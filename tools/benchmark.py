@@ -47,7 +47,7 @@ EXAMPLES = {
     "antenna_mast": ("MAST", ["MAST_0001.rad"]),
     "rubber_block": ("RUBBER", ["RUBBER_0001.rad"]),
     "notched_plate": ("NOTCH", ["NOTCH_0001.rad"]),
-    "spot_weld": ("SPOTWELD", ["SPOTWELD_0001.rad"]),
+    "spot_weld": ("WELD", ["WELD_0001.rad"]),
     "edge_impact": ("EDGE", ["EDGE_0001.rad"]),
     "rigid_impactor": ("IMPACTOR", ["IMPACTOR_0001.rad"]),
     "gas_piston": ("GASPISTON", ["GASPISTON_0001.rad",
