@@ -1,0 +1,329 @@
+"""
+4-node Belytschko–Tsay shell element (/SHELL + /PROP/SHELL, Ishell=1).
+
+Fortran origin: ``engine/source/elements/shell/coque/`` — the cycle path is
+
+    cforc3.F   driver (gather, frame, call chain, scatter)
+    ccoor3.F   corotational frame + projection to local coordinates
+    cdefo3.F   membrane velocity strains
+    cdlen3.F   characteristic length / time step
+    czforc3.F / cbilan.F  bending + shear rates, resultants, forces
+    chour3.F   hourglass control
+    + the plane-stress material calls sigeps..c.F per integration layer
+
+Theory (Belytschko, Lin & Tsay, CMAME 42 (1984) 225-251; also BLM ch. 9):
+
+* **Corotational frame**: a local orthonormal triad (e1, e2, e3) is built
+  from the current geometry each cycle: e3 is normal to the element
+  (cross product of the diagonals — insensitive to in-plane node
+  numbering), e1 is side 1-2 projected onto the plane, e2 = e3 x e1.
+  All rates are measured in this frame, which removes the large rigid
+  rotation from the formulation — objective stress rates are then
+  unnecessary for the (small) in-frame rotations.  This is the classic
+  explicit-shell trick: accuracy O(element rotation per step), perfectly
+  adequate at explicit time steps.
+
+* **One-point quadrature** in the plane (element center), NIP-point
+  Gauss quadrature through the thickness. The mid-plane gradient operator
+  for a quad with local corner coords (x_i, y_i):
+
+      B1 = [y2-y4, y3-y1, y4-y2, y1-y3] / (2A)
+      B2 = [x4-x2, x1-x3, x2-x4, x3-x1] / (2A)
+
+* **Mindlin-Reissner kinematics** (first-order shear deformable):
+  velocity of a point at distance z from the mid-plane is
+  v(z) = v_m + z * (theta_dot x e3), giving
+
+      membrane rates   d_xx = B1.vx, d_yy = B2.vy,
+                       d_xy = B1.vy + B2.vx           (engineering)
+      curvature rates  k_xx = B1.thy, k_yy = -B2.thx,
+                       k_xy = B2.thy - B1.thx
+      shear rates      g_xz = B1.vz + mean(thy),
+                       g_yz = B2.vz - mean(thx)
+
+  strain rate at layer z:  d(z) = d_m + z * k. Each layer is updated by
+  the plane-stress material law; transverse shear is elastic with the 5/6
+  correction factor (BT assumption, matches the original for elastic
+  shear).
+
+* **Resultants** (force/length and moment/length):
+      N = sum_k w_k sigma_k,  M = sum_k w_k z_k sigma_k,
+      q = kappa * G * t * gamma
+  and the internal nodal forces/moments follow from the virtual power
+  identity  P = A (N:d_m + M:k + q.g)  — the exact transpose of the rate
+  operators above (each B-term in a rate produces the matching force
+  term; see the code, it is written line by line against the rates).
+
+* **Hourglass control** (chour3): one-point quadrature leaves 5 zero-
+  energy modes (2 membrane, 1 transverse 'w', 2 bending) with the pattern
+  h = (1,-1,1,-1). The stabilizing shape vector is orthogonalized against
+  the linear field (Flanagan-Belytschko), gamma_i = h_i - (h.x) B1i -
+  (h.y) B2i, and a viscous force opposes each modal velocity.
+  Port simplification: Radioss' default shell hourglass is *stiffness*
+  type (hm/hf/hr are stiffness coefficients); this port uses the viscous
+  form with the same coefficients — robust, slightly more dissipative on
+  coarse dynamic bending. Roadmap M2 upgrades this to stiffness type.
+
+* **Lumped inertia**: m_i = rho t A / 4; rotational inertia
+  I_i = m_i (t^2 + A) / 12 — deliberately generous (Key's trick) so the
+  rotational stability limit never governs and dt stays the membrane one.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+
+from .. import materials
+from ..common.constants import EM20, SHEAR_FACTOR
+
+
+# ----------------------------------------------------------------------------
+# geometry: corotational frame and local coordinates (ccoor3.F)
+# ----------------------------------------------------------------------------
+
+def _frame(xe: np.ndarray):
+    """Build the corotational triad E = [e1|e2|e3] per element.
+
+    xe: (n, 4, 3). Returns E (n, 3, 3) with COLUMNS e1, e2, e3.
+    """
+    r31 = xe[:, 2] - xe[:, 0]
+    r42 = xe[:, 3] - xe[:, 1]
+    e3 = np.cross(r31, r42)
+    e3 /= np.maximum(np.linalg.norm(e3, axis=1), EM20)[:, None]
+    s1 = xe[:, 1] - xe[:, 0]
+    e1 = s1 - (np.einsum("nb,nb->n", s1, e3))[:, None] * e3
+    e1 /= np.maximum(np.linalg.norm(e1, axis=1), EM20)[:, None]
+    e2 = np.cross(e3, e1)
+    return np.stack([e1, e2, e3], axis=2)
+
+
+def _local_geometry(xe: np.ndarray):
+    """Frame, local corner coordinates, area and gradient operators."""
+    E = _frame(xe)
+    center = xe.mean(axis=1)
+    # local coords: xl[n,i,a] = (x_i - c) . e_a
+    xl = np.einsum("nib,nba->nia", xe - center[:, None, :], E)
+    x, y = xl[:, :, 0], xl[:, :, 1]
+    area = 0.5 * ((x[:, 2] - x[:, 0]) * (y[:, 3] - y[:, 1])
+                  + (x[:, 1] - x[:, 3]) * (y[:, 2] - y[:, 0]))
+    inv2A = 1.0 / np.maximum(2.0 * area, EM20)
+    B1 = np.stack([y[:, 1] - y[:, 3], y[:, 2] - y[:, 0],
+                   y[:, 3] - y[:, 1], y[:, 0] - y[:, 2]], axis=1) * inv2A[:, None]
+    B2 = np.stack([x[:, 3] - x[:, 1], x[:, 0] - x[:, 2],
+                   x[:, 1] - x[:, 3], x[:, 2] - x[:, 0]], axis=1) * inv2A[:, None]
+    return E, xl, area, B1, B2
+
+
+def _char_length(xl: np.ndarray, area: np.ndarray) -> np.ndarray:
+    """lc = A / longest side (cdlen3.F flavour)."""
+    lmax = np.zeros(len(area))
+    for i in range(4):
+        j = (i + 1) % 4
+        d = xl[:, j, :2] - xl[:, i, :2]
+        lmax = np.maximum(lmax, np.einsum("nb,nb->n", d, d))
+    return area / np.maximum(np.sqrt(lmax), EM20)
+
+
+# ----------------------------------------------------------------------------
+# Starter-side initialization
+# ----------------------------------------------------------------------------
+
+def _exact_dt_factor(B1, B2, area, lc, slices) -> np.ndarray:
+    """Per-element ratio dt_exact/(lc/c) for the membrane behaviour —
+    the 2-D analogue of solid_hexa8._exact_dt_factor: the one-point
+    membrane stiffness is K = t*A * B^T C B with constant B, so the exact
+    max frequency comes from the 3x3 eigenproblem C.(B B^T) with lumped
+    mass m = rho*t*A/4:  omega^2 = (4/rho) eig(C_planestress . B B^T).
+    Transverse shear and bending modes stay below the membrane one (shear
+    modulus < plane-stress modulus; rotations carry a deliberately
+    generous inertia), so the membrane factor is the binding one."""
+    n = len(area)
+    Sxx = np.einsum("ni,ni->n", B1, B1)
+    Syy = np.einsum("ni,ni->n", B2, B2)
+    Sxy = np.einsum("ni,ni->n", B1, B2)
+    BBt = np.zeros((n, 3, 3))
+    BBt[:, 0, 0], BBt[:, 1, 1] = Sxx, Syy
+    BBt[:, 2, 2] = Sxx + Syy
+    BBt[:, 0, 2] = BBt[:, 2, 0] = Sxy
+    BBt[:, 1, 2] = BBt[:, 2, 1] = Sxy
+    fac = np.ones(n)
+    for sl, mat, prop in slices:
+        Ep = mat.E / (1.0 - mat.nu ** 2)
+        C = np.array([[Ep, mat.nu * Ep, 0.0],
+                      [mat.nu * Ep, Ep, 0.0],
+                      [0.0, 0.0, mat.G]])
+        eig = np.linalg.eigvals(C[None, :, :] @ BBt[sl])
+        w2max = (4.0 / mat.rho0) * eig.real.max(axis=1)
+        c = mat.sound_speed_shell()
+        dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
+        fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
+    return fac
+
+
+def init_group(group, model, log):
+    """Element buffer + lumped mass/inertia (starter cinit3/cmass3)."""
+    xe = model.x0[group.conn]
+    E, xl, area, B1, B2 = _local_geometry(xe)
+    bad = area <= 0.0
+    if np.any(bad):
+        for eid in group.ids[bad]:
+            log.error(f"/SHELL {eid}: zero or negative area", "SHELL INIT")
+
+    n = group.n
+    thick = np.zeros(n)
+    rho0 = np.zeros(n)
+    nip_max = 1
+    for sl, mat, prop in group.state["slices"]:
+        thick[sl] = prop.params["thick"]
+        rho0[sl] = mat.rho0
+        nip_max = max(nip_max, int(prop.params["nip"]))
+    mass = rho0 * thick * area
+
+    # Through-thickness Gauss stations per part slice: z_k in [-t/2, t/2],
+    # weights scaled so sum(w_k) = t. Stored per slice (nip may differ).
+    zw = []
+    for sl, mat, prop in group.state["slices"]:
+        nip = int(prop.params["nip"])
+        gp, gw = np.polynomial.legendre.leggauss(nip)
+        zw.append((gp * 0.5, gw * 0.5))  # relative to thickness
+    group.state.update(
+        sig=np.zeros((n, nip_max, 3)),   # in-plane stress per layer
+        qshear=np.zeros((n, 2)),         # transverse shear stress (elastic)
+        epsp=np.zeros((n, nip_max)),     # plastic strain per layer
+        thick=thick,
+        area0=area.copy(),
+        mass=mass,
+        eint=np.zeros(n),
+        ehour=np.zeros(n),
+        zw=zw,
+        # exact stability correction to the lc/c estimate (see helper)
+        dtfac=_exact_dt_factor(B1, B2, area, _char_length(xl, area),
+                               group.state["slices"]),
+    )
+    node_idx = group.conn.reshape(-1)
+    mass_c = np.repeat(mass / 4.0, 4)
+    # generous lumped rotational inertia (see module docstring)
+    inertia_c = np.repeat(mass / 4.0 * (thick ** 2 + area) / 12.0, 4)
+    return node_idx, mass_c, inertia_c
+
+
+# ----------------------------------------------------------------------------
+# Engine-side forces (cforc3.F)
+# ----------------------------------------------------------------------------
+
+def forces(group, x, v, vr, dt, fint, mint):
+    st = group.state
+    conn = group.conn
+    n = group.n
+    xe = x[conn]
+    E, xl, area, B1, B2 = _local_geometry(xe)
+    area = np.maximum(area, EM20)
+    lc = _char_length(xl, area)
+    thick = st["thick"]
+
+    # velocities in the corotational frame
+    vl = np.einsum("nib,nba->nia", v[conn], E)
+    wl = np.einsum("nib,nba->nia", vr[conn], E)
+
+    # ---- rate of deformation (cdefo3 + czforc3 kinematics) ----------------
+    vx, vy, vz = vl[:, :, 0], vl[:, :, 1], vl[:, :, 2]
+    thx, thy = wl[:, :, 0], wl[:, :, 1]
+    dm = np.stack([  # membrane rates [xx, yy, xy(eng)]
+        np.einsum("ni,ni->n", B1, vx),
+        np.einsum("ni,ni->n", B2, vy),
+        np.einsum("ni,ni->n", B1, vy) + np.einsum("ni,ni->n", B2, vx),
+    ], axis=1)
+    kap = np.stack([  # curvature rates
+        np.einsum("ni,ni->n", B1, thy),
+        -np.einsum("ni,ni->n", B2, thx),
+        np.einsum("ni,ni->n", B2, thy) - np.einsum("ni,ni->n", B1, thx),
+    ], axis=1)
+    gs = np.stack([  # transverse shear rates
+        np.einsum("ni,ni->n", B1, vz) + thy.mean(axis=1),
+        np.einsum("ni,ni->n", B2, vz) - thx.mean(axis=1),
+    ], axis=1)
+
+    # ---- layer stress updates + resultants ---------------------------------
+    sig = st["sig"]
+    Nres = np.zeros((n, 3))     # membrane force / length
+    Mres = np.zeros((n, 3))     # moment / length
+    de_layers = np.zeros(n)     # internal energy density accumulation
+    c = np.zeros(n)
+    rho = np.zeros(n)
+    for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        zrel, wrel = st["zw"][isl]
+        t_sl = thick[sl]
+        for k in range(len(zrel)):
+            zk = zrel[k] * t_sl                     # layer position
+            wk = wrel[k] * t_sl                     # layer weight (sums to t)
+            deps = (dm[sl] + zk[:, None] * kap[sl]) * dt
+            s_old = sig[sl, k, :].copy()
+            s_new, _ = materials.shell_update(
+                mat, sig[sl, k, :], deps, st["epsp"][sl, k], dt)
+            sig[sl, k, :] = s_new
+            s_mid = 0.5 * (s_old + s_new)
+            Nres[sl] += wk[:, None] * s_new
+            Mres[sl] += (wk * zk)[:, None] * s_new
+            de_layers[sl] += wk * np.einsum("nk,nk->n", s_mid, deps)
+        c[sl] = mat.sound_speed_shell()
+        rho[sl] = mat.rho0
+        # elastic transverse shear resultant stress (with 5/6 factor)
+        qold = st["qshear"][sl].copy()
+        st["qshear"][sl] += SHEAR_FACTOR * mat.G * gs[sl] * dt
+        de_layers[sl] += t_sl * np.einsum(
+            "nk,nk->n", 0.5 * (qold + st["qshear"][sl]), gs[sl] * dt)
+    qres = st["qshear"] * thick[:, None]            # shear force / length
+
+    # ---- internal nodal forces & moments (transpose of the rates) ---------
+    # each line mirrors one line of the rate kinematics above.
+    f = np.zeros((n, 4, 3))
+    m = np.zeros((n, 4, 3))
+    A_ = area[:, None]
+    f[:, :, 0] = A_ * (B1 * Nres[:, 0:1] + B2 * Nres[:, 2:3])
+    f[:, :, 1] = A_ * (B2 * Nres[:, 1:2] + B1 * Nres[:, 2:3])
+    f[:, :, 2] = A_ * (B1 * qres[:, 0:1] + B2 * qres[:, 1:2])
+    m[:, :, 0] = A_ * (-B2 * Mres[:, 1:2] - B1 * Mres[:, 2:3]
+                       - 0.25 * qres[:, 1:2])
+    m[:, :, 1] = A_ * (B1 * Mres[:, 0:1] + B2 * Mres[:, 2:3]
+                       + 0.25 * qres[:, 0:1])
+
+    # ---- hourglass control (chour3, viscous — see module docstring) -------
+    h = np.array([1.0, -1.0, 1.0, -1.0])
+    hx = np.einsum("i,ni->n", h, xl[:, :, 0])
+    hy = np.einsum("i,ni->n", h, xl[:, :, 1])
+    gam = h[None, :] - hx[:, None] * B1 - hy[:, None] * B2   # (n, 4)
+    hm = np.zeros(n)
+    hf = np.zeros(n)
+    hr = np.zeros(n)
+    for sl, mat, prop in st["slices"]:
+        hm[sl], hf[sl], hr[sl] = (prop.params["hm"], prop.params["hf"],
+                                  prop.params["hr"])
+    rt = rho * thick
+    sqA = np.sqrt(area)
+    a_m = hm * rt * c * sqA * 0.25          # membrane modes
+    a_w = hf * rt * c * sqA * 0.25          # transverse w mode
+    a_r = hr * rt * c * sqA * thick ** 2 / 12.0 * 0.25   # bending modes
+    fhg = np.zeros((n, 4, 3))
+    mhg = np.zeros((n, 4, 3))
+    for comp, coef, vel, out in ((0, a_m, vx, fhg), (1, a_m, vy, fhg),
+                                 (2, a_w, vz, fhg)):
+        qd = np.einsum("ni,ni->n", gam, vel)
+        out[:, :, comp] -= (coef * qd)[:, None] * gam
+    for comp, coef, vel in ((0, a_r, thx), (1, a_r, thy)):
+        qd = np.einsum("ni,ni->n", gam, vel)
+        mhg[:, :, comp] -= (coef * qd)[:, None] * gam
+
+    st["ehour"] += -(np.einsum("nib,nib->n", fhg, vl)
+                     + np.einsum("nib,nib->n", mhg, wl)) * dt
+    st["eint"] += area * de_layers
+
+    # total local force = -(internal) + hourglass, back to global frame
+    fl = -f + fhg
+    ml = -m + mhg
+    fg = np.einsum("nia,nba->nib", fl, E)
+    mg = np.einsum("nia,nba->nib", ml, E)
+    np.add.at(fint, conn.reshape(-1), fg.reshape(-1, 3))
+    np.add.at(mint, conn.reshape(-1), mg.reshape(-1, 3))
+
+    # ---- critical time step ------------------------------------------------
+    return st["dtfac"] * lc / c
