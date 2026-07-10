@@ -21,10 +21,54 @@ from ..model.model import ElementGroup, Model
 # element type name -> (attr on Model, nodes per element, required prop type)
 _ETYPES = {
     "BRICK": ("bricks", 8, 14),
+    "TETRA4": ("tetras", 4, 14),
     "SHELL": ("shells", 4, 1),
+    "SH3N": ("sh3n", 3, 1),
     "TRUSS": ("trusses", 2, 2),
     "SPRING": ("springs", 2, 4),
+    "BEAM": ("beams", 3, 3),
 }
+
+
+# ----------------------------------------------------------------------------
+# Degenerated bricks: repeated nodes -> tetra conversion / clear rejection
+# ----------------------------------------------------------------------------
+
+def _convert_degenerated_bricks(model: Model, log: MessageLog) -> None:
+    """Handle /BRICK cards with repeated node IDs (the classic Radioss way
+    of writing lower-order solids in brick format).
+
+    Fortran origin: the brick reader (hm_read_brick / sinit3) detects
+    repeated nodes and switches the element to its degenerated formulation
+    (tetra, penta...). This port converts the 4-distinct-node patterns
+    (e.g. ``n1 n2 n3 n3 n5 n5 n5 n5``) to genuine /TETRA4 elements — the
+    constant-strain tetra IS the right element for that geometry, whereas
+    running it as a collapsed hexa leaves zero-volume sub-shapes in the
+    hourglass base vectors. Distinct nodes are taken in order of first
+    appearance, which maps every standard collapse pattern onto the
+    positively-oriented tetra (checked again at element init).
+
+    Pentas (6 distinct) and pyramids (5 distinct) are NOT silently
+    degraded: the Starter stops with a clear message (roadmap item), which
+    beats the M1 behaviour of failing later on a zero-volume Jacobian.
+    """
+    kept, moved = [], 0
+    for (eid, pid, nodes) in model.raw_elems["BRICK"]:
+        uniq = list(dict.fromkeys(nodes))         # distinct, order preserved
+        if len(uniq) == 8:
+            kept.append((eid, pid, nodes))
+        elif len(uniq) == 4:
+            model.raw_elems["TETRA4"].append((eid, pid, uniq))
+            moved += 1
+        else:
+            log.error(
+                f"/BRICK {eid}: degenerated brick with {len(uniq)} distinct "
+                f"nodes (penta/pyramid) is not ported — use full hexas or "
+                f"/TETRA4", "BRICK DEGEN")
+    model.raw_elems["BRICK"] = kept
+    if moved:
+        log.info(f"     {moved} DEGENERATED /BRICK ELEMENT(S) CONVERTED "
+                 f"TO /TETRA4")
 
 
 # ----------------------------------------------------------------------------
@@ -37,6 +81,7 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
     contiguous slice — the Python equivalent of the Fortran element
     *groups* (NGROUP blocks of same type/mat/prop), which lets the material
     law run vectorized on each slice."""
+    _convert_degenerated_bricks(model, log)
     for etype, (attr, nnode, req_prop) in _ETYPES.items():
         raw = model.raw_elems[etype]
         if not raw:
@@ -154,6 +199,23 @@ def _free_faces_of_bricks(model: Model, part_ids: List[int]) -> np.ndarray:
     return faces[counts[inverse] == 1]
 
 
+def _free_faces_of_tetras(model: Model, part_ids: List[int]) -> np.ndarray:
+    """Free triangular faces of /TETRA4 parts, as degenerate 4-node
+    segments (3rd node repeated — Radioss triangle-segment convention)."""
+    from ..elements.solid_tetra4 import _FACES
+    g = model.tetras
+    if g is None:
+        return np.zeros((0, 4), dtype=np.int64)
+    mask = np.isin(g.state["part_ids"], part_ids)
+    conn = g.conn[mask]
+    faces = conn[:, _FACES.reshape(-1)].reshape(-1, 3)      # (nelem*4, 3)
+    key = np.sort(faces, axis=1)
+    _, inverse, counts = np.unique(key, axis=0, return_inverse=True,
+                                   return_counts=True)
+    free = faces[counts[inverse] == 1]
+    return np.column_stack([free, free[:, 2]])              # n4 = n3
+
+
 def resolve_surfaces(model: Model, log: MessageLog) -> None:
     """/SURF content -> (nseg, 4) node-index arrays."""
     for s in model.surfaces.values():
@@ -170,10 +232,19 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
                 mask = np.isin(model.shells.state["part_ids"], s.part_ids)
                 if np.any(mask):
                     segs.append(model.shells.conn[mask])
+            # 3-node shell parts: triangle segments (3rd node repeated)
+            if model.sh3n is not None:
+                mask = np.isin(model.sh3n.state["part_ids"], s.part_ids)
+                if np.any(mask):
+                    c3 = model.sh3n.conn[mask]
+                    segs.append(np.column_stack([c3, c3[:, 2]]))
             # solid parts: free outer faces
             ff = _free_faces_of_bricks(model, s.part_ids)
             if len(ff):
                 segs.append(ff)
+            ft = _free_faces_of_tetras(model, s.part_ids)
+            if len(ft):
+                segs.append(ft)
         s.segments = (np.vstack(segs) if segs
                       else np.zeros((0, 4), dtype=np.int64))
         if s.segments.shape[0] == 0:

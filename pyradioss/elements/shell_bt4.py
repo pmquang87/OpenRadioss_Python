@@ -58,15 +58,35 @@ Theory (Belytschko, Lin & Tsay, CMAME 42 (1984) 225-251; also BLM ch. 9):
   energy modes (2 membrane, 1 transverse 'w', 2 bending) with the pattern
   h = (1,-1,1,-1). The stabilizing shape vector is orthogonalized against
   the linear field (Flanagan-Belytschko), gamma_i = h_i - (h.x) B1i -
-  (h.y) B2i, and a viscous force opposes each modal velocity.
-  Port simplification: Radioss' default shell hourglass is *stiffness*
-  type (hm/hf/hr are stiffness coefficients); this port uses the viscous
-  form with the same coefficients — robust, slightly more dissipative on
-  coarse dynamic bending. Roadmap M2 upgrades this to stiffness type.
+  (h.y) B2i, so pure deformation and rigid motion produce no hourglass
+  force. **Stiffness type** (the BLT84 paper's own control, and the
+  Radioss default): each mode carries a persistent generalized force Q
+  integrated in rate form,
+
+      Q += k_mode * (gamma . velocity) * dt,   f_i = -Q * gamma_i
+
+  with the stiffness scaled from the matching physical stiffness of the
+  element (the classic BLT84 / LS-DYNA calibration constants):
+
+      membrane   k_m = hm * E  t   A (B1.B1 + B2.B2) / 8
+      transverse k_w = hf * kGA/t->  kappa G t A (B1.B1 + B2.B2) / 8
+      bending    k_r = hr * E t^3 A (B1.B1 + B2.B2) / 192
+
+  Unlike the M1 viscous form, stiffness control stores (rather than
+  dissipates) the hourglass energy — coarse dynamic bending is no longer
+  artificially damped. Q is a scalar modal amplitude, so it transports
+  exactly under the corotational frame (no rotation bookkeeping needed).
+  The added frequency is O(sqrt(hm)) of the membrane one (~10% at the
+  default hm = 0.01), comfortably inside the /DT scale factor 0.9 —
+  verified by the rigid-body and vibration validations in tests/.
 
 * **Lumped inertia**: m_i = rho t A / 4; rotational inertia
-  I_i = m_i (t^2 + A) / 12 — deliberately generous (Key's trick) so the
-  rotational stability limit never governs and dt stays the membrane one.
+  I_i = m_i (t^2 + A) / 12 — deliberately generous (Key's trick) to push
+  the rotational stability limit up toward the membrane one. It does NOT
+  always clear it: for thick or large elements the transverse-shear /
+  rotation branch (stiffness ~ kappa G t A) still governs, which is why
+  the Starter computes the exact eigenvalue of BOTH branches (see
+  _exact_dt_factor — an M2 fix after a nu=0 strip diverged at /DT 0.9).
 """
 
 from __future__ import annotations
@@ -128,15 +148,59 @@ def _char_length(xl: np.ndarray, area: np.ndarray) -> np.ndarray:
 # Starter-side initialization
 # ----------------------------------------------------------------------------
 
-def _exact_dt_factor(B1, B2, area, lc, slices) -> np.ndarray:
-    """Per-element ratio dt_exact/(lc/c) for the membrane behaviour —
-    the 2-D analogue of solid_hexa8._exact_dt_factor: the one-point
-    membrane stiffness is K = t*A * B^T C B with constant B, so the exact
-    max frequency comes from the 3x3 eigenproblem C.(B B^T) with lumped
-    mass m = rho*t*A/4:  omega^2 = (4/rho) eig(C_planestress . B B^T).
-    Transverse shear and bending modes stay below the membrane one (shear
-    modulus < plane-stress modulus; rotations carry a deliberately
-    generous inertia), so the membrane factor is the binding one."""
+def _bend_shear_omega2(B1, B2, area, sl, mat, t, nnode, rho) -> np.ndarray:
+    """Exact max eigenfrequency^2 of the bending/shear branch of a FLAT
+    one-point shell element (membrane decouples on a flat element).
+
+    Local dofs (w_i, thx_i, thy_i); generalized rates (kxx, kyy, kxy,
+    gx, gy) from the SAME operators as forces() — see the kinematics
+    there; K = A * B^T C_b B with C_b = diag(t^3/12 * C_planestress,
+    kappa*G*t * I2); lumped mass m = rho t A/nnode and the (deliberately
+    generous) rotational inertia I = m (t^2 + A)/12 actually used by
+    init_group. This branch GOVERNS the time step for thick/large
+    elements where kappa*G*t*A outruns the membrane stiffness — assuming
+    'membrane always binds' was an M1 bug fixed in M2 (a nu=0 cantilever
+    strip at /DT 0.9 diverged on the shear-rotation mode)."""
+    b1, b2, A = B1[sl], B2[sl], area[sl]
+    n = len(A)
+    B = np.zeros((n, 5, 3 * nnode))
+    B[:, 0, 2 * nnode:] = b1                    # kxx =  B1 . thy
+    B[:, 1, nnode:2 * nnode] = -b2              # kyy = -B2 . thx
+    B[:, 2, 2 * nnode:] = b2                    # kxy = B2.thy - B1.thx
+    B[:, 2, nnode:2 * nnode] = -b1
+    B[:, 3, :nnode] = b1                        # gx = B1.w + mean(thy)
+    B[:, 3, 2 * nnode:] = 1.0 / nnode
+    B[:, 4, :nnode] = b2                        # gy = B2.w - mean(thx)
+    B[:, 4, nnode:2 * nnode] = -1.0 / nnode
+    Ep = mat.E / (1.0 - mat.nu ** 2)
+    Cb = np.zeros((5, 5))
+    Cb[:3, :3] = t ** 3 / 12.0 * np.array(
+        [[Ep, mat.nu * Ep, 0.0], [mat.nu * Ep, Ep, 0.0], [0.0, 0.0, mat.G]])
+    Cb[3, 3] = Cb[4, 4] = SHEAR_FACTOR * mat.G * t
+    K = A[:, None, None] * np.einsum("nai,ab,nbj->nij", B, Cb, B)
+    m = rho * t * A / nnode                     # nodal mass
+    inertia = m * (t ** 2 + A) / 12.0           # nodal inertia (init_group)
+    minv = np.empty((n, 3 * nnode))
+    minv[:, :nnode] = 1.0 / np.sqrt(m)[:, None]
+    minv[:, nnode:] = np.repeat(1.0 / np.sqrt(inertia), 2 * nnode
+                                ).reshape(n, 2 * nnode)
+    Ksym = minv[:, :, None] * K * minv[:, None, :]
+    return np.linalg.eigvalsh(Ksym)[:, -1]
+
+
+def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
+    """Per-element ratio dt_exact/(lc/c) over BOTH stiffness branches of
+    the flat one-point element:
+
+    * membrane — the 2-D analogue of solid_hexa8._exact_dt_factor: the
+      membrane stiffness is K = t*A * B^T C B with constant B, so the
+      exact max frequency is the 3x3 eigenproblem
+      omega^2 = (4/rho) eig(C_planestress . B B^T)  (lumped m = rho t A/4);
+    * bending/transverse-shear — the 12-dof (w, thx, thy) eigenproblem of
+      _bend_shear_omega2, which takes over for thick or large elements.
+
+    dt_exact = 2 / max(omega) is a strict bound for the linearized
+    element; forces() rescales it by the running lc/c."""
     n = len(area)
     Sxx = np.einsum("ni,ni->n", B1, B1)
     Syy = np.einsum("ni,ni->n", B2, B2)
@@ -154,6 +218,9 @@ def _exact_dt_factor(B1, B2, area, lc, slices) -> np.ndarray:
                       [0.0, 0.0, mat.G]])
         eig = np.linalg.eigvals(C[None, :, :] @ BBt[sl])
         w2max = (4.0 / mat.rho0) * eig.real.max(axis=1)
+        w2bend = _bend_shear_omega2(B1, B2, area, sl, mat,
+                                    prop.params["thick"], 4, mat.rho0)
+        w2max = np.maximum(w2max, w2bend)
         c = mat.sound_speed_shell()
         dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
         fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
@@ -195,10 +262,13 @@ def init_group(group, model, log):
         mass=mass,
         eint=np.zeros(n),
         ehour=np.zeros(n),
+        # persistent hourglass generalized forces (stiffness control):
+        # columns = [membrane-x, membrane-y, transverse-w, theta-x, theta-y]
+        hgq=np.zeros((n, 5)),
         zw=zw,
         # exact stability correction to the lc/c estimate (see helper)
         dtfac=_exact_dt_factor(B1, B2, area, _char_length(xl, area),
-                               group.state["slices"]),
+                               thick, group.state["slices"]),
     )
     node_idx = group.conn.reshape(-1)
     mass_c = np.repeat(mass / 4.0, 4)
@@ -249,7 +319,6 @@ def forces(group, x, v, vr, dt, fint, mint):
     Mres = np.zeros((n, 3))     # moment / length
     de_layers = np.zeros(n)     # internal energy density accumulation
     c = np.zeros(n)
-    rho = np.zeros(n)
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         zrel, wrel = st["zw"][isl]
         t_sl = thick[sl]
@@ -266,7 +335,6 @@ def forces(group, x, v, vr, dt, fint, mint):
             Mres[sl] += (wk * zk)[:, None] * s_new
             de_layers[sl] += wk * np.einsum("nk,nk->n", s_mid, deps)
         c[sl] = mat.sound_speed_shell()
-        rho[sl] = mat.rho0
         # elastic transverse shear resultant stress (with 5/6 factor)
         qold = st["qshear"][sl].copy()
         st["qshear"][sl] += SHEAR_FACTOR * mat.G * gs[sl] * dt
@@ -287,34 +355,41 @@ def forces(group, x, v, vr, dt, fint, mint):
     m[:, :, 1] = A_ * (B1 * Mres[:, 0:1] + B2 * Mres[:, 2:3]
                        + 0.25 * qres[:, 0:1])
 
-    # ---- hourglass control (chour3, viscous — see module docstring) -------
+    # ---- hourglass control (chour3, BLT84 stiffness type — module doc) ----
     h = np.array([1.0, -1.0, 1.0, -1.0])
     hx = np.einsum("i,ni->n", h, xl[:, :, 0])
     hy = np.einsum("i,ni->n", h, xl[:, :, 1])
     gam = h[None, :] - hx[:, None] * B1 - hy[:, None] * B2   # (n, 4)
-    hm = np.zeros(n)
-    hf = np.zeros(n)
-    hr = np.zeros(n)
+    bb = (np.einsum("ni,ni->n", B1, B1)
+          + np.einsum("ni,ni->n", B2, B2))                   # B1.B1 + B2.B2
+    k_m = np.zeros(n)
+    k_w = np.zeros(n)
+    k_r = np.zeros(n)
     for sl, mat, prop in st["slices"]:
-        hm[sl], hf[sl], hr[sl] = (prop.params["hm"], prop.params["hf"],
-                                  prop.params["hr"])
-    rt = rho * thick
-    sqA = np.sqrt(area)
-    a_m = hm * rt * c * sqA * 0.25          # membrane modes
-    a_w = hf * rt * c * sqA * 0.25          # transverse w mode
-    a_r = hr * rt * c * sqA * thick ** 2 / 12.0 * 0.25   # bending modes
+        p = prop.params
+        t_sl = thick[sl]
+        # per-mode hourglass stiffness, scaled from the element's physical
+        # membrane / transverse-shear / bending stiffness (BLT84 constants)
+        k_m[sl] = p["hm"] * mat.E * t_sl * area[sl] * bb[sl] / 8.0
+        k_w[sl] = p["hf"] * SHEAR_FACTOR * mat.G * t_sl * area[sl] * bb[sl] / 8.0
+        k_r[sl] = p["hr"] * mat.E * t_sl ** 3 * area[sl] * bb[sl] / 192.0
     fhg = np.zeros((n, 4, 3))
     mhg = np.zeros((n, 4, 3))
-    for comp, coef, vel, out in ((0, a_m, vx, fhg), (1, a_m, vy, fhg),
-                                 (2, a_w, vz, fhg)):
+    Q = st["hgq"]
+    dehg = np.zeros(n)
+    # translations (membrane x/y, transverse w) then rotations (theta x/y):
+    # each mode integrates Q += k*qdot*dt and pushes back f = -Q*gamma.
+    for col, (comp, k, vel, out) in enumerate((
+            (0, k_m, vx, fhg), (1, k_m, vy, fhg), (2, k_w, vz, fhg),
+            (0, k_r, thx, mhg), (1, k_r, thy, mhg))):
         qd = np.einsum("ni,ni->n", gam, vel)
-        out[:, :, comp] -= (coef * qd)[:, None] * gam
-    for comp, coef, vel in ((0, a_r, thx), (1, a_r, thy)):
-        qd = np.einsum("ni,ni->n", gam, vel)
-        mhg[:, :, comp] -= (coef * qd)[:, None] * gam
+        q_old = Q[:, col].copy()
+        Q[:, col] = q_old + k * qd * dt
+        out[:, :, comp] -= Q[:, col, None] * gam
+        # stored hourglass energy increment: midpoint force x modal rate
+        dehg += 0.5 * (q_old + Q[:, col]) * qd * dt
 
-    st["ehour"] += -(np.einsum("nib,nib->n", fhg, vl)
-                     + np.einsum("nib,nib->n", mhg, wl)) * dt
+    st["ehour"] += dehg
     st["eint"] += area * de_layers
 
     # total local force = -(internal) + hourglass, back to global frame

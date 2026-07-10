@@ -164,14 +164,29 @@ def _read_elems(block: KeywordBlock, model: Model, log: MessageLog,
 
 def read_brick(block, model, log):
     """``/BRICK/part_ID``: 8-node solids (elem_ID + 8 node IDs).
-    Degenerated bricks (repeated nodes → penta/tetra) are not ported yet
-    and are rejected by the Starter checks."""
+    Degenerated bricks with 4 distinct nodes (the classic tetra-in-brick
+    convention, e.g. n1 n2 n3 n3 n5 n5 n5 n5) are converted to /TETRA4
+    elements by the Starter; other repeated-node patterns (penta/pyramid)
+    are rejected with a clear error (see initialization.py)."""
     _read_elems(block, model, log, "BRICK", 8)
+
+
+def read_tetra4(block, model, log):
+    """``/TETRA4/part_ID``: 4-node solids (elem_ID + 4 node IDs, base
+    triangle 1-2-3 counter-clockwise seen from node 4). Uses the same
+    /PROP/TYPE14 (SOLID) property as bricks."""
+    _read_elems(block, model, log, "TETRA4", 4)
 
 
 def read_shell(block, model, log):
     """``/SHELL/part_ID``: 4-node shells (elem_ID + 4 node IDs)."""
     _read_elems(block, model, log, "SHELL", 4)
+
+
+def read_sh3n(block, model, log):
+    """``/SH3N/part_ID``: 3-node shells (elem_ID + 3 node IDs). Uses the
+    same /PROP/TYPE1 (SHELL) property as 4-node shells."""
+    _read_elems(block, model, log, "SH3N", 3)
 
 
 def read_truss(block, model, log):
@@ -182,6 +197,14 @@ def read_truss(block, model, log):
 def read_spring(block, model, log):
     """``/SPRING/part_ID``: 2-node springs (elem_ID + 2 node IDs)."""
     _read_elems(block, model, log, "SPRING", 2)
+
+
+def read_beam(block, model, log):
+    """``/BEAM/part_ID``: 2-node beams + orientation node (elem_ID + N1 N2
+    N3). N3 orients the local y axis (in the N1-N2-N3 plane) and carries
+    neither mass nor force — it may be any node, including a standalone
+    one (which the mass check then freezes, harmlessly)."""
+    _read_elems(block, model, log, "BEAM", 3)
 
 
 # ============================================================================
@@ -282,6 +305,18 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     TYPE2 / TRUSS::   card 1: title,  card 2: Area
 
+    TYPE3 / BEAM  (Fortran starter/source/properties/p03_beam)::
+
+        card 1:  prop_title
+        card 2:  Ishear  dm  df       (flags/damping — read and ignored:
+                 the port always includes Timoshenko shear, no damping)
+        card 3:  Area   Iyy   Izz   Ixx
+
+      Iyy/Izz = bending inertias about the local y/z axes, Ixx = torsion
+      constant. Ixx = 0 defaults to Iyy + Izz (polar, exact for circular
+      sections only — give the real torsion constant for others).
+      Short form: a single data card 'Area Iyy Izz Ixx'.
+
     TYPE4 / SPRING:: card 1: title,  card 2: Mass  K  C
       (linear spring: F = K*dl + C*dl_dot; Mass is lumped half/half)
 
@@ -295,11 +330,12 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """
     typename = block.parts[1].upper() if len(block.parts) > 1 else ""
     aliases = {"TYPE1": 1, "SHELL": 1, "TYPE2": 2, "TRUSS": 2,
+               "TYPE3": 3, "BEAM": 3,
                "TYPE4": 4, "SPRING": 4, "TYPE14": 14, "SOLID": 14}
     if typename not in aliases:
         log.warning(f"/PROP/{typename} not ported — property skipped "
-                    f"(supported: TYPE1/SHELL, TYPE2/TRUSS, TYPE4/SPRING, "
-                    f"TYPE14/SOLID)", block.source)
+                    f"(supported: TYPE1/SHELL, TYPE2/TRUSS, TYPE3/BEAM, "
+                    f"TYPE4/SPRING, TYPE14/SOLID)", block.source)
         return
     ptype = aliases[typename]
     title, cards = _title_and_data(block)
@@ -334,6 +370,21 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                       block.source)
             return
         params = {"area": cards[0].floats()[0]}
+    elif ptype == 3:  # BEAM
+        # skip pure-integer flag cards (Ishear...), read the section card
+        data = [c for c in cards if not all(tok.lstrip("+-").isdigit()
+                                            for tok in c.tokens())]
+        if not data:
+            log.error(f"/PROP/BEAM/{block.user_id}: section card "
+                      f"'Area Iyy Izz Ixx' missing", block.source)
+            return
+        a, iyy, izz, ixx = _floats(data[0], 4)
+        if a <= 0 or iyy <= 0 or izz <= 0:
+            log.error(f"/PROP/BEAM/{block.user_id}: Area, Iyy and Izz "
+                      f"must be > 0", block.source)
+            return
+        params = {"area": a, "iyy": iyy, "izz": izz,
+                  "ixx": ixx if ixx > 0 else iyy + izz}
     elif ptype == 4:  # SPRING
         if not cards:
             log.error(f"/PROP/SPRING/{block.user_id}: data card missing",
@@ -678,9 +729,12 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "END": read_end,
     "NODE": read_node,
     "BRICK": read_brick,
+    "TETRA4": read_tetra4,
     "SHELL": read_shell,
+    "SH3N": read_sh3n,
     "TRUSS": read_truss,
     "SPRING": read_spring,
+    "BEAM": read_beam,
     "PART": read_part,
     "MAT": read_mat,
     "PROP": read_prop,

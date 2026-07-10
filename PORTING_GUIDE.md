@@ -44,7 +44,10 @@ same names in comments.
 | `engine/source/constraints/general/bcs` | `pyradioss/engine/kinematics.py` | `/BCS`, `/IMPVEL` |
 | `engine/source/constraints/general/rwall` | `pyradioss/engine/rigid_wall.py` | kinematic wall |
 | `engine/source/elements/solid/solide/` (`sforc3.F`, `srota3.F`, `shour3.F`…) | `pyradioss/elements/solid_hexa8.py` | 1-pt + FB hourglass |
-| `engine/source/elements/shell/coque/` (`cforc3.F`, `czforc3.F`…) | `pyradioss/elements/shell_bt4.py` | Belytschko–Tsay |
+| `engine/source/elements/solid/solide4/` (`s4forc3.F`…) | `pyradioss/elements/solid_tetra4.py` | constant-strain tetra |
+| `engine/source/elements/shell/coque/` (`cforc3.F`, `czforc3.F`…) | `pyradioss/elements/shell_bt4.py` | Belytschko–Tsay, BLT84 stiffness hourglass |
+| `engine/source/elements/sh3n/coque3n/` (`c3forc3.F`…) | `pyradioss/elements/shell_tri3.py` | C0 triangle |
+| `engine/source/elements/beam/` (`pforc3.F`, `pdefo3.F`…) | `pyradioss/elements/beam_type3.py` | corotational Timoshenko |
 | `engine/source/elements/truss/` (`tforc3.F`) | `pyradioss/elements/truss.py` | |
 | `engine/source/elements/spring/` (`rforc3.F`) | `pyradioss/elements/spring.py` | TYPE4 |
 | `engine/source/materials/mat/mat001/sigeps01.F` | `pyradioss/materials/law01_elastic.py` | |
@@ -77,7 +80,7 @@ same names in comments.
    the Engine protects against divergence with an energy-error stop criterion
    like the original (`/STOP` defaults).
 
-## 4. Feature matrix (Milestone 1)
+## 4. Feature matrix (Milestones 1–2)
 
 Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options), ❌ not yet.
 
@@ -88,14 +91,18 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | `/BEGIN`, `/END`, `/TITLE` | ✅ | |
 | `#include` | ✅ | recursive |
 | `/NODE` | ✅ | |
-| `/BRICK` | ✅ | 8-node hexa (degenerate 6/4-node not yet) |
-| `/SHELL` | ✅ | 4-node (`/SH3N` ❌) |
+| `/BRICK` | ✅ | 8-node hexa; 4-distinct-node degenerates auto-convert to `/TETRA4`, penta/pyramid rejected with a clear error |
+| `/TETRA4` | ✅ | 4-node constant-strain tetra |
+| `/SHELL` | ✅ | 4-node Belytschko–Tsay |
+| `/SH3N` | ✅ | 3-node C0 triangle (plain C0; DKT-flavoured Ish3n variants ❌) |
 | `/TRUSS`, `/SPRING` | ✅ | |
+| `/BEAM` | ✅ | N1 N2 + orientation node N3 |
 | `/PART`, `/SUBSET` | ✅ / ❌ | |
 | `/MAT/LAW1` (`/MAT/ELAST`) | ✅ | |
-| `/MAT/LAW2` (`/MAT/PLAS_JOHNS`) | ✅ | εp-rate & hardening; temperature term ❌ |
-| `/PROP/TYPE1` (`SHELL`) | 🟡 | thickness, N integration points, hourglass coeff (Ishell fixed = BT) |
+| `/MAT/LAW2` (`/MAT/PLAS_JOHNS`) | ✅ | εp-rate & hardening; temperature term ❌; not for beams |
+| `/PROP/TYPE1` (`SHELL`) | 🟡 | thickness, N integration points, hourglass coeffs (Ishell fixed = BT for quads, C0 for `/SH3N`) |
 | `/PROP/TYPE2` (`TRUSS`) | ✅ | area |
+| `/PROP/TYPE3` (`BEAM`) | 🟡 | A, Iyy, Izz, Ixx; Timoshenko with full-section shear (no shear factor / Ishear variants), LAW1 only |
 | `/PROP/TYPE4` (`SPRING`) | 🟡 | linear k, c, mass |
 | `/PROP/TYPE14` (`SOLID`) | 🟡 | qa/qb bulk viscosity, hourglass coeff (Isolid fixed = 1-pt+FB) |
 | `/BCS` | ✅ | translation + rotation fixities |
@@ -118,9 +125,13 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 |---|---|
 | Explicit central-difference integration | ✅ |
 | Element time step with scale factor, bulk viscosity | ✅ |
-| Exact per-element eigenvalue bound on dt (port improvement: the classic lc/c estimate is up to ~40% above the true one-point-element stability limit; the Starter computes the exact 6×6/3×3 eigenvalue correction once per element — see `solid_hexa8._exact_dt_factor`) | ✅ |
+| Exact per-element eigenvalue bound on dt (port improvement: the classic lc/c estimate is up to ~40% above the true one-point-element stability limit; the Starter computes the exact eigenvalue correction once per element — 6×6 for solids, membrane **and** bending/shear branches for shells since M2, the full 12×12 for beams — see `solid_hexa8._exact_dt_factor`, `shell_bt4._bend_shear_omega2`, `beam_type3._exact_dt`) | ✅ |
 | Solid hexa8, 1-point, Flanagan–Belytschko hourglass control | ✅ |
-| Belytschko–Tsay 4-node shell (memb/bend/shear + hourglass) | ✅ |
+| Solid tetra4, constant strain (no hourglass modes; plain formulation — nodal-pressure Itetra variants ❌) | ✅ |
+| Belytschko–Tsay 4-node shell (memb/bend/shear, BLT84 **stiffness** hourglass control since M2 — M1's viscous form artificially damped coarse dynamic bending) | ✅ |
+| C0 3-node triangle shell (CST membrane + Mindlin plate, no hourglass modes) | ✅ |
+| Corotational Timoshenko beam (axial/2×shear/torsion/2×bending resultants) | 🟡 (LAW1 only) |
+| Degenerated /BRICK → tetra conversion, penta/pyramid clear check | 🟡 |
 | Truss, linear spring | ✅ |
 | Jaumann objective stress update | ✅ |
 | LAW1, LAW2 (3D + plane stress) | ✅ |
@@ -132,11 +143,17 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 
 ## 5. Roadmap (next milestones)
 
-1. **M2 — element completeness**: `/SH3N` (C0 triangle), 4-node tetra,
-   fully-integrated solid (Isolid=17 equivalent), QEPH shell, beams
-   (`/PROP/TYPE3`), degenerate bricks.
+1. **M2 — element completeness** ✅ (done): `/SH3N` (C0 triangle), 4-node
+   tetra, beams (`/BEAM` + `/PROP/TYPE3`, elastic), degenerate-brick
+   handling, shell hourglass upgraded from viscous to BLT84 stiffness
+   type, exact-dt coverage extended to the shell bending/shear branch and
+   the beam 12×12 eigenproblem. Deferred to later milestones:
+   fully-integrated solid (Isolid=17 equivalent), QEPH shell, DKT18
+   triangle, plastic beams (global plasticity model), nodal-pressure
+   tetra variants.
 2. **M3 — materials**: LAW36 (tabulated plasticity), LAW27 (brittle),
-   LAW42 (Ogden), /FAIL cards (Johnson–Cook failure, biquad), EOS.
+   LAW42 (Ogden), /FAIL cards (Johnson–Cook failure, biquad), EOS;
+   plastic beams from M2's deferred list.
 3. **M4 — contact**: TYPE7 full options (Igap, Istf variants, self-impact),
    TYPE2 tied, TYPE11 edge-to-edge.
 4. **M5 — constraints & loads**: /RBODY, /RBE2/RBE3, /MPC, /SECT, moving and

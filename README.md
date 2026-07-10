@@ -71,15 +71,19 @@ Outputs:
 
 See [PORTING_GUIDE.md](PORTING_GUIDE.md) for the detailed feature matrix, the
 map from every Python module to the original Fortran directory, and the porting
-roadmap. Milestone 1 (this state of the repository) covers:
+roadmap. Milestones 1–2 (this state of the repository) cover:
 
-- **Input**: the Radioss block-keyword deck format (`/NODE`, `/BRICK`, `/SHELL`,
-  `/TRUSS`, `/SPRING`, `/PART`, `/MAT/LAW1`, `/MAT/LAW2`, `/PROP/TYPE1/2/4/14`,
+- **Input**: the Radioss block-keyword deck format (`/NODE`, `/BRICK`,
+  `/TETRA4`, `/SHELL`, `/SH3N`, `/TRUSS`, `/SPRING`, `/BEAM`, `/PART`,
+  `/MAT/LAW1`, `/MAT/LAW2`, `/PROP/TYPE1/2/3/4/14`,
   `/BCS`, `/INIVEL`, `/GRAV`, `/CLOAD`, `/IMPVEL`, `/FUNCT`, `/GRNOD`,
   `/RWALL`, `/INTER/TYPE7`, `/TH`, …) with `#include` support.
 - **Elements**: 8-node solid (one-point integration + Flanagan–Belytschko
-  hourglass control), 4-node Belytschko–Tsay shell (membrane + bending +
-  transverse shear, through-thickness integration), 2-node truss, 2-node spring.
+  hourglass control) with degenerated-brick→tetra conversion, 4-node
+  constant-strain tetra, 4-node Belytschko–Tsay shell (membrane + bending +
+  transverse shear, through-thickness integration, BLT84 stiffness hourglass
+  control), 3-node C0 triangle shell, 2-node corotational Timoshenko beam,
+  2-node truss, 2-node spring.
 - **Materials**: LAW1 (linear elastic, hypoelastic Jaumann update) and LAW2
   (Johnson–Cook elasto-plasticity with strain-rate hardening, 3D and
   plane-stress variants).

@@ -10,7 +10,8 @@ of) this object, playing the role of the binary ``*_0000.rst`` restart.
 Element storage
 ---------------
 Like the Fortran, elements are stored **by type** in homogeneous groups
-(`bricks`, `shells`, `trusses`, `springs`), each carrying:
+(`bricks`, `tetras`, `shells`, `sh3n`, `trusses`, `springs`, `beams`),
+each carrying:
 
 * ``ids``   — user element IDs, shape (n,)
 * ``conn``  — 0-based node indices, shape (n, nodes_per_elem)
@@ -93,13 +94,17 @@ class Model:
         # Elements by type
         # ------------------------------------------------------------------
         self.bricks: Optional[ElementGroup] = None    # /BRICK  (IXS)
+        self.tetras: Optional[ElementGroup] = None    # /TETRA4 (IXS10 kin)
         self.shells: Optional[ElementGroup] = None    # /SHELL  (IXC)
+        self.sh3n: Optional[ElementGroup] = None      # /SH3N   (IXTG)
         self.trusses: Optional[ElementGroup] = None   # /TRUSS  (IXT)
         self.springs: Optional[ElementGroup] = None   # /SPRING (IXR)
+        self.beams: Optional[ElementGroup] = None     # /BEAM   (IXP)
         # raw (id, part_id, node ids...) tuples collected during parsing,
         # converted to ElementGroups in Starter finalization:
-        self.raw_elems: Dict[str, list] = {"BRICK": [], "SHELL": [],
-                                           "TRUSS": [], "SPRING": []}
+        self.raw_elems: Dict[str, list] = {
+            "BRICK": [], "TETRA4": [], "SHELL": [], "SH3N": [],
+            "TRUSS": [], "SPRING": [], "BEAM": []}
 
         # ------------------------------------------------------------------
         # Definitions keyed by user id
@@ -151,7 +156,8 @@ class Model:
     # ----------------------------------------------------------------------
     def element_groups(self):
         """Iterate (name, group) over the non-empty element groups."""
-        for name in ("bricks", "shells", "trusses", "springs"):
+        for name in ("bricks", "tetras", "shells", "sh3n",
+                     "trusses", "springs", "beams"):
             g = getattr(self, name)
             if g is not None and g.n:
                 yield name, g
