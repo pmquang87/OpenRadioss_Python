@@ -34,7 +34,7 @@ from ..common.messages import MessageLog
 from ..common.tables import FunctTable
 from ..model.entities import (
     BoundaryCondition, Box, ConcentratedLoad, Gravity, ImposedVelocity,
-    InitialVelocity, Interface7, Material, NodeGroup, Part, Property,
+    InitialVelocity, Interface, Line, Material, NodeGroup, Part, Property,
     RigidWall, Surface, THRequest,
 )
 from ..model.model import Model
@@ -847,34 +847,120 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INTER/TYPE7/inter_ID``::
+    """``/INTER/TYPE7|TYPE2|TYPE11/inter_ID`` — the three contact types.
+
+    Fortran: ``starter/source/interfaces/int07|02|11/hm_read_inter*.F``.
+    The port keeps a compact card layout (a strict subset of the Radioss
+    fields, in the Radioss order where they exist):
+
+    ``/INTER/TYPE7`` (penalty node-to-surface)::
 
         card 1:  title
-        card 2:  grnod_ID   surf_ID          (secondary nodes, main surface)
-        card 3:  Stfac      Fric      Gap    (all optional)
+        card 2:  grnod_ID  surf_ID  Istf  Igap
+        card 3:  Stfac     Fric     Gapmin  Gapmax     (all optional)
 
-      Penalty contact of the secondary node group against the main surface.
-      Stfac scales the auto-computed penalty stiffness; Gap = contact
-      thickness (0 → auto from main segment size). See
-      pyradioss/contact/inter_type7.py for the ported algorithm.
+      grnod_ID = 0 → *self-impact*: the secondary nodes default to the
+      nodes of the main surface itself (Radioss single-surface input).
+      Istf 0..5 and Igap 0/1 as documented on
+      :class:`pyradioss.model.entities.Interface`. For Istf=1, Stfac is
+      the constant penalty stiffness itself (force/length); otherwise it
+      scales the element-based stiffness (default 1.0).
+
+    ``/INTER/TYPE2`` (tied, kinematic)::
+
+        card 1:  title
+        card 2:  grnod_ID  surf_ID  dsearch
+
+      Every secondary node within ``dsearch`` of the main surface
+      (0 → auto: twice the main segment size) is glued to its closest
+      segment for the whole run. Not-found nodes are left free (warning).
+
+    ``/INTER/TYPE11`` (penalty edge-to-edge)::
+
+        card 1:  title
+        card 2:  line_ID1  line_ID2  Istf  Igap    (secondary, main edges)
+        card 3:  Stfac     Fric      Gapmin  Gapmax
+
+    Options NOT ported (accepted Radioss fields ignored elsewhere in the
+    line): Inacti, sensors, Tstart/Tstop, thermal contact, Ifric>0 friction
+    models, Igap 2/3 mesh-size gap scaling.
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if kind != "TYPE7":
-        log.warning(f"/INTER/{kind} not ported (TYPE7 supported)", block.source)
+    if kind not in ("TYPE7", "TYPE2", "TYPE11"):
+        log.warning(f"/INTER/{kind} not ported (TYPE2, TYPE7, TYPE11 "
+                    f"supported)", block.source)
         return
     title, cards = _title_and_data(block)
     if not cards:
-        log.error(f"/INTER/TYPE7/{block.user_id}: missing data card",
+        log.error(f"/INTER/{kind}/{block.user_id}: missing data card",
                   block.source)
         return
+    toks = cards[0].tokens()
+
+    if kind == "TYPE2":
+        f = _floats(cards[0], 3)
+        model.interfaces.append(Interface(
+            id=block.user_id, type=2, grnod_id=int(toks[0]),
+            surf_id=int(toks[1]), dsearch=f[2], title=title))
+        return
+
     t = cards[0].ints()
-    stfac, fric, gap = (1.0, 0.0, 0.0)
+    istf = t[2] if len(t) > 2 else 0
+    igap = t[3] if len(t) > 3 else 0
+    if istf not in (0, 1, 2, 3, 4, 5):
+        log.error(f"/INTER/{kind}/{block.user_id}: Istf={istf} (0..5)",
+                  block.source)
+    if igap not in (0, 1):
+        log.error(f"/INTER/{kind}/{block.user_id}: Igap={igap} not ported "
+                  f"(0 constant, 1 variable)", block.source)
+    stfac, fric, gap, gap_max = (1.0, 0.0, 0.0, 0.0)
     if len(cards) > 1:
-        stfac, fric, gap = _floats(cards[1], 3, defaults=[1.0, 0.0, 0.0])
-        stfac = stfac or 1.0
-    model.interfaces.append(Interface7(
-        id=block.user_id, grnod_id=t[0], surf_id=t[1],
-        stfac=stfac, fric=fric, gap=gap, title=title))
+        stfac, fric, gap, gap_max = _floats(
+            cards[1], 4, defaults=[1.0, 0.0, 0.0, 0.0])
+        if stfac == 0.0 and istf != 1:
+            stfac = 1.0            # Radioss: Stfac = 0 -> default scale 1.0
+        if istf == 1 and stfac <= 0.0:
+            log.error(f"/INTER/{kind}/{block.user_id}: Istf=1 needs a "
+                      f"positive Stfac (it IS the stiffness)", block.source)
+    if kind == "TYPE7":
+        model.interfaces.append(Interface(
+            id=block.user_id, type=7, grnod_id=t[0], surf_id=t[1],
+            istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap,
+            gap_max=gap_max, title=title))
+    else:                          # TYPE11
+        model.interfaces.append(Interface(
+            id=block.user_id, type=11, line_id1=t[0], line_id2=t[1],
+            istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap,
+            gap_max=gap_max, title=title))
+
+
+def read_line(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/LINE/SURF/line_ID`` or ``/LINE/SEG/line_ID`` — edge sets for
+    /INTER/TYPE11 (Fortran: hm_read_lines.F → IGRSLIN)::
+
+        /LINE/SURF: card 1 = title, card 2+ = surf_IDs (any number/card)
+                    → every unique edge of those surfaces' segments
+        /LINE/SEG:  card 1 = title, card 2+ = node_ID1 node_ID2 per card
+    """
+    kind = block.parts[1].upper() if len(block.parts) > 1 else "SURF"
+    if kind not in ("SURF", "SEG"):
+        log.warning(f"/LINE/{kind} not ported (SURF, SEG supported)",
+                    block.source)
+        return
+    title, cards = _title_and_data(block)
+    line = model.lines.setdefault(block.user_id,
+                                  Line(id=block.user_id, title=title))
+    if kind == "SURF":
+        for card in cards:
+            line.surf_ids.extend(card.ints())
+    else:
+        for card in cards:
+            t = card.ints()
+            if len(t) < 2:
+                log.error(f"/LINE/SEG/{block.user_id}: a segment needs 2 "
+                          f"node ids", card.source)
+                continue
+            line.seg_nodes.append(t[:2])
 
 
 # ============================================================================
@@ -943,6 +1029,7 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "IMPVEL": read_impvel,
     "RWALL": read_rwall,
     "INTER": read_inter,
+    "LINE": read_line,
     "TH": read_th,
 }
 

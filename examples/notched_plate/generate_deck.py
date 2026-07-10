@@ -22,7 +22,11 @@ What to look at (NOTCH_A*.vtk in ParaView):
   * elements delete tip-to-center — threshold on the OFF cell field
     (OFF = 0 -> deleted) to watch the crack run through the ligament;
   * the engine listing (NOTCH_0001.out) prints the running deletion
-    count; after separation the load drops to zero.
+    count; after separation the load drops to zero;
+  * (since M4) a self-impact /INTER/TYPE7 covers the whole plate: the
+    segments of deleted elements drop out of the contact surface, so the
+    crack faces separate freely — and would push, not interpenetrate, if
+    the halves swung back together.
 
 Run it (from this directory):
     python generate_deck.py          # regenerates the two .rad files
@@ -118,6 +122,27 @@ def main():
     lines.append("/IMPVEL/1")
     lines.append("pull top edge in +Y")
     lines.append(f"         1         Y         2{PULL_V:10.3f}")
+
+    # ---- self-impact contact (M4) ----------------------------------------------
+    # A /INTER/TYPE7 in self-impact mode (grnod = 0) over the whole plate:
+    # once /FAIL deletes elements, the segments of the dead elements DROP
+    # OUT of the surface (Starter provenance + engine-side off masking) so
+    # the freshly created crack faces can separate freely and, if the two
+    # halves swing back, they CONTACT instead of interpenetrating. This is
+    # the M3<->M4 interaction that makes crack models physically right.
+    lines.append("/SURF/PART/1")
+    lines.append("whole plate")
+    lines.append("         1")
+    # Gap_max = 0.5: the variable gap t/2 + t/2 = 1.0 mm equals the mesh
+    # size here, which would put every in-plane neighbour permanently
+    # inside the contact search band and throttle the time step for
+    # nothing — capping the pair gap at half a thickness keeps the
+    # out-of-plane crack-face contact and the runtime (the standard
+    # Radioss remedy for fine-mesh self-impact).
+    lines.append("/INTER/TYPE7/1")
+    lines.append("plate self-impact")
+    lines.append("         0         1         2         1")   # self, Istf=2, Igap=1
+    lines.append("       1.0       0.0       0.0       0.5")
 
     # ---- time history ----------------------------------------------------------
     lines.append("/TH/NODE/1")

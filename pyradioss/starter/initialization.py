@@ -241,47 +241,69 @@ def resolve_node_groups(model: Model, log: MessageLog) -> None:
             log.warning(f"/GRNOD/{g.id} '{g.title}' is empty", "GROUP CHECK")
 
 
-def _free_faces_of_bricks(model: Model, part_ids: List[int]) -> np.ndarray:
+def _free_faces_of_bricks(model: Model, part_ids: List[int]):
     """Outer (free) faces of the given solid parts: faces used by exactly
     one element. Fortran: the surface-from-part extraction of
-    starter/source/model/sets/."""
+    starter/source/model/sets/. Returns (faces (n,4), parent element rows
+    in model.bricks (n,)) — the provenance is what lets contact drop the
+    faces of /FAIL-deleted elements (M3<->M4 interaction)."""
     from ..elements.solid_hexa8 import _FACES
     g = model.bricks
     if g is None:
-        return np.zeros((0, 4), dtype=np.int64)
+        return (np.zeros((0, 4), dtype=np.int64),
+                np.zeros(0, dtype=np.int64))
     mask = np.isin(g.state["part_ids"], part_ids)
+    erow = np.where(mask)[0]                                # rows in group
     conn = g.conn[mask]
     faces = conn[:, _FACES.reshape(-1)].reshape(-1, 4)      # (nelem*6, 4)
+    owner = np.repeat(erow, 6)                              # face -> element
     key = np.sort(faces, axis=1)
     _, inverse, counts = np.unique(key, axis=0, return_inverse=True,
                                    return_counts=True)
-    return faces[counts[inverse] == 1]
+    free = counts[inverse] == 1
+    return faces[free], owner[free]
 
 
-def _free_faces_of_tetras(model: Model, part_ids: List[int]) -> np.ndarray:
+def _free_faces_of_tetras(model: Model, part_ids: List[int]):
     """Free triangular faces of /TETRA4 parts, as degenerate 4-node
-    segments (3rd node repeated — Radioss triangle-segment convention)."""
+    segments (3rd node repeated — Radioss triangle-segment convention).
+    Returns (faces (n,4), parent element rows in model.tetras (n,))."""
     from ..elements.solid_tetra4 import _FACES
     g = model.tetras
     if g is None:
-        return np.zeros((0, 4), dtype=np.int64)
+        return (np.zeros((0, 4), dtype=np.int64),
+                np.zeros(0, dtype=np.int64))
     mask = np.isin(g.state["part_ids"], part_ids)
+    erow = np.where(mask)[0]
     conn = g.conn[mask]
     faces = conn[:, _FACES.reshape(-1)].reshape(-1, 3)      # (nelem*4, 3)
+    owner = np.repeat(erow, 4)
     key = np.sort(faces, axis=1)
     _, inverse, counts = np.unique(key, axis=0, return_inverse=True,
                                    return_counts=True)
-    free = faces[counts[inverse] == 1]
-    return np.column_stack([free, free[:, 2]])              # n4 = n3
+    free = counts[inverse] == 1
+    faces = faces[free]
+    return np.column_stack([faces, faces[:, 2]]), owner[free]  # n4 = n3
 
 
 def resolve_surfaces(model: Model, log: MessageLog) -> None:
-    """/SURF content -> (nseg, 4) node-index arrays."""
+    """/SURF content -> (nseg, 4) node-index arrays + per-segment
+    provenance (parent element group/row, see Surface docstring)."""
     for s in model.surfaces.values():
         segs: List[np.ndarray] = []
+        gtypes: List[np.ndarray] = []   # parallel provenance pieces
+        elems: List[np.ndarray] = []
+
+        def _add(seg_arr, gtype, elem_rows):
+            segs.append(seg_arr)
+            gtypes.append(np.full(len(seg_arr), gtype, dtype="<U8"))
+            elems.append(np.asarray(elem_rows, dtype=np.int64))
+
         for row in s.seg_nodes:
             try:
-                segs.append(model.node_indices(row)[None, :])
+                # explicit /SURF/SEG segments have no parent element: they
+                # are never dropped by element deletion (gtype '')
+                _add(model.node_indices(row)[None, :], "", [-1])
             except KeyError as exc:
                 log.error(f"/SURF/{s.id}: unknown node id {exc}",
                           "SURFACE CHECK")
@@ -290,25 +312,86 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
             if model.shells is not None:
                 mask = np.isin(model.shells.state["part_ids"], s.part_ids)
                 if np.any(mask):
-                    segs.append(model.shells.conn[mask])
+                    _add(model.shells.conn[mask], "shells", np.where(mask)[0])
             # 3-node shell parts: triangle segments (3rd node repeated)
             if model.sh3n is not None:
                 mask = np.isin(model.sh3n.state["part_ids"], s.part_ids)
                 if np.any(mask):
                     c3 = model.sh3n.conn[mask]
-                    segs.append(np.column_stack([c3, c3[:, 2]]))
-            # solid parts: free outer faces
-            ff = _free_faces_of_bricks(model, s.part_ids)
+                    _add(np.column_stack([c3, c3[:, 2]]), "sh3n",
+                         np.where(mask)[0])
+            # solid parts: free outer faces (with their parent element)
+            ff, fo = _free_faces_of_bricks(model, s.part_ids)
             if len(ff):
-                segs.append(ff)
-            ft = _free_faces_of_tetras(model, s.part_ids)
+                _add(ff, "bricks", fo)
+            ft, to = _free_faces_of_tetras(model, s.part_ids)
             if len(ft):
-                segs.append(ft)
-        s.segments = (np.vstack(segs) if segs
-                      else np.zeros((0, 4), dtype=np.int64))
+                _add(ft, "tetras", to)
+        if segs:
+            s.segments = np.vstack(segs)
+            s.seg_gtype = np.concatenate(gtypes)
+            s.seg_elem = np.concatenate(elems)
+        else:
+            s.segments = np.zeros((0, 4), dtype=np.int64)
+            s.seg_gtype = np.zeros(0, dtype="<U8")
+            s.seg_elem = np.zeros(0, dtype=np.int64)
         if s.segments.shape[0] == 0:
             log.warning(f"/SURF/{s.id} '{s.title}' has no segments",
                         "SURFACE CHECK")
+
+
+# 4-node segment -> its 4 edges; a triangle segment (n4 = n3) yields the
+# degenerate edge (n3, n3), filtered out below.
+_SEG_EDGES = np.array([[0, 1], [1, 2], [2, 3], [3, 0]])
+
+
+def resolve_lines(model: Model, log: MessageLog) -> None:
+    """/LINE content -> (nseg, 2) edge node-index arrays + provenance.
+    Must run AFTER resolve_surfaces (LINE/SURF reads resolved segments).
+
+    Fortran: hm_read_lines.F builds IGRSLIN the same two ways (from a
+    surface or from explicit segments)."""
+    for ln in model.lines.values():
+        edges: List[np.ndarray] = []
+        gtypes: List[np.ndarray] = []
+        elems: List[np.ndarray] = []
+        for sid in ln.surf_ids:
+            surf = model.surfaces.get(sid)
+            if surf is None or surf.segments is None:
+                log.error(f"/LINE/{ln.id}: surface {sid} not defined",
+                          "LINE CHECK")
+                continue
+            e = surf.segments[:, _SEG_EDGES.reshape(-1)].reshape(-1, 2)
+            own_g = np.repeat(surf.seg_gtype, 4)
+            own_e = np.repeat(surf.seg_elem, 4)
+            keep = e[:, 0] != e[:, 1]        # drop degenerate triangle edge
+            e, own_g, own_e = e[keep], own_g[keep], own_e[keep]
+            # each interior edge appears twice (once per adjacent segment):
+            # keep one copy — for contact both copies are identical springs
+            _, first = np.unique(np.sort(e, axis=1), axis=0,
+                                 return_index=True)
+            edges.append(e[first])
+            gtypes.append(own_g[first])
+            elems.append(own_e[first])
+        for row in ln.seg_nodes:
+            try:
+                edges.append(model.node_indices(row)[None, :])
+                gtypes.append(np.array([""], dtype="<U8"))
+                elems.append(np.array([-1], dtype=np.int64))
+            except KeyError as exc:
+                log.error(f"/LINE/{ln.id}: unknown node id {exc}",
+                          "LINE CHECK")
+        if edges:
+            ln.segments = np.vstack(edges)
+            ln.seg_gtype = np.concatenate(gtypes)
+            ln.seg_elem = np.concatenate(elems)
+        else:
+            ln.segments = np.zeros((0, 2), dtype=np.int64)
+            ln.seg_gtype = np.zeros(0, dtype="<U8")
+            ln.seg_elem = np.zeros(0, dtype=np.int64)
+        if ln.segments.shape[0] == 0:
+            log.warning(f"/LINE/{ln.id} '{ln.title}' has no edges",
+                        "LINE CHECK")
 
 
 # ----------------------------------------------------------------------------

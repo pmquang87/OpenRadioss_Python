@@ -22,5 +22,5 @@ from .model import Model, EngineControls  # noqa: F401
 from .entities import (  # noqa: F401
     Material, Property, Part, NodeGroup, Surface, BoundaryCondition,
     InitialVelocity, Gravity, ConcentratedLoad, ImposedVelocity,
-    RigidWall, Interface7, THRequest, Box,
+    RigidWall, Interface, Line, THRequest, Box,
 )

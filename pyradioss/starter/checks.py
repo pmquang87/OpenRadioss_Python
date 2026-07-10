@@ -73,10 +73,22 @@ def check_model(model: Model, log: MessageLog) -> None:
     for rw in model.rwalls:
         need_group(rw.grnod_id, f"/RWALL/{rw.id}")
     for itf in model.interfaces:
-        need_group(itf.grnod_id, f"/INTER/TYPE7/{itf.id}")
-        if itf.surf_id not in model.surfaces:
-            log.error(f"/INTER/TYPE7/{itf.id}: surface {itf.surf_id} "
-                      f"not defined", "CROSS REF")
+        who = f"/INTER/TYPE{itf.type}/{itf.id}"
+        if itf.type in (7, 2):
+            # TYPE7 allows grnod_id = 0 (self-impact: secondary side
+            # defaults to the main surface's own nodes); TYPE2 does not.
+            if itf.type == 2 or itf.grnod_id != 0:
+                need_group(itf.grnod_id, who)
+            if itf.type == 2 and itf.grnod_id == 0:
+                log.error(f"{who}: a tied interface needs a secondary "
+                          f"node group", "CROSS REF")
+            if itf.surf_id not in model.surfaces:
+                log.error(f"{who}: surface {itf.surf_id} not defined",
+                          "CROSS REF")
+        elif itf.type == 11:
+            for lid in (itf.line_id1, itf.line_id2):
+                if lid not in model.lines:
+                    log.error(f"{who}: line {lid} not defined", "CROSS REF")
     for th in model.th_requests:
         if th.kind == "NODE":
             for nid in th.ids:

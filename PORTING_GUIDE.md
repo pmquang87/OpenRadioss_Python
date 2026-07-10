@@ -57,7 +57,12 @@ same names in comments.
 | `engine/source/materials/mat/mat042/sigeps42.F` | `pyradioss/materials/law42_ogden.py` | solids; returns its own SOUNDSP |
 | `engine/source/materials/fail/johnson_cook/`, `fail/biquad/` | `pyradioss/failure/` | /FAIL cards + GBUF%OFF element deletion |
 | `engine/source/elements/beam/pmat3.F` (global plasticity) | `pyradioss/elements/beam_type3.py` | LAW2 resultant-space return |
-| `engine/source/interfaces/inter3d/` (TYPE7: `i7main*.F`) | `pyradioss/contact/inter_type7.py` | penalty node↔segment |
+| `engine/source/interfaces/int07/` (`i7dst3.F`, `i7for3.F`) + `intsort/i7buce.F` | `pyradioss/contact/inter_type7.py` | penalty node↔segment, voxel broad phase |
+| `engine/source/interfaces/int02/` (`i2for3.F`, `i2vit3.F`) | `pyradioss/contact/inter_type2.py` | tied contact (kinematic) |
+| `engine/source/interfaces/int11/` (`i11dst3.F`, `i11for3.F`) | `pyradioss/contact/inter_type11.py` | penalty edge↔edge |
+| `starter/source/interfaces/inter3d1/` (`i7sti3.F`, `i11sti3.F`, gap setup) | `pyradioss/contact/stiffness.py` | element-based penalty stiffness + gaps |
+| interface `IDEL` bookkeeping vs `GBUF%OFF` | `pyradioss/contact/tracking.py` | deleted elements drop out of contact |
+| `starter/source/model/sets/hm_read_lines.F` (IGRSLIN) | `pyradioss/starter/initialization.py` (`resolve_lines`) | /LINE edge sets |
 | `engine/source/output/` (`ecrit.F`, `sortie_main.F`, TH, ANIM) | `pyradioss/output/*.py` | CSV + VTK |
 | `common_source/` (constants, tables) | `pyradioss/common/*.py` | |
 
@@ -124,8 +129,11 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | `/GRNOD/NODE`, `/GRNOD/PART`, `/GRNOD/BOX` | ✅ | |
 | `/BOX/RECTA` | ✅ | |
 | `/RWALL/PLANE` | 🟡 | infinite plane, sliding or tied; moving wall ❌ |
-| `/INTER/TYPE7` | 🟡 | penalty, constant stiffness option, Coulomb friction; full Istf/Igap variants ❌ |
-| `/SURF/PART`, `/SURF/SEG` | ✅ | for contact |
+| `/INTER/TYPE7` | ✅ | penalty node↔surface (M4): Istf 0–5 stiffness variants, Igap 0/1 (constant / variable from shell thicknesses) with Gap_min/Gap_max, self-impact (`grnod_ID = 0`), Coulomb friction, voxel broad phase; Inacti, Igap 2/3, Tstart/Tstop, sensors, Ifric>0 friction models ❌ |
+| `/INTER/TYPE2` | 🟡 | tied contact (M4): kinematic secondary→main gluing, constant-weight projection with co-rotating offset, lumped mass/force transfer, deletion release; rotational-DOF tying (Spotflag) and offset moment redistribution ❌ |
+| `/INTER/TYPE11` | ✅ | edge↔edge penalty (M4): /LINE edge sets, Istf/Igap as TYPE7, exact segment-segment closest points; parallel-overlap force distribution simplified to the closest-point pair |
+| `/LINE/SURF`, `/LINE/SEG` | ✅ | edge sets for TYPE11 (M4), with element provenance for deletion |
+| `/SURF/PART`, `/SURF/SEG` | ✅ | for contact; since M4 every segment carries its parent-element provenance (deletion, stiffness, gap) |
 | `/TH/NODE`, `/TH/PART` | ✅ | |
 | Engine: `/RUN`, `/VERS`, `/TFILE`, `/ANIM/DT`, `/ANIM/VECT|ELEM`, `/DT`, `/PRINT`, `/STOP` | ✅/🟡 | `/DT/NODA/CST` (mass scaling) ❌ |
 
@@ -151,7 +159,12 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | /FAIL element deletion plumbing (per-layer for shells, GBUF%OFF, deleted elements keep mass, drop stress/hourglass/dt claim, OFF field in ANIM, deletion count in the listing) | ✅ |
 | Equations of state (/EOS) for solids | ❌ (deliberately deferred — see roadmap M6: needs energy-dependent pressure integration per element, out of M3's scope; pressure is currently always the law's own, i.e. linear K·tr(ε) for LAW1/2/36) |
 | Rigid wall (kinematic, slide/tied) | ✅ |
-| TYPE7-style penalty contact + friction | 🟡 |
+| TYPE7 penalty contact + friction (Istf variants, Igap, self-impact, voxel search) | ✅ |
+| TYPE2 tied contact (kinematic; zero-work by construction — asserted in tests) | ✅ (translations; no rotation tying) |
+| TYPE11 edge-to-edge penalty contact | ✅ |
+| Contact ⇄ element deletion (M3⇄M4): segments/edges of `off == 0` elements drop out per cycle, secondary nodes with no surviving element stop being tracked, tied pairs release | ✅ |
+| Interface time step: static node-on-spring bound + per-cycle accumulation of NEAR candidate spring stiffness per node (dt ≤ √(2m/ΣK) — springs stack at corners and in self-impact; proven by /DT 0.9 long-run impacts for Istf 0/2/5) | ✅ |
+| Contact energy booked at the leapfrog midstep velocity (an M4 lesson: booking f·v at the pre-update velocity leaves a positive-definite f²dt²/2m residual per cycle that reads as energy creation when penalty springs dominate the scale — the midstep booking closes the balance to round-off) | ✅ |
 | Energy balance (int/kin/hourglass/contact/external work), error % | ✅ |
 | T01 time history, ANIM (as VTK), listings | ✅ |
 | MPI/domain decomposition, SMP | ❌ (out of scope) |
@@ -185,8 +198,33 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
    * /FAIL/BIQUAD M-flag presets and S-flag; LAW36 Fsmooth/Fscale;
    * fiber-integrated beams (/PROP/TYPE18) for true plastic-hinge
      spread.
-3. **M4 — contact**: TYPE7 full options (Igap, Istf variants, self-impact),
-   TYPE2 tied, TYPE11 edge-to-edge.
+3. **M4 — contact** ✅ (done): TYPE7 full options — Istf 0–5 stiffness
+   variants from the element formulas of i7sti3 (shell 0.5·E·t, solid
+   B·A²/V), Igap constant/variable gaps with Gap_min/Gap_max, self-impact
+   (grnod = 0), and a voxel broad phase replacing M1's all-pairs box
+   test; TYPE2 tied contact (kinematic constraint: constant-weight
+   projection with a co-rotating offset frame, lumped mass/force
+   transfer — momentum-exact and zero-work by construction, both
+   asserted); TYPE11 edge-to-edge penalty on /LINE edge sets (exact
+   segment-segment closest points). Contact ⇄ /FAIL deletion is fully
+   plumbed through per-segment element provenance: crack faces stop
+   carrying contact, orphaned nodes stop being tracked, tied pairs
+   release (the notched-plate example now runs a self-impact interface
+   through full ligament tearing at ~0% energy error). Two hard-won
+   solver lessons are recorded in the code: the interface dt must see
+   the SUM of the candidate spring stiffnesses per node (springs stack
+   at corners/self-impact — i7's STIFN accumulation), and contact work
+   must be booked at the leapfrog midstep velocity or the balance reads
+   spurious energy creation. Deferred out of M4, explicitly:
+   * Inacti initial-penetration treatments and the stiffening
+     K·p/(gap−p) near-crossing guard of the original force law;
+   * Igap 2/3 (mesh-size-scaled gaps), Tstart/Tstop, sensors,
+     Ifric > 0 friction models, thermal contact;
+   * TYPE2 rotational-DOF tying (Spotflag) and the moment
+     redistribution of offset ties; penalty-formulation TYPE2;
+   * TYPE19/24/25 style combined interfaces;
+   * parallel-edge overlap force distribution for TYPE11 (resultant is
+     right, distribution acts at the closest-point pair).
 4. **M5 — constraints & loads**: /RBODY, /RBE2/RBE3, /MPC, /SECT, moving and
    spherical/cylindrical rigid walls, /PLOAD, /IMPDISP.
 5. **M6 — engine niceties**: /DT/NODA/CST mass scaling, restarts

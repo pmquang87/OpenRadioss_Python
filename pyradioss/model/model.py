@@ -31,7 +31,7 @@ import numpy as np
 
 from .entities import (
     BoundaryCondition, Box, ConcentratedLoad, Gravity, ImposedVelocity,
-    InitialVelocity, Interface7, Material, NodeGroup, Part, Property,
+    InitialVelocity, Interface, Line, Material, NodeGroup, Part, Property,
     RigidWall, Surface, THRequest,
 )
 from ..common.tables import FunctTable
@@ -120,6 +120,7 @@ class Model:
         self.functions: Dict[int, FunctTable] = {}
         self.node_groups: Dict[int, NodeGroup] = {}
         self.surfaces: Dict[int, Surface] = {}
+        self.lines: Dict[int, Line] = {}
         self.boxes: Dict[int, Box] = {}
 
         # Loads / constraints / contacts
@@ -129,7 +130,7 @@ class Model:
         self.cloads: List[ConcentratedLoad] = []
         self.impvel: List[ImposedVelocity] = []
         self.rwalls: List[RigidWall] = []
-        self.interfaces: List[Interface7] = []
+        self.interfaces: List[Interface] = []
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
