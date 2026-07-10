@@ -141,6 +141,65 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
 
 
 # ----------------------------------------------------------------------------
+# Material resolution: /FUNCT curve references, /FAIL attachment
+# ----------------------------------------------------------------------------
+
+def resolve_materials(model: Model, log: MessageLog) -> None:
+    """Resolve everything a material references once the whole deck is
+    read (deck order between /MAT, /FUNCT and /FAIL is free):
+
+    * LAW36: pull the /FUNCT hardening curves into plain arrays in
+      ``mat.params`` (curve_x/curve_y/curve_s + rates) so the Engine
+      kernels never touch the function-table objects — the Fortran
+      Starter does the same (curves are copied into the MLAW buffer);
+    * /FAIL cards: attach each parsed FailureModel to its material.
+    """
+    for mat in model.materials.values():
+        if mat.law != 36:
+            continue
+        cxs, cys, css = [], [], []
+        ok = True
+        for fid in mat.params["funct_ids"]:
+            fct = model.functions.get(fid)
+            if fct is None:
+                log.error(f"/MAT/LAW36/{mat.id}: function {fid} not defined",
+                          "MAT CHECK")
+                ok = False
+                continue
+            if np.any(fct.x < 0.0):
+                log.error(f"/MAT/LAW36/{mat.id}: curve {fid} has negative "
+                          f"plastic-strain abscissae", "MAT CHECK")
+                ok = False
+            if fct.eval(0.0) <= 0.0:
+                log.error(f"/MAT/LAW36/{mat.id}: curve {fid} gives a "
+                          f"non-positive initial yield stress", "MAT CHECK")
+                ok = False
+            cxs.append(fct.x.copy())
+            cys.append(fct.y.copy())
+            css.append(fct.slope.copy())
+        if ok:
+            mat.params["curve_x"] = cxs
+            mat.params["curve_y"] = cys
+            mat.params["curve_s"] = css
+            mat.params["rates"] = np.asarray(mat.params["rates"], dtype=float)
+
+    for mat_id, fm, source in model.raw_fails:
+        mat = model.materials.get(mat_id)
+        if mat is None:
+            log.error(f"/FAIL/{fm.type}/{mat_id}: material {mat_id} not "
+                      f"defined", source)
+            continue
+        if mat.law == 1:
+            log.warning(f"/FAIL/{fm.type}/{mat_id}: attached to elastic "
+                        f"LAW1 — no plastic strain ever accumulates, the "
+                        f"criterion will never trigger", source)
+        if mat.fail is not None:
+            log.warning(f"/FAIL/{fm.type}/{mat_id}: material already has a "
+                        f"/FAIL card — replaced", source)
+        mat.fail = fm
+
+
+# ----------------------------------------------------------------------------
 # Node groups and surfaces
 # ----------------------------------------------------------------------------
 

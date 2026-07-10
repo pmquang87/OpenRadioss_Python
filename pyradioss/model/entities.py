@@ -23,6 +23,27 @@ import numpy as np
 # ============================================================================
 
 @dataclass
+class FailureModel:
+    """One /FAIL option, attached to a material (the keyword carries the
+    material id: ``/FAIL/JOHNSON/mat_ID``).
+
+    Fortran origin: the FAIL_PARAM structures of ``fail_param_mod.F``
+    filled by ``starter/source/materials/fail/hm_read_fail*.F``.
+
+    Attributes
+    ----------
+    type     : 'JOHNSON' | 'BIQUAD' (see pyradioss.failure)
+    params   : criterion constants (D1..D4 / c1..c5 + derived fits)
+    ifail_sh : shell deletion rule — 1 = delete when ONE integration
+               layer is broken (default), 2 = when ALL layers are broken
+    """
+
+    type: str
+    params: Dict[str, float] = field(default_factory=dict)
+    ifail_sh: int = 1
+
+
+@dataclass
 class Material:
     """One /MAT law. Only the fields common to all laws live here; law
     parameters are in ``params``, interpreted by the material kernel.
@@ -30,9 +51,14 @@ class Material:
     Attributes
     ----------
     id, title : user id and title
-    law       : integer law number (1 = elastic, 2 = Johnson-Cook, ...)
+    law       : integer law number (1 = elastic, 2 = Johnson-Cook,
+                27 = brittle, 36 = tabulated, 42 = Ogden, ...)
     rho0      : initial density (PM(1) 'RHO0' in the Fortran)
     params    : law-specific constants, e.g. E, nu, A, B, n, c, eps0...
+                (for LAW42 the parse stores the DERIVED E from
+                G0 = sum(mu_p*alpha_p)/2 and nu, so the generic elastic
+                properties below work for every law)
+    fail      : optional /FAIL criterion attached to this material
     """
 
     id: int
@@ -40,6 +66,7 @@ class Material:
     rho0: float
     title: str = ""
     params: Dict[str, float] = field(default_factory=dict)
+    fail: Optional[FailureModel] = None
 
     # Convenience elastic constants (every implemented law defines these;
     # they drive the sound speed / time step and contact stiffness).

@@ -69,7 +69,11 @@ from __future__ import annotations
 import numpy as np
 
 from .. import materials
-from ..common.constants import EM20, SHEAR_FACTOR
+from ..common.constants import EM20, EP30, SHEAR_FACTOR
+# the per-layer material/failure plumbing is IDENTICAL to the quad shell
+# (only the node count differs) — shared helpers, like _bend_shear_omega2
+from .shell_bt4 import (_element_deletion, _init_material_state,
+                        _layer_extra, _layer_failure)
 
 
 # ----------------------------------------------------------------------------
@@ -191,6 +195,7 @@ def init_group(group, model, log):
         dtfac=_exact_dt_factor(B1, B2, area, _char_length(xl, area),
                                thick, group.state["slices"]),
     )
+    _init_material_state(group, nip_max)
     node_idx = group.conn.reshape(-1)
     mass_c = np.repeat(mass / 3.0, 3)
     # generous lumped rotational inertia (Key's trick, see module docstring)
@@ -234,14 +239,24 @@ def forces(group, x, v, vr, dt, fint, mint):
         np.einsum("ni,ni->n", B2, vz) - thx.mean(axis=1),
     ], axis=1)
 
+    # deleted elements (GBUF%OFF = 0): freeze their state (see shell_bt4)
+    alive = st["off"] > 0.0
+    if not alive.all():
+        dm[~alive] = 0.0
+        kap[~alive] = 0.0
+        gs[~alive] = 0.0
+
     # ---- layer stress updates + resultants (same machinery as shell_bt4) ---
     sig = st["sig"]
+    epsp_old = st["epsp"].copy() if st["chk_fail"] else None
     Nres = np.zeros((n, 3))     # membrane force / length
     Mres = np.zeros((n, 3))     # moment / length
     de_layers = np.zeros(n)
     c = np.zeros(n)
+    nip_of = []
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         zrel, wrel = st["zw"][isl]
+        nip_of.append(len(zrel))
         t_sl = thick[sl]
         for k in range(len(zrel)):
             zk = zrel[k] * t_sl
@@ -249,7 +264,10 @@ def forces(group, x, v, vr, dt, fint, mint):
             deps = (dm[sl] + zk[:, None] * kap[sl]) * dt
             s_old = sig[sl, k, :].copy()
             s_new, _ = materials.shell_update(
-                mat, sig[sl, k, :], deps, st["epsp"][sl, k], dt)
+                mat, sig[sl, k, :], deps, st["epsp"][sl, k], dt,
+                _layer_extra(st, sl, k))
+            if st["chk_fail"]:
+                _layer_failure(st, sl, mat, k, s_new, epsp_old, deps, dt)
             sig[sl, k, :] = s_new
             s_mid = 0.5 * (s_old + s_new)
             Nres[sl] += wk[:, None] * s_new
@@ -261,6 +279,16 @@ def forces(group, x, v, vr, dt, fint, mint):
         st["qshear"][sl] += SHEAR_FACTOR * mat.G * gs[sl] * dt
         de_layers[sl] += t_sl * np.einsum(
             "nk,nk->n", 0.5 * (qold + st["qshear"][sl]), gs[sl] * dt)
+
+    # ---- element deletion from the layer flags (see shell_bt4) -------------
+    if st["chk_fail"]:
+        alive = _element_deletion(st, nip_of)
+        if not alive.all():
+            dead = ~alive
+            Nres[dead] = 0.0
+            Mres[dead] = 0.0
+            sig[dead] = 0.0
+            st["qshear"][dead] = 0.0
     qres = st["qshear"] * thick[:, None]            # shear force / length
 
     # ---- internal nodal forces & moments (transpose of the rates) ----------
@@ -287,4 +315,5 @@ def forces(group, x, v, vr, dt, fint, mint):
     np.add.at(mint, conn.reshape(-1), mg.reshape(-1, 3))
 
     # ---- critical time step --------------------------------------------------
-    return st["dtfac"] * lc / c
+    # deleted elements no longer constrain the global step
+    return np.where(alive, st["dtfac"] * lc / c, EP30)
