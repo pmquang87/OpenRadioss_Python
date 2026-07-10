@@ -33,10 +33,10 @@ import numpy as np
 from ..common.messages import MessageLog
 from ..common.tables import FunctTable
 from ..model.entities import (
-    AddedMass, BoundaryCondition, Box, ConcentratedLoad, Gravity,
+    AddedMass, BoundaryCondition, Box, ConcentratedLoad, Damping, Gravity,
     ImposedDisplacement, ImposedVelocity, InitialVelocity, Interface, Line,
-    Material, NodeGroup, Part, PressureLoad, Property, Rbe3, RigidBody,
-    RigidWall, Section, Surface, THRequest,
+    Material, Mpc, NodeGroup, Part, PressureLoad, Property, Rbe3, RigidBody,
+    RigidWall, Section, Sensor, Surface, THRequest,
 )
 from ..model.model import Model
 from .deck_reader import Card, KeywordBlock
@@ -246,11 +246,18 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         card 3:  E   nu
         card 4:  A   B   n   eps_p_max   sig_max
         card 5:  c   eps_dot_0   [ICC  Fsmooth  F_cut  — ignored]
+        card 6:  m   T_melt   rho_Cp   [T_i]          (optional — M6)
 
-      yield stress  sigma_y = (A + B*eps_p^n) * (1 + c*ln(eps_dot/eps_dot_0))
+      yield stress
+      sigma_y = (A + B*eps_p^n) (1 + c*ln(eps_dot/eps_dot_0)) (1 - T*^m)
       capped at sig_max; the element is DELETED when the plastic strain
       reaches eps_p_max (since M3). Card 5 is optional (no rate effect if
-      absent). The thermal-softening card (m, T_melt, ...) is not ported.
+      absent). Card 6 (M6) turns on the ADIABATIC thermal terms: the
+      plastic work heats the material, dT = sigma_y d(eps_p) / rho_Cp
+      (rho_Cp = specific heat per unit volume), and the homologous
+      temperature T* = (T - T_i)/(T_melt - T_i) softens the yield stress
+      (and feeds /FAIL/JOHNSON's D5 term). T_i defaults to 298 K; there
+      is no heat conduction (adiabatic — the crash/impact regime).
 
     LAW27 (brittle, shells only) — Fortran .../mat027::
 
@@ -352,6 +359,15 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             params.update(c=c, eps_dot_0=eps0 if eps0 > 0 else 1.0)
         else:
             params.update(c=0.0, eps_dot_0=1.0)
+        if len(cards) >= 5:                    # thermal card (M6)
+            mT, tmelt, rho_cp, ti = _floats(
+                cards[4], 4, defaults=[0.0, 0.0, 0.0, 298.0])
+            ti = ti if ti > 0 else 298.0
+            if mT > 0 and (tmelt <= ti or rho_cp <= 0):
+                log.error(f"/MAT/LAW2/{block.user_id}: thermal card needs "
+                          f"T_melt > T_i and rho_Cp > 0", block.source)
+            elif mT > 0:
+                params.update(mT=mT, T_melt=tmelt, rho_cp=rho_cp, T_i=ti)
     elif law == 27:
         if len(cards) < 3:
             log.error(f"/MAT/LAW27/{block.user_id}: missing damage card "
@@ -412,12 +428,15 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     JOHNSON — Fortran starter/source/materials/fail/johnson_cook::
 
-        card 1:  D1   D2   D3   D4   [D5 — read and ignored, no thermal]
+        card 1:  D1   D2   D3   D4   [D5]
         card 2:  eps_dot_0   Ifail_sh        (optional; defaults 1.0, 1)
 
-      eps_f = (D1 + D2*exp(D3*sigma*)) * (1 + D4*ln(rate/eps_dot_0)),
+      eps_f = (D1 + D2*exp(D3*sigma*)) * (1 + D4*ln(rate/eps_dot_0))
+              * (1 + D5*T*),
       damage D += d_eps_p/eps_f, break at D >= 1. Ifail_sh: 1 = delete
       the shell when ONE layer breaks (default), 2 = when ALL layers do.
+      D5 (M6) needs the material's adiabatic temperature (the LAW2
+      thermal card) — the Starter warns and drops it otherwise.
 
     BIQUAD — Fortran starter/source/materials/fail/biquad::
 
@@ -446,7 +465,7 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/FAIL/{kind}/{mat_id}: missing data card", block.source)
         return
     if kind == "JOHNSON":
-        D1, D2, D3, D4, _D5 = _floats(cards[0], 5)
+        D1, D2, D3, D4, D5 = _floats(cards[0], 5)
         eps0, ifail_sh = 1.0, 1
         if len(cards) > 1:
             v = _floats(cards[1], 2, defaults=[1.0, 1])
@@ -454,7 +473,7 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             ifail_sh = int(v[1]) if v[1] in (1, 2) else 1
         fm = FailureModel(type="JOHNSON", ifail_sh=ifail_sh,
                           params={"D1": D1, "D2": D2, "D3": D3, "D4": D4,
-                                  "eps_dot_0": eps0})
+                                  "D5": D5, "eps_dot_0": eps0})
         if D1 <= 0.0 and D2 <= 0.0:
             log.error(f"/FAIL/JOHNSON/{mat_id}: D1 and D2 both <= 0 gives "
                       f"a zero failure strain", block.source)
@@ -477,6 +496,59 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     # attachment to the material happens in the Starter resolve step
     # (initialization.resolve_materials) so deck order does not matter
     model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EOS/POLYNOMIAL/mat_ID`` and ``/EOS/IDEAL-GAS/mat_ID`` (M6):
+    attach an equation of state to a material (the trailing id IS the
+    material id, like /FAIL; the EOS pressure then replaces the law's
+    own pressure for solid elements — laws 1, 2 and 36).
+
+    POLYNOMIAL — Fortran starter/source/materials/eos (polynomial)::
+
+        card 1:  C0   C1   C2   C3   C4   C5
+        card 2:  E0                       (initial energy per unit
+                                           initial volume; optional, 0)
+
+      p = C0 + C1*mu + C2*max(mu,0)^2 + C3*mu^3 + (C4 + C5*mu)*E with
+      mu = rho/rho0 - 1 (C2 dropped in tension, Radioss convention).
+
+    IDEAL-GAS::
+
+        card 1:  gamma   P0
+
+      the perfect gas p = (gamma-1)*(1+mu)*E, stored as the equivalent
+      polynomial C4 = C5 = gamma-1 with E0 = P0/(gamma-1). P0 > 0 makes
+      a pre-pressurized gas (it pushes from cycle 1 — confine it).
+    """
+    from ..model.entities import EquationOfState
+    kind = block.parts[1].upper() if len(block.parts) > 1 else ""
+    kind = {"IDEAL_GAS": "IDEAL-GAS"}.get(kind, kind)
+    if kind not in ("POLYNOMIAL", "IDEAL-GAS"):
+        log.warning(f"/EOS/{kind} not ported — skipped (supported: "
+                    f"POLYNOMIAL, IDEAL-GAS)", block.source)
+        return
+    mat_id = block.user_id
+    cards = block.cards
+    if not cards:
+        log.error(f"/EOS/{kind}/{mat_id}: missing data card", block.source)
+        return
+    if kind == "POLYNOMIAL":
+        c0, c1, c2, c3, c4, c5 = _floats(cards[0], 6)
+        e0 = cards[1].floats()[0] if len(cards) > 1 else 0.0
+        params = {"c0": c0, "c1": c1, "c2": c2, "c3": c3, "c4": c4,
+                  "c5": c5, "e0": e0}
+    else:
+        gamma, p0 = _floats(cards[0], 2, defaults=[1.4, 0.0])
+        if gamma <= 1.0:
+            log.error(f"/EOS/IDEAL-GAS/{mat_id}: gamma must be > 1",
+                      block.source)
+            return
+        params = {"c0": 0.0, "c1": 0.0, "c2": 0.0, "c3": 0.0,
+                  "c4": gamma - 1.0, "c5": gamma - 1.0,
+                  "e0": p0 / (gamma - 1.0), "gamma": gamma}
+    model.raw_eos.append((mat_id, EquationOfState(kind=kind, params=params),
+                          block.source))
 
 
 def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -790,10 +862,12 @@ def read_cload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CLOAD/cload_ID``::
 
         card 1:  title
-        card 2:  fct_ID   Dir(X|Y|Z)   grnod_ID   Fscale
+        card 2:  fct_ID   Dir(X|Y|Z)   grnod_ID   Fscale   [sens_ID]
 
       force F(t) = Fscale * f(t) applied along Dir to EVERY node of the
       group (Radioss semantics: per node, not divided among them).
+      sens_ID (M6): the load waits for /SENSOR sens_ID and then follows
+      f(t - t_fire) — the curve is the load's own history from activation.
     """
     title, cards = _title_and_data(block)
     if not cards:
@@ -803,7 +877,7 @@ def read_cload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.cloads.append(ConcentratedLoad(
         id=block.user_id, funct_id=int(t[0]), direction=_direction(t[1]),
         grnod_id=int(t[2]), scale=float(t[3]) if len(t) > 3 else 1.0,
-        title=title))
+        sens_id=int(float(t[4])) if len(t) > 4 else 0, title=title))
 
 
 def read_impvel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -852,12 +926,13 @@ def read_pload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/PLOAD/pload_ID`` (M5)::
 
         card 1:  title
-        card 2:  surf_ID   fct_ID   Fscale
+        card 2:  surf_ID   fct_ID   Fscale   [sens_ID]
 
       follower pressure p(t) = Fscale * f(t) on every segment of the
       surface, acting along the current segment normal (node ordering
       n1-n2-n3-n4, right-hand rule: positive p pushes along +n). The
       resultant p*A of each segment is lumped to its corners.
+      sens_ID (M6): waits for /SENSOR sens_ID, then follows p(t - t_fire).
     """
     title, cards = _title_and_data(block)
     if not cards:
@@ -866,7 +941,8 @@ def read_pload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     t = cards[0].tokens()
     model.ploads.append(PressureLoad(
         id=block.user_id, surf_id=int(t[0]), funct_id=int(t[1]),
-        scale=float(t[2]) if len(t) > 2 else 1.0, title=title))
+        scale=float(t[2]) if len(t) > 2 else 1.0,
+        sens_id=int(float(t[3])) if len(t) > 3 else 0, title=title))
 
 
 def read_admas(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -892,6 +968,110 @@ def read_admas(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     model.admas.append(AddedMass(
         id=block.user_id, grnod_id=int(t[1]), mass=mass, title=title))
+
+
+def read_damp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DAMP/damp_ID`` (M6)::
+
+        card 1:  title
+        card 2:  Alpha   grnod_ID   [Tstart   Tstop]
+
+      Rayleigh MASS damping: force f = -Alpha * m * v on every node of
+      the group while Tstart <= t <= Tstop (defaults: the whole run).
+      Applied as the exact per-cycle integrating factor and its
+      dissipation booked into the DE ledger — see engine/damping.py.
+      The stiffness-proportional Beta branch of the Radioss card is not
+      ported (it needs K*v products this explicit port never assembles).
+    """
+    title, cards = _title_and_data(block)
+    if not cards:
+        log.error(f"/DAMP/{block.user_id}: missing data card", block.source)
+        return
+    t = cards[0].tokens()
+    alpha = float(t[0])
+    if alpha < 0.0:
+        log.error(f"/DAMP/{block.user_id}: Alpha must be >= 0", block.source)
+        return
+    model.damps.append(Damping(
+        id=block.user_id, alpha=alpha, grnod_id=int(t[1]),
+        tstart=float(t[2]) if len(t) > 2 else 0.0,
+        tstop=float(t[3]) if len(t) > 3 else 1e30, title=title))
+
+
+def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/TIME/sens_ID`` and ``/SENSOR/DISP/sens_ID`` (M6)::
+
+        /SENSOR/TIME:  card 1: title,  card 2: Tdelay
+        /SENSOR/DISP:  card 1: title,  card 2: node_ID   Dmin
+
+      TIME fires at t = Tdelay; DISP fires when the node's displacement
+      magnitude first exceeds Dmin. Sensors LATCH (once fired, active
+      forever) and gate /CLOAD, /PLOAD and /INTER/TYPE7|11 through their
+      sens_ID field — see engine/sensors.py for the exact semantics.
+    """
+    kind = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if kind not in ("TIME", "DISP"):
+        log.warning(f"/SENSOR/{kind} not ported (TIME, DISP supported)",
+                    block.source)
+        return
+    title, cards = _title_and_data(block)
+    if not cards:
+        log.error(f"/SENSOR/{block.user_id}: missing data card",
+                  block.source)
+        return
+    t = cards[0].tokens()
+    if kind == "TIME":
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="TIME", tdelay=float(t[0]), title=title))
+    else:
+        if len(t) < 2:
+            log.error(f"/SENSOR/DISP/{block.user_id}: card 2 needs "
+                      f"'node_ID Dmin'", block.source)
+            return
+        dmin = float(t[1])
+        if dmin <= 0.0:
+            log.error(f"/SENSOR/DISP/{block.user_id}: Dmin must be > 0",
+                      block.source)
+            return
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="DISP", node_id=int(t[0]), dmin=dmin,
+            title=title))
+
+
+def read_mpc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MPC/mpc_ID`` (M6) — one linear multi-point constraint row::
+
+        card 1:  title
+        card 2+: node_ID   dof   coef        (one term per card)
+
+      imposing  sum_k coef_k * u(node_k, dof_k) = 0  with dof 1/2/3 the
+      X/Y/Z translations and 4/5/6 the rotations (rotational terms need
+      the node to carry rotational inertia — shell/beam nodes). At least
+      two terms are required. See engine/mpc.py for the Lagrange
+      treatment and its zero-work property.
+    """
+    title, cards = _title_and_data(block)
+    nodes, dofs, coefs = [], [], []
+    for c in cards:
+        t = c.tokens()
+        if len(t) < 3:
+            log.error(f"/MPC/{block.user_id}: term card needs "
+                      f"'node_ID dof coef'", c.source)
+            continue
+        dof = int(t[1])
+        if dof not in (1, 2, 3, 4, 5, 6):
+            log.error(f"/MPC/{block.user_id}: dof must be 1..6, got {dof}",
+                      c.source)
+            continue
+        nodes.append(int(t[0]))
+        dofs.append(dof)
+        coefs.append(float(t[2]))
+    if len(nodes) < 2:
+        log.error(f"/MPC/{block.user_id}: a constraint needs at least two "
+                  f"terms", block.source)
+        return
+    model.mpcs.append(Mpc(id=block.user_id, node_ids=nodes, dofs=dofs,
+                          coefs=coefs, title=title))
 
 
 # ============================================================================
@@ -1094,8 +1274,11 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     ``/INTER/TYPE7`` (penalty node-to-surface)::
 
         card 1:  title
-        card 2:  grnod_ID  surf_ID  Istf  Igap
+        card 2:  grnod_ID  surf_ID  Istf  Igap  [sens_ID]
         card 3:  Stfac     Fric     Gapmin  Gapmax     (all optional)
+
+      sens_ID (M6): the interface stays inactive (no forces, no time-step
+      claim) until /SENSOR sens_ID fires.
 
       grnod_ID = 0 → *self-impact*: the secondary nodes default to the
       nodes of the main surface itself (Radioss single-surface input).
@@ -1116,7 +1299,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     ``/INTER/TYPE11`` (penalty edge-to-edge)::
 
         card 1:  title
-        card 2:  line_ID1  line_ID2  Istf  Igap    (secondary, main edges)
+        card 2:  line_ID1  line_ID2  Istf  Igap  [sens_ID]
         card 3:  Stfac     Fric      Gapmin  Gapmax
 
     Options NOT ported (accepted Radioss fields ignored elsewhere in the
@@ -1145,6 +1328,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     t = cards[0].ints()
     istf = t[2] if len(t) > 2 else 0
     igap = t[3] if len(t) > 3 else 0
+    sens = t[4] if len(t) > 4 else 0
     if istf not in (0, 1, 2, 3, 4, 5):
         log.error(f"/INTER/{kind}/{block.user_id}: Istf={istf} (0..5)",
                   block.source)
@@ -1164,12 +1348,12 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.interfaces.append(Interface(
             id=block.user_id, type=7, grnod_id=t[0], surf_id=t[1],
             istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap,
-            gap_max=gap_max, title=title))
+            gap_max=gap_max, sens_id=sens, title=title))
     else:                          # TYPE11
         model.interfaces.append(Interface(
             id=block.user_id, type=11, line_id1=t[0], line_id2=t[1],
             istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap,
-            gap_max=gap_max, title=title))
+            gap_max=gap_max, sens_id=sens, title=title))
 
 
 def read_line(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -1257,6 +1441,7 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "PART": read_part,
     "MAT": read_mat,
     "FAIL": read_fail,
+    "EOS": read_eos,
     "PROP": read_prop,
     "FUNCT": read_funct,
     "GRNOD": read_grnod,
@@ -1270,6 +1455,9 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "IMPDISP": read_impdisp,
     "PLOAD": read_pload,
     "ADMAS": read_admas,
+    "DAMP": read_damp,
+    "SENSOR": read_sensor,
+    "MPC": read_mpc,
     "RBODY": read_rbody,
     "RBE2": read_rbe2,
     "RBE3": read_rbe3,

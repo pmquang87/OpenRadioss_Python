@@ -150,7 +150,10 @@ class ContactType11:
         self.fric = itf.fric
 
         # ---- interface time step bound -------------------------------------
-        self.dt_bound = self._compute_dt_bound(model.mass)
+        # physical pre-mass-scaling masses: conservative and
+        # restart-invariant (M6), like inter_type7
+        self.dt_bound = self._compute_dt_bound(
+            getattr(model, "mass0", model.mass))
 
         # ---- deletion bookkeeping ------------------------------------------
         self.deletable = (tracking.any_deletable(model, self.es_gtype)
@@ -248,11 +251,12 @@ class ContactType11:
         self.pairs_m = pm
 
     # ------------------------------------------------------------------
-    def forces(self, x, v, mass, dt, fcont, cycle):
+    def forces(self, x, v, mass, dt, fcont, cycle, stifn=None):
         """Penalty forces for one cycle, scattered into ``fcont``.
         Returns (contact_work_increment, dt_interface) — the same
         contract as ContactType7.forces (the Engine books the exact
-        midstep contact energy from ``fcont``, see engine.py)."""
+        midstep contact energy from ``fcont``, see engine.py; ``stifn``
+        is the /DT/NODA nodal-stiffness accumulation, M6)."""
         if len(self.es) == 0 or len(self.em) == 0:
             return 0.0, np.inf
 
@@ -310,6 +314,8 @@ class ContactType11:
         loaded = Knode > 0.0
         dt_int = min(self.dt_bound, float(
             np.sqrt(2.0 * mass[loaded] / Knode[loaded]).min()))
+        if stifn is not None:                    # /DT/NODA accumulation
+            stifn[loaded] += Knode[loaded]
 
         pen = gap - d
         active = pen > 0.0

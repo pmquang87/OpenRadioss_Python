@@ -230,8 +230,11 @@ class ContactType7:
 
         # --- interface time step bound (see module docstring) --------------
         # Worst node-on-spring combination on each side, evaluated once
-        # (masses and stiffness are constant; deletion only REMOVES springs)
-        self.dt_bound = self._compute_dt_bound(model.mass)
+        # (masses and stiffness are constant; deletion only REMOVES
+        # springs). The PHYSICAL pre-mass-scaling masses keep the bound
+        # conservative and restart-invariant (M6).
+        self.dt_bound = self._compute_dt_bound(
+            getattr(model, "mass0", model.mass))
 
         # --- deletion bookkeeping (M3<->M4) --------------------------------
         self.deletable = tracking.any_deletable(model, self.seg_gtype)
@@ -330,7 +333,7 @@ class ContactType7:
         self.pairs_seg = sj
 
     # ------------------------------------------------------------------
-    def forces(self, x, v, mass, dt, fcont, cycle):
+    def forces(self, x, v, mass, dt, fcont, cycle, stifn=None):
         """Penalty forces for one cycle, scattered into ``fcont``.
 
         Returns (contact_work_increment, dt_interface). The work increment
@@ -338,6 +341,12 @@ class ContactType7:
         (-F.vrel dt); the Engine books the exact leapfrog-consistent value
         from the assembled ``fcont`` at the midstep velocity — see the
         'contact energy booking' block of engine.py for why.
+
+        ``stifn`` (M6, /DT/NODA): when given, the NEAR-candidate spring
+        stiffness accumulated per node (the same sums that feed this
+        interface's own dt) is also added into this global nodal-stiffness
+        array, so the nodal time step / mass scaling sees the contact
+        springs exactly like the element stiffness.
         """
         if len(self.segs) == 0 or len(self.nodes) == 0:
             return 0.0, np.inf
@@ -426,6 +435,8 @@ class ContactType7:
         loaded = Knode > 0.0
         dt_int = min(self.dt_bound, float(
             np.sqrt(2.0 * mass[loaded] / Knode[loaded]).min()))
+        if stifn is not None:                    # /DT/NODA accumulation
+            stifn[loaded] += Knode[loaded]
 
         pen = gap - best_d
         active = pen > 0.0

@@ -59,8 +59,11 @@ class LoadsAndConstraints:
         # gravity mass: a frozen node carries NO physical mass — its 1e30
         # placeholder must not turn into a 1e30*g force (harmless while
         # the node is BCS-fixed, catastrophic once a rigid body gathers
-        # its force rows)
-        self._m_grav = np.where(frozen, 0.0, model.mass)
+        # its force rows). The PHYSICAL (pre-mass-scaling) mass is used:
+        # /DT/NODA/CST additions are numerical and must not weigh (which
+        # also keeps a chained restart identical to the unchained run).
+        m_phys = getattr(model, "mass0", model.mass)
+        self._m_grav = np.where(frozen, 0.0, m_phys)
 
         # resolved loads: (node_idx, direction, funct, scale)
         def _grp(gid):
@@ -70,8 +73,9 @@ class LoadsAndConstraints:
 
         self.gravity = [(_grp(g.grnod_id), g.direction, model.functions[g.funct_id],
                          g.scale) for g in model.gravity]
+        # /CLOAD entries carry their /SENSOR id (M6): 0 = always active
         self.cloads = [(_grp(c.grnod_id), c.direction, model.functions[c.funct_id],
-                        c.scale) for c in model.cloads]
+                        c.scale, c.sens_id) for c in model.cloads]
         self.impvel = [(_grp(i.grnod_id), i.dof, model.functions[i.funct_id],
                         i.scale) for i in model.impvel]
         # /IMPDISP: like /IMPVEL, plus the base coordinate of each node so
@@ -123,26 +127,38 @@ class LoadsAndConstraints:
                     else np.full(len(segs), -1, dtype=np.int64))
             deletable = tracking.any_deletable(model, gtype)
             self.ploads.append((segs, wgt, model.functions[pl.funct_id],
-                                pl.scale, gtype, elem, deletable))
+                                pl.scale, gtype, elem, deletable,
+                                pl.sens_id))
 
     # ------------------------------------------------------------------
     def external_forces(self, t: float, fext: np.ndarray,
-                        x: np.ndarray) -> None:
+                        x: np.ndarray, sensors=None) -> None:
         """Accumulate gravity + concentrated loads + follower pressure at
         time t (gravit.F, force.F, pload.F). Gravity is an acceleration
         -> F = m * a per node; /CLOAD applies the full F(t) to every node
-        of its group; /PLOAD integrates p(t) over the current surface."""
+        of its group; /PLOAD integrates p(t) over the current surface.
+
+        ``sensors`` (M6): /SENSOR-gated loads evaluate their curve at the
+        SHIFTED time t - t_fire once their sensor fired, and are silent
+        before (see engine/sensors.py)."""
         m = self._m_grav
         for idx, direction, fct, scale in self.gravity:
             acc = scale * fct.eval(t)
             fext[idx] += (m[idx, None] * acc) * direction[None, :]
-        for idx, direction, fct, scale in self.cloads:
-            F = scale * fct.eval(t)
+        for idx, direction, fct, scale, sens in self.cloads:
+            te = t if sensors is None else sensors.shifted_time(sens, t)
+            if te is None:
+                continue                      # sensor has not fired yet
+            F = scale * fct.eval(te)
             fext[idx] += F * direction[None, :]
-        for segs, wgt, fct, scale, gtype, elem, deletable in self.ploads:
+        for segs, wgt, fct, scale, gtype, elem, deletable, sens \
+                in self.ploads:
             if len(segs) == 0:
                 continue
-            p = scale * fct.eval(t)
+            te = t if sensors is None else sensors.shifted_time(sens, t)
+            if te is None:
+                continue
+            p = scale * fct.eval(te)
             if p == 0.0:
                 continue
             xs = x[segs]                                  # (nseg, 4, 3)

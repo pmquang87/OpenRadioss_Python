@@ -29,30 +29,32 @@ material's threshold directly.
 
 Dispatch contract (mirrors the material-law dispatch):
 
-    solid_step(fail, sig, d_epsp, deps, dt, dama)  -> newly-broken mask
-    shell_step(fail, sig, d_epsp, deps, dt, dama)  -> newly-broken mask
+    solid_step(fail, sig, d_epsp, deps, dt, dama, tstar)  -> broken mask
+    shell_step(fail, sig, d_epsp, deps, dt, dama, tstar)  -> broken mask
 
 with sig/deps the (m, 6) or (m, 3) slice arrays of the group, d_epsp the
-plastic-strain increment of this cycle and dama the persistent damage
-array (in-place). All vectorized over the element slice.
+plastic-strain increment of this cycle, dama the persistent damage
+array (in-place) and tstar the homologous temperature of the points
+(M6, None for materials without the thermal card — only /FAIL/JOHNSON's
+D5 term reads it). All vectorized over the element slice.
 """
 
 from . import biquad, johnson  # noqa: F401
 
 
-def solid_step(fail, sig, d_epsp, deps, dt, dama):
+def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     """Advance the damage of a solid slice; returns the broken mask."""
     if fail.type == "JOHNSON":
-        return johnson.solid_step(fail, sig, d_epsp, deps, dt, dama)
+        return johnson.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar)
     if fail.type == "BIQUAD":
         return biquad.solid_step(fail, sig, d_epsp, deps, dt, dama)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")
 
 
-def shell_step(fail, sig, d_epsp, deps, dt, dama):
+def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     """Advance the damage of one shell layer; returns the broken mask."""
     if fail.type == "JOHNSON":
-        return johnson.shell_step(fail, sig, d_epsp, deps, dt, dama)
+        return johnson.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar)
     if fail.type == "BIQUAD":
         return biquad.shell_step(fail, sig, d_epsp, deps, dt, dama)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")

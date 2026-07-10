@@ -198,6 +198,37 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
                         f"/FAIL card — replaced", source)
         mat.fail = fm
 
+    # /EOS attachment (M6, same free-order pattern as /FAIL): the EOS
+    # replaces the law's pressure for SOLID elements — only meaningful
+    # for laws whose deviatoric response is pressure-independent
+    for mat_id, es, source in model.raw_eos:
+        mat = model.materials.get(mat_id)
+        if mat is None:
+            log.error(f"/EOS/{es.kind}/{mat_id}: material {mat_id} not "
+                      f"defined", source)
+            continue
+        if mat.law not in (1, 2, 36):
+            log.error(f"/EOS/{es.kind}/{mat_id}: an EOS can only attach "
+                      f"to LAW1/LAW2/LAW36 (isotropic laws with a "
+                      f"pressure-independent deviator), got LAW{mat.law}",
+                      source)
+            continue
+        if mat.eos is not None:
+            log.warning(f"/EOS/{es.kind}/{mat_id}: material already has "
+                        f"an /EOS card — replaced", source)
+        es.rho0 = mat.rho0
+        mat.eos = es
+
+    # /FAIL/JOHNSON D5 needs the material's adiabatic temperature (M6)
+    for mat in model.materials.values():
+        if (mat.fail is not None and mat.fail.type == "JOHNSON"
+                and mat.fail.params.get("D5", 0.0) != 0.0
+                and "mT" not in mat.params):
+            log.warning(f"/FAIL/JOHNSON/{mat.id}: D5 given but the "
+                        f"material has no thermal card (LAW2 card 6) — "
+                        f"D5 term dropped", "FAIL CHECK")
+            mat.fail.params["D5"] = 0.0
+
 
 # ----------------------------------------------------------------------------
 # Node groups and surfaces

@@ -113,6 +113,11 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
         if not log.errors:
             initialize_elements_and_mass(model, log)
             initialize_rigid_bodies(model, log)
+            # reference (physical, pre-mass-scaling) nodal masses: the
+            # Engine's init-time computations (interface dt bounds,
+            # gravity) use these so a /DT/NODA/CST-grown model resumes
+            # from a restart with IDENTICAL derived quantities (M6)
+            model.mass0 = model.mass.copy()
             _listing_summary(model, log)
 
         log.info(log.summary())

@@ -198,8 +198,11 @@ class ContactType2:
                             f"wins (kinematic condition clash)",
                             "TIED INIT")
 
-        # tracked position of the tied nodes (see enforce)
-        self.x_prev = x0[self.snode].copy()
+        # tracked position of the tied nodes (see enforce) — from the
+        # CURRENT coordinates, not x0: on a restart-chained run (M6) the
+        # ties resume where the saved model left them (at a fresh start
+        # model.x == x0, so nothing changes)
+        self.x_prev = model.x[self.snode].copy()
         self.active = np.ones(len(self.snode), dtype=bool)
 
         # deletion bookkeeping (release, not force filtering)
@@ -207,15 +210,26 @@ class ContactType2:
         if self.deletable:
             self.ref_total = tracking.node_reference_counts(
                 model, alive_only=False)
+            # ties already released by /FAIL deletion in a PREVIOUS run
+            # (M6 restart): the deletion state lives in the model, so the
+            # release set is reconstructed here instead of persisted
+            seg_dead = ~tracking.alive_segment_mask(
+                model, self.seg_gtype, self.seg_elem)
+            node_dead = ~tracking.tracked_node_mask(
+                model, self.ref_total)[self.snode]
+            self.active &= ~(seg_dead | node_dead)
 
     # ------------------------------------------------------------------
     def augment_mass(self, mass_eff: np.ndarray) -> None:
         """Mass transfer M_k += w_k m_s (once, engine init). ``mass_eff``
         is the Engine's EFFECTIVE mass used for accelerations only — the
-        physical ``model.mass`` (energies, momentum) is untouched."""
-        m_s = self.model.mass[self.snode]
+        physical ``model.mass`` (energies, momentum) is untouched.
+        Released ties (reconstructed at init after a chained restart)
+        transfer nothing — their nodes fly with their own inertia."""
+        act = self.active
+        m_s = self.model.mass[self.snode[act]]
         for k in range(4):
-            np.add.at(mass_eff, self.seg[:, k], self.w[:, k] * m_s)
+            np.add.at(mass_eff, self.seg[act, k], self.w[act, k] * m_s)
 
     # ------------------------------------------------------------------
     def _release(self, dead: np.ndarray, mass_eff: np.ndarray,

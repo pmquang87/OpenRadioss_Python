@@ -108,7 +108,9 @@ class Rbe3Constraint:
         log.info(f"     {who}: NODE {r3.ref_id} INTERPOLATED FROM "
                  f"{len(masters)} MASTER NODE(S)")
 
-        self.x_prev = model.x0[self.ref].copy()
+        # current position, not x0: restart-transparent (M6) — at a
+        # fresh start model.x == x0
+        self.x_prev = model.x[self.ref].copy()
 
     # ------------------------------------------------------------------
     def _geometry(self, x: np.ndarray):

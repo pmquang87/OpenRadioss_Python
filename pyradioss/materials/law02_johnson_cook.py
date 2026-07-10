@@ -2,18 +2,36 @@
 LAW2 — Johnson–Cook elasto-plasticity (/MAT/LAW2, /MAT/PLAS_JOHNS).
 
 Fortran origin: ``engine/source/materials/mat/mat002/sigeps02.F`` (solids)
-and ``sigeps02c.F`` (shells). This port covers the strain hardening and
-strain-rate terms; the thermal-softening term (1 - T*^m) of the full
-Johnson–Cook model is not ported yet (see PORTING_GUIDE.md roadmap M3).
+and ``sigeps02c.F`` (shells). This port covers the strain hardening,
+strain-rate and — since M6 — the ADIABATIC thermal terms.
 
 Theory
 ------
-J2 (von Mises) plasticity with the Johnson–Cook yield stress
+J2 (von Mises) plasticity with the (full) Johnson–Cook yield stress
 
-    sigma_y(eps_p, eps_p_dot) =
+    sigma_y(eps_p, eps_p_dot, T) =
         (A + B * eps_p^n) * (1 + c * ln(eps_p_dot / eps_dot_0))
+                          * (1 - T*^m)
 
-capped at ``sig_max``. The stress integration is the classic **radial
+capped at ``sig_max``, with T* = (T - T_i)/(T_melt - T_i) the homologous
+temperature. The thermal terms (optional card 6, M6) run in the
+ADIABATIC approximation standard for crash/impact: at the strain rates
+of interest heat has no time to conduct, so the plastic work stays where
+it is produced and the local temperature rise integrates
+
+    dT = sigma_y * d(eps_p) / rho_Cp
+
+(rho_Cp = volumetric heat capacity; the Taylor–Quinney fraction of
+plastic work converted to heat is taken as 1, like the original). The
+per-point temperature RISE is persistent element state (allocated by the
+kernels through ``extra_shapes``); the softening factor is evaluated
+with the temperature at the START of the increment and frozen during the
+return (explicit in T — one cycle's heating cannot soften the same
+cycle's yield, exactly the original's staggering). The closed-form
+adiabatic checks of the M6 tests: dT/d(eps_p) = sigma_y/rho_Cp during
+flow, and the yield drop (1 - T*^m) at a prescribed temperature.
+
+The stress integration is the classic **radial
 return** (Wilkins 1964, the same algorithm as the Fortran):
 
 1. *Elastic trial*: integrate the whole strain increment elastically
@@ -54,10 +72,12 @@ from . import law01_elastic
 _NEWTON_ITERS = 5  # enough: the residual is nearly linear in dlambda
 
 
-def _yield_stress(mat, epsp: np.ndarray, rate_fac: np.ndarray):
+def _yield_stress(mat, epsp: np.ndarray, rate_fac):
     """sigma_y and hardening slope H at the given plastic strain.
 
-    rate_fac is the (frozen) strain-rate multiplier 1 + c*ln(rate/rate0).
+    rate_fac is the (frozen) multiplier collecting the strain-rate AND
+    thermal-softening factors — both are evaluated once per increment
+    and held constant through the Newton return (see _combined_factor).
     """
     A = mat.params["A"]
     B = mat.params["B"]
@@ -73,6 +93,24 @@ def _yield_stress(mat, epsp: np.ndarray, rate_fac: np.ndarray):
     sy = np.where(capped, sig_max, sy)
     H = np.where(capped, 0.0, H)
     return sy, H
+
+
+def _thermal_factor(mat, extra):
+    """(1 - T*^m) softening from the stored temperature rise, or 1.0
+    when the thermal card is absent. Also returns the temp array (for
+    the adiabatic update after the return) — None without thermal."""
+    if extra is None or "temp" not in extra or "mT" not in mat.params:
+        return 1.0, None
+    temp = extra["temp"]                 # rise above T_i, in place
+    tstar = np.clip(temp / (mat.params["T_melt"] - mat.params["T_i"]),
+                    0.0, 1.0)
+    return 1.0 - tstar ** mat.params["mT"], temp
+
+
+def _adiabatic_heating(mat, temp, sy_new, dl, idx):
+    """T += sigma_y * d(eps_p) / rho_Cp on the plastic subset (M6)."""
+    if temp is not None:
+        temp[idx] += sy_new * dl / mat.params["rho_cp"]
 
 
 def _rate_factor(mat, deps_eq_dot: np.ndarray) -> np.ndarray:
@@ -91,7 +129,7 @@ def _rate_factor(mat, deps_eq_dot: np.ndarray) -> np.ndarray:
 # ----------------------------------------------------------------------------
 
 def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
-                 epsp: np.ndarray, dt: float):
+                 epsp: np.ndarray, dt: float, extra=None):
     """Radial-return update for solids.
 
     Parameters
@@ -100,6 +138,8 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
     deps : (n, 6) strain increment (engineering shear)
     epsp : (n,)   equivalent plastic strain, updated in place
     dt   : time step (for the strain-rate term)
+    extra: law state views (M6: extra['temp'] = adiabatic temperature
+           rise, present when the thermal card is given)
     """
     G = mat.G
 
@@ -124,6 +164,10 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
         + 0.5 * (deps[:, 3] ** 2 + deps[:, 4] ** 2 + deps[:, 5] ** 2)
     rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, 1e-30)
     rate_fac = _rate_factor(mat, rate)
+    # thermal softening (M6): evaluated at the START-of-increment
+    # temperature and frozen through the return (see module docstring)
+    tfac, temp = _thermal_factor(mat, extra)
+    rate_fac = rate_fac * tfac
 
     # 3. yield check
     sy, _ = _yield_stress(mat, epsp, rate_fac)
@@ -137,7 +181,7 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
     dl = np.zeros(len(idx))
     seq = sig_eq[idx]
     ep0 = epsp[idx]
-    rf = rate_fac[idx]
+    rf = rate_fac[idx] if np.ndim(rate_fac) else rate_fac
     for _ in range(_NEWTON_ITERS):
         sy_i, H_i = _yield_stress(mat, ep0 + dl, rf)
         res = seq - 3.0 * G * dl - sy_i
@@ -154,6 +198,8 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
     sig[idx, 1] += p[idx]
     sig[idx, 2] += p[idx]
     epsp[idx] = ep0 + dl
+    # adiabatic heating from the plastic work (M6)
+    _adiabatic_heating(mat, temp, sy_new, dl, idx)
     return sig, epsp
 
 
@@ -162,10 +208,11 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
 # ----------------------------------------------------------------------------
 
 def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
-                 epsp: np.ndarray, dt: float):
+                 epsp: np.ndarray, dt: float, extra=None):
     """Plane-stress radial projection (see module docstring).
 
     sig, deps: (n, 3) = [xx, yy, xy];  epsp: (n,). In-place updates.
+    extra['temp'] (M6): per-layer adiabatic temperature rise.
     """
     G = mat.G
 
@@ -185,6 +232,8 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
         + 0.5 * dxy ** 2
     rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, 1e-30)
     rate_fac = _rate_factor(mat, rate)
+    tfac, temp = _thermal_factor(mat, extra)     # M6 thermal softening
+    rate_fac = rate_fac * tfac
 
     sy, _ = _yield_stress(mat, epsp, rate_fac)
     plastic = sig_eq > sy
@@ -209,4 +258,5 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
     sig[idx, 1] *= scale
     sig[idx, 2] *= scale
     epsp[idx] = ep0 + dl
+    _adiabatic_heating(mat, temp, sy_new, dl, idx)   # M6
     return sig, epsp

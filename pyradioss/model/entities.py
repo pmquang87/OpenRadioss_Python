@@ -44,6 +44,28 @@ class FailureModel:
 
 
 @dataclass
+class EquationOfState:
+    """One /EOS option, attached to a material like /FAIL is (the keyword
+    carries the material id: ``/EOS/POLYNOMIAL/mat_ID``).
+
+    Fortran origin: the EOS_PARAM structures filled by
+    ``starter/source/materials/eos/hm_read_eos.F``. Ported kinds:
+
+    * ``POLYNOMIAL`` — p = C0 + C1 mu + C2 mubar^2 + C3 mu^3
+      + (C4 + C5 mu) E  (params c0..c5, e0 = initial energy per V0);
+    * ``IDEAL-GAS``   — stored as the equivalent polynomial
+      (C4 = C5 = gamma - 1, e0 = P0/(gamma - 1)).
+
+    ``rho0`` is copied from the host material at resolve time (the sound
+    speed needs it). See pyradioss/materials/eos.py for the theory.
+    """
+
+    kind: str
+    params: Dict[str, float] = field(default_factory=dict)
+    rho0: float = 0.0
+
+
+@dataclass
 class Material:
     """One /MAT law. Only the fields common to all laws live here; law
     parameters are in ``params``, interpreted by the material kernel.
@@ -59,6 +81,8 @@ class Material:
                 G0 = sum(mu_p*alpha_p)/2 and nu, so the generic elastic
                 properties below work for every law)
     fail      : optional /FAIL criterion attached to this material
+    eos       : optional /EOS attached to this material (M6): the EOS
+                pressure replaces the law's own for solid elements
     """
 
     id: int
@@ -67,6 +91,7 @@ class Material:
     title: str = ""
     params: Dict[str, float] = field(default_factory=dict)
     fail: Optional[FailureModel] = None
+    eos: Optional["EquationOfState"] = None
 
     # Convenience elastic constants (every implemented law defines these;
     # they drive the sound speed / time step and contact stiffness).
@@ -286,13 +311,16 @@ class Gravity:
 @dataclass
 class ConcentratedLoad:
     """/CLOAD: nodal force F(t) = scale * funct(t) along a fixed direction,
-    applied to every node of the group."""
+    applied to every node of the group. ``sens_id`` (M6): the load is
+    inactive until /SENSOR sens_id fires, then evaluates the curve with
+    the shifted time f(t - t_fire)."""
 
     id: int
     grnod_id: int
     funct_id: int
     direction: np.ndarray  # (3,) unit vector
     scale: float = 1.0
+    sens_id: int = 0
     title: str = ""
 
 
@@ -346,6 +374,66 @@ class PressureLoad:
     surf_id: int
     funct_id: int
     scale: float = 1.0
+    sens_id: int = 0       # M6: /SENSOR gating (same semantics as /CLOAD)
+    title: str = ""
+
+
+@dataclass
+class Damping:
+    """/DAMP (M6): Rayleigh MASS damping — force f = -alpha m v on every
+    node of the group, active in the [tstart, tstop] window.
+
+    Fortran origin: ``engine/source/assembly/damping*.F``. The port
+    integrates the mass-damping ODE exactly per cycle (integrating
+    factor, see engine/damping.py) and books the removed kinetic energy
+    into the DE ledger. The stiffness-proportional beta branch of full
+    Rayleigh damping is not ported (needs K*v products)."""
+
+    id: int
+    grnod_id: int
+    alpha: float
+    tstart: float = 0.0
+    tstop: float = 1e30
+    title: str = ""
+
+
+@dataclass
+class Sensor:
+    """/SENSOR (M6): an event source gating loads and interfaces.
+
+    Fortran origin: ``starter/source/tools/sensor/hm_read_sensor.F`` +
+    ``engine/source/tools/sensor/``. Ported types: ``kind='TIME'``
+    (fires at tdelay) and ``kind='DISP'`` (fires when node_id's
+    displacement magnitude first exceeds dmin). Sensors latch — see
+    engine/sensors.py."""
+
+    id: int
+    kind: str              # 'TIME' | 'DISP'
+    tdelay: float = 0.0    # TIME
+    node_id: int = 0       # DISP
+    dmin: float = 0.0      # DISP
+    title: str = ""
+
+
+@dataclass
+class Mpc:
+    """/MPC (M6): one general linear multi-point constraint row,
+
+        sum_k  coef_k * u(node_k, dof_k) = 0        (dof 1-3 = X,Y,Z
+                                                     translations,
+                                                     4-6 = rotations)
+
+    imposed on velocities/accelerations (its time derivative — exact for
+    the homogeneous row, see engine/mpc.py for the Lagrange treatment).
+
+    Fortran origin: ``starter/source/constraints/general/mpc/
+    hm_read_mpc.F`` + ``engine/source/constraints/general/mpc/``.
+    """
+
+    id: int
+    node_ids: List[int] = field(default_factory=list)
+    dofs: List[int] = field(default_factory=list)      # 1..6 (user input)
+    coefs: List[float] = field(default_factory=list)
     title: str = ""
 
 
@@ -529,6 +617,9 @@ class Interface:
 
     Penalty options (types 7 and 11), following the Radioss cards:
 
+    sens_id (M6): types 7/11 only — the interface is inactive (no
+    forces, no dt claim) until /SENSOR sens_id fires.
+
     istf  : stiffness definition flag —
             0 = main-side element stiffness scaled by ``stfac`` (default),
             1 = ``stfac`` IS the stiffness (a constant spring value),
@@ -559,6 +650,7 @@ class Interface:
     gap: float = 0.0
     gap_max: float = 0.0  # igap=1 cap, 0 = no cap
     dsearch: float = 0.0  # type 2: projection search distance (0 = auto)
+    sens_id: int = 0      # M6: /SENSOR gating (types 7/11)
     title: str = ""
 
 

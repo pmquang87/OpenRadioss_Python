@@ -30,10 +30,10 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from .entities import (
-    AddedMass, BoundaryCondition, Box, ConcentratedLoad, Gravity,
+    AddedMass, BoundaryCondition, Box, ConcentratedLoad, Damping, Gravity,
     ImposedDisplacement, ImposedVelocity, InitialVelocity, Interface, Line,
-    Material, NodeGroup, Part, PressureLoad, Property, Rbe3, RigidBody,
-    RigidWall, Section, Surface, THRequest,
+    Material, Mpc, NodeGroup, Part, PressureLoad, Property, Rbe3, RigidBody,
+    RigidWall, Section, Sensor, Surface, THRequest,
 )
 from ..common.tables import FunctTable
 
@@ -64,8 +64,11 @@ class EngineControls:
     t_end: float = 0.0            # /RUN final time
     dt_scale: float = 0.9         # /DT  scale factor  (dt = k * dt_critical)
     dt_min: float = 0.0           # /DT  minimum dt: below this -> stop
+    dt_noda: str = ""             # '' | 'NODA' | 'CST' (/DT/NODA[/CST], M6)
     th_dt: float = 0.0            # /TFILE time-history output period
     anim_dt: float = 0.0          # /ANIM/DT animation state period
+    state_dt: float = 0.0         # /STATE/DT restart-snapshot period (M6)
+    state_tstart: float = 0.0     # /STATE/DT first snapshot time
     print_cycles: int = 100       # /PRINT listing frequency (cycles)
     energy_error_stop: float = 15.0  # %, /STOP-like divergence guard
     anim_vect: List[str] = field(default_factory=lambda: ["VEL", "DIS"])
@@ -88,6 +91,8 @@ class Model:
         self.v: np.ndarray = np.zeros((0, 3))     # velocities
         self.vr: np.ndarray = np.zeros((0, 3))    # rotational velocities (shells)
         self.mass: np.ndarray = np.zeros(0)       # lumped mass MS
+        self.mass0: np.ndarray = np.zeros(0)      # physical MS before any
+        # /DT/NODA/CST mass scaling (M6) — gravity and init-time bounds
         self.inertia: np.ndarray = np.zeros(0)    # lumped nodal inertia IN (shells)
         self._id2idx: Dict[int, int] = {}         # USR2SYS node map
 
@@ -115,6 +120,8 @@ class Model:
         # (mat_id, FailureModel, source) tuples, attached by the Starter
         # resolve step (deck order between /MAT and /FAIL is free).
         self.raw_fails: list = []
+        # /EOS cards, same pattern (M6): (mat_id, EquationOfState, source)
+        self.raw_eos: list = []
         self.properties: Dict[int, Property] = {}
         self.parts: Dict[int, Part] = {}
         self.parts_list: List[Part] = []          # dense order for elements
@@ -137,6 +144,9 @@ class Model:
         self.rbodies: List[RigidBody] = []             # /RBODY + /RBE2 (M5)
         self.rbe3: List[Rbe3] = []                     # /RBE3    (M5)
         self.sections: List[Section] = []              # /SECT    (M5)
+        self.damps: List[Damping] = []                 # /DAMP    (M6)
+        self.sensors: List[Sensor] = []                # /SENSOR  (M6)
+        self.mpcs: List[Mpc] = []                      # /MPC     (M6)
         self.interfaces: List[Interface] = []
         self.th_requests: List[THRequest] = []
 

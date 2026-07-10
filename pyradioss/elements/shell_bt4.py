@@ -325,8 +325,13 @@ def _layer_failure(st, sl, mat, k, sig_k, epsp_old, deps_k, dt):
     layf = st["layfail"][sl, k]
     if mat.fail is not None:
         d_ep = st["epsp"][sl, k] - epsp_old[sl, k]
+        tstar = None                 # /FAIL/JOHNSON D5 (M6): homologous
+        if "temp" in st["mat_extra"] and "mT" in mat.params:
+            tstar = np.clip(
+                st["mat_extra"]["temp"][sl, k]
+                / (mat.params["T_melt"] - mat.params["T_i"]), 0.0, 1.0)
         broken = failure.shell_step(mat.fail, sig_k, d_ep, deps_k, dt,
-                                    st["dama"][sl, k])
+                                    st["dama"][sl, k], tstar)
         layf[broken] = 0.0
     eps_max = mat.params.get("eps_p_max", EP30)
     if eps_max < 1e30:

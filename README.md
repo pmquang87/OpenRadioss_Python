@@ -71,7 +71,7 @@ Outputs:
 
 See [PORTING_GUIDE.md](PORTING_GUIDE.md) for the detailed feature matrix, the
 map from every Python module to the original Fortran directory, and the porting
-roadmap. Milestones 1–5 (this state of the repository) cover:
+roadmap. Milestones 1–6 (this state of the repository) cover:
 
 - **Input**: the Radioss block-keyword deck format (`/NODE`, `/BRICK`,
   `/TETRA4`, `/SHELL`, `/SH3N`, `/TRUSS`, `/SPRING`, `/BEAM`, `/PART`,
@@ -79,8 +79,8 @@ roadmap. Milestones 1–5 (this state of the repository) cover:
   `/PROP/TYPE1/2/3/4/14`,
   `/BCS`, `/INIVEL`, `/GRAV`, `/CLOAD`, `/PLOAD`, `/IMPVEL`, `/IMPDISP`,
   `/ADMAS`, `/FUNCT`, `/GRNOD`, `/RWALL`, `/RBODY`, `/RBE2`, `/RBE3`,
-  `/SECT`, `/INTER/TYPE2/7/11`, `/SURF`, `/LINE`, `/TH`, …) with
-  `#include` support.
+  `/SECT`, `/INTER/TYPE2/7/11`, `/SURF`, `/LINE`, `/TH`, `/EOS`,
+  `/DAMP`, `/SENSOR`, `/MPC`, …) with `#include` support.
 - **Elements**: 8-node solid (one-point integration + Flanagan–Belytschko
   hourglass control) with degenerated-brick→tetra conversion, 4-node
   constant-strain tetra, 4-node Belytschko–Tsay shell (membrane + bending +
@@ -116,11 +116,24 @@ roadmap. Milestones 1–5 (this state of the repository) cover:
   momentum-exact impulse exchange — or velocity-driven), /SECT
   section-force output, /PLOAD follower pressure, /IMPDISP imposed
   displacement, /ADMAS added mass, /INIVEL/AXIS initial spin.
+- **Engine niceties** (M6): /DT/NODA/CST mass scaling (the run holds its
+  target time step by adding mass at the critical nodes — the added
+  mass, momentum and energy are tracked, reported and kept in the
+  balance), restart chaining (`RunName_0002.rad` resumes the previous
+  run's `.rst` and reproduces the unchained run exactly), /STATE/DT
+  restart snapshots, /DAMP mass damping with exactly-booked
+  dissipation, /SENSOR/TIME + /SENSOR/DISP gating loads and contact
+  interfaces, /MPC general linear multi-point constraints, /EOS
+  (polynomial and ideal-gas equations of state with implicit
+  energy–pressure coupling), the LAW2 adiabatic thermal terms and
+  /FAIL/JOHNSON's D5.
 - **Engine**: explicit central-difference integration, element/nodal stable
   time step (including the accumulated contact-spring stiffness), boundary
   conditions, initial/imposed velocities, gravity, concentrated loads,
   kinematic rigid walls, full energy-balance bookkeeping (contact work
-  booked at the leapfrog-consistent midstep velocity).
+  booked at the leapfrog-consistent midstep velocity; since M6 the
+  numerical dissipation of the element dampers is measured exactly and
+  reported as its own EN ledger).
 - **Output**: listings, CSV time history (incl. /TH/SECT section
   resultants), VTK animation states.
 
