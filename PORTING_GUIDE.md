@@ -403,18 +403,31 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
      a full starter+engine impact run compared state array by state
      array, and the M6 restart-chain bit-match rerun UNDER numba — the
      canary that would instantly catch nondeterministic reductions.
-   * **Measured speedups** (tools/benchmark.py; engine wall clock, same
-     machine, numba JIT cache warm — the compile itself is a one-time
-     ~10 s paid on the very first run):
+   * **Measured speedups** (tools/benchmark.py; engine wall clock, one
+     clean run on the same machine, numba JIT cache warm — the compile
+     itself is a one-time ~10 s paid on the very first run; energy error
+     identical between backends to the reordered-reduction ulp drift):
 
-     | example (engine s) | M6 baseline | M7 NumPy | M7 numba | numba vs M6 |
-     |---|---|---|---|---|
-     | rigid_impactor | 78.0 | 55.3 | 26.6 | 2.9× |
-     | notched_plate  | 67.7 | 60.1 | 24.3 | 2.8× |
-     | edge_impact    | 46.0 | 33.8 | 21.5 | 2.1× |
+     | example (engine s) | M7 NumPy | M7 numba | numba/NumPy |
+     |---|---|---|---|
+     | notched_plate  | 57.6 | 24.4 | 2.36× |
+     | rigid_impactor | 56.7 | 25.8 | 2.20× |
+     | box_beam_impact | 3.88 | 2.19 | 1.77× |
+     | spot_weld      | 5.38 | 3.22 | 1.67× |
+     | tensile_bar    | 1.11 | 0.68 | 1.63× |
+     | edge_impact    | 33.7 | 22.9 | 1.47× |
+     | rubber_block   | 1.07 | 0.75 | 1.42× |
+     | gas_piston     | 0.40 | 0.36 | 1.10× |
+     | antenna_mast   | 1.27 | 1.22 | 1.05× |
 
-     (full nine-example table in PR #7; the small quick examples sit at
-     1–2× — fixed per-cycle Python overhead dominates them.)
+     The biggest wins are the compute-heavy solid/shell + contact runs
+     (notched_plate 2.4×, rigid_impactor 2.2×); the small quick examples
+     sit near 1× — fixed per-cycle Python overhead (the engine loop,
+     kinematics, output) that neither backend touches dominates them, so
+     the accelerated kernels are a small slice of their wall clock.
+     Against the M6 (pre-M7) code the long examples are ~3× faster
+     end-to-end (NumPy fast paths + numba stacked): rigid_impactor
+     78.0 s → 25.8 s, notched_plate 67.7 s → 24.4 s.
    * Deferred out of M7, explicitly:
      - **the JAX backend** (stretch scope, not started — reasons on
        record): the engine cycle is built on in-place scatter into
