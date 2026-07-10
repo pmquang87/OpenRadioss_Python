@@ -13,11 +13,41 @@ from ..common.messages import MessageLog
 from ..model.model import Model
 
 
+# element family -> material laws its kernels implement (see the
+# materials package dispatch; extending a kernel means extending this map)
+_ALLOWED_LAWS = {
+    "bricks": {1, 2, 36, 42},
+    "tetras": {1, 2, 36, 42},
+    "shells": {1, 2, 27, 36},
+    "sh3n": {1, 2, 27, 36},
+    "trusses": {1, 2},
+    "springs": None,          # springs ignore their material entirely
+    "beams": {1, 2},
+}
+
+
 def check_model(model: Model, log: MessageLog) -> None:
     if model.numnod == 0:
         log.error("model has no nodes", "MODEL CHECK")
     if not any(True for _ in model.element_groups()):
         log.error("model has no elements", "MODEL CHECK")
+
+    # material law vs element family compatibility (fail in the Starter
+    # with a clear message instead of a NotImplementedError mid-run)
+    for name, group in model.element_groups():
+        allowed = _ALLOWED_LAWS.get(name)
+        if allowed is None:
+            continue
+        for sl, mat, prop in group.state["slices"]:
+            if mat.law not in allowed:
+                log.error(f"material LAW{mat.law} (/MAT {mat.id}) is not "
+                          f"ported for {name} elements (supported: "
+                          f"{sorted(allowed)})", "MAT CHECK")
+            if mat.fail is not None and name in ("trusses", "springs",
+                                                 "beams"):
+                log.warning(f"/FAIL on /MAT {mat.id} is ignored for {name} "
+                            f"(failure is ported for solids and shells)",
+                            "MAT CHECK")
 
     def need_group(gid, who):
         if gid is not None and gid != 0 and gid not in model.node_groups:

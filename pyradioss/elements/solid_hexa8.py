@@ -61,8 +61,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from .. import materials
-from ..common.constants import EM20
+from .. import failure, materials
+from ..common.constants import EM20, EP30
 
 # Node sign pattern of the trilinear hexa (Radioss /BRICK node ordering:
 # nodes 1-4 = bottom face counter-clockwise, 5-8 = top face).
@@ -208,13 +208,37 @@ def init_group(group, model, log):
         mass=mass,                   # element mass (constant)
         eint=np.zeros(n),            # internal energy (GBUF%EINT)
         ehour=np.zeros(n),           # hourglass energy
+        off=np.ones(n),              # 1 alive / 0 deleted (GBUF%OFF)
         # exact stability correction to the lc/c estimate (module docstring)
         dtfac=_exact_dt_factor(dndx0, vol, lc0, group.state["slices"]),
     )
+    _init_material_state(group, dndx0)
     # nodal mass: 1/8 of the element mass to each node
     node_idx = group.conn.reshape(-1)
     mass_c = np.repeat(mass / 8.0, 8)
     return node_idx, mass_c, None
+
+
+def _init_material_state(group, dndx0):
+    """M3 material/failure plumbing shared by both solid kernels:
+
+    * ``dndx0`` — the INITIAL shape-function gradients are stored when a
+      slice's law is total-strain (LAW42): the cycle then computes the
+      deformation gradient exactly as F = sum_i x_i (x) gradN0_i, with no
+      rate integration and hence no drift;
+    * ``dama`` — /FAIL damage per element (single integration point);
+    * ``chk_fail`` — precomputed flag: True when any slice can delete
+      elements (a /FAIL card or a material eps_p_max threshold), so the
+      cycle skips the whole failure block for plain models.
+    """
+    st = group.state
+    if any(materials.needs_defgrad(mat) for _, mat, _ in st["slices"]):
+        st["dndx0"] = dndx0.copy()
+    if any(mat.fail is not None for _, mat, _ in st["slices"]):
+        st["dama"] = np.zeros(group.n)
+    st["chk_fail"] = any(
+        mat.fail is not None or mat.params.get("eps_p_max", EP30) < 1e30
+        for _, mat, _ in st["slices"])
 
 
 # ----------------------------------------------------------------------------
@@ -249,6 +273,13 @@ def forces(group, x, v, vr, dt, fint, mint):
     deps[:, 4] = 2.0 * D[:, 1, 2] * dt
     deps[:, 5] = 2.0 * D[:, 0, 2] * dt
 
+    # deleted elements (GBUF%OFF = 0): freeze their state — no straining,
+    # and below no stress, viscosity, hourglass force or time-step claim
+    alive = st["off"] > 0.0
+    if not alive.all():
+        deps[~alive] = 0.0
+        trD = np.where(alive, trD, 0.0)
+
     # ---- Jaumann rotation of the old stress (srota3) ---------------------
     sig = st["sig"]
     sig_old = sig.copy()                            # kept for the energy
@@ -265,19 +296,54 @@ def forces(group, x, v, vr, dt, fint, mint):
     sig[:, 5] += wxz * (szz - sxx) + wxy * syz - wyz * sxy
 
     # ---- material law per part slice (mmain -> sigeps) -------------------
+    # laws may return their own sound speed (Fortran SOUNDSP): LAW42's
+    # tangent stiffness grows with stretch, so its c MUST feed the dt.
+    epsp_old = st["epsp"].copy() if st["chk_fail"] else None
+    c = np.zeros(group.n)
+    c_from_law = np.zeros(group.n, dtype=bool)
+    F = None
+    if "dndx0" in st:
+        # exact deformation gradient at the point: F = sum_i x_i (x) gradN0_i
+        F = np.einsum("nia,nib->nab", xe, st["dndx0"])
     for sl, mat, prop in st["slices"]:
-        materials.solid_update(mat, sig[sl], deps[sl], st["epsp"][sl], dt)
+        extra = {"F": F[sl]} if F is not None else None
+        _, _, c_new = materials.solid_update(
+            mat, sig[sl], deps[sl], st["epsp"][sl], dt, extra)
+        if c_new is not None:
+            c[sl] = c_new
+            c_from_law[sl] = True
+
+    # ---- failure models + eps_p_max deletion (engine/source/materials/
+    # fail/, see pyradioss/failure/) — after the law so the damage sees
+    # the updated stress state and the plastic-strain increment ----------
+    if st["chk_fail"]:
+        off = st["off"]
+        for sl, mat, prop in st["slices"]:
+            eps_max = mat.params.get("eps_p_max", EP30)
+            if mat.fail is None and eps_max >= 1e30:
+                continue
+            broken = np.zeros(sl.stop - sl.start, dtype=bool)
+            if mat.fail is not None:
+                broken |= failure.solid_step(
+                    mat.fail, sig[sl], st["epsp"][sl] - epsp_old[sl],
+                    deps[sl], dt, st["dama"][sl])
+            if eps_max < 1e30:
+                broken |= st["epsp"][sl] > eps_max
+            off[sl][broken] = 0.0
+        alive = off > 0.0
+        sig[~alive] = 0.0            # a deleted element carries no stress
 
     # ---- sound speed & bulk viscosity (sbulk3) ----------------------------
-    c = np.zeros(group.n)
     qa = np.zeros(group.n)
     qb = np.zeros(group.n)
     for sl, mat, prop in st["slices"]:
-        # current sound speed uses current density (stiffness constant)
-        c[sl] = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
+        # current sound speed uses current density (stiffness constant);
+        # laws that returned their own (nonlinear) c keep it
+        if not c_from_law[sl.start]:
+            c[sl] = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
         qa[sl] = prop.params["qa"]
         qb[sl] = prop.params["qb"]
-    compressing = trD < 0.0
+    compressing = (trD < 0.0) & alive
     qvisc = np.where(
         compressing,
         rho * lc * (qa ** 2 * lc * trD ** 2 - qb * c * trD),
@@ -309,7 +375,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     for sl, mat, prop in st["slices"]:
         hcoef[sl] = prop.params["h"]
     # viscous coefficient (FB 1981 eq. 79 flavour): a = h*rho*c*V^(2/3)/4
-    ah = hcoef * rho * c * vol ** (2.0 / 3.0) / 4.0
+    # (deleted elements exert no hourglass force either)
+    ah = hcoef * rho * c * vol ** (2.0 / 3.0) / 4.0 * alive
     fhg = -np.einsum("n,nab,nai->nib", ah, qdot, gamma)
     fe += fhg
 
@@ -329,4 +396,5 @@ def forces(group, x, v, vr, dt, fint, mint):
     # Courant limit — but only where it acts, i.e. in compression:
     Q = np.where(compressing, qb * c + qa * lc * np.abs(trD), 0.0)
     dt_crit = st["dtfac"] * lc / (Q + np.sqrt(Q * Q + c * c))
-    return dt_crit
+    # deleted elements no longer constrain the global step
+    return np.where(alive, dt_crit, EP30)

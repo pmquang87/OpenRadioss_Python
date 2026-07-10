@@ -71,22 +71,31 @@ Outputs:
 
 See [PORTING_GUIDE.md](PORTING_GUIDE.md) for the detailed feature matrix, the
 map from every Python module to the original Fortran directory, and the porting
-roadmap. Milestones 1–2 (this state of the repository) cover:
+roadmap. Milestones 1–3 (this state of the repository) cover:
 
 - **Input**: the Radioss block-keyword deck format (`/NODE`, `/BRICK`,
   `/TETRA4`, `/SHELL`, `/SH3N`, `/TRUSS`, `/SPRING`, `/BEAM`, `/PART`,
-  `/MAT/LAW1`, `/MAT/LAW2`, `/PROP/TYPE1/2/3/4/14`,
+  `/MAT/LAW1/2/27/36/42`, `/FAIL/JOHNSON`, `/FAIL/BIQUAD`,
+  `/PROP/TYPE1/2/3/4/14`,
   `/BCS`, `/INIVEL`, `/GRAV`, `/CLOAD`, `/IMPVEL`, `/FUNCT`, `/GRNOD`,
   `/RWALL`, `/INTER/TYPE7`, `/TH`, …) with `#include` support.
 - **Elements**: 8-node solid (one-point integration + Flanagan–Belytschko
   hourglass control) with degenerated-brick→tetra conversion, 4-node
   constant-strain tetra, 4-node Belytschko–Tsay shell (membrane + bending +
   transverse shear, through-thickness integration, BLT84 stiffness hourglass
-  control), 3-node C0 triangle shell, 2-node corotational Timoshenko beam,
-  2-node truss, 2-node spring.
-- **Materials**: LAW1 (linear elastic, hypoelastic Jaumann update) and LAW2
+  control), 3-node C0 triangle shell, 2-node corotational Timoshenko beam
+  (elastic or global-plasticity), 2-node truss, 2-node spring.
+- **Materials**: LAW1 (linear elastic, hypoelastic Jaumann update), LAW2
   (Johnson–Cook elasto-plasticity with strain-rate hardening, 3D and
-  plane-stress variants).
+  plane-stress variants), LAW36 (tabulated plasticity from /FUNCT hardening
+  curves with a strain-rate curve family), LAW27 (brittle tensile cracking
+  for shells, fixed crack direction + unilateral damage), LAW42
+  (Ogden/Mooney-Rivlin hyperelasticity for solids, with the nonlinear
+  tangent sound speed feeding the stable time step).
+- **Failure**: /FAIL/JOHNSON and /FAIL/BIQUAD damage criteria with full
+  element deletion (per-layer bookkeeping for shells, deleted elements
+  flagged in the VTK output as `OFF`), plus the eps_p_max thresholds of
+  LAW2/LAW36.
 - **Engine**: explicit central-difference integration, element/nodal stable
   time step, boundary conditions, initial/imposed velocities, gravity,
   concentrated loads, kinematic rigid walls, TYPE7-style penalty contact with
@@ -103,7 +112,8 @@ pyradioss/
 ├── starter/      # the Starter program        (≈ starter/source)
 ├── engine/       # the Engine program         (≈ engine/source)
 ├── elements/     # element kernels            (≈ engine/source/elements)
-├── materials/    # material laws              (≈ engine/source/materials)
+├── materials/    # material laws              (≈ engine/source/materials/mat)
+├── failure/      # /FAIL damage criteria      (≈ engine/source/materials/fail)
 ├── contact/      # contact interfaces         (≈ engine/source/interfaces)
 └── output/       # listings, TH, ANIM         (≈ engine/source/output)
 examples/         # ready-to-run input decks

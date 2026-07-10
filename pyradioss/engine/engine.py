@@ -78,7 +78,18 @@ class EngineState:
         self.cycle = 0
         self.wext = 0.0        # accumulated external work
         self.econt = 0.0       # accumulated contact + rigid-wall energy
+        self.ndel = 0          # deleted elements reported so far (/FAIL)
         self.stop_reason = ""
+
+
+def _deleted_count(model: Model) -> int:
+    """Total deleted elements (GBUF%OFF == 0) across all groups."""
+    ndel = 0
+    for _, group in model.element_groups():
+        off = group.state.get("off")
+        if off is not None:
+            ndel += int((off == 0.0).sum())
+    return ndel
 
 
 def _energies(model: Model, state: EngineState) -> dict:
@@ -226,6 +237,14 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             next_anim += controls.anim_dt
         if state.cycle % controls.print_cycles == 0 or \
                 state.t >= controls.t_end:
+            # element-deletion report (the original prints a "RUPTURE /
+            # DELETE ELEMENT" message per element; the port reports the
+            # running total at the listing frequency)
+            ndel = _deleted_count(model)
+            if ndel > state.ndel:
+                log.info(f" -- ELEMENT DELETION: {ndel - state.ndel} "
+                         f"ELEMENT(S) DELETED (TOTAL {ndel})")
+                state.ndel = ndel
             e = _energies(model, state)
             log.info(f" {state.cycle:6d} {state.t:12.5E} {dt:12.5E} "
                      f"{e['IE']:12.5E} {e['KE']:12.5E} {e['HE']:12.5E} "

@@ -229,7 +229,8 @@ def read_part(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW<n>/mat_ID`` (aliases /MAT/ELAST, /MAT/PLAS_JOHNS).
+    """``/MAT/LAW<n>/mat_ID`` (aliases /MAT/ELAST, /MAT/PLAS_JOHNS,
+    /MAT/PLAS_TAB, /MAT/PLAS_BRIT, /MAT/OGDEN).
 
     LAW1 (linear elastic) — Fortran starter/source/materials/mat/mat001::
 
@@ -246,23 +247,92 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         card 5:  c   eps_dot_0   [ICC  Fsmooth  F_cut  — ignored]
 
       yield stress  sigma_y = (A + B*eps_p^n) * (1 + c*ln(eps_dot/eps_dot_0))
-      capped at sig_max; element deletion at eps_p_max is not ported yet.
-      Card 5 is optional (no rate effect if absent). The thermal-softening
-      card (m, T_melt, ...) of the original law is not ported.
+      capped at sig_max; the element is DELETED when the plastic strain
+      reaches eps_p_max (since M3). Card 5 is optional (no rate effect if
+      absent). The thermal-softening card (m, T_melt, ...) is not ported.
+
+    LAW27 (brittle, shells only) — Fortran .../mat027::
+
+        card 1:  mat_title
+        card 2:  rho_0
+        card 3:  E   nu
+        card 4:  eps_t1   eps_m1   dmax1   eps_f1     (crack direction 1)
+        card 5:  eps_t2   eps_m2   dmax2   eps_f2     (optional, = card 4)
+
+      tensile cracking: damage starts at strain eps_t, reaches dmax at
+      eps_m, layer breaks at eps_f (see law27_brittle.py). The plastic
+      block of the original PLAS_BRIT is not ported (elastic to crack).
+
+    LAW36 (tabulated plasticity) — Fortran .../mat036::
+
+        card 1:  mat_title
+        card 2:  rho_0
+        card 3:  E   nu
+        card 4:  N_funct   [eps_p_max]
+        card 5:  fct_ID1 ... fct_ID_N       (hardening curves eps_p->sig_y)
+        card 6:  rate_1 ... rate_N          (required when N_funct > 1,
+                 strictly increasing strain rates, one per curve)
+
+      the yield stress follows the /FUNCT curves, linearly interpolated
+      in strain rate; the element is deleted at eps_p_max (0 = no limit).
+      The original's Fsmooth/Chard/Fcut flags and Fscale card not ported.
+
+    LAW42 (Ogden hyperelastic, solids only) — Fortran .../mat042::
+
+        card 1:  mat_title
+        card 2:  rho_0
+        card 3:  mu_1  mu_2  mu_3  mu_4  mu_5
+        card 4:  alpha_1 ... alpha_5
+        card 5:  nu                          (default 0.495, near-incompr.)
+
+      W = sum mu_p/alpha_p (lb1^a + lb2^a + lb3^a - 3) + K/2 (J-1)^2;
+      every used pair must satisfy mu_p*alpha_p > 0; the ground-state
+      shear modulus is G0 = sum(mu_p*alpha_p)/2 and the derived E, K
+      follow from nu (stored in params so the generic elastic machinery
+      — time step, contact stiffness — works unchanged).
     """
     lawname = block.parts[1].upper() if len(block.parts) > 1 else ""
-    law_aliases = {"LAW1": 1, "ELAST": 1, "LAW2": 2, "PLAS_JOHNS": 2}
+    law_aliases = {"LAW1": 1, "ELAST": 1, "LAW2": 2, "PLAS_JOHNS": 2,
+                   "LAW27": 27, "PLAS_BRIT": 27,
+                   "LAW36": 36, "PLAS_TAB": 36,
+                   "LAW42": 42, "OGDEN": 42}
     if lawname not in law_aliases:
         log.warning(f"/MAT/{lawname} not ported — material skipped "
-                    f"(supported: LAW1/ELAST, LAW2/PLAS_JOHNS)", block.source)
+                    f"(supported: LAW1/ELAST, LAW2/PLAS_JOHNS, "
+                    f"LAW27/PLAS_BRIT, LAW36/PLAS_TAB, LAW42/OGDEN)",
+                    block.source)
         return
     law = law_aliases[lawname]
     title, cards = _title_and_data(block)
     if len(cards) < 2:
-        log.error(f"/MAT/{lawname}/{block.user_id}: needs rho and E,nu cards",
-                  block.source)
+        log.error(f"/MAT/{lawname}/{block.user_id}: needs at least rho and "
+                  f"elasticity cards", block.source)
         return
     rho0 = cards[0].floats()[0]
+
+    if law == 42:
+        # cards: mu / alpha / nu — the elastic constants are DERIVED
+        mu = _floats(cards[1], 5)
+        al = _floats(cards[2], 5) if len(cards) >= 3 else [0.0] * 5
+        nu = cards[3].floats()[0] if len(cards) >= 4 else 0.495
+        nu = nu if nu > 0 else 0.495
+        used = [(m, a) for m, a in zip(mu, al) if m != 0.0]
+        if not used:
+            log.error(f"/MAT/LAW42/{block.user_id}: all mu_p are zero",
+                      block.source)
+            return
+        if any(m * a <= 0.0 for m, a in used):
+            log.error(f"/MAT/LAW42/{block.user_id}: every Ogden pair must "
+                      f"satisfy mu_p * alpha_p > 0 (material stability)",
+                      block.source)
+            return
+        G0 = sum(m * a for m, a in used) / 2.0
+        params = {"E": 2.0 * G0 * (1.0 + nu), "nu": nu,
+                  "mu": [m for m, _ in used], "alpha": [a for _, a in used]}
+        model.materials[block.user_id] = Material(
+            id=block.user_id, law=law, rho0=rho0, title=title, params=params)
+        return
+
     E, nu = _floats(cards[1], 2)
     params = {"E": E, "nu": nu}
     if law == 2:
@@ -281,8 +351,131 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             params.update(c=c, eps_dot_0=eps0 if eps0 > 0 else 1.0)
         else:
             params.update(c=0.0, eps_dot_0=1.0)
+    elif law == 27:
+        if len(cards) < 3:
+            log.error(f"/MAT/LAW27/{block.user_id}: missing damage card "
+                      f"'eps_t1 eps_m1 dmax1 eps_f1'", block.source)
+            return
+        t1, m1, d1, f1 = _floats(cards[2], 4,
+                                 defaults=[0.0, 0.0, 0.999, 1e30])
+        if not (0.0 < t1 < m1):
+            log.error(f"/MAT/LAW27/{block.user_id}: need 0 < eps_t1 < "
+                      f"eps_m1", block.source)
+            return
+        d1 = min(d1 if d1 > 0 else 0.999, 1.0)
+        f1 = f1 if f1 > 0 else 1e30
+        if len(cards) >= 4:
+            t2, m2, d2, f2 = _floats(cards[3], 4, defaults=[t1, m1, d1, f1])
+            t2, m2 = (t2 if t2 > 0 else t1), (m2 if m2 > 0 else m1)
+            d2 = min(d2 if d2 > 0 else d1, 1.0)
+            f2 = f2 if f2 > 0 else f1
+        else:
+            t2, m2, d2, f2 = t1, m1, d1, f1
+        params.update(eps_t1=t1, eps_m1=m1, dmax1=d1, eps_f1=f1,
+                      eps_t2=t2, eps_m2=m2, dmax2=d2, eps_f2=f2)
+    elif law == 36:
+        if len(cards) < 4:
+            log.error(f"/MAT/LAW36/{block.user_id}: needs N_funct and "
+                      f"function-ID cards", block.source)
+            return
+        v = _floats(cards[2], 2, defaults=[1, 0.0])
+        nfun = int(v[0]) if v[0] > 0 else 1
+        params["eps_p_max"] = v[1] if v[1] > 0 else 1e30
+        fids = cards[3].ints()
+        if len(fids) < nfun:
+            log.error(f"/MAT/LAW36/{block.user_id}: N_funct={nfun} but only "
+                      f"{len(fids)} function ids given", block.source)
+            return
+        params["funct_ids"] = fids[:nfun]
+        if nfun > 1:
+            if len(cards) < 5:
+                log.error(f"/MAT/LAW36/{block.user_id}: N_funct>1 needs a "
+                          f"strain-rate card", block.source)
+                return
+            rates = _floats(cards[4], nfun)
+            if any(b <= a for a, b in zip(rates, rates[1:])):
+                log.error(f"/MAT/LAW36/{block.user_id}: strain rates must "
+                          f"be strictly increasing", block.source)
+                return
+            params["rates"] = rates
+        else:
+            params["rates"] = [0.0]
     model.materials[block.user_id] = Material(
         id=block.user_id, law=law, rho0=rho0, title=title, params=params)
+
+
+def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/JOHNSON/mat_ID`` and ``/FAIL/BIQUAD/mat_ID``: attach a
+    failure criterion to a material (the trailing id IS the material id —
+    Radioss convention; there is no title card).
+
+    JOHNSON — Fortran starter/source/materials/fail/johnson_cook::
+
+        card 1:  D1   D2   D3   D4   [D5 — read and ignored, no thermal]
+        card 2:  eps_dot_0   Ifail_sh        (optional; defaults 1.0, 1)
+
+      eps_f = (D1 + D2*exp(D3*sigma*)) * (1 + D4*ln(rate/eps_dot_0)),
+      damage D += d_eps_p/eps_f, break at D >= 1. Ifail_sh: 1 = delete
+      the shell when ONE layer breaks (default), 2 = when ALL layers do.
+
+    BIQUAD — Fortran starter/source/materials/fail/biquad::
+
+        card 1:  c1   c2   c3   c4   c5
+        card 2:  Ifail_sh                    (optional; default 1)
+
+      failure plastic strains at triaxialities -1/3, 0, 1/3, 2/3, 1 —
+      two parabolas through them (see pyradioss/failure/biquad.py). The
+      M-flag material presets and S-flag of the original are not ported:
+      give the five coefficients explicitly.
+
+    Solids break when their single integration point does (the ported
+    hexa/tetra are one-point elements, so the original's Ifail_so
+    variants are moot here).
+    """
+    from ..failure import biquad as fail_biquad
+    from ..model.entities import FailureModel
+    kind = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if kind not in ("JOHNSON", "BIQUAD"):
+        log.warning(f"/FAIL/{kind} not ported — skipped "
+                    f"(supported: JOHNSON, BIQUAD)", block.source)
+        return
+    mat_id = block.user_id
+    cards = block.cards
+    if not cards:
+        log.error(f"/FAIL/{kind}/{mat_id}: missing data card", block.source)
+        return
+    if kind == "JOHNSON":
+        D1, D2, D3, D4, _D5 = _floats(cards[0], 5)
+        eps0, ifail_sh = 1.0, 1
+        if len(cards) > 1:
+            v = _floats(cards[1], 2, defaults=[1.0, 1])
+            eps0 = v[0] if v[0] > 0 else 1.0
+            ifail_sh = int(v[1]) if v[1] in (1, 2) else 1
+        fm = FailureModel(type="JOHNSON", ifail_sh=ifail_sh,
+                          params={"D1": D1, "D2": D2, "D3": D3, "D4": D4,
+                                  "eps_dot_0": eps0})
+        if D1 <= 0.0 and D2 <= 0.0:
+            log.error(f"/FAIL/JOHNSON/{mat_id}: D1 and D2 both <= 0 gives "
+                      f"a zero failure strain", block.source)
+            return
+    else:  # BIQUAD
+        c1, c2, c3, c4, c5 = _floats(cards[0], 5)
+        if min(c1, c2, c3, c4, c5) <= 0.0:
+            log.error(f"/FAIL/BIQUAD/{mat_id}: all five failure strains "
+                      f"c1..c5 must be > 0 (presets not ported)",
+                      block.source)
+            return
+        ifail_sh = 1
+        if len(cards) > 1:
+            v = cards[1].ints()
+            if v and v[0] in (1, 2):
+                ifail_sh = v[0]
+        params = {"c1": c1, "c2": c2, "c3": c3, "c4": c4, "c5": c5}
+        fail_biquad.fit(params)   # pre-compute the two parabolas
+        fm = FailureModel(type="BIQUAD", ifail_sh=ifail_sh, params=params)
+    # attachment to the material happens in the Starter resolve step
+    # (initialization.resolve_materials) so deck order does not matter
+    model.raw_fails.append((mat_id, fm, block.source))
 
 
 def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -737,6 +930,7 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "BEAM": read_beam,
     "PART": read_part,
     "MAT": read_mat,
+    "FAIL": read_fail,
     "PROP": read_prop,
     "FUNCT": read_funct,
     "GRNOD": read_grnod,

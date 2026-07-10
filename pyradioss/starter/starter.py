@@ -24,7 +24,8 @@ from ..model.model import Model
 from .checks import check_model
 from .initialization import (build_element_groups,
                              initialize_elements_and_mass,
-                             resolve_node_groups, resolve_surfaces)
+                             resolve_materials, resolve_node_groups,
+                             resolve_surfaces)
 from .restart import write_restart
 
 
@@ -95,7 +96,9 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
         model = Model()
         parse_starter_deck(blocks, model, log)
 
-        # 2. finalize: ids->indices, element groups, node groups, surfaces
+        # 2. finalize: ids->indices, element groups, node groups, surfaces,
+        #    material curve/failure references
+        resolve_materials(model, log)
         build_element_groups(model, log)
         resolve_node_groups(model, log)
         resolve_surfaces(model, log)

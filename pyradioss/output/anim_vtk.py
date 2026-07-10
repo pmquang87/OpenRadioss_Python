@@ -10,7 +10,10 @@ Contents per state:
 * points  = current node positions (deformed geometry)
 * cells   = all elements (hexa/quad/line)
 * point data: DISPLACEMENT, VELOCITY vectors (per /ANIM/VECT)
-* cell data:  VONM von Mises stress, EPSP plastic strain (per /ANIM/ELEM)
+* cell data:  VONM von Mises stress, EPSP plastic strain (per /ANIM/ELEM),
+  OFF element status (always written: 1 = alive, 0 = deleted by a /FAIL
+  criterion or a material failure threshold — threshold/select on OFF in
+  ParaView to hide the deleted elements)
   - solids: from the stress tensor; shells: worst layer;
     trusses/springs: |axial stress| (resp. 0)
 """
@@ -102,3 +105,11 @@ def write_anim_state(path: str, model: Model, t: float,
                 fh.write("SCALARS EPSP double 1\nLOOKUP_TABLE default\n")
                 for name, g in groups:
                     np.savetxt(fh, _epsp(name, g), fmt="%.9E")
+            # element status: deleted elements stay in the mesh (constant
+            # topology keeps ParaView time series happy) but are flagged
+            fh.write("SCALARS OFF double 1\nLOOKUP_TABLE default\n")
+            for name, g in groups:
+                off = g.state.get("off")
+                if off is None:
+                    off = np.ones(g.n)
+                np.savetxt(fh, off, fmt="%.1f")

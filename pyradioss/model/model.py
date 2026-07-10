@@ -110,6 +110,10 @@ class Model:
         # Definitions keyed by user id
         # ------------------------------------------------------------------
         self.materials: Dict[int, Material] = {}
+        # /FAIL cards awaiting attachment to their material: parsed as
+        # (mat_id, FailureModel, source) tuples, attached by the Starter
+        # resolve step (deck order between /MAT and /FAIL is free).
+        self.raw_fails: list = []
         self.properties: Dict[int, Property] = {}
         self.parts: Dict[int, Part] = {}
         self.parts_list: List[Part] = []          # dense order for elements

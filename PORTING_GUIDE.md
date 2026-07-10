@@ -52,6 +52,11 @@ same names in comments.
 | `engine/source/elements/spring/` (`rforc3.F`) | `pyradioss/elements/spring.py` | TYPE4 |
 | `engine/source/materials/mat/mat001/sigeps01.F` | `pyradioss/materials/law01_elastic.py` | |
 | `engine/source/materials/mat/mat002/sigeps02.F` | `pyradioss/materials/law02_johnson_cook.py` | |
+| `engine/source/materials/mat/mat027/sigeps27c.F` | `pyradioss/materials/law27_brittle.py` | shells only, like the original |
+| `engine/source/materials/mat/mat036/sigeps36.F` (+ `36c`) | `pyradioss/materials/law36_tabulated.py` | |
+| `engine/source/materials/mat/mat042/sigeps42.F` | `pyradioss/materials/law42_ogden.py` | solids; returns its own SOUNDSP |
+| `engine/source/materials/fail/johnson_cook/`, `fail/biquad/` | `pyradioss/failure/` | /FAIL cards + GBUF%OFF element deletion |
+| `engine/source/elements/beam/pmat3.F` (global plasticity) | `pyradioss/elements/beam_type3.py` | LAW2 resultant-space return |
 | `engine/source/interfaces/inter3d/` (TYPE7: `i7main*.F`) | `pyradioss/contact/inter_type7.py` | penalty node↔segment |
 | `engine/source/output/` (`ecrit.F`, `sortie_main.F`, TH, ANIM) | `pyradioss/output/*.py` | CSV + VTK |
 | `common_source/` (constants, tables) | `pyradioss/common/*.py` | |
@@ -80,7 +85,7 @@ same names in comments.
    the Engine protects against divergence with an energy-error stop criterion
    like the original (`/STOP` defaults).
 
-## 4. Feature matrix (Milestones 1–2)
+## 4. Feature matrix (Milestones 1–3)
 
 Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options), ❌ not yet.
 
@@ -99,7 +104,12 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | `/BEAM` | ✅ | N1 N2 + orientation node N3 |
 | `/PART`, `/SUBSET` | ✅ / ❌ | |
 | `/MAT/LAW1` (`/MAT/ELAST`) | ✅ | |
-| `/MAT/LAW2` (`/MAT/PLAS_JOHNS`) | ✅ | εp-rate & hardening; temperature term ❌; not for beams |
+| `/MAT/LAW2` (`/MAT/PLAS_JOHNS`) | ✅ | εp-rate & hardening, eps_p_max element deletion (M3), beams via the global-plasticity model (M3); temperature term ❌ |
+| `/MAT/LAW27` (`/MAT/PLAS_BRIT`) | 🟡 | brittle tensile cracking with fixed crack direction, unilateral damage, layer rupture + element deletion; the plastic block of the original ❌ (shells only, like the original) |
+| `/MAT/LAW36` (`/MAT/PLAS_TAB`) | ✅ | tabulated hardening from /FUNCT curves, strain-rate curve family (linear rate interpolation), eps_p_max deletion; Fsmooth/Chard/Fcut and Fscale ❌ |
+| `/MAT/LAW42` (`/MAT/OGDEN`) | 🟡 | Ogden/Mooney-Rivlin, incompressible + K(J-1) bulk penalty, exact F from initial gradients, **nonlinear sound speed feeds the time step** (the law stiffens with stretch — verified by a long /DT 0.9 hold at λ≈2); solids only, no shell variant, no Prony viscosity |
+| `/FAIL/JOHNSON` | ✅ | D1–D4 + rate term; thermal D5 ❌; Ifail_sh 1/2; element deletion (stress zeroing, dt release, OFF in ANIM) |
+| `/FAIL/BIQUAD` | 🟡 | explicit c1–c5 input (two-parabola εf(σ*) fit); M-flag material presets and S-flag ❌ |
 | `/PROP/TYPE1` (`SHELL`) | 🟡 | thickness, N integration points, hourglass coeffs (Ishell fixed = BT for quads, C0 for `/SH3N`) |
 | `/PROP/TYPE2` (`TRUSS`) | ✅ | area |
 | `/PROP/TYPE3` (`BEAM`) | 🟡 | A, Iyy, Izz, Ixx; Timoshenko with full-section shear (no shear factor / Ishear variants), LAW1 only |
@@ -130,11 +140,16 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | Solid tetra4, constant strain (no hourglass modes; plain formulation — nodal-pressure Itetra variants ❌) | ✅ |
 | Belytschko–Tsay 4-node shell (memb/bend/shear, BLT84 **stiffness** hourglass control since M2 — M1's viscous form artificially damped coarse dynamic bending) | ✅ |
 | C0 3-node triangle shell (CST membrane + Mindlin plate, no hourglass modes) | ✅ |
-| Corotational Timoshenko beam (axial/2×shear/torsion/2×bending resultants) | 🟡 (LAW1 only) |
+| Corotational Timoshenko beam (axial/2×shear/torsion/2×bending resultants) | ✅ (LAW1 elastic; LAW2 via the global resultant-plasticity model since M3 — yields at exactly W·σy, no elastic-core spread to the 1.5·W·σy hinge; fiber-integrated TYPE18 beam is a roadmap item) |
 | Degenerated /BRICK → tetra conversion, penta/pyramid clear check | 🟡 |
 | Truss, linear spring | ✅ |
 | Jaumann objective stress update | ✅ |
 | LAW1, LAW2 (3D + plane stress) | ✅ |
+| LAW36 tabulated plasticity (3D + plane stress, rate curve family) | ✅ |
+| LAW27 brittle cracking (fixed smeared crack, unilateral damage) | 🟡 (elastic-brittle; original's plastic block ❌) |
+| LAW42 Ogden hyperelasticity (total-strain from exact F, nonlinear SOUNDSP → dt) | 🟡 (solids only) |
+| /FAIL element deletion plumbing (per-layer for shells, GBUF%OFF, deleted elements keep mass, drop stress/hourglass/dt claim, OFF field in ANIM, deletion count in the listing) | ✅ |
+| Equations of state (/EOS) for solids | ❌ (deliberately deferred — see roadmap M6: needs energy-dependent pressure integration per element, out of M3's scope; pressure is currently always the law's own, i.e. linear K·tr(ε) for LAW1/2/36) |
 | Rigid wall (kinematic, slide/tied) | ✅ |
 | TYPE7-style penalty contact + friction | 🟡 |
 | Energy balance (int/kin/hourglass/contact/external work), error % | ✅ |
@@ -151,15 +166,32 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
    fully-integrated solid (Isolid=17 equivalent), QEPH shell, DKT18
    triangle, plastic beams (global plasticity model), nodal-pressure
    tetra variants.
-2. **M3 — materials**: LAW36 (tabulated plasticity), LAW27 (brittle),
-   LAW42 (Ogden), /FAIL cards (Johnson–Cook failure, biquad), EOS;
-   plastic beams from M2's deferred list.
+2. **M3 — materials** ✅ (done): LAW36 tabulated plasticity (/FUNCT
+   hardening curves + strain-rate curve family), LAW27 brittle cracking
+   (shells), LAW42 Ogden hyperelasticity (solids, with the law feeding
+   its **nonlinear sound speed** into the element time step — the M2
+   time-step lesson applied to a stiffening material, proven by a long
+   /DT 0.9 hold at λ≈2), /FAIL/JOHNSON and /FAIL/BIQUAD with full
+   element-deletion plumbing (per-layer shell failure, OFF in ANIM,
+   deletion messages), eps_p_max deletion for LAW2/LAW36, and the
+   deferred-from-M2 plastic beams (LAW2 global resultant plasticity).
+   Deferred out of M3, explicitly:
+   * **/EOS (equations of state)** — energy-dependent pressure
+     integration (E-p coupling per element, relative-volume state) is a
+     solver-loop change, not just a material: it moves to M6 together
+     with the thermal Johnson–Cook terms it usually accompanies;
+   * thermal terms of LAW2//FAIL/JOHNSON (no thermal solution yet);
+   * the plastic block of LAW27, shell LAW42, LAW42 Prony viscosity;
+   * /FAIL/BIQUAD M-flag presets and S-flag; LAW36 Fsmooth/Fscale;
+   * fiber-integrated beams (/PROP/TYPE18) for true plastic-hinge
+     spread.
 3. **M4 — contact**: TYPE7 full options (Igap, Istf variants, self-impact),
    TYPE2 tied, TYPE11 edge-to-edge.
 4. **M5 — constraints & loads**: /RBODY, /RBE2/RBE3, /MPC, /SECT, moving and
    spherical/cylindrical rigid walls, /PLOAD, /IMPDISP.
 5. **M6 — engine niceties**: /DT/NODA/CST mass scaling, restarts
-   (`_0002.rad` chaining), /STATE, sensors, /DAMP, ALE/CFD (long term).
+   (`_0002.rad` chaining), /STATE, sensors, /DAMP, /EOS + thermal
+   material terms (deferred from M3), ALE/CFD (long term).
 6. **M7 — performance**: optional numba/JAX backends behind the same API.
 
 ## 6. Validation strategy

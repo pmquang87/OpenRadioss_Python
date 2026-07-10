@@ -93,8 +93,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from .. import materials
-from ..common.constants import EM20, SHEAR_FACTOR
+from .. import failure, materials
+from ..common.constants import EM20, EP30, SHEAR_FACTOR
 
 
 # ----------------------------------------------------------------------------
@@ -270,11 +270,91 @@ def init_group(group, model, log):
         dtfac=_exact_dt_factor(B1, B2, area, _char_length(xl, area),
                                thick, group.state["slices"]),
     )
+    _init_material_state(group, nip_max)
     node_idx = group.conn.reshape(-1)
     mass_c = np.repeat(mass / 4.0, 4)
     # generous lumped rotational inertia (see module docstring)
     inertia_c = np.repeat(mass / 4.0 * (thick ** 2 + area) / 12.0, 4)
     return node_idx, mass_c, inertia_c
+
+
+# ----------------------------------------------------------------------------
+# M3 material/failure plumbing shared by both shell kernels
+# ----------------------------------------------------------------------------
+
+def _init_material_state(group, nip_max):
+    """Allocate the per-layer material/failure state (see the materials
+    and failure package docstrings):
+
+    * ``off``      (n,)          1 alive / 0 deleted (GBUF%OFF)
+    * ``layfail``  (n, nip)      1 intact / 0 broken, per layer — written
+                                 by /FAIL criteria AND by layer-breaking
+                                 laws (LAW27 rupture strain)
+    * ``dama``     (n, nip)      /FAIL damage per layer (when needed)
+    * ``mat_extra``{name: array} law-specific state (LAW27 crack memory)
+    * ``chk_fail``               precomputed 'anything can delete here'
+    """
+    st = group.state
+    n = group.n
+    st["off"] = np.ones(n)
+    st["layfail"] = np.ones((n, nip_max))
+    st["mat_extra"] = {}
+    for sl, mat, prop in st["slices"]:
+        for name, shape in materials.extra_shapes(mat, nip_max).items():
+            if name not in st["mat_extra"]:
+                st["mat_extra"][name] = np.zeros((n,) + shape)
+    if any(mat.fail is not None for _, mat, _ in st["slices"]):
+        st["dama"] = np.zeros((n, nip_max))
+    st["chk_fail"] = any(
+        mat.fail is not None or mat.law == 27
+        or mat.params.get("eps_p_max", EP30) < 1e30
+        for _, mat, _ in st["slices"])
+
+
+def _layer_extra(st, sl, k):
+    """The ``extra`` dict for one layer of one part slice: views into the
+    law-specific arrays plus the shared layer-failure flags."""
+    extra = {name: arr[sl, k] for name, arr in st["mat_extra"].items()}
+    extra["layfail"] = st["layfail"][sl, k]
+    return extra
+
+
+def _layer_failure(st, sl, mat, k, sig_k, epsp_old, deps_k, dt):
+    """/FAIL damage + eps_p_max for one layer; breaks layers in place and
+    zeroes their stress so the resultant integration never sees them."""
+    layf = st["layfail"][sl, k]
+    if mat.fail is not None:
+        d_ep = st["epsp"][sl, k] - epsp_old[sl, k]
+        broken = failure.shell_step(mat.fail, sig_k, d_ep, deps_k, dt,
+                                    st["dama"][sl, k])
+        layf[broken] = 0.0
+    eps_max = mat.params.get("eps_p_max", EP30)
+    if eps_max < 1e30:
+        layf[st["epsp"][sl, k] > eps_max] = 0.0
+    sig_k[layf == 0.0] = 0.0
+
+
+def _element_deletion(st, nip_of):
+    """Element OFF from the layer flags, per part slice.
+
+    Deletion rule: /FAIL's Ifail_sh (1 = one broken layer kills the
+    element — the Radioss default, also used for the material eps_p_max
+    thresholds; 2 = all layers), while LAW27 uses the all-layers rule of
+    the original brittle law. Returns the updated alive mask."""
+    off = st["off"]
+    layfail = st["layfail"]
+    for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        if not (mat.fail is not None or mat.law == 27
+                or mat.params.get("eps_p_max", EP30) < 1e30):
+            continue
+        nip = nip_of[isl]
+        nbroken = (layfail[sl, :nip] == 0.0).sum(axis=1)
+        if mat.law == 27 or (mat.fail is not None and mat.fail.ifail_sh == 2):
+            dead = nbroken == nip
+        else:
+            dead = nbroken >= 1
+        off[sl][dead] = 0.0
+    return off > 0.0
 
 
 # ----------------------------------------------------------------------------
@@ -313,14 +393,25 @@ def forces(group, x, v, vr, dt, fint, mint):
         np.einsum("ni,ni->n", B2, vz) - thx.mean(axis=1),
     ], axis=1)
 
+    # deleted elements (GBUF%OFF = 0): freeze their state — no straining,
+    # and below no resultants, hourglass force or time-step claim
+    alive = st["off"] > 0.0
+    if not alive.all():
+        dm[~alive] = 0.0
+        kap[~alive] = 0.0
+        gs[~alive] = 0.0
+
     # ---- layer stress updates + resultants ---------------------------------
     sig = st["sig"]
+    epsp_old = st["epsp"].copy() if st["chk_fail"] else None
     Nres = np.zeros((n, 3))     # membrane force / length
     Mres = np.zeros((n, 3))     # moment / length
     de_layers = np.zeros(n)     # internal energy density accumulation
     c = np.zeros(n)
+    nip_of = []
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         zrel, wrel = st["zw"][isl]
+        nip_of.append(len(zrel))
         t_sl = thick[sl]
         for k in range(len(zrel)):
             zk = zrel[k] * t_sl                     # layer position
@@ -328,7 +419,12 @@ def forces(group, x, v, vr, dt, fint, mint):
             deps = (dm[sl] + zk[:, None] * kap[sl]) * dt
             s_old = sig[sl, k, :].copy()
             s_new, _ = materials.shell_update(
-                mat, sig[sl, k, :], deps, st["epsp"][sl, k], dt)
+                mat, sig[sl, k, :], deps, st["epsp"][sl, k], dt,
+                _layer_extra(st, sl, k))
+            if st["chk_fail"]:
+                # /FAIL damage + eps_p_max: break layers, zero their stress
+                # BEFORE they enter the resultants
+                _layer_failure(st, sl, mat, k, s_new, epsp_old, deps, dt)
             sig[sl, k, :] = s_new
             s_mid = 0.5 * (s_old + s_new)
             Nres[sl] += wk[:, None] * s_new
@@ -340,6 +436,19 @@ def forces(group, x, v, vr, dt, fint, mint):
         st["qshear"][sl] += SHEAR_FACTOR * mat.G * gs[sl] * dt
         de_layers[sl] += t_sl * np.einsum(
             "nk,nk->n", 0.5 * (qold + st["qshear"][sl]), gs[sl] * dt)
+
+    # ---- element deletion from the layer flags -----------------------------
+    if st["chk_fail"]:
+        alive = _element_deletion(st, nip_of)
+        if not alive.all():
+            dead = ~alive
+            # a deleted element carries nothing: wipe this cycle's
+            # resultants and every bit of persistent stress state
+            Nres[dead] = 0.0
+            Mres[dead] = 0.0
+            sig[dead] = 0.0
+            st["qshear"][dead] = 0.0
+            st["hgq"][dead] = 0.0
     qres = st["qshear"] * thick[:, None]            # shear force / length
 
     # ---- internal nodal forces & moments (transpose of the rates) ---------
@@ -373,6 +482,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         k_m[sl] = p["hm"] * mat.E * t_sl * area[sl] * bb[sl] / 8.0
         k_w[sl] = p["hf"] * SHEAR_FACTOR * mat.G * t_sl * area[sl] * bb[sl] / 8.0
         k_r[sl] = p["hr"] * mat.E * t_sl ** 3 * area[sl] * bb[sl] / 192.0
+    # deleted elements exert no hourglass force (their Q was wiped above)
+    k_m *= alive
+    k_w *= alive
+    k_r *= alive
     fhg = np.zeros((n, 4, 3))
     mhg = np.zeros((n, 4, 3))
     Q = st["hgq"]
@@ -401,4 +514,5 @@ def forces(group, x, v, vr, dt, fint, mint):
     np.add.at(mint, conn.reshape(-1), mg.reshape(-1, 3))
 
     # ---- critical time step ------------------------------------------------
-    return st["dtfac"] * lc / c
+    # deleted elements no longer constrain the global step
+    return np.where(alive, st["dtfac"] * lc / c, EP30)

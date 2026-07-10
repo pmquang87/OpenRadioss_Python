@@ -54,8 +54,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from .. import materials
-from ..common.constants import EM20
+from .. import failure, materials
+from ..common.constants import EM20, EP30
 
 # dN_i/dxi_a of the linear tetrahedron with natural coordinates
 #   N1 = 1 - xi1 - xi2 - xi3,  N2 = xi1,  N3 = xi2,  N4 = xi3
@@ -180,8 +180,12 @@ def init_group(group, model, log):
         mass=mass,
         eint=np.zeros(n),
         ehour=np.zeros(n),           # always zero: no hourglass modes (doc)
+        off=np.ones(n),              # 1 alive / 0 deleted (GBUF%OFF)
         dtfac=_exact_dt_factor(dndx0, vol, lc0, group.state["slices"]),
     )
+    # dndx0 / damage / failure-flag plumbing shared with the brick kernel
+    from .solid_hexa8 import _init_material_state
+    _init_material_state(group, dndx0)
     node_idx = group.conn.reshape(-1)
     mass_c = np.repeat(mass / 4.0, 4)
     return node_idx, mass_c, None
@@ -217,6 +221,12 @@ def forces(group, x, v, vr, dt, fint, mint):
     deps[:, 4] = 2.0 * D[:, 1, 2] * dt
     deps[:, 5] = 2.0 * D[:, 0, 2] * dt
 
+    # deleted elements (GBUF%OFF = 0): freeze their state (see the brick)
+    alive = st["off"] > 0.0
+    if not alive.all():
+        deps[~alive] = 0.0
+        trD = np.where(alive, trD, 0.0)
+
     # ---- Jaumann rotation of the old stress (srota3) -----------------------
     sig = st["sig"]
     sig_old = sig.copy()
@@ -233,18 +243,49 @@ def forces(group, x, v, vr, dt, fint, mint):
     sig[:, 5] += wxz * (szz - sxx) + wxy * syz - wyz * sxy
 
     # ---- material law per part slice (mmain -> sigeps) ---------------------
+    # laws may return their own sound speed (LAW42 stiffens with stretch —
+    # its c MUST feed the time step; see the brick kernel for commentary)
+    epsp_old = st["epsp"].copy() if st["chk_fail"] else None
+    c = np.zeros(group.n)
+    c_from_law = np.zeros(group.n, dtype=bool)
+    F = None
+    if "dndx0" in st:
+        F = np.einsum("nia,nib->nab", xe, st["dndx0"])
     for sl, mat, prop in st["slices"]:
-        materials.solid_update(mat, sig[sl], deps[sl], st["epsp"][sl], dt)
+        extra = {"F": F[sl]} if F is not None else None
+        _, _, c_new = materials.solid_update(
+            mat, sig[sl], deps[sl], st["epsp"][sl], dt, extra)
+        if c_new is not None:
+            c[sl] = c_new
+            c_from_law[sl] = True
+
+    # ---- failure models + eps_p_max deletion (pyradioss/failure/) ----------
+    if st["chk_fail"]:
+        off = st["off"]
+        for sl, mat, prop in st["slices"]:
+            eps_max = mat.params.get("eps_p_max", EP30)
+            if mat.fail is None and eps_max >= 1e30:
+                continue
+            broken = np.zeros(sl.stop - sl.start, dtype=bool)
+            if mat.fail is not None:
+                broken |= failure.solid_step(
+                    mat.fail, sig[sl], st["epsp"][sl] - epsp_old[sl],
+                    deps[sl], dt, st["dama"][sl])
+            if eps_max < 1e30:
+                broken |= st["epsp"][sl] > eps_max
+            off[sl][broken] = 0.0
+        alive = off > 0.0
+        sig[~alive] = 0.0            # a deleted element carries no stress
 
     # ---- sound speed & bulk viscosity (sbulk3) ------------------------------
-    c = np.zeros(group.n)
     qa = np.zeros(group.n)
     qb = np.zeros(group.n)
     for sl, mat, prop in st["slices"]:
-        c[sl] = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
+        if not c_from_law[sl.start]:
+            c[sl] = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
         qa[sl] = prop.params["qa"]
         qb[sl] = prop.params["qb"]
-    compressing = trD < 0.0
+    compressing = (trD < 0.0) & alive
     qvisc = np.where(
         compressing,
         rho * lc * (qa ** 2 * lc * trD ** 2 - qb * c * trD),
@@ -273,4 +314,6 @@ def forces(group, x, v, vr, dt, fint, mint):
 
     # ---- critical time step --------------------------------------------------
     Q = np.where(compressing, qb * c + qa * lc * np.abs(trD), 0.0)
-    return st["dtfac"] * lc / (Q + np.sqrt(Q * Q + c * c))
+    dt_crit = st["dtfac"] * lc / (Q + np.sqrt(Q * Q + c * c))
+    # deleted elements no longer constrain the global step
+    return np.where(alive, dt_crit, EP30)
