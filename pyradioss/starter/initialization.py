@@ -400,7 +400,8 @@ def resolve_lines(model: Model, log: MessageLog) -> None:
 
 def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
     """Run every kernel's init_group and assemble the lumped nodal mass
-    (and rotational inertia, from shells). Also applies /INIVEL."""
+    (and rotational inertia, from shells). Also applies /ADMAS and
+    /INIVEL (TRA and AXIS)."""
     model.x = model.x0.copy()
     model.v = np.zeros((model.numnod, 3))
     model.vr = np.zeros((model.numnod, 3))
@@ -414,6 +415,16 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
         if inertia_c is not None:
             np.add.at(model.inertia, node_idx, inertia_c)
 
+    # /ADMAS (M5): non-structural mass, added BEFORE the massless-node
+    # check so a standalone node + /ADMAS is a legitimate free point mass
+    for am in model.admas:
+        g = model.node_groups.get(am.grnod_id)
+        if g is None or g.node_idx is None:
+            log.error(f"/ADMAS/{am.id}: unknown node group {am.grnod_id}",
+                      "ADMAS CHECK")
+            continue
+        model.mass[g.node_idx] += am.mass
+
     # /INIVEL
     for iv in model.inivel:
         g = model.node_groups.get(iv.grnod_id)
@@ -421,7 +432,12 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
             log.error(f"/INIVEL/{iv.id}: unknown node group {iv.grnod_id}",
                       "INIVEL CHECK")
             continue
-        model.v[g.node_idx] = iv.v
+        if iv.kind == "AXIS":
+            # rigid-rotation velocity field: v += omega * d x (x0 - P)
+            r = model.x0[g.node_idx] - iv.origin
+            model.v[g.node_idx] += iv.omega * np.cross(iv.axis, r)
+        else:
+            model.v[g.node_idx] = iv.v
 
     # massless nodes: harmless if nothing ever loads them, fatal otherwise.
     # The Engine divides force by mass, so give unreferenced nodes a tiny
@@ -432,3 +448,126 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
                     f"(not referenced by any element); they are frozen.",
                     "MASS INIT")
         model.mass[massless] = 1e30  # infinite mass = frozen node
+
+
+# ----------------------------------------------------------------------------
+# Rigid bodies (/RBODY, /RBE2): mass, COG, inertia tensor  (M5)
+# ----------------------------------------------------------------------------
+
+def initialize_rigid_bodies(model: Model, log: MessageLog) -> None:
+    """Compute each rigid body's total mass, center of gravity and inertia
+    tensor from its slave nodes, and resolve the master node.
+
+    Fortran origin: ``starter/source/constraints/general/rbody/rbyini.F``
+    (and ``inirby``), which assemble exactly these quantities into the
+    RBY buffer. The theory is the discrete rigid body: the slaves are
+    point masses m_s at positions x_s (plus the isotropic lumped nodal
+    inertias I_s that shells contribute), so
+
+        M  = sum m_s (+ added mass)
+        xg = sum m_s x_s / sum m_s
+        J  = sum m_s (|r|^2 E - r r^T) + sum I_s E + diag(Jadd),
+             r = x_s - xg
+
+    Notes baked in:
+
+    * an /RBE2 master is a structural node: its own mass/position joins
+      the sums; an /RBODY master usually carries no mass (frozen by the
+      mass check) and is EXCLUDED from them — with Icog=1 (default) it is
+      *relocated* to the computed COG, the Radioss ICoG behaviour;
+    * added mass/inertia act AT the COG (they shift nothing);
+    * element deletion (/FAIL) never changes nodal masses (the deleted
+      element's mass stays, see the /FAIL plumbing) — so M, xg, J are
+      computed ONCE here and stay exact for the whole run;
+    * slaves that are massless standalone nodes are tolerated (they are
+      carried kinematically) but contribute nothing to M/J — a body needs
+      at least some real mass;
+    * a near-singular inertia tensor (all slave mass on one line) is
+      regularized with a small isotropic term and flagged: the rotation
+      rate about the mass line is then meaningless but stays bounded.
+    """
+    seen = np.zeros(model.numnod, dtype=bool)
+    for rb in model.rbodies:
+        who = f"/{rb.kind}/{rb.id}"
+        try:
+            rb.master = model.node_index(rb.master_id)
+        except KeyError:
+            log.error(f"{who}: unknown master node {rb.master_id}",
+                      "RBODY CHECK")
+            continue
+        g = model.node_groups.get(rb.grnod_id)
+        if g is None or g.node_idx is None or g.node_idx.size == 0:
+            log.error(f"{who}: slave node group {rb.grnod_id} is missing "
+                      f"or empty", "RBODY CHECK")
+            continue
+        rb.slaves = g.node_idx[g.node_idx != rb.master]
+
+        # one kinematic condition per node: overlapping bodies are an error
+        body_nodes = np.concatenate([[rb.master], rb.slaves])
+        if np.any(seen[body_nodes]):
+            log.error(f"{who}: node(s) already belong to another rigid "
+                      f"body", "RBODY CHECK")
+            continue
+        seen[body_nodes] = True
+
+        # mass sums: slaves + the master if it is structural (real mass).
+        # Frozen (1e30) masses are the mass-check placeholder for nodes no
+        # element references — they carry NO physical mass.
+        m = model.mass[rb.slaves].copy()
+        m[m >= 1e29] = 0.0
+        mm = model.mass[rb.master]
+        m_master = mm if mm < 1e29 else 0.0
+        msum = float(m.sum()) + m_master
+        if msum + rb.added_mass <= 0.0:
+            log.error(f"{who}: rigid body has no mass (give the slaves "
+                      f"element mass or /ADMAS, or set the Mass field)",
+                      "RBODY CHECK")
+            continue
+        if msum > 0.0:
+            xg = (m[:, None] * model.x0[rb.slaves]).sum(axis=0)
+            xg = (xg + m_master * model.x0[rb.master]) / msum
+        else:
+            xg = model.x0[rb.slaves].mean(axis=0)   # massless: geometric
+
+        # inertia tensor about xg (point masses + isotropic nodal inertias)
+        r = model.x0[rb.slaves] - xg
+        r2 = np.einsum("nb,nb->n", r, r)
+        J = (np.einsum("n,nb,nc->bc", m, r, r) * -1.0
+             + np.eye(3) * float((m * r2).sum()))
+        rm = model.x0[rb.master] - xg
+        J += m_master * (np.eye(3) * float(rm @ rm) - np.outer(rm, rm))
+        inert = model.inertia[rb.slaves]
+        J += np.eye(3) * float(inert.sum())
+        J += np.diag(rb.jadd if rb.jadd is not None else np.zeros(3))
+
+        # regularize a singular tensor (collinear point masses): the spin
+        # about the mass line has no physics — keep it bounded, warn once
+        lam = np.linalg.eigvalsh(J)
+        if lam[0] < 1e-8 * max(lam[2], 1e-30):
+            J += np.eye(3) * max(1e-8 * lam[2], 1e-30)
+            log.warning(f"{who}: (near-)singular inertia tensor — slave "
+                        f"masses are collinear; the spin about that line "
+                        f"is regularized", "RBODY CHECK")
+
+        rb.mass_total = msum + rb.added_mass
+        rb.xg = xg
+        rb.J = J
+
+        # ICoG = 1: relocate the master node to the COG (Radioss default)
+        if rb.icog == 1 and rb.kind == "RBODY":
+            model.x0[rb.master] = xg
+            model.x[rb.master] = xg
+        # the added mass physically rides the body: hang it on the master
+        # so the Engine's nodal KE/momentum ledgers see it move
+        if rb.added_mass > 0.0:
+            if model.mass[rb.master] >= 1e29:      # was frozen-massless
+                model.mass[rb.master] = rb.added_mass
+            else:
+                model.mass[rb.master] += rb.added_mass
+
+        pj = np.linalg.eigvalsh(rb.J)
+        log.info(f"     {who}: {len(rb.slaves)} SLAVE NODE(S), MASS = "
+                 f"{rb.mass_total:12.5E}, COG = {xg[0]:12.5E} "
+                 f"{xg[1]:12.5E} {xg[2]:12.5E}")
+        log.info(f"       PRINCIPAL INERTIA . . . . : {pj[0]:12.5E} "
+                 f"{pj[1]:12.5E} {pj[2]:12.5E}")

@@ -33,9 +33,10 @@ import numpy as np
 from ..common.messages import MessageLog
 from ..common.tables import FunctTable
 from ..model.entities import (
-    BoundaryCondition, Box, ConcentratedLoad, Gravity, ImposedVelocity,
-    InitialVelocity, Interface, Line, Material, NodeGroup, Part, Property,
-    RigidWall, Surface, THRequest,
+    AddedMass, BoundaryCondition, Box, ConcentratedLoad, Gravity,
+    ImposedDisplacement, ImposedVelocity, InitialVelocity, Interface, Line,
+    Material, NodeGroup, Part, PressureLoad, Property, Rbe3, RigidBody,
+    RigidWall, Section, Surface, THRequest,
 )
 from ..model.model import Model
 from .deck_reader import Card, KeywordBlock
@@ -724,20 +725,42 @@ def read_inivel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
         card 1:  title
         card 2:  Vx   Vy   Vz   grnod_ID
+
+    ``/INIVEL/AXIS/inivel_ID`` (M5) — initial rotation about an axis::
+
+        card 1:  title
+        card 2:  omega   Dir(X|Y|Z)   grnod_ID   Xp   Yp   Zp
+
+      every node of the group receives v += omega * d x (x0 - P), the
+      velocity field of a rigid rotation at rate omega about the axis
+      through P = (Xp,Yp,Zp) along Dir. This is how a spinning /RBODY is
+      initialized. (The translational Vt fields of the full Radioss AXIS
+      card are covered by adding a /INIVEL/TRA on the same group.)
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else "TRA"
-    if kind != "TRA":
-        log.warning(f"/INIVEL/{kind} not ported (TRA supported)", block.source)
-        return
     title, cards = _title_and_data(block)
     if not cards:
         log.error(f"/INIVEL/{block.user_id}: missing data card", block.source)
         return
-    v = _floats(cards[0], 3)
-    toks = cards[0].tokens()
-    grnod = int(float(toks[3])) if len(toks) > 3 else 0
-    model.inivel.append(InitialVelocity(
-        id=block.user_id, grnod_id=grnod, v=np.array(v), title=title))
+    if kind == "TRA":
+        v = _floats(cards[0], 3)
+        toks = cards[0].tokens()
+        grnod = int(float(toks[3])) if len(toks) > 3 else 0
+        model.inivel.append(InitialVelocity(
+            id=block.user_id, grnod_id=grnod, v=np.array(v), title=title))
+    elif kind == "AXIS":
+        t = cards[0].tokens()
+        omega = float(t[0])
+        axis = _direction(t[1])
+        grnod = int(t[2]) if len(t) > 2 else 0
+        origin = np.array([float(x) for x in t[3:6]]) if len(t) >= 6 \
+            else np.zeros(3)
+        model.inivel.append(InitialVelocity(
+            id=block.user_id, grnod_id=grnod, v=np.zeros(3), title=title,
+            kind="AXIS", omega=omega, axis=axis, origin=origin))
+    else:
+        log.warning(f"/INIVEL/{kind} not ported (TRA, AXIS supported)",
+                    block.source)
 
 
 def read_grav(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -803,47 +826,262 @@ def read_impvel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         scale=float(t[3]) if len(t) > 3 else 1.0, title=title))
 
 
+def read_impdisp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/IMPDISP/impdisp_ID`` (M5)::
+
+        card 1:  title
+        card 2:  fct_ID   Dir(X|Y|Z)   grnod_ID   Fscale
+
+      kinematic condition: the DOF's displacement follows
+      d(t) = Fscale * f(t) exactly (the Engine sets the velocity each
+      cycle so the node lands at x0 + d(t+dt)). The curve should start at
+      f(0) = 0 — a nonzero start makes the node JUMP in the first cycle.
+    """
+    title, cards = _title_and_data(block)
+    if not cards:
+        log.error(f"/IMPDISP/{block.user_id}: missing data card", block.source)
+        return
+    t = cards[0].tokens()
+    dof = {"X": 0, "Y": 1, "Z": 2}[t[1].upper()]
+    model.impdisp.append(ImposedDisplacement(
+        id=block.user_id, funct_id=int(t[0]), dof=dof, grnod_id=int(t[2]),
+        scale=float(t[3]) if len(t) > 3 else 1.0, title=title))
+
+
+def read_pload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PLOAD/pload_ID`` (M5)::
+
+        card 1:  title
+        card 2:  surf_ID   fct_ID   Fscale
+
+      follower pressure p(t) = Fscale * f(t) on every segment of the
+      surface, acting along the current segment normal (node ordering
+      n1-n2-n3-n4, right-hand rule: positive p pushes along +n). The
+      resultant p*A of each segment is lumped to its corners.
+    """
+    title, cards = _title_and_data(block)
+    if not cards:
+        log.error(f"/PLOAD/{block.user_id}: missing data card", block.source)
+        return
+    t = cards[0].tokens()
+    model.ploads.append(PressureLoad(
+        id=block.user_id, surf_id=int(t[0]), funct_id=int(t[1]),
+        scale=float(t[2]) if len(t) > 2 else 1.0, title=title))
+
+
+def read_admas(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ADMAS/admas_ID`` (M5)::
+
+        card 1:  title
+        card 2:  Mass   grnod_ID
+
+      adds Mass to EVERY node of the group (the Radioss type-0 per-node
+      semantics; the distributed-total variants are not ported). Applied
+      before the massless-node check, so a standalone node + /ADMAS is a
+      legitimate free point mass — e.g. the carrier node of a moving
+      /RWALL.
+    """
+    title, cards = _title_and_data(block)
+    if not cards:
+        log.error(f"/ADMAS/{block.user_id}: missing data card", block.source)
+        return
+    t = cards[0].tokens()
+    mass = float(t[0])
+    if mass <= 0.0:
+        log.error(f"/ADMAS/{block.user_id}: Mass must be > 0", block.source)
+        return
+    model.admas.append(AddedMass(
+        id=block.user_id, grnod_id=int(t[1]), mass=mass, title=title))
+
+
+# ============================================================================
+# Rigid bodies, rigid links, interpolation constraints, sections (M5)
+# ============================================================================
+
+def read_rbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RBODY/rbody_ID`` (M5)::
+
+        card 1:  title
+        card 2:  node_ID   grnod_ID   Mass   Icog
+        card 3:  Jxx   Jyy   Jzz          (optional added inertia)
+
+      node_ID = master node (usually a standalone node); grnod_ID = the
+      slave nodes. The Starter computes the body mass, center of gravity
+      and inertia tensor from the slave nodal masses; Mass and Jxx/Jyy/Jzz
+      are extra mass/inertia lumped at the COG. Icog = 1 (default) moves
+      the master node to the COG (the Radioss ICoG behaviour); 0 keeps it
+      where it is (it is then simply carried rigidly).
+
+      Not ported from the full card (documented M5 simplifications):
+      sensors, skew/spherical inertia frames, IKREM and the surface
+      envelope.
+    """
+    title, cards = _title_and_data(block)
+    if not cards:
+        log.error(f"/RBODY/{block.user_id}: missing data card", block.source)
+        return
+    t = cards[0].tokens()
+    if len(t) < 2:
+        log.error(f"/RBODY/{block.user_id}: card 2 needs 'node_ID grnod_ID'",
+                  block.source)
+        return
+    mass = float(t[2]) if len(t) > 2 else 0.0
+    icog = int(float(t[3])) if len(t) > 3 else 1
+    jadd = np.array(_floats(cards[1], 3)) if len(cards) > 1 else np.zeros(3)
+    if np.any(jadd < 0.0):
+        log.error(f"/RBODY/{block.user_id}: added inertia must be >= 0",
+                  block.source)
+        return
+    model.rbodies.append(RigidBody(
+        id=block.user_id, kind="RBODY", master_id=int(t[0]),
+        grnod_id=int(t[1]), added_mass=mass, jadd=jadd, icog=icog,
+        title=title))
+
+
+def read_rbe2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RBE2/rbe2_ID`` (M5)::
+
+        card 1:  title
+        card 2:  node_ID   grnod_ID
+
+      rigid link: the slave nodes (grnod_ID) move rigidly with the master
+      node node_ID. Unlike /RBODY the master is a structural node: it
+      keeps its position, its own mass and the forces of the elements
+      attached to it feed the link's rigid equation of motion. Only the
+      full 6-DOF tie is ported (no per-DOF flags).
+    """
+    title, cards = _title_and_data(block)
+    if not cards:
+        log.error(f"/RBE2/{block.user_id}: missing data card", block.source)
+        return
+    t = cards[0].ints()
+    if len(t) < 2:
+        log.error(f"/RBE2/{block.user_id}: card 2 needs 'node_ID grnod_ID'",
+                  block.source)
+        return
+    model.rbodies.append(RigidBody(
+        id=block.user_id, kind="RBE2", master_id=t[0], grnod_id=t[1],
+        added_mass=0.0, jadd=np.zeros(3), icog=0, title=title))
+
+
+def read_rbe3(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RBE3/rbe3_ID`` (M5)::
+
+        card 1:  title
+        card 2:  node_ID   grnod_ID
+
+      interpolation constraint: the dependent node node_ID follows the
+      weighted-average (least-squares rigid fit) motion of the master
+      nodes in grnod_ID, and forces applied at the dependent node are
+      distributed to the masters without stiffening the model. Uniform
+      unit weights (the per-set weights/DOF flags of the full card are
+      not ported).
+    """
+    title, cards = _title_and_data(block)
+    if not cards:
+        log.error(f"/RBE3/{block.user_id}: missing data card", block.source)
+        return
+    t = cards[0].ints()
+    if len(t) < 2:
+        log.error(f"/RBE3/{block.user_id}: card 2 needs 'node_ID grnod_ID'",
+                  block.source)
+        return
+    model.rbe3.append(Rbe3(
+        id=block.user_id, ref_id=t[0], grnod_id=t[1], title=title))
+
+
+def read_sect(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SECT/sect_ID`` (M5)::
+
+        card 1:  title
+        card 2:  grnod_ID   [node_ID_ref]
+
+      section-force output: grnod_ID must contain ALL nodes of one side
+      of the cut (a /GRNOD/PART of the side's parts is the natural
+      input); the reported force/moment is what the other side transmits
+      through the cut (see the Section entity docstring for the side-sum
+      identity). node_ID_ref: moment reference node (its current
+      position); 0/absent = the fixed initial centroid of the side set.
+      Output via /TH/SECT.
+    """
+    title, cards = _title_and_data(block)
+    if not cards:
+        log.error(f"/SECT/{block.user_id}: missing data card", block.source)
+        return
+    t = cards[0].ints()
+    model.sections.append(Section(
+        id=block.user_id, grnod_id=t[0],
+        node_id_ref=t[1] if len(t) > 1 else 0, title=title))
+
+
 # ============================================================================
 # Rigid wall, contact
 # ============================================================================
 
 def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/RWALL/PLANE/rwall_ID``::
+    """``/RWALL/PLANE|SPHER|CYL/rwall_ID`` (geometries + motion since M5)::
 
         card 1:  title
-        card 2:  grnod_ID   Slide   fric   Dist
+        card 2:  grnod_ID   Slide   fric   Dist   node_ID
+        PLANE:
         card 3:  XM    YM    ZM        (point M on the plane)
         card 4:  XM1   YM1   ZM1       (point M1: normal = M->M1)
+        SPHER:
+        card 3:  XM    YM    ZM        (center)
+        card 4:  R                     (radius; nodes live OUTSIDE)
+        CYL:
+        card 3:  XM    YM    ZM        (point on the axis)
+        card 4:  XM1   YM1   ZM1       (point M1: axis = M->M1)
+        card 5:  R                     (radius; nodes live outside)
 
       Slide: 0 = frictionless sliding, 1 = tied, 2 = sliding + friction.
-      grnod_ID = 0 → all nodes are wall candidates.
+      grnod_ID = 0 → all (real-mass) nodes are wall candidates.
       Dist = search distance (0 → all candidates tracked every cycle).
-      Only the fixed infinite plane is ported (no moving/sphere/cyl walls).
+      node_ID > 0 → MOVING wall tied to that node (M5): the wall
+      translates with the node and the contact impulses react on it —
+      give the node its inertia with /ADMAS + /INIVEL for a free wall,
+      or drive it with /IMPVEL for an imposed-motion wall.
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else "PLANE"
-    if kind != "PLANE":
-        log.warning(f"/RWALL/{kind} not ported (PLANE supported)", block.source)
+    if kind not in ("PLANE", "SPHER", "CYL"):
+        log.warning(f"/RWALL/{kind} not ported (PLANE, SPHER, CYL "
+                    f"supported)", block.source)
         return
     title, cards = _title_and_data(block)
-    if len(cards) < 3:
-        log.error(f"/RWALL/{block.user_id}: needs 3 data cards", block.source)
+    ncards = {"PLANE": 3, "SPHER": 3, "CYL": 4}[kind]
+    if len(cards) < ncards:
+        log.error(f"/RWALL/{kind}/{block.user_id}: needs {ncards} data "
+                  f"cards", block.source)
         return
     t = cards[0].tokens()
     grnod = int(t[0]) if t else 0
     slide = int(t[1]) if len(t) > 1 else 0
     fric = float(t[2]) if len(t) > 2 else 0.0
     dist = float(t[3]) if len(t) > 3 else 0.0
+    node_id = int(float(t[4])) if len(t) > 4 else 0
     m = np.array(_floats(cards[1], 3))
-    m1 = np.array(_floats(cards[2], 3))
-    n = m1 - m
-    nn = np.linalg.norm(n)
-    if nn < 1e-20:
-        log.error(f"/RWALL/{block.user_id}: M and M1 coincide (zero normal)",
-                  block.source)
-        return
+    normal = np.array([0.0, 0.0, 1.0])
+    radius = 0.0
+    if kind in ("PLANE", "CYL"):
+        m1 = np.array(_floats(cards[2], 3))
+        n = m1 - m
+        nn = np.linalg.norm(n)
+        if nn < 1e-20:
+            log.error(f"/RWALL/{block.user_id}: M and M1 coincide "
+                      f"(zero normal/axis)", block.source)
+            return
+        normal = n / nn
+    if kind in ("SPHER", "CYL"):
+        rcard = cards[2] if kind == "SPHER" else cards[3]
+        radius = rcard.floats()[0]
+        if radius <= 0.0:
+            log.error(f"/RWALL/{kind}/{block.user_id}: radius must be > 0",
+                      block.source)
+            return
     model.rwalls.append(RigidWall(
-        id=block.user_id, point=m, normal=n / nn, slide=slide, fric=fric,
-        grnod_id=grnod or None, dist=dist, title=title))
+        id=block.user_id, point=m, normal=normal, slide=slide, fric=fric,
+        grnod_id=grnod or None, dist=dist, title=title, geom=kind,
+        radius=radius, node_id=node_id))
 
 
 def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -968,17 +1206,18 @@ def read_line(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 # ============================================================================
 
 def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/TH/NODE|PART/th_ID``::
+    """``/TH/NODE|PART|SECT/th_ID``::
 
         card 1:  title
         card 2:  variable names (e.g. ``DX DY DZ VX VY VZ``) or ``DEF``
         card 3+: object IDs (any number per card)
 
       DEF expands to the Radioss default set for the object type.
+      SECT (M5) variables: FX FY FZ MX MY MZ (section force/moment).
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
-    if kind not in ("NODE", "PART"):
-        log.warning(f"/TH/{kind} not ported (NODE, PART supported)",
+    if kind not in ("NODE", "PART", "SECT"):
+        log.warning(f"/TH/{kind} not ported (NODE, PART, SECT supported)",
                     block.source)
         return
     title, cards = _title_and_data(block)
@@ -988,8 +1227,9 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     variables = [v.upper() for v in cards[0].tokens()]
     if variables == ["DEF"]:
-        variables = (["DX", "DY", "DZ", "VX", "VY", "VZ"] if kind == "NODE"
-                     else ["IE", "KE"])
+        variables = {"NODE": ["DX", "DY", "DZ", "VX", "VY", "VZ"],
+                     "PART": ["IE", "KE"],
+                     "SECT": ["FX", "FY", "FZ", "MX", "MY", "MZ"]}[kind]
     ids: List[int] = []
     for c in cards[1:]:
         ids.extend(c.ints())
@@ -1027,6 +1267,13 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "GRAV": read_grav,
     "CLOAD": read_cload,
     "IMPVEL": read_impvel,
+    "IMPDISP": read_impdisp,
+    "PLOAD": read_pload,
+    "ADMAS": read_admas,
+    "RBODY": read_rbody,
+    "RBE2": read_rbe2,
+    "RBE3": read_rbe3,
+    "SECT": read_sect,
     "RWALL": read_rwall,
     "INTER": read_inter,
     "LINE": read_line,

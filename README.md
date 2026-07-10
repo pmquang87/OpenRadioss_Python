@@ -71,14 +71,15 @@ Outputs:
 
 See [PORTING_GUIDE.md](PORTING_GUIDE.md) for the detailed feature matrix, the
 map from every Python module to the original Fortran directory, and the porting
-roadmap. Milestones 1–4 (this state of the repository) cover:
+roadmap. Milestones 1–5 (this state of the repository) cover:
 
 - **Input**: the Radioss block-keyword deck format (`/NODE`, `/BRICK`,
   `/TETRA4`, `/SHELL`, `/SH3N`, `/TRUSS`, `/SPRING`, `/BEAM`, `/PART`,
   `/MAT/LAW1/2/27/36/42`, `/FAIL/JOHNSON`, `/FAIL/BIQUAD`,
   `/PROP/TYPE1/2/3/4/14`,
-  `/BCS`, `/INIVEL`, `/GRAV`, `/CLOAD`, `/IMPVEL`, `/FUNCT`, `/GRNOD`,
-  `/RWALL`, `/INTER/TYPE2/7/11`, `/SURF`, `/LINE`, `/TH`, …) with
+  `/BCS`, `/INIVEL`, `/GRAV`, `/CLOAD`, `/PLOAD`, `/IMPVEL`, `/IMPDISP`,
+  `/ADMAS`, `/FUNCT`, `/GRNOD`, `/RWALL`, `/RBODY`, `/RBE2`, `/RBE3`,
+  `/SECT`, `/INTER/TYPE2/7/11`, `/SURF`, `/LINE`, `/TH`, …) with
   `#include` support.
 - **Elements**: 8-node solid (one-point integration + Flanagan–Belytschko
   hourglass control) with degenerated-brick→tetra conversion, 4-node
@@ -105,12 +106,23 @@ roadmap. Milestones 1–4 (this state of the repository) cover:
   sets. Contact fully respects /FAIL element deletion: segments and edges
   of deleted elements drop out and orphaned nodes stop being tracked, so
   crack faces behave physically.
+- **Constraints & loads** (M5): /RBODY rigid bodies (starter-assembled
+  mass/COG/inertia tensor; stable 6-DOF Newton–Euler update that
+  conserves angular momentum by construction, exponential-map finite
+  rotation; coexists with contact) and /RBE2 rigid links (pivot mode
+  from the master's /BCS — physical pendulums), /RBE3 interpolation
+  constraints (force distribution without stiffening), rigid walls with
+  plane/sphere/cylinder geometry that can move (free with a mass —
+  momentum-exact impulse exchange — or velocity-driven), /SECT
+  section-force output, /PLOAD follower pressure, /IMPDISP imposed
+  displacement, /ADMAS added mass, /INIVEL/AXIS initial spin.
 - **Engine**: explicit central-difference integration, element/nodal stable
   time step (including the accumulated contact-spring stiffness), boundary
   conditions, initial/imposed velocities, gravity, concentrated loads,
   kinematic rigid walls, full energy-balance bookkeeping (contact work
   booked at the leapfrog-consistent midstep velocity).
-- **Output**: listings, CSV time history, VTK animation states.
+- **Output**: listings, CSV time history (incl. /TH/SECT section
+  resultants), VTK animation states.
 
 ## Repository layout
 

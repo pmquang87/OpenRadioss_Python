@@ -24,6 +24,7 @@ from ..model.model import Model
 from .checks import check_model
 from .initialization import (build_element_groups,
                              initialize_elements_and_mass,
+                             initialize_rigid_bodies,
                              resolve_lines, resolve_materials,
                              resolve_node_groups, resolve_surfaces)
 from .restart import write_restart
@@ -107,9 +108,11 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
         # 3. checks before any heavy work (fail early with ALL messages)
         check_model(model, log)
 
-        # 4. element buffers + lumped mass + initial conditions
+        # 4. element buffers + lumped mass + initial conditions, then the
+        #    rigid bodies (they need the assembled nodal masses)
         if not log.errors:
             initialize_elements_and_mass(model, log)
+            initialize_rigid_bodies(model, log)
             _listing_summary(model, log)
 
         log.info(log.summary())

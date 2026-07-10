@@ -70,8 +70,36 @@ def check_model(model: Model, log: MessageLog) -> None:
     for imp in model.impvel:
         need_group(imp.grnod_id, f"/IMPVEL/{imp.id}")
         need_funct(imp.funct_id, f"/IMPVEL/{imp.id}")
+    for imp in model.impdisp:
+        need_group(imp.grnod_id, f"/IMPDISP/{imp.id}")
+        need_funct(imp.funct_id, f"/IMPDISP/{imp.id}")
+    for pl in model.ploads:
+        need_funct(pl.funct_id, f"/PLOAD/{pl.id}")
+        if pl.surf_id not in model.surfaces:
+            log.error(f"/PLOAD/{pl.id}: surface {pl.surf_id} not defined",
+                      "CROSS REF")
+    for am in model.admas:
+        need_group(am.grnod_id, f"/ADMAS/{am.id}")
+    for rb in model.rbodies:
+        need_group(rb.grnod_id, f"/{rb.kind}/{rb.id}")
+        if rb.master_id not in model._id2idx:
+            log.error(f"/{rb.kind}/{rb.id}: unknown master node "
+                      f"{rb.master_id}", "CROSS REF")
+    for r3 in model.rbe3:
+        need_group(r3.grnod_id, f"/RBE3/{r3.id}")
+        if r3.ref_id not in model._id2idx:
+            log.error(f"/RBE3/{r3.id}: unknown reference node {r3.ref_id}",
+                      "CROSS REF")
+    for sc in model.sections:
+        need_group(sc.grnod_id, f"/SECT/{sc.id}")
+        if sc.node_id_ref and sc.node_id_ref not in model._id2idx:
+            log.error(f"/SECT/{sc.id}: unknown reference node "
+                      f"{sc.node_id_ref}", "CROSS REF")
     for rw in model.rwalls:
         need_group(rw.grnod_id, f"/RWALL/{rw.id}")
+        if rw.node_id and rw.node_id not in model._id2idx:
+            log.error(f"/RWALL/{rw.id}: unknown wall node {rw.node_id}",
+                      "CROSS REF")
     for itf in model.interfaces:
         who = f"/INTER/TYPE{itf.type}/{itf.id}"
         if itf.type in (7, 2):
@@ -99,4 +127,10 @@ def check_model(model: Model, log: MessageLog) -> None:
             for pid in th.ids:
                 if pid not in model.parts:
                     log.error(f"/TH/PART/{th.id}: unknown part {pid}",
+                              "CROSS REF")
+        elif th.kind == "SECT":
+            defined = {s.id for s in model.sections}
+            for sid in th.ids:
+                if sid not in defined:
+                    log.error(f"/TH/SECT/{th.id}: unknown section {sid}",
                               "CROSS REF")

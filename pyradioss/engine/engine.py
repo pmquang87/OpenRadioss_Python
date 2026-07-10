@@ -58,7 +58,10 @@ from ..model.model import EngineControls, Model
 from ..output import TimeHistory, write_anim_state
 from ..starter.restart import read_restart
 from .kinematics import LoadsAndConstraints
+from .rbe3 import build_rbe3
+from .rigid_body import build_rigid_bodies
 from .rigid_wall import RigidWalls
+from .sections import SectionForces
 
 
 def run_name_from_input(path: str) -> str:
@@ -79,6 +82,7 @@ class EngineState:
         self.wext = 0.0        # accumulated external work
         self.econt = 0.0       # accumulated contact + rigid-wall energy
         self.ndel = 0          # deleted elements reported so far (/FAIL)
+        self.epeak = 0.0       # running peak of IE+KE (error reference)
         self.stop_reason = ""
 
 
@@ -100,7 +104,17 @@ def _energies(model: Model, state: EngineState) -> dict:
     real = model.mass < 1e29
     ke = float(0.5 * (model.mass[real, None] * model.v[real] ** 2).sum())
     total = ie + ke + he + state.econt
-    ref = max(abs(state.wext), ke, ie, 1e-12)
+    # the error reference is the ENERGY SCALE OF THE RUN: the largest of
+    # the initial energy, external work, current energies and the running
+    # peak of IE+KE. The initial/peak terms matter for oscillating or
+    # fully-arrested systems (a pendulum at its turning point, a block
+    # brought to rest on a wall): all instantaneous energies pass through
+    # zero there, and normalizing a fixed round-off residual by them
+    # would scream divergence where there is none. (The original guards
+    # its error the same way, with the initial/reference energy.)
+    state.epeak = max(state.epeak, ie + ke)
+    ref = max(abs(state.wext), ke, ie, state.epeak, abs(_energies.e0),
+              1e-12)
     err = (total - state.wext - _energies.e0) / ref * 100.0
     return {"IE": ie, "KE": ke, "HE": he, "CE": state.econt,
             "EW": state.wext, "ERR": err}
@@ -141,6 +155,13 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     # contact: penalty interfaces (TYPE7/TYPE11, force-based) and tied
     # interfaces (TYPE2, kinematic) hook into the cycle differently
     contacts, tied = build_contacts(model, log)
+    # rigid bodies (/RBODY + /RBE2) and interpolation constraints (/RBE3):
+    # both kinematic — see engine/rigid_body.py and engine/rbe3.py. The
+    # rigid bodies also project the initial nodal velocities onto rigid
+    # motion, so they run BEFORE the E0 reference below.
+    rbodies = build_rigid_bodies(model, loads, log)
+    rbe3s = build_rbe3(model, log)
+    sections = SectionForces(model, log)
     th = TimeHistory(os.path.join(out_dir, f"{run_name}T01.csv"), model, log)
 
     fint = np.zeros((n, 3))    # -internal forces (see elements pkg doc)
@@ -151,11 +172,18 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     # (see step 5b below), which needs the isolated contact force vector
     # /INTER/TYPE2 mass transfer (i2 init): the EFFECTIVE mass — used for
     # accelerations only — of a tied node's main segment corners includes
-    # the secondary mass, M_k += w_k m_s. Physical masses (energies,
-    # momentum, listing) stay in model.mass. See contact/inter_type2.py.
+    # the secondary mass, M_k += w_k m_s. Same for the /RBE3 dependent
+    # node's mass on its masters. Physical masses (energies, momentum,
+    # listing) stay in model.mass. See contact/inter_type2.py.
     mass_eff = model.mass.copy()
     for t2 in tied:
         t2.augment_mass(mass_eff)
+    for r3 in rbe3s:
+        r3.augment_mass(mass_eff)
+    # a rigid body whose nodes carry tied secondaries must also carry
+    # their inertia in its 6-DOF EOM (see rigid_body.finalize_mass)
+    for rb in rbodies:
+        rb.finalize_mass(mass_eff)
     inv_mass = 1.0 / mass_eff
     has_inertia = model.inertia > 0.0
     inv_inertia = np.where(has_inertia, 1.0 / np.maximum(model.inertia, 1e-30),
@@ -215,18 +243,21 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                                 fcont, state.cycle)
             dt_next = min(dt_next, dt_i)
 
-        # ---- 3. external loads (gravity, /CLOAD) --------------------------
+        # ---- 3. external loads (gravity, /CLOAD, /PLOAD) -------------------
         fext[:] = 0.0
-        loads.external_forces(state.t, fext)
+        loads.external_forces(state.t, fext, model.x)
 
         # ---- 3b. tied interfaces (/INTER/TYPE2, i2for3): move the tied
         # nodes' internal + external forces onto their main segments (the
         # constraint carries them; the secondary rows are zeroed). Also
         # polls the deletion release. Does NO work by construction —
-        # nothing is booked into econt.
+        # nothing is booked into econt. /RBE3 distributes its dependent
+        # node's forces to the masters the same way (rbe3f).
         for t2 in tied:
             t2.transfer_forces(fint, fext, fcont, mass_eff, inv_mass,
                                state.cycle)
+        for r3 in rbe3s:
+            r3.transfer_forces(fint, fext, fcont, mint, model.x)
 
         # ---- 4. acceleration + velocity update (leap-frog) ----------------
         v_old = model.v.copy()     # for wall energy + contact work booking
@@ -235,11 +266,22 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         model.vr += mint * inv_inertia[:, None] * dt
 
         # ---- 5. kinematic conditions overwrite velocities -----------------
+        # 5a. rigid bodies (/RBODY, /RBE2 — rbyfor/rbycor): gather the
+        # body forces, advance the 6-DOF EOM, scatter the rigid velocity
+        # field. Runs FIRST so everything downstream (walls, the contact
+        # work booking, the fext work) sees the velocities the body nodes
+        # actually move with. Books only the master /IMPVEL drive work.
+        for rb in rbodies:
+            state.wext += rb.advance(fint, fext, fcont, mint, model.v,
+                                     model.vr, model.x, dt, state.t + dt)
         # (mass_eff: an /IMPVEL driving a tied main node reacts against
         # the secondary inertia it carries too)
         state.wext += loads.apply_kinematic(state.t + dt, model.v, model.vr,
-                                            mass_eff)
-        state.econt += walls.apply(model.x, model.v, v_old, model.mass, dt)
+                                            mass_eff, model.x, dt)
+        de_wall, dw_wall = walls.apply(model.x, model.v, v_old,
+                                       model.mass, dt)
+        state.econt += de_wall
+        state.wext += dw_wall
 
         # ---- 5b. contact energy booking (M4 lesson) ------------------------
         # In leap-frog, a force f^n changes the kinetic energy by exactly
@@ -265,10 +307,15 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # ---- 6. position update -------------------------------------------
         model.x += model.v * dt
 
-        # ---- 6b. tied interfaces (i2vit3): place the tied nodes on their
-        # (just moved) main segments and set the consistent velocity
+        # ---- 6b. kinematic placements, dependency order: rigid bodies
+        # first (their nodes may carry tied mains / RBE3 masters), then
+        # tied interfaces (i2vit3), then RBE3 dependents.
+        for rb in rbodies:
+            rb.enforce(model.x, model.v, dt)
         for t2 in tied:
             t2.enforce(model.x, model.v, dt)
+        for r3 in rbe3s:
+            r3.enforce(model.x, model.v, model.vr, dt)
 
         state.t += dt
         state.cycle += 1
@@ -277,7 +324,10 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         if state.t >= next_th and controls.th_dt > 0:
             e = _energies(model, state)
             mom = (model.mass[real, None] * model.v[real]).sum(axis=0)
-            th.write(state.t, e, float(model.mass[real].sum()), mom)
+            # /SECT resultants from this cycle's assembled internal forces
+            svals = sections.compute(model.x, fint, mint) if len(sections) \
+                else None
+            th.write(state.t, e, float(model.mass[real].sum()), mom, svals)
             next_th += controls.th_dt
         if controls.anim_dt > 0 and state.t >= next_anim:
             path = os.path.join(out_dir, f"{run_name}A{anim_no:03d}.vtk")

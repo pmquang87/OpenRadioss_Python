@@ -30,9 +30,10 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from .entities import (
-    BoundaryCondition, Box, ConcentratedLoad, Gravity, ImposedVelocity,
-    InitialVelocity, Interface, Line, Material, NodeGroup, Part, Property,
-    RigidWall, Surface, THRequest,
+    AddedMass, BoundaryCondition, Box, ConcentratedLoad, Gravity,
+    ImposedDisplacement, ImposedVelocity, InitialVelocity, Interface, Line,
+    Material, NodeGroup, Part, PressureLoad, Property, Rbe3, RigidBody,
+    RigidWall, Section, Surface, THRequest,
 )
 from ..common.tables import FunctTable
 
@@ -129,7 +130,13 @@ class Model:
         self.gravity: List[Gravity] = []
         self.cloads: List[ConcentratedLoad] = []
         self.impvel: List[ImposedVelocity] = []
+        self.impdisp: List[ImposedDisplacement] = []   # /IMPDISP (M5)
+        self.ploads: List[PressureLoad] = []           # /PLOAD   (M5)
+        self.admas: List[AddedMass] = []               # /ADMAS   (M5)
         self.rwalls: List[RigidWall] = []
+        self.rbodies: List[RigidBody] = []             # /RBODY + /RBE2 (M5)
+        self.rbe3: List[Rbe3] = []                     # /RBE3    (M5)
+        self.sections: List[Section] = []              # /SECT    (M5)
         self.interfaces: List[Interface] = []
         self.th_requests: List[THRequest] = []
 

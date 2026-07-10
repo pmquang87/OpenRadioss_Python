@@ -13,6 +13,7 @@ it, and re-run the solver to explore.
 | `notched_plate` | /MAT/LAW36 tabulated plasticity + /FAIL/BIQUAD, element deletion, self-impact /INTER/TYPE7 (M4) | Double-edge-notch tension coupon: plasticity localizes at the notch tips, the crack runs element-by-element through the ligament (watch the `OFF` cell field), full separation; the self-contact drops the deleted elements' segments so the crack faces are truly free; energy error ~0% |
 | `spot_weld` | /INTER/TYPE2 tied contact (M4): lap joint of two shell strips, offset ties, /GRNOD/BOX | The pull transfers through the tied patch in single-lap shear; CONTACT energy stays exactly zero (a kinematic tie does no work); energy error ~0.03% |
 | `edge_impact` | /INTER/TYPE11 edge-to-edge contact (M4): /LINE/SURF edge sets, Istf=2, Igap=1 | A strip dropped edge-first across a supported strip bounces off the crossing point — contact happens between the nodes, where node-to-surface interfaces are blind; energy error a few % over a 23k-cycle /DT 0.9 run |
+| `rigid_impactor` | /RBODY rigid body (M5) with /ADMAS ballast, /INTER/TYPE7 vs a clamped shell panel, /GRAV, /SECT + /TH/SECT | A rigid brick block (one 6-DOF body — its bricks never deform) drops onto an aluminium panel, dents it and bounces/rocks; the mid-panel section force spikes at impact and rings down (columns `S1_*` in the T01); energy error a few % at /DT 0.9 |
 
 Run any example with:
 

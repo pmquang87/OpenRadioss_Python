@@ -16,6 +16,8 @@ AX AY AZ (acceleration is not stored — approximated by force/mass).
 Per-part variables: IE (internal energy of the part's elements),
 KE (kinetic energy of the part's element masses, computed from their
 nodes' velocities).
+Per-section variables (M5, /TH/SECT): FX FY FZ MX MY MZ — the section
+force/moment resultants computed by pyradioss/engine/sections.py.
 """
 
 from __future__ import annotations
@@ -39,16 +41,20 @@ class TimeHistory:
         # resolve /TH requests once (Starter checked the ids)
         self._node_req = []   # (label, node_idx, var)
         self._part_req = []   # (label, part_id, var)
+        self._sect_req = []   # (label, sect_id, var)
         for th in model.th_requests:
             for oid in th.ids:
                 for var in th.variables:
                     if th.kind == "NODE":
                         self._node_req.append(
                             (f"N{oid}_{var}", model.node_index(oid), var))
+                    elif th.kind == "SECT":
+                        self._sect_req.append((f"S{oid}_{var}", oid, var))
                     else:
                         self._part_req.append((f"P{oid}_{var}", oid, var))
         self._cols += [r[0] for r in self._node_req]
         self._cols += [r[0] for r in self._part_req]
+        self._cols += [r[0] for r in self._sect_req]
         self._fh.write("# pyradioss time history (T01 equivalent)\n")
         self._fh.write(",".join(self._cols) + "\n")
 
@@ -73,7 +79,9 @@ class TimeHistory:
                 val += float(0.5 * (group.state["mass"][mask] * v2).sum())
         return val
 
-    def write(self, t, energies, mass, momentum) -> None:
+    def write(self, t, energies, mass, momentum, sect_values=None) -> None:
+        """``sect_values``: {sect_id: (F (3,), M (3,))} from
+        SectionForces.compute — required only when /TH/SECT was asked."""
         model = self.model
         row = [t, energies["IE"], energies["KE"], energies["HE"],
                energies["CE"], energies["EW"], energies["ERR"],
@@ -89,6 +97,13 @@ class TimeHistory:
                 row.append(0.0)
         for _, pid, var in self._part_req:
             row.append(self._part_value(pid, var))
+        for _, sid, var in self._sect_req:
+            comp = {"X": 0, "Y": 1, "Z": 2}[var[-1]]
+            if sect_values is None or sid not in sect_values:
+                row.append(0.0)
+            else:
+                F, M = sect_values[sid]
+                row.append(F[comp] if var[0] == "F" else M[comp])
         self._fh.write(",".join(f"{x:.9E}" for x in row) + "\n")
         self._fh.flush()
 

@@ -41,8 +41,13 @@ same names in comments.
 | `engine/source/engine/resol.F` | `pyradioss/engine/engine.py` | main loop |
 | `engine/source/engine/lectur.F` + `hm_read_*` (engine cards) | `pyradioss/input/engine_keywords.py` | `/RUN /DT /TFILE /ANIM …` |
 | `engine/source/assembly/asspar*.F` | `pyradioss/engine/engine.py` (`np.add.at` scatter) | force assembly |
-| `engine/source/constraints/general/bcs` | `pyradioss/engine/kinematics.py` | `/BCS`, `/IMPVEL` |
-| `engine/source/constraints/general/rwall` | `pyradioss/engine/rigid_wall.py` | kinematic wall |
+| `engine/source/constraints/general/bcs` + `impvel/fixvel.F` | `pyradioss/engine/kinematics.py` | `/BCS`, `/IMPVEL`, `/IMPDISP` |
+| `engine/source/constraints/general/rwall` (`rgwal0/s/c/t.F`) | `pyradioss/engine/rigid_wall.py` | kinematic wall: plane/sphere/cylinder, moving (M5) |
+| `starter/.../rbody/hm_read_rbody.F`, `rbyini.F` + `engine/.../rbody/rbyfor.F`, `rbycor.F` (and `rbe2/`) | `pyradioss/engine/rigid_body.py` + `starter/initialization.py` (`initialize_rigid_bodies`) | `/RBODY`, `/RBE2` (M5) |
+| `starter/.../rbe3/hm_read_rbe3.F` + `engine/.../rbe3/rbe3f.F`, `rbe3v.F` | `pyradioss/engine/rbe3.py` | `/RBE3` interpolation constraint (M5) |
+| `engine/source/loads/general/pload/pload.F` | `pyradioss/engine/kinematics.py` (`external_forces`) | `/PLOAD` follower pressure (M5) |
+| `engine/source/tools/sect/` (`section.F`, `forint.F`) | `pyradioss/engine/sections.py` | `/SECT` via the side-sum identity (M5) |
+| `starter/source/tools/admas/` | `pyradioss/starter/initialization.py` | `/ADMAS` (M5) |
 | `engine/source/elements/solid/solide/` (`sforc3.F`, `srota3.F`, `shour3.F`…) | `pyradioss/elements/solid_hexa8.py` | 1-pt + FB hourglass |
 | `engine/source/elements/solid/solide4/` (`s4forc3.F`…) | `pyradioss/elements/solid_tetra4.py` | constant-strain tetra |
 | `engine/source/elements/shell/coque/` (`cforc3.F`, `czforc3.F`…) | `pyradioss/elements/shell_bt4.py` | Belytschko–Tsay, BLT84 stiffness hourglass |
@@ -90,7 +95,7 @@ same names in comments.
    the Engine protects against divergence with an energy-error stop criterion
    like the original (`/STOP` defaults).
 
-## 4. Feature matrix (Milestones 1–3)
+## 4. Feature matrix (Milestones 1–5)
 
 Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options), ❌ not yet.
 
@@ -120,21 +125,29 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | `/PROP/TYPE3` (`BEAM`) | 🟡 | A, Iyy, Izz, Ixx; Timoshenko with full-section shear (no shear factor / Ishear variants), LAW1 only |
 | `/PROP/TYPE4` (`SPRING`) | 🟡 | linear k, c, mass |
 | `/PROP/TYPE14` (`SOLID`) | 🟡 | qa/qb bulk viscosity, hourglass coeff (Isolid fixed = 1-pt+FB) |
-| `/BCS` | ✅ | translation + rotation fixities |
-| `/INIVEL/TRA`, `/INIVEL/AXIS` | ✅ / ❌ | |
-| `/IMPVEL` | ✅ | via `/FUNCT`, fixed direction |
+| `/BCS` | ✅ | translation + rotation fixities; on a rigid-body master it becomes a body-level condition (full 111 translations = pivot) |
+| `/INIVEL/TRA`, `/INIVEL/AXIS` | ✅ / ✅ | AXIS since M5: rigid-rotation field ω·d×(x−P) (the way a spinning /RBODY is set up); the translational Vt fields of the full AXIS card via an extra /INIVEL/TRA |
+| `/IMPVEL` | ✅ | via `/FUNCT`, fixed direction; on a rigid-body master it drives the body (moving rigid die); on a moving-wall node it drives the wall |
+| `/IMPDISP` | ✅ | M5 — kinematic like /IMPVEL but enforced at the *position* level (the node lands exactly at x0 + d(t), no velocity-integration drift); work booked from the constraint impulse like /IMPVEL |
 | `/GRAV` | ✅ | |
 | `/CLOAD` | ✅ | |
+| `/PLOAD` | ✅ | M5 — follower pressure on a /SURF (current segment normal, p·A lumped to corners, triangles 1/3); segments of /FAIL-deleted elements stop carrying pressure |
+| `/ADMAS` | 🟡 | M5 — per-node added mass (Radioss type-0 semantics only); also the way a moving /RWALL gets its inertia |
 | `/FUNCT` | ✅ | piecewise-linear tables |
 | `/GRNOD/NODE`, `/GRNOD/PART`, `/GRNOD/BOX` | ✅ | |
 | `/BOX/RECTA` | ✅ | |
-| `/RWALL/PLANE` | 🟡 | infinite plane, sliding or tied; moving wall ❌ |
+| `/RWALL/PLANE`, `/RWALL/SPHER`, `/RWALL/CYL` | ✅ | M5: three geometries, sliding/tied/friction, and MOVING walls tied to a carrier node (free with /ADMAS+/INIVEL — impulses react on the node, momentum-exact; or /IMPVEL-driven — the drive absorbs the reaction and books external work). Walls do not rotate; containment (nodes inside a sphere/cyl) ❌ |
+| `/RBODY` | ✅ | M5 — master + slave node set as one rigid body: starter assembles mass/COG/inertia tensor (point masses + nodal inertias + added Mass/Jxx-Jzz), ICoG=1 master relocation; engine integrates the 6-DOF Newton-Euler EOM (angular-momentum update + exponential-map rotation — L conserved by construction). Sensors, skew/spherical inertia, IKREM, surface envelope ❌ |
+| `/RBE2` | 🟡 | M5 — rigid link: same mechanics with a structural master kept at its own position; full 6-DOF tie only (per-DOF flags ❌) |
+| `/RBE3` | 🟡 | M5 — interpolation constraint (least-squares rigid fit + its virtual-work dual force distribution — no stiffening, no spurious work); one master group with uniform weights (per-set weights/DOF flags ❌) |
+| `/SECT` | 🟡 | M5 — section force/moment time history through a cut, computed by the side-sum identity over one side's node set (see engine/sections.py); output via /TH/SECT. The frame/element-set input of the full card ❌ |
+| `/MPC` | ❌ | deliberately deferred (see roadmap M6): a general multi-point constraint needs a coupled constraint solve that shares nothing with the lumped patterns of this milestone |
 | `/INTER/TYPE7` | ✅ | penalty node↔surface (M4): Istf 0–5 stiffness variants, Igap 0/1 (constant / variable from shell thicknesses) with Gap_min/Gap_max, self-impact (`grnod_ID = 0`), Coulomb friction, voxel broad phase; Inacti, Igap 2/3, Tstart/Tstop, sensors, Ifric>0 friction models ❌ |
 | `/INTER/TYPE2` | 🟡 | tied contact (M4): kinematic secondary→main gluing, constant-weight projection with co-rotating offset, lumped mass/force transfer, deletion release; rotational-DOF tying (Spotflag) and offset moment redistribution ❌ |
 | `/INTER/TYPE11` | ✅ | edge↔edge penalty (M4): /LINE edge sets, Istf/Igap as TYPE7, exact segment-segment closest points; parallel-overlap force distribution simplified to the closest-point pair |
 | `/LINE/SURF`, `/LINE/SEG` | ✅ | edge sets for TYPE11 (M4), with element provenance for deletion |
 | `/SURF/PART`, `/SURF/SEG` | ✅ | for contact; since M4 every segment carries its parent-element provenance (deletion, stiffness, gap) |
-| `/TH/NODE`, `/TH/PART` | ✅ | |
+| `/TH/NODE`, `/TH/PART`, `/TH/SECT` | ✅ | SECT since M5: FX FY FZ MX MY MZ |
 | Engine: `/RUN`, `/VERS`, `/TFILE`, `/ANIM/DT`, `/ANIM/VECT|ELEM`, `/DT`, `/PRINT`, `/STOP` | ✅/🟡 | `/DT/NODA/CST` (mass scaling) ❌ |
 
 ### Solver features
@@ -158,7 +171,12 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | LAW42 Ogden hyperelasticity (total-strain from exact F, nonlinear SOUNDSP → dt) | 🟡 (solids only) |
 | /FAIL element deletion plumbing (per-layer for shells, GBUF%OFF, deleted elements keep mass, drop stress/hourglass/dt claim, OFF field in ANIM, deletion count in the listing) | ✅ |
 | Equations of state (/EOS) for solids | ❌ (deliberately deferred — see roadmap M6: needs energy-dependent pressure integration per element, out of M3's scope; pressure is currently always the law's own, i.e. linear K·tr(ε) for LAW1/2/36) |
-| Rigid wall (kinematic, slide/tied) | ✅ |
+| Rigid wall (kinematic, slide/tied/friction; plane, sphere, cylinder; fixed, free-with-mass, velocity-driven — M5) | ✅ |
+| Rigid bodies /RBODY + /RBE2 (6-DOF Newton-Euler: gather → L += T dt → w = (R J0 Rᵀ)⁻¹L → rigid scatter → exponential-map placement; exact L conservation for torque-free bodies, pivot mode from master /BCS, /IMPVEL body drive; slaves coexist with contact and the TYPE2 effective-mass machinery; deletion never changes the inertia — masses stay; elements interior to a body carry exactly zero strain because the enforcement re-scatters the rigid velocity field at the placed positions) | ✅ |
+| /RBE3 interpolation constraint (weighted least-squares rigid fit + dual force distribution — transmits force and moment exactly, adds no stiffness, does no work; lumped mass transfer like TYPE2) | 🟡 (uniform weights) |
+| /SECT section resultants (side-sum identity: element self-equilibrium cancels everything interior to the side, leaving the through-cut force/moment; no per-side reassembly needed) | ✅ |
+| Free moving wall: IMPLICIT joint momentum solve of the carrier node with all hit nodes (an M5 lesson: correcting the nodes against the pre-recoil wall velocity and recoiling afterwards feeds every riding node a one-cycle-stale, faster wall — an energy injection that does **not** vanish with dt, measured at +33% before the fix; the joint 3×3 solve reproduces the exact perfectly-inelastic collision in one cycle, asserted by a closed-form test) | ✅ |
+| Kinematic-wall energy booking on the per-node injection identity U = ΔKE − f·v_old dt (books the arrest, the within-cycle acquired velocity, tied drag and friction in one expression; free-wall carrier KE change booked exactly from the joint solve; driven-wall injection booked as external work) | ✅ |
 | TYPE7 penalty contact + friction (Istf variants, Igap, self-impact, voxel search) | ✅ |
 | TYPE2 tied contact (kinematic; zero-work by construction — asserted in tests) | ✅ (translations; no rotation tying) |
 | TYPE11 edge-to-edge penalty contact | ✅ |
@@ -225,11 +243,60 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
    * TYPE19/24/25 style combined interfaces;
    * parallel-edge overlap force distribution for TYPE11 (resultant is
      right, distribution acts at the closest-point pair).
-4. **M5 — constraints & loads**: /RBODY, /RBE2/RBE3, /MPC, /SECT, moving and
-   spherical/cylindrical rigid walls, /PLOAD, /IMPDISP.
+4. **M5 — constraints & loads** ✅ (done): /RBODY and /RBE2 rigid bodies
+   (starter-assembled mass/COG/inertia tensor; a 6-DOF Newton-Euler
+   engine update that integrates the ANGULAR MOMENTUM — not the spin —
+   and rotates the body frame with the exponential map, so a torque-free
+   body conserves L by construction and the finite rotation is stable at
+   any step; pivot mode when the master's /BCS clamps all translations —
+   the physical-pendulum configuration, inertia transported by
+   parallel-axis; /IMPVEL on the master = moving rigid die), /RBE3
+   (least-squares rigid fit + its virtual-work dual force distribution,
+   following the ContactType2 lumped pattern hook for hook), /SECT
+   section resultants (via the side-sum identity — element
+   self-equilibrium does the bookkeeping), /PLOAD follower pressure,
+   /IMPDISP position-level imposed displacement, /ADMAS,
+   /INIVEL/AXIS, and rigid walls completed: SPHER/CYL geometries and
+   MOVING walls (free with a carrier-node mass — momentum-exact
+   impulse exchange — or /IMPVEL-driven). Two M5 solver lessons are
+   recorded in the code:
+   * elements fully interior to a rigid body must see the rigid
+     velocity field evaluated at their PLACED positions (the enforce()
+     re-scatter) or their hypoelastic stress ratchets at O(w^2 dt) per
+     cycle — the original deactivates such elements, the port keeps
+     them alive at exactly zero strain so their faces stay available to
+     contact;
+   * a free moving wall must solve its recoil IMPLICITLY with the node
+     corrections (one 3×3 system per cycle): the explicit-lag variant
+     feeds riding nodes a one-cycle-stale wall velocity and injects
+     energy at a rate that does not vanish with dt; the wall energy is
+     then booked from the per-node injection identity
+     U = dKE − f·v_old dt (rigid_wall.py).
+   A pre-existing (M1-era) issue was *isolated* during M5 and is left
+   for M6, documented here honestly: the solid **bulk-viscosity work
+   under barely-resolved ringing** misbooks — a coarse block left
+   ringing violently (strain rates ~1/ms on a single element through
+   the thickness) drifts the energy balance over long free flights,
+   with the half-step-lagged linear (qb) damper as the isolated
+   culprit; it is invisible in normal meshes/loadings (all M1–M5
+   validations and examples), and none of the M5 modules touch it —
+   reproduce with a 2×2×2 cube given ±0.3 opposite face velocities.
+   Deferred out of M5, explicitly:
+   * **/MPC** — a general multi-point constraint row couples arbitrary
+     DOFs and needs a small implicit solve per constraint (or mass
+     redistribution à la Lagrange/penalty) that shares nothing with the
+     lumped one-way patterns used here; it moves to M6;
+   * per-DOF flags of /RBE2 and /RBE3, RBE3 per-set weights;
+   * /RBODY sensors, IKREM, skew/spherical inertia input, the surface
+     envelope, merged bodies (/RBODY of /RBODY);
+   * wall rotation (a moving wall translates only), containment
+     (nodes inside a sphere/cylinder), the Dist search band;
+   * /SECT frame output and element-set input; distributed /PLOAD on
+     solids' internal faces (only surface segments), /PLOAD Ipinch etc.
 5. **M6 — engine niceties**: /DT/NODA/CST mass scaling, restarts
-   (`_0002.rad` chaining), /STATE, sensors, /DAMP, /EOS + thermal
-   material terms (deferred from M3), ALE/CFD (long term).
+   (`_0002.rad` chaining), /STATE, sensors, /DAMP, /MPC (deferred from
+   M5), /EOS + thermal material terms (deferred from M3), ALE/CFD
+   (long term).
 6. **M7 — performance**: optional numba/JAX backends behind the same API.
 
 ## 6. Validation strategy
