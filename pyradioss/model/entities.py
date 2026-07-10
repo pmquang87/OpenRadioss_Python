@@ -253,12 +253,22 @@ class BoundaryCondition:
 
 @dataclass
 class InitialVelocity:
-    """/INIVEL/TRA: initial translational velocity on a node group."""
+    """/INIVEL/TRA: initial translational velocity on a node group.
+    /INIVEL/AXIS (M5): initial *rotational* velocity field about an axis,
+    v += omega * (d x (x0 - P)) — how a spinning body is initialized
+    (Fortran: starter/source/initial_conditions/inivel/hm_read_inivel.F).
+
+    kind='TRA' uses ``v``; kind='AXIS' uses ``omega``, ``axis`` (unit
+    direction d) and ``origin`` (point P on the axis)."""
 
     id: int
     grnod_id: int
-    v: np.ndarray  # (3,)
+    v: np.ndarray  # (3,)  (TRA)
     title: str = ""
+    kind: str = "TRA"
+    omega: float = 0.0
+    axis: Optional[np.ndarray] = None    # (3,) unit vector (AXIS)
+    origin: Optional[np.ndarray] = None  # (3,) point on the axis (AXIS)
 
 
 @dataclass
@@ -301,22 +311,207 @@ class ImposedVelocity:
 
 
 @dataclass
-class RigidWall:
-    """/RWALL/PLANE: infinite rigid plane, kinematic treatment.
+class ImposedDisplacement:
+    """/IMPDISP (M5): imposed displacement d(t) = scale * funct(t) on one
+    DOF of a node group. Kinematic like /IMPVEL, but enforced at the
+    *position* level: each cycle the velocity is set so the node lands
+    exactly at x0 + d(t+dt) — no drift accumulation, unlike integrating an
+    equivalent velocity curve.
 
-    Fortran: engine/source/constraints/general/rwall/. A node that ends the
-    cycle on the wrong side of the plane is projected back and its normal
-    velocity is removed (slide=0) or its full velocity zeroed (tied).
+    Fortran origin: ``engine/source/constraints/general/impvel/fixvel.F``
+    (the same routine serves /IMPVEL and /IMPDISP through IFLAG).
     """
 
     id: int
-    point: np.ndarray    # (3,) a point on the plane (M)
-    normal: np.ndarray   # (3,) outward unit normal (side where nodes live)
+    grnod_id: int
+    funct_id: int
+    dof: int              # 0=x,1=y,2=z
+    scale: float = 1.0
+    title: str = ""
+
+
+@dataclass
+class PressureLoad:
+    """/PLOAD (M5): follower pressure p(t) = scale * funct(t) on a /SURF.
+
+    Fortran origin: ``engine/source/loads/general/pload/pload.F``. The
+    pressure acts along the *current* segment normal (follower load, the
+    normal is defined by the segment node ordering n1-n2-n3-n4, right-hand
+    rule) and the resultant p*A is lumped to the corners (A/4 per quad
+    corner, A/3 per triangle corner). Segments of /FAIL-deleted elements
+    stop carrying pressure (a torn face is an open boundary).
+    """
+
+    id: int
+    surf_id: int
+    funct_id: int
+    scale: float = 1.0
+    title: str = ""
+
+
+@dataclass
+class AddedMass:
+    """/ADMAS (M5): concentrated non-structural mass added to every node
+    of a group (Radioss type-0 semantics: the value is PER NODE).
+
+    Fortran origin: ``starter/source/tools/admas/hm_read_admas.F``. Beyond
+    its normal use (payload, joints), this is how a *moving rigid wall
+    with a mass* is built in this port: the wall is tied to a node whose
+    inertia comes from /ADMAS (see RigidWall.node_id).
+    """
+
+    id: int
+    grnod_id: int
+    mass: float
+    title: str = ""
+
+
+@dataclass
+class Section:
+    """/SECT (M5): section-force output — the time history of the resultant
+    force/moment transmitted through a cut of the mesh.
+
+    Fortran origin: ``engine/source/tools/sect/`` (section.F, forint.F):
+    the original accumulates the internal forces of the elements of one
+    side at the section nodes. The port uses the equivalent *side-sum*
+    identity, which needs only a node set: since the internal force vector
+    of any element in equilibrium sums to zero over its own nodes (and its
+    moments balance), summing the assembled internal forces over ALL nodes
+    of one side leaves exactly the force the OTHER side's elements exert
+    through the cut:
+
+        F_sect = sum_{n in side} fint_n
+        M_sect = sum_{n in side} [(x_n - x_ref) x fint_n + mint_n]
+
+    ``grnod_id`` must therefore contain every node of one side of the cut,
+    including the cut nodes themselves (a /GRNOD/PART of the side parts is
+    the natural way to write it). The sign convention: the reported force
+    is the force the excluded side applies to the included side.
+
+    ``node_id_ref`` (optional): moment reference point = that node's
+    current position (it rides the deformation); 0 = the fixed initial
+    centroid of the side node set. Output goes to the T01 file via
+    /TH/SECT (FX FY FZ MX MY MZ).
+    """
+
+    id: int
+    grnod_id: int
+    node_id_ref: int = 0
+    title: str = ""
+
+
+@dataclass
+class RigidBody:
+    """/RBODY and /RBE2 (M5): a set of slave nodes moving as one rigid
+    body, represented by a master node.
+
+    Fortran origin: ``starter/source/constraints/general/rbody/hm_read_rbody.F``
+    (input + mass/inertia assembly in ``rbyini.F``) and the engine update
+    ``engine/source/constraints/general/rbody/rbyfor.F`` / ``rbycor.F``;
+    /RBE2 is ``constraints/general/rbe2``. Both are the same mechanics —
+    a 6-DOF rigid equation of motion fed by the gathered slave forces —
+    and share this entity:
+
+    * ``kind='RBODY'``: the classic rigid body. The master node is usually
+      a standalone (massless) node; with ``icog=1`` (default, the Radioss
+      ICoG behaviour) the Starter MOVES it to the computed center of
+      gravity. ``added_mass``/``jadd`` are extra mass/inertia lumped at
+      the COG (the Radioss Mass and Jxx/Jyy/Jzz fields).
+    * ``kind='RBE2'``: a rigid link. The master is a structural node kept
+      at its own position (never relocated); its own mass and the forces
+      of the elements attached to it enter the body EOM, so a deformable
+      structure can hang off the master. Only the full 6-DOF tie is
+      ported (the per-DOF flags of the Radioss card are not).
+
+    The Starter fills the resolved fields: dense indices, the total mass
+    (slaves + master-if-structural + added), the COG and the 3x3 inertia
+    tensor about it (from the slave point masses + nodal shell inertias +
+    jadd). Element deletion does NOT change any of this: a deleted
+    element's mass stays on its nodes (the Radioss convention, see
+    initialization.py), so the rigid-body inertia is constant for the
+    whole run — computed once here, never updated.
+    """
+
+    id: int
+    kind: str                 # 'RBODY' | 'RBE2'
+    master_id: int            # user node id of the master node
+    grnod_id: int             # slave node group
+    added_mass: float = 0.0   # /RBODY Mass field (at the COG)
+    jadd: Optional[np.ndarray] = None   # (3,) added Jxx Jyy Jzz (at the COG)
+    icog: int = 1             # 1 = move master to COG (RBODY default)
+    title: str = ""
+    # Resolved by the Starter (initialize_rigid_bodies):
+    master: int = -1                      # dense node index
+    slaves: Optional[np.ndarray] = None   # dense node indices (no master)
+    mass_total: float = 0.0               # incl. added mass
+    xg: Optional[np.ndarray] = None       # (3,) center of gravity
+    J: Optional[np.ndarray] = None        # (3,3) inertia tensor about xg
+
+
+@dataclass
+class Rbe3:
+    """/RBE3 (M5): interpolation constraint — the motion of one dependent
+    (reference) node is the weighted average of a set of independent
+    (master) nodes, and a force applied at the reference node is
+    distributed to the masters *without adding any stiffness*.
+
+    Fortran origin: ``starter/source/constraints/general/rbe3/hm_read_rbe3.F``
+    + ``engine/source/constraints/general/rbe3/rbe3f.F`` (force
+    distribution) / ``rbe3v.F`` (kinematic update). The port supports one
+    master node group with uniform unit weights (the per-set weights and
+    per-DOF flags of the full card are not ported); see
+    pyradioss/engine/rbe3.py for the interpolation/distribution math.
+    """
+
+    id: int
+    ref_id: int               # user node id of the dependent node
+    grnod_id: int             # independent (master) nodes
+    title: str = ""
+
+
+@dataclass
+class RigidWall:
+    """/RWALL — rigid wall, kinematic treatment. Since M5 three geometries
+    and moving walls are ported.
+
+    Fortran: engine/source/constraints/general/rwall/ (``rgwal0.F`` plane,
+    ``rgwals.F`` sphere, ``rgwalc.F`` cylinder, ``rgwalt.F`` the moving
+    variants). A node that would end the cycle behind the wall surface has
+    its normal velocity replaced so it lands exactly ON the surface
+    (relative to the wall's own motion); slide=0 keeps the tangential
+    velocity, slide=1 ties it to the wall, slide=2 applies Coulomb
+    friction.
+
+    Geometry (``geom``):
+
+    * 'PLANE' — infinite plane through ``point`` with outward unit
+      ``normal`` (nodes live on the +normal side);
+    * 'SPHER' — sphere of ``radius`` centered at ``point`` (nodes live
+      outside; per-node normal = radial direction);
+    * 'CYL'   — infinite cylinder of ``radius`` about the axis through
+      ``point`` along ``normal`` (nodes outside).
+
+    Moving walls (``node_id`` > 0): the wall geometry is tied to that
+    node — it translates with the node's displacement and pushes with the
+    node's velocity, and the contact impulses REACT on the node (Radioss
+    moving-wall convention: the node's mass, e.g. from /ADMAS, and its
+    /INIVEL make a free flying wall; an /IMPVEL on the node makes a
+    velocity-driven wall, in which case the reaction is absorbed by the
+    drive instead). The wall does not rotate (the axis/normal direction
+    is constant), like the original.
+    """
+
+    id: int
+    point: np.ndarray    # (3,) plane point / sphere center / cyl axis point
+    normal: np.ndarray   # (3,) plane outward normal / cylinder axis
     slide: int = 0       # 0=sliding, 1=tied, 2=sliding with friction
     fric: float = 0.0
     grnod_id: Optional[int] = None  # None = all nodes are candidates
     dist: float = 0.0    # activation distance (search band), 0 = auto
     title: str = ""
+    geom: str = "PLANE"  # 'PLANE' | 'SPHER' | 'CYL'
+    radius: float = 0.0  # SPHER / CYL
+    node_id: int = 0     # > 0: wall tied to this (user id) node — moving
 
 
 @dataclass
@@ -369,10 +564,10 @@ class Interface:
 
 @dataclass
 class THRequest:
-    """/TH/NODE or /TH/PART: time-history output request."""
+    """/TH/NODE, /TH/PART or /TH/SECT (M5): time-history output request."""
 
     id: int
-    kind: str            # 'NODE' | 'PART'
+    kind: str            # 'NODE' | 'PART' | 'SECT'
     ids: List[int] = field(default_factory=list)
     variables: List[str] = field(default_factory=list)  # e.g. DX, VX, IE
     title: str = ""
