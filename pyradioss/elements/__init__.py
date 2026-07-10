@@ -27,11 +27,15 @@ that  a = (fext + fint) / m  (this matches the Fortran A(3,*) accumulation
 where internal forces enter negated).
 """
 
-from . import solid_hexa8, shell_bt4, truss, spring  # noqa: F401
+from . import (beam_type3, shell_bt4, shell_tri3, solid_hexa8,  # noqa: F401
+               solid_tetra4, spring, truss)
 
 KERNELS = {
     "bricks": solid_hexa8,
+    "tetras": solid_tetra4,
     "shells": shell_bt4,
+    "sh3n": shell_tri3,
     "trusses": truss,
     "springs": spring,
+    "beams": beam_type3,
 }

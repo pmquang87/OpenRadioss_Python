@@ -21,25 +21,34 @@ import numpy as np
 
 from ..model.model import Model
 
-_VTK_CELL = {"bricks": (12, 8), "shells": (9, 4), "trusses": (3, 2),
-             "springs": (3, 2)}
+# group name -> (VTK cell type id, node count written). Beams write only
+# their two end nodes (the 3rd is the orientation node, not geometry).
+_VTK_CELL = {"bricks": (12, 8), "tetras": (10, 4), "shells": (9, 4),
+             "sh3n": (5, 3), "trusses": (3, 2), "springs": (3, 2),
+             "beams": (3, 2)}
 
 
 def _von_mises(group_name: str, group) -> np.ndarray:
     st = group.state
-    if group_name == "bricks":
+    if group_name in ("bricks", "tetras"):
         s = st["sig"]
         return np.sqrt(0.5 * ((s[:, 0] - s[:, 1]) ** 2
                               + (s[:, 1] - s[:, 2]) ** 2
                               + (s[:, 2] - s[:, 0]) ** 2)
                        + 3.0 * (s[:, 3] ** 2 + s[:, 4] ** 2 + s[:, 5] ** 2))
-    if group_name == "shells":
+    if group_name in ("shells", "sh3n"):
         s = st["sig"]  # (n, nip, 3)
         vm = np.sqrt(s[:, :, 0] ** 2 - s[:, :, 0] * s[:, :, 1]
                      + s[:, :, 1] ** 2 + 3.0 * s[:, :, 2] ** 2)
         return vm.max(axis=1)
     if group_name == "trusses":
         return np.abs(st["sig"])
+    if group_name == "beams":
+        # display value: |axial stress| = |N| / A (resultant over section)
+        area = np.zeros(group.n)
+        for sl, mat, prop in st["slices"]:
+            area[sl] = prop.params["area"]
+        return np.abs(st["fres"][:, 0]) / np.maximum(area, 1e-20)
     return np.zeros(group.n)
 
 
@@ -67,7 +76,8 @@ def write_anim_state(path: str, model: Model, t: float,
         fh.write(f"CELLS {ncell} {size}\n")
         for name, g in groups:
             nn = _VTK_CELL[name][1]
-            block = np.hstack([np.full((g.n, 1), nn, dtype=np.int64), g.conn])
+            block = np.hstack([np.full((g.n, 1), nn, dtype=np.int64),
+                               g.conn[:, :nn]])
             np.savetxt(fh, block, fmt="%d")
         fh.write(f"CELL_TYPES {ncell}\n")
         for name, g in groups:

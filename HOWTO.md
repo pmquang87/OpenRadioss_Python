@@ -93,6 +93,10 @@ pyradioss-engine  -i TENSILE_0001.rad
 cd ../box_beam_impact       # shell box crushed against a rigid wall
 pyradioss-starter -i BOXIMP_0000.rad
 pyradioss-engine  -i BOXIMP_0001.rad
+
+cd ../antenna_mast          # cantilever /BEAM mast under a wind gust
+pyradioss-starter -i MAST_0000.rad
+pyradioss-engine  -i MAST_0001.rad
 ```
 
 ## 4. How to visualize results

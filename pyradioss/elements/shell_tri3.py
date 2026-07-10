@@ -1,0 +1,290 @@
+"""
+3-node C0 triangular shell element (/SH3N + /PROP/SHELL).
+
+Fortran origin: ``engine/source/elements/sh3n/coque3n/`` — the cycle path
+mirrors the 4-node Belytschko–Tsay shell (see shell_bt4.py) with the "3"
+variants:
+
+    c3forc3.F   driver (gather, frame, call chain, scatter)
+    c3coor3.F   corotational frame + projection to local coordinates
+    c3defo3.F   membrane velocity strains (constant-strain triangle)
+    c3dlen3.F   characteristic length / time step
+    c3fint3.F / c3fcum3.F  resultants -> internal forces
+    + the plane-stress material calls sigeps..c.F per integration layer
+
+Theory (the C0 triangle of Belytschko, Stolarski & Carpenter, IJNME 20
+(1984) 787-802 — "a C0 triangular plate element with one-point
+quadrature" — combined with a CST membrane; BLM ch. 9 covers both):
+
+* **Corotational frame**: e3 = normalized (x2-x1) x (x3-x1); e1 = side
+  1-2 direction (exactly in-plane by construction); e2 = e3 x e1. As for
+  the quad, measuring rates in this frame removes the large rigid
+  rotation, so no objective stress rate is needed.
+
+* **Constant-strain membrane** (CST): the linear displacement field over
+  a triangle gives an exactly constant strain — one integration point is
+  FULL integration and the element has **no hourglass modes** (that is
+  why this file, like the tetra, has no hourglass block). The mid-plane
+  gradient operators for local corner coords (x_i, y_i):
+
+      B1 = [y2-y3, y3-y1, y1-y2] / (2A)
+      B2 = [x3-x2, x1-x3, x2-x1] / (2A)
+
+* **Mindlin-Reissner plate part** (C0 = displacement and rotations both
+  interpolated linearly, only C0 continuity across edges): rotation rates
+  are linear -> curvature rates constant, with the same operator shape as
+  the quad:
+
+      k_xx = B1.thy,  k_yy = -B2.thx,  k_xy = B2.thy - B1.thx
+
+  transverse shear at the centroid, with the mean nodal rotation:
+
+      g_xz = B1.vz + mean(thy),   g_yz = B2.vz - mean(thx)
+
+  This shear field is exact for rigid rotation (B1.x = 1 makes the two
+  terms cancel — checked in the unit tests). Known accuracy note: the
+  plain C0 triangle is stiff in bending for coarse thin meshes (mild
+  shear locking); Radioss' default SH3N carries the same reputation, and
+  the DKT18-flavoured Ish3n variants are a later roadmap item.
+
+* **Layers and resultants**: identical machinery to the quad — NIP Gauss
+  layers through the thickness updated by the plane-stress material law,
+  N = sum w_k sigma_k, M = sum w_k z_k sigma_k, q = kappa G t gamma,
+  nodal forces from the exact transpose of the rate operators.
+
+* **Lumped inertia**: m_i = rho t A / 3; rotational inertia
+  I_i = m_i (t^2 + A) / 12 — Key's deliberately generous lumping (same
+  reasoning and same caveat as the quad: bending/shear can still govern
+  the time step for thick or large elements).
+
+* **Time step**: lc = 2A / (longest side) is the smallest triangle
+  altitude; the exact eigenvalue correction 'dtfac' covers BOTH the
+  membrane branch (3x3 eigenproblem C_planestress.(B B^T), nodal mass
+  rho t A / 3) and the bending/transverse-shear branch (9-dof
+  eigenproblem, shared with shell_bt4) — see _exact_dt_factor.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+
+from .. import materials
+from ..common.constants import EM20, SHEAR_FACTOR
+
+
+# ----------------------------------------------------------------------------
+# geometry: corotational frame and local coordinates (c3coor3.F)
+# ----------------------------------------------------------------------------
+
+def _local_geometry(xe: np.ndarray):
+    """Frame, local corner coordinates, area and gradient operators.
+
+    xe: (n, 3, 3). Returns (E (n,3,3) columns e1|e2|e3, xl (n,3,2),
+    area (n,), B1 (n,3), B2 (n,3))."""
+    s12 = xe[:, 1] - xe[:, 0]
+    s13 = xe[:, 2] - xe[:, 0]
+    e3 = np.cross(s12, s13)
+    a2 = np.linalg.norm(e3, axis=1)            # = 2 * area
+    e3 = e3 / np.maximum(a2, EM20)[:, None]
+    e1 = s12 / np.maximum(np.linalg.norm(s12, axis=1), EM20)[:, None]
+    e2 = np.cross(e3, e1)
+    E = np.stack([e1, e2, e3], axis=2)
+    center = xe.mean(axis=1)
+    # local in-plane coords: xl[n,i,a] = (x_i - c) . e_a, a = 1,2
+    xl = np.einsum("nib,nba->nia", xe - center[:, None, :], E[:, :, :2])
+    x, y = xl[:, :, 0], xl[:, :, 1]
+    area = 0.5 * a2
+    inv2A = 1.0 / np.maximum(2.0 * area, EM20)
+    B1 = np.stack([y[:, 1] - y[:, 2], y[:, 2] - y[:, 0],
+                   y[:, 0] - y[:, 1]], axis=1) * inv2A[:, None]
+    B2 = np.stack([x[:, 2] - x[:, 1], x[:, 0] - x[:, 2],
+                   x[:, 1] - x[:, 0]], axis=1) * inv2A[:, None]
+    return E, xl, area, B1, B2
+
+
+def _char_length(xl: np.ndarray, area: np.ndarray) -> np.ndarray:
+    """lc = 2A / longest side = smallest altitude (c3dlen3.F flavour)."""
+    lmax = np.zeros(len(area))
+    for i in range(3):
+        j = (i + 1) % 3
+        d = xl[:, j, :] - xl[:, i, :]
+        lmax = np.maximum(lmax, np.einsum("nb,nb->n", d, d))
+    return 2.0 * area / np.maximum(np.sqrt(lmax), EM20)
+
+
+# ----------------------------------------------------------------------------
+# Starter-side initialization
+# ----------------------------------------------------------------------------
+
+def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
+    """Per-element ratio dt_exact/(lc/c) over BOTH stiffness branches
+    (same construction as shell_bt4._exact_dt_factor, triangle flavour):
+
+    * membrane — 3x3 eigenproblem with lumped mass m = rho*t*A/3:
+      omega^2 = (3/rho) eig(C_planestress . B B^T);
+    * bending/transverse-shear — the 9-dof (w, thx, thy) eigenproblem of
+      shell_bt4._bend_shear_omega2 (the operators are identical, only
+      the node count differs), which governs thick or large elements."""
+    from .shell_bt4 import _bend_shear_omega2
+    n = len(area)
+    Sxx = np.einsum("ni,ni->n", B1, B1)
+    Syy = np.einsum("ni,ni->n", B2, B2)
+    Sxy = np.einsum("ni,ni->n", B1, B2)
+    BBt = np.zeros((n, 3, 3))
+    BBt[:, 0, 0], BBt[:, 1, 1] = Sxx, Syy
+    BBt[:, 2, 2] = Sxx + Syy
+    BBt[:, 0, 2] = BBt[:, 2, 0] = Sxy
+    BBt[:, 1, 2] = BBt[:, 2, 1] = Sxy
+    fac = np.ones(n)
+    for sl, mat, prop in slices:
+        Ep = mat.E / (1.0 - mat.nu ** 2)
+        C = np.array([[Ep, mat.nu * Ep, 0.0],
+                      [mat.nu * Ep, Ep, 0.0],
+                      [0.0, 0.0, mat.G]])
+        eig = np.linalg.eigvals(C[None, :, :] @ BBt[sl])
+        w2max = (3.0 / mat.rho0) * eig.real.max(axis=1)
+        w2bend = _bend_shear_omega2(B1, B2, area, sl, mat,
+                                    prop.params["thick"], 3, mat.rho0)
+        w2max = np.maximum(w2max, w2bend)
+        c = mat.sound_speed_shell()
+        dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
+        fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
+    return fac
+
+
+def init_group(group, model, log):
+    """Element buffer + lumped mass/inertia (starter c3init3/c3mass3)."""
+    xe = model.x0[group.conn]
+    E, xl, area, B1, B2 = _local_geometry(xe)
+    bad = area <= 0.0
+    if np.any(bad):
+        for eid in group.ids[bad]:
+            log.error(f"/SH3N {eid}: zero area (coincident nodes?)",
+                      "SH3N INIT")
+
+    n = group.n
+    thick = np.zeros(n)
+    rho0 = np.zeros(n)
+    nip_max = 1
+    for sl, mat, prop in group.state["slices"]:
+        thick[sl] = prop.params["thick"]
+        rho0[sl] = mat.rho0
+        nip_max = max(nip_max, int(prop.params["nip"]))
+    mass = rho0 * thick * area
+
+    # Through-thickness Gauss stations per part slice (same as shell_bt4)
+    zw = []
+    for sl, mat, prop in group.state["slices"]:
+        nip = int(prop.params["nip"])
+        gp, gw = np.polynomial.legendre.leggauss(nip)
+        zw.append((gp * 0.5, gw * 0.5))  # relative to thickness
+    group.state.update(
+        sig=np.zeros((n, nip_max, 3)),   # in-plane stress per layer
+        qshear=np.zeros((n, 2)),         # transverse shear stress (elastic)
+        epsp=np.zeros((n, nip_max)),
+        thick=thick,
+        area0=area.copy(),
+        mass=mass,
+        eint=np.zeros(n),
+        ehour=np.zeros(n),               # always zero: CST has no hg modes
+        zw=zw,
+        dtfac=_exact_dt_factor(B1, B2, area, _char_length(xl, area),
+                               thick, group.state["slices"]),
+    )
+    node_idx = group.conn.reshape(-1)
+    mass_c = np.repeat(mass / 3.0, 3)
+    # generous lumped rotational inertia (Key's trick, see module docstring)
+    inertia_c = np.repeat(mass / 3.0 * (thick ** 2 + area) / 12.0, 3)
+    return node_idx, mass_c, inertia_c
+
+
+# ----------------------------------------------------------------------------
+# Engine-side forces (c3forc3.F)
+# ----------------------------------------------------------------------------
+
+def forces(group, x, v, vr, dt, fint, mint):
+    st = group.state
+    conn = group.conn
+    n = group.n
+    xe = x[conn]
+    E, xl, area, B1, B2 = _local_geometry(xe)
+    area = np.maximum(area, EM20)
+    lc = _char_length(xl, area)
+    thick = st["thick"]
+
+    # velocities in the corotational frame
+    vl = np.einsum("nib,nba->nia", v[conn], E)
+    wl = np.einsum("nib,nba->nia", vr[conn], E)
+
+    # ---- rate of deformation (c3defo3 kinematics) --------------------------
+    vx, vy, vz = vl[:, :, 0], vl[:, :, 1], vl[:, :, 2]
+    thx, thy = wl[:, :, 0], wl[:, :, 1]
+    dm = np.stack([  # membrane rates [xx, yy, xy(eng)] — exactly constant
+        np.einsum("ni,ni->n", B1, vx),
+        np.einsum("ni,ni->n", B2, vy),
+        np.einsum("ni,ni->n", B1, vy) + np.einsum("ni,ni->n", B2, vx),
+    ], axis=1)
+    kap = np.stack([  # curvature rates (constant: rotations linear)
+        np.einsum("ni,ni->n", B1, thy),
+        -np.einsum("ni,ni->n", B2, thx),
+        np.einsum("ni,ni->n", B2, thy) - np.einsum("ni,ni->n", B1, thx),
+    ], axis=1)
+    gs = np.stack([  # transverse shear rates at the centroid
+        np.einsum("ni,ni->n", B1, vz) + thy.mean(axis=1),
+        np.einsum("ni,ni->n", B2, vz) - thx.mean(axis=1),
+    ], axis=1)
+
+    # ---- layer stress updates + resultants (same machinery as shell_bt4) ---
+    sig = st["sig"]
+    Nres = np.zeros((n, 3))     # membrane force / length
+    Mres = np.zeros((n, 3))     # moment / length
+    de_layers = np.zeros(n)
+    c = np.zeros(n)
+    for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        zrel, wrel = st["zw"][isl]
+        t_sl = thick[sl]
+        for k in range(len(zrel)):
+            zk = zrel[k] * t_sl
+            wk = wrel[k] * t_sl
+            deps = (dm[sl] + zk[:, None] * kap[sl]) * dt
+            s_old = sig[sl, k, :].copy()
+            s_new, _ = materials.shell_update(
+                mat, sig[sl, k, :], deps, st["epsp"][sl, k], dt)
+            sig[sl, k, :] = s_new
+            s_mid = 0.5 * (s_old + s_new)
+            Nres[sl] += wk[:, None] * s_new
+            Mres[sl] += (wk * zk)[:, None] * s_new
+            de_layers[sl] += wk * np.einsum("nk,nk->n", s_mid, deps)
+        c[sl] = mat.sound_speed_shell()
+        # elastic transverse shear resultant stress (with 5/6 factor)
+        qold = st["qshear"][sl].copy()
+        st["qshear"][sl] += SHEAR_FACTOR * mat.G * gs[sl] * dt
+        de_layers[sl] += t_sl * np.einsum(
+            "nk,nk->n", 0.5 * (qold + st["qshear"][sl]), gs[sl] * dt)
+    qres = st["qshear"] * thick[:, None]            # shear force / length
+
+    # ---- internal nodal forces & moments (transpose of the rates) ----------
+    f = np.zeros((n, 3, 3))
+    m = np.zeros((n, 3, 3))
+    A_ = area[:, None]
+    f[:, :, 0] = A_ * (B1 * Nres[:, 0:1] + B2 * Nres[:, 2:3])
+    f[:, :, 1] = A_ * (B2 * Nres[:, 1:2] + B1 * Nres[:, 2:3])
+    f[:, :, 2] = A_ * (B1 * qres[:, 0:1] + B2 * qres[:, 1:2])
+    # mean(th) in the shear rates spreads 1/3 to each node's moment
+    m[:, :, 0] = A_ * (-B2 * Mres[:, 1:2] - B1 * Mres[:, 2:3]
+                       - qres[:, 1:2] / 3.0)
+    m[:, :, 1] = A_ * (B1 * Mres[:, 0:1] + B2 * Mres[:, 2:3]
+                       + qres[:, 0:1] / 3.0)
+
+    st["eint"] += area * de_layers
+
+    # no hourglass: full integration of a linear field (module docstring)
+    fl = -f
+    ml = -m
+    fg = np.einsum("nia,nba->nib", fl, E)
+    mg = np.einsum("nia,nba->nib", ml, E)
+    np.add.at(fint, conn.reshape(-1), fg.reshape(-1, 3))
+    np.add.at(mint, conn.reshape(-1), mg.reshape(-1, 3))
+
+    # ---- critical time step --------------------------------------------------
+    return st["dtfac"] * lc / c

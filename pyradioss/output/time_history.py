@@ -65,8 +65,11 @@ class TimeHistory:
                 val += float(group.state["eint"][mask].sum())
             elif var == "KE":
                 # kinetic energy of the element masses: 1/2 m_e <v^2>_nodes
-                ve = model.v[group.conn[mask]]
-                v2 = np.einsum("nib,nib->n", ve, ve) / group.conn.shape[1]
+                # (beams store a reduced 'mass_conn' — their 3rd node is
+                # orientation only and carries no mass)
+                conn = group.state.get("mass_conn", group.conn)
+                ve = model.v[conn[mask]]
+                v2 = np.einsum("nib,nib->n", ve, ve) / conn.shape[1]
                 val += float(0.5 * (group.state["mass"][mask] * v2).sum())
         return val
 

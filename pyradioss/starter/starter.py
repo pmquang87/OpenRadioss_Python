@@ -43,8 +43,9 @@ def _listing_summary(model: Model, log: MessageLog) -> None:
     log.info("                       -------------")
     log.info(f"     TITLE . . . . . . . . . . . . . . : {model.title}")
     log.info(f"     NUMBER OF NODES . . . . . . . . . : {model.numnod}")
-    counts = {"bricks": "BRICK", "shells": "SHELL",
-              "trusses": "TRUSS", "springs": "SPRING"}
+    counts = {"bricks": "BRICK", "tetras": "TETRA4", "shells": "SHELL",
+              "sh3n": "SH3N", "trusses": "TRUSS", "springs": "SPRING",
+              "beams": "BEAM"}
     for attr, kw in counts.items():
         g = getattr(model, attr)
         if g is not None:
