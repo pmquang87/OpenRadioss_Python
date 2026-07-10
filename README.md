@@ -38,8 +38,18 @@ pip install -e .          # installs `pyradioss` + the two console scripts
 ```
 
 The only runtime dependency is **NumPy** (all element/material kernels are
-vectorized over elements — this is the single concession to performance, and it
-also matches how the Fortran loops over element *groups*).
+vectorized over elements — this matches how the Fortran loops over element
+*groups*). Since M7 there is also an **optional numba backend** for the
+hottest kernels (2–3× on the bundled examples, same results):
+
+```bash
+pip install -e ".[accel]"                        # adds numba
+pyradioss-engine -i MYRUN_0001.rad -backend numba   # or PYRADIOSS_BACKEND=numba
+```
+
+The base install keeps working unchanged without numba — see
+`pyradioss/accel/__init__.py` for the backend architecture and the parity
+contract, and `tools/benchmark.py` to measure both backends on the examples.
 
 ## Running a simulation
 
@@ -134,6 +144,12 @@ roadmap. Milestones 1–6 (this state of the repository) cover:
   booked at the leapfrog-consistent midstep velocity; since M6 the
   numerical dissipation of the element dampers is measured exactly and
   reported as its own EN ledger).
+- **Performance** (M7): profiled cycle path with pure-NumPy fast paths
+  (`pyradioss/common/fastmath.py`) and an optional, explicitly-selected
+  numba backend (`pyradioss/accel`) mirroring the measured hotspots —
+  solid/shell kernels and the TYPE7 contact narrow phase — with a
+  tested parity contract: both backends produce the same results, and
+  the restart-chaining bit-match holds under numba.
 - **Output**: listings, CSV time history (incl. /TH/SECT section
   resultants), VTK animation states.
 

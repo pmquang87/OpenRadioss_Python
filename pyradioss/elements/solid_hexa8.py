@@ -55,6 +55,22 @@ IJNME 1981):
   and stores it as 'dtfac'; forces() multiplies the running lc/c by it.
   (Frequencies rise as an element distorts, but lc tracks that; the /DT
   scale factor 0.9 covers the drift.)
+
+M7 performance structure
+------------------------
+forces() is split around the Python material/failure loop into two array
+blocks, ``_pre`` (geometry + kinematics + Jaumann rotation, the
+srcoor3/sdefo3/srota3 chain) and ``_post`` (bulk viscosity, internal +
+hourglass forces, energies, critical dt — sbulk3/sfint3/shour3/sdlen3).
+Both have an optional numba mirror in ``pyradioss.accel.jit_kernels``
+selected via ``accel.get`` (see the accel package docstring for the
+backend architecture and the parity contract). The NumPy code HERE is
+the reference implementation. Within the NumPy code the M7 profiling
+pass replaced np.cross / np.linalg.det / np.linalg.inv / np.add.at with
+the formula-identical small-array primitives of ``common.fastmath``, and
+fused the einsum chains into stacked matmuls — see fastmath's docstring
+for which replacements are bitwise-identical and which reassociate at
+machine precision.
 """
 
 from __future__ import annotations
@@ -62,7 +78,9 @@ from __future__ import annotations
 import numpy as np
 
 from .. import failure, materials
+from ..accel import get as accel_get
 from ..common.constants import EM20, EP30
+from ..common.fastmath import cross3, det_inv33, norm3, scatter_add3
 
 # Node sign pattern of the trilinear hexa (Radioss /BRICK node ordering:
 # nodes 1-4 = bottom face counter-clockwise, 5-8 = top face).
@@ -72,6 +90,7 @@ _XI = np.array([
 ], dtype=float)
 # dN_i/dxi_a at the centroid = xi_sign/8 (uniform gradient operator)
 _DN_DXI = _XI / 8.0
+_DN_DXI_T = np.ascontiguousarray(_DN_DXI.T)     # (3, 8) for the matmuls
 
 # The 4 hourglass base vectors of Flanagan-Belytschko (their table 2):
 # each is a deformation pattern with zero uniform strain at the centroid.
@@ -99,13 +118,14 @@ def _geometry(xe: np.ndarray):
     xe : (n, 8, 3) nodal coordinates.
     Returns (dndx (n,8,3), vol (n,)). Fortran: srcoor3.F + sderi3.F.
     """
-    # J[a,b] = d x_b / d xi_a  summed over nodes
-    J = np.einsum("ia,nib->nab", _DN_DXI, xe)
-    detJ = np.linalg.det(J)
+    # J[a,b] = d x_b / d xi_a  summed over nodes: (3,8) @ (n,8,3) matmul
+    J = _DN_DXI_T @ xe
+    # explicit 3x3 cofactor det/inverse (fastmath — LAPACK is ~5x slower
+    # at group sizes and not reproducible by the numba mirror)
+    detJ, Jinv = det_inv33(J)
     vol = 8.0 * detJ
     # dN_i/dx_b = dN_i/dxi_a * dxi_a/dx_b ; dxi_a/dx_b = inv(J)[b,a]
-    Jinv = np.linalg.inv(J)
-    dndx = np.einsum("ia,nba->nib", _DN_DXI, Jinv)
+    dndx = _DN_DXI @ Jinv.transpose(0, 2, 1)
     return dndx, vol
 
 
@@ -114,15 +134,13 @@ def _char_length(xe: np.ndarray, vol: np.ndarray) -> np.ndarray:
 
     Face area from the cross product of its diagonals: for a (possibly
     warped) quad face with corners a,b,c,d the vector area is
-    0.5 * (c-a) x (d-b).
+    0.5 * (c-a) x (d-b). All 6 faces at once: gather the diagonal
+    endpoints per face (two (n,6,3) arrays), one cross, one norm, max.
     """
-    amax = np.zeros(len(xe))
-    for f in _FACES:
-        d1 = xe[:, f[2], :] - xe[:, f[0], :]
-        d2 = xe[:, f[3], :] - xe[:, f[1], :]
-        a = 0.5 * np.linalg.norm(np.cross(d1, d2), axis=1)
-        amax = np.maximum(amax, a)
-    return vol / np.maximum(amax, EM20)
+    d1 = xe[:, _FACES[:, 2]] - xe[:, _FACES[:, 0]]      # (n, 6, 3)
+    d2 = xe[:, _FACES[:, 3]] - xe[:, _FACES[:, 1]]
+    a = 0.5 * norm3(cross3(d1, d2))                     # (n, 6) face areas
+    return vol / np.maximum(a.max(axis=1), EM20)
 
 
 def _exact_dt_factor(dndx: np.ndarray, vol: np.ndarray, lc: np.ndarray,
@@ -280,44 +298,58 @@ def _init_material_state(group, dndx0):
 # Engine-side force computation (one cycle)
 # ----------------------------------------------------------------------------
 
-def forces(group, x, v, vr, dt, fint, mint):
-    """One explicit cycle for the whole brick group. See module docstring
-    for the sforc3.F call chain this reproduces. Returns the per-element
-    critical time step."""
-    st = group.state
-    conn = group.conn
-    xe = x[conn]                                   # (n, 8, 3) gather
-    ve = v[conn]
+def _pre(xe, ve, sig, dt, off):
+    """Geometry + kinematics + Jaumann rotation: the srcoor3 / sdefo3 /
+    srota3 / sdlen3-geometry part of the cycle, everything BEFORE the
+    material law. Rotates ``sig`` in place; returns
+    (dndx, vol, lc, deps, trD). Mirrored by accel.jit_kernels.hexa_pre
+    (same formulas, element-serial — the M7 parity contract)."""
+    n = len(xe)
 
     # ---- geometry at t_{n+1/2} (srcoor3) --------------------------------
     dndx, vol = _geometry(xe)
     vol = np.maximum(vol, EM20)
-    rho = st["mass"] / vol                          # current density
     lc = _char_length(xe, vol)
 
     # ---- velocity gradient, D and W (sdefo3) -----------------------------
-    L = np.einsum("nib,nic->nbc", ve, dndx)         # L = sum v_i (x) gradN_i
-    D = 0.5 * (L + np.transpose(L, (0, 2, 1)))
-    trD = D[:, 0, 0] + D[:, 1, 1] + D[:, 2, 2]
-    # strain increment in Voigt form, ENGINEERING shear (gamma = 2 eps)
-    deps = np.empty((group.n, 6))
-    deps[:, 0] = D[:, 0, 0] * dt
-    deps[:, 1] = D[:, 1, 1] * dt
-    deps[:, 2] = D[:, 2, 2] * dt
-    deps[:, 3] = 2.0 * D[:, 0, 1] * dt
-    deps[:, 4] = 2.0 * D[:, 1, 2] * dt
-    deps[:, 5] = 2.0 * D[:, 0, 2] * dt
+    # L = sum_i v_i (x) gradN_i as a stacked matmul: (n,3,8) @ (n,8,3)
+    L = ve.transpose(0, 2, 1) @ dndx
+    trD = L[:, 0, 0] + L[:, 1, 1] + L[:, 2, 2]
+    # flush ROUND-OFF traces to exact zero (M7). On a rigid velocity
+    # field (an element interior to a /RBODY, or uniform translation)
+    # the trace cancels only in exact arithmetic — floating point leaves
+    # trD at the eps level of the v_i*gradN_i products, with a SIGN that
+    # is luck of the summation order. A stray negative flips the
+    # 'compressing' branch below and puts the bulk-viscosity qb*c term
+    # into the time step: a ~5% dt penalty for zero physical
+    # compression, different between backends/op orderings (caught by
+    # the M6 /RBODY chain test when M7 reordered these reductions —
+    # einsum happened to cancel exactly, matmul leaves ~1e-18).
+    # The noise floor of every L entry is eps * max|v| * max|gradN|, so
+    # a |trD| below 1e-14 of that product scale is numerical zero by
+    # construction — treat it as the exact zero it represents. (The
+    # scale must be the v*g PRODUCT, not |L| itself: on a rigid field
+    # ALL of L is round-off.) Mirrored in accel.jit_kernels.hexa_pre.
+    vgm = np.abs(ve).max(axis=(1, 2)) * np.abs(dndx).max(axis=(1, 2))
+    trD = np.where(np.abs(trD) <= 1e-14 * vgm, 0.0, trD)
+    # strain increment in Voigt form, ENGINEERING shear (gamma = 2 eps);
+    # the off-diagonal D entries are (L + L^T)/2, engineering doubles them
+    deps = np.empty((n, 6))
+    deps[:, 0] = L[:, 0, 0] * dt
+    deps[:, 1] = L[:, 1, 1] * dt
+    deps[:, 2] = L[:, 2, 2] * dt
+    deps[:, 3] = (L[:, 0, 1] + L[:, 1, 0]) * dt
+    deps[:, 4] = (L[:, 1, 2] + L[:, 2, 1]) * dt
+    deps[:, 5] = (L[:, 0, 2] + L[:, 2, 0]) * dt
 
     # deleted elements (GBUF%OFF = 0): freeze their state — no straining,
-    # and below no stress, viscosity, hourglass force or time-step claim
-    alive = st["off"] > 0.0
+    # and downstream no stress, viscosity, hourglass force or dt claim
+    alive = off > 0.0
     if not alive.all():
         deps[~alive] = 0.0
         trD = np.where(alive, trD, 0.0)
 
     # ---- Jaumann rotation of the old stress (srota3) ---------------------
-    sig = st["sig"]
-    sig_old = sig.copy()                            # kept for the energy
     wxy = 0.5 * (L[:, 0, 1] - L[:, 1, 0]) * dt      # spin increments W*dt
     wyz = 0.5 * (L[:, 1, 2] - L[:, 2, 1]) * dt
     wxz = 0.5 * (L[:, 0, 2] - L[:, 2, 0]) * dt
@@ -329,6 +361,116 @@ def forces(group, x, v, vr, dt, fint, mint):
     sig[:, 3] += wxy * (syy - sxx) + wxz * syz + wyz * szx
     sig[:, 4] += wyz * (szz - syy) - wxy * szx - wxz * sxy
     sig[:, 5] += wxz * (szz - sxx) + wxy * syz - wyz * sxy
+    return dndx, vol, lc, deps, trD
+
+
+def _post(xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
+          qa, qb, c, hcoef, alive, qvw_pend, dt, dtfac):
+    """Bulk viscosity + internal & hourglass forces + energy increments +
+    critical dt: the sbulk3 / sfint3 / shour3 / sdlen3 part of the cycle,
+    everything AFTER the material law. Returns
+    (fe, dt_crit, w_visc, qvw_new, deint0, dehour) with ``fe`` the
+    (n, 8, 3) nodal forces (internal + hourglass, already negated for the
+    fint accumulation) — the caller scatters. Mirrored by
+    accel.jit_kernels.hexa_post."""
+    n = len(xe)
+
+    # ---- bulk viscosity (sbulk3) — see module docstring -------------------
+    compressing = (trD < 0.0) & alive
+    qvisc = np.where(
+        compressing,
+        rho * lc * (qa ** 2 * lc * trD ** 2 - qb * c * trD),
+        0.0)
+
+    # ---- internal nodal forces (sfint3) -----------------------------------
+    # f_i = V * sigma . gradN_i   (3x3 stress from Voigt; the viscous
+    # pressure adds to the three normal stresses, compression +)
+    S = np.empty((n, 3, 3))
+    S[:, 0, 0] = sig[:, 0] - qvisc
+    S[:, 1, 1] = sig[:, 1] - qvisc
+    S[:, 2, 2] = sig[:, 2] - qvisc
+    S[:, 0, 1] = S[:, 1, 0] = sig[:, 3]
+    S[:, 1, 2] = S[:, 2, 1] = sig[:, 4]
+    S[:, 0, 2] = S[:, 2, 0] = sig[:, 5]
+    # fe[i,b] = -vol * sum_c S[b,c] dndx[i,c]: S is symmetric, so this is
+    # the stacked matmul dndx @ S. Minus sign: fint holds -integral(B^T s)
+    fe = (dndx @ S) * (-vol)[:, None, None]
+
+    # ---- hourglass control (shour3, viscous Flanagan-Belytschko) ----------
+    # gamma_ai = h_ai - (sum_j h_aj x_j.) gradN_i  : hourglass shape vectors
+    # orthogonalized against the linear field so pure deformation produces
+    # no hourglass force (essential for coarse-mesh bending accuracy).
+    hx = _H @ xe                                       # (n, 4, 3)
+    gamma = _H[None, :, :] - hx @ dndx.transpose(0, 2, 1)   # (n, 4, 8)
+    qdot = gamma @ ve                                  # modal velocities
+    # viscous coefficient (FB 1981 eq. 79 flavour): a = h*rho*c*V^(2/3)/4
+    # (deleted elements exert no hourglass force either)
+    ah = hcoef * rho * c * vol ** (2.0 / 3.0) / 4.0 * alive
+    # fhg[i,b] = -ah * sum_a qdot[a,b] gamma[a,i]
+    fhg = (gamma.transpose(0, 2, 1) @ qdot) * (-ah)[:, None, None]
+    fe += fhg
+
+    # ---- energy bookkeeping (units: work) ---------------------------------
+    # internal energy: midpoint rule  dE = V * sigma_mid : deps
+    #
+    # Bulk-viscosity work — the M6 fix of an M1-era misbooking. The
+    # viscous nodal force built from q^n acts through the COMING velocity
+    # update: its kinetic-energy extraction over the cycle is exactly
+    #     W = V q^n * ( -(trD(v^{n-1/2}) + trD(v^{n+1/2})) / 2 ) * dt
+    # (a force f changes the leapfrog KE by f . (v_old + v_new)/2 dt — the
+    # same midstep identity as the M4 contact-work lesson). Booking the
+    # whole of W at trD(v^{n-1/2}) — the M1 form — is fine while trD barely
+    # changes per cycle, but under BARELY-RESOLVED RINGING (strain-rate
+    # sign flipping every cycle on a single element through the thickness)
+    # trD(v^{n+1/2}) ~ -trD(v^{n-1/2}): the ledger then books a full
+    # dissipation the damper never extracted, and the balance drifts
+    # SECULARLY (the 2x2x2-cube reproducer read -35% over 2 ms of free
+    # flight at /DT 0.9). The elastic sigma_mid : deps term has no such
+    # secular mode — stress is a state function, its booking error cannot
+    # accumulate — which is why the qb linear damper was the isolated
+    # culprit. Fix: trapezoidal booking — half the viscous work now (at
+    # trD of v^{n-1/2}), half DEFERRED one cycle, when the next forces()
+    # call holds v^{n+1/2} in its trD (the O(dt) geometry difference
+    # between the two evaluations is oscillatory, not secular).
+    sig_mid = 0.5 * (sig_old + sig)
+    w_visc = 0.5 * vol * qvisc * (-trD * dt) + qvw_pend * (-trD)
+    qvw_new = 0.5 * vol * qvisc * dt                 # booked next cycle
+    deint0 = vol * np.einsum("nk,nk->n", sig_mid, deps)
+    # hourglass dissipation: - f_hg . v * dt  (>= 0 for viscous control)
+    dehour = -np.einsum("nib,nib->n", fhg, ve) * dt
+
+    # ---- critical time step (sdlen3 + material) ----------------------------
+    # the bulk-viscosity pressure stiffens the response, eroding the
+    # Courant limit — but only where it acts, i.e. in compression:
+    Q = np.where(compressing, qb * c + qa * lc * np.abs(trD), 0.0)
+    dt_crit = dtfac * lc / (Q + np.sqrt(Q * Q + c * c))
+    # deleted elements no longer constrain the global step
+    dt_crit = np.where(alive, dt_crit, EP30)
+    return fe, dt_crit, w_visc, qvw_new, deint0, dehour
+
+
+def forces(group, x, v, vr, dt, fint, mint):
+    """One explicit cycle for the whole brick group. See module docstring
+    for the sforc3.F call chain this reproduces (and for the M7 pre/post
+    split around the material loop). Returns the per-element critical
+    time step."""
+    st = group.state
+    conn = group.conn
+    xe = x[conn]                                   # (n, 8, 3) gather
+    ve = v[conn]
+
+    sig = st["sig"]
+    sig_old = sig.copy()                           # kept for the energy
+    alive = st["off"] > 0.0
+
+    # ---- pre block: geometry, D & W, Jaumann rotation ---------------------
+    # (dispatched to the numba mirror when that backend is active)
+    jit = accel_get("hexa_pre")
+    if jit is not None:
+        dndx, vol, lc, deps, trD = jit(xe, ve, sig, dt, st["off"])
+    else:
+        dndx, vol, lc, deps, trD = _pre(xe, ve, sig, dt, st["off"])
+    rho = st["mass"] / vol                          # current density
 
     # ---- material law per part slice (mmain -> sigeps) -------------------
     # laws may return their own sound speed (Fortran SOUNDSP): LAW42's
@@ -418,9 +560,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         alive = off > 0.0
         sig[~alive] = 0.0            # a deleted element carries no stress
 
-    # ---- sound speed & bulk viscosity (sbulk3) ----------------------------
+    # ---- sound speed & bulk-viscosity coefficients per slice --------------
     qa = np.zeros(group.n)
     qb = np.zeros(group.n)
+    hcoef = np.zeros(group.n)
     for sl, mat, prop in st["slices"]:
         # current sound speed uses current density (stiffness constant);
         # laws that returned their own (nonlinear) c keep it
@@ -428,67 +571,20 @@ def forces(group, x, v, vr, dt, fint, mint):
             c[sl] = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
         qa[sl] = prop.params["qa"]
         qb[sl] = prop.params["qb"]
-    compressing = (trD < 0.0) & alive
-    qvisc = np.where(
-        compressing,
-        rho * lc * (qa ** 2 * lc * trD ** 2 - qb * c * trD),
-        0.0)
-    # viscous pressure adds to the three normal stresses (compression +)
-    sig_tot = sig.copy()
-    sig_tot[:, 0] -= qvisc
-    sig_tot[:, 1] -= qvisc
-    sig_tot[:, 2] -= qvisc
-
-    # ---- internal nodal forces (sfint3) -----------------------------------
-    # f_i = V * sigma . gradN_i   (3x3 stress from Voigt)
-    S = np.empty((group.n, 3, 3))
-    S[:, 0, 0], S[:, 1, 1], S[:, 2, 2] = sig_tot[:, 0], sig_tot[:, 1], sig_tot[:, 2]
-    S[:, 0, 1] = S[:, 1, 0] = sig_tot[:, 3]
-    S[:, 1, 2] = S[:, 2, 1] = sig_tot[:, 4]
-    S[:, 0, 2] = S[:, 2, 0] = sig_tot[:, 5]
-    fe = -np.einsum("n,nbc,nic->nib", vol, S, dndx)   # (n, 8, 3), minus sign:
-    # accumulated so that fint holds  -integral(B^T sigma)  (see package doc)
-
-    # ---- hourglass control (shour3, viscous Flanagan-Belytschko) ----------
-    # gamma_ai = h_ai - (sum_j h_aj x_j.) gradN_i  : hourglass shape vectors
-    # orthogonalized against the linear field so pure deformation produces
-    # no hourglass force (essential for coarse-mesh bending accuracy).
-    hx = np.einsum("ai,nib->nab", _H, xe)             # (n, 4, 3)
-    gamma = _H[None, :, :] - np.einsum("nab,nib->nai", hx, dndx)  # (n,4,8)
-    qdot = np.einsum("nai,nib->nab", gamma, ve)       # modal velocities
-    hcoef = np.zeros(group.n)
-    for sl, mat, prop in st["slices"]:
         hcoef[sl] = prop.params["h"]
-    # viscous coefficient (FB 1981 eq. 79 flavour): a = h*rho*c*V^(2/3)/4
-    # (deleted elements exert no hourglass force either)
-    ah = hcoef * rho * c * vol ** (2.0 / 3.0) / 4.0 * alive
-    fhg = -np.einsum("n,nab,nai->nib", ah, qdot, gamma)
-    fe += fhg
 
-    # ---- energy bookkeeping (units: work) ---------------------------------
-    # internal energy: midpoint rule  dE = V * sigma_mid : deps
-    #
-    # Bulk-viscosity work — the M6 fix of an M1-era misbooking. The
-    # viscous nodal force built from q^n acts through the COMING velocity
-    # update: its kinetic-energy extraction over the cycle is exactly
-    #     W = V q^n * ( -(trD(v^{n-1/2}) + trD(v^{n+1/2})) / 2 ) * dt
-    # (a force f changes the leapfrog KE by f . (v_old + v_new)/2 dt — the
-    # same midstep identity as the M4 contact-work lesson). Booking the
-    # whole of W at trD(v^{n-1/2}) — the M1 form — is fine while trD barely
-    # changes per cycle, but under BARELY-RESOLVED RINGING (strain-rate
-    # sign flipping every cycle on a single element through the thickness)
-    # trD(v^{n+1/2}) ~ -trD(v^{n-1/2}): the ledger then books a full
-    # dissipation the damper never extracted, and the balance drifts
-    # SECULARLY (the 2x2x2-cube reproducer read -35% over 2 ms of free
-    # flight at /DT 0.9). The elastic sigma_mid : deps term has no such
-    # secular mode — stress is a state function, its booking error cannot
-    # accumulate — which is why the qb linear damper was the isolated
-    # culprit. Fix: trapezoidal booking — half the viscous work now (at
-    # trD of v^{n-1/2}), half DEFERRED one cycle, when the next forces()
-    # call holds v^{n+1/2} in its trD (the O(dt) geometry difference
-    # between the two evaluations is oscillatory, not secular).
-    sig_mid = 0.5 * (sig_old + sig)
-    w_visc = 0.5 * vol * qvisc * (-trD * dt) + st["qvw_pend"] * (-trD)
+    # ---- post block: viscosity, forces, hourglass, energies, dt -----------
+    # (dispatched to the numba mirror when that backend is active)
+    jit = accel_get("hexa_post")
+    if jit is not None:
+        fe, dt_crit, w_visc, qvw_new, deint0, dehour = jit(
+            xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
+            qa, qb, c, hcoef, alive, st["qvw_pend"], dt, st["dtfac"])
+    else:
+        fe, dt_crit, w_visc, qvw_new, deint0, dehour = _post(
+            xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
+            qa, qb, c, hcoef, alive, st["qvw_pend"], dt, st["dtfac"])
+
     if "eos_mask" in st:
         # /EOS elements (M6): their energy equation already integrated
         # the deviator + pdV work implicitly (the law-loop EOS block);
@@ -497,22 +593,15 @@ def forces(group, x, v, vr, dt, fint, mint):
         # isentrope — see materials/eos.py) and eint mirrors it.
         em = st["eos_mask"]
         st["e_eos"][em] += w_visc[em] / st["vol0"][em]
-        deint = vol * np.einsum("nk,nk->n", sig_mid, deps) + w_visc
+        deint = deint0 + w_visc
         st["eint"] += np.where(em, 0.0, deint)
         st["eint"][em] = st["e_eos"][em] * st["vol0"][em]
     else:
-        st["eint"] += vol * np.einsum("nk,nk->n", sig_mid, deps) + w_visc
-    st["qvw_pend"] = 0.5 * vol * qvisc * dt          # booked next cycle
-    # hourglass dissipation: - f_hg . v * dt  (>= 0 for viscous control)
-    st["ehour"] += -np.einsum("nib,nib->n", fhg, ve) * dt
+        st["eint"] += deint0 + w_visc
+    st["qvw_pend"] = qvw_new
+    st["ehour"] += dehour
 
     # ---- scatter to global arrays (asspar) ---------------------------------
-    np.add.at(fint, conn.reshape(-1), fe.reshape(-1, 3))
+    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
 
-    # ---- critical time step (sdlen3 + material) ----------------------------
-    # the bulk-viscosity pressure stiffens the response, eroding the
-    # Courant limit — but only where it acts, i.e. in compression:
-    Q = np.where(compressing, qb * c + qa * lc * np.abs(trD), 0.0)
-    dt_crit = st["dtfac"] * lc / (Q + np.sqrt(Q * Q + c * c))
-    # deleted elements no longer constrain the global step
-    return np.where(alive, dt_crit, EP30)
+    return dt_crit

@@ -25,12 +25,13 @@ from __future__ import annotations
 import numpy as np
 
 from ..common.constants import EM20
+from ..common.fastmath import norm3
 
 
 def init_group(group, model, log):
     xe = model.x0[group.conn]                     # (n, 2, 3)
     dx = xe[:, 1] - xe[:, 0]
-    L0 = np.linalg.norm(dx, axis=1)
+    L0 = norm3(dx)
     if np.any(L0 <= 0):
         for eid in group.ids[L0 <= 0]:
             log.error(f"/TRUSS {eid}: zero length", "TRUSS INIT")
@@ -53,7 +54,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     st = group.state
     conn = group.conn
     dx = x[conn[:, 1]] - x[conn[:, 0]]
-    L = np.maximum(np.linalg.norm(dx, axis=1), EM20)
+    L = np.maximum(norm3(dx), EM20)
     a = dx / L[:, None]
     dv = v[conn[:, 1]] - v[conn[:, 0]]
     eps_dot = np.einsum("nb,nb->n", dv, a) / L

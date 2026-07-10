@@ -87,6 +87,20 @@ Theory (Belytschko, Lin & Tsay, CMAME 42 (1984) 225-251; also BLM ch. 9):
   rotation branch (stiffness ~ kappa G t A) still governs, which is why
   the Starter computes the exact eigenvalue of BOTH branches (see
   _exact_dt_factor — an M2 fix after a nu=0 strip diverged at /DT 0.9).
+
+M7 performance structure
+------------------------
+forces() is split around the Python layer/material loop into ``_pre``
+(corotational frame, local geometry, rate kinematics — ccoor3/cdefo3)
+and ``_post`` (resultant nodal forces, BLT84 hourglass, back-transform —
+czforc3/chour3), each with an optional numba mirror in
+``pyradioss.accel.jit_kernels`` (see the accel package docstring for the
+architecture and the parity contract). The NumPy code here is the
+reference. The M7 profiling pass fused the per-rate einsum calls into
+ONE stacked matmul (all ten B·v dot products at once: Bt (n,2,4) @
+V (n,4,5), with V the local [vx,vy,vz,thx,thy]), replaced np.cross /
+np.linalg.norm with the bitwise-identical fastmath forms, and replaced
+np.add.at with the bincount scatter — see common/fastmath.py.
 """
 
 from __future__ import annotations
@@ -94,7 +108,12 @@ from __future__ import annotations
 import numpy as np
 
 from .. import failure, materials
+from ..accel import get as accel_get
 from ..common.constants import EM20, EP30, SHEAR_FACTOR
+from ..common.fastmath import cross3, norm3, scatter_add3
+
+# side-index helper for the characteristic length: side i = (i, i+1)
+_NEXT = np.array([1, 2, 3, 0])
 
 
 # ----------------------------------------------------------------------------
@@ -108,12 +127,12 @@ def _frame(xe: np.ndarray):
     """
     r31 = xe[:, 2] - xe[:, 0]
     r42 = xe[:, 3] - xe[:, 1]
-    e3 = np.cross(r31, r42)
-    e3 /= np.maximum(np.linalg.norm(e3, axis=1), EM20)[:, None]
+    e3 = cross3(r31, r42)
+    e3 /= np.maximum(norm3(e3), EM20)[:, None]
     s1 = xe[:, 1] - xe[:, 0]
     e1 = s1 - (np.einsum("nb,nb->n", s1, e3))[:, None] * e3
-    e1 /= np.maximum(np.linalg.norm(e1, axis=1), EM20)[:, None]
-    e2 = np.cross(e3, e1)
+    e1 /= np.maximum(norm3(e1), EM20)[:, None]
+    e2 = cross3(e3, e1)
     return np.stack([e1, e2, e3], axis=2)
 
 
@@ -121,26 +140,31 @@ def _local_geometry(xe: np.ndarray):
     """Frame, local corner coordinates, area and gradient operators."""
     E = _frame(xe)
     center = xe.mean(axis=1)
-    # local coords: xl[n,i,a] = (x_i - c) . e_a
-    xl = np.einsum("nib,nba->nia", xe - center[:, None, :], E)
+    # local coords: xl[n,i,a] = (x_i - c) . e_a  — one stacked matmul
+    xl = (xe - center[:, None, :]) @ E
     x, y = xl[:, :, 0], xl[:, :, 1]
     area = 0.5 * ((x[:, 2] - x[:, 0]) * (y[:, 3] - y[:, 1])
                   + (x[:, 1] - x[:, 3]) * (y[:, 2] - y[:, 0]))
     inv2A = 1.0 / np.maximum(2.0 * area, EM20)
-    B1 = np.stack([y[:, 1] - y[:, 3], y[:, 2] - y[:, 0],
-                   y[:, 3] - y[:, 1], y[:, 0] - y[:, 2]], axis=1) * inv2A[:, None]
-    B2 = np.stack([x[:, 3] - x[:, 1], x[:, 0] - x[:, 2],
-                   x[:, 1] - x[:, 3], x[:, 2] - x[:, 0]], axis=1) * inv2A[:, None]
+    B1 = np.empty((len(xe), 4))
+    B1[:, 0] = y[:, 1] - y[:, 3]
+    B1[:, 1] = y[:, 2] - y[:, 0]
+    B1[:, 2] = y[:, 3] - y[:, 1]
+    B1[:, 3] = y[:, 0] - y[:, 2]
+    B1 *= inv2A[:, None]
+    B2 = np.empty((len(xe), 4))
+    B2[:, 0] = x[:, 3] - x[:, 1]
+    B2[:, 1] = x[:, 0] - x[:, 2]
+    B2[:, 2] = x[:, 1] - x[:, 3]
+    B2[:, 3] = x[:, 2] - x[:, 0]
+    B2 *= inv2A[:, None]
     return E, xl, area, B1, B2
 
 
 def _char_length(xl: np.ndarray, area: np.ndarray) -> np.ndarray:
-    """lc = A / longest side (cdlen3.F flavour)."""
-    lmax = np.zeros(len(area))
-    for i in range(4):
-        j = (i + 1) % 4
-        d = xl[:, j, :2] - xl[:, i, :2]
-        lmax = np.maximum(lmax, np.einsum("nb,nb->n", d, d))
+    """lc = A / longest side (cdlen3.F flavour) — all 4 sides at once."""
+    d = xl[:, _NEXT, :2] - xl[:, :, :2]              # (n, 4, 2) side vectors
+    lmax = (d[:, :, 0] ** 2 + d[:, :, 1] ** 2).max(axis=1)
     return area / np.maximum(np.sqrt(lmax), EM20)
 
 
@@ -366,45 +390,144 @@ def _element_deletion(st, nip_of):
 # Engine-side forces (cforc3.F)
 # ----------------------------------------------------------------------------
 
+def _pre(xe, ve, vre, off):
+    """Corotational frame + local geometry + rate kinematics — the
+    ccoor3/cdefo3(+czforc3 kinematics) part of the cycle, everything
+    BEFORE the layer/material loop. Returns
+    (E, area, lc, B1, B2, bb, gam, V, dm, kap, gs) where
+
+    * ``V`` (n, 4, 5) are the LOCAL nodal rates [vx, vy, vz, thx, thy] —
+      reused verbatim by the hourglass block of _post;
+    * ``gam`` (n, 4) is the FB-orthogonalized hourglass shape vector;
+    * ``bb`` = B1.B1 + B2.B2 feeds the per-slice hourglass stiffness.
+
+    Mirrored by accel.jit_kernels.shell_pre (the M7 parity contract)."""
+    n = len(xe)
+    E, xl, area, B1, B2 = _local_geometry(xe)
+    area = np.maximum(area, EM20)
+    lc = _char_length(xl, area)
+
+    # velocities in the corotational frame: one matmul for the three
+    # translations, one for the rotations (only thx/thy are used)
+    V = np.empty((n, 4, 5))
+    V[:, :, :3] = ve @ E
+    V[:, :, 3:] = (vre @ E)[:, :, :2]
+
+    # ---- rate of deformation (cdefo3 + czforc3 kinematics) ----------------
+    # ALL ten B.v dot products in one stacked matmul: Bt (n,2,4) @ V
+    # (n,4,5) -> M[n, which-B, which-field]; the rate lines below then
+    # mirror the kinematics table of the module docstring entry by entry.
+    Bt = np.empty((n, 2, 4))
+    Bt[:, 0, :] = B1
+    Bt[:, 1, :] = B2
+    M = Bt @ V
+    dm = np.empty((n, 3))            # membrane rates [xx, yy, xy(eng)]
+    dm[:, 0] = M[:, 0, 0]                              # B1 . vx
+    dm[:, 1] = M[:, 1, 1]                              # B2 . vy
+    dm[:, 2] = M[:, 0, 1] + M[:, 1, 0]                 # B1.vy + B2.vx
+    kap = np.empty((n, 3))           # curvature rates
+    kap[:, 0] = M[:, 0, 4]                             # B1 . thy
+    kap[:, 1] = -M[:, 1, 3]                            # -B2 . thx
+    kap[:, 2] = M[:, 1, 4] - M[:, 0, 3]                # B2.thy - B1.thx
+    gs = np.empty((n, 2))            # transverse shear rates
+    gs[:, 0] = M[:, 0, 2] + V[:, :, 4].mean(axis=1)    # B1.vz + mean(thy)
+    gs[:, 1] = M[:, 1, 2] - V[:, :, 3].mean(axis=1)    # B2.vz - mean(thx)
+
+    # hourglass geometry (chour3): the FB shape vector gamma and the
+    # B1.B1+B2.B2 stiffness factor — pure geometry, computed here so the
+    # post block never re-touches xl
+    hx = xl[:, 0, 0] - xl[:, 1, 0] + xl[:, 2, 0] - xl[:, 3, 0]
+    hy = xl[:, 0, 1] - xl[:, 1, 1] + xl[:, 2, 1] - xl[:, 3, 1]
+    gam = np.empty((n, 4))
+    gam[:, 0] = 1.0
+    gam[:, 1] = -1.0
+    gam[:, 2] = 1.0
+    gam[:, 3] = -1.0
+    gam -= hx[:, None] * B1
+    gam -= hy[:, None] * B2
+    bb = (np.einsum("ni,ni->n", B1, B1)
+          + np.einsum("ni,ni->n", B2, B2))             # B1.B1 + B2.B2
+
+    # deleted elements (GBUF%OFF = 0): freeze their state — no straining,
+    # and downstream no resultants, hourglass force or time-step claim
+    alive = off > 0.0
+    if not alive.all():
+        dm[~alive] = 0.0
+        kap[~alive] = 0.0
+        gs[~alive] = 0.0
+    return E, area, lc, B1, B2, bb, gam, V, dm, kap, gs
+
+
+def _post(E, area, B1, B2, gam, V, Nres, Mres, qres, Q,
+          k_m, k_w, k_r, dt):
+    """Resultants -> nodal forces/moments, BLT84 stiffness hourglass and
+    the back-transform to global axes — the czforc3/chour3 part of the
+    cycle, everything AFTER the layer loop. ``Q`` is the persistent
+    hourglass state st["hgq"], updated IN PLACE; k_m/k_w/k_r arrive
+    pre-masked by ``alive``. Returns (fg, mg, dehg): global nodal
+    forces/moments (n,4,3) ready to scatter, and the stored hourglass
+    energy increment. Mirrored by accel.jit_kernels.shell_post."""
+    n = len(area)
+
+    # ---- internal nodal forces & moments (transpose of the rates) ---------
+    # each line mirrors one line of the rate kinematics in _pre.
+    f = np.empty((n, 4, 3))
+    m = np.zeros((n, 4, 3))
+    A_ = area[:, None]
+    f[:, :, 0] = A_ * (B1 * Nres[:, 0:1] + B2 * Nres[:, 2:3])
+    f[:, :, 1] = A_ * (B2 * Nres[:, 1:2] + B1 * Nres[:, 2:3])
+    f[:, :, 2] = A_ * (B1 * qres[:, 0:1] + B2 * qres[:, 1:2])
+    m[:, :, 0] = A_ * (-B2 * Mres[:, 1:2] - B1 * Mres[:, 2:3]
+                       - 0.25 * qres[:, 1:2])
+    m[:, :, 1] = A_ * (B1 * Mres[:, 0:1] + B2 * Mres[:, 2:3]
+                       + 0.25 * qres[:, 0:1])
+
+    # ---- hourglass control (chour3, BLT84 stiffness type — module doc) ----
+    # all five modes at once: modal velocities qd = gamma . (local rates),
+    # stiffness per mode [k_m, k_m, k_w, k_r, k_r]; each mode integrates
+    # Q += k*qd*dt and pushes back f = -Q*gamma (translations x/y/w from
+    # columns 0-2, rotations thx/thy from columns 3-4).
+    qd = np.einsum("ni,nik->nk", gam, V)               # (n, 5)
+    kvec = np.empty((n, 5))
+    kvec[:, 0] = k_m
+    kvec[:, 1] = k_m
+    kvec[:, 2] = k_w
+    kvec[:, 3] = k_r
+    kvec[:, 4] = k_r
+    q_old = Q.copy()
+    Q += kvec * qd * dt
+    # stored hourglass energy increment: midpoint force x modal rate
+    dehg = 0.5 * ((q_old + Q) * qd).sum(axis=1) * dt
+
+    # total local force = -(internal) + hourglass, back to global frame
+    fl = -f
+    fl -= gam[:, :, None] * Q[:, None, :3]
+    ml = -m
+    ml[:, :, 0] -= gam * Q[:, 3:4]
+    ml[:, :, 1] -= gam * Q[:, 4:5]
+    # back to global axes: fg[n,i,b] = sum_a fl[n,i,a] E[n,b,a]
+    Et = E.transpose(0, 2, 1)
+    fg = fl @ Et
+    mg = ml @ Et
+    return fg, mg, dehg
+
+
 def forces(group, x, v, vr, dt, fint, mint):
     st = group.state
     conn = group.conn
     n = group.n
     xe = x[conn]
-    E, xl, area, B1, B2 = _local_geometry(xe)
-    area = np.maximum(area, EM20)
-    lc = _char_length(xl, area)
     thick = st["thick"]
 
-    # velocities in the corotational frame
-    vl = np.einsum("nib,nba->nia", v[conn], E)
-    wl = np.einsum("nib,nba->nia", vr[conn], E)
-
-    # ---- rate of deformation (cdefo3 + czforc3 kinematics) ----------------
-    vx, vy, vz = vl[:, :, 0], vl[:, :, 1], vl[:, :, 2]
-    thx, thy = wl[:, :, 0], wl[:, :, 1]
-    dm = np.stack([  # membrane rates [xx, yy, xy(eng)]
-        np.einsum("ni,ni->n", B1, vx),
-        np.einsum("ni,ni->n", B2, vy),
-        np.einsum("ni,ni->n", B1, vy) + np.einsum("ni,ni->n", B2, vx),
-    ], axis=1)
-    kap = np.stack([  # curvature rates
-        np.einsum("ni,ni->n", B1, thy),
-        -np.einsum("ni,ni->n", B2, thx),
-        np.einsum("ni,ni->n", B2, thy) - np.einsum("ni,ni->n", B1, thx),
-    ], axis=1)
-    gs = np.stack([  # transverse shear rates
-        np.einsum("ni,ni->n", B1, vz) + thy.mean(axis=1),
-        np.einsum("ni,ni->n", B2, vz) - thx.mean(axis=1),
-    ], axis=1)
-
-    # deleted elements (GBUF%OFF = 0): freeze their state — no straining,
-    # and below no resultants, hourglass force or time-step claim
+    # ---- pre block: frame, geometry, rates (numba mirror when active) -----
+    jit = accel_get("shell_pre")
+    if jit is not None:
+        E, area, lc, B1, B2, bb, gam, V, dm, kap, gs = jit(
+            xe, v[conn], vr[conn], st["off"])
+    else:
+        E, area, lc, B1, B2, bb, gam, V, dm, kap, gs = _pre(
+            xe, v[conn], vr[conn], st["off"])
     alive = st["off"] > 0.0
-    if not alive.all():
-        dm[~alive] = 0.0
-        kap[~alive] = 0.0
-        gs[~alive] = 0.0
 
     # ---- layer stress updates + resultants ---------------------------------
     sig = st["sig"]
@@ -456,67 +579,38 @@ def forces(group, x, v, vr, dt, fint, mint):
             st["hgq"][dead] = 0.0
     qres = st["qshear"] * thick[:, None]            # shear force / length
 
-    # ---- internal nodal forces & moments (transpose of the rates) ---------
-    # each line mirrors one line of the rate kinematics above.
-    f = np.zeros((n, 4, 3))
-    m = np.zeros((n, 4, 3))
-    A_ = area[:, None]
-    f[:, :, 0] = A_ * (B1 * Nres[:, 0:1] + B2 * Nres[:, 2:3])
-    f[:, :, 1] = A_ * (B2 * Nres[:, 1:2] + B1 * Nres[:, 2:3])
-    f[:, :, 2] = A_ * (B1 * qres[:, 0:1] + B2 * qres[:, 1:2])
-    m[:, :, 0] = A_ * (-B2 * Mres[:, 1:2] - B1 * Mres[:, 2:3]
-                       - 0.25 * qres[:, 1:2])
-    m[:, :, 1] = A_ * (B1 * Mres[:, 0:1] + B2 * Mres[:, 2:3]
-                       + 0.25 * qres[:, 0:1])
-
-    # ---- hourglass control (chour3, BLT84 stiffness type — module doc) ----
-    h = np.array([1.0, -1.0, 1.0, -1.0])
-    hx = np.einsum("i,ni->n", h, xl[:, :, 0])
-    hy = np.einsum("i,ni->n", h, xl[:, :, 1])
-    gam = h[None, :] - hx[:, None] * B1 - hy[:, None] * B2   # (n, 4)
-    bb = (np.einsum("ni,ni->n", B1, B1)
-          + np.einsum("ni,ni->n", B2, B2))                   # B1.B1 + B2.B2
+    # per-mode hourglass stiffness, scaled from the element's physical
+    # membrane / transverse-shear / bending stiffness (BLT84 constants);
+    # deleted elements exert no hourglass force (their Q was wiped above)
     k_m = np.zeros(n)
     k_w = np.zeros(n)
     k_r = np.zeros(n)
     for sl, mat, prop in st["slices"]:
         p = prop.params
         t_sl = thick[sl]
-        # per-mode hourglass stiffness, scaled from the element's physical
-        # membrane / transverse-shear / bending stiffness (BLT84 constants)
         k_m[sl] = p["hm"] * mat.E * t_sl * area[sl] * bb[sl] / 8.0
         k_w[sl] = p["hf"] * SHEAR_FACTOR * mat.G * t_sl * area[sl] * bb[sl] / 8.0
         k_r[sl] = p["hr"] * mat.E * t_sl ** 3 * area[sl] * bb[sl] / 192.0
-    # deleted elements exert no hourglass force (their Q was wiped above)
     k_m *= alive
     k_w *= alive
     k_r *= alive
-    fhg = np.zeros((n, 4, 3))
-    mhg = np.zeros((n, 4, 3))
-    Q = st["hgq"]
-    dehg = np.zeros(n)
-    # translations (membrane x/y, transverse w) then rotations (theta x/y):
-    # each mode integrates Q += k*qdot*dt and pushes back f = -Q*gamma.
-    for col, (comp, k, vel, out) in enumerate((
-            (0, k_m, vx, fhg), (1, k_m, vy, fhg), (2, k_w, vz, fhg),
-            (0, k_r, thx, mhg), (1, k_r, thy, mhg))):
-        qd = np.einsum("ni,ni->n", gam, vel)
-        q_old = Q[:, col].copy()
-        Q[:, col] = q_old + k * qd * dt
-        out[:, :, comp] -= Q[:, col, None] * gam
-        # stored hourglass energy increment: midpoint force x modal rate
-        dehg += 0.5 * (q_old + Q[:, col]) * qd * dt
+
+    # ---- post block: forces, hourglass, back-transform ---------------------
+    jit = accel_get("shell_post")
+    if jit is not None:
+        fg, mg, dehg = jit(E, area, B1, B2, gam, V, Nres, Mres, qres,
+                           st["hgq"], k_m, k_w, k_r, dt)
+    else:
+        fg, mg, dehg = _post(E, area, B1, B2, gam, V, Nres, Mres, qres,
+                             st["hgq"], k_m, k_w, k_r, dt)
 
     st["ehour"] += dehg
     st["eint"] += area * de_layers
 
-    # total local force = -(internal) + hourglass, back to global frame
-    fl = -f + fhg
-    ml = -m + mhg
-    fg = np.einsum("nia,nba->nib", fl, E)
-    mg = np.einsum("nia,nba->nib", ml, E)
-    np.add.at(fint, conn.reshape(-1), fg.reshape(-1, 3))
-    np.add.at(mint, conn.reshape(-1), mg.reshape(-1, 3))
+    # ---- scatter to global arrays (asspar) ---------------------------------
+    flat = conn.reshape(-1)
+    scatter_add3(fint, flat, fg.reshape(-1, 3))
+    scatter_add3(mint, flat, mg.reshape(-1, 3))
 
     # ---- critical time step ------------------------------------------------
     # deleted elements no longer constrain the global step

@@ -57,6 +57,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..common.constants import EM20
+from ..common.fastmath import norm3, scatter_add3
 from ..model.model import Model
 from . import tracking
 from .inter_type7 import _expand_matches
@@ -284,7 +285,7 @@ class ContactType11:
         s, t, cA, cB = _closest_points_on_segments(
             x[ea[:, 0]], x[ea[:, 1]], x[eb[:, 0]], x[eb[:, 1]])
         dvec = cA - cB
-        d = np.linalg.norm(dvec, axis=1)
+        d = norm3(dvec)
 
         if self.itf.igap == 1:
             gap = np.clip(self.gap_s[ps] + self.gap_m[pm],
@@ -307,10 +308,12 @@ class ContactType11:
 
         K = combine_stiffness(self.itf.istf, self.itf.stfac,
                               self.Km[pm], self.Ks[ps])
-        Knode = np.zeros(len(fcont))
-        for cols in (ea, eb):
-            np.add.at(Knode, cols[:, 0], K)
-            np.add.at(Knode, cols[:, 1], K)
+        # per-node spring-stiffness sums (bincount = the fast add.at, M7)
+        n_nod = len(fcont)
+        Knode = np.bincount(ea.reshape(-1), weights=np.repeat(K, 2),
+                            minlength=n_nod)
+        Knode += np.bincount(eb.reshape(-1), weights=np.repeat(K, 2),
+                             minlength=n_nod)
         loaded = Knode > 0.0
         dt_int = min(self.dt_bound, float(
             np.sqrt(2.0 * mass[loaded] / Knode[loaded]).min()))
@@ -347,7 +350,7 @@ class ContactType11:
         if self.fric > 0.0:
             gap_ref = float(np.mean(gap))
             vt = vrel - vn[:, None] * nvec
-            vt_mag = np.linalg.norm(vt, axis=1)
+            vt_mag = norm3(vt)
             Ft = self.fric * Fn * vt_mag / (
                 vt_mag + 1e-3 * gap_ref / max(dt, EM20))
             Fvec -= (Ft / np.maximum(vt_mag, EM20))[:, None] * vt
@@ -355,10 +358,14 @@ class ContactType11:
         # scatter with the closest-point parameters: +F on the secondary
         # edge ends, -F on the main edge ends (collinear equal/opposite
         # forces: linear AND angular momentum conserved)
-        np.add.at(fcont, ea[:, 0], (1 - s)[:, None] * Fvec)
-        np.add.at(fcont, ea[:, 1], s[:, None] * Fvec)
-        np.add.at(fcont, eb[:, 0], -(1 - t)[:, None] * Fvec)
-        np.add.at(fcont, eb[:, 1], -t[:, None] * Fvec)
+        va = np.empty((len(s), 2, 3))
+        va[:, 0, :] = (1 - s)[:, None] * Fvec
+        va[:, 1, :] = s[:, None] * Fvec
+        scatter_add3(fcont, ea.reshape(-1), va.reshape(-1, 3))
+        vb = np.empty((len(t), 2, 3))
+        vb[:, 0, :] = -(1 - t)[:, None] * Fvec
+        vb[:, 1, :] = -t[:, None] * Fvec
+        scatter_add3(fcont, eb.reshape(-1), vb.reshape(-1, 3))
 
         wrk = float(np.einsum("nb,nb->", Fvec, vrel)) * dt
         return -wrk, dt_int

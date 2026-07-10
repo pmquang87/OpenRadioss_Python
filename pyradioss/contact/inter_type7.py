@@ -77,7 +77,9 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..accel import get as accel_get
 from ..common.constants import EM20
+from ..common.fastmath import norm3, scatter_add3
 from ..model.model import Model
 from . import tracking
 from .stiffness import (combine_stiffness, node_stiffness_gap,
@@ -140,6 +142,31 @@ def _closest_point_on_triangle(p, a, b, c):
     u = 1.0 - v - w
     point = u[:, None] * a + v[:, None] * b + w[:, None] * c
     return point, u, v, w
+
+
+def _narrow(x, ni, seg):
+    """Narrow phase (i7dst3): exact closest point of each candidate node
+    on its quad segment, the quad split into triangles (0,1,2) and
+    (0,2,3). Returns (best_d, best_pt, best_w) with ``best_w`` the corner
+    weights of the closest point. Mirrored by
+    accel.jit_kernels.t7_narrow (M7 — this was the hottest single block
+    of the self-impact examples; see the accel package docstring)."""
+    best_d = np.full(len(ni), np.inf)
+    best_pt = np.zeros((len(ni), 3))
+    best_w = np.zeros((len(ni), 4))
+    p = x[ni]
+    for cols in ((0, 1, 2), (0, 2, 3)):
+        a, b, c = (x[seg[:, cols[0]]], x[seg[:, cols[1]]],
+                   x[seg[:, cols[2]]])
+        pt, u, vv, w = _closest_point_on_triangle(p, a, b, c)
+        d = norm3(p - pt)
+        better = d < best_d
+        best_d = np.where(better, d, best_d)
+        best_pt[better] = pt[better]
+        wq = np.zeros((len(ni), 4))
+        wq[:, cols[0]], wq[:, cols[1]], wq[:, cols[2]] = u, vv, w
+        best_w[better] = wq[better]
+    return best_d, best_pt, best_w
 
 
 def _expand_matches(keys_a: np.ndarray, keys_b: np.ndarray):
@@ -372,24 +399,14 @@ class ContactType7:
         if len(ni) == 0:
             return 0.0, self.dt_bound
         seg = self.segs[srow]                            # (np, 4)
-        p = x[ni]
 
         # ---- narrow phase: exact closest point (i7dst3) -------------------
-        best_d = np.full(len(ni), np.inf)
-        best_pt = np.zeros((len(ni), 3))
-        best_w = np.zeros((len(ni), 4))
-        # quad = triangles (0,1,2) and (0,2,3)
-        for cols in ((0, 1, 2), (0, 2, 3)):
-            a, b, c = (x[seg[:, cols[0]]], x[seg[:, cols[1]]],
-                       x[seg[:, cols[2]]])
-            pt, u, vv, w = _closest_point_on_triangle(p, a, b, c)
-            d = np.linalg.norm(p - pt, axis=1)
-            better = d < best_d
-            best_d = np.where(better, d, best_d)
-            best_pt[better] = pt[better]
-            wq = np.zeros((len(ni), 4))
-            wq[:, cols[0]], wq[:, cols[1]], wq[:, cols[2]] = u, vv, w
-            best_w[better] = wq[better]
+        # (dispatched to the numba mirror when that backend is active)
+        jit = accel_get("t7_narrow")
+        if jit is not None:
+            best_d, best_pt, best_w = jit(x, ni, seg)
+        else:
+            best_d, best_pt, best_w = _narrow(x, ni, seg)
 
         # ---- per-pair gap (Igap) ------------------------------------------
         loc = np.searchsorted(self.nodes, ni)    # nodes is sorted (init)
@@ -428,10 +445,12 @@ class ContactType7:
 
         K = combine_stiffness(self.itf.istf, self.itf.stfac,
                               self.Km[srow], self.Ks[loc])
-        Knode = np.zeros(len(fcont))
-        np.add.at(Knode, ni, K)
-        for k in range(4):                       # corner weight <= 1
-            np.add.at(Knode, seg[:, k], K)
+        # per-node spring-stiffness sums (bincount = the fast add.at, M7):
+        # full K on the secondary node, full K on each corner (weight <= 1)
+        n_nod = len(fcont)
+        Knode = np.bincount(ni, weights=K, minlength=n_nod)
+        Knode += np.bincount(seg.reshape(-1), weights=np.repeat(K, 4),
+                             minlength=n_nod)
         loaded = Knode > 0.0
         dt_int = min(self.dt_bound, float(
             np.sqrt(2.0 * mass[loaded] / Knode[loaded]).min()))
@@ -466,16 +485,16 @@ class ContactType7:
         if self.fric > 0.0:
             gap_ref = float(np.mean(gap))
             vt = vrel - vn[:, None] * nvec
-            vt_mag = np.linalg.norm(vt, axis=1)
+            vt_mag = norm3(vt)
             Ft = self.fric * Fn * vt_mag / (
                 vt_mag + 1e-3 * gap_ref / max(dt, EM20))
             Fvec -= (Ft / np.maximum(vt_mag, EM20))[:, None] * vt
 
         # scatter: action on the node, exact opposite reaction on the
         # segment corners (momentum conservation)
-        np.add.at(fcont, ni, Fvec)
-        for k in range(4):
-            np.add.at(fcont, seg[:, k], -wseg[:, k, None] * Fvec)
+        scatter_add3(fcont, ni, Fvec)
+        scatter_add3(fcont, seg.reshape(-1),
+                     (-wseg[:, :, None] * Fvec[:, None, :]).reshape(-1, 3))
 
         # contact work this cycle (stored elastic + dissipated), for the
         # energy balance

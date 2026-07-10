@@ -120,6 +120,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..common.constants import EM20
+from ..common.fastmath import cross3, norm3
 
 
 # ----------------------------------------------------------------------------
@@ -131,12 +132,12 @@ def _frame(x1: np.ndarray, x2: np.ndarray, x3: np.ndarray):
 
     Returns (E (n,3,3) with columns e1|e2|e3, L (n,))."""
     d = x2 - x1
-    L = np.maximum(np.linalg.norm(d, axis=1), EM20)
+    L = np.maximum(norm3(d), EM20)
     e1 = d / L[:, None]
     yref = x3 - x1                                # local y lies in (e1, yref)
     e2 = yref - np.einsum("nb,nb->n", yref, e1)[:, None] * e1
-    e2 /= np.maximum(np.linalg.norm(e2, axis=1), EM20)[:, None]
-    e3 = np.cross(e1, e2)
+    e2 /= np.maximum(norm3(e2), EM20)[:, None]
+    e3 = cross3(e1, e2)
     return np.stack([e1, e2, e3], axis=2), L
 
 
