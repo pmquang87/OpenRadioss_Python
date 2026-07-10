@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyradioss"
+version = "0.1.0"
+description = "Python port of the OpenRadioss explicit finite-element solver (Starter + Engine)"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+dependencies = ["numpy>=1.22"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+# The two console scripts mirror the two OpenRadioss executables
+# (starter_linux64_gf / engine_linux64_gf placed in OpenRadioss/exec).
+pyradioss-starter = "pyradioss.starter.__main__:main"
+pyradioss-engine = "pyradioss.engine.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["pyradioss*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
