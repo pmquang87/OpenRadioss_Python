@@ -43,14 +43,14 @@ from __future__ import annotations
 
 import os
 import time
-from typing import List, Optional
+from typing import Optional
 
 import numpy as np
 
 from .. import banner
 from ..common.constants import EP30
 from ..common.messages import MessageLog
-from ..contact import ContactType7
+from ..contact import build_contacts
 from ..elements import KERNELS
 from ..input.deck_reader import read_deck
 from ..input.engine_keywords import parse_engine_deck
@@ -138,14 +138,25 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     # ---- engine-side setup (resol_init) ----------------------------------
     loads = LoadsAndConstraints(model, log)
     walls = RigidWalls(model, log)
-    contacts: List[ContactType7] = [
-        ContactType7(itf, model, log) for itf in model.interfaces]
+    # contact: penalty interfaces (TYPE7/TYPE11, force-based) and tied
+    # interfaces (TYPE2, kinematic) hook into the cycle differently
+    contacts, tied = build_contacts(model, log)
     th = TimeHistory(os.path.join(out_dir, f"{run_name}T01.csv"), model, log)
 
     fint = np.zeros((n, 3))    # -internal forces (see elements pkg doc)
     mint = np.zeros((n, 3))    # -internal moments (shell rotations)
     fext = np.zeros((n, 3))
-    inv_mass = 1.0 / model.mass
+    fcont = np.zeros((n, 3))   # contact forces, kept separate: the contact
+    # energy must be booked with the leapfrog-consistent MIDSTEP velocity
+    # (see step 5b below), which needs the isolated contact force vector
+    # /INTER/TYPE2 mass transfer (i2 init): the EFFECTIVE mass — used for
+    # accelerations only — of a tied node's main segment corners includes
+    # the secondary mass, M_k += w_k m_s. Physical masses (energies,
+    # momentum, listing) stay in model.mass. See contact/inter_type2.py.
+    mass_eff = model.mass.copy()
+    for t2 in tied:
+        t2.augment_mass(mass_eff)
+    inv_mass = 1.0 / mass_eff
     has_inertia = model.inertia > 0.0
     inv_inertia = np.where(has_inertia, 1.0 / np.maximum(model.inertia, 1e-30),
                            0.0)
@@ -163,6 +174,10 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         dt_e = KERNELS[name].forces(group, model.x, model.v, model.vr,
                                     0.0, fint, mint)
         dt_next = min(dt_next, float(dt_e.min()))
+    # penalty interfaces bound the step from cycle 0 (their stiffness is
+    # static in this port), so an impact on the very first cycles is safe
+    for ct in contacts:
+        dt_next = min(dt_next, ct.dt_bound)
     fint[:] = 0.0
     mint[:] = 0.0
     dt = controls.dt_scale * dt_next
@@ -191,26 +206,56 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             dt_next = min(dt_next, float(dt_e.min()))
 
         # ---- 2. contact forces -------------------------------------------
+        # (into their own array — see the fcont declaration and step 5b;
+        # the work increment the interface returns is its own estimate at
+        # the pre-update velocities, superseded by the exact booking below)
+        fcont[:] = 0.0
         for ct in contacts:
-            dwork, dt_i = ct.forces(model.x, model.v, model.mass, dt,
-                                    fint, state.cycle)
-            state.econt += dwork
+            _, dt_i = ct.forces(model.x, model.v, model.mass, dt,
+                                fcont, state.cycle)
             dt_next = min(dt_next, dt_i)
 
         # ---- 3. external loads (gravity, /CLOAD) --------------------------
         fext[:] = 0.0
         loads.external_forces(state.t, fext)
 
+        # ---- 3b. tied interfaces (/INTER/TYPE2, i2for3): move the tied
+        # nodes' internal + external forces onto their main segments (the
+        # constraint carries them; the secondary rows are zeroed). Also
+        # polls the deletion release. Does NO work by construction —
+        # nothing is booked into econt.
+        for t2 in tied:
+            t2.transfer_forces(fint, fext, fcont, mass_eff, inv_mass,
+                               state.cycle)
+
         # ---- 4. acceleration + velocity update (leap-frog) ----------------
-        v_old = model.v.copy() if walls.walls else model.v  # for wall energy
-        acc = (fint + fext) * inv_mass[:, None]
+        v_old = model.v.copy()     # for wall energy + contact work booking
+        acc = (fint + fcont + fext) * inv_mass[:, None]
         model.v += acc * dt
         model.vr += mint * inv_inertia[:, None] * dt
 
         # ---- 5. kinematic conditions overwrite velocities -----------------
+        # (mass_eff: an /IMPVEL driving a tied main node reacts against
+        # the secondary inertia it carries too)
         state.wext += loads.apply_kinematic(state.t + dt, model.v, model.vr,
-                                            model.mass)
+                                            mass_eff)
         state.econt += walls.apply(model.x, model.v, v_old, model.mass, dt)
+
+        # ---- 5b. contact energy booking (M4 lesson) ------------------------
+        # In leap-frog, a force f^n changes the kinetic energy by exactly
+        # f . (v^{n-1/2} + v^{n+1/2})/2 * dt — the MIDSTEP average, not
+        # either endpoint. Booking contact work at v^{n-1/2} (as a contact
+        # kernel alone could) leaves a positive-definite residual
+        # f^2 dt^2 / 2m per cycle that reads as spurious energy CREATION
+        # whenever penalty springs dominate the energy scale (light nodes,
+        # short impacts). Booking from the assembled contact force with
+        # the midstep velocity closes the balance to round-off; the
+        # remaining CE drift is the real damper/friction dissipation.
+        # (The original accumulates interface energies from the same
+        # assembled forces in its FSAV blocks.)
+        if contacts:
+            state.econt -= float(np.einsum(
+                "nb,nb->", fcont, 0.5 * (v_old + model.v))) * dt
 
         # external work of the loads: force x actual displacement, i.e. the
         # POST-enforcement midstep velocity (f^n does its work over
@@ -219,6 +264,11 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
 
         # ---- 6. position update -------------------------------------------
         model.x += model.v * dt
+
+        # ---- 6b. tied interfaces (i2vit3): place the tied nodes on their
+        # (just moved) main segments and set the consistent velocity
+        for t2 in tied:
+            t2.enforce(model.x, model.v, dt)
 
         state.t += dt
         state.cycle += 1

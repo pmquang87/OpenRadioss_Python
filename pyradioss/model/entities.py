@@ -180,6 +180,16 @@ class Surface:
     Fortran: IGRSURF(ISU)%NODES(NSEG,4). Segments from /SURF/PART are the
     free (outer) faces of the part's elements — extracted by the Starter,
     like the Fortran surface-from-part builder in starter/source/model/sets.
+
+    Since M4 every segment also records its *provenance* — which element it
+    is a face of (Fortran IGRSURF%ELTYP/ELEM). Contact needs this twice:
+
+    * the Radioss penalty stiffness and variable-gap formulas are written
+      in terms of the parent element (shell thickness, solid volume...);
+    * element deletion (/FAIL, M3): a segment whose parent element has
+      GBUF%OFF = 0 must drop out of the main surface, so freshly created
+      crack faces stop carrying contact forces (the IDEL treatment of the
+      original interfaces).
     """
 
     id: int
@@ -189,6 +199,37 @@ class Surface:
     # Resolved by the Starter: (nseg, 4) 0-based node indices; triangles
     # repeat the 3rd node in the 4th slot (Radioss convention).
     segments: Optional[np.ndarray] = None
+    # Provenance, parallel to ``segments`` (resolved by the Starter):
+    # seg_gtype[i] = element-group attribute on Model ('shells', 'bricks',
+    # 'tetras', 'sh3n') or '' for explicit /SURF/SEG segments;
+    # seg_elem[i]  = row in that group (-1 for explicit segments).
+    seg_gtype: Optional[np.ndarray] = None    # (nseg,) dtype '<U8'
+    seg_elem: Optional[np.ndarray] = None     # (nseg,) int64
+
+
+@dataclass
+class Line:
+    """A /LINE edge set: 2-node segments, the sides of /INTER/TYPE11
+    edge-to-edge contact.
+
+    Fortran: IGRSLIN(ISL)%NODES(NSEG,2) built by
+    ``starter/source/model/sets/hm_read_lines.F``. The port supports
+
+    * ``/LINE/SURF`` — every unique edge of the segments of the listed
+      surfaces (with element provenance carried over from the surface, so
+      edges of deleted elements drop out, exactly like surface segments);
+    * ``/LINE/SEG``  — explicit node pairs.
+    """
+
+    id: int
+    title: str = ""
+    surf_ids: List[int] = field(default_factory=list)         # /LINE/SURF
+    seg_nodes: List[List[int]] = field(default_factory=list)  # /LINE/SEG (user ids)
+    # Resolved by the Starter: (nseg, 2) node indices + provenance
+    # (same convention as Surface.seg_gtype/seg_elem).
+    segments: Optional[np.ndarray] = None
+    seg_gtype: Optional[np.ndarray] = None
+    seg_elem: Optional[np.ndarray] = None
 
 
 # ============================================================================
@@ -279,17 +320,50 @@ class RigidWall:
 
 
 @dataclass
-class Interface7:
-    """/INTER/TYPE7 penalty contact: candidate *secondary* nodes (a group)
-    against a *main* surface. See pyradioss/contact/inter_type7.py for the
-    ported mechanics and simplifications."""
+class Interface:
+    """One /INTER contact interface. ``type`` selects the mechanics:
+
+    * **7**  — penalty node-to-surface (pyradioss/contact/inter_type7.py):
+      secondary node group vs main surface; ``grnod_id = 0`` means
+      *self-impact* — the secondary side defaults to the nodes of the main
+      surface itself, the Radioss single-surface convention;
+    * **2**  — tied/kinematic (inter_type2.py): the secondary nodes are
+      glued to their main segment for the whole run;
+    * **11** — penalty edge-to-edge (inter_type11.py): secondary /LINE
+      edges vs main /LINE edges.
+
+    Penalty options (types 7 and 11), following the Radioss cards:
+
+    istf  : stiffness definition flag —
+            0 = main-side element stiffness scaled by ``stfac`` (default),
+            1 = ``stfac`` IS the stiffness (a constant spring value),
+            2/3/4/5 = combine main-segment and secondary-node stiffness as
+            average / max / min / series (K_m*K_s/(K_m+K_s)).
+    igap  : 0 = constant gap (``gap``, auto-computed when 0),
+            1 = variable gap per pair from element sizes:
+            g = g_s(node) + g_m(segment), floored by ``gap`` (Gap_min)
+            and optionally capped by ``gap_max``.
+    stfac : stiffness scale factor — or the stiffness itself for istf=1.
+    fric  : Coulomb friction coefficient.
+    gap   : constant gap / Gap_min (0 = auto from main element sizes).
+
+    Fortran origin: ``starter/source/interfaces/int07|02|11/hm_read_*.F``
+    (the option cards) and the ``INTBUF_TAB`` interface buffers.
+    """
 
     id: int
-    grnod_id: int        # secondary nodes
-    surf_id: int         # main surface
-    stfac: float = 1.0   # stiffness scale factor (Istf default variant)
-    fric: float = 0.0    # Coulomb friction coefficient
-    gap: float = 0.0     # contact gap (0 = auto from element sizes)
+    type: int = 7
+    grnod_id: int = 0     # secondary nodes (7: 0 = self-impact; 2: required)
+    surf_id: int = 0      # main surface (types 7 and 2)
+    line_id1: int = 0     # secondary edges (type 11)
+    line_id2: int = 0     # main edges (type 11)
+    istf: int = 0
+    igap: int = 0
+    stfac: float = 1.0
+    fric: float = 0.0
+    gap: float = 0.0
+    gap_max: float = 0.0  # igap=1 cap, 0 = no cap
+    dsearch: float = 0.0  # type 2: projection search distance (0 = auto)
     title: str = ""
 
 

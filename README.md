@@ -71,14 +71,15 @@ Outputs:
 
 See [PORTING_GUIDE.md](PORTING_GUIDE.md) for the detailed feature matrix, the
 map from every Python module to the original Fortran directory, and the porting
-roadmap. Milestones 1–3 (this state of the repository) cover:
+roadmap. Milestones 1–4 (this state of the repository) cover:
 
 - **Input**: the Radioss block-keyword deck format (`/NODE`, `/BRICK`,
   `/TETRA4`, `/SHELL`, `/SH3N`, `/TRUSS`, `/SPRING`, `/BEAM`, `/PART`,
   `/MAT/LAW1/2/27/36/42`, `/FAIL/JOHNSON`, `/FAIL/BIQUAD`,
   `/PROP/TYPE1/2/3/4/14`,
   `/BCS`, `/INIVEL`, `/GRAV`, `/CLOAD`, `/IMPVEL`, `/FUNCT`, `/GRNOD`,
-  `/RWALL`, `/INTER/TYPE7`, `/TH`, …) with `#include` support.
+  `/RWALL`, `/INTER/TYPE2/7/11`, `/SURF`, `/LINE`, `/TH`, …) with
+  `#include` support.
 - **Elements**: 8-node solid (one-point integration + Flanagan–Belytschko
   hourglass control) with degenerated-brick→tetra conversion, 4-node
   constant-strain tetra, 4-node Belytschko–Tsay shell (membrane + bending +
@@ -96,10 +97,19 @@ roadmap. Milestones 1–3 (this state of the repository) cover:
   element deletion (per-layer bookkeeping for shells, deleted elements
   flagged in the VTK output as `OFF`), plus the eps_p_max thresholds of
   LAW2/LAW36.
+- **Contact** (M4): /INTER/TYPE7 penalty node-to-surface contact with the
+  Istf stiffness variants, constant/variable gap (Igap), self-impact and a
+  voxel (bucket) broad phase; /INTER/TYPE2 tied contact (kinematic
+  secondary-to-main gluing with co-rotating offsets — does no work by
+  construction); /INTER/TYPE11 edge-to-edge penalty contact on /LINE edge
+  sets. Contact fully respects /FAIL element deletion: segments and edges
+  of deleted elements drop out and orphaned nodes stop being tracked, so
+  crack faces behave physically.
 - **Engine**: explicit central-difference integration, element/nodal stable
-  time step, boundary conditions, initial/imposed velocities, gravity,
-  concentrated loads, kinematic rigid walls, TYPE7-style penalty contact with
-  bucket search, full energy-balance bookkeeping.
+  time step (including the accumulated contact-spring stiffness), boundary
+  conditions, initial/imposed velocities, gravity, concentrated loads,
+  kinematic rigid walls, full energy-balance bookkeeping (contact work
+  booked at the leapfrog-consistent midstep velocity).
 - **Output**: listings, CSV time history, VTK animation states.
 
 ## Repository layout
