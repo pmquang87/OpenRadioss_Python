@@ -56,6 +56,7 @@ import numpy as np
 
 from .. import failure, materials
 from ..common.constants import EM20, EP30
+from ..common.fastmath import cross3, det_inv33, norm3, scatter_add3
 
 # dN_i/dxi_a of the linear tetrahedron with natural coordinates
 #   N1 = 1 - xi1 - xi2 - xi3,  N2 = xi1,  N3 = xi2,  N4 = xi3
@@ -85,11 +86,11 @@ def _geometry(xe: np.ndarray):
     xe : (n, 4, 3) nodal coordinates.
     Returns (dndx (n,4,3), vol (n,)). Fortran: s4coor3.F/s4deri3.F.
     """
-    # J[a,b] = d x_b / d xi_a  (edge vectors from node 1)
+    # J[a,b] = d x_b / d xi_a  (edge vectors from node 1); explicit 3x3
+    # cofactor det/inverse — the M7 cheap win, see fastmath.det_inv33
     J = np.einsum("ia,nib->nab", _DN_DXI, xe)
-    detJ = np.linalg.det(J)
+    detJ, Jinv = det_inv33(J)
     vol = detJ / 6.0                      # tet volume = det(edges)/6
-    Jinv = np.linalg.inv(J)
     # dN_i/dx_b = dN_i/dxi_a * dxi_a/dx_b ; dxi_a/dx_b = inv(J)[b,a]
     dndx = np.einsum("ia,nba->nib", _DN_DXI, Jinv)
     return dndx, vol
@@ -97,13 +98,12 @@ def _geometry(xe: np.ndarray):
 
 def _char_length(xe: np.ndarray, vol: np.ndarray) -> np.ndarray:
     """Characteristic length = minimum altitude = 3 V / max face area."""
-    amax = np.zeros(len(xe))
-    for f in _FACES:
-        e1 = xe[:, f[1], :] - xe[:, f[0], :]
-        e2 = xe[:, f[2], :] - xe[:, f[0], :]
-        a = 0.5 * np.linalg.norm(np.cross(e1, e2), axis=1)
-        amax = np.maximum(amax, a)
-    return 3.0 * vol / np.maximum(amax, EM20)
+    # all 4 faces at once (fastmath cross/norm — the M7 cheap win, same
+    # rewrite as solid_hexa8._char_length)
+    e1 = xe[:, _FACES[:, 1]] - xe[:, _FACES[:, 0]]      # (n, 4, 3)
+    e2 = xe[:, _FACES[:, 2]] - xe[:, _FACES[:, 0]]
+    a = 0.5 * norm3(cross3(e1, e2))                     # (n, 4) face areas
+    return 3.0 * vol / np.maximum(a.max(axis=1), EM20)
 
 
 def _exact_dt_factor(dndx: np.ndarray, vol: np.ndarray, lc: np.ndarray,
@@ -215,6 +215,10 @@ def forces(group, x, v, vr, dt, fint, mint):
     L = np.einsum("nib,nic->nbc", ve, dndx)
     D = 0.5 * (L + np.transpose(L, (0, 2, 1)))
     trD = D[:, 0, 0] + D[:, 1, 1] + D[:, 2, 2]
+    # flush round-off traces to exact zero — rigid-interior elements must
+    # not flicker into the compression branch; see solid_hexa8._pre (M7)
+    vgm = np.abs(ve).max(axis=(1, 2)) * np.abs(dndx).max(axis=(1, 2))
+    trD = np.where(np.abs(trD) <= 1e-14 * vgm, 0.0, trD)
     deps = np.empty((group.n, 6))                  # Voigt, engineering shear
     deps[:, 0] = D[:, 0, 0] * dt
     deps[:, 1] = D[:, 1, 1] * dt
@@ -373,7 +377,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     st["qvw_pend"] = 0.5 * vol * qvisc * dt          # booked next cycle
 
     # ---- scatter to global arrays (asspar) ----------------------------------
-    np.add.at(fint, conn.reshape(-1), fe.reshape(-1, 3))
+    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
 
     # ---- critical time step --------------------------------------------------
     Q = np.where(compressing, qb * c + qa * lc * np.abs(trD), 0.0)

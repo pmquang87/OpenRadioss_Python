@@ -22,6 +22,12 @@ def main(argv=None) -> int:
                     help="number of threads (sets numpy thread env vars)")
     ap.add_argument("-np", dest="nspmd", type=int, default=1,
                     help="MPI domains (ignored: the port has no MPI)")
+    ap.add_argument("-backend", "--backend", dest="backend", default=None,
+                    choices=["numpy", "numba"],
+                    help="compute backend (M7): 'numpy' (default) or the "
+                         "optional 'numba' JIT backend — overrides the "
+                         "PYRADIOSS_BACKEND environment variable; numba "
+                         "missing falls back to numpy with a warning")
     args = ap.parse_args(argv)
 
     if args.nthread > 0:
@@ -30,6 +36,9 @@ def main(argv=None) -> int:
             os.environ[var] = str(args.nthread)
     if args.nspmd > 1:
         print(" ** WARNING: -np ignored (no MPI in pyradioss)")
+    if args.backend is not None:
+        from ..accel import select_backend
+        select_backend(args.backend)
 
     from .engine import run_engine
     run_engine(args.input)

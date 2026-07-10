@@ -49,6 +49,7 @@ from typing import Optional
 import numpy as np
 
 from .. import banner
+from ..accel import backend_name
 from ..common.constants import EP30
 from ..common.messages import MessageLog
 from ..contact import build_contacts
@@ -166,6 +167,11 @@ def run_engine(input_file: str, log: Optional[MessageLog] = None) -> Model:
         log.attach_listing(listing)
         log.info(banner())
         log.info(f" ENGINE INPUT FILE  . . . . . . . . . : {input_file}")
+        # M7: which compute backend runs the kernels (accel package);
+        # resolves PYRADIOSS_BACKEND / -backend here so a requested-but-
+        # missing numba surfaces its fallback warning in the listing
+        log.info(f" COMPUTE BACKEND  . . . . . . . . . . : "
+                 f"{backend_name(log)}")
 
         # ---- read controls + restart (engine lectur.F + rdresb.F) --------
         controls = parse_engine_deck(read_deck(input_file), log)

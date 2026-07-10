@@ -76,6 +76,9 @@ same names in comments.
 | `starter+engine/source/constraints/general/mpc/` | `pyradioss/engine/mpc.py` | `/MPC` Lagrange treatment (M6) |
 | `starter/source/materials/eos/` + `engine/source/materials/eos/eosmain.F` | `pyradioss/materials/eos.py` + solid kernels | `/EOS` polynomial & ideal gas, implicit E-p (M6) |
 | `common_source/` (constants, tables) | `pyradioss/common/*.py` | |
+| — (OpenRadioss speed = compiled Fortran + OpenMP/MPI, out of scope) | `pyradioss/accel/` | M7: optional numba backend behind the same kernel API (see the package docstring for architecture + parity contract) |
+| — | `pyradioss/common/fastmath.py` | M7: small-array NumPy primitives (bitwise-documented replacements for np.cross / norm / det / inv / add.at) |
+| — | `tools/benchmark.py` | M7: NumPy vs numba wall-clock benchmark over the examples |
 
 ## 3. Conventions used in this port
 
@@ -204,6 +207,9 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | Contact energy booked at the leapfrog midstep velocity (an M4 lesson: booking f·v at the pre-update velocity leaves a positive-definite f²dt²/2m residual per cycle that reads as energy creation when penalty springs dominate the scale — the midstep booking closes the balance to round-off) | ✅ |
 | Energy balance (int/kin/hourglass/contact/external work), error % | ✅ |
 | T01 time history, ANIM (as VTK), listings | ✅ |
+| M7 NumPy fast paths (`common/fastmath.py`: formula-identical cross/norm, bincount scatter assembly, cofactor 3×3 det/inv; fused shell rate/hourglass matmuls; LAW36 exact-fixed-point Newton exit) | ✅ |
+| Optional numba backend (`pyradioss/accel`): jit mirrors of the measured hotspots — hexa8 pre/post, BT4 shell pre/post, TYPE7 narrow phase — behind the same kernel API, `PYRADIOSS_BACKEND=numba` or `pyradioss-engine -backend numba`, NumPy fallback with a warning when numba is absent; parity asserted at kernel level and on full runs, restart chain bit-match asserted under numba (M7) | ✅ |
+| JAX backend | ❌ (deferred — see the M7 roadmap note) |
 | MPI/domain decomposition, SMP | ❌ (out of scope) |
 
 ## 5. Roadmap (next milestones)
@@ -355,7 +361,89 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
    * Gruneisen/tabulated EOS, Psh/tension cutoffs, EOS on shells;
    * per-DOF /MPC skew frames; heat conduction (thermal stays adiabatic);
    * ALE/CFD (long term).
-6. **M7 — performance**: optional numba/JAX backends behind the same API.
+6. **M7 — performance** ✅ (done): profile first, optimize second, and
+   keep the solver architecture (and every result) unchanged.
+   * **The profile drove everything** (numbers in PR #7): at this
+     port's typical model sizes (10²–10³ elements — the examples) the
+     cycle cost is NumPy *per-call overhead*, not flops. On
+     rigid_impactor, `np.cross` alone was ~20% of the runtime (its
+     moveaxis/axis bookkeeping), stacked `np.linalg.det/inv` on the
+     (n,3,3) Jacobians ~90 µs/call through LAPACK dispatch, `np.add.at`
+     4× slower than a bincount, ~60 einsum dispatches per cycle; on
+     notched_plate the TYPE7 narrow phase (~30 vectorized where/maximum
+     passes over the candidate set) was the hottest single block.
+   * **Pure-NumPy cheap wins**, benefiting every install:
+     `common/fastmath.py` (cross3/norm3 — bitwise identical to the
+     NumPy calls they replace; scatter_add3 — bincount assembly,
+     bitwise identical into a zero target, reassociated at ulp level
+     into an accumulated one; det_inv33 — explicit cofactor 3×3, ~5×
+     faster than LAPACK here and machine-precision close); the shell
+     kernel's ten per-rate einsums fused into ONE stacked matmul (and
+     the five hourglass-mode einsums into one); all-faces-at-once
+     characteristic lengths; LAW36's Newton loop exits on its exact
+     fixed point (bitwise-identical results, ~2.5× fewer table walks);
+     an integer `np.clip` (a hidden np.finfo per call in NumPy 2)
+     removed from the LAW36 curve walk. **Preallocated scratch buffers
+     were profiled and rejected**: allocations measured < 1% of the
+     cycle — call-count reduction is where the time was.
+   * **The optional numba backend** (`pyradioss/accel`, the package
+     docstring is the specification): `forces()` of solid_hexa8 and
+     shell_bt4 split into pre/post array blocks around the pure-Python
+     material/failure loop, each block plus the TYPE7 narrow phase
+     mirrored as an `@njit(cache=True)` kernel — exactly the three
+     measured hotspots, nothing else. Selected explicitly
+     (`PYRADIOSS_BACKEND=numba`, `pyradioss-engine -backend numba`, or
+     `accel.select_backend`); numba stays an optional dependency
+     (`pip install -e ".[accel]"`) and a missing/unknown backend falls
+     back to NumPy with a warning. No `fastmath`, no `parallel`: the
+     mirrors reproduce the reference math element for element, so the
+     backends agree bitwise except for reassociated short reductions
+     (documented, ≲1e-15/call). tests/test_m7_backends.py asserts the
+     contract at three levels: single-call kernel parity (rtol 1e-12),
+     a full starter+engine impact run compared state array by state
+     array, and the M6 restart-chain bit-match rerun UNDER numba — the
+     canary that would instantly catch nondeterministic reductions.
+   * **Measured speedups** (tools/benchmark.py; engine wall clock, one
+     clean run on the same machine, numba JIT cache warm — the compile
+     itself is a one-time ~10 s paid on the very first run; energy error
+     identical between backends to the reordered-reduction ulp drift):
+
+     | example (engine s) | M7 NumPy | M7 numba | numba/NumPy |
+     |---|---|---|---|
+     | notched_plate  | 57.6 | 24.4 | 2.36× |
+     | rigid_impactor | 56.7 | 25.8 | 2.20× |
+     | box_beam_impact | 3.88 | 2.19 | 1.77× |
+     | spot_weld      | 5.38 | 3.22 | 1.67× |
+     | tensile_bar    | 1.11 | 0.68 | 1.63× |
+     | edge_impact    | 33.7 | 22.9 | 1.47× |
+     | rubber_block   | 1.07 | 0.75 | 1.42× |
+     | gas_piston     | 0.40 | 0.36 | 1.10× |
+     | antenna_mast   | 1.27 | 1.22 | 1.05× |
+
+     The biggest wins are the compute-heavy solid/shell + contact runs
+     (notched_plate 2.4×, rigid_impactor 2.2×); the small quick examples
+     sit near 1× — fixed per-cycle Python overhead (the engine loop,
+     kinematics, output) that neither backend touches dominates them, so
+     the accelerated kernels are a small slice of their wall clock.
+     Against the M6 (pre-M7) code the long examples are ~3× faster
+     end-to-end (NumPy fast paths + numba stacked): rigid_impactor
+     78.0 s → 25.8 s, notched_plate 67.7 s → 24.4 s.
+   * Deferred out of M7, explicitly:
+     - **the JAX backend** (stretch scope, not started — reasons on
+       record): the engine cycle is built on in-place scatter into
+       shared force arrays, per-cycle Python branching (sensors,
+       deletion, EOS, /DT/NODA) and stateful dict-of-arrays element
+       buffers; none of that maps to `jax.jit` without rewriting the
+       engine in functional style — a fork, not a backend — while
+       un-jitted `jax.numpy` would only add dispatch overhead at these
+       model sizes. Revisit only after (if ever) a functional-core
+       engine refactor;
+     - numba mirrors beyond the measured hotspots: the TYPE11 narrow
+       phase, the material laws (LAW36's table walk is the visible
+       next candidate on notched_plate), tri3/tetra4/beam kernels;
+     - threading: numba `parallel=True` breaks the determinism/parity
+       contract (scatter order); MPI/domain decomposition stays out of
+       scope for the port.
 
 ## 6. Validation strategy
 

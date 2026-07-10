@@ -99,6 +99,7 @@ from typing import List
 
 import numpy as np
 
+from ..common.fastmath import cross3
 from ..model.model import Model
 
 
@@ -275,7 +276,7 @@ class RigidBodyEngine:
     # ------------------------------------------------------------------
     def _rigid_field(self, x_nodes: np.ndarray) -> np.ndarray:
         """v_ref + w x (x - x_ref) for the given node positions."""
-        return self.v_ref + np.cross(self.w, x_nodes - self.x_ref)
+        return self.v_ref + cross3(self.w, x_nodes - self.x_ref)
 
     # ------------------------------------------------------------------
     def advance(self, fint: np.ndarray, fext: np.ndarray, fcont: np.ndarray,
@@ -293,7 +294,7 @@ class RigidBodyEngine:
         f = fint[nodes] + fext[nodes] + fcont[nodes]
         F = f.sum(axis=0)
         r = x[nodes] - self.x_ref
-        T = np.cross(r, f).sum(axis=0) + mint[nodes].sum(axis=0)
+        T = cross3(r, f).sum(axis=0) + mint[nodes].sum(axis=0)
 
         wext = 0.0
         if not self.pivot:

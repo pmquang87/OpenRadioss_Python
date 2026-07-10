@@ -32,6 +32,13 @@ pip install -e ".[test]"
 pytest                     # runs unit + analytic validation tests
 ```
 
+Optional (M7): the accelerated numba backend for the hot kernels —
+
+```bash
+pip install -e ".[accel]"  # adds numba; the base install works without it
+python tools/benchmark.py  # times every example under both backends
+```
+
 ## 2. How to run OpenRadioss_Python
 
 A Radioss run is always two stages. Given a run name `MYRUN`:
@@ -71,6 +78,7 @@ Useful flags (mirroring the original command lines):
 | `-nt / -nthread N` | SMP threads | sets NumPy thread env vars (best effort) |
 | `-np N` | MPI domains | **accepted but ignored** — no MPI in the port (a warning is printed) |
 | `-v / --version` | banner | same |
+| `-backend numpy\|numba` | — (the original is compiled Fortran) | engine only, M7: compute backend; also via `PYRADIOSS_BACKEND`. `numba` needs the optional dependency (`pip install -e ".[accel]"`) and falls back to NumPy with a warning otherwise. Results are identical either way (the tested parity contract — see `pyradioss/accel`). |
 
 ## 3. Input decks
 

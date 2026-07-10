@@ -70,6 +70,7 @@ import numpy as np
 
 from .. import materials
 from ..common.constants import EM20, EP30, SHEAR_FACTOR
+from ..common.fastmath import cross3, norm3, scatter_add3
 # the per-layer material/failure plumbing is IDENTICAL to the quad shell
 # (only the node count differs) — shared helpers, like _bend_shear_omega2
 from .shell_bt4 import (_element_deletion, _init_material_state,
@@ -87,11 +88,11 @@ def _local_geometry(xe: np.ndarray):
     area (n,), B1 (n,3), B2 (n,3))."""
     s12 = xe[:, 1] - xe[:, 0]
     s13 = xe[:, 2] - xe[:, 0]
-    e3 = np.cross(s12, s13)
-    a2 = np.linalg.norm(e3, axis=1)            # = 2 * area
+    e3 = cross3(s12, s13)
+    a2 = norm3(e3)                             # = 2 * area
     e3 = e3 / np.maximum(a2, EM20)[:, None]
-    e1 = s12 / np.maximum(np.linalg.norm(s12, axis=1), EM20)[:, None]
-    e2 = np.cross(e3, e1)
+    e1 = s12 / np.maximum(norm3(s12), EM20)[:, None]
+    e2 = cross3(e3, e1)
     E = np.stack([e1, e2, e3], axis=2)
     center = xe.mean(axis=1)
     # local in-plane coords: xl[n,i,a] = (x_i - c) . e_a, a = 1,2
@@ -311,8 +312,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     ml = -m
     fg = np.einsum("nia,nba->nib", fl, E)
     mg = np.einsum("nia,nba->nib", ml, E)
-    np.add.at(fint, conn.reshape(-1), fg.reshape(-1, 3))
-    np.add.at(mint, conn.reshape(-1), mg.reshape(-1, 3))
+    scatter_add3(fint, conn.reshape(-1), fg.reshape(-1, 3))
+    scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3))
 
     # ---- critical time step --------------------------------------------------
     # deleted elements no longer constrain the global step

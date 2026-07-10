@@ -13,6 +13,9 @@ dependencies = ["numpy>=1.22"]
 
 [project.optional-dependencies]
 test = ["pytest>=7"]
+# the optional M7 accelerated backend (pyradioss/accel): the base install
+# stays NumPy-only; select with PYRADIOSS_BACKEND=numba or -backend numba
+accel = ["numba>=0.59"]
 
 [project.scripts]
 # The two console scripts mirror the two OpenRadioss executables

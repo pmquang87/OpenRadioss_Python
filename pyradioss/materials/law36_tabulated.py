@@ -66,7 +66,11 @@ def _curve_eval(cx: np.ndarray, cy: np.ndarray, cs: np.ndarray,
     Returns (value, slope) — the slope is the hardening modulus
     H = d sigma_y / d eps_p of the segment containing each point (constant
     per segment: that is what makes the return-mapping exact)."""
-    i = np.clip(np.searchsorted(cx, e, side="right") - 1, 0, len(cx) - 2)
+    # maximum/minimum instead of np.clip: same result, but np.clip with
+    # Python int bounds pays a np.finfo/np.iinfo promotion check per call
+    # in NumPy 2.x — it was ~5% of the notched-plate runtime (M7)
+    i = np.minimum(np.maximum(np.searchsorted(cx, e, side="right") - 1, 0),
+                   len(cx) - 2)
     return cy[i] + cs[i] * (e - cx[i]), cs[i]
 
 
@@ -110,9 +114,17 @@ def _radial_return(mat, sig_eq, epsp, rate, G3):
     for _ in range(_NEWTON_ITERS):
         sy_i, H_i = _yield_stress(mat, ep0 + dl, rt)
         res = seq - G3 * dl - sy_i
+        dl_prev = dl.copy()
         # H may be <= 0 (softening table): keep the denominator positive
         dl += res / (G3 + np.maximum(H_i, 0.0))
         dl = np.maximum(dl, 0.0)
+        # exact fixed point: piecewise-linear hardening converges EXACTLY
+        # once every iterate sits inside one table segment, after which
+        # further iterations reproduce dl bit for bit — skipping them
+        # cannot change any result (an M7 cheap win: LAW36 evaluated the
+        # full 8 iterations on every cycle, ~2.5x the needed table walks)
+        if np.array_equal(dl, dl_prev):
+            break
     sy_new, _ = _yield_stress(mat, ep0 + dl, rt)
     return idx, sy_new / seq, dl
 
