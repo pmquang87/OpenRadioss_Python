@@ -128,9 +128,18 @@ def _orthonormalize(R: np.ndarray) -> np.ndarray:
 
 
 class RigidBodyEngine:
-    """One /RBODY or /RBE2, engine-side."""
+    """One /RBODY or /RBE2, engine-side.
 
-    def __init__(self, rb, model: Model, loads, log):
+    ``saved`` (M6 restart chaining): the dynamic state written by a
+    previous engine run — when given, the initial-velocity projection is
+    SKIPPED (the nodal velocities in the restart are already the exact
+    rigid field of the saved state, and the body frame R cannot be
+    reconstructed from positions) and the saved (R, L, v_ref, w, x_ref,
+    xg) are restored instead. Everything static (masses, offsets, BCS
+    flags, drives) is reconstructed deterministically from the model.
+    """
+
+    def __init__(self, rb, model: Model, loads, log, saved=None):
         self.rb = rb
         self.model = model
         who = f"/{rb.kind}/{rb.id}"
@@ -207,6 +216,17 @@ class RigidBodyEngine:
         if self.pivot and self.drives:
             log.warning(f"{who}: /IMPVEL on a pivoted (fully clamped) "
                         f"master is ignored", "RBODY INIT")
+
+        # ---- restart resume (M6): restore the dynamic state ---------------
+        if saved is not None:
+            self.R = saved["R"].copy()
+            self.L = saved["L"].copy()
+            self.v_ref = saved["v_ref"].copy()
+            self.w = saved["w"].copy()
+            self.x_ref = saved["x_ref"].copy()
+            self.xg = saved["xg"].copy()
+            log.info(f"     {who}: RESUMED (RESTART)")
+            return
 
         # ---- initial state: project the nodal velocities ------------------
         # (an /INIVEL field on the slaves may not be exactly rigid; the
@@ -331,7 +351,10 @@ class RigidBodyEngine:
         v[self.nodes] = self._rigid_field(x[self.nodes])
 
 
-def build_rigid_bodies(model: Model, loads, log) -> List[RigidBodyEngine]:
-    """Instantiate the engine-side rigid bodies (/RBODY + /RBE2)."""
-    return [RigidBodyEngine(rb, model, loads, log)
+def build_rigid_bodies(model: Model, loads, log,
+                       saved_map=None) -> List[RigidBodyEngine]:
+    """Instantiate the engine-side rigid bodies (/RBODY + /RBE2).
+    ``saved_map`` (M6): {body id: state dict} from an engine restart."""
+    saved_map = saved_map or {}
+    return [RigidBodyEngine(rb, model, loads, log, saved_map.get(rb.id))
             for rb in model.rbodies if rb.slaves is not None]

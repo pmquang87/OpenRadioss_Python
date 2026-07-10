@@ -209,6 +209,10 @@ def init_group(group, model, log):
         eint=np.zeros(n),            # internal energy (GBUF%EINT)
         ehour=np.zeros(n),           # hourglass energy
         off=np.ones(n),              # 1 alive / 0 deleted (GBUF%OFF)
+        # pending half of the bulk-viscosity work, booked at the NEXT
+        # cycle's trD (the leapfrog-consistent midstep booking — see the
+        # energy block in forces())
+        qvw_pend=np.zeros(n),
         # exact stability correction to the lc/c estimate (module docstring)
         dtfac=_exact_dt_factor(dndx0, vol, lc0, group.state["slices"]),
     )
@@ -220,7 +224,7 @@ def init_group(group, model, log):
 
 
 def _init_material_state(group, dndx0):
-    """M3 material/failure plumbing shared by both solid kernels:
+    """M3/M6 material/failure plumbing shared by both solid kernels:
 
     * ``dndx0`` — the INITIAL shape-function gradients are stored when a
       slice's law is total-strain (LAW42): the cycle then computes the
@@ -229,16 +233,47 @@ def _init_material_state(group, dndx0):
     * ``dama`` — /FAIL damage per element (single integration point);
     * ``chk_fail`` — precomputed flag: True when any slice can delete
       elements (a /FAIL card or a material eps_p_max threshold), so the
-      cycle skips the whole failure block for plain models.
+      cycle skips the whole failure block for plain models;
+    * ``mat_extra`` (M6) — law-specific persistent per-element state
+      (the LAW2 adiabatic temperature rise), allocated from
+      materials.extra_shapes — the solid analogue of the shell kernels'
+      per-layer allocation;
+    * /EOS state (M6) — elements whose material carries an equation of
+      state track their relative volume ``j_prev`` = V/V0, energy per
+      reference volume ``e_eos`` and pressure ``p_eos`` (see
+      materials/eos.py); ``eos_mask`` flags them for the cycle's energy
+      bookkeeping, and their eint starts at the EOS initial energy.
     """
     st = group.state
+    n = group.n
     if any(materials.needs_defgrad(mat) for _, mat, _ in st["slices"]):
         st["dndx0"] = dndx0.copy()
     if any(mat.fail is not None for _, mat, _ in st["slices"]):
-        st["dama"] = np.zeros(group.n)
+        st["dama"] = np.zeros(n)
     st["chk_fail"] = any(
         mat.fail is not None or mat.params.get("eps_p_max", EP30) < 1e30
         for _, mat, _ in st["slices"])
+    st["mat_extra"] = {}
+    for sl, mat, prop in st["slices"]:
+        for name, shape in materials.extra_shapes(mat).items():
+            if name not in st["mat_extra"]:
+                st["mat_extra"][name] = np.zeros((n,) + shape)
+    if any(mat.eos is not None for _, mat, _ in st["slices"]):
+        from ..materials import eos as eos_mod
+        st["eos_mask"] = np.zeros(n, dtype=bool)
+        st["e_eos"] = np.zeros(n)
+        st["p_eos"] = np.zeros(n)
+        st["j_prev"] = np.ones(n)
+        for sl, mat, prop in st["slices"]:
+            if mat.eos is None:
+                continue
+            e0, p0 = eos_mod.initial_state(mat.eos)
+            st["eos_mask"][sl] = True
+            st["e_eos"][sl] = e0
+            st["p_eos"][sl] = p0
+            # the EOS initial energy IS internal energy from cycle 0
+            # (the Engine's balance reference includes initial IE)
+            st["eint"][sl] = e0 * st["vol0"][sl]
 
 
 # ----------------------------------------------------------------------------
@@ -297,7 +332,8 @@ def forces(group, x, v, vr, dt, fint, mint):
 
     # ---- material law per part slice (mmain -> sigeps) -------------------
     # laws may return their own sound speed (Fortran SOUNDSP): LAW42's
-    # tangent stiffness grows with stretch, so its c MUST feed the dt.
+    # tangent stiffness grows with stretch, so its c MUST feed the dt —
+    # and so does an /EOS, whose bulk stiffness is state-dependent (M6).
     epsp_old = st["epsp"].copy() if st["chk_fail"] else None
     c = np.zeros(group.n)
     c_from_law = np.zeros(group.n, dtype=bool)
@@ -306,11 +342,53 @@ def forces(group, x, v, vr, dt, fint, mint):
         # exact deformation gradient at the point: F = sum_i x_i (x) gradN0_i
         F = np.einsum("nia,nib->nab", xe, st["dndx0"])
     for sl, mat, prop in st["slices"]:
-        extra = {"F": F[sl]} if F is not None else None
+        extra = {}
+        if F is not None:
+            extra["F"] = F[sl]
+        for name, arr in st["mat_extra"].items():
+            extra[name] = arr[sl]
         _, _, c_new = materials.solid_update(
-            mat, sig[sl], deps[sl], st["epsp"][sl], dt, extra)
+            mat, sig[sl], deps[sl], st["epsp"][sl], dt, extra or None)
         if c_new is not None:
             c[sl] = c_new
+            c_from_law[sl] = True
+
+        # ---- /EOS pressure (M6, eosmain): replace the law's pressure by
+        # the implicit E-p update — deviator from the law, pressure from
+        # the equation of state; see materials/eos.py for the theory
+        if mat.eos is not None:
+            from ..materials import eos as eos_mod
+            live = alive[sl]
+            J = vol[sl] / st["vol0"][sl]
+            mu = 1.0 / J - 1.0
+            dv = np.where(live, J - st["j_prev"][sl], 0.0)
+            st["j_prev"][sl] = np.where(live, J, st["j_prev"][sl])
+            sgsl = sig[sl]
+            pm = (sgsl[:, 0] + sgsl[:, 1] + sgsl[:, 2]) / 3.0
+            s_new = sgsl.copy()
+            s_new[:, 0] -= pm
+            s_new[:, 1] -= pm
+            s_new[:, 2] -= pm
+            so = sig_old[sl]
+            pm_o = (so[:, 0] + so[:, 1] + so[:, 2]) / 3.0
+            s_mid = 0.5 * (s_new + so)
+            s_mid[:, 0] -= 0.5 * pm_o
+            s_mid[:, 1] -= 0.5 * pm_o
+            s_mid[:, 2] -= 0.5 * pm_o
+            # deviator work per unit REFERENCE volume (vol/vol0 = J)
+            de_dev = J * np.einsum("nk,nk->n", s_mid, deps[sl])
+            p_new, e_new, c2 = eos_mod.update(
+                mat.eos, mu, dv, st["e_eos"][sl], st["p_eos"][sl], de_dev)
+            p_new = np.where(live, p_new, st["p_eos"][sl])   # frozen dead
+            e_new = np.where(live, e_new, st["e_eos"][sl])
+            st["p_eos"][sl] = p_new
+            st["e_eos"][sl] = e_new
+            sgsl[:] = s_new
+            sgsl[:, 0] -= p_new
+            sgsl[:, 1] -= p_new
+            sgsl[:, 2] -= p_new
+            # EOS bulk stiffness + the law's shear feeds the time step
+            c[sl] = np.sqrt(c2 + (4.0 * mat.G / 3.0) / rho[sl])
             c_from_law[sl] = True
 
     # ---- failure models + eps_p_max deletion (engine/source/materials/
@@ -324,9 +402,16 @@ def forces(group, x, v, vr, dt, fint, mint):
                 continue
             broken = np.zeros(sl.stop - sl.start, dtype=bool)
             if mat.fail is not None:
+                # homologous temperature for /FAIL/JOHNSON D5 (M6)
+                tstar = None
+                if "temp" in st["mat_extra"] and "mT" in mat.params:
+                    tstar = np.clip(
+                        st["mat_extra"]["temp"][sl]
+                        / (mat.params["T_melt"] - mat.params["T_i"]),
+                        0.0, 1.0)
                 broken |= failure.solid_step(
                     mat.fail, sig[sl], st["epsp"][sl] - epsp_old[sl],
-                    deps[sl], dt, st["dama"][sl])
+                    deps[sl], dt, st["dama"][sl], tstar)
             if eps_max < 1e30:
                 broken |= st["epsp"][sl] > eps_max
             off[sl][broken] = 0.0
@@ -382,9 +467,42 @@ def forces(group, x, v, vr, dt, fint, mint):
 
     # ---- energy bookkeeping (units: work) ---------------------------------
     # internal energy: midpoint rule  dE = V * sigma_mid : deps
+    #
+    # Bulk-viscosity work — the M6 fix of an M1-era misbooking. The
+    # viscous nodal force built from q^n acts through the COMING velocity
+    # update: its kinetic-energy extraction over the cycle is exactly
+    #     W = V q^n * ( -(trD(v^{n-1/2}) + trD(v^{n+1/2})) / 2 ) * dt
+    # (a force f changes the leapfrog KE by f . (v_old + v_new)/2 dt — the
+    # same midstep identity as the M4 contact-work lesson). Booking the
+    # whole of W at trD(v^{n-1/2}) — the M1 form — is fine while trD barely
+    # changes per cycle, but under BARELY-RESOLVED RINGING (strain-rate
+    # sign flipping every cycle on a single element through the thickness)
+    # trD(v^{n+1/2}) ~ -trD(v^{n-1/2}): the ledger then books a full
+    # dissipation the damper never extracted, and the balance drifts
+    # SECULARLY (the 2x2x2-cube reproducer read -35% over 2 ms of free
+    # flight at /DT 0.9). The elastic sigma_mid : deps term has no such
+    # secular mode — stress is a state function, its booking error cannot
+    # accumulate — which is why the qb linear damper was the isolated
+    # culprit. Fix: trapezoidal booking — half the viscous work now (at
+    # trD of v^{n-1/2}), half DEFERRED one cycle, when the next forces()
+    # call holds v^{n+1/2} in its trD (the O(dt) geometry difference
+    # between the two evaluations is oscillatory, not secular).
     sig_mid = 0.5 * (sig_old + sig)
-    st["eint"] += vol * np.einsum("nk,nk->n", sig_mid, deps) \
-        + vol * qvisc * (-trD * dt)                  # bulk viscosity work
+    w_visc = 0.5 * vol * qvisc * (-trD * dt) + st["qvw_pend"] * (-trD)
+    if "eos_mask" in st:
+        # /EOS elements (M6): their energy equation already integrated
+        # the deviator + pdV work implicitly (the law-loop EOS block);
+        # the viscous SHOCK HEATING is added to that energy state (it is
+        # what puts computed shocks on the Hugoniot instead of the
+        # isentrope — see materials/eos.py) and eint mirrors it.
+        em = st["eos_mask"]
+        st["e_eos"][em] += w_visc[em] / st["vol0"][em]
+        deint = vol * np.einsum("nk,nk->n", sig_mid, deps) + w_visc
+        st["eint"] += np.where(em, 0.0, deint)
+        st["eint"][em] = st["e_eos"][em] * st["vol0"][em]
+    else:
+        st["eint"] += vol * np.einsum("nk,nk->n", sig_mid, deps) + w_visc
+    st["qvw_pend"] = 0.5 * vol * qvisc * dt          # booked next cycle
     # hourglass dissipation: - f_hg . v * dt  (>= 0 for viscous control)
     st["ehour"] += -np.einsum("nib,nib->n", fhg, ve) * dt
 

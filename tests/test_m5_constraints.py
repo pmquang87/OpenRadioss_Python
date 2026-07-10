@@ -67,7 +67,9 @@ def _final_summary(out_path):
                          text).group(1))
     ew = float(re.search(r"EXTERNAL WORK\s*\.[ .]*:\s*([-\d.Ee+]+)",
                          text).group(1))
-    return {"ERR": err, "CE": ce, "EW": ew,
+    en = float(re.search(r"NUMERICAL DISSIPATION\s*\.[ .]*:\s*([-\d.Ee+]+)",
+                         text).group(1))
+    return {"ERR": err, "CE": ce, "EW": ew, "EN": en,
             "NORMAL": "ENGINE TERMINATION : NORMAL" in text}
 
 
@@ -779,12 +781,14 @@ def test_driven_wall_push_books_external_work(make_deck):
     assert model.x[cube, 2].min() >= model.x[iw, 2] - 1e-9
     s = _final_summary(out)
     assert s["NORMAL"]
-    # everything the cube carries (plus the arrest dissipation CE) was
-    # booked as the drive's work: EW = IE + KE + CE at balance
+    # everything the cube carries (plus the arrest dissipation CE and the
+    # numerical dissipation EN the kick's barely-resolved chatter feeds —
+    # measured exactly by the M6 internal-work ledger) was booked as the
+    # drive's work: EW = IE + KE + CE + EN at balance
     real = model.mass < 1e29
     ke = float(0.5 * (model.mass[real] * (model.v[real] ** 2).sum(1)).sum())
     ie = sum(float(g.state["eint"].sum()) for _, g in model.element_groups())
-    assert s["EW"] == pytest.approx(ke + ie + s["CE"], rel=0.07)
+    assert s["EW"] == pytest.approx(ke + ie + s["CE"] + s["EN"], rel=0.07)
     assert abs(s["ERR"]) < 5.0
 
 

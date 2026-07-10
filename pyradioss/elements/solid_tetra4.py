@@ -181,6 +181,8 @@ def init_group(group, model, log):
         eint=np.zeros(n),
         ehour=np.zeros(n),           # always zero: no hourglass modes (doc)
         off=np.ones(n),              # 1 alive / 0 deleted (GBUF%OFF)
+        qvw_pend=np.zeros(n),        # deferred half of the viscous work
+        # (midstep booking, see solid_hexa8)
         dtfac=_exact_dt_factor(dndx0, vol, lc0, group.state["slices"]),
     )
     # dndx0 / damage / failure-flag plumbing shared with the brick kernel
@@ -244,7 +246,9 @@ def forces(group, x, v, vr, dt, fint, mint):
 
     # ---- material law per part slice (mmain -> sigeps) ---------------------
     # laws may return their own sound speed (LAW42 stiffens with stretch —
-    # its c MUST feed the time step; see the brick kernel for commentary)
+    # its c MUST feed the time step; same for an /EOS since M6; see the
+    # brick kernel for the full commentary — the two blocks below are its
+    # line-by-line siblings)
     epsp_old = st["epsp"].copy() if st["chk_fail"] else None
     c = np.zeros(group.n)
     c_from_law = np.zeros(group.n, dtype=bool)
@@ -252,11 +256,49 @@ def forces(group, x, v, vr, dt, fint, mint):
     if "dndx0" in st:
         F = np.einsum("nia,nib->nab", xe, st["dndx0"])
     for sl, mat, prop in st["slices"]:
-        extra = {"F": F[sl]} if F is not None else None
+        extra = {}
+        if F is not None:
+            extra["F"] = F[sl]
+        for name, arr in st["mat_extra"].items():
+            extra[name] = arr[sl]
         _, _, c_new = materials.solid_update(
-            mat, sig[sl], deps[sl], st["epsp"][sl], dt, extra)
+            mat, sig[sl], deps[sl], st["epsp"][sl], dt, extra or None)
         if c_new is not None:
             c[sl] = c_new
+            c_from_law[sl] = True
+
+        # ---- /EOS pressure (M6, eosmain) — see solid_hexa8 -----------------
+        if mat.eos is not None:
+            from ..materials import eos as eos_mod
+            live = alive[sl]
+            J = vol[sl] / st["vol0"][sl]
+            mu = 1.0 / J - 1.0
+            dv = np.where(live, J - st["j_prev"][sl], 0.0)
+            st["j_prev"][sl] = np.where(live, J, st["j_prev"][sl])
+            sgsl = sig[sl]
+            pm = (sgsl[:, 0] + sgsl[:, 1] + sgsl[:, 2]) / 3.0
+            s_new = sgsl.copy()
+            s_new[:, 0] -= pm
+            s_new[:, 1] -= pm
+            s_new[:, 2] -= pm
+            so = sig_old[sl]
+            pm_o = (so[:, 0] + so[:, 1] + so[:, 2]) / 3.0
+            s_mid = 0.5 * (s_new + so)
+            s_mid[:, 0] -= 0.5 * pm_o
+            s_mid[:, 1] -= 0.5 * pm_o
+            s_mid[:, 2] -= 0.5 * pm_o
+            de_dev = J * np.einsum("nk,nk->n", s_mid, deps[sl])
+            p_new, e_new, c2 = eos_mod.update(
+                mat.eos, mu, dv, st["e_eos"][sl], st["p_eos"][sl], de_dev)
+            p_new = np.where(live, p_new, st["p_eos"][sl])
+            e_new = np.where(live, e_new, st["e_eos"][sl])
+            st["p_eos"][sl] = p_new
+            st["e_eos"][sl] = e_new
+            sgsl[:] = s_new
+            sgsl[:, 0] -= p_new
+            sgsl[:, 1] -= p_new
+            sgsl[:, 2] -= p_new
+            c[sl] = np.sqrt(c2 + (4.0 * mat.G / 3.0) / rho[sl])
             c_from_law[sl] = True
 
     # ---- failure models + eps_p_max deletion (pyradioss/failure/) ----------
@@ -268,9 +310,15 @@ def forces(group, x, v, vr, dt, fint, mint):
                 continue
             broken = np.zeros(sl.stop - sl.start, dtype=bool)
             if mat.fail is not None:
+                tstar = None                 # /FAIL/JOHNSON D5 (M6)
+                if "temp" in st["mat_extra"] and "mT" in mat.params:
+                    tstar = np.clip(
+                        st["mat_extra"]["temp"][sl]
+                        / (mat.params["T_melt"] - mat.params["T_i"]),
+                        0.0, 1.0)
                 broken |= failure.solid_step(
                     mat.fail, sig[sl], st["epsp"][sl] - epsp_old[sl],
-                    deps[sl], dt, st["dama"][sl])
+                    deps[sl], dt, st["dama"][sl], tstar)
             if eps_max < 1e30:
                 broken |= st["epsp"][sl] > eps_max
             off[sl][broken] = 0.0
@@ -305,9 +353,24 @@ def forces(group, x, v, vr, dt, fint, mint):
     # accumulates -integral(B^T sigma), see the elements package docstring
 
     # ---- energy bookkeeping -------------------------------------------------
+    # bulk-viscosity work booked trapezoidally: half at this cycle's trD,
+    # half deferred to the next cycle's (= the post-update velocities) —
+    # the leapfrog-consistent midstep booking. See the long comment in
+    # solid_hexa8.forces() for the barely-resolved-ringing failure mode of
+    # the one-sided M1 booking that this fixes (M6).
     sig_mid = 0.5 * (sig_old + sig)
-    st["eint"] += vol * np.einsum("nk,nk->n", sig_mid, deps) \
-        + vol * qvisc * (-trD * dt)
+    w_visc = 0.5 * vol * qvisc * (-trD * dt) + st["qvw_pend"] * (-trD)
+    if "eos_mask" in st:
+        # /EOS elements: energy from the EOS state (+ viscous shock
+        # heating) — see the matching block in solid_hexa8
+        em = st["eos_mask"]
+        st["e_eos"][em] += w_visc[em] / st["vol0"][em]
+        deint = vol * np.einsum("nk,nk->n", sig_mid, deps) + w_visc
+        st["eint"] += np.where(em, 0.0, deint)
+        st["eint"][em] = st["e_eos"][em] * st["vol0"][em]
+    else:
+        st["eint"] += vol * np.einsum("nk,nk->n", sig_mid, deps) + w_visc
+    st["qvw_pend"] = 0.5 * vol * qvisc * dt          # booked next cycle
 
     # ---- scatter to global arrays (asspar) ----------------------------------
     np.add.at(fint, conn.reshape(-1), fe.reshape(-1, 3))

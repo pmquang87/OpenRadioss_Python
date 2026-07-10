@@ -69,6 +69,12 @@ same names in comments.
 | interface `IDEL` bookkeeping vs `GBUF%OFF` | `pyradioss/contact/tracking.py` | deleted elements drop out of contact |
 | `starter/source/model/sets/hm_read_lines.F` (IGRSLIN) | `pyradioss/starter/initialization.py` (`resolve_lines`) | /LINE edge sets |
 | `engine/source/output/` (`ecrit.F`, `sortie_main.F`, TH, ANIM) | `pyradioss/output/*.py` | CSV + VTK |
+| `engine/source/time_step/` (`dtnoda.F`, STIFN accumulation) | `pyradioss/engine/mass_scaling.py` | `/DT/NODA[/CST]` nodal dt + mass scaling (M6) |
+| `engine/source/output/restart/` (`wrrestp.F`, `rdresb.F`) | `pyradioss/starter/restart.py` + engine resume | engine restarts, `_0002.rad` chaining, /STATE (M6) |
+| `engine/source/assembly/damping*.F` | `pyradioss/engine/damping.py` | `/DAMP` mass damping (M6) |
+| `starter+engine/source/tools/sensor/` | `pyradioss/engine/sensors.py` | `/SENSOR/TIME`, `/SENSOR/DISP` (M6) |
+| `starter+engine/source/constraints/general/mpc/` | `pyradioss/engine/mpc.py` | `/MPC` Lagrange treatment (M6) |
+| `starter/source/materials/eos/` + `engine/source/materials/eos/eosmain.F` | `pyradioss/materials/eos.py` + solid kernels | `/EOS` polynomial & ideal gas, implicit E-p (M6) |
 | `common_source/` (constants, tables) | `pyradioss/common/*.py` | |
 
 ## 3. Conventions used in this port
@@ -95,7 +101,7 @@ same names in comments.
    the Engine protects against divergence with an energy-error stop criterion
    like the original (`/STOP` defaults).
 
-## 4. Feature matrix (Milestones 1–5)
+## 4. Feature matrix (Milestones 1–6)
 
 Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options), ❌ not yet.
 
@@ -114,11 +120,11 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | `/BEAM` | ✅ | N1 N2 + orientation node N3 |
 | `/PART`, `/SUBSET` | ✅ / ❌ | |
 | `/MAT/LAW1` (`/MAT/ELAST`) | ✅ | |
-| `/MAT/LAW2` (`/MAT/PLAS_JOHNS`) | ✅ | εp-rate & hardening, eps_p_max element deletion (M3), beams via the global-plasticity model (M3); temperature term ❌ |
+| `/MAT/LAW2` (`/MAT/PLAS_JOHNS`) | ✅ | εp-rate & hardening, eps_p_max element deletion (M3), beams via the global-plasticity model (M3); since M6 the full thermal terms in the ADIABATIC approximation (optional card 6 `m T_melt rho_Cp T_i`): plastic work heats the point, dT = σy·dεp/ρCp, and T*^m softens the yield — per-point temperature state on solids and shell layers |
 | `/MAT/LAW27` (`/MAT/PLAS_BRIT`) | 🟡 | brittle tensile cracking with fixed crack direction, unilateral damage, layer rupture + element deletion; the plastic block of the original ❌ (shells only, like the original) |
 | `/MAT/LAW36` (`/MAT/PLAS_TAB`) | ✅ | tabulated hardening from /FUNCT curves, strain-rate curve family (linear rate interpolation), eps_p_max deletion; Fsmooth/Chard/Fcut and Fscale ❌ |
 | `/MAT/LAW42` (`/MAT/OGDEN`) | 🟡 | Ogden/Mooney-Rivlin, incompressible + K(J-1) bulk penalty, exact F from initial gradients, **nonlinear sound speed feeds the time step** (the law stiffens with stretch — verified by a long /DT 0.9 hold at λ≈2); solids only, no shell variant, no Prony viscosity |
-| `/FAIL/JOHNSON` | ✅ | D1–D4 + rate term; thermal D5 ❌; Ifail_sh 1/2; element deletion (stress zeroing, dt release, OFF in ANIM) |
+| `/FAIL/JOHNSON` | ✅ | D1–D4 + rate term; thermal D5 since M6 (needs the LAW2 thermal card, warned otherwise); Ifail_sh 1/2; element deletion (stress zeroing, dt release, OFF in ANIM) |
 | `/FAIL/BIQUAD` | 🟡 | explicit c1–c5 input (two-parabola εf(σ*) fit); M-flag material presets and S-flag ❌ |
 | `/PROP/TYPE1` (`SHELL`) | 🟡 | thickness, N integration points, hourglass coeffs (Ishell fixed = BT for quads, C0 for `/SH3N`) |
 | `/PROP/TYPE2` (`TRUSS`) | ✅ | area |
@@ -130,7 +136,11 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | `/IMPVEL` | ✅ | via `/FUNCT`, fixed direction; on a rigid-body master it drives the body (moving rigid die); on a moving-wall node it drives the wall |
 | `/IMPDISP` | ✅ | M5 — kinematic like /IMPVEL but enforced at the *position* level (the node lands exactly at x0 + d(t), no velocity-integration drift); work booked from the constraint impulse like /IMPVEL |
 | `/GRAV` | ✅ | |
-| `/CLOAD` | ✅ | |
+| `/CLOAD` | ✅ | optional /SENSOR gating since M6 (waits for the sensor, then follows f(t − t_fire)) |
+| `/EOS/POLYNOMIAL`, `/EOS/IDEAL-GAS` | ✅ | M6 — attaches to LAW1/2/36 like /FAIL; the EOS pressure replaces the law's (deviator stays with the law); implicit E-p coupling per element with relative-volume state, viscous shock heating into E, EOS sound speed feeds the time step (see materials/eos.py) |
+| `/DAMP` | 🟡 | M6 — Rayleigh MASS damping (α), Tstart/Tstop window; applied as the exact per-cycle integrating factor (unconditionally stable, claims no dt) with the dissipation booked exactly into the DE ledger; the stiffness (β) branch ❌ (needs K·v products) |
+| `/SENSOR/TIME`, `/SENSOR/DISP` | ✅ | M6 — latching sensors gating /CLOAD, /PLOAD and /INTER/TYPE7/11 (fire time survives restarts); other sensor types ❌ |
+| `/MPC` | ✅ | M6 (deferred from M5) — general linear rows on translations (+ rotations where the node carries inertia), solved together via the nc×nc Lagrange system on accelerations + a velocity cleanup; zero work by construction, /BCS-fixed DOFs act as ground; redundant row sets fall back to least-squares multipliers |
 | `/PLOAD` | ✅ | M5 — follower pressure on a /SURF (current segment normal, p·A lumped to corners, triangles 1/3); segments of /FAIL-deleted elements stop carrying pressure |
 | `/ADMAS` | 🟡 | M5 — per-node added mass (Radioss type-0 semantics only); also the way a moving /RWALL gets its inertia |
 | `/FUNCT` | ✅ | piecewise-linear tables |
@@ -141,14 +151,16 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | `/RBE2` | 🟡 | M5 — rigid link: same mechanics with a structural master kept at its own position; full 6-DOF tie only (per-DOF flags ❌) |
 | `/RBE3` | 🟡 | M5 — interpolation constraint (least-squares rigid fit + its virtual-work dual force distribution — no stiffening, no spurious work); one master group with uniform weights (per-set weights/DOF flags ❌) |
 | `/SECT` | 🟡 | M5 — section force/moment time history through a cut, computed by the side-sum identity over one side's node set (see engine/sections.py); output via /TH/SECT. The frame/element-set input of the full card ❌ |
-| `/MPC` | ❌ | deliberately deferred (see roadmap M6): a general multi-point constraint needs a coupled constraint solve that shares nothing with the lumped patterns of this milestone |
-| `/INTER/TYPE7` | ✅ | penalty node↔surface (M4): Istf 0–5 stiffness variants, Igap 0/1 (constant / variable from shell thicknesses) with Gap_min/Gap_max, self-impact (`grnod_ID = 0`), Coulomb friction, voxel broad phase; Inacti, Igap 2/3, Tstart/Tstop, sensors, Ifric>0 friction models ❌ |
+| `/INTER/TYPE7` | ✅ | penalty node↔surface (M4): Istf 0–5 stiffness variants, Igap 0/1 (constant / variable from shell thicknesses) with Gap_min/Gap_max, self-impact (`grnod_ID = 0`), Coulomb friction, voxel broad phase; /SENSOR gating since M6 (the Tstart/Tstop role); Inacti, Igap 2/3, Ifric>0 friction models ❌ |
 | `/INTER/TYPE2` | 🟡 | tied contact (M4): kinematic secondary→main gluing, constant-weight projection with co-rotating offset, lumped mass/force transfer, deletion release; rotational-DOF tying (Spotflag) and offset moment redistribution ❌ |
 | `/INTER/TYPE11` | ✅ | edge↔edge penalty (M4): /LINE edge sets, Istf/Igap as TYPE7, exact segment-segment closest points; parallel-overlap force distribution simplified to the closest-point pair |
 | `/LINE/SURF`, `/LINE/SEG` | ✅ | edge sets for TYPE11 (M4), with element provenance for deletion |
 | `/SURF/PART`, `/SURF/SEG` | ✅ | for contact; since M4 every segment carries its parent-element provenance (deletion, stiffness, gap) |
 | `/TH/NODE`, `/TH/PART`, `/TH/SECT` | ✅ | SECT since M5: FX FY FZ MX MY MZ |
-| Engine: `/RUN`, `/VERS`, `/TFILE`, `/ANIM/DT`, `/ANIM/VECT|ELEM`, `/DT`, `/PRINT`, `/STOP` | ✅/🟡 | `/DT/NODA/CST` (mass scaling) ❌ |
+| Engine: `/RUN`, `/VERS`, `/TFILE`, `/ANIM/DT`, `/ANIM/VECT|ELEM`, `/DT`, `/PRINT`, `/STOP` | ✅/🟡 | |
+| Engine: `/DT/NODA`, `/DT/NODA/CST` | ✅ | M6 — nodal time step dt_i = √(2Mᵢ/Kᵢ) with the element stiffness derived from the kernels' own dt claims (kᵢᵉ = 2mᵢᵉ/dt_e², = the element dt on uniform meshes) and the contact NEAR-spring stiffness accumulated in; CST adds mass to hold dT_min — added mass, its momentum and its kinetic energy are tracked, reported (1%-step announcements + termination summary) and the energy enters the balance; prescribed nodes (rigid-body members, tied secondaries, RBE3 dependents) are excluded (see engine/mass_scaling.py) |
+| Engine: `/STATE/DT` | 🟡 | M6 — periodic full restart snapshots refreshing `RunName_{nn}.rst` (crash recovery / early chaining); the original's .sta ASCII format ❌ (the pickle restart plays that role) |
+| Engine restart chaining (`RunName_0002.rad`) | ✅ | M6 — the Engine ALWAYS writes `RunName_{nn}.rst` at termination; run nn+1 resumes it: clock/ledgers/next-dt/output numbering restored, rigid-body R & L and sensor fire-times carried, everything else deliberately reconstructed from the model arrays (tied projections, contact candidates, fix masks). Acceptance: a chained run reproduces the unchained one exactly — same cycle count, state to round-off (asserted for a spring oscillator and a tumbling /RBODY) |
 
 ### Solver features
 
@@ -170,7 +182,14 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | LAW27 brittle cracking (fixed smeared crack, unilateral damage) | 🟡 (elastic-brittle; original's plastic block ❌) |
 | LAW42 Ogden hyperelasticity (total-strain from exact F, nonlinear SOUNDSP → dt) | 🟡 (solids only) |
 | /FAIL element deletion plumbing (per-layer for shells, GBUF%OFF, deleted elements keep mass, drop stress/hourglass/dt claim, OFF field in ANIM, deletion count in the listing) | ✅ |
-| Equations of state (/EOS) for solids | ❌ (deliberately deferred — see roadmap M6: needs energy-dependent pressure integration per element, out of M3's scope; pressure is currently always the law's own, i.e. linear K·tr(ε) for LAW1/2/36) |
+| Equations of state (/EOS) for solids (M6): polynomial + ideal gas, implicit E-p update per element (closed form — p linear in E), relative-volume state, q-work shock heating into E, EOS sound speed → dt; validated against the exact ideal-gas isentrope pV^γ, the Rankine–Hugoniot identity and a quasi-static piston compression | ✅ |
+| LAW2 adiabatic thermal terms + /FAIL/JOHNSON D5 (M6): per-point temperature rise from plastic work, (1−T*^m) softening (validated against the closed-form heating ODE and the softened flow stress) | ✅ |
+| /DT/NODA/CST mass scaling with honest added-mass accounting (M6) | ✅ |
+| /DAMP mass damping via the exact integrating factor, dissipation booked from the KE identity (M6) | ✅ |
+| /SENSOR gating with latching + time-shifted load curves (M6) | ✅ |
+| /MPC general linear constraints (Lagrange on accelerations + velocity cleanup, zero work by construction) (M6) | ✅ |
+| Engine restart chaining, bit-reproducing the unchained run (M6) | ✅ |
+| Numerical-dissipation ledger EN (M6): the exact internal-force midstep work measured per cycle against the state-function bookings — closes the balance under damped barely-resolved ringing (the M1-era qb misbooking), stays negligible on healthy runs (asserted), and its strongly-negative excursions are the new energy-INJECTION divergence stop (|ERR| alone is blind to instability once EN is in the balance) | ✅ |
 | Rigid wall (kinematic, slide/tied/friction; plane, sphere, cylinder; fixed, free-with-mass, velocity-driven — M5) | ✅ |
 | Rigid bodies /RBODY + /RBE2 (6-DOF Newton-Euler: gather → L += T dt → w = (R J0 Rᵀ)⁻¹L → rigid scatter → exponential-map placement; exact L conservation for torque-free bodies, pivot mode from master /BCS, /IMPVEL body drive; slaves coexist with contact and the TYPE2 effective-mass machinery; deletion never changes the inertia — masses stay; elements interior to a body carry exactly zero strain because the enforcement re-scatters the rigid velocity field at the placed positions) | ✅ |
 | /RBE3 interpolation constraint (weighted least-squares rigid fit + dual force distribution — transmits force and moment exactly, adds no stiffness, does no work; lumped mass transfer like TYPE2) | 🟡 (uniform weights) |
@@ -272,8 +291,9 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
      energy at a rate that does not vanish with dt; the wall energy is
      then booked from the per-node injection identity
      U = dKE − f·v_old dt (rigid_wall.py).
-   A pre-existing (M1-era) issue was *isolated* during M5 and is left
-   for M6, documented here honestly: the solid **bulk-viscosity work
+   A pre-existing (M1-era) issue was *isolated* during M5 and left
+   for M6 (where it was FIXED — see the M6 entry), documented here
+   honestly: the solid **bulk-viscosity work
    under barely-resolved ringing** misbooks — a coarse block left
    ringing violently (strain rates ~1/ms on a single element through
    the thickness) drifts the energy balance over long free flights,
@@ -293,10 +313,48 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
      (nodes inside a sphere/cylinder), the Dist search band;
    * /SECT frame output and element-set input; distributed /PLOAD on
      solids' internal faces (only surface segments), /PLOAD Ipinch etc.
-5. **M6 — engine niceties**: /DT/NODA/CST mass scaling, restarts
-   (`_0002.rad` chaining), /STATE, sensors, /DAMP, /MPC (deferred from
-   M5), /EOS + thermal material terms (deferred from M3), ALE/CFD
-   (long term).
+5. **M6 — engine niceties** ✅ (done): /DT/NODA + /DT/NODA/CST mass
+   scaling (nodal dt from the kernels' own claims + contact NEAR
+   springs; added mass/momentum/energy tracked, reported and kept in
+   the balance), engine restart chaining (`_0002.rad` resumes
+   `_0001.rst`; a chain reproduces the unchained run exactly — the
+   acceptance test — with rigid-body R/L and sensor latch state carried
+   and everything else deliberately reconstructed), /STATE/DT restart
+   snapshots, /DAMP mass damping (exact integrating factor, exact
+   KE-identity booking, DE ledger), /SENSOR/TIME + /SENSOR/DISP gating
+   loads (time-shifted curves) and interfaces, /MPC (deferred from M5:
+   the coupled nc×nc Lagrange solve on accelerations — zero work by
+   construction, fixed DOFs as ground), /EOS polynomial + ideal gas with
+   the implicit E-p coupling and EOS sound speed (deferred from M3),
+   the LAW2 adiabatic thermal terms and /FAIL/JOHNSON D5, and the FIX
+   of the M1-era bulk-viscosity misbooking documented in the M5 note.
+   The M6 solver lessons, recorded in the code:
+   * the qb misbooking was only half the story: booking the damper's
+     work trapezoidally (the SDOF-exact midstep booking) still left the
+     reproducer at −66%, because a LAGGED damper acting on
+     barely-resolved content (ω·dt → 2) drains energy through the
+     DISCRETE ELASTIC FORCE — real numerical dissipation that no state
+     function can book. The consistent treatment measures the exact
+     internal-force midstep work each cycle (one einsum — the same
+     identity as the M4 contact lesson) and books the residual into the
+     reported EN ledger: the reproducer closes to −0.00% at /DT 0.9 AND
+     0.2, healthy runs keep EN ≲ few % (asserted);
+   * a balance that CONTAINS its own residual ledger can no longer flag
+     instability through |ERR| — divergence now drives EN hard negative
+     instead, so the Engine stops on ERRN < −2×limit (energy injection)
+     and on time-step collapse (dt < 1e-9 of its running peak — a dead
+     run must never spin forever at dt ≈ 1e-18);
+   * /DAMP's integrating factor rescales the very velocities the other
+     ledgers book work with — the O(α·dt) attribution residual is
+     measured on the damped nodes and moved into EN (the /MPC settle
+     test read a spurious frozen +3.2% before that correction).
+   Deferred out of M6, explicitly:
+   * the β (stiffness) branch of /DAMP (needs K·v products);
+   * /SENSOR types beyond TIME/DISP, sensor-driven /RBODY activation;
+   * /STATE .sta ASCII output (the pickle restart is the state file);
+   * Gruneisen/tabulated EOS, Psh/tension cutoffs, EOS on shells;
+   * per-DOF /MPC skew frames; heat conduction (thermal stays adiabatic);
+   * ALE/CFD (long term).
 6. **M7 — performance**: optional numba/JAX backends behind the same API.
 
 ## 6. Validation strategy

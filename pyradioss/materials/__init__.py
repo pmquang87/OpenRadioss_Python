@@ -51,8 +51,8 @@ exceed the ground-state one (LAW42 at large stretch!) MUST return the
 true current sound speed or the Courant time step is not a bound.
 """
 
-from . import (law01_elastic, law02_johnson_cook, law27_brittle,  # noqa: F401
-               law36_tabulated, law42_ogden)
+from . import (eos, law01_elastic, law02_johnson_cook,  # noqa: F401
+               law27_brittle, law36_tabulated, law42_ogden)
 
 
 def extra_shapes(mat, nip=None):
@@ -61,11 +61,16 @@ def extra_shapes(mat, nip=None):
     Returns {name: trailing_shape}; the kernels allocate arrays of shape
     (n, *trailing_shape) for solids and (n, nip, *trailing_shape[1:])...
     — in practice the shapes below already include the layer dimension
-    for shell laws (nip is the layer count of the property)."""
+    for shell laws (nip is the layer count of the property; ``nip=None``
+    for solids, whose per-point state is per-element)."""
+    shapes = {}
     if mat.law == 27:
-        return {"eps27": (nip, 3), "crk27": (nip,), "ang27": (nip,),
-                "dmg27": (nip, 2)}
-    return {}
+        shapes.update(eps27=(nip, 3), crk27=(nip,), ang27=(nip,),
+                      dmg27=(nip, 2))
+    if mat.law == 2 and "mT" in mat.params:
+        # adiabatic temperature RISE above T_i (M6 thermal terms)
+        shapes["temp"] = (nip,) if nip is not None else ()
+    return shapes
 
 
 def needs_defgrad(mat) -> bool:
@@ -82,7 +87,8 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     if mat.law == 1:
         return law01_elastic.solid_update(mat, sig, deps), epsp, None
     if mat.law == 2:
-        sig, epsp = law02_johnson_cook.solid_update(mat, sig, deps, epsp, dt)
+        sig, epsp = law02_johnson_cook.solid_update(mat, sig, deps, epsp,
+                                                    dt, extra)
         return sig, epsp, None
     if mat.law == 36:
         sig, epsp = law36_tabulated.solid_update(mat, sig, deps, epsp, dt)
@@ -97,7 +103,8 @@ def shell_update(mat, sig, deps, epsp, dt, extra=None):
     if mat.law == 1:
         return law01_elastic.shell_update(mat, sig, deps), epsp
     if mat.law == 2:
-        return law02_johnson_cook.shell_update(mat, sig, deps, epsp, dt)
+        return law02_johnson_cook.shell_update(mat, sig, deps, epsp, dt,
+                                               extra)
     if mat.law == 36:
         return law36_tabulated.shell_update(mat, sig, deps, epsp, dt)
     if mat.law == 27:

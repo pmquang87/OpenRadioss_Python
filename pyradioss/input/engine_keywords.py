@@ -8,13 +8,17 @@ frequencies) — the model itself comes from the Starter restart file.
 
 Supported cards (layouts documented per parser below)::
 
-    /RUN/RunName/run#          card: T_stop
+    /RUN/RunName/run#          card: T_stop  (run# >= 2 resumes the
+                               previous run's restart — M6 chaining)
     /VERS/...                  ignored (input version)
     /TFILE                     card: dT_history
     /ANIM/DT                   card: T_start  dT_anim
     /ANIM/VECT/<VEL|DIS|ACC>   request nodal vector in animation files
     /ANIM/ELEM/<VONM|EPSP>     request element scalar in animation files
     /DT                        card: Scale  [dT_min]
+    /DT/NODA                   card: Scale  [dT_min]  — nodal time step
+    /DT/NODA/CST               card: Scale  dT_min    — mass scaling (M6)
+    /STATE/DT                  card: T_start  dT — restart snapshots (M6)
     /PRINT/-n                  listing line every n cycles
     /STOP                      card: E_error_max_%   (energy error stop)
 """
@@ -67,14 +71,48 @@ def parse_engine_deck(blocks: List[KeywordBlock],
             elif key == "DT":
                 # /DT: card = Scale [dT_min]. The scale multiplies the
                 # critical time step (default 0.9); if dt falls below
-                # dT_min the Engine stops (the original can also switch to
-                # mass scaling here — /DT/NODA/CST — not ported).
+                # dT_min the Engine stops.
+                #
+                # /DT/NODA (M6): the step is bounded by the NODAL time
+                # step dt_i = sqrt(2 M_i / K_i) instead of the worst
+                # element (see engine/mass_scaling.py).
+                # /DT/NODA/CST (M6): additionally, mass is ADDED to the
+                # critical nodes so the step never falls below dT_min
+                # (mass scaling — the added mass and its momentum/energy
+                # effect are tracked and reported).
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "NODA":
+                    ec.dt_noda = ("CST" if len(block.parts) > 2 and
+                                  block.parts[2].upper() == "CST"
+                                  else "NODA")
+                elif sub:
+                    log.warning(f"/DT/{sub} not ported — treated as /DT",
+                                block.source)
                 if block.cards:
                     vals = block.cards[0].floats()
                     if vals:
                         ec.dt_scale = vals[0]
                     if len(vals) > 1:
                         ec.dt_min = vals[1]
+                if ec.dt_noda == "CST" and ec.dt_min <= 0.0:
+                    log.warning("/DT/NODA/CST without a positive dT_min "
+                                "adds no mass", block.source)
+            elif key == "STATE":
+                # /STATE/DT (M6): card = T_start dT — periodic full
+                # restart snapshots (each refreshes RunName_{nn}.rst; the
+                # port's equivalent of the original's /STATE state files
+                # + /RFILE restart cadence). Independently of /STATE, the
+                # Engine ALWAYS writes the restart at termination — that
+                # is the RunName_{nn+1}.rad chaining contract.
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub != "DT":
+                    log.warning(f"/STATE/{sub} not ported (DT supported)",
+                                block.source)
+                elif block.cards:
+                    vals = block.cards[0].floats()
+                    ec.state_tstart = vals[0] if vals else 0.0
+                    ec.state_dt = vals[1] if len(vals) > 1 else \
+                        (vals[0] if vals else 0.0)
             elif key == "PRINT":
                 # /PRINT/-100 → one listing line every 100 cycles (the minus
                 # sign is the Radioss convention for 'every n cycles').

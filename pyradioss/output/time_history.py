@@ -8,8 +8,10 @@ requested /TH variable, named ``<kind><id>_<VAR>``.
 
 Global columns (always present, matching the original's global T-file
 variables): IE internal energy, KE kinetic energy (translational),
-HE hourglass energy, CE contact energy, EW external work, ERR energy
-error %, MASS, MOMX/Y/Z momentum components.
+HE hourglass energy, CE contact energy, EN numerical dissipation of the
+element dampers (M6, see the engine's step-6c ledger), DE /DAMP
+dissipation (M6), EW external work, ERR energy error %, MASS (grows
+under /DT/NODA/CST mass scaling), MOMX/Y/Z momentum components.
 
 Per-node variables: DX DY DZ (displacement), VX VY VZ (velocity),
 AX AY AZ (acceleration is not stored — approximated by force/mass).
@@ -35,8 +37,8 @@ class TimeHistory:
         self.model = model
         self._fh = open(path, "w")
         self._cols: List[str] = [
-            "TIME", "IE", "KE", "HE", "CE", "EW", "ERR%", "MASS",
-            "MOMX", "MOMY", "MOMZ"]
+            "TIME", "IE", "KE", "HE", "CE", "EN", "DE", "EW", "ERR%",
+            "MASS", "MOMX", "MOMY", "MOMZ"]
 
         # resolve /TH requests once (Starter checked the ids)
         self._node_req = []   # (label, node_idx, var)
@@ -84,8 +86,9 @@ class TimeHistory:
         SectionForces.compute — required only when /TH/SECT was asked."""
         model = self.model
         row = [t, energies["IE"], energies["KE"], energies["HE"],
-               energies["CE"], energies["EW"], energies["ERR"],
-               mass, momentum[0], momentum[1], momentum[2]]
+               energies["CE"], energies["EN"], energies["DE"],
+               energies["EW"], energies["ERR"], mass,
+               momentum[0], momentum[1], momentum[2]]
         disp = model.x - model.x0
         for _, idx, var in self._node_req:
             comp = {"X": 0, "Y": 1, "Z": 2}[var[-1]]
