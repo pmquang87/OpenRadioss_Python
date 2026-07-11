@@ -28,6 +28,13 @@ def main(argv=None) -> int:
                          "optional 'numba' JIT backend — overrides the "
                          "PYRADIOSS_BACKEND environment variable; numba "
                          "missing falls back to numpy with a warning")
+    ap.add_argument("-linsolve", "--linsolve", dest="linsolve", default=None,
+                    choices=["superlu", "cholmod", "mumps"],
+                    help="direct linear solver for the implicit run (M8): "
+                         "'superlu' (default, ships with SciPy) or the "
+                         "optional 'cholmod'/'mumps' backends — overrides "
+                         "PYRADIOSS_LINSOLVE; a missing optional library "
+                         "falls back to SuperLU with a warning")
     args = ap.parse_args(argv)
 
     if args.nthread > 0:
@@ -39,6 +46,11 @@ def main(argv=None) -> int:
     if args.backend is not None:
         from ..accel import select_backend
         select_backend(args.backend)
+    if args.linsolve is not None:
+        # implicit runs (/IMPL) read this; explicit runs ignore it. Setting
+        # the env var keeps the selection lazy (the solver resolves on first
+        # use, like the compute backend), and lets it survive into the driver.
+        os.environ["PYRADIOSS_LINSOLVE"] = args.linsolve
 
     from .engine import run_engine
     run_engine(args.input)

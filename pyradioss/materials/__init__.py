@@ -110,3 +110,35 @@ def shell_update(mat, sig, deps, epsp, dt, extra=None):
     if mat.law == 27:
         return law27_brittle.shell_update(mat, sig, deps, epsp, dt, extra)
     raise NotImplementedError(f"material LAW{mat.law} not ported for shells")
+
+
+# ----------------------------------------------------------------------------
+# Consistent tangents for the implicit solver (M8)
+# ----------------------------------------------------------------------------
+
+def solid_tangent(mat, sig, epsp, epsp_incr):
+    """Dispatch the (n, 6, 6) consistent solid tangent for the implicit
+    solve. LAW1 returns the constant elastic C broadcast over the group;
+    LAW2 returns the CONSISTENT (algorithmic) elastoplastic tangent of the
+    radial return (see law02.consistent_solid_tangent for the derivation)."""
+    n = sig.shape[0]
+    if mat.law == 1:
+        import numpy as np
+        return np.broadcast_to(law01_elastic.solid_tangent(mat),
+                               (n, 6, 6)).copy()
+    if mat.law == 2:
+        return law02_johnson_cook.consistent_solid_tangent(
+            mat, sig, epsp, epsp_incr)
+    raise NotImplementedError(
+        f"material LAW{mat.law} has no implicit solid tangent (M8 supports "
+        f"LAW1 elastic and LAW2 elastoplastic)")
+
+
+def shell_membrane_tangent(mat):
+    """(3, 3) plane-stress membrane/bending tangent for the shell implicit
+    tangent. LAW1 only in M8 (LAW2 shell tangent deferred — see the guide)."""
+    if mat.law == 1:
+        return law01_elastic.shell_membrane_tangent(mat)
+    raise NotImplementedError(
+        f"material LAW{mat.law} has no implicit shell tangent (M8 supports "
+        f"LAW1 elastic shells)")

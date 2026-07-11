@@ -113,6 +113,50 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     ec.state_tstart = vals[0] if vals else 0.0
                     ec.state_dt = vals[1] if len(vals) > 1 else \
                         (vals[0] if vals else 0.0)
+            elif key == "IMPL":
+                # /IMPL (M8): switch the run into implicit-static mode. The
+                # port mirrors the OpenRadioss /IMPL cards minimally through
+                # a small set of sub-cards; the run's final "time" (/RUN
+                # T_stop) is reinterpreted as the FINAL LOAD FACTOR.
+                #
+                #   /IMPL                 (bare) implicit on, defaults
+                #   /IMPL/DTINI  card: dt_incr          load-factor increment
+                #   /IMPL/NEWTON card: tol  max_iter    Newton controls
+                #   /IMPL/LSOLVER/<superlu|cholmod|mumps>   direct solver
+                #   /IMPL/DYNA ...        NOT ported (warns, statics only)
+                #
+                # Unknown sub-cards warn and are skipped, exactly like the
+                # rest of the reader.
+                ec.implicit = True
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub in ("", "STATIC", "STAT", "LINEAR", "L", "NL"):
+                    if block.cards:  # a lone /IMPL card may carry dt_incr
+                        vals = block.cards[0].floats()
+                        if vals:
+                            ec.impl_dt = vals[0]
+                elif sub in ("DTINI", "DT", "DT/STOP"):
+                    if block.cards:
+                        vals = block.cards[0].floats()
+                        if vals:
+                            ec.impl_dt = vals[0]
+                elif sub in ("NEWTON", "SOLVINFO"):
+                    if block.cards:
+                        vals = block.cards[0].floats()
+                        if vals:
+                            ec.impl_tol = vals[0]
+                        if len(vals) > 1:
+                            ec.impl_max_iter = int(vals[1])
+                elif sub in ("LSOLVER", "SOLVER"):
+                    ec.impl_linsolve = (block.parts[2].lower()
+                                        if len(block.parts) > 2 else "")
+                elif sub in ("DYNA", "DYNAMIC", "DYN"):
+                    log.warning("/IMPL/DYNA (implicit dynamics) not ported — "
+                                "M8 is implicit STATICS only; running static",
+                                block.source)
+                else:
+                    log.warning(f"/IMPL/{sub} not ported — ignored (M8 "
+                                f"supports DTINI, NEWTON, LSOLVER)",
+                                block.source)
             elif key == "PRINT":
                 # /PRINT/-100 → one listing line every 100 cycles (the minus
                 # sign is the Radioss convention for 'every n cycles').

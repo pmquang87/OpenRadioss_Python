@@ -615,3 +615,167 @@ def forces(group, x, v, vr, dt, fint, mint):
     # ---- critical time step ------------------------------------------------
     # deleted elements no longer constrain the global step
     return np.where(alive, st["dtfac"] * lc / c, EP30)
+
+
+# ----------------------------------------------------------------------------
+# Implicit tangent stiffness (M8) — a NEW entry point alongside forces()
+# ----------------------------------------------------------------------------
+# The Belytschko-Tsay tangent is assembled in the corotational LOCAL frame and
+# rotated to global, exactly like the force path. Per node the element carries
+# five LOCAL dofs — three translations (vx, vy, vz) and two bending rotations
+# (thx, thy); there is no local drilling (thz) stiffness (the classic BT
+# feature). The local element stiffness is the sum of four consistent blocks,
+# each the exact linearization of the matching rate operator in _pre/_post:
+#
+#   membrane   K_m = A t     B_m^T C B_m         (N   = t   C  dm)
+#   bending    K_b = A t^3/12 B_b^T C B_b        (M   = t^3/12 C kappa)
+#   shear      K_s = A kG t   B_s^T B_s          (q   = kG t gamma_s)
+#   hourglass  K_h = sum_modes k_mode g (x) g    (BLT84 stiffness control)
+#
+# with C the plane-stress membrane tangent (materials.shell_membrane_tangent,
+# LAW1 in M8). The local dofs are then mapped to the six global dofs per node
+# (three translations + three rotations) by the corotational frame E, and a
+# small DRILLING stiffness about the local normal e3 is added so the global
+# rotation block is non-singular (a flat shell gives no stiffness to rotation
+# about its normal — the standard shell drilling-DOF penalty; the residual
+# never loads it, so it stays zero and does not affect the solution).
+#
+# LAW2 shell (through-thickness elastoplastic layers) tangent is DEFERRED —
+# M8 ports the LAW1 elastic shell tangent (see PORTING_GUIDE). Geometric /
+# initial-stress stiffness is deferred with the solids.
+
+#: drilling-stiffness fraction of the bending stiffness (conditioning only —
+#: the drilling DOF carries no load on the M8 validations, so the exact value
+#: does not change results; small enough not to pollute a curved-shell answer).
+_DRILL_COEF = 1.0e-3
+
+
+def tangent(group, x, epsp_incr=None):
+    """Element tangent stiffness for the whole shell group (LAW1 elastic).
+
+    Returns ``(ke, edofs)``:
+
+    * ``ke``    (n, 24, 24) dense element tangents over the 4 nodes x 6 global
+      dofs (translations + rotations);
+    * ``edofs`` (n, 24) global scalar DOF slot ids (node*6 + component) in the
+      ``implicit.dofmap`` numbering — 0,1,2 = ux,uy,uz ; 3,4,5 = rx,ry,rz.
+
+    ``epsp_incr`` is accepted for signature parity with the solid tangent and
+    ignored (elastic shell)."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    xe = x[conn]
+
+    E, xl, area, B1, B2 = _local_geometry(xe)
+    area = np.maximum(area, EM20)
+    thick = st["thick"]
+
+    # ---- generalized strain-displacement operators in the LOCAL frame -----
+    # local dof layout is COMPONENT-grouped: d = [vx(4), vy(4), vz(4),
+    # thx(4), thy(4)] (20 dofs). Each B maps d -> the generalized strains,
+    # written line-for-line against the rate kinematics of _pre.
+    z = np.zeros((n, 4))
+    Bm = np.zeros((n, 3, 20))            # membrane [dm_xx, dm_yy, dm_xy]
+    Bm[:, 0, 0:4] = B1                                   # dm_xx = B1.vx
+    Bm[:, 1, 4:8] = B2                                   # dm_yy = B2.vy
+    Bm[:, 2, 0:4] = B2                                   # dm_xy = B2.vx +
+    Bm[:, 2, 4:8] = B1                                   #         B1.vy
+    Bb = np.zeros((n, 3, 20))            # curvature [k_xx, k_yy, k_xy]
+    Bb[:, 0, 16:20] = B1                                 # k_xx = B1.thy
+    Bb[:, 1, 12:16] = -B2                                # k_yy = -B2.thx
+    Bb[:, 2, 12:16] = -B1                                # k_xy = B2.thy -
+    Bb[:, 2, 16:20] = B2                                 #        B1.thx
+    Bs = np.zeros((n, 2, 20))            # shear [g_x, g_y]
+    Bs[:, 0, 8:12] = B1                                  # g_x = B1.vz +
+    Bs[:, 0, 16:20] = 0.25                               #       mean(thy)
+    Bs[:, 1, 8:12] = B2                                  # g_y = B2.vz -
+    Bs[:, 1, 12:16] = -0.25                              #       mean(thx)
+
+    # ---- constitutive blocks (membrane + bending + shear) -----------------
+    Kl = np.zeros((n, 20, 20))
+    kdrill = np.zeros(n)
+    for sl, mat, prop in st["slices"]:
+        C = materials.shell_membrane_tangent(mat)        # (3, 3) plane stress
+        t_sl = thick[sl]
+        A_sl = area[sl]
+        kGt = SHEAR_FACTOR * mat.G * t_sl                # transverse shear
+        Bms, Bbs, Bss = Bm[sl], Bb[sl], Bs[sl]
+        # membrane: A t B_m^T C B_m
+        Kl[sl] += (A_sl * t_sl)[:, None, None] * np.einsum(
+            "nai,ab,nbj->nij", Bms, C, Bms)
+        # bending: A t^3/12 B_b^T C B_b
+        Kl[sl] += (A_sl * t_sl ** 3 / 12.0)[:, None, None] * np.einsum(
+            "nai,ab,nbj->nij", Bbs, C, Bbs)
+        # shear: A kGt B_s^T B_s
+        Kl[sl] += (A_sl * kGt)[:, None, None] * np.einsum(
+            "nai,naj->nij", Bss, Bss)
+        # drilling penalty scale (bending stiffness order, see module note)
+        kdrill[sl] = _DRILL_COEF * mat.E * t_sl ** 3 * A_sl / 12.0
+
+    # ---- hourglass stiffness (BLT84 stiffness control, same as _post) -----
+    # gamma: FB-orthogonalized shape vector (identical to _pre's construction)
+    hx = xl[:, 0, 0] - xl[:, 1, 0] + xl[:, 2, 0] - xl[:, 3, 0]
+    hy = xl[:, 0, 1] - xl[:, 1, 1] + xl[:, 2, 1] - xl[:, 3, 1]
+    gam = np.empty((n, 4))
+    gam[:, 0] = 1.0
+    gam[:, 1] = -1.0
+    gam[:, 2] = 1.0
+    gam[:, 3] = -1.0
+    gam -= hx[:, None] * B1
+    gam -= hy[:, None] * B2
+    GG = np.einsum("ni,nj->nij", gam, gam)               # (n, 4, 4) Gram
+    bb = (np.einsum("ni,ni->n", B1, B1)
+          + np.einsum("ni,ni->n", B2, B2))
+    # per-mode stiffness (identical formulas to forces()), fields ordered
+    # [vx, vy, vz, thx, thy] -> [k_m, k_m, k_w, k_r, k_r]
+    kfield = np.zeros((n, 5))
+    for sl, mat, prop in st["slices"]:
+        p = prop.params
+        t_sl = thick[sl]
+        A_sl = area[sl]
+        k_m = p["hm"] * mat.E * t_sl * A_sl * bb[sl] / 8.0
+        k_w = p["hf"] * SHEAR_FACTOR * mat.G * t_sl * A_sl * bb[sl] / 8.0
+        k_r = p["hr"] * mat.E * t_sl ** 3 * A_sl * bb[sl] / 192.0
+        kfield[sl, 0] = k_m
+        kfield[sl, 1] = k_m
+        kfield[sl, 2] = k_w
+        kfield[sl, 3] = k_r
+        kfield[sl, 4] = k_r
+    # scatter k_field * GG onto each field's 4x4 block of the local matrix
+    fi = np.arange(4)
+    for f in range(5):
+        rows = (f * 4 + fi)[:, None]
+        cols = (f * 4 + fi)[None, :]
+        Kl[:, rows, cols] += kfield[:, f, None, None] * GG
+
+    # ---- local (20) -> global (24) transformation via the frame E ----------
+    # local layout [vx(4),vy(4),vz(4),thx(4),thy(4)]; global node-major
+    # [ux,uy,uz,rx,ry,rz] per node. local translation = E^T global_trans,
+    # local (thx,thy) = (e1,e2) . global_rot.
+    e1, e2, e3 = E[:, :, 0], E[:, :, 1], E[:, :, 2]      # (n, 3) each
+    Tg = np.zeros((n, 20, 24))
+    for i in range(4):
+        for c in range(3):
+            Tg[:, 0 * 4 + i, i * 6 + c] = e1[:, c]       # vx = e1.trans
+            Tg[:, 1 * 4 + i, i * 6 + c] = e2[:, c]       # vy = e2.trans
+            Tg[:, 2 * 4 + i, i * 6 + c] = e3[:, c]       # vz = e3.trans
+            Tg[:, 3 * 4 + i, i * 6 + 3 + c] = e1[:, c]   # thx = e1.rot
+            Tg[:, 4 * 4 + i, i * 6 + 3 + c] = e2[:, c]   # thy = e2.rot
+    ke = np.einsum("nki,nkl,nlj->nij", Tg, Kl, Tg)       # (n, 24, 24)
+
+    # ---- drilling penalty about the local normal e3 (global rot block) -----
+    # add k_d (e3 (x) e3) to each node's rotation block so the drilling DOF
+    # (rotation about the shell normal, unstiffened by BT) has a small,
+    # non-singular stiffness. e3 (x) e3 restricts exactly that rotation.
+    e3e3 = np.einsum("ni,nj->nij", e3, e3)               # (n, 3, 3)
+    for i in range(4):
+        r = i * 6 + 3
+        ke[:, r:r + 3, r:r + 3] += kdrill[:, None, None] * e3e3
+
+    # ---- global DOF addressing --------------------------------------------
+    edofs = np.empty((n, 24), dtype=np.int64)
+    for i in range(4):
+        for c in range(6):
+            edofs[:, i * 6 + c] = conn[:, i] * 6 + c
+    return ke, edofs

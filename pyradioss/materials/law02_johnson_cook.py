@@ -260,3 +260,88 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
     epsp[idx] = ep0 + dl
     _adiabatic_heating(mat, temp, sy_new, dl, idx)   # M6
     return sig, epsp
+
+
+# ----------------------------------------------------------------------------
+# Consistent (algorithmic) tangent for the implicit solver (M8)
+# ----------------------------------------------------------------------------
+
+def consistent_solid_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
+                             epsp_incr: np.ndarray) -> np.ndarray:
+    """The CONSISTENT (algorithmic) elastoplastic tangent of the radial
+    return, (n, 6, 6), Voigt / engineering shear.
+
+    This is the derivative that governs Newton's quadratic convergence — and
+    the point the M8 task flags: it is the tangent of the *discrete*
+    return-mapping algorithm, NOT the continuum elastoplastic tangent. Using
+    the continuum tangent instead loses the quadratic rate (Newton then
+    converges only linearly). The two differ by the ``Δεp/q_trial`` terms
+    below, which vanish as the increment shrinks — so the two agree in the
+    limit of infinitesimal steps but not at the finite steps a load-stepping
+    Newton actually takes.
+
+    Derivation (Simo & Hughes 1998 / de Souza Neto, Perić & Owen 2008,
+    Box 7.3 — the von Mises consistent tangent for isotropic hardening):
+
+        D = K (1 (x) 1)                                  volumetric (elastic)
+          + 2G (1 - 3G Δεp / q_tr) I_dev                 scaled deviatoric
+          + 6G^2 (Δεp/q_tr - 1/(3G+H)) N (x) N           plastic correction
+
+    with 1 = [1,1,1,0,0,0], I_dev the deviatoric projector, N = s/||s|| the
+    UNIT deviatoric flow direction (tensor norm, so the engineering-shear
+    Voigt vector ``N`` needs no factor — one N absorbs the shear-doubling
+    against the engineering strain, the other emits plain stress), q_tr the
+    von Mises TRIAL stress and H = dσy/dεp the hardening slope. Because the
+    radial return gives q_tr = σy + 3G Δεp exactly, and the converged stress
+    sits on the surface (its von Mises = σy), q_tr is reconstructed from the
+    current stress and the step's plastic increment — no extra state.
+
+    Rewritten against the elastic matrix C (so the code needs only C and the
+    bulk term), using 2G·I_dev = C - K(1(x)1):
+
+        D = C - a (C - K 1(x)1) + b (N (x) N)
+        a = 3G Δεp / q_tr,   b = 6G^2 (Δεp/q_tr - 1/(3G+H))
+
+    Elastic points (Δεp = 0) keep D = C. Rate/thermal factors are held out of
+    the tangent (the implicit statics validations use c = 0, no thermal): the
+    frozen-factor return already treats them as constants of the increment.
+    """
+    from . import law01_elastic
+    n = sig.shape[0]
+    G = mat.G
+    Kb = mat.K
+    C = law01_elastic.solid_tangent(mat)             # (6, 6) elastic
+    D = np.broadcast_to(C, (n, 6, 6)).copy()
+    if epsp_incr is None:
+        return D
+    plastic = epsp_incr > 0.0
+    if not np.any(plastic):
+        return D
+
+    idx = np.where(plastic)[0]
+    s = sig[idx].copy()
+    pm = (s[:, 0] + s[:, 1] + s[:, 2]) / 3.0
+    s[:, 0] -= pm
+    s[:, 1] -= pm
+    s[:, 2] -= pm
+    # tensor norm ||s|| = sqrt(s:s), s:s = sxx^2+syy^2+szz^2 + 2*(shears^2)
+    snorm = np.sqrt(s[:, 0] ** 2 + s[:, 1] ** 2 + s[:, 2] ** 2
+                    + 2.0 * (s[:, 3] ** 2 + s[:, 4] ** 2 + s[:, 5] ** 2))
+    snorm = np.maximum(snorm, 1e-30)
+    Nv = s / snorm[:, None]                          # (m, 6) unit deviatoric
+    q = np.sqrt(1.5) * snorm                          # von Mises = sigma_y
+    dep = epsp_incr[idx]
+    q_tr = q + 3.0 * G * dep                           # trial von Mises (exact)
+    _, H = _yield_stress(mat, epsp[idx], 1.0)         # hardening slope
+    a = 3.0 * G * dep / q_tr
+    b = 6.0 * G * G * (dep / q_tr - 1.0 / (3.0 * G + np.maximum(H, 0.0)))
+
+    ee = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+    KeeT = Kb * np.outer(ee, ee)                      # K (1 (x) 1) in Voigt
+    C_minus_vol = C - KeeT                            # = 2G I_dev
+    NN = np.einsum("mi,mj->mij", Nv, Nv)              # N (x) N per element
+    D[idx] = (C[None, :, :]
+              - a[:, None, None] * C_minus_vol[None, :, :]
+              + b[:, None, None] * NN)
+    return D
+

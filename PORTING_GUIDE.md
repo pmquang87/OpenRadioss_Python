@@ -79,6 +79,12 @@ same names in comments.
 | — (OpenRadioss speed = compiled Fortran + OpenMP/MPI, out of scope) | `pyradioss/accel/` | M7: optional numba backend behind the same kernel API (see the package docstring for architecture + parity contract) |
 | — | `pyradioss/common/fastmath.py` | M7: small-array NumPy primitives (bitwise-documented replacements for np.cross / norm / det / inv / add.at) |
 | — | `tools/benchmark.py` | M7: NumPy vs numba wall-clock benchmark over the examples |
+| `engine/source/implicit/ind_glob_k.F` (equation numbering) | `pyradioss/implicit/dofmap.py` | M8: assign each free nodal DOF an index; /BCS-fixed DOFs condensed (removed, not penalized); shell rotations numbered where they carry stiffness |
+| `engine/source/implicit/imp_glob_k.F` / `imp_fsa_inv.F` (sparse assembly) | `pyradioss/implicit/assembly.py` | M8: element tangents → COO triplets → scipy CSR (scipy guarded inside the package) |
+| `engine/source/implicit/imp_solv.F` (implicit driver + Newton loop) | `pyradioss/implicit/statics.py` | M8: load stepping, residual R = f_ext − f_int (reusing the explicit kernels), K Δu = R, convergence norms, iteration cap |
+| `engine/source/implicit/imp_dsolv*.F` (direct-solver interface) | `pyradioss/implicit/linsolve.py` | M8: `solve(K,R)` behind the M7 backend pattern — SuperLU default, optional CHOLMOD / MUMPS wrapped (not ported) with fallback |
+| element `KE` routines (e.g. `s8eoff.F` / shell `cmalpha`) + material `TANGENT` | `solid_hexa8.tangent`, `shell_bt4.tangent`, `materials.*_tangent` | M8: element tangent stiffness + the LAW1 elastic and LAW2 CONSISTENT (algorithmic) tangents (a NEW method alongside `forces()`; does not perturb the M7 force path) |
+| `engine/source/input/*` `/IMPL*` cards | `pyradioss/input/engine_keywords.py` (`/IMPL`) | M8: minimal implicit-static control (final load factor, increment size, Newton tolerances, linear-solver choice) |
 
 ## 3. Conventions used in this port
 
@@ -163,6 +169,7 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | Engine: `/RUN`, `/VERS`, `/TFILE`, `/ANIM/DT`, `/ANIM/VECT|ELEM`, `/DT`, `/PRINT`, `/STOP` | ✅/🟡 | |
 | Engine: `/DT/NODA`, `/DT/NODA/CST` | ✅ | M6 — nodal time step dt_i = √(2Mᵢ/Kᵢ) with the element stiffness derived from the kernels' own dt claims (kᵢᵉ = 2mᵢᵉ/dt_e², = the element dt on uniform meshes) and the contact NEAR-spring stiffness accumulated in; CST adds mass to hold dT_min — added mass, its momentum and its kinetic energy are tracked, reported (1%-step announcements + termination summary) and the energy enters the balance; prescribed nodes (rigid-body members, tied secondaries, RBE3 dependents) are excluded (see engine/mass_scaling.py) |
 | Engine: `/STATE/DT` | 🟡 | M6 — periodic full restart snapshots refreshing `RunName_{nn}.rst` (crash recovery / early chaining); the original's .sta ASCII format ❌ (the pickle restart plays that role) |
+| Engine: `/IMPL` (+ `/IMPL/DTINI`, `/IMPL/NEWTON`, `/IMPL/LSOLVER`) | 🟡 | M8 — switches the run to the implicit-STATIC Newton driver (final /RUN "time" = load factor, increment size, Newton tolerance + iteration cap, direct-solver choice); `/IMPL/DYNA` (implicit dynamics) warns and is not ported; unknown sub-cards warn and skip like the rest of the reader |
 | Engine restart chaining (`RunName_0002.rad`) | ✅ | M6 — the Engine ALWAYS writes `RunName_{nn}.rst` at termination; run nn+1 resumes it: clock/ledgers/next-dt/output numbering restored, rigid-body R & L and sensor fire-times carried, everything else deliberately reconstructed from the model arrays (tied projections, contact candidates, fix masks). Acceptance: a chained run reproduces the unchained one exactly — same cycle count, state to round-off (asserted for a spring oscillator and a tumbling /RBODY) |
 
 ### Solver features
@@ -211,6 +218,11 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | Optional numba backend (`pyradioss/accel`): jit mirrors of the measured hotspots — hexa8 pre/post, BT4 shell pre/post, TYPE7 narrow phase — behind the same kernel API, `PYRADIOSS_BACKEND=numba` or `pyradioss-engine -backend numba`, NumPy fallback with a warning when numba is absent; parity asserted at kernel level and on full runs, restart chain bit-match asserted under numba (M7) | ✅ |
 | JAX backend | ❌ (deferred — see the M7 roadmap note) |
 | MPI/domain decomposition, SMP | ❌ (out of scope) |
+| **Implicit STATIC analysis (M8)**: Newton–Raphson equilibrium, load stepping, global equation numbering with /BCS condensation, sparse tangent assembly (scipy CSR), reuse of the explicit force kernels for the residual, direct linear solve. Elements: 8-node solid (hexa8) + 4-node shell (BT4); materials: LAW1 elastic + LAW2 with the CONSISTENT elastoplastic tangent. Load control AND /IMPDISP displacement control. Validated: single-element Hooke (exact, 1-step), multi-element patch test (exact), shell cantilever tip deflection vs beam theory (<1%), LAW2 uniaxial vs the closed-form Johnson–Cook curve with quadratic Newton convergence, reaction/energy balance | ✅ (small-strain linear geometry) |
+| Direct linear solver behind `solve(K,R)`: SuperLU default (SciPy), optional CHOLMOD (scikit-sparse, SPD) and MUMPS (python-mumps, wrapped not ported), env/CLI-selected with SuperLU fallback + warning — mirrors the M7 compute-backend pattern | ✅ |
+| Implicit geometric (initial-stress) stiffness / large displacement | ❌ (deferred — M8 is small-strain linear geometry; the residual uses the corotational kernels so moderate rotations enter f_int, but the tangent omits K_geo) |
+| Implicit DYNAMICS (Newmark / HHT / generalized-α) | ❌ (deferred — M8 is statics only) |
+| Contact / /RBODY / /MPC in the implicit tangent system; arc-length continuation | ❌ (deferred — see the M8 roadmap note) |
 
 ## 5. Roadmap (next milestones)
 
@@ -444,6 +456,93 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
      - threading: numba `parallel=True` breaks the determinism/parity
        contract (scatter order); MPI/domain decomposition stays out of
        scope for the port.
+7. **M8 — implicit analysis (implicit STATICS)** ✅ (done): the port
+   was fully EXPLICIT before this milestone (leap-frog, lumped mass, no
+   global matrix). M8 adds a *parallel* implicit-static driver
+   (`pyradioss/implicit/`, mapped to `engine/source/implicit/`) that
+   REUSES the explicit element force kernels for the internal-force
+   residual and adds ONE new piece per element — the tangent stiffness —
+   assembled into a global sparse matrix and factorized by a direct
+   solver. The explicit loop, all M1–M7 tests and all nine examples are
+   untouched (re-verified). Delivered:
+   * **DOF management** (`implicit/dofmap.py`): a global equation
+     numbering (node*6 + component) that assigns each free nodal DOF an
+     index, CONDENSES /BCS-fixed and /IMPDISP-prescribed DOFs (removed,
+     not penalized), and numbers shell rotations only where they carry
+     stiffness (shell nodes) — solids get translations only.
+   * **Sparse tangent assembly** (`implicit/assembly.py`): each element
+     returns its tangent as COO triplets in global-DOF space; they
+     scatter into a `scipy.sparse` CSR K. SciPy is imported *inside* the
+     implicit package (`require_scipy`), so the base explicit install
+     stays NumPy-only and an implicit run without SciPy fails with one
+     clear message (SciPy is required for implicit, optional otherwise).
+   * **Consistent tangents**: LAW1 elastic (the material tangent is just
+     C) for hexa8 and BT4, and — the piece that governs Newton's
+     quadratic convergence — the LAW2 radial-return CONSISTENT
+     (algorithmic) elastoplastic tangent (de Souza Neto Box 7.3, derived
+     in `materials/law02_johnson_cook.consistent_solid_tangent`; NOT the
+     continuum tangent, which would only converge linearly — asserted by
+     the observed quadratic tail). The element tangents live alongside
+     `forces()` and never touch the force path or the M7 numba parity
+     contract (asserted). The one-point solid needs a genuine STIFFNESS
+     hourglass for statics (the explicit VISCOUS hourglass is ~1e-4 of
+     the physical stiffness and cannot control hourglass under load): a
+     Flanagan–Belytschko stiffness-hourglass term is added to BOTH the
+     tangent and the residual (`solid_hexa8.static_stabilization`),
+     consistently, so Newton keeps its quadratic rate; it is orthogonal
+     to the constant-strain modes, so uniform-strain states (patch test,
+     uniaxial) stay EXACT. The BT4 shell's BLT84 hourglass is already
+     stiffness-type and needs no addition.
+   * **Newton–Raphson** (`implicit/statics.py`): load stepping
+     (increments), residual R = f_ext − f_int with f_int from the
+     EXISTING kernels (driven at the committed reference geometry with
+     the displacement increment as a pseudo-velocity at dt=1, snapshot/
+     restore around each residual evaluation so the rate kernels behave
+     as pure functions of u), K Δu = R, residual + displacement
+     convergence norms, an iteration cap with a clear non-convergence
+     stop. Load control AND /IMPDISP displacement control.
+   * **Direct linear solver** (`implicit/linsolve.py`): a `solve(K,R)`
+     interface behind the EXACT M7 backend pattern — `splu` (SuperLU)
+     default (no extra dependency), optional CHOLMOD (scikit-sparse, SPD)
+     and MUMPS (python-mumps, *wrapped* — not ported), selected by
+     `PYRADIOSS_LINSOLVE` / `-linsolve`, each falling back to SuperLU
+     with a warning when its library is absent. Optional solvers stay
+     optional dependencies; the base install keeps working.
+   * **Engine input**: a minimal `/IMPL` control card (final /RUN "time"
+     reinterpreted as the load factor; `/IMPL/DTINI`, `/IMPL/NEWTON`,
+     `/IMPL/LSOLVER`); unknown sub-cards warn and skip; `/IMPL/DYNA`
+     warns (implicit dynamics not ported) and runs static.
+   * **Validation** (`tests/test_m8_implicit.py`, the port's philosophy —
+     an analytic check per capability): single-element uniaxial pull =
+     Hooke exactly with ONE-step (quadratic) convergence; multi-element
+     constant-stress PATCH test exact; shell cantilever tip deflection
+     within <1% of Euler–Bernoulli; LAW2 uniaxial matching the
+     closed-form Johnson–Cook curve AND the explicit solver driven
+     quasi-statically, with the plastic increments showing QUADRATIC
+     convergence; DOF condensation, the reaction (equilibrium) balance
+     and the strain-energy balance; the linear-solver fallback and the
+     SciPy guard.
+   Deferred out of M8, EXPLICITLY (not half-implemented):
+   * **geometric / initial-stress stiffness** (large-displacement K_geo):
+     M8 lands small-strain LINEAR geometry. The residual keeps the full
+     corotational kernels (so moderate rotations enter f_int), but the
+     tangent omits the stress-dependent geometric term and the reference
+     frame stays at x0 for the whole run — so a genuinely large-rotation
+     or buckling problem is out of scope until K_geo lands;
+   * **implicit DYNAMICS** (Newmark / HHT / generalized-α) — the mass
+     matrix, the a/v update and the effective dynamic stiffness are a
+     separate build on top of this statics core;
+   * **contact, rigid bodies and general constraints in the tangent
+     system** (/INTER, /RBODY, /RBE2/3, /MPC): these are kinematic /
+     penalty in the explicit port and contribute nothing to K here — an
+     implicit run must not use them (the assembler errors on un-ported
+     element groups; constraint contributions to K are a follow-on);
+   * **arc-length / snap-through continuation** — plain load control
+     only, so a limit point (softening past the peak) stops Newton
+     rather than turning the corner;
+   * tetra4 / sh3n / beam / truss / spring element tangents (only hexa8
+     and BT4 in M8) and the LAW2 SHELL consistent tangent (LAW1 shells
+     only); LAW36/27/42 implicit tangents.
 
 ## 6. Validation strategy
 
@@ -455,6 +554,15 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
   results: longitudinal wave speed in a bar, cantilever/plate vibration
   frequency, Johnson–Cook uniaxial yield curve, energy conservation of a
   block bouncing on a rigid wall.
+* **Implicit validations (M8)** — the same philosophy for the Newton solver:
+  a single-element uniaxial pull reproducing Hooke's law exactly (with
+  one-step, i.e. quadratic, convergence), a multi-element constant-stress
+  patch test, a shell cantilever tip deflection against Euler–Bernoulli beam
+  theory, and a LAW2 monotonic pull matching both the closed-form Johnson–Cook
+  curve and the explicit solver driven quasi-statically — the last also
+  asserting the QUADRATIC Newton convergence that only the consistent
+  (algorithmic) elastoplastic tangent delivers. Cross-checks: the reaction
+  (equilibrium) balance and the strain-energy balance close to round-off.
 
 When porting new features, always add at least one analytic validation — this
 is how the port stays trustworthy without bit-for-bit comparison against the

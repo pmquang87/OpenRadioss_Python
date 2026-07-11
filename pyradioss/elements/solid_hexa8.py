@@ -605,3 +605,165 @@ def forces(group, x, v, vr, dt, fint, mint):
     scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
 
     return dt_crit
+
+
+# ----------------------------------------------------------------------------
+# Implicit tangent stiffness (M8) — a NEW entry point alongside forces()
+# ----------------------------------------------------------------------------
+# The explicit path never assembles a matrix. The implicit solver needs the
+# element TANGENT K_e = d f_int / d u so it can build the global sparse K and
+# take Newton steps. This function is entirely separate from forces() (it does
+# not touch the force path, the element state, or the M7 numba parity
+# contract): it reads the geometry + material state and returns the dense
+# element tangents plus their global-DOF addressing.
+#
+# For the one-point hexa the small-strain tangent has two parts, exactly
+# mirroring the two force contributions of _post:
+#
+#   1. the CONSTITUTIVE stiffness  K_c = V B^T D B, with B the uniform-gradient
+#      strain-displacement operator (the same gradN_i the forces use) and D the
+#      material consistent tangent (LAW1: C; LAW2: the algorithmic tangent);
+#   2. the HOURGLASS stabilization  K_h. One-point integration leaves 12
+#      zero-energy modes; K_c alone is rank-deficient (rank 6 of 24) and K is
+#      singular. The stabilization is the SAME Flanagan-Belytschko operator the
+#      explicit kernel uses, made consistent with how the implicit residual
+#      drives forces(): the residual evaluates forces() with the displacement
+#      increment as a pseudo-velocity at dt = 1, so its viscous hourglass term
+#      -a_h (gamma . du) gamma acts as a linear STIFFNESS a_h per mode. K_h
+#      reproduces exactly that derivative,  K_h[i,j] = a_h sum_modes g_i g_j,
+#      block-diagonal over the three translation directions, so tangent and
+#      residual are consistent and Newton keeps its quadratic rate. a_h is the
+#      exact coefficient _post uses (hcoef*rho*c*V^(2/3)/4); it is small
+#      relative to the physical stiffness and vanishes on uniform-strain
+#      (patch-test / uniaxial) states, which excite no hourglass mode.
+#
+# Geometric (initial-stress) stiffness is DEFERRED (see the implicit package
+# docstring / PORTING_GUIDE): M8 lands small-strain linear geometry.
+#
+# A note on the hourglass stiffness (the reason for the split below). The
+# explicit kernel's hourglass control is VISCOUS: a force proportional to the
+# hourglass modal VELOCITY (a_h = h*rho*c*V^(2/3)/4). Fed the displacement
+# increment as a pseudo-velocity at dt=1 it does act like a stiffness a_h — but
+# a_h is a viscous scale (rho*c), typically ~1e-4 of the physical stiffness, so
+# it cannot control hourglass in STATICS (a hourglass-exciting load would blow
+# the modes up). Statics needs a genuine STIFFNESS hourglass. So the implicit
+# path adds a Flanagan-Belytschko stiffness-hourglass term
+#   k_stiff = HG_STIFF * mu * V * sum_i |gradN_i|^2         (units: force/len)
+# to BOTH the tangent (here) and the residual (``static_stabilization`` below,
+# added by the implicit driver on top of forces()), keeping the two consistent
+# so Newton keeps its quadratic rate. The stiffness hourglass is orthogonal to
+# the constant-strain modes (FB construction), so it leaves uniform-strain
+# states — patch test, uniaxial pull — EXACT; it only resists genuine
+# hourglass deformation. The tangent adds a_h too (forces() still emits it), so
+# residual and tangent match to the last bit on an elastic step.
+
+#: stiffness-hourglass fraction of  mu * V * sum|gradN|^2  (a robust static
+#: hourglass control level; uniform-strain results are unaffected either way).
+HG_STIFF = 0.1
+
+
+def _hg_operators(group, x):
+    """Shared hourglass geometry for the implicit tangent + residual:
+    returns (conn, gamma (n,4,8), GG (n,8,8), k_hg (n,), k_stiff (n,)) where
+    ``k_hg`` = a_h (viscous, as forces() emits it at dt=1) + k_stiff, and
+    ``k_stiff`` is the added FB stiffness-hourglass coefficient (see the note
+    above)."""
+    st = group.state
+    conn = group.conn
+    xe = x[conn]
+    dndx, vol = _geometry(xe)
+    vol = np.maximum(vol, EM20)
+    hx = _H @ xe
+    gamma = _H[None, :, :] - hx @ dndx.transpose(0, 2, 1)      # (n, 4, 8)
+    GG = np.einsum("nai,naj->nij", gamma, gamma)               # (n, 8, 8)
+    traceS = np.einsum("nia,nia->n", dndx, dndx)               # sum|gradN|^2
+    rho = st["mass"] / vol
+    n = group.n
+    k_hg = np.zeros(n)
+    k_stiff = np.zeros(n)
+    for sl, mat, prop in st["slices"]:
+        c = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
+        ah = prop.params["h"] * rho[sl] * c * vol[sl] ** (2.0 / 3.0) / 4.0
+        ks = HG_STIFF * mat.G * vol[sl] * traceS[sl]
+        k_stiff[sl] = ks
+        k_hg[sl] = ah + ks
+    return conn, gamma, GG, k_hg, k_stiff
+
+
+def static_stabilization(group, x, u, ur, fint, mint):
+    """Add the static stiffness-hourglass NODAL FORCE to ``fint`` (the part of
+    the implicit residual that forces() does not supply, because its hourglass
+    is viscous — see the note above). f_i = -k_stiff * sum_modes (gamma . u_e)
+    gamma_i, per translation direction; ``ur``/``mint`` are unused (solids
+    carry no rotational DOF). Consistent with the k_stiff term of tangent()."""
+    conn, gamma, GG, k_hg, k_stiff = _hg_operators(group, x)
+    ue = u[conn]                                               # (n, 8, 3)
+    modal = np.einsum("nai,nid->nad", gamma, ue)              # (n, 4, 3)
+    fe = -k_stiff[:, None, None] * np.einsum("nad,nai->nid", modal, gamma)
+    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
+
+
+def tangent(group, x, epsp_incr=None):
+    """Element tangent stiffness for the whole brick group.
+
+    Returns ``(ke, edofs)``:
+
+    * ``ke``    (n, 24, 24) dense element tangents (translations only);
+    * ``edofs`` (n, 24) global scalar DOF slot ids (node*6 + component) in
+      the ``implicit.dofmap`` numbering — component 0,1,2 = ux,uy,uz.
+
+    ``epsp_incr`` (n,) is the plastic-strain increment of the current load
+    step, used by the LAW2 consistent tangent; None / zeros = elastic.
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    xe = x[conn]                                   # (n, 8, 3)
+
+    # geometry: uniform-gradient shape derivatives + volume (srcoor3/sderi3)
+    dndx, vol = _geometry(xe)
+    vol = np.maximum(vol, EM20)
+
+    # ---- strain-displacement operator B (n, 6, 24), engineering shear -----
+    # rows [xx, yy, zz, xy, yz, zx]; columns node-major [ux0,uy0,uz0, ...].
+    B = np.zeros((n, 6, 24))
+    gx, gy, gz = dndx[:, :, 0], dndx[:, :, 1], dndx[:, :, 2]   # (n, 8)
+    ix = np.arange(8)
+    B[:, 0, 3 * ix + 0] = gx            # eps_xx = dN_i/dx * ux_i
+    B[:, 1, 3 * ix + 1] = gy            # eps_yy = dN_i/dy * uy_i
+    B[:, 2, 3 * ix + 2] = gz            # eps_zz = dN_i/dz * uz_i
+    B[:, 3, 3 * ix + 0] = gy            # gamma_xy = dN/dy ux + dN/dx uy
+    B[:, 3, 3 * ix + 1] = gx
+    B[:, 4, 3 * ix + 1] = gz            # gamma_yz = dN/dz uy + dN/dy uz
+    B[:, 4, 3 * ix + 2] = gy
+    B[:, 5, 3 * ix + 0] = gz            # gamma_zx = dN/dz ux + dN/dx uz
+    B[:, 5, 3 * ix + 2] = gx
+
+    # ---- constitutive stiffness  K_c = V B^T D B --------------------------
+    ke = np.zeros((n, 24, 24))
+    epi = np.zeros(n) if epsp_incr is None else epsp_incr
+    for sl, mat, prop in st["slices"]:
+        D = materials.solid_tangent(mat, st["sig"][sl], st["epsp"][sl],
+                                    epi[sl])              # (m, 6, 6)
+        Bs = B[sl]
+        # V * B^T D B, per element (einsum keeps it a stacked matmul)
+        DB = np.einsum("mij,mjk->mik", D, Bs)             # (m, 6, 24)
+        ke[sl] = vol[sl][:, None, None] * np.einsum("mji,mjk->mik", Bs, DB)
+
+    # ---- hourglass stabilization  K_h (see the function comment) ----------
+    # k_hg = a_h (viscous, matching what forces() emits at dt=1) + k_stiff
+    # (the FB stiffness hourglass, also added to the residual by
+    # static_stabilization) — so the tangent matches the residual exactly.
+    _, _, GG, k_hg, _ = _hg_operators(group, x)
+    kh = k_hg[:, None, None] * GG                          # (n, 8, 8)
+    for b in range(3):
+        rows = (3 * ix + b)[:, None]
+        cols = (3 * ix + b)[None, :]
+        ke[:, rows, cols] += kh
+
+    # ---- global DOF addressing (node*6 + component) -----------------------
+    edofs = np.empty((n, 24), dtype=np.int64)
+    edofs[:, 3 * ix + 0] = conn * 6 + 0
+    edofs[:, 3 * ix + 1] = conn * 6 + 1
+    edofs[:, 3 * ix + 2] = conn * 6 + 2
+    return ke, edofs
