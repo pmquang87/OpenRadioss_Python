@@ -16,6 +16,11 @@ OpenRadioss, which lives entirely apart from the explicit ``resol.F`` loop:
     engine/source/implicit/imp_dsolv*.F    the direct linear-solver interface
                                            (Radioss wraps MUMPS / a built-in
                                            sparse LDL^T here)
+    engine/source/implicit/imp_dyna.F      implicit DYNAMICS (/IMPL/DYNA):
+                                           Newmark/HHT setup, dynamic
+                                           residual + effective stiffness,
+                                           a/v recovery (M10 →
+                                           ``dynamics.py``)
 
 The whole port was EXPLICIT before this milestone: leap-frog central
 differences, a lumped (diagonal) mass, and NO global matrix ever assembled
@@ -75,10 +80,26 @@ What M9 adds (implicit NONLINEAR GEOMETRY — see statics.py for the theory)
 * **Truss implicit tangent** (exact corotational, LAW1): the textbook
   geometric-nonlinearity element, used by the snap-through validation.
 
+What M10 adds (implicit DYNAMICS — see dynamics.py for the theory)
+------------------------------------------------------------------
+* **Newmark-beta / HHT-alpha time integration** (``dynamics.py``, the
+  imp_dyna.F analogue, ``/IMPL/DYNA/1|2``): the lumped starter mass /
+  inertia condensed to equation space, the HHT-weighted dynamic residual
+  R = (1+a)(f_ext + f_int)_{n+1} - a(...)_n - M a_{n+1}, the effective
+  tangent K_eff = (1+a) K_T + M/(beta dt^2), and the Newmark a/v recovery
+  from each converged displacement increment — on top of the statics
+  residual/commit machinery, under BOTH geometry modes (M8 linear and M9
+  /IMPL/NONLIN). /RUN's time is physical again; rate devices (bulk
+  viscosity, LAW2 strain-rate term) are disabled explicitly rather than
+  fed the pseudo-velocity (see the dynamics.py docstring).
+
 Explicitly DEFERRED (documented in PORTING_GUIDE.md, not half-implemented):
 
-* **implicit DYNAMICS** (Newmark / HHT / generalized-α) — statics only
-  (the natural M10);
+* **consistent (element) mass**, Rayleigh damping in the implicit system
+  (/IMPL/DYNA/DAMP), modal/eigenvalue dynamics, implicit-explicit
+  switching mid-run, automatic implicit time-step control (imp_dt.F),
+  /IMPVEL under implicit dynamics (use /IMPDISP), rate-dependent
+  plasticity under implicit dynamics;
 * **contact and general constraints in the tangent system** (/INTER, /RBODY,
   /MPC): the explicit interfaces are kinematic/penalty and do not contribute
   to K here;

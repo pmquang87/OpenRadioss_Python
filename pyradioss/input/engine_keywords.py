@@ -143,7 +143,36 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 #                         (default: from the first predictor
                 #                         at the DTINI increment), increment
                 #                         cap, target iterations/increment.
-                #   /IMPL/DYNA ...        NOT ported (warns, statics only)
+                #   /IMPL/DYNA/1 card: alpha
+                #                         (M10) implicit DYNAMICS, HHT-alpha
+                #                         time integration. The card value is
+                #                         the HHT alpha ITSELF (the original
+                #                         reads HHT_A in freimpl.F — NOT a
+                #                         spectral radius): 0 = the
+                #                         trapezoidal rule, -1/3 <= alpha < 0
+                #                         adds high-frequency dissipation
+                #                         (rho_inf = (1+a)/(1-a)). Newmark
+                #                         gamma/beta follow as 1/2 - a and
+                #                         (1-a)^2/4 (imp_dyna.F DYNA_INI).
+                #   /IMPL/DYNA/2 card: gamma  beta
+                #                         (M10) implicit DYNAMICS, plain
+                #                         Newmark with gamma/beta given
+                #                         directly IN THAT ORDER (the
+                #                         original's NM_A -> DY_G = gamma,
+                #                         NM_B -> DY_B = beta). Defaults
+                #                         0.5 / 0.25 = the unconditionally
+                #                         stable trapezoidal rule.
+                #   /IMPL/DYNA            (bare) = /IMPL/DYNA/2 defaults
+                #                         (trapezoidal; a convenience the
+                #                         original does not spell — its
+                #                         reader requires the /1 or /2).
+                #   /IMPL/DYNA/DAMP       NOT ported (Rayleigh damping in
+                #                         the implicit system — deferred,
+                #                         warns; see PORTING_GUIDE M10)
+                #
+                # With /IMPL/DYNA the /RUN "time" is PHYSICAL TIME again and
+                # /IMPL/DTINI is the physical time step (statics reinterprets
+                # them as load factor / increment).
                 #
                 # Unknown sub-cards warn and are skipped, exactly like the
                 # rest of the reader.
@@ -191,13 +220,56 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     ec.impl_linsolve = (block.parts[2].lower()
                                         if len(block.parts) > 2 else "")
                 elif sub in ("DYNA", "DYNAMIC", "DYN"):
-                    log.warning("/IMPL/DYNA (implicit dynamics) not ported — "
-                                "implicit is STATICS only (M8/M9); running "
-                                "static", block.source)
+                    # /IMPL/DYNA (M10): implicit DYNAMICS — Newmark / HHT.
+                    # Sub-sub-keyword mirrors the original's IDYNA read
+                    # (freimpl.F): /1 = HHT (card: alpha), /2 = Newmark
+                    # (card: gamma beta), /DAMP = Rayleigh damping (NOT
+                    # ported — deferred, see PORTING_GUIDE M10).
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    if sub2 == "DAMP":
+                        log.warning(
+                            "/IMPL/DYNA/DAMP (Rayleigh damping in the "
+                            "implicit system) not ported — ignored (see "
+                            "PORTING_GUIDE M10)", block.source)
+                    elif sub2 in ("", "1", "2"):
+                        ec.impl_dyna = int(sub2) if sub2 else 2
+                        vals = block.cards[0].floats() if block.cards else []
+                        if ec.impl_dyna == 1:
+                            # HHT: the card value IS alpha (freimpl.F reads
+                            # HHT_A; unset -> -1e-20, i.e. trapezoidal)
+                            ec.impl_dyna_alpha = vals[0] if vals else 0.0
+                            if not -1.0 / 3.0 - 1e-12 <= ec.impl_dyna_alpha \
+                                    <= 0.0:
+                                log.warning(
+                                    f"/IMPL/DYNA/1: alpha = "
+                                    f"{ec.impl_dyna_alpha:g} outside the "
+                                    f"HHT range [-1/3, 0] — second-order "
+                                    f"accuracy / unconditional stability "
+                                    f"not guaranteed", block.source)
+                        else:
+                            # Newmark: gamma then beta (DY_G = NM_A,
+                            # DY_B = NM_B in imp_dyna.F)
+                            if vals:
+                                ec.impl_dyna_gamma = vals[0]
+                            if len(vals) > 1:
+                                ec.impl_dyna_beta = vals[1]
+                            g, b = ec.impl_dyna_gamma, ec.impl_dyna_beta
+                            # unconditional stability iff 2*beta >= gamma
+                            # >= 1/2 (Hughes, The FEM, table 9.1.1)
+                            if g < 0.5 or 2.0 * b < g:
+                                log.warning(
+                                    f"/IMPL/DYNA/2: gamma = {g:g}, beta = "
+                                    f"{b:g} is NOT unconditionally stable "
+                                    f"(needs 2*beta >= gamma >= 1/2)",
+                                    block.source)
+                    else:
+                        log.warning(f"/IMPL/DYNA/{sub2} not ported — "
+                                    f"ignored (supports 1, 2)", block.source)
                 else:
                     log.warning(f"/IMPL/{sub} not ported — ignored (supports "
-                                f"DTINI, NEWTON, LSOLVER, NONLIN, ARCL)",
-                                block.source)
+                                f"DTINI, NEWTON, LSOLVER, NONLIN, ARCL, "
+                                f"DYNA)", block.source)
             elif key == "PRINT":
                 # /PRINT/-100 → one listing line every 100 cycles (the minus
                 # sign is the Radioss convention for 'every n cycles').
