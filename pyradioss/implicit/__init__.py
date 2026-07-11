@@ -115,11 +115,29 @@ What M11 adds (implicit COMPLETENESS)
 * **The /IMPL/BUCKL engine card**: prestress increments + the M9
   eigensolver, factors/modes reported in the listing and on the result.
 
+What M12 adds (implicit CONSTRAINTS & CONTACT)
+----------------------------------------------
+* **Kinematic constraints by CONDENSATION** (``constraints.py`` — the
+  rby_imp0.F / rbe2_imp0.F / rbe3_imp0.F / i2_imp1.F block condensations
+  as one sparse transform): /RBODY, /RBE2, /INTER/TYPE2 tied, /RBE3 and
+  /MPC in the implicit system — dependent DOFs eliminated through
+  K_red = T^T K T, R_red = T^T R (never penalized), in BOTH geometry
+  modes (T rebuilt per committed frame + exact rigid re-placement under
+  /IMPL/NONLIN) and under /IMPL/DYNA (T^T M T is the exact rigid-body
+  6-DOF mass at the master; initial velocities projected onto the
+  constraint manifold).
+* **Penalty contact in the Newton loop** (``contact.py`` — i7ke3.F /
+  i7keg3.F): /INTER/TYPE7 frictionless contact force in the residual at
+  the trial configuration + the exact gap tangent K g g^T in K(_eff),
+  with the ACTIVE SET re-evaluated every iteration and non-convergence
+  handed to the M11 StepControl cut. The i7sti3 stiffness/gap machinery
+  of contact/stiffness.py is reused unchanged.
+
 Explicitly DEFERRED (documented in PORTING_GUIDE.md, not half-implemented):
 
-* **contact and general constraints in the tangent system** (/INTER, /RBODY,
-  /RBE2/3, /MPC): the explicit interfaces are kinematic/penalty and do not
-  contribute to K here — the structural M12 candidate;
+* friction and /INTER/TYPE11 in the implicit loop; Inacti/Igap 2/3;
+  /RWALL under implicit (refused); constraint CHAINS; /IMPDISP on
+  constraint nodes; /IMPL/ARCL and /IMPL/BUCKL with constraints/contact;
 * **consistent (element) mass**, modal/eigenvalue dynamics,
   implicit-explicit switching mid-run, /IMPVEL under implicit dynamics
   (use /IMPDISP);

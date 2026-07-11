@@ -93,6 +93,8 @@ same names in comments.
 | `engine/source/implicit/imp_dt.F` (`IMP_DTN`: cut on IMCONV < 0 bounded by DT_MIN, IDTC = 1 growth toward DT_MAX after ≤ NL_DTP iterations) + the /IMPL/DT reads of `freimpl.F` | `implicit/statics.py` (`StepControl`) + `/IMPL/DT/STOP`, `/IMPL/DT/1` in `engine_keywords.py` | M11: automatic implicit step control for BOTH statics load increments and dynamics time steps — always on, the cards tune it; IDTC 2/3 deferred |
 | `engine/source/implicit/imp_buck.F` engine-card path (the /IMPL/BUCKL read of `freimpl.F`, the "BUCKLING MODES COMPUTATION" listing block) | `statics.py` (`_run_buckling`) + `/IMPL/BUCKL/1|2` in `engine_keywords.py` | M11: the card runs the static prestress increments then the M9 eigensolver, reports factors/modes in the listing and on `implicit_result` |
 | element `KE` routines of the remaining families (solide4, coque3n/sh3n, beam, spring) + their `imp_kgeo` branches | `tangent()`/`kgeo()`/`static_internal_forces()` in `solid_tetra4`, `shell_tri3`, `beam_type3`; `tangent()`/`kgeo()`/`implicit_internal_forces()` in `spring` and the truss's `implicit_internal_forces` | M11: element tangent COMPLETENESS — every element family of the port is implicit-capable (the spring/truss get their own implicit residual: total-form / iterated-return, see the module notes) |
+| `engine/source/constraints/general/rbody/rby_imp0.F` (RBY_IMP1/IMPR1/IMPR2), `rbe2/rbe2_imp0.F`, `rbe3/rbe3_imp0.F`, `engine/source/interfaces/interf/i2_imp1.F` (I2UPDK0) — the constraint condensations `imp_solv.F`/`imp_dyna.F` call around every assembly | `pyradioss/implicit/constraints.py` | M12: /RBODY, /RBE2, /INTER/TYPE2 tied, /RBE3 and /MPC in the implicit system by CONDENSATION — one sparse transform `u_full = T u_red`, `K_red = T^T K T`, `R_red = T^T R` (the *_IMP1/*_IMPR1 block algebra; dependent DOFs eliminated, never penalized); rebuilt per committed frame + exact Rodrigues re-placement under /IMPL/NONLIN; `T^T M T` = the exact rigid 6-DOF mass at the master under /IMPL/DYNA |
+| `engine/source/implicit/imp_int_k.F` (IMP_INT_K forcing IMP_INT7 = 3) + `engine/source/interfaces/int07/i7ke3.F` / `i7keg3.F` (the per-pair contact stiffness blocks) | `pyradioss/implicit/contact.py` | M12: /INTER/TYPE7 penalty contact in the Newton loop — frictionless force at the trial configuration in the residual, exact gap tangent K·g gᵀ **plus the closest-point curvature −K·p·∇²d** (the original assembles the n nᵀ blocks only) in K/K_eff, active set re-evaluated every iteration, i7sti3 stiffness/gap machinery (`contact/stiffness.py`) reused unchanged |
 
 ## 3. Conventions used in this port
 
@@ -245,7 +247,10 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | Automatic implicit step control (M11, imp_dt.F IMP_DTN): cut-and-RETRY on non-convergence (rollback is free — failed increments never touch model.x and the element buffers re-base from the committed snapshots), growth back toward /IMPL/DTINI after ≤-target-iteration steps; statics AND dynamics. Validated: a one-increment deep-elastica run that fails its Newton budget now completes through cuts and matches the fine fixed-increment answer to 0.5%; smooth runs take zero cuts and reproduce the fixed-dt stepping exactly | ✅ |
 | /IMPL/BUCKL engine card (M11): prestress increments → (K_mat + μ K_geo)φ = 0 → factors/modes reported (listing + result object). Validated: the M9 shell Euler column through the CARD path (π²EI/4L² < 3%) | ✅ |
 | Consistent (element) mass matrix; modal / eigenvalue dynamics; implicit↔explicit switching mid-run; /IMPVEL under implicit dynamics (refused — use /IMPDISP); rate devices under implicit (LAW2 strain-rate term, bulk viscosity, spring dashpot — all disabled loudly) | ❌ (deferred — see the M10/M11 roadmap notes) |
-| Contact / /RBODY / /MPC in the implicit tangent system; follower-load (pressure) stiffness | ❌ (deferred — see the M9/M11 roadmap notes; the big M12 candidate) |
+| **Implicit KINEMATIC CONSTRAINTS by condensation (M12)**: /RBODY, /RBE2, /INTER/TYPE2 tied, /RBE3 and /MPC in the implicit system — dependent DOFs eliminated through the sparse transform K_red = TᵀKT, R_red = TᵀR (the rby_imp0.F / rbe2_imp0.F / rbe3_imp0.F / i2_imp1.F block condensations; never penalized), in BOTH geometry modes (T rebuilt per committed frame, rigid bodies re-placed exactly with the Rodrigues map at each NLGEOM commit) and under /IMPL/DYNA (TᵀMT carries the exact rigid 6-DOF mass at the master — total mass, parallel-axis inertia, COG-coupling blocks — and initial velocities project onto the constraint manifold mass-weighted = the explicit momentum projection). Standalone frozen masters unfrozen and force-numbered; /BCS on a master = the body-level condition (all-translations-fixed = the PIVOT); /BCS on dependents warned, constraint wins. Validated: RBE2 rigid-lever closed form exact in one Newton step (both modes), the condensed master 6×6 mass block vs the parallel-axis closed form, /MPC equality split exact, /RBE3 dual lever rule exact, /RBODY pivot static rotation exact + the implicit-dynamic physical pendulum on the elliptic-integral quarter period (< 0.5%, amplitude preserved, arms exact), spot-weld lap joint implicit = explicit quasi-static (< 2%) | ✅ |
+| **Implicit PENALTY CONTACT (M12)**: /INTER/TYPE7 in the Newton loop — frictionless contact force at the TRIAL configuration in the residual, exact gap tangent K·g gᵀ + the closest-point curvature −K·p·∇²d (region-wise: zero on faces, the point/edge lateral terms at vertices/edges — the i7keg3.F blocks omit it; an M12 lesson) in K/K_eff, ACTIVE-SET Newton (pairs enter/leave per iteration; a set that will not settle lands in the M11 StepControl cut), Istf/Igap stiffness+gap machinery of contact/stiffness.py reused unchanged, stored spring energy ½Kp² in its own dynamics ledger channel. Validated: two blocks pressed = series-springs closed form EXACT with the active set entering mid-run, FD residual/tangent consistency (exact for secondary-side directions; ≤ 5% full-direction, the documented weight-variation omission), implicit punch = explicit damped steady state (< 2%) and the dead-load closed form (1e-6) | ✅ |
+| A constraint-condensation predictor lesson (M12, recorded in `constraints.make_consistent`): the dynamics predictor must be PROJECTED onto the constraint manifold (u = T u_red always) — the node-space extrapolation violates the constraint by O(θ²)·arm, Newton cannot remove what Tᵀ annihilates, and the commit placement silently converts the violation into energy (found by a pendulum that gained 20× its drop energy and circulated) | ✅ |
+| Friction and /INTER/TYPE11 under implicit; /RWALL under implicit (refused loudly); constraint CHAINS; /IMPDISP on constraint nodes; /IMPL/ARCL // /IMPL/BUCKL with constraints or contact; follower-load (pressure) stiffness | ❌ (deferred — see the M12 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -858,6 +863,140 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       Iplas=2 radial projection, and its tangent differentiates THAT
       algorithm (validated against its own closed form, documented
       3G/E flow factor and all).
+11. **M12 — implicit CONSTRAINTS & CONTACT** ✅ (done): the M11 deferral
+    list's structural gap — an implicit run silently ignored /RBODY,
+    /RBE2, /RBE3, /MPC and every /INTER (they contributed nothing to K
+    or the residual). M12 closes it, each piece mapped to the CHECKED
+    Fortran (fetched, not recalled): the rby_imp0.F / rbe2_imp0.F /
+    rbe3_imp0.F / i2_imp1.F condensations, imp_int_k.F + i7ke3.F /
+    i7keg3.F for the contact stiffness, imp_solv.F's ICONTA bookkeeping.
+    * **Kinematic constraints by CONDENSATION**
+      (`implicit/constraints.py`): the original transforms every
+      dependent DOF block in place (`UPDKB_RB`: K' = CDIᵀ·K·CDI with
+      CDI = [[I, R],[0, I]] built from the CURRENT arm, residual
+      B_M += CDIᵀ·B_s, slave equations marked IKC and skipped); the port
+      expresses the whole family as ONE sparse transform u = T·u_red
+      around each Newton solve — algebraically the same condensation,
+      dependent DOFs eliminated, never penalized. /RBODY + /RBE2 (the
+      rigid map u_s = u_M + θ_M × r_s), /INTER/TYPE2 (the Starter
+      projection weights — the constraint layer literally reuses the
+      explicit ContactType2 search, so implicit and explicit ties are
+      identical; the rotational tie / offset-moment branch of I2UPDK0
+      stays unported like the explicit side), /RBE3 (the least-squares
+      fit linearized — Tᵀ IS rbe3f's virtual-work dual), /MPC
+      (column-pivoted QR elimination; fixed DOFs read as ground,
+      redundant rows dropped with a warning). The DofMap gained the
+      constraint hooks: force-numbered master blocks (a standalone
+      /RBODY master is a frozen placeholder that must be UNFROZEN),
+      dependent slots always numbered so their element stiffness/loads
+      are captured before elimination, /BCS on a master = the body-level
+      condition (the PIVOT when all translations are fixed), /BCS on
+      dependents warned away (the constraint wins — the explicit
+      convention). Under /IMPL/NONLIN, T is rebuilt on every committed
+      frame and the rigid bodies are RE-PLACED exactly (Rodrigues of the
+      increment rotation; tied nodes on their co-rotated segment) — the
+      linearized map would stretch a body O(θ²) per increment. Under
+      /IMPL/DYNA nothing extra is assembled: Tᵀ M T IS the exact
+      rigid-body 6-DOF mass at the master (parallel-axis inertia and
+      COG-coupling blocks included), the initial velocities project onto
+      the constraint manifold mass-weighted (= the explicit momentum
+      projection), and the initial acceleration solves the condensed
+      M_red a_red = R_red. TWO M12 lessons are recorded in the code:
+      - the dynamics PREDICTOR must be projected onto the constraint
+        manifold (`constraints.make_consistent`): the node-space
+        constant-acceleration extrapolation violates u = T u_red by
+        O(θ²)·arm per step, Newton cannot remove what Tᵀ annihilates,
+        and the commit placement silently converts the violation into
+        energy — found by a physical pendulum that gained 20× its drop
+        energy and swung over the top;
+      - convergence is measured on the REDUCED residual (the only one
+        that must vanish — a dependent row's out-of-balance is by
+        construction carried by its masters).
+    * **Penalty contact in the Newton loop** (`implicit/contact.py`,
+      /INTER/TYPE7): the contact force of every active pair at the TRIAL
+      configuration (model.x + u — contact is geometric in both element
+      modes) joins the residual, and the tangent gets the exact gap
+      linearization K·g gᵀ (g = [n, −H₁n … −H₄n]) PLUS the closest-point
+      curvature −K·p·∇²d, region-wise exact: zero for face-interior
+      projections, the point-tie lateral term (I−nnᵀ)/d at vertices, the
+      line-tie term at real boundary edges (i7keg3.F assembles only the
+      n nᵀ blocks with the corner weights un-squared — a diagonal-boosted
+      modified Newton; IMP_INT_K forces IMP_INT7 = 3, the CONSTANT-spring
+      branch, which is exactly the port's explicit force law, so
+      residual/tangent/explicit-cross-check are mutually consistent).
+      The curvature term is an M12 lesson: a punch whose corner nodes
+      land on the pad's grid leaves Newton in a LIMIT CYCLE without it
+      (the missing lateral stiffness was 23% of K at p/d ≈ 0.23). The
+      ACTIVE SET is simply re-evaluated at every residual/tangent call
+      (the penalty force is continuous at p = 0); an increment whose set
+      refuses to settle fails its Newton budget into the M11 StepControl
+      cut — the imp_dt.F coupling. Istf/Igap stiffness and gap machinery
+      reused verbatim from contact/stiffness.py; the i7 normal VISCOUS
+      damper is a rate device and does not exist here; under /IMPL/DYNA
+      the contact force is HHT-weighted like f_int and the stored spring
+      energy ½Kp² gets its own `econt` ledger channel. A DOCUMENTED
+      non-smoothness: a converged state sitting exactly on a projection-
+      region boundary (node laterally on a main-mesh grid line, or on
+      the crease of a warped quad's triangle split — the medial axis) can
+      leave Newton cycling at ~1e-5 relative residual; deliberate mesh
+      alignment provokes it (the press example documents the geometry),
+      breaking the alignment or loosening /IMPL/NEWTON's tolerance clears
+      it — node-to-segment contact in the original has the same
+      non-smooth set behind a looser default tolerance.
+    * **Refusals, never silence** (an implicit run used to IGNORE all of
+      this): /RWALL under implicit refuses (a real BC of the explicit
+      update — use TYPE7 against a meshed surface), /INTER/TYPE11
+      refuses, /IMPL/ARCL and /IMPL/BUCKL refuse when combined with
+      constraints or contact, /IMPDISP on constraint nodes refuses,
+      constraint CHAINS (a dependent DOF of one constraint appearing in
+      another) refuse, TYPE7 friction warns and runs frictionless.
+    * **Validation** (tests/test_m12_implconstr.py — an analytic check
+      per capability, 17 tests): the RBE2 rigid-lever closed form exact
+      in ONE Newton step (both geometry modes, frozen master unfrozen);
+      the condensed master 6×6 mass vs the parallel-axis block (1e-12);
+      /MPC equality split and /RBE3 dual lever rule exact; the /RBODY
+      pivot static rotation exact and the implicit-dynamic physical
+      pendulum crossing the vertical at the elliptic-integral quarter
+      period (< 0.5%, amplitude preserved < 1°, arm lengths exact,
+      ledger closed); the spot-weld lap joint solved implicitly matching
+      the explicit damped quasi-static answer (< 2% — the tie searches
+      are shared code, so the comparison isolates the condensation); two
+      blocks pressed = the series-springs closed form EXACT with the
+      active set entering mid-run and uniform patch stress; FD
+      residual/tangent consistency at an active contact state (exact for
+      secondary-side directions, ≤ 5% full — the documented
+      weight-variation omission); the implicit punch vs the explicit
+      damped steady state (< 2%) AND its dead-load closed form (1e-6);
+      the parity contract (builds mutate nothing shared); every refusal
+      fires. Example: `examples/implicit_press` (RBE2 ram + TYPE7 pad,
+      10 increments × 3 iterations).
+    Deferred out of M12, explicitly (not half-implemented):
+    * **friction in the implicit loop** (the FRIC blocks of i7keg3.F):
+      the tangential force needs a slip/stick decision and its own
+      consistent tangent — frictionless first, warned loudly;
+    * **/INTER/TYPE11 edge-to-edge under implicit**: its segment-segment
+      narrow phase shares nothing with the node-segment machinery here
+      — refused, not approximated;
+    * Inacti initial-penetration treatments, Igap 2/3, sensor gating of
+      interfaces under the implicit clock, the IMP_INT7 = 0/1 stiffening
+      (gap-scaled) tangent branches of i7keg3.F;
+    * /RWALL under implicit (refused — model a wall as TYPE7 against a
+      fixed meshed surface);
+    * constraint CHAINS (rigid-on-rigid, /MPC rows on rigid slaves,
+      /RBE3 masters inside bodies…): the original resolves some
+      orderings; the port refuses them loudly;
+    * /IMPDISP on constraint nodes (drive a free master with forces
+      instead); /IMPVEL stays refused as before;
+    * /IMPL/ARCL and /IMPL/BUCKL combined with constraints or contact
+      (the arc-length metric and the buckling eigenproblem would need
+      the reduction threaded through — refused for now);
+    * the TYPE2 rotational tie / offset-moment redistribution (the
+      UPDKB_RB arm branch of I2UPDK0 for 6-DOF mains) — same deferral as
+      the explicit port, so the two solvers stay comparable;
+    * follower-load (/PLOAD) stiffness: still evaluated at the committed
+      frame, its configuration dependence not linearized into K (slows
+      Newton on pressure-dominated NLGEOM runs, never changes the
+      answer).
 
 ## 6. Validation strategy
 
@@ -869,6 +1008,16 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
   results: longitudinal wave speed in a bar, cantilever/plate vibration
   frequency, Johnson–Cook uniaxial yield curve, energy conservation of a
   block bouncing on a rigid wall.
+* **Implicit constraints & contact validations (M12)** — the RBE2
+  rigid-lever and /RBODY-pivot closed forms (exact), the condensed
+  rigid-body 6×6 mass at the master against the parallel-axis block, the
+  /MPC equality split and /RBE3 dual lever rule (exact), the implicit-
+  dynamic physical pendulum against the elliptic-integral period, the
+  spot-weld lap joint implicit-vs-explicit cross-check, the two-block
+  series-springs contact closed form (exact, active set entering
+  mid-run), FD residual/tangent consistency at an active contact state,
+  the implicit punch against the explicit damped steady state, the
+  no-shared-mutation parity assertion and the loud-refusal battery.
 * **Implicit completeness validations (M11)** — finite-difference
   residual/tangent consistency for every new element tangent, the tetra and
   sh3n membrane patch tests (exact), the thick-sh3n and beam cantilevers
