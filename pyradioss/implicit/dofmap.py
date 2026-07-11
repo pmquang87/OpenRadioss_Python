@@ -73,9 +73,27 @@ class DofMap:
     fix_tra, fix_rot : (numnod, 3) bool — the /BCS + frozen fixity masks
     """
 
-    def __init__(self, model: Model, log=None, prescribed=None):
+    def __init__(self, model: Model, log=None, prescribed=None,
+                 constraints=None):
+        """``constraints`` (M12, optional): an
+        ``implicit.constraints.ImplicitConstraints`` whose numbering hooks
+        apply — ``extra`` slots are force-numbered (constraint masters need
+        their full 6-DOF block even when massless/rotation-free, and every
+        DEPENDENT slot must be numbered so its element stiffness and loads
+        are captured before condensation), ``unfreeze`` overrides the
+        frozen-placeholder fixity of standalone master nodes (a REAL /BCS
+        on a master still applies: it is the body-level condition — the
+        rigid-body PIVOT when all translations are fixed), and
+        ``bcs_ignore`` drops the /BCS of clash nodes the constraint wins
+        over (warned at the constraint scan)."""
         self.model = model
         n = model.numnod
+        extra = (constraints.extra if constraints is not None
+                 else np.zeros((n, DOFS_PER_NODE), dtype=bool))
+        unfreeze = (constraints.unfreeze if constraints is not None
+                    else np.zeros(n, dtype=bool))
+        bcs_ignore = (constraints.bcs_ignore if constraints is not None
+                      else np.zeros(n, dtype=bool))
 
         # ---- which nodes carry rotational stiffness ----------------------
         # shell families and (M11) beams put bending/twist stiffness on
@@ -100,14 +118,20 @@ class DofMap:
             grp = model.node_groups.get(bc.grnod_id)
             if grp is None or grp.node_idx is None:
                 continue
-            idx = grp.node_idx
+            # M12: nodes whose /BCS clashes with a kinematic constraint
+            # (rigid slaves, tied secondaries, RBE3 references) — the
+            # constraint wins, exactly the explicit convention (warned)
+            idx = grp.node_idx[~bcs_ignore[grp.node_idx]]
             for d in range(3):
                 if bc.fix_tra[d]:
                     fix_tra[idx, d] = True
                 if bc.fix_rot[d]:
                     fix_rot[idx, d] = True
-        # frozen placeholder nodes (mass ~ 1e30) are fully fixed
-        frozen = model.mass >= 1e29
+        # frozen placeholder nodes (mass ~ 1e30) are fully fixed — except
+        # constraint masters/dependents (M12): a standalone /RBODY master
+        # is exactly such a placeholder, yet it must carry the body's six
+        # condensed equations
+        frozen = (model.mass >= 1e29) & ~unfreeze
         fix_tra[frozen, :] = True
         fix_rot[frozen, :] = True
         # PRESCRIBED (imposed-displacement) DOFs are condensed exactly like
@@ -133,16 +157,18 @@ class DofMap:
         counter = 0
         for i in range(n):
             base = i * DOFS_PER_NODE
-            # translations
-            if massed[i]:
+            # translations (M12: constraint masters/dependents force-
+            # numbered through ``extra`` — see the constructor docstring)
+            if massed[i] or extra[i, :3].any():
                 for c in range(3):
-                    if not fix_tra[i, c]:
+                    if not fix_tra[i, c] and (massed[i] or extra[i, c]):
                         eq[base + c] = counter
                         counter += 1
-            # rotations (shell nodes only)
-            if has_rot[i]:
+            # rotations (shell/beam nodes, + forced constraint slots)
+            if has_rot[i] or extra[i, 3:].any():
                 for c in range(3):
-                    if not fix_rot[i, c]:
+                    if not fix_rot[i, c] and (has_rot[i]
+                                              or extra[i, 3 + c]):
                         eq[base + 3 + c] = counter
                         counter += 1
         self.eq = eq

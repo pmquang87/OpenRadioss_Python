@@ -140,10 +140,24 @@ Total-form elements (the spring) and the LAW2 truss carry their own
 implicit residual, ``implicit_internal_forces``, dispatched by
 ``_internal_forces`` instead of forces() — see their module notes.
 
+M12 added the two structural gaps this module had left: KINEMATIC
+CONSTRAINTS BY CONDENSATION (/RBODY, /RBE2, /INTER/TYPE2, /RBE3, /MPC —
+``constraints.py``: the rby_imp0.F / rbe2_imp0.F / rbe3_imp0.F /
+i2_imp1.F transformations K_red = T^T K T, R_red = T^T R around every
+Newton solve, rebuilt per committed frame under NLGEOM) and PENALTY
+CONTACT in the loop (/INTER/TYPE7 — ``contact.py``: the i7ke3.F force in
+the residual at the trial configuration + the exact gap tangent in K,
+with the active set re-evaluated every iteration; a chattering set that
+fails its Newton budget lands in the M11 StepControl cut, the imp_dt.F
+coupling). Rigid walls are REFUSED under implicit (a kinematic device of
+the explicit update; silently ignoring a wall would drop a real boundary
+condition).
+
 Still DEFERRED (documented, not half-done — see the package docstring and
-PORTING_GUIDE): contact & general constraints in the tangent (the M12
-candidate), follower-load (pressure) stiffness, LAW27/36/42 and LAW2-beam
-tangents, rate devices under implicit (disabled loudly).
+PORTING_GUIDE): friction and /INTER/TYPE11 in the implicit loop,
+follower-load (pressure) stiffness, LAW27/36/42 and LAW2-beam tangents,
+rate devices under implicit (disabled loudly), arc length / /IMPL/BUCKL
+combined with constraints or contact.
 """
 
 from __future__ import annotations
@@ -429,13 +443,29 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
         log.info(" BULK VISCOSITY (qa/qb) . . . . . . . : DISABLED (STATICS)")
     _warn_spring_dashpot(model, log)
 
+    # rigid walls are a kinematic device of the explicit velocity update —
+    # under implicit they would be silently dropped boundary conditions:
+    # refuse loudly (model contact against a fixed body with /INTER/TYPE7)
+    if model.rwalls:
+        raise NotImplementedError(
+            "/RWALL is not supported by the implicit solver — replace the "
+            "wall with /INTER/TYPE7 contact against a meshed (fixed) "
+            "surface, or run the explicit solver.")
+
     # /IMPDISP prescribed displacements: known DOFs whose value ramps with the
     # load factor. They are condensed out of the equations (like /BCS) but
     # carried in the displacement vector so f_int feels them — the standard
     # implicit displacement-control treatment (see _solve_increment). /IMPVEL
     # is meaningless for statics and is ignored here.
     imposed, presc = _resolve_imposed(model, log)
-    dof = DofMap(model, log, prescribed=presc)
+    # M12: kinematic constraints (condensation transform) + penalty contact
+    from .constraints import build_constraints
+    from .contact import build_implicit_contacts
+    constr = build_constraints(model, log)
+    contacts = build_implicit_contacts(model, log)
+    if constr is not None:
+        constr.veto_imposed(imposed)
+    dof = DofMap(model, log, prescribed=presc, constraints=constr)
     loads = LoadsAndConstraints(model, log)
     solver = LinearSolver(ip.impl_linsolve, log)
 
@@ -450,6 +480,13 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
     # — the updated-Lagrangian outer step (see the module docstring).
     x_ref = model.x0.copy()
     model.x = model.x0.copy()
+    if constr is not None:
+        # the condensation transform, linearized at the committed frame
+        # (rebuilt on every frame advance under /IMPL/NONLIN — see
+        # constraints.py)
+        constr.build(dof, x_ref)
+        log.info(f" CONDENSED EQUATIONS (M12)  . . . . . : {constr.nred} "
+                 f"(FROM {dof.ndof})")
 
     result = ImplicitResult()
     lam = 0.0
@@ -468,6 +505,13 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
     log.info(f" MAX NEWTON ITERATIONS  . . . . . . . : {ip.impl_max_iter}")
     log.info("\n   INCREMENT   LOAD-FACTOR   ITER   RESIDUAL-NORM   STATUS")
 
+    if (constr is not None or contacts) and \
+            (arc or getattr(ip, "impl_buckl", 0)):
+        raise NotImplementedError(
+            "/IMPL/ARCL and /IMPL/BUCKL combined with kinematic "
+            "constraints or /INTER contact are DEFERRED (PORTING_GUIDE "
+            "M12) — run plain /IMPL[/NONLIN] load control.")
+
     if arc:
         _run_arclength(model, controls, log, dof, loads, solver, committed,
                        x_ref, imposed, dlam, lam_end, result)
@@ -485,8 +529,9 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
     while lam < lam_end * (1.0 - 1e-12):
         lam_new = min(lam + ctrl.dt, lam_end)
         inc_no += 1
-        inc = _solve_increment(model, controls, log, dof, loads, solver,
-                               committed, x_ref, lam, lam_new, imposed, nlg)
+        inc, u_c, ur_c = _solve_increment(
+            model, controls, log, dof, loads, solver, committed, x_ref,
+            lam, lam_new, imposed, nlg, constr, contacts)
         result.increments.append(inc)
         if not inc.converged:
             log.info(f" {inc_no:9d} {lam_new:13.5E} {inc.iterations:6d} "
@@ -512,7 +557,16 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
         # configuration (updated Lagrangian); otherwise it stays at x0.
         committed = {name: _snapshot(g) for name, g in model.element_groups()}
         if nlg:
+            if constr is not None:
+                # exact placement of the dependent nodes (rigid bodies via
+                # the Rodrigues map of the increment rotation, tied nodes
+                # on their co-rotated segment) BEFORE the frame advances —
+                # the linearized map would stretch the body O(theta^2) per
+                # increment (see constraints.commit_placement)
+                constr.commit_placement(model, u_c, ur_c)
             x_ref = model.x.copy()
+            if constr is not None:
+                constr.build(dof, x_ref)      # re-linearize the arms/fits
         lam = lam_new
         ctrl.converged(inc.iterations)
 
@@ -582,23 +636,38 @@ def _resolve_imposed(model, log):
 
 
 def _solve_increment(model, controls, log, dof, loads, solver,
-                     committed, x_ref, lam_prev, lam, imposed, nlgeom=False):
+                     committed, x_ref, lam_prev, lam, imposed, nlgeom=False,
+                     constr=None, contacts=()):
     """One load increment: Newton-iterate to equilibrium at load factor
-    ``lam``. Returns an IncrementResult. On entry the element buffers hold the
-    committed state and ``x_ref`` the committed geometry; on a converged
-    return model.x and the element state hold the new equilibrium.
+    ``lam``. Returns ``(IncrementResult, u, ur)`` — the converged increment
+    displacements are what the NLGEOM commit placement needs. On entry the
+    element buffers hold the committed state and ``x_ref`` the committed
+    geometry; on a converged return model.x and the element state hold the
+    new equilibrium.
 
     ``nlgeom`` selects the M9 nonlinear-geometry increment: residual on the
     trial configuration (see ``_internal_forces``) and tangent with K_geo,
-    both linearized at the trial geometry x_ref + u."""
+    both linearized at the trial geometry x_ref + u.
+
+    M12: ``constr`` reduces the linear system through the condensation
+    transform (K_red = T^T K T, R_red = T^T R, du = T du_red — the
+    *_IMP1/*_IMPR1 calls of the original around every solve; convergence
+    is measured on the REDUCED residual, the only one that must vanish:
+    a dependent row's out-of-balance is by construction carried by its
+    masters). ``contacts`` add the penalty force at the TRIAL
+    configuration model.x + u to the residual and the active-set gap
+    tangent to K — the active set is re-evaluated every iteration."""
     ip = controls
     n = model.numnod
+
+    def _reduce(vec):
+        return constr.reduce_vector(vec) if constr is not None else vec
 
     # external force at this load factor (the loads machinery evaluates the
     # curves at t = lam — the load factor plays the role of the pseudo-time)
     fext = np.zeros((n, 3))
     loads.external_forces(lam, fext, x_ref)
-    fext_eq = dof.gather_residual(fext, np.zeros((n, 3)))
+    fext_eq = _reduce(dof.gather_residual(fext, np.zeros((n, 3))))
     ref = max(np.linalg.norm(fext_eq), 1e-30)
 
     # plastic strain at the start of the increment (per solid group) for the
@@ -619,10 +688,20 @@ def _solve_increment(model, controls, log, dof, loads, solver,
         # the internal force as well (see ``ref`` update after iter 0)
     inc = IncrementResult(load_factor=lam, converged=False, iterations=0)
 
-    for it in range(ip.impl_max_iter):
-        # residual R = f_ext + f_int(u)  (equation space)
+    def _residual():
+        """Residual at the current trial increment: internal force from the
+        committed base + the M12 contact force at the trial CONFIGURATION
+        (model.x + u — contact is geometric in both element modes)."""
         fint, mint = _internal_forces(model, x_ref, u, ur, committed, nlgeom)
-        R = dof.gather_residual(fext + fint, mint)
+        if contacts:
+            from .contact import contact_forces
+            fcont, _ = contact_forces(contacts, model.x + u, n)
+            fint = fint + fcont
+        return fint, mint, _reduce(dof.gather_residual(fext + fint, mint))
+
+    for it in range(ip.impl_max_iter):
+        # residual R = f_ext + f_int(u) (+ contact), reduced equation space
+        fint, mint, R = _residual()
         rnorm = float(np.linalg.norm(R))
         inc.residuals.append(rnorm)
         inc.iterations = it + 1
@@ -646,7 +725,15 @@ def _solve_increment(model, controls, log, dof, loads, solver,
         # stiffness added) for the nonlinear-geometry path
         x_tan = x_ref + u if nlgeom else x_ref
         K = assemble(model, dof, x_tan, epsp_incr, kgeo=nlgeom)
-        du_eq = solver.solve(K, R)
+        if contacts:
+            # active-set gap tangent at the trial configuration (M12 —
+            # the IMP_INT_K assembly step)
+            from .contact import contact_tangent
+            K = K + contact_tangent(contacts, model.x + u, dof)
+        if constr is not None:
+            du_eq = constr.expand(solver.solve(constr.reduce_matrix(K), R))
+        else:
+            du_eq = solver.solve(K, R)
         du, dur = dof.scatter_solution(du_eq)
         u = u + du
         ur = ur + dur
@@ -658,9 +745,7 @@ def _solve_increment(model, controls, log, dof, loads, solver,
         if np.linalg.norm(du_eq) <= ip.impl_tol * max(unorm, 1e-30) \
                 and it > 0:
             # re-evaluate the residual at the corrected u for the record
-            fint, mint = _internal_forces(model, x_ref, u, ur, committed,
-                                          nlgeom)
-            R = dof.gather_residual(fext + fint, mint)
+            fint, mint, R = _residual()
             inc.residuals.append(float(np.linalg.norm(R)))
             inc.iterations = it + 2
             inc.converged = True
@@ -673,7 +758,7 @@ def _solve_increment(model, controls, log, dof, loads, solver,
         # (updated Lagrangian). The element state already holds the converged
         # trial values from the last _internal_forces call.
         model.x = model.x + u
-    return inc
+    return inc, u, ur
 
 
 # ----------------------------------------------------------------------------
@@ -783,9 +868,9 @@ def _run_arclength(model, controls, log, dof, loads, solver, committed,
     # near-final state) so the reported state is at exactly lam_end.
     if abs(lam - lam_end) > 1e-12 * max(abs(lam_end), 1.0):
         loads_zero_imposed = []
-        inc = _solve_increment(model, ip, log, dof, _ArcLoads(q_full), solver,
-                               committed, x_ref, lam, lam_end,
-                               loads_zero_imposed, nlgeom=True)
+        inc, _, _ = _solve_increment(model, ip, log, dof, _ArcLoads(q_full),
+                                     solver, committed, x_ref, lam, lam_end,
+                                     loads_zero_imposed, nlgeom=True)
         result.increments.append(inc)
         if inc.converged:
             log.info(f" {len(result.increments):9d} {lam_end:13.5E} "

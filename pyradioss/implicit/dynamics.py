@@ -42,6 +42,32 @@ M11 added (removing two M10 deferrals):
   /IMPL/DTINI on easy steps — shared with the statics driver
   (``statics.StepControl``, where the semantics are documented).
 
+M12 added constraints and contact to the dynamic system:
+
+* KINEMATIC CONSTRAINTS BY CONDENSATION (``constraints.py`` — the
+  rby_imp0.F/rbe2_imp0.F/rbe3_imp0.F/i2_imp1.F transformations, called
+  by IMP_DYKV/upd_rhs in the original's dynamic path): the whole
+  eq-space system of a step — dynamic residual, K_eff, damping — is
+  reduced through T before the solve. Because the inertia term -M a is
+  built in NODE space and the Newmark kinematics make a_full = T a_red
+  (v/a of a dependent node follow its masters exactly), the reduction
+  T^T(-M a) IS the condensed-mass term -(T^T M T) a_red: a rigid body
+  automatically carries its EXACT 6-DOF mass matrix at the master
+  (total mass, parallel-axis inertia tensor, m*skew(r) COG coupling) —
+  nothing else to assemble. The initial nodal velocities are projected
+  onto the constraint manifold mass-weighted (for a rigid body that is
+  precisely the explicit port's momentum projection v_g = p/M,
+  w = J^-1 L), and the initial acceleration solves the CONDENSED
+  M_red a_red = R_red (zero-mass reduced rows quasi-static, as before).
+* PENALTY CONTACT (``contact.py`` — i7ke3.F): the contact force at the
+  trial configuration joins f_int in the HHT weighting (it is a
+  configuration force like the internal force; the previous level's
+  value rides g_n), the active-set gap tangent joins K_eff, and the
+  stored spring energy 1/2 K p^2 gets its own ``econt`` ledger channel
+  (a state function — the balance closes through impacts up to the
+  O(dt^2) trapezoid-vs-quadratic booking noise of the step the set
+  changes in).
+
 NOT mirrored (deferred explicitly, PORTING_GUIDE M10/M11): the ``QSTAT_*``
 quasi-static-initialization branch, the IDTC = 2/3 displacement-norm /
 Riks step controls of ``imp_dt.F``, and /IMPL/DT/FIXP fix points.
@@ -239,8 +265,10 @@ class ImplicitDynResult(ImplicitResult):
         #: "bal" = ie + ke + edamp - wext - e0 (lists of floats), and "u" —
         #: displacement snapshots (numnod, 3) for the validations (kept
         #: while numnod stays example-sized).
+        #: "econt" (M12): stored contact penalty-spring energy 1/2 K p^2
+        #: (zero without /INTER/TYPE7), part of the balance like edamp.
         self.history = {"t": [], "ke": [], "ie": [], "wext": [], "edamp": [],
-                        "bal": [], "u": []}
+                        "econt": [], "bal": [], "u": []}
 
 
 #: stop keeping displacement snapshots beyond this many stored floats —
@@ -257,14 +285,21 @@ def _lumped_mass_eq(model, dof):
 
     A rotational equation with zero nodal inertia keeps M = 0: its balance
     is quasi-static (no Ma term) and K_eff still carries the full rotational
-    stiffness, so the system stays well posed."""
+    stiffness, so the system stays well posed.
+
+    Frozen-placeholder masses (1e30 — the Starter's marker for nodes no
+    element references) read as ZERO here: before M12 such nodes never had
+    equations; now an unfrozen constraint master does, and its phantom
+    placeholder must not enter the physics — the body's real mass reaches
+    the master through the condensation T^T M T (see constraints.py)."""
     n = model.numnod
     node = np.arange(n)
+    mass = np.where(model.mass >= 1e29, 0.0, model.mass)
     M = np.zeros(dof.ndof)
     for c in range(3):
         e = dof.eq[node * DOFS_PER_NODE + c]
         act = e >= 0
-        M[e[act]] = model.mass[act]
+        M[e[act]] = mass[act]
         e = dof.eq[node * DOFS_PER_NODE + 3 + c]
         act = e >= 0
         M[e[act]] = model.inertia[act]
@@ -382,8 +417,21 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
 
     _disable_rate_devices(model, log)
 
+    if model.rwalls:
+        raise NotImplementedError(
+            "/RWALL is not supported by the implicit solver — replace the "
+            "wall with /INTER/TYPE7 contact against a meshed (fixed) "
+            "surface, or run the explicit solver.")
+
     imposed, presc = _resolve_imposed(model, log)
-    dof = DofMap(model, log, prescribed=presc)
+    # M12: kinematic constraints (condensation) + penalty contact
+    from .constraints import build_constraints
+    from .contact import build_implicit_contacts, contact_forces
+    constr = build_constraints(model, log)
+    contacts = build_implicit_contacts(model, log)
+    if constr is not None:
+        constr.veto_imposed(imposed)
+    dof = DofMap(model, log, prescribed=presc, constraints=constr)
     loads = LoadsAndConstraints(model, log)
     solver = LinearSolver(ip.impl_linsolve, log)
     M_eq = _lumped_mass_eq(model, dof)
@@ -391,6 +439,10 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
     committed = {name: _snapshot(g) for name, g in model.element_groups()}
     x_ref = model.x0.copy()
     model.x = model.x0.copy()
+    if constr is not None:
+        constr.build(dof, x_ref)
+        log.info(f" CONDENSED EQUATIONS (M12)  . . . . . : {constr.nred} "
+                 f"(FROM {dof.ndof})")
 
     # ---- time controls: /RUN t_end is PHYSICAL time, /IMPL/DTINI the step
     t_end = ip.t_end
@@ -426,6 +478,12 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
     # on it (the explicit path zeroes it in the kinematic enforcement)
     v[dof.fix_tra] = 0.0
     vr[dof.fix_rot] = 0.0
+    if constr is not None:
+        # project the initial velocities onto the constraint manifold,
+        # mass weighted — for a rigid body this IS the explicit port's
+        # momentum projection (v_g = p/M, w = J^-1 L); an /INIVEL field
+        # can only be carried through its constraint-compatible part
+        v, vr = constr.project_velocity(dof, M_eq, v, vr, solver)
 
     # ---- damping matrix C = a M + b K (IMP_DYKS/IMP_DYKV) ------------------
     # b couples through the STEP-START tangent: constant under linear
@@ -453,13 +511,30 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
     loads.external_forces(0.0, fext, x_ref)
     fint, mint = _internal_forces(model, x_ref, np.zeros((n, 3)),
                                   np.zeros((n, 3)), committed, nlg)
+    if contacts:
+        # contact force of the INITIAL configuration joins f_int (a
+        # configuration force — it rides the HHT previous level too)
+        fc0, _ = contact_forces(contacts, model.x, n)
+        fint = fint + fc0
     R0 = dof.gather_residual(fext + fint, mint)
     # DYNA_INA: the initial acceleration balances the initial out-of-force,
     # damping included: M a_0 = f_ext(0) + f_int(0) - C v_0
     fd_prev = _damp_force(v, vr)
     if fd_prev is not None:
         R0 = R0 - fd_prev
-    a0_eq = np.where(M_eq > 0.0, R0 / np.where(M_eq > 0.0, M_eq, 1.0), 0.0)
+    if constr is not None:
+        # condensed initial acceleration: M_red a_red = R_red (the rigid
+        # 6-DOF mass at the master — see the module docstring), zero-mass
+        # reduced rows quasi-static like the diagonal path below
+        from . import require_scipy
+        sp, _spla = require_scipy()
+        from .constraints import _solve_semidefinite
+        Mred = (constr.Tt @ sp.diags(M_eq) @ constr.T).tocsr()
+        a0_eq = constr.expand(
+            _solve_semidefinite(Mred, constr.reduce_vector(R0), solver))
+    else:
+        a0_eq = np.where(M_eq > 0.0, R0 / np.where(M_eq > 0.0, M_eq, 1.0),
+                         0.0)
     a, ar = dof.scatter_solution(a0_eq)
     # previous-level force g_n = (f_ext + f_int)_n for the HHT weighting
     g_prev_f = fext + fint
@@ -468,7 +543,8 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
 
     # ---- energy ledger seed -------------------------------------------------
     real = model.mass < 1e29
-    e0 = _kinetic(model, v, vr, real) + _elem_energy(model)
+    econt0 = sum(c.energy(model.x) for c in contacts) if contacts else 0.0
+    e0 = _kinetic(model, v, vr, real) + _elem_energy(model) + econt0
     wext = 0.0
     edamp = 0.0
     keep_u = True
@@ -491,7 +567,8 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
             model, ip, dof, loads, solver, committed, x_ref, imposed,
             t, t_new, dt_s, alpha, gamma, beta, M_eq, v, vr, a, ar,
             g_prev_f, g_prev_m, nlg,
-            (da, db, K_damp, fd_prev) if damp_on else None)
+            (da, db, K_damp, fd_prev) if damp_on else None,
+            constr, contacts)
         result.increments.append(inc)
         if not inc.converged:
             log.info(f" {step_no:11d} {t_new:11.4E} {inc.iterations:6d} "
@@ -548,7 +625,14 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
         fext_prev = fext_new
         committed = {name: _snapshot(g) for name, g in model.element_groups()}
         if nlg:
+            if constr is not None:
+                # exact placement of the dependent nodes before the frame
+                # advances (rigid Rodrigues re-placement, tied co-rotated
+                # offset — see constraints.commit_placement)
+                constr.commit_placement(model, u, ur_s)
             x_ref = model.x.copy()
+            if constr is not None:
+                constr.build(dof, x_ref)   # re-linearize arms/fits
             if damp_on and db != 0.0:
                 # re-save the damping stiffness at the new committed frame
                 # (the original's per-step IMP_DYKS save)
@@ -559,13 +643,18 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
         # ---- history --------------------------------------------------------
         ke = _kinetic(model, v, vr, real)
         ie = _elem_energy(model)
+        # stored contact-spring energy (M12): a state function of the
+        # configuration — its own ledger channel, like edamp
+        econt = (sum(c.energy(model.x) for c in contacts)
+                 if contacts else 0.0)
         h = result.history
         h["t"].append(t)
         h["ke"].append(ke)
         h["ie"].append(ie)
         h["wext"].append(wext)
         h["edamp"].append(edamp)
-        h["bal"].append(ie + ke + edamp - wext - e0)
+        h["econt"].append(econt)
+        h["bal"].append(ie + ke + edamp + econt - wext - e0)
         if keep_u:
             h["u"].append(model.x - model.x0)
             if (len(h["u"]) + 1) * n * 3 > _U_HISTORY_CAP:
@@ -608,7 +697,8 @@ def _elem_energy(model):
 
 def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
                 t_old, t_new, dt, alpha, gamma, beta, M_eq, v, vr, a, ar,
-                g_prev_f, g_prev_m, nlgeom, damp=None):
+                g_prev_f, g_prev_m, nlgeom, damp=None, constr=None,
+                contacts=()):
     """Newton-iterate one time step to the HHT-weighted dynamic balance
     (see module docstring). Returns ``(inc, u, ur, fint, mint, fext_new,
     fd_new)`` with ``u``/``ur`` the converged step displacement increment,
@@ -620,6 +710,16 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
     ``damp`` (M11, /IMPL/DYNA/DAMP) is ``(a, b, K_damp, fd_prev)``: the
     Rayleigh coefficients, the step-start damping stiffness (CSR or None
     when b = 0) and the PREVIOUS level's damping force for the HHT blend.
+
+    M12: ``constr`` reduces the assembled system through the condensation
+    transform before the solve (convergence measured on the REDUCED
+    residual — the only one that must vanish); ``contacts`` add the
+    penalty force at the trial configuration model.x + u into the
+    (1+alpha)-weighted force level like f_int (the previous level's
+    contact force rides ``g_prev_f``) and the active-set gap tangent into
+    K_eff. The returned ``fint`` INCLUDES the converged contact force, so
+    the caller's g_n bookkeeping and /IMPDISP reaction booking stay
+    correct with no extra plumbing.
 
     On entry the element buffers hold the committed state; on a converged
     return model.x and the element state hold the new configuration —
@@ -675,6 +775,13 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
     # never enter the solve, so Newton could not correct one)...
     u[dof.fix_tra] = 0.0
     ur_s[dof.fix_rot] = 0.0
+    # ...and with constraints the predictor must be PROJECTED onto the
+    # constraint manifold (u = T u_red always — see
+    # constraints.make_consistent for the failure mode this prevents)...
+    if constr is not None:
+        u, ur_s = constr.make_consistent(dof, u, ur_s)
+        u[dof.fix_tra] = 0.0
+        ur_s[dof.fix_rot] = 0.0
     # ...and the /IMPDISP-driven DOFs (part of that mask) are then seeded
     # EXACTLY: the drive steps from d(t_n) to d(t_{n+1})
     for idx, d, fct, scale in imposed:
@@ -683,6 +790,14 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
     inc = IncrementResult(load_factor=t_new, converged=False, iterations=0)
     fint = mint = None
     fd_new = None
+    fcont = None
+    # frozen-placeholder masses read as zero in the node-space inertia
+    # term (an unfrozen M12 constraint master carries a 1e30 marker, and
+    # its row IS gathered now — see _lumped_mass_eq)
+    massz = np.where(model.mass >= 1e29, 0.0, model.mass)
+
+    def _reduce(vec):
+        return constr.reduce_vector(vec) if constr is not None else vec
 
     for it in range(ip.impl_max_iter):
         # Newmark kinematics of the current trial increment
@@ -691,12 +806,18 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
 
         fint, mint = _internal_forces(model, x_ref, u, ur_s, committed,
                                       nlgeom)
+        if contacts:
+            # penalty force at the TRIAL configuration — a configuration
+            # force weighted with f_int in the HHT balance (M12)
+            from .contact import contact_forces
+            fcont, _ = contact_forces(contacts, model.x + u, n)
+            fint = fint + fcont
         # R = (1+a)(f_ext + f_int)_{n+1} - a g_n - M a_{n+1}   (node space)
         Rf = (ap1 * (fext + fint) - alpha * g_prev_f
-              - model.mass[:, None] * a_new)
+              - massz[:, None] * a_new)
         Rm = (ap1 * mint - alpha * g_prev_m
               - model.inertia[:, None] * ar_new)
-        R = dof.gather_residual(Rf, Rm)
+        R = _reduce(dof.gather_residual(Rf, Rm))
         if damp is not None:
             # the damping force enters like f_int, negated and HHT-weighted
             # (IMP_DYNAR: FINT = FINT - DY_DAM): the CURRENT velocity
@@ -704,7 +825,7 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
             v_new = v + dt * ((1.0 - gamma) * a + gamma * a_new)
             vr_new = vr + dt * ((1.0 - gamma) * ar + gamma * ar_new)
             fd_new = _fd(v_new, vr_new)
-            R = R - ap1 * fd_new + alpha * fd_prev
+            R = R - _reduce(ap1 * fd_new - alpha * fd_prev)
         rnorm = float(np.linalg.norm(R))
         inc.residuals.append(rnorm)
         inc.iterations = it + 1
@@ -712,8 +833,9 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
             # reference: the largest of the applied load, the inertial
             # force of the predicted motion (THE force scale of a free
             # vibration) and the initial out-of-balance
-            ma = dof.gather_residual(model.mass[:, None] * a_new,
-                                     model.inertia[:, None] * ar_new)
+            ma = _reduce(dof.gather_residual(massz[:, None] * a_new,
+                                             model.inertia[:, None]
+                                             * ar_new))
             ref = max(ref, float(np.linalg.norm(ma)), rnorm)
 
         if rnorm <= ip.impl_tol * ref:
@@ -723,13 +845,22 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
         epsp_incr = _epsp_increments(model, epsp0)
         x_tan = x_ref + u if nlgeom else x_ref
         K = assemble(model, dof, x_tan, epsp_incr, kgeo=nlgeom)
+        if contacts:
+            # the active-set gap tangent at the trial configuration
+            # joins the (1+alpha)-weighted stiffness like K_T (M12)
+            from .contact import contact_tangent
+            K = K + contact_tangent(contacts, model.x + u, dof)
         # K_eff = (1+alpha) K_T + M/(beta dt^2)  (IMP_DYNAM's diagonal add)
         # + (1+alpha) gamma/(beta dt) C under Rayleigh damping (the
         # IDY_DAMP branch — see the module docstring for the algebra)
         K_eff = ap1 * K + M_diag
         if C_eff is not None:
             K_eff = K_eff + C_eff
-        du_eq = solver.solve(K_eff, R)
+        if constr is not None:
+            du_eq = constr.expand(
+                solver.solve(constr.reduce_matrix(K_eff), R))
+        else:
+            du_eq = solver.solve(K_eff, R)
         du, dur = dof.scatter_solution(du_eq)
         u = u + du
         ur_s = ur_s + dur
@@ -744,16 +875,20 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
             ar_new = c0 * ur_s - vr / (beta * dt) - (0.5 / beta - 1.0) * ar
             fint, mint = _internal_forces(model, x_ref, u, ur_s, committed,
                                           nlgeom)
+            if contacts:
+                from .contact import contact_forces
+                fcont, _ = contact_forces(contacts, model.x + u, n)
+                fint = fint + fcont
             Rf = (ap1 * (fext + fint) - alpha * g_prev_f
-                  - model.mass[:, None] * a_new)
+                  - massz[:, None] * a_new)
             Rm = (ap1 * mint - alpha * g_prev_m
                   - model.inertia[:, None] * ar_new)
-            R = dof.gather_residual(Rf, Rm)
+            R = _reduce(dof.gather_residual(Rf, Rm))
             if damp is not None:
                 v_new = v + dt * ((1.0 - gamma) * a + gamma * a_new)
                 vr_new = vr + dt * ((1.0 - gamma) * ar + gamma * ar_new)
                 fd_new = _fd(v_new, vr_new)
-                R = R - ap1 * fd_new + alpha * fd_prev
+                R = R - _reduce(ap1 * fd_new - alpha * fd_prev)
             inc.residuals.append(float(np.linalg.norm(R)))
             inc.iterations = it + 2
             inc.converged = True
@@ -790,6 +925,9 @@ def _dyn_summary(model, result, dof, log, e0):
         if h.get("edamp") and h["edamp"][-1] != 0.0:
             log.info(f"     RAYLEIGH DISSIPATION  . . : "
                      f"{h['edamp'][-1]:14.7E}  (/IMPL/DYNA/DAMP)")
+        if h.get("econt") and h["econt"][-1] != 0.0:
+            log.info(f"     CONTACT SPRING ENERGY . . : "
+                     f"{h['econt'][-1]:14.7E}  (/INTER/TYPE7)")
         log.info(f"     ENERGY BALANCE  . . . . . : "
                  f"{h['bal'][-1] / ref * 100.0:8.2f} %")
     log.info("     ------------------------------------------------")
