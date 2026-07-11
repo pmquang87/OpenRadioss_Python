@@ -93,6 +93,18 @@ class EngineControls:
     impl_arc_dl: float = 0.0      # initial arc radius (0 = from 1st predictor)
     impl_arc_maxinc: int = 200    # arc increment cap (runaway-path guard)
     impl_arc_itdes: int = 5       # target Newton iterations per arc increment
+    # -- M10 implicit DYNAMICS (/IMPL/DYNA) — Newmark/HHT time integration.
+    # ``impl_dyna`` mirrors the original's IDYNA flag (input/freimpl.F):
+    # 0 = off (implicit runs STATIC), 1 = HHT-alpha (/IMPL/DYNA/1 — the
+    # alpha value is read; gamma/beta derived as 1/2-a and (1-a)^2/4,
+    # exactly imp_dyna.F's DYNA_INI), 2 = plain Newmark (/IMPL/DYNA/2 —
+    # gamma and beta read directly, in that order: DY_G = NM_A,
+    # DY_B = NM_B). With /IMPL/DYNA the /RUN "time" is PHYSICAL time again
+    # and /IMPL/DTINI the physical time step.
+    impl_dyna: int = 0            # 0 = static, 1 = HHT-alpha, 2 = Newmark
+    impl_dyna_alpha: float = 0.0  # HHT alpha (0 = trapezoidal; -1/3 <= a <= 0)
+    impl_dyna_gamma: float = 0.5  # Newmark gamma (/IMPL/DYNA/2 field 1)
+    impl_dyna_beta: float = 0.25  # Newmark beta  (/IMPL/DYNA/2 field 2)
 
 
 class Model:

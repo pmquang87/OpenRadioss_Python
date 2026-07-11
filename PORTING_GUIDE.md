@@ -88,6 +88,7 @@ same names in comments.
 | `imp_solv.F` /IMPL/NONLIN branch (updated-Lagrangian step) + the `imp_kgeo` geometric-stiffness assembly in `imp_glob_k.F` | `statics.py` (nlgeom path) + `kgeo()` in `solid_hexa8` / `shell_bt4` / `truss` | M9: committed frame advances per increment; residual = midpoint (Hughes–Winget) stress update + end-configuration assembly (`static_internal_forces`); tangent += K_geo = ∫G^T[σ]G dV at the trial geometry |
 | the arc-length continuation of the implicit nonlinear driver (`imp_solv.F` family) | `statics.py` (`_run_arclength`) | M9: spherical Riks/Crisfield constraint, root selection by path continuation, adaptive radius, sign-following predictor; `/IMPL/ARCL` |
 | `engine/source/implicit/imp_buck.F` (/IMPL/BUCKL buckling eigensolver) | `pyradioss/implicit/buckling.py` | M9: (K_mat + μ K_geo)φ = 0 generalized eigenproblem on a pre-stressed state (library function; the engine card itself deferred) |
+| `engine/source/implicit/imp_dyna.F` (implicit dynamics: DYNA_INI scheme setup, DYNA_INA initial acceleration, IMP_DYNAM effective-stiffness diagonal, IMP_DYNAR/IMP_FHHT dynamic residual + HHT weighting, INTE_DYNA a/v recovery, DYNA_WEX work ledger) + the /IMPL/DYNA read of `engine/source/input/freimpl.F` | `pyradioss/implicit/dynamics.py` + `/IMPL/DYNA` in `engine_keywords.py` | M10: Newmark-β/HHT-α implicit time integration on top of the M8/M9 statics core — lumped M (model.mass + model.inertia) condensed through the DofMap, R = (1+α)(f_ext+f_int)ₙ₊₁ − α(…)ₙ − M aₙ₊₁, K_eff = (1+α)K_T + M/(β dt²), both geometry modes; rate devices disabled explicitly (see the module docstring) |
 
 ## 3. Conventions used in this port
 
@@ -172,7 +173,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | Engine: `/RUN`, `/VERS`, `/TFILE`, `/ANIM/DT`, `/ANIM/VECT|ELEM`, `/DT`, `/PRINT`, `/STOP` | ✅/🟡 | |
 | Engine: `/DT/NODA`, `/DT/NODA/CST` | ✅ | M6 — nodal time step dt_i = √(2Mᵢ/Kᵢ) with the element stiffness derived from the kernels' own dt claims (kᵢᵉ = 2mᵢᵉ/dt_e², = the element dt on uniform meshes) and the contact NEAR-spring stiffness accumulated in; CST adds mass to hold dT_min — added mass, its momentum and its kinetic energy are tracked, reported (1%-step announcements + termination summary) and the energy enters the balance; prescribed nodes (rigid-body members, tied secondaries, RBE3 dependents) are excluded (see engine/mass_scaling.py) |
 | Engine: `/STATE/DT` | 🟡 | M6 — periodic full restart snapshots refreshing `RunName_{nn}.rst` (crash recovery / early chaining); the original's .sta ASCII format ❌ (the pickle restart plays that role) |
-| Engine: `/IMPL` (+ `/IMPL/DTINI`, `/IMPL/NEWTON`, `/IMPL/LSOLVER`) | 🟡 | M8 — switches the run to the implicit-STATIC Newton driver (final /RUN "time" = load factor, increment size, Newton tolerance + iteration cap, direct-solver choice); `/IMPL/DYNA` (implicit dynamics) warns and is not ported; unknown sub-cards warn and skip like the rest of the reader |
+| Engine: `/IMPL` (+ `/IMPL/DTINI`, `/IMPL/NEWTON`, `/IMPL/LSOLVER`) | 🟡 | M8 — switches the run to the implicit-STATIC Newton driver (final /RUN "time" = load factor, increment size, Newton tolerance + iteration cap, direct-solver choice); unknown sub-cards warn and skip like the rest of the reader |
+| Engine: `/IMPL/DYNA/1` (HHT), `/IMPL/DYNA/2` (Newmark) | ✅ | M10 — implicit DYNAMICS: /RUN "time" and /IMPL/DTINI become PHYSICAL again. The card mirror follows the SOURCE (freimpl.F + imp_dyna.F), checked, not the docs: `/1` reads the HHT **alpha itself** (HHT_A — *not* a spectral radius; γ = ½−α, β = ¼(1−α)² derived), `/2` reads **gamma then beta** (NM_A → DY_G, NM_B → DY_B), defaults γ=½ β=¼ (trapezoidal); a bare `/IMPL/DYNA` = `/2` defaults (a port convenience). Warns outside the HHT range [−1/3, 0] and outside 2β ≥ γ ≥ ½. `/IMPL/DYNA/DAMP` (Rayleigh damping, IDY_DAMP) deferred — warns |
 | Engine: `/IMPL/NONLIN[/N]` (`/SMDISP`), `/IMPL/ARCL` | ✅ | M9 — NONLIN switches the implicit run to NONLINEAR GEOMETRY (updated-Lagrangian frame + K_geo; the original card's large-displacement default), `/IMPL/NONLIN/SMDISP` keeps the M8 small-displacement path (the original's SMDISP), a numeric /N (solver-strategy pick) is accepted (the port always runs full Newton); ARCL card `dl max_inc it_des` (all optional) selects the Riks/Crisfield arc-length continuation and implies NONLIN |
 | Engine restart chaining (`RunName_0002.rad`) | ✅ | M6 — the Engine ALWAYS writes `RunName_{nn}.rst` at termination; run nn+1 resumes it: clock/ledgers/next-dt/output numbering restored, rigid-body R & L and sensor fire-times carried, everything else deliberately reconstructed from the model arrays (tied projections, contact candidates, fix masks). Acceptance: a chained run reproduces the unchained one exactly — same cycle count, state to round-off (asserted for a spring oscillator and a tumbling /RBODY) |
 
@@ -228,7 +230,9 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | Linearized buckling eigensolver (K_mat + μ K_geo)φ = 0 (`implicit/buckling.py`, imp_buck.F analogue; dense eigh — fine at this port's model sizes) | ✅ (library function; /IMPL/BUCKL card deferred) |
 | Arc-length continuation (spherical Riks/Crisfield: predictor sign-following, Crisfield root selection by path continuation, adaptive radius with cut-on-failure, exact landing on the final load factor). Validated: von Mises two-bar truss traced through BOTH limit points against the closed form (sampled peaks ≥ 99% of ±P_max, never exceeding them; far-branch equilibrium to 0.1%) | ✅ (`/IMPL/ARCL`; proportional force loading only, no /IMPDISP) |
 | Statics bulk-viscosity fix (M9): the implicit driver zeroes the solid qa/qb — a rate device that leaked a spurious viscous pressure into COMPRESSIVE increments of the pseudo-velocity residual (latent in M8: all its validations were tensile); uniaxial compression is now exactly Hooke (asserted) | ✅ |
-| Implicit DYNAMICS (Newmark / HHT / generalized-α) | ❌ (deferred — the natural M10) |
+| **Implicit DYNAMICS (M10)**: Newmark-β time integration with HHT-α numerical dissipation (`/IMPL/DYNA/1|2`, imp_dyna.F) — lumped (diagonal) mass in equation space from the starter's model.mass/model.inertia (no consistent mass, like the original's MS/IN), dynamic residual R = (1+α)(f_ext+f_int)ₙ₊₁ − α(f_ext+f_int)ₙ − M aₙ₊₁, effective tangent K_eff = (1+α)K_T + M/(β dt²), Newmark a/v recovery per converged step; BOTH geometry modes (M8 linear + M9 /IMPL/NONLIN updated-Lagrangian); /IMPDISP at physical time; per-step energy ledger (KE/IE/W_ext/balance) in the result history. Validated: SDOF period elongation MATCHING the closed-form (ω dt)²/12 dispersion (and its 4× drop when dt halves), exact amplitude, energy conservation to round-off (trapezoidal), stability at 20× the leapfrog limit (leapfrog divergence asserted on the same system), HHT high-mode dissipation vs trapezoidal conservation on a bar, quasi-static limit = the M8 static answer, transient cross-checked against the EXPLICIT solver at the response peak (0.5%), large-rotation pendulum vs the elliptic-integral period (0.5%) with quadratic Newton | ✅ |
+| Rate effects under implicit dynamics: the kernels are driven with the step increment as a pseudo-velocity at dt = 1 (what the tangents linearize), so the rate devices are DISABLED explicitly — bulk viscosity zeroed (as statics), LAW2 strain-rate term zeroed with a warning — never silently fed du/1 | ✅ (deliberate deferral of rate-dependent plasticity — see dynamics.py) |
+| Consistent (element) mass matrix; Rayleigh damping in the implicit system (/IMPL/DYNA/DAMP); modal / eigenvalue dynamics; implicit↔explicit switching mid-run; automatic implicit time-step control (imp_dt.F); /IMPVEL under implicit dynamics (refused — use /IMPDISP) | ❌ (deferred — see the M10 roadmap note) |
 | Contact / /RBODY / /MPC in the implicit tangent system; follower-load (pressure) stiffness | ❌ (deferred — see the M9 roadmap note) |
 
 ## 5. Roadmap (next milestones)
@@ -618,7 +622,7 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
    Deferred out of M9, explicitly:
    * **implicit DYNAMICS** (Newmark / HHT / generalized-α) — the natural
      M10: mass matrix, a/v updates, effective dynamic stiffness on top of
-     this statics core;
+     this statics core (DONE in M10 — see the next entry);
    * contact, rigid bodies and /MPC in the implicit tangent system
      (unchanged from M8);
    * **follower-load (pressure) stiffness**: /PLOAD is evaluated at the
@@ -632,6 +636,107 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
      tangents;
    * line search for the Newton corrector (the arc radius adaptation
      covered every validation case).
+9. **M10 — implicit DYNAMICS** ✅ (done): Newmark-β time integration with
+   HHT-α numerical dissipation, mapped to the /IMPL/DYNA branch of the
+   implicit driver — `engine/source/implicit/imp_dyna.F` (DYNA_INI scheme
+   setup, DYNA_INA initial acceleration, IMP_DYNAM effective-stiffness
+   diagonal, IMP_DYNAR + IMP_FHHT dynamic residual with the HHT weighting,
+   INTE_DYNA acceleration/velocity recovery, DYNA_WEX work ledger) and the
+   /IMPL/DYNA read of `engine/source/input/freimpl.F`. Implicit was
+   STATICS ONLY through M9 (/IMPL/DYNA warned and ran static). Delivered
+   (`pyradioss/implicit/dynamics.py`; statics stays the default for a
+   bare /IMPL):
+   * **The lumped mass in equation space**: diagonal M from the starter's
+     `model.mass` (translations) and `model.inertia` (shell rotations),
+     condensed through the existing DofMap — exactly the arrays the
+     explicit leapfrog divides by, and exactly the original's lumped
+     MS/IN use in IMP_DYNAM. NO consistent-mass option (the original has
+     none here either); a zero-inertia rotational equation keeps M = 0
+     and stays well-posed through K_eff.
+   * **The Newmark/HHT stepper on the Newton machinery**: each time step
+     is a statics increment plus inertia. Newmark makes (a, v) pure
+     KINEMATIC functions of the step displacement increment
+     (a = Δu/(βdt²) − v/(βdt) − (1/2β − 1)a_n); the HHT residual
+     R = (1+α)(f_ext + f_int)_{n+1} − α(f_ext + f_int)_n − M a_{n+1}
+     REUSES `statics._internal_forces` for f_int (BOTH geometry modes:
+     the M8 frozen-frame path and the M9 /IMPL/NONLIN updated-Lagrangian
+     midpoint/end evaluation, whose committed frame advances per step);
+     the effective tangent K_eff = (1+α) K_T + M/(βdt²) reuses
+     `assembly.assemble` (+K_geo under NONLIN). The previous level's
+     converged force is stored, never recomputed. /RUN "time" and
+     /IMPL/DTINI are PHYSICAL again; /IMPDISP drives at real time;
+     /IMPVEL is REFUSED with a pointer to /IMPDISP (silently ignoring a
+     real dynamic BC would be worse). /IMPL/ARCL + /IMPL/DYNA is refused
+     as the contradiction it is.
+   * **The /IMPL/DYNA card, mirrored from the SOURCE** (an M10 check the
+     task asked for: the original does NOT take a spectral-radius input):
+     `/IMPL/DYNA/1` reads the HHT **alpha itself** (freimpl.F HHT_A;
+     γ = 1/2 − α, β = (1−α)²/4 derived exactly as DYNA_INI), and
+     `/IMPL/DYNA/2` reads **gamma, beta in that order** (NM_A → DY_G,
+     NM_B → DY_B). Defaults = the trapezoidal rule (γ = 1/2, β = 1/4,
+     α = 0), unconditionally stable and non-dissipative. Out-of-range
+     values warn (α outside [−1/3, 0]; 2β ≥ γ ≥ 1/2 violated).
+   * **Rate handling DECIDED and documented** (the pseudo-velocity trick
+     changes meaning under dynamics): the kernels stay driven with the
+     step increment at dt = 1 — that is what the element tangents
+     (including the solid hourglass consistency) linearize — so every
+     strain-rate device is disabled EXPLICITLY rather than silently fed
+     du/1: bulk viscosity qa/qb zeroed (the statics rationale, plus an
+     implicit dynamic step is far above the shock-resolving scale, and
+     the original's implicit branch runs without it), the LAW2 rate term
+     (c > 0) zeroed with a WARNING — rate-dependent plasticity under
+     implicit dynamics is a deliberate deferral.
+   * **Energy ledger** (DYNA_WEX analogue): per-step KE (½vMv + ½wIw),
+     IE (+hourglass) from the element bookings, trapezoidal external
+     work (+ the /IMPDISP constraint-reaction work), and the balance —
+     recorded in `model.implicit_result.history` with displacement
+     snapshots (the validation instrument), printed at termination.
+   * **Validation** (tests/test_m10_impdyn.py — an analytic check per
+     capability): the equation-space mass matrix (values + condensation);
+     an SDOF truss free vibration whose measured period elongation
+     MATCHES Newmark's closed-form (ω dt)²/12 dispersion to 5% AND drops
+     4× when dt halves (the O(dt²) signature), amplitude exact to 1e-3,
+     energy balance < 1e-10 (the trapezoidal rule's exact conservation on
+     linear systems); UNCONDITIONAL stability at 20× the explicit
+     critical step over 100 steps — with the leapfrog's divergence at the
+     same dt asserted by direct recursion on the same discrete system;
+     HHT α = −0.3 draining the unresolvable high modes of an 8-element
+     bar (jump excitation) below 0.92·E0 while never exceeding E0 and
+     while the trapezoidal run conserves to 1e-9 — with the honest note
+     that the strictly monotone HHT quantity is the ALGORITHMIC energy
+     (the physical KE+IE wiggles at the 0.1% level while decaying);
+     the quasi-static limit reproducing the M8 implicit-static cantilever
+     to 0.2%; a step-force transient matching (F/k)(1 − cos ωt) pointwise
+     AND the EXPLICIT solver on the same shell-cantilever deck at the
+     response peak (0.5% — sampled where v = 0 so end-time granularity
+     cannot leak in); the /IMPL/NONLIN large-rotation pendulum crossing
+     the vertical at the elliptic-integral quarter period to 0.5% (7.3%
+     away from linear theory at 60°), bar length preserved to 1e-4
+     through the 120° swing, closed energy, quadratic Newton tails; card
+     parsing vs the freimpl.F semantics; the rate-term and /IMPVEL
+     deferrals firing. Example: `examples/implicit_pendulum`.
+   Deferred out of M10, explicitly (not half-implemented):
+   * **consistent (element) mass matrix** — the original's implicit is
+     lumped here too; nothing to mirror until a consistent-mass source
+     path exists to port;
+   * **Rayleigh damping in the implicit system** (/IMPL/DYNA/DAMP,
+     IDY_DAMP/DAMPA_IMP/DAMPB_IMP): needs the damping force AND its
+     tangent blended into residual/K_eff — a self-contained follow-on;
+     the card warns and skips;
+   * **rate-dependent plasticity under implicit dynamics** (the LAW2 c
+     term): feeding the true velocity to the kernels would break the
+     tangent/hourglass consistency the statics drive guarantees; doing it
+     right means threading the real dt through the kernel drive and
+     linearizing the rate term — deferred, the term is zeroed loudly;
+   * **automatic implicit time-step control** (imp_dt.F): the port stops
+     on non-convergence with a clear message instead of cutting dt;
+   * **modal / eigenvalue dynamics** (frequency extraction beyond the M9
+     buckling eigensolver), **implicit↔explicit switching mid-run**
+     (/IMPL/SWITCH family), **/IMPVEL under dynamics** (use /IMPDISP),
+     the **QSTAT_*** quasi-static-initialization branch of imp_dyna.F;
+   * contact / rigid bodies / /MPC in the dynamic tangent, consistent
+     with their M8/M9 statics deferral — an implicit dynamic run must not
+     use them either.
 
 ## 6. Validation strategy
 
@@ -643,6 +748,14 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
   results: longitudinal wave speed in a bar, cantilever/plate vibration
   frequency, Johnson–Cook uniaxial yield curve, energy conservation of a
   block bouncing on a rigid wall.
+* **Implicit dynamics validations (M10)** — the SDOF free vibration against
+  Newmark's closed-form period dispersion (ω dt)²/12 (quantitatively, with
+  the 4× error drop when dt halves), unconditional stability far beyond the
+  explicit critical step (leapfrog divergence asserted on the same discrete
+  system), trapezoidal energy conservation vs HHT high-mode dissipation on
+  a bar, the quasi-static limit reproducing the implicit-static answer, a
+  transient cross-checked against the explicit solver at the response peak,
+  and the large-rotation pendulum against the elliptic-integral period.
 * **Implicit nonlinear-geometry validations (M9)** — Euler buckling
   (shell column vs the continuum formula; hexa column vs Euler's relation
   with the mesh's measured EI), the elastica large-deflection cantilever,

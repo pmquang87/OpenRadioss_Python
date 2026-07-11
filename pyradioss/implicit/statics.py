@@ -129,10 +129,14 @@ its /IMPL/NONLIN controls; the port exposes it as the minimal sub-card
 ``/IMPL/ARCL`` (see engine_keywords). Requires proportional loading
 (f_ext = lambda*q — asserted at startup) and no /IMPDISP.
 
+Implicit DYNAMICS landed as M10 (``implicit/dynamics.py`` — /IMPL/DYNA,
+Newmark/HHT on top of this statics core: each time step reuses this
+module's residual evaluation and commit machinery plus inertia).
+
 Still DEFERRED (documented, not half-done — see the package docstring and
-PORTING_GUIDE): implicit DYNAMICS (Newmark/HHT — the natural M10), contact &
-general constraints in the tangent, follower-load (pressure) stiffness,
-LAW2 shell / truss tangents, tetra4 / sh3n / beam / spring tangents.
+PORTING_GUIDE): contact & general constraints in the tangent, follower-load
+(pressure) stiffness, LAW2 shell / truss tangents, tetra4 / sh3n / beam /
+spring tangents.
 """
 
 from __future__ import annotations

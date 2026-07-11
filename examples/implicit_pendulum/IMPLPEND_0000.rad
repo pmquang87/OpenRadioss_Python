@@ -1,0 +1,38 @@
+#RADIOSS STARTER
+/BEGIN
+IMPLICIT_PENDULUM - large-rotation swing, /IMPL/DYNA + /IMPL/NONLIN (M10)
+/NODE
+         1        0.0000000000        0.0000000000        0.0000000000
+         2       86.6025403784      -50.0000000000        0.0000000000
+/TRUSS/1
+         1         1         2
+/PART/1
+pendulum bar
+         1         1
+/MAT/LAW1/1
+steel (the bar is effectively rigid on the gravity scale)
+   7.8e-06
+     210.0       0.0
+/PROP/TRUSS/1
+bar section
+       1.0
+/GRNOD/NODE/1
+pivot
+1
+/GRNOD/NODE/2
+tip
+2
+/BCS/1
+pin the pivot
+       111       000         0         1
+/BCS/2
+keep the swing in the x-y plane
+       001       000         0         2
+/FUNCT/1
+constant gravity switch-on
+       0.0       1.0
+   1.0e30       1.0
+/GRAV/1
+g, minus-y
+         1        Y         0      -0.00981
+/END

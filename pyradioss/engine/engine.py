@@ -190,9 +190,16 @@ def run_engine(input_file: str, log: Optional[MessageLog] = None) -> Model:
             # PARALLEL entry point that reuses the element force kernels for
             # the residual and adds the assembled tangent stiffness. The
             # explicit leap-frog loop below is left completely untouched.
-            from ..implicit.statics import run_implicit_static
-            model = run_implicit_static(model, controls, log, out_dir,
-                                        run_name, run_num)
+            # M10: /IMPL/DYNA selects the implicit DYNAMIC (Newmark/HHT)
+            # branch of that driver instead; a bare /IMPL stays static.
+            if controls.impl_dyna:
+                from ..implicit.dynamics import run_implicit_dynamic
+                model = run_implicit_dynamic(model, controls, log, out_dir,
+                                             run_name, run_num)
+            else:
+                from ..implicit.statics import run_implicit_static
+                model = run_implicit_static(model, controls, log, out_dir,
+                                            run_name, run_num)
         else:
             model = _integrate(model, controls, log, out_dir, run_name,
                                run_num, saved)
