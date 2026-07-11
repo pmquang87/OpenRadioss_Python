@@ -87,6 +87,12 @@ class EngineControls:
     impl_tol: float = 1.0e-6      # Newton residual tolerance (relative)
     impl_max_iter: int = 25       # Newton iteration cap per increment
     impl_linsolve: str = ""       # '', 'superlu', 'cholmod', 'mumps'
+    # -- M9 nonlinear geometry (/IMPL/NONLIN) and arc-length (/IMPL/ARCL) --
+    impl_nlgeom: bool = False     # updated-Lagrangian frame + K_geo tangent
+    impl_arc: bool = False        # Crisfield arc-length continuation
+    impl_arc_dl: float = 0.0      # initial arc radius (0 = from 1st predictor)
+    impl_arc_maxinc: int = 200    # arc increment cap (runaway-path guard)
+    impl_arc_itdes: int = 5       # target Newton iterations per arc increment
 
 
 class Model:

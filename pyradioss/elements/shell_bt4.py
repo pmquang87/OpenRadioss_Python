@@ -641,8 +641,9 @@ def forces(group, x, v, vr, dt, fint, mint):
 # never loads it, so it stays zero and does not affect the solution).
 #
 # LAW2 shell (through-thickness elastoplastic layers) tangent is DEFERRED —
-# M8 ports the LAW1 elastic shell tangent (see PORTING_GUIDE). Geometric /
-# initial-stress stiffness is deferred with the solids.
+# M8 ports the LAW1 elastic shell tangent (see PORTING_GUIDE). The geometric /
+# initial-stress stiffness is the M9 addition — ``kgeo()`` below, added to
+# this tangent by the assembler when /IMPL/NONLIN is active.
 
 #: drilling-stiffness fraction of the bending stiffness (conditioning only —
 #: the drilling DOF carries no load on the M8 validations, so the exact value
@@ -779,3 +780,126 @@ def tangent(group, x, epsp_incr=None):
         for c in range(6):
             edofs[:, i * 6 + c] = conn[:, i] * 6 + c
     return ke, edofs
+
+
+# ----------------------------------------------------------------------------
+# Geometric (initial-stress) stiffness K_geo (M9)
+# ----------------------------------------------------------------------------
+# Fortran origin: the geometric-stiffness branch of the implicit assembly
+# (``engine/source/implicit/imp_glob_k.F`` + the shell KGEO routines — the
+# ``imp_kgeo`` path of OpenRadioss's /IMPL/NONLIN large-displacement branch).
+#
+# Theory. For a shell the dominant initial-stress term carries the MEMBRANE
+# force resultants N (force/length): linearizing the internal virtual work of
+# the current membrane state against a transverse (or in-plane) perturbation
+# of the midsurface gives, per element and in the local frame,
+#
+#     K_geo[a i, b j] = δ_ij A ( B1_a B1_b N_xx + B2_a B2_b N_yy
+#                                + (B1_a B2_b + B2_a B1_b) N_xy )
+#
+# on the TRANSLATIONS — the classic von-Kármán initial-stress matrix built
+# from the same one-point gradient operators B1, B2 the force path uses.
+# It is δ_ij (isotropic over the translation components), so rotating the
+# local block to global axes leaves it unchanged: it can be added directly to
+# the global translation blocks (frame invariance of c_ab * I3). Compressive
+# N makes it negative — the plate/column buckling driver; tensile N stiffens
+# (stress stiffening / membranes). At zero stress it vanishes: the M8 path is
+# untouched. The higher-order geometric couplings through the ROTATIONAL dofs
+# (moment-resultant terms) are O(t/L) of the membrane term and are omitted —
+# the standard BT shell buckling practice (they matter only for problems
+# dominated by pre-stress moments, out of M9 scope, see PORTING_GUIDE).
+
+def _membrane_resultants(st, thick):
+    """Membrane force resultants N = sum_k w_k sigma_k (force/length, local
+    [xx, yy, xy]) from the stored layer stresses — the same quadrature the
+    force path applies (deleted elements have wiped stress => N = 0)."""
+    sig = st["sig"]
+    Nres = np.zeros((len(thick), 3))
+    for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        zrel, wrel = st["zw"][isl]
+        t_sl = thick[sl]
+        for k in range(len(zrel)):
+            wk = wrel[k] * t_sl                 # layer weight (sums to t)
+            Nres[sl] += wk[:, None] * sig[sl, k, :]
+    return Nres
+
+
+def kgeo(group, x):
+    """Geometric (initial-stress) element stiffness for the shell group,
+    from the current layer stresses at geometry ``x``. Returns
+    ``(ke, edofs)`` shaped exactly like ``tangent()`` (n, 24, 24)."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    E, xl, area, B1, B2 = _local_geometry(x[conn])
+    area = np.maximum(area, EM20)
+    Nres = _membrane_resultants(st, st["thick"])
+
+    # g_ab = A (B1a B1b Nxx + B2a B2b Nyy + (B1a B2b + B2a B1b) Nxy)  (n,4,4)
+    g = area[:, None, None] * (
+        Nres[:, 0, None, None] * B1[:, :, None] * B1[:, None, :]
+        + Nres[:, 1, None, None] * B2[:, :, None] * B2[:, None, :]
+        + Nres[:, 2, None, None] * (B1[:, :, None] * B2[:, None, :]
+                                    + B2[:, :, None] * B1[:, None, :]))
+    ke = np.zeros((n, 24, 24))
+    ni = 6 * np.arange(4)
+    for c in range(3):                     # delta_ij over the translations
+        rows = (ni + c)[:, None]
+        cols = (ni + c)[None, :]
+        ke[:, rows, cols] += g
+
+    edofs = np.empty((n, 24), dtype=np.int64)
+    for i in range(4):
+        for c in range(6):
+            edofs[:, i * 6 + c] = conn[:, i] * 6 + c
+    return ke, edofs
+
+
+def static_internal_forces(group, x, u, ur, fint, mint):
+    """Internal nodal forces/moments at configuration ``x`` from the CURRENT
+    resultant state — the updated-Lagrangian force assembly of the M9
+    implicit residual (the stress/hourglass state was just updated by a
+    ``forces()`` call at the MIDPOINT geometry; this re-states the czforc3
+    force expressions on the END geometry, where equilibrium holds).
+
+    Implementation: rebuild N/M from the stored layer stresses (the same
+    quadrature the force path uses), q from the stored shear state, then
+    call the existing ``_post`` with dt = 0 — at dt = 0 the hourglass state
+    Q is NOT advanced (it already holds the trial values from the midpoint
+    call) and _post reduces to exactly the resultant->nodal-force transpose
+    plus the -gamma*Q hourglass push-back, all on this geometry."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    thick = st["thick"]
+    E, xl, area, B1, B2 = _local_geometry(x[conn])
+    area = np.maximum(area, EM20)
+
+    sig = st["sig"]
+    Nres = np.zeros((n, 3))
+    Mres = np.zeros((n, 3))
+    for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        zrel, wrel = st["zw"][isl]
+        t_sl = thick[sl]
+        for k in range(len(zrel)):
+            zk = zrel[k] * t_sl
+            wk = wrel[k] * t_sl
+            Nres[sl] += wk[:, None] * sig[sl, k, :]
+            Mres[sl] += (wk * zk)[:, None] * sig[sl, k, :]
+    qres = st["qshear"] * thick[:, None]
+
+    # hourglass shape vector at THIS geometry (same construction as _pre)
+    hx = xl[:, 0, 0] - xl[:, 1, 0] + xl[:, 2, 0] - xl[:, 3, 0]
+    hy = xl[:, 0, 1] - xl[:, 1, 1] + xl[:, 2, 1] - xl[:, 3, 1]
+    gam = np.empty((n, 4))
+    gam[:, 0], gam[:, 1], gam[:, 2], gam[:, 3] = 1.0, -1.0, 1.0, -1.0
+    gam -= hx[:, None] * B1
+    gam -= hy[:, None] * B2
+
+    zeros_n = np.zeros(n)
+    fg, mg, _ = _post(E, area, B1, B2, gam, np.zeros((n, 4, 5)),
+                      Nres, Mres, qres, st["hgq"],
+                      zeros_n, zeros_n, zeros_n, 0.0)
+    flat = conn.reshape(-1)
+    scatter_add3(fint, flat, fg.reshape(-1, 3))
+    scatter_add3(mint, flat, mg.reshape(-1, 3))
