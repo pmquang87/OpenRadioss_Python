@@ -427,7 +427,8 @@ def tangent(group, x, epsp_incr=None):
                 wk = wrel[k] * t_sl
                 dep_k = None if epsp_incr is None else epsp_incr[sl, k]
                 Dk = materials.shell_layer_tangent(
-                    mat, st["sig"][sl, k, :], st["epsp"][sl, k], dep_k)
+                    mat, st["sig"][sl, k, :], st["epsp"][sl, k], dep_k,
+                    extra=_layer_extra(st, sl, k))
                 Am_ += wk[:, None, None] * Dk
                 Bm_ += (wk * zk)[:, None, None] * Dk
                 Dm_ += (wk * zk * zk)[:, None, None] * Dk

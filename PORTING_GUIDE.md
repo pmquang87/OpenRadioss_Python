@@ -104,6 +104,10 @@ same names in comments.
 | `imp_solv.F`'s Riks machinery (IDTC = 3 of `imp_dt.F` + the BFAC load rescaling; arc metric UL2 = full-field `PRODUT_UHP0` norm AFTER the dependent-motion recovery) | `statics.py` (`_run_arclength` / `_solve_increment_arc` / `_arc_tangent`) | M14: /IMPL/ARCL WITH constraints & contact — both auxiliary solves, the spherical metric and the root selection in the REDUCED space (documented deviation: the original's metric is the full recovered field — the two differ by the fixed SPD reweighting TᵀT, both valid Crisfield parametrizations); contact force in the corrector residual + active-set tangent in both solves, anchors/placement committed per arc increment |
 | `imp_buck.F` (UPD_GLOB_K condensing BOTH matrices before EIGBUCKP, RECUKIN mode recovery; NO contact assembly — NDDLI7 forced 0; IMP_KPRES into KG) | `implicit/buckling.py` | M14: /IMPL/BUCKL WITH constraints & contact — the reduced pencil Tᵀ(K_mat)T + µ Tᵀ(K_geo)T exactly as the original; the CONVERGED contact active set's tangent added to K_MAT (documented deviation: the original omits contact entirely — a column resting on a stop would report the free-column factor; the stop's stiffness does not scale with µ, so K_geo would be wrong), friction blocks symmetrized for eigh, frozen-set/bilateral caveats documented |
 | `sigeps42.F`'s implicit branch (IMPL_S > 0: a SCALAR stiffness ratio ET scaling a linear elastic D — a secant modified Newton) | `materials/law42_ogden.py` (`consistent_solid_tangent`) + the total-form re-evaluation in `solid_hexa8/tetra4.static_internal_forces` | M14: LAW42 CONSISTENT tangent — the exact spectral SPATIAL elasticity of the port's own Ogden stress (Bonet & Wood §6.6/ch.8: c_aabb from ∂²W/∂lnλ², the (σ_a λ_b² − σ_b λ_a²)/(λ_a² − λ_b²) shear terms, the equal-stretch L'Hôpital limit — in the shifted convention (c_aaaa − c_aabb)/2 WITHOUT the extra −σ_a of the textbook form, verified by the coalescent FD identity); the NLGEOM residual re-evaluates total-form stress at the END configuration; /IMPL/NONLIN REQUIRED (refused on the frozen frame — F never sees the trial displacement there) |
+| the MFROT µ(p, v) blocks + IFQ filtering of `i7for3.F` ("Friction coefficient computation" / "TANGENT FORCE CALCULATION"), the `Ifric/Ifiltr/Xfreq/C1–C6` reads + XFILTR mapping of `hm_read_inter_type07.F` | `pyradioss/contact/friction.py` (laws + filter) wired into `inter_type7.py`/`inter_type11.py` (explicit) | M15: friction MODELS — MFROT 1 (generalized viscous polynomial), 2 (Darmstadt), 3 (Renard piecewise), 4 (exponential decay) with p = f_n/AREA(main segment) and the EM30 floor; IFQ 1/2/3 first-order (CAND_F EMA) filter with the reader's exact XFILTR mapping (IFQ 3's per-cycle α = min(1, XFILTR·dt) — the DOCUMENTED deviation from the fetched source's `MAX(ONE, …)`, which disables the filter it was asked for); TYPE11 = a documented PORT EXTENSION (the original's i11mainf.F forces MFROT = 0 — checked) with the edge pressure DEFINED p = f_n/(L_main·gap); Ifric = 0 bit-identical, numba mirror untouched (the models live downstream of the mirrored narrow phase) |
+| the MFROT/IFQ blocks of `i7keg3.F`'s I7KFOR3 (µ(p, v) fed the increment pseudo-rates) + I7KEG3's `FACT(I)=FRIC` always-stick spring (constant µ in the matrix even when MFROT > 0) | `implicit/contact.py` (`_cone` + the µ_t coupling in both classes' `_friction_state`/`triplets`) | M15: friction MODELS under implicit — the Coulomb cone radius becomes µ(p)·f_n at the STATIC LIMIT µ(p, v=0) (`friction.mu_static`; rate devices reduce loudly, never fed du/1 — the original feeds I7KFOR3's µ law the increment fields, a step-size-dependent pseudo-rate the port deliberately does not reproduce), and the slip tangent's t nᵀ block carries the derived µ_t = µ + f_n µ′(p)/A coupling slope (frozen area, the frozen-weight class) — a documented deviation from I7KEG3's constant-FRIC spring, the M13 IMP_KPRES pattern; IFQ ignored with a warning (a time device: its DC limit is the unfiltered force); mfrot = 0 bit-identical to M13/M14 |
+| — (no LAW27 implicit tangent exists in OpenRadioss: the law is an explicit crash material) | `materials/law27_brittle.py` (`consistent_shell_tangent`) + the `extra` hook of `materials.shell_layer_tangent` and both shell kernels' tangent layer loops | M15: LAW27 CONSISTENT shell tangent — the exact derivative of the port's own fixed-crack unilateral law per branch: uncracked = elastic C; open + FROZEN damage = the (1−d) secant rows; open + GROWING damage = plus the softening −cps(en_i+ν en_j)·dd_i/den_i and the shear-row −G g12 dd_i terms (derived, not bounded — the M12 lesson; nonsymmetric like every softening tangent); CLOSED crack = full elastic rows (the unilateral switch — the M13 line search is the non-smooth backstop); broken = zero. Assembled in the frozen crack frame, rotated with the Voigt pair Tεᵀ C Tε |
+| the LAW2 global resultant-plasticity return of the beam (the port's M3 model; note the ACTUAL `pmat3.F` is pke3.F's ELASTIC shear-stiffness setup — the original's implicit beam KE has no plasticity linearization to mirror) | `elements/beam_type3.py` (`tangent` LAW2 branch + `implicit_internal_forces`) | M15: LAW2 BEAM consistent tangent — the algorithmic derivative of the radial resultant return, C_alg = s·C + [(H/(E+H) − s)/seq_tr]·R_tr (qᵀC), built from the POST-return state via the homogeneity identities (seq degree-1, q degree-0 ⇒ seq_tr = sy + E·dλ, R_tr = R·seq_tr/sy); the implicit residual runs its own ITERATED consistency solve (`implicit_internal_forces`, the M11 truss lesson MEASURED again in resultant space: 5 iterations are exact at n = 0.5 but leave O(1) residual at n = 0.2 virgin yield; the explicit kernel keeps its bit-identical 5); elastic beams route through the new hook bit-identically |
 
 ## 3. Conventions used in this port
 
@@ -149,7 +153,7 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | `/PART`, `/SUBSET` | ✅ / ❌ | |
 | `/MAT/LAW1` (`/MAT/ELAST`) | ✅ | |
 | `/MAT/LAW2` (`/MAT/PLAS_JOHNS`) | ✅ | εp-rate & hardening, eps_p_max element deletion (M3), beams via the global-plasticity model (M3); since M6 the full thermal terms in the ADIABATIC approximation (optional card 6 `m T_melt rho_Cp T_i`): plastic work heats the point, dT = σy·dεp/ρCp, and T*^m softens the yield — per-point temperature state on solids and shell layers |
-| `/MAT/LAW27` (`/MAT/PLAS_BRIT`) | 🟡 | brittle tensile cracking with fixed crack direction, unilateral damage, layer rupture + element deletion; the plastic block of the original ❌ (shells only, like the original) |
+| `/MAT/LAW27` (`/MAT/PLAS_BRIT`) | 🟡 | brittle tensile cracking with fixed crack direction, unilateral damage, layer rupture + element deletion; since M15 the CONSISTENT implicit shell tangent (per-branch — see law27_brittle.py); the plastic block of the original ❌ (shells only, like the original) |
 | `/MAT/LAW36` (`/MAT/PLAS_TAB`) | ✅ | tabulated hardening from /FUNCT curves, strain-rate curve family (linear rate interpolation), eps_p_max deletion; Fsmooth/Chard/Fcut and Fscale ❌ |
 | `/MAT/LAW42` (`/MAT/OGDEN`) | 🟡 | Ogden/Mooney-Rivlin, incompressible + K(J-1) bulk penalty, exact F from initial gradients, **nonlinear sound speed feeds the time step** (the law stiffens with stretch — verified by a long /DT 0.9 hold at λ≈2); solids only, no shell variant, no Prony viscosity |
 | `/FAIL/JOHNSON` | ✅ | D1–D4 + rate term; thermal D5 since M6 (needs the LAW2 thermal card, warned otherwise); Ifail_sh 1/2; element deletion (stress zeroing, dt release, OFF in ANIM) |
@@ -179,9 +183,9 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | `/RBE2` | 🟡 | M5 — rigid link: same mechanics with a structural master kept at its own position; full 6-DOF tie only (per-DOF flags ❌) |
 | `/RBE3` | 🟡 | M5 — interpolation constraint (least-squares rigid fit + its virtual-work dual force distribution — no stiffening, no spurious work); one master group with uniform weights (per-set weights/DOF flags ❌) |
 | `/SECT` | 🟡 | M5 — section force/moment time history through a cut, computed by the side-sum identity over one side's node set (see engine/sections.py); output via /TH/SECT. The frame/element-set input of the full card ❌ |
-| `/INTER/TYPE7` | ✅ | penalty node↔surface (M4): Istf 0–5 stiffness variants, Igap 0/1 (constant / variable from shell thicknesses) with Gap_min/Gap_max, self-impact (`grnod_ID = 0`), Coulomb friction, voxel broad phase; /SENSOR gating since M6 (the Tstart/Tstop role); Inacti, Igap 2/3, Ifric>0 friction models ❌ |
+| `/INTER/TYPE7` | ✅ | penalty node↔surface (M4): Istf 0–5 stiffness variants, Igap 0/1 (constant / variable from shell thicknesses) with Gap_min/Gap_max, self-impact (`grnod_ID = 0`), Coulomb friction, voxel broad phase; /SENSOR gating since M6 (the Tstart/Tstop role); since M15 the Ifric > 0 friction MODELS (MFROT 1–4: generalized viscous / Darmstadt / Renard / exponential decay µ(p, v) with C1–C6, `contact/friction.py`) and the Ifiltr = 1/2/3 IFQ tangential-force filter with the reader's exact XFILTR mapping; Inacti, Igap 2/3, Ifiltr ≥ 10 (MODFR 2, refused loudly), /FRICTION per-part-pair sets, orthotropic friction ❌ |
 | `/INTER/TYPE2` | 🟡 | tied contact (M4): kinematic secondary→main gluing, constant-weight projection with co-rotating offset, lumped mass/force transfer, deletion release; rotational-DOF tying (Spotflag) and offset moment redistribution ❌ |
-| `/INTER/TYPE11` | ✅ | edge↔edge penalty (M4): /LINE edge sets, Istf/Igap as TYPE7, exact segment-segment closest points; parallel-overlap force distribution simplified to the closest-point pair |
+| `/INTER/TYPE11` | ✅ | edge↔edge penalty (M4): /LINE edge sets, Istf/Igap as TYPE7, exact segment-segment closest points; parallel-overlap force distribution simplified to the closest-point pair; since M15 the Ifric > 0 friction models + IFQ as a documented PORT EXTENSION (the original TYPE11 never evaluates MFROT — i11mainf.F forces MFROT = 0, checked; edge-pair pressure DEFINED p = f_n/(L_main·gap), see contact/friction.py) |
 | `/LINE/SURF`, `/LINE/SEG` | ✅ | edge sets for TYPE11 (M4), with element provenance for deletion |
 | `/SURF/PART`, `/SURF/SEG` | ✅ | for contact; since M4 every segment carries its parent-element provenance (deletion, stiffness, gap) |
 | `/TH/NODE`, `/TH/PART`, `/TH/SECT` | ✅ | SECT since M5: FX FY FZ MX MY MZ |
@@ -207,13 +211,13 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | Solid tetra4, constant strain (no hourglass modes; plain formulation — nodal-pressure Itetra variants ❌) | ✅ |
 | Belytschko–Tsay 4-node shell (memb/bend/shear, BLT84 **stiffness** hourglass control since M2 — M1's viscous form artificially damped coarse dynamic bending) | ✅ |
 | C0 3-node triangle shell (CST membrane + Mindlin plate, no hourglass modes) | ✅ |
-| Corotational Timoshenko beam (axial/2×shear/torsion/2×bending resultants) | ✅ (LAW1 elastic; LAW2 via the global resultant-plasticity model since M3 — yields at exactly W·σy, no elastic-core spread to the 1.5·W·σy hinge; fiber-integrated TYPE18 beam is a roadmap item) |
+| Corotational Timoshenko beam (axial/2×shear/torsion/2×bending resultants) | ✅ (LAW1 elastic; LAW2 via the global resultant-plasticity model since M3 — yields at exactly W·σy, no elastic-core spread to the 1.5·W·σy hinge; consistent implicit tangent + iterated implicit return since M15; fiber-integrated TYPE18 beam is a roadmap item) |
 | Degenerated /BRICK → tetra conversion, penta/pyramid clear check | 🟡 |
 | Truss, linear spring | ✅ |
 | Jaumann objective stress update | ✅ |
 | LAW1, LAW2 (3D + plane stress) | ✅ |
 | LAW36 tabulated plasticity (3D + plane stress, rate curve family) | ✅ |
-| LAW27 brittle cracking (fixed smeared crack, unilateral damage) | 🟡 (elastic-brittle; original's plastic block ❌) |
+| LAW27 brittle cracking (fixed smeared crack, unilateral damage; consistent implicit tangent since M15) | 🟡 (elastic-brittle; original's plastic block ❌) |
 | LAW42 Ogden hyperelasticity (total-strain from exact F, nonlinear SOUNDSP → dt) | 🟡 (solids only) |
 | /FAIL element deletion plumbing (per-layer for shells, GBUF%OFF, deleted elements keep mass, drop stress/hourglass/dt claim, OFF field in ANIM, deletion count in the listing) | ✅ |
 | Equations of state (/EOS) for solids (M6): polynomial + ideal gas, implicit E-p update per element (closed form — p linear in E), relative-volume state, q-work shock heating into E, EOS sound speed → dt; validated against the exact ideal-gas isentrope pV^γ, the Rankine–Hugoniot identity and a quasi-static piston compression | ✅ |
@@ -261,7 +265,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | A constraint-condensation predictor lesson (M12, recorded in `constraints.make_consistent`): the dynamics predictor must be PROJECTED onto the constraint manifold (u = T u_red always) — the node-space extrapolation violates the constraint by O(θ²)·arm, Newton cannot remove what Tᵀ annihilates, and the commit placement silently converts the violation into energy (found by a pendulum that gained 20× its drop energy and circulated) | ✅ |
 | **Implicit CONTACT & LOAD COMPLETION (M13)**: /INTER/TYPE7 COULOMB FRICTION in the Newton loop (the i7kfor3.F incremental return mapping — stick/slip with the consistent nonsymmetric slip tangent, anchors committed per increment, `efric` slip-work ledger channel, µ = 0 bit-identical to M12); /INTER/TYPE11 edge-to-edge under implicit (exact segment-segment gap tangent + the EXACT edge-edge closest-point curvature in every projection region; near-parallel overlaps by two-point trapezoid quadrature — the period-2 lesson); /PLOAD follower-load stiffness under /IMPL/NONLIN (trial-configuration pressure residual + the exact nonsymmetric −∂f_ext/∂x; IMP_KPRES analogue, documented deviation) with /PLOAD + /IMPL/ARCL refused; LAW36 consistent tangents (solids + shells, table-slope H; the piecewise-linear return measured EXACT at implicit increments; rate families truncated to the static curve, warned). Two SOLVER lessons recorded in the code: the imp_solv.F-style backtracking LINE SEARCH (engages only when the residual GROWS — smooth runs bit-identical) that breaks non-smooth assignment cycles, and the PERSISTENT implicit hourglass state `hgq` (the incremental static stabilization forgot accumulated hourglass deformation at every commit and the modes ratcheted — latent since M8, exposed by moment-loaded corner forces) | ✅ |
 | **Implicit GENERALITY (M14)**: constraint CHAINS resolved by transform substitution (rigid-on-rigid, /MPC rows on rigid slaves, /RBE3 masters/ties inside bodies — the rbody_part_modif.F90 hierarchy expressed as T = T1·T2·…; CIRCULAR chains refused; conflicts refused; the explicit engine refuses chains loudly), with the topological commit placement under NLGEOM and the chained TᵀMT mass under /IMPL/DYNA (chained pendulum on the elliptic-integral period); /INTER/TYPE11 COULOMB FRICTION under implicit (the M13 TYPE7 return mapping generalized to edge pairs, consistent stick/slip tangents, anchors keyed per (edge, edge, overlap-end) — the original's I11KFOR3 has NO cone cap: documented deviation); /IMPL/ARCL WITH constraints & contact (reduced-space corrector solves + spherical metric — documented deviation from the full-field PRODUT_UHP0 Riks norm; contact active set re-evaluated inside the corrector, validated by the snap-catch); /IMPL/BUCKL WITH constraints & contact (the reduced pencil, as imp_buck.F's UPD_GLOB_K; the converged contact tangent in K_mat — imp_buck.F omits contact, documented deviation); LAW42 CONSISTENT spectral tangent (uniaxial/equibiaxial exact with quadratic tails; the coalescent-stretch L'Hôpital branch FD-verified; /IMPL/NONLIN required, frozen-frame runs refused) | ✅ |
-| Ifric > 0 friction models under implicit (MFROT 1/2/3 + IFQ filtering); /RWALL under implicit (refused loudly); /IMPDISP on constraint nodes; /PLOAD with /IMPL/ARCL (refused); LAW27 and LAW2-beam implicit tangents | ❌ (deferred — see the M12/M13/M14 roadmap notes) |
+| **Friction MODELS (M15)**: MFROT 1–4 µ(p, v) + IFQ filtering in the EXPLICIT TYPE7 (and TYPE11 as a documented port extension), the STATIC-LIMIT µ(p) Coulomb cone with the consistent µ′(p) coupling tangent in the IMPLICIT TYPE7/TYPE11 return mapping; LAW27 implicit shell tangent (per-branch: uncracked/open-frozen/open-growing/closed/broken); LAW2 BEAM resultant-plasticity consistent tangent + iterated implicit return. Validated: exact MFROT formula/branch checks, kernel-level transmitted-force closed forms, the exact discrete IFQ step response, implicit stick/slip closed forms with µ(p), FD tangent consistency in every regime (µ′ block included), pre-crack = LAW1 exact, crack-closure stiffness recovery, notched-strip implicit-vs-explicit crack pattern, the beam hinge at EXACTLY the resultant limit load with the root element ON the yield surface to 1e-9, quadratic tails, cross-solver checks, bit-identity of every switched-off path (monkeypatch-asserted) | ✅ |
+| /RWALL under implicit (refused loudly); /IMPDISP on constraint nodes; /PLOAD with /IMPL/ARCL (refused); MFROT velocity terms + IFQ under implicit (static limit, loudly); Ifiltr ≥ 10 / MODFR 2 (refused); /FRICTION per-part-pair sets; orthotropic friction | ❌ (deferred — see the M12/M13/M14/M15 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -1267,8 +1272,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       the parity contract. Example: `examples/snap_catch`.
     Deferred out of M14, explicitly (not half-implemented):
     * **Ifric > 0 friction models** under implicit (MFROT 1/2/3 and IFQ
-      filtering) — for TYPE7 AND TYPE11; thermal contact; TYPE19/24/25
-      combined interfaces;
+      filtering) — for TYPE7 AND TYPE11 (**removed in M15** — both
+      solvers); thermal contact; TYPE19/24/25 combined interfaces;
     * Inacti initial-penetration treatments, Igap 2/3, sensor gating of
       interfaces under the implicit clock, the IMP_INT7 = 0/1 stiffening
       tangent branches;
@@ -1276,10 +1281,10 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       (refused); /PLOAD with /IMPL/ARCL (refused — the follower pressure
       breaks proportional loading, and the arc metric would need the
       configuration-dependent pattern re-sampled);
-    * LAW27 and the LAW2 BEAM (global resultant plasticity) tangents;
-      LAW42 SHELLS (no explicit shell variant exists to be consistent
-      with) and LAW42 Prony viscosity; rate devices under implicit stay
-      disabled loudly;
+    * LAW27 and the LAW2 BEAM (global resultant plasticity) tangents
+      (**removed in M15**); LAW42 SHELLS (no explicit shell variant
+      exists to be consistent with) and LAW42 Prony viscosity; rate
+      devices under implicit stay disabled loudly;
     * buckling with the arc-length traced state uses the same
       linearized pencil (no extended-system / branch-switching
       continuation — the classical eigenvalue estimate only);
@@ -1293,6 +1298,155 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
     * the BT4 drilling-row residual floor under NLGEOM (unchanged M13
       note).
 
+14. **M15 — friction MODELS + the last material tangents** ✅ (done):
+    the head of the M14 deferral list, each piece mapped to the CHECKED
+    Fortran (fetched, not recalled): the MFROT/IFQ blocks of i7for3.F
+    and the hm_read_inter_type07.F reader (Ifric → MFROT, Ifiltr → IFQ,
+    Xfreq → XFILTR with the exact 1/2/3 mapping, C1–C5 for Ifric > 0 and
+    C6 for Ifric > 1), i11mainf.F (which HARDCODES MFROT = 0 — the
+    original TYPE11 never evaluates friction models; I11FOR3 receives no
+    FRIC_COEFS), the I7KFOR3/I7KEG3 implicit friction blocks of
+    i7keg3.F, sigeps27c.F (whose damage/crack machinery lives in
+    M27ELAS/M27CRAK — the port's total-strain law is what the tangent
+    must be consistent with), and pmat3.F (which turns out to be pke3.F's
+    ELASTIC shear-stiffness setup: the original's implicit beam has no
+    resultant-plasticity linearization to mirror).
+    * **Friction MODELS, explicit** (`contact/friction.py` +
+      `inter_type7/11.py`): MFROT 1 (generalized viscous polynomial),
+      2 (Darmstadt), 3 (Renard piecewise in v), 4 (exponential decay),
+      p = f_n over the CURRENT main-segment area, the EM30 floor; the
+      IFQ 1/2/3 first-order filter on the tangential force (the CAND_F
+      exponential moving average, per-pair anchors rebuilt from the
+      active set — the IFPEN scope; the anchor store resets across a
+      restart chain, documented). ONE documented deviation: the fetched
+      source computes IFQ 3's per-cycle coefficient as
+      `MAX(ONE, ALPHA0*DT12)` — identically 1, i.e. the filter the card
+      asked for never engages; the port uses min(1, XFILTR·dt), the
+      documented cutoff-frequency behaviour. TYPE11 is a documented
+      PORT EXTENSION (see the i11mainf.F finding above) with the edge
+      pressure DEFINED p = f_n/(L_main·gap_pair) — stated in
+      contact/friction.py so a calibrated C1 can be converted; decks
+      that must match OpenRadioss keep Ifric = 0 on TYPE11. Ifric = 0
+      is bit-identical (x + (−a) ≡ x − a; monkeypatch-asserted), and
+      the numba mirror is untouched — the models sit downstream of the
+      mirrored narrow phase in the NumPy path both backends share (the
+      M7 boundary, stated in the module docstrings, parity asserted at
+      the force-call level).
+    * **Friction MODELS, implicit** (`implicit/contact.py`): the
+      Coulomb cone radius becomes µ(p)·f_n with µ at the STATIC LIMIT
+      µ(p, v = 0) (`friction.mu_static` — the M10 rate-device
+      convention; the ORIGINAL's I7KFOR3 feeds its µ(p, v) the
+      increment fields DX/DY/DZ, a step-size-dependent pseudo-rate the
+      port deliberately does not reproduce, warned per interface when
+      the deck's coefficients actually carry velocity terms; MFROT 3
+      lands on its static coefficient C1, MFROT 4 on the card Fric).
+      IFQ under statics is a TIME device whose DC fixed point is the
+      unfiltered force — ignored with a warning. The consistent tangent
+      gains the µ′(p) COUPLING BLOCK: d(µ f_n) = [µ + f_n µ′(p)/A] df_n
+      =: µ_t df_n at frozen area (the frozen-weight class), so the slip
+      block's t nᵀ factor is µ_t while the in-plane rotation term keeps
+      the current cone radius — derived, not bounded (the M12 lesson),
+      and a documented deviation from I7KEG3, which assembles its
+      always-stick spring with the CONSTANT card FRIC even when
+      MFROT > 0 (`FACT(I)=FRIC` — no µ(p) in the original's matrix at
+      all). mfrot = 0 keeps every M13/M14 expression verbatim
+      (bit-identical, monkeypatch-asserted). TYPE11: the same cone and
+      coupling with the port-extension pressure definition.
+    * **LAW27 implicit shell tangent**
+      (`law27_brittle.consistent_shell_tangent`, dispatched through the
+      new `extra` hook of `materials.shell_layer_tangent` and both
+      shell kernels' layer loops): the EXACT derivative of the port's
+      own total-strain fixed-crack unilateral law, per branch —
+      uncracked = elastic C; crack OPEN with FROZEN damage = the (1−d)
+      secant rows; OPEN with GROWING damage = plus the softening
+      −cps(en_i + ν en_j)·dd_i/den_i normal terms and the shear-row
+      −G·g12·dd_i terms of the ruling direction (growth detected by the
+      stored-equals-drive identity, the loading branch taken at the
+      corner — the plasticity convention; mildly nonsymmetric, as every
+      softening tangent); CLOSED (elastic normal stress ≤ 0) = full
+      stiffness rows — the unilateral switch, with the M13 line search
+      as the non-smooth backstop (checked by the load-reversal
+      validation); BROKEN = zero. Assembled in the frozen crack frame,
+      rotated by the Voigt strain/stress pair.
+    * **LAW2 BEAM consistent tangent** (`beam_type3.py`): the
+      algorithmic derivative of the global resultant return in
+      resultant space, C_alg = s·C + [(H/(E+H) − s)/seq_tr]·R_tr (qᵀC)
+      — reconstructed from the POST-return state via the homogeneity
+      identities (seq is degree-1 homogeneous and its gradient q
+      degree-0, so seq_tr = sy + E·dλ and R_tr = R·seq_tr/sy with dλ
+      from the epsp_incr plumbing); q carries the extreme-fiber |·|
+      sign pattern (non-smooth at resultant sign changes like the yield
+      function itself). The INCREMENTAL treatment was decided by
+      MEASUREMENT (the M11 truss lesson replayed): the explicit
+      kernel's historical 5-iteration consistency Newton is exact at
+      n = 0.5 but leaves an O(1) residual at n = 0.2 virgin yield (the
+      e^(n−1) slope needs O(1/n) iterations to escape), so the implicit
+      residual runs its own ITERATED solve
+      (`implicit_internal_forces`, 60 iterations) while forces() keeps
+      its bit-identical 5 (the M7 contract — LAW1 beams route through
+      the new hook reproducing the old path bit for bit, asserted).
+      Two DRIVER lessons this milestone exposed (statics.py): a
+      NON-FINITE residual/unorm must fail the increment (the perfectly
+      plastic H = 0 plateau overflowed u and the relative-displacement
+      test compared against tol·inf — accepting a NaN state as
+      "converged"), and an EXACTLY SINGULAR trial factorization must
+      fail the increment for the StepControl to cut (a too-large
+      increment spuriously yields enough H = 0 elements to form a
+      transient mechanism; smaller increments keep the intermediate
+      states regular).
+    * **Validation** (tests/test_m15_fricmat.py, 28 tests): exact MFROT
+      formula/branch/continuity/floor checks + FD of the static-limit
+      µ′(p); the reader's XFILTR mapping and refusals (Ifiltr ≥ 10,
+      Ifric = 5, out-of-range Xfreq); kernel-level transmitted-force
+      closed forms for MFROT 1 (every factor recomputed independently)
+      and the Renard µ(v) curve through all three branches; the exact
+      discrete first-order IFQ step response (1 − (1−α)^k for IFQ 1 AND
+      the IFQ 3 cutoff form); the TYPE11 pressure-definition closed
+      form; force-call numba parity; implicit µ(p) slip and stick
+      closed forms; FD tangent consistency in both regimes with the
+      coupling block active; static-limit and IFQ-ignored warnings with
+      the converged force provably free of velocity terms (and the
+      IFQ run equal to the unfiltered one bitwise); the
+      implicit-vs-explicit steady-sliding identity at matched pressure;
+      LAW27 pre-crack = LAW1 EXACTLY, law-level FD in every branch,
+      the crack-closure stiffness recovery against the LAW1 twin, the
+      notched-strip implicit-vs-explicit crack pattern/angle/damage;
+      the beam hinge at EXACTLY the closed-form resultant limit load
+      (root element ON the yield surface to 1e-9), hardening quadratic
+      tails ON the JC curve to 1e-9, the iterated-return measurement
+      (n = 0.2), the LAW1 hook-route bit-identity, the quasi-static
+      explicit cross-check (0.1% measured), the NLGEOM plastic-beam
+      branch; the parity/no-shared-mutation contract; Ifric = 0 /
+      mfrot = 0 monkeypatch bit-identity in both solvers. Example:
+      `examples/brake_pad` (µ(p) clamp that holds ONLY because the
+      press pressure lifts the cone — the constant-µ0 twin fails
+      loudly, verified).
+    Deferred out of M15, explicitly (not half-implemented):
+    * the IFQ ≥ 10 / MODFR 2 incremental (stiffness) EXPLICIT
+      tangential formulation (refused at the reader; its return-mapping
+      mechanics is exactly what the implicit port already implements);
+      /FRICTION per-part-pair friction sets (INTFRIC) and orthotropic
+      friction (IORTHFRIC); friction µ(T) thermal dependence (IFRICTH);
+    * MFROT velocity terms and IFQ under implicit DYNAMICS (rate
+      devices stay off — the M10 convention, warned);
+    * the IFQ anchor store across restart CHAINS (rebuilt empty — a
+      chained IFQ run re-converges its filter within ~1/α cycles; the
+      M6 bit-match contract holds for Ifiltr = 0 decks, documented in
+      inter_type7.py);
+    * the LAW27 plastic block (M27PLAS — unchanged M3 deferral: the
+      port's law is elastic-brittle, and the tangent is consistent with
+      THE PORT'S law), LAW27 solids (the original refuses them too);
+    * the fiber-integrated TYPE18 beam (the global resultant model's
+      W·σy hinge convention is documented — the elastic-core spread to
+      1.5·W·σy needs fibers); beam K_geo beyond the axial term
+      (unchanged M11 note);
+    * thermal contact, TYPE19/24/25, Inacti, Igap 2/3, rate devices
+      under implicit dynamics, LAW42 shells/Prony, IDTC 2/3, /RWALL
+      under implicit, consistent mass / modal dynamics, the UL
+      hourglass memory and the hourglass-operator geometry variation in
+      the NLGEOM tangent, the BT4 drilling floor (all unchanged from
+      the M10–M14 lists).
+
 ## 6. Validation strategy
 
 `tests/` contains two layers:
@@ -1303,6 +1457,19 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
   results: longitudinal wave speed in a bar, cantilever/plate vibration
   frequency, Johnson–Cook uniaxial yield curve, energy conservation of a
   block bouncing on a rigid wall.
+* **Friction-model / material-tangent validations (M15)** — exact MFROT
+  formula, branch-joint and floor checks with the FD-verified static
+  µ′(p); kernel-level transmitted-force closed forms (every factor
+  recomputed independently) and the Renard µ(v) curve; the exact
+  discrete IFQ first-order step response; the implicit µ(p) stick/slip
+  closed forms, FD tangent consistency with the µ′(p) coupling block,
+  and the cross-solver steady-sliding identity at matched pressure;
+  LAW27 pre-crack = LAW1 exact, per-branch law-level FD, crack-closure
+  stiffness recovery, and the notched-strip implicit-vs-explicit crack
+  pattern; the beam hinge at exactly the resultant limit load with
+  quadratic tails on the JC curve, the measured iterated-return
+  decision, and the monkeypatch-asserted bit-identity of every
+  switched-off path.
 * **Implicit generality validations (M14)** — the two-body rigid chain
   lever and /MPC-on-slave closed forms (exact, one Newton step), the
   chained pendulum on the elliptic-integral period with exact arm

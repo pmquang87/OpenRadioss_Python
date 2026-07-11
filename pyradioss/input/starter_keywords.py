@@ -1274,8 +1274,9 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     ``/INTER/TYPE7`` (penalty node-to-surface)::
 
         card 1:  title
-        card 2:  grnod_ID  surf_ID  Istf  Igap  [sens_ID]
-        card 3:  Stfac     Fric     Gapmin  Gapmax     (all optional)
+        card 2:  grnod_ID  surf_ID  Istf  Igap  [sens_ID]  [Ifric]  [Ifiltr]
+        card 3:  Stfac     Fric     Gapmin  Gapmax  [Xfreq]   (all optional)
+        card 4:  C1  C2  C3  C4  C5  C6         (only read when Ifric > 0)
 
       sens_ID (M6): the interface stays inactive (no forces, no time-step
       claim) until /SENSOR sens_ID fires.
@@ -1286,6 +1287,19 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       :class:`pyradioss.model.entities.Interface`. For Istf=1, Stfac is
       the constant penalty stiffness itself (force/length); otherwise it
       scales the element-based stiffness (default 1.0).
+
+      Ifric/Ifiltr/Xfreq/C1..C6 (M15 — the friction MODELS of
+      ``hm_read_inter_type07.F``, mirrored field for field against the
+      SOURCE): Ifric = MFROT 1..4 selects the mu(p, v) law (C1..C5 read
+      for Ifric > 0, C6 for Ifric > 1 — the original's optional card 8);
+      Ifiltr = IFQ 1/2/3 turns the tangential-force first-order filter
+      on, with the coefficient derived from Xfreq exactly as the reader
+      does (1: Xfreq itself, must be in [0, 1]; 2: 2*pi/Xfreq, Xfreq a
+      period in cycles; 3: 2*pi*Xfreq, Xfreq a cutoff frequency —
+      per-cycle alpha = XFILTR*dt). IFQ >= 10 (the MODFR = 2 incremental
+      stiffness formulation) is refused loudly — deferred (see
+      contact/friction.py; the implicit solver's return mapping IS that
+      formulation). Laws and filter live in contact/friction.py.
 
     ``/INTER/TYPE2`` (tied, kinematic)::
 
@@ -1299,12 +1313,19 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     ``/INTER/TYPE11`` (penalty edge-to-edge)::
 
         card 1:  title
-        card 2:  line_ID1  line_ID2  Istf  Igap  [sens_ID]
-        card 3:  Stfac     Fric      Gapmin  Gapmax
+        card 2:  line_ID1  line_ID2  Istf  Igap  [sens_ID]  [Ifric]  [Ifiltr]
+        card 3:  Stfac     Fric      Gapmin  Gapmax  [Xfreq]
+        card 4:  C1  C2  C3  C4  C5  C6         (only read when Ifric > 0)
+
+      The TYPE11 friction-model fields are a documented port EXTENSION:
+      the ORIGINAL TYPE11 card has none and its engine never evaluates
+      MFROT (i11mainf.F forces MFROT = 0 — checked; see
+      contact/friction.py for the edge-pair pressure definition).
 
     Options NOT ported (accepted Radioss fields ignored elsewhere in the
-    line): Inacti, sensors, Tstart/Tstop, thermal contact, Ifric>0 friction
-    models, Igap 2/3 mesh-size gap scaling.
+    line): Inacti, Tstart/Tstop, thermal contact, the IFQ >= 10 / MODFR=2
+    incremental tangential formulation (refused), Igap 2/3 mesh-size gap
+    scaling.
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
     if kind not in ("TYPE7", "TYPE2", "TYPE11"):
@@ -1329,31 +1350,91 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     istf = t[2] if len(t) > 2 else 0
     igap = t[3] if len(t) > 3 else 0
     sens = t[4] if len(t) > 4 else 0
+    mfrot = t[5] if len(t) > 5 else 0            # Ifric (M15)
+    ifq = t[6] if len(t) > 6 else 0              # Ifiltr (M15)
     if istf not in (0, 1, 2, 3, 4, 5):
         log.error(f"/INTER/{kind}/{block.user_id}: Istf={istf} (0..5)",
                   block.source)
     if igap not in (0, 1):
         log.error(f"/INTER/{kind}/{block.user_id}: Igap={igap} not ported "
                   f"(0 constant, 1 variable)", block.source)
-    stfac, fric, gap, gap_max = (1.0, 0.0, 0.0, 0.0)
+    if mfrot not in (0, 1, 2, 3, 4):
+        log.error(f"/INTER/{kind}/{block.user_id}: Ifric={mfrot} (0..4: "
+                  f"Coulomb / generalized viscous / Darmstadt / Renard / "
+                  f"exponential decay)", block.source)
+        mfrot = 0
+    if ifq >= 10:
+        # MODFR = 2 / the incremental (stiffness) tangential formulation —
+        # a different explicit force path, deferred loudly (M15; the
+        # implicit solver's return mapping IS that formulation)
+        log.error(f"/INTER/{kind}/{block.user_id}: Ifiltr={ifq} (the "
+                  f"IFQ >= 10 incremental stiffness formulation) is not "
+                  f"ported — use Ifiltr 0..3", block.source)
+        ifq = 0
+    if ifq not in (0, 1, 2, 3):
+        log.error(f"/INTER/{kind}/{block.user_id}: Ifiltr={ifq} (0..3)",
+                  block.source)
+        ifq = 0
+    stfac, fric, gap, gap_max, xfreq = (1.0, 0.0, 0.0, 0.0, 0.0)
     if len(cards) > 1:
-        stfac, fric, gap, gap_max = _floats(
-            cards[1], 4, defaults=[1.0, 0.0, 0.0, 0.0])
+        stfac, fric, gap, gap_max, xfreq = _floats(
+            cards[1], 5, defaults=[1.0, 0.0, 0.0, 0.0, 0.0])
         if stfac == 0.0 and istf != 1:
             stfac = 1.0            # Radioss: Stfac = 0 -> default scale 1.0
         if istf == 1 and stfac <= 0.0:
             log.error(f"/INTER/{kind}/{block.user_id}: Istf=1 needs a "
                       f"positive Stfac (it IS the stiffness)", block.source)
+    # ---- the XFILTR mapping of hm_read_inter_type07.F (M15, checked) ------
+    # IFQ=1: Xfreq IS the coefficient; IFQ=2: 2*pi/Xfreq (a period in
+    # cycles); IFQ=3: 2*pi*Xfreq (a cutoff frequency — alpha = XFILTR*dt
+    # per cycle). The original's MSGID 554 errors are mirrored.
+    xfiltr = 0.0
+    if ifq > 0:
+        if ifq == 1:
+            xfiltr = xfreq
+        elif ifq == 2:
+            xfiltr = (2.0 * np.pi / xfreq) if xfreq > 0.0 else -1.0
+        elif ifq == 3:
+            xfiltr = 2.0 * np.pi * xfreq
+        if xfiltr < 0.0 or (xfiltr > 1.0 and ifq <= 2):
+            log.error(f"/INTER/{kind}/{block.user_id}: friction filtering "
+                      f"factor out of range (Xfreq={xfreq:g} -> "
+                      f"XFILTR={xfiltr:g}, must be in [0,1] for "
+                      f"Ifiltr 1/2)", block.source)
+            ifq, xfiltr = 0, 0.0
+    # ---- optional C1..C6 card (the original's card 8, Ifric > 0 only) -----
+    fric_c = (0.0,) * 6
+    icard = 2
+    if mfrot > 0:
+        if len(cards) > icard:
+            cc = _floats(cards[icard], 6, defaults=[0.0] * 6)
+            # C6 is only read for Ifric > 1 (hm_read_inter_type07.F)
+            fric_c = tuple(cc[:5]) + ((cc[5],) if mfrot > 1 else (0.0,))
+            icard += 1
+        else:
+            log.warning(f"/INTER/{kind}/{block.user_id}: Ifric={mfrot} "
+                        f"without a C1..C6 card — all coefficients 0",
+                        block.source)
     if kind == "TYPE7":
         model.interfaces.append(Interface(
             id=block.user_id, type=7, grnod_id=t[0], surf_id=t[1],
             istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap,
-            gap_max=gap_max, sens_id=sens, title=title))
+            gap_max=gap_max, sens_id=sens, mfrot=mfrot, ifq=ifq,
+            xfiltr=xfiltr, fric_c=fric_c, title=title))
     else:                          # TYPE11
+        if mfrot > 0 or ifq > 0:
+            # the original TYPE11 has no friction models at all (checked:
+            # i11mainf.F forces MFROT = 0) — the port extension is
+            # announced so nobody mistakes it for Radioss behaviour
+            log.info(f"     /INTER/TYPE11/{block.user_id}: FRICTION "
+                     f"MODEL Ifric={mfrot} Ifiltr={ifq} — A PORT "
+                     f"EXTENSION (the original TYPE11 never evaluates "
+                     f"MFROT; see contact/friction.py)")
         model.interfaces.append(Interface(
             id=block.user_id, type=11, line_id1=t[0], line_id2=t[1],
             istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap,
-            gap_max=gap_max, sens_id=sens, title=title))
+            gap_max=gap_max, sens_id=sens, mfrot=mfrot, ifq=ifq,
+            xfiltr=xfiltr, fric_c=fric_c, title=title))
 
 
 def read_line(block: KeywordBlock, model: Model, log: MessageLog) -> None:

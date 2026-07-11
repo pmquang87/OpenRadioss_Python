@@ -179,9 +179,16 @@ K_mat — buckling.py), and LAW42 gained its consistent spectral tangent
 (materials/law42_ogden.py; /IMPL/NONLIN required — the total-form law
 has no meaning on the frozen small-strain frame, checked below).
 
-Still DEFERRED (documented, not half-done — see the package docstring and
-PORTING_GUIDE): Ifric > 0 friction models under implicit, LAW27 and
-LAW2-beam tangents, rate devices under implicit (disabled loudly).
+M15 closed the last material/friction refusals: Ifric > 0 friction
+models (the mu(p) cone + consistent mu'(p) tangent, static-limit
+velocity terms — contact.py), the LAW27 damaged-crack shell tangent and
+the LAW2 beam resultant-plasticity tangent (with its own ITERATED
+implicit return — beam_type3.implicit_internal_forces, the truss's M11
+lesson applied to the resultant space).
+
+Still DEFERRED (documented, not half-done — see the package docstring
+and PORTING_GUIDE): rate devices under implicit (disabled loudly),
+thermal contact, Inacti/Igap 2/3, IDTC 2/3.
 """
 
 from __future__ import annotations
@@ -820,6 +827,13 @@ def _solve_increment(model, controls, log, dof, loads, solver,
     for it in range(ip.impl_max_iter):
         inc.residuals.append(rnorm)
         inc.iterations = it + 1
+        # a NON-FINITE residual can never converge — fail the increment NOW
+        # so the StepControl cuts it (found by the M15 perfectly-plastic
+        # beam: a Newton walk along an H = 0 plateau overflowed u, unorm
+        # became inf and the RELATIVE displacement test below compared
+        # against tol*inf — accepting a NaN state as "converged")
+        if not np.isfinite(rnorm):
+            break
         if it == 0:
             # the residual reference: the larger of the applied load and the
             # INITIAL out-of-balance (the latter carries the reaction scale of
@@ -850,10 +864,19 @@ def _solve_increment(model, controls, log, dof, loads, solver,
             # trial configuration (imp_glob_k.F IMP_KPRES analogue — see
             # followerload.py for the documented deviation)
             K = K + pload_tangent(loads, model, lam, model.x + u, dof)
-        if constr is not None:
-            du_eq = constr.expand(solver.solve(constr.reduce_matrix(K), R))
-        else:
-            du_eq = solver.solve(K, R)
+        try:
+            if constr is not None:
+                du_eq = constr.expand(
+                    solver.solve(constr.reduce_matrix(K), R))
+            else:
+                du_eq = solver.solve(K, R)
+        except RuntimeError:
+            # an EXACTLY singular trial tangent (e.g. a perfectly-plastic
+            # H = 0 state where a too-large increment spuriously yields
+            # enough elements to form a mechanism — the M15 beam-hinge
+            # lesson): fail the increment and let the StepControl cut it;
+            # smaller increments keep the intermediate states regular.
+            break
         du, dur = dof.scatter_solution(du_eq)
 
         # ---- backtracking line search (M13 — the ILINE branch of
@@ -889,8 +912,9 @@ def _solve_increment(model, controls, log, dof, loads, solver,
         # accumulated increment (catches a converged step whose residual
         # reference is tiny, e.g. a pure displacement-controlled increment)
         unorm = np.linalg.norm(dof.gather_residual(u, ur))
-        if alpha * np.linalg.norm(du_eq) <= ip.impl_tol * max(unorm, 1e-30) \
-                and it > 0:
+        if np.isfinite(unorm) \
+                and alpha * np.linalg.norm(du_eq) \
+                <= ip.impl_tol * max(unorm, 1e-30) and it > 0:
             inc.residuals.append(rnorm)
             inc.iterations = it + 2
             inc.converged = True

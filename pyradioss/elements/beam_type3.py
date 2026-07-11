@@ -265,10 +265,20 @@ def init_group(group, model, log):
 _NEWTON_ITERS = 5
 
 
-def _global_plastic_return(st, sl, mat, p):
+def _global_plastic_return(st, sl, mat, p, iters=_NEWTON_ITERS):
     """Radial return of the six resultants onto the Johnson-Cook yield
     stress (rate term ignored — Starter warns). In-place on fres/mres and
-    the global plastic strain epsp."""
+    the global plastic strain epsp.
+
+    ``iters`` is the Newton budget of the 1-D consistency solve — the
+    explicit cycle keeps its historical 5 (bit-identical M3 contract; per
+    tiny explicit step the residual re-enters every cycle so 5 is plenty),
+    while the IMPLICIT residual passes ``_IMPL_NEWTON_ITERS`` because a
+    large increment from a near-virgin state converges slowly at first
+    (the JC slope B*n*e^(n-1) diverges as e -> 0 — the M11 truss lesson,
+    MEASURED again here for the resultant return by the M15 tests: 5
+    iterations leave an O(1) consistency residual on a first-yield
+    implicit-size increment; 60 converge it to round-off)."""
     mp = mat.params
     A = p["area"]
     fres = st["fres"]
@@ -301,7 +311,7 @@ def _global_plastic_return(st, sl, mat, p):
     ep0 = epsp[gidx]
     # 1-D consistency: seq - E*dl = sigma_y(ep0 + dl) — Newton, exactly
     # the truss return with E as the effective section modulus
-    for _ in range(_NEWTON_ITERS):
+    for _ in range(iters):
         sy_i, H_i = sy_h(ep0 + dl)
         res = seq_p - mat.E * dl - sy_i
         dl += res / (mat.E + np.maximum(H_i, 0.0))
@@ -318,6 +328,14 @@ def _global_plastic_return(st, sl, mat, p):
 # ----------------------------------------------------------------------------
 
 def forces(group, x, v, vr, dt, fint, mint):
+    """The explicit cycle path — the M3 code verbatim (a thin wrapper
+    since M15: the body moved to ``_forces_core`` so the implicit
+    residual can thread a converged plastic-return budget through the
+    SAME kinematics; the explicit call is bit-identical)."""
+    return _forces_core(group, x, v, vr, dt, fint, mint, _NEWTON_ITERS)
+
+
+def _forces_core(group, x, v, vr, dt, fint, mint, plast_iters):
     st = group.state
     conn = group.conn
     n1, n2, n3 = conn[:, 0], conn[:, 1], conn[:, 2]
@@ -354,7 +372,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         # consistency solve on the Johnson-Cook curve, radial scaling of
         # all six resultants back to the yield surface.
         if mat.law == 2:
-            _global_plastic_return(st, sl, mat, p)
+            _global_plastic_return(st, sl, mat, p, plast_iters)
 
     # ---- internal nodal forces & moments (pfint3, see docstring) -----------
     N, Qy, Qz = fres[:, 0], fres[:, 1], fres[:, 2]
@@ -421,10 +439,54 @@ def forces(group, x, v, vr, dt, fint, mint):
 # PORTING_GUIDE M11). A beam column therefore buckles at Euler's load like
 # the truss-braced systems the M9 validations cover.
 #
-# LAW2 beams (the M3 GLOBAL resultant plasticity) have NO implicit tangent:
-# linearizing the resultant-space radial return is a different derivation
-# (deferred explicitly, PORTING_GUIDE M11) — a plastic beam raises rather
-# than silently running elastic.
+# LAW2 beams — the CONSISTENT tangent of the GLOBAL resultant-plasticity
+# return (M15; removes the M11 deferral). NOTE what the checked Fortran
+# offers to mirror: ``pmat3.F`` (this module's namesake, fetched) is the
+# implicit beam's ELASTIC shear-stiffness setup called from pke3.F — the
+# original's implicit beam KE has no resultant-plasticity linearization
+# at all. The tangent below is therefore the exact derivative of the
+# PORT'S OWN return map (the M13 IMP_KPRES principle: Newton needs
+# consistency with the residual actually iterated).
+#
+# Derivation (resultant space R = [N, Qy, Qz, Mx, My, Mz], the order of
+# the B rows and of C = diag(EA, GA, GA, GIxx, EIyy, EIzz)): the return
+# scales the TRIAL resultants radially, R_new = s * R_tr with
+# s = sy(ep0 + dl)/seq_tr and dl from the 1-D consistency
+# seq_tr - E dl = sy(ep0 + dl). Because the equivalent stress seq(R) is
+# positively HOMOGENEOUS of degree 1 (it is built from absolute values
+# and a Euclidean norm of resultants over constant section moduli), its
+# gradient q = d seq/d R is homogeneous of degree 0 — q(R_new) = q(R_tr)
+# — and seq(R_new) = s seq_tr = sy_new. Both let the tangent be built
+# from the POST-return state the implicit driver holds plus the
+# increment's dl (the epsp_incr plumbing):
+#
+#     seq_tr = sy_new + E dl,       R_tr = R_new * seq_tr / sy_new,
+#     d R_new / d R_tr = s I + R_tr (ds/dseq) q^T,
+#     ds/dseq = (H/(E+H) - s)/seq_tr        (H = dsy/dep at ep0 + dl,
+#                                            0 where sig_max caps)
+#     =>  C_alg = s C + [(H/(E+H) - s)/seq_tr] R_tr (q^T C)
+#
+# a mildly NONSYMMETRIC rank-one update of the scaled elastic C — the
+# same structure as the LAW2 shell tangent (M11), living in resultant
+# space. The gradient q has the extreme-fiber pattern
+#     q_N = (sn/seq) sgn(N)/A,  q_My = (sn/seq) sgn(My)/Wy,  (etc.)
+#     q_Qy = (3 tau/seq) Qy/(A |Q|),  q_Mx = (3 tau/seq) sgn(Mx)/Wx
+# — non-smooth at resultant sign changes exactly like the |.| terms of
+# the yield function itself (the usual vertex of a piecewise-smooth
+# surface; the M13 line search is the backstop). The element tangent is
+# then K_l = L B^T C_alg B rotated by the frame, replacing the elastic
+# diag(C) ONLY on the elements the increment actually yielded
+# (epsp_incr > 0) — elastic beams keep the M11 code path bit-identical.
+#
+# The IMPLICIT residual runs its own ITERATED consistency solve
+# (``implicit_internal_forces`` below — the M11 truss lesson applied to
+# the resultant return, MEASURED by the M15 tests: the explicit path's
+# historical 5 Newton iterations leave a first-yield implicit-size
+# increment visibly off the hardening curve, because the JC slope
+# B*n*e^(n-1) diverges at e -> 0; the shared explicit kernel is
+# untouched — the M7 parity contract). The JC strain-RATE term was never
+# in the beam model (the Starter warns), so nothing else needs
+# disabling.
 
 def _beam_edofs(conn):
     """(n, 12) global scalar DOF slot ids over N1, N2 (N3 carries none)."""
@@ -448,11 +510,14 @@ def _frame_transform(E):
 
 
 def tangent(group, x, epsp_incr=None):
-    """Element tangent stiffness for the whole beam group (LAW1 elastic).
+    """Element tangent stiffness for the whole beam group — LAW1 elastic;
+    LAW2 with the CONSISTENT resultant-plasticity tangent on the elements
+    the increment yielded (M15, see the derivation note above).
 
     Returns ``(ke, edofs)``: ``ke`` (n, 12, 12) over the two force-carrying
-    nodes x 6 global dofs, ``edofs`` (n, 12). ``epsp_incr`` is accepted for
-    signature parity and unused (LAW2 beams are refused — see the note)."""
+    nodes x 6 global dofs, ``edofs`` (n, 12). ``epsp_incr`` (n,) is the
+    increment's global plastic-strain step (None / zeros = all elastic —
+    that path is the M11 code verbatim)."""
     st = group.state
     conn = group.conn
     n = group.n
@@ -473,11 +538,11 @@ def tangent(group, x, epsp_incr=None):
 
     Cd = np.zeros((n, 6))                                  # diag of C
     for sl, mat, prop in st["slices"]:
-        if mat.law != 1:
+        if mat.law not in (1, 2):
             raise NotImplementedError(
-                f"the implicit beam tangent supports LAW1 only; LAW{mat.law} "
-                f"(the global resultant-plasticity beam) has no implicit "
-                f"tangent — deferred, see PORTING_GUIDE M11")
+                f"the implicit beam tangent supports LAW1 and LAW2 (the "
+                f"global resultant-plasticity model, M15); got "
+                f"LAW{mat.law} — see PORTING_GUIDE")
         p = prop.params
         Cd[sl, 0] = mat.E * p["area"]
         Cd[sl, 1] = Cd[sl, 2] = mat.G * p["area"]
@@ -487,6 +552,62 @@ def tangent(group, x, epsp_incr=None):
     # K_l = L * B^T diag(C) B  (stacked)
     CB = Cd[:, :, None] * B                                # (n, 6, 12)
     Kl = L[:, None, None] * np.einsum("nai,naj->nij", B, CB)
+
+    # ---- LAW2 consistent resultant-plasticity blocks (M15) -----------------
+    # Elements the increment yielded (epsp_incr > 0) get their local block
+    # RECOMPUTED with the algorithmic C_alg (the derivation note above);
+    # elastic elements keep the diag(C) block bit-for-bit.
+    if epsp_incr is not None:
+        for sl, mat, prop in st["slices"]:
+            if mat.law != 2:
+                continue
+            dl_sl = epsp_incr[sl]
+            plas = np.where(dl_sl > 0.0)[0]
+            if len(plas) == 0:
+                continue
+            gidx = np.arange(sl.start, sl.stop)[plas]
+            mp = mat.params
+            p = prop.params
+            A = p["area"]
+            # POST-return state (the driver's trial buffers) + increment
+            R = np.concatenate([st["fres"][gidx], st["mres"][gidx]],
+                               axis=1)                     # (m, 6)
+            ep = np.maximum(st["epsp"][gidx], 1e-20)
+            sy = mp["A"] + mp["B"] * ep ** mp["n"]
+            H = mp["B"] * mp["n"] * ep ** (mp["n"] - 1.0)
+            capped = sy > mp["sig_max"]
+            sy = np.where(capped, mp["sig_max"], sy)
+            H = np.where(capped, 0.0, np.maximum(H, 0.0))
+            dl = dl_sl[plas]
+            seq_tr = sy + mat.E * dl        # the consistency identity
+            scale = sy / seq_tr             # s = sy_new / seq_tr
+            R_tr = R / scale[:, None]       # radial: homogeneity deg 1
+            # q = grad seq at the post state (degree-0 homogeneous —
+            # identical at the trial state; same sign pattern)
+            N, Qy, Qz = R[:, 0], R[:, 1], R[:, 2]
+            Mx, My, Mz = R[:, 3], R[:, 4], R[:, 5]
+            wy, wz, wx = st["wy"][gidx], st["wz"][gidx], st["wx"][gidx]
+            sn = np.abs(N) / A + np.abs(My) / wy + np.abs(Mz) / wz
+            tau = np.abs(Mx) / wx + np.sqrt(Qy ** 2 + Qz ** 2) / A
+            seq = np.sqrt(sn ** 2 + 3.0 * tau ** 2) + 1e-30
+            Qn = np.maximum(np.sqrt(Qy ** 2 + Qz ** 2), 1e-30)
+            q = np.empty((len(plas), 6))
+            q[:, 0] = (sn / seq) * np.sign(N) / A
+            q[:, 1] = (3.0 * tau / seq) * Qy / (A * Qn)
+            q[:, 2] = (3.0 * tau / seq) * Qz / (A * Qn)
+            q[:, 3] = (3.0 * tau / seq) * np.sign(Mx) / wx
+            q[:, 4] = (sn / seq) * np.sign(My) / wy
+            q[:, 5] = (sn / seq) * np.sign(Mz) / wz
+            # C_alg = s C + [(H/(E+H) - s)/seq_tr] R_tr (q^T C)
+            Csub = Cd[gidx]                              # (m, 6) diag
+            coef = (H / (mat.E + H) - scale) / seq_tr
+            Calg = scale[:, None, None] * \
+                np.einsum("ma,ab->mab", Csub, np.eye(6))
+            Calg += coef[:, None, None] * np.einsum(
+                "ma,mb->mab", R_tr, q * Csub)
+            Bp = B[gidx]
+            Kl[gidx] = L[gidx, None, None] * np.einsum(
+                "mai,mab,mbj->mij", Bp, Calg, Bp)
 
     T = _frame_transform(E)
     ke = np.einsum("nki,nkl,nlj->nij", T, Kl, T)           # (n, 12, 12)
@@ -541,3 +662,41 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     np.add.at(fint, n2, -fg)
     np.add.at(mint, n1, -np.einsum("na,nba->nb", m1, E))
     np.add.at(mint, n2, -np.einsum("na,nba->nb", m2, E))
+
+
+#: Newton budget of the IMPLICIT 1-D consistency solve — sized so a
+#: first-yield implicit-size increment converges to round-off (the slow
+#: near-virgin start of the JC slope needs ~10 iterations before the
+#: quadratic tail kicks in; 60 is cheap at implicit model sizes and the
+#: loop is vectorized over the group).
+_IMPL_NEWTON_ITERS = 60
+
+
+def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom):
+    """The beam's own implicit residual (M15 — dispatched by the drivers
+    instead of forces(), exactly like the M11 truss/spring hooks; see the
+    LAW2 tangent note above for WHY: the explicit kernel's historical
+    5-iteration consistency solve veers off the hardening curve at
+    implicit increment sizes, and the shared explicit path must stay
+    bit-identical under the M7 parity contract).
+
+    Kinematics mirror the drivers' historical use of the rate-form
+    kernels VERBATIM (LAW1 groups reproduce the old route bit for bit —
+    asserted by the M15 tests): under linear geometry, one
+    ``_forces_core`` call at the committed frame with the increment as a
+    pseudo-velocity at dt = 1 (state update + force assembly in one);
+    under /IMPL/NONLIN, the midpoint-geometry state update with the
+    force discarded, then the END-configuration ``static_internal_forces``
+    re-statement. The ONLY difference is the plastic-return budget:
+    ``_IMPL_NEWTON_ITERS`` instead of 5, i.e. a CONVERGED resultant
+    return (the M11 truss iterated-return lesson in resultant space)."""
+    if not nlgeom:
+        _forces_core(group, x_ref, u, ur, 1.0, fint, mint,
+                     _IMPL_NEWTON_ITERS)
+        return
+    nn = len(x_ref)
+    junk_f = np.zeros((nn, 3))
+    junk_m = np.zeros((nn, 3))
+    _forces_core(group, x_ref + 0.5 * u, u, ur, 1.0, junk_f, junk_m,
+                 _IMPL_NEWTON_ITERS)
+    static_internal_forces(group, x_ref + u, u, ur, fint, mint)

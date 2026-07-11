@@ -45,11 +45,23 @@ Algorithm — the same skeleton as the ported TYPE7:
 The interface time step is the node-on-spring bound dt = sqrt(2 m / K)
 for the worst (mass, combined stiffness) on either side, like TYPE7.
 
-Port simplifications: no Inacti / Tstart / sensors; the gap is constant
+Port simplifications: no Inacti / Tstart; the gap is constant
 per pair (Igap=1 uses the two edges' half-thicknesses, no mesh-size
 scaling variants); parallel-edge contact acts at the single closest-point
 pair (the original distributes along the overlap; the resultant is the
 same, the distribution slightly different).
+
+Friction MODELS (M15, ``Ifric > 0``) — a documented PORT EXTENSION: the
+ORIGINAL TYPE11 never evaluates the MFROT mu(p, v) laws (checked against
+the source: ``i11mainf.F`` hardcodes MFROT = 0 and I11FOR3 receives no
+FRIC_COEFS; the TYPE11 reader has no Ifric fields). The port extends the
+TYPE7 evaluation to edge pairs deliberately so both contact types (and
+both solvers) share one friction-model capability, with the edge-pair
+contact pressure DEFINED as p = f_n / (L_main * gap_pair) — the current
+main-edge length times the pair gap, the tributary strip of a line
+contact (derivation and rationale in ``contact/friction.py``). Ifric = 0
+keeps every M4 path bit-identical. The IFQ anchor store resets on a
+restart chain exactly like TYPE7's (see inter_type7.py).
 """
 
 from __future__ import annotations
@@ -59,7 +71,7 @@ import numpy as np
 from ..common.constants import EM20
 from ..common.fastmath import norm3, scatter_add3
 from ..model.model import Model
-from . import tracking
+from . import friction, tracking
 from .inter_type7 import _expand_matches
 from .stiffness import combine_stiffness, edge_stiffness_gap
 
@@ -149,6 +161,20 @@ class ContactType11:
             self.gap_const = gap_floor
             self.gap_bound = gap_floor
         self.fric = itf.fric
+
+        # ---- friction MODELS + IFQ filter state (M15, port extension —
+        # module docstring). mfrot/ifq = 0: every M4 path bit-identical.
+        self.mfrot = int(getattr(itf, "mfrot", 0))
+        self.ifq = int(getattr(itf, "ifq", 0))
+        self.xfiltr = float(getattr(itf, "xfiltr", 0.0))
+        self.fric_c = np.asarray(getattr(itf, "fric_c",
+                                         (0.0,) * 6), dtype=float)
+        self._filt_keys = np.zeros(0, dtype=np.int64)
+        self._filt_vals = np.zeros((0, 3))
+        if self.mfrot > 0:
+            log.info(f"     /INTER/TYPE11/{itf.id}: FRICTION MODEL "
+                     f"MFROT={self.mfrot} (PORT EXTENSION — p = fn/(L*gap),"
+                     f" see contact/friction.py), IFQ={self.ifq}")
 
         # ---- interface time step bound -------------------------------------
         # physical pre-mass-scaling masses: conservative and
@@ -346,14 +372,36 @@ class ContactType11:
         Fn = K * pen - C * np.minimum(vn, 0.0)
         Fvec = Fn[:, None] * nvec
 
-        # Coulomb friction, regularized around zero slip
-        if self.fric > 0.0:
+        # Coulomb friction, regularized around zero slip. Ifric > 0 (M15,
+        # port extension — module docstring) swaps the constant mu for the
+        # MFROT mu(p, v) laws with the edge-pair pressure definition
+        # p = Fn/(L_main * gap); Ifiltr applies the IFQ filter. The
+        # mu = const, no-filter path is the M4 code verbatim
+        # (x + (-a) == x - a exactly in IEEE — bit-identical).
+        if self.fric > 0.0 or self.mfrot > 0:
             gap_ref = float(np.mean(gap))
             vt = vrel - vn[:, None] * nvec
             vt_mag = norm3(vt)
-            Ft = self.fric * Fn * vt_mag / (
+            if self.mfrot > 0:
+                # p = Fn / (current main-edge length x pair gap) — the
+                # documented port DEFINITION of an edge pair's contact
+                # pressure (contact/friction.py)
+                lm = norm3(x[eb[:, 1]] - x[eb[:, 0]])
+                pres = Fn / np.maximum(lm * gap, EM20)
+                mu = friction.mu_kinetic(self.mfrot, self.fric,
+                                         self.fric_c, pres, vt_mag)
+            else:
+                mu = self.fric
+            Ft = mu * Fn * vt_mag / (
                 vt_mag + 1e-3 * gap_ref / max(dt, EM20))
-            Fvec -= (Ft / np.maximum(vt_mag, EM20))[:, None] * vt
+            ftvec = -(Ft / np.maximum(vt_mag, EM20))[:, None] * vt
+            if self.ifq > 0:
+                alpha = friction.filter_alpha(self.ifq, self.xfiltr, dt)
+                keys = ps[active] * max(len(self.em), 1) + pm[active]
+                ftvec, self._filt_keys, self._filt_vals = friction.\
+                    apply_filter(keys, ftvec, alpha, self._filt_keys,
+                                 self._filt_vals)
+            Fvec += ftvec
 
         # scatter with the closest-point parameters: +F on the secondary
         # edge ends, -F on the main edge ends (collinear equal/opposite
