@@ -266,9 +266,13 @@ class ImplicitDynResult(ImplicitResult):
         #: displacement snapshots (numnod, 3) for the validations (kept
         #: while numnod stays example-sized).
         #: "econt" (M12): stored contact penalty-spring energy 1/2 K p^2
-        #: (zero without /INTER/TYPE7), part of the balance like edamp.
+        #: (+ M13 the stick spring's 1/2 |f_t|^2/K_t), zero without /INTER,
+        #: part of the balance like edamp.
+        #: "efric" (M13): frictional SLIP dissipation mu f_n dgamma from the
+        #: TYPE7 return mapping, accumulated per committed step — the
+        #: contact analogue of plastic work (zero without friction).
         self.history = {"t": [], "ke": [], "ie": [], "wext": [], "edamp": [],
-                        "econt": [], "bal": [], "u": []}
+                        "econt": [], "efric": [], "bal": [], "u": []}
 
 
 #: stop keeping displacement snapshots beyond this many stored floats —
@@ -333,8 +337,11 @@ def _disable_rate_devices(model, log):
                     f"DEFERRED under implicit dynamics — the term is "
                     f"disabled and the material runs rate-independent "
                     f"(see PORTING_GUIDE M10)", "IMPL/DYNA")
-    from .statics import _warn_spring_dashpot
+    from .statics import _law36_static_curve, _warn_spring_dashpot
     _warn_spring_dashpot(model, log)
+    # M13: LAW36 multi-rate curve families run on the static curve only
+    # (the pseudo-velocity drive would feed the family a step-size rate)
+    _law36_static_curve(model, log)
 
 
 # ----------------------------------------------------------------------------
@@ -547,6 +554,7 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
     e0 = _kinetic(model, v, vr, real) + _elem_energy(model) + econt0
     wext = 0.0
     edamp = 0.0
+    efric = 0.0
     keep_u = True
 
     log.info("\n        STEP        TIME    ITER   RESIDUAL-NORM   STATUS")
@@ -624,6 +632,11 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
         g_prev_m = mint.copy()
         fext_prev = fext_new
         committed = {name: _snapshot(g) for name, g in model.element_groups()}
+        if contacts:
+            # M13: re-base the friction anchors on the converged step and
+            # book the return map's slip work into its own ledger channel
+            from .contact import commit_contacts
+            efric += commit_contacts(contacts, model.x)
         if nlg:
             if constr is not None:
                 # exact placement of the dependent nodes before the frame
@@ -654,7 +667,8 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
         h["wext"].append(wext)
         h["edamp"].append(edamp)
         h["econt"].append(econt)
-        h["bal"].append(ie + ke + edamp + econt - wext - e0)
+        h["efric"].append(efric)
+        h["bal"].append(ie + ke + edamp + econt + efric - wext - e0)
         if keep_u:
             h["u"].append(model.x - model.x0)
             if (len(h["u"]) + 1) * n * 3 > _U_HISTORY_CAP:
@@ -761,6 +775,19 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
     # shifts it by O(alpha dt f_dot), irrelevant to a norm)
     fext_eq = dof.gather_residual(fext, np.zeros((n, 3)))
     ref = max(float(np.linalg.norm(fext_eq)), 1e-30)
+    # M13: follower /PLOAD under NLGEOM — the end-level pressure is
+    # re-evaluated at the TRIAL configuration inside the loop and the
+    # load stiffness joins K (statics._solve_increment mirror)
+    from .followerload import has_follower, pload_tangent
+    follower = nlgeom and has_follower(loads)
+    lstiff = follower and bool(getattr(ip, "impl_load_stiff", True))
+
+    def _fext_trial(u_trial):
+        if not follower:
+            return fext
+        fx = np.zeros((n, 3))
+        loads.external_forces(t_new, fx, model.x + u_trial)
+        return fx
 
     epsp0 = {name: committed[name].get("epsp")
              for name, _ in model.element_groups()}
@@ -791,6 +818,7 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
     fint = mint = None
     fd_new = None
     fcont = None
+    fext_new = fext
     # frozen-placeholder masses read as zero in the node-space inertia
     # term (an unfrozen M12 constraint master carries a 1e30 marker, and
     # its row IS gathered now — see _lumped_mass_eq)
@@ -812,8 +840,11 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
             from .contact import contact_forces
             fcont, _ = contact_forces(contacts, model.x + u, n)
             fint = fint + fcont
+        # M13: follower pressure at the trial configuration (dead loads
+        # unchanged — _fext_trial returns the precomputed fext then)
+        fext_new = _fext_trial(u)
         # R = (1+a)(f_ext + f_int)_{n+1} - a g_n - M a_{n+1}   (node space)
-        Rf = (ap1 * (fext + fint) - alpha * g_prev_f
+        Rf = (ap1 * (fext_new + fint) - alpha * g_prev_f
               - massz[:, None] * a_new)
         Rm = (ap1 * mint - alpha * g_prev_m
               - model.inertia[:, None] * ar_new)
@@ -850,6 +881,10 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
             # joins the (1+alpha)-weighted stiffness like K_T (M12)
             from .contact import contact_tangent
             K = K + contact_tangent(contacts, model.x + u, dof)
+        if lstiff:
+            # M13: the follower-pressure load stiffness joins K_T (it is
+            # part of -dR/du and rides the same (1+alpha) HHT weight)
+            K = K + pload_tangent(loads, model, t_new, model.x + u, dof)
         # K_eff = (1+alpha) K_T + M/(beta dt^2)  (IMP_DYNAM's diagonal add)
         # + (1+alpha) gamma/(beta dt) C under Rayleigh damping (the
         # IDY_DAMP branch — see the module docstring for the algebra)
@@ -879,7 +914,8 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
                 from .contact import contact_forces
                 fcont, _ = contact_forces(contacts, model.x + u, n)
                 fint = fint + fcont
-            Rf = (ap1 * (fext + fint) - alpha * g_prev_f
+            fext_new = _fext_trial(u)
+            Rf = (ap1 * (fext_new + fint) - alpha * g_prev_f
                   - massz[:, None] * a_new)
             Rm = (ap1 * mint - alpha * g_prev_m
                   - model.inertia[:, None] * ar_new)
@@ -896,7 +932,7 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
 
     if inc.converged:
         model.x = model.x + u
-    return inc, u, ur_s, fint, mint, fext, fd_new
+    return inc, u, ur_s, fint, mint, fext_new, fd_new
 
 
 def _dyn_summary(model, result, dof, log, e0):
@@ -927,7 +963,10 @@ def _dyn_summary(model, result, dof, log, e0):
                      f"{h['edamp'][-1]:14.7E}  (/IMPL/DYNA/DAMP)")
         if h.get("econt") and h["econt"][-1] != 0.0:
             log.info(f"     CONTACT SPRING ENERGY . . : "
-                     f"{h['econt'][-1]:14.7E}  (/INTER/TYPE7)")
+                     f"{h['econt'][-1]:14.7E}  (/INTER)")
+        if h.get("efric") and h["efric"][-1] != 0.0:
+            log.info(f"     FRICTION DISSIPATION  . . : "
+                     f"{h['efric'][-1]:14.7E}  (/INTER/TYPE7)")
         log.info(f"     ENERGY BALANCE  . . . . . : "
                  f"{h['bal'][-1] / ref * 100.0:8.2f} %")
     log.info("     ------------------------------------------------")

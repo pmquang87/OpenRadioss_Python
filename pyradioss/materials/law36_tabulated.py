@@ -37,6 +37,38 @@ Port simplifications (documented deviations)
   exceeds it — handled generically by the element kernels (the same
   mechanism as the /FAIL cards; see pyradioss/failure/).
 
+Consistent tangents for the implicit solver (M13)
+-------------------------------------------------
+``consistent_solid_tangent`` / ``consistent_shell_tangent`` below are the
+LAW2 algorithmic tangents (see law02_johnson_cook.py for the full
+derivations — Simo & Hughes Box 7.3 for the solid, the Iplas=2 radial
+projection's exact derivative for the shell) with the hardening slope H
+taken from the TABLE's local segment slope at the end-of-increment
+plastic strain (``_curve_eval`` returns exactly that — the one-sided
+slope at a knot, which is the discrete algorithm's own derivative there).
+Two LAW36-specific points, measured rather than assumed:
+
+* NO iterated-return upgrade is needed (the M11 truss lesson does not
+  apply here): between table knots the consistency condition
+  q_tr - 3G*dl = sigma_y(ep0 + dl) is LINEAR, so ``_radial_return``'s
+  fixed-point iteration lands EXACTLY on the curve in a finite number of
+  steps regardless of the increment size (the M7 exact-fixed-point exit
+  detects it) — the M13 validation asserts machine-precision agreement
+  with the tabulated curve at implicit increment sizes.
+* Tables may SOFTEN (H < 0), which the Johnson–Cook law cannot. The
+  tangent uses the segment's true H (that is what makes Newton quadratic
+  on the segment) with the denominator 3G + H floored at 1% of 3G — the
+  return itself never diverges (its own Newton uses max(H, 0)), but a
+  softening slope approaching -3G means a snap-back no static tangent
+  can regularize.
+
+Strain-rate curve families under implicit run on the FIRST (static)
+curve only — the implicit drivers truncate the family with a warning
+(statics._law36_static_curve): the pseudo-velocity drive would otherwise
+feed the rate interpolation a step-size artifact (the LAW2 rate-term
+convention). The tangents below evaluate the curve at rate 0, which
+clamps to the first curve, so residual and tangent stay consistent.
+
 The curves referenced by the material are resolved by the Starter
 (``initialization.resolve_material_curves``) into plain arrays stored in
 ``mat.params``:
@@ -208,3 +240,120 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
     sig[idx, 2] *= scale
     epsp[idx] += dl
     return sig, epsp
+
+
+# ----------------------------------------------------------------------------
+# Consistent (algorithmic) tangents for the implicit solver (M13)
+# ----------------------------------------------------------------------------
+
+def _static_sy_H(mat, epsp):
+    """Yield stress and hardening slope on the STATIC (first) curve at
+    plastic strain ``epsp`` — the implicit path's curve (module
+    docstring): rate 0 clamps the family to its lowest-rate member."""
+    return _yield_stress(mat, epsp, np.zeros_like(epsp))
+
+
+def consistent_solid_tangent(mat, sig, epsp, epsp_incr):
+    """The consistent elastoplastic solid tangent of the LAW36 radial
+    return, (n, 6, 6) Voigt / engineering shear — the LAW2 Box 7.3
+    algebra (law02_johnson_cook.consistent_solid_tangent documents every
+    step) with H = the table segment's slope at the END-of-increment
+    plastic strain:
+
+        D = C - a (C - K 1(x)1) + b (N (x) N)
+        a = 3G d_ep / q_tr,   b = 6G^2 (d_ep/q_tr - 1/(3G + H))
+
+    q_tr reconstructed exactly from the converged stress and the step's
+    plastic increment (q_tr = sigma_y + 3G d_ep — the return identity),
+    N the unit deviatoric flow direction. Elastic points keep D = C.
+    True (possibly negative) H is used, floored so 3G + H >= 0.03 G (see
+    the module docstring's softening note)."""
+    from . import law01_elastic
+    n = sig.shape[0]
+    G = mat.G
+    Kb = mat.K
+    C = law01_elastic.solid_tangent(mat)             # (6, 6) elastic
+    D = np.broadcast_to(C, (n, 6, 6)).copy()
+    if epsp_incr is None:
+        return D
+    plastic = epsp_incr > 0.0
+    if not np.any(plastic):
+        return D
+
+    idx = np.where(plastic)[0]
+    s = sig[idx].copy()
+    pm = (s[:, 0] + s[:, 1] + s[:, 2]) / 3.0
+    s[:, 0] -= pm
+    s[:, 1] -= pm
+    s[:, 2] -= pm
+    snorm = np.sqrt(s[:, 0] ** 2 + s[:, 1] ** 2 + s[:, 2] ** 2
+                    + 2.0 * (s[:, 3] ** 2 + s[:, 4] ** 2 + s[:, 5] ** 2))
+    snorm = np.maximum(snorm, 1e-30)
+    Nv = s / snorm[:, None]                          # unit deviatoric flow
+    q = np.sqrt(1.5) * snorm                         # von Mises = sigma_y
+    dep = epsp_incr[idx]
+    q_tr = q + 3.0 * G * dep                         # trial von Mises (exact)
+    _, H = _static_sy_H(mat, epsp[idx])              # table segment slope
+    Hd = np.maximum(3.0 * G + H, 0.03 * G)           # softening floor
+    a = 3.0 * G * dep / q_tr
+    b = 6.0 * G * G * (dep / q_tr - 1.0 / Hd)
+
+    ee = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+    KeeT = Kb * np.outer(ee, ee)                     # K (1 (x) 1) in Voigt
+    C_minus_vol = C - KeeT                           # = 2G I_dev
+    NN = np.einsum("mi,mj->mij", Nv, Nv)
+    D[idx] = (C[None, :, :]
+              - a[:, None, None] * C_minus_vol[None, :, :]
+              + b[:, None, None] * NN)
+    return D
+
+
+def consistent_shell_tangent(mat, sig, epsp, epsp_incr):
+    """The consistent PLANE-STRESS tangent of the LAW36 Iplas=2 radial
+    projection, (n, 3, 3) Voigt [xx, yy, xy] engineering shear — the
+    exact derivative of the discrete algorithm ``shell_update`` runs,
+    identical in structure to law02_johnson_cook.consistent_shell_tangent
+    (see there for the derivation):
+
+        D = s C + [H/(3G+H) - s] / q_tr^2 * sig_tr (x) (C P sig_tr)
+
+    with sigma_y and the slope H from the static table curve at the
+    END-of-increment plastic strain, s = sigma_y/q_tr the radial scale,
+    sig_tr = sig/s the trial stress reconstructed from the converged
+    state, and P the plane-stress von Mises metric. Mildly nonsymmetric
+    (the radial projection is not the exact plane-stress return) — the
+    direct solver is LU."""
+    from . import law01_elastic
+    from .law02_johnson_cook import _P_PLANE
+    n = sig.shape[0]
+    G = mat.G
+    C = law01_elastic.shell_membrane_tangent(mat)    # (3, 3) plane stress
+    D = np.broadcast_to(C, (n, 3, 3)).copy()
+    if epsp_incr is None:
+        return D
+    plastic = epsp_incr > 0.0
+    if not np.any(plastic):
+        return D
+
+    idx = np.where(plastic)[0]
+    dl = epsp_incr[idx]
+    s_c = sig[idx]
+    # converged yield stress = the plane-stress von Mises of the returned
+    # stress (the projection lands exactly on the surface)
+    sy = np.sqrt(np.maximum(
+        np.einsum("mi,ij,mj->m", s_c, _P_PLANE, s_c), 0.0))
+    sy = np.maximum(sy, 1e-30)
+    q_tr = sy + 3.0 * G * dl                         # trial von Mises (exact)
+    sfac = sy / q_tr                                 # radial scale factor
+    sig_tr = s_c / sfac[:, None]
+    _, H = _static_sy_H(mat, epsp[idx])              # table segment slope
+    Hd = np.maximum(3.0 * G + H, 0.03 * G)           # softening floor
+    Hfrac = (Hd - 3.0 * G) / Hd                      # = H/(3G+H), floored
+
+    CP = C @ _P_PLANE
+    gvec = np.einsum("ij,mj->mi", CP, sig_tr)
+    coef = (Hfrac - sfac) / (q_tr * q_tr)
+    D[idx] = (sfac[:, None, None] * C[None, :, :]
+              + coef[:, None, None]
+              * np.einsum("mi,mj->mij", sig_tr, gvec))
+    return D

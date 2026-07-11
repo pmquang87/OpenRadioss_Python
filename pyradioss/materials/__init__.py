@@ -120,7 +120,9 @@ def solid_tangent(mat, sig, epsp, epsp_incr):
     """Dispatch the (n, 6, 6) consistent solid tangent for the implicit
     solve. LAW1 returns the constant elastic C broadcast over the group;
     LAW2 returns the CONSISTENT (algorithmic) elastoplastic tangent of the
-    radial return (see law02.consistent_solid_tangent for the derivation)."""
+    radial return (see law02.consistent_solid_tangent for the derivation);
+    LAW36 (M13) the same algebra with the hardening slope from the table's
+    local segment (law36.consistent_solid_tangent)."""
     n = sig.shape[0]
     if mat.law == 1:
         import numpy as np
@@ -129,9 +131,13 @@ def solid_tangent(mat, sig, epsp, epsp_incr):
     if mat.law == 2:
         return law02_johnson_cook.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr)
+    if mat.law == 36:
+        return law36_tabulated.consistent_solid_tangent(
+            mat, sig, epsp, epsp_incr)
     raise NotImplementedError(
-        f"material LAW{mat.law} has no implicit solid tangent (M8 supports "
-        f"LAW1 elastic and LAW2 elastoplastic)")
+        f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
+        f"elastic, LAW2 and LAW36 elastoplastic are ported; LAW42 is "
+        f"deferred — see PORTING_GUIDE M13)")
 
 
 def shell_membrane_tangent(mat):
@@ -152,7 +158,8 @@ def shell_layer_tangent(mat, sig, epsp, epsp_incr):
     through-thickness layer for the implicit shell tangents (M11). LAW1
     broadcasts the elastic matrix; LAW2 returns the CONSISTENT (algorithmic)
     tangent of the Iplas=2 radial projection (see
-    law02.consistent_shell_tangent for the derivation)."""
+    law02.consistent_shell_tangent for the derivation); LAW36 (M13) the
+    same projection tangent with the table's local hardening slope."""
     n = sig.shape[0]
     if mat.law == 1:
         import numpy as np
@@ -161,6 +168,10 @@ def shell_layer_tangent(mat, sig, epsp, epsp_incr):
     if mat.law == 2:
         return law02_johnson_cook.consistent_shell_tangent(
             mat, sig, epsp, epsp_incr)
+    if mat.law == 36:
+        return law36_tabulated.consistent_shell_tangent(
+            mat, sig, epsp, epsp_incr)
     raise NotImplementedError(
-        f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic "
-        f"and LAW2 elastoplastic are ported; see PORTING_GUIDE)")
+        f"material LAW{mat.law} has no implicit shell tangent (LAW1 "
+        f"elastic, LAW2 and LAW36 elastoplastic are ported; LAW27 is "
+        f"deferred — see PORTING_GUIDE M13)")
