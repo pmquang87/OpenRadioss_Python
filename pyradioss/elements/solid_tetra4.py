@@ -452,9 +452,15 @@ def tangent(group, x, epsp_incr=None):
     from .. import materials as _materials
     ke = np.zeros((n, 12, 12))
     epi = np.zeros(n) if epsp_incr is None else epsp_incr
+    # M14: total-form laws (LAW42) get the deformation gradient of the
+    # linearization geometry (see solid_hexa8.tangent)
+    F = (np.einsum("nia,nib->nab", x[conn], st["dndx0"])
+         if "dndx0" in st else None)
     for sl, mat, prop in st["slices"]:
+        extra = ({"F": F[sl]} if F is not None
+                 and _materials.needs_defgrad(mat) else None)
         D = _materials.solid_tangent(mat, st["sig"][sl], st["epsp"][sl],
-                                     epi[sl])              # (m, 6, 6)
+                                     epi[sl], extra)       # (m, 6, 6)
         Bs = B[sl]
         DB = np.einsum("mij,mjk->mik", D, Bs)              # (m, 6, 12)
         ke[sl] = vol[sl][:, None, None] * np.einsum("mji,mjk->mik", Bs, DB)
@@ -498,6 +504,16 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     dndx, vol = _geometry(x[conn])
     vol = np.maximum(vol, EM20)
     s = st["sig"]
+    # M14: total-form laws re-evaluate at the END configuration (see
+    # solid_hexa8.static_internal_forces for the rationale)
+    if "dndx0" in st:
+        from .. import materials as _materials
+        F = np.einsum("nia,nib->nab", x[conn], st["dndx0"])
+        for sl, mat, prop in st["slices"]:
+            if _materials.needs_defgrad(mat):
+                _materials.solid_update(
+                    mat, s[sl], np.zeros((sl.stop - sl.start, 6)),
+                    st["epsp"][sl], 1.0, {"F": F[sl]})
     S = np.empty((group.n, 3, 3))
     S[:, 0, 0], S[:, 1, 1], S[:, 2, 2] = s[:, 0], s[:, 1], s[:, 2]
     S[:, 0, 1] = S[:, 1, 0] = s[:, 3]

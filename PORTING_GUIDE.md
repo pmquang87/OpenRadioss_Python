@@ -99,6 +99,11 @@ same names in comments.
 | `engine/source/interfaces/int11/i11ke3.F` / `i11keg3.F` (I11KE3/I11KEG3 — the TYPE11 edge-to-edge implicit stiffness; IMP_INT7 = 3 forced around it too) | `implicit/contact.py` (`ImplicitContact11`) | M13: /INTER/TYPE11 under implicit — penalty force at the segment-segment closest points in the residual (the explicit i11dst3 port reused read-only), exact gap tangent K·g gᵀ (g from the two edges' parameters — the original's HS·HM blocks are its diagonal-boosted variant) plus the EXACT edge-edge closest-point curvature (the 2×2 optimality-system linearization, every projection region); near-parallel overlaps get a two-point trapezoid quadrature (the single closest point of parallel edges is non-unique and flips ends — a period-2 Newton cycle, the M13 lesson) |
 | `engine/source/implicit/imp_glob_k.F` — `IMP_KPRES` + `KPQUAD`/`KPTRIA` (pressure load stiffness: Gauss-integrated, only the OFF-diagonal blocks, forced antisymmetric, scaled SCALN = HALF) | `pyradioss/implicit/followerload.py` | M13: /PLOAD follower-load stiffness under /IMPL/NONLIN — the port linearizes ITS OWN lumped area-vector pressure force EXACTLY (nonsymmetric −∂(p·w·½ d13×d24)/∂x per segment; documented deviation: Newton cares about consistency with the residual actually iterated), and the NLGEOM residual now evaluates /PLOAD at the TRIAL configuration |
 | `engine/source/materials/mat/mat036/sigeps36.F` (+ `36c`) — the return the tangent must be consistent with | `materials/law36_tabulated.py` (`consistent_solid_tangent` / `consistent_shell_tangent`) | M13: LAW36 consistent tangents — the LAW2 algorithmic-tangent algebra with H from the TABLE's local segment slope; the piecewise-linear return is already EXACT at implicit increment sizes (measured — no iterated-return upgrade needed); rate-curve families truncated to the static curve under implicit (warned) |
+| `starter/source/constraints/general/rbody/rbody_part_modif.F90` (the PARENT_OF hierarchy resolving nested part-rigid-bodies in the Starter) | `implicit/constraints.py` (`_fully_resolve` + the topological `commit_placement`) | M14: constraint CHAINS — a master DOF of one constraint DEPENDENT in another (rigid-on-rigid, /MPC on rigid slaves, /RBE3 masters in a body, ties on body slaves) resolved by transform SUBSTITUTION (= the product T = T1·T2·… in topological order, never formed); CIRCULAR chains refused as a DFS back-edge; conflicts (one DOF, two rows) still refused; the explicit engine refuses chains loudly (its per-body integrator has no nesting order — the original's engine never sees one) |
+| the FRIC blocks of `i11keg3.F` (I11KEG3's always-stick µ-scaled plane spring; I11KFOR3's UNCAPPED tangential spring `FTN = -FRIC*STIF*DXT` — no CAND_F anchor, no cone) | `implicit/contact.py` (friction blocks of `ImplicitContact11`) | M14: TYPE11 Coulomb friction under implicit — the TYPE7/I7KFOR3 incremental RETURN MAPPING generalized to edge pairs (slip = relative motion of the closest MATERIAL points at frozen parameters, tangential plane ⊥ n — which CONTAINS both edge directions at a crossing), consistent stick/slip tangents on the [(1-s), s, -(1-t), -t] pattern, anchors keyed 2*(pair)+overlap-end (the documented near-parallel keying); a deliberate deviation from the original's uncapped spring, same rationale as M13's TYPE7 |
+| `imp_solv.F`'s Riks machinery (IDTC = 3 of `imp_dt.F` + the BFAC load rescaling; arc metric UL2 = full-field `PRODUT_UHP0` norm AFTER the dependent-motion recovery) | `statics.py` (`_run_arclength` / `_solve_increment_arc` / `_arc_tangent`) | M14: /IMPL/ARCL WITH constraints & contact — both auxiliary solves, the spherical metric and the root selection in the REDUCED space (documented deviation: the original's metric is the full recovered field — the two differ by the fixed SPD reweighting TᵀT, both valid Crisfield parametrizations); contact force in the corrector residual + active-set tangent in both solves, anchors/placement committed per arc increment |
+| `imp_buck.F` (UPD_GLOB_K condensing BOTH matrices before EIGBUCKP, RECUKIN mode recovery; NO contact assembly — NDDLI7 forced 0; IMP_KPRES into KG) | `implicit/buckling.py` | M14: /IMPL/BUCKL WITH constraints & contact — the reduced pencil Tᵀ(K_mat)T + µ Tᵀ(K_geo)T exactly as the original; the CONVERGED contact active set's tangent added to K_MAT (documented deviation: the original omits contact entirely — a column resting on a stop would report the free-column factor; the stop's stiffness does not scale with µ, so K_geo would be wrong), friction blocks symmetrized for eigh, frozen-set/bilateral caveats documented |
+| `sigeps42.F`'s implicit branch (IMPL_S > 0: a SCALAR stiffness ratio ET scaling a linear elastic D — a secant modified Newton) | `materials/law42_ogden.py` (`consistent_solid_tangent`) + the total-form re-evaluation in `solid_hexa8/tetra4.static_internal_forces` | M14: LAW42 CONSISTENT tangent — the exact spectral SPATIAL elasticity of the port's own Ogden stress (Bonet & Wood §6.6/ch.8: c_aabb from ∂²W/∂lnλ², the (σ_a λ_b² − σ_b λ_a²)/(λ_a² − λ_b²) shear terms, the equal-stretch L'Hôpital limit — in the shifted convention (c_aaaa − c_aabb)/2 WITHOUT the extra −σ_a of the textbook form, verified by the coalescent FD identity); the NLGEOM residual re-evaluates total-form stress at the END configuration; /IMPL/NONLIN REQUIRED (refused on the frozen frame — F never sees the trial displacement there) |
 
 ## 3. Conventions used in this port
 
@@ -255,7 +260,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | **Implicit PENALTY CONTACT (M12)**: /INTER/TYPE7 in the Newton loop — frictionless contact force at the TRIAL configuration in the residual, exact gap tangent K·g gᵀ + the closest-point curvature −K·p·∇²d (region-wise: zero on faces, the point/edge lateral terms at vertices/edges — the i7keg3.F blocks omit it; an M12 lesson) in K/K_eff, ACTIVE-SET Newton (pairs enter/leave per iteration; a set that will not settle lands in the M11 StepControl cut), Istf/Igap stiffness+gap machinery of contact/stiffness.py reused unchanged, stored spring energy ½Kp² in its own dynamics ledger channel. Validated: two blocks pressed = series-springs closed form EXACT with the active set entering mid-run, FD residual/tangent consistency (exact for secondary-side directions; ≤ 5% full-direction, the documented weight-variation omission), implicit punch = explicit damped steady state (< 2%) and the dead-load closed form (1e-6) | ✅ |
 | A constraint-condensation predictor lesson (M12, recorded in `constraints.make_consistent`): the dynamics predictor must be PROJECTED onto the constraint manifold (u = T u_red always) — the node-space extrapolation violates the constraint by O(θ²)·arm, Newton cannot remove what Tᵀ annihilates, and the commit placement silently converts the violation into energy (found by a pendulum that gained 20× its drop energy and circulated) | ✅ |
 | **Implicit CONTACT & LOAD COMPLETION (M13)**: /INTER/TYPE7 COULOMB FRICTION in the Newton loop (the i7kfor3.F incremental return mapping — stick/slip with the consistent nonsymmetric slip tangent, anchors committed per increment, `efric` slip-work ledger channel, µ = 0 bit-identical to M12); /INTER/TYPE11 edge-to-edge under implicit (exact segment-segment gap tangent + the EXACT edge-edge closest-point curvature in every projection region; near-parallel overlaps by two-point trapezoid quadrature — the period-2 lesson); /PLOAD follower-load stiffness under /IMPL/NONLIN (trial-configuration pressure residual + the exact nonsymmetric −∂f_ext/∂x; IMP_KPRES analogue, documented deviation) with /PLOAD + /IMPL/ARCL refused; LAW36 consistent tangents (solids + shells, table-slope H; the piecewise-linear return measured EXACT at implicit increments; rate families truncated to the static curve, warned). Two SOLVER lessons recorded in the code: the imp_solv.F-style backtracking LINE SEARCH (engages only when the residual GROWS — smooth runs bit-identical) that breaks non-smooth assignment cycles, and the PERSISTENT implicit hourglass state `hgq` (the incremental static stabilization forgot accumulated hourglass deformation at every commit and the modes ratcheted — latent since M8, exposed by moment-loaded corner forces) | ✅ |
-| Ifric > 0 friction models under implicit (MFROT 1/2/3 + IFQ filtering); TYPE11 friction under implicit (warns, runs frictionless); /RWALL under implicit (refused loudly); constraint CHAINS; /IMPDISP on constraint nodes; /IMPL/ARCL // /IMPL/BUCKL with constraints or contact; /PLOAD with /IMPL/ARCL (refused); LAW27/42 implicit tangents | ❌ (deferred — see the M12/M13 roadmap notes) |
+| **Implicit GENERALITY (M14)**: constraint CHAINS resolved by transform substitution (rigid-on-rigid, /MPC rows on rigid slaves, /RBE3 masters/ties inside bodies — the rbody_part_modif.F90 hierarchy expressed as T = T1·T2·…; CIRCULAR chains refused; conflicts refused; the explicit engine refuses chains loudly), with the topological commit placement under NLGEOM and the chained TᵀMT mass under /IMPL/DYNA (chained pendulum on the elliptic-integral period); /INTER/TYPE11 COULOMB FRICTION under implicit (the M13 TYPE7 return mapping generalized to edge pairs, consistent stick/slip tangents, anchors keyed per (edge, edge, overlap-end) — the original's I11KFOR3 has NO cone cap: documented deviation); /IMPL/ARCL WITH constraints & contact (reduced-space corrector solves + spherical metric — documented deviation from the full-field PRODUT_UHP0 Riks norm; contact active set re-evaluated inside the corrector, validated by the snap-catch); /IMPL/BUCKL WITH constraints & contact (the reduced pencil, as imp_buck.F's UPD_GLOB_K; the converged contact tangent in K_mat — imp_buck.F omits contact, documented deviation); LAW42 CONSISTENT spectral tangent (uniaxial/equibiaxial exact with quadratic tails; the coalescent-stretch L'Hôpital branch FD-verified; /IMPL/NONLIN required, frozen-frame runs refused) | ✅ |
+| Ifric > 0 friction models under implicit (MFROT 1/2/3 + IFQ filtering); /RWALL under implicit (refused loudly); /IMPDISP on constraint nodes; /PLOAD with /IMPL/ARCL (refused); LAW27 and LAW2-beam implicit tangents | ❌ (deferred — see the M12/M13/M14 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -989,12 +995,13 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       fixed meshed surface);
     * constraint CHAINS (rigid-on-rigid, /MPC rows on rigid slaves,
       /RBE3 masters inside bodies…): the original resolves some
-      orderings; the port refuses them loudly;
+      orderings; the port refuses them loudly. **Removed in M14.**;
     * /IMPDISP on constraint nodes (drive a free master with forces
       instead); /IMPVEL stays refused as before;
     * /IMPL/ARCL and /IMPL/BUCKL combined with constraints or contact
       (the arc-length metric and the buckling eigenproblem would need
-      the reduction threaded through — refused for now);
+      the reduction threaded through — refused for now). **Removed in
+      M14.**;
     * the TYPE2 rotational tie / offset-moment redistribution (the
       UPDKB_RB arm branch of I2UPDK0 for 6-DOF mains) — same deferral as
       the explicit port, so the two solvers stay comparable;
@@ -1126,19 +1133,21 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
     * **Ifric > 0 friction models** under implicit (MFROT 1/2/3 —
       viscous/Darmstadt/Renard pressure- and velocity-dependent µ — and
       the IFQ friction filtering);
-    * **TYPE11 friction under implicit** (warned, runs frictionless);
-      thermal contact; TYPE19/24/25 combined interfaces;
+    * **TYPE11 friction under implicit** (warned, runs frictionless —
+      **removed in M14**); thermal contact; TYPE19/24/25 combined
+      interfaces;
     * Inacti initial-penetration treatments, Igap 2/3, sensor gating of
       interfaces under the implicit clock, the IMP_INT7 = 0/1 stiffening
       tangent branches;
-    * /RWALL under implicit (refused); constraint CHAINS (refused);
-      /IMPDISP on constraint nodes (refused); /IMPL/ARCL and /IMPL/BUCKL
-      with constraints or contact (refused); **/PLOAD with /IMPL/ARCL**
-      (refused — the follower pressure breaks proportional loading);
-    * LAW27 and LAW42 implicit tangents, the LAW2 BEAM (global resultant
-      plasticity) tangent; LAW36 rate families under implicit (static
-      curve only, warned); rate devices under implicit stay disabled
-      loudly;
+    * /RWALL under implicit (refused); constraint CHAINS (refused —
+      **removed in M14**); /IMPDISP on constraint nodes (refused);
+      /IMPL/ARCL and /IMPL/BUCKL with constraints or contact (refused —
+      **removed in M14**); **/PLOAD with /IMPL/ARCL** (refused — the
+      follower pressure breaks proportional loading);
+    * LAW27 and LAW42 implicit tangents (LAW42's **removed in M14**),
+      the LAW2 BEAM (global resultant plasticity) tangent; LAW36 rate
+      families under implicit (static curve only, warned); rate devices
+      under implicit stay disabled loudly;
     * the NLGEOM (updated-Lagrangian) hourglass memory: the `hgq` fix
       covers the small-displacement path; under /IMPL/NONLIN the
       committed hourglass deformation lives in the advanced frame itself
@@ -1149,6 +1158,140 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       residual, ~1e-4 of the load scale on the strip that measured it):
       runs converge through the displacement-correction criterion;
       documented in the M13 validation rather than hidden.
+13. **M14 — implicit GENERALITY: chains, TYPE11 friction, ARCL/BUCKL with
+    constraints & contact, the LAW42 tangent** ✅ (done): the remaining
+    STRUCTURAL refusals of the implicit system, each mapped to the
+    CHECKED Fortran (fetched, not recalled): rbody_part_modif.F90 (the
+    starter's PARENT_OF rigid-body hierarchy), i11keg3.F's FRIC blocks
+    (I11KEG3/I11KFOR3), imp_solv.F's Riks machinery (IDTC = 3 of
+    imp_dt.F + PRODUT_UHP0), imp_buck.F (UPD_GLOB_K on both matrices, no
+    contact assembly, IMP_KPRES into KG), sigeps42.F (the scalar-ET
+    implicit branch).
+    * **Constraint CHAINS** (`constraints.py`): a master DOF of one
+      constraint DEPENDENT in another resolves by recursive transform
+      SUBSTITUTION — exactly the product T = T1·T2·… in topological
+      order, never formed; the DFS back-edge = a CIRCULAR chain, refused
+      loudly; one DOF claimed by two rows = a CONFLICT, refused (the
+      original MERGES part-body overlaps — merging would silently change
+      the model). /MPC rows pre-substitute their dependent columns before
+      the pivoting. Under NLGEOM the whole substitution re-runs per
+      committed frame (all factors linearized at ONE configuration) and
+      the commit placement walks the chain topologically — parents place
+      their slaves (including a child's master) exactly before the child
+      places its own, arms measured on the pre-increment snapshot. The
+      EXPLICIT engine refuses chains loudly (its per-body 6-DOF
+      integrator has no nesting order; the original's engine never sees
+      one). Starter check relaxed to the slave/master-overlap case only.
+    * **TYPE11 COULOMB FRICTION** (`contact.py`): the M13 TYPE7 return
+      mapping generalized to edge pairs — the slip increment is the
+      relative motion of the two closest MATERIAL points at frozen
+      parameters, projected onto the plane orthogonal to n (which
+      CONTAINS both edge directions at a crossing: axial sliding of
+      either edge is genuine rubbing); stick/slip consistent tangents on
+      the [(1-s), s, -(1-t), -t] pattern; anchors committed per converged
+      increment, keyed 2*(i*n_main + j) + k with k the overlap-end index
+      (the documented near-parallel keying: the LOW-s sub-pair inherits
+      the single-point anchor across the threshold, the HIGH end starts
+      fresh). What the ORIGINAL does (fetched): I11KEG3 assembles the
+      always-stick µ-scaled plane spring and I11KFOR3 applies an UNCAPPED
+      tangential spring with no stored anchor — the port's return mapping
+      is a deliberate deviation, the same one M13 made for TYPE7 and for
+      the same reason. µ = 0 stays bit-identical to M13.
+    * **/IMPL/ARCL with constraints & contact** (`statics.py`): both
+      corrector auxiliary solves, the spherical metric, the Crisfield
+      root selection and the predictor-sign rule live in the REDUCED
+      space; T is rebuilt and the exact placement runs per committed arc
+      increment. The ORIGINAL's Riks control measures its arc metric on
+      the FULL recovered nodal field (PRODUT_UHP0-style sum over all
+      nodes — verified) — the port's reduced metric is a documented
+      deviation (the constraint quadratic must live where the solves
+      live; the two differ by the fixed SPD reweighting TᵀT, both valid
+      Crisfield parametrizations). Contact joins the corrector residual
+      at the trial configuration and both solves' matrix; the active set
+      re-evaluates per iteration (the residual is continuous), and the
+      radius-halving cut remains the non-smooth backstop — the corrector
+      keeps plain Newton steps (no M13 line search; measured unnecessary
+      on the snap-catch, where the set changes inside increments without
+      a single cut).
+    * **/IMPL/BUCKL with constraints & contact** (`buckling.py`): the
+      reduced pencil Tᵀ(K_mat)T + µ Tᵀ(K_geo)T — exactly the original
+      (imp_buck.F runs UPD_GLOB_K on BOTH assemblies before EIGBUCKP and
+      recovers modes with RECUKIN). Contact: the original assembles NONE
+      (no IMP_INT_K call — a column on a stop reports the free-column
+      factor); the port DEVIATES, documented: the CONVERGED prestressed
+      active set's gap (+friction, symmetrized) tangent joins K_MAT — the
+      µ-independent side, because a closed stop is a physical support
+      whose stiffness does not scale with the load multiplier (the one
+      configuration stiffness the original DOES include, IMP_KPRES, goes
+      into its KG correctly: follower pressure does scale). Frozen-set /
+      bilateral-linearization caveats documented, not hidden.
+    * **LAW42 consistent tangent** (`materials/law42_ogden.py`): the
+      exact spectral SPATIAL elasticity of the port's own Ogden stress —
+      c_aabb = β_ab/J − 2σ_a δ_ab with β from ∂²W/∂lnλ², the
+      (σ_a λ_b² − σ_b λ_a²)/(λ_a² − λ_b²) shear terms, and the
+      equal-stretch L'HÔPITAL limit which in THIS (shifted) convention is
+      (c_aaaa − c_aabb)/2 — the textbook "− σ_a" form applies to the
+      UNSHIFTED entries and would subtract σ_a twice (caught by the
+      coalescent FD identity; recorded in the module). The NLGEOM
+      residual re-evaluates total-form stress at the END configuration
+      (the midpoint value is the right objective INCREMENT for
+      hypoelastic laws but simply the wrong configuration for a pure
+      function of F); tangent() feeds the trial F through the new
+      ``extra`` hook of materials.solid_tangent. The ORIGINAL's implicit
+      branch only scales a linear D by the scalar ET of sigeps42.F — a
+      secant modified Newton; the port's exact tangent is the documented
+      deviation (the M13 IMP_KPRES pattern). LAW42 under implicit
+      REQUIRES /IMPL/NONLIN — on the frozen frame F never sees the trial
+      displacement; refused loudly, statics and dynamics.
+    * **Validation** (tests/test_m14_implgen.py, 19 tests): the two-body
+      chain lever closed form EXACT in one Newton step (both geometry
+      modes), the /MPC-on-rigid-slave equality closed form, the CHAINED
+      pendulum on the elliptic-integral quarter period with BOTH arm
+      lengths exact (the topological placement), the circular/conflict/
+      explicit-engine refusals; TYPE11 friction stick (u = F/(2k + K_t))
+      and slip (f_t = µN, u = (F − µN)/2k) closed forms EXACT, µ = 0 and
+      pure-normal-load bit-consistency, FD in both regimes at a committed
+      anchor, the explicit kinetic law evaluated ON the implicit converged
+      slip state landing on µ·v/(v+eps); the snap-catch (free-path peak
+      sampled from below exactly as M9, arrested equilibrium on the stop
+      to 1e-5) and the RBE2-loaded snap through BOTH limit points; the
+      RBE2-capped Euler column = the plain factor (1e-9 relative) on
+      π²EI/4L², the pinned column on a contact stop = π²EI/L² (< 3%);
+      LAW42: the FD Truesdell identity exact in every regime INCLUDING
+      coalescent stretches, full-path FD exact with the hourglass frozen
+      (the live-hourglass residue measured IDENTICAL for LAW1 — a
+      pre-existing NLGEOM omission, not a LAW42 term), uniaxial (λ≈1.70)
+      and equibiaxial closed forms to 1e-8 with quadratic tails, the
+      explicit /IMPDISP quasi-static cross-check (< 2%), the
+      incompressible-limit 1/K scaling of J−1, the frozen-frame refusal;
+      the parity contract. Example: `examples/snap_catch`.
+    Deferred out of M14, explicitly (not half-implemented):
+    * **Ifric > 0 friction models** under implicit (MFROT 1/2/3 and IFQ
+      filtering) — for TYPE7 AND TYPE11; thermal contact; TYPE19/24/25
+      combined interfaces;
+    * Inacti initial-penetration treatments, Igap 2/3, sensor gating of
+      interfaces under the implicit clock, the IMP_INT7 = 0/1 stiffening
+      tangent branches;
+    * /RWALL under implicit (refused); /IMPDISP on constraint nodes
+      (refused); /PLOAD with /IMPL/ARCL (refused — the follower pressure
+      breaks proportional loading, and the arc metric would need the
+      configuration-dependent pattern re-sampled);
+    * LAW27 and the LAW2 BEAM (global resultant plasticity) tangents;
+      LAW42 SHELLS (no explicit shell variant exists to be consistent
+      with) and LAW42 Prony viscosity; rate devices under implicit stay
+      disabled loudly;
+    * buckling with the arc-length traced state uses the same
+      linearized pencil (no extended-system / branch-switching
+      continuation — the classical eigenvalue estimate only);
+    * the IDTC 2/3 step controls of imp_dt.F (the original's own Riks
+      flavor lives there — the port keeps its Crisfield corrector);
+    * the UL hourglass memory under NLGEOM and the hourglass-operator
+      geometry variation in the tangent (the O(k_hg·|u|) omission the
+      M14 FD validation measures and documents — shared by every
+      material since M9, invisible at the u = 0 states the M9 FD tests
+      probe);
+    * the BT4 drilling-row residual floor under NLGEOM (unchanged M13
+      note).
 
 ## 6. Validation strategy
 
@@ -1160,6 +1303,20 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
   results: longitudinal wave speed in a bar, cantilever/plate vibration
   frequency, Johnson–Cook uniaxial yield curve, energy conservation of a
   block bouncing on a rigid wall.
+* **Implicit generality validations (M14)** — the two-body rigid chain
+  lever and /MPC-on-slave closed forms (exact, one Newton step), the
+  chained pendulum on the elliptic-integral period with exact arm
+  lengths, the circular-chain / conflict / explicit-engine refusals; the
+  TYPE11 friction stick and slip closed forms (exact), FD consistency in
+  both regimes, µ = 0 preservation, and the explicit kinetic law
+  evaluated on the implicit converged slip state; the snap-catch (arc
+  length + contact: free-path peak as M9, arrested closed form on the
+  stop) and the RBE2-loaded snap (arc length + constraints, both limit
+  points); the RBE2-capped and contact-stopped Euler columns; the LAW42
+  Truesdell FD identity (including coalescent stretches), uniaxial/
+  equibiaxial closed forms with quadratic tails, the explicit
+  quasi-static cross-check, the incompressible 1/K scaling and the
+  frozen-frame refusal; the parity contract.
 * **Implicit friction / TYPE11 / follower-load / LAW36 validations
   (M13)** — the friction stick (transmitted shear + micro-slip
   F/(4K_t)) and slip (exactly µN) closed forms with the inclined-load

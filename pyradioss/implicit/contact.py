@@ -198,8 +198,62 @@ so their curvature keeps only the clamped-parameter terms (the s-drift
 terms are O(theta) below the parallel threshold), and crossing the
 threshold itself redistributes the force between two nearby points
 (resultant-continuous; the moment jump is O(K L theta_c) — documented,
-not hidden). Friction for TYPE11 under implicit is DEFERRED (warned,
-runs frictionless — PORTING_GUIDE M13).
+not hidden).
+
+Theory — TYPE11 COULOMB FRICTION (M14)
+--------------------------------------
+The TYPE7 return mapping generalized to edge pairs. What the ORIGINAL's
+implicit branch does for TYPE11 friction, from the fetched source
+(i11keg3.F): the force path I11KFOR3 applies a plain tangential spring
+``FTN = -FRIC*STIF*DXT`` on the step's tangential relative displacement
+at the closest-point weights — with NO Coulomb cone cap and NO stored
+anchor (unlike I7KFOR3's CAND_F incremental return) — and the tangent
+path I11KEG3 assembles the same mu-scaled ALWAYS-STICK tangential-plane
+spring FRIC*STIF*(Q1 Q1^T + Q2 Q2^T) as I7KEG3 (a modified Newton, no
+stick/slip decision). The port deviates exactly as M13 did for TYPE7,
+and for the same reason (Newton needs a residual with a bounded force
+and a tangent consistent with it): the INCREMENTAL RETURN MAPPING on the
+anchored tangential force, capped on the cone, with the consistent
+stick/slip tangent per regime.
+
+Kinematics: the slip increment of a pair is the relative motion of the
+two closest MATERIAL points at frozen parameters (the TYPE7 frozen
+weights, verbatim),
+
+    delta = [cA(x) - cB(x)] - [cA(x_com) - cB(x_com)]   at fixed (s, t),
+
+projected onto the tangential plane I - n n^T. Note what that plane IS
+for edge-to-edge contact: at an interior-interior solution n is parallel
+to u x v, so the plane orthogonal to n CONTAINS both edge directions —
+axial sliding of either edge across the other is genuine rubbing and
+enters the return map (only the normal approach is excluded). The
+anchored force is projected onto the current tangential plane before the
+trial update (the FTN removal), the trial force f_t^tr = f0 - K_t*dt is
+radially returned to the cone mu*K*p, and the consistent tangent blocks
+are (P P^T) (x) M over the four end nodes with P = [(1-s), s, -(1-t), -t]
+and M the TYPE7 stick/slip matrices (K_t(I - n n^T); the nonsymmetric
+slip derivative). K_t = K, the pair's normal penalty stiffness — the
+original's own choice (FACT = FRIC*STIF).
+
+ANCHOR KEYING (the near-parallel sub-pairs need a decision — here it
+is): anchors are stored per (secondary edge row, main edge row, END
+index) as key = 2*(i*n_main + j) + k. A generic single-closest-point
+pair uses k = 0. The two overlap sub-pairs of a near-parallel pair use
+k = 0 for the LOW overlap end and k = 1 for the HIGH end (ends ordered
+by the secondary-edge parameter s — a stable labeling). Crossing INTO
+the overlap regime the low-end sub-pair therefore INHERITS the
+single-point anchor and the high end starts fresh at zero; crossing out,
+the high-end anchor is dropped. The stored tangential resultant is
+continuous to the same order as the frictionless force redistribution
+already accepted at that threshold (module section above); the
+alternative — one shared anchor per edge pair — would smear one slip
+history over two points with different normals and break the per-point
+return map.
+
+The friction slip work lands in the same ``efric`` ledger channel as
+TYPE7 (mu f_n dgamma per commit), the stick spring store joins
+``econt``, and mu = 0 leaves every M13 path bit-identical (guarded at
+each branch — asserted by the validations).
 
 The pair stiffness K reuses ``contact/stiffness.py`` unchanged (the
 i7sti3/i11sti3 element formulas + the Istf combination), and the gap
@@ -247,11 +301,11 @@ tolerance above the cycle amplitude. Node-to-segment contact in the
 original has the same non-smooth set behind a looser default convergence
 tolerance.
 
-DEFERRED loudly (PORTING_GUIDE M13): TYPE11 friction under implicit,
-Ifric > 0 friction models (MFROT 1/2/3 — viscous/Darmstadt/Renard — and
-the IFQ friction filtering), Inacti initial-penetration treatments,
-Igap 2/3, sensor gating (TSTART/TSTOP) under the implicit clock, the
-I7KEG3/I11KEG3 stiffening modes IMP_INT7 = 0/1.
+DEFERRED loudly (PORTING_GUIDE M13/M14): Ifric > 0 friction models
+(MFROT 1/2/3 — viscous/Darmstadt/Renard — and the IFQ friction
+filtering), Inacti initial-penetration treatments, Igap 2/3, sensor
+gating (TSTART/TSTOP) under the implicit clock, the I7KEG3/I11KEG3
+stiffening modes IMP_INT7 = 0/1.
 """
 
 from __future__ import annotations
@@ -666,20 +720,27 @@ class ImplicitContact11:
             self.gap_const = gap_floor
             self.gap_bound = gap_floor
 
-        if itf.fric > 0.0:
-            log.warning(
-                f"/INTER/TYPE11/{itf.id}: Coulomb friction (fric = "
-                f"{itf.fric:g}) is DEFERRED for edge-to-edge contact under "
-                f"the implicit solver — the interface runs FRICTIONLESS "
-                f"(see PORTING_GUIDE M13)", "IMPL CONTACT")
+        # ---- Coulomb friction state (M14) --------------------------------
+        # the TYPE7 return mapping generalized to edge pairs (module
+        # docstring "TYPE11 COULOMB FRICTION"): committed anchor geometry
+        # x_com + anchored tangential forces keyed 2*(i*n_main + j) + k
+        # (k the overlap-end index — the documented keying decision).
+        # mu = 0 leaves every friction branch untouched (M13 bit-identical).
+        self.mu = float(itf.fric)
+        self.x_com = model.x.copy()
+        self.ft_keys = np.zeros(0, dtype=np.int64)
+        self.ft_vals = np.zeros((0, 3))
+
         if getattr(itf, "sens_id", 0):
             log.warning(
                 f"/INTER/TYPE11/{itf.id}: /SENSOR gating is not evaluated "
                 f"under the implicit solver — the interface is active for "
                 f"the whole run", "IMPL CONTACT")
+        fric_txt = (f"COULOMB FRICTION mu = {self.mu:g} (M14 edge-pair "
+                    f"return mapping)" if self.mu > 0.0 else "frictionless")
         log.info(f"     /INTER/TYPE11/{itf.id}: IMPLICIT PENALTY CONTACT — "
                  f"{len(self.es)} secondary edge(s) vs "
-                 f"{len(self.em)} main edge(s) (i11ke3.F, frictionless)")
+                 f"{len(self.em)} main edge(s) (i11ke3.F, {fric_txt})")
 
     #: near-parallel threshold on sin^2 of the edge crossing angle — below
     #: it the closest-point pair is treated as non-unique and the pair
@@ -690,16 +751,18 @@ class ImplicitContact11:
     def _active_pairs(self, x):
         """Box-overlap candidates re-projected at trial geometry ``x``
         (the explicit i11dst3 closest points, read-only); returns the
-        penetrating pairs: (ea, eb, s, t, nvec, pen, K, d, frozen) with
-        ``ea`` the secondary edge ends (m, 2), ``eb`` the main ends, s/t
-        the closest-point parameters and ``frozen`` True on the
+        penetrating pairs: (ea, eb, s, t, nvec, pen, K, d, frozen, key)
+        with ``ea`` the secondary edge ends (m, 2), ``eb`` the main ends,
+        s/t the closest-point parameters, ``frozen`` True on the
         near-parallel OVERLAP sub-pairs, whose parameters are overlap
-        constructions rather than distance minimizers (module
-        docstring)."""
+        constructions rather than distance minimizers (module docstring),
+        and ``key`` the M14 friction-anchor key 2*(i*n_main + j) + k
+        (the documented sub-pair keying)."""
         empty = (np.zeros((0, 2), dtype=np.int64),
                  np.zeros((0, 2), dtype=np.int64), np.zeros(0),
                  np.zeros(0), np.zeros((0, 3)), np.zeros(0), np.zeros(0),
-                 np.zeros(0), np.zeros(0, dtype=bool))
+                 np.zeros(0), np.zeros(0, dtype=bool),
+                 np.zeros(0, dtype=np.int64))
         if len(self.es) == 0 or len(self.em) == 0:
             return empty
         margin = 1.001 * self.gap_bound
@@ -724,6 +787,10 @@ class ImplicitContact11:
         ea, eb, ii, jj = ea[keep], eb[keep], ii[keep], jj[keep]
         if len(ii) == 0:
             return empty
+
+        # friction-anchor base key of each candidate PAIR (M14): the
+        # sub-index k is appended below (2*base + k)
+        base_key = ii * max(len(self.em), 1) + jj
 
         s, t, cA, cB = _closest_points_on_segments(
             x[ea[:, 0]], x[ea[:, 1]], x[eb[:, 0]], x[eb[:, 1]])
@@ -774,6 +841,12 @@ class ImplicitContact11:
                                                   dtype=bool),
                                          np.ones(2 * len(rows),
                                                  dtype=bool)])
+                # anchor keys: generic pairs k = 0; overlap sub-pairs
+                # k = 0 (LOW s end, inheriting the single-point anchor)
+                # and k = 1 (HIGH end) — the documented keying decision
+                key = np.concatenate([2 * base_key[keep],
+                                      2 * base_key[rows],
+                                      2 * base_key[rows] + 1])
                 ea, eb = ea_s, eb_s
                 cA = ((1.0 - s)[:, None] * x[ea[:, 0]]
                       + s[:, None] * x[ea[:, 1]])
@@ -781,8 +854,10 @@ class ImplicitContact11:
                       + t[:, None] * x[eb[:, 1]])
             else:
                 frozen = np.zeros(len(ea), dtype=bool)
+                key = 2 * base_key
         else:
             frozen = np.zeros(len(ea), dtype=bool)
+            key = 2 * base_key
 
         dvec = cA - cB
         dd = np.sqrt(np.einsum("mb,mb->m", dvec, dvec))
@@ -794,7 +869,7 @@ class ImplicitContact11:
         pen = pen[act]
         d = np.maximum(dd[act], EM20)
         nvec = dvec[act] / d[:, None]        # pushes the secondary edge out
-        return ea, eb, s, t, nvec, pen, K[act], d, frozen[act]
+        return ea, eb, s, t, nvec, pen, K[act], d, frozen[act], key[act]
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -811,16 +886,62 @@ class ImplicitContact11:
         return g
 
     # ------------------------------------------------------------------
+    def _friction_state(self, x, ea, eb, s, t, key, nvec, pen, K):
+        """The M14 edge-pair return mapping at trial geometry ``x`` from
+        the committed anchors (module docstring "TYPE11 COULOMB
+        FRICTION"): the slip increment is the relative motion of the two
+        closest MATERIAL points at frozen parameters, tangentially
+        projected (the plane orthogonal to n — which CONTAINS both edge
+        directions at a crossing: axial edge sliding is genuine slip);
+        stick keeps the trial spring force, slip radially returns it to
+        the cone mu K p. Returns (ft, stick, tnorm, ttr) like the TYPE7
+        twin. Never called when mu = 0."""
+        m = len(s)
+        # relative closest-point motion at frozen (s, t): trial - committed
+        dx = x - self.x_com
+        delta = ((1.0 - s)[:, None] * dx[ea[:, 0]]
+                 + s[:, None] * dx[ea[:, 1]]
+                 - (1.0 - t)[:, None] * dx[eb[:, 0]]
+                 - t[:, None] * dx[eb[:, 1]])
+        dn = np.einsum("mb,mb->m", delta, nvec)
+        dt_vec = delta - dn[:, None] * nvec
+        # committed anchor lookup (sorted-key searchsorted; missing = 0)
+        f0 = np.zeros((m, 3))
+        if len(self.ft_keys):
+            pos = np.searchsorted(self.ft_keys, key)
+            pos = np.minimum(pos, len(self.ft_keys) - 1)
+            hit = self.ft_keys[pos] == key
+            f0[hit] = self.ft_vals[pos[hit]]
+        # project the anchor onto the CURRENT tangential plane (the FTN
+        # removal — a rotating pair must not keep a normal ghost)
+        f0 -= np.einsum("mb,mb->m", f0, nvec)[:, None] * nvec
+        ftr = f0 - K[:, None] * dt_vec
+        tnorm = np.sqrt(np.einsum("mb,mb->m", ftr, ftr))
+        fcap = self.mu * K * pen                       # the Coulomb cone
+        stick = tnorm <= fcap
+        ttr = ftr / np.maximum(tnorm, EM20)[:, None]
+        ft = np.where(stick[:, None], ftr, fcap[:, None] * ttr)
+        return ft, stick, tnorm, ttr
+
+    # ------------------------------------------------------------------
     def forces(self, x, fcont):
-        """Penalty force of the active set at trial geometry ``x``,
-        scattered into ``fcont`` — i11for3's spring term (no rate damper,
-        no friction: deferred loudly). The force is f = K p distributed
-        with the closest-point parameters — collinear equal/opposite
-        point forces, so linear AND angular momentum balance exactly."""
-        ea, eb, s, t, nvec, pen, K, _, _ = self._active_pairs(x)
+        """Penalty (+ friction, M14) force of the active set at trial
+        geometry ``x``, scattered into ``fcont`` — i11for3's spring term
+        (no rate damper) plus the M14 return-mapped tangential force. The
+        force is distributed with the closest-point parameters — the
+        normal parts are collinear equal/opposite point forces (exact
+        linear AND angular momentum balance); the tangential parts are
+        equal/opposite at the two closest points, whose normal offset d
+        leaves the same O(f_t*d) moment the TYPE7 node-vs-projection
+        transfer carries."""
+        ea, eb, s, t, nvec, pen, K, _, _, key = self._active_pairs(x)
         if len(s) == 0:
             return 0
         F = (K * pen)[:, None] * nvec
+        if self.mu > 0.0:
+            ft, _, _, _ = self._friction_state(x, ea, eb, s, t, key, nvec,
+                                               pen, K)
+            F = F + ft
         va = np.empty((len(s), 2, 3))
         va[:, 0, :] = (1.0 - s)[:, None] * F
         va[:, 1, :] = s[:, None] * F
@@ -833,15 +954,45 @@ class ImplicitContact11:
 
     # ------------------------------------------------------------------
     def energy(self, x):
-        """Stored penalty-spring energy 1/2 K p^2 of the active set."""
-        _, _, _, _, _, pen, K, _, _ = self._active_pairs(x)
-        return 0.5 * float((K * pen * pen).sum())
+        """Stored penalty-spring energy 1/2 K p^2 of the active set,
+        plus (M14) the stick spring's tangential store 1/2 |f_t|^2/K_t."""
+        ea, eb, s, t, nvec, pen, K, _, _, key = self._active_pairs(x)
+        if len(s) == 0:
+            return 0.0
+        e = 0.5 * float((K * pen * pen).sum())
+        if self.mu > 0.0:
+            ft, _, _, _ = self._friction_state(x, ea, eb, s, t, key, nvec,
+                                               pen, K)
+            e += 0.5 * float((np.einsum("mb,mb->m", ft, ft) / K).sum())
+        return e
 
     # ------------------------------------------------------------------
     def commit(self, x):
-        """No committed friction state (TYPE11 runs frictionless under
-        implicit — deferred loudly); kept for the uniform driver hook."""
-        return 0.0
+        """Re-base the friction anchors on a CONVERGED configuration
+        (M14 — the TYPE7 commit discipline verbatim: forces evaluated
+        from the OLD anchors first, then the anchor geometry re-based).
+        Returns the frictional slip dissipation of the increment for the
+        ``efric`` ledger channel."""
+        if self.mu <= 0.0:
+            return 0.0
+        ea, eb, s, t, nvec, pen, K, _, _, key = self._active_pairs(x)
+        if len(s) == 0:
+            self.x_com = x.copy()
+            self.ft_keys = np.zeros(0, dtype=np.int64)
+            self.ft_vals = np.zeros((0, 3))
+            return 0.0
+        ft, stick, tnorm, _ = self._friction_state(x, ea, eb, s, t, key,
+                                                   nvec, pen, K)
+        self.x_com = x.copy()
+        fcap = self.mu * K * pen
+        slip_g = np.where(stick, 0.0, (tnorm - fcap) / K)   # plastic slip
+        diss = float((fcap * slip_g).sum())
+        # duplicate keys cannot happen: a pair contributes one sub-index
+        # each (the near-parallel split emits k = 0 and k = 1 once)
+        order = np.argsort(key)
+        self.ft_keys = key[order]
+        self.ft_vals = ft[order]
+        return diss
 
     # ------------------------------------------------------------------
     def triplets(self, x, dof):
@@ -849,8 +1000,10 @@ class ImplicitContact11:
         K g g^T minus the EXACT edge-edge closest-point curvature
         K p Hess(d) (module docstring "Theory — TYPE11": the 2x2
         optimality-system linearization, exact in every projection
-        region, with the near-parallel guard)."""
-        ea, eb, s, t, nvec, pen, K, d, frozen = self._active_pairs(x)
+        region, with the near-parallel guard), PLUS (M14) the friction
+        stick/slip blocks (P P^T) (x) M with P = [(1-s), s, -(1-t), -t]
+        and M the TYPE7 consistent regime matrices."""
+        ea, eb, s, t, nvec, pen, K, d, frozen, key = self._active_pairs(x)
         z = (np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64),
              np.zeros(0))
         m = len(s)
@@ -860,6 +1013,27 @@ class ImplicitContact11:
         ke = K[:, None, None] * g[:, :, None] * g[:, None, :]
         ke -= self._curvature_blocks(x, ea, eb, s, t, nvec, pen, K, d,
                                      frozen)
+        if self.mu > 0.0:
+            # friction blocks (P P^T) (x) M — stick K_t(I - n n^T), slip
+            # the nonsymmetric return-map derivative (module docstring);
+            # P matches the force distribution rows exactly.
+            ft, stick, tnorm, ttr = self._friction_state(
+                x, ea, eb, s, t, key, nvec, pen, K)
+            eye = np.eye(3)
+            T = eye[None] - np.einsum("mi,mj->mij", nvec, nvec)
+            M = np.where(stick[:, None, None],
+                         K[:, None, None] * T,
+                         (self.mu * K)[:, None, None]
+                         * np.einsum("mi,mj->mij", ttr, nvec)
+                         + (self.mu * K * pen * K
+                            / np.maximum(tnorm, EM20))[:, None, None]
+                         * (T - np.einsum("mi,mj->mij", ttr, ttr)))
+            P = np.empty((m, 4))
+            P[:, 0] = 1.0 - s
+            P[:, 1] = s
+            P[:, 2] = -(1.0 - t)
+            P[:, 3] = -t
+            ke += np.einsum("ma,mb,mij->maibj", P, P, M).reshape(m, 12, 12)
         edofs = np.zeros((m, 12), dtype=np.int64)
         ends = np.concatenate([ea, eb], axis=1)          # (m, 4)
         for k in range(4):

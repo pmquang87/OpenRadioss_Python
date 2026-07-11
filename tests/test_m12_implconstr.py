@@ -1065,13 +1065,24 @@ floor
             run_engine(e)
 
 
-def test_arcl_with_constraints_refused(make_deck):
-    s, e = make_deck("ARCR", LEVER,
+def test_arcl_with_constraints_no_longer_refused(make_deck):
+    """/IMPL/ARCL with constraints was a loud M12 refusal; M14 threads
+    the condensation through the arc corrector (validated in
+    tests/test_m14_implgen.py). This test keeps the old refusal deck and
+    asserts the trace now CONVERGES to the lever's closed form (the
+    stable path of a linear structure — the arc method reduces to load
+    control here)."""
+    F, k = 1e-4, 2.0
+    lever = LEVER.replace("pull\n         1         X         4       1.0",
+                          f"pull\n         1         X         4       {F}")
+    s, e = make_deck("ARCR", lever,
                      "#\n/RUN/ARCR/1\n1.0\n/IMPL\n/IMPL/ARCL\n/END\n")
     with contextlib.redirect_stdout(io.StringIO()):
         run_starter(s)
-        with pytest.raises(NotImplementedError, match="ARCL"):
-            run_engine(e)
+        model = run_engine(e)
+    assert model.implicit_result.converged
+    d = model.x - model.x0
+    assert d[model.node_index(6), 0] == pytest.approx(5 * F / k, rel=1e-3)
 
 
 def test_impdisp_on_constraint_nodes_refused(make_deck):
@@ -1086,9 +1097,12 @@ def test_impdisp_on_constraint_nodes_refused(make_deck):
             run_engine(e)
 
 
-def test_chained_constraints_refused(make_deck):
-    """An /RBE3 whose master is a rigid-body slave = a constraint chain:
-    refused loudly (PORTING_GUIDE M12), never resolved silently."""
+def test_chained_constraints_no_longer_refused(make_deck):
+    """An /RBE3 whose masters are rigid-body slaves = a constraint chain:
+    an M12 loud refusal, RESOLVED by transform substitution since M14
+    (validated in tests/test_m14_implgen.py). The old refusal deck now
+    converges, with the RBE3 reference riding the interpolated motion of
+    the two rigid slaves: u_ref_x = (u3 + u4)/2 = F/(2k) exactly."""
     starter = LEVER.replace("/END\n", """/NODE
          7                 2.0                 0.0                 0.0
 /GRNOD/NODE/5
@@ -1102,5 +1116,15 @@ chain
     s, e = make_deck("CHR", starter, "#\n/RUN/CHR/1\n1.0\n/IMPL\n/END\n")
     with contextlib.redirect_stdout(io.StringIO()):
         run_starter(s)
-        with pytest.raises(NotImplementedError, match="chain"):
-            run_engine(e)
+        model = run_engine(e)
+    assert model.implicit_result.converged
+    d = model.x - model.x0
+    F, k = 1.0, 2.0
+    u3 = d[model.node_index(3), 0]
+    u4 = d[model.node_index(4), 0]
+    assert u3 == pytest.approx(-F / k, rel=1e-9)
+    assert u4 == pytest.approx(2 * F / k, rel=1e-9)
+    # the masters lie EXACTLY on the lever's rigid field, so the RBE3
+    # least-squares fit reproduces it and the reference (at y = 0, like
+    # node 3) rides u(y = 0) = u3 exactly
+    assert d[model.node_index(7), 0] == pytest.approx(u3, rel=1e-9)

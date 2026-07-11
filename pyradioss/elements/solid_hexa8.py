@@ -782,9 +782,17 @@ def tangent(group, x, epsp_incr=None):
     # ---- constitutive stiffness  K_c = V B^T D B --------------------------
     ke = np.zeros((n, 24, 24))
     epi = np.zeros(n) if epsp_incr is None else epsp_incr
+    # M14: total-form laws (LAW42) build their SPATIAL tangent from the
+    # deformation gradient of the linearization geometry ``x`` — exactly
+    # the F the residual's stress was evaluated at (static_internal_forces
+    # re-evaluates total-form slices at the end configuration)
+    F = (np.einsum("nia,nib->nab", xe, st["dndx0"])
+         if "dndx0" in st else None)
     for sl, mat, prop in st["slices"]:
+        extra = ({"F": F[sl]} if F is not None
+                 and materials.needs_defgrad(mat) else None)
         D = materials.solid_tangent(mat, st["sig"][sl], st["epsp"][sl],
-                                    epi[sl])              # (m, 6, 6)
+                                    epi[sl], extra)       # (m, 6, 6)
         Bs = B[sl]
         # V * B^T D B, per element (einsum keeps it a stacked matmul)
         DB = np.einsum("mij,mjk->mik", D, Bs)             # (m, 6, 24)
@@ -895,6 +903,20 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     dndx, vol = _geometry(x[conn])
     vol = np.maximum(vol, EM20)
     s = st["sig"]
+    # M14: TOTAL-form laws (LAW42) re-evaluate their stress at THIS (end)
+    # configuration — the midpoint forces() call left sigma(F_mid) in the
+    # state, which is the right objective INCREMENT for the hypoelastic
+    # laws but simply the wrong configuration for a law whose stress is a
+    # pure function of F. The re-evaluation is exact and free of drift
+    # (F comes from the stored initial gradients), overwrites the state
+    # in place (a pure function — nothing is lost), and is what makes the
+    # M14 LAW42 tangent CONSISTENT with the residual assembled here.
+    if "dndx0" in st:
+        F = np.einsum("nia,nib->nab", x[conn], st["dndx0"])
+        for sl, mat, prop in st["slices"]:
+            if materials.needs_defgrad(mat):
+                materials.solid_update(mat, s[sl], np.zeros((sl.stop - sl.start, 6)),
+                                       st["epsp"][sl], 1.0, {"F": F[sl]})
     S = np.empty((group.n, 3, 3))
     S[:, 0, 0], S[:, 1, 1], S[:, 2, 2] = s[:, 0], s[:, 1], s[:, 2]
     S[:, 0, 1] = S[:, 1, 0] = s[:, 3]

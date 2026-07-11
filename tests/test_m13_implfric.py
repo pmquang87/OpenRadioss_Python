@@ -820,16 +820,19 @@ press
     assert d_i[ia, 2] == pytest.approx(d_e[ia, 2], rel=0.02)
 
 
-def test_type11_friction_warns_and_runs_frictionless(make_deck):
-    """TYPE11 friction under implicit is DEFERRED: the interface warns
-    and runs frictionless — the crossed-edges closed form (a frictionless
-    result) still holds exactly."""
+def test_type11_friction_no_longer_deferred(make_deck):
+    """TYPE11 friction under implicit was an M13 deferral (warned, ran
+    frictionless); M14 upgraded it to the edge-pair return mapping
+    (validated in tests/test_m14_implgen.py). This keeps the old deck:
+    the interface now announces COULOMB FRICTION, and — the load being
+    purely NORMAL (zero slip increment) — the frictionless crossed-edges
+    closed form still holds exactly."""
     h, gap, K, kz, F = 0.09, 0.1, 100.0, 2.0, 2.0
     model, out = _run(make_deck, "X11F",
                       _crossed_edges_deck(h, gap, K, kz, F, fric=0.3),
                       "#\n/RUN/X11F/1\n1.0\n/IMPL/DTINI\n0.25\n"
                       "/IMPL/NEWTON\n1e-10  30\n/END\n")
-    assert "DEFERRED" in out and "FRICTIONLESS" in out
+    assert "COULOMB FRICTION" in out and "DEFERRED" not in out
     u_exact = (K * (gap - h) - F) / (2 * kz + K)
     d = model.x - model.x0
     assert d[model.node_index(1), 2] == pytest.approx(u_exact, rel=1e-8)

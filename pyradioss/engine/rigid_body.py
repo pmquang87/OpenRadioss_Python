@@ -355,7 +355,28 @@ class RigidBodyEngine:
 def build_rigid_bodies(model: Model, loads, log,
                        saved_map=None) -> List[RigidBodyEngine]:
     """Instantiate the engine-side rigid bodies (/RBODY + /RBE2).
-    ``saved_map`` (M6): {body id: state dict} from an engine restart."""
+    ``saved_map`` (M6): {body id: state dict} from an engine restart.
+
+    Rigid-body CHAINS (a master of one body a slave of another — allowed
+    through the Starter since M14 for the IMPLICIT condensation) are
+    REFUSED here loudly: this explicit integrator advances each body's
+    6-DOF EOM independently and scatters the rigid field per body — a
+    chained master would be written by its parent and read by its child
+    with no nesting order, silently corrupting both. (The original
+    resolves chains in the Starter — rbody_part_modif.F90 — so its engine
+    never sees one.)"""
     saved_map = saved_map or {}
+    bodies = [rb for rb in model.rbodies if rb.slaves is not None]
+    is_master = np.zeros(model.numnod, dtype=bool)
+    for rb in bodies:
+        is_master[rb.master] = True
+    for rb in bodies:
+        if is_master[rb.slaves].any():
+            raise NotImplementedError(
+                f"/{rb.kind}/{rb.id}: rigid-body CHAIN (a slave of this "
+                f"body is the master of another) — supported by the "
+                f"IMPLICIT solver only (PORTING_GUIDE M14); the explicit "
+                f"engine refuses it rather than integrate the bodies in "
+                f"an undefined order.")
     return [RigidBodyEngine(rb, model, loads, log, saved_map.get(rb.id))
-            for rb in model.rbodies if rb.slaves is not None]
+            for rb in bodies]
