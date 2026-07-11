@@ -185,8 +185,17 @@ def run_engine(input_file: str, log: Optional[MessageLog] = None) -> Model:
         log.info(f" FINAL TIME (/RUN)  . . . . . . . . . : "
                  f"{controls.t_end:12.5E}")
 
-        model = _integrate(model, controls, log, out_dir, run_name,
-                           run_num, saved)
+        if controls.implicit:
+            # M8: /IMPL switches to the implicit-static Newton driver — a
+            # PARALLEL entry point that reuses the element force kernels for
+            # the residual and adds the assembled tangent stiffness. The
+            # explicit leap-frog loop below is left completely untouched.
+            from ..implicit.statics import run_implicit_static
+            model = run_implicit_static(model, controls, log, out_dir,
+                                        run_name, run_num)
+        else:
+            model = _integrate(model, controls, log, out_dir, run_name,
+                               run_num, saved)
     return model
 
 

@@ -56,3 +56,44 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray) -> np.ndarray:
     sig[:, 1] += c * (dyy + nu * dxx)
     sig[:, 2] += G * deps[:, 2]
     return sig
+
+
+# ----------------------------------------------------------------------------
+# Consistent tangents for the implicit solver (M8)
+# ----------------------------------------------------------------------------
+# For a linear-elastic law the "consistent (algorithmic) tangent" is trivially
+# the constant elasticity matrix C itself — the stress is a linear function of
+# strain, so dsigma/deps = C exactly. These builders return C in the SAME
+# Voigt / engineering-shear convention the element B-matrices use (shear
+# strains are engineering, gamma = 2*eps, so the shear rows carry G directly,
+# consistent with the rate updates above and with solid_hexa8._exact_dt_factor).
+
+
+def solid_tangent(mat) -> np.ndarray:
+    """(6, 6) isotropic elastic tangent C for solids (Voigt, engineering
+    shear: rows/cols [xx, yy, zz, xy, yz, zx]).
+
+    C = lambda*(1 (x) 1) + 2G on the deviatoric/shear structure, i.e. the
+    standard Lame form with G on the engineering-shear diagonal."""
+    G = mat.G
+    lam = mat.K - 2.0 * G / 3.0
+    C = np.array([
+        [lam + 2 * G, lam, lam, 0, 0, 0],
+        [lam, lam + 2 * G, lam, 0, 0, 0],
+        [lam, lam, lam + 2 * G, 0, 0, 0],
+        [0, 0, 0, G, 0, 0],
+        [0, 0, 0, 0, G, 0],
+        [0, 0, 0, 0, 0, G],
+    ], dtype=float)
+    return C
+
+
+def shell_membrane_tangent(mat) -> np.ndarray:
+    """(3, 3) plane-stress elastic tangent for shells (Voigt [xx, yy, xy],
+    engineering shear). This is the membrane AND (scaled by z^2) the bending
+    constitutive matrix of the Belytschko-Tsay resultant formulation."""
+    E, nu, G = mat.E, mat.nu, mat.G
+    Ep = E / (1.0 - nu * nu)
+    return np.array([[Ep, nu * Ep, 0.0],
+                     [nu * Ep, Ep, 0.0],
+                     [0.0, 0.0, G]], dtype=float)

@@ -74,6 +74,20 @@ class EngineControls:
     anim_vect: List[str] = field(default_factory=lambda: ["VEL", "DIS"])
     anim_elem: List[str] = field(default_factory=lambda: ["VONM", "EPSP"])
 
+    # ------------------------------------------------------------------
+    # /IMPL implicit-static control (M8). ``implicit`` switches the run
+    # from the explicit leap-frog loop to the Newton–Raphson static
+    # driver (pyradioss/implicit/statics.py); the fields below mirror the
+    # OpenRadioss /IMPL cards minimally (final load factor = t_end,
+    # increment size, Newton tolerance + iteration cap, linear-solver
+    # backend). Unused by explicit runs.
+    # ------------------------------------------------------------------
+    implicit: bool = False        # /IMPL present -> implicit static run
+    impl_dt: float = 0.0          # load-factor increment (0 = single step)
+    impl_tol: float = 1.0e-6      # Newton residual tolerance (relative)
+    impl_max_iter: int = 25       # Newton iteration cap per increment
+    impl_linsolve: str = ""       # '', 'superlu', 'cholmod', 'mumps'
+
 
 class Model:
     """The full model. Created empty, filled by the keyword parsers, then

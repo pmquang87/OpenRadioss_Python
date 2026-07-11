@@ -12,10 +12,18 @@ requires-python = ">=3.9"
 dependencies = ["numpy>=1.22"]
 
 [project.optional-dependencies]
-test = ["pytest>=7"]
+test = ["pytest>=7", "scipy>=1.8"]
 # the optional M7 accelerated backend (pyradioss/accel): the base install
 # stays NumPy-only; select with PYRADIOSS_BACKEND=numba or -backend numba
 accel = ["numba>=0.59"]
+# the M8 implicit solver (pyradioss/implicit): SciPy is REQUIRED for implicit
+# runs (sparse assembly + SuperLU) but OPTIONAL for the explicit solver, so it
+# lives here rather than in the base deps. scikit-sparse (CHOLMOD) and
+# python-mumps are further-optional direct-solver backends (each falls back to
+# SuperLU with a warning when absent — see pyradioss/implicit/linsolve.py).
+implicit = ["scipy>=1.8"]
+cholmod = ["scipy>=1.8", "scikit-sparse>=0.4"]
+mumps = ["scipy>=1.8", "python-mumps>=0.0.1"]
 
 [project.scripts]
 # The two console scripts mirror the two OpenRadioss executables
