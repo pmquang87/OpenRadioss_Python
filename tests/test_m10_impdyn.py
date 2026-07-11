@@ -691,7 +691,8 @@ def test_impl_dyna_card_parsing(tmp_path):
     """/IMPL/DYNA/1 reads the HHT alpha ITSELF (freimpl.F HHT_A — not a
     spectral radius); /IMPL/DYNA/2 reads gamma then beta (DY_G = NM_A,
     DY_B = NM_B in imp_dyna.F); bare /IMPL stays STATIC; /IMPL/DYNA/DAMP
-    warns (Rayleigh damping deferred)."""
+    reads a then b and IMPLIES dynamics (M11 removed the M10 deferral —
+    freimpl.F: IF (IDYNA==0) IDYNA=1)."""
     ec, _ = _parse(tmp_path, "#\n/RUN/A/1\n1.0\n/IMPL/DYNA/1\n-0.05\n/END\n")
     assert ec.implicit and ec.impl_dyna == 1
     assert ec.impl_dyna_alpha == pytest.approx(-0.05)
@@ -711,11 +712,14 @@ def test_impl_dyna_card_parsing(tmp_path):
     ec, _ = _parse(tmp_path, "#\n/RUN/A/1\n1.0\n/IMPL\n/END\n")
     assert ec.implicit and ec.impl_dyna == 0
 
-    # /IMPL/DYNA/DAMP: deferred with a warning, run type unchanged
+    # /IMPL/DYNA/DAMP (M11): DAMPA_IMP then DAMPB_IMP, and the card alone
+    # switches the run dynamic exactly like the original reader
     ec, log = _parse(tmp_path, "#\n/RUN/A/1\n1.0\n/IMPL/DYNA/DAMP\n"
                                "0.1  0.01\n/END\n")
-    assert ec.impl_dyna == 0
-    assert any("DAMP" in w for w in log.warnings)
+    assert ec.impl_dyna_damp
+    assert ec.impl_dyna == 1 and ec.impl_dyna_alpha == 0.0
+    assert ec.impl_dyna_dampa == pytest.approx(0.1)
+    assert ec.impl_dyna_dampb == pytest.approx(0.01)
 
 
 def test_impl_dyna_stability_warnings(tmp_path):

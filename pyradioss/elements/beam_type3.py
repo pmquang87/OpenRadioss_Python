@@ -382,3 +382,162 @@ def forces(group, x, v, vr, dt, fint, mint):
     # ---- critical time step (exact init value, length-rescaled) ------------
     ratio = L / st["L0"]
     return st["dt0"] * np.where(ratio < 1.0, ratio, ratio ** -0.5)
+
+
+# ----------------------------------------------------------------------------
+# Implicit tangent stiffness (M11) — a NEW entry point alongside forces()
+# ----------------------------------------------------------------------------
+# Fortran origin: the element-KE branch of the implicit assembly
+# (``engine/source/implicit/imp_glob_k.F`` dispatching the beam stiffness)
+# + its ``imp_kgeo`` geometric path (/IMPL/NONLIN).
+#
+# The corotational Timoshenko beam's material tangent is the local 12x12
+#
+#     K_l = L * B^T C B,   C = diag(EA, GA, GA, GIxx, EIyy, EIzz)
+#
+# with B the SAME 6x12 generalized-strain-rate operator the force path
+# integrates (``_b_operator`` — one point at mid-span, the reduced
+# integration that avoids shear locking) — the exact stiffness the exact-dt
+# eigenproblem of ``_exact_dt`` already builds. It is rotated to global by
+# the corotational frame E per 3-dof block. Note the one-point linear
+# element is nodally EXACT for end loads on a Timoshenko cantilever
+# (delta = FL^3/3EI + FL/GA) — the M11 closed-form check.
+#
+# The orientation node N3 carries no DOFs (as it carries no force): the
+# frame's dependence on N3 (and the frame-rotation derivative terms in
+# general) multiplies the current RESULTANTS, so at zero prestress the
+# material tangent above is the EXACT linearization (asserted by finite
+# differences); with prestress those frame terms are exactly what kgeo()
+# carries for the dominant axial resultant.
+#
+# K_geo: the transverse ("taut string") stiffness of the AXIAL force,
+# (N/L)(I - a a^T) on the translations — for the LINEAR (one-point)
+# interpolation this IS the consistent initial-stress operator
+# (int N w'^2 dx with linear w gives exactly N/L; the L/12-type rotational
+# couplings belong to CUBIC beam shape functions, which this element does
+# not have). The shear-force and moment frame-coupling terms are omitted —
+# they are O(Q/N, M/NL) of the axial term at a buckling state and the
+# standard beam-column practice drops them (documented deferral,
+# PORTING_GUIDE M11). A beam column therefore buckles at Euler's load like
+# the truss-braced systems the M9 validations cover.
+#
+# LAW2 beams (the M3 GLOBAL resultant plasticity) have NO implicit tangent:
+# linearizing the resultant-space radial return is a different derivation
+# (deferred explicitly, PORTING_GUIDE M11) — a plastic beam raises rather
+# than silently running elastic.
+
+def _beam_edofs(conn):
+    """(n, 12) global scalar DOF slot ids over N1, N2 (N3 carries none)."""
+    n = len(conn)
+    edofs = np.empty((n, 12), dtype=np.int64)
+    for c in range(6):
+        edofs[:, c] = conn[:, 0] * 6 + c
+        edofs[:, 6 + c] = conn[:, 1] * 6 + c
+    return edofs
+
+
+def _frame_transform(E):
+    """(n, 12, 12) local<-global transformation: each 3-dof block (v1, th1,
+    v2, th2) transforms by E^T (local component a = sum_b E[b,a] global_b)."""
+    n = len(E)
+    T = np.zeros((n, 12, 12))
+    for q in range(4):
+        # T[3q+a, 3q+b] = E[b, a]
+        T[:, 3 * q:3 * q + 3, 3 * q:3 * q + 3] = np.transpose(E, (0, 2, 1))
+    return T
+
+
+def tangent(group, x, epsp_incr=None):
+    """Element tangent stiffness for the whole beam group (LAW1 elastic).
+
+    Returns ``(ke, edofs)``: ``ke`` (n, 12, 12) over the two force-carrying
+    nodes x 6 global dofs, ``edofs`` (n, 12). ``epsp_incr`` is accepted for
+    signature parity and unused (LAW2 beams are refused — see the note)."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    E, L = _frame(x[conn[:, 0]], x[conn[:, 1]], x[conn[:, 2]])
+
+    # local K_l = L * B^T C B, vectorized over the group: B(L) has entries
+    # +-1/L and +-1/2 only (see _b_operator) — build it stacked
+    B = np.zeros((n, 6, 12))
+    invL = 1.0 / L
+    B[:, 0, 0], B[:, 0, 6] = -invL, invL                   # eps
+    B[:, 1, 1], B[:, 1, 7] = -invL, invL                   # gy
+    B[:, 1, 5] = B[:, 1, 11] = -0.5
+    B[:, 2, 2], B[:, 2, 8] = -invL, invL                   # gz
+    B[:, 2, 4] = B[:, 2, 10] = 0.5
+    B[:, 3, 3], B[:, 3, 9] = -invL, invL                   # kx (twist)
+    B[:, 4, 4], B[:, 4, 10] = -invL, invL                  # ky
+    B[:, 5, 5], B[:, 5, 11] = -invL, invL                  # kz
+
+    Cd = np.zeros((n, 6))                                  # diag of C
+    for sl, mat, prop in st["slices"]:
+        if mat.law != 1:
+            raise NotImplementedError(
+                f"the implicit beam tangent supports LAW1 only; LAW{mat.law} "
+                f"(the global resultant-plasticity beam) has no implicit "
+                f"tangent — deferred, see PORTING_GUIDE M11")
+        p = prop.params
+        Cd[sl, 0] = mat.E * p["area"]
+        Cd[sl, 1] = Cd[sl, 2] = mat.G * p["area"]
+        Cd[sl, 3] = mat.G * p["ixx"]
+        Cd[sl, 4] = mat.E * p["iyy"]
+        Cd[sl, 5] = mat.E * p["izz"]
+    # K_l = L * B^T diag(C) B  (stacked)
+    CB = Cd[:, :, None] * B                                # (n, 6, 12)
+    Kl = L[:, None, None] * np.einsum("nai,naj->nij", B, CB)
+
+    T = _frame_transform(E)
+    ke = np.einsum("nki,nkl,nlj->nij", T, Kl, T)           # (n, 12, 12)
+    return ke, _beam_edofs(conn)
+
+
+def kgeo(group, x):
+    """Geometric (initial-stress) element stiffness of the AXIAL resultant,
+    (N/L)(I - a a^T) on the two nodes' translations (see the note above for
+    why this is the consistent operator of the linear element, and which
+    coupling terms are deferred). Identically zero at zero axial force."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    d = x[conn[:, 1]] - x[conn[:, 0]]
+    L = np.maximum(norm3(d), EM20)
+    a = d / L[:, None]
+    N_over_L = st["fres"][:, 0] / L
+    eye = np.eye(3)
+    kb = N_over_L[:, None, None] * (eye[None, :, :]
+                                    - np.einsum("ni,nj->nij", a, a))
+    ke = np.zeros((n, 12, 12))
+    ke[:, 0:3, 0:3] = kb
+    ke[:, 6:9, 6:9] = kb
+    ke[:, 0:3, 6:9] = -kb
+    ke[:, 6:9, 0:3] = -kb
+    return ke, _beam_edofs(conn)
+
+
+def static_internal_forces(group, x, u, ur, fint, mint):
+    """Nodal forces/moments at configuration ``x`` from the CURRENT local
+    resultants — the updated-Lagrangian end-configuration force assembly of
+    the M9/M11 implicit residual (the resultants were just advanced by a
+    midpoint-geometry ``forces()`` call; this re-states the pfint3
+    expressions with the frame and length OF THIS geometry).
+    ``u``/``ur`` unused."""
+    st = group.state
+    conn = group.conn
+    n1, n2, n3 = conn[:, 0], conn[:, 1], conn[:, 2]
+    E, L = _frame(x[n1], x[n2], x[n3])
+
+    fres, mres = st["fres"], st["mres"]
+    N, Qy, Qz = fres[:, 0], fres[:, 1], fres[:, 2]
+    Mx, My, Mz = mres[:, 0], mres[:, 1], mres[:, 2]
+    f2 = np.stack([N, Qy, Qz], axis=1)
+    hL = 0.5 * L
+    m1 = np.stack([-Mx, -My + Qz * hL, -Mz - Qy * hL], axis=1)
+    m2 = np.stack([Mx, My + Qz * hL, Mz - Qy * hL], axis=1)
+
+    fg = np.einsum("na,nba->nb", f2, E)
+    np.add.at(fint, n1, fg)
+    np.add.at(fint, n2, -fg)
+    np.add.at(mint, n1, -np.einsum("na,nba->nb", m1, E))
+    np.add.at(mint, n2, -np.einsum("na,nba->nb", m2, E))

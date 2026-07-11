@@ -39,13 +39,14 @@ from ..elements import KERNELS
 from . import require_scipy
 from .dofmap import DofMap
 
-#: element kernels that expose an implicit ``tangent()``: the 8-node solid
-#: (hexa8) and the 4-node shell (BT4) since M8, the 2-node truss since M9
-#: (its exact corotational tangent is the arc-length validation element).
-#: Groups outside this set raise a clear error in ``assemble`` — the implicit
-#: path does not silently ignore un-ported element types (tetra4 / sh3n /
-#: beam / spring tangents are deferred, see PORTING_GUIDE).
-_TANGENT_KERNELS = ("bricks", "shells", "trusses")
+#: element kernels that expose an implicit ``tangent()``: hexa8 + BT4 since
+#: M8, the truss since M9, and — M11 (element tangent COMPLETENESS) — the
+#: 4-node tetra, the 3-node C0 triangle shell, the corotational Timoshenko
+#: beam and the TYPE4 spring: every element family of the port. The gate
+#: stays (a future un-ported family must still fail loudly here, never be
+#: silently ignored).
+_TANGENT_KERNELS = ("bricks", "tetras", "shells", "sh3n", "trusses",
+                    "springs", "beams")
 
 
 def element_triplets(name, group, x_geom, dof: DofMap, epsp_incr=None,

@@ -93,21 +93,44 @@ What M10 adds (implicit DYNAMICS — see dynamics.py for the theory)
   viscosity, LAW2 strain-rate term) are disabled explicitly rather than
   fed the pseudo-velocity (see the dynamics.py docstring).
 
+What M11 adds (implicit COMPLETENESS)
+-------------------------------------
+* **Element tangent completeness**: tangent()/kgeo()/
+  static_internal_forces() for tetra4, sh3n, beam and spring — every
+  element family of the port is implicit-capable and the assembler gate
+  admits full mixed models. The spring (total-form) and the LAW2 truss
+  (whose explicit one-step return cannot serve implicit increment sizes)
+  carry their OWN implicit residual, ``implicit_internal_forces``,
+  dispatched by ``statics._internal_forces`` instead of forces().
+* **LAW2 consistent tangents for shells and the truss**: the plane-stress
+  Iplas=2 radial projection's algorithmic tangent
+  (``law02.consistent_shell_tangent``), integrated per layer with the
+  force path's own quadrature; the truss's E·H/(E+H) modulus.
+* **/IMPL/DYNA/DAMP Rayleigh damping** (imp_dyna.F IDY_DAMP): C = a·M +
+  b·K(step start) in the HHT residual and the effective tangent, with the
+  DY_EDAMP trapezoidal dissipation ledger (see dynamics.py).
+* **Automatic implicit step control** (imp_dt.F — ``statics.StepControl``):
+  cut-and-retry on non-convergence, growth back toward /IMPL/DTINI after
+  easy steps, for statics increments AND dynamics time steps.
+* **The /IMPL/BUCKL engine card**: prestress increments + the M9
+  eigensolver, factors/modes reported in the listing and on the result.
+
 Explicitly DEFERRED (documented in PORTING_GUIDE.md, not half-implemented):
 
-* **consistent (element) mass**, Rayleigh damping in the implicit system
-  (/IMPL/DYNA/DAMP), modal/eigenvalue dynamics, implicit-explicit
-  switching mid-run, automatic implicit time-step control (imp_dt.F),
-  /IMPVEL under implicit dynamics (use /IMPDISP), rate-dependent
-  plasticity under implicit dynamics;
 * **contact and general constraints in the tangent system** (/INTER, /RBODY,
-  /MPC): the explicit interfaces are kinematic/penalty and do not contribute
-  to K here;
+  /RBE2/3, /MPC): the explicit interfaces are kinematic/penalty and do not
+  contribute to K here — the structural M12 candidate;
+* **consistent (element) mass**, modal/eigenvalue dynamics,
+  implicit-explicit switching mid-run, /IMPVEL under implicit dynamics
+  (use /IMPDISP);
+* rate devices under implicit — the LAW2 strain-rate term, the bulk
+  viscosity and the spring dashpot are disabled LOUDLY, never fed the
+  pseudo-velocity;
 * **follower-load (pressure) stiffness**: /PLOAD is evaluated at the
   committed frame; its configuration-dependence is not linearized into K;
-* LAW2 shell / LAW2 truss consistent tangents; tetra4 / sh3n / beam /
-  spring element tangents; the /IMPL/BUCKL engine card (the buckling
-  eigensolver is a library function).
+* LAW27/36/42 implicit tangents and the LAW2 BEAM (global resultant
+  plasticity) tangent; the IDTC = 2/3 step controls and /IMPL/DT/FIXP;
+  the exact plane-stress (Iplas=1) LAW2 return.
 
 Why scipy is guarded
 --------------------

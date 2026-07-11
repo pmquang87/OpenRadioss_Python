@@ -105,6 +105,27 @@ class EngineControls:
     impl_dyna_alpha: float = 0.0  # HHT alpha (0 = trapezoidal; -1/3 <= a <= 0)
     impl_dyna_gamma: float = 0.5  # Newmark gamma (/IMPL/DYNA/2 field 1)
     impl_dyna_beta: float = 0.25  # Newmark beta  (/IMPL/DYNA/2 field 2)
+    # -- M11 Rayleigh damping in the implicit system (/IMPL/DYNA/DAMP,
+    # freimpl.F IDY_DAMP: card reads DAMPA_IMP then DAMPB_IMP). The damping
+    # matrix is C = a*M + b*K with M the lumped mass and K the tangent at
+    # the step start (imp_dyna.F IMP_DYKV). The card IMPLIES dynamics
+    # (freimpl.F: IF (IDYNA==0) IDYNA=1).
+    impl_dyna_damp: bool = False  # /IMPL/DYNA/DAMP present
+    impl_dyna_dampa: float = 0.0  # DAMPA_IMP — mass-proportional a
+    impl_dyna_dampb: float = 0.0  # DAMPB_IMP — stiffness-proportional b
+    # -- M11 automatic implicit step control (/IMPL/DT/1 + /IMPL/DT/STOP,
+    # imp_dt.F IMP_DTN with IDTC = 1): cut on non-convergence, grow back
+    # toward /IMPL/DTINI on easy steps. Defaults are PORT choices where the
+    # original reads them from the card (documented in statics.py).
+    impl_dt_itw: int = 6          # NL_DTP — target iterations (grow below)
+    impl_dt_scaleup: float = 1.1  # SCAL_DTP — growth factor per easy step
+    impl_dt_scaledn: float = 0.5  # SCAL_DTN — cut factor on non-convergence
+    impl_dt_min: float = 0.0      # /IMPL/DT/STOP dt_min (0 = dtini * 1e-4)
+    impl_dt_max: float = 0.0      # /IMPL/DT/STOP dt_max (0 = dtini)
+    # -- M11 /IMPL/BUCKL (imp_buck.F): linearized buckling extraction after
+    # the static prestress increments. 0 = off; 1|2 mirrors /IMPL/BUCKL/n.
+    impl_buckl: int = 0           # /IMPL/BUCKL/n present
+    impl_buckl_nmode: int = 4     # NBUCK — number of critical loads
 
 
 class Model:

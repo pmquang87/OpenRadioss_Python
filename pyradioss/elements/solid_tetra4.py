@@ -384,3 +384,124 @@ def forces(group, x, v, vr, dt, fint, mint):
     dt_crit = st["dtfac"] * lc / (Q + np.sqrt(Q * Q + c * c))
     # deleted elements no longer constrain the global step
     return np.where(alive, dt_crit, EP30)
+
+
+# ----------------------------------------------------------------------------
+# Implicit tangent stiffness (M11) — a NEW entry point alongside forces()
+# ----------------------------------------------------------------------------
+# Fortran origin: the element-KE branch of the implicit assembly
+# (``engine/source/implicit/imp_glob_k.F`` dispatching the solide4 stiffness)
+# and, for the geometric part, its ``imp_kgeo`` path (/IMPL/NONLIN).
+#
+# The constant-strain tetra is the SIMPLEST implicit solid: the linear
+# displacement field makes B constant over the element, one point is FULL
+# integration and there are NO hourglass modes (module docstring) — so,
+# unlike the one-point hexa, the tangent needs no stabilization block at
+# all: K_e = V B^T D B is already rank 6 (12 dofs - 6 rigid modes), exactly
+# what a full-rank element tangent must be. D is the material consistent
+# tangent (LAW1: C; LAW2: the algorithmic radial-return tangent —
+# materials.solid_tangent, shared with the hexa). Same for the residual:
+# forces() driven with the pseudo-velocity at dt = 1 IS the exact
+# incremental force, nothing to add (no static_stabilization here).
+#
+# K_geo is the same delta_ij initial-stress operator as the hexa
+# (V * gradN_a . sigma . gradN_b — see solid_hexa8.kgeo for the derivation),
+# with the tet's own constant gradients; static_internal_forces re-states
+# the s4fint3 force expression f_i = -V sigma gradN_i standalone for the M9
+# updated-Lagrangian end-configuration assembly.
+
+def _edofs(conn):
+    """(n, 12) global scalar DOF slot ids, node-major [ux, uy, uz] * 4."""
+    n = len(conn)
+    ix = np.arange(4)
+    edofs = np.empty((n, 12), dtype=np.int64)
+    edofs[:, 3 * ix + 0] = conn * 6 + 0
+    edofs[:, 3 * ix + 1] = conn * 6 + 1
+    edofs[:, 3 * ix + 2] = conn * 6 + 2
+    return edofs
+
+
+def tangent(group, x, epsp_incr=None):
+    """Element tangent stiffness for the whole tetra group.
+
+    Returns ``(ke, edofs)``: ``ke`` (n, 12, 12) dense element tangents
+    (translations only), ``edofs`` (n, 12) global scalar DOF slot ids in the
+    ``implicit.dofmap`` numbering. ``epsp_incr`` (n,) is the increment's
+    plastic-strain step for the LAW2 consistent tangent (None = elastic)."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    dndx, vol = _geometry(x[conn])
+    vol = np.maximum(vol, EM20)
+
+    # strain-displacement operator B (n, 6, 12), engineering shear, rows
+    # [xx, yy, zz, xy, yz, zx] — the same layout as the hexa tangent
+    B = np.zeros((n, 6, 12))
+    gx, gy, gz = dndx[:, :, 0], dndx[:, :, 1], dndx[:, :, 2]   # (n, 4)
+    ix = np.arange(4)
+    B[:, 0, 3 * ix + 0] = gx
+    B[:, 1, 3 * ix + 1] = gy
+    B[:, 2, 3 * ix + 2] = gz
+    B[:, 3, 3 * ix + 0] = gy
+    B[:, 3, 3 * ix + 1] = gx
+    B[:, 4, 3 * ix + 1] = gz
+    B[:, 4, 3 * ix + 2] = gy
+    B[:, 5, 3 * ix + 0] = gz
+    B[:, 5, 3 * ix + 2] = gx
+
+    from .. import materials as _materials
+    ke = np.zeros((n, 12, 12))
+    epi = np.zeros(n) if epsp_incr is None else epsp_incr
+    for sl, mat, prop in st["slices"]:
+        D = _materials.solid_tangent(mat, st["sig"][sl], st["epsp"][sl],
+                                     epi[sl])              # (m, 6, 6)
+        Bs = B[sl]
+        DB = np.einsum("mij,mjk->mik", D, Bs)              # (m, 6, 12)
+        ke[sl] = vol[sl][:, None, None] * np.einsum("mji,mjk->mik", Bs, DB)
+    return ke, _edofs(conn)
+
+
+def kgeo(group, x):
+    """Geometric (initial-stress) element stiffness for the tetra group at
+    geometry ``x`` — V * gradN_a . sigma . gradN_b replicated over the three
+    translation directions (see solid_hexa8.kgeo). Identically zero at zero
+    stress."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    dndx, vol = _geometry(x[conn])
+    vol = np.maximum(vol, EM20)
+    s = st["sig"]
+    S = np.empty((n, 3, 3))
+    S[:, 0, 0], S[:, 1, 1], S[:, 2, 2] = s[:, 0], s[:, 1], s[:, 2]
+    S[:, 0, 1] = S[:, 1, 0] = s[:, 3]
+    S[:, 1, 2] = S[:, 2, 1] = s[:, 4]
+    S[:, 0, 2] = S[:, 2, 0] = s[:, 5]
+    g = vol[:, None, None] * np.einsum("nac,ncd,nbd->nab", dndx, S, dndx)
+    ke = np.zeros((n, 12, 12))
+    ix = np.arange(4)
+    for b in range(3):
+        rows = (3 * ix + b)[:, None]
+        cols = (3 * ix + b)[None, :]
+        ke[:, rows, cols] += g
+    return ke, _edofs(conn)
+
+
+def static_internal_forces(group, x, u, ur, fint, mint):
+    """Internal nodal force at configuration ``x`` from the CURRENT stress
+    state — the updated-Lagrangian end-configuration force assembly of the
+    M9/M11 implicit residual (s4fint3 standalone): f_i = -V sigma gradN_i.
+    No hourglass term exists for the tet (full integration). ``u``/``ur``/
+    ``mint`` unused (no rotational DOFs)."""
+    st = group.state
+    conn = group.conn
+    dndx, vol = _geometry(x[conn])
+    vol = np.maximum(vol, EM20)
+    s = st["sig"]
+    S = np.empty((group.n, 3, 3))
+    S[:, 0, 0], S[:, 1, 1], S[:, 2, 2] = s[:, 0], s[:, 1], s[:, 2]
+    S[:, 0, 1] = S[:, 1, 0] = s[:, 3]
+    S[:, 1, 2] = S[:, 2, 1] = s[:, 4]
+    S[:, 0, 2] = S[:, 2, 0] = s[:, 5]
+    fe = -vol[:, None, None] * np.einsum("nid,ncd->nic", dndx, S)
+    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))

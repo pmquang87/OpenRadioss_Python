@@ -27,13 +27,18 @@ each ACTIVE slot a dense equation index and marks every other slot ``-1``:
 * **Translations** are active on every node that carries mass and is not
   /BCS-fixed. (A free translational DOF with no element attached would make K
   singular; a well-posed static model has none, exactly as the original
-  assumes.)
+  assumes.) A node with exactly ZERO mass carries no element — the only such
+  node a valid deck produces is a standalone /BEAM orientation node N3, which
+  receives neither mass nor force — so it gets no equations either (M11:
+  numbering it would put zero rows in K; the beam frame reads its
+  coordinates, never its motion).
 * **Rotations** are active only on nodes that carry ROTATIONAL stiffness —
-  i.e. nodes attached to a shell (BT4) or 3-node shell — and are not
-  /BCS-rotation-fixed. Solid/truss/spring nodes get no rotational equations
-  (their rotational DOFs are massless and stiffness-less: numbering them
-  would put a zero row in K). This is the "shell rotations where they carry
-  stiffness" rule of the M8 task.
+  nodes attached to a shell (BT4), a 3-node shell, or (M11) the two
+  force-carrying nodes N1/N2 of a beam — and are not /BCS-rotation-fixed.
+  Solid/truss/spring nodes get no rotational equations (their rotational
+  DOFs are massless and stiffness-less: numbering them would put a zero row
+  in K). This is the "rotations where they carry stiffness" rule of the M8
+  task.
 
 /BCS-fixed DOFs are **condensed** (removed from the system), not penalized:
 a fixed slot simply never receives an equation index, so it contributes no
@@ -73,14 +78,19 @@ class DofMap:
         n = model.numnod
 
         # ---- which nodes carry rotational stiffness ----------------------
-        # only shell families put bending/twist stiffness on their nodes;
-        # solids/trusses/springs contribute translational stiffness only, so
-        # numbering their rotational slots would leave zero rows in K.
+        # shell families and (M11) beams put bending/twist stiffness on
+        # their nodes; solids/trusses/springs contribute translational
+        # stiffness only, so numbering their rotational slots would leave
+        # zero rows in K. Beam connectivity is (N1, N2, N3) with N3 the
+        # force-free ORIENTATION node — only N1/N2 carry stiffness.
         has_rot = np.zeros(n, dtype=bool)
         for name in ("shells", "sh3n"):
             g = getattr(model, name)
             if g is not None and g.n:
                 has_rot[g.conn.reshape(-1)] = True
+        g = getattr(model, "beams", None)
+        if g is not None and g.n:
+            has_rot[g.conn[:, :2].reshape(-1)] = True
         self.has_rot = has_rot
 
         # ---- /BCS + frozen fixity masks (same convention as kinematics) ---
@@ -115,8 +125,10 @@ class DofMap:
         # a node with no mass and no rotational stiffness contributes nothing
         # (its translations would be zero rows) — but a massed, unfixed node
         # is assumed element-attached (well-posed static model), so every
-        # such translational slot is active.
-        massed = model.mass < 1e29
+        # such translational slot is active. Exactly-zero-mass nodes (a
+        # standalone beam orientation node N3 — the module docstring) carry
+        # no element and are excluded (M11).
+        massed = (model.mass > 0.0) & (model.mass < 1e29)
         eq = np.full(n * DOFS_PER_NODE, -1, dtype=np.int64)
         counter = 0
         for i in range(n):

@@ -81,7 +81,7 @@ Outputs:
 
 See [PORTING_GUIDE.md](PORTING_GUIDE.md) for the detailed feature matrix, the
 map from every Python module to the original Fortran directory, and the porting
-roadmap. Milestones 1–6 (this state of the repository) cover:
+roadmap. Milestones 1–11 (this state of the repository) cover:
 
 - **Input**: the Radioss block-keyword deck format (`/NODE`, `/BRICK`,
   `/TETRA4`, `/SHELL`, `/SH3N`, `/TRUSS`, `/SPRING`, `/BEAM`, `/PART`,
@@ -150,6 +150,18 @@ roadmap. Milestones 1–6 (this state of the repository) cover:
   solid/shell kernels and the TYPE7 contact narrow phase — with a
   tested parity contract: both backends produce the same results, and
   the restart-chaining bit-match holds under numba.
+- **Implicit solver** (M8–M11, `pyradioss/implicit/`, needs SciPy):
+  a parallel Newton–Raphson branch reusing the explicit force kernels for
+  the residual — statics with load stepping and /IMPDISP displacement
+  control (M8), nonlinear geometry with the updated-Lagrangian frame,
+  geometric stiffness and Riks/Crisfield arc-length continuation through
+  limit points (M9, `/IMPL/NONLIN`, `/IMPL/ARCL`), Newmark-β/HHT-α
+  implicit dynamics on the lumped mass (M10, `/IMPL/DYNA`), and — M11 —
+  element-tangent COMPLETENESS (every element family, mixed models
+  welcome), LAW2 consistent tangents for shells and trusses, Rayleigh
+  damping with an exact dissipation ledger (`/IMPL/DYNA/DAMP`), automatic
+  step cut/growth control (imp_dt.F) and the `/IMPL/BUCKL` linearized
+  buckling card.
 - **Output**: listings, CSV time history (incl. /TH/SECT section
   resultants), VTK animation states.
 

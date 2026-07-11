@@ -27,11 +27,81 @@ the ``imp_solv.F`` driver, activated by /IMPL/DYNA (IDYNA in the reader,
   converged displacement increment → ``_newmark_update``.
 * ``DYNA_WEX`` — external-work bookkeeping → the energy history ledger.
 
-NOT mirrored (deferred explicitly, PORTING_GUIDE M10): the ``QSTAT_*``
-quasi-static-initialization branch, ``/IMPL/DYNA/DAMP`` Rayleigh damping
-(``IDY_DAMP``/``DAMPA_IMP``/``DAMPB_IMP``), and the automatic implicit
-time-step control of ``imp_dt.F`` (the port stops on non-convergence
-instead of cutting dt).
+M11 added (removing two M10 deferrals):
+
+* ``/IMPL/DYNA/DAMP`` Rayleigh damping — ``IMP_DYKV`` (the damping force
+  DY_DAM = DAMPA_IMP*M*v + DAMPB_IMP*K*v, built with the STEP-START
+  tangent saved by ``IMP_DYKS``), the ``IDY_DAMP`` branch of ``IMP_DYNAM``
+  (its exact contribution to the effective-stiffness diagonal and the
+  S0-scaling of the off-diagonal tangent), the ``-DY_DAM`` add into FINT
+  of ``IMP_DYNAR`` (so the damping force is HHT-weighted with the internal
+  force), and the ``DY_EDAMP`` trapezoidal dissipation ledger of
+  ``DYNA_WEX`` — see the "Rayleigh damping" section below;
+* the automatic implicit time-step control of ``imp_dt.F`` (``IMP_DTN``,
+  IDTC = 1): cut and RETRY on non-convergence, grow back toward
+  /IMPL/DTINI on easy steps — shared with the statics driver
+  (``statics.StepControl``, where the semantics are documented).
+
+NOT mirrored (deferred explicitly, PORTING_GUIDE M10/M11): the ``QSTAT_*``
+quasi-static-initialization branch, the IDTC = 2/3 displacement-norm /
+Riks step controls of ``imp_dt.F``, and /IMPL/DT/FIXP fix points.
+
+Rayleigh damping in the implicit system (M11, /IMPL/DYNA/DAMP)
+--------------------------------------------------------------
+The semi-discrete balance gains the classical Rayleigh damping matrix
+
+    C = a M + b K,        M a + C v = f_ext + f_int         (a = DAMPA_IMP,
+                                                             b = DAMPB_IMP)
+
+with M the lumped mass and K the TANGENT AT THE STEP START (the original
+saves the assembled K into DY_DIAK0/DY_LTK0 once per step — IMP_DYKS — and
+IMP_DYKV multiplies THAT saved matrix by the current velocity; the port
+reassembles the committed-state tangent per step under /IMPL/NONLIN and
+reuses the constant K of the linear-geometry path). The damping force is
+evaluated at the CURRENT velocity iterate v_{n+1} (the IMP_DYKV comment:
+"using v(t+dt) is more stable — especially at beginning") and is folded
+into the internal-force side of the HHT balance (IMP_DYNAR adds -DY_DAM to
+FINT), so it is alpha-weighted between the time levels exactly like f_int:
+
+    R = (1+a)[f_ext + f_int - C v]_{n+1} - a[f_ext + f_int - C v]_n
+        - M a_{n+1}
+
+Because Newmark makes v_{n+1} a kinematic function of the displacement
+increment (dv/dDu = gamma/(beta dt)), the EXACT linearization gains
+
+    K_eff = (1+alpha) K_T + M/(beta dt^2)
+            + (1+alpha) * gamma/(beta dt) * C
+
+— algebraically identical to IMP_DYNAM's IDY_DAMP branch, which divides
+the whole system by (1+alpha) instead: its mass diagonal
+BDT = 1/((1+a) b dt^2) + DAMPA*gamma/(b dt) and its off-diagonal scaling
+S0 = DAMPB*gamma/(b dt) are this K_eff over (1+alpha), with C's K part
+taken equal to the assembled K_T (exact under linear geometry; under
+NONLIN K_T moves within the step while C keeps the step-start K — the
+same approximation as the original, quadratic convergence degrades only
+at strongly-rotating damped steps).
+
+The DISSIPATION is booked exactly as DYNA_WEX books DY_EDAMP: per
+converged step, trapezoidally over the step displacement increment,
+
+    E_damp += 1/2 (C v_{n+1} + C v_n) . Du       (free DOFs only — the
+                                                  original sums IKC == 0)
+
+and enters the energy BALANCE on the energy side (the original adds it to
+Eint rather than W_ext "which makes high error in case of high Rayleigh
+damping" — the port keeps it as its own ``edamp`` history channel):
+balance = IE + KE + E_damp - W_ext - E0. The M11 validation closes this
+on the closed-form damped SDOF (mass-only, stiffness-only and mixed
+Rayleigh cases against the exp(-zeta omega t) envelope and the damped
+period).
+
+A note on /IMPDISP + damping: the constraint-reaction work on a DRIVEN
+DOF is booked from M a - f_ext - f_int, which under damping omits the
+C v share of the reaction — the damping matrix lives in condensed
+equation space, where driven rows do not exist (the original condenses
+DY_DAM the same way). The ledger of a damped, displacement-driven run is
+correspondingly approximate; free-vibration and force-driven ledgers are
+exact and asserted.
 
 The scheme (Newmark 1959; Hilber–Hughes–Taylor 1977)
 ----------------------------------------------------
@@ -147,8 +217,9 @@ from ..engine.kinematics import LoadsAndConstraints
 from .assembly import assemble, _TANGENT_KERNELS
 from .dofmap import DofMap, DOFS_PER_NODE
 from .linsolve import LinearSolver
-from .statics import (ImplicitResult, IncrementResult, _internal_forces,
-                      _resolve_imposed, _snapshot, _solver_banner)
+from .statics import (ImplicitResult, IncrementResult, _epsp_increments,
+                      _internal_forces, _resolve_imposed, _snapshot,
+                      _solver_banner)
 
 
 class ImplicitDynResult(ImplicitResult):
@@ -163,11 +234,13 @@ class ImplicitDynResult(ImplicitResult):
         self.gamma = gamma
         self.beta = beta
         #: per-converged-step history: "t", kinetic "ke", internal+hourglass
-        #: "ie", external work "wext", balance "bal" = ie + ke - wext - e0
-        #: (lists of floats), and "u" — displacement snapshots (numnod, 3)
-        #: for the validations (kept while numnod stays example-sized).
-        self.history = {"t": [], "ke": [], "ie": [], "wext": [], "bal": [],
-                        "u": []}
+        #: "ie", external work "wext", Rayleigh dissipation "edamp" (M11 —
+        #: the DY_EDAMP ledger, zero without /IMPL/DYNA/DAMP), balance
+        #: "bal" = ie + ke + edamp - wext - e0 (lists of floats), and "u" —
+        #: displacement snapshots (numnod, 3) for the validations (kept
+        #: while numnod stays example-sized).
+        self.history = {"t": [], "ke": [], "ie": [], "wext": [], "edamp": [],
+                        "bal": [], "u": []}
 
 
 #: stop keeping displacement snapshots beyond this many stored floats —
@@ -225,6 +298,8 @@ def _disable_rate_devices(model, log):
                     f"DEFERRED under implicit dynamics — the term is "
                     f"disabled and the material runs rate-independent "
                     f"(see PORTING_GUIDE M10)", "IMPL/DYNA")
+    from .statics import _warn_spring_dashpot
+    _warn_spring_dashpot(model, log)
 
 
 # ----------------------------------------------------------------------------
@@ -279,10 +354,24 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
             "with /IMPDISP (the displacement drive; integrate the velocity "
             "curve into a displacement curve). Silently ignoring a REAL "
             "dynamic boundary condition would be worse than refusing.")
+    if getattr(ip, "impl_buckl", 0):
+        raise ValueError(
+            "/IMPL/BUCKL cannot be combined with /IMPL/DYNA: linearized "
+            "buckling is an eigensolve about a STATIC prestressed state "
+            "(run the prestress increments with /IMPL and the BUCKL card, "
+            "without DYNA).")
+
+    # ---- Rayleigh damping (M11, /IMPL/DYNA/DAMP — IDY_DAMP) ---------------
+    damp_on = bool(getattr(ip, "impl_dyna_damp", False))
+    da = float(getattr(ip, "impl_dyna_dampa", 0.0)) if damp_on else 0.0
+    db = float(getattr(ip, "impl_dyna_dampb", 0.0)) if damp_on else 0.0
 
     scheme = (f"HHT-ALPHA (ALPHA = {alpha:g})" if ip.impl_dyna == 1
               else "NEWMARK")
     log.info(f" TIME INTEGRATION . . . . . . . . . . : {scheme}")
+    if damp_on:
+        log.info(f" RAYLEIGH DAMPING C = a M + b K . . . : a = {da:g}, "
+                 f"b = {db:g}  (/IMPL/DYNA/DAMP)")
     log.info(f" NEWMARK GAMMA / BETA . . . . . . . . : {gamma:g} / {beta:g}"
              + ("  (TRAPEZOIDAL RULE)"
                 if gamma == 0.5 and beta == 0.25 else ""))
@@ -337,11 +426,39 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
     # on it (the explicit path zeroes it in the kinematic enforcement)
     v[dof.fix_tra] = 0.0
     vr[dof.fix_rot] = 0.0
+
+    # ---- damping matrix C = a M + b K (IMP_DYKS/IMP_DYKV) ------------------
+    # b couples through the STEP-START tangent: constant under linear
+    # geometry (assembled once here), reassembled at each committed frame
+    # under /IMPL/NONLIN (the per-step save of the original). K_damp is the
+    # material(+hourglass) tangent of the committed state — kgeo is a
+    # stress-stiffening term, not a structural stiffness for damping
+    # purposes, and at t = 0 the state is unstressed anyway.
+    K_damp = None
+    if damp_on and db != 0.0:
+        K_damp = assemble(model, dof, x_ref, None, kgeo=False)
+
+    def _damp_force(v_nod, vr_nod):
+        """Equation-space Rayleigh damping force C v (IMP_DYKV): zero
+        without the card."""
+        if not damp_on:
+            return None
+        v_eq = dof.gather_residual(v_nod, vr_nod)
+        fd = da * M_eq * v_eq
+        if K_damp is not None:
+            fd = fd + db * (K_damp @ v_eq)
+        return fd
+
     fext = np.zeros((n, 3))
     loads.external_forces(0.0, fext, x_ref)
     fint, mint = _internal_forces(model, x_ref, np.zeros((n, 3)),
                                   np.zeros((n, 3)), committed, nlg)
     R0 = dof.gather_residual(fext + fint, mint)
+    # DYNA_INA: the initial acceleration balances the initial out-of-force,
+    # damping included: M a_0 = f_ext(0) + f_int(0) - C v_0
+    fd_prev = _damp_force(v, vr)
+    if fd_prev is not None:
+        R0 = R0 - fd_prev
     a0_eq = np.where(M_eq > 0.0, R0 / np.where(M_eq > 0.0, M_eq, 1.0), 0.0)
     a, ar = dof.scatter_solution(a0_eq)
     # previous-level force g_n = (f_ext + f_int)_n for the HHT weighting
@@ -353,32 +470,45 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
     real = model.mass < 1e29
     e0 = _kinetic(model, v, vr, real) + _elem_energy(model)
     wext = 0.0
+    edamp = 0.0
     keep_u = True
 
     log.info("\n        STEP        TIME    ITER   RESIDUAL-NORM   STATUS")
 
+    # automatic time-step control (M11, imp_dt.F): cut-and-retry on a failed
+    # step, grow back toward /IMPL/DTINI on easy ones
+    from .statics import StepControl
+    ctrl = StepControl(ip, dt, log, what="TIME STEP")
+
     t = 0.0
     step_no = 0
     while t < t_end * (1.0 - 1e-12):
-        dt_s = min(dt, t_end - t)   # clip the final step to land on t_end
+        dt_s = min(ctrl.dt, t_end - t)  # clip the final step onto t_end
         t_new = t + dt_s
         step_no += 1
 
-        inc, u, ur_s, fint, mint, fext_new = _solve_step(
+        inc, u, ur_s, fint, mint, fext_new, fd_new = _solve_step(
             model, ip, dof, loads, solver, committed, x_ref, imposed,
             t, t_new, dt_s, alpha, gamma, beta, M_eq, v, vr, a, ar,
-            g_prev_f, g_prev_m, nlg)
+            g_prev_f, g_prev_m, nlg,
+            (da, db, K_damp, fd_prev) if damp_on else None)
         result.increments.append(inc)
         if not inc.converged:
+            log.info(f" {step_no:11d} {t_new:11.4E} {inc.iterations:6d} "
+                     f"{inc.residuals[-1]:14.5E}   *** NO CONVERGENCE")
+            # roll back (the failed step touched neither model.x nor the
+            # committed buffers' base — IMP_DTN's TT/NCYCLE rollback) and
+            # retry at the cut step
+            if ctrl.cut():
+                step_no -= 1
+                continue
             result.converged = False
             result.stop_reason = (
                 f"NEWTON DID NOT CONVERGE AT TIME {t_new:.4E} IN "
                 f"{ip.impl_max_iter} ITERATIONS "
-                f"(||R|| = {inc.residuals[-1]:.4E}) — reduce /IMPL/DTINI "
-                f"(automatic implicit time-step control is deferred, see "
-                f"PORTING_GUIDE M10)")
-            log.info(f" {step_no:11d} {t_new:11.4E} {inc.iterations:6d} "
-                     f"{inc.residuals[-1]:14.5E}   *** NO CONVERGENCE")
+                f"(||R|| = {inc.residuals[-1]:.4E}) EVEN AT THE MINIMUM "
+                f"TIME STEP {ctrl.dt_min:.3E} "
+                f"({ctrl.total_cuts} automatic cuts — imp_dt.F control)")
             break
 
         # ---- commit (the statics commit + the Newmark kinematics) ---------
@@ -403,6 +533,15 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
                 wext += 0.5 * float(((g_new_r + g_old_r)[idx, d]
                                      * u[idx, d]).sum())
 
+        # ---- Rayleigh dissipation booking (DYNA_WEX's DY_EDAMP): the
+        # trapezoid of the damping force over the step displacement
+        # increment, free DOFs only (both live in equation space)
+        if damp_on:
+            u_eq = dof.gather_residual(u, ur_s)
+            fd0 = fd_prev if fd_prev is not None else 0.0
+            edamp += 0.5 * float(u_eq @ (fd_new + fd0))
+            fd_prev = fd_new
+
         v, a, vr, ar = v_new, a_new, vr_new, ar_new
         g_prev_f = fext_new + fint
         g_prev_m = mint.copy()
@@ -410,7 +549,12 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
         committed = {name: _snapshot(g) for name, g in model.element_groups()}
         if nlg:
             x_ref = model.x.copy()
+            if damp_on and db != 0.0:
+                # re-save the damping stiffness at the new committed frame
+                # (the original's per-step IMP_DYKS save)
+                K_damp = assemble(model, dof, x_ref, None, kgeo=False)
         t = t_new
+        ctrl.converged(inc.iterations)
 
         # ---- history --------------------------------------------------------
         ke = _kinetic(model, v, vr, real)
@@ -420,7 +564,8 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
         h["ke"].append(ke)
         h["ie"].append(ie)
         h["wext"].append(wext)
-        h["bal"].append(ie + ke - wext - e0)
+        h["edamp"].append(edamp)
+        h["bal"].append(ie + ke + edamp - wext - e0)
         if keep_u:
             h["u"].append(model.x - model.x0)
             if (len(h["u"]) + 1) * n * 3 > _U_HISTORY_CAP:
@@ -463,12 +608,18 @@ def _elem_energy(model):
 
 def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
                 t_old, t_new, dt, alpha, gamma, beta, M_eq, v, vr, a, ar,
-                g_prev_f, g_prev_m, nlgeom):
+                g_prev_f, g_prev_m, nlgeom, damp=None):
     """Newton-iterate one time step to the HHT-weighted dynamic balance
-    (see module docstring). Returns ``(inc, u, ur, fint, mint, fext_new)``
-    with ``u``/``ur`` the converged step displacement increment and
+    (see module docstring). Returns ``(inc, u, ur, fint, mint, fext_new,
+    fd_new)`` with ``u``/``ur`` the converged step displacement increment,
     ``fint``/``mint`` the internal force at the converged state (kept by
-    the caller as the next step's HHT previous-level force).
+    the caller as the next step's HHT previous-level force) and ``fd_new``
+    the equation-space damping force C v_{n+1} at the converged state
+    (None without damping).
+
+    ``damp`` (M11, /IMPL/DYNA/DAMP) is ``(a, b, K_damp, fd_prev)``: the
+    Rayleigh coefficients, the step-start damping stiffness (CSR or None
+    when b = 0) and the PREVIOUS level's damping force for the HHT blend.
 
     On entry the element buffers hold the committed state; on a converged
     return model.x and the element state hold the new configuration —
@@ -479,6 +630,28 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
     from . import require_scipy
     sp, _ = require_scipy()
     M_diag = sp.diags(c0 * M_eq, format="csr")   # the lumped-mass add to K
+
+    # ---- Rayleigh damping pieces (IMP_DYKV / IMP_DYNAM's IDY_DAMP) --------
+    # C = da*M + db*K_damp; the effective-tangent add is
+    # (1+alpha)*gamma/(beta dt) * C (dv/dDu = gamma/(beta dt) — see the
+    # module docstring for the algebra against the original's BDT/S0 form)
+    da = db = 0.0
+    K_damp = fd_prev = None
+    C_eff = None
+    if damp is not None:
+        da, db, K_damp, fd_prev = damp
+        cv = ap1 * gamma / (beta * dt)
+        C_eff = sp.diags(cv * da * M_eq, format="csr")
+        if K_damp is not None:
+            C_eff = C_eff + (cv * db) * K_damp
+
+    def _fd(v_nod, vr_nod):
+        """Equation-space damping force C v at a velocity state."""
+        v_eq = dof.gather_residual(v_nod, vr_nod)
+        fd = da * M_eq * v_eq
+        if K_damp is not None:
+            fd = fd + db * (K_damp @ v_eq)
+        return fd
 
     # external force at the END time level (the HHT combination weights it
     # against the stored previous level below)
@@ -509,6 +682,7 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
 
     inc = IncrementResult(load_factor=t_new, converged=False, iterations=0)
     fint = mint = None
+    fd_new = None
 
     for it in range(ip.impl_max_iter):
         # Newmark kinematics of the current trial increment
@@ -523,6 +697,14 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
         Rm = (ap1 * mint - alpha * g_prev_m
               - model.inertia[:, None] * ar_new)
         R = dof.gather_residual(Rf, Rm)
+        if damp is not None:
+            # the damping force enters like f_int, negated and HHT-weighted
+            # (IMP_DYNAR: FINT = FINT - DY_DAM): the CURRENT velocity
+            # iterate v_{n+1}(Du) — a kinematic function of the increment
+            v_new = v + dt * ((1.0 - gamma) * a + gamma * a_new)
+            vr_new = vr + dt * ((1.0 - gamma) * ar + gamma * ar_new)
+            fd_new = _fd(v_new, vr_new)
+            R = R - ap1 * fd_new + alpha * fd_prev
         rnorm = float(np.linalg.norm(R))
         inc.residuals.append(rnorm)
         inc.iterations = it + 1
@@ -538,14 +720,15 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
             inc.converged = True
             break
 
-        epsp_incr = {}
-        for name, group in model.element_groups():
-            if name == "bricks" and epsp0[name] is not None:
-                epsp_incr[name] = group.state["epsp"] - epsp0[name]
+        epsp_incr = _epsp_increments(model, epsp0)
         x_tan = x_ref + u if nlgeom else x_ref
         K = assemble(model, dof, x_tan, epsp_incr, kgeo=nlgeom)
         # K_eff = (1+alpha) K_T + M/(beta dt^2)  (IMP_DYNAM's diagonal add)
+        # + (1+alpha) gamma/(beta dt) C under Rayleigh damping (the
+        # IDY_DAMP branch — see the module docstring for the algebra)
         K_eff = ap1 * K + M_diag
+        if C_eff is not None:
+            K_eff = K_eff + C_eff
         du_eq = solver.solve(K_eff, R)
         du, dur = dof.scatter_solution(du_eq)
         u = u + du
@@ -565,15 +748,20 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
                   - model.mass[:, None] * a_new)
             Rm = (ap1 * mint - alpha * g_prev_m
                   - model.inertia[:, None] * ar_new)
-            inc.residuals.append(
-                float(np.linalg.norm(dof.gather_residual(Rf, Rm))))
+            R = dof.gather_residual(Rf, Rm)
+            if damp is not None:
+                v_new = v + dt * ((1.0 - gamma) * a + gamma * a_new)
+                vr_new = vr + dt * ((1.0 - gamma) * ar + gamma * ar_new)
+                fd_new = _fd(v_new, vr_new)
+                R = R - ap1 * fd_new + alpha * fd_prev
+            inc.residuals.append(float(np.linalg.norm(R)))
             inc.iterations = it + 2
             inc.converged = True
             break
 
     if inc.converged:
         model.x = model.x + u
-    return inc, u, ur_s, fint, mint, fext
+    return inc, u, ur_s, fint, mint, fext, fd_new
 
 
 def _dyn_summary(model, result, dof, log, e0):
@@ -599,6 +787,9 @@ def _dyn_summary(model, result, dof, log, e0):
         log.info(f"     KINETIC ENERGY  . . . . . : {h['ke'][-1]:14.7E}")
         log.info(f"     INTERNAL ENERGY . . . . . : {h['ie'][-1]:14.7E}")
         log.info(f"     EXTERNAL WORK . . . . . . : {h['wext'][-1]:14.7E}")
+        if h.get("edamp") and h["edamp"][-1] != 0.0:
+            log.info(f"     RAYLEIGH DISSIPATION  . . : "
+                     f"{h['edamp'][-1]:14.7E}  (/IMPL/DYNA/DAMP)")
         log.info(f"     ENERGY BALANCE  . . . . . : "
                  f"{h['bal'][-1] / ref * 100.0:8.2f} %")
     log.info("     ------------------------------------------------")

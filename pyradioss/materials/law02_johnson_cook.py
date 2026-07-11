@@ -345,3 +345,95 @@ def consistent_solid_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
               + b[:, None, None] * NN)
     return D
 
+
+# ----------------------------------------------------------------------------
+# Consistent (algorithmic) PLANE-STRESS tangent for the implicit solver (M11)
+# ----------------------------------------------------------------------------
+
+#: the plane-stress von Mises metric P (Voigt [xx, yy, xy], engineering
+#: shear): q^2 = sig^T P sig = sxx^2 - sxx*syy + syy^2 + 3*sxy^2.
+_P_PLANE = np.array([[1.0, -0.5, 0.0],
+                     [-0.5, 1.0, 0.0],
+                     [0.0, 0.0, 3.0]])
+
+
+def consistent_shell_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
+                             epsp_incr: np.ndarray) -> np.ndarray:
+    """The CONSISTENT (algorithmic) elastoplastic tangent of the SHELL
+    (plane-stress, Iplas=2 radial-projection) update, (n, 3, 3), Voigt
+    [xx, yy, xy] with engineering shear — the M8/M9 deferral this removes.
+
+    This is the exact derivative of the DISCRETE algorithm ``shell_update``
+    runs (module docstring), not of the continuum plane-stress return —
+    exactly the distinction the solid consistent tangent makes (Box 7.3 vs
+    the continuum tangent): only the algorithmic derivative gives Newton its
+    quadratic tail, asserted by the M11 plane-stress validation.
+
+    The algorithm being differentiated:
+
+        sig_tr = sig_n + C deps                       (elastic trial, C the
+                                                       3x3 plane-stress law)
+        q_tr   = sqrt(sig_tr^T P sig_tr)              (plane-stress von Mises)
+        q_tr - 3G dl = sigma_y(ep0 + dl)              (1-D consistency solve)
+        sig    = s * sig_tr,  s = sigma_y(ep0+dl)/q_tr  (radial PROJECTION of
+                                                       the WHOLE in-plane
+                                                       stress — Iplas=2)
+
+    Differentiating sig = s(q_tr) sig_tr with dl'(q_tr) = 1/(3G + H) (from
+    the consistency condition) and dq_tr/d(deps) = C P sig_tr / q_tr (P, C
+    symmetric):
+
+        D = s C + [H/(3G+H) - s] / q_tr^2 * sig_tr (x) (C P sig_tr)
+
+    The rank-one update is mildly NON-symmetric (C P sig_tr is not parallel
+    to sig_tr in general — the price of the radial projection, which is not
+    the exact plane-stress return); the direct solver is LU and does not
+    care. Everything is reconstructed from the CONVERGED state, as the solid
+    tangent does: the return gives q_tr = sigma_y + 3G*dl exactly, the
+    converged stress sits on the yield surface (its plane-stress von Mises
+    equals sigma_y), so sig_tr = sig / s with s = sigma_y / q_tr — no extra
+    state is stored. Elastic points (dl = 0) keep D = C. Rate/thermal
+    factors are frozen constants of the increment (as in the return itself)
+    and stay out of the derivative, like the solid.
+
+    Parameters: ``sig`` (n, 3) converged layer stress, ``epsp`` (n,) the
+    CURRENT (end-of-increment) plastic strain, ``epsp_incr`` (n,) the
+    increment's plastic-strain step. Returns (n, 3, 3).
+    """
+    from . import law01_elastic
+    n = sig.shape[0]
+    G = mat.G
+    C = law01_elastic.shell_membrane_tangent(mat)     # (3, 3) plane stress
+    D = np.broadcast_to(C, (n, 3, 3)).copy()
+    if epsp_incr is None:
+        return D
+    plastic = epsp_incr > 0.0
+    if not np.any(plastic):
+        return D
+
+    idx = np.where(plastic)[0]
+    dl = epsp_incr[idx]
+    # converged yield stress = the plane-stress von Mises of the returned
+    # stress (the projection lands exactly on the surface)
+    s_c = sig[idx]
+    sy = np.sqrt(np.maximum(
+        np.einsum("mi,ij,mj->m", s_c, _P_PLANE, s_c), 0.0))
+    sy = np.maximum(sy, 1e-30)
+    q_tr = sy + 3.0 * G * dl                          # trial von Mises (exact)
+    s = sy / q_tr                                     # radial scale factor
+    sig_tr = s_c / s[:, None]                         # the trial stress back
+    # hardening slope at the END-of-increment plastic strain (the Newton
+    # consistency is solved there; the cap makes H = 0 where sig_max rules)
+    _, H = _yield_stress(mat, epsp[idx], 1.0)
+    Hbar = np.maximum(H, 0.0)
+
+    # rank-one direction: C P sig_tr (the sensitivity of q_tr to the strain
+    # increment, times C), and the scalar [H/(3G+H) - s]/q_tr^2
+    CP = C @ _P_PLANE                                  # (3, 3)
+    g = np.einsum("ij,mj->mi", CP, sig_tr)             # (m, 3)
+    coef = (Hbar / (3.0 * G + Hbar) - s) / (q_tr * q_tr)
+    D[idx] = (s[:, None, None] * C[None, :, :]
+              + coef[:, None, None]
+              * np.einsum("mi,mj->mij", sig_tr, g))
+    return D
+
