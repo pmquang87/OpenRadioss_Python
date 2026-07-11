@@ -166,9 +166,49 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 #                         (trapezoidal; a convenience the
                 #                         original does not spell — its
                 #                         reader requires the /1 or /2).
-                #   /IMPL/DYNA/DAMP       NOT ported (Rayleigh damping in
-                #                         the implicit system — deferred,
-                #                         warns; see PORTING_GUIDE M10)
+                #   /IMPL/DYNA/DAMP card: a  b
+                #                         (M11) RAYLEIGH damping in the
+                #                         implicit system: C = a*M + b*K
+                #                         (freimpl.F reads DAMPA_IMP then
+                #                         DAMPB_IMP; the card IMPLIES
+                #                         dynamics — IF (IDYNA==0) IDYNA=1
+                #                         in the source). Damping force,
+                #                         effective-tangent term and the
+                #                         dissipation ledger live in
+                #                         implicit/dynamics.py.
+                #   /IMPL/DT/STOP card: dt_min  dt_max
+                #   /IMPL/DT/1    card: it_w  sc_up  it_dn  sc_dn
+                #                         (M11) AUTOMATIC step control
+                #                         (imp_dt.F IMP_DTN, IDTC = 1): on
+                #                         non-convergence the step is CUT by
+                #                         sc_dn and retried (never below
+                #                         dt_min); after a step converging
+                #                         in <= it_w iterations it GROWS by
+                #                         sc_up back toward dt_max (default:
+                #                         the /IMPL/DTINI value). The
+                #                         control is ON by default with the
+                #                         port defaults (statics.py) — the
+                #                         cards only tune it, mirroring the
+                #                         original where the cut happens
+                #                         regardless of /IMPL/DT. it_dn is
+                #                         accepted and unused (the original
+                #                         reads NL_DTN for its IDTC = 2/3
+                #                         arc-length variants — deferred).
+                #   /IMPL/BUCKL/1|2 card: Emin  Emax  Nmode ...
+                #                         (M11) linearized BUCKLING
+                #                         extraction (imp_buck.F) after the
+                #                         static prestress increments: the
+                #                         (K_mat + mu K_geo) phi = 0
+                #                         eigensolve of implicit/buckling.py
+                #                         reported in the listing and on the
+                #                         result object. Nmode = NBUCK; the
+                #                         Emin/Emax search range and the
+                #                         ARPACK controls (MSGL, MAXSET,
+                #                         SHIFT) are accepted and unused
+                #                         (dense eigh at this port's model
+                #                         sizes). A bare /IMPL/BUCKL errors
+                #                         like the original ("OBSOLETE, USE
+                #                         /IMPL/BUCKL/1 OR /2").
                 #
                 # With /IMPL/DYNA the /RUN "time" is PHYSICAL TIME again and
                 # /IMPL/DTINI is the physical time step (statics reinterprets
@@ -204,11 +244,58 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             ec.impl_arc_maxinc = int(vals[1])
                         if len(vals) > 2 and vals[2] > 0:
                             ec.impl_arc_itdes = int(vals[2])
-                elif sub in ("DTINI", "DT", "DT/STOP"):
+                elif sub == "DTINI":
                     if block.cards:
                         vals = block.cards[0].floats()
                         if vals:
                             ec.impl_dt = vals[0]
+                elif sub == "DT":
+                    # /IMPL/DT/STOP (dt_min dt_max) and /IMPL/DT/1 (the
+                    # IDTC = 1 iteration-count control card: it_w sc_up
+                    # it_dn sc_dn) — M11, imp_dt.F. The control itself is
+                    # always on; these tune it. IDTC 2/3 deferred.
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    vals = block.cards[0].floats() if block.cards else []
+                    if sub2 == "STOP":
+                        if vals:
+                            ec.impl_dt_min = vals[0]
+                        if len(vals) > 1:
+                            ec.impl_dt_max = vals[1]
+                    elif sub2 == "1":
+                        if vals and vals[0] > 0:
+                            ec.impl_dt_itw = int(vals[0])
+                        if len(vals) > 1 and vals[1] > 1.0:
+                            ec.impl_dt_scaleup = vals[1]
+                        # vals[2] = it_dn: read by the original for its
+                        # IDTC 2/3 variants — accepted, unused here
+                        if len(vals) > 3 and 0.0 < vals[3] < 1.0:
+                            ec.impl_dt_scaledn = vals[3]
+                    else:
+                        log.warning(f"/IMPL/DT/{sub2} not ported — ignored "
+                                    f"(supports STOP, 1; the IDTC 2/3 "
+                                    f"arc-length step controls are "
+                                    f"deferred)", block.source)
+                elif sub == "BUCKL":
+                    # /IMPL/BUCKL/n (M11, imp_buck.F): n = 1 after a linear
+                    # run, 2 after a nonlinear one — the port runs the same
+                    # eigensolve on the converged prestressed state either
+                    # way. A bare /IMPL/BUCKL is OBSOLETE in the original
+                    # and errors the same way here.
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    if sub2 not in ("1", "2"):
+                        log.error(
+                            "/IMPL/BUCKL is obsolete — use /IMPL/BUCKL/1 "
+                            "or /IMPL/BUCKL/2 (mirroring the original "
+                            "reader's check)", block.source)
+                    else:
+                        ec.impl_buckl = int(sub2)
+                        vals = block.cards[0].floats() if block.cards else []
+                        # card: EMIN_B EMAX_B NBUCK MSGL MAXSET SHIFT — only
+                        # NBUCK drives the dense eigensolve
+                        if len(vals) > 2 and vals[2] > 0:
+                            ec.impl_buckl_nmode = int(vals[2])
                 elif sub in ("NEWTON", "SOLVINFO"):
                     if block.cards:
                         vals = block.cards[0].floats()
@@ -228,10 +315,24 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     sub2 = (block.parts[2].upper()
                             if len(block.parts) > 2 else "")
                     if sub2 == "DAMP":
-                        log.warning(
-                            "/IMPL/DYNA/DAMP (Rayleigh damping in the "
-                            "implicit system) not ported — ignored (see "
-                            "PORTING_GUIDE M10)", block.source)
+                        # M11: Rayleigh damping C = a*M + b*K. freimpl.F
+                        # reads DAMPA_IMP, DAMPB_IMP from one card and the
+                        # option IMPLIES dynamics (IF (IDYNA==0) IDYNA=1 —
+                        # HHT with alpha unset, i.e. trapezoidal).
+                        ec.impl_dyna_damp = True
+                        if ec.impl_dyna == 0:
+                            ec.impl_dyna = 1
+                        vals = block.cards[0].floats() if block.cards else []
+                        if vals:
+                            ec.impl_dyna_dampa = vals[0]
+                        if len(vals) > 1:
+                            ec.impl_dyna_dampb = vals[1]
+                        if ec.impl_dyna_dampa < 0.0 or \
+                                ec.impl_dyna_dampb < 0.0:
+                            log.warning(
+                                "/IMPL/DYNA/DAMP: negative Rayleigh "
+                                "coefficient — this INJECTS energy",
+                                block.source)
                     elif sub2 in ("", "1", "2"):
                         ec.impl_dyna = int(sub2) if sub2 else 2
                         vals = block.cards[0].floats() if block.cards else []

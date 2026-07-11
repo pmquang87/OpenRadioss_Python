@@ -74,3 +74,121 @@ def forces(group, x, v, vr, dt, fint, mint):
     xi = st["cdamp"] / np.sqrt(k * st["mass"])
     dt_crit = (2.0 / omega) * (np.sqrt(1.0 + xi ** 2) - xi)
     return np.where(st["k"] > 0, dt_crit, EP30)
+
+
+# ----------------------------------------------------------------------------
+# Implicit tangent stiffness + residual (M11) — alongside forces()
+# ----------------------------------------------------------------------------
+# Fortran origin: the element-KE branch of the implicit assembly
+# (``engine/source/implicit/imp_glob_k.F``, spring stiffness) + its
+# ``imp_kgeo`` geometric path.
+#
+# The TYPE4 spring is a TOTAL-form element: forces() rebuilds F = k(L - L0)
+# + c*Ldot from the geometry every cycle instead of integrating a rate on
+# committed state. That breaks the implicit drivers' pseudo-velocity trick
+# (which relies on rate-form kernels accumulating C*grad(u) on the FROZEN
+# committed frame): at the frozen geometry the elastic term k(L - L0) never
+# feels the trial displacement at all, and the DAMPING term c*(a . du)
+# would answer instead — a rate device masquerading as a stiffness. So the
+# spring supplies its own implicit residual, ``implicit_internal_forces``,
+# which the drivers call INSTEAD of forces() (both geometry modes):
+#
+# * linear geometry (M8 frozen frame): F = F_committed + k (a_ref . du_rel)
+#   along the committed axis a_ref — the total form linearized at the
+#   committed geometry, ACCUMULATED on the committed force state exactly
+#   like the rate-form kernels accumulate stress (the driver feeds only
+#   the CURRENT increment's displacement; the previous increments live in
+#   the state, which the driver restores to the committed values before
+#   every residual evaluation). Its derivative is EXACTLY the material
+#   tangent k a a^T, so a linear step converges in one Newton iteration
+#   (the M8 contract);
+# * nonlinear geometry (M9 updated-Lagrangian): F = k (L(x_end) - L0) along
+#   the CURRENT axis — the total form is exact at any configuration (no
+#   midpoint objectivity step is needed: the elastic force is a state
+#   function of the end geometry), and its exact derivative is the material
+#   tangent PLUS the (F/L)(I - a a^T) geometric term of ``kgeo``.
+#
+# The DASHPOT (c > 0) is a rate device: like the LAW2 strain-rate term and
+# the bulk viscosity (M10 convention), it is DISABLED under implicit with
+# an explicit warning — never silently fed the pseudo-velocity du/1
+# (deferred, PORTING_GUIDE M11). The stored force/energy state stays the
+# state function F^2/2k of the elastic spring.
+
+def _spring_axis(group, x):
+    conn = group.conn
+    dx = x[conn[:, 1]] - x[conn[:, 0]]
+    L = np.maximum(norm3(dx), EM20)
+    return conn, L, dx / L[:, None]
+
+
+def _spring_edofs(conn):
+    edofs = np.empty((len(conn), 6), dtype=np.int64)
+    for c in range(3):
+        edofs[:, c] = conn[:, 0] * 6 + c
+        edofs[:, 3 + c] = conn[:, 1] * 6 + c
+    return edofs
+
+
+def _blocks(kb):
+    """(n,3,3) relative block -> (n,6,6) element [[kb,-kb],[-kb,kb]]."""
+    n = len(kb)
+    ke = np.empty((n, 6, 6))
+    ke[:, :3, :3] = kb
+    ke[:, 3:, 3:] = kb
+    ke[:, :3, 3:] = -kb
+    ke[:, 3:, :3] = -kb
+    return ke
+
+
+def tangent(group, x, epsp_incr=None):
+    """Material element tangent k a a^T along the current axis at geometry
+    ``x``. Returns (ke (n,6,6), edofs (n,6)). ``epsp_incr`` unused (the
+    spring is elastic; the dashpot is disabled under implicit)."""
+    st = group.state
+    conn, L, a = _spring_axis(group, x)
+    kb = st["k"][:, None, None] * np.einsum("ni,nj->nij", a, a)
+    return _blocks(kb), _spring_edofs(conn)
+
+
+def kgeo(group, x):
+    """Geometric (initial-stress) stiffness (F/L)(I - a a^T) from the
+    current spring force at geometry ``x`` — the same taut-string operator
+    as the truss. Identically zero at zero force."""
+    st = group.state
+    conn, L, a = _spring_axis(group, x)
+    F_over_L = st["force"] / L
+    eye = np.eye(3)
+    kb = F_over_L[:, None, None] * (eye[None, :, :]
+                                    - np.einsum("ni,nj->nij", a, a))
+    return _blocks(kb), _spring_edofs(conn)
+
+
+def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom):
+    """The spring's own implicit residual (called by the drivers INSTEAD of
+    ``forces()`` — see the note above): elastic total-form force at the
+    trial configuration, linearized at the committed frame under linear
+    geometry. Updates the force/energy state in place (trial values; the
+    drivers' snapshot/commit machinery handles rollback exactly as for the
+    rate-form kernels). ``ur``/``mint`` unused."""
+    st = group.state
+    if nlgeom:
+        # end configuration: the total form is exact there (x_ref advances
+        # per increment under the updated-Lagrangian outer step, so
+        # x_ref + u IS the trial configuration)
+        conn, L, a = _spring_axis(group, x_ref + u)
+        F = st["k"] * (L - st["L0"])
+    else:
+        # frozen committed frame (x_ref stays at x0 for the whole run and
+        # u is THIS increment only): accumulate the linearized force on
+        # the committed state — see the note above
+        conn, L, a = _spring_axis(group, x_ref)
+        du_rel = u[conn[:, 1]] - u[conn[:, 0]]
+        F = st["force"] + st["k"] * np.einsum("nb,nb->n", du_rel, a)
+    st["force"][...] = F
+    # elastic state function (the dashpot is off): eint = F^2 / 2k
+    st["eint"][...] = np.where(st["k"] > 0.0,
+                               F * F / (2.0 * np.maximum(st["k"], EM20)),
+                               0.0)
+    fvec = F[:, None] * a
+    np.add.at(fint, conn[:, 0], fvec)
+    np.add.at(fint, conn[:, 1], -fvec)

@@ -136,9 +136,31 @@ def solid_tangent(mat, sig, epsp, epsp_incr):
 
 def shell_membrane_tangent(mat):
     """(3, 3) plane-stress membrane/bending tangent for the shell implicit
-    tangent. LAW1 only in M8 (LAW2 shell tangent deferred — see the guide)."""
+    tangent — the constant elastic matrix (LAW1 shells use it for every
+    layer; the shell kernels take this fast path so the M8 results stay
+    byte-identical). Elastoplastic shells go through the per-layer
+    ``shell_layer_tangent`` instead (M11)."""
     if mat.law == 1:
         return law01_elastic.shell_membrane_tangent(mat)
     raise NotImplementedError(
-        f"material LAW{mat.law} has no implicit shell tangent (M8 supports "
-        f"LAW1 elastic shells)")
+        f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic "
+        f"and LAW2 elastoplastic are ported; see PORTING_GUIDE)")
+
+
+def shell_layer_tangent(mat, sig, epsp, epsp_incr):
+    """Dispatch the (n, 3, 3) consistent PLANE-STRESS tangent of one
+    through-thickness layer for the implicit shell tangents (M11). LAW1
+    broadcasts the elastic matrix; LAW2 returns the CONSISTENT (algorithmic)
+    tangent of the Iplas=2 radial projection (see
+    law02.consistent_shell_tangent for the derivation)."""
+    n = sig.shape[0]
+    if mat.law == 1:
+        import numpy as np
+        return np.broadcast_to(law01_elastic.shell_membrane_tangent(mat),
+                               (n, 3, 3)).copy()
+    if mat.law == 2:
+        return law02_johnson_cook.consistent_shell_tangent(
+            mat, sig, epsp, epsp_incr)
+    raise NotImplementedError(
+        f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic "
+        f"and LAW2 elastoplastic are ported; see PORTING_GUIDE)")

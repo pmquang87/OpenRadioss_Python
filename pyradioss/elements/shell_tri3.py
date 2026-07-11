@@ -318,3 +318,225 @@ def forces(group, x, v, vr, dt, fint, mint):
     # ---- critical time step --------------------------------------------------
     # deleted elements no longer constrain the global step
     return np.where(alive, st["dtfac"] * lc / c, EP30)
+
+
+# ----------------------------------------------------------------------------
+# Implicit tangent stiffness (M11) — a NEW entry point alongside forces()
+# ----------------------------------------------------------------------------
+# Fortran origin: the element-KE branch of the implicit assembly
+# (``engine/source/implicit/imp_glob_k.F`` dispatching the sh3n/coque3n
+# stiffness) + its ``imp_kgeo`` geometric path (/IMPL/NONLIN).
+#
+# Exactly the BT4 construction (see shell_bt4.tangent) with the triangle's
+# operators and WITHOUT any hourglass block: the CST membrane and the
+# linear-rotation plate field are FULLY integrated by one point (module
+# docstring), so K = K_membrane + K_bending + K_shear is already full rank
+# over the 15 local dofs — 3 nodes x [vx, vy, vz, thx, thy] — plus the same
+# small drilling penalty about the local normal for the global 18x18 block
+# (a flat shell gives no stiffness to rotation about e3). Each block is the
+# exact linearization of the matching rate operator in forces():
+#
+#   membrane   K_m = A t     B_m^T C B_m        (CST — B1, B2 rows)
+#   bending    K_b = A t^3/12 B_b^T C B_b       (constant curvature)
+#   shear      K_s = A kG t   B_s^T B_s         (centroid shear, the
+#                                                mean(th)/3 nodal weights)
+#
+# LAW2 shells integrate the per-layer CONSISTENT plane-stress tangents D_k
+# with the force path's own thickness quadrature instead of the constant C —
+# the A_m/B_m/D_m thickness-moment construction documented in
+# shell_bt4.tangent (M11), sharing materials.shell_layer_tangent.
+#
+# K_geo is the same membrane-resultant von-Karman operator as the quad
+# (frame-invariant delta_ij over the translations — see shell_bt4.kgeo);
+# static_internal_forces re-states the c3fint3 resultant->force transpose
+# standalone on the END configuration for the M9 updated-Lagrangian
+# residual (no hourglass push-back exists here).
+
+from .shell_bt4 import _DRILL_COEF
+
+
+def _tri_edofs(conn):
+    """(n, 18) global scalar DOF slot ids, node-major [ux..rz] * 3 nodes."""
+    n = len(conn)
+    edofs = np.empty((n, 18), dtype=np.int64)
+    for i in range(3):
+        for c in range(6):
+            edofs[:, i * 6 + c] = conn[:, i] * 6 + c
+    return edofs
+
+
+def tangent(group, x, epsp_incr=None):
+    """Element tangent stiffness for the whole sh3n group (LAW1 closed-form
+    elastic; LAW2 per-layer consistent integration).
+
+    Returns ``(ke, edofs)``: ``ke`` (n, 18, 18) over 3 nodes x 6 global
+    dofs, ``edofs`` (n, 18) global scalar DOF slot ids. ``epsp_incr``
+    (n, nip) is the increment's per-layer plastic-strain step (None / zeros
+    = elastic)."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    E, xl, area, B1, B2 = _local_geometry(x[conn])
+    area = np.maximum(area, EM20)
+    thick = st["thick"]
+
+    # ---- generalized strain-displacement operators, LOCAL frame -----------
+    # local dof layout component-grouped: [vx(3), vy(3), vz(3), thx(3),
+    # thy(3)] (15 dofs), written line-for-line against the rates of forces()
+    Bm = np.zeros((n, 3, 15))            # membrane [dm_xx, dm_yy, dm_xy]
+    Bm[:, 0, 0:3] = B1                                   # dm_xx = B1.vx
+    Bm[:, 1, 3:6] = B2                                   # dm_yy = B2.vy
+    Bm[:, 2, 0:3] = B2                                   # dm_xy = B2.vx +
+    Bm[:, 2, 3:6] = B1                                   #         B1.vy
+    Bb = np.zeros((n, 3, 15))            # curvature [k_xx, k_yy, k_xy]
+    Bb[:, 0, 12:15] = B1                                 # k_xx = B1.thy
+    Bb[:, 1, 9:12] = -B2                                 # k_yy = -B2.thx
+    Bb[:, 2, 9:12] = -B1                                 # k_xy = B2.thy -
+    Bb[:, 2, 12:15] = B2                                 #        B1.thx
+    Bs = np.zeros((n, 2, 15))            # shear [g_x, g_y] at the centroid
+    Bs[:, 0, 6:9] = B1                                   # g_x = B1.vz +
+    Bs[:, 0, 12:15] = 1.0 / 3.0                          #       mean(thy)
+    Bs[:, 1, 6:9] = B2                                   # g_y = B2.vz -
+    Bs[:, 1, 9:12] = -1.0 / 3.0                          #       mean(thx)
+
+    # ---- constitutive blocks (no hourglass: CST + linear plate) -----------
+    Kl = np.zeros((n, 15, 15))
+    kdrill = np.zeros(n)
+    for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        t_sl = thick[sl]
+        A_sl = area[sl]
+        kGt = SHEAR_FACTOR * mat.G * t_sl
+        Bms, Bbs, Bss = Bm[sl], Bb[sl], Bs[sl]
+        if mat.law == 1:
+            # LAW1: closed-form thickness integration of the constant C
+            C = materials.shell_membrane_tangent(mat)
+            Kl[sl] += (A_sl * t_sl)[:, None, None] * np.einsum(
+                "nai,ab,nbj->nij", Bms, C, Bms)
+            Kl[sl] += (A_sl * t_sl ** 3 / 12.0)[:, None, None] * np.einsum(
+                "nai,ab,nbj->nij", Bbs, C, Bbs)
+        else:
+            # M11 elastoplastic layers (see shell_bt4.tangent for the
+            # A_m/B_m/D_m thickness-moment construction)
+            zrel, wrel = st["zw"][isl]
+            m = sl.stop - sl.start
+            Am_ = np.zeros((m, 3, 3))
+            Bm_ = np.zeros((m, 3, 3))
+            Dm_ = np.zeros((m, 3, 3))
+            for k in range(len(zrel)):
+                zk = zrel[k] * t_sl
+                wk = wrel[k] * t_sl
+                dep_k = None if epsp_incr is None else epsp_incr[sl, k]
+                Dk = materials.shell_layer_tangent(
+                    mat, st["sig"][sl, k, :], st["epsp"][sl, k], dep_k)
+                Am_ += wk[:, None, None] * Dk
+                Bm_ += (wk * zk)[:, None, None] * Dk
+                Dm_ += (wk * zk * zk)[:, None, None] * Dk
+            Kl[sl] += A_sl[:, None, None] * (
+                np.einsum("nai,nab,nbj->nij", Bms, Am_, Bms)
+                + np.einsum("nai,nab,nbj->nij", Bms, Bm_, Bbs)
+                + np.einsum("nai,nab,nbj->nij", Bbs, Bm_, Bms)
+                + np.einsum("nai,nab,nbj->nij", Bbs, Dm_, Bbs))
+        # shear: A kGt B_s^T B_s (elastic, matching the force path)
+        Kl[sl] += (A_sl * kGt)[:, None, None] * np.einsum(
+            "nai,naj->nij", Bss, Bss)
+        kdrill[sl] = _DRILL_COEF * mat.E * t_sl ** 3 * A_sl / 12.0
+
+    # ---- local (15) -> global (18) via the frame E -------------------------
+    e1, e2, e3 = E[:, :, 0], E[:, :, 1], E[:, :, 2]
+    Tg = np.zeros((n, 15, 18))
+    for i in range(3):
+        for c in range(3):
+            Tg[:, 0 * 3 + i, i * 6 + c] = e1[:, c]       # vx = e1.trans
+            Tg[:, 1 * 3 + i, i * 6 + c] = e2[:, c]       # vy = e2.trans
+            Tg[:, 2 * 3 + i, i * 6 + c] = e3[:, c]       # vz = e3.trans
+            Tg[:, 3 * 3 + i, i * 6 + 3 + c] = e1[:, c]   # thx = e1.rot
+            Tg[:, 4 * 3 + i, i * 6 + 3 + c] = e2[:, c]   # thy = e2.rot
+    ke = np.einsum("nki,nkl,nlj->nij", Tg, Kl, Tg)       # (n, 18, 18)
+
+    # drilling penalty about the local normal (see shell_bt4.tangent)
+    e3e3 = np.einsum("ni,nj->nij", e3, e3)
+    for i in range(3):
+        r = i * 6 + 3
+        ke[:, r:r + 3, r:r + 3] += kdrill[:, None, None] * e3e3
+    return ke, _tri_edofs(conn)
+
+
+def kgeo(group, x):
+    """Geometric (initial-stress) element stiffness for the sh3n group from
+    the current layer stresses at geometry ``x`` — the membrane-resultant
+    von-Karman operator over the translations (see shell_bt4.kgeo).
+    Returns ``(ke, edofs)`` shaped like ``tangent()`` (n, 18, 18)."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    E, xl, area, B1, B2 = _local_geometry(x[conn])
+    area = np.maximum(area, EM20)
+    thick = st["thick"]
+
+    # membrane force resultants N = sum_k w_k sigma_k (force/length)
+    sig = st["sig"]
+    Nres = np.zeros((n, 3))
+    for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        zrel, wrel = st["zw"][isl]
+        t_sl = thick[sl]
+        for k in range(len(zrel)):
+            wk = wrel[k] * t_sl
+            Nres[sl] += wk[:, None] * sig[sl, k, :]
+
+    # g_ab = A (B1a B1b Nxx + B2a B2b Nyy + (B1a B2b + B2a B1b) Nxy) (n,3,3)
+    g = area[:, None, None] * (
+        Nres[:, 0, None, None] * B1[:, :, None] * B1[:, None, :]
+        + Nres[:, 1, None, None] * B2[:, :, None] * B2[:, None, :]
+        + Nres[:, 2, None, None] * (B1[:, :, None] * B2[:, None, :]
+                                    + B2[:, :, None] * B1[:, None, :]))
+    ke = np.zeros((n, 18, 18))
+    ni = 6 * np.arange(3)
+    for c in range(3):                     # delta_ij over the translations
+        rows = (ni + c)[:, None]
+        cols = (ni + c)[None, :]
+        ke[:, rows, cols] += g
+    return ke, _tri_edofs(conn)
+
+
+def static_internal_forces(group, x, u, ur, fint, mint):
+    """Internal nodal forces/moments at configuration ``x`` from the CURRENT
+    layer/shear state — the updated-Lagrangian end-configuration force
+    assembly of the M9/M11 implicit residual (the state was just advanced by
+    a midpoint-geometry ``forces()`` call; this re-states the c3fint3
+    resultant->force transpose on the END geometry). No hourglass term
+    exists for the triangle. ``u``/``ur`` unused."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    thick = st["thick"]
+    E, xl, area, B1, B2 = _local_geometry(x[conn])
+    area = np.maximum(area, EM20)
+
+    sig = st["sig"]
+    Nres = np.zeros((n, 3))
+    Mres = np.zeros((n, 3))
+    for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        zrel, wrel = st["zw"][isl]
+        t_sl = thick[sl]
+        for k in range(len(zrel)):
+            zk = zrel[k] * t_sl
+            wk = wrel[k] * t_sl
+            Nres[sl] += wk[:, None] * sig[sl, k, :]
+            Mres[sl] += (wk * zk)[:, None] * sig[sl, k, :]
+    qres = st["qshear"] * thick[:, None]
+
+    # the exact force/moment transpose of forces(), on THIS geometry
+    f = np.zeros((n, 3, 3))
+    m = np.zeros((n, 3, 3))
+    A_ = area[:, None]
+    f[:, :, 0] = A_ * (B1 * Nres[:, 0:1] + B2 * Nres[:, 2:3])
+    f[:, :, 1] = A_ * (B2 * Nres[:, 1:2] + B1 * Nres[:, 2:3])
+    f[:, :, 2] = A_ * (B1 * qres[:, 0:1] + B2 * qres[:, 1:2])
+    m[:, :, 0] = A_ * (-B2 * Mres[:, 1:2] - B1 * Mres[:, 2:3]
+                       - qres[:, 1:2] / 3.0)
+    m[:, :, 1] = A_ * (B1 * Mres[:, 0:1] + B2 * Mres[:, 2:3]
+                       + qres[:, 0:1] / 3.0)
+    fg = np.einsum("nia,nba->nib", -f, E)
+    mg = np.einsum("nia,nba->nib", -m, E)
+    scatter_add3(fint, conn.reshape(-1), fg.reshape(-1, 3))
+    scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3))

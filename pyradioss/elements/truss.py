@@ -122,9 +122,35 @@ def forces(group, x, v, vr, dt, fint, mint):
 # Mises) truss soften, reach its limit point and snap through — the M9
 # arc-length validation traces it against the closed form.
 #
-# LAW1 only: the LAW2 (elastoplastic) truss tangent is DEFERRED explicitly
-# (PORTING_GUIDE M9) — a plastic truss raises rather than silently using the
-# elastic modulus.
+# Materials (M11 removes the M9 LAW2 deferral). The implicit residual does
+# NOT reuse forces() for the truss anymore: the explicit kernel's 1-D
+# return is a SINGLE linearized step (dl = (|sig_tr| - sy0)/(E + H0) with
+# H0 frozen at the committed plastic strain) — a per-cycle approximation
+# that is exact in the explicit limit of tiny steps but VEERS OFF the
+# hardening curve at implicit load-increment sizes (measured: 20 x 0.05
+# increments to sigma = 0.5 leave eps_p at 0.006 instead of the JC 0.04 —
+# the near-virgin JC slope B*n*e^(n-1) diverges as e -> 0, so the one-step
+# return barely flows). The implicit path therefore supplies its own
+# residual, ``implicit_internal_forces`` (the total-form-spring mechanism),
+# identical to forces() for LAW1 bit for bit, but running the ITERATED
+# Newton consistency solve for LAW2 —
+#
+#     |sig_tr| - E dl = sy(ep0 + dl),   sy capped at sig_max (H = 0 there)
+#
+# — exactly the solid/shell radial-return discipline (forces() itself is
+# untouched: the M7 parity contract). The JC strain-RATE term is OFF here
+# like every implicit rate device (M10 convention). The CONSISTENT tangent
+# of that return is the textbook elastoplastic modulus
+#
+#     d sig / d eps = E * H / (E + H)         (H = dsy/dep at ep0 + dl, the
+#                                             END point of the converged
+#                                             consistency; 0 where sig_max
+#                                             caps the curve)
+#
+# — in 1-D the consistent and continuum tangents coincide (no frozen radial
+# direction), and this is what carries the quadratic Newton tail asserted
+# by the M11 elastoplastic-truss validation. Yielding is detected from the
+# increment's epsp_incr > 0, exactly like the solid/shell tangents.
 
 def _axis(group, x):
     conn = group.conn
@@ -154,20 +180,36 @@ def _edofs(conn):
 
 
 def tangent(group, x, epsp_incr=None):
-    """Material element tangent (E A / L) a a^T for the whole truss group at
-    geometry ``x``. Returns (ke (n,6,6), edofs (n,6)) in the implicit
-    assembler's convention. LAW1 only (see the note above)."""
+    """Material element tangent (E_t A / L) a a^T for the whole truss group
+    at geometry ``x``, with E_t the CONSISTENT axial modulus: E elastic,
+    E*H/(E+H) on elements that yielded this increment (see the note above).
+    ``epsp_incr`` (n,) is the increment's plastic-strain step (None / zeros
+    = all elastic). Returns (ke (n,6,6), edofs (n,6)) in the implicit
+    assembler's convention."""
     st = group.state
     conn, L, a = _axis(group, x)
     n = group.n
     k_ax = np.zeros(n)
     for sl, mat, prop in st["slices"]:
-        if mat.law != 1:
+        if mat.law not in (1, 2):
             raise NotImplementedError(
-                f"the implicit truss tangent supports LAW1 only (M9); "
-                f"got LAW{mat.law} — the elastoplastic truss tangent is "
-                f"deferred (see PORTING_GUIDE)")
-        k_ax[sl] = mat.E * st["area"][sl] / L[sl]
+                f"the implicit truss tangent supports LAW1 and LAW2; got "
+                f"LAW{mat.law} (see PORTING_GUIDE)")
+        Emod = np.full(sl.stop - sl.start, mat.E)
+        if mat.law == 2 and epsp_incr is not None:
+            dl = epsp_incr[sl]
+            plastic = dl > 0.0
+            if np.any(plastic):
+                # hardening slope at the END of the converged consistency
+                # solve (see the note above); H = 0 where the sig_max cap
+                # rules — matching the iterated implicit return exactly
+                p = mat.params
+                e = np.maximum(st["epsp"][sl], 1e-20)
+                sy = p["A"] + p["B"] * e ** p["n"]
+                H = np.maximum(p["B"] * p["n"] * e ** (p["n"] - 1.0), 0.0)
+                H = np.where(sy > p["sig_max"], 0.0, H)
+                Emod = np.where(plastic, mat.E * H / (mat.E + H), Emod)
+        k_ax[sl] = Emod * st["area"][sl] / L[sl]
     kb = k_ax[:, None, None] * np.einsum("ni,nj->nij", a, a)
     return _blocks_to_element(kb), _edofs(conn)
 
@@ -189,9 +231,85 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     """Nodal force at configuration ``x`` from the current stress state —
     the updated-Lagrangian force assembly of the M9 implicit residual
     (stress already updated by a midpoint-geometry forces() call):
-    F = A*sigma along the CURRENT axis. ``u``/``ur``/``mint`` unused."""
+    F = A*sigma along the CURRENT axis. ``u``/``ur``/``mint`` unused.
+    (Kept for callers like the buckling prestress path; the implicit
+    drivers reach the truss through ``implicit_internal_forces`` below
+    since M11.)"""
     st = group.state
     conn, L, a = _axis(group, x)
     fvec = (st["area"] * st["sig"])[:, None] * a
     np.add.at(fint, conn[:, 0], fvec)
     np.add.at(fint, conn[:, 1], -fvec)
+
+
+_IMPL_NEWTON_ITERS = 12   # the iterated 1-D consistency solve (see note)
+
+
+def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom):
+    """The truss's own implicit residual (M11 — called by the drivers
+    instead of forces(); see the LAW2 note above for WHY the explicit
+    kernel's one-step return cannot serve the implicit increment sizes).
+
+    Kinematics mirror the driver's use of forces() exactly: the strain
+    increment is measured on the COMMITTED frame under linear geometry and
+    on the MIDPOINT geometry under /IMPL/NONLIN (Hughes–Winget — identical
+    to the old forces(x_mid) call, so the M9 corotational log-strain
+    behaviour and the arc-length validations are reproduced bit for bit
+    for LAW1), and the nodal force acts along the committed (linear) or
+    END (nonlinear) axis. LAW2 runs the ITERATED radial return with the
+    rate term off. State (sig, epsp, eint) updates to the trial values in
+    place — the drivers' snapshot/commit machinery rolls back exactly as
+    for the rate-form kernels."""
+    st = group.state
+    conn = group.conn
+    x_eval = (x_ref + 0.5 * u) if nlgeom else x_ref
+    dxm = x_eval[conn[:, 1]] - x_eval[conn[:, 0]]
+    Lm = np.maximum(norm3(dxm), EM20)
+    am = dxm / Lm[:, None]
+    du = u[conn[:, 1]] - u[conn[:, 0]]
+    deps = np.einsum("nb,nb->n", du, am) / Lm
+
+    sig = st["sig"]
+    sig_old = sig.copy()
+    for sl, mat, prop in st["slices"]:
+        E = mat.E
+        sig[sl] += E * deps[sl]                      # elastic trial
+        if mat.law == 2:
+            # iterated 1-D consistency solve on the JC static curve
+            # (rate term OFF under implicit — the M10 convention)
+            p = mat.params
+            ep0 = st["epsp"][sl]
+            over = np.abs(sig[sl])
+            sy0 = np.minimum(p["A"] + p["B"] *
+                             np.maximum(ep0, 1e-20) ** p["n"], p["sig_max"])
+            plastic = over > sy0
+            if np.any(plastic):
+                dl = np.zeros(sl.stop - sl.start)
+                for _ in range(_IMPL_NEWTON_ITERS):
+                    e = np.maximum(ep0 + dl, 1e-20)
+                    sy = p["A"] + p["B"] * e ** p["n"]
+                    H = p["B"] * p["n"] * e ** (p["n"] - 1.0)
+                    capped = sy > p["sig_max"]
+                    sy = np.where(capped, p["sig_max"], sy)
+                    H = np.where(capped, 0.0, np.maximum(H, 0.0))
+                    res = over - E * dl - sy
+                    dl += np.where(plastic, res / (E + H), 0.0)
+                    dl = np.maximum(dl, 0.0)
+                e = np.maximum(ep0 + dl, 1e-20)
+                sy_new = np.minimum(p["A"] + p["B"] * e ** p["n"],
+                                    p["sig_max"])
+                sig[sl] = np.where(plastic, np.sign(sig[sl]) * sy_new,
+                                   sig[sl])
+                st["epsp"][sl] = ep0 + dl
+
+    # force along the committed axis (linear) / the END axis (nonlinear) —
+    # matching the old forces()/static_internal_forces pairing
+    if nlgeom:
+        conn2, Lf, af = _axis(group, x_ref + u)
+    else:
+        af = am
+    fvec = (st["area"] * sig)[:, None] * af
+    np.add.at(fint, conn[:, 0], fvec)
+    np.add.at(fint, conn[:, 1], -fvec)
+    # trapezoidal internal-energy booking, the forces() formula
+    st["eint"] += st["area"] * Lm * 0.5 * (sig_old + sig) * deps

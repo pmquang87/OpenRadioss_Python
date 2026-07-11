@@ -89,6 +89,10 @@ same names in comments.
 | the arc-length continuation of the implicit nonlinear driver (`imp_solv.F` family) | `statics.py` (`_run_arclength`) | M9: spherical Riks/Crisfield constraint, root selection by path continuation, adaptive radius, sign-following predictor; `/IMPL/ARCL` |
 | `engine/source/implicit/imp_buck.F` (/IMPL/BUCKL buckling eigensolver) | `pyradioss/implicit/buckling.py` | M9: (K_mat + μ K_geo)φ = 0 generalized eigenproblem on a pre-stressed state (library function; the engine card itself deferred) |
 | `engine/source/implicit/imp_dyna.F` (implicit dynamics: DYNA_INI scheme setup, DYNA_INA initial acceleration, IMP_DYNAM effective-stiffness diagonal, IMP_DYNAR/IMP_FHHT dynamic residual + HHT weighting, INTE_DYNA a/v recovery, DYNA_WEX work ledger) + the /IMPL/DYNA read of `engine/source/input/freimpl.F` | `pyradioss/implicit/dynamics.py` + `/IMPL/DYNA` in `engine_keywords.py` | M10: Newmark-β/HHT-α implicit time integration on top of the M8/M9 statics core — lumped M (model.mass + model.inertia) condensed through the DofMap, R = (1+α)(f_ext+f_int)ₙ₊₁ − α(…)ₙ − M aₙ₊₁, K_eff = (1+α)K_T + M/(β dt²), both geometry modes; rate devices disabled explicitly (see the module docstring) |
+| the `IDY_DAMP` branch of `imp_dyna.F` (`IMP_DYKS`/`IMP_DYKV` damping force DY_DAM = a·M·v + b·K·v with the step-start K, the IDY_DAMP branch of `IMP_DYNAM`, the DY_EDAMP ledger of `DYNA_WEX`) + the /IMPL/DYNA/DAMP read of `freimpl.F` | `implicit/dynamics.py` (damping blocks) + `/IMPL/DYNA/DAMP` in `engine_keywords.py` | M11: Rayleigh damping C = a·M + b·K in the implicit system — damping force HHT-weighted in the residual, (1+α)γ/(βdt)·C in K_eff, trapezoidal dissipation booked into its own `edamp` ledger channel |
+| `engine/source/implicit/imp_dt.F` (`IMP_DTN`: cut on IMCONV < 0 bounded by DT_MIN, IDTC = 1 growth toward DT_MAX after ≤ NL_DTP iterations) + the /IMPL/DT reads of `freimpl.F` | `implicit/statics.py` (`StepControl`) + `/IMPL/DT/STOP`, `/IMPL/DT/1` in `engine_keywords.py` | M11: automatic implicit step control for BOTH statics load increments and dynamics time steps — always on, the cards tune it; IDTC 2/3 deferred |
+| `engine/source/implicit/imp_buck.F` engine-card path (the /IMPL/BUCKL read of `freimpl.F`, the "BUCKLING MODES COMPUTATION" listing block) | `statics.py` (`_run_buckling`) + `/IMPL/BUCKL/1|2` in `engine_keywords.py` | M11: the card runs the static prestress increments then the M9 eigensolver, reports factors/modes in the listing and on `implicit_result` |
+| element `KE` routines of the remaining families (solide4, coque3n/sh3n, beam, spring) + their `imp_kgeo` branches | `tangent()`/`kgeo()`/`static_internal_forces()` in `solid_tetra4`, `shell_tri3`, `beam_type3`; `tangent()`/`kgeo()`/`implicit_internal_forces()` in `spring` and the truss's `implicit_internal_forces` | M11: element tangent COMPLETENESS — every element family of the port is implicit-capable (the spring/truss get their own implicit residual: total-form / iterated-return, see the module notes) |
 
 ## 3. Conventions used in this port
 
@@ -174,7 +178,10 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | Engine: `/DT/NODA`, `/DT/NODA/CST` | ✅ | M6 — nodal time step dt_i = √(2Mᵢ/Kᵢ) with the element stiffness derived from the kernels' own dt claims (kᵢᵉ = 2mᵢᵉ/dt_e², = the element dt on uniform meshes) and the contact NEAR-spring stiffness accumulated in; CST adds mass to hold dT_min — added mass, its momentum and its kinetic energy are tracked, reported (1%-step announcements + termination summary) and the energy enters the balance; prescribed nodes (rigid-body members, tied secondaries, RBE3 dependents) are excluded (see engine/mass_scaling.py) |
 | Engine: `/STATE/DT` | 🟡 | M6 — periodic full restart snapshots refreshing `RunName_{nn}.rst` (crash recovery / early chaining); the original's .sta ASCII format ❌ (the pickle restart plays that role) |
 | Engine: `/IMPL` (+ `/IMPL/DTINI`, `/IMPL/NEWTON`, `/IMPL/LSOLVER`) | 🟡 | M8 — switches the run to the implicit-STATIC Newton driver (final /RUN "time" = load factor, increment size, Newton tolerance + iteration cap, direct-solver choice); unknown sub-cards warn and skip like the rest of the reader |
-| Engine: `/IMPL/DYNA/1` (HHT), `/IMPL/DYNA/2` (Newmark) | ✅ | M10 — implicit DYNAMICS: /RUN "time" and /IMPL/DTINI become PHYSICAL again. The card mirror follows the SOURCE (freimpl.F + imp_dyna.F), checked, not the docs: `/1` reads the HHT **alpha itself** (HHT_A — *not* a spectral radius; γ = ½−α, β = ¼(1−α)² derived), `/2` reads **gamma then beta** (NM_A → DY_G, NM_B → DY_B), defaults γ=½ β=¼ (trapezoidal); a bare `/IMPL/DYNA` = `/2` defaults (a port convenience). Warns outside the HHT range [−1/3, 0] and outside 2β ≥ γ ≥ ½. `/IMPL/DYNA/DAMP` (Rayleigh damping, IDY_DAMP) deferred — warns |
+| Engine: `/IMPL/DYNA/1` (HHT), `/IMPL/DYNA/2` (Newmark) | ✅ | M10 — implicit DYNAMICS: /RUN "time" and /IMPL/DTINI become PHYSICAL again. The card mirror follows the SOURCE (freimpl.F + imp_dyna.F), checked, not the docs: `/1` reads the HHT **alpha itself** (HHT_A — *not* a spectral radius; γ = ½−α, β = ¼(1−α)² derived), `/2` reads **gamma then beta** (NM_A → DY_G, NM_B → DY_B), defaults γ=½ β=¼ (trapezoidal); a bare `/IMPL/DYNA` = `/2` defaults (a port convenience). Warns outside the HHT range [−1/3, 0] and outside 2β ≥ γ ≥ ½ |
+| Engine: `/IMPL/DYNA/DAMP` | ✅ | M11 — Rayleigh damping in the implicit system, card = `a b` (freimpl.F reads DAMPA_IMP then DAMPB_IMP; the card alone IMPLIES dynamics, mirroring `IF (IDYNA==0) IDYNA=1`): C = a·M + b·K(step start), damping force HHT-weighted in the residual, (1+α)γ/(βdt)·C in K_eff, DY_EDAMP-style trapezoidal dissipation ledger. Validated vs the closed-form damped SDOF (a-only / b-only / mixed) |
+| Engine: `/IMPL/DT/STOP`, `/IMPL/DT/1` | ✅ | M11 — automatic implicit step control (imp_dt.F, IDTC = 1): ALWAYS ON with documented port defaults (target 6 iterations, grow ×1.1 toward the /IMPL/DTINI step, cut ×0.5 on non-convergence, dt_min = 1e-4·dtini); the cards tune it. Works for statics load increments AND dynamics time steps; IDTC 2/3 (displacement-norm/Riks step controls) and /IMPL/DT/FIXP deferred |
+| Engine: `/IMPL/BUCKL/1\|2` | ✅ | M11 — the engine card for the M9 buckling eigensolver: runs the static prestress increments, then reports the critical-load multipliers + modes in the listing (imp_buck.F flavour) and on `implicit_result.buckling_factors/modes`; card = `Emin Emax Nmode …` (Nmode = NBUCK drives the dense eigh; the ARPACK range/controls accepted, unused); bare `/IMPL/BUCKL` errors as OBSOLETE like the original reader; refused with /IMPL/DYNA |
 | Engine: `/IMPL/NONLIN[/N]` (`/SMDISP`), `/IMPL/ARCL` | ✅ | M9 — NONLIN switches the implicit run to NONLINEAR GEOMETRY (updated-Lagrangian frame + K_geo; the original card's large-displacement default), `/IMPL/NONLIN/SMDISP` keeps the M8 small-displacement path (the original's SMDISP), a numeric /N (solver-strategy pick) is accepted (the port always runs full Newton); ARCL card `dl max_inc it_des` (all optional) selects the Riks/Crisfield arc-length continuation and implies NONLIN |
 | Engine restart chaining (`RunName_0002.rad`) | ✅ | M6 — the Engine ALWAYS writes `RunName_{nn}.rst` at termination; run nn+1 resumes it: clock/ledgers/next-dt/output numbering restored, rigid-body R & L and sensor fire-times carried, everything else deliberately reconstructed from the model arrays (tied projections, contact candidates, fix masks). Acceptance: a chained run reproduces the unchained one exactly — same cycle count, state to round-off (asserted for a spring oscillator and a tumbling /RBODY) |
 
@@ -232,8 +239,13 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | Statics bulk-viscosity fix (M9): the implicit driver zeroes the solid qa/qb — a rate device that leaked a spurious viscous pressure into COMPRESSIVE increments of the pseudo-velocity residual (latent in M8: all its validations were tensile); uniaxial compression is now exactly Hooke (asserted) | ✅ |
 | **Implicit DYNAMICS (M10)**: Newmark-β time integration with HHT-α numerical dissipation (`/IMPL/DYNA/1|2`, imp_dyna.F) — lumped (diagonal) mass in equation space from the starter's model.mass/model.inertia (no consistent mass, like the original's MS/IN), dynamic residual R = (1+α)(f_ext+f_int)ₙ₊₁ − α(f_ext+f_int)ₙ − M aₙ₊₁, effective tangent K_eff = (1+α)K_T + M/(β dt²), Newmark a/v recovery per converged step; BOTH geometry modes (M8 linear + M9 /IMPL/NONLIN updated-Lagrangian); /IMPDISP at physical time; per-step energy ledger (KE/IE/W_ext/balance) in the result history. Validated: SDOF period elongation MATCHING the closed-form (ω dt)²/12 dispersion (and its 4× drop when dt halves), exact amplitude, energy conservation to round-off (trapezoidal), stability at 20× the leapfrog limit (leapfrog divergence asserted on the same system), HHT high-mode dissipation vs trapezoidal conservation on a bar, quasi-static limit = the M8 static answer, transient cross-checked against the EXPLICIT solver at the response peak (0.5%), large-rotation pendulum vs the elliptic-integral period (0.5%) with quadratic Newton | ✅ |
 | Rate effects under implicit dynamics: the kernels are driven with the step increment as a pseudo-velocity at dt = 1 (what the tangents linearize), so the rate devices are DISABLED explicitly — bulk viscosity zeroed (as statics), LAW2 strain-rate term zeroed with a warning — never silently fed du/1 | ✅ (deliberate deferral of rate-dependent plasticity — see dynamics.py) |
-| Consistent (element) mass matrix; Rayleigh damping in the implicit system (/IMPL/DYNA/DAMP); modal / eigenvalue dynamics; implicit↔explicit switching mid-run; automatic implicit time-step control (imp_dt.F); /IMPVEL under implicit dynamics (refused — use /IMPDISP) | ❌ (deferred — see the M10 roadmap note) |
-| Contact / /RBODY / /MPC in the implicit tangent system; follower-load (pressure) stiffness | ❌ (deferred — see the M9 roadmap note) |
+| **Implicit COMPLETENESS (M11)**: element tangents for EVERY family — tetra4 (full-rank V·BᵀDB, no hourglass block needed), sh3n C0 triangle (membrane/bending/shear blocks + drilling penalty, per-layer LAW2 integration), corotational Timoshenko beam 12×12 (the exact-dt eigenproblem's own L·BᵀCB rotated by the frame; axial K_geo — the consistent initial-stress operator of the LINEAR element), spring TYPE4 (total-form element with its OWN implicit residual: incremental on the committed force under linear geometry, exact total form under NLGEOM) — plus beam rotational DOFs in the equation numbering and the zero-mass orientation-node exclusion. FD residual/tangent consistency exact at zero stress for all four (beam/spring exact including prestress); closed-form checks: tetra constant-strain patch (exact, one step), sh3n membrane patch (exact) + thick cantilever vs Timoshenko (< 2%), beam cantilever vs FL³/3EI + FL/GA (< 0.5%), spring u = F/k (exact); a mixed model with all seven families converging in one Newton step | ✅ |
+| LAW2 consistent PLANE-STRESS (shell) tangent (M11 — the Iplas=2 radial projection's algorithmic tangent, mildly nonsymmetric rank-one update, per-layer thickness integration with the A/B/D moment matrices — the B coupling block carries a plastified stack's neutral-surface shift) + the elastoplastic TRUSS (implicit path upgraded to the ITERATED 1-D consistency solve — the explicit kernel's one-step return veers off the hardening curve at implicit increment sizes, measured and documented; consistent modulus E·H/(E+H)). Validated: BT4 + sh3n uniaxial past yield matching the Iplas=2 algorithm's own closed form u/L = σ/E + (3G/E)·εp with εp exactly on the JC curve and QUADRATIC Newton tails; truss vs the 1-D closed form | ✅ |
+| Rayleigh damping in the implicit system (M11, /IMPL/DYNA/DAMP — imp_dyna.F IDY_DAMP): C = a·M + b·K(step start), damping force HHT-weighted like f_int (IMP_DYNAR), exact velocity linearization (1+α)γ/(βdt)·C in K_eff (the IMP_DYNAM BDT/S0 algebra), trapezoidal DY_EDAMP dissipation ledger in the energy balance. Validated: damped SDOF vs exp(−ζωt)·sin(ω_d t) and the damped period for mass-only / stiffness-only / mixed Rayleigh; balance closes to round-off WITH the ledger; dissipated fraction matches 1 − exp(−2ζωt) | ✅ |
+| Automatic implicit step control (M11, imp_dt.F IMP_DTN): cut-and-RETRY on non-convergence (rollback is free — failed increments never touch model.x and the element buffers re-base from the committed snapshots), growth back toward /IMPL/DTINI after ≤-target-iteration steps; statics AND dynamics. Validated: a one-increment deep-elastica run that fails its Newton budget now completes through cuts and matches the fine fixed-increment answer to 0.5%; smooth runs take zero cuts and reproduce the fixed-dt stepping exactly | ✅ |
+| /IMPL/BUCKL engine card (M11): prestress increments → (K_mat + μ K_geo)φ = 0 → factors/modes reported (listing + result object). Validated: the M9 shell Euler column through the CARD path (π²EI/4L² < 3%) | ✅ |
+| Consistent (element) mass matrix; modal / eigenvalue dynamics; implicit↔explicit switching mid-run; /IMPVEL under implicit dynamics (refused — use /IMPDISP); rate devices under implicit (LAW2 strain-rate term, bulk viscosity, spring dashpot — all disabled loudly) | ❌ (deferred — see the M10/M11 roadmap notes) |
+| Contact / /RBODY / /MPC in the implicit tangent system; follower-load (pressure) stiffness | ❌ (deferred — see the M9/M11 roadmap notes; the big M12 candidate) |
 
 ## 5. Roadmap (next milestones)
 
@@ -737,6 +749,115 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
    * contact / rigid bodies / /MPC in the dynamic tangent, consistent
      with their M8/M9 statics deferral — an implicit dynamic run must not
      use them either.
+10. **M11 — implicit COMPLETENESS** ✅ (done): the implicit solver
+    accepted only hexa8/BT4/truss + LAW1 (and LAW2 solids), fixed steps,
+    no damping, and the buckling eigensolver had no engine card. M11
+    closes those gaps (each mapped to the checked Fortran —
+    imp_dyna.F's IDY_DAMP blocks, imp_dt.F, imp_buck.F + the freimpl.F
+    reads — not to docs from memory):
+    * **Element tangent completeness**: `tangent()` (+ `kgeo()` +
+      `static_internal_forces()`) for tetra4 (full integration — no
+      hourglass block to stabilize), sh3n (the BT4 construction with
+      triangle operators, no hourglass), beam (the 12×12 L·BᵀCB the
+      exact-dt eigenproblem already built, frame-rotated; K_geo = the
+      truss-form axial operator, which IS consistent for the linear
+      one-point element), spring TYPE4. The `_TANGENT_KERNELS` gate now
+      admits every family (and stays as the guard for future ones); the
+      DofMap numbers beam rotations and excludes zero-mass orientation
+      nodes. TWO elements needed their OWN implicit residual
+      (`implicit_internal_forces`, dispatched by
+      `statics._internal_forces` instead of `forces()`):
+      - the SPRING is total-form (forces() rebuilds F = k(L−L0) from
+        geometry, so the frozen-frame pseudo-velocity drive would feed
+        the elastic term NOTHING and the dashpot the increment) —
+        incremental on the committed force state under linear geometry,
+        exact total form at the end configuration under NLGEOM. An M11
+        lesson recorded in the code: the first cut evaluated
+        k(L(x_ref)−L0) + k·a·Δu with x_ref frozen at x0 — correct for
+        ONE increment, silently losing all accumulated displacement on
+        the next (caught by the multi-increment regression test and a
+        −67% dynamics ledger);
+      - the TRUSS's explicit LAW2 return is a SINGLE linearized step
+        (H frozen at the committed εp) — exact at explicit step sizes,
+        but at implicit increments it barely flows (measured: εp 0.006
+        instead of 0.04 at σ = 0.5) because the virgin JC slope
+        diverges; the implicit path runs the ITERATED consistency solve
+        (forces() untouched — the M7 parity contract).
+    * **LAW2 consistent tangents for shells and the truss** (the M8/M9
+      deferrals): the plane-stress Iplas=2 radial projection's
+      algorithmic tangent (derived in
+      `law02.consistent_shell_tangent`; mildly NONSYMMETRIC — the price
+      of the projection; reconstructed entirely from the converged
+      state like the solid one), integrated per layer with the force
+      path's own quadrature (A/B/D thickness moments — the coupling
+      block activates when the stack yields asymmetrically); LAW1
+      shells keep the closed-form elastic path bit for bit. The
+      validations pin the ALGORITHM's own closed form: the radial
+      projection makes the axial plastic flow (3G/E)·εp, not εp — a
+      documented property of the ported Iplas=2 variant, asserted
+      exactly, with quadratic Newton tails.
+    * **/IMPL/DYNA/DAMP** (imp_dyna.F IDY_DAMP): C = a·M + b·K with the
+      STEP-START tangent (the IMP_DYKS save; reassembled per committed
+      frame under NLGEOM), damping force at the current velocity
+      iterate folded into the HHT weighting exactly like f_int
+      (IMP_DYNAR), K_eff += (1+α)γ/(βdt)·C — algebraically the
+      original's BDT/S0 form times (1+α) — and the DY_EDAMP trapezoidal
+      dissipation ledger (booked on the energy side, as the source
+      comments explain, in its own `edamp` channel). The card alone
+      implies dynamics (`IF (IDYNA==0) IDYNA=1`).
+    * **Automatic step control** (imp_dt.F IMP_DTN): cut-and-retry on
+      non-convergence (the source's TT/NCYCLE rollback + SCAL_DTN cut,
+      stop at DT_MIN), IDTC = 1 growth toward DT_MAX after easy steps —
+      one `StepControl` object driving statics increments AND dynamics
+      steps. Always on (the source cuts regardless of /IMPL/DT);
+      /IMPL/DT/STOP and /IMPL/DT/1 tune it. The original's defaults
+      live in an init routine outside the reader, so the port's
+      defaults are its own, documented: target 6, grow ×1.1, cut ×0.5,
+      dt_max = the /IMPL/DTINI step, dt_min = 1e-4 of it.
+    * **/IMPL/BUCKL/1|2**: prestress increments, then the M9
+      eigensolver, factors/modes in the listing (the imp_buck.F
+      "BUCKLING MODES COMPUTATION" block) and on the result object;
+      bare /IMPL/BUCKL errors as OBSOLETE exactly like the reader.
+    * **Validation** (tests/test_m11_implcomp.py — an analytic check per
+      capability, 26 tests): FD residual/tangent consistency for all
+      four new elements (exact at zero stress; beam/spring exact with
+      prestress; tetra/sh3n prestressed at the documented σ/E scale of
+      the omitted spin terms); the tetra patch test and sh3n membrane
+      patch EXACT in one Newton step; the thick sh3n cantilever vs
+      Timoshenko (2% — the THIN strip shear-locks: −8% even at 32×4,
+      the honest C0 note); the beam cantilever vs FL³/3EI + FL/GA
+      (0.5%); spring u = F/k exact incl. multi-increment; a
+      seven-family mixed model in one Newton step; plane-stress and
+      truss JC closed forms with quadratic tails; the damped-SDOF
+      trilogy vs exp(−ζωt) envelopes, damped periods and the
+      dissipation fraction 1 − exp(−2ζωt), balance at round-off; the
+      elastica cut-and-complete + smooth-run-reproduction pair; the
+      Euler column through the BUCKL card. Example:
+      `examples/implicit_ringdown` (mixed beam+sh3n+truss+spring mast,
+      Rayleigh ring-down onto its own static answer at 0.00% balance).
+    Deferred out of M11, explicitly (not half-implemented):
+    * **contact, /RBODY, /RBE2/3 and /MPC in the implicit tangent
+      system** — still THE structural gap and the natural M12: penalty
+      contact stiffness and constraint condensation in K, so implicit
+      models can carry joints and interfaces;
+    * consistent (element) mass; modal / eigenvalue dynamics;
+      implicit↔explicit switching (/IMPL/SWITCH); QSTAT_*;
+    * LAW27/36/42 implicit tangents (LAW36's tabulated consistent
+      tangent is the cheapest next candidate); the LAW2 BEAM tangent
+      (linearizing the global resultant-space return is its own
+      derivation — plastic beams refuse rather than run elastic);
+    * rate devices under implicit stay OFF loudly: LAW2 strain-rate
+      term, bulk viscosity, and now the spring DASHPOT (its force needs
+      the true velocity; under statics it is meaningless);
+    * the IDTC = 2/3 step controls (displacement-norm / Riks coupling)
+      and /IMPL/DT/FIXP fix points; line search;
+    * beam K_geo shear/moment frame-coupling terms (the axial term is
+      the consistent one for the linear element; the omitted couplings
+      are O(Q/N, M/NL) at a buckling state);
+    * exact plane-stress LAW2 return (Iplas=1) — the port mirrors the
+      Iplas=2 radial projection, and its tangent differentiates THAT
+      algorithm (validated against its own closed form, documented
+      3G/E flow factor and all).
 
 ## 6. Validation strategy
 
@@ -748,6 +869,14 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
   results: longitudinal wave speed in a bar, cantilever/plate vibration
   frequency, Johnson–Cook uniaxial yield curve, energy conservation of a
   block bouncing on a rigid wall.
+* **Implicit completeness validations (M11)** — finite-difference
+  residual/tangent consistency for every new element tangent, the tetra and
+  sh3n membrane patch tests (exact), the thick-sh3n and beam cantilevers
+  against their Timoshenko closed forms, the plane-stress/truss Johnson–Cook
+  closed forms with quadratic Newton tails, the damped SDOF against the
+  exponential envelope + damped period with the dissipation ledger closing
+  the balance at round-off, the elastica step-cut/step-grow pair for the
+  automatic dt control, and the Euler column through the /IMPL/BUCKL card.
 * **Implicit dynamics validations (M10)** — the SDOF free vibration against
   Newmark's closed-form period dispersion (ω dt)²/12 (quantitatively, with
   the 4× error drop when dt halves), unconditional stability far beyond the

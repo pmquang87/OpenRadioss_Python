@@ -640,10 +640,28 @@ def forces(group, x, v, vr, dt, fint, mint):
 # about its normal — the standard shell drilling-DOF penalty; the residual
 # never loads it, so it stays zero and does not affect the solution).
 #
-# LAW2 shell (through-thickness elastoplastic layers) tangent is DEFERRED —
-# M8 ports the LAW1 elastic shell tangent (see PORTING_GUIDE). The geometric /
-# initial-stress stiffness is the M9 addition — ``kgeo()`` below, added to
-# this tangent by the assembler when /IMPL/NONLIN is active.
+# LAW2 shells (M11 — this removes the M8 deferral): the constant-C membrane/
+# bending blocks above are the CLOSED-FORM thickness integration of an
+# elastic layer stack (sum w_k = t, sum w_k z_k^2 = t^3/12 for the Gauss
+# stations). With elastoplastic layers each station carries its OWN
+# consistent plane-stress tangent D_k (materials.shell_layer_tangent — the
+# algorithmic tangent of the Iplas=2 radial projection, derived in
+# law02.consistent_shell_tangent), so the tangent integrates the SAME
+# quadrature the force path uses for the resultants:
+#
+#   A_m = sum_k w_k D_k     B_m = sum_k w_k z_k D_k    D_m = sum_k w_k z_k^2 D_k
+#   K   = A [ B_mem^T A_m B_mem + B_mem^T B_m B_bend + B_bend^T B_m B_mem
+#             + B_bend^T D_m B_bend ] + shear + hourglass
+#
+# — the membrane/bending COUPLING block B_m switches on exactly when the
+# stack yields asymmetrically through the thickness (a plastified outer
+# fiber shifts the section's neutral surface), which the constant-C form
+# cannot represent. LAW1 keeps the closed-form path bit-for-bit (M8
+# contract). The transverse shear stays elastic (the force path integrates
+# it elastically too) and the BLT84 hourglass keeps its elastic modulus (a
+# stabilization, not a constitutive term). The geometric / initial-stress
+# stiffness is the M9 addition — ``kgeo()`` below, added to this tangent by
+# the assembler when /IMPL/NONLIN is active.
 
 #: drilling-stiffness fraction of the bending stiffness (conditioning only —
 #: the drilling DOF carries no load on the M8 validations, so the exact value
@@ -652,7 +670,8 @@ _DRILL_COEF = 1.0e-3
 
 
 def tangent(group, x, epsp_incr=None):
-    """Element tangent stiffness for the whole shell group (LAW1 elastic).
+    """Element tangent stiffness for the whole shell group (LAW1 elastic
+    closed-form; LAW2 per-layer consistent integration — see the note above).
 
     Returns ``(ke, edofs)``:
 
@@ -661,8 +680,9 @@ def tangent(group, x, epsp_incr=None):
     * ``edofs`` (n, 24) global scalar DOF slot ids (node*6 + component) in the
       ``implicit.dofmap`` numbering — 0,1,2 = ux,uy,uz ; 3,4,5 = rx,ry,rz.
 
-    ``epsp_incr`` is accepted for signature parity with the solid tangent and
-    ignored (elastic shell)."""
+    ``epsp_incr`` (n, nip) is the increment's PER-LAYER plastic-strain step
+    (None / zeros = all elastic), used by the LAW2 consistent layer
+    tangents; LAW1 slices ignore it."""
     st = group.state
     conn = group.conn
     n = group.n
@@ -696,19 +716,46 @@ def tangent(group, x, epsp_incr=None):
     # ---- constitutive blocks (membrane + bending + shear) -----------------
     Kl = np.zeros((n, 20, 20))
     kdrill = np.zeros(n)
-    for sl, mat, prop in st["slices"]:
-        C = materials.shell_membrane_tangent(mat)        # (3, 3) plane stress
+    for isl, (sl, mat, prop) in enumerate(st["slices"]):
         t_sl = thick[sl]
         A_sl = area[sl]
         kGt = SHEAR_FACTOR * mat.G * t_sl                # transverse shear
         Bms, Bbs, Bss = Bm[sl], Bb[sl], Bs[sl]
-        # membrane: A t B_m^T C B_m
-        Kl[sl] += (A_sl * t_sl)[:, None, None] * np.einsum(
-            "nai,ab,nbj->nij", Bms, C, Bms)
-        # bending: A t^3/12 B_b^T C B_b
-        Kl[sl] += (A_sl * t_sl ** 3 / 12.0)[:, None, None] * np.einsum(
-            "nai,ab,nbj->nij", Bbs, C, Bbs)
-        # shear: A kGt B_s^T B_s
+        if mat.law == 1:
+            # LAW1: closed-form thickness integration of the constant C —
+            # the M8 elastic path, kept bit-for-bit
+            C = materials.shell_membrane_tangent(mat)    # (3, 3) plane stress
+            # membrane: A t B_m^T C B_m
+            Kl[sl] += (A_sl * t_sl)[:, None, None] * np.einsum(
+                "nai,ab,nbj->nij", Bms, C, Bms)
+            # bending: A t^3/12 B_b^T C B_b
+            Kl[sl] += (A_sl * t_sl ** 3 / 12.0)[:, None, None] * np.einsum(
+                "nai,ab,nbj->nij", Bbs, C, Bbs)
+        else:
+            # M11 elastoplastic layers: per-layer consistent tangents D_k
+            # integrated with the FORCE PATH's own quadrature (see the
+            # module note — A_m/B_m/D_m thickness moments; the B_m coupling
+            # block carries a plastified stack's neutral-surface shift)
+            zrel, wrel = st["zw"][isl]
+            m = sl.stop - sl.start
+            Am_ = np.zeros((m, 3, 3))
+            Bm_ = np.zeros((m, 3, 3))
+            Dm_ = np.zeros((m, 3, 3))
+            for k in range(len(zrel)):
+                zk = zrel[k] * t_sl
+                wk = wrel[k] * t_sl
+                dep_k = None if epsp_incr is None else epsp_incr[sl, k]
+                Dk = materials.shell_layer_tangent(
+                    mat, st["sig"][sl, k, :], st["epsp"][sl, k], dep_k)
+                Am_ += wk[:, None, None] * Dk
+                Bm_ += (wk * zk)[:, None, None] * Dk
+                Dm_ += (wk * zk * zk)[:, None, None] * Dk
+            Kl[sl] += A_sl[:, None, None] * (
+                np.einsum("nai,nab,nbj->nij", Bms, Am_, Bms)
+                + np.einsum("nai,nab,nbj->nij", Bms, Bm_, Bbs)
+                + np.einsum("nai,nab,nbj->nij", Bbs, Bm_, Bms)
+                + np.einsum("nai,nab,nbj->nij", Bbs, Dm_, Bbs))
+        # shear: A kGt B_s^T B_s (elastic, matching the force path)
         Kl[sl] += (A_sl * kGt)[:, None, None] * np.einsum(
             "nai,naj->nij", Bss, Bss)
         # drilling penalty scale (bending stiffness order, see module note)

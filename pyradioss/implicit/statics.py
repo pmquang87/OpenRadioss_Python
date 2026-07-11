@@ -131,12 +131,19 @@ its /IMPL/NONLIN controls; the port exposes it as the minimal sub-card
 
 Implicit DYNAMICS landed as M10 (``implicit/dynamics.py`` — /IMPL/DYNA,
 Newmark/HHT on top of this statics core: each time step reuses this
-module's residual evaluation and commit machinery plus inertia).
+module's residual evaluation and commit machinery plus inertia). M11 made
+the element-tangent set COMPLETE (tetra4 / sh3n / beam / spring joined
+hexa8 / BT4 / truss — see the element modules), added the LAW2 shell/truss
+consistent tangents, the automatic step control (``StepControl`` below —
+imp_dt.F) and the /IMPL/BUCKL engine card (``_run_buckling`` below).
+Total-form elements (the spring) and the LAW2 truss carry their own
+implicit residual, ``implicit_internal_forces``, dispatched by
+``_internal_forces`` instead of forces() — see their module notes.
 
 Still DEFERRED (documented, not half-done — see the package docstring and
-PORTING_GUIDE): contact & general constraints in the tangent, follower-load
-(pressure) stiffness, LAW2 shell / truss tangents, tetra4 / sh3n / beam /
-spring tangents.
+PORTING_GUIDE): contact & general constraints in the tangent (the M12
+candidate), follower-load (pressure) stiffness, LAW27/36/42 and LAW2-beam
+tangents, rate devices under implicit (disabled loudly).
 """
 
 from __future__ import annotations
@@ -151,6 +158,75 @@ from ..engine.kinematics import LoadsAndConstraints
 from .assembly import assemble
 from .dofmap import DofMap
 from .linsolve import LinearSolver
+
+
+class StepControl:
+    """Automatic implicit step-size control (M11).
+
+    Fortran origin: ``engine/source/implicit/imp_dt.F`` — ``IMP_DTN``, the
+    routine ``imp_solv.F`` calls after every increment attempt:
+
+    * on NON-convergence (IMCONV < 0) the driver rolls the state back
+      (``TT = TT - DT2``, ``NCYCLE = NCYCLE - 1``), multiplies the step by
+      SCAL_DTN (bounded below by DT_MIN) and RETRIES — it stops only when
+      DT_IMP hits DT_MIN (``IMP_STOP``);
+    * on convergence, the IDTC = 1 branch GROWS the step by SCAL_DTP when
+      the increment needed at most NL_DTP Newton iterations, capped at
+      DT_MAX — the "grow back after easy steps" recovery.
+
+    This is exactly the arc-length radius-adaptation idea applied to plain
+    load/time stepping, and the port drives BOTH the statics load
+    increments and the dynamics time steps through this one object. The
+    IDTC = 2/3 branches (displacement-norm / Riks step control) are
+    deferred (PORTING_GUIDE M11).
+
+    Card mapping (/IMPL/DT/1: NL_DTP SCAL_DTP NL_DTN SCAL_DTN, /IMPL/DT/STOP:
+    DT_MIN DT_MAX — freimpl.F): the original's DEFAULTS for these live in an
+    engine-init routine, not the reader, so the port sets its own DOCUMENTED
+    defaults: target iterations 6, growth 1.1, cut 0.5, DT_MAX = the
+    /IMPL/DTINI step (the step grows back toward what the user asked for,
+    never beyond), DT_MIN = 1e-4 of it (≈13 halvings — a bounded retry
+    budget by construction). The control is ALWAYS ON, mirroring the source
+    (IMP_DTN cuts regardless of /IMPL/DT); the cards only tune it.
+    """
+
+    def __init__(self, controls, dt_ini, log, what="TIME STEP"):
+        self.itw = max(1, int(getattr(controls, "impl_dt_itw", 6)))
+        self.up = max(1.0, float(getattr(controls, "impl_dt_scaleup", 1.1)))
+        self.dn = min(0.99, max(0.01, float(
+            getattr(controls, "impl_dt_scaledn", 0.5))))
+        dmax = float(getattr(controls, "impl_dt_max", 0.0))
+        dmin = float(getattr(controls, "impl_dt_min", 0.0))
+        self.dt = float(dt_ini)
+        self.dt_max = dmax if dmax > 0.0 else float(dt_ini)
+        self.dt_min = dmin if dmin > 0.0 else 1e-4 * float(dt_ini)
+        self.total_cuts = 0
+        self.log = log
+        self.what = what
+
+    def cut(self):
+        """Halt-or-retry decision after a failed increment: shrink the step
+        and return True (retry), or return False when the step already sits
+        at DT_MIN — the IMP_STOP condition."""
+        if self.dt <= self.dt_min * (1.0 + 1e-12):
+            return False
+        old = self.dt
+        self.dt = max(self.dt * self.dn, self.dt_min)
+        self.total_cuts += 1
+        # the IMP_DTN listing line ("--NEXT TIMESTEP IS DECREASED BY--")
+        self.log.info(f"     --{self.what} DECREASED {old:.5E} -> "
+                      f"{self.dt:.5E}, RETRYING (imp_dt.F)")
+        return True
+
+    def converged(self, iterations):
+        """Post-convergence growth (IDTC = 1): an easy step (<= target
+        iterations) grows the step back toward DT_MAX."""
+        if iterations <= self.itw and self.dt < self.dt_max:
+            old = self.dt
+            self.dt = min(self.dt * self.up, self.dt_max)
+            if self.dt != old:
+                self.log.info(f"     --{self.what} INCREASED {old:.5E} -> "
+                              f"{self.dt:.5E} (imp_dt.F)")
 
 
 @dataclass
@@ -171,6 +247,10 @@ class ImplicitResult:
     increments: List[IncrementResult] = field(default_factory=list)
     converged: bool = True
     stop_reason: str = ""
+    #: /IMPL/BUCKL (M11): critical-load multipliers of the current load and
+    #: the matching (du, dur) mode shapes — None when the card is absent.
+    buckling_factors: object = None
+    buckling_modes: object = None
 
 
 # ----------------------------------------------------------------------------
@@ -199,6 +279,22 @@ def _restore(group, snap):
                 st[k][kk][...] = vv
         else:
             st[k][...] = v
+
+
+def _epsp_increments(model, epsp0):
+    """Plastic-strain increment of the current step, per element group, for
+    the LAW2 CONSISTENT tangents (M8 solids; M11 shells layer-wise and the
+    truss): group name -> (element state ``epsp`` now) - (``epsp`` at the
+    committed start of the increment). Shapes follow each group's own state
+    — (n,) for solids/trusses, (n, nip) for shell layers — and each kernel
+    slices its own. Groups without a plasticity state contribute nothing
+    (their kernels ignore the argument)."""
+    out = {}
+    for name, group in model.element_groups():
+        e0 = epsp0.get(name)
+        if e0 is not None and "epsp" in group.state:
+            out[name] = group.state["epsp"] - e0
+    return out
 
 
 # ----------------------------------------------------------------------------
@@ -234,6 +330,14 @@ def _internal_forces(model, x_ref, u, ur, committed, nlgeom=False):
     mint = np.zeros((n, 3))
     if not nlgeom:
         for name, group in model.element_groups():
+            # TOTAL-form kernels (the TYPE4 spring, M11) supply their own
+            # implicit residual — the pseudo-velocity trick relies on
+            # RATE-form state accumulation they do not have (see
+            # spring.implicit_internal_forces).
+            own = getattr(KERNELS[name], "implicit_internal_forces", None)
+            if own is not None:
+                own(group, x_ref, u, ur, fint, mint, nlgeom=False)
+                continue
             KERNELS[name].forces(group, x_ref, u, ur, 1.0, fint, mint)
             # some kernels add a STATIC stabilization the (dynamics-tuned)
             # force path cannot supply — the solid stiffness-hourglass, whose
@@ -251,6 +355,12 @@ def _internal_forces(model, x_ref, u, ur, committed, nlgeom=False):
     junk_f = np.zeros((n, 3))
     junk_m = np.zeros((n, 3))
     for name, group in model.element_groups():
+        # total-form kernels evaluate directly at the end configuration
+        # (exact — no midpoint objectivity step needed; see the note above)
+        own = getattr(KERNELS[name], "implicit_internal_forces", None)
+        if own is not None:
+            own(group, x_ref, u, ur, fint, mint, nlgeom=True)
+            continue
         # stress/hourglass-state update at the midpoint configuration;
         # the returned force (midpoint-configuration) is discarded
         KERNELS[name].forces(group, x_mid, u, ur, 1.0, junk_f, junk_m)
@@ -288,9 +398,9 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
     log.info("\n     IMPLICIT STATIC ANALYSIS (M8/M9)")
     log.info("     --------------------------------")
 
-    # fail fast on un-ported element types (rather than mid-Newton): the
-    # implicit tangent covers the 8-node solid, the 4-node shell and (M9)
-    # the 2-node truss
+    # fail fast on un-ported element types (rather than mid-Newton): since
+    # M11 every element family carries a tangent, but the gate stays for
+    # any future family
     from .assembly import _TANGENT_KERNELS
     unsupported = [name for name, _ in model.element_groups()
                    if name not in _TANGENT_KERNELS]
@@ -317,6 +427,7 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
                 nvisc += 1
     if nvisc:
         log.info(" BULK VISCOSITY (qa/qb) . . . . . . . : DISABLED (STATICS)")
+    _warn_spring_dashpot(model, log)
 
     # /IMPDISP prescribed displacements: known DOFs whose value ramps with the
     # load factor. They are condensed out of the equations (like /BCS) but
@@ -361,24 +472,37 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
         _run_arclength(model, controls, log, dof, loads, solver, committed,
                        x_ref, imposed, dlam, lam_end, result)
         model.implicit_result = result
+        if getattr(ip, "impl_buckl", 0) and result.converged:
+            # /IMPL/BUCKL/2 flavour: extraction about the traced final state
+            _run_buckling(model, ip, log, result)
         _final_summary(model, result, dof, log)
         return model
 
+    # automatic increment control (M11, imp_dt.F): cut-and-retry on a failed
+    # increment, grow back toward the /IMPL/DTINI size on easy ones
+    ctrl = StepControl(ip, dlam, log, what="LOAD INCREMENT")
     inc_no = 0
     while lam < lam_end * (1.0 - 1e-12):
-        lam_new = min(lam + dlam, lam_end)
+        lam_new = min(lam + ctrl.dt, lam_end)
         inc_no += 1
         inc = _solve_increment(model, controls, log, dof, loads, solver,
                                committed, x_ref, lam, lam_new, imposed, nlg)
         result.increments.append(inc)
         if not inc.converged:
+            log.info(f" {inc_no:9d} {lam_new:13.5E} {inc.iterations:6d} "
+                     f"{inc.residuals[-1]:14.5E}   *** NO CONVERGENCE")
+            # a failed increment left model.x untouched and the element
+            # buffers are re-based from ``committed`` on the next residual
+            # evaluation — cutting the increment and retrying is safe
+            if ctrl.cut():
+                continue
             result.converged = False
             result.stop_reason = (
                 f"NEWTON DID NOT CONVERGE AT LOAD FACTOR {lam_new:.4E} "
                 f"IN {ip.impl_max_iter} ITERATIONS "
-                f"(||R|| = {inc.residuals[-1]:.4E})")
-            log.info(f" {inc_no:9d} {lam_new:13.5E} {inc.iterations:6d} "
-                     f"{inc.residuals[-1]:14.5E}   *** NO CONVERGENCE")
+                f"(||R|| = {inc.residuals[-1]:.4E}) EVEN AT THE MINIMUM "
+                f"INCREMENT {ctrl.dt_min:.3E} "
+                f"({ctrl.total_cuts} automatic cuts — imp_dt.F control)")
             break
         log.info(f" {inc_no:9d} {lam_new:13.5E} {inc.iterations:6d} "
                  f"{inc.residuals[-1]:14.5E}   converged")
@@ -390,10 +514,52 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
         if nlg:
             x_ref = model.x.copy()
         lam = lam_new
+        ctrl.converged(inc.iterations)
 
     model.implicit_result = result
+    if getattr(ip, "impl_buckl", 0) and result.converged:
+        _run_buckling(model, ip, log, result)
     _final_summary(model, result, dof, log)
     return model
+
+
+def _run_buckling(model, ip, log, result):
+    """/IMPL/BUCKL (M11): linearized buckling extraction on the CONVERGED
+    prestressed state — the engine-card wiring of ``buckling.py``
+    (imp_buck.F). The static increments above played the role of the
+    original's prestress solution; this reports the critical-load
+    multipliers of the CURRENT load in the imp_buck.F listing flavour and
+    stores (factors, modes) on the result object."""
+    from .buckling import buckling_factors
+    nev = max(1, int(getattr(ip, "impl_buckl_nmode", 4)))
+    log.info("\n     ** BUCKLING MODES COMPUTATION **        (/IMPL/BUCKL)")
+    factors, modes = buckling_factors(model, nev=nev, log=None)
+    result.buckling_factors = factors
+    result.buckling_modes = modes
+    log.info(f"      NUMBER OF BUCKLING CRITICAL LOADS  {len(factors):10d}")
+    log.info("      CRITICAL LOADS:")
+    log.info("              NUMBER  CRITICAL LOAD")
+    for i, f in enumerate(factors):
+        log.info(f"          {i + 1:10d}  {f:12.5E}")
+    if len(factors) == 0:
+        log.info("          (no positive multiplier — the current stress "
+                 "state does not destabilize under this load direction)")
+
+
+def _warn_spring_dashpot(model, log):
+    """The TYPE4 spring dashpot (c > 0) is a RATE device: the implicit
+    residual never evaluates it (spring.implicit_internal_forces — the
+    total-form elastic force only), consistent with the bulk-viscosity /
+    LAW2-rate-term convention (statics carries no rate effects; under
+    dynamics feeding it the pseudo-velocity du/1 would be wrong by the step
+    magnitude). Deferred explicitly (PORTING_GUIDE M11) — warn, never
+    silently."""
+    g = getattr(model, "springs", None)
+    if g is not None and g.n and np.any(g.state["cdamp"] > 0.0):
+        log.warning(
+            "/PROP/SPRING dashpot (c > 0) is DEFERRED under the implicit "
+            "solver — the damping force is disabled and the spring runs "
+            "elastic (see PORTING_GUIDE M11)", "IMPL")
 
 
 def _resolve_imposed(model, log):
@@ -471,12 +637,10 @@ def _solve_increment(model, controls, log, dof, loads, solver,
             inc.converged = True
             break
 
-        # tangent: plastic-strain increment of this step (solids), used by
-        # the LAW2 consistent tangent; elastic groups ignore it
-        epsp_incr = {}
-        for name, group in model.element_groups():
-            if name == "bricks" and epsp0[name] is not None:
-                epsp_incr[name] = group.state["epsp"] - epsp0[name]
+        # tangent: plastic-strain increment of this step (solids, shell
+        # layers, trusses), used by the LAW2 consistent tangents; elastic
+        # groups ignore it
+        epsp_incr = _epsp_increments(model, epsp0)
         # linearize where the residual lives: the committed frame for the
         # small-strain path, the TRIAL configuration (with the geometric
         # stiffness added) for the nonlinear-geometry path
@@ -704,10 +868,7 @@ def _solve_increment_arc(model, ip, dof, solver, committed, x_ref, lam, dl,
             inc.converged = True
             break
 
-        epsp_incr = {}
-        for name, group in model.element_groups():
-            if name == "bricks" and epsp0[name] is not None:
-                epsp_incr[name] = group.state["epsp"] - epsp0[name]
+        epsp_incr = _epsp_increments(model, epsp0)
         K = assemble(model, dof, x_ref + u, epsp_incr, kgeo=True)
         du_bar = solver.solve(K, R)
         du_t = solver.solve(K, q_eq)
