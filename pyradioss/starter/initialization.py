@@ -517,7 +517,17 @@ def initialize_rigid_bodies(model: Model, log: MessageLog) -> None:
       regularized with a small isotropic term and flagged: the rotation
       rate about the mass line is then meaningless but stays bounded.
     """
-    seen = np.zeros(model.numnod, dtype=bool)
+    # one kinematic condition per DOF: a node SLAVE of two bodies (or a
+    # node serving as MASTER twice) is an error. A node that is the MASTER
+    # of one body and a SLAVE of another is a rigid-body CHAIN (M14): the
+    # original starter resolves such nestings into a PARENT_OF hierarchy
+    # (rbody_part_modif.F90); this port carries the bodies as written —
+    # the IMPLICIT solver resolves the chain by transform substitution
+    # (implicit/constraints.py), the EXPLICIT engine refuses it loudly
+    # (engine/rigid_body.build_rigid_bodies — its per-body 6-DOF
+    # integrator has no nesting order).
+    seen_slave = np.zeros(model.numnod, dtype=bool)
+    seen_master = np.zeros(model.numnod, dtype=bool)
     for rb in model.rbodies:
         who = f"/{rb.kind}/{rb.id}"
         try:
@@ -533,13 +543,16 @@ def initialize_rigid_bodies(model: Model, log: MessageLog) -> None:
             continue
         rb.slaves = g.node_idx[g.node_idx != rb.master]
 
-        # one kinematic condition per node: overlapping bodies are an error
-        body_nodes = np.concatenate([[rb.master], rb.slaves])
-        if np.any(seen[body_nodes]):
+        if np.any(seen_slave[rb.slaves]) or seen_master[rb.master]:
             log.error(f"{who}: node(s) already belong to another rigid "
                       f"body", "RBODY CHECK")
             continue
-        seen[body_nodes] = True
+        if seen_master[rb.slaves].any() or seen_slave[rb.master]:
+            log.info(f"     {who}: rigid-body CHAIN (a master of one body "
+                     f"is a slave of another) — supported by the IMPLICIT "
+                     f"solver only (M14)")
+        seen_slave[rb.slaves] = True
+        seen_master[rb.master] = True
 
         # mass sums: slaves + the master if it is structural (real mass).
         # Frozen (1e30) masses are the mass-check placeholder for nodes no

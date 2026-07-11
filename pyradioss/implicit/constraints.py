@@ -113,10 +113,51 @@ Geometry modes
   order as the Hughes–Winget incremental-objectivity error already
   accepted per increment.
 
-Deferred loudly (PORTING_GUIDE M12): constraint CHAINS (a dependent DOF of
-one constraint appearing in another — e.g. an /MPC row on a rigid-body
-slave, an /RBE3 master inside an /RBODY: refused with a clear error, the
-original resolves some of these orderings), /IMPDISP or /IMPVEL on
+Constraint CHAINS (M14)
+-----------------------
+A chain is a MASTER DOF of one constraint being DEPENDENT in another —
+rigid-on-rigid (/RBODY or /RBE2 whose master node is a slave of another
+body), an /MPC row written on rigid slaves, an /RBE3 whose master cloud
+sits inside a body, a tie whose main segment corners are body slaves.
+The ORIGINAL resolves such nestings in the Starter: for part-based rigid
+bodies ``rbody_part_modif.F90`` (called from ``hm_read_rbody.F``) builds
+an explicit PARENT_OF hierarchy — overlapping slaves are removed from the
+child and the child's MAIN node is inserted in the parent's slave list
+instead, so the engine only ever sees resolved one-level bodies; the
+implicit condensations (RBY_IMP1 …) then run on the resolved sets. The
+port keeps the constraints as WRITTEN and resolves the chain in the
+TRANSFORM instead: conceptually T = T1 · T2 · … in topological order
+(every factor eliminates one constraint's dependents), implemented as a
+recursive SUBSTITUTION when T is assembled — a constraint row whose
+master term lands on a DOF that is itself dependent in another row gets
+that row substituted in place (depth-first, memoized), until every term
+is independent. The result is exactly the product transform, without ever
+forming the factors. Composition order therefore never needs a global
+sort: the DFS follows the dependency arrows wherever they point, and a
+genuinely CIRCULAR set (body A's master a slave of B while B's master is
+a slave of A) is detected as a DFS back-edge and REFUSED loudly — the
+original has no such configuration either (its hierarchy is a tree by
+construction).
+
+Where the frame re-linearization happens under NLGEOM: every constraint's
+rows are linearized at the SAME committed frame x_ref (the arms, fits and
+weights all read x_ref), and the whole substitution is re-run inside
+``build()`` on every committed frame — so the chained transform is always
+the product of factors linearized at ONE consistent configuration, never
+a mix of frames. The commit PLACEMENT (below) walks the chain in
+topological order — parents place their slaves (including a child body's
+master) exactly BEFORE the child places its own slaves from that placed
+master, so the exactness of the Rodrigues re-placement survives nesting;
+the arms are always measured on the committed (pre-increment) geometry
+snapshot, not on partially-placed coordinates.
+
+What stays refused is the genuine CONFLICT, not the chain: one DOF
+DEPENDENT in two constraints at once (a node slave of two rigid bodies,
+tied twice…). The original MERGES some of those (the rbody_part_modif
+overlap removal); the port refuses them loudly — merging would silently
+change the model.
+
+Deferred loudly (PORTING_GUIDE M12/M14): /IMPDISP or /IMPVEL on
 constraint nodes (drive a free master with forces, or the structure), the
 TYPE2 rotational tie / offset-moment branch, RBE3 per-set weights.
 """
@@ -160,18 +201,27 @@ class ImplicitConstraints:
         self.master_nodes = np.zeros(n, dtype=bool)
 
         # ---- /RBODY + /RBE2 (rby_imp0.F / rbe2_imp0.F) --------------------
+        # M14: a master that is DEPENDENT elsewhere (rigid-on-rigid: the
+        # child body rides its parent — rbody_part_modif.F90's PARENT_OF
+        # hierarchy, resolved here by transform substitution instead) is a
+        # CHAIN and is allowed; a SLAVE claimed by two constraints is a
+        # CONFLICT (two rows for one DOF) and stays refused.
         self.rigid = []
         for rb in model.rbodies:
             if rb.slaves is None:
                 continue
             m, slaves = rb.master, rb.slaves
             who = f"/{rb.kind}/{rb.id}"
-            if self.dep_nodes[m] or np.any(self.dep_nodes[slaves]):
+            if np.any(self.dep_nodes[slaves]):
                 raise NotImplementedError(
-                    f"{who}: node(s) already dependent in another "
-                    f"constraint — chained kinematic constraints are "
-                    f"DEFERRED under the implicit solver (PORTING_GUIDE "
-                    f"M12)")
+                    f"{who}: slave node(s) already DEPENDENT in another "
+                    f"constraint — one DOF cannot carry two constraint "
+                    f"rows (conflicting/over-constrained sets are refused; "
+                    f"acyclic constraint CHAINS are supported since M14)")
+            if np.any(np.asarray(slaves) == m):
+                raise NotImplementedError(
+                    f"{who}: the master node is in its own slave list — a "
+                    f"circular constraint")
             self.rigid.append(rb)
             self.dep_nodes[slaves] = True
             self.master_nodes[m] = True
@@ -211,12 +261,15 @@ class ImplicitConstraints:
             off = t2.off_loc[act]
             if len(snode) == 0:
                 continue
-            if np.any(self.dep_nodes[snode]) or \
-                    np.any(self.master_nodes[snode]):
+            # M14: a tied secondary that is a MASTER elsewhere (e.g. a
+            # rigid-body master spot-welded onto a panel) is a CHAIN —
+            # allowed; a secondary already DEPENDENT is a conflict.
+            if np.any(self.dep_nodes[snode]):
                 raise NotImplementedError(
                     f"/INTER/TYPE2/{itf.id}: tied secondary node(s) already "
-                    f"belong to another constraint — chained kinematic "
-                    f"constraints are DEFERRED (PORTING_GUIDE M12)")
+                    f"DEPENDENT in another constraint — one DOF cannot "
+                    f"carry two constraint rows (conflicts refused; "
+                    f"acyclic chains supported since M14)")
             self.tied.append((snode, seg, w, off))
             self.dep_nodes[snode] = True
             self.master_nodes[np.unique(seg)] = True
@@ -236,12 +289,17 @@ class ImplicitConstraints:
         for r3 in model.rbe3:
             from ..engine.rbe3 import Rbe3Constraint
             c = Rbe3Constraint(r3, model, log)
-            if self.dep_nodes[c.ref] or self.master_nodes[c.ref] or \
-                    np.any(self.dep_nodes[c.masters]):
+            # M14: RBE3 masters inside a rigid body (or tied) are a CHAIN —
+            # allowed by substitution — and so is the reference node
+            # serving as a MASTER elsewhere (an /RBE2 hanging off an /RBE3
+            # reference: the classic load spreader). Only the reference
+            # being DEPENDENT twice is a conflict.
+            if self.dep_nodes[c.ref]:
                 raise NotImplementedError(
-                    f"/RBE3/{r3.id}: node(s) already belong to another "
-                    f"constraint — chained kinematic constraints are "
-                    f"DEFERRED (PORTING_GUIDE M12)")
+                    f"/RBE3/{r3.id}: the reference node is already "
+                    f"DEPENDENT in another constraint — one DOF cannot "
+                    f"carry two constraint rows (conflicts refused; "
+                    f"acyclic chains supported since M14)")
             self.rbe3.append(c)
             self.dep_nodes[c.ref] = True
             self.master_nodes[c.masters] = True
@@ -303,6 +361,15 @@ class ImplicitConstraints:
         def add_row(e, terms):
             if e < 0:
                 return               # slot condensed by a (master) BCS
+            if dep[e]:
+                # two constraints writing a row for one DOF is a CONFLICT
+                # (not a chain): the scan-time checks catch the node-level
+                # cases; this guards the equation-level remainder (M14)
+                raise NotImplementedError(
+                    "conflicting kinematic constraints: one DOF received "
+                    "two constraint rows — over-constrained sets are "
+                    "refused (acyclic chains are supported, PORTING_GUIDE "
+                    "M14)")
             dep[e] = True
             rows.append((e, [(me, c) for (me, c) in terms
                              if me >= 0 and c != 0.0]))
@@ -356,25 +423,33 @@ class ImplicitConstraints:
                 add_row(_eqof(dof, np.array([c3.ref]), 3 + c)[0], terms_r[c])
 
         # ---- MPC: eliminate the best-pivot column of each row ---------------
+        # (M14: dependent columns in an /MPC row — e.g. a row written on
+        # rigid slaves — are SUBSTITUTED through the constraint rows built
+        # above before the pivoting, so the elimination always happens in
+        # already-independent columns.)
         if self.mpc_rows:
             self._build_mpc_rows(dof, dep, rows, add_row)
 
-        # ---- chain check in equation space -----------------------------------
-        for e, terms in rows:
-            for me, c in terms:
-                if dep[me]:
-                    raise NotImplementedError(
-                        "chained kinematic constraints (a master DOF of one "
-                        "constraint is dependent in another) are DEFERRED "
-                        "under the implicit solver (PORTING_GUIDE M12)")
+        # ---- M14: resolve constraint CHAINS by substitution ------------------
+        # A row's master term landing on a DOF that is itself dependent in
+        # another row (rigid-on-rigid, /RBE3 masters in a body, an /MPC
+        # eliminating a body master…) gets that row substituted in place —
+        # the depth-first expansion below IS the product T = T1 · T2 · …
+        # of the per-constraint factors in topological order, without ever
+        # forming them (module docstring). A DFS back-edge = a genuinely
+        # CIRCULAR dependency and is refused loudly.
+        rowmap = {e: terms for e, terms in rows}
+        resolved = _fully_resolve(rowmap, dep)
 
         # ---- assemble T --------------------------------------------------------
         red = np.cumsum(~dep) - 1                 # independent eq -> column
         self.nred = int((~dep).sum())
         ind = np.where(~dep)[0]
         rr, cc, vv = list(ind), list(red[ind]), [1.0] * len(ind)
-        for e, terms in rows:
-            for me, c in terms:
+        for e in rowmap:
+            for me, c in resolved[e].items():
+                if c == 0.0:
+                    continue
                 rr.append(e)
                 cc.append(red[me])
                 vv.append(c)
@@ -416,12 +491,27 @@ class ImplicitConstraints:
         """Eliminate the /MPC rows: G over the numbered columns (fixed
         DOFs = ground, dropped), QR with column pivoting picks the
         dependent columns, u_d = -G_d^-1 G_f u_f. Redundant rows beyond
-        the rank are dropped with a warning (see module docstring)."""
+        the rank are dropped with a warning (see module docstring).
+
+        M14: a term on a DOF already DEPENDENT in a rigid body / tie /
+        RBE3 (an /MPC row written on rigid slaves) is SUBSTITUTED through
+        that constraint's resolved row first — the row then reads on the
+        chain's independent DOFs and the pivoting proceeds as before (the
+        MPC constrains the MASTERS through the body's kinematics, exactly
+        what the written row means physically)."""
         from scipy.linalg import qr
+        # resolved rows of the constraints built so far, for the M14
+        # dependent-column substitution (computed lazily — most decks
+        # have no MPC-on-dependent chains)
+        resolved_pre = None
         # unique (eq) columns over all rows
         col_eqs, G_rows = [], []
         for mid, idx, dofs, coefs in self.mpc_rows:
             terms = {}
+
+            def _accum(e, c):
+                terms[e] = terms.get(e, 0.0) + c
+
             for ni, d, c in zip(idx, dofs, coefs):
                 if d >= 3 and not (dof.has_rot[ni]
                                    or self.extra[ni, d]):
@@ -433,7 +523,15 @@ class ImplicitConstraints:
                 e = _eqof(dof, np.array([ni]), d)[0]
                 if e < 0:
                     continue                      # fixed = ground
-                terms[e] = terms.get(e, 0.0) + c
+                if dep[e]:
+                    # M14 chain: substitute the resolved constraint row
+                    if resolved_pre is None:
+                        resolved_pre = _fully_resolve(
+                            {ee: tt for ee, tt in rows}, dep)
+                    for me, cm in resolved_pre[e].items():
+                        _accum(me, c * cm)
+                else:
+                    _accum(e, c)
             if terms:
                 G_rows.append(terms)
             else:
@@ -464,11 +562,9 @@ class ImplicitConstraints:
             if rank < len(col_eqs) else np.zeros((rank, 0))
         for i in range(rank):
             e_dep = col_eqs[piv[i]]
-            if dep[e_dep]:
-                raise NotImplementedError(
-                    "/MPC row eliminates a DOF already dependent in "
-                    "another constraint — chained kinematic constraints "
-                    "are DEFERRED (PORTING_GUIDE M12)")
+            # unreachable since the M14 pre-substitution: every column is
+            # independent by construction when the pivoting runs
+            assert not dep[e_dep], "MPC pivot landed on a dependent column"
             terms = [(col_eqs[piv[rank + j]], C[i, j])
                      for j in range(C.shape[1])]
             add_row(e_dep, terms)
@@ -512,23 +608,115 @@ class ImplicitConstraints:
         dependent nodes EXACTLY (see module docstring — the linearized
         map stretches a rigid body by O(theta^2) per increment; the
         explicit modules place, never integrate). ``u``/``ur`` are the
-        increment just committed (model.x already holds x_old + u)."""
+        increment just committed (model.x already holds x_old + u).
+
+        M14 (chains): the placement walks the units in TOPOLOGICAL order
+        — a parent body places its slaves (including a child body's
+        master) exactly BEFORE the child places its own slaves from that
+        already-placed master — and the committed-frame arms are measured
+        on a SNAPSHOT of the pre-increment geometry (x_old = model.x - u),
+        never on partially-placed coordinates: for a chained master,
+        ``model.x[m]`` after the parent's placement no longer equals
+        ``x_old[m] + u[m]``, which is exactly the point. The chained
+        master's rotation increment ``ur[m]`` is its parent's (the
+        linearized rows carry theta_s = theta_M exactly — an equality, no
+        O(theta^2) term to fix)."""
         from ..engine.rigid_body import _exp_rotation
-        for rb in self.rigid:
-            m, slaves = rb.master, rb.slaves
-            th = ur[m]
-            R = _exp_rotation(th, 1.0)          # exp(skew(theta)), dt = 1
-            x_m_old = model.x[m] - u[m]
-            arms_old = (model.x[slaves] - u[slaves]) \
-                - x_m_old                        # committed-frame arms
-            model.x[slaves] = model.x[m] + arms_old @ R.T
-        from ..contact.inter_type2 import _segment_frames
-        for snode, seg, w, off in self.tied:
-            xs = model.x[seg]
-            t1, t2, nn = _segment_frames(xs)
-            model.x[snode] = (np.einsum("nk,nkb->nb", w, xs)
-                              + off[:, 0:1] * t1 + off[:, 1:2] * t2
-                              + off[:, 2:3] * nn)
+        x_old = model.x - u                      # committed (pre-increment)
+        for kind, unit in self._placement_order():
+            if kind == "rigid":
+                m, slaves = unit.master, unit.slaves
+                th = ur[m]
+                R = _exp_rotation(th, 1.0)      # exp(skew(theta)), dt = 1
+                arms_old = x_old[slaves] - x_old[m]
+                model.x[slaves] = model.x[m] + arms_old @ R.T
+            else:                                # tied
+                from ..contact.inter_type2 import _segment_frames
+                snode, seg, w, off = unit
+                xs = model.x[seg]
+                t1, t2, nn = _segment_frames(xs)
+                model.x[snode] = (np.einsum("nk,nkb->nb", w, xs)
+                                  + off[:, 0:1] * t1 + off[:, 1:2] * t2
+                                  + off[:, 2:3] * nn)
+
+    def _placement_order(self):
+        """Kahn topological sort of the placement units (rigid bodies +
+        tied sets; /RBE3 places nothing — its reference stays on the
+        linearized map, the M12 convention): unit V precedes unit U when
+        a MASTER node of U is a DEPENDENT of V. Cycles are impossible
+        here — ``build()`` already refused them."""
+        units = [("rigid", rb) for rb in self.rigid] \
+            + [("tied", t) for t in self.tied]
+        deps, masters = [], []
+        for kind, unit in units:
+            if kind == "rigid":
+                deps.append(np.asarray(unit.slaves))
+                masters.append(np.asarray([unit.master]))
+            else:
+                deps.append(np.asarray(unit[0]))
+                masters.append(np.unique(unit[1]))
+        n = len(units)
+        order, done = [], np.zeros(n, dtype=bool)
+        # edges: j -> i when masters[i] hits deps[j]
+        pred = [[j for j in range(n) if j != i
+                 and np.isin(masters[i], deps[j]).any()]
+                for i in range(n)]
+        while len(order) < n:
+            progress = False
+            for i in range(n):
+                if not done[i] and all(done[j] for j in pred[i]):
+                    order.append(units[i])
+                    done[i] = True
+                    progress = True
+            assert progress, "placement cycle (build() should have refused)"
+        return order
+
+
+def _fully_resolve(rowmap, dep):
+    """Resolve every constraint row of ``rowmap`` (dependent equation ->
+    [(master eq, coef), ...]) into INDEPENDENT terms only, substituting
+    rows for master terms that are themselves dependent — the transform
+    composition of a constraint CHAIN (M14, see the module docstring:
+    this depth-first substitution IS the product T = T1 · T2 · … in
+    topological order). Returns dependent eq -> {independent eq: coef}.
+
+    A DFS back-edge means the chain is CIRCULAR (body A rides body B
+    rides body A): refused loudly — no ordering of the factors exists,
+    and the original's PARENT_OF hierarchy is a tree by construction."""
+    resolved = {}
+    state = {}                       # eq -> 0 visiting / 1 done
+    import sys
+    limit = sys.getrecursionlimit()
+    if len(rowmap) + 100 > limit:
+        sys.setrecursionlimit(len(rowmap) + 200)
+
+    def rec(e):
+        if state.get(e) == 1:
+            return resolved[e]
+        if state.get(e) == 0:
+            raise NotImplementedError(
+                "CIRCULAR constraint chain detected (a dependency loop "
+                "among rigid bodies / ties / RBE3 / MPC rows): no "
+                "topological ordering of the condensation transforms "
+                "exists — break the loop in the model (PORTING_GUIDE "
+                "M14).")
+        state[e] = 0
+        out = {}
+        for me, c in rowmap[e]:
+            if c == 0.0:
+                continue
+            if dep[me]:
+                for me2, c2 in rec(me).items():
+                    out[me2] = out.get(me2, 0.0) + c * c2
+            else:
+                out[me] = out.get(me, 0.0) + c
+        state[e] = 1
+        resolved[e] = out
+        return out
+
+    for e in list(rowmap):
+        rec(e)
+    return resolved
 
 
 def _skew(v):

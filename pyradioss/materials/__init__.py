@@ -116,13 +116,16 @@ def shell_update(mat, sig, deps, epsp, dt, extra=None):
 # Consistent tangents for the implicit solver (M8)
 # ----------------------------------------------------------------------------
 
-def solid_tangent(mat, sig, epsp, epsp_incr):
+def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
     """Dispatch the (n, 6, 6) consistent solid tangent for the implicit
     solve. LAW1 returns the constant elastic C broadcast over the group;
     LAW2 returns the CONSISTENT (algorithmic) elastoplastic tangent of the
     radial return (see law02.consistent_solid_tangent for the derivation);
     LAW36 (M13) the same algebra with the hardening slope from the table's
-    local segment (law36.consistent_solid_tangent)."""
+    local segment (law36.consistent_solid_tangent); LAW42 (M14) the exact
+    spectral SPATIAL tangent of the total-form Ogden stress, built from
+    the trial deformation gradient the element passes in ``extra["F"]``
+    (law42.consistent_solid_tangent — pairs with the assembler's K_geo)."""
     n = sig.shape[0]
     if mat.law == 1:
         import numpy as np
@@ -134,10 +137,17 @@ def solid_tangent(mat, sig, epsp, epsp_incr):
     if mat.law == 36:
         return law36_tabulated.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr)
+    if mat.law == 42:
+        if extra is None or "F" not in extra:
+            raise NotImplementedError(
+                "LAW42 implicit tangent needs the deformation gradient — "
+                "supported for the solid kernels (hexa8/tetra4) under "
+                "/IMPL/NONLIN only (PORTING_GUIDE M14)")
+        return law42_ogden.consistent_solid_tangent(mat, extra["F"])
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
-        f"elastic, LAW2 and LAW36 elastoplastic are ported; LAW42 is "
-        f"deferred — see PORTING_GUIDE M13)")
+        f"elastic, LAW2 and LAW36 elastoplastic, LAW42 hyperelastic are "
+        f"ported; LAW27 is deferred — see PORTING_GUIDE M14)")
 
 
 def shell_membrane_tangent(mat):

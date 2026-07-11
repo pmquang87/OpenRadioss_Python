@@ -310,7 +310,7 @@ def _lumped_mass_eq(model, dof):
     return M
 
 
-def _disable_rate_devices(model, log):
+def _disable_rate_devices(model, log, nlg=False):
     """Statics/dynamics share the pseudo-velocity kernel drive, so the
     rate devices must not run (module docstring): zero the solid bulk
     viscosity like statics, and zero the LAW2 rate coefficient with an
@@ -337,11 +337,15 @@ def _disable_rate_devices(model, log):
                     f"DEFERRED under implicit dynamics — the term is "
                     f"disabled and the material runs rate-independent "
                     f"(see PORTING_GUIDE M10)", "IMPL/DYNA")
-    from .statics import _law36_static_curve, _warn_spring_dashpot
+    from .statics import (_check_total_form_geometry, _law36_static_curve,
+                          _warn_spring_dashpot)
     _warn_spring_dashpot(model, log)
     # M13: LAW36 multi-rate curve families run on the static curve only
     # (the pseudo-velocity drive would feed the family a step-size rate)
     _law36_static_curve(model, log)
+    # M14: LAW42 requires /IMPL/NONLIN (the total-form stress never sees
+    # the trial displacement on the frozen frame — see statics)
+    _check_total_form_geometry(model, nlg)
 
 
 # ----------------------------------------------------------------------------
@@ -422,7 +426,7 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
     log.info(f" GEOMETRY . . . . . . . . . . . . . . : "
              f"{'NONLINEAR (UPDATED-LAGRANGIAN + KGEO)' if nlg else 'LINEAR (SMALL STRAIN)'}")
 
-    _disable_rate_devices(model, log)
+    _disable_rate_devices(model, log, nlg)
 
     if model.rwalls:
         raise NotImplementedError(
