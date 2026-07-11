@@ -39,31 +39,40 @@ from ..elements import KERNELS
 from . import require_scipy
 from .dofmap import DofMap
 
-#: element kernels that expose an implicit ``tangent()`` (M8): the 8-node
-#: solid (hexa8) and the 4-node shell (BT4). Groups outside this set raise a
-#: clear error in ``assemble`` — the implicit path does not silently ignore
-#: un-ported element types (tetra4 / sh3n / beam / truss / spring tangents are
-#: deferred, see PORTING_GUIDE).
-_TANGENT_KERNELS = ("bricks", "shells")
+#: element kernels that expose an implicit ``tangent()``: the 8-node solid
+#: (hexa8) and the 4-node shell (BT4) since M8, the 2-node truss since M9
+#: (its exact corotational tangent is the arc-length validation element).
+#: Groups outside this set raise a clear error in ``assemble`` — the implicit
+#: path does not silently ignore un-ported element types (tetra4 / sh3n /
+#: beam / spring tangents are deferred, see PORTING_GUIDE).
+_TANGENT_KERNELS = ("bricks", "shells", "trusses")
 
 
-def element_triplets(name, group, x_geom, dof: DofMap, epsp_incr=None):
+def element_triplets(name, group, x_geom, dof: DofMap, epsp_incr=None,
+                     kgeo=False):
     """Return (rows, cols, vals) COO triplets in EQUATION space for one
     element group, by calling the kernel's ``tangent()`` and mapping its
     global-DOF addressing through the equation numbering.
 
-    ``x_geom`` is the geometry at which to linearize (the small-strain
-    reference frame — the same geometry the residual is evaluated at, so the
-    tangent is consistent with f_int). ``epsp_incr`` (per element) is the
-    plastic-strain increment of the current load step, forwarded to the
-    kernel for the LAW2 consistent tangent; ignored by elastic groups."""
+    ``x_geom`` is the geometry at which to linearize (the same geometry the
+    residual is evaluated at, so the tangent is consistent with f_int: the
+    committed reference frame for the M8 small-strain path, the CURRENT
+    trial geometry for the M9 nonlinear-geometry path). ``epsp_incr`` (per
+    element) is the plastic-strain increment of the current load step,
+    forwarded to the kernel for the LAW2 consistent tangent; ignored by
+    elastic groups. ``kgeo=True`` (M9, /IMPL/NONLIN) ADDS the geometric
+    (initial-stress) stiffness ``kernel.kgeo`` built from the current stress
+    state — the imp_kgeo branch of the original assembly."""
     kernel = KERNELS[name]
     if not hasattr(kernel, "tangent"):
         raise NotImplementedError(
-            f"element group '{name}' has no implicit tangent() — the M8 "
+            f"element group '{name}' has no implicit tangent() — the "
             f"implicit solver supports {_TANGENT_KERNELS}. Remove the "
             f"element type or run the explicit solver.")
     ke, edofs = kernel.tangent(group, x_geom, epsp_incr)
+    if kgeo:
+        kg, _ = kernel.kgeo(group, x_geom)
+        ke = ke + kg
     # ke: (n, d, d)   edofs: (n, d) global scalar slot ids
     n, d, _ = ke.shape
     # map each local DOF to its equation index (-1 = condensed/fixed)
@@ -77,22 +86,25 @@ def element_triplets(name, group, x_geom, dof: DofMap, epsp_incr=None):
             ke[keep].ravel())
 
 
-def assemble(model, dof: DofMap, x_geom, epsp_incr=None, log=None):
+def assemble(model, dof: DofMap, x_geom, epsp_incr=None, log=None,
+             kgeo=False):
     """Assemble the global tangent K (CSR, ndof x ndof) from every element
-    group's element tangent, linearized at geometry ``x_geom`` (the
-    small-strain reference frame). See the module docstring for the scatter.
+    group's element tangent, linearized at geometry ``x_geom``. See the
+    module docstring for the scatter.
 
     ``epsp_incr`` maps group name -> per-element plastic-strain increment
-    (for the LAW2 consistent tangent); ``None`` means all-elastic."""
+    (for the LAW2 consistent tangent); ``None`` means all-elastic.
+    ``kgeo=True`` adds the geometric (initial-stress) stiffness of each
+    element to its material+hourglass tangent (M9, /IMPL/NONLIN)."""
     sp, _ = require_scipy()
     rows, cols, vals = [], [], []
     for name, group in model.element_groups():
         if name not in _TANGENT_KERNELS:
             raise NotImplementedError(
-                f"element group '{name}' is not supported by the M8 implicit "
+                f"element group '{name}' is not supported by the implicit "
                 f"solver (supported: {_TANGENT_KERNELS}).")
         ei = None if epsp_incr is None else epsp_incr.get(name)
-        r, c, v = element_triplets(name, group, x_geom, dof, ei)
+        r, c, v = element_triplets(name, group, x_geom, dof, ei, kgeo)
         rows.append(r)
         cols.append(c)
         vals.append(v)
@@ -106,3 +118,34 @@ def assemble(model, dof: DofMap, x_geom, epsp_incr=None, log=None):
     if log is not None:
         log.info(f" TANGENT NNZ (ASSEMBLED)  . . . . . . : {K.nnz}")
     return K
+
+
+def assemble_kgeo(model, dof: DofMap, x_geom):
+    """Assemble the geometric (initial-stress) stiffness K_geo ALONE (CSR),
+    from the current element stress states at geometry ``x_geom`` — the
+    matrix pair (K_material, K_geo) is what the linearized-buckling
+    eigenproblem of ``implicit.buckling`` needs (imp_buck.F / /IMPL/BUCKL
+    analogue). The regular Newton path never calls this: it gets K_geo added
+    into ``assemble(..., kgeo=True)`` instead."""
+    sp, _ = require_scipy()
+    rows, cols, vals = [], [], []
+    for name, group in model.element_groups():
+        if name not in _TANGENT_KERNELS:
+            raise NotImplementedError(
+                f"element group '{name}' is not supported by the implicit "
+                f"solver (supported: {_TANGENT_KERNELS}).")
+        kernel = KERNELS[name]
+        kg, edofs = kernel.kgeo(group, x_geom)
+        n, d, _ = kg.shape
+        eq = dof.eq[edofs]
+        row_eq = np.repeat(eq[:, :, None], d, axis=2)
+        col_eq = np.repeat(eq[:, None, :], d, axis=1)
+        keep = (row_eq >= 0) & (col_eq >= 0)
+        rows.append(row_eq[keep].ravel())
+        cols.append(col_eq[keep].ravel())
+        vals.append(kg[keep].ravel())
+    rows = np.concatenate(rows) if rows else np.zeros(0, dtype=np.int64)
+    cols = np.concatenate(cols) if cols else np.zeros(0, dtype=np.int64)
+    vals = np.concatenate(vals) if vals else np.zeros(0)
+    return sp.coo_matrix((vals, (rows, cols)),
+                         shape=(dof.ndof, dof.ndof)).tocsr()

@@ -84,7 +84,10 @@ same names in comments.
 | `engine/source/implicit/imp_solv.F` (implicit driver + Newton loop) | `pyradioss/implicit/statics.py` | M8: load stepping, residual R = f_ext − f_int (reusing the explicit kernels), K Δu = R, convergence norms, iteration cap |
 | `engine/source/implicit/imp_dsolv*.F` (direct-solver interface) | `pyradioss/implicit/linsolve.py` | M8: `solve(K,R)` behind the M7 backend pattern — SuperLU default, optional CHOLMOD / MUMPS wrapped (not ported) with fallback |
 | element `KE` routines (e.g. `s8eoff.F` / shell `cmalpha`) + material `TANGENT` | `solid_hexa8.tangent`, `shell_bt4.tangent`, `materials.*_tangent` | M8: element tangent stiffness + the LAW1 elastic and LAW2 CONSISTENT (algorithmic) tangents (a NEW method alongside `forces()`; does not perturb the M7 force path) |
-| `engine/source/input/*` `/IMPL*` cards | `pyradioss/input/engine_keywords.py` (`/IMPL`) | M8: minimal implicit-static control (final load factor, increment size, Newton tolerances, linear-solver choice) |
+| `engine/source/input/*` `/IMPL*` cards | `pyradioss/input/engine_keywords.py` (`/IMPL`) | M8: minimal implicit-static control (final load factor, increment size, Newton tolerances, linear-solver choice); M9: `/IMPL/NONLIN[/SMDISP]` + `/IMPL/ARCL` |
+| `imp_solv.F` /IMPL/NONLIN branch (updated-Lagrangian step) + the `imp_kgeo` geometric-stiffness assembly in `imp_glob_k.F` | `statics.py` (nlgeom path) + `kgeo()` in `solid_hexa8` / `shell_bt4` / `truss` | M9: committed frame advances per increment; residual = midpoint (Hughes–Winget) stress update + end-configuration assembly (`static_internal_forces`); tangent += K_geo = ∫G^T[σ]G dV at the trial geometry |
+| the arc-length continuation of the implicit nonlinear driver (`imp_solv.F` family) | `statics.py` (`_run_arclength`) | M9: spherical Riks/Crisfield constraint, root selection by path continuation, adaptive radius, sign-following predictor; `/IMPL/ARCL` |
+| `engine/source/implicit/imp_buck.F` (/IMPL/BUCKL buckling eigensolver) | `pyradioss/implicit/buckling.py` | M9: (K_mat + μ K_geo)φ = 0 generalized eigenproblem on a pre-stressed state (library function; the engine card itself deferred) |
 
 ## 3. Conventions used in this port
 
@@ -170,6 +173,7 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | Engine: `/DT/NODA`, `/DT/NODA/CST` | ✅ | M6 — nodal time step dt_i = √(2Mᵢ/Kᵢ) with the element stiffness derived from the kernels' own dt claims (kᵢᵉ = 2mᵢᵉ/dt_e², = the element dt on uniform meshes) and the contact NEAR-spring stiffness accumulated in; CST adds mass to hold dT_min — added mass, its momentum and its kinetic energy are tracked, reported (1%-step announcements + termination summary) and the energy enters the balance; prescribed nodes (rigid-body members, tied secondaries, RBE3 dependents) are excluded (see engine/mass_scaling.py) |
 | Engine: `/STATE/DT` | 🟡 | M6 — periodic full restart snapshots refreshing `RunName_{nn}.rst` (crash recovery / early chaining); the original's .sta ASCII format ❌ (the pickle restart plays that role) |
 | Engine: `/IMPL` (+ `/IMPL/DTINI`, `/IMPL/NEWTON`, `/IMPL/LSOLVER`) | 🟡 | M8 — switches the run to the implicit-STATIC Newton driver (final /RUN "time" = load factor, increment size, Newton tolerance + iteration cap, direct-solver choice); `/IMPL/DYNA` (implicit dynamics) warns and is not ported; unknown sub-cards warn and skip like the rest of the reader |
+| Engine: `/IMPL/NONLIN[/N]` (`/SMDISP`), `/IMPL/ARCL` | ✅ | M9 — NONLIN switches the implicit run to NONLINEAR GEOMETRY (updated-Lagrangian frame + K_geo; the original card's large-displacement default), `/IMPL/NONLIN/SMDISP` keeps the M8 small-displacement path (the original's SMDISP), a numeric /N (solver-strategy pick) is accepted (the port always runs full Newton); ARCL card `dl max_inc it_des` (all optional) selects the Riks/Crisfield arc-length continuation and implies NONLIN |
 | Engine restart chaining (`RunName_0002.rad`) | ✅ | M6 — the Engine ALWAYS writes `RunName_{nn}.rst` at termination; run nn+1 resumes it: clock/ledgers/next-dt/output numbering restored, rigid-body R & L and sensor fire-times carried, everything else deliberately reconstructed from the model arrays (tied projections, contact candidates, fix masks). Acceptance: a chained run reproduces the unchained one exactly — same cycle count, state to round-off (asserted for a spring oscillator and a tumbling /RBODY) |
 
 ### Solver features
@@ -220,9 +224,12 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | MPI/domain decomposition, SMP | ❌ (out of scope) |
 | **Implicit STATIC analysis (M8)**: Newton–Raphson equilibrium, load stepping, global equation numbering with /BCS condensation, sparse tangent assembly (scipy CSR), reuse of the explicit force kernels for the residual, direct linear solve. Elements: 8-node solid (hexa8) + 4-node shell (BT4); materials: LAW1 elastic + LAW2 with the CONSISTENT elastoplastic tangent. Load control AND /IMPDISP displacement control. Validated: single-element Hooke (exact, 1-step), multi-element patch test (exact), shell cantilever tip deflection vs beam theory (<1%), LAW2 uniaxial vs the closed-form Johnson–Cook curve with quadratic Newton convergence, reaction/energy balance | ✅ (small-strain linear geometry) |
 | Direct linear solver behind `solve(K,R)`: SuperLU default (SciPy), optional CHOLMOD (scikit-sparse, SPD) and MUMPS (python-mumps, wrapped not ported), env/CLI-selected with SuperLU fallback + warning — mirrors the M7 compute-backend pattern | ✅ |
-| Implicit geometric (initial-stress) stiffness / large displacement | ❌ (deferred — M8 is small-strain linear geometry; the residual uses the corotational kernels so moderate rotations enter f_int, but the tangent omits K_geo) |
-| Implicit DYNAMICS (Newmark / HHT / generalized-α) | ❌ (deferred — M8 is statics only) |
-| Contact / /RBODY / /MPC in the implicit tangent system; arc-length continuation | ❌ (deferred — see the M8 roadmap note) |
+| **Implicit NONLINEAR GEOMETRY (M9)**: geometric (initial-stress) stiffness K_geo = ∫G^T[σ]G dV for hexa8 / BT4 / truss, updated-Lagrangian reference frame (committed geometry advances per increment; midpoint Hughes–Winget stress update + end-configuration force assembly), exact corotational truss tangent (LAW1). Validated: Euler buckling of a shell-strip column vs π²EI/(4L²) (<3%), Euler's RELATION on a hexa column with the mesh's measured EI (<1% — see the hourglass note in the M9 roadmap entry), FD-exact residual/tangent consistency, small-strain limit reproduces M8 | ✅ |
+| Linearized buckling eigensolver (K_mat + μ K_geo)φ = 0 (`implicit/buckling.py`, imp_buck.F analogue; dense eigh — fine at this port's model sizes) | ✅ (library function; /IMPL/BUCKL card deferred) |
+| Arc-length continuation (spherical Riks/Crisfield: predictor sign-following, Crisfield root selection by path continuation, adaptive radius with cut-on-failure, exact landing on the final load factor). Validated: von Mises two-bar truss traced through BOTH limit points against the closed form (sampled peaks ≥ 99% of ±P_max, never exceeding them; far-branch equilibrium to 0.1%) | ✅ (`/IMPL/ARCL`; proportional force loading only, no /IMPDISP) |
+| Statics bulk-viscosity fix (M9): the implicit driver zeroes the solid qa/qb — a rate device that leaked a spurious viscous pressure into COMPRESSIVE increments of the pseudo-velocity residual (latent in M8: all its validations were tensile); uniaxial compression is now exactly Hooke (asserted) | ✅ |
+| Implicit DYNAMICS (Newmark / HHT / generalized-α) | ❌ (deferred — the natural M10) |
+| Contact / /RBODY / /MPC in the implicit tangent system; follower-load (pressure) stiffness | ❌ (deferred — see the M9 roadmap note) |
 
 ## 5. Roadmap (next milestones)
 
@@ -543,6 +550,88 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
    * tetra4 / sh3n / beam / truss / spring element tangents (only hexa8
      and BT4 in M8) and the LAW2 SHELL consistent tangent (LAW1 shells
      only); LAW36/27/42 implicit tangents.
+8. **M9 — implicit NONLINEAR GEOMETRY** ✅ (done): geometric stiffness
+   first, mapped to the /IMPL/NONLIN branch of `imp_solv.F` (the
+   updated-Lagrangian step), the `imp_kgeo` geometric-stiffness assembly
+   inside `imp_glob_k.F`, and `imp_buck.F` (buckling). M8's implicit
+   statics was small-strain LINEAR geometry: tangent without K_geo,
+   reference frame frozen at x0. M9 delivers, all opt-in behind
+   `/IMPL/NONLIN` so the M8 path stays byte-identical (asserted by the
+   unchanged M8 suite):
+   * **K_geo** (initial-stress stiffness) for hexa8, BT4 and (new) the
+     truss: K_geo = ∫G^T[σ]G dV — δ_ij ∇N_a·σ·∇N_b for the one-point
+     solid, the membrane-resultant von-Kármán form for the shell, the
+     exact (F/L)(I − aa^T) for the corotational truss. K_geo → 0 at zero
+     stress, so the small-strain limit IS the M8 path.
+   * **Updated-Lagrangian frame**: the committed geometry advances to the
+     deformed configuration each increment; within an increment the
+     stress integrates at the MIDPOINT geometry (Hughes–Winget: the
+     midpoint gradient of a finite rigid-rotation increment is the exact
+     Cayley skew, so rigid increments produce identically zero strain —
+     the end-point evaluation would leak 1−cosθ spurious strain per
+     increment, measured fatal for the elastica) and the force is
+     re-assembled on the END configuration (`static_internal_forces` per
+     element), where equilibrium is stated. Tangent = material +
+     hourglass + K_geo at the trial geometry.
+   * **Arc-length continuation** (`/IMPL/ARCL`): spherical Riks/Crisfield
+     constraint ‖Δu‖² + w·Δλ² = dl² with w = ‖K₀⁻¹q‖² (the pure
+     cylindrical form let λ jump arbitrarily on the stiff post-snap
+     branch — measured, and fixed by the spherical metric), Crisfield
+     root selection by path continuation, sign-following predictor,
+     radius adaptation + halving on failure, and a trailing
+     load-controlled step landing exactly on the final load factor.
+     Proportional force loading required (asserted); /IMPDISP refused.
+   * **Linearized buckling** (`implicit/buckling.py`): dense generalized
+     eigenproblem (K_mat + μ K_geo)φ = 0 on a pre-stressed state.
+   * **Statics bulk-viscosity fix**: the implicit driver now zeroes the
+     solid qa/qb rate coefficients — the pseudo-velocity residual gave
+     compressive increments a spurious viscous pressure (latent in M8,
+     whose validations were all tensile). Compression is now exactly
+     Hooke (asserted).
+   * **Validation** (tests/test_m9_geomnl.py, one analytic check per
+     capability): Euler buckling of a clamped-free BT4 strip column vs
+     π²EI/(4L²) (<3%, ν=0 so plate=beam); Euler's RELATION on a hexa8
+     column — P_cr = π²(EI)_eff/(4L²) with the mesh's own bending
+     stiffness measured by a static tip-load bend (<1% — see the honest
+     note below); the large-deflection cantilever at PL²/EI = 2 vs the
+     Bisshopp–Drucker elastica (tip position within 2% of L, far from
+     the linear w = αL/3); the von Mises two-bar truss traced by arc
+     length through BOTH limit points against the closed form
+     P(y) = −2EA·ln(L/L0)·y/L (exact for the corotational log-strain
+     truss: sampled peaks reach 99% of ±P_max and never exceed them,
+     the far-branch landing matches to 0.1%, and the load factor goes
+     NEGATIVE mid-trace — the signature no load control can produce);
+     finite-difference residual/tangent consistency (exact for the truss
+     including prestress, exact for the hexa at zero stress); the
+     small-strain /IMPL/NONLIN limit reproducing Hooke with a quadratic
+     Newton tail.
+   * An HONEST discretization note recorded in the hexa buckling test:
+     pure bending excites the one-point element's hourglass pattern in
+     every element, so the M8 FB *stiffness* stabilization (HG_STIFF,
+     sized for robust static hourglass control) over-stiffens
+     coarse-section solid bending (measured 3.4× on a 3×3-element
+     section). That is a K_mat property of the 1-pt element, not a K_geo
+     error — the buckling eigenvalue obeys Euler's relation with the
+     mesh's own EI to <1%, which is exactly what K_geo controls. Shell
+     bending is physical, hence the strip column validates against the
+     continuum Euler load directly.
+   Deferred out of M9, explicitly:
+   * **implicit DYNAMICS** (Newmark / HHT / generalized-α) — the natural
+     M10: mass matrix, a/v updates, effective dynamic stiffness on top of
+     this statics core;
+   * contact, rigid bodies and /MPC in the implicit tangent system
+     (unchanged from M8);
+   * **follower-load (pressure) stiffness**: /PLOAD is evaluated at the
+     committed frame each increment; its configuration dependence is not
+     linearized into K (quadratic convergence degrades gracefully if
+     used);
+   * the /IMPL/BUCKL engine card (the eigensolver is a library function),
+     sparse (shift-invert) buckling eigensolves for large models;
+   * LAW2 (elastoplastic) truss and shell consistent tangents; tetra4 /
+     sh3n / beam / spring element tangents; LAW36/27/42 implicit
+     tangents;
+   * line search for the Newton corrector (the arc radius adaptation
+     covered every validation case).
 
 ## 6. Validation strategy
 
@@ -554,6 +643,12 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
   results: longitudinal wave speed in a bar, cantilever/plate vibration
   frequency, Johnson–Cook uniaxial yield curve, energy conservation of a
   block bouncing on a rigid wall.
+* **Implicit nonlinear-geometry validations (M9)** — Euler buckling
+  (shell column vs the continuum formula; hexa column vs Euler's relation
+  with the mesh's measured EI), the elastica large-deflection cantilever,
+  the von Mises truss snap-through traced through both limit points by arc
+  length against its closed form, finite-difference residual/tangent
+  consistency, and the small-strain limit reproducing the M8 answers.
 * **Implicit validations (M8)** — the same philosophy for the Newton solver:
   a single-element uniaxial pull reproducing Hooke's law exactly (with
   one-step, i.e. quadratic, convergence), a multi-element constant-stress

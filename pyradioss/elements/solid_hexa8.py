@@ -637,8 +637,9 @@ def forces(group, x, v, vr, dt, fint, mint):
 #      relative to the physical stiffness and vanishes on uniform-strain
 #      (patch-test / uniaxial) states, which excite no hourglass mode.
 #
-# Geometric (initial-stress) stiffness is DEFERRED (see the implicit package
-# docstring / PORTING_GUIDE): M8 lands small-strain linear geometry.
+# Geometric (initial-stress) stiffness is the M9 addition — see ``kgeo`` below
+# (M8 landed small-strain linear geometry; the tangent() here is unchanged, the
+# implicit driver ADDS kgeo() to it when /IMPL/NONLIN is active).
 #
 # A note on the hourglass stiffness (the reason for the split below). The
 # explicit kernel's hourglass control is VISCOUS: a force proportional to the
@@ -767,3 +768,103 @@ def tangent(group, x, epsp_incr=None):
     edofs[:, 3 * ix + 1] = conn * 6 + 1
     edofs[:, 3 * ix + 2] = conn * 6 + 2
     return ke, edofs
+
+
+# ----------------------------------------------------------------------------
+# Geometric (initial-stress) stiffness K_geo (M9) — see PORTING_GUIDE M9
+# ----------------------------------------------------------------------------
+# Fortran origin: the geometric-stiffness branch of the implicit assembly
+# (``engine/source/implicit/imp_glob_k.F`` dispatching the element KGEO
+# routines — the ``imp_kgeo`` path that OpenRadioss activates for its
+# large-displacement implicit nonlinear analysis, /IMPL/NONLIN).
+#
+# Theory (BLM ch. 6.4; Bathe ch. 6.3 — the updated-Lagrangian linearization).
+# Linearizing the internal virtual work at a CURRENT (stressed) configuration
+# splits the tangent into the material part K_c = ∫ B^T D B dV (tangent())
+# and the INITIAL-STRESS part carrying the current Cauchy stress:
+#
+#     K_geo[a i, b j] = δ_ij ∫ (∇N_a · σ · ∇N_b) dV
+#
+# — identical in every translation direction (the δ_ij), which makes it the
+# term through which a membrane/axial stress resists (tension) or drives
+# (compression) a TRANSVERSE perturbation: exactly the physics of stress
+# stiffening and of buckling (K_c + λ K_geo singular at the critical load).
+# For the one-point hexa the integrand is constant, so the integral is
+# V · ∇N_a σ ∇N_b with the same centroid gradients the forces use. At zero
+# stress K_geo vanishes identically — the M8 small-strain path is untouched.
+# (The hourglass modes get no geometric term: they are orthogonal to the
+# linear field, and their stabilization stiffness dominates any σ-scale
+# correction — standard one-point-element practice.)
+
+def kgeo(group, x):
+    """Geometric (initial-stress) element stiffness for the brick group,
+    from the CURRENT stress state ``st['sig']`` at geometry ``x``.
+
+    Returns ``(ke, edofs)`` shaped exactly like ``tangent()`` (n, 24, 24) so
+    the assembler can simply add it. Zero wherever the stress is zero
+    (deleted elements carry zero stress, so they drop out automatically)."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    dndx, vol = _geometry(x[conn])
+    vol = np.maximum(vol, EM20)
+
+    # Cauchy stress as a 3x3 per element (Voigt [xx, yy, zz, xy, yz, zx])
+    s = st["sig"]
+    S = np.empty((n, 3, 3))
+    S[:, 0, 0], S[:, 1, 1], S[:, 2, 2] = s[:, 0], s[:, 1], s[:, 2]
+    S[:, 0, 1] = S[:, 1, 0] = s[:, 3]
+    S[:, 1, 2] = S[:, 2, 1] = s[:, 4]
+    S[:, 0, 2] = S[:, 2, 0] = s[:, 5]
+
+    # g_ab = V * gradN_a . sigma . gradN_b   (n, 8, 8), replicated over the
+    # three translation directions (the delta_ij of the derivation above)
+    g = vol[:, None, None] * np.einsum("nac,ncd,nbd->nab", dndx, S, dndx)
+    ke = np.zeros((n, 24, 24))
+    ix = np.arange(8)
+    for b in range(3):
+        rows = (3 * ix + b)[:, None]
+        cols = (3 * ix + b)[None, :]
+        ke[:, rows, cols] += g
+
+    edofs = np.empty((n, 24), dtype=np.int64)
+    edofs[:, 3 * ix + 0] = conn * 6 + 0
+    edofs[:, 3 * ix + 1] = conn * 6 + 1
+    edofs[:, 3 * ix + 2] = conn * 6 + 2
+    return ke, edofs
+
+
+def static_internal_forces(group, x, u, ur, fint, mint):
+    """Internal nodal force at configuration ``x`` from the CURRENT stress
+    state — the updated-Lagrangian force assembly of the M9 implicit residual
+    (see ``implicit.statics._internal_forces``: the stress was just updated
+    by a ``forces()`` call at the MIDPOINT geometry — the Hughes–Winget
+    objective increment — and this routine re-assembles the nodal force at
+    the END geometry, where equilibrium is stated). It is the sfint3.F
+    force expression evaluated standalone:
+
+        f_i = - V * sigma . gradN_i        (negated-internal convention)
+
+    plus the hourglass stabilization force at the same configuration with
+    the SAME total modal stiffness k_hg = a_h + k_stiff the tangent carries
+    (a_h is what forces() emits at dt=1, k_stiff the static FB hourglass of
+    ``static_stabilization`` — here both are applied in one term so residual
+    and tangent stay consistent in the nonlinear-geometry path). ``ur`` and
+    ``mint`` are unused (solids carry no rotational DOFs)."""
+    st = group.state
+    conn = group.conn
+    dndx, vol = _geometry(x[conn])
+    vol = np.maximum(vol, EM20)
+    s = st["sig"]
+    S = np.empty((group.n, 3, 3))
+    S[:, 0, 0], S[:, 1, 1], S[:, 2, 2] = s[:, 0], s[:, 1], s[:, 2]
+    S[:, 0, 1] = S[:, 1, 0] = s[:, 3]
+    S[:, 1, 2] = S[:, 2, 1] = s[:, 4]
+    S[:, 0, 2] = S[:, 2, 0] = s[:, 5]
+    # f_i = -V sigma gradN_i  (n, 8, 3)
+    fe = -vol[:, None, None] * np.einsum("nid,ncd->nic", dndx, S)
+    # hourglass stabilization at this configuration: -k_hg (gamma.u) gamma
+    _, gamma, _, k_hg, _ = _hg_operators(group, x)
+    modal = np.einsum("nai,nid->nad", gamma, u[conn])          # (n, 4, 3)
+    fe -= k_hg[:, None, None] * np.einsum("nad,nai->nid", modal, gamma)
+    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))

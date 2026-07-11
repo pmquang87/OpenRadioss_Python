@@ -123,17 +123,58 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 #   /IMPL/DTINI  card: dt_incr          load-factor increment
                 #   /IMPL/NEWTON card: tol  max_iter    Newton controls
                 #   /IMPL/LSOLVER/<superlu|cholmod|mumps>   direct solver
+                #   /IMPL/NONLIN[/N]      (M9) NONLINEAR GEOMETRY: updated-
+                #                         Lagrangian frame + geometric
+                #                         stiffness K_geo — large
+                #                         displacement, the original
+                #                         /IMPL/NONLIN's default behaviour.
+                #                         /IMPL/NONLIN/SMDISP keeps the
+                #                         small-displacement (M8) path,
+                #                         mirroring the original's SMDISP.
+                #                         A numeric /N (the original's
+                #                         nonlinear-solver strategy pick) is
+                #                         accepted and ignored — the port
+                #                         always runs full Newton.
+                #   /IMPL/ARCL   card: dl  max_inc  it_des
+                #                         (M9) Crisfield arc-length
+                #                         continuation for limit points /
+                #                         snap-through (implies NONLIN).
+                #                         All three optional: initial radius
+                #                         (default: from the first predictor
+                #                         at the DTINI increment), increment
+                #                         cap, target iterations/increment.
                 #   /IMPL/DYNA ...        NOT ported (warns, statics only)
                 #
                 # Unknown sub-cards warn and are skipped, exactly like the
                 # rest of the reader.
                 ec.implicit = True
                 sub = block.parts[1].upper() if len(block.parts) > 1 else ""
-                if sub in ("", "STATIC", "STAT", "LINEAR", "L", "NL"):
+                if sub in ("", "STATIC", "STAT", "LINEAR", "L"):
                     if block.cards:  # a lone /IMPL card may carry dt_incr
                         vals = block.cards[0].floats()
                         if vals:
                             ec.impl_dt = vals[0]
+                elif sub in ("NONLIN", "NLGEOM", "NL"):
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    # /IMPL/NONLIN/SMDISP = the original's explicit small-
+                    # displacement restriction: exactly the M8 linear path
+                    ec.impl_nlgeom = sub2 != "SMDISP"
+                    if block.cards:  # may carry dt_incr like the bare card
+                        vals = block.cards[0].floats()
+                        if vals:
+                            ec.impl_dt = vals[0]
+                elif sub in ("ARCL", "ARC", "RIKS"):
+                    ec.impl_arc = True
+                    ec.impl_nlgeom = True
+                    if block.cards:
+                        vals = block.cards[0].floats()
+                        if vals:
+                            ec.impl_arc_dl = vals[0]
+                        if len(vals) > 1 and vals[1] > 0:
+                            ec.impl_arc_maxinc = int(vals[1])
+                        if len(vals) > 2 and vals[2] > 0:
+                            ec.impl_arc_itdes = int(vals[2])
                 elif sub in ("DTINI", "DT", "DT/STOP"):
                     if block.cards:
                         vals = block.cards[0].floats()
@@ -151,11 +192,11 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                                         if len(block.parts) > 2 else "")
                 elif sub in ("DYNA", "DYNAMIC", "DYN"):
                     log.warning("/IMPL/DYNA (implicit dynamics) not ported — "
-                                "M8 is implicit STATICS only; running static",
-                                block.source)
+                                "implicit is STATICS only (M8/M9); running "
+                                "static", block.source)
                 else:
-                    log.warning(f"/IMPL/{sub} not ported — ignored (M8 "
-                                f"supports DTINI, NEWTON, LSOLVER)",
+                    log.warning(f"/IMPL/{sub} not ported — ignored (supports "
+                                f"DTINI, NEWTON, LSOLVER, NONLIN, ARCL)",
                                 block.source)
             elif key == "PRINT":
                 # /PRINT/-100 → one listing line every 100 cycles (the minus

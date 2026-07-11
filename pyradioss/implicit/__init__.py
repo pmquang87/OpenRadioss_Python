@@ -5,9 +5,14 @@ Fortran origin: ``engine/source/implicit/`` — the whole implicit branch of
 OpenRadioss, which lives entirely apart from the explicit ``resol.F`` loop:
 
     engine/source/implicit/imp_solv.F      the implicit driver / load steps
-    engine/source/implicit/imp_buck.F      Newton iteration bookkeeping
+                                           (+ its /IMPL/NONLIN updated-
+                                           Lagrangian and arc-length branch)
+    engine/source/implicit/imp_buck.F      buckling eigen-extraction
+                                           (/IMPL/BUCKL) + Newton bookkeeping
     engine/source/implicit/ind_glob_k.F    global equation numbering (DOFs)
-    engine/source/implicit/imp_glob_k.F    sparse tangent assembly
+    engine/source/implicit/imp_glob_k.F    sparse tangent assembly (material
+                                           KE + the imp_kgeo geometric-
+                                           stiffness branch)
     engine/source/implicit/imp_dsolv*.F    the direct linear-solver interface
                                            (Radioss wraps MUMPS / a built-in
                                            sparse LDL^T here)
@@ -48,18 +53,40 @@ What M8 ports (implicit **statics** first)
   (python-mumps) are selected by env var / CLI flag and fall back to SuperLU
   with a warning when their library is absent.
 
-Explicitly DEFERRED out of M8 (documented in PORTING_GUIDE.md, not
-half-implemented):
+What M9 adds (implicit NONLINEAR GEOMETRY — see statics.py for the theory)
+--------------------------------------------------------------------------
+* **Geometric (initial-stress) stiffness K_geo** per element (``kgeo()`` in
+  hexa8 / BT4 / truss): the stress-dependent tangent term that carries
+  stress stiffening, compression softening and buckling. Added to the
+  material+hourglass tangent when ``/IMPL/NONLIN`` is active; identically
+  zero at zero stress, so the M8 small-strain results are untouched.
+* **Updated-Lagrangian reference frame**: the committed geometry ADVANCES to
+  the deformed configuration between increments; within an increment the
+  stress integrates at the midpoint geometry (Hughes–Winget — exact for
+  finite rigid rotations) and the force is assembled on the end geometry
+  (each element's ``static_internal_forces``).
+* **Arc-length continuation** (``/IMPL/ARCL``, Crisfield's cylindrical
+  method): the load factor becomes an unknown constrained by the step
+  length, so the driver traces THROUGH limit points (snap-through) where
+  load control necessarily fails.
+* **Linearized buckling** (``buckling.py``, the imp_buck.F analogue): the
+  (K_mat + mu*K_geo) phi = 0 eigenproblem on a pre-stressed state — the
+  Euler-column validation path.
+* **Truss implicit tangent** (exact corotational, LAW1): the textbook
+  geometric-nonlinearity element, used by the snap-through validation.
 
-* **geometric / initial-stress stiffness** (large-displacement K_geo): M8
-  lands small-strain *linear* geometry only. The residual still uses the
-  full corotational kernels, so moderate rotations are handled in f_int, but
-  the tangent omits the stress-dependent geometric term;
-* **implicit DYNAMICS** (Newmark / HHT / generalized-α) — statics only;
+Explicitly DEFERRED (documented in PORTING_GUIDE.md, not half-implemented):
+
+* **implicit DYNAMICS** (Newmark / HHT / generalized-α) — statics only
+  (the natural M10);
 * **contact and general constraints in the tangent system** (/INTER, /RBODY,
   /MPC): the explicit interfaces are kinematic/penalty and do not contribute
   to K here;
-* **arc-length / snap-through** continuation — plain load control only.
+* **follower-load (pressure) stiffness**: /PLOAD is evaluated at the
+  committed frame; its configuration-dependence is not linearized into K;
+* LAW2 shell / LAW2 truss consistent tangents; tetra4 / sh3n / beam /
+  spring element tangents; the /IMPL/BUCKL engine card (the buckling
+  eigensolver is a library function).
 
 Why scipy is guarded
 --------------------

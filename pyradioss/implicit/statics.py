@@ -54,10 +54,85 @@ reproduces exactly that a_h, so residual and tangent stay consistent and the
 hourglass modes are stabilized without polluting uniform-strain states. The
 shell BLT84 hourglass is already stiffness-type and behaves the same way.
 
-What is DEFERRED (documented, not half-done — see the package docstring and
-PORTING_GUIDE): geometric/initial-stress stiffness (large displacement),
-implicit dynamics (Newmark/HHT), contact & constraints in the tangent, and
-arc-length continuation. Load control only, small-strain linear geometry.
+One rate device is switched OFF for statics: the solid BULK VISCOSITY
+(qa/qb shock damping). It is a function of the strain RATE, and the
+pseudo-velocity drive would otherwise leak a spurious viscous pressure into
+every compressive increment (trD < 0) — a statics run must depend on the
+displacement state alone, exactly as the original's implicit branch runs
+without it. The driver zeroes qa/qb once at startup (the run is
+implicit-only, so nothing else reads them).
+
+Nonlinear geometry (M9): the updated-Lagrangian step and K_geo
+--------------------------------------------------------------
+Fortran origin: the /IMPL/NONLIN branch of ``imp_solv.F`` (the
+updated-Lagrangian outer step) with the geometric-stiffness assembly
+(``imp_kgeo`` inside ``imp_glob_k.F``). Activated by ``/IMPL/NONLIN``;
+the default stays the exact M8 small-strain path (byte-identical).
+
+M8 froze the reference frame at x0 and linearized every increment there —
+exact for small strain, blind to stress stiffening and buckling. With
+nonlinear geometry ON, three things change (each increment, nothing else):
+
+1. **The committed frame ADVANCES**: after an increment converges, the
+   reference geometry becomes the deformed configuration (x_ref += u) — the
+   classic updated-Lagrangian outer step. Rotations accumulate increment by
+   increment through the corotational kernels.
+2. **The residual is evaluated on the trial configuration**: the stress
+   increment integrates at the MIDPOINT geometry x_ref + u/2 (the
+   Hughes–Winget midpoint rule: for the increment map x_new = R x_old the
+   midpoint gradient 2(R-I)(R+I)^-1 is the Cayley transform of R — EXACTLY
+   skew for any finite rigid rotation, so a rigid increment produces
+   identically zero strain, where an end-point evaluation would leak a
+   1-cos(theta) spurious strain per increment); the nodal force is then
+   re-assembled on the END geometry x_ref + u, where equilibrium is stated
+   (each element's ``static_internal_forces``). Both reuse the explicit
+   kernels' machinery; remaining incremental-objectivity error is
+   O(dtheta^2) per increment (the linearized Jaumann stress rotation).
+3. **The tangent gains the geometric term**: K = K_material + K_hourglass +
+   K_geo, all linearized at the trial (end) geometry, with
+   K_geo = int G^T [sigma] G dV built from the current stress (each
+   element's ``kgeo``; the delta_ij initial-stress operator — see the
+   element modules for the derivation). K_geo -> 0 at zero stress, so the
+   small-strain limit reproduces M8. Compressive stress makes K lose
+   positive definiteness at the buckling load — which is exactly what lets
+   the driver *find* limit points instead of marching through them.
+
+Arc-length continuation (M9): past the limit point
+--------------------------------------------------
+Load control prescribes lambda and solves for u — at a limit point (a peak
+of the load-displacement curve, e.g. snap-through) no equilibrium exists at
+lambda > lambda_max and Newton diverges: the load increment can only STOP
+there. The arc-length method (Riks 1979 / Crisfield 1981) treats lambda as
+an UNKNOWN and constrains the step length in (u, lambda) space instead:
+
+    R(u, lambda) = lambda*q + f_int(u) = 0                    (n equations)
+    c(u, lambda) = ||Delta_u||^2 + w*Delta_lambda^2 - dl^2 = 0   (constraint)
+
+with the SPHERICAL (Riks) metric weight w = ||K0^-1 q||^2 sampled once at
+startup (psi = 1 in Crisfield's psi-scaled family): it makes the load term
+commensurate with the displacement term, so on a very stiff branch (where
+||du_t|| collapses, e.g. after a snap-through re-stiffens) the constraint
+still bounds the LOAD step — the pure cylindrical form (w = 0) lets lambda
+jump arbitrarily far there. Each corrector iteration solves the two
+auxiliary systems K du_bar = R and K du_t = q, writes
+du = du_bar + dlambda*du_t and picks dlambda from the constraint — a scalar
+quadratic a*dlambda^2 + b*dlambda + c = 0 (Crisfield's formulation; of the
+two roots, keep the one pointing along the incoming path, i.e. maximizing
+the metric dot product with the current (Delta_u, Delta_lambda), so the
+continuation never doubles back). The predictor direction takes the sign
+that continues the previous increment. The arc length dl adapts to the
+iteration count and halves on failure (complex roots / no convergence).
+This is what "turns the corner": lambda DECREASES on the descending branch
+while the displacement keeps growing, and recovers past the snap.
+OpenRadioss reaches the same continuation through the arc-length option of
+its /IMPL/NONLIN controls; the port exposes it as the minimal sub-card
+``/IMPL/ARCL`` (see engine_keywords). Requires proportional loading
+(f_ext = lambda*q — asserted at startup) and no /IMPDISP.
+
+Still DEFERRED (documented, not half-done — see the package docstring and
+PORTING_GUIDE): implicit DYNAMICS (Newmark/HHT — the natural M10), contact &
+general constraints in the tangent, follower-load (pressure) stiffness,
+LAW2 shell / truss tangents, tetra4 / sh3n / beam / spring tangents.
 """
 
 from __future__ import annotations
@@ -126,21 +201,25 @@ def _restore(group, snap):
 # Residual (internal force) evaluation — reuses the explicit kernels
 # ----------------------------------------------------------------------------
 
-def _internal_forces(model, x_ref, u, ur, committed):
+def _internal_forces(model, x_ref, u, ur, committed, nlgeom=False):
     """Internal force/moment at trial increment (u, ur) from the committed
     base state. Restores the element buffers and calls the EXISTING force
     kernels with the displacement increment as a pseudo-velocity at dt = 1
-    (see module docstring), evaluated at the COMMITTED geometry ``x_ref``.
+    (see module docstring).
 
-    Evaluating at the committed (reference) geometry — not ``x_ref + u`` — is
-    what makes M8 a *small-strain linear-geometry* analysis: the strain
-    increment is grad(u) on the reference frame, so a linear-elastic step is
-    exactly K u and Newton converges in one iteration (Hooke's law reproduced
-    exactly). The reference frame is advanced to the deformed geometry only
-    when an increment COMMITS (an updated-Lagrangian outer step), which lets a
-    moderate-rotation problem accumulate over several increments while each
-    increment stays linear. Large-displacement geometric stiffness WITHIN an
-    increment is the deferred sub-step (see the package docstring).
+    ``nlgeom=False`` (the M8 small-strain path, byte-identical): everything
+    is evaluated at the COMMITTED geometry ``x_ref``. The strain increment
+    is grad(u) on the reference frame, so a linear-elastic step is exactly
+    K u and Newton converges in one iteration (Hooke's law reproduced
+    exactly).
+
+    ``nlgeom=True`` (M9, /IMPL/NONLIN — the updated-Lagrangian increment):
+    the kernels integrate the stress at the MIDPOINT geometry x_ref + u/2
+    (Hughes–Winget: a finite rigid-rotation increment produces exactly zero
+    strain there — see the module docstring) and the nodal force is then
+    re-assembled at the END geometry x_ref + u by each element's
+    ``static_internal_forces``, so equilibrium is stated on the trial
+    configuration. The midpoint call's force output is discarded.
 
     Restores + calls in place; the element state is left at the trial values
     (the caller commits or re-evaluates from ``committed``)."""
@@ -149,15 +228,33 @@ def _internal_forces(model, x_ref, u, ur, committed):
         _restore(group, committed[name])
     fint = np.zeros((n, 3))
     mint = np.zeros((n, 3))
+    if not nlgeom:
+        for name, group in model.element_groups():
+            KERNELS[name].forces(group, x_ref, u, ur, 1.0, fint, mint)
+            # some kernels add a STATIC stabilization the (dynamics-tuned)
+            # force path cannot supply — the solid stiffness-hourglass, whose
+            # explicit form is viscous and far too weak to control hourglass
+            # in statics (see solid_hexa8.static_stabilization). Consistent
+            # with tangent().
+            stab = getattr(KERNELS[name], "static_stabilization", None)
+            if stab is not None:
+                stab(group, x_ref, u, ur, fint, mint)
+        return fint, mint
+
+    # ---- M9 nonlinear geometry: midpoint stress update, end assembly ------
+    x_mid = x_ref + 0.5 * u
+    x_end = x_ref + u
+    junk_f = np.zeros((n, 3))
+    junk_m = np.zeros((n, 3))
     for name, group in model.element_groups():
-        KERNELS[name].forces(group, x_ref, u, ur, 1.0, fint, mint)
-        # some kernels add a STATIC stabilization the (dynamics-tuned) force
-        # path cannot supply — the solid stiffness-hourglass, whose explicit
-        # form is viscous and far too weak to control hourglass in statics
-        # (see solid_hexa8.static_stabilization). Consistent with tangent().
-        stab = getattr(KERNELS[name], "static_stabilization", None)
-        if stab is not None:
-            stab(group, x_ref, u, ur, fint, mint)
+        # stress/hourglass-state update at the midpoint configuration;
+        # the returned force (midpoint-configuration) is discarded
+        KERNELS[name].forces(group, x_mid, u, ur, 1.0, junk_f, junk_m)
+        # nodal force from the updated state, on the END configuration.
+        # For solids this includes the FULL hourglass stabilization
+        # (a_h + k_stiff) in one term — static_stabilization must NOT be
+        # called on top (it would double-count k_stiff).
+        KERNELS[name].static_internal_forces(group, x_end, u, ur, fint, mint)
     return fint, mint
 
 
@@ -175,23 +272,47 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
     ``model.implicit_result`` records the per-increment convergence."""
     ip = controls
     n = model.numnod
+    nlg = bool(getattr(ip, "impl_nlgeom", False))
+    arc = bool(getattr(ip, "impl_arc", False))
+    if arc and not nlg:
+        # arc length exists to trace geometrically nonlinear limit points;
+        # running it on the frozen-frame small-strain path would trace a
+        # LINEAR curve (no limit point ever). Force the consistent pairing.
+        nlg = True
+        log.info(" /IMPL/ARCL IMPLIES /IMPL/NONLIN  . . : NONLINEAR GEOMETRY ON")
 
-    log.info("\n     IMPLICIT STATIC ANALYSIS (M8)")
-    log.info("     -----------------------------")
+    log.info("\n     IMPLICIT STATIC ANALYSIS (M8/M9)")
+    log.info("     --------------------------------")
 
-    # fail fast on un-ported element types (rather than mid-Newton): the M8
-    # implicit tangent covers only the 8-node solid and the 4-node shell
+    # fail fast on un-ported element types (rather than mid-Newton): the
+    # implicit tangent covers the 8-node solid, the 4-node shell and (M9)
+    # the 2-node truss
     from .assembly import _TANGENT_KERNELS
     unsupported = [name for name, _ in model.element_groups()
                    if name not in _TANGENT_KERNELS]
     if unsupported:
         raise NotImplementedError(
-            f"the M8 implicit solver has no tangent for element group(s) "
+            f"the implicit solver has no tangent for element group(s) "
             f"{unsupported} (supported: {list(_TANGENT_KERNELS)}). Remove "
             f"them or run the explicit solver.")
 
     log.info(f" LINEAR SOLVER  . . . . . . . . . . . : "
              f"{_solver_banner(ip, log)}")
+    log.info(f" GEOMETRY . . . . . . . . . . . . . . : "
+             f"{'NONLINEAR (UPDATED-LAGRANGIAN + KGEO)' if nlg else 'LINEAR (SMALL STRAIN)'}")
+
+    # statics carries no rate effects: disable the solid bulk viscosity
+    # (see the module docstring — it would leak a spurious rate pressure
+    # into compressive increments through the pseudo-velocity drive)
+    nvisc = 0
+    for name, group in model.element_groups():
+        for sl, mat, prop in group.state["slices"]:
+            if prop.params.get("qa", 0.0) or prop.params.get("qb", 0.0):
+                prop.params["qa"] = 0.0
+                prop.params["qb"] = 0.0
+                nvisc += 1
+    if nvisc:
+        log.info(" BULK VISCOSITY (qa/qb) . . . . . . . : DISABLED (STATICS)")
 
     # /IMPDISP prescribed displacements: known DOFs whose value ramps with the
     # load factor. They are condensed out of the equations (like /BCS) but
@@ -206,11 +327,12 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
     # committed element state (base for each increment's residual evals) and
     # committed plastic strain (for the consistent-tangent increment)
     committed = {name: _snapshot(g) for name, g in model.element_groups()}
-    # SMALL-STRAIN LINEAR GEOMETRY (M8): the reference frame stays at the
-    # initial configuration x0 for the whole run — every residual and tangent
-    # is linearized there. model.x accumulates the total displacement for
-    # output only; it is never fed back as geometry (that would be an
-    # updated-Lagrangian / geometric-nonlinear scheme — the deferred sub-step).
+    # The reference frame: with LINEAR geometry (M8, the default) it stays at
+    # the initial configuration x0 for the whole run — every residual and
+    # tangent is linearized there and model.x accumulates the displacement
+    # for output only. With NONLINEAR geometry (M9, /IMPL/NONLIN) x_ref
+    # ADVANCES to the deformed configuration each time an increment commits
+    # — the updated-Lagrangian outer step (see the module docstring).
     x_ref = model.x0.copy()
     model.x = model.x0.copy()
 
@@ -231,12 +353,19 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
     log.info(f" MAX NEWTON ITERATIONS  . . . . . . . : {ip.impl_max_iter}")
     log.info("\n   INCREMENT   LOAD-FACTOR   ITER   RESIDUAL-NORM   STATUS")
 
+    if arc:
+        _run_arclength(model, controls, log, dof, loads, solver, committed,
+                       x_ref, imposed, dlam, lam_end, result)
+        model.implicit_result = result
+        _final_summary(model, result, dof, log)
+        return model
+
     inc_no = 0
     while lam < lam_end * (1.0 - 1e-12):
         lam_new = min(lam + dlam, lam_end)
         inc_no += 1
         inc = _solve_increment(model, controls, log, dof, loads, solver,
-                               committed, x_ref, lam, lam_new, imposed)
+                               committed, x_ref, lam, lam_new, imposed, nlg)
         result.increments.append(inc)
         if not inc.converged:
             result.converged = False
@@ -250,8 +379,12 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
         log.info(f" {inc_no:9d} {lam_new:13.5E} {inc.iterations:6d} "
                  f"{inc.residuals[-1]:14.5E}   converged")
         # commit: the element state already holds the converged step; rebase
-        # the committed buffers for the next increment. x_ref stays at x0.
+        # the committed buffers for the next increment. With nonlinear
+        # geometry the reference frame advances to the deformed
+        # configuration (updated Lagrangian); otherwise it stays at x0.
         committed = {name: _snapshot(g) for name, g in model.element_groups()}
+        if nlg:
+            x_ref = model.x.copy()
         lam = lam_new
 
     model.implicit_result = result
@@ -279,11 +412,15 @@ def _resolve_imposed(model, log):
 
 
 def _solve_increment(model, controls, log, dof, loads, solver,
-                     committed, x_ref, lam_prev, lam, imposed):
+                     committed, x_ref, lam_prev, lam, imposed, nlgeom=False):
     """One load increment: Newton-iterate to equilibrium at load factor
     ``lam``. Returns an IncrementResult. On entry the element buffers hold the
     committed state and ``x_ref`` the committed geometry; on a converged
-    return model.x and the element state hold the new equilibrium."""
+    return model.x and the element state hold the new equilibrium.
+
+    ``nlgeom`` selects the M9 nonlinear-geometry increment: residual on the
+    trial configuration (see ``_internal_forces``) and tangent with K_geo,
+    both linearized at the trial geometry x_ref + u."""
     ip = controls
     n = model.numnod
 
@@ -314,7 +451,7 @@ def _solve_increment(model, controls, log, dof, loads, solver,
 
     for it in range(ip.impl_max_iter):
         # residual R = f_ext + f_int(u)  (equation space)
-        fint, mint = _internal_forces(model, x_ref, u, ur, committed)
+        fint, mint = _internal_forces(model, x_ref, u, ur, committed, nlgeom)
         R = dof.gather_residual(fext + fint, mint)
         rnorm = float(np.linalg.norm(R))
         inc.residuals.append(rnorm)
@@ -336,7 +473,11 @@ def _solve_increment(model, controls, log, dof, loads, solver,
         for name, group in model.element_groups():
             if name == "bricks" and epsp0[name] is not None:
                 epsp_incr[name] = group.state["epsp"] - epsp0[name]
-        K = assemble(model, dof, x_ref, epsp_incr)
+        # linearize where the residual lives: the committed frame for the
+        # small-strain path, the TRIAL configuration (with the geometric
+        # stiffness added) for the nonlinear-geometry path
+        x_tan = x_ref + u if nlgeom else x_ref
+        K = assemble(model, dof, x_tan, epsp_incr, kgeo=nlgeom)
         du_eq = solver.solve(K, R)
         du, dur = dof.scatter_solution(du_eq)
         u = u + du
@@ -349,7 +490,8 @@ def _solve_increment(model, controls, log, dof, loads, solver,
         if np.linalg.norm(du_eq) <= ip.impl_tol * max(unorm, 1e-30) \
                 and it > 0:
             # re-evaluate the residual at the corrected u for the record
-            fint, mint = _internal_forces(model, x_ref, u, ur, committed)
+            fint, mint = _internal_forces(model, x_ref, u, ur, committed,
+                                          nlgeom)
             R = dof.gather_residual(fext + fint, mint)
             inc.residuals.append(float(np.linalg.norm(R)))
             inc.iterations = it + 2
@@ -358,12 +500,246 @@ def _solve_increment(model, controls, log, dof, loads, solver,
 
     if inc.converged:
         # accumulate the increment displacement into the total (deformed)
-        # geometry for OUTPUT. The reference frame x_ref stays at x0 — this
-        # is a small-strain analysis, so model.x is never used as geometry.
-        # The element state already holds the converged trial values from the
-        # last _internal_forces call.
+        # geometry. Small-strain path: model.x is OUTPUT only (x_ref stays
+        # at x0). Nonlinear geometry: the caller re-bases x_ref on model.x
+        # (updated Lagrangian). The element state already holds the converged
+        # trial values from the last _internal_forces call.
         model.x = model.x + u
     return inc
+
+
+# ----------------------------------------------------------------------------
+# Arc-length (Riks / Crisfield) continuation — M9 (see the module docstring)
+# ----------------------------------------------------------------------------
+
+def _run_arclength(model, controls, log, dof, loads, solver, committed,
+                   x_ref, imposed, dlam0, lam_end, result):
+    """Trace the equilibrium path with the cylindrical (Crisfield) arc-length
+    method until the load factor reaches ``lam_end`` — THROUGH limit points,
+    where the load factor is free to decrease. Appends to ``result`` and
+    leaves model.x / the element state at the final equilibrium.
+
+    The constraint radius dl starts from the first predictor at the
+    /IMPL/DTINI load increment (or the /IMPL/ARCL card value), adapts to the
+    iteration count of each increment (targeting ``impl_arc_itdes``
+    iterations) and halves whenever an increment fails (no convergence, or
+    complex roots of the constraint quadratic)."""
+    ip = controls
+    n = model.numnod
+    if imposed:
+        raise ValueError(
+            "/IMPL/ARCL cannot be combined with /IMPDISP: the arc-length "
+            "constraint already controls the step size, and the method "
+            "assumes a pure proportional force loading f_ext = lambda*q. "
+            "Use load control (/IMPL/NONLIN) for prescribed displacements.")
+
+    # ---- proportional load pattern q (f_ext(lam) = lam * q, asserted) -----
+    q_full = np.zeros((n, 3))
+    loads.external_forces(lam_end, q_full, x_ref)
+    q_full /= lam_end
+    probe = np.zeros((n, 3))
+    loads.external_forces(0.5 * lam_end, probe, x_ref)
+    scale = max(float(np.abs(q_full).max()), 1e-30)
+    if not np.allclose(probe, 0.5 * lam_end * q_full, atol=1e-9 * scale):
+        raise ValueError(
+            "/IMPL/ARCL requires a PROPORTIONAL load history "
+            "(f_ext(lambda) = lambda * q): make every load /FUNCT a linear "
+            "ramp through the origin over the load-factor range.")
+    q_eq = dof.gather_residual(q_full, np.zeros((n, 3)))
+    qnorm = float(np.linalg.norm(q_eq))
+    if qnorm <= 0.0:
+        raise ValueError("/IMPL/ARCL: the load pattern is empty (no applied "
+                         "force on any free DOF).")
+
+    # ---- spherical metric weight + initial radius --------------------------
+    # w_lam = ||K0^-1 q||^2 (the initial tangential displacement per unit
+    # load factor, squared) makes the Delta_lambda^2 term of the constraint
+    # commensurate with ||Delta_u||^2 — see the module docstring. The
+    # radius dl is then set so the FIRST increment is exactly the
+    # /IMPL/DTINI load increment on the (still linear) path.
+    K0 = assemble(model, dof, x_ref, None, kgeo=True)
+    duT0 = solver.solve(K0, q_eq)
+    wlam = float(duT0 @ duT0)
+    dl = ip.impl_arc_dl if getattr(ip, "impl_arc_dl", 0.0) > 0.0 \
+        else abs(dlam0) * np.sqrt(2.0 * wlam)
+    itdes = max(1, int(getattr(ip, "impl_arc_itdes", 5)))
+    maxinc = max(1, int(getattr(ip, "impl_arc_maxinc", 200)))
+    log.info(f" ARC-LENGTH (RIKS/CRISFIELD) RADIUS . : {dl:12.5E}")
+
+    lam = 0.0
+    dir_prev = None      # previous converged Delta_u (equation space)
+    cuts = 0
+    while lam < lam_end * (1.0 - 1e-12):
+        if len(result.increments) >= maxinc:
+            result.converged = False
+            result.stop_reason = (
+                f"ARC-LENGTH REACHED THE INCREMENT CAP ({maxinc}) AT LOAD "
+                f"FACTOR {lam:.4E} (< {lam_end:.4E}) — raise the cap on "
+                f"/IMPL/ARCL or check for a runaway path")
+            return
+        inc, Du_eq = _solve_increment_arc(model, ip, dof, solver, committed,
+                                          x_ref, lam, dl, q_full, q_eq,
+                                          wlam, dir_prev)
+        result.increments.append(inc)
+        inc_no = len(result.increments)
+        if not inc.converged:
+            cuts += 1
+            log.info(f" {inc_no:9d} {inc.load_factor:13.5E} "
+                     f"{inc.iterations:6d} "
+                     f"{(inc.residuals[-1] if inc.residuals else 0.0):14.5E}"
+                     f"   *** CUT (dl/2)")
+            if cuts > 8:
+                result.converged = False
+                result.stop_reason = (
+                    f"ARC-LENGTH FAILED AFTER 8 RADIUS CUTS AT LOAD FACTOR "
+                    f"{lam:.4E} (||R|| = "
+                    f"{inc.residuals[-1] if inc.residuals else 0.0:.4E})")
+                return
+            dl *= 0.5
+            continue
+        log.info(f" {inc_no:9d} {inc.load_factor:13.5E} {inc.iterations:6d} "
+                 f"{inc.residuals[-1]:14.5E}   converged (arc)")
+        # commit exactly like load control, PLUS the updated-Lagrangian
+        # frame advance and the path direction for the next predictor
+        committed = {name: _snapshot(g) for name, g in model.element_groups()}
+        x_ref = model.x.copy()
+        lam = inc.load_factor
+        dir_prev = Du_eq
+        cuts = 0
+        # adapt the radius toward the target iteration count
+        dl *= min(2.0, max(0.5, np.sqrt(itdes / max(inc.iterations, 1))))
+
+    # ---- land exactly on lam_end -------------------------------------------
+    # the arc trace rarely stops exactly at the final load factor; finish
+    # with one plain load-controlled Newton step (tiny, from the committed
+    # near-final state) so the reported state is at exactly lam_end.
+    if abs(lam - lam_end) > 1e-12 * max(abs(lam_end), 1.0):
+        loads_zero_imposed = []
+        inc = _solve_increment(model, ip, log, dof, _ArcLoads(q_full), solver,
+                               committed, x_ref, lam, lam_end,
+                               loads_zero_imposed, nlgeom=True)
+        result.increments.append(inc)
+        if inc.converged:
+            log.info(f" {len(result.increments):9d} {lam_end:13.5E} "
+                     f"{inc.iterations:6d} {inc.residuals[-1]:14.5E}"
+                     f"   converged (final)")
+        else:
+            result.converged = False
+            result.stop_reason = (
+                f"FINAL LOAD-CONTROLLED STEP TO {lam_end:.4E} DID NOT "
+                f"CONVERGE AFTER THE ARC TRACE")
+
+
+class _ArcLoads:
+    """Minimal stand-in for LoadsAndConstraints inside the arc driver's final
+    load-controlled step: the load is exactly lambda * q by the proportional
+    assumption already asserted, so re-walking the /FUNCT curves is not
+    needed (and the pattern was sampled at the committed reference frame)."""
+
+    def __init__(self, q_full):
+        self.q_full = q_full
+
+    def external_forces(self, lam, fext, x_ref):
+        fext += lam * self.q_full
+
+
+def _solve_increment_arc(model, ip, dof, solver, committed, x_ref, lam, dl,
+                         q_full, q_eq, wlam, dir_prev):
+    """One arc-length increment (predictor + Crisfield correctors) from the
+    committed state at load factor ``lam``, with constraint radius ``dl``
+    and spherical load-metric weight ``wlam`` (see _run_arclength).
+
+    Returns ``(inc, Du_eq)``: the increment record (``inc.load_factor`` is
+    the CONVERGED load factor — it may be smaller than ``lam``: that is the
+    method working, not an error) and the converged displacement increment in
+    equation space (the next predictor's direction). On failure (no
+    convergence, or complex roots of the constraint quadratic) the caller
+    restores nothing — the element buffers are re-based from ``committed``
+    at every residual/tangent evaluation."""
+    n = model.numnod
+
+    # ---- predictor: tangential step of length dl in the (u, lam) metric ----
+    for name, group in model.element_groups():
+        _restore(group, committed[name])
+    K0 = assemble(model, dof, x_ref, None, kgeo=True)
+    duT = solver.solve(K0, q_eq)
+    # continue along the previous increment's direction (the standard
+    # predictor-sign rule: it flips exactly where the path folds back).
+    # dir_prev carries the previous (Delta_u, Delta_lambda) so the metric
+    # dot product stays meaningful on near-vertical path segments.
+    sign = 1.0
+    if dir_prev is not None:
+        Du_prev, dlam_prev = dir_prev
+        if float(duT @ Du_prev) + wlam * dlam_prev < 0.0:
+            sign = -1.0
+    dlam = sign * dl / np.sqrt(float(duT @ duT) + wlam)
+    Du = dlam * duT                      # equation-space increment
+    dlam_tot = dlam                      # accumulated lambda increment
+    lam_t = lam + dlam
+    dlam_pred = abs(dlam)
+    u, ur = dof.scatter_solution(Du)
+
+    qnorm = float(np.linalg.norm(q_eq))
+    epsp0 = {name: committed[name].get("epsp")
+             for name, _ in model.element_groups()}
+    inc = IncrementResult(load_factor=lam_t, converged=False, iterations=0)
+
+    for it in range(ip.impl_max_iter):
+        fint, mint = _internal_forces(model, x_ref, u, ur, committed,
+                                      nlgeom=True)
+        R = dof.gather_residual(lam_t * q_full + fint, mint)
+        rnorm = float(np.linalg.norm(R))
+        inc.residuals.append(rnorm)
+        inc.iterations = it + 1
+        inc.load_factor = lam_t
+        # reference: the load level actually applied (never below the
+        # predictor's own step, so a near-zero crossing of lambda cannot
+        # make the tolerance impossible)
+        ref = max(qnorm * max(abs(lam_t), dlam_pred), 1e-30)
+        if rnorm <= ip.impl_tol * ref:
+            inc.converged = True
+            break
+
+        epsp_incr = {}
+        for name, group in model.element_groups():
+            if name == "bricks" and epsp0[name] is not None:
+                epsp_incr[name] = group.state["epsp"] - epsp0[name]
+        K = assemble(model, dof, x_ref + u, epsp_incr, kgeo=True)
+        du_bar = solver.solve(K, R)
+        du_t = solver.solve(K, q_eq)
+
+        # constraint quadratic (spherical metric, see module docstring):
+        # ||Du + du_bar + r*du_t||^2 + wlam*(dlam_tot + r)^2 = dl^2
+        #   ->  a*r^2 + b*r + c = 0
+        t = Du + du_bar
+        a = float(du_t @ du_t) + wlam
+        b = 2.0 * (float(du_t @ t) + wlam * dlam_tot)
+        c = float(t @ t) + wlam * dlam_tot * dlam_tot - dl * dl
+        disc = b * b - 4.0 * a * c
+        if disc < 0.0 or a <= 0.0:
+            # the corrector left the constraint sphere with no real
+            # intersection: the radius is too large for this part of the
+            # path — report failure, the caller halves dl and retries
+            inc.converged = False
+            return inc, (Du, dlam_tot)
+        sq = np.sqrt(disc)
+        r1 = (-b + sq) / (2.0 * a)
+        r2 = (-b - sq) / (2.0 * a)
+        # keep the root that continues forward along the current increment
+        # (maximizes the METRIC dot with (Du, dlam_tot) — Crisfield's
+        # criterion; the other root would double back along the traced path)
+        def _fwd(r):
+            return float(Du @ (t + r * du_t)) \
+                + wlam * dlam_tot * (dlam_tot + r)
+        pick = r1 if _fwd(r1) >= _fwd(r2) else r2
+        Du = t + pick * du_t
+        dlam_tot += pick
+        lam_t += pick
+        u, ur = dof.scatter_solution(Du)
+
+    if inc.converged:
+        model.x = model.x + u
+    return inc, (Du, dlam_tot)
 
 
 def _solver_banner(ip, log):
