@@ -133,20 +133,52 @@ What M12 adds (implicit CONSTRAINTS & CONTACT)
   handed to the M11 StepControl cut. The i7sti3 stiffness/gap machinery
   of contact/stiffness.py is reused unchanged.
 
+What M13 adds (implicit FRICTION, TYPE11, FOLLOWER LOADS, LAW36)
+----------------------------------------------------------------
+* **/INTER/TYPE7 Coulomb friction in the Newton loop** (``contact.py`` —
+  the FRIC blocks of i7keg3.F, checked: I7KFOR3's incremental branch is
+  a genuine return mapping): stick = tangential penalty spring K_t = K
+  on the slip increment, slip = radial return to the cone with the
+  CONSISTENT nonsymmetric tangent (the original's I7KEG3 assembles a
+  mu-scaled always-stick spring instead); anchors committed per
+  converged increment, slip work in the ``efric`` dynamics ledger
+  channel; mu = 0 bit-identical to M12.
+* **/INTER/TYPE11 edge-to-edge under implicit** (``ImplicitContact11``):
+  the same penalty-in-residual + gap-tangent pattern on the
+  segment-segment closest points, with the EXACT edge-edge closest-point
+  curvature (2x2 optimality-system linearization, every projection
+  region) and a two-point overlap quadrature for near-parallel pairs
+  (the single closest point of parallel edges flips ends — a period-2
+  Newton cycle otherwise). TYPE11 friction warns and runs frictionless.
+* **/PLOAD follower-load stiffness under /IMPL/NONLIN**
+  (``followerload.py`` — the IMP_KPRES analogue, documented deviation):
+  trial-configuration pressure residual + the exact nonsymmetric
+  -d f_ext/d x in K; /PLOAD + /IMPL/ARCL refused.
+* **LAW36 consistent tangents** (solids + shells): the LAW2 algorithmic
+  algebra with H from the table's local slope; the piecewise-linear
+  return is already exact at implicit increments (measured); rate
+  families truncated to the static curve (warned).
+* Two solver lessons: the imp_solv.F-style backtracking LINE SEARCH in
+  the statics Newton loop (engages only when the residual grows — smooth
+  runs bit-identical; the dynamic loop's M/(beta dt^2) diagonal already
+  regularizes the cycling)
+  and the PERSISTENT implicit hourglass state ``hgq`` (the incremental
+  static stabilization ratcheted across commits — latent since M8).
+
 Explicitly DEFERRED (documented in PORTING_GUIDE.md, not half-implemented):
 
-* friction and /INTER/TYPE11 in the implicit loop; Inacti/Igap 2/3;
-  /RWALL under implicit (refused); constraint CHAINS; /IMPDISP on
-  constraint nodes; /IMPL/ARCL and /IMPL/BUCKL with constraints/contact;
+* Ifric > 0 friction models (MFROT 1/2/3 + IFQ filtering) and TYPE11
+  friction under implicit; thermal contact; TYPE19/24/25;
+  Inacti/Igap 2/3; /RWALL under implicit (refused); constraint CHAINS;
+  /IMPDISP on constraint nodes; /IMPL/ARCL and /IMPL/BUCKL with
+  constraints/contact; /PLOAD with /IMPL/ARCL (refused);
 * **consistent (element) mass**, modal/eigenvalue dynamics,
   implicit-explicit switching mid-run, /IMPVEL under implicit dynamics
   (use /IMPDISP);
-* rate devices under implicit — the LAW2 strain-rate term, the bulk
-  viscosity and the spring dashpot are disabled LOUDLY, never fed the
-  pseudo-velocity;
-* **follower-load (pressure) stiffness**: /PLOAD is evaluated at the
-  committed frame; its configuration-dependence is not linearized into K;
-* LAW27/36/42 implicit tangents and the LAW2 BEAM (global resultant
+* rate devices under implicit — the LAW2 strain-rate term, the LAW36
+  rate-curve family, the bulk viscosity and the spring dashpot are
+  disabled LOUDLY, never fed the pseudo-velocity;
+* LAW27/42 implicit tangents and the LAW2 BEAM (global resultant
   plasticity) tangent; the IDTC = 2/3 step controls and /IMPL/DT/FIXP;
   the exact plane-stress (Iplas=1) LAW2 return.
 

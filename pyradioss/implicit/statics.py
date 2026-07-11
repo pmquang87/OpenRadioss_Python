@@ -153,11 +153,25 @@ coupling). Rigid walls are REFUSED under implicit (a kinematic device of
 the explicit update; silently ignoring a wall would drop a real boundary
 condition).
 
+M13 closed the M12 deferral list's head: /INTER/TYPE7 COULOMB FRICTION
+(the i7kfor3.F incremental return mapping — ``contact.py``, anchors
+committed per increment through ``commit_contacts``), /INTER/TYPE11
+edge-to-edge, the /PLOAD FOLLOWER-LOAD stiffness under /IMPL/NONLIN
+(trial-configuration pressure residual + ``followerload.pload_tangent``;
+/PLOAD + /IMPL/ARCL refused) and the LAW36 consistent tangents (rate
+families truncated to the static curve — ``_law36_static_curve``). It
+also added the imp_solv.F-style backtracking LINE SEARCH in the Newton
+loop below (the ILINE branch: engages ONLY when the residual norm grows,
+so every monotone run is bit-identical — it breaks the period-2
+assignment cycles a friction stick/slip boundary can fall into) and the
+persistent implicit hourglass state (see solid_hexa8.static_stabilization
+— the incremental form ratcheted across commits).
+
 Still DEFERRED (documented, not half-done — see the package docstring and
-PORTING_GUIDE): friction and /INTER/TYPE11 in the implicit loop,
-follower-load (pressure) stiffness, LAW27/36/42 and LAW2-beam tangents,
-rate devices under implicit (disabled loudly), arc length / /IMPL/BUCKL
-combined with constraints or contact.
+PORTING_GUIDE): Ifric > 0 friction models and TYPE11 friction under
+implicit, LAW27/42 and LAW2-beam tangents, rate devices under implicit
+(disabled loudly), arc length / /IMPL/BUCKL combined with constraints or
+contact.
 """
 
 from __future__ import annotations
@@ -442,6 +456,7 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
     if nvisc:
         log.info(" BULK VISCOSITY (qa/qb) . . . . . . . : DISABLED (STATICS)")
     _warn_spring_dashpot(model, log)
+    _law36_static_curve(model, log)
 
     # rigid walls are a kinematic device of the explicit velocity update —
     # under implicit they would be silently dropped boundary conditions:
@@ -511,6 +526,17 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
             "/IMPL/ARCL and /IMPL/BUCKL combined with kinematic "
             "constraints or /INTER contact are DEFERRED (PORTING_GUIDE "
             "M12) — run plain /IMPL[/NONLIN] load control.")
+    if arc and model.ploads:
+        # a follower pressure is configuration-dependent: f_ext != lambda*q
+        # once the geometry moves, which breaks the proportional-loading
+        # assumption the arc-length constraint is built on (M13 — the
+        # pattern was previously sampled at the INITIAL frame silently)
+        raise NotImplementedError(
+            "/PLOAD combined with /IMPL/ARCL is not supported: a follower "
+            "pressure violates the proportional-loading assumption "
+            "f_ext = lambda*q of the arc-length method (PORTING_GUIDE "
+            "M13). Use load control (/IMPL/NONLIN) or replace the "
+            "pressure by /CLOAD forces.")
 
     if arc:
         _run_arclength(model, controls, log, dof, loads, solver, committed,
@@ -556,6 +582,12 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
         # geometry the reference frame advances to the deformed
         # configuration (updated Lagrangian); otherwise it stays at x0.
         committed = {name: _snapshot(g) for name, g in model.element_groups()}
+        if contacts:
+            # M13: re-base the friction anchors on the converged
+            # configuration (the I7KFOR3 CAND_F save — a failed increment
+            # never reaches here, so the anchors always match ``committed``)
+            from .contact import commit_contacts
+            commit_contacts(contacts, model.x)
         if nlg:
             if constr is not None:
                 # exact placement of the dependent nodes (rigid bodies via
@@ -616,6 +648,35 @@ def _warn_spring_dashpot(model, log):
             "elastic (see PORTING_GUIDE M11)", "IMPL")
 
 
+def _law36_static_curve(model, log):
+    """LAW36 rate handling under implicit (M13): a multi-curve family is
+    rate-interpolated by the EXPLICIT kernel from the increment's
+    pseudo-rate |dev(du)|/1 — a step-size artifact, not a physical rate
+    (the same reason the LAW2 strain-rate term is disabled). The implicit
+    run therefore TRUNCATES the family to its first (lowest-rate, static)
+    curve with a warning, which keeps the residual (the explicit kernel)
+    and the M13 consistent tangent (law36_tabulated.consistent_*_tangent,
+    which reads the static curve) exactly consistent. Rate-dependent
+    tabulated plasticity under implicit stays deferred (PORTING_GUIDE
+    M13) — never fed du/1 silently. Single-curve materials are untouched
+    (the rate argument then never selects anything)."""
+    warned = set()
+    for name, group in model.element_groups():
+        for sl, mat, prop in group.state["slices"]:
+            if mat.law == 36 and len(mat.params.get("curve_x", ())) > 1 \
+                    and id(mat) not in warned:
+                warned.add(id(mat))
+                nfun = len(mat.params["curve_x"])
+                for key in ("curve_x", "curve_y", "curve_s"):
+                    mat.params[key] = mat.params[key][:1]
+                mat.params["rates"] = mat.params["rates"][:1]
+                log.warning(
+                    f"/MAT/LAW36/{mat.id}: the strain-rate curve family "
+                    f"({nfun} curves) is DEFERRED under the implicit "
+                    f"solver — only the first (static) curve is used "
+                    f"(see PORTING_GUIDE M13)", "IMPL")
+
+
 def _resolve_imposed(model, log):
     """Resolve /IMPDISP into (index, dof, funct, scale, x0-value) tuples and a
     (numnod, 6) prescribed-DOF mask for the equation numbering."""
@@ -663,6 +724,15 @@ def _solve_increment(model, controls, log, dof, loads, solver,
     def _reduce(vec):
         return constr.reduce_vector(vec) if constr is not None else vec
 
+    # M13: under NONLINEAR geometry a /PLOAD is a FOLLOWER load — the
+    # residual must evaluate it at the TRIAL configuration (model.x + u,
+    # like contact) and the tangent gains the load-stiffness term
+    # -d f_ext/d x (implicit/followerload.py). The small-displacement path
+    # keeps the dead committed-frame pressure (byte-identical to M8).
+    from .followerload import has_follower, pload_tangent
+    follower = nlgeom and has_follower(loads)
+    lstiff = follower and bool(getattr(controls, "impl_load_stiff", True))
+
     # external force at this load factor (the loads machinery evaluates the
     # curves at t = lam — the load factor plays the role of the pseudo-time)
     fext = np.zeros((n, 3))
@@ -688,21 +758,29 @@ def _solve_increment(model, controls, log, dof, loads, solver,
         # the internal force as well (see ``ref`` update after iter 0)
     inc = IncrementResult(load_factor=lam, converged=False, iterations=0)
 
-    def _residual():
-        """Residual at the current trial increment: internal force from the
+    def _residual(ut, urt):
+        """Residual at trial increment (ut, urt): internal force from the
         committed base + the M12 contact force at the trial CONFIGURATION
-        (model.x + u — contact is geometric in both element modes)."""
-        fint, mint = _internal_forces(model, x_ref, u, ur, committed, nlgeom)
+        (model.x + u — contact is geometric in both element modes). With a
+        follower /PLOAD under NLGEOM (M13) the whole external force is
+        re-evaluated at the trial configuration too (only the pressure
+        actually depends on it — gravity//CLOAD are dead loads)."""
+        fint, mint = _internal_forces(model, x_ref, ut, urt, committed,
+                                      nlgeom)
         if contacts:
             from .contact import contact_forces
-            fcont, _ = contact_forces(contacts, model.x + u, n)
+            fcont, _ = contact_forces(contacts, model.x + ut, n)
             fint = fint + fcont
-        return fint, mint, _reduce(dof.gather_residual(fext + fint, mint))
+        fx = fext
+        if follower:
+            fx = np.zeros((n, 3))
+            loads.external_forces(lam, fx, model.x + ut)
+        return fint, mint, _reduce(dof.gather_residual(fx + fint, mint))
 
+    # first residual R = f_ext + f_int(u) (+ contact), reduced eqn space
+    fint, mint, R = _residual(u, ur)
+    rnorm = float(np.linalg.norm(R))
     for it in range(ip.impl_max_iter):
-        # residual R = f_ext + f_int(u) (+ contact), reduced equation space
-        fint, mint, R = _residual()
-        rnorm = float(np.linalg.norm(R))
         inc.residuals.append(rnorm)
         inc.iterations = it + 1
         if it == 0:
@@ -730,23 +808,53 @@ def _solve_increment(model, controls, log, dof, loads, solver,
             # the IMP_INT_K assembly step)
             from .contact import contact_tangent
             K = K + contact_tangent(contacts, model.x + u, dof)
+        if lstiff:
+            # M13: follower-pressure load stiffness -d f_ext/d x at the
+            # trial configuration (imp_glob_k.F IMP_KPRES analogue — see
+            # followerload.py for the documented deviation)
+            K = K + pload_tangent(loads, model, lam, model.x + u, dof)
         if constr is not None:
             du_eq = constr.expand(solver.solve(constr.reduce_matrix(K), R))
         else:
             du_eq = solver.solve(K, R)
         du, dur = dof.scatter_solution(du_eq)
-        u = u + du
-        ur = ur + dur
+
+        # ---- backtracking line search (M13 — the ILINE branch of
+        # imp_solv.F, IMCONV = -1): the FULL Newton step is accepted
+        # whenever it does not grow the residual norm, so every monotone
+        # (smooth) run is bit-identical to the plain Newton path. A step
+        # that GROWS the residual — the signature of the non-smooth
+        # assignment cycles a contact active set or a friction stick/slip
+        # boundary can fall into (a mixed stick-slip state with pairs
+        # parked exactly on the Coulomb cone cycled with period 2 before
+        # this) — is backtracked by halving, keeping the best trial.
+        alpha, best, alpha_last = 1.0, None, 1.0
+        for ls in range(4):
+            alpha_last = alpha
+            fint_t, mint_t, R_t = _residual(u + alpha * du,
+                                            ur + alpha * dur)
+            rn_t = float(np.linalg.norm(R_t))
+            if best is None or rn_t < best[0]:
+                best = (rn_t, alpha, fint_t, mint_t, R_t)
+            if rn_t <= rnorm or ls == 3:
+                break
+            alpha *= 0.5
+        rnorm, alpha, fint, mint, R = best
+        u = u + alpha * du
+        ur = ur + alpha * dur
+        if alpha != alpha_last:
+            # the element buffers must hold the ACCEPTED trial state: the
+            # kept trial was not the last one evaluated — re-evaluate there
+            # (a rare path: only when every backtrack failed to improve)
+            fint, mint, R = _residual(u, ur)
 
         # displacement convergence: negligible correction relative to the
         # accumulated increment (catches a converged step whose residual
         # reference is tiny, e.g. a pure displacement-controlled increment)
         unorm = np.linalg.norm(dof.gather_residual(u, ur))
-        if np.linalg.norm(du_eq) <= ip.impl_tol * max(unorm, 1e-30) \
+        if alpha * np.linalg.norm(du_eq) <= ip.impl_tol * max(unorm, 1e-30) \
                 and it > 0:
-            # re-evaluate the residual at the corrected u for the record
-            fint, mint, R = _residual()
-            inc.residuals.append(float(np.linalg.norm(R)))
+            inc.residuals.append(rnorm)
             inc.iterations = it + 2
             inc.converged = True
             break

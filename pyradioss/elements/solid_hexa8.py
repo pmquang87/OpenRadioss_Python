@@ -231,6 +231,13 @@ def init_group(group, model, log):
         # cycle's trD (the leapfrog-consistent midstep booking — see the
         # energy block in forces())
         qvw_pend=np.zeros(n),
+        # accumulated hourglass MODAL displacement (mode a, direction d) of
+        # the IMPLICIT static path — see static_stabilization: the explicit
+        # hourglass is viscous and carries no deformation state, but the
+        # implicit stiffness hourglass must remember its deformation across
+        # committed increments or the modes ratchet (an M13 lesson). Inert
+        # in the explicit engine (never read or written there).
+        hgq=np.zeros((n, 4, 3)),
         # exact stability correction to the lc/c estimate (module docstring)
         dtfac=_exact_dt_factor(dndx0, vol, lc0, group.state["slices"]),
     )
@@ -694,13 +701,45 @@ def _hg_operators(group, x):
 def static_stabilization(group, x, u, ur, fint, mint):
     """Add the static stiffness-hourglass NODAL FORCE to ``fint`` (the part of
     the implicit residual that forces() does not supply, because its hourglass
-    is viscous — see the note above). f_i = -k_stiff * sum_modes (gamma . u_e)
-    gamma_i, per translation direction; ``ur``/``mint`` are unused (solids
-    carry no rotational DOF). Consistent with the k_stiff term of tangent()."""
+    is viscous — see the note above); ``ur``/``mint`` are unused (solids
+    carry no rotational DOF). Consistent with the k_hg term of tangent().
+
+    M13 made the hourglass deformation PERSISTENT across committed
+    increments (state ``hgq``, the accumulated modal displacement,
+    committed/restored with the stress by the driver's snapshot
+    machinery): the original incremental form  -k_stiff (gamma . u)
+    forgot the accumulated hourglass deformation at every commit — each
+    increment's converged hourglass content turned into a permanent
+    out-of-balance jump at the next increment's start and the modes
+    RATCHETED increment by increment (exposed by a moment-loaded block
+    whose corner forces excite the modes hard: every M8-M12 validation
+    loads solids symmetrically enough that the term stayed invisible).
+    The total hourglass force of the implicit residual is now
+
+        f = -k_hg * (q_committed + gamma.u) . gamma,   k_hg = a_h + k_s
+
+    of which forces() already emits the viscous  a_h * (gamma.u)  part
+    (the pseudo-velocity drive), so this adds  k_s*(gamma.u) + k_hg*q  —
+    the tangent's k_hg block is exactly its derivative. The stored modal
+    state is updated in place (pure: the driver restores the committed
+    base before every evaluation). The NLGEOM branch keeps its own
+    treatment (static_internal_forces — updated-Lagrangian hourglass,
+    where the committed deformation lives in the advanced frame itself);
+    the stored hourglass strain energy of this term is not booked into
+    ``ehour`` (a statics device; documented, like the incremental form
+    before it)."""
+    st = group.state
     conn, gamma, GG, k_hg, k_stiff = _hg_operators(group, x)
     ue = u[conn]                                               # (n, 8, 3)
     modal = np.einsum("nai,nid->nad", gamma, ue)              # (n, 4, 3)
-    fe = -k_stiff[:, None, None] * np.einsum("nad,nai->nid", modal, gamma)
+    q0 = st["hgq"]                        # committed base (just restored)
+    fe = -np.einsum("nad,nai->nid",
+                    k_stiff[:, None, None] * modal
+                    + k_hg[:, None, None] * q0, gamma)
+    q0[...] = q0 + modal                  # trial state, in place (array
+    #                                       identity kept — the snapshot/
+    #                                       restore contract); committed
+    #                                       on convergence
     scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
 
 

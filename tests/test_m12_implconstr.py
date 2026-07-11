@@ -1015,7 +1015,13 @@ def test_m12_builds_do_not_touch_shared_state(make_deck):
 # loud refusals (deferred, never silent)
 # ----------------------------------------------------------------------------
 
-def test_type11_refused_under_implicit(make_deck):
+def test_type11_no_longer_refused_under_implicit(make_deck):
+    """/INTER/TYPE11 under implicit was a loud M12 refusal; M13 upgraded
+    it to a capability (implicit/contact.ImplicitContact11 — validated in
+    tests/test_m13_implfric.py). This test keeps the old refusal deck and
+    asserts the run now CONVERGES with the edge springs pushing the
+    initially-penetrating parallel edges apart (the near-parallel
+    curvature guard path)."""
     starter = _stack_deck(0.02, 0.05, 50.0, 0.0)
     i0 = starter.index("/INTER/TYPE7/1")
     i1 = starter.index("/FUNCT/1")
@@ -1033,8 +1039,14 @@ edges
     s, e = make_deck("T11R", starter, "#\n/RUN/T11R/1\n1.0\n/IMPL\n/END\n")
     with contextlib.redirect_stdout(io.StringIO()):
         run_starter(s)
-        with pytest.raises(NotImplementedError, match="TYPE11"):
-            run_engine(e)
+        model = run_engine(e)
+    assert model.implicit_result.converged
+    # the edge spring separated the initially-penetrating faces: the top
+    # block rose (edge b, nodes 11/12 z > start) while the bottom block's
+    # top edge was pushed down
+    d = model.x - model.x0
+    assert d[model.node_index(11), 2] > 1e-6
+    assert d[model.node_index(5), 2] < -1e-6
 
 
 def test_rwall_refused_under_implicit(make_deck):
