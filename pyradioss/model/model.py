@@ -229,6 +229,12 @@ class EngineControls:
     impl_fatig_k: float = 0.3       # Findley/Fatemi-Socie normal-sensitivity k
     impl_fatig_sigy: float = 1.0    # yield stress sigma_y (Fatemi-Socie)
     impl_fatig_amp: str = "mrh"     # shear-path amplitude: mrh / mcc / chord
+    # M23 /IMPL/FATIG/MULT/NPROP/SPEC: SPECTRAL non-proportional multiaxial
+    # fatigue — the frequency-domain F_np and critical-plane damage estimated
+    # DIRECTLY from the cross-PSD moment matrices (no synthesised history), run
+    # ALONGSIDE the M21 spectral + M22 time-domain answers. Implies NPROP (hence
+    # MULT). See implicit/spectral_nonproportional_fatigue.py.
+    impl_fatig_spec: bool = False   # /IMPL/FATIG/MULT/NPROP/SPEC -> spectral NP
 
 
 class Model:

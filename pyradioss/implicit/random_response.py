@@ -915,6 +915,7 @@ def _run_multiaxial(model, ip, log, result, frf, Sigma, channels, psd_tab,
     # searches the Findley / Fatemi-Socie / shear-path critical plane. See
     # implicit/nonproportional_fatigue.py.
     nprop = bool(getattr(ip, "impl_fatig_nprop", False))
+    spec_np = bool(getattr(ip, "impl_fatig_spec", False))
     npres = None
     if nprop:
         from . import nonproportional_fatigue as npf
@@ -929,9 +930,23 @@ def _run_multiaxial(model, ip, log, result, frf, Sigma, channels, psd_tab,
         npres = npf.nonproportional_summary(
             frf["freqs"], summ["Scross"], m_sn, C_sn, mc_dur, mc_seed,
             k=k_np, sigma_y=sigy, amp_method=amp, naz=naz, npol=npol)
+        # M23: the SPECTRAL non-proportional estimate runs ALONGSIDE the M22
+        # time-domain path count (a NEW parallel path — the M22 answer above is
+        # fully formed and left byte-identical). It reuses the SAME critical
+        # element's 6x6 spectral-MOMENT matrices (summ["Mmats"]) — NO synthesised
+        # history — and estimates the frequency-domain F_np + critical-plane
+        # damage directly, so the listing shows the proportional-spectral (M21),
+        # non-proportional time-domain (M22) and non-proportional spectral (M23)
+        # answers side by side. See implicit/spectral_nonproportional_fatigue.py.
+        if spec_np:
+            from . import spectral_nonproportional_fatigue as snp
+            npres["spectral"] = snp.spectral_nonproportional_summary(
+                summ["Mmats"], m_sn, C_sn, k=k_np, sigma_y=sigy,
+                mean_stress=mean_stress, ultimate=ultimate, naz=naz, npol=npol)
 
     result.fatigue = {
         "multiaxial": True, "nonproportional": nprop,
+        "spectral_nonproportional": spec_np,
         "channels": channels, "voigt_blocks": blocks,
         "critical_element": (cname, ce, cbase),
         "critical_label": cbase,
@@ -1038,4 +1053,44 @@ def _report_nonproportional(log, npres):
         life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
         log.info(f"      {name:15s} [{n[0]:+.3F} {n[1]:+.3F} {n[2]:+.3F}]  "
                  f"{r['sn_max']:+.4E} {r['tau_a']:.4E} {r['F_np']:.3F}  "
+                 f"{r['damage_rate']:.5E}  {life_s}")
+    # M23: the SPECTRAL non-proportional block, printed ALONGSIDE the M22
+    # time-domain numbers so all THREE answers (M21 proportional-spectral, M22
+    # non-proportional time-domain, M23 non-proportional spectral) show side by
+    # side. The spectral estimate uses the cross-PSD moment matrices directly —
+    # NO synthesised history.
+    if npres.get("spectral") is not None:
+        _report_spectral_nonproportional(log, npres["spectral"])
+
+
+def _report_spectral_nonproportional(log, sp):
+    """Print the SPECTRAL NON-PROPORTIONAL / CRITICAL-PLANE (M23) listing block:
+    the frequency-domain non-proportionality factor F_np and the Susmel-Tovo
+    stress ratio rho on the critical plane (from the cross-PSD moment matrices,
+    no synthesised history), and for each critical-plane model (Findley,
+    Fatemi-Socie, shear-path) the critical plane normal, F_np, rho, the effective
+    shear amplitude tau_a and the Dirlik damage rate / life."""
+    amp = sp["amplitudes"]
+    log.info("\n     ** SPECTRAL NON-PROPORTIONAL FATIGUE **   "
+             "(/IMPL/FATIG/MULT/NPROP/SPEC)")
+    log.info(f"      FREQUENCY-DOMAIN ESTIMATE (no synthesised history; "
+             f"psf = {sp['peak_factor']:.4F})")
+    log.info(f"      SHEAR RMS  DOMINANT / EFFECTIVE (Findley plane) : "
+             f"{amp['shear_rms_dominant']:.5E} / "
+             f"{amp['shear_rms_effective']:.5E}")
+    log.info(f"      NON-PROPORTIONALITY  F_np / PATH FACTOR g / rho : "
+             f"{amp['F_np']:.5F} / {amp['g']:.5F} / {amp['rho']:.5F}")
+    log.info("      MODEL            CRIT-PLANE NORMAL         F_np    rho    "
+             "tau_a       DAMAGE RATE     LIFE")
+    for key, name in (("findley", "FINDLEY 1959"),
+                      ("fatemi_socie", "FATEMI-SOCIE 88"),
+                      ("shear_path", "SHEAR-PATH")):
+        r = sp.get(key)
+        if r is None:
+            continue
+        n = r["normal"]
+        life = r["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      {name:15s} [{n[0]:+.3F} {n[1]:+.3F} {n[2]:+.3F}]  "
+                 f"{r['F_np']:.3F}  {r['rho']:.3F}  {r['tau_a']:.4E}  "
                  f"{r['damage_rate']:.5E}  {life_s}")

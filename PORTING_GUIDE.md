@@ -114,6 +114,7 @@ same names in comments.
 | — (NO frequency-domain / spectral-fatigue solver anywhere in the open-source engine — `freimpl.F` re-read line by line for M20: no /FATIG, no S-N / Miner branch, no Dirlik / rainflow / narrow-band estimator; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/spectral_fatigue.py` + the stress-recovery section of `pyradioss/implicit/random_response.py` + `/IMPL/FATIG` in `engine_keywords.py` | M20: RANDOM-VIBRATION (SPECTRAL) FATIGUE — the stress-life damage estimate computed DIRECTLY from the M19 stress-PSD spectral moments. STRESS-PSD RECOVERY: the per-mode stress modes σᵢ = (element stress operator)·φᵢ recovered by running the SAME force kernels the M8 static solve uses on each mode shape (read-only, σ = C:B:u on the zero-stress reference), the stress FRF H_σ(Ω) = Σᵢ σᵢ qᵢ(Ω) and the stress response PSD S_σσ(Ω) = \|H_σ\|² S_ff with its own moments m₀..m₄. DAMAGE MODELS for an S-N curve N = C·S^−m under a Miner sum: NARROW-BAND (Bendat 1964, the closed-form Rayleigh-range Γ(1+m/2) damage), DIRLIK (1985, the empirical three-term rainflow-range PDF from m₀,m₁,m₂,m₄), WIRSCHING–LIGHT (1980) and TOVO–BENASCIUTTI (2005) — the damage rate, equivalent stress and time-to-failure, plus a seeded Monte-Carlo rainflow (ASTM E1049) cross-check. PORT card, library-first exactly like M16–M19; the M10 integrator and the M16/M17/M18/M19 paths stay bit-identical (a NEW parallel path consuming the stress moments read-only). Theory: Bendat 1964; Dirlik 1985; Wirsching & Light 1980; Benasciutti & Tovo 2005; Newland; Bishop & Sherratt (NAFEMS); Palmgren–Miner; ASTM E1049 |
 | — (NO frequency-domain / spectral-fatigue solver of ANY kind — scalar OR multiaxial — anywhere in the open-source engine — `freimpl.F` re-read line by line for M21: no /FATIG, no von-Mises / critical-plane / cross-PSD machinery; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/multiaxial_fatigue.py` + the per-element Voigt-block helpers & `_run_multiaxial` driver in `pyradioss/implicit/random_response.py` + `/IMPL/FATIG/MULT` in `engine_keywords.py` | M21: MULTIAXIAL / CRITICAL-PLANE SPECTRAL FATIGUE — the damage estimate of a MULTIAXIAL stress STATE, the natural consumer of the M20 scalar-channel fatigue and vector stress FRF. STRESS-TENSOR CROSS-PSD: the M20 vector stress modes give the FULL 6-Voigt stress FRF H_σ(Ω) (nf,6) per solid/shell element (read-only); the stress-tensor cross-PSD S_σσ(Ω) = H_σ S_ff H_σᴴ (a 6×6 Hermitian matrix per frequency per element) — its diagonal = the M20 per-component channel PSDs, uniaxial → the M20 scalar σₓₓ. EQUIVALENT-STRESS METHODS: reduce the 6×6 to a scalar and run the M20 estimators — the frequency-domain EQUIVALENT VON MISES S_vm = trace(Q·S_σσ) (Preumont & Piéfort 1994 / Pitoiset & Preumont 2000, the von Mises quadratic operator Q; rank-1 form HᴴQH), plus MAX-NORMAL and MAX-SHEAR CRITICAL PLANE (Carpinteri–Spagnoli / Cristofori–Susmel–Tovo, the projection-by-direction spectral form σₙ=pₙᵀσ, τ=pₛᵀσ over a searched candidate-plane set), reporting the critical-plane damage/equivalent-stress/life. A MULTIVARIATE Monte-Carlo cross-check (Cholesky/eigen of S_σσ → correlated Gaussian component histories → project onto the critical plane → ASTM E1049 rainflow → Miner, seeded). PORT sub-card, library-first exactly like M16–M20; the M10 integrator and the M16–M20 paths (incl. the M20 SCALAR fatigue) stay bit-identical (a NEW parallel path consuming the vector stress modes read-only). Theory: Preumont & Piéfort 1994; Pitoiset & Preumont 2000; Carpinteri–Spagnoli 2001; Cristofori/Susmel–Tovo 2008; Socie & Marquis; Shinozuka & Deodatis (multivariate synthesis) |
 | — (NO frequency-domain / spectral / critical-plane / path-counting fatigue solver of ANY kind anywhere in the open-source engine — `freimpl.F` re-read line by line for M22: no /FATIG, no critical-plane / MCC / Findley / Fatemi-Socie machinery; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/nonproportional_fatigue.py` + the `_run_nonproportional` extension of the `_run_multiaxial` driver (`_report_nonproportional`) in `pyradioss/implicit/random_response.py` + `/IMPL/FATIG/MULT/NPROP` in `engine_keywords.py` | M22: NON-PROPORTIONAL MULTIAXIAL FATIGUE — the critical-plane TIME-DOMAIN path-counting damage of a rotating (non-proportional) shear path, the FIRST item deferred out of M21 that BUILDS on it (the rotating-shear PATH the M21 projected-equivalent spectral methods deferred), the natural consumer of the M21 multivariate synthesiser + candidate-plane machinery. SHEAR-PATH AMPLITUDE OPERATORS: on a candidate plane, the 2-D resolved-shear locus (τ_a(t),τ_b(t)) in the M21 in-plane basis (a `shear_projection` per in-plane axis of a synthesised stress-component history) — the MINIMUM CIRCUMSCRIBED CIRCLE (Papadopoulos 1998, radius = τ_a; Welzl on the convex hull), the LONGEST CHORD / longest projection (the diameter), and the MAXIMUM RECTANGULAR / PRISMATIC HULL (Mamiya–Araújo–Castro 2009, max_θ √(a1²+a2²)). All collapse to the scalar M21 amplitude for a proportional line; for a circle MCC=r, chord=2r, MRH=r√2. A non-proportionality factor F_np = √(λ₂/λ₁) of the 2-D shear-path covariance (the Itoh–Kanazawa aspect-ratio form: 0 for a line, 1 for a circle). CRITICAL-PLANE TIME-DOMAIN DAMAGE: over the M21-synthesised correlated stress-component histories (seeded), resolve σ_n(t) and the shear PATH on each candidate plane, rainflow (ASTM E1049) the dominant resolved shear scaled by the non-proportional path factor g=MRH/scalar, and apply FINDLEY (τ_a + k σ_n,max) and FATEMI–SOCIE (γ_a(1 + k σ_n,max/σ_y)) carrying the per-plane MAX NORMAL stress (which folds in that plane's mean — a piece of the M20/M21 mean-stress deferral). Search the critical plane (max criterion parameter — the textbook Findley/FS definition), report the plane, F_np, damage rate / life. For PROPORTIONAL loading the path count reduces to the M21 max-shear rainflow (g=1, F_np=0); for a 90°-out-of-phase case the non-proportional damage is g^m higher than the scalar projection (F_np≈1) — the extra damage the spectral method misses. PORT sub-flag, library-first exactly like M16–M21; the M10 integrator, the M16–M20 paths AND the M21 SPECTRAL reductions stay bit-identical (a NEW parallel path — the M21 spectral answer is byte-identical whether or not /NPROP runs). Theory: Papadopoulos 1998; Mamiya–Araújo–Castro 2009; Findley 1959; Fatemi–Socie 1988; Matake 1977; Carpinteri–Spagnoli 2001; Itoh–Sakane–Socie 1995; Socie & Marquis ch. 2–4 |
+| — (NO frequency-domain / spectral / critical-plane / non-proportional fatigue solver of ANY kind anywhere in the open-source engine — `freimpl.F` re-read line by line for M23: no /FATIG, no frequency-domain non-proportionality / modified-Wöhler / spectral-invariant machinery; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/spectral_nonproportional_fatigue.py` + the `_run_spectral_nonproportional` extension of the `_run_multiaxial` driver (`_report_spectral_nonproportional`) in `pyradioss/implicit/random_response.py` + `/IMPL/FATIG/MULT/NPROP/SPEC` in `engine_keywords.py` | M23: SPECTRAL NON-PROPORTIONAL MULTIAXIAL FATIGUE — the FREQUENCY-DOMAIN non-proportionality factor and critical-plane damage estimated DIRECTLY from the stress-tensor cross-PSD spectral-MOMENT matrices, with NO synthesised history (the Cristofori–Susmel–Tovo / Pitoiset spectral method M22's time-domain path count deferred), the SPECTRAL sibling of M22. SPECTRAL SHEAR-PATH / F_np: on a candidate plane, the 2×2 in-plane shear cross-spectral moment matrix Σ_τ (the 2×2 block of the M21 M₀ = E[σσᵀ] built from `shear_projection` along each in-plane axis — NO synthesis), and F_np = √(λ₂/λ₁) of its eigenvalues — EQUALS the M22 TIME-DOMAIN F_np (the identity M₀ = E[σσᵀ] = the covariance the synthesiser reproduces); F_np = 0 for a proportional (rank-1) state, → 1 for the 90°-out-of-phase circle. SPECTRAL CRITICAL-PLANE DAMAGE: the dominant-shear PSD moments p_domᵀMₙp_dom and resolved-normal p_nᵀMₙp_n (from p^T Mₙ p, no history), the closed-form non-proportional amplitude correction g² = 1 + F_np² = trace(Σ_τ)/λ₁ (the exact MRH/MCC ratio of an elliptical path — the M22 prismatic-hull effect read spectrally), the Susmel–Tovo modified-Wöhler stress ratio ρ = σ_a/τ_a, and the equivalent-stress moments per model (FINDLEY as the spectral-invariant linear combination g·τ + k·σ_n, FATEMI–SOCIE, SHEAR-PATH) run through the four M20 estimators. For PROPORTIONAL loading the spectral shear-path damage reduces EXACTLY to the M21 max-shear spectral answer (F_np=0); for 90°-out-of-phase it is (1+F_np²)^(m/2)=2^(m/2) higher than the M21 projected scalar AND agrees with the M22 time-domain path count within scatter (the two non-proportional methods converge). PORT sub-flag, library-first exactly like M16–M22; the M10 integrator, the M16–M20 paths, the M21 SPECTRAL reductions AND the M22 TIME-DOMAIN path count stay bit-identical (a NEW parallel path — both byte-identical whether or not /SPEC runs). Theory: Pitoiset & Preumont 2000; Cristofori–Susmel–Tovo 2008; Susmel & Lazzarin 2002; Bäckström & Marquis 2001; Carpinteri–Spagnoli–Vantadori 2013 |
 
 ## 3. Conventions used in this port
 
@@ -280,7 +281,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | **RANDOM-VIBRATION (SPECTRAL) FATIGUE (M20)**: the stress-life fatigue-damage estimate computed DIRECTLY from the M19 stress-PSD spectral moments (`implicit/spectral_fatigue.py`, `implicit/random_response.py` stress recovery, `/IMPL/FATIG`). STRESS-PSD RECOVERY — the per-mode STRESS modes σᵢ = (element stress operator)·φᵢ recovered by running the SAME force kernels the M8 static solve uses on each mode shape (read-only; sigma = C:B:u the linear stress operator on the zero-stress reference), the stress FRF H_σ(Ω) = Σᵢ σᵢ qᵢ(Ω) (stress commutes with the modal superposition) and the stress response PSD S_σσ(Ω) = \|H_σ\|² S_ff with its own moments m₀..m₄. DAMAGE MODELS — for an S-N curve N = C·S^−m under a Miner sum: the NARROW-BAND (Bendat 1964) closed-form Rayleigh-range Gamma-function damage E[D]/T = (ν₀/C)(2√2σ)^m Γ(1+m/2), DIRLIK (1985) (the empirical three-term rainflow-range PDF from m₀,m₁,m₂,m₄), WIRSCHING–LIGHT (1980) and TOVO–BENASCIUTTI (2005) as wide-band cross-checks — reporting the damage rate, equivalent stress and time-to-failure, plus a seeded Monte-Carlo rainflow (ASTM E1049) cross-check (synthesise a Gaussian history from the PSD, count, Miner-sum). Validated: the narrow-band closed form vs a hand Gamma evaluation; Dirlik → narrow-band as the bandwidth → 0 and the correct wide-band bias on a bimodal spectrum; the ASTM E1049 counter on its canonical example; the Monte-Carlo damage matching Dirlik within the documented scatter; the recovered static stress = the M8 static stress; the stress FRF = the direct stress operator on U(Ω). A PORT card, library-first like M16–M19; the M10 integrator, M16/M17/M18/M19 paths stay BIT-IDENTICAL (a NEW parallel path consuming the stress moments read-only — monkeypatch-asserted parity) | ✅ |
 | **MULTIAXIAL / CRITICAL-PLANE SPECTRAL FATIGUE (M21)**: the fatigue-damage estimate of a MULTIAXIAL stress STATE (`implicit/multiaxial_fatigue.py`, the per-element Voigt-block helpers + `_run_multiaxial` in `implicit/random_response.py`, `/IMPL/FATIG/MULT`). STRESS-TENSOR CROSS-PSD — the M20 vector stress modes give the FULL 6-Voigt stress FRF H_σ(Ω) (nf,6) per solid/shell element (read-only, the M20 recovery reused unchanged), and the stress-tensor cross-PSD S_σσ(Ω) = H_σ S_ff H_σᴴ (a 6×6 Hermitian matrix per frequency per element). EQUIVALENT-STRESS METHODS — reduce the 6×6 to a scalar EQUIVALENT-stress PSD and run the four M20 estimators on its moments: the frequency-domain EQUIVALENT VON MISES S_vm(Ω) = trace(Q·S_σσ) (Preumont & Piéfort 1994 / Pitoiset & Preumont 2000, the von Mises quadratic operator Q; evaluated through the cheap rank-1 HᴴQH form), the MAX-NORMAL-stress and MAX-SHEAR-stress CRITICAL PLANE (Carpinteri–Spagnoli / Cristofori–Susmel–Tovo, the projection σₙ = pₙᵀσ, τ = pₛᵀσ over a searched candidate-plane set; the shear direction from the leading eigenvector of the 2×2 in-plane covariance) — reporting the damage/equivalent-stress/life and the critical-plane orientation, picking the critical ELEMENT by von Mises Dirlik damage. A seeded MULTIVARIATE Monte-Carlo cross-check (per-bin eigendecomposition / Cholesky of S_σσ → correlated Gaussian component histories → project onto the critical plane → ASTM E1049 rainflow → Miner). Validated: uniaxial → the M20 scalar σₓₓ (cross-PSD collapse, von Mises reduction); the cross-PSD diagonal = the M20 per-component channel PSDs, Hermitian; the trace / quadratic-operator identity (trace(Q Mₙ) = the direct S_vm moments); the von Mises operator on the textbook invariants; pure shear recovering the 45° max-normal plane and the coordinate max-shear plane, both at the shear amplitude; p^T Mₙ p = the |H·p|² S scalar moments; the multivariate synthesis reproducing the full covariance (variances AND cross-covariances = M₀); the Monte-Carlo critical-plane damage matching Dirlik within scatter. PORT sub-card, library-first like M16–M20; the M10 integrator and the M16–M20 paths (incl. the M20 SCALAR fatigue) stay BIT-IDENTICAL (a NEW parallel path consuming the vector stress modes read-only — asserted). Theory: Preumont & Piéfort 1994; Pitoiset & Preumont 2000; Carpinteri–Spagnoli 2001; Cristofori/Susmel–Tovo 2008; Socie & Marquis; Shinozuka & Deodatis | ✅ |
 | **NON-PROPORTIONAL MULTIAXIAL FATIGUE (M22)**: the CRITICAL-PLANE, TIME-DOMAIN, PATH-COUNTING damage of a rotating (non-proportional) shear path (`implicit/nonproportional_fatigue.py`, the `_run_nonproportional` extension of `_run_multiaxial` in `implicit/random_response.py`, `/IMPL/FATIG/MULT/NPROP`) — the rotating-shear PATH the M21 projected-equivalent spectral methods deferred, consuming the M21 multivariate synthesiser + candidate-plane machinery read-only. SHEAR-PATH AMPLITUDE OPERATORS — the 2-D resolved-shear locus (τ_a(t),τ_b(t)) on each candidate plane, and its amplitude by the MINIMUM CIRCUMSCRIBED CIRCLE (Papadopoulos 1998, Welzl on the hull), the LONGEST CHORD (the diameter) and the MAXIMUM RECTANGULAR / PRISMATIC HULL (Mamiya–Araújo–Castro 2009, max_θ √(a1²+a2²)), plus the non-proportionality factor F_np = √(λ₂/λ₁) of the shear-path covariance (Itoh–Kanazawa aspect-ratio form: 0 for a line, 1 for a circle). CRITICAL-PLANE TIME-DOMAIN DAMAGE — over the M21-synthesised correlated stress-component histories (seeded), rainflow (ASTM E1049) the dominant resolved shear scaled by the non-proportional path factor g = MRH/scalar, and apply FINDLEY (τ_a + k σ_n,max) and FATEMI–SOCIE (γ_a(1 + k σ_n,max/σ_y)) carrying the per-plane MAX NORMAL stress (folding in the plane mean), searching the critical plane by the criterion parameter and reporting the plane / F_np / damage rate / life. Validated: proportional line → all three operators collapse to the scalar M21 amplitude, F_np = 0; circle → MCC = r, chord = 2r, MRH = r√2, F_np = 1; ellipse MRH = √(p²+q²), MCC = major semi-axis, F_np = q/p; the off-centre-circle MCC recovering radius + centre; proportional path count → the M21 max-shear rainflow within scatter (g = 1); 90°-out-of-phase → g^m ≈ 2^(m/2) higher than the scalar projection with F_np ≈ 1; a two-channel-sinusoid hand check of MCC / MRH / Findley / Fatemi-Socie. PORT sub-flag, library-first like M16–M21; the M10 integrator, the M16–M20 paths AND the M21 SPECTRAL reductions stay BIT-IDENTICAL (a NEW parallel path — the M21 spectral damage rates AND critical-plane orientations byte-identical whether or not /NPROP runs — asserted). Theory: Papadopoulos 1998; Mamiya–Araújo–Castro 2009; Findley 1959; Fatemi–Socie 1988; Matake 1977; Carpinteri–Spagnoli 2001; Itoh–Sakane–Socie 1995; Socie & Marquis ch. 2–4 | ✅ |
-| Lanczos/subspace for large models; AMLS / substructuring; non-stationary / evolutionary PSD; multi-input cross-PSD with coherence; a purely frequency-domain non-proportionality estimator (Cristofori–Susmel–Tovo / Pitoiset spectral F_np, beyond the M22 time-domain path count); non-proportional HARDENING as a material model; mean-stress beyond the per-plane normal / basic Goodman option; crack-growth / fracture-mechanics fatigue; non-Gaussian / kurtosis corrections; the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21/M22 roadmap notes) |
+| **SPECTRAL NON-PROPORTIONAL MULTIAXIAL FATIGUE (M23)**: the FREQUENCY-DOMAIN non-proportionality factor and critical-plane damage estimated DIRECTLY from the stress-tensor cross-PSD spectral-MOMENT matrices, with NO synthesised history (`implicit/spectral_nonproportional_fatigue.py`, the `_run_spectral_nonproportional` extension of `_run_multiaxial` in `implicit/random_response.py`, `/IMPL/FATIG/MULT/NPROP/SPEC`) — the spectral estimator the M22 time-domain path count deferred, the SPECTRAL sibling of M22, both built on the M21 moment-matrix / candidate-plane machinery (read-only). SPECTRAL SHEAR-PATH COVARIANCE + F_np — the 2×2 in-plane shear block Σ_τ of M₀ = E[σσᵀ] (`inplane_shear_covariance`, from `pₐᵀM₀pₐ`, `pₐᵀM₀p_b`, `p_bᵀM₀p_b`), and F_np = √(λ₂/λ₁) of its eigenvalues (`spectral_nonproportionality_factor`) — EQUALS the M22 TIME-DOMAIN F_np (the identity M₀ = E[σσᵀ] = the covariance the synthesiser reproduces), computed with no synthesis. SPECTRAL CRITICAL-PLANE DAMAGE — the dominant-shear PSD moments mₙ^τ = p_domᵀMₙp_dom and resolved-normal moments p_nᵀMₙp_n (from p^T Mₙ p, no history), the closed-form non-proportional amplitude correction g² = 1 + F_np² = trace(Σ_τ)/λ₁ (the exact MRH/MCC ratio of an elliptical path), the Susmel–Tovo modified-Wöhler stress ratio ρ = σ_a/τ_a, the Findley (spectral-invariant linear combination g·τ + k·σ_n) / Fatemi–Socie / shear-path models, searched by the amplitude-only criterion parameter and run through the four M20 estimators on the corrected moments. Validated: the 2×2 shear block = the M22 time-domain shear-path covariance; spectral F_np = M22 time-domain F_np; F_np = 0 for a proportional (rank-1) state, → 1 for the 90°-out-of-phase circle (closed forms); the resolved amplitudes matching the M22 synthesised RMS; proportional → the M21 max-shear spectral answer EXACTLY (no correction); 90°-out-of-phase → g^m = 2^(m/2) higher than the M21 projected scalar AND agreeing with the M22 time-domain path count within scatter; a two-channel-cross-PSD hand check of F_np / ρ / g. PORT sub-flag, library-first like M16–M22; the M10 integrator, the M16–M20 paths, the M21 SPECTRAL reductions AND the M22 TIME-DOMAIN path count stay BIT-IDENTICAL (a NEW parallel path — both byte-identical whether or not /SPEC runs — asserted). Theory: Pitoiset & Preumont 2000; Cristofori–Susmel–Tovo 2008; Susmel & Lazzarin (modified Wöhler curve) 2002; Bäckström & Marquis 2001; Carpinteri–Spagnoli–Vantadori 2013 | ✅ |
+| Lanczos/subspace for large models; AMLS / substructuring; non-stationary / evolutionary PSD; multi-input cross-PSD with coherence; non-proportional HARDENING as a material model; mean-stress beyond the per-plane normal / basic Goodman option; crack-growth / fracture-mechanics fatigue; non-Gaussian / kurtosis corrections; the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21/M22/M23 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -2283,6 +2285,154 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       implicit, the UL hourglass memory, the NLGEOM hourglass-operator geometry
       variation, the BT4 thin-plate shear-lock / drilling floor.
 
+22. **M23 — SPECTRAL NON-PROPORTIONAL MULTIAXIAL FATIGUE (frequency-domain F_np +
+    critical-plane damage from the cross-PSD moment matrices)** ✅ (done): the
+    FIRST item deferred out of M22 that BUILDS on it — the FREQUENCY-DOMAIN
+    non-proportionality factor and critical-plane damage estimated DIRECTLY from
+    the stress-tensor cross-PSD spectral-MOMENT matrices, with NO synthesised
+    history: the Cristofori–Susmel–Tovo / Pitoiset SPECTRAL non-proportional
+    method the M22 time-domain path count deliberately deferred. The SPECTRAL
+    sibling of M22 (the same F_np and critical-plane concepts, read spectrally off
+    the M21 moment matrices instead of counted over a synthesised history), the
+    natural consumer of the M21 cross-PSD / tensor-moment machinery
+    (`tensor_moment_matrices` / `normal_projection` / `shear_projection` /
+    `_inplane_basis` / `candidate_normals`) and the M22 F_np / critical-plane /
+    shear-path concepts. A NEW, parallel path
+    (`implicit/spectral_nonproportional_fatigue.py` + the
+    `_run_spectral_nonproportional` extension of the `_run_multiaxial` driver in
+    `implicit/random_response.py`) that never touches the M10 integrator, the M16
+    eigensolver, the M17/M18 superposition, the M19 PSD path, the M20 SCALAR
+    fatigue, the M21 MULTIAXIAL SPECTRAL reductions OR the M22 NON-PROPORTIONAL
+    TIME-DOMAIN path (all stay bit-identical — the M21 spectral AND the M22
+    time-domain answers are byte-identical whether or not /SPEC runs, asserted).
+    Theory: Pitoiset & Preumont, "Spectral methods for multiaxial random fatigue
+    analysis of metallic structures" (Int. J. Fatigue 22, 2000 — the frequency-
+    domain multiaxial projection + the cross-PSD eigenstructure); Cristofori,
+    Susmel & Tovo, "A stress-invariant based spectral method to estimate fatigue
+    life under multiaxial random loading" (Int. J. Fatigue 30, 2008 — the spectral
+    critical-plane / modified-Wöhler estimator this module ports); Susmel &
+    Lazzarin, "A bi-parametric Wöhler curve for high cycle multiaxial fatigue
+    assessment" (FFEMS 25, 2002 — the modified Wöhler curve method + the stress
+    ratio ρ = σ_a/τ_a); Bäckström & Marquis 2001; Carpinteri, Spagnoli & Vantadori
+    2013 (the spectral critical-plane weighting).
+
+    Fortran origin: there is NONE — `engine/source/input/freimpl.F` (re-read line
+    by line for M23, 639 lines fetched from raw.githubusercontent.com) has no
+    /FATIG, no S-N / Miner branch, and NO frequency-domain non-proportionality /
+    modified-Wöhler / spectral-invariant / critical-plane machinery of any kind
+    (the sole `PSD` token is still `IMUMPSD`, a MUMPS-solver flag at line 269).
+    OpenRadioss is a time-domain crash/impact code — the stationary random-
+    vibration MULTIAXIAL fatigue analysis, proportional (M21) OR non-proportional
+    time-domain (M22) OR non-proportional spectral (M23), simply is not part of the
+    open-source solver (the same finding M16–M22 made). So M23 ports the spectral
+    non-proportional estimator as a clean LIBRARY capability behind a minimal PORT
+    sub-flag (/IMPL/FATIG/MULT/NPROP/SPEC), exactly as M16–M22 did.
+
+    * **SPECTRAL SHEAR-PATH / NON-PROPORTIONALITY FACTOR**
+      (`spectral_nonproportional_fatigue.py`): on a candidate plane of normal n,
+      the 2×2 IN-PLANE SHEAR cross-spectral moment matrix Σ_τ =
+      [[pₐᵀM₀pₐ, pₐᵀM₀p_b],[·, p_bᵀM₀p_b]] (`inplane_shear_covariance`, the 2×2
+      block of the M21 M₀ = E[σσᵀ] built from `shear_projection` along each
+      in-plane axis — NO synthesis), and the SPECTRAL non-proportionality factor
+      F_np = √(λ₂/λ₁) of its eigenvalues (`spectral_nonproportionality_factor`),
+      plus the spectral resolved-shear / resolved-normal moments from p^T Mₙ p.
+      Validated: the 2×2 shear block EQUALS the M22 time-domain shear-path
+      covariance (np.cov of the synthesised path) — the M₀ = E[σσᵀ] identity; the
+      SPECTRAL F_np EQUALS the M22 TIME-DOMAIN F_np on the same cross-PSD; F_np = 0
+      for a proportional (rank-1) state and → 1 for the equal-amplitude
+      90°-out-of-phase circle (closed forms); the spectral resolved amplitudes
+      matching the M22 synthesised RMS within the seeded scatter.
+    * **SPECTRAL CRITICAL-PLANE DAMAGE** (`spectral_nonproportional_fatigue.py`):
+      over the M21 moment matrices (no history), for each candidate plane the
+      dominant-shear PSD moments mₙ^τ = p_domᵀMₙp_dom (p_dom the leading
+      eigenvector of Σ_τ), the resolved-normal moments p_nᵀMₙp_n, the CLOSED-FORM
+      non-proportional amplitude correction g² = 1 + F_np² = trace(Σ_τ)/λ₁ =
+      (MRH/MCC)² of an elliptical path (so the effective shear variance is
+      λ₁+λ₂ = trace, the M22 prismatic-hull effect read spectrally), the
+      Susmel–Tovo modified-Wöhler stress ratio ρ = σ_a/τ_a, and the equivalent-
+      stress moments per model — FINDLEY (the spectral-invariant LINEAR
+      combination g·τ + k·σ_n, itself a linear projection so its moments come
+      straight from Mₙ), FATEMI–SOCIE ((1 + k σ_n,a/σ_y)²·(1+F_np²)·mₙ^τ) and
+      SHEAR-PATH ((1+F_np²)·mₙ^τ) — searched by the amplitude-only criterion
+      parameter and run through the four M20 estimators (Dirlik etc.). Reports the
+      critical plane, F_np, ρ, damage rate / equivalent stress / life. Validated:
+      PROPORTIONAL loading (F_np = 0) → the spectral shear-path damage reduces
+      EXACTLY to the M21 max-shear critical-plane spectral answer (no correction);
+      90°-out-of-phase → the spectral non-proportional damage is (1+F_np²)^(m/2) =
+      2^(m/2) HIGHER than the uncorrected M21 projected-scalar answer AND AGREES
+      with the M22 TIME-DOMAIN path-counting damage within the seeded Monte-Carlo
+      scatter (the two non-proportional methods — spectral estimator vs time-domain
+      path count — converge, the whole point); a hand check of the spectral F_np /
+      ρ / g on a synthetic two-channel cross-PSD.
+    * **Engine sub-flag + reporting** (`random_response._run_spectral_nonproportional`,
+      inside `_run_multiaxial`): /IMPL/FATIG/MULT/NPROP/SPEC (implies /NPROP hence
+      /MULT; composes with /BASE / /STRS) runs everything /MULT (M21 spectral) and
+      /NPROP (M22 time-domain path count) do — both byte-identical — and THEN,
+      ALONGSIDE, computes the spectral non-proportional critical-plane damage on
+      the critical element from the SAME 6×6 moment matrices (`summ["Mmats"]`)
+      WITHOUT synthesising a history, reporting the spectral non-proportional
+      damage rate / F_np / ρ / critical-plane life on
+      `model.implicit_result.fatigue['nprop_result']['spectral']` and in the
+      listing — ALONGSIDE the M21 spectral von-Mises / critical-plane numbers AND
+      the M22 time-domain path-counting numbers, so the listing shows ALL THREE
+      (proportional-spectral, non-proportional time-domain, non-proportional
+      spectral) side by side. A PORT sub-flag, minimal like /IMPL/FATIG/MULT/NPROP.
+    * **Example**: `examples/spectral_nonproportional_fatigue` — the M22
+      rectangular-section (1×2 mm) solid-brick cantilever re-run to report its
+      SPECTRAL non-proportional critical-plane life ALONGSIDE its M22 TIME-DOMAIN
+      path-counting life and its M21 proportional-spectral life, the three side by
+      side: the split bending modes (~33 / ~60 kHz) make the root shear path a
+      rotating near-circle (F_np ≈ 0.89–0.97 — the SPECTRAL F_np matching the M22
+      TIME-DOMAIN F_np to ~1e-4), the closed-form path factor g = √(1+F_np²) ≈
+      1.34–1.41, and the spectral non-proportional lives (~2.4×10⁹ ms) CLOSE to
+      the M22 time-domain lives (~2.1×10⁹ ms) — the two non-proportional methods
+      converge — both ~g^m ≈ 5× SHORTER than the M21 proportional-spectral
+      projection (~1.3×10¹⁰ ms).
+    * **Validated** (`tests/test_m23_specnprop.py`): all of the above plus the
+      /IMPL/FATIG/MULT/NPROP/SPEC card mirror (a PORT sub-flag, composes in any
+      order, implies /NPROP hence /MULT) and the parity contract (the spectral
+      path never mutating the M16 eigensolver / M17–M19 transfer functions / the
+      M20 SCALAR fatigue / the M21 SPECTRAL reductions / the M22 TIME-DOMAIN path
+      count / the element state; the M21 spectral damage rates AND the M22
+      time-domain damage rates + critical-plane orientations byte-identical whether
+      or not /SPEC runs; the direct /IMPL/DYNA answer byte-identical).
+
+    Deferred out of M23, explicitly (not half-implemented):
+    * the non-proportional amplitude correction uses the EXACT-ellipse factor
+      g = √(1 + F_np²) (the MRH/MCC closed form) and REUSES the dominant-shear PSD
+      spectral SHAPE for the higher moments; M22 measures the actual MRH of the
+      synthesised hull and rainflow-counts the real history — the two converge for
+      a clean ellipse and agree within the M20 rainflow-vs-Dirlik + path scatter
+      otherwise (the exact-ellipse shape reuse is the documented spectral
+      approximation);
+    * the normal-stress AMPLITUDE is a peak-stress factor × RMS (default psf = √2,
+      the equivalent-sinusoid amplitude of a narrow-band Gaussian), NOT a
+      per-record σ_n,max (a time-domain object); MEAN-STRESS beyond the per-plane
+      normal and the basic M20/M21 Goodman intercept — Gerber / Soderberg / Walker
+      — remain DEFERRED (M20/M21/M22);
+    * the spectral Findley uses the LINEAR-COMBINATION (spectral-invariant) form
+      g·τ + k·σ_n (a single linear projection whose moments come straight from Mₙ,
+      folding in the shear/normal phase), which differs from M22's ADDITIVE
+      record-max form — the spectral form is the natural frequency-domain object;
+    * NON-PROPORTIONAL HARDENING as a MATERIAL model (F_np is reported and drives
+      the amplitude correction, but the port's S-N curve is the proportional one —
+      the standard high-cycle-fatigue assumption, Socie & Marquis);
+    * a MULTI-INPUT cross-PSD with coherence (the cross-PSD here is the rank-1
+      H S_ff Hᴴ of a SINGLE scalar input — the non-proportionality of the response
+      comes from the frequency-dependent multi-mode FRF phase, not multiple
+      inputs) — the same M19–M22 deferral;
+    * CRACK-GROWTH / fracture-mechanics fatigue; NON-STATIONARY / evolutionary-PSD
+      and NON-GAUSSIAN (kurtosis) corrections; the COMPLEX-FRF stress recovery —
+      the unchanged M20/M21/M22 tail;
+    * the unchanged M10–M22 deferral tail: multi-input cross-PSD with coherence,
+      multi-directional 100-30-30 response spectra, the complex-FRF base-excitation
+      feed, gyroscopic / circulatory systems, Lanczos / subspace + AMLS, IFQ ≥ 10
+      / MODFR 2, /FRICTION per-part-pair sets, orthotropic / thermal friction, the
+      fiber TYPE18 beam, the LAW27 plastic block / solids, thermal contact,
+      TYPE19/24/25, Inacti, Igap 2/3, LAW42 shells/Prony, IDTC 2/3, /RWALL under
+      implicit, the UL hourglass memory, the NLGEOM hourglass-operator geometry
+      variation, the BT4 thin-plate shear-lock / drilling floor.
+
 ## 6. Validation strategy
 
 `tests/` contains two layers:
@@ -2364,6 +2514,27 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
   solvers / the M21 SPECTRAL reductions — damage rates AND critical-plane
   orientations byte-identical whether or not /NPROP runs — / element state; the
   direct /IMPL/DYNA answer byte-identical).
+* **Spectral non-proportional multiaxial fatigue validations (M23)** — the 2×2
+  in-plane shear cross-spectral moment matrix (from M₀) EQUALLING the M22
+  TIME-DOMAIN shear-path covariance (np.cov of the synthesised path — the M₀ =
+  E[σσᵀ] identity); the SPECTRAL F_np EQUALLING the M22 TIME-DOMAIN F_np on the
+  same cross-PSD; F_np = 0 on EVERY plane for a PROPORTIONAL (rank-1) state and
+  F_np = 1 for the equal-amplitude 90°-out-of-phase circle (closed forms); the
+  spectral resolved-shear / resolved-normal amplitudes (from p^T Mₙ p) matching
+  the RMS of the M22 synthesised histories; a two-channel-cross-PSD hand check of
+  F_np = 1/a (the aspect ratio), the path factor g = √(1+F_np²) and the effective
+  shear amplitude; for PROPORTIONAL loading the spectral non-proportional damage
+  reducing EXACTLY to the M21 max-shear critical-plane spectral answer (F_np = 0,
+  no correction); for a 90°-OUT-OF-PHASE case the spectral non-proportional damage
+  (1+F_np²)^(m/2) = 2^(m/2) HIGHER than the uncorrected M21 projected-scalar answer
+  AND AGREEING with the M22 TIME-DOMAIN path-counting damage within the seeded
+  Monte-Carlo scatter (the two non-proportional methods converge); the
+  /IMPL/FATIG/MULT/NPROP/SPEC card mirror (a PORT sub-flag composing in any order,
+  implying /NPROP hence /MULT) and the parity contract (no mutation of the M16-M20
+  solvers / the M21 SPECTRAL reductions / the M22 TIME-DOMAIN path count — the M21
+  damage rates AND the M22 damage rates + critical-plane orientations byte-identical
+  whether or not /SPEC runs — / element state; the direct /IMPL/DYNA answer
+  byte-identical).
 * **Friction-model / material-tangent validations (M15)** — exact MFROT
   formula, branch-joint and floor checks with the FD-verified static
   µ′(p); kernel-level transmitted-force closed forms (every factor
