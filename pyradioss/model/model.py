@@ -293,6 +293,34 @@ class EngineControls:
     # implicit/joint_evolutionary_fatigue.py.
     impl_fatig_joint: bool = False   # /IMPL/FATIG/MULT/EVOL/JOINT -> joint tensor
 
+    # M28 /IMPL/PSD/MULTI and /IMPL/FATIG/MINPUT: MULTI-INPUT / PARTIALLY-COHERENT
+    # random-vibration response & fatigue — the stationary response (and
+    # stress-tensor) cross-PSD driven by SEVERAL simultaneous random inputs with a
+    # full Hermitian input cross-spectral matrix S_ff(w) = [sqrt(G_a G_b) gamma_ab
+    # exp(i theta_ab)] (auto-PSDs on the diagonal, coherence gamma_ab and phase
+    # theta_ab off-diagonal), propagated through the VECTOR FRF by the MIMO relation
+    # S_uu = H S_ff H^H / S_sigmasigma = H_sigma S_ff H_sigma^H, then reduced by the
+    # WHOLE M20-M27 estimator family UNCHANGED (the multi-input S_sigmasigma flows
+    # straight into them). /MULTI (PSD) and /MINPUT (FATIG) read a table of input
+    # load patterns + their auto-PSD /FUNCTs and a coherence/phase model, assemble
+    # S_ff, recover S_uu / S_sigmasigma, run the reductions and the multi-input
+    # Monte-Carlo, and report the multi-input answers ALONGSIDE the single-input
+    # numbers (a "multi_input" sub-entry). The single scalar input is exactly the
+    # 1x1 (diagonal / rank-1) special case (bit-identical). A PORT sub-flag
+    # (freimpl.F has no multi-input / coherence path — the sole PSD token is the
+    # MUMPS flag IMUMPSD). Composes with /MULT / /NPROP / /SPEC / /NGAUSS / /NSTAT /
+    # /EVOL / /JOINT. See implicit/multi_input_response.py + multi_input_fatigue.py.
+    impl_psd_multi: bool = False     # /IMPL/PSD/MULTI -> multi-input response
+    impl_fatig_minput: bool = False  # /IMPL/FATIG/MINPUT -> multi-input fatigue
+    # the input-pattern table (list of dicts: cload_funct, psd_funct, pos) + the
+    # coherence model, filled by the reader; the driver assembles S_ff from them
+    impl_mi_inputs: tuple = ()       # per-input (cload_funct, psd_funct, x,y,z)
+    impl_mi_cohmodel: int = 0        # 0 = constant coherence, 1 = exponential/decay
+    impl_mi_gamma: float = 0.0       # constant coherence gamma_ab in [0,1]
+    impl_mi_phase: float = 0.0       # constant phase theta_ab (degrees)
+    impl_mi_decay: float = 0.0       # exponential-coherence decay coefficient
+    impl_mi_speed: float = 1.0       # exponential-coherence reference speed
+
 
 class Model:
     """The full model. Created empty, filled by the keyword parsers, then

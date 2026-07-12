@@ -32,6 +32,53 @@ from ..model.model import EngineControls
 from .deck_reader import KeywordBlock
 
 
+def _parse_multi_input_table(block, ec, base_line, log, card):
+    """Read the M28 MULTI-INPUT table off a /IMPL/PSD/MULTI or /IMPL/FATIG/MINPUT
+    card, starting at card line ``base_line``:
+
+        line base_line     : ninput  cohmodel  gamma  phase  [decay  speed]
+        lines base_line+1..: cload_funct  psd_funct  [x  y  z]   (one per input)
+
+    ``cohmodel`` = 0 constant coherence gamma_ab = gamma (phase theta_ab = phase
+    degrees on every off-diagonal pair), 1 exponential/decay coherence (needs the
+    per-input positions x y z, decay coefficient and reference speed). Each input
+    row names the /CLOAD /FUNCT id that identifies its spatial load pattern and the
+    auto-PSD /FUNCT id giving its G_a(f). Fills ``ec.impl_mi_*``. Returns True on a
+    usable table (>= 1 input)."""
+    cards = block.cards
+    if len(cards) <= base_line:
+        log.warning(f"{card}: no MULTI-INPUT table found (expected a header "
+                    "'ninput cohmodel gamma phase' line then one row per input: "
+                    "cload_funct psd_funct [x y z])", block.source)
+        return False
+    hdr = cards[base_line].floats()
+    ninput = int(hdr[0]) if len(hdr) > 0 and hdr[0] > 0 else 0
+    ec.impl_mi_cohmodel = int(hdr[1]) if len(hdr) > 1 and hdr[1] >= 0 else 0
+    ec.impl_mi_gamma = float(hdr[2]) if len(hdr) > 2 else 0.0
+    ec.impl_mi_phase = float(hdr[3]) if len(hdr) > 3 else 0.0
+    ec.impl_mi_decay = float(hdr[4]) if len(hdr) > 4 else 0.0
+    ec.impl_mi_speed = float(hdr[5]) if len(hdr) > 5 and hdr[5] > 0 else 1.0
+    inputs = []
+    for r in range(ninput):
+        li = base_line + 1 + r
+        if li >= len(cards):
+            break
+        v = cards[li].floats()
+        if len(v) < 2:
+            continue
+        cf = int(v[0]); pf = int(v[1])
+        x = float(v[2]) if len(v) > 2 else 0.0
+        y = float(v[3]) if len(v) > 3 else 0.0
+        z = float(v[4]) if len(v) > 4 else 0.0
+        inputs.append((cf, pf, x, y, z))
+    ec.impl_mi_inputs = tuple(inputs)
+    if len(inputs) < 1:
+        log.warning(f"{card}: MULTI-INPUT table has no usable input rows "
+                    "(each row: cload_funct psd_funct [x y z])", block.source)
+        return False
+    return True
+
+
 def parse_engine_deck(blocks: List[KeywordBlock],
                       log: MessageLog) -> EngineControls:
     ec = EngineControls()
@@ -471,6 +518,20 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_nlgeom = True
                         if len(vals) > 4 and vals[4] > 0:
                             ec.impl_psd_nmode = int(vals[4])
+                    elif sub2 in ("MULTI", "MINPUT", "MIMO", "COHERENT"):
+                        # M28: MULTI-INPUT / partially-coherent random response.
+                        # The single-input funct (line 0) is the reference PSD for
+                        # the side-by-side listing; the MULTI-INPUT table follows
+                        #   line 1     : ninput cohmodel gamma phase [decay speed]
+                        #   lines 2..  : cload_funct psd_funct [x y z]  (per input)
+                        # S_uu = H S_ff H^H is recovered ALONGSIDE the single-input
+                        # answer. A PORT sub-flag (freimpl.F has no multi-input /
+                        # coherence path). See implicit/multi_input_response.py.
+                        ec.impl_psd_multi = True
+                        if len(vals) > 4 and vals[4] > 0:
+                            ec.impl_psd_nmode = int(vals[4])
+                        _parse_multi_input_table(block, ec, 1, log,
+                                                 "/IMPL/PSD/MULTI")
                     else:
                         if len(vals) > 4 and vals[4] > 0:
                             ec.impl_psd_nmode = int(vals[4])
@@ -609,6 +670,24 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     # reuses the /EVOL drifting-shape schedule line; it composes
                     # with /NPROP / /SPEC / /NGAUSS / /NSTAT.
                     is_joint = bool(subs & {"JOINT", "TENSOR", "JOINTTENSOR"})
+                    # M28: MULTI-INPUT / partially-coherent random fatigue; the
+                    # response / stress-tensor cross-PSD driven by SEVERAL
+                    # simultaneous random inputs with a full Hermitian input
+                    # cross-spectral matrix S_ff (auto-PSDs on the diagonal,
+                    # coherence gamma_ab + phase off-diagonal). Composes with (does
+                    # NOT imply) MULT / NPROP / SPEC / NGAUSS / NSTAT / EVOL / JOINT
+                    # — the multi-input S_sigmasigma flows into all of them
+                    # UNCHANGED. Its input-pattern TABLE (ninput cohmodel gamma
+                    # phase, then one 'cload_funct psd_funct [x y z]' row per input)
+                    # goes on DEDICATED card lines AFTER any M24-M26 lines. The
+                    # multi-input answers are reported ALONGSIDE the single-input
+                    # numbers (a "multi_input" sub-entry). A PORT sub-flag
+                    # (freimpl.F has no multi-input / coherence path). See
+                    # implicit/multi_input_response.py + multi_input_fatigue.py.
+                    is_minput = bool(subs & {"MINPUT", "MULTIINPUT", "MIMO",
+                                             "COHERENT"})
+                    if is_minput:
+                        is_mult = True                # multi-input needs the tensor
                     if is_joint:
                         is_evol = True
                         is_mult = True
@@ -645,6 +724,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_evol = True
                     if is_joint:
                         ec.impl_fatig_joint = True
+                    if is_minput:
+                        ec.impl_fatig_minput = True
                     if is_base:
                         ec.impl_fatig_base = True
                         if len(v0) > 4 and v0[4] >= 0:
@@ -740,6 +821,19 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                                 "nwin on the drifting-shape line (fc0 fc1 bw0 bw1 "
                                 "nwin) after the sweep/S-N (and kurtosis/modulation"
                                 ", if NGAUSS/NSTAT) lines", block.source)
+                    # M28 MULTI-INPUT: the input-pattern TABLE lives on DEDICATED
+                    # card lines AFTER any M24 kurtosis / M25 modulation / M26
+                    # drifting-shape lines — so its base index is 2 + (1 if NGAUSS)
+                    # + (1 if NSTAT) + (1 if EVOL). Header 'ninput cohmodel gamma
+                    # phase [decay speed]' then one 'cload_funct psd_funct [x y z]'
+                    # row per input. The single-input funct (line 1) is the
+                    # reference PSD for the side-by-side listing.
+                    if is_minput:
+                        miline = (2 + (1 if is_ngauss else 0)
+                                  + (1 if is_nstat else 0)
+                                  + (1 if is_evol else 0))
+                        _parse_multi_input_table(block, ec, miline, log,
+                                                 "/IMPL/FATIG/MINPUT")
                     if is_nprop and ec.impl_fatig_mcdur <= 0.0:
                         log.warning(
                             "/IMPL/FATIG/MULT/NPROP needs a Monte-Carlo record "
