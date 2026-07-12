@@ -168,6 +168,8 @@ stress recovery is DEFERRED (PORTING_GUIDE M20).
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from . import require_scipy
@@ -394,6 +396,67 @@ def run_random_response(model, ip, log, result, constr=None, contacts=(),
         log.info(f"      MEAN PEAK RATE (HZ)  . . . . . . : "
                  f"{rates['nup'][jmax]:.5E}")
 
+    # M28: the MULTI-INPUT response runs ALONGSIDE the single-input answer above
+    # (a NEW parallel path — result.random_response is fully formed and left
+    # byte-identical; the multi-input diagnostics attach as a sub-entry)
+    if bool(getattr(ip, "impl_psd_multi", False)) and not cplx:
+        _run_multi_input_response(model, ip, log, result, frf, loads)
+
+
+def _run_multi_input_response(model, ip, log, result, frf, loads):
+    """/IMPL/PSD/MULTI (M28): MULTI-INPUT / partially-coherent random RESPONSE.
+    Assemble the input cross-PSD S_ff, build the per-input displacement FRF
+    columns, recover the response cross-PSD diagonal S_uu[j,j] = (H S_ff H^H)[j,j]
+    (the per-DOF response PSD), its RMS field and the response coherence
+    diagnostics, and store them on ``result.random_response['multi_input']``
+    ALONGSIDE the single-input RMS. Never mutates the single-input result.
+
+    The single-input funct (card line 0) stays the reference; the multi-input
+    RMS is the correlated-input answer (the SUM of per-input variances for
+    incoherent inputs, the coherent combination for coherent inputs)."""
+    from . import multi_input_response as mir
+    basis = frf.get("_basis")
+    zeta = frf.get("_zeta")
+    if basis is None:
+        log.warning("        /IMPL/PSD/MULTI needs the real-mode FRF basis; "
+                    "the complex-FRF multi-input feed is deferred (M28).",
+                    "IMPL/PSD/MULTI")
+        return
+    freqs_hz = np.asarray(frf["freqs"], dtype=float)
+    data = _assemble_multi_input(model, ip, log, basis, freqs_hz, zeta, loads)
+    Sff = data["Sff"]
+    # per-input physical (equation-space) FRF columns U_a(f) (nf, ndof, ninput)
+    Ucols = mir.displacement_frf_columns(data["q_cols"], basis.Phi)
+    Suu_diag = mir.response_cross_psd_diagonal(Ucols, Sff)     # (nf, ndof) real
+    mom = spectral_moments(data["omega"], Suu_diag, nmax=4)
+    rms = rms_response(mom)
+    du_rms, dur_rms = basis.dof.scatter_solution(rms)
+    # response coherence between the few highest-RMS DOFs (a compact diagnostic)
+    jmax = int(np.argmax(rms))
+    ndof = rms.size
+    sel = np.argsort(rms)[-min(4, ndof):][::-1]
+    Suu_sel = mir.response_cross_psd(Ucols, Sff, sel)
+    coh = mir.response_coherence(Suu_sel)
+    result.random_response["multi_input"] = {
+        "inputs": data["inputs"], "ninput": data["ninput"],
+        "coh_label": data["coh_label"], "projected": data["projected"],
+        "min_eig": data["min_eig"], "nclipped": data["nclipped"],
+        "Sff": Sff, "Suu_diag": Suu_diag, "moments": mom, "rms": rms,
+        "rms_nodal": du_rms, "rms_rot_nodal": dur_rms, "peak_dof": jmax,
+        "coherence_dofs": sel, "response_coherence": coh,
+        "freqs": freqs_hz, "omega": data["omega"],
+    }
+    log.info("\n     ** MULTI-INPUT / PARTIALLY-COHERENT RESPONSE **   "
+             "(/IMPL/PSD/MULTI)")
+    log.info(f"      NUMBER OF INPUTS . . . . . . . . : {data['ninput']}")
+    log.info(f"      COHERENCE MODEL  . . . . . . . . : {data['coh_label']}")
+    log.info(f"      INPUT CROSS-PSD PSD-PROJECTED  . : "
+             f"{'YES' if data['projected'] else 'NO (already valid)'}"
+             f"  (min eig {data['min_eig']:.3E})")
+    log.info(f"      PEAK MULTI-INPUT RMS (any DOF) . : {rms[jmax]:.5E}")
+    log.info(f"      (single-input peak RMS)  . . . . : "
+             f"{np.max(result.random_response['rms']):.5E}")
+
 
 def _build_frf(model, ip, log, constr, contacts, loads, nev, prestress, cplx,
                base, base_dir, zeta_u, fmin, fmax, nf):
@@ -443,6 +506,10 @@ def _build_frf(model, ip, log, constr, contacts, loads, nev, prestress, cplx,
     frf = modal_frequency_response(basis, F, np.zeros((n, 3)), freqs_hz, zeta,
                                    base_excitation=base, base_dir=base_dir)
     frf["dof"] = basis.dof
+    # M28 multi-input reuses the real-mode basis + damping read-only (stashed
+    # for /IMPL/PSD/MULTI; harmless for the single-input path)
+    frf["_basis"] = basis
+    frf["_zeta"] = zeta
     return frf
 
 
@@ -733,11 +800,20 @@ def run_fatigue(model, ip, log, result, constr=None, contacts=(), loads=None):
     # forms the stress-tensor cross-PSD, reduces it to an equivalent-stress PSD
     # and runs the M20 estimators on THAT. Shares the FRF + stress-mode recovery
     # above (read-only). The scalar M20 path continues below unchanged.
+    minput = bool(getattr(ip, "impl_fatig_minput", False))
     if mult:
         nplane = int(getattr(ip, "impl_fatig_nplane", 24))
         _run_multiaxial(model, ip, log, result, frf, Sigma, channels,
                         psd_tab, m_sn, C_sn, mean_stress, ultimate, mc_dur,
                         mc_seed, base, base_dir, funct_id, nev, nplane)
+        if minput:
+            # M28: attach the multi-input answer ALONGSIDE the single-input
+            # /MULT result (a NEW parallel path — the single-input result above
+            # is fully formed and left byte-identical)
+            _run_multi_input_fatigue(
+                model, ip, log, result, basis, Sigma, channels,
+                frf["freqs"], zeta, loads, m_sn, C_sn, mean_stress, ultimate,
+                mc_dur, mc_seed, nplane)
         return
 
     # stress response PSD + moments per channel (theory eqs. (8))
@@ -1618,6 +1694,291 @@ def _run_multiaxial(model, ip, log, result, frf, Sigma, channels, psd_tab,
         "summary": summ["von_mises"]["summary"],
     }
     _report_multiaxial(log, result.fatigue, funct_id, base, base_dir, frf, nev)
+
+
+# ============================================================================
+# M28 — MULTI-INPUT / partially-coherent random-vibration RESPONSE & FATIGUE
+# (a NEW parallel path — attaches a "multi_input" sub-entry ALONGSIDE the
+#  single-input M19/M20/M21 answers, never mutating them)
+# ============================================================================
+
+def _multi_input_force_pattern(model, loads, cload_funct):
+    """The unit-amplitude spatial FORCE pattern F_a (numnod, 3) of input pattern
+    ``a`` — the sum of the /CLOAD contributions whose time-/FUNCT id is
+    ``cload_funct`` (each contributes ``scale`` along its unit ``direction`` on
+    its node group). The /FUNCT carries only the SPATIAL pattern here (the
+    frequency content is the input's auto-PSD G_a(f)); a unit /FUNCT/1 (the
+    M19-M27 example convention) gives the bare pattern, matching how the
+    single-input path calls ``loads.external_forces(1.0, F, x0)``."""
+    n = model.numnod
+    F = np.zeros((n, 3))
+    target = model.functions.get(int(cload_funct))
+    if target is None:
+        raise ValueError(
+            f"/IMPL/FATIG/MINPUT input references /CLOAD /FUNCT/{cload_funct}, "
+            "which is not defined in the deck.")
+    hit = False
+    for idx, direction, fct, scale, _sens in loads.cloads:
+        if fct is target:
+            F[idx] += float(scale) * np.asarray(direction, dtype=float)
+            hit = True
+    if not hit:
+        raise ValueError(
+            f"/IMPL/FATIG/MINPUT input pattern /FUNCT/{cload_funct} matches no "
+            "/CLOAD in the deck — each input names the /CLOAD /FUNCT id that "
+            "identifies its spatial load pattern.")
+    return F
+
+
+def _assemble_multi_input(model, ip, log, basis, freqs_hz, zeta, loads):
+    """Build the M28 multi-input driving data from the card's input table:
+    the per-input modal-coordinate FRF columns q_cols (nf, nmode, ninput), the
+    input auto-PSDs G_a(f), the coherence/phase model and the assembled
+    Hermitian input cross-PSD S_ff(f) (nf, ninput, ninput). Returns a dict.
+
+    A PORT sub-flag: force-pattern multi-input (the common case). Base-
+    acceleration multi-input is DEFERRED (the per-direction participation feed
+    would need a base-input column stack — PORTING_GUIDE M28 deferral)."""
+    from . import multi_input_response as mir
+    from .modal_response import modal_frequency_response
+
+    inputs = tuple(getattr(ip, "impl_mi_inputs", ()))
+    if not inputs:
+        raise ValueError(
+            "/IMPL/FATIG/MINPUT (or /IMPL/PSD/MULTI) needs an input-pattern "
+            "table (ninput cohmodel gamma phase, then a 'cload_funct psd_funct "
+            "[x y z]' row per input) after the sweep / S-N lines.")
+    freqs_hz = np.asarray(freqs_hz, dtype=float)
+    nf = freqs_hz.size
+    ninput = len(inputs)
+    n = model.numnod
+
+    # per-input auto-PSDs G_a(f) and modal FRF columns q_a(f)
+    G = np.zeros((nf, ninput))
+    q_cols = np.zeros((nf, basis.nmode, ninput), dtype=complex)
+    positions = np.zeros((ninput, 3))
+    for a, (cf, pf, x, y, z) in enumerate(inputs):
+        positions[a] = (x, y, z)
+        psd_tab = _lookup_psd_fatig(model, pf)
+        G[:, a] = np.clip(np.asarray(psd_tab.eval(freqs_hz), dtype=float), 0.0,
+                          None)
+        Fa = _multi_input_force_pattern(model, loads, cf)
+        frf_a = modal_frequency_response(basis, Fa, np.zeros((n, 3)), freqs_hz,
+                                         zeta)
+        q_cols[:, :, a] = frf_a["q"]
+
+    # coherence model -> gamma (constant matrix OR frequency-dependent stack)
+    cohmodel = int(getattr(ip, "impl_mi_cohmodel", 0))
+    gamma_c = float(getattr(ip, "impl_mi_gamma", 0.0))
+    phase_deg = float(getattr(ip, "impl_mi_phase", 0.0))
+    phase = math.radians(phase_deg)
+    if cohmodel == 1:
+        decay = float(getattr(ip, "impl_mi_decay", 0.0))
+        speed = float(getattr(ip, "impl_mi_speed", 1.0)) or 1.0
+        gstack, _th = mir.exponential_coherence(freqs_hz, positions, decay,
+                                                ref_speed=speed, phase=phase)
+        gamma_arg = gstack
+        coh_label = f"EXPONENTIAL (decay={decay:.4g}, speed={speed:.4g})"
+    else:
+        gamma_arg = gamma_c
+        coh_label = f"CONSTANT (gamma={gamma_c:.4g}, phase={phase_deg:.4g} deg)"
+    mi = mir.input_cross_psd_matrix(G, gamma=gamma_arg, phase=phase)
+    return {"inputs": inputs, "ninput": ninput, "G": G, "q_cols": q_cols,
+            "Sff": mi["Sff"], "positions": positions, "coh_label": coh_label,
+            "projected": mi["projected"], "min_eig": mi["min_eig"],
+            "nclipped": mi["nclipped"], "freqs": freqs_hz,
+            "omega": 2.0 * np.pi * freqs_hz}
+
+
+def _run_multi_input_fatigue(model, ip, log, result, basis, Sigma, channels,
+                             freqs_hz, zeta, loads, m_sn, C_sn, mean_stress,
+                             ultimate, mc_dur, mc_seed, nplane):
+    """/IMPL/FATIG/MINPUT (M28): MULTI-INPUT / partially-coherent spectral
+    fatigue. Assembles the input cross-PSD S_ff, builds the per-input stress FRF
+    columns, forms the multi-input stress-tensor cross-PSD S_sigmasigma = H_sigma
+    S_ff H_sigma^H on the critical element, reduces it by the SAME M21 machinery
+    (equivalent von Mises / max-normal / max-shear critical plane) and — because
+    the multi-input S_sigmasigma flows into them UNCHANGED — composes with the
+    M22-M27 corrections exactly as the single-input /MULT path does. Runs the
+    multi-input Monte-Carlo (input-level synthesis + the M21-on-S_sigmasigma
+    stress-level check) and stores everything on ``result.fatigue['multi_input']``
+    ALONGSIDE the single-input answer. Never mutates the single-input result."""
+    from . import multi_input_response as mir
+    from . import multi_input_fatigue as mif
+    from . import multiaxial_fatigue as mf
+    from . import spectral_fatigue as sf
+
+    if bool(getattr(ip, "impl_fatig_base", False)):
+        log.warning("        /IMPL/FATIG/MINPUT with base excitation is "
+                    "DEFERRED (M28) — using the force-pattern feed; base "
+                    "multi-input needs the per-direction participation stack.",
+                    "IMPL/FATIG/MINPUT")
+    data = _assemble_multi_input(model, ip, log, basis, freqs_hz, zeta, loads)
+    Sff = data["Sff"]
+    omega = data["omega"]
+    naz, npol = int(nplane), max(7, int(nplane) // 2 + 1)
+
+    # per-input stress FRF columns (nf, nchan, ninput)
+    Hs_cols = mir.stress_frf_columns(data["q_cols"], Sigma)
+    blocks = element_voigt_blocks(channels)
+
+    multi = {"inputs": data["inputs"], "ninput": data["ninput"],
+             "coh_label": data["coh_label"], "projected": data["projected"],
+             "min_eig": data["min_eig"], "nclipped": data["nclipped"],
+             "Sff": Sff, "freqs": freqs_hz, "omega": omega, "G": data["G"]}
+
+    if blocks:
+        # critical element by equivalent-von-Mises Dirlik on the MULTI-INPUT
+        # stress-tensor cross-PSD (the same ranking metric the single-input
+        # /MULT path uses, but formed from H S_ff H^H)
+        elem_rate = np.zeros(len(blocks))
+        for k, (_nm, _e, _bs, cols) in enumerate(blocks):
+            Hcols = mir.element_voigt_frf_columns(Hs_cols, cols)
+            Scr = mir.stress_tensor_cross_psd_multi(Hcols, Sff)
+            Svm = mir.equivalent_vonmises_psd_multi(Scr)
+            mom = spectral_moments(omega, Svm, nmax=4)
+            if mom[0] <= 0.0:
+                continue
+            elem_rate[k] = sf.dirlik_damage(mom, m_sn, C_sn, mean_stress,
+                                            ultimate)["damage_rate"]
+        kcrit = int(np.argmax(elem_rate)) if len(blocks) else 0
+        cname, ce, cbase, ccols = blocks[kcrit]
+        Hcrit = mir.element_voigt_frf_columns(Hs_cols, ccols)
+        Scross = mir.stress_tensor_cross_psd_multi(Hcrit, Sff)
+        summ = mir.multi_input_multiaxial_summary(
+            Scross, omega, m_sn, C_sn, mean_stress=mean_stress,
+            ultimate=ultimate, naz=naz, npol=npol)
+
+        # a minimal FRF-like handle (only omega/freqs are read by the M22-M27
+        # correction helpers — they take S_sigmasigma from ``summ`` read-only)
+        frf_like = {"omega": omega, "freqs": freqs_hz}
+
+        mc = None
+        mc_input = None
+        if mc_dur > 0.0:
+            sp = summ["shear_plane"]
+            # stress-level MC (the M21 synthesiser on the multi-input
+            # S_sigmasigma — bit-identical to single-input when rank-1)
+            mc = mf.monte_carlo_multiaxial_damage(
+                freqs_hz, Scross, sp["proj"], m_sn, C_sn, mc_dur, mc_seed,
+                mean_stress=mean_stress, ultimate=ultimate)
+            # input-level MC (the INDEPENDENT cross-check: synthesise the
+            # correlated inputs, drive through the stress columns, sum)
+            mc_input = mif.monte_carlo_multi_input_damage(
+                freqs_hz, Sff, Hcrit, sp["proj"], m_sn, C_sn, mc_dur, mc_seed,
+                mean_stress=mean_stress, ultimate=ultimate)
+
+        # the M22-M27 corrections compose UNCHANGED (they read summ read-only)
+        nprop = bool(getattr(ip, "impl_fatig_nprop", False))
+        spec_np = bool(getattr(ip, "impl_fatig_spec", False))
+        npres = None
+        if nprop and mc_dur > 0.0:
+            from . import nonproportional_fatigue as npf
+            k_np = float(getattr(ip, "impl_fatig_k", 0.3))
+            sigy = float(getattr(ip, "impl_fatig_sigy", 1.0))
+            amp = str(getattr(ip, "impl_fatig_amp", "mrh"))
+            npres = npf.nonproportional_summary(
+                freqs_hz, summ["Scross"], m_sn, C_sn, mc_dur, mc_seed, k=k_np,
+                sigma_y=sigy, amp_method=amp, naz=naz, npol=npol)
+            if spec_np:
+                from . import spectral_nonproportional_fatigue as snp
+                npres["spectral"] = snp.spectral_nonproportional_summary(
+                    summ["Mmats"], m_sn, C_sn, k=k_np, sigma_y=sigy,
+                    mean_stress=mean_stress, ultimate=ultimate, naz=naz,
+                    npol=npol)
+        nongaussian = _run_nongaussian_multiaxial(
+            ip, summ, freqs_hz, m_sn, C_sn, mean_stress, ultimate, mc_dur,
+            mc_seed)
+        nonstationary = _run_nonstationary_multiaxial(
+            ip, summ, freqs_hz, m_sn, C_sn, mean_stress, ultimate, mc_dur,
+            mc_seed, model)
+        evolutionary = _run_evolutionary_multiaxial(
+            ip, summ, freqs_hz, m_sn, C_sn, mean_stress, ultimate, mc_dur,
+            mc_seed, model)
+        joint_evolutionary = _run_joint_evolutionary(
+            ip, summ, frf_like, m_sn, C_sn, mean_stress, ultimate, mc_dur,
+            mc_seed, model, naz, npol)
+
+        multi.update({
+            "multiaxial": True, "critical_element": (cname, ce, cbase),
+            "critical_label": cbase, "elem_vm_dirlik_rate": elem_rate,
+            "von_mises": summ["von_mises"], "normal_plane": summ["normal_plane"],
+            "shear_plane": summ["shear_plane"], "Mmats": summ["Mmats"],
+            "Scross": Scross, "monte_carlo": mc, "monte_carlo_input": mc_input,
+            "nprop_result": npres, "nonproportional": nprop,
+            "spectral_nonproportional": spec_np, "nongaussian": nongaussian,
+            "nonstationary": nonstationary, "evolutionary": evolutionary,
+            "joint_evolutionary": joint_evolutionary,
+            "summary": summ["von_mises"]["summary"],
+        })
+    else:
+        # scalar-channel fallback (truss / spring model): per-channel MULTI-INPUT
+        # PSD S_jj = sum_ab H_ja S_ff,ab conj(H_jb); the M20 estimators on that
+        nchan = Hs_cols.shape[1]
+        Sjj = np.einsum("fja,fab,fjb->fj", Hs_cols, Sff,
+                        np.conj(Hs_cols)).real
+        dirlik = np.zeros(nchan)
+        for j in range(nchan):
+            mom = spectral_moments(omega, Sjj[:, j], nmax=4)
+            if mom[0] > 0.0:
+                dirlik[j] = sf.dirlik_damage(mom, m_sn, C_sn, mean_stress,
+                                             ultimate)["damage_rate"]
+        jcrit = int(np.argmax(dirlik)) if nchan else 0
+        crit_mom = spectral_moments(omega, Sjj[:, jcrit], nmax=4)
+        summary = sf.fatigue_summary(crit_mom, m_sn, C_sn, mean_stress,
+                                     ultimate)
+        multi.update({
+            "multiaxial": False, "critical_channel": jcrit,
+            "critical_label": channels[jcrit][3], "moments": crit_mom,
+            "Sjj": Sjj, "dirlik_rate": dirlik, "summary": summary,
+            "monte_carlo": None, "monte_carlo_input": None,
+        })
+
+    result.fatigue["multi_input"] = multi
+    _report_multi_input(log, multi, result.fatigue)
+
+
+def _report_multi_input(log, mi, single):
+    """Print the M28 MULTI-INPUT listing block ALONGSIDE the single-input numbers
+    (the side-by-side view: the single-input critical answer and the multi-input
+    critical answer with the coherence diagnostics)."""
+    log.info("\n     ** MULTI-INPUT / PARTIALLY-COHERENT SPECTRAL FATIGUE **"
+             "  (/IMPL/FATIG/MINPUT)")
+    log.info(f"      NUMBER OF INPUTS . . . . . . . . : {mi['ninput']}")
+    log.info(f"      COHERENCE MODEL  . . . . . . . . : {mi['coh_label']}")
+    log.info(f"      INPUT CROSS-PSD PSD-PROJECTED  . : "
+             f"{'YES (%d bins)' % mi['nclipped'] if mi['projected'] else 'NO (already valid)'}"
+             f"  (min eig {mi['min_eig']:.3E})")
+    for a, (cf, pf, x, y, z) in enumerate(mi["inputs"]):
+        log.info(f"        input {a+1}: /CLOAD /FUNCT/{cf}  auto-PSD "
+                 f"/FUNCT/{pf}  pos ({x:.4g},{y:.4g},{z:.4g})")
+    if mi.get("multiaxial"):
+        cn, ce, cb = mi["critical_element"]
+        log.info(f"      CRITICAL ELEMENT . . . . . . . . : {cb}")
+        red = mi["von_mises"]["summary"]
+        log.info(f"      VON MISES DIRLIK DAMAGE RATE . . : "
+                 f"{red['dirlik']['damage_rate']:.5E}  life "
+                 f"{red['dirlik']['life']:.5E}")
+        np_ = mi["normal_plane"]["summary"]["dirlik"]
+        sh = mi["shear_plane"]["summary"]["dirlik"]
+        log.info(f"      MAX-NORMAL / MAX-SHEAR DAMAGE  . : "
+                 f"{np_['damage_rate']:.5E} / {sh['damage_rate']:.5E}")
+        if mi.get("monte_carlo") is not None:
+            log.info(f"      MC (stress-level / input-level) . : "
+                     f"{mi['monte_carlo']['damage_rate']:.5E} / "
+                     f"{mi['monte_carlo_input']['damage_rate']:.5E}")
+        # the single-input critical answer, for the side-by-side view
+        if single is not None and single.get("summary"):
+            s = single["summary"].get("dirlik", {})
+            if s:
+                log.info(f"      (single-input critical DIRLIK) . . : "
+                         f"{s.get('damage_rate', 0.0):.5E}  life "
+                         f"{s.get('life', 0.0):.5E}")
+    else:
+        red = mi["summary"]["dirlik"]
+        log.info(f"      CRITICAL CHANNEL . . . . . . . . : {mi['critical_label']}")
+        log.info(f"      DIRLIK DAMAGE RATE / LIFE . . . . : "
+                 f"{red['damage_rate']:.5E} / {red['life']:.5E}")
 
 
 def _report_multiaxial(log, fat, funct_id, base, base_dir, frf, nev):
