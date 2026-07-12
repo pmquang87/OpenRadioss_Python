@@ -221,6 +221,14 @@ class EngineControls:
     # multiaxial_fatigue.py.
     impl_fatig_mult: bool = False   # /IMPL/FATIG/MULT present -> multiaxial
     impl_fatig_nplane: int = 24     # candidate-plane azimuth divisions (15 deg)
+    # M22 /IMPL/FATIG/MULT/NPROP: NON-PROPORTIONAL multiaxial fatigue — the
+    # critical-plane TIME-DOMAIN path-counting damage of the rotating shear path
+    # (MCC/MRH shear amplitude + Findley / Fatemi-Socie with the per-plane max
+    # normal stress). Implies MULT. See implicit/nonproportional_fatigue.py.
+    impl_fatig_nprop: bool = False  # /IMPL/FATIG/MULT/NPROP -> path-counting
+    impl_fatig_k: float = 0.3       # Findley/Fatemi-Socie normal-sensitivity k
+    impl_fatig_sigy: float = 1.0    # yield stress sigma_y (Fatemi-Socie)
+    impl_fatig_amp: str = "mrh"     # shear-path amplitude: mrh / mcc / chord
 
 
 class Model:

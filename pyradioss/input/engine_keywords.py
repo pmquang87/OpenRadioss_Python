@@ -531,6 +531,16 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     #                      plane) scalar PSD; composes with BASE
                     #                      / STRS (any order, e.g.
                     #                      /IMPL/FATIG/MULT/BASE)
+                    #   /IMPL/FATIG/MULT/NPROP (M22) NON-PROPORTIONAL — the
+                    #                      critical-plane TIME-DOMAIN path count
+                    #                      of the rotating shear path (MCC/MRH
+                    #                      shear amplitude + Findley /
+                    #                      Fatemi-Socie with the per-plane max
+                    #                      normal stress + the F_np factor);
+                    #                      implies MULT, reuses the M21 seeded
+                    #                      synthesiser (needs mcdur/seed on line
+                    #                      2). Line 2 optionally appends k sigy:
+                    #                      m C zeta mean ult mcdur seed [k sigy]
                     ec.impl_fatig = True
                     ec.implicit = True
                     # scan ALL sub-keywords (the modifiers compose in any order)
@@ -539,6 +549,11 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     is_strs = bool(subs & {"STRS", "STRESS", "PRESTRESS"})
                     is_mult = bool(subs & {"MULT", "MULTI", "MULTIAXIAL",
                                            "CRITPLANE"})
+                    # M22: NON-PROPORTIONAL path counting; implies MULT
+                    is_nprop = bool(subs & {"NPROP", "NONPROP",
+                                            "NONPROPORTIONAL", "PATH"})
+                    if is_nprop:
+                        is_mult = True
                     v0 = block.cards[0].floats() if block.cards else []
                     v1 = (block.cards[1].floats()
                           if len(block.cards) > 1 else [])
@@ -552,6 +567,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_funct = int(v0[3])
                     if is_mult:
                         ec.impl_fatig_mult = True
+                    if is_nprop:
+                        ec.impl_fatig_nprop = True
                     if is_base:
                         ec.impl_fatig_base = True
                         if len(v0) > 4 and v0[4] >= 0:
@@ -579,6 +596,20 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_mcdur = v1[5]
                     if len(v1) > 6 and v1[6] > 0:
                         ec.impl_fatig_seed = int(v1[6])
+                    # M22 NON-PROPORTIONAL extras (optional, appended to line 2):
+                    #   ... seed [k sigy] — the Findley/Fatemi-Socie normal
+                    # sensitivity k and the yield stress sigma_y
+                    if len(v1) > 7 and v1[7] > 0:
+                        ec.impl_fatig_k = v1[7]
+                    if len(v1) > 8 and v1[8] > 0:
+                        ec.impl_fatig_sigy = v1[8]
+                    if is_nprop and ec.impl_fatig_mcdur <= 0.0:
+                        log.warning(
+                            "/IMPL/FATIG/MULT/NPROP needs a Monte-Carlo record "
+                            "length (mcdur on line 2: m C zeta mean ult mcdur "
+                            "seed) — the path count runs on the synthesised "
+                            "history; without it there is no time domain to "
+                            "count", block.source)
                     if ec.impl_fatig_funct <= 0:
                         log.warning(
                             "/IMPL/FATIG: no input-PSD /FUNCT id on line 1 "
