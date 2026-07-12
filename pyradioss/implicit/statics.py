@@ -336,6 +336,13 @@ class ImplicitResult:
     #: matrix, and the SRSS and CQC peak envelopes (per DOF + nodal). None
     #: without the card. See implicit/response_spectrum.py.
     response_spectrum: object = None
+    #: /IMPL/FATIG (M20): RANDOM-VIBRATION (SPECTRAL) FATIGUE — a dict with the
+    #: stress channels + critical channel, the stress-PSD spectral moments, and
+    #: the narrow-band / Dirlik / Wirsching-Light / Tovo-Benasciutti damage
+    #: rates, equivalent stresses and lives (+ an optional Monte-Carlo rainflow
+    #: cross-check). None without the card. See implicit/spectral_fatigue.py +
+    #: random_response.py.
+    fatigue: object = None
 
 
 # ----------------------------------------------------------------------------
@@ -618,6 +625,8 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
         if getattr(ip, "impl_rspec", False) and result.converged:
             _run_response_spectrum(model, ip, log, result, constr, contacts,
                                    loads)
+        if getattr(ip, "impl_fatig", False) and result.converged:
+            _run_fatigue(model, ip, log, result, constr, contacts, loads)
         _final_summary(model, result, dof, log)
         return model
 
@@ -690,6 +699,8 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
         _run_random_response(model, ip, log, result, constr, contacts, loads)
     if getattr(ip, "impl_rspec", False) and result.converged:
         _run_response_spectrum(model, ip, log, result, constr, contacts, loads)
+    if getattr(ip, "impl_fatig", False) and result.converged:
+        _run_fatigue(model, ip, log, result, constr, contacts, loads)
     _final_summary(model, result, dof, log)
     return model
 
@@ -716,6 +727,19 @@ def _run_response_spectrum(model, ip, log, result, constr=None, contacts=(),
     from .response_spectrum import run_response_spectrum
     run_response_spectrum(model, ip, log, result, constr=constr,
                           contacts=contacts, loads=loads)
+
+
+def _run_fatigue(model, ip, log, result, constr=None, contacts=(),
+                 loads=None):
+    """/IMPL/FATIG (M20): random-vibration (spectral) FATIGUE — the engine-card
+    wiring of ``random_response.run_fatigue`` (a PORT card, mirroring
+    ``_run_random_response`` for M19: the open-source engine has no
+    spectral-fatigue path). Runs after the (usually zero-load or prestress)
+    static solve, recovers the stress PSD from the M19 stress modes and
+    evaluates the S-N / Miner damage estimators."""
+    from .random_response import run_fatigue
+    run_fatigue(model, ip, log, result, constr=constr, contacts=contacts,
+                loads=loads)
 
 
 def _run_complex_modal(model, ip, log, result, constr=None, contacts=(),

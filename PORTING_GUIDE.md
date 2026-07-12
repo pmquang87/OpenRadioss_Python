@@ -111,6 +111,7 @@ same names in comments.
 | — (NO modal-superposition, frequency-response or harmonic path exists in the open-source engine: `engine/source/input/freimpl.F` reads only DYNA / BUCKL / DT / NONLIN / ARCL — OpenRadioss is a time-domain crash/impact code) | `pyradioss/implicit/modal_response.py` + `/IMPL/MODAL/DYNA`, `/IMPL/FREQ` in `engine_keywords.py` | M17: MODAL-SUPERPOSITION dynamics — consumes the M16 real eigenpairs (u = Σφᵢqᵢ, each qᵢ a decoupled damped SDOF q̈ᵢ + 2ζᵢωᵢq̇ᵢ + ωᵢ²qᵢ = φᵢᵀf). MODAL DAMPING (uniform ζ / (freq,ζ) table / the Rayleigh map ζᵢ = ½(α/ωᵢ + βωᵢ) — the SAME α,β as the M11 direct /IMPL/DYNA/DAMP, so both solvers carry identical physical damping); MODAL TRANSIENT (the EXACT Nigam–Jennings piecewise-linear-forcing recurrence per mode — no dispersion, unlike the M10 direct Newmark — with an optional mode-ACCELERATION / residual-flexibility static correction K⁻¹−Σφφᵀ/ωᵢ² for the truncated tail); HARMONIC / FREQUENCY RESPONSE (the complex FRF qᵢ(Ω) = φᵢᵀF/(ωᵢ²−Ω²+2iζᵢωᵢΩ), swept, amplitude/phase, base-excitation feeding the M16 effective-mass participation). PORT cards, library-first exactly like M16's /IMPL/EIGV; the M10 Newmark integrator and the M16 eigensolver stay bit-identical (modal superposition is a NEW parallel path) |
 | — (NO complex/damped eigensolver, NO assembled viscous C beyond the on-the-fly Rayleigh of imp_dyna.F, NO state-space / QEP path anywhere in the open-source engine — the frequency domain is not part of the time-domain solver) | `pyradioss/implicit/damping_matrix.py` + `pyradioss/implicit/complex_modal.py` + `/IMPL/CEIGV` in `engine_keywords.py`; `spring.damping_matrix` | M18: COMPLEX / DAMPED eigenvalues + NON-CLASSICALLY-damped complex-mode superposition. ASSEMBLED C (the C analogue of M16's `assemble_mass`) = Rayleigh αM + βK (M11-consistent) + discrete dashpots (the /PROP/SPRING `c` term c·aaᵀ, revived from its M11 implicit deferral; per-node /DAMP mass dampers), COO→CSR through the DofMap, condensed TᵀCT. COMPLEX EIGENVALUES: the QEP (λ²M + λC + K)φ = 0 via the SYMMETRIC state-space linearization A z = λB z, A = [[0,K],[K,C]], B = [[K,0],[0,−M]], `scipy.linalg.eig` on the reduced pencil → λᵢ = −ζᵢωᵢ ± iωd,ᵢ (decay + damped freq) and COMPLEX mode shapes (the DOF phase lag). COMPLEX-MODE SUPERPOSITION: the state-space decoupling ẋᵢ = λᵢxᵢ + pᵢ(t) (first-order exact recurrence) + the damped complex FRF (matches (K−Ω²M+iΩC)⁻¹ on the full basis). PORT card, library-first exactly like M16/M17; the M10 integrator, M16 REAL eigensolver and M17 REAL-mode superposition stay bit-identical (a NEW parallel path) |
 | — (NO frequency-domain / random-vibration / PSD / response-spectrum path anywhere in the open-source engine — `freimpl.F` re-read line by line for M19: only DYNA / BUCKL / DT / NONLIN / ARCL + solver housekeeping, the sole `PSD` token being `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/random_response.py` + `pyradioss/implicit/response_spectrum.py` + `/IMPL/PSD`, `/IMPL/RSPEC` in `engine_keywords.py` | M19: RANDOM / SPECTRAL (PSD) response + RESPONSE SPECTRA — the stochastic and envelope analyses that BUILD on the M17 real-mode FRF and the M18 complex FRF. RANDOM (PSD): the stationary response PSD S_uu(Ω) = H(Ω)S_ff(Ω)H(Ω)* through the modal transfer function (the M17 real FRF for classical damping, the M18 complex FRF for non-classical — FRF-source-agnostic), reporting the RMS σ_u = √m₀, the spectral moments m₀/m₁/m₂ (mₙ = (1/π)∫₀^∞ Ωⁿ S_uu dΩ, the Wiener–Khinchin / task ∫S dΩ/2π convention), the mean zero-crossing rate ν₀ = (1/2π)√(m₂/m₀) and peak rate ν_p = (1/2π)√(m₄/m₂) (Rice), plus the base-excitation (support-motion) PSD feed via the M16 participation. RESPONSE SPECTRA: the per-mode peaks rᵢ = Γᵢ Sa(ωᵢ,ζᵢ)/ωᵢ² φᵢ (participation-scaled spectral ordinate) combined by SRSS and CQC (Der Kiureghian 1981 closed-form ρᵢⱼ). PORT cards, library-first exactly like M16/M17/M18; the M10 integrator, M16/M17/M18 paths stay bit-identical (a NEW parallel path consuming their FRFs read-only). Theory: Newland; Wirsching/Paez/Ortiz; Vanmarcke; Chopra ch. 13; Der Kiureghian 1981 |
+| — (NO frequency-domain / spectral-fatigue solver anywhere in the open-source engine — `freimpl.F` re-read line by line for M20: no /FATIG, no S-N / Miner branch, no Dirlik / rainflow / narrow-band estimator; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/spectral_fatigue.py` + the stress-recovery section of `pyradioss/implicit/random_response.py` + `/IMPL/FATIG` in `engine_keywords.py` | M20: RANDOM-VIBRATION (SPECTRAL) FATIGUE — the stress-life damage estimate computed DIRECTLY from the M19 stress-PSD spectral moments. STRESS-PSD RECOVERY: the per-mode stress modes σᵢ = (element stress operator)·φᵢ recovered by running the SAME force kernels the M8 static solve uses on each mode shape (read-only, σ = C:B:u on the zero-stress reference), the stress FRF H_σ(Ω) = Σᵢ σᵢ qᵢ(Ω) and the stress response PSD S_σσ(Ω) = \|H_σ\|² S_ff with its own moments m₀..m₄. DAMAGE MODELS for an S-N curve N = C·S^−m under a Miner sum: NARROW-BAND (Bendat 1964, the closed-form Rayleigh-range Γ(1+m/2) damage), DIRLIK (1985, the empirical three-term rainflow-range PDF from m₀,m₁,m₂,m₄), WIRSCHING–LIGHT (1980) and TOVO–BENASCIUTTI (2005) — the damage rate, equivalent stress and time-to-failure, plus a seeded Monte-Carlo rainflow (ASTM E1049) cross-check. PORT card, library-first exactly like M16–M19; the M10 integrator and the M16/M17/M18/M19 paths stay bit-identical (a NEW parallel path consuming the stress moments read-only). Theory: Bendat 1964; Dirlik 1985; Wirsching & Light 1980; Benasciutti & Tovo 2005; Newland; Bishop & Sherratt (NAFEMS); Palmgren–Miner; ASTM E1049 |
 
 ## 3. Conventions used in this port
 
@@ -274,7 +275,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | **MODAL-SUPERPOSITION dynamics (M17)**: mode-superposition TRANSIENT (`/IMPL/MODAL/DYNA`) + harmonic / frequency response (`/IMPL/FREQ`) + modal damping, consuming the M16 real eigenpairs (u = Σφᵢqᵢ, decoupled damped SDOFs). MODAL DAMPING — uniform ζ, a (freq, ζ) table interpolated onto the ωᵢ, and the Rayleigh map ζᵢ = ½(α/ωᵢ + βωᵢ) so a /IMPL/DYNA/DAMP α,β becomes modal damping CONSISTENT with the M11 direct integrator (validated against the direct damped-decay envelope). MODAL TRANSIENT — the EXACT Nigam–Jennings piecewise-linear-forcing recurrence per mode (step/impulse response matched POINTWISE + bit-close to the DIRECT M10 Newmark at a peak on a spring-mass sharing K,M; modal-truncation convergence to DAF = 2; the mode-ACCELERATION / residual-flexibility static correction recovering the EXACT static tail from one mode — a documented deviation), the M10 energy ledger in modal coordinates. HARMONIC RESPONSE — the complex FRF qᵢ(Ω) = φᵢᵀF/(ωᵢ²−Ω²+2iζᵢωᵢΩ), swept, amplitude/phase (SDOF peak = 1/(2ζ), half-power Δω/ω = 2ζ; resonances coinciding with the M16 natural frequencies; a driven-cantilever tip amplitude; base-excitation feeding the M16 effective-mass participation). PORT cards, library-first like /IMPL/EIGV; the M10 Newmark integrator + M16 eigensolver stay BIT-IDENTICAL (monkeypatch-asserted parity contract) | ✅ |
 | **COMPLEX / DAMPED eigenvalues + NON-CLASSICAL damping (M18)**: the ASSEMBLED damping C (`implicit/damping_matrix.py`) = Rayleigh αM + βK (M11-consistent) + discrete dashpots (the /PROP/SPRING `c` term c·aaᵀ, revived from its M11 implicit deferral; per-node /DAMP mass dampers), COO→CSR through the DofMap and condensed TᵀCT like M16's mass. The COMPLEX eigenproblem (λ²M + λC + K)φ = 0 (`implicit/complex_modal.py`, `/IMPL/CEIGV`) via the SYMMETRIC state-space linearization A z = λB z (A = [[0,K],[K,C]], B = [[K,0],[0,−M]]; no mass inverse, symmetric so the biorthogonality is z_iᵀBz_j = 0), `scipy.linalg.eig` on the reduced pencil → λᵢ = −ζᵢωᵢ ± iωd,ᵢ (decay rate + damped frequency) + COMPLEX mode shapes (the DOF phase lag of non-proportional damping). COMPLEX-MODE SUPERPOSITION — the state-space decoupling into first-order complex modal equations ẋᵢ = λᵢxᵢ + pᵢ(t) (an EXACT piecewise-linear recurrence, the first-order analogue of Nigam–Jennings) + the damped complex FRF. Validated: a classically-damped (Rayleigh) system reducing EXACTLY to −ζᵢωᵢ ± iωd,ᵢ with the M16 ωᵢ and M17 ζᵢ (real-up-to-phase shapes); a 2-DOF one-dashpot system matching the closed-form complex roots + a genuine phase lag; the state-space biorthogonality; the discrete-dashpot C contribution + pure-Rayleigh C reproducing the M17 ζᵢ; the complex-mode transient matching a DIRECT Newmark march of (K,C,M) where the M17 REAL-mode superposition provably errs (gap asserted); reduction to the M17 answer when damping IS classical; the complex FRF matching (K−Ω²M+iΩC)⁻¹ on the full basis. PORT card, library-first like M16/M17; the M10 integrator, M16 REAL eigensolver and M17 REAL-mode superposition stay BIT-IDENTICAL | ✅ |
 | **RANDOM / SPECTRAL (PSD) response + RESPONSE SPECTRA (M19)**: the stationary random-vibration and design-envelope analyses that build on the M17/M18 FRFs (`implicit/random_response.py`, `implicit/response_spectrum.py`, `/IMPL/PSD`, `/IMPL/RSPEC`). RANDOM (PSD) — the response PSD S_uu(Ω) = \|H(Ω)\|² S_ff(Ω) through the modal transfer function (FRF-source-agnostic: the M17 real FRF for classical damping, the M18 complex FRF for non-classical), reporting the RMS σ_u = √m₀, the spectral moments m₀/m₁/m₂ (mₙ = (1/π)∫₀^∞ Ωⁿ S_uu dΩ), the mean zero-crossing rate ν₀ = (1/2π)√(m₂/m₀) and peak rate ν_p = (1/2π)√(m₄/m₂) (Rice), and the base-excitation (support-motion) PSD feed via the M16 participation. RESPONSE SPECTRA — the per-mode peaks rᵢ = Γᵢ Sa(ωᵢ,ζᵢ)/ωᵢ² φᵢ combined by SRSS and CQC (Der Kiureghian 1981 closed-form ρᵢⱼ). Validated: a white-noise SDOF's σ² = S₀/(2ck) closed form; the multi-DOF response PSD from the modal FRF matching the DIRECT (K−Ω²M+iΩC)⁻¹ inversion; the spectral-moment / Parseval identity m₀(velocity) = m₂(displacement); the RMS reducing to the static σ_f/k for a quasi-static band; the CQC closed-form ρᵢⱼ; a single-mode spectrum recovering Γ Sa/ω²; SRSS ≈ CQC for well-separated modes and the CQC-vs-SRSS GAP on a closely-spaced (near-degenerate tuning-fork) pair; the complex-FRF PSD reducing to the real-FRF PSD when damping is classical. PORT cards, library-first like M16-M18; the M10 integrator, M16/M17/M18 paths stay BIT-IDENTICAL (a NEW parallel path consuming their FRFs read-only — monkeypatch-asserted parity) | ✅ |
-| Lanczos/subspace for large models; AMLS / substructuring; non-stationary / evolutionary PSD; multi-input cross-PSD with coherence; fatigue damage (Dirlik/rainflow) from the spectral moments; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19 roadmap notes) |
+| **RANDOM-VIBRATION (SPECTRAL) FATIGUE (M20)**: the stress-life fatigue-damage estimate computed DIRECTLY from the M19 stress-PSD spectral moments (`implicit/spectral_fatigue.py`, `implicit/random_response.py` stress recovery, `/IMPL/FATIG`). STRESS-PSD RECOVERY — the per-mode STRESS modes σᵢ = (element stress operator)·φᵢ recovered by running the SAME force kernels the M8 static solve uses on each mode shape (read-only; sigma = C:B:u the linear stress operator on the zero-stress reference), the stress FRF H_σ(Ω) = Σᵢ σᵢ qᵢ(Ω) (stress commutes with the modal superposition) and the stress response PSD S_σσ(Ω) = \|H_σ\|² S_ff with its own moments m₀..m₄. DAMAGE MODELS — for an S-N curve N = C·S^−m under a Miner sum: the NARROW-BAND (Bendat 1964) closed-form Rayleigh-range Gamma-function damage E[D]/T = (ν₀/C)(2√2σ)^m Γ(1+m/2), DIRLIK (1985) (the empirical three-term rainflow-range PDF from m₀,m₁,m₂,m₄), WIRSCHING–LIGHT (1980) and TOVO–BENASCIUTTI (2005) as wide-band cross-checks — reporting the damage rate, equivalent stress and time-to-failure, plus a seeded Monte-Carlo rainflow (ASTM E1049) cross-check (synthesise a Gaussian history from the PSD, count, Miner-sum). Validated: the narrow-band closed form vs a hand Gamma evaluation; Dirlik → narrow-band as the bandwidth → 0 and the correct wide-band bias on a bimodal spectrum; the ASTM E1049 counter on its canonical example; the Monte-Carlo damage matching Dirlik within the documented scatter; the recovered static stress = the M8 static stress; the stress FRF = the direct stress operator on U(Ω). A PORT card, library-first like M16–M19; the M10 integrator, M16/M17/M18/M19 paths stay BIT-IDENTICAL (a NEW parallel path consuming the stress moments read-only — monkeypatch-asserted parity) | ✅ |
+| Lanczos/subspace for large models; AMLS / substructuring; non-stationary / evolutionary PSD; multi-input cross-PSD with coherence; multiaxial / critical-plane fatigue + stress-invariant equivalent PSDs; mean-stress beyond a basic Goodman option; crack-growth / fracture-mechanics fatigue; the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -1907,6 +1909,119 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       the UL hourglass memory, the NLGEOM hourglass-operator geometry
       variation, the BT4 thin-plate shear-lock / drilling floor.
 
+19. **M20 — RANDOM-VIBRATION (SPECTRAL) FATIGUE** ✅ (done):
+    the FIRST item deferred out of M19 that BUILDS on it — the stress-life
+    fatigue-damage estimate computed DIRECTLY from the M19 stress-PSD spectral
+    moments (m₀..m₄). A NEW, parallel path (`implicit/spectral_fatigue.py` +
+    the stress-recovery section of `implicit/random_response.py`) that never
+    touches the M10 integrator, the M16 eigensolver, the M17/M18 superposition
+    or the M19 PSD / response-spectrum paths (all stay bit-identical,
+    asserted). Theory: Bendat, "Probability Functions for Random Responses"
+    (NASA CR-33, 1964 — the narrow-band estimate); Dirlik, PhD thesis
+    (Warwick, 1985 — the empirical rainflow-range PDF); Wirsching & Light
+    (ASCE 1980); Benasciutti & Tovo (Int. J. Fatigue 2005); Newland; Bishop &
+    Sherratt (NAFEMS 2000); the Rayleigh / rainflow-range spectral connection;
+    Palmgren–Miner linear damage; the ASTM E1049-85 rainflow standard.
+
+    Fortran origin: there is NONE — `engine/source/input/freimpl.F` (re-read
+    line by line for M20) has no /FATIG, no S-N / Miner branch, no Dirlik /
+    rainflow / narrow-band estimator anywhere in the open tree (the sole `PSD`
+    token is still `IMUMPSD`, a MUMPS-solver flag). OpenRadioss is a
+    time-domain crash/impact code — the stationary random-vibration fatigue
+    analysis simply is not part of the open-source solver (the same finding
+    M16 made for the real eigensolver, M17–M19 for their frequency-domain
+    analyses). So M20 ports spectral fatigue as a clean LIBRARY capability
+    behind a minimal PORT card, exactly as M16–M19 did.
+
+    * **STRESS-PSD RECOVERY** (`random_response.py`): the M19 response path is
+      extended so the transfer function can target a STRESS (or
+      stress-resultant) component, not just a displacement DOF. Because the
+      element stress is a LINEAR operator on the nodal displacement for a
+      small-strain element on the reference configuration (σ = C:B:u), the
+      per-mode STRESS MODES σᵢ = (element stress operator)·φᵢ are recovered by
+      running the SAME force kernels the M8 static solve uses on each mode
+      shape (`recover_element_stresses` / `stress_modes`), on the ZERO-stress
+      reference at x0, restoring the buffers afterward (the M14–M19 read-only
+      parity contract — the element/stress kernels are reused READ-ONLY, never
+      perturbed). The stress FRF is the modal combination H_σ(Ω) = Σᵢ σᵢ qᵢ(Ω)
+      (stress commutes with the superposition — one small (nf,nmode)×(nmode,
+      nchan) product, no per-frequency kernel calls), and the stress response
+      PSD S_σσ(Ω) = \|H_σ\|² S_ff has its own moments m₀..m₄. Truss/solid/shell
+      elements expose their `sig` (axial / 6-Voigt); the spring exposes its
+      axial FORCE resultant (its natural stress-resultant channel). Built on
+      the REAL-mode FRF (classical damping — the standard random-vibration-
+      fatigue assumption). Validated: the recovered STATIC stress = the M8
+      implicit-static stress (= P/A closed form); the stress FRF = the direct
+      element-stress operator applied to the physical FRF U(Ω).
+    * **SPECTRAL FATIGUE-DAMAGE MODELS** (`spectral_fatigue.py`): for an S-N
+      curve N = C·S^−m (a C, m input) under a Palmgren–Miner sum, the expected
+      damage rate E[D]/T = (ν/C)·E[Sᵐ]. The NARROW-BAND (Bendat) estimate — the
+      rate ν₀, the Rayleigh peak/range distribution, the closed-form
+      Gamma-function damage (2√2σ)ᵐΓ(1+m/2). The WIDE-BAND corrections — DIRLIK
+      (1985)'s empirical three-distribution rainflow-range PDF from
+      m₀,m₁,m₂,m₄ (one exponential + two Rayleigh, the closed-form Eq. (9)
+      moment), plus WIRSCHING–LIGHT (1980) and TOVO–BENASCIUTTI (2005) as
+      cross-checks — each reporting the damage rate, equivalent constant-
+      amplitude stress range and time-to-failure. A basic Goodman mean-stress
+      option (C_eff = C(1−σ_m/S_u)ᵐ). An ASTM E1049-85 rainflow counter and a
+      spectral-representation Gaussian-history synthesiser (an inverse-rFFT of
+      the PSD with seeded random phases) drive a MONTE-CARLO cross-check.
+      Validated: the narrow-band closed form vs a hand Gamma evaluation; Dirlik
+      → narrow band as the bandwidth → 0 (D1,D2 → 0, D3 → 1) and the correct
+      wide-band BIAS (less conservative) on a bimodal spectrum; the rainflow
+      counter on the canonical ASTM E1049 example; the synthesised RMS = √m₀;
+      the Monte-Carlo damage matching Dirlik within the documented scatter
+      (~20 % here); Wirsching–Light / Tovo–Benasciutti reducing to narrow band
+      in the narrow-band limit; the T_f = 1/rate and S_eq reporting triple.
+    * **Engine card + reporting** (`statics._run_fatigue`,
+      `random_response.run_fatigue`, mirroring M19's `_run_random_response`):
+      /IMPL/FATIG (+ /BASE, /STRS) builds the real-mode FRF, recovers the
+      stress modes, forms the stress PSD / moments, picks the CRITICAL channel
+      (highest Dirlik damage), evaluates the four estimators + the optional
+      Monte-Carlo, and reports the damage rate / equivalent stress / life on
+      `model.implicit_result.fatigue` and in the listing. Two card lines: the
+      PSD sweep (fmin fmax nf funct [dir] [nmode]) and the S-N + options (m C
+      [zeta] [mean ult] [mcdur seed]). A PORT card, minimal like /IMPL/EIGV.
+    * **Example**: `examples/spectral_fatigue` — the M19 base-driven 5-mass
+      instrument stack re-run under /IMPL/FATIG/BASE to report the fatigue life
+      of the critical element (the base spring) under its base-acceleration
+      PSD: the four estimators + the Monte-Carlo cross-check, the wide-band
+      Dirlik relaxation of the conservative narrow-band life.
+    * **Validated** (`tests/test_m20_fatigue.py`): all of the above plus the
+      /IMPL/FATIG (+ /BASE, /STRS) card mirror and the parity contract (the
+      fatigue path never mutating the M16 eigensolver / M17–M19 transfer
+      functions / the element state; the direct /IMPL/DYNA answer byte-
+      identical whether or not it runs).
+
+    Deferred out of M20, explicitly (not half-implemented):
+    * MULTIAXIAL / critical-plane fatigue and stress-INVARIANT (von Mises /
+      signed-von-Mises) equivalent PSDs: the port computes damage from a SINGLE
+      scalar stress (or stress-resultant) component's PSD (the critical
+      element/component is auto-selected). The full stress-tensor cross-PSD
+      matrix and a critical-plane search are the generalization;
+    * MEAN-STRESS corrections beyond the basic Goodman intercept option
+      (Gerber / Soderberg / Walker, and a per-cycle mean from the rainflow
+      pairing);
+    * NON-STATIONARY / evolutionary-PSD fatigue and non-Gaussian (kurtosis)
+      corrections (the |H|² S law and every PDF assume a STATIONARY GAUSSIAN
+      process) — they build on these same moments;
+    * CYCLE-COUNTING of a full MULTI-INPUT cross-PSD (needs the M19-deferred
+      cross-PSD response first);
+    * CRACK-GROWTH / fracture-mechanics fatigue (Paris law, spectral da/dN) — a
+      different analysis entirely;
+    * the COMPLEX-FRF stress recovery (the stress path is built on the REAL-mode
+      FRF; recovering stress through the M18 complex state-space modes is
+      deferred, as is M19's complex-FRF base-excitation feed);
+    * the unchanged M10–M19 deferral tail: non-stationary / evolutionary PSD,
+      multi-input cross-PSD with coherence, multi-directional 100-30-30 response
+      spectra, the complex-FRF base-excitation feed, gyroscopic / circulatory
+      systems, Lanczos / subspace + AMLS, IFQ ≥ 10 / MODFR 2, /FRICTION
+      per-part-pair sets, orthotropic / thermal friction, the fiber TYPE18
+      beam, the LAW27 plastic block / solids, thermal contact, TYPE19/24/25,
+      Inacti, Igap 2/3, LAW42 shells/Prony, IDTC 2/3, /RWALL under implicit,
+      the UL hourglass memory, the NLGEOM hourglass-operator geometry
+      variation, the BT4 thin-plate shear-lock / drilling floor.
+
 ## 6. Validation strategy
 
 `tests/` contains two layers:
@@ -1932,6 +2047,21 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
   real-FRF PSD when damping is classical; the card mirror and the parity
   contract (no mutation of the M16-M18 solvers / element state; the direct
   /IMPL/DYNA answer byte-identical whether or not the random path runs).
+* **Random-vibration (spectral) fatigue validations (M20)** — the recovered
+  STATIC stress equal to the M8 implicit-static stress (= the P/A closed form),
+  the stress FRF H_σ(Ω) = Σᵢσᵢqᵢ(Ω) equal to the direct element-stress operator
+  applied to U(Ω) (a |H_σ|² S stress-PSD identity), and the recovery leaving
+  the element state untouched (read-only); the narrow-band (Bendat) closed form
+  against a hand Gamma-function evaluation; Dirlik reducing to narrow band as
+  the bandwidth → 0 (D1,D2 → 0, D3 → 1) and giving the correct wide-band bias
+  (less conservative than narrow band) on a bimodal spectrum; the ASTM
+  E1049-85 rainflow counter on its canonical worked example; a Gaussian time
+  history synthesised from the PSD (RMS = √m₀) rainflow-counted and matching
+  the Dirlik estimate within the documented scatter (a seeded Monte-Carlo
+  cross-check); Wirsching–Light / Tovo–Benasciutti reducing to narrow band in
+  the narrow-band limit; the card mirror (/IMPL/FATIG + /BASE + /STRS) and the
+  parity contract (no mutation of the M16-M19 solvers / element state; the
+  direct /IMPL/DYNA answer byte-identical whether or not the fatigue path runs).
 * **Friction-model / material-tangent validations (M15)** — exact MFROT
   formula, branch-joint and floor checks with the FD-verified static
   µ′(p); kernel-level transmitted-force closed forms (every factor
