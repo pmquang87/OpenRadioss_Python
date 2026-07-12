@@ -509,6 +509,73 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             "/IMPL/RSPEC: no design-spectrum /FUNCT id on the "
                             "card (funct dir zeta nmode) — the run will error "
                             "at the analysis", block.source)
+                elif sub in ("FATIG", "FATIGUE", "SPECTRALFATIGUE"):
+                    # /IMPL/FATIG (M20 — a PORT card; freimpl.F has no
+                    # spectral-fatigue solver). Random-vibration (spectral)
+                    # fatigue: recover a STRESS PSD from the M19 stress modes,
+                    # evaluate the narrow-band (Bendat) / Dirlik /
+                    # Wirsching-Light / Tovo-Benasciutti damage of an S-N curve
+                    # N = C*S^-m under a Miner sum. Two card lines:
+                    #   line 1 (PSD sweep): fmin fmax nf funct [nmode]
+                    #   line 2 (S-N + opts): m C [zeta] [mean ult] [mcdur seed]
+                    # Sub-keywords:
+                    #   /IMPL/FATIG        force PSD (the /CLOAD pattern)
+                    #   /IMPL/FATIG/BASE   rigid-base ACCELERATION PSD; the
+                    #                      base direction is appended to line 1
+                    #                      (fmin fmax nf funct dir [nmode])
+                    #   /IMPL/FATIG/STRS   modes on the prestressed K
+                    ec.impl_fatig = True
+                    ec.implicit = True
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    v0 = block.cards[0].floats() if block.cards else []
+                    v1 = (block.cards[1].floats()
+                          if len(block.cards) > 1 else [])
+                    if len(v0) > 0:
+                        ec.impl_fatig_fmin = v0[0]
+                    if len(v0) > 1:
+                        ec.impl_fatig_fmax = v0[1]
+                    if len(v0) > 2 and v0[2] > 0:
+                        ec.impl_fatig_nf = int(v0[2])
+                    if len(v0) > 3 and v0[3] > 0:
+                        ec.impl_fatig_funct = int(v0[3])
+                    if sub2 in ("BASE", "SUPPORT", "ACCEL"):
+                        ec.impl_fatig_base = True
+                        if len(v0) > 4 and v0[4] >= 0:
+                            ec.impl_fatig_dir = int(v0[4])
+                        if len(v0) > 5 and v0[5] > 0:
+                            ec.impl_fatig_nmode = int(v0[5])
+                    else:
+                        if sub2 in ("STRS", "STRESS", "PRESTRESS"):
+                            ec.impl_fatig_prestress = True
+                            ec.impl_nlgeom = True
+                        if len(v0) > 4 and v0[4] > 0:
+                            ec.impl_fatig_nmode = int(v0[4])
+                    # line 2: the S-N curve + options
+                    if len(v1) > 0 and v1[0] > 0:
+                        ec.impl_fatig_snm = v1[0]
+                    if len(v1) > 1 and v1[1] > 0:
+                        ec.impl_fatig_snc = v1[1]
+                    if len(v1) > 2 and v1[2] > 0:
+                        ec.impl_fatig_zeta = v1[2]
+                    if len(v1) > 3:
+                        ec.impl_fatig_mean = v1[3]
+                    if len(v1) > 4 and v1[4] > 0:
+                        ec.impl_fatig_ult = v1[4]
+                    if len(v1) > 5 and v1[5] > 0:
+                        ec.impl_fatig_mcdur = v1[5]
+                    if len(v1) > 6 and v1[6] > 0:
+                        ec.impl_fatig_seed = int(v1[6])
+                    if ec.impl_fatig_funct <= 0:
+                        log.warning(
+                            "/IMPL/FATIG: no input-PSD /FUNCT id on line 1 "
+                            "(fmin fmax nf funct) — the run will error at the "
+                            "analysis", block.source)
+                    if ec.impl_fatig_snm <= 0.0 or ec.impl_fatig_snc <= 0.0:
+                        log.warning(
+                            "/IMPL/FATIG: no valid S-N curve on line 2 (m C) — "
+                            "a positive slope m and coefficient C are required "
+                            "(N = C*S^-m)", block.source)
                 elif sub in ("NEWTON", "SOLVINFO"):
                     if block.cards:
                         vals = block.cards[0].floats()

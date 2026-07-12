@@ -194,6 +194,27 @@ class EngineControls:
     impl_rspec_zeta: float = 0.05   # spectrum / modal damping ratio
     impl_rspec_nmode: int = 6       # modes retained in the combination
     impl_rspec_prestress: bool = False  # extract modes on the prestressed K
+    # -- M20 /IMPL/FATIG: RANDOM-VIBRATION (SPECTRAL) FATIGUE (PORT card —
+    # freimpl.F has no spectral-fatigue solver). Recovers a STRESS PSD from the
+    # M19 stress modes and evaluates the narrow-band (Bendat) / Dirlik /
+    # Wirsching-Light / Tovo-Benasciutti damage of an S-N curve N = C*S^-m
+    # under a Miner sum. See implicit/spectral_fatigue.py + random_response.py.
+    impl_fatig: bool = False        # /IMPL/FATIG present -> spectral fatigue
+    impl_fatig_funct: int = 0       # /FUNCT id of the input PSD S_ff(f)
+    impl_fatig_fmin: float = 0.0    # FRF sweep start frequency (Hz)
+    impl_fatig_fmax: float = 0.0    # FRF sweep end frequency (Hz)
+    impl_fatig_nf: int = 800        # number of sweep points
+    impl_fatig_nmode: int = 6       # modes retained in the FRF / stress modes
+    impl_fatig_zeta: float = 0.02   # uniform modal damping for the FRF
+    impl_fatig_base: bool = False   # /IMPL/FATIG/BASE: base-acceleration PSD
+    impl_fatig_dir: int = 0         # base-excitation rigid direction (0..5)
+    impl_fatig_prestress: bool = False  # extract modes on the prestressed K
+    impl_fatig_snm: float = 0.0     # S-N slope m (N = C*S^-m)
+    impl_fatig_snc: float = 0.0     # S-N coefficient C
+    impl_fatig_mean: float = 0.0    # static mean stress (basic Goodman option)
+    impl_fatig_ult: float = 0.0     # ultimate tensile strength S_u (Goodman)
+    impl_fatig_mcdur: float = 0.0   # Monte-Carlo cross-check duration (0=off)
+    impl_fatig_seed: int = 1        # Monte-Carlo random seed (reproducible)
 
 
 class Model:
