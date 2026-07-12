@@ -235,6 +235,16 @@ class EngineControls:
     # ALONGSIDE the M21 spectral + M22 time-domain answers. Implies NPROP (hence
     # MULT). See implicit/spectral_nonproportional_fatigue.py.
     impl_fatig_spec: bool = False   # /IMPL/FATIG/MULT/NPROP/SPEC -> spectral NP
+    # M24 /IMPL/FATIG/NGAUSS: NON-GAUSSIAN / KURTOSIS correction — the Winterstein
+    # Hermite-moment model + the Benasciutti-Braccesi / Rizzi-Kihm closed-form
+    # correction factor lambda_ng that scales the Gaussian spectral damage for a
+    # target kurtosis (and skewness), plus a non-Gaussian Monte-Carlo cross-check.
+    # Composes with MULT / NPROP / SPEC (a scalar correction on the equivalent
+    # stress). See implicit/nongaussian_fatigue.py.
+    impl_fatig_ngauss: bool = False  # /IMPL/FATIG/NGAUSS -> non-Gaussian corr.
+    impl_fatig_kurt: float = 3.0     # target kurtosis gamma_4 (3 = Gaussian)
+    impl_fatig_skew: float = 0.0     # target skewness gamma_3 (0 = symmetric)
+    impl_fatig_bwcorr: bool = True   # Benasciutti-Tovo bandwidth attenuation
 
 
 class Model:

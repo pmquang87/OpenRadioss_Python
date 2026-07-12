@@ -549,6 +549,18 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     #                      reported ALONGSIDE the M21 spectral and
                     #                      M22 time-domain answers (all three side
                     #                      by side). Implies NPROP (hence MULT).
+                    #   /IMPL/FATIG/NGAUSS (M24) NON-GAUSSIAN / KURTOSIS —
+                    #                      correct the Gaussian spectral damage
+                    #                      (scalar OR the MULT equivalent scalar)
+                    #                      for a target kurtosis / skewness by the
+                    #                      Winterstein Hermite model + the
+                    #                      lambda_ng closed-form factor, with a
+                    #                      non-Gaussian Monte-Carlo cross-check,
+                    #                      reported ALONGSIDE the M20 Gaussian
+                    #                      numbers. Composes with MULT / NPROP /
+                    #                      SPEC (orthogonal). The kurtosis (and
+                    #                      optional skewness) go on a THIRD card
+                    #                      line: kurt [skew].
                     ec.impl_fatig = True
                     ec.implicit = True
                     # scan ALL sub-keywords (the modifiers compose in any order)
@@ -563,6 +575,10 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     # M23: SPECTRAL non-proportional; implies NPROP (hence MULT)
                     is_spec = bool(subs & {"SPEC", "SPECTRAL", "FREQ",
                                            "FREQUENCY"})
+                    # M24: NON-GAUSSIAN / KURTOSIS correction; orthogonal — it
+                    # composes with (does NOT imply) MULT / NPROP / SPEC
+                    is_ngauss = bool(subs & {"NGAUSS", "NONGAUSS",
+                                             "NONGAUSSIAN", "KURTOSIS", "KURT"})
                     if is_spec:
                         is_nprop = True
                     if is_nprop:
@@ -570,6 +586,10 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     v0 = block.cards[0].floats() if block.cards else []
                     v1 = (block.cards[1].floats()
                           if len(block.cards) > 1 else [])
+                    # M24: line 3 carries the target kurtosis (and optional
+                    # skewness): kurt [skew]
+                    v2 = (block.cards[2].floats()
+                          if len(block.cards) > 2 else [])
                     if len(v0) > 0:
                         ec.impl_fatig_fmin = v0[0]
                     if len(v0) > 1:
@@ -584,6 +604,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_nprop = True
                     if is_spec:
                         ec.impl_fatig_spec = True
+                    if is_ngauss:
+                        ec.impl_fatig_ngauss = True
                     if is_base:
                         ec.impl_fatig_base = True
                         if len(v0) > 4 and v0[4] >= 0:
@@ -618,6 +640,17 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_k = v1[7]
                     if len(v1) > 8 and v1[8] > 0:
                         ec.impl_fatig_sigy = v1[8]
+                    # M24 line 3: target kurtosis [skewness] for the non-Gaussian
+                    # correction (kurt = 3, skew = 0 is Gaussian, a no-op)
+                    if len(v2) > 0 and v2[0] > 0:
+                        ec.impl_fatig_kurt = v2[0]
+                    if len(v2) > 1:
+                        ec.impl_fatig_skew = v2[1]
+                    if is_ngauss and ec.impl_fatig_kurt <= 0.0:
+                        log.warning(
+                            "/IMPL/FATIG/NGAUSS needs a target kurtosis on line "
+                            "3 (kurt [skew]); kurt = 3 is Gaussian (a no-op)",
+                            block.source)
                     if is_nprop and ec.impl_fatig_mcdur <= 0.0:
                         log.warning(
                             "/IMPL/FATIG/MULT/NPROP needs a Monte-Carlo record "
