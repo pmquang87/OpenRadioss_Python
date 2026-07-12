@@ -110,6 +110,7 @@ same names in comments.
 | the LAW2 global resultant-plasticity return of the beam (the port's M3 model; note the ACTUAL `pmat3.F` is pke3.F's ELASTIC shear-stiffness setup — the original's implicit beam KE has no plasticity linearization to mirror) | `elements/beam_type3.py` (`tangent` LAW2 branch + `implicit_internal_forces`) | M15: LAW2 BEAM consistent tangent — the algorithmic derivative of the radial resultant return, C_alg = s·C + [(H/(E+H) − s)/seq_tr]·R_tr (qᵀC), built from the POST-return state via the homogeneity identities (seq degree-1, q degree-0 ⇒ seq_tr = sy + E·dλ, R_tr = R·seq_tr/sy); the implicit residual runs its own ITERATED consistency solve (`implicit_internal_forces`, the M11 truss lesson MEASURED again in resultant space: 5 iterations are exact at n = 0.5 but leave O(1) residual at n = 0.2 virgin yield; the explicit kernel keeps its bit-identical 5); elastic beams route through the new hook bit-identically |
 | — (NO modal-superposition, frequency-response or harmonic path exists in the open-source engine: `engine/source/input/freimpl.F` reads only DYNA / BUCKL / DT / NONLIN / ARCL — OpenRadioss is a time-domain crash/impact code) | `pyradioss/implicit/modal_response.py` + `/IMPL/MODAL/DYNA`, `/IMPL/FREQ` in `engine_keywords.py` | M17: MODAL-SUPERPOSITION dynamics — consumes the M16 real eigenpairs (u = Σφᵢqᵢ, each qᵢ a decoupled damped SDOF q̈ᵢ + 2ζᵢωᵢq̇ᵢ + ωᵢ²qᵢ = φᵢᵀf). MODAL DAMPING (uniform ζ / (freq,ζ) table / the Rayleigh map ζᵢ = ½(α/ωᵢ + βωᵢ) — the SAME α,β as the M11 direct /IMPL/DYNA/DAMP, so both solvers carry identical physical damping); MODAL TRANSIENT (the EXACT Nigam–Jennings piecewise-linear-forcing recurrence per mode — no dispersion, unlike the M10 direct Newmark — with an optional mode-ACCELERATION / residual-flexibility static correction K⁻¹−Σφφᵀ/ωᵢ² for the truncated tail); HARMONIC / FREQUENCY RESPONSE (the complex FRF qᵢ(Ω) = φᵢᵀF/(ωᵢ²−Ω²+2iζᵢωᵢΩ), swept, amplitude/phase, base-excitation feeding the M16 effective-mass participation). PORT cards, library-first exactly like M16's /IMPL/EIGV; the M10 Newmark integrator and the M16 eigensolver stay bit-identical (modal superposition is a NEW parallel path) |
 | — (NO complex/damped eigensolver, NO assembled viscous C beyond the on-the-fly Rayleigh of imp_dyna.F, NO state-space / QEP path anywhere in the open-source engine — the frequency domain is not part of the time-domain solver) | `pyradioss/implicit/damping_matrix.py` + `pyradioss/implicit/complex_modal.py` + `/IMPL/CEIGV` in `engine_keywords.py`; `spring.damping_matrix` | M18: COMPLEX / DAMPED eigenvalues + NON-CLASSICALLY-damped complex-mode superposition. ASSEMBLED C (the C analogue of M16's `assemble_mass`) = Rayleigh αM + βK (M11-consistent) + discrete dashpots (the /PROP/SPRING `c` term c·aaᵀ, revived from its M11 implicit deferral; per-node /DAMP mass dampers), COO→CSR through the DofMap, condensed TᵀCT. COMPLEX EIGENVALUES: the QEP (λ²M + λC + K)φ = 0 via the SYMMETRIC state-space linearization A z = λB z, A = [[0,K],[K,C]], B = [[K,0],[0,−M]], `scipy.linalg.eig` on the reduced pencil → λᵢ = −ζᵢωᵢ ± iωd,ᵢ (decay + damped freq) and COMPLEX mode shapes (the DOF phase lag). COMPLEX-MODE SUPERPOSITION: the state-space decoupling ẋᵢ = λᵢxᵢ + pᵢ(t) (first-order exact recurrence) + the damped complex FRF (matches (K−Ω²M+iΩC)⁻¹ on the full basis). PORT card, library-first exactly like M16/M17; the M10 integrator, M16 REAL eigensolver and M17 REAL-mode superposition stay bit-identical (a NEW parallel path) |
+| — (NO frequency-domain / random-vibration / PSD / response-spectrum path anywhere in the open-source engine — `freimpl.F` re-read line by line for M19: only DYNA / BUCKL / DT / NONLIN / ARCL + solver housekeeping, the sole `PSD` token being `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/random_response.py` + `pyradioss/implicit/response_spectrum.py` + `/IMPL/PSD`, `/IMPL/RSPEC` in `engine_keywords.py` | M19: RANDOM / SPECTRAL (PSD) response + RESPONSE SPECTRA — the stochastic and envelope analyses that BUILD on the M17 real-mode FRF and the M18 complex FRF. RANDOM (PSD): the stationary response PSD S_uu(Ω) = H(Ω)S_ff(Ω)H(Ω)* through the modal transfer function (the M17 real FRF for classical damping, the M18 complex FRF for non-classical — FRF-source-agnostic), reporting the RMS σ_u = √m₀, the spectral moments m₀/m₁/m₂ (mₙ = (1/π)∫₀^∞ Ωⁿ S_uu dΩ, the Wiener–Khinchin / task ∫S dΩ/2π convention), the mean zero-crossing rate ν₀ = (1/2π)√(m₂/m₀) and peak rate ν_p = (1/2π)√(m₄/m₂) (Rice), plus the base-excitation (support-motion) PSD feed via the M16 participation. RESPONSE SPECTRA: the per-mode peaks rᵢ = Γᵢ Sa(ωᵢ,ζᵢ)/ωᵢ² φᵢ (participation-scaled spectral ordinate) combined by SRSS and CQC (Der Kiureghian 1981 closed-form ρᵢⱼ). PORT cards, library-first exactly like M16/M17/M18; the M10 integrator, M16/M17/M18 paths stay bit-identical (a NEW parallel path consuming their FRFs read-only). Theory: Newland; Wirsching/Paez/Ortiz; Vanmarcke; Chopra ch. 13; Der Kiureghian 1981 |
 
 ## 3. Conventions used in this port
 
@@ -272,7 +273,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | /RWALL under implicit (refused loudly); /IMPDISP on constraint nodes; /PLOAD with /IMPL/ARCL (refused); MFROT velocity terms + IFQ under implicit (static limit, loudly); Ifiltr ≥ 10 / MODFR 2 (refused); /FRICTION per-part-pair sets; orthotropic friction | ❌ (deferred — see the M12/M13/M14/M15 roadmap notes) |
 | **MODAL-SUPERPOSITION dynamics (M17)**: mode-superposition TRANSIENT (`/IMPL/MODAL/DYNA`) + harmonic / frequency response (`/IMPL/FREQ`) + modal damping, consuming the M16 real eigenpairs (u = Σφᵢqᵢ, decoupled damped SDOFs). MODAL DAMPING — uniform ζ, a (freq, ζ) table interpolated onto the ωᵢ, and the Rayleigh map ζᵢ = ½(α/ωᵢ + βωᵢ) so a /IMPL/DYNA/DAMP α,β becomes modal damping CONSISTENT with the M11 direct integrator (validated against the direct damped-decay envelope). MODAL TRANSIENT — the EXACT Nigam–Jennings piecewise-linear-forcing recurrence per mode (step/impulse response matched POINTWISE + bit-close to the DIRECT M10 Newmark at a peak on a spring-mass sharing K,M; modal-truncation convergence to DAF = 2; the mode-ACCELERATION / residual-flexibility static correction recovering the EXACT static tail from one mode — a documented deviation), the M10 energy ledger in modal coordinates. HARMONIC RESPONSE — the complex FRF qᵢ(Ω) = φᵢᵀF/(ωᵢ²−Ω²+2iζᵢωᵢΩ), swept, amplitude/phase (SDOF peak = 1/(2ζ), half-power Δω/ω = 2ζ; resonances coinciding with the M16 natural frequencies; a driven-cantilever tip amplitude; base-excitation feeding the M16 effective-mass participation). PORT cards, library-first like /IMPL/EIGV; the M10 Newmark integrator + M16 eigensolver stay BIT-IDENTICAL (monkeypatch-asserted parity contract) | ✅ |
 | **COMPLEX / DAMPED eigenvalues + NON-CLASSICAL damping (M18)**: the ASSEMBLED damping C (`implicit/damping_matrix.py`) = Rayleigh αM + βK (M11-consistent) + discrete dashpots (the /PROP/SPRING `c` term c·aaᵀ, revived from its M11 implicit deferral; per-node /DAMP mass dampers), COO→CSR through the DofMap and condensed TᵀCT like M16's mass. The COMPLEX eigenproblem (λ²M + λC + K)φ = 0 (`implicit/complex_modal.py`, `/IMPL/CEIGV`) via the SYMMETRIC state-space linearization A z = λB z (A = [[0,K],[K,C]], B = [[K,0],[0,−M]]; no mass inverse, symmetric so the biorthogonality is z_iᵀBz_j = 0), `scipy.linalg.eig` on the reduced pencil → λᵢ = −ζᵢωᵢ ± iωd,ᵢ (decay rate + damped frequency) + COMPLEX mode shapes (the DOF phase lag of non-proportional damping). COMPLEX-MODE SUPERPOSITION — the state-space decoupling into first-order complex modal equations ẋᵢ = λᵢxᵢ + pᵢ(t) (an EXACT piecewise-linear recurrence, the first-order analogue of Nigam–Jennings) + the damped complex FRF. Validated: a classically-damped (Rayleigh) system reducing EXACTLY to −ζᵢωᵢ ± iωd,ᵢ with the M16 ωᵢ and M17 ζᵢ (real-up-to-phase shapes); a 2-DOF one-dashpot system matching the closed-form complex roots + a genuine phase lag; the state-space biorthogonality; the discrete-dashpot C contribution + pure-Rayleigh C reproducing the M17 ζᵢ; the complex-mode transient matching a DIRECT Newmark march of (K,C,M) where the M17 REAL-mode superposition provably errs (gap asserted); reduction to the M17 answer when damping IS classical; the complex FRF matching (K−Ω²M+iΩC)⁻¹ on the full basis. PORT card, library-first like M16/M17; the M10 integrator, M16 REAL eigensolver and M17 REAL-mode superposition stay BIT-IDENTICAL | ✅ |
-| Lanczos/subspace for large models; AMLS / substructuring; random & spectral (PSD) response; response spectra; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18 roadmap notes) |
+| **RANDOM / SPECTRAL (PSD) response + RESPONSE SPECTRA (M19)**: the stationary random-vibration and design-envelope analyses that build on the M17/M18 FRFs (`implicit/random_response.py`, `implicit/response_spectrum.py`, `/IMPL/PSD`, `/IMPL/RSPEC`). RANDOM (PSD) — the response PSD S_uu(Ω) = \|H(Ω)\|² S_ff(Ω) through the modal transfer function (FRF-source-agnostic: the M17 real FRF for classical damping, the M18 complex FRF for non-classical), reporting the RMS σ_u = √m₀, the spectral moments m₀/m₁/m₂ (mₙ = (1/π)∫₀^∞ Ωⁿ S_uu dΩ), the mean zero-crossing rate ν₀ = (1/2π)√(m₂/m₀) and peak rate ν_p = (1/2π)√(m₄/m₂) (Rice), and the base-excitation (support-motion) PSD feed via the M16 participation. RESPONSE SPECTRA — the per-mode peaks rᵢ = Γᵢ Sa(ωᵢ,ζᵢ)/ωᵢ² φᵢ combined by SRSS and CQC (Der Kiureghian 1981 closed-form ρᵢⱼ). Validated: a white-noise SDOF's σ² = S₀/(2ck) closed form; the multi-DOF response PSD from the modal FRF matching the DIRECT (K−Ω²M+iΩC)⁻¹ inversion; the spectral-moment / Parseval identity m₀(velocity) = m₂(displacement); the RMS reducing to the static σ_f/k for a quasi-static band; the CQC closed-form ρᵢⱼ; a single-mode spectrum recovering Γ Sa/ω²; SRSS ≈ CQC for well-separated modes and the CQC-vs-SRSS GAP on a closely-spaced (near-degenerate tuning-fork) pair; the complex-FRF PSD reducing to the real-FRF PSD when damping is classical. PORT cards, library-first like M16-M18; the M10 integrator, M16/M17/M18 paths stay BIT-IDENTICAL (a NEW parallel path consuming their FRFs read-only — monkeypatch-asserted parity) | ✅ |
+| Lanczos/subspace for large models; AMLS / substructuring; non-stationary / evolutionary PSD; multi-input cross-PSD with coherence; fatigue damage (Dirlik/rainflow) from the spectral moments; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -1795,6 +1797,116 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       the UL hourglass memory, the NLGEOM hourglass-operator geometry
       variation, the BT4 thin-plate shear-lock / drilling floor.
 
+18. **M19 — RANDOM / SPECTRAL (PSD) response + RESPONSE SPECTRA** ✅ (done):
+    the FIRST frequency-domain-statistics item deferred out of M17 AND M18 —
+    the stochastic (random-vibration) and envelope (response-spectrum)
+    analyses that BUILD on the M17 real-mode FRF and the M18 complex FRF (both
+    explicitly deferred these). A NEW, parallel path
+    (`implicit/random_response.py` + `implicit/response_spectrum.py`) that
+    never touches the M10 integrator, the M16 eigensolver, the M17
+    superposition or the M18 complex path (all stay bit-identical, asserted).
+    Theory: Newland, "An Introduction to Random Vibrations, Spectral & Wavelet
+    Analysis" (ch. 5-7); Wirsching, Paez & Ortiz, "Random Vibrations: Theory
+    and Practice"; Vanmarcke, "Random Fields" (spectral moments / crossing
+    rates); the Wiener-Khinchin theorem; Chopra, "Dynamics of Structures"
+    (ch. 13); Der Kiureghian 1981 (CQC).
+
+    Fortran origin: there is NONE — `engine/source/input/freimpl.F` (re-read
+    line by line for M19) has no /PSD, no /RSPEC, no random-response or
+    spectral-moment or SRSS/CQC branch anywhere in the open tree (the sole
+    `PSD` token is `IMUMPSD`, a MUMPS-solver flag — not a power spectral
+    density). OpenRadioss is a time-domain crash/impact code — the frequency-
+    domain statistics simply are not part of the open-source solver (the same
+    finding M16 made for the real eigensolver, M17 for superposition, M18 for
+    the complex modes). So M19 ports these as clean LIBRARY capabilities behind
+    minimal PORT cards, exactly as M16-M18 did.
+
+    * **RANDOM / SPECTRAL (PSD) RESPONSE** (`random_response.py`, /IMPL/PSD):
+      given an input force- or base-acceleration PSD S_ff(Ω) (a /FUNCT table),
+      the stationary response PSD is S_uu(Ω) = H(Ω) S_ff(Ω) H(Ω)* through the
+      modal transfer function H(Ω) — the |H|² S law (Newland eq. 6.31). The
+      module is FRF-SOURCE-AGNOSTIC: it consumes the M17 real-mode FRF (for
+      classical damping) or the M18 complex FRF (`/IMPL/PSD/CPLX`, for
+      non-classical damping — the assembled C = Rayleigh + discrete dashpots),
+      read-only. Reports the RMS σ_u = √m₀ (the zeroth spectral moment / the
+      response variance) per DOF, the spectral moments mₙ = (1/π)∫₀^∞ Ωⁿ S_uu
+      dΩ (m₀/m₁/m₂; the 1/π folds the Wiener-Khinchin 1/2π with the even-
+      function factor 2 — EXACTLY the task's σ² = ∫S dΩ/2π convention), and the
+      mean zero-crossing rate ν₀ = (1/2π)√(m₂/m₀) + peak rate ν_p =
+      (1/2π)√(m₄/m₂) (Rice's formula) + the Vanmarcke bandwidth. The BASE-
+      excitation (support-motion) PSD feed reuses the M16 participation
+      (`/IMPL/PSD/BASE`, a shaker table). Validated: a white-noise-driven
+      SDOF's σ² = S₀/(2ck) closed form (the Lorentzian ∫|H|²dΩ = π/(ck)); a
+      multi-DOF response PSD from the modal FRF matching the DIRECT
+      (K−Ω²M+iΩC)⁻¹ inversion; the spectral-moment / Parseval identity
+      m₀(velocity PSD) = m₂(displacement PSD); the RMS reducing to the static
+      σ_f/k for a quasi-static (low-frequency-band) input; the complex-FRF PSD
+      reducing to the real-FRF PSD when the damping IS classical.
+    * **RESPONSE SPECTRA** (`response_spectrum.py`, /IMPL/RSPEC): given a
+      design response spectrum Sa(ω,ζ) (a /FUNCT of frequency), the per-mode
+      peak rᵢ = Γᵢ Sa(ωᵢ,ζᵢ)/ωᵢ² φᵢ (the participation-scaled spectral
+      ordinate, Γᵢ = φᵢᵀM ιₐ the SIGNED M16 participation — the effective mass
+      Γ² loses the sign, recovered here) is combined by SRSS (well-separated
+      modes) and CQC (the Der Kiureghian 1981 complete-quadratic-combination
+      with the closed-form modal-correlation ρᵢⱼ = 8√(ζᵢζⱼ)(ζᵢ+rζⱼ)r^{3/2} /
+      [(1−r²)²+4ζᵢζⱼr(1+r²)+4(ζᵢ²+ζⱼ²)r²], r = ωⱼ/ωᵢ — the general unequal-
+      damping form, reducing to the familiar equal-ζ one). Both reported so the
+      gap is visible. Validated: the CQC ρᵢⱼ closed form (unit diagonal, →0
+      well-separated, →1 for r→1); SRSS ≈ CQC for well-separated modes (ρ→I);
+      the CQC-vs-SRSS GAP on CLOSELY-SPACED modes (a near-degenerate tuning-
+      fork pair both participating under base excitation — the CQC analogue of
+      M18's classical-vs-complex gap, asserted > 5 %); a single-mode spectrum
+      recovering Γ Sa/ω²; the flat-spectrum limit computed exactly.
+    * **Engine cards + reporting** (`statics._run_random_response` /
+      `_run_response_spectrum`, mirroring `_run_freqresponse` / M18's
+      `_run_complex_modal`): /IMPL/PSD (+ /BASE, /CPLX, /STRS) extracts the
+      modes (real or complex), builds the FRF, reads the input PSD /FUNCT,
+      forms the response PSD / spectral moments / RMS and reports them on
+      `model.implicit_result.random_response`; /IMPL/RSPEC (+ /STRS) reads the
+      design spectrum /FUNCT, combines the SRSS/CQC peaks and reports them on
+      `model.implicit_result.response_spectrum` (+ the participation table in
+      the listing). PORT cards, minimal like /IMPL/EIGV.
+    * **Example**: `examples/random_vibration` (a base-excited 5-mass
+      instrument stack — /IMPL/PSD/BASE reporting the RMS relative
+      displacement + spectral moments + zero-crossing/peak rate under a flat
+      band-limited base-acceleration PSD, and /IMPL/RSPEC combining a plateau
+      design spectrum by SRSS and CQC).
+    * **Validated** (`tests/test_m19_random.py`): all of the above plus the
+      /IMPL/PSD (+ /BASE, /CPLX) and /IMPL/RSPEC card mirror and the parity
+      contract (the random/spectral path never mutating the M16 eigensolver /
+      M17 / M18 transfer functions / the element state, the direct /IMPL/DYNA
+      answer byte-identical whether or not it runs).
+
+    Deferred out of M19, explicitly (not half-implemented):
+    * NON-STATIONARY / evolutionary PSD (a time-varying spectrum — an
+      earthquake's build-up/decay envelope, a run-up transient): the port does
+      the STATIONARY response only (the |H|² S law assumes a stationary input
+      and a settled response);
+    * MULTI-INPUT cross-PSD with coherence (a full S_ff MATRIX with
+      off-diagonal cross-spectra between multiple correlated inputs): the port
+      does a SINGLE scalar input process (a force pattern OR one base
+      direction), the |H|² S law; the matrix H S H* triple product and a
+      coherence model are the generalization;
+    * FATIGUE DAMAGE from the spectral moments (Dirlik / rainflow / narrow-band
+      Miner) and the full PEAK-FACTOR / extreme-value distribution beyond the
+      mean crossing/peak rate — they build on the moments this milestone
+      reports;
+    * MULTI-DIRECTIONAL response-spectrum combination (the 100-30-30 /
+      SRSS-of-directions rules): a straightforward post-combination of
+      per-direction /IMPL/RSPEC runs, deferred;
+    * the complex-FRF BASE-excitation feed (the participation projected through
+      the state-space biorthogonality) — real-mode base PSD and complex-mode
+      force PSD are both supported, their combination is not;
+    * GYROSCOPIC / circulatory (non-symmetric C/K) systems unchanged from M18;
+      the Lanczos / subspace-iteration sparse eigensolver + AMLS / substructur-
+      ing unchanged from M16;
+    * the M10–M18 deferral tail unchanged: IFQ ≥ 10 / MODFR 2, /FRICTION
+      per-part-pair sets, orthotropic / thermal friction, the fiber TYPE18
+      beam, the LAW27 plastic block / solids, thermal contact, TYPE19/24/25,
+      Inacti, Igap 2/3, LAW42 shells/Prony, IDTC 2/3, /RWALL under implicit,
+      the UL hourglass memory, the NLGEOM hourglass-operator geometry
+      variation, the BT4 thin-plate shear-lock / drilling floor.
+
 ## 6. Validation strategy
 
 `tests/` contains two layers:
@@ -1805,6 +1917,21 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
   results: longitudinal wave speed in a bar, cantilever/plate vibration
   frequency, Johnson–Cook uniaxial yield curve, energy conservation of a
   block bouncing on a rigid wall.
+* **Random / spectral (PSD) & response-spectrum validations (M19)** — the
+  white-noise SDOF variance against the closed form σ² = S₀/(2ck) (the
+  Lorentzian ∫|H|²dΩ = π/(ck)); the multi-DOF response PSD from the modal
+  FRF matching the DIRECT (K−Ω²M+iΩC)⁻¹ inversion (the |H|² S law is the
+  same whichever transfer function feeds it); the spectral-moment / Parseval
+  identity m₀(velocity PSD) = m₂(displacement PSD); the RMS reducing to the
+  static σ_f/k for a quasi-static band; the mean zero-crossing rate ≈ the
+  natural frequency for a narrow-band SDOF; the CQC correlation ρᵢⱼ against
+  the Der Kiureghian equal-damping closed form (unit diagonal, →0 well-
+  separated, →1 for r→1); a single-mode spectrum recovering Γ Sa/ω²; SRSS ≈
+  CQC for well-separated modes and the CQC-vs-SRSS GAP on a closely-spaced
+  (near-degenerate tuning-fork) pair; the complex-FRF PSD reducing to the
+  real-FRF PSD when damping is classical; the card mirror and the parity
+  contract (no mutation of the M16-M18 solvers / element state; the direct
+  /IMPL/DYNA answer byte-identical whether or not the random path runs).
 * **Friction-model / material-tangent validations (M15)** — exact MFROT
   formula, branch-joint and floor checks with the FD-verified static
   µ′(p); kernel-level transmitted-force closed forms (every factor

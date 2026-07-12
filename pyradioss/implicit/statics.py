@@ -326,6 +326,16 @@ class ImplicitResult:
     #: history and the damped complex FRF sweep (dicts). None without them.
     complex_transient_history: object = None
     complex_frf: object = None
+    #: /IMPL/PSD (M19): RANDOM / SPECTRAL (PSD) response — a dict with the
+    #: response PSD (Suu), spectral moments (m0/m1/m2..), RMS per DOF (and its
+    #: nodal scatter), and the crossing/peak rates. None without the card. See
+    #: implicit/random_response.py.
+    random_response: object = None
+    #: /IMPL/RSPEC (M19): RESPONSE SPECTRUM modal combination — a dict with the
+    #: signed participation factors, the per-mode peaks, the CQC correlation
+    #: matrix, and the SRSS and CQC peak envelopes (per DOF + nodal). None
+    #: without the card. See implicit/response_spectrum.py.
+    response_spectrum: object = None
 
 
 # ----------------------------------------------------------------------------
@@ -602,6 +612,12 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
             _run_freqresponse(model, ip, log, result, constr, contacts, loads)
         if getattr(ip, "impl_ceigv", False) and result.converged:
             _run_complex_modal(model, ip, log, result, constr, contacts, loads)
+        if getattr(ip, "impl_psd", False) and result.converged:
+            _run_random_response(model, ip, log, result, constr, contacts,
+                                 loads)
+        if getattr(ip, "impl_rspec", False) and result.converged:
+            _run_response_spectrum(model, ip, log, result, constr, contacts,
+                                   loads)
         _final_summary(model, result, dof, log)
         return model
 
@@ -670,8 +686,36 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
         _run_freqresponse(model, ip, log, result, constr, contacts, loads)
     if getattr(ip, "impl_ceigv", False) and result.converged:
         _run_complex_modal(model, ip, log, result, constr, contacts, loads)
+    if getattr(ip, "impl_psd", False) and result.converged:
+        _run_random_response(model, ip, log, result, constr, contacts, loads)
+    if getattr(ip, "impl_rspec", False) and result.converged:
+        _run_response_spectrum(model, ip, log, result, constr, contacts, loads)
     _final_summary(model, result, dof, log)
     return model
+
+
+def _run_random_response(model, ip, log, result, constr=None, contacts=(),
+                         loads=None):
+    """/IMPL/PSD (M19): stationary random / spectral (PSD) response — the
+    engine-card wiring of ``random_response.run_random_response`` (a PORT card,
+    mirroring ``_run_freqresponse`` for M17 and ``_run_complex_modal`` for M18:
+    the open-source engine has no random-vibration path). Runs after the
+    (usually zero-load or prestress) static solve, building the FRF on the
+    committed state and forming the response PSD statistics."""
+    from .random_response import run_random_response
+    run_random_response(model, ip, log, result, constr=constr,
+                        contacts=contacts, loads=loads)
+
+
+def _run_response_spectrum(model, ip, log, result, constr=None, contacts=(),
+                           loads=None):
+    """/IMPL/RSPEC (M19): design-response-spectrum modal combination — the
+    engine-card wiring of ``response_spectrum.run_response_spectrum`` (a PORT
+    card, mirroring ``_run_modal``). Extracts the M17 real modes and combines
+    the participation-scaled spectral ordinates by SRSS and CQC."""
+    from .response_spectrum import run_response_spectrum
+    run_response_spectrum(model, ip, log, result, constr=constr,
+                          contacts=contacts, loads=loads)
 
 
 def _run_complex_modal(model, ip, log, result, constr=None, contacts=(),
