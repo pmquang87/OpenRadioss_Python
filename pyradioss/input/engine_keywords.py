@@ -585,7 +585,20 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     # optional nseg) go on a DEDICATED card line AFTER the M24
                     # kurtosis line: modfunct [nseg].
                     is_nstat = bool(subs & {"NSTAT", "NONSTAT", "NONSTATIONARY",
-                                            "EVOL", "EVOLUTIONARY", "MISSION"})
+                                            "MISSION"})
+                    # M26: FULLY EVOLUTIONARY / NON-SEPARABLE-PSD correction; also
+                    # orthogonal — composes with (does NOT imply) MULT / NPROP /
+                    # SPEC / NGAUSS / NSTAT. The spectral SHAPE drifts with time (a
+                    # swept centre frequency / broadening bandwidth), each window
+                    # carrying its OWN full PSD (a spectrogram) — the general
+                    # non-separable extension of the M25 separable |A(t)|^2 S(w)
+                    # model. Its drifting-shape schedule (fc0 fc1 bw0 bw1 nwin) goes
+                    # on a DEDICATED card line AFTER the M25 modulation line; the
+                    # RMS level schedule / mission span are shared with /NSTAT's
+                    # modulation /FUNCT (so /EVOL naturally composes with /NSTAT).
+                    is_evol = bool(subs & {"EVOL", "EVOLUTIONARY",
+                                           "NONSEPARABLE", "SPECTROGRAM",
+                                           "CHIRP"})
                     if is_spec:
                         is_nprop = True
                     if is_nprop:
@@ -615,6 +628,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_ngauss = True
                     if is_nstat:
                         ec.impl_fatig_nstat = True
+                    if is_evol:
+                        ec.impl_fatig_evol = True
                     if is_base:
                         ec.impl_fatig_base = True
                         if len(v0) > 4 and v0[4] >= 0:
@@ -678,6 +693,38 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                                 "modulation /FUNCT id on the line after the "
                                 "sweep/S-N (and kurtosis, if NGAUSS) lines: "
                                 "modfunct [nseg]", block.source)
+                    # M26 EVOLUTIONARY: the drifting-shape schedule
+                    # (fc0 fc1 bw0 bw1 nwin) lives on a DEDICATED card line AFTER
+                    # the M25 modulation line — so its index is 2 + (1 if NGAUSS)
+                    # + (1 if NSTAT). The RMS level schedule / mission span are
+                    # taken from the shared modulation /FUNCT (impl_fatig_modfunct),
+                    # so /EVOL composes with /NSTAT (and can reuse a modfunct even
+                    # when NSTAT is absent).
+                    if is_evol:
+                        eline = 2 + (1 if is_ngauss else 0) + (1 if is_nstat
+                                                               else 0)
+                        vE = (block.cards[eline].floats()
+                              if len(block.cards) > eline else [])
+                        if len(vE) > 0:
+                            ec.impl_fatig_evol_fc0 = vE[0]
+                        if len(vE) > 1:
+                            ec.impl_fatig_evol_fc1 = vE[1]
+                        else:
+                            ec.impl_fatig_evol_fc1 = ec.impl_fatig_evol_fc0
+                        if len(vE) > 2:
+                            ec.impl_fatig_evol_bw0 = vE[2]
+                        if len(vE) > 3:
+                            ec.impl_fatig_evol_bw1 = vE[3]
+                        else:
+                            ec.impl_fatig_evol_bw1 = ec.impl_fatig_evol_bw0
+                        if len(vE) > 4 and vE[4] > 0:
+                            ec.impl_fatig_evol_nwin = int(vE[4])
+                        if ec.impl_fatig_evol_nwin <= 0:
+                            log.warning(
+                                "/IMPL/FATIG/EVOL needs a positive window count "
+                                "nwin on the drifting-shape line (fc0 fc1 bw0 bw1 "
+                                "nwin) after the sweep/S-N (and kurtosis/modulation"
+                                ", if NGAUSS/NSTAT) lines", block.source)
                     if is_nprop and ec.impl_fatig_mcdur <= 0.0:
                         log.warning(
                             "/IMPL/FATIG/MULT/NPROP needs a Monte-Carlo record "

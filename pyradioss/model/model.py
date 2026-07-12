@@ -258,6 +258,25 @@ class EngineControls:
     impl_fatig_nstat_nseg: int = 0   # sample the modulation into nseg blocks
     #                                  (0 = use the function's own breakpoints)
 
+    # M26 /IMPL/FATIG/EVOL: FULLY EVOLUTIONARY / NON-SEPARABLE-PSD fatigue — the
+    # M20 estimators evaluated per time-WINDOW of a spectrogram whose spectral
+    # SHAPE (not merely its RMS level) DRIFTS with time (a swept centre frequency /
+    # broadening bandwidth — a "chirp-like" random process), each window carrying
+    # its OWN full moment set, and Miner-summed. The general NON-SEPARABLE
+    # extension of the M25 (separable |A(t)|^2 S(w)) block model — of which the M25
+    # shared-shape scaling is the constant-shape reduction. The drifting-shape
+    # window sweeps fc0 -> fc1 and broadens bw0 -> bw1 across nwin windows; the RMS
+    # level schedule (and the mission time span) come from the shared modulation
+    # /FUNCT (impl_fatig_modfunct) so EVOL composes with /NSTAT. Composes with
+    # MULT / NPROP / SPEC / NGAUSS (a drifting window on the equivalent-stress
+    # PSD). See implicit/evolutionary_fatigue.py.
+    impl_fatig_evol: bool = False    # /IMPL/FATIG/EVOL -> evolutionary path
+    impl_fatig_evol_fc0: float = 0.0  # window centre freq at the FIRST window (Hz)
+    impl_fatig_evol_fc1: float = 0.0  # window centre freq at the LAST window (Hz)
+    impl_fatig_evol_bw0: float = 0.0  # window bandwidth start (0 = flat/no drift)
+    impl_fatig_evol_bw1: float = 0.0  # window bandwidth end (broadens/narrows)
+    impl_fatig_evol_nwin: int = 12   # time-windows the spectrogram is sampled into
+
 
 class Model:
     """The full model. Created empty, filled by the keyword parsers, then

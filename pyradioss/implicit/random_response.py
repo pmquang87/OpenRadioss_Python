@@ -790,6 +790,17 @@ def run_fatigue(model, ip, log, result, constr=None, contacts=(), loads=None):
         ip, summary, crit_mom, sp["freqs"], sp["Ssigma"][:, jcrit],
         m_sn, C_sn, mean_stress, ultimate, mc_dur, mc_seed, model)
 
+    # M26: the FULLY EVOLUTIONARY / NON-SEPARABLE-PSD correction runs ALONGSIDE the
+    # M20 stationary AND the M25 non-stationary numbers (a NEW parallel path — the
+    # summaries above are fully formed and left byte-identical). It windows the
+    # recovered stress PSD with a swept-centre / broadening Gaussian per time-window
+    # (a spectrogram whose SHAPE drifts, not just its RMS level — each window its
+    # OWN full moment set) and Miner-sums the window damages, with a non-separable
+    # time-varying-filter Monte-Carlo cross-check. See implicit/evolutionary_fatigue.py.
+    evolutionary = _run_evolutionary(
+        ip, summary, sp["freqs"], sp["Ssigma"][:, jcrit], m_sn, C_sn,
+        mean_stress, ultimate, mc_dur, mc_seed, model)
+
     result.fatigue = {
         "channels": channels, "critical_channel": jcrit,
         "critical_label": channels[jcrit][3], "moments": mom,
@@ -797,6 +808,7 @@ def run_fatigue(model, ip, log, result, constr=None, contacts=(), loads=None):
         "freqs": sp["freqs"], "omega": sp["omega"], "Ssigma": sp["Ssigma"],
         "Sff": sp["Sff"], "summary": summary, "monte_carlo": mc,
         "nongaussian": nongaussian, "nonstationary": nonstationary,
+        "evolutionary": evolutionary,
         "sn_m": m_sn, "sn_C": C_sn, "mean_stress": mean_stress,
         "ultimate": ultimate, "base": base, "stress_modes": Sigma,
     }
@@ -965,6 +977,141 @@ def _run_nonstationary(ip, stationary_summary, base_moments, freqs, psd, m, C,
             "bridge": bridge, "monte_carlo": ns_mc}
 
 
+def _evol_schedule(ip, model, nwin):
+    """Build the per-window RMS LEVEL schedule + window DURATIONS for the M26
+    evolutionary spectrogram. The levels + mission time span come from the shared
+    RMS modulation /FUNCT (``impl_fatig_modfunct`` — the SAME mission profile
+    /NSTAT uses, so /EVOL composes with /NSTAT): sample it into ``nwin`` equal
+    windows. Without a modulation /FUNCT the levels are unity and the windows are
+    unit-duration (the damage RATE is then the physical quantity; the absolute life
+    scales with the — arbitrary — total window time). Returns (scales, durations)."""
+    from . import nonstationary_fatigue as nsf
+    modfunct = int(getattr(ip, "impl_fatig_modfunct", 0) or 0)
+    if modfunct > 0 and modfunct in model.functions:
+        func = model.functions[modfunct]
+        scales, durations = nsf.sample_function_modulation(
+            func, nwin, t0=float(func.x[0]), t1=float(func.x[-1]))
+    else:
+        scales = np.ones(nwin)
+        durations = np.ones(nwin)
+    return np.asarray(scales, dtype=float), np.asarray(durations, dtype=float)
+
+
+def _run_evolutionary(ip, stationary_summary, freqs, psd, m, C, mean_stress,
+                      ultimate, mc_dur, mc_seed, model):
+    """M26: the FULLY EVOLUTIONARY / NON-SEPARABLE-PSD damage of a stationary
+    estimator ``stationary_summary`` (the M20 ``fatigue_summary`` shape) on one
+    channel's stress PSD (``freqs`` / ``psd``). Returns ``None`` unless
+    /IMPL/FATIG/EVOL is set.
+
+    Reads the drifting-shape schedule (``impl_fatig_evol_fc0`` .. ``_bw1`` /
+    ``_nwin``), samples the RMS level schedule from the shared modulation /FUNCT
+    (composing with /NSTAT), applies the swept-centre / broadening Gaussian window
+    per time-window to the recovered stress PSD (each window carries its OWN full
+    moment set — a genuinely NON-SEPARABLE spectrogram), runs the M20 estimators
+    PER WINDOW and Palmgren-Miner SUMs them (``evolutionary_fatigue_summary`` — the
+    general non-separable extension of the M25 block model), and if a Monte-Carlo
+    duration is given runs the non-separable time-domain cross-check (per-window
+    spectral-representation blocks concatenated — a time-varying filter). Stored
+    ALONGSIDE the M20 stationary and M25 non-stationary numbers so the listing
+    shows the stationary, RMS-non-stationary and shape-evolutionary answers side by
+    side. A PORT sub-flag."""
+    if not bool(getattr(ip, "impl_fatig_evol", False)):
+        return None
+    from . import evolutionary_fatigue as ef
+    from . import nonstationary_fatigue as nsf
+    fc0 = float(getattr(ip, "impl_fatig_evol_fc0", 0.0))
+    fc1 = float(getattr(ip, "impl_fatig_evol_fc1", fc0))
+    bw0 = float(getattr(ip, "impl_fatig_evol_bw0", 0.0))
+    bw1 = float(getattr(ip, "impl_fatig_evol_bw1", bw0))
+    nwin = max(1, int(getattr(ip, "impl_fatig_evol_nwin", 12)))
+    scales, durations = _evol_schedule(ip, model, nwin)
+    # the NON-SEPARABLE spectrogram: the recovered stress PSD windowed by a
+    # swept-centre / broadening Gaussian per window (theory eq. (2))
+    windows = ef.drifting_shape_spectrogram(
+        freqs, psd, durations, fc=(fc0, fc1), bw=(bw0, bw1), scales=scales)
+    summary = ef.evolutionary_fatigue_summary(
+        windows, m, C, mean_stress=mean_stress, ultimate=ultimate)
+    # the induced kurtosis of the LEVEL modulation (the RMS part; the shape drift
+    # itself does not enter the marginal kurtosis of a Gaussian carrier)
+    sc_w, wt = nsf.modulation_from_schedule(scales, durations)
+    kurt = nsf.rms_modulation_kurtosis(sc_w, wt)
+    ns_mc = None
+    if mc_dur > 0.0 and freqs is not None and psd is not None:
+        tot = float(np.sum(durations))
+        mc_durs = durations * (mc_dur / tot) if tot > 0 else durations
+        mc_windows = ef.drifting_shape_spectrogram(
+            freqs, psd, mc_durs, fc=(fc0, fc1), bw=(bw0, bw1), scales=scales)
+        ns_mc = ef.evolutionary_monte_carlo_damage(
+            mc_windows, m, C, mc_seed, mean_stress=mean_stress, ultimate=ultimate)
+    return {"fc": (fc0, fc1), "bw": (bw0, bw1), "nwin": nwin,
+            "modfunct": int(getattr(ip, "impl_fatig_modfunct", 0) or 0),
+            "scales": scales, "durations": durations, "kurtosis": kurt,
+            "constant_shape": summary["constant_shape"], "summary": summary,
+            "damage_rate": summary["damage_rate"], "life": summary["life"],
+            "monte_carlo": ns_mc}
+
+
+def _run_evolutionary_multiaxial(ip, summ, freqs, m, C, mean_stress, ultimate,
+                                 mc_dur, mc_seed, model):
+    """M26 (multiaxial): the FULLY EVOLUTIONARY / NON-SEPARABLE-PSD damage of the
+    M21 equivalent-stress reductions (von Mises / max-normal / max-shear critical
+    plane). Returns ``None`` unless /IMPL/FATIG/EVOL is set.
+
+    Recovers each reduction's frequency-resolved SCALAR PSD (the von Mises PSD is
+    stored; the critical-plane scalar PSDs are the projected cross-PSD
+    p^T S_cross(f) p), applies the SAME swept/broadening drifting-shape window per
+    window (each reduction its own per-window moments), and Miner-sums. Runs a
+    non-separable Monte-Carlo on the von-Mises drifting spectrogram. Stored
+    ALONGSIDE the M21 reductions. Composes with /MULT / /NPROP / /SPEC / /NGAUSS /
+    /NSTAT — the drifting-shape window on the equivalent scalar the multiaxial
+    reductions produce (a jointly evolutionary tensor is deferred)."""
+    if not bool(getattr(ip, "impl_fatig_evol", False)):
+        return None
+    from . import evolutionary_fatigue as ef
+    from . import nonstationary_fatigue as nsf
+    fc0 = float(getattr(ip, "impl_fatig_evol_fc0", 0.0))
+    fc1 = float(getattr(ip, "impl_fatig_evol_fc1", fc0))
+    bw0 = float(getattr(ip, "impl_fatig_evol_bw0", 0.0))
+    bw1 = float(getattr(ip, "impl_fatig_evol_bw1", bw0))
+    nwin = max(1, int(getattr(ip, "impl_fatig_evol_nwin", 12)))
+    scales, durations = _evol_schedule(ip, model, nwin)
+    Scross = np.asarray(summ["Scross"])            # (nf, 6, 6) tensor cross-PSD
+    # each reduction's frequency-resolved SCALAR PSD (von Mises is stored; the
+    # critical planes are the projected cross-PSD p^T S_cross p)
+    scalar_psd = {"von_mises": np.clip(np.real(np.asarray(summ["von_mises"]["psd"],
+                                                          dtype=float)), 0.0, None)}
+    for key in ("normal_plane", "shear_plane"):
+        proj = np.asarray(summ[key]["proj"], dtype=float)
+        sp = np.einsum("i,fij,j->f", proj, Scross, proj)
+        scalar_psd[key] = np.clip(np.real(sp), 0.0, None)
+    out = {"fc": (fc0, fc1), "bw": (bw0, bw1), "nwin": nwin,
+           "modfunct": int(getattr(ip, "impl_fatig_modfunct", 0) or 0),
+           "scales": scales, "durations": durations}
+    for key in ("von_mises", "normal_plane", "shear_plane"):
+        windows = ef.drifting_shape_spectrogram(
+            freqs, scalar_psd[key], durations, fc=(fc0, fc1), bw=(bw0, bw1),
+            scales=scales)
+        out[key] = {"summary": ef.evolutionary_fatigue_summary(
+            windows, m, C, mean_stress=mean_stress, ultimate=ultimate)}
+        out[key]["damage_rate"] = out[key]["summary"]["damage_rate"]
+    sc_w, wt = nsf.modulation_from_schedule(scales, durations)
+    out["kurtosis"] = nsf.rms_modulation_kurtosis(sc_w, wt)
+    out["constant_shape"] = out["von_mises"]["summary"]["constant_shape"]
+    # a non-separable Monte-Carlo on the von-Mises drifting spectrogram
+    ns_mc = None
+    if mc_dur > 0.0:
+        tot = float(np.sum(durations))
+        mc_durs = durations * (mc_dur / tot) if tot > 0 else durations
+        mc_windows = ef.drifting_shape_spectrogram(
+            freqs, scalar_psd["von_mises"], mc_durs, fc=(fc0, fc1),
+            bw=(bw0, bw1), scales=scales)
+        ns_mc = ef.evolutionary_monte_carlo_damage(
+            mc_windows, m, C, mc_seed, mean_stress=mean_stress, ultimate=ultimate)
+    out["monte_carlo"] = ns_mc
+    return out
+
+
 def _run_nonstationary_multiaxial(ip, summ, freqs, m, C, mean_stress, ultimate,
                                   mc_dur, mc_seed, model):
     """M25 (multiaxial): the NON-STATIONARY / EVOLUTIONARY-PSD correction of the
@@ -1085,6 +1232,71 @@ def _report_fatigue(log, fat, funct_id, base, base_dir, frf, nev):
     # side.
     if fat.get("nonstationary") is not None:
         _report_nonstationary(log, fat["nonstationary"])
+    # M26: the FULLY EVOLUTIONARY / NON-SEPARABLE-PSD block, printed ALONGSIDE the
+    # M20 stationary and M25 non-stationary numbers so all three (stationary,
+    # RMS-non-stationary, shape-evolutionary) lives show side by side.
+    if fat.get("evolutionary") is not None:
+        _report_evolutionary(log, fat["evolutionary"], fat["summary"],
+                             fat.get("nonstationary"))
+
+
+def _report_evolutionary(log, ev, stationary_summary, nonstationary):
+    """Print the FULLY EVOLUTIONARY / NON-SEPARABLE-PSD (M26) listing block: the
+    drifting-shape schedule (swept centre frequency / broadening bandwidth,
+    windows), the per-window SHAPE breakdown (RMS / rate / alpha2 drift — the point
+    of a NON-separable spectrum), the window Miner-sum per estimator ALONGSIDE the
+    M20 stationary and (if present) the M25 non-stationary damage, and the
+    non-separable Monte-Carlo cross-check."""
+    log.info("\n     ** FULLY EVOLUTIONARY / NON-SEPARABLE-PSD FATIGUE **  "
+             "(/IMPL/FATIG/EVOL)")
+    fc0, fc1 = ev["fc"]
+    bw0, bw1 = ev["bw"]
+    log.info(f"      DRIFTING SHAPE  fc0->fc1 (HZ) . . : "
+             f"{fc0:.4G} -> {fc1:.4G}   (bw {bw0:.4G} -> {bw1:.4G})")
+    log.info(f"      SPECTROGRAM WINDOWS  . . . . . . : {ev['nwin']}  "
+             f"(RMS level /FUNCT/{ev['modfunct']})")
+    log.info(f"      NON-SEPARABLE ? / INDUCED g4 . . : "
+             f"{'NO (constant shape -> M25)' if ev['constant_shape'] else 'YES'}"
+             f"  /  g4 = {ev['kurtosis']:.4F}")
+    # the per-window SHAPE drift (RMS / nu0 / alpha2) — a compact spectrogram view
+    wins = ev["summary"]["windows"]
+    a2 = [w["alpha2"] for w in wins]
+    nu0 = [w["nu0"] for w in wins]
+    sig = [w["sigma"] for w in wins]
+    log.info(f"      WINDOW alpha2  (min..max)  . . . : "
+             f"{min(a2):.4F} .. {max(a2):.4F}  (narrow=1, wide->0)")
+    log.info(f"      WINDOW nu0 (HZ)(min..max)  . . . : "
+             f"{min(nu0):.4G} .. {max(nu0):.4G}  (centre-freq drift)")
+    log.info(f"      WINDOW RMS     (min..max)  . . . : "
+             f"{min(sig):.5E} .. {max(sig):.5E}")
+    # per-estimator: stationary rate | evolutionary (window Miner-sum) rate | life
+    log.info("      METHOD              STATIONARY RATE  EVOLUTION RATE   "
+             "EVOLUTION LIFE")
+    for key, name in (("narrow_band", "NARROW-BAND (Bendat)"),
+                      ("dirlik", "DIRLIK 1985"),
+                      ("wirsching_light", "WIRSCHING-LIGHT"),
+                      ("tovo_benasciutti", "TOVO-BENASCIUTTI")):
+        drS = stationary_summary[key]["damage_rate"]
+        r = ev["summary"][key]
+        life = r["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      {name:20s}{drS:14.5E}   "
+                 f"{r['damage_rate']:14.5E}   {life_s:>14s}")
+    if nonstationary is not None:
+        # side-by-side: the M25 (separable RMS) block Miner-sum vs the M26
+        # (non-separable shape) window Miner-sum, both Dirlik
+        m25 = nonstationary["block"]["damage_rate"]
+        m26 = ev["summary"]["dirlik"]["damage_rate"]
+        log.info(f"      M25 (sep RMS) vs M26 (shape) . . : "
+                 f"{m25:.5E} / {m26:.5E}  (Dirlik window Miner-sum)")
+    if ev.get("monte_carlo") is not None:
+        mc = ev["monte_carlo"]
+        life = mc["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        tag = "M25-delegated" if mc.get("delegated") else "non-separable"
+        log.info(f"      EVOLUTION MONTE-CARLO  . . . . . : "
+                 f"{mc['damage_rate']:.5E}  ({tag}, sample g4 = "
+                 f"{mc['kurtosis']:.3F}, life {life_s})")
 
 
 def _report_nonstationary(log, ns):
@@ -1294,10 +1506,21 @@ def _run_multiaxial(model, ip, log, result, frf, Sigma, channels, psd_tab,
         ip, summ, frf["freqs"], m_sn, C_sn, mean_stress, ultimate, mc_dur,
         mc_seed, model)
 
+    # M26: the FULLY EVOLUTIONARY / NON-SEPARABLE-PSD correction of the MULTIAXIAL
+    # equivalent scalars, run ALONGSIDE the M21 reductions (a NEW parallel path —
+    # the reductions above are left byte-identical). It applies the drifting-shape
+    # window per time-window to each reduction's frequency-resolved scalar PSD
+    # (each window its OWN full moments) and Miner-sums, with a non-separable
+    # Monte-Carlo on the von-Mises drifting spectrogram. See
+    # implicit/evolutionary_fatigue.py.
+    evolutionary = _run_evolutionary_multiaxial(
+        ip, summ, frf["freqs"], m_sn, C_sn, mean_stress, ultimate, mc_dur,
+        mc_seed, model)
+
     result.fatigue = {
         "multiaxial": True, "nonproportional": nprop,
         "spectral_nonproportional": spec_np, "nongaussian": nongaussian,
-        "nonstationary": nonstationary,
+        "nonstationary": nonstationary, "evolutionary": evolutionary,
         "channels": channels, "voigt_blocks": blocks,
         "critical_element": (cname, ce, cbase),
         "critical_label": cbase,
@@ -1382,6 +1605,48 @@ def _report_multiaxial(log, fat, funct_id, base, base_dir, frf, nev):
     # reductions, printed ALONGSIDE the Gaussian numbers.
     if fat.get("nonstationary") is not None:
         _report_nonstationary_multiaxial(log, fat["nonstationary"])
+    # M26: the FULLY EVOLUTIONARY / NON-SEPARABLE-PSD correction of the multiaxial
+    # reductions, printed ALONGSIDE the Gaussian numbers.
+    if fat.get("evolutionary") is not None:
+        _report_evolutionary_multiaxial(log, fat["evolutionary"], fat)
+
+
+def _report_evolutionary_multiaxial(log, ev, fat):
+    """Print the MULTIAXIAL FULLY EVOLUTIONARY / NON-SEPARABLE-PSD (M26) listing
+    block: the drifting-shape schedule and, for each reduction (von Mises /
+    max-normal / max-shear), the window Miner-sum Dirlik damage rate / life
+    ALONGSIDE the stationary one, plus the non-separable Monte-Carlo."""
+    log.info("\n     ** FULLY EVOLUTIONARY / NON-SEPARABLE-PSD FATIGUE **  "
+             "(/IMPL/FATIG/EVOL)")
+    fc0, fc1 = ev["fc"]
+    bw0, bw1 = ev["bw"]
+    log.info(f"      DRIFTING SHAPE  fc0->fc1 (HZ) . . : "
+             f"{fc0:.4G} -> {fc1:.4G}   (bw {bw0:.4G} -> {bw1:.4G})")
+    log.info(f"      SPECTROGRAM WINDOWS / g4  . . . . : {ev['nwin']}  /  "
+             f"g4 = {ev['kurtosis']:.4F}  "
+             f"({'constant shape -> M25' if ev['constant_shape'] else 'non-separable'})")
+    log.info("      REDUCTION            STAT DIRLIK RATE   EVOLUTION RATE   "
+             "EVOLUTION LIFE")
+    for key, name in (("von_mises", "VON MISES"),
+                      ("normal_plane", "MAX-NORMAL PLANE"),
+                      ("shear_plane", "MAX-SHEAR PLANE")):
+        r = ev.get(key)
+        if r is None:
+            continue
+        drS = fat[key]["summary"]["dirlik"]["damage_rate"]
+        dk = r["summary"]["dirlik"]
+        life = dk["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      {name:18s}{drS:16.5E}   "
+                 f"{dk['damage_rate']:14.5E}   {life_s:>14s}")
+    if ev.get("monte_carlo") is not None:
+        mc = ev["monte_carlo"]
+        life = mc["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        tag = "M25-delegated" if mc.get("delegated") else "non-separable"
+        log.info(f"      EVOLUTION MONTE-CARLO (von Mises): "
+                 f"{mc['damage_rate']:.5E}  ({tag}, sample g4 = "
+                 f"{mc['kurtosis']:.3F}, life {life_s})")
 
 
 def _report_nonstationary_multiaxial(log, ns):
