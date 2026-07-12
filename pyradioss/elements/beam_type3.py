@@ -614,6 +614,138 @@ def tangent(group, x, epsp_incr=None):
     return ke, _beam_edofs(conn)
 
 
+# ----------------------------------------------------------------------------
+# Consistent (element) mass — M16, alongside the lumped mass of init_group.
+# ----------------------------------------------------------------------------
+# Fortran origin: the lumped mass/inertia is ``starter/source/elements/beam/
+# pmass3.F`` (the m/2 nodal mass and Key's boosted rotary inertia this file's
+# ``init_group`` returns). The CONSISTENT mass is the Timoshenko/Rayleigh-beam
+# shape-function integral M = ∫ ρ (A Nᵀ_t N_t + I Nᵀ_r N_r) dx; ported here for
+# the M16 modal eigensolver alongside — never mutating — the lumped path
+# (whose artificial rotary-inertia boost would corrupt the natural frequencies
+# it was never meant to feed).
+#
+# Theory (Przemieniecki "Theory of Matrix Structural Analysis" ch. 11 — the
+# same reference this module's stiffness cites for the beam, ch. 5). The local
+# 12×12 consistent mass decouples into the four classical blocks, each built on
+# the reference length L0 (mass conservation) and then rotated to global axes
+# by the SAME corotational frame E as the stiffness (me_g = Tᵀ me_l T):
+#
+# * AXIAL (v1x, v2x): the 2-node bar mass  ρA L/6 [[2,1],[1,2]].
+# * TORSION (θ1x, θ2x): the polar rotary-inertia bar mass  ρ Ip L/6 [[2,1],
+#   [1,2]]  with the mass polar moment Ip = Iyy + Izz (NOT the St-Venant torsion
+#   constant Ixx, which is a STIFFNESS quantity — the twisting kinetic energy
+#   is governed by the true second moments).
+# * BENDING (transverse translation + its slope) in each principal plane: the
+#   Hermite-cubic translational mass PLUS the rotary-inertia mass
+#       M_t = ρA L/420 [[156, 22L, 54,-13L],[22L,4L²,13L,-3L²],
+#                       [54, 13L, 156,-22L],[-13L,-3L²,-22L, 4L²]]
+#       M_r = ρ I /(30L) [[36, 3L,-36, 3L],[3L, 4L²,-3L,-L²],
+#                        [-36,-3L, 36,-3L],[3L, -L²,-3L, 4L²]]
+#   coupling translation and rotation (the off-diagonal 22L / 3L terms) — the
+#   term that makes the cantilever bending frequencies match the Euler–Bernoulli
+#   βₙL roots to <1% at a handful of elements (validated in M16). The x–z plane
+#   uses the slope convention θy = -w', so its block is P M P with
+#   P = diag(1,-1,1,-1) (sign-flipping the translation↔rotation couplings);
+#   I = Izz for the x–y plane (bending about z), Iyy for the x–z plane.
+#
+# A NOTE on consistency: this is the RAYLEIGH beam consistent mass (Hermite
+# cubic translation field), one order richer than the beam's LINEAR Timoshenko
+# stiffness interpolation. That mild inconsistency is the standard engineering
+# choice (Przemieniecki, Cook et al.) and is what buys the bending-frequency
+# accuracy; a fully interpolation-consistent linear mass would need far finer
+# meshes to reach the same %. Partition of unity: the four translational rows
+# each sum to m/2 (rigid translation → ½ vᵀMv = ½ m|v|² exact); the Hermite
+# rotation rows sum to zero (a rigid translation excites no rotation), exactly
+# as they must.
+
+def _bending_mass_blocks(L, rhoA, rhoI):
+    """The 4×4 bending consistent mass (translational + rotary) for DOFs
+    [w1, θ1, w2, θ2] with θ = +w', vectorized over the group. ``L``, ``rhoA``,
+    ``rhoI`` are (n,)."""
+    n = len(L)
+    L2 = L * L
+    Mt = np.empty((n, 4, 4))
+    # translational Hermite mass ρA L / 420 * [...]
+    c = rhoA * L / 420.0
+    Mt[:, 0, 0] = 156 * c;      Mt[:, 0, 1] = 22 * L * c
+    Mt[:, 0, 2] = 54 * c;       Mt[:, 0, 3] = -13 * L * c
+    Mt[:, 1, 1] = 4 * L2 * c;   Mt[:, 1, 2] = 13 * L * c
+    Mt[:, 1, 3] = -3 * L2 * c
+    Mt[:, 2, 2] = 156 * c;      Mt[:, 2, 3] = -22 * L * c
+    Mt[:, 3, 3] = 4 * L2 * c
+    # rotary-inertia mass ρI /(30 L) * [...]
+    d = rhoI / (30.0 * L)
+    Mt[:, 0, 0] += 36 * d;      Mt[:, 0, 1] += 3 * L * d
+    Mt[:, 0, 2] += -36 * d;     Mt[:, 0, 3] += 3 * L * d
+    Mt[:, 1, 1] += 4 * L2 * d;  Mt[:, 1, 2] += -3 * L * d
+    Mt[:, 1, 3] += -1 * L2 * d
+    Mt[:, 2, 2] += 36 * d;      Mt[:, 2, 3] += -3 * L * d
+    Mt[:, 3, 3] += 4 * L2 * d
+    # symmetrize (only the upper triangle was filled)
+    i_lo = np.tril_indices(4, -1)
+    Mt[:, i_lo[0], i_lo[1]] = Mt[:, i_lo[1], i_lo[0]]
+    return Mt
+
+
+def consistent_mass(group, x):
+    """Consistent element mass of the corotational Timoshenko beam (see the
+    note above): the local 12×12 axial+torsion+two-plane-bending mass built on
+    the reference length, rotated to global axes by the frame at geometry
+    ``x``.
+
+    Returns ``(me (n,12,12), edofs (n,12))`` over the two force-carrying nodes
+    × 6 global DOFs — the same addressing and frame transform as
+    ``tangent()``."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    L0 = st["L0"]
+    # per-element ρA, ρ Iyy, ρ Izz, ρ Ip from the part slices
+    rhoA = np.zeros(n)
+    rhoIyy = np.zeros(n)
+    rhoIzz = np.zeros(n)
+    rhoIp = np.zeros(n)
+    for sl, mat, prop in st["slices"]:
+        p = prop.params
+        rhoA[sl] = mat.rho0 * p["area"]
+        rhoIyy[sl] = mat.rho0 * p["iyy"]
+        rhoIzz[sl] = mat.rho0 * p["izz"]
+        rhoIp[sl] = mat.rho0 * (p["iyy"] + p["izz"])   # mass polar moment
+
+    Ml = np.zeros((n, 12, 12))
+    # axial (v1x=0, v2x=6): ρA L/6 [[2,1],[1,2]]
+    ax = rhoA * L0 / 6.0
+    Ml[:, 0, 0] = 2 * ax;  Ml[:, 0, 6] = ax
+    Ml[:, 6, 0] = ax;      Ml[:, 6, 6] = 2 * ax
+    # torsion (th1x=3, th2x=9): ρ Ip L/6 [[2,1],[1,2]]
+    tor = rhoIp * L0 / 6.0
+    Ml[:, 3, 3] = 2 * tor;  Ml[:, 3, 9] = tor
+    Ml[:, 9, 3] = tor;      Ml[:, 9, 9] = 2 * tor
+    # bending in the x-y plane, DOFs [v1y=1, th1z=5, v2y=7, th2z=11] (θz=+w')
+    Mxy = _bending_mass_blocks(L0, rhoA, rhoIzz)
+    ib = [1, 5, 7, 11]
+    for a in range(4):
+        for b in range(4):
+            Ml[:, ib[a], ib[b]] = Mxy[:, a, b]
+    # bending in the x-z plane, DOFs [v1z=2, th1y=4, v2z=8, th2y=10] (θy=-w'):
+    # apply P = diag(1,-1,1,-1) to sign-flip the translation<->rotation terms
+    Mxz = _bending_mass_blocks(L0, rhoA, rhoIyy)
+    P = np.array([1.0, -1.0, 1.0, -1.0])
+    Mxz = P[None, :, None] * Mxz * P[None, None, :]
+    iz = [2, 4, 8, 10]
+    for a in range(4):
+        for b in range(4):
+            Ml[:, iz[a], iz[b]] = Mxz[:, a, b]
+
+    # rotate the local mass to global axes with the corotational frame,
+    # exactly as tangent() rotates the local stiffness
+    E, _ = _frame(x[conn[:, 0]], x[conn[:, 1]], x[conn[:, 2]])
+    T = _frame_transform(E)
+    me = np.einsum("nki,nkl,nlj->nij", T, Ml, T)
+    return me, _beam_edofs(conn)
+
+
 def kgeo(group, x):
     """Geometric (initial-stress) element stiffness of the AXIAL resultant,
     (N/L)(I - a a^T) on the two nodes' translations (see the note above for

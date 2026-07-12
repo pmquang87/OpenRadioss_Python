@@ -121,6 +121,57 @@ def assemble(model, dof: DofMap, x_geom, epsp_incr=None, log=None,
     return K
 
 
+#: element kernels that expose ``consistent_mass()`` — M16 adds the parallel
+#: mass operator to every family that carries a tangent (all of them).
+_MASS_KERNELS = _TANGENT_KERNELS
+
+
+def assemble_mass(model, dof: DofMap, x_geom, log=None):
+    """Assemble the global CONSISTENT mass matrix M (CSR, ndof x ndof) from
+    every element group's ``consistent_mass()`` — the M16 modal analogue of
+    ``assemble`` (the tangent scatter), same COO->CSR path through the DofMap.
+
+    Fortran origin: there is no single ``imp_mass.F`` in the open-source engine
+    (the implicit dynamics of imp_dyna.F uses the LUMPED MS/IN diagonal); this
+    is the consistent-mass assembly the modal eigensolver of ``implicit.modal``
+    needs, built exactly like the stiffness assembly so the (K, M) pencil is
+    stated on the same equation numbering.
+
+    ``x_geom`` is the geometry at which the (frame-dependent) element masses
+    are evaluated — model.x0 for the standard modal problem (mass conserved on
+    the reference geometry). The isotropic element masses (solids, shells,
+    truss, spring) ignore it; only the corotational beam reads it, to orient
+    its local mass with the same frame as its stiffness. This is a NEW
+    operator built ALONGSIDE the lumped mass (``dynamics._lumped_mass_eq``),
+    which stays bit-identical — the consistent mass never enters the explicit
+    or implicit-dynamics time-marching paths, only the opt-in modal solve."""
+    sp, _ = require_scipy()
+    rows, cols, vals = [], [], []
+    for name, group in model.element_groups():
+        if name not in _MASS_KERNELS:
+            raise NotImplementedError(
+                f"element group '{name}' has no consistent_mass() — the modal "
+                f"eigensolver supports {_MASS_KERNELS}.")
+        kernel = KERNELS[name]
+        me, edofs = kernel.consistent_mass(group, x_geom)
+        n, d, _ = me.shape
+        eq = dof.eq[edofs]
+        row_eq = np.repeat(eq[:, :, None], d, axis=2)
+        col_eq = np.repeat(eq[:, None, :], d, axis=1)
+        keep = (row_eq >= 0) & (col_eq >= 0)          # drop condensed DOFs
+        rows.append(row_eq[keep].ravel())
+        cols.append(col_eq[keep].ravel())
+        vals.append(me[keep].ravel())
+    rows = np.concatenate(rows) if rows else np.zeros(0, dtype=np.int64)
+    cols = np.concatenate(cols) if cols else np.zeros(0, dtype=np.int64)
+    vals = np.concatenate(vals) if vals else np.zeros(0)
+    M = sp.coo_matrix((vals, (rows, cols)),
+                      shape=(dof.ndof, dof.ndof)).tocsr()
+    if log is not None:
+        log.info(f" CONSISTENT MASS NNZ (ASSEMBLED) . . : {M.nnz}")
+    return M
+
+
 def assemble_kgeo(model, dof: DofMap, x_geom):
     """Assemble the geometric (initial-stress) stiffness K_geo ALONE (CSR),
     from the current element stress states at geometry ``x_geom`` — the
