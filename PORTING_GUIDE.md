@@ -109,6 +109,7 @@ same names in comments.
 | — (no LAW27 implicit tangent exists in OpenRadioss: the law is an explicit crash material) | `materials/law27_brittle.py` (`consistent_shell_tangent`) + the `extra` hook of `materials.shell_layer_tangent` and both shell kernels' tangent layer loops | M15: LAW27 CONSISTENT shell tangent — the exact derivative of the port's own fixed-crack unilateral law per branch: uncracked = elastic C; open + FROZEN damage = the (1−d) secant rows; open + GROWING damage = plus the softening −cps(en_i+ν en_j)·dd_i/den_i and the shear-row −G g12 dd_i terms (derived, not bounded — the M12 lesson; nonsymmetric like every softening tangent); CLOSED crack = full elastic rows (the unilateral switch — the M13 line search is the non-smooth backstop); broken = zero. Assembled in the frozen crack frame, rotated with the Voigt pair Tεᵀ C Tε |
 | the LAW2 global resultant-plasticity return of the beam (the port's M3 model; note the ACTUAL `pmat3.F` is pke3.F's ELASTIC shear-stiffness setup — the original's implicit beam KE has no plasticity linearization to mirror) | `elements/beam_type3.py` (`tangent` LAW2 branch + `implicit_internal_forces`) | M15: LAW2 BEAM consistent tangent — the algorithmic derivative of the radial resultant return, C_alg = s·C + [(H/(E+H) − s)/seq_tr]·R_tr (qᵀC), built from the POST-return state via the homogeneity identities (seq degree-1, q degree-0 ⇒ seq_tr = sy + E·dλ, R_tr = R·seq_tr/sy); the implicit residual runs its own ITERATED consistency solve (`implicit_internal_forces`, the M11 truss lesson MEASURED again in resultant space: 5 iterations are exact at n = 0.5 but leave O(1) residual at n = 0.2 virgin yield; the explicit kernel keeps its bit-identical 5); elastic beams route through the new hook bit-identically |
 | — (NO modal-superposition, frequency-response or harmonic path exists in the open-source engine: `engine/source/input/freimpl.F` reads only DYNA / BUCKL / DT / NONLIN / ARCL — OpenRadioss is a time-domain crash/impact code) | `pyradioss/implicit/modal_response.py` + `/IMPL/MODAL/DYNA`, `/IMPL/FREQ` in `engine_keywords.py` | M17: MODAL-SUPERPOSITION dynamics — consumes the M16 real eigenpairs (u = Σφᵢqᵢ, each qᵢ a decoupled damped SDOF q̈ᵢ + 2ζᵢωᵢq̇ᵢ + ωᵢ²qᵢ = φᵢᵀf). MODAL DAMPING (uniform ζ / (freq,ζ) table / the Rayleigh map ζᵢ = ½(α/ωᵢ + βωᵢ) — the SAME α,β as the M11 direct /IMPL/DYNA/DAMP, so both solvers carry identical physical damping); MODAL TRANSIENT (the EXACT Nigam–Jennings piecewise-linear-forcing recurrence per mode — no dispersion, unlike the M10 direct Newmark — with an optional mode-ACCELERATION / residual-flexibility static correction K⁻¹−Σφφᵀ/ωᵢ² for the truncated tail); HARMONIC / FREQUENCY RESPONSE (the complex FRF qᵢ(Ω) = φᵢᵀF/(ωᵢ²−Ω²+2iζᵢωᵢΩ), swept, amplitude/phase, base-excitation feeding the M16 effective-mass participation). PORT cards, library-first exactly like M16's /IMPL/EIGV; the M10 Newmark integrator and the M16 eigensolver stay bit-identical (modal superposition is a NEW parallel path) |
+| — (NO complex/damped eigensolver, NO assembled viscous C beyond the on-the-fly Rayleigh of imp_dyna.F, NO state-space / QEP path anywhere in the open-source engine — the frequency domain is not part of the time-domain solver) | `pyradioss/implicit/damping_matrix.py` + `pyradioss/implicit/complex_modal.py` + `/IMPL/CEIGV` in `engine_keywords.py`; `spring.damping_matrix` | M18: COMPLEX / DAMPED eigenvalues + NON-CLASSICALLY-damped complex-mode superposition. ASSEMBLED C (the C analogue of M16's `assemble_mass`) = Rayleigh αM + βK (M11-consistent) + discrete dashpots (the /PROP/SPRING `c` term c·aaᵀ, revived from its M11 implicit deferral; per-node /DAMP mass dampers), COO→CSR through the DofMap, condensed TᵀCT. COMPLEX EIGENVALUES: the QEP (λ²M + λC + K)φ = 0 via the SYMMETRIC state-space linearization A z = λB z, A = [[0,K],[K,C]], B = [[K,0],[0,−M]], `scipy.linalg.eig` on the reduced pencil → λᵢ = −ζᵢωᵢ ± iωd,ᵢ (decay + damped freq) and COMPLEX mode shapes (the DOF phase lag). COMPLEX-MODE SUPERPOSITION: the state-space decoupling ẋᵢ = λᵢxᵢ + pᵢ(t) (first-order exact recurrence) + the damped complex FRF (matches (K−Ω²M+iΩC)⁻¹ on the full basis). PORT card, library-first exactly like M16/M17; the M10 integrator, M16 REAL eigensolver and M17 REAL-mode superposition stay bit-identical (a NEW parallel path) |
 
 ## 3. Conventions used in this port
 
@@ -270,7 +271,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | **CONSISTENT ELEMENT MASS + MODAL analysis (M16)**: a `consistent_mass()` per family alongside the lumped mass — the ∫ρ Nᵀ N dV translational brick/tetra mass (analytic tet, 2×2×2 Gauss brick), the bilinear/CST membrane+bending+rotary shell mass (isotropic ρt / ρt³/12 blocks, drilling inertia included so the reduced mass stays PD), the 12×12 Rayleigh–Timoshenko beam mass (axial + torsion + two-plane Hermite-cubic bending with rotary-inertia coupling, rotated by the corotational frame), the exact truss/spring mass — each carrying its Fortran-origin + shape-integral docstring; the global consistent M assembled COO→CSR through the DofMap and condensed TᵀMT under every M12/M14 constraint (the exact rigid-body parallel-axis block, now fed by the consistent mass). MODAL EIGENVALUE extraction (`/IMPL/EIGV`, a PORT card — freimpl.F has no modal branch, so ported library-first like the M9 buckling eigensolver): (K − ω²M)φ = 0 for the lowest N natural frequencies + mass-normalized mode shapes + modal effective mass, in the REDUCED (constrained) space via `buckling.py`'s dense `eigh` (Lanczos/subspace deferred, documented), on a PRESTRESSED state too (K = K_mat + K_geo, `/IMPL/EIGV/STRS`). Validated: longitudinal bar vs (2n−1)c/4L and nc/2L, cantilever bending vs the Euler–Bernoulli βₙL roots (< 0.3% at 20 beams), a simply-supported plate fundamental (a/t = 20, the BT4 thin-plate shear-lock documented + convergence shown), mode M-orthogonality φᵢᵀMφⱼ = δᵢⱼ to round-off, the consistent-over/lumped-under BRACKET around the exact frequency, the rigid-link spectrum shift sqrt(k/(m₁+m₂)) + the rigid-bar parallel-axis inertia mL²/3, the taut-string prestressed modes n/2L·sqrt(T/μ) (pure geometric-stiffness modes); the LUMPED path (explicit leapfrog + M10 implicit dynamics) BIT-IDENTICAL, consistent_mass() never mutating element state (monkeypatch-asserted, the M7 parity contract) | ✅ |
 | /RWALL under implicit (refused loudly); /IMPDISP on constraint nodes; /PLOAD with /IMPL/ARCL (refused); MFROT velocity terms + IFQ under implicit (static limit, loudly); Ifiltr ≥ 10 / MODFR 2 (refused); /FRICTION per-part-pair sets; orthotropic friction | ❌ (deferred — see the M12/M13/M14/M15 roadmap notes) |
 | **MODAL-SUPERPOSITION dynamics (M17)**: mode-superposition TRANSIENT (`/IMPL/MODAL/DYNA`) + harmonic / frequency response (`/IMPL/FREQ`) + modal damping, consuming the M16 real eigenpairs (u = Σφᵢqᵢ, decoupled damped SDOFs). MODAL DAMPING — uniform ζ, a (freq, ζ) table interpolated onto the ωᵢ, and the Rayleigh map ζᵢ = ½(α/ωᵢ + βωᵢ) so a /IMPL/DYNA/DAMP α,β becomes modal damping CONSISTENT with the M11 direct integrator (validated against the direct damped-decay envelope). MODAL TRANSIENT — the EXACT Nigam–Jennings piecewise-linear-forcing recurrence per mode (step/impulse response matched POINTWISE + bit-close to the DIRECT M10 Newmark at a peak on a spring-mass sharing K,M; modal-truncation convergence to DAF = 2; the mode-ACCELERATION / residual-flexibility static correction recovering the EXACT static tail from one mode — a documented deviation), the M10 energy ledger in modal coordinates. HARMONIC RESPONSE — the complex FRF qᵢ(Ω) = φᵢᵀF/(ωᵢ²−Ω²+2iζᵢωᵢΩ), swept, amplitude/phase (SDOF peak = 1/(2ζ), half-power Δω/ω = 2ζ; resonances coinciding with the M16 natural frequencies; a driven-cantilever tip amplitude; base-excitation feeding the M16 effective-mass participation). PORT cards, library-first like /IMPL/EIGV; the M10 Newmark integrator + M16 eigensolver stay BIT-IDENTICAL (monkeypatch-asserted parity contract) | ✅ |
-| Complex/damped (state-space / QEP) eigenvalues; non-classical damping; Lanczos/subspace for large models; AMLS / substructuring; random & spectral (PSD) response; response spectra | ❌ (deferred — see the M17 roadmap notes) |
+| **COMPLEX / DAMPED eigenvalues + NON-CLASSICAL damping (M18)**: the ASSEMBLED damping C (`implicit/damping_matrix.py`) = Rayleigh αM + βK (M11-consistent) + discrete dashpots (the /PROP/SPRING `c` term c·aaᵀ, revived from its M11 implicit deferral; per-node /DAMP mass dampers), COO→CSR through the DofMap and condensed TᵀCT like M16's mass. The COMPLEX eigenproblem (λ²M + λC + K)φ = 0 (`implicit/complex_modal.py`, `/IMPL/CEIGV`) via the SYMMETRIC state-space linearization A z = λB z (A = [[0,K],[K,C]], B = [[K,0],[0,−M]]; no mass inverse, symmetric so the biorthogonality is z_iᵀBz_j = 0), `scipy.linalg.eig` on the reduced pencil → λᵢ = −ζᵢωᵢ ± iωd,ᵢ (decay rate + damped frequency) + COMPLEX mode shapes (the DOF phase lag of non-proportional damping). COMPLEX-MODE SUPERPOSITION — the state-space decoupling into first-order complex modal equations ẋᵢ = λᵢxᵢ + pᵢ(t) (an EXACT piecewise-linear recurrence, the first-order analogue of Nigam–Jennings) + the damped complex FRF. Validated: a classically-damped (Rayleigh) system reducing EXACTLY to −ζᵢωᵢ ± iωd,ᵢ with the M16 ωᵢ and M17 ζᵢ (real-up-to-phase shapes); a 2-DOF one-dashpot system matching the closed-form complex roots + a genuine phase lag; the state-space biorthogonality; the discrete-dashpot C contribution + pure-Rayleigh C reproducing the M17 ζᵢ; the complex-mode transient matching a DIRECT Newmark march of (K,C,M) where the M17 REAL-mode superposition provably errs (gap asserted); reduction to the M17 answer when damping IS classical; the complex FRF matching (K−Ω²M+iΩC)⁻¹ on the full basis. PORT card, library-first like M16/M17; the M10 integrator, M16 REAL eigensolver and M17 REAL-mode superposition stay BIT-IDENTICAL | ✅ |
+| Lanczos/subspace for large models; AMLS / substructuring; random & spectral (PSD) response; response spectra; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -1660,6 +1662,138 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       Inacti, Igap 2/3, LAW42 shells/Prony, IDTC 2/3, /RWALL under implicit,
       the UL hourglass memory, the NLGEOM hourglass-operator geometry
       variation, the BT4 drilling floor.
+
+17. **M18 — COMPLEX / DAMPED eigenvalues + NON-CLASSICALLY-damped mode
+    superposition** ✅ (done): the FIRST item deferred out of M17 (and the
+    complex-modes item M16 deferred before it) — the state-space /
+    quadratic-eigenvalue (QEP) analysis for structures whose damping is NOT
+    classical, where the M16 real symmetric eigensolver and the M17
+    real-mode superposition (classical damping only) both break down. When
+    the damping matrix C is not proportional to M or K (a local dashpot,
+    damping on part of the structure), the M16 undamped modes no longer
+    diagonalize C: the free-vibration modes become COMPLEX (a DOF-to-DOF
+    phase lag) and the SDOF decoupling M17 relies on no longer holds. M18
+    generalizes the eigenproblem to the damped case and superposes the
+    COMPLEX modes. A NEW, parallel path (`implicit/damping_matrix.py` +
+    `implicit/complex_modal.py`) that never touches the M10 integrator, the
+    M16 eigensolver or the M17 superposition (all stay bit-identical,
+    asserted). Theory: Géradin & Rixen "Mechanical Vibrations" (ch. 3, 5),
+    Meirovitch "Principles and Techniques of Vibrations" (ch. 9), Tisseur &
+    Meerbergen "The Quadratic Eigenvalue Problem" (SIAM Review 2001), Clough
+    & Penzien / Caughey & O'Kelly (classical vs non-classical damping).
+
+    Fortran origin: there is NONE — `engine/source/input/freimpl.F` (read
+    line by line for M18) has no /CEIGV, no complex/damped eigensolver, and
+    no state-space / QEP branch anywhere in the open tree; the only damping
+    the implicit path knows is the on-the-fly Rayleigh force C v = a M v +
+    b K v of imp_dyna.F's IMP_DYKV (M11), never an assembled C. OpenRadioss
+    is a time-domain crash/impact code. So M18 ports these as clean LIBRARY
+    capabilities behind a minimal PORT card, exactly as M16 ported the real
+    eigensolver behind /IMPL/EIGV and M17 the superposition behind
+    /IMPL/MODAL, /IMPL/FREQ.
+
+    * **Assembled damping matrix C** (`damping_matrix.assemble_damping`, the
+      C analogue of M16's `assemble_mass`): C = Rayleigh αM + βK (the SAME
+      α, β the M11 /IMPL/DYNA/DAMP feeds, with the CONSISTENT mass and the
+      tangent K) PLUS the discrete viscous dashpots — the /PROP/SPRING `c`
+      term revived as the element damping matrix c·aaᵀ
+      (`spring.damping_matrix`, the velocity analogue of the elastic k·aaᵀ,
+      after the dashpot was DEFERRED from the M11 implicit residual as a rate
+      device) and the per-node /DAMP mass damper α_dp·m as its diagonal C
+      contribution. Assembled COO→CSR through the DofMap and condensed TᵀCT
+      under the M12/M14 constraints exactly like TᵀMT. Validated: the
+      discrete dashpot contributes exactly c·aaᵀ on the free DOF; a
+      pure-Rayleigh C reproduces the M11/M17 modal ratios ζᵢ =
+      ½(α/ωᵢ + βωᵢ) in the M16 real modal basis (diag(ΦᵀCΦ) = 2ζᵢωᵢ, and the
+      off-diagonal ΦᵀCΦ is zero — Rayleigh IS classical). Documented: the
+      Rayleigh C uses the CONSISTENT mass (the modal pencil), not the lumped
+      mass the M11 DIRECT integrator uses; the /DAMP time window has no
+      meaning in a linearized analysis (constant α used, flagged).
+    * **Complex / damped eigenvalues** (`complex_modal.build_complex_basis`,
+      `/IMPL/CEIGV`): the QEP (λ²M + λC + K)φ = 0 solved through the
+      SYMMETRIC state-space linearization A z = λB z with z = [φ; λφ],
+      A = [[0,K],[K,C]], B = [[K,0],[0,−M]] — chosen over the M⁻¹ companion
+      form [[0,I],[−M⁻¹K,−M⁻¹C]] because it needs NO mass inverse (the
+      reduced consistent M is dense) and A, B inherit the symmetry of K, C, M
+      so the left/right eigenvectors coincide and the biorthogonality is the
+      clean symmetric-bilinear (transpose, not conjugate) relation
+      z_iᵀBz_j = 0. `scipy.linalg.eig` (non-symmetric generalized) on the
+      REDUCED pencil (dense, the documented M16 choice — Lanczos/subspace and
+      a structure-preserving QEP solver deferred). Reports λᵢ = −ζᵢωᵢ ±
+      iωᵢ√(1−ζᵢ²): the decay rate −Re(λ), the damped frequency Im(λ), the
+      natural frequency |λ|, the ratio ζ = −Re(λ)/|λ|, and the COMPLEX mode
+      shapes (phase lag). The rigid/spurious modes filtered exactly as M16
+      filters its near-zero ω²; the FULL surviving reduced modal set retained
+      for an EXACT (non-truncated) superposition, only the reporting limited
+      to the lowest N under-damped modes. Validated: a classically-damped
+      (Rayleigh) system reducing EXACTLY to −ζᵢωᵢ ± iωd,ᵢ with the M16 ωᵢ and
+      the M17 ζᵢ, its mode shapes real-up-to-phase; a 2-DOF chain with a
+      dashpot on ONE mass matching the closed-form roots of
+      det(λ²M + λC + K) = 0 AND showing a DOF phase lag (neither in phase nor
+      exactly out of phase); the state-space biorthogonality z_iᵀBz_j = 0.
+    * **Complex-mode superposition** (`complex_modal_transient`,
+      `complex_frf`): the state-space form B ẇ = A w + P (w = [u; u̇],
+      P = [0; −f]) decouples in the complex modal basis into 2n INDEPENDENT
+      FIRST-ORDER complex modal equations ẋₖ = λₖxₖ + pₖ(t), pₖ =
+      (zₖᵀP)/(zₖᵀBzₖ) — each marched by the EXACT piecewise-linear-forcing
+      recurrence (the first-order analogue of M17's Nigam–Jennings) and
+      recombined u(t) = Σ φₖxₖ(t) (real to round-off, the modes/forces
+      conjugate-closed). The damped complex FRF xₖ(Ω) = pₖᶠ/(iΩ − λₖ),
+      U(Ω) = Σ φₖxₖ, exact for non-classical damping. Validated: the
+      complex-mode transient of a non-classically-damped chain matching a
+      DIRECT Newmark march of the assembled (K, C, M) BIT-CLOSE, where the
+      M17 real-mode (classical-damping) superposition — even fed the best
+      diagonal modal damping — is provably WRONG (the gap asserted, > 20×);
+      reduction to the M17 answer when the damping IS classical; the
+      complex-mode FRF matching the direct inversion (K − Ω²M + iΩC)⁻¹F on
+      the full basis to round-off; the first-order recurrence exact (DC limit
+      −p/λ + free decay e^{λt}).
+    * **Engine card + reporting** (`statics._run_complex_modal`, mirroring
+      `_run_modal` / `run_modal_transient`): /IMPL/CEIGV runs after the
+      (usually zero-load, or /STRS prestress) static solve, assembles
+      (K, C, M) — the Rayleigh α, β from /IMPL/DYNA/DAMP folded into C —
+      extracts the complex modes and prints the "COMPLEX / DAMPED
+      EIGENVALUES" block (frequency / damped frequency / ζ / decay rate per
+      mode), storing `complex_eigenvalues`, `complex_natural_freqs`,
+      `complex_damped_freqs`, `complex_decay_rates`, `complex_damping_ratios`
+      and `complex_modes` on `model.implicit_result`. /IMPL/CEIGV/TRAN drives
+      the complex-mode transient (card: t_end dt); /IMPL/CEIGV/FRF the damped
+      complex FRF sweep (card: fmin fmax nf). PORT cards, minimal like
+      /IMPL/EIGV.
+    * **Example**: `examples/complex_modes` (a fixed-free spring-mass chain
+      with ONE localized dashpot — /IMPL/CEIGV extracting the complex modes,
+      whose ζ is NON-monotone in frequency (the localized dashpot damps modes
+      unequally, the non-classical fingerprint), + /IMPL/CEIGV/FRF sweeping
+      the decaying complex FRF).
+    * **Validated** (`tests/test_m18_cmplxmodes.py`): all of the above plus
+      the /IMPL/CEIGV (+ /STRS, /TRAN, /FRF) card mirror and the parity
+      contract (the complex path never mutating the M16 eigensolver / M17
+      superposition / the element state, the direct /IMPL/DYNA answer
+      byte-identical whether or not it runs).
+
+    Deferred out of M18, explicitly (not half-implemented):
+    * the Lanczos / subspace-iteration sparse eigensolver for large models
+      (unchanged from M16 — the dense `scipy.linalg.eig` is the documented
+      library choice at this port's sizes; a structure-preserving QEP solver
+      — SOAR / second-order Arnoldi, `polyeig` — is the upgrade path); AMLS /
+      component-mode substructuring;
+    * random & spectral (PSD) response and RESPONSE SPECTRA — the
+      frequency-domain statistics / envelope analyses that build on this same
+      FRF machinery (unchanged from M17);
+    * GYROSCOPIC / circulatory systems — a non-symmetric damping C (from a
+      rotating frame's Coriolis term) or a non-symmetric stiffness K (a
+      follower / circulatory force): the symmetric state-space linearization
+      above assumes symmetric K, C, M, so these are OUT of scope (the
+      non-symmetric pencil and its distinct left/right eigenvectors are the
+      generalization);
+    * base excitation beyond the participation-factor feed (multiple support
+      motions, large rigid-base rotations — unchanged from M17);
+    * the M10–M17 deferral tail unchanged: IFQ ≥ 10 / MODFR 2, /FRICTION
+      per-part-pair sets, orthotropic / thermal friction, the fiber TYPE18
+      beam, the LAW27 plastic block / solids, thermal contact, TYPE19/24/25,
+      Inacti, Igap 2/3, LAW42 shells/Prony, IDTC 2/3, /RWALL under implicit,
+      the UL hourglass memory, the NLGEOM hourglass-operator geometry
+      variation, the BT4 thin-plate shear-lock / drilling floor.
 
 ## 6. Validation strategy
 
