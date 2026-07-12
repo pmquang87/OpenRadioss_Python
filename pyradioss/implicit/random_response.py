@@ -907,15 +907,38 @@ def _run_multiaxial(model, ip, log, result, frf, Sigma, channels, psd_tab,
             frf["freqs"], summ["Scross"], sp["proj"], m_sn, C_sn, mc_dur,
             mc_seed, mean_stress=mean_stress, ultimate=ultimate)
 
+    # M22: the NON-PROPORTIONAL critical-plane TIME-DOMAIN path count runs
+    # ALONGSIDE the M21 spectral reductions (a NEW parallel path — the M21
+    # answer above is fully formed and left byte-identical). It reuses the
+    # critical element's stress-tensor cross-PSD (summ["Scross"]) to synthesise
+    # the correlated stress-component histories (seeded via mcdur/seed) and
+    # searches the Findley / Fatemi-Socie / shear-path critical plane. See
+    # implicit/nonproportional_fatigue.py.
+    nprop = bool(getattr(ip, "impl_fatig_nprop", False))
+    npres = None
+    if nprop:
+        from . import nonproportional_fatigue as npf
+        if mc_dur <= 0.0:
+            raise ValueError(
+                "/IMPL/FATIG/MULT/NPROP needs a Monte-Carlo record length "
+                "(mcdur on card line 2: m C zeta mean ult mcdur seed) — the "
+                "non-proportional path count runs on the synthesised history.")
+        k_np = float(getattr(ip, "impl_fatig_k", 0.3))
+        sigy = float(getattr(ip, "impl_fatig_sigy", 1.0))
+        amp = str(getattr(ip, "impl_fatig_amp", "mrh"))
+        npres = npf.nonproportional_summary(
+            frf["freqs"], summ["Scross"], m_sn, C_sn, mc_dur, mc_seed,
+            k=k_np, sigma_y=sigy, amp_method=amp, naz=naz, npol=npol)
+
     result.fatigue = {
-        "multiaxial": True,
+        "multiaxial": True, "nonproportional": nprop,
         "channels": channels, "voigt_blocks": blocks,
         "critical_element": (cname, ce, cbase),
         "critical_label": cbase,
         "elem_vm_dirlik_rate": elem_vm_rate,
         "von_mises": summ["von_mises"], "normal_plane": summ["normal_plane"],
         "shear_plane": summ["shear_plane"], "Mmats": summ["Mmats"],
-        "Scross": summ["Scross"], "monte_carlo": mc,
+        "Scross": summ["Scross"], "monte_carlo": mc, "nprop_result": npres,
         "freqs": np.asarray(frf["freqs"], dtype=float), "omega": omega,
         "Sff": Sff, "sn_m": m_sn, "sn_C": C_sn, "mean_stress": mean_stress,
         "ultimate": ultimate, "base": base, "stress_modes": Sigma,
@@ -979,3 +1002,40 @@ def _report_multiaxial(log, fat, funct_id, base, base_dir, frf, nev):
         log.info(f"      MONTE-CARLO (shear-plane rainflow) DAMAGE / LIFE : "
                  f"{mc['damage_rate']:.5E} / {life_s}  "
                  f"(n_cyc = {mc['ncycles']:.0f})")
+    # M22: the NON-PROPORTIONAL critical-plane path-counting block, printed
+    # ALONGSIDE the M21 spectral reductions so the listing shows the
+    # non-proportional correction explicitly (the M21 numbers above are the
+    # proportional-spectral answer; these are the rotating-shear-path answer).
+    if fat.get("nprop_result") is not None:
+        _report_nonproportional(log, fat["nprop_result"])
+
+
+def _report_nonproportional(log, npres):
+    """Print the NON-PROPORTIONAL / CRITICAL-PLANE PATH-COUNTING (M22) listing
+    block: the shear-path amplitude comparison (MCC / longest chord / MRH), the
+    non-proportionality factor F_np, and, for each critical-plane model (Findley,
+    Fatemi-Socie, shear-path), the critical plane normal, sigma_n,max, the shear
+    amplitude tau_a and the damage rate / life."""
+    amp = npres["amplitudes"]
+    log.info("\n     ** NON-PROPORTIONAL MULTIAXIAL FATIGUE **  "
+             "(/IMPL/FATIG/MULT/NPROP)")
+    log.info(f"      TIME-DOMAIN PATH COUNT (dur / seed)  : "
+             f"{npres['duration']:.5E} / {npres['seed']}")
+    log.info(f"      SHEAR-PATH AMPLITUDE  MCC / CHORD/2 / MRH (Findley plane): "
+             f"{amp['mcc']:.5E} / {amp['chord']:.5E} / {amp['mrh']:.5E}")
+    log.info(f"      NON-PROPORTIONALITY  F_np (0 line .. 1 circle) : "
+             f"{amp['F_np']:.5F}   [amp op = {npres['amp_method'].upper()}]")
+    log.info("      MODEL            CRIT-PLANE NORMAL         sig_n,max   "
+             "tau_a       F_np   DAMAGE RATE     LIFE")
+    for key, name in (("findley", "FINDLEY 1959"),
+                      ("fatemi_socie", "FATEMI-SOCIE 88"),
+                      ("shear_path", "SHEAR-PATH")):
+        r = npres.get(key)
+        if r is None:
+            continue
+        n = r["normal"]
+        life = r["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      {name:15s} [{n[0]:+.3F} {n[1]:+.3F} {n[2]:+.3F}]  "
+                 f"{r['sn_max']:+.4E} {r['tau_a']:.4E} {r['F_np']:.3F}  "
+                 f"{r['damage_rate']:.5E}  {life_s}")
