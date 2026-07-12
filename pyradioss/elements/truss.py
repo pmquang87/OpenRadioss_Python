@@ -227,6 +227,58 @@ def kgeo(group, x):
     return _blocks_to_element(kb), _edofs(conn)
 
 
+# ----------------------------------------------------------------------------
+# Consistent (element) mass — M16, alongside the lumped mass of init_group.
+# ----------------------------------------------------------------------------
+# Fortran origin: the lumped mass is ``starter/source/elements/truss/tmass3.F``
+# (the /2 half-mass-to-each-node lumping this file's ``init_group`` returns and
+# the explicit leapfrog / M10 implicit dynamics divide by). The CONSISTENT mass
+# is the standard shape-function integral M = ∫_V ρ Nᵀ N dV; the open-source
+# element ships only the lumped form (as the buckling eigensolver's card was
+# thin — M9), so the consistent operator is ported here as a clean library
+# capability for the M16 modal eigensolver, NEVER touching the lumped path.
+#
+# Theory (Cook, Malkus & Plesha "Concepts and Applications of FE Analysis",
+# ch. 11; Przemieniecki "Theory of Matrix Structural Analysis" ch. 11). The
+# 2-node bar interpolates displacement linearly, N1 = 1-ξ, N2 = ξ (ξ in
+# [0,1]); the same linear field carries motion in every one of the three
+# global directions, so the translational consistent mass is isotropic:
+#
+#     M = ρ A L0 / 6 * [[2 I3,  I3 ],      (∫₀¹ Ni Nj L dξ = L/6 [[2,1],[1,2]])
+#                       [ I3, 2 I3 ]]
+#
+# with m = ρ A L0 the (constant) element mass this file already stores. Being
+# ∝ I3 in each 2×2 nodal pair, it is FRAME-INVARIANT — no corotational
+# rotation is needed (unlike the beam), and the mass is evaluated on the
+# REFERENCE length L0 because mass is conserved (it does not scale with the
+# deformed length). Partition of unity: each row sums to m/2 (the lumped
+# nodal mass), so ½ vᵀ M v = ½ m |v|² is exact for a rigid translation v.
+
+_M_BAR = np.array([[2.0, 1.0], [1.0, 2.0]]) / 6.0     # ∫ Ni Nj dξ, unit length
+
+
+def consistent_mass(group, x=None):
+    """Consistent element mass ∫ρ Nᵀ N dV of the 2-node bar (see the note
+    above): (m/6)[[2 I3, I3],[I3, 2 I3]] with m the stored element mass.
+
+    Returns ``(me (n,6,6), edofs (n,6))`` in the implicit assembler's
+    convention — translations only, same 6-DOF addressing as ``tangent()``.
+    ``x`` is accepted for a uniform kernel signature but unused: the mass is
+    built on the reference length (mass conservation) and is frame-invariant
+    (isotropic per nodal block)."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    m = st["mass"]                                    # ρ A L0, per element
+    me = np.zeros((n, 6, 6))
+    for a in range(2):
+        for b in range(2):
+            f = m * _M_BAR[a, b]                       # (n,)
+            for c in range(3):
+                me[:, a * 3 + c, b * 3 + c] = f
+    return me, _edofs(conn)
+
+
 def static_internal_forces(group, x, u, ur, fint, mint):
     """Nodal force at configuration ``x`` from the current stress state —
     the updated-Lagrangian force assembly of the M9 implicit residual

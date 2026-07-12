@@ -296,6 +296,12 @@ class ImplicitResult:
     #: the matching (du, dur) mode shapes — None when the card is absent.
     buckling_factors: object = None
     buckling_modes: object = None
+    #: /IMPL/EIGV (M16): natural frequencies (Hz), mass-normalized (du, dur)
+    #: mode shapes and the (nev, 6) modal effective mass — None without the
+    #: card. Mirrors the buckling fields above.
+    modal_frequencies: object = None
+    modal_modes: object = None
+    modal_effective_mass: object = None
 
 
 # ----------------------------------------------------------------------------
@@ -563,6 +569,8 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
         if getattr(ip, "impl_buckl", 0) and result.converged:
             # /IMPL/BUCKL/2 flavour: extraction about the traced final state
             _run_buckling(model, ip, log, result, constr, contacts)
+        if getattr(ip, "impl_eigv", False) and result.converged:
+            _run_modal(model, ip, log, result, constr, contacts)
         _final_summary(model, result, dof, log)
         return model
 
@@ -623,8 +631,47 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
     model.implicit_result = result
     if getattr(ip, "impl_buckl", 0) and result.converged:
         _run_buckling(model, ip, log, result, constr, contacts)
+    if getattr(ip, "impl_eigv", False) and result.converged:
+        _run_modal(model, ip, log, result, constr, contacts)
     _final_summary(model, result, dof, log)
     return model
+
+
+def _run_modal(model, ip, log, result, constr=None, contacts=()):
+    """/IMPL/EIGV (M16): modal (free-vibration) eigenvalue extraction on the
+    CONVERGED state — the engine-card wiring of ``modal.py`` (see that module
+    for why this is a PORT card: the open-source freimpl.F has no modal
+    branch). Reports the lowest natural frequencies and stores
+    (frequencies, modes, effective mass) on the result object, mirroring
+    ``_run_buckling``.
+
+    With /IMPL/EIGV/STRS the stiffness is the prestressed tangent
+    K = K_mat + K_geo (the static increments above supplied the prestress),
+    so a loaded/spinning structure reports its stress-stiffened spectrum.
+    The driver's live constraint transform and contact treatments are passed
+    through, so the (K, M) pencil is condensed T^T (.) T exactly like the
+    buckling path."""
+    from .modal import modal_frequencies
+    nev = max(1, int(getattr(ip, "impl_eigv_nmode", 6)))
+    prestress = bool(getattr(ip, "impl_eigv_prestress", False))
+    log.info("\n     ** NATURAL FREQUENCIES COMPUTATION **   (/IMPL/EIGV)")
+    if prestress:
+        log.info("        (prestressed: K = K_mat + K_geo of the "
+                 "committed state)")
+    freqs, modes, eff = modal_frequencies(
+        model, nev=nev, log=None, constraints=constr, contacts=contacts,
+        prestress=prestress)
+    result.modal_frequencies = freqs
+    result.modal_modes = modes
+    result.modal_effective_mass = eff
+    log.info(f"      NUMBER OF NATURAL FREQUENCIES     {len(freqs):10d}")
+    log.info("      NATURAL FREQUENCIES:")
+    log.info("              MODE  FREQUENCY (HZ)")
+    for i, f in enumerate(freqs):
+        log.info(f"          {i + 1:10d}  {f:14.6E}")
+    if len(freqs) == 0:
+        log.info("          (no positive frequency extracted — check that "
+                 "the model is well constrained and carries mass)")
 
 
 def _run_buckling(model, ip, log, result, constr=None, contacts=()):

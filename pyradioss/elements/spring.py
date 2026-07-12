@@ -163,6 +163,38 @@ def kgeo(group, x):
     return _blocks(kb), _spring_edofs(conn)
 
 
+# ----------------------------------------------------------------------------
+# Consistent (element) mass — M16, alongside the lumped mass of init_group.
+# ----------------------------------------------------------------------------
+# Fortran origin: the TYPE4 spring's mass is the /PROP/SPRING scalar mass M
+# lumped half to each node (``rmass3.F`` / this file's ``init_group`` /2
+# return). Unlike the truss/beam/solid, the spring carries NO distributed
+# density field — its mass is a DISCRETE point property, not ∫ρ dV — so the
+# "consistent" mass and the lumped mass COINCIDE exactly: M/2 as a point mass
+# on each node's three translations, a diagonal 6×6. There is no shape-
+# function integral to do (the spring has no interior), which is why this is
+# the EXACT mass, not an approximation. Reported here so the modal assembler
+# has a uniform ``consistent_mass()`` on every family; the value is identical
+# to what the lumped path already puts on these DOFs, so a spring never shifts
+# the consistent-vs-lumped spectrum.
+
+def consistent_mass(group, x=None):
+    """Exact element mass of the TYPE4 spring: the point mass M/2 on each
+    node's translations (diagonal 6×6) — identical to the lumped mass (see
+    the note above; the spring has no distributed density to integrate).
+
+    Returns ``(me (n,6,6), edofs (n,6))``. ``x`` unused (a point mass is
+    frame-invariant and configuration-independent)."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    half = st["mass"] / 2.0                            # M/2 per node
+    me = np.zeros((n, 6, 6))
+    for i in range(6):                                 # 3 trans on each node
+        me[:, i, i] = half
+    return me, _spring_edofs(conn)
+
+
 def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom):
     """The spring's own implicit residual (called by the drivers INSTEAD of
     ``forces()`` — see the note above): elastic total-form force at the

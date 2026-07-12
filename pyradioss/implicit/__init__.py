@@ -172,8 +172,11 @@ Explicitly DEFERRED (documented in PORTING_GUIDE.md, not half-implemented):
   (refused); the IFQ >= 10 / MODFR = 2 explicit tangential formulation
   (the implicit return mapping IS that formulation — M15 note in
   contact.py);
-* **consistent (element) mass**, modal/eigenvalue dynamics,
-  implicit-explicit switching mid-run, /IMPVEL under implicit dynamics
+* modal SUPERPOSITION transient / frequency response (/FREQ), complex
+  (damped) eigenvalues, the Lanczos/subspace sparse eigensolver for large
+  models, AMLS/substructuring, random/spectral response (M16 — the real
+  eigenpairs those build on ARE now ported, see below);
+* implicit-explicit switching mid-run, /IMPVEL under implicit dynamics
   (use /IMPDISP);
 * rate devices under implicit — the LAW2 strain-rate term, the LAW36
   rate-curve family, the bulk viscosity, the spring dashpot, the MFROT
@@ -191,6 +194,37 @@ LAW27 shells carry the damaged fixed-crack unilateral tangent
 (materials/law27_brittle.py); LAW2 BEAMS carry the algorithmic tangent
 of the global resultant-plasticity return with an ITERATED implicit
 consistency solve (elements/beam_type3.py).
+
+What M16 adds (CONSISTENT element mass + MODAL analysis)
+--------------------------------------------------------
+The port was LUMPED-mass everywhere (the explicit leapfrog and the M10
+implicit dynamics divide by the diagonal ``model.mass``/``model.inertia``,
+the original's MS/IN). M16 removes the standing "consistent (element)
+mass, modal/eigenvalue dynamics" refusal by adding a *parallel*
+consistent-mass operator — never touching the lumped path (bit-identical,
+asserted), the mass analogue of ``tangent()`` beside ``forces()``:
+
+* **Consistent element mass** (``elements/*.consistent_mass()``): the
+  ∫rho N^T N dV shape-function integral per family — the analytic tetra /
+  2x2x2-Gauss brick translational mass, the bilinear-quad / CST shell
+  membrane+bending+rotary mass (isotropic rho t / rho t^3/12 blocks), the
+  12x12 Rayleigh-Timoshenko beam mass (translational + rotary-inertia
+  coupling, corotational-frame rotated), the exact truss/spring mass —
+  each with its *mass3.F origin + shape-integral docstring. The LUMPED
+  path is untouched (the M16 opt-in contract).
+* **Mass assembly + condensation** (``assembly.assemble_mass`` → COO/CSR;
+  ``constraints.reduce_matrix`` for T^T M T): the global consistent M,
+  condensed under every M12/M14 constraint — the exact rigid-body
+  parallel-axis 6-DOF block, now fed by the consistent element mass.
+* **Modal eigenvalue extraction** (``modal.py``, ``/IMPL/EIGV``): the
+  (K - omega^2 M) phi = 0 generalized eigenproblem for the lowest N
+  natural frequencies (Hz) + mass-normalized mode shapes + modal
+  effective mass, in the REDUCED space via ``buckling.py``'s dense eigh
+  (Lanczos/subspace deferred, documented), on a PRESTRESSED state too
+  (``/IMPL/EIGV/STRS``: K = K_mat + K_geo, the stress-stiffened spectrum).
+  ``/IMPL/EIGV`` is a PORT card (freimpl.F has no modal branch — ported
+  library-first exactly as M9's buckling eigensolver preceded M11's card),
+  reporting on ``model.implicit_result`` like the buckling fields.
 
 Why scipy is guarded
 --------------------

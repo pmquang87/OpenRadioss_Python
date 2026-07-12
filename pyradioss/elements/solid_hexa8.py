@@ -818,6 +818,96 @@ def tangent(group, x, epsp_incr=None):
 
 
 # ----------------------------------------------------------------------------
+# Consistent (element) mass — M16, alongside the lumped mass of init_group.
+# ----------------------------------------------------------------------------
+# Fortran origin: the lumped mass is ``starter/source/elements/solid/solide/
+# smass3.F`` (MASS = RHO*VOLU/8 spread to the 8 nodes — the value ``init_group``
+# returns and the explicit leapfrog / M10 implicit dynamics divide by). The
+# CONSISTENT mass is the shape-function integral M = ∫_V ρ Nᵀ N dV; the
+# open-source element ships only the lumped form, so this is ported as a clean
+# M16 library capability for the modal eigensolver — NEVER touching the lumped
+# path (the mass analogue of tangent() sitting beside forces()).
+#
+# Theory (Cook, Malkus & Plesha ch. 11; Hughes "The FEM" ch. 7). Unlike the
+# constant-B one-point STIFFNESS (which the hourglass block stabilizes), the
+# consistent mass MUST be integrated with FULL 2×2×2 Gauss quadrature: a
+# one-point evaluation would put every trilinear N_i = 1/8 at the centroid and
+# give a rank-1 (physically wrong, singular) mass. With the 8 Gauss points
+# ξ_g = ±1/√3 and the trilinear shape functions
+#
+#     N_i(ξ,η,ζ) = 1/8 (1+ξξ_i)(1+ηη_i)(1+ζζ_i)          (ξ_i,η_i,ζ_i = _XI)
+#
+# the block is  M[a i, b j] = δ_ij Σ_g w_g detJ_g N_a(ξ_g) N_b(ξ_g)  (w_g = 1),
+# isotropic in the three translation directions (δ_ij), hence frame-invariant.
+# Density ρ = m/V0 comes from the stored element mass and reference volume, so
+# the mass is conserved (built on the undeformed geometry). For a rectangular /
+# parallelepiped brick detJ is constant and the quadrature is EXACT: each row
+# then sums to ρV/8 = m/8 (the lumped nodal mass) and ½ vᵀMv = ½ m|v|² is exact
+# for rigid v. For a DISTORTED hexa N_a N_b detJ exceeds the degree the 2×2×2
+# rule integrates exactly, so the mass carries the standard O(distortion²)
+# quadrature error of the consistent brick mass (documented; well-shaped
+# meshes — the modal validations — are unaffected).
+
+# 2×2×2 Gauss points (rows) in (ξ,η,ζ); the 8-point rule has unit weights.
+_GAUSS3 = _XI / np.sqrt(3.0)                            # reuse the node signs
+
+
+def _shape8(xi):
+    """Trilinear shape values N (8,) at one natural point xi = (ξ,η,ζ)."""
+    return 0.125 * np.prod(1.0 + _XI * xi[None, :], axis=1)
+
+
+def consistent_mass(group, x=None):
+    """Consistent element mass ∫ρ Nᵀ N dV of the 8-node brick by 2×2×2 Gauss
+    integration (see the note above): M[a,b] = ρ Σ_g detJ_g N_a N_b, isotropic
+    over the three translations.
+
+    Returns ``(me (n,24,24), edofs (n,24))`` — translations only, the same
+    node-major addressing as ``tangent()``. ``x`` unused (the mass is built on
+    the reference geometry and is frame-invariant)."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    # density ρ = m / V0 from the stored element mass and reference volume:
+    # the mass is conserved, so it is integrated on the UNDEFORMED element.
+    rho = st["mass"] / np.maximum(st["vol0"], EM20)     # (n,)
+    # detJ at each Gauss point needs the reference nodal coordinates; the
+    # element buffer stored only the centroid dndx0, so the driver passes
+    # model.x0 through ``x`` for the modal path (mass conservation).
+    if x is None:
+        raise ValueError("solid_hexa8.consistent_mass needs the reference "
+                         "coordinates (pass model.x0)")
+    xe = x[conn]                                        # (n, 8, 3)
+
+    S = np.zeros((n, 8, 8))                             # Σ_g detJ_g Nᵀ N
+    for g in range(8):
+        xi = _GAUSS3[g]
+        N = _shape8(xi)                                # (8,)
+        # dN_i/dξ_a at this Gauss point = (xi_sign_a / 8) * prod_{b≠a}(1+..)
+        dN = np.empty((8, 3))
+        for a in range(3):
+            other = [c for c in range(3) if c != a]
+            dN[:, a] = 0.125 * _XI[:, a] * np.prod(
+                1.0 + _XI[:, other] * xi[None, other], axis=1)
+        J = np.einsum("ia,nib->nab", dN, xe)           # (n,3,3)
+        detJ, _ = det_inv33(J)
+        S += (detJ[:, None, None]) * np.einsum("i,j->ij", N, N)[None]
+
+    me = np.zeros((n, 24, 24))
+    MS = rho[:, None, None] * S                         # (n,8,8) mass factor
+    ix = np.arange(8)
+    for c in range(3):
+        rows = (3 * ix + c)[:, None]
+        cols = (3 * ix + c)[None, :]
+        me[:, rows, cols] = MS
+    edofs = np.empty((n, 24), dtype=np.int64)
+    edofs[:, 3 * ix + 0] = conn * 6 + 0
+    edofs[:, 3 * ix + 1] = conn * 6 + 1
+    edofs[:, 3 * ix + 2] = conn * 6 + 2
+    return me, edofs
+
+
+# ----------------------------------------------------------------------------
 # Geometric (initial-stress) stiffness K_geo (M9) — see PORTING_GUIDE M9
 # ----------------------------------------------------------------------------
 # Fortran origin: the geometric-stiffness branch of the implicit assembly

@@ -493,6 +493,56 @@ def kgeo(group, x):
     return ke, _edofs(conn)
 
 
+# ----------------------------------------------------------------------------
+# Consistent (element) mass — M16, alongside the lumped mass of init_group.
+# ----------------------------------------------------------------------------
+# Fortran origin: the lumped mass is ``starter/source/elements/solid/solide4/
+# s4mass3.F`` (the /4 quarter-mass-to-each-node lumping ``init_group`` returns,
+# = the smass3.F family this milestone builds on). The CONSISTENT mass is the
+# shape-function integral M = ∫_V ρ Nᵀ N dV; ported here for the M16 modal
+# eigensolver alongside — never mutating — the lumped path.
+#
+# Theory (Cook, Malkus & Plesha ch. 11; Hughes "The FEM" ch. 7). The linear
+# (constant-strain) tetrahedron interpolates displacement with the barycentric
+# coordinates N_i, whose products integrate EXACTLY over the element:
+#
+#     ∫_V N_i N_j dV = V/20 (1 + δ_ij)   ⇒   ∫ Nᵀ N dV = V/20 [[2,1,1,1],
+#                                                               [1,2,1,1],
+#                                                               [1,1,2,1],
+#                                                               [1,1,1,2]]
+#
+# (the standard simplex moment formula ∫ N_i^a N_j^b ... dV =
+# a! b! ... 3! / (a+b+...+3)! · 6V). The Jacobian is CONSTANT over the tet, so
+# this analytic form is EXACT for any tet shape (no quadrature error, unlike
+# the 8-node brick which needs 2×2×2 Gauss). The mass is isotropic in the
+# three translation directions (∝ I3), hence frame-invariant, and built on the
+# reference volume (mass conservation). Row-sum = V/4 · ρ = m/4 per node —
+# the lumped nodal mass — so ½ vᵀ M v = ½ m |v|² is exact for rigid v.
+
+#: ∫ Nᵀ N over the reference tet, in units of V (the simplex moment matrix).
+_M_TET = (np.ones((4, 4)) + np.eye(4)) / 20.0
+
+
+def consistent_mass(group, x=None):
+    """Consistent element mass ∫ρ Nᵀ N dV of the 4-node tet (see the note
+    above): ρ V/20 [[2,1,1,1],…] ⊗ I3, built on the stored element mass.
+
+    Returns ``(me (n,12,12), edofs (n,12))`` — translations only, the same
+    node-major addressing as ``tangent()``. ``x`` unused (the mass uses the
+    reference volume and is frame-invariant)."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    m = st["mass"]                                    # ρ V0, per element
+    me = np.zeros((n, 12, 12))
+    for a in range(4):
+        for b in range(4):
+            f = m * _M_TET[a, b]                       # (n,) = ρ V · factor
+            for c in range(3):
+                me[:, a * 3 + c, b * 3 + c] = f
+    return me, _edofs(conn)
+
+
 def static_internal_forces(group, x, u, ur, fint, mint):
     """Internal nodal force at configuration ``x`` from the CURRENT stress
     state — the updated-Lagrangian end-configuration force assembly of the

@@ -462,6 +462,68 @@ def tangent(group, x, epsp_incr=None):
     return ke, _tri_edofs(conn)
 
 
+# ----------------------------------------------------------------------------
+# Consistent (element) mass — M16, alongside the lumped mass of init_group.
+# ----------------------------------------------------------------------------
+# Fortran origin: the lumped mass/inertia is ``starter/source/elements/shell/
+# coquedk/c3mass3.F`` (the m/3 nodal mass ``init_group`` returns). The
+# CONSISTENT mass is the triangle shape-function integral M = ∫_A ρ (t Nᵀ_u N_u
+# + t³/12 Nᵀ_θ N_θ) dA; ported for the M16 modal eigensolver alongside — never
+# mutating — the lumped path.
+#
+# Theory (Cook, Malkus & Plesha ch. 11 — CST consistent mass). The 3-node
+# triangle interpolates midsurface displacement and section rotation with the
+# LINEAR (area-coordinate) shape functions, whose products integrate EXACTLY
+# over the element (the Jacobian is constant — unlike the quad, no
+# parallelogram assumption is needed):
+#
+#     S_ij = ∫ N_i N_j dA = A/12 (1 + δ_ij)  ⇒  S = A/12 [[2,1,1],[1,2,1],
+#                                                          [1,1,2]]
+#
+# Both blocks are isotropic (∝ I3), so the mass is assembled directly in global
+# node-major DOF order (no frame rotation):
+#
+#     translation block (i,j) = ρ t   S_ij I3
+#     rotation    block (i,j) = ρ t³/12 S_ij I3   (physical bending rotary
+#                                                  inertia; isotropic over the
+#                                                  three rotations incl.
+#                                                  drilling — see shell_bt4)
+#
+# Each translational row sums to ρtA/3 = m/3 (the lumped nodal mass), so
+# ½ vᵀMv = ½ m|v|² is exact for rigid v. The rotary inertia drops the lumped
+# path's "+A" time-step boost, using only ρt³/12 (see shell_bt4.consistent_mass
+# for why).
+
+#: CST ∫ Nᵀ N dA in units of the element area (exact, constant Jacobian).
+_S_TRI = (np.ones((3, 3)) + np.eye(3)) / 12.0
+
+
+def consistent_mass(group, x=None):
+    """Consistent element mass of the sh3n shell (see the note above):
+    ρt S ⊗ I3 on translations, ρt³/12 S ⊗ I3 on rotations, S the CST area
+    integral. Global node-major DOF order (isotropic blocks — no frame
+    rotation).
+
+    Returns ``(me (n,18,18), edofs (n,18))``. ``x`` unused."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    mass = st["mass"]                                  # ρ t A, per element
+    thick = st["thick"]
+    m_trans = mass
+    m_rot = mass * thick ** 2 / 12.0
+    me = np.zeros((n, 18, 18))
+    for a in range(3):
+        for b in range(3):
+            s = _S_TRI[a, b]
+            ft = m_trans * s
+            fr = m_rot * s
+            for c in range(3):
+                me[:, a * 6 + c, b * 6 + c] = ft
+                me[:, a * 6 + 3 + c, b * 6 + 3 + c] = fr
+    return me, _tri_edofs(conn)
+
+
 def kgeo(group, x):
     """Geometric (initial-stress) element stiffness for the sh3n group from
     the current layer stresses at geometry ``x`` — the membrane-resultant

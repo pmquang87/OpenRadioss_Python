@@ -126,6 +126,14 @@ class EngineControls:
     # the static prestress increments. 0 = off; 1|2 mirrors /IMPL/BUCKL/n.
     impl_buckl: int = 0           # /IMPL/BUCKL/n present
     impl_buckl_nmode: int = 4     # NBUCK — number of critical loads
+    # -- M16 /IMPL/EIGV: modal (free-vibration) eigenvalue extraction. There
+    # is no /IMPL/EIGV card in the open-source freimpl.F (only BUCKL and
+    # DYNA); the port adds this minimal card to drive the consistent-mass
+    # eigensolver (implicit/modal.py) the same way M11 added the thin
+    # /IMPL/BUCKL card over the M9 library eigensolver. 0 = off.
+    impl_eigv: bool = False       # /IMPL/EIGV present -> modal analysis
+    impl_eigv_nmode: int = 6      # number of natural frequencies to extract
+    impl_eigv_prestress: bool = False  # /IMPL/EIGV/STRS: K = K_mat + K_geo
 
 
 class Model:

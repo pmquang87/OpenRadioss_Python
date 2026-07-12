@@ -831,6 +831,81 @@ def tangent(group, x, epsp_incr=None):
 
 
 # ----------------------------------------------------------------------------
+# Consistent (element) mass — M16, alongside the lumped mass of init_group.
+# ----------------------------------------------------------------------------
+# Fortran origin: the lumped mass/inertia is ``starter/source/elements/shell/
+# coque/cmass3.F`` (the m/4 nodal mass and the generous rotary inertia
+# ``init_group`` returns). The CONSISTENT mass is the shell shape-function
+# integral M = ∫_A ρ (t Nᵀ_u N_u + t³/12 Nᵀ_θ N_θ) dA; ported for the M16 modal
+# eigensolver alongside — never mutating — the lumped path.
+#
+# Theory (Cook, Malkus & Plesha ch. 11 — bilinear-quad consistent mass). The
+# BT4's midsurface displacement and section rotation are interpolated with the
+# SAME bilinear shape functions N_i in every global direction, so both blocks
+# are ISOTROPIC (∝ I3) and the mass needs NO corotational rotation (unlike the
+# stiffness): it is assembled directly in global node-major DOF order. Writing
+# S_ij = ∫ N_i N_j dA (units of area),
+#
+#     translation block (i,j) = ρ t   S_ij I3     (membrane + transverse)
+#     rotation    block (i,j) = ρ t³/12 S_ij I3   (bending rotary inertia)
+#
+# The rotation block uses the PHYSICAL section rotary inertia ρt³/12 — WITHOUT
+# the lumped path's deliberate "+A" time-step boost (module docstring): that
+# boost is a stability device that would wreck the natural frequencies, so the
+# consistent mass drops it and applies the same isotropic ρt³/12 to all three
+# rotation components (including the drilling DOF, so the reduced mass stays
+# positive-definite for the eigensolver — the mass analogue of the drilling
+# penalty stiffness). For a rectangular / parallelogram element the exact
+# bilinear integral is the closed form
+#
+#     S = A/36 [[4,2,1,2],[2,4,2,1],[1,2,4,2],[2,1,2,4]]
+#
+# (used here); each translational row then sums to ρtA/4 = m/4 (the lumped
+# nodal mass) so ½ vᵀMv = ½ m|v|² is exact for rigid v. A distorted quad
+# carries the O(distortion) tributary-area error of this closed form — the same
+# one-point-integration character as the element's stiffness; a full
+# isoparametric 2×2 integration is the documented refinement (PORTING_GUIDE
+# M16).
+
+#: bilinear-quad ∫ Nᵀ N dA in units of the element area (parallelogram-exact).
+_S_QUAD = np.array([[4.0, 2.0, 1.0, 2.0],
+                    [2.0, 4.0, 2.0, 1.0],
+                    [1.0, 2.0, 4.0, 2.0],
+                    [2.0, 1.0, 2.0, 4.0]]) / 36.0
+
+
+def consistent_mass(group, x=None):
+    """Consistent element mass of the BT4 shell (see the note above):
+    ρt S ⊗ I3 on the translations and ρt³/12 S ⊗ I3 on the rotations, S the
+    bilinear-quad area integral. Built in global node-major DOF order (the
+    blocks are isotropic, so no frame rotation is needed).
+
+    Returns ``(me (n,24,24), edofs (n,24))``. ``x`` unused (mass conserved on
+    the reference area, frame-invariant)."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    mass = st["mass"]                                  # ρ t A, per element
+    thick = st["thick"]
+    m_trans = mass                                     # ρtA scalar
+    m_rot = mass * thick ** 2 / 12.0                   # ρ (t³/12) A
+    me = np.zeros((n, 24, 24))
+    for a in range(4):
+        for b in range(4):
+            s = _S_QUAD[a, b]                          # dimensionless factor
+            ft = m_trans * s                           # (n,)
+            fr = m_rot * s
+            for c in range(3):
+                me[:, a * 6 + c, b * 6 + c] = ft        # translations
+                me[:, a * 6 + 3 + c, b * 6 + 3 + c] = fr  # rotations
+    edofs = np.empty((n, 24), dtype=np.int64)
+    for i in range(4):
+        for c in range(6):
+            edofs[:, i * 6 + c] = conn[:, i] * 6 + c
+    return me, edofs
+
+
+# ----------------------------------------------------------------------------
 # Geometric (initial-stress) stiffness K_geo (M9)
 # ----------------------------------------------------------------------------
 # Fortran origin: the geometric-stiffness branch of the implicit assembly

@@ -259,14 +259,16 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | Rayleigh damping in the implicit system (M11, /IMPL/DYNA/DAMP — imp_dyna.F IDY_DAMP): C = a·M + b·K(step start), damping force HHT-weighted like f_int (IMP_DYNAR), exact velocity linearization (1+α)γ/(βdt)·C in K_eff (the IMP_DYNAM BDT/S0 algebra), trapezoidal DY_EDAMP dissipation ledger in the energy balance. Validated: damped SDOF vs exp(−ζωt)·sin(ω_d t) and the damped period for mass-only / stiffness-only / mixed Rayleigh; balance closes to round-off WITH the ledger; dissipated fraction matches 1 − exp(−2ζωt) | ✅ |
 | Automatic implicit step control (M11, imp_dt.F IMP_DTN): cut-and-RETRY on non-convergence (rollback is free — failed increments never touch model.x and the element buffers re-base from the committed snapshots), growth back toward /IMPL/DTINI after ≤-target-iteration steps; statics AND dynamics. Validated: a one-increment deep-elastica run that fails its Newton budget now completes through cuts and matches the fine fixed-increment answer to 0.5%; smooth runs take zero cuts and reproduce the fixed-dt stepping exactly | ✅ |
 | /IMPL/BUCKL engine card (M11): prestress increments → (K_mat + μ K_geo)φ = 0 → factors/modes reported (listing + result object). Validated: the M9 shell Euler column through the CARD path (π²EI/4L² < 3%) | ✅ |
-| Consistent (element) mass matrix; modal / eigenvalue dynamics; implicit↔explicit switching mid-run; /IMPVEL under implicit dynamics (refused — use /IMPDISP); rate devices under implicit (LAW2 strain-rate term, bulk viscosity, spring dashpot — all disabled loudly) | ❌ (deferred — see the M10/M11 roadmap notes) |
+| Implicit↔explicit switching mid-run; /IMPVEL under implicit dynamics (refused — use /IMPDISP); rate devices under implicit (LAW2 strain-rate term, bulk viscosity, spring dashpot — all disabled loudly) | ❌ (deferred — see the M10/M11 roadmap notes) |
 | **Implicit KINEMATIC CONSTRAINTS by condensation (M12)**: /RBODY, /RBE2, /INTER/TYPE2 tied, /RBE3 and /MPC in the implicit system — dependent DOFs eliminated through the sparse transform K_red = TᵀKT, R_red = TᵀR (the rby_imp0.F / rbe2_imp0.F / rbe3_imp0.F / i2_imp1.F block condensations; never penalized), in BOTH geometry modes (T rebuilt per committed frame, rigid bodies re-placed exactly with the Rodrigues map at each NLGEOM commit) and under /IMPL/DYNA (TᵀMT carries the exact rigid 6-DOF mass at the master — total mass, parallel-axis inertia, COG-coupling blocks — and initial velocities project onto the constraint manifold mass-weighted = the explicit momentum projection). Standalone frozen masters unfrozen and force-numbered; /BCS on a master = the body-level condition (all-translations-fixed = the PIVOT); /BCS on dependents warned, constraint wins. Validated: RBE2 rigid-lever closed form exact in one Newton step (both modes), the condensed master 6×6 mass block vs the parallel-axis closed form, /MPC equality split exact, /RBE3 dual lever rule exact, /RBODY pivot static rotation exact + the implicit-dynamic physical pendulum on the elliptic-integral quarter period (< 0.5%, amplitude preserved, arms exact), spot-weld lap joint implicit = explicit quasi-static (< 2%) | ✅ |
 | **Implicit PENALTY CONTACT (M12)**: /INTER/TYPE7 in the Newton loop — frictionless contact force at the TRIAL configuration in the residual, exact gap tangent K·g gᵀ + the closest-point curvature −K·p·∇²d (region-wise: zero on faces, the point/edge lateral terms at vertices/edges — the i7keg3.F blocks omit it; an M12 lesson) in K/K_eff, ACTIVE-SET Newton (pairs enter/leave per iteration; a set that will not settle lands in the M11 StepControl cut), Istf/Igap stiffness+gap machinery of contact/stiffness.py reused unchanged, stored spring energy ½Kp² in its own dynamics ledger channel. Validated: two blocks pressed = series-springs closed form EXACT with the active set entering mid-run, FD residual/tangent consistency (exact for secondary-side directions; ≤ 5% full-direction, the documented weight-variation omission), implicit punch = explicit damped steady state (< 2%) and the dead-load closed form (1e-6) | ✅ |
 | A constraint-condensation predictor lesson (M12, recorded in `constraints.make_consistent`): the dynamics predictor must be PROJECTED onto the constraint manifold (u = T u_red always) — the node-space extrapolation violates the constraint by O(θ²)·arm, Newton cannot remove what Tᵀ annihilates, and the commit placement silently converts the violation into energy (found by a pendulum that gained 20× its drop energy and circulated) | ✅ |
 | **Implicit CONTACT & LOAD COMPLETION (M13)**: /INTER/TYPE7 COULOMB FRICTION in the Newton loop (the i7kfor3.F incremental return mapping — stick/slip with the consistent nonsymmetric slip tangent, anchors committed per increment, `efric` slip-work ledger channel, µ = 0 bit-identical to M12); /INTER/TYPE11 edge-to-edge under implicit (exact segment-segment gap tangent + the EXACT edge-edge closest-point curvature in every projection region; near-parallel overlaps by two-point trapezoid quadrature — the period-2 lesson); /PLOAD follower-load stiffness under /IMPL/NONLIN (trial-configuration pressure residual + the exact nonsymmetric −∂f_ext/∂x; IMP_KPRES analogue, documented deviation) with /PLOAD + /IMPL/ARCL refused; LAW36 consistent tangents (solids + shells, table-slope H; the piecewise-linear return measured EXACT at implicit increments; rate families truncated to the static curve, warned). Two SOLVER lessons recorded in the code: the imp_solv.F-style backtracking LINE SEARCH (engages only when the residual GROWS — smooth runs bit-identical) that breaks non-smooth assignment cycles, and the PERSISTENT implicit hourglass state `hgq` (the incremental static stabilization forgot accumulated hourglass deformation at every commit and the modes ratcheted — latent since M8, exposed by moment-loaded corner forces) | ✅ |
 | **Implicit GENERALITY (M14)**: constraint CHAINS resolved by transform substitution (rigid-on-rigid, /MPC rows on rigid slaves, /RBE3 masters/ties inside bodies — the rbody_part_modif.F90 hierarchy expressed as T = T1·T2·…; CIRCULAR chains refused; conflicts refused; the explicit engine refuses chains loudly), with the topological commit placement under NLGEOM and the chained TᵀMT mass under /IMPL/DYNA (chained pendulum on the elliptic-integral period); /INTER/TYPE11 COULOMB FRICTION under implicit (the M13 TYPE7 return mapping generalized to edge pairs, consistent stick/slip tangents, anchors keyed per (edge, edge, overlap-end) — the original's I11KFOR3 has NO cone cap: documented deviation); /IMPL/ARCL WITH constraints & contact (reduced-space corrector solves + spherical metric — documented deviation from the full-field PRODUT_UHP0 Riks norm; contact active set re-evaluated inside the corrector, validated by the snap-catch); /IMPL/BUCKL WITH constraints & contact (the reduced pencil, as imp_buck.F's UPD_GLOB_K; the converged contact tangent in K_mat — imp_buck.F omits contact, documented deviation); LAW42 CONSISTENT spectral tangent (uniaxial/equibiaxial exact with quadratic tails; the coalescent-stretch L'Hôpital branch FD-verified; /IMPL/NONLIN required, frozen-frame runs refused) | ✅ |
 | **Friction MODELS (M15)**: MFROT 1–4 µ(p, v) + IFQ filtering in the EXPLICIT TYPE7 (and TYPE11 as a documented port extension), the STATIC-LIMIT µ(p) Coulomb cone with the consistent µ′(p) coupling tangent in the IMPLICIT TYPE7/TYPE11 return mapping; LAW27 implicit shell tangent (per-branch: uncracked/open-frozen/open-growing/closed/broken); LAW2 BEAM resultant-plasticity consistent tangent + iterated implicit return. Validated: exact MFROT formula/branch checks, kernel-level transmitted-force closed forms, the exact discrete IFQ step response, implicit stick/slip closed forms with µ(p), FD tangent consistency in every regime (µ′ block included), pre-crack = LAW1 exact, crack-closure stiffness recovery, notched-strip implicit-vs-explicit crack pattern, the beam hinge at EXACTLY the resultant limit load with the root element ON the yield surface to 1e-9, quadratic tails, cross-solver checks, bit-identity of every switched-off path (monkeypatch-asserted) | ✅ |
+| **CONSISTENT ELEMENT MASS + MODAL analysis (M16)**: a `consistent_mass()` per family alongside the lumped mass — the ∫ρ Nᵀ N dV translational brick/tetra mass (analytic tet, 2×2×2 Gauss brick), the bilinear/CST membrane+bending+rotary shell mass (isotropic ρt / ρt³/12 blocks, drilling inertia included so the reduced mass stays PD), the 12×12 Rayleigh–Timoshenko beam mass (axial + torsion + two-plane Hermite-cubic bending with rotary-inertia coupling, rotated by the corotational frame), the exact truss/spring mass — each carrying its Fortran-origin + shape-integral docstring; the global consistent M assembled COO→CSR through the DofMap and condensed TᵀMT under every M12/M14 constraint (the exact rigid-body parallel-axis block, now fed by the consistent mass). MODAL EIGENVALUE extraction (`/IMPL/EIGV`, a PORT card — freimpl.F has no modal branch, so ported library-first like the M9 buckling eigensolver): (K − ω²M)φ = 0 for the lowest N natural frequencies + mass-normalized mode shapes + modal effective mass, in the REDUCED (constrained) space via `buckling.py`'s dense `eigh` (Lanczos/subspace deferred, documented), on a PRESTRESSED state too (K = K_mat + K_geo, `/IMPL/EIGV/STRS`). Validated: longitudinal bar vs (2n−1)c/4L and nc/2L, cantilever bending vs the Euler–Bernoulli βₙL roots (< 0.3% at 20 beams), a simply-supported plate fundamental (a/t = 20, the BT4 thin-plate shear-lock documented + convergence shown), mode M-orthogonality φᵢᵀMφⱼ = δᵢⱼ to round-off, the consistent-over/lumped-under BRACKET around the exact frequency, the rigid-link spectrum shift sqrt(k/(m₁+m₂)) + the rigid-bar parallel-axis inertia mL²/3, the taut-string prestressed modes n/2L·sqrt(T/μ) (pure geometric-stiffness modes); the LUMPED path (explicit leapfrog + M10 implicit dynamics) BIT-IDENTICAL, consistent_mass() never mutating element state (monkeypatch-asserted, the M7 parity contract) | ✅ |
 | /RWALL under implicit (refused loudly); /IMPDISP on constraint nodes; /PLOAD with /IMPL/ARCL (refused); MFROT velocity terms + IFQ under implicit (static limit, loudly); Ifiltr ≥ 10 / MODFR 2 (refused); /FRICTION per-part-pair sets; orthotropic friction | ❌ (deferred — see the M12/M13/M14/M15 roadmap notes) |
+| Modal superposition TRANSIENT; frequency response (/FREQ); complex/damped eigenvalues; Lanczos/subspace for large models; AMLS / substructuring; random & spectral response | ❌ (deferred — see the M16 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -1442,10 +1444,113 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       (unchanged M11 note);
     * thermal contact, TYPE19/24/25, Inacti, Igap 2/3, rate devices
       under implicit dynamics, LAW42 shells/Prony, IDTC 2/3, /RWALL
-      under implicit, consistent mass / modal dynamics, the UL
-      hourglass memory and the hourglass-operator geometry variation in
-      the NLGEOM tangent, the BT4 drilling floor (all unchanged from
-      the M10–M14 lists).
+      under implicit, the UL hourglass memory and the hourglass-operator
+      geometry variation in the NLGEOM tangent, the BT4 drilling floor
+      (all unchanged from the M10–M14 lists).
+
+15. **M16 — CONSISTENT element mass + MODAL / eigenvalue analysis** ✅
+    (done): the largest standing item of the M10–M15 deferral tail —
+    free-vibration natural frequencies and mode shapes. The port was
+    LUMPED-mass everywhere (the explicit leapfrog and the M10 implicit
+    dynamics divide by the diagonal `model.mass`/`model.inertia`, exactly
+    the original's MS/IN in IMP_DYNAM); M16 adds a *parallel* CONSISTENT
+    mass operator — the mass analogue of `tangent()` sitting alongside
+    `forces()` — feeding a modal eigensolver, without touching the lumped
+    path (which stays bit-identical, asserted).
+
+    * **Consistent element mass** (`consistent_mass()` per family,
+      alongside the lumped mass of each `init_group`): the ∫ρ Nᵀ N dV
+      shape-function integral. SOLIDS — the analytic V/20·[[2,1,1,1]…]
+      tetra mass (constant Jacobian, exact) and the 2×2×2-Gauss brick
+      mass (a one-point evaluation would be rank-1 and singular); SHELLS —
+      the bilinear-quad (parallelogram-exact A/36·[[4,2,1,2]…]) and CST
+      (A/12·[[2,1,1]…]) area integrals, isotropic ρt on the translations
+      and ρt³/12 on the rotations (the PHYSICAL bending rotary inertia
+      WITHOUT the lumped path's "+A" time-step boost, applied to all three
+      rotations incl. drilling so the reduced mass stays PD); the BEAM —
+      the 12×12 Rayleigh–Timoshenko mass (Przemieniecki ch. 11): axial
+      ρAL/6·[[2,1],[1,2]], torsion with the mass polar moment ρ(Iyy+Izz),
+      and the Hermite-cubic bending mass ρAL/420·[156,22L,…] PLUS the
+      rotary-inertia mass ρI/30L·[36,3L,…] with the translation↔rotation
+      coupling, in both principal planes (the x–z plane sign-flipped for
+      θy = −w′), rotated to global axes by the SAME corotational frame as
+      its stiffness; the TRUSS bar mass ρAL/6·[[2I,I],[I,2I]] and the
+      spring's exact point mass (= its lumped mass — a discrete property,
+      no interior to integrate). Fortran origin: the *mass3.F lumped
+      family (smass3.F/s4mass3.F/cmass3.F/c3mass3.F/pmass3.F/tmass3.F —
+      the open source ships only the lumped form); the consistent operator
+      is derived per family from the shape integral and ported library-
+      first, exactly as M9 ported the buckling eigensolver before M11's
+      thin card.
+    * **Mass assembly + constraint condensation** (`assembly.assemble_mass`
+      → COO/CSR through the DofMap; `constraints.reduce_matrix` for TᵀMT):
+      the global consistent M, condensed under every M12/M14 constraint
+      (/RBODY, /RBE2, tied, /RBE3, /MPC and chains) — the same congruence
+      transform as TᵀKT, so a rigid body carries its EXACT parallel-axis
+      6-DOF mass at the master, now with the CONSISTENT element mass
+      feeding it (validated: a uniform rigid bar reproduces the continuum
+      mL²/3 end / mL²/12 centre inertia, exact because a rigid rotation is
+      linear in the shape space).
+    * **Modal eigenvalue extraction** (`implicit/modal.py`, `/IMPL/EIGV`):
+      the generalized eigenproblem (K − ω²M)φ = 0 for the lowest N natural
+      frequencies (Hz) + MASS-NORMALIZED mode shapes + the (N,6) modal
+      effective mass, in the REDUCED (constrained) space — reusing
+      `buckling.py`'s reduced-pencil + dense `scipy.linalg.eigh` (fine at
+      this port's sizes; the original's Lanczos/subspace deferred, a
+      documented deviation exactly as buckling did). A robust rigid-body
+      filter (median-scaled, immune to the penalty-DOF spectrum inflation
+      a max-relative threshold suffers) skips the ≤6 mechanism modes. On a
+      PRESTRESSED state too (`/IMPL/EIGV/STRS`: K = K_mat + K_geo — the
+      stress-stiffened spectrum; a tension-tuned string, a compressive
+      column softening toward its buckling load where the modal and
+      buckling eigenproblems meet). `/IMPL/EIGV` is a PORT card
+      (freimpl.F reads only BUCKL and DYNA); it reports factors/modes on
+      `model.implicit_result` (mirroring `buckling_factors`/`modes`) and
+      in the listing.
+    * **Validated** (`tests/test_m16_modal.py`): per-family mass partition
+      of unity (row-sums to the lumped nodal mass), rigid-body KE
+      ½vᵀMv = ½m|v|² EXACT, symmetry + PSD, no state mutation
+      (monkeypatch-asserted — the M7 parity contract), the lumped path
+      bit-identical with the consistent mass present; longitudinal bar
+      vs (2n−1)c/4L (fixed-free) and nc/2L (free-free, the rigid mode
+      filtered); cantilever bending vs the Euler–Bernoulli βₙL roots
+      (1.875, 4.694 → < 0.3% at 20 beams — the antenna_mast example deck);
+      a simply-supported plate fundamental; mode M-orthogonality
+      φᵢᵀMφⱼ = δᵢⱼ to round-off; the consistent-over/lumped-under BRACKET
+      around the exact frequency; the rigid-link spectrum shift
+      sqrt(k/(m₁+m₂)); the taut-string prestressed modes n/2L·sqrt(T/μ)
+      (transverse modes that exist ONLY through the geometric stiffness).
+      Example: `examples/modal_mast` (/IMPL/EIGV natural frequencies of
+      the cantilever mast).
+
+    A deliberate, documented finding: the BT4 shell SHEAR-LOCKS in thin
+    (a/t ≫ 20) 2D plate bending — a pre-existing element property, NOT an
+    M16 mass error (consistent and lumped masses give the same locked
+    frequency; the plate validation therefore uses a genuine a/t = 20
+    plate and shows the error shrinking on refinement). Recorded so a
+    future milestone (an assumed-strain / MITC4 shear treatment) can lift
+    it.
+
+    Deferred out of M16, explicitly (not half-implemented):
+    * modal SUPERPOSITION transient and frequency response (/FREQ) — the
+      response-history / steady-state build on these eigenpairs;
+    * complex / damped (quadratic) eigenvalues — the real symmetric
+      eigenproblem is ported; a damped structure's complex modes need the
+      state-space or QEP formulation;
+    * the Lanczos / subspace-iteration sparse eigensolver of the original
+      (EIGBUCKP family) for large models — the dense `eigh` is the
+      documented library choice at this port's sizes; a shift-invert
+      `scipy.sparse.linalg.eigsh` is the upgrade path;
+    * AMLS / component-mode substructuring; random & spectral (PSD)
+      response;
+    * the BT4 thin-plate shear-lock (an assumed-strain shell — a future
+      element milestone, above);
+    * the M10–M15 deferral tail unchanged: IFQ ≥ 10 / MODFR 2, /FRICTION
+      per-part-pair sets, orthotropic / thermal friction, the fiber
+      TYPE18 beam, the LAW27 plastic block / solids, thermal contact,
+      TYPE19/24/25, Inacti, Igap 2/3, LAW42 shells/Prony, IDTC 2/3,
+      /RWALL under implicit, the UL hourglass memory, the NLGEOM
+      hourglass-operator geometry variation, the BT4 drilling floor.
 
 ## 6. Validation strategy
 

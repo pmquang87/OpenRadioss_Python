@@ -296,6 +296,25 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         # NBUCK drives the dense eigensolve
                         if len(vals) > 2 and vals[2] > 0:
                             ec.impl_buckl_nmode = int(vals[2])
+                elif sub in ("EIGV", "EIG", "MODAL", "FREQ"):
+                    # /IMPL/EIGV (M16 — a PORT card; freimpl.F has no modal
+                    # branch, so this drives the consistent-mass eigensolver
+                    # of implicit/modal.py the way /IMPL/BUCKL drives
+                    # buckling.py). Optional /STRS suffix requests the
+                    # PRESTRESSED spectrum K = K_mat + K_geo (implies the
+                    # static prestress increments have run). Card: Nmode
+                    # (number of natural frequencies) — the search-range /
+                    # Lanczos controls of the commercial card are accepted
+                    # and unused (dense eigh, see modal.py).
+                    ec.impl_eigv = True
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    if sub2 in ("STRS", "STRESS", "PRESTRESS"):
+                        ec.impl_eigv_prestress = True
+                        ec.impl_nlgeom = True   # prestress needs the K_geo path
+                    vals = block.cards[0].floats() if block.cards else []
+                    if vals and vals[0] > 0:
+                        ec.impl_eigv_nmode = int(vals[0])
                 elif sub in ("NEWTON", "SOLVINFO"):
                     if block.cards:
                         vals = block.cards[0].floats()
