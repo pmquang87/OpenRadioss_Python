@@ -599,6 +599,19 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     is_evol = bool(subs & {"EVOL", "EVOLUTIONARY",
                                            "NONSEPARABLE", "SPECTROGRAM",
                                            "CHIRP"})
+                    # M27: FULLY EVOLUTIONARY MULTIAXIAL JOINT-TENSOR correction;
+                    # the M21/M23 critical-plane reductions evaluated PER WINDOW of
+                    # the full 6x6 stress-TENSOR cross-PSD, the critical plane /
+                    # F_np RE-SEARCHED from the window's OWN tensor (so the plane
+                    # may ROTATE / F_np may DRIFT window to window), Miner-summed —
+                    # the joint-tensor lift of the M26 fixed-reduction scalar
+                    # spectrogram. /JOINT (or /TENSOR) IMPLIES MULT + EVOL and
+                    # reuses the /EVOL drifting-shape schedule line; it composes
+                    # with /NPROP / /SPEC / /NGAUSS / /NSTAT.
+                    is_joint = bool(subs & {"JOINT", "TENSOR", "JOINTTENSOR"})
+                    if is_joint:
+                        is_evol = True
+                        is_mult = True
                     if is_spec:
                         is_nprop = True
                     if is_nprop:
@@ -630,6 +643,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_nstat = True
                     if is_evol:
                         ec.impl_fatig_evol = True
+                    if is_joint:
+                        ec.impl_fatig_joint = True
                     if is_base:
                         ec.impl_fatig_base = True
                         if len(v0) > 4 and v0[4] >= 0:

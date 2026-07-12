@@ -808,7 +808,7 @@ def run_fatigue(model, ip, log, result, constr=None, contacts=(), loads=None):
         "freqs": sp["freqs"], "omega": sp["omega"], "Ssigma": sp["Ssigma"],
         "Sff": sp["Sff"], "summary": summary, "monte_carlo": mc,
         "nongaussian": nongaussian, "nonstationary": nonstationary,
-        "evolutionary": evolutionary,
+        "evolutionary": evolutionary, "joint_evolutionary": None,
         "sn_m": m_sn, "sn_C": C_sn, "mean_stress": mean_stress,
         "ultimate": ultimate, "base": base, "stress_modes": Sigma,
     }
@@ -1110,6 +1110,74 @@ def _run_evolutionary_multiaxial(ip, summ, freqs, m, C, mean_stress, ultimate,
             mc_windows, m, C, mc_seed, mean_stress=mean_stress, ultimate=ultimate)
     out["monte_carlo"] = ns_mc
     return out
+
+
+def _run_joint_evolutionary(ip, summ, frf, m, C, mean_stress, ultimate,
+                            mc_dur, mc_seed, model, naz, npol):
+    """M27: the FULLY EVOLUTIONARY MULTIAXIAL (JOINT-TENSOR) damage of the critical
+    element. Returns ``None`` unless /IMPL/FATIG/MULT/EVOL/JOINT is set.
+
+    Where M26 (``_run_evolutionary_multiaxial``) windowed the equivalent SCALAR PSD
+    of a FIXED reduction, M27 windows the FULL 6x6 stress-TENSOR cross-PSD per
+    window and RE-SEARCHES the critical plane / F_np from the window's OWN tensor —
+    so the critical plane may ROTATE and F_np may DRIFT window to window. Reads the
+    SAME drifting-shape schedule (``impl_fatig_evol_fc0`` .. ``_nwin``) and RMS
+    level schedule (the shared modulation /FUNCT, composing with /NSTAT) the M26
+    scalar path uses; forms the per-window tensor cross-PSD, reduces each window
+    (von Mises / max-normal / max-shear critical plane, plane RE-SEARCHED), and
+    Miner-sums; then runs the non-stationary MULTIVARIATE Monte-Carlo cross-check
+    (per-window multivariate blocks of the windowed tensor, per-window critical-
+    plane projection, rainflow, Miner-sum). Stored ALONGSIDE the M21 stationary,
+    M25 non-stationary and M26 scalar-evolutionary numbers so the listing shows all
+    four side by side. A PORT sub-flag (a jointly evolutionary tensor — the item
+    M25/M26 deferred). See implicit/joint_evolutionary_fatigue.py."""
+    if not bool(getattr(ip, "impl_fatig_joint", False)):
+        return None
+    from . import joint_evolutionary_fatigue as jf
+    from . import nonstationary_fatigue as nsf
+    fc0 = float(getattr(ip, "impl_fatig_evol_fc0", 0.0))
+    fc1 = float(getattr(ip, "impl_fatig_evol_fc1", fc0))
+    bw0 = float(getattr(ip, "impl_fatig_evol_bw0", 0.0))
+    bw1 = float(getattr(ip, "impl_fatig_evol_bw1", bw0))
+    nwin = max(1, int(getattr(ip, "impl_fatig_evol_nwin", 12)))
+    scales, durations = _evol_schedule(ip, model, nwin)
+    omega = np.asarray(frf["omega"], dtype=float)
+    Scross = np.asarray(summ["Scross"])            # (nf, 6, 6) tensor cross-PSD
+    # the JOINT-TENSOR window Miner-sum, the critical plane RE-SEARCHED per window
+    summary = jf.joint_evolutionary_fatigue_summary(
+        omega, Scross, durations, fc=(fc0, fc1), bw=(bw0, bw1), m=m, C=C,
+        scales=scales, mean_stress=mean_stress, ultimate=ultimate, naz=naz,
+        npol=npol, drift=True)
+    sc_w, wt = nsf.modulation_from_schedule(scales, durations)
+    kurt = nsf.rms_modulation_kurtosis(sc_w, wt)
+    # the non-stationary MULTIVARIATE Monte-Carlo cross-check on the max-shear plane
+    ns_mc = None
+    if mc_dur > 0.0:
+        tot = float(np.sum(durations))
+        mc_durs = durations * (mc_dur / tot) if tot > 0 else durations
+        # reuse the spectral summary's per-window critical planes (their
+        # orientation depends only on the per-window tensor shape — fc / bw /
+        # scales — NOT on the durations, so the mc_durs-scaled MC shares them)
+        ns_mc = jf.joint_evolutionary_monte_carlo_damage(
+            omega, Scross, mc_durs, fc=(fc0, fc1), bw=(bw0, bw1), m=m, C=C,
+            seed=mc_seed, scales=scales, mean_stress=mean_stress,
+            ultimate=ultimate, naz=naz, npol=npol, reduction="shear_plane",
+            summary=summary)
+    return {"fc": (fc0, fc1), "bw": (bw0, bw1), "nwin": nwin,
+            "modfunct": int(getattr(ip, "impl_fatig_modfunct", 0) or 0),
+            "scales": scales, "durations": durations, "kurtosis": kurt,
+            "constant_shape": summary["constant_shape"],
+            "plane_rotation_deg": summary["plane_rotation_deg"],
+            "fnp_drift": summary.get("fnp_drift", 0.0),
+            "summary": summary,
+            "von_mises": {"damage_rate": summary["von_mises"]["damage_rate"],
+                          "life": summary["von_mises"]["life"]},
+            "normal_plane": {"damage_rate": summary["normal_plane"]["damage_rate"],
+                             "life": summary["normal_plane"]["life"]},
+            "shear_plane": {"damage_rate": summary["shear_plane"]["damage_rate"],
+                            "life": summary["shear_plane"]["life"]},
+            "damage_rate": summary["damage_rate"], "life": summary["life"],
+            "monte_carlo": ns_mc}
 
 
 def _run_nonstationary_multiaxial(ip, summ, freqs, m, C, mean_stress, ultimate,
@@ -1517,10 +1585,23 @@ def _run_multiaxial(model, ip, log, result, frf, Sigma, channels, psd_tab,
         ip, summ, frf["freqs"], m_sn, C_sn, mean_stress, ultimate, mc_dur,
         mc_seed, model)
 
+    # M27: the FULLY EVOLUTIONARY MULTIAXIAL JOINT-TENSOR correction, run ALONGSIDE
+    # the M21 reductions AND the M26 scalar-evolutionary correction (a NEW parallel
+    # path — everything above is left byte-identical). Where M26 windowed the
+    # equivalent SCALAR of a FIXED reduction, M27 windows the FULL 6x6 stress-TENSOR
+    # cross-PSD per window and RE-SEARCHES the critical plane / F_np from the
+    # window's OWN tensor (so the plane may ROTATE, F_np may DRIFT), Miner-summing
+    # the per-window MULTIAXIAL damages, with a non-stationary MULTIVARIATE
+    # Monte-Carlo. See implicit/joint_evolutionary_fatigue.py.
+    joint_evolutionary = _run_joint_evolutionary(
+        ip, summ, frf, m_sn, C_sn, mean_stress, ultimate, mc_dur, mc_seed,
+        model, naz, npol)
+
     result.fatigue = {
         "multiaxial": True, "nonproportional": nprop,
         "spectral_nonproportional": spec_np, "nongaussian": nongaussian,
         "nonstationary": nonstationary, "evolutionary": evolutionary,
+        "joint_evolutionary": joint_evolutionary,
         "channels": channels, "voigt_blocks": blocks,
         "critical_element": (cname, ce, cbase),
         "critical_label": cbase,
@@ -1609,6 +1690,61 @@ def _report_multiaxial(log, fat, funct_id, base, base_dir, frf, nev):
     # reductions, printed ALONGSIDE the Gaussian numbers.
     if fat.get("evolutionary") is not None:
         _report_evolutionary_multiaxial(log, fat["evolutionary"], fat)
+    # M27: the FULLY EVOLUTIONARY MULTIAXIAL JOINT-TENSOR correction, printed
+    # ALONGSIDE the M21 stationary, M25 non-stationary and M26 scalar-evolutionary
+    # numbers so the listing shows the stationary, the RMS-non-stationary, the
+    # scalar-shape-evolutionary and the joint-tensor-evolutionary answers side by
+    # side (the point of a JOINT evolutionary tensor over the fixed reduction).
+    if fat.get("joint_evolutionary") is not None:
+        _report_joint_evolutionary(log, fat["joint_evolutionary"], fat)
+
+
+def _report_joint_evolutionary(log, jv, fat):
+    """Print the FULLY EVOLUTIONARY MULTIAXIAL JOINT-TENSOR (M27) listing block:
+    the drifting-shape schedule, the critical-plane ROTATION across the windows,
+    and, for each reduction (von Mises / max-normal / max-shear), the joint-tensor
+    window Miner-sum Dirlik damage rate / life ALONGSIDE the stationary (M21) one,
+    plus the per-window critical-plane / F_np / RMS drift and the non-stationary
+    MULTIVARIATE Monte-Carlo."""
+    log.info("\n     ** FULLY EVOLUTIONARY MULTIAXIAL JOINT-TENSOR FATIGUE **  "
+             "(/IMPL/FATIG/MULT/EVOL/JOINT)")
+    fc0, fc1 = jv["fc"]
+    bw0, bw1 = jv["bw"]
+    log.info(f"      DRIFTING TENSOR fc0->fc1 (HZ) . . : "
+             f"{fc0:.4G} -> {fc1:.4G}   (bw {bw0:.4G} -> {bw1:.4G})")
+    log.info(f"      WINDOWS / g4 / PLANE ROTATION . . : {jv['nwin']}  /  "
+             f"g4 = {jv['kurtosis']:.4F}  /  {jv['plane_rotation_deg']:.1F} deg  "
+             f"({'constant tensor -> M25/M26' if jv['constant_shape'] else 'joint tensor drifts'})")
+    log.info(f"      F_np DRIFT (max - min over windows): "
+             f"{jv.get('fnp_drift', 0.0):.4F}  (the non-proportionality "
+             f"evolving window to window)")
+    log.info("      REDUCTION            STAT DIRLIK RATE   JOINT-EVOL RATE  "
+             "JOINT-EVOL LIFE")
+    for key, name in (("von_mises", "VON MISES"),
+                      ("normal_plane", "MAX-NORMAL PLANE"),
+                      ("shear_plane", "MAX-SHEAR PLANE")):
+        drS = fat[key]["summary"]["dirlik"]["damage_rate"]
+        r = jv["summary"][key]
+        life = r["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      {name:18s}{drS:16.5E}   "
+                 f"{r['damage_rate']:14.5E}   {life_s:>14s}")
+    # the per-window critical-plane DRIFT (the point of a JOINT evolutionary tensor)
+    log.info("      PER-WINDOW DRIFT  (fc | max-shear plane normal | F_np | "
+             "sigma_vm):")
+    wins = jv["summary"]["windows"]
+    step = max(1, len(wins) // 6)                 # at most ~6 rows in the listing
+    for w in wins[::step]:
+        n = w["shear_n"]
+        log.info(f"        fc={w['fc']:7.2F}  n=[{n[0]:+.3F} {n[1]:+.3F} "
+                 f"{n[2]:+.3F}]  F_np={w['F_np']:.3F}  s_vm={w['sigma_vm']:.4E}")
+    if jv.get("monte_carlo") is not None:
+        mc = jv["monte_carlo"]
+        life = mc["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        tag = "M21-delegated" if mc.get("delegated") else "non-stationary"
+        log.info(f"      JOINT MONTE-CARLO (max-shear) . . : "
+                 f"{mc['damage_rate']:.5E}  ({tag} multivariate, life {life_s})")
 
 
 def _report_evolutionary_multiaxial(log, ev, fat):
