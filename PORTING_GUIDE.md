@@ -108,6 +108,7 @@ same names in comments.
 | the MFROT/IFQ blocks of `i7keg3.F`'s I7KFOR3 (µ(p, v) fed the increment pseudo-rates) + I7KEG3's `FACT(I)=FRIC` always-stick spring (constant µ in the matrix even when MFROT > 0) | `implicit/contact.py` (`_cone` + the µ_t coupling in both classes' `_friction_state`/`triplets`) | M15: friction MODELS under implicit — the Coulomb cone radius becomes µ(p)·f_n at the STATIC LIMIT µ(p, v=0) (`friction.mu_static`; rate devices reduce loudly, never fed du/1 — the original feeds I7KFOR3's µ law the increment fields, a step-size-dependent pseudo-rate the port deliberately does not reproduce), and the slip tangent's t nᵀ block carries the derived µ_t = µ + f_n µ′(p)/A coupling slope (frozen area, the frozen-weight class) — a documented deviation from I7KEG3's constant-FRIC spring, the M13 IMP_KPRES pattern; IFQ ignored with a warning (a time device: its DC limit is the unfiltered force); mfrot = 0 bit-identical to M13/M14 |
 | — (no LAW27 implicit tangent exists in OpenRadioss: the law is an explicit crash material) | `materials/law27_brittle.py` (`consistent_shell_tangent`) + the `extra` hook of `materials.shell_layer_tangent` and both shell kernels' tangent layer loops | M15: LAW27 CONSISTENT shell tangent — the exact derivative of the port's own fixed-crack unilateral law per branch: uncracked = elastic C; open + FROZEN damage = the (1−d) secant rows; open + GROWING damage = plus the softening −cps(en_i+ν en_j)·dd_i/den_i and the shear-row −G g12 dd_i terms (derived, not bounded — the M12 lesson; nonsymmetric like every softening tangent); CLOSED crack = full elastic rows (the unilateral switch — the M13 line search is the non-smooth backstop); broken = zero. Assembled in the frozen crack frame, rotated with the Voigt pair Tεᵀ C Tε |
 | the LAW2 global resultant-plasticity return of the beam (the port's M3 model; note the ACTUAL `pmat3.F` is pke3.F's ELASTIC shear-stiffness setup — the original's implicit beam KE has no plasticity linearization to mirror) | `elements/beam_type3.py` (`tangent` LAW2 branch + `implicit_internal_forces`) | M15: LAW2 BEAM consistent tangent — the algorithmic derivative of the radial resultant return, C_alg = s·C + [(H/(E+H) − s)/seq_tr]·R_tr (qᵀC), built from the POST-return state via the homogeneity identities (seq degree-1, q degree-0 ⇒ seq_tr = sy + E·dλ, R_tr = R·seq_tr/sy); the implicit residual runs its own ITERATED consistency solve (`implicit_internal_forces`, the M11 truss lesson MEASURED again in resultant space: 5 iterations are exact at n = 0.5 but leave O(1) residual at n = 0.2 virgin yield; the explicit kernel keeps its bit-identical 5); elastic beams route through the new hook bit-identically |
+| — (NO modal-superposition, frequency-response or harmonic path exists in the open-source engine: `engine/source/input/freimpl.F` reads only DYNA / BUCKL / DT / NONLIN / ARCL — OpenRadioss is a time-domain crash/impact code) | `pyradioss/implicit/modal_response.py` + `/IMPL/MODAL/DYNA`, `/IMPL/FREQ` in `engine_keywords.py` | M17: MODAL-SUPERPOSITION dynamics — consumes the M16 real eigenpairs (u = Σφᵢqᵢ, each qᵢ a decoupled damped SDOF q̈ᵢ + 2ζᵢωᵢq̇ᵢ + ωᵢ²qᵢ = φᵢᵀf). MODAL DAMPING (uniform ζ / (freq,ζ) table / the Rayleigh map ζᵢ = ½(α/ωᵢ + βωᵢ) — the SAME α,β as the M11 direct /IMPL/DYNA/DAMP, so both solvers carry identical physical damping); MODAL TRANSIENT (the EXACT Nigam–Jennings piecewise-linear-forcing recurrence per mode — no dispersion, unlike the M10 direct Newmark — with an optional mode-ACCELERATION / residual-flexibility static correction K⁻¹−Σφφᵀ/ωᵢ² for the truncated tail); HARMONIC / FREQUENCY RESPONSE (the complex FRF qᵢ(Ω) = φᵢᵀF/(ωᵢ²−Ω²+2iζᵢωᵢΩ), swept, amplitude/phase, base-excitation feeding the M16 effective-mass participation). PORT cards, library-first exactly like M16's /IMPL/EIGV; the M10 Newmark integrator and the M16 eigensolver stay bit-identical (modal superposition is a NEW parallel path) |
 
 ## 3. Conventions used in this port
 
@@ -268,7 +269,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | **Friction MODELS (M15)**: MFROT 1–4 µ(p, v) + IFQ filtering in the EXPLICIT TYPE7 (and TYPE11 as a documented port extension), the STATIC-LIMIT µ(p) Coulomb cone with the consistent µ′(p) coupling tangent in the IMPLICIT TYPE7/TYPE11 return mapping; LAW27 implicit shell tangent (per-branch: uncracked/open-frozen/open-growing/closed/broken); LAW2 BEAM resultant-plasticity consistent tangent + iterated implicit return. Validated: exact MFROT formula/branch checks, kernel-level transmitted-force closed forms, the exact discrete IFQ step response, implicit stick/slip closed forms with µ(p), FD tangent consistency in every regime (µ′ block included), pre-crack = LAW1 exact, crack-closure stiffness recovery, notched-strip implicit-vs-explicit crack pattern, the beam hinge at EXACTLY the resultant limit load with the root element ON the yield surface to 1e-9, quadratic tails, cross-solver checks, bit-identity of every switched-off path (monkeypatch-asserted) | ✅ |
 | **CONSISTENT ELEMENT MASS + MODAL analysis (M16)**: a `consistent_mass()` per family alongside the lumped mass — the ∫ρ Nᵀ N dV translational brick/tetra mass (analytic tet, 2×2×2 Gauss brick), the bilinear/CST membrane+bending+rotary shell mass (isotropic ρt / ρt³/12 blocks, drilling inertia included so the reduced mass stays PD), the 12×12 Rayleigh–Timoshenko beam mass (axial + torsion + two-plane Hermite-cubic bending with rotary-inertia coupling, rotated by the corotational frame), the exact truss/spring mass — each carrying its Fortran-origin + shape-integral docstring; the global consistent M assembled COO→CSR through the DofMap and condensed TᵀMT under every M12/M14 constraint (the exact rigid-body parallel-axis block, now fed by the consistent mass). MODAL EIGENVALUE extraction (`/IMPL/EIGV`, a PORT card — freimpl.F has no modal branch, so ported library-first like the M9 buckling eigensolver): (K − ω²M)φ = 0 for the lowest N natural frequencies + mass-normalized mode shapes + modal effective mass, in the REDUCED (constrained) space via `buckling.py`'s dense `eigh` (Lanczos/subspace deferred, documented), on a PRESTRESSED state too (K = K_mat + K_geo, `/IMPL/EIGV/STRS`). Validated: longitudinal bar vs (2n−1)c/4L and nc/2L, cantilever bending vs the Euler–Bernoulli βₙL roots (< 0.3% at 20 beams), a simply-supported plate fundamental (a/t = 20, the BT4 thin-plate shear-lock documented + convergence shown), mode M-orthogonality φᵢᵀMφⱼ = δᵢⱼ to round-off, the consistent-over/lumped-under BRACKET around the exact frequency, the rigid-link spectrum shift sqrt(k/(m₁+m₂)) + the rigid-bar parallel-axis inertia mL²/3, the taut-string prestressed modes n/2L·sqrt(T/μ) (pure geometric-stiffness modes); the LUMPED path (explicit leapfrog + M10 implicit dynamics) BIT-IDENTICAL, consistent_mass() never mutating element state (monkeypatch-asserted, the M7 parity contract) | ✅ |
 | /RWALL under implicit (refused loudly); /IMPDISP on constraint nodes; /PLOAD with /IMPL/ARCL (refused); MFROT velocity terms + IFQ under implicit (static limit, loudly); Ifiltr ≥ 10 / MODFR 2 (refused); /FRICTION per-part-pair sets; orthotropic friction | ❌ (deferred — see the M12/M13/M14/M15 roadmap notes) |
-| Modal superposition TRANSIENT; frequency response (/FREQ); complex/damped eigenvalues; Lanczos/subspace for large models; AMLS / substructuring; random & spectral response | ❌ (deferred — see the M16 roadmap notes) |
+| **MODAL-SUPERPOSITION dynamics (M17)**: mode-superposition TRANSIENT (`/IMPL/MODAL/DYNA`) + harmonic / frequency response (`/IMPL/FREQ`) + modal damping, consuming the M16 real eigenpairs (u = Σφᵢqᵢ, decoupled damped SDOFs). MODAL DAMPING — uniform ζ, a (freq, ζ) table interpolated onto the ωᵢ, and the Rayleigh map ζᵢ = ½(α/ωᵢ + βωᵢ) so a /IMPL/DYNA/DAMP α,β becomes modal damping CONSISTENT with the M11 direct integrator (validated against the direct damped-decay envelope). MODAL TRANSIENT — the EXACT Nigam–Jennings piecewise-linear-forcing recurrence per mode (step/impulse response matched POINTWISE + bit-close to the DIRECT M10 Newmark at a peak on a spring-mass sharing K,M; modal-truncation convergence to DAF = 2; the mode-ACCELERATION / residual-flexibility static correction recovering the EXACT static tail from one mode — a documented deviation), the M10 energy ledger in modal coordinates. HARMONIC RESPONSE — the complex FRF qᵢ(Ω) = φᵢᵀF/(ωᵢ²−Ω²+2iζᵢωᵢΩ), swept, amplitude/phase (SDOF peak = 1/(2ζ), half-power Δω/ω = 2ζ; resonances coinciding with the M16 natural frequencies; a driven-cantilever tip amplitude; base-excitation feeding the M16 effective-mass participation). PORT cards, library-first like /IMPL/EIGV; the M10 Newmark integrator + M16 eigensolver stay BIT-IDENTICAL (monkeypatch-asserted parity contract) | ✅ |
+| Complex/damped (state-space / QEP) eigenvalues; non-classical damping; Lanczos/subspace for large models; AMLS / substructuring; random & spectral (PSD) response; response spectra | ❌ (deferred — see the M17 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -1551,6 +1553,113 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       TYPE19/24/25, Inacti, Igap 2/3, LAW42 shells/Prony, IDTC 2/3,
       /RWALL under implicit, the UL hourglass memory, the NLGEOM
       hourglass-operator geometry variation, the BT4 drilling floor.
+
+16. **M17 — MODAL-SUPERPOSITION dynamics (transient + frequency response
+    + modal damping)** ✅ (done): the FIRST item deferred out of M16 — the
+    response-history and steady-state analyses that BUILD on the M16 natural
+    frequencies + mode shapes. Modal superposition is the ALTERNATIVE to the
+    M10 DIRECT Newmark/HHT time integration: expand u(t) = Σ φᵢ qᵢ(t) in the
+    M16 mass-normalized modes, and the M- and K-orthogonality of the modes
+    DECOUPLES the equation of motion into independent damped SDOFs, one per
+    mode, q̈ᵢ + 2ζᵢωᵢq̇ᵢ + ωᵢ²qᵢ = φᵢᵀf(t). A NEW, parallel path
+    (`implicit/modal_response.py`) that CONSUMES the M16 eigenpairs and never
+    touches the M10 integrator or the M16 eigensolver (both stay
+    bit-identical, monkeypatch-asserted). Theory: Clough & Penzien /
+    Chopra / Craig & Kurdila (mode superposition), Nigam & Jennings 1969
+    (the exact recurrence), the damped-SDOF complex FRF.
+
+    Fortran origin: there is NONE — `engine/source/input/freimpl.F` (read
+    line by line for M17) has no /FREQ, no /IMPL/MODAL, no mode-superposition
+    or harmonic-response branch anywhere in the open tree; OpenRadioss is a
+    time-domain crash/impact code. So M17 ports these as clean LIBRARY
+    capabilities with minimal PORT cards, exactly as M16 ported the
+    eigensolver behind /IMPL/EIGV and M9/M11 ported buckling behind
+    /IMPL/BUCKL.
+
+    * **Modal damping** (`modal_damping` + `rayleigh_ratios` /
+      `table_ratios`): per-mode ζᵢ from (a) a uniform ζ, (b) a table
+      (frequency, ζ) linearly interpolated onto the extracted ωᵢ, or (c) the
+      Rayleigh map ζᵢ = ½(α/ωᵢ + β ωᵢ). The Rayleigh map uses the SAME
+      (α, β) the M11 direct-integration /IMPL/DYNA/DAMP feeds C = αM + βK, so
+      the modal and direct solvers describe IDENTICAL physical damping —
+      validated against the direct-integration damped-decay envelope (the
+      measured decay rate = ζωₙ). Over-critical ζ ≥ 1 refused loudly.
+    * **Modal transient** (`modal_transient`, `/IMPL/MODAL/DYNA`): project
+      the deck loads onto the modes (rᵢ(t) = φᵢᵀf(t) — the same
+      /CLOAD//GRAV//PLOAD machinery evaluated at PHYSICAL time), march each
+      decoupled SDOF with the EXACT Nigam–Jennings piecewise-linear-forcing
+      recurrence (Chopra Table 5.2.1 — eight closed-form coefficients per
+      mode; exact for a sampled load at ANY step, so NO period elongation,
+      unlike the M10 Newmark's (ωdt)²/12 dispersion — which is why the
+      step/impulse response matches the closed form POINTWISE), recombine
+      u(t) = Σ φᵢ qᵢ(t). The M10 energy ledger is reproduced in modal
+      coordinates (KE = ½Σq̇ᵢ², IE = ½Σωᵢ²qᵢ², edamp = Σ2ζᵢωᵢ∫q̇ᵢ²dt,
+      balance closed to round-off). An optional MODE-ACCELERATION /
+      residual-flexibility correction (`mode_acceleration=True`, /MACC on the
+      card) adds the truncated tail's quasi-static response
+      [K⁻¹ − Σᵢ₌₁..N φᵢφᵢᵀ/ωᵢ²]f(t) — one extra linear solve per step,
+      recovering the EXACT static answer from a SINGLE mode (a documented
+      ADDITION, off by default). Validated: a step-loaded spring-mass SDOF
+      matching (F/k)(1−cos ωt) pointwise; the modal-vs-DIRECT-Newmark
+      cross-check bit-close at the response peak (the spring's consistent
+      mass EQUALS its lumped mass, so both solvers share K and M — the mass
+      analogue of the M10 explicit-vs-implicit check); modal-truncation
+      convergence to DAF = 2 as N grows; the mode-acceleration correction
+      recovering the exact static tip; a uniform-ζ decay on the exp(−ζωt)
+      envelope.
+    * **Harmonic / frequency response** (`modal_frequency_response`,
+      `/IMPL/FREQ`): for f(t) = F e^{iΩt} the complex modal FRF is
+      qᵢ(Ω) = (φᵢᵀF)/(ωᵢ² − Ω² + 2iζᵢωᵢΩ), recombined to the complex
+      transfer function u(Ω) = Σ φᵢ qᵢ(Ω), swept over a band and reported as
+      amplitude and phase. Validated: the SDOF FRF peak = 1/(2ζ) at
+      resonance with the half-power bandwidth Δω/ω = 2ζ; the FRF resonances
+      COINCIDING with the M16 natural frequencies (the /IMPL/FREQ card on
+      the antenna_mast cantilever); a driven cantilever's tip amplitude vs
+      the closed-form modal FRF; base excitation (a shaker table) feeding
+      the M16 effective-mass participation rᵢ = −φᵢᵀM r_d = −Γᵢ into the FRF.
+    * **Engine cards + reporting** (`statics._run_modal_transient` /
+      `_run_freqresponse`, mirroring `_run_modal`): both cards run AFTER the
+      (usually zero-load, or prestress under /STRS) static solve, extract the
+      modes on the committed state (rest at x0 for a pure transient) and
+      drive the transient / sweep, storing `modal_damping`,
+      `modal_transient_history` and `freq_response` on
+      `model.implicit_result` and printing the "MODAL TRANSIENT" /
+      "FREQUENCY RESPONSE" listing blocks. /IMPL/MODAL/DYNA card:
+      `t_end dt [nmode]` (+ /MACC, /STRS); /IMPL/MODAL/DAMP: `zeta`
+      (uniform); /IMPL/FREQ: `fmin fmax nf [zeta] [nmode]` — PORT cards,
+      minimal like /IMPL/EIGV.
+    * **Example**: `examples/modal_frf` (a shaker-driven cantilever mast,
+      /IMPL/FREQ sweeping the first two bending resonances — the tip spikes
+      to 1/(2ζ) = 50× its static deflection at each ωᵢ).
+    * **Validated** (`tests/test_m17_modalresp.py`): all of the above plus
+      the card mirror and the parity contract (modal superposition never
+      mutating the element state or the eigensolver output, the direct
+      /IMPL/DYNA answer byte-identical whether or not the modal path runs).
+
+    Deferred out of M17, explicitly (not half-implemented):
+    * complex / damped (state-space / quadratic-eigenvalue) eigenvalues and
+      NON-CLASSICAL damping — the port superposes the M16 REAL modes and
+      assumes classical (diagonal modal) damping; a structure whose C is not
+      αM + βK has coupled modal equations the SDOF decoupling cannot
+      capture. This is the M16-deferred complex-modes item, now reached and
+      re-deferred: it needs the state-space / QEP formulation;
+    * random & spectral (PSD) response and RESPONSE SPECTRA — the
+      frequency-domain statistics / envelope analyses that build on this
+      same real-modes FRF machinery;
+    * base excitation beyond the simple participation-factor feed (multiple
+      support motions, large rigid-base rotations);
+    * the Lanczos / subspace-iteration sparse eigensolver for large models
+      (unchanged from M16 — the dense `eigh` is the documented library
+      choice at this port's sizes; `scipy.sparse.linalg.eigsh` is the
+      upgrade path); AMLS / component-mode substructuring;
+    * the BT4 thin-plate shear-lock (an assumed-strain / MITC4 shell — a
+      future element milestone);
+    * the M10–M16 deferral tail unchanged: IFQ ≥ 10 / MODFR 2, /FRICTION
+      per-part-pair sets, orthotropic / thermal friction, the fiber TYPE18
+      beam, the LAW27 plastic block / solids, thermal contact, TYPE19/24/25,
+      Inacti, Igap 2/3, LAW42 shells/Prony, IDTC 2/3, /RWALL under implicit,
+      the UL hourglass memory, the NLGEOM hourglass-operator geometry
+      variation, the BT4 drilling floor.
 
 ## 6. Validation strategy
 

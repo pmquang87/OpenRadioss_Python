@@ -302,6 +302,15 @@ class ImplicitResult:
     modal_frequencies: object = None
     modal_modes: object = None
     modal_effective_mass: object = None
+    #: /IMPL/MODAL/DYNA (M17): the per-mode damping ratios and the
+    #: mode-superposition transient response history (a dict mirroring the
+    #: M10 dynamics ledger — t/u/ke/ie/wext/edamp/bal/q). None without the
+    #: card. See implicit/modal_response.py.
+    modal_damping: object = None
+    modal_transient_history: object = None
+    #: /IMPL/FREQ (M17): the harmonic frequency-response sweep (a dict —
+    #: omega/freqs/q/U/amp/phase/resonances). None without the card.
+    freq_response: object = None
 
 
 # ----------------------------------------------------------------------------
@@ -571,6 +580,11 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
             _run_buckling(model, ip, log, result, constr, contacts)
         if getattr(ip, "impl_eigv", False) and result.converged:
             _run_modal(model, ip, log, result, constr, contacts)
+        if getattr(ip, "impl_modal_dyna", False) and result.converged:
+            _run_modal_transient(model, ip, log, result, constr, contacts,
+                                 loads)
+        if getattr(ip, "impl_freq", False) and result.converged:
+            _run_freqresponse(model, ip, log, result, constr, contacts, loads)
         _final_summary(model, result, dof, log)
         return model
 
@@ -633,8 +647,34 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
         _run_buckling(model, ip, log, result, constr, contacts)
     if getattr(ip, "impl_eigv", False) and result.converged:
         _run_modal(model, ip, log, result, constr, contacts)
+    if getattr(ip, "impl_modal_dyna", False) and result.converged:
+        _run_modal_transient(model, ip, log, result, constr, contacts, loads)
+    if getattr(ip, "impl_freq", False) and result.converged:
+        _run_freqresponse(model, ip, log, result, constr, contacts, loads)
     _final_summary(model, result, dof, log)
     return model
+
+
+def _run_modal_transient(model, ip, log, result, constr=None, contacts=(),
+                         loads=None):
+    """/IMPL/MODAL/DYNA (M17): mode-superposition transient — the engine-card
+    wiring of ``modal_response.run_modal_transient`` (a PORT card, the same
+    way ``_run_modal`` wires the M16 eigensolver). Runs after the (usually
+    zero-load or prestress) static solve, extracting the modes on the
+    committed state and integrating the decoupled SDOFs over physical time."""
+    from .modal_response import run_modal_transient
+    run_modal_transient(model, ip, log, result, constr=constr,
+                        contacts=contacts, loads=loads)
+
+
+def _run_freqresponse(model, ip, log, result, constr=None, contacts=(),
+                      loads=None):
+    """/IMPL/FREQ (M17): harmonic frequency response — the engine-card wiring
+    of ``modal_response.run_freq_response`` (a PORT card, mirroring
+    ``_run_modal``). Sweeps the requested band and reports the complex FRF."""
+    from .modal_response import run_freq_response
+    run_freq_response(model, ip, log, result, constr=constr,
+                     contacts=contacts, loads=loads)
 
 
 def _run_modal(model, ip, log, result, constr=None, contacts=()):
