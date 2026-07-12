@@ -1,0 +1,71 @@
+#RADIOSS STARTER
+/BEGIN
+COMPLEX_MODES - non-classically-damped spring-mass chain (pyradioss /IMPL/CEIGV)
+/NODE
+         1        0.0000000000        0.0000000000        0.0000000000
+         2       10.0000000000        0.0000000000        0.0000000000
+         3       20.0000000000        0.0000000000        0.0000000000
+         4       30.0000000000        0.0000000000        0.0000000000
+         5       40.0000000000        0.0000000000        0.0000000000
+/SPRING/1
+         1         1         2
+/SPRING/2
+         2         2         3
+/SPRING/3
+         3         3         4
+/SPRING/4
+         4         4         5
+/PART/1
+link1
+         1         1
+/PART/2
+link2
+         2         1
+/PART/3
+link3
+         3         1
+/PART/4
+link4
+         4         1
+/MAT/LAW1/1
+steel elastic
+   7.8e-6
+     210.0       0.0
+/PROP/SPRING/1
+sp1
+       0.002        1000         0.6
+/PROP/SPRING/2
+sp2
+       0.002        1000           0
+/PROP/SPRING/3
+sp3
+       0.002        1000           0
+/PROP/SPRING/4
+sp4
+       0.002        1000           0
+/GRNOD/NODE/1
+pin
+1
+/GRNOD/NODE/2
+free
+2
+3
+4
+5
+/GRNOD/NODE/3
+tip
+5
+/BCS/1
+pin base
+       111       111         0         1
+/BCS/2
+axial only (free nodes)
+       011       111         0         2
+/FUNCT/1
+unit amplitude
+       0.0       1.0
+  100000.0       1.0
+/CLOAD/1
+tip axial drive
+         1         X         3       1.0
+/END

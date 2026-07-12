@@ -311,6 +311,21 @@ class ImplicitResult:
     #: /IMPL/FREQ (M17): the harmonic frequency-response sweep (a dict —
     #: omega/freqs/q/U/amp/phase/resonances). None without the card.
     freq_response: object = None
+    #: /IMPL/CEIGV (M18): COMPLEX / DAMPED eigenvalues. The complex
+    #: eigenvalues lambda_i = -zeta_i omega_i +/- i omega_{d,i}, the derived
+    #: natural / damped frequencies (Hz), decay rates, damping ratios, and the
+    #: complex (du, dur) mode shapes (phase lag). None without the card. See
+    #: implicit/complex_modal.py.
+    complex_eigenvalues: object = None
+    complex_natural_freqs: object = None
+    complex_damped_freqs: object = None
+    complex_decay_rates: object = None
+    complex_damping_ratios: object = None
+    complex_modes: object = None
+    #: /IMPL/CEIGV/TRAN and /FRF: the complex-mode superposition transient
+    #: history and the damped complex FRF sweep (dicts). None without them.
+    complex_transient_history: object = None
+    complex_frf: object = None
 
 
 # ----------------------------------------------------------------------------
@@ -585,6 +600,8 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
                                  loads)
         if getattr(ip, "impl_freq", False) and result.converged:
             _run_freqresponse(model, ip, log, result, constr, contacts, loads)
+        if getattr(ip, "impl_ceigv", False) and result.converged:
+            _run_complex_modal(model, ip, log, result, constr, contacts, loads)
         _final_summary(model, result, dof, log)
         return model
 
@@ -651,8 +668,24 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
         _run_modal_transient(model, ip, log, result, constr, contacts, loads)
     if getattr(ip, "impl_freq", False) and result.converged:
         _run_freqresponse(model, ip, log, result, constr, contacts, loads)
+    if getattr(ip, "impl_ceigv", False) and result.converged:
+        _run_complex_modal(model, ip, log, result, constr, contacts, loads)
     _final_summary(model, result, dof, log)
     return model
+
+
+def _run_complex_modal(model, ip, log, result, constr=None, contacts=(),
+                       loads=None):
+    """/IMPL/CEIGV (M18): complex / damped eigenvalue extraction (+ optional
+    complex-mode transient / FRF) — the engine-card wiring of
+    ``complex_modal.run_complex_modal`` (a PORT card, mirroring ``_run_modal``
+    for M16 and ``_run_modal_transient`` for M17: the open-source engine has
+    no complex/damped eigensolver). Runs after the (usually zero-load or
+    prestress) static solve, assembling (K, C, M) and extracting the complex
+    modes on the committed state."""
+    from .complex_modal import run_complex_modal
+    run_complex_modal(model, ip, log, result, constr=constr,
+                      contacts=contacts, loads=loads)
 
 
 def _run_modal_transient(model, ip, log, result, constr=None, contacts=(),

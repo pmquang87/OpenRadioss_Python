@@ -195,6 +195,40 @@ def consistent_mass(group, x=None):
     return me, _spring_edofs(conn)
 
 
+# ----------------------------------------------------------------------------
+# Viscous DAMPING matrix — M18, alongside the tangent / consistent mass.
+# ----------------------------------------------------------------------------
+# Fortran origin: the /PROP/SPRING dashpot ``c`` term of the TYPE4 force law
+# F = K(L - L0) + C*L_dot (rforc3.F). Under the DIRECT explicit / implicit
+# time march the dashpot is a rate device (it reads the nodal velocity, so it
+# is disabled in the implicit Newton residual — see the note above and
+# PORTING_GUIDE M11). M18 revives it as a genuine assembled DAMPING operator:
+# the viscous force F_c = c*L_dot along the axis is EXACTLY the linear map
+# f = C_e u_dot with the element damping matrix
+#
+#     C_e = c * [[ a a^T, -a a^T], [-a a^T, a a^T]]
+#
+# (the same relative-block structure as the elastic tangent k a a^T, with c in
+# place of k — the dashpot resists the RATE of axial stretch just as the
+# spring resists the axial stretch itself). A dashpot on one spring among many
+# is the canonical source of NON-CLASSICAL damping: C is then NOT proportional
+# to M or K, so the damped modes go complex (implicit/complex_modal.py). This
+# operator never enters the M8-M17 residual/tangent paths — it feeds only the
+# opt-in complex-eigenvalue / complex-mode-superposition solve.
+
+def damping_matrix(group, x):
+    """Viscous element damping matrix c a a^T along the current axis at
+    geometry ``x`` — the /PROP/SPRING dashpot ``c`` term as a linear operator
+    on the nodal velocities (see the note above). Returns ``(ce (n,6,6),
+    edofs (n,6))``, the same shape/addressing as ``tangent()`` so the global
+    C assembles through exactly the same COO->CSR scatter as K and M. Springs
+    with c = 0 contribute a zero block (harmless)."""
+    st = group.state
+    conn, L, a = _spring_axis(group, x)
+    cb = st["cdamp"][:, None, None] * np.einsum("ni,nj->nij", a, a)
+    return _blocks(cb), _spring_edofs(conn)
+
+
 def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom):
     """The spring's own implicit residual (called by the drivers INSTEAD of
     ``forces()`` — see the note above): elastic total-form force at the

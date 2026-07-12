@@ -152,6 +152,23 @@ class EngineControls:
     impl_freq_fmax: float = 0.0     # sweep end frequency (Hz)
     impl_freq_nf: int = 200         # number of sweep points
     impl_freq_zeta: float = 0.02    # uniform modal damping for the FRF
+    # -- M18 /IMPL/CEIGV: COMPLEX / DAMPED eigenvalues (PORT card — freimpl.F
+    # has no complex/damped eigensolver at all). Solves the QEP (l^2 M + l C
+    # + K) phi = 0 via the state-space linearization; C = Rayleigh a M + b K
+    # (from /IMPL/DYNA/DAMP) + the deck's discrete dashpots (/PROP/SPRING c,
+    # /DAMP). Library-first exactly like /IMPL/EIGV. See complex_modal.py.
+    impl_ceigv: bool = False        # /IMPL/CEIGV present -> complex modal
+    impl_ceigv_nmode: int = 6       # number of complex modes to extract
+    impl_ceigv_prestress: bool = False  # /IMPL/CEIGV/STRS: K = K_mat + K_geo
+    # /IMPL/CEIGV/TRAN: complex-mode superposition TRANSIENT (card: t_end dt)
+    impl_ceigv_tran: bool = False
+    impl_ceigv_tend: float = 0.0
+    impl_ceigv_dt: float = 0.0
+    # /IMPL/CEIGV/FRF: complex (damped) FRF sweep (card: fmin fmax nf)
+    impl_ceigv_frf: bool = False
+    impl_ceigv_fmin: float = 0.0
+    impl_ceigv_fmax: float = 0.0
+    impl_ceigv_nf: int = 200
 
 
 class Model:

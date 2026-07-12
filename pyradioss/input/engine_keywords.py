@@ -315,6 +315,50 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     vals = block.cards[0].floats() if block.cards else []
                     if vals and vals[0] > 0:
                         ec.impl_eigv_nmode = int(vals[0])
+                elif sub in ("CEIGV", "CEIG", "CMPLX", "COMPLEX"):
+                    # /IMPL/CEIGV (M18 — a PORT card; freimpl.F has no
+                    # complex/damped eigensolver). Drives the QEP / state-space
+                    # complex-mode analysis of implicit/complex_modal.py the
+                    # way /IMPL/EIGV drives the real eigensolver. Sub-keywords:
+                    #   /IMPL/CEIGV        card: Nmode  (complex modes)
+                    #   /IMPL/CEIGV/STRS   prestressed spectrum K = K_mat+K_geo
+                    #   /IMPL/CEIGV/TRAN   card: t_end dt [nmode]  (complex-mode
+                    #                      superposition TRANSIENT)
+                    #   /IMPL/CEIGV/FRF    card: fmin fmax nf [nmode]  (damped
+                    #                      complex FRF sweep)
+                    # The damping C is the /IMPL/DYNA/DAMP Rayleigh a,b PLUS the
+                    # deck's discrete dashpots (/PROP/SPRING c, /DAMP).
+                    ec.impl_ceigv = True
+                    ec.implicit = True
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    vals = block.cards[0].floats() if block.cards else []
+                    if sub2 in ("STRS", "STRESS", "PRESTRESS"):
+                        ec.impl_ceigv_prestress = True
+                        ec.impl_nlgeom = True
+                        if vals and vals[0] > 0:
+                            ec.impl_ceigv_nmode = int(vals[0])
+                    elif sub2 in ("TRAN", "TRANSIENT", "DYNA"):
+                        ec.impl_ceigv_tran = True
+                        if vals:
+                            ec.impl_ceigv_tend = vals[0]
+                        if len(vals) > 1 and vals[1] > 0:
+                            ec.impl_ceigv_dt = vals[1]
+                        if len(vals) > 2 and vals[2] > 0:
+                            ec.impl_ceigv_nmode = int(vals[2])
+                    elif sub2 in ("FRF", "FREQ", "HARMONIC"):
+                        ec.impl_ceigv_frf = True
+                        if len(vals) > 0:
+                            ec.impl_ceigv_fmin = vals[0]
+                        if len(vals) > 1:
+                            ec.impl_ceigv_fmax = vals[1]
+                        if len(vals) > 2 and vals[2] > 0:
+                            ec.impl_ceigv_nf = int(vals[2])
+                        if len(vals) > 3 and vals[3] > 0:
+                            ec.impl_ceigv_nmode = int(vals[3])
+                    else:
+                        if vals and vals[0] > 0:
+                            ec.impl_ceigv_nmode = int(vals[0])
                 elif sub in ("MODAL", "MSUP"):
                     # /IMPL/MODAL/... (M17 — PORT cards; freimpl.F has no
                     # mode-superposition path). Drives the modal-transient /
@@ -458,7 +502,7 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 else:
                     log.warning(f"/IMPL/{sub} not ported — ignored (supports "
                                 f"DTINI, NEWTON, LSOLVER, NONLIN, ARCL, "
-                                f"DYNA, EIGV, BUCKL, MODAL, FREQ)",
+                                f"DYNA, EIGV, CEIGV, BUCKL, MODAL, FREQ)",
                                 block.source)
             elif key == "PRINT":
                 # /PRINT/-100 → one listing line every 100 cycles (the minus
