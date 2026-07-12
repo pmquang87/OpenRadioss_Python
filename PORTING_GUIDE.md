@@ -117,6 +117,7 @@ same names in comments.
 | — (NO frequency-domain / spectral / critical-plane / non-proportional fatigue solver of ANY kind anywhere in the open-source engine — `freimpl.F` re-read line by line for M23: no /FATIG, no frequency-domain non-proportionality / modified-Wöhler / spectral-invariant machinery; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/spectral_nonproportional_fatigue.py` + the `_run_spectral_nonproportional` extension of the `_run_multiaxial` driver (`_report_spectral_nonproportional`) in `pyradioss/implicit/random_response.py` + `/IMPL/FATIG/MULT/NPROP/SPEC` in `engine_keywords.py` | M23: SPECTRAL NON-PROPORTIONAL MULTIAXIAL FATIGUE — the FREQUENCY-DOMAIN non-proportionality factor and critical-plane damage estimated DIRECTLY from the stress-tensor cross-PSD spectral-MOMENT matrices, with NO synthesised history (the Cristofori–Susmel–Tovo / Pitoiset spectral method M22's time-domain path count deferred), the SPECTRAL sibling of M22. SPECTRAL SHEAR-PATH / F_np: on a candidate plane, the 2×2 in-plane shear cross-spectral moment matrix Σ_τ (the 2×2 block of the M21 M₀ = E[σσᵀ] built from `shear_projection` along each in-plane axis — NO synthesis), and F_np = √(λ₂/λ₁) of its eigenvalues — EQUALS the M22 TIME-DOMAIN F_np (the identity M₀ = E[σσᵀ] = the covariance the synthesiser reproduces); F_np = 0 for a proportional (rank-1) state, → 1 for the 90°-out-of-phase circle. SPECTRAL CRITICAL-PLANE DAMAGE: the dominant-shear PSD moments p_domᵀMₙp_dom and resolved-normal p_nᵀMₙp_n (from p^T Mₙ p, no history), the closed-form non-proportional amplitude correction g² = 1 + F_np² = trace(Σ_τ)/λ₁ (the exact MRH/MCC ratio of an elliptical path — the M22 prismatic-hull effect read spectrally), the Susmel–Tovo modified-Wöhler stress ratio ρ = σ_a/τ_a, and the equivalent-stress moments per model (FINDLEY as the spectral-invariant linear combination g·τ + k·σ_n, FATEMI–SOCIE, SHEAR-PATH) run through the four M20 estimators. For PROPORTIONAL loading the spectral shear-path damage reduces EXACTLY to the M21 max-shear spectral answer (F_np=0); for 90°-out-of-phase it is (1+F_np²)^(m/2)=2^(m/2) higher than the M21 projected scalar AND agrees with the M22 time-domain path count within scatter (the two non-proportional methods converge). PORT sub-flag, library-first exactly like M16–M22; the M10 integrator, the M16–M20 paths, the M21 SPECTRAL reductions AND the M22 TIME-DOMAIN path count stay bit-identical (a NEW parallel path — both byte-identical whether or not /SPEC runs). Theory: Pitoiset & Preumont 2000; Cristofori–Susmel–Tovo 2008; Susmel & Lazzarin 2002; Bäckström & Marquis 2001; Carpinteri–Spagnoli–Vantadori 2013 |
 | — (NO frequency-domain / spectral / non-Gaussian fatigue solver of ANY kind anywhere in the open-source engine — `freimpl.F` re-read line by line for M24: no /FATIG, no non-Gaussian / kurtosis / Hermite-moment / Winterstein machinery; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/nongaussian_fatigue.py` + the `_run_nongaussian` / `_run_nongaussian_multiaxial` extensions of the `run_fatigue` / `_run_multiaxial` drivers (`_report_nongaussian` / `_report_nongaussian_multiaxial`) in `pyradioss/implicit/random_response.py` + `/IMPL/FATIG/NGAUSS` in `engine_keywords.py` | M24: NON-GAUSSIAN / KURTOSIS SPECTRAL FATIGUE — the frequency-domain damage of a stationary but NON-GAUSSIAN random-vibration response, computed by CORRECTING the M20–M23 Gaussian spectral estimators for a specified kurtosis (and skewness). WINTERSTEIN HERMITE MODEL: g(u) = κ[u + h₃(u²−1) + h₄(u³−3u)] maps a standard Gaussian u to the non-Gaussian process for a target γ₄/γ₃ (the softening fit h₄ = (√(1+1.5(γ₄−3))−1)/18; κ = 1/√(1+2h₃²+6h₄²) preserves the mean/variance EXACTLY). CORRECTION FACTOR: λ_ng = E[g(V)ᵐ]/E[Vᵐ] over the Rayleigh amplitude V (Benasciutti–Braccesi / Rizzi–Kihm), scaling the Gaussian narrow-band / Dirlik / Wirsching-Light / Tovo-Benasciutti damage, with an optional Benasciutti–Tovo bandwidth attenuation γ₄,eff = 3 + (γ₄−3)α₂. NON-GAUSSIAN MONTE-CARLO: the M20 Gaussian history pushed through the memoryless Hermite transform to (γ₃, γ₄), ASTM E1049 rainflow + Miner (`synthesize_nongaussian_history` / `nongaussian_monte_carlo_damage` / `_projected`). λ_ng = 1 for Gaussian (M20 recovered EXACTLY), > 1 leptokurtic, < 1 platykurtic; composes with /MULT, /NPROP, /SPEC (a scalar correction on the equivalent-stress PSD the M21/M23 reductions produce). PORT sub-flag, library-first exactly like M16–M23; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions stay bit-identical (a NEW parallel path — byte-identical whether or not /NGAUSS runs). Theory: Winterstein 1988; Winterstein & MacKenzie 1997; Benasciutti & Tovo 2005/2006; Braccesi–Cianetti–Lori–Pioli 2009; Rizzi–Kihm–Ferguson; Kihm & Rizzi 2013 |
 | — (NO frequency-domain / spectral / non-stationary fatigue solver of ANY kind anywhere in the open-source engine — `freimpl.F` re-read line by line for M25: no /FATIG, no non-stationary / evolutionary / spectrogram / mission-profile machinery; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/nonstationary_fatigue.py` + the `_run_nonstationary` / `_run_nonstationary_multiaxial` extensions of the `run_fatigue` / `_run_multiaxial` drivers (`_report_nonstationary` / `_report_nonstationary_multiaxial`) in `pyradioss/implicit/random_response.py` + `/IMPL/FATIG/NSTAT` in `engine_keywords.py` | M25: NON-STATIONARY / EVOLUTIONARY-PSD SPECTRAL FATIGUE — the frequency-domain damage of a random-vibration response whose PSD / RMS VARIES WITH TIME, computed by extending the M20–M24 STATIONARY estimators to a non-stationary process. PIECEWISE-STATIONARY / BLOCK ("mission profile") MODEL: partition the load into stationary blocks (each an RMS scaling a_i of a shared PSD shape — moments scale as m_n → a_i²m_n — over a duration T_i), run the M20 estimators PER BLOCK and Palmgren–Miner SUM D = Σ (E[D]/T)_i T_i (`block_fatigue_summary`; each estimator's damage scales EXACTLY as a_i^m, the shape coefficients scale-invariant). AMPLITUDE-MODULATED / EVOLUTIONARY MODEL: Priestley's separable S(ω,t) = |A(t)|² S(ω), the stationary damage INTEGRATED over the RMS distribution p(a) — the closed-form E[a^m]-weighted damage (`amplitude_modulated_summary`; = the block Miner-sum for equal-shape blocks). M25↔M24 BRIDGE: a varying RMS makes the Gaussian carrier leptokurtic, γ₄ = 3·E[a⁴]/E[a²]² (the Wolfsteiner–Trapp / Kihm–Rizzi non-stationary→kurtosis link), so the non-stationary amplification κ_ns = E[a^m]/E[a²]^(m/2) (`nonstationary_amplification`) AGREES with the M24 λ_ng at that kurtosis (`bridge_to_nongaussian`, reusing `nongaussian_fatigue` read-only) — EXACTLY 1 in the constant-modulation limit, to leading order otherwise (differing by the documented (m−2)/(m−1) scale-mixture-vs-Hermite factor). NON-STATIONARY MONTE-CARLO: the M20 Gaussian carrier × a time-varying RMS envelope, ASTM E1049 rainflow + Miner (`synthesize_nonstationary_history` / `nonstationary_monte_carlo_damage`); the block-boundary-rainflow caveat documented; the constant-modulation limit reduces to the M20 Gaussian MC bit-identically. Composes with /MULT, /NPROP, /SPEC, /NGAUSS (a scaling on the equivalent-stress PSD the M21/M23 reductions produce). PORT sub-flag, library-first exactly like M16–M24; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions AND the M24 NON-GAUSSIAN correction stay bit-identical (a NEW parallel path — byte-identical whether or not /NSTAT runs). Theory: Priestley 1965; Bendat & Piersol; Wolfsteiner & Breuer / Wolfsteiner & Trapp; Braccesi–Cianetti–Lori–Pioli; Kihm–Ferguson–Antoni; Rychlik (switching process); Palmgren–Miner |
+| — (NO frequency-domain / spectral / non-stationary / evolutionary fatigue solver of ANY kind anywhere in the open-source engine — `freimpl.F` re-read line by line for M26: no /FATIG, no non-stationary / evolutionary / spectrogram / time-frequency machinery; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag at line 269) | `pyradioss/implicit/evolutionary_fatigue.py` + the `_run_evolutionary` / `_run_evolutionary_multiaxial` extensions of the `run_fatigue` / `_run_multiaxial` drivers (`_report_evolutionary` / `_report_evolutionary_multiaxial`) in `pyradioss/implicit/random_response.py` + `/IMPL/FATIG/EVOL` in `engine_keywords.py` | M26: FULLY EVOLUTIONARY / NON-SEPARABLE-PSD SPECTRAL FATIGUE — the frequency-domain damage of a random-vibration response whose spectral SHAPE (not merely its RMS level) VARIES WITH TIME, computed by extending the M25 piecewise-stationary / amplitude-modulated estimators to a genuinely NON-SEPARABLE evolutionary spectrum S(ω,t) / spectrogram. SPECTROGRAM / PER-WINDOW-FULL-PSD MODEL: partition into time-windows each with its OWN complete stress PSD (hence its own full moments m₀..m₄ — different bandwidth / rates / centre frequency per window, NOT a shared shape), run the M20 estimators PER WINDOW and Palmgren–Miner SUM the window damages duration-weighted (`evolutionary_fatigue_summary`, driven read-only through the M25 `block_fatigue_summary` which already accepts per-window distinct moments). TIME-FREQUENCY / DRIFTING-SHAPE MODEL: an evolutionary spectrum from a smoothly time-varying parameter — a swept centre frequency f_c(t) (a chirp) and/or a broadening bandwidth b(t) — sampled into windows whose full moments are recomputed FROM the drifting shape (`drifting_shape_spectrogram` applies a swept/broadening Gaussian window W_i(f) to the recovered stress PSD, commuting with |H|²; `gaussian_evolutionary_spectrogram` builds one analytically). NON-SEPARABLE MONTE-CARLO with a TIME-VARYING FILTER: per-window spectral-representation blocks concatenated (`synthesize_evolutionary_history` / `evolutionary_monte_carlo_damage`), whose short-time spectrogram (per-window RMS + ν₀) tracks S(ω,t); the constant-shape limit DELEGATES to the M25 `synthesize_nonstationary_history` bit-identically (the built-in M26↔M25 reduction). Validated: a single window = M20 EXACTLY; a constant-shape spectrogram = M25 amplitude-modulated EXACTLY; the window Miner-sum = the duration-weighted per-window damages; a two-window narrow→wide shape-swap differing from any single-shape M25 scaling; the swept f_c drifting ν₀, the broadening b drifting α₂; the non-separable MC matching the window estimate within scatter and reducing to the M25 / M20 MC bit-identically in the constant-shape / single-window limit. Composes with /MULT, /NPROP, /SPEC, /NGAUSS, /NSTAT (a drifting window on the equivalent-stress PSD the M21/M23 reductions produce). PORT sub-flag, library-first exactly like M16–M25; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions, the M24 NON-GAUSSIAN correction AND the M25 NON-STATIONARY correction stay bit-identical (a NEW parallel path — byte-identical whether or not /EVOL runs). Theory: Priestley 1965/1967 (evolutionary / non-separable spectra); Mark 1970 / Hammond (non-stationary spectral analysis); Newland (the spectrogram / short-time method); Bendat & Piersol; the Wigner–Ville time-frequency view; Palmgren–Miner |
 
 ## 3. Conventions used in this port
 
@@ -286,7 +287,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | **SPECTRAL NON-PROPORTIONAL MULTIAXIAL FATIGUE (M23)**: the FREQUENCY-DOMAIN non-proportionality factor and critical-plane damage estimated DIRECTLY from the stress-tensor cross-PSD spectral-MOMENT matrices, with NO synthesised history (`implicit/spectral_nonproportional_fatigue.py`, the `_run_spectral_nonproportional` extension of `_run_multiaxial` in `implicit/random_response.py`, `/IMPL/FATIG/MULT/NPROP/SPEC`) — the spectral estimator the M22 time-domain path count deferred, the SPECTRAL sibling of M22, both built on the M21 moment-matrix / candidate-plane machinery (read-only). SPECTRAL SHEAR-PATH COVARIANCE + F_np — the 2×2 in-plane shear block Σ_τ of M₀ = E[σσᵀ] (`inplane_shear_covariance`, from `pₐᵀM₀pₐ`, `pₐᵀM₀p_b`, `p_bᵀM₀p_b`), and F_np = √(λ₂/λ₁) of its eigenvalues (`spectral_nonproportionality_factor`) — EQUALS the M22 TIME-DOMAIN F_np (the identity M₀ = E[σσᵀ] = the covariance the synthesiser reproduces), computed with no synthesis. SPECTRAL CRITICAL-PLANE DAMAGE — the dominant-shear PSD moments mₙ^τ = p_domᵀMₙp_dom and resolved-normal moments p_nᵀMₙp_n (from p^T Mₙ p, no history), the closed-form non-proportional amplitude correction g² = 1 + F_np² = trace(Σ_τ)/λ₁ (the exact MRH/MCC ratio of an elliptical path), the Susmel–Tovo modified-Wöhler stress ratio ρ = σ_a/τ_a, the Findley (spectral-invariant linear combination g·τ + k·σ_n) / Fatemi–Socie / shear-path models, searched by the amplitude-only criterion parameter and run through the four M20 estimators on the corrected moments. Validated: the 2×2 shear block = the M22 time-domain shear-path covariance; spectral F_np = M22 time-domain F_np; F_np = 0 for a proportional (rank-1) state, → 1 for the 90°-out-of-phase circle (closed forms); the resolved amplitudes matching the M22 synthesised RMS; proportional → the M21 max-shear spectral answer EXACTLY (no correction); 90°-out-of-phase → g^m = 2^(m/2) higher than the M21 projected scalar AND agreeing with the M22 time-domain path count within scatter; a two-channel-cross-PSD hand check of F_np / ρ / g. PORT sub-flag, library-first like M16–M22; the M10 integrator, the M16–M20 paths, the M21 SPECTRAL reductions AND the M22 TIME-DOMAIN path count stay BIT-IDENTICAL (a NEW parallel path — both byte-identical whether or not /SPEC runs — asserted). Theory: Pitoiset & Preumont 2000; Cristofori–Susmel–Tovo 2008; Susmel & Lazzarin (modified Wöhler curve) 2002; Bäckström & Marquis 2001; Carpinteri–Spagnoli–Vantadori 2013 | ✅ |
 | **NON-GAUSSIAN / KURTOSIS SPECTRAL FATIGUE (M24)**: the frequency-domain damage of a stationary but NON-GAUSSIAN random-vibration response, computed by CORRECTING the M20–M23 Gaussian spectral estimators for a specified kurtosis / skewness (`implicit/nongaussian_fatigue.py`, the `_run_nongaussian` / `_run_nongaussian_multiaxial` extensions of the M20/M21 drivers in `implicit/random_response.py`, `/IMPL/FATIG/NGAUSS`) — the FIRST fatigue item deferred out of M20–M23 that BUILDS on the spectral-fatigue machinery (every prior estimator assumed a stationary GAUSSIAN response; M24 lifts exactly that). WINTERSTEIN HERMITE-MOMENT MODEL — g(u) = κ[u + h₃(u²−1) + h₄(u³−3u)] (`hermite_coefficients` / `hermite_transform`) maps a standard Gaussian u to the non-Gaussian process for a target γ₄/γ₃; Gaussian-orthogonality gives EXACTLY zero mean and (κ = 1/√(1+2h₃²+6h₄²)) unit variance, the softening fit h₄ = (√(1+1.5(γ₄−3))−1)/18, h₃ = γ₃/(6(1+6h₄)). CORRECTION FACTOR — λ_ng = E[g(V)ᵐ]/E[Vᵐ] over the Rayleigh(1) amplitude V (`nongaussian_correction_factor`, Benasciutti–Braccesi / Rizzi–Kihm), scaling the Gaussian narrow-band / Dirlik / Wirsching-Light / Tovo-Benasciutti damage (`nongaussian_summary`), with an optional Benasciutti–Tovo bandwidth attenuation γ₄,eff = 3 + (γ₄−3)α₂. NON-GAUSSIAN MONTE-CARLO — the M20 Gaussian history pushed through the memoryless Hermite transform to (γ₃, γ₄) (`synthesize_nongaussian_history`), ASTM E1049 rainflow + Miner (`nongaussian_monte_carlo_damage`; `_projected` for the multiaxial critical-plane scalar). Validated: λ_ng = 1 for a Gaussian process (γ₄ = 3, γ₃ = 0) — the M20 answer recovered EXACTLY; λ_ng > 1 leptokurtic (γ₄ > 3), < 1 platykurtic (γ₄ < 3), monotone in γ₄ and m; the Hermite transform preserving the mean/variance EXACTLY and hitting the target kurtosis (exact-moment + large-sample hand checks); the non-Gaussian Monte-Carlo damage matching the λ_ng-corrected spectral estimate within the seeded scatter on a narrow band, and reducing EXACTLY to the M20 Gaussian Monte-Carlo in the Gaussian limit; composes with /MULT, /NPROP, /SPEC (a scalar correction on the equivalent-stress PSD the M21/M23 reductions produce). PORT sub-flag, library-first like M16–M23; the M10 integrator, the M16–M20 paths AND the M21–M23 MULTIAXIAL reductions stay BIT-IDENTICAL (a NEW parallel path — the M20–M23 answers byte-identical whether or not /NGAUSS runs — asserted). Theory: Winterstein 1988; Winterstein & MacKenzie 1997; Benasciutti & Tovo 2005/2006; Braccesi–Cianetti–Lori–Pioli 2009; Rizzi–Kihm–Ferguson; Kihm & Rizzi 2013 | ✅ |
 | **NON-STATIONARY / EVOLUTIONARY-PSD SPECTRAL FATIGUE (M25)**: the frequency-domain damage of a random-vibration response whose PSD / RMS VARIES WITH TIME, computed by extending the M20–M24 STATIONARY estimators to a non-stationary process (`implicit/nonstationary_fatigue.py`, the `_run_nonstationary` / `_run_nonstationary_multiaxial` extensions of the M20/M21 drivers in `implicit/random_response.py`, `/IMPL/FATIG/NSTAT`) — the FIRST fatigue item deferred out of M20–M24 that BUILDS on the spectral machinery (every prior estimator, Gaussian OR non-Gaussian, assumed a single time-invariant PSD; M25 lifts exactly that stationarity, the M24 sibling). PIECEWISE-STATIONARY / BLOCK ("mission profile") MODEL — partition into stationary blocks (RMS scaling a_i of a shared shape, moments m_n → a_i²m_n, duration T_i), run the M20 estimators per block and Palmgren–Miner SUM D = Σ (E[D]/T)_i T_i (`block_fatigue_summary`; every estimator's damage scales EXACTLY as a_i^m). AMPLITUDE-MODULATED / EVOLUTIONARY MODEL — Priestley's separable S(ω,t) = |A(t)|² S(ω), the stationary damage integrated over the RMS distribution, the closed-form E[a^m]-weighted damage (`amplitude_modulated_summary`). M25↔M24 BRIDGE — γ₄ = 3·E[a⁴]/E[a²]² (Wolfsteiner–Trapp / Kihm–Rizzi), κ_ns = E[a^m]/E[a²]^(m/2) (`nonstationary_amplification`) agreeing with the M24 λ_ng at that kurtosis (`bridge_to_nongaussian`, `nongaussian_fatigue` read-only). NON-STATIONARY MONTE-CARLO — the Gaussian carrier × a time-varying RMS envelope, ASTM E1049 rainflow + Miner (`synthesize_nonstationary_history` / `nonstationary_monte_carlo_damage`). Validated: the constant-modulation limit recovering the M20 answer EXACTLY (E[a^m] = 1, κ_ns = 1, MC bit-identical); the block Miner-sum = the duration-weighted per-block damages (hand check) and = the amplitude-modulated E[a^m] damage for a shared shape; κ_ns agreeing with λ_ng at the induced kurtosis (both directions, the constant limit exact); the non-stationary MC hitting the induced sample kurtosis / schedule RMS and matching the block estimate within scatter; composes with /MULT, /NPROP, /SPEC, /NGAUSS. PORT sub-flag, library-first like M16–M24; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions AND the M24 NON-GAUSSIAN correction stay BIT-IDENTICAL (a NEW parallel path — the M20–M24 answers byte-identical whether or not /NSTAT runs — asserted). Theory: Priestley 1965; Bendat & Piersol; Wolfsteiner & Breuer / Wolfsteiner & Trapp; Braccesi–Cianetti–Lori–Pioli; Kihm–Ferguson–Antoni; Rychlik; Palmgren–Miner | ✅ |
-| Lanczos/subspace for large models; AMLS / substructuring; a FULLY evolutionary NON-SEPARABLE S(ω,t) with a time-varying spectral SHAPE (beyond the M25 separable |A(t)|²S(ω) / piecewise-stationary model); multi-input cross-PSD with coherence; non-proportional HARDENING as a material model; mean-stress beyond the per-plane normal / basic Goodman option; crack-growth / fracture-mechanics fatigue; a full non-Gaussian MULTIAXIAL joint distribution (beyond the M24 equivalent-scalar kurtosis correction) and a full non-stationary MULTIAXIAL joint treatment (beyond the M25 equivalent-scalar block/modulation); the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21/M22/M23/M24/M25 roadmap notes) |
+| **FULLY EVOLUTIONARY / NON-SEPARABLE-PSD SPECTRAL FATIGUE (M26)**: the frequency-domain damage of a random-vibration response whose spectral SHAPE (not merely its RMS level) VARIES WITH TIME, computed by extending the M25 piecewise-stationary / amplitude-modulated estimators to a genuinely NON-SEPARABLE evolutionary spectrum `S(ω,t)` / spectrogram (`implicit/evolutionary_fatigue.py`, the `_run_evolutionary` / `_run_evolutionary_multiaxial` extensions of the M20/M21 drivers in `implicit/random_response.py`, `/IMPL/FATIG/EVOL`) — the FIRST fatigue item deferred out of M25 that BUILDS on the non-stationary spectral machinery (M25 lifted stationarity only in the RMS ENVELOPE, the separable `|A(t)|²S(ω)` case with a FIXED shape; M26 lifts SEPARABILITY itself, so each time-window carries its OWN full moment set m₀..m₄, not a scaling of a shared shape). SPECTROGRAM / PER-WINDOW-FULL-PSD MODEL — partition into time-windows each with its OWN complete stress PSD (different bandwidth / rates / centre frequency per window), run the M20 estimators PER WINDOW and Palmgren–Miner SUM the window damages duration-weighted (`evolutionary_fatigue_summary`, driven read-only through the M25 `block_fatigue_summary` which already accepts per-window distinct moments — M26 supplies the real per-window PSDs of a drifting shape, of which M25's shared-shape scaling is the constant-shape reduction). TIME-FREQUENCY / DRIFTING-SHAPE MODEL — an evolutionary spectrum built from a smoothly time-varying parameter (a swept centre frequency `f_c(t)` — a "chirp" — and/or a broadening bandwidth `b(t)`), sampled into windows whose full moments are recomputed FROM the drifting shape (`drifting_shape_spectrogram` applies a swept/broadening Gaussian window `W_i(f)` to the recovered stress PSD — commutes with `\|H\|²`; `gaussian_evolutionary_spectrogram` builds one analytically). NON-SEPARABLE MONTE-CARLO with a TIME-VARYING FILTER — per-window spectral-representation blocks concatenated (`synthesize_evolutionary_history` / `evolutionary_monte_carlo_damage`), whose short-time spectrogram tracks `S(ω,t)`; in the constant-shape limit it DELEGATES to the M25 `synthesize_nonstationary_history` (bit-identical). Validated: a single window recovering the M20 stationary answer EXACTLY; a constant-shape spectrogram recovering the M25 amplitude-modulated answer EXACTLY (the built-in M26↔M25 reduction); the window Miner-sum = the duration-weighted per-window damages (hand check); a two-window shape-swap (narrow→wide) differing from any single-shape M25 scaling (the non-separable point); the swept `f_c` drifting the per-window ν₀, the broadening `b` drifting the per-window α₂; the non-separable MC tracking the spectrogram and matching the window estimate within scatter, and reducing to the M25 (hence M20) MC bit-identically in the constant-shape (single-window) limit; composes with /MULT, /NPROP, /SPEC, /NGAUSS, /NSTAT. PORT sub-flag, library-first like M16–M25; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions, the M24 NON-GAUSSIAN correction AND the M25 NON-STATIONARY correction stay BIT-IDENTICAL (a NEW parallel path — the M20–M25 answers byte-identical whether or not /EVOL runs — asserted). Theory: Priestley 1965/1967 (evolutionary / non-separable spectra); Mark 1970 / Hammond (non-stationary spectral analysis); Newland (the spectrogram / short-time method); Bendat & Piersol; Wigner–Ville time-frequency view; Palmgren–Miner window sum | ✅ |
+| Lanczos/subspace for large models; AMLS / substructuring; a continuous Wigner–Ville / Loève INSTANTANEOUS-spectrum formulation (beyond the M26 windowed spectrogram); a full non-stationary MULTIAXIAL JOINT treatment of the evolutionary stress TENSOR (beyond the M26 equivalent-scalar per-window spectrogram); multi-input cross-PSD with coherence; non-proportional HARDENING as a material model; mean-stress beyond the per-plane normal / basic Goodman option; crack-growth / fracture-mechanics fatigue; a full non-Gaussian MULTIAXIAL joint distribution (beyond the M24 equivalent-scalar kurtosis correction) and a full non-stationary MULTIAXIAL joint treatment (beyond the M25/M26 equivalent-scalar block/spectrogram); the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21/M22/M23/M24/M25/M26 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -2710,6 +2712,172 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       implicit, the UL hourglass memory, the NLGEOM hourglass-operator geometry
       variation, the BT4 thin-plate shear-lock / drilling floor.
 
+25. **M26 — FULLY EVOLUTIONARY / NON-SEPARABLE-PSD SPECTRAL FATIGUE** ✅ (done):
+    the FIRST item deferred out of M25 that BUILDS on the non-stationary spectral
+    machinery — the frequency-domain damage of a random-vibration response whose
+    spectral SHAPE (not merely its RMS level) VARIES WITH TIME, computed by
+    extending the M25 piecewise-stationary / amplitude-modulated estimators to a
+    genuinely NON-SEPARABLE evolutionary spectrum S(ω,t) (a time-frequency
+    "spectrogram" whose bandwidth / rates / centre frequency DRIFT with time), and
+    cross-validated against a non-stationary time-domain Monte-Carlo with a
+    time-varying filter. M25 lifted stationarity only in the RMS ENVELOPE
+    (Priestley's SEPARABLE S(ω,t) = |A(t)|²S(ω) — a FIXED spectral shape whose
+    amplitude is modulated, so the rates ν₀/ν_p and width factors α₁/α₂ stay
+    fixed); M26 lifts exactly that SEPARABILITY assumption — the shape itself
+    evolves, so each time-window carries its OWN complete moment set m₀..m₄, not
+    just its own scaling of a shared shape. M26's non-separable spectrogram is the
+    GENERAL per-window-full-PSD block, of which M25's RMS-scaled block is the
+    shared-shape SPECIAL CASE (the built-in M26↔M25 reduction: a non-separable
+    spectrogram whose per-window shape is CONSTANT recovers the M25
+    amplitude-modulated answer EXACTLY; a single window / a time-invariant shape
+    recovers the M20 stationary answer EXACTLY). A NEW, parallel path
+    (`implicit/evolutionary_fatigue.py` + the `_run_evolutionary` /
+    `_run_evolutionary_multiaxial` extensions of the M20/M21 drivers in
+    `implicit/random_response.py`) that never touches the M10 integrator, the M16
+    eigensolver, the M17/M18 superposition, the M19 PSD path, the M20 SCALAR
+    fatigue, the M21 MULTIAXIAL SPECTRAL path, the M22 NON-PROPORTIONAL TIME-DOMAIN
+    path, the M23 SPECTRAL NON-PROPORTIONAL path, the M24 NON-GAUSSIAN correction
+    OR the M25 NON-STATIONARY correction (all stay bit-identical — the M20–M25
+    answers are byte-identical whether or not /EVOL runs, asserted). Theory:
+    Priestley, "Evolutionary spectra and non-stationary processes" (J. Roy.
+    Statist. Soc. B 27, 1965) AND "Power spectral analysis of non-stationary random
+    processes" (J. Sound Vib. 6, 1967 — the GENERAL non-separable oscillatory
+    amplitude A(ω,t), of which M25 used the separable A(t)A(ω) subcase); Mark 1970
+    / Hammond (non-stationary spectral analysis, the instantaneous spectrum);
+    Newland (the short-time / windowed spectral method — the spectrogram — and the
+    time-frequency view); Bendat & Piersol ch. 12; the Wigner–Ville / Loève
+    time-frequency distribution as the continuous instantaneous-spectrum limit;
+    Palmgren–Miner (the window sum); the M25 piecewise-stationary basis.
+
+    Fortran origin: there is NONE — `engine/source/input/freimpl.F` (re-read line
+    by line for M26, fetched from raw.githubusercontent.com) has no /FATIG, no
+    S-N / Miner branch, and NO non-stationary / evolutionary / spectrogram /
+    time-frequency machinery of any kind (the sole `PSD` token is still `IMUMPSD`,
+    a MUMPS-solver flag at line 269). OpenRadioss is a time-domain crash/impact
+    code — the random-vibration fatigue analysis, stationary Gaussian (M20–M23),
+    stationary non-Gaussian (M24), separable non-stationary (M25) OR fully
+    evolutionary / non-separable (M26), simply is not part of the open-source
+    solver (the same finding M16–M25 made). So M26 ports evolutionary /
+    non-separable-PSD fatigue as a clean LIBRARY capability behind a minimal PORT
+    sub-flag (/IMPL/FATIG/EVOL — the evolutionary analogue of the M20 /IMPL/FATIG,
+    M24 /IMPL/FATIG/NGAUSS and M25 /IMPL/FATIG/NSTAT cards), exactly as M16–M25 did.
+
+    * **EVOLUTIONARY / NON-SEPARABLE DAMAGE MODEL** (`evolutionary_fatigue.py`):
+      (a) the SPECTROGRAM / per-window-full-PSD model — partition the loading into
+      time-windows, each with its OWN complete stress PSD (hence its own full
+      moment set m₀..m₄ — a genuinely different bandwidth / rates / shape per
+      window), run the M20 estimators PER WINDOW and Palmgren–Miner SUM the window
+      damages duration-weighted (`evolutionary_fatigue_summary`, the general
+      non-separable extension of the M25 block model — driven read-only through the
+      M25 `block_fatigue_summary`, which already accepts per-block distinct
+      moments, with the real per-window PSDs of a drifting shape). (b) the
+      TIME-FREQUENCY / drifting-shape model — an evolutionary spectrum built from a
+      smoothly time-varying spectral parameter (a swept centre frequency f_c(t) — a
+      "chirp-like" random process — and/or a broadening bandwidth b(t)), sampled
+      into windows whose full moments are recomputed FROM the drifting shape
+      (`drifting_shape_spectrogram` applies a swept/broadening Gaussian window
+      W_i(f) = exp(−(f−f_c,i)²/(2b_i²)) to the recovered stress PSD — the window
+      commutes with the linear |H_σ|² map, so windowing the stress PSD = windowing
+      the input; `gaussian_evolutionary_spectrogram` builds a self-contained
+      analytic spectrogram). Validated: the evolutionary damage REDUCING to the M25
+      amplitude-modulated answer for a CONSTANT-SHAPE spectrogram (only the RMS
+      drifts — recovered EXACTLY, the window Miner-sum over shared-shape windows IS
+      the M25 block Miner-sum); REDUCING to the M20 stationary answer for a single
+      window / a time-invariant shape (EXACTLY); the window Miner-sum equalling the
+      duration-weighted per-window damages (hand check); a two-window "shape-swap"
+      (narrow-band → wide-band) whose Miner-sum DIFFERS from any single-shape M25
+      scaling (the point of a NON-separable spectrum — the M26↔M25 boundary made
+      explicit); the swept f_c drifting the per-window ν₀, the broadening b drifting
+      the per-window α₂.
+    * **NON-SEPARABLE MONTE-CARLO CROSS-CHECK** (time-varying filter,
+      `evolutionary_fatigue.py`): a non-separable synthesiser — per-window
+      spectral-representation blocks (the M20 spectral-representation history of
+      each window's OWN PSD, seeded deterministically) CONCATENATED in time so the
+      instantaneous spectrum tracks S(ω,t) window by window (the
+      short-time-stationary approximation — a slowly time-varying filter on the
+      carrier) — (`synthesize_evolutionary_history`), rainflow-counted (the M20
+      ASTM E1049 counter) and Miner-summed (`evolutionary_monte_carlo_damage`). The
+      window-boundary rainflow caveat (carried from M25) and the
+      instantaneous-vs-windowed-spectrum distinction are documented. Validated: the
+      synthesised history's short-time spectrogram (per-window RMS + zero-crossing
+      rate) matching the target evolutionary spectrum (the centre-frequency drift);
+      the non-separable Monte-Carlo damage matching the window spectral estimate
+      within the seeded scatter; the constant-shape limit DELEGATING to the M25
+      `synthesize_nonstationary_history` and reducing to the M25 non-stationary
+      Monte-Carlo BIT-IDENTICALLY (and a single unit window to the M20 Gaussian
+      Monte-Carlo bit-identically).
+    * **Engine sub-flag + reporting** (`random_response._run_evolutionary` /
+      `_run_evolutionary_multiaxial`): /IMPL/FATIG/EVOL (composing with /MULT,
+      /NPROP, /SPEC, /NGAUSS, /NSTAT — a drifting-shape window on whatever
+      equivalent-stress PSD the M20–M25 path produces) recovers the (scalar OR
+      multiaxial von-Mises / critical-plane) stress PSD as M20–M25 do, reads a
+      drifting-shape schedule (a swept centre frequency f_c0→f_c1 and broadening
+      bandwidth b_0→b_1 over nwin windows) plus the RMS level schedule from the
+      shared modulation /FUNCT (so /EVOL composes with /NSTAT), evaluates the
+      window Miner-sum damage / equivalent stress / life PER estimator, runs the
+      non-separable Monte-Carlo cross-check, and reports the evolutionary damage /
+      per-window shape breakdown (α₂ / ν₀ / RMS drift) ALONGSIDE the M20 stationary
+      and M25 non-stationary numbers on
+      `model.implicit_result.fatigue['evolutionary']` and in the listing (a new
+      FULLY EVOLUTIONARY / NON-SEPARABLE-PSD block showing the stationary,
+      RMS-non-stationary and shape-evolutionary answers side by side). The
+      drifting-shape line (fc0 fc1 bw0 bw1 nwin) goes on a card line AFTER the
+      sweep / S-N (and the M24 kurtosis / M25 modulation, if /NGAUSS / /NSTAT)
+      lines. A PORT sub-flag, minimal like /IMPL/FATIG.
+    * **Example**: `examples/evolutionary_fatigue` — the M20 `spectral_fatigue`
+      base-excited instrument stack re-run under /IMPL/FATIG/EVOL/NSTAT/BASE with a
+      RESONANCE SWEEP (the excitation centre frequency sweeps f_c 31 → 200 Hz
+      through the five modes near 31/91/142/179/199 Hz, broadening b 12 → 30,
+      12 windows) on top of the M25 RMS mission profile: the M20 stationary block
+      UNCHANGED (Dirlik life ~7.4×10⁵ ms), the M25 non-stationary block UNCHANGED
+      (mission life ~1.8×10⁵ ms), then the M26 FULLY EVOLUTIONARY block with the
+      per-window shape drift (α₂ 0.65…0.98, ν₀ 31.5…169.7 Hz — the sweep made
+      explicit), the induced γ₄ ≈ 3.86 and the much LONGER shape-evolutionary life
+      (Dirlik ~1.2×10⁸ ms — the sweep dwells only transiently on each mode, doing
+      far less damage than the fixed excitation sitting on the worst mode forever),
+      plus the non-separable Monte-Carlo cross-check (~8.0×10⁻⁹ vs the ~8.6×10⁻⁹
+      window estimate).
+    * **Validated** (`tests/test_m26_evolfatig.py`): all of the above plus the
+      /IMPL/FATIG/EVOL (composing with /MULT, /NPROP, /SPEC, /NGAUSS, /NSTAT) card
+      mirror and the parity contract (the evolutionary path never mutating the M16
+      eigensolver / M17–M19 transfer functions / the M20 SCALAR fatigue / the
+      M21–M23 MULTIAXIAL reductions / the M24 NON-GAUSSIAN correction / the M25
+      NON-STATIONARY correction / the element state; the M20 SCALAR AND the
+      M21/M24/M25 MULTIAXIAL / non-Gaussian / non-stationary damage rates
+      byte-identical whether or not /EVOL runs; the direct /IMPL/DYNA answer
+      byte-identical).
+
+    Deferred out of M26, explicitly (not half-implemented):
+    * a continuous WIGNER–VILLE / Loève INSTANTANEOUS-spectrum (Priestley's
+      oscillatory A(ω,t)) formulation — the M26 windowed SPECTROGRAM is the
+      engineering standard and the fine-window limit of the continuous
+      distribution; the cross-term-laden continuous time-frequency distribution is
+      DEFERRED (a different analysis);
+    * the SHORT-TIME-STATIONARY approximation is used within each window (the M20
+      estimators assume local stationarity): the window must be long relative to
+      the carrier period and short relative to the shape drift — the standard
+      spectrogram trade-off, DOCUMENTED not hidden; the window-boundary rainflow
+      caveat (cycles straddling a window boundary, which the concatenated MC counts
+      but the window Miner-sum does not) is DOCUMENTED (carried from M25);
+    * a full non-stationary MULTIAXIAL JOINT treatment of the evolutionary stress
+      TENSOR (a jointly time-varying tensor cross-PSD): M26 applies the
+      drifting-shape window to the (von Mises / critical-plane) equivalent scalar
+      the M21/M23 reductions already produce, so it COMPOSES with the multiaxial /
+      non-proportional paths but does not model a jointly evolutionary tensor —
+      DEFERRED;
+    * MEAN-STRESS beyond the basic M20/M21 Goodman intercept, CRACK-GROWTH /
+      fracture-mechanics fatigue, the COMPLEX-FRF stress recovery, a MULTI-INPUT
+      cross-PSD with coherence and the full non-Gaussian MULTIAXIAL joint
+      distribution — the unchanged M20–M25 tail;
+    * the unchanged M10–M25 deferral tail: multi-input cross-PSD with coherence,
+      multi-directional 100-30-30 response spectra, the complex-FRF base-excitation
+      feed, gyroscopic / circulatory systems, Lanczos / subspace + AMLS, IFQ ≥ 10
+      / MODFR 2, /FRICTION per-part-pair sets, orthotropic / thermal friction, the
+      fiber TYPE18 beam, the LAW27 plastic block / solids, thermal contact,
+      TYPE19/24/25, Inacti, Igap 2/3, LAW42 shells/Prony, IDTC 2/3, /RWALL under
+      implicit, the UL hourglass memory, the NLGEOM hourglass-operator geometry
+      variation, the BT4 thin-plate shear-lock / drilling floor.
+
 ## 6. Validation strategy
 
 `tests/` contains two layers:
@@ -2863,6 +3031,34 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
   the M24 NON-GAUSSIAN correction / element state — the M20-M24 damage rates
   byte-identical whether or not /NSTAT runs; the direct /IMPL/DYNA answer
   byte-identical).
+* **Fully evolutionary / non-separable-PSD spectral fatigue validations (M26)** —
+  a SINGLE window / a time-invariant shape recovering the M20 stationary answer
+  EXACTLY (the window Miner-sum of one block) and a CONSTANT-SHAPE spectrogram
+  (a flat window, only the RMS level drifting) recovering the M25
+  amplitude-modulated answer EXACTLY (the window Miner-sum over shared-shape
+  windows IS the M25 block Miner-sum — the built-in M26↔M25 reduction); the window
+  Miner-sum EQUALLING the duration-weighted per-window damages with genuinely
+  DIFFERENT per-window shapes (a hand check); a two-window narrow→wide SHAPE-SWAP
+  whose Miner-sum DIFFERS from any single-shape M25 scaling and lies BETWEEN the
+  two single-shape rates (the non-separable point — the per-window α₂ genuinely
+  differing, ~1 narrow, <0.9 wide); a swept centre frequency drifting the
+  per-window ν₀ UP (a chirp) and a broadening bandwidth drifting the per-window α₂
+  toward 0 (narrow→wide); the non-separable Monte-Carlo (per-window
+  spectral-representation blocks concatenated — a time-varying filter → ASTM E1049
+  rainflow → Miner) whose short-time spectrogram (per-window RMS + zero-crossing
+  rate) tracks the swept centre frequency (ν₀ rising through the record), matching
+  the window spectral estimate within the seeded scatter (the window-boundary
+  rainflow caveat documented), reducing EXACTLY (bit-identical) to the M25
+  non-stationary Monte-Carlo in the constant-shape limit (the synthesiser
+  delegating to the M25 single-carrier-times-envelope path) and to the M20
+  Gaussian Monte-Carlo for a single unit window; the /IMPL/FATIG/EVOL card mirror
+  (a PORT sub-flag with the drifting-shape schedule fc0 fc1 bw0 bw1 nwin on the
+  card line after the sweep / S-N / kurtosis / modulation lines, composing with
+  /MULT, /NPROP, /SPEC, /NGAUSS, /NSTAT) and the parity contract (no mutation of
+  the M16-M19 solvers / the M20 SCALAR fatigue / the M21-M23 MULTIAXIAL reductions
+  / the M24 NON-GAUSSIAN correction / the M25 NON-STATIONARY correction / element
+  state — the M20-M25 damage rates byte-identical whether or not /EVOL runs; the
+  direct /IMPL/DYNA answer byte-identical).
 * **Friction-model / material-tangent validations (M15)** — exact MFROT
   formula, branch-joint and floor checks with the FD-verified static
   µ′(p); kernel-level transmitted-force closed forms (every factor
