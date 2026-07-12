@@ -778,13 +778,25 @@ def run_fatigue(model, ip, log, result, constr=None, contacts=(), loads=None):
         ip, summary, crit_mom, sp["freqs"], sp["Ssigma"][:, jcrit],
         m_sn, C_sn, mean_stress, ultimate, mc_dur, mc_seed)
 
+    # M25: the NON-STATIONARY / EVOLUTIONARY-PSD correction runs ALONGSIDE the M20
+    # stationary summary (a NEW parallel path — the stationary ``summary`` above
+    # is fully formed and left byte-identical). It evaluates the M20 estimators
+    # per stationary block of the RMS mission profile and Miner-sums them (+ the
+    # amplitude-modulated E[a^m] closed form + the M25<->M24 kurtosis bridge), and
+    # if a Monte-Carlo duration is given runs a non-stationary time-domain
+    # cross-check (the Gaussian carrier times a time-varying RMS envelope). See
+    # implicit/nonstationary_fatigue.py.
+    nonstationary = _run_nonstationary(
+        ip, summary, crit_mom, sp["freqs"], sp["Ssigma"][:, jcrit],
+        m_sn, C_sn, mean_stress, ultimate, mc_dur, mc_seed, model)
+
     result.fatigue = {
         "channels": channels, "critical_channel": jcrit,
         "critical_label": channels[jcrit][3], "moments": mom,
         "rms_stress": rms_stress, "dirlik_rate": dirlik_rate,
         "freqs": sp["freqs"], "omega": sp["omega"], "Ssigma": sp["Ssigma"],
         "Sff": sp["Sff"], "summary": summary, "monte_carlo": mc,
-        "nongaussian": nongaussian,
+        "nongaussian": nongaussian, "nonstationary": nonstationary,
         "sn_m": m_sn, "sn_C": C_sn, "mean_stress": mean_stress,
         "ultimate": ultimate, "base": base, "stress_modes": Sigma,
     }
@@ -861,6 +873,153 @@ def _run_nongaussian_multiaxial(ip, summ, freqs, m, C, mean_stress, ultimate,
     return out
 
 
+def _build_modulation(model, modfunct, nseg):
+    """Turn an RMS scale-vs-time modulation /FUNCT into the (scales, durations)
+    block schedule the M25 non-stationary estimators + Monte-Carlo consume.
+
+    ``modfunct`` — the /FUNCT id whose (time, scale) piecewise-linear curve gives
+    the RMS scaling a(t) (a mission profile: run-up / dwell / run-down). If
+    ``nseg`` > 0 the curve is sampled into ``nseg`` equal-duration blocks (scale =
+    the curve at each block midpoint — a smooth amplitude-modulated envelope);
+    otherwise the curve's OWN breakpoint intervals become the blocks (scale = the
+    midpoint value, duration = the interval). Returns (scales, durations, func)."""
+    from . import nonstationary_fatigue as nsf
+    if modfunct is None or int(modfunct) <= 0:
+        raise ValueError(
+            "/IMPL/FATIG/NSTAT needs an RMS scale-vs-time modulation /FUNCT id "
+            "(the mission profile) on the card line after the sweep / S-N "
+            "(and kurtosis, if NGAUSS) lines: modfunct [nseg].")
+    fid = int(modfunct)
+    if fid not in model.functions:
+        raise ValueError(
+            f"/IMPL/FATIG/NSTAT modulation /FUNCT/{fid} is not defined in the "
+            "deck.")
+    func = model.functions[fid]
+    if nseg and int(nseg) > 0:
+        scales, durations = nsf.sample_function_modulation(
+            func, int(nseg), t0=float(func.x[0]), t1=float(func.x[-1]))
+    else:
+        # the curve's own breakpoint intervals are the blocks (scale = the
+        # midpoint value, duration = the interval length)
+        x = np.asarray(func.x, dtype=float)
+        mids = 0.5 * (x[:-1] + x[1:])
+        scales = np.abs(np.atleast_1d(func.eval(mids)).astype(float))
+        durations = np.diff(x)
+    return scales, durations, func
+
+
+def _run_nonstationary(ip, stationary_summary, base_moments, freqs, psd, m, C,
+                       mean_stress, ultimate, mc_dur, mc_seed, model):
+    """M25: the NON-STATIONARY / EVOLUTIONARY-PSD correction of a stationary
+    estimator ``stationary_summary`` (the M20 ``fatigue_summary`` shape) on one
+    channel's shared-shape ``base_moments`` [m0..m4]. Returns ``None`` unless
+    /IMPL/FATIG/NSTAT is set.
+
+    Reads the RMS scale-vs-time modulation /FUNCT (``impl_fatig_modfunct``, an
+    optional block count ``impl_fatig_nstat_nseg``), builds the block schedule,
+    and:
+      * runs the M20 estimators PER BLOCK and Palmgren-Miner SUMs the block
+        damages duration-weighted (``block_fatigue_summary`` — the piecewise-
+        stationary "mission profile" model);
+      * scales every stationary estimator by E[a^m], the AMPLITUDE-MODULATED /
+        evolutionary damage (``amplitude_modulated_summary``), and reports the
+        induced kurtosis + the M25<->M24 bridge (kappa_ns vs lambda_ng);
+      * if a Monte-Carlo duration is given, runs the non-stationary time-domain
+        cross-check on the channel PSD (``freqs`` / ``psd``).
+    The result is stored ALONGSIDE the stationary numbers so the listing shows the
+    stationary and the non-stationary answers side by side. A PORT sub-flag."""
+    if not bool(getattr(ip, "impl_fatig_nstat", False)):
+        return None
+    from . import nonstationary_fatigue as nsf
+    modfunct = getattr(ip, "impl_fatig_modfunct", 0)
+    nseg = int(getattr(ip, "impl_fatig_nstat_nseg", 0))
+    scales, durations, func = _build_modulation(model, modfunct, nseg)
+    scales_w, weights = nsf.modulation_from_schedule(scales, durations)
+    # the block "mission profile" Miner sum (Dirlik — the wide-band standard) with
+    # the per-block breakdown, and the amplitude-modulated four-estimator summary
+    blocks = [{"scale": float(s), "duration": float(d)}
+              for s, d in zip(scales, durations)]
+    block_summary = nsf.block_fatigue_summary(
+        blocks, m, C, mean_stress=mean_stress, ultimate=ultimate,
+        estimator="dirlik", base_moments=base_moments)
+    am = nsf.amplitude_modulated_summary(
+        base_moments, scales_w, weights, m, C, mean_stress=mean_stress,
+        ultimate=ultimate, stationary=stationary_summary)
+    alpha2 = stationary_summary["params"]["alpha2"]
+    bridge = nsf.bridge_to_nongaussian(scales_w, weights, m, alpha2=alpha2,
+                                       bandwidth_correction=False)
+    ns_mc = None
+    if mc_dur > 0.0 and freqs is not None and psd is not None:
+        # scale the block durations so the MC record totals mc_dur (the fractions
+        # — hence E[a^m] and the induced kurtosis — are preserved)
+        tot = float(np.sum(durations))
+        mc_durs = durations * (mc_dur / tot) if tot > 0 else durations
+        ns_mc = nsf.nonstationary_monte_carlo_damage(
+            freqs, psd, m, C, scales, mc_durs, mc_seed, mean_stress=mean_stress,
+            ultimate=ultimate)
+    return {"modfunct": int(modfunct), "nseg": nseg, "nblocks": len(blocks),
+            "scales": scales, "durations": durations, "weights": weights,
+            "kurtosis": am["kurtosis"], "kappa_ns": am["kappa_ns"],
+            "e_am": am["e_am"], "rms_scale": am["rms_scale"],
+            "block": block_summary, "amplitude_modulated": am,
+            "bridge": bridge, "monte_carlo": ns_mc}
+
+
+def _run_nonstationary_multiaxial(ip, summ, freqs, m, C, mean_stress, ultimate,
+                                  mc_dur, mc_seed, model):
+    """M25 (multiaxial): the NON-STATIONARY / EVOLUTIONARY-PSD correction of the
+    M21 equivalent-stress reductions (von Mises / max-normal / max-shear critical
+    plane). Returns ``None`` unless /IMPL/FATIG/NSTAT is set.
+
+    Scales each reduction's shared-shape moment array by the SAME RMS modulation
+    (the block Miner-sum + amplitude-modulated E[a^m], per reduction), and runs a
+    non-stationary Monte-Carlo on the max-shear-plane LINEAR projection PSD.
+    Stored ALONGSIDE the Gaussian reductions. Composes with /MULT / /NPROP /
+    /SPEC / /NGAUSS — the block/modulation scaling on the equivalent scalar the
+    multiaxial reductions produce (a full evolutionary tensor is deferred)."""
+    if not bool(getattr(ip, "impl_fatig_nstat", False)):
+        return None
+    from . import nonstationary_fatigue as nsf
+    modfunct = getattr(ip, "impl_fatig_modfunct", 0)
+    nseg = int(getattr(ip, "impl_fatig_nstat_nseg", 0))
+    scales, durations, func = _build_modulation(model, modfunct, nseg)
+    scales_w, weights = nsf.modulation_from_schedule(scales, durations)
+    blocks = [{"scale": float(s), "duration": float(d)}
+              for s, d in zip(scales, durations)]
+    out = {"modfunct": int(modfunct), "nseg": nseg, "nblocks": len(blocks),
+           "scales": scales, "durations": durations, "weights": weights}
+    for key in ("von_mises", "normal_plane", "shear_plane"):
+        red = summ[key]
+        base_moments = red["moments"]
+        am = nsf.amplitude_modulated_summary(
+            base_moments, scales_w, weights, m, C, mean_stress=mean_stress,
+            ultimate=ultimate, stationary=red["summary"])
+        block_summary = nsf.block_fatigue_summary(
+            blocks, m, C, mean_stress=mean_stress, ultimate=ultimate,
+            estimator="dirlik", base_moments=base_moments)
+        out[key] = {"amplitude_modulated": am, "block": block_summary,
+                    "kurtosis": am["kurtosis"], "kappa_ns": am["kappa_ns"],
+                    "e_am": am["e_am"]}
+    alpha2 = summ["von_mises"]["summary"]["params"]["alpha2"]
+    out["kurtosis"] = out["von_mises"]["kurtosis"]
+    out["bridge"] = nsf.bridge_to_nongaussian(
+        scales_w, weights, m, alpha2=alpha2, bandwidth_correction=False)
+    # a non-stationary Monte-Carlo on the equivalent-von-Mises scalar PSD (the
+    # natural scalar analogue the M21 reduction stores as ``psd`` on the sweep
+    # grid) — the non-stationary time-domain answer the block/modulated von-Mises
+    # spectral estimate approximates
+    ns_mc = None
+    vm = summ["von_mises"]
+    if mc_dur > 0.0 and freqs is not None and vm.get("psd") is not None:
+        tot = float(np.sum(durations))
+        mc_durs = durations * (mc_dur / tot) if tot > 0 else durations
+        ns_mc = nsf.nonstationary_monte_carlo_damage(
+            freqs, vm["psd"], m, C, scales, mc_durs, mc_seed,
+            mean_stress=mean_stress, ultimate=ultimate)
+    out["monte_carlo"] = ns_mc
+    return out
+
+
 def _lookup_psd_fatig(model, funct_id):
     """Resolve the input-PSD /FUNCT table by user id (the same map every load
     references), with a clear error — mirrors ``_lookup_psd``."""
@@ -921,6 +1080,57 @@ def _report_fatigue(log, fat, funct_id, base, base_dir, frf, nev):
     # numbers so the Gaussian and the kurtosis-corrected lives show side by side.
     if fat.get("nongaussian") is not None:
         _report_nongaussian(log, fat["nongaussian"])
+    # M25: the NON-STATIONARY / EVOLUTIONARY-PSD block, printed ALONGSIDE the M20
+    # stationary numbers so the stationary and non-stationary lives show side by
+    # side.
+    if fat.get("nonstationary") is not None:
+        _report_nonstationary(log, fat["nonstationary"])
+
+
+def _report_nonstationary(log, ns):
+    """Print the NON-STATIONARY / EVOLUTIONARY-PSD (M25) listing block: the RMS
+    mission profile (blocks / modulation), the induced kurtosis, the block
+    Miner-sum + amplitude-modulated damage ALONGSIDE the stationary numbers, the
+    M25<->M24 kurtosis bridge and the non-stationary Monte-Carlo cross-check."""
+    log.info("\n     ** NON-STATIONARY / EVOLUTIONARY-PSD FATIGUE **  "
+             "(/IMPL/FATIG/NSTAT)")
+    log.info(f"      RMS MODULATION /FUNCT / BLOCKS  . : "
+             f"/FUNCT/{ns['modfunct']} / {ns['nblocks']} block(s)")
+    sc = np.asarray(ns["scales"], dtype=float)
+    log.info(f"      RMS SCALE RANGE (min..max) . . . : "
+             f"{sc.min():.4F} .. {sc.max():.4F}  "
+             f"(overall RMS x {ns['rms_scale']:.4F})")
+    log.info(f"      INDUCED KURTOSIS g4  . . . . . . : "
+             f"{ns['kurtosis']:.4F}  (3 = stationary Gaussian)")
+    br = ns["bridge"]
+    log.info(f"      M25<->M24 BRIDGE  kappa_ns / l_ng: "
+             f"{br['kappa_ns']:.5F} / {br['lambda_ng']:.5F}  "
+             f"(ratio {br['ratio']:.4F})")
+    # per-estimator: stationary rate | non-stationary (E[a^m]-scaled) rate | life
+    am = ns["amplitude_modulated"]
+    log.info("      METHOD              STATIONARY RATE  NON-STAT RATE    "
+             "NON-STAT LIFE")
+    for key, name in (("narrow_band", "NARROW-BAND (Bendat)"),
+                      ("dirlik", "DIRLIK 1985"),
+                      ("wirsching_light", "WIRSCHING-LIGHT"),
+                      ("tovo_benasciutti", "TOVO-BENASCIUTTI")):
+        r = am[key]
+        life = r["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      {name:20s}{r['stationary_damage_rate']:14.5E}   "
+                 f"{r['damage_rate']:14.5E}   {life_s:>14s}")
+    bl = ns["block"]
+    bl_life = "INF" if not np.isfinite(bl["life"]) else f"{bl['life']:.5E}"
+    log.info(f"      BLOCK MINER-SUM (Dirlik) . . . . : "
+             f"{bl['damage_rate']:.5E} / {bl_life}  "
+             f"(E[a^m] = {ns['e_am']:.5F}, {ns['nblocks']} blocks)")
+    if ns.get("monte_carlo") is not None:
+        mc = ns["monte_carlo"]
+        life = mc["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      NON-STAT MONTE-CARLO . . . . . . : "
+                 f"{mc['damage_rate']:.5E}  (sample g4 = {mc['kurtosis']:.3F}, "
+                 f"life {life_s})")
 
 
 def _report_nongaussian(log, ng):
@@ -1074,9 +1284,20 @@ def _run_multiaxial(model, ip, log, result, frf, Sigma, channels, psd_tab,
         ip, summ, frf["freqs"], m_sn, C_sn, mean_stress, ultimate, mc_dur,
         mc_seed)
 
+    # M25: the NON-STATIONARY / EVOLUTIONARY-PSD correction of the MULTIAXIAL
+    # equivalent scalars, run ALONGSIDE the M21 spectral reductions (a NEW
+    # parallel path — the reductions above are left byte-identical). It scales
+    # each reduction's shared-shape moments by the RMS mission profile (block
+    # Miner-sum + amplitude-modulated E[a^m]) and runs a non-stationary
+    # Monte-Carlo on the von-Mises scalar PSD. See implicit/nonstationary_fatigue.py.
+    nonstationary = _run_nonstationary_multiaxial(
+        ip, summ, frf["freqs"], m_sn, C_sn, mean_stress, ultimate, mc_dur,
+        mc_seed, model)
+
     result.fatigue = {
         "multiaxial": True, "nonproportional": nprop,
         "spectral_nonproportional": spec_np, "nongaussian": nongaussian,
+        "nonstationary": nonstationary,
         "channels": channels, "voigt_blocks": blocks,
         "critical_element": (cname, ce, cbase),
         "critical_label": cbase,
@@ -1157,6 +1378,48 @@ def _report_multiaxial(log, fat, funct_id, base, base_dir, frf, nev):
     # printed ALONGSIDE the Gaussian numbers.
     if fat.get("nongaussian") is not None:
         _report_nongaussian_multiaxial(log, fat["nongaussian"])
+    # M25: the NON-STATIONARY / EVOLUTIONARY-PSD correction of the multiaxial
+    # reductions, printed ALONGSIDE the Gaussian numbers.
+    if fat.get("nonstationary") is not None:
+        _report_nonstationary_multiaxial(log, fat["nonstationary"])
+
+
+def _report_nonstationary_multiaxial(log, ns):
+    """Print the MULTIAXIAL NON-STATIONARY / EVOLUTIONARY-PSD (M25) listing block:
+    the RMS mission profile, the induced kurtosis, and, for each reduction (von
+    Mises / max-normal / max-shear), the amplitude-modulated Dirlik damage rate /
+    life ALONGSIDE the stationary one, plus the non-stationary Monte-Carlo."""
+    log.info("\n     ** NON-STATIONARY / EVOLUTIONARY-PSD FATIGUE **  "
+             "(/IMPL/FATIG/NSTAT)")
+    log.info(f"      RMS MODULATION /FUNCT / BLOCKS  . : "
+             f"/FUNCT/{ns['modfunct']} / {ns['nblocks']} block(s)")
+    log.info(f"      INDUCED KURTOSIS g4  . . . . . . : "
+             f"{ns['kurtosis']:.4F}  (3 = stationary Gaussian)")
+    br = ns["bridge"]
+    log.info(f"      M25<->M24 BRIDGE  kappa_ns / l_ng: "
+             f"{br['kappa_ns']:.5F} / {br['lambda_ng']:.5F}  "
+             f"(ratio {br['ratio']:.4F})")
+    log.info("      REDUCTION            E[a^m]     STAT DIRLIK RATE   "
+             "NON-STAT RATE   NON-STAT LIFE")
+    for key, name in (("von_mises", "VON MISES"),
+                      ("normal_plane", "MAX-NORMAL PLANE"),
+                      ("shear_plane", "MAX-SHEAR PLANE")):
+        r = ns.get(key)
+        if r is None:
+            continue
+        dk = r["amplitude_modulated"]["dirlik"]
+        life = dk["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      {name:18s}{r['e_am']:11.5F}  "
+                 f"{dk['stationary_damage_rate']:14.5E}  "
+                 f"{dk['damage_rate']:14.5E}   {life_s:>14s}")
+    if ns.get("monte_carlo") is not None:
+        mc = ns["monte_carlo"]
+        life = mc["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      NON-STAT MONTE-CARLO (von Mises) . : "
+                 f"{mc['damage_rate']:.5E}  (sample g4 = {mc['kurtosis']:.3F}, "
+                 f"life {life_s})")
 
 
 def _report_nongaussian_multiaxial(log, ng):
