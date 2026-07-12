@@ -58,6 +58,13 @@ def _parse_multi_input_table(block, ec, base_line, log, card):
     ec.impl_mi_phase = float(hdr[3]) if len(hdr) > 3 else 0.0
     ec.impl_mi_decay = float(hdr[4]) if len(hdr) > 4 else 0.0
     ec.impl_mi_speed = float(hdr[5]) if len(hdr) > 5 and hdr[5] > 0 else 1.0
+    # M29 EVOLUTIONARY-COHERENCE schedule (optional): the END coherence gamma_ab(t_1)
+    # and phase theta_ab(t_1) the coherence DRIFTS to across the /EVOL windows
+    # (interpolated from the start pair gamma / phase above). Columns 7-8 of the
+    # header: gamma1 [phase1]. A negative (or absent) gamma1 means NO coherence
+    # drift (the M28 stationary special case) — the driver then holds gamma_ab fixed.
+    ec.impl_mi_gamma1 = float(hdr[6]) if len(hdr) > 6 else -1.0
+    ec.impl_mi_phase1 = float(hdr[7]) if len(hdr) > 7 else ec.impl_mi_phase
     inputs = []
     for r in range(ninput):
         li = base_line + 1 + r

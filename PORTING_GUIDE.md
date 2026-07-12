@@ -291,7 +291,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | **FULLY EVOLUTIONARY / NON-SEPARABLE-PSD SPECTRAL FATIGUE (M26)**: the frequency-domain damage of a random-vibration response whose spectral SHAPE (not merely its RMS level) VARIES WITH TIME, computed by extending the M25 piecewise-stationary / amplitude-modulated estimators to a genuinely NON-SEPARABLE evolutionary spectrum `S(ω,t)` / spectrogram (`implicit/evolutionary_fatigue.py`, the `_run_evolutionary` / `_run_evolutionary_multiaxial` extensions of the M20/M21 drivers in `implicit/random_response.py`, `/IMPL/FATIG/EVOL`) — the FIRST fatigue item deferred out of M25 that BUILDS on the non-stationary spectral machinery (M25 lifted stationarity only in the RMS ENVELOPE, the separable `|A(t)|²S(ω)` case with a FIXED shape; M26 lifts SEPARABILITY itself, so each time-window carries its OWN full moment set m₀..m₄, not a scaling of a shared shape). SPECTROGRAM / PER-WINDOW-FULL-PSD MODEL — partition into time-windows each with its OWN complete stress PSD (different bandwidth / rates / centre frequency per window), run the M20 estimators PER WINDOW and Palmgren–Miner SUM the window damages duration-weighted (`evolutionary_fatigue_summary`, driven read-only through the M25 `block_fatigue_summary` which already accepts per-window distinct moments — M26 supplies the real per-window PSDs of a drifting shape, of which M25's shared-shape scaling is the constant-shape reduction). TIME-FREQUENCY / DRIFTING-SHAPE MODEL — an evolutionary spectrum built from a smoothly time-varying parameter (a swept centre frequency `f_c(t)` — a "chirp" — and/or a broadening bandwidth `b(t)`), sampled into windows whose full moments are recomputed FROM the drifting shape (`drifting_shape_spectrogram` applies a swept/broadening Gaussian window `W_i(f)` to the recovered stress PSD — commutes with `\|H\|²`; `gaussian_evolutionary_spectrogram` builds one analytically). NON-SEPARABLE MONTE-CARLO with a TIME-VARYING FILTER — per-window spectral-representation blocks concatenated (`synthesize_evolutionary_history` / `evolutionary_monte_carlo_damage`), whose short-time spectrogram tracks `S(ω,t)`; in the constant-shape limit it DELEGATES to the M25 `synthesize_nonstationary_history` (bit-identical). Validated: a single window recovering the M20 stationary answer EXACTLY; a constant-shape spectrogram recovering the M25 amplitude-modulated answer EXACTLY (the built-in M26↔M25 reduction); the window Miner-sum = the duration-weighted per-window damages (hand check); a two-window shape-swap (narrow→wide) differing from any single-shape M25 scaling (the non-separable point); the swept `f_c` drifting the per-window ν₀, the broadening `b` drifting the per-window α₂; the non-separable MC tracking the spectrogram and matching the window estimate within scatter, and reducing to the M25 (hence M20) MC bit-identically in the constant-shape (single-window) limit; composes with /MULT, /NPROP, /SPEC, /NGAUSS, /NSTAT. PORT sub-flag, library-first like M16–M25; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions, the M24 NON-GAUSSIAN correction AND the M25 NON-STATIONARY correction stay BIT-IDENTICAL (a NEW parallel path — the M20–M25 answers byte-identical whether or not /EVOL runs — asserted). Theory: Priestley 1965/1967 (evolutionary / non-separable spectra); Mark 1970 / Hammond (non-stationary spectral analysis); Newland (the spectrogram / short-time method); Bendat & Piersol; Wigner–Ville time-frequency view; Palmgren–Miner window sum | ✅ |
 | **FULLY NON-STATIONARY / EVOLUTIONARY MULTIAXIAL (JOINT-TENSOR) FATIGUE (M27)**: the frequency-domain damage of a MULTIAXIAL random-vibration response whose full 6×6 stress-TENSOR cross-PSD `S_σσ(ω,t)` (not just an equivalent scalar) VARIES WITH TIME (`implicit/joint_evolutionary_fatigue.py`, the `_run_joint_evolutionary` extension of the M21 `_run_multiaxial` driver in `implicit/random_response.py`, `/IMPL/FATIG/MULT/EVOL/JOINT`) — the item M25/M26 DEFERRED (M25/M26 applied the block / evolutionary scaling to the EQUIVALENT SCALAR the M21/M23 reductions produce, a FIXED reduction; M27 lifts exactly that — the JOINT tensor evolves so the critical-plane orientation and F_np are RE-SEARCHED per window and may DRIFT). PER-WINDOW TENSOR CROSS-PSD — the M26 drifting-shape window `W_i(f)` multiplies the full 6×6 `S_σσ(ω)` per window (commutes with the reduction, as M26 established for `\|H\|²`), the per-window 6×6 spectral-MOMENT matrices `M_{n,i} = a_i²·(1/π)∫ω^n W_i(f) S_σσ dω` recomputed (`windowed_tensor_moment_matrices`), EACH window reduced by the M21 equivalent von Mises + max-normal / max-shear critical-plane search + the M23 `F_np`, the plane RE-SEARCHED from the window's OWN tensor (`reduce_window_tensor`, `joint_evolutionary_fatigue_summary`), and the per-window multiaxial damages Palmgren–Miner-summed. Reports the per-window critical-plane DRIFT (plane normal / `F_np` / equivalent-stress RMS), the plane ROTATION angle and the `F_np` drift. NON-STATIONARY MULTIVARIATE MONTE-CARLO — per-window multivariate spectral-representation blocks of the WINDOWED tensor (the M21 per-bin eigen/Cholesky synthesiser with a time-varying tensor cross-PSD), projected onto the window's OWN critical plane, ASTM E1049 rainflow + Miner (`synthesize_joint_evolutionary_history` / `joint_evolutionary_monte_carlo_damage`); the constant-shape limit delegates to a single multivariate carrier × envelope, a single unit window reducing to the M21 multivariate MC bit-identically. Validated: a STATIONARY tensor / single window recovering the M21 spectral multiaxial answer EXACTLY (all three reductions); a FIXED critical plane recovering the M26 scalar per-window spectrogram EXACTLY; a CONSTANT-tensor-shape / RMS-only drift recovering the M25 multiaxial block answer EXACTLY; a rotating-principal-axes case whose per-window critical plane genuinely DRIFTS and whose Miner-sum DIFFERS from the M26 fixed reduction (the M27↔M26 boundary made explicit); the windowed tensor moments commuting with the reduction; the MC tracking the spectrogram within scatter; composes with /NPROP, /SPEC, /NGAUSS, /NSTAT (/JOINT implies MULT+EVOL). PORT sub-flag, library-first like M16–M26; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions, the M24 NON-GAUSSIAN correction, the M25 NON-STATIONARY correction AND the M26 EVOLUTIONARY-SCALAR correction stay BIT-IDENTICAL (a NEW parallel path — the M20–M26 answers byte-identical whether or not /JOINT runs — asserted). Theory: Priestley 1965/1967 (evolutionary spectra, matrix-valued); Preumont & Piéfort 1994 / Pitoiset & Preumont 2000; Carpinteri–Spagnoli / Cristofori–Susmel–Tovo; Bäckström & Marquis; Palmgren–Miner | ✅ |
 | **MULTI-INPUT / PARTIALLY-COHERENT RANDOM-VIBRATION RESPONSE & FATIGUE (M28)**: the stationary response (and stress-tensor) cross-PSD driven by SEVERAL simultaneous random inputs with a full Hermitian input cross-spectral matrix `S_ff(ω) = [√(G_a G_b) γ_ab e^{iθ_ab}]` (auto-PSDs on the diagonal, coherence γ_ab ∈ [0,1] + phase θ_ab off-diagonal), propagated through the VECTOR FRF by the MIMO relation `S_uu = H S_ff Hᴴ` / `S_σσ = H_σ S_ff H_σᴴ` and reduced by the whole M20–M27 estimator family UNCHANGED (`implicit/multi_input_response.py` + `implicit/multi_input_fatigue.py`, the `_run_multi_input_fatigue` / `_run_multi_input_response` extensions of the M19/M21 drivers in `implicit/random_response.py`, `/IMPL/PSD/MULTI` + `/IMPL/FATIG/MULT/MINPUT`) — the LAST item on the recurring deferral tail carried since M19/M20/M21 (the multi-input cross-PSD with coherence deferred in every spectral milestone). Where M19/M20/M21 assumed ONE scalar input and formed the RANK-1 `H S_ff Hᴴ` with a scalar `S_ff`, M28 generalises `S_ff` to a NON-DIAGONAL ninput×ninput Hermitian matrix and contracts it with a per-input FRF COLUMN stack `H(ω)` (nf, ndof, ninput). INPUT CROSS-PSD MODEL — `input_cross_psd_matrix` assembles the Hermitian `S_ff` from per-input auto-PSDs and a coherence model (`constant_coherence` OR the exponential/decay `exponential_coherence` for distributed loads), projected onto the nearest Hermitian PSD matrix (`nearest_psd`, clip negative eigenvalues, Higham 1988, a no-op on a valid matrix). The per-input FRF columns (`stress_frf_columns` / `displacement_frf_columns`, reusing the M17/M19 machinery read-only) and the batched triple products (`response_cross_psd(_diagonal)`, `stress_tensor_cross_psd_multi`); the single-input (ninput = 1) case delegates to the M21 rank-1 routines (bit-identical). `multi_input_multiaxial_summary` reduces `S_σσ` by the SAME M21 machinery (returning the SAME dict shape, so the M22–M27 corrections compose UNCHANGED). MULTI-INPUT MONTE-CARLO — synthesise the ninput CORRELATED input histories from the per-bin eigen/Cholesky factor of `S_ff` (the M21 synthesiser applied to the INPUT matrix, `synthesize_multi_input_forces` / `synthesize_multi_input_stress`), drive each through its stress FRF column, sum, ASTM E1049 rainflow + Miner (`monte_carlo_multi_input_damage`); the single-input / fully-coherent (rank-1) cases DELEGATE to the M21 MC (bit-identical), the partially-coherent case runs the input-level synthesis and is cross-checked against the stress-level (M21-on-`S_σσ`) answer within scatter; `measure_coherence` confirms the synthesised inputs' coherence matches γ_ab. Validated: the single-input cross-PSD BIT-IDENTICAL to the M21 rank-1 / M19 |U|²G answers; the coherence identity |S_ff[a,b]|² = γ_ab²G_aG_b; the PSD projection a no-op on a valid matrix; a diagonal `S_ff` = the SUM of the per-input answers EXACTLY; a rank-1 coherent `S_ff` = the single-input answer for the combined pattern EXACTLY; partial coherence interpolating monotonically; a two-input SDOF closed form; the M21 reductions byte-identical given the same `S_σσ`; the fully-coherent MC reducing to the M21 MC bit-identically; the incoherent variance additive + the input-level MC matching the stress-level MC within scatter; the synthesised coherence matching γ_ab. Composes with /NPROP, /SPEC, /NGAUSS, /NSTAT, /EVOL, /JOINT (the multi-input `S_σσ` flows into them unchanged), reported ALONGSIDE the single-input numbers (a `multi_input` sub-entry). PORT sub-flag, library-first like M16–M27; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions and the M24–M27 corrections stay BIT-IDENTICAL (a NEW parallel path — the single-input answers byte-identical whether or not the multi-input path runs — asserted). Theory: Newland ch. 6–8 (multiple correlated inputs, the coherence function); Bendat & Piersol ch. 5–7 (the cross-spectral / coherence matrix, the `H S_ff Hᴴ` MIMO relation); Wirsching–Paez–Ortiz (multi-input random fatigue); Higham 1988 (nearest PSD); Shinozuka & Deodatis (multivariate spectral representation) | ✅ |
-| Lanczos/subspace for large models; AMLS / substructuring; a continuous Wigner–Ville / Loève INSTANTANEOUS-spectrum formulation (scalar M26 OR joint-tensor M27 — beyond the windowed spectrogram); a full NON-GAUSSIAN JOINT-TENSOR evolutionary distribution (beyond the M27 Gaussian joint-tensor + the M24 equivalent-scalar kurtosis correction); a fully NON-STATIONARY / EVOLUTIONARY MULTI-INPUT cross-PSD (a time-varying coherence, beyond the M28 stationary multi-input) and frequency-dependent coherence beyond the M28 constant + exponential models; multi-directional 100-30-30 response spectra; non-proportional HARDENING as a material model; mean-stress beyond the per-plane normal / basic Goodman option; crack-growth / fracture-mechanics fatigue; the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21/M22/M23/M24/M25/M26/M27/M28 roadmap notes) |
+| **FULLY NON-STATIONARY / EVOLUTIONARY MULTI-INPUT CROSS-PSD (M29)**: a TIME-VARYING input coherence matrix `S_ff(ω,t)` (the coherence γ_ab(t) and phase θ_ab(t), and/or the auto-PSDs G_a(t), DRIFTING with time) driving a per-window multi-input stress-tensor cross-PSD `S_σσ(ω,tᵢ) = H_σ S_ff(tᵢ) H_σᴴ` whose critical plane / F_np may DRIFT as the input coherence evolves, reduced PER WINDOW by the M20–M27 estimator family + the M28 multi-input path and Miner-summed (`implicit/evolutionary_multi_input.py`, the `_run_evolutionary_multi_input` extension of the M28 `_run_multi_input_fatigue` driver in `implicit/random_response.py`, `/IMPL/FATIG/MULT/MINPUT/EVOL`) — the item M28 DEFERRED (M28 was STATIONARY multi-input, a fixed `S_ff` modulated at most by a scalar RMS profile / drifting-shape window, the coherence itself held stationary). M29 is the CONVERGENCE of M27 (evolutionary joint-tensor) and M28 (multi-input): the coherence itself is now the drifting quantity. TIME-VARYING INPUT CROSS-PSD — a per-window schedule of Hermitian input cross-spectral matrices `S_ff(ω,tᵢ)` (`evolutionary_input_windows`), the coherence γ_ab(tᵢ) / θ_ab(tᵢ) interpolated across the M26/M27 windows from a START pair to an END pair (`coherence_schedule`) and the auto-PSDs carrying the M27 drifting-shape window `W_i(f)` / RMS level `a_i`, each window projected onto the nearest Hermitian PSD matrix (reusing M28 `nearest_psd`). The per-window multi-input `S_σσ,ᵢ = H_σ S_ff(tᵢ) H_σᴴ` (M28 `stress_tensor_cross_psd_multi`) and its 6×6 moment matrices, reduced PER WINDOW by the M27 critical-plane search (`reduce_window_tensor` — the plane / F_np RE-SEARCHED per window as the coherence drifts), Miner-summed (`evolutionary_multi_input_summary`). EVOLUTIONARY MULTI-INPUT MONTE-CARLO — per-window blocks of the M28 correlated-input synthesiser (each window's `S_ff(tᵢ)`'s eigen/Cholesky factor) concatenated, driven through the stress columns, projected onto the window's OWN plane, ASTM E1049 rainflow + Miner (`synthesize_evolutionary_multi_input_stress` / `evolutionary_multi_input_monte_carlo_damage`); the synthesised inputs' per-window measured coherence tracks γ_ab(tᵢ) (M28 `measure_coherence`). Validated: a CONSTANT coherence / SINGLE window recovering the M28 stationary multi-input answer EXACTLY (bit-identical delegation — summary + MC); a SINGLE input recovering the M27 scalar/tensor evolutionary answer EXACTLY (bit-identical delegation — summary + MC); a drifting incoherent→coherent schedule whose per-window response variance and critical plane genuinely DRIFT between the M28 incoherent-SUM and coherent-combination limits (the coherence itself evolving); the per-window reductions byte-identical given the same per-window `S_σσ`; the measured coherence tracking the drifting target. Composes with /JOINT / /NSTAT / /NGAUSS, reported ALONGSIDE the M28 stationary multi-input and the M27 single-input evolutionary numbers (an `evolutionary_multi_input` sub-entry). PORT sub-flag, library-first like M16–M28; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions, the M24–M27 corrections AND the M28 stationary multi-input path stay BIT-IDENTICAL (a NEW parallel path — the M28 stationary answers byte-identical whether or not /EVOL runs — asserted). Theory: Priestley 1965 (evolutionary spectra — the matrix / coherence-valued case); Newland ch. 6–8 + Bendat & Piersol ch. 5–7 (the time-varying coherence matrix); the M27 joint-tensor + M28 multi-input base | ✅ |
+| Lanczos/subspace for large models; AMLS / substructuring; a continuous Wigner–Ville / Loève INSTANTANEOUS-spectrum formulation (scalar M26 OR joint-tensor M27 OR coherence-matrix M29 — beyond the windowed spectrogram); a full NON-GAUSSIAN JOINT-TENSOR evolutionary distribution (beyond the M27 Gaussian joint-tensor + the M24 equivalent-scalar kurtosis correction); a FREQUENCY-DEPENDENT drifting coherence γ_ab(f,t) beyond the M29 start→end / mission-profile schedules and the M28 constant + exponential models; the base-acceleration MULTI-INPUT feed (per-direction participation column stack, carried from M28); multi-directional 100-30-30 response spectra; non-proportional HARDENING as a material model; mean-stress beyond the per-plane normal / basic Goodman option; crack-growth / fracture-mechanics fatigue; the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21/M22/M23/M24/M25/M26/M27/M28/M29 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -3153,6 +3154,144 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       block / solids, thermal contact, TYPE19/24/25, Inacti, Igap 2/3, LAW42
       shells/Prony, IDTC 2/3, /RWALL under implicit, the UL hourglass memory, the
       NLGEOM hourglass-operator geometry variation, the BT4 thin-plate shear-lock
+      / drilling floor.
+
+28. **M29 — FULLY NON-STATIONARY / EVOLUTIONARY MULTI-INPUT CROSS-PSD** ✅ (done):
+    a TIME-VARYING input coherence matrix S_ff(ω, t) — the coherence γ_ab(t) and
+    phase θ_ab(t) (and/or the auto-PSDs G_a(t)) DRIFTING with time — driving a
+    per-window multi-input stress-tensor cross-PSD S_σσ(ω, t_i) = H_σ S_ff(t_i)
+    H_σᴴ whose critical plane / F_np may DRIFT as the input coherence evolves,
+    reduced PER WINDOW by the M20–M27 estimator family + the M28 multi-input path
+    and Palmgren–Miner-summed, cross-validated against a NON-STATIONARY
+    MULTI-INPUT multivariate Monte-Carlo. M29 is the CONVERGENCE of M27
+    (evolutionary joint-tensor) and M28 (multi-input): where M27 let the full 6×6
+    stress-TENSOR cross-PSD evolve but from ONE scalar input process, and M28 drove
+    S_σσ from a full Hermitian ninput×ninput input cross-PSD S_ff but held the
+    coherence STATIONARY (composing with M25/M26/M27 only by modulating the
+    stationary multi-input S_σσ with a scalar RMS profile / drifting-shape window),
+    M29 lifts exactly that last assumption — the INPUT COHERENCE MATRIX itself is
+    time-varying. This is the FIRST item M28 deferred. Upstream check (re-run for
+    M29): the open-source OpenRadioss engine has NO frequency-domain / spectral /
+    random-vibration / cross-spectral / coherence / MIMO / evolutionary solver of
+    any kind — `engine/source/input/freimpl.F` and
+    `engine/source/implicit/imp_solv.F` carry no `coherence` / `cross_psd` /
+    time-varying token, and the sole `PSD` token anywhere is `IMUMPSD`, a
+    MUMPS-solver flag (exactly the finding M16–M28 recorded line by line). So M29,
+    like every spectral milestone since M16, ports evolutionary multi-input random
+    fatigue as a clean LIBRARY capability and drives it with a minimal PORT engine
+    sub-flag (`/IMPL/FATIG/MULT/MINPUT/EVOL` — the evolutionary-coherence analogue
+    of the M28 multi-input card, composing with /EVOL / /JOINT / /NSTAT / /NGAUSS).
+    A NEW, parallel path (`implicit/evolutionary_multi_input.py` + the
+    `_run_evolutionary_multi_input` extension of the M28 driver in
+    `implicit/random_response.py`) that never touches the M10 integrator, the M16
+    eigensolver, the M17/M18 superposition, the M19 PSD path, the M20–M27 fatigue
+    reductions OR the M28 stationary multi-input path (all stay bit-identical — the
+    M28 stationary answers byte-identical whether or not /EVOL runs, asserted). The
+    evolutionary multi-input path is reported ALONGSIDE the M28 stationary
+    multi-input and the M27 single-input evolutionary numbers (an
+    `evolutionary_multi_input` sub-entry on
+    `model.implicit_result.fatigue['multi_input']`), so the listing shows all three
+    side by side.
+
+    * **TIME-VARYING INPUT CROSS-PSD** (`evolutionary_multi_input.py`): (a) the
+      per-window coherence schedule (`coherence_schedule`) — the coherence γ_ab(t_i)
+      and phase θ_ab(t_i) interpolated LINEARLY across the M26/M27 window mid-time
+      fractions s_i = (i+½)/nwin from a START pair (γ₀, θ₀) to an END pair (γ₁, θ₁)
+      (scalars or full matrices, NumPy-broadcast); (b) the per-window schedule of
+      Hermitian input cross-spectral matrices S_ff(ω, t_i) (`evolutionary_input_
+      windows`) — the auto-PSDs G_a(ω, t_i) = a_i² W_i(f) G_a(ω) carrying the M27
+      drifting-shape window W_i(f) / RMS level a_i (so the coherence drift COMPOSES
+      with the M25/M26/M27 level / spectral-shape drift), each S_ff assembled by the
+      M28 `input_cross_psd_matrix` and projected onto the nearest Hermitian PSD
+      matrix (M28 `nearest_psd`); (c) the per-window multi-input S_σσ,i = H_σ
+      S_ff(t_i) H_σᴴ (M28 `stress_tensor_cross_psd_multi`), its 6×6 moment matrices
+      (`tensor_moment_matrices`), reduced PER WINDOW by the M27 `reduce_window_
+      tensor` (the critical plane / F_np RE-SEARCHED from the window's OWN tensor as
+      the coherence drifts), and Palmgren–Miner-summed (`evolutionary_multi_input_
+      summary`). Two BIT-IDENTICAL delegations — ninput = 1 delegates to the M27
+      `joint_evolutionary_fatigue_summary`; nwin = 1 + constant coherence + flat unit
+      window delegates to the M28 `multi_input_multiaxial_summary`.
+    * **EVOLUTIONARY MULTI-INPUT FATIGUE + MONTE-CARLO** (`evolutionary_multi_
+      input.py`): the per-window S_σσ feeds the M20–M27 reductions UNCHANGED (byte-
+      identical given the same per-window S_σσ). The INDEPENDENT cross-check is a
+      NON-STATIONARY MULTI-INPUT multivariate Monte-Carlo: per-window BLOCKS of the
+      M28 correlated-input synthesiser (each window's S_ff(t_i)'s per-bin
+      eigen/Cholesky factor driven through the stress FRF columns and summed, M28
+      `synthesize_multi_input_stress`) concatenated in time, each window's block
+      PROJECTED onto that WINDOW's OWN critical plane, ASTM E1049 rainflow + Miner
+      (`synthesize_evolutionary_multi_input_stress` /
+      `evolutionary_multi_input_monte_carlo_damage`); the single-window /
+      constant-coherence MC delegates to the M28 MC bit-identically, the single-input
+      MC to the M27 MC bit-identically. The synthesised inputs' per-window MEASURED
+      coherence (M28 `measure_coherence`, Welch averaging) tracks the drifting target
+      γ_ab(t_i).
+    * **ENGINE CARD + reporting** (`/IMPL/FATIG/MULT/MINPUT/EVOL` — composing with
+      /JOINT / /NSTAT / /NGAUSS): reads the coherence END pair (γ₁, θ₁) as extra
+      columns on the multi-input header (`ninput cohmodel γ θ [decay speed [γ₁ θ₁]]`;
+      a negative γ₁ means NO coherence drift, the M28 stationary special case) and
+      reuses the /EVOL drifting-shape schedule (fc0 fc1 bw0 bw1 nwin) and the shared
+      modulation /FUNCT, assembles the per-window S_ff, recovers the per-window S_σσ,
+      runs the requested reductions and the non-stationary multi-input Monte-Carlo,
+      and reports the coherence DRIFT / per-window response RMS / critical-plane
+      rotation / damage-life ALONGSIDE the M28 stationary multi-input and the M27
+      single-input evolutionary numbers (the `evolutionary_multi_input` sub-entry).
+      The M28 stationary multi-input result is fully formed and left byte-identical.
+    * **Example** (`examples/evolutionary_multi_input`): the M28 two-input
+      solid-brick cantilever RE-RUN under a DRIFTING coherence (γ 0.1 → 0.9) with a
+      swept-centre window (fc 60 → 180 kHz) and a mission RMS profile — reporting its
+      evolutionary multi-input life alongside its stationary multi-input life, the
+      critical-plane ROTATION ≈ 19° driven by the evolving coherence, and the
+      measured per-window coherence tracking the target.
+
+    Validated (`tests/test_m29_evolmultiinput.py`): the coherence schedule
+    interpolating start→end; a CONSTANT coherence / SINGLE flat unit window
+    recovering the M28 stationary multi-input answer EXACTLY (bit-identical
+    delegation — all three reductions AND the Monte-Carlo); a SINGLE input (ninput =
+    1) recovering the M27 scalar/tensor evolutionary answer EXACTLY (bit-identical
+    delegation — summary AND MC); a constant-coherence multi-window flat schedule
+    giving per-window S_σσ,i = the M28 stationary S_σσ for that γ; a drifting
+    incoherent→coherent schedule whose per-window equivalent-stress variance rises
+    MONOTONICALLY, bracketed by the M28 incoherent-SUM and coherent-combination
+    limits; the per-window reductions byte-identical given the same per-window S_σσ
+    (`reduce_window_tensor` on the independently-formed tensor); the coherence drift
+    evolving the per-window tensor SHAPE (constant when the coherence is fixed); the
+    synthesised inputs' per-window measured coherence tracking the drifting target
+    γ_ab(t_i); the card mirror (the γ₁ / θ₁ END pair, the no-drift sentinel); the
+    solid-brick end to end (the evolutionary multi-input life alongside the stationary
+    one, the critical-plane rotation, the measured coherence); and the M7 parity
+    contract (the M28 stationary multi-input reductions byte-identical whether or not
+    /EVOL runs; the recovery read-only).
+
+    Deferred out of M29, explicitly (not half-implemented):
+    * a FREQUENCY-DEPENDENT drifting coherence γ_ab(f, t) BEYOND the supported
+      schedules (the start→end interpolation, or a per-input mission profile on the
+      auto-PSDs): the library accepts a full per-window coherence stack, but the card
+      exposes only the start/end-pair schedule — DEFERRED;
+    * the EXPONENTIAL/decay coherence model DRIFT (a time-varying decay coefficient):
+      the constant-coherence start/end schedule drives the M29 evolutionary path; the
+      exponential model is held stationary (its stationary answer is the M28
+      exponential result) — DEFERRED;
+    * a continuous Wigner–Ville / Loève INSTANTANEOUS coherence-matrix spectrum
+      (beyond the windowed short-time spectrogram) — DEFERRED, exactly as M26/M27
+      deferred the scalar / joint-tensor Wigner–Ville distributions;
+    * a full NON-GAUSSIAN time-varying-coherence joint-tensor evolutionary
+      distribution: M29 composes with the M24 non-Gaussian correction on the
+      equivalent scalar but does not model a non-Gaussian evolutionary coherence
+      joint-tensor distribution — DEFERRED;
+    * the base-acceleration MULTI-INPUT feed (per-direction participation column
+      stack) — carried from M28, the force-pattern feed is used — DEFERRED;
+    * multi-directional 100-30-30 (multi-component) response spectra — DEFERRED
+      (carried from M19);
+    * MEAN-STRESS beyond the basic M20/M21 Goodman intercept, CRACK-GROWTH /
+      fracture-mechanics fatigue and the COMPLEX-FRF stress recovery — the unchanged
+      M20–M28 tail;
+    * the unchanged M10–M28 deferral tail: the continuous Wigner–Ville / Loève
+      instantaneous-tensor spectrum, non-proportional hardening, gyroscopic /
+      circulatory systems, Lanczos / subspace + AMLS, IFQ ≥ 10 / MODFR 2, /FRICTION
+      per-part-pair sets, orthotropic / thermal friction, the fiber TYPE18 beam, the
+      LAW27 plastic block / solids, thermal contact, TYPE19/24/25, Inacti, Igap 2/3,
+      LAW42 shells/Prony, IDTC 2/3, /RWALL under implicit, the UL hourglass memory,
+      the NLGEOM hourglass-operator geometry variation, the BT4 thin-plate shear-lock
       / drilling floor.
 
 ## 6. Validation strategy

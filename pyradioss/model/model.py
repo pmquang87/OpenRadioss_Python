@@ -321,6 +321,26 @@ class EngineControls:
     impl_mi_decay: float = 0.0       # exponential-coherence decay coefficient
     impl_mi_speed: float = 1.0       # exponential-coherence reference speed
 
+    # M29 /IMPL/FATIG/MULT/MINPUT/EVOL and /IMPL/PSD/MULTI/EVOL: FULLY NON-STATIONARY
+    # / EVOLUTIONARY MULTI-INPUT cross-PSD — the input coherence matrix S_ff(w, t)
+    # itself DRIFTS with time (the coherence gamma_ab(t) and phase theta_ab(t)), so
+    # the per-window multi-input stress-tensor cross-PSD S_sigmasigma(w, t_i) =
+    # H_sigma S_ff(t_i) H_sigma^H drives a per-window critical-plane search whose
+    # plane / F_np may DRIFT as the coherence evolves, reduced by the M20-M27
+    # estimators + the M28 multi-input path and Miner-summed. Where M28 was
+    # STATIONARY multi-input (a fixed S_ff modulated at most by a scalar RMS profile /
+    # drifting-shape window, the coherence held stationary), M29 interpolates the
+    # coherence across the M26/M27 windows from a START pair (impl_mi_gamma /
+    # impl_mi_phase) to an END pair (impl_mi_gamma1 / impl_mi_phase1). It reuses the
+    # /EVOL drifting-shape schedule (impl_fatig_evol_fc0 .. _nwin) and the shared
+    # modulation /FUNCT; it composes with /JOINT / /NSTAT / /NGAUSS. The M28
+    # stationary answer is exactly the single-window / constant-coherence special
+    # case; the M27 single-input answer the ninput = 1 special case. A PORT sub-flag
+    # (freimpl.F has no time-varying-coherence path — the sole PSD token is IMUMPSD).
+    # See implicit/evolutionary_multi_input.py.
+    impl_mi_gamma1: float = -1.0     # END coherence gamma_ab(t_1); < 0 -> no drift
+    impl_mi_phase1: float = 0.0      # END phase theta_ab(t_1) (degrees)
+
 
 class Model:
     """The full model. Created empty, filled by the keyword parsers, then

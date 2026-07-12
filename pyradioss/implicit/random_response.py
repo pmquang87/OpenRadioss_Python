@@ -1256,6 +1256,100 @@ def _run_joint_evolutionary(ip, summ, frf, m, C, mean_stress, ultimate,
             "monte_carlo": ns_mc}
 
 
+def _run_evolutionary_multi_input(ip, model, Hcols, G, omega, freqs_hz, m, C,
+                                  mean_stress, ultimate, mc_dur, mc_seed, naz,
+                                  npol, m28_summ):
+    """M29: the FULLY EVOLUTIONARY MULTI-INPUT damage of the critical element — the
+    input COHERENCE matrix S_ff(w, t) itself DRIFTING with time. Returns ``None``
+    unless BOTH /IMPL/FATIG/MINPUT and /IMPL/FATIG/EVOL are set (i.e.
+    /IMPL/FATIG/MULT/MINPUT/EVOL).
+
+    Where M28 (``_run_multi_input_fatigue``) formed ONE stationary multi-input
+    stress-tensor cross-PSD S_sigmasigma = H_sigma S_ff H_sigma^H and (composing with
+    /EVOL / /JOINT) windowed its SCALAR shape with a FIXED coherence, M29 lets the
+    INPUT COHERENCE drift window to window: it interpolates gamma_ab / theta_ab across
+    the M26/M27 windows from the start pair (impl_mi_gamma / impl_mi_phase) to the end
+    pair (impl_mi_gamma1 / impl_mi_phase1), assembles the per-window S_ff(t_i), forms
+    the per-window multi-input S_sigmasigma,i and RE-SEARCHES the critical plane / F_np
+    from the window's OWN tensor (so the plane may ROTATE as the coherence evolves),
+    Miner-sums, and runs the non-stationary MULTI-INPUT multivariate Monte-Carlo
+    cross-check (per-window blocks of the M28 correlated-input synthesiser, per-window
+    plane projection, rainflow, Miner). Reuses the /EVOL drifting-shape schedule
+    (impl_fatig_evol_fc0 .. _nwin) and the shared modulation /FUNCT the M26/M27 scalar
+    paths use. Stored ALONGSIDE the M28 stationary multi-input and the M27
+    single-input evolutionary numbers so the listing shows the coherence DRIFT / the
+    per-window RMS / the critical-plane drift / the damage-life side by side. A PORT
+    sub-flag (freimpl.F has no time-varying-coherence path). See
+    implicit/evolutionary_multi_input.py."""
+    if not (bool(getattr(ip, "impl_fatig_evol", False))
+            and bool(getattr(ip, "impl_fatig_minput", False))):
+        return None
+    from . import evolutionary_multi_input as emi
+    from . import nonstationary_fatigue as nsf
+    fc0 = float(getattr(ip, "impl_fatig_evol_fc0", 0.0))
+    fc1 = float(getattr(ip, "impl_fatig_evol_fc1", fc0))
+    bw0 = float(getattr(ip, "impl_fatig_evol_bw0", 0.0))
+    bw1 = float(getattr(ip, "impl_fatig_evol_bw1", bw0))
+    nwin = max(1, int(getattr(ip, "impl_fatig_evol_nwin", 12)))
+    scales, durations = _evol_schedule(ip, model, nwin)
+    # the coherence schedule: the start pair (M28 gamma/phase) -> the end pair
+    # (impl_mi_gamma1 / impl_mi_phase1). A negative gamma1 means NO coherence drift
+    # (the coherence held at gamma0 — the M28 stationary special case, so /EVOL then
+    # windows the multi-input SHAPE only, exactly like the M27 composition).
+    gamma0 = float(getattr(ip, "impl_mi_gamma", 0.0))
+    g1 = float(getattr(ip, "impl_mi_gamma1", -1.0))
+    gamma1 = gamma0 if g1 < 0.0 else g1
+    phase0 = math.radians(float(getattr(ip, "impl_mi_phase", 0.0)))
+    phase1 = math.radians(float(getattr(ip, "impl_mi_phase1",
+                                        getattr(ip, "impl_mi_phase", 0.0))))
+    if int(getattr(ip, "impl_mi_cohmodel", 0)) == 1:
+        # the EXPONENTIAL/decay coherence model DRIFT (a time-varying decay
+        # coefficient) is DEFERRED for M29 — the constant-coherence start/end
+        # schedule drives the evolutionary path; the exponential model is held
+        # stationary (its stationary answer is the M28 exponential result).
+        gamma1 = gamma0
+    summary = emi.evolutionary_multi_input_summary(
+        omega, Hcols, G, durations, m, C, gamma0=gamma0, gamma1=gamma1,
+        phase0=phase0, phase1=phase1, fc=(fc0, fc1), bw=(bw0, bw1),
+        scales=scales, mean_stress=mean_stress, ultimate=ultimate, naz=naz,
+        npol=npol, drift=True)
+    sc_w, wt = nsf.modulation_from_schedule(scales, durations)
+    kurt = nsf.rms_modulation_kurtosis(sc_w, wt)
+    mc = None
+    if mc_dur > 0.0:
+        tot = float(np.sum(durations))
+        mc_durs = durations * (mc_dur / tot) if tot > 0 else durations
+        mc = emi.evolutionary_multi_input_monte_carlo_damage(
+            omega, Hcols, G, mc_durs, m, C, seed=mc_seed, gamma0=gamma0,
+            gamma1=gamma1, phase0=phase0, phase1=phase1, fc=(fc0, fc1),
+            bw=(bw0, bw1), scales=scales, mean_stress=mean_stress,
+            ultimate=ultimate, naz=naz, npol=npol, reduction="shear_plane",
+            summary=summary, measure=True)
+    # the M28 STATIONARY multi-input reference (the coherence held at the mean) for
+    # the side-by-side listing — the stationary Dirlik rate the drift departs from
+    m28_ref = {k: float(m28_summ[k]["summary"]["dirlik"]["damage_rate"])
+               for k in ("von_mises", "normal_plane", "shear_plane")}
+    return {"fc": (fc0, fc1), "bw": (bw0, bw1), "nwin": nwin,
+            "modfunct": int(getattr(ip, "impl_fatig_modfunct", 0) or 0),
+            "scales": scales, "durations": durations, "kurtosis": kurt,
+            "gamma0": gamma0, "gamma1": gamma1,
+            "phase0_deg": math.degrees(phase0), "phase1_deg": math.degrees(phase1),
+            "coherence_drift": summary["coherence_drift"],
+            "constant_coherence": summary.get("constant_coherence", True),
+            "constant_shape": summary["constant_shape"],
+            "plane_rotation_deg": summary["plane_rotation_deg"],
+            "fnp_drift": summary.get("fnp_drift", 0.0),
+            "delegated": summary.get("delegated"), "summary": summary,
+            "von_mises": {"damage_rate": summary["von_mises"]["damage_rate"],
+                          "life": summary["von_mises"]["life"]},
+            "normal_plane": {"damage_rate": summary["normal_plane"]["damage_rate"],
+                             "life": summary["normal_plane"]["life"]},
+            "shear_plane": {"damage_rate": summary["shear_plane"]["damage_rate"],
+                            "life": summary["shear_plane"]["life"]},
+            "damage_rate": summary["damage_rate"], "life": summary["life"],
+            "stationary_multi_input": m28_ref, "monte_carlo": mc}
+
+
 def _run_nonstationary_multiaxial(ip, summ, freqs, m, C, mean_stress, ultimate,
                                   mc_dur, mc_seed, model):
     """M25 (multiaxial): the NON-STATIONARY / EVOLUTIONARY-PSD correction of the
@@ -1898,6 +1992,14 @@ def _run_multi_input_fatigue(model, ip, log, result, basis, Sigma, channels,
         joint_evolutionary = _run_joint_evolutionary(
             ip, summ, frf_like, m_sn, C_sn, mean_stress, ultimate, mc_dur,
             mc_seed, model, naz, npol)
+        # M29: the FULLY EVOLUTIONARY MULTI-INPUT path — the input COHERENCE matrix
+        # itself DRIFTING with time (as opposed to the M27 joint_evolutionary above,
+        # which windows the SHAPE of a stationary-coherence multi-input tensor).
+        # Runs only when BOTH /MINPUT and /EVOL are set; reported ALONGSIDE the M28
+        # stationary multi-input and the M27 single-input evolutionary numbers.
+        evolutionary_multi_input = _run_evolutionary_multi_input(
+            ip, model, Hcrit, data["G"], omega, freqs_hz, m_sn, C_sn,
+            mean_stress, ultimate, mc_dur, mc_seed, naz, npol, summ)
 
         multi.update({
             "multiaxial": True, "critical_element": (cname, ce, cbase),
@@ -1909,6 +2011,7 @@ def _run_multi_input_fatigue(model, ip, log, result, basis, Sigma, channels,
             "spectral_nonproportional": spec_np, "nongaussian": nongaussian,
             "nonstationary": nonstationary, "evolutionary": evolutionary,
             "joint_evolutionary": joint_evolutionary,
+            "evolutionary_multi_input": evolutionary_multi_input,
             "summary": summ["von_mises"]["summary"],
         })
     else:
@@ -1974,11 +2077,60 @@ def _report_multi_input(log, mi, single):
                 log.info(f"      (single-input critical DIRLIK) . . : "
                          f"{s.get('damage_rate', 0.0):.5E}  life "
                          f"{s.get('life', 0.0):.5E}")
+        # M29: the FULLY EVOLUTIONARY MULTI-INPUT block (the coherence DRIFT), printed
+        # ALONGSIDE the M28 stationary multi-input numbers above
+        if mi.get("evolutionary_multi_input") is not None:
+            _report_evolutionary_multi_input(log, mi["evolutionary_multi_input"])
     else:
         red = mi["summary"]["dirlik"]
         log.info(f"      CRITICAL CHANNEL . . . . . . . . : {mi['critical_label']}")
         log.info(f"      DIRLIK DAMAGE RATE / LIFE . . . . : "
                  f"{red['damage_rate']:.5E} / {red['life']:.5E}")
+
+
+def _report_evolutionary_multi_input(log, ev):
+    """Print the FULLY EVOLUTIONARY MULTI-INPUT (M29) listing block: the coherence
+    DRIFT schedule (start -> end coherence), the critical-plane ROTATION driven by the
+    evolving coherence, the per-window response RMS / coherence drift, and, for each
+    reduction (von Mises / max-normal / max-shear), the evolutionary multi-input
+    window Miner-sum Dirlik damage rate / life ALONGSIDE the M28 STATIONARY
+    multi-input one, plus the non-stationary MULTI-INPUT multivariate Monte-Carlo."""
+    log.info("\n     ** FULLY EVOLUTIONARY MULTI-INPUT FATIGUE **  "
+             "(/IMPL/FATIG/MULT/MINPUT/EVOL)")
+    log.info(f"      COHERENCE SCHEDULE gamma . . . . . : "
+             f"{ev['gamma0']:.4g} -> {ev['gamma1']:.4g}  (drift "
+             f"{ev['coherence_drift']:.4g})")
+    if abs(ev['phase1_deg'] - ev['phase0_deg']) > 1e-9:
+        log.info(f"      PHASE SCHEDULE theta (deg) . . . : "
+                 f"{ev['phase0_deg']:.4g} -> {ev['phase1_deg']:.4g}")
+    fc0, fc1 = ev["fc"]
+    bw0, bw1 = ev["bw"]
+    log.info(f"      DRIFTING-SHAPE fc / bw (HZ)  . . . : "
+             f"{fc0:.4g}->{fc1:.4g} / {bw0:.4g}->{bw1:.4g}  ({ev['nwin']} windows)")
+    log.info(f"      CRITICAL-PLANE ROTATION (deg)  . . : "
+             f"{ev['plane_rotation_deg']:.4g}  (F_np drift {ev['fnp_drift']:.4g})")
+    if ev.get("delegated"):
+        log.info(f"      (reduced via delegation) . . . . : {ev['delegated']}")
+    st = ev.get("stationary_multi_input", {})
+    for key, name in (("von_mises", "VON MISES"),
+                      ("normal_plane", "MAX-NORMAL"),
+                      ("shear_plane", "MAX-SHEAR")):
+        r = ev[key]
+        life = r["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      {name:11s} EVOL / STATIONARY RATE : "
+                 f"{r['damage_rate']:.5E} / {st.get(key, 0.0):.5E}  "
+                 f"life {life_s}")
+    if ev.get("monte_carlo") is not None:
+        mc = ev["monte_carlo"]
+        log.info(f"      NON-STAT MULTI-INPUT MC (shear) DAMAGE / LIFE : "
+                 f"{mc['damage_rate']:.5E} / "
+                 f"{'INF' if not np.isfinite(mc['life']) else '%.5E' % mc['life']}")
+        wg = mc.get("window_gamma")
+        if wg is not None and np.size(wg):
+            with np.errstate(invalid="ignore"):
+                log.info("      MEASURED per-window COHERENCE  . : ["
+                         + " ".join(f"{g:.3f}" for g in np.atleast_1d(wg)) + "]")
 
 
 def _report_multiaxial(log, fat, funct_id, base, base_dir, frf, nev):
