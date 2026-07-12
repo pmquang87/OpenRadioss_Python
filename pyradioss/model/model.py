@@ -245,6 +245,18 @@ class EngineControls:
     impl_fatig_kurt: float = 3.0     # target kurtosis gamma_4 (3 = Gaussian)
     impl_fatig_skew: float = 0.0     # target skewness gamma_3 (0 = symmetric)
     impl_fatig_bwcorr: bool = True   # Benasciutti-Tovo bandwidth attenuation
+    # M25 /IMPL/FATIG/NSTAT: NON-STATIONARY / EVOLUTIONARY-PSD fatigue — the M20
+    # stationary estimators evaluated per stationary segment / time-window and
+    # Miner-summed (the piecewise-stationary "mission profile" block model), plus
+    # the amplitude-modulated (evolutionary S(w,t) = |A(t)|^2 S(w)) damage
+    # integrated over the RMS distribution, with a non-stationary Monte-Carlo
+    # cross-check and the M25<->M24 kurtosis bridge. Composes with MULT / NPROP /
+    # SPEC / NGAUSS (a scaling on the equivalent-stress PSD). See implicit/
+    # nonstationary_fatigue.py.
+    impl_fatig_nstat: bool = False   # /IMPL/FATIG/NSTAT -> non-stationary path
+    impl_fatig_modfunct: int = 0     # /FUNCT id: RMS scale-vs-time modulation
+    impl_fatig_nstat_nseg: int = 0   # sample the modulation into nseg blocks
+    #                                  (0 = use the function's own breakpoints)
 
 
 class Model:

@@ -579,6 +579,13 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     # composes with (does NOT imply) MULT / NPROP / SPEC
                     is_ngauss = bool(subs & {"NGAUSS", "NONGAUSS",
                                              "NONGAUSSIAN", "KURTOSIS", "KURT"})
+                    # M25: NON-STATIONARY / EVOLUTIONARY-PSD correction; also
+                    # orthogonal — composes with (does NOT imply) MULT / NPROP /
+                    # SPEC / NGAUSS. The RMS scale-vs-time modulation /FUNCT (and
+                    # optional nseg) go on a DEDICATED card line AFTER the M24
+                    # kurtosis line: modfunct [nseg].
+                    is_nstat = bool(subs & {"NSTAT", "NONSTAT", "NONSTATIONARY",
+                                            "EVOL", "EVOLUTIONARY", "MISSION"})
                     if is_spec:
                         is_nprop = True
                     if is_nprop:
@@ -606,6 +613,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_spec = True
                     if is_ngauss:
                         ec.impl_fatig_ngauss = True
+                    if is_nstat:
+                        ec.impl_fatig_nstat = True
                     if is_base:
                         ec.impl_fatig_base = True
                         if len(v0) > 4 and v0[4] >= 0:
@@ -651,6 +660,24 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             "/IMPL/FATIG/NGAUSS needs a target kurtosis on line "
                             "3 (kurt [skew]); kurt = 3 is Gaussian (a no-op)",
                             block.source)
+                    # M25 NON-STATIONARY: the RMS scale-vs-time modulation /FUNCT
+                    # (and optional block count nseg) live on a DEDICATED card
+                    # line AFTER the M24 kurtosis line — so its index is 2 (no
+                    # NGAUSS) or 3 (NGAUSS also present): modfunct [nseg]
+                    if is_nstat:
+                        nline = 3 if is_ngauss else 2
+                        vN = (block.cards[nline].floats()
+                              if len(block.cards) > nline else [])
+                        if len(vN) > 0 and vN[0] > 0:
+                            ec.impl_fatig_modfunct = int(vN[0])
+                        if len(vN) > 1 and vN[1] > 0:
+                            ec.impl_fatig_nstat_nseg = int(vN[1])
+                        if ec.impl_fatig_modfunct <= 0:
+                            log.warning(
+                                "/IMPL/FATIG/NSTAT needs an RMS scale-vs-time "
+                                "modulation /FUNCT id on the line after the "
+                                "sweep/S-N (and kurtosis, if NGAUSS) lines: "
+                                "modfunct [nseg]", block.source)
                     if is_nprop and ec.impl_fatig_mcdur <= 0.0:
                         log.warning(
                             "/IMPL/FATIG/MULT/NPROP needs a Monte-Carlo record "
