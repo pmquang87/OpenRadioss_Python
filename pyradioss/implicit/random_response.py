@@ -767,17 +767,98 @@ def run_fatigue(model, ip, log, result, constr=None, contacts=(), loads=None):
             sp["freqs"], sp["Ssigma"][:, jcrit], m_sn, C_sn, mc_dur, mc_seed,
             mean_stress=mean_stress, ultimate=ultimate)
 
+    # M24: the NON-GAUSSIAN / KURTOSIS correction runs ALONGSIDE the M20 Gaussian
+    # summary (a NEW parallel path — the Gaussian ``summary`` above is fully
+    # formed and left byte-identical). It scales the Gaussian spectral damage of
+    # the critical channel by the closed-form lambda_ng (the Winterstein Hermite
+    # model) and, if a Monte-Carlo duration is given, runs a non-Gaussian
+    # time-domain cross-check (the Gaussian history pushed through the memoryless
+    # Hermite transform). See implicit/nongaussian_fatigue.py.
+    nongaussian = _run_nongaussian(
+        ip, summary, crit_mom, sp["freqs"], sp["Ssigma"][:, jcrit],
+        m_sn, C_sn, mean_stress, ultimate, mc_dur, mc_seed)
+
     result.fatigue = {
         "channels": channels, "critical_channel": jcrit,
         "critical_label": channels[jcrit][3], "moments": mom,
         "rms_stress": rms_stress, "dirlik_rate": dirlik_rate,
         "freqs": sp["freqs"], "omega": sp["omega"], "Ssigma": sp["Ssigma"],
         "Sff": sp["Sff"], "summary": summary, "monte_carlo": mc,
+        "nongaussian": nongaussian,
         "sn_m": m_sn, "sn_C": C_sn, "mean_stress": mean_stress,
         "ultimate": ultimate, "base": base, "stress_modes": Sigma,
     }
 
     _report_fatigue(log, result.fatigue, funct_id, base, base_dir, frf, nev)
+
+
+def _run_nongaussian(ip, gaussian_summary, moments, freqs, psd, m, C,
+                     mean_stress, ultimate, mc_dur, mc_seed):
+    """M24: the NON-GAUSSIAN / KURTOSIS correction of a Gaussian estimator
+    ``gaussian_summary`` (the M20 ``fatigue_summary`` shape) on one channel's
+    ``moments`` [m0..m4]. Returns ``None`` unless /IMPL/FATIG/NGAUSS is set.
+
+    Reads the target kurtosis ``impl_fatig_kurt`` and skewness ``impl_fatig_skew``
+    (card line 3) and computes the closed-form correction lambda_ng (Winterstein
+    Hermite model + Benasciutti-Braccesi / Rizzi-Kihm) that scales the Gaussian
+    spectral damage of every estimator (``nongaussian_summary``); if a Monte-Carlo
+    duration is given it also runs the non-Gaussian time-domain cross-check on the
+    channel PSD (``freqs`` / ``psd``). The result is stored ALONGSIDE the Gaussian
+    numbers so the listing shows both. A PORT sub-flag: the open-source engine has
+    no non-Gaussian fatigue path (module docstring)."""
+    if not bool(getattr(ip, "impl_fatig_ngauss", False)):
+        return None
+    from . import nongaussian_fatigue as ngf
+    gamma4 = float(getattr(ip, "impl_fatig_kurt", 3.0))
+    gamma3 = float(getattr(ip, "impl_fatig_skew", 0.0))
+    bwcorr = bool(getattr(ip, "impl_fatig_bwcorr", True))
+    ng = ngf.nongaussian_summary(
+        moments, m, C, gamma3, gamma4, mean_stress=mean_stress,
+        ultimate=ultimate, bandwidth_correction=bwcorr,
+        gaussian=gaussian_summary)
+    ng_mc = None
+    if mc_dur > 0.0 and freqs is not None and psd is not None:
+        ng_mc = ngf.nongaussian_monte_carlo_damage(
+            freqs, psd, m, C, mc_dur, mc_seed, gamma3, gamma4,
+            mean_stress=mean_stress, ultimate=ultimate)
+    ng["monte_carlo"] = ng_mc
+    return ng
+
+
+def _run_nongaussian_multiaxial(ip, summ, freqs, m, C, mean_stress, ultimate,
+                                mc_dur, mc_seed):
+    """M24 (multiaxial): the NON-GAUSSIAN / KURTOSIS correction of the M21
+    equivalent-stress reductions (von Mises / max-normal / max-shear critical
+    plane). Returns ``None`` unless /IMPL/FATIG/NGAUSS is set.
+
+    Scales each reduction's Gaussian spectral damage by its own lambda_ng (each
+    reduction has its own bandwidth alpha_2, so the correction is per-reduction),
+    and runs a non-Gaussian Monte-Carlo on the max-shear-plane LINEAR projection
+    (the M21 multivariate synthesiser + the Hermite transform). Stored ALONGSIDE
+    the Gaussian reductions. Composes with /MULT / /NPROP / /SPEC — the kurtosis
+    correction on the equivalent scalar the multiaxial reductions produce."""
+    if not bool(getattr(ip, "impl_fatig_ngauss", False)):
+        return None
+    from . import nongaussian_fatigue as ngf
+    gamma4 = float(getattr(ip, "impl_fatig_kurt", 3.0))
+    gamma3 = float(getattr(ip, "impl_fatig_skew", 0.0))
+    bwcorr = bool(getattr(ip, "impl_fatig_bwcorr", True))
+    out = {"gamma4": gamma4, "gamma3": gamma3, "bandwidth_correction": bwcorr}
+    for key in ("von_mises", "normal_plane", "shear_plane"):
+        red = summ[key]
+        out[key] = ngf.nongaussian_summary(
+            red["moments"], m, C, gamma3, gamma4, mean_stress=mean_stress,
+            ultimate=ultimate, bandwidth_correction=bwcorr,
+            gaussian=red["summary"])
+    # a non-Gaussian Monte-Carlo cross-check on the max-shear-plane projection
+    ng_mc = None
+    if mc_dur > 0.0:
+        sp = summ["shear_plane"]
+        ng_mc = ngf.nongaussian_monte_carlo_projected(
+            freqs, summ["Scross"], sp["proj"], m, C, mc_dur, mc_seed, gamma3,
+            gamma4, mean_stress=mean_stress, ultimate=ultimate)
+    out["monte_carlo"] = ng_mc
+    return out
 
 
 def _lookup_psd_fatig(model, funct_id):
@@ -836,6 +917,43 @@ def _report_fatigue(log, fat, funct_id, base, base_dir, frf, nev):
         log.info(f"      {'MONTE-CARLO rainflow':20s}{mc['damage_rate']:14.5E}"
                  f"   {life_s:>14s}   (n_cyc = {mc['ncycles']:.0f}, "
                  f"seed check)")
+    # M24: the NON-GAUSSIAN / KURTOSIS block, printed ALONGSIDE the M20 Gaussian
+    # numbers so the Gaussian and the kurtosis-corrected lives show side by side.
+    if fat.get("nongaussian") is not None:
+        _report_nongaussian(log, fat["nongaussian"])
+
+
+def _report_nongaussian(log, ng):
+    """Print the NON-GAUSSIAN / KURTOSIS (M24) listing block: the target kurtosis
+    / skewness, the Hermite coefficients, the closed-form correction factor
+    lambda_ng and, for each estimator, the CORRECTED damage rate / life ALONGSIDE
+    the Gaussian one, plus the non-Gaussian Monte-Carlo cross-check."""
+    log.info("\n     ** NON-GAUSSIAN / KURTOSIS FATIGUE **      "
+             "(/IMPL/FATIG/NGAUSS)")
+    log.info(f"      TARGET KURTOSIS g4 / SKEWNESS g3 . : "
+             f"{ng['gamma4']:.4F} / {ng['gamma3']:.4F}  (g4 = 3 is Gaussian)")
+    log.info(f"      HERMITE h3 / h4 / kappa  . . . . . : "
+             f"{ng['h3']:+.5F} / {ng['h4']:+.5F} / {ng['kappa']:.5F}")
+    bw = "ON (Benasciutti-Tovo alpha2)" if ng["bandwidth_correction"] else "OFF"
+    log.info(f"      CORRECTION lambda_ng / BW-ATTEN  . : "
+             f"{ng['lambda_ng']:.5F}  [bandwidth atten = {bw}]")
+    log.info("      METHOD              GAUSSIAN RATE    NON-GAUSS RATE   "
+             "NON-GAUSS LIFE")
+    for key, name in (("narrow_band", "NARROW-BAND (Bendat)"),
+                      ("dirlik", "DIRLIK 1985"),
+                      ("wirsching_light", "WIRSCHING-LIGHT"),
+                      ("tovo_benasciutti", "TOVO-BENASCIUTTI")):
+        r = ng[key]
+        life = r["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      {name:20s}{r['gaussian_damage_rate']:14.5E}   "
+                 f"{r['damage_rate']:14.5E}   {life_s:>14s}")
+    if ng.get("monte_carlo") is not None:
+        mc = ng["monte_carlo"]
+        life = mc["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      {'NON-GAUSS MONTE-CARLO':20s}{mc['damage_rate']:14.5E}"
+                 f"   (sample g4 = {mc['kurtosis']:.3F}, life {life_s})")
 
 
 # ============================================================================
@@ -944,9 +1062,21 @@ def _run_multiaxial(model, ip, log, result, frf, Sigma, channels, psd_tab,
                 summ["Mmats"], m_sn, C_sn, k=k_np, sigma_y=sigy,
                 mean_stress=mean_stress, ultimate=ultimate, naz=naz, npol=npol)
 
+    # M24: the NON-GAUSSIAN / KURTOSIS correction of the MULTIAXIAL equivalent
+    # scalars, run ALONGSIDE the M21 spectral reductions (a NEW parallel path —
+    # the reductions above are fully formed and left byte-identical). It scales
+    # each reduction's (von Mises / max-normal / max-shear) Gaussian spectral
+    # damage by the closed-form lambda_ng of the target kurtosis, and runs a
+    # non-Gaussian Monte-Carlo on the max-shear-plane LINEAR projection (the M21
+    # multivariate synthesiser + the Hermite transform). See
+    # implicit/nongaussian_fatigue.py.
+    nongaussian = _run_nongaussian_multiaxial(
+        ip, summ, frf["freqs"], m_sn, C_sn, mean_stress, ultimate, mc_dur,
+        mc_seed)
+
     result.fatigue = {
         "multiaxial": True, "nonproportional": nprop,
-        "spectral_nonproportional": spec_np,
+        "spectral_nonproportional": spec_np, "nongaussian": nongaussian,
         "channels": channels, "voigt_blocks": blocks,
         "critical_element": (cname, ce, cbase),
         "critical_label": cbase,
@@ -1023,6 +1153,44 @@ def _report_multiaxial(log, fat, funct_id, base, base_dir, frf, nev):
     # proportional-spectral answer; these are the rotating-shear-path answer).
     if fat.get("nprop_result") is not None:
         _report_nonproportional(log, fat["nprop_result"])
+    # M24: the NON-GAUSSIAN / KURTOSIS correction of the multiaxial reductions,
+    # printed ALONGSIDE the Gaussian numbers.
+    if fat.get("nongaussian") is not None:
+        _report_nongaussian_multiaxial(log, fat["nongaussian"])
+
+
+def _report_nongaussian_multiaxial(log, ng):
+    """Print the MULTIAXIAL NON-GAUSSIAN / KURTOSIS (M24) listing block: the
+    target kurtosis / skewness and, for each reduction (von Mises / max-normal /
+    max-shear), the correction lambda_ng and the CORRECTED Dirlik damage rate /
+    life ALONGSIDE the Gaussian one, plus the non-Gaussian Monte-Carlo."""
+    log.info("\n     ** NON-GAUSSIAN / KURTOSIS FATIGUE **      "
+             "(/IMPL/FATIG/NGAUSS)")
+    bw = "ON (Benasciutti-Tovo alpha2)" if ng["bandwidth_correction"] else "OFF"
+    log.info(f"      TARGET KURTOSIS g4 / SKEWNESS g3 . : "
+             f"{ng['gamma4']:.4F} / {ng['gamma3']:.4F}  "
+             f"[bandwidth atten = {bw}]")
+    log.info("      REDUCTION            lambda_ng   GAUSS DIRLIK RATE  "
+             "NON-GAUSS RATE   NON-GAUSS LIFE")
+    for key, name in (("von_mises", "VON MISES"),
+                      ("normal_plane", "MAX-NORMAL PLANE"),
+                      ("shear_plane", "MAX-SHEAR PLANE")):
+        r = ng.get(key)
+        if r is None:
+            continue
+        dk = r["dirlik"]
+        life = dk["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      {name:18s}{r['lambda_ng']:11.5F}  "
+                 f"{dk['gaussian_damage_rate']:14.5E}  "
+                 f"{dk['damage_rate']:14.5E}   {life_s:>14s}")
+    if ng.get("monte_carlo") is not None:
+        mc = ng["monte_carlo"]
+        life = mc["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      NON-GAUSS MONTE-CARLO (shear plane) : "
+                 f"{mc['damage_rate']:.5E}  (sample g4 = {mc['kurtosis']:.3F}, "
+                 f"life {life_s})")
 
 
 def _report_nonproportional(log, npres):

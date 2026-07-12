@@ -115,6 +115,7 @@ same names in comments.
 | — (NO frequency-domain / spectral-fatigue solver of ANY kind — scalar OR multiaxial — anywhere in the open-source engine — `freimpl.F` re-read line by line for M21: no /FATIG, no von-Mises / critical-plane / cross-PSD machinery; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/multiaxial_fatigue.py` + the per-element Voigt-block helpers & `_run_multiaxial` driver in `pyradioss/implicit/random_response.py` + `/IMPL/FATIG/MULT` in `engine_keywords.py` | M21: MULTIAXIAL / CRITICAL-PLANE SPECTRAL FATIGUE — the damage estimate of a MULTIAXIAL stress STATE, the natural consumer of the M20 scalar-channel fatigue and vector stress FRF. STRESS-TENSOR CROSS-PSD: the M20 vector stress modes give the FULL 6-Voigt stress FRF H_σ(Ω) (nf,6) per solid/shell element (read-only); the stress-tensor cross-PSD S_σσ(Ω) = H_σ S_ff H_σᴴ (a 6×6 Hermitian matrix per frequency per element) — its diagonal = the M20 per-component channel PSDs, uniaxial → the M20 scalar σₓₓ. EQUIVALENT-STRESS METHODS: reduce the 6×6 to a scalar and run the M20 estimators — the frequency-domain EQUIVALENT VON MISES S_vm = trace(Q·S_σσ) (Preumont & Piéfort 1994 / Pitoiset & Preumont 2000, the von Mises quadratic operator Q; rank-1 form HᴴQH), plus MAX-NORMAL and MAX-SHEAR CRITICAL PLANE (Carpinteri–Spagnoli / Cristofori–Susmel–Tovo, the projection-by-direction spectral form σₙ=pₙᵀσ, τ=pₛᵀσ over a searched candidate-plane set), reporting the critical-plane damage/equivalent-stress/life. A MULTIVARIATE Monte-Carlo cross-check (Cholesky/eigen of S_σσ → correlated Gaussian component histories → project onto the critical plane → ASTM E1049 rainflow → Miner, seeded). PORT sub-card, library-first exactly like M16–M20; the M10 integrator and the M16–M20 paths (incl. the M20 SCALAR fatigue) stay bit-identical (a NEW parallel path consuming the vector stress modes read-only). Theory: Preumont & Piéfort 1994; Pitoiset & Preumont 2000; Carpinteri–Spagnoli 2001; Cristofori/Susmel–Tovo 2008; Socie & Marquis; Shinozuka & Deodatis (multivariate synthesis) |
 | — (NO frequency-domain / spectral / critical-plane / path-counting fatigue solver of ANY kind anywhere in the open-source engine — `freimpl.F` re-read line by line for M22: no /FATIG, no critical-plane / MCC / Findley / Fatemi-Socie machinery; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/nonproportional_fatigue.py` + the `_run_nonproportional` extension of the `_run_multiaxial` driver (`_report_nonproportional`) in `pyradioss/implicit/random_response.py` + `/IMPL/FATIG/MULT/NPROP` in `engine_keywords.py` | M22: NON-PROPORTIONAL MULTIAXIAL FATIGUE — the critical-plane TIME-DOMAIN path-counting damage of a rotating (non-proportional) shear path, the FIRST item deferred out of M21 that BUILDS on it (the rotating-shear PATH the M21 projected-equivalent spectral methods deferred), the natural consumer of the M21 multivariate synthesiser + candidate-plane machinery. SHEAR-PATH AMPLITUDE OPERATORS: on a candidate plane, the 2-D resolved-shear locus (τ_a(t),τ_b(t)) in the M21 in-plane basis (a `shear_projection` per in-plane axis of a synthesised stress-component history) — the MINIMUM CIRCUMSCRIBED CIRCLE (Papadopoulos 1998, radius = τ_a; Welzl on the convex hull), the LONGEST CHORD / longest projection (the diameter), and the MAXIMUM RECTANGULAR / PRISMATIC HULL (Mamiya–Araújo–Castro 2009, max_θ √(a1²+a2²)). All collapse to the scalar M21 amplitude for a proportional line; for a circle MCC=r, chord=2r, MRH=r√2. A non-proportionality factor F_np = √(λ₂/λ₁) of the 2-D shear-path covariance (the Itoh–Kanazawa aspect-ratio form: 0 for a line, 1 for a circle). CRITICAL-PLANE TIME-DOMAIN DAMAGE: over the M21-synthesised correlated stress-component histories (seeded), resolve σ_n(t) and the shear PATH on each candidate plane, rainflow (ASTM E1049) the dominant resolved shear scaled by the non-proportional path factor g=MRH/scalar, and apply FINDLEY (τ_a + k σ_n,max) and FATEMI–SOCIE (γ_a(1 + k σ_n,max/σ_y)) carrying the per-plane MAX NORMAL stress (which folds in that plane's mean — a piece of the M20/M21 mean-stress deferral). Search the critical plane (max criterion parameter — the textbook Findley/FS definition), report the plane, F_np, damage rate / life. For PROPORTIONAL loading the path count reduces to the M21 max-shear rainflow (g=1, F_np=0); for a 90°-out-of-phase case the non-proportional damage is g^m higher than the scalar projection (F_np≈1) — the extra damage the spectral method misses. PORT sub-flag, library-first exactly like M16–M21; the M10 integrator, the M16–M20 paths AND the M21 SPECTRAL reductions stay bit-identical (a NEW parallel path — the M21 spectral answer is byte-identical whether or not /NPROP runs). Theory: Papadopoulos 1998; Mamiya–Araújo–Castro 2009; Findley 1959; Fatemi–Socie 1988; Matake 1977; Carpinteri–Spagnoli 2001; Itoh–Sakane–Socie 1995; Socie & Marquis ch. 2–4 |
 | — (NO frequency-domain / spectral / critical-plane / non-proportional fatigue solver of ANY kind anywhere in the open-source engine — `freimpl.F` re-read line by line for M23: no /FATIG, no frequency-domain non-proportionality / modified-Wöhler / spectral-invariant machinery; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/spectral_nonproportional_fatigue.py` + the `_run_spectral_nonproportional` extension of the `_run_multiaxial` driver (`_report_spectral_nonproportional`) in `pyradioss/implicit/random_response.py` + `/IMPL/FATIG/MULT/NPROP/SPEC` in `engine_keywords.py` | M23: SPECTRAL NON-PROPORTIONAL MULTIAXIAL FATIGUE — the FREQUENCY-DOMAIN non-proportionality factor and critical-plane damage estimated DIRECTLY from the stress-tensor cross-PSD spectral-MOMENT matrices, with NO synthesised history (the Cristofori–Susmel–Tovo / Pitoiset spectral method M22's time-domain path count deferred), the SPECTRAL sibling of M22. SPECTRAL SHEAR-PATH / F_np: on a candidate plane, the 2×2 in-plane shear cross-spectral moment matrix Σ_τ (the 2×2 block of the M21 M₀ = E[σσᵀ] built from `shear_projection` along each in-plane axis — NO synthesis), and F_np = √(λ₂/λ₁) of its eigenvalues — EQUALS the M22 TIME-DOMAIN F_np (the identity M₀ = E[σσᵀ] = the covariance the synthesiser reproduces); F_np = 0 for a proportional (rank-1) state, → 1 for the 90°-out-of-phase circle. SPECTRAL CRITICAL-PLANE DAMAGE: the dominant-shear PSD moments p_domᵀMₙp_dom and resolved-normal p_nᵀMₙp_n (from p^T Mₙ p, no history), the closed-form non-proportional amplitude correction g² = 1 + F_np² = trace(Σ_τ)/λ₁ (the exact MRH/MCC ratio of an elliptical path — the M22 prismatic-hull effect read spectrally), the Susmel–Tovo modified-Wöhler stress ratio ρ = σ_a/τ_a, and the equivalent-stress moments per model (FINDLEY as the spectral-invariant linear combination g·τ + k·σ_n, FATEMI–SOCIE, SHEAR-PATH) run through the four M20 estimators. For PROPORTIONAL loading the spectral shear-path damage reduces EXACTLY to the M21 max-shear spectral answer (F_np=0); for 90°-out-of-phase it is (1+F_np²)^(m/2)=2^(m/2) higher than the M21 projected scalar AND agrees with the M22 time-domain path count within scatter (the two non-proportional methods converge). PORT sub-flag, library-first exactly like M16–M22; the M10 integrator, the M16–M20 paths, the M21 SPECTRAL reductions AND the M22 TIME-DOMAIN path count stay bit-identical (a NEW parallel path — both byte-identical whether or not /SPEC runs). Theory: Pitoiset & Preumont 2000; Cristofori–Susmel–Tovo 2008; Susmel & Lazzarin 2002; Bäckström & Marquis 2001; Carpinteri–Spagnoli–Vantadori 2013 |
+| — (NO frequency-domain / spectral / non-Gaussian fatigue solver of ANY kind anywhere in the open-source engine — `freimpl.F` re-read line by line for M24: no /FATIG, no non-Gaussian / kurtosis / Hermite-moment / Winterstein machinery; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/nongaussian_fatigue.py` + the `_run_nongaussian` / `_run_nongaussian_multiaxial` extensions of the `run_fatigue` / `_run_multiaxial` drivers (`_report_nongaussian` / `_report_nongaussian_multiaxial`) in `pyradioss/implicit/random_response.py` + `/IMPL/FATIG/NGAUSS` in `engine_keywords.py` | M24: NON-GAUSSIAN / KURTOSIS SPECTRAL FATIGUE — the frequency-domain damage of a stationary but NON-GAUSSIAN random-vibration response, computed by CORRECTING the M20–M23 Gaussian spectral estimators for a specified kurtosis (and skewness). WINTERSTEIN HERMITE MODEL: g(u) = κ[u + h₃(u²−1) + h₄(u³−3u)] maps a standard Gaussian u to the non-Gaussian process for a target γ₄/γ₃ (the softening fit h₄ = (√(1+1.5(γ₄−3))−1)/18; κ = 1/√(1+2h₃²+6h₄²) preserves the mean/variance EXACTLY). CORRECTION FACTOR: λ_ng = E[g(V)ᵐ]/E[Vᵐ] over the Rayleigh amplitude V (Benasciutti–Braccesi / Rizzi–Kihm), scaling the Gaussian narrow-band / Dirlik / Wirsching-Light / Tovo-Benasciutti damage, with an optional Benasciutti–Tovo bandwidth attenuation γ₄,eff = 3 + (γ₄−3)α₂. NON-GAUSSIAN MONTE-CARLO: the M20 Gaussian history pushed through the memoryless Hermite transform to (γ₃, γ₄), ASTM E1049 rainflow + Miner (`synthesize_nongaussian_history` / `nongaussian_monte_carlo_damage` / `_projected`). λ_ng = 1 for Gaussian (M20 recovered EXACTLY), > 1 leptokurtic, < 1 platykurtic; composes with /MULT, /NPROP, /SPEC (a scalar correction on the equivalent-stress PSD the M21/M23 reductions produce). PORT sub-flag, library-first exactly like M16–M23; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions stay bit-identical (a NEW parallel path — byte-identical whether or not /NGAUSS runs). Theory: Winterstein 1988; Winterstein & MacKenzie 1997; Benasciutti & Tovo 2005/2006; Braccesi–Cianetti–Lori–Pioli 2009; Rizzi–Kihm–Ferguson; Kihm & Rizzi 2013 |
 
 ## 3. Conventions used in this port
 
@@ -282,7 +283,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | **MULTIAXIAL / CRITICAL-PLANE SPECTRAL FATIGUE (M21)**: the fatigue-damage estimate of a MULTIAXIAL stress STATE (`implicit/multiaxial_fatigue.py`, the per-element Voigt-block helpers + `_run_multiaxial` in `implicit/random_response.py`, `/IMPL/FATIG/MULT`). STRESS-TENSOR CROSS-PSD — the M20 vector stress modes give the FULL 6-Voigt stress FRF H_σ(Ω) (nf,6) per solid/shell element (read-only, the M20 recovery reused unchanged), and the stress-tensor cross-PSD S_σσ(Ω) = H_σ S_ff H_σᴴ (a 6×6 Hermitian matrix per frequency per element). EQUIVALENT-STRESS METHODS — reduce the 6×6 to a scalar EQUIVALENT-stress PSD and run the four M20 estimators on its moments: the frequency-domain EQUIVALENT VON MISES S_vm(Ω) = trace(Q·S_σσ) (Preumont & Piéfort 1994 / Pitoiset & Preumont 2000, the von Mises quadratic operator Q; evaluated through the cheap rank-1 HᴴQH form), the MAX-NORMAL-stress and MAX-SHEAR-stress CRITICAL PLANE (Carpinteri–Spagnoli / Cristofori–Susmel–Tovo, the projection σₙ = pₙᵀσ, τ = pₛᵀσ over a searched candidate-plane set; the shear direction from the leading eigenvector of the 2×2 in-plane covariance) — reporting the damage/equivalent-stress/life and the critical-plane orientation, picking the critical ELEMENT by von Mises Dirlik damage. A seeded MULTIVARIATE Monte-Carlo cross-check (per-bin eigendecomposition / Cholesky of S_σσ → correlated Gaussian component histories → project onto the critical plane → ASTM E1049 rainflow → Miner). Validated: uniaxial → the M20 scalar σₓₓ (cross-PSD collapse, von Mises reduction); the cross-PSD diagonal = the M20 per-component channel PSDs, Hermitian; the trace / quadratic-operator identity (trace(Q Mₙ) = the direct S_vm moments); the von Mises operator on the textbook invariants; pure shear recovering the 45° max-normal plane and the coordinate max-shear plane, both at the shear amplitude; p^T Mₙ p = the |H·p|² S scalar moments; the multivariate synthesis reproducing the full covariance (variances AND cross-covariances = M₀); the Monte-Carlo critical-plane damage matching Dirlik within scatter. PORT sub-card, library-first like M16–M20; the M10 integrator and the M16–M20 paths (incl. the M20 SCALAR fatigue) stay BIT-IDENTICAL (a NEW parallel path consuming the vector stress modes read-only — asserted). Theory: Preumont & Piéfort 1994; Pitoiset & Preumont 2000; Carpinteri–Spagnoli 2001; Cristofori/Susmel–Tovo 2008; Socie & Marquis; Shinozuka & Deodatis | ✅ |
 | **NON-PROPORTIONAL MULTIAXIAL FATIGUE (M22)**: the CRITICAL-PLANE, TIME-DOMAIN, PATH-COUNTING damage of a rotating (non-proportional) shear path (`implicit/nonproportional_fatigue.py`, the `_run_nonproportional` extension of `_run_multiaxial` in `implicit/random_response.py`, `/IMPL/FATIG/MULT/NPROP`) — the rotating-shear PATH the M21 projected-equivalent spectral methods deferred, consuming the M21 multivariate synthesiser + candidate-plane machinery read-only. SHEAR-PATH AMPLITUDE OPERATORS — the 2-D resolved-shear locus (τ_a(t),τ_b(t)) on each candidate plane, and its amplitude by the MINIMUM CIRCUMSCRIBED CIRCLE (Papadopoulos 1998, Welzl on the hull), the LONGEST CHORD (the diameter) and the MAXIMUM RECTANGULAR / PRISMATIC HULL (Mamiya–Araújo–Castro 2009, max_θ √(a1²+a2²)), plus the non-proportionality factor F_np = √(λ₂/λ₁) of the shear-path covariance (Itoh–Kanazawa aspect-ratio form: 0 for a line, 1 for a circle). CRITICAL-PLANE TIME-DOMAIN DAMAGE — over the M21-synthesised correlated stress-component histories (seeded), rainflow (ASTM E1049) the dominant resolved shear scaled by the non-proportional path factor g = MRH/scalar, and apply FINDLEY (τ_a + k σ_n,max) and FATEMI–SOCIE (γ_a(1 + k σ_n,max/σ_y)) carrying the per-plane MAX NORMAL stress (folding in the plane mean), searching the critical plane by the criterion parameter and reporting the plane / F_np / damage rate / life. Validated: proportional line → all three operators collapse to the scalar M21 amplitude, F_np = 0; circle → MCC = r, chord = 2r, MRH = r√2, F_np = 1; ellipse MRH = √(p²+q²), MCC = major semi-axis, F_np = q/p; the off-centre-circle MCC recovering radius + centre; proportional path count → the M21 max-shear rainflow within scatter (g = 1); 90°-out-of-phase → g^m ≈ 2^(m/2) higher than the scalar projection with F_np ≈ 1; a two-channel-sinusoid hand check of MCC / MRH / Findley / Fatemi-Socie. PORT sub-flag, library-first like M16–M21; the M10 integrator, the M16–M20 paths AND the M21 SPECTRAL reductions stay BIT-IDENTICAL (a NEW parallel path — the M21 spectral damage rates AND critical-plane orientations byte-identical whether or not /NPROP runs — asserted). Theory: Papadopoulos 1998; Mamiya–Araújo–Castro 2009; Findley 1959; Fatemi–Socie 1988; Matake 1977; Carpinteri–Spagnoli 2001; Itoh–Sakane–Socie 1995; Socie & Marquis ch. 2–4 | ✅ |
 | **SPECTRAL NON-PROPORTIONAL MULTIAXIAL FATIGUE (M23)**: the FREQUENCY-DOMAIN non-proportionality factor and critical-plane damage estimated DIRECTLY from the stress-tensor cross-PSD spectral-MOMENT matrices, with NO synthesised history (`implicit/spectral_nonproportional_fatigue.py`, the `_run_spectral_nonproportional` extension of `_run_multiaxial` in `implicit/random_response.py`, `/IMPL/FATIG/MULT/NPROP/SPEC`) — the spectral estimator the M22 time-domain path count deferred, the SPECTRAL sibling of M22, both built on the M21 moment-matrix / candidate-plane machinery (read-only). SPECTRAL SHEAR-PATH COVARIANCE + F_np — the 2×2 in-plane shear block Σ_τ of M₀ = E[σσᵀ] (`inplane_shear_covariance`, from `pₐᵀM₀pₐ`, `pₐᵀM₀p_b`, `p_bᵀM₀p_b`), and F_np = √(λ₂/λ₁) of its eigenvalues (`spectral_nonproportionality_factor`) — EQUALS the M22 TIME-DOMAIN F_np (the identity M₀ = E[σσᵀ] = the covariance the synthesiser reproduces), computed with no synthesis. SPECTRAL CRITICAL-PLANE DAMAGE — the dominant-shear PSD moments mₙ^τ = p_domᵀMₙp_dom and resolved-normal moments p_nᵀMₙp_n (from p^T Mₙ p, no history), the closed-form non-proportional amplitude correction g² = 1 + F_np² = trace(Σ_τ)/λ₁ (the exact MRH/MCC ratio of an elliptical path), the Susmel–Tovo modified-Wöhler stress ratio ρ = σ_a/τ_a, the Findley (spectral-invariant linear combination g·τ + k·σ_n) / Fatemi–Socie / shear-path models, searched by the amplitude-only criterion parameter and run through the four M20 estimators on the corrected moments. Validated: the 2×2 shear block = the M22 time-domain shear-path covariance; spectral F_np = M22 time-domain F_np; F_np = 0 for a proportional (rank-1) state, → 1 for the 90°-out-of-phase circle (closed forms); the resolved amplitudes matching the M22 synthesised RMS; proportional → the M21 max-shear spectral answer EXACTLY (no correction); 90°-out-of-phase → g^m = 2^(m/2) higher than the M21 projected scalar AND agreeing with the M22 time-domain path count within scatter; a two-channel-cross-PSD hand check of F_np / ρ / g. PORT sub-flag, library-first like M16–M22; the M10 integrator, the M16–M20 paths, the M21 SPECTRAL reductions AND the M22 TIME-DOMAIN path count stay BIT-IDENTICAL (a NEW parallel path — both byte-identical whether or not /SPEC runs — asserted). Theory: Pitoiset & Preumont 2000; Cristofori–Susmel–Tovo 2008; Susmel & Lazzarin (modified Wöhler curve) 2002; Bäckström & Marquis 2001; Carpinteri–Spagnoli–Vantadori 2013 | ✅ |
-| Lanczos/subspace for large models; AMLS / substructuring; non-stationary / evolutionary PSD; multi-input cross-PSD with coherence; non-proportional HARDENING as a material model; mean-stress beyond the per-plane normal / basic Goodman option; crack-growth / fracture-mechanics fatigue; non-Gaussian / kurtosis corrections; the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21/M22/M23 roadmap notes) |
+| **NON-GAUSSIAN / KURTOSIS SPECTRAL FATIGUE (M24)**: the frequency-domain damage of a stationary but NON-GAUSSIAN random-vibration response, computed by CORRECTING the M20–M23 Gaussian spectral estimators for a specified kurtosis / skewness (`implicit/nongaussian_fatigue.py`, the `_run_nongaussian` / `_run_nongaussian_multiaxial` extensions of the M20/M21 drivers in `implicit/random_response.py`, `/IMPL/FATIG/NGAUSS`) — the FIRST fatigue item deferred out of M20–M23 that BUILDS on the spectral-fatigue machinery (every prior estimator assumed a stationary GAUSSIAN response; M24 lifts exactly that). WINTERSTEIN HERMITE-MOMENT MODEL — g(u) = κ[u + h₃(u²−1) + h₄(u³−3u)] (`hermite_coefficients` / `hermite_transform`) maps a standard Gaussian u to the non-Gaussian process for a target γ₄/γ₃; Gaussian-orthogonality gives EXACTLY zero mean and (κ = 1/√(1+2h₃²+6h₄²)) unit variance, the softening fit h₄ = (√(1+1.5(γ₄−3))−1)/18, h₃ = γ₃/(6(1+6h₄)). CORRECTION FACTOR — λ_ng = E[g(V)ᵐ]/E[Vᵐ] over the Rayleigh(1) amplitude V (`nongaussian_correction_factor`, Benasciutti–Braccesi / Rizzi–Kihm), scaling the Gaussian narrow-band / Dirlik / Wirsching-Light / Tovo-Benasciutti damage (`nongaussian_summary`), with an optional Benasciutti–Tovo bandwidth attenuation γ₄,eff = 3 + (γ₄−3)α₂. NON-GAUSSIAN MONTE-CARLO — the M20 Gaussian history pushed through the memoryless Hermite transform to (γ₃, γ₄) (`synthesize_nongaussian_history`), ASTM E1049 rainflow + Miner (`nongaussian_monte_carlo_damage`; `_projected` for the multiaxial critical-plane scalar). Validated: λ_ng = 1 for a Gaussian process (γ₄ = 3, γ₃ = 0) — the M20 answer recovered EXACTLY; λ_ng > 1 leptokurtic (γ₄ > 3), < 1 platykurtic (γ₄ < 3), monotone in γ₄ and m; the Hermite transform preserving the mean/variance EXACTLY and hitting the target kurtosis (exact-moment + large-sample hand checks); the non-Gaussian Monte-Carlo damage matching the λ_ng-corrected spectral estimate within the seeded scatter on a narrow band, and reducing EXACTLY to the M20 Gaussian Monte-Carlo in the Gaussian limit; composes with /MULT, /NPROP, /SPEC (a scalar correction on the equivalent-stress PSD the M21/M23 reductions produce). PORT sub-flag, library-first like M16–M23; the M10 integrator, the M16–M20 paths AND the M21–M23 MULTIAXIAL reductions stay BIT-IDENTICAL (a NEW parallel path — the M20–M23 answers byte-identical whether or not /NGAUSS runs — asserted). Theory: Winterstein 1988; Winterstein & MacKenzie 1997; Benasciutti & Tovo 2005/2006; Braccesi–Cianetti–Lori–Pioli 2009; Rizzi–Kihm–Ferguson; Kihm & Rizzi 2013 | ✅ |
+| Lanczos/subspace for large models; AMLS / substructuring; non-stationary / evolutionary PSD; multi-input cross-PSD with coherence; non-proportional HARDENING as a material model; mean-stress beyond the per-plane normal / basic Goodman option; crack-growth / fracture-mechanics fatigue; a full non-Gaussian MULTIAXIAL joint distribution (beyond the M24 equivalent-scalar kurtosis correction); the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21/M22/M23/M24 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -2433,6 +2435,138 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       implicit, the UL hourglass memory, the NLGEOM hourglass-operator geometry
       variation, the BT4 thin-plate shear-lock / drilling floor.
 
+23. **M24 — NON-GAUSSIAN / KURTOSIS SPECTRAL FATIGUE** ✅ (done):
+    the FIRST item deferred out of M20–M23 that BUILDS on the spectral-fatigue
+    machinery — the frequency-domain damage of a stationary but NON-GAUSSIAN
+    random-vibration response, computed by CORRECTING the M20–M23 Gaussian
+    spectral estimators for a specified kurtosis (and skewness), with the
+    correction cross-validated against a non-Gaussian time-domain Monte-Carlo.
+    Every spectral estimator so far assumed a stationary GAUSSIAN response (the
+    |H|²S law of a Gaussian input, the Rayleigh peak / rainflow-range PDFs); M24
+    lifts EXACTLY that Gaussian assumption while keeping the process stationary —
+    the natural consumer of the M20 scalar / M21–M23 multiaxial moment + Dirlik
+    machinery. A NEW, parallel path (`implicit/nongaussian_fatigue.py` + the
+    `_run_nongaussian` / `_run_nongaussian_multiaxial` extensions of the M20/M21
+    drivers in `implicit/random_response.py`) that never touches the M10
+    integrator, the M16 eigensolver, the M17/M18 superposition, the M19 PSD path,
+    the M20 SCALAR fatigue, the M21 MULTIAXIAL SPECTRAL path, the M22
+    NON-PROPORTIONAL TIME-DOMAIN path OR the M23 SPECTRAL NON-PROPORTIONAL path
+    (all stay bit-identical — the M20–M23 answers are byte-identical whether or
+    not /NGAUSS runs, asserted). Theory: Winterstein, "Nonlinear vibration models
+    for extremes and fatigue" (J. Eng. Mech. 114, 1988 — the Hermite-moment
+    transformation g(u)); Winterstein & MacKenzie 1997 / Winterstein & Kashef 2000
+    (the refined softening coefficients); Benasciutti & Tovo, "Cycle distribution
+    and fatigue damage assessment in broad-band non-Gaussian random processes"
+    (Prob. Eng. Mech. 20, 2005; Int. J. Fatigue 2006 — the bandwidth-dependent
+    non-Gaussian rainflow correction); Braccesi, Cianetti, Lori & Pioli, "Fatigue
+    behaviour analysis of mechanical components subject to random bimodal stress
+    process: frequency domain approach" (Int. J. Fatigue 31, 2009 — the closed-form
+    non-Gaussian damage correction coefficient); Rizzi, Kihm, Ferguson, Przekop et
+    al. (the kurtosis-corrected spectral damage); Kihm & Rizzi, "Understanding how
+    kurtosis is transferred from input acceleration to stress response" (2013 —
+    non-Gaussian random fatigue); Ochi & Ahn 1994.
+
+    Fortran origin: there is NONE — `engine/source/input/freimpl.F` (re-read line
+    by line for M24, 639 lines fetched from raw.githubusercontent.com) has no
+    /FATIG, no S-N / Miner branch, and NO non-Gaussian / kurtosis / Hermite-moment
+    / Winterstein machinery of any kind (the sole `PSD` token is still `IMUMPSD`, a
+    MUMPS-solver flag at line 269). OpenRadioss is a time-domain crash/impact code
+    — the stationary random-vibration fatigue analysis, Gaussian (M20–M23) OR
+    non-Gaussian (M24), simply is not part of the open-source solver (the same
+    finding M16–M23 made). So M24 ports the non-Gaussian / kurtosis correction as a
+    clean LIBRARY capability behind a minimal PORT sub-flag (/IMPL/FATIG/NGAUSS —
+    the non-Gaussian analogue of the M20 /IMPL/FATIG Gaussian card), exactly as
+    M16–M23 did.
+
+    * **NON-GAUSSIAN CORRECTION FACTOR + HERMITE MOMENTS**
+      (`nongaussian_fatigue.py`): the Winterstein Hermite-moment model
+      g(u) = κ[u + h₃(u²−1) + h₄(u³−3u)] (`hermite_coefficients` /
+      `hermite_transform`) maps a standard Gaussian u to the non-Gaussian process
+      for a target kurtosis γ₄ and skewness γ₃; because the Hermite polynomials are
+      Gaussian-orthogonal the transform has EXACTLY zero mean and (with
+      κ = 1/√(1 + 2h₃² + 6h₄²)) EXACTLY unit variance, and the coefficients hit the
+      target moments (the refined softening fit h₄ = (√(1 + 1.5(γ₄−3)) − 1)/18,
+      h₃ = γ₃/(6(1 + 6h₄)) for γ₄ ≥ 3; the first-order h₄ = (γ₄−3)/24 for a
+      platykurtic target). The closed-form correction coefficient (Benasciutti–
+      Braccesi / Rizzi–Kihm) is the ratio of the non-Gaussian to the Gaussian
+      m-th range moment, the Winterstein amplitude transform integrated over the
+      Rayleigh(1) amplitude: λ_ng = E[g(V)ᵐ]/E[Vᵐ] (`nongaussian_correction_
+      factor`), which SCALES the Gaussian narrow-band / Dirlik / Wirsching-Light /
+      Tovo-Benasciutti damage (`nongaussian_summary`), with an optional
+      Benasciutti–Tovo bandwidth attenuation γ₄,eff = 3 + (γ₄−3)α₂ (a wide-band
+      process gets less correction). Validated: λ_ng = 1 for a GAUSSIAN process
+      (γ₄ = 3, γ₃ = 0) — the M20 answer recovered EXACTLY (the identity transform);
+      λ_ng > 1 for a LEPTOKURTIC (γ₄ > 3, spiky) process and < 1 for a PLATYKURTIC
+      (γ₄ < 3) one (closed forms), monotone in γ₄ and the slope m; the Hermite
+      transform preserving the mean/variance EXACTLY and hitting the target
+      kurtosis (an exact-moment hand check + a large-sample check).
+    * **NON-GAUSSIAN MONTE-CARLO CROSS-CHECK** (`nongaussian_fatigue.py`): a
+      non-Gaussian time-domain synthesiser — the M20 Gaussian spectral-
+      representation history pushed through the memoryless Hermite / power-law
+      transform g(u) to the target (γ₃, γ₄) (`synthesize_nongaussian_history`) —
+      rainflow-counted (the M20 ASTM E1049 counter) and Miner-summed
+      (`nongaussian_monte_carlo_damage`, and `nongaussian_monte_carlo_projected`
+      for the multiaxial critical-plane projection). The static/memoryless
+      transform preserves the PSD SHAPE only approximately (a cubic nonlinearity
+      injects harmonics — the documented bandwidth caveat: the correction is exact
+      for a narrow band). Validated: the synthesised history hitting the target
+      sample kurtosis/skewness; the non-Gaussian Monte-Carlo damage matching the
+      λ_ng-corrected spectral damage within the seeded scatter on a NARROW-band
+      process (where the amplitude and instantaneous transforms coincide); the
+      Gaussian limit (γ₄ = 3) reducing the non-Gaussian Monte-Carlo EXACTLY
+      (bit-identical) to the M20 Gaussian Monte-Carlo.
+    * **Engine sub-flag + reporting** (`random_response._run_nongaussian` /
+      `_run_nongaussian_multiaxial`): /IMPL/FATIG/NGAUSS (composing with /MULT,
+      /NPROP, /SPEC — it is ORTHOGONAL, a scalar correction on whatever
+      equivalent-stress PSD the M20–M23 path produces) recovers the (scalar OR
+      multiaxial von-Mises / critical-plane) stress PSD as M20–M23 do, computes
+      λ_ng and the corrected damage rate / equivalent stress / life, runs the
+      non-Gaussian Monte-Carlo cross-check, and reports the non-Gaussian damage /
+      kurtosis / λ_ng ALONGSIDE the M20 Gaussian numbers on
+      `model.implicit_result.fatigue['nongaussian']` and in the listing (a new
+      NON-GAUSSIAN / KURTOSIS block showing the Gaussian and the kurtosis-corrected
+      answers side by side). The kurtosis (and optional skewness) go on a THIRD
+      card line: kurt [skew]. A PORT sub-flag, minimal like /IMPL/FATIG.
+    * **Example**: `examples/nongaussian_fatigue` — the M20 `spectral_fatigue`
+      base-excited instrument stack re-run under /IMPL/FATIG/NGAUSS/BASE with a
+      leptokurtic input (γ₄ = 6): the M20 Gaussian block UNCHANGED, then the
+      NON-GAUSSIAN / KURTOSIS block with λ_ng ≈ 2.85 and the ~3× shorter
+      kurtosis-corrected life, plus the non-Gaussian Monte-Carlo cross-check.
+    * **Validated** (`tests/test_m24_ngfatig.py`): all of the above plus the
+      /IMPL/FATIG/NGAUSS (composing with /MULT, /NPROP, /SPEC) card mirror and the
+      parity contract (the non-Gaussian path never mutating the M16 eigensolver /
+      M17–M19 transfer functions / the M20 SCALAR fatigue / the M21–M23 MULTIAXIAL
+      reductions / the element state; the M20 SCALAR AND the M21/M22/M23
+      MULTIAXIAL damage rates byte-identical whether or not /NGAUSS runs; the
+      direct /IMPL/DYNA answer byte-identical).
+
+    Deferred out of M24, explicitly (not half-implemented):
+    * NON-STATIONARY / evolutionary-PSD fatigue — the kurtosis here is a
+      STATIONARY non-Gaussian correction (a fixed one-point marginal), NOT a
+      time-varying PSD; a genuinely non-stationary (burst / run-up) process is a
+      different analysis and remains DEFERRED;
+    * a full non-Gaussian MULTIAXIAL JOINT distribution (a vector Hermite transform
+      of the correlated stress tensor): M24 applies the SCALAR kurtosis correction
+      to the (von Mises / critical-plane) equivalent scalar the M21/M23 reductions
+      already produce, so it COMPOSES with the multiaxial / non-proportional paths
+      but does not model a joint non-Gaussian tensor;
+    * the WIDE-BAND correction uses the narrow-band-exact Winterstein amplitude
+      transform with a first-order α₂ bandwidth attenuation (Benasciutti–Tovo), NOT
+      the exact empirical Braccesi 2009 fit constants (DEFERRED — the Hermite-
+      derived form is more principled and matches the Monte-Carlo directly); the
+      memoryless transform preserves the PSD shape only approximately (documented);
+    * MEAN-STRESS beyond the basic M20/M21 Goodman intercept, CRACK-GROWTH /
+      fracture-mechanics fatigue, the COMPLEX-FRF stress recovery and a MULTI-INPUT
+      cross-PSD with coherence — the unchanged M20–M23 tail;
+    * the unchanged M10–M23 deferral tail: multi-input cross-PSD with coherence,
+      multi-directional 100-30-30 response spectra, the complex-FRF base-excitation
+      feed, gyroscopic / circulatory systems, Lanczos / subspace + AMLS, IFQ ≥ 10
+      / MODFR 2, /FRICTION per-part-pair sets, orthotropic / thermal friction, the
+      fiber TYPE18 beam, the LAW27 plastic block / solids, thermal contact,
+      TYPE19/24/25, Inacti, Igap 2/3, LAW42 shells/Prony, IDTC 2/3, /RWALL under
+      implicit, the UL hourglass memory, the NLGEOM hourglass-operator geometry
+      variation, the BT4 thin-plate shear-lock / drilling floor.
+
 ## 6. Validation strategy
 
 `tests/` contains two layers:
@@ -2535,6 +2669,29 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
   damage rates AND the M22 damage rates + critical-plane orientations byte-identical
   whether or not /SPEC runs — / element state; the direct /IMPL/DYNA answer
   byte-identical).
+* **Non-Gaussian / kurtosis spectral fatigue validations (M24)** — the Winterstein
+  Hermite transform g(u) = κ[u + h₃(u²−1) + h₄(u³−3u)] being the IDENTITY for the
+  Gaussian target (γ₄ = 3, γ₃ = 0) and preserving the mean (0) and variance (κ
+  makes Var(g) = 1 EXACTLY, the Hermite-orthogonality identity — checked
+  analytically AND on a large sample) while hitting the target kurtosis to the
+  Winterstein-fit accuracy (an exact-moment hand check via `hermite_kurtosis` + a
+  large-sample check); the non-Gaussian correction factor λ_ng = E[g(V)ᵐ]/E[Vᵐ]
+  being EXACTLY 1 for a Gaussian process (the M20 answer recovered to machine
+  precision), > 1 for a LEPTOKURTIC (γ₄ > 3, spiky) process and < 1 for a
+  PLATYKURTIC (γ₄ < 3) one (the closed-form Rayleigh-amplitude integral), monotone
+  in γ₄ and the S-N slope m; the Benasciutti–Tovo bandwidth attenuation moving
+  λ_ng toward 1 for a wide band and leaving it unchanged for a narrow band; the
+  corrected damage of each estimator being EXACTLY λ_ng × the Gaussian damage; on a
+  NARROW-band process the non-Gaussian Monte-Carlo (Gaussian history → Hermite
+  transform → ASTM E1049 rainflow → Miner) hitting the target sample kurtosis and
+  matching the λ_ng-corrected spectral (Dirlik) estimate within the seeded scatter;
+  the Gaussian limit (γ₄ = 3) reducing the non-Gaussian Monte-Carlo EXACTLY
+  (bit-identical) to the M20 Gaussian Monte-Carlo; the /IMPL/FATIG/NGAUSS card
+  mirror (a PORT sub-flag with the kurtosis / skewness on card line 3, composing
+  with /MULT, /NPROP, /SPEC) and the parity contract (no mutation of the M16-M19
+  solvers / the M20 SCALAR fatigue / the M21-M23 MULTIAXIAL reductions / element
+  state — the M20 SCALAR AND the M21/M22/M23 MULTIAXIAL damage rates byte-identical
+  whether or not /NGAUSS runs — ; the direct /IMPL/DYNA answer byte-identical).
 * **Friction-model / material-tangent validations (M15)** — exact MFROT
   formula, branch-joint and floor checks with the FD-verified static
   µ′(p); kernel-level transmitted-force closed forms (every factor
