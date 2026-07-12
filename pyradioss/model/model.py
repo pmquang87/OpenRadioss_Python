@@ -277,6 +277,22 @@ class EngineControls:
     impl_fatig_evol_bw1: float = 0.0  # window bandwidth end (broadens/narrows)
     impl_fatig_evol_nwin: int = 12   # time-windows the spectrogram is sampled into
 
+    # M27 /IMPL/FATIG/MULT/EVOL/JOINT: FULLY NON-STATIONARY / EVOLUTIONARY
+    # MULTIAXIAL (JOINT-TENSOR) fatigue — the M21/M23 critical-plane reductions
+    # evaluated PER TIME-WINDOW of the full 6x6 stress-TENSOR cross-PSD
+    # S_sigmasigma(w, t), the critical-plane ORIENTATION and the non-proportionality
+    # factor F_np RE-SEARCHED from the WINDOW's OWN tensor (so the plane may ROTATE
+    # and F_np may DRIFT window to window), and the per-window multiaxial damages
+    # Miner-summed — cross-validated against a non-stationary MULTIVARIATE
+    # time-domain Monte-Carlo. Where M26 windowed the equivalent SCALAR of a FIXED
+    # reduction, M27 lets the JOINT tensor evolve so the reduction itself drifts.
+    # /JOINT implies MULT + EVOL and reuses the /EVOL drifting-shape schedule
+    # (fc0 fc1 bw0 bw1 nwin) and the shared modulation /FUNCT; it composes with
+    # /NPROP / /SPEC / /NGAUSS / /NSTAT. A PORT sub-flag (freimpl.F has no
+    # joint-tensor evolutionary fatigue path). See
+    # implicit/joint_evolutionary_fatigue.py.
+    impl_fatig_joint: bool = False   # /IMPL/FATIG/MULT/EVOL/JOINT -> joint tensor
+
 
 class Model:
     """The full model. Created empty, filled by the keyword parsers, then
