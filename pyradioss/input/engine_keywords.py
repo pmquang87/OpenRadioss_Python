@@ -541,6 +541,14 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     #                      synthesiser (needs mcdur/seed on line
                     #                      2). Line 2 optionally appends k sigy:
                     #                      m C zeta mean ult mcdur seed [k sigy]
+                    #   /IMPL/FATIG/MULT/NPROP/SPEC (M23) SPECTRAL non-
+                    #                      proportional — the frequency-domain
+                    #                      F_np + critical-plane damage estimated
+                    #                      DIRECTLY from the cross-PSD moment
+                    #                      matrices (NO synthesised history),
+                    #                      reported ALONGSIDE the M21 spectral and
+                    #                      M22 time-domain answers (all three side
+                    #                      by side). Implies NPROP (hence MULT).
                     ec.impl_fatig = True
                     ec.implicit = True
                     # scan ALL sub-keywords (the modifiers compose in any order)
@@ -552,6 +560,11 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     # M22: NON-PROPORTIONAL path counting; implies MULT
                     is_nprop = bool(subs & {"NPROP", "NONPROP",
                                             "NONPROPORTIONAL", "PATH"})
+                    # M23: SPECTRAL non-proportional; implies NPROP (hence MULT)
+                    is_spec = bool(subs & {"SPEC", "SPECTRAL", "FREQ",
+                                           "FREQUENCY"})
+                    if is_spec:
+                        is_nprop = True
                     if is_nprop:
                         is_mult = True
                     v0 = block.cards[0].floats() if block.cards else []
@@ -569,6 +582,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_mult = True
                     if is_nprop:
                         ec.impl_fatig_nprop = True
+                    if is_spec:
+                        ec.impl_fatig_spec = True
                     if is_base:
                         ec.impl_fatig_base = True
                         if len(v0) > 4 and v0[4] >= 0:
