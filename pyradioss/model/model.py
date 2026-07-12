@@ -134,6 +134,24 @@ class EngineControls:
     impl_eigv: bool = False       # /IMPL/EIGV present -> modal analysis
     impl_eigv_nmode: int = 6      # number of natural frequencies to extract
     impl_eigv_prestress: bool = False  # /IMPL/EIGV/STRS: K = K_mat + K_geo
+    # -- M17 MODAL-SUPERPOSITION dynamics (PORT cards — freimpl.F has no
+    # frequency-domain or mode-superposition path at all; the open-source
+    # solver is time-domain only). These build on the M16 eigenpairs
+    # (implicit/modal.py) and are library-first exactly like /IMPL/EIGV.
+    # /IMPL/MODAL/DYNA: mode-superposition TRANSIENT response history.
+    impl_modal_dyna: bool = False   # /IMPL/MODAL/DYNA present
+    impl_modal_tend: float = 0.0    # transient end time (0 -> use t_end)
+    impl_modal_dt: float = 0.0      # sampling step (0 -> use impl_dt)
+    impl_modal_nmode: int = 6       # modes retained in the superposition
+    impl_modal_macc: bool = False   # mode-acceleration static correction
+    impl_modal_zeta: float = 0.0    # uniform modal damping ratio (MODAL/DAMP)
+    impl_modal_prestress: bool = False  # extract modes on the prestressed K
+    # /IMPL/FREQ: harmonic / steady-state frequency response (FRF sweep).
+    impl_freq: bool = False         # /IMPL/FREQ present
+    impl_freq_fmin: float = 0.0     # sweep start frequency (Hz)
+    impl_freq_fmax: float = 0.0     # sweep end frequency (Hz)
+    impl_freq_nf: int = 200         # number of sweep points
+    impl_freq_zeta: float = 0.02    # uniform modal damping for the FRF
 
 
 class Model:

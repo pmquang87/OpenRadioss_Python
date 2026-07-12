@@ -296,7 +296,7 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         # NBUCK drives the dense eigensolve
                         if len(vals) > 2 and vals[2] > 0:
                             ec.impl_buckl_nmode = int(vals[2])
-                elif sub in ("EIGV", "EIG", "MODAL", "FREQ"):
+                elif sub in ("EIGV", "EIG"):
                     # /IMPL/EIGV (M16 — a PORT card; freimpl.F has no modal
                     # branch, so this drives the consistent-mass eigensolver
                     # of implicit/modal.py the way /IMPL/BUCKL drives
@@ -315,6 +315,75 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     vals = block.cards[0].floats() if block.cards else []
                     if vals and vals[0] > 0:
                         ec.impl_eigv_nmode = int(vals[0])
+                elif sub in ("MODAL", "MSUP"):
+                    # /IMPL/MODAL/... (M17 — PORT cards; freimpl.F has no
+                    # mode-superposition path). Drives the modal-transient /
+                    # modal-damping library of implicit/modal_response.py the
+                    # way /IMPL/EIGV drives the eigensolver. Sub-keywords:
+                    #   /IMPL/MODAL/DYNA  card: t_end  dt  [nmode]
+                    #                     (mode-superposition TRANSIENT; add
+                    #                     /MACC as a 4th field or the /STRS
+                    #                     suffix for prestressed modes)
+                    #   /IMPL/MODAL/DAMP  card: zeta   (uniform modal damping;
+                    #                     Rayleigh a,b comes from /IMPL/DYNA/
+                    #                     DAMP, mapped consistently — see
+                    #                     modal_response.rayleigh_ratios)
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    if sub2 in ("DYNA", "DYNAMIC", "DYN", ""):
+                        ec.impl_modal_dyna = True
+                        ec.implicit = True   # the static prestress driver hosts
+                        vals = block.cards[0].floats() if block.cards else []
+                        if vals:
+                            ec.impl_modal_tend = vals[0]
+                        if len(vals) > 1 and vals[1] > 0:
+                            ec.impl_modal_dt = vals[1]
+                        if len(vals) > 2 and vals[2] > 0:
+                            ec.impl_modal_nmode = int(vals[2])
+                        # /MACC (mode-acceleration) may ride as a 4th part
+                        rest = [p.upper() for p in block.parts[3:]]
+                        if "MACC" in rest or (len(vals) > 3 and vals[3] != 0):
+                            ec.impl_modal_macc = True
+                        if "STRS" in rest or "STRESS" in rest:
+                            ec.impl_modal_prestress = True
+                            ec.impl_nlgeom = True
+                    elif sub2 == "MACC":
+                        ec.impl_modal_macc = True
+                    elif sub2 == "DAMP":
+                        vals = block.cards[0].floats() if block.cards else []
+                        if vals:
+                            ec.impl_modal_zeta = vals[0]
+                        if ec.impl_modal_zeta < 0.0:
+                            log.warning(
+                                "/IMPL/MODAL/DAMP: negative modal damping "
+                                "ratio INJECTS energy", block.source)
+                    else:
+                        log.warning(f"/IMPL/MODAL/{sub2} not ported — ignored "
+                                    f"(supports DYNA, DAMP, MACC)",
+                                    block.source)
+                elif sub in ("FREQ", "FRF", "HARMONIC"):
+                    # /IMPL/FREQ (M17 — PORT card): harmonic / steady-state
+                    # frequency response over a swept band. Card:
+                    #   fmin  fmax  nf  [zeta]  [nmode]
+                    # (a shaker-driven FRF; the excitation is the deck's
+                    # /CLOAD pattern taken as the harmonic force amplitude).
+                    ec.impl_freq = True
+                    ec.implicit = True
+                    vals = block.cards[0].floats() if block.cards else []
+                    if len(vals) > 0:
+                        ec.impl_freq_fmin = vals[0]
+                    if len(vals) > 1:
+                        ec.impl_freq_fmax = vals[1]
+                    if len(vals) > 2 and vals[2] > 0:
+                        ec.impl_freq_nf = int(vals[2])
+                    if len(vals) > 3 and vals[3] > 0:
+                        ec.impl_freq_zeta = vals[3]
+                    if len(vals) > 4 and vals[4] > 0:
+                        ec.impl_modal_nmode = int(vals[4])
+                    if ec.impl_freq_fmax <= ec.impl_freq_fmin:
+                        log.warning(
+                            "/IMPL/FREQ: fmax <= fmin — set a positive sweep "
+                            "band (fmin fmax nf)", block.source)
                 elif sub in ("NEWTON", "SOLVINFO"):
                     if block.cards:
                         vals = block.cards[0].floats()
@@ -389,7 +458,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 else:
                     log.warning(f"/IMPL/{sub} not ported — ignored (supports "
                                 f"DTINI, NEWTON, LSOLVER, NONLIN, ARCL, "
-                                f"DYNA)", block.source)
+                                f"DYNA, EIGV, BUCKL, MODAL, FREQ)",
+                                block.source)
             elif key == "PRINT":
                 # /PRINT/-100 → one listing line every 100 cycles (the minus
                 # sign is the Radioss convention for 'every n cycles').
