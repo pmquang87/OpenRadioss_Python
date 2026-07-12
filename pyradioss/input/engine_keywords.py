@@ -524,10 +524,21 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     #                      base direction is appended to line 1
                     #                      (fmin fmax nf funct dir [nmode])
                     #   /IMPL/FATIG/STRS   modes on the prestressed K
+                    #   /IMPL/FATIG/MULT   (M21) MULTIAXIAL / critical-plane —
+                    #                      the FULL 6-Voigt stress-tensor
+                    #                      cross-PSD reduced to an equivalent
+                    #                      (von Mises / normal / shear critical
+                    #                      plane) scalar PSD; composes with BASE
+                    #                      / STRS (any order, e.g.
+                    #                      /IMPL/FATIG/MULT/BASE)
                     ec.impl_fatig = True
                     ec.implicit = True
-                    sub2 = (block.parts[2].upper()
-                            if len(block.parts) > 2 else "")
+                    # scan ALL sub-keywords (the modifiers compose in any order)
+                    subs = {p.upper() for p in block.parts[2:]}
+                    is_base = bool(subs & {"BASE", "SUPPORT", "ACCEL"})
+                    is_strs = bool(subs & {"STRS", "STRESS", "PRESTRESS"})
+                    is_mult = bool(subs & {"MULT", "MULTI", "MULTIAXIAL",
+                                           "CRITPLANE"})
                     v0 = block.cards[0].floats() if block.cards else []
                     v1 = (block.cards[1].floats()
                           if len(block.cards) > 1 else [])
@@ -539,14 +550,16 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_nf = int(v0[2])
                     if len(v0) > 3 and v0[3] > 0:
                         ec.impl_fatig_funct = int(v0[3])
-                    if sub2 in ("BASE", "SUPPORT", "ACCEL"):
+                    if is_mult:
+                        ec.impl_fatig_mult = True
+                    if is_base:
                         ec.impl_fatig_base = True
                         if len(v0) > 4 and v0[4] >= 0:
                             ec.impl_fatig_dir = int(v0[4])
                         if len(v0) > 5 and v0[5] > 0:
                             ec.impl_fatig_nmode = int(v0[5])
                     else:
-                        if sub2 in ("STRS", "STRESS", "PRESTRESS"):
+                        if is_strs:
                             ec.impl_fatig_prestress = True
                             ec.impl_nlgeom = True
                         if len(v0) > 4 and v0[4] > 0:

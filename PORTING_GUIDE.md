@@ -112,6 +112,7 @@ same names in comments.
 | — (NO complex/damped eigensolver, NO assembled viscous C beyond the on-the-fly Rayleigh of imp_dyna.F, NO state-space / QEP path anywhere in the open-source engine — the frequency domain is not part of the time-domain solver) | `pyradioss/implicit/damping_matrix.py` + `pyradioss/implicit/complex_modal.py` + `/IMPL/CEIGV` in `engine_keywords.py`; `spring.damping_matrix` | M18: COMPLEX / DAMPED eigenvalues + NON-CLASSICALLY-damped complex-mode superposition. ASSEMBLED C (the C analogue of M16's `assemble_mass`) = Rayleigh αM + βK (M11-consistent) + discrete dashpots (the /PROP/SPRING `c` term c·aaᵀ, revived from its M11 implicit deferral; per-node /DAMP mass dampers), COO→CSR through the DofMap, condensed TᵀCT. COMPLEX EIGENVALUES: the QEP (λ²M + λC + K)φ = 0 via the SYMMETRIC state-space linearization A z = λB z, A = [[0,K],[K,C]], B = [[K,0],[0,−M]], `scipy.linalg.eig` on the reduced pencil → λᵢ = −ζᵢωᵢ ± iωd,ᵢ (decay + damped freq) and COMPLEX mode shapes (the DOF phase lag). COMPLEX-MODE SUPERPOSITION: the state-space decoupling ẋᵢ = λᵢxᵢ + pᵢ(t) (first-order exact recurrence) + the damped complex FRF (matches (K−Ω²M+iΩC)⁻¹ on the full basis). PORT card, library-first exactly like M16/M17; the M10 integrator, M16 REAL eigensolver and M17 REAL-mode superposition stay bit-identical (a NEW parallel path) |
 | — (NO frequency-domain / random-vibration / PSD / response-spectrum path anywhere in the open-source engine — `freimpl.F` re-read line by line for M19: only DYNA / BUCKL / DT / NONLIN / ARCL + solver housekeeping, the sole `PSD` token being `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/random_response.py` + `pyradioss/implicit/response_spectrum.py` + `/IMPL/PSD`, `/IMPL/RSPEC` in `engine_keywords.py` | M19: RANDOM / SPECTRAL (PSD) response + RESPONSE SPECTRA — the stochastic and envelope analyses that BUILD on the M17 real-mode FRF and the M18 complex FRF. RANDOM (PSD): the stationary response PSD S_uu(Ω) = H(Ω)S_ff(Ω)H(Ω)* through the modal transfer function (the M17 real FRF for classical damping, the M18 complex FRF for non-classical — FRF-source-agnostic), reporting the RMS σ_u = √m₀, the spectral moments m₀/m₁/m₂ (mₙ = (1/π)∫₀^∞ Ωⁿ S_uu dΩ, the Wiener–Khinchin / task ∫S dΩ/2π convention), the mean zero-crossing rate ν₀ = (1/2π)√(m₂/m₀) and peak rate ν_p = (1/2π)√(m₄/m₂) (Rice), plus the base-excitation (support-motion) PSD feed via the M16 participation. RESPONSE SPECTRA: the per-mode peaks rᵢ = Γᵢ Sa(ωᵢ,ζᵢ)/ωᵢ² φᵢ (participation-scaled spectral ordinate) combined by SRSS and CQC (Der Kiureghian 1981 closed-form ρᵢⱼ). PORT cards, library-first exactly like M16/M17/M18; the M10 integrator, M16/M17/M18 paths stay bit-identical (a NEW parallel path consuming their FRFs read-only). Theory: Newland; Wirsching/Paez/Ortiz; Vanmarcke; Chopra ch. 13; Der Kiureghian 1981 |
 | — (NO frequency-domain / spectral-fatigue solver anywhere in the open-source engine — `freimpl.F` re-read line by line for M20: no /FATIG, no S-N / Miner branch, no Dirlik / rainflow / narrow-band estimator; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/spectral_fatigue.py` + the stress-recovery section of `pyradioss/implicit/random_response.py` + `/IMPL/FATIG` in `engine_keywords.py` | M20: RANDOM-VIBRATION (SPECTRAL) FATIGUE — the stress-life damage estimate computed DIRECTLY from the M19 stress-PSD spectral moments. STRESS-PSD RECOVERY: the per-mode stress modes σᵢ = (element stress operator)·φᵢ recovered by running the SAME force kernels the M8 static solve uses on each mode shape (read-only, σ = C:B:u on the zero-stress reference), the stress FRF H_σ(Ω) = Σᵢ σᵢ qᵢ(Ω) and the stress response PSD S_σσ(Ω) = \|H_σ\|² S_ff with its own moments m₀..m₄. DAMAGE MODELS for an S-N curve N = C·S^−m under a Miner sum: NARROW-BAND (Bendat 1964, the closed-form Rayleigh-range Γ(1+m/2) damage), DIRLIK (1985, the empirical three-term rainflow-range PDF from m₀,m₁,m₂,m₄), WIRSCHING–LIGHT (1980) and TOVO–BENASCIUTTI (2005) — the damage rate, equivalent stress and time-to-failure, plus a seeded Monte-Carlo rainflow (ASTM E1049) cross-check. PORT card, library-first exactly like M16–M19; the M10 integrator and the M16/M17/M18/M19 paths stay bit-identical (a NEW parallel path consuming the stress moments read-only). Theory: Bendat 1964; Dirlik 1985; Wirsching & Light 1980; Benasciutti & Tovo 2005; Newland; Bishop & Sherratt (NAFEMS); Palmgren–Miner; ASTM E1049 |
+| — (NO frequency-domain / spectral-fatigue solver of ANY kind — scalar OR multiaxial — anywhere in the open-source engine — `freimpl.F` re-read line by line for M21: no /FATIG, no von-Mises / critical-plane / cross-PSD machinery; the sole `PSD` token is still `IMUMPSD`, a MUMPS flag) | `pyradioss/implicit/multiaxial_fatigue.py` + the per-element Voigt-block helpers & `_run_multiaxial` driver in `pyradioss/implicit/random_response.py` + `/IMPL/FATIG/MULT` in `engine_keywords.py` | M21: MULTIAXIAL / CRITICAL-PLANE SPECTRAL FATIGUE — the damage estimate of a MULTIAXIAL stress STATE, the natural consumer of the M20 scalar-channel fatigue and vector stress FRF. STRESS-TENSOR CROSS-PSD: the M20 vector stress modes give the FULL 6-Voigt stress FRF H_σ(Ω) (nf,6) per solid/shell element (read-only); the stress-tensor cross-PSD S_σσ(Ω) = H_σ S_ff H_σᴴ (a 6×6 Hermitian matrix per frequency per element) — its diagonal = the M20 per-component channel PSDs, uniaxial → the M20 scalar σₓₓ. EQUIVALENT-STRESS METHODS: reduce the 6×6 to a scalar and run the M20 estimators — the frequency-domain EQUIVALENT VON MISES S_vm = trace(Q·S_σσ) (Preumont & Piéfort 1994 / Pitoiset & Preumont 2000, the von Mises quadratic operator Q; rank-1 form HᴴQH), plus MAX-NORMAL and MAX-SHEAR CRITICAL PLANE (Carpinteri–Spagnoli / Cristofori–Susmel–Tovo, the projection-by-direction spectral form σₙ=pₙᵀσ, τ=pₛᵀσ over a searched candidate-plane set), reporting the critical-plane damage/equivalent-stress/life. A MULTIVARIATE Monte-Carlo cross-check (Cholesky/eigen of S_σσ → correlated Gaussian component histories → project onto the critical plane → ASTM E1049 rainflow → Miner, seeded). PORT sub-card, library-first exactly like M16–M20; the M10 integrator and the M16–M20 paths (incl. the M20 SCALAR fatigue) stay bit-identical (a NEW parallel path consuming the vector stress modes read-only). Theory: Preumont & Piéfort 1994; Pitoiset & Preumont 2000; Carpinteri–Spagnoli 2001; Cristofori/Susmel–Tovo 2008; Socie & Marquis; Shinozuka & Deodatis (multivariate synthesis) |
 
 ## 3. Conventions used in this port
 
@@ -276,7 +277,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | **COMPLEX / DAMPED eigenvalues + NON-CLASSICAL damping (M18)**: the ASSEMBLED damping C (`implicit/damping_matrix.py`) = Rayleigh αM + βK (M11-consistent) + discrete dashpots (the /PROP/SPRING `c` term c·aaᵀ, revived from its M11 implicit deferral; per-node /DAMP mass dampers), COO→CSR through the DofMap and condensed TᵀCT like M16's mass. The COMPLEX eigenproblem (λ²M + λC + K)φ = 0 (`implicit/complex_modal.py`, `/IMPL/CEIGV`) via the SYMMETRIC state-space linearization A z = λB z (A = [[0,K],[K,C]], B = [[K,0],[0,−M]]; no mass inverse, symmetric so the biorthogonality is z_iᵀBz_j = 0), `scipy.linalg.eig` on the reduced pencil → λᵢ = −ζᵢωᵢ ± iωd,ᵢ (decay rate + damped frequency) + COMPLEX mode shapes (the DOF phase lag of non-proportional damping). COMPLEX-MODE SUPERPOSITION — the state-space decoupling into first-order complex modal equations ẋᵢ = λᵢxᵢ + pᵢ(t) (an EXACT piecewise-linear recurrence, the first-order analogue of Nigam–Jennings) + the damped complex FRF. Validated: a classically-damped (Rayleigh) system reducing EXACTLY to −ζᵢωᵢ ± iωd,ᵢ with the M16 ωᵢ and M17 ζᵢ (real-up-to-phase shapes); a 2-DOF one-dashpot system matching the closed-form complex roots + a genuine phase lag; the state-space biorthogonality; the discrete-dashpot C contribution + pure-Rayleigh C reproducing the M17 ζᵢ; the complex-mode transient matching a DIRECT Newmark march of (K,C,M) where the M17 REAL-mode superposition provably errs (gap asserted); reduction to the M17 answer when damping IS classical; the complex FRF matching (K−Ω²M+iΩC)⁻¹ on the full basis. PORT card, library-first like M16/M17; the M10 integrator, M16 REAL eigensolver and M17 REAL-mode superposition stay BIT-IDENTICAL | ✅ |
 | **RANDOM / SPECTRAL (PSD) response + RESPONSE SPECTRA (M19)**: the stationary random-vibration and design-envelope analyses that build on the M17/M18 FRFs (`implicit/random_response.py`, `implicit/response_spectrum.py`, `/IMPL/PSD`, `/IMPL/RSPEC`). RANDOM (PSD) — the response PSD S_uu(Ω) = \|H(Ω)\|² S_ff(Ω) through the modal transfer function (FRF-source-agnostic: the M17 real FRF for classical damping, the M18 complex FRF for non-classical), reporting the RMS σ_u = √m₀, the spectral moments m₀/m₁/m₂ (mₙ = (1/π)∫₀^∞ Ωⁿ S_uu dΩ), the mean zero-crossing rate ν₀ = (1/2π)√(m₂/m₀) and peak rate ν_p = (1/2π)√(m₄/m₂) (Rice), and the base-excitation (support-motion) PSD feed via the M16 participation. RESPONSE SPECTRA — the per-mode peaks rᵢ = Γᵢ Sa(ωᵢ,ζᵢ)/ωᵢ² φᵢ combined by SRSS and CQC (Der Kiureghian 1981 closed-form ρᵢⱼ). Validated: a white-noise SDOF's σ² = S₀/(2ck) closed form; the multi-DOF response PSD from the modal FRF matching the DIRECT (K−Ω²M+iΩC)⁻¹ inversion; the spectral-moment / Parseval identity m₀(velocity) = m₂(displacement); the RMS reducing to the static σ_f/k for a quasi-static band; the CQC closed-form ρᵢⱼ; a single-mode spectrum recovering Γ Sa/ω²; SRSS ≈ CQC for well-separated modes and the CQC-vs-SRSS GAP on a closely-spaced (near-degenerate tuning-fork) pair; the complex-FRF PSD reducing to the real-FRF PSD when damping is classical. PORT cards, library-first like M16-M18; the M10 integrator, M16/M17/M18 paths stay BIT-IDENTICAL (a NEW parallel path consuming their FRFs read-only — monkeypatch-asserted parity) | ✅ |
 | **RANDOM-VIBRATION (SPECTRAL) FATIGUE (M20)**: the stress-life fatigue-damage estimate computed DIRECTLY from the M19 stress-PSD spectral moments (`implicit/spectral_fatigue.py`, `implicit/random_response.py` stress recovery, `/IMPL/FATIG`). STRESS-PSD RECOVERY — the per-mode STRESS modes σᵢ = (element stress operator)·φᵢ recovered by running the SAME force kernels the M8 static solve uses on each mode shape (read-only; sigma = C:B:u the linear stress operator on the zero-stress reference), the stress FRF H_σ(Ω) = Σᵢ σᵢ qᵢ(Ω) (stress commutes with the modal superposition) and the stress response PSD S_σσ(Ω) = \|H_σ\|² S_ff with its own moments m₀..m₄. DAMAGE MODELS — for an S-N curve N = C·S^−m under a Miner sum: the NARROW-BAND (Bendat 1964) closed-form Rayleigh-range Gamma-function damage E[D]/T = (ν₀/C)(2√2σ)^m Γ(1+m/2), DIRLIK (1985) (the empirical three-term rainflow-range PDF from m₀,m₁,m₂,m₄), WIRSCHING–LIGHT (1980) and TOVO–BENASCIUTTI (2005) as wide-band cross-checks — reporting the damage rate, equivalent stress and time-to-failure, plus a seeded Monte-Carlo rainflow (ASTM E1049) cross-check (synthesise a Gaussian history from the PSD, count, Miner-sum). Validated: the narrow-band closed form vs a hand Gamma evaluation; Dirlik → narrow-band as the bandwidth → 0 and the correct wide-band bias on a bimodal spectrum; the ASTM E1049 counter on its canonical example; the Monte-Carlo damage matching Dirlik within the documented scatter; the recovered static stress = the M8 static stress; the stress FRF = the direct stress operator on U(Ω). A PORT card, library-first like M16–M19; the M10 integrator, M16/M17/M18/M19 paths stay BIT-IDENTICAL (a NEW parallel path consuming the stress moments read-only — monkeypatch-asserted parity) | ✅ |
-| Lanczos/subspace for large models; AMLS / substructuring; non-stationary / evolutionary PSD; multi-input cross-PSD with coherence; multiaxial / critical-plane fatigue + stress-invariant equivalent PSDs; mean-stress beyond a basic Goodman option; crack-growth / fracture-mechanics fatigue; the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20 roadmap notes) |
+| **MULTIAXIAL / CRITICAL-PLANE SPECTRAL FATIGUE (M21)**: the fatigue-damage estimate of a MULTIAXIAL stress STATE (`implicit/multiaxial_fatigue.py`, the per-element Voigt-block helpers + `_run_multiaxial` in `implicit/random_response.py`, `/IMPL/FATIG/MULT`). STRESS-TENSOR CROSS-PSD — the M20 vector stress modes give the FULL 6-Voigt stress FRF H_σ(Ω) (nf,6) per solid/shell element (read-only, the M20 recovery reused unchanged), and the stress-tensor cross-PSD S_σσ(Ω) = H_σ S_ff H_σᴴ (a 6×6 Hermitian matrix per frequency per element). EQUIVALENT-STRESS METHODS — reduce the 6×6 to a scalar EQUIVALENT-stress PSD and run the four M20 estimators on its moments: the frequency-domain EQUIVALENT VON MISES S_vm(Ω) = trace(Q·S_σσ) (Preumont & Piéfort 1994 / Pitoiset & Preumont 2000, the von Mises quadratic operator Q; evaluated through the cheap rank-1 HᴴQH form), the MAX-NORMAL-stress and MAX-SHEAR-stress CRITICAL PLANE (Carpinteri–Spagnoli / Cristofori–Susmel–Tovo, the projection σₙ = pₙᵀσ, τ = pₛᵀσ over a searched candidate-plane set; the shear direction from the leading eigenvector of the 2×2 in-plane covariance) — reporting the damage/equivalent-stress/life and the critical-plane orientation, picking the critical ELEMENT by von Mises Dirlik damage. A seeded MULTIVARIATE Monte-Carlo cross-check (per-bin eigendecomposition / Cholesky of S_σσ → correlated Gaussian component histories → project onto the critical plane → ASTM E1049 rainflow → Miner). Validated: uniaxial → the M20 scalar σₓₓ (cross-PSD collapse, von Mises reduction); the cross-PSD diagonal = the M20 per-component channel PSDs, Hermitian; the trace / quadratic-operator identity (trace(Q Mₙ) = the direct S_vm moments); the von Mises operator on the textbook invariants; pure shear recovering the 45° max-normal plane and the coordinate max-shear plane, both at the shear amplitude; p^T Mₙ p = the |H·p|² S scalar moments; the multivariate synthesis reproducing the full covariance (variances AND cross-covariances = M₀); the Monte-Carlo critical-plane damage matching Dirlik within scatter. PORT sub-card, library-first like M16–M20; the M10 integrator and the M16–M20 paths (incl. the M20 SCALAR fatigue) stay BIT-IDENTICAL (a NEW parallel path consuming the vector stress modes read-only — asserted). Theory: Preumont & Piéfort 1994; Pitoiset & Preumont 2000; Carpinteri–Spagnoli 2001; Cristofori/Susmel–Tovo 2008; Socie & Marquis; Shinozuka & Deodatis | ✅ |
+| Lanczos/subspace for large models; AMLS / substructuring; non-stationary / evolutionary PSD; multi-input cross-PSD with coherence; NON-PROPORTIONAL multiaxial cycle-counting beyond the projected-equivalent methods (full tensor rainflow / minimum-circumscribed-circle path counting); mean-stress beyond a basic Goodman option; crack-growth / fracture-mechanics fatigue; non-Gaussian / kurtosis corrections; the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -2022,6 +2024,131 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       the UL hourglass memory, the NLGEOM hourglass-operator geometry
       variation, the BT4 thin-plate shear-lock / drilling floor.
 
+20. **M21 — MULTIAXIAL / CRITICAL-PLANE SPECTRAL FATIGUE** ✅ (done):
+    the FIRST item deferred out of M20 that BUILDS on it — the frequency-domain
+    fatigue-damage estimate of a MULTIAXIAL stress STATE, the natural consumer
+    of the M20 scalar-channel fatigue and the vector stress FRF M20 delivered.
+    A NEW, parallel path (`implicit/multiaxial_fatigue.py` + the per-element
+    Voigt-block helpers and `_run_multiaxial` driver in
+    `implicit/random_response.py`) that never touches the M10 integrator, the
+    M16 eigensolver, the M17/M18 superposition, the M19 PSD path or the M20
+    SCALAR-channel fatigue (all stay bit-identical, asserted). Theory:
+    Preumont & Piéfort, "Predicting random high-cycle fatigue life with finite
+    elements" (J. Sound Vib. 168, 1994 — the equivalent-von-Mises frequency-
+    domain projection); Pitoiset & Preumont, "Spectral methods for multiaxial
+    random fatigue analysis" (Int. J. Fatigue 22, 2000 — the trace(Q S) form);
+    Carpinteri & Spagnoli (Int. J. Fatigue 23, 2001); Cristofori, Susmel & Tovo
+    (Int. J. Fatigue 30, 2008 — the projection-by-direction critical plane);
+    Socie & Marquis, "Multiaxial Fatigue" (SAE 2000); Shinozuka & Deodatis (the
+    multivariate spectral-representation synthesis).
+
+    Fortran origin: there is NONE — `engine/source/input/freimpl.F` (re-read
+    line by line for M21) has no /FATIG, no S-N / Miner branch, and NO
+    von-Mises / critical-plane / stress-tensor cross-PSD machinery of any kind
+    (the sole `PSD` token is still `IMUMPSD`, a MUMPS-solver flag). OpenRadioss
+    is a time-domain crash/impact code — the stationary random-vibration
+    multiaxial fatigue analysis simply is not part of the open-source solver
+    (the same finding M16 made for the real eigensolver, M17–M19 for the
+    frequency-domain analyses, M20 for the scalar spectral fatigue). So M21
+    ports multiaxial spectral fatigue as a clean LIBRARY capability behind a
+    minimal PORT sub-card (/IMPL/FATIG/MULT), exactly as M16–M20 did.
+
+    * **STRESS-TENSOR CROSS-PSD** (`random_response.element_voigt_blocks` /
+      `element_voigt_frf` + `multiaxial_fatigue.stress_tensor_cross_psd`): the
+      M20 stress recovery already returns the FULL 6-component Voigt stress per
+      solid/shell element, so the vector stress FRF H_σ(Ω) = Σᵢ σᵢ qᵢ(Ω)
+      (nf, 6) per element is available with NO new kernel work — the M20 vector
+      stress modes are reused READ-ONLY, the modal coordinates q sliced by the
+      element's 6 channel columns. For a SINGLE scalar random input the
+      stress-tensor cross-PSD is the rank-1 Hermitian S_σσ(Ω) = H_σ S_ff H_σᴴ
+      (a 6×6 matrix per frequency per element). Validated: for a UNIAXIAL state
+      the 6×6 collapses to the M20 scalar σₓₓ channel; the DIAGONAL S[c,c] =
+      |H_c|² S_ff equals the M20 per-component channel PSDs; the matrix is
+      Hermitian.
+    * **EQUIVALENT-STRESS SPECTRAL METHODS** (`multiaxial_fatigue.py`): reduce
+      the 6×6 cross-PSD to a scalar EQUIVALENT-stress PSD, then run the four M20
+      estimators (narrow-band / Dirlik / Wirsching–Light / Tovo–Benasciutti) on
+      its moments. The frequency-domain EQUIVALENT VON MISES (Preumont &
+      Piéfort 1994; Pitoiset & Preumont 2000): S_vm(Ω) = trace(Q·S_σσ) with the
+      von Mises quadratic operator Q (σ_vm² = σᵀQσ), evaluated through the cheap
+      rank-1 HᴴQH form (no 6×6 formed at run time). At least one CRITICAL-PLANE
+      method — BOTH the MAX-NORMAL-stress (σₙ = pₙᵀσ, pₙ = [nₓ², …, 2nₓnᵧ, …])
+      and the MAX-SHEAR-stress (τ = pₛᵀσ; on each plane the in-plane direction
+      of maximum shear variance from the 2×2 in-plane covariance) over a
+      searched candidate-plane set (Carpinteri–Spagnoli / Cristofori–
+      Susmel–Tovo, the projection-by-direction spectral form) — reporting the
+      damage / equivalent stress / life on the critical plane and its normal.
+      A seeded MULTIVARIATE Monte-Carlo cross-check: synthesise the CORRELATED
+      Gaussian stress-component histories from the cross-PSD via a per-bin
+      eigendecomposition / Cholesky of S_σσ (the M20 seeded synthesiser
+      generalised to a vector process, batched over the FFT grid), project onto
+      the critical plane's LINEAR scalar, ASTM E1049 rainflow, Miner. Validated:
+      the equivalent-von-Mises PSD reducing to the M20 scalar answer for a
+      uniaxial state; the trace / quadratic-operator identity (trace(Q Mₙ) =
+      the direct S_vm moments); the von Mises operator on the textbook
+      invariants (uniaxial → 1, pure shear → 3, hydrostatic → 0); the
+      critical-plane search recovering the 45° max-normal plane AND the
+      coordinate max-shear plane for pure shear, both at the shear amplitude;
+      the projection-by-direction moments p^T Mₙ p = the |H·p|² S scalar
+      moments; the multivariate synthesis reproducing the full covariance
+      (variances AND cross-covariances = M₀); the Monte-Carlo critical-plane
+      damage matching Dirlik within the documented scatter.
+    * **Engine sub-card + reporting** (`random_response._run_multiaxial`, a
+      branch of `run_fatigue`): /IMPL/FATIG/MULT (composing with /BASE, /STRS)
+      builds the real-mode FRF, recovers the vector stress modes, groups them
+      into per-element 6-Voigt blocks, forms the cross-PSD, reduces to the
+      three equivalent-stress PSDs, evaluates the M20 damage models + the
+      Monte-Carlo, picks the critical ELEMENT (highest von Mises Dirlik damage)
+      and reports the multiaxial damage rate / equivalent stress / critical-
+      plane life on `model.implicit_result.fatigue` (the M20 dict, extended
+      with `multiaxial`) and in the listing. Two card lines like M20: the PSD
+      sweep (fmin fmax nf funct [dir] [nmode]) and the S-N + options
+      (m C [zeta] [mean ult] [mcdur seed]). A PORT sub-card, minimal like
+      /IMPL/FATIG.
+    * **Example**: `examples/multiaxial_fatigue` — a base-clamped SOLID-brick
+      cantilever driven by a skew (bending + shear) random tip-force PSD, so
+      the clamped-root elements see a genuinely MULTIAXIAL stress state; the
+      critical root element's von Mises + max-normal + max-shear critical-plane
+      life, the TILTED critical plane (not a coordinate axis), and the
+      multivariate Monte-Carlo cross-check.
+    * **Validated** (`tests/test_m21_multiaxfatig.py`): all of the above plus
+      the /IMPL/FATIG/MULT (+ /BASE) card mirror and the parity contract (the
+      multiaxial path never mutating the M16 eigensolver / M17–M19 transfer
+      functions / the M20 SCALAR fatigue / the element state; the direct
+      /IMPL/DYNA answer byte-identical whether or not it runs).
+
+    Deferred out of M21, explicitly (not half-implemented):
+    * NON-PROPORTIONAL multiaxial cycle-counting beyond the projected-equivalent
+      methods: the full TENSOR rainflow / minimum-circumscribed-circle
+      (Papadopoulos) shear-amplitude path counting and the rotating-principal-
+      axes non-proportional-hardening correction — the port counts damage on a
+      PROJECTED scalar (von Mises or a critical-plane resolved stress), which is
+      exact for proportional loading and the standard spectral approximation
+      otherwise;
+    * the Monte-Carlo cross-check validates the LINEAR critical-plane
+      projection; a VON-MISES (quadratic, hence non-Gaussian) time-domain
+      rainflow cross-check is DEFERRED (the spectral von-Mises PDF is itself an
+      approximation — Pitoiset & Preumont 2000 discuss the bias);
+    * MEAN-STRESS corrections beyond the basic M20 Goodman intercept (carried
+      through to the equivalent scalar) — Gerber / Soderberg / Walker and a
+      per-plane mean remain DEFERRED (M20);
+    * a full MULTI-INPUT cross-PSD with coherence (a non-diagonal S_ff and a
+      coherence model — the same M19/M20 deferral): the cross-PSD here is the
+      rank-1 H S_ff H^H of a SINGLE scalar input process;
+    * NON-STATIONARY / evolutionary-PSD fatigue, NON-GAUSSIAN (kurtosis)
+      corrections, CRACK-GROWTH / fracture-mechanics fatigue, and the
+      COMPLEX-FRF stress recovery (the stress path is built on the REAL-mode
+      FRF) — the unchanged M20 tail;
+    * the unchanged M10–M20 deferral tail: non-stationary / evolutionary PSD,
+      multi-input cross-PSD with coherence, multi-directional 100-30-30 response
+      spectra, the complex-FRF base-excitation feed, gyroscopic / circulatory
+      systems, Lanczos / subspace + AMLS, IFQ ≥ 10 / MODFR 2, /FRICTION
+      per-part-pair sets, orthotropic / thermal friction, the fiber TYPE18
+      beam, the LAW27 plastic block / solids, thermal contact, TYPE19/24/25,
+      Inacti, Igap 2/3, LAW42 shells/Prony, IDTC 2/3, /RWALL under implicit,
+      the UL hourglass memory, the NLGEOM hourglass-operator geometry
+      variation, the BT4 thin-plate shear-lock / drilling floor.
+
 ## 6. Validation strategy
 
 `tests/` contains two layers:
@@ -2062,6 +2189,24 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
   the narrow-band limit; the card mirror (/IMPL/FATIG + /BASE + /STRS) and the
   parity contract (no mutation of the M16-M19 solvers / element state; the
   direct /IMPL/DYNA answer byte-identical whether or not the fatigue path runs).
+* **Multiaxial / critical-plane spectral fatigue validations (M21)** — for a
+  UNIAXIAL stress state the 6×6 stress-tensor cross-PSD collapsing to the M20
+  scalar σₓₓ channel (the equivalent-von-Mises PSD = |H_xx|² S_ff) and its
+  DIAGONAL equal to the M20 per-component channel PSDs, Hermitian; the von Mises
+  operator Q on the textbook invariants (uniaxial → 1, pure shear → 3,
+  hydrostatic → 0); the trace / quadratic-operator identity trace(Q Mₙ) = the
+  moments of the direct S_vm = HᴴQH PSD; the MAX-NORMAL-stress critical plane
+  recovering the 45° principal plane and the MAX-SHEAR-stress critical plane the
+  coordinate plane for a pure-shear state, both at the shear amplitude; the
+  projection-by-direction moments p^T Mₙ p equal to the |H·p|² S scalar
+  moments; the MULTIVARIATE spectral-representation synthesis (per-bin
+  eigendecomposition / Cholesky of the cross-PSD) reproducing the full
+  covariance matrix (component variances AND cross-covariances = M₀); the
+  seeded Monte-Carlo critical-plane rainflow damage matching the spectral Dirlik
+  estimate within the documented scatter; the /IMPL/FATIG/MULT (+ /BASE) card
+  mirror and the parity contract (no mutation of the M16-M20 solvers / the M20
+  SCALAR fatigue / element state; the direct /IMPL/DYNA answer byte-identical
+  whether or not the multiaxial path runs).
 * **Friction-model / material-tangent validations (M15)** — exact MFROT
   formula, branch-joint and floor checks with the FD-verified static
   µ′(p); kernel-level transmitted-force closed forms (every factor

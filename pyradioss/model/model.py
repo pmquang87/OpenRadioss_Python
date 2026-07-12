@@ -215,6 +215,12 @@ class EngineControls:
     impl_fatig_ult: float = 0.0     # ultimate tensile strength S_u (Goodman)
     impl_fatig_mcdur: float = 0.0   # Monte-Carlo cross-check duration (0=off)
     impl_fatig_seed: int = 1        # Monte-Carlo random seed (reproducible)
+    # M21 /IMPL/FATIG/MULT: MULTIAXIAL / critical-plane spectral fatigue — the
+    # full stress-tensor cross-PSD reduced to an equivalent-stress PSD (von
+    # Mises + max-normal / max-shear critical plane). See implicit/
+    # multiaxial_fatigue.py.
+    impl_fatig_mult: bool = False   # /IMPL/FATIG/MULT present -> multiaxial
+    impl_fatig_nplane: int = 24     # candidate-plane azimuth divisions (15 deg)
 
 
 class Model:

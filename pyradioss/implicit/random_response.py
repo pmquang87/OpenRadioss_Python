@@ -556,6 +556,43 @@ def stress_modes(model, basis, channels=None):
     return Sigma, channels
 
 
+def element_voigt_blocks(channels):
+    """Group the scalar stress channels (``stress_channels``) into per-element
+    6-component VOIGT blocks — the M21 multiaxial path needs the FULL stress
+    TENSOR of an element, not the individual scalar components the M20 path
+    treats independently. Returns a list of tuples ``(group_name, elem_local,
+    label_base, cols)`` where ``cols`` is the length-6 array of channel-column
+    indices (in Voigt order xx,yy,zz,xy,yz,zx) for that element; only elements
+    that expose ALL 6 Voigt components (solids / shells) qualify — trusses /
+    springs (a single axial channel) have no stress TENSOR and are skipped
+    (their scalar fatigue is the M20 path). ``label_base`` is the element tag
+    without the component suffix (e.g. ``solids#7``)."""
+    # index channels by (group, elem) -> {comp: column}
+    per_elem = {}
+    for j, (name, e, c, lab) in enumerate(channels):
+        per_elem.setdefault((name, e), {})[c] = (j, lab)
+    blocks = []
+    for (name, e), comps in per_elem.items():
+        if len(comps) < 6 or any(c not in comps for c in range(6)):
+            continue                              # not a full 6-Voigt element
+        cols = np.array([comps[c][0] for c in range(6)], dtype=int)
+        # the label base is the tag stripped of its ":s.." component suffix
+        lab0 = comps[0][1]
+        base = lab0.rsplit(":", 1)[0]
+        blocks.append((name, e, base, cols))
+    return blocks
+
+
+def element_voigt_frf(frf, Sigma, cols):
+    """The 6-component Voigt stress FRF H_sigma(Omega) (nf, 6) of ONE element,
+    pulling the element's 6 channel columns (``cols`` from
+    ``element_voigt_blocks``) out of the full stress FRF q @ Sigma. Read-only in
+    the modal data. Reuses ``stress_frf`` (the H_sigma = q Sigma product) and
+    slices — the same modal coordinates the displacement FRF uses (M20 eq. (7))."""
+    Hs = stress_frf(frf, Sigma)["U"]                # (nf, nchan)
+    return Hs[:, np.asarray(cols, dtype=int)]       # (nf, 6)
+
+
 def stress_frf(frf, Sigma):
     """The stress FRF H_sigma(Omega) = sum_i sigma_i q_i(Omega) (theory eq.
     (7)), returned as a dict ``{omega, freqs, U}`` shaped like a displacement
@@ -642,8 +679,14 @@ def run_fatigue(model, ip, log, result, constr=None, contacts=(), loads=None):
     ultimate = float(getattr(ip, "impl_fatig_ult", 0.0))
     mc_dur = float(getattr(ip, "impl_fatig_mcdur", 0.0))
     mc_seed = int(getattr(ip, "impl_fatig_seed", 1))
+    mult = bool(getattr(ip, "impl_fatig_mult", False))
 
-    log.info("\n     ** RANDOM-VIBRATION (SPECTRAL) FATIGUE **    (/IMPL/FATIG)")
+    if mult:
+        log.info("\n     ** MULTIAXIAL / CRITICAL-PLANE SPECTRAL FATIGUE **"
+                 "  (/IMPL/FATIG/MULT)")
+    else:
+        log.info("\n     ** RANDOM-VIBRATION (SPECTRAL) FATIGUE **    "
+                 "(/IMPL/FATIG)")
     if prestress:
         log.info("        (prestressed modes: K = K_mat + K_geo of the "
                  "committed state)")
@@ -684,6 +727,18 @@ def run_fatigue(model, ip, log, result, constr=None, contacts=(), loads=None):
         raise ValueError(
             "/IMPL/FATIG found no stress channel to evaluate — the model has "
             "no stress-carrying elements (truss / spring / solid / shell).")
+
+    # M21: the MULTIAXIAL / critical-plane path branches here — it keeps the
+    # FULL 6-component stress tensor of every element (not the scalar channels),
+    # forms the stress-tensor cross-PSD, reduces it to an equivalent-stress PSD
+    # and runs the M20 estimators on THAT. Shares the FRF + stress-mode recovery
+    # above (read-only). The scalar M20 path continues below unchanged.
+    if mult:
+        nplane = int(getattr(ip, "impl_fatig_nplane", 24))
+        _run_multiaxial(model, ip, log, result, frf, Sigma, channels,
+                        psd_tab, m_sn, C_sn, mean_stress, ultimate, mc_dur,
+                        mc_seed, base, base_dir, funct_id, nev, nplane)
+        return
 
     # stress response PSD + moments per channel (theory eqs. (8))
     Sff = np.clip(np.asarray(psd_tab.eval(frf["freqs"]), dtype=float), 0.0,
@@ -781,3 +836,146 @@ def _report_fatigue(log, fat, funct_id, base, base_dir, frf, nev):
         log.info(f"      {'MONTE-CARLO rainflow':20s}{mc['damage_rate']:14.5E}"
                  f"   {life_s:>14s}   (n_cyc = {mc['ncycles']:.0f}, "
                  f"seed check)")
+
+
+# ============================================================================
+# Engine-card driver (/IMPL/FATIG/MULT) — M21 multiaxial / critical-plane
+# ============================================================================
+
+def _run_multiaxial(model, ip, log, result, frf, Sigma, channels, psd_tab,
+                    m_sn, C_sn, mean_stress, ultimate, mc_dur, mc_seed, base,
+                    base_dir, funct_id, nev, nplane):
+    """/IMPL/FATIG/MULT (M21): multiaxial / critical-plane spectral fatigue.
+
+    Consumes the M20 vector stress modes (``Sigma``, ``channels``) read-only,
+    groups them into per-element 6-Voigt blocks, and for each solid/shell
+    element forms the stress-tensor cross-PSD S_sigmasigma = H_sigma S_ff
+    H_sigma^H, reduces it to a scalar EQUIVALENT-stress PSD three ways —
+    equivalent VON MISES (Preumont & Piefort 1994 / Pitoiset & Preumont 2000,
+    the trace(Q S) projection), MAX-NORMAL-stress and MAX-SHEAR-stress CRITICAL
+    PLANE (Carpinteri-Spagnoli / Cristofori-Susmel-Tovo) — and runs the M20
+    estimators on each. Picks the CRITICAL ELEMENT (highest von Mises Dirlik
+    damage), stores the full multiaxial result on ``result.fatigue`` and prints
+    the listing. A PORT sub-card: the open-source engine has no multiaxial
+    spectral-fatigue path (module docstring). See
+    ``implicit/multiaxial_fatigue.py`` for the theory."""
+    from . import multiaxial_fatigue as mf
+    from . import spectral_fatigue as sf
+
+    Sff = np.clip(np.asarray(psd_tab.eval(frf["freqs"]), dtype=float), 0.0,
+                  None)
+    omega = np.asarray(frf["omega"], dtype=float)
+
+    # per-element 6-Voigt blocks (solids / shells only — a full stress tensor)
+    blocks = element_voigt_blocks(channels)
+    if not blocks:
+        raise ValueError(
+            "/IMPL/FATIG/MULT found no multiaxial (6-component) stress "
+            "element — the model has only scalar-channel elements "
+            "(truss / spring). Use /IMPL/FATIG (the M20 scalar path) for a "
+            "uniaxial model, or add solid / shell elements.")
+
+    # every element's Voigt stress FRF, then the CHEAP equivalent-von-Mises
+    # Dirlik damage per element -> the critical element (Pitoiset & Preumont's
+    # comparison uses the von Mises damage as the ranking metric)
+    naz, npol = int(nplane), max(7, int(nplane) // 2 + 1)
+    elem_vm_rate = np.zeros(len(blocks))
+    for k, (_name, _e, _base, cols) in enumerate(blocks):
+        Hv = element_voigt_frf(frf, Sigma, cols)          # (nf, 6)
+        Svm = mf.equivalent_vonmises_psd(Hv, Sff)
+        mom_vm = spectral_moments(omega, Svm, nmax=4)
+        if mom_vm[0] <= 0.0:
+            continue
+        elem_vm_rate[k] = sf.dirlik_damage(
+            mom_vm, m_sn, C_sn, mean_stress, ultimate)["damage_rate"]
+    kcrit = int(np.argmax(elem_vm_rate)) if len(blocks) else 0
+    cname, ce, cbase, ccols = blocks[kcrit]
+
+    # the full multiaxial summary on the critical element (all three reductions)
+    Hcrit = element_voigt_frf(frf, Sigma, ccols)
+    summ = mf.multiaxial_fatigue_summary(
+        Hcrit, Sff, omega, m_sn, C_sn, mean_stress=mean_stress,
+        ultimate=ultimate, naz=naz, npol=npol)
+
+    # Monte-Carlo cross-check on the MAX-SHEAR critical plane's linear scalar
+    # (the projected history is exactly Gaussian; the quadratic von Mises MC is
+    # deferred — module docstring)
+    mc = None
+    if mc_dur > 0.0:
+        sp = summ["shear_plane"]
+        mc = mf.monte_carlo_multiaxial_damage(
+            frf["freqs"], summ["Scross"], sp["proj"], m_sn, C_sn, mc_dur,
+            mc_seed, mean_stress=mean_stress, ultimate=ultimate)
+
+    result.fatigue = {
+        "multiaxial": True,
+        "channels": channels, "voigt_blocks": blocks,
+        "critical_element": (cname, ce, cbase),
+        "critical_label": cbase,
+        "elem_vm_dirlik_rate": elem_vm_rate,
+        "von_mises": summ["von_mises"], "normal_plane": summ["normal_plane"],
+        "shear_plane": summ["shear_plane"], "Mmats": summ["Mmats"],
+        "Scross": summ["Scross"], "monte_carlo": mc,
+        "freqs": np.asarray(frf["freqs"], dtype=float), "omega": omega,
+        "Sff": Sff, "sn_m": m_sn, "sn_C": C_sn, "mean_stress": mean_stress,
+        "ultimate": ultimate, "base": base, "stress_modes": Sigma,
+        # keep an M20-compatible top-level "summary" (the von Mises equivalent,
+        # the natural scalar analogue) so downstream code that reads the M20
+        # dict shape still finds a summary
+        "summary": summ["von_mises"]["summary"],
+    }
+    _report_multiaxial(log, result.fatigue, funct_id, base, base_dir, frf, nev)
+
+
+def _report_multiaxial(log, fat, funct_id, base, base_dir, frf, nev):
+    """Print the MULTIAXIAL / CRITICAL-PLANE SPECTRAL FATIGUE listing block: the
+    sweep, the critical element, the equivalent-von-Mises + max-normal +
+    max-shear critical-plane reductions (each with the four M20 estimators), the
+    critical-plane orientations and the Monte-Carlo cross-check."""
+    band = f"[{frf['freqs'].min():.5E}, {frf['freqs'].max():.5E}]"
+    log.info(f"      MODES / FRF SOURCE . . . . . . . : {nev} / REAL modal")
+    log.info(f"      INPUT . . . . . . . . . . . . . : "
+             f"{'BASE ACCELERATION PSD (dir %d)' % base_dir if base else 'FORCE PSD'}"
+             f"  /FUNCT/{int(funct_id)}")
+    log.info(f"      SWEEP BAND (HZ) / POINTS . . . . : {band} / "
+             f"{len(frf['freqs'])}")
+    log.info(f"      S-N CURVE  N = C S^-m  . . . . . : "
+             f"m = {fat['sn_m']:.4G} , C = {fat['sn_C']:.5E}")
+    if fat["mean_stress"]:
+        log.info(f"      MEAN-STRESS (GOODMAN) / ULT  . . : "
+                 f"{fat['mean_stress']:.5E} / {fat['ultimate']:.5E}")
+    log.info(f"      CRITICAL ELEMENT . . . . . . . . : {fat['critical_label']}")
+
+    def _block(title, red):
+        p = red["summary"]["params"]
+        log.info(f"      --- {title} ---")
+        log.info(f"        RMS EQUIV STRESS (sqrt m0) . . : {p['sigma']:.5E}")
+        log.info(f"        RATES  nu0 / nup (HZ)  . . . . : "
+                 f"{p['nu0']:.5E} / {p['nup']:.5E}")
+        log.info(f"        IRREGULARITY alpha2 / BANDWIDTH: "
+                 f"{p['alpha2']:.5F} / {p['epsilon']:.5F}")
+        if "normal" in red:
+            n = red["normal"]
+            log.info(f"        CRITICAL PLANE NORMAL  . . . . : "
+                     f"[{n[0]:+.4F} {n[1]:+.4F} {n[2]:+.4F}]")
+        log.info("        METHOD              DAMAGE RATE      LIFE (T_f)")
+        for key, name in (("narrow_band", "NARROW-BAND"),
+                          ("dirlik", "DIRLIK 1985"),
+                          ("wirsching_light", "WIRSCHING-LIGHT"),
+                          ("tovo_benasciutti", "TOVO-BENASCIUTTI")):
+            r = red["summary"][key]
+            life = r["life"]
+            life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+            log.info(f"        {name:18s}{r['damage_rate']:14.5E}   "
+                     f"{life_s:>14s}")
+
+    _block("EQUIVALENT VON MISES (Preumont-Piefort)", fat["von_mises"])
+    _block("MAX-NORMAL-STRESS CRITICAL PLANE", fat["normal_plane"])
+    _block("MAX-SHEAR-STRESS CRITICAL PLANE", fat["shear_plane"])
+    if fat["monte_carlo"] is not None:
+        mc = fat["monte_carlo"]
+        life = mc["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      MONTE-CARLO (shear-plane rainflow) DAMAGE / LIFE : "
+                 f"{mc['damage_rate']:.5E} / {life_s}  "
+                 f"(n_cyc = {mc['ncycles']:.0f})")
