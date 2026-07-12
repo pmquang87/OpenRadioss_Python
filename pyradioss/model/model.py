@@ -169,6 +169,31 @@ class EngineControls:
     impl_ceigv_fmin: float = 0.0
     impl_ceigv_fmax: float = 0.0
     impl_ceigv_nf: int = 200
+    # -- M19 /IMPL/PSD: RANDOM / SPECTRAL (PSD) response (PORT card — freimpl.F
+    # has no random-vibration path). Response PSD S_uu = |H|^2 S_ff through the
+    # M17 real-mode FRF (classical damping) or the M18 complex FRF
+    # (/IMPL/PSD/CPLX, non-classical); reports the RMS, spectral moments and
+    # crossing/peak rates. See implicit/random_response.py.
+    impl_psd: bool = False          # /IMPL/PSD present -> random response
+    impl_psd_funct: int = 0         # /FUNCT id of the input PSD S_ff(f)
+    impl_psd_fmin: float = 0.0      # sweep start frequency (Hz)
+    impl_psd_fmax: float = 0.0      # sweep end frequency (Hz)
+    impl_psd_nf: int = 400          # number of sweep points
+    impl_psd_nmode: int = 6         # modes retained in the FRF
+    impl_psd_zeta: float = 0.02     # uniform modal damping for the FRF
+    impl_psd_base: bool = False     # /IMPL/PSD/BASE: base-acceleration PSD
+    impl_psd_dir: int = 0           # base-excitation rigid direction (0..5)
+    impl_psd_cplx: bool = False     # /IMPL/PSD/CPLX: use the M18 complex FRF
+    impl_psd_prestress: bool = False  # extract modes on the prestressed K
+    # -- M19 /IMPL/RSPEC: RESPONSE SPECTRUM analysis (PORT card). Per-mode peak
+    # r_i = Gamma_i Sa(omega_i)/omega_i^2 combined by SRSS and CQC (Der
+    # Kiureghian 1981). See implicit/response_spectrum.py.
+    impl_rspec: bool = False        # /IMPL/RSPEC present -> response spectrum
+    impl_rspec_funct: int = 0       # /FUNCT id of the design spectrum Sa(f)
+    impl_rspec_dir: int = 0         # excitation rigid direction (0..5)
+    impl_rspec_zeta: float = 0.05   # spectrum / modal damping ratio
+    impl_rspec_nmode: int = 6       # modes retained in the combination
+    impl_rspec_prestress: bool = False  # extract modes on the prestressed K
 
 
 class Model:

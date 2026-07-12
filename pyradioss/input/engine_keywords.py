@@ -428,6 +428,87 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         log.warning(
                             "/IMPL/FREQ: fmax <= fmin — set a positive sweep "
                             "band (fmin fmax nf)", block.source)
+                elif sub in ("PSD", "RANDOM", "SPECTRAL"):
+                    # /IMPL/PSD (M19 — a PORT card; freimpl.F has no
+                    # random-vibration path). Stationary random / spectral
+                    # (PSD) response S_uu = |H|^2 S_ff through the M17 real-mode
+                    # FRF (or the M18 complex FRF), reporting the RMS, spectral
+                    # moments and crossing/peak rates. Sub-keywords:
+                    #   /IMPL/PSD        card: fmin fmax nf funct [nmode]
+                    #                    (force PSD; the /CLOAD pattern is the
+                    #                    spatial force pattern, funct = S_ff(f))
+                    #   /IMPL/PSD/BASE   card: fmin fmax nf funct [dir] [nmode]
+                    #                    (rigid-base ACCELERATION PSD, dir 0..5)
+                    #   /IMPL/PSD/CPLX   card: fmin fmax nf funct [nmode]
+                    #                    (force PSD via the M18 COMPLEX FRF —
+                    #                    non-classical damping)
+                    ec.impl_psd = True
+                    ec.implicit = True
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    vals = block.cards[0].floats() if block.cards else []
+                    if len(vals) > 0:
+                        ec.impl_psd_fmin = vals[0]
+                    if len(vals) > 1:
+                        ec.impl_psd_fmax = vals[1]
+                    if len(vals) > 2 and vals[2] > 0:
+                        ec.impl_psd_nf = int(vals[2])
+                    if len(vals) > 3 and vals[3] > 0:
+                        ec.impl_psd_funct = int(vals[3])
+                    if sub2 in ("BASE", "SUPPORT", "ACCEL"):
+                        ec.impl_psd_base = True
+                        # dir then nmode after the funct id
+                        if len(vals) > 4 and vals[4] >= 0:
+                            ec.impl_psd_dir = int(vals[4])
+                        if len(vals) > 5 and vals[5] > 0:
+                            ec.impl_psd_nmode = int(vals[5])
+                    elif sub2 in ("CPLX", "COMPLEX", "CEIGV"):
+                        ec.impl_psd_cplx = True
+                        if len(vals) > 4 and vals[4] > 0:
+                            ec.impl_psd_nmode = int(vals[4])
+                    elif sub2 in ("STRS", "STRESS", "PRESTRESS"):
+                        ec.impl_psd_prestress = True
+                        ec.impl_nlgeom = True
+                        if len(vals) > 4 and vals[4] > 0:
+                            ec.impl_psd_nmode = int(vals[4])
+                    else:
+                        if len(vals) > 4 and vals[4] > 0:
+                            ec.impl_psd_nmode = int(vals[4])
+                    if ec.impl_psd_funct <= 0:
+                        log.warning(
+                            "/IMPL/PSD: no input-PSD /FUNCT id on the card "
+                            "(fmin fmax nf funct) — the run will error at the "
+                            "analysis", block.source)
+                elif sub in ("RSPEC", "RESPSPEC", "SPECTRUM"):
+                    # /IMPL/RSPEC (M19 — a PORT card; freimpl.F has no
+                    # response-spectrum path). Design-response-spectrum modal
+                    # combination: per-mode peak r_i = Gamma_i Sa/omega^2
+                    # combined by SRSS and CQC (Der Kiureghian 1981). Card:
+                    #   funct  dir  [zeta]  [nmode]
+                    # (funct = the design spectrum Sa(f); dir the 0..5 rigid
+                    # excitation direction). Both SRSS and CQC are reported.
+                    # /IMPL/RSPEC/STRS extracts the modes on the prestressed K.
+                    ec.impl_rspec = True
+                    ec.implicit = True
+                    sub2 = (block.parts[2].upper()
+                            if len(block.parts) > 2 else "")
+                    vals = block.cards[0].floats() if block.cards else []
+                    if len(vals) > 0 and vals[0] > 0:
+                        ec.impl_rspec_funct = int(vals[0])
+                    if len(vals) > 1 and vals[1] >= 0:
+                        ec.impl_rspec_dir = int(vals[1])
+                    if len(vals) > 2 and vals[2] > 0:
+                        ec.impl_rspec_zeta = vals[2]
+                    if len(vals) > 3 and vals[3] > 0:
+                        ec.impl_rspec_nmode = int(vals[3])
+                    if sub2 in ("STRS", "STRESS", "PRESTRESS"):
+                        ec.impl_rspec_prestress = True
+                        ec.impl_nlgeom = True
+                    if ec.impl_rspec_funct <= 0:
+                        log.warning(
+                            "/IMPL/RSPEC: no design-spectrum /FUNCT id on the "
+                            "card (funct dir zeta nmode) — the run will error "
+                            "at the analysis", block.source)
                 elif sub in ("NEWTON", "SOLVINFO"):
                     if block.cards:
                         vals = block.cards[0].floats()
@@ -502,7 +583,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 else:
                     log.warning(f"/IMPL/{sub} not ported — ignored (supports "
                                 f"DTINI, NEWTON, LSOLVER, NONLIN, ARCL, "
-                                f"DYNA, EIGV, CEIGV, BUCKL, MODAL, FREQ)",
+                                f"DYNA, EIGV, CEIGV, BUCKL, MODAL, FREQ, "
+                                f"PSD, RSPEC)",
                                 block.source)
             elif key == "PRINT":
                 # /PRINT/-100 → one listing line every 100 cycles (the minus
