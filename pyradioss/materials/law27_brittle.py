@@ -154,3 +154,138 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
     sig[:, 1] = np.where(dead, 0.0, syy)
     sig[:, 2] = np.where(dead, 0.0, sxy)
     return sig, epsp
+
+
+# ----------------------------------------------------------------------------
+# Consistent plane-stress tangent for the implicit solver (M15)
+# ----------------------------------------------------------------------------
+# Fortran origin: none to mirror — OpenRadioss's implicit shell assembly
+# never builds a LAW27 tangent (the law is an explicit crash material).
+# The tangent below is the exact derivative d sigma / d eps of the PORT'S
+# OWN law above (the total-strain fixed-crack unilateral model), which is
+# what the implicit Newton loop iterates — the M13 IMP_KPRES principle
+# (consistency with the residual actually assembled beats mirroring).
+#
+# The law is a piecewise-smooth function of the total strain with FOUR
+# regimes per crack direction (plus the uncracked and broken states), and
+# the tangent follows each branch exactly:
+#
+# * UNCRACKED (crk = 0): the elastic plane-stress C — pre-crack implicit
+#   runs reproduce LAW1 exactly (validated).
+# * CRACKED, direction i OPEN (elastic normal stress s_i > 0), damage
+#   FROZEN (the current driving value below the stored d_i, or clipped at
+#   dmax): the secant row (1 - d_i) * cps * [1, nu] — unloading/reloading
+#   inside the damage surface.
+# * CRACKED, direction i OPEN, damage GROWING (the stored d_i equals the
+#   current driving value dmax_i (en_i - eps_ti)/(eps_mi - eps_ti), still
+#   interior): the row gains the SOFTENING term
+#       -cps (en_i + nu en_j) * d d_i/d en_i,
+#   d d_i/d en_i = dmax_i/(eps_mi - eps_ti) — the derived consistent
+#   linearization of the damage evolution (the M12 curvature lesson:
+#   derive, don't bound). The shear row's (1 - max(d1, d2)) factor
+#   contributes -G g12 * dd_i/den_i through whichever direction carries
+#   the max (ties resolve to direction 1, matching np.maximum). At the
+#   loading/unloading corner (a growth step just converged) the GROWING
+#   branch is taken — the plasticity convention for algorithmic tangents.
+# * CRACKED, direction i CLOSED (s_i <= 0): the crack transmits full
+#   stiffness — the row is the ELASTIC cps * [1, nu] (the unilateral
+#   closure; validated by the closed-form compression reload). The
+#   open/closed switch at s_i = 0 is a genuine non-smooth event; the M13
+#   backtracking line search is the Newton backstop (checked by the M15
+#   load-reversal validation).
+# * BROKEN (layfail = 0): zero tangent (the layer carries no stress).
+#
+# Rows are assembled in the frozen CRACK frame and rotated back with the
+# strain/stress Voigt rotation pair (C_elem = T_eps^T C_crack T_eps —
+# T_eps maps element strain to crack-frame strain with engineering
+# shear); the growing-damage rows make C_crack (mildly) NONSYMMETRIC,
+# like every softening tangent — the LU solver does not care. Crack
+# INITIATION inside an increment freezes the angle before this tangent
+# is evaluated (the trial force pass runs first), so the tangent always
+# sees a definite frame; the initiation switch itself is another
+# line-search-backstopped non-smooth event.
+
+def consistent_shell_tangent(mat, extra):
+    """(m, 3, 3) consistent tangent of one LAW27 layer at its TRIAL state
+    (the ``extra`` views hold the trial eps27/crk27/ang27/dmg27/layfail
+    the force pass just updated — see the branch derivation above)."""
+    E, nu, G = mat.E, mat.nu, mat.G
+    p = mat.params
+    eps_t1, eps_m1 = p["eps_t1"], p["eps_m1"]
+    eps_t2, eps_m2 = p["eps_t2"], p["eps_m2"]
+    dmax1, dmax2 = p["dmax1"], p["dmax2"]
+
+    eps = extra["eps27"]
+    crk = extra["crk27"]
+    ang = extra["ang27"]
+    dmg = extra["dmg27"]
+    layfail = extra["layfail"]
+
+    m = len(crk)
+    cps = E / (1.0 - nu * nu)
+    Cel = np.array([[cps, cps * nu, 0.0],
+                    [cps * nu, cps, 0.0],
+                    [0.0, 0.0, G]])
+    C = np.broadcast_to(Cel, (m, 3, 3)).copy()
+
+    cracked = (crk > 0.0) & (layfail != 0.0)
+    if np.any(cracked):
+        idx = np.where(cracked)[0]
+        c = np.cos(ang[idx])
+        s = np.sin(ang[idx])
+        cc, ss, cs = c * c, s * s, c * s
+        exx, eyy, gxy = eps[idx, 0], eps[idx, 1], eps[idx, 2]
+        # crack-frame strains — the same rotation the force path uses
+        en1 = exx * cc + eyy * ss + gxy * cs
+        en2 = exx * ss + eyy * cc - gxy * cs
+        g12 = 2.0 * (eyy - exx) * cs + gxy * (cc - ss)
+        d1 = dmg[idx, 0]
+        d2 = dmg[idx, 1]
+
+        # branch classification per direction (derivation above): the
+        # driving value recomputed with the FORCE PASS's own expressions,
+        # so "growing" is the exact stored-equals-drive identity
+        drv1 = dmax1 * (en1 - eps_t1) / max(eps_m1 - eps_t1, 1e-20)
+        drv2 = dmax2 * (en2 - eps_t2) / max(eps_m2 - eps_t2, 1e-20)
+        s1el = cps * (en1 + nu * en2)      # undamaged normal predictions
+        s2el = cps * (en2 + nu * en1)
+        open1 = s1el > 0.0
+        open2 = s2el > 0.0
+        grow1 = (np.clip(drv1, 0.0, dmax1) == d1) \
+            & (drv1 > 0.0) & (drv1 < dmax1)
+        grow2 = (np.clip(drv2, 0.0, dmax2) == d2) \
+            & (drv2 > 0.0) & (drv2 < dmax2)
+        dd1 = np.where(grow1, dmax1 / max(eps_m1 - eps_t1, 1e-20), 0.0)
+        dd2 = np.where(grow2, dmax2 / max(eps_m2 - eps_t2, 1e-20), 0.0)
+
+        k = len(idx)
+        Ck = np.zeros((k, 3, 3))
+        # normal rows: secant factor (1 - d_i) when open (full when
+        # closed) + the softening term on the growing-open branch
+        phi1 = np.where(open1, 1.0 - d1, 1.0)
+        phi2 = np.where(open2, 1.0 - d2, 1.0)
+        Ck[:, 0, 0] = phi1 * cps - np.where(open1, dd1 * s1el, 0.0)
+        Ck[:, 0, 1] = phi1 * cps * nu
+        Ck[:, 1, 0] = phi2 * cps * nu
+        Ck[:, 1, 1] = phi2 * cps - np.where(open2, dd2 * s2el, 0.0)
+        # shear row: (1 - max(d1, d2)) G, with the growth of the RULING
+        # direction feeding -G g12 dd_i (ties -> direction 1, matching
+        # np.maximum's semantics in the force pass)
+        rule1 = d1 >= d2
+        Ck[:, 2, 2] = (1.0 - np.maximum(d1, d2)) * G
+        Ck[:, 2, 0] = np.where(rule1, -G * g12 * dd1, 0.0)
+        Ck[:, 2, 1] = np.where(~rule1, -G * g12 * dd2, 0.0)
+
+        # rotate to the element frame: eps_crack = Te eps_elem (Voigt,
+        # engineering shear), sigma_elem = Te^T sigma_crack  =>
+        # C_elem = Te^T Ck Te (the transform pair of the force path)
+        Te = np.empty((k, 3, 3))
+        Te[:, 0, 0], Te[:, 0, 1], Te[:, 0, 2] = cc, ss, cs
+        Te[:, 1, 0], Te[:, 1, 1], Te[:, 1, 2] = ss, cc, -cs
+        Te[:, 2, 0], Te[:, 2, 1], Te[:, 2, 2] = \
+            -2.0 * cs, 2.0 * cs, cc - ss
+        C[idx] = np.einsum("kai,kab,kbj->kij", Te, Ck, Te)
+
+    # broken layers carry no stress and no stiffness
+    C[layfail == 0.0] = 0.0
+    return C

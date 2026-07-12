@@ -167,20 +167,30 @@ What M13 adds (implicit FRICTION, TYPE11, FOLLOWER LOADS, LAW36)
 
 Explicitly DEFERRED (documented in PORTING_GUIDE.md, not half-implemented):
 
-* Ifric > 0 friction models (MFROT 1/2/3 + IFQ filtering) and TYPE11
-  friction under implicit; thermal contact; TYPE19/24/25;
-  Inacti/Igap 2/3; /RWALL under implicit (refused); constraint CHAINS;
-  /IMPDISP on constraint nodes; /IMPL/ARCL and /IMPL/BUCKL with
-  constraints/contact; /PLOAD with /IMPL/ARCL (refused);
+* thermal contact; TYPE19/24/25; Inacti/Igap 2/3; /RWALL under implicit
+  (refused); /IMPDISP on constraint nodes; /PLOAD with /IMPL/ARCL
+  (refused); the IFQ >= 10 / MODFR = 2 explicit tangential formulation
+  (the implicit return mapping IS that formulation — M15 note in
+  contact.py);
 * **consistent (element) mass**, modal/eigenvalue dynamics,
   implicit-explicit switching mid-run, /IMPVEL under implicit dynamics
   (use /IMPDISP);
 * rate devices under implicit — the LAW2 strain-rate term, the LAW36
-  rate-curve family, the bulk viscosity and the spring dashpot are
-  disabled LOUDLY, never fed the pseudo-velocity;
-* LAW27/42 implicit tangents and the LAW2 BEAM (global resultant
-  plasticity) tangent; the IDTC = 2/3 step controls and /IMPL/DT/FIXP;
+  rate-curve family, the bulk viscosity, the spring dashpot, the MFROT
+  friction-model VELOCITY terms (M15: reduced to their static limit
+  mu(p, v=0), warned) and the IFQ force filter (a time device — its DC
+  limit is the unfiltered force, warned) are disabled LOUDLY, never fed
+  the pseudo-velocity;
+* the IDTC = 2/3 step controls and /IMPL/DT/FIXP;
   the exact plane-stress (Iplas=1) LAW2 return.
+
+M15 removed the last MATERIAL/friction refusals: Ifric > 0 friction
+MODELS run in the implicit loop with the pressure-dependent Coulomb cone
+mu(p) f_n and the consistent mu'(p) coupling tangent (contact.py);
+LAW27 shells carry the damaged fixed-crack unilateral tangent
+(materials/law27_brittle.py); LAW2 BEAMS carry the algorithmic tangent
+of the global resultant-plasticity return with an ITERATED implicit
+consistency solve (elements/beam_type3.py).
 
 Why scipy is guarded
 --------------------

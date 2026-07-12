@@ -301,11 +301,57 @@ tolerance above the cycle amplitude. Node-to-segment contact in the
 original has the same non-smooth set behind a looser default convergence
 tolerance.
 
-DEFERRED loudly (PORTING_GUIDE M13/M14): Ifric > 0 friction models
-(MFROT 1/2/3 — viscous/Darmstadt/Renard — and the IFQ friction
-filtering), Inacti initial-penetration treatments, Igap 2/3, sensor
-gating (TSTART/TSTOP) under the implicit clock, the I7KEG3/I11KEG3
-stiffening modes IMP_INT7 = 0/1.
+Theory — friction MODELS under implicit (M15, Ifric > 0)
+---------------------------------------------------------
+The MFROT mu(p, v) laws (contact/friction.py — the i7for3.F blocks) make
+the Coulomb cone radius a function of the SAME unknowns the normal force
+depends on: mu = mu(p) with p = f_n / A. What the ORIGINAL's implicit
+branch does, from the fetched i7keg3.F:
+
+* I7KFOR3 (the implicit force path) evaluates the same MFROT blocks —
+  but feeds their velocity argument the increment fields DX/DY/DZ (a
+  step-size-dependent PSEUDO-rate). The port's convention since M10 is
+  that rate devices under implicit reduce LOUDLY to their static limit,
+  never fed du/1: the cone uses mu_static = mu(p, v = 0)
+  (friction.mu_static — MFROT 3 lands on its static coefficient C1,
+  MFROT 4 on the card Fric; a one-time warning fires when the deck's
+  coefficients actually carry velocity terms). The IFQ < 10 filter is a
+  TIME device (an exponential moving average over cycles); its static
+  (DC, fixed-point) limit is the unfiltered force — ignored with a
+  warning. (IFQ >= 10 is the MODFR = 2 incremental formulation: that
+  return-mapping mechanics is exactly what this module already IS.)
+* I7KEG3 (the tangent path) assembles its always-stick tangential
+  spring with the CONSTANT card FRIC even when MFROT > 0 (line
+  ``FACT(I)=FRIC`` — no mu(p) in the matrix at all). The port instead
+  derives the CONSISTENT tangent of its own mu(p) return map — the M13
+  IMP_KPRES pattern (Newton cares about consistency with the residual
+  actually iterated), documented deviation:
+
+  with the cone radius mu(p) f_n and p = f_n/A at FROZEN area A (the
+  area variation is the same O(p/L) class as the frozen projection
+  weights — omitted, stated), the slip force is f_t = mu(p) f_n t and
+  its linearization gains the CHAIN-RULE coupling through f_n:
+
+      d(mu f_n) = [mu + f_n mu'(p)/A] df_n   =:  mu_t df_n
+
+  so the M13 slip tangent's mu K t n^T block becomes mu_t K t n^T (the
+  mu'(p) coupling block) while the in-plane rotation term keeps the
+  CURRENT cone radius: (mu f_n K/|f_tr|)(I - n n^T - t t^T). Stick is
+  untouched (the stick force never sees mu; only the regime DECISION
+  moves with the cone). mu is floored at 1e-30 exactly like the
+  explicit path (mu' = 0 where the floor clamps). mfrot = 0 keeps every
+  M13/M14 scalar expression verbatim — bit-identical (asserted).
+
+  TYPE11 (a documented PORT EXTENSION, like the explicit side — the
+  original TYPE11 never evaluates MFROT at all, see inter_type11.py):
+  the same static-limit cone and mu_t coupling with the edge-pair
+  pressure definition p = f_n / (L_main * gap_pair) at frozen L*gap.
+
+DEFERRED loudly (PORTING_GUIDE M13/M14/M15): Inacti initial-penetration
+treatments, Igap 2/3, sensor gating (TSTART/TSTOP) under the implicit
+clock, the I7KEG3/I11KEG3 stiffening modes IMP_INT7 = 0/1, the
+IFQ >= 10 / MODFR = 2 EXPLICIT force path, MFROT velocity terms under
+implicit DYNAMICS (rate devices stay off — the M10 convention).
 """
 
 from __future__ import annotations
@@ -313,12 +359,45 @@ from __future__ import annotations
 import numpy as np
 
 from ..common.constants import EM20
+from ..contact import friction
 from ..contact.inter_type7 import _narrow
 from ..contact.inter_type11 import _closest_points_on_segments
 from ..contact.stiffness import (combine_stiffness, edge_stiffness_gap,
                                  node_stiffness_gap, segment_stiffness_gap,
                                  _segment_areas)
 from .dofmap import DOFS_PER_NODE
+
+
+def _friction_model_init(self, itf, kind, log):
+    """Shared M15 friction-model init of the two implicit interfaces:
+    reads the Ifric/Ifiltr card state and fires the one-time static-limit
+    warnings (module docstring "friction MODELS under implicit")."""
+    self.mfrot = int(getattr(itf, "mfrot", 0))
+    self.fric_c = np.asarray(getattr(itf, "fric_c", (0.0,) * 6),
+                             dtype=float)
+    # a friction MODEL can produce mu > 0 with the card Fric = 0
+    # (MFROT 1/2 pressure terms, MFROT 3's C1/C2, MFROT 4's C1)
+    self.has_fric = self.mu > 0.0 or self.mfrot > 0
+    if self.mfrot > 0:
+        ext = (" — PORT EXTENSION, p = fn/(L*gap)"
+               if kind == 11 else "")
+        log.info(f"     /INTER/TYPE{kind}/{itf.id}: FRICTION MODEL "
+                 f"MFROT={self.mfrot} at its STATIC LIMIT mu(p, v=0), "
+                 f"consistent mu'(p) tangent{ext} (M15)")
+        if friction.has_velocity_terms(self.mfrot, self.fric_c):
+            log.warning(
+                f"/INTER/TYPE{kind}/{itf.id}: the MFROT={self.mfrot} "
+                f"velocity terms REDUCE TO THEIR STATIC LIMIT v = 0 "
+                f"under the implicit solver (rate devices are never fed "
+                f"the pseudo-velocity du/1 — the M10 convention; the "
+                f"original's I7KFOR3 does feed them the increment, a "
+                f"step-size-dependent pseudo-rate)", "IMPL CONTACT")
+    if int(getattr(itf, "ifq", 0)) > 0:
+        log.warning(
+            f"/INTER/TYPE{kind}/{itf.id}: IFQ friction-force filtering "
+            f"is a time device — its static (DC) limit is the "
+            f"unfiltered force; IGNORED under the implicit solver",
+            "IMPL CONTACT")
 
 
 class ImplicitContact7:
@@ -381,6 +460,7 @@ class ImplicitContact7:
         self.x_com = model.x.copy()
         self.ft_keys = np.zeros(0, dtype=np.int64)
         self.ft_vals = np.zeros((0, 3))
+        _friction_model_init(self, itf, 7, log)   # Ifric > 0 models (M15)
 
         if getattr(itf, "sens_id", 0):
             log.warning(
@@ -388,7 +468,7 @@ class ImplicitContact7:
                 f"under the implicit solver — the interface is active for "
                 f"the whole run", "IMPL CONTACT")
         fric_txt = (f"COULOMB FRICTION mu = {self.mu:g} (i7kfor3 return "
-                    f"mapping)" if self.mu > 0.0 else "frictionless")
+                    f"mapping)" if self.has_fric else "frictionless")
         log.info(f"     /INTER/TYPE7/{itf.id}: IMPLICIT PENALTY CONTACT — "
                  f"{len(self.nodes)} secondary node(s) vs "
                  f"{len(self.segs)} segment(s) (i7ke3.F, {fric_txt})")
@@ -451,6 +531,29 @@ class ImplicitContact7:
         return ni, seg, w, nvec, pen, K, d, jj
 
     # ------------------------------------------------------------------
+    def _cone(self, x, ni, seg, pen, K):
+        """The Coulomb cone radius ``fcap`` of every active pair and the
+        slip tangent's coupling slope ``mu_t = d(mu f_n)/d f_n`` (M15,
+        module docstring "friction MODELS under implicit").
+
+        mfrot = 0: the M13 scalar expressions verbatim (bit-identical —
+        fcap = mu K p, mu_t = mu). mfrot > 0: the STATIC LIMIT
+        mu(p, v=0) at the pair pressure p = f_n / A with A the CURRENT
+        main-segment area (i7for3's AREA), frozen in the linearization;
+        mu_t = mu + f_n mu'(p)/A — the mu'(p) coupling block."""
+        if self.mfrot == 0:
+            return self.mu * K * pen, self.mu
+        fn = K * pen
+        d13 = x[seg[:, 2]] - x[seg[:, 0]]
+        d24 = x[seg[:, 3]] - x[seg[:, 1]]
+        area = np.maximum(0.5 * np.linalg.norm(
+            np.cross(d13, d24), axis=1), EM20)
+        pres = fn / area
+        mu, dmu_dp = friction.mu_static(self.mfrot, self.mu,
+                                        self.fric_c, pres)
+        return mu * fn, mu + fn * dmu_dp / area
+
+    # ------------------------------------------------------------------
     def _friction_state(self, x, ni, seg, srow, w, nvec, pen, K):
         """The incremental return mapping of every active pair at trial
         geometry ``x`` from the COMMITTED anchors (module docstring —
@@ -458,13 +561,14 @@ class ImplicitContact7:
 
             delta   = (x - x_com) relative motion at the CURRENT weights
             f_t^tr  = P_T(anchor) - K_t * P_T(delta)     (K_t = K)
-            stick   : f_t = f_t^tr                (|f_t^tr| <= mu K p)
-            slip    : f_t = mu K p * f_t^tr/|f_t^tr|
+            stick   : f_t = f_t^tr             (|f_t^tr| <= mu(p) K p)
+            slip    : f_t = mu(p) K p * f_t^tr/|f_t^tr|
 
-        Returns (ft, stick, tnorm, ttr) — the tangential force (m, 3),
-        the stick mask, |f_t^tr| and its unit direction (slip rows only
-        meaningful) — everything forces()/triplets()/commit() need.
-        Never called when mu = 0."""
+        Returns (ft, stick, tnorm, ttr, fcap, mu_t) — the tangential
+        force (m, 3), the stick mask, |f_t^tr| and its unit direction
+        (slip rows only meaningful), the cone radius and the coupling
+        slope d(mu f_n)/df_n (M15 — see ``_cone``). Never called when
+        the interface carries no friction."""
         m = len(ni)
         # slip increment at frozen (current) weights, tangential part
         delta = ((x[ni] - self.x_com[ni])
@@ -485,11 +589,11 @@ class ImplicitContact7:
         f0 -= np.einsum("mb,mb->m", f0, nvec)[:, None] * nvec
         ftr = f0 - K[:, None] * dt_vec
         tnorm = np.sqrt(np.einsum("mb,mb->m", ftr, ftr))
-        fcap = self.mu * K * pen                       # the Coulomb cone
+        fcap, mu_t = self._cone(x, ni, seg, pen, K)    # the Coulomb cone
         stick = tnorm <= fcap
         ttr = ftr / np.maximum(tnorm, EM20)[:, None]
         ft = np.where(stick[:, None], ftr, fcap[:, None] * ttr)
-        return ft, stick, tnorm, ttr
+        return ft, stick, tnorm, ttr, fcap, mu_t
 
     # ------------------------------------------------------------------
     def forces(self, x, fcont):
@@ -502,9 +606,9 @@ class ImplicitContact7:
         if len(ni) == 0:
             return 0
         Fvec = (K * pen)[:, None] * nvec
-        if self.mu > 0.0:
-            ft, _, _, _ = self._friction_state(x, ni, seg, srow, w, nvec,
-                                               pen, K)
+        if self.has_fric:
+            ft = self._friction_state(x, ni, seg, srow, w, nvec,
+                                      pen, K)[0]
             Fvec = Fvec + ft
         np.add.at(fcont, ni, Fvec)
         np.add.at(fcont, seg.reshape(-1),
@@ -522,9 +626,9 @@ class ImplicitContact7:
         if len(ni) == 0:
             return 0.0
         e = 0.5 * float((K * pen * pen).sum())
-        if self.mu > 0.0:
-            ft, _, _, _ = self._friction_state(x, ni, seg, srow, w, nvec,
-                                               pen, K)
+        if self.has_fric:
+            ft = self._friction_state(x, ni, seg, srow, w, nvec,
+                                      pen, K)[0]
             e += 0.5 * float((np.einsum("mb,mb->m", ft, ft) / K).sum())
         return e
 
@@ -537,7 +641,7 @@ class ImplicitContact7:
         increment, Sum mu f_n dgamma with dgamma = (|f_t^tr| - mu f_n)/K_t
         — the return map's plastic-slip work, booked in the dynamics
         ``efric`` ledger channel (statics ignores the return value)."""
-        if self.mu <= 0.0:
+        if not self.has_fric:
             return 0.0
         ni, seg, w, nvec, pen, K, _, srow = self._active_pairs(x)
         if len(ni) == 0:
@@ -549,10 +653,9 @@ class ImplicitContact7:
         # anchor configuration (the slip increment is measured from the
         # OLD x_com — re-basing first would store the stale anchors and
         # silently drop the increment's tangential update)
-        ft, stick, tnorm, _ = self._friction_state(x, ni, seg, srow, w,
-                                                   nvec, pen, K)
+        ft, stick, tnorm, _, fcap, _ = self._friction_state(
+            x, ni, seg, srow, w, nvec, pen, K)
         self.x_com = x.copy()
-        fcap = self.mu * K * pen
         slip_g = np.where(stick, 0.0, (tnorm - fcap) / K)   # plastic slip
         diss = float((fcap * slip_g).sum())
         key = ni * len(self.segs) + srow
@@ -585,21 +688,25 @@ class ImplicitContact7:
             g[:, 3 + 3 * k: 6 + 3 * k] = -w[:, k, None] * nvec
         ke = K[:, None, None] * g[:, :, None] * g[:, None, :]
         ke -= self._curvature_blocks(x, ni, seg, w, nvec, pen, K, d)
-        if self.mu > 0.0:
+        if self.has_fric:
             # friction blocks (P P^T) (x) M — see the docstring above for
             # M per regime; P = [1, -H1..-H4] is the same pair pattern the
             # curvature term uses, so the assembled rows/columns match the
-            # residual's force distribution exactly.
-            ft, stick, tnorm, ttr = self._friction_state(
+            # residual's force distribution exactly. M15: the slip block's
+            # t n^T factor is mu_t = mu + fn mu'(p)/A — the pressure-
+            # dependent cone's coupling slope (= mu verbatim for
+            # mfrot = 0); the in-plane rotation term keeps the CURRENT
+            # cone radius fcap = mu(p) fn.
+            ft, stick, tnorm, ttr, fcap, mu_t = self._friction_state(
                 x, ni, seg, srow, w, nvec, pen, K)
             eye = np.eye(3)
             T = eye[None] - np.einsum("mi,mj->mij", nvec, nvec)
             M = np.where(stick[:, None, None],
                          K[:, None, None] * T,
-                         # slip: mu K t n^T + (mu fn K/|ftr|)(T - t t^T)
-                         (self.mu * K)[:, None, None]
+                         # slip: mu_t K t n^T + (mu fn K/|ftr|)(T - t t^T)
+                         (mu_t * K)[:, None, None]
                          * np.einsum("mi,mj->mij", ttr, nvec)
-                         + (self.mu * K * pen * K
+                         + (fcap * K
                             / np.maximum(tnorm, EM20))[:, None, None]
                          * (T - np.einsum("mi,mj->mij", ttr, ttr)))
             P = np.empty((npair, 5))
@@ -730,6 +837,7 @@ class ImplicitContact11:
         self.x_com = model.x.copy()
         self.ft_keys = np.zeros(0, dtype=np.int64)
         self.ft_vals = np.zeros((0, 3))
+        _friction_model_init(self, itf, 11, log)  # Ifric > 0 models (M15)
 
         if getattr(itf, "sens_id", 0):
             log.warning(
@@ -737,7 +845,7 @@ class ImplicitContact11:
                 f"under the implicit solver — the interface is active for "
                 f"the whole run", "IMPL CONTACT")
         fric_txt = (f"COULOMB FRICTION mu = {self.mu:g} (M14 edge-pair "
-                    f"return mapping)" if self.mu > 0.0 else "frictionless")
+                    f"return mapping)" if self.has_fric else "frictionless")
         log.info(f"     /INTER/TYPE11/{itf.id}: IMPLICIT PENALTY CONTACT — "
                  f"{len(self.es)} secondary edge(s) vs "
                  f"{len(self.em)} main edge(s) (i11ke3.F, {fric_txt})")
@@ -886,7 +994,25 @@ class ImplicitContact11:
         return g
 
     # ------------------------------------------------------------------
-    def _friction_state(self, x, ea, eb, s, t, key, nvec, pen, K):
+    def _cone(self, x, eb, gap, pen, K):
+        """Coulomb cone radius + coupling slope of every active pair —
+        the TYPE7 ``_cone`` with the edge-pair pressure DEFINITION
+        p = f_n / (L_main * gap_pair) at the trial main-edge length
+        (M15 port extension, module docstring; frozen L*gap in the
+        linearization like the TYPE7 frozen area). mfrot = 0: the M14
+        scalar expressions verbatim (bit-identical)."""
+        if self.mfrot == 0:
+            return self.mu * K * pen, self.mu
+        fn = K * pen
+        lm = np.linalg.norm(x[eb[:, 1]] - x[eb[:, 0]], axis=1)
+        aref = np.maximum(lm * gap, EM20)
+        pres = fn / aref
+        mu, dmu_dp = friction.mu_static(self.mfrot, self.mu,
+                                        self.fric_c, pres)
+        return mu * fn, mu + fn * dmu_dp / aref
+
+    # ------------------------------------------------------------------
+    def _friction_state(self, x, ea, eb, s, t, key, nvec, pen, K, gap):
         """The M14 edge-pair return mapping at trial geometry ``x`` from
         the committed anchors (module docstring "TYPE11 COULOMB
         FRICTION"): the slip increment is the relative motion of the two
@@ -894,8 +1020,9 @@ class ImplicitContact11:
         projected (the plane orthogonal to n — which CONTAINS both edge
         directions at a crossing: axial edge sliding is genuine slip);
         stick keeps the trial spring force, slip radially returns it to
-        the cone mu K p. Returns (ft, stick, tnorm, ttr) like the TYPE7
-        twin. Never called when mu = 0."""
+        the cone mu(p) K p (M15: the static-limit friction model — see
+        ``_cone``). Returns (ft, stick, tnorm, ttr, fcap, mu_t) like the
+        TYPE7 twin. Never called when the interface has no friction."""
         m = len(s)
         # relative closest-point motion at frozen (s, t): trial - committed
         dx = x - self.x_com
@@ -917,11 +1044,11 @@ class ImplicitContact11:
         f0 -= np.einsum("mb,mb->m", f0, nvec)[:, None] * nvec
         ftr = f0 - K[:, None] * dt_vec
         tnorm = np.sqrt(np.einsum("mb,mb->m", ftr, ftr))
-        fcap = self.mu * K * pen                       # the Coulomb cone
+        fcap, mu_t = self._cone(x, eb, gap, pen, K)    # the Coulomb cone
         stick = tnorm <= fcap
         ttr = ftr / np.maximum(tnorm, EM20)[:, None]
         ft = np.where(stick[:, None], ftr, fcap[:, None] * ttr)
-        return ft, stick, tnorm, ttr
+        return ft, stick, tnorm, ttr, fcap, mu_t
 
     # ------------------------------------------------------------------
     def forces(self, x, fcont):
@@ -934,13 +1061,13 @@ class ImplicitContact11:
         equal/opposite at the two closest points, whose normal offset d
         leaves the same O(f_t*d) moment the TYPE7 node-vs-projection
         transfer carries."""
-        ea, eb, s, t, nvec, pen, K, _, _, key = self._active_pairs(x)
+        ea, eb, s, t, nvec, pen, K, d, _, key = self._active_pairs(x)
         if len(s) == 0:
             return 0
         F = (K * pen)[:, None] * nvec
-        if self.mu > 0.0:
-            ft, _, _, _ = self._friction_state(x, ea, eb, s, t, key, nvec,
-                                               pen, K)
+        if self.has_fric:
+            ft = self._friction_state(x, ea, eb, s, t, key, nvec,
+                                      pen, K, pen + d)[0]
             F = F + ft
         va = np.empty((len(s), 2, 3))
         va[:, 0, :] = (1.0 - s)[:, None] * F
@@ -956,13 +1083,13 @@ class ImplicitContact11:
     def energy(self, x):
         """Stored penalty-spring energy 1/2 K p^2 of the active set,
         plus (M14) the stick spring's tangential store 1/2 |f_t|^2/K_t."""
-        ea, eb, s, t, nvec, pen, K, _, _, key = self._active_pairs(x)
+        ea, eb, s, t, nvec, pen, K, d, _, key = self._active_pairs(x)
         if len(s) == 0:
             return 0.0
         e = 0.5 * float((K * pen * pen).sum())
-        if self.mu > 0.0:
-            ft, _, _, _ = self._friction_state(x, ea, eb, s, t, key, nvec,
-                                               pen, K)
+        if self.has_fric:
+            ft = self._friction_state(x, ea, eb, s, t, key, nvec,
+                                      pen, K, pen + d)[0]
             e += 0.5 * float((np.einsum("mb,mb->m", ft, ft) / K).sum())
         return e
 
@@ -973,18 +1100,17 @@ class ImplicitContact11:
         from the OLD anchors first, then the anchor geometry re-based).
         Returns the frictional slip dissipation of the increment for the
         ``efric`` ledger channel."""
-        if self.mu <= 0.0:
+        if not self.has_fric:
             return 0.0
-        ea, eb, s, t, nvec, pen, K, _, _, key = self._active_pairs(x)
+        ea, eb, s, t, nvec, pen, K, d, _, key = self._active_pairs(x)
         if len(s) == 0:
             self.x_com = x.copy()
             self.ft_keys = np.zeros(0, dtype=np.int64)
             self.ft_vals = np.zeros((0, 3))
             return 0.0
-        ft, stick, tnorm, _ = self._friction_state(x, ea, eb, s, t, key,
-                                                   nvec, pen, K)
+        ft, stick, tnorm, _, fcap, _ = self._friction_state(
+            x, ea, eb, s, t, key, nvec, pen, K, pen + d)
         self.x_com = x.copy()
-        fcap = self.mu * K * pen
         slip_g = np.where(stick, 0.0, (tnorm - fcap) / K)   # plastic slip
         diss = float((fcap * slip_g).sum())
         # duplicate keys cannot happen: a pair contributes one sub-index
@@ -1013,19 +1139,22 @@ class ImplicitContact11:
         ke = K[:, None, None] * g[:, :, None] * g[:, None, :]
         ke -= self._curvature_blocks(x, ea, eb, s, t, nvec, pen, K, d,
                                      frozen)
-        if self.mu > 0.0:
+        if self.has_fric:
             # friction blocks (P P^T) (x) M — stick K_t(I - n n^T), slip
             # the nonsymmetric return-map derivative (module docstring);
-            # P matches the force distribution rows exactly.
-            ft, stick, tnorm, ttr = self._friction_state(
-                x, ea, eb, s, t, key, nvec, pen, K)
+            # P matches the force distribution rows exactly. M15: the
+            # slip t n^T factor is mu_t = mu + fn mu'(p)/(L*gap) — the
+            # pressure-dependent cone's coupling slope (= mu verbatim
+            # for mfrot = 0).
+            ft, stick, tnorm, ttr, fcap, mu_t = self._friction_state(
+                x, ea, eb, s, t, key, nvec, pen, K, pen + d)
             eye = np.eye(3)
             T = eye[None] - np.einsum("mi,mj->mij", nvec, nvec)
             M = np.where(stick[:, None, None],
                          K[:, None, None] * T,
-                         (self.mu * K)[:, None, None]
+                         (mu_t * K)[:, None, None]
                          * np.einsum("mi,mj->mij", ttr, nvec)
-                         + (self.mu * K * pen * K
+                         + (fcap * K
                             / np.maximum(tnorm, EM20))[:, None, None]
                          * (T - np.einsum("mi,mj->mij", ttr, ttr)))
             P = np.empty((m, 4))

@@ -651,6 +651,16 @@ class Interface:
     gap_max: float = 0.0  # igap=1 cap, 0 = no cap
     dsearch: float = 0.0  # type 2: projection search distance (0 = auto)
     sens_id: int = 0      # M6: /SENSOR gating (types 7/11)
+    # ---- friction MODELS (M15, Ifric > 0 — contact/friction.py) ----------
+    # mfrot = Ifric (the MFROT law), fric_c = C1..C6, ifq = Ifiltr and
+    # xfiltr the reader-derived filter coefficient (hm_read_inter_type07.F:
+    # IFQ=1 -> Xfreq, IFQ=2 -> 2*pi/Xfreq, IFQ=3 -> 2*pi*Xfreq). On TYPE11
+    # these fields are a documented port EXTENSION (the original TYPE11
+    # card carries none — see contact/friction.py).
+    mfrot: int = 0
+    ifq: int = 0
+    xfiltr: float = 0.0
+    fric_c: tuple = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     title: str = ""
 
 

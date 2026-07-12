@@ -53,7 +53,23 @@ Algorithm
 
 4. **Coulomb friction**: the tangential relative velocity direction gets
    a force min(mu * Fn, ...) opposing it (kinetic friction, smoothly
-   regularized near zero slip velocity).
+   regularized near zero slip velocity). Since M15, ``Ifric > 0``
+   replaces the constant mu with the MFROT friction MODELS mu(p, v) of
+   i7for3.F — pressure p = Fn over the CURRENT main-segment area, slip
+   speed v — and ``Ifiltr`` low-pass filters the tangential force with
+   the per-pair IFQ exponential moving average (both live in
+   ``contact/friction.py``, where the laws, the reader mapping and the
+   one documented deviation are derived against the fetched source).
+   The Ifric = 0 code path is untouched — bit-identical to M4 (asserted
+   by the M15 tests). The mu(p, v) evaluation and the filter sit
+   DOWNSTREAM of the numba-mirrored narrow phase (t7_narrow), in the
+   NumPy force path both backends share — the M7 kernel parity contract
+   holds with no mirror change (stated, not silent: the mirror boundary
+   is the narrow phase, see the accel package docstring).
+   The IFQ anchor store is engine-side state rebuilt EMPTY on a restart
+   chain (like the broad-phase candidates); a chained IFQ run
+   re-converges its filter within ~1/alpha cycles — the M6 restart
+   bit-match contract is guaranteed for Ifiltr = 0 decks.
 
 5. **Element deletion (M3<->M4)**: segments whose parent element has
    GBUF%OFF = 0 are masked out every cycle (crack faces stop pushing),
@@ -79,9 +95,9 @@ import numpy as np
 
 from ..accel import get as accel_get
 from ..common.constants import EM20
-from ..common.fastmath import norm3, scatter_add3
+from ..common.fastmath import cross3, norm3, scatter_add3
 from ..model.model import Model
-from . import tracking
+from . import friction, tracking
 from .stiffness import (combine_stiffness, node_stiffness_gap,
                         segment_stiffness_gap, _segment_areas)
 
@@ -254,6 +270,23 @@ class ContactType7:
             self.gap_const = gap_floor
             self.gap_bound = gap_floor
         self.fric = itf.fric
+
+        # --- friction MODELS + IFQ filter state (M15) -----------------------
+        # mfrot/ifq = 0 leaves every M4 path untouched (bit-identical).
+        # The filter anchors are the CAND_F store of i7for3.F, keyed
+        # node*nseg + segrow, sorted; rebuilt from the active pairs each
+        # cycle (a separated pair restarts its history — the IFPEN scope).
+        self.mfrot = int(getattr(itf, "mfrot", 0))
+        self.ifq = int(getattr(itf, "ifq", 0))
+        self.xfiltr = float(getattr(itf, "xfiltr", 0.0))
+        self.fric_c = np.asarray(getattr(itf, "fric_c",
+                                         (0.0,) * 6), dtype=float)
+        self._filt_keys = np.zeros(0, dtype=np.int64)
+        self._filt_vals = np.zeros((0, 3))
+        if self.mfrot > 0:
+            log.info(f"     /INTER/TYPE7/{itf.id}: FRICTION MODEL "
+                     f"MFROT={self.mfrot} (i7for3.F mu(p, v)), "
+                     f"IFQ={self.ifq}")
 
         # --- interface time step bound (see module docstring) --------------
         # Worst node-on-spring combination on each side, evaluated once
@@ -481,14 +514,38 @@ class ContactType7:
         Fn = K * pen - C * np.minimum(vn, 0.0)
         Fvec = Fn[:, None] * nvec
 
-        # Coulomb friction, regularized around zero slip
-        if self.fric > 0.0:
+        # Coulomb friction, regularized around zero slip. Ifric > 0 (M15)
+        # swaps the constant mu for the MFROT mu(p, v) laws of i7for3.F
+        # (contact/friction.py) and Ifiltr low-pass filters the tangential
+        # force (the CAND_F exponential moving average). The mu = const,
+        # no-filter path below is the M4 code verbatim (x + (-a) == x - a
+        # exactly in IEEE — bit-identical, asserted by the M15 tests).
+        if self.fric > 0.0 or self.mfrot > 0:
             gap_ref = float(np.mean(gap))
             vt = vrel - vn[:, None] * nvec
             vt_mag = norm3(vt)
-            Ft = self.fric * Fn * vt_mag / (
+            if self.mfrot > 0:
+                # contact pressure p = Fn / (CURRENT main-segment area),
+                # the i7for3 AREA = 1/2 |(x3-x1) x (x4-x2)| — its FNI by
+                # this point includes the damper term, exactly like Fn
+                d13 = x[seg[:, 2]] - x[seg[:, 0]]
+                d24 = x[seg[:, 3]] - x[seg[:, 1]]
+                area = 0.5 * norm3(cross3(d13, d24))
+                pres = Fn / np.maximum(area, EM20)
+                mu = friction.mu_kinetic(self.mfrot, self.fric,
+                                         self.fric_c, pres, vt_mag)
+            else:
+                mu = self.fric
+            Ft = mu * Fn * vt_mag / (
                 vt_mag + 1e-3 * gap_ref / max(dt, EM20))
-            Fvec -= (Ft / np.maximum(vt_mag, EM20))[:, None] * vt
+            ftvec = -(Ft / np.maximum(vt_mag, EM20))[:, None] * vt
+            if self.ifq > 0:
+                alpha = friction.filter_alpha(self.ifq, self.xfiltr, dt)
+                keys = ni * max(len(self.segs), 1) + srow[active]
+                ftvec, self._filt_keys, self._filt_vals = friction.\
+                    apply_filter(keys, ftvec, alpha, self._filt_keys,
+                                 self._filt_vals)
+            Fvec += ftvec
 
         # scatter: action on the node, exact opposite reaction on the
         # segment corners (momentum conservation)

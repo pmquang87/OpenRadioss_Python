@@ -163,13 +163,18 @@ def shell_membrane_tangent(mat):
         f"and LAW2 elastoplastic are ported; see PORTING_GUIDE)")
 
 
-def shell_layer_tangent(mat, sig, epsp, epsp_incr):
+def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
     """Dispatch the (n, 3, 3) consistent PLANE-STRESS tangent of one
     through-thickness layer for the implicit shell tangents (M11). LAW1
     broadcasts the elastic matrix; LAW2 returns the CONSISTENT (algorithmic)
     tangent of the Iplas=2 radial projection (see
     law02.consistent_shell_tangent for the derivation); LAW36 (M13) the
-    same projection tangent with the table's local hardening slope."""
+    same projection tangent with the table's local hardening slope;
+    LAW27 (M15) the damaged fixed-crack unilateral tangent built from the
+    layer's trial crack state passed in ``extra`` (the eps27/crk27/ang27/
+    dmg27/layfail views — law27.consistent_shell_tangent for the
+    per-branch derivation: uncracked / open-frozen / open-growing /
+    closed / broken)."""
     n = sig.shape[0]
     if mat.law == 1:
         import numpy as np
@@ -181,7 +186,13 @@ def shell_layer_tangent(mat, sig, epsp, epsp_incr):
     if mat.law == 36:
         return law36_tabulated.consistent_shell_tangent(
             mat, sig, epsp, epsp_incr)
+    if mat.law == 27:
+        if extra is None:
+            raise NotImplementedError(
+                "LAW27 implicit tangent needs the layer crack state "
+                "(the shell kernels pass it since M15)")
+        return law27_brittle.consistent_shell_tangent(mat, extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 "
-        f"elastic, LAW2 and LAW36 elastoplastic are ported; LAW27 is "
-        f"deferred — see PORTING_GUIDE M13)")
+        f"elastic, LAW2 and LAW36 elastoplastic, LAW27 brittle cracking "
+        f"are ported — see PORTING_GUIDE M15)")

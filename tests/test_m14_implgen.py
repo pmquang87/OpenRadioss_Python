@@ -625,11 +625,12 @@ def test_t11_friction_fd_consistency_both_regimes(make_deck):
         u1 = u0.copy()
         for nid in (1, 2):
             u1[model.node_index(nid), 1] += dy
-        # verify the intended regime
-        ea, eb, s, t, nvec, pen, K, _, _, key = c._active_pairs(
+        # verify the intended regime (the M15 signature: gap = pen + d,
+        # plus the cone/coupling returns the mu(p) models added)
+        ea, eb, s, t, nvec, pen, K, d, _, key = c._active_pairs(
             model.x0 + u1)
-        _, stick, _, _ = c._friction_state(model.x0 + u1, ea, eb, s, t,
-                                           key, nvec, pen, K)
+        stick = c._friction_state(model.x0 + u1, ea, eb, s, t,
+                                  key, nvec, pen, K, pen + d)[1]
         assert stick.all() == (regime == "stick")
         Kc = contact_tangent(contacts, model.x0 + u1, dof).toarray()
         eps = 1e-8
