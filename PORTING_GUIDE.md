@@ -293,7 +293,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | **MULTI-INPUT / PARTIALLY-COHERENT RANDOM-VIBRATION RESPONSE & FATIGUE (M28)**: the stationary response (and stress-tensor) cross-PSD driven by SEVERAL simultaneous random inputs with a full Hermitian input cross-spectral matrix `S_ff(ω) = [√(G_a G_b) γ_ab e^{iθ_ab}]` (auto-PSDs on the diagonal, coherence γ_ab ∈ [0,1] + phase θ_ab off-diagonal), propagated through the VECTOR FRF by the MIMO relation `S_uu = H S_ff Hᴴ` / `S_σσ = H_σ S_ff H_σᴴ` and reduced by the whole M20–M27 estimator family UNCHANGED (`implicit/multi_input_response.py` + `implicit/multi_input_fatigue.py`, the `_run_multi_input_fatigue` / `_run_multi_input_response` extensions of the M19/M21 drivers in `implicit/random_response.py`, `/IMPL/PSD/MULTI` + `/IMPL/FATIG/MULT/MINPUT`) — the LAST item on the recurring deferral tail carried since M19/M20/M21 (the multi-input cross-PSD with coherence deferred in every spectral milestone). Where M19/M20/M21 assumed ONE scalar input and formed the RANK-1 `H S_ff Hᴴ` with a scalar `S_ff`, M28 generalises `S_ff` to a NON-DIAGONAL ninput×ninput Hermitian matrix and contracts it with a per-input FRF COLUMN stack `H(ω)` (nf, ndof, ninput). INPUT CROSS-PSD MODEL — `input_cross_psd_matrix` assembles the Hermitian `S_ff` from per-input auto-PSDs and a coherence model (`constant_coherence` OR the exponential/decay `exponential_coherence` for distributed loads), projected onto the nearest Hermitian PSD matrix (`nearest_psd`, clip negative eigenvalues, Higham 1988, a no-op on a valid matrix). The per-input FRF columns (`stress_frf_columns` / `displacement_frf_columns`, reusing the M17/M19 machinery read-only) and the batched triple products (`response_cross_psd(_diagonal)`, `stress_tensor_cross_psd_multi`); the single-input (ninput = 1) case delegates to the M21 rank-1 routines (bit-identical). `multi_input_multiaxial_summary` reduces `S_σσ` by the SAME M21 machinery (returning the SAME dict shape, so the M22–M27 corrections compose UNCHANGED). MULTI-INPUT MONTE-CARLO — synthesise the ninput CORRELATED input histories from the per-bin eigen/Cholesky factor of `S_ff` (the M21 synthesiser applied to the INPUT matrix, `synthesize_multi_input_forces` / `synthesize_multi_input_stress`), drive each through its stress FRF column, sum, ASTM E1049 rainflow + Miner (`monte_carlo_multi_input_damage`); the single-input / fully-coherent (rank-1) cases DELEGATE to the M21 MC (bit-identical), the partially-coherent case runs the input-level synthesis and is cross-checked against the stress-level (M21-on-`S_σσ`) answer within scatter; `measure_coherence` confirms the synthesised inputs' coherence matches γ_ab. Validated: the single-input cross-PSD BIT-IDENTICAL to the M21 rank-1 / M19 |U|²G answers; the coherence identity |S_ff[a,b]|² = γ_ab²G_aG_b; the PSD projection a no-op on a valid matrix; a diagonal `S_ff` = the SUM of the per-input answers EXACTLY; a rank-1 coherent `S_ff` = the single-input answer for the combined pattern EXACTLY; partial coherence interpolating monotonically; a two-input SDOF closed form; the M21 reductions byte-identical given the same `S_σσ`; the fully-coherent MC reducing to the M21 MC bit-identically; the incoherent variance additive + the input-level MC matching the stress-level MC within scatter; the synthesised coherence matching γ_ab. Composes with /NPROP, /SPEC, /NGAUSS, /NSTAT, /EVOL, /JOINT (the multi-input `S_σσ` flows into them unchanged), reported ALONGSIDE the single-input numbers (a `multi_input` sub-entry). PORT sub-flag, library-first like M16–M27; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions and the M24–M27 corrections stay BIT-IDENTICAL (a NEW parallel path — the single-input answers byte-identical whether or not the multi-input path runs — asserted). Theory: Newland ch. 6–8 (multiple correlated inputs, the coherence function); Bendat & Piersol ch. 5–7 (the cross-spectral / coherence matrix, the `H S_ff Hᴴ` MIMO relation); Wirsching–Paez–Ortiz (multi-input random fatigue); Higham 1988 (nearest PSD); Shinozuka & Deodatis (multivariate spectral representation) | ✅ |
 | **FULLY NON-STATIONARY / EVOLUTIONARY MULTI-INPUT CROSS-PSD (M29)**: a TIME-VARYING input coherence matrix `S_ff(ω,t)` (the coherence γ_ab(t) and phase θ_ab(t), and/or the auto-PSDs G_a(t), DRIFTING with time) driving a per-window multi-input stress-tensor cross-PSD `S_σσ(ω,tᵢ) = H_σ S_ff(tᵢ) H_σᴴ` whose critical plane / F_np may DRIFT as the input coherence evolves, reduced PER WINDOW by the M20–M27 estimator family + the M28 multi-input path and Miner-summed (`implicit/evolutionary_multi_input.py`, the `_run_evolutionary_multi_input` extension of the M28 `_run_multi_input_fatigue` driver in `implicit/random_response.py`, `/IMPL/FATIG/MULT/MINPUT/EVOL`) — the item M28 DEFERRED (M28 was STATIONARY multi-input, a fixed `S_ff` modulated at most by a scalar RMS profile / drifting-shape window, the coherence itself held stationary). M29 is the CONVERGENCE of M27 (evolutionary joint-tensor) and M28 (multi-input): the coherence itself is now the drifting quantity. TIME-VARYING INPUT CROSS-PSD — a per-window schedule of Hermitian input cross-spectral matrices `S_ff(ω,tᵢ)` (`evolutionary_input_windows`), the coherence γ_ab(tᵢ) / θ_ab(tᵢ) interpolated across the M26/M27 windows from a START pair to an END pair (`coherence_schedule`) and the auto-PSDs carrying the M27 drifting-shape window `W_i(f)` / RMS level `a_i`, each window projected onto the nearest Hermitian PSD matrix (reusing M28 `nearest_psd`). The per-window multi-input `S_σσ,ᵢ = H_σ S_ff(tᵢ) H_σᴴ` (M28 `stress_tensor_cross_psd_multi`) and its 6×6 moment matrices, reduced PER WINDOW by the M27 critical-plane search (`reduce_window_tensor` — the plane / F_np RE-SEARCHED per window as the coherence drifts), Miner-summed (`evolutionary_multi_input_summary`). EVOLUTIONARY MULTI-INPUT MONTE-CARLO — per-window blocks of the M28 correlated-input synthesiser (each window's `S_ff(tᵢ)`'s eigen/Cholesky factor) concatenated, driven through the stress columns, projected onto the window's OWN plane, ASTM E1049 rainflow + Miner (`synthesize_evolutionary_multi_input_stress` / `evolutionary_multi_input_monte_carlo_damage`); the synthesised inputs' per-window measured coherence tracks γ_ab(tᵢ) (M28 `measure_coherence`). Validated: a CONSTANT coherence / SINGLE window recovering the M28 stationary multi-input answer EXACTLY (bit-identical delegation — summary + MC); a SINGLE input recovering the M27 scalar/tensor evolutionary answer EXACTLY (bit-identical delegation — summary + MC); a drifting incoherent→coherent schedule whose per-window response variance and critical plane genuinely DRIFT between the M28 incoherent-SUM and coherent-combination limits (the coherence itself evolving); the per-window reductions byte-identical given the same per-window `S_σσ`; the measured coherence tracking the drifting target. Composes with /JOINT / /NSTAT / /NGAUSS, reported ALONGSIDE the M28 stationary multi-input and the M27 single-input evolutionary numbers (an `evolutionary_multi_input` sub-entry). PORT sub-flag, library-first like M16–M28; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions, the M24–M27 corrections AND the M28 stationary multi-input path stay BIT-IDENTICAL (a NEW parallel path — the M28 stationary answers byte-identical whether or not /EVOL runs — asserted). Theory: Priestley 1965 (evolutionary spectra — the matrix / coherence-valued case); Newland ch. 6–8 + Bendat & Piersol ch. 5–7 (the time-varying coherence matrix); the M27 joint-tensor + M28 multi-input base | ✅ |
 | **FREQUENCY-DEPENDENT + TIME-VARYING (EVOLUTIONARY) INPUT COHERENCE (M30)**: a coherence matrix `γ_ab(f,t)` varying with BOTH FREQUENCY AND TIME — a per-window schedule of FULL (nf, ninput, ninput) Hermitian coherence stacks `γ_ab(f,tᵢ)` (a measured / modelled `γ_ab(f)` SHAPE interpolated start→end across the windows, and/or the M28 exponential/convection field `γ_ab(f) = exp(−decay·|x_a−x_b|·f/speed)` with a TIME-VARYING decay coefficient / reference speed) driving a per-window multi-input stress-tensor cross-PSD `S_σσ(ω,tᵢ) = H_σ S_ff(tᵢ) H_σᴴ` whose critical plane / F_np may DRIFT as the coherence FREQUENCY-SHAPE evolves, reduced PER WINDOW by the M20–M27 estimator family + the M28/M29 multi-input paths and Miner-summed (`implicit/freq_evolutionary_multi_input.py`, the `_run_freq_evolutionary_multi_input` extension of the M28 `_run_multi_input_fatigue` driver, `/IMPL/FATIG/MULT/MINPUT/EVOL/FCOH`) — the FIRST item M29 DEFERRED (M29 drifted a frequency-FLAT SCALAR `γ_ab(t)` and held the M28 exponential coherence STATIONARY). M30 is the CONVERGENCE of M28's frequency-dependent coherence and M29's time-varying coherence: the FULL frequency shape `γ_ab(f)` is now the drifting quantity. FREQUENCY-DEPENDENT COHERENCE STACKS — a per-window schedule of `γ_ab(f,tᵢ)` from a measured shape (`measured_coherence_stack` / `freq_coherence_stacks`) or the exponential/convection field with a drifting decay / speed (`exponential_coherence_stack` / `exponential_drift_stacks`), each window's `S_ff` assembled by the M28 `input_cross_psd_matrix` (which already accepts a full (nf,n,n) γ stack) and projected onto the nearest Hermitian PSD matrix (M28 `nearest_psd`). The per-window `S_σσ,ᵢ` + its 6×6 moment matrices reduced by the M27 `reduce_window_tensor` (the plane / F_np RE-SEARCHED per window as the frequency-shape drifts), Miner-summed (`freq_evolutionary_multi_input_summary`), with band-resolved coherence diagnostics (`representative_pair_spectrum` / `decorrelation_frequency` / `band_coherence`). FREQUENCY-DEPENDENT EVOLUTIONARY MONTE-CARLO — per-window blocks of the M28 correlated-input synthesiser (reusing M29 `synthesize_evolutionary_multi_input_stress`), per-window plane projection, ASTM E1049 rainflow + Miner (`freq_evolutionary_multi_input_monte_carlo_damage`); the synthesised inputs' per-window measured coherence SPECTRUM (M28 `measure_coherence`, per frequency band — NOT just a band-mean scalar) tracks the target `γ_ab(f,tᵢ)`. Validated: a FREQUENCY-FLAT coherence recovering the M29 scalar-coherence answer EXACTLY (bit-identical delegation — summary + MC), which recovers M28 / M27 in ITS special cases; a STATIONARY (single-window) frequency-dependent coherence recovering the M28 frequency-dependent answer EXACTLY (bit-identical delegation — summary + MC); a drifting-frequency-shape schedule (a decorrelation frequency that MOVES UP as the mission proceeds, or a convection speed that ramps) whose per-window response variance AND critical plane genuinely DRIFT; the per-window reductions byte-identical given the same per-window `S_σσ`; the measured coherence SPECTRUM tracking the drifting target band-by-band. Composes with /JOINT / /NSTAT / /NGAUSS, reported ALONGSIDE the M29 scalar-coherence and the M28 frequency-dependent-stationary numbers (a `freq_evolutionary_multi_input` sub-entry). PORT sub-flag, library-first like M16–M29; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions, the M24–M27 corrections, the M28 stationary multi-input path AND the M29 scalar-coherence evolutionary path stay BIT-IDENTICAL (a NEW parallel path — the M28 + M29 answers byte-identical whether or not /FCOH runs — asserted). Theory: Priestley 1965 (evolutionary spectra — the frequency-AND-time varying coherence matrix); Newland ch. 6–8 + Bendat & Piersol ch. 5–7 (the frequency-dependent coherence); Davenport / von Kármán (convection-coherence fields); the M28 frequency-dependent + M29 time-varying base | ✅ |
-| Lanczos/subspace for large models; AMLS / substructuring; a continuous Wigner–Ville / Loève INSTANTANEOUS-spectrum formulation (scalar M26 OR joint-tensor M27 OR coherence-matrix M29/M30 — beyond the windowed spectrogram); a full NON-GAUSSIAN frequency-dependent-coherence JOINT-TENSOR evolutionary distribution (beyond the M27 Gaussian joint-tensor + the M24 equivalent-scalar kurtosis correction); an ARBITRARY per-pair per-window coherence-shape stack beyond the M30 measured-shape start→end + exponential-drift card schedules (the library accepts it; the card exposes those two); the base-acceleration MULTI-INPUT feed (per-direction participation column stack, carried from M28/M29); multi-directional 100-30-30 response spectra; non-proportional HARDENING as a material model; mean-stress beyond the per-plane normal / basic Goodman option; crack-growth / fracture-mechanics fatigue; the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21/M22/M23/M24/M25/M26/M27/M28/M29/M30 roadmap notes) |
+| **CONTINUOUS WIGNER–VILLE / LOÈVE INSTANTANEOUS TIME-FREQUENCY SPECTRUM (M31)**: a bilinear time-frequency distribution `S_WV(ω,t)` of the scalar (M26) / 6×6 joint-tensor (M27) / multi-input coherence-matrix (M29/M30) response process, replacing the M26–M30 SHORT-TIME WINDOWED SPECTROGRAM with a CONTINUOUS instantaneous spectrum evaluated at a fine instant grid, reduced by the M20–M27 estimators AT EACH INSTANT (the critical plane / F_np drifting CONTINUOUSLY) and Palmgren–Miner INTEGRATED over time — an integral, not a per-window sum (`implicit/wigner_ville_fatigue.py`, the `_run_wigner_ville` / `_run_wigner_ville_multiaxial` / `_run_wigner_ville_multi_input` extensions of the M20/M21/M28 drivers in `implicit/random_response.py`, `/IMPL/FATIG/.../WVILLE`) — the RECURRING item M26/M27/M29/M30 ALL deferred (each modelled the non-stationary load with a windowed spectrogram and documented the short-time-stationary resolution trade-off + the window-boundary rainflow caveat; M31 removes both). THE CONTINUOUS PRIMITIVE — the fine-grid instantaneous EFFECTIVE WINDOWS `W_eff,j(f) = Σ_k g_jk a_k² W_k(f)` (`instantaneous_effective_windows`): subdivide each M26–M30 window into `refine` fine sub-instants (nt = nwin·refine, `instantaneous_schedule`), evaluate the drifting shape fc(t)/bw(t)/a(t) CONTINUOUSLY, and apply the Cohen-class time-smoothing kernel `g_jk` (`cohen_time_kernel`, a normalised Gaussian of width `smooth` — the tunable cross-term control). Because the smoothing is linear and S₀(f) fixed, the effective window feeds the SCALAR (`wigner_ville_fatigue_summary` → M26 estimators), the 6×6 TENSOR (`wigner_ville_tensor_summary` → per-instant `reduce_window_tensor` re-search) and the MULTI-INPUT (`wigner_ville_multi_input_summary` → per-instant `H S_ff(t) Hᴴ` reduction) reductions UNCHANGED. CONTINUOUS MONTE-CARLO — the M26–M30 non-separable synthesisers on the fine grid, rainflow over the WHOLE record (the reference that includes the straddling cycles), converging to the continuous integral as the grid refines. Validated: the windowed spectrogram is EXACTLY the refine = 1 / smooth = 0 limit — the scalar / tensor / multi-input summaries DELEGATE to M26 / M27 / M29 / M30 BYTE-IDENTICALLY there (summary + MC); a STATIONARY process recovering the stationary PSD at EVERY instant EXACTLY; the frequency / time MARGINALS recovering the average PSD / instantaneous power; a chirp whose instantaneous spectral peak / critical plane drifts CONTINUOUSLY (finer than the windows resolve); the window-boundary caveat (adjacent-instant shape jump) measurably SHRINKING on the fine grid vs the coarse windows; heavy Cohen-class smoothing collapsing the instantaneous spectrum toward the mission-average; the continuous Miner-integral tracking the Monte-Carlo BETTER than the coarse windowed sum (on a swept-narrow-window demonstrator the continuous integral tracks the MC within ~1 % where the coarse windowed sum is ~240× too low). Composes with /EVOL (implied) / /JOINT / /MINPUT / /FCOH / /NSTAT, reported ALONGSIDE the M26/M27/M29/M30 windowed numbers (a `wigner_ville` sub-entry). PORT sub-flag, library-first like M16–M30; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions, the M24–M27 corrections AND the M26–M30 windowed evolutionary paths stay BIT-IDENTICAL (a NEW parallel path — the M8–M30 answers byte-identical whether or not /WVILLE runs — asserted). Theory: Wigner 1932 (the Wigner distribution) / Ville 1948 (the Wigner–Ville distribution); Loève (the harmonizable-process dual-frequency spectrum); Mark 1970 / Martin & Flandrin 1985 (the Wigner–Ville spectrum of nonstationary random processes); Cohen 1989 (the class of time-frequency distributions and cross-term smoothing); Priestley evolutionary spectra (the windowed approximation M31 makes continuous); the M26/M27/M29/M30 windowed base | ✅ |
+| Lanczos/subspace for large models; AMLS / substructuring; a full NON-GAUSSIAN INSTANTANEOUS-tensor time-frequency distribution (beyond the M27/M31 Gaussian joint-tensor + the M24 equivalent-scalar kurtosis correction); an ARBITRARY per-pair per-window coherence-shape stack beyond the M30 measured-shape start→end + exponential-drift card schedules (the library accepts it; the card exposes those two); the base-acceleration MULTI-INPUT feed (per-direction participation column stack, carried from M28/M29/M30/M31); multi-directional 100-30-30 response spectra; non-proportional HARDENING as a material model; mean-stress beyond the per-plane normal / basic Goodman option; crack-growth / fracture-mechanics fatigue; the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21/M22/M23/M24/M25/M26/M27/M28/M29/M30/M31 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -3449,6 +3450,163 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       the NLGEOM hourglass-operator geometry variation, the BT4 thin-plate shear-lock
       / drilling floor.
 
+30. **M31 — CONTINUOUS WIGNER–VILLE / LOÈVE INSTANTANEOUS TIME-FREQUENCY SPECTRUM**
+    ✅ (done): a bilinear time-frequency distribution `S_WV(ω, t)` of the scalar
+    (M26), the 6×6 joint-tensor (M27) and the multi-input coherence-matrix (M29/M30)
+    response process, replacing the M26/M27/M29/M30 SHORT-TIME WINDOWED SPECTROGRAM
+    with a CONTINUOUS instantaneous spectrum evaluated at a fine instant grid, reduced
+    by the M20–M27 estimator family AT EACH INSTANT (the critical plane / F_np
+    drifting CONTINUOUSLY) and Palmgren–Miner INTEGRATED over time (an integral, not a
+    per-window sum), cross-validated by the M25/M27/M29/M30 non-stationary
+    Monte-Carlo. M31 is the CONTINUOUS-INSTANTANEOUS lift of the whole M26→M27→M29→M30
+    windowed line: those milestones each partition the mission into `nwin` short
+    time-WINDOWS, treat each as locally stationary with its OWN complete PSD / tensor
+    cross-PSD, and Miner-SUM the per-window damages `D = Σ_i (dD/dt)_i T_i` — a
+    sampling that carries TWO documented costs (the short-time-stationary resolution
+    trade-off — the window must be LONG vs the carrier period yet SHORT vs the shape
+    drift; and the window-boundary rainflow caveat — the closed-form window sum MISSES
+    cycles that STRADDLE a boundary, which the Monte-Carlo includes). M31 evaluates the
+    drifting shape fc(t)/bw(t)/a(t) (and the M29/M30 coherence γ_ab(f,t)) CONTINUOUSLY
+    at a fine instant grid, reduces AT EACH INSTANT and Miner-INTEGRATES `D = ∫
+    (dD/dt)(t) dt` (a Riemann quadrature over the fine grid, of which the coarse
+    windowed sum is the nwin-point midpoint case), removing the resolution compromise
+    AND shrinking the boundary caveat (adjacent fine instants carry near-identical
+    shapes) — so the continuous integral tracks the Monte-Carlo BETTER than the
+    windowed sum did. Upstream check (re-run for M31): the open-source OpenRadioss
+    engine has NO frequency-domain / spectral / random-vibration / time-frequency /
+    Wigner–Ville / evolutionary solver of any kind — `engine/source/input/freimpl.F`
+    (line 269, `IF (ISOLV==3) IMUMPSD=L_LIM`) and `engine/source/implicit/imp_solv.F`
+    (line 1796, `IF (IMUMPSD == 0) IMUMPSD = 1`) carry no `wigner` / `ville` /
+    `instantaneous` / `time-frequency` / `cohen` token, and the sole `PSD` token
+    anywhere is `IMUMPSD`, a MUMPS-solver flag (exactly the finding M16–M30 recorded
+    line by line). So M31, like every spectral milestone since M16, ports the
+    continuous instantaneous time-frequency fatigue distribution as a clean LIBRARY
+    capability EXTENDING the M26–M30 evolutionary windowed line and drives it with a
+    minimal PORT engine sub-flag (`/IMPL/FATIG/.../WVILLE`, implying /EVOL and
+    composing with /JOINT / /MINPUT / /FCOH / /NSTAT, plus a grid-refinement `refine`
+    and a Cohen-class smoothing-width `smooth` parameter). A NEW, parallel path
+    (`implicit/wigner_ville_fatigue.py` + the `_run_wigner_ville` /
+    `_run_wigner_ville_multiaxial` / `_run_wigner_ville_multi_input` extensions of the
+    M20/M21/M28 drivers in `implicit/random_response.py`) that never touches the M10
+    integrator, the M16 eigensolver, the M17/M18 superposition, the M19 PSD path, the
+    M20–M27 reductions OR the M26–M30 windowed evolutionary paths (all stay
+    bit-identical — the M8–M30 answers byte-identical whether or not /WVILLE runs,
+    asserted). The continuous Wigner–Ville path is reported ALONGSIDE the M26/M27/M29/
+    M30 windowed numbers (a `wigner_ville` sub-entry on `model.implicit_result`), so
+    the listing shows the continuous integral next to the windowed sum.
+
+    * **CONTINUOUS INSTANTANEOUS SPECTRUM** (`wigner_ville_fatigue.py`): (a) the M31
+      PRIMITIVE — the fine-grid instantaneous EFFECTIVE WINDOWS `W_eff,j(f) = Σ_k g_jk
+      a_k² W_k(f)` (`instantaneous_effective_windows`): `instantaneous_schedule`
+      subdivides each M26–M30 window into `refine` fine sub-instants (nt = nwin·refine,
+      each carrying duration `T_i/refine`, mission-fraction `s_j`, and the drifting
+      shape fc(s_j)/bw(s_j)/a(s_j) evaluated CONTINUOUSLY), and `cohen_time_kernel`
+      applies the Cohen-class time-smoothing `g_jk` (a normalised Gaussian of width
+      `smooth`, the tunable cross-term control — 0 = the raw instantaneous WVD, large
+      = the mission-average). Because the smoothing is LINEAR and S₀(f) is fixed,
+      `S_smooth(f,t_j) = W_eff,j(f) S₀(f)`, so the effective window feeds every
+      reduction UNCHANGED. (b) the SCALAR path (M26 base) —
+      `wigner_ville_spectrogram` builds the fine-grid instant windows, fed to the M26
+      `evolutionary_fatigue_summary` read-only (its window Miner-SUM over the fine
+      instants IS the continuous Miner-INTEGRAL); `wigner_ville_fatigue_summary` adds
+      the marginals (`instantaneous_marginals`: peak-frequency drift, instantaneous
+      power, average PSD) and the boundary-caveat proxy (`boundary_shape_jump`). (c)
+      the 6×6 TENSOR path (M27 base) — `wigner_ville_tensor_summary` forms the
+      per-instant windowed moment matrices (`windowed_tensor_moment_matrices` with the
+      effective window) and RE-SEARCHES the critical plane / F_np AT EACH INSTANT
+      (`reduce_window_tensor` — the plane drifting CONTINUOUSLY), Miner-integrated. (d)
+      the MULTI-INPUT path (M29/M30 base) — `wigner_ville_multi_input_summary`
+      assembles the per-instant `S_ff(t)` from the smoothed auto-PSDs + the continuous
+      coherence γ_ab(f,t) drift (`input_cross_psd_matrix`), forms `S_σσ,ᵢ = H_σ S_ff(t)
+      H_σᴴ` (`stress_tensor_cross_psd_multi`) and reduces per instant, Miner-integrated
+      (including the M30 γ_ab(f,t) frequency-stack drift, read-only via the M30 stack
+      builders). Long docstrings naming the theory (Wigner 1932 / Ville 1948; Loève;
+      Mark 1970 / Martin & Flandrin 1985; Cohen 1989; Priestley; the M26/M27/M29/M30
+      windowed base). Validated: a STATIONARY process recovering the stationary PSD at
+      EVERY instant EXACTLY; the windowed spectrogram recovered EXACTLY in the refine =
+      1 / smooth = 0 limit (DELEGATED to M26/M27/M29/M30 byte-identically); the
+      time/frequency MARGINALS recovering the instantaneous power / average PSD; a
+      chirp whose instantaneous spectral peak / critical plane DRIFTS continuously
+      (nt = nwin·refine instants, finer than the windows resolve).
+    * **CONTINUOUS-SPECTRUM FATIGUE + MONTE-CARLO** (`wigner_ville_fatigue.py`): the
+      per-instant reductions feed the M20–M27 machinery UNCHANGED (byte-identical in
+      the windowed limit by DELEGATION, asserted). The INDEPENDENT cross-check reuses
+      the M26–M30 non-separable synthesisers on the FINE grid
+      (`wigner_ville_monte_carlo_damage` / `wigner_ville_tensor_monte_carlo_damage` /
+      `wigner_ville_multi_input_monte_carlo_damage` — per-instant blocks concatenated,
+      rainflow over the WHOLE record, the reference that DOES include the
+      window-straddling cycles). Validated: the windowed-limit reductions + MC
+      bit-identical to M26/M27/M29/M30; the continuous Miner-integral converging to the
+      Monte-Carlo as the grid refines; the window-boundary caveat measurably SHRINKING
+      vs the windowed sum (on the swept-narrow-window example the continuous integral
+      ≈ 3.6×10⁻⁹ tracks the MC within ~1 % while the coarse windowed sum ≈ 1.5×10⁻¹¹ is
+      ~240× too LOW — the coarse windows sit between modes and MISS the swept
+      resonances the continuous integral captures).
+    * **ENGINE CARD + reporting** (`/IMPL/FATIG/.../WVILLE` — composing with /EVOL
+      (implied) / /JOINT / /MINPUT / /FCOH / /NSTAT): the `/WVILLE` sub-flag (also
+      `/WV` / `/WIGNER` / `/INST` / `/TFR`) IMPLIES /EVOL and reads the grid-refinement
+      factor `refine` (fine instants per window) + the Cohen-class smoothing width
+      `smooth` from the TRAILING columns of the /EVOL drifting-shape line (`fc0 fc1 bw0
+      bw1 nwin [refine smooth]`). It builds the continuous instantaneous spectrum for
+      whichever tensor / multi-input path is active, runs the requested reductions and
+      the continuous Monte-Carlo, and reports the instantaneous spectral-PEAK drift /
+      the continuous critical-plane DRIFT / the shrinking window-boundary caveat / the
+      continuous-integral damage-life ALONGSIDE the M26/M27/M29/M30 windowed numbers
+      (a `wigner_ville` sub-entry on `model.implicit_result.fatigue` — or, for the
+      multi-input path, on `…fatigue['multi_input']['wigner_ville']`). The M26–M30
+      results are fully formed and left byte-identical.
+    * **Example** (`examples/wigner_ville_fatigue`): the M20/M26 base-excited
+      instrument stack RE-RUN under a resonance sweep (fc 31 → 200 Hz) through a
+      WELL-SEPARATED modal band with a NARROW window (bw 4 → 6 Hz), reporting its
+      continuous-Wigner–Ville life alongside its M26 windowed life — the continuous
+      integral tracking the Monte-Carlo within ~1 % where the coarse windowed sum is
+      ~240× too low, the instantaneous peak drifting ≈ 166 Hz, the window-boundary
+      caveat shrinking (fine 0.37 vs coarse 1.41).
+
+    Validated (`tests/test_m31_wignerville.py`): the scalar / tensor / multi-input
+    continuous summaries DELEGATING to M26 / M27 / M29 / M30 BYTE-IDENTICALLY in the
+    windowed limit (refine = 1, smooth = 0 — summary + Monte-Carlo); a STATIONARY
+    process recovering the stationary PSD at EVERY instant EXACTLY; the frequency
+    MARGINAL recovering the average PSD; a chirp whose instantaneous spectral peak
+    drifts CONTINUOUSLY across nt = nwin·refine instants (finer than the windows); the
+    6×6 tensor critical plane re-searched per instant (a continuous plane rotation /
+    F_np drift, collapsing under heavy Cohen-class smoothing); the window-boundary
+    caveat shrinking fine vs coarse; the continuous Miner-integral tracking the
+    Monte-Carlo BETTER than the coarse windowed sum; the /WVILLE card mirror (the
+    refine / smooth trailing columns, /WVILLE implying /EVOL, composing with /JOINT /
+    /MINPUT / /FCOH); the scalar / multiaxial / multi-input (M29 + M30) paths end to
+    end; and the M7 parity contract (the M20 / M25 / M26 / M27 / M29 windowed answers
+    byte-identical whether or not /WVILLE runs; the continuous path read-only in the
+    element state).
+
+    Deferred out of M31, explicitly (not half-implemented):
+    * a full NON-GAUSSIAN INSTANTANEOUS-tensor time-frequency distribution: M31
+      composes with the M24 non-Gaussian correction on the equivalent scalar but does
+      not model a non-Gaussian time-frequency JOINT-TENSOR distribution — DEFERRED;
+    * a MULTI-COMPONENT analytic Wigner–Ville distribution with genuine INTERFERENCE
+      cross-terms: the drifting-shape evolutionary load is unimodal / slowly-varying,
+      so its raw WVD is cross-term-free (the effective window is real and non-negative
+      by construction); the smoothing is exposed as the Cohen-class control the theory
+      names, but a full multi-component analytic WVD is not the load model here —
+      DEFERRED / documented in the module;
+    * the base-acceleration MULTI-INPUT feed (per-direction participation column
+      stack) — carried from M28/M29/M30, the force-pattern feed is used — DEFERRED;
+    * multi-directional 100-30-30 (multi-component) response spectra — DEFERRED
+      (carried from M19);
+    * an ARBITRARY per-pair per-window coherence-shape stack beyond the M30 card
+      schedules — carried from M30 (the library accepts it; the card exposes the two
+      M30 schedules) — DEFERRED;
+    * MEAN-STRESS beyond the basic M20/M21 Goodman intercept, CRACK-GROWTH /
+      fracture-mechanics fatigue and the COMPLEX-FRF stress recovery — the unchanged
+      M20–M30 tail;
+    * the unchanged M10–M30 deferral tail: non-proportional hardening, gyroscopic /
+      circulatory systems, Lanczos / subspace + AMLS, IFQ ≥ 10 / MODFR 2, /FRICTION
+      per-part-pair sets, orthotropic / thermal friction, the fiber TYPE18 beam, the
+      LAW27 plastic block / solids, thermal contact, TYPE19/24/25, Inacti, Igap 2/3,
+      LAW42 shells/Prony, IDTC 2/3, /RWALL under implicit, the UL hourglass memory,
+      the NLGEOM hourglass-operator geometry variation, the BT4 thin-plate shear-lock
+      / drilling floor.
+
 ## 6. Validation strategy
 
 `tests/` contains two layers:
@@ -3602,6 +3760,27 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
   the M24 NON-GAUSSIAN correction / element state — the M20-M24 damage rates
   byte-identical whether or not /NSTAT runs; the direct /IMPL/DYNA answer
   byte-identical).
+* **Continuous Wigner–Ville / Loève instantaneous time-frequency validations
+  (M31)** — the scalar / 6×6-tensor / multi-input continuous instantaneous
+  summaries DELEGATING to the M26 / M27 / M29 / M30 windowed spectrogram
+  BYTE-IDENTICALLY in the long-window / coarsest-grid limit (refine = 1, smooth = 0
+  — summary AND Monte-Carlo); a STATIONARY process recovering the stationary PSD at
+  EVERY instant EXACTLY; the frequency MARGINAL recovering the mission-average PSD;
+  a genuinely non-stationary chirp whose instantaneous spectral PEAK / critical
+  plane drifts CONTINUOUSLY across nt = nwin·refine instants (finer than the windows
+  resolve); the window-boundary rainflow caveat (the adjacent-instant shape jump)
+  measurably SHRINKING on the fine grid vs the coarse windows; heavy Cohen-class
+  cross-term smoothing collapsing the instantaneous spectrum toward the
+  mission-average; the continuous Miner-INTEGRAL tracking the non-separable
+  Monte-Carlo BETTER than the coarse windowed Miner-SUM (on a swept-narrow-window
+  demonstrator the continuous integral tracks the MC within ~1 % while the coarse
+  windowed sum is ~240× too low — the coarse windows sit between modes and MISS the
+  swept resonances); the /IMPL/FATIG/WVILLE card mirror (a PORT sub-flag implying
+  /EVOL, the refine / smooth trailing columns, composing with /JOINT, /MINPUT,
+  /FCOH, /NSTAT) and the parity contract (no mutation of the M20 SCALAR / M21
+  MULTIAXIAL / M26 windowed evolutionary / M27 joint-tensor / M29–M30 multi-input
+  paths / element state — the M8–M30 answers byte-identical whether or not /WVILLE
+  runs).
 * **Fully evolutionary / non-separable-PSD spectral fatigue validations (M26)** —
   a SINGLE window / a time-invariant shape recovering the M20 stationary answer
   EXACTLY (the window Miner-sum of one block) and a CONSTANT-SHAPE spectrogram

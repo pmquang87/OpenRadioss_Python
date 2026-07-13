@@ -727,6 +727,27 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     # implicit/freq_evolutionary_multi_input.py.
                     is_fcoh = bool(subs & {"FCOH", "FREQCOH", "FREQCOHERENCE",
                                            "FDRIFT", "FREQEVOL"})
+                    # M31: CONTINUOUS WIGNER-VILLE / LOEVE INSTANTANEOUS time-frequency
+                    # spectrum — replace the M26-M30 short-time WINDOWED spectrogram
+                    # with a CONTINUOUS instantaneous spectrum S_WV(omega, t) evaluated
+                    # at a fine instant grid, reduced AT EACH INSTANT (the critical
+                    # plane / F_np drifting CONTINUOUSLY) and Miner-INTEGRATED. IMPLIES
+                    # EVOL (it needs the drifting-shape schedule) and composes with
+                    # /JOINT / /MINPUT / /FCOH (whichever tensor / multi-input path is
+                    # active becomes the continuous-instantaneous one) + /NSTAT. Its
+                    # grid-refinement factor `refine` and Cohen-class smoothing width
+                    # `smooth` live on the trailing columns of the /EVOL drifting-shape
+                    # line (fc0 fc1 bw0 bw1 nwin [refine smooth]). The windowed
+                    # spectrogram is EXACTLY the refine = 1 / smooth = 0 limit
+                    # (delegated byte-identically). A PORT sub-flag (freimpl.F has no
+                    # time-frequency / Wigner-Ville / spectral solver). See
+                    # implicit/wigner_ville_fatigue.py.
+                    is_wville = bool(subs & {"WVILLE", "WV", "WIGNER",
+                                             "WIGNERVILLE", "INST", "INSTANT",
+                                             "TFR", "CONTINUOUS"})
+                    if is_wville:
+                        is_evol = True                # continuous spectrum needs the
+                        #                               drifting-shape / evol schedule
                     if is_fcoh:
                         is_minput = True              # frequency-dep coherence needs
                         is_evol = True                # the multi-input + evol paths
@@ -772,6 +793,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_minput = True
                     if is_fcoh:
                         ec.impl_mi_fcoh = True
+                    if is_wville:
+                        ec.impl_fatig_wville = True
                     if is_base:
                         ec.impl_fatig_base = True
                         if len(v0) > 4 and v0[4] >= 0:
@@ -867,6 +890,14 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                                 "nwin on the drifting-shape line (fc0 fc1 bw0 bw1 "
                                 "nwin) after the sweep/S-N (and kurtosis/modulation"
                                 ", if NGAUSS/NSTAT) lines", block.source)
+                        # M31 WVILLE: the CONTINUOUS-spectrum grid-refinement factor
+                        # (fine instants per window) and Cohen-class cross-term
+                        # smoothing width are the trailing columns 6 / 7 of the SAME
+                        # drifting-shape line: fc0 fc1 bw0 bw1 nwin [refine smooth].
+                        if len(vE) > 5 and vE[5] > 0:
+                            ec.impl_fatig_wv_refine = int(vE[5])
+                        if len(vE) > 6 and vE[6] >= 0:
+                            ec.impl_fatig_wv_smooth = float(vE[6])
                     # M28 MULTI-INPUT: the input-pattern TABLE lives on DEDICATED
                     # card lines AFTER any M24 kurtosis / M25 modulation / M26
                     # drifting-shape lines — so its base index is 2 + (1 if NGAUSS)
