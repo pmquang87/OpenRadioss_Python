@@ -1626,6 +1626,50 @@ def _run_joint_nongaussian_multiaxial(ip, summ, frf, wigner_ville, m, C,
     se_rates = ({k: float(se[k]["damage_rate"])
                  for k in ("von_mises", "normal_plane", "shear_plane")}
                 if se is not None else None)
+    # M34: the EXACT translation-process CORRELATION-DISTORTION INVERSION. When /EXACT
+    # (or /NORTA) composes with the M33 /JOINT + /NGAUSS + /WVILLE path, additionally
+    # build the COVARIANCE-EXACT joint tensor (the underlying-Gaussian correlation solved
+    # by the Grigoriu / NORTA matching so the transformed covariance reproduces the target
+    # EXACTLY, the preservation error driven to ~0) and the corrected multivariate MC, and
+    # attach them as an ``exact_covariance`` sub-entry ALONGSIDE the M33 leading-order
+    # numbers (which stay byte-identical — the EXACT path is a NEW path). See implicit/
+    # joint_nongaussian_fatigue.py.
+    exact_entry = None
+    if bool(getattr(ip, "impl_fatig_exact", False)):
+        ex_summary = jng.joint_nongaussian_tensor_summary(
+            omega, Scross, durations, fc, bw, m, C, kurt, skew=skew, scales=scales,
+            refine=refine, smooth=smooth, bandwidth_correction=bwcorr,
+            mean_stress=mean_stress, ultimate=ultimate, naz=naz, npol=npol, drift=True,
+            scalar_equivalent=False, exact=True)
+        ex_mc = None
+        if mc_dur > 0.0:
+            tot = float(np.sum(durations))
+            mc_durs = durations * (mc_dur / tot) if tot > 0 else durations
+            ex_mc = jng.joint_nongaussian_monte_carlo_damage(
+                omega, Scross, mc_durs, fc, bw, m, C, mc_seed, kurt, skew=skew,
+                scales=scales, refine=refine, smooth=smooth, mean_stress=mean_stress,
+                ultimate=ultimate, naz=naz, npol=npol, reduction="shear_plane",
+                summary=ex_summary, exact=True)
+        exact_entry = {
+            "preservation_error": ex_summary["preservation_error"],
+            "preservation_error_leading": ex_summary["preservation_error_leading"],
+            "induced_kurt_min": ex_summary["induced_kurt_min"],
+            "induced_kurt_max": ex_summary["induced_kurt_max"],
+            "induced_kurt_mean": ex_summary["induced_kurt_mean"],
+            "lambda_min": ex_summary["lambda_min"],
+            "lambda_max": ex_summary["lambda_max"],
+            "lambda_mean": ex_summary["lambda_mean"],
+            "von_mises": {"damage_rate": ex_summary["von_mises"]["damage_rate"],
+                          "life": ex_summary["von_mises"]["life"],
+                          "induced_kurt": ex_summary["von_mises"]["induced_kurt"]},
+            "normal_plane": {"damage_rate": ex_summary["normal_plane"]["damage_rate"],
+                             "life": ex_summary["normal_plane"]["life"],
+                             "induced_kurt": ex_summary["normal_plane"]["induced_kurt"]},
+            "shear_plane": {"damage_rate": ex_summary["shear_plane"]["damage_rate"],
+                            "life": ex_summary["shear_plane"]["life"],
+                            "induced_kurt": ex_summary["shear_plane"]["induced_kurt"]},
+            "damage_rate": ex_summary["damage_rate"], "life": ex_summary["life"],
+            "summary": ex_summary, "monte_carlo": ex_mc}
     return {"joint_kurt": tuple(float(x) for x in kurt), "skew": skew,
             "induced_kurt_min": summary["induced_kurt_min"],
             "induced_kurt_max": summary["induced_kurt_max"],
@@ -1645,7 +1689,8 @@ def _run_joint_nongaussian_multiaxial(ip, summ, frf, wigner_ville, m, C,
                             "life": summary["shear_plane"]["life"],
                             "induced_kurt": summary["shear_plane"]["induced_kurt"]},
             "damage_rate": summary["damage_rate"], "life": summary["life"],
-            "gaussian": gwin, "scalar_equivalent": se_rates, "monte_carlo": mc}
+            "gaussian": gwin, "scalar_equivalent": se_rates, "monte_carlo": mc,
+            "exact_covariance": exact_entry}
 
 
 def _run_wigner_ville_multi_input(ip, model, Hcols, G, positions, omega, freqs_hz,
@@ -2221,6 +2266,47 @@ def _report_joint_nongaussian(log, ng):
         life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
         log.info(f"      MULTIVARIATE NON-GAUSS MC DMG/LIFE : "
                  f"{mc['damage_rate']:.5E} / {life_s}  (proj sample g4 = "
+                 f"{mc.get('kurtosis', 3.0):.3F})")
+    # M34: the EXACT translation-process CORRELATION-DISTORTION INVERSION block, printed
+    # when /EXACT (or /NORTA) composes with the M33 joint path — the NORTA correlation
+    # matching driving the covariance preservation error to ~0.
+    if ng.get("exact_covariance") is not None:
+        _report_exact_covariance(log, ng, ng["exact_covariance"])
+
+
+def _report_exact_covariance(log, ng, ex):
+    """Print the EXACT TRANSLATION-PROCESS CORRELATION-DISTORTION INVERSION (M34) block:
+    the Grigoriu / Nataf / NORTA correlation matching that solves the underlying-Gaussian
+    correlation rho^U so the component-wise Winterstein-Hermite transform of the joint 6x6
+    tensor reproduces the TARGET covariance EXACTLY — the (now ~0) covariance preservation
+    error NEXT TO the M33 leading-order value, and the EXACT-covariance induced kurtosis /
+    damage / life ALONGSIDE the M33 leading-order joint numbers (the same reductions on a
+    covariance-EXACT joint tensor)."""
+    log.info("\n     ** EXACT TRANSLATION-PROCESS CORRELATION-DISTORTION INVERSION **  "
+             "(/IMPL/FATIG/NGAUSS+JOINT+WVILLE+EXACT)")
+    log.info(f"      NORTA / NATAF / GRIGORIU CORRELATION MATCHING + HIGHAM PD REPAIR")
+    log.info(f"      COVARIANCE PRESERVATION EXACT / M33 : "
+             f"{ex['preservation_error']:.4E} / "
+             f"{ex['preservation_error_leading']:.4E}  (target reproduced to machine "
+             f"precision)")
+    log.info(f"      INDUCED CRITICAL-PLANE g4^s (EXACT). : "
+             f"{ex['induced_kurt_min']:.4F} .. {ex['induced_kurt_max']:.4F}  "
+             f"(mean {ex['induced_kurt_mean']:.4F})")
+    for key, name in (("von_mises", "VON MISES"), ("normal_plane", "MAX-NORMAL"),
+                      ("shear_plane", "MAX-SHEAR")):
+        r = ex[key]
+        rl = ng[key]
+        life = r["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      {name:11s} EXACT / M33-LEADING RATE  : "
+                 f"{r['damage_rate']:.5E} / {rl['damage_rate']:.5E}  life {life_s}")
+    if ex.get("monte_carlo") is not None:
+        mc = ex["monte_carlo"]
+        life = mc["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      COVARIANCE-EXACT MC DMG/LIFE . . . : "
+                 f"{mc['damage_rate']:.5E} / {life_s}  (sample-cov err "
+                 f"{mc.get('sample_cov_error', 0.0):.4E}, proj g4 = "
                  f"{mc.get('kurtosis', 3.0):.3F})")
 
 

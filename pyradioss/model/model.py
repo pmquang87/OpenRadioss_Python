@@ -312,6 +312,19 @@ class EngineControls:
     # sub-flag (freimpl.F has no non-Gaussian / joint-tensor / Hermite path). See
     # implicit/joint_nongaussian_fatigue.py.
     impl_fatig_joint_kurt: tuple = ()  # per-component target kurtoses (empty = off)
+    # M34 /IMPL/FATIG/NGAUSS/JOINT/WVILLE/EXACT (or /NORTA): the EXACT translation-process
+    # CORRELATION-DISTORTION INVERSION — solve the underlying-Gaussian correlation rho^U
+    # (the Grigoriu / Nataf / Cario-Nelson NORTA correlation matching) per component pair
+    # so the component-wise Winterstein-Hermite transform of the correlated 6x6 tensor
+    # reproduces the TARGET covariance EXACTLY (not merely to M33's leading order), driving
+    # the covariance preservation error to ~0. A positive-definite Higham nearest-
+    # correlation repair keeps the underlying Gaussian a valid covariance. Only meaningful
+    # with the M33 /JOINT + /NGAUSS + /WVILLE joint path (a per-component kurtosis line);
+    # reported as an ``exact_covariance`` sub-entry ALONGSIDE the M33 leading-order joint,
+    # the M32 equivalent-scalar and the M31/M27 Gaussian numbers (all left byte-identical
+    # — the EXACT path is a NEW path alongside them). A PORT sub-flag (freimpl.F has no
+    # translation / copula / correlation solver). See implicit/joint_nongaussian_fatigue.py.
+    impl_fatig_exact: bool = False   # /IMPL/FATIG/.../EXACT -> NORTA covariance-exact
 
     # M28 /IMPL/PSD/MULTI and /IMPL/FATIG/MINPUT: MULTI-INPUT / PARTIALLY-COHERENT
     # random-vibration response & fatigue — the stationary response (and
