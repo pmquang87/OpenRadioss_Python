@@ -368,6 +368,30 @@ class EngineControls:
     impl_mi_gfunct0: int = 0         # START measured coherence shape gamma(f) /FUNCT
     impl_mi_gfunct1: int = 0         # END measured coherence shape gamma(f) /FUNCT
 
+    # M31 /IMPL/FATIG/.../WVILLE: CONTINUOUS WIGNER-VILLE / LOEVE INSTANTANEOUS
+    # TIME-FREQUENCY SPECTRUM — a bilinear time-frequency distribution S_WV(omega, t)
+    # of the scalar (M26) / 6x6 joint-tensor (M27) / multi-input coherence-matrix
+    # (M29/M30) response process, replacing the M26-M30 SHORT-TIME WINDOWED
+    # SPECTROGRAM (the piecewise-locally-stationary windows those milestones sample
+    # the mission into) with a CONTINUOUS instantaneous spectrum evaluated at a fine
+    # instant grid, reduced by the M20-M27 estimators AT EACH INSTANT (the critical
+    # plane / F_np drifting CONTINUOUSLY) and Palmgren-Miner INTEGRATED over time (an
+    # integral, not a per-window sum). The windowed spectrogram is EXACTLY the
+    # long-window / coarsest-grid (refine = 1) / un-smoothed (smooth = 0) limit — the
+    # continuous path DELEGATES to M26/M27/M29/M30 there byte-identically, so the
+    # windowed numbers are reported ALONGSIDE unchanged (a "wigner_ville" sub-entry).
+    # /WVILLE IMPLIES /EVOL (it needs the drifting-shape schedule) and composes with
+    # /JOINT / /MINPUT / /FCOH (whichever tensor / multi-input path is active becomes
+    # the continuous-instantaneous one) + /NSTAT. The grid-refinement factor `refine`
+    # (fine instants per M26-M30 window) and the Cohen-class cross-term smoothing
+    # width `smooth` live on the trailing columns of the /EVOL drifting-shape line
+    # (fc0 fc1 bw0 bw1 nwin [refine smooth]). A PORT sub-flag (freimpl.F has no
+    # time-frequency / Wigner-Ville / spectral solver of any kind — the sole PSD token
+    # is IMUMPSD, a MUMPS flag). See implicit/wigner_ville_fatigue.py.
+    impl_fatig_wville: bool = False  # /WVILLE -> continuous instantaneous spectrum
+    impl_fatig_wv_refine: int = 8    # fine instants per M26-M30 window (grid refine)
+    impl_fatig_wv_smooth: float = 0.0  # Cohen-class time-smoothing width (mission frac)
+
 
 class Model:
     """The full model. Created empty, filled by the keyword parsers, then

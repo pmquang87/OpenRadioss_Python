@@ -877,6 +877,17 @@ def run_fatigue(model, ip, log, result, constr=None, contacts=(), loads=None):
         ip, summary, sp["freqs"], sp["Ssigma"][:, jcrit], m_sn, C_sn,
         mean_stress, ultimate, mc_dur, mc_seed, model)
 
+    # M31: the CONTINUOUS WIGNER-VILLE INSTANTANEOUS time-frequency spectrum runs
+    # ALONGSIDE the M20 stationary, M25 non-stationary AND M26 windowed-evolutionary
+    # numbers (a NEW parallel path — everything above is left byte-identical). It
+    # evaluates the drifting shape CONTINUOUSLY at a fine instant grid and Miner-
+    # INTEGRATES the per-instant damage (of which the M26 window Miner-SUM is the
+    # coarse-grid limit, delegated byte-identically). See implicit/
+    # wigner_ville_fatigue.py.
+    wigner_ville = _run_wigner_ville(
+        ip, evolutionary, sp["freqs"], sp["Ssigma"][:, jcrit], m_sn, C_sn,
+        mean_stress, ultimate, mc_dur, mc_seed, model)
+
     result.fatigue = {
         "channels": channels, "critical_channel": jcrit,
         "critical_label": channels[jcrit][3], "moments": mom,
@@ -885,6 +896,7 @@ def run_fatigue(model, ip, log, result, constr=None, contacts=(), loads=None):
         "Sff": sp["Sff"], "summary": summary, "monte_carlo": mc,
         "nongaussian": nongaussian, "nonstationary": nonstationary,
         "evolutionary": evolutionary, "joint_evolutionary": None,
+        "wigner_ville": wigner_ville,
         "sn_m": m_sn, "sn_C": C_sn, "mean_stress": mean_stress,
         "ultimate": ultimate, "base": base, "stress_modes": Sigma,
     }
@@ -1128,6 +1140,58 @@ def _run_evolutionary(ip, stationary_summary, freqs, psd, m, C, mean_stress,
             "monte_carlo": ns_mc}
 
 
+def _run_wigner_ville(ip, evolutionary, freqs, psd, m, C, mean_stress, ultimate,
+                      mc_dur, mc_seed, model):
+    """M31 (scalar): the CONTINUOUS WIGNER-VILLE / LOEVE INSTANTANEOUS time-frequency
+    spectrum S_WV(f, t) of one channel's stress PSD (``freqs`` / ``psd``). Returns
+    ``None`` unless /IMPL/FATIG/WVILLE is set.
+
+    Where M26 (``_run_evolutionary``) sampled the mission into ``nwin`` short WINDOWS
+    and Miner-SUMMED the per-window damages, M31 evaluates the drifting shape
+    CONTINUOUSLY at a fine instant grid (``impl_fatig_wv_refine`` instants per window,
+    a Cohen-class smoothing width ``impl_fatig_wv_smooth``), reduces the M20
+    estimators AT EACH INSTANT and Miner-INTEGRATES over time (an integral, not a
+    per-window sum), with the continuous non-separable Monte-Carlo cross-check. The
+    windowed spectrogram (refine = 1, smooth = 0) is EXACTLY the long-window limit,
+    delegated byte-identically — so the M26 answer (passed as ``evolutionary``) is
+    reported ALONGSIDE the continuous one. Stored on
+    ``result.fatigue['wigner_ville']``. A PORT sub-flag."""
+    if not bool(getattr(ip, "impl_fatig_wville", False)):
+        return None
+    from . import wigner_ville_fatigue as wv
+    fc0 = float(getattr(ip, "impl_fatig_evol_fc0", 0.0))
+    fc1 = float(getattr(ip, "impl_fatig_evol_fc1", fc0))
+    bw0 = float(getattr(ip, "impl_fatig_evol_bw0", 0.0))
+    bw1 = float(getattr(ip, "impl_fatig_evol_bw1", bw0))
+    nwin = max(1, int(getattr(ip, "impl_fatig_evol_nwin", 12)))
+    refine = max(1, int(getattr(ip, "impl_fatig_wv_refine", 8)))
+    smooth = float(getattr(ip, "impl_fatig_wv_smooth", 0.0))
+    scales, durations = _evol_schedule(ip, model, nwin)
+    summary = wv.wigner_ville_fatigue_summary(
+        freqs, psd, durations, (fc0, fc1), (bw0, bw1), m, C, scales=scales,
+        refine=refine, smooth=smooth, mean_stress=mean_stress, ultimate=ultimate)
+    mc = None
+    if mc_dur > 0.0 and freqs is not None and psd is not None:
+        tot = float(np.sum(durations))
+        mc_durs = durations * (mc_dur / tot) if tot > 0 else durations
+        mc = wv.wigner_ville_monte_carlo_damage(
+            freqs, psd, mc_durs, (fc0, fc1), (bw0, bw1), m, C, mc_seed,
+            scales=scales, refine=refine, smooth=smooth, mean_stress=mean_stress,
+            ultimate=ultimate)
+    # the M26 WINDOWED reference (the long-window limit) for the side-by-side listing
+    windowed = None
+    if evolutionary is not None:
+        windowed = float(evolutionary["summary"]["dirlik"]["damage_rate"])
+    return {"fc": (fc0, fc1), "bw": (bw0, bw1), "nwin": nwin, "refine": refine,
+            "smooth": smooth, "nt": summary["nt"],
+            "peak_drift": summary["peak_drift"],
+            "boundary_jump": summary["boundary_jump"],
+            "boundary_jump_windowed": summary["boundary_jump_windowed"],
+            "constant_shape": summary["constant_shape"], "summary": summary,
+            "damage_rate": summary["damage_rate"], "life": summary["life"],
+            "windowed_damage_rate": windowed, "monte_carlo": mc}
+
+
 def _run_evolutionary_multiaxial(ip, summ, freqs, m, C, mean_stress, ultimate,
                                  mc_dur, mc_seed, model):
     """M26 (multiaxial): the FULLY EVOLUTIONARY / NON-SEPARABLE-PSD damage of the
@@ -1254,6 +1318,178 @@ def _run_joint_evolutionary(ip, summ, frf, m, C, mean_stress, ultimate,
                             "life": summary["shear_plane"]["life"]},
             "damage_rate": summary["damage_rate"], "life": summary["life"],
             "monte_carlo": ns_mc}
+
+
+def _run_wigner_ville_multiaxial(ip, summ, frf, joint_evolutionary, m, C,
+                                 mean_stress, ultimate, mc_dur, mc_seed, model,
+                                 naz, npol):
+    """M31 (multiaxial / JOINT-TENSOR): the CONTINUOUS WIGNER-VILLE INSTANTANEOUS
+    6x6 stress-TENSOR spectrum S_sigmasigma,WV(omega, t) of the critical element.
+    Returns ``None`` unless /IMPL/FATIG/WVILLE is set.
+
+    Where M27 (``_run_joint_evolutionary``) windowed the full tensor cross-PSD per
+    WINDOW and RE-SEARCHED the critical plane / F_np window to window, M31 evaluates
+    the tensor spectrum CONTINUOUSLY at a fine instant grid and re-searches the plane
+    / F_np AT EACH INSTANT (the plane drifting CONTINUOUSLY, finer than the windows
+    resolve), Miner-INTEGRATING the per-instant multiaxial damages, with the
+    continuous multivariate Monte-Carlo cross-check. The windowed spectrogram
+    (refine = 1, smooth = 0) is EXACTLY the long-window limit, delegated
+    byte-identically — so the M27 answer (passed as ``joint_evolutionary``) is
+    reported ALONGSIDE. Reuses the /EVOL drifting-shape schedule + the WVILLE
+    refine / smooth parameters. Stored on ``result.fatigue['wigner_ville']``. A PORT
+    sub-flag."""
+    if not bool(getattr(ip, "impl_fatig_wville", False)):
+        return None
+    from . import wigner_ville_fatigue as wv
+    fc0 = float(getattr(ip, "impl_fatig_evol_fc0", 0.0))
+    fc1 = float(getattr(ip, "impl_fatig_evol_fc1", fc0))
+    bw0 = float(getattr(ip, "impl_fatig_evol_bw0", 0.0))
+    bw1 = float(getattr(ip, "impl_fatig_evol_bw1", bw0))
+    nwin = max(1, int(getattr(ip, "impl_fatig_evol_nwin", 12)))
+    refine = max(1, int(getattr(ip, "impl_fatig_wv_refine", 8)))
+    smooth = float(getattr(ip, "impl_fatig_wv_smooth", 0.0))
+    scales, durations = _evol_schedule(ip, model, nwin)
+    omega = np.asarray(frf["omega"], dtype=float)
+    Scross = np.asarray(summ["Scross"])
+    summary = wv.wigner_ville_tensor_summary(
+        omega, Scross, durations, (fc0, fc1), (bw0, bw1), m, C, scales=scales,
+        refine=refine, smooth=smooth, mean_stress=mean_stress, ultimate=ultimate,
+        naz=naz, npol=npol, drift=True)
+    mc = None
+    if mc_dur > 0.0:
+        tot = float(np.sum(durations))
+        mc_durs = durations * (mc_dur / tot) if tot > 0 else durations
+        mc = wv.wigner_ville_tensor_monte_carlo_damage(
+            omega, Scross, mc_durs, (fc0, fc1), (bw0, bw1), m, C, seed=mc_seed,
+            scales=scales, refine=refine, smooth=smooth, mean_stress=mean_stress,
+            ultimate=ultimate, naz=naz, npol=npol, reduction="shear_plane")
+    windowed = None
+    if joint_evolutionary is not None:
+        windowed = {k: float(joint_evolutionary[k]["damage_rate"])
+                    for k in ("von_mises", "normal_plane", "shear_plane")}
+    return {"fc": (fc0, fc1), "bw": (bw0, bw1), "nwin": nwin, "refine": refine,
+            "smooth": smooth, "nt": summary["nt"],
+            "multiaxial": True, "tensor": True,
+            "peak_drift": summary.get("peak_drift", 0.0),
+            "plane_rotation_deg": summary["plane_rotation_deg"],
+            "fnp_drift": summary.get("fnp_drift", 0.0),
+            "constant_shape": summary["constant_shape"],
+            "delegated": summary.get("delegated"), "summary": summary,
+            "von_mises": {"damage_rate": summary["von_mises"]["damage_rate"],
+                          "life": summary["von_mises"]["life"]},
+            "normal_plane": {"damage_rate": summary["normal_plane"]["damage_rate"],
+                             "life": summary["normal_plane"]["life"]},
+            "shear_plane": {"damage_rate": summary["shear_plane"]["damage_rate"],
+                            "life": summary["shear_plane"]["life"]},
+            "damage_rate": summary["damage_rate"], "life": summary["life"],
+            "windowed": windowed, "monte_carlo": mc}
+
+
+def _run_wigner_ville_multi_input(ip, model, Hcols, G, positions, omega, freqs_hz,
+                                  m, C, mean_stress, ultimate, mc_dur, mc_seed,
+                                  naz, npol, m29_ev, m30_ev):
+    """M31 (multi-input): the CONTINUOUS WIGNER-VILLE INSTANTANEOUS multi-input
+    stress-tensor spectrum of the critical element — the input coherence matrix
+    S_ff(omega, t) drifting CONTINUOUSLY. Returns ``None`` unless /IMPL/FATIG/WVILLE
+    AND /IMPL/FATIG/MINPUT AND /IMPL/FATIG/EVOL are all set.
+
+    Where M29 (``_run_evolutionary_multi_input``) / M30 (``_run_freq_evolutionary_
+    multi_input``) windowed the coherence-driven tensor per WINDOW, M31 evaluates it
+    CONTINUOUSLY at a fine instant grid with a per-instant plane re-search, Miner-
+    INTEGRATING, with the continuous multi-input Monte-Carlo. Uses the M30
+    frequency-dependent stack path when /FCOH is set (``freq_dependent``), else the
+    M29 scalar-coherence path. The windowed answer (refine = 1, smooth = 0) is
+    delegated byte-identically and reported ALONGSIDE. Stored on
+    ``result.fatigue['multi_input']['wigner_ville']``. A PORT sub-flag."""
+    if not (bool(getattr(ip, "impl_fatig_wville", False))
+            and bool(getattr(ip, "impl_fatig_minput", False))
+            and bool(getattr(ip, "impl_fatig_evol", False))):
+        return None
+    from . import wigner_ville_fatigue as wv
+    from . import freq_evolutionary_multi_input as fem
+    fc0 = float(getattr(ip, "impl_fatig_evol_fc0", 0.0))
+    fc1 = float(getattr(ip, "impl_fatig_evol_fc1", fc0))
+    bw0 = float(getattr(ip, "impl_fatig_evol_bw0", 0.0))
+    bw1 = float(getattr(ip, "impl_fatig_evol_bw1", bw0))
+    nwin = max(1, int(getattr(ip, "impl_fatig_evol_nwin", 12)))
+    refine = max(1, int(getattr(ip, "impl_fatig_wv_refine", 8)))
+    smooth = float(getattr(ip, "impl_fatig_wv_smooth", 0.0))
+    scales, durations = _evol_schedule(ip, model, nwin)
+    ninput = int(np.asarray(Hcols).shape[2])
+    phase0 = math.radians(float(getattr(ip, "impl_mi_phase", 0.0)))
+    phase1 = math.radians(float(getattr(ip, "impl_mi_phase1",
+                                        getattr(ip, "impl_mi_phase", 0.0))))
+    fcoh = bool(getattr(ip, "impl_mi_fcoh", False))
+    coh_label = ""
+    if fcoh:
+        # the M30 FREQUENCY-DEPENDENT coherence stacks (same schedules as
+        # _run_freq_evolutionary_multi_input) drifting CONTINUOUSLY
+        cohmodel = int(getattr(ip, "impl_mi_cohmodel", 0))
+        gfunct0 = int(getattr(ip, "impl_mi_gfunct0", 0) or 0)
+        gfunct1 = int(getattr(ip, "impl_mi_gfunct1", gfunct0) or gfunct0)
+        if cohmodel == 1:
+            decay0 = float(getattr(ip, "impl_mi_decay", 0.0))
+            d1 = float(getattr(ip, "impl_mi_decay1", -1.0))
+            decay1 = decay0 if d1 < 0.0 else d1
+            speed0 = float(getattr(ip, "impl_mi_speed", 1.0)) or 1.0
+            s1 = float(getattr(ip, "impl_mi_speed1", -1.0))
+            speed1 = speed0 if s1 < 0.0 else (s1 or 1.0)
+            g0 = fem.exponential_coherence_stack(freqs_hz, positions, decay0, speed0)
+            g1 = fem.exponential_coherence_stack(freqs_hz, positions, decay1, speed1)
+            coh_label = (f"EXPONENTIAL decay {decay0:.4g}->{decay1:.4g}, "
+                         f"speed {speed0:.4g}->{speed1:.4g}")
+        elif gfunct0 > 0 and gfunct0 in model.functions \
+                and gfunct1 in model.functions:
+            shape0 = np.asarray(model.functions[gfunct0].eval(freqs_hz), dtype=float)
+            shape1 = np.asarray(model.functions[gfunct1].eval(freqs_hz), dtype=float)
+            g0 = fem.measured_coherence_stack(freqs_hz, shape0, ninput)
+            g1 = fem.measured_coherence_stack(freqs_hz, shape1, ninput)
+            coh_label = f"MEASURED gamma(f) /FUNCT {gfunct0}->{gfunct1}"
+        else:
+            fcoh = False
+    if not fcoh:
+        # the M29 SCALAR coherence schedule (frequency-flat, drifting CONTINUOUSLY)
+        gamma0 = float(getattr(ip, "impl_mi_gamma", 0.0))
+        gg1 = float(getattr(ip, "impl_mi_gamma1", -1.0))
+        g0 = gamma0
+        g1 = gamma0 if gg1 < 0.0 else gg1
+        coh_label = f"SCALAR gamma {g0:.4g}->{g1:.4g}"
+    summary = wv.wigner_ville_multi_input_summary(
+        omega, Hcols, G, durations, m, C, gamma0=g0, gamma1=g1, phase0=phase0,
+        phase1=phase1, fc=(fc0, fc1), bw=(bw0, bw1), scales=scales, refine=refine,
+        smooth=smooth, mean_stress=mean_stress, ultimate=ultimate, naz=naz,
+        npol=npol, drift=True, freq_dependent=fcoh)
+    mc = None
+    if mc_dur > 0.0:
+        tot = float(np.sum(durations))
+        mc_durs = durations * (mc_dur / tot) if tot > 0 else durations
+        mc = wv.wigner_ville_multi_input_monte_carlo_damage(
+            omega, Hcols, G, mc_durs, m, C, seed=mc_seed, gamma0=g0, gamma1=g1,
+            phase0=phase0, phase1=phase1, fc=(fc0, fc1), bw=(bw0, bw1),
+            scales=scales, refine=refine, smooth=smooth, mean_stress=mean_stress,
+            ultimate=ultimate, naz=naz, npol=npol, reduction="shear_plane",
+            summary=None, measure=True, freq_dependent=fcoh)
+    windowed = None
+    ref = m30_ev if fcoh else m29_ev
+    if ref is not None:
+        windowed = {k: float(ref[k]["damage_rate"])
+                    for k in ("von_mises", "normal_plane", "shear_plane")}
+    return {"fc": (fc0, fc1), "bw": (bw0, bw1), "nwin": nwin, "refine": refine,
+            "smooth": smooth, "nt": summary["nt"], "multi_input": True,
+            "freq_dependent": fcoh, "coh_label": coh_label,
+            "peak_drift": summary.get("peak_drift", 0.0),
+            "plane_rotation_deg": summary["plane_rotation_deg"],
+            "fnp_drift": summary.get("fnp_drift", 0.0),
+            "constant_shape": summary["constant_shape"],
+            "delegated": summary.get("wv_delegated"), "summary": summary,
+            "von_mises": {"damage_rate": summary["von_mises"]["damage_rate"],
+                          "life": summary["von_mises"]["life"]},
+            "normal_plane": {"damage_rate": summary["normal_plane"]["damage_rate"],
+                             "life": summary["normal_plane"]["life"]},
+            "shear_plane": {"damage_rate": summary["shear_plane"]["damage_rate"],
+                            "life": summary["shear_plane"]["life"]},
+            "damage_rate": summary["damage_rate"], "life": summary["life"],
+            "windowed": windowed, "monte_carlo": mc}
 
 
 def _run_evolutionary_multi_input(ip, model, Hcols, G, omega, freqs_hz, m, C,
@@ -1605,6 +1841,66 @@ def _report_fatigue(log, fat, funct_id, base, base_dir, frf, nev):
     if fat.get("evolutionary") is not None:
         _report_evolutionary(log, fat["evolutionary"], fat["summary"],
                              fat.get("nonstationary"))
+    # M31: the CONTINUOUS WIGNER-VILLE INSTANTANEOUS block, printed ALONGSIDE the
+    # M26 windowed-evolutionary numbers (the continuous integral next to the
+    # windowed sum).
+    if fat.get("wigner_ville") is not None:
+        _report_wigner_ville(log, fat["wigner_ville"])
+
+
+def _report_wigner_ville(log, wv):
+    """Print the CONTINUOUS WIGNER-VILLE / LOEVE INSTANTANEOUS TIME-FREQUENCY (M31)
+    listing block: the continuous instantaneous spectrum settings (the fine instant
+    grid / the Cohen-class smoothing), the instantaneous spectral-PEAK drift, the
+    window-boundary-caveat shrink (fine grid vs coarse windows) and — for the scalar
+    path — the continuous-integral Dirlik damage / life ALONGSIDE the M26 windowed
+    Miner-SUM, plus the continuous non-separable Monte-Carlo. Handles the scalar,
+    the JOINT-TENSOR (multiaxial) and the MULTI-INPUT sub-entry shapes."""
+    log.info("\n     ** CONTINUOUS WIGNER-VILLE INSTANTANEOUS TIME-FREQUENCY "
+             "FATIGUE **  (/IMPL/FATIG/WVILLE)")
+    fc0, fc1 = wv["fc"]
+    bw0, bw1 = wv["bw"]
+    log.info(f"      INSTANTANEOUS SPECTRUM S_WV(w,t) . : fine grid nt = {wv['nt']}"
+             f"  ({wv['nwin']} windows x refine {wv['refine']})")
+    log.info(f"      COHEN-CLASS SMOOTHING (x-terms)  . : {wv['smooth']:.4g}  "
+             f"(0 = raw instantaneous WVD)")
+    log.info(f"      DRIFTING SHAPE fc / bw (HZ)  . . . : "
+             f"{fc0:.4g}->{fc1:.4g} / {bw0:.4g}->{bw1:.4g}")
+    log.info(f"      INSTANTANEOUS PEAK-FREQ DRIFT (HZ) : {wv['peak_drift']:.4g}")
+    if wv.get("boundary_jump_windowed") is not None:
+        log.info(f"      WINDOW-BOUNDARY CAVEAT (fine/coarse): "
+                 f"{wv['boundary_jump']:.4g} / {wv['boundary_jump_windowed']:.4g}"
+                 f"  (continuous shrinks it)")
+    if wv.get("tensor") or wv.get("multi_input"):
+        if wv.get("coh_label"):
+            log.info(f"      COHERENCE MODEL gamma(.,t) . . . . : {wv['coh_label']}")
+        log.info(f"      CRITICAL-PLANE ROTATION (deg)  . . : "
+                 f"{wv['plane_rotation_deg']:.4g}  (F_np drift "
+                 f"{wv['fnp_drift']:.4g})")
+        win = wv.get("windowed") or {}
+        for key, name in (("von_mises", "VON MISES"),
+                          ("normal_plane", "MAX-NORMAL"),
+                          ("shear_plane", "MAX-SHEAR")):
+            r = wv[key]
+            life = r["life"]
+            life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+            log.info(f"      {name:11s} CONTINUOUS / WINDOWED  : "
+                     f"{r['damage_rate']:.5E} / {win.get(key, 0.0):.5E}  "
+                     f"life {life_s}")
+    else:
+        dk = wv["summary"]["dirlik"]
+        life = dk["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        wd = wv.get("windowed_damage_rate")
+        wd_s = "n/a" if wd is None else f"{wd:.5E}"
+        log.info(f"      DIRLIK CONTINUOUS / WINDOWED RATE  : "
+                 f"{dk['damage_rate']:.5E} / {wd_s}   life {life_s}")
+    if wv.get("monte_carlo") is not None:
+        mc = wv["monte_carlo"]
+        life = mc["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      CONTINUOUS MONTE-CARLO DAMAGE/LIFE : "
+                 f"{mc['damage_rate']:.5E} / {life_s}")
 
 
 def _report_evolutionary(log, ev, stationary_summary, nonstationary):
@@ -1896,11 +2192,22 @@ def _run_multiaxial(model, ip, log, result, frf, Sigma, channels, psd_tab,
         ip, summ, frf, m_sn, C_sn, mean_stress, ultimate, mc_dur, mc_seed,
         model, naz, npol)
 
+    # M31: the CONTINUOUS WIGNER-VILLE INSTANTANEOUS 6x6 stress-TENSOR spectrum runs
+    # ALONGSIDE the M21 reductions AND the M26/M27 windowed corrections (a NEW
+    # parallel path — everything above is left byte-identical). It evaluates the
+    # tensor spectrum CONTINUOUSLY at a fine instant grid with a per-instant plane
+    # re-search (of which the M27 window re-search is the coarse-grid limit,
+    # delegated byte-identically). See implicit/wigner_ville_fatigue.py.
+    wigner_ville = _run_wigner_ville_multiaxial(
+        ip, summ, frf, joint_evolutionary, m_sn, C_sn, mean_stress, ultimate,
+        mc_dur, mc_seed, model, naz, npol)
+
     result.fatigue = {
         "multiaxial": True, "nonproportional": nprop,
         "spectral_nonproportional": spec_np, "nongaussian": nongaussian,
         "nonstationary": nonstationary, "evolutionary": evolutionary,
         "joint_evolutionary": joint_evolutionary,
+        "wigner_ville": wigner_ville,
         "channels": channels, "voigt_blocks": blocks,
         "critical_element": (cname, ce, cbase),
         "critical_label": cbase,
@@ -2138,6 +2445,16 @@ def _run_multi_input_fatigue(model, ip, log, result, basis, Sigma, channels,
             ip, model, Hcrit, data["G"], data["positions"], omega, freqs_hz,
             m_sn, C_sn, mean_stress, ultimate, mc_dur, mc_seed, naz, npol, summ,
             evolutionary_multi_input)
+        # M31: the CONTINUOUS WIGNER-VILLE INSTANTANEOUS multi-input tensor spectrum
+        # — the coherence-driven tensor evaluated CONTINUOUSLY (the M29 scalar or M30
+        # frequency-dependent coherence drifting continuously, per-instant plane
+        # re-search, Miner-INTEGRATED). Runs only when /WVILLE + /MINPUT + /EVOL are
+        # set; the M29/M30 windowed answers are delegated to (byte-identical) in the
+        # coarse-grid limit and reported ALONGSIDE.
+        wigner_ville_multi = _run_wigner_ville_multi_input(
+            ip, model, Hcrit, data["G"], data["positions"], omega, freqs_hz,
+            m_sn, C_sn, mean_stress, ultimate, mc_dur, mc_seed, naz, npol,
+            evolutionary_multi_input, freq_evolutionary_multi_input)
 
         multi.update({
             "multiaxial": True, "critical_element": (cname, ce, cbase),
@@ -2151,6 +2468,7 @@ def _run_multi_input_fatigue(model, ip, log, result, basis, Sigma, channels,
             "joint_evolutionary": joint_evolutionary,
             "evolutionary_multi_input": evolutionary_multi_input,
             "freq_evolutionary_multi_input": freq_evolutionary_multi_input,
+            "wigner_ville": wigner_ville_multi,
             "summary": summ["von_mises"]["summary"],
         })
     else:
@@ -2225,6 +2543,11 @@ def _report_multi_input(log, mi, single):
         if mi.get("freq_evolutionary_multi_input") is not None:
             _report_freq_evolutionary_multi_input(
                 log, mi["freq_evolutionary_multi_input"])
+        # M31: the CONTINUOUS WIGNER-VILLE INSTANTANEOUS multi-input block, printed
+        # ALONGSIDE the M29 scalar-coherence / M30 frequency-dependent windowed
+        # numbers (the continuous coherence-driven tensor next to the windowed one)
+        if mi.get("wigner_ville") is not None:
+            _report_wigner_ville(log, mi["wigner_ville"])
     else:
         red = mi["summary"]["dirlik"]
         log.info(f"      CRITICAL CHANNEL . . . . . . . . : {mi['critical_label']}")
@@ -2410,6 +2733,11 @@ def _report_multiaxial(log, fat, funct_id, base, base_dir, frf, nev):
     # side (the point of a JOINT evolutionary tensor over the fixed reduction).
     if fat.get("joint_evolutionary") is not None:
         _report_joint_evolutionary(log, fat["joint_evolutionary"], fat)
+    # M31: the CONTINUOUS WIGNER-VILLE INSTANTANEOUS TENSOR block, printed ALONGSIDE
+    # the M27 windowed joint-tensor numbers (the continuous per-instant plane
+    # re-search next to the windowed one).
+    if fat.get("wigner_ville") is not None:
+        _report_wigner_ville(log, fat["wigner_ville"])
 
 
 def _report_joint_evolutionary(log, jv, fat):
