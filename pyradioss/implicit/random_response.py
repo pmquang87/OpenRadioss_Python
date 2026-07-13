@@ -1560,6 +1560,94 @@ def _run_nongaussian_wigner_ville_multiaxial(ip, summ, frf, wigner_ville, m, C,
             "gaussian": gwin, "monte_carlo": mc}
 
 
+def _run_joint_nongaussian_multiaxial(ip, summ, frf, wigner_ville, m, C,
+                                      mean_stress, ultimate, mc_dur, mc_seed,
+                                      model, naz, npol):
+    """M33 (JOINT-TENSOR NON-GAUSSIAN): a VECTOR (component-wise) Winterstein-Hermite /
+    translation-process transform of the CORRELATED 6x6 stress tensor imposing a
+    PER-COMPONENT target kurtosis (the Voigt components xx yy zz xy yz zx) JOINTLY on the
+    tensor while PRESERVING the marginal variances / covariance, so the resolved critical
+    plane INHERITS the INDUCED kurtosis of the joint tensor statistics (NOT the M24/M32
+    kurtosis imposed on the already-resolved scalar), applied along the M31/M32
+    CONTINUOUS Wigner-Ville instantaneous spectrum, reduced per instant and
+    Miner-INTEGRATED, cross-validated by a MULTIVARIATE non-Gaussian non-stationary
+    Monte-Carlo. Returns ``None`` unless /IMPL/FATIG/JOINT + /NGAUSS + /WVILLE are all
+    set AND a per-component kurtosis line (cols 4..9 of the M24 kurtosis line) is given.
+
+    Where M32 (``_run_nongaussian_wigner_ville_multiaxial``) imposed the target kurtosis
+    on the RESOLVED equivalent scalar, M33 imposes it on the TENSOR components and lets
+    the reduction inherit the induced non-Gaussianity — the FIRST item M32 deferred. The
+    M32 equivalent-scalar answer (kurtosis on the scalar) is reported ALONGSIDE as the
+    ``scalar_equivalent`` reference; the M31 Gaussian-continuous tensor is reported
+    alongside too (both left byte-identical). Stored on
+    ``result.fatigue['wigner_ville']['joint_nongaussian']``. A PORT sub-flag (freimpl.F
+    has no non-Gaussian / joint-tensor / Hermite path). See implicit/
+    joint_nongaussian_fatigue.py."""
+    joint_kurt = tuple(getattr(ip, "impl_fatig_joint_kurt", ()) or ())
+    if not (bool(getattr(ip, "impl_fatig_joint", False))
+            and bool(getattr(ip, "impl_fatig_ngauss", False))
+            and bool(getattr(ip, "impl_fatig_wville", False))
+            and len(joint_kurt) > 0):
+        return None
+    if wigner_ville is None:
+        return None
+    from . import joint_nongaussian_fatigue as jng
+    fc = wigner_ville["fc"]
+    bw = wigner_ville["bw"]
+    nwin = wigner_ville["nwin"]
+    refine = wigner_ville["refine"]
+    smooth = wigner_ville["smooth"]
+    scales, durations = _evol_schedule(ip, model, nwin)
+    bwcorr = bool(getattr(ip, "impl_fatig_bwcorr", True))
+    omega = np.asarray(frf["omega"], dtype=float)
+    Scross = np.asarray(summ["Scross"])
+    kurt = np.asarray(joint_kurt, dtype=float)
+    skew = float(getattr(ip, "impl_fatig_skew", 0.0))
+    summary = jng.joint_nongaussian_tensor_summary(
+        omega, Scross, durations, fc, bw, m, C, kurt, skew=skew, scales=scales,
+        refine=refine, smooth=smooth, bandwidth_correction=bwcorr,
+        mean_stress=mean_stress, ultimate=ultimate, naz=naz, npol=npol, drift=True,
+        scalar_equivalent=True)
+    # the MULTIVARIATE non-Gaussian non-stationary Monte-Carlo (the M21 synthesiser
+    # pushed through the VECTOR Hermite transform per instant, projected onto the
+    # per-instant critical plane, rainflow over the WHOLE record)
+    mc = None
+    if mc_dur > 0.0:
+        tot = float(np.sum(durations))
+        mc_durs = durations * (mc_dur / tot) if tot > 0 else durations
+        mc = jng.joint_nongaussian_monte_carlo_damage(
+            omega, Scross, mc_durs, fc, bw, m, C, mc_seed, kurt, skew=skew,
+            scales=scales, refine=refine, smooth=smooth, mean_stress=mean_stress,
+            ultimate=ultimate, naz=naz, npol=npol, reduction="shear_plane",
+            summary=summary)
+    gwin = {k: float(wigner_ville[k]["damage_rate"])
+            for k in ("von_mises", "normal_plane", "shear_plane")}
+    se = summary.get("scalar_equivalent")
+    se_rates = ({k: float(se[k]["damage_rate"])
+                 for k in ("von_mises", "normal_plane", "shear_plane")}
+                if se is not None else None)
+    return {"joint_kurt": tuple(float(x) for x in kurt), "skew": skew,
+            "induced_kurt_min": summary["induced_kurt_min"],
+            "induced_kurt_max": summary["induced_kurt_max"],
+            "induced_kurt_mean": summary["induced_kurt_mean"],
+            "lambda_min": summary["lambda_min"], "lambda_max": summary["lambda_max"],
+            "lambda_mean": summary["lambda_mean"],
+            "plane_rotation_deg": summary["plane_rotation_deg"],
+            "preservation_error": summary["preservation_error"],
+            "bandwidth_correction": bwcorr, "summary": summary, "tensor": True,
+            "von_mises": {"damage_rate": summary["von_mises"]["damage_rate"],
+                          "life": summary["von_mises"]["life"],
+                          "induced_kurt": summary["von_mises"]["induced_kurt"]},
+            "normal_plane": {"damage_rate": summary["normal_plane"]["damage_rate"],
+                             "life": summary["normal_plane"]["life"],
+                             "induced_kurt": summary["normal_plane"]["induced_kurt"]},
+            "shear_plane": {"damage_rate": summary["shear_plane"]["damage_rate"],
+                            "life": summary["shear_plane"]["life"],
+                            "induced_kurt": summary["shear_plane"]["induced_kurt"]},
+            "damage_rate": summary["damage_rate"], "life": summary["life"],
+            "gaussian": gwin, "scalar_equivalent": se_rates, "monte_carlo": mc}
+
+
 def _run_wigner_ville_multi_input(ip, model, Hcols, G, positions, omega, freqs_hz,
                                   m, C, mean_stress, ultimate, mc_dur, mc_seed,
                                   naz, npol, m29_ev, m30_ev):
@@ -2081,6 +2169,59 @@ def _report_wigner_ville(log, wv):
     # with /WVILLE (the leptokurtic amplification lambda_ng(t) drifting with time).
     if wv.get("nongaussian") is not None:
         _report_nongaussian_wigner_ville(log, wv["nongaussian"])
+    # M33: the JOINT-TENSOR NON-GAUSSIAN distribution (the vector Hermite transform of
+    # the correlated tensor, the resolved plane inheriting the induced kurtosis),
+    # printed ALONGSIDE the M32 equivalent-scalar and the M31 Gaussian-continuous
+    # numbers when /JOINT composes with /NGAUSS + /WVILLE and a per-component kurtosis
+    # line is given.
+    if wv.get("joint_nongaussian") is not None:
+        _report_joint_nongaussian(log, wv["joint_nongaussian"])
+
+
+def _report_joint_nongaussian(log, ng):
+    """Print the JOINT-TENSOR NON-GAUSSIAN DISTRIBUTION (M33) listing block: the
+    per-component target kurtoses imposed on the 6 Voigt tensor components (a vector
+    Winterstein-Hermite / translation transform), the INDUCED critical-plane kurtosis
+    the resolved plane inherits from the joint tensor statistics, the covariance
+    preservation error, and the JOINT-tensor-non-Gaussian damage / life ALONGSIDE the
+    M32 EQUIVALENT-SCALAR (kurtosis on the resolved scalar) and the M31/M27 Gaussian
+    numbers, plus the multivariate non-Gaussian Monte-Carlo (its resolved-projection
+    sample kurtosis tracking the induced value) — the M33 <-> M32 boundary made
+    explicit."""
+    log.info("\n     ** JOINT-TENSOR NON-GAUSSIAN DISTRIBUTION FATIGUE **  "
+             "(/IMPL/FATIG/NGAUSS+JOINT+WVILLE)")
+    jk = ng.get("joint_kurt", ())
+    jk_s = " ".join(f"{v:.3g}" for v in jk)
+    log.info(f"      PER-COMPONENT KURTOSIS g4_c (Voigt): {jk_s}")
+    log.info(f"      INDUCED CRITICAL-PLANE g4^s  . . . : "
+             f"{ng['induced_kurt_min']:.4F} .. {ng['induced_kurt_max']:.4F}  "
+             f"(mean {ng['induced_kurt_mean']:.4F})")
+    bw = "ON (Benasciutti-Tovo alpha2(t))" if ng["bandwidth_correction"] else "OFF"
+    log.info(f"      INDUCED lambda_ng(t) DRIFT . . . . : "
+             f"{ng['lambda_min']:.4F} .. {ng['lambda_max']:.4F}  "
+             f"(mean {ng['lambda_mean']:.4F})  [BW-atten {bw}]")
+    log.info(f"      COVARIANCE PRESERVATION ERROR  . . : "
+             f"{ng['preservation_error']:.4E}  (max off-diagonal drift; marginals "
+             f"exact)")
+    log.info(f"      CRITICAL-PLANE ROTATION (deg)  . . : "
+             f"{ng['plane_rotation_deg']:.4g}")
+    gwin = ng.get("gaussian") or {}
+    se = ng.get("scalar_equivalent") or {}
+    for key, name in (("von_mises", "VON MISES"), ("normal_plane", "MAX-NORMAL"),
+                      ("shear_plane", "MAX-SHEAR")):
+        r = ng[key]
+        life = r["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      {name:11s} JOINT / SCALAR-EQ / GAUSS : "
+                 f"{r['damage_rate']:.5E} / {se.get(key, 0.0):.5E} / "
+                 f"{gwin.get(key, 0.0):.5E}  life {life_s}")
+    if ng.get("monte_carlo") is not None:
+        mc = ng["monte_carlo"]
+        life = mc["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      MULTIVARIATE NON-GAUSS MC DMG/LIFE : "
+                 f"{mc['damage_rate']:.5E} / {life_s}  (proj sample g4 = "
+                 f"{mc.get('kurtosis', 3.0):.3F})")
 
 
 def _report_nongaussian_wigner_ville(log, ng):
@@ -2438,6 +2579,19 @@ def _run_multiaxial(model, ip, log, result, frf, Sigma, channels, psd_tab,
     # nongaussian_wigner_ville_fatigue.py.
     if wigner_ville is not None:
         wigner_ville["nongaussian"] = _run_nongaussian_wigner_ville_multiaxial(
+            ip, summ, frf, wigner_ville, m_sn, C_sn, mean_stress, ultimate,
+            mc_dur, mc_seed, model, naz, npol)
+
+    # M33: the JOINT-TENSOR NON-GAUSSIAN distribution (a VECTOR component-wise
+    # Winterstein-Hermite / translation transform of the correlated 6x6 tensor imposing
+    # a PER-COMPONENT kurtosis, the resolved critical plane INHERITING the induced
+    # kurtosis) runs when /JOINT + /NGAUSS + /WVILLE are all set AND a per-component
+    # kurtosis line is given — the FIRST item M32 deferred, reported as a sub-entry of
+    # the wigner_ville entry ALONGSIDE the M32 equivalent-scalar (nongaussian) and the
+    # M31 Gaussian-continuous numbers (both left byte-identical). See implicit/
+    # joint_nongaussian_fatigue.py.
+    if wigner_ville is not None:
+        wigner_ville["joint_nongaussian"] = _run_joint_nongaussian_multiaxial(
             ip, summ, frf, wigner_ville, m_sn, C_sn, mean_stress, ultimate,
             mc_dur, mc_seed, model, naz, npol)
 

@@ -295,7 +295,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | **FREQUENCY-DEPENDENT + TIME-VARYING (EVOLUTIONARY) INPUT COHERENCE (M30)**: a coherence matrix `γ_ab(f,t)` varying with BOTH FREQUENCY AND TIME — a per-window schedule of FULL (nf, ninput, ninput) Hermitian coherence stacks `γ_ab(f,tᵢ)` (a measured / modelled `γ_ab(f)` SHAPE interpolated start→end across the windows, and/or the M28 exponential/convection field `γ_ab(f) = exp(−decay·|x_a−x_b|·f/speed)` with a TIME-VARYING decay coefficient / reference speed) driving a per-window multi-input stress-tensor cross-PSD `S_σσ(ω,tᵢ) = H_σ S_ff(tᵢ) H_σᴴ` whose critical plane / F_np may DRIFT as the coherence FREQUENCY-SHAPE evolves, reduced PER WINDOW by the M20–M27 estimator family + the M28/M29 multi-input paths and Miner-summed (`implicit/freq_evolutionary_multi_input.py`, the `_run_freq_evolutionary_multi_input` extension of the M28 `_run_multi_input_fatigue` driver, `/IMPL/FATIG/MULT/MINPUT/EVOL/FCOH`) — the FIRST item M29 DEFERRED (M29 drifted a frequency-FLAT SCALAR `γ_ab(t)` and held the M28 exponential coherence STATIONARY). M30 is the CONVERGENCE of M28's frequency-dependent coherence and M29's time-varying coherence: the FULL frequency shape `γ_ab(f)` is now the drifting quantity. FREQUENCY-DEPENDENT COHERENCE STACKS — a per-window schedule of `γ_ab(f,tᵢ)` from a measured shape (`measured_coherence_stack` / `freq_coherence_stacks`) or the exponential/convection field with a drifting decay / speed (`exponential_coherence_stack` / `exponential_drift_stacks`), each window's `S_ff` assembled by the M28 `input_cross_psd_matrix` (which already accepts a full (nf,n,n) γ stack) and projected onto the nearest Hermitian PSD matrix (M28 `nearest_psd`). The per-window `S_σσ,ᵢ` + its 6×6 moment matrices reduced by the M27 `reduce_window_tensor` (the plane / F_np RE-SEARCHED per window as the frequency-shape drifts), Miner-summed (`freq_evolutionary_multi_input_summary`), with band-resolved coherence diagnostics (`representative_pair_spectrum` / `decorrelation_frequency` / `band_coherence`). FREQUENCY-DEPENDENT EVOLUTIONARY MONTE-CARLO — per-window blocks of the M28 correlated-input synthesiser (reusing M29 `synthesize_evolutionary_multi_input_stress`), per-window plane projection, ASTM E1049 rainflow + Miner (`freq_evolutionary_multi_input_monte_carlo_damage`); the synthesised inputs' per-window measured coherence SPECTRUM (M28 `measure_coherence`, per frequency band — NOT just a band-mean scalar) tracks the target `γ_ab(f,tᵢ)`. Validated: a FREQUENCY-FLAT coherence recovering the M29 scalar-coherence answer EXACTLY (bit-identical delegation — summary + MC), which recovers M28 / M27 in ITS special cases; a STATIONARY (single-window) frequency-dependent coherence recovering the M28 frequency-dependent answer EXACTLY (bit-identical delegation — summary + MC); a drifting-frequency-shape schedule (a decorrelation frequency that MOVES UP as the mission proceeds, or a convection speed that ramps) whose per-window response variance AND critical plane genuinely DRIFT; the per-window reductions byte-identical given the same per-window `S_σσ`; the measured coherence SPECTRUM tracking the drifting target band-by-band. Composes with /JOINT / /NSTAT / /NGAUSS, reported ALONGSIDE the M29 scalar-coherence and the M28 frequency-dependent-stationary numbers (a `freq_evolutionary_multi_input` sub-entry). PORT sub-flag, library-first like M16–M29; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions, the M24–M27 corrections, the M28 stationary multi-input path AND the M29 scalar-coherence evolutionary path stay BIT-IDENTICAL (a NEW parallel path — the M28 + M29 answers byte-identical whether or not /FCOH runs — asserted). Theory: Priestley 1965 (evolutionary spectra — the frequency-AND-time varying coherence matrix); Newland ch. 6–8 + Bendat & Piersol ch. 5–7 (the frequency-dependent coherence); Davenport / von Kármán (convection-coherence fields); the M28 frequency-dependent + M29 time-varying base | ✅ |
 | **CONTINUOUS WIGNER–VILLE / LOÈVE INSTANTANEOUS TIME-FREQUENCY SPECTRUM (M31)**: a bilinear time-frequency distribution `S_WV(ω,t)` of the scalar (M26) / 6×6 joint-tensor (M27) / multi-input coherence-matrix (M29/M30) response process, replacing the M26–M30 SHORT-TIME WINDOWED SPECTROGRAM with a CONTINUOUS instantaneous spectrum evaluated at a fine instant grid, reduced by the M20–M27 estimators AT EACH INSTANT (the critical plane / F_np drifting CONTINUOUSLY) and Palmgren–Miner INTEGRATED over time — an integral, not a per-window sum (`implicit/wigner_ville_fatigue.py`, the `_run_wigner_ville` / `_run_wigner_ville_multiaxial` / `_run_wigner_ville_multi_input` extensions of the M20/M21/M28 drivers in `implicit/random_response.py`, `/IMPL/FATIG/.../WVILLE`) — the RECURRING item M26/M27/M29/M30 ALL deferred (each modelled the non-stationary load with a windowed spectrogram and documented the short-time-stationary resolution trade-off + the window-boundary rainflow caveat; M31 removes both). THE CONTINUOUS PRIMITIVE — the fine-grid instantaneous EFFECTIVE WINDOWS `W_eff,j(f) = Σ_k g_jk a_k² W_k(f)` (`instantaneous_effective_windows`): subdivide each M26–M30 window into `refine` fine sub-instants (nt = nwin·refine, `instantaneous_schedule`), evaluate the drifting shape fc(t)/bw(t)/a(t) CONTINUOUSLY, and apply the Cohen-class time-smoothing kernel `g_jk` (`cohen_time_kernel`, a normalised Gaussian of width `smooth` — the tunable cross-term control). Because the smoothing is linear and S₀(f) fixed, the effective window feeds the SCALAR (`wigner_ville_fatigue_summary` → M26 estimators), the 6×6 TENSOR (`wigner_ville_tensor_summary` → per-instant `reduce_window_tensor` re-search) and the MULTI-INPUT (`wigner_ville_multi_input_summary` → per-instant `H S_ff(t) Hᴴ` reduction) reductions UNCHANGED. CONTINUOUS MONTE-CARLO — the M26–M30 non-separable synthesisers on the fine grid, rainflow over the WHOLE record (the reference that includes the straddling cycles), converging to the continuous integral as the grid refines. Validated: the windowed spectrogram is EXACTLY the refine = 1 / smooth = 0 limit — the scalar / tensor / multi-input summaries DELEGATE to M26 / M27 / M29 / M30 BYTE-IDENTICALLY there (summary + MC); a STATIONARY process recovering the stationary PSD at EVERY instant EXACTLY; the frequency / time MARGINALS recovering the average PSD / instantaneous power; a chirp whose instantaneous spectral peak / critical plane drifts CONTINUOUSLY (finer than the windows resolve); the window-boundary caveat (adjacent-instant shape jump) measurably SHRINKING on the fine grid vs the coarse windows; heavy Cohen-class smoothing collapsing the instantaneous spectrum toward the mission-average; the continuous Miner-integral tracking the Monte-Carlo BETTER than the coarse windowed sum (on a swept-narrow-window demonstrator the continuous integral tracks the MC within ~1 % where the coarse windowed sum is ~240× too low). Composes with /EVOL (implied) / /JOINT / /MINPUT / /FCOH / /NSTAT, reported ALONGSIDE the M26/M27/M29/M30 windowed numbers (a `wigner_ville` sub-entry). PORT sub-flag, library-first like M16–M30; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions, the M24–M27 corrections AND the M26–M30 windowed evolutionary paths stay BIT-IDENTICAL (a NEW parallel path — the M8–M30 answers byte-identical whether or not /WVILLE runs — asserted). Theory: Wigner 1932 (the Wigner distribution) / Ville 1948 (the Wigner–Ville distribution); Loève (the harmonizable-process dual-frequency spectrum); Mark 1970 / Martin & Flandrin 1985 (the Wigner–Ville spectrum of nonstationary random processes); Cohen 1989 (the class of time-frequency distributions and cross-term smoothing); Priestley evolutionary spectra (the windowed approximation M31 makes continuous); the M26/M27/M29/M30 windowed base | ✅ |
 | **NON-GAUSSIAN INSTANTANEOUS-TENSOR TIME-FREQUENCY DISTRIBUTION (M32)**: a per-instant, time-VARYING NON-GAUSSIAN (kurtosis / skewness) correction of the M31 CONTINUOUS Wigner–Ville instantaneous stress spectrum — the leptokurtic damage amplification `λ_ng(t)` DRIFTING with time along the continuous spectrum, reduced PER INSTANT and Palmgren–Miner INTEGRATED `D_nG = ∫ λ_ng(t) (dD/dt)_G(t) dt` (`implicit/nongaussian_wigner_ville_fatigue.py`, the `_run_nongaussian_wigner_ville` / `_run_nongaussian_wigner_ville_multiaxial` extensions of the M20/M21 drivers in `implicit/random_response.py`, `/IMPL/FATIG/NGAUSS` composing with `/WVILLE` + a kurtosis-vs-time `/FUNCT`) — the CONVERGENCE of M24 (stationary Winterstein–Hermite kurtosis correction of the equivalent scalar) and M31 (the continuous instantaneous tensor spectrum), the FIRST item M31 deferred. At each fine instant `t_j` it re-computes the M24 amplification `λ_ng(t_j)` from THAT instant's bandwidth `α₂(t_j)` and a TIME-VARYING target `γ₄(t_j)/γ₃(t_j)` (`kurtosis_schedule` — a scalar constant, a linear sweep, or a per-instant array from a sampled kurtosis-vs-time `/FUNCT`; `instantaneous_lambda_ng`), then Miner-INTEGRATES the non-Gaussian per-instant damage — the SCALAR path (`nongaussian_wigner_ville_summary`, a constant `λ_ng` FACTORING out EXACTLY) and the 6×6 TENSOR path (`nongaussian_wigner_ville_tensor_summary` → per-instant `reduce_window_tensor` re-search, each reduction scaled by its OWN per-instant `λ_ng`). NON-GAUSSIAN NON-STATIONARY MONTE-CARLO — the M31 continuous non-separable synthesiser with EACH per-instant block pushed through the M24 memoryless Hermite transform to that instant's `γ₄(t_j)` (so the record's LOCAL kurtosis tracks `γ₄(t)`), rainflow over the WHOLE record. Validated: a CONSTANT kurtosis recovering the M24 correction on the M31 continuous Gaussian answer EXACTLY; `γ₄(t) ≡ 3` recovering the M31 Gaussian continuous answer BYTE-IDENTICALLY (scalar + tensor, summary + MC); the windowed limit recovering the M24-on-M27 windowed answer EXACTLY (the Gaussian per-window reduction byte-identical to M27); a stationary process with a constant kurtosis recovering the M24 stationary answer EXACTLY; a genuinely time-varying kurtosis whose `λ_ng(t)` DRIFTS continuously; the MC induced sample kurtosis tracking `γ₄(t)`. Composes with /WVILLE (implied /EVOL) / /JOINT / /NSTAT, reported ALONGSIDE the M31 Gaussian-continuous and M24 stationary-non-Gaussian numbers (a `nongaussian` sub-entry on the `wigner_ville` entry). PORT sub-flag, library-first like M16–M31; the M10 integrator, the M16–M23 paths, the M24 stationary non-Gaussian correction AND the M31 continuous Gaussian spectrum stay BIT-IDENTICAL (a NEW parallel path — asserted). Theory: Winterstein 1988 (the Hermite-moment model); Benasciutti–Tovo 2005/2006 / Braccesi 2009 / Rizzi–Kihm 2013 (non-Gaussian spectral fatigue); the M24 stationary base + the M31 continuous base; the M25/M26 RMS-induced-kurtosis bridge | ✅ |
-| Lanczos/subspace for large models; AMLS / substructuring; a full NON-GAUSSIAN INSTANTANEOUS-tensor JOINT distribution (a vector Hermite transform of the correlated 6×6 tensor — beyond the M32 time-varying equivalent-scalar kurtosis correction on the M31 continuous tensor); the MULTI-INPUT (M29/M30) non-Gaussian instantaneous path (the equivalent-scalar correction composes; the card wires scalar + JOINT-tensor); an ARBITRARY per-pair per-window coherence-shape stack beyond the M30 measured-shape start→end + exponential-drift card schedules (the library accepts it; the card exposes those two); the base-acceleration MULTI-INPUT feed (per-direction participation column stack, carried from M28/M29/M30/M31/M32); multi-directional 100-30-30 response spectra; non-proportional HARDENING as a material model; mean-stress beyond the per-plane normal / basic Goodman option; crack-growth / fracture-mechanics fatigue; the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21/M22/M23/M24/M25/M26/M27/M28/M29/M30/M31/M32 roadmap notes) |
+| **NON-GAUSSIAN JOINT-TENSOR DISTRIBUTION (M33)**: a VECTOR (multivariate) Winterstein–Hermite / translation-process transform of the CORRELATED 6×6 stress-tensor process — the target kurtosis (and skewness) imposed JOINTLY on the tensor COMPONENTS `[σ_xx σ_yy σ_zz σ_xy σ_yz σ_zx]` (preserving the marginal variances / covariance / cross-PSD), NOT on the already-resolved equivalent scalar, so the resolved critical-plane / von-Mises reduction INHERITS an INDUCED kurtosis derived from the JOINT tensor statistics — applied along the M31/M32 CONTINUOUS Wigner–Ville instantaneous spectrum, reduced PER INSTANT and Palmgren–Miner INTEGRATED, cross-validated by a MULTIVARIATE non-Gaussian Monte-Carlo (`implicit/joint_nongaussian_fatigue.py`, the `_run_joint_nongaussian_multiaxial` extension of the M21 driver in `implicit/random_response.py`, `/IMPL/FATIG/NGAUSS` composing with `/JOINT` + `/WVILLE` + a PER-COMPONENT kurtosis line on cols 4..9 of the M24 kurtosis line) — the FIRST item M32 (and M24, M31) deferred. Where M24/M32 imposed γ₄ on the resolved SCALAR (a scalar Hermite transform), M33 pushes EACH tensor component through its OWN memoryless Winterstein–Hermite transform `X_c = σ_c g_c(U_c)` (a VECTOR translation process, Grigoriu 1998; Lutes & Sarkani) preserving each component's variance + kurtosis EXACTLY and the 6×6 covariance to leading order (`translation_process_covariance`, the off-diagonal distortion reported as a diagnostic). Because the resolved-plane scalar `s = pᵀσ = Σ_c a_c g_c(U_c)` is a LINEAR projection of a component-wise-transformed correlated Gaussian, its INDUCED `(γ₃ˢ, γ₄ˢ)` is CLOSED-FORM (`induced_projection_moments` — the multivariate Hermite / diagram (Wick) moment sums `E[∏ He_{p_v}(U_{i_v})] = Σ over matchings without self-contractions of ∏ R_{ij}`, evaluated by cached einsum contractions), fed to the M24 `λ_ng` closed form. PER-INSTANT JOINT REDUCTION (`joint_nongaussian_tensor_summary` → per-instant `reduce_window_tensor` re-search, the induced-kurtosis `λ_ng(t_j)` scaling each linear critical-plane rate; the quadratic von-Mises reuses the max-shear plane's induced kurtosis) + MULTIVARIATE MONTE-CARLO (`synthesize_joint_nongaussian_history` / `joint_nongaussian_monte_carlo_damage` — the M21 multivariate synthesiser pushed through the VECTOR Hermite transform per instant, projected onto the per-instant plane, rainflow over the WHOLE record). Validated: `γ₄_c ≡ 3` recovering the M31/M27 Gaussian tensor answer BYTE-IDENTICALLY (summary + MC); the SCALAR-equivalent limit (kurtosis on the resolved scalar) recovering the M32/M24 correction EXACTLY (a `scalar_equivalent` delegation, byte-identical to M32); a UNIAXIAL projection's induced kurtosis reducing EXACTLY to the M24 realised `hermite_kurtosis`; the induced-kurtosis closed form matching the multivariate MC; a genuinely JOINT case whose induced resolved-plane kurtosis (and damage) DIFFERS from imposing γ₄ directly on the scalar (the M33 ↔ M32 boundary). Composes with /JOINT + /WVILLE (implied /MULT /EVOL) / /NSTAT, reported ALONGSIDE the M32 equivalent-scalar and the M31/M27 Gaussian numbers (a `joint_nongaussian` sub-entry on the `wigner_ville` entry). PORT sub-flag, library-first like M16–M32; the M10 integrator, the M16–M23 paths, the M24/M32 equivalent-scalar non-Gaussian correction AND the M27/M31 Gaussian tensor spectrum stay BIT-IDENTICAL (a NEW parallel path — asserted). Theory: Grigoriu translation-process / memoryless-transform theory; the vector Winterstein–Hermite model; Lutes & Sarkani "Random Vibrations"; the multivariate Hermite / diagram (Isserlis/Wick/Mehler) moment formula; the M24 scalar base; the M32 time-varying base; the M21/M27 tensor reduction | ✅ |
+| Lanczos/subspace for large models; AMLS / substructuring; a full non-Gaussian COPULA / non-translation joint distribution (beyond the M33 component-wise Hermite TRANSLATION model — the marginals exact, the cross-covariance leading-order; the exact Grigoriu correlation inversion deferred); the MULTI-INPUT (M29/M30) JOINT non-Gaussian instantaneous path (the M33 single-input joint-tensor + the M32 equivalent-scalar correction compose; the card wires scalar + JOINT-tensor single-input); an ARBITRARY per-pair per-window coherence-shape stack beyond the M30 measured-shape start→end + exponential-drift card schedules (the library accepts it; the card exposes those two); the base-acceleration MULTI-INPUT feed (per-direction participation column stack, carried from M28/M29/M30/M31/M32/M33); multi-directional 100-30-30 response spectra; non-proportional HARDENING as a material model; mean-stress beyond the per-plane normal / basic Goodman option; crack-growth / fracture-mechanics fatigue; the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21/M22/M23/M24/M25/M26/M27/M28/M29/M30/M31/M32/M33 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -3745,6 +3746,159 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       fracture-mechanics fatigue and the COMPLEX-FRF stress recovery — the unchanged
       M20–M31 tail;
     * the unchanged M10–M31 deferral tail: non-proportional hardening, gyroscopic /
+      circulatory systems, Lanczos / subspace + AMLS, IFQ ≥ 10 / MODFR 2, /FRICTION
+      per-part-pair sets, orthotropic / thermal friction, the fiber TYPE18 beam, the
+      LAW27 plastic block / solids, thermal contact, TYPE19/24/25, Inacti, Igap 2/3,
+      LAW42 shells/Prony, IDTC 2/3, /RWALL under implicit, the UL hourglass memory, the
+      NLGEOM hourglass-operator geometry variation, the BT4 thin-plate shear-lock /
+      drilling floor.
+
+32. **M33 — NON-GAUSSIAN JOINT-TENSOR DISTRIBUTION** ✅ (done):
+    a VECTOR (multivariate) Winterstein–Hermite / translation-process transform of the
+    CORRELATED 6×6 stress-tensor process, so the target kurtosis (and skewness) is
+    imposed JOINTLY on the stress-tensor COMPONENTS (preserving the full 6×6 covariance /
+    cross-PSD), NOT on the already-resolved equivalent scalar; the resolved critical-plane
+    / von-Mises reduction INHERITS an INDUCED kurtosis derived from the JOINT tensor
+    statistics, applied along the M31/M32 CONTINUOUS Wigner–Ville instantaneous spectrum
+    (composing with the M32 time-varying γ₄(t) schedule), reduced per instant and
+    Palmgren–Miner INTEGRATED, cross-validated by a MULTIVARIATE non-Gaussian
+    non-stationary Monte-Carlo. M33 is the JOINT-TENSOR lift of the M24/M32 SCALAR
+    correction and the FIRST item M32 (and M24, M31) deferred: where M24/M32 imposed γ₄
+    on the RESOLVED equivalent scalar (the von-Mises / critical-plane scalar the M21/M27
+    reductions produce — a SCALAR Hermite transform), M33 imposes a PER-COMPONENT kurtosis
+    γ₄_c on the six Voigt stress components via a VECTOR Hermite transform of the
+    correlated tensor and lets the reduction inherit the induced non-Gaussianity — a
+    genuinely multiaxial non-Gaussian distribution. Upstream check (re-run for M33): the
+    open-source OpenRadioss engine has NO frequency-domain / spectral / random-vibration /
+    time-frequency / non-Gaussian / Hermite / multivariate-translation / joint-tensor
+    solver of any kind — `engine/source/input/freimpl.F` (639 lines, re-read line by line)
+    parses only /IMPL/DYNA / BUCKL / DT / NONLIN / ARCL plus linear-solver housekeeping;
+    its sole `PSD` token is `IMUMPSD` (line 269), a MUMPS-solver flag, not a power
+    spectral density. So M33, like every spectral milestone since M16, ports the
+    joint-tensor non-Gaussian distribution as a clean LIBRARY capability EXTENDING the M32
+    time-varying line + the M27/M31 joint-tensor line and drives it with a minimal PORT
+    engine sub-flag (`/IMPL/FATIG/NGAUSS` composing with `/JOINT` + `/WVILLE` + a
+    PER-COMPONENT kurtosis line). A NEW, parallel path (`implicit/
+    joint_nongaussian_fatigue.py` + the `_run_joint_nongaussian_multiaxial` extension of
+    the M21 driver in `implicit/random_response.py`) that never touches the M10
+    integrator, the M16 eigensolver, the M17/M18 superposition, the M19 PSD path, the
+    M20–M27 reductions, the M24/M32 equivalent-scalar non-Gaussian correction OR the
+    M27/M31 Gaussian tensor spectrum (all stay bit-identical — the M24/M32 correction is
+    EXACTLY the scalar-equivalent limit and the M31/M27 Gaussian answer EXACTLY the
+    γ₄_c ≡ 3 limit, asserted). The joint non-Gaussian path is reported ALONGSIDE the M32
+    equivalent-scalar and the M31/M27 Gaussian numbers (a `joint_nongaussian` sub-entry on
+    the `wigner_ville` entry of `model.implicit_result`).
+
+    * **JOINT NON-GAUSSIAN TENSOR REDUCTION** (`joint_nongaussian_fatigue.py`): the
+      VECTOR translation transform pushes EACH Voigt component through its OWN memoryless
+      Winterstein–Hermite transform `X_c = σ_c g_c(U_c)`, U ~ N(0, R) the standardised
+      correlated Gaussian of correlation `R = corr(M₀)`, preserving each component's
+      MARGINAL variance AND kurtosis EXACTLY (kappa normalisation) and the 6×6 covariance
+      to LEADING order (`translation_process_covariance`, eq. (2) — the h-dependent
+      R²/R³ off-diagonal distortion reported as `preservation_error`; the exact Grigoriu
+      correlation inversion deferred). The resolved-plane scalar `s = pᵀσ = Σ_c a_c
+      g_c(U_c)` (a_c = p_c σ_c) is a LINEAR projection of a component-wise-transformed
+      correlated Gaussian, so its INDUCED `(γ₃ˢ, γ₄ˢ)` is CLOSED-FORM
+      (`induced_projection_moments`): writing `q_c = Σ_{k=1..3} e_{c,k} He_k(U_c)`, the
+      multivariate Hermite / diagram (Wick) moment formula `E[∏_v He_{p_v}(U_{i_v})] =
+      Σ over perfect matchings of the half-edges WITHOUT self-contractions of ∏ R_{ij}`
+      gives the 2-/3-/4-vertex sums (precomputed diagram tables `_M3_CFG` / `_M4_CFG`,
+      evaluated by cached einsum contractions over the component index space), fed to the
+      M24 `nongaussian_correction_factor(γ₃ˢ, γ₄ˢ, m, α₂)`. Long docstrings naming the
+      theory (Grigoriu translation-process / memoryless-transform theory; the vector
+      Winterstein–Hermite model; Lutes & Sarkani "Random Vibrations"; the multivariate
+      Hermite / Isserlis–Wick–Mehler moment formula; the M24 scalar base; the M32
+      time-varying base; the M21/M27 tensor reduction). Validated: the SCALAR-equivalent
+      limit (kurtosis on the resolved scalar) recovering the M32/M24 correction EXACTLY
+      (a `scalar_equivalent` delegation, byte-identical to a direct M32 call); γ₄_c ≡ 3
+      recovering the M31/M27 Gaussian tensor answer BYTE-IDENTICALLY (delegated); a
+      UNIAXIAL (single-component) projection's induced kurtosis reducing EXACTLY to the
+      M24 realised `hermite_kurtosis`; a genuinely JOINT case where the per-component
+      kurtoses DIFFER so the resolved-plane kurtosis (and damage) DIFFERS from imposing
+      γ₄ directly on the scalar (the M33 ↔ M32 boundary); the induced-kurtosis closed
+      form matching the multivariate MC.
+    * **JOINT NON-GAUSSIAN CONTINUOUS FATIGUE + MONTE-CARLO** (`joint_nongaussian_
+      fatigue.py`): the joint-tensor reduction is applied AT EACH fine instant of the
+      M31/M32 continuous spectrum (`_reduce_instant_tensors_joint_ng` +
+      `joint_nongaussian_tensor_summary` — per instant re-searches the critical plane
+      /F_np, computes the induced `(γ₃ˢ, γ₄ˢ)` of each LINEAR plane's resolved scalar and
+      scales the Gaussian rate by the induced-kurtosis `λ_ng(t_j)`, Miner-INTEGRATED; the
+      quadratic von-Mises reuses the max-shear plane's induced kurtosis, documented). The
+      MULTIVARIATE non-Gaussian non-stationary Monte-Carlo (`synthesize_joint_nongaussian_
+      history` / `joint_nongaussian_monte_carlo_damage`) reuses the M21 multivariate
+      synthesiser (per-instant correlated 6-component blocks) and pushes EACH COMPONENT of
+      each block through its own memoryless Hermite transform to that instant's γ₄_c (the
+      VECTOR transform), projects onto the per-instant critical plane and rainflows (ASTM
+      E1049) the WHOLE record. Validated: the Gaussian-limit MC bit-identical to the
+      M31/M27 MC (delegated); the induced-kurtosis closed form tracking the multivariate
+      non-Gaussian MC (stationary single-plane comparison within ~1 %); the induced sample
+      kurtosis of the resolved projection tracking the joint-tensor-induced value.
+    * **ENGINE CARD + reporting** (`/IMPL/FATIG/NGAUSS` composing with `/JOINT` +
+      `/WVILLE` (+ `/EVOL` / `/NSTAT`)): the M24 kurtosis line optionally appends up to 6
+      PER-COMPONENT target kurtoses on trailing columns 4..9 (`kurt skew kfunct kurt1
+      k_xx k_yy k_zz k_xy k_yz k_zx`) — a NON-EMPTY per-component line
+      (`impl_fatig_joint_kurt`) triggers the M33 joint path; fewer than 6 values pad with
+      the scalar kurt; a card WITHOUT the per-component line never triggers M33 (the M32
+      path untouched). The driver builds the joint non-Gaussian tensor spectrum, runs the
+      reductions and the multivariate non-Gaussian Monte-Carlo, and reports the
+      per-component kurtoses, the JOINT-tensor-induced critical-plane kurtosis, the
+      covariance preservation error and the JOINT-vs-scalar-equivalent-vs-Gaussian
+      damage-life SIDE BY SIDE (a `joint_nongaussian` sub-entry on the `wigner_ville`
+      entry). The M32 / M31 results are fully formed and left byte-identical.
+    * **Example** (`examples/joint_nongaussian_fatigue`): the M27 solid-brick cantilever
+      RE-RUN under a resonance sweep (fc 40 → 600 Hz) with a JOINT per-component kurtosis
+      (`σ_xx` γ₄ = 9 spiky bending, `σ_xy`/`σ_zx`/`σ_yz` γ₄ = 7/6/5 torsion/shear, minor
+      components Gaussian), reporting its joint non-Gaussian life alongside its M32
+      equivalent-scalar and M31/M27 Gaussian lives — the INDUCED critical-plane kurtosis
+      ≈ 5.7 .. 7.7 (mean ≈ 6.4, DILUTED below the per-component max of 9 by the projection
+      / correlation), the max-shear JOINT rate ≈ 1.32×10⁻¹¹ sitting BETWEEN the Gaussian
+      ≈ 2.08×10⁻¹² and the M32 equivalent-scalar ≈ 2.91×10⁻¹¹ (the worst-case-scalar
+      assumption), the multivariate non-Gaussian Monte-Carlo ≈ 1.01×10⁻¹¹ (proj sample γ₄
+      ≈ 9.5).
+
+    Validated (`tests/test_m33_jointng.py`): the per-component / diagram-moment
+    primitives; a UNIAXIAL projection's induced kurtosis EXACTLY the M24 realised
+    `hermite_kurtosis`; a Gaussian tensor projecting to a Gaussian scalar (induced γ₄ = 3
+    exactly); the induced-kurtosis closed form matching the multivariate stationary
+    Monte-Carlo; the joint summary DELEGATING to the M31 Gaussian continuous tensor answer
+    BYTE-IDENTICALLY in the γ₄_c ≡ 3 limit; the `scalar_equivalent` entry BYTE-IDENTICAL
+    to a direct M32 call; a genuinely JOINT case whose induced damage DIFFERS from the
+    equivalent-scalar one (the M33 ↔ M32 boundary); the windowed limit's Gaussian
+    per-window reduction byte-identical to M27; the multivariate non-Gaussian MC
+    bit-identical to M27 in the Gaussian limit and leptokurtic otherwise; the
+    `/IMPL/FATIG/NGAUSS+JOINT+WVILLE` per-component kurtosis card mirror (cols 4..9); the
+    joint path end to end reading `model.implicit_result.fatigue['wigner_ville']
+    ['joint_nongaussian']`; and the M7 parity contract (the M27/M31 Gaussian tensor and
+    the M32 equivalent-scalar answers byte-identical whether or not the M33 joint path
+    runs; the path read-only in the element state).
+
+    Deferred out of M33, explicitly (not half-implemented):
+    * a full non-Gaussian COPULA / non-translation joint distribution (beyond the
+      component-wise Hermite TRANSLATION model): M33 uses the memoryless (translation)
+      vector transform, imposing the MARGINALS (each component's variance AND kurtosis)
+      EXACTLY and the 6×6 CROSS-covariance to LEADING order (the h-dependent R²/R³
+      off-diagonal distortion reported as a diagnostic — the closed-form induced kurtosis
+      and the Monte-Carlo BOTH use the underlying-Gaussian correlation = the target tensor
+      correlation, so they match; the EXACT Grigoriu correlation inversion that restores
+      the target covariance exactly, and a genuine copula / non-translation joint
+      distribution, are DEFERRED);
+    * the MULTI-INPUT (M29/M30) JOINT non-Gaussian instantaneous path — the M33
+      single-input joint-tensor + the M32 equivalent-scalar correction compose with the
+      multi-input continuous spectrum the same way, but the driver wires the scalar +
+      JOINT-tensor SINGLE-input paths only — DEFERRED / documented;
+    * the von-Mises equivalent scalar is a QUADRATIC form (no linear projection), so it
+      reuses the max-shear plane's induced kurtosis as its representative rather than a
+      quadratic-form induced kurtosis — the LINEAR critical-plane reductions carry the
+      genuine joint induced kurtosis (documented);
+    * the exact empirical Braccesi 2009 bandwidth-attenuation constants — the
+      Hermite-derived first-order α₂ model is carried from M24/M32 — DEFERRED;
+    * the base-acceleration MULTI-INPUT feed, multi-directional 100-30-30 response spectra
+      and the arbitrary per-pair per-window coherence-shape card beyond M30's schedules —
+      the unchanged M28–M32 tail;
+    * MEAN-STRESS beyond the basic M20/M21 Goodman intercept, CRACK-GROWTH /
+      fracture-mechanics fatigue and the COMPLEX-FRF stress recovery — the unchanged
+      M20–M32 tail;
+    * the unchanged M10–M32 deferral tail: non-proportional hardening, gyroscopic /
       circulatory systems, Lanczos / subspace + AMLS, IFQ ≥ 10 / MODFR 2, /FRICTION
       per-part-pair sets, orthotropic / thermal friction, the fiber TYPE18 beam, the
       LAW27 plastic block / solids, thermal contact, TYPE19/24/25, Inacti, Igap 2/3,
