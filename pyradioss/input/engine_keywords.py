@@ -835,6 +835,20 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_kurt = v2[0]
                     if len(v2) > 1:
                         ec.impl_fatig_skew = v2[1]
+                    # M32: compose /NGAUSS with /WVILLE for a TIME-VARYING kurtosis
+                    # gamma_4(t) drifting ALONG the continuous Wigner-Ville spectrum.
+                    # The M24 kurtosis line optionally appends a kurtosis-vs-time
+                    # /FUNCT id (col 3, sampled continuously onto the fine instant
+                    # grid) and/or an END kurtosis (col 4) for a linear sweep:
+                    #   kurt [skew [kfunct [kurt1]]]. When both are given the /FUNCT
+                    # wins (a measured / arbitrary schedule). Only meaningful with
+                    # /WVILLE (the continuous spectrum); with a stationary /NGAUSS it
+                    # is ignored (the constant kurt applies). See implicit/
+                    # nongaussian_wigner_ville_fatigue.py.
+                    if len(v2) > 2 and v2[2] > 0:
+                        ec.impl_fatig_kfunct = int(v2[2])
+                    if len(v2) > 3 and v2[3] > 0:
+                        ec.impl_fatig_kurt1 = v2[3]
                     if is_ngauss and ec.impl_fatig_kurt <= 0.0:
                         log.warning(
                             "/IMPL/FATIG/NGAUSS needs a target kurtosis on line "

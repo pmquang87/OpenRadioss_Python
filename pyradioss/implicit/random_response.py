@@ -888,6 +888,18 @@ def run_fatigue(model, ip, log, result, constr=None, contacts=(), loads=None):
         ip, evolutionary, sp["freqs"], sp["Ssigma"][:, jcrit], m_sn, C_sn,
         mean_stress, ultimate, mc_dur, mc_seed, model)
 
+    # M32: the TIME-VARYING NON-GAUSSIAN correction of the M31 continuous scalar
+    # spectrum (the leptokurtic amplification lambda_ng(t) drifting ALONG the
+    # continuous spectrum) runs when BOTH /NGAUSS and /WVILLE are set — the
+    # convergence of the M24 stationary kurtosis correction and the M31 continuous
+    # instantaneous spectrum, reported as a sub-entry of the wigner_ville entry
+    # ALONGSIDE the M31 Gaussian-continuous and M24 stationary-non-Gaussian numbers.
+    # See implicit/nongaussian_wigner_ville_fatigue.py.
+    if wigner_ville is not None:
+        wigner_ville["nongaussian"] = _run_nongaussian_wigner_ville(
+            ip, model, wigner_ville, sp["freqs"], sp["Ssigma"][:, jcrit], m_sn,
+            C_sn, mean_stress, ultimate, mc_dur, mc_seed)
+
     result.fatigue = {
         "channels": channels, "critical_channel": jcrit,
         "critical_label": channels[jcrit][3], "moments": mom,
@@ -1192,6 +1204,95 @@ def _run_wigner_ville(ip, evolutionary, freqs, psd, m, C, mean_stress, ultimate,
             "windowed_damage_rate": windowed, "monte_carlo": mc}
 
 
+def _kurtosis_grid(ip, model, s):
+    """M32: build the TIME-VARYING target kurtosis gamma_4(t) / skewness gamma_3(t)
+    for the continuous Wigner-Ville spectrum, sampled onto the fine-grid
+    mission-fraction axis ``s`` (from ``wigner_ville_fatigue.instantaneous_schedule``).
+
+    A kurtosis-vs-time /FUNCT (``impl_fatig_kfunct``) is evaluated CONTINUOUSLY across
+    its own x-range mapped onto the mission fraction (col 3 of the M24 kurtosis line);
+    otherwise a linear sweep ``impl_fatig_kurt`` -> ``impl_fatig_kurt1`` (col 4,
+    defaulting to the constant kurtosis). Returns (kurt, skew, kurt_grid, label) where
+    ``kurt_grid`` is the per-instant gamma_4 array (or None for the scalar/sweep form)
+    and ``label`` is the reporting descriptor of the schedule."""
+    kfunct = int(getattr(ip, "impl_fatig_kfunct", 0) or 0)
+    kurt0 = float(getattr(ip, "impl_fatig_kurt", 3.0))
+    k1 = float(getattr(ip, "impl_fatig_kurt1", 0.0))
+    kurt1 = k1 if k1 > 0.0 else kurt0
+    skew = float(getattr(ip, "impl_fatig_skew", 0.0))
+    if kfunct > 0 and kfunct in model.functions:
+        fn = model.functions[kfunct]
+        x0, x1 = float(fn.x[0]), float(fn.x[-1])
+        kg = np.asarray(fn.eval(x0 + np.asarray(s, dtype=float) * (x1 - x0)),
+                        dtype=float)
+        return kurt0, skew, kg, (f"/FUNCT/{kfunct} g4(t) "
+                                 f"{kg.min():.3g}..{kg.max():.3g}")
+    if kurt1 != kurt0:
+        return (kurt0, kurt1), skew, None, f"SWEEP g4 {kurt0:.4g}->{kurt1:.4g}"
+    return kurt0, skew, None, f"CONSTANT g4 {kurt0:.4g}"
+
+
+def _run_nongaussian_wigner_ville(ip, model, wigner_ville, freqs, psd, m, C,
+                                  mean_stress, ultimate, mc_dur, mc_seed):
+    """M32 (scalar): the TIME-VARYING NON-GAUSSIAN correction of the CONTINUOUS
+    Wigner-Ville instantaneous SCALAR spectrum — the leptokurtic amplification
+    lambda_ng(t) drifting ALONG the M31 continuous spectrum, reduced per instant and
+    Miner-INTEGRATED. Returns ``None`` unless BOTH /IMPL/FATIG/NGAUSS and
+    /IMPL/FATIG/WVILLE are set (i.e. /IMPL/FATIG/NGAUSS/WVILLE).
+
+    Where M24 (``_run_nongaussian``) corrected ONE stationary equivalent scalar for a
+    FIXED kurtosis and M31 (``_run_wigner_ville``) gave the Gaussian scalar a
+    continuous instantaneous spectrum, M32 re-computes the M24 lambda_ng AT EACH
+    INSTANT from that instant's bandwidth alpha_2(t) and a TIME-VARYING target
+    gamma_4(t) (a kurtosis-vs-time /FUNCT, or a linear sweep) sampled continuously
+    onto the fine grid, and Miner-INTEGRATES the non-Gaussian per-instant damage. The
+    M31 Gaussian-continuous and the M24 stationary-non-Gaussian answers are reported
+    ALONGSIDE (both left byte-identical). Stored on
+    ``result.fatigue['wigner_ville']['nongaussian']``. A PORT sub-flag."""
+    if not (bool(getattr(ip, "impl_fatig_ngauss", False))
+            and bool(getattr(ip, "impl_fatig_wville", False))):
+        return None
+    if wigner_ville is None:
+        return None
+    from . import nongaussian_wigner_ville_fatigue as ngwv
+    from . import wigner_ville_fatigue as wv
+    fc = wigner_ville["fc"]
+    bw = wigner_ville["bw"]
+    nwin = wigner_ville["nwin"]
+    refine = wigner_ville["refine"]
+    smooth = wigner_ville["smooth"]
+    scales, durations = _evol_schedule(ip, model, nwin)
+    bwcorr = bool(getattr(ip, "impl_fatig_bwcorr", True))
+    sch = wv.instantaneous_schedule(durations, fc, bw, scales=scales, refine=refine)
+    kurt, skew, kgrid, label = _kurtosis_grid(ip, model, sch["s"])
+    summary = ngwv.nongaussian_wigner_ville_summary(
+        freqs, psd, durations, fc, bw, m, C, kurt, skew=skew, scales=scales,
+        refine=refine, smooth=smooth, kurt_grid=kgrid,
+        bandwidth_correction=bwcorr, mean_stress=mean_stress, ultimate=ultimate)
+    mc = None
+    if mc_dur > 0.0 and freqs is not None and psd is not None:
+        tot = float(np.sum(durations))
+        mc_durs = durations * (mc_dur / tot) if tot > 0 else durations
+        kgrid_mc = kgrid  # same per-instant grid (refine unchanged; durations scaled)
+        mc = ngwv.nongaussian_wigner_ville_monte_carlo_damage(
+            freqs, psd, mc_durs, fc, bw, m, C, mc_seed, kurt, skew=skew,
+            scales=scales, refine=refine, smooth=smooth, kurt_grid=kgrid_mc,
+            mean_stress=mean_stress, ultimate=ultimate)
+    st = summary.get("stationary_ng")
+    return {"schedule": label, "kfunct": int(getattr(ip, "impl_fatig_kfunct", 0)
+                                             or 0),
+            "gamma4_range": summary["gamma4_range"],
+            "lambda_min": summary["lambda_min"],
+            "lambda_max": summary["lambda_max"],
+            "lambda_mean": summary["lambda_mean"],
+            "bandwidth_correction": bwcorr, "summary": summary,
+            "damage_rate": summary["damage_rate"], "life": summary["life"],
+            "gaussian_damage_rate": float(wigner_ville["damage_rate"]),
+            "stationary_ng_damage_rate":
+                (float(st["dirlik"]["damage_rate"]) if st is not None else None),
+            "monte_carlo": mc, "tensor": False, "multi_input": False}
+
+
 def _run_evolutionary_multiaxial(ip, summ, freqs, m, C, mean_stress, ultimate,
                                  mc_dur, mc_seed, model):
     """M26 (multiaxial): the FULLY EVOLUTIONARY / NON-SEPARABLE-PSD damage of the
@@ -1383,6 +1484,80 @@ def _run_wigner_ville_multiaxial(ip, summ, frf, joint_evolutionary, m, C,
                             "life": summary["shear_plane"]["life"]},
             "damage_rate": summary["damage_rate"], "life": summary["life"],
             "windowed": windowed, "monte_carlo": mc}
+
+
+def _run_nongaussian_wigner_ville_multiaxial(ip, summ, frf, wigner_ville, m, C,
+                                             mean_stress, ultimate, mc_dur, mc_seed,
+                                             model, naz, npol):
+    """M32 (multiaxial / JOINT-TENSOR): the TIME-VARYING NON-GAUSSIAN correction of
+    the CONTINUOUS Wigner-Ville instantaneous 6x6 stress-TENSOR spectrum — the
+    per-instant re-searched critical-plane / von-Mises equivalent scalar corrected by
+    its OWN per-instant lambda_ng(t) (from its per-instant bandwidth and the
+    time-varying target gamma_4(t)), Miner-INTEGRATED. Returns ``None`` unless BOTH
+    /IMPL/FATIG/NGAUSS and /IMPL/FATIG/WVILLE are set.
+
+    Where M31 (``_run_wigner_ville_multiaxial``) gave the Gaussian joint-tensor a
+    continuous instantaneous spectrum with a per-instant plane re-search, M32 scales
+    each per-instant reduction by its per-instant lambda_ng (the M24 correction on the
+    equivalent scalar, re-computed at each instant). The M31 Gaussian-continuous
+    tensor is reported ALONGSIDE (left byte-identical). Stored on
+    ``result.fatigue['wigner_ville']['nongaussian']``. A PORT sub-flag (the
+    equivalent-scalar Hermite correction on the continuous tensor — a full non-Gaussian
+    JOINT-tensor distribution is deferred, module docstring)."""
+    if not (bool(getattr(ip, "impl_fatig_ngauss", False))
+            and bool(getattr(ip, "impl_fatig_wville", False))):
+        return None
+    if wigner_ville is None:
+        return None
+    from . import nongaussian_wigner_ville_fatigue as ngwv
+    from . import wigner_ville_fatigue as wv
+    fc = wigner_ville["fc"]
+    bw = wigner_ville["bw"]
+    nwin = wigner_ville["nwin"]
+    refine = wigner_ville["refine"]
+    smooth = wigner_ville["smooth"]
+    scales, durations = _evol_schedule(ip, model, nwin)
+    bwcorr = bool(getattr(ip, "impl_fatig_bwcorr", True))
+    omega = np.asarray(frf["omega"], dtype=float)
+    Scross = np.asarray(summ["Scross"])
+    sch = wv.instantaneous_schedule(durations, fc, bw, scales=scales, refine=refine)
+    kurt, skew, kgrid, label = _kurtosis_grid(ip, model, sch["s"])
+    summary = ngwv.nongaussian_wigner_ville_tensor_summary(
+        omega, Scross, durations, fc, bw, m, C, kurt, skew=skew, scales=scales,
+        refine=refine, smooth=smooth, kurt_grid=kgrid, bandwidth_correction=bwcorr,
+        mean_stress=mean_stress, ultimate=ultimate, naz=naz, npol=npol, drift=True)
+    # the non-Gaussian NON-STATIONARY Monte-Carlo on the von-Mises equivalent scalar
+    # continuous spectrum (the fatigue driver; a full non-Gaussian tensor MC is
+    # deferred — the equivalent-scalar cross-check tracks the induced kurtosis)
+    mc = None
+    if mc_dur > 0.0:
+        tot = float(np.sum(durations))
+        mc_durs = durations * (mc_dur / tot) if tot > 0 else durations
+        Svm = wv._vonmises_scalar_psd(Scross)
+        freqs_hz = omega / (2.0 * np.pi)
+        mc = ngwv.nongaussian_wigner_ville_monte_carlo_damage(
+            freqs_hz, Svm, mc_durs, fc, bw, m, C, mc_seed, kurt, skew=skew,
+            scales=scales, refine=refine, smooth=smooth, kurt_grid=kgrid,
+            mean_stress=mean_stress, ultimate=ultimate)
+    gwin = {k: float(wigner_ville[k]["damage_rate"])
+            for k in ("von_mises", "normal_plane", "shear_plane")}
+    return {"schedule": label, "kfunct": int(getattr(ip, "impl_fatig_kfunct", 0)
+                                             or 0),
+            "gamma4_range": summary["gamma4_range"],
+            "lambda_min": summary["lambda_min"], "lambda_max": summary["lambda_max"],
+            "lambda_mean": summary["lambda_mean"],
+            "plane_rotation_deg": summary["plane_rotation_deg"],
+            "fnp_drift": summary.get("fnp_drift", 0.0),
+            "bandwidth_correction": bwcorr, "summary": summary, "tensor": True,
+            "multi_input": False,
+            "von_mises": {"damage_rate": summary["von_mises"]["damage_rate"],
+                          "life": summary["von_mises"]["life"]},
+            "normal_plane": {"damage_rate": summary["normal_plane"]["damage_rate"],
+                             "life": summary["normal_plane"]["life"]},
+            "shear_plane": {"damage_rate": summary["shear_plane"]["damage_rate"],
+                            "life": summary["shear_plane"]["life"]},
+            "damage_rate": summary["damage_rate"], "life": summary["life"],
+            "gaussian": gwin, "monte_carlo": mc}
 
 
 def _run_wigner_ville_multi_input(ip, model, Hcols, G, positions, omega, freqs_hz,
@@ -1901,6 +2076,59 @@ def _report_wigner_ville(log, wv):
         life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
         log.info(f"      CONTINUOUS MONTE-CARLO DAMAGE/LIFE : "
                  f"{mc['damage_rate']:.5E} / {life_s}")
+    # M32: the TIME-VARYING NON-GAUSSIAN correction of the continuous spectrum,
+    # printed ALONGSIDE the M31 Gaussian-continuous numbers when /NGAUSS composes
+    # with /WVILLE (the leptokurtic amplification lambda_ng(t) drifting with time).
+    if wv.get("nongaussian") is not None:
+        _report_nongaussian_wigner_ville(log, wv["nongaussian"])
+
+
+def _report_nongaussian_wigner_ville(log, ng):
+    """Print the TIME-VARYING NON-GAUSSIAN INSTANTANEOUS TIME-FREQUENCY (M32) listing
+    block: the kurtosis-vs-time schedule gamma_4(t), the DRIFT of the per-instant
+    amplification lambda_ng(t) (min .. max), and the non-Gaussian continuous-integral
+    damage / life ALONGSIDE the M31 Gaussian-continuous and the M24 stationary-non-
+    Gaussian numbers, plus the non-Gaussian non-stationary Monte-Carlo (its induced
+    sample kurtosis tracking gamma_4(t)). Handles the scalar and JOINT-TENSOR shapes."""
+    log.info("\n     ** TIME-VARYING NON-GAUSSIAN INSTANTANEOUS TIME-FREQUENCY "
+             "FATIGUE **  (/IMPL/FATIG/NGAUSS+WVILLE)")
+    log.info(f"      KURTOSIS-VS-TIME g4(t) SCHEDULE . . : {ng['schedule']}  "
+             f"(range {ng['gamma4_range']:.4g})")
+    bw = "ON (Benasciutti-Tovo alpha2(t))" if ng["bandwidth_correction"] else "OFF"
+    log.info(f"      INSTANTANEOUS lambda_ng(t) DRIFT . : "
+             f"{ng['lambda_min']:.4F} .. {ng['lambda_max']:.4F}  "
+             f"(mean {ng['lambda_mean']:.4F})  [BW-atten {bw}]")
+    if ng.get("tensor"):
+        log.info(f"      CRITICAL-PLANE ROTATION (deg)  . . : "
+                 f"{ng['plane_rotation_deg']:.4g}  (F_np drift "
+                 f"{ng['fnp_drift']:.4g})")
+        gwin = ng.get("gaussian") or {}
+        for key, name in (("von_mises", "VON MISES"),
+                          ("normal_plane", "MAX-NORMAL"),
+                          ("shear_plane", "MAX-SHEAR")):
+            r = ng[key]
+            life = r["life"]
+            life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+            log.info(f"      {name:11s} NON-GAUSS / GAUSS RATE : "
+                     f"{r['damage_rate']:.5E} / {gwin.get(key, 0.0):.5E}  "
+                     f"life {life_s}")
+    else:
+        life = ng["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        st = ng.get("stationary_ng_damage_rate")
+        st_s = "n/a" if st is None else f"{st:.5E}"
+        log.info(f"      DIRLIK NON-GAUSS(t) / GAUSS RATE  : "
+                 f"{ng['damage_rate']:.5E} / {ng['gaussian_damage_rate']:.5E}  "
+                 f"life {life_s}")
+        log.info(f"      M24 STATIONARY-NON-GAUSS RATE  . . : {st_s}  "
+                 f"(constant-kurtosis reference)")
+    if ng.get("monte_carlo") is not None:
+        mc = ng["monte_carlo"]
+        life = mc["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      NON-GAUSS MONTE-CARLO DAMAGE/LIFE  : "
+                 f"{mc['damage_rate']:.5E} / {life_s}  (sample g4 = "
+                 f"{mc.get('kurtosis', 3.0):.3F})")
 
 
 def _report_evolutionary(log, ev, stationary_summary, nonstationary):
@@ -2201,6 +2429,17 @@ def _run_multiaxial(model, ip, log, result, frf, Sigma, channels, psd_tab,
     wigner_ville = _run_wigner_ville_multiaxial(
         ip, summ, frf, joint_evolutionary, m_sn, C_sn, mean_stress, ultimate,
         mc_dur, mc_seed, model, naz, npol)
+
+    # M32: the TIME-VARYING NON-GAUSSIAN correction of the M31 continuous TENSOR
+    # spectrum (per-instant lambda_ng(t) on the re-searched critical-plane /
+    # von-Mises equivalent scalar) runs when BOTH /NGAUSS and /WVILLE are set — the
+    # convergence of the M24 kurtosis correction and the M31 continuous tensor,
+    # reported as a sub-entry of the wigner_ville entry. See implicit/
+    # nongaussian_wigner_ville_fatigue.py.
+    if wigner_ville is not None:
+        wigner_ville["nongaussian"] = _run_nongaussian_wigner_ville_multiaxial(
+            ip, summ, frf, wigner_ville, m_sn, C_sn, mean_stress, ultimate,
+            mc_dur, mc_seed, model, naz, npol)
 
     result.fatigue = {
         "multiaxial": True, "nonproportional": nprop,

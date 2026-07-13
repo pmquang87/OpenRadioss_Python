@@ -245,6 +245,14 @@ class EngineControls:
     impl_fatig_kurt: float = 3.0     # target kurtosis gamma_4 (3 = Gaussian)
     impl_fatig_skew: float = 0.0     # target skewness gamma_3 (0 = symmetric)
     impl_fatig_bwcorr: bool = True   # Benasciutti-Tovo bandwidth attenuation
+    # M32 /IMPL/FATIG/NGAUSS + /WVILLE: TIME-VARYING non-Gaussian instantaneous
+    # spectrum — the target kurtosis gamma_4(t) (and end value for a linear sweep)
+    # drifts ALONG the M31 continuous Wigner-Ville spectrum, re-computed per instant
+    # from the instantaneous bandwidth alpha_2(t). A kurtosis-vs-time /FUNCT
+    # (impl_fatig_kfunct) is sampled continuously onto the fine instant grid; else a
+    # linear sweep kurt -> kurt1. See implicit/nongaussian_wigner_ville_fatigue.py.
+    impl_fatig_kfunct: int = 0       # /FUNCT id: target kurtosis gamma_4-vs-time
+    impl_fatig_kurt1: float = 0.0    # end kurtosis for a linear sweep (0 = constant)
     # M25 /IMPL/FATIG/NSTAT: NON-STATIONARY / EVOLUTIONARY-PSD fatigue — the M20
     # stationary estimators evaluated per stationary segment / time-window and
     # Miner-summed (the piecewise-stationary "mission profile" block model), plus
