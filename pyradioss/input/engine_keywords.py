@@ -745,6 +745,17 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     is_wville = bool(subs & {"WVILLE", "WV", "WIGNER",
                                              "WIGNERVILLE", "INST", "INSTANT",
                                              "TFR", "CONTINUOUS"})
+                    # M34: the EXACT translation-process CORRELATION-DISTORTION INVERSION
+                    # (Grigoriu / Nataf / NORTA correlation matching) — solve the
+                    # underlying-Gaussian correlation rho^U so the component-wise Hermite
+                    # transform of the joint 6x6 tensor reproduces the TARGET covariance
+                    # EXACTLY (not merely M33's leading order), the preservation error
+                    # driven to ~0. Composes with (does NOT imply anything on its own) the
+                    # M33 /JOINT + /NGAUSS + /WVILLE joint path; a NEW covariance-exact
+                    # sub-entry reported alongside the M33 leading-order joint. A PORT
+                    # sub-flag. See implicit/joint_nongaussian_fatigue.py.
+                    is_exact = bool(subs & {"EXACT", "NORTA", "NATAF",
+                                            "GRIGORIU", "COVEXACT"})
                     if is_wville:
                         is_evol = True                # continuous spectrum needs the
                         #                               drifting-shape / evol schedule
@@ -795,6 +806,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_mi_fcoh = True
                     if is_wville:
                         ec.impl_fatig_wville = True
+                    if is_exact:
+                        ec.impl_fatig_exact = True
                     if is_base:
                         ec.impl_fatig_base = True
                         if len(v0) > 4 and v0[4] >= 0:

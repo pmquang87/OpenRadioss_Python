@@ -296,7 +296,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | **CONTINUOUS WIGNER–VILLE / LOÈVE INSTANTANEOUS TIME-FREQUENCY SPECTRUM (M31)**: a bilinear time-frequency distribution `S_WV(ω,t)` of the scalar (M26) / 6×6 joint-tensor (M27) / multi-input coherence-matrix (M29/M30) response process, replacing the M26–M30 SHORT-TIME WINDOWED SPECTROGRAM with a CONTINUOUS instantaneous spectrum evaluated at a fine instant grid, reduced by the M20–M27 estimators AT EACH INSTANT (the critical plane / F_np drifting CONTINUOUSLY) and Palmgren–Miner INTEGRATED over time — an integral, not a per-window sum (`implicit/wigner_ville_fatigue.py`, the `_run_wigner_ville` / `_run_wigner_ville_multiaxial` / `_run_wigner_ville_multi_input` extensions of the M20/M21/M28 drivers in `implicit/random_response.py`, `/IMPL/FATIG/.../WVILLE`) — the RECURRING item M26/M27/M29/M30 ALL deferred (each modelled the non-stationary load with a windowed spectrogram and documented the short-time-stationary resolution trade-off + the window-boundary rainflow caveat; M31 removes both). THE CONTINUOUS PRIMITIVE — the fine-grid instantaneous EFFECTIVE WINDOWS `W_eff,j(f) = Σ_k g_jk a_k² W_k(f)` (`instantaneous_effective_windows`): subdivide each M26–M30 window into `refine` fine sub-instants (nt = nwin·refine, `instantaneous_schedule`), evaluate the drifting shape fc(t)/bw(t)/a(t) CONTINUOUSLY, and apply the Cohen-class time-smoothing kernel `g_jk` (`cohen_time_kernel`, a normalised Gaussian of width `smooth` — the tunable cross-term control). Because the smoothing is linear and S₀(f) fixed, the effective window feeds the SCALAR (`wigner_ville_fatigue_summary` → M26 estimators), the 6×6 TENSOR (`wigner_ville_tensor_summary` → per-instant `reduce_window_tensor` re-search) and the MULTI-INPUT (`wigner_ville_multi_input_summary` → per-instant `H S_ff(t) Hᴴ` reduction) reductions UNCHANGED. CONTINUOUS MONTE-CARLO — the M26–M30 non-separable synthesisers on the fine grid, rainflow over the WHOLE record (the reference that includes the straddling cycles), converging to the continuous integral as the grid refines. Validated: the windowed spectrogram is EXACTLY the refine = 1 / smooth = 0 limit — the scalar / tensor / multi-input summaries DELEGATE to M26 / M27 / M29 / M30 BYTE-IDENTICALLY there (summary + MC); a STATIONARY process recovering the stationary PSD at EVERY instant EXACTLY; the frequency / time MARGINALS recovering the average PSD / instantaneous power; a chirp whose instantaneous spectral peak / critical plane drifts CONTINUOUSLY (finer than the windows resolve); the window-boundary caveat (adjacent-instant shape jump) measurably SHRINKING on the fine grid vs the coarse windows; heavy Cohen-class smoothing collapsing the instantaneous spectrum toward the mission-average; the continuous Miner-integral tracking the Monte-Carlo BETTER than the coarse windowed sum (on a swept-narrow-window demonstrator the continuous integral tracks the MC within ~1 % where the coarse windowed sum is ~240× too low). Composes with /EVOL (implied) / /JOINT / /MINPUT / /FCOH / /NSTAT, reported ALONGSIDE the M26/M27/M29/M30 windowed numbers (a `wigner_ville` sub-entry). PORT sub-flag, library-first like M16–M30; the M10 integrator, the M16–M20 paths, the M21–M23 MULTIAXIAL reductions, the M24–M27 corrections AND the M26–M30 windowed evolutionary paths stay BIT-IDENTICAL (a NEW parallel path — the M8–M30 answers byte-identical whether or not /WVILLE runs — asserted). Theory: Wigner 1932 (the Wigner distribution) / Ville 1948 (the Wigner–Ville distribution); Loève (the harmonizable-process dual-frequency spectrum); Mark 1970 / Martin & Flandrin 1985 (the Wigner–Ville spectrum of nonstationary random processes); Cohen 1989 (the class of time-frequency distributions and cross-term smoothing); Priestley evolutionary spectra (the windowed approximation M31 makes continuous); the M26/M27/M29/M30 windowed base | ✅ |
 | **NON-GAUSSIAN INSTANTANEOUS-TENSOR TIME-FREQUENCY DISTRIBUTION (M32)**: a per-instant, time-VARYING NON-GAUSSIAN (kurtosis / skewness) correction of the M31 CONTINUOUS Wigner–Ville instantaneous stress spectrum — the leptokurtic damage amplification `λ_ng(t)` DRIFTING with time along the continuous spectrum, reduced PER INSTANT and Palmgren–Miner INTEGRATED `D_nG = ∫ λ_ng(t) (dD/dt)_G(t) dt` (`implicit/nongaussian_wigner_ville_fatigue.py`, the `_run_nongaussian_wigner_ville` / `_run_nongaussian_wigner_ville_multiaxial` extensions of the M20/M21 drivers in `implicit/random_response.py`, `/IMPL/FATIG/NGAUSS` composing with `/WVILLE` + a kurtosis-vs-time `/FUNCT`) — the CONVERGENCE of M24 (stationary Winterstein–Hermite kurtosis correction of the equivalent scalar) and M31 (the continuous instantaneous tensor spectrum), the FIRST item M31 deferred. At each fine instant `t_j` it re-computes the M24 amplification `λ_ng(t_j)` from THAT instant's bandwidth `α₂(t_j)` and a TIME-VARYING target `γ₄(t_j)/γ₃(t_j)` (`kurtosis_schedule` — a scalar constant, a linear sweep, or a per-instant array from a sampled kurtosis-vs-time `/FUNCT`; `instantaneous_lambda_ng`), then Miner-INTEGRATES the non-Gaussian per-instant damage — the SCALAR path (`nongaussian_wigner_ville_summary`, a constant `λ_ng` FACTORING out EXACTLY) and the 6×6 TENSOR path (`nongaussian_wigner_ville_tensor_summary` → per-instant `reduce_window_tensor` re-search, each reduction scaled by its OWN per-instant `λ_ng`). NON-GAUSSIAN NON-STATIONARY MONTE-CARLO — the M31 continuous non-separable synthesiser with EACH per-instant block pushed through the M24 memoryless Hermite transform to that instant's `γ₄(t_j)` (so the record's LOCAL kurtosis tracks `γ₄(t)`), rainflow over the WHOLE record. Validated: a CONSTANT kurtosis recovering the M24 correction on the M31 continuous Gaussian answer EXACTLY; `γ₄(t) ≡ 3` recovering the M31 Gaussian continuous answer BYTE-IDENTICALLY (scalar + tensor, summary + MC); the windowed limit recovering the M24-on-M27 windowed answer EXACTLY (the Gaussian per-window reduction byte-identical to M27); a stationary process with a constant kurtosis recovering the M24 stationary answer EXACTLY; a genuinely time-varying kurtosis whose `λ_ng(t)` DRIFTS continuously; the MC induced sample kurtosis tracking `γ₄(t)`. Composes with /WVILLE (implied /EVOL) / /JOINT / /NSTAT, reported ALONGSIDE the M31 Gaussian-continuous and M24 stationary-non-Gaussian numbers (a `nongaussian` sub-entry on the `wigner_ville` entry). PORT sub-flag, library-first like M16–M31; the M10 integrator, the M16–M23 paths, the M24 stationary non-Gaussian correction AND the M31 continuous Gaussian spectrum stay BIT-IDENTICAL (a NEW parallel path — asserted). Theory: Winterstein 1988 (the Hermite-moment model); Benasciutti–Tovo 2005/2006 / Braccesi 2009 / Rizzi–Kihm 2013 (non-Gaussian spectral fatigue); the M24 stationary base + the M31 continuous base; the M25/M26 RMS-induced-kurtosis bridge | ✅ |
 | **NON-GAUSSIAN JOINT-TENSOR DISTRIBUTION (M33)**: a VECTOR (multivariate) Winterstein–Hermite / translation-process transform of the CORRELATED 6×6 stress-tensor process — the target kurtosis (and skewness) imposed JOINTLY on the tensor COMPONENTS `[σ_xx σ_yy σ_zz σ_xy σ_yz σ_zx]` (preserving the marginal variances / covariance / cross-PSD), NOT on the already-resolved equivalent scalar, so the resolved critical-plane / von-Mises reduction INHERITS an INDUCED kurtosis derived from the JOINT tensor statistics — applied along the M31/M32 CONTINUOUS Wigner–Ville instantaneous spectrum, reduced PER INSTANT and Palmgren–Miner INTEGRATED, cross-validated by a MULTIVARIATE non-Gaussian Monte-Carlo (`implicit/joint_nongaussian_fatigue.py`, the `_run_joint_nongaussian_multiaxial` extension of the M21 driver in `implicit/random_response.py`, `/IMPL/FATIG/NGAUSS` composing with `/JOINT` + `/WVILLE` + a PER-COMPONENT kurtosis line on cols 4..9 of the M24 kurtosis line) — the FIRST item M32 (and M24, M31) deferred. Where M24/M32 imposed γ₄ on the resolved SCALAR (a scalar Hermite transform), M33 pushes EACH tensor component through its OWN memoryless Winterstein–Hermite transform `X_c = σ_c g_c(U_c)` (a VECTOR translation process, Grigoriu 1998; Lutes & Sarkani) preserving each component's variance + kurtosis EXACTLY and the 6×6 covariance to leading order (`translation_process_covariance`, the off-diagonal distortion reported as a diagnostic). Because the resolved-plane scalar `s = pᵀσ = Σ_c a_c g_c(U_c)` is a LINEAR projection of a component-wise-transformed correlated Gaussian, its INDUCED `(γ₃ˢ, γ₄ˢ)` is CLOSED-FORM (`induced_projection_moments` — the multivariate Hermite / diagram (Wick) moment sums `E[∏ He_{p_v}(U_{i_v})] = Σ over matchings without self-contractions of ∏ R_{ij}`, evaluated by cached einsum contractions), fed to the M24 `λ_ng` closed form. PER-INSTANT JOINT REDUCTION (`joint_nongaussian_tensor_summary` → per-instant `reduce_window_tensor` re-search, the induced-kurtosis `λ_ng(t_j)` scaling each linear critical-plane rate; the quadratic von-Mises reuses the max-shear plane's induced kurtosis) + MULTIVARIATE MONTE-CARLO (`synthesize_joint_nongaussian_history` / `joint_nongaussian_monte_carlo_damage` — the M21 multivariate synthesiser pushed through the VECTOR Hermite transform per instant, projected onto the per-instant plane, rainflow over the WHOLE record). Validated: `γ₄_c ≡ 3` recovering the M31/M27 Gaussian tensor answer BYTE-IDENTICALLY (summary + MC); the SCALAR-equivalent limit (kurtosis on the resolved scalar) recovering the M32/M24 correction EXACTLY (a `scalar_equivalent` delegation, byte-identical to M32); a UNIAXIAL projection's induced kurtosis reducing EXACTLY to the M24 realised `hermite_kurtosis`; the induced-kurtosis closed form matching the multivariate MC; a genuinely JOINT case whose induced resolved-plane kurtosis (and damage) DIFFERS from imposing γ₄ directly on the scalar (the M33 ↔ M32 boundary). Composes with /JOINT + /WVILLE (implied /MULT /EVOL) / /NSTAT, reported ALONGSIDE the M32 equivalent-scalar and the M31/M27 Gaussian numbers (a `joint_nongaussian` sub-entry on the `wigner_ville` entry). PORT sub-flag, library-first like M16–M32; the M10 integrator, the M16–M23 paths, the M24/M32 equivalent-scalar non-Gaussian correction AND the M27/M31 Gaussian tensor spectrum stay BIT-IDENTICAL (a NEW parallel path — asserted). Theory: Grigoriu translation-process / memoryless-transform theory; the vector Winterstein–Hermite model; Lutes & Sarkani "Random Vibrations"; the multivariate Hermite / diagram (Isserlis/Wick/Mehler) moment formula; the M24 scalar base; the M32 time-varying base; the M21/M27 tensor reduction | ✅ |
-| Lanczos/subspace for large models; AMLS / substructuring; a full non-Gaussian COPULA / non-translation joint distribution (beyond the M33 component-wise Hermite TRANSLATION model — the marginals exact, the cross-covariance leading-order; the exact Grigoriu correlation inversion deferred); the MULTI-INPUT (M29/M30) JOINT non-Gaussian instantaneous path (the M33 single-input joint-tensor + the M32 equivalent-scalar correction compose; the card wires scalar + JOINT-tensor single-input); an ARBITRARY per-pair per-window coherence-shape stack beyond the M30 measured-shape start→end + exponential-drift card schedules (the library accepts it; the card exposes those two); the base-acceleration MULTI-INPUT feed (per-direction participation column stack, carried from M28/M29/M30/M31/M32/M33); multi-directional 100-30-30 response spectra; non-proportional HARDENING as a material model; mean-stress beyond the per-plane normal / basic Goodman option; crack-growth / fracture-mechanics fatigue; the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21/M22/M23/M24/M25/M26/M27/M28/M29/M30/M31/M32/M33 roadmap notes) |
+| **EXACT TRANSLATION-PROCESS CORRELATION-DISTORTION INVERSION (M34)**: the Grigoriu / Nataf / Cario–Nelson NORTA correlation-matching inversion that solves the underlying-Gaussian correlation `ρ^U_cc'` per component pair so the component-wise Winterstein–Hermite (translation) transform of the correlated 6×6 stress tensor reproduces the TARGET 6×6 covariance EXACTLY (not merely to M33's leading order), driving M33's `preservation_error` to ~0 — applied along the M31/M32 CONTINUOUS spectrum, reduced PER INSTANT on a covariance-EXACT joint tensor and Palmgren–Miner INTEGRATED, cross-validated by the M33 multivariate non-Gaussian Monte-Carlo synthesised with the CORRECTED underlying correlation (`implicit/joint_nongaussian_fatigue.py` — `solve_underlying_correlation` + `_solve_pair_rho` + `_higham_nearest_correlation`, the `exact=True` path of `joint_nongaussian_tensor_summary` / `joint_nongaussian_monte_carlo_damage`; the `_run_joint_nongaussian_multiaxial` extension in `implicit/random_response.py`, `/IMPL/FATIG/.../EXACT` (or `/NORTA`) composing with the M33 `/JOINT` + `/NGAUSS` + `/WVILLE` path) — the FIRST item M33 deferred. Where M33 took the underlying-Gaussian correlation as the TARGET correlation R (marginals exact, cross-covariance leading-order, the off-diagonal distortion a reported diagnostic), M34 INVERTS the distortion: for each pair the transformed correlation `κ_c κ_c'[ρ^U + 2 h3_c h3_c' ρ^U² + 6 h4_c h4_c' ρ^U³]` (Mehler / diagram) set equal to R_cc' is a CUBIC in ρ^U, solved by a monotone root-find (`_solve_pair_rho`, the physical near-identity branch; the NORTA feasibility bound clamped), the assembled 6×6 ρ^U REPAIRED to the nearest positive-definite correlation matrix (Higham 2002 alternating projections, `_higham_nearest_correlation`) so the underlying Gaussian is a valid covariance. A RELATIVE-VARIANCE FLOOR restricts the matching to the materially-contributing components (a numerically-zero minor component's "correlation" is floating-point noise). The induced moments then evaluate on the covariance-EXACT ρ^U (`induced_projection_moments`'s `underlying_R` override — `underlying_R = R` reproduces M33 byte-identically), and the corrected MC pre-scales each block's cross-spectrum off-diagonals by the NORTA ratio ρ^U/R (`_rescale_block_to_underlying`) so the transformed record's SAMPLE covariance matches the target (`_sample_cov_rel_error`) where M33's drifted. Validated: the LEADING-ORDER limit (small non-Gaussianity → ρ^U → R, the M33 underlying correlation); the transformed covariance matching the target to MACHINE PRECISION (`preservation_error` → ~1e-15) where M33's is nonzero; `γ₄_c ≡ 3` recovering the M33/M31/M27 Gaussian answer BYTE-IDENTICALLY (summary + MC, ρ^U = R, `preservation_error` = 0); the uniaxial / scalar-equivalent limit recovering M24/M32 (through the M33 `scalar_equivalent` delegation, left byte-identical); the per-pair cubic reproducing the target correlation; the Higham repair PD & unit-diagonal; the corrected MC's sample covariance closer to the target than M33's. Composes with the M33 joint path, reported as an `exact_covariance` sub-entry of the `joint_nongaussian` entry ALONGSIDE the M33 leading-order joint, the M32 equivalent-scalar and the M31/M27 Gaussian numbers (all left byte-identical — a NEW parallel path, asserted). PORT sub-flag, library-first like M16–M33. Theory: Grigoriu translation-process correlation distortion (1995/1998); the Nataf transformation (Nataf 1962; Der Kiureghian & Liu 1986); Cario & Nelson NORTA (1997); Vale & Maurelli 1983; Higham 2002 (nearest correlation matrix); the M33 leading-order base | ✅ |
+| Lanczos/subspace for large models; AMLS / substructuring; a full non-Gaussian COPULA / non-translation joint distribution (beyond the M33/M34 component-wise Hermite TRANSLATION model — the marginals AND, since M34, the cross-covariance EXACT via the NORTA correlation inversion, but still a TRANSLATION / Gaussian-copula joint law, not an arbitrary non-translation copula); the MULTI-INPUT (M29/M30) JOINT non-Gaussian instantaneous path (the M33 single-input joint-tensor + the M32 equivalent-scalar correction compose; the card wires scalar + JOINT-tensor single-input); an ARBITRARY per-pair per-window coherence-shape stack beyond the M30 measured-shape start→end + exponential-drift card schedules (the library accepts it; the card exposes those two); the base-acceleration MULTI-INPUT feed (per-direction participation column stack, carried from M28/M29/M30/M31/M32/M33/M34); multi-directional 100-30-30 response spectra; non-proportional HARDENING as a material model; mean-stress beyond the per-plane normal / basic Goodman option; crack-growth / fracture-mechanics fatigue; the complex-FRF stress recovery; gyroscopic / circulatory (non-symmetric C/K) systems | ❌ (deferred — see the M18/M19/M20/M21/M22/M23/M24/M25/M26/M27/M28/M29/M30/M31/M32/M33/M34 roadmap notes) |
 
 ## 5. Roadmap (next milestones)
 
@@ -3880,8 +3881,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       off-diagonal distortion reported as a diagnostic — the closed-form induced kurtosis
       and the Monte-Carlo BOTH use the underlying-Gaussian correlation = the target tensor
       correlation, so they match; the EXACT Grigoriu correlation inversion that restores
-      the target covariance exactly, and a genuine copula / non-translation joint
-      distribution, are DEFERRED);
+      the target covariance exactly is now DONE in M34 — a genuine copula / non-translation
+      joint distribution beyond the Gaussian-copula translation law remains DEFERRED);
     * the MULTI-INPUT (M29/M30) JOINT non-Gaussian instantaneous path — the M33
       single-input joint-tensor + the M32 equivalent-scalar correction compose with the
       multi-input continuous spectrum the same way, but the driver wires the scalar +
@@ -3905,6 +3906,142 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       LAW42 shells/Prony, IDTC 2/3, /RWALL under implicit, the UL hourglass memory, the
       NLGEOM hourglass-operator geometry variation, the BT4 thin-plate shear-lock /
       drilling floor.
+
+33. **M34 — EXACT TRANSLATION-PROCESS CORRELATION-DISTORTION INVERSION** ✅ (done):
+    the Grigoriu / Nataf / Cario–Nelson NORTA correlation-matching inversion that solves
+    the underlying-Gaussian correlation ρ^U_cc' per component pair so the component-wise
+    Winterstein–Hermite (translation) transform of the correlated 6×6 stress tensor
+    reproduces the TARGET 6×6 covariance EXACTLY (not merely to M33's leading order),
+    driving M33's reported `preservation_error` to ~0 — applied along the M31/M32
+    CONTINUOUS Wigner–Ville instantaneous spectrum, reduced PER INSTANT on a
+    covariance-EXACT joint tensor and Palmgren–Miner INTEGRATED, cross-validated by the
+    M33 multivariate non-Gaussian Monte-Carlo synthesised with the CORRECTED underlying
+    correlation. This is the FIRST item M33 deferred (its "Deferred out of M33" list named
+    "the EXACT Grigoriu correlation inversion that restores the target covariance
+    exactly").
+
+    WHERE M34 SITS — the covariance-EXACT lift of M33. M33 imposed the per-component
+    kurtoses on a tensor whose underlying-Gaussian correlation was TAKEN as the TARGET
+    correlation R = M₀/(σσ): the marginals (each component's variance AND kurtosis) exact,
+    the 6×6 CROSS-covariance leading-order (eq. (2), the dominant κ_c κ_c' R term), the
+    h-dependent R²/R³ off-diagonal translation distortion reported as a diagnostic
+    (`translation_process_covariance`'s `preservation_error`). M34 INVERTS that distortion.
+    From the same Mehler / diagram identity, the transformed correlation of the two
+    component transforms g_c, g_c' at underlying correlation ρ is
+    φ_cc'(ρ) = κ_c κ_c'[ρ + 2 h3_c h3_c' ρ² + 6 h4_c h4_c' ρ³] — a CUBIC in ρ. Setting
+    φ_cc'(ρ^U) = R_cc' and solving for ρ^U per pair (`_solve_pair_rho`, a monotone
+    root-find picking the physical near-identity real root on [−1, 1]; the NORTA
+    feasibility bound clamped and flagged when the target correlation is outside the
+    achievable range [φ(−1), φ(1)]), then REPAIRING the assembled 6×6 ρ^U to the nearest
+    positive-definite unit-diagonal correlation matrix (Higham 2002 alternating
+    projections, `_higham_nearest_correlation`), gives a valid underlying Gaussian whose
+    component-wise Hermite transform reproduces M₀ EXACTLY. A RELATIVE-VARIANCE FLOOR
+    (`var_floor`) restricts the matching AND the preservation diagnostics to the
+    materially-contributing components — a numerically-zero minor component (a thin-section
+    tensor's negligible σ_zz / σ_yz) carries no stress, so its "correlation" is
+    floating-point noise that no inversion can (or should) match, and it is weighted out of
+    every projection anyway (`solve_underlying_correlation`).
+
+    THE M34 ↔ M33 / M31 REDUCTIONS (built in, exact, asserted like every milestone since
+    M14):
+    * the LEADING-ORDER limit (small non-Gaussianity, h3, h4 → 0, κ → 1) collapses the
+      cubic to φ(ρ) = ρ, so ρ^U → R and M34 recovers the M33 underlying correlation
+      EXACTLY (`test_leading_order_limit_recovers_m33_correlation`, monotone convergence);
+    * γ₄_c ≡ 3 on every component → ρ^U = R EXACTLY, `preservation_error` = 0, and the M34
+      path DELEGATES to the M33 / M31 / M27 Gaussian answer BYTE-IDENTICALLY (summary +
+      MC, the delegation guarantee — every component transform the identity, the NORTA
+      ratio 1);
+    * the transformed covariance matches the target 6×6 to MACHINE PRECISION
+      (`preservation_error` → ~1e-15) where M33's leading-order distortion is nonzero (the
+      M34 payload);
+    * passing `underlying_R = R` to `induced_projection_moments` reproduces the M33 answer
+      BYTE-IDENTICALLY — the exact path (`underlying_R = ρ^U`) is a strict generalisation;
+    * the uniaxial / scalar-equivalent limit recovers M24/M32 (the trivial 1×1 correlation
+      makes exact = leading = M24; the M33 `scalar_equivalent` delegation is left
+      byte-identical).
+
+    THE COVARIANCE-EXACT REDUCTION + MONTE-CARLO. Along the M31/M32 continuous spectrum, at
+    each fine instant M34 solves ρ^U from that instant's tensor M₀,ⱼ and the per-component
+    γ₄_c(tⱼ), passes it as the `underlying_R` override to the induced-moment diagram (the
+    formula UNCHANGED — only the correlation it evaluates on is now covariance-exact),
+    scales the Gaussian rate by the induced-kurtosis λ_ng and Miner-INTEGRATES (the
+    `exact=True` path of `joint_nongaussian_tensor_summary` /
+    `_reduce_instant_tensors_joint_ng`, reporting the ~0 exact `preservation_error` with
+    the M33 leading-order value alongside as `preservation_error_leading`). The corrected
+    multivariate MC (`joint_nongaussian_monte_carlo_damage(exact=True)` /
+    `synthesize_joint_nongaussian_history`) pre-scales each per-instant block's
+    cross-spectrum off-diagonals by the NORTA ratio ρ^U/R (`_rescale_block_to_underlying`)
+    so the synthesised UNDERLYING Gaussian carries correlation ρ^U; the per-component
+    Hermite transform then brings the transformed cross-covariance BACK to the target, so
+    the corrected record's SAMPLE covariance matches the target (`_sample_cov_rel_error`)
+    where the M33 leading-order record's drifted (the synthesiser's per-bin PSD-cone clip
+    absorbs any residual PD loss from the rescale).
+
+    CARD + REPORTING. `/IMPL/FATIG/.../EXACT` (aliases `/NORTA`, `/NATAF`, `/GRIGORIU`)
+    composes with the M33 `/JOINT` + `/NGAUSS` + `/WVILLE` path (`impl_fatig_exact`); the
+    driver `_run_joint_nongaussian_multiaxial` builds the covariance-exact summary + MC and
+    attaches them as an `exact_covariance` sub-entry of the `joint_nongaussian` entry, so a
+    listing shows the EXACT / M33-LEADING covariance preservation error and the EXACT vs
+    M33-leading induced kurtosis / damage / life ALONGSIDE the M32 equivalent-scalar and
+    the M31/M27 Gaussian numbers (all left byte-identical — a NEW parallel path).
+    Validated (`tests/test_m34_exactcov.py`): the per-pair cubic solver (Gaussian pair →
+    ρ^U = target, cubic reproducing the target correlation); the Higham repair PD &
+    unit-diagonal; the exact preservation → ~0 with the M33 leading-order value nonzero;
+    the Gaussian-tensor ρ^U = R and byte-identical delegation; the leading-order-limit
+    ρ^U → R convergence; `underlying_R = R` reproducing M33 byte-identically; the uniaxial
+    reduction to M24; the exact summary differing from leading on a sensitive plane; the
+    Gaussian-limit MC bit-identical; the corrected MC's sample covariance closer to the
+    target than M33's; the `/EXACT` (+ `/NORTA` / `/NATAF`) card mirror; the exact path end
+    to end reading `model.implicit_result.fatigue['wigner_ville']['joint_nongaussian']
+    ['exact_covariance']`; and the M7 parity contract (the M31/M27 Gaussian tensor, the M32
+    equivalent-scalar AND the M33 leading-order joint answers byte-identical whether or not
+    the M34 exact path runs). A PORT sub-flag — the /IMPL reader (`freimpl.F`, re-read for
+    M34) has no frequency-domain / spectral / non-Gaussian / translation / copula /
+    correlation solver of any kind; its sole `PSD` token is still `IMUMPSD` (line 269), a
+    MUMPS-solver flag, exactly as M16–M33 recorded. Theory: Grigoriu translation-process
+    correlation distortion (Grigoriu, "Applied Non-Gaussian Processes" 1995; "Simulation of
+    stationary non-Gaussian translation processes", J. Eng. Mech. 124, 1998); the Nataf
+    transformation (Nataf 1962; Der Kiureghian & Liu, "Structural reliability under
+    incomplete probability information", J. Eng. Mech. 112, 1986 — the underlying-Gaussian
+    correlation of a marginal-transformed vector); Cario & Nelson, "Modeling and generating
+    random vectors with arbitrary marginal distributions and correlation matrix" (NORTA,
+    1997); Vale & Maurelli 1983 (the intermediate-correlation solve); Higham, "Computing
+    the nearest correlation matrix — a problem from finance" (IMA J. Numer. Anal. 22, 2002);
+    the M33 leading-order translation base.
+
+    Deferred out of M34, explicitly (not half-implemented):
+    * a genuine non-Gaussian COPULA / NON-TRANSLATION joint distribution beyond the
+      marginal-Hermite NORTA model: M34 makes the Gaussian-copula TRANSLATION law
+      covariance-EXACT (the marginals AND the full 6×6 covariance now exact), but the joint
+      law is still a memoryless transform of a JOINTLY GAUSSIAN vector (a Gaussian copula) —
+      an arbitrary non-translation copula (t-copula, vine copula, a non-Gaussian dependence
+      structure with the SAME covariance but different higher joint cumulants) is DEFERRED;
+    * the NORTA FEASIBILITY frontier — when a target correlation lies outside the achievable
+      range [φ(−1), φ(1)] of the translated pair (an extreme leptokurtic pair at a
+      near-±1 target), M34 CLAMPS ρ^U to the boundary and flags it (`n_infeasible`); a
+      full feasibility-repair (a minimal joint-moment relaxation to the nearest FEASIBLE
+      target correlation set) is DEFERRED — the demonstrator + tests stay in the feasible
+      regime;
+    * the exact-covariance correction is applied to the LINEAR critical-plane projections
+      (the primary multiaxial drivers); the von-Mises QUADRATIC form reuses the max-shear
+      plane's induced kurtosis as its representative (carried from M33) — a genuine
+      quadratic-form covariance-exact induced kurtosis is DEFERRED;
+    * the MULTI-INPUT (M29/M30) JOINT non-Gaussian instantaneous path and the
+      base-acceleration multi-input feed (the driver wires the scalar + JOINT-tensor
+      SINGLE-input paths) — the unchanged M33 deferral, carried;
+    * multi-directional 100-30-30 response spectra and the arbitrary per-pair per-window
+      coherence-shape card beyond M30's schedules — the unchanged M28–M33 tail;
+    * the exact empirical Braccesi 2009 bandwidth-attenuation constants — the
+      Hermite-derived first-order α₂ model is carried from M24/M32/M33 — DEFERRED;
+    * MEAN-STRESS beyond the basic M20/M21 Goodman intercept, CRACK-GROWTH /
+      fracture-mechanics fatigue, the COMPLEX-FRF stress recovery, non-proportional
+      hardening — the unchanged M20–M33 tail;
+    * the unchanged M10–M33 deferral tail: gyroscopic / circulatory systems, Lanczos /
+      subspace + AMLS, IFQ ≥ 10 / MODFR 2, /FRICTION per-part-pair sets, orthotropic /
+      thermal friction, the fiber TYPE18 beam, the LAW27 plastic block / solids, thermal
+      contact, TYPE19/24/25, Inacti, Igap 2/3, LAW42 shells/Prony, IDTC 2/3, /RWALL under
+      implicit, the UL hourglass memory, the NLGEOM hourglass-operator geometry variation,
+      the BT4 thin-plate shear-lock / drilling floor.
 
 ## 6. Validation strategy
 

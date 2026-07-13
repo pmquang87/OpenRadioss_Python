@@ -408,7 +408,7 @@ def _hermite_e_coeffs(a, h3, h4, kappa):
 
 
 def induced_projection_moments(M0, proj, gamma3, gamma4, model="winterstein",
-                               return_components=False):
+                               return_components=False, underlying_R=None):
     """The CLOSED-FORM induced (variance, skewness, kurtosis) of the resolved-plane
     scalar s = p^T sigma under the joint component-wise Hermite transform (theory eq.
     (3)) — the resolved plane INHERITING the joint tensor non-Gaussianity.
@@ -425,7 +425,17 @@ def induced_projection_moments(M0, proj, gamma3, gamma4, model="winterstein",
     gamma_3^s / gamma_4^s). For a UNIAXIAL projection (one nonzero component) the induced
     kurtosis reduces EXACTLY to the M24 ``hermite_kurtosis`` of that component; for a
     Gaussian tensor (gamma4 = 3) the induced kurtosis is 3 EXACTLY. ``return_components``
-    additionally returns the (h3, h4, kappa) per-component coefficients."""
+    additionally returns the (h3, h4, kappa) per-component coefficients.
+
+    ``underlying_R`` (M34, optional) — the (n, n) UNDERLYING-Gaussian correlation to use
+    for U instead of the correlation of ``M0``. In the M33 (leading-order) model the
+    underlying correlation is TAKEN as the target correlation R = M0/(sig sig) (default,
+    ``underlying_R=None``); in the M34 EXACT-covariance model it is the Grigoriu / NORTA
+    correlation-matching solution rho^U (``solve_underlying_correlation``) so the
+    transformed component-wise Hermite tensor reproduces the target covariance M0 EXACTLY
+    rather than to leading order. The variance is ALWAYS computed on the passed underlying
+    correlation, so with rho^U the induced (var, skew, kurt) are the covariance-EXACT
+    ones; passing ``underlying_R = R`` reproduces the M33 answer byte-identically."""
     M0 = np.asarray(M0, dtype=float)
     p = np.asarray(proj, dtype=float).ravel()
     n = p.size
@@ -446,9 +456,16 @@ def induced_projection_moments(M0, proj, gamma3, gamma4, model="winterstein",
         out = (0.0, 0.0, 3.0)
         return (out + ((h3f, h4f, kappaf),)) if return_components else out
     sig_s = sig[supp]
-    # underlying-Gaussian correlation on the support (R_cc' = M0/(sig_c sig_c'))
-    Msub = M0[np.ix_(supp, supp)]
-    R = Msub / np.outer(sig_s, sig_s)
+    if underlying_R is not None:
+        # M34 EXACT-covariance: use the supplied underlying-Gaussian correlation rho^U
+        # (the NORTA correlation-matching solution) on the support instead of the target
+        # correlation — the diagram moments then evaluate the covariance-EXACT statistics
+        R = np.asarray(underlying_R, dtype=float)[np.ix_(supp, supp)].copy()
+    else:
+        # M33 leading-order: the underlying correlation IS the target correlation
+        # (R_cc' = M0/(sig_c sig_c'))
+        Msub = M0[np.ix_(supp, supp)]
+        R = Msub / np.outer(sig_s, sig_s)
     R = np.clip(R, -1.0, 1.0)
     np.fill_diagonal(R, 1.0)
     e = _hermite_e_coeffs(a[supp], h3f[supp], h4f[supp], kappaf[supp])
@@ -507,6 +524,234 @@ def translation_process_covariance(M0, gamma3, gamma4, model="winterstein"):
     err = float(np.max(rel)) if rel.size else 0.0
     return {"cov": cov, "preservation_error": err, "h3": h3, "h4": h4,
             "kappa": kappa}
+
+
+# ============================================================================
+# The EXACT translation-process correlation-distortion INVERSION (M34)
+# ============================================================================
+# THE GRIGORIU / NATAF / NORTA CORRELATION MATCHING. The M33 (leading-order)
+# translation model imposes the per-component variances AND kurtoses EXACTLY but
+# preserves the 6x6 CROSS-covariance only to LEADING order: it takes the underlying
+# Gaussian correlation rho^U_cc' = the TARGET correlation R_cc' and reports the
+# residual translation distortion (``translation_process_covariance``'s
+# ``preservation_error``) as a diagnostic. M34 INVERTS that distortion. For each
+# component pair (c, c') the transformed correlation of the two component-wise
+# Winterstein-Hermite transforms g_c, g_c' at underlying-Gaussian correlation rho is
+# the Mehler / diagram sum (theory eq. (2), the c != c' off-diagonal; He_p orthogonality
+# E[He_p(U_c) He_q(U_c')] = delta_pq p! rho^p):
+#
+#     phi_cc'(rho) = kappa_c kappa_c'
+#         [ rho + 2 h_{3,c} h_{3,c'} rho^2 + 6 h_{4,c} h_{4,c'} rho^3 ]        (2')
+#
+# — a CUBIC in rho. The exact correlation matching solves phi_cc'(rho^U) = R_cc' for
+# the underlying rho^U_cc' PER PAIR (a monotone root-find; the cubic has a
+# closed/near-closed real inverse on [-1, 1]), assembles the 6x6 rho^U, and REPAIRS it
+# to the nearest valid (positive-definite, unit-diagonal) correlation matrix by the
+# Higham 2002 alternating-projections algorithm so the underlying Gaussian is a
+# well-defined covariance. Pushing the component-wise Hermite transform through a
+# Gaussian of correlation rho^U then reproduces the target covariance M0 EXACTLY (the
+# translated ``preservation_error`` -> ~0), where M33's leading-order rho^U = R left the
+# documented second-order distortion. This is exactly the Grigoriu translation-process
+# correlation distortion (Grigoriu 1995/1998); the Nataf transformation (Nataf 1962; Der
+# Kiureghian & Liu 1986 — the underlying-Gaussian correlation of a marginal-transformed
+# vector); Cario & Nelson's NORTA (NORmal-To-Anything, 1997 — the same correlation-
+# matching root-find for arbitrary marginals); Vale & Maurelli 1983 (the intermediate-
+# correlation solve for non-normal multivariate data); Higham 2002 (the nearest
+# correlation matrix). In the SMALL-non-Gaussianity limit (h3, h4 -> 0, kappa -> 1) the
+# cubic collapses to phi(rho) = rho, so rho^U -> R and M34 recovers the M33 underlying
+# correlation EXACTLY; for a Gaussian component (gamma4 = 3) phi_cc'(rho) = rho on that
+# pair, so rho^U = R and the whole M34 path DELEGATES to the M33 / M31 / M27 Gaussian
+# answer byte-identically.
+
+
+def _solve_pair_rho(A1, A2, A3, target):
+    """Solve the per-pair correlation-matching cubic phi(rho) = A1 rho + A2 rho^2 +
+    A3 rho^3 = ``target`` for the underlying-Gaussian correlation rho on [-1, 1] (theory
+    eq. (2'), with A1 = kappa_c kappa_c', A2 = 2 kappa_c kappa_c' h3_c h3_c', A3 = 6
+    kappa_c kappa_c' h4_c h4_c'). Picks the REAL root in [-1, 1] closest to ``target``
+    (the physical near-identity branch — phi is monotone in the valid leptokurtic
+    regime, so the branch is unique). If NO root lies in [-1, 1] (the target correlation
+    is outside the achievable range [phi(-1), phi(1)] — the NORTA feasibility limit),
+    CLAMPS to the endpoint whose phi is closest to the target and flags it. Returns
+    (rho, residual, feasible) with residual = phi(rho) - target."""
+    def phi(r):
+        return A1 * r + A2 * r * r + A3 * r * r * r
+    # exact cubic roots (numpy drops leading zeros, so a degenerate quadratic/linear is
+    # handled gracefully — e.g. two Gaussian components give A2 = A3 = 0, root target/A1)
+    coeffs = [A3, A2, A1, -float(target)]
+    while len(coeffs) > 2 and abs(coeffs[0]) < 1e-300:
+        coeffs = coeffs[1:]
+    if len(coeffs) == 2 and abs(coeffs[0]) < 1e-300:
+        # fully degenerate (A1 = A2 = A3 = 0) — a zero-variance / no-correlation pair
+        return 0.0, -float(target), True
+    roots = np.roots(coeffs)
+    real = [r.real for r in np.atleast_1d(roots)
+            if abs(r.imag) < 1e-9 and -1.0001 <= r.real <= 1.0001]
+    if real:
+        r = min(real, key=lambda x: abs(x - target))
+        r = max(-1.0, min(1.0, r))
+        return float(r), float(phi(r) - target), True
+    # infeasible: clamp to the endpoint whose transformed correlation is closest
+    r = min((-1.0, 1.0), key=lambda x: abs(phi(x) - target))
+    return float(r), float(phi(r) - target), False
+
+
+def _proj_spd(A, floor=0.0):
+    """Project a symmetric matrix onto the positive-semidefinite cone (clamp its
+    eigenvalues to >= ``floor``) — the SPD projection step of the Higham 2002 nearest-
+    correlation-matrix alternating projections."""
+    w, V = np.linalg.eigh((A + A.T) / 2.0)
+    w = np.clip(w, floor, None)
+    return (V * w) @ V.T
+
+
+def _higham_nearest_correlation(A, max_iter=200, tol=1e-12, eig_floor=1e-10):
+    """The Higham (2002) NEAREST CORRELATION MATRIX of a symmetric ``A`` by Dykstra-
+    corrected alternating projections between the positive-semidefinite cone and the
+    unit-diagonal set. Returns the closest (in Frobenius norm) valid correlation matrix
+    (symmetric, unit diagonal, positive-semidefinite). ``eig_floor`` clamps the smallest
+    eigenvalue slightly above 0 so the result is strictly positive-definite (a valid
+    Cholesky factor for the Monte-Carlo synthesiser). A matrix that is ALREADY a valid
+    correlation matrix passes through essentially unchanged (a few cheap iterations)."""
+    A = np.asarray(A, dtype=float)
+    n = A.shape[0]
+    Y = (A + A.T) / 2.0
+    dS = np.zeros_like(Y)
+    X = Y.copy()
+    for _ in range(max_iter):
+        R = Y - dS                        # Dykstra correction
+        X = _proj_spd(R, floor=0.0)       # project onto the PSD cone
+        dS = X - R
+        Yprev = Y
+        Y = X.copy()
+        np.fill_diagonal(Y, 1.0)          # project onto unit-diagonal set
+        if np.linalg.norm(Y - Yprev, "fro") <= tol * max(1.0,
+                                                          np.linalg.norm(Y, "fro")):
+            break
+    # final strict-PD floor (guarantee a Cholesky factor exists)
+    w, V = np.linalg.eigh((Y + Y.T) / 2.0)
+    if w.min() < eig_floor:
+        w = np.clip(w, eig_floor, None)
+        Y = (V * w) @ V.T
+        d = np.sqrt(np.clip(np.diag(Y), 1e-300, None))
+        Y = Y / np.outer(d, d)            # renormalise to unit diagonal
+    np.fill_diagonal(Y, 1.0)
+    return Y
+
+
+def solve_underlying_correlation(M0, gamma3, gamma4, model="winterstein",
+                                 repair=True, var_floor=1e-9):
+    """Solve the UNDERLYING-Gaussian correlation rho^U (M34) so the component-wise
+    Winterstein-Hermite (translation) transform of a Gaussian tensor of correlation
+    rho^U reproduces the TARGET 6x6 covariance ``M0`` EXACTLY — the Grigoriu / Nataf /
+    NORTA correlation-distortion INVERSION (theory eq. (2')).
+
+    For each component pair (c, c') solves phi_cc'(rho^U) = R_cc' (the target correlation
+    R = M0 / (sig sig)) for rho^U by ``_solve_pair_rho`` (the monotone cubic root-find),
+    assembles the 6x6 rho^U (unit diagonal), and — if ``repair`` — projects it to the
+    nearest valid correlation matrix by ``_higham_nearest_correlation`` (so the
+    underlying Gaussian is a genuine positive-definite covariance).
+
+    ``var_floor`` — the RELATIVE variance floor that defines the MATERIALLY-CONTRIBUTING
+    support: a component whose variance is below ``var_floor`` times the largest component
+    variance carries numerically no stress, so its "correlation" with the others is
+    floating-point noise (a near-degenerate tensor). Such components are EXCLUDED from the
+    correlation matching (their rho^U rows are the identity) AND from the preservation-
+    error diagnostics — the exact inversion reproduces the covariance of the significant
+    components to machine precision, which is all that enters the resolved-plane damage
+    (a component with negligible RMS is weighted out of every projection). Without this
+    floor a thin-section stress tensor's numerically-zero minor components would inject
+    spurious near-+/-1 correlations, some infeasible under NORTA, that no inversion can
+    match.
+
+    Returns a dict with
+      * ``rho_u`` (n, n) — the (repaired) underlying-Gaussian correlation;
+      * ``rho_u_raw`` (n, n) — before the Higham repair;
+      * ``target_R`` (n, n) — the target correlation of ``M0``;
+      * ``transformed_cov`` (n, n) — eq. (2) evaluated at ``rho_u`` (equals ``M0`` to
+        machine precision on the diagonal AND, for feasible targets with no repair,
+        off-diagonal);
+      * ``support`` (n,) bool — the materially-contributing components;
+      * ``preservation_error`` — the EXACT model's max relative off-diagonal deviation
+        |transformed_cov - M0| / (sig_c sig_c') over the SUPPORT (~0 for a feasible target
+        — the M34 payload, closing M33's ``preservation_error``);
+      * ``preservation_error_leading`` — the M33 leading-order deviation (rho^U = R) over
+        the SAME support, for the fair side-by-side comparison;
+      * ``n_infeasible`` — count of support pairs clamped at the NORTA feasibility bound;
+      * ``repair_delta`` — Frobenius norm of the Higham correction (0 if already valid);
+      * ``h3`` / ``h4`` / ``kappa`` — the per-component coefficients.
+
+    In the Gaussian limit (gamma4 = 3 on every component) rho^U = R EXACTLY and the
+    preservation error is 0 (the delegation guarantee)."""
+    M0 = np.asarray(M0, dtype=float)
+    n = M0.shape[0]
+    var_c = np.clip(np.diag(M0), 0.0, None)
+    sig = np.sqrt(var_c)
+    vmax = float(np.max(var_c)) if var_c.size else 0.0
+    # the materially-contributing support (relative variance floor); everything below is
+    # numerically-zero stress whose correlation is floating-point noise
+    nz = var_c > max(vmax * float(var_floor), 0.0)
+    h3, h4, kappa = component_hermite_coefficients(gamma3, gamma4, model=model)
+    if h3.size != n:
+        h3 = np.broadcast_to(h3, (n,)).copy()
+        h4 = np.broadcast_to(h4, (n,)).copy()
+        kappa = np.broadcast_to(kappa, (n,)).copy()
+    # target correlation (on the support; degenerate rows left at identity)
+    R = np.eye(n)
+    R[np.ix_(nz, nz)] = M0[np.ix_(nz, nz)] / np.outer(sig[nz], sig[nz])
+    R = np.clip(R, -1.0, 1.0)
+    np.fill_diagonal(R, 1.0)
+    # per-pair inversion (upper triangle, symmetric) over the support only
+    rho = np.eye(n)
+    n_infeasible = 0
+    for c in range(n):
+        for cp in range(c + 1, n):
+            if not (nz[c] and nz[cp]):
+                rho[c, cp] = rho[cp, c] = 0.0
+                continue
+            A1 = kappa[c] * kappa[cp]
+            A2 = A1 * 2.0 * h3[c] * h3[cp]
+            A3 = A1 * 6.0 * h4[c] * h4[cp]
+            r, _res, feasible = _solve_pair_rho(A1, A2, A3, float(R[c, cp]))
+            rho[c, cp] = rho[cp, c] = r
+            if not feasible:
+                n_infeasible += 1
+    rho_raw = rho.copy()
+    if repair:
+        # only the significant sub-block is a meaningful correlation matrix; repair it
+        # and leave the negligible-variance rows/cols at their identity
+        idx = np.where(nz)[0]
+        if idx.size > 1:
+            sub = _higham_nearest_correlation(rho[np.ix_(idx, idx)])
+            rho[np.ix_(idx, idx)] = sub
+    repair_delta = float(np.linalg.norm(rho - rho_raw, "fro"))
+    # the transformed covariance at rho_u (eq. (2)) and its preservation diagnostics
+    KK = np.outer(kappa, kappa)
+    H3 = np.outer(h3, h3)
+    H4 = np.outer(h4, h4)
+    inner = rho + 2.0 * H3 * rho ** 2 + 6.0 * H4 * rho ** 3
+    cov = np.outer(sig, sig) * KK * inner
+    np.fill_diagonal(cov, var_c)
+    # the M33 leading-order transformed covariance (rho^U = R) on the SAME footing
+    inner_l = R + 2.0 * H3 * R ** 2 + 6.0 * H4 * R ** 3
+    cov_l = np.outer(sig, sig) * KK * inner_l
+    np.fill_diagonal(cov_l, var_c)
+    # preservation errors over the significant support only
+    def _pres(cov_):
+        idx = np.where(nz)[0]
+        if idx.size < 2:
+            return 0.0
+        st = sig[idx]
+        rel = np.abs(cov_[np.ix_(idx, idx)] - M0[np.ix_(idx, idx)]) / np.outer(st, st)
+        np.fill_diagonal(rel, 0.0)
+        return float(np.max(rel))
+    pres_exact = _pres(cov)
+    pres_lead = _pres(cov_l)
+    return {"rho_u": rho, "rho_u_raw": rho_raw, "target_R": R, "support": nz,
+            "transformed_cov": cov, "preservation_error": pres_exact,
+            "preservation_error_leading": pres_lead,
+            "n_infeasible": int(n_infeasible), "repair_delta": repair_delta,
+            "h3": h3, "h4": h4, "kappa": kappa}
 
 
 def joint_lambda_ng(M0, proj, gamma3, gamma4, m, alpha2=1.0,
@@ -640,7 +885,8 @@ def _representative_scalar_kurtosis(kurt, skew=0.0):
 
 def _reduce_instant_tensors_joint_ng(omega, Scross, weights, inst_scales, durations,
                                      gamma4, gamma3, m, C, mean_stress, ultimate, naz,
-                                     npol, bandwidth_correction, model, drift=True):
+                                     npol, bandwidth_correction, model, drift=True,
+                                     exact=False):
     """Reduce a fine-grid instantaneous TENSOR spectrum with the JOINT non-Gaussian
     correction (theory "THE PER-INSTANT JOINT REDUCTION"): per instant form the 6x6
     windowed moment matrices M_{n,j}, RE-SEARCH the critical plane / F_np from THAT
@@ -655,6 +901,16 @@ def _reduce_instant_tensors_joint_ng(omega, Scross, weights, inst_scales, durati
     per-window weight/scale for the windowed limit). ``gamma4`` / ``gamma3`` — the
     (nt, 6) per-instant per-component target arrays. Returns the M27-summary dict shape
     PLUS the per-reduction / per-instant induced-kurtosis + lambda_ng diagnostics.
+
+    ``exact`` (M34) — when False (default, M33), the underlying-Gaussian correlation of
+    each instant's tensor is TAKEN as the target correlation R = M_{0,j}/(sig sig), so the
+    transformed covariance is preserved only to LEADING order and the induced kurtosis is
+    the M33 one. When True, the underlying correlation is the Grigoriu / NORTA
+    correlation-matching solution rho^U (``solve_underlying_correlation``) so the
+    component-wise Hermite tensor reproduces M_{0,j} EXACTLY (covariance
+    preservation_error -> ~0) and the induced kurtosis is computed on the covariance-EXACT
+    joint tensor. The reported ``preservation_error`` is then the EXACT (~0) one, with the
+    M33 leading-order value alongside as ``preservation_error_leading``.
 
     The von-Mises reduction (a QUADRATIC form, no linear projection) reuses the
     max-shear plane's induced kurtosis as its representative (documented)."""
@@ -685,6 +941,7 @@ def _reduce_instant_tensors_joint_ng(omega, Scross, weights, inst_scales, durati
     fnps = []
     shapes = []
     preservation = 0.0
+    preservation_leading = 0.0        # M34: the M33 leading-order error, alongside
     for j in range(nt):
         Mi = windowed_tensor_moment_matrices(omega, Scross, weights[j],
                                              scale=float(inst_scales[j]), nmax=4)
@@ -697,14 +954,29 @@ def _reduce_instant_tensors_joint_ng(omega, Scross, weights, inst_scales, durati
         M0j = Mi[0]
         g4j = g4[j]
         g3j = g3[j]
-        # the joint-tensor covariance-preservation diagnostic (max off-diagonal drift)
-        tp = translation_process_covariance(M0j, g3j, g4j, model=model)
-        preservation = max(preservation, tp["preservation_error"])
-        # LINEAR critical planes: the induced kurtosis of the resolved scalar
+        # the joint-tensor covariance-preservation diagnostic (max off-diagonal drift).
+        # M34 exact: solve the NORTA underlying correlation rho^U so the transformed
+        # covariance reproduces M_{0,j} EXACTLY (preservation_error -> ~0), and use rho^U
+        # as the underlying correlation for the induced-moment diagram. M33 leading-order:
+        # the underlying correlation IS the target R (the documented distortion).
+        if exact:
+            sol = solve_underlying_correlation(M0j, g3j, g4j, model=model)
+            rho_u = sol["rho_u"]
+            preservation = max(preservation, sol["preservation_error"])
+            preservation_leading = max(preservation_leading,
+                                       sol["preservation_error_leading"])
+        else:
+            rho_u = None
+            tp = translation_process_covariance(M0j, g3j, g4j, model=model)
+            preservation = max(preservation, tp["preservation_error"])
+            preservation_leading = preservation
+        # LINEAR critical planes: the induced kurtosis of the resolved scalar (on the
+        # covariance-EXACT joint tensor when exact, else the M33 leading-order one)
         plane_kurt = {}
         for k in ("normal_plane", "shear_plane"):
             proj = np.asarray(red[k]["proj"], dtype=float)
-            _, g3s, g4s = induced_projection_moments(M0j, proj, g3j, g4j, model=model)
+            _, g3s, g4s = induced_projection_moments(M0j, proj, g3j, g4j, model=model,
+                                                     underlying_R=rho_u)
             plane_kurt[k] = (g3s, g4s)
         # the von-Mises quadratic reuses the max-shear plane's induced kurtosis
         plane_kurt["von_mises"] = plane_kurt["shear_plane"]
@@ -754,7 +1026,9 @@ def _reduce_instant_tensors_joint_ng(omega, Scross, weights, inst_scales, durati
     out = {"method": "joint_nongaussian_tensor", "nt": nt, "drift": bool(drift),
            "constant_shape": bool(const), "plane_rotation_deg": rot,
            "fnp_drift": fnp_drift, "windows": wout, "stationary": stat,
+           "exact": bool(exact),
            "total_time": Ttot, "preservation_error": preservation,
+           "preservation_error_leading": preservation_leading,
            "lambda_min": float(lam_all.min()) if lam_all.size else 1.0,
            "lambda_max": float(lam_all.max()) if lam_all.size else 1.0,
            "lambda_mean": float(np.mean(lam_all)) if lam_all.size else 1.0,
@@ -781,7 +1055,7 @@ def joint_nongaussian_tensor_summary(omega, Scross, durations, fc, bw, m, C,
                                      smooth=0.0, kurt_grid=None, skew_grid=None,
                                      bandwidth_correction=True, model="winterstein",
                                      mean_stress=0.0, ultimate=0.0, naz=24, npol=13,
-                                     drift=True, scalar_equivalent=True):
+                                     drift=True, scalar_equivalent=True, exact=False):
     """The 6x6 JOINT NON-GAUSSIAN TENSOR continuous instantaneous damage (theory "THE
     PER-INSTANT JOINT REDUCTION"): the M31 continuous Gaussian TENSOR spectrum reduced
     with a per-instant critical-plane re-search, the resolved plane INHERITING the
@@ -801,7 +1075,18 @@ def joint_nongaussian_tensor_summary(omega, Scross, durations, fc, bw, m, C,
     computes the M32 EQUIVALENT-SCALAR tensor answer (kurtosis imposed on the resolved
     scalar) as the ``scalar_equivalent`` side-by-side entry (a direct M32 delegation, so
     it is byte-identical to M32); the JOINT vs equivalent-scalar damage difference is the
-    M33 <-> M32 boundary. Returns the M27 summary dict shape PLUS the per-reduction
+    M33 <-> M32 boundary.
+
+    ``exact`` (M34) — when False (default) the underlying-Gaussian correlation is TAKEN
+    as the target correlation (M33 leading-order, the transformed covariance preserved to
+    leading order); when True the per-instant reduction solves the Grigoriu / NORTA
+    underlying correlation rho^U (``solve_underlying_correlation``) so the component-wise
+    Hermite tensor reproduces the target covariance EXACTLY (the covariance
+    ``preservation_error`` -> ~0, reported with the M33 leading-order value alongside as
+    ``preservation_error_leading``) and the induced kurtosis / lambda_ng / damage are
+    computed on the covariance-EXACT joint tensor. The Gaussian and scalar-equivalent
+    side entries are byte-identical either way (the EXACT path is a NEW path ALONGSIDE
+    the M33 leading-order one). Returns the M27 summary dict shape PLUS the per-reduction
     gaussian_damage_rate / lambda_ng / induced_kurt, the induced-kurtosis + lambda drift
     diagnostics, the covariance ``preservation_error`` and the gamma_4_c(t) schedule."""
     from . import wigner_ville_fatigue as wv
@@ -819,7 +1104,7 @@ def joint_nongaussian_tensor_summary(omega, Scross, durations, fc, bw, m, C,
                                                  skew_grid=skew_grid)
 
     if _is_gaussian_component_schedule(gamma4, gamma3):
-        return _wrap_gaussian_tensor(gauss, gamma4, gamma3, refine, smooth)
+        return _wrap_gaussian_tensor(gauss, gamma4, gamma3, refine, smooth, exact=exact)
 
     if wv.is_windowed_limit(refine, smooth):
         win = joint_evolutionary_windows(freqs, durations, fc, bw, scales)
@@ -834,7 +1119,7 @@ def joint_nongaussian_tensor_summary(omega, Scross, durations, fc, bw, m, C,
         dur = eff["dur"]
     out = _reduce_instant_tensors_joint_ng(
         omega, Scross, weights, inst_scales, dur, gamma4, gamma3, m, C, mean_stress,
-        ultimate, naz, npol, bandwidth_correction, model, drift=drift)
+        ultimate, naz, npol, bandwidth_correction, model, drift=drift, exact=exact)
     out["refine"] = refine
     out["smooth"] = float(smooth)
     out["continuous"] = not wv.is_windowed_limit(refine, smooth)
@@ -861,15 +1146,17 @@ def joint_nongaussian_tensor_summary(omega, Scross, durations, fc, bw, m, C,
     return out
 
 
-def _wrap_gaussian_tensor(gauss, gamma4, gamma3, refine, smooth):
+def _wrap_gaussian_tensor(gauss, gamma4, gamma3, refine, smooth, exact=False):
     """Wrap the M31 Gaussian continuous tensor summary as the M33 result in the exact
     gamma_4_c == 3 limit — every component transform is the identity, the induced
     kurtosis is 3, lambda_ng == 1, so every reduction rate IS the M31 Gaussian rate
-    BYTE-IDENTICALLY (the delegation)."""
+    BYTE-IDENTICALLY (the delegation). In the M34 EXACT limit rho^U = R = the target
+    correlation, so the preservation error is 0 and the delegation is identical."""
     out = dict(gauss)
     out["method"] = "joint_nongaussian_tensor"
     out["delegated"] = "m31_gaussian"
     out["joint"] = True
+    out["exact"] = bool(exact)
     out["refine"] = int(refine)
     out["smooth"] = float(smooth)
     out["gamma4"] = np.asarray(gamma4, dtype=float)
@@ -882,6 +1169,7 @@ def _wrap_gaussian_tensor(gauss, gamma4, gamma3, refine, smooth):
     out["induced_kurt_max"] = 3.0
     out["induced_kurt_mean"] = 3.0
     out["preservation_error"] = 0.0
+    out["preservation_error_leading"] = 0.0
     out["bandwidth_correction"] = True
     out["scalar_equivalent"] = None
     for k in ("von_mises", "normal_plane", "shear_plane"):
@@ -897,10 +1185,76 @@ def _wrap_gaussian_tensor(gauss, gamma4, gamma3, refine, smooth):
 # (b) The multivariate NON-GAUSSIAN non-stationary Monte-Carlo (build item 2)
 # ============================================================================
 
+def _sample_cov_rel_error(X, M0_target):
+    """The max off-diagonal deviation between the SAMPLE correlation of a synthesised
+    record ``X`` (nt, n) and the TARGET correlation of ``M0_target`` (n, n) — the M34
+    Monte-Carlo covariance-preservation diagnostic. The marginals (diagonal) are
+    preserved by construction; this measures the CROSS-structure drift the leptokurtic
+    translation induces (large for the M33 leading-order record, ~0 for the M34
+    covariance-exact one). Restricted to components with positive target AND sample
+    variance."""
+    X = np.asarray(X, dtype=float)
+    if X.shape[0] < 2:
+        return 0.0
+    n = X.shape[1]
+    Xc = X - X.mean(axis=0, keepdims=True)
+    Cs = (Xc.T @ Xc) / X.shape[0]
+    dt = np.clip(np.diag(np.asarray(M0_target, dtype=float)), 0.0, None)
+    ds = np.clip(np.diag(Cs), 0.0, None)
+    # restrict to the SIGNIFICANT (materially-contributing) components: a numerically-zero
+    # component's sample correlation is floating-point noise (the same relative-variance
+    # floor the NORTA inversion uses)
+    tmax = float(np.max(dt)) if dt.size else 0.0
+    ok = (dt > tmax * 1e-9) & (ds > 0.0)
+    idx = np.where(ok)[0]
+    if idx.size < 2:
+        return 0.0
+    st = np.sqrt(dt[idx])
+    ss = np.sqrt(ds[idx])
+    Rt = M0_target[np.ix_(idx, idx)] / np.outer(st, st)
+    Rs = Cs[np.ix_(idx, idx)] / np.outer(ss, ss)
+    dev = np.abs(Rs - Rt)
+    np.fill_diagonal(dev, 0.0)
+    return float(np.max(dev)) if dev.size else 0.0
+
+
+def _rescale_block_to_underlying(Sw, freqs, gamma3, gamma4, model):
+    """Return a copy of the block cross-PSD ``Sw`` (nf, 6, 6) with its OFF-DIAGONAL
+    cross-spectra scaled by the NORTA ratio rho^U_cc' / R_cc' (M34), so a Gaussian
+    synthesised from it carries the underlying-Gaussian correlation rho^U. The block's
+    0th-moment covariance M_0 = integral of Re(Sw) df fixes the target correlation R and
+    (via ``solve_underlying_correlation``) the underlying rho^U; the ratio is applied to
+    each Hermitian off-diagonal pair (the diagonal auto-PSDs are left EXACT, so the
+    marginals are unchanged). The scaling preserves the cross-spectrum's frequency SHAPE
+    and phase; the synthesiser's per-bin PSD-cone clip absorbs any residual loss of
+    positive-definiteness from the rescale (a tiny effect for the modest ratios of a
+    leptokurtic translation)."""
+    Sw = np.asarray(Sw)
+    # block covariance (correlation only needs the co-spectrum integral; the constant
+    # factor cancels in the ratio). Real part = the zero-lag covariance contribution.
+    M0 = np.trapezoid(Sw.real, freqs, axis=0)
+    M0 = 0.5 * (M0 + M0.T)
+    sol = solve_underlying_correlation(M0, gamma3, gamma4, model=model)
+    R = sol["target_R"]
+    rho_u = sol["rho_u"]
+    supp = sol["support"]
+    n = R.shape[0]
+    ratio = np.ones((n, n))
+    for c in range(n):
+        for cp in range(n):
+            # only rescale pairs of SIGNIFICANT components whose target correlation is
+            # meaningfully nonzero (a near-zero R gives rho^U ~ R -> ratio ~ 1 anyway);
+            # a degenerate component's row is left untouched (ratio 1)
+            if c != cp and supp[c] and supp[cp] and abs(R[c, cp]) > 1e-6:
+                r = rho_u[c, cp] / R[c, cp]
+                ratio[c, cp] = min(max(r, 0.0), 4.0)   # clip for synthesiser stability
+    return Sw * ratio[None, :, :]
+
+
 def synthesize_joint_nongaussian_history(omega, Scross, durations, fc, bw, seed,
                                          kurt, skew=0.0, scales=None, refine=8,
                                          smooth=0.0, kurt_grid=None, skew_grid=None,
-                                         fs=None, model="winterstein"):
+                                         fs=None, model="winterstein", exact=False):
     """Synthesise the MULTIVARIATE NON-GAUSSIAN NON-STATIONARY stress-tensor record
     (theory "THE MULTIVARIATE NON-GAUSSIAN NON-STATIONARY MONTE-CARLO"): the M27/M31
     multivariate non-separable synthesiser on the fine instant grid (per-instant
@@ -911,8 +1265,17 @@ def synthesize_joint_nongaussian_history(omega, Scross, durations, fc, bw, seed,
     Returns (t, X, info) with ``X`` (nt, 6) the six Voigt components, ``info`` = {edges,
     fs, gamma4, gamma3}.
 
-    In the Gaussian-tensor limit every component transform is the identity, so the record
-    reduces EXACTLY to the M27/M31 multivariate non-separable history."""
+    ``exact`` (M34) — when False (default, M33) each block's correlated Gaussian is
+    synthesised from the TARGET cross-PSD, so the component-wise Hermite transform
+    DISTORTS the cross-covariance away from the target (the record's sample covariance
+    drifts). When True, each block's cross-spectrum off-diagonals are pre-scaled by the
+    NORTA ratio rho^U_cc' / R_cc' (``solve_underlying_correlation`` on the block's own
+    covariance) so the UNDERLYING Gaussian carries correlation rho^U; the Hermite
+    transform then brings the transformed cross-covariance BACK to the target, so the
+    corrected record's sample covariance matches the target (the marginals unchanged —
+    the diagonal auto-PSDs are untouched). In the Gaussian-tensor limit the ratio is 1
+    and the record reduces EXACTLY to the M27/M31 multivariate non-separable history
+    either way."""
     from .joint_evolutionary_fatigue import joint_evolutionary_windows
     from .multiaxial_fatigue import synthesize_multiaxial_history
     from . import wigner_ville_fatigue as wv
@@ -948,7 +1311,21 @@ def synthesize_joint_nongaussian_history(omega, Scross, durations, fc, bw, seed,
     T = np.array([b[1] for b in blocks], dtype=float)
     edges = np.concatenate([[0.0], np.cumsum(T)])
     chunks = []
+    cov_err = 0.0                     # max per-block sample-covariance drift diagnostic
     for j, (Sw, dur_j) in enumerate(blocks):
+        # the block's TARGET covariance (before any rescale) fixes the correlation the
+        # transformed record should reproduce — the sample-covariance drift diagnostic
+        M0_target = np.trapezoid(np.asarray(Sw).real, freqs, axis=0)
+        M0_target = 0.5 * (M0_target + M0_target.T)
+        # M34 EXACT-covariance: pre-scale this block's cross-spectrum off-diagonals by
+        # the NORTA ratio rho^U/R (computed from the block's OWN 0th-moment covariance)
+        # so the synthesised UNDERLYING Gaussian carries correlation rho^U; the Hermite
+        # transform below then restores the transformed cross-covariance to the target.
+        # The diagonal auto-PSDs are untouched (the marginals stay exact). In the M33
+        # leading-order / Gaussian case the ratio is 1 (a no-op, byte-identical).
+        if exact and not _is_gaussian_component_schedule(gamma4[j:j + 1],
+                                                         gamma3[j:j + 1]):
+            Sw = _rescale_block_to_underlying(Sw, freqs, gamma3[j], gamma4[j], model)
         _t, Xi = synthesize_multiaxial_history(freqs, Sw, dur_j, int(seed) + j, fs=fs)
         # per-component memoryless Hermite transform (VECTOR transform; identity at a
         # Gaussian component) — standardise each component, transform, rescale
@@ -965,10 +1342,12 @@ def synthesize_joint_nongaussian_history(omega, Scross, durations, fc, bw, seed,
                 continue
             z = (xc - float(np.mean(xc))) / sig
             Xi[:, c] = sig * ngf.hermite_transform(z, g3c, g4c, coeffs=coeffs)
+        cov_err = max(cov_err, _sample_cov_rel_error(Xi, M0_target))
         chunks.append(Xi)
     X = np.concatenate(chunks, axis=0) if chunks else np.zeros((0, 6))
     t = np.arange(X.shape[0]) / fs
-    return t, X, {"edges": edges, "fs": fs, "gamma4": gamma4, "gamma3": gamma3}
+    return t, X, {"edges": edges, "fs": fs, "gamma4": gamma4, "gamma3": gamma3,
+                  "exact": bool(exact), "sample_cov_error": float(cov_err)}
 
 
 def joint_nongaussian_monte_carlo_damage(omega, Scross, durations, fc, bw, m, C,
@@ -976,7 +1355,8 @@ def joint_nongaussian_monte_carlo_damage(omega, Scross, durations, fc, bw, m, C,
                                          smooth=0.0, kurt_grid=None, skew_grid=None,
                                          fs=None, mean_stress=0.0, ultimate=0.0,
                                          naz=24, npol=13, model="winterstein",
-                                         reduction="shear_plane", summary=None):
+                                         reduction="shear_plane", summary=None,
+                                         exact=False):
     """The JOINT non-Gaussian tensor damage rate by MULTIVARIATE non-stationary
     Monte-Carlo (theory): synthesise the multivariate non-Gaussian record
     (``synthesize_joint_nongaussian_history`` — per-instant correlated 6-component
@@ -989,9 +1369,14 @@ def joint_nongaussian_monte_carlo_damage(omega, Scross, durations, fc, bw, m, C,
     ``reduction`` — which critical plane to project onto ("shear_plane" default, the
     primary multiaxial driver; or "normal_plane"). ``summary`` optionally supplies a
     precomputed ``joint_nongaussian_tensor_summary`` so the per-instant planes are
-    shared. In the Gaussian-tensor limit reduces EXACTLY to the M27/M31 multivariate MC.
-    Returns the M27 Monte-Carlo dict shape plus the sample ``kurtosis`` / ``skewness`` of
-    the resolved projection (tracking the induced value)."""
+    shared. ``exact`` (M34) — when True the record is synthesised from the NORTA
+    underlying correlation rho^U so its sample covariance matches the TARGET (where the
+    M33 leading-order record's drifts); the ``sample_cov_error`` returned then measures
+    that (near-zero) residual. In the Gaussian-tensor limit reduces EXACTLY to the
+    M27/M31 multivariate MC either way. Returns the M27 Monte-Carlo dict shape plus the
+    sample ``kurtosis`` / ``skewness`` of the resolved projection (tracking the induced
+    value) and the ``sample_cov_error`` (max relative off-diagonal deviation of the
+    record's sample covariance from the target)."""
     from . import spectral_fatigue as sf
     from . import wigner_ville_fatigue as wv
     Ceff = sf._goodman_C(C, m, mean_stress, ultimate)
@@ -1015,11 +1400,12 @@ def joint_nongaussian_monte_carlo_damage(omega, Scross, durations, fc, bw, m, C,
         mc["method"] = "joint_nongaussian_monte_carlo"
         mc.setdefault("kurtosis", 3.0)
         mc.setdefault("skewness", 0.0)
+        mc.setdefault("sample_cov_error", 0.0)
         return mc
     t, X, info = synthesize_joint_nongaussian_history(
         omega, Scross, durations, fc, bw, seed, kurt, skew=skew, scales=scales,
         refine=refine, smooth=smooth, kurt_grid=kurt_grid, skew_grid=skew_grid,
-        fs=fs, model=model)
+        fs=fs, model=model, exact=exact)
     edges = info["edges"]
     nwin = len(edges) - 1
     # the per-instant critical planes (re-searched from each instant's tensor) — reuse
@@ -1066,4 +1452,5 @@ def joint_nongaussian_monte_carlo_damage(omega, Scross, durations, fc, bw, m, C,
     return {"method": "joint_nongaussian_monte_carlo", "damage_rate": dr, "life": tf,
             "s_eq": s_eq, "ncycles": ncyc, "duration": Ttot, "reduction": reduction,
             "kurtosis": kurt_s, "skewness": skew_s, "rms": rms, "refine": refine,
-            "smooth": float(smooth)}
+            "smooth": float(smooth), "exact": bool(exact),
+            "sample_cov_error": float(info.get("sample_cov_error", 0.0))}
