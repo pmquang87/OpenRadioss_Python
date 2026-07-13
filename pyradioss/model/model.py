@@ -300,6 +300,18 @@ class EngineControls:
     # joint-tensor evolutionary fatigue path). See
     # implicit/joint_evolutionary_fatigue.py.
     impl_fatig_joint: bool = False   # /IMPL/FATIG/MULT/EVOL/JOINT -> joint tensor
+    # M33 /IMPL/FATIG/NGAUSS/JOINT/WVILLE: JOINT-TENSOR NON-GAUSSIAN distribution — a
+    # VECTOR (component-wise) Winterstein-Hermite / translation-process transform of the
+    # CORRELATED 6x6 stress tensor imposing a PER-COMPONENT target kurtosis (the Voigt
+    # components xx yy zz xy yz zx) while PRESERVING the marginal variances / covariance,
+    # so the resolved critical plane INHERITS the INDUCED kurtosis of the joint tensor
+    # statistics (NOT the M24/M32 kurtosis imposed on the already-resolved scalar). The
+    # per-component targets live on the trailing columns 4..9 of the M24 kurtosis line;
+    # a NON-EMPTY list triggers the M33 joint path (composing with /JOINT + /WVILLE),
+    # reported alongside the M32 equivalent-scalar and M31/M27 Gaussian numbers. A PORT
+    # sub-flag (freimpl.F has no non-Gaussian / joint-tensor / Hermite path). See
+    # implicit/joint_nongaussian_fatigue.py.
+    impl_fatig_joint_kurt: tuple = ()  # per-component target kurtoses (empty = off)
 
     # M28 /IMPL/PSD/MULTI and /IMPL/FATIG/MINPUT: MULTI-INPUT / PARTIALLY-COHERENT
     # random-vibration response & fatigue — the stationary response (and

@@ -849,6 +849,24 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_kfunct = int(v2[2])
                     if len(v2) > 3 and v2[3] > 0:
                         ec.impl_fatig_kurt1 = v2[3]
+                    # M33 JOINT-TENSOR NON-GAUSSIAN: when /JOINT composes with /NGAUSS,
+                    # up to 6 PER-COMPONENT target kurtoses (the Voigt stress components
+                    # xx yy zz xy yz zx) on the TRAILING columns 4..9 of the M24
+                    # kurtosis line impose the kurtosis JOINTLY on the TENSOR components
+                    # (a VECTOR Winterstein-Hermite / translation transform preserving
+                    # the marginal variances / covariance), so the resolved critical
+                    # plane INHERITS the INDUCED kurtosis of the joint tensor statistics
+                    # — the M33 joint-tensor distribution (vs the M24/M32 kurtosis on
+                    # the already-resolved scalar). A NON-EMPTY per-component list (>= 1
+                    # value on col 4+) triggers the M33 joint path; fewer than 6 values
+                    # pad with the scalar kurt (col 0). All == 3 is Gaussian (a no-op).
+                    # Only meaningful with /JOINT + /WVILLE; see implicit/
+                    # joint_nongaussian_fatigue.py.
+                    if is_joint and is_ngauss and len(v2) > 4:
+                        kfill = float(ec.impl_fatig_kurt)
+                        jk = [float(v2[i]) for i in range(4, min(10, len(v2)))]
+                        jk += [kfill] * (6 - len(jk))     # pad to 6 with the scalar kurt
+                        ec.impl_fatig_joint_kurt = tuple(jk[:6])
                     if is_ngauss and ec.impl_fatig_kurt <= 0.0:
                         log.warning(
                             "/IMPL/FATIG/NGAUSS needs a target kurtosis on line "
