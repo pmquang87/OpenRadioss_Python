@@ -341,6 +341,33 @@ class EngineControls:
     impl_mi_gamma1: float = -1.0     # END coherence gamma_ab(t_1); < 0 -> no drift
     impl_mi_phase1: float = 0.0      # END phase theta_ab(t_1) (degrees)
 
+    # M30 /IMPL/FATIG/MULT/MINPUT/EVOL/FCOH: FREQUENCY-DEPENDENT + TIME-VARYING
+    # (EVOLUTIONARY) INPUT COHERENCE — a coherence matrix gamma_ab(f, t) varying with
+    # BOTH FREQUENCY AND TIME. Where M29 drifted a per-window SCALAR gamma_ab(t_i)
+    # (frequency-FLAT, constant across f within a window) and held the M28 exponential
+    # coherence STATIONARY, M30 lets the coherence be a FULL (nf, ninput, ninput)
+    # frequency-dependent stack gamma_ab(f) that ALSO drifts window to window: either
+    # a per-pair MEASURED shape gamma(f) /FUNCT interpolated start (impl_mi_gfunct0)
+    # -> end (impl_mi_gfunct1), or the M28 exponential/convection field with a
+    # TIME-VARYING decay coefficient (impl_mi_decay -> impl_mi_decay1) / reference
+    # speed (impl_mi_speed -> impl_mi_speed1) — a turbulence field whose
+    # DECORRELATION FREQUENCY drifts through the mission. Each window's S_ff(w, t_i)
+    # drives a per-window multi-input S_sigmasigma whose critical plane / F_np may
+    # DRIFT as the coherence FREQUENCY-SHAPE evolves, reduced by the M20-M27 estimators
+    # + the M28/M29 multi-input paths and Miner-summed, cross-validated by a
+    # non-stationary multi-input Monte-Carlo whose measured coherence SPECTRUM (per
+    # frequency band) tracks the target. M29 is EXACTLY the frequency-flat special
+    # case; M28 (frequency-dependent) the single-window special case. A PORT sub-flag
+    # (freimpl.F has no frequency-dependent-time-varying-coherence path — the sole PSD
+    # token is IMUMPSD). Reported ALONGSIDE the M29 scalar-coherence + M28
+    # frequency-dependent-stationary numbers (a "freq_evolutionary_multi_input"
+    # sub-entry). See implicit/freq_evolutionary_multi_input.py.
+    impl_mi_fcoh: bool = False       # /FCOH -> frequency-dependent evolutionary path
+    impl_mi_decay1: float = -1.0     # END exponential decay coeff; < 0 -> no drift
+    impl_mi_speed1: float = -1.0     # END exponential ref speed; < 0 -> no drift
+    impl_mi_gfunct0: int = 0         # START measured coherence shape gamma(f) /FUNCT
+    impl_mi_gfunct1: int = 0         # END measured coherence shape gamma(f) /FUNCT
+
 
 class Model:
     """The full model. Created empty, filled by the keyword parsers, then

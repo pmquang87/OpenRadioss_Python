@@ -1350,6 +1350,135 @@ def _run_evolutionary_multi_input(ip, model, Hcols, G, omega, freqs_hz, m, C,
             "stationary_multi_input": m28_ref, "monte_carlo": mc}
 
 
+def _run_freq_evolutionary_multi_input(ip, model, Hcols, G, positions, omega,
+                                       freqs_hz, m, C, mean_stress, ultimate,
+                                       mc_dur, mc_seed, naz, npol, m28_summ,
+                                       m29_ev):
+    """M30: the FREQUENCY-DEPENDENT + TIME-VARYING (EVOLUTIONARY) INPUT COHERENCE
+    damage of the critical element — the coherence matrix gamma_ab(f, t) varying
+    with BOTH frequency AND time. Returns ``None`` unless /FCOH is set on top of
+    /IMPL/FATIG/MINPUT and /EVOL (i.e. /IMPL/FATIG/MULT/MINPUT/EVOL/FCOH).
+
+    Where M29 (``_run_evolutionary_multi_input``) drifted a per-window SCALAR
+    gamma_ab(t_i) (frequency-FLAT) and held the M28 exponential coherence STATIONARY,
+    M30 builds a FULL (nf, ninput, ninput) frequency-dependent coherence stack
+    gamma_ab(f) that ALSO drifts window to window: either
+      * the M28 EXPONENTIAL / convection field (cohmodel = 1) with a TIME-VARYING
+        decay coefficient (impl_mi_decay -> impl_mi_decay1) and/or reference speed
+        (impl_mi_speed -> impl_mi_speed1) — a turbulence field whose DECORRELATION
+        FREQUENCY drifts through the mission; or
+      * a per-pair MEASURED coherence SHAPE gamma(f) as a /FUNCT (impl_mi_gfunct0
+        START -> impl_mi_gfunct1 END).
+    It assembles the per-window frequency-dependent S_ff(w, t_i), forms the per-window
+    multi-input S_sigmasigma,i and RE-SEARCHES the critical plane / F_np from the
+    window's OWN tensor (so the plane may ROTATE as the coherence FREQUENCY-SHAPE
+    evolves), Miner-sums, and runs the non-stationary MULTI-INPUT multivariate
+    Monte-Carlo cross-check whose measured coherence SPECTRUM (per frequency band)
+    tracks the target. Reuses the /EVOL drifting-shape schedule (impl_fatig_evol_fc0
+    .. _nwin) and the shared modulation /FUNCT. Stored ALONGSIDE the M29
+    scalar-coherence and the M28 frequency-dependent-stationary numbers so the listing
+    shows the coherence FREQUENCY-SHAPE drift / the decorrelation-frequency drift / the
+    critical-plane drift / the damage-life side by side. A PORT sub-flag (freimpl.F has
+    no frequency-dependent-time-varying-coherence path). See
+    implicit/freq_evolutionary_multi_input.py."""
+    if not (bool(getattr(ip, "impl_mi_fcoh", False))
+            and bool(getattr(ip, "impl_fatig_evol", False))
+            and bool(getattr(ip, "impl_fatig_minput", False))):
+        return None
+    from . import freq_evolutionary_multi_input as fem
+    from . import nonstationary_fatigue as nsf
+    fc0 = float(getattr(ip, "impl_fatig_evol_fc0", 0.0))
+    fc1 = float(getattr(ip, "impl_fatig_evol_fc1", fc0))
+    bw0 = float(getattr(ip, "impl_fatig_evol_bw0", 0.0))
+    bw1 = float(getattr(ip, "impl_fatig_evol_bw1", bw0))
+    nwin = max(1, int(getattr(ip, "impl_fatig_evol_nwin", 12)))
+    scales, durations = _evol_schedule(ip, model, nwin)
+    ninput = int(np.asarray(Hcols).shape[2])
+    phase0 = math.radians(float(getattr(ip, "impl_mi_phase", 0.0)))
+    phase1 = math.radians(float(getattr(ip, "impl_mi_phase1",
+                                        getattr(ip, "impl_mi_phase", 0.0))))
+
+    # ---- build the START / END FREQUENCY-DEPENDENT coherence stacks -------------
+    cohmodel = int(getattr(ip, "impl_mi_cohmodel", 0))
+    gfunct0 = int(getattr(ip, "impl_mi_gfunct0", 0) or 0)
+    gfunct1 = int(getattr(ip, "impl_mi_gfunct1", gfunct0) or gfunct0)
+    if cohmodel == 1:
+        # the EXPONENTIAL / convection field with a TIME-VARYING decay / speed
+        decay0 = float(getattr(ip, "impl_mi_decay", 0.0))
+        d1 = float(getattr(ip, "impl_mi_decay1", -1.0))
+        decay1 = decay0 if d1 < 0.0 else d1
+        speed0 = float(getattr(ip, "impl_mi_speed", 1.0)) or 1.0
+        s1 = float(getattr(ip, "impl_mi_speed1", -1.0))
+        speed1 = speed0 if s1 < 0.0 else (s1 or 1.0)
+        g0 = fem.exponential_coherence_stack(freqs_hz, positions, decay0, speed0)
+        g1 = fem.exponential_coherence_stack(freqs_hz, positions, decay1, speed1)
+        coh_label = (f"EXPONENTIAL decay {decay0:.4g} -> {decay1:.4g}, "
+                     f"speed {speed0:.4g} -> {speed1:.4g}")
+    elif gfunct0 > 0:
+        # a per-pair MEASURED coherence SHAPE gamma(f) /FUNCT, START -> END
+        if gfunct0 not in model.functions or gfunct1 not in model.functions:
+            return None
+        shape0 = np.asarray(model.functions[gfunct0].eval(freqs_hz), dtype=float)
+        shape1 = np.asarray(model.functions[gfunct1].eval(freqs_hz), dtype=float)
+        g0 = fem.measured_coherence_stack(freqs_hz, shape0, ninput)
+        g1 = fem.measured_coherence_stack(freqs_hz, shape1, ninput)
+        coh_label = (f"MEASURED gamma(f) /FUNCT {gfunct0} -> {gfunct1}")
+    else:
+        # /FCOH requested but no frequency-dependent schedule supplied — nothing to
+        # do beyond the M29 scalar path already run; skip cleanly.
+        return None
+
+    summary = fem.freq_evolutionary_multi_input_summary(
+        omega, Hcols, G, durations, m, C, gamma0=g0, gamma1=g1, phase0=phase0,
+        phase1=phase1, fc=(fc0, fc1), bw=(bw0, bw1), scales=scales,
+        mean_stress=mean_stress, ultimate=ultimate, naz=naz, npol=npol,
+        drift=True)
+    sc_w, wt = nsf.modulation_from_schedule(scales, durations)
+    kurt = nsf.rms_modulation_kurtosis(sc_w, wt)
+    mc = None
+    if mc_dur > 0.0:
+        tot = float(np.sum(durations))
+        mc_durs = durations * (mc_dur / tot) if tot > 0 else durations
+        mc = fem.freq_evolutionary_multi_input_monte_carlo_damage(
+            omega, Hcols, G, mc_durs, m, C, seed=mc_seed, gamma0=g0, gamma1=g1,
+            phase0=phase0, phase1=phase1, fc=(fc0, fc1), bw=(bw0, bw1),
+            scales=scales, mean_stress=mean_stress, ultimate=ultimate, naz=naz,
+            npol=npol, reduction="shear_plane", summary=summary, measure=True)
+    # the M28 STATIONARY frequency-dependent reference (the coherence held at the
+    # mission-mean frequency shape) for the side-by-side listing
+    m28_ref = {k: float(m28_summ[k]["summary"]["dirlik"]["damage_rate"])
+               for k in ("von_mises", "normal_plane", "shear_plane")}
+    # the M29 SCALAR-coherence reference (the frequency-flat drift) if it ran
+    m29_ref = None
+    if m29_ev is not None:
+        m29_ref = {k: float(m29_ev[k]["damage_rate"])
+                   for k in ("von_mises", "normal_plane", "shear_plane")}
+    # a coarse band-coherence table of the START / END shapes for the listing
+    _bc_c, band0 = fem.band_coherence(freqs_hz, g0)
+    _bc_c2, band1 = fem.band_coherence(freqs_hz, g1)
+    return {"fc": (fc0, fc1), "bw": (bw0, bw1), "nwin": nwin,
+            "cohmodel": cohmodel, "coh_label": coh_label,
+            "modfunct": int(getattr(ip, "impl_fatig_modfunct", 0) or 0),
+            "scales": scales, "durations": durations, "kurtosis": kurt,
+            "phase0_deg": math.degrees(phase0), "phase1_deg": math.degrees(phase1),
+            "band_centres": _bc_c, "band_gamma0": band0, "band_gamma1": band1,
+            "decorr_drift": summary.get("decorr_drift", 0.0),
+            "freq_dependent": summary.get("freq_dependent", True),
+            "constant_shape": summary["constant_shape"],
+            "plane_rotation_deg": summary["plane_rotation_deg"],
+            "fnp_drift": summary.get("fnp_drift", 0.0),
+            "delegated": summary.get("delegated"), "summary": summary,
+            "von_mises": {"damage_rate": summary["von_mises"]["damage_rate"],
+                          "life": summary["von_mises"]["life"]},
+            "normal_plane": {"damage_rate": summary["normal_plane"]["damage_rate"],
+                             "life": summary["normal_plane"]["life"]},
+            "shear_plane": {"damage_rate": summary["shear_plane"]["damage_rate"],
+                            "life": summary["shear_plane"]["life"]},
+            "damage_rate": summary["damage_rate"], "life": summary["life"],
+            "stationary_multi_input": m28_ref,
+            "scalar_evolutionary_multi_input": m29_ref, "monte_carlo": mc}
+
+
 def _run_nonstationary_multiaxial(ip, summ, freqs, m, C, mean_stress, ultimate,
                                   mc_dur, mc_seed, model):
     """M25 (multiaxial): the NON-STATIONARY / EVOLUTIONARY-PSD correction of the
@@ -2000,6 +2129,15 @@ def _run_multi_input_fatigue(model, ip, log, result, basis, Sigma, channels,
         evolutionary_multi_input = _run_evolutionary_multi_input(
             ip, model, Hcrit, data["G"], omega, freqs_hz, m_sn, C_sn,
             mean_stress, ultimate, mc_dur, mc_seed, naz, npol, summ)
+        # M30: the FREQUENCY-DEPENDENT + TIME-VARYING (evolutionary) coherence path —
+        # the coherence gamma_ab(f, t) drifting in BOTH frequency AND time (as opposed
+        # to M29 above, which drifts a frequency-FLAT scalar coherence). Runs only when
+        # /FCOH is also set; reported ALONGSIDE the M29 scalar-coherence and the M28
+        # frequency-dependent-stationary numbers.
+        freq_evolutionary_multi_input = _run_freq_evolutionary_multi_input(
+            ip, model, Hcrit, data["G"], data["positions"], omega, freqs_hz,
+            m_sn, C_sn, mean_stress, ultimate, mc_dur, mc_seed, naz, npol, summ,
+            evolutionary_multi_input)
 
         multi.update({
             "multiaxial": True, "critical_element": (cname, ce, cbase),
@@ -2012,6 +2150,7 @@ def _run_multi_input_fatigue(model, ip, log, result, basis, Sigma, channels,
             "nonstationary": nonstationary, "evolutionary": evolutionary,
             "joint_evolutionary": joint_evolutionary,
             "evolutionary_multi_input": evolutionary_multi_input,
+            "freq_evolutionary_multi_input": freq_evolutionary_multi_input,
             "summary": summ["von_mises"]["summary"],
         })
     else:
@@ -2081,6 +2220,11 @@ def _report_multi_input(log, mi, single):
         # ALONGSIDE the M28 stationary multi-input numbers above
         if mi.get("evolutionary_multi_input") is not None:
             _report_evolutionary_multi_input(log, mi["evolutionary_multi_input"])
+        # M30: the FREQUENCY-DEPENDENT + TIME-VARYING coherence block, printed
+        # ALONGSIDE the M29 scalar-coherence + M28 stationary numbers above
+        if mi.get("freq_evolutionary_multi_input") is not None:
+            _report_freq_evolutionary_multi_input(
+                log, mi["freq_evolutionary_multi_input"])
     else:
         red = mi["summary"]["dirlik"]
         log.info(f"      CRITICAL CHANNEL . . . . . . . . : {mi['critical_label']}")
@@ -2131,6 +2275,62 @@ def _report_evolutionary_multi_input(log, ev):
             with np.errstate(invalid="ignore"):
                 log.info("      MEASURED per-window COHERENCE  . : ["
                          + " ".join(f"{g:.3f}" for g in np.atleast_1d(wg)) + "]")
+
+
+def _report_freq_evolutionary_multi_input(log, ev):
+    """Print the FREQUENCY-DEPENDENT + TIME-VARYING (evolutionary) COHERENCE (M30)
+    listing block: the coherence FREQUENCY-SHAPE schedule (the start / end
+    band-resolved coherence and the model), the DECORRELATION-FREQUENCY drift, the
+    critical-plane ROTATION driven by the evolving frequency-shape, and, for each
+    reduction, the M30 frequency-dependent evolutionary damage rate ALONGSIDE the M29
+    scalar-coherence and the M28 frequency-dependent-STATIONARY ones, plus the
+    non-stationary MULTI-INPUT Monte-Carlo and the MEASURED per-window band-resolved
+    coherence SPECTRUM tracking the target gamma_ab(f, t_i)."""
+    log.info("\n     ** FREQUENCY-DEPENDENT EVOLUTIONARY MULTI-INPUT FATIGUE **  "
+             "(/IMPL/FATIG/MULT/MINPUT/EVOL/FCOH)")
+    log.info(f"      COHERENCE MODEL (gamma_ab(f,t))  . : {ev['coh_label']}")
+    bc = ev.get("band_centres")
+    if bc is not None and np.size(bc):
+        b0 = "/".join(f"{g:.2f}" for g in ev["band_gamma0"])
+        b1 = "/".join(f"{g:.2f}" for g in ev["band_gamma1"])
+        log.info(f"      BAND-COHERENCE gamma(f) START/END : [{b0}] -> [{b1}]")
+    log.info(f"      DECORRELATION-FREQ DRIFT (HZ)  . . : {ev['decorr_drift']:.4g}")
+    fc0, fc1 = ev["fc"]
+    bw0, bw1 = ev["bw"]
+    log.info(f"      DRIFTING-SHAPE fc / bw (HZ)  . . . : "
+             f"{fc0:.4g}->{fc1:.4g} / {bw0:.4g}->{bw1:.4g}  ({ev['nwin']} windows)")
+    log.info(f"      CRITICAL-PLANE ROTATION (deg)  . . : "
+             f"{ev['plane_rotation_deg']:.4g}  (F_np drift {ev['fnp_drift']:.4g})")
+    if ev.get("delegated"):
+        log.info(f"      (reduced via delegation) . . . . : {ev['delegated']}")
+    st = ev.get("stationary_multi_input", {})
+    sc = ev.get("scalar_evolutionary_multi_input") or {}
+    for key, name in (("von_mises", "VON MISES"),
+                      ("normal_plane", "MAX-NORMAL"),
+                      ("shear_plane", "MAX-SHEAR")):
+        r = ev[key]
+        life = r["life"]
+        life_s = "INF" if not np.isfinite(life) else f"{life:.5E}"
+        log.info(f"      {name:11s} FREQ-EVOL RATE . . : "
+                 f"{r['damage_rate']:.5E}  life {life_s}")
+        log.info(f"                  (M29 scalar / M28 stat) : "
+                 f"{sc.get(key, 0.0):.5E} / {st.get(key, 0.0):.5E}")
+    if ev.get("monte_carlo") is not None:
+        mc = ev["monte_carlo"]
+        log.info(f"      NON-STAT MULTI-INPUT MC (shear) DAMAGE / LIFE : "
+                 f"{mc['damage_rate']:.5E} / "
+                 f"{'INF' if not np.isfinite(mc['life']) else '%.5E' % mc['life']}")
+        wg = mc.get("window_gamma")
+        if wg is not None and np.size(wg):
+            with np.errstate(invalid="ignore"):
+                log.info("      MEASURED per-window band-mean COH: ["
+                         + " ".join(f"{g:.3f}" for g in np.atleast_1d(wg)) + "]")
+        wd = mc.get("window_decorr")
+        if wd is not None and np.size(wd) and np.any(np.isfinite(wd)):
+            with np.errstate(invalid="ignore"):
+                log.info("      MEASURED per-window DECORR-FREQ  : ["
+                         + " ".join(("INF" if not np.isfinite(g) else f"{g:.1f}")
+                                    for g in np.atleast_1d(wd)) + "]")
 
 
 def _report_multiaxial(log, fat, funct_id, base, base_dir, frf, nev):

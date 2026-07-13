@@ -36,8 +36,14 @@ def _parse_multi_input_table(block, ec, base_line, log, card):
     """Read the M28 MULTI-INPUT table off a /IMPL/PSD/MULTI or /IMPL/FATIG/MINPUT
     card, starting at card line ``base_line``:
 
-        line base_line     : ninput  cohmodel  gamma  phase  [decay  speed]
+        line base_line     : ninput  cohmodel  gamma  phase  [decay  speed
+                              [gamma1  phase1  [decay1  speed1  gfunct0  gfunct1]]]
         lines base_line+1..: cload_funct  psd_funct  [x  y  z]   (one per input)
+
+    Columns 6-7 (gamma1, phase1) are the M29 SCALAR-coherence END pair; columns 8-11
+    (decay1, speed1, gfunct0, gfunct1) are the M30 FREQUENCY-DEPENDENT-evolutionary
+    schedule (a time-varying exponential decay / speed, or a per-pair measured
+    coherence-shape /FUNCT start -> end).
 
     ``cohmodel`` = 0 constant coherence gamma_ab = gamma (phase theta_ab = phase
     degrees on every off-diagonal pair), 1 exponential/decay coherence (needs the
@@ -65,6 +71,21 @@ def _parse_multi_input_table(block, ec, base_line, log, card):
     # drift (the M28 stationary special case) — the driver then holds gamma_ab fixed.
     ec.impl_mi_gamma1 = float(hdr[6]) if len(hdr) > 6 else -1.0
     ec.impl_mi_phase1 = float(hdr[7]) if len(hdr) > 7 else ec.impl_mi_phase
+    # M30 FREQUENCY-DEPENDENT-EVOLUTIONARY-COHERENCE schedule (optional): the
+    # coherence is a FULL gamma_ab(f) frequency shape that ALSO drifts window to
+    # window. Two schedules share the header's trailing columns:
+    #   * the EXPONENTIAL / convection model (cohmodel = 1) with a TIME-VARYING decay
+    #     coefficient decay1 (col 8) and reference speed speed1 (col 9) the field
+    #     DRIFTS to (a decorrelation frequency that moves through the mission); a
+    #     negative (or absent) decay1 / speed1 means NO drift of that quantity;
+    #   * a per-pair MEASURED coherence SHAPE gamma(f) as a /FUNCT id: gfunct0 (col
+    #     10) the START shape, gfunct1 (col 11) the END shape (defaults to gfunct0 —
+    #     a stationary frequency-dependent coherence, the M28 special case).
+    ec.impl_mi_decay1 = float(hdr[8]) if len(hdr) > 8 else -1.0
+    ec.impl_mi_speed1 = float(hdr[9]) if len(hdr) > 9 else -1.0
+    ec.impl_mi_gfunct0 = int(hdr[10]) if len(hdr) > 10 and hdr[10] > 0 else 0
+    ec.impl_mi_gfunct1 = (int(hdr[11]) if len(hdr) > 11 and hdr[11] > 0
+                          else ec.impl_mi_gfunct0)
     inputs = []
     for r in range(ninput):
         li = base_line + 1 + r
@@ -693,6 +714,22 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     # implicit/multi_input_response.py + multi_input_fatigue.py.
                     is_minput = bool(subs & {"MINPUT", "MULTIINPUT", "MIMO",
                                              "COHERENT"})
+                    # M30: FREQUENCY-DEPENDENT + TIME-VARYING (evolutionary) INPUT
+                    # COHERENCE — the coherence gamma_ab(f, t) varies with BOTH
+                    # frequency AND time (a measured gamma_ab(f) shape drifting window
+                    # to window, and/or the M28 exponential/convection field with a
+                    # time-varying decay / speed). IMPLIES MINPUT (hence MULT) + EVOL
+                    # and reuses the /EVOL drifting-shape schedule line; composes with
+                    # /JOINT / /NSTAT. Its frequency-shape schedule lives on the M28
+                    # multi-input header's trailing columns (decay1 speed1 gfunct0
+                    # gfunct1). A PORT sub-flag (freimpl.F has no
+                    # frequency-dependent-time-varying-coherence path). See
+                    # implicit/freq_evolutionary_multi_input.py.
+                    is_fcoh = bool(subs & {"FCOH", "FREQCOH", "FREQCOHERENCE",
+                                           "FDRIFT", "FREQEVOL"})
+                    if is_fcoh:
+                        is_minput = True              # frequency-dep coherence needs
+                        is_evol = True                # the multi-input + evol paths
                     if is_minput:
                         is_mult = True                # multi-input needs the tensor
                     if is_joint:
@@ -733,6 +770,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.impl_fatig_joint = True
                     if is_minput:
                         ec.impl_fatig_minput = True
+                    if is_fcoh:
+                        ec.impl_mi_fcoh = True
                     if is_base:
                         ec.impl_fatig_base = True
                         if len(v0) > 4 and v0[4] >= 0:
