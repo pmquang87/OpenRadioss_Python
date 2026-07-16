@@ -91,6 +91,16 @@ Run it (from this directory):
 """
 
 import os
+# M36: decks are emitted through the package's fixed-format 2022 writer
+# (pyradioss/input/deck_writer.py) — model definition above is unchanged,
+# only the emission format moved to the real Radioss dialect.
+import sys as _sys
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
+if _REPO not in _sys.path:
+    _sys.path.insert(0, _REPO)
+from pyradioss.input import deck_writer  # noqa: E402
+
 
 NX = 6               # bricks along the cantilever axis (x)
 WY = 1.0             # cross-section width in y (mm) — the RECTANGULAR section...
@@ -182,9 +192,8 @@ def main():
                   f"         1         Z{10 + k:10d}{per * FZ:12g}"]
     lines.append("/END")
 
-    with open(os.path.join(here, "SPECTRAL_NONPROPORTIONAL_FATIGUE_0000.rad"),
-              "w") as fh:
-        fh.write("\n".join(lines) + "\n")
+    deck_writer.write_starter_from_port_lines(
+        lines, os.path.join(here, "SPECTRAL_NONPROPORTIONAL_FATIGUE_0000.rad"), runname="SPECTRAL_NONPROPORTIONAL_FATIGUE")
 
     # ---- engine: a bare implicit static step + the M23 analysis ------------
     engine = [
@@ -201,9 +210,8 @@ def main():
         "/STOP",
         "15.0",
     ]
-    with open(os.path.join(here, "SPECTRAL_NONPROPORTIONAL_FATIGUE_0001.rad"),
-              "w") as fh:
-        fh.write("\n".join(engine) + "\n")
+    deck_writer.write_engine_from_port_lines(
+        engine, os.path.join(here, "SPECTRAL_NONPROPORTIONAL_FATIGUE_0001.rad"))
     print("wrote SPECTRAL_NONPROPORTIONAL_FATIGUE_0000.rad / "
           "SPECTRAL_NONPROPORTIONAL_FATIGUE_0001.rad")
 

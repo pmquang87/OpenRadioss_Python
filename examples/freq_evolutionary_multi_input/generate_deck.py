@@ -101,6 +101,16 @@ Run it (from this directory):
 """
 
 import os
+# M36: decks are emitted through the package's fixed-format 2022 writer
+# (pyradioss/input/deck_writer.py) — model definition above is unchanged,
+# only the emission format moved to the real Radioss dialect.
+import sys as _sys
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
+if _REPO not in _sys.path:
+    _sys.path.insert(0, _REPO)
+from pyradioss.input import deck_writer  # noqa: E402
+
 
 NX = 6               # bricks along the cantilever axis (x)
 H = 1.0              # cross-section side (mm) — 1x1 square
@@ -199,9 +209,8 @@ def main():
                   f"         2         Y{10 + k:10d}{per * 0.7:12g}"]
     lines.append("/END")
 
-    with open(os.path.join(here, "FREQ_EVOLUTIONARY_MULTI_INPUT_0000.rad"),
-              "w") as fh:
-        fh.write("\n".join(lines) + "\n")
+    deck_writer.write_starter_from_port_lines(
+        lines, os.path.join(here, "FREQ_EVOLUTIONARY_MULTI_INPUT_0000.rad"), runname="FREQ_EVOLUTIONARY_MULTI_INPUT")
 
     # ---- engine: a bare implicit static step + the M30 freq-evol analysis --
     engine = [
@@ -235,9 +244,8 @@ def main():
         "/STOP",
         "15.0",
     ]
-    with open(os.path.join(here, "FREQ_EVOLUTIONARY_MULTI_INPUT_0001.rad"),
-              "w") as fh:
-        fh.write("\n".join(engine) + "\n")
+    deck_writer.write_engine_from_port_lines(
+        engine, os.path.join(here, "FREQ_EVOLUTIONARY_MULTI_INPUT_0001.rad"))
     print("wrote FREQ_EVOLUTIONARY_MULTI_INPUT_0000.rad / "
           "FREQ_EVOLUTIONARY_MULTI_INPUT_0001.rad")
 

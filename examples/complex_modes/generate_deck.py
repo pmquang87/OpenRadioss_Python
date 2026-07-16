@@ -57,6 +57,16 @@ Run it (from this directory):
 """
 
 import os
+# M36: decks are emitted through the package's fixed-format 2022 writer
+# (pyradioss/input/deck_writer.py) — model definition above is unchanged,
+# only the emission format moved to the real Radioss dialect.
+import sys as _sys
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
+if _REPO not in _sys.path:
+    _sys.path.insert(0, _REPO)
+from pyradioss.input import deck_writer  # noqa: E402
+
 
 NLINK = 4            # spring-mass links
 DX = 10.0            # node spacing (mm)
@@ -112,8 +122,8 @@ def main():
               "         1         X         3       1.0"]
     lines.append("/END")
 
-    with open(os.path.join(here, "COMPLEX_MODES_0000.rad"), "w") as fh:
-        fh.write("\n".join(lines) + "\n")
+    deck_writer.write_starter_from_port_lines(
+        lines, os.path.join(here, "COMPLEX_MODES_0000.rad"), runname="COMPLEX_MODES")
 
     # ---- engine: a bare implicit static step + the complex-modal analysis -
     engine = [
@@ -129,8 +139,8 @@ def main():
         "/STOP",
         "15.0",
     ]
-    with open(os.path.join(here, "COMPLEX_MODES_0001.rad"), "w") as fh:
-        fh.write("\n".join(engine) + "\n")
+    deck_writer.write_engine_from_port_lines(
+        engine, os.path.join(here, "COMPLEX_MODES_0001.rad"))
     print("wrote COMPLEX_MODES_0000.rad / COMPLEX_MODES_0001.rad")
 
 

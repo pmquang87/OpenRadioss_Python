@@ -1,0 +1,1555 @@
+{
+ "milestone": "M36",
+ "tolerance_rel_rms": 0.05,
+ "machine": "13th Gen Intel(R) Core(TM) i9-13900H",
+ "results": [
+  {
+   "case": "antenna_mast",
+   "suite": "bundled",
+   "case_id": null,
+   "class": "MATCH",
+   "max_rel_rms": 0.025674593896848306,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.014217849975363416,
+     "final_dev": 0.002260361832892585,
+     "scale": 6.136267173,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.01579226979295378,
+     "final_dev": 0.002909208405115244,
+     "scale": 6.095342941,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.004899260220914415,
+     "final_dev": 0.005177605979286784,
+     "scale": 6.145891002,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 11.037,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.025674593896848306,
+     "final_dev": 0.043100341927474854,
+     "scale": 9.339042756943705,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.477635736314883,
+     "final_dev": 0.02772048716266321,
+     "scale": 0.009815663909,
+     "significant": false
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.0347761734400231,
+     "final_dev": 0.07123749018845871,
+     "scale": 0.053737155798074046,
+     "significant": false
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.005201850455188216,
+     "final_dev": 0.005146390755820166,
+     "scale": 6.1407709849,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.014217849975363416,
+     "final_dev": 0.002260361832892585,
+     "scale": 6.136267173,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.015998115707438688,
+     "final_dev": 0.002917778051272812,
+     "scale": 6.095342941,
+     "significant": true
+    }
+   ],
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "box_beam_impact",
+   "suite": "bundled",
+   "case_id": null,
+   "class": "DEVIATION",
+   "max_rel_rms": 0.9745352978217758,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.026034804472409415,
+     "final_dev": 0.04008013234585906,
+     "scale": 0.14240382919966985,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.014328059491950373,
+     "final_dev": 0.012817093082844665,
+     "scale": 0.156,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.5837935787036291,
+     "final_dev": 0.9917197385783217,
+     "scale": 0.006960489365602505,
+     "significant": true
+    },
+    {
+     "channel": "CE",
+     "rel_rms": 0.9567219624584099,
+     "final_dev": 0.9829804798075834,
+     "scale": 0.01131441767,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.9745352978217758,
+     "final_dev": 1.0,
+     "scale": 0.007845371,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.00312,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.0065361183516078475,
+     "final_dev": 0.0053834211538461366,
+     "scale": 0.0312,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.012722632331936407,
+     "final_dev": 0.023769857692026428,
+     "scale": 0.156,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.026034804472409415,
+     "final_dev": 0.04008013234585906,
+     "scale": 0.14240382919966985,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.012138957349975794,
+     "final_dev": 0.009591082213226089,
+     "scale": 0.156,
+     "significant": true
+    }
+   ],
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "edge_impact",
+   "suite": "bundled",
+   "case_id": null,
+   "class": "DEVIATION",
+   "max_rel_rms": 0.4555191414653947,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.4370554586013864,
+     "final_dev": 0.9265497819189008,
+     "scale": 0.12239950315634462,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.41894719553447474,
+     "final_dev": 0.7096291877623653,
+     "scale": 0.0543586925965497,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.32274232320717927,
+     "final_dev": 0.99926865042134,
+     "scale": 0.04405313350837597,
+     "significant": true
+    },
+    {
+     "channel": "CE",
+     "rel_rms": 0.10656601327492049,
+     "final_dev": 0.19680904124992255,
+     "scale": 0.006699250118929782,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.01248,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.19516277533438642,
+     "final_dev": 0.14355818697325706,
+     "scale": 0.0008985459624644673,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.287099573195817,
+     "final_dev": 0.29477991747126897,
+     "scale": 0.0005468509678530522,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.13131983364990246,
+     "final_dev": 0.15260235334891584,
+     "scale": 0.01693602553947662,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.4555191414653947,
+     "final_dev": 0.9130295425481724,
+     "scale": 0.1664609311626823,
+     "significant": true
+    }
+   ],
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "gas_piston",
+   "suite": "bundled",
+   "case_id": null,
+   "class": "PORT-ONLY(starter-reject)",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "starter-reject",
+   "pyradioss_status": "ok",
+   "fortran_error": "ERROR ID :     67 | ** ERROR IN EOS DEFINITION | DESCRIPTION : | -- EOS ID          : 1 | -- EOS KEY         : /EOS/IDEAL-GAS | INITIAL PRESSURE MUST BE POSITIVE",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "notched_plate",
+   "suite": "bundled",
+   "case_id": null,
+   "class": "DEVIATION",
+   "max_rel_rms": 0.4308658763162625,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.09160650931176513,
+     "final_dev": 0.15356205418585042,
+     "scale": 5.879158162,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.24818705088861812,
+     "final_dev": 0.31935615066965545,
+     "scale": 0.0053824461282932085,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.4308658763162625,
+     "final_dev": 0.5955312214876567,
+     "scale": 0.1013654386,
+     "significant": true
+    },
+    {
+     "channel": "CE",
+     "rel_rms": 0.6912954280560895,
+     "final_dev": 0.6816170867270728,
+     "scale": 0.003609732824150894,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.09549696758446186,
+     "final_dev": 0.159875902995662,
+     "scale": 5.984291214,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.0015132,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.1711853969334294,
+     "final_dev": 0.06773411850983051,
+     "scale": 0.002851866312,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.09170593369031918,
+     "final_dev": 0.1537442517244578,
+     "scale": 5.883371321993,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.09160650931176513,
+     "final_dev": 0.15356205418585042,
+     "scale": 5.879158162,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.24469159688638537,
+     "final_dev": 0.3228778502312824,
+     "scale": 0.005473805527342726,
+     "significant": false
+    }
+   ],
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "rigid_impactor",
+   "suite": "bundled",
+   "case_id": null,
+   "class": "DEVIATION",
+   "max_rel_rms": 0.9738603610708474,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.10474641623699042,
+     "final_dev": 0.021980372064620335,
+     "scale": 0.0001403044162,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.881760792746442,
+     "final_dev": 0.7738934664986256,
+     "scale": 0.0001499829902,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.10438938297339459,
+     "final_dev": 0.035815947467486564,
+     "scale": 2.061560025e-06,
+     "significant": true
+    },
+    {
+     "channel": "CE",
+     "rel_rms": 0.7039178370942665,
+     "final_dev": 1.0,
+     "scale": 2.629635824e-06,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.5426043024163149,
+     "final_dev": 0.10819622172500229,
+     "scale": 2.386765601e-05,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.0029288,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.360878205494736,
+     "final_dev": 0.37387055641536715,
+     "scale": 3.091758121e-09,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.36089183610716496,
+     "final_dev": 0.3739474125075299,
+     "scale": 3.091400262e-09,
+     "significant": false
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.9738603610708474,
+     "final_dev": 1.0109226304113208,
+     "scale": 0.0008514534511,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.9030551823450038,
+     "final_dev": 0.7944553706003659,
+     "scale": 0.0001499829995258866,
+     "significant": true
+    }
+   ],
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "rubber_block",
+   "suite": "bundled",
+   "case_id": null,
+   "class": "MATCH",
+   "max_rel_rms": 0.0009554329589538454,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.0008890970739896451,
+     "final_dev": 0.0007530216793877172,
+     "scale": 0.5151274002036063,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.0009621275915105519,
+     "final_dev": 5.37502500123647e-07,
+     "scale": 0.001166781432,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.011574700638973713,
+     "final_dev": 0.02273255289454037,
+     "scale": 8.378193214407191e-05,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.0009371405854381621,
+     "final_dev": 0.001669107919016318,
+     "scale": 0.5150362,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.001,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.0009554329589538454,
+     "final_dev": 2.7679396713531502e-05,
+     "scale": 0.001189567857,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.0008898322491395385,
+     "final_dev": 0.0007530197687467464,
+     "scale": 0.5151278743950294,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.0008890970739896451,
+     "final_dev": 0.0007530216793877172,
+     "scale": 0.5151274002036063,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.004279154518205297,
+     "final_dev": 7.399541606769022e-07,
+     "scale": 0.0011677868512582057,
+     "significant": false
+    }
+   ],
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "spot_weld",
+   "suite": "bundled",
+   "case_id": null,
+   "class": "DEVIATION",
+   "max_rel_rms": 0.9870299421205904,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.15967394038120808,
+     "final_dev": 0.3263928111807058,
+     "scale": 30.714450155122197,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.07179628098616261,
+     "final_dev": 0.00026479083826626054,
+     "scale": 938.8201244562293,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.07996995540156512,
+     "final_dev": 0.035669047208981224,
+     "scale": 7.0043528262003125,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.4259333773106444,
+     "final_dev": 0.9756803287465454,
+     "scale": 10.27974422,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.00936,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.9687006726906785,
+     "final_dev": 0.981725628432,
+     "scale": 0.25,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.9870299421205904,
+     "final_dev": 1.0000012261591689,
+     "scale": 0.25,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.987029282303069,
+     "final_dev": 1.0,
+     "scale": 0.25,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.0719452351671833,
+     "final_dev": 0.010765690644745795,
+     "scale": 908.105674301107,
+     "significant": true
+    }
+   ],
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "tensile_bar",
+   "suite": "bundled",
+   "case_id": null,
+   "class": "MATCH",
+   "max_rel_rms": 0.001724068762275621,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.00028796864679561814,
+     "final_dev": 0.00031834584446574336,
+     "scale": 0.3118180374764601,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.001846977773099096,
+     "final_dev": 1.7587541541520973e-05,
+     "scale": 7.779157365e-05,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.000592322528962679,
+     "final_dev": 0.0005024136619238991,
+     "scale": 0.000154109059,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 4.711037675120051e-05,
+     "final_dev": 4.9922516303817395e-05,
+     "scale": 0.3120413043,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.000312,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.001724068762275621,
+     "final_dev": 2.0577542452638187e-05,
+     "scale": 0.0001990054399,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.0002878915112101541,
+     "final_dev": 0.00031828899037403106,
+     "scale": 0.3118694372081875,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.00028796864679561814,
+     "final_dev": 0.00031834584446574336,
+     "scale": 0.3118180374764601,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.002765041945765577,
+     "final_dev": 0.00048398130777835074,
+     "scale": 7.779157365e-05,
+     "significant": false
+    }
+   ],
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "c10_V0030_Spring_Type_4_stiff",
+   "suite": "official",
+   "case_id": "rd_v_elements/RD-V-0030_Spring_Type_4/0030_spring_type_4/0030_spring_type_4_stiff/Spring_TYPE4_element_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": " . . . . . . . :      0.030 s\n\n     STARTER TERMINATION : ERROR\n     5 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/SPRING"
+   ]
+  },
+  {
+   "case": "c11_V0030_Spring_Type_4_visc",
+   "suite": "official",
+   "case_id": "rd_v_elements/RD-V-0030_Spring_Type_4/0030_spring_type_4/0030_spring_type_4_visc/Spring_TYPE4_element_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": " . . . . . . . :      0.030 s\n\n     STARTER TERMINATION : ERROR\n     5 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/SPRING"
+   ]
+  },
+  {
+   "case": "c26_V0200_Hardening",
+   "suite": "official",
+   "case_id": "rd_v_material/RD-V-0200_Hardening/0200_hardening/rdv_0200_hardening_modulus_0000.rad",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.9742921041685053,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.5612098425520455,
+     "final_dev": 1.0,
+     "scale": 6484204.476792166,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.8883603875792703,
+     "final_dev": 0.8541670452116699,
+     "scale": 7.344984790041662,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.5612115428853166,
+     "final_dev": 1.0,
+     "scale": 6484350.476792166,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 3.622054488670272e-07,
+     "final_dev": 3.6220544886702723e-07,
+     "scale": 0.000126999746,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.9742921041685053,
+     "final_dev": 0.9754372518054634,
+     "scale": 0.03307068840956899,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.5612101391540653,
+     "final_dev": 1.0,
+     "scale": 6484210.750636121,
+     "significant": true
+    }
+   ],
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/BRIC"
+   ]
+  },
+  {
+   "case": "c15_V0700_LAW2_SHELL_Ishell24_LAW2",
+   "suite": "official",
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/SHELL_Ishell24_LAW2/shell_Ishell24_LAW2_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.048 s\n\n     STARTER TERMINATION : ERROR\n     14 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "shell_Ishell24_LAW2T01",
+    "shell_Ishell24_LAW2_0000.out",
+    "shell_Ishell24_LAW2_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c21_V0700_LAW36_SHELL_Ishell12",
+   "suite": "official",
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW36_version2/SHELL_Ishell12/shell_Ishell12_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.057 s\n\n     STARTER TERMINATION : ERROR\n     14 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "shell_Ishell12T01",
+    "shell_Ishell12_0000.out",
+    "shell_Ishell12_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c22_V0700_LAW36_SHELL_Ishell24",
+   "suite": "official",
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW36_version2/SHELL_Ishell24/shell_Ishell24_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.058 s\n\n     STARTER TERMINATION : ERROR\n     14 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "shell_Ishell24T01",
+    "shell_Ishell24_0000.out",
+    "shell_Ishell24_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c17_V0700_LAW2_TRIA_LAW2",
+   "suite": "official",
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/TRIA_LAW2/TRIA_JC_LAW2_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": " . . . . . . . :      0.048 s\n\n     STARTER TERMINATION : ERROR\n     4 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "TRIA_JC_LAW2T01",
+    "TRIA_JC_LAW2_0000.out",
+    "TRIA_JC_LAW2_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/SH3N"
+   ]
+  },
+  {
+   "case": "c24_V0700_LAW36_TRIA",
+   "suite": "official",
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW36_version2/TRIA/TRIA_JC_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": " . . . . . . . :      0.056 s\n\n     STARTER TERMINATION : ERROR\n     4 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "TRIA_JCT01",
+    "TRIA_JC_0000.out",
+    "TRIA_JC_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/SH3N"
+   ]
+  },
+  {
+   "case": "c13_V0700_LAW2_HEXA_18_LAW2",
+   "suite": "official",
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/HEXA_ELEM_SOLID_18_LAW2/HEXAP14_18_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.098 s\n\n     STARTER TERMINATION : ERROR\n     17 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "HEXAP14_18T01",
+    "HEXAP14_18_0000.out",
+    "HEXAP14_18_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/BRIC"
+   ]
+  },
+  {
+   "case": "c14_V0700_LAW2_HEXA_24_LAW2",
+   "suite": "official",
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/HEXA_ELEM_SOLID_24_LAW2/HEXA_LAW2_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.077 s\n\n     STARTER TERMINATION : ERROR\n     17 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "HEXA_LAW2T01",
+    "HEXA_LAW2_0000.out",
+    "HEXA_LAW2_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/BRIC"
+   ]
+  },
+  {
+   "case": "c19_V0700_LAW36_HEXA_18",
+   "suite": "official",
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW36_version2/HEXA_ELEM_SOLID_18/HEXAP14_18_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.082 s\n\n     STARTER TERMINATION : ERROR\n     39 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "HEXAP14_18T01",
+    "HEXAP14_18_0000.out",
+    "HEXAP14_18_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/BRIC"
+   ]
+  },
+  {
+   "case": "c20_V0700_LAW36_HEXA_24",
+   "suite": "official",
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW36_version2/HEXA_ELEM_SOLID_24/HEXA1_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.100 s\n\n     STARTER TERMINATION : ERROR\n     39 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "HEXA1T01",
+    "HEXA1_0000.out",
+    "HEXA1_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/BRIC"
+   ]
+  },
+  {
+   "case": "c12_V0700_LAW2_HEXA_DEGE_LAW2",
+   "suite": "official",
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/HEXA_DEGE_LAW2/HEXA_DEGE_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.087 s\n\n     STARTER TERMINATION : ERROR\n     58 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "HEXA_DEGET01",
+    "HEXA_DEGE_0000.out",
+    "HEXA_DEGE_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/BRIC"
+   ]
+  },
+  {
+   "case": "c18_V0700_LAW36_HEXA_DEGE",
+   "suite": "official",
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW36_version2/HEXA_DEGE/HEXA_DEGE_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.089 s\n\n     STARTER TERMINATION : ERROR\n     60 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "HEXA_DEGET01",
+    "HEXA_DEGE_0000.out",
+    "HEXA_DEGE_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/BRIC"
+   ]
+  },
+  {
+   "case": "c01_E0500_Beam_frame",
+   "suite": "official",
+   "case_id": "rd_e/RD-E-0500_Beam_frame/05_Beam-frame/FRAME_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": " . . . . . . . :      0.038 s\n\n     STARTER TERMINATION : ERROR\n     4 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "SUBSET",
+    "TH/BEAM"
+   ]
+  },
+  {
+   "case": "c02_E1000_Bending_BATOZ_Sf_0.6",
+   "suite": "official",
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BATOZ/Sf_0.6/ROLLING_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": " . . . . . . . :      0.042 s\n\n     STARTER TERMINATION : ERROR\n     2 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c03_E1000_Bending_BATOZ_Sf_0.8",
+   "suite": "official",
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BATOZ/Sf_0.8/ROLLING_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": " . . . . . . . :      0.030 s\n\n     STARTER TERMINATION : ERROR\n     2 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c04_E1000_Bending_BATOZ_Sf_0.9",
+   "suite": "official",
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BATOZ/Sf_0.9/ROLLING_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": " . . . . . . . :      0.027 s\n\n     STARTER TERMINATION : ERROR\n     2 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c08_E1000_Bending_QEPH_Sf_0.8",
+   "suite": "official",
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/QEPH/Sf_0.8/ROLLING_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": " . . . . . . . :      0.031 s\n\n     STARTER TERMINATION : ERROR\n     2 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c09_E1000_Bending_QEPH_Sf_0.9",
+   "suite": "official",
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/QEPH/Sf_0.9/ROLLING_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": " . . . . . . . :      0.043 s\n\n     STARTER TERMINATION : ERROR\n     2 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c16_V0700_LAW2_TETRA_ELEM_24",
+   "suite": "official",
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/TETRA_ELEM_24/TETRA_LAW2_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.100 s\n\n     STARTER TERMINATION : ERROR\n     17 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "TETRA_LAW2T01",
+    "TETRA_LAW2_0000.out",
+    "TETRA_LAW2_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": []
+  },
+  {
+   "case": "c23_V0700_LAW36_TETRA_ELEM_24",
+   "suite": "official",
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW36_version2/TETRA_ELEM_24/TETRA_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.088 s\n\n     STARTER TERMINATION : ERROR\n     38 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "TETRAT01",
+    "TETRA_0000.out",
+    "TETRA_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": []
+  },
+  {
+   "case": "c05_E1000_Bending_DKT18_Sf_0.1",
+   "suite": "official",
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/DKT18/Sf_0.1/ROLLING_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": " . . . . . . . :      0.050 s\n\n     STARTER TERMINATION : ERROR\n     2 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/RBODY"
+   ]
+  },
+  {
+   "case": "c06_E1000_Bending_DKT18_Sf_0.2",
+   "suite": "official",
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/DKT18/Sf_0.2/ROLLING_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": " . . . . . . . :      0.043 s\n\n     STARTER TERMINATION : ERROR\n     2 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/RBODY"
+   ]
+  },
+  {
+   "case": "c07_E1000_Bending_DKT18_Sf_0.3",
+   "suite": "official",
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/DKT18/Sf_0.3/ROLLING_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": " . . . . . . . :      0.041 s\n\n     STARTER TERMINATION : ERROR\n     2 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/RBODY"
+   ]
+  },
+  {
+   "case": "c39_TENSILE",
+   "suite": "official",
+   "case_id": "tutorial/TENSILE/TENSILE_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "starter-reject",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": "ERROR ID :    178 | ** ERROR IN PART DEFINITION (PROPERTY) | DESCRIPTION : | -- PART ID: 1 | -- PART TITLE: PSHELL1 | PROPERTY ID=0 DOES NOT EXIST",
+   "pyradioss_error": " . . . . . . . :      0.043 s\n\n     STARTER TERMINATION : ERROR\n     3 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": "TENSILET01",
+   "pre_existing_reference": [
+    "TENSILET01"
+   ],
+   "engine_deck_chain": 0,
+   "unsupported_soft": []
+  },
+  {
+   "case": "c00_E0100_Twisted_beam_DKT18",
+   "suite": "official",
+   "case_id": "rd_e/RD-E-0100_Twisted_beam/01_Twisted_Beam/DKT18/TWISBEAM_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": " . . . . . . . :      0.039 s\n\n     STARTER TERMINATION : ERROR\n     1 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 2,
+   "unsupported_soft": []
+  },
+  {
+   "case": "c25_V0300_Pressure",
+   "suite": "official",
+   "case_id": "rd_v_loads/RD-V-0300_Pressure/0300_pressure/rdv_0300_pressure_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . :      0.279 s\n\n     STARTER TERMINATION : ERROR\n     1165 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_soft": []
+  },
+  {
+   "case": "c27_V0240_HEXA_P14_Isolid24",
+   "suite": "official",
+   "case_id": "rd_v_material/RD_V_0240/Modele_HEXA_P14_Isolid24/tensile_TABULATED_HEXA_P14_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.139 s\n\n     STARTER TERMINATION : ERROR\n     32 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "tensile_TABULATED_HEXA_P14T01",
+    "tensile_TABULATED_HEXA_P14_0000.out",
+    "tensile_TABULATED_HEXA_P14_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/BRIC",
+    "TH/RBODY"
+   ]
+  },
+  {
+   "case": "c28_V0240_QUAD_Ishell12",
+   "suite": "official",
+   "case_id": "rd_v_material/RD_V_0240/Modele_QUAD_Ishell12/tensile_TABULATED_QUAD_Ishell12_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.076 s\n\n     STARTER TERMINATION : ERROR\n     22 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "tensile_TABULATED_QUAD_Ishell12T01",
+    "tensile_TABULATED_QUAD_Ishell12_0000.out",
+    "tensile_TABULATED_QUAD_Ishell12_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c32_V0240_Tensile_QUAD_Ishell24",
+   "suite": "official",
+   "case_id": "rd_v_material/RD_V_0240/Tensile_QUAD_Ishell24/tensile_TABULATED_QUAD_Ishell24_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.109 s\n\n     STARTER TERMINATION : ERROR\n     22 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "tensile_TABULATED_QUAD_Ishell24T01",
+    "tensile_TABULATED_QUAD_Ishell24_0000.out",
+    "tensile_TABULATED_QUAD_Ishell24_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c33_T1000",
+   "suite": "official",
+   "case_id": "tutorial/RD-HWX-T-1000/solved_completed_model/data/tensile_completed_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.043 s\n\n     STARTER TERMINATION : ERROR\n     19 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "tensile_completedT01",
+    "tensile_completed_0000.out",
+    "tensile_completed_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/RBODY"
+   ]
+  },
+  {
+   "case": "c34_T1000",
+   "suite": "official",
+   "case_id": "tutorial/RD-HWX-T-1000/unsolved_starter_model/data/tensile_start_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "starter-reject",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": "ERROR ID :    178 | ** ERROR IN PART DEFINITION (PROPERTY) | DESCRIPTION : | -- PART ID: 3 | -- PART TITLE: Tensile_coupon | PROPERTY ID=0 DOES NOT EXIST",
+   "pyradioss_error": ". . . . . . . :      0.027 s\n\n     STARTER TERMINATION : ERROR\n     14 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "tensile_completedT01",
+    "tensile_completed_0000.out",
+    "tensile_completed_0001.out"
+   ],
+   "engine_deck_chain": 0,
+   "unsupported_soft": []
+  },
+  {
+   "case": "c35_T1010_unsolved",
+   "suite": "official",
+   "case_id": "tutorial/RD-HWX-T-1010/unsolved/data/cantilever_start_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "starter-reject",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": "ERROR ID :    178 | ** ERROR IN PART DEFINITION (PROPERTY) | DESCRIPTION : | -- PART ID: 1 | -- PART TITLE: plate | PROPERTY ID=0 DOES NOT EXIST",
+   "pyradioss_error": ". . . . . . . :      0.033 s\n\n     STARTER TERMINATION : ERROR\n     77 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "cantilever_completedT01",
+    "cantilever_completed_0000.out",
+    "cantilever_completed_0001.out",
+    "cantilever_completed_DYRELT01",
+    "cantilever_completed_DYREL_0000.out",
+    "cantilever_completed_DYREL_0001.out"
+   ],
+   "engine_deck_chain": 0,
+   "unsupported_soft": []
+  },
+  {
+   "case": "c31_V0240_TRIA_Ishell24",
+   "suite": "official",
+   "case_id": "rd_v_material/RD_V_0240/Modele_TRIA_Ishell24/tensile_TABULATED_TRIA_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.028 s\n\n     STARTER TERMINATION : ERROR\n     27 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "tensile_TABULATED_TRIAT01",
+    "tensile_TABULATED_TRIA_0000.out",
+    "tensile_TABULATED_TRIA_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SH3N"
+   ]
+  },
+  {
+   "case": "c29_V0240_TETRA4_Itetra0",
+   "suite": "official",
+   "case_id": "rd_v_material/RD_V_0240/Modele_TETRA4_Itetra0/tensile_TABULATED_TETRA_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . . :      0.085 s\n\n     STARTER TERMINATION : ERROR\n     55 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "tensile_TABULATED_TETRAT01",
+    "tensile_TABULATED_TETRA_0000.out",
+    "tensile_TABULATED_TETRA_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/BRIC",
+    "TH/RBODY"
+   ]
+  },
+  {
+   "case": "c30_V0240_TETRA4_Itetra3",
+   "suite": "official",
+   "case_id": "rd_v_material/RD_V_0240/Modele_TETRA4_Itetra3/tensile_TABULATED_TETRA4_3_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "engine-fail",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": "Abort(2) on node 0 (rank 0 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 2) - process 0",
+   "pyradioss_error": ". . . . . . . :      0.072 s\n\n     STARTER TERMINATION : ERROR\n     55 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": "tensile_TABULATED_TETRA4_3T01",
+   "pre_existing_reference": [
+    "tensile_TABULATED_TETRA4_3T01",
+    "tensile_TABULATED_TETRA4_3_0000.out",
+    "tensile_TABULATED_TETRA4_3_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/BRIC",
+    "TH/RBODY"
+   ]
+  },
+  {
+   "case": "c38_T1060_unsolved",
+   "suite": "official",
+   "case_id": "tutorial/RD-HWX-T-1060/unsolved/data/3PB_initial_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "starter-reject",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": "ERROR ID :    178 | ** ERROR IN PART DEFINITION (PROPERTY) | DESCRIPTION : | -- PART ID: 2 | -- PART TITLE: Flat | PROPERTY ID=0 DOES NOT EXIST",
+   "pyradioss_error": " . . . . . . :      0.075 s\n\n     STARTER TERMINATION : ERROR\n     303 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "3PB_completedT01",
+    "3PB_completed_0000.out",
+    "3PB_completed_0001.out"
+   ],
+   "engine_deck_chain": 0,
+   "unsupported_soft": []
+  },
+  {
+   "case": "c36_T1020_unsolved",
+   "suite": "official",
+   "case_id": "tutorial/RD-HWX-T-1020/unsolved/data/Front_Impact_initial_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "starter-reject",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": "ERROR ID :    178 | ** ERROR IN PART DEFINITION (PROPERTY) | DESCRIPTION : | -- PART ID: 3 | -- PART TITLE: BumperBeam | PROPERTY ID=0 DOES NOT EXIST",
+   "pyradioss_error": ". . . . . . :      0.109 s\n\n     STARTER TERMINATION : ERROR\n     1636 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "Front_Impact_completedT01",
+    "Front_Impact_completed_0000.out",
+    "Front_Impact_completed_0001.out"
+   ],
+   "engine_deck_chain": 0,
+   "unsupported_soft": [
+    "SUBSET"
+   ]
+  },
+  {
+   "case": "c37_T1040_solved",
+   "suite": "official",
+   "case_id": "tutorial/RD-HWX-T-1040/solved/data/gasket_completed_0000.rad",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": null,
+   "pyradioss_error": ". . . . . . :      1.274 s\n\n     STARTER TERMINATION : ERROR\n     2073 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "pre_existing_reference": [
+    "gasket_completedT01",
+    "gasket_completed_0000.out",
+    "gasket_completed_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_soft": [
+    "TH/RBODY"
+   ]
+  }
+ ]
+}

@@ -44,6 +44,16 @@ Run it (from this directory):
 
 import math
 import os
+# M36: decks are emitted through the package's fixed-format 2022 writer
+# (pyradioss/input/deck_writer.py) — model definition above is unchanged,
+# only the emission format moved to the real Radioss dialect.
+import sys as _sys
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
+if _REPO not in _sys.path:
+    _sys.path.insert(0, _REPO)
+from pyradioss.input import deck_writer  # noqa: E402
+
 
 L = 100.0            # pendulum length (mm)
 G = 9.81e-3          # gravity (mm/ms^2)
@@ -132,10 +142,10 @@ g, minus-y
 /PRINT/-100
 /END
 """
-    with open(os.path.join(here, "IMPLPEND_0000.rad"), "w") as f:
-        f.write(starter)
-    with open(os.path.join(here, "IMPLPEND_0001.rad"), "w") as f:
-        f.write(engine)
+    deck_writer.write_starter_from_port_lines(
+        starter.splitlines(), os.path.join(here, "IMPLPEND_0000.rad"), runname="IMPLPEND")
+    deck_writer.write_engine_from_port_lines(
+        engine.splitlines(), os.path.join(here, "IMPLPEND_0001.rad"))
     print("wrote IMPLPEND_0000.rad / IMPLPEND_0001.rad")
     print(f"  linear period 2 pi sqrt(L/g)     : {t_lin:9.2f} ms")
     print(f"  elliptic (60 deg) period         : {t_nl:9.2f} ms  "

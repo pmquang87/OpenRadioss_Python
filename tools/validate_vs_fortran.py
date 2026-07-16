@@ -36,24 +36,28 @@ parity (default)
     - ``SKIPPED-SLOW``   pyradioss side exceeded ``--timeout`` (default 240 s)
                          or the global ``--budget`` (default 2700 s)
 
-    DIALECT NOTE (measured, see VALIDATION.md): the port's example decks
-    are written in pyradioss' own *free-format* dialect (whitespace
-    tokens, 10-char real fields, trailing default cards omitted, port
-    field order on load cards).  The real Starter reads **fixed-format
-    Radioss 2022** (20-char real fields, exact card layouts).  Feeding
-    the decks to the Fortran Starter unmodified fails at /BEGIN
-    ("INPUT FORMAT 0 NOT SUPPORTED"), and even where a deck can be
-    nursed past the reader the model is *silently different* (e.g.
-    Poisson ratio 0.3 lands in the E field's columns and reads as 0).
-    Therefore this harness carries a small, per-keyword *translator*
-    (``--shim translate``, the default) that re-emits a deck copy in the
-    real fixed format.  Every translated layout was taken from the
-    authoritative ``hm_cfg_files`` CARD definitions shipped with the
-    Fortran build, and the translation is *formatting only* — same
-    values, same meaning, sources under examples/ are never touched.
-    Decks using keywords without a verified translator are honestly
-    classified PORT-ONLY(dialect) and the raw Fortran error is recorded
-    (``--shim begin`` inserts only the /BEGIN version card so that the
+    DIALECT NOTE (M36 update): the bundled example decks are now
+    generated in the **real fixed 2022 format** directly, by
+    ``pyradioss/input/deck_writer.py`` — the M35 per-keyword translator
+    below was PROMOTED into that module and extended to every supported
+    keyword family; the copy kept here is only a **fallback for
+    old-dialect decks** (user decks written in the port's historical
+    free-format style).  The harness auto-detects the format
+    (:func:`deck_is_real_format` looks for the /BEGIN input-version
+    card): real-format decks skip translation entirely and only receive
+    :func:`real_deck_fixups` — the deck_writer's *documented residue
+    fields* mapped to their real meaning for the Fortran run
+    (/RWALL blank search distance -> 1e30; /INTER/TYPE7|11 port gap_max
+    in the real Tstart column -> moved to the real GAPMAX field; the
+    port-only /TH/SECT block stripped).  See the deck_writer module
+    docstring for why those residues exist.
+
+    For OLD-dialect decks the historical behaviour is unchanged: feeding
+    them to the Fortran Starter unmodified fails at /BEGIN
+    ("INPUT FORMAT 0 NOT SUPPORTED"), so ``--shim translate`` (default)
+    re-emits a fixed-format copy per keyword; decks using keywords
+    without a verified translator are classified PORT-ONLY(dialect)
+    (``--shim begin`` inserts only the /BEGIN version card so the
     per-deck real error is visible; ``--shim none`` runs the deck raw).
 
 coverage
@@ -93,7 +97,7 @@ from typing import Dict, List, Optional, Tuple
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
 
-from pyradioss.input.deck_reader import read_deck, KeywordBlock  # noqa: E402
+from pyradioss.input.deck_reader import read_deck  # noqa: E402
 
 # ----------------------------------------------------------------------------
 # Fortran toolchain (mirrors run_batch.ps1, non-MPI path)
@@ -144,409 +148,200 @@ def run_cmd(cmd: List[str], cwd: str, timeout: float,
 
 
 # ----------------------------------------------------------------------------
-# Deck dialect translation  (port free-format  ->  real Radioss 2022 fixed)
-#
-# Every layout below is copied from the CARD("...") definitions in
-# C:/OpenRadioss/hm_cfg_files/config/CFG/radioss*/ — the exact format
-# strings this Starter build parses with.  Only formatting is changed;
-# values and their meaning are preserved (the port's card semantics were
-# verified against pyradioss/input/starter_keywords.py docstrings).
+# Listing (.out) harvesting — model size, cycle count, self-reported elapsed
+# (M36: per-run wall-clock timing is a first-class deliverable; the harness
+# wall-clocks each subprocess AND harvests the solvers' own counters so the
+# perf records can carry cycles/s and elements*cycles/s.)
 # ----------------------------------------------------------------------------
 
-def _i10(v) -> str:
-    return f"{int(float(v)):>10d}"
+def harvest_fortran_out(starter_out: str, engine_out: str) -> Dict:
+    """Counts from the real Starter/Engine listings.
 
+    Starter: ``NUMNOD: NUMBER OF NODAL POINTS. . .   99`` and the
+    ``NUMEL*:`` family (summed); ``ELAPSED TIME...........=  1.43 s``.
+    Engine: ``TOTAL NUMBER OF CYCLES  :  1420`` and its ELAPSED TIME.
+    """
+    info: Dict = {}
+    if os.path.exists(starter_out):
+        txt = open(starter_out, errors="replace").read()
+        m = re.search(r"NUMNOD\s*:\s*NUMBER OF NODAL POINTS[ .]*(\d+)", txt)
+        if m:
+            info["n_nodes"] = int(m.group(1))
+        nel = 0
+        seen = set()
+        for m in re.finditer(r"^\s*(NUMEL\w*)\s*:[^\n]*?(\d+)\s*$",
+                             txt, re.M):
+            if m.group(1) not in seen:
+                seen.add(m.group(1))
+                nel += int(m.group(2))
+        if seen:
+            info["n_elements"] = nel
+        m = re.search(r"ELAPSED TIME[ .]*=\s*([\d.]+)", txt)
+        if m:
+            info["starter_elapsed_self"] = float(m.group(1))
+    if os.path.exists(engine_out):
+        txt = open(engine_out, errors="replace").read()
+        m = re.search(r"TOTAL NUMBER OF CYCLES\s*:\s*(\d+)", txt)
+        if m:
+            info["n_cycles"] = int(m.group(1))
+        m = re.search(r"ELAPSED TIME[ .]*=\s*([\d.]+)", txt)
+        if m:
+            info["engine_elapsed_self"] = float(m.group(1))
+    return info
+
+
+def harvest_port_out(starter_out: str, engine_out: str) -> Dict:
+    """Counts from the pyradioss listings.
+
+    Starter: ``NUMBER OF NODES . . : 99`` / ``NUMBER OF /BRICK  ELEMENTS``
+    (summed) / ``STARTER ELAPSED TIME . . :  0.031 s``.
+    Engine: ``CYCLES . . : 1847`` / ``ELAPSED TIME . . :  3.034 s``.
+    """
+    info: Dict = {}
+    if os.path.exists(starter_out):
+        txt = open(starter_out, errors="replace").read()
+        m = re.search(r"NUMBER OF NODES[ .]*:\s*(\d+)", txt)
+        if m:
+            info["n_nodes"] = int(m.group(1))
+        nel = sum(int(m.group(2)) for m in re.finditer(
+            r"NUMBER OF /(\w+)\s*ELEMENTS[ .]*:\s*(\d+)", txt))
+        if re.search(r"NUMBER OF /(\w+)\s*ELEMENTS", txt):
+            info["n_elements"] = nel
+        m = re.search(r"ELAPSED TIME[ .]*:\s*([\d.]+)", txt)
+        if m:
+            info["starter_elapsed_self"] = float(m.group(1))
+    if os.path.exists(engine_out):
+        txt = open(engine_out, errors="replace").read()
+        m = re.search(r"^\s*CYCLES[ .]*:\s*(\d+)", txt, re.M)
+        if m:
+            info["n_cycles"] = int(m.group(1))
+        m = re.search(r"ELAPSED TIME[ .]*:\s*([\d.]+)", txt)
+        if m:
+            info["engine_elapsed_self"] = float(m.group(1))
+    return info
+
+
+# ----------------------------------------------------------------------------
+# Real-format deck detection + residue fixups (M36)
+# ----------------------------------------------------------------------------
+
+def deck_is_real_format(path: str) -> bool:
+    """True when the starter deck already carries the fixed-2022 /BEGIN
+    input-version card (decks emitted by pyradioss/input/deck_writer.py).
+    Such decks are fed to the Fortran Starter without translation."""
+    lines = open(path, errors="replace").read().splitlines()
+    for i, ln in enumerate(lines):
+        if ln.strip().upper().startswith("/BEGIN"):
+            for j in range(i + 1, min(i + 4, len(lines))):
+                toks = lines[j].split()
+                if toks and toks[0].isdigit() and len(toks[0]) == 4:
+                    return True
+            return False
+    return False
+
+
+def real_deck_fixups(path: str) -> str:
+    """Map the deck_writer's DOCUMENTED RESIDUE fields to their real
+    meaning in the Fortran-side deck copy (values preserved; see the
+    deck_writer module docstring for why the residues exist):
+
+    * /RWALL/* — the blank d/fric card (the port reads the next card as
+      the wall point) becomes d = 1e30, the real equivalent of the
+      port's "track all nodes";
+    * /INTER/TYPE7 — a value in the Stfac card's 4th field (real Tstart)
+      is the PORT's gap_max: moved to the real GAPMAX field (card B,
+      2nd field); /INTER/TYPE11 — same field blanked (the real TYPE11
+      2020 layout has no gap-cap field);
+    * /TH/SECT — the port's section-output request (real Radioss spells
+      it /TH/SECTIO and defines sections differently): stripped.
+    """
+    return real_deck_fixups_text(open(path, errors="replace").read())
+
+
+def real_deck_fixups_text(text: str) -> str:
+    """Text-input variant of :func:`real_deck_fixups` (same mapping)."""
+    lines = text.splitlines()
+    out: List[str] = []
+    i, n = 0, len(lines)
+
+    def is_comment(s: str) -> bool:
+        return s.lstrip().startswith(("#", "$"))
+
+    while i < n:
+        ln = lines[i]
+        s = ln.strip().upper()
+        if s.startswith("/TH/SECT/"):
+            i += 1
+            while i < n and not lines[i].lstrip().startswith("/"):
+                i += 1
+            out.append("# (/TH/SECT port block stripped for the Fortran "
+                       "run — real Radioss spells it /TH/SECTIO)")
+            continue
+        if s.startswith("/RWALL/"):
+            out.append(ln)
+            i += 1
+            replaced = False
+            while i < n and not lines[i].lstrip().startswith("/"):
+                if (not replaced and lines[i].strip() == ""
+                        and not is_comment(lines[i])):
+                    out.append(_f20(1e30))     # d: search distance
+                    replaced = True
+                else:
+                    out.append(lines[i])
+                i += 1
+            continue
+        if s.startswith("/INTER/TYPE7/") or s.startswith("/INTER/TYPE11/"):
+            is7 = s.startswith("/INTER/TYPE7/")
+            blk = [ln]
+            i += 1
+            while i < n and not lines[i].lstrip().startswith("/"):
+                blk.append(lines[i])
+                i += 1
+            data = [k for k in range(1, len(blk)) if not is_comment(blk[k])]
+            nonblank = [k for k in data if blk[k].strip()]
+            # nonblank: [title, cardA, cardD(Stfac), ...]
+            if len(nonblank) >= 3:
+                kd = nonblank[2]
+                card = blk[kd].ljust(100)
+                tstart = card[60:80].strip()
+                if tstart:
+                    blk[kd] = card[:60].rstrip()
+                    if is7:
+                        blanks = [k for k in data if not blk[k].strip()]
+                        if blanks:      # card B: Fscalegap | GAPMAX | ...
+                            blk[blanks[0]] = " " * 20 + f"{tstart:>20}"
+            out.extend(blk)
+            continue
+        out.append(ln)
+        i += 1
+    return "\n".join(out) + "\n"
+
+
+# ----------------------------------------------------------------------------
+# Old-dialect fallback translation
+#
+# Since M36 the translator lives in pyradioss/input/deck_writer.py (the
+# promotion of the M35 per-keyword translator that used to be duplicated
+# here — single source of truth).  This wrapper remains as the FALLBACK
+# for user decks still written in the port's historical free-format
+# dialect: it converts them with the package writer and then applies the
+# same documented residue fixups as real-format decks.
+# ----------------------------------------------------------------------------
 
 def _f20(v) -> str:
     return f"{float(v):>20.10G}"
 
 
-def _b(width: int = 10) -> str:
-    return " " * width
-
-
-def _title_cards(block: KeywordBlock) -> Tuple[str, list]:
-    """First card = title (Radioss convention for titled blocks)."""
-    if not block.cards:
-        return "", []
-    return block.cards[0].raw.rstrip(), block.cards[1:]
-
-
-def _header(block: KeywordBlock) -> str:
-    return "/" + "/".join(block.parts)
-
-
-class Untranslatable(Exception):
-    pass
-
-
-def tr_begin(block, runname):
-    # /BEGIN: runname, input-version card, input/work unit cards
-    # (identical units in and out -> no conversion; labels arbitrary).
-    return ["/BEGIN", runname, "      2022         0",
-            "                  Mg                  mm                   s",
-            "                  Mg                  mm                   s"]
-
-
-def tr_passthrough(block, runname):
-    return [_header(block)] + [c.raw.rstrip() for c in block.cards]
-
-
-def tr_node(block, runname):
-    # cfg: %10d%20lg%20lg%20lg
-    out = [_header(block)]
-    for c in block.cards:
-        t = c.tokens()
-        out.append(_i10(t[0]) + "".join(_f20(x) for x in t[1:4]))
-    return out
-
-
-def tr_int_elements(block, runname):
-    # BRICK/SHELL/SH3N/TRUSS/BEAM/SPRING element cards: all-int I10 fields
-    out = [_header(block)]
-    for c in block.cards:
-        out.append("".join(_i10(x) for x in c.tokens()))
-    return out
-
-
-def tr_part(block, runname):
-    title, cards = _title_cards(block)
-    t = cards[0].tokens()
-    return [_header(block), title, _i10(t[0]) + _i10(t[1])]
-
-
-def tr_mat_law1(block, runname):
-    # cfg matl1 'elast': rho / E nu   (all %20lg)
-    title, cards = _title_cards(block)
-    out = [_header(block), title, _f20(cards[0].tokens()[0])]
-    e, nu = cards[1].tokens()[:2]
-    out.append(_f20(e) + _f20(nu))
-    return out
-
-
-def tr_mat_law2(block, runname):
-    # cfg matl2_plas_johns (radioss2023):
-    #   rho / E nu Iflag VP / a b n epsmax sigmax / c eps0 ICC ... / m ...
-    title, cards = _title_cards(block)
-    out = [_header(block), title, _f20(cards[0].tokens()[0])]
-    e, nu = cards[1].tokens()[:2]
-    out.append(_f20(e) + _f20(nu))          # Iflag/VP blank -> defaults
-    t = cards[2].tokens()
-    out.append("".join(_f20(x) for x in t[:5]))
-    if len(cards) >= 4:                     # c eps0  (ICC.. defaults)
-        t = cards[3].tokens()
-        out.append("".join(_f20(x) for x in t[:2]))
-    if len(cards) >= 5:                     # m Tmelt rhoCp Tr
-        t = cards[4].tokens()
-        out.append("".join(_f20(x) for x in t[:4]))
-    return out
-
-
-def tr_mat_law42(block, runname):
-    # cfg matl42_Ogden: rho / nu sig_cut fBulk fscale M Iform /
-    #                   mu1-5 / mu6-10 / alpha1-5 / alpha6-10
-    # port: rho / mu1-5 / alpha1-5 / [nu]
-    title, cards = _title_cards(block)
-    rho = cards[0].tokens()[0]
-    mu = [float(x) for x in cards[1].tokens()[:5]]
-    al = [float(x) for x in cards[2].tokens()[:5]] if len(cards) >= 3 else []
-    nu = float(cards[3].tokens()[0]) if len(cards) >= 4 else 0.495
-    z5 = "".join(_f20(0.0) for _ in range(5))
-    return [_header(block), title, _f20(rho), _f20(nu),
-            "".join(_f20(x) for x in mu), z5,
-            "".join(_f20(x) for x in al), z5]
-
-
-def tr_eos(block, runname):
-    # cfg mat_EOS radioss2022 — IDEAL-GAS: title / Gamma P0 PSH T0 RHO0
-    #                           POLYNOMIAL: title / C0..C3 / C4 C5 E0 PSH RHO0
-    # NOTE the real /EOS has a TITLE card the port dialect omits.
-    kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    cards = block.cards
-    if kind == "IDEAL-GAS":
-        t = cards[0].tokens()
-        gamma = t[0]
-        p0 = t[1] if len(t) > 1 else 0.0
-        return [_header(block), "ideal gas (translated)",
-                _f20(gamma) + _f20(p0)]
-    if kind == "POLYNOMIAL":
-        t = cards[0].tokens()
-        e0 = cards[1].tokens()[0] if len(cards) > 1 else 0.0
-        return [_header(block), "polynomial EOS (translated)",
-                "".join(_f20(x) for x in t[:4]),
-                _f20(t[4]) + _f20(t[5]) + _f20(e0)]
-    raise Untranslatable(f"/EOS/{kind}")
-
-
-def tr_prop_solid(block, runname):
-    # cfg prop_p14_solid: title / Isolid Ismstr Iale Icpre Itet10 Inpts
-    #   Itet4 Iframe dn / qa qb h Lambda Mu / dtmin ...
-    # port: single float card 'qa qb h' (int flag cards ignored).
-    # Isolid=1 emitted explicitly = 8-node 1-point + viscous hourglass,
-    # the only formulation the port implements.
-    title, cards = _title_cards(block)
-    qa, qb, h = 1.1, 0.05, 0.1
-    for c in cards:
-        toks = c.tokens()
-        if toks and not all(t.lstrip("+-").isdigit() for t in toks):
-            vals = [float(x) for x in toks[:3]]
-            vals += [qa, qb, h][len(vals):]
-            qa, qb, h = vals
-            break
-    return [_header(block), title, _i10(1),
-            _f20(qa) + _f20(qb) + _f20(h)]
-
-
-def tr_prop_shell(block, runname):
-    # cfg prop_p1_shell: title / Ishell Ismstr Ish3n Idrill /
-    #   Hm Hf Hr Dm Dn (F20) / N Istrain Thick AShear <10sp> Ithick Iplas
-    title, cards = _title_cards(block)
-    hm = hf = hr = 0.01
-    nip, thick = 3, 1.0
-    ishell = 1        # Belytschko-Tsay — the port's only shell formulation
-    if cards and any("." in t or "e" in t.lower()
-                     for t in cards[0].tokens()):
-        # short form: Thick [N] [hm]
-        t = [float(x) for x in cards[0].tokens()[:3]]
-        thick = t[0]
-        if len(t) > 1 and t[1]:
-            nip = int(t[1])
-        if len(t) > 2 and t[2]:
-            hm = hf = hr = t[2]
-    else:
-        if cards:
-            f = cards[0].tokens()
-            if f and int(f[0]) > 0:
-                ishell = int(f[0])
-        if len(cards) >= 2:
-            t = [float(x) for x in cards[1].tokens()[:3]]
-            hm, hf, hr = (t + [0.01] * 3)[:3]
-            hm, hf, hr = hm or 0.01, hf or 0.01, hr or 0.01
-        if len(cards) >= 3:
-            t = cards[2].tokens()
-            nip = int(float(t[0])) or 3
-            thick = float(t[2]) if len(t) > 2 else 1.0
-    return [_header(block), title,
-            _i10(ishell),
-            _f20(hm) + _f20(hf) + _f20(hr),
-            _i10(nip) + _b(10) + _f20(thick)]
-
-
-def tr_prop_beam(block, runname):
-    # cfg prop_p3_beam: title / <10sp>Ismstr / Dm Df / Area Iyy Izz Ixx /
-    #                   Wdof+Ishear
-    # port: short form single card 'Area Iyy Izz Ixx'
-    title, cards = _title_cards(block)
-    data = [c for c in cards if not all(t.lstrip("+-").isdigit()
-                                        for t in c.tokens())]
-    t = data[0].tokens() if data else cards[-1].tokens()
-    return [_header(block), title,
-            _b(20),                                   # Ismstr default
-            _f20(0.0) + _f20(0.0),                    # Dm Df
-            "".join(_f20(x) for x in t[:4]),
-            _b(20)]                                   # Wdof/Ishear default
-
-
-def tr_bcs(block, runname):
-    # cfg bcs: title / '   TTT RRR' skew(I10) grnod(I10)
-    title, cards = _title_cards(block)
-    t = cards[0].tokens()
-    tra, rot = t[0].zfill(3), t[1].zfill(3)
-    return [_header(block), title,
-            f"   {tra} {rot}" + _i10(t[2]) + _i10(t[3])]
-
-
-def tr_grnod(block, runname):
-    # GRNOD/NODE|PART: title + ids, 10 per card, I10 fields
-    kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if kind not in ("NODE", "PART"):
-        raise Untranslatable(f"/GRNOD/{kind}")
-    title, cards = _title_cards(block)
-    ids: List[int] = []
-    for c in cards:
-        ids.extend(int(x) for x in c.tokens())
-    out = [_header(block), title]
-    for i in range(0, len(ids), 10):
-        out.append("".join(_i10(x) for x in ids[i:i + 10]))
-    return out
-
-
-def tr_surf_part(block, runname):
-    kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if kind != "PART":
-        raise Untranslatable(f"/SURF/{kind}")
-    title, cards = _title_cards(block)
-    ids = []
-    for c in cards:
-        ids.extend(int(x) for x in c.tokens())
-    out = [_header(block), title]
-    for i in range(0, len(ids), 10):
-        out.append("".join(_i10(x) for x in ids[i:i + 10]))
-    return out
-
-
-def tr_funct(block, runname):
-    # cfg funct: title / one (X,Y) pair per card, %20lg%20lg
-    title, cards = _title_cards(block)
-    out = [_header(block), title]
-    for c in cards:
-        t = c.tokens()
-        out.append(_f20(t[0]) + _f20(t[1]))
-    return out
-
-
-def tr_impvel_impdisp(block, runname):
-    # cfg impvel/impdisp: title / fct(I10) Dir(A10) skew sens grnod frame
-    #   icoor / Scale_x(F20) Scale_y(F20) Tstart Tstop
-    # port card: fct Dir grnod [scale]
-    title, cards = _title_cards(block)
-    t = cards[0].tokens()
-    fct, direc, grnod = t[0], t[1].upper(), t[2]
-    scale = float(t[3]) if len(t) > 3 else 1.0
-    return [_header(block), title,
-            _i10(fct) + f"{direc:>10}" + _b(10) + _b(10) + _i10(grnod),
-            _f20(1.0) + _f20(scale)]
-
-
-def tr_cload(block, runname):
-    # cfg cload radioss2023 (single card):
-    #   fct(I10) Dir(A10) skew sens grnod Itypfun Ascalex(F20) Fscaley(F20)
-    # port card: fct Dir grnod [scale] [sens]
-    title, cards = _title_cards(block)
-    t = cards[0].tokens()
-    fct, direc, grnod = t[0], t[1].upper(), t[2]
-    scale = float(t[3]) if len(t) > 3 else 1.0
-    sens = int(float(t[4])) if len(t) > 4 else 0
-    return [_header(block), title,
-            _i10(fct) + f"{direc:>10}" + _b(10) + _i10(sens) + _i10(grnod)
-            + _b(10) + _f20(1.0) + _f20(scale)]
-
-
-def tr_inivel(block, runname):
-    # cfg inivel: title / Vx Vy Vz (3xF20) grnod(I10) skew(I10)
-    kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if kind != "TRA":
-        raise Untranslatable(f"/INIVEL/{kind}")
-    title, cards = _title_cards(block)
-    t = cards[0].tokens()
-    return [_header(block), title,
-            _f20(t[0]) + _f20(t[1]) + _f20(t[2]) + _i10(t[3])]
-
-
-def tr_rwall(block, runname):
-    # cfg RWALL/plane.cfg: title / node slide grnd1 grnd2 (I10) /
-    #   d fric ... (F20) / XM YM ZM / XM1 YM1 ZM1
-    # port: grnod slide fric dist [node] / XM YM ZM / XM1 YM1 ZM1
-    kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if kind != "PLANE":
-        raise Untranslatable(f"/RWALL/{kind}")
-    title, cards = _title_cards(block)
-    t = cards[0].tokens()
-    grnod = int(t[0]) if t else 0
-    slide = int(t[1]) if len(t) > 1 else 0
-    fric = float(t[2]) if len(t) > 2 else 0.0
-    dist = float(t[3]) if len(t) > 3 else 0.0
-    node = int(float(t[4])) if len(t) > 4 else 0
-    m = cards[1].tokens()[:3]
-    m1 = cards[2].tokens()[:3]
-    # semantics mapping (measured): the port's dist=0 means "track ALL
-    # nodes every cycle"; the real d is the secondary-node search distance
-    # and d=0 selects NOTHING (the wall never acts).  Emit d=1e30 for 0.
-    d = dist if dist > 0 else 1e30
-    return [_header(block), title,
-            _i10(node) + _i10(slide) + _i10(grnod) + _i10(0),
-            _f20(d) + _f20(fric),
-            "".join(_f20(x) for x in m),
-            "".join(_f20(x) for x in m1)]
-
-
-def tr_th(block, runname):
-    # cfg th_node / th_part: title / var names %-10s /
-    #   NODE: one card per id  '%10d%10d%-80s' (id, skew, name)
-    #   PART: ids packed %10d
-    kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if kind not in ("NODE", "PART"):
-        raise Untranslatable(f"/TH/{kind}")
-    title, cards = _title_cards(block)
-    vars_ = cards[0].tokens()
-    ids: List[int] = []
-    for c in cards[1:]:
-        ids.extend(int(x) for x in c.tokens())
-    out = [_header(block), title, "".join(f"{v:<10}" for v in vars_)]
-    if kind == "NODE":
-        out += [_i10(i) for i in ids]
-    else:
-        for i in range(0, len(ids), 10):
-            out.append("".join(_i10(x) for x in ids[i:i + 10]))
-    return out
-
-
-def tr_end(block, runname):
-    return ["/END"]
-
-
-TRANSLATORS = {
-    "BEGIN": tr_begin,
-    "TITLE": tr_passthrough,
-    "END": tr_end,
-    "NODE": tr_node,
-    "BRICK": tr_int_elements,
-    "TETRA4": tr_int_elements,
-    "SHELL": tr_int_elements,
-    "SH3N": tr_int_elements,
-    "BEAM": tr_int_elements,
-    "PART": tr_part,
-    "MAT/LAW1": tr_mat_law1,
-    "MAT/ELAST": tr_mat_law1,
-    "MAT/LAW2": tr_mat_law2,
-    "MAT/PLAS_JOHNS": tr_mat_law2,
-    "MAT/LAW42": tr_mat_law42,
-    "MAT/OGDEN": tr_mat_law42,
-    "EOS/IDEAL-GAS": tr_eos,
-    "EOS/POLYNOMIAL": tr_eos,
-    "PROP/SOLID": tr_prop_solid,
-    "PROP/TYPE14": tr_prop_solid,
-    "PROP/SHELL": tr_prop_shell,
-    "PROP/TYPE1": tr_prop_shell,
-    "PROP/BEAM": tr_prop_beam,
-    "PROP/TYPE3": tr_prop_beam,
-    "BCS": tr_bcs,
-    "GRNOD/NODE": tr_grnod,
-    "GRNOD/PART": tr_grnod,
-    "SURF/PART": tr_surf_part,
-    "FUNCT": tr_funct,
-    "IMPVEL": tr_impvel_impdisp,
-    "IMPDISP": tr_impvel_impdisp,
-    "CLOAD": tr_cload,
-    "INIVEL/TRA": tr_inivel,
-    "RWALL/PLANE": tr_rwall,
-    "TH/NODE": tr_th,
-    "TH/PART": tr_th,
-}
-
-
-def block_key(block: KeywordBlock) -> str:
-    """Lookup key: 'MAT/LAW2' style (keyword includes subtype, no id)."""
-    return block.keyword
-
-
 def translate_starter_deck(path: str, runname: str) -> Tuple[Optional[str],
                                                              List[str]]:
-    """Return (translated text, untranslatable keys). None text if any."""
-    blocks = read_deck(path)
-    missing = sorted({block_key(b) for b in blocks
-                      if block_key(b) not in TRANSLATORS})
-    if missing:
-        return None, missing
-    out = ["#RADIOSS STARTER",
-           "# translated to fixed 2022 format by tools/validate_vs_fortran.py"
-           " (formatting only)"]
+    """Return (translated text, failure notes).  None text on failure."""
+    from pyradioss.input import deck_writer as _dw
+    lines = open(path, errors="replace").read().splitlines()
     try:
-        for b in blocks:
-            out.extend(TRANSLATORS[block_key(b)](b, runname))
-    except (Untranslatable, ValueError, IndexError, KeyError) as exc:
+        text = _dw.starter_deck_from_lines(lines, runname).render()
+    except Exception as exc:                      # noqa: BLE001 — reported
         return None, [f"{type(exc).__name__}: {exc}"]
-    return "\n".join(out) + "\n", []
+    return real_deck_fixups_text(text), []
 
 
 def shim_begin_only(path: str) -> str:
@@ -735,7 +530,13 @@ def run_fortran(name: str, runname: str, deck0: str, deck1: str,
     d1 = os.path.join(rd, os.path.basename(deck1))
     info: Dict = {"mode": shim, "dir": rd}
 
-    if shim == "translate":
+    if shim != "none" and deck_is_real_format(deck0):
+        # M36: the deck is already in the real fixed 2022 format (emitted
+        # by pyradioss/input/deck_writer.py) — no translation, only the
+        # documented residue fixups for the Fortran side.
+        info["mode"] = "real-format"
+        open(d0, "w").write(real_deck_fixups(deck0))
+    elif shim == "translate":
         text, missing = translate_starter_deck(deck0, runname)
         if text is None:
             info.update(status="untranslatable", missing=missing)
@@ -760,7 +561,7 @@ def run_fortran(name: str, runname: str, deck0: str, deck1: str,
     rc, tail, dt = run_cmd([STARTER_EXE, "-i", os.path.basename(d0),
                             "-np", "1", "-nt", "1"], rd, 300, env)
     info["starter_rc"] = rc
-    info["starter_time"] = round(dt, 1)
+    info["starter_time"] = round(dt, 2)
     out0 = os.path.join(rd, f"{runname}_0000.out")
     nerr = 0
     if os.path.exists(out0):
@@ -775,7 +576,9 @@ def run_fortran(name: str, runname: str, deck0: str, deck1: str,
     rc, tail, dt = run_cmd([ENGINE_EXE, "-i", os.path.basename(d1),
                             "-nt", "1"], rd, 900, env)
     info["engine_rc"] = rc
-    info["engine_time"] = round(dt, 1)
+    info["engine_time"] = round(dt, 2)
+    info.update(harvest_fortran_out(out0,
+                                    os.path.join(rd, f"{runname}_0001.out")))
     t01 = os.path.join(rd, f"{runname}T01")
     normal = "NORMAL TERMINATION" in tail or (
         os.path.exists(os.path.join(rd, f"{runname}_0001.out")) and
@@ -807,7 +610,7 @@ def run_pyradioss(name: str, runname: str, deck0: str, deck1: str,
     rc, tail, dt = run_cmd([sys.executable, "-m", "pyradioss.starter", "-i",
                             os.path.basename(deck0)], rd, timeout, env)
     info["starter_rc"] = rc
-    info["starter_time"] = round(dt, 1)
+    info["starter_time"] = round(dt, 2)
     if rc == -9:
         info["status"] = "timeout"
         return info
@@ -818,7 +621,10 @@ def run_pyradioss(name: str, runname: str, deck0: str, deck1: str,
     rc, tail, dt = run_cmd([sys.executable, "-m", "pyradioss.engine", "-i",
                             os.path.basename(deck1)], rd, remain, env)
     info["engine_rc"] = rc
-    info["engine_time"] = round(dt, 1)
+    info["engine_time"] = round(dt, 2)
+    info.update(harvest_port_out(
+        os.path.join(rd, f"{runname}_0000.out"),
+        os.path.join(rd, f"{runname}_0001.out")))
     if rc == -9:
         info["status"] = "timeout"
         return info

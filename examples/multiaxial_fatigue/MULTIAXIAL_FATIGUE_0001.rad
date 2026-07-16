@@ -6,5 +6,4 @@
 0.0  400.0  1500  10  8
 5.0  10000.0  0.03  0.0  0.0  400.0  21000
 /PRINT/-500
-/STOP
-15.0
+# /STOP 15.0 (port energy-error abort) omitted: the real Engine reader cannot read the block (M35, forrtl severe 24); the port uses its default 15% guard

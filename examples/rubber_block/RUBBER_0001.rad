@@ -10,5 +10,4 @@
 /ANIM/VECT/VEL
 /ANIM/ELEM/VONM
 /PRINT/-100
-/STOP
-15.0
+# /STOP 15.0 (port energy-error abort) omitted: the real Engine reader cannot read the block (M35, forrtl severe 24); the port uses its default 15% guard

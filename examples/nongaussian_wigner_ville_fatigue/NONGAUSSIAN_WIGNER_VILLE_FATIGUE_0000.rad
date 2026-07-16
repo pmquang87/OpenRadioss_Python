@@ -1,13 +1,17 @@
 #RADIOSS STARTER
 /BEGIN
-NONGAUSSIAN_WIGNER_VILLE_FATIGUE - base-excited instrument stack, time-varying non-Gaussian instantaneous spectrum (pyradioss /IMPL/FATIG/NGAUSS+WVILLE)
+NONGAUSSIAN_WIGNER_VILLE_FATIGUE
+      2022         0
+                  Mg                  mm                   s
+                  Mg                  mm                   s
 /NODE
-         1        0.0000000000        0.0000000000        0.0000000000
-         2       10.0000000000        0.0000000000        0.0000000000
-         3       20.0000000000        0.0000000000        0.0000000000
-         4       30.0000000000        0.0000000000        0.0000000000
-         5       40.0000000000        0.0000000000        0.0000000000
-         6       50.0000000000        0.0000000000        0.0000000000
+#   node_ID                   X                   Y                   Z
+         1                 0.0                 0.0                 0.0
+         2                10.0                 0.0                 0.0
+         3                20.0                 0.0                 0.0
+         4                30.0                 0.0                 0.0
+         5                40.0                 0.0                 0.0
+         6                50.0                 0.0                 0.0
 /SPRING/1
          1         1         2
 /SPRING/2
@@ -35,54 +39,55 @@ storey5
          5         1
 /MAT/LAW1/1
 steel elastic
-   7.8e-6
-     210.0       0.0
+             7.8e-06
+               210.0                 0.0
+# PORT-DIALECT block (port simplified TYPE4 spring: real layout splits Mass and K/C across two cards)
 /PROP/SPRING/1
 sp1
-       0.002         800         0.0
+               0.002               800.0                 0.0
+# PORT-DIALECT block (port simplified TYPE4 spring: real layout splits Mass and K/C across two cards)
 /PROP/SPRING/2
 sp2
-       0.002         800         0.0
+               0.002               800.0                 0.0
+# PORT-DIALECT block (port simplified TYPE4 spring: real layout splits Mass and K/C across two cards)
 /PROP/SPRING/3
 sp3
-       0.002         800         0.0
+               0.002               800.0                 0.0
+# PORT-DIALECT block (port simplified TYPE4 spring: real layout splits Mass and K/C across two cards)
 /PROP/SPRING/4
 sp4
-       0.002         800         0.0
+               0.002               800.0                 0.0
+# PORT-DIALECT block (port simplified TYPE4 spring: real layout splits Mass and K/C across two cards)
 /PROP/SPRING/5
 sp5
-       0.002         800         0.0
+               0.002               800.0                 0.0
 /GRNOD/NODE/1
 base
-1
+         1
 /GRNOD/NODE/2
 stack
-2
-3
-4
-5
-6
+         2         3         4         5         6
 /BCS/1
 pinned base (the support)
-       111       111         0         1
+   111 111         0         1
 /BCS/2
 axial only (stacked masses)
-       011       111         0         2
+   011 111         0         2
 /FUNCT/10
 flat input PSD S_aa(f)
-       0.0         100
-  100000.0         100
+                 0.0               100.0
+            100000.0               100.0
 /FUNCT/20
 RMS mission profile (run-up / dwell / run-down)
-       0.0       0.4
-     150.0       1.5
-     350.0       1.5
-     500.0       0.3
+                 0.0                 0.4
+               150.0                 1.5
+               350.0                 1.5
+               500.0                 0.3
 /FUNCT/30
 target kurtosis gamma_4(t) (bursty transient)
-       0.0       3.0
-     120.0       3.5
-     250.0       9.0
-     380.0       4.0
-     500.0       3.0
+                 0.0                 3.0
+               120.0                 3.5
+               250.0                 9.0
+               380.0                 4.0
+               500.0                 3.0
 /END
