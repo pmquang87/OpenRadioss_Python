@@ -1,0 +1,146 @@
+# ---------------------------------------------------------------------------
+# Continuous integration for pyradioss (the OpenRadioss Python port).
+#
+# Three jobs:
+#
+#   fast-tests        - the everyday PR gate: full test tree minus tests marked
+#                       'slow', on Python 3.10 and 3.12, parallelised with
+#                       pytest-xdist. The 3.10 leg additionally installs numba
+#                       so the optional M7 accelerated backend's parity tests
+#                       (tests/test_m7_backends.py, gated by
+#                       @pytest.mark.skipif(not HAS_NUMBA)) actually run
+#                       instead of skipping.
+#
+#   numpy-only-smoke  - guards the core design contract documented in
+#                       pyradioss/implicit/__init__.py: the EXPLICIT solver
+#                       must depend on NumPy alone (scipy is lazy behind
+#                       require_scipy(), numba behind the optional accel
+#                       backend). It installs ONLY numpy + pytest and runs the
+#                       dependency-light explicit core tests.
+#
+#   full-suite-nightly - the whole suite including 'slow' tests, weekly +
+#                       on demand, with a generous timeout.
+# ---------------------------------------------------------------------------
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # full-suite-nightly only (the other jobs skip scheduled events via an
+    # `if:` guard below): weekly, Sunday 03:00 UTC.
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  # Cancel superseded runs of the same PR / branch to save runner minutes.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # -------------------------------------------------------------------------
+  # PR gate: everything not marked 'slow', two Python versions.
+  # -------------------------------------------------------------------------
+  fast-tests:
+    name: fast tests (py${{ matrix.python-version }})
+    # push / pull_request only -- the weekly cron should trigger just the
+    # full-suite job, not re-run the fast gate.
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # Quoted on purpose: bare 3.10 is YAML float 3.1.
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install package + test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # -e . brings in the base dependency (numpy only); scipy is needed
+          # by the implicit-solver (M8+) tests, pytest-xdist for -n auto.
+          python -m pip install -e . scipy pytest pytest-xdist
+
+      - name: Install numba (accel backend, 3.10 leg only)
+        # Exercise the optional numba-accelerated M7 backend on exactly one
+        # matrix leg; on the other leg its parity tests skip cleanly.
+        if: matrix.python-version == '3.10'
+        run: python -m pip install numba
+
+      - name: Run fast test suite
+        run: python -m pytest tests -q -m "not slow" -n auto --durations=15
+
+  # -------------------------------------------------------------------------
+  # Dependency-light smoke: the explicit core must run on numpy alone.
+  #
+  # The four modules below import only numpy/pytest plus explicit-core
+  # pyradioss modules (deck_reader, starter, engine, elements); every scipy
+  # import in the package is function-local behind
+  # pyradioss.implicit.require_scipy(), so this job fails loudly if anyone
+  # ever adds a top-level scipy/numba import to the explicit path.
+  # (Verified 2026-07: the full 38-test subset passes in a venv containing
+  # only numpy + pytest.)
+  # -------------------------------------------------------------------------
+  numpy-only-smoke:
+    name: numpy-only smoke (py3.10)
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install package (numpy) + pytest ONLY -- no scipy, no numba
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . pytest
+
+      - name: Run explicit-core tests without optional dependencies
+        run: >
+          python -m pytest
+          tests/test_deck_reader.py
+          tests/test_element_kernels.py
+          tests/test_integration.py
+          tests/test_m3_integration.py
+          -q
+
+  # -------------------------------------------------------------------------
+  # Weekly full suite (includes the 'slow'-marked tests) + manual trigger.
+  # -------------------------------------------------------------------------
+  full-suite-nightly:
+    name: full suite (weekly, py3.10)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install package + all optional dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e . scipy numba pytest pytest-xdist
+
+      - name: Run full test suite (slow tests included)
+        run: python -m pytest tests -q -n auto --durations=25

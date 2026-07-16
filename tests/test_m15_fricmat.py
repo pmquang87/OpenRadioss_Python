@@ -944,6 +944,7 @@ pull
     assert s27 == pytest.approx(s01, rel=1e-6)
 
 
+@pytest.mark.slow          # measured 1120.5 s serial (2026-07 full-suite run)
 def test_law27_implicit_vs_explicit_notched_strip(make_deck):
     """Crack-PATTERN cross-check on a notched strip: a 3x1 row of shell
     elements whose middle element has a LOWER initiation strain (the
@@ -1259,6 +1260,7 @@ def test_beam_elastic_hook_route_bit_identical(make_deck):
             assert np.array_equal(v, g.state[k]), (nlg, k)
 
 
+@pytest.mark.slow          # measured 206.5 s serial (2026-07 full-suite run)
 def test_beam_implicit_vs_explicit_quasistatic(make_deck):
     """Cross-solver check: the hardening cantilever driven quasi-
     statically by the EXPLICIT leapfrog (a slow smooth /IMPDISP ramp —

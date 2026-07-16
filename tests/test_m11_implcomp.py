@@ -1077,16 +1077,14 @@ def test_damp_undamped_unchanged(make_deck):
 # Automatic implicit step control (imp_dt.F)
 # ----------------------------------------------------------------------------
 
+@pytest.mark.slow          # measured 155.4 s serial (2026-07 full-suite run)
 def test_autodt_statics_cut_and_complete(make_deck):
     """The deep-elastica strip (PL^2/EI = 2) asked to reach the full load
     in ONE /IMPL/NONLIN increment with a tight Newton budget: without the
     M11 control this run STOPS (non-convergence — the M10 behaviour); with
     imp_dt.F it cuts the increment, converges, grows back and finishes —
     matching the fine fixed-increment answer to 0.5%."""
-    import sys
-    import os
-    sys.path.insert(0, os.path.dirname(__file__))
-    from test_m9_geomnl import _strip_deck
+    from tests.test_m9_geomnl import _strip_deck
     Lx, b, t = 40.0, 10.0, 1.0
     I = b * t ** 3 / 12.0
     F = 2.0 * 210.0 * I / Lx ** 2                 # PL^2/EI = 2
@@ -1229,10 +1227,7 @@ def test_buckl_card_euler_column(make_deck):
     time: /IMPL runs the prestress increments, /IMPL/BUCKL/1 extracts and
     REPORTS the factors — P_cr = factors[0]*P0 = pi^2 EI/(4L^2) within 3%,
     the mode transverse, the listing carrying the imp_buck.F block."""
-    import sys
-    import os
-    sys.path.insert(0, os.path.dirname(__file__))
-    from test_m9_geomnl import _strip_deck
+    from tests.test_m9_geomnl import _strip_deck
     Lx, b, t, E = 100.0, 10.0, 1.0, 210.0
     P0 = 0.002
     starter, nid = _strip_deck(20, 2, Lx, b, t, "X", -P0)

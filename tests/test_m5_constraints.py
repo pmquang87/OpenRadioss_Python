@@ -511,6 +511,7 @@ def test_rbe2_pendulum_bottom_speed_and_energy(make_deck):
     assert abs(s["ERR"]) < 1.0
 
 
+@pytest.mark.slow          # measured 148.2 s serial (2026-07 full-suite run)
 def test_rbody_contact_impact_dt09(make_deck):
     """Coexistence with contact at /DT 0.9: a rigid 2x2x2-meshed cube
     (/RBODY over a brick part) falls onto a clamped deformable plate

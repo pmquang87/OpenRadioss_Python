@@ -227,6 +227,7 @@ def test_dt_noda_equals_element_dt_on_uniform_mesh(make_deck):
     assert np.allclose(m1.x, m2.x, atol=1e-12)
 
 
+@pytest.mark.slow          # measured 93.5 s serial (2026-07 full-suite run)
 def test_dt_noda_cst_holds_step_adds_mass_quasistatic(make_deck):
     """Mass scaling acceptance: a bar with ONE thin element (its natural
     dt ~5x below the rest) pushed quasi-statically. /DT/NODA/CST with a
@@ -399,6 +400,7 @@ def test_sensor_disp_fires_on_displacement(make_deck):
     assert "/SENSOR/3 ACTIVATED" in open(out).read()
 
 
+@pytest.mark.slow          # measured 123.9 s serial (2026-07 full-suite run)
 def test_sensor_gates_interface(make_deck):
     """A /INTER/TYPE7 gated by a never-firing sensor exerts no force (the
     block sails through the shell); the same deck with the sensor firing
