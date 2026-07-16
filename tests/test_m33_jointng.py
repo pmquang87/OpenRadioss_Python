@@ -181,6 +181,7 @@ def test_gaussian_components_induced_kurtosis_is_three():
     assert sk == pytest.approx(0.0, abs=1e-9)
 
 
+@pytest.mark.slow          # measured 76.6 s serial (2026-07 full-suite run)
 def test_induced_kurtosis_matches_multivariate_monte_carlo():
     """The closed-form induced (variance, skewness, kurtosis) of the resolved plane
     matches a STATIONARY multivariate non-Gaussian Monte-Carlo: synthesise the

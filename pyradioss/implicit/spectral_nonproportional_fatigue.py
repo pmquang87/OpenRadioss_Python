@@ -278,6 +278,41 @@ def spectral_nonproportionality_factor(M0, n):
     return math.sqrt(min(lam2 / lam1, 1.0))
 
 
+def max_shear_plane_nonproportionality(M0, naz=24, npol=13):
+    """The F_np of the MAX-SHEAR CRITICAL PLANE under THIS module's (M23)
+    critical-plane convention — the plane maximising the NON-PROPORTIONAL
+    EFFECTIVE shear variance tau_a^2 = (1 + F_np^2) lambda_1 = lambda_1 +
+    lambda_2 = trace(Sigma_tau) (theory eqs. (3)-(4); exactly the
+    ``spectral_critical_plane_damage`` model="shear_path" search parameter).
+    Returns ``(F_np, normal)``.
+
+    This is the plane whose F_np the M23 search itself reports, and it is the
+    WELL-POSED one: the M21 ``critical_plane_search(method="shear")`` plane
+    (argmax of lambda_1 ALONE) is F_np-BLIND — for a uniaxial-dominated state
+    its maximum is DEGENERATE (a one-parameter family of 45-deg planes) and the
+    first-found member generically carries an EMPTY minor shear axis, so
+    evaluating F_np there reports 0 even for a genuinely non-proportional
+    (independent bending + torsion) state. Maximising the trace instead folds
+    the minor axis in, resolving the degeneracy toward the damage-relevant
+    (Susmel-Tovo effective-amplitude) member. The scan needs NO per-plane
+    eigendecomposition (the trace is basis-independent); only the winning
+    plane's 2x2 block is diagonalised."""
+    M0 = np.asarray(M0)
+    best_tr = -1.0
+    best_n = None
+    for n in candidate_normals(naz, npol):
+        a, b = _inplane_basis(n)
+        pa = shear_projection(n, a)
+        pb = shear_projection(n, b)
+        tr = float(pa @ M0 @ pa) + float(pb @ M0 @ pb)
+        if tr > best_tr:
+            best_tr = tr
+            best_n = n.copy()
+    if best_n is None or best_tr <= 0.0:
+        return 0.0, best_n
+    return spectral_nonproportionality_factor(M0, best_n), best_n
+
+
 # ============================================================================
 # Per-plane spectral statistics (build item 1)
 # ============================================================================

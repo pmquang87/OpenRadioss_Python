@@ -318,6 +318,7 @@ _IMPACT_DECK = (
 
 
 @needs_numba
+@pytest.mark.slow          # measured 982.7 s serial (2026-07 full-suite run)
 def test_full_run_backend_parity(make_deck, tmp_path):
     """THE backend acceptance test: the same starter+engine impact model
     run under both backends must agree state array by state array. The

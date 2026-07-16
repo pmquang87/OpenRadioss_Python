@@ -686,7 +686,12 @@ def _meshed_cube(base_id, eid0, part, origin, n=2, size=1.0):
     return nodes, bricks, base_nodes
 
 
-@pytest.mark.parametrize("istf,igap", [(0, 0), (2, 1), (5, 1)])
+@pytest.mark.parametrize("istf,igap", [
+    (0, 0),
+    # the (2, 1) variant measured 81.3 s serial (2026-07 full-suite run)
+    pytest.param(2, 1, marks=pytest.mark.slow),
+    (5, 1),
+])
 def test_type7_impact_stability_dt09_variants(make_deck, istf, igap):
     """The two-cube impact of M1 (2x2x2-meshed cubes), run LONG at /DT 0.9
     for every stiffness variant class: the interface dt bound must keep
@@ -728,6 +733,7 @@ def test_type7_impact_stability_dt09_variants(make_deck, istf, igap):
     assert abs(s["ERR"]) < 6.0
 
 
+@pytest.mark.slow          # measured 165.2 s serial (2026-07 full-suite run)
 def test_notched_plate_crack_with_self_contact(make_deck):
     """The M3<->M4 flagship: the notched-plate tearing model WITH a
     self-impact TYPE7 on the plate. As /FAIL/BIQUAD deletes elements,

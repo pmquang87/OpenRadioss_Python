@@ -186,6 +186,7 @@ def _proportional_cross_psd(nf=1500, fmax=120.0):
     return f, omega, Sff, H, Scross
 
 
+@pytest.mark.slow          # measured 167.6 s serial (2026-07 full-suite run)
 def test_proportional_reduces_to_m21_maxshear():
     """For PROPORTIONAL loading the M22 path-counting (shear-path) damage on the
     critical plane reduces to the M21 max-shear critical-plane rainflow (the same

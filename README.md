@@ -1,5 +1,7 @@
 # OpenRadioss_Python (`pyradioss`)
 
+[![CI](https://github.com/pmquang87/OpenRadioss_Python/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/pmquang87/OpenRadioss_Python/actions/workflows/ci.yml)
+
 A **Python port of [OpenRadioss](https://github.com/OpenRadioss/OpenRadioss)**, the
 open-source explicit finite-element solver for crash, impact and highly non-linear
 transient dynamics.

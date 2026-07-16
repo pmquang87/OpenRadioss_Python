@@ -328,13 +328,16 @@ def forces(group, x, v, vr, dt, fint, mint):
 # stiffness) + its ``imp_kgeo`` geometric path (/IMPL/NONLIN).
 #
 # Exactly the BT4 construction (see shell_bt4.tangent) with the triangle's
-# operators and WITHOUT any hourglass block: the CST membrane and the
-# linear-rotation plate field are FULLY integrated by one point (module
-# docstring), so K = K_membrane + K_bending + K_shear is already full rank
-# over the 15 local dofs — 3 nodes x [vx, vy, vz, thx, thy] — plus the same
-# small drilling penalty about the local normal for the global 18x18 block
-# (a flat shell gives no stiffness to rotation about e3). Each block is the
-# exact linearization of the matching rate operator in forces():
+# operators and WITHOUT any hourglass block: the CST membrane is FULLY
+# integrated by one point (module docstring). The one-point plate pair
+# {constant curvature (rank 3), centroid shear (rank 2)} however spans only
+# rank 5 of the 9 local plate dofs — 3 nodes x [vz, thx, thy] minus the 3
+# plate rigid modes needs rank 6 — leaving ONE spurious zero-energy plate
+# mode; it (and the drilling rotation about e3, to which a flat shell gives
+# no stiffness) receives a small TANGENT-ONLY stabilization penalty so the
+# 18x18 block reaches its full rank 12 (see the two penalty notes in
+# tangent()). Each physical block is the exact linearization of the
+# matching rate operator in forces():
 #
 #   membrane   K_m = A t     B_m^T C B_m        (CST — B1, B2 rows)
 #   bending    K_b = A t^3/12 B_b^T C B_b       (constant curvature)
@@ -442,6 +445,23 @@ def tangent(group, x, epsp_incr=None):
             "nai,naj->nij", Bss, Bss)
         kdrill[sl] = _DRILL_COEF * mat.E * t_sl ** 3 * A_sl / 12.0
 
+    # ---- stabilization of the one-point plate's spurious mode -------------
+    # {constant curvature} + {centroid shear} leave exactly ONE zero-energy
+    # plate mode beyond the rigid ones: th following the centroid-referred
+    # position field — thx_i = x_i, thy_i = y_i, w = 0 (k_xx = dy/dx = 0,
+    # k_yy = -dx/dy = 0, k_xy = dy/dy - dx/dx = 0, and the centroid shear
+    # samples mean(th) = 0 since the x_i/y_i are centroid-referred). Its
+    # internal-force projection A(-(B1.x) M_xy + (B2.y) M_xy) is zero for
+    # EVERY stress state, so — exactly like the drilling penalty below — a
+    # small tangent-only penalty makes K invertible without disturbing any
+    # converged result (a single sh3n clamped at one node was a mechanism
+    # along this mode: the M11 mixed-element model's singular tangent).
+    svec = np.zeros((n, 15))
+    svec[:, 9:12] = xl[:, :, 0]                          # thx_i = x_i
+    svec[:, 12:15] = xl[:, :, 1]                         # thy_i = y_i
+    svec /= np.maximum(np.linalg.norm(svec, axis=1), EM20)[:, None]
+    Kl += kdrill[:, None, None] * np.einsum("ni,nj->nij", svec, svec)
+
     # ---- local (15) -> global (18) via the frame E -------------------------
     e1, e2, e3 = E[:, :, 0], E[:, :, 1], E[:, :, 2]
     Tg = np.zeros((n, 15, 18))
@@ -454,11 +474,27 @@ def tangent(group, x, epsp_incr=None):
             Tg[:, 4 * 3 + i, i * 6 + 3 + c] = e2[:, c]   # thy = e2.rot
     ke = np.einsum("nki,nkl,nlj->nij", Tg, Kl, Tg)       # (n, 18, 18)
 
-    # drilling penalty about the local normal (see shell_bt4.tangent)
-    e3e3 = np.einsum("ni,nj->nij", e3, e3)
+    # drilling penalty about the local normal (see shell_bt4.tangent),
+    # COUPLED to the membrane spin: the plain per-node form kdrill*rz_i^2
+    # leaves the in-plane rotation of the DISPLACEMENT field (rz = 0)
+    # unresisted — a mechanism when a single node carries all the fixities
+    # (the M11 mixed-element model) — while inconsistently penalizing the
+    # true rigid spin rz_i = omega. Penalizing kdrill*(rz_i - omega)^2,
+    # omega = (B1.vy - B2.vx)/2 the CST in-plane (continuum) rotation,
+    # fixes both: the element keeps its 6 exact zero-energy rigid modes and
+    # reaches full rank 12. No internal drilling force exists (the force
+    # path is untouched), so converged results are unchanged — a free rz
+    # now follows omega instead of parking at zero, and the penalty
+    # vanishes there exactly as it did at rz = 0 before.
+    wrow = np.zeros((n, 18))                 # omega row over the 18 dofs
+    for j in range(3):
+        for c in range(3):
+            wrow[:, j * 6 + c] = 0.5 * (B1[:, j] * e2[:, c]
+                                        - B2[:, j] * e1[:, c])
     for i in range(3):
-        r = i * 6 + 3
-        ke[:, r:r + 3, r:r + 3] += kdrill[:, None, None] * e3e3
+        gi = -wrow.copy()                    # g_i . u = rz_i - omega
+        gi[:, i * 6 + 3:i * 6 + 6] += e3
+        ke += kdrill[:, None, None] * np.einsum("ni,nj->nij", gi, gi)
     return ke, _tri_edofs(conn)
 
 

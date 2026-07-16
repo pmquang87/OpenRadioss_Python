@@ -136,7 +136,11 @@ is reduced EXACTLY as M21/M23 reduce a stationary tensor:
   M20 estimators.
 * NON-PROPORTIONALITY F_np,i: the M23 spectral F_np of the window's critical
   plane (the aspect ratio of the 2x2 in-plane shear block of M_{0,i}) — DRIFTS
-  window to window when the tensor's non-proportional content evolves.
+  window to window when the tensor's non-proportional content evolves. The plane
+  it is evaluated on is the M23-CONVENTION max-shear plane (argmax of the
+  NP-effective shear variance lambda_1 + lambda_2 = tau_a^2), because the M21
+  lambda_1-argmax plane used for the DAMAGE reduction is F_np-blind (degenerate
+  for uniaxial-dominated windows, reporting F_np = 0 on non-proportional states).
 
 THE WINDOW MINER-SUM (Palmgren-Miner). Within each window the STATIONARY M20
 estimator gives a damage RATE (E[D]/T)_i from the window's OWN reduced moments;
@@ -228,7 +232,8 @@ from .multiaxial_fatigue import (critical_plane_search,
                                  equivalent_vonmises_moments,
                                  synthesize_multiaxial_history,
                                  tensor_moment_matrices)
-from .spectral_nonproportional_fatigue import spectral_nonproportionality_factor
+from .spectral_nonproportional_fatigue import (
+    max_shear_plane_nonproportionality)
 
 
 # ============================================================================
@@ -338,7 +343,10 @@ def reduce_window_tensor(Mmats, m, C, mean_stress=0.0, ultimate=0.0,
       * ``shear_plane`` : the max-SHEAR-stress critical plane (searched from
         M_{0,i}) and its scalar moments / M20 estimators;
       * ``F_np``        : the M23 spectral non-proportionality of the max-shear
-        critical plane (the aspect ratio of its 2x2 in-plane shear block).
+        critical plane (the aspect ratio of its 2x2 in-plane shear block),
+        evaluated on the M23-convention plane — the plane maximising the
+        NP-effective shear variance lambda_1 + lambda_2 (its normal is returned
+        as ``F_np_normal``); the lambda_1-argmax plane above is F_np-blind.
 
     Returns a dict with, per reduction, {moments, summary (the four M20
     estimators), damage_rate (Dirlik), normal, ...}, plus ``F_np`` and ``sigma_vm``
@@ -361,8 +369,15 @@ def reduce_window_tensor(Mmats, m, C, mean_stress=0.0, ultimate=0.0,
                                            ultimate)
         out[key] = cp
     # --- the M23 spectral F_np of the (re-searched) max-shear critical plane ----
-    out["F_np"] = spectral_nonproportionality_factor(Mmats[0],
-                                                     out["shear_plane"]["normal"])
+    # Evaluated under the M23 critical-plane convention (the plane maximising the
+    # NP-EFFECTIVE shear variance lambda_1 + lambda_2 = tau_a^2), NOT at the M21
+    # lambda_1-argmax plane above: that plane is F_np-BLIND — degenerate for a
+    # uniaxial-dominated tensor, its first-found member carries an empty minor
+    # shear axis and would report F_np = 0 even for genuinely non-proportional
+    # (independent bending + torsion) content. The damage reductions keep the M21
+    # plane (the M27 <-> M21 identity); only the F_np report uses the M23 plane.
+    out["F_np"], out["F_np_normal"] = max_shear_plane_nonproportionality(
+        Mmats[0], naz=naz, npol=npol)
     for key in ("von_mises", "normal_plane", "shear_plane"):
         out[key]["damage_rate"] = float(out[key]["summary"]["dirlik"]
                                         ["damage_rate"])
@@ -524,6 +539,7 @@ def _reduce_window_fixed(Mmats, stat, m, C, mean_stress, ultimate):
                     "summary": sf.fatigue_summary(moments, m, C, mean_stress,
                                                   ultimate)}
     out["F_np"] = float(stat["F_np"])
+    out["F_np_normal"] = stat.get("F_np_normal")
     for key in ("von_mises", "normal_plane", "shear_plane"):
         out[key]["damage_rate"] = float(out[key]["summary"]["dirlik"]
                                         ["damage_rate"])

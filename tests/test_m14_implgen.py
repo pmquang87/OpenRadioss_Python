@@ -1346,6 +1346,7 @@ def test_law42_equibiaxial_closed_form(make_deck):
     _assert_quadratic_tail(res)
 
 
+@pytest.mark.slow          # measured 94.5 s serial (2026-07 full-suite run)
 def test_law42_implicit_vs_explicit_quasi_static(make_deck):
     """The explicit cross-check: the same rubber cube compressed 20% by
     /IMPDISP — implicitly (NLGEOM statics) and explicitly (slow ramp +
