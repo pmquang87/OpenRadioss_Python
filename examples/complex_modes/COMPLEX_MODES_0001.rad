@@ -7,5 +7,4 @@
 /IMPL/CEIGV/FRF
 0.0  0.4  2000  4
 /PRINT/-500
-/STOP
-15.0
+# /STOP 15.0 (port energy-error abort) omitted: the real Engine reader cannot read the block (M35, forrtl severe 24); the port uses its default 15% guard

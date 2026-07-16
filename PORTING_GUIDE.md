@@ -35,6 +35,7 @@ same names in comments.
 | `starter/source/starter/lectur.F` (deck reading driver) | `pyradioss/starter/starter.py` | orchestration |
 | `starter/source/reader/*` + `hm_reader` (Altair reader lib) | `pyradioss/input/deck_reader.py` | block/keyword lexer, `#include` |
 | `starter/source/elements/reader` per-keyword `hm_read_*.F` | `pyradioss/input/starter_keywords.py` | one function per keyword |
+| — (deck *writing* is the preprocessor's job in the Altair stack, not the solver's; the layouts come from the `hm_cfg_files` CARD definitions the Fortran reader parses with) | `pyradioss/input/deck_writer.py` | M36: fixed-format Radioss 2022 deck writer — per-keyword emitters for all 39 starter dispatch families + engine decks, each citing its CFG card layout; "dual-dialect" output readable by the real Starter AND the port |
 | Fortran derived types / common blocks (`common_source/modules`) | `pyradioss/model/*.py` | dataclasses + NumPy arrays |
 | `starter/source/initial_conditions`, `inimass` etc. | `pyradioss/starter/initialization.py` | lumped mass, volumes |
 | restart write `starter/source/restart/ddsplit/wrrest.F` | `pyradioss/starter/restart.py` | pickle instead of binary |
@@ -4042,6 +4043,111 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       contact, TYPE19/24/25, Inacti, Igap 2/3, LAW42 shells/Prony, IDTC 2/3, /RWALL under
       implicit, the UL hourglass memory, the NLGEOM hourglass-operator geometry variation,
       the BT4 thin-plate shear-lock / drilling floor.
+34. **M35 — FOUNDATION HARDENING + FIRST DIFFERENTIAL VALIDATION** ✅ (done): a
+    deliberate pivot from the M16–M34 spectral-fatigue tower back to the port's
+    foundations. Delivered:
+    * **two day-one defect FIXES** (both present since the module in question first
+      landed): the SH3N (C0 triangle) RANK DEFICIENCY, and the F_np-BLIND critical
+      plane (the non-proportionality machinery could sit on a plane the factor never
+      saw);
+    * **test-infrastructure hardening**: `tests/__init__.py` (the suite becomes a
+      proper package), a `slow` test tier (fast tier runnable as
+      `pytest -m "not slow"`), and CI wiring;
+    * **the FIRST DIFFERENTIAL VALIDATION against the real Fortran OpenRadioss**
+      (`tools/validate_vs_fortran.py` + the first edition of `VALIDATION.md`): the
+      proven Windows reference environment (`starter/engine/th_to_csv_win64.exe`,
+      `-np 1 -nt 1`, `RAD_CFG_PATH`, Intel oneAPI runtime), a parity mode with the
+      rel-RMS / significance-rule scoring, a per-keyword fixed-format deck
+      TRANSLATOR (9 keyword families, layouts from the `hm_cfg_files` CARD
+      definitions) bridging 5 of the 9 explicit examples, and a coverage mode run on
+      two real k2rad decks (W12 water-ALE, W13 blast vehicle). Measured: 3 MATCH
+      (0.10–2.6 % rel RMS), 1 explained DEVIATION (contact-energy bookkeeping +
+      shell-hourglass dissipation ~2 orders low), 4 PORT-ONLY(dialect), and the
+      central finding that the obstacle was the DECK DIALECT, not physics.
+    Deferred out of M35, explicitly (all picked up by M36):
+    * the fixed-format deck WRITER (M35's own recommendation: "then the translator
+      disappears and all explicit examples become directly diffable");
+    * the two reader parse bugs coverage found on real decks (`/MAT/LAW36` real-card
+      crash, `/SURF/SEG` fixed-format mis-parse) + the `/SURF/PART/EXT` silent
+      qualifier drop and the `/INTER/TYPE7` over-strict Xfreq=0 filter check;
+    * translation of the 4 PORT-ONLY(dialect) contact examples; `/TH/NODE` channel
+      comparison (`th_to_csv` `var NN` numbering) — still open after M36.
+35. **M36 — REAL-DECK VALIDATION AT SCALE: native fixed-format decks, the official
+    corpus, timed parity** ✅ (done): the full report is `VALIDATION.md` (M36
+    edition) with machine-readable results in `tools/validation_data/`. Delivered:
+    * **the fixed-format deck WRITER** (`pyradioss/input/deck_writer.py`, 1855
+      lines): per-keyword emitters for all 39 starter dispatch families + engine
+      decks, every card layout citing its `hm_cfg_files` CFG definition;
+      "dual-dialect discipline" — ONE file satisfies the real Starter's fixed
+      columns AND the port's whitespace-token parsers (blank fields = real defaults;
+      whitespace-only blank cards invisible to the port reader); all 36 examples
+      regenerated (36/36 parse cleanly, T01s byte-identical to the old decks; the
+      Fortran-comparable ones accepted by the real Starter at 0 errors); the M35
+      translator RETIRED to a fallback that delegates to the writer (~380 duplicated
+      lines deleted); two documented RESIDUE fields (`/RWALL` d, TYPE7/11 gap_max)
+      mapped by the harness's `real_deck_fixups`; irreconcilable combinations in
+      loudly-commented PORT-DIALECT fallback blocks (port-only chains only);
+    * **the four M35 reader bugs FIXED** in `starter_keywords.py`: LAW36 dual-dialect
+      dispatch (+ `_fixed_vals` column slicing), `/SURF/SEG` seg_ID + N4=0 triangle,
+      `/SURF/PART/EXT` warning, `/INTER/TYPE7` real 6-card layout + the reference's
+      `IF (ALPHA==0.) IFQ = 0`. W12: 5 → 2 errors; W13: 33 425 → 6 errors — all
+      remaining are genuine feature gaps (HYD_VISC/GRUNEISEN/TYPE18; LAW44/PBLAST/
+      surface subtypes);
+    * **the official corpus extracted and inventoried** (61 RD-E + 26 RD-V + 8
+      tutorial packages from `E:/openradioss_run` → 551 cases, 529 runnable, 65 with
+      Fortran references; `tools/validation_data/inventory.json`) and **swept through
+      the port Starter**: 0 CLEAN, 9 SKIPS, 520 ERROR, **0 CRASH**, 0 TIMEOUT;
+      classification 40 IN_ENVELOPE / 276 NEAR / 213 OUT on hard blockers; the
+      group/set trio (`/GRNOD/SURF` + `/GRNOD/GRNOD` + `/LINE/EDGE`) is the COMPLETE
+      hard gap for 252/529 decks (48 %) — the measured highest-value next port
+      target; 446 decks hit caught fixed-format parse failures (ranked 20-signature
+      backlog in VALIDATION.md §4.4);
+    * **timed parity**: harness timing harvest (`harvest_fortran_out` /
+      `harvest_port_out`, solver self-reported elapsed + wall at 0.01 s); all 9
+      explicit bundled examples comparable for the first time — 3 MATCH
+      (tensile_bar 0.0017, rubber_block 0.000955, antenna_mast 0.0257), 5 DEVIATION
+      (0.43–0.99, concentrated in contact-energy / momentum / hourglass channels
+      while IE is often within 3–16 %), gas_piston a genuine starter-reject
+      (/EOS-on-LAW1 port extension); official IN_ENVELOPE parity started (12/40 at
+      report time: 1 DEVIATION, 11 PYRADIOSS-FAIL on three diagnosed parser gaps);
+      first performance numbers — port totals 1.3×–26× the Fortran wall clock,
+      single-threaded both sides, caveats recorded in `perf_m36.json`.
+    Deferred out of M36, explicitly:
+    * **fixed-format reader hardening** (the §4.4 backlog): `/TH/NODE` trailing-name
+      column (360 cases), abutting 20-char fields → column slicing for
+      `/NODE`/`/FUNCT`/`/MAT/PLAS_JOHNS` (75), `/SHELL` + `/SH3N` per-element float
+      fields (46), `/IMPVEL` + `/IMPDISP` XX/YY/ZZ rotational codes (43), a third
+      `/MAT/PLAS_TAB` dialect (17), `/EOS` title tokens (19), `/INIVEL/AXIS` letter
+      axis (10), `/PART` with mat id 0 (legal spring parts);
+    * **the group/set machinery** (`/GRNOD/SURF`, `/GRNOD/GRNOD`, `/LINE/EDGE`, then
+      the wider GRSHEL/GRSH3N/SURF subtypes) — flips 252+ official cases;
+    * the contact/hourglass differential study the 5 DEVIATION examples now motivate
+      (IE agrees, contact/hourglass ledgers do not); the M35 shell-hourglass-scaling
+      question stands;
+    * completion of the official parity sweep (detached driver resumes; expected
+      straggler: the 65k-element gasket at the 600 s port budget);
+    * gas_piston real-comparability (positive P0 in the writer and/or a LAW6
+      rebuild); pre-/BEGIN embedded engine blocks (phone_start, RD-E-1500_Gears,
+      RD_V_0240); `/TH/SECTIO` spelling once the port reader learns it; RBE2 real
+      Trarot bit-field (emitted blank); upgrading the PORT-DIALECT fallback blocks
+      (LAW36/SURF-SEG/TYPE7 real layouts are now parsed — several could switch);
+      real-dialect LAW36 Fscale_i / fct_IDp / fct_IDE application in
+      `resolve_materials`; the W12/W13 feature gaps (HYD_VISC, GRUNEISEN EOS,
+      INTER/TYPE18, GRBRIC/PART; LAW44, LOAD/PBLAST, SURF/GRSHEL + SURF/PLANE +
+      GRSHEL/SHEL, TH/INTER + TH/SURF); `/TH/NODE` channel comparison (carried from
+      M35).
+
+**Unnumbered deferred candidate — pending a project scope decision** (previously
+queued as the next numbered milestone; kept here explicitly, not silently dropped):
+**a genuine non-Gaussian COPULA / NON-TRANSLATION joint distribution** beyond the
+M33/M34 marginal-Hermite NORTA translation model — a t-copula / vine copula / any
+non-Gaussian dependence structure with the SAME covariance but different higher
+joint cumulants (the first item M34 deferred, together with its NORTA
+feasibility-frontier repair and the quadratic-form covariance-exact induced
+kurtosis). M35/M36 deliberately pivoted from the M16–M34 spectral-fatigue tower to
+foundation hardening and real-deck validation; whether the copula line continues —
+against the measured pull of the group/set + fixed-format-reader backlog above — is
+a scope decision the project has not yet taken.
 
 ## 6. Validation strategy
 

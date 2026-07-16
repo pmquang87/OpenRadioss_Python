@@ -39,12 +39,36 @@ from ..model.entities import (
     RigidWall, Section, Sensor, Surface, THRequest,
 )
 from ..model.model import Model
-from .deck_reader import Card, KeywordBlock
+from .deck_reader import Card, KeywordBlock, _to_float
 
 
 # ----------------------------------------------------------------------------
 # Small helpers shared by the parsers
 # ----------------------------------------------------------------------------
+
+def _fixed_vals(card: Card, widths: List[int]) -> List[str]:
+    """Cut ``card.raw`` at the given column ``widths`` (the Fortran fixed
+    format, e.g. ``[10, 10, 20, 20]``), returning stripped strings — ''
+    where the line is blank or too short. Used for the REAL fixed-format
+    card layouts whose fields are NOT all 10 characters wide (mixed
+    ``%10d``/``%20lg`` cards), where a whitespace-token view would shift
+    on blank fields."""
+    line, pos, out = card.raw, 0, []
+    for w in widths:
+        out.append(line[pos:pos + w].strip())
+        pos += w
+    return out
+
+
+def _ival(s: str, default: int = 0) -> int:
+    """Fixed field -> int; blank -> default (Fortran blank-reads-as-zero)."""
+    return int(s) if s else default
+
+
+def _fval(s: str, default: float = 0.0) -> float:
+    """Fixed field -> float; blank -> default."""
+    return _to_float(s) if s else default
+
 
 def _is_numeric_card(card: Card) -> bool:
     """True if every token of the card parses as a number — used to decide
@@ -271,19 +295,42 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       eps_m, layer breaks at eps_f (see law27_brittle.py). The plastic
       block of the original PLAS_BRIT is not ported (elastic to crack).
 
-    LAW36 (tabulated plasticity) — Fortran .../mat036::
+    LAW36 (tabulated plasticity) — Fortran .../mat036. TWO dialects are
+    accepted (dispatched on the card count — the real layout always has
+    at least 6 data cards, the compact one at most 5):
 
-        card 1:  mat_title
-        card 2:  rho_0
-        card 3:  E   nu
-        card 4:  N_funct   [eps_p_max]
-        card 5:  fct_ID1 ... fct_ID_N       (hardening curves eps_p->sig_y)
-        card 6:  rate_1 ... rate_N          (required when N_funct > 1,
-                 strictly increasing strain rates, one per curve)
+      * the port's compact layout::
+
+            card 1:  mat_title
+            card 2:  rho_0
+            card 3:  E   nu
+            card 4:  N_funct   [eps_p_max]
+            card 5:  fct_ID1 ... fct_ID_N     (hardening curves eps_p->sig_y)
+            card 6:  rate_1 ... rate_N        (required when N_funct > 1,
+                     strictly increasing strain rates, one per curve)
+
+      * the REAL fixed-format layout (cfg ``matl36_plas_tab.cfg``
+        radioss2017+ / ``hm_read_mat36.F``), as written by real decks::
+
+            card 1:  mat_title
+            card 2:  rho_0                                        (%20lg)
+            card 3:  E   Nu   Eps_p_max   Eps_t   Eps_m           (5 %20lg)
+            card 4:  N_funct  F_smooth  C_hard  F_cut  Eps_f  VP
+                     (%10d %10d %20lg %20lg %20lg 10x %10d)
+            card 5:  fct_IDp  Fscale  fct_IDE  EInf  CE
+                     (%10d %20lg %10d %20lg %20lg)
+            card 6+: fct_ID1...  (%10d, 5 per card), then
+                     Fscale_1... (%20lg, 5 per card, 0 -> 1.0), then
+                     Eps_dot_1... (%20lg, 5 per card)
+
+        Fields the port does not implement (F_smooth/C_hard/F_cut/Eps_f/
+        VP/Eps_t/Eps_m, the fct_IDp pressure function, the fct_IDE
+        modulus evolution, per-curve Fscale != 1) are accepted and
+        reported in ONE warning, mirroring the 'accepted, ignored'
+        contract of the original Starter listing.
 
       the yield stress follows the /FUNCT curves, linearly interpolated
       in strain rate; the element is deleted at eps_p_max (0 = no limit).
-      The original's Fsmooth/Chard/Fcut flags and Fscale card not ported.
 
     LAW42 (Ogden hyperelastic, solids only) — Fortran .../mat042::
 
@@ -395,28 +442,102 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             log.error(f"/MAT/LAW36/{block.user_id}: needs N_funct and "
                       f"function-ID cards", block.source)
             return
-        v = _floats(cards[2], 2, defaults=[1, 0.0])
-        nfun = int(v[0]) if v[0] > 0 else 1
-        params["eps_p_max"] = v[1] if v[1] > 0 else 1e30
-        fids = cards[3].ints()
-        if len(fids) < nfun:
-            log.error(f"/MAT/LAW36/{block.user_id}: N_funct={nfun} but only "
-                      f"{len(fids)} function ids given", block.source)
-            return
-        params["funct_ids"] = fids[:nfun]
-        if nfun > 1:
-            if len(cards) < 5:
-                log.error(f"/MAT/LAW36/{block.user_id}: N_funct>1 needs a "
-                          f"strain-rate card", block.source)
+        if len(cards) >= 6:
+            # ---- the REAL fixed-format layout (see docstring) -------------
+            # rho / E-card already read; Eps_p_max sits ON the E-card here.
+            v1 = _floats(cards[1], 5)
+            params["eps_p_max"] = v1[2] if v1[2] > 0 else 1e30
+            ign: List[str] = []          # accepted-but-not-ported fields
+            if v1[3] != 0.0 or v1[4] != 0.0:
+                ign.append(f"Eps_t={v1[3]:g} Eps_m={v1[4]:g}")
+            # card 4: N_funct F_smooth C_hard F_cut Eps_f (10 blank) VP
+            f2 = _fixed_vals(cards[2], [10, 10, 20, 20, 20, 10, 10])
+            nfun = _ival(f2[0])
+            if nfun <= 0:
+                log.error(f"/MAT/LAW36/{block.user_id}: N_funct={nfun} "
+                          f"(needs at least one hardening curve)",
+                          block.source)
                 return
-            rates = _floats(cards[4], nfun)
-            if any(b <= a for a, b in zip(rates, rates[1:])):
-                log.error(f"/MAT/LAW36/{block.user_id}: strain rates must "
-                          f"be strictly increasing", block.source)
+            for name, s in (("F_smooth", f2[1]), ("C_hard", f2[2]),
+                            ("F_cut", f2[3]), ("Eps_f", f2[4]),
+                            ("VP", f2[6])):
+                if s and _to_float(s) != 0.0:
+                    ign.append(f"{name}={s}")
+            # card 5: fct_IDp Fscale fct_IDE EInf CE
+            f3 = _fixed_vals(cards[3], [10, 20, 10, 20, 20])
+            if _ival(f3[0]) != 0:
+                ign.append(f"fct_IDp={f3[0]} (pressure-dependent yield)")
+            if _ival(f3[2]) != 0:
+                ign.append(f"fct_IDE={f3[2]} (modulus evolution EInf/CE)")
+            # function-id cards (5 per card), then Fscale_i, then Eps_dot_i
+            idx, fids = 4, []
+            while idx < len(cards) and len(fids) < nfun:
+                fids.extend(cards[idx].ints())
+                idx += 1
+            if len(fids) < nfun:
+                log.error(f"/MAT/LAW36/{block.user_id}: N_funct={nfun} but "
+                          f"only {len(fids)} function ids given",
+                          block.source)
                 return
-            params["rates"] = rates
+            params["funct_ids"] = fids[:nfun]
+            nlist = (nfun + 4) // 5
+            yfac: List[float] = []
+            for _ in range(nlist):
+                if idx < len(cards):
+                    yfac.extend(cards[idx].floats())
+                    idx += 1
+            # hm_read_mat36.F: YFAC == 0 -> 1.0 (default scale)
+            yfac = [y if y != 0.0 else 1.0 for y in yfac[:nfun]]
+            if any(y != 1.0 for y in yfac):
+                ign.append(f"Fscale_i={yfac} (curves used unscaled)")
+            rates: List[float] = []
+            for _ in range(nlist):
+                if idx < len(cards):
+                    rates.extend(cards[idx].floats())
+                    idx += 1
+            if nfun > 1:
+                if len(rates) < nfun:
+                    log.error(f"/MAT/LAW36/{block.user_id}: N_funct={nfun} "
+                              f"needs {nfun} strain rates (Eps_dot_i cards)",
+                              block.source)
+                    return
+                rates = rates[:nfun]
+                if any(b <= a for a, b in zip(rates, rates[1:])):
+                    log.error(f"/MAT/LAW36/{block.user_id}: strain rates "
+                              f"must be strictly increasing", block.source)
+                    return
+                params["rates"] = rates
+            else:
+                params["rates"] = [0.0]
+            if ign:
+                log.warning(f"/MAT/LAW36/{block.user_id}: real-format "
+                            f"fields not ported — ignored: "
+                            f"{'; '.join(ign)}", block.source)
         else:
-            params["rates"] = [0.0]
+            # ---- the port's compact layout ---------------------------------
+            v = _floats(cards[2], 2, defaults=[1, 0.0])
+            nfun = int(v[0]) if v[0] > 0 else 1
+            params["eps_p_max"] = v[1] if v[1] > 0 else 1e30
+            fids = cards[3].ints()
+            if len(fids) < nfun:
+                log.error(f"/MAT/LAW36/{block.user_id}: N_funct={nfun} but "
+                          f"only {len(fids)} function ids given",
+                          block.source)
+                return
+            params["funct_ids"] = fids[:nfun]
+            if nfun > 1:
+                if len(cards) < 5:
+                    log.error(f"/MAT/LAW36/{block.user_id}: N_funct>1 needs "
+                              f"a strain-rate card", block.source)
+                    return
+                rates = _floats(cards[4], nfun)
+                if any(b <= a for a, b in zip(rates, rates[1:])):
+                    log.error(f"/MAT/LAW36/{block.user_id}: strain rates "
+                              f"must be strictly increasing", block.source)
+                    return
+                params["rates"] = rates
+            else:
+                params["rates"] = [0.0]
     model.materials[block.user_id] = Material(
         id=block.user_id, law=law, rho0=rho0, title=title, params=params)
 
@@ -733,24 +854,50 @@ def read_surf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/SURF/PART|SEG/surf_ID``: title card, then
 
     * PART: part IDs (the Starter extracts the free outer faces / shell
-      faces of those parts into segments),
-    * SEG:  one segment per card: ``n1 n2 n3 n4`` (n4 = n3 for triangles).
+      faces of those parts into segments). The real Radioss ``EXT``
+      qualifier (``/SURF/PART/EXT`` — external faces only) is accepted
+      but IGNORED with a warning: the port's /SURF/PART extraction
+      already returns the free outer faces, but the two treatments are
+      not guaranteed identical on every mesh.
+    * SEG:  one segment per card, in either dialect —
+
+        - port compact: ``n1 n2 n3 [n4]``  (3 ids = triangle),
+        - REAL fixed format (``hm_read_surf.F`` 'SEG'):
+          ``seg_ID n1 n2 n3 n4`` — 5 fields; the leading segment id is
+          dropped, ``n4 = 0`` means a triangle (upstream: N4=0 -> N3).
+
+      Cards with 4 ids are read as the compact quad ``n1..n4`` — a REAL
+      triangle card that leaves N4 blank instead of writing 0 is
+      ambiguous with it and would be misread (real writers, e.g. k2rad,
+      write all 5 fields).
     """
-    kind = block.parts[1].upper() if len(block.parts) > 1 else "SEG"
+    kparts = block.keyword.split("/")      # ids already stripped
+    kind = kparts[1] if len(kparts) > 1 else "SEG"
     title, cards = _title_and_data(block)
     s = model.surfaces.setdefault(
         block.user_id, Surface(id=block.user_id, title=title))
     if kind == "PART":
+        quals = kparts[2:]
+        if quals:
+            log.warning(f"/SURF/PART/{'/'.join(quals)}/{block.user_id}: the "
+                        f"{'/'.join(quals)} qualifier is ignored — treated "
+                        f"as plain /SURF/PART (the port extracts the free "
+                        f"outer faces of the parts)", block.source)
         for c in cards:
             s.part_ids.extend(c.ints())
     elif kind == "SEG":
         for c in cards:
             t = c.ints()
+            if len(t) == 5:
+                t = t[1:]                  # real dialect: drop seg_ID
             if len(t) == 3:
                 t = t + [t[2]]
             if len(t) != 4:
-                log.error(f"/SURF/SEG card needs 3 or 4 node ids", c.source)
+                log.error(f"/SURF/SEG card needs 3 or 4 node ids, or "
+                          f"seg_ID + 4 node ids (real format)", c.source)
                 continue
+            if t[3] == 0:
+                t[3] = t[2]                # upstream: N4 = 0 -> triangle
             s.seg_nodes.append(t)
     else:
         log.warning(f"/SURF/{kind} not ported (PART, SEG supported)",
@@ -1296,10 +1443,35 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       on, with the coefficient derived from Xfreq exactly as the reader
       does (1: Xfreq itself, must be in [0, 1]; 2: 2*pi/Xfreq, Xfreq a
       period in cycles; 3: 2*pi*Xfreq, Xfreq a cutoff frequency —
-      per-cycle alpha = XFILTR*dt). IFQ >= 10 (the MODFR = 2 incremental
-      stiffness formulation) is refused loudly — deferred (see
-      contact/friction.py; the implicit solver's return mapping IS that
-      formulation). Laws and filter live in contact/friction.py.
+      per-cycle alpha = XFILTR*dt). Xfreq = 0 switches the filter OFF
+      whatever Ifiltr says — exactly the reference (``IF (ALPHA==0.)
+      IFQ = 0`` in hm_read_inter_type07.F). IFQ >= 10 (the MODFR = 2
+      incremental stiffness formulation) is refused loudly — deferred
+      (see contact/friction.py; the implicit solver's return mapping IS
+      that formulation). Laws and filter live in contact/friction.py.
+
+      TYPE7 also accepts the REAL fixed-format layout (cfg
+      ``inter_type7.cfg`` radioss2020+ / ``hm_read_inter_type07.F``),
+      detected by its card count — 6+ data cards where the compact
+      layout above has at most 3::
+
+        card 2:  grnod_ID surf_ID Istf Ithe Igap __ Ibag Idel Icurv Iadm
+        card 3:  Fscale_gap  Gap_max  Fpenmax  __  Itied
+        card 4:  Stmin  Stmax  %mesh_size  dtmin  Irem_gap  Irem_i2
+        [Icurv 1/2 only: node_ID1 node_ID2]
+        card 5:  Stfac  Fric  Gapmin  Tstart  Tstop
+        card 6:  IBC  __  Inacti  VisS  VisF  Bumult
+        card 7:  Ifric Ifiltr Xfreq Iform sens_ID fct_IDF AscaleF fric_ID
+        [Ifric > 0 only: C1..C5]  [Ifric > 1 only: C6]
+
+      Real fields with no port equivalent (Ithe/Ibag/Idel/Icurv/Iadm,
+      Fscale_gap/Fpenmax/Itied, Stmin/Stmax/%mesh_size/dtmin/Irem_*,
+      Tstart/Tstop, IBC/Inacti/VisS/VisF/Bumult, fct_IDF/AscaleF/
+      fric_ID) are accepted and, when set to a non-default value,
+      reported in ONE warning. Iform = 2 (the incremental tangential
+      formulation) is an ERROR when friction is actually active
+      (Fric != 0 or Ifric > 0 — same machinery as the IFQ >= 10
+      refusal); with no friction it is inert and only warned about.
 
     ``/INTER/TYPE2`` (tied, kinematic)::
 
@@ -1346,12 +1518,119 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             surf_id=int(toks[1]), dsearch=f[2], title=title))
         return
 
-    t = cards[0].ints()
-    istf = t[2] if len(t) > 2 else 0
-    igap = t[3] if len(t) > 3 else 0
-    sens = t[4] if len(t) > 4 else 0
-    mfrot = t[5] if len(t) > 5 else 0            # Ifric (M15)
-    ifq = t[6] if len(t) > 6 else 0              # Ifiltr (M15)
+    if kind == "TYPE7" and len(cards) >= 6:
+        # ==== the REAL fixed-format TYPE7 layout (see docstring) ===========
+        ign: List[str] = []            # non-default fields the port ignores
+        f0 = _fixed_vals(cards[0], [10] * 10)
+        id1, id2 = _ival(f0[0]), _ival(f0[1])
+        istf, igap = _ival(f0[2]), _ival(f0[4])
+        for name, s in (("Ithe", f0[3]), ("Ibag", f0[6]), ("Idel", f0[7]),
+                        ("Iadm", f0[9])):
+            if _ival(s) != 0:
+                ign.append(f"{name}={s}")
+        icurv = _ival(f0[8])
+        f1 = _fixed_vals(cards[1], [20, 20, 20, 20, 10])
+        gap_max = _fval(f1[1])
+        if f1[0] and _to_float(f1[0]) not in (0.0, 1.0):  # 0/1 = default
+            ign.append(f"Fscale_gap={f1[0]}")
+        for name, s in (("Fpenmax", f1[2]), ("Itied", f1[4])):
+            if s and _to_float(s) != 0.0:
+                ign.append(f"{name}={s}")
+        f2 = _fixed_vals(cards[2], [20, 20, 20, 20, 10, 10])
+        for name, s in (("Stmin", f2[0]), ("Stmax", f2[1]),
+                        ("%mesh_size", f2[2]), ("dtmin", f2[3]),
+                        ("Irem_gap", f2[4]), ("Irem_i2", f2[5])):
+            if s and _to_float(s) != 0.0:
+                ign.append(f"{name}={s}")
+        icard = 3
+        if icurv in (1, 2):            # the optional curvature node card
+            ign.append(f"Icurv={icurv} (node card skipped)")
+            icard += 1
+        elif icurv != 0:
+            ign.append(f"Icurv={icurv}")
+        if len(cards) < icard + 3:
+            log.error(f"/INTER/TYPE7/{block.user_id}: real-format block "
+                      f"needs 6 data cards (got {len(cards)})", block.source)
+            return
+        f3 = _fixed_vals(cards[icard], [20] * 5)
+        stfac, fric, gap = _fval(f3[0]), _fval(f3[1]), _fval(f3[2])
+        for name, s in (("Tstart", f3[3]), ("Tstop", f3[4])):
+            if s and _to_float(s) != 0.0:
+                ign.append(f"{name}={s}")
+        f4 = _fixed_vals(cards[icard + 1], [7, 1, 1, 1, 20, 10, 20, 20, 20])
+        if _ival(f4[1]) or _ival(f4[2]) or _ival(f4[3]):
+            ign.append(f"IBC={f4[1] or '0'}{f4[2] or '0'}{f4[3] or '0'}")
+        for name, s in (("Inacti", f4[5]), ("VisS", f4[6]),
+                        ("VisF", f4[7]), ("Bumult", f4[8])):
+            if s and _to_float(s) != 0.0:
+                ign.append(f"{name}={s}")
+        f5 = _fixed_vals(cards[icard + 2],
+                         [10, 10, 20, 10, 10, 10, 20, 10])
+        mfrot, ifq = _ival(f5[0]), _ival(f5[1])
+        xfreq, iform, sens = _fval(f5[2]), _ival(f5[3]), _ival(f5[4])
+        for name, s in (("fct_IDF", f5[5]), ("fric_ID", f5[7])):
+            if _ival(s) != 0:
+                ign.append(f"{name}={s}")
+        if f5[6] and _to_float(f5[6]) not in (0.0, 1.0):
+            ign.append(f"AscaleF={f5[6]}")
+        # Iform = MODFR: 2 selects the incremental (stiffness) tangential
+        # formulation (upstream turns it into IFQ >= 10) — the same
+        # not-ported path the compact dialect refuses. Without friction
+        # it changes nothing and is only reported.
+        if iform == 2:
+            if fric != 0.0 or mfrot > 0:
+                log.error(f"/INTER/TYPE7/{block.user_id}: Iform=2 (the "
+                          f"incremental stiffness tangential formulation) "
+                          f"is not ported — use Iform 0/1", block.source)
+            else:
+                ign.append("Iform=2 (no friction defined — inert)")
+        # C1..C5 (Ifric > 0) and C6 (Ifric > 1) cards
+        fric_c = (0.0,) * 6
+        icard += 3
+        if mfrot > 0:
+            cc = [0.0] * 6
+            if len(cards) > icard:
+                cc[:5] = _floats(cards[icard], 5)
+                icard += 1
+                if mfrot > 1 and len(cards) > icard:
+                    cc[5] = _floats(cards[icard], 1)[0]
+                    icard += 1
+            else:
+                log.warning(f"/INTER/TYPE7/{block.user_id}: Ifric={mfrot} "
+                            f"without a C1..C5 card — all coefficients 0",
+                            block.source)
+            fric_c = tuple(cc)
+        if ign:
+            log.warning(f"/INTER/TYPE7/{block.user_id}: real-format fields "
+                        f"not ported — ignored: {'; '.join(ign)}",
+                        block.source)
+    else:
+        # ==== the port's compact layout =====================================
+        t = cards[0].ints()
+        id1 = t[0]
+        id2 = t[1]
+        istf = t[2] if len(t) > 2 else 0
+        igap = t[3] if len(t) > 3 else 0
+        sens = t[4] if len(t) > 4 else 0
+        mfrot = t[5] if len(t) > 5 else 0        # Ifric (M15)
+        ifq = t[6] if len(t) > 6 else 0          # Ifiltr (M15)
+        stfac, fric, gap, gap_max, xfreq = (1.0, 0.0, 0.0, 0.0, 0.0)
+        if len(cards) > 1:
+            stfac, fric, gap, gap_max, xfreq = _floats(
+                cards[1], 5, defaults=[1.0, 0.0, 0.0, 0.0, 0.0])
+        # ---- optional C1..C6 card (the original's card 8, Ifric > 0) ------
+        fric_c = (0.0,) * 6
+        if mfrot in (1, 2, 3, 4):
+            if len(cards) > 2:
+                cc = _floats(cards[2], 6, defaults=[0.0] * 6)
+                # C6 is only read for Ifric > 1 (hm_read_inter_type07.F)
+                fric_c = tuple(cc[:5]) + ((cc[5],) if mfrot > 1 else (0.0,))
+            else:
+                log.warning(f"/INTER/{kind}/{block.user_id}: Ifric={mfrot} "
+                            f"without a C1..C6 card — all coefficients 0",
+                            block.source)
+
+    # ==== shared validation (both dialects) ================================
     if istf not in (0, 1, 2, 3, 4, 5):
         log.error(f"/INTER/{kind}/{block.user_id}: Istf={istf} (0..5)",
                   block.source)
@@ -1375,19 +1654,19 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/INTER/{kind}/{block.user_id}: Ifiltr={ifq} (0..3)",
                   block.source)
         ifq = 0
-    stfac, fric, gap, gap_max, xfreq = (1.0, 0.0, 0.0, 0.0, 0.0)
-    if len(cards) > 1:
-        stfac, fric, gap, gap_max, xfreq = _floats(
-            cards[1], 5, defaults=[1.0, 0.0, 0.0, 0.0, 0.0])
-        if stfac == 0.0 and istf != 1:
-            stfac = 1.0            # Radioss: Stfac = 0 -> default scale 1.0
-        if istf == 1 and stfac <= 0.0:
-            log.error(f"/INTER/{kind}/{block.user_id}: Istf=1 needs a "
-                      f"positive Stfac (it IS the stiffness)", block.source)
+    if stfac == 0.0 and istf != 1:
+        stfac = 1.0                # Radioss: Stfac = 0 -> default scale 1.0
+    if istf == 1 and stfac <= 0.0:
+        log.error(f"/INTER/{kind}/{block.user_id}: Istf=1 needs a "
+                  f"positive Stfac (it IS the stiffness)", block.source)
     # ---- the XFILTR mapping of hm_read_inter_type07.F (M15, checked) ------
-    # IFQ=1: Xfreq IS the coefficient; IFQ=2: 2*pi/Xfreq (a period in
-    # cycles); IFQ=3: 2*pi*Xfreq (a cutoff frequency — alpha = XFILTR*dt
-    # per cycle). The original's MSGID 554 errors are mirrored.
+    # Xfreq (ALPHA) = 0 switches the filter OFF whatever Ifiltr says —
+    # exactly the reference: IF (ALPHA==0.) IFQ = 0. Then IFQ=1: Xfreq IS
+    # the coefficient; IFQ=2: 2*pi/Xfreq (a period in cycles); IFQ=3:
+    # 2*pi*Xfreq (a cutoff frequency — alpha = XFILTR*dt per cycle). The
+    # original's MSGID 554 errors are mirrored.
+    if xfreq == 0.0:
+        ifq = 0
     xfiltr = 0.0
     if ifq > 0:
         if ifq == 1:
@@ -1402,22 +1681,9 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                       f"XFILTR={xfiltr:g}, must be in [0,1] for "
                       f"Ifiltr 1/2)", block.source)
             ifq, xfiltr = 0, 0.0
-    # ---- optional C1..C6 card (the original's card 8, Ifric > 0 only) -----
-    fric_c = (0.0,) * 6
-    icard = 2
-    if mfrot > 0:
-        if len(cards) > icard:
-            cc = _floats(cards[icard], 6, defaults=[0.0] * 6)
-            # C6 is only read for Ifric > 1 (hm_read_inter_type07.F)
-            fric_c = tuple(cc[:5]) + ((cc[5],) if mfrot > 1 else (0.0,))
-            icard += 1
-        else:
-            log.warning(f"/INTER/{kind}/{block.user_id}: Ifric={mfrot} "
-                        f"without a C1..C6 card — all coefficients 0",
-                        block.source)
     if kind == "TYPE7":
         model.interfaces.append(Interface(
-            id=block.user_id, type=7, grnod_id=t[0], surf_id=t[1],
+            id=block.user_id, type=7, grnod_id=id1, surf_id=id2,
             istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap,
             gap_max=gap_max, sens_id=sens, mfrot=mfrot, ifq=ifq,
             xfiltr=xfiltr, fric_c=fric_c, title=title))
@@ -1431,7 +1697,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                      f"EXTENSION (the original TYPE11 never evaluates "
                      f"MFROT; see contact/friction.py)")
         model.interfaces.append(Interface(
-            id=block.user_id, type=11, line_id1=t[0], line_id2=t[1],
+            id=block.user_id, type=11, line_id1=id1, line_id2=id2,
             istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap,
             gap_max=gap_max, sens_id=sens, mfrot=mfrot, ifq=ifq,
             xfiltr=xfiltr, fric_c=fric_c, title=title))

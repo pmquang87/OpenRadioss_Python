@@ -29,6 +29,17 @@ V0 summed) — and the run 2 listing's IE must equal
 p V/(gamma-1) = 2.64e-4 * 20000 / 0.4 (units mm/ms/kg -> GPa).
 """
 
+# M36: decks are emitted through the package's fixed-format 2022 writer
+# (pyradioss/input/deck_writer.py) — model definition below is unchanged,
+# only the emission format moved to the real Radioss dialect.
+import os
+import sys as _sys
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
+if _REPO not in _sys.path:
+    _sys.path.insert(0, _REPO)
+from pyradioss.input import deck_writer  # noqa: E402
+
 # column: 10 x 10 mm section, 40 mm tall, 4 bricks stacked in z
 NZ = 4
 H = 10.0          # element height (mm)
@@ -97,10 +108,10 @@ engine2 = [
     "/STOP", "15.0",
 ]
 
-with open("GASPISTON_0000.rad", "w") as fh:
-    fh.write("\n".join(starter) + "\n")
-with open("GASPISTON_0001.rad", "w") as fh:
-    fh.write("\n".join(engine1) + "\n")
-with open("GASPISTON_0002.rad", "w") as fh:
-    fh.write("\n".join(engine2) + "\n")
+deck_writer.write_starter_from_port_lines(
+    starter, "GASPISTON_0000.rad", runname="GASPISTON")
+deck_writer.write_engine_from_port_lines(
+    engine1, "GASPISTON_0001.rad")
+deck_writer.write_engine_from_port_lines(
+    engine2, "GASPISTON_0002.rad")
 print("wrote GASPISTON_0000.rad / _0001.rad / _0002.rad")

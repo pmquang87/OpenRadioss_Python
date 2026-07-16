@@ -1,3 +1,4 @@
+#RADIOSS ENGINE
 /RUN/GASPISTON/1
 8.0
 /DT
@@ -7,5 +8,4 @@
 /STATE/DT
 2.0 2.0
 /PRINT/-2000
-/STOP
-15.0
+# /STOP 15.0 (port energy-error abort) omitted: the real Engine reader cannot read the block (M35, forrtl severe 24); the port uses its default 15% guard

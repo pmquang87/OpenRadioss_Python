@@ -21,6 +21,17 @@ Run:
 
 import numpy as np
 
+# M36: decks are emitted through the package's fixed-format 2022 writer
+# (pyradioss/input/deck_writer.py) — model definition below is unchanged,
+# only the emission format moved to the real Radioss dialect.
+import os
+import sys as _sys
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
+if _REPO not in _sys.path:
+    _sys.path.insert(0, _REPO)
+from pyradioss.input import deck_writer  # noqa: E402
+
 # panel: 10 x 10 shells of 2 mm -> 20 x 20 mm, t = 0.5 mm
 NX = NY = 10
 H = 2.0
@@ -157,8 +168,8 @@ deck.append("DZ VZ")
 deck.append(f"{MASTER}")
 deck.append("/END")
 
-with open("IMPACTOR_0000.rad", "w") as fh:
-    fh.write("\n".join(deck) + "\n")
+deck_writer.write_starter_from_port_lines(
+    deck, "IMPACTOR_0000.rad", runname="IMPACTOR")
 
 engine = [
     "/RUN/IMPACTOR/1",
@@ -176,7 +187,7 @@ engine = [
     "/STOP",
     "10.0",
 ]
-with open("IMPACTOR_0001.rad", "w") as fh:
-    fh.write("\n".join(engine) + "\n")
+deck_writer.write_engine_from_port_lines(
+    engine, "IMPACTOR_0001.rad")
 
 print("wrote IMPACTOR_0000.rad / IMPACTOR_0001.rad")

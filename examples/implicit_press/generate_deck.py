@@ -43,6 +43,16 @@ Run it (from this directory):
 """
 
 import os
+# M36: decks are emitted through the package's fixed-format 2022 writer
+# (pyradioss/input/deck_writer.py) — model definition above is unchanged,
+# only the emission format moved to the real Radioss dialect.
+import sys as _sys
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))))
+if _REPO not in _sys.path:
+    _sys.path.insert(0, _REPO)
+from pyradioss.input import deck_writer  # noqa: E402
+
 
 # pad
 PLX, PLY, PLZ = 40.0, 40.0, 10.0
@@ -172,8 +182,8 @@ def main():
               f"         1         Z         4{-F:10.4f}"]
 
     lines.append("/END")
-    with open(os.path.join(here, "IMPLPRESS_0000.rad"), "w") as f:
-        f.write("\n".join(lines) + "\n")
+    deck_writer.write_starter_from_port_lines(
+        lines, os.path.join(here, "IMPLPRESS_0000.rad"), runname="IMPLPRESS")
 
     engine = """#
 /RUN/IMPLPRESS/1
@@ -186,8 +196,8 @@ def main():
 1.0
 /END
 """
-    with open(os.path.join(here, "IMPLPRESS_0001.rad"), "w") as f:
-        f.write(engine)
+    deck_writer.write_engine_from_port_lines(
+        engine.splitlines(), os.path.join(here, "IMPLPRESS_0001.rad"))
     print("wrote IMPLPRESS_0000.rad / IMPLPRESS_0001.rad")
 
 
