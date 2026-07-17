@@ -77,6 +77,29 @@ jobs:
         if: matrix.python-version == '3.10'
         run: python -m pip install numba
 
+      # The M37 generic /MAT reader (pyradioss/input/mat_reader.py) parses
+      # its per-law schemas from OpenRadioss's own hm_cfg_files CFG tree.
+      # Those files are NOT vendored into this MIT-licensed repo (they carry
+      # the upstream project's license); fetch them sparsely from the
+      # official repo and point PYRADIOSS_HM_CFG at them. Without this the
+      # cfg-dependent test modules skip (still green, but ~200 tests less).
+      - name: Cache OpenRadioss hm_cfg_files
+        id: cfg-cache
+        uses: actions/cache@v4
+        with:
+          path: or_cfg/hm_cfg_files/config/CFG
+          key: hm-cfg-files-v1
+
+      - name: Fetch OpenRadioss hm_cfg_files (sparse)
+        if: steps.cfg-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse \
+            https://github.com/OpenRadioss/OpenRadioss.git or_cfg
+          git -C or_cfg sparse-checkout set hm_cfg_files/config/CFG
+
+      - name: Point pyradioss at the cfg tree
+        run: echo "PYRADIOSS_HM_CFG=$GITHUB_WORKSPACE/or_cfg/hm_cfg_files/config/CFG" >> "$GITHUB_ENV"
+
       - name: Run fast test suite
         run: python -m pytest tests -q -m "not slow" -n auto --durations=15
 
@@ -141,6 +164,23 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e . scipy numba pytest pytest-xdist
+
+      - name: Cache OpenRadioss hm_cfg_files
+        id: cfg-cache
+        uses: actions/cache@v4
+        with:
+          path: or_cfg/hm_cfg_files/config/CFG
+          key: hm-cfg-files-v1
+
+      - name: Fetch OpenRadioss hm_cfg_files (sparse)
+        if: steps.cfg-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse \
+            https://github.com/OpenRadioss/OpenRadioss.git or_cfg
+          git -C or_cfg sparse-checkout set hm_cfg_files/config/CFG
+
+      - name: Point pyradioss at the cfg tree
+        run: echo "PYRADIOSS_HM_CFG=$GITHUB_WORKSPACE/or_cfg/hm_cfg_files/config/CFG" >> "$GITHUB_ENV"
 
       - name: Run full test suite (slow tests included)
         run: python -m pytest tests -q -n auto --durations=25

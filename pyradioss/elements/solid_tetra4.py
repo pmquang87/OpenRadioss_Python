@@ -143,9 +143,15 @@ def _exact_dt_factor(dndx: np.ndarray, vol: np.ndarray, lc: np.ndarray,
             [0, 0, 0, 0, G, 0],
             [0, 0, 0, 0, 0, G],
         ])
+        c = mat.sound_speed_solid() \
+            if (mat.rho0 > 0.0 and mat.E > 0.0) else 0.0
+        if c <= 0.0:
+            # stiffness-free material (a /MAT/VOID with E = 0) claims no
+            # time step — see the brick kernel's identical guard
+            fac[sl] = 1.0
+            continue
         eig = np.linalg.eigvals(C[None, :, :] @ BBt[sl])
         w2max = (4.0 / mat.rho0) * eig.real.max(axis=1)   # m = rho*V/4
-        c = mat.sound_speed_solid()
         dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
         fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
     return fac
@@ -265,6 +271,11 @@ def forces(group, x, v, vr, dt, fint, mint):
             extra["F"] = F[sl]
         for name, arr in st["mat_extra"].items():
             extra[name] = arr[sl]
+        if materials.needs_env(mat):
+            # M37 pack 2: LAW24/LAW81 gate their dilatancy on the current
+            # density / internal energy (see materials.needs_env)
+            extra["rho"] = rho[sl]
+            extra["eint"] = st["eint"][sl]
         _, _, c_new = materials.solid_update(
             mat, sig[sl], deps[sl], st["epsp"][sl], dt, extra or None)
         if c_new is not None:

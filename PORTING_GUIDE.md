@@ -33,9 +33,13 @@ same names in comments.
 | OpenRadioss (Fortran) | pyradioss (Python) | Notes |
 |---|---|---|
 | `starter/source/starter/lectur.F` (deck reading driver) | `pyradioss/starter/starter.py` | orchestration |
-| `starter/source/reader/*` + `hm_reader` (Altair reader lib) | `pyradioss/input/deck_reader.py` | block/keyword lexer, `#include` |
+| `starter/source/reader/*` + `hm_reader` (Altair reader lib) | `pyradioss/input/deck_reader.py` | block/keyword lexer, `#include`; M37: real-dialect detection from /BEGIN's declared input version (≥ 90 → `block.fixed` everywhere, `#include`s too), `KeywordBlock.fixed_cards()` re-inserting whitespace-only lines as REAL blank cards (`blank_slots`), `Card.cut(layout)`/`Card.is_blank`, /PARAMETER `&NAME` substitution with columns preserved |
 | `starter/source/elements/reader` per-keyword `hm_read_*.F` | `pyradioss/input/starter_keywords.py` | one function per keyword |
-| — (deck *writing* is the preprocessor's job in the Altair stack, not the solver's; the layouts come from the `hm_cfg_files` CARD definitions the Fortran reader parses with) | `pyradioss/input/deck_writer.py` | M36: fixed-format Radioss 2022 deck writer — per-keyword emitters for all 39 starter dispatch families + engine decks, each citing its CFG card layout; "dual-dialect" output readable by the real Starter AND the port |
+| `starter/source/materials/mat/mat###/hm_read_mat##.F` (all laws) driven by the `hm_cfg_files` CFG card definitions | `pyradioss/input/mat_reader.py` | M37: cfg-driven GENERIC /MAT reader — every law in the radioss2022 catalogue parses (schema = newest `CFG/radioss*/MAT/*.cfg` FORMAT block ≤ 2022, interpreted in import mode); laws without ported physics become `InactiveMaterial` (full params + density, mass init works, Engine refuses to run them); `MAT_PHYSICS_REGISTRY` is the one-line hook for new-law physics builders; `/ALE/MAT`, `/EULER/MAT`, `/HEAT/MAT` parse as notes |
+| — (deck *writing* is the preprocessor's job in the Altair stack, not the solver's; the layouts come from the `hm_cfg_files` CARD definitions the Fortran reader parses with) | `pyradioss/input/deck_writer.py` | M36: fixed-format Radioss 2022 deck writer — per-keyword emitters for all 39 starter dispatch families + engine decks, each citing its CFG card layout; "dual-dialect" output readable by the real Starter AND the port; M37: the field-formatting primitives extracted to `card_layouts.py` (re-exported here) |
+| the `hm_cfg_files` CARD format strings themselves (the column widths the real reader parses with) | `pyradioss/input/card_layouts.py` | M37: ONE shared table — the field-formatting primitives (`fmt_int`/`fmt_float`/`fmt_str`/`blank`/`BLANK_CARD`, extracted from `deck_writer`) plus the `LAYOUTS` column-width table, every entry citing its `hm_cfg_files` CARD format string; the WRITER emits with it and the READER cuts fixed cards with it (`Card.cut(layout)`) |
+| `starter/source/general_controls/computation/unit_code.F` + `hm_read_unit.F` (UNITAB) + the per-quantity dimension conversion of `hm_get_floatv.F` | `pyradioss/input/units.py` + `/UNIT` in `starter_keywords.py` | M37 (groups-sets builder, landed unreported): /BEGIN work-unit cards + `/UNIT/<id>` local unit systems — `<prefix><base>` code parse (g/m/s bases, metric prefixes, the MASS×1e-3 kg quirk) and per-quantity (mass, length, time)-power conversion of blocks referencing a /UNIT, verified against the real Windows starter on RD-E-2601 main_TEST4; unconverted keywords referencing a /UNIT warn loudly |
+| `starter/source/model/sets/` + `starter/source/groups/` (`hm_lecgrn.F` node groups, `hm_surfnod.F`, `hm_grogronod.F` group-of-groups, `hm_elngr*.F` element-group nodes, `hm_read_surfsurf.F`, `hm_surfgr2`/`surftage`, `linedge.F` border edges, `hm_lines_of_lines.F`) | `read_grnod`/`read_gr_elem`/`read_surf`/`read_line` in `starter_keywords.py` + `resolve_entity_groups`/`resolve_node_groups`/`resolve_surfaces`/`resolve_lines` in `starter/initialization.py` | M37 (groups-sets builder, landed unreported): the group/set machinery the M36 corpus sweep ranked gap #1–#10 — /GRNOD/SURF, /GRNOD/GRNOD (recursive fixpoint, negative-id removal wins, cycle detection), /GRNOD/GENE + GEN_INCR, /GRNOD/GR<elem>, element groups /GRSHEL\|GRSH3N\|GRBRIC\|GRQUAD\|GRTRUS\|GRBEAM\|GRSPRI (ids, PART, ALL, group-of-groups), /GRPART/PART, /SURF/SURF (negative id = normal flip), /SURF/GRSHEL\|GRSH3N, /LINE/EDGE (border-edges-only, linedge.F semantics), /LINE/LINE, /LINE/PART |
 | Fortran derived types / common blocks (`common_source/modules`) | `pyradioss/model/*.py` | dataclasses + NumPy arrays |
 | `starter/source/initial_conditions`, `inimass` etc. | `pyradioss/starter/initialization.py` | lumped mass, volumes |
 | restart write `starter/source/restart/ddsplit/wrrest.F` | `pyradioss/starter/restart.py` | pickle instead of binary |
@@ -61,6 +65,16 @@ same names in comments.
 | `engine/source/materials/mat/mat027/sigeps27c.F` | `pyradioss/materials/law27_brittle.py` | shells only, like the original |
 | `engine/source/materials/mat/mat036/sigeps36.F` (+ `36c`) | `pyradioss/materials/law36_tabulated.py` | |
 | `engine/source/materials/mat/mat042/sigeps42.F` | `pyradioss/materials/law42_ogden.py` | solids; returns its own SOUNDSP |
+| `starter/source/materials/mat/mat000/hm_read_mat00.F` (no engine kernel — that is the point) | `pyradioss/materials/mat_void.py` | M37 pack 1: /MAT/VOID — mass + contact/dt stiffness estimate, stress identically ZERO (solids + shells) |
+| `starter/source/materials/mat/matgas/hm_read_matgas.F` + the airbag consumers (`engine/source/airbag/`) | `pyradioss/materials/mat_gas.py` | M37 pack 1: /MAT/GAS MASS/MOLE/CSTA/PREDEF thermodynamics (cp(T), cv, gamma); on solids = ideal-gas EOS semantics (zero deviator, pressure/SOUNDSP via the kernels' /EOS block; /EOS/IDEAL-GAS supplies P0/gamma/RHO_0 — port extension, upstream has no gas element kernel) |
+| `engine/source/materials/mat/mat035/sigeps35.F` | `pyradioss/materials/law35_kelvinmax.py` | M37 pack 1: LAW35 visco-elastic foam (solids) — standard-linear-solid deviator (exact Crank–Nicolson MIDSTEP), C1/C2/C3 volumetric visco-elasticity or tabulated pressure, closed-cell air term, Fortran dP/drho SOUNDSP |
+| `engine/source/materials/mat/mat040/sigeps40.F` | `pyradioss/materials/law40_kelvinmax.py` | M37 pack 1: /MAT/KELVINMAX generalized Kelvin–Maxwell (solids) — 5 Prony branches integrated exactly (linear-in-time rate reconstruction, the `jbm037` block verbatim), incremental K-pressure, Stassi/von-Mises UVAR criteria; the law the RD-E-5200 corpus decks use |
+| `engine/source/materials/mat/mat044/sigeps44.F` (+ `44c`) | `pyradioss/materials/law44_cowper.py` | M37 pack 1: LAW44 Cowper–Symonds — RQ = 1 + (CC·epsdot)^CP verbatim (CC = 1/C, CP = 1/p per hm_read_mat44), VP=1/2/3 rate measures, one-step IPLA=0 radial return + TOTAL P = K·mu pressure (solids), LAW2-style Iplas=2 projection (shells); kinematic hardening NOT ported (warned) |
+| `engine/source/materials/mat/mat070/sigeps70.F` + `law70_upd.F`/`law70_table.F` | `pyradioss/materials/law70_tabfoam.py` | M37 pack 1: LAW70 tabulated visco-elastic foam (solids) — 2-D (strain × rate) loading/unloading tables with end-slope extrapolation, evolving unloading modulus, Iflag 0–4 unloading formulations, Itens tension scale, SOUNDSP = sqrt(AA1(E_cur)/rho0); oracle RD-V-0220 parses + runs (goes unstable only at ~80% crush — Isolid24/HEPH element technology, not material) |
+| `engine/source/materials/mat/mat019/sigeps19c.F` (shells only, called from mulawc) + `hm_read_mat19.F` | `pyradioss/materials/law19_fabric.py` | M37 pack 2 (landed unreported): LAW19 /MAT/FABRI orthotropic linear-elastic membrane fabric — reduced compression stiffness (principal-stress RCOMP blend / bi-compression scale) + the REF-STATE "zerostress" option; /SENSOR TSTART wiring not ported (documented cut) |
+| `engine/source/materials/mat/mat024/` (`m24law.F` entry, `conc24.F` driver, `elas24.F` damage-degraded prediction …) + `hm_read_mat24.F` | `pyradioss/materials/law24_concrete.py` | M37 pack 2 (landed unreported): LAW24 /MAT/CONC reinforced-concrete smeared-crack / cap plasticity (solids) — documented cuts: steel reinforcement (ARM1–3) REFUSED, Icap=2 full cap REFUSED (Icap 0/1 only — the corpus decks run Icap 0), 2D/SPH branches not ported |
+| `engine/source/materials/mat/mat062/sigeps62.F` + `hm_read_mat62.F` | `pyradioss/materials/law62_hypervisco.py` | M37 pack 2 (landed unreported): LAW62 /MAT/VISC_HYP hyper-visco-elastic foam (solids) — Ogden series with per-term compressibility exponents + optional Prony overstress, CIMAX sound-speed bound; the implicit/IHET tangent feedback (ET) not ported |
+| `engine/source/materials/mat/mat081/sigeps81.F90` + `hm_read_mat81.F90` | `pyradioss/materials/law81_druckerprager.py` | M37 pack 2 (landed unreported): LAW81 /MAT/DPRAG_CAP Drucker–Prager with cap hardening (solids) — cutting-plane return mapping, apex/cone/cap branches; porosity input recorded + Starter-warned (`law81_porosity_ignored`) |
 | `engine/source/materials/fail/johnson_cook/`, `fail/biquad/` | `pyradioss/failure/` | /FAIL cards + GBUF%OFF element deletion |
 | `engine/source/elements/beam/pmat3.F` (global plasticity) | `pyradioss/elements/beam_type3.py` | LAW2 resultant-space return |
 | `engine/source/interfaces/int07/` (`i7dst3.F`, `i7for3.F`) + `intsort/i7buce.F` | `pyradioss/contact/inter_type7.py` | penalty node↔segment, voxel broad phase |
@@ -155,6 +169,9 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 |---|---|---|
 | `/BEGIN`, `/END`, `/TITLE` | ✅ | |
 | `#include` | ✅ | recursive |
+| classic FIXED-COLUMN dialect (official decks) | ✅ | M37 — dialect detected from /BEGIN's input version (≥ 90 → column cuts via the shared `card_layouts.LAYOUTS` table on every block incl. `#include`s); whitespace-only lines = REAL blank cards; abutting 10/20-char fields, numeric titles, `/PARAMETER` `&NAME` substitution; version-less port decks keep the free-token reading untouched. The entire M36 20-signature parse-bug backlog is dead (VALIDATION.md §4.5) |
+| `/PARAMETER/GLOBAL/REAL\|INTEGER` | 🟡 | M37 — textual `&NAME` substitution in place, columns preserved (the SPHEX '0&V' class) |
+| `/UNIT` + /BEGIN work units | ✅ | M37 — local unit systems: `<prefix><base>` codes (g/m/s bases; MASS×1e-3 kg quirk) or plain factors; per-quantity (mass,length,time)-power conversion of blocks referencing the /UNIT, verified vs the real starter on RD-E-2601 main_TEST4; keywords without conversion wiring warn loudly (see `input/units.py`) |
 | `/NODE` | ✅ | |
 | `/BRICK` | ✅ | 8-node hexa; 4-distinct-node degenerates auto-convert to `/TETRA4`, penta/pyramid rejected with a clear error |
 | `/TETRA4` | ✅ | 4-node constant-strain tetra |
@@ -168,6 +185,18 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | `/MAT/LAW27` (`/MAT/PLAS_BRIT`) | 🟡 | brittle tensile cracking with fixed crack direction, unilateral damage, layer rupture + element deletion; since M15 the CONSISTENT implicit shell tangent (per-branch — see law27_brittle.py); the plastic block of the original ❌ (shells only, like the original) |
 | `/MAT/LAW36` (`/MAT/PLAS_TAB`) | ✅ | tabulated hardening from /FUNCT curves, strain-rate curve family (linear rate interpolation), eps_p_max deletion; Fsmooth/Chard/Fcut and Fscale ❌ |
 | `/MAT/LAW42` (`/MAT/OGDEN`) | 🟡 | Ogden/Mooney-Rivlin, incompressible + K(J-1) bulk penalty, exact F from initial gradients, **nonlinear sound speed feeds the time step** (the law stiffens with stretch — verified by a long /DT 0.9 hold at λ≈2); solids only, no shell variant, no Prony viscosity |
+| `/MAT/<any law>` — generic cfg-driven reader | ✅ | M37 — `input/mat_reader.py` parses the `hm_cfg_files` CFG DSL into per-law schemas: 204 law spellings resolve, 193/193 non-dedicated corpus /MAT blocks parse (0 failures, 0 heuristic fallbacks); laws without ported physics = `InactiveMaterial` (full params + density, mass init works, /PART cross-refs warn, the ENGINE refuses to run them naming law/id/element family); `MAT_PHYSICS_REGISTRY` = the one-line hook for new-law physics; needs the cfg tree (`PYRADIOSS_HM_CFG` or `C:/OpenRadioss/hm_cfg_files/config/CFG`, else density-only heuristic + warning) |
+| `/MAT/VOID` (law 0) | ✅ | M37 pack 1 — stress identically zero; E/nu feed dt/contact estimates only (solids + shells) |
+| `/MAT/GAS` (MASS/MOLE/CSTA/PREDEF) | 🟡 | M37 pack 1 — gas thermodynamics (cp(T), cv, gamma); on elements = ideal-gas EOS semantics via /EOS/IDEAL-GAS (port extension — upstream has no gas element kernel; Starter errors on GAS-on-elements without EOS); PREDEF table + default R_igc are SI values |
+| `/MAT/LAW35` (`/MAT/FOAM_VISC`) | ✅ | M37 pack 1 — visco-elastic foam (solids): standard-linear-solid deviator, C1/C2/C3 volumetric visco or tabulated pressure, closed-cell air term |
+| `/MAT/KELVINMAX` (LAW40) | ✅ | M37 pack 1 — generalized Kelvin–Maxwell (solids): 5 Prony branches integrated exactly, incremental K-pressure; the RD-E-5200 creep/relaxation corpus law |
+| `/MAT/LAW44` (`/MAT/COWPER`) | 🟡 | M37 pack 1 — Cowper–Symonds (solids + shells): VP=1/2/3 rate measures, sig_max cap, eps_max kill, TOTAL P=K·mu; kinematic hardening (C_hard/FISOKIN) not ported (warned, runs isotropic) |
+| `/MAT/LAW70` (`/MAT/FOAM_TAB`) | ✅ | M37 pack 1 — tabulated visco-elastic foam (solids): 2-D strain-rate loading/unloading tables, Iflag 0–4, Itens; oracle RD-V-0220 runs (variant 0 instability is the Isolid24/HEPH ELEMENT gap) |
+| `/MAT/FABRI` (LAW19) | 🟡 | M37 pack 2 (landed unreported) — orthotropic membrane fabric (shells): reduced compression (RCOMP), zerostress REF-STATE; /SENSOR TSTART wiring ❌ |
+| `/MAT/CONC` (LAW24) | 🟡 | M37 pack 2 (landed unreported) — smeared-crack / cap plasticity (solids); steel reinforcement (ARM1–3) and Icap=2 REFUSED, 2D/SPH ❌ |
+| `/MAT/LAW62` (`/MAT/VISC_HYP`) | ✅ | M37 pack 2 (landed unreported) — hyper-visco-elastic foam (solids): per-term-compressibility Ogden + Prony overstress |
+| `/MAT/LAW81` (`/MAT/DPRAG_CAP`) | 🟡 | M37 pack 2 (landed unreported) — Drucker–Prager with cap (solids); porosity input warned + ignored |
+| `/ALE/MAT`, `/EULER/MAT`, `/HEAT/MAT` | 🟡 | M37 — parse as notes attached to the material's params (no ALE/thermal solver) |
 | `/FAIL/JOHNSON` | ✅ | D1–D4 + rate term; thermal D5 since M6 (needs the LAW2 thermal card, warned otherwise); Ifail_sh 1/2; element deletion (stress zeroing, dt release, OFF in ANIM) |
 | `/FAIL/BIQUAD` | 🟡 | explicit c1–c5 input (two-parabola εf(σ*) fit); M-flag material presets and S-flag ❌ |
 | `/PROP/TYPE1` (`SHELL`) | 🟡 | thickness, N integration points, hourglass coeffs (Ishell fixed = BT for quads, C0 for `/SH3N`) |
@@ -177,8 +206,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | `/PROP/TYPE14` (`SOLID`) | 🟡 | qa/qb bulk viscosity, hourglass coeff (Isolid fixed = 1-pt+FB) |
 | `/BCS` | ✅ | translation + rotation fixities; on a rigid-body master it becomes a body-level condition (full 111 translations = pivot) |
 | `/INIVEL/TRA`, `/INIVEL/AXIS` | ✅ / ✅ | AXIS since M5: rigid-rotation field ω·d×(x−P) (the way a spinning /RBODY is set up); the translational Vt fields of the full AXIS card via an extra /INIVEL/TRA |
-| `/IMPVEL` | ✅ | via `/FUNCT`, fixed direction; on a rigid-body master it drives the body (moving rigid die); on a moving-wall node it drives the wall |
-| `/IMPDISP` | ✅ | M5 — kinematic like /IMPVEL but enforced at the *position* level (the node lands exactly at x0 + d(t), no velocity-integration drift); work booked from the constraint impulse like /IMPVEL |
+| `/IMPVEL` | ✅ | via `/FUNCT`, fixed direction; on a rigid-body master it drives the body (moving rigid die); on a moving-wall node it drives the wall; M37: rotational direction codes XX/YY/ZZ parse as legal values but the condition is warned + skipped (rotational imposition is a small follow-up — the engine has vr and nodal inertia) |
+| `/IMPDISP` | ✅ | M5 — kinematic like /IMPVEL but enforced at the *position* level (the node lands exactly at x0 + d(t), no velocity-integration drift); work booked from the constraint impulse like /IMPVEL; M37: XX/YY/ZZ as /IMPVEL; a master-node rigid-body /IMPDISP drive added for the RD-V-0220 oracle (rigid_body.py) |
 | `/GRAV` | ✅ | |
 | `/CLOAD` | ✅ | optional /SENSOR gating since M6 (waits for the sensor, then follows f(t − t_fire)) |
 | `/EOS/POLYNOMIAL`, `/EOS/IDEAL-GAS` | ✅ | M6 — attaches to LAW1/2/36 like /FAIL; the EOS pressure replaces the law's (deviator stays with the law); implicit E-p coupling per element with relative-volume state, viscous shock heating into E, EOS sound speed feeds the time step (see materials/eos.py) |
@@ -188,8 +217,10 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | `/PLOAD` | ✅ | M5 — follower pressure on a /SURF (current segment normal, p·A lumped to corners, triangles 1/3); segments of /FAIL-deleted elements stop carrying pressure |
 | `/ADMAS` | 🟡 | M5 — per-node added mass (Radioss type-0 semantics only); also the way a moving /RWALL gets its inertia |
 | `/FUNCT` | ✅ | piecewise-linear tables |
-| `/GRNOD/NODE`, `/GRNOD/PART`, `/GRNOD/BOX` | ✅ | |
-| `/BOX/RECTA` | ✅ | |
+| `/FUNCT_SMOOTH` | ✅ | M37 (landed unreported) — the smooth-curve variant incl. scale/shift and blank scale card |
+| `/GRNOD/*` | ✅ | NODE, PART, BOX (M1); M37 (landed unreported): SURF (nodes of the surfaces' segments), GRNOD (group-of-groups — recursive fixpoint, NEGATIVE id removes, removal wins, cycle detection), GR<elem> (nodes of element groups), GENE + GEN_INCR ranges; other subtypes warn |
+| `/GRSHEL\|GRSH3N\|GRBRIC\|GRQUAD\|GRTRUS\|GRBEAM\|GRSPRI`, `/GRPART/PART` | ✅ | M37 (landed unreported) — element groups: element ids, PART, ALL-of-family, group-of-groups (signed ids, cycle detection); part groups |
+| `/BOX/RECTA`, `/BOX/CYLIN`, `/BOX/SPHER` | ✅ | CYLIN/SPHER membership exercised by the M37 group tests |
 | `/RWALL/PLANE`, `/RWALL/SPHER`, `/RWALL/CYL` | ✅ | M5: three geometries, sliding/tied/friction, and MOVING walls tied to a carrier node (free with /ADMAS+/INIVEL — impulses react on the node, momentum-exact; or /IMPVEL-driven — the drive absorbs the reaction and books external work). Walls do not rotate; containment (nodes inside a sphere/cyl) ❌ |
 | `/RBODY` | ✅ | M5 — master + slave node set as one rigid body: starter assembles mass/COG/inertia tensor (point masses + nodal inertias + added Mass/Jxx-Jzz), ICoG=1 master relocation; engine integrates the 6-DOF Newton-Euler EOM (angular-momentum update + exponential-map rotation — L conserved by construction). Sensors, skew/spherical inertia, IKREM, surface envelope ❌ |
 | `/RBE2` | 🟡 | M5 — rigid link: same mechanics with a structural master kept at its own position; full 6-DOF tie only (per-DOF flags ❌) |
@@ -198,8 +229,8 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | `/INTER/TYPE7` | ✅ | penalty node↔surface (M4): Istf 0–5 stiffness variants, Igap 0/1 (constant / variable from shell thicknesses) with Gap_min/Gap_max, self-impact (`grnod_ID = 0`), Coulomb friction, voxel broad phase; /SENSOR gating since M6 (the Tstart/Tstop role); since M15 the Ifric > 0 friction MODELS (MFROT 1–4: generalized viscous / Darmstadt / Renard / exponential decay µ(p, v) with C1–C6, `contact/friction.py`) and the Ifiltr = 1/2/3 IFQ tangential-force filter with the reader's exact XFILTR mapping; Inacti, Igap 2/3, Ifiltr ≥ 10 (MODFR 2, refused loudly), /FRICTION per-part-pair sets, orthotropic friction ❌ |
 | `/INTER/TYPE2` | 🟡 | tied contact (M4): kinematic secondary→main gluing, constant-weight projection with co-rotating offset, lumped mass/force transfer, deletion release; rotational-DOF tying (Spotflag) and offset moment redistribution ❌ |
 | `/INTER/TYPE11` | ✅ | edge↔edge penalty (M4): /LINE edge sets, Istf/Igap as TYPE7, exact segment-segment closest points; parallel-overlap force distribution simplified to the closest-point pair; since M15 the Ifric > 0 friction models + IFQ as a documented PORT EXTENSION (the original TYPE11 never evaluates MFROT — i11mainf.F forces MFROT = 0, checked; edge-pair pressure DEFINED p = f_n/(L_main·gap), see contact/friction.py) |
-| `/LINE/SURF`, `/LINE/SEG` | ✅ | edge sets for TYPE11 (M4), with element provenance for deletion |
-| `/SURF/PART`, `/SURF/SEG` | ✅ | for contact; since M4 every segment carries its parent-element provenance (deletion, stiffness, gap) |
+| `/LINE/SURF`, `/LINE/SEG`, `/LINE/EDGE`, `/LINE/LINE`, `/LINE/PART` | ✅ | edge sets for TYPE11 (M4), with element provenance for deletion; EDGE (border edges only — linedge.F semantics), LINE (line-of-lines, fixpoint + cycle detection) and PART (1-D elements) since M37 (landed unreported) |
+| `/SURF/PART`, `/SURF/SEG`, `/SURF/SURF`, `/SURF/GRSHEL`, `/SURF/GRSH3N` | ✅ | for contact; since M4 every segment carries its parent-element provenance (deletion, stiffness, gap); SURF (surface-of-surfaces, negative id flips normals, cycle detection) and GRSHEL/GRSH3N (element-group segments) since M37 (landed unreported) |
 | `/TH/NODE`, `/TH/PART`, `/TH/SECT` | ✅ | SECT since M5: FX FY FZ MX MY MZ |
 | Engine: `/RUN`, `/VERS`, `/TFILE`, `/ANIM/DT`, `/ANIM/VECT|ELEM`, `/DT`, `/PRINT`, `/STOP` | ✅/🟡 | |
 | Engine: `/DT/NODA`, `/DT/NODA/CST` | ✅ | M6 — nodal time step dt_i = √(2Mᵢ/Kᵢ) with the element stiffness derived from the kernels' own dt claims (kᵢᵉ = 2mᵢᵉ/dt_e², = the element dt on uniform meshes) and the contact NEAR-spring stiffness accumulated in; CST adds mass to hold dT_min — added mass, its momentum and its kinetic energy are tracked, reported (1%-step announcements + termination summary) and the energy enters the balance; prescribed nodes (rigid-body members, tied secondaries, RBE3 dependents) are excluded (see engine/mass_scaling.py) |
@@ -4136,6 +4167,151 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       INTER/TYPE18, GRBRIC/PART; LAW44, LOAD/PBLAST, SURF/GRSHEL + SURF/PLANE +
       GRSHEL/SHEL, TH/INTER + TH/SURF); `/TH/NODE` channel comparison (carried from
       M35).
+36. **M37 — COLUMN-AWARE FIXED FORMAT + ALL MATERIALS AT READER LEVEL + FIRST
+    MATERIAL-PHYSICS PACKS + GROUP/SET MACHINERY** ✅ (done; the corpus
+    re-sweep MEASURED the unlock — 371 of 529 official decks improved, the
+    whole parse backlog dead, every /MAT family closed. Report:
+    `VALIDATION.md` M37 edition, §4.5 tree-side deltas + §4.6 the
+    authoritative full-corpus measurement).
+    Delivered:
+    * **column-aware fixed-format reading** — the ENTIRE M36 20-signature
+      parse-bug backlog (~600 corpus incidents) is dead: new shared module
+      `pyradioss/input/card_layouts.py` (field-formatting primitives extracted
+      from `deck_writer`, which re-exports them, + the `LAYOUTS` column-width
+      table, every entry citing its `hm_cfg_files` CARD format string — writer
+      and reader consume ONE table); `deck_reader.py` detects the real dialect
+      from /BEGIN's declared input version (≥ 90 → `block.fixed` everywhere,
+      `#include`s too; version-less port decks untouched), reconstructs the true
+      fixed card stream with REAL blank-card semantics
+      (`KeywordBlock.fixed_cards()` + `blank_slots`), adds
+      `Card.cut(layout)`/`Card.is_blank`, substitutes /PARAMETER `&NAME`
+      references in place; surgical fixed-dialect branches across
+      `starter_keywords.py` (/NODE, elements, /PART, LAW1/2/27/36/42, /FAIL,
+      /EOS, /FUNCT, /INIVEL, /GRAV /CLOAD /PLOAD, /DAMP, /SECT, /RBODY, /RBE2,
+      /RWALL real Diameter card, /INTER/TYPE2, /TH variable FREE_CELL_LIST,
+      /BCS packed Trarot, /PROP/SHELL) + a fatal null-density starter check.
+      Measured: 60-case validation slice parse-error lines 268 → 0, 0 crashes,
+      0 timeouts, 23/60 cases rc=0 (the whole M36 sweep: 9 rc-0 cases in 529);
+    * **the generic cfg-driven /MAT reader** (`pyradioss/input/mat_reader.py`):
+      parses the `hm_cfg_files` CFG DSL (ATTRIBUTES/DEFAULTS/FORMAT: CARD,
+      CARD_PREREAD, ASSIGN, header captures, BLANK, CARD_LIST/FREE_CARD_LIST,
+      CELL_LIST/FREE_CELL_LIST, FREE_CARD, if/else, inline SUBOBJECTS) into
+      per-law schemas — 204 law spellings resolve, 193/193 non-dedicated corpus
+      /MAT blocks parse (0 failures, 0 heuristic fallbacks); unported laws
+      become `InactiveMaterial` (full params + density, mass init works, /PART
+      cross-refs downgrade to warnings, the Engine REFUSES via
+      `refuse_inactive_materials` naming law/id/element family);
+      `MAT_PHYSICS_REGISTRY` = the one-line physics hook; /ALE/MAT, /EULER/MAT,
+      /HEAT/MAT parse as notes; dedicated LAW1/2/27/36/42 readers untouched;
+    * **material-physics pack 1** (upstream kernels, vectorized, registered,
+      27 analytic tests): /MAT/VOID (`hm_read_mat00.F` — no engine kernel,
+      stress ≡ 0), /MAT/GAS (`hm_read_matgas.F` + the airbag consumers; on
+      elements = ideal-gas EOS semantics, a documented port extension),
+      LAW70 FOAM_TAB (`sigeps70.F` + `law70_upd.F`/`law70_table.F`),
+      LAW35 FOAM_VISC (`sigeps35.F`), LAW40 KELVINMAX (`sigeps40.F` — what the
+      6 RD-E-5200 "Kelvin-Maxwell" corpus decks actually use),
+      LAW44 COWPER (`sigeps44.F` + `sigeps44c.F`); plus the master-node
+      /IMPDISP rigid-body drive, the /DT scale-0 default (0.9) and the
+      stiffness-free exact-dt guard the RD-V-0220_Foam_LAW70 oracle needed —
+      that oracle now runs end-to-end (Starter clean on all 4 variants,
+      variant 3 truncated engine run NORMAL at −0.05 % energy error; variant 0
+      instability at ~80 % crush is the Isolid24/HEPH ELEMENT gap);
+    * **landed UNREPORTED** (their builders crashed after finishing; verified
+      only by their 62 passing tests): the GROUP/SET + /UNIT machinery
+      (`groups-sets` builder — the M36 ranked-gap top: /GRNOD/SURF,
+      /GRNOD/GRNOD recursive with negative-id removal + cycle detection,
+      /GRNOD/GENE + GEN_INCR, /GRNOD/GR<elem>, element groups
+      /GRSHEL|GRSH3N|GRBRIC|GRQUAD|GRTRUS|GRBEAM|GRSPRI + /GRPART/PART,
+      /SURF/SURF + /SURF/GRSHEL|GRSH3N, /LINE/EDGE|LINE|PART, /FUNCT_SMOOTH,
+      /UNIT + /BEGIN work units in `input/units.py`) and **material-physics
+      pack 2** (`mat-physics-2` builder): LAW19 FABRI (`sigeps19c.F`),
+      LAW24 CONC (`mat024/`: `m24law.F`/`conc24.F`/`elas24.F` …),
+      LAW62 VISC_HYP (`sigeps62.F`), LAW81 DPRAG_CAP (`sigeps81.F90`);
+    * **the FULL-CORPUS RE-SWEEP** (`coverage-resweep`, re-run after its
+      first attempt died on a transient API error — VALIDATION.md §4.6,
+      `tools/validation_data/coverage_results_m37.json`): same 529 decks,
+      same driver and verdict definitions as M36 — **parse-error incidents
+      858 → 0, distinct signatures 20 → 0, decks with parse errors
+      446 → 0**; verdicts **ERROR 520 → 149, SKIPS 9 → 373, CLEAN 0 → 7**;
+      **371 decks (70 %) improved, 0 regressed, 0 crashes, 0 timeouts**;
+      every group/set family and all 28 unsupported /MAT families closed;
+      the blocker profile now FLAT (75 families, none above 21 decks) with
+      **/PROP the new #1 cluster** (SH_ORTH 21, SPR_BEAM 20, INJECT1 17,
+      SPR_GENE 14, TYPE20 12, VOID 10). It also found three bugs: /ADMAS's
+      header misread as a unit_ID (FIXED during integration), the null-density
+      check false-firing on the multi-material ALE laws, and /TETRA4 flagging
+      zero/negative volume on 100 % of an official tetra deck (a node-ordering
+      convention mismatch, pre-existing, exposed by deeper parsing);
+    * **the OFFICIAL-PARITY RE-RUN** (`timed-parity-m37`, re-run after its
+      first attempt died on a transient API error — VALIDATION.md §3.1,
+      `parity_m37.json` + `perf_m37.json`): 52 cases — **both-engine
+      comparisons 1 → 24** (4 MATCH + 20 DEVIATION, 15 at 100 % run
+      coverage); **RD-V-0220 LAW70 foam = a clean full-run MATCH at
+      0.0355 max rel RMS, the first new-physics law validated end-to-end
+      against the real solver**; c26 Hardening 0.974 → 0.170; bundled
+      examples byte-identical to M36 (zero regression). It also exposed
+      the `/STOP` Emax=0 mis-read (a 0 % energy tolerance instead of the
+      real engine's "no user limit") — FIXED post-measurement with
+      regression tests; the c26 deck then runs its full 42 082 cycles to
+      NORMAL TERMINATION at −0.00 % energy error. Timing campaign:
+      port 2–7× slower on full-run shells, 12–27× on contact-heavy decks,
+      throughput collapsing ~1 400 → 0.9 cyc/s from 99 to 65 k elements
+      (the profiling target), port starter consistently FASTER than
+      Fortran's; 28 tail records flagged as contended (a concurrent user
+      MPI job) — upper bounds only;
+    * **failed with nothing landed**: `c26-hardening` (superseded — §3.1
+      measured the case anyway via the re-run).
+    Deferred out of M37, explicitly:
+    * **M37-BUG-3 /TETRA4 volume-sign / node-ordering convention** (9 official
+      decks, 100 % of RD-V-0020's 2166 tetras): the highest-value next item —
+      a correctness bug in the port's tetra initializer that the port's OWN
+      decks cannot see (they use the port's convention);
+    * **M37-BUG-2** the null-density check false-firing on LAW51/LAW151/
+      MULTIFLUID (density lives in submaterial references + volume fractions);
+    * **the V0700 cycle-1 energy-ledger anomaly** — the nine SAMP-family
+      decks book −50 % energy error at cycle 1 under their imposed loading
+      (visible now that /STOP no longer masks everything else; §3.1);
+    * **the LAW70 instability on 3 of 4 RD-V-0220 variants** — numerical
+      energy injection (−504 %…−16 968 %) ~32 % into the run (the 4th
+      variant full-run MATCHes, so the base kernel is right; suspect the
+      unloading-path/rate-interpolation branch);
+    * **the shell-family full-run deviations** (0.42–0.64 max rel RMS on
+      the RD-E-1000 Bending family) — consistent with the M36 box-beam
+      shell-hourglass fidelity finding, now measurable on official decks;
+    * **c26_V0200_Hardening residual DEVIATION** (0.170 max rel RMS at
+      full coverage after the /STOP fix — was 0.974; hardening-flag
+      semantics still unexamined);
+    * **laws parsed-but-INACTIVE** (schema-verified, physics pending — ranked
+      by corpus blocks): LAW6 HYD_VISC (30), LAW51 + Iflag subobjects (22),
+      LAW151/MULTIFLUID (7+3), LAW11 BOUND (7), LAW37 BIPHAS (6), LAW66,
+      LAW83, LAW4 HYD_JCOOK, LAW5 JWL, PLAS_PREDEF, LAW69, LAW94 YEOH,
+      LAW43 HILL_TAB, LAW92, LAW82 OGDEN-cell, LAW46 LES_FLUID,
+      LAW59 CONNECT, LAW88 — each a one-module `MAT_PHYSICS_REGISTRY` job;
+    * **group/set subtypes NOT done** (warn loudly): /GRNOD beyond
+      NODE/PART/BOX/SURF/GRNOD/GR<elem>/GENE/GEN_INCR (SUBSET, MAT, PROP …),
+      /SURF beyond PART/SEG/SURF/GRSHEL/GRSH3N (BOX, MAT, PLANE, ELLIPS …),
+      /LINE beyond SURF/SEG/EDGE/LINE/PART, /GRPART beyond PART;
+    * **/UNIT depth**: conversion covers the keywords wired for it —
+      unconverted keywords referencing a /UNIT warn loudly (tested), and the
+      /MAT/GAS PREDEF table + default R_igc stay SI (override
+      `params['R_igc']` on non-SI decks, documented);
+    * **pack-1/2 documented cuts**: LAW44 kinematic hardening (C_hard/FISOKIN,
+      warned); LAW24 steel reinforcement (ARM1–3) and Icap=2 REFUSED, 2D/SPH
+      branches unported; LAW19 /SENSOR TSTART wiring; LAW62 implicit/IHET ET
+      feedback; LAW81 porosity (warned); LAW70/35/40 global-frame total-strain
+      objectivity caveat (documented per module);
+    * **reader/writer follow-ups**: /IMPVEL / /IMPDISP ROTATIONAL imposition
+      (XX/YY/ZZ parse + warn + skip today; the engine has vr and nodal
+      inertia); the writer's PORT-DIALECT fallback blocks (CLOAD-with-sensor,
+      SECT-with-node_ref, non-default RWALL, RBODY-not-dual-encodable) should
+      be emitted in real layout now that the reader is column-aware (no
+      bundled/corpus deck hits them — grep-verified); TYPE7/11 could emit
+      GAPMAX on its real card B and retire the gap_max-in-Tstart residue;
+      /SECT node_id_ref → node_ID1 moment-reference mapping (documented
+      deviation);
+    * the Isolid24/HEPH physically-stabilized brick (RD-V-0220 variant 0);
+      output-side oracle keywords (/TH/RBODY, /STATE/BRICK, /H3D/*, /ANALY,
+      /DEF_SOLID — warnings only, block parity plots not physics).
 
 **Unnumbered deferred candidate — pending a project scope decision** (previously
 queued as the next numbered milestone; kept here explicitly, not silently dropped):

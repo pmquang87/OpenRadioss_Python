@@ -22,9 +22,11 @@ from ..input.deck_reader import read_deck
 from ..input.starter_keywords import parse_starter_deck
 from ..model.model import Model
 from .checks import check_model
+from ..input.units import apply_unit_conversions
 from .initialization import (build_element_groups,
                              initialize_elements_and_mass,
                              initialize_rigid_bodies,
+                             resolve_entity_groups,
                              resolve_lines, resolve_materials,
                              resolve_node_groups, resolve_surfaces)
 from .restart import write_restart
@@ -69,8 +71,11 @@ def _listing_summary(model: Model, log: MessageLog) -> None:
 
     log.info("\n     MATERIALS")
     for mat in model.materials.values():
-        log.info(f"       MAT {mat.id:8d}  LAW{mat.law:<3d} RHO="
-                 f"{mat.rho0:12.5E}  {mat.title}")
+        law = getattr(mat, "law_name", None) or f"LAW{mat.law}"
+        tag = "  [parsed, physics not implemented (M37)]" \
+            if getattr(mat, "inactive", False) else ""
+        log.info(f"       MAT {mat.id:8d}  {law:<10s} RHO="
+                 f"{mat.rho0:12.5E}  {mat.title}{tag}")
     log.info("\n     PARTS")
     for part in model.parts.values():
         log.info(f"       PART {part.id:8d}  PROP={part.prop_id:<8d} "
@@ -98,12 +103,19 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
         parse_starter_deck(blocks, model, log)
 
         # 2. finalize: ids->indices, element groups, node groups, surfaces,
-        #    material curve/failure references
+        #    material curve/failure references.  Order matters (M37, the
+        #    upstream two-pass resolve): local /UNIT conversion first
+        #    (materials must be converted before their curves are
+        #    copied), then elements -> element GROUPS -> surfaces (may
+        #    reference element groups + other surfaces) -> lines (read
+        #    surfaces) -> node groups (read surfaces + element groups).
+        apply_unit_conversions(model, log)
         resolve_materials(model, log)
         build_element_groups(model, log)
-        resolve_node_groups(model, log)
+        resolve_entity_groups(model, log)
         resolve_surfaces(model, log)
         resolve_lines(model, log)     # after surfaces: /LINE/SURF reads them
+        resolve_node_groups(model, log)
 
         # 3. checks before any heavy work (fail early with ALL messages)
         check_model(model, log)

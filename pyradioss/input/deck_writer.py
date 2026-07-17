@@ -143,51 +143,19 @@ import os
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .deck_reader import Card, KeywordBlock
-
+from .starter_keywords import split_imposed_card
 
 # ============================================================================
-# Field-formatting primitives
+# Field-formatting primitives — M37: EXTRACTED to card_layouts.py, the ONE
+# module shared by writer and reader (the reader cuts real fixed cards at
+# the same column widths these primitives emit; every LAYOUTS entry there
+# cites the hm_cfg_files CARD its widths encode).  Re-exported here so
+# every existing import site (tools/, tests/) keeps working unchanged.
 # ============================================================================
 
-def fmt_int(v, width: int = 10) -> str:
-    """An integer right-justified in a *width*-character field (cfg %10d)."""
-    return f"{int(float(str(v))):>{width}d}"
-
-
-def fmt_float(v, width: int = 20) -> str:
-    """A real right-justified in a *width*-character field (cfg %20lg).
-
-    Emits the shortest representation that round-trips to the identical
-    double (Python ``repr``), so a value read from a port-dialect deck and
-    re-emitted here parses back to the *same* IEEE double on both sides.
-    Falls back to ``%.<n>G`` only if repr would not fit the field.
-    """
-    if isinstance(v, str):
-        v = float(v.replace("D", "E").replace("d", "e"))
-    v = float(v)
-    s = repr(v)
-    if len(s) > width:
-        for prec in (16, 12, 8):
-            s = f"{v:.{prec}G}"
-            if len(s) <= width:
-                break
-    return f"{s:>{width}}"
-
-
-def fmt_str(s: str, width: int = 10) -> str:
-    """A string right-justified in a *width*-character field (cfg %10s)."""
-    return f"{s:>{width}}"
-
-
-def blank(width: int = 10) -> str:
-    """A blank fixed field: the real reader takes the field's default,
-    the port reader sees nothing at all (whitespace split)."""
-    return " " * width
-
-
-#: a blank CARD: whitespace-only line — a real card with every field at
-#: its default, invisible to the port reader (it skips blank lines).
-BLANK_CARD = " " * 10
+from .card_layouts import (                                     # noqa: F401
+    BLANK_CARD, blank, fmt_float, fmt_int, fmt_str,
+)
 
 
 # ============================================================================
@@ -818,22 +786,25 @@ class StarterDeck:
                           + blank(30) + blank(20) + fmt_float(scale))
 
     def _imp(self, keyword: str, iid: int, title: str, fct: int,
-             direction: str, grnod: int, scale) -> None:
+             direction: str, grnod: int, scale, xscale: float = 1.0,
+             tstart: float = 0.0, tstop: float = 1.0e30) -> None:
         """Shared /IMPVEL & /IMPDISP emitter — cfg LOADS/impvel.cfg /
         impdisp.cfg (FORMAT radioss120): title / fct DIR skew sens grnod
         frame Icoor / Scale_x Scale_y Tstart Tstop (proven M35).
 
-        The port reads ONLY card 1 ([fct, Dir, grnod, scale]); the real
-        reader takes the scale from card 2's Scale_y.  For scale == 1 both
-        agree with the emitted [1.0, 1.0] card-2.  For scale != 1 there is
-        NO column on card 1 the real reader would ignore, so the writer
-        emits an **auxiliary scaled function** (a copy of the curve with
-        Y*scale, id from the 900001+ pool) referenced with scale 1 on both
-        sides — physics identical on both readers, documented at the
-        emitted /FUNCT.  (For the bundled decks the scaling is exact in
-        floating point: scales are ±1/±2 on 0/1-valued ramps.)  The direct
-        API requires the base /FUNCT to have been emitted through
-        :meth:`funct` first (so its points are known)."""
+        The Y scale is baked into an **auxiliary scaled function** (a copy
+        of the curve with Y*scale, id from the 900001+ pool) referenced
+        with Scale_y = 1 on card 2 — a workaround from the era when the
+        port read only card 1 (fixed in M37: starter_keywords.
+        split_imposed_card now takes Scale_y from card 2 exactly like the
+        real reader), kept because it is harmless, byte-stable for the
+        emitted corpus, and physics-identical on both readers.  (For the
+        bundled decks the scaling is exact in floating point: scales are
+        ±1/±2 on 0/1-valued ramps.)  The direct API requires the base
+        /FUNCT to have been emitted through :meth:`funct` first (so its
+        points are known).  Ascale_x / Tstart / Tstop pass through on
+        card 2 verbatim (0 / infinite Tstop is omitted — both readers
+        default it)."""
         use_fct = int(fct)
         need_aux = abs(float(scale) - 1.0) > 0.0
         if need_aux:
@@ -859,15 +830,22 @@ class StarterDeck:
                      "  frame_ID     Icoor")
         self.lines.append(fmt_int(use_fct) + fmt_str(direction.upper())
                           + blank(10) + blank(10) + fmt_int(grnod))
-        self.lines.append(fmt_float(1.0) + fmt_float(1.0))
+        card2 = fmt_float(xscale) + fmt_float(1.0)
+        if tstart != 0.0 or tstop not in (0.0, 1.0e30):
+            card2 += fmt_float(tstart) + fmt_float(tstop)
+        self.lines.append(card2)
 
-    def impvel(self, iid, title, fct, direction, grnod, scale=1.0):
+    def impvel(self, iid, title, fct, direction, grnod, scale=1.0,
+               xscale=1.0, tstart=0.0, tstop=1.0e30):
         """``/IMPVEL`` — see :meth:`_imp`."""
-        self._imp("IMPVEL", iid, title, fct, direction, grnod, scale)
+        self._imp("IMPVEL", iid, title, fct, direction, grnod, scale,
+                  xscale, tstart, tstop)
 
-    def impdisp(self, iid, title, fct, direction, grnod, scale=1.0):
+    def impdisp(self, iid, title, fct, direction, grnod, scale=1.0,
+                xscale=1.0, tstart=0.0, tstop=1.0e30):
         """``/IMPDISP`` — see :meth:`_imp`."""
-        self._imp("IMPDISP", iid, title, fct, direction, grnod, scale)
+        self._imp("IMPDISP", iid, title, fct, direction, grnod, scale,
+                  xscale, tstart, tstop)
 
     # ---- masses, damping, constraints -------------------------------------------
 

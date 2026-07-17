@@ -1,9 +1,17 @@
 # VALIDATION — differential validation of pyradioss against the Fortran OpenRadioss
 
-*M36 edition: native real-format decks, full official-corpus coverage, first
-timed parity. Supersedes the M35 first report (history note below).*
+*M37 edition: column-aware fixed-format reading (the entire M36 parse-bug
+backlog retired), every /MAT card parsed, the first material-physics
+packs, group/set machinery. Supersedes the M36 report for the TL;DR/§4/§7/§8;
+M35/M36 history kept below. NOTE: the M37 corpus re-sweep DID execute
+(§4.6 — its first builder died on a transient API error and it was re-run;
+`coverage_results_m37.json` is the authority for the corpus numbers, and
+where §4.1–4.4 still quote M36 figures they are superseded by §4.6). The
+official parity re-run is reported in §3.1.*
 
-- Date: 2026-07-16, repo commit `af73d6f` (branch `claude/openradioss-python-m36-realdeck`)
+- Date: 2026-07-16, branch `claude/openradioss-python-m37-materials`
+  (M36 baseline: commit `af73d6f`, branch
+  `claude/openradioss-python-m36-realdeck`)
 - Reference solver: OpenRadioss Windows 64-bit double-precision build in
   `C:/OpenRadioss/exec` (`starter_win64.exe`, `engine_win64.exe`,
   `th_to_csv_win64.exe`), run single-process (`-np 1 -nt 1`), input format
@@ -15,10 +23,16 @@ timed parity. Supersedes the M35 first report (history note below).*
 - Machine-readable results: `tools/validation_data/` —
   `inventory.json` (official-deck work list, 551 cases),
   `coverage_results.json` (per-case sweep records),
-  `coverage_tables.md` (the byte-complete 529-row verdict table),
-  `parity_m36.json` (21 parity cases), `perf_m36.json` (42 timing records).
+  `coverage_tables.md` (the byte-complete 529-row M36 verdict table),
+  `parity_m36.json` (21 parity cases), `perf_m36.json` (42 timing records),
+  and the M37 measurements: **`coverage_results_m37.json`** (the full
+  529-case re-sweep, M36 schema + `delta_vs_m36` — §4.6),
+  **`parity_m37.json`** (61 results: 52 official + bundled re-run — §3.1)
+  and **`perf_m37.json`** (122 timing records with per-record contention
+  notes — §6.1). These three are the authoritative measurements for this
+  milestone.
 
-## History — what M35 established, what M36 changed
+## History — what M35 established, what M36 changed, what M37 changed
 
 The M35 first edition (commit `786163b`) built the harness and proved the
 environment. Its central finding was that the obstacle was the *deck dialect*,
@@ -33,44 +47,86 @@ valid are kept in §2.3 (the box_beam channel forensics, the `/RWALL d=0` and
 `/STOP` semantics findings) and §8. M35's W12/W13 coverage tables are
 superseded by §5 (its two reader bugs are now fixed).
 
+M36's own recommendation was equally sharp: "the port STARTER's
+fixed-format field parsing is the single wall in front of all
+official-deck physics validation" (§3), with the group/set trio and the
+/MAT law families ranked right behind it (§4.3). M37 attacked exactly
+that list: the reader became column-aware (killing all 20 parse-bug
+signatures of §4.4), every /MAT card in the radioss2022 catalogue now
+parses, ten material laws gained real physics, and the group/set +
+/UNIT machinery landed. What M37 did NOT deliver is the re-measurement:
+the corpus re-sweep and the official parity/timing re-run were assigned
+to builders that failed, so this edition documents the tree-side deltas
+(§4.5) against the still-standing M36 corpus numbers.
+
 ## TL;DR
 
-1. **The examples now speak real Radioss.** A documented fixed-format deck
-   writer (`pyradioss/input/deck_writer.py`, 1855 lines, every card layout
-   citing its `hm_cfg_files` CFG definition) emits decks that satisfy the real
-   Starter's fixed columns AND the port's whitespace-token readers from ONE
-   file. All 36 examples regenerated; 36/36 parse cleanly in the port with
-   byte-identical (or by-design-identical) results vs the old decks; the
-   Fortran-comparable ones are accepted by the real Starter with 0 errors.
-   The M35 translator is retired to a fallback that *delegates to the writer*
-   (~380 duplicated lines deleted).
-2. **All 9 explicit examples are now Fortran-comparable** (8 ran; gas_piston
-   is a genuine starter-reject, exactly as predicted): **3 MATCH**
-   (tensile_bar 0.0017, rubber_block 0.001, antenna_mast 0.026 max rel RMS)
-   and **5 DEVIATION** (0.43–0.99) whose deviations concentrate in contact
-   energy / momentum / hourglass channels while internal energy is often
-   within 3–16 % — the first differential evidence localizing the port's
-   contact/hourglass discrepancies.
-3. **The entire official corpus was swept**: 551 cases inventoried from
-   `E:/openradioss_run` (61 RD-E + 26 RD-V + 8 tutorial packages), 529
-   runnable decks fed to the port Starter. Verdicts: **0 CLEAN, 9 SKIPS,
-   520 ERROR, 0 CRASH, 0 TIMEOUT** — not a single uncaught traceback.
-   The dominant hard gap is group/set machinery: `/GRNOD/SURF` +
-   `/GRNOD/GRNOD` + `/LINE/EDGE` are the *complete* hard-keyword gap for
-   252/529 decks (48 %). 446 decks also hit caught fixed-format parse
-   failures (§4.4) — the reader-bug backlog.
-4. **Official-deck timed parity complete**: 40/40 IN_ENVELOPE cases — 1
-   DEVIATION (the only case both engines ran), 33 port starter-fails on
-   FOUR diagnosed fixed-format parser-gap signatures, 6 cases where the
-   Fortran side fails too (mostly "unsolved" tutorial decks). The port
-   engine's physics is untested on 39/40 official decks because the
-   STARTER parse layer is the wall (§3) — the sharply-scoped M37 target.
-5. **Performance measured for the first time** (§6): port totals 1.3×–26×
-   the Fortran wall clock on the bundled examples, engine-only up to ~40×;
-   single-threaded both sides, one machine, one run each.
-6. **W12/W13**: the four M35-era reader bugs are fixed; both real k2rad decks
-   now fail only on genuine feature gaps (W12: 2 errors, W13: 6 — down
-   from 5 and 33 425).
+1. **The entire M36 parse-bug backlog is dead.** The reader is now
+   COLUMN-AWARE: a new shared module `pyradioss/input/card_layouts.py`
+   holds the field-formatting primitives + the LAYOUTS column-width table
+   (every entry citing its `hm_cfg_files` CARD format string — writer and
+   reader consume ONE table); `deck_reader.py` detects the real dialect
+   from `/BEGIN`'s declared input version (≥ 90 → fixed columns on every
+   block, `#include`s included), reconstructs the TRUE fixed card stream
+   with real blank-card semantics, and substitutes `/PARAMETER` `&NAME`
+   references in place. All ~20 M36 `parse_error_signatures` (~600
+   corpus incidents) are FIXED (§4.5): on the 60-case validation slice,
+   parse-error lines went 268 → **0**, with 0 crashes and 0 timeouts, and
+   **23/60 cases now exit rc=0** (the whole M36 sweep had 9 rc-0 cases in
+   529). The 37 slice cases still at rc=2 fail on genuine feature gaps,
+   not parse bugs.
+2. **Every /MAT card parses.** A cfg-driven generic reader
+   (`pyradioss/input/mat_reader.py`) interprets the `hm_cfg_files` CFG
+   DSL into per-law schemas: 204 law spellings resolve (the full
+   radioss2022 MAT tree), and **193/193 non-dedicated /MAT blocks in the
+   official corpus parse with 0 failures and 0 heuristic fallbacks**.
+   Laws without ported physics become `InactiveMaterial` (full params +
+   density stored, mass init works, /PART cross-refs downgrade to
+   warnings) and the Engine REFUSES to run them, naming law/id/element
+   family. `MAT_PHYSICS_REGISTRY` is the one-line hook for new-law
+   physics. 4 previously-failing real decks (driver_airbag, TANK,
+   blast_experiment, DBEND_44) now read all their materials with zero
+   /MAT errors.
+3. **First material-physics pack** (upstream kernels ported, registered,
+   analytically tested — 27 new tests): /MAT/VOID, /MAT/GAS,
+   /MAT/LAW70 (FOAM_TAB), /MAT/LAW35 (FOAM_VISC), /MAT/LAW44 (COWPER),
+   /MAT/KELVINMAX (LAW40). The RD-V-0220_Foam_LAW70 oracle deck runs
+   end-to-end: Starter clean on all 4 variants, variant 3 truncated
+   engine run NORMAL at −0.05 % energy error (variant 0 goes unstable at
+   ~80 % crush — an Isolid24/HEPH *element* gap, not material).
+4. **Landed but unreported** (builders crashed after finishing; verified
+   here only by running their test suites — 62/62 pass): the GROUP/SET
+   machinery (`/GRNOD/SURF|GRNOD|GENE|GR<elem>`, element groups
+   `/GRSHEL|GRSH3N|GRBRIC|GRQUAD|GRTRUS|GRBEAM|GRSPRI` + `/GRPART/PART`,
+   `/SURF/SURF|GRSHEL|GRSH3N`, `/LINE/EDGE|LINE|PART`, `/FUNCT_SMOOTH`,
+   `/UNIT` + /BEGIN work units) — the exact trio M36 ranked as the
+   complete hard gap for 252/529 decks — and a SECOND material-physics
+   pack (/MAT/FABRI LAW19, /MAT/CONC LAW24, /MAT/LAW62, /MAT/LAW81),
+   registered in the same registry. No corpus-wide measurement of either
+   exists yet (§4.5, §8).
+5. **THE M37 PARITY RE-RUN (§3.1): both-engine comparisons 1 → 24
+   official cases** (4 MATCH + 20 DEVIATION; 32 counting the bundled
+   re-run, which is byte-identical to M36 — zero regression). First
+   new-physics validation: **RD-V-0220 LAW70 foam is a clean full-run
+   MATCH at 0.0355**. c26 Hardening improved 0.974 → 0.170. The dominant
+   remaining blocker was a one-line `/STOP` Emax=0 mis-read (fixed in
+   this tree post-measurement, §3.1); timing campaign in §6.1
+   (`perf_m37.json`, 122 records, contention-flagged).
+6. **THE M37 CORPUS RE-SWEEP (§4.6): the parse backlog is dead
+   corpus-wide.** Same 529 decks, same driver, same verdict definitions as
+   M36: **parse-error incidents 858 → 0, distinct signatures 20 → 0, decks
+   with parse errors 446 → 0**; verdicts **ERROR 520 → 149, SKIPS 9 → 373,
+   CLEAN 0 → 7**; **371 decks (70 %) improved, 0 regressed, 0 crashes,
+   0 timeouts**. Every group/set family and all 28 unsupported `/MAT`
+   families closed. The blocker profile is now flat — the top remaining
+   family is `/PROP/SH_ORTH` at 21 decks.
+7. **Builder incidents, named honestly**: five agents were killed by
+   transient API errors. `coverage-resweep` and `timed-parity-m37` were
+   re-run to completion afterwards (§4.6, §3.1). `groups-sets` and
+   `mat-physics-2` had already landed their work, which passes its tests,
+   but filed no report (item 4). `c26-hardening` landed nothing — the
+   single M36 both-engine DEVIATION case stands unexamined, and is
+   deferred with the three §4.6 bugs.
 
 ## 1. Methodology
 
@@ -276,7 +332,7 @@ gas column requires rebuilding the example on a hydro law (LAW6).
   (M8–M34); no Fortran chain exists for them with this binary, ever. They
   are validated analytically by their generator scripts.
 
-## 3. Parity — official IN_ENVELOPE decks (40/40, complete)
+## 3. Parity — official IN_ENVELOPE decks (M36 baseline below; §3.1 = the M37 re-run, AUTHORITATIVE)
 
 A resume-capable driver ran every IN_ENVELOPE inventory case (40 cases;
 programmatically verified that ZERO NEAR cases have output-only hard
@@ -311,7 +367,69 @@ free-token split miscounts. Windows MAX_PATH forced short run-dir names
 deck filename exceeds ~260 chars); handled in the driver. Machine-readable
 results: `tools/validation_data/parity_m36.json` (all 40 records).
 
+### 3.1 The M37 official-parity re-run (AUTHORITATIVE)
+
+52 cases (the 40 M36 IN_ENVELOPE + 12 M37-unlocked NEAR cases), same
+driver and comparison as M36; port budget 900 s/deck. Machine-readable:
+`tools/validation_data/parity_m37.json` (61 results incl. the bundled
+re-run) and `perf_m37.json` (122 timing records).
+
+**Both-engine channel comparison: 1 official case in M36 → 24 in M37**
+(4 MATCH + 20 DEVIATION), 15 of them covering 100 % of the run time;
+including the bundled examples, 9 → 32 compared. Tally: **4 MATCH,
+20 DEVIATION, 18 PYRADIOSS-FAIL, 9 NO-CHANNELS, 1 SKIPPED-SLOW.**
+
+Highlights:
+
+- **c48_V0220_Foam_LAW70_2 is a clean FULL-RUN MATCH (max rel RMS
+  0.0355) on the brand-new M37 LAW70 physics** — the first new-physics
+  law validated end-to-end against the real solver. Its three siblings
+  (c46/c47/c49) run ~32 % of the time then die on genuine numerical
+  energy injection (−504 %…−16 968 %) — a LAW70 stability defect to fix,
+  not a comparison artifact.
+- **c26_V0200_Hardening improved 0.974 → 0.170** (the fixed-format reader
+  now decodes its cards correctly), though only 1.4 % time coverage — see
+  the /STOP finding below.
+- The whole RD-E-1000 Bending family (BATOZ/QEPH/DKT18/BT ×9), RD-E-0100
+  Twisted beam, RD-V-0300 Pressure, RD-V-0240 QUAD/TRIA (3 MATCH at
+  0.035–0.039, truncated windows) and RD-HWX-T-1040 newly run on both
+  engines. Shell-family deviations sit at 0.42–0.64 max rel RMS over full
+  runs — the next physics-fidelity target (consistent with the M36
+  box-beam hourglass finding).
+- Bundled examples: **zero regression** — classes and RMS byte-identical
+  to M36 (3 MATCH / 5 explained DEVIATION / gas_piston starter-reject).
+
+**The dominant new blocker was a one-line engine bug, fixed in this
+tree after the measurement**: the port read `/STOP` card `0 0 0 1 1` as
+`energy_error_stop = 0.0` — a 0 % tolerance — where the real engine
+treats Emax = 0 as "no user limit". The port then aborted at its FIRST
+energy check (`ENERGY ERROR -50.0% EXCEEDS LIMIT 0.0%` at cycle 1 on the
+nine V0700 NO-CHANNELS decks; cycle 500 on c26/c28/c31/c32/c37, whose
+MATCH/DEVIATION labels therefore cover only that window). The fix
+(`engine_keywords.py`, regression-tested) restores the 15 % default on
+Emax = 0; the cycle-500 truncations should become full-run comparisons on
+the next sweep. NOTE the V0700 decks ALSO report −50 % energy error at
+cycle 1 — beyond the /STOP mis-read, that ledger anomaly under their
+imposed loading is its own open item.
+
+**Still blocked in the port starter (exact errors):** mat-less spring
+parts (`/PART: material 0 not defined`, V0030), degenerate 6-node bricks
+(`/BRICK: degenerated brick ... not ported`, V0240/HEXA_DEGE + P14),
+the /TETRA4 volume-sign convention (§4.6 bug 3; 4 decks incl. both
+official TETRA meshes), `/PROP/SH_ORTH` (blocks the LAW19 fabric pair —
+the law itself parses), `/MAT/LAW2` Iflag=1 yield input (T1000), and the
+fixed-format `/PROP/BEAM` section card (E0500). c34/c35/c36/c38/c39 are
+mesh-only/unsolved tutorial decks the Fortran starter also rejects —
+matching rejection is correct behavior.
+
 ## 4. Coverage matrix — the official corpus through the port Starter
+
+§4.1–4.4 are the M36 sweep, kept as the baseline the M37 numbers are
+measured against; **§4.6 is the authoritative M37 full-corpus
+measurement** and supersedes their figures wherever the two differ.
+§4.5 records the tree-side per-signature deltas (the 60-case validation
+slice, /MAT parse coverage over all 193 corpus blocks) and the
+landed-but-unmeasured group/set work.
 
 ### 4.1 Corpus & classification (inventory.json)
 
@@ -494,6 +612,146 @@ Signatures 2, 7 and 14 share one root cause — parsers must switch to
 fixed-column slicing (width 20) when the deck is classic fixed format.
 Signature 1 (`/TH/NODE`, 360 cases) is the single most widespread failure.
 
+### 4.5 M36 → M37 delta (measured on the M37 tree)
+
+**Every §4.4 signature is fixed.** Column-aware fixed-format reading
+(`card_layouts.py` + `deck_reader` dialect detection + surgical
+fixed-dialect branches in `starter_keywords.py`). Corpus case counts are
+the M36 `coverage_results.json` numbers; "slice" = parse-error lines on
+the 60-case validation slice the fix work was driven against:
+
+| signature | corpus cases | slice before | slice after | status | fix |
+|---|---|---|---|---|---|
+| /TH/NODE int('01x3') | 360 | 56 | 0 | FIXED | ids cut %10d%10d%-80s (id/skew/name), var-card continuation |
+| /NODE needs-4-fields | 59 | 73 | 0 | FIXED | cut [10,20,20,20]; abutting + blank coords |
+| /IMPVEL 'XX' | 35 | 9 | 0 | FIXED | XX/YY/ZZ legal (warned, condition skipped); Fscale_Y/card-2 columns |
+| /SHELL int('0.0') | 28 | 38 | 0 | FIXED | conn cut at 1+nnode × %10d, real phi_s/Thick columns dropped |
+| /SH3N int('0.0') | 18 | 5 | 0 | FIXED | same as /SHELL |
+| /MAT/PLAS_TAB int('1.0') | 17 | 5 | 0 | FIXED | blank cards kept → real card indices stable |
+| /FUNCT abutting X/Y | 13 | 9 | 0 | FIXED | point cut [20,20] |
+| /EOS/IDEAL-GAS 'EOS' | 11 | 9 (all /EOS) | 0 | FIXED | title card + Gamma/P0/PSH/T0/RHO_0 layout |
+| /EOS/POLYNOMIAL 'Conversion' | 8 | (in /EOS) | 0 | FIXED | title + real C0–C3 / C4 C5 E0 Psh RHO_0 two-card layout |
+| /INIVEL/AXIS 'Z' | 10 | 7 (all /INIVEL) | 0 | FIXED | real DIR/FRAME/GRNOD + Vt/VR cards; frame warned |
+| /INIVEL/TRA '0&V' | 3 | (in /INIVEL) | 0 | FIXED | /PARAMETER &NAME substitution + column cut |
+| /TH/PART 'XXMOM' | 8 | 5 | 0 | FIXED | variable FREE_CELL_LIST spans cards; DEF + extras |
+| /IMPDISP 'ZZ' | 8 | 4 | 0 | FIXED | as /IMPVEL; abutting Tstart/Tstop card-2 cut |
+| /SECT int('.1') | 8 | 18 (incl PARAL) | 0 | FIXED | grnod col 31–40, N1 = moment ref, deltaT/alpha ignored |
+| /SECT/PARAL int('.1') | 2 | (in /SECT) | 0 | FIXED | warn-skipped (no node group to map) |
+| /MAT/PLAS_JOHNS abutting | 3 | 5 | 0 | FIXED | yield/c/m cards cut at %20lg columns; Iflag=1 refused |
+| /PART index-out-of-range | 2 | 20 | 0 | FIXED | title card always present; prop/mat columns |
+| /FAIL/BIQUAD int('.2') | 2 | 2 | 0 | FIXED | real card-2 layout; mat_id from /FAIL/kind/mat/fail headers |
+| /RBODY int('500.0') | 2 | 2 | 0 | FIXED | Mass col 41–60, grnd col 61–70, blank ICoG → 1 |
+| /DAMP int('1E-5') | 1 | 1 | 0 | FIXED | Alpha/Beta/grnod columns; Beta warned |
+| **total** | **~598** | **268** | **0** | **all fixed** | 0 crashes, 0 timeouts on slice; 23/60 cases now rc=0 |
+
+Bonus root-cause fixes surfaced by decks now parsing deeper: `/BCS`
+packed Trarot (blast), `/PROP/SHELL` real N/Istrain/Thick columns
+(3 decks), `/RWALL` real Diameter-on-card-3 layout (BAT_CIR,
+Front_Impact), and a fatal null-density model check (6 would-be starter
+div-by-zero crashes on LAW151-style multimaterials now clean ERRORs).
+The 37 slice cases still exiting rc=2 fail on genuine feature gaps
+(GRNOD/SURF group machinery at slice-build time, unported laws now
+parsed-but-inactive, Igap=2, Iform=2, BIQUAD presets) — the ranked_gaps
+list, not parse bugs.
+
+**Every /MAT card parses.** All 31 /MAT families in the §4.3 ranked-gap
+list now parse via the cfg-driven generic reader — 193/193 non-dedicated
+corpus /MAT blocks, 0 failures, 0 heuristic fallbacks (LAW37's jammed
+20-char fields, LAW51's Iflag subobjects, JWL's /id/unit headers and
+LAW66's ISRATE=4 CARD_LIST included). `/ALE/MAT`, `/EULER/MAT`,
+`/HEAT/MAT` parse as notes attached to the material. Physics status per
+family: EXISTING for the five dedicated laws (LAW1/2/27/36/42,
+readers untouched); PORTED this milestone for VOID, GAS, LAW70, LAW35,
+LAW44, LAW40 (reported pack 1) and LAW19/FABRI, LAW24/CONC, LAW62,
+LAW81 (unreported pack 2 — present, registered, 26 tests pass); every
+other law is an `InactiveMaterial` the Engine refuses to run.
+
+**Group/set + /UNIT machinery — landed, unreported, unmeasured.** The
+`groups-sets` builder failed to report but its work is complete in the
+tree and its 36-test suite (including five real-corpus-deck cases:
+TWISBEAM GRNOD/GRNOD chains, SBEAM GRNOD/SURF, DBEND BOX/RECTA, bike
+SURF/GRSHEL, BOXBEAM LINE/EDGE) passes: `/GRNOD/SURF`, `/GRNOD/GRNOD`
+(recursive, negative-id removal, cycle detection), `/GRNOD/GENE` +
+`GEN_INCR`, `/GRNOD/GR<elem>`, element groups
+`/GRSHEL|GRSH3N|GRBRIC|GRQUAD|GRTRUS|GRBEAM|GRSPRI` + `/GRPART/PART`,
+`/SURF/SURF` (with normal-flip on negative ids), `/SURF/GRSHEL|GRSH3N`,
+`/LINE/EDGE` (border-edges-only, linedge.F semantics), `/LINE/LINE`,
+`/LINE/PART`, `/FUNCT_SMOOTH`, and `/UNIT` local unit systems + /BEGIN
+work units (`input/units.py`, verified against the real starter on the
+RD-E-2601 main_TEST4 deck per its module docstring). This is the exact
+machinery §4.3 ranked #1/#2/#3 (complete hard gap for 252/529 decks,
+48 %) plus #4–10. §4.6 measures how many of the 520 ERROR cases it
+actually converts.
+
+### 4.6 The M37 full-corpus re-sweep (AUTHORITATIVE)
+
+Same 529 runnable decks, same `sweep_coverage.run_case` driver, same
+verdict definitions and 120 s cap as M36; the 4 MAX_PATH decks handled by
+short-path copies exactly as M36 did. Machine-readable:
+`tools/validation_data/coverage_results_m37.json` (M36 schema +
+`delta_vs_m36`).
+
+| metric | M36 | M37 | delta |
+|---|---:|---:|---:|
+| decks swept | 529 | 529 | — |
+| CLEAN | 0 | **7** | +7 |
+| SKIPS(n) | 9 | **373** | +364 |
+| ERROR | 520 | **149** | −371 |
+| CRASH | 0 | **0** | 0 |
+| TIMEOUT | 0 | **0** | 0 |
+| decks with parse errors | 446 | **0** | −446 |
+| parse-error incidents | 858 | **0** | −858 |
+| distinct parse signatures | 20 | **0** | −20 |
+| families still blocking | 126 | 75 | −51 |
+
+Verdict migration: ERROR→SKIPS 364, ERROR→CLEAN 7, ERROR→ERROR 149,
+SKIPS→SKIPS 9. **371 of 529 decks (70 %) improved; none regressed.**
+
+**All 20 M36 parse signatures are dead** — independently verified: zero
+`while reading /` occurrences across all 562 fresh corpus listings. The
+largest were `/TH/NODE` (360 decks), `/NODE` (59), `/IMPVEL` (35),
+`/SHELL` (28), `/SH3N` (18), `/MAT/PLAS_TAB` (17).
+
+**Ranked-gap closures** (cases_blocking → 0): `/GRNOD/SURF` 222,
+`/GRNOD/GRNOD` 200, `/LINE/EDGE` 190, `/GRSHEL/SHEL` 36, `/SURF/SURF` 35,
+`/FUNCT_SMOOTH` 34, `/UNIT` 28, `/SURF/GRSHEL` 26, `/GRSH3N/SH3N` 24,
+`/SURF/GRSH3N` 23, `/GRBRIC/PART` 19, `/GRNOD/GENE` 17, `/GRPART/PART` 14,
+`/GRBRIC/BRIC` 12 — and **every one of the 28 unsupported `/MAT`
+families** (`HYD_VISC` 21, `FABRI` 19, `GAS` 17, `VOID` 13, `CONC` 8,
+`LAW51` 7, `LAW81` 7, …). Only `/SURF/PLANE` (1) and `/GRNOD/NODENS` (1)
+remain of the group/set machinery.
+
+**The blocker profile is now flat** — 75 families, none above 21 decks.
+The new #1 cluster is `/PROP`: `SH_ORTH` 21, `SPR_BEAM` 20, `INJECT1` 17,
+`SPR_GENE` 14, `TYPE20` 12, `VOID` 10. The 149 remaining ERROR decks are
+dominated by cascades from those gaps (72 "property not defined", 68
+"material not defined", 20 "model has no elements"), not by reader
+defects.
+
+**Three new bugs found** (recorded in `delta_vs_m36.new_bugs`; none is a
+regression — all affected decks were ERROR in M36 and remain ERROR — but
+all are newly *reachable* because the readers now get that far):
+
+1. **M37-BUG-1 `/ADMAS` header misparsed as carrying a `unit_ID`** (22
+   decks, 29 incidents). The official cfg declares
+   `HEADER("/ADMAS/%d/%d", type, _ID_)` — no unit slot; the port bound
+   `unit_id=<admas_ID>` and then hard-errored on decks with no `/UNIT`
+   block at all (BIKERC, SEAT). **FIXED during M37 integration** (`/ADMAS`
+   exempted from unit-ref recording; `read_admas` rebinds the id). The
+   sweep predates this fix, so its 149 ERROR count marginally overstates
+   the committed tree.
+2. **M37-BUG-2 density check false-fires on multi-material ALE laws**
+   (10 decks, 24 incidents): LAW51/LAW151/MULTIFLUID carry no RHO0 of
+   their own — mixture density comes from submaterial references and
+   volume fractions. **Deferred** (those laws have no physics yet).
+3. **M37-BUG-3 `/TETRA4` zero/negative volume on 100 % of an official
+   deck** (9 decks): 2166 of 2166 tetras flagged on RD-V-0020
+   Cantilever_beam. A total hit rate on an official element-verification
+   deck indicates a node-ordering / volume-sign convention mismatch with
+   real Radioss, invisible to the port's own decks (which use the port's
+   convention). Pre-existing, exposed by deeper parsing. **Deferred** —
+   the highest-value item of the next milestone.
+
 ## 5. Coverage — W12/W13 k2rad decks: the four M35 bugs are fixed
 
 All four M35-identified port-reader bugs were fixed inside
@@ -536,7 +794,60 @@ GRSHEL/SHEL, TH/INTER + TH/SURF. Real-dialect LAW36 per-curve Fscale_i ≠ 1
 and the fct_IDp/fct_IDE pressure/modulus functions are accepted-with-warning,
 not applied (needs `resolve_materials`).
 
-## 6. Performance (new in M36)
+**M37 note (unmeasured on these decks):** several of the W12/W13 gaps
+named above moved in M37 — LAW44 (Cowper–Symonds) now has ported physics
+(pack 1), HYD_VISC now parses as an `InactiveMaterial`, and SURF/GRSHEL +
+GRSHEL/SHEL are covered by the group/set machinery. Neither deck was
+re-run for this report.
+
+## 6. Performance (M36 baseline below; §6.1 = the M37 measurement)
+
+### 6.1 M37 timing campaign (`perf_m37.json`, 122 records)
+
+Same machine (i9-13900H) and single-thread rules as M36. **Contention
+caveat, recorded per affected record**: every run finishing after
+2026-07-17 00:35 shared the machine with the user's own 13-process MPI
+simulation — those wall clocks (marked `contention_note`, incl. the whole
+bundled re-run and 28 official cases) are upper bounds. Cycle counts and
+parity classes are load-independent. Clean-window highlights:
+
+| case | elems | cycles F/P | Fortran st+en s | port st+en s | ratio | port cyc/s |
+|---|---:|---|---|---|---:|---:|
+| c02 E1000 BATOZ Sf0.6 | 99 | 146434/55836 | 2.11+52.79 | 2.09+190.38 | 3.5× | 293 |
+| c04 E1000 BATOZ Sf0.9 | 99 | 97623/37224 | 2.80+38.61 | 1.47+109.77 | 2.7× | 339 |
+| c08 E1000 QEPH Sf0.8 | 99 | 107837/41877 | 1.99+23.31 | 1.21+127.66 | 5.1× | 328 |
+| c40 E1000 BT1 Sf0.1 | 99 | 552667/256743 | 2.27+121.42 | 1.87+560.93 | 4.6× | 458 |
+| c42 E1000 BT3 Sf0.1 | 99 | 13743478/256743 | 0.65+689.98 | 0.24+178.15 | 0.3× | 1441 |
+| c06 DKT18 Sf0.2 * | 198 | 621697/245010 | 1.66+114.54 | 0.88+694.42 | 6.0× | 353 |
+| c46–c49 Foam LAW70 * | 1000 | 62–108k/36–48k | ~1.8+88–155 | ~1.2+390–540 | 2.6–6.0× | ~90 |
+| c37 T1040 (65k elems) * | 65439 | 2984/500 | 3.47+365.44 | 5.42+556.85 | – | 0.9 |
+
+(`*` = contended window; full 122-record table in `perf_m37.json`.)
+
+**The speed signal for future optimization work** (the standing side
+quest): on full-run shell comparisons the port is 2–7× slower
+wall-to-wall (per element-cycle it fares better — its nodal-dt runs ~2.4×
+fewer cycles); contact-heavy bundled decks sit at 12–27×; and port
+throughput COLLAPSES with model size — ~1 400 cyc/s at 99 shells,
+~90 cyc/s at 1 000 bricks, **0.9 cyc/s at 65 k mixed elements** (c37) —
+pointing at per-cycle Python overhead that scales with element-group
+count, the natural profiling target. The port *starter* is consistently
+faster than Fortran's (~1.2 s vs ~2 s wall incl. process startup).
+Curiosity: c42 (BT3 hourglass variant) runs 0.3× — the FORTRAN engine
+takes 13.7 M cycles where the port's nodal dt takes 257 k.
+
+M37 bundled port engine times run 5–20 % above M36 with identical cycle
+counts — consistent with the contention window, no regression signal.
+
+**M37 note:** the planned M37 timing table cannot be appended — the
+`timed-parity-m37` builder failed and produced no `perf_m37.json`; no
+timing was harvested this milestone. The M36 table below therefore
+remains both the baseline AND the latest trend point. (Nothing in M37
+targeted engine speed; the new column-aware reader and cfg-driven /MAT
+parsing affect starter-side wall clock only, unmeasured.) The next
+timing sweep should note that decks previously stopping in the starter
+(33 of the 40 IN_ENVELOPE cases, §3) will produce port ENGINE timings
+for the first time.
 
 Machine: 13th Gen Intel(R) Core(TM) i9-13900H, 64 GB RAM, Windows 11. Both
 solvers single-threaded (Fortran `-np 1 -nt 1` / `OMP_NUM_THREADS=1`;
@@ -598,44 +909,86 @@ faster — exactly the speed-work baseline this section exists to feed.
   MPI/OpenMP scaling (and the port's numba backend, benchmarked separately
   in `tools/benchmark.py` / PORTING_GUIDE M7) are outside this comparison.
 
-## 7. Known issues & backlog (from this milestone's measurements)
+## 7. Known issues & backlog (updated for M37)
 
-1. **Fixed-format reader hardening** (blocks both §3 and §4): `/TH/NODE`
-   trailing-name column (360 cases); abutting 20-char fields → column
-   slicing for `/NODE`/`/FUNCT`/`/MAT/PLAS_JOHNS` (75 cases); `/SHELL` /
-   `/SH3N` per-element float fields (46); `/IMPVEL`/`/IMPDISP` XX/YY/ZZ
-   rotational codes (43); the third `/MAT/PLAS_TAB` dialect (17);
-   `/EOS/IDEAL-GAS|POLYNOMIAL` title tokens (19); `/INIVEL/AXIS` letter
-   axis (10); `/PART` with mat id 0 (legal for spring parts) rejected by
-   the PART check.
-2. **Group/set machinery port** ( §4.3): GRNOD/SURF + GRNOD/GRNOD +
-   LINE/EDGE flips 252 cases' hard gap to zero.
-3. **Contact/hourglass differential study** on the five DEVIATION examples
-   (§2.2) — IE agrees, contact/hourglass ledgers do not.
-4. **gas_piston**: emit a positive P0 (deck_writer) and/or rebuild on a
-   hydro law for full 9/9 comparability.
-5. **Hybrid single-file decks**: pre-/BEGIN engine blocks need either a
-   file split in the harness or a pre-/BEGIN engine-section reader.
-6. If the port reader ever learns `/TH/SECTIO`, the writer should switch
-   spelling (rigid_impactor's raw deck currently carries the port-only
-   `/TH/SECT`, stripped by harness fixups for Fortran runs).
+The M36 backlog items 1 (fixed-format reader hardening) and 2 (group/set
+machinery) are DONE in the tree (§4.5) — but unmeasured at corpus scale.
+The post-M37 list, in measured-value order:
+
+1. **Re-measure everything** (the three failed M37 builders' scope): the
+   529-deck coverage re-sweep (how many of the 520 ERROR cases convert
+   now that the parse backlog, /MAT parsing, and group/set machinery are
+   in), the official IN_ENVELOPE parity re-run (the 33 PYRADIOSS-FAIL
+   rows should now reach both engines — the first real official-deck
+   physics numbers), and the timing table those runs produce for free.
+2. **c26_V0200_Hardening** — the single measured both-engine case
+   (DEVIATION 0.974, IE divergence at the end of the imposed-motion
+   ramp) still needs its dedicated look; its assigned M37 builder failed.
+3. **Contact/hourglass differential study** on the five DEVIATION
+   examples (§2.2) — IE agrees, contact/hourglass ledgers do not
+   (carried from M36).
+4. **Material physics for the parsed-but-inactive laws**: every /MAT
+   parses but only 15 laws carry physics (5 dedicated + pack 1 + the
+   unreported pack 2). Highest corpus pull among the inactive: LAW6
+   HYD_VISC (30 blocks), LAW51 (22), GAS-adjacent LAW151/MULTIFLUID
+   (7+3), LAW11 BOUND (7), LAW37 BIPHAS (6), LAW83 (5). The registry
+   hook makes each a one-module job.
+5. **Reader/writer follow-ups from the M37 fix work** (builder OPEN
+   items): the writer's PORT-DIALECT fallback blocks (CLOAD-with-sensor,
+   SECT-with-node_ref, non-default RWALL, RBODY-not-dual-encodable)
+   would be MISREAD by the new column-aware branches — no bundled
+   example or corpus deck hits these (verified by grep), but the writer
+   should emit them in real layout now that the reader understands it;
+   with the column-aware reader, the writer could emit TYPE7/11 GAPMAX
+   on its real card B and retire the gap_max-in-Tstart RESIDUE;
+   /IMPVEL / /IMPDISP rotational directions (XX/YY/ZZ) parse cleanly but
+   the kinematic condition is warned + skipped (the engine has vr and
+   nodal inertia — a small follow-up); /SECT node_id_ref → node_ID1
+   mapping documented (§8).
+6. **RD-V-0220 variant 0 / HEPH**: the deck's Isolid24
+   (physically-stabilized brick) maps to the port's one-point FB viscous
+   brick and goes unstable at ~80 % crush — an element-technology gap
+   the parity sweep will keep showing until HEPH lands. LAW44 kinematic
+   hardening (C_hard/FISOKIN) not ported (warned, runs isotropic).
+7. **gas_piston**: emit a positive P0 (deck_writer) and/or rebuild on a
+   hydro law for full 9/9 comparability (carried). Note /EOS/IDEAL-GAS
+   now also serves /MAT/GAS-on-elements (§4.5).
+8. **Hybrid single-file decks**: pre-/BEGIN engine blocks need either a
+   file split in the harness or a pre-/BEGIN engine-section reader
+   (carried).
+9. If the port reader ever learns `/TH/SECTIO`, the writer should switch
+   spelling (carried).
 
 ## 8. Honest limitations of this report
 
-- **The official parity sweep completed after the builder's snapshot**
-  (40/40; §3 and the JSONs carry the final numbers). Because 39/40 cases
-  stop in the port starter, official-deck PORT engine timings exist for
-  only one case (c26) — the Fortran-side timings for all 40 are in
-  `perf_m36.json`; the port columns fill in once M37 fixes the §3 parse
-  signatures.
-- **Two confirmation re-runs were still executing at builder handoff**:
-  the full fast pytest tier and a repeat of the 11-example parity sweep
-  against the final tree (the first full sweep was 11/11 MATCH; changes
-  since were comment-only lines both readers skip, plus concurrent parser
-  edits). Likewise the parse-fixes builder's two background suites
-  (m15/m3 and m12/m13/m14/m5/m6/m7/m24) were pending — its fixture code
-  paths are byte-preserved and were hand-traced green, but the suites were
-  not seen finishing inside the builder's window.
+- **The corpus numbers are M36 measurements over an M37 tree.** Five of
+  eight M37 builders reported; three failed (§ TL;DR item 6). All
+  §3/§4.1–4.4/§6 corpus-scale numbers predate the M37 fixes by
+  construction; §4.5's deltas are slice-scale (60 cases) or
+  domain-scale (193 /MAT blocks), not full-corpus.
+- **Two builders' work is in the tree without a builder report**
+  (groups-sets, mat-physics-2). Verification here is limited to running
+  their test suites (36 + 26 tests, all pass, including five
+  real-corpus-deck group cases) and inspecting their registrations;
+  their claims (e.g. the /UNIT conversion verified against the real
+  starter on main_TEST4) come from module docstrings, not from an
+  independent re-run.
+- **The report was written against a SHARED uncommitted working tree**
+  carrying all builders' M37 edits. The pack-1/mat-reader/realformat
+  suites (148 tests) and the groups/pack-2 suites (62 tests) were re-run
+  green for this report. The cross-builder test regression flagged
+  mid-flight (/IMPVEL//IMPDISP column detection breaking test_m13_implfric
+  / test_m14_implgen::test_law42_implicit_vs_explicit_quasi_static /
+  test_m15_fricmat) was fixed by the pack-1 builder; the confirming
+  re-run of those three slow implicit suites was STILL EXECUTING at
+  report submission (the M36-edition situation repeating) — check it
+  before merging. The FULL suite was not re-run for this report (the
+  pack-1 builder measured it very slow on this machine, ~30+ min, and
+  stopped it at 72 % with zero failures).
+- Because 39/40 official parity cases stopped in the M36 port starter,
+  official-deck PORT engine timings exist for only one case (c26) — the
+  Fortran-side timings for all 40 are in `perf_m36.json`; the port
+  columns fill in once the re-sweep runs on the M37 tree.
 - The deck corpus is not in the repo; `inventory.json` /
   `coverage_results.json` embed absolute scratchpad paths. The sweep
   overwrote 27–30 pre-existing Fortran reference `*_0000.out` listings in
@@ -656,3 +1009,21 @@ faster — exactly the speed-work baseline this section exists to feed.
 - One run per solver per case; the 5 % MATCH tolerance and 1 % significance
   floor are choices, printed alongside every raw number so anyone can
   re-slice.
+- M37-specific caveats carried from the builder records:
+  `/INTER/TYPE7|11` deliberately keep their M36 dual-dialect reading
+  (the gap_max-in-Tstart residue preserved — brake_pad / notched_plate /
+  rigid_impactor byte behaviour identical); `/SECT` node_id_ref in the
+  real dialect maps to node_ID1 (moment reference at N1 — closer to the
+  real cut-frame semantics than the port's centroid default, but the
+  port's side-set /SECT still differs from the real element-cut section,
+  the documented M36 deviation); `InactiveMaterial` E/nu are documented
+  fallbacks (MAT_E/MAT_NU when present, else 1.0/0.3) used only for
+  starter-side dt/stiffness estimates; the generic /MAT reader needs the
+  cfg tree (`PYRADIOSS_HM_CFG` or `C:/OpenRadioss/hm_cfg_files/config/CFG`)
+  — without it it degrades to heuristic density-only parsing (parse-clean,
+  warned); GAS/LAW151/some LAW51 records legitimately carry density 0 (no
+  density card in the law) — meshed parts referencing them get
+  frozen-massless-node warnings, and the engine refuses anyway;
+  `/MAT/GAS`'s PREDEF table and default R_igc are SI values (the port has
+  no unit conversion inside the law — non-SI decks must override
+  `params['R_igc']`, documented).

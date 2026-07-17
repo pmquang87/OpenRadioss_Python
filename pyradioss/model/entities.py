@@ -175,18 +175,48 @@ class Part:
 
 @dataclass
 class Box:
-    """A /BOX/RECTA rectangular box, used by /GRNOD/BOX to select nodes."""
+    """A /BOX volume, used by /GRNOD/BOX to select nodes (M37: the three
+    real geometries of ``starter/source/model/box/rdbox.F``).
+
+    ``kind`` selects the geometry and which fields are meaningful:
+
+    * ``'RECTA'`` — axis-aligned box between two diagonal corners.
+      Corners come either from the coordinate cards (``corner_min``/
+      ``corner_max`` filled at read time) or from two NODES (``node1``/
+      ``node2`` > 0 — resolved against the mesh at group-resolution
+      time, the cfg recta.cfg N1/N2 fields);
+    * ``'CYLIN'`` — finite cylinder: axis segment ``p1``->``p2``,
+      ``diameter``; a node is inside when its axis projection falls
+      between the caps and its distance from the axis is <= D/2
+      (rdbox.F INSIDE_CYLINDER, boundaries inclusive);
+    * ``'SPHER'`` — sphere: center ``p1``, ``diameter``.
+    """
 
     id: int
-    corner_min: np.ndarray  # (3,)
-    corner_max: np.ndarray  # (3,)
+    corner_min: Optional[np.ndarray] = None  # (3,) RECTA
+    corner_max: Optional[np.ndarray] = None  # (3,) RECTA
     title: str = ""
+    kind: str = "RECTA"                      # 'RECTA' | 'CYLIN' | 'SPHER'
+    p1: Optional[np.ndarray] = None          # (3,) CYLIN base / SPHER center
+    p2: Optional[np.ndarray] = None          # (3,) CYLIN axis end
+    diameter: float = 0.0                    # CYLIN / SPHER
+    node1: int = 0                           # RECTA/CYLIN corner/axis node
+    node2: int = 0
 
 
 @dataclass
 class NodeGroup:
     """A /GRNOD node group. After Starter resolution, ``node_idx`` holds
-    dense 0-based node indices (Fortran IGRNOD(IGR)%ENTITY)."""
+    dense 0-based node indices (Fortran IGRNOD(IGR)%ENTITY).
+
+    M37 adds the remaining real-deck subtypes (48 % of the official
+    corpus): nodes of surfaces (/GRNOD/SURF — hm_surfnod.F), recursive
+    group-of-groups (/GRNOD/GRNOD — hm_grogronod.F, iterative fixpoint
+    with cycle detection; NEGATIVE ids REMOVE the referenced group's
+    nodes, and removal wins over addition whatever the order — the
+    BUFTMP = -1 convention), nodes of element groups (/GRNOD/GRSHEL|
+    GRSH3N|GRBRIC|... — hm_elngr*.F) and generated id ranges
+    (/GRNOD/GENE first..last [+ GEN_INCR increment])."""
 
     id: int
     title: str = ""
@@ -194,6 +224,14 @@ class NodeGroup:
     node_ids: List[int] = field(default_factory=list)   # /GRNOD/NODE
     part_ids: List[int] = field(default_factory=list)   # /GRNOD/PART
     box_ids: List[int] = field(default_factory=list)    # /GRNOD/BOX
+    surf_ids: List[int] = field(default_factory=list)   # /GRNOD/SURF (M37)
+    grnod_ids: List[int] = field(default_factory=list)  # /GRNOD/GRNOD, signed
+    # /GRNOD/GRSHEL|GRSH3N|GRBRIC|GRTRUS|GRBEAM|GRSPRI: (family, group id)
+    # pairs — family is the canonical element-group key ('SHEL', 'SH3N',
+    # 'BRIC', ...), see Model.egroups (M37)
+    egroup_refs: List[tuple] = field(default_factory=list)
+    # /GRNOD/GENE (+ GEN_INCR): (first_id, last_id, incr) user-id ranges
+    gene_ranges: List[tuple] = field(default_factory=list)
     # Resolved by the Starter:
     node_idx: Optional[np.ndarray] = None
 
@@ -221,6 +259,15 @@ class Surface:
     title: str = ""
     part_ids: List[int] = field(default_factory=list)         # /SURF/PART
     seg_nodes: List[List[int]] = field(default_factory=list)  # /SURF/SEG (user ids)
+    # M37 subtypes:
+    # /SURF/SURF — surface-of-surfaces (hm_read_surfsurf.F): the listed
+    # surfaces' segments are CONCATENATED, resolved by iterative fixpoint
+    # with cycle detection; a NEGATIVE id includes the surface with its
+    # segment node order REVERSED (n4 n3 n2 n1 — the normal flips).
+    surf_ids: List[int] = field(default_factory=list)
+    # /SURF/GRSHEL | /SURF/GRSH3N — every element of the element group
+    # becomes a segment (hm_surfgr2/surftage): (family, group id) pairs.
+    egroup_refs: List[tuple] = field(default_factory=list)
     # Resolved by the Starter: (nseg, 4) 0-based node indices; triangles
     # repeat the 3rd node in the 4th slot (Radioss convention).
     segments: Optional[np.ndarray] = None
@@ -243,18 +290,61 @@ class Line:
     * ``/LINE/SURF`` — every unique edge of the segments of the listed
       surfaces (with element provenance carried over from the surface, so
       edges of deleted elements drop out, exactly like surface segments);
-    * ``/LINE/SEG``  — explicit node pairs.
+    * ``/LINE/SEG``  — explicit node pairs;
+    * ``/LINE/EDGE`` (M37) — only the BORDER edges of the listed
+      surfaces: edges used by exactly ONE segment (``linedge.F``
+      'REMOVAL OF INTERNAL SEGMENTS (EXCEPT BORDERS)' — interior edges,
+      shared by two segments, are removed entirely, which turns the
+      free boundary of a shell patch into a line);
+    * ``/LINE/LINE`` (M37) — line-of-lines: the listed lines' edges
+      concatenated (hm_lines_of_lines.F, fixpoint + cycle detection);
+    * ``/LINE/PART`` (M37) — every 1-D element (truss/beam/spring) of
+      the listed parts becomes an edge (elem_1D_line_buffer.F).
     """
 
     id: int
     title: str = ""
     surf_ids: List[int] = field(default_factory=list)         # /LINE/SURF
     seg_nodes: List[List[int]] = field(default_factory=list)  # /LINE/SEG (user ids)
+    edge_surf_ids: List[int] = field(default_factory=list)    # /LINE/EDGE (M37)
+    line_ids: List[int] = field(default_factory=list)         # /LINE/LINE (M37)
+    part_ids: List[int] = field(default_factory=list)         # /LINE/PART (M37)
     # Resolved by the Starter: (nseg, 2) node indices + provenance
     # (same convention as Surface.seg_gtype/seg_elem).
     segments: Optional[np.ndarray] = None
     seg_gtype: Optional[np.ndarray] = None
     seg_elem: Optional[np.ndarray] = None
+
+
+@dataclass
+class EntityGroup:
+    """An ELEMENT (or part) group: /GRSHEL, /GRSH3N, /GRBRIC, /GRTRUS,
+    /GRBEAM, /GRSPRI, /GRQUAD and /GRPART (M37).
+
+    Fortran origin: the IGRSH4N/IGRSH3N/IGRBRIC/... GROUP_ structures of
+    ``groupdef_mod.F`` read by ``starter/source/groups/hm_lecgre.F``
+    (direct element lists and parts) and ``hm_grogro.F`` (recursive
+    group-of-groups with the same negative-id removal convention and
+    iterative-fixpoint cycle detection as /GRNOD/GRNOD).
+
+    ``family`` is the canonical element-family key ('SHEL', 'SH3N',
+    'BRIC', 'QUAD', 'TRUS', 'BEAM', 'SPRI', 'PART' — GRBRIC covers ALL
+    solids, bricks and tetras alike, exactly like IGRBRIC spans IXS).
+    After resolution ``members`` lists (model element-group attribute,
+    row indices) pairs — the port's dense equivalent of GROUP%ENTITY —
+    and for family 'PART' ``part_ids_resolved`` holds the part ids.
+    """
+
+    id: int
+    family: str
+    title: str = ""
+    # Unresolved content:
+    elem_ids: List[int] = field(default_factory=list)   # direct element ids
+    part_ids: List[int] = field(default_factory=list)   # /GR*/PART
+    group_ids: List[int] = field(default_factory=list)  # group-of-groups, signed
+    # Resolved by the Starter:
+    members: Optional[list] = None            # [(gtype attr, rows ndarray)]
+    part_ids_resolved: Optional[list] = None  # family 'PART' only
 
 
 # ============================================================================
@@ -326,15 +416,26 @@ class ConcentratedLoad:
 
 @dataclass
 class ImposedVelocity:
-    """/IMPVEL: imposed velocity v(t) = scale * funct(t) on one DOF of a
-    node group (kinematic condition: overrides the solution, does not add a
-    force; the reaction is recovered from the mass * acceleration)."""
+    """/IMPVEL: imposed velocity v(t) = scale * funct(t / xscale) on one
+    DOF of a node group, active inside [tstart, tstop] (kinematic
+    condition: overrides the solution, does not add a force; the reaction
+    is recovered from the mass * acceleration).
+
+    scale/xscale/tstart/tstop are the official card-2 fields Fscale_Y /
+    Ascale_x / Tstart / Tstop (``starter/source/constraints/general/
+    impvel/read_impvel.F``: zero Ascale_x or Fscale_Y defaults to 1, zero
+    Tstop to infinity; ``engine/.../fixvel.F`` evaluates the curve at
+    t * (1/Ascale_x) and skips the condition outside the time window)."""
 
     id: int
     grnod_id: int
     funct_id: int
     dof: int              # 0=x,1=y,2=z
-    scale: float = 1.0
+    scale: float = 1.0    # Fscale_Y (curve ordinate scale)
+    xscale: float = 1.0   # Ascale_x (curve abscissa scale, never 0)
+    tstart: float = 0.0   # activation window
+    tstop: float = 1.0e30
+    sens_id: int = 0      # /SENSOR gate (parsed; engine gating not ported)
     title: str = ""
 
 
@@ -348,13 +449,19 @@ class ImposedDisplacement:
 
     Fortran origin: ``engine/source/constraints/general/impvel/fixvel.F``
     (the same routine serves /IMPVEL and /IMPDISP through IFLAG).
+    Card-2 fields as for :class:`ImposedVelocity`:
+    d(t) = scale * funct(t / xscale) inside [tstart, tstop].
     """
 
     id: int
     grnod_id: int
     funct_id: int
     dof: int              # 0=x,1=y,2=z
-    scale: float = 1.0
+    scale: float = 1.0    # Fscale_Y (curve ordinate scale)
+    xscale: float = 1.0   # Ascale_x (curve abscissa scale, never 0)
+    tstart: float = 0.0   # activation window
+    tstop: float = 1.0e30
+    sens_id: int = 0      # /SENSOR gate (parsed; engine gating not ported)
     title: str = ""
 
 

@@ -196,7 +196,8 @@ class RigidBodyEngine:
         # booking cannot fire; slaves under /IMPVEL are a clash: warn and
         # remove them there too — the body wins)
         self.drives = []               # (dof, funct, scale)
-        for k, (idx, dof, fct, scale) in enumerate(loads.impvel):
+        for k, entry in enumerate(loads.impvel):
+            idx, dof, fct, scale = entry[0], entry[1], entry[2], entry[3]
             if self.master in idx:
                 self.drives.append((dof, fct, scale))
             hit = np.isin(idx, self.nodes)
@@ -205,15 +206,31 @@ class RigidBodyEngine:
                     log.warning(f"{who}: /IMPVEL drives slave node(s) — "
                                 f"the rigid body wins (kinematic clash)",
                                 "RBODY INIT")
-                loads.impvel[k] = (idx[~hit], dof, fct, scale)
-        for k, (idx, dof, fct, scale, x0d) in enumerate(loads.impdisp):
+                loads.impvel[k] = (idx[~hit],) + entry[1:]
+        # ---- /IMPDISP driving the master: body-displacement drive ---------
+        # (M37: the standard way the official decks move a rigid platen —
+        # RD-V-0220 drives the /RBODY master with a /FUNCT_SMOOTH ramp.
+        # The master dof must land on x0 + d(t) exactly, so the body
+        # velocity is set from the CURRENT master position each cycle,
+        # like the nodal /IMPDISP treatment in kinematics.apply.)
+        # Slaves under /IMPDISP remain a clash: warn, the body wins.
+        self.disp_drives = []          # (dof, fct, scale, facx, t0, t1, x0)
+        for k, entry in enumerate(loads.impdisp):
+            idx, x0d = entry[0], entry[-1]
+            if self.master in idx:
+                pos = int(np.where(idx == self.master)[0][0])
+                self.disp_drives.append(entry[1:-1] + (float(x0d[pos]),))
             hit = np.isin(idx, self.nodes)
             if np.any(hit):
-                log.warning(f"{who}: /IMPDISP drives body node(s) — the "
-                            f"rigid body wins (kinematic clash)",
-                            "RBODY INIT")
-                loads.impdisp[k] = (idx[~hit], dof, fct, scale,
-                                    x0d[~hit] if x0d is not None else None)
+                if np.isin(self.slaves, idx).any():
+                    log.warning(f"{who}: /IMPDISP drives slave node(s) — "
+                                f"the rigid body wins (kinematic clash)",
+                                "RBODY INIT")
+                loads.impdisp[k] = (idx[~hit],) + entry[1:-1] + (
+                    x0d[~hit] if x0d is not None else None,)
+        if self.pivot and self.disp_drives:
+            log.warning(f"{who}: /IMPDISP on a pivoted (fully clamped) "
+                        f"master is ignored", "RBODY INIT")
         if self.pivot and self.drives:
             log.warning(f"{who}: /IMPVEL on a pivoted (fully clamped) "
                         f"master is ignored", "RBODY INIT")
@@ -305,6 +322,20 @@ class RigidBodyEngine:
                 dv = vimp - self.v_ref[dof]
                 wext += self.M * dv * vimp           # J . v_imp, as /IMPVEL
                 self.v_ref[dof] = vimp
+            # master /IMPDISP (M37): the master dof lands on x0 + d(t)
+            # exactly — velocity from the CURRENT master position, with
+            # the spin transport w x (x_m - x_ref) removed so it is the
+            # REFERENCE point's velocity that gets prescribed
+            for dof, fct, scale, facx, t0, t1, x0m in self.disp_drives:
+                if dt <= 0.0 or t_next < t0 or t_next > t1:
+                    continue
+                target = x0m + scale * fct.eval(t_next * facx)
+                vimp = (target - x[self.master, dof]) / dt
+                vref_new = vimp - cross3(
+                    self.w, x[self.master] - self.x_ref)[dof]
+                dv = vref_new - self.v_ref[dof]
+                wext += self.M * dv * vref_new       # J . v_imp booking
+                self.v_ref[dof] = vref_new
             self.v_ref[self.fix_tra] = 0.0
 
         # angular momentum update + spin from the co-rotated inertia

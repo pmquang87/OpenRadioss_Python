@@ -166,7 +166,12 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 if block.cards:
                     vals = block.cards[0].floats()
                     if vals:
-                        ec.dt_scale = vals[0]
+                        # a zero/blank scale means the DEFAULT 0.9 (the
+                        # reference reads dTsca=0 as 'use default' — the
+                        # RD-V-0220 oracle deck writes '0.0 1e-7'), and a
+                        # zero scale would divide the /DT/NODA/CST mass
+                        # target by zero (M37)
+                        ec.dt_scale = vals[0] if vals[0] > 0.0 else 0.9
                     if len(vals) > 1:
                         ec.dt_min = vals[1]
                 if ec.dt_noda == "CST" and ec.dt_min <= 0.0:
@@ -1056,8 +1061,16 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 if len(block.parts) > 1:
                     ec.print_cycles = abs(int(block.parts[1]))
             elif key == "STOP":
+                # /STOP card: Emax Mmax Nmax NTH NANIM. Emax = 0.0 (blank or
+                # explicit 0, as official decks write '0 0 0 1 1') means "no
+                # user limit" in the real engine — NOT a 0% tolerance. Keep
+                # the 15% default then; only a positive Emax overrides it
+                # (M37: this zero mis-read aborted 14 official decks at
+                # their first energy check).
                 if block.cards:
-                    ec.energy_error_stop = block.cards[0].floats()[0]
+                    emax = block.cards[0].floats()[0]
+                    if emax > 0.0:
+                        ec.energy_error_stop = emax
             else:
                 log.warning(f"engine keyword /{'/'.join(block.parts)} "
                             f"not ported — ignored", block.source)

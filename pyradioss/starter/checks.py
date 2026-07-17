@@ -16,10 +16,10 @@ from ..model.model import Model
 # element family -> material laws its kernels implement (see the
 # materials package dispatch; extending a kernel means extending this map)
 _ALLOWED_LAWS = {
-    "bricks": {1, 2, 36, 42},
-    "tetras": {1, 2, 36, 42},
-    "shells": {1, 2, 27, 36},
-    "sh3n": {1, 2, 27, 36},
+    "bricks": {0, 1, 2, 24, 35, 36, 40, 42, 44, 62, 70, 81, 999},
+    "tetras": {0, 1, 2, 24, 35, 36, 40, 42, 44, 62, 70, 81, 999},
+    "shells": {0, 1, 2, 19, 27, 36, 44},
+    "sh3n": {0, 1, 2, 19, 27, 36, 44},
     "trusses": {1, 2},
     "springs": None,          # springs ignore their material entirely
     "beams": {1, 2},
@@ -39,6 +39,43 @@ def check_model(model: Model, log: MessageLog) -> None:
         if allowed is None:
             continue
         for sl, mat, prop in group.state["slices"]:
+            if mat.law == 999 and mat.eos is None:
+                # M37 pack 1: a /MAT/GAS on elements has no pressure or
+                # stiffness of its own — the initial state must come
+                # from an /EOS/IDEAL-GAS card (or the programmatic
+                # P0/T0/RHO0 params); see materials/mat_gas.py.  Checked
+                # before the density (a bare gas card has neither).
+                log.error(f"/MAT/GAS/{mat.id} on {name} elements needs "
+                          f"an /EOS/IDEAL-GAS card for its initial "
+                          f"state (P0, gamma) — a bare gas card has no "
+                          f"element pressure", "MAT CHECK")
+            rho0 = getattr(mat, "rho0", 0.0) or 0.0
+            if rho0 <= 0.0:
+                # M37: a used material MUST carry a positive initial
+                # density — element masses cannot be initialized without
+                # it (the reference Starter raises the same fatal check;
+                # multimaterial laws like LAW151 keep their densities on
+                # submaterials the port does not resolve).  A clean
+                # model ERROR here replaces the div-by-zero crash in the
+                # element init kernels.
+                law_name = getattr(mat, "law_name", None) \
+                    or f"LAW{mat.law}"
+                log.error(f"/MAT/{law_name}/{mat.id} on {name} elements: "
+                          f"zero or missing initial density "
+                          f"(RHO0={rho0:g}) — element masses cannot be "
+                          f"initialized", "MAT CHECK")
+                continue
+            if getattr(mat, "inactive", False):
+                # M37: cfg-parsed law without ported physics — the
+                # STARTER accepts it (params + density read, mass init
+                # works); the ENGINE refuses to run the model (see
+                # mat_reader.refuse_inactive_materials)
+                law_name = getattr(mat, "law_name", f"LAW{mat.law}")
+                log.warning(f"/MAT/{law_name}/{mat.id} on {name} "
+                            f"elements: parsed, physics not implemented "
+                            f"(M37) — the Engine will refuse to run "
+                            f"this model", "MAT CHECK")
+                continue
             if mat.law not in allowed:
                 log.error(f"material LAW{mat.law} (/MAT {mat.id}) is not "
                           f"ported for {name} elements (supported: "
