@@ -357,6 +357,14 @@ class BoundaryCondition:
 
     ``trarot`` is the classic Radioss 6-character flag string 'XYZ XYZ'
     (e.g. '111 000' fixes all translations); stored as two boolean triples.
+
+    ``skew_id`` (M39): the DOFs are fixed in the axes of that /SKEW, not
+    the global ones — the constraint condensation ROTATES with the skew.
+    ``bcs1v`` (``engine/source/constraints/general/bcs/bcs1.F``) projects
+    the component along each constrained skew axis out of both the
+    acceleration and the velocity; with a /SKEW/MOV the axes are rebuilt
+    every cycle, so the constraint plane turns with the nodes.  0 = the
+    global system.
     """
 
     id: int
@@ -364,6 +372,8 @@ class BoundaryCondition:
     fix_tra: np.ndarray  # (3,) bool
     fix_rot: np.ndarray  # (3,) bool
     title: str = ""
+    skew_id: int = 0
+    skew_row: int = 0    # resolved SkewSet row (0 = global)
 
 
 @dataclass
@@ -374,7 +384,15 @@ class InitialVelocity:
     (Fortran: starter/source/initial_conditions/inivel/hm_read_inivel.F).
 
     kind='TRA' uses ``v``; kind='AXIS' uses ``omega``, ``axis`` (unit
-    direction d) and ``origin`` (point P on the axis)."""
+    direction d) and ``origin`` (point P on the axis).
+
+    ``frame_id`` / ``dir`` (M39): with a /FRAME the AXIS card's rotation
+    runs about the frame's ``dir`` axis THROUGH THE FRAME ORIGIN, and its
+    Vxt/Vyt/Vzt are components IN the frame — the Starter resolves both
+    into ``axis``/``origin``/``v`` (hm_read_inivel.F 415-453 rotates Vt by
+    the frame, 581-621 builds ``V = Vt + VR * (d x (X - O))``).  Without a
+    frame the axis passes through the GLOBAL origin along the global
+    ``dir``, which is that code's IFRA == 0 branch."""
 
     id: int
     grnod_id: int
@@ -384,6 +402,8 @@ class InitialVelocity:
     omega: float = 0.0
     axis: Optional[np.ndarray] = None    # (3,) unit vector (AXIS)
     origin: Optional[np.ndarray] = None  # (3,) point on the axis (AXIS)
+    frame_id: int = 0                    # /FRAME (AXIS); 0 = global
+    dir: int = 1                         # IDIR 1/2/3 = the frame's X'/Y'/Z'
 
 
 @dataclass
@@ -437,6 +457,8 @@ class ImposedVelocity:
     tstop: float = 1.0e30
     sens_id: int = 0      # /SENSOR gate (parsed; engine gating not ported)
     title: str = ""
+    skew_id: int = 0      # /SKEW: dof is the skew's axis, not the global one
+    skew_row: int = 0     # resolved SkewSet row (0 = global)
 
 
 @dataclass
@@ -451,6 +473,11 @@ class ImposedDisplacement:
     (the same routine serves /IMPVEL and /IMPDISP through IFLAG).
     Card-2 fields as for :class:`ImposedVelocity`:
     d(t) = scale * funct(t / xscale) inside [tstart, tstop].
+
+    ``skew_id`` (M39): the imposed component is the one along that /SKEW's
+    ``dof`` axis (fixvel.F 390-418 projects the current velocity onto the
+    skew axis, imposes the curve there and adds the correction back along
+    the SAME axis, leaving the other two components free).
     """
 
     id: int
@@ -463,6 +490,8 @@ class ImposedDisplacement:
     tstop: float = 1.0e30
     sens_id: int = 0      # /SENSOR gate (parsed; engine gating not ported)
     title: str = ""
+    skew_id: int = 0      # /SKEW: dof is the skew's axis, not the global one
+    skew_row: int = 0     # resolved SkewSet row (0 = global)
 
 
 @dataclass
@@ -634,7 +663,24 @@ class RigidBody:
     added_mass: float = 0.0   # /RBODY Mass field (at the COG)
     jadd: Optional[np.ndarray] = None   # (3,) added Jxx Jyy Jzz (at the COG)
     icog: int = 1             # 1 = move master to COG (RBODY default)
+    # /RBODY sens_ID: 0 = the body is ACTIVE from t=0; nonzero = a /SENSOR
+    # gates it, so it starts INACTIVE.  This mirrors the reference's
+    # NPBY(7,N) ON/OFF flag, set by hm_read_rbody.F exactly this way
+    # ("IF(ISENS == 0) THEN NPBY(7,NRB)=1 ELSE NPBY(7,NRB)=0").  The port
+    # does NOT gate the rigid-body kinematics by sensor (the field is
+    # warned as ignored by read_rbody and engine/rigid_body.py never reads
+    # it); it is carried because the Starter's shared-node check needs the
+    # ACTIVE/INACTIVE distinction to match checkrby.F — see
+    # starter/initialization.initialize_rigid_bodies (M39 / M38-NEW-4).
+    sens_id: int = 0
     title: str = ""
+    #: /RBODY Skew_ID (M39): the axes the card's Jxx/Jyy/Jzz are written
+    #: in.  ``inirby.F`` calls CHBAS(SKEW(1,NOSKEW), RBY) ONCE, at Starter
+    #: time, to rotate that tensor into the global frame — so only the
+    #: skew's INITIAL orientation matters even for a /SKEW/MOV (the body
+    #: then carries its own rotation).  0 = the global system.
+    skew_id: int = 0
+    skew_row: int = 0         # resolved SkewSet row (0 = global)
     # Resolved by the Starter (initialize_rigid_bodies):
     master: int = -1                      # dense node index
     slaves: Optional[np.ndarray] = None   # dense node indices (no master)

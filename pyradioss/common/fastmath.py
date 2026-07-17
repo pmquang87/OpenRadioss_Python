@@ -33,6 +33,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..accel import get as _accel_get
+
 
 def cross3(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """Cross product of (..., 3) arrays (broadcasting like ``np.cross``).
@@ -103,7 +105,23 @@ def scatter_add3(target: np.ndarray, idx: np.ndarray,
     node that already carries force from ANOTHER element group the final
     addition is reassociated — ((f+c1)+c2) becomes f+(c1+c2) — an
     ulp-level, deterministic difference (documented M7 reordering).
-    Measured ~4× faster than ``np.add.at`` at cycle-path sizes."""
+    Measured ~4× faster than ``np.add.at`` at cycle-path sizes.
+
+    M39: when the numba backend is active, dispatch to ``accel.scatter3``,
+    which fuses the three component passes into one pass over the index
+    list (measured ~3× faster than the bincount reference on the 65 k-brick
+    cliff) while reproducing THIS reference bit-for-bit — bincount
+    accumulates each component in input order, and the numba mirror
+    accumulates the same values in the same order into a zeroed scratch it
+    then adds to ``target``, so cross-group additions associate identically
+    (the accel-package parity contract; verified by tests/test_m7_backends
+    on zero and non-zero targets). On the NumPy backend ``_accel_get``
+    returns None and the bincount reference below runs unchanged (one dict
+    lookup, the same negligible dispatch every kernel block already pays)."""
+    jit = _accel_get("scatter3")
+    if jit is not None:
+        jit(target, idx, values)
+        return
     n = len(target)
     target[:, 0] += np.bincount(idx, weights=values[:, 0], minlength=n)
     target[:, 1] += np.bincount(idx, weights=values[:, 1], minlength=n)

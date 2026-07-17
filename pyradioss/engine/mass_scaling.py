@@ -100,6 +100,10 @@ class NodalTimeStep:
         # motion — see module docstring); filled by ``set_prescribed``
         self.free = model.mass < 1e29
         self.stifn = np.zeros(n)         # assembled nodal stiffness
+        # rigid bodies whose member stiffness is transported to the master
+        # (rgbodfp.F + dtnoda.F — see ``add_rigid_body``/``_rigid_body_dt``):
+        # (member node indices, DD=|x-x_master|^2, body mass M, min inertia)
+        self._rbodies: List[Tuple[np.ndarray, np.ndarray, float, float]] = []
         self.mass_added = 0.0            # cumulative added mass
         self.e_madd = 0.0                # cumulative 0.5 dm v^2
         self.mom_added = np.zeros(3)     # cumulative dm * v
@@ -117,6 +121,68 @@ class NodalTimeStep:
         tied secondaries, RBE3 dependents): no dt claim, no mass add."""
         if len(idx):
             self.free[idx] = False
+
+    # ------------------------------------------------------------------
+    def add_rigid_body(self, nodes: np.ndarray, master: int, mass: float,
+                       inertia: np.ndarray, x0: np.ndarray) -> None:
+        """Register a rigid body so its member stiffness is TRANSPORTED to
+        the master node and gives the body its own nodal time step — the
+        thing that replaces the member nodes dropped by ``set_prescribed``.
+
+        Fortran origin: ``rgbodfp.F`` (IFLAG=1 gather, called from
+        ``rbyfor.F``) sums every slave's nodal stiffness onto the master —
+        translational ``STIFN(M) += Sum STIFN(slave)`` and rotational
+        ``STIFR(M) += Sum (STIFR(slave) + DD*STIFN(slave))`` with
+        ``DD = |x_slave - x_master|^2`` the Huygens-Steiner parallel-axis
+        transport of the slave spring to the master — then zeroes the
+        slaves (rgbodfp.F 741-755).  ``dtnoda.F`` then bounds the step with
+        the master's two nodal dts, ``sqrt(2 MS(M)/STIFN(M))`` (line 257)
+        and ``sqrt(2 IN(M)/STIFR(M))`` (line 469), where the Starter set
+        ``MS(M)`` = the body mass and ``IN(M) = MIN`` principal moment of
+        the body inertia (``inirby.F`` line 838).
+
+        Without this the port marks every member node prescribed and drops
+        its stiffness, so a stiff shell welded into a rigid body never
+        constrains dt (the M39 RD-E-1000 rolling bug: the port ran the
+        clamped strip 2.6x too fast).
+
+        ``DD`` is taken from the initial positions ``x0`` — a rigid body
+        preserves its inter-node distances, so ``|x-x_master|`` is constant
+        and equals its t=0 value (rgbodfp recomputes it from the current X
+        each cycle only because the generic gather cannot assume rigidity).
+
+        NOTE — the port's nodal-dt machinery accumulates only the
+        TRANSLATIONAL stiffness ``stifn`` (``sqrt(2 M/K)``); it has no
+        rotational-stiffness (``STIFR``) accumulator, so the transported
+        rotational stiffness here carries only rgbodfp's ``DD*STIFN`` term,
+        not the members' own drilling/bending ``STIFR(slave)``.  The body
+        rotational dt is therefore a mild OVER-estimate (on the RD-E-1000
+        BATOZ roll: 2.07e-2 vs the Fortran 1.64e-2 — both far below the
+        4.31e-2 the un-transported port used); the mechanism and the
+        governing entity (the master node) are exact.
+        """
+        nodes = np.asarray(nodes)
+        dd = ((x0[nodes] - x0[master]) ** 2).sum(axis=1)
+        in_min = float(np.linalg.eigvalsh(inertia)[0])
+        self._rbodies.append((nodes, dd, float(mass), in_min))
+
+    # ------------------------------------------------------------------
+    def _rigid_body_dt(self) -> float:
+        """The transported master nodal dt of every registered rigid body
+        (see ``add_rigid_body``): min over bodies of the translational
+        ``sqrt(2 M/K_tra)`` and rotational ``sqrt(2 IN/K_rot)`` steps, with
+        ``K_tra = Sum stifn`` and ``K_rot = Sum DD*stifn`` over the member
+        nodes.  Read from ``self.stifn`` BEFORE ``apply`` resets it."""
+        dt = EP30
+        for nodes, dd, mass, in_min in self._rbodies:
+            st = self.stifn[nodes]
+            k_tra = float(st.sum())
+            if k_tra > 0.0 and mass > 0.0:
+                dt = min(dt, float(np.sqrt(2.0 * mass / k_tra)))
+            k_rot = float((dd * st).sum())
+            if k_rot > 0.0 and in_min > 0.0:
+                dt = min(dt, float(np.sqrt(2.0 * in_min / k_rot)))
+        return dt
 
     # ------------------------------------------------------------------
     def assemble(self, dt_claims) -> None:
@@ -144,8 +210,12 @@ class NodalTimeStep:
         model = self.model
         loaded = (self.stifn > 0.0) & self.free
         if not np.any(loaded):
+            # no FREE node claims a step, but a rigid body's transported
+            # master dt still can (the RD-E-1000 case: every stiff shell is
+            # welded into the body) — never silently drop it
+            dt_rb = self._rigid_body_dt()
             self.stifn[:] = 0.0
-            return EP30
+            return dt_rb
 
         if self.cst and self.dt_min > 0.0:
             # mass needed so that dt_sca * sqrt(2 M / K) >= dt_min
@@ -176,8 +246,11 @@ class NodalTimeStep:
                     self._reported = frac
 
         dt_i = np.sqrt(2.0 * mass_eff[loaded] / self.stifn[loaded])
+        # the rigid bodies' transported master dts join the free-node min
+        # (rgbodfp.F/dtnoda.F — see add_rigid_body); a no-op with no /RBODY
+        dt = min(float(dt_i.min()), self._rigid_body_dt())
         self.stifn[:] = 0.0
-        return float(dt_i.min())
+        return dt
 
     # ------------------------------------------------------------------
     def summary(self, log) -> None:

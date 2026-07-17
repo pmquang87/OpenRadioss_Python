@@ -23,16 +23,49 @@ from ..model.model import Model
 _MULTIMAT_ALE_LAWS = {51, 151}
 
 
+# Laws whose RHO0 may legally be zero — the null-density MAT CHECK exempts
+# them (M39 / M38-NEW-2).  Two distinct reasons:
+#
+# * LAW0 (/MAT/VOID) is MASSLESS BY DESIGN.  The upstream reader
+#   ``starter/source/materials/mat/mat000/hm_read_mat00.F`` applies NO
+#   positivity check to RHO0 and explicitly guards the only place the
+#   density is divided by —  ``SDSP = SQRT(YOUNG/MAX(RHOR,EM20))`` — so a
+#   void card with RHO0 = 0 is legal and produces a zero sound speed, not
+#   an error.  The cfg agrees and is the sharpest evidence: every load-
+#   bearing law's cfg CHECK block demands ``MAT_RHO > 0`` (e.g.
+#   matl2_plas_johns.cfg) while ``MAT/matl_void0.cfg`` demands only
+#   ``MAT_RHO >= 0``.  A void element contributes zero mass and zero
+#   stress: dummy contact skins, airbag reference geometry, parts replaced
+#   by a rigid body.  The port's fatal here was a false positive on the
+#   RD-E-2700 Football decks (BAT_CIR / BAT_SQR), whose /MAT/VOID/12 skin
+#   shells carry RHO0 = 0 verbatim;
+# * the multimaterial ALE family carries its density on the submaterials
+#   (see _MULTIMAT_ALE_LAWS above).
+_NULL_RHO0_OK_LAWS = frozenset({0} | _MULTIMAT_ALE_LAWS)
+
+
 # element family -> material laws its kernels implement (see the
-# materials package dispatch; extending a kernel means extending this map)
+# materials package dispatch; extending a kernel means extending this map).
+#
+# LAW0 (/MAT/VOID) is legal on EVERY family here, matching the upstream
+# compatibility declaration in hm_read_mat00.F, which tags the void law
+# SOLID_ISOTROPIC / SHELL_ISOTROPIC / SPRING_MATERIAL / BEAM_ALL / TRUSS /
+# SPH — i.e. all of them (M39 / M38-NEW-2, closing the M38 prop-pack OPEN
+# item: /PROP/VOID was already made universally family-compatible by
+# ``prop_reader.prop_type_ok``, but the MATERIAL half still rejected LAW0
+# on /BEAM and /TRUSS, so a void beam passed the property check and failed
+# the material one).  The truss/beam kernels honour it: a void material's
+# E = G = 0 makes every resultant identically zero (the void semantics)
+# and their density divisions are guarded exactly as hm_read_mat00.F
+# guards its own — see elements/truss.py and elements/beam_type3.py.
 _ALLOWED_LAWS = {
     "bricks": {0, 1, 2, 24, 35, 36, 40, 42, 44, 62, 70, 81, 999},
     "tetras": {0, 1, 2, 24, 35, 36, 40, 42, 44, 62, 70, 81, 999},
     "shells": {0, 1, 2, 19, 27, 36, 44},
     "sh3n": {0, 1, 2, 19, 27, 36, 44},
-    "trusses": {1, 2},
+    "trusses": {0, 1, 2},
     "springs": None,          # springs ignore their material entirely
-    "beams": {1, 2},
+    "beams": {0, 1, 2},
 }
 
 
@@ -60,17 +93,20 @@ def check_model(model: Model, log: MessageLog) -> None:
                           f"state (P0, gamma) — a bare gas card has no "
                           f"element pressure", "MAT CHECK")
             rho0 = getattr(mat, "rho0", 0.0) or 0.0
-            if rho0 <= 0.0 and mat.law not in _MULTIMAT_ALE_LAWS:
+            if rho0 <= 0.0 and mat.law not in _NULL_RHO0_OK_LAWS:
                 # M37: a used material MUST carry a positive initial
                 # density — element masses cannot be initialized without
                 # it (the reference Starter raises the same fatal check).
-                # M38 / M37-BUG-2: the multimaterial ALE family (LAW51,
-                # LAW151/MULTIFLUID) is EXEMPT — its density lives on the
-                # submaterial references + volume fractions, not the
-                # top-level RHO0, so a blank RHO0 is legal there (the
-                # upstream Starter does not fatal it either).  These laws
-                # are also 'inactive' in the port, so they fall through to
-                # the physics-not-implemented warning below.
+                # EXEMPT (see _NULL_RHO0_OK_LAWS): the multimaterial ALE
+                # family (LAW51, LAW151/MULTIFLUID — M38 / M37-BUG-2),
+                # whose density lives on the submaterial references +
+                # volume fractions rather than the top-level RHO0; and
+                # LAW0 / /MAT/VOID (M39 / M38-NEW-2), which is massless by
+                # design — upstream applies no RHO0 check to it at all and
+                # its cfg demands only MAT_RHO >= 0.  The ALE laws are
+                # also 'inactive' in the port, so they fall through to the
+                # physics-not-implemented warning below; VOID is active
+                # and falls through to the family check.
                 law_name = getattr(mat, "law_name", None) \
                     or f"LAW{mat.law}"
                 log.error(f"/MAT/{law_name}/{mat.id} on {name} elements: "

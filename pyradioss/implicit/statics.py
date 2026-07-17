@@ -509,9 +509,13 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
 
     # statics carries no rate effects: disable the solid bulk viscosity
     # (see the module docstring — it would leak a spurious rate pressure
-    # into compressive increments through the pseudo-velocity drive)
+    # into compressive increments through the pseudo-velocity drive) and the
+    # shell chvis3 QUADRATIC viscous hourglass damper (the same rate device,
+    # driven at dt = 1 it would grow the residual with a spurious O(u^2)
+    # hourglass force — see shell_bt4.forces() _impl_static_hg gate).
     nvisc = 0
     for name, group in model.element_groups():
+        group.state["_impl_static_hg"] = True
         for sl, mat, prop in group.state["slices"]:
             if prop.params.get("qa", 0.0) or prop.params.get("qb", 0.0):
                 prop.params["qa"] = 0.0

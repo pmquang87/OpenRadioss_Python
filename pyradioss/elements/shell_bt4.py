@@ -54,31 +54,57 @@ Theory (Belytschko, Lin & Tsay, CMAME 42 (1984) 225-251; also BLM ch. 9):
   operators above (each B-term in a rate produces the matching force
   term; see the code, it is written line by line against the rates).
 
-* **Hourglass control** (chour3): one-point quadrature leaves 5 zero-
+* **Hourglass control** (chvis3.F): one-point quadrature leaves 5 zero-
   energy modes (2 membrane, 1 transverse 'w', 2 bending) with the pattern
   h = (1,-1,1,-1). The stabilizing shape vector is orthogonalized against
   the linear field (Flanagan-Belytschko), gamma_i = h_i - (h.x) B1i -
   (h.y) B2i, so pure deformation and rigid motion produce no hourglass
-  force. **Stiffness type** (the BLT84 paper's own control, and the
-  Radioss default): each mode carries a persistent generalized force Q
-  integrated in rate form,
+  force — this matches chvis3.F's GAMA1..GAMA4 (lines 122-140) exactly.
 
-      Q += k_mode * (gamma . velocity) * dt,   f_i = -Q * gamma_i
+  cforc3.F (lines 593-638) dispatches the control by Ishell (IHBE):
+  IHBE == 2 -> chsti3.F (pure stiffness + plastic FMAX caps), every other
+  Ishell -> **chvis3.F**, which is the /PROP/SHELL default and what this
+  file implements. The engine pins HELAS = HVISC = 1/2 and **HVLIN = 0**
+  (radioss2.F lines 638-640), so chvis3's LINEAR (sound-speed) viscous
+  branch vanishes identically and each mode carries an ELASTIC stiffness
+  plus a **QUADRATIC viscous damper**:
 
-  with the stiffness scaled from the matching physical stiffness of the
-  element (the classic BLT84 / LS-DYNA calibration constants):
+      SHFPR3   = SHF / (3 (1 + nu))                        (chvis3 l.143)
+      (B1+B2)  = PX1^2 + PY1^2 + PX2^2 + PY2^2             (chvis3 l.174)
 
-      membrane   k_m = hm * E  t   A (B1.B1 + B2.B2) / 8
-      transverse k_w = hf * kGA/t->  kappa G t A (B1.B1 + B2.B2) / 8
-      bending    k_r = hr * E t^3 A (B1.B1 + B2.B2) / 192
+      elastic   hh1 = hm E t / 8                  modes 0,1 (membrane)
+                hh2 = hf E SHFPR3 t^3 / (8 (B1+B2))  mode 2 (bending)
+      viscous   h1q = (25/2) rho hm t sqrt(A)      modes 0,1
+                h2q = (25/2) rho hf sqrt(SHFPR3) t^2  mode 2
+                h3q = (25/2) 0.072169 rho hr t^2 A  modes 3,4
 
-  Unlike the M1 viscous form, stiffness control stores (rather than
-  dissipates) the hourglass energy — coarse dynamic bending is no longer
-  artificially damped. Q is a scalar modal amplitude, so it transports
-  exactly under the corotational frame (no rotation bookkeeping needed).
-  The added frequency is O(sqrt(hm)) of the membrane one (~10% at the
-  default hm = 0.01), comfortably inside the /DT scale factor 0.9 —
-  verified by the rigid-body and vibration validations in tests/.
+      Q += hh * (gamma . v) * dt                   (elastic, persistent)
+      F  = Q + qd * hq * |qd|                      (+ quadratic damper)
+      f_i = -F * gamma_i
+
+  The rotation modes 3,4 are **purely viscous** (chvis3 lines 332-334
+  ASSIGN rather than accumulate: no elastic branch at all) and their modal
+  rate uses the RAW h = (1,-1,1,-1) pattern, not gamma (lines 327-330).
+
+  Upstream stores the gradient operators AREA-scaled (cderi3.F l.172:
+  PX1 = (Y2-Y4)/2, i.e. PX = A * B with B this file's operator), so
+  (B1+B2)_upstream = A^2 * bb / 2 and the ELASTIC coefficients carry no
+  area factor whatever. Before M39 this file used the LS-DYNA **BLT84**
+  calibration (k_m = hm E t A bb / 8, k_w = hf kappa G t A bb / 8,
+  k_r = hr E t^3 A bb / 192) — a different code's hourglass. That was
+  wrong three ways: the membrane stiffness ran A*bb (~2) high, the
+  transverse one ~3 (B1+B2)^2/(A t^2) high (~300x at box_beam's L/t = 10),
+  and — the one that showed up in validation — it was purely ELASTIC, so
+  it STORED the hourglass energy and dissipated none: the M36 box_beam
+  hourglass energy came out at 0.04 % of the total against the Fortran's
+  4.4 %. The quadratic dampers above are where that 4.4 % lives; the
+  earlier reading that the port's hourglass stiffness was "~2 orders low"
+  had the sign of the stiffness error backwards — it was the DISSIPATION
+  that was missing, not the stiffness (M39).
+
+  Triangles (a degenerate quad, node 3 == node 4) take no hourglass at all
+  — chvis3.F lines 181-192 zero every coefficient. shell_tri3.py is fully
+  integrated and has no hourglass block for the same reason.
 
 * **Lumped inertia**: m_i = rho t A / 4; rotational inertia
   I_i = m_i (t^2 + A) / 12 — deliberately generous (Key's trick) to push
@@ -115,6 +141,27 @@ from ..common.fastmath import cross3, norm3, scatter_add3
 
 # side-index helper for the characteristic length: side i = (i, i+1)
 _NEXT = np.array([1, 2, 3, 0])
+
+#: raw hourglass pattern h = (1,-1,1,-1) — chvis3.F applies it UNMODIFIED
+#: to the rotation modes (lines 327-330: HG1 = RX1-RX2+RX3-RX4), unlike the
+#: translation modes which ride the FB-orthogonalized gamma.
+_HRAW = np.array([1.0, -1.0, 1.0, -1.0])
+
+#: chvis3.F quadratic-viscous prefactor: R1 * HVISC = (100/4 rho) * (1/2)
+#: -> 25/2 per unit rho (chvis3 lines 144-157, radioss2.F HVISC = HALF).
+_HQ = 12.5
+
+#: constant_mod.F ZEP072169 = ZEP07+TWOEM3+EM04+SIXEM5+NINEEM6 — the
+#: rotational hourglass calibration of chvis3.F/chsti3.F.
+_ZEP072169 = 0.072169
+
+#: IMPLICIT-ONLY rotational-hourglass regularization fraction (tangent()).
+#: chvis3's rotation modes are purely viscous, so they contribute no
+#: stiffness; a tangent still needs the (1,-1,1,-1) thx/thy mode
+#: constrained or the implicit matrix is singular. 1.0 keeps the historic
+#: (pre-M39) BLT84 rotational stiffness, which the M8/M9 implicit shell
+#: validations were built on — it is a conditioning device, not physics.
+_HG_ROT_REG = 1.0
 
 
 # ----------------------------------------------------------------------------
@@ -237,6 +284,16 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
     BBt[:, 1, 2] = BBt[:, 2, 1] = Sxy
     fac = np.ones(n)
     for sl, mat, prop in slices:
+        if not (mat.rho0 > 0.0 and mat.E > 0.0):
+            # stiffness-free / massless material (a /MAT/VOID skin shell —
+            # legally RHO0 = 0 and E = 0, see starter/checks.
+            # _NULL_RHO0_OK_LAWS): the element claims no time step at all
+            # (upstream lc/SSP with SSP = 0), so the correction ratio is
+            # moot — keep 1 instead of dividing by the null density.  The
+            # exact twin of the guard solid_hexa8._exact_dt_factor already
+            # applies for the same material (M39 / M38-NEW-2).
+            fac[sl] = 1.0
+            continue
         Ep = mat.E / (1.0 - mat.nu ** 2)
         C = np.array([[Ep, mat.nu * Ep, 0.0],
                       [mat.nu * Ep, Ep, 0.0],
@@ -290,6 +347,14 @@ def init_group(group, model, log):
         # persistent hourglass generalized forces (stiffness control):
         # columns = [membrane-x, membrane-y, transverse-w, theta-x, theta-y]
         hgq=np.zeros((n, 5)),
+        # accumulated IMPLICIT rotation-hourglass modal displacement
+        # (local theta-x, theta-y) — the static-stabilization state, the
+        # rotation-mode analogue of solid_hexa8's hgq. chvis3's rotation
+        # hourglass is purely viscous, so the implicit residual must supply
+        # its own ELASTIC rotation stabilization to match tangent()'s k_r
+        # regularization (see static_stabilization). Unused by the explicit
+        # path (its rotation hourglass is the viscous damper of _post).
+        hgq_rot=np.zeros((n, 2)),
         zw=zw,
         # exact stability correction to the lc/c estimate (see helper)
         dtfac=_exact_dt_factor(B1, B2, area, _char_length(xl, area),
@@ -465,14 +530,22 @@ def _pre(xe, ve, vre, off):
 
 
 def _post(E, area, B1, B2, gam, V, Nres, Mres, qres, Q,
-          k_m, k_w, k_r, dt):
-    """Resultants -> nodal forces/moments, BLT84 stiffness hourglass and
-    the back-transform to global axes — the czforc3/chour3 part of the
+          k_m, k_w, hqm, hqb, hqr, dt):
+    """Resultants -> nodal forces/moments, chvis3.F hourglass and the
+    back-transform to global axes — the czforc3/chvis3 part of the
     cycle, everything AFTER the layer loop. ``Q`` is the persistent
-    hourglass state st["hgq"], updated IN PLACE; k_m/k_w/k_r arrive
-    pre-masked by ``alive``. Returns (fg, mg, dehg): global nodal
-    forces/moments (n,4,3) ready to scatter, and the stored hourglass
-    energy increment. Mirrored by accel.jit_kernels.shell_post."""
+    ELASTIC hourglass state st["hgq"], updated IN PLACE; the five
+    coefficients arrive pre-masked by ``alive``:
+
+    * ``k_m``/``k_w`` — elastic stiffness of the membrane / bending modes
+      (chvis3 HH1/HH2); the rotation modes have NO elastic branch;
+    * ``hqm``/``hqb``/``hqr`` — quadratic viscous coefficients (H1Q/H2Q/
+      H3Q), the dissipative branch.
+
+    Returns (fg, mg, dehg): global nodal forces/moments (n,4,3) ready to
+    scatter, and the hourglass energy increment (elastic stored + viscous
+    dissipated, exactly chvis3's EHOU). Mirrored by
+    accel.jit_kernels.shell_post."""
     n = len(area)
 
     # ---- internal nodal forces & moments (transpose of the rates) ---------
@@ -488,29 +561,40 @@ def _post(E, area, B1, B2, gam, V, Nres, Mres, qres, Q,
     m[:, :, 1] = A_ * (B1 * Mres[:, 0:1] + B2 * Mres[:, 2:3]
                        + 0.25 * qres[:, 0:1])
 
-    # ---- hourglass control (chour3, BLT84 stiffness type — module doc) ----
-    # all five modes at once: modal velocities qd = gamma . (local rates),
-    # stiffness per mode [k_m, k_m, k_w, k_r, k_r]; each mode integrates
-    # Q += k*qd*dt and pushes back f = -Q*gamma (translations x/y/w from
-    # columns 0-2, rotations thx/thy from columns 3-4).
+    # ---- hourglass control (chvis3.F — module doc) ------------------------
+    # translation modes 0,1,2 ride the FB-orthogonalized gamma (chvis3
+    # lines 277-284 / 308-313); the rotation modes 3,4 ride the RAW
+    # h = (1,-1,1,-1) pattern (chvis3 lines 327-330 use RX1-RX2+RX3-RX4).
     qd = np.einsum("ni,nik->nk", gam, V)               # (n, 5)
-    kvec = np.empty((n, 5))
-    kvec[:, 0] = k_m
-    kvec[:, 1] = k_m
-    kvec[:, 2] = k_w
-    kvec[:, 3] = k_r
-    kvec[:, 4] = k_r
-    q_old = Q.copy()
-    Q += kvec * qd * dt
-    # stored hourglass energy increment: midpoint force x modal rate
-    dehg = 0.5 * ((q_old + Q) * qd).sum(axis=1) * dt
+    qd[:, 3:] = (V[:, 0, 3:] - V[:, 1, 3:]
+                 + V[:, 2, 3:] - V[:, 3, 3:])          # raw h . (thx, thy)
+
+    # elastic branch: persistent, modes 0-2 only (Q += HH*qd*dt).
+    Q[:, 0] += k_m * qd[:, 0] * dt
+    Q[:, 1] += k_m * qd[:, 1] * dt
+    Q[:, 2] += k_w * qd[:, 2] * dt
+    Q[:, 3:] = 0.0            # rotation carries no elastic hourglass state
+
+    # total modal force = elastic + quadratic viscous damper qd*HQ*|qd|
+    # (chvis3 lines 288/293/316/333-334). The rotation force is the damper
+    # alone — chvis3 ASSIGNS HOUR(4..5) rather than accumulating them.
+    F = np.empty((n, 5))
+    F[:, 0] = Q[:, 0] + qd[:, 0] * hqm * np.abs(qd[:, 0])
+    F[:, 1] = Q[:, 1] + qd[:, 1] * hqm * np.abs(qd[:, 1])
+    F[:, 2] = Q[:, 2] + qd[:, 2] * hqb * np.abs(qd[:, 2])
+    F[:, 3] = qd[:, 3] * hqr * np.abs(qd[:, 3])
+    F[:, 4] = qd[:, 4] * hqr * np.abs(qd[:, 4])
+    # hourglass energy: EHOU = dt * sum_modes F * qd (chvis3 l.298/321/335
+    # -337). The elastic part swings both ways (stored), the viscous part
+    # is sign-definite (dissipated) — their sum is the reported HE.
+    dehg = (F * qd).sum(axis=1) * dt
 
     # total local force = -(internal) + hourglass, back to global frame
     fl = -f
-    fl -= gam[:, :, None] * Q[:, None, :3]
+    fl -= gam[:, :, None] * F[:, None, :3]
     ml = -m
-    ml[:, :, 0] -= gam * Q[:, 3:4]
-    ml[:, :, 1] -= gam * Q[:, 4:5]
+    ml[:, :, 0] -= _HRAW * F[:, 3:4]
+    ml[:, :, 1] -= _HRAW * F[:, 4:5]
     # back to global axes: fg[n,i,b] = sum_a fl[n,i,a] E[n,b,a]
     Et = E.transpose(0, 2, 1)
     fg = fl @ Et
@@ -597,30 +681,53 @@ def forces(group, x, v, vr, dt, fint, mint):
             st["hgq"][dead] = 0.0
     qres = st["qshear"] * thick[:, None]            # shear force / length
 
-    # per-mode hourglass stiffness, scaled from the element's physical
-    # membrane / transverse-shear / bending stiffness (BLT84 constants);
-    # deleted elements exert no hourglass force (their Q was wiped above)
-    k_m = np.zeros(n)
-    k_w = np.zeros(n)
-    k_r = np.zeros(n)
+    # ---- hourglass coefficients (chvis3.F — see the module docstring) ------
+    # elastic HH1/HH2 and quadratic-viscous H1Q/H2Q/H3Q, with the engine's
+    # HELAS = HVISC = 1/2, HVLIN = 0. (B1+B2) is upstream's AREA-scaled
+    # PX1^2+PY1^2+PX2^2+PY2^2 = A^2 * bb / 2 (cderi3.F l.172).
+    # Deleted elements exert no hourglass force (their Q was wiped above).
+    k_m = np.zeros(n)      # HH1 elastic membrane stiffness  (modes 0,1)
+    k_w = np.zeros(n)      # HH2 elastic bending  stiffness  (mode 2)
+    hqm = np.zeros(n)      # H1Q quadratic viscous, membrane (modes 0,1)
+    hqb = np.zeros(n)      # H2Q quadratic viscous, bending  (mode 2)
+    hqr = np.zeros(n)      # H3Q quadratic viscous, rotation (modes 3,4)
+    b12 = np.maximum(area ** 2 * bb * 0.5, EM20)       # (B1+B2) upstream
     for sl, mat, prop in st["slices"]:
         p = prop.params
         t_sl = thick[sl]
-        k_m[sl] = p["hm"] * mat.E * t_sl * area[sl] * bb[sl] / 8.0
-        k_w[sl] = p["hf"] * SHEAR_FACTOR * mat.G * t_sl * area[sl] * bb[sl] / 8.0
-        k_r[sl] = p["hr"] * mat.E * t_sl ** 3 * area[sl] * bb[sl] / 192.0
-    k_m *= alive
-    k_w *= alive
-    k_r *= alive
+        rho = mat.rho0
+        shfpr3 = SHEAR_FACTOR / (3.0 * (1.0 + mat.nu))
+        k_m[sl] = p["hm"] * mat.E * t_sl / 8.0
+        k_w[sl] = p["hf"] * mat.E * shfpr3 * t_sl ** 3 / (8.0 * b12[sl])
+        hqm[sl] = _HQ * rho * p["hm"] * t_sl * np.sqrt(area[sl])
+        hqb[sl] = _HQ * rho * p["hf"] * np.sqrt(shfpr3) * t_sl ** 2
+        hqr[sl] = _HQ * _ZEP072169 * rho * p["hr"] * t_sl ** 2 * area[sl]
+    if st.get("_impl_static_hg"):
+        # IMPLICIT residual (statics/dynamics): the quadratic viscous
+        # hourglass damper qd*HQ*|qd| is a RATE device. The implicit driver
+        # feeds the displacement INCREMENT as a pseudo-velocity at dt = 1
+        # (see implicit/statics._internal_forces), so the O(v^2) damper
+        # becomes a spurious O(u^2) static force that does NOT vanish at the
+        # equilibrium displacement — it grows the residual after an otherwise
+        # correct Newton step and the solve never converges. It is disabled
+        # here exactly as the driver disables the solid bulk viscosity
+        # (qa/qb): the ELASTIC chvis3 hourglass (HH1/HH2, linear in u) is the
+        # genuine stabilization and stays, matched bit-for-bit by tangent().
+        # The explicit engine never sets this flag (byte-identical path).
+        hqm[:] = 0.0
+        hqb[:] = 0.0
+        hqr[:] = 0.0
+    for _c in (k_m, k_w, hqm, hqb, hqr):
+        _c *= alive
 
     # ---- post block: forces, hourglass, back-transform ---------------------
     jit = accel_get("shell_post")
     if jit is not None:
         fg, mg, dehg = jit(E, area, B1, B2, gam, V, Nres, Mres, qres,
-                           st["hgq"], k_m, k_w, k_r, dt)
+                           st["hgq"], k_m, k_w, hqm, hqb, hqr, dt)
     else:
         fg, mg, dehg = _post(E, area, B1, B2, gam, V, Nres, Mres, qres,
-                             st["hgq"], k_m, k_w, k_r, dt)
+                             st["hgq"], k_m, k_w, hqm, hqb, hqr, dt)
 
     st["ehour"] += dehg
     st["eint"] += area * de_layers
@@ -797,13 +904,29 @@ def tangent(group, x, epsp_incr=None):
     # per-mode stiffness (identical formulas to forces()), fields ordered
     # [vx, vy, vz, thx, thy] -> [k_m, k_m, k_w, k_r, k_r]
     kfield = np.zeros((n, 5))
+    b12 = np.maximum(area ** 2 * bb * 0.5, EM20)       # (B1+B2) upstream
     for sl, mat, prop in st["slices"]:
         p = prop.params
         t_sl = thick[sl]
         A_sl = area[sl]
-        k_m = p["hm"] * mat.E * t_sl * A_sl * bb[sl] / 8.0
-        k_w = p["hf"] * SHEAR_FACTOR * mat.G * t_sl * A_sl * bb[sl] / 8.0
-        k_r = p["hr"] * mat.E * t_sl ** 3 * A_sl * bb[sl] / 192.0
+        shfpr3 = SHEAR_FACTOR / (3.0 * (1.0 + mat.nu))
+        # membrane/bending: the ELASTIC chvis3 branch (HH1/HH2), the exact
+        # linearization of the ELASTIC hourglass forces() integrates. The
+        # quadratic viscous damper forces() also emits is a RATE device
+        # (qd*HQ*|qd|, O(v^2)) that the implicit residual disables — so the
+        # tangent carries the elastic stiffness alone (see the module note
+        # on the implicit static hourglass, and forces()' _impl_static gate).
+        k_m = p["hm"] * mat.E * t_sl / 8.0
+        k_w = p["hf"] * mat.E * shfpr3 * t_sl ** 3 / (8.0 * b12[sl])
+        # rotation: chvis3's rotational hourglass is PURELY VISCOUS, so it
+        # contributes no stiffness and cannot appear in a tangent. Left
+        # unconstrained the (1,-1,1,-1) thx/thy pattern is a zero-energy
+        # mode of the whole local matrix (B1/B2 annihilate it) and the
+        # implicit solve goes singular, so the tangent keeps an explicit
+        # REGULARIZATION here of bending-stiffness order — the same role
+        # _DRILL_COEF plays for the drilling DOF, and implicit-only (the
+        # explicit path never sees it).
+        k_r = _HG_ROT_REG * p["hr"] * mat.E * t_sl ** 3 * A_sl * bb[sl] / 192.0
         kfield[sl, 0] = k_m
         kfield[sl, 1] = k_m
         kfield[sl, 2] = k_w
@@ -846,6 +969,97 @@ def tangent(group, x, epsp_incr=None):
         for c in range(6):
             edofs[:, i * 6 + c] = conn[:, i] * 6 + c
     return ke, edofs
+
+
+# ----------------------------------------------------------------------------
+# Implicit static hourglass stabilization — the residual counterpart of
+# tangent()'s rotation-hourglass regularization (M39).
+# ----------------------------------------------------------------------------
+# chvis3's rotation-hourglass modes (theta-x, theta-y with the (1,-1,1,-1)
+# pattern) are PURELY VISCOUS: the explicit _post emits them as the quadratic
+# damper qd*H3Q*|qd|, which the implicit residual disables (a rate device fed a
+# pseudo-velocity at dt = 1 — see forces()' _impl_static_hg gate). The membrane
+# and transverse-w hourglass modes carry a chvis3 ELASTIC stiffness (HH1/HH2)
+# that forces() emits linearly and tangent() matches bit-for-bit; the rotation
+# modes have NO elastic branch. tangent() therefore stabilizes the rotation
+# zero-energy mode with an explicit regularization k_r (of bending-stiffness
+# order — else the implicit matrix is singular on the (1,-1,1,-1) theta pattern,
+# and the modal/buckling eigensolvers would pick it up as a spurious near-zero
+# frequency). That k_r has no counterpart in the (viscous-disabled) residual, so
+# the two disagree and Newton stalls on the rotation DOFs. This restores the
+# MATCHING elastic rotation-hourglass MOMENT to the implicit residual —
+# exactly the consistent pre-M39 pairing, now split cleanly from the explicit
+# viscous damper — mirroring solid_hexa8.static_stabilization for the solid
+# stiffness hourglass. The stored modal displacement (hgq_rot) is persistent
+# across committed increments (the driver's snapshot machinery commits/restores
+# it with the stress), so a multi-increment run does not ratchet.
+
+def _static_rot_hourglass(group, x, ur, mint):
+    """Assemble the implicit elastic rotation-hourglass MOMENT into ``mint``,
+    the residual counterpart of tangent()'s k_r regularization (see the note
+    above). Shared by both implicit residual assemblers — static_stabilization
+    (the M8 small-strain path) and static_internal_forces (the M9 nonlinear-
+    geometry path) — so the rotation zero-energy mode is stabilized
+    CONSISTENTLY with the tangent in either geometry mode. The persistent modal
+    displacement ``hgq_rot`` is committed/restored with the stress by the
+    driver's snapshot machinery, so a multi-increment run does not ratchet.
+    ``x`` is the geometry the tangent is linearized at (x_ref for M8, the
+    trial end configuration for NLGEOM); ``ur`` the rotation increment."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    E, xl, area, B1, B2 = _local_geometry(x[conn])
+    area = np.maximum(area, EM20)
+    thick = st["thick"]
+
+    # FB-orthogonalized hourglass shape vector gam (identical to tangent()/_pre)
+    hx = xl[:, 0, 0] - xl[:, 1, 0] + xl[:, 2, 0] - xl[:, 3, 0]
+    hy = xl[:, 0, 1] - xl[:, 1, 1] + xl[:, 2, 1] - xl[:, 3, 1]
+    gam = np.empty((n, 4))
+    gam[:, 0], gam[:, 1], gam[:, 2], gam[:, 3] = 1.0, -1.0, 1.0, -1.0
+    gam -= hx[:, None] * B1
+    gam -= hy[:, None] * B2
+    bb = (np.einsum("ni,ni->n", B1, B1)
+          + np.einsum("ni,ni->n", B2, B2))
+
+    # per-element rotation-hourglass stiffness k_r — the SAME formula as
+    # tangent(), masked by the alive flag (deleted elements exert no moment)
+    alive = st["off"] > 0.0
+    k_r = np.zeros(n)
+    for sl, mat, prop in st["slices"]:
+        p = prop.params
+        t_sl = thick[sl]
+        k_r[sl] = (_HG_ROT_REG * p["hr"] * mat.E * t_sl ** 3
+                   * area[sl] * bb[sl] / 192.0)
+    k_r *= alive
+
+    # local rotation increment (theta about e1, e2) and its modal amplitude
+    # a = gam . theta_local (the same projection tangent()'s GG = gam (x) gam
+    # linearizes; for a rectangle gam = (1,-1,1,-1), the raw _post pattern)
+    Vr = (ur[conn] @ E)[:, :, :2]                      # (n, 4, 2) local thx,thy
+    a = np.einsum("ni,nid->nd", gam, Vr)               # (n, 2) modal amplitude
+    q0 = st["hgq_rot"]                                 # committed base
+    F = k_r[:, None] * (q0 + a)                        # total elastic moment
+    q0[...] = q0 + a                                   # trial state, in place
+
+    # -gam (x) F back to global axes: moment about e1 <- F[:,0], e2 <- F[:,1]
+    ml = np.zeros((n, 4, 3))
+    ml[:, :, 0] = -gam * F[:, 0:1]
+    ml[:, :, 1] = -gam * F[:, 1:2]
+    mg = ml @ E.transpose(0, 2, 1)                     # local -> global
+    scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3))
+
+
+def static_stabilization(group, x, u, ur, fint, mint):
+    """Add the implicit elastic rotation-hourglass MOMENT to ``mint`` (the part
+    of the SMALL-STRAIN static residual forces() does not supply, because
+    chvis3's rotation hourglass is viscous — see the note above). Consistent
+    with the k_r block of tangent(); ``u``/``fint`` unused (the membrane/
+    transverse elastic hourglass forces() already emits and tangent() already
+    matches). Called by implicit/statics._internal_forces after forces() on the
+    M8 (nlgeom=False) path; the NLGEOM path folds the same term into
+    static_internal_forces instead (both go through _static_rot_hourglass)."""
+    _static_rot_hourglass(group, x, ur, mint)
 
 
 # ----------------------------------------------------------------------------
@@ -1037,10 +1251,21 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     gam -= hx[:, None] * B1
     gam -= hy[:, None] * B2
 
+    # dt = 0 and zero rates: every coefficient drops out, so _post reduces
+    # to the resultant->nodal-force transpose plus the -gamma*Q push-back of
+    # the ELASTIC membrane/transverse hourglass state (chvis3's rotation
+    # modes are viscous, so _post contributes nothing to them in a static
+    # residual — see the module doc).
     zeros_n = np.zeros(n)
     fg, mg, _ = _post(E, area, B1, B2, gam, np.zeros((n, 4, 5)),
                       Nres, Mres, qres, st["hgq"],
-                      zeros_n, zeros_n, zeros_n, 0.0)
+                      zeros_n, zeros_n, zeros_n, zeros_n, zeros_n, 0.0)
     flat = conn.reshape(-1)
     scatter_add3(fint, flat, fg.reshape(-1, 3))
     scatter_add3(mint, flat, mg.reshape(-1, 3))
+    # the elastic ROTATION-hourglass moment — the residual counterpart of
+    # tangent()'s k_r regularization, on the END geometry (the M8 path adds
+    # it via static_stabilization; NLGEOM folds it in here). Without it the
+    # tangent's k_r has no residual match and the nonlinear-geometry Newton
+    # stalls on the rotation DOFs exactly as the small-strain path did.
+    _static_rot_hourglass(group, x, ur, mint)

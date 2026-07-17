@@ -142,6 +142,15 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
     BBt[:, 1, 2] = BBt[:, 2, 1] = Sxy
     fac = np.ones(n)
     for sl, mat, prop in slices:
+        if not (mat.rho0 > 0.0 and mat.E > 0.0):
+            # stiffness-free / massless material (a /MAT/VOID skin sh3n —
+            # legally RHO0 = 0 and E = 0, see starter/checks.
+            # _NULL_RHO0_OK_LAWS): the element claims no time step at all
+            # (upstream lc/SSP with SSP = 0) — the same guard the solid
+            # and BT4 kernels apply for the same material
+            # (M39 / M38-NEW-2).
+            fac[sl] = 1.0
+            continue
         Ep = mat.E / (1.0 - mat.nu ** 2)
         C = np.array([[Ep, mat.nu * Ep, 0.0],
                       [mat.nu * Ep, Ep, 0.0],

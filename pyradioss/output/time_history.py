@@ -57,6 +57,12 @@ class TimeHistory:
         self._cols += [r[0] for r in self._node_req]
         self._cols += [r[0] for r in self._part_req]
         self._cols += [r[0] for r in self._sect_req]
+        # M39 output-path: the nodal DISPLACEMENT field (model.x - model.x0)
+        # is only read by a /TH/NODE 'D*' request. Building the whole (N, 3)
+        # difference every write when no such request exists is wasted work
+        # — a 72k-node global-only T-file (the gasket cliff deck) allocated
+        # and subtracted 1.7 MB per row for nothing. Resolve the need once.
+        self._need_disp = any(var[0] == "D" for _, _, var in self._node_req)
         self._fh.write("# pyradioss time history (T01 equivalent)\n")
         self._fh.write(",".join(self._cols) + "\n")
 
@@ -89,7 +95,7 @@ class TimeHistory:
                energies["CE"], energies["EN"], energies["DE"],
                energies["EW"], energies["ERR"], mass,
                momentum[0], momentum[1], momentum[2]]
-        disp = model.x - model.x0
+        disp = (model.x - model.x0) if self._need_disp else None
         for _, idx, var in self._node_req:
             comp = {"X": 0, "Y": 1, "Z": 2}[var[-1]]
             if var[0] == "D":

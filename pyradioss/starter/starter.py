@@ -28,7 +28,8 @@ from .initialization import (build_element_groups,
                              initialize_rigid_bodies,
                              resolve_entity_groups,
                              resolve_lines, resolve_materials,
-                             resolve_node_groups, resolve_surfaces)
+                             resolve_node_groups, resolve_skews,
+                             resolve_surfaces)
 from .restart import write_restart
 
 
@@ -116,6 +117,11 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
         resolve_surfaces(model, log)
         resolve_lines(model, log)     # after surfaces: /LINE/SURF reads them
         resolve_node_groups(model, log)
+        # reference systems (M39): built from the node positions, then
+        # bound to every consumer that names one (/BCS, /IMP*, /RBODY,
+        # /PROP TYPE8, /INIVEL/AXIS) — before the checks so an unknown
+        # skew_ID is reported with all the other model errors
+        resolve_skews(model, log)
 
         # 3. checks before any heavy work (fail early with ALL messages)
         check_model(model, log)

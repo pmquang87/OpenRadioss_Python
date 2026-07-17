@@ -257,6 +257,11 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     if noda is not None:
         for rb in rbodies:
             noda.set_prescribed(rb.nodes)
+            # ...but transport their member stiffness to the master so the
+            # body still claims a nodal dt (rgbodfp.F/dtnoda.F — otherwise a
+            # stiff shell welded into the body never constrains dt; the
+            # RD-E-1000 rolling bug). No-op where no /RBODY exists.
+            noda.add_rigid_body(rb.nodes, rb.master, rb.M, rb.J0, model.x0)
         for t2 in tied:
             noda.set_prescribed(t2.snode[t2.active])
         for r3 in rbe3s:
@@ -408,6 +413,15 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # ---- 0. sensors (M6): poll and latch before anything acts --------
         if len(sensors):
             sensors.update(state.t, log)
+
+        # ---- 0b. moving skews (M39, newskw.F) ----------------------------
+        # /SKEW/MOV and /SKEW/MOV2 are rebuilt from the nodes' CURRENT
+        # positions once per cycle, BEFORE the forces — exactly where
+        # resol.F calls NEWSKW ('MOVING SKEW [MONO THREAD]', resol.F 2653).
+        # Everything downstream (the TYPE8 spring frames, the skewed /BCS
+        # projection, the skewed imposed motion) reads the rows it writes,
+        # so a moving skew turns with its nodes. Free when nothing moves.
+        model.skews.update(model.x)
 
         # ---- 1. internal forces, element by element group ----------------
         fint[:] = 0.0

@@ -317,6 +317,10 @@ def _disable_rate_devices(model, log, nlg=False):
     explicit DEFERRED warning (never silently du/1)."""
     nvisc = 0
     for name, group in model.element_groups():
+        # shell chvis3 quadratic viscous hourglass damper is a rate device
+        # too — disable it in the pseudo-velocity residual exactly like the
+        # bulk viscosity (see shell_bt4.forces() _impl_static_hg gate).
+        group.state["_impl_static_hg"] = True
         for sl, mat, prop in group.state["slices"]:
             if prop.params.get("qa", 0.0) or prop.params.get("qb", 0.0):
                 prop.params["qa"] = 0.0

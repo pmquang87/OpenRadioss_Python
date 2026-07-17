@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..common.constants import EM20
+from ..common.constants import EM20, EP30
 from ..common.fastmath import norm3
 
 
@@ -65,8 +65,16 @@ def forces(group, x, v, vr, dt, fint, mint):
     c = np.zeros(group.n)
     for sl, mat, prop in st["slices"]:
         E = mat.E
-        c[sl] = np.sqrt(E / mat.rho0)
-        sig[sl] += E * deps[sl]                     # elastic trial
+        # sound speed sqrt(E/rho) with the density guarded exactly as the
+        # reference guards its own: hm_read_mat00.F computes
+        # SDSP = SQRT(YOUNG/MAX(RHOR,EM20)).  A /MAT/VOID truss (LAW0) is
+        # legally massless (RHO0 = 0 — see starter/checks._NULL_RHO0_OK_LAWS)
+        # and would otherwise turn the 0/0 into a NaN time step; with E = 0
+        # the guarded form gives c = 0, i.e. the element claims no time-step
+        # limit of its own, which is the void semantics (M39 / M38-NEW-2).
+        c[sl] = np.sqrt(E / max(mat.rho0, EM20))
+        sig[sl] += E * deps[sl]                     # elastic trial (E = 0
+        #                                             for VOID: no stress)
         if mat.law == 2:
             # 1-D radial return on the Johnson-Cook curve
             p = mat.params
@@ -94,7 +102,12 @@ def forces(group, x, v, vr, dt, fint, mint):
     np.add.at(fint, conn[:, 1], -fvec)
 
     st["eint"] += st["area"] * L * 0.5 * (sig_old + sig) * deps
-    return L / c
+    # dt = L/c.  A stiffness-free material (a /MAT/VOID truss, E = 0) has
+    # c = 0 and claims NO time-step limit of its own — the same convention
+    # the solid kernel documents for SSP = 0 (solid_hexa8._exact_dt_factor)
+    # and the spring uses for k = 0.  Returned as EP30 rather than letting
+    # the division produce a warned inf (M39 / M38-NEW-2).
+    return np.where(c > 0.0, L / np.maximum(c, EM20), EP30)
 
 
 # ----------------------------------------------------------------------------

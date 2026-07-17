@@ -1,0 +1,4191 @@
+{
+ "milestone": "M39",
+ "tolerance_rel_rms": 0.05,
+ "machine": "13th Gen Intel(R) Core(TM) i9-13900H",
+ "contention_note": "results with contended_timing=true had their wall clocks measured concurrently with the user's live 12-13-process MPI job (engine_win64_impi); ALL M39 records are contended (the job ran the whole sweep). Per-case impi process counts are in each record's impi_procs field. Parity classes and channel rel-RMS are deterministic and unaffected; a borderline case can only be pushed to SKIPPED-SLOW if contention exhausts the port budget.",
+ "comparison_note": "Fortran reference CSVs are CARRIED from M37 for c00..c51 (deterministic solver, unchanged binaries/decks) and GENERATED this round for c52+ (fresh Fortran run, or the deck's shipped T01); the port side is a FRESH M39 run. Channels are compared over the OVERLAP window [0, min(fortran, port) final time] interpolated onto the port grid (same semantics as M36/M37/M38). port_time_coverage = port final time / the deck's /RUN target; results < 1 carry a MATCH/DEVIATION label for only that fraction of the simulation.",
+ "results": [
+  {
+   "case": "antenna_mast",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 150.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 150.0,
+   "port_time_coverage": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "MATCH",
+   "max_rel_rms": 0.025674593896848306,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.014217849975363416,
+     "final_dev": 0.002260361832892585,
+     "scale": 6.136267173,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.01579226979295378,
+     "final_dev": 0.002909208405115244,
+     "scale": 6.095342941,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.004899260220914415,
+     "final_dev": 0.005177605979286784,
+     "scale": 6.145891002,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 11.037,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.025674593896848306,
+     "final_dev": 0.043100341927474854,
+     "scale": 9.339042756943705,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.477635736314883,
+     "final_dev": 0.02772048716266321,
+     "scale": 0.009815663909,
+     "significant": false
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.0347761734400231,
+     "final_dev": 0.07123749018845871,
+     "scale": 0.053737155798074046,
+     "significant": false
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.005201850455188216,
+     "final_dev": 0.005146390755820166,
+     "scale": 6.1407709849,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.014217849975363416,
+     "final_dev": 0.002260361832892585,
+     "scale": 6.136267173,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.015998115707438688,
+     "final_dev": 0.002917778051272812,
+     "scale": 6.095342941,
+     "significant": true
+    }
+   ],
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "box_beam_impact",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 1.0,
+   "port_time_coverage": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "DEVIATION",
+   "max_rel_rms": 0.9745352972492353,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.026289664009354657,
+     "final_dev": 0.043932623360135245,
+     "scale": 0.14240400868458214,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.010072541030874089,
+     "final_dev": 0.014418374540797052,
+     "scale": 0.156,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.09435884891069836,
+     "final_dev": 0.16100290765292474,
+     "scale": 0.008296070577,
+     "significant": true
+    },
+    {
+     "channel": "CE",
+     "rel_rms": 0.9549785715217407,
+     "final_dev": 0.9811754038260544,
+     "scale": 0.01131474418,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.9745352972492353,
+     "final_dev": 1.0,
+     "scale": 0.007845371,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.00312,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.006319379201219237,
+     "final_dev": 0.005104306410256398,
+     "scale": 0.0312,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.01696966775762527,
+     "final_dev": 0.025685354167620984,
+     "scale": 0.156,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.026289664009354657,
+     "final_dev": 0.043932623360135245,
+     "scale": 0.14240400868458214,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.007894098659603933,
+     "final_dev": 0.011183248712224194,
+     "scale": 0.156,
+     "significant": true
+    }
+   ],
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "edge_impact",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 4.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 4.0,
+   "port_time_coverage": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "DEVIATION",
+   "max_rel_rms": 0.4554759379564271,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.43676743423367825,
+     "final_dev": 0.9242697219039225,
+     "scale": 0.12239950315634462,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.41947367379079503,
+     "final_dev": 0.7134653764019213,
+     "scale": 0.0543586925965497,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.32187632349084316,
+     "final_dev": 0.9960975654803917,
+     "scale": 0.04405313350837597,
+     "significant": true
+    },
+    {
+     "channel": "CE",
+     "rel_rms": 0.10304537047638516,
+     "final_dev": 0.17601514603374366,
+     "scale": 0.006699250118929782,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.01248,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.196772352885199,
+     "final_dev": 0.1524754753087626,
+     "scale": 0.0008985459624644673,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.28566693401365967,
+     "final_dev": 0.2836582025442977,
+     "scale": 0.0005468509678530522,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.13333780063096412,
+     "final_dev": 0.1380631003567637,
+     "scale": 0.01693602553947662,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.4554759379564271,
+     "final_dev": 0.9126057313060554,
+     "scale": 0.1664609311626823,
+     "significant": true
+    }
+   ],
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "gas_piston",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 8.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 8.0,
+   "port_time_coverage": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(starter-reject)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": "starter-reject",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": "ERROR ID :     67 | ** ERROR IN EOS DEFINITION | DESCRIPTION : | -- EOS ID          : 1 | -- EOS KEY         : /EOS/IDEAL-GAS | INITIAL PRESSURE MUST BE POSITIVE",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "notched_plate",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.2,
+   "port_termination": "NORMAL",
+   "port_final_t": 1.2,
+   "port_time_coverage": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "DEVIATION",
+   "max_rel_rms": 0.3154109441455401,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.12043790008157432,
+     "final_dev": 0.215051710065706,
+     "scale": 6.339301149,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.2302827653505353,
+     "final_dev": 0.30484841577596633,
+     "scale": 0.005410711476008408,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.3154109441455401,
+     "final_dev": 0.4989927748652091,
+     "scale": 0.08156586637,
+     "significant": true
+    },
+    {
+     "channel": "CE",
+     "rel_rms": 0.6912998344031288,
+     "final_dev": 0.681735346971216,
+     "scale": 0.003609762331119572,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.12171169296349348,
+     "final_dev": 0.21712200320622901,
+     "scale": 6.421275578,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.0015132,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.20757884647060995,
+     "final_dev": 0.39474920528269686,
+     "scale": 0.002746762772,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.1204932845975341,
+     "final_dev": 0.21517769196074046,
+     "scale": 6.3432551353169995,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.12043790008157432,
+     "final_dev": 0.215051710065706,
+     "scale": 6.339301149,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.2273352434566718,
+     "final_dev": 0.30861596235761823,
+     "scale": 0.00550345495406986,
+     "significant": false
+    }
+   ],
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "rigid_impactor",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 6.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 6.0,
+   "port_time_coverage": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "DEVIATION",
+   "max_rel_rms": 0.9645769768573339,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.1058008569846278,
+     "final_dev": 0.03642831163444341,
+     "scale": 0.0001417373961,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.879656795245082,
+     "final_dev": 0.7622665105204335,
+     "scale": 0.0001499829922,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.4162444218120556,
+     "final_dev": 0.9999999913801421,
+     "scale": 5.862660108e-07,
+     "significant": false
+    },
+    {
+     "channel": "CE",
+     "rel_rms": 0.6493326482502504,
+     "final_dev": 0.9216951482647834,
+     "scale": 2.811876801e-06,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.5430686464572114,
+     "final_dev": 0.10449074235931442,
+     "scale": 2.387027737e-05,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.0029288,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.30037017733341953,
+     "final_dev": 0.2738735335655022,
+     "scale": 3.813059931e-09,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.3003451161364845,
+     "final_dev": 0.27386075856754427,
+     "scale": 3.813077348e-09,
+     "significant": false
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.9645769768573339,
+     "final_dev": 1.0176702972454765,
+     "scale": 0.0008580205725,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.9028384640999383,
+     "final_dev": 0.796692098914284,
+     "scale": 0.00014998299380642995,
+     "significant": true
+    }
+   ],
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "rubber_block",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 3.5,
+   "port_termination": "NORMAL",
+   "port_final_t": 3.5,
+   "port_time_coverage": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "MATCH",
+   "max_rel_rms": 0.0009554329589538454,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.0008890970739896451,
+     "final_dev": 0.0007530216793877172,
+     "scale": 0.5151274002036063,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.0009621275915105519,
+     "final_dev": 5.37502500123647e-07,
+     "scale": 0.001166781432,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.011574700638973713,
+     "final_dev": 0.02273255289454037,
+     "scale": 8.378193214407191e-05,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.00027614327636508296,
+     "final_dev": 0.0004335095280681864,
+     "scale": 0.5150362,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.001,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.0009554329589538454,
+     "final_dev": 2.7679396713531502e-05,
+     "scale": 0.001189567857,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.0008898322491395385,
+     "final_dev": 0.0007530197687467464,
+     "scale": 0.5151278743950294,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.0008890970739896451,
+     "final_dev": 0.0007530216793877172,
+     "scale": 0.5151274002036063,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.004279154518205297,
+     "final_dev": 7.399541606769022e-07,
+     "scale": 0.0011677868512582057,
+     "significant": false
+    }
+   ],
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "spot_weld",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 1.0,
+   "port_time_coverage": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "DEVIATION",
+   "max_rel_rms": 0.9870299528479334,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.15967459847571472,
+     "final_dev": 0.3263781366301843,
+     "scale": 30.714449942946654,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.07179628098570157,
+     "final_dev": 0.00026479097374825314,
+     "scale": 938.8201185488483,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.07997128237612808,
+     "final_dev": 0.035678157905837254,
+     "scale": 7.004352782111651,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.4259531703016121,
+     "final_dev": 0.975679024442632,
+     "scale": 10.27919293,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.00936,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.9686997789367284,
+     "final_dev": 0.981725731296,
+     "scale": 0.25,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.9870299528479334,
+     "final_dev": 1.0000013583457297,
+     "scale": 0.25,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.987029282303069,
+     "final_dev": 1.0,
+     "scale": 0.25,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.0719452367761854,
+     "final_dev": 0.010765194166932949,
+     "scale": 908.1056686059017,
+     "significant": true
+    }
+   ],
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "tensile_bar",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 0.2,
+   "port_termination": "NORMAL",
+   "port_final_t": 0.2,
+   "port_time_coverage": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "MATCH",
+   "max_rel_rms": 0.001724068762275621,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.00028796864679561814,
+     "final_dev": 0.00031834584446574336,
+     "scale": 0.3118180374764601,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.001846977773099096,
+     "final_dev": 1.7587541541520973e-05,
+     "scale": 7.779157365e-05,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.000592322528962679,
+     "final_dev": 0.0005024136619238991,
+     "scale": 0.000154109059,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 3.311474073917052e-06,
+     "final_dev": 3.7853577006656674e-07,
+     "scale": 0.3120257264128986,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.000312,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.001724068762275621,
+     "final_dev": 2.0577542452638187e-05,
+     "scale": 0.0001990054399,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.0002878915112101541,
+     "final_dev": 0.00031828899037403106,
+     "scale": 0.3118694372081875,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.00028796864679561814,
+     "final_dev": 0.00031834584446574336,
+     "scale": 0.3118180374764601,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.002765041945765577,
+     "final_dev": 0.00048398130777835074,
+     "scale": 7.779157365e-05,
+     "significant": false
+    }
+   ],
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "brake_pad",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "complex_modes",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "evolutionary_fatigue",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "evolutionary_multi_input",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "exact_covariance_fatigue",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "freq_evolutionary_multi_input",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "implicit_cantilever",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "implicit_clamp",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "implicit_pendulum",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 748.879,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "implicit_press",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "implicit_ringdown",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 120.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "joint_evolutionary_fatigue",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "joint_nongaussian_fatigue",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "modal_frf",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "modal_mast",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "multi_input_random",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "multiaxial_fatigue",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "nongaussian_fatigue",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "nongaussian_wigner_ville_fatigue",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "nonproportional_fatigue",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "nonstationary_fatigue",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "random_vibration",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "snap_catch",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "snap_through",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "spectral_fatigue",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "spectral_nonproportional_fatigue",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "wigner_ville_fatigue",
+   "suite": "bundled",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 1.0,
+   "case_id": null,
+   "group": null,
+   "m36_classification": null,
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": null,
+   "engine_deck_chain": null,
+   "unsupported_hard_m36": null,
+   "unsupported_soft": null
+  },
+  {
+   "case": "c01_E0500_Beam_frame",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 10.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 10.0,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_e/RD-E-0500_Beam_frame/05_Beam-frame/FRAME_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.9995136663203248,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.8094193459059202,
+     "final_dev": 0.9684440748600105,
+     "scale": 149984.4411979914,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.4370030079778631,
+     "final_dev": 0.03162947719342872,
+     "scale": 150000.484507731,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.7568082304789947,
+     "final_dev": 0.5859266364056216,
+     "scale": 127.98201232156943,
+     "significant": false
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.9443155978273187,
+     "final_dev": 0.9443155978273187,
+     "scale": 3176.904,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.17715160170780694,
+     "final_dev": 0.06522009552716747,
+     "scale": 0.000775946051308112,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.20495742466747172,
+     "final_dev": 0.057668117375429255,
+     "scale": 0.0015125600439189926,
+     "significant": false
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.5207306786754715,
+     "final_dev": 0.1743341309298244,
+     "scale": 30136.299852318392,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.9995136663203248,
+     "final_dev": 0.9998271611706433,
+     "scale": 150021.90991441242,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.8094193459059202,
+     "final_dev": 0.9684440748600105,
+     "scale": 149984.4411979914,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.3136652966416888,
+     "final_dev": 0.010439637455024024,
+     "scale": 2026.2701919337721,
+     "significant": true
+    }
+   ],
+   "shell_family": false,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "SUBSET",
+    "TH/BEAM"
+   ]
+  },
+  {
+   "case": "c02_E1000_Bending_BATOZ_Sf_0.6",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 1605.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 1605.0,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BATOZ/Sf_0.6/ROLLING_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.5535050619336117,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.41111975453688837,
+     "final_dev": 1.0,
+     "scale": 1481270.9043253968,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.5289726887606861,
+     "final_dev": 0.1420131687997702,
+     "scale": 788.0721685927411,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.4112229524867769,
+     "final_dev": 1.0,
+     "scale": 1481383.921031746,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.04991239929554598,
+     "final_dev": 1.0,
+     "scale": 0.00436836077825396,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.534040614930456,
+     "final_dev": 0.216875921525866,
+     "scale": 1602.4181597770428,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.5535050619336117,
+     "final_dev": 0.11792857937964352,
+     "scale": 1742.6959512151595,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.4112227182790951,
+     "final_dev": 1.0,
+     "scale": 1481382.8209513016,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.41111975453688837,
+     "final_dev": 1.0,
+     "scale": 1481270.9043253968,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.5289726190595416,
+     "final_dev": 0.14200578679946746,
+     "scale": 788.0721745265691,
+     "significant": false
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c03_E1000_Bending_BATOZ_Sf_0.8",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 1605.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 1605.0,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BATOZ/Sf_0.8/ROLLING_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.5541167293799433,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.41112955095574194,
+     "final_dev": 1.0,
+     "scale": 1477062.5640664652,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.5298639234139728,
+     "final_dev": 0.1410236430859304,
+     "scale": 786.609539202856,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.4112333360823894,
+     "final_dev": 1.0,
+     "scale": 1477174.564326284,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.06731785401141052,
+     "final_dev": 0.9588487865977146,
+     "scale": 0.44135739097795135,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.5336917897776142,
+     "final_dev": 0.21148690626128067,
+     "scale": 1603.515989881264,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.5541167293799433,
+     "final_dev": 0.12334607878764688,
+     "scale": 1740.5985757753851,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.4112330914392118,
+     "final_dev": 1.0,
+     "scale": 1477173.4946093697,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.41112955095574194,
+     "final_dev": 1.0,
+     "scale": 1477062.5640664652,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.5298641131746883,
+     "final_dev": 0.1410068023147847,
+     "scale": 786.6091628334788,
+     "significant": false
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c04_E1000_Bending_BATOZ_Sf_0.9",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 1605.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 1605.0,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BATOZ/Sf_0.9/ROLLING_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.5543231704776816,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.41112528673473325,
+     "final_dev": 1.0,
+     "scale": 1475688.9349551345,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.530169019292964,
+     "final_dev": 0.1406635703130015,
+     "scale": 786.1138238886119,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.4112291851052799,
+     "final_dev": 1.0,
+     "scale": 1475800.9527417747,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.096975006151496,
+     "final_dev": 0.9306571715791521,
+     "scale": 0.4750948496777495,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.5335795816046645,
+     "final_dev": 0.20998978879346358,
+     "scale": 1603.874431892711,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.5543231704776816,
+     "final_dev": 0.1249573194957059,
+     "scale": 1739.893521639246,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.41122902648206616,
+     "final_dev": 1.0,
+     "scale": 1475799.5125322752,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.41112528673473325,
+     "final_dev": 1.0,
+     "scale": 1475688.9349551345,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.5301694077915078,
+     "final_dev": 0.14065704313474156,
+     "scale": 786.1131767220284,
+     "significant": false
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c08_E1000_Bending_QEPH_Sf_0.8",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 1605.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 1605.0,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/QEPH/Sf_0.8/ROLLING_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.5559850133152757,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.4111299031473346,
+     "final_dev": 1.0,
+     "scale": 1464503.058455366,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.5326145638271242,
+     "final_dev": 0.1390878728509671,
+     "scale": 782.1322625562375,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.4112351230352691,
+     "final_dev": 1.0,
+     "scale": 1464613.058455366,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.5326764187404214,
+     "final_dev": 0.20174894106984118,
+     "scale": 1606.7458029130435,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.5559850133152757,
+     "final_dev": 0.1352944362321371,
+     "scale": 1734.2058323108392,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.411234954681896,
+     "final_dev": 1.0,
+     "scale": 1464611.843568053,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.4111299031473346,
+     "final_dev": 1.0,
+     "scale": 1464503.058455366,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.532614745733132,
+     "final_dev": 0.13908550743333134,
+     "scale": 782.1318753705576,
+     "significant": false
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c09_E1000_Bending_QEPH_Sf_0.9",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 1605.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 1605.0,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/QEPH/Sf_0.9/ROLLING_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.5559849618668071,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.4111257973295527,
+     "final_dev": 1.0,
+     "scale": 1464524.1631872512,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.5326162722310751,
+     "final_dev": 0.1390925377541242,
+     "scale": 782.131637192555,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.4112310073672572,
+     "final_dev": 1.0,
+     "scale": 1464634.1631872512,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.532677402114033,
+     "final_dev": 0.2017636927541699,
+     "scale": 1606.7457473124628,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.5559849618668071,
+     "final_dev": 0.1352699944414531,
+     "scale": 1734.2079079426694,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.41123084649090225,
+     "final_dev": 1.0,
+     "scale": 1464632.951861526,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.4111257973295527,
+     "final_dev": 1.0,
+     "scale": 1464524.1631872512,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.5326164230574442,
+     "final_dev": 0.13908976482325705,
+     "scale": 782.1312747059222,
+     "significant": false
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c10_V0030_Spring_Type_4_stiff",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 0.401,
+   "port_termination": "NORMAL",
+   "port_final_t": 0.401,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_v_elements/RD-V-0030_Spring_Type_4/0030_spring_type_4/0030_spring_type_4_stiff/Spring_TYPE4_element_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "NO-CHANNELS",
+   "max_rel_rms": null,
+   "channels": [],
+   "shell_family": false,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/SPRING"
+   ]
+  },
+  {
+   "case": "c11_V0030_Spring_Type_4_visc",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 0.4,
+   "port_termination": "NORMAL",
+   "port_final_t": 0.4,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_v_elements/RD-V-0030_Spring_Type_4/0030_spring_type_4/0030_spring_type_4_visc/Spring_TYPE4_element_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "NO-CHANNELS",
+   "max_rel_rms": null,
+   "channels": [],
+   "shell_family": false,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/SPRING"
+   ]
+  },
+  {
+   "case": "c12_V0700_LAW2_HEXA_DEGE_LAW2",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 30.0,
+   "port_termination": "ERROR \u2014 NUMERICAL ENERGY INJECTION -31.9% EXCEEDS LIMIT 30.0% \u2014 RUN UNSTABLE",
+   "port_final_t": 0.0045145246,
+   "port_time_coverage": 0.0002,
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/HEXA_DEGE_LAW2/HEXA_DEGE_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "NO-CHANNELS",
+   "max_rel_rms": null,
+   "channels": [],
+   "shell_family": false,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [
+    "HEXA_DEGET01",
+    "HEXA_DEGE_0000.out",
+    "HEXA_DEGE_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/BRIC"
+   ]
+  },
+  {
+   "case": "c13_V0700_LAW2_HEXA_18_LAW2",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 30.0,
+   "port_termination": "ERROR \u2014 NUMERICAL ENERGY INJECTION -61.9% EXCEEDS LIMIT 30.0% \u2014 RUN UNSTABLE",
+   "port_final_t": 0.017038012,
+   "port_time_coverage": 0.0006,
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/HEXA_ELEM_SOLID_18_LAW2/HEXAP14_18_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "NO-CHANNELS",
+   "max_rel_rms": null,
+   "channels": [],
+   "shell_family": false,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [
+    "HEXAP14_18T01",
+    "HEXAP14_18_0000.out",
+    "HEXAP14_18_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/BRIC"
+   ]
+  },
+  {
+   "case": "c14_V0700_LAW2_HEXA_24_LAW2",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 30.0,
+   "port_termination": "ERROR \u2014 NUMERICAL ENERGY INJECTION -38.4% EXCEEDS LIMIT 30.0% \u2014 RUN UNSTABLE",
+   "port_final_t": 0.016992071,
+   "port_time_coverage": 0.0006,
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/HEXA_ELEM_SOLID_24_LAW2/HEXA_LAW2_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "NO-CHANNELS",
+   "max_rel_rms": null,
+   "channels": [],
+   "shell_family": false,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [
+    "HEXA_LAW2T01",
+    "HEXA_LAW2_0000.out",
+    "HEXA_LAW2_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/BRIC"
+   ]
+  },
+  {
+   "case": "c15_V0700_LAW2_SHELL_Ishell24_LAW2",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 30.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 30.0,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/SHELL_Ishell24_LAW2/shell_Ishell24_LAW2_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.12581368654848038,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.12581368654848038,
+     "final_dev": 0.16337206475572688,
+     "scale": 266.1448,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.009863929957589973,
+     "final_dev": 0.009788562535361603,
+     "scale": 0.01231090954797756,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.754878754399365,
+     "final_dev": 0.8123415038149573,
+     "scale": 0.3691336087,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.12478538248775035,
+     "final_dev": 0.16218652523566532,
+     "scale": 266.15273269831687,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.00702,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.013959979209544737,
+     "final_dev": 0.007961713575545593,
+     "scale": 0.004854778185,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.024449321611529917,
+     "final_dev": 0.031398914383188564,
+     "scale": 0.0023589187477990404,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.12580821049251567,
+     "final_dev": 0.1633649608590944,
+     "scale": 266.15711090954795,
+     "significant": true
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [
+    "shell_Ishell24_LAW2T01",
+    "shell_Ishell24_LAW2_0000.out",
+    "shell_Ishell24_LAW2_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c17_V0700_LAW2_TRIA_LAW2",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 30.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 30.0,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/TRIA_LAW2/TRIA_JC_LAW2_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.12339394517780886,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.12339394517780886,
+     "final_dev": 0.1585102052293804,
+     "scale": 264.9377,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.010047160333060088,
+     "final_dev": 0.009884668590529097,
+     "scale": 0.01231077168823184,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.12335707112929799,
+     "final_dev": 0.15846668568394828,
+     "scale": 264.9473640639055,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.00702,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.013402727297558531,
+     "final_dev": 0.012801986811008591,
+     "scale": 0.004876398929,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.024444064012519362,
+     "final_dev": 0.03138634068961084,
+     "scale": 0.0023589085101553583,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.12338855690003689,
+     "final_dev": 0.15850329941706037,
+     "scale": 264.95001077168826,
+     "significant": true
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [
+    "TRIA_JC_LAW2T01",
+    "TRIA_JC_LAW2_0000.out",
+    "TRIA_JC_LAW2_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/SH3N"
+   ]
+  },
+  {
+   "case": "c18_V0700_LAW36_HEXA_DEGE",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 30.0,
+   "port_termination": "ERROR \u2014 NUMERICAL ENERGY INJECTION -31.9% EXCEEDS LIMIT 30.0% \u2014 RUN UNSTABLE",
+   "port_final_t": 0.0044011154,
+   "port_time_coverage": 0.0001,
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW36_version2/HEXA_DEGE/HEXA_DEGE_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "NO-CHANNELS",
+   "max_rel_rms": null,
+   "channels": [],
+   "shell_family": false,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [
+    "HEXA_DEGET01",
+    "HEXA_DEGE_0000.out",
+    "HEXA_DEGE_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/BRIC"
+   ]
+  },
+  {
+   "case": "c19_V0700_LAW36_HEXA_18",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 30.0,
+   "port_termination": "ERROR \u2014 NUMERICAL ENERGY INJECTION -75.0% EXCEEDS LIMIT 30.0% \u2014 RUN UNSTABLE",
+   "port_final_t": 0.017363092,
+   "port_time_coverage": 0.0006,
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW36_version2/HEXA_ELEM_SOLID_18/HEXAP14_18_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "NO-CHANNELS",
+   "max_rel_rms": null,
+   "channels": [],
+   "shell_family": false,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [
+    "HEXAP14_18T01",
+    "HEXAP14_18_0000.out",
+    "HEXAP14_18_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/BRIC"
+   ]
+  },
+  {
+   "case": "c20_V0700_LAW36_HEXA_24",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 30.0,
+   "port_termination": "ERROR \u2014 NUMERICAL ENERGY INJECTION -76.5% EXCEEDS LIMIT 30.0% \u2014 RUN UNSTABLE",
+   "port_final_t": 0.017317241,
+   "port_time_coverage": 0.0006,
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW36_version2/HEXA_ELEM_SOLID_24/HEXA1_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "NO-CHANNELS",
+   "max_rel_rms": null,
+   "channels": [],
+   "shell_family": false,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [
+    "HEXA1T01",
+    "HEXA1_0000.out",
+    "HEXA1_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/BRIC"
+   ]
+  },
+  {
+   "case": "c26_V0200_Hardening",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 0.05,
+   "port_termination": "NORMAL",
+   "port_final_t": 0.05,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_v_material/RD-V-0200_Hardening/0200_hardening/rdv_0200_hardening_modulus_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "MATCH",
+   "max_rel_rms": 0.021559735514854215,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 2.9336894098808728e-05,
+     "final_dev": 3.299006270877759e-05,
+     "scale": 6497983.413880304,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.024676753554197187,
+     "final_dev": 0.0015936083382608764,
+     "scale": 7.346450117653855,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.9986476643869159,
+     "final_dev": 1.0,
+     "scale": 2.307395012,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 2.2920283828735967e-05,
+     "final_dev": 3.0980897344781405e-05,
+     "scale": 6498129.413880304,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 3.622054488670272e-07,
+     "final_dev": 3.6220544886702723e-07,
+     "scale": 0.000126999746,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.021559735514854215,
+     "final_dev": 0.00139412973355416,
+     "scale": 0.0330762227581015,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 2.9336399674344982e-05,
+     "final_dev": 3.299183254425562e-05,
+     "scale": 6497989.688223155,
+     "significant": true
+    }
+   ],
+   "shell_family": false,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/BRIC"
+   ]
+  },
+  {
+   "case": "c28_V0240_QUAD_Ishell12",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": -1,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 40.0,
+   "port_termination": "ERROR \u2014 NUMERICAL ENERGY INJECTION -30.3% EXCEEDS LIMIT 30.0% \u2014 RUN UNSTABLE",
+   "port_final_t": 8.4400861,
+   "port_time_coverage": 0.211,
+   "case_id": "rd_v_material/RD_V_0240/Modele_QUAD_Ishell12/tensile_TABULATED_QUAD_Ishell12_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.4230352979827542,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.40275754819689635,
+     "final_dev": 0.8588406324709328,
+     "scale": 569.1202719,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.27709858563676476,
+     "final_dev": 0.2199245148718843,
+     "scale": 7.527950614,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.3641236642016961,
+     "final_dev": 1.0,
+     "scale": 249.5990645,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.4230352979827542,
+     "final_dev": 0.8723947542399891,
+     "scale": 629.6409458,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 3.812025017734393e-08,
+     "final_dev": 3.812025017734393e-08,
+     "scale": 0.03987382,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.22684510119460213,
+     "final_dev": 0.020440802519471283,
+     "scale": 0.03517020405,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.2878890278823743,
+     "final_dev": 0.5869422891333564,
+     "scale": 0.004280618063,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.40456073706586254,
+     "final_dev": 0.8592370554511831,
+     "scale": 570.7845024210001,
+     "significant": true
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [
+    "tensile_TABULATED_QUAD_Ishell12T01",
+    "tensile_TABULATED_QUAD_Ishell12_0000.out",
+    "tensile_TABULATED_QUAD_Ishell12_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c31_V0240_TRIA_Ishell24",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "case_id": "rd_v_material/RD_V_0240/Modele_TRIA_Ishell24/tensile_TABULATED_TRIA_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "SKIPPED-SLOW",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "timeout",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [
+    "tensile_TABULATED_TRIAT01",
+    "tensile_TABULATED_TRIA_0000.out",
+    "tensile_TABULATED_TRIA_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SH3N"
+   ]
+  },
+  {
+   "case": "c32_V0240_Tensile_QUAD_Ishell24",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 40.0,
+   "port_termination": "ERROR \u2014 NUMERICAL ENERGY INJECTION -30.3% EXCEEDS LIMIT 30.0% \u2014 RUN UNSTABLE",
+   "port_final_t": 8.4400861,
+   "port_time_coverage": 0.211,
+   "case_id": "rd_v_material/RD_V_0240/Tensile_QUAD_Ishell24/tensile_TABULATED_QUAD_Ishell24_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.42303724382072255,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.40275957057697803,
+     "final_dev": 0.8588455378382873,
+     "scale": 569.1202719,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.27709962781579045,
+     "final_dev": 0.21991508669362864,
+     "scale": 7.527950614,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.3641236642016961,
+     "final_dev": 1.0,
+     "scale": 249.5990645,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.42303724382072255,
+     "final_dev": 0.872399219620584,
+     "scale": 629.6409458,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 3.812025017734393e-08,
+     "final_dev": 3.812025017734393e-08,
+     "scale": 0.03987382,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.22713374400641104,
+     "final_dev": 0.017221749525255257,
+     "scale": 0.03517020405,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.287805996106796,
+     "final_dev": 0.5934160758779802,
+     "scale": 0.004280618063,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.4045627712502176,
+     "final_dev": 0.8592418221698497,
+     "scale": 570.7845024210001,
+     "significant": true
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [
+    "tensile_TABULATED_QUAD_Ishell24T01",
+    "tensile_TABULATED_QUAD_Ishell24_0000.out",
+    "tensile_TABULATED_QUAD_Ishell24_0001.out"
+   ],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c39_TENSILE",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "case_id": "tutorial/TENSILE/TENSILE_0000.rad",
+   "group": "m36-40",
+   "m36_classification": "IN_ENVELOPE",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "starter-reject",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "starter-fail",
+   "fortran_error": "ERROR ID :    178 | ** ERROR IN PART DEFINITION (PROPERTY) | DESCRIPTION : | -- PART ID: 1 | -- PART TITLE: PSHELL1 | PROPERTY ID=0 DOES NOT EXIST",
+   "pyradioss_error": "PART/1: material 0 not defined\n ** ERROR     3 IN PART CHECK\n    /PART/1: property 0 not defined\n ** ERROR     4 IN PART CHECK\n    /PART/1: material 0 not defined\n\n              4 ERROR(S)\n              0 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.034 s\n\n     STARTER TERMINATION : ERROR\n     4 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": "TENSILET01",
+   "pre_existing_reference": [
+    "TENSILET01"
+   ],
+   "engine_deck_chain": 0,
+   "unsupported_hard_m36": [],
+   "unsupported_soft": []
+  },
+  {
+   "case": "c40_E1000_Bending_BT_BT_type1_Sf_0",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 1230.01,
+   "port_termination": "NORMAL",
+   "port_final_t": 1230.01,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BT/BT_type1/Sf_0.1/ROLLING_0000.rad",
+   "group": "m37-unlocked",
+   "m36_classification": "NEAR",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.6369451374906722,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.43108611680994025,
+     "final_dev": 0.7571968394196048,
+     "scale": 593346.9192631999,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.12420834405740835,
+     "final_dev": 0.34990474126823445,
+     "scale": 80044.49738050086,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.2155033846446786,
+     "final_dev": 1.0,
+     "scale": 1153616.0763896103,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.40110400923695716,
+     "final_dev": 1.0,
+     "scale": 765492.3122883117,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.05105359850519453,
+     "final_dev": 1.0,
+     "scale": 268.28030029220565,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.40570441384451117,
+     "final_dev": 0.933860770891256,
+     "scale": 2266.899749940882,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.6369451374906722,
+     "final_dev": 0.36549020849534336,
+     "scale": 1734.2112101323485,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.42691401291403913,
+     "final_dev": 0.7028218276808799,
+     "scale": 599401.5071923257,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.43108611680994025,
+     "final_dev": 0.7571968394196048,
+     "scale": 593346.9192631999,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.12348927120679998,
+     "final_dev": 0.3494100138760282,
+     "scale": 80649.96444088127,
+     "significant": true
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [
+    "GRNOD/GRNOD"
+   ],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c41_E1000_Bending_BT_BT_type1_Sf_0",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 1185.01,
+   "port_termination": "NORMAL",
+   "port_final_t": 1185.01,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BT/BT_type1/Sf_0.9/ROLLING_0000.rad",
+   "group": "m37-unlocked",
+   "m36_classification": "NEAR",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.5546330875182296,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.4279338383081693,
+     "final_dev": 0.6911583720834418,
+     "scale": 584429.2010325674,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.08154146700290152,
+     "final_dev": 0.18272863912263954,
+     "scale": 55556.04984686635,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.18663606425082,
+     "final_dev": 1.0,
+     "scale": 308479.2465735178,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.39436959207990874,
+     "final_dev": 1.0,
+     "scale": 705160.3006530632,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.13300523336237838,
+     "final_dev": 0.9795633249642645,
+     "scale": 17.48788275257908,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.5546330875182296,
+     "final_dev": 0.043838876811383855,
+     "scale": 1606.7686650712717,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.5241674686833645,
+     "final_dev": 1.0,
+     "scale": 2130.822760528656,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.42510628688058305,
+     "final_dev": 0.698689477457795,
+     "scale": 592659.2999137538,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.4279338383081693,
+     "final_dev": 0.6911583720834418,
+     "scale": 584429.2010325674,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.08516493132320704,
+     "final_dev": 0.20424048633043307,
+     "scale": 59908.226925753646,
+     "significant": true
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [
+    "GRNOD/GRNOD"
+   ],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c42_E1000_Bending_BT_BT_type3_Sf_0",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 1230.01,
+   "port_termination": "NORMAL",
+   "port_final_t": 1230.01,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BT/BT_type3/Sf_0.1/ROLLING_0000.rad",
+   "group": "m37-unlocked",
+   "m36_classification": "NEAR",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.6272503502075982,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.3995136493152798,
+     "final_dev": 1.0,
+     "scale": 766764.4341020002,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.5896993012138662,
+     "final_dev": 0.34797795033128304,
+     "scale": 782.0831707006399,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.3997557009131007,
+     "final_dev": 1.0,
+     "scale": 767037.7189098002,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.0654346655300977,
+     "final_dev": 1.0,
+     "scale": 0.0005822622614948988,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.5590134675628512,
+     "final_dev": 0.48816884674102384,
+     "scale": 1606.747,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.6272503502075982,
+     "final_dev": 0.34273846210162767,
+     "scale": 1734.2102132172,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.39975524125076767,
+     "final_dev": 1.0,
+     "scale": 767036.5818007292,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.3995136493152798,
+     "final_dev": 1.0,
+     "scale": 766764.4341020002,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.5896992991829103,
+     "final_dev": 0.3479782060585605,
+     "scale": 782.0831707006399,
+     "significant": false
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [
+    "GRNOD/GRNOD"
+   ],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c43_E1000_Bending_BT_BT_type3_Sf_0",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 1185.05,
+   "port_termination": "NORMAL",
+   "port_final_t": 1185.05,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BT/BT_type3/Sf_0.9/ROLLING_0000.rad",
+   "group": "m37-unlocked",
+   "m36_classification": "NEAR",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.6322618736977059,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.3976181771415448,
+     "final_dev": 1.0,
+     "scale": 697890.2588687314,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.5946070378105383,
+     "final_dev": 0.46576642966766535,
+     "scale": 782.0820836784893,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.39784437819349455,
+     "final_dev": 1.0,
+     "scale": 698255.9607757244,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.07049986972604579,
+     "final_dev": 0.01471592299710272,
+     "scale": 1.63853971762614e-05,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.5611270297484559,
+     "final_dev": 0.48447667599896455,
+     "scale": 1606.746942257768,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.6322618736977059,
+     "final_dev": 0.5296268273605618,
+     "scale": 1734.2096526522782,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.3978440550375397,
+     "final_dev": 1.0,
+     "scale": 698254.5264485534,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.3976181771415448,
+     "final_dev": 1.0,
+     "scale": 697890.2588687314,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.5946066000614342,
+     "final_dev": 0.46575714633581394,
+     "scale": 782.0819994748726,
+     "significant": false
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [
+    "GRNOD/GRNOD"
+   ],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c44_E1000_Bending_BT_BT_type4_Sf_0",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 1230.01,
+   "port_termination": "NORMAL",
+   "port_final_t": 1230.01,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BT/BT_type4/Sf_0.1/ROLLING_0000.rad",
+   "group": "m37-unlocked",
+   "m36_classification": "NEAR",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.5552086106961196,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.3958994520933701,
+     "final_dev": 1.0,
+     "scale": 682792.4347501,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.12472394390510763,
+     "final_dev": 0.207341486077916,
+     "scale": 85508.21086059826,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.16364587841003006,
+     "final_dev": 1.0,
+     "scale": 1337985.119089,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.401534414723904,
+     "final_dev": 1.0,
+     "scale": 764879.8621159,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.06851402132652826,
+     "final_dev": 0.005602247566244882,
+     "scale": 455.17907917765075,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.5552086106961196,
+     "final_dev": 0.38750222067303663,
+     "scale": 1606.747651195648,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.44065514399968997,
+     "final_dev": 1.0,
+     "scale": 2517.644964906999,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.4063425974993679,
+     "final_dev": 1.0,
+     "scale": 665063.0352383998,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.3958994520933701,
+     "final_dev": 1.0,
+     "scale": 682792.4347501,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.12453391232690768,
+     "final_dev": 0.21153228482435674,
+     "scale": 85835.43072934073,
+     "significant": true
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [
+    "GRNOD/GRNOD"
+   ],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c46_V0220_Foam_LAW70_0",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 0.20001,
+   "case_id": "rd_v_material/RD-V-0220_Foam_LAW70/0220_foam_LAW70/0220_foam_LAW70_0/BLOCK_H8_0000.rad",
+   "group": "m37-unlocked",
+   "m36_classification": "NEAR",
+   "class": "SKIPPED-SLOW",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": 1800.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "timeout",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [
+    "FUNCT_SMOOTH",
+    "MAT/LAW70"
+   ],
+   "unsupported_soft": [
+    "TH/RBODY"
+   ]
+  },
+  {
+   "case": "c50_V0230_Fabric_LAW19_0230_shell",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 100.0,
+   "port_termination": "ERROR \u2014 NUMERICAL ENERGY INJECTION -75.3% EXCEEDS LIMIT 30.0% \u2014 RUN UNSTABLE",
+   "port_final_t": 88.895815,
+   "port_time_coverage": 0.889,
+   "case_id": "rd_v_material/RD-V-0230_Fabric_LAW19/0230_fabric_LAW19/0230_shell_mat_019_01/SHELL_LAW19_PROP9_0000.rad",
+   "group": "m37-unlocked",
+   "m36_classification": "OUT",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.6086655334487759,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.5505286236667714,
+     "final_dev": 0.9838783017997711,
+     "scale": 223.0806381,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.1916189443889878,
+     "final_dev": 0.9508288786148094,
+     "scale": 107.7732041,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.6086655334487759,
+     "final_dev": 1.0,
+     "scale": 331.1190439,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.3502083114333036,
+     "final_dev": 0.4200353913529276,
+     "scale": 193.3475,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.24576,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.14751811359822323,
+     "final_dev": 0.1671548049797332,
+     "scale": 0.4329616848,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.14283747555127968,
+     "final_dev": 0.9998376848330562,
+     "scale": 0.4520385657,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.5586553232654733,
+     "final_dev": 0.6051817840862522,
+     "scale": 193.34740016304372,
+     "significant": true
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [
+    "FUNCT_SMOOTH",
+    "GRNOD/GENE",
+    "MAT/FABRI",
+    "PROP/SH_ORTH"
+   ],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SH3N",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c51_V0230_Fabric_LAW19_0230_shell",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": null,
+    "impi_fortran_end": null,
+    "contended": true
+   },
+   "port_run_target_t": 100.0,
+   "port_termination": "ERROR \u2014 ENERGY ERROR 22.5% EXCEEDS LIMIT 15.0%",
+   "port_final_t": 14.59801,
+   "port_time_coverage": 0.146,
+   "case_id": "rd_v_material/RD-V-0230_Fabric_LAW19/0230_fabric_LAW19/0230_shell_mat_019_02/SHELL_LAW19_PROP9_0000.rad",
+   "group": "m37-unlocked",
+   "m36_classification": "OUT",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.3656664201531201,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.34767032582966695,
+     "final_dev": 0.8741675239416091,
+     "scale": 464.8022332,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.1302583773282822,
+     "final_dev": 0.14325127086270312,
+     "scale": 31.07785423,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.2336979402125184,
+     "final_dev": 1.0,
+     "scale": 55.68264493,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.3656664201531201,
+     "final_dev": 0.9911959367119012,
+     "scale": 567.9514898,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.10000000000000006,
+     "final_dev": 0.10000000000000006,
+     "scale": 0.24576,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.28485934741864016,
+     "final_dev": 0.2689953523764909,
+     "scale": 0.8590053859128205,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.1224655845419045,
+     "final_dev": 0.14768370973042508,
+     "scale": 0.01395161528,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.34802205998927643,
+     "final_dev": 0.8742741741351964,
+     "scale": 469.837691179,
+     "significant": true
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M37-carried",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [
+    "FUNCT_SMOOTH",
+    "GRNOD/GENE",
+    "MAT/FABRI",
+    "PROP/SH_ORTH",
+    "XREF"
+   ],
+   "unsupported_soft": [
+    "TH/RBODY",
+    "TH/SH3N",
+    "TH/SHEL"
+   ]
+  },
+  {
+   "case": "c52_V0031_Pretensioner_Spring_Type",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": 12,
+    "impi_fortran_end": 12,
+    "contended": true
+   },
+   "case_id": "rd_v_elements/RD-V-0031_Pretensioner_Spring_Type_32/0031_spring_type_32/Spring_TYPE32_element_0000.rad",
+   "group": "m39-unlocked",
+   "m36_classification": "NEAR",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M39-fresh",
+   "pyradioss_status": "engine-fail",
+   "fortran_error": null,
+   "pyradioss_error": "referenced by springs elements\n  /PROP/SPR_PRE/3: parsed, physics not implemented (M38) \u2014 referenced by springs elements\n  /PROP/SPR_PRE/4: parsed, physics not implemented (M38) \u2014 referenced by springs elements\n  /PROP/SPR_PRE/5: parsed, physics not implemented (M38) \u2014 referenced by springs elements\n  (the Starter accepted them at parse level; implement the property or change the part's property)\n",
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [
+    "PROP/SPR_PRE"
+   ],
+   "unsupported_soft": [
+    "TH/SPRING"
+   ]
+  },
+  {
+   "case": "c53_E0200_Snap_thru_Roof_02_Snap-t",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": 12,
+    "impi_fortran_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 3050.0,
+   "port_termination": "NORMAL",
+   "port_final_t": 3050.0,
+   "port_time_coverage": 1.0,
+   "case_id": "rd_e/RD-E-0200_Snap_thru_Roof/02_Snap-through/Explicit_solver/SNAP_EXP_0000.rad",
+   "group": "m39-unlocked",
+   "m36_classification": "NEAR",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.346030642410523,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.18134772708269073,
+     "final_dev": 0.4472855395223111,
+     "scale": 19255.22295,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.24802616589320928,
+     "final_dev": 0.35850724071278095,
+     "scale": 0.9999270642,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.18302598563031872,
+     "final_dev": 0.4505003133069645,
+     "scale": 19389.61248,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 5.8765833643448626e-08,
+     "final_dev": 5.876583364344864e-08,
+     "scale": 6432.309,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.31236134412115246,
+     "final_dev": 1.1016996529964795,
+     "scale": 2.549007882,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.346030642410523,
+     "final_dev": 0.3260732650646109,
+     "scale": 1.716349157,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.30762753828124034,
+     "final_dev": 0.811064759449815,
+     "scale": 93.94516727,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.1813485028618347,
+     "final_dev": 0.4472930109512189,
+     "scale": 19255.7027631383,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.18134772708269073,
+     "final_dev": 0.4472855395223111,
+     "scale": 19255.22295,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.24848257327412865,
+     "final_dev": 0.35819998250157764,
+     "scale": 0.9999270642,
+     "significant": false
+    }
+   ],
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M39-fresh",
+   "pyradioss_status": "ok",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [
+    "SKEW/FIX"
+   ],
+   "unsupported_soft": [
+    "SUBSET",
+    "TH/RBODY"
+   ]
+  },
+  {
+   "case": "c54_E0200_Snap_thru_Roof_02_Snap-t",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": 12,
+    "impi_fortran_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 3000.0,
+   "case_id": "rd_e/RD-E-0200_Snap_thru_Roof/02_Snap-through/Implicit_solver/SNAP_IMP_0000.rad",
+   "group": "m39-unlocked",
+   "m36_classification": "NEAR",
+   "class": "NO-CHANNELS",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": true,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M39-fresh",
+   "pyradioss_status": "ok-no-th",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [
+    "SKEW/FIX"
+   ],
+   "unsupported_soft": [
+    "SUBSET",
+    "TH/RBODY"
+   ]
+  },
+  {
+   "case": "c55_E2100_Cam_21_Cam_interface7_fr",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": 12,
+    "impi_fortran_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 0.04,
+   "case_id": "rd_e/RD-E-2100_Cam/21_Cam/interface7/friction/I7PFMCAM_0000.rad",
+   "group": "m39-unlocked",
+   "m36_classification": "NEAR",
+   "class": "SKIPPED-SLOW",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M39-fresh",
+   "pyradioss_status": "timeout",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [
+    "FRAME/FIX"
+   ],
+   "unsupported_soft": []
+  },
+  {
+   "case": "c56_E2100_Cam_21_Cam_interface7_pe",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": 12,
+    "impi_fortran_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 0.04,
+   "case_id": "rd_e/RD-E-2100_Cam/21_Cam/interface7/penalty/slave_cam/I7PMCAM_0000.rad",
+   "group": "m39-unlocked",
+   "m36_classification": "NEAR",
+   "class": "SKIPPED-SLOW",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M39-fresh",
+   "pyradioss_status": "timeout",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [
+    "FRAME/FIX"
+   ],
+   "unsupported_soft": []
+  },
+  {
+   "case": "c57_E2100_Cam_21_Cam_interface7_pe",
+   "suite": "official",
+   "contended_timing": true,
+   "impi_procs": {
+    "impi_start": 12,
+    "impi_end": 12,
+    "impi_fortran_start": 12,
+    "impi_fortran_end": 12,
+    "contended": true
+   },
+   "port_run_target_t": 0.04,
+   "case_id": "rd_e/RD-E-2100_Cam/21_Cam/interface7/penalty/slave_valve/I7PMVALVE_0000.rad",
+   "group": "m39-unlocked",
+   "m36_classification": "NEAR",
+   "class": "SKIPPED-SLOW",
+   "max_rel_rms": null,
+   "channels": null,
+   "shell_family": false,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "fortran_provenance": "M39-fresh",
+   "pyradioss_status": "timeout",
+   "fortran_error": null,
+   "pyradioss_error": null,
+   "reference_used": null,
+   "pre_existing_reference": [],
+   "engine_deck_chain": 1,
+   "unsupported_hard_m36": [
+    "FRAME/FIX"
+   ],
+   "unsupported_soft": []
+  }
+ ]
+}

@@ -164,6 +164,16 @@ LAYOUTS: Dict[str, List[int]] = {
     # CARD("%20lg%20lg%10d%10d%10d%10d%10d%10d",
     #      Mass, Inertia, skew_ID, sens_ID, Isflag, Ifail, Ileng/Ifail2, ...)
     "PROP_SPR_HEAD": [20, 20, 10, 10, 10, 10, 10, 10],
+    # PROP/prop_p32_spr_pre.cfg (radioss100/radioss51) header card:
+    # CARD("%20lg                              %10d%10d", MASS, ISENSOR, ILock)
+    # — the 30 blank columns between the mass and sens_ID are a real gap in
+    # the cfg FORMAT, so field 1 is a dead spacer (M39 / M38-NEW-1).
+    "PROP_SPR_PRE_HEAD": [20, 30, 10, 10],
+    # prop_p32_spr_pre.cfg function card:
+    # CARD("%10d%10d                    %20lg%20lg%20lg",
+    #      FUN_A1, FUN_B1, Scale_t, Scale_d, Scale_f)  (radioss100; the
+    # radioss51 FORMAT stops after the two function IDs)
+    "PROP_SPR_PRE_FCT": [10, 10, 20, 20, 20, 20],
     # generic 4 x %20lg value card (beam section Area/Iyy/Izz/Ixx, the
     # spring per-DOF F/E/Ascale/Hscale card)
     "F20X4": [20] * 4,
@@ -186,6 +196,22 @@ LAYOUTS: Dict[str, List[int]] = {
     "EOS_POLY_1": [20] * 6,
     # mat_EOS.cfg POLYNOMIAL card 2: CARD("%20lg"*5, C4, C5, E0, Psh, RHO_0)
     "EOS_POLY_2": [20] * 5,
+
+    # ---- skews / frames (M39) -------------------------------------------------
+    # SYSTEM/skew_fix.cfg (radioss120) + SYSTEM/frame_fix.cfg (radioss51):
+    # CARD("%20lg%20lg%20lg", ...) — the origin card (Ox Oy Oz, radioss120
+    # /SKEW/FIX and radioss41+ /FRAME/FIX) and the two vector cards
+    # (X1 Y1 Z1 = the Y' axis, X2 Y2 Z2 = the Z' axis).  /SKEW/FIX gained
+    # its origin card at radioss120: a 2-data-card block is the radioss51
+    # form (origin defaults to 0), a 3-card block the radioss120 one.
+    "SKEW_V3": [20] * 3,
+    # SYSTEM/skew_mov.cfg + frame_mov.cfg (radioss2019):
+    # CARD("%10d%10d%10d%10s", originnodeid, axisnodeid, planenodeid, DIR)
+    # (radioss51 has the same three node columns and no DIR -> 'X')
+    "SKEW_MOV": [10, 10, 10, 10],
+    # SYSTEM/skew_mov2.cfg (radioss100) + frame_mov2.cfg (radioss110):
+    # CARD("%10d%10d%10d", node_ID1, node_ID2, node_ID3)
+    "SKEW_MOV2": [10, 10, 10],
 
     # ---- loads / initial conditions ------------------------------------------
     # LOADS/bcs.cfg (radioss51): CARD("   %1d%1d%1d %1d%1d%1d%10d%10d",

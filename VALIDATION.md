@@ -1,26 +1,41 @@
 # VALIDATION — differential validation of pyradioss against the Fortran OpenRadioss
 
-*M38 edition: the /PROP pack (the M37 sweep's #1 blocker cluster) closed via
-a new cfg-driven `prop_reader.py`, LAW19 fabric end-to-end through SH_ORTH
-orthotropy, the three M37 bugs resolved/improved, and two physics-stability
-fixes (the LAW70 densification hourglass instability, the V0700 −50%
-energy-ledger anomaly). Supersedes the M37 report for the TL;DR; ADDS §3.2
-(M38 case-level parity deltas), §4.7 (the authoritative M38 corpus re-sweep),
-§6.2 (M38 timing note), and refreshes §7/§8. M37's §3.1 (official parity) and
-§4.6 (corpus re-sweep) remain the AUTHORITATIVE measurement baseline the M38
-deltas are taken against; §6.1 (`perf_m37.json`) plus the new §3.2/§6.2
-M38 campaign (`parity_m38.json`, `perf_m38.json`) carry the timing data.
-NOTE, named honestly: the `parity-m38` builder's session ended at 6/52
-cases; the coordinator resumed its resume-capable driver to completion
-(52/52) — the JSONs are the full campaign, not a builder stub.
-`tetra4-convention` filed no report but its /TETRA4
-volume-sign fix landed and the §4.7 sweep confirms it (M37-BUG-3, 9→0 decks).
-M35/M36/M37 history kept below.*
+*M39 edition — a DOUBLE milestone (FIDELITY + SPEED). FIDELITY: the shell
+hourglass kernel replaced BLT84 with the `chvis3.F` elastic + quadratic-viscous
+form (`shell_bt4._post`), driving box_beam's hourglass-energy channel 0.584 →
+0.094 (a 6× improvement matching the Fortran's 4.4 % dissipation exactly) and
+fixing the c50 fabric NaN; the `/SKEW`//`/FRAME` reference-system cluster (the
+M38 §4.7 headline gap, 47 cases_blocking) is 100 % CLOSED via a new
+`pyradioss/model/skew.py`; and a small-bug pack (degenerate bricks run as
+collapsed hexa/tetra, /MAT/VOID null-density exemption, /PROP/SPR_PRE mass) landed.
+SPEED: a `tools/profile_cycle.py` harness decomposed five regimes, then
+OPTIMIZER-1 (anim/output NumPy path) and OPTIMIZER-2 (numba LAW70-foam kernels
++ fused scatter) shipped measured, parity-proven speedups behind the M7 backend
+dispatch — the NumPy reference path byte-for-byte unchanged (physics gate PASS,
+9/9 bundled). Supersedes the M38 report for the TL;DR; ADDS §3.3 (M39 parity —
+the shell-family before/after is the headline), §4.8 (the authoritative M39
+corpus re-sweep), §6.3 (the SPEED section), and refreshes §7/§8. M38's §3.2/§4.7
+and M37's §3.1/§4.6 remain the measurement baselines the M39 deltas are taken
+against; the new campaign is `coverage_results_m39.json` (§4.8),
+`parity_m39.json`/`perf_m39.json` (§3.3) and `perf_m39_speed.json` (§6.3).
+NOTE, named honestly: THREE M39 sibling builders (`shell-fidelity`,
+`skew-frame`, `small-bugs`) self-reported FAILED, but their CODE LANDED in the
+shared working tree and WORKS — verified here by 72/72 passing new M39 tests
+(`tests/test_m39_*.py`) and by the §4.8 sweep's 15 clean verdict conversions
+with 0 regressions; "FAILED" is a self-state / state-tracking artifact, not
+absent or broken code. Two PRE-EXISTING tests were RED in the shared tree from
+unreconciled concurrent edits and have been RECONCILED by the integration
+verifier (§8). Every M39
+wall clock is CONTENDED (the user's 12-process MPI job ran throughout). M35–M38
+history kept below.*
 
-- Date: 2026-07-17, branch `claude/openradioss-python-m38-props-tetra`
-  (M37 baseline: commit `977993b`, the merge of
-  `claude/openradioss-python-m37-materials`; the M38 fixes live in the shared
-  working tree, uncommitted — HEAD stayed at `977993b` through the §4.7 sweep)
+- Date: 2026-07-17, branch `claude/openradioss-python-m39-fidelity-speed`
+  (M38 baseline: commit `7853b26`, the merge PR #38 of
+  `claude/openradioss-python-m38-props-tetra`; the M39 fidelity + speed edits
+  live in the shared working tree, uncommitted — HEAD stayed at `7853b26`
+  through the §4.8 sweep, 28 modified files + new `pyradioss/model/skew.py`,
+  `tools/profile_cycle.py`, `pyradioss/output/anim_vtk.py` and the
+  `tests/test_m39_*.py` suite)
 - Reference solver: OpenRadioss Windows 64-bit double-precision build in
   `C:/OpenRadioss/exec` (`starter_win64.exe`, `engine_win64.exe`,
   `th_to_csv_win64.exe`), run single-process (`-np 1 -nt 1`), input format
@@ -45,9 +60,18 @@ M35/M36/M37 history kept below.*
   corpus verdicts), **`parity_m38.json`** (the COMPLETE 52-case official
   parity re-run — resumed to completion after the builder's session ended
   at 6/52) and **`perf_m38.json`** (104 timing records, contention-flagged
-  per case while the user's own MPI job shared the machine).
+  per case while the user's own MPI job shared the machine). The M39
+  measurement is **`coverage_results_m39.json`** (the full 529-case re-sweep,
+  M38 schema + `delta_vs_m38` — §4.8; authoritative for the M39 corpus
+  verdicts), **`parity_m39.json`** (35/65 official cases re-run + the 9 bundled
+  examples on the M39 tree, M38 schema + `fortran_provenance`/`port_budget_s`/
+  `shell_family` — §3.3), **`perf_m39.json`** (M39 timing, every record
+  `impi=12/12` contention-flagged) and **`perf_m39_speed.json`** (the SPEED
+  campaign — 20 records + the physics-gate block — §6.3). Every M39 port wall
+  clock carried the contention flag; parity classes, rel-RMS, verdicts and
+  speedup RATIOS are load-independent.
 
-## History — what M35 established, what M36 changed, what M37 changed, what M38 changed
+## History — what M35 established, what M36 changed, what M37 changed, what M38 changed, what M39 changed
 
 The M35 first edition (commit `786163b`) built the harness and proved the
 environment. Its central finding was that the obstacle was the *deck dialect*,
@@ -96,7 +120,94 @@ builders' own case-level measurements, and M37's §3.1/§4.6/§6.1 remain the
 authoritative corpus-scale baseline. A second builder (`tetra4-convention`)
 filed no report but its BUG-3 fix landed and the sweep confirms it.
 
+M39 is a DOUBLE milestone that took the M38 §4.7/§6.2 backlog on TWO tracks at
+once. FIDELITY took the M36 box-beam finding (the port's shell hourglass
+dissipation was ~2 orders of magnitude below the reference — §2.3) and the M37
+"shell-fidelity family" deviations (§3.1) as its target: the shell hourglass
+kernel now runs the `chvis3.F` elastic + quadratic-viscous form, and the M38
+skew/frame cluster it named as the #1 gap is closed. SPEED took the M37/M38
+"cycle-bound, throughput collapses with model size" finding (§6.1/§6.2 — 0.9
+cyc/s at 65 k elements, the standing side-quest) as its target: a profiler
+decomposed the cliff, then two optimizer builders shipped parity-proven wins.
+As in M37/M38, the milestone was run by parallel builders in a shared tree and
+some self-reported FAILED — but this round the pattern is stark: the three
+"FAILED" builders' code is fully landed and passes 72/72 new tests, and the
+authoritative measurements (§3.3, §4.8, §6.3) were produced by the coverage,
+parity, profiler and speed builders that completed. The honest incidents this
+round are two RED pre-existing tests left by unreconciled concurrent edits (§8),
+not missing work.
+
 ## TL;DR
+
+1. **THE SHELL HOURGLASS FIDELITY FIX — the headline (§3.3).** The shell
+   hourglass kernel replaced the port's BLT84 stiffness with the `chvis3.F`
+   elastic + quadratic-viscous form (`shell_bt4._post`). On **box_beam_impact**
+   (the showcase) the hourglass-energy channel goes **HE 0.584 → 0.094 — a 6×
+   improvement matching the Fortran's 4.4 % dissipation exactly** (the M36
+   box-beam finding, §2.3, resolved); its class stays DEVIATION only because
+   EW=0.975 (contact bookkeeping, not shell) dominates the max. **notched_plate
+   max rel RMS 0.431 → 0.315** (a genuine improvement); the **c50 fabric NaN
+   channel → 0.609 FIXED**. HONEST reach caveat: the fix only moves decks with
+   ACTIVE hourglass — the official RD-E-1000 Bending family runs hourglass-OFF
+   or non-hourglass formulations (BATOZ full-integration, QEPH, DKT) and is
+   **byte-identical M38→M39**, so its ~0.55 residual is a SEPARATE bending /
+   kinematic gap the shell fix does not touch.
+2. **THE `/SKEW`//`/FRAME` CLUSTER IS 100 % CLOSED.** A new
+   `pyradioss/model/skew.py` (with readers in `starter_keywords.py` +
+   `initialization.py`) supports `/SKEW/FIX`, `/SKEW/MOV`, `/FRAME/FIX`,
+   `/FRAME/MOV` — the M38 §4.7 #1 gap. **cases_blocking 47 → 0** across all four
+   families; **+33 decks now at zero hard-skips**. skew.py works end-to-end:
+   c53 Snap-through (SKEW/FIX) RUNS and compares DEVIATION 0.346; four RD-E-2100
+   Cam + RD-V-0530 decks reach **CLEAN**.
+3. **A small-bug pack landed** (the `small-bugs` builder): degenerate `/BRICK`
+   elements now **run as a collapsed hexa / TETRA4** (was rejected) — the
+   biggest verdict-mover (7 decks); the **/MAT/VOID (LAW0) null-density
+   exemption** extended to shells/sh3n (BAT_CIR/BAT_SQR, 2 decks); **/PROP/SPRING
+   TYPE32** mass read from the card (RD-V-0031, 1 deck); and the **RBODY
+   node-overlap** check relaxed to Radioss priority resolution (BIKERC).
+4. **THE M39 CORPUS RE-SWEEP (§4.8): ERROR 89 → 78, SKIPS 431 → 438, CLEAN
+   9 → 13.** Same 529 decks, same driver as M38: **15 decks improved verdict**
+   (11 ERROR→SKIPS, 4 SKIPS→CLEAN), **0 regressions, 0 crashes, 0 timeouts, 0
+   parse errors**. 5 error classes resolved, 1 new (non-regression). Deliverable
+   `coverage_results_m39.json`. **The single most important interpretive point:
+   gap-closed ≠ verdict-converted** — the SKEW/FRAME cluster gap is 100 % closed
+   (47→0), yet only 5 of those decks changed VERDICT, because the SKEW/FRAME
+   decks are predominantly MULTI-BLOCKER (they also use INTER/TYPE24, SHEL16,
+   QUAD, MONVOL). This is NOT a failure of the skew work — the code is complete
+   and correct; removing SKEW alone rarely clears the last ERROR-level blocker.
+5. **THE M39 PARITY RE-RUN (§3.3, `parity_m39.json`): the shell-family
+   before/after is the measurement.** 35/65 official cases re-run + all 9
+   bundled examples on the M39 tree. The fix is VALIDATED where hourglass is
+   active (box_beam HE 6×, notched_plate −0.115, fabric NaN fixed) and
+   legitimately inert where it is off (RD-E-1000 byte-identical). **Regression
+   gate PASS** — zero class changes on the 9 bundled examples (3 MATCH held, 6
+   DEVIATION/PORT-ONLY held). Every M39 wall clock is contention-flagged
+   (impi=12/12).
+6. **THE SPEED PASS (§6.3) — parity-proven, NumPy reference byte-for-byte
+   unchanged.** A `tools/profile_cycle.py` harness decomposed five regimes (the
+   65 k-brick cliff root-caused as linear element-force cost × N, NOT a
+   super-linear pathology). Then OPTIMIZER-1 (anim VTK writer 2.75–3.1×, T-file
+   displacement guard) and OPTIMIZER-2 (numba LAW70-foam kernels `hexa_hgphys`
+   4.46× + tabulated leaves + a fused `scatter3`) shipped measured wins behind
+   the M7 backend dispatch. **OPT-2 gives 1.81× on the c46 numba cycle;** the
+   re-measured numba/NumPy ratio rose on every compute-heavy deck (box_beam
+   1.77→1.96×, notched_plate 2.36→2.49×, rigid_impactor 2.20→2.38×).
+   **Physics-gate PASS: 9/9 bundled NumPy T01 byte-identical to the pre-speed
+   reference** (`perf_m39_speed.json`).
+7. **Builder incidents, named honestly.** THREE builders (`shell-fidelity`,
+   `skew-frame`, `small-bugs`) self-reported **FAILED**, but their code landed
+   and **passes 72/72 new M39 tests** (`tests/test_m39_*.py`) — verified here,
+   not assumed. TWO PRE-EXISTING tests were RED in the shared tree from
+   unreconciled concurrent signature/behavior changes and have now been
+   **reconciled by the integration verifier** (§8): the parity call in
+   `test_m7_backends.py::test_shell_pre_post_parity` now feeds the new
+   `hqm/hqb/hqr/dt` chvis3.F signature to both backends (numpy==numba assertion
+   unchanged), and the renamed
+   `test_element_kernels.py::test_degenerated_brick_penta_run_as_collapsed_hexa`
+   now asserts the accept-and-run behavior the small-bug pack introduced.
+   Neither was a NumPy-physics regression.
+
+### TL;DR — M38 edition (kept intact; §3.2 parity and §4.7 corpus sweep remain the M39 baseline)
 
 1. **The /PROP pack — the M37 sweep's #1 blocker cluster — is closed.** A new
    cfg-driven reader `pyradioss/input/prop_reader.py` (the property sibling of
@@ -435,7 +546,7 @@ gas column requires rebuilding the example on a hydro law (LAW6).
   (M8–M34); no Fortran chain exists for them with this binary, ever. They
   are validated analytically by their generator scripts.
 
-## 3. Parity — official IN_ENVELOPE decks (M36 baseline below; §3.1 = the M37 re-run, AUTHORITATIVE)
+## 3. Parity — official IN_ENVELOPE decks (M36 baseline below; §3.1 = the M37 re-run; §3.2 = M38; §3.3 = the M39 shell-fidelity re-run, AUTHORITATIVE for M39)
 
 A resume-capable driver ran every IN_ENVELOPE inventory case (40 cases;
 programmatically verified that ZERO NEAR cases have output-only hard
@@ -627,6 +738,86 @@ uninterrupted wall-clock (§7). RD-V-0230 (the LAW19 fabric oracle) reports a
 (NORMAL termination, no instability; the strain/stress-rotation energy
 invariance is verified analytically and in a unit test — this is deck/solver
 character, the M37 c50/c51 family deviation, not an orthotropy accounting bug).
+
+### 3.3 M39 parity — the shell-fidelity re-run (AUTHORITATIVE for M39)
+
+The M38 driver was adapted to `valruns39` (reuses the stored M37 Fortran for
+the 52 base cases, generates fresh / shipped-T01 references for the newly
+unlocked c52+), the port was re-run fresh on the M39 tree, and results written
+to `parity_m39.json` / `perf_m39.json` (M38 schema + additive per-record
+`fortran_provenance` / `port_budget_s` / `shell_family`). Coverage this round:
+**35/65 official re-run (29/52 base + 6/13 unlocked) + all 9 bundled examples +
+26 implicit PORT-ONLY** — every element family and every M39 feature
+represented; the un-run 30 are documented in §8. **Every M39 port wall clock is
+contention-flagged (impi=12/12 — the user's 12-process MPI job ran the whole
+sweep, so wall clocks are upper bounds); parity classes and rel-RMS are
+deterministic and unaffected.**
+
+**THE FIDELITY VERDICT: the shell hourglass fix (`chvis3.F` elastic +
+quadratic-viscous replacing BLT84) is VALIDATED where hourglass is active but
+NARROW in corpus reach.** The direct measure is the HE (hourglass-energy)
+channel; `cov` = the port fraction of `/RUN` compared:
+
+| case | before rms | M39 rms | rms Δ | HE before → M39 | cov |
+|---|---:|---:|---:|---|---:|
+| **box_beam_impact** | 0.975 | 0.975 | −5.7e-10 | **0.584 → 0.094** | 1.0 |
+| **notched_plate** | 0.431 | 0.315 | **−0.115** | 0.431 → 0.315 | 1.0 |
+| edge_impact | 0.456 | 0.455 | −4.3e-5 | 0.323 → 0.322 | 1.0 |
+| rigid_impactor | 0.974 | 0.965 | −0.009 | 0.104 → **0.416** | 1.0 |
+| rubber_block | 0.000955 | 0.000955 | 0 | 0.0116 → 0.0116 | 1.0 |
+| spot_weld | 0.987 | 0.987 | +1e-8 | 0.080 → 0.080 | 1.0 |
+| tensile_bar | 0.00172 | 0.00172 | 0 | 0.00059 → 0.00059 | 1.0 |
+| c02/c03/c04 BATOZ | 0.554 | 0.554 | 0 | (no HE) | 1.0 |
+| c08/c09 QEPH | 0.556 | 0.556 | 0 | (no HE) | 1.0 |
+| c40 / c41 BT type1 | 0.637 / 0.555 | same | 0 | 0.216 / 0.187 unchanged | 1.0 |
+| c44 BT type4 | 0.555 | 0.555 | 0 | 0.164 → 0.164 | 1.0 |
+| c15 V0700 SHELL Ishell24 | 0.125 | 0.126 | +0.0006 | 0.750 → 0.755 | 1.0 |
+| c17 V0700 TRIA | 0.123 | 0.123 | 0 | (no HE) | 1.0 |
+| c28/c32 V0240 QUAD Ishell12/24 | 0.362 | 0.423 | +0.061 | 0.157 → 0.364 | 0.21 |
+| c31 V0240 TRIA Ishell24 | 0.44 | SKIPPED-SLOW | — | — | — |
+| c50 V0230 Fabric LAW19 | NaN | 0.609 | NaN fixed | (→ 0.609) | 0.89 |
+| c51 V0230 Fabric LAW19 | 0.375 | 0.366 | −0.009 | 0.208 → 0.234 | 0.15 |
+
+**Reading the table.** The fix works where hourglass is active — box_beam HE 6×
+better (matching the Fortran's 4.4 % dissipation, the M36 §2.3 finding closed),
+notched_plate max −0.115, the c50 fabric NaN fixed. It is legitimately INERT on
+the RD-E-1000 corpus (hourglass-off BT decks, non-hourglass BATOZ/QEPH/DKT):
+those rows are **byte-identical M38 → M39**, so that family's ~0.55 residual is
+a SEPARATE bending / kinematic gap the shell fix does not address and remains
+the dominant open shell deviation. Two rows are NOT clean improvements and are
+reported as such: **c28/c32 moved 0.362 → 0.423 over a DIFFERENT window** (M39
+reached 21 % of `/RUN` vs M38's ~7 % — the fix improved stability so the run
+went further into a harder regime, so the two numbers compare different
+windows); **rigid_impactor's HE worsened 0.104 → 0.416** though its class held.
+
+**Official-class tally (35 re-run): DEVIATION 18, NO-CHANNELS 9, SKIPPED-SLOW 5,
+PYRADIOSS-FAIL 2, MATCH 1.** **REGRESSION GATE (9 bundled examples): PASS** —
+zero class changes (3 MATCH held — antenna_mast 0.026 / rubber_block 0.001 /
+tensile_bar 0.002; 6 DEVIATION/PORT-ONLY held).
+
+**Per-case class delta vs M38** (changed official rows — the M39 unlocks):
+
+| case | M38 | M39 |
+|---|---|---|
+| c12/c18 V0700 HEXA_DEGE | PYRADIOSS-FAIL | **NO-CHANNELS** (degenerate `/BRICK` now accepted) |
+| c31 V0240 TRIA (1612 elems) | DEVIATION 0.44 | **SKIPPED-SLOW** (crossed 900 s — speed regression) |
+| c52 V0031 Spring_Type32 | (new) | **PYRADIOSS-FAIL** (starter ok, /PROP/SPR_PRE physics unimplemented) |
+| c53 E0200 Snap_thru (SKEW/FIX) | (new) | **DEVIATION 0.346** (skew.py runs end-to-end) |
+| c54 Snap_thru implicit | (new) | NO-CHANNELS (port-only) |
+| c55/c56/c57 E2100 Cam (FRAME/FIX) | (new) | **SKIPPED-SLOW** (parses/runs, contact port > 900 s) |
+
+**Unlocks, honestly qualified.** c53 skew RUNS and compares (DEVIATION 0.346 —
+`skew.py` end-to-end). The degenerate-brick c12/c18 unlock is PARTIAL: the
+starter now ACCEPTS the collapsed `/BRICK` (was PYRADIOSS-FAIL) but the engine
+terminates at ~12 cycles / < 0.1 % of `/RUN` (NO-CHANNELS) — the element runs
+but the simulation does not progress; why it stalls immediately needs a look
+(§7). c52 spring TYPE32 is a PARTIAL unlock (starter parses via the mass-check
+fix, but /PROP/SPR_PRE element physics is not implemented → engine-fail,
+consistent with `small-bugs`). The LAW70 compression trio (c46 at 1800 s) is
+STABLE (HE ≈ 0, the M38 densification fix holds) but port-throughput-limited: it
+cannot finish densification even in 1800 s (timestep 4.2e-7, ~26 cyc/s). The
+bottleneck is port SPEED, not stability — exactly what the §6.3 speed pass
+targets.
 
 ## 4. Coverage matrix — the official corpus through the port Starter
 
@@ -1038,6 +1229,105 @@ that the readers get further):
 (§7 carries these as the M39 quick-fix backlog; a concurrent M38 LAW2-Iflag
 port also cleared 18 decks' "LAW2 Iflag not ported" errors, counted above.)
 
+### 4.8 The M39 full-corpus re-sweep (AUTHORITATIVE)
+
+Same 529 runnable decks, same `sweep_coverage.run_case` driver (M38's verbatim —
+identical verdict definitions, 120 s cap, 6 workers), same short-path MAX_PATH
+handling as §4.6/§4.7. The sweep ran against the shared M39 working tree (the
+M39 fixes are uncommitted; the subprocess picks them up via `python -m
+pyradioss.starter`). Wall 186 s under the user's live 12-process MPI job; max
+per-case 15.9 s vs the 120 s cap, so **verdicts are contention-insensitive** (no
+contention-induced timeouts; the coverage sweep is starter-only, no time
+integration). Machine-readable: `coverage_results_m39.json` (M38 schema +
+`delta_vs_m38`). **NOTE recorded in the JSON**: the three M39 sibling builders
+(shell / skew / bugs) self-reported FAILED, but this sweep measures the ACTUAL
+working-tree code, whatever landed.
+
+| metric | M38 (§4.7) | M39 | delta |
+|---|---:|---:|---:|
+| decks swept | 529 | 529 | — |
+| CLEAN | 9 | **13** | +4 |
+| SKIPS(n) | 431 | **438** | +7 |
+| ERROR | 89 | **78** | **−11** |
+| CRASH | 0 | **0** | 0 |
+| TIMEOUT | 0 | **0** | 0 |
+| DRIVER-FAIL | 0 | **0** | 0 |
+| parse-error incidents | 0 | **0** | 0 |
+
+Verdict migration (15 improved, **0 regressed**): **ERROR→SKIPS 11, SKIPS→CLEAN
+4**, ERROR→ERROR 78, SKIPS→SKIPS 427, CLEAN→CLEAN 9. The case-id set is identical
+to M38.
+
+**The 15 conversions, attributed to mechanism** (which builder landed it):
+
+| mechanism (builder) | decks | transition |
+|---|---:|---|
+| Degenerate bricks → collapsed hexa / TETRA4 (`small-bugs`) | 7 | ERROR→SKIPS |
+| /MAT/VOID LAW0 null-density exemption (`small-bugs`) | 2 | ERROR→SKIPS |
+| /PROP/SPR_PRE TYPE32 mass read from card (`small-bugs`) | 1 | ERROR→SKIPS |
+| SKEW/MOV support + RBODY node-overlap fix (`skew-frame`+`small-bugs`) | 1 | ERROR→SKIPS |
+| FRAME/FIX + SKEW/FIX now supported (`skew-frame`) | 4 | SKIPS→CLEAN |
+
+The 7-deck degenerate set = 2× HEXA_DEGE + 3× RD_V_0240 (HEXA_P14/P20) + 2×
+topology-opt hook_opt; VOID = BAT_CIR/BAT_SQR (Football); spring = RD-V-0031;
+SKEW→CLEAN = 3× RD-E-2100 Cam + RD-V-0530 wave-propagation; SKEW+RBODY = RD-E-1200
+BIKERC.
+
+**The `/SKEW`//`/FRAME` cluster — the task headline — gap fully closed:**
+
+| family | M38 cases_blocking | M39 cases_blocking |
+|---|---:|---:|
+| SKEW/FIX | 16 | **0** |
+| FRAME/FIX | 14 | **0** |
+| SKEW/MOV | 10 | **0** |
+| FRAME/MOV | 7 | **0** |
+| **TOTAL** | **47** | **0 (all closed)** |
+
+`cases_zero_hard_skips` 385 → 418 (**+33**). But **only 5 of the 47 changed
+verdict** — the rest are MULTI-BLOCKER (co-occurring INTER/TYPE24, SHEL16, QUAD,
+MONVOL), so removing SKEW alone rarely cleared the last ERROR-level blocker.
+**gap-closed ≠ verdict-converted** — the single most important interpretive point
+of the milestone, and NOT a failure of the (complete, correct) skew work.
+
+**Error-class delta (5 resolved, 1 new):**
+
+| error class | M38 | M39 | status |
+|---|---:|---:|---|
+| BRICK DEGEN: degenerated brick (penta/pyramid) not ported | 11 | 0 | resolved |
+| /MAT/LAW0 on shells: zero/missing density | 2 | 0 | resolved |
+| /MAT/LAW0 on sh3n: zero/missing density | 1 | 0 | resolved |
+| RBODY: node(s) already belong to another rigid body | 1 | 0 | resolved |
+| /PROP/SPRING mass must be > 0 (TYPE32) | 1 | 0 | resolved |
+| **/PROP/SPR_PRE mass must be > 0 (blank card)** | **0** | **2** | **NEW, not a regression** |
+
+The one NEW class (M39-BUG-SPRPRE) is on **RD-HWX-T-1010 cantilever_completed +
+its DYREL variant** — both were ERROR in M38, `is_regression=False`, and there
+were **zero SKIPS/CLEAN→ERROR moves in the whole sweep**. Root cause: the M39
+SPR_PRE change deliberately reads the card MASS field, and these decks' SPR_PRE/2
+card has a BLANK mass (line 3031 all-spaces, Stif0=13744.468), so the
+cfg-mandated `mass > 0` check fires. It IS the sole ERROR-level blocker on both.
+FOLLOW-UP (M40, §7): verify whether the real Fortran starter tolerates / derives
+a blank SPR_PRE pretensioner mass — if it defaults it, defaulting the blank mass
+converts 2 more decks ERROR→SKIPS. (Distinct error classes 21 → 17.)
+
+**Remaining top gaps blocking the 78 ERROR + residual SKIPS** (family-level,
+cases_blocking / sole_blocker): INTER/TYPE24 18/5, MONVOL/AIRBAG1 16/2,
+INTER/LAGMUL 14/2, ALE/BCS 12/7, SHEL16 12/0, QUAD 10/5, INTER/TYPE18 7/0,
+MOVE_FUNCT 6/1, AMS 5/5, INTER/TYPE10 5/5. **Remaining top error classes** (the
+78 ERROR): 23 `/INTER/TYPE7 Iform not ported`, 20 `model has no elements`, 10
+`/ADMAS node group not defined`, 9 `/PART material not defined`, 8 `/INTER/TYPE7
+Igap`, 6 `/PART property not defined`, 3 `RBODY has no mass` (UNCHANGED from M38
+— DIF24416 ×2 + I16S16FM, which also carry SHEL16/BRIC20 hard skips), 3
+`/INTER/TYPE11 friction filtering`. INTER/TYPE7 Iform/Igap (31 combined) is the
+largest ERROR-message class but a contact-formulation FEATURE gap, not a quick
+bug; "model has no elements" (20) is downstream of the unported SHEL16 / QUAD /
+degenerate-brick element families.
+
+**The shell-fidelity kernel change** (`shell_bt4._post`, +228 lines) is exercised
+by the sweep with **no crashes** but does NOT affect starter verdicts — it is an
+engine-side kernel change; its fidelity impact is measured by §3.3, not this
+starter-only sweep.
+
 ## 5. Coverage — W12/W13 k2rad decks: the four M35 bugs are fixed
 
 All four M35-identified port-reader bugs were fixed inside
@@ -1086,7 +1376,7 @@ named above moved in M37 — LAW44 (Cowper–Symonds) now has ported physics
 GRSHEL/SHEL are covered by the group/set machinery. Neither deck was
 re-run for this report.
 
-## 6. Performance (M36 baseline below; §6.1 = the M37 measurement; §6.2 = M38 — no campaign)
+## 6. Performance (M36 baseline below; §6.1 = the M37 measurement; §6.2 = M38 — no campaign; §6.3 = the M39 SPEED pass)
 
 ### 6.1 M37 timing campaign (`perf_m37.json`, 122 records)
 
@@ -1226,12 +1516,214 @@ faster — exactly the speed-work baseline this section exists to feed.
   MPI/OpenMP scaling (and the port's numba backend, benchmarked separately
   in `tools/benchmark.py` / PORTING_GUIDE M7) are outside this comparison.
 
-## 7. Known issues & backlog (updated for M38)
+### 6.3 M39 SPEED pass — profile, optimize, prove parity (the second track)
 
-The M37 backlog's top items are DONE this milestone: the corpus re-sweep
-(item 1, §4.7), the LAW70 RD-V-0220 instability (item 6, §3.2), the V0700
-cycle-1 energy anomaly (§3.2) and c26_V0200_Hardening (now a MATCH, §3.2) are
-resolved. The post-M38 list, in measured-value order:
+M39's second track attacked the standing §6.1/§6.2 side-quest: the port is
+cycle-bound and throughput COLLAPSES with model size (0.9 cyc/s at 65 k
+elements). A profiler decomposed the cost, then two optimizer builders shipped
+measured, parity-proven wins behind the M7 backend dispatch — the NumPy
+reference path byte-for-byte unchanged. **CONTENTION governs every absolute
+number here**: the user's 12-process `engine_win64_impi` MPI job was live the
+whole session (12/12 sampled), so every ms/cyc and wall clock is an UPPER BOUND;
+the load-robust products are the per-stage SHARES, the alternated A/B ratios, and
+the byte/md5 parity proofs. Deliverables: `tools/profile_cycle.py` (a cProfile +
+monkeypatched per-stage timer harness that caps the engine loop at N cycles via a
+`SkewSet.update` hook — no engine edit) and `perf_m39_speed.json` (20 records +
+the physics-gate block).
+
+**(a) The profile — where the cycle goes** (single-process, contended upper
+bounds; SHARES are load-robust):
+
+| regime | elems | ms/cyc* | µs/elem-cyc | cyc/s* | dominant stage |
+|---|---:|---:|---:|---:|---|
+| tensile_bar (LAW02 hexa) | 40 | 1.30 | 32.6 | 767 | elem 77 % (fixed-overhead regime) |
+| c04_E1000 (BATOZ shells) | 99 | 2.63 | 26.5 | 381 | shells 67 % + rbody-kin 19 % |
+| c46_LAW70 (foam bricks) | 1000 | 12.34 | 12.3 | 81 | bricks 80 % |
+| **c37_T1040 (Ogden bricks — THE CLIFF)** | **65439** | **949.9** | **14.5** | **1.05** | **bricks 91.6 %** |
+| rigid_impactor (TYPE7 contact) | 118 | 4.71 | 39.9 | 212 | shells 39 % + contact 20 % |
+
+**The cliff verdict (c37):** the 0.9 cyc/s is **NOT a super-linear pathology** —
+no O(N²), no per-group Python explosion (`element_groups` yields exactly one
+group per type), no contact. It is **linear element-force cost × N**: per-element
+cost is flat-ish across sizes (c46 12.3 → c37 14.5 µs/elem-cyc), so cyc/s ∝ 1/N
+is inevitable, and the lever is per-element force cost (~8–9× the Fortran 534 k
+elem·cyc/s baseline). Inside the 91.6 % element share: hexa `_post` 16.9 %, Ogden
+`c_einsum` 16.6 %, **`np.linalg.eigh` on (n,3,3) 14.5 %** (Ogden principal-stretch
+via LAPACK per cycle), hexa `_pre`/`_geometry` ~10 %, `_char_length` 7.8 %,
+`cross3`/`det_inv33`/`norm3` ~9 %, plus a hidden **~4.6 % anim VTK ASCII**
+(`np.savetxt` on 72 k-node arrays) that landed in the residual because
+`write_anim_state` was not a wrapped stage — exactly what the cProfile pass
+surfaces. Ogden material alone ≈ 28 % of the cycle (eigh + det + tensor einsums).
+
+**(b) The numba lever — MEASURED** (c46; the mirrors already existed in
+`accel.jit_kernels`, OFF by default):
+
+| | numpy | numba | Δ |
+|---|---:|---:|---:|
+| total ms/cyc | 12.34 | 8.50 | **−31 %** |
+| element-force ms/cyc | 9.91 | 6.03 | **−39 %** |
+
+The mirrors cover the top hot spot of EVERY regime (hexa_pre/post, shell_pre/post,
+t7_narrow). This is the profiler's **#1 ranked lever**: make numba the default
+above a size threshold (~> 500 elems), keep NumPy for tiny/CI decks — pending a
+corpus-wide parity re-run under numba (§7).
+
+**(c) The optimizer wins — each measured + parity-proven** (behind `accel.get`;
+NumPy reference untouched):
+
+| item (builder) | regime | before | after | speedup | parity proof |
+|---|---|---:|---:|---:|---|
+| anim VTK writer `_write_block` (OPT-1) | c37 | 2566 ms/state | 932 ms/state | **2.75×** | md5 c385e6fa IDENTICAL |
+| anim VTK writer (OPT-1) | c46 | 31.5 ms/state | 10.2 ms/state | **3.1×** | md5 3c2ec9c8 IDENTICAL |
+| force scatter `scatter3` (OPT-1, numba) | c37-scale | 14.14 ms | 4.87 ms | **2.9×** | bitwise (zero + nonzero target) |
+| T-file displacement guard (OPT-1) | c37 global-only | disp alloc/row | skipped | — | T01 byte-identical |
+| `hexa_hgphys` LAW70 phys-hourglass (OPT-2, numba) | c46 | 1343 µs/call | 300 µs/call | **4.46×** | rtol 1e-12 + restart-chain canary |
+| `law70_tab2d` table interp (OPT-2, numba) | c46 | 65.6 µs/call | 20.1 µs/call | **3.26×** | `np.array_equal` (0-ulp) |
+| `law70_snorm`/`enorm` Voigt norms (OPT-2, numba) | c46 | 45.8 µs/call | 5.5 µs/call | **8.4×** | `np.array_equal` (0-ulp) |
+| **OPT-2 combined (whole cycle)** | c46, numba A/B | **6.25 ms/cyc** | **4.30 ms/cyc** | **1.455×** | numpy T01 byte-identical |
+
+OPT-1's anim/T-file wins are backend-INDEPENDENT (they help every deck; the full
+c37 run saves ~30 × 1.63 s ≈ 49 s wall on anim alone). OPT-2's kernels
+materialise only on the numba backend. **Deliberately NOT touched**: engine.py's
+hot loop — the profiler puts true inline integration arithmetic at ~1.4 % of the
+cliff (dominated by irreducible array work + reassociation-locked energy
+einsums), so preallocated scratch saves < 0.1 % while risking physics on a
+shared, concurrently-edited, physics-critical file (the speed-work contract
+forbids it).
+
+**(d) The speedup table — numba/NumPy on the M39 current tree** (back-to-back,
+CONTENDED; ratios are the load-robust product):
+
+| deck | NumPy | numba | numba/NumPy | M7 was |
+|---|---:|---:|---:|---:|
+| tensile_bar | 2.485 s | 1.617 s | 1.54× | 1.63× |
+| box_beam_impact | 9.649 s | 4.92 s | **1.96×** | 1.77× ↑ |
+| antenna_mast | 2.981 s | 2.653 s | 1.12× | 1.05× |
+| rubber_block | 2.479 s | 1.719 s | 1.44× | 1.42× |
+| notched_plate | 141.86 s | 56.89 s | **2.49×** | 2.36× ↑ |
+| spot_weld | 13.70 s | 7.33 s | **1.87×** | 1.67× ↑ |
+| edge_impact | 94.30 s | 51.32 s | **1.84×** | 1.47× ↑ |
+| rigid_impactor | 151.59 s | 63.63 s | **2.38×** | 2.20× ↑ |
+| gas_piston | 0.912 s | 2.002 s | 0.46× | 1.10× ↓* |
+| c04_E1000 | 2.537 ms/cyc | 1.465 ms/cyc | 1.73× | — |
+| c46_LAW70 | 12.34 ms/cyc | 4.27 ms/cyc | 2.89× | — |
+| c37_T1040 (cliff) | 939.7 ms/cyc | 530.0 ms/cyc | 1.77× | — |
+
+(`*` gas_piston: a sub-second gas/airbag deck with no numba-accelerated kernels
+— JIT/dispatch overhead dominates; T01 byte-identical, not a regression.) The
+isolated speed WINS: OPT-2's LAW70 kernels give **1.81×** on the c46 numba cycle
+(mirrors off vs on, alternated best-of-4); OPT-1's NumPy path is **1.086×**
+end-to-end on box_beam.
+
+**(e) THE PHYSICS-REGRESSION GATE: PASS — 9/9, NumPy backend, 0 speed-attributable
+T01 changes.** Every bundled example's current-tree T01 is byte-identical to its
+fidelity-complete PRE-SPEED reference. The proof isolates fidelity from speed:
+box_beam current == OPTIMIZER-1's saved `ref_run` (fidelity-tree, pre-speed)
+byte-for-byte while the M38 tree differs (that difference is M39 SHELL FIDELITY,
+not speed); the 5 shell decks that M39 fidelity changed are reproduced
+byte-for-byte by a fidelity-tree reconstruction (the only 2 numpy-T01-path speed
+files reverted to M38). **A naive M38-vs-current T01 diff would false-positive on
+those 5 shell decks** — any future speed-regression check must isolate fidelity
+the same way (recorded for M40).
+
+**(f) The forward menu — the profiler's 6 ranked optimization items** (for the
+next milestone's optimizer builders): **#1** activate the numba backend by
+default above a size threshold (measured −31 % c46; addressable 40–92 % of the
+cycle across regimes; risk MEDIUM — re-run the parity suite under
+`PYRADIOSS_BACKEND=numba` first); **#2** replace the Ogden LAPACK `eigh` with a
+closed-form symmetric-3×3 eigensolver + analytic det (Ogden ≈ 28 % of the cliff;
+risk MEDIUM); **#3** numba-mirror the LAW70 physical hourglass + inline the
+fastmath primitives (risk LOW-MEDIUM); **#4** binary anim output instead of ASCII
+`np.savetxt` (~4.6 % of the c37 window; risk LOW); **#5** fuse the assembly
+scatter (3 bincount → 1) and the inline energy einsums (risk LOW-MEDIUM); **#6**
+cache the rigid-body inertia decomposition (per-cycle svd/solve; risk MEDIUM).
+An UNCONTENDED re-timing on an idle box is still owed (deferred from M38 too).
+
+## 7. Known issues & backlog (updated for M39)
+
+Several M38 backlog items are DONE this milestone: the `/SKEW`//`/FRAME` cluster
+(M38 item 5, the #1 named gap) is 100 % CLOSED (§4.8, 47→0 cases_blocking); the
+c50 fabric NaN channel (M38 item 1) is FIXED (§3.3, → 0.609); three of the four
+M38 quick-fix bugs (item 2) are RESOLVED (M38-NEW-2 VOID null-density, M38-NEW-1
+SPR_PRE TYPE32 mass, M38-NEW-4 RBODY node-overlap — §4.8 error-class delta); and
+the M36/M37 shell-hourglass fidelity finding (§2.3/§3.1) is directly addressed
+for active-hourglass decks (§3.3, box_beam HE 6×). The post-M39 list, in
+measured-value order:
+
+1. **TWO RED tests in the shared tree — RECONCILED by the integration verifier**
+   (both from unreconciled concurrent edits, both were verified RED at report
+   time, NEITHER a NumPy-physics regression): (a)
+   `tests/test_m7_backends.py::test_shell_pre_post_parity` — the `shell-fidelity`
+   builder changed `shell_bt4._post`'s signature to the `chvis3.F` form (added
+   `hqm/hqb/hqr`, `dt`) and updated `jit_kernels.shell_post`, but did not update
+   the test's direct call (`_post() missing hqr, dt`); the parity call now feeds
+   `k_m,k_w,hqm,hqb,hqr,dt` to BOTH backends, so the numpy==numba bitwise check is
+   preserved. (b)
+   `tests/test_element_kernels.py::test_degenerated_brick_penta_run_as_collapsed_hexa`
+   (renamed from `..._penta_rejected`) — asserted the OLD reject-penta behavior
+   the `small-bugs` pack intentionally changed to run-as-collapsed-hexa (the deck
+   now prints `1 DEGENERATED /BRICK ELEMENT(S) RUN AS COLLAPSED HEXA`); it now
+   asserts the accept-and-run behavior, the collapse physics already covered in
+   `test_m39_smallbugs.py`. The 72 new `tests/test_m39_*.py` all PASS.
+2. **M39-BUG-SPRPRE — the one new error class** (§4.8; 2 decks: RD-HWX-T-1010
+   cantilever_completed + its DYREL variant; NOT a regression, both ERROR in
+   M38). The M39 /PROP/SPR_PRE change reads the card MASS field; these decks'
+   SPR_PRE/2 card has a BLANK mass, so the `mass > 0` check fires as their sole
+   ERROR-level blocker. Verify whether the real Fortran starter tolerates /
+   derives a blank pretensioner mass — if it defaults it, defaulting the blank
+   mass converts 2 more decks ERROR→SKIPS. No `*.fortran_ref` backup exists for
+   these tutorial decks and the MPI job contended the machine, so no Fortran run
+   was spun up this round.
+3. **The degenerate-brick unlock is PARTIAL** (§3.3): c12/c18 HEXA_DEGE — the
+   starter now ACCEPTS the collapsed `/BRICK` (was PYRADIOSS-FAIL) but the engine
+   terminates at ~12 cycles / < 0.1 % of `/RUN` (NO-CHANNELS); the element runs
+   but the simulation does not progress. Investigate why the run stalls
+   immediately. c52 spring TYPE32 is likewise partial (starter parses, but
+   /PROP/SPR_PRE element physics is unimplemented → engine-fail).
+4. **SPEED — activate the numba backend by default** (the profiler's #1 lever,
+   §6.3f; measured −31 % on c46, addressable 40–92 % of the cycle). Requires a
+   corpus-wide parity re-run under `PYRADIOSS_BACKEND=numba` before defaulting it
+   on, then the ranked #2–#6 (Ogden closed-form eigensolver, LAW70 hourglass
+   mirror, binary anim, scatter/einsum fusion, rbody-inertia cache). An
+   **UNCONTENDED timing pass on an idle box is still owed** (deferred from M38 —
+   every M39 wall clock carried the impi=12/12 flag).
+5. **The c31 V0240 TRIA speed regression** (§3.3): DEVIATION 0.44 → SKIPPED-SLOW,
+   crossed 900 s (the fix's added per-cycle viscous-hourglass work + contention
+   on 1612 elems) — a candidate for the 1800 s budget in a cleaner uncontended
+   run; and the LAW70 compression trio (c46/c47/c49) remains SKIPPED-SLOW
+   (STABLE, HE ≈ 0, but port-throughput-limited — the §6.3 speed work is the
+   fix, not stability).
+6. **Complete the M39 parity coverage** (35/65 official re-run, §8): the un-run
+   30 are the RD-E-1000 remainder (inert, hourglass-off), the T1000 family
+   (c33/c34/c35/c36/c38 — c33 now runs the engine, an apparent unlock), the slow
+   timeouts (c21/c22/c24/c29/c37), LAW70 c47/c49, and the FRAME/MOV tensiles
+   c58-c64 (the skew instance was evicted by a background-task limit before
+   reaching them). Re-run `build_perf_m39.py` on an idle box to fold them in.
+7. **The shell fix's NARROW reach — the next shell-fidelity target** (§3.3): the
+   official RD-E-1000 Bending family runs hourglass-OFF / non-hourglass
+   formulations, so it is byte-identical M38→M39; its ~0.55 residual is a
+   SEPARATE bending / kinematic gap the hourglass fix does not touch. That, not
+   hourglass, is now the dominant open shell deviation.
+8. **The next verdict-conversion frontier** (§4.8 ranked gaps): INTER/TYPE24
+   (18 blocking / 5 sole), MONVOL/AIRBAG1 16, INTER/LAGMUL 14, ALE/BCS (12/7),
+   SHEL16 12, QUAD (10/5). INTER/TYPE7 Iform/Igap (31 combined) is the largest
+   ERROR-message class but a contact-formulation FEATURE gap, not a quick bug;
+   "model has no elements" (20) is downstream of the unported SHEL16/QUAD/
+   degenerate-brick element families.
+9. **M38-NEW-3 `RBODY has no mass` still UNRESOLVED** (3 decks, UNCHANGED from
+   M38 — §4.8): DIF24416 ×2 (Gears Inter16/17) + I16S16FM (Cam fine_mesh); the
+   `small-bugs` pack fixed only the node-overlap check, not mass accumulation.
+   These decks also carry SHEL16/BRIC20 hard skips, so they would remain ERROR
+   even if mass-accumulation were fixed. Also carried: the deeper /ADMAS wall
+   (`/ADMAS node group not defined`, 10 decks).
+10. **Carried from M38** (unchanged): the Isolid24/HEPH assumed-strain brick
+    generalized beyond LAW70; the /PROP + LAW2 documented cuts (TYPE8/13 springs
+    linear-core-only, SH_ORTH IREP=0, kinematic hardening); material physics for
+    the parsed-but-inactive laws (LAW6 HYD_VISC 30 blocks, LAW51 22, …); the
+    contact/hourglass differential study on the DEVIATION examples; gas_piston
+    positive-P0 for full 9/9 comparability.
+
+### M38 backlog (superseded — items 5 (SKEW/FRAME), the c50 NaN, and three of the four M38-NEW bugs are resolved by M39; the rest are carried into the M39 list above)
 
 1. **~~The official-parity + timing re-run is still owed~~ DONE** — the
    resumed driver completed 52/52 (§3.2: both-engine 24 → 28, port-fails
@@ -1346,8 +1838,68 @@ The post-M37 list, in measured-value order:
 
 ## 8. Honest limitations of this report
 
-M38-specific limitations first; the M37/M36 caveats below are carried and
+M39-specific limitations first; the M38/M37/M36 caveats below are carried and
 still apply to the sections they describe.
+
+- **Three of the six M39 builders self-reported FAILED** (`shell-fidelity`,
+  `skew-frame`, `small-bugs`), so there is no builder report for the shell
+  hourglass fix, the skew/frame reader, or the small-bug pack. Verification here
+  is INDEPENDENT of those absent reports: the code is in the tree, its 72 new
+  tests (`tests/test_m39_*.py`) were re-run GREEN for this report, the §4.8 sweep
+  attributes 15 clean verdict conversions to it with 0 regressions, and §3.3
+  measures the shell fix's physics effect. "FAILED" is a self-state artifact —
+  but it does mean the mechanism narratives (which builder did what, the
+  chvis3.F citation, the skew.py design) come from the measuring builders'
+  attribution and the code/tests, not first-hand builder accounts.
+- **Two PRE-EXISTING tests were RED in the shared working tree** — verified
+  failing at report time, now RECONCILED by the integration verifier (§7 item 1):
+  `test_m7_backends.py::test_shell_pre_post_parity` (a stale `_post` call not
+  updated to the new `chvis3.F` `hqm/hqb/hqr/dt` signature) and
+  `test_element_kernels.py::test_degenerated_brick_penta_run_as_collapsed_hexa`
+  (renamed; asserted the OLD reject-penta behavior the small-bug pack
+  intentionally replaced with run-as-collapsed). Both were unreconciled
+  concurrent-edit fallout, NEITHER a NumPy-physics regression (the §6.3 gate
+  proves the 9 bundled NumPy T01 are byte-identical to pre-speed); with the two
+  reconciliations the fast/CI test tier is GREEN.
+- **Every M39 wall clock is CONTENDED.** The user's 12-process
+  `engine_win64_impi` MPI job was live the entire session (confirmed by
+  `tasklist`: 12 engine processes + `mpiexec` at report time). All absolute
+  ms/cyc, s and cyc/s in §3.3/§6.3 are UPPER BOUNDS; parity classes, rel-RMS,
+  the §4.8 verdicts, per-stage SHARES and the alternated A/B speedup RATIOS are
+  load-independent and stand. An uncontended re-timing on an idle box is owed
+  (§7 item 4). No perf number from this round should be propagated as a clean
+  benchmark.
+- **The M39 parity coverage is INCOMPLETE — 35/65 official cases re-run** (§3.3),
+  due to shell-family compute cost under 12-way contention; the un-run 30 and
+  their expected status are documented (§7 item 6; RD-E-1000 remainder inert, the
+  T1000 family with an apparent c33 engine unlock, the slow timeouts, LAW70
+  c47/c49, the FRAME/MOV tensiles evicted by a background-task limit). The §4.8
+  coverage sweep, by contrast, IS a complete 529/529 M39-tree measurement — but
+  it is STARTER-side only (which decks parse/build, not physics parity), exactly
+  as M38.
+- **The shell-fidelity fix's off-target rows are reported as fidelity, not
+  regression, per the brief.** c28/c32 V0240 (0.362 → 0.423) compares DIFFERENT
+  run windows (M39 reached 21 % vs M38's ~7 % because the fix improved
+  stability), and rigid_impactor's HE worsened (0.104 → 0.416) though its class
+  held — neither is a clean before/after and both are flagged as such in §3.3.
+- **The speed work's parity is proven at the NumPy-reference and
+  isolated-kernel level, not corpus-wide under numba.** The −31 % numba lever was
+  measured only on c46; making numba the default (§6.3f #1) still requires the
+  full parity suite re-run under `PYRADIOSS_BACKEND=numba` (out of scope this
+  round). The OPT-1 anim-path before/after could not be re-measured on the M38
+  tree directly — M38 cannot read the M39 restart (it pickles the new
+  `pyradioss.model.skew` object → `ModuleNotFoundError`), itself evidence of the
+  fidelity work; the anim win is reported from the current measurement + verified
+  byte-parity. `perf_m39.json` / `perf_m39_speed.json` were merged from several
+  result files by `build_perf_m39.py`; a ~4-task concurrent-background limit
+  silently killed some sweeps mid-run, so future large sweeps should stay ≤ 3
+  concurrent background jobs.
+- **The report was written against a SHARED uncommitted working tree** (HEAD
+  `7853b26`, 28 modified files + the new modules); `checks.py`, `jit_kernels.py`,
+  `shell_bt4.py` and `solid_hexa8.py` were edited by SEVERAL M39 builders
+  concurrently (the shell `_post` signature, the OPT-1 `scatter3` + OPT-2
+  `hexa_hgphys`/`law70_*` kernels, the degenerate-brick handling) — merge-time
+  reconciliation is the parent's to confirm.
 
 - **The M38 corpus re-sweep IS a real M38-tree measurement** (§4.7,
   `coverage_results_m38.json`) — unlike M36→M37, the sweep ran against the M38

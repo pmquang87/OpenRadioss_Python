@@ -579,7 +579,18 @@ def test_eos_polynomial_real_two_card_layout(tmp_path):
 
 def test_inivel_axis_real_layout(tmp_path):
     """Real AXIS card 1 is 'DIR FRAME_ID GRNOD_ID' (float('Z') crashed);
-    card 2 carries Vxt Vyt Vzt VR."""
+    card 2 carries Vxt Vyt Vzt VR.
+
+    M39 ported /SKEW//FRAME, so /INIVEL/AXIS now CONSUMES its FRAME_ID
+    (the reader retains it and resolve_skews binds it to the frame's DIR
+    axis + origin — starter/initialization.py resolve_skews, hm_read_inivel.F
+    437-439/581-598; the frame-transform physics is covered by
+    test_m39_skew.py). The pre-M39 'frame not ported' warning is therefore
+    gone. The real card's FRAME_ID must (a) be parsed and retained and
+    (b) — since this byte-faithful fixture names FRAME_ID = 1 but defines no
+    /FRAME/1 — raise the hard 'unknown frame' error real Radioss raises
+    (ANCMSG 184/490), never be silently dropped."""
+    from pyradioss.starter.initialization import resolve_skews
     body = (
         "/INIVEL/AXIS/1\n"
         "INIVEL 1\n"
@@ -594,7 +605,15 @@ def test_inivel_axis_real_layout(tmp_path):
     assert iv.grnod_id == 25
     assert iv.omega == pytest.approx(0.0118)
     assert list(iv.axis) == [0.0, 0.0, 1.0]
-    assert any("FRAME" in w.upper() for w in log.warnings), log.warnings
+    # the FRAME_ID column is parsed and RETAINED (consumed, not dropped):
+    # M39 wires it to the frame at resolve time instead of warning
+    assert iv.frame_id == 1
+    assert not log.warnings, log.warnings         # no stale 'not ported' warn
+    # resolving a reference to a frame that does not exist is a hard error,
+    # exactly like the Fortran starter (an /INIVEL/AXIS whose axis/origin
+    # would come from a missing /FRAME cannot be applied)
+    resolve_skews(model, log)
+    assert any("frame_ID 1" in e for e in log.errors), log.errors
 
 
 def test_inivel_tra_parameter_reference(tmp_path):
