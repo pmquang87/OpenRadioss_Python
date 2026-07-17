@@ -30,6 +30,15 @@ from pyradioss.input.mat_reader import (
     GenericMaterialRecord, InactiveMaterial, InactiveMaterialError,
     MAT_PHYSICS_REGISTRY, refuse_inactive_materials)
 from pyradioss.input.starter_keywords import parse_starter_deck
+
+# The generic reader parses its schemas from OpenRadioss's hm_cfg_files —
+# not vendored (license); local installs find C:/OpenRadioss, CI fetches a
+# sparse checkout and sets PYRADIOSS_HM_CFG (ci.yml). Anywhere else: skip,
+# loudly, instead of failing on all-zero parameters.
+pytestmark = pytest.mark.skipif(
+    mat_reader.catalogue().schema("FABRI") is None,
+    reason="hm_cfg_files CFG tree not found — set PYRADIOSS_HM_CFG "
+           "(see ci.yml / PORTING_GUIDE M37)")
 from pyradioss.model.entities import Material
 from pyradioss.model.model import Model
 

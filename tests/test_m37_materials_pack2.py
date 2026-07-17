@@ -18,6 +18,14 @@ from pyradioss.common.messages import MessageLog
 from pyradioss.input.deck_reader import read_deck
 from pyradioss.input import mat_reader
 
+# Deck-level tests here parse /MAT cards through the cfg-driven generic
+# reader, which needs OpenRadioss's hm_cfg_files (not vendored — license;
+# CI fetches a sparse checkout, ci.yml). Skip loudly without them.
+pytestmark = pytest.mark.skipif(
+    mat_reader.catalogue().schema("FABRI") is None,
+    reason="hm_cfg_files CFG tree not found — set PYRADIOSS_HM_CFG "
+           "(see ci.yml / PORTING_GUIDE M37)")
+
 
 # ============================================================================
 # helpers
