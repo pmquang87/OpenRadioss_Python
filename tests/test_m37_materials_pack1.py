@@ -479,6 +479,78 @@ def test_law70_hexa_deck_on_curve(tmp_path):
     assert np.isfinite(dtc[0]) and dtc[0] > 0.0
 
 
+def test_law70_physical_hourglass_stiffness_is_elastic(tmp_path):
+    """M38 regression for the LAW70 physical-hourglass fix.
+
+    RD-V-0220 c46/c47/c49 died on hourglass-energy INJECTION at their
+    densification lock-up: the deck's /PROP/SOLID Isolid=24 asks for the
+    HEPH physically-stabilized brick, but the port's default brick carries
+    only VISCOUS hourglass control, which resists hourglass VELOCITY, never
+    DEFORMATION — so past EPS_max the zero-energy modes ran away (Fortran
+    holds HOURGLASS ENERGY = 0 the whole run). The M38 fix
+    (solid_hexa8._phys_hourglass_law70) adds the missing Belytschko-Bindeman
+    hourglass STIFFNESS for LAW70 bricks.
+
+    This drives ONE hourglass mode UP then back DOWN at a densified state and
+    asserts the hourglass-energy ledger is STORED on the way up and RETURNED
+    on the way down — i.e. the added control is an ELASTIC restoring force. A
+    viscous-only control (the pre-fix behaviour) could only ever DISSIPATE, so
+    its ledger would keep GROWING on the reverse leg and never come back;
+    hence ``ehour_end < ehour_peak`` fails without the fix and holds with it.
+    """
+    deck = (
+        "/BEGIN\nfoam hg\n" + _CUBE +
+        "/MAT/LAW70/1\nfoam\n"
+        + _f20("1.0") + "\n"                              # heavy rho -> slow c
+        + _f20("25.0", "0.0", "2500.0", "1.0") + f"{0:>10d}" + "\n"
+        + _f20("0.0") + _i10(0, 1, 1, 0) + _f20("1.0", "1.0") + "\n"
+        + f"{1:>10d}" + _f20("0.0", "0.0") + "\n"
+        + f"{2:>10d}" + _f20("0.0", "0.5") + "\n"
+        "/FUNCT/1\nload\n0.0 0.0\n0.1 0.4\n0.9 1.0\n1.0 7.0\n"
+        "/FUNCT/2\nunload\n0.0 0.0\n0.1 0.2\n0.9 0.5\n1.0 3.5\n"
+        "/END\n")
+    model, log = _build(deck, tmp_path)
+    g = model.bricks
+    assert g.state["has_law70"]                    # fix wired for this group
+    fint = np.zeros_like(model.x)
+    mint = np.zeros_like(model.x)
+    dt = 1e-3
+
+    # ---- 1. compress uniformly to a stiffened (densifying) state ----------
+    v = np.zeros_like(model.x)
+    v[:, 2] = -0.8 * model.x[:, 2]
+    for _ in range(1000):
+        solid_hexa8.forces(g, model.x, v, model.vr, dt, fint, mint)
+    E = g.state["mat_extra"]["uv70"][0, 2]
+    assert E > 1500.0                              # modulus climbed toward E_max
+    # uniform compression excites no hourglass -> ledger still ~0
+    ehour0 = float(g.state["ehour"][0])
+
+    conn = g.conn[0]                               # the element's 8 node ids
+    pat = solid_hexa8._H[0]                        # a pure hourglass mode
+    amp = 1e-3
+
+    # ---- 2. LOAD the hourglass mode: the ledger must climb (energy stored) -
+    def drive(sign, nstep):
+        vh = np.zeros_like(model.x)
+        vh[conn, 2] = sign * amp * pat
+        last = None
+        for _ in range(nstep):
+            last = solid_hexa8.forces(g, model.x, vh, model.vr, dt, fint, mint)
+        return last
+
+    dtc = drive(+1.0, 150)
+    ehour_peak = float(g.state["ehour"][0])
+    assert ehour_peak > ehour0 + 1e-9             # STORED on loading
+    assert np.all(np.isfinite(dtc)) and dtc[0] > 0.0   # dt stays finite/coupled
+
+    # ---- 3. UNLOAD the mode back to the start: the ledger must come DOWN ---
+    drive(-1.0, 150)
+    ehour_end = float(g.state["ehour"][0])
+    assert ehour_end < ehour_peak - 1e-9          # RETURNED on unloading (elastic)
+    assert np.isfinite(ehour_end)                 # bounded throughout (no runaway)
+
+
 @pytest.mark.skipif(not _HAS_CORPUS, reason="official-deck corpus extract "
                     "not present on this machine")
 def test_law70_oracle_deck_material_resolves():
@@ -500,6 +572,66 @@ def test_law70_oracle_deck_material_resolves():
         assert "xg_load" in mat.params, (k, log.errors)
         mat_errors = [e for e in log.errors if "LAW70" in e]
         assert not mat_errors, mat_errors
+
+
+# ============================================================================
+# M38 / M37-BUG-2 — null-density MAT CHECK vs multi-material ALE laws
+# ============================================================================
+
+@pytest.mark.skipif(not _HAS_CORPUS, reason="official-deck corpus extract "
+                    "not present on this machine")
+def test_law151_multimaterial_ale_exempt_from_null_density_check():
+    """M38 / M37-BUG-2: the multimaterial ALE family (LAW51, LAW151/
+    MULTIFLUID) carries its initial density on the SUBMATERIAL references +
+    volume fractions, not the top-level RHO0 — the card's first density
+    field is legitimately blank (RD-E-1300 blast_experiment: an empty first
+    card, then ``mat_ID_01 / Vfrac_01``). The port's null-density MAT CHECK
+    must NOT fatal-error them (the upstream Starter does not). Here the two
+    LAW151 air materials parse with RHO0 = 0, land on brick element groups,
+    and check_model must raise NO 'initial density' error for them."""
+    path = os.path.join(RD_DECKS, "rd_e", "RD-E-1300_Shock_tube",
+                        "13_Shock_tube", "Blast_experiment",
+                        "blast_experiment_0000.rad")
+    if not os.path.isfile(path):
+        pytest.skip("blast_experiment deck not in corpus extract")
+    model = Model()
+    log = MessageLog()
+    parse_starter_deck(read_deck(path), model, log)
+    resolve_materials(model, log)
+    build_element_groups(model, log)
+    law151 = [m for m in model.materials.values() if m.law == 151]
+    assert law151, "blast_experiment should define /MAT/LAW151 materials"
+    assert all(getattr(m, "rho0", 0.0) == 0.0 for m in law151), \
+        "a multimaterial LAW151's top-level RHO0 is blank/zero"
+    on_group = [mat.id for _, g in model.element_groups()
+                for _, mat, _ in g.state["slices"] if mat.law == 151]
+    assert on_group, "LAW151 materials must reach the MAT CHECK on a group"
+    log.errors.clear()
+    check_model(model, log)
+    dens_err = [e for e in log.errors if "initial density" in e]
+    assert not dens_err, dens_err              # EXEMPT — no fatal density error
+
+
+def test_null_density_check_still_fires_for_non_ale_law(tmp_path):
+    """The M38 exemption is NARROW: a genuine null-density material on a
+    non-ALE law (only LAW51/LAW151 keep density on submaterials) is still a
+    fatal MAT CHECK error — masses cannot be initialized without it."""
+    deck = (
+        "/BEGIN\nnull dens\n" + _CUBE +
+        "/MAT/LAW1/1\nsteel\n"
+        + _f20("0.0") + "\n"                       # RHO_I = 0 (the real bug)
+        + _f20("210000.0", "0.3") + "\n"
+        "/END\n")
+    model = Model()
+    log = MessageLog()
+    f = tmp_path / "K_0000.rad"
+    f.write_text(deck)
+    parse_starter_deck(read_deck(str(f)), model, log)
+    resolve_materials(model, log)
+    build_element_groups(model, log)
+    log.errors.clear()
+    check_model(model, log)
+    assert any("initial density" in e for e in log.errors), log.errors
 
 
 # ============================================================================

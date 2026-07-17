@@ -1,17 +1,26 @@
 # VALIDATION — differential validation of pyradioss against the Fortran OpenRadioss
 
-*M37 edition: column-aware fixed-format reading (the entire M36 parse-bug
-backlog retired), every /MAT card parsed, the first material-physics
-packs, group/set machinery. Supersedes the M36 report for the TL;DR/§4/§7/§8;
-M35/M36 history kept below. NOTE: the M37 corpus re-sweep DID execute
-(§4.6 — its first builder died on a transient API error and it was re-run;
-`coverage_results_m37.json` is the authority for the corpus numbers, and
-where §4.1–4.4 still quote M36 figures they are superseded by §4.6). The
-official parity re-run is reported in §3.1.*
+*M38 edition: the /PROP pack (the M37 sweep's #1 blocker cluster) closed via
+a new cfg-driven `prop_reader.py`, LAW19 fabric end-to-end through SH_ORTH
+orthotropy, the three M37 bugs resolved/improved, and two physics-stability
+fixes (the LAW70 densification hourglass instability, the V0700 −50%
+energy-ledger anomaly). Supersedes the M37 report for the TL;DR; ADDS §3.2
+(M38 case-level parity deltas), §4.7 (the authoritative M38 corpus re-sweep),
+§6.2 (M38 timing note), and refreshes §7/§8. M37's §3.1 (official parity) and
+§4.6 (corpus re-sweep) remain the AUTHORITATIVE measurement baseline the M38
+deltas are taken against; §6.1 (`perf_m37.json`) plus the new §3.2/§6.2
+M38 campaign (`parity_m38.json`, `perf_m38.json`) carry the timing data.
+NOTE, named honestly: the `parity-m38` builder's session ended at 6/52
+cases; the coordinator resumed its resume-capable driver to completion
+(52/52) — the JSONs are the full campaign, not a builder stub.
+`tetra4-convention` filed no report but its /TETRA4
+volume-sign fix landed and the §4.7 sweep confirms it (M37-BUG-3, 9→0 decks).
+M35/M36/M37 history kept below.*
 
-- Date: 2026-07-16, branch `claude/openradioss-python-m37-materials`
-  (M36 baseline: commit `af73d6f`, branch
-  `claude/openradioss-python-m36-realdeck`)
+- Date: 2026-07-17, branch `claude/openradioss-python-m38-props-tetra`
+  (M37 baseline: commit `977993b`, the merge of
+  `claude/openradioss-python-m37-materials`; the M38 fixes live in the shared
+  working tree, uncommitted — HEAD stayed at `977993b` through the §4.7 sweep)
 - Reference solver: OpenRadioss Windows 64-bit double-precision build in
   `C:/OpenRadioss/exec` (`starter_win64.exe`, `engine_win64.exe`,
   `th_to_csv_win64.exe`), run single-process (`-np 1 -nt 1`), input format
@@ -29,10 +38,16 @@ official parity re-run is reported in §3.1.*
   529-case re-sweep, M36 schema + `delta_vs_m36` — §4.6),
   **`parity_m37.json`** (61 results: 52 official + bundled re-run — §3.1)
   and **`perf_m37.json`** (122 timing records with per-record contention
-  notes — §6.1). These three are the authoritative measurements for this
-  milestone.
+  notes — §6.1). These three are the authoritative M37 measurements, and the
+  BASELINE the M38 deltas are taken against. The M38 measurement is
+  **`coverage_results_m38.json`** (the full 529-case re-sweep, M37 schema +
+  `delta_vs_m37` + `error_class_signatures` — §4.7; authoritative for the M38
+  corpus verdicts), **`parity_m38.json`** (the COMPLETE 52-case official
+  parity re-run — resumed to completion after the builder's session ended
+  at 6/52) and **`perf_m38.json`** (104 timing records, contention-flagged
+  per case while the user's own MPI job shared the machine).
 
-## History — what M35 established, what M36 changed, what M37 changed
+## History — what M35 established, what M36 changed, what M37 changed, what M38 changed
 
 The M35 first edition (commit `786163b`) built the harness and proved the
 environment. Its central finding was that the obstacle was the *deck dialect*,
@@ -57,9 +72,97 @@ parses, ten material laws gained real physics, and the group/set +
 /UNIT machinery landed. What M37 did NOT deliver is the re-measurement:
 the corpus re-sweep and the official parity/timing re-run were assigned
 to builders that failed, so this edition documents the tree-side deltas
-(§4.5) against the still-standing M36 corpus numbers.
+(§4.5) against the still-standing M36 corpus numbers. (Both re-runs were
+subsequently RE-RUN to completion — §4.6 and §3.1 are the authoritative M37
+measurements; the History note here is the M37 edition's own account, kept
+intact.)
+
+M38 took the M37 sweep's own #1 finding — "the blocker profile is now flat,
+the top cluster is /PROP" (§4.6) — as its target. It shipped the /PROP pack
+(a new cfg-driven `prop_reader.py`, the property sibling of `mat_reader.py`,
+closing every /PROP family the sweep ranked), completed the LAW19 fabric chain
+end-to-end through SH_ORTH orthotropy, and resolved the three bugs M37
+deferred: the /TETRA4 volume-sign convention (BUG-3, resolved), the /ADMAS
+unit-system misread (BUG-1, resolved), and the multi-material-ALE density
+false-positive (BUG-2, improved 10→2). Two physics-stability fixes landed
+alongside — the LAW70 densification hourglass instability (the Isolid24/HEPH
+element gap M37 named, fixed for LAW70 bricks) and the V0700 −50% cycle-1
+energy-ledger anomaly (a midstep constraint-work bug) — and c26_V0200_Hardening
+was re-measured to a clean MATCH. The M38 corpus re-sweep (§4.7) measured the
+unlock: ERROR 149→89, 60 more decks out of ERROR, 0 regressions. As in M37,
+the parity/timing re-run builder (`parity-m38`) failed — there is no
+`parity_m38.json`/`perf_m38.json`; the §3.2 parity numbers are the physics
+builders' own case-level measurements, and M37's §3.1/§4.6/§6.1 remain the
+authoritative corpus-scale baseline. A second builder (`tetra4-convention`)
+filed no report but its BUG-3 fix landed and the sweep confirms it.
 
 ## TL;DR
+
+1. **The /PROP pack — the M37 sweep's #1 blocker cluster — is closed.** A new
+   cfg-driven reader `pyradioss/input/prop_reader.py` (the property sibling of
+   `mat_reader.py`, citing each `hm_cfg_files` PROP cfg FORMAT): every /PROP
+   family the M37 corpus sweep ranked as the flat blocker profile's top cluster
+   now parses, and where the port's element families support it, has real
+   physics. SH_ORTH (TYPE9) feeds a per-element orthotropy fiber frame into the
+   BT4/tri3 shell kernels (`corthdir.F` + `mulawc.F90`/`rotov.F`); SPR_GENE
+   (TYPE8) + SPR_BEAM (TYPE13) are 6-DOF linear K/C springs (`r2def3.F`); VOID
+   (TYPE0) is a no-stiffness placeholder; INJECT1, TSHELL/TYPE20 and every other
+   spelling parse as `InactiveProperty` the Engine refuses. Two parity blockers
+   cleared: the E0500 fixed-format /PROP/BEAM section card and the mat_ID=0
+   /PART rule (legal on spring parts). **23 new tests, 0 regressions** across
+   363 existing.
+2. **LAW19 fabric is end-to-end.** SH_ORTH completes the LAW19 chain:
+   **RD-V-0230 SHELL_LAW19_PROP9** runs the complete chain — Starter NORMAL
+   (**0 errors, was 6 "property not defined"**), Engine NORMAL, 384 shells with
+   0°/45°/90° fibers; a kernel-level test confirms a 0°-fiber shell resists
+   x-stretch **> 2×** (≈ E11/E22 = 6×) a 90°-fiber shell — the orthotropy
+   wiring changes the stress, not just the parse.
+3. **THE M38 CORPUS RE-SWEEP (§4.7): ERROR 149 → 89, SKIPS 373 → 431, CLEAN
+   7 → 9.** Same 529 decks, same driver as M37: **60 decks converted out of
+   ERROR** (58 → SKIPS, 2 → CLEAN), **0 regressions, 0 crashes, 0 timeouts, 0
+   parse errors**. Every /PROP family closed at the gap level (SH_ORTH 21→0,
+   SPR_BEAM 20→0, INJECT1 17→0, SPR_GENE 14→0, TYPE20 12→0, VOID 10→0, …).
+   Atomic (source SHA-256 byte-identical before/after, HEAD at `977993b`).
+   Deliverable `coverage_results_m38.json`.
+4. **The three M37 bugs are resolved/improved.** M37-BUG-3 **/TETRA4
+   volume-sign** (9 decks) FIXED — the `tetra4-convention` builder filed only a
+   stub report but its `solid_tetra4.py` node-ordering/volume-sign fix landed
+   and the sweep confirms **9 → 0** (the M37 landed-unreported pattern);
+   M37-BUG-1 **/ADMAS unit-system** (22 decks) resolved; M37-BUG-2 **MAT
+   density false-positive 10 → 2** (multi-material ALE law {51,151} exemption).
+5. **LAW70 densification instability killed.** The 3 RD-V-0220 variants
+   (c46/c47/c49) that died on numerical energy injection (−504 %…−16 968 % at
+   ~32 %) now run stably through densification: a Belytschko–Bindeman hourglass
+   STIFFNESS added for LAW70 bricks ONLY (`solid_hexa8`) — **EN identically 0**
+   (was −5.29e9), **max HE ~2** (a 2.6-billion-fold reduction), ERR% ~0.0007 %,
+   verified into **~95 % of peak crush**. c48 (tension, no densification)
+   unchanged: NORMAL, **MATCH 0.0353** (was 0.0355). Root cause = the deck's
+   Isolid=24 HEPH brick mapping to the port's one-point FB viscous brick — the
+   M37 "element gap, not material" finding, fixed for LAW70 (§3.2).
+6. **V0700 −50 % cycle-1 anomaly root-caused + fixed; c26 is a MATCH; LAW2
+   Iflag=1 ported.** The nine V0700 SAMP decks' −50 % cycle-1 energy error was
+   a midstep-bookkeeping bug — `apply_kinematic` booked constraint work at the
+   endpoint velocity, not the leapfrog midstep `½J(v_old+v_imp)` that `fixvel.F`
+   books (kinematics.py/engine.py fixed) — SHELL_Ishell24_LAW2 now NORMAL,
+   **0.00 % every cycle**. c26_V0200_Hardening re-measured at full coverage is
+   a clean **MATCH (0.0216)** — the M37 0.170 was a 1.4 %-window truncation
+   artifact. /MAT/LAW2 Iflag=1 (SIG_Y/UTS/EUTS → a/b/n) ported **bit-exact vs
+   Fortran** (T1000: A=0.090260 / B=0.223202 / n=0.368307), clearing the c33
+   blocker (§3.2).
+7. **THE M38 PARITY CAMPAIGN COMPLETED 52/52** (§3.2, `parity_m38.json` +
+   `perf_m38.json`; the builder's session ended at 6/52 and the coordinator
+   resumed its driver): **both-engine comparisons 24 → 28, port starter
+   fails 18 → 9 (halved)**; the two full-coverage MATCHes are this
+   milestone's fix showcases — c26 Hardening (0.0216) and c48 LAW70 foam
+   (0.0353). M37's other "MATCH" labels are exposed as /STOP-truncation
+   artifacts (full-coverage they measure 0.36–0.44, the shell-fidelity
+   family). All M38 port wall clocks are CPU-contention-flagged (§6.2).
+8. **Builder incidents, named honestly**: `tetra4-convention` filed a stub
+   report but its /TETRA4 fix landed and is confirmed by the §4.7 sweep and
+   the §3.2 tetra comparisons; `parity-m38` was resumed by the coordinator
+   (item 7).
+
+### TL;DR — M37 edition (kept intact; §3.1 parity and §4.6 corpus sweep remain the authoritative measurement baseline the M38 deltas are taken against)
 
 1. **The entire M36 parse-bug backlog is dead.** The reader is now
    COLUMN-AWARE: a new shared module `pyradioss/input/card_layouts.py`
@@ -422,6 +525,109 @@ fixed-format `/PROP/BEAM` section card (E0500). c34/c35/c36/c38/c39 are
 mesh-only/unsolved tutorial decks the Fortran starter also rejects —
 matching rejection is correct behavior.
 
+### 3.2 M38 parity — the full 52-case re-run (AUTHORITATIVE) + case-level deltas
+
+The `parity-m38` builder's session ended at 6/52 cases; its resume-capable
+driver was resumed to completion. **`parity_m38.json` carries the full
+52-case campaign** (Fortran side reused from the M37 runs — identical
+binaries and comparison; port side fresh on the M38 tree; per-case
+contention flags recorded while the user's own 12-process MPI job shared
+the machine).
+
+**Tally: 28 both-engine comparisons (26 DEVIATION + 2 MATCH; M37: 24),
+9 PYRADIOSS-FAIL (M37: 18 — halved), 7 NO-CHANNELS, 8 SKIPPED-SLOW.**
+The two full-coverage MATCHes are exactly this milestone's fix showcases:
+**c26 V0200 Hardening** (the ledger fix; was a 1.4 %-window artifact) and
+**c48 LAW70 foam**. Notable honest migrations: M37's c28/c31/c32 "MATCH"
+labels were 0.2 %-window truncation artifacts of the /STOP bug — at full
+coverage they measure as DEVIATION 0.36–0.44 (the shell-fidelity gap, same
+family as the RD-E-1000 deviations); the LAW70 compression trio
+(c46/c47/c49) now runs STABLY but exceeds the 900 s port budget
+(SKIPPED-SLOW — the added hourglass work plus CPU contention), and the
+newly-unlocked tetra/fabric/T1000 cases produce their first comparisons
+(c23 tetra 0.428, c51 fabric 0.375, c33 T1000 0.177). One flag for M39:
+c50's comparison yields a NaN rel-RMS (fabric channel pairing) — needs a
+look before it can classify.
+
+Below, the case-level deltas the physics builders measured on the decks
+their fixes touched (same binaries and comparison):
+
+| case | M37 (§3.1) | M38 | fix / builder |
+|---|---|---|---|
+| c48 V0220 Foam LAW70_2 | MATCH 0.0355 (full run) | **MATCH 0.0353** (full run, t=0.2 NORMAL) | law70-stability — fix inert in tension (HE~0) |
+| c46 / c47 / c49 V0220 Foam LAW70 | DIED ~32 % — energy injection **−15254 % / −504.5 % / −16968 %** | **run stably through densification** — EN≡0 (was −5.29e9), max HE ~2 (2.6e9× reduction), ERR% ~0.0007 %, into ~95 % peak crush | law70-stability — Belytschko–Bindeman hourglass STIFFNESS, LAW70 bricks (`solid_hexa8`) |
+| SHELL_Ishell24_LAW2 (+ 8 V0700 siblings) | aborted **cycle 1 — −50.0 %** | **NORMAL** t=30, 20197 cycles, **0.00 % every cycle**, 9/9 elements fail as the JC verification intends | ledger-hardening — midstep constraint-work booking (kinematics.py/engine.py) |
+| c26 V0200 Hardening | DEVIATION 0.170 (1.4 % coverage) | **MATCH 0.0216** (full coverage, both engines NORMAL) | ledger-hardening — re-measurement (the 0.170 was a truncated-window artifact) |
+| T1000 (c33) | starter blocker — LAW2 Iflag=1 not ported | **Starter NORMAL, 0 errors** — LAW2 a/b/n bit-exact vs Fortran | ledger-hardening — /MAT/LAW2 Iflag=1 ported |
+
+**LAW70 detail (the headline stability fix).** The 3 dead RD-V-0220 variants
+are all COMPRESSION tests (imposed disp −95 mm → ~80 % crush into
+densification); the surviving c48 is a TENSION test (+50 mm) that never
+densifies (variants: c46 Iflag0/Nunload1, c47 Iflag4/Shape4/Hys2, c48
+Iflag4+Itens, c49 Iflag4/4-rate/Itens). Past EPS_max=1.0 the LAW70 stress
+extrapolates with slope E_max=2500 (near-rigid lock-up); the deck's
+/PROP/SOLID **Isolid=24** requests the HEPH physically-stabilized brick
+(Fortran holds HOURGLASS ENERGY=0 the whole run), but the port maps every solid
+to the one-point Flanagan–Belytschko VISCOUS hourglass brick, which resists
+hourglass VELOCITY not DEFORMATION — in the lock-up the one-point geometric
+coupling pumps the zero-energy modes faster than the viscous damper can bleed
+them (HE 401 → 5.29e9 over ~5000 cycles → ledger −504 %…−16 968 % → abort).
+Instrumented onset: element at **epst=1.28** (past EPS_max), **dt/dt_crit=0.925**
+(Courant OK), **visc_num=0.066** (viscous not overshooting); and the sound speed
+cancels in the viscous-hourglass stability number, so no law70-side change can
+help — exactly the M37 "Isolid24/HEPH element gap, not material" finding (§7).
+The fix adds the essential part of HEPH — a Belytschko–Bindeman hourglass
+STIFFNESS (restoring force on the accumulated hourglass deformation, k =
+HG_PHYS(0.03)·AA1·V·Σ|∇N|², AA1 = ρ₀c² tracking E0 → E_max) with its frequency
+fed into the element timestep (dt_hg) and its elastic work booked into the
+hourglass ledger — for LAW70 bricks ONLY (gated on `has_law70`; every non-LAW70
+solid deck is byte-for-byte unchanged). Item B of the same builder resolved
+M37-BUG-2 (multi-material ALE laws {51,151} exempted from the null-RHO0 fatal
+check — real blast_experiment /MAT/LAW151 now raises zero density errors).
+
+**V0700 −50 % detail.** The nine V0700 SAMP decks drive /IMPVEL curves that are
+non-zero at t=0 (FUNCT/1 = exp(t/10), value 1.0 at t=0), so the driven node
+jumps 0 → v_imp in cycle 1; `apply_kinematic` booked the constraint work as
+J·v_imp (the ENDPOINT velocity) instead of the leapfrog-consistent midstep
+J·(v_old+v_imp)/2 that `fixvel.F` books (and that the port already uses for
+contact and internal work). At the impulsive start (v_old=0) J·v_imp =
+m·v_imp² = exactly 2×KE, and since the energy reference is that over-booked EW,
+KE sits at exactly half → −50.0 %. The measured ledger on SHELL_Ishell24_LAW2
+(dt = 1.08034e-3):
+
+| term | Fortran | port BEFORE | port AFTER |
+|---|---|---|---|
+| IE (internal) | 1.625e-3 | 0.0 | 0.0 |
+| KE = ½m·v_imp² | 2.348e-3 | 2.34005e-3 | 2.34005e-3 |
+| EW (external work) | 3.965e-3 | **4.68011e-3 (= 2·KE)** | **2.34005e-3 (= KE)** |
+| ERROR % | +0.2 | **−50.00** | **0.00** |
+
+The fix is element-independent, so all nine V0700 "−50 %" decks are resolved.
+c26_V0200_Hardening (Item B of the ledger builder) is a clean MATCH at full
+coverage — IE matches Fortran to 0.00003 (3e-3 %), EW to 0.00002, IE+KE to
+0.00003; the only non-trivial channel is MOMZ 0.0216 (2.2 %), a near-zero
+momentum channel (scale 0.033 vs the energy scale 6.5e6). The deck is Chard=0
+(isotropic) under monotonic loading, so the port's isotropic Johnson–Cook
+radial return is exactly right; a Chard>0 kinematic-hardening warning was added
+(deferred, no in-scope deck exercises it). /MAT/LAW2 Iflag=1 (Item C) ports the
+`hm_read_mat02_jc.F90` SIG_Y/UTS/EUTS → a/b/n conversion: on the T1000
+aluminium card (SIG_Y=0.09026, UTS=0.175, EUTS=0.24, E=60.4) the port produces
+A=0.090260 / B=0.223202 / n=0.368307, matching the Fortran starter's printed
+A=0.09026 / B=0.2232020270107 / N=0.3683065281433 to all printed digits.
+
+**Caveat carried by the builders.** The full t=0.2 NORMAL termination of
+c46/c47/c49 completes in the background but the long Python runs (the Fortran
+itself needs 108311 cycles through densification) exceed the session's
+background-task lifetime and were reaped before finishing; the instability
+itself is definitively eliminated (EN≡0, max HE~2, verified past the old
+failure point into ~95 % of peak crush), and c48's in-session full-run
+NORMAL+MATCH is the full-run demonstration. A clean 4/4 NORMAL just needs
+uninterrupted wall-clock (§7). RD-V-0230 (the LAW19 fabric oracle) reports a
+−3.76 % energy error on a shortened, mass-scaled quasi-static bending run
+(NORMAL termination, no instability; the strain/stress-rotation energy
+invariance is verified analytically and in a unit test — this is deck/solver
+character, the M37 c50/c51 family deviation, not an orthotropy accounting bug).
+
 ## 4. Coverage matrix — the official corpus through the port Starter
 
 §4.1–4.4 are the M36 sweep, kept as the baseline the M37 numbers are
@@ -752,6 +958,86 @@ all are newly *reachable* because the readers now get that far):
    convention). Pre-existing, exposed by deeper parsing. **Deferred** —
    the highest-value item of the next milestone.
 
+### 4.7 The M38 full-corpus re-sweep (AUTHORITATIVE)
+
+Same 529 runnable decks, same `sweep_coverage.run_case` driver (M37's verbatim
+— identical verdict definitions, 120 s cap, 6 workers, resumable per-case
+partials), same short-path MAX_PATH handling as §4.6. The sweep ran against the
+shared M38 working tree (the M38 fixes are uncommitted; the subprocess picks
+them up via PYTHONPATH). **Atomicity**: the pyradioss source SHA-256 manifest
+was byte-identical before and after the 214 s sweep (`74edae99…`) and git HEAD
+stayed at the M37 merge (`977993b`), so every case ran against one consistent
+tree despite concurrent builders. Machine-readable:
+`tools/validation_data/coverage_results_m38.json` (M37 schema + `delta_vs_m37`
++ `error_class_signatures`).
+
+| metric | M37 (§4.6) | M38 | delta |
+|---|---:|---:|---:|
+| decks swept | 529 | 529 | — |
+| CLEAN | 7 | **9** | +2 |
+| SKIPS(n) | 373 | **431** | +58 |
+| ERROR | 149 | **89** | **−60** |
+| CRASH | 0 | **0** | 0 |
+| TIMEOUT | 0 | **0** | 0 |
+| DRIVER-FAIL | 0 | **0** | 0 |
+| parse-error incidents | 0 | **0** | 0 |
+
+Verdict migration (60 improved, 0 regressed): **ERROR→SKIPS 58, ERROR→CLEAN 2**,
+ERROR→ERROR 89, SKIPS→SKIPS 373, CLEAN→CLEAN 7. The migration matrix reconciles
+exactly with the verdict counts and the case-id set is identical to M37.
+
+**Every /PROP family closed at the gap level** (cases_blocking → 0): SH_ORTH
+21→0, SPR_BEAM 20→0, INJECT1 17→0, SPR_GENE 14→0, TYPE20 12→0, VOID 10→0,
+CONNECT 7→0, TSHELL/TYPE34 4→0 each, SPR_PRE/FLUID 3→0 each, SH_SANDW 1→0. No
+family regressed (the gap-delta worse/new list is empty).
+
+**The three M37 bugs are resolved/improved** (`delta_vs_m37.new_bugs.m37_bug_fates`):
+
+| bug | class | M37 | M38 | status |
+|---|---|---:|---:|---|
+| M37-BUG-1 | /ADMAS header misread as /UNIT ref | 22 | **0** | resolved |
+| M37-BUG-2 | MAT density check on multi-material ALE laws | 10 | **2** | improved (LAW51/151 exempted; residual 2 are LAW0/VOID — M38-NEW-2) |
+| M37-BUG-3 | /TETRA4 zero/negative volume on every tetra | 9 | **0** | resolved |
+
+**Resolved error classes** (by M37 incidence): 22 `/ADMAS unknown unit system`
+(BUG-1), 18 `/MAT/LAW2 Iflag=1 not ported` (the ledger-hardening LAW2 port), 10
+`LAW51/LAW151/MULTIFLUID density` (BUG-2), 9 `/TETRA4 zero/negative volume`
+(BUG-3), 8 `/PROP/BEAM Area/Iyy/Izz + section card missing` (the /PROP pack's
+E0500 fix).
+
+**The 89 remaining ERROR decks** are dominated by genuine unported physics, not
+reader defects. Top classes: 23 `/INTER/TYPE7 Iform not ported`, 20 `model has
+no elements` (the deck's only elements are unsupported families — SHEL16, QUAD,
+degenerate bricks), 11 `degenerated brick (penta/pyramid)`, 10 `/ADMAS node
+group not defined` (rose 2 → 10 — a deeper /ADMAS wall UNMASKED by the BUG-1
+fix, status "worse" but NOT a regression), 8 `/INTER/TYPE7 Igap not ported`, 7
+`material not defined` (improved from M37).
+
+**Top M39 gap targets** (family-level, cases_blocking / sole_blocker):
+INTER/TYPE24 18/5, SKEW/FIX 16/15, MONVOL/AIRBAG1 16/0, INTER/LAGMUL 14/0,
+FRAME/FIX 14/3, ALE/BCS 12/7, SHEL16 12/0, QUAD 10/5, SKEW/MOV 10/8, FRAME/MOV
+7/6, INTER/TYPE18 7/0. The skew/frame reference-system cluster
+(SKEW/FIX + SKEW/MOV + FRAME/FIX + FRAME/MOV = 47 blocking, high sole-blocker
+counts) is the highest-leverage next target; contact interfaces
+(TYPE24/LAGMUL/TYPE18) and MONVOL/AIRBAG1 next; closing SHEL16/QUAD/BRICK-DEGEN
+would convert most of the 20 "model has no elements" decks.
+
+**Five new error-class signatures — four distinct issues** (the /MAT/LAW0/VOID
+false-positive is recorded twice, once for shells (2 cases) and once for sh3n
+(1 case); recorded in `delta_vs_m37.new_bugs.new_error_classes`; all on decks
+that were ALREADY ERROR in M37 — **0 regressions**, all newly *reachable* now
+that the readers get further):
+
+| M38 cases | classification | class / decks |
+|---:|---|---|
+| 3 | needs-investigation | `RBODY: rigid body has no mass` — DIF24416 (Gears Inter16/17), I16S16FM (Cam fine_mesh); the port may not sum slave-element mass onto the body |
+| 3 | **suspected port bug (false positive)** | `/MAT/LAW0(VOID) on shells/sh3n: zero density` — BAT_CIR, BAT_SQR; VOID is massless by design, Fortran accepts RHO0=0 — the BUG-2 fix exempted LAW51/151 but not LAW0 (M38-NEW-2) |
+| 1 | **suspected port bug** | `/PROP/SPRING mass must be > 0` — RD-V-0031; the TYPE4 mass check misapplied to /PROP/SPR_PRE (TYPE32) (M38-NEW-1) |
+| 1 | needs-investigation | `RBODY: node(s) already belong to another rigid body` — BIKERC; the port may be stricter than the Fortran priority resolution (M38-NEW-4) |
+
+(§7 carries these as the M39 quick-fix backlog; a concurrent M38 LAW2-Iflag
+port also cleared 18 decks' "LAW2 Iflag not ported" errors, counted above.)
+
 ## 5. Coverage — W12/W13 k2rad decks: the four M35 bugs are fixed
 
 All four M35-identified port-reader bugs were fixed inside
@@ -800,7 +1086,7 @@ named above moved in M37 — LAW44 (Cowper–Symonds) now has ported physics
 GRSHEL/SHEL are covered by the group/set machinery. Neither deck was
 re-run for this report.
 
-## 6. Performance (M36 baseline below; §6.1 = the M37 measurement)
+## 6. Performance (M36 baseline below; §6.1 = the M37 measurement; §6.2 = M38 — no campaign)
 
 ### 6.1 M37 timing campaign (`perf_m37.json`, 122 records)
 
@@ -848,6 +1134,37 @@ parsing affect starter-side wall clock only, unmeasured.) The next
 timing sweep should note that decks previously stopping in the starter
 (33 of the 40 IN_ENVELOPE cases, §3) will produce port ENGINE timings
 for the first time.
+
+### 6.2 M38 timing (`perf_m38.json`, 104 records)
+
+The campaign completed with the resumed parity driver (Fortran wall clocks
+reused from the clean M37 records; port wall clocks fresh on the M38 tree).
+**Heavy caveat: every M38 port run carried the `impi=12/12` contention flag**
+— the user's own 12-process MPI simulation shared the machine throughout, so
+port wall clocks are upper bounds and cross-milestone wall-clock comparison
+is NOT meaningful this round (cycle counts and parity classes are
+load-independent and stand). Within that caveat the structural signal is
+unchanged from §6.1: port 2–7× slower on full-run shells (uncontended M37
+figures), throughput collapsing with element count — nothing in M38 targeted
+engine speed (the /PROP reader is starter-side; the LAW70 hourglass
+stiffness adds work only to LAW70 solids, and its three compression decks
+now exceed the 900 s budget under contention — clean re-timing of those is
+an M39 sweep item). The M36 baseline table below stands unchanged as the
+last clean bundled-example measurement.
+
+Two incidental timing observations from the physics builders, consistent with
+the §6.1 "cycle-bound, not element-bound" finding:
+
+- The LAW70 hourglass-stiffness fix (§3.2) feeds its frequency into the element
+  timestep (dt_hg): **HG_PHYS=0.03 imposes a modest ~1.7× dt reduction only
+  while the foam is soft** (early phase) and **NONE at densification** (the base
+  Courant dt already dominates there). A future proper HEPH/Isolid=24
+  assumed-strain brick would remove even that (§7).
+- The c46/c47/c49 LAW70 full runs need the Fortran's **108311 cycles** through
+  densification; at the port's §6.1-measured ~90 cyc/s on 1000-brick decks
+  these exceed the session's background-task lifetime — the same cycle-bound
+  throughput wall §6.1 flagged as the profiling target, now demonstrated on the
+  densification decks.
 
 Machine: 13th Gen Intel(R) Core(TM) i9-13900H, 64 GB RAM, Windows 11. Both
 solvers single-threaded (Fortran `-np 1 -nt 1` / `OMP_NUM_THREADS=1`;
@@ -909,7 +1226,75 @@ faster — exactly the speed-work baseline this section exists to feed.
   MPI/OpenMP scaling (and the port's numba backend, benchmarked separately
   in `tools/benchmark.py` / PORTING_GUIDE M7) are outside this comparison.
 
-## 7. Known issues & backlog (updated for M37)
+## 7. Known issues & backlog (updated for M38)
+
+The M37 backlog's top items are DONE this milestone: the corpus re-sweep
+(item 1, §4.7), the LAW70 RD-V-0220 instability (item 6, §3.2), the V0700
+cycle-1 energy anomaly (§3.2) and c26_V0200_Hardening (now a MATCH, §3.2) are
+resolved. The post-M38 list, in measured-value order:
+
+1. **~~The official-parity + timing re-run is still owed~~ DONE** — the
+   resumed driver completed 52/52 (§3.2: both-engine 24 → 28, port-fails
+   18 → 9, c26 + c48 full-coverage MATCHes; `parity_m38.json` /
+   `perf_m38.json`). Still owed for M39: an UNCONTENDED timing pass (every
+   M38 port wall clock carried the impi=12/12 flag), the LAW70
+   compression-trio full runs past the 900 s budget, and the c50 fabric
+   NaN-channel fix.
+2. **Four M38 quick-fix bugs** (all surfaced by the §4.7 sweep, all on decks
+   already ERROR in M37 — 0 regressions):
+   - **M38-NEW-2** extend the MAT null-density exemption to LAW0/VOID (massless
+     by design; Fortran accepts RHO0=0) — clears BAT_CIR/BAT_SQR and the
+     prop-pack's OPEN item (VOID on /BEAM|/TRUSS parts tripping the pre-existing
+     `_ALLOWED_LAWS` material-family gap in `checks.py`);
+   - **M38-NEW-1** the /PROP/SPR_PRE (TYPE32) SPRING INIT mass check misapplies
+     the TYPE4 mass requirement (RD-V-0031);
+   - **M38-NEW-3** `RBODY has no mass` on the Gears Inter16/17 and Cam fine_mesh
+     decks — check slave-element mass accumulation in the rbody initializer;
+   - **M38-NEW-4** `RBODY node already belongs to another rigid body` on BIKERC
+     — the port may be stricter than the Fortran starter's priority resolution.
+3. **Complete the LAW70 c46/c47/c49 full runs** — the densification instability
+   is definitively eliminated (EN≡0, max HE~2, verified into ~95 % peak crush)
+   but the long Python runs (108311 Fortran cycles) were reaped by the session
+   before a clean 4/4 t=0.2 NORMAL; completion is physically assured and just
+   needs uninterrupted wall-clock (§3.2, §6.2).
+4. **The deeper /ADMAS wall**: resolving M37-BUG-1 (22 decks) unmasked
+   `/ADMAS: node group not defined` (2 → 10 decks, §4.7) — the node-group
+   cross-ref resolution for /ADMAS is the next /ADMAS blocker.
+5. **Top M39 physics gaps** (genuine unported families, §4.7): the skew/frame
+   reference-system cluster (SKEW/FIX 16, SKEW/MOV 10, FRAME/FIX 14, FRAME/MOV
+   7 = 47 blocking, high sole-blocker counts) is the highest-leverage target;
+   then the contact interfaces (INTER/TYPE24 18, INTER/LAGMUL 14, INTER/TYPE18
+   7), MONVOL/AIRBAG1 16, and the element families SHEL16 12 / QUAD 10 /
+   degenerate bricks 11 (which would convert most of the 20 "model has no
+   elements" decks).
+6. **The Isolid24/HEPH assumed-strain brick, generalized** — the M38 LAW70
+   hourglass stiffness is gated to LAW70 hexa bricks only (the failing decks);
+   a general Isolid=24 → physical-hourglass mapping for all solid laws is the
+   longer-term "until HEPH lands" item. (LAW70 on the 4-node tetra needs no fix
+   — the constant-strain element has no hourglass modes.)
+7. **/PROP and LAW2 documented cuts** (parsed, physics cut — warned + docstring):
+   TYPE8/TYPE13 springs are the linear K/C 6-DOF core only (force functions,
+   hardening, rupture, rate smoothing, sensor activation, `skew_ID` → global
+   frame, the TYPE13 co-rotational beam-frame update all cut; implicit-spring
+   path stays TYPE4-only); SH_ORTH is IREP=0 with the Ishell formulation flag
+   read-and-ignored (port uses BT4/C0), the stored σ is in the fiber frame, and
+   per-ply composite layup runs as a single orthotropic layer; LAW2/LAW36
+   kinematic hardening (Chard/FISOKIN back-stress) deferred (now warned when
+   Chard>0).
+8. **Shell-family full-run deviations** (0.42–0.64 max rel RMS on the RD-E-1000
+   Bending family, §3.1) — consistent with the M36 box-beam shell-hourglass
+   fidelity finding; the next physics-fidelity target once the parity re-run
+   quantifies it corpus-wide. Carried.
+9. **Material physics for the parsed-but-inactive laws** (carried from M37):
+   every /MAT parses but only ~15 laws carry physics; highest corpus pull among
+   the inactive — LAW6 HYD_VISC (30 blocks), LAW51 (22), LAW151/MULTIFLUID
+   (7+3), LAW11 BOUND (7), LAW37 BIPHAS (6). Each a one-module registry job.
+10. **Carried from M37**: the contact/hourglass differential study on the five
+    DEVIATION bundled examples (§2.2); gas_piston positive-P0 emission for full
+    9/9 comparability; hybrid single-file pre-/BEGIN engine blocks; the
+    reader/writer real-layout follow-ups (§4.5 item 5).
+
+### M37 backlog (superseded — items 1/6 and the V0700/c26 items above are resolved by M38; the rest are carried into the M38 list)
 
 The M36 backlog items 1 (fixed-format reader hardening) and 2 (group/set
 machinery) are DONE in the tree (§4.5) — but unmeasured at corpus scale.
@@ -961,11 +1346,42 @@ The post-M37 list, in measured-value order:
 
 ## 8. Honest limitations of this report
 
-- **The corpus numbers are M36 measurements over an M37 tree.** Five of
-  eight M37 builders reported; three failed (§ TL;DR item 6). All
-  §3/§4.1–4.4/§6 corpus-scale numbers predate the M37 fixes by
-  construction; §4.5's deltas are slice-scale (60 cases) or
-  domain-scale (193 /MAT blocks), not full-corpus.
+M38-specific limitations first; the M37/M36 caveats below are carried and
+still apply to the sections they describe.
+
+- **The M38 corpus re-sweep IS a real M38-tree measurement** (§4.7,
+  `coverage_results_m38.json`) — unlike M36→M37, the sweep ran against the M38
+  working tree and is atomic (source SHA-256 byte-identical before/after, HEAD
+  at `977993b`). But it is STARTER-side only: it measures which decks
+  parse/build, not physics parity.
+- **The M38 parity/timing campaign completed via a coordinator resume**
+  (§3.2/§6.2, `parity_m38.json` + `perf_m38.json`): the `parity-m38`
+  builder's session ended at 6/52; the driver was resumed to 52/52. Its
+  Fortran side reuses the M37 runs (identical binaries/comparison); its
+  port side ran ENTIRELY under CPU contention (impi=12/12 — the user's own
+  MPI job), so M38 port wall clocks are upper bounds. The three LAW70
+  compression variants are stable but exceeded the 900 s budget
+  (SKIPPED-SLOW) — their full-run NORMAL plus an uncontended timing pass
+  are M39 sweep items.
+- **One of six M38 builders filed a stub report.** `tetra4-convention`
+  produced no report, but its /TETRA4 node-ordering / volume-sign fix
+  (`solid_tetra4.py`) landed and is confirmed independently by the §4.7
+  sweep (M37-BUG-3 9 → 0) and the §3.2 tetra comparisons — verification is
+  the coverage delta + the module, not a builder report.
+- **The report was written against a SHARED uncommitted working tree** carrying
+  all M38 builders' edits (HEAD `977993b`); `checks.py` was edited concurrently
+  by several builders (the MAT-density ALE exemption, the mat-0 /PART rule, the
+  inactive-property warning) — merge-time reconciliation of `checks.py` is the
+  parent's to confirm. Builder test suites were re-run green (prop-pack 23 new
+  + 363 existing; ledger-hardening 10 new + ~500 existing across
+  engine/element/implicit/contact/materials/reader/constraint); the full suite
+  was not re-run for this report.
+- **M37 edition (carried): the corpus numbers were M36 measurements over an M37
+  tree.** Five of eight M37 builders reported; three failed (§ TL;DR — M37
+  edition, item 6). All §3/§4.1–4.4/§6 corpus-scale numbers predate the M37
+  fixes by construction; §4.5's deltas are slice-scale (60 cases) or
+  domain-scale (193 /MAT blocks), not full-corpus. (§4.6 and §3.1 — the M37
+  re-runs — are the authoritative M37 corpus and parity measurements.)
 - **Two builders' work is in the tree without a builder report**
   (groups-sets, mat-physics-2). Verification here is limited to running
   their test suites (36 + 26 tests, all pass, including five

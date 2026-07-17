@@ -197,6 +197,10 @@ def init_group(group, model, log):
                                thick, group.state["slices"]),
     )
     _init_material_state(group, nip_max)
+    # orthotropy fiber frame (/PROP/TYPE9 SH_ORTH, TYPE16) — see shell_bt4
+    from . import shell_ortho
+    group.state["ortho"] = shell_ortho.build_group_ortho(
+        group.state["slices"], E, n, log, group.ids)
     node_idx = group.conn.reshape(-1)
     mass_c = np.repeat(mass / 3.0, 3)
     # generous lumped rotational inertia (Key's trick, see module docstring)
@@ -255,14 +259,22 @@ def forces(group, x, v, vr, dt, fint, mint):
     de_layers = np.zeros(n)
     c = np.zeros(n)
     nip_of = []
+    from . import shell_ortho
+    ortho_all = st.get("ortho")                     # (n, 2) fiber cos/sin
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         zrel, wrel = st["zw"][isl]
         nip_of.append(len(zrel))
         t_sl = thick[sl]
+        # orthotropic slice: strain -> fiber frame for the law, stress ->
+        # element frame for the resultants (see shell_bt4.forces)
+        cs = ortho_all[sl] if (ortho_all is not None and getattr(
+            prop, "type", 0) in shell_ortho.ORTHO_PROP_TYPES) else None
         for k in range(len(zrel)):
             zk = zrel[k] * t_sl
             wk = wrel[k] * t_sl
             deps = (dm[sl] + zk[:, None] * kap[sl]) * dt
+            if cs is not None:
+                deps = shell_ortho.rot_strain_e2m(deps, cs)   # elem -> fiber
             s_old = sig[sl, k, :].copy()
             s_new, _ = materials.shell_update(
                 mat, sig[sl, k, :], deps, st["epsp"][sl, k], dt,
@@ -271,9 +283,11 @@ def forces(group, x, v, vr, dt, fint, mint):
                 _layer_failure(st, sl, mat, k, s_new, epsp_old, deps, dt)
             sig[sl, k, :] = s_new
             s_mid = 0.5 * (s_old + s_new)
-            Nres[sl] += wk[:, None] * s_new
-            Mres[sl] += (wk * zk)[:, None] * s_new
             de_layers[sl] += wk * np.einsum("nk,nk->n", s_mid, deps)
+            s_res = shell_ortho.rot_stress_m2e(s_new, cs) \
+                if cs is not None else s_new        # fiber -> elem
+            Nres[sl] += wk[:, None] * s_res
+            Mres[sl] += (wk * zk)[:, None] * s_res
         c[sl] = mat.sound_speed_shell()
         # elastic transverse shear resultant stress (with 5/6 factor)
         qold = st["qshear"][sl].copy()

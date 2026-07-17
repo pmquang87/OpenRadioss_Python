@@ -16,6 +16,8 @@ import numpy as np
 
 from ..common.messages import MessageLog
 from ..elements import KERNELS
+from ..input import prop_reader
+from ..model.entities import Material
 from ..model.model import ElementGroup, Model
 
 # element type name -> (attr on Model, nodes per element, required prop type)
@@ -28,6 +30,21 @@ _ETYPES = {
     "SPRING": ("springs", 2, 4),
     "BEAM": ("beams", 3, 3),
 }
+
+#: the "fictitious material law for spring elements" the reference assigns
+#: to a /PART with mat_ID 0 on a spring property (hm_read_part.F): springs
+#: read their mass/stiffness from the /PROP, never a material, so this is a
+#: bare inert placeholder (never inactive — the Engine must not refuse it).
+_SPRING_MAT_SINGLETON: Material = None       # type: ignore[assignment]
+
+
+def _fictitious_spring_material() -> Material:
+    global _SPRING_MAT_SINGLETON
+    if _SPRING_MAT_SINGLETON is None:
+        _SPRING_MAT_SINGLETON = Material(
+            id=0, law=-1, rho0=0.0, title="fictitious spring material",
+            params={"E": 0.0, "nu": 0.0})
+    return _SPRING_MAT_SINGLETON
 
 
 # ----------------------------------------------------------------------------
@@ -119,15 +136,24 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
                 model.parts_list.append(part)
             mat = model.materials.get(part.mat_id)
             prop = model.properties.get(part.prop_id)
-            if mat is None:
-                log.error(f"/PART/{pid}: material {part.mat_id} not defined",
-                          "PART CHECK")
             if prop is None:
                 log.error(f"/PART/{pid}: property {part.prop_id} not defined",
                           "PART CHECK")
-            elif prop.type != req_prop:
+            elif not prop_reader.prop_type_ok(req_prop, prop):
                 log.error(f"/PART/{pid}: /{etype} elements need /PROP/TYPE"
                           f"{req_prop}, got TYPE{prop.type}", "PART CHECK")
+            # material resolution incl. the mat_ID = 0 rule (hm_read_part.F,
+            # M38): a spring property (TYPE4/8/13...) may legally carry
+            # mat_ID 0 — a fictitious material is assigned for the spring
+            # elements; every material-required property (solids, shells,
+            # trusses, beams) still needs a defined material.
+            if mat is None:
+                if part.mat_id == 0 and prop is not None \
+                        and not prop_reader.material_required(prop.type):
+                    mat = _fictitious_spring_material()
+                else:
+                    log.error(f"/PART/{pid}: material {part.mat_id} not "
+                              f"defined", "PART CHECK")
             if mat is not None and prop is not None:
                 slices.append((slice(start, end), mat, prop))
             part_idx[sel] = model.parts_list.index(part) if part in \

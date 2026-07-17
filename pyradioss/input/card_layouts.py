@@ -157,6 +157,16 @@ LAYOUTS: Dict[str, List[int]] = {
     # CARD("%10d%10d%20lg%20lg          %10d%10d",
     #      NIP, ISTRAIN, THICK, ASHEAR, ITHICK, IPLAS)
     "PROP_SHELL_N": [10, 10, 20, 20, 10, 10, 10],
+    # PROP/prop_p9_sh_orth.cfg (radioss2021) orthotropy-vector card:
+    # CARD("%20lg%20lg%20lg%20lg          %10d", Vx, Vy, Vz, Phi, Ip)
+    "PROP_ORTH_VEC": [20, 20, 20, 20, 10, 10],
+    # PROP/prop_p8_spr_gene.cfg / prop_p13_spr_beam.cfg header card:
+    # CARD("%20lg%20lg%10d%10d%10d%10d%10d%10d",
+    #      Mass, Inertia, skew_ID, sens_ID, Isflag, Ifail, Ileng/Ifail2, ...)
+    "PROP_SPR_HEAD": [20, 20, 10, 10, 10, 10, 10, 10],
+    # generic 4 x %20lg value card (beam section Area/Iyy/Izz/Ixx, the
+    # spring per-DOF F/E/Ascale/Hscale card)
+    "F20X4": [20] * 4,
 
     # ---- failure / EOS ------------------------------------------------------
     # fail_johnson.cfg (radioss51): D1..D5 %20lg; card 2

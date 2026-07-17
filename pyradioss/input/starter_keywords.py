@@ -444,6 +444,58 @@ def read_part(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=block.user_id, prop_id=t[0], mat_id=t[1], title=title)
 
 
+def _law2_iflag1_to_abn(sig_y: float, uts: float, euts: float, young: float,
+                        block: KeywordBlock, log: MessageLog):
+    """Convert /MAT/LAW2 (PLAS_JOHNS) ``Iflag=1`` yield input to the
+    Johnson-Cook hardening a/b/n.
+
+    Fortran origin: ``starter/source/materials/mat/mat002/
+    hm_read_mat02_jc.F90`` (the ``iflag == 1`` branch, lines 146-166). The
+    card gives the engineering ultimate-tensile data instead of a/b/n:
+    ``SIG_Y`` (yield), ``UTS`` (engineering ultimate stress), ``EUTS``
+    (engineering strain at UTS, a.k.a. Ag). The flow curve a + b*eps_p^n is
+    fit so that it (1) passes through the TRUE ultimate-tensile point and
+    (2) satisfies the Considere necking instability dsigma/deps_p = sigma
+    at that strain::
+
+        rm = UTS * (1 + EUTS)      true stress at necking
+        ag = ln(1 + EUTS)          true (log) strain at necking
+        a  = SIG_Y                 yield stress (unchanged)
+        n  = rm*ag / (rm - a)      (Considere + flow-curve fit)
+        b  = rm / (n * ag^(n-1))
+
+    with the exponent capped at 1 (linear-hardening refit — hm_read_mat02_jc
+    MSGID 277) and a perfectly-plastic fallback when the fit gives n<0 and
+    b<0 (MSGID 278). For physical data UTS > SIG_Y so rm - a > 0."""
+    a = sig_y
+    if euts == 0.0:                          # Fortran: if (cn == zero) cn = one
+        euts = 1.0
+    cb0, cn0 = uts, euts
+    rm = uts * (1.0 + euts)                  # true UTS
+    ag = float(np.log(1.0 + euts))           # true strain at UTS
+    denom = rm - a
+    if denom == 0.0:                         # degenerate: drive n huge -> cap
+        denom = 1e-20
+    n = rm * ag / denom
+    b = rm / max(n * ag ** (n - 1.0), 1e-20)
+    if n > 1.0:
+        # exponent capped at 1 -> linear-hardening refit through the same
+        # true-UTS point, over the true PLASTIC strain range (MSGID 277)
+        n = 1.0
+        b = ((cb0 * (1.0 + cn0) - a)
+             / (float(np.log(1.0 + cn0)) - cb0 * (1.0 + cn0) / young
+                - a / young))
+        log.warning(f"/MAT/LAW2/{block.user_id}: Iflag=1 hardening exponent "
+                    f"n>1, capped to 1 (linear hardening — "
+                    f"hm_read_mat02_jc MSGID 277)", block.source)
+    if n < 0.0 and b < 0.0:
+        n, b = 0.0, 0.0                       # perfectly plastic (MSGID 278)
+        log.warning(f"/MAT/LAW2/{block.user_id}: Iflag=1 conversion gave "
+                    f"n<0 and b<0 -> perfectly plastic (yield a only — "
+                    f"hm_read_mat02_jc MSGID 278)", block.source)
+    return a, b, n
+
+
 def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/MAT/LAW<n>/mat_ID`` (aliases /MAT/ELAST, /MAT/PLAS_JOHNS,
     /MAT/PLAS_TAB, /MAT/PLAS_BRIT, /MAT/OGDEN).
@@ -610,31 +662,40 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             id=block.user_id, law=law, rho0=rho0, title=title, params=params)
         return
 
+    law2_iflag = 0
     if block.fixed:
         # matl*.cfg elasticity card "%20lg%20lg%10d%10d" E Nu Iflag VP —
-        # cut at columns (abutting values, blank -> 0); Iflag = 1 selects
-        # the SIG_Y/UTS/EUTS yield input the port does not carry.
+        # cut at columns (abutting values, blank -> 0). LAW2 Iflag = 1
+        # selects the SIG_Y/UTS/EUTS ultimate-tensile yield input, converted
+        # to a/b/n below (hm_read_mat02_jc.F90, the iflag==1 branch).
         e_nu = cards[1].cut("MAT_E_NU")
         E, nu = _fval(e_nu[0]), _fval(e_nu[1])
-        if law == 2 and _ival(e_nu[2]):
-            log.error(f"/MAT/LAW2/{block.user_id}: Iflag={e_nu[2]} "
-                      f"(SIG_Y/UTS/EUTS yield input) is not ported — "
-                      f"give a/b/n directly (Iflag 0)", block.source)
-            return
+        if law == 2:
+            law2_iflag = _ival(e_nu[2])
     else:
         E, nu = _floats(cards[1], 2)
+        if law == 2:
+            # free dialect: an optional Iflag rides the E/Nu card 3rd token
+            etok = cards[1].tokens()
+            if len(etok) > 2:
+                law2_iflag = _ival(etok[2])
     params = {"E": E, "nu": nu}
     if law == 2:
         if len(cards) < 3:
             log.error(f"/MAT/LAW2/{block.user_id}: missing A,B,n card",
                       block.source)
             return
-        # yield card "%20lg"*5 (a b n EPS_p_max SIG_max0): real decks
-        # pack e.g. '0.51.00000000000000E+301.00000000000000E+30' with
-        # no whitespace — cut at columns for the fixed dialect
+        # yield card "%20lg"*5: Iflag=0 -> a b n EPS_p_max SIG_max0;
+        # Iflag=1 -> SIG_Y UTS EUTS EPS_p_max SIG_max0. Real decks pack
+        # e.g. '0.51.00000000000000E+301.00000000000000E+30' with no
+        # whitespace — cut at columns for the fixed dialect.
         av = _cut_floats(cards[2], "LAW2_A") if block.fixed \
             else _floats(cards[2], 5, defaults=[0, 0, 1.0, 1e30, 1e30])
         A, B, n, epsmax, sigmax = av[:5]
+        if law2_iflag == 1:
+            # convert the ultimate-tensile input (A=SIG_Y, B=UTS, n=EUTS)
+            # to the Johnson-Cook hardening a/b/n (hm_read_mat02_jc.F90)
+            A, B, n = _law2_iflag1_to_abn(A, B, n, E, block, log)
         # Radioss conventions: eps_p_max=0 means "no limit", sig_max=0 too.
         params.update(A=A, B=B, n=n if n > 0 else 1.0,
                       eps_p_max=epsmax if epsmax > 0 else 1e30,
@@ -642,12 +703,27 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if len(cards) >= 4:
             if block.fixed:
                 # "%20lg%20lg%10d%10d%20lg%20lg" c EPS_DOT_0 ICC Fsmooth
-                # F_cut Chard (trailing flags read + ignored, as ever)
+                # F_cut Chard — c/eps_dot_0 ported; the trailing flags are
+                # read to surface the un-ported ones (Chard below).
                 cv = cards[3].cut("LAW2_C")
                 c, eps0 = _fval(cv[0]), _fval(cv[1], 1.0)
+                chard = _fval(cv[5]) if len(cv) > 5 else 0.0
             else:
-                c, eps0 = _floats(cards[3], 2, defaults=[0.0, 1.0])
+                cvals = _floats(cards[3], 6,
+                                defaults=[0.0, 1.0, 0.0, 0.0, 0.0, 0.0])
+                c, eps0, chard = cvals[0], cvals[1], cvals[5]
             params.update(c=c, eps_dot_0=eps0 if eps0 > 0 else 1.0)
+            # Chard (Fisokin) = iso-kinematic hardening fraction: 0 = pure
+            # ISOTROPIC (the only mode this radial return implements — no
+            # back-stress state is carried), 1 = pure Prager KINEMATIC. A
+            # non-zero Chard would be silently mis-simulated, so warn (as
+            # LAW44 does for its own kinematic term). Monotonic loading is
+            # unaffected — isotropic and kinematic coincide until reversal.
+            if chard != 0.0:
+                log.warning(f"/MAT/LAW2/{block.user_id}: Chard={chard:g} "
+                            f"(kinematic hardening) is not ported — the "
+                            f"radial return is purely isotropic (correct "
+                            f"only for monotonic loading)", block.source)
         else:
             params.update(c=0.0, eps_dot_0=1.0)
         if len(cards) >= 5:                    # thermal card (M6)
@@ -1109,9 +1185,13 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                "TYPE3": 3, "BEAM": 3,
                "TYPE4": 4, "SPRING": 4, "TYPE14": 14, "SOLID": 14}
     if typename not in aliases:
-        log.warning(f"/PROP/{typename} not ported — property skipped "
-                    f"(supported: TYPE1/SHELL, TYPE2/TRUSS, TYPE3/BEAM, "
-                    f"TYPE4/SPRING, TYPE14/SOLID)", block.source)
+        # M38: SH_ORTH/SPR_GENE/SPR_BEAM/VOID (ported physics) + every
+        # other spelling (InactiveProperty the Engine refuses) — delegated
+        # to the /PROP reader that mirrors the generic /MAT reader.
+        from . import prop_reader
+        prop = prop_reader.parse_property(block, log)
+        if prop is not None:
+            model.properties[block.user_id] = prop
         return
     ptype = aliases[typename]
     title, cards = _fixed_data(block) if block.fixed \
@@ -1176,14 +1256,29 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             return
         params = {"area": cards[0].floats()[0]}
     elif ptype == 3:  # BEAM
-        # skip pure-integer flag cards (Ishear...), read the section card
-        data = [c for c in cards if not all(tok.lstrip("+-").isdigit()
-                                            for tok in c.tokens())]
-        if not data:
-            log.error(f"/PROP/BEAM/{block.user_id}: section card "
-                      f"'Area Iyy Izz Ixx' missing", block.source)
-            return
-        a, iyy, izz, ixx = _floats(data[0], 4)
+        if block.fixed:
+            # REAL layout (cfg prop_p3_beam.cfg): title / Ismstr /
+            # Dm Df / Area Iyy Izz Ixx / OmegaDof Ishear — the section
+            # card is data card index 2.  (E0500 fix: Area/Iyy/Izz/Ixx
+            # are commonly whole numbers, e.g. 36/108/108/216, so the
+            # free-format 'skip pure-integer cards' heuristic below wrongly
+            # skipped the section card too and reported it missing.)
+            sec = cards[2] if len(cards) >= 3 and not cards[2].is_blank \
+                else None
+            if sec is None:
+                log.error(f"/PROP/BEAM/{block.user_id}: section card "
+                          f"'Area Iyy Izz Ixx' missing", block.source)
+                return
+            a, iyy, izz, ixx = _cut_floats(sec, "F20X4")
+        else:
+            # skip pure-integer flag cards (Ishear...), read the section
+            data = [c for c in cards if not all(tok.lstrip("+-").isdigit()
+                                                for tok in c.tokens())]
+            if not data:
+                log.error(f"/PROP/BEAM/{block.user_id}: section card "
+                          f"'Area Iyy Izz Ixx' missing", block.source)
+                return
+            a, iyy, izz, ixx = _floats(data[0], 4)
         if a <= 0 or iyy <= 0 or izz <= 0:
             log.error(f"/PROP/BEAM/{block.user_id}: Area, Iyy and Izz "
                       f"must be > 0", block.source)

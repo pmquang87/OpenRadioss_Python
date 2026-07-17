@@ -189,6 +189,75 @@ def test_tetra4_rigid_rotation_gives_no_stress(tmp_path):
     assert np.abs(g.state["sig"]).max() < 1e-12
 
 
+# The SAME four points as TET_DECK, listed in the REAL Radioss winding
+# (VOLDP>0, i.e. V_std<0 in the port's isoparametric det): nodes 2 and 4 are
+# swapped on the card relative to TET_DECK. This is how every official mesh
+# is written (RD-V-0020 / RD-V-0240), which the port used to flag as
+# "zero or negative volume" on 100% of elements (M38-BUG-3).
+TET_DECK_OFFICIAL = (
+    "/BEGIN\nunit tet official\n"
+    "/NODE\n"
+    "1 0 0 0\n2 1 0 0\n3 0 1 0\n4 0 0 1\n"
+    "/TETRA4/1\n1 1 4 3 2\n"
+    "/PART/1\ntet\n1 1\n" + STEEL_LAW1 +
+    "/PROP/SOLID/1\nsolid\n1.1 0.05 0.1\n/END\n"
+)
+
+
+def test_tetra4_official_winding_initializes(tmp_path):
+    """A /TETRA4 in the real Radioss winding (VOLDP>0) must initialise with a
+    POSITIVE volume via the s4coor3/hm_read_solid 2<->4 node-swap
+    canonicalisation — _build() asserts the starter logs NO error — and then
+    give the physically identical response to the port-winding twin
+    (test_tetra4_uniaxial_strain_stress_and_forces). Regression for M38-BUG-3."""
+    model, _ = _build(TET_DECK_OFFICIAL, tmp_path)
+    g = model.tetras
+    assert g.n == 1
+    # positive physical volume (|V| = 1/6) and mass, exactly the port twin
+    assert g.state["vol0"][0] == pytest.approx(1.0 / 6.0)
+    assert g.state["mass"][0] == pytest.approx(7.8e-6 / 6.0)
+
+    rate, dt = 1e-3, 1e-3
+    v = np.zeros_like(model.x)
+    v[:, 0] = model.x[:, 0] * rate                    # uniaxial strain rate
+    fint = np.zeros_like(model.x)
+    mint = np.zeros_like(model.x)
+    solid_tetra4.forces(g, model.x, v, model.vr, dt, fint, mint)
+
+    mat = g.state["slices"][0][1]
+    expected = (mat.K + 4 * mat.G / 3) * rate * dt
+    assert g.state["sig"][0, 0] == pytest.approx(expected, rel=1e-10)
+    assert np.abs(fint.sum(axis=0)).max() < 1e-12       # free-body balance
+    # winding-independent physics: node id 2 at x=1 pulled back, node id 1
+    # at the origin pulled forward — same as the port-winding fixture
+    assert fint[1, 0] < 0 and fint[0, 0] > 0
+
+
+def test_tetra4_degenerate_volume_is_caught(tmp_path):
+    """A genuinely degenerate (coplanar, zero-volume) /TETRA4 must STILL be
+    caught: the winding-canonicalisation swap cannot rescue |V|~0, mirroring
+    s4deri3.F's DET<=0 guard (MSGID 245 for a solid property). This is the
+    guard the M38 fix must not silently disable with an unconditional |V|."""
+    deck = (
+        "/BEGIN\ndegen tet\n"
+        "/NODE\n"
+        "1 0 0 0\n2 1 0 0\n3 0 1 0\n4 1 1 0\n"        # all in the z=0 plane
+        "/TETRA4/1\n1 1 2 3 4\n"
+        "/PART/1\ntet\n1 1\n" + STEEL_LAW1 +
+        "/PROP/SOLID/1\nsolid\n1.1 0.05 0.1\n/END\n"
+    )
+    f = tmp_path / "K_0000.rad"
+    f.write_text(deck)
+    model = Model()
+    log = MessageLog()
+    parse_starter_deck(read_deck(str(f)), model, log)
+    build_element_groups(model, log)
+    resolve_node_groups(model, log)
+    resolve_surfaces(model, log)
+    initialize_elements_and_mass(model, log)
+    assert any("volume" in e.lower() for e in log.errors)
+
+
 SH3N_DECK = (
     "/BEGIN\nunit triangle\n"
     "/NODE\n1 0 0 0\n2 1 0 0\n3 0 1 0\n"

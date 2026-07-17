@@ -181,20 +181,34 @@ class LoadsAndConstraints:
     # ------------------------------------------------------------------
     def apply_kinematic(self, t: float, v: np.ndarray, vr: np.ndarray,
                         mass: np.ndarray, x: np.ndarray,
-                        dt: float) -> float:
+                        dt: float, v_old: np.ndarray = None) -> float:
         """Apply /IMPVEL, /IMPDISP and /BCS to the freshly updated
         velocities (``t`` is the END of the step, t_n + dt).
 
         Returns the external work done by the constraints this cycle.
 
         Work accounting (must be consistent with the element ledger, which
-        measures internal work with the POST-enforcement velocities):
+        books internal work at the leapfrog MIDSTEP velocity, and with the
+        contact-work booking of engine step 5b):
 
         * /IMPVEL: the constraint applies the impulse J = m (v_imp - v_free)
-          and the node then MOVES with v_imp, so the constraint's mechanical
-          work over the coming interval is  J . v_imp  (reaction force times
-          actual displacement). This is how the original recovers /IMPVEL
-          work from the constraint reactions.
+          that overwrites the free velocity with v_imp. In leap-frog an
+          impulse changes the kinetic energy by exactly  J . (v^{n-1/2} +
+          v^{n+1/2}) / 2  — the MIDSTEP average of the velocity BEFORE the
+          cycle (v_old) and the enforced value (v_imp), NOT J . v_imp.
+          Booking J . v_imp is correct only in the steady state where the
+          node already moves at v_imp (v_old == v_imp); at an IMPULSIVE
+          start (a curve that is non-zero at t=0, so the node jumps 0 ->
+          v_imp in one cycle) it DOUBLES the work — the exact source of the
+          -50% cycle-1 energy error on the RD-V-0700 imposed-velocity decks,
+          because the reference is then the (over-booked) external work and
+          KE = 1/2 m v_imp^2 sits at exactly half of it. This is the same
+          midstep identity the original books in ``fixvel.F`` (the DW term
+          ``1/4 MS (A*DT12 + 2 V)(A-AOLD)`` expands to
+          ``1/2 J (v_old + v_imp)``). ``v_old`` is the velocity at the
+          START of the cycle (v^{n-1/2}); the caller (engine.py) passes it.
+          When it is omitted the pre-enforcement free velocity is used as a
+          surrogate (their difference is O(dt^2) per cycle).
         * /IMPDISP: identical, with the imposed velocity derived from the
           exact landing condition x + v dt = x0 + d(t+dt).
         * /BCS: a permanently fixed node never moves — the trial velocity
@@ -211,9 +225,12 @@ class LoadsAndConstraints:
             if len(idx) == 0 or t < tstart or t > tstop:
                 continue
             vimp = scale * fct.eval(t * facx)
-            dv = vimp - v[idx, dof]
+            dv = vimp - v[idx, dof]              # J/m: impulse over free vel
             m = np.where(self._frozen[idx], 0.0, mass[idx])
-            w += float(np.dot(m, dv)) * vimp
+            # midstep velocity (v^{n-1/2} + v^{n+1/2})/2 — the leapfrog work
+            v_mid = 0.5 * ((v_old[idx, dof] if v_old is not None
+                            else v[idx, dof]) + vimp)
+            w += float(np.dot(m * dv, v_mid))
             v[idx, dof] = vimp
         # imposed displacements: land exactly at x0 + d(t_end)
         for idx, dof, fct, scale, facx, tstart, tstop, x0d in self.impdisp:
@@ -223,7 +240,9 @@ class LoadsAndConstraints:
             vimp = (target - x[idx, dof]) / dt
             dv = vimp - v[idx, dof]
             m = np.where(self._frozen[idx], 0.0, mass[idx])
-            w += float(np.dot(m * dv, vimp))
+            v_mid = 0.5 * ((v_old[idx, dof] if v_old is not None
+                            else v[idx, dof]) + vimp)
+            w += float(np.dot(m * dv, v_mid))
             v[idx, dof] = vimp
         # fixed DOFs: zero velocity (no work — see docstring)
         v[self.fix_tra] = 0.0

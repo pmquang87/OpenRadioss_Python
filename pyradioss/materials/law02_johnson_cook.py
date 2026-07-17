@@ -31,6 +31,26 @@ cycle's yield, exactly the original's staggering). The closed-form
 adiabatic checks of the M6 tests: dT/d(eps_p) = sigma_y/rho_Cp during
 flow, and the yield drop (1 - T*^m) at a prescribed temperature.
 
+Hardening mode — ISOTROPIC only (Chard / Fisokin = 0)
+-----------------------------------------------------
+This radial return implements PURE ISOTROPIC hardening: the yield surface
+expands (sigma_y grows with eps_p) but never translates. Radioss LAW2 also
+offers a linear-Prager KINEMATIC component through ``Chard`` (the
+iso-kinematic fraction, ``Fisokin`` in mat002): Chard = 0 is pure
+isotropic, 1 is pure kinematic, and the surface back-stress evolves as
+X += (2/3) Chard H d(eps_p) n. The port carries NO back-stress state, so a
+non-zero Chard is refused-with-a-warning at read time
+(``starter_keywords.read_mat``) rather than silently mis-simulated. This is
+inconsequential for MONOTONIC loading — isotropic and kinematic hardening
+coincide until the first strain reversal (the Bauschinger effect is what
+distinguishes them) — which is why the RD-V-0200 Hardening verification
+(Chard = 0, a single imposed-velocity ramp) matches the Fortran internal
+energy to 3e-3 % (M38, VALIDATION §6). Kinematic hardening is a deferred
+enhancement: it needs a per-integration-point back-stress tensor threaded
+through the element state (``extra_shapes``) and a shifted return
+(s_trial - X back to the surface), and no in-scope official deck exercises
+Chard > 0.
+
 The stress integration is the classic **radial
 return** (Wilkins 1964, the same algorithm as the Fortran):
 
