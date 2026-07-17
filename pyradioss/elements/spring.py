@@ -23,43 +23,68 @@ import numpy as np
 
 from ..common.constants import EM20, EP30
 from ..common.fastmath import norm3
+from . import spring_general
 
 
 def init_group(group, model, log):
+    """Element buffer + lumped mass/inertia.  A /SPRING group may mix the
+    axial TYPE4 spring (this module) with the 6-DOF TYPE8/TYPE13 general
+    springs (:mod:`spring_general`), one property per part slice — each
+    element is classified by its slice's property type and the two paths
+    write into the SAME per-(element,node) mass/inertia return."""
+    st = group.state
+    n = group.n
     xe = model.x0[group.conn]
     L0 = norm3(xe[:, 1] - xe[:, 0])
-    n = group.n
     mass = np.zeros(n)
     k = np.zeros(n)
     cdamp = np.zeros(n)
-    for sl, mat, prop in group.state["slices"]:
+    kind = np.full(n, 4, dtype=np.int64)
+    for sl, mat, prop in st["slices"]:
+        pt = getattr(prop, "type", 4)
+        kind[sl] = pt
+        if pt in spring_general.SPRING_PROP_TYPES:
+            continue                       # 6-DOF: built by spring_general
         mass[sl] = prop.params["mass"]
         k[sl] = prop.params["k"]
         cdamp[sl] = prop.params["c"]
-    if np.any(mass <= 0):
-        for eid in group.ids[mass <= 0]:
+    is6 = np.isin(kind, list(spring_general.SPRING_PROP_TYPES))
+    idx4 = np.where(~is6)[0]
+    idx6 = np.where(is6)[0]
+
+    # the axial TYPE4 spring needs a positive mass for its own time step
+    if len(idx4):
+        bad = mass[idx4] <= 0.0
+        for eid in group.ids[idx4][bad]:
             log.error(f"/SPRING {eid}: /PROP/SPRING mass must be > 0 "
                       f"(needed for the explicit time step)", "SPRING INIT")
-    group.state.update(
-        L0=L0, mass=mass, k=k, cdamp=cdamp,
-        force=np.zeros(n), eint=np.zeros(n), ehour=np.zeros(n),
-    )
+
+    st.update(L0=L0, mass=mass, k=k, cdamp=cdamp,
+              force=np.zeros(n), eint=np.zeros(n), ehour=np.zeros(n),
+              idx4=idx4, idx6=idx6)
+
+    massn = np.repeat(mass / 2.0, 2)       # per (elem, localnode)
+    inertn = np.zeros(2 * n)
+    if len(idx6):
+        spring_general.init6(group, model, log, idx6, massn, inertn)
     node_idx = group.conn.reshape(-1)
-    return node_idx, np.repeat(mass / 2.0, 2), None
+    return node_idx, massn, (inertn if inertn.any() else None)
 
 
-def forces(group, x, v, vr, dt, fint, mint):
+def _forces_axial(group, x, v, dt, fint, idx):
+    """Axial TYPE4 spring forces for the elements ``idx`` (``slice(None)``
+    for the whole group — the original vectorized path)."""
     st = group.state
-    conn = group.conn
+    conn = group.conn[idx]
     dx = x[conn[:, 1]] - x[conn[:, 0]]
     L = np.maximum(norm3(dx), EM20)
     a = dx / L[:, None]
     Ldot = np.einsum("nb,nb->n",
                      v[conn[:, 1]] - v[conn[:, 0]], a)
 
-    F_old = st["force"].copy()
-    F = st["k"] * (L - st["L0"]) + st["cdamp"] * Ldot
-    st["force"] = F
+    F_old = st["force"][idx].copy()
+    F = st["k"][idx] * (L - st["L0"][idx]) + st["cdamp"][idx] * Ldot
+    st["force"][idx] = F
 
     fvec = F[:, None] * a          # tension pulls the nodes together
     np.add.at(fint, conn[:, 0], fvec)
@@ -67,13 +92,28 @@ def forces(group, x, v, vr, dt, fint, mint):
 
     # elastic part of the work goes to internal energy; damping work too
     # (the original books spring damping into internal energy as well).
-    st["eint"] += 0.5 * (F_old + F) * Ldot * dt
+    st["eint"][idx] += 0.5 * (F_old + F) * Ldot * dt
 
-    k = np.maximum(st["k"], EM20)
-    omega = 2.0 * np.sqrt(k / st["mass"])
-    xi = st["cdamp"] / np.sqrt(k * st["mass"])
+    k = np.maximum(st["k"][idx], EM20)
+    omega = 2.0 * np.sqrt(k / st["mass"][idx])
+    xi = st["cdamp"][idx] / np.sqrt(k * st["mass"][idx])
     dt_crit = (2.0 / omega) * (np.sqrt(1.0 + xi ** 2) - xi)
-    return np.where(st["k"] > 0, dt_crit, EP30)
+    return np.where(st["k"][idx] > 0, dt_crit, EP30)
+
+
+def forces(group, x, v, vr, dt, fint, mint):
+    st = group.state
+    idx6 = st.get("idx6")
+    if idx6 is None or len(idx6) == 0:
+        # pure axial group (every existing spring deck): the whole-group
+        # vectorized path, bit-identical to the pre-M38 kernel
+        return _forces_axial(group, x, v, dt, fint, slice(None))
+    dtc = np.full(group.n, EP30)
+    idx4 = st["idx4"]
+    if len(idx4):
+        dtc[idx4] = _forces_axial(group, x, v, dt, fint, idx4)
+    dtc[idx6] = spring_general.forces6(group, x, v, vr, dt, fint, mint, idx6)
+    return dtc
 
 
 # ----------------------------------------------------------------------------

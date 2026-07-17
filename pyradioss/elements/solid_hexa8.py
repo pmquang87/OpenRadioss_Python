@@ -248,9 +248,24 @@ def init_group(group, model, log):
         # committed increments or the modes ratchet (an M13 lesson). Inert
         # in the explicit engine (never read or written there).
         hgq=np.zeros((n, 4, 3)),
+        # accumulated hourglass MODAL displacement of the EXPLICIT physical
+        # (Belytschko-Bindeman) hourglass STIFFNESS — LAW70 foam only, see
+        # _phys_hourglass_law70. Separate from hgq (implicit) so an implicit
+        # residual call cannot corrupt the explicit deformation state.
+        hgqex=np.zeros((n, 4, 3)),
         # exact stability correction to the lc/c estimate (module docstring)
         dtfac=_exact_dt_factor(dndx0, vol, lc0, group.state["slices"]),
     )
+    # LAW70 tabulated foam needs the physical (stiffness) hourglass its
+    # /PROP/SOLID Isolid=24 asks for — the viscous default cannot hold the
+    # zero-energy modes through its densification lock-up (see
+    # _phys_hourglass_law70). Precompute the element mask once.
+    law70_mask = np.zeros(n, dtype=bool)
+    for sl, mat, prop in group.state["slices"]:
+        if mat.law == 70:
+            law70_mask[sl] = True
+    group.state["law70_mask"] = law70_mask
+    group.state["has_law70"] = bool(law70_mask.any())
     _init_material_state(group, dndx0)
     # nodal mass: 1/8 of the element mass to each node
     node_idx = group.conn.reshape(-1)
@@ -466,6 +481,84 @@ def _post(xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
     return fe, dt_crit, w_visc, qvw_new, deint0, dehour
 
 
+# ----------------------------------------------------------------------------
+# Physical (Belytschko-Bindeman) hourglass STIFFNESS — LAW70 foam (M38)
+# ----------------------------------------------------------------------------
+# The default one-point brick carries only VISCOUS hourglass control (shour3:
+# a force on the hourglass VELOCITY). That is adequate for metals but NOT for
+# the /MAT/LAW70 tabulated foam in its densification lock-up: past EPS_max the
+# tangent jumps to E_max, the response goes near-rigid, and the geometric
+# coupling of one-point integration pumps the zero-energy modes faster than a
+# velocity damper can bleed them — they run away as pure hourglass-energy
+# injection (M37 measured RD-V-0220 c46/c47/c49 dying at ~80 % crush with
+# −504 %…−16 968 % energy error; the survivor c48 is a TENSION test that never
+# densifies). The deck asks for exactly the cure: /PROP/SOLID Isolid=24, the
+# HEPH physically-stabilized brick, whose assumed-strain hourglass the real
+# solver holds at HOURGLASS ENERGY = 0 for the whole run. The port has no HEPH
+# element (an M37-flagged "until HEPH lands" gap); this adds the essential part
+# of it — a Flanagan–Belytschko hourglass STIFFNESS (a restoring force on the
+# accumulated hourglass deformation, the shour3 stiffness form) — for LAW70
+# bricks only:
+#
+#   * the stiffness scales with the CURRENT per-element P-wave modulus
+#     AA1 = rho0 c^2 (c from sigeps70's evolving modulus), so it tracks the
+#     E0 -> E_max stiffening and is always a fixed FRACTION of the physical
+#     stiffness — never a foreign scale;
+#   * the hourglass modal frequency it introduces is fed into the element
+#     time step (dt_hg), so a coarse-to-fine mesh where the nodal step exceeds
+#     a small element's own Courant limit stays stable — the one thing the
+#     naive "add a spring" attempt gets wrong;
+#   * its (recoverable, elastic) work is booked into the hourglass-energy
+#     ledger, so the global balance stays closed and ERR/ERRN honest.
+#
+# Only LAW70 elements are touched, so every other solid deck's validated
+# viscous-hourglass behaviour is byte-for-byte unchanged.
+
+#: hourglass stiffness as a fraction of the element P-wave modulus (small
+#: enough to barely touch the time step, large enough to bound the LAW70
+#: densification modes — the FB stiffness is orthogonal to uniform strain, so
+#: patch-test / uniaxial states are unaffected whatever the value)
+HG_PHYS = 0.03
+#: safety factor on the hourglass Courant limit dt_hg
+DT_HG_SF = 0.9
+
+
+def _phys_hourglass_law70(st, xe, ve, dndx, vol, c, dt):
+    """Belytschko–Bindeman physical hourglass STIFFNESS for the LAW70 slices
+    of a brick group (mask ``st['law70_mask']``). Returns
+    ``(f_hg, dehour, dt_hg)``: the (n,8,3) nodal restoring force to add to the
+    internal force, the (n,) hourglass-energy increment, and the (n,) element
+    time-step cap that keeps the added hourglass frequency explicitly stable.
+    Non-LAW70 elements get zero force / EP30 dt (no effect)."""
+    mask = st["law70_mask"]
+    mass = st["mass"]
+    # current P-wave modulus AA1 = rho0 c^2  (rho0 = mass/vol0); this is the
+    # same AA1 whose sqrt(AA1/rho0) sigeps70 returns as c, recovered per element
+    aa1 = (mass / np.maximum(st["vol0"], EM20)) * c * c
+    hx = _H @ xe                                            # (n, 4, 3)
+    gamma = _H[None, :, :] - hx @ dndx.transpose(0, 2, 1)   # (n, 4, 8)
+    traceS = np.einsum("nia,nia->n", dndx, dndx)            # sum|gradN|^2
+    kstiff = np.where(mask, HG_PHYS * aa1 * vol * traceS, 0.0)
+    # accumulate the hourglass modal displacement (rate form, LAW70 only)
+    q = st["hgqex"]
+    if mask.all():
+        q += (gamma @ ve) * dt
+    elif mask.any():
+        q[mask] += (gamma[mask] @ ve[mask]) * dt
+    f_hg = (gamma.transpose(0, 2, 1) @ q) * (-kstiff)[:, None, None]
+    dehour = -np.einsum("nib,nib->n", f_hg, ve) * dt
+    # dt cap: K_max <= kstiff * trace(GG) = kstiff * sum|gamma|^2 ; the
+    # hourglass modal mass is mass/8, so omega_max^2 = 8 kstiff gnorm / mass
+    gnorm = np.einsum("nai,nai->n", gamma, gamma)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        dt_hg = np.where(
+            kstiff > 0.0,
+            DT_HG_SF * np.sqrt(np.maximum(mass, EM20)
+                               / np.maximum(2.0 * kstiff * gnorm, EM20)),
+            EP30)
+    return f_hg, dehour, dt_hg
+
+
 def forces(group, x, v, vr, dt, fint, mint):
     """One explicit cycle for the whole brick group. See module docstring
     for the sforc3.F call chain this reproduces (and for the M7 pre/post
@@ -622,6 +715,18 @@ def forces(group, x, v, vr, dt, fint, mint):
         st["eint"] += deint0 + w_visc
     st["qvw_pend"] = qvw_new
     st["ehour"] += dehour
+
+    # ---- physical (stiffness) hourglass for LAW70 foam (M38) --------------
+    # HEPH/Isolid=24 gap: the viscous hourglass above cannot hold LAW70's
+    # densification lock-up. Add the FB stiffness-hourglass restoring force,
+    # book its elastic work, and tighten dt to its frequency (see
+    # _phys_hourglass_law70). Untouched for every non-LAW70 group.
+    if st.get("has_law70"):
+        f_hg, dehour_hg, dt_hg = _phys_hourglass_law70(
+            st, xe, ve, dndx, vol, c, dt)
+        fe = fe + f_hg
+        st["ehour"] += dehour_hg
+        dt_crit = np.minimum(dt_crit, dt_hg)
 
     # ---- scatter to global arrays (asspar) ---------------------------------
     scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))

@@ -36,6 +36,7 @@ same names in comments.
 | `starter/source/reader/*` + `hm_reader` (Altair reader lib) | `pyradioss/input/deck_reader.py` | block/keyword lexer, `#include`; M37: real-dialect detection from /BEGIN's declared input version (≥ 90 → `block.fixed` everywhere, `#include`s too), `KeywordBlock.fixed_cards()` re-inserting whitespace-only lines as REAL blank cards (`blank_slots`), `Card.cut(layout)`/`Card.is_blank`, /PARAMETER `&NAME` substitution with columns preserved |
 | `starter/source/elements/reader` per-keyword `hm_read_*.F` | `pyradioss/input/starter_keywords.py` | one function per keyword |
 | `starter/source/materials/mat/mat###/hm_read_mat##.F` (all laws) driven by the `hm_cfg_files` CFG card definitions | `pyradioss/input/mat_reader.py` | M37: cfg-driven GENERIC /MAT reader — every law in the radioss2022 catalogue parses (schema = newest `CFG/radioss*/MAT/*.cfg` FORMAT block ≤ 2022, interpreted in import mode); laws without ported physics become `InactiveMaterial` (full params + density, mass init works, Engine refuses to run them); `MAT_PHYSICS_REGISTRY` is the one-line hook for new-law physics builders; `/ALE/MAT`, `/EULER/MAT`, `/HEAT/MAT` parse as notes |
+| `starter/source/properties/hm_read_prop##.F` (all property types) driven by the `hm_cfg_files/config/CFG/radioss*/PROP/*.cfg` card layouts | `pyradioss/input/prop_reader.py` | M38: cfg-driven GENERIC /PROP reader — the property sibling of `mat_reader.py`, citing each PROP cfg FORMAT; the properties WITH ported physics get real params (SH_ORTH TYPE9 → the shell orthotropy fiber frame into the BT4/tri3 kernels; SPR_GENE TYPE8 / SPR_BEAM TYPE13 → the 6-DOF linear K/C spring per `r2def3.F`; VOID TYPE0 → the no-stiffness placeholder), every other spelling (INJECT1, TSHELL/TYPE20, composite stacks …) → `InactiveProperty` the Engine REFUSES to run element groups referencing it (`refuse_inactive_properties`), exactly like `InactiveMaterial`/`refuse_inactive_materials`; `read_prop` in `starter_keywords.py` keeps the hand readers for TYPE1/2/3/4/14 and delegates the rest here |
 | — (deck *writing* is the preprocessor's job in the Altair stack, not the solver's; the layouts come from the `hm_cfg_files` CARD definitions the Fortran reader parses with) | `pyradioss/input/deck_writer.py` | M36: fixed-format Radioss 2022 deck writer — per-keyword emitters for all 39 starter dispatch families + engine decks, each citing its CFG card layout; "dual-dialect" output readable by the real Starter AND the port; M37: the field-formatting primitives extracted to `card_layouts.py` (re-exported here) |
 | the `hm_cfg_files` CARD format strings themselves (the column widths the real reader parses with) | `pyradioss/input/card_layouts.py` | M37: ONE shared table — the field-formatting primitives (`fmt_int`/`fmt_float`/`fmt_str`/`blank`/`BLANK_CARD`, extracted from `deck_writer`) plus the `LAYOUTS` column-width table, every entry citing its `hm_cfg_files` CARD format string; the WRITER emits with it and the READER cuts fixed cards with it (`Card.cut(layout)`) |
 | `starter/source/general_controls/computation/unit_code.F` + `hm_read_unit.F` (UNITAB) + the per-quantity dimension conversion of `hm_get_floatv.F` | `pyradioss/input/units.py` + `/UNIT` in `starter_keywords.py` | M37 (groups-sets builder, landed unreported): /BEGIN work-unit cards + `/UNIT/<id>` local unit systems — `<prefix><base>` code parse (g/m/s bases, metric prefixes, the MASS×1e-3 kg quirk) and per-quantity (mass, length, time)-power conversion of blocks referencing a /UNIT, verified against the real Windows starter on RD-E-2601 main_TEST4; unconverted keywords referencing a /UNIT warn loudly |
@@ -46,22 +47,22 @@ same names in comments.
 | `engine/source/engine/resol.F` | `pyradioss/engine/engine.py` | main loop |
 | `engine/source/engine/lectur.F` + `hm_read_*` (engine cards) | `pyradioss/input/engine_keywords.py` | `/RUN /DT /TFILE /ANIM …` |
 | `engine/source/assembly/asspar*.F` | `pyradioss/engine/engine.py` (`np.add.at` scatter) | force assembly |
-| `engine/source/constraints/general/bcs` + `impvel/fixvel.F` | `pyradioss/engine/kinematics.py` | `/BCS`, `/IMPVEL`, `/IMPDISP` |
+| `engine/source/constraints/general/bcs` + `impvel/fixvel.F` | `pyradioss/engine/kinematics.py` | `/BCS`, `/IMPVEL`, `/IMPDISP`; M38: `apply_kinematic` books constraint work at the leapfrog MIDSTEP ½J(v_old+v_imp) per `fixvel.F` (was the endpoint J·v_imp) — fixes the V0700 −50 % cycle-1 energy anomaly at an impulsive /IMPVEL start; `engine.py` passes v^{n-1/2} |
 | `engine/source/constraints/general/rwall` (`rgwal0/s/c/t.F`) | `pyradioss/engine/rigid_wall.py` | kinematic wall: plane/sphere/cylinder, moving (M5) |
 | `starter/.../rbody/hm_read_rbody.F`, `rbyini.F` + `engine/.../rbody/rbyfor.F`, `rbycor.F` (and `rbe2/`) | `pyradioss/engine/rigid_body.py` + `starter/initialization.py` (`initialize_rigid_bodies`) | `/RBODY`, `/RBE2` (M5) |
 | `starter/.../rbe3/hm_read_rbe3.F` + `engine/.../rbe3/rbe3f.F`, `rbe3v.F` | `pyradioss/engine/rbe3.py` | `/RBE3` interpolation constraint (M5) |
 | `engine/source/loads/general/pload/pload.F` | `pyradioss/engine/kinematics.py` (`external_forces`) | `/PLOAD` follower pressure (M5) |
 | `engine/source/tools/sect/` (`section.F`, `forint.F`) | `pyradioss/engine/sections.py` | `/SECT` via the side-sum identity (M5) |
 | `starter/source/tools/admas/` | `pyradioss/starter/initialization.py` | `/ADMAS` (M5) |
-| `engine/source/elements/solid/solide/` (`sforc3.F`, `srota3.F`, `shour3.F`…) | `pyradioss/elements/solid_hexa8.py` | 1-pt + FB hourglass |
-| `engine/source/elements/solid/solide4/` (`s4forc3.F`…) | `pyradioss/elements/solid_tetra4.py` | constant-strain tetra |
+| `engine/source/elements/solid/solide/` (`sforc3.F`, `srota3.F`, `shour3.F`…) | `pyradioss/elements/solid_hexa8.py` | 1-pt + FB hourglass; M38: a Belytschko–Bindeman hourglass STIFFNESS for LAW70 bricks ONLY (`_phys_hourglass_law70`, gated on `has_law70`) — the essential part of the Isolid=24/HEPH brick (restoring force on the accumulated hourglass deformation, k = HG_PHYS·AA1·V·Σ\|∇N\|² with AA1 = ρ₀c² tracking E0→E_max, frequency fed into the element dt, elastic work booked into the HG ledger), killing the RD-V-0220 densification instability; every non-LAW70 solid deck byte-for-byte unchanged |
+| `engine/source/elements/solid/solide4/` (`s4forc3.F`…) + `starter/.../s4coor3.F` / `hm_read_solid.F` | `pyradioss/elements/solid_tetra4.py` | constant-strain tetra; M38 (`tetra4-convention` builder — landed unreported, confirmed by the §4.7 sweep): node-ordering / signed-volume canonicalisation matched to Radioss — a /TETRA4 whose signed volume is negative in the port's convention is reordered, so official tetra decks (whose node order is the OPPOSITE of the port's own decks) no longer flag zero/negative volume (M37-BUG-3 fix, resolved 9 official decks) |
 | `engine/source/elements/shell/coque/` (`cforc3.F`, `czforc3.F`…) | `pyradioss/elements/shell_bt4.py` | Belytschko–Tsay, BLT84 stiffness hourglass |
 | `engine/source/elements/sh3n/coque3n/` (`c3forc3.F`…) | `pyradioss/elements/shell_tri3.py` | C0 triangle |
 | `engine/source/elements/beam/` (`pforc3.F`, `pdefo3.F`…) | `pyradioss/elements/beam_type3.py` | corotational Timoshenko |
 | `engine/source/elements/truss/` (`tforc3.F`) | `pyradioss/elements/truss.py` | |
-| `engine/source/elements/spring/` (`rforc3.F`) | `pyradioss/elements/spring.py` | TYPE4 |
+| `engine/source/elements/spring/` (`rforc3.F`, `r2def3.F`) | `pyradioss/elements/spring.py` | TYPE4; M38: TYPE8 SPR_GENE + TYPE13 SPR_BEAM 6-DOF linear K/C core (`r2def3.F`), force/moment closed-form-matched — physics wired from `prop_reader.py`; documented cuts: force functions (fct_IDji), hardening (Hi/IECROU), rupture (DeltaMin/Max), rate smoothing (ISRATE/Fcut), sensor activation, `skew_ID` → global frame, TYPE13 co-rotational beam-frame update (implicit-spring path stays TYPE4-only) |
 | `engine/source/materials/mat/mat001/sigeps01.F` | `pyradioss/materials/law01_elastic.py` | |
-| `engine/source/materials/mat/mat002/sigeps02.F` | `pyradioss/materials/law02_johnson_cook.py` | |
+| `engine/source/materials/mat/mat002/sigeps02.F` (+ `starter/.../hm_read_mat02_jc.F90`) | `pyradioss/materials/law02_johnson_cook.py` | M38: Iflag=1 SIG_Y/UTS/EUTS → a/b/n conversion (fit through the true-UTS point + Considère necking, `hm_read_mat02_jc.F90`; bit-exact vs the Fortran starter — T1000 A=0.090260/B=0.223202/n=0.368307, clearing the c33 parity blocker); Chard>0 kinematic hardening warned + deferred (no per-integration-point back-stress state ported) |
 | `engine/source/materials/mat/mat027/sigeps27c.F` | `pyradioss/materials/law27_brittle.py` | shells only, like the original |
 | `engine/source/materials/mat/mat036/sigeps36.F` (+ `36c`) | `pyradioss/materials/law36_tabulated.py` | |
 | `engine/source/materials/mat/mat042/sigeps42.F` | `pyradioss/materials/law42_ogden.py` | solids; returns its own SOUNDSP |
@@ -4312,6 +4313,128 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
     * the Isolid24/HEPH physically-stabilized brick (RD-V-0220 variant 0);
       output-side oracle keywords (/TH/RBODY, /STATE/BRICK, /H3D/*, /ANALY,
       /DEF_SOLID — warnings only, block parity plots not physics).
+
+37. **M38 — THE /PROP PACK + LAW19 FABRIC END-TO-END + THE THREE M37 BUGS +
+    TWO PHYSICS-STABILITY FIXES** ✅ (done; the corpus re-sweep MEASURED the
+    unlock — ERROR 149 → 89, 60 more decks out of ERROR, 0 regressions.
+    Report: `VALIDATION.md` M38 edition, §3.2 case-level parity + §4.7 the
+    authoritative corpus re-sweep + §6.2 the timing note).
+    Delivered:
+    * **the /PROP pack** — the new cfg-driven `pyradioss/input/prop_reader.py`
+      (the property sibling of `mat_reader.py`: cites each `hm_cfg_files` PROP
+      cfg FORMAT, dispatches physics vs `InactiveProperty` exactly like
+      `InactiveMaterial`/`refuse_inactive_materials`; `read_prop` in
+      `starter_keywords.py` keeps the hand readers for TYPE1/2/3/4/14 and
+      delegates the rest). SH_ORTH (TYPE9) → a per-element orthotropy fiber
+      frame into the BT4/tri3 shell kernels (`corthdir.F` direction +
+      `mulawc.F90`/`rotov.F` strain/stress rotation, IREP=0, frozen at init);
+      SPR_GENE (TYPE8) + SPR_BEAM (TYPE13) → 6-DOF linear K/C springs
+      (`r2def3.F` core, in `spring.py`); VOID (TYPE0) → a no-stiffness
+      placeholder (pairs with /MAT/VOID); INJECT1, TSHELL/TYPE20 and every
+      other spelling → `InactiveProperty` (Starter accepts, Engine refuses
+      groups that use it). Two parity blockers cleared: the E0500 fixed-format
+      /PROP/BEAM section card, and the mat_ID=0 /PART rule (legal on spring
+      parts per `hm_read_part.F`). 23 new tests, 0 regressions across 363
+      existing;
+    * **LAW19 fabric end-to-end** — SH_ORTH completes the chain: RD-V-0230
+      SHELL_LAW19_PROP9 runs Starter NORMAL (0 errors, was 6 "property not
+      defined"), Engine NORMAL, 384 shells with 0°/45°/90° fibers; a
+      kernel-level test confirms a 0°-fiber shell resists x-stretch > 2×
+      (≈ E11/E22 = 6×) a 90°-fiber shell — the orthotropy wiring changes the
+      stress, not just the parse;
+    * **M37-BUG-3 /TETRA4 volume-sign / node-ordering** FIXED
+      (`solid_tetra4.py` — canonicalises a /TETRA4 whose signed volume is
+      negative in the port's convention, mirroring `s4coor3.F`/
+      `hm_read_solid.F`): the §4.7 sweep confirms 9 → 0. Its builder
+      (`tetra4-convention`) filed no report — the fix is verified by the sweep
+      delta + the module (the M37 landed-unreported pattern);
+    * **M37-BUG-2 the null-density check** exempted for the multi-material ALE
+      family (`checks.py`, `mat.law ∈ {51,151}`) — real blast_experiment
+      /MAT/LAW151 now raises zero density errors (10 → 2 decks; the residual 2
+      are LAW0/VOID, M38-NEW-2 below);
+    * **the LAW70 densification hourglass instability** (RD-V-0220 c46/c47/c49)
+      FIXED — a Belytschko–Bindeman hourglass STIFFNESS for LAW70 bricks ONLY
+      (`solid_hexa8._phys_hourglass_law70`, gated on `has_law70`; k =
+      HG_PHYS·AA1·V·Σ|∇N|², AA1 = ρ₀c² tracking E0→E_max, frequency fed into
+      the element dt, elastic work booked into the hourglass ledger). The 3
+      dead compression variants now run stably through densification (EN ≡ 0,
+      was −5.29e9; max HE ~2, a 2.6e9× reduction; ERR% ~0.0007 %, into ~95 %
+      peak crush); c48 (tension) unchanged at MATCH 0.0353 (was 0.0355). Root
+      cause = the deck's Isolid=24 HEPH brick mapping to the port's one-point
+      FB viscous brick — the M37 "element gap, not material" finding, fixed for
+      LAW70 (supersedes entry 36's deferred Isolid24/HEPH item FOR LAW70 bricks);
+    * **the V0700 −50 % cycle-1 energy-ledger anomaly** ROOT-CAUSED + FIXED —
+      `apply_kinematic` booked constraint work at the endpoint velocity, not
+      the leapfrog midstep `J·(v_old+v_imp)/2` that `fixvel.F` books; at an
+      impulsive /IMPVEL start (v_old=0) J·v_imp = m·v_imp² = 2·KE, so KE read
+      exactly half → −50 % (`kinematics.py` books the midstep, `engine.py`
+      passes v^{n-1/2}). SHELL_Ishell24_LAW2 now NORMAL, 0.00 % every cycle,
+      element-independent → all nine V0700 SAMP decks fixed;
+    * **c26_V0200_Hardening re-measured to a clean MATCH** (0.0216 at full
+      coverage, the M37 0.170 was a truncated-window artifact; the deck is
+      Chard=0 isotropic + monotonic, the port's isotropic JC radial return
+      exact) + **/MAT/LAW2 Iflag=1 ported bit-exact** (SIG_Y/UTS/EUTS → a/b/n
+      per `hm_read_mat02_jc.F90`; T1000: A=0.090260 / B=0.223202 / n=0.368307
+      vs the Fortran starter's A=0.09026 / B=0.2232020270107 /
+      N=0.3683065281433 — clears the c33 blocker);
+    * **the FULL-CORPUS RE-SWEEP** (`coverage-m38`, VALIDATION.md §4.7,
+      `coverage_results_m38.json`): same 529 decks, same driver — verdicts
+      CLEAN 7→9, SKIPS 373→431, ERROR 149→89; 60 decks out of ERROR (58→SKIPS,
+      2→CLEAN), 0 regressions/crashes/timeouts/parse-errors; every /PROP family
+      closed at the gap level; atomic (source SHA-256 byte-identical
+      before/after, HEAD at `977993b`);
+    * **the OFFICIAL-PARITY + TIMING RE-RUN, completed 52/52** (the
+      `parity-m38` builder's session ended at 6/52; the coordinator resumed
+      its resume-capable driver — VALIDATION.md §3.2, `parity_m38.json` +
+      `perf_m38.json` 104 records): **both-engine comparisons 24 → 28, port
+      starter fails 18 → 9 (halved)**; the two full-coverage MATCHes are the
+      milestone's fix showcases — c26 Hardening 0.0216 (the ledger fix) and
+      c48 LAW70 foam 0.0353; M37's c28/c31/c32 "MATCH" labels exposed as
+      /STOP-truncation artifacts (0.36–0.44 at full coverage — the
+      shell-fidelity family); first comparisons for tetra (c23 0.428),
+      fabric (c51 0.375) and T1000 (c33 0.177); every M38 port wall clock
+      contention-flagged (impi=12/12 — a concurrent user MPI job).
+    Deferred out of M38, explicitly:
+    * **an UNCONTENDED timing pass** (all M38 port wall clocks are upper
+      bounds), the **LAW70 compression-trio full runs** past the 900 s
+      budget (stable now, SKIPPED-SLOW), and the **c50 fabric NaN-channel
+      comparison fix**;
+    * **four M38 quick-fix bugs** (§4.7, all on decks already ERROR in M37):
+      M38-NEW-2 extend the MAT null-density exemption to LAW0/VOID (BAT_CIR/
+      BAT_SQR; also clears the prop-pack's VOID-on-/BEAM|/TRUSS `_ALLOWED_LAWS`
+      OPEN item); M38-NEW-1 the /PROP/SPR_PRE (TYPE32) SPRING INIT mass check
+      misapplying the TYPE4 requirement (RD-V-0031); M38-NEW-3 `RBODY has no
+      mass` on the Gears/Cam decks (slave-element mass accumulation); M38-NEW-4
+      `RBODY node already belongs` on BIKERC (port stricter than the Fortran
+      priority resolution);
+    * **the LAW70 c46/c47/c49 full t=0.2 NORMAL** — the instability is
+      eliminated but the long runs (108311 Fortran cycles) were reaped by the
+      session before a clean 4/4 (completion physically assured);
+    * **the deeper /ADMAS wall** — resolving BUG-1 unmasked `/ADMAS node group
+      not defined` (2 → 10 decks), the next /ADMAS blocker;
+    * **the Isolid24/HEPH assumed-strain brick, generalized** — the M38 LAW70
+      hourglass stiffness is gated to LAW70 hexa bricks; a general Isolid=24 →
+      physical-hourglass mapping for all solid laws is the longer-term item
+      (LAW70 on the 4-node tetra needs no fix — no hourglass modes);
+    * **/PROP + LAW2 documented cuts**: TYPE8/13 = the linear K/C 6-DOF core
+      only (force functions fct_IDji, hardening Hi/IECROU, rupture
+      DeltaMin/Max, rate smoothing ISRATE/Fcut, sensor activation, `skew_ID` →
+      global frame, TYPE13 co-rotational beam-frame update + long-spring
+      moment-arm coupling — all parsed + cut; implicit-spring path stays
+      TYPE4-only); SH_ORTH IREP=0 only (IREP 1/2 fabric-shear reprojection
+      cut), the Ishell formulation flag read-and-ignored (port uses BT4/C0),
+      stored σ in the fiber frame, per-ply composite layup run as a single
+      orthotropic layer; LAW2/LAW36 kinematic hardening (Chard/FISOKIN
+      back-stress) deferred (now warned when Chard>0);
+    * **top M39 physics gaps** (§4.7): the skew/frame reference-system cluster
+      (SKEW/FIX + SKEW/MOV + FRAME/FIX + FRAME/MOV = 47 blocking), the contact
+      interfaces (INTER/TYPE24 18, INTER/LAGMUL 14, INTER/TYPE18 7),
+      MONVOL/AIRBAG1 16, and the element families SHEL16 12 / QUAD 10 /
+      degenerate bricks 11 (which would convert most of the 20 "model has no
+      elements" decks);
+    * carried from M37: material physics for the parsed-but-inactive laws (LAW6
+      HYD_VISC 30 blocks, LAW51 22, …), the shell-family full-run deviations,
+      the contact/hourglass differential study, gas_piston positive-P0.
 
 **Unnumbered deferred candidate — pending a project scope decision** (previously
 queued as the next numbered milestone; kept here explicitly, not silently dropped):

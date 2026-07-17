@@ -60,8 +60,21 @@ from ..common.fastmath import cross3, det_inv33, norm3, scatter_add3
 
 # dN_i/dxi_a of the linear tetrahedron with natural coordinates
 #   N1 = 1 - xi1 - xi2 - xi3,  N2 = xi1,  N3 = xi2,  N4 = xi3
-# (Radioss /TETRA4 node ordering: base triangle 1-2-3 counter-clockwise
-#  seen from node 4, i.e. node 4 on the positive-normal side).
+#
+# Node-ordering / volume-sign convention (M38, matched to upstream):
+# _geometry() below returns the standard isoparametric determinant
+#   V_std = det[x2-x1, x3-x1, x4-x1] / 6,
+# which is the NEGATIVE of Radioss's signed tetra volume
+#   VOLDP = (x1-x4).((x2-x4) x (x3-x4)) / 6
+# (starter/source/elements/solid/solide4/s4deri3.F, and its read-time twin
+#  CHECKVOLUME_4N in .../solide/checksvolume.F).  A /TETRA4 card is accepted
+# in EITHER winding: the starter canonicalises a wrong-signed element by
+# swapping its 2nd and 4th local nodes (hm_read_solid.F / s4coor3.F swap
+# IXS(4)<->IXS(6)).  init_group() below mirrors that swap so an official
+# mesh (written in the VOLDP>0 winding = V_std<0 here) initialises with a
+# positive volume, arriving at an equivalent positively-signed labelling;
+# a genuinely degenerate (near-coplanar) tetra survives the swap with
+# |V|~0 and is flagged, exactly as s4deri3.F's DET<=0 guard does.
 _DN_DXI = np.array([
     [-1.0, -1.0, -1.0],
     [1.0, 0.0, 0.0],
@@ -164,14 +177,39 @@ def _exact_dt_factor(dndx: np.ndarray, vol: np.ndarray, lc: np.ndarray,
 def init_group(group, model, log):
     """Element buffer + lumped mass (starter s4init3/s4mass3): volume from
     the initial geometry, element mass rho0*V spread equally to the 4
-    nodes."""
+    nodes.
+
+    Node-ordering canonicalisation mirrors the Radioss starter (s4coor3.F /
+    hm_read_solid.F): a /TETRA4 whose signed volume is negative in the port's
+    isoparametric convention (= Radioss VOLDP>0 winding, how official meshes
+    are written) is fixed IN PLACE by the same 2<->4 local-node swap, so the
+    stored connectivity always yields a positive volume for the tested
+    forces()/tangent() math.  See the _DN_DXI convention note above."""
     xe = model.x0[group.conn]                      # (n, 4, 3)
     dndx0, vol = _geometry(xe)
-    bad = vol <= 0.0
+    # --- canonicalise winding: swap local nodes 2 and 4 where V_std<0 -------
+    # (Radioss hm_read_solid.F: IC2=IXS(6); IC4=IXS(4); IXS(4)=IC2; IXS(6)=IC4)
+    flip = vol < 0.0
+    if np.any(flip):
+        group.conn[flip] = group.conn[flip][:, [0, 3, 2, 1]]
+        xe = model.x0[group.conn]
+        dndx0, vol = _geometry(xe)
+    # --- genuinely degenerate (coplanar) tetra: |V|~0 survives the swap -----
+    # size-relative floor so a collapsed element is caught in either winding;
+    # mirror s4deri3.F's error path (MSGID 245 for a solid property, VOL=EM20
+    # "to prevent crash") so the flag never turns into a downstream NaN.
+    ev = xe[:, 1:, :] - xe[:, :1, :]               # edges from node 1 (n,3,3)
+    vtol = 1.0e-9 * np.sqrt((ev * ev).sum(-1)).mean(axis=1) ** 3
+    bad = vol <= vtol
     if np.any(bad):
         for eid in group.ids[bad]:
             log.error(f"/TETRA4 {eid}: zero or negative volume "
                       f"(check node ordering)", "TETRA INIT")
+        # s4deri3.F sets VOL=EM20 "to prevent crash"; the port additionally
+        # neutralises the singular (NaN/huge) shape gradients of the collapsed
+        # element so the flagged run cannot trip the dt eigensolver below.
+        vol = np.where(bad, EM20, vol)
+        dndx0[bad] = 0.0
     n = group.n
     rho0 = np.zeros(n)
     for sl, mat, prop in group.state["slices"]:

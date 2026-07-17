@@ -13,6 +13,16 @@ from ..common.messages import MessageLog
 from ..model.model import Model
 
 
+# multi-material ALE/Euler laws (LAW51, LAW151/MULTIFLUID): their initial
+# density is NOT a top-level RHO0 — it is carried by the submaterial
+# references (mat_ID_ii) weighted by their volume fractions (Vfrac_ii), so
+# the material card's own RHO0 field is legitimately blank/zero.  The
+# reference Starter reads the submaterial densities to build the element
+# mass and does NOT fatal-error the empty top-level density, so the port's
+# null-RHO0 MAT CHECK must exempt the family (M38 / M37-BUG-2).
+_MULTIMAT_ALE_LAWS = {51, 151}
+
+
 # element family -> material laws its kernels implement (see the
 # materials package dispatch; extending a kernel means extending this map)
 _ALLOWED_LAWS = {
@@ -50,14 +60,17 @@ def check_model(model: Model, log: MessageLog) -> None:
                           f"state (P0, gamma) — a bare gas card has no "
                           f"element pressure", "MAT CHECK")
             rho0 = getattr(mat, "rho0", 0.0) or 0.0
-            if rho0 <= 0.0:
+            if rho0 <= 0.0 and mat.law not in _MULTIMAT_ALE_LAWS:
                 # M37: a used material MUST carry a positive initial
                 # density — element masses cannot be initialized without
-                # it (the reference Starter raises the same fatal check;
-                # multimaterial laws like LAW151 keep their densities on
-                # submaterials the port does not resolve).  A clean
-                # model ERROR here replaces the div-by-zero crash in the
-                # element init kernels.
+                # it (the reference Starter raises the same fatal check).
+                # M38 / M37-BUG-2: the multimaterial ALE family (LAW51,
+                # LAW151/MULTIFLUID) is EXEMPT — its density lives on the
+                # submaterial references + volume fractions, not the
+                # top-level RHO0, so a blank RHO0 is legal there (the
+                # upstream Starter does not fatal it either).  These laws
+                # are also 'inactive' in the port, so they fall through to
+                # the physics-not-implemented warning below.
                 law_name = getattr(mat, "law_name", None) \
                     or f"LAW{mat.law}"
                 log.error(f"/MAT/{law_name}/{mat.id} on {name} elements: "
@@ -85,6 +98,20 @@ def check_model(model: Model, log: MessageLog) -> None:
                 log.warning(f"/FAIL on /MAT {mat.id} is ignored for {name} "
                             f"(failure is ported for solids and shells)",
                             "MAT CHECK")
+
+    # M38: element groups that reference a parsed-but-not-implemented
+    # PROPERTY (InactiveProperty) — the Starter accepts them (params +
+    # safe geometry read, mass init works); the Engine refuses to run the
+    # model (see prop_reader.refuse_inactive_properties), mirroring the
+    # inactive-material warning above.
+    for name, group in model.element_groups():
+        for sl, mat, prop in group.state["slices"]:
+            if getattr(prop, "inactive", False):
+                pn = getattr(prop, "prop_name", None) or f"TYPE{prop.type}"
+                log.warning(f"/PROP/{pn}/{prop.id} on {name} elements: "
+                            f"parsed, physics not implemented (M38) — the "
+                            f"Engine will refuse to run this model",
+                            "PROP CHECK")
 
     def need_group(gid, who):
         if gid is not None and gid != 0 and gid not in model.node_groups:

@@ -57,6 +57,7 @@ from ..elements import KERNELS
 from ..input.deck_reader import read_deck
 from ..input.engine_keywords import parse_engine_deck
 from ..input.mat_reader import refuse_inactive_materials
+from ..input.prop_reader import refuse_inactive_properties
 from ..model.model import EngineControls, Model
 from ..output import TimeHistory, write_anim_state
 from ..starter.restart import read_restart, write_restart
@@ -184,6 +185,12 @@ def run_engine(input_file: str, log: Optional[MessageLog] = None) -> Model:
         # simulatable — refuse loudly BEFORE any engine branch runs,
         # naming every offending law (raises InactiveMaterialError).
         refuse_inactive_materials(model, log)
+        # M38: the same refusal for element groups that reference a
+        # parsed-but-not-implemented PROPERTY (InactiveProperty — INJECT1,
+        # TSHELL/TYPE20, composite stacks ...); raises
+        # InactivePropertyError.  A property defined but referenced by no
+        # elements (an /PROP/INJECT1 used only by a /MONVOL) does not block.
+        refuse_inactive_properties(model, log)
         log.info(f" MODEL TITLE  . . . . . . . . . . . . : {model.title}")
         if saved is not None:
             log.info(f" RESUMING FROM TIME . . . . . . . . . : "
@@ -507,9 +514,13 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             state.wext += rb.advance(fint, fext, fcont, mint, model.v,
                                      model.vr, model.x, dt, state.t + dt)
         # (mass_eff: an /IMPVEL driving a tied main node reacts against
-        # the secondary inertia it carries too)
+        # the secondary inertia it carries too. v_old is v^{n-1/2}, the
+        # start-of-cycle velocity, so the constraint work is booked at the
+        # leapfrog midstep — see LoadsAndConstraints.apply_kinematic; this
+        # is what makes an IMPULSIVE imposed-velocity start (RD-V-0700)
+        # balance instead of booking twice the work at cycle 1.)
         state.wext += loads.apply_kinematic(state.t + dt, model.v, model.vr,
-                                            mass_eff, model.x, dt)
+                                            mass_eff, model.x, dt, v_old)
         de_wall, dw_wall = walls.apply(model.x, model.v, v_old,
                                        model.mass, dt)
         state.econt += de_wall
