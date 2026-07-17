@@ -1,0 +1,1133 @@
+"""
+LAW24 — reinforced-concrete smeared-crack / cap plasticity
+(/MAT/CONC, /MAT/LAW24).  Solids only.
+
+Fortran origin (translated block by block)
+------------------------------------------
+``engine/source/materials/mat/mat024/``:
+
+    m24law.F   entry (sound speed = sqrt(PM24/PM1), strain-rate output)
+    conc24.F   driver: elastic prediction -> criterion -> branch
+    elas24.F   damage-degraded Hooke prediction (rdam24 rotation, CRAK
+               accumulation, unilateral DE_i coefficients)
+    crit24.F   Ottosen criterion + secant search of the crossing point
+    fr.F       the criterion function FRV (three-invariant Ottosen
+               surface with the VK hardening/cap factor)
+    dama24.F   tensile damage: new crack directions (pri324 / pri224),
+               rupture strain EPS_F, damage growth, new Hooke matrix
+    plas24.F   compressive plasticity (ICAP = 0 original cap / ICAP = 1),
+               scalar cutting-plane sub-increments with VK/ROB hardening
+    rdam24.F / udam24.F   strain / stress rotations to/from the frozen
+               crack frame (ANG stores the first two crack axes)
+    pri324.F / pri224.F   principal directions for the 1st / 2nd crack
+
+``starter/source/materials/mat/mat024/hm_read_mat24.F`` gives the PM
+table (constants below carry their PM index) and ``m24in2.F`` the state
+initialization (ANG = identity, EPS_F = -1, VK0 = VKY, ROB = RO0).
+
+Model summary
+-------------
+Stress lives in the (frozen) CRACK frame once a direction is damaged —
+``sigc24`` is the Fortran LBUF%SIGC.  Each cycle:
+
+1. **elas24**: rotate the strain increment into the crack frame, update
+   the accumulated crack-normal strain CRAK, evolve the directional
+   damage d_i = QQ (1 - EPS_F_i/CRAK_i) <= DSUP (unilateral: a closed
+   crack, CRAK_i < 0, transmits full stiffness) and build the damaged
+   Hooke matrix; elastic prediction S0 (total-strain in the normals,
+   incremental in the shears).
+2. **crit24/frv**: evaluate the three-invariant Ottosen criterion
+   F(S) = (sqrt(2 J2) - VK * RF(SM, cos3theta))/FC with the hardening
+   factor VK (1 above RT, parabolic RC..RT blend, VK0 on the cone,
+   parabolic cap ROB..ROK) and secant-search the fraction SCLE2 of the
+   increment beyond the surface.
+3. Branch per element: ELASTIC (accept S0) / DAMAGE (mean stress at the
+   trial >= RT: tensile crack via dama24) / PLASTIC (compaction
+   trace(STRAIN) > VMAX: cutting-plane compressive return via plas24
+   with volumetric compactancy/dilatancy ALPHA(VK) and the VK0/ROB
+   hardening update).
+4. Total failure when max(CRAK) >= EPSMAX: the element unloads by the
+   upstream OFF cascade (off *= 0.8 per cycle, dead below 0.1).
+
+Documented deviations of the port
+---------------------------------
+* REINFORCEMENT (steel ratios ARM1-3 + YMS/Y0S/ETS, carm24.F) is NOT
+  ported — a deck giving nonzero ARM percentages is refused by the
+  builder.  None of the 8 corpus decks uses reinforcement.
+* ICAP = 2 (plas24b.F "new cap formulation", 2017+ optional flag) is NOT
+  ported — refused by the builder.  The corpus decks run ICAP = 0.
+  The INVERS < 2017 auto-promotion of ICAP 0 -> 1 is not applied (the
+  builder keeps the deck's flag; pass Iflag = 1 explicitly for the old
+  behavior).
+* the plastic corrector runs per yielding element (a faithful scalar
+  transliteration of plas24.F's inner loop) — the elastic, damage and
+  criterion paths are vectorized; concrete models spend most elements
+  in those paths each cycle.
+* element deletion is expressed through the law's own ``off24`` state
+  (stress wiped); the port's solid kernels keep the element in the mesh
+  (mass/time step) — upstream fully deletes it.  The corpus decks never
+  reach EPSMAX (default 1e20).
+* 2D (N2D = 1 quad) and SPH branches are not ported.
+
+Extra state (materials.extra_shapes -> solid kernels):
+    strain24 (6,)  accumulated total strain (element frame)  LBUF%STRA
+    sigc24   (6,)  stress in the crack frame                 LBUF%SIGC
+    crak24   (3,)  crack-normal strains                      LBUF%CRAK
+    dam24    (3,)  directional damage                        LBUF%DAM
+    ang24    (6,)  crack frame (first two axes)              LBUF%ANG
+    epsf24   (3,)  rupture strain per direction (-1 = none)  LBUF%SF
+    vk024    ()    max hardening parameter reached           LBUF%VK
+    vk24     ()    current criterion ratio                   LBUF%RK
+    rob24    ()    current cap end position                  LBUF%ROB
+    off24    ()    element OFF (1 alive, decaying 0.8/cycle)
+    ini24    ()    lazy-init flag (m24in2.F values on first call)
+"""
+
+from __future__ import annotations
+
+import numpy as np
+
+from ..model.entities import Material
+
+_EM20 = 1e-20
+
+
+# ----------------------------------------------------------------------------
+# rotations to/from the crack frame (rdam24.F / udam24.F)
+# ----------------------------------------------------------------------------
+
+def _frame(ang):
+    """(m, 3, 3) rotation whose COLUMNS are the crack axes: cols 1-2 are
+    stored in ang, col 3 = col1 x col2 (the Fortran S matrix)."""
+    m = len(ang)
+    S = np.empty((m, 3, 3))
+    S[:, 0, 0], S[:, 1, 0], S[:, 2, 0] = ang[:, 0], ang[:, 1], ang[:, 2]
+    S[:, 0, 1], S[:, 1, 1], S[:, 2, 1] = ang[:, 3], ang[:, 4], ang[:, 5]
+    S[:, 0, 2] = ang[:, 1] * ang[:, 5] - ang[:, 2] * ang[:, 4]
+    S[:, 1, 2] = ang[:, 2] * ang[:, 3] - ang[:, 0] * ang[:, 5]
+    S[:, 2, 2] = ang[:, 0] * ang[:, 4] - ang[:, 1] * ang[:, 3]
+    return S
+
+
+def _voigt_to_mat(v, eng=False):
+    """(m, 6) [xx,yy,zz,xy,yz,zx] -> (m, 3, 3); halves the shears when
+    they are engineering."""
+    f = 0.5 if eng else 1.0
+    m = len(v)
+    T = np.empty((m, 3, 3))
+    T[:, 0, 0], T[:, 1, 1], T[:, 2, 2] = v[:, 0], v[:, 1], v[:, 2]
+    T[:, 0, 1] = T[:, 1, 0] = f * v[:, 3]
+    T[:, 1, 2] = T[:, 2, 1] = f * v[:, 4]
+    T[:, 0, 2] = T[:, 2, 0] = f * v[:, 5]
+    return T
+
+
+def _mat_to_voigt(T, eng=False):
+    f = 2.0 if eng else 1.0
+    m = len(T)
+    v = np.empty((m, 6))
+    v[:, 0], v[:, 1], v[:, 2] = T[:, 0, 0], T[:, 1, 1], T[:, 2, 2]
+    v[:, 3] = f * T[:, 0, 1]
+    v[:, 4] = f * T[:, 1, 2]
+    v[:, 5] = f * T[:, 0, 2]
+    return v
+
+
+def _rot_strain_to_crack(deps, ang):
+    """rdam24.F: engineering-shear strain, element -> crack frame
+    (eps' = S^T eps S)."""
+    S = _frame(ang)
+    T = _voigt_to_mat(deps, eng=True)
+    Tp = np.einsum("mia,mij,mjb->mab", S, T, S)
+    return _mat_to_voigt(Tp, eng=True)
+
+
+def _rot_stress_from_crack(sig, ang):
+    """udam24n: stress, crack -> element frame (sig = S sig' S^T)."""
+    S = _frame(ang)
+    T = _voigt_to_mat(sig, eng=False)
+    Tp = np.einsum("mai,mij,mbj->mab", S, T, S)
+    return _mat_to_voigt(Tp, eng=False)
+
+
+# ----------------------------------------------------------------------------
+# principal crack directions (pri324.F / pri224.F) — scalar helpers used
+# on the rare crack-initiation events
+# ----------------------------------------------------------------------------
+
+def _pri324(sig, epstot, eps):
+    """First crack: principal frame of the (deviatoric) stress.  Rotates
+    sig[3:6], eps[0:3], epstot[0:3] into that frame IN PLACE and returns
+    the frame's first two axes as an ang24 row (vec of 6).  Faithful to
+    pri324.F including the degenerate fallbacks."""
+    vec = np.array([1.0, 0.0, 0.0, 0.0, 1.0, 0.0])
+    cs = sig.copy()
+    pr = -(cs[0] + cs[1] + cs[2]) / 3.0
+    cs[0] += pr
+    cs[1] += pr
+    cs[2] += pr
+    aa = (cs[3] ** 2 + cs[4] ** 2 + cs[5] ** 2
+          - cs[0] * cs[1] - cs[1] * cs[2] - cs[0] * cs[2])
+    if aa < 1e-20:
+        return vec
+    bb = (cs[0] * cs[4] ** 2 + cs[1] * cs[5] ** 2 + cs[2] * cs[3] ** 2
+          - cs[0] * cs[1] * cs[2] - 2.0 * cs[3] * cs[4] * cs[5])
+    cc = np.clip(-np.sqrt(27.0 / aa) * bb * 0.5 / aa, -1.0, 1.0)
+    angp = np.arccos(cc) / 3.0
+    dd = 2.0 * np.sqrt(aa / 3.0)
+    ftpi, ttpi = 4.188790205, 2.094395102
+    strv = np.array([dd * np.cos(angp), dd * np.cos(angp + ftpi),
+                     dd * np.cos(angp + ttpi)])
+
+    strmax = max(abs(strv[0]), abs(strv[2]))
+    tol1 = max(1e-20, 6e-4 * strmax ** 2)
+    tol2 = 2e-4 * strmax
+
+    def _amat(shift):
+        A = np.array([[cs[0] - shift, cs[3], cs[5]],
+                      [cs[3], cs[1] - shift, cs[4]],
+                      [cs[5], cs[4], cs[2] - shift]])
+        return A
+
+    V = np.zeros((3, 3))
+    A = _amat(strv[0])
+    iperm = [1, 2, 0]
+    B = np.empty((3, 3))
+    xmag = np.empty(3)
+    for l in range(3):
+        B[:, l] = np.cross(A[:, l], A[:, iperm[l]])
+        xmag[l] = np.linalg.norm(B[:, l])
+    lmax = int(np.argmax(xmag))
+    xmax = xmag[lmax]
+    if xmax > tol1:
+        V[:, 0] = B[:, lmax] / xmax
+        A = _amat(strv[2])
+        for l in range(3):
+            B[:, l] = np.cross(A[:, l], V[:, 0])
+            xmag[l] = np.linalg.norm(B[:, l])
+        lmax = int(np.argmax(xmag))
+        xmax = xmag[lmax]
+        if xmax > tol2:
+            V[:, 2] = B[:, lmax] / xmax
+            V[:, 1] = np.cross(V[:, 2], V[:, 0])
+            V[:, 1] /= np.linalg.norm(V[:, 1])
+        else:
+            vmag = np.linalg.norm(V[:, 0])
+            if vmag > tol2 / max(strmax, 1e-20):
+                V[:, 1] = np.array([-V[1, 0], V[0, 0], 0.0]) / vmag
+            else:
+                V[:, 1] = np.array([1.0, 0.0, 0.0])
+    else:
+        # double eigenvalue: pick any consistent orthogonal pair
+        for l in range(3):
+            xmag[l] = np.hypot(A[0, l], A[1, l])
+        lmax = int(np.argmax(xmag))
+        xmax = xmag[lmax]
+        if max(abs(A[2, 0]), abs(A[2, 1]), abs(A[2, 2])) < tol2:
+            V[:, 0] = np.array([0.0, 0.0, 1.0])
+            V[:, 1] = np.array([-A[1, lmax], A[0, lmax], 0.0]) / xmax
+        elif xmax > tol2:
+            V[:, 0] = np.array([-A[1, lmax], A[0, lmax], 0.0]) / xmax
+            V[:, 1] = np.array([-A[2, lmax] * V[1, 0],
+                                A[2, lmax] * V[0, 0],
+                                A[0, lmax] * V[1, 0] - A[1, lmax] * V[0, 0]])
+            V[:, 1] /= np.linalg.norm(V[:, 1])
+        else:
+            V[:, 0] = np.array([1.0, 0.0, 0.0])
+            V[:, 1] = np.array([0.0, 1.0, 0.0])
+
+    vec = np.array([V[0, 0], V[1, 0], V[2, 0], V[0, 1], V[1, 1], V[2, 1]])
+
+    # rotate sig shears / eps / epstot normals into the new frame
+    S = _frame(vec[None, :])[0]
+
+    def _rot(v6, eng, keep_shear):
+        T = _voigt_to_mat(v6[None, :], eng=eng)[0]
+        Tp = S.T @ T @ S
+        out = _mat_to_voigt(Tp[None, :, :], eng=eng)[0]
+        if keep_shear:
+            v6[3:6] = out[3:6]
+        else:
+            v6[0:3] = out[0:3]
+
+    _rot(sig, eng=False, keep_shear=True)      # SIG(4:6) only
+    _rot(eps, eng=True, keep_shear=False)      # EPS(1:3) only
+    _rot(epstot, eng=True, keep_shear=False)   # EPSTOT(1:3) only
+    return vec
+
+
+def _pri224(sig, epstot, eps, ang):
+    """Second crack: principal direction in the plane normal to the
+    first crack axis (rotation about local axis 1).  Rotates sig[3:6],
+    eps[0:3], epstot[0:3] in place; returns the new SECOND axis (3,) in
+    the element frame (pri224.F's DIR3D)."""
+    s22, s33, s23 = sig[1], sig[2], sig[4]
+    cc = 0.5 * (s22 + s33)
+    bb = 0.5 * (s22 - s33)
+    cr = np.hypot(bb, s23)
+    ss1 = cc + cr
+    d1, d2 = s23, ss1 - s22
+    orm = np.hypot(d1, d2)
+    if orm < 1e-8:
+        d1, d2 = 1.0, 0.0
+    else:
+        d1, d2 = d1 / orm, d2 / orm
+    # rotation about axis 1 by the principal angle
+    S = np.array([[1.0, 0.0, 0.0],
+                  [0.0, d1, -d2],
+                  [0.0, d2, d1]])
+
+    def _rot(v6, eng, keep_shear):
+        T = _voigt_to_mat(v6[None, :], eng=eng)[0]
+        Tp = S.T @ T @ S
+        out = _mat_to_voigt(Tp[None, :, :], eng=eng)[0]
+        if keep_shear:
+            v6[3:6] = out[3:6]
+        else:
+            v6[0:3] = out[0:3]
+
+    _rot(sig, eng=False, keep_shear=True)
+    _rot(eps, eng=True, keep_shear=False)
+    _rot(epstot, eng=True, keep_shear=False)
+
+    # new axis 2 in the ELEMENT frame: dir1*e2_old + dir2*(e1 x e2)
+    e1 = ang[0:3]
+    e2 = ang[3:6]
+    e3 = np.cross(e1, e2)
+    return d1 * e2 + d2 * e3
+
+
+# ----------------------------------------------------------------------------
+# damaged Hooke matrix (shared by elas24 / dama24 / plas24)
+# ----------------------------------------------------------------------------
+
+def _cdam(young, nu, de1, de2, de3, sc1, sc2, sc3):
+    """The unilateral damaged Hooke matrix of elas24.F lines 148-159 (the
+    dama24/plas24 variants are the same formula with their own DE/SCAL).
+    Returns (m, 3, 3) — the normal-stress block."""
+    de4 = sc1 * sc2
+    de5 = sc2 * sc3
+    de6 = sc3 * sc1
+    den = 1.0 - nu ** 2 * (de4 + de5 + de6 + 2.0 * nu * sc1 * sc2 * sc3)
+    m = len(np.atleast_1d(de1))
+    C = np.empty((m, 3, 3))
+    C[:, 0, 0] = young * de1 * (1.0 - nu ** 2 * de5) / den
+    C[:, 1, 1] = young * de2 * (1.0 - nu ** 2 * de6) / den
+    C[:, 2, 2] = young * de3 * (1.0 - nu ** 2 * de4) / den
+    C[:, 0, 1] = C[:, 1, 0] = nu * young * de4 * (1.0 + nu * sc3) / den
+    C[:, 0, 2] = C[:, 2, 0] = nu * young * de6 * (1.0 + nu * sc2) / den
+    C[:, 1, 2] = C[:, 2, 1] = nu * young * de5 * (1.0 + nu * sc1) / den
+    return C
+
+
+def _unilateral(dam, crak):
+    """DE_i = 1 - max(0, sign(dam_i, crak_i)) and the open/closed scales
+    SCAL_i (1 = closed/undamaged direction, 0 = open crack)."""
+    de = 1.0 - np.maximum(0.0, np.where(crak >= 0.0, dam, -dam))
+    scal = np.where(de >= 1.0, 1.0, 0.0)
+    return de, scal
+
+
+# ----------------------------------------------------------------------------
+# the criterion function FRV (fr.F)
+# ----------------------------------------------------------------------------
+
+def _frv(p, s6, sm, vk0, rob, rok):
+    """Ottosen criterion value FA and hardening factor VK for deviator
+    s6 (tensor shears) + mean stress sm.  All arrays (m,)."""
+    fc, rt, rc = p["FC"], p["RT"], p["RC"]
+    rct1, rct2 = p["RCT1"], p["RCT2"]
+    aa, ac = p["AA"], p["AC"]
+    bc, bt = p["BC"], p["BT"]
+    tol = (rt - rc) / 20.0
+
+    vk = np.where(
+        sm >= rt - tol, 1.0,
+        np.where(sm > rc,
+                 1.0 + (1.0 - vk0) * (rct1 - 2.0 * rc * sm + sm ** 2) / rct2,
+                 np.where(sm > rok, vk0,
+                          vk0 * (1.0 - ((sm - rok)
+                                        / np.where(rob != rok, rob - rok,
+                                                   _EM20)) ** 2))))
+
+    s1, s2, s3, s4, s5, s6_ = (s6[:, 0], s6[:, 1], s6[:, 2],
+                               s6[:, 3], s6[:, 4], s6[:, 5])
+    r2 = (s1 ** 2 + s2 ** 2 + s3 ** 2
+          + 2.0 * (s4 ** 2 + s5 ** 2 + s6_ ** 2))
+    aj3 = (s1 * s2 * s3 - s1 * s5 * s5 - s2 * s6_ * s6_ - s3 * s4 * s4
+           + 2.0 * s4 * s5 * s6_)
+    cs3t = np.clip(0.5 * aj3 * (3.0 / np.maximum(0.5 * r2, _EM20)) ** 1.5,
+                   -1.0, 1.0)
+    bb = 0.5 * ((1.0 - cs3t) * bc + (1.0 + cs3t) * bt)
+    df = np.sqrt(np.maximum(bb * bb - aa * sm + ac, 0.0))
+    rf = (-bb + df) / aa
+    fa = (np.sqrt(r2) - vk * rf) / fc
+
+    # tensile apex overflow
+    hi = sm > ac / aa
+    if np.any(hi):
+        fa[hi] = 0.5 * (sm[hi] - ac / aa) / min(bc, bt) / fc
+    # beyond the cap end
+    lo = (~hi) & (sm <= rob)
+    if np.any(lo):
+        bbl = max(bc, bt)
+        dfl = np.sqrt(bbl * bbl - aa * rob[lo] + ac)
+        rfl = (-bbl + dfl) / aa
+        fa[lo] = (2.0 * rfl * (sm[lo] - rob[lo])
+                  / np.where(rob[lo] != rok[lo], rob[lo] - rok[lo], _EM20)
+                  / fc)
+    return fa, vk
+
+
+# ----------------------------------------------------------------------------
+# crit24.F — crossing-fraction search
+# ----------------------------------------------------------------------------
+
+def _crit24(p, sigc, s0, scal, vk0, rob, off):
+    """Returns (scle2, scle3, sm_trial, s_star, sm_star, vk) where
+    scle3 < 0 flags pure elastic, scle2 in [0, 1] is the fraction of the
+    increment beyond the criterion, s_star/sm_star the deviator/mean at
+    the crossing point."""
+    m = len(s0)
+    sc = np.empty((m, 6))
+    sc[:, 0] = s0[:, 0] * scal[:, 0]
+    sc[:, 1] = s0[:, 1] * scal[:, 1]
+    sc[:, 2] = s0[:, 2] * scal[:, 2]
+    sc[:, 3] = s0[:, 3] * scal[:, 0] * scal[:, 1]
+    sc[:, 4] = s0[:, 4] * scal[:, 1] * scal[:, 2]
+    sc[:, 5] = s0[:, 5] * scal[:, 2] * scal[:, 0]
+    sm = (sc[:, 0] + sc[:, 1] + sc[:, 2]) / 3.0
+
+    ds = np.empty((m, 6))
+    ds[:, 0] = (sc[:, 0] - sigc[:, 0]) * scal[:, 0]
+    ds[:, 1] = (sc[:, 1] - sigc[:, 1]) * scal[:, 1]
+    ds[:, 2] = (sc[:, 2] - sigc[:, 2]) * scal[:, 2]
+    ds[:, 3] = (sc[:, 3] - sigc[:, 3]) * scal[:, 0] * scal[:, 1]
+    ds[:, 4] = (sc[:, 4] - sigc[:, 4]) * scal[:, 1] * scal[:, 2]
+    ds[:, 5] = (sc[:, 5] - sigc[:, 5]) * scal[:, 2] * scal[:, 0]
+    dsm = (ds[:, 0] + ds[:, 1] + ds[:, 2]) / 3.0
+
+    sc[:, 0] -= sm
+    sc[:, 1] -= sm
+    sc[:, 2] -= sm
+    ds[:, 0] -= dsm
+    ds[:, 1] -= dsm
+    ds[:, 2] -= dsm
+
+    rok = p["ROK0"] + rob - p["RO0"]
+    scle2 = np.zeros(m)
+    scle3 = -np.ones(m)
+    vk = np.zeros(m)
+
+    act = off >= 1.0
+    if np.any(act):
+        fa = np.full(m, -1.0)
+        fa[act], vk[act] = _frv(p, sc[act], sm[act], vk0[act], rob[act],
+                                rok[act])
+        beyond = act & (fa >= 1e-10)
+        scle3[act & (np.abs(fa) < 1e-10)] = 1.0
+        if np.any(beyond):
+            scle3[beyond] = 1.0
+            tolf = 0.005
+            xn = np.ones(m)
+            live = beyond.copy()
+            for nit in range(10):
+                if not np.any(live):
+                    break
+                ix = np.where(live)[0]
+                sn = sc[ix] - xn[ix, None] * ds[ix]
+                smn = sm[ix] - xn[ix] * dsm[ix]
+                fn, _ = _frv(p, sn, smn, vk0[ix], rob[ix], rok[ix])
+                if nit == 0:
+                    early = fn > -tolf
+                    scle2[ix[early]] = 1.0
+                    live[ix[early]] = False
+                    ix = ix[~early]
+                    fn = fn[~early]
+                    if len(ix) == 0:
+                        continue
+                x = xn[ix] / (1.0 - fn / fa[ix])
+                scle2[ix] = x
+                done = np.abs(fn) < tolf
+                scle2[ix[done]] = np.clip(x[done], 0.0, 1.0)
+                live[ix[done]] = False
+                xn[ix[~done]] = x[~done]
+            scle2[beyond] = np.clip(scle2[beyond], 0.0, 1.0)
+
+    s_star = sc - scle2[:, None] * ds
+    sm_star = sm - scle2 * dsm
+    return scle2, scle3, sm + 0.0, s_star, sm_star, vk, dsm
+
+
+# ----------------------------------------------------------------------------
+# plas24.F — scalar (per-element) compressive plastic corrector
+# ----------------------------------------------------------------------------
+
+def _plas24_one(p, sigc, dam, crak, eps6, scle2, vk0_a, vk_a, rob_a,
+                eint, rho):
+    """One element of plas24.F (faithful transliteration; ICAP 0/1).
+    Mutates sigc (6,), crak (3,), and the 0-d array views vk0_a, vk_a,
+    rob_a.  ``eps6`` is the strain increment in the crack frame."""
+    young, nu, g = p["E"], p["nu"], p["Gc"]
+    rho0 = p["RHO0"]
+    rok0, ro0 = p["ROK0"], p["RO0"]
+    bulk = p["BULK"]
+    fc, rt, rc = p["FC"], p["RT"], p["RC"]
+    rct1, rct2 = p["RCT1"], p["RCT2"]
+    aa, bc, bt, ac = p["AA"], p["BC"], p["BT"], p["AC"]
+    hbp, ali0, alf0 = p["HBP"], p["ALI0"], p["ALF0"]
+    vky, hv0, expo = p["VKY"], p["HV0"], p["EXPO"]
+    icap = int(p["ICAP"])
+    tol = (rt - rc) / 20.0
+
+    vk0 = float(vk0_a)
+    vk = float(vk_a)
+    rob = float(rob_a)
+    e = eps6.copy()
+
+    # ---- return to the criterion --------------------------------------
+    crak -= scle2 * e[:3]
+    de, scal = _unilateral(dam, crak)
+    C = _cdam(young, nu, de[0], de[1], de[2],
+              scal[0], scal[1], scal[2])[0]
+    c44 = g * scal[0] * scal[1]
+    c55 = g * scal[1] * scal[2]
+    c66 = g * scal[2] * scal[0]
+    sigc[:3] = C @ crak
+    # IBUG == 0 branch of plas24.F lines 136-139
+    sigc[3] = scal[0] * scal[1] * sigc[3] - c44 * e[3] * (1.0 - scle2)
+    sigc[4] = scal[1] * scal[2] * sigc[4] - c55 * e[4] * (1.0 - scle2)
+    sigc[5] = scal[2] * scal[0] * sigc[5] - c66 * e[5] * (1.0 - scle2)
+
+    s = np.empty(6)
+    s[0] = scal[0] * sigc[0]
+    s[1] = scal[1] * sigc[1]
+    s[2] = scal[2] * sigc[2]
+    s[3] = sigc[3] * scal[0] * scal[1]
+    s[4] = sigc[4] * scal[1] * scal[2]
+    s[5] = sigc[5] * scal[2] * scal[0]
+    sm = (s[0] + s[1] + s[2]) / 3.0
+    s[0] -= sm
+    s[1] -= sm
+    s[2] -= sm
+
+    numer = np.abs(e).sum()
+    denom = (np.abs(crak).sum() + np.abs(sigc[3:6]).sum() / g)
+    if denom == 0.0:
+        vk0_a[...] = vk0
+        vk_a[...] = vk
+        rob_a[...] = rob
+        return
+    rate = numer / denom
+    niter = min(int(3.0 * rate + 0.5) + 1, 10)     # NINT, positive arg
+    e *= scle2 / niter
+
+    for _ in range(niter):
+        rok = rok0 + rob - ro0
+        r2 = (s[0] ** 2 + s[1] ** 2 + s[2] ** 2
+              + 2.0 * (s[3] ** 2 + s[4] ** 2 + s[5] ** 2))
+        if sm >= rt - tol:
+            vk = 1.0
+        elif sm > rc:
+            vk = 1.0 + (1.0 - vk0) * (rct1 - 2.0 * rc * sm + sm ** 2) / rct2
+        elif sm > rok:
+            vk = vk0
+        elif sm > rob:
+            vk = vk0 * (1.0 - ((sm - rok) / (rob - rok)) ** 2)
+        else:
+            vk = 0.0
+
+        aj3 = (s[0] * s[1] * s[2] - s[0] * s[4] ** 2 - s[1] * s[5] ** 2
+               - s[2] * s[3] ** 2 + 2.0 * s[3] * s[4] * s[5])
+        cs3t = np.clip(0.5 * aj3 * (3.0 / max(0.5 * r2, _EM20)) ** 1.5,
+                       -1.0, 1.0)
+        bb = 0.5 * ((1.0 - cs3t) * bc + (1.0 + cs3t) * bt)
+        df = np.sqrt(bb * bb + max(-aa * sm + ac, 1e-9))
+        rf = (-bb + df) / aa
+        aj2 = 0.5 * r2
+        ajj = np.sqrt(aj2)
+
+        sm = max(rob, sm)
+        if sm >= rt - tol:
+            dkdsm = 0.0
+        elif sm > rc:
+            dkdsm = 2.0 * (1.0 - vk0) * (sm - rc) / rct2
+        elif sm > rok:
+            dkdsm = 0.0
+        else:
+            dkdsm = -2.0 * vk0 * (sm - rok) / (rob - rok) ** 2
+        drfdsm = -0.5 / df
+        b0 = -vk * drfdsm / 3.0 - rf * dkdsm / 3.0
+        if ajj > 1e-3 * fc:
+            drf3 = 0.5 * (-1.0 + bb / df) * (bt - bc) / aa
+            b1 = (0.5 * np.sqrt(2.0) / max(ajj, _EM20)
+                  + vk * drf3 * 0.25 * aj3
+                  * (3.0 / max(aj2, _EM20)) ** 2.5)
+            b2 = -vk * drf3 * 0.5 * (3.0 / max(aj2, _EM20)) ** 1.5
+        else:
+            b1 = 0.0
+            b2 = 0.0
+
+        ts1 = s[0] ** 2 + s[3] ** 2 + s[5] ** 2 - 2.0 / 3.0 * aj2
+        ts2 = s[1] ** 2 + s[3] ** 2 + s[4] ** 2 - 2.0 / 3.0 * aj2
+        ts3 = s[2] ** 2 + s[4] ** 2 + s[5] ** 2 - 2.0 / 3.0 * aj2
+        ts4 = 2.0 * (s[4] * s[5] - s[3] * s[2])
+        ts5 = 2.0 * (s[5] * s[3] - s[4] * s[0])
+        ts6 = 2.0 * (s[3] * s[4] - s[5] * s[1])
+        dfs = np.array([b0 + b1 * s[0] + b2 * ts1,
+                        b0 + b1 * s[1] + b2 * ts2,
+                        b0 + b1 * s[2] + b2 * ts3,
+                        2.0 * b1 * s[3] + b2 * ts4,
+                        2.0 * b1 * s[4] + b2 * ts5,
+                        2.0 * b1 * s[5] + b2 * ts6])
+
+        # volumetric plasticity: compactancy / dilatancy
+        if vk > vky:
+            alpha = ((1.0 - vk) * ali0 + (vk - vky) * alf0) / (1.0 - vky)
+        else:
+            alpha = ali0
+        if icap == 1:
+            if b0 < -1e-2:
+                alpha = min(alpha, -0.4 / b0)
+            if b0 > 1e-2:
+                alpha = max(alpha, -0.4 / b0)
+        if eint is not None and eint <= 0.0:
+            alpha = 0.0
+        if rho is not None and rho < rho0:
+            alpha = 0.0
+        if ajj > 1e-3 * fc:
+            dgs = np.array([alpha + s[0] / (2.0 * ajj),
+                            alpha + s[1] / (2.0 * ajj),
+                            alpha + s[2] / (2.0 * ajj),
+                            s[3] / ajj, s[4] / ajj, s[5] / ajj])
+        else:
+            if icap == 1:
+                dgs = np.array([alpha, alpha, alpha, 0.0, 0.0, 0.0])
+            else:
+                dgs = np.array([-1.0, -1.0, -1.0, 0.0, 0.0, 0.0])
+
+        # hardening modulus
+        hpv = hv0 * np.exp(min(50.0, (rob - ro0) * expo))
+        hp = hbp if sm > rok0 else hpv
+
+        if icap == 1:
+            phi = alpha * 3.0 * sm + ajj
+            dfdto1 = b0 - np.sqrt(2.0 / 3.0)
+            dfdto2 = 3.0 * b0
+            if dfdto1 <= dfdto2:
+                to = np.sqrt(1.5) * vk * rf
+                dfdto = dfdto1
+            else:
+                to = abs(sm)
+                dfdto = dfdto2
+            # (HALF - SIGN(HALF, VK-1)): 1 while hardening (VK < 1), 0 at
+            # and beyond the failure surface
+            ecr = phi * hp * dfdto / to * (1.0 if vk < 1.0 else 0.0)
+        else:
+            dfdto1 = b0 - np.sqrt(2.0 / 3.0)
+            dfdto2 = 3.0 * b0
+            if dfdto1 <= dfdto2:
+                to = np.sqrt(1.5) * vk * rf
+                phi = (alpha * 3.0 * sm + ajj) / to
+                ecr = phi * hp * dfdto1 * (1.0 if vk < 1.0 else 0.0)
+            else:
+                dfdro = -2.0 * vk0 * rf * (sm - rok) / (ro0 - rok0) ** 2
+                ecr = dfdto2 * dfdro * hpv
+                dgs = dfs.copy()
+
+        if icap == 1 or (icap == 0 and vk > 1e-5):
+            ha = np.empty(6)
+            ha[0] = C[0, 0] * dfs[0] + C[1, 0] * dfs[1] + C[2, 0] * dfs[2]
+            ha[1] = C[0, 1] * dfs[0] + C[1, 1] * dfs[1] + C[2, 1] * dfs[2]
+            ha[2] = C[0, 2] * dfs[0] + C[1, 2] * dfs[1] + C[2, 2] * dfs[2]
+            ha[3] = c44 * dfs[3]
+            ha[4] = c55 * dfs[4]
+            ha[5] = c66 * dfs[5]
+            hn = np.empty(6)
+            hn[0] = C[0, 0] * dgs[0] + C[0, 1] * dgs[1] + C[0, 2] * dgs[2]
+            hn[1] = C[1, 0] * dgs[0] + C[1, 1] * dgs[1] + C[1, 2] * dgs[2]
+            hn[2] = C[2, 0] * dgs[0] + C[2, 1] * dgs[1] + C[2, 2] * dgs[2]
+            hn[3] = c44 * dgs[3]
+            hn[4] = c55 * dgs[4]
+            hn[5] = c66 * dgs[5]
+            hh = float(dfs @ hn) - min(0.0, ecr)
+            hh = np.sign(hh) * max(abs(hh), _EM20) if hh != 0.0 else _EM20
+
+            sc1, sc2, sc3 = scal
+            # the plastic rank-one correction, with the SCAL masking of
+            # plas24.F lines 358-398
+            fac = np.array([
+                [sc1, sc1 * sc2, sc1 * sc3,
+                 sc1 * sc2, sc1 * sc2 * sc3, sc1 * sc3],
+                [sc1 * sc2, sc2, sc3 * sc2,
+                 sc2 * sc1, sc2 * sc3, sc2 * sc1 * sc3],
+                [sc3 * sc1, sc3 * sc2, sc3,
+                 sc3 * sc1 * sc2, sc3 * sc2, sc3 * sc1],
+                [sc1, sc2, sc3,
+                 sc1 * sc2, sc1 * sc2 * sc3, sc1 * sc2 * sc3],
+                [sc1, sc2, sc3,
+                 sc1 * sc2 * sc3, sc2 * sc3, sc1 * sc2 * sc3],
+                [sc1, sc2, sc3,
+                 sc1 * sc2 * sc3, sc1 * sc2 * sc3, sc1 * sc3]])
+            CP = -np.outer(hn, ha) / hh * fac
+            CP[0, 0] += C[0, 0]
+            CP[0, 1] += C[0, 1]
+            CP[0, 2] += C[0, 2]
+            CP[1, 0] += C[1, 0]
+            CP[1, 1] += C[1, 1]
+            CP[1, 2] += C[1, 2]
+            CP[2, 0] += C[2, 0]
+            CP[2, 1] += C[2, 1]
+            CP[2, 2] += C[2, 2]
+            CP[3, 3] += c44
+            CP[4, 4] += c55
+            CP[5, 5] += c66
+            sigc += CP @ e
+        else:
+            # pure triaxial fallback
+            dp = bulk * hpv / (bulk + hpv) * (e[0] + e[1] + e[2])
+            sigc[0] += dp
+            sigc[1] += dp
+            sigc[2] += dp
+
+        # ---- elastic strains for crack reopening ----------------------
+        c11 = 1.0 / de[0] / young
+        c12 = -nu * scal[0] * scal[1] / young
+        c13 = -nu * scal[0] * scal[2] / young
+        c22 = 1.0 / de[1] / young
+        c23 = -nu * scal[1] * scal[2] / young
+        c33 = 1.0 / de[2] / young
+        crak[0] = c11 * sigc[0] + c12 * sigc[1] + c13 * sigc[2]
+        crak[1] = c12 * sigc[0] + c22 * sigc[1] + c23 * sigc[2]
+        crak[2] = c13 * sigc[0] + c23 * sigc[1] + c33 * sigc[2]
+        de, scal = _unilateral(dam, crak)
+        C = _cdam(young, nu, de[0], de[1], de[2],
+                  scal[0], scal[1], scal[2])[0]
+        c44 = g * scal[0] * scal[1]
+        c55 = g * scal[1] * scal[2]
+        c66 = g * scal[2] * scal[0]
+        sigc[:3] = C @ crak
+        sigc[3] *= scal[0] * scal[1]
+        sigc[4] *= scal[1] * scal[2]
+        sigc[5] *= scal[2] * scal[0]
+
+        s[0] = sigc[0] * scal[0]
+        s[1] = sigc[1] * scal[1]
+        s[2] = sigc[2] * scal[2]
+        s[3] = sigc[3] * scal[0] * scal[1]
+        s[4] = sigc[4] * scal[1] * scal[2]
+        s[5] = sigc[5] * scal[2] * scal[0]
+        sm = (s[0] + s[1] + s[2]) / 3.0
+        s[0] -= sm
+        s[1] -= sm
+        s[2] -= sm
+
+        # ---- hardening parameters + failure-surface capping ------------
+        if sm > ac / aa:
+            sm = sm - 3.0 * (sm - ac / aa) / max(scal.sum(), _EM20)
+        r2 = (s[0] ** 2 + s[1] ** 2 + s[2] ** 2
+              + 2.0 * (s[3] ** 2 + s[4] ** 2 + s[5] ** 2))
+        rr = np.sqrt(r2)
+        aj3 = (s[0] * s[1] * s[2] - s[0] * s[4] ** 2 - s[1] * s[5] ** 2
+               - s[2] * s[3] ** 2 + 2.0 * s[3] * s[4] * s[5])
+        cs3t = np.clip(0.5 * aj3 * (3.0 / max(0.5 * r2, _EM20)) ** 1.5,
+                       -1.0, 1.0)
+        bb = 0.5 * ((1.0 - cs3t) * bc + (1.0 + cs3t) * bt)
+        df = np.sqrt(bb * bb + max(-aa * sm + ac, 0.0))
+        rf = (-bb + df) / aa
+        vk = rr / max(rf, _EM20)
+
+        if vk > 1.0:
+            fac2 = 1.0 / vk
+            if scal[0] > 0.9:
+                sigc[0] = s[0] * fac2 + sm
+            if scal[1] > 0.9:
+                sigc[1] = s[1] * fac2 + sm
+            if scal[2] > 0.9:
+                sigc[2] = s[2] * fac2 + sm
+            if scal[0] * scal[1] > 0.9:
+                sigc[3] = s[3] * fac2
+            if scal[1] * scal[2] > 0.9:
+                sigc[4] = s[4] * fac2
+            if scal[2] * scal[0] > 0.9:
+                sigc[5] = s[5] * fac2
+            vk = 1.0
+            c11 = 1.0 / de[0] / young
+            c12 = -nu * scal[0] * scal[1] / young
+            c13 = -nu * scal[0] * scal[2] / young
+            c22 = 1.0 / de[1] / young
+            c23 = -nu * scal[1] * scal[2] / young
+            c33 = 1.0 / de[2] / young
+            crak[0] = c11 * sigc[0] + c12 * sigc[1] + c13 * sigc[2]
+            crak[1] = c12 * sigc[0] + c22 * sigc[1] + c23 * sigc[2]
+            crak[2] = c13 * sigc[0] + c23 * sigc[1] + c33 * sigc[2]
+            de, scal = _unilateral(dam, crak)
+            C = _cdam(young, nu, de[0], de[1], de[2],
+                      scal[0], scal[1], scal[2])[0]
+            c44 = g * scal[0] * scal[1]
+            c55 = g * scal[1] * scal[2]
+            c66 = g * scal[2] * scal[0]
+            sigc[:3] = C @ crak
+            sigc[3] *= scal[0] * scal[1]
+            sigc[4] *= scal[1] * scal[2]
+            sigc[5] *= scal[2] * scal[0]
+
+        ro = rob
+        rok = rok0 + rob - ro0
+        if sm >= rt - tol:
+            vk = 1.0
+        elif sm > rc:
+            div = min(-_EM20, rct1 - 2.0 * rc * sm + sm * sm)
+            vk = 1.0 + (1.0 - vk) * rct2 / div
+        elif sm > rok:
+            pass                            # vk unchanged
+        else:
+            dvk = vk - vk0 * (1.0 - ((max(sm, rob) - rok)
+                                     / (ro0 - rok0)) ** 2)
+            vkk = min(vk0 + max(dvk, 0.0), 1.0)
+            ro = sm + (1.0 - np.sqrt(max(0.0, 1.0 - vk / vkk))) \
+                * (ro0 - rok0)
+        rob = min(ro, rob)
+        vk = min(vk, 1.0)
+        vk0 = max(vk, vk0)
+
+    vk0_a[...] = vk0
+    vk_a[...] = vk
+    rob_a[...] = rob
+
+
+# ----------------------------------------------------------------------------
+# dama24.F — tensile crack initiation / growth (per candidate element)
+# ----------------------------------------------------------------------------
+
+def _dama24_one(p, sigc, dam, ang, epsf, crak, s0, eps6, scle2, g):
+    """One element of dama24.F.  ``s0`` is the elastic trial (6,) in the
+    current crack/element frame, ``eps6`` the strain increment in that
+    frame.  Mutates sigc, dam, ang, epsf, crak."""
+    young, nu = p["E"], p["nu"]
+    dsup, qq, epst = p["DSUP"], p["QQ"], p["EPST"]
+
+    eps = eps6.copy()
+    epstot = np.array([crak[0], crak[1], crak[2],
+                       s0[3] / g, s0[4] / g, s0[5] / g])
+    sigo = s0.copy()
+    de, scal = _unilateral(dam, crak)
+    de = de.copy()
+    scal = scal.copy()
+
+    if dam[0] > 0.0:
+        idir = 2
+        if dam[1] == 0.0:
+            idir = 1
+            dir2 = _pri224(sigo, epstot, eps, ang)
+        else:
+            dir2 = None
+    else:
+        idir = 0
+        vec = _pri324(sigo, epstot, eps)
+        dir2 = None
+
+    sftry = min(epstot[idir], epstot[idir] - scle2 * eps[idir], epst)
+    sftry = max(sftry, 0.25 * epst)
+
+    if epstot[idir] < sftry:
+        sigc[:] = s0            # no crack after all: keep the trial
+        return
+
+    if idir == 0:
+        ang[:] = vec
+    elif idir == 1:
+        ang[3:6] = dir2
+
+    for k in range(3):
+        crak[k] = epstot[k]
+        depsf = epstot[k] - sftry
+        if depsf >= 0.0 and epsf[k] < 0.0:
+            if k >= 1 and dam[k - 1] == 0.0:
+                continue
+            epsf[k] = sftry
+            d = qq * (1.0 - epsf[k] / max(epstot[k], _EM20))
+            dam[k] = min(max(d, _EM20), dsup)
+            de[k] = 1.0 - dam[k]
+            scal[k] = 0.0
+
+    C = _cdam(young, nu, de[0], de[1], de[2],
+              scal[0], scal[1], scal[2])[0]
+    sigc[0] = C[0, 0] * epstot[0] + C[0, 1] * epstot[1] + C[0, 2] * epstot[2]
+    sigc[1] = C[1, 0] * epstot[0] + C[1, 1] * epstot[1] + C[1, 2] * epstot[2]
+    sigc[2] = C[2, 0] * epstot[0] + C[2, 1] * epstot[1] + C[2, 2] * epstot[2]
+    sigc[3] = scal[0] * scal[1] * sigo[3]
+    sigc[4] = scal[1] * scal[2] * sigo[4]
+    sigc[5] = scal[2] * scal[0] * sigo[5]
+
+
+# ----------------------------------------------------------------------------
+# conc24.F — the driver
+# ----------------------------------------------------------------------------
+
+def solid_update(mat, sig, deps, epsp, dt, extra=None):
+    """One cycle for the group slice.  Returns (sig, epsp, c) — c is the
+    constant sqrt(A11/rho0) of m24law.F."""
+    p = mat.params
+    young, nu, g = p["E"], p["nu"], p["Gc"]
+    a11, a12 = p["A11c"], p["A12c"]
+    dsup, qq = p["DSUP"], p["QQ"]
+    vmax, epsmax, rt = p["VMAX"], p["EPSMAX"], p["RT"]
+    m = len(sig)
+
+    strain = extra["strain24"]
+    sigc = extra["sigc24"]
+    crak = extra["crak24"]
+    dam = extra["dam24"]
+    ang = extra["ang24"]
+    epsf = extra["epsf24"]
+    vk0 = extra["vk024"]
+    vk = extra["vk24"]
+    rob = extra["rob24"]
+    off = extra["off24"]
+    ini = extra["ini24"]
+
+    # ---- lazy init (m24in2.F) ---------------------------------------------
+    fresh = ini == 0.0
+    if np.any(fresh):
+        ang[fresh] = np.array([1.0, 0.0, 0.0, 0.0, 1.0, 0.0])
+        epsf[fresh] = -1.0
+        vk0[fresh] = p["VKY"]
+        rob[fresh] = p["RO0"]
+        off[fresh] = 1.0
+        ini[fresh] = 1.0
+
+    strain += deps                       # LBUF%STRA (ISTRAIN accumulation)
+
+    # ---- elas24: damage evolution + elastic prediction ---------------------
+    d6 = deps.copy()                     # rotated per element below
+    damaged = dam.sum(axis=1) > 0.0
+    s0 = np.empty((m, 6))
+    scal = np.ones((m, 3))
+    if np.any(damaged):
+        di = np.where(damaged)[0]
+        d6[di] = _rot_strain_to_crack(deps[di], ang[di])
+        crak[di] += d6[di, :3]
+        # damage growth from EPS_F/CRAK ratio
+        for k in range(3):
+            hh = np.maximum(crak[di, k], _EM20)
+            dek = np.where(epsf[di, k] > 0.0,
+                           qq * (1.0 - epsf[di, k] / hh), 0.0)
+            dek = np.minimum(dek, dsup)
+            dam[di, k] = np.maximum(dek, dam[di, k])
+        de3 = np.empty((len(di), 3))
+        for k in range(3):
+            de3[:, k] = 1.0 - np.maximum(
+                0.0, np.where(crak[di, k] >= 0.0, dam[di, k], -dam[di, k]))
+        sc = np.where(de3 >= 1.0, 1.0, 0.0)
+        scal[di] = sc
+        C = _cdam(young, nu, de3[:, 0], de3[:, 1], de3[:, 2],
+                  sc[:, 0], sc[:, 1], sc[:, 2])
+        de4 = sc[:, 0] * sc[:, 1]
+        de5 = sc[:, 1] * sc[:, 2]
+        de6 = sc[:, 2] * sc[:, 0]
+        s0[di, :3] = np.einsum("mij,mj->mi", C, crak[di])
+        s0[di, 3] = de4 * sigc[di, 3] + g * de4 * d6[di, 3]
+        s0[di, 4] = de5 * sigc[di, 4] + g * de5 * d6[di, 4]
+        s0[di, 5] = de6 * sigc[di, 5] + g * de6 * d6[di, 5]
+    undam = ~damaged
+    if np.any(undam):
+        ui = np.where(undam)[0]
+        s0[ui, 0] = sigc[ui, 0] + a11 * d6[ui, 0] \
+            + a12 * (d6[ui, 1] + d6[ui, 2])
+        s0[ui, 1] = sigc[ui, 1] + a11 * d6[ui, 1] \
+            + a12 * (d6[ui, 0] + d6[ui, 2])
+        s0[ui, 2] = sigc[ui, 2] + a11 * d6[ui, 2] \
+            + a12 * (d6[ui, 0] + d6[ui, 1])
+        s0[ui, 3] = sigc[ui, 3] + g * d6[ui, 3]
+        s0[ui, 4] = sigc[ui, 4] + g * d6[ui, 4]
+        s0[ui, 5] = sigc[ui, 5] + g * d6[ui, 5]
+        crak[ui, 0] = (s0[ui, 0] - nu * (s0[ui, 1] + s0[ui, 2])) / young
+        crak[ui, 1] = (s0[ui, 1] - nu * (s0[ui, 0] + s0[ui, 2])) / young
+        crak[ui, 2] = (s0[ui, 2] - nu * (s0[ui, 0] + s0[ui, 1])) / young
+
+    # ---- crit24: criterion + crossing fraction -----------------------------
+    scle2, scle3, sm_trial, _s_star, sm_star, vknew, dsm = _crit24(
+        p, sigc, s0, scal, vk0, rob, off)
+    vk[:] = np.where(off >= 1.0, vknew, vk)
+
+    # ---- branch per element -------------------------------------------------
+    alive = off != 0.0
+    elastic = alive & (scle3 < 0.0)
+    trial_mean = sm_star + scle2 * dsm
+    dama_b = alive & (scle3 >= 0.0) & (trial_mean >= rt)
+    plast_b = alive & (scle3 >= 0.0) & ~dama_b \
+        & (strain[:, 0] + strain[:, 1] + strain[:, 2] > vmax)
+    accept = alive & ~dama_b & ~plast_b       # elastic or compacted-out
+
+    acc = elastic | accept | dama_b           # all these take the trial
+    sigc[acc] = s0[acc]
+
+    # damage: only elements with an undamaged direction start a new crack
+    cand = dama_b & (dam == 0.0).any(axis=1)
+    eint = extra.get("eint") if extra else None
+    rho = extra.get("rho") if extra else None
+    for i in np.where(cand)[0]:
+        _dama24_one(p, sigc[i], dam[i], ang[i], epsf[i], crak[i],
+                    s0[i].copy(), d6[i], scle2[i], g)
+    for i in np.where(plast_b)[0]:
+        _plas24_one(p, sigc[i], dam[i], crak[i], d6[i], scle2[i],
+                    vk0[i:i + 1].reshape(()), vk[i:i + 1].reshape(()),
+                    rob[i:i + 1].reshape(()),
+                    None if eint is None else float(eint[i]),
+                    None if rho is None else float(rho[i]))
+
+    # ---- OFF cascade + EPSMAX total failure --------------------------------
+    off[:] = np.where(off < 0.1, 0.0, off)
+    dying = (off < 1.0) & (off > 0.0)
+    off[dying] *= 0.8
+    etest = crak.max(axis=1)
+    starting = (off >= 1.0) & (etest >= epsmax)
+    off[starting] *= 0.8
+
+    # ---- back to the element frame + OFF ------------------------------------
+    out = sigc.copy()
+    dsum = dam.sum(axis=1)
+    di = np.where(dsum > 0.0)[0]
+    if len(di):
+        out[di] = _rot_stress_from_crack(out[di], ang[di])
+    sig[:] = out * off[:, None]
+
+    c = np.full(m, np.sqrt(p["A11c"] / p["RHO0"]))     # m24law SSP
+    return sig, epsp, c
+
+
+# ----------------------------------------------------------------------------
+# cfg-record constructor (mat_reader physics registry)
+# ----------------------------------------------------------------------------
+
+def build_conc(rec) -> Material:
+    """hm_read_mat24.F: cfg attributes -> the PM table (each param below
+    notes its PM index)."""
+    q = rec.params
+    ymc = float(q.get("MAT_E", 0.0) or 0.0)
+    anuc = float(q.get("MAT_NU", 0.0) or 0.0)
+    icap = int(q.get("Iflag", 0) or 0)
+    fc = float(q.get("MAT_SIGY", 0.0) or 0.0)
+    ft = float(q.get("MAT_FtFc", 0.0) or 0.0)
+    fb = float(q.get("MAT_FbFc", 0.0) or 0.0)
+    f2d = float(q.get("MAT_F2Fc", 0.0) or 0.0)
+    s0 = float(q.get("MAT_SoFc", 0.0) or 0.0)
+    ht = float(q.get("MAT_ETAN", 0.0) or 0.0)
+    dsup1 = float(q.get("MAT_DAMAGE", 0.0) or 0.0)
+    epsmax = float(q.get("MAT_EPS", 0.0) or 0.0)
+    vky = float(q.get("MAT_BETA", 0.0) or 0.0)
+    rt = float(q.get("MAT_PPRES", 0.0) or 0.0)
+    rc = float(q.get("MAT_YPRES", 0.0) or 0.0)
+    hbp = float(q.get("MAT_BPMOD", 0.0) or 0.0)
+    etc = float(q.get("MAT_ETC", 0.0) or 0.0)
+    ali = float(q.get("MAT_DIL_Y", 0.0) or 0.0)
+    alf = float(q.get("MAT_DIL_F", 0.0) or 0.0)
+    vmax = float(q.get("MAT_COMPAC", 0.0) or 0.0)
+    rok = float(q.get("MAT_CAP_BEG", 0.0) or 0.0)
+    ro0 = float(q.get("MAT_CAP_END", 0.0) or 0.0)
+    hv0 = float(q.get("MAT_TPMOD", 0.0) or 0.0)
+    arm = [float(q.get(k, 0.0) or 0.0)
+           for k in ("MAT_PDIR1", "MAT_PDIR2", "MAT_PDIR3")]
+
+    if ymc <= 0.0 or fc <= 0.0:
+        raise ValueError("LAW24 needs positive E and fc")
+    if any(a != 0.0 for a in arm):
+        raise ValueError("LAW24 steel reinforcement (ARM1-3) is not ported "
+                         "(documented cut) — remove the reinforcement card")
+    if icap == 2:
+        raise ValueError("LAW24 Icap=2 (plas24b 'new cap formulation') is "
+                         "not ported (documented cut) — use Icap 0 or 1")
+
+    # ---- defaults (hm_read_mat24.F lines 152-220) --------------------------
+    if ft == 0.0:
+        ft = 0.1
+    if fb == 0.0:
+        fb = 1.2
+    if s0 == 0.0:
+        s0 = 1.25
+    if ht >= 0.0:
+        ht = -ymc
+    if dsup1 == 0.0:
+        dsup1 = 0.99999
+    if vmax >= 0.0:
+        vmax = -0.35
+    if epsmax <= 0.0:
+        epsmax = 1e20
+    if vky == 0.0:
+        vky = 0.5
+    if rc == 0.0:
+        rc = -fc / 3.0
+    if hbp == 0.0:
+        if etc == 0.0:
+            etc = (1.0 - vky) * ymc * fc / (2e-3 * ymc - vky * fc)
+        if etc >= ymc:
+            raise ValueError("LAW24: derived plastic tangent ETC >= E "
+                             "(hm_read_mat24 error 2065/2066)")
+        hbp = ymc * etc / (ymc - etc)
+    bulk = ymc / 3.0 / (1.0 - 2.0 * anuc)
+    if rok == 0.0:
+        rok = rc
+    if f2d == 0.0:
+        f2d = 4.0
+    if ro0 == 0.0:
+        ro0 = -0.8 * fc
+    if hv0 == 0.0:
+        hv0 = ymc / 5.0
+    expo = 1.0 / hv0 / vmax
+    if ali >= 0.0:
+        if icap == 1:
+            raise ValueError("LAW24 Icap=1 requires ALPHA_i < 0 "
+                             "(hm_read_mat24 warning 1161)")
+        ali = -0.2
+    if dsup1 >= 1.0 or dsup1 < 0.0:
+        raise ValueError("LAW24: 0 <= D_sup < 1 required "
+                         "(hm_read_mat24 error 605)")
+
+    # ---- Ottosen surface constants (hm_read_mat24.F lines 240-246) ---------
+    f2d0 = f2d - s0
+    aa = 1.5 * (s0 / (f2d0 - 1.0) - ft * fb / (fb - ft)) / (f2d0 - fb * ft)
+    cc = fb * ft * (f2d0 / (fb - ft) - s0 / (f2d0 - 1.0)) / (f2d0 - fb * ft)
+    sqr32 = np.sqrt(1.5)
+    bc = 0.5 * sqr32 * (cc + 1.0 / 3.0 - 2.0 / 3.0 * aa)
+    bt = 0.5 * sqr32 * (cc / ft - 1.0 / 3.0 - 2.0 / 3.0 * aa * ft)
+    ac = cc * aa
+    aa = aa / fc
+
+    gc = ymc / (2.0 * (1.0 + anuc))                       # PM(22)
+    a12c = ymc * anuc / (1.0 + anuc) / (1.0 - 2.0 * anuc)  # PM(25)
+    a11c = a12c + 2.0 * gc                                 # PM(24)
+
+    params = {
+        "E": ymc, "nu": anuc,                 # PM(20) / PM(21)
+        "Gc": gc, "A11c": a11c, "A12c": a12c,
+        "RHO0": rec.density,                  # PM(1) (RHOR = RHO0 here)
+        "DSUP": max(0.0, dsup1),              # PM(26)
+        "VMAX": vmax,                         # PM(27)
+        "QQ": 1.0 - ht / ymc,                 # PM(28)
+        "ROK0": rok, "RO0": ro0,              # PM(29) / PM(30)
+        "BULK": bulk,                         # PM(32)
+        "FC": fc, "RT": rt, "RC": rc,         # PM(33) / PM(34) / PM(35)
+        "RCT1": rt * (2.0 * rc - rt),         # PM(36)
+        "RCT2": (rc - rt) ** 2,               # PM(37)
+        "AA": aa, "BC": bc, "BT": bt, "AC": ac,  # PM(38..41)
+        "EPST": ft * fc / ymc,                # PM(42)
+        "HBP": hbp,                           # PM(43)
+        "ALI0": ali, "ALF0": alf,             # PM(44) / PM(45)
+        "VKY": vky,                           # PM(46)
+        "EPSMAX": epsmax,                     # PM(47)
+        "HV0": hv0, "EXPO": expo,             # PM(48) / PM(49)
+        "ICAP": icap,                         # PM(57)
+        "FT": ft, "FB": fb, "F2D": f2d, "S0FC": s0, "CCOTT": cc,
+    }
+    return Material(id=rec.id, law=24, rho0=rec.density,
+                    title=rec.title, params=params)
+
+
+def _register():
+    from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+    MAT_PHYSICS_REGISTRY.setdefault("CONC", build_conc)
+    MAT_PHYSICS_REGISTRY.setdefault("LAW24", build_conc)
+
+
+_register()

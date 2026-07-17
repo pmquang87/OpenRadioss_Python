@@ -60,3 +60,44 @@ class FunctTable:
 
     def __repr__(self):  # pragma: no cover - debug helper
         return f"FunctTable(id={self.id}, npoints={self.x.size}, title={self.title!r})"
+
+
+class SmoothFunctTable(FunctTable):
+    """One /FUNCT_SMOOTH curve (M37).
+
+    Fortran origin: ``starter/source/tools/curve/hm_read_funct.F``
+    (ISMOOTH = 1 branch) + ``engine/source/tools/curve/finter_smooth.F``.
+    The points are already scale/shift-transformed at READ time
+    (x*Ascalex + Ashiftx, y*Fscaley + Fshifty — the reference transforms
+    them before storage, so the stored table needs no further scaling).
+
+    Evaluation differs from the linear /FUNCT in two ways, both matching
+    FINTER_SMOOTH exactly:
+
+    * inside each segment the quintic *smoothstep* Hermite polynomial
+      interpolates:  y = y1 + (y2 - y1) * s^3 (10 - 15 s + 6 s^2) with
+      s = (t - x1)/(x2 - x1)  — C2-continuous (zero first AND second
+      derivative at each data point), which is why the option exists:
+      ramps defined with few points drive loads without acceleration
+      jumps;
+    * outside [x0, xn] the curve is CLAMPED to the end ordinates (the
+      linear /FUNCT extrapolates with the end slope instead).
+    """
+
+    def eval(self, t):
+        t = np.asarray(t, dtype=float)
+        # segment index: i such that x[i] <= t < x[i+1]
+        i = np.clip(np.searchsorted(self.x, t, side="right") - 1,
+                    0, self.x.size - 2)
+        x1, x2 = self.x[i], self.x[i + 1]
+        y1, y2 = self.y[i], self.y[i + 1]
+        s = np.clip((t - x1) / (x2 - x1), 0.0, 1.0)
+        out = y1 + (y2 - y1) * s ** 3 * (10.0 - 15.0 * s + 6.0 * s * s)
+        # FINTER_SMOOTH clamps outside the definition interval
+        out = np.where(t <= self.x[0], self.y[0], out)
+        out = np.where(t >= self.x[-1], self.y[-1], out)
+        return float(out) if out.ndim == 0 else out
+
+    def __repr__(self):  # pragma: no cover - debug helper
+        return (f"SmoothFunctTable(id={self.id}, npoints={self.x.size}, "
+                f"title={self.title!r})")

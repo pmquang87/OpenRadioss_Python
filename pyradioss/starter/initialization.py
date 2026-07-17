@@ -155,7 +155,7 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
     * /FAIL cards: attach each parsed FailureModel to its material.
     """
     for mat in model.materials.values():
-        if mat.law != 36:
+        if mat.law != 36 or getattr(mat, "inactive", False):
             continue
         cxs, cys, css = [], [], []
         ok = True
@@ -183,6 +183,45 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
             mat.params["curve_s"] = css
             mat.params["rates"] = np.asarray(mat.params["rates"], dtype=float)
 
+    # LAW81 (M37 pack 2): resolve the four optional /FUNCT references
+    # (K, G scale vs eps_p_vol; cohesion vs eps_p_dev; cap pressure Pb vs
+    # eps_p_vol) into plain (x, y) arrays for the kernel, exactly like
+    # LAW36 above.  Also surface the documented porosity cut.
+    for mat in model.materials.values():
+        if mat.law != 81 or getattr(mat, "inactive", False):
+            continue
+        if mat.params.pop("law81_porosity_ignored", False):
+            log.warning(f"/MAT/LAW81/{mat.id}: pore-water block (Kw, P0r, "
+                        f"sat0...) is not ported — porosity IGNORED "
+                        f"(law81_druckerprager documented cut)",
+                        "MAT CHECK")
+        for fid, name in zip(mat.params.get("funct81_ids", []),
+                             ("k", "g", "c", "pb")):
+            if fid == 0:
+                continue
+            fct = model.functions.get(fid)
+            if fct is None:
+                log.error(f"/MAT/LAW81/{mat.id}: function {fid} not "
+                          f"defined", "MAT CHECK")
+                continue
+            mat.params["curve81_" + name] = (fct.x.copy(), fct.y.copy())
+
+    # M37 pack 1: LAW70 (loading/unloading tables + the law70_upd.F
+    # derived constants), LAW35 (pressure curve) and LAW44 (tabulated
+    # yield) resolve their /FUNCT references the same deck-order-free way
+    for mat in model.materials.values():
+        if getattr(mat, "inactive", False):
+            continue
+        if mat.law == 70:
+            from ..materials import law70_tabfoam
+            law70_tabfoam.resolve(mat, model, log)
+        elif mat.law == 35:
+            from ..materials import law35_kelvinmax
+            law35_kelvinmax.resolve(mat, model, log)
+        elif mat.law == 44:
+            from ..materials import law44_cowper
+            law44_cowper.resolve(mat, model, log)
+
     for mat_id, fm, source in model.raw_fails:
         mat = model.materials.get(mat_id)
         if mat is None:
@@ -207,17 +246,48 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
             log.error(f"/EOS/{es.kind}/{mat_id}: material {mat_id} not "
                       f"defined", source)
             continue
-        if mat.law not in (1, 2, 36):
+        if getattr(mat, "inactive", False):
+            # M37: an /EOS on a parsed-but-not-implemented law is kept as
+            # part of the record (parse-clean) — the Engine refuses the
+            # material anyway, so the EOS never acts
+            es.rho0 = mat.rho0
+            mat.eos = es
+            continue
+        if mat.law not in (1, 2, 36, 44, 999):
             log.error(f"/EOS/{es.kind}/{mat_id}: an EOS can only attach "
-                      f"to LAW1/LAW2/LAW36 (isotropic laws with a "
-                      f"pressure-independent deviator), got LAW{mat.law}",
-                      source)
+                      f"to LAW1/LAW2/LAW36/LAW44/GAS (isotropic laws "
+                      f"with a pressure-independent deviator), got "
+                      f"LAW{mat.law}", source)
             continue
         if mat.eos is not None:
             log.warning(f"/EOS/{es.kind}/{mat_id}: material already has "
                         f"an /EOS card — replaced", source)
+        if mat.law == 999 and mat.rho0 == 0.0 \
+                and es.params.get("rho0_card", 0.0) > 0.0:
+            # /MAT/GAS has no density card of its own — the /EOS/IDEAL-GAS
+            # RHO_0 field supplies it (M37 pack 1, materials/mat_gas.py)
+            mat.rho0 = es.params["rho0_card"]
         es.rho0 = mat.rho0
         mat.eos = es
+
+    # M37 pack 1: /MAT/GAS element-path resolution — build the IDEAL-GAS
+    # EOS from programmatic P0/T0/RHO0 params when no /EOS card gave one
+    # (materials/mat_gas.resolve_gas; harmless for injector-only gases)
+    for mat in model.materials.values():
+        if mat.law == 999 and not getattr(mat, "inactive", False):
+            from ..materials import mat_gas
+            mat_gas.resolve_gas(mat, log)
+
+    # /ALE/MAT, /EULER/MAT, /HEAT/MAT parse-only notes (M37): attach to
+    # the material's params (deck order is free, like /FAIL and /EOS) —
+    # accepted and remembered, no physics acts on them
+    for kind, mat_id, params, source in getattr(model, "raw_mat_notes", []):
+        mat = model.materials.get(mat_id)
+        if mat is None:
+            log.warning(f"/{kind}/{mat_id}: material {mat_id} not defined "
+                        f"— note ignored", source)
+            continue
+        mat.params[kind.replace("/", "_").lower() + "_note"] = params
 
     # /FAIL/JOHNSON D5 needs the material's adiabatic temperature (M6)
     for mat in model.materials.values():
@@ -231,7 +301,7 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
 
 
 # ----------------------------------------------------------------------------
-# Node groups and surfaces
+# Node groups, element groups and surfaces
 # ----------------------------------------------------------------------------
 
 def _nodes_of_parts(model: Model, part_ids: List[int]) -> np.ndarray:
@@ -246,9 +316,221 @@ def _nodes_of_parts(model: Model, part_ids: List[int]) -> np.ndarray:
     return np.unique(np.concatenate(out))
 
 
+# element-group family key -> model attributes it spans (GRBRIC = ALL
+# solids, like the Fortran IGRBRIC over the whole IXS; BEAM edges use
+# the two END nodes only — the orientation node N3 is no geometry)
+_EGROUP_FAMILIES = {
+    "SHEL": ("shells",),
+    "SH3N": ("sh3n",),
+    "BRIC": ("bricks", "tetras"),
+    "QUAD": (),                      # no 2D quad element in the port
+    "TRUS": ("trusses",),
+    "BEAM": ("beams",),
+    "SPRI": ("springs",),
+}
+
+
+def _elem_row_lookup(model: Model, attr: str):
+    """user element id -> row map for one element group (cached)."""
+    g = getattr(model, attr, None)
+    if g is None:
+        return {}
+    cache = g.state.get("_id2row")
+    if cache is None:
+        cache = {int(e): k for k, e in enumerate(g.ids)}
+        g.state["_id2row"] = cache
+    return cache
+
+
+def _fixpoint(pending: dict, try_resolve, log: MessageLog, kind: str,
+              on_cycle) -> None:
+    """The iterative group-of-groups resolution of hm_grogro.F /
+    hm_grogronod.F / hm_read_surfsurf.F: repeat passes resolving every
+    item whose references are all resolved; when a full pass makes no
+    progress the leftovers form reference CYCLES — reported as errors
+    (the upstream 'ITER > N' MSGID 176/189 stop) and force-resolved
+    empty so downstream consumers keep working."""
+    guard = len(pending) + 1
+    for _ in range(guard):
+        progressed = False
+        for gid in list(pending):
+            if try_resolve(pending[gid]):
+                del pending[gid]
+                progressed = True
+        if not pending:
+            return
+        if not progressed:
+            break
+    for gid, obj in pending.items():
+        log.error(f"/{kind}/{gid}: circular {kind} group-of-groups "
+                  f"reference (involves "
+                  f"{sorted(pending)}) — group left empty", "GROUP CHECK")
+        on_cycle(obj)
+
+
+def resolve_entity_groups(model: Model, log: MessageLog) -> None:
+    """ELEMENT groups (/GRSHEL, /GRSH3N, /GRBRIC, ..., /GRPART) ->
+    resolved member rows (Fortran hm_lecgre.F + hm_grogro.F).
+
+    Each group ends with ``members`` = [(model attr, row ndarray)]
+    (family 'PART': ``part_ids_resolved``).  Group-of-group references
+    are signed: negative ids REMOVE the referenced group's members,
+    and removal wins over addition (the upstream BUFTMP = -1 rule);
+    cycles are detected by the fixpoint guard."""
+    for family, groups in model.egroups.items():
+        attrs = _EGROUP_FAMILIES.get(family, ())
+        if family != "PART" and not attrs and any(
+                g.elem_ids or g.part_ids for g in groups.values()):
+            log.warning(f"/GR{family}: element family not ported — "
+                        f"groups resolve empty", "GROUP CHECK")
+
+        def _base(g):
+            """direct + part content as {attr: set(rows)} / part set."""
+            if family == "PART":
+                for pid in g.part_ids:
+                    if pid not in model.parts:
+                        log.error(f"/GRPART/{g.id}: unknown part {pid}",
+                                  "GROUP CHECK")
+                return set(p for p in g.part_ids if p in model.parts)
+            rows = {a: set() for a in attrs}
+            if not attrs:            # family without a ported element
+                return rows
+            missing = []
+            for eid in g.elem_ids:
+                for a in attrs:
+                    r = _elem_row_lookup(model, a).get(eid)
+                    if r is not None:
+                        rows[a].add(r)
+                        break
+                else:
+                    missing.append(eid)
+            if missing:
+                log.error(f"/GR{family}/{g.id}: unknown element id(s) "
+                          f"{missing[:5]}{'...' if len(missing) > 5 else ''}",
+                          "GROUP CHECK")
+            if g.part_ids:
+                for a in attrs:
+                    eg = getattr(model, a, None)
+                    if eg is None:
+                        continue
+                    mask = np.isin(eg.state["part_ids"], g.part_ids)
+                    rows[a].update(np.where(mask)[0].tolist())
+            return rows
+
+        resolved: dict = {}
+        base_cache: dict = {}
+
+        def _try(g):
+            if g.id not in base_cache:   # once — errors not duplicated
+                base_cache[g.id] = _base(g)
+            add = (set(base_cache[g.id]) if family == "PART"
+                   else {a: set(v) for a, v in base_cache[g.id].items()})
+            rem = set() if family == "PART" else {a: set() for a in attrs}
+            for ref in g.group_ids:
+                other = groups.get(abs(ref))
+                if other is None:
+                    log.warning(f"/GR{family}/{g.id}: unknown group "
+                                f"{abs(ref)} — ignored", "GROUP CHECK")
+                    continue
+                if abs(ref) not in resolved:
+                    return False                       # defer this pass
+                if family == "PART":
+                    (add if ref > 0 else rem).update(resolved[abs(ref)])
+                else:
+                    for a in attrs:
+                        tgt = add if ref > 0 else rem
+                        tgt[a].update(resolved[abs(ref)][a])
+            if family == "PART":
+                final = add - rem
+                g.part_ids_resolved = sorted(final)
+                resolved[g.id] = final
+            else:
+                final = {a: add[a] - rem[a] for a in attrs}
+                g.members = [
+                    (a, np.array(sorted(final[a]), dtype=np.int64))
+                    for a in attrs if final[a]]
+                resolved[g.id] = final
+            return True
+
+        def _on_cycle(g):
+            if family == "PART":
+                g.part_ids_resolved = []
+            else:
+                g.members = []
+
+        _fixpoint(dict(groups), _try, log, f"GR{family}", _on_cycle)
+        for g in groups.values():
+            n = (len(g.part_ids_resolved) if family == "PART"
+                 else sum(len(r) for _, r in (g.members or [])))
+            if n == 0:
+                log.warning(f"/GR{family}/{g.id} '{g.title}' is empty",
+                            "GROUP CHECK")
+
+
+def _nodes_in_box(model: Model, box, log: MessageLog,
+                  who: str) -> np.ndarray:
+    """Node indices inside one /BOX volume (rdbox.F membership tests,
+    boundaries inclusive)."""
+    x = model.x0
+
+    def _pt(node_id, fallback):
+        if node_id:
+            try:
+                return x[model.node_index(node_id)]
+            except KeyError:
+                log.error(f"{who}: /BOX/{box.id} references unknown "
+                          f"node {node_id}", "GROUP CHECK")
+                return None
+        return fallback
+
+    if box.kind == "RECTA":
+        cmin, cmax = box.corner_min, box.corner_max
+        if box.node1:
+            p1 = _pt(box.node1, None)
+            p2 = _pt(box.node2, None)
+            if p1 is None or p2 is None:
+                return np.zeros(0, dtype=np.int64)
+            cmin, cmax = np.minimum(p1, p2), np.maximum(p1, p2)
+        inside = np.all((x >= cmin) & (x <= cmax), axis=1)
+        return np.where(inside)[0]
+    if box.kind == "SPHER":
+        c = _pt(box.node1, box.p1)
+        if c is None:
+            return np.zeros(0, dtype=np.int64)
+        d2 = np.einsum("nb,nb->n", x - c, x - c)
+        return np.where(d2 <= (0.5 * box.diameter) ** 2)[0]
+    # CYLIN: finite cylinder p1 -> p2, radius D/2 (INSIDE_CYLINDER)
+    p1 = _pt(box.node1, box.p1)
+    p2 = _pt(box.node2, box.p2)
+    if p1 is None or p2 is None:
+        return np.zeros(0, dtype=np.int64)
+    axis = p2 - p1
+    length = float(np.linalg.norm(axis))
+    if length <= 0.0:
+        log.error(f"{who}: /BOX/CYLIN/{box.id} has a zero-length axis",
+                  "GROUP CHECK")
+        return np.zeros(0, dtype=np.int64)
+    a = axis / length
+    d = (x - p1) @ a
+    radial = x - p1 - d[:, None] * a
+    r2 = np.einsum("nb,nb->n", radial, radial)
+    inside = (d >= 0.0) & (d <= length) & (r2 <= (0.5 * box.diameter) ** 2)
+    return np.where(inside)[0]
+
+
 def resolve_node_groups(model: Model, log: MessageLog) -> None:
-    """/GRNOD content (node/part/box lists) -> dense node index arrays."""
-    for g in model.node_groups.values():
+    """/GRNOD content -> dense node index arrays.
+
+    M37: runs AFTER resolve_entity_groups and resolve_surfaces —
+    /GRNOD/SURF takes the nodes of resolved surface segments
+    (hm_surfnod.F) and /GRNOD/GR<elem> the nodes of resolved element
+    groups (hm_elngr.F).  /GRNOD/GRNOD (hm_grogronod.F) resolves by
+    iterative fixpoint with cycle detection; NEGATIVE references REMOVE
+    the referenced group's nodes and removal wins over addition,
+    whatever the order (the upstream BUFTMP = -1 convention).  Groups
+    are stored sorted by node index, like the upstream sorted groups.
+    """
+    def _base(g) -> np.ndarray:
         idx: List[np.ndarray] = []
         if g.node_ids:
             try:
@@ -263,12 +545,62 @@ def resolve_node_groups(model: Model, log: MessageLog) -> None:
             if box is None:
                 log.error(f"/GRNOD/{g.id}: unknown box {bid}", "GROUP CHECK")
                 continue
-            inside = np.all((model.x0 >= box.corner_min)
-                            & (model.x0 <= box.corner_max), axis=1)
-            idx.append(np.where(inside)[0])
-        g.node_idx = (np.unique(np.concatenate(idx)) if idx
-                      else np.zeros(0, dtype=np.int64))
-        if g.node_idx.size == 0:
+            idx.append(_nodes_in_box(model, box, log, f"/GRNOD/{g.id}"))
+        for first, last, incr in g.gene_ranges:
+            uid = model.node_ids
+            mask = (uid >= first) & (uid <= last)
+            if incr > 1:
+                mask &= (uid - first) % incr == 0
+            idx.append(np.where(mask)[0])
+        for sid in g.surf_ids:
+            surf = model.surfaces.get(sid)
+            if surf is None or surf.segments is None:
+                log.error(f"/GRNOD/{g.id}: surface {sid} missing or "
+                          f"unresolved", "GROUP CHECK")
+                continue
+            if surf.segments.size:
+                idx.append(np.unique(surf.segments))
+        for family, gid in g.egroup_refs:
+            eg = model.egroups.get(family, {}).get(gid)
+            if eg is None:
+                log.error(f"/GRNOD/{g.id}: unknown /GR{family} group "
+                          f"{gid}", "GROUP CHECK")
+                continue
+            for attr, rows in (eg.members or []):
+                idx.append(np.unique(getattr(model, attr).conn[rows]))
+        return (np.unique(np.concatenate(idx)) if idx
+                else np.zeros(0, dtype=np.int64))
+
+    resolved: dict = {}
+    base_cache: dict = {}
+
+    def _try(g) -> bool:
+        if g.id not in base_cache:       # once — errors not duplicated
+            base_cache[g.id] = _base(g)
+        add = [base_cache[g.id]]
+        rem = [np.zeros(0, dtype=np.int64)]
+        for ref in g.grnod_ids:
+            other = model.node_groups.get(abs(ref))
+            if other is None:
+                # upstream MSGID 174: unknown reference is a WARNING
+                log.warning(f"/GRNOD/{g.id}: unknown node group "
+                            f"{abs(ref)} — ignored", "GROUP CHECK")
+                continue
+            if abs(ref) not in resolved:
+                return False                           # defer this pass
+            (add if ref > 0 else rem).append(resolved[abs(ref)])
+        final = np.setdiff1d(np.unique(np.concatenate(add)),
+                             np.unique(np.concatenate(rem)))
+        g.node_idx = final
+        resolved[g.id] = final
+        return True
+
+    def _on_cycle(g):
+        g.node_idx = np.zeros(0, dtype=np.int64)
+
+    _fixpoint(dict(model.node_groups), _try, log, "GRNOD", _on_cycle)
+    for g in model.node_groups.values():
+        if g.node_idx is None or g.node_idx.size == 0:
             log.warning(f"/GRNOD/{g.id} '{g.title}' is empty", "GROUP CHECK")
 
 
@@ -319,8 +651,16 @@ def _free_faces_of_tetras(model: Model, part_ids: List[int]):
 
 def resolve_surfaces(model: Model, log: MessageLog) -> None:
     """/SURF content -> (nseg, 4) node-index arrays + per-segment
-    provenance (parent element group/row, see Surface docstring)."""
-    for s in model.surfaces.values():
+    provenance (parent element group/row, see Surface docstring).
+
+    M37 additions: /SURF/GRSHEL and /SURF/GRSH3N (segments from element
+    groups — runs AFTER resolve_entity_groups) and /SURF/SURF
+    (surface-of-surfaces, hm_read_surfsurf.F): the referenced surfaces'
+    segments are concatenated by iterative fixpoint with cycle
+    detection; a NEGATIVE reference includes the surface with its
+    segment node order REVERSED (n4 n3 n2 n1 — the normal flips),
+    provenance carried along either way."""
+    def _base(s):
         segs: List[np.ndarray] = []
         gtypes: List[np.ndarray] = []   # parallel provenance pieces
         elems: List[np.ndarray] = []
@@ -358,14 +698,61 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
             ft, to = _free_faces_of_tetras(model, s.part_ids)
             if len(ft):
                 _add(ft, "tetras", to)
+        # /SURF/GRSHEL | /SURF/GRSH3N: every element of the group (M37)
+        for family, gid in s.egroup_refs:
+            eg = model.egroups.get(family, {}).get(gid)
+            if eg is None:
+                log.error(f"/SURF/{s.id}: unknown /GR{family} group {gid}",
+                          "SURFACE CHECK")
+                continue
+            for attr, rows in (eg.members or []):
+                conn = getattr(model, attr).conn[rows]
+                if conn.shape[1] == 3:              # triangles: n4 = n3
+                    conn = np.column_stack([conn, conn[:, 2]])
+                _add(conn, attr, rows)
         if segs:
-            s.segments = np.vstack(segs)
-            s.seg_gtype = np.concatenate(gtypes)
-            s.seg_elem = np.concatenate(elems)
-        else:
-            s.segments = np.zeros((0, 4), dtype=np.int64)
-            s.seg_gtype = np.zeros(0, dtype="<U8")
-            s.seg_elem = np.zeros(0, dtype=np.int64)
+            return (np.vstack(segs), np.concatenate(gtypes),
+                    np.concatenate(elems))
+        return (np.zeros((0, 4), dtype=np.int64),
+                np.zeros(0, dtype="<U8"), np.zeros(0, dtype=np.int64))
+
+    resolved: dict = {}
+    base_cache: dict = {}
+
+    def _finish(s, triple):
+        s.segments, s.seg_gtype, s.seg_elem = triple
+        resolved[s.id] = triple
+
+    def _try(s) -> bool:
+        if s.id not in base_cache:       # once — errors not duplicated
+            base_cache[s.id] = _base(s)
+        pieces = [base_cache[s.id]]
+        for ref in s.surf_ids:
+            other = model.surfaces.get(abs(ref))
+            if other is None:
+                log.warning(f"/SURF/{s.id}: unknown surface {abs(ref)} — "
+                            f"ignored", "SURFACE CHECK")
+                continue
+            if abs(ref) not in resolved:
+                return False                        # defer this pass
+            seg, gt, el = resolved[abs(ref)]
+            if ref < 0:
+                # negative id: node order reversed — the normal flips
+                # (hm_read_surfsurf.F NODES(L,4..1))
+                seg = seg[:, ::-1]
+            pieces.append((seg, gt, el))
+        _finish(s, (np.vstack([p[0] for p in pieces]),
+                    np.concatenate([p[1] for p in pieces]),
+                    np.concatenate([p[2] for p in pieces])))
+        return True
+
+    def _on_cycle(s):
+        _finish(s, (np.zeros((0, 4), dtype=np.int64),
+                    np.zeros(0, dtype="<U8"),
+                    np.zeros(0, dtype=np.int64)))
+
+    _fixpoint(dict(model.surfaces), _try, log, "SURF", _on_cycle)
+    for s in model.surfaces.values():
         if s.segments.shape[0] == 0:
             log.warning(f"/SURF/{s.id} '{s.title}' has no segments",
                         "SURFACE CHECK")
@@ -376,34 +763,94 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
 _SEG_EDGES = np.array([[0, 1], [1, 2], [2, 3], [3, 0]])
 
 
+def _surface_edges(model: Model, ln, surf_ids, log: MessageLog):
+    """All edges of the listed surfaces' segments, with provenance —
+    the raw union LINEDGE starts from (degenerate triangle edges
+    dropped).  Returns (edges (n,2), gtype (n,), elem (n,))."""
+    edges, gtypes, elems = [], [], []
+    for sid in surf_ids:
+        surf = model.surfaces.get(sid)
+        if surf is None or surf.segments is None:
+            log.error(f"/LINE/{ln.id}: surface {sid} not defined",
+                      "LINE CHECK")
+            continue
+        e = surf.segments[:, _SEG_EDGES.reshape(-1)].reshape(-1, 2)
+        own_g = np.repeat(surf.seg_gtype, 4)
+        own_e = np.repeat(surf.seg_elem, 4)
+        keep = e[:, 0] != e[:, 1]        # drop degenerate triangle edge
+        edges.append(e[keep])
+        gtypes.append(own_g[keep])
+        elems.append(own_e[keep])
+    if not edges:
+        return (np.zeros((0, 2), dtype=np.int64),
+                np.zeros(0, dtype="<U8"), np.zeros(0, dtype=np.int64))
+    return (np.vstack(edges), np.concatenate(gtypes),
+            np.concatenate(elems))
+
+
 def resolve_lines(model: Model, log: MessageLog) -> None:
     """/LINE content -> (nseg, 2) edge node-index arrays + provenance.
-    Must run AFTER resolve_surfaces (LINE/SURF reads resolved segments).
+    Must run AFTER resolve_surfaces (LINE/SURF|EDGE read resolved
+    segments).
 
-    Fortran: hm_read_lines.F builds IGRSLIN the same two ways (from a
-    surface or from explicit segments)."""
-    for ln in model.lines.values():
+    Fortran: hm_read_lines.F builds IGRSLIN from a surface (all unique
+    edges — /LINE/SURF), from a surface's BORDER (/LINE/EDGE, M37:
+    ``linedge.F`` keeps only edges used by exactly ONE segment of the
+    union of the listed surfaces, removing interior edges entirely),
+    from other lines (/LINE/LINE, M37: concatenation by fixpoint with
+    cycle detection), from 1-D element parts (/LINE/PART, M37) and from
+    explicit node pairs (/LINE/SEG)."""
+    def _base(ln):
         edges: List[np.ndarray] = []
         gtypes: List[np.ndarray] = []
         elems: List[np.ndarray] = []
-        for sid in ln.surf_ids:
-            surf = model.surfaces.get(sid)
-            if surf is None or surf.segments is None:
-                log.error(f"/LINE/{ln.id}: surface {sid} not defined",
+        if ln.surf_ids:
+            # every unique edge: interior edges appear once per adjacent
+            # segment — keep one copy (both copies are identical springs)
+            e, gt, el = _surface_edges(model, ln, ln.surf_ids, log)
+            if len(e):
+                _, first = np.unique(np.sort(e, axis=1), axis=0,
+                                     return_index=True)
+                edges.append(e[first])
+                gtypes.append(gt[first])
+                elems.append(el[first])
+        if ln.edge_surf_ids:
+            # /LINE/EDGE: BORDER edges only — count over the union of
+            # the listed surfaces' segments, keep count == 1 (linedge.F
+            # 'removal of internal segments except borders'); stored
+            # (lo, hi) like the upstream sorted pairs
+            e, gt, el = _surface_edges(model, ln, ln.edge_surf_ids, log)
+            if len(e):
+                key = np.sort(e, axis=1)
+                _, first, counts = np.unique(
+                    key, axis=0, return_index=True, return_counts=True)
+                border = first[counts == 1]
+                edges.append(key[border])
+                gtypes.append(gt[border])
+                elems.append(el[border])
+        for pid in ln.part_ids:
+            # /LINE/PART: every 1-D element of the part is an edge
+            # (beams: end nodes N1-N2 — the orientation node carries no
+            # geometry)
+            if pid not in model.parts:
+                log.error(f"/LINE/{ln.id}: unknown part {pid}",
                           "LINE CHECK")
                 continue
-            e = surf.segments[:, _SEG_EDGES.reshape(-1)].reshape(-1, 2)
-            own_g = np.repeat(surf.seg_gtype, 4)
-            own_e = np.repeat(surf.seg_elem, 4)
-            keep = e[:, 0] != e[:, 1]        # drop degenerate triangle edge
-            e, own_g, own_e = e[keep], own_g[keep], own_e[keep]
-            # each interior edge appears twice (once per adjacent segment):
-            # keep one copy — for contact both copies are identical springs
-            _, first = np.unique(np.sort(e, axis=1), axis=0,
-                                 return_index=True)
-            edges.append(e[first])
-            gtypes.append(own_g[first])
-            elems.append(own_e[first])
+            found = False
+            for attr in ("trusses", "springs", "beams"):
+                eg = getattr(model, attr, None)
+                if eg is None:
+                    continue
+                mask = np.isin(eg.state["part_ids"], [pid])
+                if np.any(mask):
+                    edges.append(eg.conn[mask][:, :2])
+                    gtypes.append(np.full(int(mask.sum()), attr,
+                                          dtype="<U8"))
+                    elems.append(np.where(mask)[0])
+                    found = True
+            if not found:
+                log.warning(f"/LINE/{ln.id}: part {pid} has no 1-D "
+                            f"(truss/beam/spring) elements", "LINE CHECK")
         for row in ln.seg_nodes:
             try:
                 edges.append(model.node_indices(row)[None, :])
@@ -413,13 +860,46 @@ def resolve_lines(model: Model, log: MessageLog) -> None:
                 log.error(f"/LINE/{ln.id}: unknown node id {exc}",
                           "LINE CHECK")
         if edges:
-            ln.segments = np.vstack(edges)
-            ln.seg_gtype = np.concatenate(gtypes)
-            ln.seg_elem = np.concatenate(elems)
-        else:
-            ln.segments = np.zeros((0, 2), dtype=np.int64)
-            ln.seg_gtype = np.zeros(0, dtype="<U8")
-            ln.seg_elem = np.zeros(0, dtype=np.int64)
+            return (np.vstack(edges), np.concatenate(gtypes),
+                    np.concatenate(elems))
+        return (np.zeros((0, 2), dtype=np.int64),
+                np.zeros(0, dtype="<U8"), np.zeros(0, dtype=np.int64))
+
+    resolved: dict = {}
+    base_cache: dict = {}
+
+    def _finish(ln, triple):
+        ln.segments, ln.seg_gtype, ln.seg_elem = triple
+        resolved[ln.id] = triple
+
+    def _try(ln) -> bool:
+        if ln.id not in base_cache:      # once — errors not duplicated
+            base_cache[ln.id] = _base(ln)
+        pieces = [base_cache[ln.id]]
+        for ref in ln.line_ids:
+            other = model.lines.get(abs(ref))
+            if other is None:
+                log.warning(f"/LINE/{ln.id}: unknown line {abs(ref)} — "
+                            f"ignored", "LINE CHECK")
+                continue
+            if abs(ref) not in resolved:
+                return False                        # defer this pass
+            seg, gt, el = resolved[abs(ref)]
+            if ref < 0:
+                seg = seg[:, ::-1]                  # reversed direction
+            pieces.append((seg, gt, el))
+        _finish(ln, (np.vstack([p[0] for p in pieces]),
+                     np.concatenate([p[1] for p in pieces]),
+                     np.concatenate([p[2] for p in pieces])))
+        return True
+
+    def _on_cycle(ln):
+        _finish(ln, (np.zeros((0, 2), dtype=np.int64),
+                     np.zeros(0, dtype="<U8"),
+                     np.zeros(0, dtype=np.int64)))
+
+    _fixpoint(dict(model.lines), _try, log, "LINE", _on_cycle)
+    for ln in model.lines.values():
         if ln.segments.shape[0] == 0:
             log.warning(f"/LINE/{ln.id} '{ln.title}' has no edges",
                         "LINE CHECK")
@@ -464,9 +944,12 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
                       "INIVEL CHECK")
             continue
         if iv.kind == "AXIS":
-            # rigid-rotation velocity field: v += omega * d x (x0 - P)
+            # rigid-rotation velocity field: v += omega * d x (x0 - P),
+            # plus the card's translational velocity Vt (the real AXIS
+            # card carries Vxt/Vyt/Vzt next to VR — M37; zero for the
+            # port's compact AXIS card, which has no Vt fields)
             r = model.x0[g.node_idx] - iv.origin
-            model.v[g.node_idx] += iv.omega * np.cross(iv.axis, r)
+            model.v[g.node_idx] += iv.v + iv.omega * np.cross(iv.axis, r)
         else:
             model.v[g.node_idx] = iv.v
 

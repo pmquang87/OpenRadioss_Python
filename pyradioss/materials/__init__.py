@@ -52,7 +52,10 @@ true current sound speed or the Courant time step is not a bound.
 """
 
 from . import (eos, law01_elastic, law02_johnson_cook,  # noqa: F401
-               law27_brittle, law36_tabulated, law42_ogden)
+               law19_fabric, law24_concrete, law27_brittle,
+               law35_kelvinmax, law36_tabulated, law40_kelvinmax,
+               law42_ogden, law44_cowper, law62_hypervisco,
+               law70_tabfoam, law81_druckerprager, mat_gas, mat_void)
 
 
 def extra_shapes(mat, nip=None):
@@ -67,6 +70,42 @@ def extra_shapes(mat, nip=None):
     if mat.law == 27:
         shapes.update(eps27=(nip, 3), crk27=(nip,), ang27=(nip,),
                       dmg27=(nip, 2))
+    if mat.law == 19:
+        # M37 pack 2: total strain, zerostress reference stress SIGI and
+        # the law's own time accumulator (see law19_fabric docstring)
+        shapes.update(eps19=(nip, 3), sigi19=(nip, 3), t19=(nip,))
+    if mat.law == 24:
+        # M37 pack 2: the LBUF state of conc24.F (law24_concrete docstring)
+        shapes.update(strain24=(6,), sigc24=(6,), crak24=(3,),
+                      dam24=(3,), ang24=(6,), epsf24=(3,),
+                      vk024=(), vk24=(), rob24=(), off24=(), ini24=())
+    if mat.law == 81:
+        # M37 pack 2: the defp(nel, 2) plastic strains of sigeps81.F90
+        shapes.update(epspd81=(), epspv81=())
+    if mat.law == 62 and mat.params.get("NPRONY", 0) > 0:
+        # M37 pack 2: Prony history of sigeps62.F (UVAR 1:6 = previous
+        # global deviatoric PK2, then 6 per Prony term)
+        shapes.update(sdg62=(6,), h62=(mat.params["NPRONY"], 6))
+    if mat.law == 70:
+        # M37 pack 1: total strain, the 10 UVARs of sigeps70.F and the
+        # filtered strain rate (law70_tabfoam docstring; solids only)
+        shapes.update(eps70=(6,), uv70=(10,), epsd70=())
+    if mat.law == 35:
+        # M37 pack 1: total strain, closed-cell air pressure (UVAR1) and
+        # the filtered strain rate (UVAR4) of sigeps35.F (solids only)
+        shapes.update(eps35=(6,), sigair35=(), edot35=())
+    if mat.law == 40:
+        # M37 pack 1: total strain + the 40 UVARs of sigeps40.F (Stassi
+        # criteria, EDRV rate memory, 5x6 Prony branch stresses)
+        shapes.update(eps40=(6,), uv40=(40,))
+    if mat.law == 44:
+        # M37 pack 1 (law44_cowper): the filtered strain-rate state is
+        # only needed when filtering / VP=1 is active; the total strain
+        # only when the tension softening (eps_t1) is finite
+        if mat.params.get("ismooth", 0) or mat.params.get("vflag") == 1:
+            shapes["epsd44"] = (nip,) if nip is not None else ()
+        if mat.params.get("epsr1", 1e30) < 1e30:
+            shapes["eps44"] = (nip, 3) if nip is not None else (6,)
     if mat.law == 2 and "mT" in mat.params:
         # adiabatic temperature RISE above T_i (M6 thermal terms)
         shapes["temp"] = (nip,) if nip is not None else ()
@@ -74,8 +113,21 @@ def extra_shapes(mat, nip=None):
 
 
 def needs_defgrad(mat) -> bool:
-    """True if the law is total-strain and needs F from the kernel."""
-    return mat.law == 42
+    """True if the law is total-strain and needs F from the kernel
+    (LAW42 Ogden; LAW62 hyper-visco foam since M37 pack 2)."""
+    return mat.law in (42, 62)
+
+
+def needs_env(mat) -> bool:
+    """True if the law wants the kernel's per-cycle environment views in
+    ``extra`` — current density ``rho`` and internal energy ``eint``
+    (M37 pack 2: LAW24's dilatancy gates ALPHA on EINT <= 0 and
+    RHO < RHO0, LAW81's maximum-dilatancy clamp on RHO; M37 pack 1:
+    LAW35's relative volume / air pressure, LAW44's total pressure
+    P = K*(rho/rho0 - 1) and LAW70's Itens tension scale all need
+    ``rho``; LAW62's CIMAX sound-speed bound divides by the current
+    density; LAW40's sound speed too)."""
+    return mat.law in (24, 35, 40, 44, 62, 70, 81)
 
 
 def solid_update(mat, sig, deps, epsp, dt, extra=None):
@@ -95,6 +147,31 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
         return sig, epsp, None
     if mat.law == 42:
         return law42_ogden.solid_update(mat, sig, deps, epsp, dt, extra)
+    if mat.law == 24:
+        return law24_concrete.solid_update(mat, sig, deps, epsp, dt, extra)
+    if mat.law == 81:
+        return law81_druckerprager.solid_update(mat, sig, deps, epsp, dt,
+                                                extra)
+    if mat.law == 62:
+        return law62_hypervisco.solid_update(mat, sig, deps, epsp, dt,
+                                             extra)
+    if mat.law == 0:
+        return mat_void.solid_update(mat, sig, deps), epsp, None
+    if mat.law == 999:
+        # /MAT/GAS: zero deviator; the pressure and the sound speed come
+        # from the attached IDEAL-GAS /EOS through the kernels' EOS block
+        return mat_gas.solid_update(mat, sig), epsp, None
+    if mat.law == 70:
+        sig, c = law70_tabfoam.solid_update(mat, sig, deps, dt, extra)
+        return sig, epsp, c
+    if mat.law == 35:
+        sig, c = law35_kelvinmax.solid_update(mat, sig, deps, dt, extra)
+        return sig, epsp, c
+    if mat.law == 40:
+        sig, c = law40_kelvinmax.solid_update(mat, sig, deps, dt, extra)
+        return sig, epsp, c
+    if mat.law == 44:
+        return law44_cowper.solid_update(mat, sig, deps, epsp, dt, extra)
     raise NotImplementedError(f"material LAW{mat.law} not ported for solids")
 
 
@@ -109,6 +186,12 @@ def shell_update(mat, sig, deps, epsp, dt, extra=None):
         return law36_tabulated.shell_update(mat, sig, deps, epsp, dt)
     if mat.law == 27:
         return law27_brittle.shell_update(mat, sig, deps, epsp, dt, extra)
+    if mat.law == 19:
+        return law19_fabric.shell_update(mat, sig, deps, epsp, dt, extra)
+    if mat.law == 0:
+        return mat_void.shell_update(mat, sig, deps), epsp
+    if mat.law == 44:
+        return law44_cowper.shell_update(mat, sig, deps, epsp, dt, extra)
     raise NotImplementedError(f"material LAW{mat.law} not ported for shells")
 
 

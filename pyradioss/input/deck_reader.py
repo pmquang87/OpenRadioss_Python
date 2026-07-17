@@ -39,16 +39,41 @@ reader). The physical file format is:
     - :meth:`Card.tokens`  — whitespace split (used for numeric cards),
     - :meth:`Card.fields`  — 10-column fixed slicing (used when a card mixes
       blanks-as-defaults, e.g. /BCS DOF flags),
+    - :meth:`Card.cut`     — arbitrary-width fixed slicing against the
+      shared :mod:`card_layouts` table (M37: real packed decks),
 
   so each keyword parser chooses the appropriate view, exactly like the
   Fortran ``KFORMAT``/free-format dual reading.
+
+* **Fixed-dialect detection (M37).** Real decks declare their input
+  version on the second /BEGIN card (``2022  0``); the port's own
+  M36-regenerated decks do too (one dialect since M36).  When a version
+  >= 90 is declared (the 10/20-character era of the cfg card layouts),
+  every block is flagged ``fixed=True``.  The real Starter counts
+  whitespace-only lines as **blank cards** (all fields default), and the
+  card *indices* of the fixed layouts only line up when they are kept:
+  the lexer records where blank lines sat (:attr:`KeywordBlock.blank_slots`)
+  and :meth:`KeywordBlock.fixed_cards` reconstructs the true card
+  stream.  :attr:`KeywordBlock.cards` stays the historical blank-skipped
+  list, so every parser keeps its legacy behaviour until it explicitly
+  opts into the fixed view (see starter_keywords).
+
+* ``/PARAMETER`` substitution (M37): real decks reference parameters as
+  ``&NAME`` inside any field (``/PARAMETER/GLOBAL/REAL`` blocks define
+  them).  The reader substitutes the value into the raw line **in
+  place**, preserving the column layout (the value replaces the
+  ``&NAME`` token and only consumes following spaces), exactly like the
+  reference reader's textual substitution.
 """
 
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
+
+from .card_layouts import LAYOUTS, split_fixed
 
 
 # ----------------------------------------------------------------------------
@@ -79,6 +104,18 @@ class Card:
         line = self.raw.rstrip("\n")
         return [line[i * width:(i + 1) * width].strip() for i in range(n)]
 
+    def cut(self, layout_key: str) -> List[str]:
+        """Cut the raw line at the column widths of the shared
+        :data:`card_layouts.LAYOUTS` entry ``layout_key`` (M37) — the way
+        packed real cards with NO whitespace between fields are split."""
+        return split_fixed(self.raw, LAYOUTS[layout_key])
+
+    @property
+    def is_blank(self) -> bool:
+        """True for a blank card (whitespace-only line, kept for fixed
+        decks): every field at its default."""
+        return not self.raw.strip()
+
     # -- typed helpers used by the keyword parsers ---------------------------
     def ints(self) -> List[int]:
         """All tokens parsed as ints (for connectivity cards)."""
@@ -106,11 +143,49 @@ class KeywordBlock:
     user_id: Optional[int]  # trailing integer component, if any
     cards: List[Card]
     source: str = ""        # "file:lineno" of the header line
+    #: positions (indices into ``cards``) where the physical file had a
+    #: whitespace-only line — a *blank card* to the real fixed-format
+    #: reader (every field at its default), invisible to the token
+    #: parsers above.  Recorded so format-exact consumers (the M37
+    #: cfg-driven /MAT reader) can reconstruct the true card stream;
+    #: one entry per blank line, duplicates = consecutive blanks.
+    blank_slots: List[int] = field(default_factory=list)
+    #: True when the deck's /BEGIN declared a real input version >= 90
+    #: (set by read_deck's post-pass): the block is in the REAL fixed
+    #: 10/20-character dialect and parsers may use :meth:`fixed_cards` +
+    #: the card_layouts column widths.
+    fixed: bool = False
+    #: the optional LOCAL UNIT id of the block (M37): the general Radioss
+    #: header syntax is ``/KEY/.../user_ID/unit_ID`` — when the header
+    #: ends in TWO integers the first is the user id and the second
+    #: references a /UNIT block whose unit system the block's quantities
+    #: are written in (converted to the /BEGIN work units at resolve
+    #: time, see input/units.py). None = no local unit (work units).
+    unit_id: Optional[int] = None
 
     @property
     def key0(self) -> str:
         """First component ('MAT' for /MAT/LAW2/17) — used for dispatch."""
         return self.parts[0].upper()
+
+    def fixed_cards(self) -> List[Card]:
+        """The TRUE fixed-format card stream: ``cards`` with the recorded
+        blank cards re-inserted at their :attr:`blank_slots` positions —
+        what the real fixed reader sees (a blank card = every field at
+        its default), so per-layout card indices line up exactly."""
+        if not self.blank_slots:
+            return self.cards
+        out: List[Card] = []
+        slots, si = self.blank_slots, 0          # ascending by construction
+        for i, c in enumerate(self.cards):
+            while si < len(slots) and slots[si] == i:
+                out.append(Card(raw="", source=self.source))
+                si += 1
+            out.append(c)
+        while si < len(slots):
+            out.append(Card(raw="", source=self.source))
+            si += 1
+        return out
 
 
 # ----------------------------------------------------------------------------
@@ -150,7 +225,12 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
             here = f"{os.path.basename(path)}:{lineno}"
 
             if not stripped:
-                continue  # blank line
+                # blank line: not a card for the token parsers, but the
+                # real fixed reader counts it as a BLANK CARD — remember
+                # where it sat (see KeywordBlock.blank_slots)
+                if current is not None:
+                    current.blank_slots.append(len(current.cards))
+                continue
 
             # -- #include directive (before generic comment handling) -------
             low = stripped.lower()
@@ -174,7 +254,11 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
                     blocks.append(current)
                 parts = [p for p in stripped[1:].split("/") if p != ""]
                 # Trailing integer component = user ID (e.g. /BRICK/3).
+                # TWO trailing integers = user ID + local UNIT id
+                # (``/MAT/PLAS_JOHNS/1/1``, the general Radioss
+                # ``/KEY/.../user_ID/unit_ID`` header syntax — M37).
                 user_id: Optional[int] = None
+                unit_id: Optional[int] = None
                 kw_parts = parts
                 if len(parts) > 1:
                     try:
@@ -182,10 +266,19 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
                         kw_parts = parts[:-1]
                     except ValueError:
                         user_id = None
+                if user_id is not None and len(parts) > 2:
+                    try:
+                        first = int(parts[-2])
+                    except ValueError:
+                        first = None
+                    if first is not None:
+                        user_id, unit_id = first, user_id
+                        kw_parts = parts[:-2]
                 current = KeywordBlock(
                     keyword="/".join(p.upper() for p in kw_parts),
                     parts=parts,
                     user_id=user_id,
+                    unit_id=unit_id,
                     cards=[],
                     source=here,
                 )
@@ -200,4 +293,98 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
 
     if current is not None:
         blocks.append(current)
+
+    if _depth == 0:
+        _finalize_deck(blocks)
     return blocks
+
+
+# ----------------------------------------------------------------------------
+# Depth-0 post-passes: fixed-dialect detection + /PARAMETER substitution
+# ----------------------------------------------------------------------------
+
+def input_version(blocks: List[KeywordBlock]) -> int:
+    """The input version declared on the /BEGIN block's second card
+    (``Invers Irun``), 0 when absent — legacy port decks carry only the
+    run-name card."""
+    for b in blocks:
+        if b.key0 != "BEGIN":
+            continue
+        if len(b.cards) >= 2:
+            toks = b.cards[1].tokens()
+            if toks:
+                try:
+                    return int(toks[0])
+                except ValueError:
+                    return 0
+        return 0
+    return 0
+
+
+_PARAM_REF = re.compile(r"&[A-Za-z0-9_]+")
+
+
+def _finalize_deck(blocks: List[KeywordBlock]) -> None:
+    """Post-passes over the complete (include-spliced) block list."""
+    # 1. fixed-dialect flag: /BEGIN declares an input version >= 90 (the
+    #    10/20-character column era of the cfg layouts; older 8-column
+    #    dialects keep the token fallback).
+    if input_version(blocks) >= 90:
+        for b in blocks:
+            b.fixed = True
+
+    # 2. /PARAMETER substitution: replace &NAME references in card text
+    #    (the reference reader substitutes textually before parsing).
+    params: Dict[str, str] = {}
+    for b in blocks:
+        if b.key0 != "PARAMETER" or not b.cards:
+            continue
+        # /PARAMETER/<scope>/<REAL|INTEGER|TEXT>/<id>:
+        # card 1 = title, card 2 = "%-10s" name + value field
+        # (parameter_float.cfg: CARD("%-10s%20lg", NAME, VALUE)).
+        # TEXT parameters put the value on a FOLLOW-UP card — not
+        # substitutable numerically; skipped (the parser then reports
+        # any &NAME reference to one, the honest failure).
+        subtype = b.parts[2].upper() if len(b.parts) > 2 else ""
+        if subtype not in ("REAL", "INTEGER", "INT"):
+            continue
+        defcard = b.cards[1] if len(b.cards) >= 2 else b.cards[0]
+        name = defcard.raw[:10].strip()
+        rest = defcard.raw[10:].split()
+        if name and rest:
+            params[name.upper()] = rest[0]
+    if not params:
+        return
+    for b in blocks:
+        if b.key0 == "PARAMETER":
+            continue
+        for c in b.cards:
+            if "&" not in c.raw:
+                continue
+            c.raw = _substitute_params(c.raw, params)
+            c._tokens = None                       # invalidate token cache
+
+
+def _substitute_params(raw: str, params: Dict[str, str]) -> str:
+    """Replace each ``&NAME`` with its value IN PLACE, preserving the
+    column layout: the value starts where the reference started and may
+    only consume the spaces that follow it (never a neighbouring field's
+    text). Unknown names are left untouched — the parser then reports
+    the unresolved token, which is the honest failure."""
+    out = raw
+    # right-to-left so earlier match positions stay valid after surgery
+    for m in reversed(list(_PARAM_REF.finditer(raw))):
+        val = params.get(m.group(0)[1:].upper())
+        if val is None:
+            continue
+        a, b = m.span()
+        end = b
+        while end < len(out) and out[end] == " ":
+            end += 1
+        avail = end - a
+        if len(val) <= b - a:                  # fits in the token itself
+            out = out[:a] + val + " " * (b - a - len(val)) + out[b:]
+        elif len(val) <= avail:                # consume following spaces
+            out = out[:a] + val + out[a + len(val):]
+        # else: cannot fit without shifting columns — leave unresolved
+    return out

@@ -76,16 +76,23 @@ class LoadsAndConstraints:
         # /CLOAD entries carry their /SENSOR id (M6): 0 = always active
         self.cloads = [(_grp(c.grnod_id), c.direction, model.functions[c.funct_id],
                         c.scale, c.sens_id) for c in model.cloads]
+        # /IMPVEL entries: (node_idx, dof, funct, Fscale_Y, 1/Ascale_x,
+        # Tstart, Tstop) — the curve is evaluated at t/Ascale_x and the
+        # condition only holds inside [Tstart, Tstop] (fixvel.F: FACX,
+        # STARTT/STOPT).
         self.impvel = [(_grp(i.grnod_id), i.dof, model.functions[i.funct_id],
-                        i.scale) for i in model.impvel]
+                        i.scale, 1.0 / i.xscale, i.tstart, i.tstop)
+                       for i in model.impvel]
         # /IMPDISP: like /IMPVEL, plus the base coordinate of each node so
         # the target position x0 + d(t) is exact (no velocity-integration
-        # drift). Entries: (node_idx, dof, funct, scale, x0_dof).
+        # drift). Entries: (node_idx, dof, funct, scale, facx, tstart,
+        # tstop, x0_dof).
         self.impdisp = []
         for i in model.impdisp:
             idx = _grp(i.grnod_id)
             self.impdisp.append((idx, i.dof, model.functions[i.funct_id],
-                                 i.scale, model.x0[idx, i.dof].copy()))
+                                 i.scale, 1.0 / i.xscale, i.tstart, i.tstop,
+                                 model.x0[idx, i.dof].copy()))
         # a FROZEN node under an imposed velocity/displacement is a
         # legitimate massless kinematic carrier (the standard way to drive
         # a moving /RWALL): release its auto-fix on the driven DOF, and
@@ -94,9 +101,8 @@ class LoadsAndConstraints:
         # reaction it transmits is booked where it acts, e.g. by the
         # moving-wall term-2 booking).
         self._frozen = frozen
-        for idx, dof, _, _ in self.impvel:
-            self.fix_tra[idx[frozen[idx]], dof] = False
-        for idx, dof, _, _, _ in self.impdisp:
+        for entry in self.impvel + self.impdisp:
+            idx, dof = entry[0], entry[1]
             self.fix_tra[idx[frozen[idx]], dof] = False
         for i in model.impdisp:
             f0 = model.functions[i.funct_id].eval(0.0) * i.scale
@@ -198,20 +204,22 @@ class LoadsAndConstraints:
         """
         w = 0.0
         # imposed velocities first (a BCS on the same dof wins, as in the
-        # original where BCS is the strongest condition)
-        for idx, dof, fct, scale in self.impvel:
-            if len(idx) == 0:
+        # original where BCS is the strongest condition). Outside the
+        # [Tstart, Tstop] window the condition is simply not applied —
+        # the node is free that cycle (fixvel.F CYCLEs the entry).
+        for idx, dof, fct, scale, facx, tstart, tstop in self.impvel:
+            if len(idx) == 0 or t < tstart or t > tstop:
                 continue
-            vimp = scale * fct.eval(t)
+            vimp = scale * fct.eval(t * facx)
             dv = vimp - v[idx, dof]
             m = np.where(self._frozen[idx], 0.0, mass[idx])
             w += float(np.dot(m, dv)) * vimp
             v[idx, dof] = vimp
         # imposed displacements: land exactly at x0 + d(t_end)
-        for idx, dof, fct, scale, x0d in self.impdisp:
-            if len(idx) == 0 or dt <= 0.0:
+        for idx, dof, fct, scale, facx, tstart, tstop, x0d in self.impdisp:
+            if len(idx) == 0 or dt <= 0.0 or t < tstart or t > tstop:
                 continue
-            target = x0d + scale * fct.eval(t)
+            target = x0d + scale * fct.eval(t * facx)
             vimp = (target - x[idx, dof]) / dt
             dv = vimp - v[idx, dof]
             m = np.where(self._frozen[idx], 0.0, mass[idx])

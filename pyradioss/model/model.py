@@ -30,10 +30,11 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from .entities import (
-    AddedMass, BoundaryCondition, Box, ConcentratedLoad, Damping, Gravity,
-    ImposedDisplacement, ImposedVelocity, InitialVelocity, Interface, Line,
-    Material, Mpc, NodeGroup, Part, PressureLoad, Property, Rbe3, RigidBody,
-    RigidWall, Section, Sensor, Surface, THRequest,
+    AddedMass, BoundaryCondition, Box, ConcentratedLoad, Damping,
+    EntityGroup, Gravity, ImposedDisplacement, ImposedVelocity,
+    InitialVelocity, Interface, Line, Material, Mpc, NodeGroup, Part,
+    PressureLoad, Property, Rbe3, RigidBody, RigidWall, Section, Sensor,
+    Surface, THRequest,
 )
 from ..common.tables import FunctTable
 
@@ -473,6 +474,10 @@ class Model:
         self.raw_fails: list = []
         # /EOS cards, same pattern (M6): (mat_id, EquationOfState, source)
         self.raw_eos: list = []
+        # /ALE/MAT, /EULER/MAT, /HEAT/MAT parse-only notes (M37): parsed
+        # as (kind, mat_id, params, source), attached to the material's
+        # params by the Starter resolve step — accepted, no physics.
+        self.raw_mat_notes: list = []
         self.properties: Dict[int, Property] = {}
         self.parts: Dict[int, Part] = {}
         self.parts_list: List[Part] = []          # dense order for elements
@@ -481,6 +486,25 @@ class Model:
         self.surfaces: Dict[int, Surface] = {}
         self.lines: Dict[int, Line] = {}
         self.boxes: Dict[int, Box] = {}
+        # ELEMENT groups (M37): /GRSHEL, /GRSH3N, /GRBRIC, /GRQUAD,
+        # /GRTRUS, /GRBEAM, /GRSPRI, /GRPART — one id namespace per
+        # family (the Fortran IGRSH4N/IGRSH3N/IGRBRIC/... arrays are
+        # separate), keyed family -> {id -> EntityGroup}.
+        self.egroups: Dict[str, Dict[int, EntityGroup]] = {}
+
+        # ------------------------------------------------------------------
+        # Unit systems (M37): /BEGIN work/input units + /UNIT blocks.
+        # ``unit_work``/``unit_input`` are (fac_m, fac_l, fac_t) SI-factor
+        # triples or None (legacy deck without unit declarations);
+        # ``units`` maps /UNIT ids to the same triples; ``raw_unit_refs``
+        # collects (keyword, user_id, unit_id, source) for every block
+        # whose header carried a LOCAL unit id — converted into the work
+        # unit system by starter/initialization (see input/units.py).
+        # ------------------------------------------------------------------
+        self.unit_work = None
+        self.unit_input = None
+        self.units: Dict[int, tuple] = {}
+        self.raw_unit_refs: list = []
 
         # Loads / constraints / contacts
         self.bcs: List[BoundaryCondition] = []

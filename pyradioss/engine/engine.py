@@ -56,6 +56,7 @@ from ..contact import build_contacts
 from ..elements import KERNELS
 from ..input.deck_reader import read_deck
 from ..input.engine_keywords import parse_engine_deck
+from ..input.mat_reader import refuse_inactive_materials
 from ..model.model import EngineControls, Model
 from ..output import TimeHistory, write_anim_state
 from ..starter.restart import read_restart, write_restart
@@ -178,6 +179,11 @@ def run_engine(input_file: str, log: Optional[MessageLog] = None) -> Model:
         rst = os.path.join(out_dir, f"{run_name}_{run_num - 1:04d}.rst")
         log.info(f" RESTART FILE . . . . . . . . . . . . : {rst}")
         model, saved = read_restart(rst)
+        # M37: a model whose element groups reference a parsed-but-not-
+        # implemented material (InactiveMaterial) is honestly not
+        # simulatable — refuse loudly BEFORE any engine branch runs,
+        # naming every offending law (raises InactiveMaterialError).
+        refuse_inactive_materials(model, log)
         log.info(f" MODEL TITLE  . . . . . . . . . . . . : {model.title}")
         if saved is not None:
             log.info(f" RESUMING FROM TIME . . . . . . . . . : "
