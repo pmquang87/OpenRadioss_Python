@@ -534,7 +534,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # is what makes an IMPULSIVE imposed-velocity start (RD-V-0700)
         # balance instead of booking twice the work at cycle 1.)
         state.wext += loads.apply_kinematic(state.t + dt, model.v, model.vr,
-                                            mass_eff, model.x, dt, v_old)
+                                            mass_eff, model.x, dt, v_old,
+                                            model.inertia, vr_old)
         de_wall, dw_wall = walls.apply(model.x, model.v, v_old,
                                        model.mass, dt)
         state.econt += de_wall

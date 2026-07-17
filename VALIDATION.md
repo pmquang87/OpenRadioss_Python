@@ -206,6 +206,24 @@ not missing work.
    `test_element_kernels.py::test_degenerated_brick_penta_run_as_collapsed_hexa`
    now asserts the accept-and-run behavior the small-bug pack introduced.
    Neither was a NumPy-physics regression.
+8. **THE M39 POST-REPORT FIX CASCADE (§3.4) — validation-driven correctness.**
+   Integrating the tree surfaced five more real, previously-masked bugs, each
+   fixed as an Opus sub-agent and verified: the **`/PROP/SOLID` negative-viscosity
+   reader bug** (all five V0700 brick/tetra cases now NORMAL, LAW2 solids match
+   Fortran at 2.3 % — this CORRECTS the M38 "all nine V0700 freed" overclaim:
+   M38 freed shells/trias, M39 frees bricks/tetras); the **`/RBODY` master-node
+   timestep** (c04 dt 4.31e-2 → 2.067e-2, the t≈890 ms hourglass runaway cleared
+   via the `rgbodfp.F` STIFN→master transport); **rotational `/IMPVEL` XX/YY/ZZ**
+   — the TRUE dominant RD-E-1000 gap (they were parsed-then-DISCARDED, so every
+   Bending deck ran UNDRIVEN; the M38 "shell-family deviations" were flat-zero
+   port output, not a shell gap) — now the strip ROLLS with **EW tracking Fortran
+   to 0.8 %** and c04 max_rel_rms **0.5543 → 0.2444**; and **three implicit/solid
+   regressions** (the chvis3 damper as a spurious static force → shell cantilever
+   tip 0.0 → 1.8994 vs analytic 1.9048; a latent NLGEOM sibling; the /INIVEL frame
+   realignment). Residual (M40): c04 still aborts at t≈1051 ms on a DISTINCT later
+   shell-hourglass instability — the /RBODY dt floor lacks the rotational STIFR
+   term so it's coarser than Fortran's; the family is now correctly DRIVEN and 2×
+   closer, the last gap localized.
 
 ### TL;DR — M38 edition (kept intact; §3.2 parity and §4.7 corpus sweep remain the M39 baseline)
 
@@ -713,7 +731,14 @@ KE sits at exactly half → −50.0 %. The measured ledger on SHELL_Ishell24_LAW
 | EW (external work) | 3.965e-3 | **4.68011e-3 (= 2·KE)** | **2.34005e-3 (= KE)** |
 | ERROR % | +0.2 | **−50.00** | **0.00** |
 
-The fix is element-independent, so all nine V0700 "−50 %" decks are resolved.
+The midstep fix resolves the V0700 **shell and tria** cases (it corrects the
+constraint-work booking, which is element-independent for the −50 % symptom).
+It does NOT by itself resolve the V0700 **brick and tetra** cases — those had a
+SECOND, distinct defect (a `/PROP/SOLID` fixed-format reader bug detailed in
+§3.4) that injected energy through a negative hourglass viscosity and was
+previously MASKED by the /STOP abort. This corrects the M38 commit's
+"all nine V0700 decks freed" claim: **shells/trias were freed by the ledger
+midstep fix; bricks/tetras are freed by the M39 `/PROP/SOLID` reader fix (§3.4).**
 c26_V0200_Hardening (Item B of the ledger builder) is a clean MATCH at full
 coverage — IE matches Fortran to 0.00003 (3e-3 %), EW to 0.00002, IE+KE to
 0.00003; the only non-trivial channel is MOMZ 0.0216 (2.2 %), a near-zero
@@ -818,6 +843,82 @@ STABLE (HE ≈ 0, the M38 densification fix holds) but port-throughput-limited: 
 cannot finish densification even in 1800 s (timestep 4.2e-7, ~26 cyc/s). The
 bottleneck is port SPEED, not stability — exactly what the §6.3 speed pass
 targets.
+
+### 3.4 The M39 post-report fix cascade (coordinator addendum)
+
+The report above (§3.1–§3.3, §4.x, §6.x) was authored by the workflow's
+report-editor over the shell/skew/speed/small-bug tracks. Integrating that
+tree then surfaced a cascade of real, previously-masked bugs — each found
+because a fix removed the abort that was hiding the next. All landed as
+Opus sub-agent fixes on top of the M39 core (committed `2ac7f4e`), verified
+individually; the combined tree passes the full fast tier. Each is a
+correctness win that the port's OWN decks structurally could not reveal.
+
+**(1) `/PROP/SOLID` reader bug → the V0700 brick/tetra energy injection.**
+The qa/qb/h viscosity card was selected by "skip all-integer cards", but the
+Isolid/Ismstr flag card ends in `Dn = 0.0` (a float), so it was misread AS the
+viscosity card → `h = −1`: a NEGATIVE Flanagan–Belytschko hourglass viscosity
+that turns the damper into an AMPLIFIER (modal velocity grew ~6×/cycle from
+round-off, HOURGLASS ENERGY ran negative — impossible for a real damper). Fixed
+with a fixed-format column-cut of the correct card. All five RD-V-0700
+brick/tetra cases (c13/c14/c16/c19/c20/c23) now run NORMAL with HE at round-off
+zero, matching Fortran's identically-zero HE. Both-engine: **LAW2 brick/tetra IE
+rel_rms 0.023 (2.3 %)**; LAW36 solids deviate ~19 % — a separate LAW36 material
+gap, honestly flagged (LAW2 solids on the identical geometry match at 2.3 %, so
+the element approximation contributes ~2 %). This is the §3.4 correction of the
+M38 V0700 overclaim.
+
+**(2) `/RBODY` master-node timestep.** Rigid-body member nodes were dropped from
+the nodal-dt minimum with NO master dt computed, so a stiff shell welded into a
+rigid body ran unconstrained. On c04 (ROLLING) the port ran dt ≡ 4.31e-2 — 1.67×
+over its stability limit → hourglass runaway at t≈890 ms. Ported the
+`rgbodfp.F`/`rbyfor.F` STIFN→master transport (with parallel-axis) and the
+`dtnoda.F` master nodal step (`mass_scaling.add_rigid_body`): c04 dt → 2.067e-2,
+below the 2.585e-2 single-mode stability limit — the t≈890 ms runaway is cleanly
+cleared, matching the Fortran mechanism (master node 1020 controls dt). Residual:
+the port's nodal-dt machinery accumulates only TRANSLATIONAL stiffness, so its
+floor (2.067e-2) is still coarser than Fortran's (1.644e-2, which includes the
+shell rotational STIFR term) — see (4).
+
+**(3) Rotational `/IMPVEL`//`/IMPDISP` (Dir = XX/YY/ZZ) — the dominant RD-E-1000
+gap.** These were parsed then DISCARDED (`starter_keywords.py` warned "rotational
+direction not ported — condition ignored"), so every RD-E-1000 Bending deck ran
+COMPLETELY UNDRIVEN (all energies identically zero — the M38 §3.1 shell-family
+0.42–0.64 "deviations" were NOT a shell-formulation gap; the port side was flat
+zero). No shell-fidelity work could ever move them. Fixed across the reader
+(`_IMP_DOF` maps XX/YY/ZZ → dof 3/4/5), the nodal apply (rotational entries drive
+`vr` against rotational inertia at the leapfrog midstep, per `fixvel.F`'s VR/IN
+branch), the rigid body (an imposed spin on the /RBODY master drives the body,
+booking `dL·(w_old+w_imp)/2`), and the implicit `ur` seed — merged into the
+existing /SKEW//FRAME apply path. **Result on c04: the strip now ROLLS** (IE
+395104, EW 498438 — previously identically zero), the drive booking is proven
+correct (**EW rel_rms 0.8 % vs Fortran**, energy error −0.39 % rules out
+double-booking), and **max_rel_rms improves 0.5543 → 0.2444**.
+
+**(4) The RD-E-1000 residual (deferred to M40).** With the rotational drive AND
+the /RBODY dt fix united, c04 rolls stably PAST the t≈890 ms runaway the dt fix
+targets — but a DISTINCT, later shell-hourglass instability onsets after
+t≈900 ms and trips the −30 % numerical-injection guard at t≈1051 ms (57 % of the
+1605 ms run; Fortran runs full). The deviation is concentrated in HE/MOMZ while
+EW/IE track Fortran — downstream of the (correct) drive, a shell-hourglass /
+dt-floor phenomenon: the port's dt floor (2.067e-2) is coarser than Fortran's
+(1.644e-2) precisely because the /RBODY dt fix lacks the rotational STIFR term.
+Completing that term (so the floor reaches Fortran's) is the clean M40 lead to a
+full-run RD-E-1000 MATCH. The family is now correctly DRIVEN and 2× closer; the
+last gap is quantified and localized.
+
+**(5) Three implicit/solid regressions fixed** (surfaced by the shell + skew
+work, all analytic-oracle-verified): the chvis3 viscous hourglass damper became a
+spurious O(u²) static force in the implicit pseudo-velocity residual
+(non-convergence read as "too stiff") — gated off in implicit-static like the
+bulk viscosity, with the matching elastic rotation-hourglass moment restored to
+the residual; **shell cantilever tip 0.0 → 1.8994 (analytic 1.9048, 0.28 %)**.
+The same fix cleared a pre-existing NLGEOM follower-stiffness failure. And
+`test_inivel_axis` was realigned — frames are now CONSUMED for /INIVEL/AXIS (an
+undefined-frame reference correctly hard-errors), so its stale "frame not ported"
+warning assertion was replaced with the true behavior. The explicit force path
+and box_beam's corrected hourglass energy (6.86 % of IE) are unchanged by these
+implicit-only edits.
 
 ## 4. Coverage matrix — the official corpus through the port Starter
 

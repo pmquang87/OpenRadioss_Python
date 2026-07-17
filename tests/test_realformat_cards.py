@@ -639,8 +639,9 @@ def test_inivel_tra_parameter_reference(tmp_path):
 #      rdv_0530) --------------------------------------------------------------
 
 def test_impvel_rotational_direction_is_legal(tmp_path):
-    """'XX' (rotation about X) is a legal direction value — no parse
-    error; the port warns that rotational conditions are not applied."""
+    """'XX' (rotation about X) resolves to dof 3 (rotation about X) — the
+    exact ROLLING card. M39: rotational conditions are now applied to the
+    angular velocity, not discarded with a warning."""
     body = (
         "/IMPVEL/1\n"
         "New IMPVEL 1\n"
@@ -651,10 +652,15 @@ def test_impvel_rotational_direction_is_legal(tmp_path):
     )
     model, log = _parse_fixed(body, tmp_path)
     assert not log.errors, log.errors
-    assert any("XX" in w for w in log.warnings), log.warnings
+    (iv,) = model.impvel
+    assert iv.dof == 3                       # XX -> rotation about X
+    assert iv.grnod_id == 6
+    assert iv.scale == pytest.approx(0.005)  # Fscale_Y from card 2
+    assert not any("not ported" in w for w in log.warnings), log.warnings
 
 
 def test_impdisp_zz_direction_is_legal(tmp_path):
+    """'ZZ' resolves to dof 5 (rotation about Z), kept not discarded (M39)."""
     body = (
         "/IMPDISP/30\n"
         "impdisp_dof6\n"
@@ -665,7 +671,11 @@ def test_impdisp_zz_direction_is_legal(tmp_path):
     )
     model, log = _parse_fixed(body, tmp_path)
     assert not log.errors, log.errors
-    assert any("ZZ" in w for w in log.warnings), log.warnings
+    (imp,) = model.impdisp
+    assert imp.dof == 5                       # ZZ -> rotation about Z
+    assert imp.grnod_id == 20
+    assert imp.scale == pytest.approx(1.0)
+    assert not any("not ported" in w for w in log.warnings), log.warnings
 
 
 def test_impdisp_abutting_tstart_tstop_columns(tmp_path):

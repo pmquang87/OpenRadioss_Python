@@ -4544,7 +4544,36 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
     — asserted the OLD reject-penta behavior the small-bug pack intentionally
     changed), now RECONCILED by the integration verifier; neither is a
     NumPy-physics regression.
+    THE M39 POST-REPORT FIX CASCADE (coordinator addendum, VALIDATION §3.4 —
+    landed as Opus sub-agent fixes on the M39 core, each validation-driven):
+    * **`/PROP/SOLID` reader bug** — the qa/qb/h card was misselected (the flag
+      card ends in `Dn=0.0`, a float, defeating the "skip all-integer cards"
+      heuristic) giving `h=−1`, a NEGATIVE Flanagan–Belytschko hourglass viscosity
+      = an amplifier; fixed-format column-cut restores it. All five RD-V-0700
+      brick/tetra cases NORMAL, HE≈0, LAW2 solids match Fortran at 2.3 %. CORRECTS
+      the M38 "all nine V0700 freed" overclaim (M38 freed shells/trias via the
+      apply_kinematic midstep fix; M39 frees bricks/tetras here);
+    * **`/RBODY` master-node timestep** (`mass_scaling.add_rigid_body`) — ported
+      the `rgbodfp.F`/`rbyfor.F` STIFN→master transport (parallel-axis) + the
+      `dtnoda.F` master step; c04 dt 4.31e-2 → 2.067e-2 (below the 2.585e-2 limit),
+      the t≈890 ms hourglass runaway cleared;
+    * **rotational `/IMPVEL`//`/IMPDISP` XX/YY/ZZ** — were parsed-then-DISCARDED,
+      leaving every RD-E-1000 Bending deck UNDRIVEN (the M38 "shell-family
+      deviations" were the port's flat-zero output, NOT a shell-formulation gap);
+      now `_IMP_DOF` maps XX/YY/ZZ→dof 3/4/5, the apply drives `vr` against
+      rotational inertia at the `fixvel.F` midstep, and an imposed spin on the
+      /RBODY master drives the body (`dL·(w_old+w_imp)/2`). c04 ROLLS: EW tracks
+      Fortran to 0.8 %, max_rel_rms 0.5543 → 0.2444;
+    * **three implicit/solid regressions** — the chvis3 viscous damper as a
+      spurious O(u²) static force in the implicit residual (shell cantilever tip
+      0.0 → 1.8994 vs analytic 1.9048), its NLGEOM sibling, and the /INIVEL/AXIS
+      frame-consumption test realignment;
     Deferred out of M39, explicitly:
+    * **the RD-E-1000 full-run MATCH** — c04 now rolls (drive correct, EW 0.8 %)
+      but aborts at t≈1051 ms on a DISTINCT later shell-hourglass instability: the
+      /RBODY dt floor (2.067e-2) lacks the shell rotational STIFR term so it's
+      coarser than Fortran's (1.644e-2); completing that term is the clean lead to
+      a full-run MATCH on the now-DRIVEN family;
     * **the two RED tests — RECONCILED by the integration verifier** (VALIDATION
       §7 item 1): the shell `_post`/`shell_post` parity call now feeds
       `k_m,k_w,hqm,hqb,hqr,dt` to both backends (numpy==numba assertion intact),

@@ -450,7 +450,7 @@ class ImposedVelocity:
     id: int
     grnod_id: int
     funct_id: int
-    dof: int              # 0=x,1=y,2=z
+    dof: int              # 0/1/2 = tra X/Y/Z, 3/4/5 = rot XX/YY/ZZ (M39)
     scale: float = 1.0    # Fscale_Y (curve ordinate scale)
     xscale: float = 1.0   # Ascale_x (curve abscissa scale, never 0)
     tstart: float = 0.0   # activation window
@@ -483,7 +483,7 @@ class ImposedDisplacement:
     id: int
     grnod_id: int
     funct_id: int
-    dof: int              # 0=x,1=y,2=z
+    dof: int              # 0/1/2 = tra X/Y/Z, 3/4/5 = rot XX/YY/ZZ (M39)
     scale: float = 1.0    # Fscale_Y (curve ordinate scale)
     xscale: float = 1.0   # Ascale_x (curve abscissa scale, never 0)
     tstart: float = 0.0   # activation window

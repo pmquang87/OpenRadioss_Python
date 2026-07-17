@@ -64,7 +64,11 @@ treatment is disabled for it):
 
 An /IMPVEL whose group contains the master drives that component of the
 body velocity (a moving rigid die); its work is booked exactly like the
-nodal /IMPVEL, J . v_imp with J = M (v_imp - v_free). BCS or /IMPVEL on
+nodal /IMPVEL, J . v_imp with J = M (v_imp - v_free). A ROTATIONAL
+/IMPVEL or /IMPDISP (dir XX/YY/ZZ, M39) instead drives that component of
+the body SPIN — the way the RD-E-1000 Bending decks roll a strip into a
+circle by spinning a rigid body about X — booked with the rotational
+midstep identity dL . (w_old + w_imp)/2 (see advance). BCS or /IMPVEL on
 *slave* nodes clash with the rigidity and are warned about (the body
 wins). Rigid walls do not know about bodies (the wall would fight the
 enforcement) — use contact interfaces against rigid bodies instead.
@@ -212,11 +216,23 @@ class RigidBodyEngine:
         # (removed from the nodal treatment so its huge-frozen-mass work
         # booking cannot fire; slaves under /IMPVEL are a clash: warn and
         # remove them there too — the body wins)
-        self.drives = []               # (dof, funct, scale)
+        #
+        # M39: a ROTATIONAL /IMPVEL (dof 3..5 = XX/YY/ZZ) on the master
+        # drives that component of the body SPIN instead of v_ref — the
+        # RD-E-1000 Bending decks spin a rigid body about X to roll a strip
+        # into a circle. It is applied after the angular-momentum update
+        # (advance), the exact rotational analogue of the translational
+        # drive here.
+        self.drives = []               # translational: (dof, funct, scale)
+        self.rot_drives = []           # rotational: (rdof, fct, scale,
+        #                                             facx, tstart, tstop)
         for k, entry in enumerate(loads.impvel):
             idx, dof, fct, scale = entry[0], entry[1], entry[2], entry[3]
             if self.master in idx:
-                self.drives.append((dof, fct, scale))
+                if dof < 3:
+                    self.drives.append((dof, fct, scale))
+                else:
+                    self.rot_drives.append((dof - 3, fct, scale) + entry[4:7])
             hit = np.isin(idx, self.nodes)
             if np.any(hit):
                 if np.isin(self.slaves, idx).any():
@@ -232,11 +248,19 @@ class RigidBodyEngine:
         # like the nodal /IMPDISP treatment in kinematics.apply.)
         # Slaves under /IMPDISP remain a clash: warn, the body wins.
         self.disp_drives = []          # (dof, fct, scale, facx, t0, t1, x0)
+        # M39: rotational /IMPDISP master drive — (rdof, fct, scale, facx,
+        # t0, t1); the imposed ANGLE is enforced as a finite-difference
+        # spin (no base angle to correct against, like the nodal branch in
+        # kinematics.apply_kinematic).
+        self.rot_disp_drives = []
         for k, entry in enumerate(loads.impdisp):
-            idx, x0d = entry[0], entry[-1]
+            idx, dof, x0d = entry[0], entry[1], entry[-1]
             if self.master in idx:
-                pos = int(np.where(idx == self.master)[0][0])
-                self.disp_drives.append(entry[1:-1] + (float(x0d[pos]),))
+                if dof < 3:
+                    pos = int(np.where(idx == self.master)[0][0])
+                    self.disp_drives.append(entry[1:-1] + (float(x0d[pos]),))
+                else:
+                    self.rot_disp_drives.append((dof - 3,) + entry[2:-1])
             hit = np.isin(idx, self.nodes)
             if np.any(hit):
                 if np.isin(self.slaves, idx).any():
@@ -245,6 +269,9 @@ class RigidBodyEngine:
                                 "RBODY INIT")
                 loads.impdisp[k] = (idx[~hit],) + entry[1:-1] + (
                     x0d[~hit] if x0d is not None else None,)
+        # a pivoted (fully translation-clamped) master cannot TRANSLATE, so
+        # translational drives are moot; a ROTATIONAL drive about the pivot
+        # is perfectly valid, so it is NOT warned away.
         if self.pivot and self.disp_drives:
             log.warning(f"{who}: /IMPDISP on a pivoted (fully clamped) "
                         f"master is ignored", "RBODY INIT")
@@ -414,6 +441,7 @@ class RigidBodyEngine:
         Returns the external work of the master /IMPVEL drive (0 without
         one)."""
         nodes = self.nodes
+        w_old = self.w.copy()          # start-of-cycle spin w^{n-1/2}
         f = fint[nodes] + fext[nodes] + fcont[nodes]
         F = f.sum(axis=0)
         r = x[nodes] - self.x_ref
@@ -455,6 +483,39 @@ class RigidBodyEngine:
         if np.any(self.fix_rot):
             w[self.fix_rot] = 0.0
             self.L = Jsp @ w
+
+        # ---- rotational /IMPVEL // /IMPDISP master drive (M39) -------------
+        # overwrite the driven spin component with the imposed angular
+        # velocity, exactly as the translational drive overwrites v_ref.
+        # Work booking is the rotational leapfrog identity: the angular
+        # impulse dL = Jsp (w_end - w_free) does dL . (w_old + w_end)/2 —
+        # the midstep average of the start-of-cycle spin and the enforced
+        # value (the same fixvel.F identity kinematics.apply_kinematic
+        # books for the translational nodal drive; w_end differs from the
+        # free spin only on the driven component). Applied whether or not
+        # the master is pivoted (a pivoted master still spins about the
+        # pivot) and BEFORE the skew /BCS below, which wins as in the
+        # translational path (bcs10 runs after fixvel in the reference).
+        def _spin_drive(rdof, wimp):
+            nonlocal w
+            w_end = w.copy()
+            w_end[rdof] = wimp
+            dL = Jsp @ (w_end - w)               # angular impulse on rdof
+            w_mid = 0.5 * (w_old + w_end)
+            w[rdof] = wimp
+            self.L = Jsp @ w                     # keep L consistent w/ spin
+            return float(dL @ w_mid)
+
+        for rdof, fct, scale, facx, t0, t1 in self.rot_drives:
+            if t_next < t0 or t_next > t1:
+                continue
+            wext += _spin_drive(rdof, scale * fct.eval(t_next * facx))
+        for rdof, fct, scale, facx, t0, t1 in self.rot_disp_drives:
+            if dt <= 0.0 or t_next < t0 or t_next > t1:
+                continue
+            wimp = scale * (fct.eval(t_next * facx)
+                            - fct.eval((t_next - dt) * facx)) / dt
+            wext += _spin_drive(rdof, wimp)
         # /BCS in a /SKEW on the master (M39): project the constrained skew
         # axes out of BOTH the reference velocity and the spin
         if self.bc_skew:

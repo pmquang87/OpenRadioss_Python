@@ -988,7 +988,14 @@ def _solve_increment(model, controls, log, dof, loads, solver,
     # DOFs (they are condensed), so f_int feels the imposed motion while the
     # residual balances only the free DOFs (displacement control).
     for idx, d, fct, scale in imposed:
-        u[idx, d] = scale * (fct.eval(lam) - fct.eval(lam_prev))
+        # dof 0..2 seed the translational increment, 3..5 (XX/YY/ZZ) the
+        # rotational increment (M39) — the prescribed-DOF mask is (n, 6) so
+        # the DofMap already condenses either one.
+        val = scale * (fct.eval(lam) - fct.eval(lam_prev))
+        if d < 3:
+            u[idx, d] = val
+        else:
+            ur[idx, d - 3] = val
         # a nonzero applied displacement makes the load reference the
         # reaction it induces, so the residual norm is measured relative to
         # the internal force as well (see ``ref`` update after iter 0)

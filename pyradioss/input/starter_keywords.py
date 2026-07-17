@@ -2152,8 +2152,14 @@ def read_cload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         sens_id=int(float(t[4])) if len(t) > 4 else 0, title=title))
 
 
-#: directions of the /IMPVEL & /IMPDISP cards (rotations parsed, not ported)
-_IMP_DIRS = ("X", "Y", "Z", "XX", "YY", "ZZ")
+#: directions of the /IMPVEL & /IMPDISP cards, mapped to the 6-DOF index
+#: (0..2 = translation X/Y/Z, 3..5 = rotation XX/YY/ZZ — the same ordering
+#: the /MPC and implicit dofmap use). M39: the rotational directions are now
+#: applied to the nodal / rigid-body angular velocity (they were parsed and
+#: DISCARDED before, which left every RD-E-1000 Bending deck — an /IMPVEL/XX
+#: on the /RBODY master — completely undriven).
+_IMP_DOF = {"X": 0, "Y": 1, "Z": 2, "XX": 3, "YY": 4, "ZZ": 5}
+_IMP_DIRS = tuple(_IMP_DOF)
 
 
 def split_imposed_card(cards) -> Optional[dict]:
@@ -2235,11 +2241,13 @@ def _read_imposed(block: KeywordBlock, model: Model, log: MessageLog,
         log.error(f"/{keyword}/{block.user_id}: missing data card",
                   block.source)
         return
-    if c["dir"] not in ("X", "Y", "Z"):
-        log.warning(f"/{keyword}/{block.user_id}: rotational direction "
-                    f"{c['dir']} not ported — condition ignored",
-                    block.source)
+    if c["dir"] not in _IMP_DOF:
+        log.error(f"/{keyword}/{block.user_id}: unknown direction "
+                  f"{c['dir']!r} (expected X|Y|Z|XX|YY|ZZ)", block.source)
         return
+    # M39: XX/YY/ZZ are rotational conditions (dof 3..5), applied to the
+    # angular velocity — see kinematics.apply_kinematic and, when the group
+    # is an /RBODY master, rigid_body.RigidBodyEngine.advance.
     # /SKEW is ported (M39): Dir names the skew's axis and fixvel.F imposes
     # the curve on THAT component only.  Icoor and frame_ID are not.
     if c["frame"]:
@@ -2260,7 +2268,7 @@ def _read_imposed(block: KeywordBlock, model: Model, log: MessageLog,
                     f"ported — condition active from Tstart", block.source)
     dest.append(cls(
         id=block.user_id, funct_id=c["fct"],
-        dof={"X": 0, "Y": 1, "Z": 2}[c["dir"]], grnod_id=c["grnod"],
+        dof=_IMP_DOF[c["dir"]], grnod_id=c["grnod"],
         scale=c["scale"], xscale=c["xscale"], tstart=c["tstart"],
         tstop=c["tstop"], sens_id=c["sens"], title=title,
         skew_id=c["skew"]))
