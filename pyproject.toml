@@ -24,12 +24,31 @@ accel = ["numba>=0.59"]
 implicit = ["scipy>=1.8"]
 cholmod = ["scipy>=1.8", "scikit-sparse>=0.4"]
 mumps = ["scipy>=1.8", "python-mumps>=0.0.1"]
+# the M41 GUI post-processing converters (pyradioss/gui/postproc.py): the
+# Vortex-Radioss anim->d3plot bridge + the lasso-python d3plot reader used to
+# verify it. Vortex-Radioss is NOT on PyPI, so the pin is a git tag.
+# WHY v1.021 specifically: EFFECTIVE PLASTIC STRAIN. The original "Official"
+# tag carried NO effective-plastic-strain handling at all (the array is simply
+# absent from the d3plot); the mapping was added Aug-2024, and the v1.02/v1.021
+# generation additionally added the solid EPSFLG array, the shell stress/strain
+# local->global tensor transforms, and the v1.021 "incorrect assignment of
+# arrays to data fields" global-history bugfix. Empirically verified on a real
+# Johnson-Cook run: element_shell_effective_plastic_strain is present and
+# non-zero at the final state. (This matches the generation the maintainer
+# already vendors for their oropt / openradioss_fatigue tooling.)
+postproc = [
+    "lasso-python",
+    "vortex_radioss @ git+https://github.com/Vortex-CAE/Vortex-Radioss.git@v1.021",
+]
 
 [project.scripts]
 # The two console scripts mirror the two OpenRadioss executables
 # (starter_linux64_gf / engine_linux64_gf placed in OpenRadioss/exec).
 pyradioss-starter = "pyradioss.starter.__main__:main"
 pyradioss-engine = "pyradioss.engine.__main__:main"
+# the run-and-monitor GUI (pyradioss.gui) — Tkinter (stdlib); matplotlib is
+# OPTIONAL (embedded T01 plots when present, textual table otherwise)
+pyradioss-gui = "pyradioss.gui.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["pyradioss*"]

@@ -99,7 +99,7 @@ def segment_stiffness_gap(model: Model, segments: np.ndarray,
             continue
         group = getattr(model, gname)
         erow = seg_elem[sel]
-        if gname in ("shells", "sh3n"):
+        if gname in ("shells", "shells_qbat", "shells_qeph", "sh3n"):
             # K = 0.5 * Stfac * E * t ;  gap contribution = t / 2
             E = _per_element(group, lambda m, p: m.E)[erow]
             t = group.state["thick"][erow]
@@ -129,7 +129,7 @@ def node_stiffness_gap(model: Model, stfac: float):
     K = np.zeros(model.numnod)
     gap = np.zeros(model.numnod)
     for gname, group in model.element_groups():
-        if gname in ("shells", "sh3n"):
+        if gname in ("shells", "shells_qbat", "shells_qeph", "sh3n"):
             E = _per_element(group, lambda m, p: m.E)
             k_e = 0.5 * stfac * E * group.state["thick"]
             g_e = 0.5 * group.state["thick"]
@@ -177,7 +177,7 @@ def edge_stiffness_gap(model: Model, edges: np.ndarray,
             continue
         group = getattr(model, gname)
         erow = seg_elem[sel]
-        if gname in ("shells", "sh3n"):
+        if gname in ("shells", "shells_qbat", "shells_qeph", "sh3n"):
             E = _per_element(group, lambda m, p: m.E)[erow]
             t = group.state["thick"][erow]
             K[sel] = 0.5 * stfac * E * t

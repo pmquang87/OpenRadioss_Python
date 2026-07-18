@@ -230,6 +230,8 @@ import math
 
 import numpy as np
 
+from ..common.npcompat import trapezoid
+
 
 # ============================================================================
 # The multivariate Hermite (diagram / Wick) moment tables (theory eq. (3))
@@ -1232,7 +1234,7 @@ def _rescale_block_to_underlying(Sw, freqs, gamma3, gamma4, model):
     Sw = np.asarray(Sw)
     # block covariance (correlation only needs the co-spectrum integral; the constant
     # factor cancels in the ratio). Real part = the zero-lag covariance contribution.
-    M0 = np.trapezoid(Sw.real, freqs, axis=0)
+    M0 = trapezoid(Sw.real, freqs, axis=0)
     M0 = 0.5 * (M0 + M0.T)
     sol = solve_underlying_correlation(M0, gamma3, gamma4, model=model)
     R = sol["target_R"]
@@ -1315,7 +1317,7 @@ def synthesize_joint_nongaussian_history(omega, Scross, durations, fc, bw, seed,
     for j, (Sw, dur_j) in enumerate(blocks):
         # the block's TARGET covariance (before any rescale) fixes the correlation the
         # transformed record should reproduce — the sample-covariance drift diagnostic
-        M0_target = np.trapezoid(np.asarray(Sw).real, freqs, axis=0)
+        M0_target = trapezoid(np.asarray(Sw).real, freqs, axis=0)
         M0_target = 0.5 * (M0_target + M0_target.T)
         # M34 EXACT-covariance: pre-scale this block's cross-spectrum off-diagonals by
         # the NORTA ratio rho^U/R (computed from the block's OWN 0th-moment covariance)

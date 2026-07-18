@@ -596,16 +596,35 @@ def test_type11_edge_impact_momentum_and_energy(make_deck):
 
     real = model.mass < 1e29
     pz = float((model.mass[real] * model.v[real, 2]).sum())
-    m_flyer = model.mass[model.node_indices(
-        [11, 12, 13, 14, 15, 16, 17, 18])].sum()
+    flyer = model.node_indices([11, 12, 13, 14, 15, 16, 17, 18])
+    m_flyer = model.mass[flyer].sum()
     assert pz == pytest.approx(-m_flyer * 1.0, rel=1e-9)  # exact momentum
     # the flyer's crossing edge stayed above the main strip (gap = 0.6,
     # both mid-surfaces never approach closer than a fraction of it)
     flyer_mid = model.node_indices([12, 13, 16, 17])
     main_mid = model.node_indices([2, 3, 6, 7])
     assert model.x[flyer_mid, 2].min() > model.x[main_mid, 2].max() + 0.2
-    # the flyer bounced/arrested: it no longer approaches at full speed
-    assert model.v[flyer_mid, 2].mean() > -0.5
+    # The flyer bounced/arrested: it no longer approaches at full speed.
+    # Measured on the flyer's CENTRE OF MASS, not on the four crossing
+    # nodes.  Contact releases well before TSTOP and leaves those nodes
+    # ringing in the strip's first bending mode with a ~+-0.28 swing about
+    # the drift, so their instantaneous mean samples the ring PHASE at
+    # t = 3.0, not the arrest.  That phase moves with ANY change to the
+    # shell's bending frequency — notably the M41 cinmas.F FAC = 9/12
+    # rotational-inertia family split (l.919-924: BT keeps AREA/9) — and
+    # the -0.5 threshold sits inside the swing for BOTH lumpings: sampled
+    # every 0.02 over t = 2.84..3.00 the four-node mean dips below -0.5 at
+    # 2/9 stop times with FAC = 9 and 3/9 with FAC = 12, so the old form
+    # was passing at t = 3.0 by coincidence of phase.  The CoM velocity IS
+    # the arrest, and once the interface releases it is exact to round-off
+    # (ptp 3e-16 across that window, -0.36865 under both lumpings).
+    mf = model.mass[flyer]
+    vz_com = float((mf * model.v[flyer, 2]).sum() / mf.sum())
+    assert vz_com > -0.5
+    # ...and the residual ringing stays bounded — measured envelope over
+    # the same window is -0.95..+0.26, so a real instability blows past
+    # this while the mode-shape phase never does
+    assert np.abs(model.v[flyer, 2]).max() < 2.0
     s = _final_summary(out)
     assert s["NORMAL"]
     assert abs(s["ERR"]) < 5.0

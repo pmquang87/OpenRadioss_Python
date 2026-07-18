@@ -87,6 +87,56 @@ Outputs:
 | `<Run>T01.csv` | Time history (global energies + requested `/TH` groups). The original binary T01 format is replaced by documented ASCII/CSV. |
 | `<Run>A000.vtk`, `A001.vtk`, … | Animation states. The proprietary ANIM format is replaced by **legacy VTK**, directly readable in [ParaView](https://www.paraview.org/) — the tool the OpenRadioss HOWTO itself recommends for post-processing. |
 
+## GUI (`pyradioss-gui`)
+
+A small **run-and-monitor** desktop GUI wraps the two console scripts. It is
+built on Tkinter (Python standard library, no new hard dependency);
+`matplotlib` is optional — when present the Results tab embeds live T01
+plots, otherwise it shows a textual channel table.
+
+```bash
+pyradioss-gui                       # empty, then Browse… to a *_0000.rad deck
+pyradioss-gui TENSILE_0000.rad      # or pre-select a deck
+python -m pyradioss.gui             # without installing
+```
+
+- **Job panel** — pick a `*_0000.rad` starter deck (the last directory is
+  remembered in `~/.pyradioss_gui/config.json`), the `*_0001.rad` engine deck
+  is auto-derived, choose the backend (auto/numpy/numba), then **Run** (Starter
+  then Engine as subprocesses, stdout streamed into the log) / **Stop**.
+- **Progress** — the Engine's cycle listing is parsed into a live status bar
+  and a progress bar against the `/RUN` end time; the `ENGINE TERMINATION`
+  banner is shown prominently (green NORMAL / red ERROR).
+- **Results tab** — load and plot the `<Run>T01.csv` channels (IE/KE/EW/error).
+- **Deck info tab** — the port's read-only deck reader's model summary
+  (node/element counts, materials, properties, parts, contacts, keywords).
+- **Post-processing tab** — convert a finished run's artifacts for downstream
+  viewers, streaming progress into the Log tab. Pick a run directory (it is
+  auto-filled with the last job's directory) and **Detect artifacts**; the
+  three converter buttons enable/disable to match what is present:
+  - **anim → d3plot** — the open-source [Vortex-Radioss](https://github.com/Vortex-CAE/Vortex-Radioss)
+    library reads the `<Run>A001`, `A002`, … animation files and writes an
+    LS-Dyna `.d3plot` family so results open in LS-PrePost. **Effective plastic
+    strain is preserved** (the pin, `v1.021`, is chosen for exactly this — older
+    versions omit or misassign it; see the `postproc` extra comment in
+    `pyproject.toml`). Enabled only when Vortex-Radioss is installed; otherwise
+    the tab shows the install command.
+  - **anim → VTK** — OpenRadioss `anim_to_vtk_win64.exe`, one `.vtk` per
+    animation file.
+  - **TH → CSV** — OpenRadioss `th_to_csv_win64.exe` on a *Fortran* binary
+    time-history `<Run>T01` (pyradioss runs already emit the T01 as CSV
+    natively, so this is greyed for a port-native run).
+
+  The Fortran converter directory defaults to `C:\OpenRadioss\exec` and is
+  overridable in the tab (persisted to the config). The **After run:** toggles
+  in the Job panel (`d3plot` / `VTK` / `TH→CSV`) run the selected conversions
+  automatically after a clean, NORMAL Engine run. The d3plot bridge is an
+  optional extra (it is not part of the base install):
+
+  ```bash
+  pip install "pyradioss[postproc]"   # lasso-python + Vortex-Radioss @ v1.021
+  ```
+
 ## What is implemented so far
 
 See [PORTING_GUIDE.md](PORTING_GUIDE.md) for the detailed feature matrix, the

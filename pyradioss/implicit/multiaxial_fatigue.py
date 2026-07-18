@@ -184,6 +184,8 @@ import math
 
 import numpy as np
 
+from ..common.npcompat import trapezoid
+
 
 # ============================================================================
 # The von Mises quadratic operator Q (build-order item 2, equivalent stress)
@@ -268,7 +270,7 @@ def tensor_moment_matrices(omega, Scross, nmax=4):
     for n in range(nmax + 1):
         integrand = (w ** n)[:, None, None] * Sw          # (nf, 6, 6)
         # trapezoid over frequency; keep the real (symmetric) part
-        out[n] = np.trapezoid(integrand.real, w, axis=0) / np.pi
+        out[n] = trapezoid(integrand.real, w, axis=0) / np.pi
     return out
 
 

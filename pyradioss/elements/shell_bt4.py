@@ -106,13 +106,17 @@ Theory (Belytschko, Lin & Tsay, CMAME 42 (1984) 225-251; also BLM ch. 9):
   — chvis3.F lines 181-192 zero every coefficient. shell_tri3.py is fully
   integrated and has no hourglass block for the same reason.
 
-* **Lumped inertia**: m_i = rho t A / 4; rotational inertia
-  I_i = m_i (t^2 + A) / 12 — deliberately generous (Key's trick) to push
-  the rotational stability limit up toward the membrane one. It does NOT
-  always clear it: for thick or large elements the transverse-shear /
-  rotation branch (stiffness ~ kappa G t A) still governs, which is why
-  the Starter computes the exact eigenvalue of BOTH branches (see
-  _exact_dt_factor — an M2 fix after a nu=0 strip diverged at /DT 0.9).
+* **Lumped inertia**: m_i = rho t A / 4; rotational inertia per
+  cinmas.F's family split (M41) — I_i = m_i (A/FAC + t^2/12) with
+  FAC = 9 for the BT family (engine IHBE < 11) and FAC = 12 for
+  QBAT/QEPH/DKT18 (IHBE >= 11) — deliberately generous (Key's trick) to
+  push the rotational stability limit up toward the membrane one. It
+  does NOT always clear it: for thick or large elements the
+  transverse-shear / rotation branch (stiffness ~ kappa G t A) still
+  governs, which is why the Starter computes the exact eigenvalue of
+  BOTH branches (see _exact_dt_factor — an M2 fix after a nu=0 strip
+  diverged at /DT 0.9; its estimate keeps the FAC=12 inertia for every
+  family — the SMALLER value, so the bound stays on the safe side).
 
 M7 performance structure
 ------------------------
@@ -269,6 +273,17 @@ def _condensed_length(xl: np.ndarray, area: np.ndarray,
     s = np.sqrt(faci * (facdt + lm / np.maximum(area, EM20)) * ll)
     return area / np.maximum(s, EM20)
 
+
+#: card Ishell values whose ENGINE formulation flag is IHBE <= 1 — the
+#: hm_read_prop01.F lines 302-315 double storage maps card -> GEO(171):
+#: 0 -> 0, 1 -> 1, 2 -> 0, >= 3 except 4 -> card-1, 4 -> 4.  The BT
+#: type-1 family (cards 0/1/2) therefore runs cdefo3.F's IHBE <= 1
+#: membrane-rate branch, which carries the SECOND-ORDER rigid-rotation
+#: correction of forces() (see there); type 3 (engine 2) and type 4
+#: (engine 4) have their own distinct branches (node-1-relative + Z2
+#: warp corrections), NOT ported — those decks keep the uncorrected
+#: rates this kernel always used.
+_IHBE_LE1_CARDS = (0, 1, 2)
 
 #: Ishell (IHBE) values of the BATOZ family, whose dt claim uses the
 #: condensed length above: {user Ishell: (FACDT, default dn)} with
@@ -456,18 +471,53 @@ def init_group(group, model, log):
     # frozen for the run (IREP==0) — None when no slice is orthotropic
     group.state["ortho"] = shell_ortho.build_group_ortho(
         group.state["slices"], E, n, log, group.ids)
+    # BT type-1 family mask (engine IHBE <= 1, see _IHBE_LE1_CARDS): the
+    # elements that take the cdefo3.F second-order rotation correction of
+    # forces(). Float 0/1 so the correction vectorizes as a multiplier.
+    rot2 = np.zeros(n)
+    for sl, mat, prop in group.state["slices"]:
+        if int(prop.params.get("ishell", 0)) in _IHBE_LE1_CARDS:
+            rot2[sl] = 1.0
+    group.state["rot2_mask"] = rot2
     node_idx = group.conn.reshape(-1)
     mass_c = np.repeat(mass / 4.0, 4)
-    # generous lumped rotational inertia (see module docstring)
-    # dt_iner: the per-NODE inertia share, kept for the ROTATIONAL nodal-dt
-    # claim of /DT/NODA (M40, engine/mass_scaling.py) — the same array the
-    # nodal inertia below is built from, so the claimed rotational spring
-    # kr = 2 I/dt_e^2 mirrors upstream's STIR = STI*(t^2+A)/12 (cndt3.F
-    # lines 209-218 for the BATOZ/QEPH/DKT family) with the factor that
-    # MATCHES this lumping (cinmas.F FAC=TWELVE for IHBE>=11): on a free
-    # element-lumped node the rotational dt equals the translational one
-    # and never binds; it bites through the /RBODY master transport.
-    group.state["dt_iner"] = mass / 4.0 * (thick ** 2 + area) / 12.0
+    # lumped rotational inertia — upstream's cinmas.F "INERTIES ELEMENTS /4"
+    # (lines 916-924 + 1379-1387), which is FAMILY-dependent:
+    #
+    #     IF(IHBE>=11) FAC=TWELVE ELSE FAC=NINE     (engine-numbering IHBE)
+    #     XI = EMS*(AREA/FAC + THK^2/12)            EMS = rho t A / 4
+    #
+    # i.e. the BT family (engine IHBE < 11: user cards 0..4 and 11) lumps
+    # the AREA share as A/9 — 4/3 MORE than the QBAT/QEPH/DKT A/12 — and
+    # the engine's chvis3.F nodal-stiffness claim mirrors exactly that
+    # (STIR = STI*(THK02/12 + AREA/9), chvis3 'STIFFNESS - DT' block), so
+    # dt_rot == dt_tra stays exact on element-lumped nodes for EVERY
+    # family.  Before M41 this file lumped (t^2+A)/12 — the FAC=TWELVE
+    # value — for ALL shells; measured on the RD-E-1000 c41 mini-roll rig
+    # the FAC=9 value reproduces the Fortran starter's printed /RBODY
+    # principal inertia EXACTLY (Ixx 4403.541 = sum of the members'
+    # m/4*(A/9+t^2/12) — nodes collinear with the axis, so the m*d^2 term
+    # vanishes and the print isolates the nodal lumping), and it moves the
+    # BT-family /DT/NODA + /RBODY-transported dt floor 1.86540e-2 ->
+    # 1.95667e-2 against the Fortran 2.004e-2 (the residual is the
+    # chvis3.F STI/STIR claim formulas, still the documented M40 cut).
+    # dt_iner: the per-NODE inertia share, kept for the ROTATIONAL
+    # nodal-dt claim of /DT/NODA (M40, engine/mass_scaling.py) — the same
+    # array the nodal inertia below is built from, so the claimed
+    # rotational spring kr = 2 I/dt_e^2 mirrors upstream's STIR with the
+    # factor that MATCHES this lumping: on a free element-lumped node the
+    # rotational dt equals the translational one and never binds; it
+    # bites through the /RBODY master transport.
+    fac = np.full(n, 9.0)                    # cinmas.F FAC=NINE (BT, DKT18)
+    for sl, mat, prop in group.state["slices"]:
+        card = int(prop.params.get("ishell", 0))
+        # hm_read_prop01.F 302-315 card -> engine IHBE: 0/2 -> 0, 1 -> 1,
+        # 4 -> 4, else (3..99) -> card-1.  IHBE >= 11 <=> card >= 12.
+        ihbe = {0: 0, 1: 1, 2: 0, 4: 4}.get(card,
+                                            card - 1 if card >= 3 else 0)
+        if ihbe >= 11:
+            fac[sl] = 12.0                   # QBAT/QEPH/DKT18 keep A/12
+    group.state["dt_iner"] = mass / 4.0 * (area / fac + thick ** 2 / 12.0)
     inertia_c = np.repeat(group.state["dt_iner"], 4)
     return node_idx, mass_c, inertia_c
 
@@ -717,6 +767,71 @@ def forces(group, x, v, vr, dt, fint, mint):
         E, area, lc, B1, B2, bb, gam, V, dm, kap, gs = _pre(
             xe, v[conn], vr[conn], st["off"])
     alive = st["off"] > 0.0
+
+    # ---- second-order rigid-rotation membrane correction (cdefo3.F) --------
+    # cdefo3.F lines 103-130, the IHBE <= 1 branch (BT type 1, see
+    # _IHBE_LE1_CARDS): the corotational frame is evaluated on the END-of-
+    # step geometry while the velocities sit at mid-step, so an element
+    # rotating rigidly at rate w about an IN-PLANE axis measures a spurious
+    # membrane stretching rate of O(w^2*dt) along the rotated direction —
+    # the frame lags the velocity field by w*dt/2 and the out-of-plane
+    # nodal velocity leaks into the in-plane rates.  Upstream compensates
+    # with a quadratic term built from the DIAGONAL vz differences (the
+    # out-of-plane rotation-rate measures):
+    #
+    #     DT1V4 = dt/4                                   (cdefo3 l.107)
+    #     TMP1A = DT1V4*(VZ13-VZ24)^2/(PY1+PY2)          (l.109-111)
+    #     VX13 -= TMP1A ; VX24 += TMP1A                  (l.114-115)
+    #     TMP2B = DT1V4*(VZ13+VZ24)^2/(PX2-PX1)          (l.120-122)
+    #     VY13 += TMP2B ; VY24 += TMP2B                  (l.125-126)
+    #
+    # (PX/PY are the AREA-scaled operators, PX_i = A*B1_i; both
+    # denominators carry the Fortran SIGN(MAX(ABS,EM20)) guard.)  On a
+    # stencil-exact rigid roll (x at n, v = (x^n - x^{n-1})/dt) the raw
+    # frame-lag bias is d_xx = +w^2 dt/2 and this term adds EXACTLY
+    # -w^2 dt: the type-1 branch OVERCORRECTS 2x, leaving -w^2 dt/2
+    # (the IHBE==2/3 branch's velocity form IS the exact cancellation —
+    # a real upstream family asymmetry, mirrored bit-for-bit; pinned in
+    # closed form by tests/test_m41_bt_rotation.py).  Beyond the static
+    # O(w^2*dt) bias, the term LINEARIZED about a steady roll is an
+    # O(w*dt) skew coupling between the transverse-vibration rates and
+    # the membrane rates: without it the port's rolled BT elements sat
+    # in a NEGATIVE-DAMPING flutter growing exp(2.7e-3/cycle) from
+    # round-off (RD-E-1000 c41, HE 1e-29 -> 2.4e5 by t=1050).  The M41
+    # forensics established the flutter is REAL PHYSICS of the rolled
+    # strip in BOTH engines — the Fortran c41 holds HE at 2e-2 at
+    # t=1050 but its OWN blow-up follows at t~1100-1140 (HE 3.1e5 =
+    # 76% of IE, printed ENERGY ERROR -40.5%), surviving to TSTOP only
+    # because with no /STOP card upstream's energy-error stop threshold
+    # is infinite (ecrit.F l.563, freform.F DEMXS=EP30) while the port
+    # keeps a live 15% guard.  WITH this correction the port's flutter
+    # onset sits AT/BELOW the Fortran engine's on the differential
+    # mini-roll rig (onset-window growth fits 3.8-5.5 vs Fortran's
+    # 4.6-6.5 dec/100ms; late-window exponents EQUAL at ~11-12 where
+    # the PRE-fix port ran 18.5; HE ~100x lower at equal late time).
+    # On c41 the IE tracking extends t~900 -> ~1000 ms (port IE at
+    # t=1000 within 0.8% of Fortran vs 19% off before), HE 40x lower
+    # at t=900 and 3+ decades lower by t=950-980, both-engine
+    # max_rel_rms 0.2305 -> 0.1542 (c40 NO-CHANNELS -> 0.1892 with the
+    # M41 guard startup conditioning, c43 0.2713 -> 0.2566, c45 0.6244
+    # -> 0.1496 — the whole RD-E-1000 BT family).
+    # Upstream kills the term for implicit (IMPL_S>0 -> DT1V4=0, l.108):
+    # the same gate as the viscous-damper disable below.  Membrane rates
+    # only — kap/gs are untouched, exactly as upstream.
+    rot2 = st["rot2_mask"] * alive
+    if rot2.any() and not st.get("_impl_static_hg"):
+        vz13 = V[:, 0, 2] - V[:, 2, 2]
+        vz24 = V[:, 1, 2] - V[:, 3, 2]
+        t2a = area * (B2[:, 0] + B2[:, 1])               # PY1 + PY2
+        t3a = np.copysign(np.maximum(np.abs(t2a), EM20), t2a)
+        tmp1a = (0.25 * dt) * (vz13 - vz24) ** 2 / t3a * rot2
+        t1b = area * (B1[:, 1] - B1[:, 0])               # PX2 - PX1
+        t3b = np.copysign(np.maximum(np.abs(t1b), EM20), t1b)
+        tmp2b = (0.25 * dt) * (vz13 + vz24) ** 2 / t3b * rot2
+        dm[:, 0] += tmp1a * (B1[:, 1] - B1[:, 0])
+        dm[:, 1] += tmp2b * (B2[:, 0] + B2[:, 1])
+        dm[:, 2] += tmp1a * (B2[:, 1] - B2[:, 0]) + tmp2b * (B1[:, 0]
+                                                             + B1[:, 1])
 
     # ---- layer stress updates + resultants ---------------------------------
     sig = st["sig"]
