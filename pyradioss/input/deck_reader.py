@@ -192,6 +192,14 @@ class KeywordBlock:
 # Lexer
 # ----------------------------------------------------------------------------
 
+#: Header line missing its leading '/' (M40, see read_deck): matched
+#: against the RAW line so column 1 is enforced like the real reader's
+#: option scan.  Deliberately NARROW — only heads with corpus evidence
+#: of real-Starter recovery (/FAIL), and only the KEYWORD/KEY2/id shape,
+#: so titles or free-format data can never match.
+_SLASHLESS_HEADER = re.compile(r"^(?:FAIL)/[A-Z0-9_]+(?:/\d+)+\s*$")
+
+
 def _is_comment(line: str) -> bool:
     s = line.lstrip()
     # '#include' is a directive, not a comment — tested before calling this.
@@ -247,6 +255,21 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
 
             if _is_comment(stripped):
                 continue
+
+            # -- keyword header MISSING its leading slash (M40) --------------
+            # Observed in the official corpus: the RD-V-0700 TETRA deck's
+            # MAT_PROP.inc writes ``FAIL/JOHNSON/1`` at column 1 (no '/'),
+            # and the REAL Starter still reads the /FAIL block — its
+            # hm_reader recovers the option (the bundled reference listing
+            # TETRA_0000.out.fortran_ref prints the JOHNSON COOK DAMAGE
+            # PARAMETERS).  The port lexer used to swallow the whole block
+            # as stray data cards of the previous /MAT — silently running
+            # WITHOUT the failure model (no c23 element ever deleted).
+            # Recover the same narrow way: only for the option heads seen
+            # in the wild (FAIL), only at column 1, and only when the line
+            # has the strict KEYWORD/KEY2/id shape of a header.
+            if _SLASHLESS_HEADER.match(line):
+                stripped = "/" + stripped
 
             # -- keyword header line ----------------------------------------
             if stripped.startswith("/"):

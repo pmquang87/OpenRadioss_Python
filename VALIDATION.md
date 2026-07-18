@@ -1,33 +1,39 @@
 # VALIDATION — differential validation of pyradioss against the Fortran OpenRadioss
 
-*M39 edition — a DOUBLE milestone (FIDELITY + SPEED). FIDELITY: the shell
-hourglass kernel replaced BLT84 with the `chvis3.F` elastic + quadratic-viscous
-form (`shell_bt4._post`), driving box_beam's hourglass-energy channel 0.584 →
-0.094 (a 6× improvement matching the Fortran's 4.4 % dissipation exactly) and
-fixing the c50 fabric NaN; the `/SKEW`//`/FRAME` reference-system cluster (the
-M38 §4.7 headline gap, 47 cases_blocking) is 100 % CLOSED via a new
-`pyradioss/model/skew.py`; and a small-bug pack (degenerate bricks run as
-collapsed hexa/tetra, /MAT/VOID null-density exemption, /PROP/SPR_PRE mass) landed.
-SPEED: a `tools/profile_cycle.py` harness decomposed five regimes, then
-OPTIMIZER-1 (anim/output NumPy path) and OPTIMIZER-2 (numba LAW70-foam kernels
-+ fused scatter) shipped measured, parity-proven speedups behind the M7 backend
-dispatch — the NumPy reference path byte-for-byte unchanged (physics gate PASS,
-9/9 bundled). Supersedes the M38 report for the TL;DR; ADDS §3.3 (M39 parity —
-the shell-family before/after is the headline), §4.8 (the authoritative M39
-corpus re-sweep), §6.3 (the SPEED section), and refreshes §7/§8. M38's §3.2/§4.7
-and M37's §3.1/§4.6 remain the measurement baselines the M39 deltas are taken
-against; the new campaign is `coverage_results_m39.json` (§4.8),
-`parity_m39.json`/`perf_m39.json` (§3.3) and `perf_m39_speed.json` (§6.3).
-NOTE, named honestly: THREE M39 sibling builders (`shell-fidelity`,
-`skew-frame`, `small-bugs`) self-reported FAILED, but their CODE LANDED in the
-shared working tree and WORKS — verified here by 72/72 passing new M39 tests
-(`tests/test_m39_*.py`) and by the §4.8 sweep's 15 clean verdict conversions
-with 0 regressions; "FAILED" is a self-state / state-tracking artifact, not
-absent or broken code. Two PRE-EXISTING tests were RED in the shared tree from
-unreconciled concurrent edits and have been RECONCILED by the integration
-verifier (§8). Every M39
-wall clock is CONTENDED (the user's 12-process MPI job ran throughout). M35–M38
-history kept below.*
+*M40 edition — MATCH + SPEED, taking the two leads the M39 §3.4 fix cascade left
+open. The RD-E-1000 "MATCH attempt" is the headline (§3.5): the `/RBODY`
+rotational-STIFR dt term was completed (the exact `cndt3.F` STIR + `dtnoda.F`
+free-node rotational step + the `rgbodfp.F` master gather + the BATOZ/QEPH
+condensed characteristic length), driving c04's initial dt floor from M39's
+2.067e-2 to **1.64410e-2 = Fortran's printed 0.01644 EXACTLY**, and the
+`parity_m40.json` re-run HALVES the RD-E-1000 deviation (0.55 → 0.23). But the
+milestone's DIRECT EXPERIMENT — a dt-floor sweep — DISPROVES the M39 §3.4
+hypothesis: the c04 abort is dt-floor-INDEPENDENT (floors
+2.067/1.865/1.634/1.6441e-2 → aborts 1051/1079/1077/1076 ms), so reaching
+Fortran's floor does NOT yield the full run — the residual is a genuinely-excited
+shell transverse-w hourglass mode (BT-vs-BT c41: port IE tracks Fortran to 4
+digits until t≈900 ms, then HE blows up 7 orders), a force-physics gap outside
+this milestone's dt-claim scope, re-aimed at M41. The second §3.4 lead — "LAW36
+solids deviate ~19 %" — is FIXED AT ROOT (§3.5): four branch-level defects (the
+per-curve Fscale/YFAC dropped, the /FAIL/JOHNSON negative-eps_f freeze, the
+K·AMU total-pressure split, a slashless /FAIL lexer gap) drive c19/c20 IE rel_rms
+0.209 → **1.1e-06**, and correct the M39 "LAW2 0.023" figure to a partial-window
+artifact (full-window LAW2 is 0.2090, LAW36 now below it). SPEED: the M39
+profiler's #1 lever LANDED — the `accel` backend default is now `auto`, numba
+auto-selected at ≥ 32 total elements (a threshold DERIVED from
+`perf_m39_speed.json`, not guessed), NumPy fallback otherwise; parity holds
+(M7 13/13, a 48-brick grid at 8.85e-19). A residuals pack closed the four M39
+deferred items (the degenerate-brick STALL was the §3.4 reader bug all along, not
+geometry; the SPR_PRE blank-mass proven Fortran-legal on the real starter; a
+rotational-`/IMPVEL`-on-skew IndexError; TYPE32 physics assessed + deferred).
+ADDS §3.5 (M40 parity), §4.9 (the M40 corpus re-sweep), §6.4 (numba-default + the
+clean benchmark), and refreshes §7/§8. M39's §3.3/§4.8/§6.3 and M38/M37's
+baselines remain the measurement history the M40 deltas are taken against;
+deliverables `parity_m40.json` / `perf_m40.json` / `perf_m40_clean.json`
+(§3.5/§6.4) and `coverage_results_m40.json` (§4.9). All six M40 builders filed
+reports (unlike M39's three self-reported-FAILED); every M40 wall clock is
+CONTENDED (the user's 12-process MPI job ran throughout — the clean benchmark
+never opened an idle window, so it is RELATIVE-ONLY). M35–M39 history kept below.*
 
 - Date: 2026-07-17, branch `claude/openradioss-python-m39-fidelity-speed`
   (M38 baseline: commit `7853b26`, the merge PR #38 of
@@ -71,7 +77,7 @@ history kept below.*
   clock carried the contention flag; parity classes, rel-RMS, verdicts and
   speedup RATIOS are load-independent.
 
-## History — what M35 established, what M36 changed, what M37 changed, what M38 changed, what M39 changed
+## History — what M35 established, what M36 changed, what M37 changed, what M38 changed, what M39 changed, what M40 changed
 
 The M35 first edition (commit `786163b`) built the harness and proved the
 environment. Its central finding was that the obstacle was the *deck dialect*,
@@ -137,7 +143,124 @@ parity, profiler and speed builders that completed. The honest incidents this
 round are two RED pre-existing tests left by unreconciled concurrent edits (§8),
 not missing work.
 
+M40 is MATCH + SPEED: it took the two sharpest leads the M39 §3.4 post-report
+cascade left open and drove each to root, plus landed the M39 profiler's #1 speed
+lever and cleared the four M39 residual items. The RD-E-1000 lead was framed by
+M39 §3.4 as "the /RBODY dt floor lacks the rotational STIFR term, so it's coarser
+than Fortran's; completing that term is the clean M40 lead to a full-run MATCH."
+M40 completed the term EXACTLY (c04 floor 2.067e-2 → 1.64410e-2, Fortran's
+printed 0.01644 to the digit) — and then DISPROVED the hypothesis by direct
+experiment: a dt-floor sweep shows the abort instant is floor-independent, so the
+RD-E-1000 residual is NOT the dt floor but a genuinely-excited shell hourglass
+mode in the BT/BATOZ/QEPH force kernel under large accumulated roll (re-aimed at
+M41, force-physics not dt). The deviation still HALVES (0.55 → 0.23) because the
+dt fix makes the port's cycle count track Fortran. The LAW36-solids lead ("~19 %
+gap, honestly flagged" in §3.4) was fully fixed: c19/c20 IE rel_rms 0.209 →
+1.1e-06 via four branch-level material defects, and the fix re-frames M39's
+"LAW2 0.023" as a partial-window figure (full-window LAW2 is 0.2090). SPEED made
+numba the default (`auto`, ≥ 32 elements). The corpus re-sweep (§4.9) is flat by
+design — M40's work is engine/perf-side — with the one M39-flagged SPR_PRE
+blank-mass class RESOLVED (ERROR→SKIPS ×2, proven against the real Fortran
+starter), 0 regressions. The honest process note inverts M39's: all six M40
+builders filed reports, but a NEW regression was surfaced by the parity re-run —
+the three RD-E-1000 Sf_0.1 variants (c40/c42/c44) now abort at cycle 100 on the
+−15 % energy guard against ~1e-8 J energies (spawned `task_29ec1751`; the guard
+must NOT be weakened — condition its startup denominator like upstream).
+
 ## TL;DR
+
+1. **THE RD-E-1000 "MATCH ATTEMPT" — the headline (§3.5, `rbody-stifr` +
+   `parity-m40`).** The M39 §3.4 cascade deferred RD-E-1000 to M40 with a precise
+   hypothesis: "the /RBODY dt floor (2.067e-2) is coarser than Fortran's
+   (1.644e-2) precisely because the dt fix lacks the rotational STIFR term;
+   completing that term is the clean M40 lead to a full-run MATCH." M40 completed
+   the term — the exact `cndt3.F` STIR = STI·(t²+A)/12 element rotational
+   stiffness + the `dtnoda.F` free-node rotational step √(2·IN/STIFR) + the
+   `rgbodfp.F` IFLAG=1 master gather + the BATOZ/QEPH condensed characteristic
+   length (`cbacoor.F` FACDT=4/3, `czcorc.F` FACDT=5/4) — driving **c04's initial
+   dt floor 2.067e-2 → 1.64410e-2 = Fortran's printed 0.01644 EXACTLY** (c02
+   1.09607e-2 = 0.01096, c08 1.48837e-2 = 0.01488, all print-exact), and the
+   deviation **HALVES 0.55 → 0.23** because the port's cycle count now tracks
+   Fortran. **But the milestone's DIRECT EXPERIMENT disproves the hypothesis: the
+   c04 abort is dt-floor-INDEPENDENT** (floor sweep 2.067/1.865/1.634/1.6441e-2 →
+   aborts 1051/1079/1077/1076 ms) — reaching Fortran's floor does NOT yield the
+   full run. The BT-vs-BT c41 isolation localizes it: port IE == Fortran IE to 4
+   significant digits until t≈900 ms (6.480e3@300, 9.801e4@600, 3.380e5@900), then
+   a transverse-w hourglass mode is genuinely EXCITED (HE 2.24e5 vs Fortran
+   2.0e-2 at t=1050 — 7 orders) and the −15 % injection guard trips at t≈1075 ms.
+   The residual is a BT/BATOZ/QEPH FORCE-kinematics gap under large accumulated
+   roll, not the dt claim — the M41 lead. NOT a full MATCH; the RD-E-1000 family
+   stays DEVIATION (c04 0.2301, c02 0.2298, c08 0.2330, c41 0.2305 — `parity_m40`).
+2. **LAW36 SOLIDS — the material gap FIXED AT ROOT (§3.5, `law36-forensics` +
+   `parity-m40`).** The other M39 §3.4 lead ("LAW36 solids deviate ~19 %, honestly
+   flagged") is closed to **c19/c20 IE rel_rms 1.095e-06 / 1.097e-06 on the full
+   30 ms window** (was 0.209–0.214 partial), five orders below target, via four
+   branch-level defects in `law36_tabulated.py` vs `sigeps36.F`: **(1)** the
+   per-curve Fscale (YFAC) was parsed then DROPPED — the V0700 decks tabulate
+   yield in MPa with Fscale=1e-3 into GPa work units, so the port's yield was
+   **1000× too high and it NEVER yielded** (/FAIL/JOHNSON inert); **(2)**
+   /FAIL/JOHNSON must FREEZE damage where eps_f ≤ 0 (the deck's D1=−0.1/D2=0.6/
+   D3=−1.2 makes eps_f<0 beyond triaxiality 1.4931 — Fortran keeps those points
+   alive forever, the port instant-deleted them); **(3)** total pressure
+   P=BULK·AMU (AMU=1/J−1) vs the port's unbounded K·tr(deps); **(4)** a slashless
+   `FAIL/JOHNSON/1` header the c23 lexer swallowed. **All 10/10 element deletions
+   match Fortran to 4 digits** (incl. the last at t=29.069 vs 29.07); c19 is a
+   MATCH (0.00113). The fix RE-FRAMES M39's "LAW2 0.023" baseline as a
+   partial-window (~t≤2.3) figure — full-window LAW2 is **0.2090** (c13), LAW36
+   now sits BELOW it, and the shared LAW2 volumetric defect is flagged
+   (`task_6c08e3b9`).
+3. **NUMBA IS NOW THE DEFAULT (§6.4, `numba-default`).** The `accel` backend
+   default flipped to **`auto`**: numba is auto-selected when it imports cleanly
+   AND the model has **≥ 32 total elements** — a threshold DERIVED from
+   `perf_m39_speed.json` (gas_piston 4 elem 0.46× LOSS, antenna_mast 10 elem
+   1.12× marginal, tensile_bar 40 elem 1.54× the smallest robust win; 32 sits in
+   the (10,40] gap, env-overridable via `PYRADIOSS_BACKEND_AUTO_MIN_ELEMENTS`) —
+   with a clean NumPy fallback and an engine-listing line naming the choice.
+   Auto-numba is gated to the explicit `/RUN` path; implicit stays NumPy.
+   `PYRADIOSS_BACKEND`/`-backend numpy|numba` still pin either backend. **13 new
+   tests pass**; parity holds (M7 13/13, a 48-brick auto-vs-numpy grid at
+   **8.85e-19**, corpus sh3n/beam byte-identical, shell/brick differ only at ulp).
+4. **THE M40 CORPUS RE-SWEEP (§4.9, `coverage-m40`): flat by design, 0
+   regressions.** Same 529 decks, same driver: **CLEAN 13 (=), SKIPS 438 → 440,
+   ERROR 78 → 76**. Migration: 76 ERROR→ERROR, 2 ERROR→SKIPS (improvements), 0
+   CLEAN/SKIPS→ERROR, 0 crashes/timeouts/driver-fails/parse-errors. The 2
+   improvements are RD-HWX-T-1010 cantilever_completed + its DYREL variant — the
+   **M39-BUG-SPRPRE error class is RESOLVED** (2 → 0). M40's landed work is
+   engine/perf-side, so it correctly moves no starter verdict beyond that; the
+   ranked gaps are byte-identical to M39. `coverage_results_m40.json`.
+5. **THE RESIDUALS PACK — the four M39 deferred items closed (`residuals-pack`).**
+   **(1)** the degenerate-brick engine STALL was ALREADY resolved — it was never
+   the geometry, it was the M39 §3.4 `/PROP/SOLID` negative-viscosity reader bug;
+   c12/c18 now run stable (t=10.46/13.62 ms, dt=3.74e-4 matching Fortran), no
+   `solid_hexa8.py` change needed. **(2)** SPR_PRE blank mass proven Fortran-LEGAL
+   by running the real `starter_win64.exe` (0 errors, MASS=0.000) → TYPE32 removed
+   from `_MASS_REQUIRED_SPRING_TYPES` (the §4.9 improvement). **(3)** a rotational
+   `/IMPVEL`-naming-a-skew `IndexError` fixed (drives `vr` about axis dof−3 per
+   `fixvel.F`). **(4)** TYPE32 pretensioner physics assessed tractable but
+   DEFERRED (a full active-spring port), left `InactiveProperty`.
+6. **THE Sf_0.1 REGRESSION — named honestly (§3.5, `parity-m40`).** The three
+   RD-E-1000 Sf_0.1 variants (c40/c42/c44, BT_type1/3/4) REGRESSED under the STIFR
+   change from M39's ~256 k-cycle runs to **cycle-100 startup aborts** on the
+   −15 % energy guard — the guard fires on ~1e-8 J absolute energies (IE 3.75e-08,
+   an ill-conditioned %-based check at slow-loading startup). Fortran runs them to
+   NORMAL. Spawned **`task_29ec1751`** for the STIFR/energy-guard owner — the
+   guard must NOT be weakened; condition its startup denominator like upstream.
+7. **THE CLEAN BENCHMARK — RELATIVE-ONLY (§6.4, `parity-m40`).** The standing
+   uncontended-timing side-quest could NOT be discharged: the user's 12-process
+   MPI job ran the WHOLE session (same PIDs 2+ days). Ran the backend set
+   back-to-back so the RATIO cancels steady contention: **numba median 1.751×**
+   (box_beam 2.10×, notched_plate 2.39×, spot_weld 1.75×, ~1.0× on the 10-elem
+   antenna_mast — which `auto` correctly runs on NumPy). Absolute seconds are
+   UPPER BOUNDS. TOOLING NOTE for future milestones: `tasklist /FI "IMAGENAME eq
+   engine_win64_impi.exe"` returns 0 on this box despite 12 live ranks — the M39
+   speed harness under-counted contention; the M40 records use plain `tasklist`.
+8. **NO REGRESSIONS on unaffected cases.** c26_V0200_Hardening holds **MATCH
+   0.0216**, c01 DEVIATION 0.9995, and every starter/engine-fail class is
+   identical to M39. The numba spot-parity (4 decks) agrees with the numpy primary
+   at physics tolerance; `auto` verified on box_beam (200 elem → "numba (auto:
+   200 elements ≥ 32)").
+
+### TL;DR — M39 edition (kept intact; §3.3 parity and §4.8 corpus sweep remain the M40 baseline)
 
 1. **THE SHELL HOURGLASS FIDELITY FIX — the headline (§3.3).** The shell
    hourglass kernel replaced the port's BLT84 stiffness with the `chvis3.F`
@@ -564,7 +687,7 @@ gas column requires rebuilding the example on a hydro law (LAW6).
   (M8–M34); no Fortran chain exists for them with this binary, ever. They
   are validated analytically by their generator scripts.
 
-## 3. Parity — official IN_ENVELOPE decks (M36 baseline below; §3.1 = the M37 re-run; §3.2 = M38; §3.3 = the M39 shell-fidelity re-run, AUTHORITATIVE for M39)
+## 3. Parity — official IN_ENVELOPE decks (M36 baseline below; §3.1 = the M37 re-run; §3.2 = M38; §3.3 = the M39 shell-fidelity re-run; §3.5 = the M40 STIFR + LAW36 re-run, AUTHORITATIVE for M40)
 
 A resume-capable driver ran every IN_ENVELOPE inventory case (40 cases;
 programmatically verified that ZERO NEAR cases have output-only hard
@@ -919,6 +1042,144 @@ undefined-frame reference correctly hard-errors), so its stale "frame not ported
 warning assertion was replaced with the true behavior. The explicit force path
 and box_beam's corrected hourglass energy (6.86 % of IE) are unchanged by these
 implicit-only edits.
+
+### 3.5 M40 parity — the RD-E-1000 MATCH attempt + the LAW36-solids fix (AUTHORITATIVE for M40)
+
+The M39 `valruns39` harness was adapted to `valruns40` (deterministic Fortran
+reference carried; port re-run FRESH on the M40 STIFR + LAW36 + numba-default
+tree, pinned to `PYRADIOSS_BACKEND=numpy` for trend-comparability, headline-first
+in disjoint concurrent streams). Deliverables `parity_m40.json` (76 cases, 26
+M40-fresh + 50 M39-carried for unaffected cases) / `perf_m40.json` (152 records).
+**Every M40 wall clock is contention-flagged** (the user's 12-process
+`engine_win64_impi` MPI job ran the whole session; parity classes and rel-RMS are
+deterministic and load-independent).
+
+**THE HEADLINE — the RD-E-1000 MATCH attempt (`rbody-stifr` landed the dt term,
+`parity-m40` measured it).** M39 §3.4 deferred RD-E-1000 to M40 with a falsifiable
+hypothesis: reaching Fortran's dt floor (by adding the rotational STIFR term the
+M39 /RBODY fix lacked) would yield a full-run MATCH. M40 completed the term
+Fortran-exactly and **DISPROVED the hypothesis by direct experiment.**
+
+**(a) The dt term — floors are now Fortran-exact.** The port now claims the
+element-side ROTATIONAL nodal stiffness `kr = 2·I_lumped/dt_e²` (shell quad/tri +
+beam — the exact mirror of `cndt3.F` 209-218 `STIR = STI·(t²+A)/12`, the factor
+matching the `cinmas.F` `FAC=TWELVE` inertia lumping), feeds the free-node
+rotational step √(2·IN/STIFR) (`dtnoda.F` 452-471) plus the `/DT/NODA/CST`
+inertia-scaling mirror (DINERT), completes the `rgbodfp.F` IFLAG=1 master gather
+`K_rot = Σ(STIFR + DD·STIFN)`, and applies the BATOZ/QEPH condensed
+characteristic length (`cbacoor.F` QBAT FACDT=4/3, `czcorc.F` QEPH FACDT=5/4)
+times the numerical-damping factor √(1+dn²)−dn (`cncoef3.F` dn = 1e-3 QBAT /
+0.015 QEPH) — gated on Ishell 12/22/24 so every BT (Ishell 1-4) deck keeps its
+byte-identical claim. The initial nodal dt floor (master-governed from cycle 0):
+
+| case | formulation | M39 floor | M40 floor | Fortran print | verdict |
+|---|---|---:|---:|---:|---|
+| c04 BATOZ Sf0.9 | Ishell 12 | 2.067e-2 | **1.64410e-2** | 0.01644 | **EXACT** |
+| c02 BATOZ Sf0.6 | Ishell 12 | — | **1.09607e-2** | 0.01096 | **EXACT** |
+| c08 QEPH Sf0.8 | Ishell 24 | — | **1.48837e-2** | 0.01488 | **EXACT** |
+| c41 BT1 Sf0.9 | Ishell 1 (BT) | — | 1.86540e-2 | 0.02006 | 7 % conservative* |
+
+(`*` c41 is on the safe side and documented: exactly mirroring the BT floor needs
+`chvis3`'s STI/STIR formulas AND the `cinmas.F` FAC=9 (A/9) BT inertia lumping —
+the latter changes `model.inertia` for every BT shell deck, i.e. starter mass
+physics, deliberately not touched.) The c04 K_rot decomposition validates the
+gather: M=72.96, IN_min=3910.656, 4 slaves → **Σdd·stifn 1.908e7 + Σstifr
+4.358e6 = 2.3437e7 vs 2.3440e7 implied by Fortran (0.013 %)**.
+
+**(b) The parity table — the deviation HALVES, but no MATCH** (`parity_m40.json`,
+`PYRADIOSS_BACKEND=numpy`; M39 → M40 max_rel_rms; the Sf_0.6-0.9 rows track
+Fortran's cycle count now that the dt is fixed):
+
+| case | formulation | M39 rms | M40 rms | port cov | verdict |
+|---|---|---:|---:|---:|---|
+| c02 | BATOZ Sf0.6 | 0.554 | **0.2298** | 65.8 % | IMPROVED (DEVIATION) |
+| c03 | BATOZ Sf0.8 | 0.554 | **0.2335** | 66.7 % | IMPROVED |
+| c04 | BATOZ Sf0.9 | 0.554 | **0.2301** | 66.6 % | IMPROVED |
+| c08 | QEPH Sf0.8 | 0.556 | **0.2330** | 66.5 % | IMPROVED |
+| c09 | QEPH Sf0.9 | 0.556 | **0.2309** | 67.5 % | IMPROVED |
+| c41 | BT_type1 Sf0.9 | 0.555 | **0.2305** | 90.5 % | IMPROVED (HE 0.230, hg/IE 0.83) |
+| c43 | BT_type3 Sf0.9 | 0.632 | **0.2713** | 91.8 % | IMPROVED (IE 0.050) |
+| c40 | BT_type1 Sf0.1 | 0.637 | **NO-CHANNELS** | 0 % | **REGRESSION** (cycle-100 abort) |
+| c42 | BT_type3 Sf0.1 | 0.627 | **NO-CHANNELS** | 0 % | **REGRESSION** |
+| c44 | BT_type4 Sf0.1 | 0.555 | **NO-CHANNELS** | 0 % | **REGRESSION** |
+
+On c04 the residual is now concentrated in HE (EW rel_rms 0.0097, IE 0.0717,
+worst-channel HE 0.2361 — Fortran's HE is identically 0 because its QBAT shell is
+fully integrated); the deviation halves because the dt fix makes the port run its
+BT kernel for the same cycle count as Fortran, not because the force physics
+converged.
+
+**(c) THE DIRECT EXPERIMENT — the abort is dt-floor-INDEPENDENT.** `rbody-stifr`
+ran c04 with the dt floor swept across the M39 value, two intermediates, and the
+new Fortran-exact value; the abort instant barely moves:
+
+| dt floor | 2.067e-2 (M39) | 1.865e-2 | 1.634e-2 | 1.6441e-2 (Fortran-exact) |
+|---|---:|---:|---:|---:|
+| abort (ms) | 1051 | 1079 | 1077 | 1076 |
+
+**Reaching Fortran's floor does NOT produce the full run** — the M39 §3.4
+hypothesis is falsified. The BT-vs-BT c41 isolation (same BT formulation both
+sides, removing any BATOZ/QEPH element-technology mismatch) localizes the true
+cause: **port IE == Fortran IE to 4 significant digits until t≈900 ms**
+(6.480e3 @ 300, 9.801e4 @ 600, 3.380e5 @ 900 ms), after which a **transverse-w
+hourglass mode is genuinely EXCITED** in the port (HE 2.24e5 vs Fortran 2.0e-2 at
+t=1050 — 7 orders of magnitude) and the −15 % energy-injection guard trips at
+t≈1075 ms. The hourglass damper is the DEFENSE, not the cause: hr→1e-9 leaves the
+abort unchanged, hf→1e-9 aborts EARLIER (958 ms). **M41 lead: the BT kernel's
+rate kinematics / corotational treatment under large accumulated per-step
+rotation — a FORCE-physics gap outside this milestone's dt-claim scope.** c42
+(BT_type3) full run was not attempted: Fortran itself needs 13.7 M cycles (≈ 7 h
+port wall), infeasible until the speed work lands.
+
+**(d) The Sf_0.1 REGRESSION — flagged, guard NOT weakened.** The three Sf_0.1
+variants (c40/c42/c44, which M39 ran to ~256 k cycles) now abort at **cycle 100**
+on the −15 % energy guard, against **~1e-8 J absolute energies** (IE 3.75e-08,
+HG ~1e-59) — an ill-conditioned %-based guard check at slow-loading startup.
+Fortran runs them to NORMAL. Spawned **`task_29ec1751`** for the STIFR /
+energy-guard owner: the −15 % limit must NOT be weakened; the fix is to condition
+the denominator / startup like upstream. (This is the one honest regression of an
+otherwise clean-report milestone.)
+
+**THE SECOND HEADLINE — LAW36 solids, the ~19 % material gap FIXED AT ROOT**
+(`law36-forensics` found + fixed, `parity-m40` confirmed). The M39 §3.4 flagged
+"LAW2 solids match at 2.3 %, LAW36 deviate ~19 %". A branch-by-branch diff of
+`materials/law36_tabulated.py` against `sigeps36.F` found FOUR defects (detailed
+in the TL;DR): the dropped per-curve Fscale/YFAC (the headline — yield 1000× too
+high, so the material NEVER yielded), the /FAIL/JOHNSON negative-eps_f freeze, the
+`K·AMU` total-pressure split, and a slashless-`/FAIL` c23 lexer gap. Result:
+
+| case | formulation | M39 | M40 | IE rel_rms | note |
+|---|---|---|---|---:|---|
+| c19 | LAW36 HEXA_18 | NO-CHANNELS (stall) | **MATCH 0.00113** | **1.095e-06** | 10/10 deletions to 4 digits (last t=29.069 vs 29.07) |
+| c20 | LAW36 HEXA_24 | NO-CHANNELS (stall) | DEVIATION 0.3156 | **1.097e-06** | material PERFECT; residual is a MOMZ momentum channel (Isolid=24 HEPH free-node) |
+| c13 | LAW2 HEXA_18 | NO-CHANNELS (stall) | DEVIATION 0.2090 | — | un-stalled; LAW2 shares the volumetric defect (`task_6c08e3b9`) |
+| c14 | LAW2 HEXA_24 | NO-CHANNELS (stall) | DEVIATION 0.2090 | — | un-stalled |
+| c18 | LAW36 HEXA_DEGE | NO-CHANNELS (stall) | SKIPPED-SLOW (899 s, 491 k cyc) | — | un-stalled, throughput-limited |
+| c23 | LAW36 TETRA_24 | 0 deletions (lexer) | interim IE 0.0000 (t≤14.1) | — | 6-tets-per-event 6@0.86932 vs Fortran 6@0.8688 |
+
+**The forensic reframe (important for reading M39's numbers):** post-Fscale LAW36
+equals its LAW2 twin (c13) to FOUR decimals at every window, and M39's "LAW2
+0.023" baseline was a partial-window (~t≤2.3) figure — the full-window LAW2 is
+**0.2090** (dominated by a shared element-side volumetric term), and the M40
+pressure fix takes LAW36 BELOW that, to 1e-6. The identical LAW2 volumetric fix
+is a flagged follow-up (`task_6c08e3b9`, out of the M40 LAW36-file scope). This
+supersedes the M39 §3.4 "LAW36 solids deviate ~19 %" flag — root-caused and
+closed. The rate-family clamp-vs-extrapolation deviation (`sigeps36.F` linearly
+EXTRAPOLATES outside the rate table, the port clamps) is documented and flagged
+(`task_7b31ad5f`); no V0700 case exercises it (all NRATE=1).
+
+**numba spot-parity + no regressions.** The M40 numba-default (§6.4) was
+spot-checked at physics tolerance: 4 decks' class + rel-RMS-vs-Fortran match the
+numpy primary, `auto` resolves correctly (box_beam 200 elem → "numba (auto: 200
+elements ≥ 32)"). Unaffected cases are unchanged M39 → M40: **c26_V0200_Hardening
+MATCH 0.0216**, c01 DEVIATION 0.9995, and every starter/engine-fail identical.
+
+**Official-class summary (26 M40-fresh):** the RD-E-1000 Sf_0.6-0.9 family HALVED
+to DEVIATION (dt fixed, shell-hourglass residual, M41); 3 Sf_0.1 REGRESSIONS
+(`task_29ec1751`); LAW36 c19 MATCH + c20 material-PASS (IE 1.1e-6); LAW2/DEGE
+un-stalled. **NOT a full RD-E-1000 MATCH — the milestone's central attempt
+succeeded at the dt claim and failed at the full-run MATCH, and the direct
+experiment says why.**
 
 ## 4. Coverage matrix — the official corpus through the port Starter
 
@@ -1429,6 +1690,63 @@ by the sweep with **no crashes** but does NOT affect starter verdicts — it is 
 engine-side kernel change; its fidelity impact is measured by §3.3, not this
 starter-only sweep.
 
+### 4.9 The M40 full-corpus re-sweep (AUTHORITATIVE)
+
+Same 529 runnable decks, same `sweep_coverage.run_case` driver (verbatim — 120 s
+cap, 6 workers), aggregated with the M39 machinery plus a `delta_vs_m39` block
+(`coverage_results_m40.json`). Batch wall 127 s under the user's live 12-process
+MPI job; per-deck elapsed median 0.8 s, p95 2.4 s, max 12.4 s vs the 120 s cap
+(10× headroom) — **verdicts are contention-insensitive** (contention could not
+manufacture a TIMEOUT). The sweep is STARTER-only, so it cannot see M40's
+engine-side fidelity gains (STIFR dt, LAW36 solids, numba-default) — those are
+measured by §3.5/§6.4, not this matrix. **The result is flat by design and
+CLEAN**: M40's landed work is engine/perf-side, so it correctly moves no starter
+verdict except the one it directly targets.
+
+| metric | M39 (§4.8) | M40 | delta |
+|---|---:|---:|---:|
+| decks swept | 529 | 529 | — |
+| CLEAN | 13 | **13** | 0 |
+| SKIPS(n) | 438 | **440** | +2 |
+| ERROR | 78 | **76** | **−2** |
+| CRASH | 0 | **0** | 0 |
+| TIMEOUT | 0 | **0** | 0 |
+| DRIVER-FAIL | 0 | **0** | 0 |
+| parse-error incidents | 0 | **0** | 0 |
+
+Verdict migration (2 improved, **0 regressed**): **ERROR→SKIPS 2**, ERROR→ERROR
+76, SKIPS→SKIPS 438, CLEAN→CLEAN 13. **No CLEAN/SKIPS→ERROR, no `*`→CRASH/TIMEOUT/
+DRIVER-FAIL, 0 new error classes.** The case-id set is identical to M39.
+
+**The 2 improvements** are both **RD-HWX-T-1010** decks (cantilever_completed + its
+DYREL variant), root-caused to the `residuals-pack` ITEM 2 fix: the /PROP/SPR_PRE
+(TYPE32) mass check was over-strict. M39 raised a hard `StarterError`
+("/PROP/SPR_PRE mass must be > 0") on a blank/zero SPR_PRE mass; M40's `spring.py`
+sets `_MASS_REQUIRED_SPRING_TYPES = frozenset({4})` (excluding TYPE32) because
+upstream `hm_read_prop32.F` reads MASS via `HM_GET_FLOATV` (blank → 0), stores it,
+and enforces only MSGID 408/406 — no mass check (the `MASS>0` in
+`prop_p32_spr_pre.cfg` is a HyperMesh-GUI validation, **confirmed against the real
+`starter_win64.exe`: 0 errors, MASS=0.000**). The decks now complete rc=0 as
+SKIPS, the property parsed and downgraded to a degrade-warning. **The one M39 new
+error class (M39-BUG-SPRPRE) is RESOLVED**: `/PROP/SPR_PRE mass must be > N`
+m39=2 → m40=0.
+
+**M40 new_bugs tracker fates** (all in the JSON): M40-RBMASS 3→3 unchanged (the
+`rigid body has no mass` decks — RD-E-1500 Gears Inter16/17 + RD-E-2100 Cam
+I16S16FM; the M40 rotational-STIFR builder is engine-side dt transport,
+ORTHOGONAL to this starter mass-accumulation check, so it correctly did not move);
+M40-DEGBRICK 0→0 (stays closed, M39); M40-DENS 0→0; **M40-SPR 2→0 RESOLVED**;
+M40-RBOVL 0→0.
+
+**`ranked_gaps` are byte-for-byte identical to M39** (`gap_delta` all "unchanged")
+— no coverage-envelope shift. Top remaining ERROR/SKIP blockers
+(cases_blocking / sole_blocker): INTER/TYPE24 18/5, MONVOL/AIRBAG1 16/2,
+INTER/LAGMUL 14/2, ALE/BCS 12/7, SHEL16 12/0, QUAD 10/5, INTER/TYPE18 7/0,
+MOVE_FUNCT 6/1, EOS/LINEAR 6/0, AMS 5/5. These unported keyword families are the
+coverage frontier, unchanged M39 → M40 (M40's landed work was engine/perf, not
+new starter keyword coverage). The 76 ERROR decks are all gated by genuinely-
+unported physics families, not port bugs.
+
 ## 5. Coverage — W12/W13 k2rad decks: the four M35 bugs are fixed
 
 All four M35-identified port-reader bugs were fixed inside
@@ -1477,7 +1795,7 @@ named above moved in M37 — LAW44 (Cowper–Symonds) now has ported physics
 GRSHEL/SHEL are covered by the group/set machinery. Neither deck was
 re-run for this report.
 
-## 6. Performance (M36 baseline below; §6.1 = the M37 measurement; §6.2 = M38 — no campaign; §6.3 = the M39 SPEED pass)
+## 6. Performance (M36 baseline below; §6.1 = the M37 measurement; §6.2 = M38 — no campaign; §6.3 = the M39 SPEED pass; §6.4 = the M40 numba-default + clean benchmark)
 
 ### 6.1 M37 timing campaign (`perf_m37.json`, 122 records)
 
@@ -1740,7 +2058,204 @@ scatter (3 bincount → 1) and the inline energy einsums (risk LOW-MEDIUM); **#6
 cache the rigid-body inertia decomposition (per-cycle svd/solve; risk MEDIUM).
 An UNCONTENDED re-timing on an idle box is still owed (deferred from M38 too).
 
-## 7. Known issues & backlog (updated for M39)
+### 6.4 M40 numba-default activation + the clean benchmark (`numba-default`, `parity-m40`)
+
+M40 landed the M39 profiler's **#1 ranked lever** (§6.3f): make numba the default
+above a size threshold, keep NumPy for tiny/CI decks. The change is surgical
+(Edit-only) to `accel/__init__.py` (a new `auto_select_backend()` + helpers +
+forced-request tracking, default flipped to `auto`), the engine backend-selection
+call site MOVED to after the restart is read (so the element count is known before
+the first kernel call — `engine.py`), and the CLI (a new `auto` choice).
+
+**(a) The activation.** The compute-backend default is now **`auto`**: numba is
+selected automatically when (a) it imports cleanly AND (b) the model has **≥ 32
+total elements**, with a clean NumPy fallback otherwise and an explicit
+engine-listing line naming the choice and reason. `PYRADIOSS_BACKEND` /
+`-backend numpy|numba` still PIN either backend. Auto-numba is gated to the
+explicit `/RUN` path (the M39 speed sweep's envelope); implicit runs stay NumPy
+unless pinned. The Starter always runs the provisional NumPy under `auto`
+(one-shot; not worth the warm-up); only the engine loop flips to numba. **13 new
+tests** (`tests/test_m40_auto_backend.py`) pass. CI is extended: the fast
+regression suite is PINNED to `PYRADIOSS_BACKEND=numpy` (determinism/hermeticity —
+every test predates the auto default and targets the NumPy reference), plus one
+dedicated 3.10-leg step that exercises the auto→numba path end-to-end.
+
+**(b) The threshold — DERIVED, not guessed** (`_AUTO_MIN_ELEMENTS = 32`, from
+`perf_m39_speed.json`, joined with per-deck sizes and the `profile_cycle.py`
+regimes):
+
+| deck | elem | numba speedup | verdict |
+|---|---:|---:|---|
+| gas_piston | 4 | 0.46× | **LOSS** (sole regression; JIT warm-up + dispatch swamp its 0.9 s baseline) |
+| antenna_mast | 10 | 1.12× | marginal (within the sweep's contention noise) |
+| tensile_bar | 40 | 1.54× | **robust win** ← smallest robust win |
+| rubber_block | 64 | 1.44× | robust win |
+| c04_E1000 | 99 | 1.73× | robust win |
+| rigid_impactor | 118 | 2.38× | robust win |
+| notched_plate | 194 | 2.49× | robust win |
+| box_beam_impact | 200 | 1.96× | robust win |
+| edge_impact | 256 | 1.84× | robust win |
+| spot_weld | 300 | 1.87× | robust win |
+| c46_LAW70 | 1000 | 1.81–2.89× | robust win |
+| c37_T1040 | 65439 | 1.77× | robust win |
+
+The ONLY regression (gas_piston, 4 elem) and ONLY marginal case (antenna_mast, 10
+elem) sit far below the smallest robust win (tensile_bar, 40 elem); every larger
+deck wins 1.44–2.49×. **32 sits in the (10, 40] gap** — ~8× the regression size,
+> 3× the marginal, below every robust win. NODES are rejected as the metric
+(gas_piston has MORE nodes (20) than antenna_mast (12) yet loses — element count
+is the causal JIT-kernel workload). Env-overridable via
+`PYRADIOSS_BACKEND_AUTO_MIN_ELEMENTS`.
+
+**(c) The auto-selection matrix** (`accel.auto_select_backend`, called by the
+engine after restart read):
+
+| request / env | model / run | result |
+|---|---|---|
+| `PYRADIOSS_BACKEND=numpy` / `-backend numpy` | any | numpy (forced) |
+| `PYRADIOSS_BACKEND=numba` / `-backend numba` | any | numba (forced; numpy+warn if numba absent) |
+| auto/unset (default) | explicit, elems ≥ 32, numba ok | **numba** ("numba (auto: N elements ≥ 32)") |
+| auto/unset (default) | explicit, elems < 32 | numpy ("numpy (auto: N elements < 32 …)") |
+| auto/unset (default) | implicit /IMPL run | numpy (auto-numba is explicit-/RUN-only) |
+| auto/unset (default) | numba not importable | numpy ("numpy (auto: numba not installed)") |
+
+**(d) The parity contract holds** (numba vs numpy — the safety gate):
+
+| source | scope | max deviation |
+|---|---|---|
+| M7 kernel-parity tests (13/13 pass) | element kernels, single-call | bitwise, ≤ 1e-12 |
+| M40 grid 48-brick `auto`(numba) vs numpy | x / v / sig full run | **8.85e-19** |
+| corpus sh3n246_twist / beam70_frame | T01 forced-numba vs numpy | **BYTE-IDENTICAL** (no SH3N/BEAM numba kernel) |
+| corpus shell99_bending (BATOZ) / brick8 | T01 | differs at **ulp only** (has a numba kernel; quantified by M7 ≤ 1e-12) |
+| corpus brick8 MOMY momentum-dust | global-sum on a conserved ~0 channel | 2.15e-17 abs — the documented reduction-reassociation exception |
+
+Element-wise bitwise; short reductions differ at machine precision; global-sum
+momentum shows ulp "dust" on conserved ~0 channels — the contract, and it holds.
+
+**(e) THE CLEAN BENCHMARK — RELATIVE-ONLY** (`parity-m40`, `perf_m40_clean.json`).
+The standing uncontended-timing side-quest could NOT be discharged: the user's
+12-process `engine_win64_impi` MPI job ran the WHOLE M40 session (same PIDs 2+
+days), so no idle window opened. The backend set was run BACK-TO-BACK per deck so
+the RATIO cancels steady contention; **absolute seconds are UPPER BOUNDS** (lower
+bounds on speedup):
+
+| deck | numpy s | numba s | auto s | numba× | auto picks |
+|---|---:|---:|---:|---:|---|
+| tensile_bar | 1.499 | 0.884 | 0.867 | 1.70× | numba |
+| box_beam_impact | 6.003 | 2.858 | 3.238 | **2.10×** | numba |
+| antenna_mast | 1.523 | 1.532 | 1.506 | 0.99× | **numpy** (10 elem < 32) |
+| rubber_block | 1.569 | 0.952 | 0.911 | 1.65× | numba |
+| notched_plate | 87.70 | 36.75 | 37.30 | **2.39×** | numba |
+| spot_weld | 9.35 | 5.34 | 4.59 | 1.75× | numba |
+
+**Median numba 1.751×**; `auto` tracks numba for ≥ 32-elem decks and correctly
+picks NumPy for antenna_mast. The T01 md5 is byte-identical across backends only
+where `auto` selects numpy (antenna_mast); the numba-kernel decks differ at the
+documented reassociation ulp (NOT a physics regression — quantified by the (d)
+contract). **NOT clean absolute numbers** — re-run `bench_m40.py` +
+`build_clean_m40.py` during a genuinely idle window for absolute timing.
+**TOOLING NOTE for future milestones**: `tasklist /FI "IMAGENAME eq
+engine_win64_impi.exe"` returns 0 on this box despite 12 live ranks — the M39
+speed harness used that filter and therefore UNDER-counted contention; the M40
+records use plain `tasklist | grep -c engine_win64_impi`.
+
+## 7. Known issues & backlog (updated for M40)
+
+Several M39 backlog items are DONE this milestone: the SPEED numba-default (M39
+item 4, the profiler's #1 lever) is LANDED (§6.4); **M39-BUG-SPRPRE** (item 2) is
+RESOLVED (§4.9, proven Fortran-legal on the real starter); the **degenerate-brick
+stall** (item 3) is RESOLVED — it was the M39 §3.4 `/PROP/SOLID` reader bug, not
+the geometry (§3.5, `residuals-pack`); and the two sharp M39 §3.4 leads are both
+driven to root (§3.5): the RD-E-1000 dt floor is now **Fortran-exact**, and the
+LAW36 **~19 % material gap is CLOSED to 1e-6** — though the RD-E-1000 full-run
+MATCH is re-aimed at M41 as a FORCE-physics gap (the dt was never the blocker).
+The post-M40 list, in measured-value order:
+
+1. **THE RD-E-1000 FULL-RUN MATCH — re-scoped to M41 as force-physics, NOT dt**
+   (§3.5). The M40 dt claim is DONE (floors Fortran-exact: c04 1.64410e-2 =
+   0.01644), the deviation halved (0.55 → 0.23), but the direct dt-floor sweep
+   proves the abort is floor-INDEPENDENT. The BT-vs-BT c41 isolation localizes it:
+   port IE tracks Fortran to 4 digits until t≈900 ms, then a transverse-w
+   hourglass mode is genuinely EXCITED (HE 7 orders over Fortran). **M41 lead: the
+   BT/BATOZ/QEPH kernel's rate kinematics / corotational treatment under large
+   accumulated per-step rotation.** Separately, an element-technology port
+   (QBAT/QEPH FORCE physics — the port runs its BT kernel for Ishell 12/24 decks,
+   storing bending energy partly as hourglass where fully-integrated QBAT keeps
+   HE ≡ 0) is the path to MATCH on the c02/c04/c08 variants.
+2. **THE Sf_0.1 REGRESSION** (§3.5; `task_29ec1751`, spawned; 3 decks
+   c40/c42/c44). Under the STIFR change the BT_type1/3/4 Sf_0.1 variants abort at
+   **cycle 100** on the −15 % energy guard against **~1e-8 J** absolute energies
+   (IE 3.75e-08) — an ill-conditioned %-based check at slow-loading startup; M39
+   ran them to ~256 k cycles, Fortran runs them to NORMAL. **The guard must NOT be
+   weakened** — condition the denominator / startup like upstream. The one honest
+   regression of the milestone.
+3. **c20 MOMZ momentum residual** (§3.5). LAW36 material fidelity is PERFECT
+   (c20 IE rel_rms 1.097e-06, NORMAL) but a MOMZ momentum channel deviates 0.316,
+   keeping the overall class DEVIATION — an element-side free-node dynamic of the
+   Isolid=24 HEPH formulation (c19/Isolid18 with the identical material path is a
+   MATCH). A solid-24 momentum/kinematic follow-up.
+4. **LAW2 SOLIDS share the volumetric defect the LAW36 pressure fix removed**
+   (§3.5; `task_6c08e3b9`, spawned with the exact recipe). `m2law.F` uses
+   PNEW=BULK·AMU; the port integrates K·tr(deps) incrementally — c13 full-window
+   IE rel_rms 0.2090 (port 7.1× high at t=27.5). Out of the M40 LAW36-file scope;
+   the same `needs_env` rho pattern applies. **NOTE for this report's own §3.4:
+   its "LAW2 brick/tetra IE rel_rms 0.023" is a partial-window (~t≤2.3) figure —
+   the full-window value is 0.2090** (the M40 window scan supplies the correction).
+5. **The clean UNCONTENDED benchmark is STILL OWED** (§6.4; deferred from
+   M38/M39 too). The user's 12-process MPI job ran the whole M40 session, so
+   `perf_m40_clean.json` carries only the back-to-back RATIO (numba median
+   1.751×), not trustworthy absolute numbers. Re-run `bench_m40.py` +
+   `build_clean_m40.py` on a genuinely idle box.
+6. **Port explicit dt runs ~2× smaller than Fortran on the V0700 solids** (§3.5):
+   3.8e-4 vs 7.6e-4 — the port kernel sound speed uses CURRENT density vs
+   Fortran's constant SSP=√((K+4G/3)/rho0) from `sigeps36`. Costs runtime, not
+   accuracy; a SPEED-track candidate (with c12/c18/c18-DEGE throughput-limited to
+   SKIPPED-SLOW at ~26 cyc/s under contention — stable, not unstable).
+7. **numba-default parity tails** (§6.4; `numba-default` OPEN items): the corpus
+   spot-parity tail (tetra120_v0700, brick800_pressure) was still running under
+   contention — re-run `corpus_parity.py` idle to fill both rows; the
+   bundled-examples both-backends byte-compare is STAGED (`rerun_picks.json`) not
+   executed (a second concurrent numba process destabilized runs on the contended
+   box); a whole-suite auto run UNDER numba could not complete cleanly (3-way
+   contention exit-127, no test failures observed) — worth an idle-box
+   confirmation, though CI is unaffected by the numpy pin. `backend_name()` is now
+   referenced only by a docstring (harmless; prune later if desired).
+8. **The LAW36 rate-family clamp-vs-extrapolation deviation** (§3.5;
+   `task_7b31ad5f`): upstream linearly EXTRAPOLATES outside the strain-rate table
+   (`sigeps36.F` RFAC unclamped), the port clamps; ISMOOTH=2 log-interp and the
+   VP=1 plastic-rate branch remain unported (warned). No V0700 case exercises it
+   (all NRATE=1).
+9. **The BT-family rigid-body dt floor is 7 % conservative vs Fortran** (§3.5,
+   c41 1.8654e-2 vs 2.006e-2 — safe side, documented). Mirroring it exactly needs
+   `chvis3`'s STI/STIR claim formulas AND the `cinmas.F` FAC=9 (A/9) BT inertia
+   lumping — the latter changes `model.inertia` for every BT shell deck (starter
+   mass physics, deliberately not touched). Related documented cuts: rotational
+   spring STIFR claims (torsional /PROP/TYPE8/13) are not ported (a spring-torsion
+   /RBODY deck would floor coarser than Fortran); the sh3n (DKT/sh3n, RD-E-1000
+   c05-07) condensed length is not yet gated in (same pattern as shell_bt4);
+   SH_ORTH/SH_FABR (TYPE9/16) do not parse ishell/dn, so orthotropic QEPH decks
+   keep the BT claim (pre-existing).
+10. **TYPE32 (/PROP/SPR_PRE) pretensioner element physics — DEFERRED**
+    (`residuals-pack` ITEM 4): `ruser32.F` is a 1-DOF sensor-gated axial
+    pretensioner (4 ITYP laws + Ilock + UVAR); assessed tractable but a full
+    active-spring port needing per-ITYP T01 channel validation against RD-V-0031.
+    Left `InactiveProperty` (reader carries all the data); c52 stays SKIPS.
+11. **The next verdict-conversion frontier** (§4.9 ranked gaps, unchanged
+    M39 → M40): INTER/TYPE24 (18/5 sole), MONVOL/AIRBAG1 16, INTER/LAGMUL 14,
+    ALE/BCS (12/7), SHEL16 12, QUAD (10/5), EOS/LINEAR 6, AMS 5. `RBODY has no
+    mass` still 3 decks (UNCHANGED — the STIFR builder is engine-side, orthogonal
+    to the starter mass-accumulation check); the deeper /ADMAS node-group wall
+    (10 decks) carried. `coverage_tables.md` (shared repo file) still reflects
+    M39 — a future editor may regenerate it from `coverage_results_m40.json`.
+12. **Carried from M39** (unchanged): the shell fix's narrow reach beyond
+    RD-E-1000 (now understood as the BT force-kinematics M41 lead, item 1); the
+    Isolid24/HEPH assumed-strain brick generalized beyond LAW70; the /PROP + LAW2
+    documented cuts; material physics for the parsed-but-inactive laws (LAW6
+    HYD_VISC 30 blocks, LAW51 22, …); the contact/hourglass differential study;
+    gas_piston positive-P0 for full 9/9 comparability. c42 BT_type3's full run is
+    infeasible until the speed work (Fortran needs 13.7 M cycles ≈ 7 h port wall).
+
+### M39 backlog (superseded — items 2/3/4 and the two §3.4 leads (the RD-E-1000 dt floor and the LAW36 ~19 % gap) are resolved/advanced by M40; the rest are carried into the M40 list above)
 
 Several M38 backlog items are DONE this milestone: the `/SKEW`//`/FRAME` cluster
 (M38 item 5, the #1 named gap) is 100 % CLOSED (§4.8, 47→0 cases_blocking); the
@@ -1939,9 +2454,54 @@ The post-M37 list, in measured-value order:
 
 ## 8. Honest limitations of this report
 
-M39-specific limitations first; the M38/M37/M36 caveats below are carried and
+M40-specific limitations first; the M39/M38/M37/M36 caveats below are carried and
 still apply to the sections they describe.
 
+- **The RD-E-1000 headline is a DIAGNOSED non-MATCH, not a fix.** The milestone's
+  central attempt — complete the /RBODY rotational-STIFR dt term so the floor
+  reaches Fortran's, and (per the M39 §3.4 hypothesis) the full-run MATCH follows
+  — succeeded at the dt claim (floors Fortran-exact) and FAILED at the MATCH. The
+  residual is CHARACTERIZED (the dt-floor sweep proving floor-independence, the
+  c41 BT-vs-BT isolation localizing a transverse-w hourglass mode from t≈900 ms)
+  but NOT fixed; the fix is an M41 force-physics item. Two measurement sources
+  give slightly different RD-E-1000 rms (the authoritative `parity_m40.json`:
+  c04 0.2301, c08 0.2330; `rbody-stifr`'s focused re-runs: c04 0.2361, c08 0.2507
+  — ~0.02 apart, different overlap windows); §3.5 uses `parity_m40.json` as
+  authoritative and cites `rbody-stifr` for the dt-floor mechanism only.
+- **A real REGRESSION landed and is NOT resolved this milestone.** The three
+  RD-E-1000 Sf_0.1 variants (c40/c42/c44) went from M39's ~256 k-cycle runs to
+  cycle-100 aborts under the STIFR change (`task_29ec1751`, §3.5 (d)). It is a
+  genuine excited-mode / ill-conditioned-guard interaction on ~1e-8 J energies,
+  not a measurement artifact; do NOT weaken the −15 % guard to mask it.
+- **Every M40 wall clock is CONTENDED and the clean benchmark is RELATIVE-ONLY.**
+  The user's 12-process `engine_win64_impi` MPI job ran the ENTIRE session (same
+  PIDs 2+ days); no idle window opened. All absolute ms/cyc, s and cyc/s in
+  §3.5/§6.4 are UPPER BOUNDS; parity classes, rel-RMS, §4.9 verdicts, and the
+  back-to-back A/B RATIOS are load-independent and stand. **No M40 perf number
+  should be propagated as a clean benchmark** — an uncontended re-timing is owed
+  (§7 item 5). The M39 speed harness's `/FI IMAGENAME` contention filter
+  UNDER-counted (returns 0 despite 12 live ranks); the M40 records use plain
+  `tasklist` (§6.4 (e)).
+- **Two LAW36 / numba tails were incomplete at handoff.** c19/c20 are the
+  complete, authoritative LAW36 result (full-30 ms NORMAL, IE 1.1e-6, 10/10
+  deletions); c23 (the lexer-fixed TETRA) was at interim IE 0.0000 (t≤14.1) with
+  the deletion pattern already matching Fortran — the full-window number is
+  expected at the c19/c20 level but was pending. The `numba-default` corpus
+  spot-parity tail (tetra120_v0700, brick800_pressure) and the bundled
+  both-backends byte-compare were still running / staged under contention (§7
+  item 7); the auto-default's element-kernel parity is independently proven
+  (M7 ≤ 1e-12, the 48-brick grid 8.85e-19), so this is a corpus-coverage gap, not
+  a correctness one.
+- **The report was written against a SHARED uncommitted working tree** (branch
+  `claude/openradioss-python-m40-match-and-speed`); the six M40 builders edited
+  different regions concurrently (`mass_scaling.py`/`rigid_body.py` for STIFR,
+  `accel/__init__.py`/`engine.py` for numba-default, `materials/law36_tabulated.py`
+  for LAW36, `kinematics.py`/`spring.py` for the residuals pack) — merge-time
+  reconciliation is the parent's to confirm. All six builders filed reports (the
+  process inverse of M39's three self-reported-FAILED), but the deviation
+  narratives and the dt-floor / c41 experiments come from the builders'
+  attribution and the machine-readable deliverables, not an independent re-run of
+  every case.
 - **Three of the six M39 builders self-reported FAILED** (`shell-fidelity`,
   `skew-frame`, `small-bugs`), so there is no builder report for the shell
   hourglass fix, the skew/frame reader, or the small-bug pack. Verification here

@@ -5,11 +5,15 @@
 #
 #   fast-tests        - the everyday PR gate: full test tree minus tests marked
 #                       'slow', on Python 3.10 and 3.12, parallelised with
-#                       pytest-xdist. The 3.10 leg additionally installs numba
-#                       so the optional M7 accelerated backend's parity tests
-#                       (tests/test_m7_backends.py, gated by
-#                       @pytest.mark.skipif(not HAS_NUMBA)) actually run
-#                       instead of skipping.
+#                       pytest-xdist. The suite runs pinned to the NumPy
+#                       reference backend (PYRADIOSS_BACKEND=numpy) so it is
+#                       deterministic and hermetic. The 3.10 leg additionally
+#                       installs numba so the optional accelerated backend's
+#                       parity tests (tests/test_m7_backends.py, gated by
+#                       @pytest.mark.skipif(not HAS_NUMBA)) actually run, and
+#                       runs one dedicated step that exercises the M40 'auto'
+#                       default resolving to numba end-to-end
+#                       (tests/test_m40_auto_backend.py, unpinned).
 #
 #   numpy-only-smoke  - guards the core design contract documented in
 #                       pyradioss/implicit/__init__.py: the EXPLICIT solver
@@ -72,8 +76,10 @@ jobs:
           python -m pip install -e . scipy pytest pytest-xdist
 
       - name: Install numba (accel backend, 3.10 leg only)
-        # Exercise the optional numba-accelerated M7 backend on exactly one
-        # matrix leg; on the other leg its parity tests skip cleanly.
+        # Exercise the optional numba-accelerated backend on exactly one
+        # matrix leg; on the other leg its parity tests skip cleanly. This
+        # leg also runs the M40 'auto' backend-selection path (see the
+        # dedicated step after the fast suite).
         if: matrix.python-version == '3.10'
         run: python -m pip install numba
 
@@ -100,8 +106,26 @@ jobs:
       - name: Point pyradioss at the cfg tree
         run: echo "PYRADIOSS_HM_CFG=$GITHUB_WORKSPACE/or_cfg/hm_cfg_files/config/CFG" >> "$GITHUB_ENV"
 
-      - name: Run fast test suite
+      - name: Run fast test suite (NumPy reference backend)
+        # Pin the reference backend so the regression suite is deterministic
+        # and hermetic — its pass/fail must not depend on whether numba is
+        # installed on the leg. Every test predates the M40 'auto' default and
+        # was written against the NumPy reference; numba parity and the 'auto'
+        # selection are covered separately (tests/test_m7_backends.py and the
+        # dedicated M40 step below), so pinning here loses no coverage.
+        env:
+          PYRADIOSS_BACKEND: numpy
         run: python -m pytest tests -q -m "not slow" -n auto --durations=15
+
+      - name: Exercise the M40 'auto' backend path (numba leg only)
+        # numba is installed only on this leg, so ONLY here can the 'auto'
+        # default actually resolve to numba. Run the M40 module in full,
+        # INCLUDING its 'slow' end-to-end spot-check, with NO backend pin: it
+        # proves the engine auto-selects numba above the size threshold AND
+        # reproduces the NumPy reference state-by-state (the safety gate for
+        # flipping the default). Kept cheap — one small module.
+        if: matrix.python-version == '3.10'
+        run: python -m pytest tests/test_m40_auto_backend.py -q --durations=5
 
   # -------------------------------------------------------------------------
   # Dependency-light smoke: the explicit core must run on numpy alone.

@@ -126,8 +126,9 @@ def needs_env(mat) -> bool:
     LAW35's relative volume / air pressure, LAW44's total pressure
     P = K*(rho/rho0 - 1) and LAW70's Itens tension scale all need
     ``rho``; LAW62's CIMAX sound-speed bound divides by the current
-    density; LAW40's sound speed too)."""
-    return mat.law in (24, 35, 40, 44, 62, 70, 81)
+    density; LAW40's sound speed too; M40: LAW36 solids use the same
+    total pressure as LAW44 — sigeps36.F P = BULK*AMU)."""
+    return mat.law in (24, 35, 36, 40, 44, 62, 70, 81)
 
 
 def solid_update(mat, sig, deps, epsp, dt, extra=None):
@@ -143,7 +144,8 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
                                                     dt, extra)
         return sig, epsp, None
     if mat.law == 36:
-        sig, epsp = law36_tabulated.solid_update(mat, sig, deps, epsp, dt)
+        sig, epsp = law36_tabulated.solid_update(mat, sig, deps, epsp, dt,
+                                                 extra)
         return sig, epsp, None
     if mat.law == 42:
         return law42_ogden.solid_update(mat, sig, deps, epsp, dt, extra)

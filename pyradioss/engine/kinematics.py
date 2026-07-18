@@ -167,9 +167,15 @@ class LoadsAndConstraints:
             # a skewed condition drives a DIRECTION, not one global column:
             # release the frozen carrier on all three (the skew axis is a
             # combination of them and the other two stay free anyway —
-            # nothing else fixes them)
-            idx = entry[1]
-            self.fix_tra[idx[frozen[idx]], :] = False
+            # nothing else fixes them).  dof 0..2 drive translation (release
+            # the translational auto-fix), dof 3..5 drive rotation about the
+            # skew axis (release the rotational auto-fix instead) — M40.
+            idx, dof = entry[1], entry[2]
+            fzn = idx[frozen[idx]]
+            if dof >= 3:
+                self.fix_rot[fzn, :] = False
+            else:
+                self.fix_tra[fzn, :] = False
         for i in model.impdisp:
             f0 = model.functions[i.funct_id].eval(0.0) * i.scale
             if abs(f0) > 0.0:
@@ -360,23 +366,44 @@ class LoadsAndConstraints:
                 self.skew_impvel + self.skew_impdisp:
             if len(idx) == 0 or t < tstart or t > tstop:
                 continue
-            e = skews.axes[row][dof]                  # the Dir axis, global
-            vn = v[idx] @ e                           # VV: current v along e
+            # dof 0..2 drive the TRANSLATIONAL velocity ``v`` along the
+            # skew's (dof)-th axis; dof 3..5 drive the ANGULAR velocity
+            # ``vr`` about the skew's (dof-3)-th axis — the exact rotational
+            # analogue (fixvel.F runs the SAME SKEW projection VV/A0/AA on
+            # the VR/AR arrays for a rotational DOF, driving rotation about
+            # skew axis J).  Before M40 a rotational /IMPVEL naming a skew
+            # indexed ``axes[row][dof]`` (dof 3..5) out of the (3,3) axes and
+            # raised IndexError; now it selects axis (dof-3) and drives ``vr``
+            # against the rotational inertia, matching the unskewed rotational
+            # branch above.
+            rot = dof >= 3
+            e = skews.axes[row][dof - 3 if rot else dof]   # the driven axis
+            vel = vr if rot else v
+            gen = rot_gen if rot else mass
+            gold = vr_old if rot else v_old
+            vn = vel[idx] @ e                         # VV: current comp along e
             if x0 is None:                            # /IMPVEL: v(t) given
                 vimp = scale * fct.eval(t * facx)
             else:                                     # /IMPDISP: d(t) given
                 if dt <= 0.0:
                     continue
-                # land on the imposed displacement measured along the axis
-                # from the original position (fixvel.F's DD = SKEW . D)
-                target = (x0 @ e) + scale * fct.eval(t * facx)
-                vimp = (target - (x[idx] @ e)) / dt
-            dv = vimp - vn                            # the impulse / m
-            m = np.where(self._frozen[idx], 0.0, mass[idx])
-            v_mid = 0.5 * ((v_old[idx] @ e if v_old is not None else vn)
+                if rot:
+                    # rotational /IMPDISP: no stored nodal angle to project
+                    # back — finite-difference the imposed angle over the
+                    # step, exactly as the unskewed rotational branch above
+                    vimp = scale * (fct.eval(t * facx)
+                                    - fct.eval((t - dt) * facx)) / dt
+                else:
+                    # land on the imposed displacement measured along the
+                    # axis from the original position (fixvel.F's DD=SKEW.D)
+                    target = (x0 @ e) + scale * fct.eval(t * facx)
+                    vimp = (target - (x[idx] @ e)) / dt
+            dv = vimp - vn                            # the impulse / gen
+            g = np.where(self._frozen[idx], 0.0, gen[idx])
+            v_mid = 0.5 * ((gold[idx] @ e if gold is not None else vn)
                            + vimp)
-            w += float(np.dot(m * dv, v_mid))
-            v[idx] += np.outer(dv, e)
+            w += float(np.dot(g * dv, v_mid))
+            vel[idx] += np.outer(dv, e)
         # ---- fixed DOFs: zero velocity (no work — see docstring) ---------
         v[self.fix_tra] = 0.0
         vr[self.fix_rot] = 0.0

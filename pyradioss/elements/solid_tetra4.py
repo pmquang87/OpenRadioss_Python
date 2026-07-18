@@ -309,9 +309,13 @@ def forces(group, x, v, vr, dt, fint, mint):
             extra["F"] = F[sl]
         for name, arr in st["mat_extra"].items():
             extra[name] = arr[sl]
-        if materials.needs_env(mat):
+        if materials.needs_env(mat) and not st.get("_impl_static_hg"):
             # M37 pack 2: LAW24/LAW81 gate their dilatancy on the current
-            # density / internal energy (see materials.needs_env)
+            # density / internal energy (see materials.needs_env).
+            # NOT under the implicit pseudo-velocity drive (M40): frozen-
+            # frame rho == rho0 would degenerate LAW36's total pressure
+            # P = K*(rho/rho0 - 1) to P == 0 while the M13 consistent
+            # tangent carries K — see solid_hexa8.forces for the full note.
             extra["rho"] = rho[sl]
             extra["eint"] = st["eint"][sl]
         _, _, c_new = materials.solid_update(

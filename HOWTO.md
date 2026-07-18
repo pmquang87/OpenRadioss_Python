@@ -32,10 +32,13 @@ pip install -e ".[test]"
 pytest                     # runs unit + analytic validation tests
 ```
 
-Optional (M7): the accelerated numba backend for the hot kernels —
+Optional (M7; auto-enabled since M40): the accelerated numba backend for the
+hot kernels. Once installed it becomes the **default** on models large enough
+to amortise its one-time JIT warm-up; small models and installs without numba
+stay on NumPy, and `-backend`/`PYRADIOSS_BACKEND` still pin either backend.
 
 ```bash
-pip install -e ".[accel]"  # adds numba; the base install works without it
+pip install -e ".[accel]"  # adds numba -> auto-enabled; base install works without it
 python tools/benchmark.py  # times every example under both backends
 ```
 
@@ -78,7 +81,7 @@ Useful flags (mirroring the original command lines):
 | `-nt / -nthread N` | SMP threads | sets NumPy thread env vars (best effort) |
 | `-np N` | MPI domains | **accepted but ignored** — no MPI in the port (a warning is printed) |
 | `-v / --version` | banner | same |
-| `-backend numpy\|numba` | — (the original is compiled Fortran) | engine only, M7: compute backend; also via `PYRADIOSS_BACKEND`. `numba` needs the optional dependency (`pip install -e ".[accel]"`) and falls back to NumPy with a warning otherwise. Results are identical either way (the tested parity contract — see `pyradioss/accel`). |
+| `-backend numpy\|numba\|auto` | — (the original is compiled Fortran) | engine only; compute backend, also via `PYRADIOSS_BACKEND`. Default `auto` (M40): numba when it is installed **and** the model is large enough to amortise JIT warm-up (≥ 32 elements, derived from the M39 sweep), else NumPy; `numpy`/`numba` pin either. `numba` needs the optional dependency (`pip install -e ".[accel]"`) and falls back to NumPy with a warning otherwise. Results are identical either way (the tested parity contract — see `pyradioss/accel`). The listing's `COMPUTE BACKEND` line names the choice. |
 
 ## 3. Input decks
 

@@ -31,8 +31,20 @@ stress comes from user *tables* instead of the Johnson–Cook formula:
 Port simplifications (documented deviations)
 --------------------------------------------
 * Input cards (see starter_keywords.read_mat): only ``N_funct`` and
-  ``Eps_p_max`` are read from the flag card; Fsmooth/Chard/Fcut and the
-  per-curve Fscale card of the original are not ported.
+  ``Eps_p_max`` are read from the flag card; Fsmooth/Chard/Fcut are not
+  ported.  The per-curve ``Fscale_i`` IS ported (M40): the reference
+  multiplies every curve evaluation by YFAC — value AND slope
+  (sigeps36.F ``Y1*YFAC``, ``DYDX1*YFAC``) — which the port bakes into
+  ``curve_y``/``curve_s`` once at resolve time
+  (initialization.resolve_materials), so the kernels below need no
+  change.  Before M40 the scale was parsed but dropped: on the
+  RD-V-0700 decks (curves in MPa, Fscale = 1e-3, work stress GPa) the
+  yield came out 1000x too high — the LAW36 solids never yielded,
+  /FAIL/JOHNSON (driven by the plastic increment) was inert, and the
+  family carried the ~19 % IE gap M39 §3.4 flagged.  With the fix the
+  c19 element-deletion times match the Fortran run to 4 digits and the
+  IE deviation drops to the LAW2 twins' element-side baseline on every
+  comparison window (M40 measurements in VALIDATION.md).
 * ``Eps_p_max`` deletes the element when the equivalent plastic strain
   exceeds it — handled generically by the element kernels (the same
   mechanism as the /FAIL cards; see pyradioss/failure/).
@@ -74,7 +86,8 @@ The curves referenced by the material are resolved by the Starter
 ``mat.params``:
 
     params["curve_x"][i], params["curve_y"][i], params["curve_s"][i]
-        abscissae / ordinates / segment slopes of curve i
+        abscissae / ordinates / segment slopes of curve i (ordinates and
+        slopes carry the per-curve Fscale_i already — M40)
     params["rates"]      strain rate of each curve (increasing)
 
 so the Engine-side kernels never touch the function-table objects.
@@ -166,27 +179,55 @@ def _radial_return(mat, sig_eq, epsp, rate, G3):
 # ----------------------------------------------------------------------------
 
 def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
-                 epsp: np.ndarray, dt: float):
+                 epsp: np.ndarray, dt: float, extra=None):
     """Radial-return update for solids — the LAW2 algorithm with the
     tabulated yield stress. In-place on sig/epsp; see law02 for the
-    step-by-step commentary of the shared parts."""
+    step-by-step commentary of the shared parts.
+
+    Pressure/deviatoric split (M40, sigeps36.F): the reference builds an
+    INCREMENTAL deviatoric predictor (``SIGN = dev(SIGO) + G2*dev(DEPS)``,
+    lines 312-319) but the pressure is NOT a hypoelastic trace update —
+    with no /EOS attached it is the TOTAL ``P = BULK*AMU``,
+    ``AMU = rho/rho0 - 1 = 1/J - 1`` (the IEOS==0 branch 'add pressure
+    to the deviatoric stress', lines 1455-1462; identical in m2law.F for
+    LAW2 and ported the same way in law44_cowper).  |P| saturates at K
+    in expansion where the trace-integrated K*ln J grows without bound —
+    on RD-V-0700 c19 the hydrostatic-tension element reaches J = 20 by
+    t = 10 and the two forms differ 2.6x in stored energy, dominating
+    the global IE.  The kernel supplies the current density in
+    ``extra['rho']`` (mass conservation: rho/rho0 = V0/V exactly);
+    direct callers without a density (unit tests, the historic API) fall
+    back to the hypoelastic trace increment — identical to first order
+    and exercised only where volumetric response is not the point.
+    When an /EOS is attached the kernel REPLACES the trace afterwards
+    (matching the reference's 'material law calculates only deviatoric
+    stress tensor' IEOS branch), so the fallback is also harmless there.
+    """
     G = mat.G
 
-    # 1. elastic trial
-    law01_elastic.solid_update(mat, sig, deps)
-
-    # 2. pressure/deviator split and von Mises stress
-    p = (sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0
+    # 1. deviatoric elastic trial (strip the old pressure, sigeps36.F
+    #    lines 304-319: P0 removes the old mean stress, G2*dev(DEPS) is
+    #    the incremental deviatoric predictor)
+    p_old = (sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0
+    tr3 = (deps[:, 0] + deps[:, 1] + deps[:, 2]) / 3.0
     s = sig.copy()
-    s[:, 0] -= p
-    s[:, 1] -= p
-    s[:, 2] -= p
+    s[:, 0] += 2.0 * G * (deps[:, 0] - tr3) - p_old
+    s[:, 1] += 2.0 * G * (deps[:, 1] - tr3) - p_old
+    s[:, 2] += 2.0 * G * (deps[:, 2] - tr3) - p_old
+    s[:, 3:] += G * deps[:, 3:]        # engineering shear: tau = G*gamma
+
+    # 2. new pressure: total K*mu when the kernel gives the density,
+    #    hypoelastic trace increment otherwise (see docstring)
+    if extra is not None and "rho" in extra:
+        p_new = -mat.K * (extra["rho"] / mat.rho0 - 1.0)   # tension > 0
+    else:
+        p_new = p_old + mat.K * 3.0 * tr3
+
     j2 = 0.5 * (s[:, 0] ** 2 + s[:, 1] ** 2 + s[:, 2] ** 2) \
         + s[:, 3] ** 2 + s[:, 4] ** 2 + s[:, 5] ** 2
     sig_eq = np.sqrt(3.0 * j2) + 1e-30
 
     # equivalent deviatoric strain rate of the increment (rate table entry)
-    tr3 = (deps[:, 0] + deps[:, 1] + deps[:, 2]) / 3.0
     exx, eyy, ezz = deps[:, 0] - tr3, deps[:, 1] - tr3, deps[:, 2] - tr3
     ee = exx ** 2 + eyy ** 2 + ezz ** 2 \
         + 0.5 * (deps[:, 3] ** 2 + deps[:, 4] ** 2 + deps[:, 5] ** 2)
@@ -194,15 +235,14 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
 
     # 3./4. yield check + radial return to the tabulated curve
     idx, scale, dl = _radial_return(mat, sig_eq, epsp, rate, 3.0 * G)
-    if idx is None:
-        return sig, epsp
-    for k in range(6):
-        s[idx, k] *= scale
-    sig[idx, :] = s[idx, :]
-    sig[idx, 0] += p[idx]
-    sig[idx, 1] += p[idx]
-    sig[idx, 2] += p[idx]
-    epsp[idx] += dl
+    if idx is not None:
+        for k in range(6):
+            s[idx, k] *= scale
+        epsp[idx] += dl
+    sig[:, :] = s
+    sig[:, 0] += p_new
+    sig[:, 1] += p_new
+    sig[:, 2] += p_new
     return sig, epsp
 
 

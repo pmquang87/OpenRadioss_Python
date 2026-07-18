@@ -62,11 +62,55 @@ stability constraint of their own — their velocities are overwritten by
 the constraint — so they are excluded both from the nodal-dt minimum and
 from mass addition (adding mass there could not change dt anyway, but it
 WOULD silently alter the constraint inertia the Starter assembled).
+
+Rotational nodal time step (STIFR) — M40
+----------------------------------------
+``dtnoda.F`` bounds the step with a SECOND, rotational nodal dt whenever
+the model carries rotational DOFs (``IRODDL /= 0``): for EVERY node with
+``IN(N) > 0`` and an assembled rotational stiffness ``STIFR(N) > 0``,
+
+    dt_i^rot = sqrt(2 IN_i / STIFR_i)          (dtnoda.F lines 452-471)
+
+joins the same minimum as the translational one.  The element claims
+mirror the translational ones — the shell dt routines set
+``STIR = STI * (t^2 + A)/12`` (cndt3.F lines 209-218, the BATOZ/QEPH/DKT
+family; chvis3/chsti3 use t^2/12 + A/9 for BT) and the assembly adds the
+FULL element STIR to each of its nodes (cupdt3.F, pmcum3.F), exactly as
+STI feeds STIFN.  The Starter lumps the nodal inertia with the MATCHING
+factor (cinmas.F ~line 920: ``XI = m/4 (AREA/FAC + t^2/12)`` with
+FAC = 12 for IHBE >= 11, 9 for BT) — so on an element-lumped free node
+the rotational dt EQUALS the translational one by construction and the
+claim never binds there.  It bites only where IN is decoupled from the
+element lumping: above all the /RBODY master, whose transported
+``STIFR(M) += Sum(STIFR(s) + DD*STIFN(s))`` (rgbodfp.F) grows with the
+parallel-axis distance while ``IN(M)`` stays the body's minimum
+principal moment — the RD-E-1000 rolling floor (M39 residual: the port's
+translational-only transport floored c04 at 2.07e-2 vs the Fortran
+1.64e-2 that includes the members' own STIFR).
+
+The port derives the rotational claim exactly like the translational
+one, from the element dt: a per-node lumped-inertia share ``I_i^e`` (the
+SAME array the Starter assembled into ``model.inertia`` — kernels store
+it as ``group.state['dt_iner']``) behaves like a torsion spring of
+
+    kr_i^e = 2 I_i^e / dt_e^2       (so that sqrt(2 I/kr) = dt_e)
+
+which reproduces upstream's ``STIR = STI * fac`` identically (both sides
+carry the same factor, k_i^e * I/m) and keeps the free-node invariant
+dt_rot == dt_tra to round-off.  With /DT/NODA/CST the rotational branch
+scales INERTIA exactly as the translational one scales mass
+(dtnoda.F lines 482-516: ``IN(N) = MAX(INER, IN(N))``, the DINERT
+counter): only ever added, reported in the summary; no energy booking is
+needed because the port's kinetic-energy ledger is translational (the
+original books none for DINERT either).  Rotational SPRING stiffness
+(torsional /PROP/TYPE8 etc.) is NOT claimed — those kernels currently
+make no rotational dt claim at all; their translational claim flows
+unchanged.
 """
 
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -84,27 +128,41 @@ class NodalTimeStep:
         self.dt_min = controls.dt_min
         n = model.numnod
 
-        # per-group (node-index matrix, nodal mass-share matrix): the same
-        # lumping the Starter used to build the nodal mass (1/8 per brick
-        # corner, 1/4 per shell/tetra corner, 1/3 per triangle corner, 1/2
-        # per truss/spring/beam end — the beam's 3rd node is orientation
-        # only and carries nothing)
-        self._shares: List[Tuple[str, np.ndarray, np.ndarray]] = []
+        # per-group (node-index matrix, nodal mass-share matrix, nodal
+        # inertia-share matrix or None): the same lumping the Starter used
+        # to build the nodal mass (1/8 per brick corner, 1/4 per
+        # shell/tetra corner, 1/3 per triangle corner, 1/2 per truss/
+        # spring/beam end — the beam's 3rd node is orientation only and
+        # carries nothing).  The inertia share ``dt_iner`` is the per-NODE
+        # lumped rotational inertia the kernel's init_group assembled into
+        # ``model.inertia`` — the rotational claim base (module docstring);
+        # groups without rotational DOFs (solids, trusses, springs) leave
+        # it unset and claim no STIFR, like the original's IRODDL gating.
+        self._shares: List[Tuple[str, np.ndarray, np.ndarray,
+                                 Optional[np.ndarray]]] = []
         for name, group in model.element_groups():
             conn = group.state.get("mass_conn", group.conn)
             share = group.state["mass"][:, None] / conn.shape[1]
+            iner = group.state.get("dt_iner")
+            if iner is not None:
+                iner = np.broadcast_to(iner[:, None], conn.shape).copy()
             self._shares.append((name, conn, np.broadcast_to(
-                share, conn.shape).copy()))
+                share, conn.shape).copy(), iner))
+        #: any rotational claims at all? (gates every STIFR op so a
+        #: solids-only deck pays nothing — dtnoda.F's IRODDL == 0 branch)
+        self._rot = any(s[3] is not None for s in self._shares)
 
         # nodes excluded from the nodal dt / mass addition (prescribed
         # motion — see module docstring); filled by ``set_prescribed``
         self.free = model.mass < 1e29
         self.stifn = np.zeros(n)         # assembled nodal stiffness
+        self.stifr = np.zeros(n)         # assembled rotational stiffness
         # rigid bodies whose member stiffness is transported to the master
         # (rgbodfp.F + dtnoda.F — see ``add_rigid_body``/``_rigid_body_dt``):
         # (member node indices, DD=|x-x_master|^2, body mass M, min inertia)
         self._rbodies: List[Tuple[np.ndarray, np.ndarray, float, float]] = []
         self.mass_added = 0.0            # cumulative added mass
+        self.iner_added = 0.0            # cumulative added inertia (DINERT)
         self.e_madd = 0.0                # cumulative 0.5 dm v^2
         self.mom_added = np.zeros(3)     # cumulative dm * v
         self.mass0 = float(model.mass[model.mass < 1e29].sum())
@@ -151,15 +209,17 @@ class NodalTimeStep:
         and equals its t=0 value (rgbodfp recomputes it from the current X
         each cycle only because the generic gather cannot assume rigidity).
 
-        NOTE — the port's nodal-dt machinery accumulates only the
-        TRANSLATIONAL stiffness ``stifn`` (``sqrt(2 M/K)``); it has no
-        rotational-stiffness (``STIFR``) accumulator, so the transported
-        rotational stiffness here carries only rgbodfp's ``DD*STIFN`` term,
-        not the members' own drilling/bending ``STIFR(slave)``.  The body
-        rotational dt is therefore a mild OVER-estimate (on the RD-E-1000
-        BATOZ roll: 2.07e-2 vs the Fortran 1.64e-2 — both far below the
-        4.31e-2 the un-transported port used); the mechanism and the
-        governing entity (the master node) are exact.
+        ``nodes`` includes the master itself (its ``DD`` is zero), so the
+        sums pick up any element stiffness claimed AT the master — exactly
+        rgbodfp's ``+=`` onto the master's pre-existing STIFN/STIFR.
+
+        M40 completes the M39 transport with the members' own rotational
+        stiffness: the port now assembles ``stifr`` (the shell bending/
+        drilling and beam STIR claims, see the module docstring), and
+        ``_rigid_body_dt`` sums the full rgbodfp gather
+        ``F2 = STIFR(s) + DD*STIFN(s)`` (rgbodfp.F lines 116-118).  On the
+        RD-E-1000 BATOZ roll this moves the c04 floor from the M39
+        translational-only 2.07e-2 onto the Fortran 1.64e-2.
         """
         nodes = np.asarray(nodes)
         dd = ((x0[nodes] - x0[master]) ** 2).sum(axis=1)
@@ -171,15 +231,18 @@ class NodalTimeStep:
         """The transported master nodal dt of every registered rigid body
         (see ``add_rigid_body``): min over bodies of the translational
         ``sqrt(2 M/K_tra)`` and rotational ``sqrt(2 IN/K_rot)`` steps, with
-        ``K_tra = Sum stifn`` and ``K_rot = Sum DD*stifn`` over the member
-        nodes.  Read from ``self.stifn`` BEFORE ``apply`` resets it."""
+        ``K_tra = Sum stifn`` and ``K_rot = Sum (stifr + DD*stifn)`` over
+        the member nodes (rgbodfp.F IFLAG=1: F1 = STIFN(s),
+        F2 = STIFR(s) + DD*STIFN(s); the STIFR term is the M40
+        completion).  Read from the accumulators BEFORE ``apply`` resets
+        them."""
         dt = EP30
         for nodes, dd, mass, in_min in self._rbodies:
             st = self.stifn[nodes]
             k_tra = float(st.sum())
             if k_tra > 0.0 and mass > 0.0:
                 dt = min(dt, float(np.sqrt(2.0 * mass / k_tra)))
-            k_rot = float((dd * st).sum())
+            k_rot = float((self.stifr[nodes] + dd * st).sum())
             if k_rot > 0.0 and in_min > 0.0:
                 dt = min(dt, float(np.sqrt(2.0 * in_min / k_rot)))
         return dt
@@ -192,29 +255,55 @@ class NodalTimeStep:
         element group in ``model.element_groups()`` order (the arrays the
         kernels return each cycle). The contact contribution is
         accumulated directly into ``self.stifn`` by the interfaces (the
-        Engine passes it to their ``forces``)."""
+        Engine passes it to their ``forces``).  Groups with rotational
+        DOFs also claim ``stifr`` from their lumped-inertia share
+        (kr = 2 I / dt_e^2 — the module docstring; the STIR analogue of
+        cupdt3.F/pmcum3.F's per-node accumulation)."""
         # (self.stifn already holds this cycle's contact springs)
-        for (name, conn, share), dt_e in zip(self._shares, dt_claims):
+        for (name, conn, share, iner), dt_e in zip(self._shares, dt_claims):
             k = 2.0 * share / np.maximum(dt_e, EM20)[:, None] ** 2
             # a deleted element's claim is 1e30 -> its k underflows to 0
             np.add.at(self.stifn, conn.reshape(-1), k.reshape(-1))
+            if iner is not None:
+                kr = 2.0 * iner / np.maximum(dt_e, EM20)[:, None] ** 2
+                np.add.at(self.stifr, conn.reshape(-1), kr.reshape(-1))
 
     # ------------------------------------------------------------------
     def apply(self, mass_eff: np.ndarray, inv_mass: np.ndarray,
-              v: np.ndarray, t: float) -> float:
+              v: np.ndarray, t: float,
+              inertia: Optional[np.ndarray] = None,
+              inv_inertia: Optional[np.ndarray] = None) -> float:
         """Mass scaling + nodal dt for this cycle. Must run BEFORE the
         acceleration update (the added mass stabilizes the very cycle
         that needed it). Returns the nodal critical time step.
 
-        The stiffness accumulator is consumed and reset here."""
+        ``inertia``/``inv_inertia`` — the physical nodal rotational
+        inertia (``model.inertia``) and its inverse: enables the
+        ROTATIONAL nodal dt ``sqrt(2 IN/STIFR)`` over every free node
+        with IN > 0 (dtnoda.F lines 452-471 — ALL nodes, not only rigid
+        bodies; see the module docstring for why it only ever binds
+        through /RBODY-like constructs) and, with CST, the matching
+        inertia scaling (dtnoda.F lines 482-516).
+
+        The stiffness accumulators are consumed and reset here."""
         model = self.model
         loaded = (self.stifn > 0.0) & self.free
+        # rotational claims: dtnoda.F's IRODDL/IN(N)>0 gating.  stifr > 0
+        # implies the node took a shell/beam claim, which also fed stifn,
+        # so rot is a subset of loaded (contact springs feed only stifn).
+        rot = None
+        if self._rot and inertia is not None:
+            rot = (self.stifr > 0.0) & self.free & (inertia > 0.0)
+            if not np.any(rot):
+                rot = None
         if not np.any(loaded):
             # no FREE node claims a step, but a rigid body's transported
             # master dt still can (the RD-E-1000 case: every stiff shell is
             # welded into the body) — never silently drop it
             dt_rb = self._rigid_body_dt()
             self.stifn[:] = 0.0
+            if self._rot:
+                self.stifr[:] = 0.0
             return dt_rb
 
         if self.cst and self.dt_min > 0.0:
@@ -244,12 +333,38 @@ class NodalTimeStep:
                         f" ({100.0 * frac:.2f}% OF THE INITIAL MASS)"
                         f" AT TIME {t:.5E}")
                     self._reported = frac
+            if rot is not None:
+                # rotational CST: inertia needed so that the rotational
+                # nodal dt holds the target too (dtnoda.F 482-516,
+                # IN(N) = MAX(INER, IN(N)) and the DINERT counter — only
+                # ever added; no energy booking, the KE ledger is
+                # translational, matching the original which books none)
+                i_req = self.stifr[rot] * (self.dt_min / self.dt_sca) ** 2 \
+                    / 2.0
+                di = i_req - inertia[rot]
+                addr = di > 0.0
+                if np.any(addr):
+                    idx = np.where(rot)[0][addr]
+                    di = di[addr]
+                    inertia[idx] += di          # model.inertia (physical)
+                    if inv_inertia is not None:
+                        inv_inertia[idx] = 1.0 / inertia[idx]
+                    self.iner_added += float(di.sum())
 
         dt_i = np.sqrt(2.0 * mass_eff[loaded] / self.stifn[loaded])
+        dt = float(dt_i.min())
+        if rot is not None:
+            # the rotational nodal dt joins the same minimum (dtnoda.F
+            # line 469: DTN = DTFAC*sqrt(2 IN/STIFR); the shared DTFAC —
+            # the port's dt_scale — is applied by the caller)
+            dt_r = np.sqrt(2.0 * inertia[rot] / self.stifr[rot])
+            dt = min(dt, float(dt_r.min()))
         # the rigid bodies' transported master dts join the free-node min
         # (rgbodfp.F/dtnoda.F — see add_rigid_body); a no-op with no /RBODY
-        dt = min(float(dt_i.min()), self._rigid_body_dt())
+        dt = min(dt, self._rigid_body_dt())
         self.stifn[:] = 0.0
+        if self._rot:
+            self.stifr[:] = 0.0
         return dt
 
     # ------------------------------------------------------------------
@@ -260,6 +375,10 @@ class NodalTimeStep:
         frac = 100.0 * self.mass_added / max(self.mass0, EM20)
         log.info(f"     ADDED MASS (/DT/NODA/CST) : {self.mass_added:14.7E}"
                  f"  ({frac:.3f}% OF INITIAL MASS)")
+        if self.iner_added > 0.0:
+            # rotational analogue of DMAST: dtnoda.F's DINERT counter
+            log.info(f"     ADDED INERTIA (DINERT). . : "
+                     f"{self.iner_added:14.7E}")
         log.info(f"     ENERGY FROM ADDED MASS  . : {self.e_madd:14.7E}")
         log.info(f"     MOMENTUM FROM ADDED MASS  : "
                  f"{self.mom_added[0]:12.5E} {self.mom_added[1]:12.5E} "
