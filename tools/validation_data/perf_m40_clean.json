@@ -1,0 +1,117 @@
+{
+ "milestone": "M40",
+ "artifact": "THE CLEAN BENCHMARK (standing side quest) \u2014 backend relative before/after on the M40 numba-default tree",
+ "clean_status": "RELATIVE-ONLY \u2014 the machine was CONTENDED for the whole M40 session (user 12-process engine_win64_impi MPI job, same PIDs throughout). No uncontended window opened, so these are NOT the clean absolute numbers the milestone hoped for. The numpy/numba/auto ELAPSED were measured BACK-TO-BACK per deck so the RATIO (numba_speedup) cancels steady contention; absolute seconds are an UPPER BOUND (lower bound on speedup).",
+ "generated_by": "scratchpad/valruns40/bench_m40.py (reusing bench39/run_one.py) + build_clean_m40.py; builder claude/openradioss-python-m40-match-and-speed",
+ "machine": "13th Gen Intel(R) Core(TM) i9-13900H",
+ "backends": [
+  "numpy",
+  "numba",
+  "auto (M40 default: numba at >=32 total elements, else numpy)"
+ ],
+ "contention_note": "Contention sampled per run with the RELIABLE plain-tasklist regex (the /FI IMAGENAME filter returns 0 on this box even with 12 live ranks, so the M39 speed harness's /FI-based flags under-counted). All rows contended=true.",
+ "parity_contract": "A backend MUST NOT change results: md5_identical_across_backends is the T01 byte check across numpy/numba/auto per deck.",
+ "n_contended": 6,
+ "median_numba_speedup": 1.751,
+ "records": [
+  {
+   "deck": "tensile_bar",
+   "cycles": 1847,
+   "numpy_elapsed_s": 1.499,
+   "numba_elapsed_s": 0.884,
+   "auto_elapsed_s": 0.867,
+   "numba_speedup": 1.696,
+   "auto_speedup": 1.729,
+   "auto_matches": "numba",
+   "md5_identical_across_backends": false,
+   "t01_md5": [
+    "231a9a48ca9a41301d566e4b83b407ff",
+    "ed05ecf1b1cd8c72df2a34fbe034c6b6"
+   ],
+   "contended": true,
+   "errors": {}
+  },
+  {
+   "deck": "box_beam_impact",
+   "cycles": 3466,
+   "numpy_elapsed_s": 6.003,
+   "numba_elapsed_s": 2.858,
+   "auto_elapsed_s": 3.238,
+   "numba_speedup": 2.1,
+   "auto_speedup": 1.854,
+   "auto_matches": "numba",
+   "md5_identical_across_backends": false,
+   "t01_md5": [
+    "4bd876d3929a9885c7c7bcb09438029d",
+    "e84c29a4f77ec92662df6aa35b001ede"
+   ],
+   "contended": true,
+   "errors": {}
+  },
+  {
+   "deck": "antenna_mast",
+   "cycles": 4961,
+   "numpy_elapsed_s": 1.523,
+   "numba_elapsed_s": 1.532,
+   "auto_elapsed_s": 1.506,
+   "numba_speedup": 0.994,
+   "auto_speedup": 1.011,
+   "auto_matches": "numpy",
+   "md5_identical_across_backends": true,
+   "t01_md5": "27477642dd75b2e507a5c4c152e84d4d",
+   "contended": true,
+   "errors": {}
+  },
+  {
+   "deck": "rubber_block",
+   "cycles": 1312,
+   "numpy_elapsed_s": 1.569,
+   "numba_elapsed_s": 0.952,
+   "auto_elapsed_s": 0.911,
+   "numba_speedup": 1.648,
+   "auto_speedup": 1.722,
+   "auto_matches": "numba",
+   "md5_identical_across_backends": false,
+   "t01_md5": [
+    "37ae7243b379a8b49ed58d520b89f3a8",
+    "e78ba9b43341cd9a64bff252622e6356"
+   ],
+   "contended": true,
+   "errors": {}
+  },
+  {
+   "deck": "notched_plate",
+   "cycles": 16020,
+   "numpy_elapsed_s": 87.702,
+   "numba_elapsed_s": 36.752,
+   "auto_elapsed_s": 37.298,
+   "numba_speedup": 2.386,
+   "auto_speedup": 2.351,
+   "auto_matches": "numba",
+   "md5_identical_across_backends": false,
+   "t01_md5": [
+    "d600cacd34461780eb5193ced173503d",
+    "e1de289b7d696d794dd426af3ebec759"
+   ],
+   "contended": true,
+   "errors": {}
+  },
+  {
+   "deck": "spot_weld",
+   "cycles": 3454,
+   "numpy_elapsed_s": 9.35,
+   "numba_elapsed_s": 5.34,
+   "auto_elapsed_s": 4.588,
+   "numba_speedup": 1.751,
+   "auto_speedup": 2.038,
+   "auto_matches": "numba",
+   "md5_identical_across_backends": false,
+   "t01_md5": [
+    "7ed9de2f06daf06f52b89f3742b27ea4",
+    "97d848c85fd844c8044db35702da518b"
+   ],
+   "contended": true,
+   "errors": {}
+  }
+ ]
+}

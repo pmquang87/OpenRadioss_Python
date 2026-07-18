@@ -141,8 +141,10 @@ MAT_PARAM_DIMS: Dict[str, Tuple[int, int, int]] = {
 }
 
 #: /MAT params that are ids/lists-of-ids or resolve-time products —
-#: never converted, never reported.
-_MAT_SKIP = {"funct_ids", "curve_x", "curve_y", "curve_s"}
+#: never converted, never reported.  LAW36 "yfac" (per-curve Fscale_i,
+#: M40) is skipped too: it scales the /FUNCT ordinates, whose physical
+#: unit conversion is carried by the function itself.
+_MAT_SKIP = {"funct_ids", "curve_x", "curve_y", "curve_s", "yfac"}
 
 #: read-time DEFAULT sentinels: the parsers inject these when the card
 #: field is blank/zero (e.g. LAW2 eps_dot_0 = 0 -> 1.0, sig_max = 0 ->

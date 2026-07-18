@@ -368,9 +368,35 @@ def parse_spr_pre(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
 
     Stif0/Stif1 are carried too (upstream's STIFM = STIF0 + STIF1 is the
     time-step stiffness), so the value is on the property when the
-    pretensioner physics does land.  The cfg CHECK block demands MASS > 0,
-    which the /SPRING mass check enforces — correctly, once the field is
-    actually read (see elements/spring.py _MASS_REQUIRED_SPRING_TYPES).
+    pretensioner physics does land.
+
+    A BLANK mass is LEGAL (M40, M39-BUG-SPRPRE).  The cfg CHECK block's
+    ``MASS > 0`` is a HyperMesh-GUI validation, NOT a Starter one:
+    ``hm_read_prop32.F`` reads the field with ``HM_GET_FLOATV('MASS',...)``
+    (blank -> 0), stores it, and never checks it (its only errors are the
+    F1/D1/E1/STIF1 over-specification MSGID 408 and the zero-length MSGID
+    406).  RD-HWX-T-1010 cantilever_completed has a blank SPR_PRE/2 mass and
+    the real ``starter_win64.exe`` accepts it (0 errors, listing
+    ``MASS. . . = 0.000000000000``).  So the port reads the field (0 when
+    blank) and does NOT mass-check TYPE32 — see elements/spring.py
+    ``_MASS_REQUIRED_SPRING_TYPES`` (TYPE4 only).
+
+    Element physics — deferred, InactiveProperty (M40 item 4 assessment).
+    The pretensioner kernel is ``engine/source/elements/spring/ruser32.F``
+    (~260 lines): a 1-DOF axial spring whose axial force accrues the elastic
+    rate ``FX += STIF0*dt*VX`` and, once a /SENSOR fires (ISENS; immediate
+    when ISENS = 0), is pulled up to a pretension ``FX = MAX(FF, FX)`` from
+    one of four ITYP laws — ITYP1 ``FF = F0 + STIF1*X`` (F1/D1/E1 on the
+    card), ITYP2 ``FF = Fscale*fct1(X*Dscale)`` (f of stroke), ITYP3
+    ``F0 = Fscale*fct2(t*Tscale)`` (f of time), ITYP4 their product — with
+    an Ilock retractor lock (D1 threshold / force-exceeds-pretension) and
+    per-element UVAR state (accrued stroke, activation, lock, current STIF).
+    It is genuinely PORTABLE (this reader already carries mass, stif0/stif1,
+    f1/d1/e1, fct_id1/fct_id2; the port has /SENSOR and /FUNCT), but it is a
+    NEW ACTIVE spring type in the shared spring kernel needing per-ITYP
+    channel validation against the RD-V-0031 (c52) T01 force traces across
+    all five pretensioners — a full element-technology port, not a residual.
+    Left InactiveProperty; the Engine refuses TYPE32 element groups.
     """
     title, cards, fixed = _data_cards(block)
     params = _universal_geo_params()

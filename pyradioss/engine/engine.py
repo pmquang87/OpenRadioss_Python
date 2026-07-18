@@ -49,7 +49,7 @@ from typing import Optional
 import numpy as np
 
 from .. import banner
-from ..accel import backend_name
+from ..accel import auto_select_backend
 from ..common.constants import EP30
 from ..common.messages import MessageLog
 from ..contact import build_contacts
@@ -169,11 +169,6 @@ def run_engine(input_file: str, log: Optional[MessageLog] = None) -> Model:
         log.attach_listing(listing)
         log.info(banner())
         log.info(f" ENGINE INPUT FILE  . . . . . . . . . : {input_file}")
-        # M7: which compute backend runs the kernels (accel package);
-        # resolves PYRADIOSS_BACKEND / -backend here so a requested-but-
-        # missing numba surfaces its fallback warning in the listing
-        log.info(f" COMPUTE BACKEND  . . . . . . . . . . : "
-                 f"{backend_name(log)}")
 
         # ---- read controls + restart (engine lectur.F + rdresb.F) --------
         controls = parse_engine_deck(read_deck(input_file), log)
@@ -192,6 +187,16 @@ def run_engine(input_file: str, log: Optional[MessageLog] = None) -> Model:
         # elements (an /PROP/INJECT1 used only by a /MONVOL) does not block.
         refuse_inactive_properties(model, log)
         log.info(f" MODEL TITLE  . . . . . . . . . . . . : {model.title}")
+        # M7/M40: which compute backend runs the kernels (accel package).
+        # Resolved HERE — after the restart is read — because the M40 'auto'
+        # default enables numba only once the model is known to be large
+        # enough to amortise JIT warm-up (accel.auto_select_backend keys on
+        # the element count; small decks stay NumPy).  PYRADIOSS_BACKEND /
+        # -backend numpy|numba still PIN a backend, and a pinned-but-missing
+        # numba surfaces its fallback warning here.  numba auto-enable is
+        # gated to the explicit /RUN path (the M39 speed data's envelope);
+        # this runs before the first kernel call either way.
+        auto_select_backend(model, log, explicit=not controls.implicit)
         if saved is not None:
             log.info(f" RESUMING FROM TIME . . . . . . . . . : "
                      f"{saved['t']:12.5E} (CYCLE {saved['cycle']})")
@@ -269,6 +274,9 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         if resumed and saved.get("noda"):
             sv = saved["noda"]
             noda.mass_added = sv["mass_added"]
+            # added inertia (M40 rotational CST): absent in pre-M40
+            # snapshots — a fresh counter is the correct resume there
+            noda.iner_added = sv.get("iner_added", 0.0)
             noda.e_madd = sv["e_madd"]
             noda.mom_added = sv["mom_added"].copy()
             noda.mass0 = sv["mass0"]
@@ -342,9 +350,12 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         if noda is not None:
             # nodal time step (and, with CST, the initial mass addition —
             # a deck whose smallest elements already violate dT_min gets
-            # scaled before the first cycle, like the original)
+            # scaled before the first cycle, like the original); the
+            # inertia arrays enable the ROTATIONAL nodal dt sqrt(2 IN/
+            # STIFR) and its CST inertia scaling (dtnoda.F 452-516, M40)
             noda.assemble(claims)
-            dt_next = noda.apply(mass_eff, inv_mass, model.v, 0.0)
+            dt_next = noda.apply(mass_eff, inv_mass, model.v, 0.0,
+                                 model.inertia, inv_inertia)
             state.e_madd = noda.e_madd
         # penalty interfaces bound the step from cycle 0 (their stiffness
         # is static in this port), so an impact on the very first cycles
@@ -389,6 +400,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                 for rb in rbodies},
             "noda": None if noda is None else {
                 "mass_added": noda.mass_added, "e_madd": noda.e_madd,
+                "iner_added": noda.iner_added,
                 "mom_added": noda.mom_added.copy(), "mass0": noda.mass0,
                 "reported": noda._reported},
         }
@@ -472,10 +484,13 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # ---- 3c. /DT/NODA[/CST]: nodal time step + mass scaling (M6) ------
         # Runs BEFORE the acceleration so the mass added for the target
         # step already stabilizes THIS cycle's update. The nodal dt
-        # replaces the worst-element dt as the next-step bound.
+        # replaces the worst-element dt as the next-step bound.  The
+        # inertia arrays enable the ROTATIONAL nodal dt and its CST
+        # inertia scaling (dtnoda.F 452-516, M40 — see mass_scaling.py).
         if noda is not None:
             noda.assemble(claims)
-            dt_next = noda.apply(mass_eff, inv_mass, model.v, state.t)
+            dt_next = noda.apply(mass_eff, inv_mass, model.v, state.t,
+                                 model.inertia, inv_inertia)
             state.e_madd = noda.e_madd
 
         # ---- 3d. /MPC Lagrange forces (M6): the tiny coupled solve that

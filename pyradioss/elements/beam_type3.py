@@ -261,6 +261,15 @@ def init_group(group, model, log):
         dt0=_exact_dt(L0, mass, inertia_c, group.state["slices"]),
         # mass-carrying connectivity (N1, N2 only) for output/energy code
         mass_conn=conn[:, :2].copy(),
+        # dt_iner: per-NODE inertia share for the ROTATIONAL /DT/NODA
+        # claim (M40, engine/mass_scaling.py): kr = 2 I/dt_e^2 with the
+        # SAME lumped inertia _exact_dt used, so sqrt(2 I/kr) = dt_e —
+        # the beam analogue of the shell STIR claim (upstream pdlen3.F
+        # sets STIR = MAX(G*Ixx, KPHI*E*max(Iyy,Izz))/L and pmcum3.F adds
+        # it per node; the port's equivalent-spring reading reproduces
+        # its own exact-eigenvalue dt instead, the established /DT/NODA
+        # contract of engine/mass_scaling.py).
+        dt_iner=inertia_c.copy(),
     )
     if plastic:
         group.state.update(

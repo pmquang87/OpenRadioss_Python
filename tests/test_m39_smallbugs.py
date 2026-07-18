@@ -251,18 +251,32 @@ def test_type4_spring_zero_mass_still_errors():
     assert any("/PROP/SPRING/7" in e for e in log.errors), log.errors
 
 
-def test_spr_pre_zero_mass_still_errors(tmp_path):
-    """prop_p32_spr_pre.cfg's own CHECK block demands MASS > 0, so a
-    TYPE32 with a blank mass must still error — and name ITS card."""
+def test_spr_pre_zero_mass_accepted_like_fortran(tmp_path):
+    """A blank/zero TYPE32 pretensioner mass is LEGAL (M40, M39-BUG-SPRPRE).
+    The real Fortran Starter does NOT enforce MASS > 0 for /PROP/SPR_PRE:
+    hm_read_prop32.F reads MASS with HM_GET_FLOATV (a blank field gives 0)
+    and never checks it — its only errors are the F1/D1/E1/STIF1 over-
+    specification (MSGID 408) and the zero spring LENGTH (MSGID 406).  The
+    ``MASS > 0`` in prop_p32_spr_pre.cfg's CHECK block is a HyperMesh-GUI
+    validation, not a Starter one.  Verified by running the real
+    starter_win64.exe on RD-HWX-T-1010 cantilever_completed (whose SPR_PRE
+    card has a BLANK mass): 0 errors, listing ``MASS = 0.000000000000``.
+    So the port must NOT error — it reads the mass (0) and lets the Engine
+    refuse the group for the honest reason (unported pretensioner physics),
+    which is the ERROR->SKIPS the M39 mass check wrongly pre-empted."""
     body = SPR_PRE_1.replace("                1E-5", "                   0")
     model, log = _parse_blocks(tmp_path, body, "PROP", read_prop)
+    assert model.properties[1].params["mass"] == 0.0     # blank -> 0, read
     m = _spring_model(model.properties[1])
     log = MessageLog()
     build_element_groups(m, log)
     (name, group), = list(m.element_groups())
     spring.init_group(group, m, log)
-    assert any("mass must be" in e for e in log.errors), log.errors
-    assert any("SPR_PRE" in e for e in log.errors), log.errors
+    assert not any("mass must be" in e for e in log.errors), log.errors
+    # ...but the unported pretensioner physics still refuses the group,
+    # so the deck is SKIPS (engine-refused), not a Starter ERROR.
+    with pytest.raises(prop_reader.InactivePropertyError):
+        prop_reader.refuse_inactive_properties(m)
 
 
 def test_inactive_spring_prop_gets_no_placeholder_mass_error():
@@ -285,7 +299,11 @@ def test_inactive_spring_prop_gets_no_placeholder_mass_error():
 
 
 def test_mass_required_spring_types_scope():
-    assert spring._MASS_REQUIRED_SPRING_TYPES == frozenset({4, 32})
+    # M40 (M39-BUG-SPRPRE): TYPE32 removed — the Fortran Starter does not
+    # enforce MASS > 0 for /PROP/SPR_PRE (hm_read_prop32.F has no mass check;
+    # the cfg CHECK is HyperMesh-GUI-only, confirmed by running starter_win64
+    # on cantilever_completed).  Only TYPE4 /SPRING genuinely requires it.
+    assert spring._MASS_REQUIRED_SPRING_TYPES == frozenset({4})
 
 
 # ============================================================================

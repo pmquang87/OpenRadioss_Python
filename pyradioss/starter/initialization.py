@@ -215,7 +215,13 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
     * LAW36: pull the /FUNCT hardening curves into plain arrays in
       ``mat.params`` (curve_x/curve_y/curve_s + rates) so the Engine
       kernels never touch the function-table objects — the Fortran
-      Starter does the same (curves are copied into the MLAW buffer);
+      Starter does the same (curves are copied into the MLAW buffer).
+      The per-curve Fscale_i (``params['yfac']``, M40) is baked into the
+      copied ordinates AND slopes here: the reference applies YFAC at
+      every engine evaluation (sigeps36.F ``Y1*YFAC(I,1)``,
+      ``DYDX1*YFAC(I,1)`` — both value and derivative, before the
+      strain-rate interpolation), which is algebraically identical to
+      scaling the stored curve once;
     * /FAIL cards: attach each parsed FailureModel to its material.
     """
     for mat in model.materials.values():
@@ -223,7 +229,9 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
             continue
         cxs, cys, css = [], [], []
         ok = True
-        for fid in mat.params["funct_ids"]:
+        yfac = list(mat.params.get("yfac") or [])
+        yfac += [1.0] * (len(mat.params["funct_ids"]) - len(yfac))
+        for fid, yf in zip(mat.params["funct_ids"], yfac):
             fct = model.functions.get(fid)
             if fct is None:
                 log.error(f"/MAT/LAW36/{mat.id}: function {fid} not defined",
@@ -234,13 +242,14 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
                 log.error(f"/MAT/LAW36/{mat.id}: curve {fid} has negative "
                           f"plastic-strain abscissae", "MAT CHECK")
                 ok = False
-            if fct.eval(0.0) <= 0.0:
+            if fct.eval(0.0) * yf <= 0.0:
                 log.error(f"/MAT/LAW36/{mat.id}: curve {fid} gives a "
-                          f"non-positive initial yield stress", "MAT CHECK")
+                          f"non-positive initial yield stress "
+                          f"(Fscale={yf:g})", "MAT CHECK")
                 ok = False
             cxs.append(fct.x.copy())
-            cys.append(fct.y.copy())
-            css.append(fct.slope.copy())
+            cys.append(fct.y * yf)
+            css.append(fct.slope * yf)
         if ok:
             mat.params["curve_x"] = cxs
             mat.params["curve_y"] = cys

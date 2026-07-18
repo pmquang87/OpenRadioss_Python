@@ -34,6 +34,19 @@ Conventions matching the original:
   term unless D4 > 0 and the rate exceeds eps_dot_0);
 * no damage grows without plastic flow (d_eps_p = 0 -> D frozen), so
   the criterion is inert on elastic materials — the Starter warns.
+* a NON-POSITIVE failure strain FREEZES the damage instead of failing
+  the point (M40): the reference floors eps_f at EPSF_MIN (default 0)
+  and accumulates only where eps_f > 0 (fail_johnson.F ``EPSF =
+  MAX(EPSF,EPSF_MIN)``, ``IF (EPSF>ZERO) DFMAX = DFMAX + DPLA/EPSF``;
+  identical in fail_johnson_c.F).  With D1 < 0 (e.g. the RD-V-0700
+  calibration D1=-0.1, D2=0.6, D3=-1.2) eps_f goes negative beyond
+  sigma* = ln(-D2/D1)/D3 = 1.493: such highly triaxial points can
+  NEVER fail through this criterion — the reference keeps them alive
+  (its own Starter only warns when the root lies inside |sigma*| <= 1).
+  The port used to divide by max(eps_f, 1e-20), instant-deleting those
+  points on their first plastic increment — the exact opposite.
+  Damage is capped at 1 (``DFMAX = MIN(ONE,DFMAX)``), which the
+  deletion threshold D >= 1 makes output-only for solids.
 """
 
 from __future__ import annotations
@@ -71,6 +84,24 @@ def _thermal_factor(fail, tstar):
     return 1.0 + D5 * tstar
 
 
+def _accumulate(fail, dama, d_epsp, eps_f):
+    """In-place damage update, the fail_johnson.F contract (M40):
+
+        EPSF  = MAX(EPSF, EPSF_MIN)          (EPSF_MIN default 0)
+        IF (EPSF > ZERO) DFMAX = DFMAX + DPLA/EPSF
+        DFMAX = MIN(ONE, DFMAX)
+
+    i.e. a non-positive failure strain FREEZES the damage (the point
+    cannot fail there) rather than failing it instantly — see the
+    module docstring's D1 < 0 note.  ``dama`` may be a slice view of
+    the element-group state array: in-place ops only."""
+    eps_f = np.maximum(eps_f, fail.params.get("eps_f_min", 0.0))
+    grow = eps_f > 0.0
+    dama += np.where(grow, np.maximum(d_epsp, 0.0), 0.0) \
+        / np.where(grow, eps_f, 1.0)
+    np.minimum(dama, 1.0, out=dama)
+
+
 def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     """3-D damage step. sig (m, 6) Voigt; ``tstar`` (M6) = homologous
     temperature array of the slice, None without a thermal material.
@@ -84,7 +115,7 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     eps_f = (p["D1"] + p["D2"] * np.exp(p["D3"] * triax)) \
         * _rate_factor(fail, deps, dt, True) \
         * _thermal_factor(fail, tstar)
-    dama += np.maximum(d_epsp, 0.0) / np.maximum(eps_f, _TINY)
+    _accumulate(fail, dama, d_epsp, eps_f)
     return dama >= 1.0
 
 
@@ -98,5 +129,5 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     eps_f = (p["D1"] + p["D2"] * np.exp(p["D3"] * triax)) \
         * _rate_factor(fail, deps, dt, False) \
         * _thermal_factor(fail, tstar)
-    dama += np.maximum(d_epsp, 0.0) / np.maximum(eps_f, _TINY)
+    _accumulate(fail, dama, d_epsp, eps_f)
     return dama >= 1.0

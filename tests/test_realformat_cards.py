@@ -97,8 +97,11 @@ def test_law36_real_format_multi_rate_curves(tmp_path):
 
 
 def test_law36_real_format_warns_on_unported_fields(tmp_path):
-    """Non-default fields the port cannot honour (F_smooth, fct_IDp, per-
-    curve Fscale != 1) must be accepted with ONE warning, not an error."""
+    """Non-default fields the port cannot honour (F_smooth, fct_IDp) must
+    be accepted with ONE warning, not an error.  Fscale_i is NO LONGER in
+    that warning: since M40 it is a ported field (sigeps36.F YFAC — the
+    curve scale), stored in params['yfac'] and applied at curve-resolve
+    time (see tests/test_m40_law36_solids.py for the physics)."""
     deck = (
         "/MAT/LAW36/8\n"
         "flagged\n"
@@ -116,7 +119,8 @@ def test_law36_real_format_warns_on_unported_fields(tmp_path):
     w = "\n".join(log.warnings)
     assert "F_smooth" in w
     assert "fct_IDp" in w
-    assert "Fscale_i" in w
+    assert "Fscale_i" not in w                       # ported in M40
+    assert model.materials[8].params["yfac"] == [3.0]
 
 
 def test_law36_compact_dialect_still_parses(tmp_path):

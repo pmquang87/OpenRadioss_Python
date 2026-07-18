@@ -26,15 +26,31 @@ from ..common.fastmath import norm3
 from . import spring_general
 
 #: Spring property TYPE numbers whose /PROP card carries a mass that THIS
-#: PORT actually reads, and which therefore may be mass-checked (M39 /
-#: M38-NEW-1).  The check below is a real requirement — an explicit spring
-#: with no mass has no stable time step — but it may only be applied to a
-#: property whose mass field was genuinely read:
+#: PORT actually reads AND whose Starter reader genuinely REQUIRES mass > 0.
+#: The check below is a real requirement for an ACTIVE spring — a TYPE4
+#: /SPRING with no mass has no stable time step of its own — but it must
+#: mirror what the Fortran Starter actually enforces, card for card:
 #:
-#: * TYPE4  (/PROP/SPRING)  — hand reader in starter_keywords.read_prop;
-#: * TYPE32 (/PROP/SPR_PRE) — prop_reader.parse_spr_pre; its cfg CHECK
-#:   block independently demands MASS > 0, and hm_read_prop32.F's RINI32
-#:   sets the element mass to it (MASS(I) = AMAS).
+#: * TYPE4 (/PROP/SPRING) — hand reader in starter_keywords.read_prop; the
+#:   Fortran /PROP/TYPE4 reader/RINI4 needs a positive mass for the spring's
+#:   own explicit step, so the port checks it.
+#:
+#: TYPE32 (/PROP/SPR_PRE) is NOT in this set (M40): the Fortran Starter does
+#: NOT enforce MASS > 0 for the pretensioner.  ``hm_read_prop32.F`` reads the
+#: card mass with ``HM_GET_FLOATV('MASS',AMAS,...)`` (a BLANK field gives
+#: AMAS = 0), stores it with ``SET_U_GEO(1,AMAS)``, and its only checks are
+#: MSGID 408 (F1/D1/E1/STIF1 force-curve over-specification) and MSGID 406
+#: (zero spring LENGTH XL) — there is no mass check.  The ``MASS > 0`` in
+#: ``prop_p32_spr_pre.cfg``'s CHECK block is a HyperMesh-GUI validation, not
+#: a Starter one.  Verified by running the real ``starter_win64.exe`` on
+#: RD-HWX-T-1010 cantilever_completed (whose SPR_PRE/2 card has a BLANK mass,
+#: Stif0 = 13744.468): 0 ERRORS, the listing printing
+#: ``MASS. . . = 0.000000000000`` — accepted.  So a blank/zero pretensioner
+#: mass is legal Starter data; the port mirrors that and does not error.
+#: (parse_spr_pre still READS the field so a real mass — e.g. RD-V-0031's
+#: 1E-5 — feeds the nodal mass; the pretensioner physics is unported, so the
+#: Engine refuses the group by :func:`prop_reader.refuse_inactive_properties`
+#: — the honest ERROR->SKIPS the check must not pre-empt.  M39-BUG-SPRPRE.)
 #:
 #: TYPE8/TYPE13 are excluded because :mod:`spring_general` owns their mass.
 #: Every OTHER spring spelling (SPR_PUL 12, SPR_MAT 23, SPR_AXI 25,
@@ -45,9 +61,9 @@ from . import spring_general
 #: names the wrong card while doing it; the Engine already refuses those
 #: groups (``prop_reader.refuse_inactive_properties``) and the Starter
 #: already warns (checks.check_model's PROP CHECK), which is the honest
-#: pair of messages.  Add a type here only together with a reader that
-#: fills its mass.
-_MASS_REQUIRED_SPRING_TYPES = frozenset({4, 32})
+#: pair of messages.  Add a type here only together with a reader that fills
+#: its mass AND a Fortran Starter that actually requires it.
+_MASS_REQUIRED_SPRING_TYPES = frozenset({4})
 
 #: /PROP spelling per TYPE for the mass message (the card the user wrote)
 _SPRING_PROP_SPELLING = {4: "SPRING", 32: "SPR_PRE"}

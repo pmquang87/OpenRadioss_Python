@@ -599,9 +599,19 @@ def forces(group, x, v, vr, dt, fint, mint):
             extra["F"] = F[sl]
         for name, arr in st["mat_extra"].items():
             extra[name] = arr[sl]
-        if materials.needs_env(mat):
+        if materials.needs_env(mat) and not st.get("_impl_static_hg"):
             # M37 pack 2: LAW24/LAW81 gate their dilatancy on the current
-            # density / internal energy (see materials.needs_env)
+            # density / internal energy (see materials.needs_env).
+            # NOT under the implicit pseudo-velocity drive (M40): there the
+            # kernel runs on the frozen small-strain frame, so rho == rho0
+            # identically and LAW36's total pressure P = K*(rho/rho0 - 1)
+            # (sigeps36.F IEOS==0) would degenerate to P == 0 for every
+            # trial u — no volumetric residual while the M13 consistent
+            # tangent carries K, stalling Newton. Without the env the law
+            # takes its documented hypoelastic trace-increment fallback,
+            # which is EXACTLY the form the consistent tangent linearizes.
+            # (The other needs_env laws have no implicit tangent and are
+            # refused by materials.solid_tangent at assembly time.)
             extra["rho"] = rho[sl]
             extra["eint"] = st["eint"][sl]
         _, _, c_new = materials.solid_update(

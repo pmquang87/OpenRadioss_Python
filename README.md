@@ -42,16 +42,24 @@ pip install -e .          # installs `pyradioss` + the two console scripts
 The only runtime dependency is **NumPy** (all element/material kernels are
 vectorized over elements — this matches how the Fortran loops over element
 *groups*). Since M7 there is also an **optional numba backend** for the
-hottest kernels (2–3× on the bundled examples, same results):
+hottest kernels (1.5–2.9× on the bundled examples, identical results), and
+since M40 it is the **default when it pays off**: if numba is installed the
+engine turns it on automatically for models large enough to amortise its
+one-time JIT warm-up (≥ 32 elements, a threshold derived from the M39 speed
+sweep) and stays on NumPy for small models and whenever numba is absent — so
+the base install keeps working unchanged. The engine listing names the
+chosen backend (`COMPUTE BACKEND . . . : numba (auto: 200 elements >= 32)`).
 
 ```bash
-pip install -e ".[accel]"                        # adds numba
-pyradioss-engine -i MYRUN_0001.rad -backend numba   # or PYRADIOSS_BACKEND=numba
+pip install -e ".[accel]"                          # adds numba -> auto-enabled
+pyradioss-engine -i MYRUN_0001.rad                 # auto: numba when it helps
+pyradioss-engine -i MYRUN_0001.rad -backend numpy  # pin (or PYRADIOSS_BACKEND=numpy)
 ```
 
-The base install keeps working unchanged without numba — see
-`pyradioss/accel/__init__.py` for the backend architecture and the parity
-contract, and `tools/benchmark.py` to measure both backends on the examples.
+Pin either backend with `-backend numpy|numba` or `PYRADIOSS_BACKEND` to
+override the auto default. See `pyradioss/accel/__init__.py` for the backend
+architecture, the auto-threshold derivation and the parity contract, and
+`tools/benchmark.py` to measure both backends on the examples.
 
 ## Running a simulation
 
@@ -146,12 +154,15 @@ roadmap. Milestones 1–11 (this state of the repository) cover:
   booked at the leapfrog-consistent midstep velocity; since M6 the
   numerical dissipation of the element dampers is measured exactly and
   reported as its own EN ledger).
-- **Performance** (M7): profiled cycle path with pure-NumPy fast paths
-  (`pyradioss/common/fastmath.py`) and an optional, explicitly-selected
-  numba backend (`pyradioss/accel`) mirroring the measured hotspots —
-  solid/shell kernels and the TYPE7 contact narrow phase — with a
-  tested parity contract: both backends produce the same results, and
-  the restart-chaining bit-match holds under numba.
+- **Performance** (M7, M39, M40): profiled cycle path with pure-NumPy fast
+  paths (`pyradioss/common/fastmath.py`) and a numba backend
+  (`pyradioss/accel`) mirroring the measured hotspots — solid/shell kernels,
+  the TYPE7 contact narrow phase and the force scatter — with a tested
+  parity contract: both backends produce the same results, and the
+  restart-chaining bit-match holds under numba. Since M40 the backend
+  defaults to `auto` — numba once installed and the model is large enough to
+  amortise JIT warm-up (a size threshold derived from the M39 speed sweep),
+  NumPy otherwise — with `-backend`/`PYRADIOSS_BACKEND` still pinning either.
 - **Implicit solver** (M8–M11, `pyradioss/implicit/`, needs SciPy):
   a parallel Newton–Raphson branch reusing the explicit force kernels for
   the residual — statics with load stepping and /IMPDISP displacement

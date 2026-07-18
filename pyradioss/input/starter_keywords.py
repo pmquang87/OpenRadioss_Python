@@ -591,9 +591,11 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
         Fields the port does not implement (F_smooth/C_hard/F_cut/Eps_f/
         VP/Eps_t/Eps_m, the fct_IDp pressure function, the fct_IDE
-        modulus evolution, per-curve Fscale != 1) are accepted and
-        reported in ONE warning, mirroring the 'accepted, ignored'
-        contract of the original Starter listing.
+        modulus evolution) are accepted and reported in ONE warning,
+        mirroring the 'accepted, ignored' contract of the original
+        Starter listing.  The per-curve Fscale_i IS applied (M40): it
+        scales the hardening curve (value and slope, sigeps36.F YFAC)
+        when the /FUNCT arrays are resolved.
 
       the yield stress follows the /FUNCT curves, linearly interpolated
       in strain rate; the element is deleted at eps_p_max (0 = no limit).
@@ -869,10 +871,20 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 if idx < len(cards):
                     yfac.extend(_list20(cards[idx]))
                     idx += 1
-            # hm_read_mat36.F: YFAC == 0 -> 1.0 (default scale)
+            # hm_read_mat36.F: YFAC == 0 -> 1.0 (default scale).  YFAC
+            # multiplies BOTH the curve value and its slope at engine
+            # evaluation time (sigeps36.F: Y1*YFAC, DYDX1*YFAC before the
+            # rate interpolation) — the port applies it once, per curve,
+            # when the /FUNCT arrays are resolved (resolve_material_curves),
+            # which is algebraically identical.  M40: previously parsed but
+            # only WARNED about ("curves used unscaled") — on the RD-V-0700
+            # LAW36 decks (curves in MPa, Fscale_i = 1e-3, work unit GPa)
+            # that made the yield 1000x too high: the material never
+            # yielded, /FAIL/JOHNSON never accumulated damage, and the
+            # solids deviated ~19 % on IE where LAW2 matched at 2.3 %.
             yfac = [y if y != 0.0 else 1.0 for y in yfac[:nfun]]
-            if any(y != 1.0 for y in yfac):
-                ign.append(f"Fscale_i={yfac} (curves used unscaled)")
+            yfac += [1.0] * (nfun - len(yfac))
+            params["yfac"] = yfac
             rates: List[float] = []
             for _ in range(nlist):
                 if idx < len(cards):
@@ -908,6 +920,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                           block.source)
                 return
             params["funct_ids"] = fids[:nfun]
+            params["yfac"] = [1.0] * nfun    # compact layout has no Fscale_i
             if nfun > 1:
                 if len(cards) < 5:
                     log.error(f"/MAT/LAW36/{block.user_id}: N_funct>1 needs "
@@ -1239,6 +1252,10 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 params["hm"] = _fval(h[0]) or hm_d
                 params["hf"] = _fval(h[1]) or hf_d
                 params["hr"] = _fval(h[2]) or hr_d
+                # dn (5th field): the BATOZ-family numerical damping that
+                # enters the dt claim (cncoef3.F AMU -> cndt3.F VISCMX;
+                # zero -> the formulation default, see shell_bt4, M40)
+                params["dn"] = _fval(h[4])
             else:
                 params["hm"], params["hf"], params["hr"] = hm_d, hf_d, hr_d
             if len(cards) >= 3:
@@ -1278,6 +1295,8 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                                      defaults=[hm_d, hf_d, hr_d])[:3]
                 params["hm"], params["hf"], params["hr"] = \
                     hm or hm_d, hf or hf_d, hr or hr_d
+                # dn (5th field) — BATOZ-family numerical damping (M40)
+                params["dn"] = _floats(cards[1], 5)[4]
             else:
                 params["hm"], params["hf"], params["hr"] = hm_d, hf_d, hr_d
             if len(cards) >= 3:

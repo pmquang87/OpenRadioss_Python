@@ -23,11 +23,13 @@ def main(argv=None) -> int:
     ap.add_argument("-np", dest="nspmd", type=int, default=1,
                     help="MPI domains (ignored: the port has no MPI)")
     ap.add_argument("-backend", "--backend", dest="backend", default=None,
-                    choices=["numpy", "numba"],
-                    help="compute backend (M7): 'numpy' (default) or the "
-                         "optional 'numba' JIT backend — overrides the "
-                         "PYRADIOSS_BACKEND environment variable; numba "
-                         "missing falls back to numpy with a warning")
+                    choices=["numpy", "numba", "auto"],
+                    help="compute backend: 'auto' (M40 default — the numba "
+                         "JIT backend on models large enough to amortise its "
+                         "warm-up, else numpy) or PIN 'numpy'/'numba' — "
+                         "overrides the PYRADIOSS_BACKEND environment "
+                         "variable; numba missing falls back to numpy with a "
+                         "warning")
     ap.add_argument("-linsolve", "--linsolve", dest="linsolve", default=None,
                     choices=["superlu", "cholmod", "mumps"],
                     help="direct linear solver for the implicit run (M8): "
