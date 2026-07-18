@@ -189,6 +189,8 @@ import math
 
 import numpy as np
 
+from ..common.npcompat import trapezoid
+
 
 # ============================================================================
 # The Winterstein Hermite-moment model (build-order item 1)
@@ -338,8 +340,8 @@ def nongaussian_correction_factor(gamma3, gamma4, m, alpha2=1.0,
     # power m; a monotone increasing g stays >= 0 on v >= 0 except a negligible
     # dip near v = 0 (Rayleigh weight ~ 0 there) for a skewed transform — clip it
     gv = np.clip(gv, 0.0, None)
-    num = np.trapezoid(gv ** m * _RAYLEIGH_PDF, v)
-    den = np.trapezoid(v ** m * _RAYLEIGH_PDF, v)     # same grid -> exact 1 for id
+    num = trapezoid(gv ** m * _RAYLEIGH_PDF, v)
+    den = trapezoid(v ** m * _RAYLEIGH_PDF, v)     # same grid -> exact 1 for id
     lam = float(num / den) if den > 0 else 1.0
     lam = max(lam, 0.0)
     return (lam, coeffs) if return_coeffs else lam

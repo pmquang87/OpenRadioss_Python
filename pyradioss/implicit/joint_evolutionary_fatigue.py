@@ -225,6 +225,8 @@ import math
 
 import numpy as np
 
+from ..common.npcompat import trapezoid
+
 # reuse the M21 tensor / plane machinery and the M26 drifting-shape window,
 # read-only (the natural consumer relationship — M27 is the joint-tensor lift of
 # the M26 scalar-evolutionary path, both built on M21)
@@ -269,7 +271,7 @@ def windowed_tensor_moment_matrices(omega, Scross, window, scale=1.0, nmax=4):
     out = np.zeros((nmax + 1, 6, 6))
     for n in range(nmax + 1):
         integrand = (w ** n)[:, None, None] * Sw          # (nf, 6, 6)
-        out[n] = a2 * np.trapezoid(integrand.real, w, axis=0) / np.pi
+        out[n] = a2 * trapezoid(integrand.real, w, axis=0) / np.pi
     return out
 
 

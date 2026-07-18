@@ -1,0 +1,4477 @@
+{
+ "milestone": "M41",
+ "tolerance_rel_rms": 0.05,
+ "machine": "13th Gen Intel(R) Core(TM) i9-13900H",
+ "headline": "RD-E-1000 shell-technology verdict: the FULL Bending family (c00..c09, c40..c45) re-run FRESH on the M41 tree \u2014 BT cdefo3 second-order membrane correction + QBAT (Ishell=12) + QEPH (Ishell=24) + Sf_0.1 guard floor. Table (a) is which variants now MATCH (<0.05) vs the M40 baseline (all DEVIATION ~0.23 or NO-CHANNELS).",
+ "contention_note": "M41 records measured with contention sampled per case (reliable plain-tasklist regex). Parity classes and channel rel-RMS are deterministic and unaffected; a borderline case can only be pushed to SKIPPED-SLOW if contention exhausts the port budget.",
+ "comparison_note": "Fortran reference CSVs are CARRIED (deterministic, unchanged since M37); the port side is a FRESH M41 numpy run on the shell-technology tree. Channels compared over the OVERLAP window [0, min(fortran, port) final time] interpolated onto the port grid (same semantics as M36..M40). Cases not re-run this session are M40-carried (provenance tag).",
+ "results": [
+  {
+   "case": "c00_E0100_Twisted_beam_DKT18",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-0100_Twisted_beam/01_Twisted_Beam/DKT18/TWISBEAM_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "DKT18 (twisted beam)",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.45558419892982893,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.207982111117355,
+     "final_dev": 0.38931728105410773,
+     "scale": 0.008040099874938492,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.24448546387974784,
+     "final_dev": 0.22948307457128764,
+     "scale": 0.002033576083257917,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.22516332777494774,
+     "final_dev": 0.3254479062016205,
+     "scale": 0.008239386416886615,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 7.548958437800286e-08,
+     "final_dev": 7.548958437800287e-08,
+     "scale": 0.009339036705,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.4966491190543532,
+     "final_dev": 0.336422046188038,
+     "scale": 1.272142499e-05,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.37483377507980536,
+     "final_dev": 0.28352025243183415,
+     "scale": 0.0033979337675521825,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.45558419892982893,
+     "final_dev": 0.39789906005522807,
+     "scale": 0.00474014877018939,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.22440935590838168,
+     "final_dev": 0.32346033473227703,
+     "scale": 0.00823432812235967,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": -0.2,
+   "port_hg_over_ie": 0.0,
+   "port_budget_s": 900.0,
+   "fortran_status": null,
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": null,
+   "m40_max_rel_rms": null,
+   "m39_class": null,
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c01_E0500_Beam_frame",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-0500_Beam_frame/05_Beam-frame/FRAME_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "Beam frame (BT+beam)",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.9995136663203248,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.8094193459059202,
+     "final_dev": 0.9684440748600105,
+     "scale": 149984.4411979914,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.4370030079778631,
+     "final_dev": 0.03162947719342872,
+     "scale": 150000.484507731,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.7568082304789947,
+     "final_dev": 0.5859266364056216,
+     "scale": 127.98201232156943,
+     "significant": false
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.9443155978273187,
+     "final_dev": 0.9443155978273187,
+     "scale": 3176.904,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.17715160170780694,
+     "final_dev": 0.06522009552716747,
+     "scale": 0.000775946051308112,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.20495742466747172,
+     "final_dev": 0.057668117375429255,
+     "scale": 0.0015125600439189926,
+     "significant": false
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.5207306786754715,
+     "final_dev": 0.1743341309298244,
+     "scale": 30136.299852318392,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.9995136663203248,
+     "final_dev": 0.9998271611706433,
+     "scale": 150021.90991441242,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.8094193459059202,
+     "final_dev": 0.9684440748600105,
+     "scale": 149984.4411979914,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.3136652966416888,
+     "final_dev": 0.010439637455024024,
+     "scale": 2026.2701919337721,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": 0.0,
+   "port_hg_over_ie": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.9995136663203248,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.9995136663203248,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c02_E1000_Bending_BATOZ_Sf_0.6",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BATOZ/Sf_0.6/ROLLING_0000.rad",
+   "group": "m36-40",
+   "headline_family": "RD-E-1000-SHELLTECH",
+   "formulation": "QBAT (Ishell=12) Sf0.6",
+   "class": "MATCH",
+   "max_rel_rms": 0.012612538238782056,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.004651761920435333,
+     "final_dev": 0.011313688717787993,
+     "scale": 1483442.7940019842,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.010633434188595947,
+     "final_dev": 0.004958267588230504,
+     "scale": 788.0726996430677,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.3715626540843695,
+     "final_dev": 1.0,
+     "scale": 0.36115415,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.004647223303629684,
+     "final_dev": 0.011307192267667325,
+     "scale": 1483556.7939087301,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.06997851413942503,
+     "final_dev": 0.5195242437111816,
+     "scale": 0.3074847421,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.008314584310159155,
+     "final_dev": 0.017448727290334212,
+     "scale": 1606.744619,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.012612538238782056,
+     "final_dev": 0.01888107025544206,
+     "scale": 1742.6979928860037,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.004651383910275679,
+     "final_dev": 0.011315460418969477,
+     "scale": 1483555.847994108,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.004651761920435333,
+     "final_dev": 0.011313688717787993,
+     "scale": 1483442.7940019842,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.01061906169934263,
+     "final_dev": 0.004949639061025791,
+     "scale": 788.0726996394587,
+     "significant": false
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": -0.0,
+   "port_hg_over_ie": 0.0,
+   "port_budget_s": 1800.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.22979490370616698,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.5535050619336117,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c03_E1000_Bending_BATOZ_Sf_0.8",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BATOZ/Sf_0.8/ROLLING_0000.rad",
+   "group": "m36-40",
+   "headline_family": "RD-E-1000-SHELLTECH",
+   "formulation": "QBAT (Ishell=12) Sf0.8",
+   "class": "MATCH",
+   "max_rel_rms": 0.009446593717375835,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.003500930205325885,
+     "final_dev": 0.008512896200756874,
+     "scale": 1477061.912745292,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.007974377632899666,
+     "final_dev": 0.0027093177912875686,
+     "scale": 786.6099990068227,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.5021988829019782,
+     "final_dev": 1.0,
+     "scale": 0.262575394,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.003495103917885253,
+     "final_dev": 0.008502907205180156,
+     "scale": 1477173.912705649,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.06216913847004662,
+     "final_dev": 0.8369172009673794,
+     "scale": 0.4519377800177238,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.006228688925949797,
+     "final_dev": 0.00929174130624185,
+     "scale": 1606.744621,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.009446593717375835,
+     "final_dev": 0.011429627044491212,
+     "scale": 1740.6009928256015,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.0035006501031509363,
+     "final_dev": 0.008513699653519394,
+     "scale": 1477172.843014057,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.003500930205325885,
+     "final_dev": 0.008512896200756874,
+     "scale": 1477061.912745292,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.007955214756932805,
+     "final_dev": 0.0026924118278510386,
+     "scale": 786.6095990577548,
+     "significant": false
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": -0.0,
+   "port_hg_over_ie": 0.0,
+   "port_budget_s": 1800.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.23352122955268595,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.5541167293799433,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c04_E1000_Bending_BATOZ_Sf_0.9",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BATOZ/Sf_0.9/ROLLING_0000.rad",
+   "group": "m36-40",
+   "headline_family": "RD-E-1000-SHELLTECH",
+   "formulation": "QBAT (Ishell=12) Sf0.9",
+   "class": "MATCH",
+   "max_rel_rms": 0.008393049731271715,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.0031161983201012235,
+     "final_dev": 0.007577332198026227,
+     "scale": 1475651.1872542372,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.007085982135664764,
+     "final_dev": 0.0022178367320279113,
+     "scale": 786.1139993815754,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.4046866404826875,
+     "final_dev": 1.0,
+     "scale": 0.3288302172,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.0031097259706779705,
+     "final_dev": 0.007565984088057468,
+     "scale": 1475763.1877966102,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.07397773644840874,
+     "final_dev": 0.5155293529933709,
+     "scale": 0.49696459362782536,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.00553591622862664,
+     "final_dev": 0.007792632647799494,
+     "scale": 1606.744649,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.008393049731271715,
+     "final_dev": 0.009819980822308325,
+     "scale": 1739.895992033104,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.003115950958777215,
+     "final_dev": 0.007577945913637486,
+     "scale": 1475761.7505048406,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.0031161983201012235,
+     "final_dev": 0.007577332198026227,
+     "scale": 1475651.1872542372,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.007064379577132643,
+     "final_dev": 0.0022109763675259844,
+     "scale": 786.1132993761914,
+     "significant": false
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": -0.0,
+   "port_hg_over_ie": 0.0,
+   "port_budget_s": 1800.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.23014371125742902,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.5543231704776816,
+   "numba_spot_class": "MATCH",
+   "numba_spot_max_rel_rms": 0.008393049731271715,
+   "numba_backend_used": "numba",
+   "numba_vs_numpy_t01_maxabs": 0.0,
+   "numba_vs_numpy_bitwise": true
+  },
+  {
+   "case": "c05_E1000_Bending_DKT18_Sf_0.1",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/DKT18/Sf_0.1/ROLLING_0000.rad",
+   "group": "m36-40",
+   "headline_family": "RD-E-1000-SHELLTECH",
+   "formulation": "DKT18 (Ishell=0) Sf0.1",
+   "class": "SKIPPED-SLOW",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_termination": null,
+   "port_energy_error_pct": null,
+   "port_hg_over_ie": null,
+   "port_budget_s": 1800.0,
+   "fortran_status": null,
+   "pyradioss_status": "timeout",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": null,
+   "m40_max_rel_rms": null,
+   "m39_class": null,
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c06_E1000_Bending_DKT18_Sf_0.2",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/DKT18/Sf_0.2/ROLLING_0000.rad",
+   "group": "m36-40",
+   "headline_family": "RD-E-1000-SHELLTECH",
+   "formulation": "DKT18 (Ishell=0) Sf0.2",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.2813025962301115,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.06401838190494853,
+     "final_dev": 0.18084195700613598,
+     "scale": 1538744.815,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.19172530779831956,
+     "final_dev": 0.9981410744433695,
+     "scale": 198743.78114940118,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.04483828479036536,
+     "final_dev": 0.14702460363620456,
+     "scale": 1541036.906,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.2813025962301115,
+     "final_dev": 0.16133066434910182,
+     "scale": 4955.691466213614,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.16248747453344256,
+     "final_dev": 0.12365020719479147,
+     "scale": 4903.128501140109,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.19376028437830536,
+     "final_dev": 0.30791133229110285,
+     "scale": 6541.536834717806,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.04228428135150639,
+     "final_dev": 0.051909916141116445,
+     "scale": 1539114.264894,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.06401838190494853,
+     "final_dev": 0.18084195700613598,
+     "scale": 1538744.815,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.18943603571683904,
+     "final_dev": 0.9981671219382113,
+     "scale": 201568.17941257486,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": -0.11,
+   "port_hg_over_ie": 0.0,
+   "port_budget_s": 1800.0,
+   "fortran_status": null,
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": null,
+   "m40_max_rel_rms": null,
+   "m39_class": null,
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c07_E1000_Bending_DKT18_Sf_0.3",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/DKT18/Sf_0.3/ROLLING_0000.rad",
+   "group": "m36-40",
+   "headline_family": "RD-E-1000-SHELLTECH",
+   "formulation": "DKT18 (Ishell=0) Sf0.3",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.25812750514955835,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.051210587354232354,
+     "final_dev": 0.19100586525929292,
+     "scale": 1132675.314,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.22842978827557275,
+     "final_dev": 0.9968191056873352,
+     "scale": 65420.977795917715,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.03329856889249414,
+     "final_dev": 0.09858454315931804,
+     "scale": 1132986.227,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.25812750514955835,
+     "final_dev": 0.517723328190109,
+     "scale": 4874.383379358387,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.14931289292078265,
+     "final_dev": 0.08835423668510685,
+     "scale": 4139.22136544904,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.18010737770273735,
+     "final_dev": 0.18338852195836003,
+     "scale": 5747.801815435401,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.039219768534628885,
+     "final_dev": 0.1334071505791084,
+     "scale": 1132883.4112162,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.051210587354232354,
+     "final_dev": 0.19100586525929292,
+     "scale": 1132675.314,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.2240101044219507,
+     "final_dev": 0.9968832985349925,
+     "scale": 66768.4147924943,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": -0.02,
+   "port_hg_over_ie": 0.0,
+   "port_budget_s": 1800.0,
+   "fortran_status": null,
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": null,
+   "m40_max_rel_rms": null,
+   "m39_class": null,
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c08_E1000_Bending_QEPH_Sf_0.8",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/QEPH/Sf_0.8/ROLLING_0000.rad",
+   "group": "m36-40",
+   "headline_family": "RD-E-1000-SHELLTECH",
+   "formulation": "QEPH (Ishell=24) Sf0.8",
+   "class": "MATCH",
+   "max_rel_rms": 5.841708325388154e-06,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 5.841708325388154e-06,
+     "final_dev": 1.055109959231294e-05,
+     "scale": 1466655.9978335008,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 8.329190725544188e-07,
+     "final_dev": 5.77448793195833e-07,
+     "scale": 782.1325975060971,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 2.063444506291652e-07,
+     "final_dev": 4.753083783485481e-07,
+     "scale": 1466766.695,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 3.5285992875181403e-06,
+     "final_dev": 1.6891565201494853e-06,
+     "scale": 1606.74722,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 4.3023182289258035e-06,
+     "final_dev": 2.5939939864252127e-06,
+     "scale": 1734.223139,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 5.841262099732548e-06,
+     "final_dev": 1.0550006694027877e-05,
+     "scale": 1466765.1223331592,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 5.841708325388154e-06,
+     "final_dev": 1.055109959231294e-05,
+     "scale": 1466655.9978335008,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 2.3010754701293523e-05,
+     "final_dev": 4.540971058718138e-06,
+     "scale": 782.1323402,
+     "significant": false
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": -0.0,
+   "port_hg_over_ie": 0.0,
+   "port_budget_s": 1800.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.23297773288230747,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.5559850133152757,
+   "numba_spot_class": "MATCH",
+   "numba_spot_max_rel_rms": 5.841708325388154e-06,
+   "numba_backend_used": "numba",
+   "numba_vs_numpy_t01_maxabs": 0.0,
+   "numba_vs_numpy_bitwise": true
+  },
+  {
+   "case": "c09_E1000_Bending_QEPH_Sf_0.9",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/QEPH/Sf_0.9/ROLLING_0000.rad",
+   "group": "m36-40",
+   "headline_family": "RD-E-1000-SHELLTECH",
+   "formulation": "QEPH (Ishell=24) Sf0.9",
+   "class": "MATCH",
+   "max_rel_rms": 6.580144914995088e-06,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 6.580144914995088e-06,
+     "final_dev": 1.1737533592212908e-05,
+     "scale": 1464491.8485222675,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 8.699026793941259e-07,
+     "final_dev": 1.273413056823323e-06,
+     "scale": 782.1324962117648,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 2.1295957115907626e-07,
+     "final_dev": 4.3457370794045455e-07,
+     "scale": 1464602.485,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 3.555147143790166e-06,
+     "final_dev": 1.9897985200786932e-07,
+     "scale": 1606.748235,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 4.283208833569912e-06,
+     "final_dev": 2.514805383945279e-06,
+     "scale": 1734.223025,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 6.579647360654475e-06,
+     "final_dev": 1.1737341817596292e-05,
+     "scale": 1464600.6321092453,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 6.580144914995088e-06,
+     "final_dev": 1.1737533592212908e-05,
+     "scale": 1464491.8485222675,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 2.5892408907117387e-05,
+     "final_dev": 1.5392922492847036e-06,
+     "scale": 782.1322835,
+     "significant": false
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": -0.0,
+   "port_hg_over_ie": 0.0,
+   "port_budget_s": 1800.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.23089517445481886,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.5559849618668071,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c10_V0030_Spring_Type_4_stiff",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_v_elements/RD-V-0030_Spring_Type_4/0030_spring_type_4/0030_spring_type_4_stiff/Spring_TYPE4_element_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "shell",
+   "class": "NO-CHANNELS",
+   "max_rel_rms": null,
+   "channels": [],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": -0.0,
+   "port_hg_over_ie": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "NO-CHANNELS",
+   "m40_max_rel_rms": null,
+   "m39_class": "NO-CHANNELS",
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c11_V0030_Spring_Type_4_visc",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_v_elements/RD-V-0030_Spring_Type_4/0030_spring_type_4/0030_spring_type_4_visc/Spring_TYPE4_element_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "shell",
+   "class": "NO-CHANNELS",
+   "max_rel_rms": null,
+   "channels": [],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": 0.0,
+   "port_hg_over_ie": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "NO-CHANNELS",
+   "m40_max_rel_rms": null,
+   "m39_class": "NO-CHANNELS",
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c13_V0700_LAW2_HEXA_18_LAW2",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/HEXA_ELEM_SOLID_18_LAW2/HEXAP14_18_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.20899214318855944,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.20899167250570982,
+     "final_dev": 0.8704850509897599,
+     "scale": 8393108052.0,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.20899214318855944,
+     "final_dev": 0.8704853595924419,
+     "scale": 8393197541.0,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.156,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.0011697793921143155,
+     "final_dev": 0.0011913845853140953,
+     "scale": 0.3394795412,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.0024976213920439062,
+     "final_dev": 0.0024970867037151998,
+     "scale": 0.1702921312,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.00910419242321131,
+     "final_dev": 0.008994141996957156,
+     "scale": 0.1405246265,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.2089916723867846,
+     "final_dev": 0.8704850504989873,
+     "scale": 8393108056.683215,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": -0.0,
+   "port_hg_over_ie": 0.0,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.20899214318855944,
+   "m39_class": "NO-CHANNELS",
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c14_V0700_LAW2_HEXA_24_LAW2",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/HEXA_ELEM_SOLID_24_LAW2/HEXA_LAW2_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.20899214317146372,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.20899167362788698,
+     "final_dev": 0.870484884379745,
+     "scale": 8393108052.0,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.20899214317146372,
+     "final_dev": 0.8704851929842035,
+     "scale": 8393197541.0,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.156,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.0034882114134867606,
+     "final_dev": 0.003569685458718413,
+     "scale": 0.34069571774949803,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.05414086719500471,
+     "final_dev": 0.06310383186503687,
+     "scale": 0.18176201055341368,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.13776095052003795,
+     "final_dev": 0.16169948396137693,
+     "scale": 0.16763037098443775,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.2089916734974245,
+     "final_dev": 0.8704848838637316,
+     "scale": 8393108056.683215,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": -0.0,
+   "port_hg_over_ie": 0.0,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.20899214317146372,
+   "m39_class": "NO-CHANNELS",
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c19_V0700_LAW36_HEXA_18",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW36_version2/HEXA_ELEM_SOLID_18/HEXAP14_18_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "shell",
+   "class": "MATCH",
+   "max_rel_rms": 0.0011261464783572771,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 1.0930087972925203e-06,
+     "final_dev": 1.7015274392357941e-06,
+     "scale": 1143999605.5467193,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.01066626768420199,
+     "final_dev": 0.011360634139189243,
+     "scale": 4.736976282471172,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 1.4742782676357502e-06,
+     "final_dev": 5.4557879201882545e-06,
+     "scale": 1144005847.0,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.156,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.0003149533852546687,
+     "final_dev": 8.735762884147833e-06,
+     "scale": 0.3392900647575547,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.00032532255213382045,
+     "final_dev": 1.7659733260619437e-05,
+     "scale": 0.17029758580994034,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.0011261464783572771,
+     "final_dev": 4.867048010140964e-05,
+     "scale": 0.14056318367763418,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 1.0930437016054267e-06,
+     "final_dev": 1.7015744731922936e-06,
+     "scale": 1143999610.2836955,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": -0.0,
+   "port_hg_over_ie": 0.0,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "MATCH",
+   "m40_max_rel_rms": 0.0011261464783356863,
+   "m39_class": "NO-CHANNELS",
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c20_V0700_LAW36_HEXA_24",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW36_version2/HEXA_ELEM_SOLID_24/HEXA1_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.31561531680675253,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 1.1032159134801725e-06,
+     "final_dev": 1.4728360367670163e-06,
+     "scale": 1143999343.9234598,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.06653317874451452,
+     "final_dev": 0.0725147610013946,
+     "scale": 5.049310793405567,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 1.471772935190492e-06,
+     "final_dev": 5.6844784117888385e-06,
+     "scale": 1144005847.0,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.156,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.053198580484896014,
+     "final_dev": 0.05613760359639199,
+     "scale": 0.3392871008,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.07909333502946596,
+     "final_dev": 0.07564248582971338,
+     "scale": 0.1702945784,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.31561531680675253,
+     "final_dev": 0.29640478258567243,
+     "scale": 0.1405563424,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 1.1034530923784433e-06,
+     "final_dev": 1.473156091135079e-06,
+     "scale": 1143999348.9727705,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": -0.0,
+   "port_hg_over_ie": 0.0,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.3156153168071513,
+   "m39_class": "NO-CHANNELS",
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c26_V0200_Hardening",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_v_material/RD-V-0200_Hardening/0200_hardening/rdv_0200_hardening_modulus_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "shell",
+   "class": "MATCH",
+   "max_rel_rms": 0.021559735514835414,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 2.9336894098808728e-05,
+     "final_dev": 3.299006270877759e-05,
+     "scale": 6497983.413880304,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.024676753554171277,
+     "final_dev": 0.0015936083382608764,
+     "scale": 7.346450117653855,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.9986476643869159,
+     "final_dev": 1.0,
+     "scale": 2.307395012,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 2.2920283828735967e-05,
+     "final_dev": 3.0980897344781405e-05,
+     "scale": 6498129.413880304,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 3.622054488670272e-07,
+     "final_dev": 3.6220544886702723e-07,
+     "scale": 0.000126999746,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.021559735514835414,
+     "final_dev": 0.00139412973355416,
+     "scale": 0.0330762227581015,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 2.9336399674344027e-05,
+     "final_dev": 3.299183254425562e-05,
+     "scale": 6497989.688223155,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_termination": "NORMAL",
+   "port_energy_error_pct": 0.0,
+   "port_hg_over_ie": 0.0,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "MATCH",
+   "m40_max_rel_rms": 0.021559735514854215,
+   "m39_class": "MATCH",
+   "m39_max_rel_rms": 0.021559735514854215,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c30_V0240_TETRA4_Itetra3",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": null,
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_v_material/RD_V_0240/Modele_TETRA4_Itetra3/tensile_TABULATED_TETRA4_3_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "shell",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_termination": null,
+   "port_energy_error_pct": null,
+   "port_hg_over_ie": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "engine-fail",
+   "pyradioss_status": "engine-fail",
+   "pyradioss_error": "ted \u2014 ignored\n ** WARNING     9 IN tensile_TABULATED_TETRA_0001.rad:18\n    engine keyword /H3D/SHELL/TENS/STRESS/NPT=ALL not ported \u2014 ignored\n RESTART FILE . . . . . . . . . . . . : C:\\Users\\pmqua\\AppData\\Local\\Temp\\claude\\C--Users-pmqua-PycharmProjects-OpenRadioss-Python\\3c2dcf1e-08fd-425b-ab67-ec0215fa4d3d\\scratchpad\\valruns41\\official\\p\\c30_V0240_TETRA4_Itetra3\\tensile_TABULATED_TETRA_0000.rst\n",
+   "reference_used": "tensile_TABULATED_TETRA4_3T01",
+   "m40_class": "PYRADIOSS-FAIL",
+   "m40_max_rel_rms": null,
+   "m39_class": "PYRADIOSS-FAIL",
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c34_T1000",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": null,
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "tutorial/RD-HWX-T-1000/unsolved_starter_model/data/tensile_start_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "shell",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_termination": null,
+   "port_energy_error_pct": null,
+   "port_hg_over_ie": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "starter-reject",
+   "pyradioss_status": "starter-fail",
+   "pyradioss_error": "PART/3: material 0 not defined\n ** ERROR     3 IN PART CHECK\n    /PART/3: property 0 not defined\n ** ERROR     4 IN PART CHECK\n    /PART/3: material 0 not defined\n\n              4 ERROR(S)\n              0 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.063 s\n\n     STARTER TERMINATION : ERROR\n     4 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "m40_class": "PYRADIOSS-FAIL",
+   "m40_max_rel_rms": null,
+   "m39_class": "PYRADIOSS-FAIL",
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c35_T1010_unsolved",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": null,
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "tutorial/RD-HWX-T-1010/unsolved/data/cantilever_start_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "shell",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_termination": null,
+   "port_energy_error_pct": null,
+   "port_hg_over_ie": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "starter-reject",
+   "pyradioss_status": "starter-fail",
+   "pyradioss_error": "PART/3: material 0 not defined\n ** ERROR     7 IN PART CHECK\n    /PART/4: property 0 not defined\n ** ERROR     8 IN PART CHECK\n    /PART/4: material 0 not defined\n\n              8 ERROR(S)\n              0 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.092 s\n\n     STARTER TERMINATION : ERROR\n     8 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "m40_class": "PYRADIOSS-FAIL",
+   "m40_max_rel_rms": null,
+   "m39_class": "PYRADIOSS-FAIL",
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c36_T1020_unsolved",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": null,
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "tutorial/RD-HWX-T-1020/unsolved/data/Front_Impact_initial_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "shell",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_termination": null,
+   "port_energy_error_pct": null,
+   "port_hg_over_ie": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "starter-reject",
+   "pyradioss_status": "starter-fail",
+   "pyradioss_error": "ART/7: material 0 not defined\n ** ERROR    23 IN PART CHECK\n    /PART/8: property 0 not defined\n ** ERROR    24 IN PART CHECK\n    /PART/8: material 0 not defined\n\n             24 ERROR(S)\n              2 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.358 s\n\n     STARTER TERMINATION : ERROR\n     24 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "m40_class": "PYRADIOSS-FAIL",
+   "m40_max_rel_rms": null,
+   "m39_class": "PYRADIOSS-FAIL",
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c38_T1060_unsolved",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": null,
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "tutorial/RD-HWX-T-1060/unsolved/data/3PB_initial_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "shell",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_termination": null,
+   "port_energy_error_pct": null,
+   "port_hg_over_ie": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "starter-reject",
+   "pyradioss_status": "starter-fail",
+   "pyradioss_error": "PART/4: material 0 not defined\n ** ERROR     7 IN PART CHECK\n    /PART/5: property 0 not defined\n ** ERROR     8 IN PART CHECK\n    /PART/5: material 0 not defined\n\n              8 ERROR(S)\n              0 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.343 s\n\n     STARTER TERMINATION : ERROR\n     8 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": null,
+   "m40_class": "PYRADIOSS-FAIL",
+   "m40_max_rel_rms": null,
+   "m39_class": "PYRADIOSS-FAIL",
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c39_TENSILE",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": null,
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "tutorial/TENSILE/TENSILE_0000.rad",
+   "group": "m36-40",
+   "headline_family": null,
+   "formulation": "shell",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_termination": null,
+   "port_energy_error_pct": null,
+   "port_hg_over_ie": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "starter-reject",
+   "pyradioss_status": "starter-fail",
+   "pyradioss_error": "PART/1: material 0 not defined\n ** ERROR     3 IN PART CHECK\n    /PART/1: property 0 not defined\n ** ERROR     4 IN PART CHECK\n    /PART/1: material 0 not defined\n\n              4 ERROR(S)\n              0 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.036 s\n\n     STARTER TERMINATION : ERROR\n     4 error(s) found while processing the deck (see messages above); restart file not written.\n",
+   "reference_used": "TENSILET01",
+   "m40_class": "PYRADIOSS-FAIL",
+   "m40_max_rel_rms": null,
+   "m39_class": "PYRADIOSS-FAIL",
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c40_E1000_Bending_BT_BT_type1_Sf_0",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BT/BT_type1/Sf_0.1/ROLLING_0000.rad",
+   "group": "m37-unlocked",
+   "headline_family": "RD-E-1000-SHELLTECH",
+   "formulation": "BT type1 (Ishell=1) Sf0.1",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.18915117511522364,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.07493528189942229,
+     "final_dev": 0.5138968580462048,
+     "scale": 572425.7785736526,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.10802728630130987,
+     "final_dev": 0.14328381598854043,
+     "scale": 31581.30744,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.17576158599341585,
+     "final_dev": 0.9998966212917776,
+     "scale": 210893.0623,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.004787000261643226,
+     "final_dev": 0.03547536998463867,
+     "scale": 573009.1525928144,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.06684866769679201,
+     "final_dev": 0.9338352760012681,
+     "scale": 236.6012661,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.09362193023305188,
+     "final_dev": 0.03742336816322057,
+     "scale": 2517.245902,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.18915117511522364,
+     "final_dev": 0.4356258751438654,
+     "scale": 6165.470903,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.07043069594863618,
+     "final_dev": 0.505572660605573,
+     "scale": 572900.2800167422,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.07493528189942229,
+     "final_dev": 0.5138968580462048,
+     "scale": 572425.7785736526,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.10802739031448283,
+     "final_dev": 0.1431947709526965,
+     "scale": 31581.30744,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 0.8916,
+   "port_termination": "ERROR - ENERGY ERROR -16.2% EXCEEDS LIMIT 15.0%",
+   "port_energy_error_pct": -16.16,
+   "port_hg_over_ie": 0.8285,
+   "port_budget_s": 1800.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "NO-CHANNELS",
+   "m40_max_rel_rms": null,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.6369451374906722,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c41_E1000_Bending_BT_BT_type1_Sf_0",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BT/BT_type1/Sf_0.9/ROLLING_0000.rad",
+   "group": "m37-unlocked",
+   "headline_family": "RD-E-1000-SHELLTECH",
+   "formulation": "BT type1 (Ishell=1) Sf0.9",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.13750034746788345,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.06717901378296973,
+     "final_dev": 0.4359344108697534,
+     "scale": 527488.6207094905,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.12770065218378923,
+     "final_dev": 0.5518228400313195,
+     "scale": 38239.5407,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.13750034746788345,
+     "final_dev": 0.9999993657504834,
+     "scale": 297845.1899,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.00043239970033527423,
+     "final_dev": 0.005694272773710564,
+     "scale": 527898.4470543456,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.09345758736191953,
+     "final_dev": 0.5300489497276262,
+     "scale": 377.5614666,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.08310839224404709,
+     "final_dev": 1.2132205536236997,
+     "scale": 2623.613249,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.02666032051610332,
+     "final_dev": 0.10162859319798559,
+     "scale": 1734.211314,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.05917095707629943,
+     "final_dev": 0.39562431315527663,
+     "scale": 527897.2555889232,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.06717901378296973,
+     "final_dev": 0.4359344108697534,
+     "scale": 527488.6207094905,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.12770061874826288,
+     "final_dev": 0.5518267521163192,
+     "scale": 38239.5407,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 0.8962,
+   "port_termination": "ERROR - NUMERICAL ENERGY INJECTION -31.3% EXCEEDS LIMIT 30.0% - RUN UNSTABLE",
+   "port_energy_error_pct": -13.74,
+   "port_hg_over_ie": 1.001,
+   "port_budget_s": 1800.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.23045996536442945,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.5546330875182296,
+   "numba_spot_class": "DEVIATION",
+   "numba_spot_max_rel_rms": 0.1374981046362685,
+   "numba_backend_used": "numba",
+   "numba_vs_numpy_t01_maxabs": 192.87790000002133,
+   "numba_vs_numpy_bitwise": false
+  },
+  {
+   "case": "c42_E1000_Bending_BT_BT_type3_Sf_0",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BT/BT_type3/Sf_0.1/ROLLING_0000.rad",
+   "group": "m37-unlocked",
+   "headline_family": "RD-E-1000-SHELLTECH",
+   "formulation": "BT type3 (Ishell=3) Sf0.1",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.25030368581431806,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.0497626500579712,
+     "final_dev": 0.33428003777908605,
+     "scale": 612507.3088385002,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.1106858375171974,
+     "final_dev": 0.8070853866433008,
+     "scale": 5614.37285,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.25030368581431806,
+     "final_dev": 1.0,
+     "scale": 107557.0232,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.004665011576962788,
+     "final_dev": 0.02659534166417982,
+     "scale": 612825.8019844001,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.03903038750416193,
+     "final_dev": 0.9999991846111573,
+     "scale": 8.439948933,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.045870962771003075,
+     "final_dev": 0.7707248132246818,
+     "scale": 3013.312226,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.051128138907409554,
+     "final_dev": 0.6497834091291864,
+     "scale": 2504.183407,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.04886144603149728,
+     "final_dev": 0.3267128010517129,
+     "scale": 612824.7421330982,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.0497626500579712,
+     "final_dev": 0.33428003777908605,
+     "scale": 612507.3088385002,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.11068583284284478,
+     "final_dev": 0.8070853688318724,
+     "scale": 5614.37285,
+     "significant": false
+    }
+   ],
+   "port_time_coverage": 0.915,
+   "port_termination": "ERROR - ENERGY ERROR -15.4% EXCEEDS LIMIT 15.0%",
+   "port_energy_error_pct": -15.43,
+   "port_hg_over_ie": 0.2736,
+   "port_budget_s": 1800.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "NO-CHANNELS",
+   "m40_max_rel_rms": null,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.6272503502075982,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c43_E1000_Bending_BT_BT_type3_Sf_0",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BT/BT_type3/Sf_0.9/ROLLING_0000.rad",
+   "group": "m37-unlocked",
+   "headline_family": "RD-E-1000-SHELLTECH",
+   "formulation": "BT type3 (Ishell=3) Sf0.9",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.2565737863252257,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.04191398958005555,
+     "final_dev": 0.3256525102284704,
+     "scale": 622366.1819252745,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.1208554883215988,
+     "final_dev": 0.9189883280268618,
+     "scale": 3668.672284,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.2565737863252257,
+     "final_dev": 1.0,
+     "scale": 131419.694,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.004652629661351627,
+     "final_dev": 0.025250085487837044,
+     "scale": 622664.5533010986,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.04371908092734238,
+     "final_dev": 0.9999999563093395,
+     "scale": 14.33128345,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.042023766697435204,
+     "final_dev": 0.803040256144033,
+     "scale": 3538.090515,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.0451632151443186,
+     "final_dev": 0.7148664602724104,
+     "scale": 2841.454219,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.041333137525858585,
+     "final_dev": 0.3200824819857459,
+     "scale": 622663.3872009229,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.04191398958005555,
+     "final_dev": 0.3256525102284704,
+     "scale": 622366.1819252745,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.12085491036211767,
+     "final_dev": 0.9189862582059789,
+     "scale": 3668.672284,
+     "significant": false
+    }
+   ],
+   "port_time_coverage": 0.9558,
+   "port_termination": "ERROR - ENERGY ERROR -19.5% EXCEEDS LIMIT 15.0%",
+   "port_energy_error_pct": -19.54,
+   "port_hg_over_ie": 0.3283,
+   "port_budget_s": 1800.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.2712506237587995,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.6322618736977059,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c44_E1000_Bending_BT_BT_type4_Sf_0",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BT/BT_type4/Sf_0.1/ROLLING_0000.rad",
+   "group": "m37-unlocked",
+   "headline_family": "RD-E-1000-SHELLTECH",
+   "formulation": "BT type4 (Ishell=4) Sf0.1",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.19019132695804544,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.07632330632315533,
+     "final_dev": 0.5066850509868217,
+     "scale": 572573.1291237527,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.10484130061865263,
+     "final_dev": 0.16061923346685222,
+     "scale": 35028.68473,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.16919277785350353,
+     "final_dev": 0.9999997282937646,
+     "scale": 220362.4405,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.004280108872405899,
+     "final_dev": 0.032290730402624396,
+     "scale": 573008.9309061877,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.08474356683747367,
+     "final_dev": 0.9996514321986555,
+     "scale": 272.4813185,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.10377320081741884,
+     "final_dev": 0.3445672366530396,
+     "scale": 2387.35614,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.19019132695804544,
+     "final_dev": 0.45970136288938845,
+     "scale": 5440.22843,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.07130214767455613,
+     "final_dev": 0.4964823573869674,
+     "scale": 573007.198343068,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.07632330632315533,
+     "final_dev": 0.5066850509868217,
+     "scale": 572573.1291237527,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.10484130900723303,
+     "final_dev": 0.16062062106712183,
+     "scale": 35028.68473,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 0.8918,
+   "port_termination": "ERROR - ENERGY ERROR -15.1% EXCEEDS LIMIT 15.0%",
+   "port_energy_error_pct": -15.09,
+   "port_hg_over_ie": 0.8768,
+   "port_budget_s": 1800.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": "NO-CHANNELS",
+   "m40_max_rel_rms": null,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.5552086106961196,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c45_E1000_Bending_BT_BT_type4_Sf_0",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": "numpy",
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_e/RD-E-1000_Bending/10_Bending/BT/BT_type4/Sf_0.9/ROLLING_0000.rad",
+   "group": "m37-unlocked",
+   "headline_family": "RD-E-1000-SHELLTECH",
+   "formulation": "BT type4 (Ishell=4) Sf0.9",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.14961544161338852,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.06875498846318065,
+     "final_dev": 0.5015562425240958,
+     "scale": 496756.5629748503,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.09553340940835398,
+     "final_dev": 0.08001145314698133,
+     "scale": 42659.11255,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.14961544161338852,
+     "final_dev": 0.9999997858977039,
+     "scale": 262309.9556,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.0006189263667775004,
+     "final_dev": 0.006084065110592916,
+     "scale": 497106.3583510978,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 4800.0,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.10391343161612512,
+     "final_dev": 0.19393260656826847,
+     "scale": 16.97822607,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.05739814754497732,
+     "final_dev": 0.4615125584619917,
+     "scale": 1606.7479966125973,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.028167531842189657,
+     "final_dev": 0.22601573918375512,
+     "scale": 1734.2048962275903,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.0630833066984036,
+     "final_dev": 0.4943382635250953,
+     "scale": 497105.2328367642,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.06875498846318065,
+     "final_dev": 0.5015562425240958,
+     "scale": 496756.5629748503,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.09553327501956929,
+     "final_dev": 0.08001376740744066,
+     "scale": 42659.11255,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 0.8762,
+   "port_termination": "ERROR - ENERGY ERROR -15.0% EXCEEDS LIMIT 15.0%",
+   "port_energy_error_pct": -15.05,
+   "port_hg_over_ie": 1.0802,
+   "port_budget_s": 1800.0,
+   "fortran_status": null,
+   "pyradioss_status": "ok",
+   "pyradioss_error": null,
+   "reference_used": null,
+   "m40_class": null,
+   "m40_max_rel_rms": null,
+   "m39_class": null,
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "c52_V0031_Pretensioner_Spring_Type",
+   "suite": "official",
+   "provenance": "M41-fresh",
+   "backend": "numpy",
+   "compute_backend_used": null,
+   "contended_timing": false,
+   "impi_procs": {
+    "impi_start": 0,
+    "impi_end": 0,
+    "contended": false
+   },
+   "case_id": "rd_v_elements/RD-V-0031_Pretensioner_Spring_Type_32/0031_spring_type_32/Spring_TYPE32_element_0000.rad",
+   "group": "m39-unlocked",
+   "headline_family": null,
+   "formulation": "shell",
+   "class": "PYRADIOSS-FAIL",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_termination": null,
+   "port_energy_error_pct": null,
+   "port_hg_over_ie": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "engine-fail",
+   "pyradioss_error": "referenced by springs elements\n  /PROP/SPR_PRE/3: parsed, physics not implemented (M38) \u2014 referenced by springs elements\n  /PROP/SPR_PRE/4: parsed, physics not implemented (M38) \u2014 referenced by springs elements\n  /PROP/SPR_PRE/5: parsed, physics not implemented (M38) \u2014 referenced by springs elements\n  (the Starter accepted them at parse level; implement the property or change the part's property)\n",
+   "reference_used": null,
+   "m40_class": "PYRADIOSS-FAIL",
+   "m40_max_rel_rms": null,
+   "m39_class": "PYRADIOSS-FAIL",
+   "m39_max_rel_rms": null,
+   "numba_spot_class": null,
+   "numba_spot_max_rel_rms": null,
+   "numba_backend_used": null
+  },
+  {
+   "case": "antenna_mast",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "MATCH",
+   "max_rel_rms": 0.025674593896848306,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.014217849975363416,
+     "final_dev": 0.002260361832892585,
+     "scale": 6.136267173,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.01579226979295378,
+     "final_dev": 0.002909208405115244,
+     "scale": 6.095342941,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.004899260220914415,
+     "final_dev": 0.005177605979286784,
+     "scale": 6.145891002,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 11.037,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.025674593896848306,
+     "final_dev": 0.043100341927474854,
+     "scale": 9.339042756943705,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.477635736314883,
+     "final_dev": 0.02772048716266321,
+     "scale": 0.009815663909,
+     "significant": false
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.0347761734400231,
+     "final_dev": 0.07123749018845871,
+     "scale": 0.053737155798074046,
+     "significant": false
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.005201850455188216,
+     "final_dev": 0.005146390755820166,
+     "scale": 6.1407709849,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.014217849975363416,
+     "final_dev": 0.002260361832892585,
+     "scale": 6.136267173,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.015998115707438688,
+     "final_dev": 0.002917778051272812,
+     "scale": 6.095342941,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "MATCH",
+   "m40_max_rel_rms": 0.025674593896848306,
+   "m39_class": "MATCH",
+   "m39_max_rel_rms": 0.025674593896848306
+  },
+  {
+   "case": "box_beam_impact",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.9745352972492353,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.026289664009354657,
+     "final_dev": 0.043932623360135245,
+     "scale": 0.14240400868458214,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.010072541030874089,
+     "final_dev": 0.014418374540797052,
+     "scale": 0.156,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.09435884891069836,
+     "final_dev": 0.16100290765292474,
+     "scale": 0.008296070577,
+     "significant": true
+    },
+    {
+     "channel": "CE",
+     "rel_rms": 0.9549785715217407,
+     "final_dev": 0.9811754038260544,
+     "scale": 0.01131474418,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.9745352972492353,
+     "final_dev": 1.0,
+     "scale": 0.007845371,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.00312,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.006319379201219237,
+     "final_dev": 0.005104306410256398,
+     "scale": 0.0312,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.01696966775762527,
+     "final_dev": 0.025685354167620984,
+     "scale": 0.156,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.026289664009354657,
+     "final_dev": 0.043932623360135245,
+     "scale": 0.14240400868458214,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.007894098659603933,
+     "final_dev": 0.011183248712224194,
+     "scale": 0.156,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.9745352972492353,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.9745352972492353
+  },
+  {
+   "case": "brake_pad",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "c12_V0700_LAW2_HEXA_DEGE_LAW2",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/HEXA_DEGE_LAW2/HEXA_DEGE_0000.rad",
+   "group": "m36-40",
+   "formulation": "shell",
+   "class": "NO-CHANNELS",
+   "max_rel_rms": null,
+   "channels": [],
+   "port_time_coverage": 0.0002,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "NO-CHANNELS",
+   "m40_max_rel_rms": null,
+   "m39_class": "NO-CHANNELS",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "c15_V0700_LAW2_SHELL_Ishell24_LAW2",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/SHELL_Ishell24_LAW2/shell_Ishell24_LAW2_0000.rad",
+   "group": "m36-40",
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.12581368654848038,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.12581368654848038,
+     "final_dev": 0.16337206475572688,
+     "scale": 266.1448,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.009863929957589973,
+     "final_dev": 0.009788562535361603,
+     "scale": 0.01231090954797756,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.754878754399365,
+     "final_dev": 0.8123415038149573,
+     "scale": 0.3691336087,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.12478538248775035,
+     "final_dev": 0.16218652523566532,
+     "scale": 266.15273269831687,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.00702,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.013959979209544737,
+     "final_dev": 0.007961713575545593,
+     "scale": 0.004854778185,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.024449321611529917,
+     "final_dev": 0.031398914383188564,
+     "scale": 0.0023589187477990404,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.12580821049251567,
+     "final_dev": 0.1633649608590944,
+     "scale": 266.15711090954795,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.12581368654848038,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.12581368654848038
+  },
+  {
+   "case": "c17_V0700_LAW2_TRIA_LAW2",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW2_version2/TRIA_LAW2/TRIA_JC_LAW2_0000.rad",
+   "group": "m36-40",
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.12339394517780886,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.12339394517780886,
+     "final_dev": 0.1585102052293804,
+     "scale": 264.9377,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.010047160333060088,
+     "final_dev": 0.009884668590529097,
+     "scale": 0.01231077168823184,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.12335707112929799,
+     "final_dev": 0.15846668568394828,
+     "scale": 264.9473640639055,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.00702,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.013402727297558531,
+     "final_dev": 0.012801986811008591,
+     "scale": 0.004876398929,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.024444064012519362,
+     "final_dev": 0.03138634068961084,
+     "scale": 0.0023589085101553583,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.12338855690003689,
+     "final_dev": 0.15850329941706037,
+     "scale": 264.95001077168826,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.12339394517780886,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.12339394517780886
+  },
+  {
+   "case": "c18_V0700_LAW36_HEXA_DEGE",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_v_failure/RD-V-0700/Final_version_JC_LAW36_LAW2/JOHNSON_COOK_FAILURE_2024_LAW36_version2/HEXA_DEGE/HEXA_DEGE_0000.rad",
+   "group": "m36-40",
+   "formulation": "shell",
+   "class": "SKIPPED-SLOW",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "timeout",
+   "m40_class": "SKIPPED-SLOW",
+   "m40_max_rel_rms": null,
+   "m39_class": "NO-CHANNELS",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "c28_V0240_QUAD_Ishell12",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_v_material/RD_V_0240/Modele_QUAD_Ishell12/tensile_TABULATED_QUAD_Ishell12_0000.rad",
+   "group": "m36-40",
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.4230352979827542,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.40275754819689635,
+     "final_dev": 0.8588406324709328,
+     "scale": 569.1202719,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.27709858563676476,
+     "final_dev": 0.2199245148718843,
+     "scale": 7.527950614,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.3641236642016961,
+     "final_dev": 1.0,
+     "scale": 249.5990645,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.4230352979827542,
+     "final_dev": 0.8723947542399891,
+     "scale": 629.6409458,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 3.812025017734393e-08,
+     "final_dev": 3.812025017734393e-08,
+     "scale": 0.03987382,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.22684510119460213,
+     "final_dev": 0.020440802519471283,
+     "scale": 0.03517020405,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.2878890278823743,
+     "final_dev": 0.5869422891333564,
+     "scale": 0.004280618063,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.40456073706586254,
+     "final_dev": 0.8592370554511831,
+     "scale": 570.7845024210001,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 0.211,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.4230352979827542,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.4230352979827542
+  },
+  {
+   "case": "c31_V0240_TRIA_Ishell24",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_v_material/RD_V_0240/Modele_TRIA_Ishell24/tensile_TABULATED_TRIA_0000.rad",
+   "group": "m36-40",
+   "formulation": "shell",
+   "class": "SKIPPED-SLOW",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "timeout",
+   "m40_class": "SKIPPED-SLOW",
+   "m40_max_rel_rms": null,
+   "m39_class": "SKIPPED-SLOW",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "c32_V0240_Tensile_QUAD_Ishell24",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_v_material/RD_V_0240/Tensile_QUAD_Ishell24/tensile_TABULATED_QUAD_Ishell24_0000.rad",
+   "group": "m36-40",
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.42303724382072255,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.40275957057697803,
+     "final_dev": 0.8588455378382873,
+     "scale": 569.1202719,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.27709962781579045,
+     "final_dev": 0.21991508669362864,
+     "scale": 7.527950614,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.3641236642016961,
+     "final_dev": 1.0,
+     "scale": 249.5990645,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.42303724382072255,
+     "final_dev": 0.872399219620584,
+     "scale": 629.6409458,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 3.812025017734393e-08,
+     "final_dev": 3.812025017734393e-08,
+     "scale": 0.03987382,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.22713374400641104,
+     "final_dev": 0.017221749525255257,
+     "scale": 0.03517020405,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.287805996106796,
+     "final_dev": 0.5934160758779802,
+     "scale": 0.004280618063,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.4045627712502176,
+     "final_dev": 0.8592418221698497,
+     "scale": 570.7845024210001,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 0.211,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.42303724382072255,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.42303724382072255
+  },
+  {
+   "case": "c46_V0220_Foam_LAW70_0",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_v_material/RD-V-0220_Foam_LAW70/0220_foam_LAW70/0220_foam_LAW70_0/BLOCK_H8_0000.rad",
+   "group": "m37-unlocked",
+   "formulation": "shell",
+   "class": "SKIPPED-SLOW",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": 1800.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "timeout",
+   "m40_class": "SKIPPED-SLOW",
+   "m40_max_rel_rms": null,
+   "m39_class": "SKIPPED-SLOW",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "c50_V0230_Fabric_LAW19_0230_shell",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_v_material/RD-V-0230_Fabric_LAW19/0230_fabric_LAW19/0230_shell_mat_019_01/SHELL_LAW19_PROP9_0000.rad",
+   "group": "m37-unlocked",
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.6086655334487759,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.5505286236667714,
+     "final_dev": 0.9838783017997711,
+     "scale": 223.0806381,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.1916189443889878,
+     "final_dev": 0.9508288786148094,
+     "scale": 107.7732041,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.6086655334487759,
+     "final_dev": 1.0,
+     "scale": 331.1190439,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.3502083114333036,
+     "final_dev": 0.4200353913529276,
+     "scale": 193.3475,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.24576,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.14751811359822323,
+     "final_dev": 0.1671548049797332,
+     "scale": 0.4329616848,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.14283747555127968,
+     "final_dev": 0.9998376848330562,
+     "scale": 0.4520385657,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.5586553232654733,
+     "final_dev": 0.6051817840862522,
+     "scale": 193.34740016304372,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 0.889,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.6086655334487759,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.6086655334487759
+  },
+  {
+   "case": "c51_V0230_Fabric_LAW19_0230_shell",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_v_material/RD-V-0230_Fabric_LAW19/0230_fabric_LAW19/0230_shell_mat_019_02/SHELL_LAW19_PROP9_0000.rad",
+   "group": "m37-unlocked",
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.3656664201531201,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.34767032582966695,
+     "final_dev": 0.8741675239416091,
+     "scale": 464.8022332,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.1302583773282822,
+     "final_dev": 0.14325127086270312,
+     "scale": 31.07785423,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.2336979402125184,
+     "final_dev": 1.0,
+     "scale": 55.68264493,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.3656664201531201,
+     "final_dev": 0.9911959367119012,
+     "scale": 567.9514898,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.10000000000000006,
+     "final_dev": 0.10000000000000006,
+     "scale": 0.24576,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.28485934741864016,
+     "final_dev": 0.2689953523764909,
+     "scale": 0.8590053859128205,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.1224655845419045,
+     "final_dev": 0.14768370973042508,
+     "scale": 0.01395161528,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.34802205998927643,
+     "final_dev": 0.8742741741351964,
+     "scale": 469.837691179,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 0.146,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.3656664201531201,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.3656664201531201
+  },
+  {
+   "case": "c53_E0200_Snap_thru_Roof_02_Snap-t",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_e/RD-E-0200_Snap_thru_Roof/02_Snap-through/Explicit_solver/SNAP_EXP_0000.rad",
+   "group": "m39-unlocked",
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.346030642410523,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.18134772708269073,
+     "final_dev": 0.4472855395223111,
+     "scale": 19255.22295,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.24802616589320928,
+     "final_dev": 0.35850724071278095,
+     "scale": 0.9999270642,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.18302598563031872,
+     "final_dev": 0.4505003133069645,
+     "scale": 19389.61248,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 5.8765833643448626e-08,
+     "final_dev": 5.876583364344864e-08,
+     "scale": 6432.309,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.31236134412115246,
+     "final_dev": 1.1016996529964795,
+     "scale": 2.549007882,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.346030642410523,
+     "final_dev": 0.3260732650646109,
+     "scale": 1.716349157,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.30762753828124034,
+     "final_dev": 0.811064759449815,
+     "scale": 93.94516727,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.1813485028618347,
+     "final_dev": 0.4472930109512189,
+     "scale": 19255.7027631383,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.18134772708269073,
+     "final_dev": 0.4472855395223111,
+     "scale": 19255.22295,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.24848257327412865,
+     "final_dev": 0.35819998250157764,
+     "scale": 0.9999270642,
+     "significant": false
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.346030642410523,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.346030642410523
+  },
+  {
+   "case": "c54_E0200_Snap_thru_Roof_02_Snap-t",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_e/RD-E-0200_Snap_thru_Roof/02_Snap-through/Implicit_solver/SNAP_IMP_0000.rad",
+   "group": "m39-unlocked",
+   "formulation": "shell",
+   "class": "NO-CHANNELS",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "NO-CHANNELS",
+   "m40_max_rel_rms": null,
+   "m39_class": "NO-CHANNELS",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "c55_E2100_Cam_21_Cam_interface7_fr",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_e/RD-E-2100_Cam/21_Cam/interface7/friction/I7PFMCAM_0000.rad",
+   "group": "m39-unlocked",
+   "formulation": "shell",
+   "class": "SKIPPED-SLOW",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "timeout",
+   "m40_class": "SKIPPED-SLOW",
+   "m40_max_rel_rms": null,
+   "m39_class": "SKIPPED-SLOW",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "c56_E2100_Cam_21_Cam_interface7_pe",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_e/RD-E-2100_Cam/21_Cam/interface7/penalty/slave_cam/I7PMCAM_0000.rad",
+   "group": "m39-unlocked",
+   "formulation": "shell",
+   "class": "SKIPPED-SLOW",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "timeout",
+   "m40_class": "SKIPPED-SLOW",
+   "m40_max_rel_rms": null,
+   "m39_class": "SKIPPED-SLOW",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "c57_E2100_Cam_21_Cam_interface7_pe",
+   "suite": "official",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": "rd_e/RD-E-2100_Cam/21_Cam/interface7/penalty/slave_valve/I7PMVALVE_0000.rad",
+   "group": "m39-unlocked",
+   "formulation": "shell",
+   "class": "SKIPPED-SLOW",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": 900.0,
+   "fortran_status": "ok",
+   "pyradioss_status": "timeout",
+   "m40_class": "SKIPPED-SLOW",
+   "m40_max_rel_rms": null,
+   "m39_class": "SKIPPED-SLOW",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "complex_modes",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "edge_impact",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.4554759379564271,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.43676743423367825,
+     "final_dev": 0.9242697219039225,
+     "scale": 0.12239950315634462,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.41947367379079503,
+     "final_dev": 0.7134653764019213,
+     "scale": 0.0543586925965497,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.32187632349084316,
+     "final_dev": 0.9960975654803917,
+     "scale": 0.04405313350837597,
+     "significant": true
+    },
+    {
+     "channel": "CE",
+     "rel_rms": 0.10304537047638516,
+     "final_dev": 0.17601514603374366,
+     "scale": 0.006699250118929782,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.01248,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.196772352885199,
+     "final_dev": 0.1524754753087626,
+     "scale": 0.0008985459624644673,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.28566693401365967,
+     "final_dev": 0.2836582025442977,
+     "scale": 0.0005468509678530522,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.13333780063096412,
+     "final_dev": 0.1380631003567637,
+     "scale": 0.01693602553947662,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.4554759379564271,
+     "final_dev": 0.9126057313060554,
+     "scale": 0.1664609311626823,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.4554759379564271,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.4554759379564271
+  },
+  {
+   "case": "evolutionary_fatigue",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "evolutionary_multi_input",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "exact_covariance_fatigue",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "freq_evolutionary_multi_input",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "gas_piston",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(starter-reject)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": 1.0,
+   "port_budget_s": null,
+   "fortran_status": "starter-reject",
+   "pyradioss_status": "ok",
+   "m40_class": "PORT-ONLY(starter-reject)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(starter-reject)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "implicit_cantilever",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "implicit_clamp",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "implicit_pendulum",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "implicit_press",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "implicit_ringdown",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "joint_evolutionary_fatigue",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "joint_nongaussian_fatigue",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "modal_frf",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "modal_mast",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "multi_input_random",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "multiaxial_fatigue",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "nongaussian_fatigue",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "nongaussian_wigner_ville_fatigue",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "nonproportional_fatigue",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "nonstationary_fatigue",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "notched_plate",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.3154109441455401,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.12043790008157432,
+     "final_dev": 0.215051710065706,
+     "scale": 6.339301149,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.2302827653505353,
+     "final_dev": 0.30484841577596633,
+     "scale": 0.005410711476008408,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.3154109441455401,
+     "final_dev": 0.4989927748652091,
+     "scale": 0.08156586637,
+     "significant": true
+    },
+    {
+     "channel": "CE",
+     "rel_rms": 0.6912998344031288,
+     "final_dev": 0.681735346971216,
+     "scale": 0.003609762331119572,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.12171169296349348,
+     "final_dev": 0.21712200320622901,
+     "scale": 6.421275578,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.0015132,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.20757884647060995,
+     "final_dev": 0.39474920528269686,
+     "scale": 0.002746762772,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.1204932845975341,
+     "final_dev": 0.21517769196074046,
+     "scale": 6.3432551353169995,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.12043790008157432,
+     "final_dev": 0.215051710065706,
+     "scale": 6.339301149,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.2273352434566718,
+     "final_dev": 0.30861596235761823,
+     "scale": 0.00550345495406986,
+     "significant": false
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.3154109441455401,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.3154109441455401
+  },
+  {
+   "case": "random_vibration",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "rigid_impactor",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.9645769768573339,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.1058008569846278,
+     "final_dev": 0.03642831163444341,
+     "scale": 0.0001417373961,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.879656795245082,
+     "final_dev": 0.7622665105204335,
+     "scale": 0.0001499829922,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.4162444218120556,
+     "final_dev": 0.9999999913801421,
+     "scale": 5.862660108e-07,
+     "significant": false
+    },
+    {
+     "channel": "CE",
+     "rel_rms": 0.6493326482502504,
+     "final_dev": 0.9216951482647834,
+     "scale": 2.811876801e-06,
+     "significant": true
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.5430686464572114,
+     "final_dev": 0.10449074235931442,
+     "scale": 2.387027737e-05,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.0029288,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.30037017733341953,
+     "final_dev": 0.2738735335655022,
+     "scale": 3.813059931e-09,
+     "significant": false
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.3003451161364845,
+     "final_dev": 0.27386075856754427,
+     "scale": 3.813077348e-09,
+     "significant": false
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.9645769768573339,
+     "final_dev": 1.0176702972454765,
+     "scale": 0.0008580205725,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.9028384640999383,
+     "final_dev": 0.796692098914284,
+     "scale": 0.00014998299380642995,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.9645769768573339,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.9645769768573339
+  },
+  {
+   "case": "rubber_block",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "MATCH",
+   "max_rel_rms": 0.0009554329589538454,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.0008890970739896451,
+     "final_dev": 0.0007530216793877172,
+     "scale": 0.5151274002036063,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.0009621275915105519,
+     "final_dev": 5.37502500123647e-07,
+     "scale": 0.001166781432,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.011574700638973713,
+     "final_dev": 0.02273255289454037,
+     "scale": 8.378193214407191e-05,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.00027614327636508296,
+     "final_dev": 0.0004335095280681864,
+     "scale": 0.5150362,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.001,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.0009554329589538454,
+     "final_dev": 2.7679396713531502e-05,
+     "scale": 0.001189567857,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.0008898322491395385,
+     "final_dev": 0.0007530197687467464,
+     "scale": 0.5151278743950294,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.0008890970739896451,
+     "final_dev": 0.0007530216793877172,
+     "scale": 0.5151274002036063,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.004279154518205297,
+     "final_dev": 7.399541606769022e-07,
+     "scale": 0.0011677868512582057,
+     "significant": false
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "MATCH",
+   "m40_max_rel_rms": 0.0009554329589538454,
+   "m39_class": "MATCH",
+   "m39_max_rel_rms": 0.0009554329589538454
+  },
+  {
+   "case": "snap_catch",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "snap_through",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "spectral_fatigue",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "spectral_nonproportional_fatigue",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  },
+  {
+   "case": "spot_weld",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "DEVIATION",
+   "max_rel_rms": 0.9870299528479334,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.15967459847571472,
+     "final_dev": 0.3263781366301843,
+     "scale": 30.714449942946654,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.07179628098570157,
+     "final_dev": 0.00026479097374825314,
+     "scale": 938.8201185488483,
+     "significant": true
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.07997128237612808,
+     "final_dev": 0.035678157905837254,
+     "scale": 7.004352782111651,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 0.4259531703016121,
+     "final_dev": 0.975679024442632,
+     "scale": 10.27919293,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.00936,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.9686997789367284,
+     "final_dev": 0.981725731296,
+     "scale": 0.25,
+     "significant": true
+    },
+    {
+     "channel": "MOMY",
+     "rel_rms": 0.9870299528479334,
+     "final_dev": 1.0000013583457297,
+     "scale": 0.25,
+     "significant": true
+    },
+    {
+     "channel": "MOMZ",
+     "rel_rms": 0.987029282303069,
+     "final_dev": 1.0,
+     "scale": 0.25,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.0719452367761854,
+     "final_dev": 0.010765194166932949,
+     "scale": 908.1056686059017,
+     "significant": true
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "DEVIATION",
+   "m40_max_rel_rms": 0.9870299528479334,
+   "m39_class": "DEVIATION",
+   "m39_max_rel_rms": 0.9870299528479334
+  },
+  {
+   "case": "tensile_bar",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "MATCH",
+   "max_rel_rms": 0.001724068762275621,
+   "channels": [
+    {
+     "channel": "IE",
+     "rel_rms": 0.00028796864679561814,
+     "final_dev": 0.00031834584446574336,
+     "scale": 0.3118180374764601,
+     "significant": true
+    },
+    {
+     "channel": "KE",
+     "rel_rms": 0.001846977773099096,
+     "final_dev": 1.7587541541520973e-05,
+     "scale": 7.779157365e-05,
+     "significant": false
+    },
+    {
+     "channel": "HE",
+     "rel_rms": 0.000592322528962679,
+     "final_dev": 0.0005024136619238991,
+     "scale": 0.000154109059,
+     "significant": false
+    },
+    {
+     "channel": "EW",
+     "rel_rms": 3.311474073917052e-06,
+     "final_dev": 3.7853577006656674e-07,
+     "scale": 0.3120257264128986,
+     "significant": true
+    },
+    {
+     "channel": "MASS",
+     "rel_rms": 0.0,
+     "final_dev": 0.0,
+     "scale": 0.000312,
+     "significant": true
+    },
+    {
+     "channel": "MOMX",
+     "rel_rms": 0.001724068762275621,
+     "final_dev": 2.0577542452638187e-05,
+     "scale": 0.0001990054399,
+     "significant": true
+    },
+    {
+     "channel": "IE+KE",
+     "rel_rms": 0.0002878915112101541,
+     "final_dev": 0.00031828899037403106,
+     "scale": 0.3118694372081875,
+     "significant": true
+    },
+    {
+     "channel": "part_IE",
+     "rel_rms": 0.00028796864679561814,
+     "final_dev": 0.00031834584446574336,
+     "scale": 0.3118180374764601,
+     "significant": true
+    },
+    {
+     "channel": "part_KE",
+     "rel_rms": 0.002765041945765577,
+     "final_dev": 0.00048398130777835074,
+     "scale": 7.779157365e-05,
+     "significant": false
+    }
+   ],
+   "port_time_coverage": 1.0,
+   "port_budget_s": null,
+   "fortran_status": "ok",
+   "pyradioss_status": "ok",
+   "m40_class": "MATCH",
+   "m40_max_rel_rms": 0.001724068762275621,
+   "m39_class": "MATCH",
+   "m39_max_rel_rms": 0.001724068762275621
+  },
+  {
+   "case": "wigner_ville_fatigue",
+   "suite": "bundled",
+   "provenance": "M40-carried (not re-run in M41 session)",
+   "backend": "numpy",
+   "contended_timing": true,
+   "case_id": null,
+   "group": null,
+   "formulation": "shell",
+   "class": "PORT-ONLY(implicit)",
+   "max_rel_rms": null,
+   "channels": null,
+   "port_time_coverage": null,
+   "port_budget_s": null,
+   "fortran_status": null,
+   "pyradioss_status": "ok-no-th",
+   "m40_class": "PORT-ONLY(implicit)",
+   "m40_max_rel_rms": null,
+   "m39_class": "PORT-ONLY(implicit)",
+   "m39_max_rel_rms": null
+  }
+ ]
+}

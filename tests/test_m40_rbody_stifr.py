@@ -123,17 +123,23 @@ def test_stifr_transport_closed_form(make_deck):
 
 def test_shell_stifr_claim_mirror(make_deck):
     """The assembled rotational stiffness must equal the translational one
-    times the (t^2+A)/12 lumping factor — upstream's STIR = STI*(t^2+A)/12
-    (cndt3.F 209-218) with the SAME factor the Starter lumps the nodal
-    inertia with (cinmas.F).  Consequence (dtnoda.F scope): the free-node
-    rotational dt sqrt(2 IN/STIFR) EQUALS the translational sqrt(2 M/STIFN)
-    on element-lumped nodes, so adding it never moves a non-/RBODY deck."""
+    times the FAMILY inertia-lumping factor — upstream's STIR = STI*fac
+    with the SAME factor the Starter lumps the nodal inertia with
+    (cinmas.F lines 919-925: FAC=TWELVE for engine IHBE>=11, FAC=NINE
+    otherwise).  Ishell=1 here is the BT family (engine IHBE=1), whose
+    engine claim is chvis3.F's ``STIR = STI*(THK02*INV12 + AREA*INV9)``
+    — i.e. t^2/12 + A/9, NOT the (t^2+A)/12 the M40 code applied to
+    every family (that form is cndt3.F 209-218, the IHBE>=11
+    BATOZ/QEPH branch; corrected in M41 with the cinmas.F FAC=9 BT
+    lumping).  Consequence (dtnoda.F scope): the free-node rotational
+    dt sqrt(2 IN/STIFR) EQUALS the translational sqrt(2 M/STIFN) on
+    element-lumped nodes, so adding it never moves a non-/RBODY deck."""
     model = _starter(make_deck, "M40MIR", _one_shell(1))
     noda, _ = _noda_after_claims(model)
     name, group = next(iter(model.element_groups()))
     t = group.state["thick"][0]
     a = group.state["area0"][0]
-    fac = (t ** 2 + a) / 12.0
+    fac = t ** 2 / 12.0 + a / 9.0
     nodes = group.conn[0]
     assert noda.stifr[nodes] == pytest.approx(noda.stifn[nodes] * fac,
                                               rel=1e-12)

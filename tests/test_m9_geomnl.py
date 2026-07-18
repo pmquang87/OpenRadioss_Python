@@ -31,6 +31,7 @@ import io
 import numpy as np
 import pytest
 
+from pyradioss.common.npcompat import trapezoid
 from pyradioss.engine.engine import run_engine
 from pyradioss.starter.starter import run_starter
 
@@ -571,8 +572,8 @@ def _elastica_reference(alpha):
     sol = shoot(m0, dense=True)
     s = np.linspace(0.0, 1.0, 2001)
     theta = sol.sol(s)[0]
-    x_tip = np.trapezoid(np.cos(theta), s)
-    w_tip = np.trapezoid(np.sin(theta), s)
+    x_tip = trapezoid(np.cos(theta), s)
+    w_tip = trapezoid(np.sin(theta), s)
     return x_tip, w_tip, theta[-1]
 
 

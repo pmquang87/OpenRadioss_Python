@@ -57,7 +57,9 @@ same names in comments.
 | `starter/source/tools/admas/` | `pyradioss/starter/initialization.py` | `/ADMAS` (M5) |
 | `engine/source/elements/solid/solide/` (`sforc3.F`, `srota3.F`, `shour3.F`…) | `pyradioss/elements/solid_hexa8.py` | 1-pt + FB hourglass; M38: a Belytschko–Bindeman hourglass STIFFNESS for LAW70 bricks ONLY (`_phys_hourglass_law70`, gated on `has_law70`) — the essential part of the Isolid=24/HEPH brick (restoring force on the accumulated hourglass deformation, k = HG_PHYS·AA1·V·Σ\|∇N\|² with AA1 = ρ₀c² tracking E0→E_max, frequency fed into the element dt, elastic work booked into the HG ledger), killing the RD-V-0220 densification instability; every non-LAW70 solid deck byte-for-byte unchanged. M39 (`optimizer-kernels`, SPEED): `_phys_hourglass_law70` and the LAW70 material leaves dispatch to the numba mirrors `hexa_hgphys` (4.46× isolated) / `law70_tab2d` / `law70_snorm`/`enorm` / `law70_elastic_stress` via `accel.get` — the NumPy reference path returns `None` and stays byte-identical; the leaves are 0-ulp bitwise even under numba (VALIDATION §6.3). Degenerate collapsed bricks are handled starter-side in `initialization.py` |
 | `engine/source/elements/solid/solide4/` (`s4forc3.F`…) + `starter/.../s4coor3.F` / `hm_read_solid.F` | `pyradioss/elements/solid_tetra4.py` | constant-strain tetra; M38 (`tetra4-convention` builder — landed unreported, confirmed by the §4.7 sweep): node-ordering / signed-volume canonicalisation matched to Radioss — a /TETRA4 whose signed volume is negative in the port's convention is reordered, so official tetra decks (whose node order is the OPPOSITE of the port's own decks) no longer flag zero/negative volume (M37-BUG-3 fix, resolved 9 official decks) |
-| `engine/source/elements/shell/coque/` (`cforc3.F`, `czforc3.F`, `chvis3.F`…) | `pyradioss/elements/shell_bt4.py` | Belytschko–Tsay; M39 (`shell-fidelity` builder — self-reported FAILED but landed, VALIDATION §3.3): the shell hourglass control replaced the port's BLT84 stiffness with the `chvis3.F` ELASTIC + QUADRATIC-VISCOUS form in `_post` (new `hqm`/`hqb`/`hqr` membrane/bending/drill hourglass-force state + `dt` argument), lifting the port's hourglass dissipation to the reference — box_beam HE channel 0.584 → 0.094, matching the Fortran's 4.4 % dissipation (the M36 §2.3 finding closed), and fixing the c50 fabric NaN. NARROW reach: hourglass-off / non-HG decks (RD-E-1000 BATOZ/QEPH/DKT/BT-off) are byte-identical, their ~0.55 residual a separate bending gap. `accel.jit_kernels.shell_post` mirrors the new signature; `tests/test_m7_backends.py`'s direct `_post` call was NOT updated (RED — VALIDATION §8) |
+| `engine/source/elements/shell/coque/` (`cforc3.F`, `czforc3.F`, `chvis3.F`…) | `pyradioss/elements/shell_bt4.py` | Belytschko–Tsay; M39 (`shell-fidelity` builder — self-reported FAILED but landed, VALIDATION §3.3): the shell hourglass control replaced the port's BLT84 stiffness with the `chvis3.F` ELASTIC + QUADRATIC-VISCOUS form in `_post` (new `hqm`/`hqb`/`hqr` membrane/bending/drill hourglass-force state + `dt` argument), lifting the port's hourglass dissipation to the reference — box_beam HE channel 0.584 → 0.094, matching the Fortran's 4.4 % dissipation (the M36 §2.3 finding closed), and fixing the c50 fabric NaN. NARROW reach: hourglass-off / non-HG decks (RD-E-1000 BATOZ/QEPH/DKT/BT-off) are byte-identical, their ~0.55 residual a separate bending gap. `accel.jit_kernels.shell_post` mirrors the new signature; `tests/test_m7_backends.py`'s direct `_post` call was NOT updated (RED — VALIDATION §8). **M41 (`bt-rotation-forensics`, VALIDATION §3.6 (c)): the missing `cdefo3.F` IHBE≤1 SECOND-ORDER RIGID-ROTATION membrane-rate correction** (upstream `cdefo3.F` 103-130: `TMP1A=(dt/4)(VZ13−VZ24)²/(PY1+PY2)` into VX13/VX24, `TMP2B=(dt/4)(VZ13+VZ24)²/(PX2−PX1)` into VY13/VY24, `SIGN(MAX(ABS,EM20))` guards, disabled when `IMPL_S>0`) implemented bit-for-bit in `forces()` gated on `rot2_mask` (Ishell cards 0/1/2 → engine IHBE≤1 per `hm_read_prop01.F` 302-315; the implicit gate mirrors `IMPL_S`). Without it the end-of-step corotational frame lags the mid-step velocities by ω·dt/2 and a rolled element's out-of-plane velocity leaks into the membrane rates — an O(ω·dt) skew coupling that left rolled elements in a negative-damping transverse-w flutter growing out of round-off. Note the mirrored upstream asymmetry: the static bias is +ω²dt/2 raw and −ω²dt/2 corrected (upstream over-corrects 2×; IHBE==2/3's velocity form is the exact cancellation) — mirrored deliberately, not "fixed". Companion `cinmas.F` 916-924 **FAC=NINE** BT-family rotational inertia lumping `I = m/4·(A/9 + t²/12)` (was `(t²+A)/12` for every family), reproducing the Fortran starter's printed `/RBODY` inertia and moving the BT dt floor 1.86540e-2 → 1.95667e-2 (Fortran 2.004e-2). Deviation roughly halves (c41 0.2305 → 0.1375) and the Sf_0.1 variants unblock, but BT does NOT match — settled by experiment, see the M41 roadmap entry. Deliberately unported: the c43 BT-type3 (node-1-relative velocity) and c45 BT-type4 (Z2 warp) `cdefo3` branches. No `jit_kernels` change needed — the correction applies identically after either backend's `pre` kernel |
+| `engine/source/elements/shell/coqueba/` (`cbaforc3.F`, `cbacoor.F`, `cbadef.F`, `cbastra3.F`, `cbavisc.F`, `cbaener.F`, `cbafori.F`, `cbaproj.F`) | `pyradioss/elements/shell_qbat.py` | **M41 NEW (`qbat-port`, VALIDATION §3.6 (a))**: the fully integrated **Batoz–Dhatt QBAT quad**, Ishell=12 / engine IHBE=11 — 1305 lines. `clskew3.F` corotational frame; the full `cbacoor.F` pass (flat/warped split at `ZL1² < 1e-12·max(L13,L24)`, explicit spin corrections, warped per-node frames VQN + edge normals VNRM/VASTN + Gauss frames VQG/VJFI + the DI free-rigid-mode projection, and the condensed FACDT=4/3 dt length now computed by the OWNING kernel rather than `shell_bt4`); `cbadef.F` assumed-strain operators (flat BM/BC(24) and warped BM/BMF/BF/BCQ blocks, CBADEFSH constant assumed membrane shear); `cbastra3.F` strain increments; **2×2 in-plane Gauss × NIP through-thickness Gauss layers** reusing `materials.shell_update` (layer state GP-major `(n, 4·nip, 3)` so anim/failure plumbing applies unchanged — element deletion re-derived for that axis, and a mixed-nip `Ifail_sh=2` immortality bug was caught by test); `cbavisc.F` dn damping booked to the `ehour`/PARTSAV(8) slot; `cbaener.F` assumed-shear energy corrections; `cbafori.F` + CBAFORICT force assembly; `cbaproj.F` local→global with the warped rigid-force projection; `cndt3.F` dt claim. **NO hourglass block — HE is identically 0 on the element side, exactly like Fortran** (that is the whole reason c02/c03/c04 could reach MATCH). Laws gated to {0,1,2,27,36,44}; implicit refuses `shells_qbat` groups loudly by design (no tangent/kgeo). Documented non-ports: the `nip=1` CBAFORI1/CBAVISNP1 branch, `Idrill>0`, `Ithick=1`. **No JIT kernels yet — numba is currently SLOWER than numpy here** (VALIDATION §6.5 (c)) |
+| `engine/source/elements/shell/coquez/` (`czforc3.F`, `czcorc.F`, `czcorp5.F`, `czdef.F`, `czfintce.F`, `czfintn.F`, `czproj.F`) | `pyradioss/elements/shell_qeph.py` | **M41 NEW (`qeph-port`, VALIDATION §3.6 (b))**: the physically-stabilized 1-point **QEPH quad**, Ishell=22/23/24 — 1010 lines. **Source-tree note: QEPH is `coquez/`, NOT the `coqueph/szforc3.F` some docs name — that path does not exist upstream.** `czcorc.F` covariant frame + FACDT=5/4 condensed length + the 2nd-order rigid-rotation correction; `czcorp5.F` warped projection with the `Z1² < LM·1e-8` plat gate (`LM=(L13+L24)/2`); `czdef.F` 8 strain + 6 hourglass rates with the mx13/my13 Flanagan–Belytschko orthogonalization; `czfintce.F` constant part; **`czfintn.F` CZFINTN1 — the PHYSICAL stabilization**: modal stresses integrated with the material's OWN plane-stress moduli A11/A12/G·SHF at CVIS=1, COEFH=0.999 plastic relaxation, dn=0.015 linear damper, **elastic work booked to EINT and ONLY damper work to the hourglass ledger** (EVIS(8)) — which is why QEPH reports HE ~1e-19 where the BT fallback reported percent-level; `czproj.F` reconstruction/projection. Starter folds Ishell 22/23 into 24 per `hm_read_prop01.F` 185-192. Documented cuts: `ZCFAC=1` in the plastic relaxation (needs a per-cycle material tangent the port does not surface — **exact for elastic laws**), `NPT=0` resolved to 3 Gauss stations (only the COEF1 16-vs-25 plastic weight differs), `Idrill=1`, `ISMSTR=1/11`, XFEM/thermal, implicit tangent (loud gate). **The orthotropic `czfintn_or` HM/HF path is NOT ported — LAW19 shells run the isotropic moduli**, flagged in `checks.py`. No JIT kernels yet |
 | `engine/source/elements/sh3n/coque3n/` (`c3forc3.F`…) | `pyradioss/elements/shell_tri3.py` | C0 triangle |
 | `engine/source/elements/beam/` (`pforc3.F`, `pdefo3.F`…) | `pyradioss/elements/beam_type3.py` | corotational Timoshenko |
 | `engine/source/elements/truss/` (`tforc3.F`) | `pyradioss/elements/truss.py` | |
@@ -202,7 +204,7 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | `/ALE/MAT`, `/EULER/MAT`, `/HEAT/MAT` | 🟡 | M37 — parse as notes attached to the material's params (no ALE/thermal solver) |
 | `/FAIL/JOHNSON` | ✅ | D1–D4 + rate term; thermal D5 since M6 (needs the LAW2 thermal card, warned otherwise); Ifail_sh 1/2; element deletion (stress zeroing, dt release, OFF in ANIM) |
 | `/FAIL/BIQUAD` | 🟡 | explicit c1–c5 input (two-parabola εf(σ*) fit); M-flag material presets and S-flag ❌ |
-| `/PROP/TYPE1` (`SHELL`) | 🟡 | thickness, N integration points, hourglass coeffs (Ishell fixed = BT for quads, C0 for `/SH3N`) |
+| `/PROP/TYPE1` (`SHELL`) | 🟡 | thickness, N integration points, hourglass coeffs. **Ishell is DISPATCHED since M41** (`_dispatch_shell_formulations`): 12 → QBAT (`shell_qbat.py`), 22/23/24 → QEPH (`shell_qeph.py`, starter folding 22/23 → 24 per `hm_read_prop01.F`), everything else → BT (`shell_bt4.py`); C0 for `/SH3N`. DKT18 still falls back to BT |
 | `/PROP/TYPE2` (`TRUSS`) | ✅ | area |
 | `/PROP/TYPE3` (`BEAM`) | 🟡 | A, Iyy, Izz, Ixx; Timoshenko with full-section shear (no shear factor / Ishear variants), LAW1 only |
 | `/PROP/TYPE4` (`SPRING`) | 🟡 | linear k, c, mass |
@@ -255,7 +257,10 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
 | Exact per-element eigenvalue bound on dt (port improvement: the classic lc/c estimate is up to ~40% above the true one-point-element stability limit; the Starter computes the exact eigenvalue correction once per element — 6×6 for solids, membrane **and** bending/shear branches for shells since M2, the full 12×12 for beams — see `solid_hexa8._exact_dt_factor`, `shell_bt4._bend_shear_omega2`, `beam_type3._exact_dt`) | ✅ |
 | Solid hexa8, 1-point, Flanagan–Belytschko hourglass control | ✅ |
 | Solid tetra4, constant strain (no hourglass modes; plain formulation — nodal-pressure Itetra variants ❌) | ✅ |
-| Belytschko–Tsay 4-node shell (memb/bend/shear, BLT84 **stiffness** hourglass control since M2 — M1's viscous form artificially damped coarse dynamic bending) | ✅ |
+| Belytschko–Tsay 4-node shell (memb/bend/shear, BLT84 **stiffness** hourglass control since M2 — M1's viscous form artificially damped coarse dynamic bending; M39 `chvis3.F` elastic+quadratic-viscous hourglass; M41 `cdefo3.F` IHBE≤1 second-order rigid-rotation membrane-rate correction + `cinmas.F` FAC=9 inertia lumping) | ✅ |
+| **QBAT fully integrated Batoz–Dhatt 4-node shell** (Ishell=12; 2×2 in-plane Gauss × NIP through-thickness, assumed strain, flat/warped split, **no hourglass block — HE ≡ 0 like Fortran**) | ✅ **M41** (RD-E-1000 c02/c03/c04 MATCH; `nip=1` branch, Idrill, Ithick=1 and the implicit tangent deliberately unported) |
+| **QEPH physically-stabilized 1-point 4-node shell** (Ishell=22/23/24; covariant frame, warped projection, 6 hourglass rates, CZFINTN1 stabilization booking elastic work to EINT and only damper work to the hourglass ledger) | ✅ **M41** (RD-E-1000 c08/c09 MATCH at 5.8e-06/6.6e-06; ZCFAC=1, NPT=0→3 stations, Idrill, ISMSTR, the orthotropic `czfintn_or` path and the implicit tangent deliberately unported) |
+| DKT18 triangle shell | ❌ (falls back to BT — the only unported shell formulation left in the RD-E-1000 family after M41; VALIDATION §3.6 (e)) |
 | C0 3-node triangle shell (CST membrane + Mindlin plate, no hourglass modes) | ✅ |
 | Corotational Timoshenko beam (axial/2×shear/torsion/2×bending resultants) | ✅ (LAW1 elastic; LAW2 via the global resultant-plasticity model since M3 — yields at exactly W·σy, no elastic-core spread to the 1.5·W·σy hinge; consistent implicit tangent + iterated implicit return since M15; fiber-integrated TYPE18 beam is a roadmap item) |
 | Degenerated /BRICK → tetra conversion, penta/pyramid clear check | 🟡 |
@@ -343,7 +348,10 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
    the beam 12×12 eigenproblem. Deferred to later milestones:
    fully-integrated solid (Isolid=17 equivalent), QEPH shell, DKT18
    triangle, plastic beams (global plasticity model), nodal-pressure
-   tetra variants.
+   tetra variants. *(Of these, the **QEPH shell landed in M41** together
+   with the fully integrated QBAT shell — see entry 40; **DKT18 is still
+   deferred** and is now the last unported shell formulation in the
+   RD-E-1000 family.)*
 2. **M3 — materials** ✅ (done): LAW36 tabulated plasticity (/FUNCT
    hardening curves + strain-rate curve family), LAW27 brittle cracking
    (shells), LAW42 Ogden hyperelasticity (solids, with the law feeding
@@ -521,7 +529,12 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
      (`PYRADIOSS_BACKEND=numpy|numba|auto`, `pyradioss-engine -backend
      numpy|numba|auto`, or `accel.select_backend`); numba stays an optional
      dependency (`pip install -e ".[accel]"`) and a missing/unknown backend
-     falls back to NumPy with a warning. No `fastmath`, no `parallel`: the
+     falls back to NumPy with a warning. **M41 caveat**: the two new shell
+     kernels (`shell_qbat.py`, `shell_qeph.py`) have NO JIT mirrors yet, so
+     for models built from those groups the ≥ 32-element rule currently
+     selects the SLOWER path — measured on RD-E-1000 c04, numba 395 s vs
+     numpy 330 s. See VALIDATION §6.5 (c); a `jit_kernels` pass plus a
+     group-aware exclusion is the logged follow-up. No `fastmath`, no `parallel`: the
      mirrors reproduce the reference math element for element, so the
      backends agree bitwise except for reassociated short reductions
      (documented, ≲1e-15/call). tests/test_m7_backends.py asserts the
@@ -4765,6 +4778,192 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
       study, gas_piston positive-P0; c42 BT_type3's full run infeasible until the
       speed work (13.7 M Fortran cycles); `coverage_tables.md` regeneration from
       `coverage_results_m40.json`.
+40. **M41 — SHELL ELEMENT TECHNOLOGY: THE QBAT + QEPH PORT (RD-E-1000 REACHES
+    MATCH) + THE BT RATE-KINEMATICS FIX + THE ENERGY-GUARD CONDITIONING** ✅
+    (done; the element-technology milestone. It took M40's single re-aimed lead —
+    "the RD-E-1000 residual is a FORCE-physics gap in the BT/BATOZ/QEPH kernel,
+    not the dt claim" — and split it into the three separable problems it actually
+    was. Report: `VALIDATION.md` M41 edition, §3.6 the parity verdict table (the
+    headline), §4.10 the corpus re-sweep + the new dispatch-regression watch, §6.5
+    the first CLEAN ABSOLUTE benchmark).
+    Delivered — the two NEW element kernels (`qbat-port`, `qeph-port`):
+    * **the root cause was that the BATOZ and QEPH decks were never running BATOZ
+      or QEPH.** Since M2 the port had exactly ONE shell kernel (Belytschko–Tsay),
+      so `/PROP/SHELL` parts with Ishell=12 or 22/23/24 silently fell back onto a
+      1-point BT element that stores bending energy AS HOURGLASS. That made HE the
+      dominant error channel on decks whose real formulations produce none —
+      M40's c04 scored worst-channel HE 0.2361 against a Fortran HE of identically
+      zero — and it is why MATCH was unreachable *by construction*, exactly as
+      M40 §3.5 predicted;
+    * **`pyradioss/elements/shell_qbat.py`** (NEW, 1305 lines) — the fully
+      integrated **Batoz–Dhatt quad** from `engine/source/elements/shell/coqueba/`:
+      `clskew3.F` frame, the complete `cbacoor.F` flat/warped split (+ the
+      condensed FACDT=4/3 dt length now owned by this kernel), `cbadef.F`
+      assumed-strain operators, `cbastra3.F` increments, **2×2 in-plane Gauss × NIP
+      through-thickness** layers reusing `materials.shell_update` (GP-major layer
+      state so anim/failure plumbing is unchanged), `cbavisc.F` damping,
+      `cbaener.F` shear-energy corrections, `cbafori.F`/`cbaproj.F` assembly,
+      `cndt3.F` dt. **NO hourglass block at all — HE identically 0 on the element
+      side, like Fortran.** 19 tests; patch tests exact to 1e-16/1e-15;
+    * **`pyradioss/elements/shell_qeph.py`** (NEW, 1010 lines) — the
+      **physically-stabilized 1-point quad** from `coquez/` (NOT `coqueph/`, which
+      does not exist upstream — a brief-level source-path error worth recording):
+      `czcorc.F` covariant frame + FACDT=5/4, `czcorp5.F` warped projection,
+      `czdef.F` 8 strain + 6 hourglass rates with Flanagan–Belytschko
+      orthogonalization, `czfintce.F`, **`czfintn.F` CZFINTN1** (modal stresses
+      integrated with the material's OWN plane-stress moduli, COEFH=0.999 plastic
+      relaxation, dn=0.015 damper — **elastic work to EINT, ONLY damper work to the
+      hourglass ledger**), `czproj.F`. 24 tests pinning patch/objectivity plus
+      closed-form stabilization stiffnesses at rtol 1e-12 and the EINT/EHOUR split;
+    * **the starter-side `/PROP/SHELL` Ishell dispatch** (`_dispatch_shell_formulations`
+      + `SHELL_ISHELL_GROUPS` in `elements/__init__.py`): 12 → `shells_qbat`,
+      22/23/24 → `shells_qeph` (upstream `hm_read_prop01.F` folds 22/23 into 24 and
+      keeps 12 distinct — **Ishell 22 is NOT a QBAT alias**), with surfaces,
+      contact stiffness, anim and listing wired through;
+    * **THE RESULT — the RD-E-1000 BATOZ and QEPH families MATCH** (tol 0.05,
+      `parity_m41.json`, both engines fresh): c02 0.2298 → **0.01261**, c03 0.2335
+      → **0.00945**, c04 0.2301 → **0.00839**, c08 0.2330 → **5.84e-06**, c09
+      0.2309 → **6.58e-06**. **All five run 100 % of `/RUN` to TERMINATION NORMAL
+      at ENERGY ERROR −0.00 %**, where M40 aborted them at ~66 % on the −15 %
+      guard. Mechanism confirmed by the hourglass channel: Fortran prints
+      **HE = 0.000E+00 exactly** on all three QBAT references and the port's max HE
+      is 2e-7 of IE (the documented `cbavisc` dn work); QEPH's is ~9e-19. c04's
+      cycle-0 dt 1.64410E-02 equals Fortran's printed `0.1644E-01`, now claimed by
+      the owning kernel's own condensed length;
+    Delivered — BT rate kinematics (`bt-rotation-forensics`):
+    * **the missing `cdefo3.F` IHBE≤1 second-order rigid-rotation membrane-rate
+      correction** (lines 103-130, `IMPL_S>0` kills it) implemented bit-for-bit in
+      `shell_bt4.forces()`, plus the companion `cinmas.F` **FAC=NINE** BT-family
+      rotational inertia lumping `I = m/4·(A/9 + t²/12)`. Because the end-of-step
+      corotational frame lags the mid-step velocities by ω·dt/2, a rolled element's
+      out-of-plane velocity leaked into the membrane rates — an O(ω·dt) skew
+      coupling that left rolled elements in a **negative-damping transverse-w
+      flutter growing out of round-off**. Deviation roughly halves (c41 0.2305 →
+      0.1375, c43 0.2713 → 0.2566) and the three Sf_0.1 variants go from M40's
+      NO-CHANNELS cycle-100 aborts to 0.1892/0.2503/0.1902 at 89–92 % coverage; the
+      dt floor moves 1.86540e-2 → 1.95667e-2 (Fortran 2.004e-2), largely closing
+      M40's deferred "7 % conservative" item;
+    * **THE FORENSIC SETTLEMENT — BT does NOT match, and the reason is shared with
+      the reference.** Run to its own TSTOP the **Fortran engine itself** blows up
+      in the same transverse-w mode: HE = **3.085e5 = 76 % of its own IE** at its
+      NORMAL end t=1184, **peak printed ENERGY ERROR −40.7 %**. It survives only
+      because upstream's default energy-error STOP threshold is effectively
+      infinite (`freform.F` 782 `IF(DEMXS==ZERO) DEMXS=EP30`) while the port keeps
+      its live −15 % guard. **MATCH < 0.05 is unreachable for this family while the
+      reference's own final window diverges** — the same class of
+      experiment-settled conclusion as M40's dt finding, and a reason NOT to
+      "fix" it by weakening a guard;
+    Delivered — the energy-guard conditioning (`guard-conditioning`):
+    * **M40's one honest regression (`task_29ec1751`) CLOSED at root, limits
+      UNCHANGED.** `engine.py` now conditions the guard REFERENCE with an absolute
+      floor (`_ENERGY_START_FLOOR = 1.0e-6`) holding BOTH percentage guards inert
+      until the balance reference energy clears the numerical-dust band; the
+      15 %/30 % limits are untouched and the NAN/INF backstop stays UNCONDITIONAL.
+      Mirrors upstream `ecrit.F` 509-515 verbatim (`IF(ABS(ENTOT1B)>EM20) THEN
+      ERR=… ELSE ERR=ZERO ENDIF`). c40/c42/c44: BEFORE abort@cycle 100 at ERR
+      −18.2 % on IE ~4.4e-8 dust; AFTER the run proceeds, the guard re-arms at
+      REF 2.9e-6 with ERR already −7 %, **max |ERR| while ACTIVE 7.0 % < 15 %**;
+    Delivered — re-measurement:
+    * **the CORPUS RE-SWEEP** (`coverage-m41`, VALIDATION §4.10,
+      `coverage_results_m41.json`): **CLEAN 13 / SKIPS 440 / ERROR 76 —
+      bit-identical to M40 in every cell**, migration matrix fully diagonal, 0
+      moved cases / 0 new error classes / 0 crashes / 0 timeouts. Because M41
+      changed the STARTER, a NEW `shell_dispatch` block proves the new path
+      actually ran: it **fired on 160 of 529 decks** (44 QBAT / 32,031 elements;
+      116 QEPH / 415,713 elements; largest deck 37,664 QEPH elements) and all 160
+      kept their full record — verdict, hard_skips, error_messages, parse_errors,
+      n_skipped_families — **byte-for-byte identical to M40**. Verdict PASS;
+    * **the PARITY RE-RUN** (`parity-m41`, VALIDATION §3.6, `parity_m41.json`, 81
+      results): zero regressions on everything the shell work did not touch (c19
+      MATCH 0.00113, c20 0.3156, c26 MATCH 0.0216, c13/c14 0.2089921, springs
+      NO-CHANNELS, all PYRADIOSS-FAIL identical), and the backend contract holds
+      3/3 with c04 and c08 T01 **byte-identical** across numpy/numba;
+    * **THE CLEAN BENCHMARK — the side-quest owed since M38, DISCHARGED**
+      (VALIDATION §6.5, `perf_m41_clean.json`, `clean: true`, **0/9 rows
+      contended**): the user's 12-process MPI job was not running, the idle window
+      was taken first and used in isolation. **Median numba 1.782×** (range
+      0.61–2.57×). The M40-derived `auto` ≥ 32-element rule is VALIDATED — numba
+      loses on exactly the two sub-threshold decks (gas_piston 4 elem 0.610×,
+      antenna_mast 10 elem 0.928×) and `auto` picks NumPy on exactly those two;
+    * **test suite 1002 → 1062 (+60)**: 19 QBAT + 24 QEPH + 6 guard + 6
+      BT-rotation + 5 numpy-compat. A mid-milestone environment regression (a
+      `vortex-radioss` install downgraded the shared NumPy to 1.26.4, breaking
+      every `np.trapezoid` caller — NEP 52 renamed `np.trapz` in NumPy 2.0) was
+      fixed at root with `pyradioss/common/npcompat.py`, a rename-only shim
+      resolved once at import, which is the correct fix given that `pyproject.toml`
+      promises `numpy>=1.22` and the `vortex_radioss` → `lasso-python`
+      post-processing stack hard-pins `numpy<2.0.0`. **Fast tier re-run on the
+      final merged tree: 1049 passed, 13 deselected, 0 failures** (numpy-pinned);
+    * **THREE PRE-EXISTING TESTS WERE MODIFIED — surfaced, not absorbed into "the
+      suite is green"** (VALIDATION §8): `test_m9_geomnl.py` took the NEP-52
+      import swap only (no assertion touched); `test_m40_rbody_stifr.py` had an
+      expected value CORRECTED at the same rel=1e-12 tolerance — M40 pinned the BT
+      deck's rotational lumping as `(t²+A)/12`, but that is the IHBE≥11
+      BATOZ/QEPH branch (`cndt3.F` 209-218), and upstream's BT form is
+      `t²/12 + A/9` (`chvis3.F` l.250 `STIR = STI*(THK02*INV12 + AREA*INV9)`, with
+      `cinmas.F` 919-925 `ELSEIF(IHBE>=11) FAC=TWELVE ELSE FAC=NINE`; **both
+      citations verified directly in the Fortran**) — so that test was pinning the
+      wrong closed form and now pins the right one; and
+      `test_m4_contact.py::test_type11_edge_impact_momentum_and_energy` had its
+      arrest assertion moved from the four crossing nodes' mean z-velocity to the
+      flyer's CENTRE-OF-MASS z-velocity against the same −0.5 threshold, plus a
+      NEW bounded-ringing assertion. That third one is a changed assertion on a
+      test that had been failing, so it is the case the no-weakening rule exists
+      to catch: the recorded rationale (post-release bending-mode ringing makes
+      the four-node mean sample PHASE, and it was already flaky under the OLD
+      FAC=12 lumping at 3/9 sampled stop times) is quantitative and reads as a
+      well-posedness fix, but it was NOT independently re-derived and should be
+      confirmed.
+    **Process note: all six M41 builders filed reports**, and for the first time
+    since M37 the milestone's central attempt reached MATCH rather than a
+    diagnosed non-MATCH — while the part that did not (BT) is documented as
+    unreachable-by-comparison rather than merely unfinished.
+    Deferred out of M41, explicitly:
+    * **the BT family stays DEVIATION** (c40–c45, 0.138–0.257 at 88–96 % of
+      `/RUN`) — settled, not solved; the two concrete remaining targets are the
+      unported `cdefo3` branches for c43 (BT type3, node-1-relative velocity form —
+      it takes NO rot2 correction today) and c45 (BT type4, Z2 warp correction);
+    * **DKT18 is now the ONLY unported shell formulation in the RD-E-1000 family**
+      (c06 0.2813, c07 0.2581, worst channel MOMX; c00 twisted beam 0.4556) — the
+      obvious next element-technology target;
+    * **QBAT/QEPH have NO JIT kernels, and `auto` currently picks the SLOWER path
+      for them**: c04 full run numba 395 s vs numpy 330 s, and QBAT is ~3× BT per
+      cycle (296 cyc/s). Needs a `jit_kernels` pass plus a decision on excluding
+      qbat/qeph groups from the ≥ 32-element auto rule until then — a genuine cost
+      incurred to buy the MATCH;
+    * **c05_E1000_Bending_DKT18_Sf_0.1 is a GENUINE timeout** (681,800 cycles,
+      1799.38 s of an 1800 s budget at ~55 % of `/RUN`; it needs ~1.2 M cycles) —
+      it has NO verdict, which is different from a bad one;
+    * **documented deliberate cuts in the new kernels** — QBAT: `nip=1`
+      CBAFORI1/CBAVISNP1, `Idrill>0`, `Ithick=1`, `tangent()`/`kgeo()` (implicit
+      refuses `shells_qbat` loudly, test-pinned); QEPH: `ZCFAC=1` plastic
+      relaxation (exact for elastic laws incl. c08/c09), `NPT=0`→3 Gauss stations,
+      `Idrill=1`, `ISMSTR=1/11`, XFEM/thermal, implicit tangent; **the orthotropic
+      QEPH `czfintn_or` HM/HF path is NOT ported — LAW19 shells run the isotropic
+      moduli**;
+    * **an ownership reconciliation in `shell_bt4.py`**: its M40-era
+      `_CONDENSED_FACDT` / Ishell 12/22/24 dt-claim branches are now SHADOWED for
+      every deck the dispatch routes to `shells_qbat`/`shells_qeph`, which own
+      their claims — duplicated BATOZ-family logic in a file that no longer owns
+      it, to be reconciled before it drifts;
+    * **numba spot coverage narrowed** — the M41 set is 3 decks (QBAT/QEPH/BT), so
+      the LAW36 SOLID-path backend contract is CARRIED from M40, not re-proven;
+      clean per-deck RD-E-1000 parity timings and `c46_LAW70`'s backend ratio are
+      unmeasured (not regressed);
+    * **a pre-existing guard gap, noted but deliberately NOT changed**: the
+      NAN/INF divergence backstop tests only `KE`, not IE/HE — marginal in
+      practice, and widening a guard's reach is a separate change with its own
+      risk;
+    * **carried from M40** (unchanged): the c20 MOMZ momentum residual (0.3156,
+      Isolid=24 HEPH free-node channel — the LAW36 material itself is perfect at IE
+      1.1e-06), the LAW2 solids volumetric defect (`task_6c08e3b9`), the LAW36
+      rate-family clamp-vs-extrapolation deviation (`task_7b31ad5f`), TYPE32
+      pretensioner physics, the port's ~2×-smaller explicit dt on V0700 solids, the
+      coverage frontier (INTER/TYPE24, MONVOL/AIRBAG1, INTER/LAGMUL, ALE/BCS,
+      SHEL16, QUAD, EOS/LINEAR, AMS — ranked gaps byte-identical), `RBODY has no
+      mass` (3 decks), the /ADMAS node-group wall, `coverage_tables.md`
+      regeneration, and `accel.backend_name()` (confirmed unused again, left in
+      place).
 
 **Unnumbered deferred candidate — pending a project scope decision** (previously
 queued as the next numbered milestone; kept here explicitly, not silently dropped):

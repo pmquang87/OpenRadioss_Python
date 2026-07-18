@@ -121,6 +121,41 @@ def _element_energy_sum(model: Model) -> float:
     return e
 
 
+# Startup conditioning for the energy-balance guards (M41).
+#
+# The percentage energy-error checks are only meaningful once the run
+# carries a non-trivial energy scale.  During the first cycles of a
+# slowly-loaded deck (RD-E-1000 Sf_0.1: /DT/NODA scale 0.1) the total
+# reference energy is numerical dust — IE/KE/EW all ~1e-8 in the deck's
+# units — and the leapfrog half-step lag between the accumulated
+# external-work Riemann sum and the realized IE+KE reads as a huge
+# percentage (ERR -84% at cycle 1, decaying to -17% at cycle 100, then
+# to ~0 as the energy grows).  Judging %-error against that dust is
+# ill-posed, so both guards are held INERT until the reference energy
+# rises above this absolute floor.
+#
+# This mirrors the upstream engine, which conditions its ENERGY ERROR
+# the same way (engine/source/output/ecrit.F):
+#   * the error is computed only when the reference/expected total
+#     energy clears an absolute floor —
+#       IF(ABS(ENTOT1B) > EM20) THEN  ERR = ENTOTB/ENTOT1B - ONE
+#       ELSE                          ERR = ZERO           (check inert)
+#   * the reported percentage is clamped to ±99.9% (X99), never "huge";
+#   * and the stop thresholds DEMXK/DEMXS default to EP20/EP30 (1e20 /
+#     1e30) when the deck sets no /STOP-Emax or /KILL card (freform.F),
+#     i.e. upstream does not abort on energy error by default at all —
+#     which is why Fortran runs these Sf_0.1 decks to NORMAL.
+# The port keeps a live 15% default limit as a divergence safety net
+# (M37 — a young port wants the guard on), so the floor is sized to the
+# numerical-dust band rather than to EM20's bare divide-by-zero role:
+# ~6 orders below any physical energy these decks reach (IE climbs to
+# ~1e0..1e6), so a genuine instability — which runs energy away
+# super-linearly (the h=-1 teeth control reaches ~1e9) — crosses the
+# floor within a handful of cycles and still trips.  The 15% / 30%
+# limits themselves are UNCHANGED.
+_ENERGY_START_FLOOR = 1.0e-6
+
+
 def _energies(model: Model, state: EngineState) -> dict:
     ie = he = 0.0
     for _, group in model.element_groups():
@@ -151,7 +186,12 @@ def _energies(model: Model, state: EngineState) -> dict:
     # divergence; the Engine stops on ERRN < -limit (step 7).
     return {"IE": ie, "KE": ke, "HE": he, "CE": state.econt,
             "EN": state.e_num, "DE": state.e_damp, "EW": state.wext,
-            "ERR": err, "ERRN": state.e_num / ref * 100.0}
+            "ERR": err, "ERRN": state.e_num / ref * 100.0,
+            # REF: the absolute energy scale the two percentages are
+            # normalized by — the divergence guards gate on it so they
+            # stay inert while it is numerical dust (see
+            # _ENERGY_START_FLOOR and the M41 startup conditioning).
+            "REF": ref}
 
 
 def run_engine(input_file: str, log: Optional[MessageLog] = None) -> Model:
@@ -672,24 +712,37 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                      f"{e['ERR']:8.2f}")
             # ---- divergence guards (the original's energy-error and
             # minimum-time-step stops) --------------------------------
-            if abs(e["ERR"]) > controls.energy_error_stop:
-                state.stop_reason = (f"ENERGY ERROR {e['ERR']:.1f}% EXCEEDS "
-                                     f"LIMIT {controls.energy_error_stop}%")
-                break
-            # a strongly NEGATIVE numerical-dissipation ledger is energy
-            # INJECTION — the signature of instability that the closed
-            # balance (which includes EN) cannot show in ERR (M6). The
-            # threshold is 2x the ERR limit: EN legitimately WOBBLES by
-            # a large fraction of the energy scale when most of a small
-            # model's energy sits in a barely-resolved mode (a single
-            # spring at omega*dt ~ 1.3 reads -35% with no instability at
-            # all), while true injection runs away to -100% and beyond.
-            if e["ERRN"] < -2.0 * controls.energy_error_stop:
-                state.stop_reason = (
-                    f"NUMERICAL ENERGY INJECTION {e['ERRN']:.1f}% EXCEEDS "
-                    f"LIMIT {2.0 * controls.energy_error_stop}% — "
-                    f"RUN UNSTABLE")
-                break
+            # M41 startup conditioning: the two PERCENTAGE guards below
+            # are inert until the reference energy clears the numerical-
+            # dust floor (mirrors ecrit.F's ABS(ENTOT1B) > EM20 gate on
+            # the ENERGY ERROR; see _ENERGY_START_FLOOR).  A slowly-
+            # loaded deck's opening cycles carry only round-off-scale
+            # energy, so a fixed leapfrog half-step lag reads as a huge
+            # %-error on a dust denominator with no instability present
+            # (RD-E-1000 Sf_0.1: ERR -17% at cycle 100, IE ~3.75e-8).
+            # The NAN/INF check stays UNCONDITIONAL — a non-finite state
+            # is always fatal.  The 15% / 30% limits are unchanged.
+            if e["REF"] > _ENERGY_START_FLOOR:
+                if abs(e["ERR"]) > controls.energy_error_stop:
+                    state.stop_reason = (
+                        f"ENERGY ERROR {e['ERR']:.1f}% EXCEEDS "
+                        f"LIMIT {controls.energy_error_stop}%")
+                    break
+                # a strongly NEGATIVE numerical-dissipation ledger is
+                # energy INJECTION — the signature of instability that
+                # the closed balance (which includes EN) cannot show in
+                # ERR (M6). The threshold is 2x the ERR limit: EN
+                # legitimately WOBBLES by a large fraction of the energy
+                # scale when most of a small model's energy sits in a
+                # barely-resolved mode (a single spring at omega*dt ~ 1.3
+                # reads -35% with no instability at all), while true
+                # injection runs away to -100% and beyond.
+                if e["ERRN"] < -2.0 * controls.energy_error_stop:
+                    state.stop_reason = (
+                        f"NUMERICAL ENERGY INJECTION {e['ERRN']:.1f}% EXCEEDS "
+                        f"LIMIT {2.0 * controls.energy_error_stop}% — "
+                        f"RUN UNSTABLE")
+                    break
             if not np.isfinite(e["KE"]):
                 state.stop_reason = "NAN/INF DETECTED — RUN DIVERGED"
                 break

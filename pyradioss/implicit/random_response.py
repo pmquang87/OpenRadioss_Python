@@ -172,6 +172,7 @@ import math
 
 import numpy as np
 
+from ..common.npcompat import trapezoid
 from . import require_scipy
 
 
@@ -239,7 +240,7 @@ def spectral_moments(omega, Suu, nmax=4):
     out = np.zeros((nmax + 1, S.shape[1]))
     for n in range(nmax + 1):
         integrand = (w ** n)[:, None] * S          # Omega^n S_uu, (nf, ndof)
-        out[n] = np.trapezoid(integrand, w, axis=0) / np.pi
+        out[n] = trapezoid(integrand, w, axis=0) / np.pi
     return out[:, 0] if one_d else out
 
 

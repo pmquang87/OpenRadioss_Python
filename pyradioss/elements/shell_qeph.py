@@ -1,0 +1,1010 @@
+"""
+4-node QEPH shell element (/SHELL + /PROP/SHELL, Ishell=24 — the
+physically-stabilized one-point quadrature shell; the starter folds the
+legacy Ishell 22/23 into 24, hm_read_prop01.F line 185-192).
+
+Fortran origin: ``engine/source/elements/shell/coquez/`` — the cycle path
+
+    czforc3.F    driver (gather, frame, call chain, scatter)
+    czcorc.F     CZCORC1: covariant frame (CLSKEW3 IREP=0), local corner
+                 coordinates, warp Z1, the CZ geometry set (X13..MY34),
+                 condensed characteristic length (FACDT=5/4), rotation /
+                 velocity gather, the 2nd-order rigid-rotation correction
+                 and the warped-element velocity projection (czcorp5.F)
+    czdef.F      CZDEF: 8 generalized strain rates VDEF + 6 hourglass
+                 rates VHG (the assumed-strain expansion point)
+    czstra3.F    strain increments = VDEF * dt
+    cmain3.F     plane-stress material laws (shared with BT — the port
+                 reuses materials.shell_update per Gauss layer)
+    cndt3.F      time step:  dt = (sqrt(1+dn^2)-dn) * LL / SSP  with LL
+                 the czcorc condensed length (ported for the dt CLAIM in
+                 M40 on the BT kernel; here it is the native claim)
+    czfintce.F   CZFINTCE: one-point (constant) internal forces/moments
+    czfintn.F    CZFINTN1: the PHYSICAL (stiffness) hourglass — see below
+    czproj.F     CZPROJ1/CZPROJV: antisym/sym reconstruction, warped-
+                 element force re-projection, local -> global transform
+
+Physical stabilization (the QEPH point, czfintn.F)
+--------------------------------------------------
+Unlike the BT viscous hourglass (chvis3.F: rate dampers + small elastic
+springs scaled by the user hm/hf/hr ~ 1e-2), QEPH stabilizes its four
+in-plane hourglass modes with a STIFFNESS built from the material's OWN
+plane-stress moduli each cycle (Belytschko-Bindeman-style assumed strain,
+same family as the M38 brick treatment solid_hexa8._phys_hourglass_law70):
+
+* hourglass strain rates (czdef.F lines 154-164) are the h=(1,-1,1,-1)
+  modal rates ORTHOGONALIZED through the CZ geometry: with centered corner
+  coordinates, MX13 = (x1+x3-x2-x4)/4 and MY13 likewise, so
+  ``VHG1 = h.vx/4 - MX13*exx - MY13*(by.vx)`` vanishes IDENTICALLY on any
+  linear velocity field (the Flanagan-Belytschko property, in covariant
+  form) — no spurious stiffness on constant-strain states;
+* the modal stress state VGLAS (GBUF%HOURG, 12 slots: eta/ksi families x
+  membrane/bending/shear pairs) is integrated with moduli A11 = E/(1-nu2),
+  A12 = nu*A11, G*SHF — scaled by CVIS = 1 (GEO(17) after the starter's
+  hm_read_prop01.F lines 227-230 swap: the card's Dn moves to GEO(13) =
+  the linear DAMPING coefficient, default 0.015 = ZEP015, and GEO(17)
+  becomes CVIS = 1), NOT by the BT hm/hf knobs;
+* a small LINEAR viscous damper rides on top (czfintn.F HVL =
+  dn*sqrt(rho*A), with the SQRT moduli A11SR = sqrt(A11) etc. of
+  resol_init.F lines 687-698) — ~1.5 % of critical;
+* the ELASTIC stabilization work is booked into the element INTERNAL
+  energy EINT (czfintn.F lines 297/449), and ONLY the damper work TESY
+  goes to the part hourglass ledger EVIS(8) (lines 443-491) — this is why
+  a healthy QEPH run reports near-zero HE where BT reports percent-level;
+* under plasticity the modal stress increment is mostly RELAXED once the
+  combined constant+hourglass von-Mises passes the yield (lines 301-351,
+  COEF=0.85/COEFH=0.999 caps).  The port evaluates the same criterion
+  with the current yield rebuilt from the slice's hardening data (LAW2/
+  LAW36/LAW44) and ZCFAC = 1 — the (1-ETAN/E) floor of the Fortran
+  needs the per-cycle material tangent ratio which the port's material
+  layer does not surface; exact for elastic laws (documented cut).
+
+Warped elements (Z1^2 >= LM*1e-8, LM = (L13+L24)/2 the mean squared
+half-diagonal — czcorc.F 397 / czcorp5.F 84): the velocities receive the FULL
+projection of czcorp5.F (rigid + nodal-drilling removal through the
+nodal-normal frame VQN and the 3x3 inverse DI), and the assembled forces
+receive the dual re-projection of czproj.F — both ported.  Flat elements
+(the plate fast path, PLAT=.TRUE.) skip both, exactly as upstream.
+
+Conventions shared with the rest of the port (see shell_bt4):
+* ``forces()`` ACCUMULATES the NEGATED internal force into ``fint`` /
+  ``mint`` (cupdtn3.F ``F(1,N) = F(1,N) - F11``);
+* GBUF%FOR = N/t and GBUF%MOM = M/t^2 in the Fortran (sigeps01g.F:
+  MOM increment = A1*THK0/12*KXX) — the port keeps the PHYSICAL
+  resultants Nres = sum(w_k sig_k), Mres = sum(w_k z_k sig_k) and folds
+  the THK/THK02 factors of czfintce.F into the formulas;
+* FOR(4) pairs with EYZ and FOR(5) with EXZ (mulawc.F90 line 538) —
+  i.e. VSTRE(4) = sig_yz = qshear[:,1], VSTRE(5) = sig_xz = qshear[:,0];
+* lumped mass rho*t*A/4 and the generous rotational inertia
+  m*(t^2+A)/12 (cinmas.F FAC=TWELVE for IHBE >= 11) — identical to BT.
+
+Deliberate cuts (documented): Idrill=1 drilling stiffness (czdefrz/
+czfintcrz — the isotropic RD decks run Idrill=0), ISMSTR=1/11 frozen-
+geometry small strain, thermal/XFEM/non-local, the NPT=0 "global
+integration" flag (the port's prop reader resolves N=0 to 3 Gauss
+stations — elastically identical, and only the plastic-relaxation
+weight COEF1 16-vs-25 of czfintn.F line 92-96 differs), and the
+implicit tangent (shell_group raises — deferred, like the M41 brief
+allows).
+"""
+
+from __future__ import annotations
+
+import numpy as np
+
+from .. import materials
+from . import shell_ortho
+from .shell_bt4 import (_element_deletion, _init_material_state,
+                        _layer_extra, _layer_failure)
+from ..common.constants import EM20, EP30, SHEAR_FACTOR
+from ..common.fastmath import cross3, norm3, scatter_add3
+
+# ---------------------------------------------------------------------------
+# Fortran constants (constant_mod.F)
+# ---------------------------------------------------------------------------
+_TOL_PLAT = 1.0e-8      # czcorc.F line 135 (double precision; EM7 single)
+#   the gate compares Z1^2 < LM*TOL with LM = (L13+L24)/2 the MEAN
+#   squared half-diagonal (czcorc.F line 397, passed into CZCORP5's LL
+#   dummy at line 581; czcorp5.F line 84) — a length^2, dimensionally
+#   consistent with Z1^2.  The implicit-only floor LM >= 0.1*THK^2
+#   (czcorc.F line 408, IMPL_S>0) is not ported: QEPH has no implicit
+#   tangent (the assembly raises).
+_CVIS = 1.0             # GEO(17) after hm_read_prop01.F 197-230 (Ishell=24)
+_DN_DEFAULT = 0.015     # ZEP015 — card Dn default (hm_read_prop01.F 199)
+_COEF = 0.85            # ZEP85   (czfintn.F line 87)
+_COEFH = 0.999          # ZEP999  (line 86)
+_STIER = 16.0 / 3.0     # FIVEP333 (line 88)
+_FBEND_V = 3.464        # THREEP464 (line 90) — viscous bending factor
+_UNDOUZSR = np.sqrt(1.0 / 12.0)   # UNDOUZSR (line 103)
+_TOL_PLAS = 1.0e-18     # TOL (line 89)
+_C7 = 4.0 / 3.0         # C7 = FOUR_OVER_3 (line 85)
+_FACDT = 1.25           # FIVE_OVER_4 (czcorc.F line 379, QEPH)
+
+
+# ---------------------------------------------------------------------------
+# geometry: covariant frame + CZ geometry set (czcorc.F CZCORC1)
+# ---------------------------------------------------------------------------
+
+def _geometry(xe):
+    """Frame + the complete CZ geometry set for the group.
+
+    Returns a dict G with (all (n,) unless noted):
+    E (n,3,3) columns e1|e2|e3; area; a_i = 1/area; z1 (warp); corx/cory
+    (n,4) centered corner coords; x13,x24,y13,y24 (half-diagonals);
+    mx13,mx23,mx34,my13,my23,my34 (mid-sums); l13,l24; ll (condensed
+    characteristic LENGTH, czcorc lines 379-403, FACDT=5/4)."""
+    n = len(xe)
+    # covariant vectors R = x2+x3-x1-x4, S = x3+x4-x1-x2 (czcorc 149-154)
+    r = xe[:, 1] + xe[:, 2] - xe[:, 0] - xe[:, 3]
+    s = xe[:, 2] + xe[:, 3] - xe[:, 0] - xe[:, 1]
+    # CLSKEW3 (cdkcoor3.F 303-399, IREP=0 = the QEPH branch):
+    # e3 = (R x S)/|R x S|; e1 ~ R*|S|/|R| + S x e3 (the symmetrized axis)
+    e3 = cross3(r, s)
+    det = norm3(e3)
+    area = 0.25 * det
+    e3 = e3 / np.maximum(det, EM20)[:, None]
+    c1c1 = np.einsum("ni,ni->n", r, r)
+    c2c2 = np.einsum("ni,ni->n", s, s)
+    c2_1 = np.where(c1c1 > 0.0,
+                    np.sqrt(c2c2 / np.maximum(c1c1, EM20)), 1.0)
+    c1_1 = np.where(c1c1 > 0.0, 1.0,
+                    np.sqrt(c1c1 / np.maximum(c2c2, EM20)))
+    e1 = r * c2_1[:, None] + cross3(s, e3) * c1_1[:, None]
+    e1 = e1 / np.maximum(norm3(e1), EM20)[:, None]
+    e2 = cross3(e3, e1)
+    E = np.stack([e1, e2, e3], axis=2)
+
+    # local corner coordinates relative to NODE 1 (czcorc 200-227)
+    d2 = xe[:, 1] - xe[:, 0]
+    d3 = xe[:, 2] - xe[:, 0]
+    d4 = xe[:, 3] - xe[:, 0]
+    xl2 = np.einsum("ni,ni->n", d2, e1)
+    yl2 = np.einsum("ni,ni->n", d2, e2)
+    xl3 = np.einsum("ni,ni->n", d3, e1)
+    yl3 = np.einsum("ni,ni->n", d3, e2)
+    xl4 = np.einsum("ni,ni->n", d4, e1)
+    yl4 = np.einsum("ni,ni->n", d4, e2)
+    center = xe.mean(axis=1)
+    z1 = np.einsum("ni,ni->n", xe[:, 0] - center, e3)
+
+    # centered corner coordinates (czcorc 336-345)
+    cx0 = 0.25 * (xl2 + xl3 + xl4)
+    cy0 = 0.25 * (yl2 + yl3 + yl4)
+    corx = np.stack([-cx0, xl2 - cx0, xl3 - cx0, xl4 - cx0], axis=1)
+    cory = np.stack([-cy0, yl2 - cy0, yl3 - cy0, yl4 - cy0], axis=1)
+
+    x13 = 0.5 * (corx[:, 0] - corx[:, 2])
+    x24 = 0.5 * (corx[:, 1] - corx[:, 3])
+    y13 = 0.5 * (cory[:, 0] - cory[:, 2])
+    y24 = 0.5 * (cory[:, 1] - cory[:, 3])
+    mx13 = 0.5 * (corx[:, 0] + corx[:, 2])
+    mx23 = 0.5 * (corx[:, 1] + corx[:, 2])
+    mx34 = 0.5 * (corx[:, 2] + corx[:, 3])
+    my13 = 0.5 * (cory[:, 0] + cory[:, 2])
+    my23 = 0.5 * (cory[:, 1] + cory[:, 2])
+    my34 = 0.5 * (cory[:, 2] + cory[:, 3])
+    l13 = x13 ** 2 + y13 ** 2
+    l24 = x24 ** 2 + y24 ** 2
+
+    a_i = 1.0 / np.maximum(area, EM20)
+    # taper term HS = max(|c1|,|c2|)/A (czcorc 370-372)
+    hs = np.maximum(
+        np.abs(corx[:, 1] * cory[:, 3] - cory[:, 1] * corx[:, 3]),
+        np.abs(corx[:, 0] * cory[:, 2] - cory[:, 0] * corx[:, 2])) * a_i
+
+    # condensed characteristic length LL (czcorc 379-403, FACDT = 5/4)
+    rx = xl2 + xl3 - xl4
+    ry = yl2 + yl3 - yl4
+    sx = -xl2 + xl3 + xl4
+    sy = -yl2 + yl3 + yl4
+    c1 = np.sqrt(rx ** 2 + ry ** 2)
+    c2 = np.sqrt(sx ** 2 + sy ** 2)
+    cmin = np.maximum(np.minimum(c1, c2), EM20)
+    fac1 = np.minimum(0.5, 0.25 * (np.maximum(c1, c2) / cmin - 1.0)) + 1.0
+    fac2 = 4.0 * area / np.maximum(c1 * c2, EM20)
+    fac2 = 3.413 * np.maximum(0.0, fac2 - 0.7071)
+    fac2 = 0.78 + 0.22 * fac2 ** 3
+    faci = 2.0 * fac1 * fac2
+    lldiag = np.maximum(l13, l24)
+    s1 = np.maximum(np.sqrt(faci * (_FACDT + hs) * lldiag), 1.0e-10)
+    ll = area / s1
+
+    return dict(E=E, area=area, a_i=a_i, z1=z1, corx=corx, cory=cory,
+                x13=x13, x24=x24, y13=y13, y24=y24,
+                mx13=mx13, mx23=mx23, mx34=mx34,
+                my13=my13, my23=my23, my34=my34,
+                l13=l13, l24=l24, ll=ll,
+                lm=0.5 * (l13 + l24))    # czcorc.F line 397 (plat gate)
+
+
+# ---------------------------------------------------------------------------
+# kinematics: local velocities, rigid correction, warp projection
+# (czcorc.F lines 411-610 + czcorp5.F)
+# ---------------------------------------------------------------------------
+
+def _sym3_inv(d):
+    """Inverse of the packed symmetric 3x3 [d1,d2,d3,d4,d5,d6] =
+    [[1,4,5],[4,2,6],[5,6,3]] — czcorp5.F lines 269-284 (A3INVDP)."""
+    abc = d[:, 0] * d[:, 1] * d[:, 2]
+    xxyz2 = d[:, 0] * d[:, 5] ** 2
+    yyxz2 = d[:, 1] * d[:, 4] ** 2
+    zzxy2 = d[:, 2] * d[:, 3] ** 2
+    deta = np.abs(abc + 2.0 * d[:, 3] * d[:, 4] * d[:, 5]
+                  - xxyz2 - yyxz2 - zzxy2)
+    deta = 1.0 / np.maximum(deta, EM20)
+    di = np.empty_like(d)
+    di[:, 0] = (abc - xxyz2) * deta / np.maximum(d[:, 0], EM20)
+    di[:, 1] = (abc - yyxz2) * deta / np.maximum(d[:, 1], EM20)
+    di[:, 2] = (abc - zzxy2) * deta / np.maximum(d[:, 2], EM20)
+    di[:, 3] = (d[:, 4] * d[:, 5] - d[:, 3] * d[:, 2]) * deta
+    di[:, 4] = (d[:, 5] * d[:, 3] - d[:, 4] * d[:, 1]) * deta
+    di[:, 5] = (d[:, 3] * d[:, 4] - d[:, 5] * d[:, 0]) * deta
+    return di
+
+
+def _kinematics(G, ve, vre, dt, npt1):
+    """Local velocity set of CZCORC1 + the czcorp5 projection.
+
+    Returns (v13, v24, vhi, rl, plat, vqn, di, db) with the SCALED
+    convention of czcorc.F lines 598-610: v13, v24 carry 1/A, vhi 1/4;
+    ``rl`` (n,4,2) are the projected local nodal rotation rates.
+    ``vqn/di/db`` are the warped-element projection operators (None if
+    every element is flat), reused by the force re-projection."""
+    E, area, a_i, z1 = G["E"], G["area"], G["a_i"], G["z1"]
+    x13, x24, y13, y24 = G["x13"], G["x24"], G["y13"], G["y24"]
+    mx13, my13 = G["mx13"], G["my13"]
+    n = len(area)
+
+    vloc = ve @ E                                    # (n, 4, 3)
+    rloc = vre @ E                                   # (n, 4, 3)
+    rl = rloc[:, :, :2].copy()                       # RLXYZ
+    v13 = vloc[:, 0] - vloc[:, 2]
+    v24 = vloc[:, 1] - vloc[:, 3]
+    vhi = vloc[:, 0] - vloc[:, 1] + vloc[:, 2] - vloc[:, 3]
+
+    # ---- 2nd-order rigid-rotation correction (czcorc 540-568) ----------
+    # V is at t+dt/2 while X is at t: remove the half-step spin so a rigid
+    # rotation produces no strain at finite dt.
+    if dt != 0.0:
+        dt05, dt025 = 0.5 * dt, 0.25 * dt
+        exz = y24 * v13[:, 2] - y13 * v24[:, 2]
+        eyz = -x24 * v13[:, 2] + x13 * v24[:, 2]
+        ddry = dt05 * exz * a_i
+        ddrx = dt05 * eyz * a_i
+        v13x, v24x, vhix = v13[:, 0].copy(), v24[:, 0].copy(), \
+            vhi[:, 0].copy()
+        den1 = x13 - x24
+        ddrz1 = np.where(np.abs(den1) < 1.0e-10, 0.0,
+                         dt025 * (v13[:, 1] - v24[:, 1])
+                         / np.where(np.abs(den1) < 1.0e-10, 1.0, den1))
+        v13[:, 0] -= ddry * v13[:, 2] + ddrz1 * v13[:, 1]
+        v24[:, 0] -= ddry * v24[:, 2] + ddrz1 * v24[:, 1]
+        vhi[:, 0] -= ddry * vhi[:, 2] + ddrz1 * vhi[:, 1]
+        den2 = y13 + y24
+        ddrz2 = np.where(np.abs(den2) < 1.0e-10, 0.0,
+                         dt025 * (v13x + v24x)
+                         / np.where(np.abs(den2) < 1.0e-10, 1.0, den2))
+        v13[:, 1] -= ddrx * v13[:, 2] + ddrz2 * v13x
+        v24[:, 1] -= ddrx * v24[:, 2] + ddrz2 * v24x
+        vhi[:, 1] -= ddrx * vhi[:, 2] + ddrz2 * vhix
+
+    # ---- PLAT flag + warped-element projection (czcorp5.F line 84:
+    # Z2 < LM*TOL with LM the mean squared half-diagonal, or NPT==1) ----
+    plat = (z1 * z1 < G["lm"] * _TOL_PLAT) | npt1
+    z1[plat] = 0.0                                   # czcorp5 line 85
+    vqn = di = db = None
+    if not plat.all():
+        w = ~plat
+        vqn = np.zeros((n, 4, 3))
+        di = np.zeros((n, 6))
+        db = np.zeros((n, 4, 3))
+        corx, cory = G["corx"], G["cory"]
+        z2 = z1 * z1
+        a_4 = 0.25 * area
+        # nodal normals VQN (czcorp5 96-130); node order (1,3) then (2,4)
+        sz1 = mx13 * y24 - my13 * x24
+        sz = z2 * G["l24"]
+        sl = 1.0 / np.sqrt(sz + (a_4 + sz1) ** 2)
+        vqn[:, 0, 0] = -z1 * y24 * sl
+        vqn[:, 0, 1] = z1 * x24 * sl
+        vqn[:, 0, 2] = (a_4 + sz1) * sl
+        sl = 1.0 / np.sqrt(sz + (a_4 - sz1) ** 2)
+        vqn[:, 2, 0] = z1 * y24 * sl
+        vqn[:, 2, 1] = -z1 * x24 * sl
+        vqn[:, 2, 2] = (a_4 - sz1) * sl
+        sz1 = mx13 * y13 - my13 * x13
+        sz = z2 * G["l13"]
+        sl = 1.0 / np.sqrt(sz + (a_4 + sz1) ** 2)
+        vqn[:, 1, 0] = -z1 * y13 * sl
+        vqn[:, 1, 1] = z1 * x13 * sl
+        vqn[:, 1, 2] = (a_4 + sz1) * sl
+        sl = 1.0 / np.sqrt(sz + (a_4 - sz1) ** 2)
+        vqn[:, 3, 0] = z1 * y13 * sl
+        vqn[:, 3, 1] = -z1 * x13 * sl
+        vqn[:, 3, 2] = (a_4 - sz1) * sl
+
+        rr = np.concatenate([rl, rloc[:, :, 2:3]], axis=2)  # RRXYZ (n,4,3)
+        # rigid + drilling residual (czcorp5 205-221) — UNSCALED v13 etc.
+        ar = np.empty((n, 3))
+        ar[:, 0] = (-z1 * vhi[:, 1] + y13 * v13[:, 2] + y24 * v24[:, 2]
+                    + my13 * vhi[:, 2] + rr[:, :, 0].sum(axis=1))
+        ar[:, 1] = (z1 * vhi[:, 0] - x13 * v13[:, 2] - x24 * v24[:, 2]
+                    - mx13 * vhi[:, 2] + rr[:, :, 1].sum(axis=1))
+        ar[:, 2] = (x13 * v13[:, 1] + x24 * v24[:, 1] + mx13 * vhi[:, 1]
+                    - y13 * v13[:, 0] - y24 * v24[:, 0] - my13 * vhi[:, 0]
+                    + rr[:, :, 2].sum(axis=1))
+        ad = np.einsum("njk,njk->nj", vqn, rr)            # (n, 4)
+        # projection matrix D (czcorp5 224-253)
+        xx = (corx ** 2).sum(axis=1)
+        yy = (cory ** 2).sum(axis=1)
+        xy = (corx * cory).sum(axis=1)
+        hpat = np.array([1.0, -1.0, 1.0, -1.0])
+        xz = (corx @ hpat) * z1
+        yz = (cory @ hpat) * z1
+        zz = 4.0 * z2
+        btb = np.einsum("njk,njl->nkl", vqn, vqn)
+        d = np.empty((n, 6))
+        d[:, 0] = yy + zz + 4.0 - btb[:, 0, 0]
+        d[:, 1] = xx + zz + 4.0 - btb[:, 1, 1]
+        d[:, 2] = xx + yy + 4.0 - btb[:, 2, 2]
+        d[:, 3] = -xy - btb[:, 0, 1]
+        d[:, 4] = -xz - btb[:, 0, 2]
+        d[:, 5] = -yz - btb[:, 1, 2]
+        di_w = _sym3_inv(d)
+        # DB = DI . VQN per node (czcorp5 286-297)
+        dimat = np.empty((n, 3, 3))
+        dimat[:, 0, 0], dimat[:, 1, 1], dimat[:, 2, 2] = \
+            di_w[:, 0], di_w[:, 1], di_w[:, 2]
+        dimat[:, 0, 1] = dimat[:, 1, 0] = di_w[:, 3]
+        dimat[:, 0, 2] = dimat[:, 2, 0] = di_w[:, 4]
+        dimat[:, 1, 2] = dimat[:, 2, 1] = di_w[:, 5]
+        db_w = np.einsum("nkl,njl->njk", dimat, vqn)      # (n, 4, 3)
+        dbad = np.einsum("njk,nj->nk", db_w, ad)
+        alr = np.einsum("nkl,nl->nk", dimat, ar) - dbad
+        ald = (ad + np.einsum("njk,nk->nj", vqn, dbad)
+               - np.einsum("njk,nk->nj", db_w, ar))
+        # velocity corrections (czcorp5 325-334)
+        c1 = 2.0 * alr[:, 2]
+        dv13 = np.zeros((n, 3))
+        dv24 = np.zeros((n, 3))
+        dvhi = np.zeros((n, 3))
+        dv13[:, 0] = c1 * y13
+        dv24[:, 0] = c1 * y24
+        dvhi[:, 0] = 4.0 * (alr[:, 2] * G["my13"] - z1 * alr[:, 1])
+        dv13[:, 1] = -c1 * x13
+        dv24[:, 1] = -c1 * x24
+        dvhi[:, 1] = -4.0 * (alr[:, 2] * G["mx13"] - z1 * alr[:, 0])
+        dv13[:, 2] = -2.0 * (y13 * alr[:, 0] - x13 * alr[:, 1])
+        dv24[:, 2] = -2.0 * (y24 * alr[:, 0] - x24 * alr[:, 1])
+        dvhi[:, 2] = 4.0 * (G["mx13"] * alr[:, 1] - G["my13"] * alr[:, 0])
+        wc = w[:, None]
+        v13 += np.where(wc, dv13, 0.0)
+        v24 += np.where(wc, dv24, 0.0)
+        vhi += np.where(wc, dvhi, 0.0)
+        # rotation projection RLXYZ = RR - ALR - VQN*ALD (czcorp5 335-343)
+        rl_w = (rr[:, :, :2] - alr[:, None, :2]
+                - vqn[:, :, :2] * ald[:, :, None])
+        rl[w] = rl_w[w]
+        # zero the operators on flat elements (only warp rows are used)
+        vqn[plat] = 0.0
+        di[w] = di_w[w]
+        db[w] = db_w[w]
+
+    # ---- scaling (czcorc 598-610) --------------------------------------
+    v13 *= a_i[:, None]
+    v24 *= a_i[:, None]
+    vhi *= 0.25
+    return v13, v24, vhi, rl, plat, vqn, di, db
+
+
+# ---------------------------------------------------------------------------
+# strain + hourglass rates (czdef.F CZDEF)
+# ---------------------------------------------------------------------------
+
+def _rates(G, v13, v24, vhi, rl, alive):
+    """VDEF (n,8) = [exx eyy exy gxz gyz kxx kyy kxy] and VHG (n,6) —
+    czdef.F lines 114-173 verbatim (with the warp additions)."""
+    area, a_i, z1 = G["area"], G["a_i"], G["z1"]
+    x13, x24, y13, y24 = G["x13"], G["x24"], G["y13"], G["y24"]
+    mx13, mx23, mx34 = G["mx13"], G["mx23"], G["mx34"]
+    my13, my23, my34 = G["my13"], G["my23"], G["my34"]
+    n = len(area)
+
+    r13 = (rl[:, 0] - rl[:, 2]) * a_i[:, None]       # (n,2) [x,y]
+    r24 = (rl[:, 1] - rl[:, 3]) * a_i[:, None]
+    rsom = rl.sum(axis=1) * a_i[:, None]
+    rhi = 0.25 * (rl[:, 0] - rl[:, 1] + rl[:, 2] - rl[:, 3])
+
+    vdef = np.empty((n, 8))
+    # membrane
+    vdef[:, 0] = y24 * v13[:, 0] - y13 * v24[:, 0]
+    vdef[:, 1] = -x24 * v13[:, 1] + x13 * v24[:, 1]
+    bxv2 = y24 * v13[:, 1] - y13 * v24[:, 1]
+    byv1 = -x24 * v13[:, 0] + x13 * v24[:, 0]
+    vdef[:, 2] = bxv2 + byv1
+    # flexion
+    vdef[:, 5] = y24 * r13[:, 1] - y13 * r24[:, 1]
+    vdef[:, 6] = x24 * r13[:, 0] - x13 * r24[:, 0]
+    bxr1 = y13 * r24[:, 0] - y24 * r13[:, 0]
+    byr2 = -x24 * r13[:, 1] + x13 * r24[:, 1]
+    vdef[:, 7] = bxr1 + byr2
+    # transverse shear
+    bcxy = 0.25 * area
+    bcx = v13[:, 2] - my13 * r13[:, 0] + mx13 * r13[:, 1]
+    bcy = v24[:, 2] + my13 * r24[:, 0] - mx13 * r24[:, 1]
+    vdef[:, 3] = y24 * bcx - y13 * bcy + bcxy * rsom[:, 1]
+    vdef[:, 4] = x13 * bcy - x24 * bcx - bcxy * rsom[:, 0]
+    # hourglass rates
+    vhg = np.empty((n, 6))
+    vhg[:, 0] = vhi[:, 0] - mx13 * vdef[:, 0] - my13 * byv1
+    vhg[:, 1] = vhi[:, 1] - mx13 * bxv2 - my13 * vdef[:, 1]
+    vhg[:, 2] = rhi[:, 1] - mx13 * vdef[:, 5] - my13 * byr2
+    vhg[:, 3] = -rhi[:, 0] - mx13 * bxr1 - my13 * vdef[:, 6]
+    vhg[:, 4] = (vhi[:, 2] * 4.0
+                 - (my13 * rsom[:, 0] - my23 * (r13[:, 0] + r24[:, 0])
+                    + mx23 * (r13[:, 1] + r24[:, 1])
+                    - mx13 * rsom[:, 1]) * area) * 4.0
+    vhg[:, 5] = (vhi[:, 2] * 4.0
+                 - (my13 * rsom[:, 0] - my34 * (r13[:, 0] - r24[:, 0])
+                    + mx34 * (r13[:, 1] - r24[:, 1])
+                    - mx13 * rsom[:, 1]) * area) * 4.0
+    vhg[:, 0] += (y24 * v13[:, 2] - y13 * v24[:, 2]) * z1
+    vhg[:, 1] += (-x24 * v13[:, 2] + x13 * v24[:, 2]) * z1
+    # warp additions to the curvatures (czdef 167-173)
+    deta1 = z1 * 4.0 * a_i
+    vdef[:, 5] += (x13 * v13[:, 0] - x24 * v24[:, 0]) * deta1
+    vdef[:, 6] += (y13 * v13[:, 1] - y24 * v24[:, 1]) * deta1
+    vdef[:, 7] += (x13 * v13[:, 1] - x24 * v24[:, 1]
+                   + y13 * v13[:, 0] - y24 * v24[:, 0]) * deta1
+    if not alive.all():
+        vdef[~alive] = 0.0
+        vhg[~alive] = 0.0
+    return vdef, vhg
+
+
+# ---------------------------------------------------------------------------
+# Starter-side initialization
+# ---------------------------------------------------------------------------
+
+def init_group(group, model, log):
+    """Element buffer + lumped mass/inertia (cinit3/cinmas, IHBE=24).
+
+    Mass and rotational inertia are the BT lumping (cinmas.F FAC=TWELVE
+    for IHBE >= 11): m_i = rho t A/4, I_i = m_i (t^2 + A)/12 — identical
+    arrays feed the /DT/NODA rotational claim (engine/mass_scaling)."""
+    xe = model.x0[group.conn]
+    G = _geometry(xe)
+    area = G["area"]
+    bad = area <= 0.0
+    if np.any(bad):
+        for eid in group.ids[bad]:
+            log.error(f"/SHELL {eid}: zero or negative area (QEPH)",
+                      "SHELL INIT")
+
+    n = group.n
+    thick = np.zeros(n)
+    rho0 = np.zeros(n)
+    nip_max = 1
+    for sl, mat, prop in group.state["slices"]:
+        thick[sl] = prop.params["thick"]
+        rho0[sl] = mat.rho0
+        nip_max = max(nip_max, int(prop.params["nip"]))
+    mass = rho0 * thick * area
+
+    # through-thickness Gauss stations per slice (shared convention)
+    zw = []
+    for sl, mat, prop in group.state["slices"]:
+        nip = int(prop.params["nip"])
+        gp, gw = np.polynomial.legendre.leggauss(nip)
+        zw.append((gp * 0.5, gw * 0.5))
+
+    # ---- per-element material/stabilization coefficients (cncoef3.F
+    # CNCOEF3B standard branch lines 209-261 + resol_init.F 687-698) ----
+    a11 = np.zeros(n)
+    a12 = np.zeros(n)
+    gmod = np.zeros(n)
+    shf = np.zeros(n)
+    amu = np.zeros(n)
+    cspd = np.ones(n)
+    npt1 = np.zeros(n, dtype=bool)
+    for sl, mat, prop in group.state["slices"]:
+        nu = mat.nu
+        a11[sl] = mat.E / max(1.0 - nu * nu, EM20)
+        a12[sl] = nu * a11[sl]
+        gmod[sl] = mat.G
+        one_pt = int(prop.params["nip"]) == 1
+        npt1[sl] = one_pt
+        shf[sl] = 0.0 if one_pt else SHEAR_FACTOR    # GEO(38) default 5/6
+        # card Dn -> engine AMU (hm_read_prop01.F 227-230 swap; ZEP015)
+        amu[sl] = float(prop.params.get("dn", 0.0)) or _DN_DEFAULT
+        if mat.rho0 > 0.0 and mat.E > 0.0:
+            cspd[sl] = mat.sound_speed_shell()
+        else:
+            cspd[sl] = 0.0            # /MAT/VOID skin: claims no dt
+    gs = gmod * shf
+    # sqrt moduli of the linear damper (resol_init.F 687-698: GSR=sqrt(G),
+    # A11SR=sqrt(A11), A12SR=NUSR*A11SR with NUSR=sqrt(nu), SHFSR=sqrt(SHF))
+    gsr = np.sqrt(gmod)
+    a11sr = np.sqrt(a11)
+    a12sr = np.zeros(n)
+    shfsr = np.sqrt(shf)
+    for sl, mat, prop in group.state["slices"]:
+        a12sr[sl] = np.sqrt(max(mat.nu, 0.0)) * a11sr[sl]
+
+    group.state.update(
+        sig=np.zeros((n, nip_max, 3)),
+        qshear=np.zeros((n, 2)),
+        epsp=np.zeros((n, nip_max)),
+        thick=thick,
+        area0=area.copy(),
+        mass=mass,
+        eint=np.zeros(n),
+        ehour=np.zeros(n),
+        # GBUF%HOURG: the 12 persistent hourglass stresses VGLAS
+        # (czfintn.F: 1-6 the eta family, 7-12 the ksi family)
+        hgstr=np.zeros((n, 12)),
+        zw=zw,
+        a11=a11, a12=a12, gmod=gmod, gs=gs, shf=shf, shfsr=shfsr,
+        gsr=gsr, a11sr=a11sr, a12sr=a12sr, amu=amu, cspd=cspd,
+        npt1=npt1, rho0=rho0,
+    )
+    _init_material_state(group, nip_max)
+    group.state["ortho"] = shell_ortho.build_group_ortho(
+        group.state["slices"], G["E"], n, log, group.ids)
+    node_idx = group.conn.reshape(-1)
+    mass_c = np.repeat(mass / 4.0, 4)
+    group.state["dt_iner"] = mass / 4.0 * (thick ** 2 + area) / 12.0
+    inertia_c = np.repeat(group.state["dt_iner"], 4)
+    return node_idx, mass_c, inertia_c
+
+
+# ---------------------------------------------------------------------------
+# constant-part internal forces (czfintce.F CZFINTCE)
+# ---------------------------------------------------------------------------
+
+def _fint_const(G, thick, Nres, Mres, qres):
+    """VF (n,3,4) / VM (n,2,4) with slots 0,1 = ANTISYM (node1/node2
+    patterns: f1 = -f3, f2 = -f4) and slots 2,3 = SYM — czfintce.F with
+    GBUF%FOR = N/t and GBUF%MOM = M/t^2 folded into physical resultants
+    (THK*VSTRE -> Nres, THK02*MSTRE -> Mres)."""
+    x13, x24, y13, y24 = G["x13"], G["x24"], G["y13"], G["y24"]
+    mx13, my13 = G["mx13"], G["my13"]
+    n = len(x13)
+    VF = np.zeros((n, 3, 4))
+    VM = np.zeros((n, 2, 4))
+    qx, qy = qres[:, 0], qres[:, 1]          # t*sig_xz, t*sig_yz
+    N1, N2, N3 = Nres[:, 0], Nres[:, 1], Nres[:, 2]
+    M1, M2, M3 = Mres[:, 0], Mres[:, 1], Mres[:, 2]
+
+    s1geo = G["my34"] * G["mx23"] - G["my23"] * G["mx34"]
+
+    VF[:, 0, 0] = y24 * N1 - x24 * N3
+    VF[:, 1, 0] = -x24 * N2 + y24 * N3
+    VF[:, 2, 0] = -x24 * qy + y24 * qx       # VSTRE(4)=yz, VSTRE(5)=xz
+    VM[:, 0, 0] = x24 * M2 - y24 * M3 - my13 * VF[:, 2, 0]
+    VM[:, 1, 0] = y24 * M1 - x24 * M3 + mx13 * VF[:, 2, 0]
+    VM[:, 0, 2] = -s1geo * qy                # -S52S
+    VM[:, 1, 2] = s1geo * qx                 # +S42S
+    VF[:, 0, 1] = -y13 * N1 + x13 * N3
+    VF[:, 1, 1] = x13 * N2 - y13 * N3
+    VF[:, 2, 1] = x13 * qy - y13 * qx
+    VM[:, 0, 1] = -x13 * M2 + y13 * M3 + my13 * VF[:, 2, 1]
+    VM[:, 1, 1] = -y13 * M1 + x13 * M3 - mx13 * VF[:, 2, 1]
+    VM[:, 0, 3] = VM[:, 0, 2]
+    VM[:, 1, 3] = VM[:, 1, 2]
+    # warp coupling of the moments into in-plane forces (czfintce 95-100)
+    c2 = G["z1"] * 4.0 * G["a_i"]
+    VF[:, 0, 0] += c2 * (x13 * M1 + y13 * M3)
+    VF[:, 1, 0] += c2 * (y13 * M2 + x13 * M3)
+    VF[:, 0, 1] -= c2 * (x24 * M1 + y24 * M3)
+    VF[:, 1, 1] -= c2 * (y24 * M2 + x24 * M3)
+    return VF, VM
+
+
+# ---------------------------------------------------------------------------
+# physical stabilization (czfintn.F CZFINTN1) — the QEPH heart
+# ---------------------------------------------------------------------------
+
+def _current_yield(st, sl, mat):
+    """Per-element current yield for the hourglass relaxation criterion —
+    the port's stand-in for cmain3's SIGY (see module docstring).  EP30
+    marks 'elastic: criterion inert' (czfintn.F line 302)."""
+    nip = st["sig"].shape[1]
+    if mat.law in (2, 44):
+        ep = st["epsp"][sl, :nip].mean(axis=1)
+        p = mat.params
+        y = p["A"] + p["B"] * np.maximum(ep, 0.0) ** p["n"]
+        return np.minimum(y, p.get("sig_max", EP30))
+    if mat.law == 36 and "curve_x" in mat.params:
+        ep = st["epsp"][sl, :nip].mean(axis=1)
+        return np.interp(ep, mat.params["curve_x"][0],
+                         mat.params["curve_y"][0])
+    return None                                  # elastic — no relaxation
+
+
+def _fint_stab(G, st, vhg, dt, alive, Nres, Mres, VF, VM, thick):
+    """czfintn.F CZFINTN1: elastic modal-stress update with the PHYSICAL
+    moduli (CVIS = 1), plastic relaxation, linear damper, generalized
+    force assembly, energy split EINT (elastic) / EHOUR (damper)."""
+    area, a_i, z1 = G["area"], G["a_i"], G["z1"]
+    x13, x24, y13, y24 = G["x13"], G["x24"], G["y13"], G["y24"]
+    mx13, mx23, mx34 = G["mx13"], G["mx23"], G["mx34"]
+    my13, my23, my34 = G["my13"], G["my23"], G["my34"]
+    vg = st["hgstr"]
+    n = len(area)
+    off = alive.astype(float)
+
+    a11, a12 = st["a11"], st["a12"]
+    fbend = np.where(st["npt1"], 0.0, 1.0 / 12.0)    # czfintn 97-102
+    fbend_v = np.where(st["npt1"], 0.0, _FBEND_V)
+    c6 = thick ** 2 * fbend                          # C6 = THK02*FBEND
+
+    dhg = vhg * dt
+    c3g = 4.0 * a_i
+    hxx = c3g * my34
+    hyy = c3g * mx34
+    hxx_k = c3g * my23
+    hyy_k = c3g * mx23
+
+    # ---- elastic increments DGLAS (czfintn 184-227, FAC1 = CVIS = 1) ----
+    c1m = a11 * _CVIS
+    c2m = a12 * _CVIS
+    dg = np.zeros((n, 12))
+    cxx = hxx * dhg[:, 0]
+    cyy = hyy * dhg[:, 1]
+    cxx_k = hxx_k * dhg[:, 0]
+    cyy_k = hyy_k * dhg[:, 1]
+    bxx = hxx * dhg[:, 2]
+    byy = hyy * dhg[:, 3]
+    bxx_k = hxx_k * dhg[:, 2]
+    byy_k = hyy_k * dhg[:, 3]
+    dg[:, 0] = c1m * cxx - c2m * cyy
+    dg[:, 1] = c1m * cyy - c2m * cxx
+    dg[:, 2] = c1m * bxx - c2m * byy
+    dg[:, 3] = c1m * byy - c2m * bxx
+    dg[:, 6] = c1m * cxx_k - c2m * cyy_k
+    dg[:, 7] = c1m * cyy_k - c2m * cxx_k
+    dg[:, 8] = c1m * bxx_k - c2m * byy_k
+    dg[:, 9] = c1m * byy_k - c2m * bxx_k
+    c2s = _CVIS * st["gs"] / 64.0                    # FAC1*G*SHF/64
+    dg[:, 4] = c2s * hxx * dhg[:, 4]
+    dg[:, 5] = c2s * hyy * dhg[:, 4]
+    dg[:, 10] = c2s * hxx_k * dhg[:, 5]
+    dg[:, 11] = c2s * hyy_k * dhg[:, 5]
+
+    # ---- first (old-stress) half of the trapezoidal energy --------------
+    ss1o = my34 * vg[:, 0] + my23 * vg[:, 6]
+    ss2o = mx23 * vg[:, 7] + mx34 * vg[:, 1]
+    sf1o = my34 * vg[:, 2] + my23 * vg[:, 8]
+    sf2o = -mx23 * vg[:, 9] - mx34 * vg[:, 3]
+    sc5o = my34 * vg[:, 4] + mx34 * vg[:, 5]
+    sc6o = my23 * vg[:, 10] + mx23 * vg[:, 11]
+    c5 = 0.5 * off * thick * _C7
+    esx = ss1o * dhg[:, 0] + ss2o * dhg[:, 1]
+    etmp1 = c5 * (esx + 0.25 * (sc5o * dhg[:, 4] + sc6o * dhg[:, 5]))
+    emx = (sf1o * dhg[:, 2] - sf2o * dhg[:, 3]) * c6
+    etmp2 = c5 * emx
+
+    # ---- elastic update (czfintn 281-299) --------------------------------
+    vg += dg
+
+    # ---- plastic relaxation (czfintn 301-351; ZCFAC = 1 port cut) --------
+    for sl, mat, prop in st["slices"]:
+        sigy = _current_yield(st, sl, mat)
+        if sigy is None:
+            continue
+        t_sl = thick[sl]
+        sigy2 = np.maximum(sigy * sigy, _TOL_PLAS)
+        nsl = Nres[sl] / np.maximum(t_sl, EM20)[:, None]      # VSTRE
+        msl = Mres[sl] / np.maximum(t_sl ** 2, EM20)[:, None]  # MSTRE
+        sxy0 = (nsl[:, 0] ** 2 + nsl[:, 1] ** 2 - nsl[:, 0] * nsl[:, 1]
+                + 3.0 * nsl[:, 2] ** 2)
+        mxy0 = (msl[:, 0] ** 2 + msl[:, 1] ** 2 - msl[:, 0] * msl[:, 1]
+                + 3.0 * msl[:, 2] ** 2)
+        cnn = _COEF
+        cmm = _COEF * t_sl / 16.0
+        cnnx = cnn * vg[sl, 0]
+        cnny = cnn * vg[sl, 1]
+        cnnx_k = cnn * vg[sl, 6]
+        cnny_k = cnn * vg[sl, 7]
+        cmmx = cmm * vg[sl, 2]
+        cmmy = cmm * vg[sl, 3]
+        cmmx_k = cmm * vg[sl, 8]
+        cmmy_k = cmm * vg[sl, 9]
+        sxy0 += cnnx ** 2 + cnny ** 2 - cnnx * cnny
+        mxy0 += cmmx ** 2 + cmmy ** 2 - cmmx * cmmy
+        sxy0 += cnnx_k ** 2 + cnny_k ** 2 - cnnx_k * cnny_k
+        mxy0 += cmmx_k ** 2 + cmmy_k ** 2 - cmmx_k * cmmy_k
+        sxy0 += np.abs(cnnx * (2.0 * cnnx_k - cnny_k)
+                       + cnny * (2.0 * cnny_k - cnnx_k))
+        mxy0 += np.abs(cmmx * (2.0 * cmmx_k - cmmy_k)
+                       + cmmy * (2.0 * cmmy_k - cmmx_k))
+        svm = sxy0 + 25.0 * mxy0                 # COEF1 (NPT>1 branch)
+        yielding = svm > sigy2
+        if not np.any(yielding):
+            continue
+        eh1 = np.minimum(sxy0 / sigy2, 1.0) * _COEFH
+        eh2 = np.full(len(sigy2), _COEFH)
+        eh1 = np.where(esx[sl] < 0.0, 0.0, eh1)   # unloading keeps elastic
+        eh2 = np.where(emx[sl] < 0.0, 0.0, eh2)
+        eh1 = np.where(yielding, eh1, 0.0)
+        eh2 = np.where(yielding, eh2, 0.0)
+        for k in (0, 1, 6, 7):
+            vg[sl, k] -= eh1 * dg[sl, k]
+        for k in (2, 3, 8, 9):
+            vg[sl, k] -= eh2 * dg[sl, k]
+
+    # ---- generalized stresses + linear damper (czfintn 353-396) ----------
+    c8 = _C7 * off
+    ss1 = (my34 * vg[:, 0] + my23 * vg[:, 6]) * c8
+    ss2 = (mx23 * vg[:, 7] + mx34 * vg[:, 1]) * c8
+    sf1 = (my34 * vg[:, 2] + my23 * vg[:, 8]) * c8
+    sf2 = -(mx23 * vg[:, 9] + mx34 * vg[:, 3]) * c8
+    hsura = thick * a_i
+    c2t = c8 * thick
+    sc5 = (my34 * vg[:, 4] + mx34 * vg[:, 5]) * c2t
+    sc6 = (my23 * vg[:, 10] + mx23 * vg[:, 11]) * c2t
+    ss3 = sc5 + sc6
+    # linear viscous damper: HVL = AMU*sqrt(RHO*AREA*FAC1), FAC1 = CVIS = 1
+    hvl = st["amu"] * np.sqrt(st["rho0"] * area * _CVIS) * off
+    ssv0 = my23 ** 2
+    ssv1 = my34 ** 2
+    ssv2 = mx23 ** 2
+    ssv3 = mx34 ** 2
+    hxx_v = _STIER * (ssv1 + ssv0)
+    hxy_v = -_STIER * (my34 * mx34 + my23 * mx23)
+    hyy_v = _STIER * (ssv2 + ssv3)
+    c2v = hvl * st["gsr"] * st["shfsr"] * _UNDOUZSR
+    cxz_v = (ssv1 + ssv3) * c2v
+    cyz_v = (ssv2 + ssv0) * c2v
+    aux = a_i * hvl
+    c1mv = st["a11sr"] * aux
+    c2mv = st["a12sr"] * aux
+    cxx_v = c1mv * hxx_v
+    cyy_v = c1mv * hyy_v
+    cxy_v = c2mv * hxy_v
+    ss1_v = cxx_v * vhg[:, 0] + cxy_v * vhg[:, 1]
+    ss2_v = cyy_v * vhg[:, 1] + cxy_v * vhg[:, 0]
+    sf1_v = (cxx_v * vhg[:, 2] + cxy_v * vhg[:, 3]) * fbend_v
+    sf2_v = (-cyy_v * vhg[:, 3] - cxy_v * vhg[:, 2]) * fbend_v
+    sc5_v = cxz_v * vhg[:, 4] * hsura
+    sc6_v = cyz_v * vhg[:, 5] * hsura
+    ss1t = ss1 + ss1_v
+    ss2t = ss2 + ss2_v
+    sc5t = sc5 + sc5_v
+    sc6t = sc6 + sc6_v
+    ss3t = ss3 + sc5_v + sc6_v
+    sf1t = sf1 + sf1_v
+    sf2t = sf2 + sf2_v
+
+    # ---- nodal assembly (czfintn 397-434) --------------------------------
+    y13s = my13 * ss3t
+    x13s = mx13 * ss3t
+    y34s6 = my34 * sc6t
+    y23s5 = my23 * sc5t
+    x23s5 = mx23 * sc5t
+    x34s6 = mx34 * sc6t
+    c2n = 0.25 * thick
+    b13 = (my13 * x24 - mx13 * y24) * hsura
+    b24 = (mx13 * y13 - my13 * x13) * hsura
+    VF[:, 0, 0] += b13 * ss1t
+    VF[:, 0, 2] = c2n * ss1t
+    VF[:, 1, 0] += b13 * ss2t
+    VF[:, 1, 2] = c2n * ss2t
+    VF[:, 2, 2] = ss3t
+    VF[:, 0, 1] += b24 * ss1t
+    VF[:, 0, 3] = -VF[:, 0, 2]
+    VF[:, 1, 1] += b24 * ss2t
+    VF[:, 1, 3] = -VF[:, 1, 2]
+    VF[:, 2, 3] = -VF[:, 2, 2]
+    c3a = c6 * b13
+    c4a = c6 * c2n
+    VM[:, 0, 0] += c3a * sf2t + y23s5 + y34s6
+    VM[:, 0, 2] += c4a * sf2t - y13s
+    VM[:, 1, 0] += c3a * sf1t - x23s5 - x34s6
+    VM[:, 1, 2] += c4a * sf1t + x13s
+    c3b = c6 * b24
+    VM[:, 0, 1] += c3b * sf2t + y23s5 - y34s6
+    VM[:, 0, 3] += -c4a * sf2t - y13s
+    VM[:, 1, 1] += c3b * sf1t - x23s5 + x34s6
+    VM[:, 1, 3] += -c4a * sf1t + x13s
+    c2z = z1 * hsura
+    VF[:, 2, 0] += c2z * (ss1t * y24 - ss2t * x24)
+    VF[:, 2, 1] += c2z * (-ss1t * y13 + ss2t * x13)
+
+    # ---- npt=1 slices: extra viscous-only transverse damper (CZFINTNM,
+    # czfintn.F 502-558 — SHF = 0 killed the elastic shear stabilization,
+    # this damper alone resists the transverse hourglass) -----------------
+    if st["npt1"].any():
+        m1 = st["npt1"]
+        c2nm = (1.0 / 12.0) * st["gmod"] * st["rho0"] * area
+        hvl_nm = 25.0 * st["amu"] * np.sqrt(np.maximum(c2nm, 0.0)) * off
+        cxz_nm = (my34 ** 2 + mx34 ** 2) * hvl_nm
+        cyz_nm = (my23 ** 2 + mx23 ** 2) * hvl_nm
+        sc5_nm = np.where(m1, cxz_nm * vhg[:, 4] * hsura, 0.0)
+        sc6_nm = np.where(m1, cyz_nm * vhg[:, 5] * hsura, 0.0)
+        ss3_nm = sc5_nm + sc6_nm
+        VF[:, 2, 2] += ss3_nm
+        VF[:, 2, 3] -= ss3_nm
+        st["ehour"] += (sc5_nm * vhg[:, 4] + sc6_nm * vhg[:, 5]) * dt
+
+    # ---- second (new-stress) half of the trapezoidal energy (czfintn
+    # 437-441; note SS1t - SS1_V = the ELASTIC generalized stress) ---------
+    esy = ((ss1 * dhg[:, 0] + ss2 * dhg[:, 1]) * thick
+           + 0.25 * (sc5 * dhg[:, 4] + sc6 * dhg[:, 5]))
+    etmp1 = etmp1 + 0.5 * esy
+    emy = sf1 * dhg[:, 2] - sf2 * dhg[:, 3]
+    etmp2 = etmp2 + 0.5 * c6 * emy * thick
+    st["eint"] += etmp1 + etmp2
+    # damper work -> the part hourglass ledger (czfintn 443-445, EVIS(8))
+    tesy = ((ss1_v * dhg[:, 0] + ss2_v * dhg[:, 1]) * thick
+            + (sf1_v * dhg[:, 2] - sf2_v * dhg[:, 3]) * thick * c6
+            + 0.25 * (sc5_v * dhg[:, 4] + sc6_v * dhg[:, 5]))
+    st["ehour"] += tesy
+
+
+# ---------------------------------------------------------------------------
+# reconstruction + projection to global (czproj.F CZPROJV, IFINI = 0)
+# ---------------------------------------------------------------------------
+
+def _project(G, VF, VM, plat, vqn, di, db):
+    """FL/ML from the antisym/sym slots, the warped-element force
+    re-projection, and the local -> global transform.  Returns the
+    INTERNAL nodal forces/moments (n,4,3) in global axes (czproj.F)."""
+    E, z1 = G["E"], G["z1"]
+    n = len(z1)
+    FL = np.empty((n, 3, 4))
+    ML3 = np.zeros((n, 3, 4))
+    for c in range(3):
+        FL[:, c, 0] = VF[:, c, 0] + VF[:, c, 2]
+        FL[:, c, 1] = VF[:, c, 1] + VF[:, c, 3]
+        FL[:, c, 2] = -VF[:, c, 0] + VF[:, c, 2]
+        FL[:, c, 3] = -VF[:, c, 1] + VF[:, c, 3]
+    for c in range(2):
+        ML3[:, c, 0] = VM[:, c, 0] + VM[:, c, 2]
+        ML3[:, c, 1] = VM[:, c, 1] + VM[:, c, 3]
+        ML3[:, c, 2] = -VM[:, c, 0] + VM[:, c, 2]
+        ML3[:, c, 3] = -VM[:, c, 1] + VM[:, c, 3]
+
+    if not plat.all():
+        # full re-projection (czproj.F 480-556): remove the net torque and
+        # the nodal-normal (drilling) moment components consistently.
+        w = ~plat
+        corx, cory = G["corx"], G["cory"]
+        hpat = np.array([1.0, -1.0, 1.0, -1.0])
+        ar = np.empty((n, 3))
+        ar[:, 0] = (-z1 * (FL[:, 1] @ hpat)
+                    + np.einsum("nj,nj->n", cory, FL[:, 2])
+                    + ML3[:, 0].sum(axis=1))
+        ar[:, 1] = (z1 * (FL[:, 0] @ hpat)
+                    - np.einsum("nj,nj->n", corx, FL[:, 2])
+                    + ML3[:, 1].sum(axis=1))
+        ar[:, 2] = (np.einsum("nj,nj->n", corx, FL[:, 1])
+                    - np.einsum("nj,nj->n", cory, FL[:, 0]))
+        ad = np.einsum("njk,nkj->nj", vqn, ML3)          # VQN . ML per node
+        dbad = np.einsum("njk,nj->nk", db, ad)
+        dimat = np.empty((n, 3, 3))
+        dimat[:, 0, 0], dimat[:, 1, 1], dimat[:, 2, 2] = \
+            di[:, 0], di[:, 1], di[:, 2]
+        dimat[:, 0, 1] = dimat[:, 1, 0] = di[:, 3]
+        dimat[:, 0, 2] = dimat[:, 2, 0] = di[:, 4]
+        dimat[:, 1, 2] = dimat[:, 2, 1] = di[:, 5]
+        alr = np.einsum("nkl,nl->nk", dimat, ar) - dbad
+        ald = (ad + np.einsum("njk,nk->nj", vqn, dbad)
+               - np.einsum("njk,nk->nj", db, ar))
+        c1 = z1 * alr[:, 1]
+        dF0 = (-c1[:, None] * hpat[None, :]
+               + cory * alr[:, 2][:, None])
+        c1 = z1 * alr[:, 0]
+        dF1 = (c1[:, None] * hpat[None, :]
+               - corx * alr[:, 2][:, None])
+        dF2 = -cory * alr[:, 0][:, None] + corx * alr[:, 1][:, None]
+        MM = np.empty((n, 3, 4))
+        MM[:, 0] = ML3[:, 0] - alr[:, 0][:, None] - vqn[:, :, 0] * ald
+        MM[:, 1] = ML3[:, 1] - alr[:, 1][:, None] - vqn[:, :, 1] * ald
+        MM[:, 2] = -alr[:, 2][:, None] - vqn[:, :, 2] * ald
+        wm = w[:, None]
+        FL[:, 0] += np.where(wm, dF0, 0.0)
+        FL[:, 1] += np.where(wm, dF1, 0.0)
+        FL[:, 2] += np.where(wm, dF2, 0.0)
+        ML3[w] = MM[w]
+
+    # local -> global: F_g[n,j,b] = sum_a E[n,b,a] * FL[n,a,j]
+    fg = np.einsum("nba,naj->njb", E, FL)
+    mg = np.einsum("nba,naj->njb", E, ML3)
+    return fg, mg
+
+
+# ---------------------------------------------------------------------------
+# Engine-side forces (czforc3.F)
+# ---------------------------------------------------------------------------
+
+def forces(group, x, v, vr, dt, fint, mint):
+    st = group.state
+    conn = group.conn
+    n = group.n
+    thick = st["thick"]
+
+    G = _geometry(x[conn])
+    alive = st["off"] > 0.0
+
+    v13, v24, vhi, rl, plat, vqn, di, db = _kinematics(
+        G, v[conn], vr[conn], dt, st["npt1"])
+    vdef, vhg = _rates(G, v13, v24, vhi, rl, alive)
+
+    dm = vdef[:, 0:3] * dt          # membrane strain increments
+    gsr2 = vdef[:, 3:5]             # [gxz, gyz] shear RATES
+    kap = vdef[:, 5:8] * dt         # curvature increments
+
+    # ---- layer stress updates + resultants (shared machinery) -----------
+    sig = st["sig"]
+    epsp_old = st["epsp"].copy() if st["chk_fail"] else None
+    Nres = np.zeros((n, 3))
+    Mres = np.zeros((n, 3))
+    de_layers = np.zeros(n)
+    nip_of = []
+    ortho_all = st.get("ortho")
+    area = G["area"]
+    for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        zrel, wrel = st["zw"][isl]
+        nip_of.append(len(zrel))
+        t_sl = thick[sl]
+        cs = ortho_all[sl] if (ortho_all is not None and getattr(
+            prop, "type", 0) in shell_ortho.ORTHO_PROP_TYPES) else None
+        for k in range(len(zrel)):
+            zk = zrel[k] * t_sl
+            wk = wrel[k] * t_sl
+            deps = dm[sl] + zk[:, None] * kap[sl]
+            if cs is not None:
+                deps = shell_ortho.rot_strain_e2m(deps, cs)
+            s_old = sig[sl, k, :].copy()
+            s_new, _ = materials.shell_update(
+                mat, sig[sl, k, :], deps, st["epsp"][sl, k], dt,
+                _layer_extra(st, sl, k))
+            if st["chk_fail"]:
+                _layer_failure(st, sl, mat, k, s_new, epsp_old, deps, dt)
+            sig[sl, k, :] = s_new
+            s_mid = 0.5 * (s_old + s_new)
+            de_layers[sl] += wk * np.einsum("nk,nk->n", s_mid, deps)
+            s_res = shell_ortho.rot_stress_m2e(s_new, cs) \
+                if cs is not None else s_new
+            Nres[sl] += wk[:, None] * s_res
+            Mres[sl] += (wk * zk)[:, None] * s_res
+        # elastic transverse shear (GS = G*SHF; SHF = 0 for one layer)
+        qold = st["qshear"][sl].copy()
+        st["qshear"][sl] += st["gs"][sl][:, None] * gsr2[sl] * dt
+        de_layers[sl] += t_sl * np.einsum(
+            "nk,nk->n", 0.5 * (qold + st["qshear"][sl]), gsr2[sl] * dt)
+
+    # ---- element deletion (shared with BT) -------------------------------
+    if st["chk_fail"]:
+        alive = _element_deletion(st, nip_of)
+        if not alive.all():
+            dead = ~alive
+            Nres[dead] = 0.0
+            Mres[dead] = 0.0
+            sig[dead] = 0.0
+            st["qshear"][dead] = 0.0
+            st["hgstr"][dead] = 0.0
+    qres = st["qshear"] * thick[:, None]
+    st["eint"] += area * de_layers
+
+    # ---- constant part + physical stabilization --------------------------
+    VF, VM = _fint_const(G, thick, Nres, Mres, qres)
+    if not alive.all():
+        # a deleted element carries no constant-part force either
+        VF[~alive] = 0.0
+        VM[~alive] = 0.0
+    _fint_stab(G, st, vhg, dt, alive, Nres, Mres, VF, VM, thick)
+
+    # ---- projection + scatter (negated: fint convention) -----------------
+    fg, mg = _project(G, VF, VM, plat, vqn, di, db)
+    flat = conn.reshape(-1)
+    scatter_add3(fint, flat, -fg.reshape(-1, 3))
+    scatter_add3(mint, flat, -mg.reshape(-1, 3))
+
+    # ---- time step (cndt3.F: VISCMX factor on the condensed length) ------
+    visc = np.sqrt(1.0 + st["amu"] ** 2) - st["amu"]
+    dt_e = np.where(st["cspd"] > 0.0,
+                    visc * G["ll"] / np.maximum(st["cspd"], EM20), EP30)
+    return np.where(alive, dt_e, EP30)

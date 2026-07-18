@@ -27,8 +27,8 @@ from ..model.model import Model
 # group name -> (VTK cell type id, node count written). Beams write only
 # their two end nodes (the 3rd is the orientation node, not geometry).
 _VTK_CELL = {"bricks": (12, 8), "tetras": (10, 4), "shells": (9, 4),
-             "sh3n": (5, 3), "trusses": (3, 2), "springs": (3, 2),
-             "beams": (3, 2)}
+             "shells_qbat": (9, 4), "shells_qeph": (9, 4), "sh3n": (5, 3),
+             "trusses": (3, 2), "springs": (3, 2), "beams": (3, 2)}
 
 
 def _write_block(fh, arr, fmt: str) -> None:
@@ -66,8 +66,9 @@ def _von_mises(group_name: str, group) -> np.ndarray:
                               + (s[:, 1] - s[:, 2]) ** 2
                               + (s[:, 2] - s[:, 0]) ** 2)
                        + 3.0 * (s[:, 3] ** 2 + s[:, 4] ** 2 + s[:, 5] ** 2))
-    if group_name in ("shells", "sh3n"):
-        s = st["sig"]  # (n, nip, 3)
+    if group_name in ("shells", "shells_qbat", "shells_qeph", "sh3n"):
+        # (n, nip, 3); QBAT stores (n, 4*nip, 3) GP-major — same reduction
+        s = st["sig"]
         vm = np.sqrt(s[:, :, 0] ** 2 - s[:, :, 0] * s[:, :, 1]
                      + s[:, :, 1] ** 2 + 3.0 * s[:, :, 2] ** 2)
         return vm.max(axis=1)

@@ -180,6 +180,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from ..common.npcompat import trapezoid
+
 
 # ============================================================================
 # The continuous fine-grid schedule + the Cohen-class smoothing kernel
@@ -409,7 +411,7 @@ def instantaneous_marginals(freqs, base_psd, durations, fc, bw, scales=None,
     # RAW ones (for the time-average marginal — the true evolutionary spectrum)
     Ssm = eff["Weff"] * S0[None, :]
     Sraw = eff["R"] * S0[None, :]
-    power = np.trapezoid(Ssm, f, axis=1)
+    power = trapezoid(Ssm, f, axis=1)
     peak = f[np.argmax(Ssm, axis=1)]
     T = float(np.sum(dur))
     avg = np.sum(Sraw * dur[:, None], axis=0) / T if T > 0 else Sraw.mean(axis=0)

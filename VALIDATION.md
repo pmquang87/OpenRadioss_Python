@@ -1,47 +1,55 @@
 # VALIDATION — differential validation of pyradioss against the Fortran OpenRadioss
 
-*M40 edition — MATCH + SPEED, taking the two leads the M39 §3.4 fix cascade left
-open. The RD-E-1000 "MATCH attempt" is the headline (§3.5): the `/RBODY`
-rotational-STIFR dt term was completed (the exact `cndt3.F` STIR + `dtnoda.F`
-free-node rotational step + the `rgbodfp.F` master gather + the BATOZ/QEPH
-condensed characteristic length), driving c04's initial dt floor from M39's
-2.067e-2 to **1.64410e-2 = Fortran's printed 0.01644 EXACTLY**, and the
-`parity_m40.json` re-run HALVES the RD-E-1000 deviation (0.55 → 0.23). But the
-milestone's DIRECT EXPERIMENT — a dt-floor sweep — DISPROVES the M39 §3.4
-hypothesis: the c04 abort is dt-floor-INDEPENDENT (floors
-2.067/1.865/1.634/1.6441e-2 → aborts 1051/1079/1077/1076 ms), so reaching
-Fortran's floor does NOT yield the full run — the residual is a genuinely-excited
-shell transverse-w hourglass mode (BT-vs-BT c41: port IE tracks Fortran to 4
-digits until t≈900 ms, then HE blows up 7 orders), a force-physics gap outside
-this milestone's dt-claim scope, re-aimed at M41. The second §3.4 lead — "LAW36
-solids deviate ~19 %" — is FIXED AT ROOT (§3.5): four branch-level defects (the
-per-curve Fscale/YFAC dropped, the /FAIL/JOHNSON negative-eps_f freeze, the
-K·AMU total-pressure split, a slashless /FAIL lexer gap) drive c19/c20 IE rel_rms
-0.209 → **1.1e-06**, and correct the M39 "LAW2 0.023" figure to a partial-window
-artifact (full-window LAW2 is 0.2090, LAW36 now below it). SPEED: the M39
-profiler's #1 lever LANDED — the `accel` backend default is now `auto`, numba
-auto-selected at ≥ 32 total elements (a threshold DERIVED from
-`perf_m39_speed.json`, not guessed), NumPy fallback otherwise; parity holds
-(M7 13/13, a 48-brick grid at 8.85e-19). A residuals pack closed the four M39
-deferred items (the degenerate-brick STALL was the §3.4 reader bug all along, not
-geometry; the SPR_PRE blank-mass proven Fortran-legal on the real starter; a
-rotational-`/IMPVEL`-on-skew IndexError; TYPE32 physics assessed + deferred).
-ADDS §3.5 (M40 parity), §4.9 (the M40 corpus re-sweep), §6.4 (numba-default + the
-clean benchmark), and refreshes §7/§8. M39's §3.3/§4.8/§6.3 and M38/M37's
-baselines remain the measurement history the M40 deltas are taken against;
-deliverables `parity_m40.json` / `perf_m40.json` / `perf_m40_clean.json`
-(§3.5/§6.4) and `coverage_results_m40.json` (§4.9). All six M40 builders filed
-reports (unlike M39's three self-reported-FAILED); every M40 wall clock is
-CONTENDED (the user's 12-process MPI job ran throughout — the clean benchmark
-never opened an idle window, so it is RELATIVE-ONLY). M35–M39 history kept below.*
+*M41 edition — SHELL ELEMENT TECHNOLOGY, taking the single lead M40 §3.5 left
+open ("the residual is a FORCE-physics gap, not the dt claim") and splitting it
+into the three things it actually was. The headline (§3.6) is that **the
+RD-E-1000 BATOZ and QEPH families now MATCH**: two NEW element kernels were
+ported from upstream — `shell_qbat.py` (Ishell=12, the fully integrated
+Batoz–Dhatt quad, `coqueba/`) and `shell_qeph.py` (Ishell=22/23/24, the
+physically-stabilized 1-point quad, `coquez/`) — and a starter-side `/PROP/SHELL`
+Ishell dispatch routes those decks off the Belytschko–Tsay fallback they had run
+on since M2. c02/c03/c04 go **0.230/0.234/0.230 → 0.0126/0.0094/0.0084** and
+c08/c09 go **0.233/0.231 → 5.8e-06/6.6e-06** — all five MATCH (tol 0.05), all
+five now run **100 % of `/RUN` to TERMINATION NORMAL at ENERGY ERROR −0.00 %**
+where M40 aborted them at ~66 % on the −15 % energy guard. The mechanism is the
+one M40 predicted: QBAT integrates 2×2 in-plane so its element hourglass energy
+is identically zero (Fortran prints HE = 0.000E+00; the port's max HE is 2e-7 of
+IE), and QEPH books its stabilization work to INTERNAL energy with only the
+damper work to the hourglass ledger — whereas the BT 1-point kernel stored
+bending energy AS hourglass, which is why MATCH was unreachable by construction.
+The BT family itself (c40–c45) got the missing `cdefo3.F` IHBE≤1 second-order
+rigid-rotation membrane-rate correction plus the `cinmas.F` FAC=9 BT inertia
+lumping: deviation roughly HALVES (c41 0.230 → 0.138) and the three Sf_0.1
+variants that were NO-CHANNELS in M40 are UNBLOCKED to 89–92 % coverage — but BT
+does **not** MATCH, and the milestone's forensic settlement is that it cannot:
+the Fortran reference ITSELF blows up in the same transverse-w mode near its end
+(HE 3.085e5 = 76 % of its own IE at t=1184, peak printed ENERGY ERROR −40.7 %),
+surviving only because upstream's default energy-error stop is EP30 (`freform.F`)
+while the port keeps its live −15 % guard. The M40 Sf_0.1 regression
+(`task_29ec1751`) is RESOLVED at root by conditioning the guard REFERENCE with an
+absolute floor mirroring `ecrit.F`'s `ABS(ENTOT1B)>EM20` — the 15 %/30 % limits
+are UNCHANGED. ADDS §3.6 (M41 parity — the verdict table), §4.10 (the corpus
+re-sweep + the new dispatch-regression watch), §6.5 (timings — and **the first
+genuinely UNCONTENDED absolute benchmark in the project's history**, a standing
+side-quest owed since M38), and refreshes §7/§8. M40's §3.5/§4.9/§6.4 and the
+M39/M38/M37 baselines remain the measurement history the M41 deltas are taken
+against; deliverables `parity_m41.json` / `perf_m41.json` / `perf_m41_clean.json`
+(§3.6/§6.5) and `coverage_results_m41.json` (§4.10). All six M41 builders filed
+reports. M35–M40 history kept below.*
 
-- Date: 2026-07-17, branch `claude/openradioss-python-m39-fidelity-speed`
-  (M38 baseline: commit `7853b26`, the merge PR #38 of
-  `claude/openradioss-python-m38-props-tetra`; the M39 fidelity + speed edits
-  live in the shared working tree, uncommitted — HEAD stayed at `7853b26`
-  through the §4.8 sweep, 28 modified files + new `pyradioss/model/skew.py`,
-  `tools/profile_cycle.py`, `pyradioss/output/anim_vtk.py` and the
-  `tests/test_m39_*.py` suite)
+- Date: 2026-07-18, branch `claude/openradioss-python-m41-shell-technology`
+  (M40 baseline: commit `aebbab5`, the merge PR #40 of
+  `claude/openradioss-python-m40-match-and-speed`; the M41 shell-technology edits
+  live in the shared working tree, 19 modified files + the two NEW element
+  kernels `pyradioss/elements/shell_qbat.py` (1305 lines) and
+  `shell_qeph.py` (1010 lines), `pyradioss/common/npcompat.py`, and the
+  `tests/test_m41_*.py` suite. Test collection **1002 → 1062 (+60)**: 19 QBAT +
+  24 QEPH + 6 guard + 6 BT-rotation + 5 numpy-compat. **Re-run for this report on
+  the final merged tree under `PYRADIOSS_BACKEND=numpy`: the full fast tier is
+  GREEN — 1049 passed, 13 deselected (`-m "not slow"`), 0 failures, 734 s**, and
+  the 60 new M41 tests pass individually. Three PRE-EXISTING tests were MODIFIED
+  this milestone; that is called out explicitly in §8 rather than absorbed into
+  "the suite is green")
 - Reference solver: OpenRadioss Windows 64-bit double-precision build in
   `C:/OpenRadioss/exec` (`starter_win64.exe`, `engine_win64.exe`,
   `th_to_csv_win64.exe`), run single-process (`-np 1 -nt 1`), input format
@@ -75,9 +83,21 @@ never opened an idle window, so it is RELATIVE-ONLY). M35–M39 history kept bel
   `impi=12/12` contention-flagged) and **`perf_m39_speed.json`** (the SPEED
   campaign — 20 records + the physics-gate block — §6.3). Every M39 port wall
   clock carried the contention flag; parity classes, rel-RMS, verdicts and
-  speedup RATIOS are load-independent.
+  speedup RATIOS are load-independent. The M40 measurement is
+  **`coverage_results_m40.json`** (§4.9), **`parity_m40.json`** (76 cases — §3.5)
+  and **`perf_m40.json`** / **`perf_m40_clean.json`** (§6.4, RELATIVE-ONLY under
+  contention). The M41 measurement is **`coverage_results_m41.json`** (the full
+  529-case re-sweep, M40 schema + `delta_vs_m40` + a NEW top-level
+  `shell_dispatch` regression-watch block — §4.10), **`parity_m41.json`** (81
+  results: the FULL RD-E-1000 Bending family c00–c09/c40–c45 re-run fresh + the
+  standing regression set + numba spot rows, with `m40_class`/`m40_max_rel_rms`
+  carried per case — §3.6), **`perf_m41.json`** (parity-sweep wall clocks —
+  8-worker pool, concurrent UPPER BOUNDS, not clean) and
+  **`perf_m41_clean.json`** (`clean: true` — the first genuinely UNCONTENDED
+  absolute benchmark in the project, 9 decks × 3 backends, 0/9 rows contended,
+  the authoritative M41 timing source — §6.5).
 
-## History — what M35 established, what M36 changed, what M37 changed, what M38 changed, what M39 changed, what M40 changed
+## History — what M35 established, what M36 changed, what M37 changed, what M38 changed, what M39 changed, what M40 changed, what M41 changed
 
 The M35 first edition (commit `786163b`) built the harness and proved the
 environment. Its central finding was that the obstacle was the *deck dialect*,
@@ -167,7 +187,165 @@ the three RD-E-1000 Sf_0.1 variants (c40/c42/c44) now abort at cycle 100 on the
 −15 % energy guard against ~1e-8 J energies (spawned `task_29ec1751`; the guard
 must NOT be weakened — condition its startup denominator like upstream).
 
+M41 is SHELL ELEMENT TECHNOLOGY: it took M40's single re-aimed lead — "the
+RD-E-1000 residual is a FORCE-physics gap in the BT/BATOZ/QEPH kernel, not the dt
+claim" — and split it into the three separable problems it actually was. **(1)
+The BATOZ and QEPH decks were never running BATOZ or QEPH**: since M2 the port
+had one shell kernel (Belytschko–Tsay), so Ishell=12 and Ishell=22/23/24 decks
+fell back onto BT, which stores bending energy as HOURGLASS where the real
+formulations do not — M40 §3.5 named this ("the port runs its BT kernel for
+Ishell 12/24 decks … fully-integrated QBAT keeps HE ≡ 0") and M41 fixed it by
+porting both kernels for real and adding a starter-side Ishell dispatch. Those
+five variants go DEVIATION → **MATCH**, at 100 % coverage and NORMAL termination.
+**(2) BT's own rate kinematics** were missing `cdefo3.F`'s IHBE≤1 second-order
+rigid-rotation membrane correction; adding it (plus the `cinmas.F` FAC=9 BT
+inertia lumping) roughly halves the BT deviation and unblocks the Sf_0.1
+variants — but BT still does not MATCH, and the milestone's honest settlement is
+that the remaining residual is *shared with the reference*: run to its own TSTOP
+the Fortran engine blows up in the SAME transverse-w mode (peak printed ENERGY
+ERROR −40.7 %), and only survives because upstream's default energy-error stop
+threshold is EP30. **(3) The M40 Sf_0.1 regression** was an ill-conditioned guard
+denominator, fixed by conditioning the guard REFERENCE on an absolute floor that
+mirrors `ecrit.F` — limits unchanged. Process notes: all six builders filed
+reports; the corpus sweep is bit-identical to M40 while actively exercising the
+new dispatch on 160 decks; and for the first time since M38 the machine went
+idle, so §6.5 carries CLEAN ABSOLUTE timings rather than ratio-only bounds.
+
 ## TL;DR
+
+1. **THE RD-E-1000 BATOZ + QEPH FAMILIES NOW MATCH — the headline (§3.6,
+   `qbat-port` + `qeph-port` + `parity-m41`).** M40 §3.5 diagnosed the residual as
+   element technology: the port had ONE shell kernel (Belytschko–Tsay), so
+   Ishell=12 (BATOZ) and Ishell=22/23/24 (QEPH) decks ran on a 1-point BT
+   fallback that books bending energy as HOURGLASS. M41 ported both formulations
+   for real — **`pyradioss/elements/shell_qbat.py`** (1305 lines, the fully
+   integrated Batoz–Dhatt quad from `engine/source/elements/shell/coqueba/`:
+   `clskew3.F` frame, the full `cbacoor.F` flat/warped split, `cbadef.F`
+   assumed-strain operators, 2×2 in-plane Gauss × NIP through-thickness,
+   `cbavisc.F` damping, `cbafori.F`/`cbaproj.F` assembly, **no hourglass block at
+   all** — HE identically 0 on the element side, exactly like Fortran) and
+   **`shell_qeph.py`** (1010 lines, the physically-stabilized 1-point quad from
+   `coquez/`: `czcorc.F` covariant frame, `czcorp5.F` warped projection,
+   `czdef.F` 8 strain + 6 hourglass rates with Flanagan–Belytschko
+   orthogonalization, and `czfintn.F` CZFINTN1 — the modal stresses integrated
+   with the material's OWN plane-stress moduli, elastic work booked to **EINT**
+   and only the damper work to the hourglass ledger) — plus a starter-side
+   `/PROP/SHELL` Ishell dispatch (`_dispatch_shell_formulations`; 12 → QBAT,
+   22/23/24 → QEPH per `hm_read_prop01.F`, which folds 22/23 into 24 and keeps 12
+   distinct). **Result (tol 0.05, `parity_m41.json`, both engines fresh):**
+
+   | case | formulation | M40 rms | M41 rms | class | coverage |
+   |---|---|---:|---:|---|---:|
+   | c02 BATOZ Sf0.6 | QBAT Ishell=12 | 0.2298 | **0.01261** | **MATCH** | 100 % |
+   | c03 BATOZ Sf0.8 | QBAT Ishell=12 | 0.2335 | **0.00945** | **MATCH** | 100 % |
+   | c04 BATOZ Sf0.9 | QBAT Ishell=12 | 0.2301 | **0.00839** | **MATCH** | 100 % |
+   | c08 QEPH Sf0.8 | QEPH Ishell=24 | 0.2330 | **5.84e-06** | **MATCH** | 100 % |
+   | c09 QEPH Sf0.9 | QEPH Ishell=24 | 0.2309 | **6.58e-06** | **MATCH** | 100 % |
+
+   All five now run **100 % of `/RUN` to TERMINATION NORMAL at ENERGY ERROR
+   −0.00 %** (M40 aborted them at ~66 % on the −15 % guard). QEPH beats the
+   target by ~4 ORDERS. The hourglass channel is the proof of mechanism: Fortran
+   prints **HE = 0.000E+00 exactly** on all three QBAT references and the port's
+   max HE is 2.6–3.7e-1 out of IE 1.47e6 (**2e-7** — the documented `cbavisc` dn
+   work); QEPH's HE is ~9e-19. c04's cycle-0 dt is **1.64410E-02**, the Fortran
+   engine's printed `0.1644E-01`, now claimed by the owning kernel's own
+   condensed characteristic length.
+2. **THE BT ROTATION FIX — halved, unblocked, and then SETTLED BY EXPERIMENT
+   (§3.6, `bt-rotation-forensics`).** The port's BT type-1 kernel was missing
+   `cdefo3.F`'s IHBE≤1 **second-order rigid-rotation membrane-rate correction**
+   (upstream lines 103-130: `TMP1A=(dt/4)(VZ13−VZ24)²/(PY1+PY2)` into VX13/VX24,
+   `TMP2B=(dt/4)(VZ13+VZ24)²/(PX2−PX1)` into VY13/VY24, `SIGN(MAX(ABS,EM20))`
+   guards, killed when `IMPL_S>0`). Because the end-of-step corotational frame
+   lags the mid-step velocities by ω·dt/2, a rolled element's out-of-plane
+   velocity LEAKS into the membrane rates; linearized about a steady roll the
+   missing term is an O(ω·dt) skew coupling that left rolled elements in a
+   negative-damping transverse-w flutter growing out of round-off. Implemented
+   bit-for-bit (gated on Ishell 0/1/2 → engine IHBE≤1; implicit gate mirrors
+   `IMPL_S`), with the companion `cinmas.F` **FAC=NINE** BT-family rotational
+   inertia lumping `I = m/4·(A/9 + t²/12)` (was `(t²+A)/12` for all families),
+   which reproduces the Fortran starter's printed `/RBODY` inertia and moves the
+   BT dt floor 1.86540e-2 → **1.95667e-2** (Fortran 2.004e-2 — the M40 §3.5 /
+   §7-item-9 "7 % conservative" cut, now largely closed). **Deviation halves and
+   the Sf_0.1 variants are UNBLOCKED**: c41 0.2305 → **0.1375**, c43 0.2713 →
+   **0.2566**, and c40/c42/c44 go from M40's NO-CHANNELS cycle-100 aborts to
+   **0.1892/0.2503/0.1902 at 89–92 % coverage**. **BUT BT DOES NOT MATCH, and the
+   forensic settlement says it cannot** — see item 3.
+3. **THE HONEST HEADLINE — the c41 flutter is REAL PHYSICS OF THE ROLLED STRIP IN
+   BOTH ENGINES (§3.6).** Run to its own TSTOP the **Fortran reference itself**
+   blows up in the same transverse-w mode: HE 2.0e-2 at t=1050 → 5.3e2 at t=1100
+   → **3.085e5 = 76 % of its own IE** at its NORMAL end t=1184, **peak printed
+   ENERGY ERROR −40.7 %** at t=1158. It reaches TSTOP only because upstream's
+   default energy-error STOP threshold is effectively infinite — `freform.F` line
+   782 `IF(DEMXS==ZERO) DEMXS=EP30` — while the port keeps its live −15 % guard
+   (NOT weakened). With the fix the port's onset sits at or below Fortran's
+   (mini-roll growth 3.8–5.5 vs Fortran 4.6–6.5 decades/100 ms; late exponents
+   equal ~11–12 where the pre-fix port ran 18.5), and c41's IE tracks Fortran to
+   **0.8 %** where M40 was 19 % off. **MATCH < 0.05 is unreachable for this family
+   while the reference's own final window is diverging** — the same class of
+   experiment-settled conclusion as M40's dt finding. The settled residual is the
+   **0.14–0.26 HE-channel deviation family**, and the honest verdict is that six
+   BT variants remain DEVIATION at 88–96 % of `/RUN`.
+4. **THE Sf_0.1 REGRESSION — RESOLVED AT ROOT, GUARD NOT WEAKENED (§3.6,
+   `guard-conditioning`; closes M40 §3.5 (d) / `task_29ec1751`).** The fix
+   conditions the guard **REFERENCE** with an absolute floor
+   (`_ENERGY_START_FLOOR = 1.0e-6`, `engine.py`) that holds BOTH percentage guards
+   inert until the balance reference energy clears the numerical-dust band; **the
+   15 % / 30 % limits are UNCHANGED and the NaN/Inf backstop stays
+   UNCONDITIONAL**. This mirrors upstream `ecrit.F` 509-515 verbatim —
+   `IF(ABS(ENTOT1B)>EM20) THEN ERR=ENTOTB/ENTOT1B-ONE … ELSE ERR=ZERO ENDIF` —
+   which computes the energy error ONLY when the expected total energy clears an
+   absolute floor. The Fortran citations were **independently verified against the
+   real `ecrit.F`/`freform.F` this milestone**, not taken on trust. Measured on
+   c40/c42/c44: BEFORE abort@cycle 100 at ERR −18.2 % on IE ~4.4e-8 dust; AFTER
+   the run proceeds, the guard re-arms at REF 2.9e-6 (≈ cycle 250) with ERR
+   already decayed to −7 %, and **max |ERR| while ACTIVE is 7.0 % < 15 %**.
+5. **THE M41 CORPUS RE-SWEEP — BIT-IDENTICAL, with a NEW dispatch-regression
+   watch (§4.10, `coverage-m41`).** Same 529 decks, same driver: **CLEAN 13,
+   SKIPS 440, ERROR 76 — identical to M40 in every cell**, migration matrix fully
+   diagonal, **0 moved cases / 0 new error classes / 0 crashes / 0 timeouts / 0
+   driver-fails**. The M41-specific question ("did the new Ishell dispatch break
+   any deck that used to fall back to BT?") is answered by a new `shell_dispatch`
+   block: the dispatch **FIRED on 160 of 529 decks** (44 QBAT routing 32,031
+   elements; 116 QEPH routing 415,713; largest single deck 37,664 QEPH elements),
+   and **all 160 kept their full record — verdict, hard_skips, error_messages,
+   parse_errors, n_skipped_families — byte-for-byte identical to M40**. Verdict
+   `PASS`. Scope caveat kept explicit: this sweep is STARTER-only, so it proves
+   the WIRING, not the kernels' engine-time fidelity (that is §3.6's job).
+6. **THE CLEAN BENCHMARK — FINALLY DISCHARGED (§6.5, `parity-m41`).** The
+   standing side-quest owed since M38 is **DONE**: the user's 12-process MPI job
+   was NOT running this session (sampled repeatedly, `impi=0`, CPU 0 %), the idle
+   window was taken FIRST and used in isolation, and `perf_m41_clean.json` carries
+   **`clean: true`, 0/9 rows contended** — the project's first CLEAN ABSOLUTE
+   backend numbers. **Median numba 1.782×** (range 0.61–2.57×: notched_plate
+   2.569×, rigid_impactor 2.275×, box_beam 2.031×; the sole loss is gas_piston at
+   0.610×). The M40-derived `auto` rule (numba at ≥ 32 elements) is **VALIDATED**:
+   `auto` picks NumPy on exactly one deck — gas_piston, 4 elements, the one deck
+   where numba loses.
+7. **ZERO REGRESSIONS on everything the shell work did not touch (§3.6).** Every
+   re-run standing case reproduces M40 to the digit: c19 LAW36 MATCH 0.00113,
+   c20 0.3156, c26 Hardening MATCH 0.0216, c13/c14 LAW2 0.2089921 (M40: 0.20899),
+   springs NO-CHANNELS, c01 1.0, and every PYRADIOSS-FAIL class identical. This
+   proves the guard floor (a GLOBAL `engine.py` change) and the starter dispatch
+   disturbed neither solids, springs nor the known-fail set. The backend contract
+   also holds: numba spot-parity **3/3** with c04 and c08 T01 **byte-identical**
+   to numpy (md5 equal, max-abs 0.0e+00).
+8. **WHAT DID NOT MATCH — named, not buried (§3.6 (e), §7).** Six BT variants stay
+   DEVIATION 0.138–0.257 at 88–96 % coverage (item 3). **DKT18 got no kernel this
+   milestone** and stays DEVIATION: c06 0.281, c07 0.258 (worst channel MOMX both),
+   c00 twisted beam 0.456 — it is now the only unported shell formulation in the
+   RD-E-1000 family. **c05 is a GENUINE timeout, not a harness artifact**: it
+   reached 681,800 cycles and 1799.38 s of a 1800 s budget at ~55 % of `/RUN`
+   (Sf_0.1 scales dt ~10×, so it needs ~1.2 M cycles — it wants a ~4000 s budget
+   or a cycle-capped comparison). c01_E0500_Beam_frame remains a saturated
+   rel-RMS 1.0 channel, unchanged since M39 and untouched by shell work.
+9. **A PERFORMANCE COST WAS INCURRED AND IS FLAGGED (§6.5).** The new kernels have
+   **no JIT kernels yet**, so on QBAT numba is SLOWER than numpy (c04 full run:
+   395 s numba vs 330 s numpy — the numba path adds dispatch overhead with nothing
+   to compile). QBAT is also ~3× BT per cycle (c04 solo: 330 s / 97,622 cycles =
+   296 cyc/s). A `jit_kernels` pass for QBAT/QEPH — and a check on whether `auto`
+   should exclude qbat groups until then — is the natural SPEED follow-up (§7).
+
+### TL;DR — M40 edition (kept intact; §3.5 parity and §4.9 corpus sweep remain the M41 baseline)
 
 1. **THE RD-E-1000 "MATCH ATTEMPT" — the headline (§3.5, `rbody-stifr` +
    `parity-m40`).** The M39 §3.4 cascade deferred RD-E-1000 to M40 with a precise
@@ -687,7 +865,7 @@ gas column requires rebuilding the example on a hydro law (LAW6).
   (M8–M34); no Fortran chain exists for them with this binary, ever. They
   are validated analytically by their generator scripts.
 
-## 3. Parity — official IN_ENVELOPE decks (M36 baseline below; §3.1 = the M37 re-run; §3.2 = M38; §3.3 = the M39 shell-fidelity re-run; §3.5 = the M40 STIFR + LAW36 re-run, AUTHORITATIVE for M40)
+## 3. Parity — official IN_ENVELOPE decks (M36 baseline below; §3.1 = the M37 re-run; §3.2 = M38; §3.3 = the M39 shell-fidelity re-run; §3.5 = the M40 STIFR + LAW36 re-run; §3.6 = the M41 shell-element-technology re-run, AUTHORITATIVE for M41)
 
 A resume-capable driver ran every IN_ENVELOPE inventory case (40 cases;
 programmatically verified that ZERO NEAR cases have output-only hard
@@ -1180,6 +1358,272 @@ to DEVIATION (dt fixed, shell-hourglass residual, M41); 3 Sf_0.1 REGRESSIONS
 un-stalled. **NOT a full RD-E-1000 MATCH — the milestone's central attempt
 succeeded at the dt claim and failed at the full-run MATCH, and the direct
 experiment says why.**
+
+### 3.6 M41 parity — the shell-element-technology re-run (AUTHORITATIVE for M41)
+
+The M40 `valruns40` harness was carried to `valruns41`. The **FULL RD-E-1000
+Bending family (c00–c09, c40–c45) was re-run FRESH on BOTH engines** on the M41
+shell-technology tree, port pinned to `PYRADIOSS_BACKEND=numpy` for
+trend-comparability; the standing regression set and the numba spot rows were
+re-run too. Deliverable **`parity_m41.json`** (81 results, each carrying
+`m40_class`/`m40_max_rel_rms` so every row is its own delta) + `perf_m41.json`.
+Channels are compared over the overlap window `[0, min(fortran, port) final
+time]` interpolated onto the port grid — the same semantics as M36–M40 — and a
+channel is scored only if its scale is ≥ 1 % of the group scale (insignificant
+channels print `~`). **Contention note, inverted from M40:** the user's
+12-process `engine_win64_impi` job was NOT running at any point this session
+(sampled repeatedly, `impi=0`, CPU 0 %), so §6.5's benchmark is CLEAN — but the
+parity sweep itself used an 8-worker pool, so `perf_m41.json` wall clocks are
+concurrent UPPER BOUNDS. Classes, rel-RMS and verdicts are deterministic
+throughout.
+
+**THE HEADLINE — the two families that got a NEW dedicated kernel are now FULLY
+MATCHED.** M40 §3.5's closing sentence re-aimed RD-E-1000 at M41 as "an
+element-technology port (QBAT/QEPH FORCE physics — the port runs its BT kernel
+for Ishell 12/24 decks, storing bending energy partly as hourglass where
+fully-integrated QBAT keeps HE ≡ 0)". That is exactly what landed, and exactly
+what it bought:
+
+| variant | formulation | M39 rms | M40 rms | **M41 rms** | class | worst ch | cov |
+|---|---|---:|---:|---:|---|---|---:|
+| c02 BATOZ Sf0.6 | QBAT Ishell=12 | 0.554 | 0.2298 | **0.01261** | **MATCH** | MOMZ | 100 % |
+| c03 BATOZ Sf0.8 | QBAT Ishell=12 | 0.554 | 0.2335 | **0.00945** | **MATCH** | MOMZ | 100 % |
+| c04 BATOZ Sf0.9 | QBAT Ishell=12 | 0.554 | 0.2301 | **0.00839** | **MATCH** | MOMZ | 100 % |
+| c08 QEPH Sf0.8 | QEPH Ishell=24 | 0.556 | 0.2330 | **5.84e-06** | **MATCH** | IE | 100 % |
+| c09 QEPH Sf0.9 | QEPH Ishell=24 | 0.556 | 0.2309 | **6.58e-06** | **MATCH** | IE | 100 % |
+| c40 BT type1 Sf0.1 | BT + cdefo3 | 0.637 | NO-CHAN | **0.1892** | DEVIATION | MOMZ | 89.2 % |
+| c41 BT type1 Sf0.9 | BT + cdefo3 | 0.555 | 0.2305 | **0.1375** | DEVIATION | HE | 89.6 % |
+| c42 BT type3 Sf0.1 | BT + cdefo3 | 0.627 | NO-CHAN | **0.2503** | DEVIATION | HE | 91.5 % |
+| c43 BT type3 Sf0.9 | BT + cdefo3 | 0.632 | 0.2713 | **0.2566** | DEVIATION | HE | 95.6 % |
+| c44 BT type4 Sf0.1 | BT + cdefo3 | 0.555 | NO-CHAN | **0.1902** | DEVIATION | MOMZ | 89.2 % |
+| c45 BT type4 Sf0.9 | BT + cdefo3 | — | — | **0.1496** | DEVIATION | HE | 87.6 % |
+| c00 Twisted beam | DKT18 (untouched) | — | — | 0.4556 | DEVIATION | MOMZ | 100 % |
+| c05 DKT18 Sf0.1 | DKT18 (untouched) | — | — | SKIPPED-SLOW | — | — | ~55 % |
+| c06 DKT18 Sf0.2 | DKT18 (untouched) | — | — | 0.2813 | DEVIATION | MOMX | 100 % |
+| c07 DKT18 Sf0.3 | DKT18 (untouched) | — | — | 0.2581 | DEVIATION | MOMX | 100 % |
+| c01 Beam frame | BT + beam | 0.9995 | 0.9995 | 0.9995 | DEVIATION | — | 100 % |
+
+**5 of the 14 scored variants MATCH, and both NEW-kernel families are 5/5.**
+
+**(a) QBAT (Ishell=12) — `shell_qbat.py`, 1305 lines, `qbat-port`.** The full
+`coqueba/` chain: `clskew3.F` corotational frame; the complete `cbacoor.F` pass
+(flat/warped split at `ZL1² < 1e-12·max(L13,L24)`, explicit spin corrections,
+warped per-node frames VQN + edge normals VNRM/VASTN + Gauss frames VQG/VJFI +
+the DI free-rigid-mode projection, and the condensed FACDT=4/3 dt length now
+computed by the OWNING kernel); `cbadef.F` assumed-strain operators (flat BM/BC
+and warped BM/BMF/BF/BCQ blocks, CBADEFSH constant assumed membrane shear);
+`cbastra3.F` strain increments; **2×2 in-plane Gauss × NIP through-thickness
+Gauss layers** reusing `materials.shell_update` (layer state stored GP-major so
+the anim/failure plumbing applies unchanged); `cbavisc.F` dn damping booked to
+the `ehour`/PARTSAV(8) slot; `cbaener.F` assumed-shear energy corrections;
+`cbafori.F` + CBAFORICT force assembly; `cbaproj.F` local→global with the warped
+rigid-force projection; `cndt3.F` dt claim. **There is NO hourglass block** —
+that is the point. Patch tests are exact to machine precision:
+
+| patch test | closed form | port | rel err |
+|---|---:|---:|---:|
+| membrane `N = C·t·ε` | 1.153846e-02 | 1.153846e-02 | 1.50e-16 |
+| bending `M = E·t³·κ/(12(1−ν²))` | 9.615385e-08 | 9.615385e-08 | 4.13e-16 |
+| twist `Mxy = E·t³·c/(12(1+ν))` | 6.730769e-08 | 6.730769e-08 | 4.13e-15 |
+| rigid rotation `\|σ\|/E` | 0 | 5.87e-13 flat / 5.95e-13 warp | quadratic order |
+| HE, inviscid bending step | 0 | **0.00e+00 exactly** | — |
+
+c04's significant channels: IE 0.00312 (final deviation 0.76 %), EW 0.00311,
+MOMY 0.00554, MOMZ 0.00839 (the worst, hence the class), MASS 0.0. Final IE
+deviation across the three: 0.99 / 0.71 / 0.61 %. **The hourglass channel is the
+mechanism proof**: Fortran prints **HE = 0.000E+00 exactly** on all three
+references, and the port's max HE is 2.6–3.7e-1 absolute out of IE 1.47e6 = **2e-7**
+— the documented `cbavisc` dn work, below the harness's 1 % significance floor,
+correctly printed `~`. c04 cycle count **97,622 port vs 97,623 Fortran**, and the
+cycle-0 dt is **1.64410E-02** = the Fortran engine's printed `0.1644E-01`
+(NODE 1020), now claimed by QBAT's own condensed length rather than the M40
+BT-side approximation. 19 tests in 7 layers (`tests/test_m41_qbat.py`), all green.
+
+**(b) QEPH (Ishell=22/23/24) — `shell_qeph.py`, 1010 lines, `qeph-port`.** Source
+note worth recording: the M41 brief named `coqueph/szforc3.F`, which **does not
+exist upstream** — QEPH is `engine/source/elements/shell/coquez/` (`czforc3.F`
+driver; `czcorc.F` covariant frame + FACDT=5/4 + the 2nd-order rigid-rotation
+correction; `czcorp5.F` warped projection with the `Z1² < LM·1e-8` plat gate;
+`czdef.F` 8 strain + 6 hourglass rates with the mx13/my13 Flanagan–Belytschko
+orthogonalization; `czfintce.F` constant part; `czfintn.F` CZFINTN1 stabilization;
+`czproj.F` reconstruction). The `czfintn`/`czdef`/`CLSKEW3`/`czcorp5`/`czcorc`
+blocks were audited line-for-line against the Fortran this session. **Why QEPH is
+essentially exact where BT reported percent-level hourglass**: CZFINTN1 is a
+PHYSICAL stabilization — modal stresses integrated with the material's own
+plane-stress moduli A11/A12/G·SHF at CVIS=1, COEFH=0.999 plastic relaxation,
+dn=0.015 linear damper — and it books the **elastic stabilization work to EINT,
+with ONLY the damper work to the hourglass ledger** (`czfintn.F` EVIS(8)).
+
+| case | F-cycles | coverage | max_rel_rms | HE port | HE Fortran | M40 baseline |
+|---|---:|---:|---:|---:|---:|---|
+| c08 QEPH Sf0.8 | 107,837 | 100 % | **5.841708325388154e-06** | 9.09e-19 | 0.0 | 0.2330 (aborted ~66 %, HE ~2e5) |
+| c09 QEPH Sf0.9 | 95,856 | 100 % | **6.580144914995088e-06** | 9.25e-19 | 0.0 | 0.2309 |
+
+(`parity_m41.json` records coverage 1.0 for both; the `qeph-port` builder's own
+harness recorded 1.0006 — the port's final time lands marginally PAST Fortran's,
+which is a full run either way.)
+
+c08 channels: IE 5.84e-06, EW 2.06e-07, MASS 0, MOMY 3.53e-06, MOMZ 4.30e-06,
+IE+KE 5.84e-06. **HE was M40's WORST channel and is now zero on both sides**, so
+it drops out of scoring entirely. The dt claim (FACDT=5/4 × the `(√(1+dn²)−dn)`
+damping factor) is Fortran-print-exact at 1.488e-2 on c08. Stabilization is
+pinned by closed form in 24 tests (`tests/test_m41_qeph.py`, all green): it
+VANISHES on arbitrary linear fields (< 1e-15) and resists h-patterns with the
+physical stiffnesses membrane `A11·t/3`, bending `A11·t³/36`, transverse
+`2/3·G·SHF·t` per node at rtol 1e-12, with the EINT/EHOUR split itself pinned;
+plus rigid translation/spin exact zeros, the leapfrog chord artifact killed to
+O(θ⁴), frame invariance 1e-12.
+
+**(c) BT (Ishell=1–4) — the rate-kinematics fix, and its experimental
+settlement (`bt-rotation-forensics`).** The defect: the port's BT type-1 kernel
+never had `cdefo3.F`'s IHBE≤1 second-order rigid-rotation membrane-rate
+correction (upstream lines 103-130; `IMPL_S>0` kills it, and the port's implicit
+gate mirrors that). The end-of-step corotational frame lags the mid-step
+velocities by ω·dt/2, so a rolled element's out-of-plane velocity leaks into the
+membrane rates — an O(ω·dt) skew coupling whose absence left rolled elements in a
+**negative-damping transverse-w flutter growing out of round-off**. The forensics
+are specific: at t=800 the top-HE elements are symmetric pairs across the strip
+(21/87, 26/92, 28/94, 31/97) in the ROLLED region (e3 tilted 30–125°), with the
+transverse-w modal state `hgq[:,2]` carrying exponential growth from ~1e-9 with
+**zero physical excitation**. Onset window t=850→980, HE:
+
+| tree | t=850 | t=900 | t=950 | t=980 |
+|---|---:|---:|---:|---:|
+| M40 (pre-fix port) | 4.75e-10 | — | — | 5.76e+04 |
+| M41 (fixed port) | 1.75e-10 | 40× lower | 1.7e3× lower | 1.46e+01 (3.9e3× lower) |
+| Fortran reference | 2.84e-16 | — | — | 9.35e-08 |
+
+A documented upstream asymmetry was mirrored rather than "corrected": the static
+bias is exactly **+ω²dt/2 raw and −ω²dt/2 corrected** — upstream OVER-corrects by
+2×, and it is IHBE==2/3's velocity form that is the exact cancellation. The
+companion `cinmas.F` lines 916-924 **FAC=NINE** BT inertia lumping moves the dt
+floor 1.86540e-2 → **1.95667e-2** (Fortran 2.004e-2), reproducing the Fortran
+starter's printed `/RBODY` inertia.
+
+**THE SETTLEMENT — and it is the honest headline of the BT track. The flutter is
+REAL PHYSICS of the rolled BT strip in BOTH engines.** Run to its own TSTOP the
+**Fortran reference itself** blows up in the same transverse-w mode: HE 2.0e-2 at
+t=1050 → 5.3e2 at t=1100 → **3.085e5 = 76 % of its own IE** at its NORMAL end
+t=1184, with a **peak printed ENERGY ERROR of −40.7 %** at t=1158. It reaches
+TSTOP only because upstream's default energy-error STOP threshold is effectively
+infinite (`freform.F` line 782 `IF(DEMXS==ZERO) DEMXS=EP30`, line 803
+`DEMXK=EP20`) — upstream does not abort on energy error by default at all —
+while the port keeps its live −15 % guard, which is **not weakened and should not
+be**. With the fix the port's onset sits at or below Fortran's (mini-roll rig
+growth 3.8–5.5 vs Fortran 4.6–6.5 decades/100 ms; late exponents equal at ~11–12
+where the pre-fix port ran 18.5) and c41's IE tracks Fortran to **0.8 %** vs 19 %
+before. **Conclusion: MATCH < 0.05 is unreachable for this family while the
+reference's own final window is diverging** — comparing against it would be
+comparing against a diverged signal. The residual is the **HE channel of the
+final blow-up window in every case**, and the six BT variants stay DEVIATION at
+88–96 % coverage. Their termination lines are recorded verbatim:
+
+| case | port termination | ERR at stop |
+|---|---|---:|
+| c40 | `ERROR - ENERGY ERROR -16.2% EXCEEDS LIMIT 15.0%` | −16.16 % |
+| c41 | `ERROR - NUMERICAL ENERGY INJECTION -31.3% EXCEEDS LIMIT 30.0% - RUN UNSTABLE` | −13.74 % |
+| c42 | `ERROR - ENERGY ERROR -15.4% EXCEEDS LIMIT 15.0%` | −15.43 % |
+| c43 | `ERROR - ENERGY ERROR -19.5% EXCEEDS LIMIT 15.0%` | −19.54 % |
+| c44 | `ERROR - ENERGY ERROR -15.1% EXCEEDS LIMIT 15.0%` | −15.09 % |
+| c45 | `ERROR - ENERGY ERROR -15.0% EXCEEDS LIMIT 15.0%` | −15.05 % |
+
+Two `cdefo3` branches remain deliberately unported, and they are the concrete
+targets if this family is pursued further: **c43 (BT type3)** uses the
+node-1-relative velocity form and therefore takes NO rot2 correction at all today
+(it gains only via the FAC=9 dt, which is why it improved least — 0.2713 →
+0.2566), and **c45 (BT type4)** uses the Z2 warp correction.
+
+**A deck-metadata correction worth recording** (it invalidates a figure quoted in
+earlier editions and in the M41 brief): RD-E-1000's TSTOP is **per variant
+family**, read directly out of the `_0001.rad` engine decks for this report —
+BATOZ / QEPH / DKT18 run `1605.00`, BT_type1 Sf_0.9 runs `1185.01` (with
+`#1640.00` commented out beneath it), BT_type1 Sf_0.1 runs `1230.01`. Coverage in
+this section is the harness's `port_time_coverage` — port final time over Fortran
+final time — so it is already per-deck; but any earlier prose quoting "1605" as
+the BT variants' end time was wrong.
+
+**(d) The energy-guard conditioning (`guard-conditioning`) — M40's one honest
+regression, CLOSED.** M40 §3.5 (d) flagged c40/c42/c44 aborting at cycle 100 on
+~1e-8 J energies and spawned `task_29ec1751` with the instruction "the guard must
+NOT be weakened; condition the denominator / startup like upstream". That is
+precisely what landed: `engine.py` now carries `_ENERGY_START_FLOOR = 1.0e-6`
+(line 156) and wraps BOTH percentage guards — the ERR stop and the ERRN
+injection guard — in `if e['REF'] > _ENERGY_START_FLOOR:`, holding them inert
+until the balance REFERENCE energy clears the numerical-dust band. **The 15 % /
+30 % limits are untouched, `energy_error_stop` still defaults to 15.0, and the
+NAN/INF divergence check remains UNCONDITIONAL.** The upstream rule it mirrors is
+`ecrit.F` 509-515 — `IF(ABS(ENTOT1B)>EM20) THEN ERR=ENTOTB/ENTOT1B-ONE … ELSE
+ERR=ZERO ENDIF` — i.e. upstream computes the energy error (and any stop it
+drives) only above an absolute floor. **These citations were read back in the
+actual Fortran sources for this report rather than trusted from docstrings**, and
+they check out, including the `X99`/99.9 % report clamp at `ecrit.F` 511/124. The
+floor value is well-centred, not tuned to pass: it sits ~1.3 decades above the
+cycle-100 dust (REF ~7.5e-8) and re-arms only after the true error has already
+decayed below the limit. Measured on c40/c42/c44 (truncated `t_end=10`): BEFORE
+abort@cycle 100 at ERR −18.2 % on IE ~4.4e-8; AFTER, the run proceeds to cycle
+4600 with IE → 2.65e-2 and ERR → −0.50 %, the guard transitioning INERT
+(REF 7.5e-8) → ACTIVE (REF 2.9e-6, ERR −7 %), **max |ERR| while ACTIVE 7.0 % <
+15 %**. 6 tests (`tests/test_m41_guard.py`).
+
+**(e) What did NOT improve — named.** **DKT18** received no kernel this milestone
+and remains DEVIATION (c06 0.2813, c07 0.2581, worst channel MOMX on both; c00
+twisted beam 0.4556) — it is now the ONLY unported shell formulation in the
+RD-E-1000 family and the obvious next element-technology target. **c05** is a
+GENUINE timeout rather than a harness artifact: it reached 681,800 cycles and
+used 1799.38 s of an 1800 s budget at ~55 % of `/RUN`; Sf_0.1 scales dt ~10× so
+the deck needs ~1.2 M cycles, and it wants either a ~4000 s budget or a
+cycle-capped comparison to earn a verdict. **c01_E0500_Beam_frame** sits at
+rel-RMS 0.9995 — a saturated channel unchanged since M39, flagged here only so it
+is not misread as M41 fallout.
+
+**(f) Standing regression set — ZERO regressions.** Every re-run case reproduces
+M40 to the digit, which is the load-bearing evidence that a GLOBAL `engine.py`
+guard change and a starter-side dispatch split disturbed nothing else:
+
+| case | M40 | M41 | verdict |
+|---|---|---|---|
+| c19 LAW36 HEXA_18 | MATCH 0.00113 | MATCH 0.0011261464 | identical |
+| c20 LAW36 HEXA_24 | DEVIATION 0.3156 | DEVIATION 0.3156153168 | identical |
+| c26 V0200 Hardening | MATCH 0.0216 | MATCH 0.0215597355 | identical |
+| c13 / c14 LAW2 HEXA | DEVIATION 0.20899 | DEVIATION 0.2089921431 | identical |
+| c10 / c11 springs | NO-CHANNELS | NO-CHANNELS | identical |
+| c01 Beam frame | DEVIATION 0.9995 | DEVIATION 0.9995136663 | identical |
+| c30/c34/c35/c36/c38/c39/c52 | PYRADIOSS-FAIL | PYRADIOSS-FAIL | identical |
+
+**(g) The backend contract — a backend MUST NOT change results (3/3 PASS).**
+
+| case | numpy | numba | T01 max-abs | md5 == numpy |
+|---|---|---|---:|---|
+| c04 QBAT | MATCH 0.00839 | MATCH 0.00839 | 0.0e+00 | **TRUE (byte-identical)** |
+| c08 QEPH | MATCH 5.84e-06 | MATCH 5.84e-06 | 0.0e+00 | **TRUE (byte-identical)** |
+| c41 BT | DEVIATION 0.1375 | DEVIATION 0.1375 | 1.9e+02 | false |
+
+c41's md5 mismatch is expected and diagnostic rather than alarming: the run
+diverges at the energy-abort cycle, where a last-digit difference decides which
+cycle trips the guard — class and rel-RMS agree to 5 digits (0.13750034 vs
+0.13749810). The LAW36-solid control (c20) from the M40 numba spot set was NOT
+re-run this session, so the solid-path backend contract is **carried from M40,
+not re-proven**.
+
+**(h) A measurement spread, disclosed.** Two sources measured the BT family and
+they agree to 4 digits on c40/c43/c45 (0.1892/0.2566/0.1496) but differ on c41:
+`parity_m41.json` records **0.1375** where `bt-rotation-forensics`'s focused
+re-run recorded **0.1542**. This is the expected harness spread on a case that
+terminates on the ERRN injection guard — the abort cycle, and therefore the
+overlap window, moves with last-digit differences. §3.6 uses `parity_m41.json` as
+authoritative (as §3.5 did with `parity_m40.json`) and cites the forensics
+builder for mechanism only. Both values are the same class and the same
+conclusion.
+
+**Official-class summary (M41-fresh):** **5 MATCH** — the complete QBAT (c02/c03/
+c04) and QEPH (c08/c09) families, all at 100 % coverage, NORMAL termination and
+ENERGY ERROR −0.00 %. **6 BT variants IMPROVED but DEVIATION** (0.138–0.257 at
+88–96 %; five against their M40 baseline, c45 against its M37 one of 0.6244 since
+it was not re-run in M38–M40), settled by experiment as a residual shared with the
+reference. **DKT18 untouched and DEVIATION**; c05 a genuine timeout. **Zero
+regressions** anywhere else. Where M40's headline attempt ended in a diagnosed
+non-MATCH, M41's reached MATCH on the two families it targeted — and the third
+(BT) is documented as unreachable-by-comparison rather than merely unfinished.
 
 ## 4. Coverage matrix — the official corpus through the port Starter
 
@@ -1747,6 +2191,80 @@ coverage frontier, unchanged M39 → M40 (M40's landed work was engine/perf, not
 new starter keyword coverage). The 76 ERROR decks are all gated by genuinely-
 unported physics families, not port bugs.
 
+### 4.10 The M41 full-corpus re-sweep (AUTHORITATIVE) — bit-identical, plus a new dispatch-regression watch
+
+Same 529 runnable decks, same `sweep_coverage.run_case` driver (verbatim — 120 s
+cap, 6 workers, no backend pin because the sweep runs only the STARTER, whose
+verdicts are backend-independent), aggregated with the M40 machinery plus a
+`delta_vs_m40` block and a **NEW top-level `shell_dispatch` section**
+(`coverage_results_m41.json`). Batch wall **82 s** for all 529 decks; per-deck
+elapsed median 0.60 s, p95 1.00 s, max 8.60 s against the 120 s cap — **14×
+headroom, so verdicts are contention-insensitive** (contention could not
+manufacture a TIMEOUT even if the MPI job had been live). This
+milestone's sweep carries an unusual burden of proof: M41 changed the STARTER —
+it splits `/PROP/SHELL` parts out of the generic Belytschko–Tsay group into two
+new kernel groups — so unlike M40 (engine-side, flat by construction) this sweep
+is directly exercising the new code on every shell deck in the corpus.
+
+| metric | M40 (§4.9) | M41 | delta |
+|---|---:|---:|---:|
+| decks swept | 529 | 529 | — |
+| CLEAN | 13 | **13** | 0 |
+| SKIPS(n) | 440 | **440** | 0 |
+| ERROR | 76 | **76** | 0 |
+| CRASH | 0 | **0** | 0 |
+| TIMEOUT | 0 | **0** | 0 |
+| DRIVER-FAIL | 0 | **0** | 0 |
+| parse-error incidents | 0 | **0** | 0 |
+
+**The migration matrix is fully diagonal**: 13 CLEAN→CLEAN, 440 SKIPS→SKIPS, 76
+ERROR→ERROR, **0 off-diagonal — zero moved cases, 0 improvements, 0 regressions,
+0 new error classes**. A deeper per-case equality check across ALL 529 decks (not
+just the shell ones) found **0 cases changed** in verdict, `hard_skips`,
+`error_messages`, `parse_errors`, `n_skipped_families` or the
+`skipped_families` key-set. 4 deep-path MAX_PATH decks were auto-rerun in
+short-path copies (hyperelastic + HEXA solid decks; non-shell, fired no dispatch)
+and all 4 came back SKIPS→SKIPS identical to M40.
+
+**THE M41-SPECIFIC QUESTION — and it is a real one.** A flat table is only
+reassuring if the new path actually ran. It did, heavily. Ground truth is the
+port's own M41-only routing INFO line (`N /SHELL ELEMENT(S) ROUTED TO THE
+{QBAT|QEPH} FORMULATION KERNEL (Ishell dispatch)`), harvested from the fresh
+port-written listings into `dispatch_map.json`:
+
+| kernel | decks | routed elements | verdicts of the firing decks |
+|---|---:|---:|---|
+| QBAT (Ishell=12) | 44 | 32,031 | CLEAN 1, SKIPS 43 |
+| QEPH (Ishell=22/23/24) | 116 | 415,713 | CLEAN 2, SKIPS 79, ERROR 35 |
+| BOTH kernels in one deck | 0 | — | — |
+| **ALL firing** | **160** | **447,744** | CLEAN 3, SKIPS 122, ERROR 35 |
+
+**All 160 dispatch-firing decks kept not merely their verdict class but their
+FULL record — verdict, `hard_skips`, `error_messages`, `parse_errors`,
+`n_skipped_families` — byte-for-byte identical to M40.** `shell_dispatch.verdict
+= PASS`, `REGRESSIONS_LOUD` empty, `changed_cases` empty. Zero of the BT-fallback
+decks broke. Even the 35 ERROR decks among the firing group error for their
+pre-existing M40 reasons with identical messages: the dispatch ran successfully
+on them and changed nothing. The largest firing decks are substantial models, not
+toys — bumper_LL4 mono/multidomain at **37,664 QEPH elements each** (ERROR,
+pre-existing), BIRD_WINDSHIELD_v1 25,394 (ERROR), Front_Impact_completed 13,598
+(ERROR), BIKERC bicycle 14,134 (SKIPS), CBOX cut-model 13,952 (SKIPS).
+
+**Tracked earlier-resolved error classes** (the re-regression watch, since the
+shell-group split sits adjacent to element-group and surface resolution): RBODY
+mass 3→3, degenerate brick 0→0, VOID density 0→0, SPRING mass 0→0, RBODY overlap
+0→0 — all `unchanged`, `new_error_classes: 0`. `ranked_gaps` remain byte-identical
+(INTER/TYPE24 18/5 sole, MONVOL/AIRBAG1 16/2, INTER/LAGMUL 14/2, ALE/BCS 12/7,
+SHEL16 12, QUAD 10/5, EOS/LINEAR 6, AMS 5/5); the 76 ERROR decks are all gated by
+genuinely unported physics families (certain `/INTER`, `/GRNOD/SURF` group refs),
+unrelated to shell technology and outside M41 scope.
+
+**Scope caveat, stated so the PASS is not over-read:** this sweep is
+**STARTER-only**. It proves the dispatch WIRING is sound and that no deck breaks
+at model setup — it does **not** measure engine-time force/energy fidelity of the
+QBAT/QEPH kernels. That parity is §3.6's, measured through
+`tools/validate_vs_fortran.py`, not this matrix.
+
 ## 5. Coverage — W12/W13 k2rad decks: the four M35 bugs are fixed
 
 All four M35-identified port-reader bugs were fixed inside
@@ -1795,7 +2313,7 @@ named above moved in M37 — LAW44 (Cowper–Symonds) now has ported physics
 GRSHEL/SHEL are covered by the group/set machinery. Neither deck was
 re-run for this report.
 
-## 6. Performance (M36 baseline below; §6.1 = the M37 measurement; §6.2 = M38 — no campaign; §6.3 = the M39 SPEED pass; §6.4 = the M40 numba-default + clean benchmark)
+## 6. Performance (M36 baseline below; §6.1 = the M37 measurement; §6.2 = M38 — no campaign; §6.3 = the M39 SPEED pass; §6.4 = the M40 numba-default + RELATIVE-ONLY benchmark; §6.5 = M41 — the FIRST CLEAN ABSOLUTE benchmark + the new-kernel cost)
 
 ### 6.1 M37 timing campaign (`perf_m37.json`, 122 records)
 
@@ -2159,7 +2677,218 @@ engine_win64_impi.exe"` returns 0 on this box despite 12 live ranks — the M39
 speed harness used that filter and therefore UNDER-counted contention; the M40
 records use plain `tasklist | grep -c engine_win64_impi`.
 
-## 7. Known issues & backlog (updated for M40)
+### 6.5 M41 — THE CLEAN ABSOLUTE BENCHMARK (a side-quest owed since M38, finally discharged) + the new-kernel cost
+
+**(a) The standing side-quest is DONE.** M38, M39 and M40 all owed an
+uncontended absolute benchmark and all three failed to deliver one for the same
+reason: the user's 12-process `engine_win64_impi` MPI job was live (in M40, the
+same PIDs for 2+ days), so every number was a contended upper bound and only
+back-to-back RATIOS were trustworthy. **This session the job was NOT running** —
+sampled repeatedly with the reliable plain-`tasklist` regex, `impi=0`, CPU 0 %.
+The idle window was taken FIRST and the benchmark run in isolation before any
+other work. `perf_m41_clean.json` therefore carries **`clean: true` and
+`n_contended: 0` — 0 of 9 rows contended**. These are the project's first CLEAN
+ABSOLUTE engine-elapsed seconds. Method unchanged: numpy / numba / auto
+back-to-back per deck, JIT cache warmed once up front, on a 13th Gen Intel Core
+i9-13900H.
+
+| deck | cycles | numpy s | numba s | auto s | numba× | `auto` selects |
+|---|---:|---:|---:|---:|---:|---|
+| notched_plate | 16,020 | 48.651 | 18.936 | 19.277 | **2.569×** | numba |
+| rigid_impactor | 35,689 | 44.826 | 19.704 | 19.800 | **2.275×** | numba |
+| box_beam_impact | 3,465 | 3.199 | 1.575 | 1.863 | **2.031×** | numba |
+| edge_impact | 22,814 | 29.557 | 16.454 | 16.193 | 1.796× | numba |
+| tensile_bar | 1,847 | 0.850 | 0.477 | 0.587 | 1.782× | numba |
+| spot_weld | 3,454 | 4.349 | 2.440 | 2.339 | 1.782× | numba |
+| rubber_block | 1,312 | 0.847 | 0.540 | 0.554 | 1.569× | numba |
+| antenna_mast | 4,961 | 0.852 | 0.918 | 1.212 | 0.928× | **numpy** (10 elem < 32) |
+| gas_piston | 1,320 | 0.320 | 0.525 | 0.277 | **0.610×** | **numpy** (4 elem < 32) |
+
+**Median numba 1.782×**, range 0.61–2.57×. M40's contended ratio-only median was
+1.751×, so the clean figure lands within 2 % of it — encouraging for the
+back-to-back method M38–M40 fell back on, but **not a controlled validation of
+it**: the two sets are not the same decks (M41 adds edge_impact, rigid_impactor
+and gas_piston to M40's six), so this is a coincidence of medians across
+overlapping-but-different populations, not a paired comparison. Read it as
+reassurance, not proof.
+
+**(b) The M40 `auto` rule is VALIDATED on clean data.** The ≥ 32-element
+threshold was DERIVED in M40 from `perf_m39_speed.json` rather than guessed
+(§6.4 (b)); the clean set now tests it. numba loses on exactly two decks —
+gas_piston (4 elements, 0.610×) and antenna_mast (10 elements, 0.928×) — and
+`auto` picks NumPy on exactly those two. **Every deck where numba wins, `auto`
+picks numba.** Zero misclassifications. Verified directly for this report by
+running both sub-threshold decks and reading the engine listing line back:
+`COMPUTE BACKEND … : numpy (auto: 4 elements < 32 — JIT warm-up dominates)` and
+`… (auto: 10 elements < 32 …)`. **Correction to a builder-side table**: the
+`auto_matches` field in `perf_m41_clean.json` is a timing-PROXIMITY heuristic,
+not the recorded backend choice, and it reads `numba` for antenna_mast because
+that deck's 1.212 s auto row sits nearer numba's 0.918 s than numpy's 0.852 s in
+absolute terms. Read as a selection record it would be wrong; the listing line
+above is the ground truth and the table's last column reflects it.
+
+**(c) THE NEW KERNELS ARE SLOW, AND ONE OF THEM IS SLOWER UNDER NUMBA.** This is
+the milestone's real performance finding and it is a cost, not a win. Measured
+SOLO on c04 (a full 97,622-cycle QBAT run):
+
+| backend | c04 wall | throughput |
+|---|---:|---:|
+| numpy | 330 s | 296 cyc/s |
+| numba | 395 s | — |
+
+**numba is ~20 % SLOWER than numpy on QBAT** because `shell_qbat.py` has **no JIT
+kernels at all** — the numba path adds dispatch overhead with nothing to compile.
+QBAT is also roughly **3× the per-cycle cost of BT** (the `parity-m41` builder's
+measurement), which is the expected price of 2×2 in-plane Gauss × NIP
+through-thickness integration versus a 1-point element — but it is now a real
+price, paid by whichever of the 160 corpus decks the §4.10 dispatch routes
+actually reach the engine. Two consequences are logged as follow-ups (§7): a
+`jit_kernels` pass for the QBAT/QEPH kernels, and a check on whether the `auto`
+≥ 32-element rule should EXCLUDE qbat/qeph groups until those kernels exist —
+because for those groups the threshold currently selects the slower path.
+
+**(d) Timing hygiene — what in this milestone is clean and what is not.**
+`perf_m41_clean.json` is the authoritative M41 timing source and is CLEAN
+ABSOLUTE. `perf_m41.json` is NOT: the 29-case parity sweep ran under an 8-worker
+pool, so those seconds are concurrent UPPER BOUNDS (classes and rel-RMS are
+deterministic and unaffected). Fortran timings are CARRIED, never re-measured
+(c04 reference: 17.38 s / 97,623 cycles). **One deck was excluded from the clean
+set and it is named**: `c46_LAW70` burned > 5.5 minutes of CPU on the numpy
+backend alone, and three back-to-back backends would have held the machine 15+
+minutes and risked losing the rare uncontended window for the rest of the
+milestone. The M40 clean set contains no c46 row either, so no trend row was
+lost — but **its backend ratio is unmeasured, not regressed**
+(`decks_omitted` in the JSON). Finally, since these decks now run to completion
+for the first time, clean per-deck RD-E-1000 parity timings have become
+interesting and are not yet measured: that needs a serial re-run on an idle box.
+
+## 7. Known issues & backlog (updated for M41)
+
+Three M40 backlog items are DONE this milestone. **Item 1** (the RD-E-1000
+full-run MATCH, re-scoped to force physics) is delivered for the two families it
+named — QBAT and QEPH both MATCH at 100 % coverage (§3.6) — and settled by
+experiment for the third (BT). **Item 2** (the Sf_0.1 regression,
+`task_29ec1751`) is RESOLVED at root with the guard limits untouched (§3.6 (d)).
+**Item 5** (the clean uncontended benchmark, owed since M38) is DISCHARGED
+(§6.5). Item 9's "BT floor is 7 % conservative" is largely closed too — the
+`cinmas.F` FAC=9 lumping the item said was "deliberately not touched" WAS touched,
+correctly, moving the floor 1.86540e-2 → 1.95667e-2 against Fortran's 2.004e-2.
+The post-M41 list, in measured-value order:
+
+1. **THE BT FAMILY STAYS DEVIATION — and the honest framing is "unreachable by
+   comparison", not "unfinished"** (§3.6 (c); c40–c45 at rel-RMS 0.138–0.257,
+   88–96 % of `/RUN`, worst channel HE or MOMZ). The `cdefo3.F` fix halved the
+   deviation and unblocked the Sf_0.1 variants, but the reference itself diverges
+   in its own final window (Fortran HE = 76 % of its own IE at TSTOP, peak printed
+   ENERGY ERROR −40.7 %), so a sub-0.05 score would require scoring against a
+   diverged signal. **Do NOT "fix" this by weakening the −15 %/−30 % guards** —
+   upstream's own default is `DEMXS=EP30` (i.e. no energy stop at all), which is a
+   reporting choice, not a physics endorsement. If the family is pursued, the two
+   concrete targets are the **unported `cdefo3` branches for c43 (BT type3, the
+   node-1-relative velocity form — it currently takes NO rot2 correction and gains
+   only via the FAC=9 dt) and c45 (BT type4, the Z2 warp correction)**.
+2. **DKT18 IS NOW THE ONLY UNPORTED SHELL FORMULATION IN THE FAMILY** (§3.6 (e);
+   c06 0.2813, c07 0.2581, worst channel MOMX on both; c00 twisted beam 0.4556).
+   It received no kernel in M41; these are its FIRST measured values (M39/M40
+   carry no baseline for c00/c06/c07 — the full-family re-run is itself an M41
+   deliverable), so they are a starting point rather than a stalled number. With
+   QBAT and QEPH landed and BT settled, DKT18 is the obvious next
+   element-technology target and the cleanest remaining RD-E-1000 lead.
+3. **QBAT/QEPH HAVE NO JIT KERNELS, AND `auto` CURRENTLY PICKS THE SLOWER PATH FOR
+   THEM** (§6.5 (c)). c04 full run: **numba 395 s vs numpy 330 s** — the numba
+   path adds dispatch overhead with nothing compiled. QBAT is also ~3× BT per
+   cycle (296 cyc/s). Two follow-ups: a `jit_kernels` pass for both new kernels,
+   and a decision on whether the `auto` ≥ 32-element rule should EXCLUDE
+   qbat/qeph groups until those kernels exist. This is a genuine cost the
+   milestone incurred to buy the MATCH, not a pre-existing gap.
+4. **c05_E1000_Bending_DKT18_Sf_0.1 IS A GENUINE TIMEOUT** (§3.6 (e)) — 681,800
+   cycles and 1799.38 s of an 1800 s budget at ~55 % of `/RUN`. Sf_0.1 scales dt
+   ~10×, so the deck needs ~1.2 M cycles. It wants a ~4000 s budget or a
+   cycle-capped comparison; it currently has NO verdict, which is different from
+   having a bad one.
+5. **DOCUMENTED DELIBERATE CUTS IN THE TWO NEW KERNELS** — all recorded in the
+   module docstrings, all with a stated reason, none of them silent. **QBAT**: the
+   `nip=1` CBAFORI1/CBAVISNP1 branch (the port runs the layered path with SHF=0
+   and the starter emits a warning; no official deck runs QBAT at N=1),
+   `Idrill>0` drilling stiffness (the deck reader does not surface Idrill),
+   `Ithick=1` thickness update (the c04 family is Ithick=0), and
+   `tangent()`/`kgeo()` — implicit assembly REFUSES `shells_qbat` groups loudly
+   and that refusal is test-pinned. **QEPH**: `ZCFAC=1` in the plastic relaxation
+   (Fortran's `(1−ETAN/E)` floor needs a per-cycle material tangent the port's
+   material layer does not surface — **exact for elastic laws, including c08/c09**),
+   `NPT=0` "global integration" resolved to 3 Gauss stations (only `czfintn.F`'s
+   COEF1 16-vs-25 plastic-relaxation weight differs, invisible on the elastic
+   c08/c09), `Idrill=1`, `ISMSTR=1/11` frozen small strain, XFEM/thermal, and the
+   implicit tangent (same loud gate). **The orthotropic QEPH stabilization
+   (`czfintn_or` HM/HF path) is NOT ported — LAW19 shells run the isotropic
+   `czfintn` moduli**, flagged in `checks.py`. LAW27/LAW36 shells are gated ALLOWED
+   for QBAT through the shared layer plumbing but only LAW1/LAW2(+JOHNSON) are
+   exercised by dedicated tests; the plumbing-reuse contract is pinned by a
+   layer-for-layer LAW2 parity test against BT4.
+6. **OWNERSHIP RECONCILIATION OWED IN `shell_bt4.py`** — its `_CONDENSED_FACDT` /
+   Ishell 12/22/24 dt-claim branches (added in M40, when BT was the only shell
+   kernel) are now SHADOWED for every deck the new starter dispatch routes to the
+   `shells_qbat` / `shells_qeph` groups, because those kernels compute their own
+   condensed length. Harmless dead-ish code today, but it is duplicated BATOZ-family
+   claim logic in a file that no longer owns it, and it should be reconciled before
+   it drifts.
+7. **AN ENVIRONMENT REGRESSION HIT MID-MILESTONE AND WAS FIXED AT ROOT — worth
+   recording because it was not the port's fault and could recur.** A
+   `vortex-radioss` install downgraded the shared Python 3.10 environment's NumPy
+   to **1.26.4**, which has `np.trapz` but not `np.trapezoid` (added in NumPy 2.0,
+   NEP 52). Every `np.trapezoid` caller broke at RUNTIME (not import time):
+   `test_m9_geomnl::test_elastica_cantilever` plus exactly 6 implicit modules
+   (`random_response`, `multiaxial_fatigue`, `nongaussian_fatigue`,
+   `joint_nongaussian_fatigue`, `joint_evolutionary_fatigue`,
+   `wigner_ville_fatigue` — all 7 call sites verified converted for this report).
+   The fix landed as **`pyradioss/common/npcompat.py`** —
+   a rename-only shim resolved once at import against whichever NumPy is
+   installed — with `tests/test_numpy_compat.py` (5 tests) pinning it. This is the
+   right fix given that `pyproject.toml` promises `numpy>=1.22` and the
+   post-processing stack (`vortex_radioss` → `lasso-python`) hard-pins
+   `numpy>=1.23.3,<2.0.0`, i.e. any environment that can read a Radioss animation
+   file is NECESSARILY a NumPy 1.x environment. Follow-up: audit for any other
+   NEP-52 spellings that have not yet been exercised.
+8. **NUMBA SPOT COVERAGE NARROWED THIS MILESTONE** (§3.6 (g)). The M41 spot set is
+   3 decks (QBAT/QEPH/BT), all PASS, with c04 and c08 T01 **byte-identical** to
+   numpy. But the LAW36-solid control (c20) from the M40 spot set was NOT re-run,
+   so **the solid-path backend contract is CARRIED from M40, not re-proven on this
+   tree**. Cheap to close on the next idle window.
+9. **CLEAN PER-DECK PARITY TIMINGS AND THE c46 BACKEND RATIO ARE STILL
+   UNMEASURED** (§6.5 (d)). `perf_m41.json`'s wall clocks are 8-worker concurrent
+   upper bounds; now that the RD-E-1000 decks run to completion for the first time
+   their per-deck cost is genuinely interesting and wants a serial idle-box re-run.
+   `c46_LAW70` was excluded from the clean set (> 5.5 min on numpy alone would have
+   risked the uncontended window) — **unmeasured, not regressed**.
+10. **A PRE-EXISTING GUARD GAP, NOTED BUT NOT CHANGED** (out of scope for the
+    startup-floor task, flagged so a future hardening pass can pick it up): the
+    NAN/INF divergence backstop tests only `e['KE']`, not IE or HE. A pathological
+    divergence where IE goes NaN while KE stays finite would slip both percentage
+    guards (NaN comparisons are False) and the KE-only finiteness check. Marginal
+    in practice — KE diverges with or before IE — and deliberately NOT touched
+    while fixing the startup conditioning, since widening a guard's reach is a
+    separate change with its own risk.
+11. **Carried from M40, unchanged**: the **c20 MOMZ momentum residual** (0.3156 —
+    LAW36 material fidelity is perfect at IE 1.1e-06, but the Isolid=24 HEPH
+    free-node momentum channel deviates; c19/Isolid18 with the identical material
+    path is a MATCH); the **LAW2 solids volumetric defect** (`task_6c08e3b9`, c13
+    full-window IE 0.2090); the **LAW36 rate-family clamp-vs-extrapolation
+    deviation** (`task_7b31ad5f`, no V0700 case exercises it); **TYPE32
+    pretensioner physics** (`ruser32.F`, assessed tractable, left
+    `InactiveProperty`, c52 stays SKIPS); the **port's explicit dt ~2× smaller than
+    Fortran on the V0700 solids** (current-density vs constant SSP — costs runtime,
+    not accuracy); the **coverage frontier** (§4.10 ranked gaps byte-identical:
+    INTER/TYPE24 18/5, MONVOL/AIRBAG1 16/2, INTER/LAGMUL 14/2, ALE/BCS 12/7,
+    SHEL16 12, QUAD 10/5, EOS/LINEAR 6, AMS 5/5; `RBODY has no mass` still 3
+    decks; the /ADMAS node-group wall 10 decks); `coverage_tables.md` still
+    reflects M39 and can be regenerated from `coverage_results_m41.json`;
+    `accel.backend_name()` remains referenced only by a docstring (confirmed
+    unused again this milestone, deliberately LEFT IN PLACE rather than pruned);
+    the remaining documented `/PROP` + LAW2 cuts, material physics for the
+    parsed-but-inactive laws, the contact/hourglass differential study, and
+    gas_piston positive-P0 for full 9/9 comparability.
+
+### M40 backlog (superseded — items 1 (for QBAT/QEPH), 2, 5 and most of 9 are resolved by M41; the rest are carried into the M41 list above)
 
 Several M39 backlog items are DONE this milestone: the SPEED numba-default (M39
 item 4, the profiler's #1 lever) is LANDED (§6.4); **M39-BUG-SPRPRE** (item 2) is
@@ -2454,8 +3183,110 @@ The post-M37 list, in measured-value order:
 
 ## 8. Honest limitations of this report
 
-M40-specific limitations first; the M39/M38/M37/M36 caveats below are carried and
-still apply to the sections they describe.
+M41-specific limitations first; the M40/M39/M38/M37/M36 caveats below are carried
+and still apply to the sections they describe.
+
+- **The BT headline is a SETTLED non-MATCH, and "settled" is a claim about the
+  reference as well as the port.** §3.6 (c) argues that MATCH < 0.05 is
+  unreachable for the BT family because the Fortran reference itself diverges in
+  its final window. That argument rests on the `bt-rotation-forensics` builder's
+  instrumented Fortran runs (HE = 76 % of IE at t=1184, peak printed ENERGY ERROR
+  −40.7 %) and on the `freform.F` `DEMXS=EP30` default, which was read back in the
+  source. It is a strong claim and it is the kind that should be re-derived, not
+  inherited: a future editor who wants to challenge it should re-run the reference
+  to TSTOP and read its own `.out` energy-error column rather than trusting this
+  paragraph. The narrower factual claims — the port's improvement (c41 0.2305 →
+  0.1375, IE tracking to 0.8 %) — are in `parity_m41.json` and independent of the
+  argument.
+- **Two sources measured c41 and they disagree by 0.017** (§3.6 (h)):
+  `parity_m41.json` 0.1375 vs the forensics builder's focused re-run 0.1542. The
+  explanation (a case that terminates on the ERRN guard has a
+  last-digit-sensitive abort cycle, hence a moving overlap window) is plausible
+  and matches the M40 precedent, but it was NOT independently re-run to confirm
+  which window each used. Same class, same conclusion, but do not quote c41 to 3
+  decimals without saying which source.
+- **The QBAT/QEPH kernels are new, large, and validated mostly by their own
+  tests.** `shell_qbat.py` (1305 lines) and `shell_qeph.py` (1010 lines) landed in
+  a single milestone with 19 and 24 dedicated tests respectively — patch tests,
+  objectivity, closed-form stabilization stiffnesses, energy-split pins — plus the
+  five RD-E-1000 MATCH results, which is genuinely strong end-to-end evidence.
+  But the corpus exposure is one deck family: the §4.10 sweep proves 160 corpus
+  decks ROUTE to these kernels without breaking the starter, and says nothing
+  about whether their ENGINE results are right on those 160. LAW27/LAW36 shells
+  are gated allowed for QBAT with no dedicated law-specific parity case. Treat
+  "QBAT/QEPH are correct" as proven for the c02–c04/c08–c09 envelope and
+  plausible-but-unmeasured outside it.
+- **The QEPH port was INHERITED from a paused session, not written this session.**
+  The `qeph-port` builder audited it line-for-line against upstream, re-validated
+  it end-to-end, and re-ran both c08/c09 on the final tree reproducing all printed
+  digits — but the original porting decisions are one remove from the reporting
+  builder. Same caveat applies in weaker form to the guard fix: `engine.py`'s
+  floor and `tests/test_m41_guard.py` were already in the tree from the paused
+  session, and the `guard-conditioning` builder's contribution was VERIFICATION
+  (reading `ecrit.F`/`freform.F` to confirm the citations are genuine rather than
+  hallucinated, and proving the before/after on the real decks). That builder
+  deliberately made no further edits rather than re-implement a correct fix — the
+  right call, but it means the report's guard section is a verification record,
+  not an implementation account.
+- **THREE EXISTING TESTS WERE MODIFIED THIS MILESTONE — flagged explicitly,
+  because "the suite is green" would otherwise hide it.** The M41 rules forbid
+  weakening a test, so each change is recorded here with the editor's own
+  assessment; the closer should confirm the judgement rather than take it from
+  this paragraph.
+  **(1) `test_m9_geomnl.py` — not a weakening, no assertion touched.** A pure
+  NEP-52 import swap (`np.trapezoid` → `pyradioss.common.npcompat.trapezoid`) so
+  the test runs on the NumPy 1.x the environment was downgraded to.
+  **(2) `test_m40_rbody_stifr.py::test_shell_stifr_claim_mirror` — an expected
+  value CORRECTED, tolerance unchanged at rel=1e-12.** M40's version asserted the
+  BT deck's rotational lumping factor was `(t²+A)/12`; M41 asserts
+  `t²/12 + A/9`. **The editor verified both upstream citations directly in the
+  Fortran for this report and they are exact**: `cinmas.F` 919-925 reads
+  `IF(INER_9_12/=ZERO) FAC=INER_9_12; ELSEIF(IHBE>=11) FAC=TWELVE; ELSE FAC=NINE`
+  with the inertia formed as `AREA/FAC + THK²/12`, and `chvis3.F` line 250 reads
+  `STIR(I) = STI(I) * (THK02(I)*INV12 + AREA(I)*INV9)`. So the BT family's
+  upstream form really is `t²/12 + A/9`, and `(t²+A)/12` is the IHBE≥11
+  BATOZ/QEPH branch (`cndt3.F` 209-218) that M40 applied to every family. This is
+  a test that was pinning the WRONG closed form for a BT deck, now pinning the
+  right one at the same tight tolerance — a fidelity gain, not a relaxation.
+  **(3) `test_m4_contact.py::test_type11_edge_impact_momentum_and_energy` — the
+  one that needs a second opinion.** This is the test the `guard-conditioning`
+  builder flagged mid-milestone as failing against the in-flight shell WIP
+  (isolated by worktree: passing on pure HEAD, failing with the working tree's
+  shell code). It is GREEN on the final tree, but **it is green partly because
+  its assertion was changed**, not only because code moved: the arrest check went
+  from the four crossing nodes' mean z-velocity to the flyer's CENTRE-OF-MASS
+  z-velocity, against the same −0.5 threshold, plus a NEW bounded-ringing
+  assertion (`max|v_z| < 2.0`) that did not exist before. The rationale recorded
+  in the test is that contact releases well before TSTOP and leaves those four
+  nodes ringing in the strip's first bending mode, so their instantaneous mean at
+  t=3.0 samples ring PHASE rather than arrest — and that sampling every 0.02 over
+  t=2.84..3.00 the four-node mean dips below −0.5 at 2/9 stop times under FAC=9
+  **and 3/9 under the old FAC=12**, i.e. the old assertion was already
+  phase-flaky before M41 and passed at t=3.0 by coincidence. The CoM velocity is
+  argued to be the physical arrest measure and phase-independent (ptp 3e-16
+  across the window, −0.36865 under both lumpings). **The editor's assessment:
+  this reads as a well-posedness fix with an added guard rather than a
+  relaxation, and the supporting sweep is quantitative — but it is still an
+  assertion changed on a test that was failing, so it is exactly the case the
+  no-weakening rule exists to catch, and it was NOT independently re-derived
+  here.** Verify the 2/9-vs-3/9 sampling claim before accepting it.
+- **The M41 numbers were re-derived where cheap, inherited where not.** For this
+  report the editor independently re-ran all 60 M41 tests (green), verified the
+  full 1062-test collection count, recomputed the §4.10 per-kernel verdict split
+  from `dispatch_map.json` against the committed coverage JSON, read the
+  RD-E-1000 engine decks to establish the per-variant TSTOP values, and executed
+  both sub-threshold benchmark decks to read their actual `auto` backend choice
+  (which CORRECTED a builder-side table — §6.5 (b)). The parity rel-RMS values,
+  the Fortran-side forensics, and the QBAT/QEPH patch-test tables are the
+  builders' measurements, taken from the machine-readable deliverables, not
+  re-measured here.
+- **The report was written against a SHARED working tree with three builders
+  editing shell code concurrently** (branch
+  `claude/openradioss-python-m41-shell-technology`), under strict file ownership:
+  BT internals, `shell_qbat.py`, `shell_qeph.py`, and each builder's own dispatch
+  lines. Merge-time reconciliation is the parent's to confirm. One known
+  cross-file consequence is already logged (§7 item 6: `shell_bt4`'s M40-era
+  BATOZ-family dt-claim branches are now shadowed by the kernels that own them).
 
 - **The RD-E-1000 headline is a DIAGNOSED non-MATCH, not a fix.** The milestone's
   central attempt — complete the /RBODY rotational-STIFR dt term so the floor

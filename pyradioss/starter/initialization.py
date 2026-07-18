@@ -203,6 +203,55 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
         group.state["part_ids"] = part_ids
         setattr(model, attr, group)
 
+    _dispatch_shell_formulations(model, log)
+
+
+def _subset_shell_group(src: ElementGroup, mask: np.ndarray) -> ElementGroup:
+    """Row subset of a shell ElementGroup, slices rebuilt. Parts are
+    contiguous after the part sort and each part routes WHOLLY to one
+    formulation (the Ishell lives on the /PROP), so taking whole slices
+    preserves both the ordering and the per-part contiguity."""
+    g = ElementGroup(ids=src.ids[mask], conn=src.conn[mask],
+                     part=src.part[mask])
+    slices = []
+    start = 0
+    for sl, mat, prop in src.state["slices"]:
+        cnt = int(mask[sl].sum())
+        if cnt:
+            slices.append((slice(start, start + cnt), mat, prop))
+            start += cnt
+    g.state["slices"] = slices
+    g.state["part_ids"] = src.state["part_ids"][mask]
+    return g
+
+
+def _dispatch_shell_formulations(model: Model, log: MessageLog) -> None:
+    """Shell element-technology dispatch (M41): split /SHELL parts whose
+    /PROP/SHELL Ishell selects a dedicated formulation kernel out of the
+    generic Belytschko-Tsay group, per elements.SHELL_ISHELL_GROUPS
+    (12 = QBAT -> model.shells_qbat). Decks without such parts are left
+    byte-identically alone (the split never runs)."""
+    from ..elements import SHELL_ISHELL_GROUPS
+    src = model.shells
+    if src is None or not src.n:
+        return
+    masks: Dict[str, np.ndarray] = {}
+    for sl, mat, prop in src.state["slices"]:
+        ishell = int(prop.params.get("ishell", 0) or 0)
+        gname = SHELL_ISHELL_GROUPS.get(ishell)
+        if gname is not None:
+            masks.setdefault(gname, np.zeros(src.n, dtype=bool))[sl] = True
+    if not masks:
+        return
+    keep = np.ones(src.n, dtype=bool)
+    for gname, mask in masks.items():
+        keep &= ~mask
+        setattr(model, gname, _subset_shell_group(src, mask))
+        log.info(f"     {int(mask.sum())} /SHELL ELEMENT(S) ROUTED TO THE "
+                 f"{gname.split('_', 1)[1].upper()} FORMULATION KERNEL "
+                 f"(Ishell dispatch)")
+    model.shells = _subset_shell_group(src, keep) if keep.any() else None
+
 
 # ----------------------------------------------------------------------------
 # Material resolution: /FUNCT curve references, /FAIL attachment
@@ -393,7 +442,7 @@ def _nodes_of_parts(model: Model, part_ids: List[int]) -> np.ndarray:
 # solids, like the Fortran IGRBRIC over the whole IXS; BEAM edges use
 # the two END nodes only — the orientation node N3 is no geometry)
 _EGROUP_FAMILIES = {
-    "SHEL": ("shells",),
+    "SHEL": ("shells", "shells_qbat", "shells_qeph"),
     "SH3N": ("sh3n",),
     "BRIC": ("bricks", "tetras"),
     "QUAD": (),                      # no 2D quad element in the port
@@ -740,7 +789,7 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
 
         def _add(seg_arr, gtype, elem_rows):
             segs.append(seg_arr)
-            gtypes.append(np.full(len(seg_arr), gtype, dtype="<U8"))
+            gtypes.append(np.full(len(seg_arr), gtype, dtype="<U16"))
             elems.append(np.asarray(elem_rows, dtype=np.int64))
 
         for row in s.seg_nodes:
@@ -757,6 +806,20 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
                 mask = np.isin(model.shells.state["part_ids"], s.part_ids)
                 if np.any(mask):
                     _add(model.shells.conn[mask], "shells", np.where(mask)[0])
+            # QBAT shell parts (Ishell=12 split group, M41): same segments
+            if model.shells_qbat is not None:
+                mask = np.isin(model.shells_qbat.state["part_ids"],
+                               s.part_ids)
+                if np.any(mask):
+                    _add(model.shells_qbat.conn[mask], "shells_qbat",
+                         np.where(mask)[0])
+            # QEPH shell parts (Ishell=24 split group, M41): same segments
+            if model.shells_qeph is not None:
+                mask = np.isin(model.shells_qeph.state["part_ids"],
+                               s.part_ids)
+                if np.any(mask):
+                    _add(model.shells_qeph.conn[mask], "shells_qeph",
+                         np.where(mask)[0])
             # 3-node shell parts: triangle segments (3rd node repeated)
             if model.sh3n is not None:
                 mask = np.isin(model.sh3n.state["part_ids"], s.part_ids)

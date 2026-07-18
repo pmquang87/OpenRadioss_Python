@@ -27,15 +27,33 @@ that  a = (fext + fint) / m  (this matches the Fortran A(3,*) accumulation
 where internal forces enter negated).
 """
 
-from . import (beam_type3, shell_bt4, shell_tri3, solid_hexa8,  # noqa: F401
-               solid_tetra4, spring, truss)
+from . import (beam_type3, shell_bt4, shell_qbat, shell_qeph,  # noqa: F401
+               shell_tri3, solid_hexa8, solid_tetra4, spring, truss)
 
 KERNELS = {
     "bricks": solid_hexa8,
     "tetras": solid_tetra4,
     "shells": shell_bt4,
+    "shells_qbat": shell_qbat,
+    "shells_qeph": shell_qeph,
     "sh3n": shell_tri3,
     "trusses": truss,
     "springs": spring,
     "beams": beam_type3,
+}
+
+#: /PROP/SHELL Ishell -> dedicated element-technology group. Parts whose
+#: property carries one of these Ishell values are SPLIT out of the
+#: generic "shells" (Belytschko-Tsay) group by the starter's
+#: shell-formulation dispatch (starter/initialization.py) and routed to
+#: their own kernel; every other Ishell keeps the BT kernel untouched.
+#: 12 = QBAT (fully integrated Batoz — cbaforc3.F, M41). The engine
+#: starter folds nothing into 12 (hm_read_prop01.F keeps 12 distinct).
+#: 22/23/24 = QEPH (physically-stabilized 1-point — czforc3.F, M41); the
+#: starter folds 22/23 into 24 (hm_read_prop01.F lines 185-192).
+SHELL_ISHELL_GROUPS = {
+    12: "shells_qbat",
+    22: "shells_qeph",
+    23: "shells_qeph",
+    24: "shells_qeph",
 }

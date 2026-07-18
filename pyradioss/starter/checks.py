@@ -62,6 +62,13 @@ _ALLOWED_LAWS = {
     "bricks": {0, 1, 2, 24, 35, 36, 40, 42, 44, 62, 70, 81, 999},
     "tetras": {0, 1, 2, 24, 35, 36, 40, 42, 44, 62, 70, 81, 999},
     "shells": {0, 1, 2, 19, 27, 36, 44},
+    # QBAT (Ishell=12, M41): the laws the layered kernel reuses from the
+    # BT plumbing; no orthotropic (LAW19) shell_ortho wiring yet
+    "shells_qbat": {0, 1, 2, 27, 36, 44},
+    # QEPH (Ishell=24, M41): shares the BT layer plumbing INCLUDING the
+    # shell_ortho fiber rotation (LAW19); the czfintn.F stabilization
+    # runs isotropic moduli (czfintn_or orthotropic HM/HF deferred)
+    "shells_qeph": {0, 1, 2, 19, 27, 36, 44},
     "sh3n": {0, 1, 2, 19, 27, 36, 44},
     "trusses": {0, 1, 2},
     "springs": None,          # springs ignore their material entirely
