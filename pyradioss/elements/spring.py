@@ -25,6 +25,33 @@ from ..common.constants import EM20, EP30
 from ..common.fastmath import norm3
 from . import spring_general
 
+#: Spring property TYPE numbers whose /PROP card carries a mass that THIS
+#: PORT actually reads, and which therefore may be mass-checked (M39 /
+#: M38-NEW-1).  The check below is a real requirement — an explicit spring
+#: with no mass has no stable time step — but it may only be applied to a
+#: property whose mass field was genuinely read:
+#:
+#: * TYPE4  (/PROP/SPRING)  — hand reader in starter_keywords.read_prop;
+#: * TYPE32 (/PROP/SPR_PRE) — prop_reader.parse_spr_pre; its cfg CHECK
+#:   block independently demands MASS > 0, and hm_read_prop32.F's RINI32
+#:   sets the element mass to it (MASS(I) = AMAS).
+#:
+#: TYPE8/TYPE13 are excluded because :mod:`spring_general` owns their mass.
+#: Every OTHER spring spelling (SPR_PUL 12, SPR_MAT 23, SPR_AXI 25,
+#: SPR_TAB 26, NSTRAND 28, KJOINT 33/45, SPR_CRUS 44, SPR_MUSCLE 46 ...)
+#: parses to an InactiveProperty whose ``mass`` is the PLACEHOLDER 0.0 of
+#: ``prop_reader._universal_geo_params`` — not a value off the card.  Mass-
+#: checking that placeholder reports a deck error that does not exist, and
+#: names the wrong card while doing it; the Engine already refuses those
+#: groups (``prop_reader.refuse_inactive_properties``) and the Starter
+#: already warns (checks.check_model's PROP CHECK), which is the honest
+#: pair of messages.  Add a type here only together with a reader that
+#: fills its mass.
+_MASS_REQUIRED_SPRING_TYPES = frozenset({4, 32})
+
+#: /PROP spelling per TYPE for the mass message (the card the user wrote)
+_SPRING_PROP_SPELLING = {4: "SPRING", 32: "SPR_PRE"}
+
 
 def init_group(group, model, log):
     """Element buffer + lumped mass/inertia.  A /SPRING group may mix the
@@ -52,12 +79,24 @@ def init_group(group, model, log):
     idx4 = np.where(~is6)[0]
     idx6 = np.where(is6)[0]
 
-    # the axial TYPE4 spring needs a positive mass for its own time step
-    if len(idx4):
-        bad = mass[idx4] <= 0.0
-        for eid in group.ids[idx4][bad]:
-            log.error(f"/SPRING {eid}: /PROP/SPRING mass must be > 0 "
-                      f"(needed for the explicit time step)", "SPRING INIT")
+    # A spring with no mass has no stable time step of its own — but only
+    # the property types whose mass this port actually READS may be checked
+    # for it (see _MASS_REQUIRED_SPRING_TYPES; M39 / M38-NEW-1).  The
+    # message names the property the user actually wrote, not TYPE4's card.
+    for sl, mat, prop in st["slices"]:
+        pt = getattr(prop, "type", 4)
+        if pt not in _MASS_REQUIRED_SPRING_TYPES:
+            continue
+        bad = np.zeros(n, dtype=bool)
+        bad[sl] = mass[sl] <= 0.0
+        if not bad.any():
+            continue
+        pn = getattr(prop, "prop_name", None) \
+            or _SPRING_PROP_SPELLING.get(pt, f"TYPE{pt}")
+        for eid in group.ids[bad]:
+            log.error(f"/SPRING {eid}: /PROP/{pn}/{prop.id} mass must be "
+                      f"> 0 (needed for the explicit time step)",
+                      "SPRING INIT")
 
     st.update(L0=L0, mass=mass, k=k, cdamp=cdamp,
               force=np.zeros(n), eint=np.zeros(n), ehour=np.zeros(n),

@@ -41,8 +41,9 @@ same names in comments.
 | the `hm_cfg_files` CARD format strings themselves (the column widths the real reader parses with) | `pyradioss/input/card_layouts.py` | M37: ONE shared table — the field-formatting primitives (`fmt_int`/`fmt_float`/`fmt_str`/`blank`/`BLANK_CARD`, extracted from `deck_writer`) plus the `LAYOUTS` column-width table, every entry citing its `hm_cfg_files` CARD format string; the WRITER emits with it and the READER cuts fixed cards with it (`Card.cut(layout)`) |
 | `starter/source/general_controls/computation/unit_code.F` + `hm_read_unit.F` (UNITAB) + the per-quantity dimension conversion of `hm_get_floatv.F` | `pyradioss/input/units.py` + `/UNIT` in `starter_keywords.py` | M37 (groups-sets builder, landed unreported): /BEGIN work-unit cards + `/UNIT/<id>` local unit systems — `<prefix><base>` code parse (g/m/s bases, metric prefixes, the MASS×1e-3 kg quirk) and per-quantity (mass, length, time)-power conversion of blocks referencing a /UNIT, verified against the real Windows starter on RD-E-2601 main_TEST4; unconverted keywords referencing a /UNIT warn loudly |
 | `starter/source/model/sets/` + `starter/source/groups/` (`hm_lecgrn.F` node groups, `hm_surfnod.F`, `hm_grogronod.F` group-of-groups, `hm_elngr*.F` element-group nodes, `hm_read_surfsurf.F`, `hm_surfgr2`/`surftage`, `linedge.F` border edges, `hm_lines_of_lines.F`) | `read_grnod`/`read_gr_elem`/`read_surf`/`read_line` in `starter_keywords.py` + `resolve_entity_groups`/`resolve_node_groups`/`resolve_surfaces`/`resolve_lines` in `starter/initialization.py` | M37 (groups-sets builder, landed unreported): the group/set machinery the M36 corpus sweep ranked gap #1–#10 — /GRNOD/SURF, /GRNOD/GRNOD (recursive fixpoint, negative-id removal wins, cycle detection), /GRNOD/GENE + GEN_INCR, /GRNOD/GR<elem>, element groups /GRSHEL\|GRSH3N\|GRBRIC\|GRQUAD\|GRTRUS\|GRBEAM\|GRSPRI (ids, PART, ALL, group-of-groups), /GRPART/PART, /SURF/SURF (negative id = normal flip), /SURF/GRSHEL\|GRSH3N, /LINE/EDGE (border-edges-only, linedge.F semantics), /LINE/LINE, /LINE/PART |
-| Fortran derived types / common blocks (`common_source/modules`) | `pyradioss/model/*.py` | dataclasses + NumPy arrays |
-| `starter/source/initial_conditions`, `inimass` etc. | `pyradioss/starter/initialization.py` | lumped mass, volumes |
+| Fortran derived types / common blocks (`common_source/modules`) | `pyradioss/model/*.py` | dataclasses + NumPy arrays; M39: `pyradioss/model/skew.py` (below) |
+| `starter/source/tools/skew_frame/` (`hm_read_skw.F`, `hm_read_frame.F`) + `engine/.../skew/skew_frame.F` | `pyradioss/model/skew.py` (+ readers in `starter_keywords.py`, resolution in `initialization.py`, `SkewSet.update` in `engine.py`) | M39 (`skew-frame` builder — self-reported FAILED but landed, VALIDATION §4.8): `/SKEW/FIX`, `/SKEW/MOV`, `/FRAME/FIX`, `/FRAME/MOV` local reference systems — the M38 §4.7 #1 gap; the sweep closed all four families (cases_blocking 47 → 0, +33 decks to zero-hard-skips), c53 Snap-through (SKEW/FIX) runs end-to-end (DEVIATION 0.346) and the RD-E-2100 Cam / RD-V-0530 decks reach CLEAN |
+| `starter/source/initial_conditions`, `inimass` etc. | `pyradioss/starter/initialization.py` | lumped mass, volumes; M39 (`small-bugs`): a degenerate `/BRICK` with 5/6/7 distinct nodes now runs as a COLLAPSED HEXA (connectivity as-written, the coincident nodes degenerate the element) instead of being rejected — VALIDATION §4.8, 7 decks ERROR→SKIPS (the guarding `tests/test_element_kernels.py` still asserts the OLD rejection — RED, §8); also resolves the M39 `/SKEW`//`/FRAME` references |
 | restart write `starter/source/restart/ddsplit/wrrest.F` | `pyradioss/starter/restart.py` | pickle instead of binary |
 | `engine/source/engine/resol.F` | `pyradioss/engine/engine.py` | main loop |
 | `engine/source/engine/lectur.F` + `hm_read_*` (engine cards) | `pyradioss/input/engine_keywords.py` | `/RUN /DT /TFILE /ANIM …` |
@@ -54,9 +55,9 @@ same names in comments.
 | `engine/source/loads/general/pload/pload.F` | `pyradioss/engine/kinematics.py` (`external_forces`) | `/PLOAD` follower pressure (M5) |
 | `engine/source/tools/sect/` (`section.F`, `forint.F`) | `pyradioss/engine/sections.py` | `/SECT` via the side-sum identity (M5) |
 | `starter/source/tools/admas/` | `pyradioss/starter/initialization.py` | `/ADMAS` (M5) |
-| `engine/source/elements/solid/solide/` (`sforc3.F`, `srota3.F`, `shour3.F`…) | `pyradioss/elements/solid_hexa8.py` | 1-pt + FB hourglass; M38: a Belytschko–Bindeman hourglass STIFFNESS for LAW70 bricks ONLY (`_phys_hourglass_law70`, gated on `has_law70`) — the essential part of the Isolid=24/HEPH brick (restoring force on the accumulated hourglass deformation, k = HG_PHYS·AA1·V·Σ\|∇N\|² with AA1 = ρ₀c² tracking E0→E_max, frequency fed into the element dt, elastic work booked into the HG ledger), killing the RD-V-0220 densification instability; every non-LAW70 solid deck byte-for-byte unchanged |
+| `engine/source/elements/solid/solide/` (`sforc3.F`, `srota3.F`, `shour3.F`…) | `pyradioss/elements/solid_hexa8.py` | 1-pt + FB hourglass; M38: a Belytschko–Bindeman hourglass STIFFNESS for LAW70 bricks ONLY (`_phys_hourglass_law70`, gated on `has_law70`) — the essential part of the Isolid=24/HEPH brick (restoring force on the accumulated hourglass deformation, k = HG_PHYS·AA1·V·Σ\|∇N\|² with AA1 = ρ₀c² tracking E0→E_max, frequency fed into the element dt, elastic work booked into the HG ledger), killing the RD-V-0220 densification instability; every non-LAW70 solid deck byte-for-byte unchanged. M39 (`optimizer-kernels`, SPEED): `_phys_hourglass_law70` and the LAW70 material leaves dispatch to the numba mirrors `hexa_hgphys` (4.46× isolated) / `law70_tab2d` / `law70_snorm`/`enorm` / `law70_elastic_stress` via `accel.get` — the NumPy reference path returns `None` and stays byte-identical; the leaves are 0-ulp bitwise even under numba (VALIDATION §6.3). Degenerate collapsed bricks are handled starter-side in `initialization.py` |
 | `engine/source/elements/solid/solide4/` (`s4forc3.F`…) + `starter/.../s4coor3.F` / `hm_read_solid.F` | `pyradioss/elements/solid_tetra4.py` | constant-strain tetra; M38 (`tetra4-convention` builder — landed unreported, confirmed by the §4.7 sweep): node-ordering / signed-volume canonicalisation matched to Radioss — a /TETRA4 whose signed volume is negative in the port's convention is reordered, so official tetra decks (whose node order is the OPPOSITE of the port's own decks) no longer flag zero/negative volume (M37-BUG-3 fix, resolved 9 official decks) |
-| `engine/source/elements/shell/coque/` (`cforc3.F`, `czforc3.F`…) | `pyradioss/elements/shell_bt4.py` | Belytschko–Tsay, BLT84 stiffness hourglass |
+| `engine/source/elements/shell/coque/` (`cforc3.F`, `czforc3.F`, `chvis3.F`…) | `pyradioss/elements/shell_bt4.py` | Belytschko–Tsay; M39 (`shell-fidelity` builder — self-reported FAILED but landed, VALIDATION §3.3): the shell hourglass control replaced the port's BLT84 stiffness with the `chvis3.F` ELASTIC + QUADRATIC-VISCOUS form in `_post` (new `hqm`/`hqb`/`hqr` membrane/bending/drill hourglass-force state + `dt` argument), lifting the port's hourglass dissipation to the reference — box_beam HE channel 0.584 → 0.094, matching the Fortran's 4.4 % dissipation (the M36 §2.3 finding closed), and fixing the c50 fabric NaN. NARROW reach: hourglass-off / non-HG decks (RD-E-1000 BATOZ/QEPH/DKT/BT-off) are byte-identical, their ~0.55 residual a separate bending gap. `accel.jit_kernels.shell_post` mirrors the new signature; `tests/test_m7_backends.py`'s direct `_post` call was NOT updated (RED — VALIDATION §8) |
 | `engine/source/elements/sh3n/coque3n/` (`c3forc3.F`…) | `pyradioss/elements/shell_tri3.py` | C0 triangle |
 | `engine/source/elements/beam/` (`pforc3.F`, `pdefo3.F`…) | `pyradioss/elements/beam_type3.py` | corotational Timoshenko |
 | `engine/source/elements/truss/` (`tforc3.F`) | `pyradioss/elements/truss.py` | |
@@ -84,7 +85,7 @@ same names in comments.
 | `starter/source/interfaces/inter3d1/` (`i7sti3.F`, `i11sti3.F`, gap setup) | `pyradioss/contact/stiffness.py` | element-based penalty stiffness + gaps |
 | interface `IDEL` bookkeeping vs `GBUF%OFF` | `pyradioss/contact/tracking.py` | deleted elements drop out of contact |
 | `starter/source/model/sets/hm_read_lines.F` (IGRSLIN) | `pyradioss/starter/initialization.py` (`resolve_lines`) | /LINE edge sets |
-| `engine/source/output/` (`ecrit.F`, `sortie_main.F`, TH, ANIM) | `pyradioss/output/*.py` | CSV + VTK |
+| `engine/source/output/` (`ecrit.F`, `sortie_main.F`, TH, ANIM) | `pyradioss/output/*.py` | CSV + VTK; M39 (`optimizer-core`, SPEED — backend-INDEPENDENT wins, VALIDATION §6.3): `anim_vtk.py` `write_anim_state` replaced `np.savetxt`'s per-row `%`+write with a single-pass `_write_block` (c37 2566 → 932 ms/state, 2.75×; c46 3.1×; BYTE-for-BYTE identical, md5 unchanged); `time_history.py` skips the `model.x − model.x0` displacement alloc when no `/TH/NODE D*` request reads it (T01 byte-identical) |
 | `engine/source/time_step/` (`dtnoda.F`, STIFN accumulation) | `pyradioss/engine/mass_scaling.py` | `/DT/NODA[/CST]` nodal dt + mass scaling (M6) |
 | `engine/source/output/restart/` (`wrrestp.F`, `rdresb.F`) | `pyradioss/starter/restart.py` + engine resume | engine restarts, `_0002.rad` chaining, /STATE (M6) |
 | `engine/source/assembly/damping*.F` | `pyradioss/engine/damping.py` | `/DAMP` mass damping (M6) |
@@ -92,9 +93,10 @@ same names in comments.
 | `starter+engine/source/constraints/general/mpc/` | `pyradioss/engine/mpc.py` | `/MPC` Lagrange treatment (M6) |
 | `starter/source/materials/eos/` + `engine/source/materials/eos/eosmain.F` | `pyradioss/materials/eos.py` + solid kernels | `/EOS` polynomial & ideal gas, implicit E-p (M6) |
 | `common_source/` (constants, tables) | `pyradioss/common/*.py` | |
-| — (OpenRadioss speed = compiled Fortran + OpenMP/MPI, out of scope) | `pyradioss/accel/` | M7: optional numba backend behind the same kernel API (see the package docstring for architecture + parity contract) |
-| — | `pyradioss/common/fastmath.py` | M7: small-array NumPy primitives (bitwise-documented replacements for np.cross / norm / det / inv / add.at) |
+| — (OpenRadioss speed = compiled Fortran + OpenMP/MPI, out of scope) | `pyradioss/accel/` | M7: optional numba backend behind the same kernel API (see the package docstring for architecture + parity contract); M39 SPEED — `jit_kernels.py` gained `scatter3` (`optimizer-core`, fuses the 3 assembly bincount passes → 1, 2.9×) and `hexa_hgphys` + `law70_tab2d`/`snorm`/`enorm`/`elastic_stress` (`optimizer-kernels`, the LAW70-foam hot spots), all dispatched via `accel.get` so the NumPy default install is untouched (VALIDATION §6.3) |
+| — | `pyradioss/common/fastmath.py` | M7: small-array NumPy primitives (bitwise-documented replacements for np.cross / norm / det / inv / add.at); M39: `scatter3` reference — the NumPy accumulate-into-zeroed-scratch form the numba `scatter3` mirrors bitwise (bincount-order preserved) |
 | — | `tools/benchmark.py` | M7: NumPy vs numba wall-clock benchmark over the examples |
+| — (profiling is the M7 "profile first" discipline) | `tools/profile_cycle.py` | M39 (`profiler` builder, SPEED): a cProfile + monkeypatched per-stage timer harness that caps the engine loop at N cycles via a `SkewSet.update` hook (no engine edit) and reports ms/cycle, µs/element-cycle and load-robust per-stage shares; decomposed 5 regimes and root-caused the 65 k-brick "cliff" as linear element-force cost × N (NOT super-linear), yielding the 6-item ranked optimization list (VALIDATION §6.3) |
 | `engine/source/implicit/ind_glob_k.F` (equation numbering) | `pyradioss/implicit/dofmap.py` | M8: assign each free nodal DOF an index; /BCS-fixed DOFs condensed (removed, not penalized); shell rotations numbered where they carry stiffness |
 | `engine/source/implicit/imp_glob_k.F` / `imp_fsa_inv.F` (sparse assembly) | `pyradioss/implicit/assembly.py` | M8: element tangents → COO triplets → scipy CSR (scipy guarded inside the package) |
 | `engine/source/implicit/imp_solv.F` (implicit driver + Newton loop) | `pyradioss/implicit/statics.py` | M8: load stepping, residual R = f_ext − f_int (reusing the explicit kernels), K Δu = R, convergence norms, iteration cap |
@@ -548,6 +550,28 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
      Against the M6 (pre-M7) code the long examples are ~3× faster
      end-to-end (NumPy fast paths + numba stacked): rigid_impactor
      78.0 s → 25.8 s, notched_plate 67.7 s → 24.4 s.
+   * **M39 speed pass** — parity-proven, every wall clock CONTENDED (the
+     box's own 12-process MPI job was live for the whole session, so
+     absolute times are UPPER BOUNDS; ratios and alternated A/B runs are the
+     load-robust product — full data + method in
+     `tools/validation_data/perf_m39_speed.json`). Two speed items landed on
+     top of M7: OPTIMIZER-2's numba LAW70-foam kernels (`hexa_hgphys` + the
+     `law70_*` tabulated leaves + a fused `scatter3`, all behind
+     `accel.get` so the NumPy path is untouched) and OPTIMIZER-1's faster
+     NumPy output/anim path (a byte-identical `np.savetxt` replacement, and
+     the displacement field skipped when no `/TH/NODE D*` request reads it).
+     Isolated, load-robust wins: the OPT-2 LAW70 kernels give **1.81×** on
+     the c46 numba cycle (mirrors off vs on, alternated best-of-4); OPT-1's
+     NumPy path is **1.086×** end-to-end on box_beam (saved ref_run vs
+     mine_run) with the anim writer ~1.9× per state. Re-measured numba/NumPy
+     ratios rose on the compute-heavy decks vs the table above —
+     box_beam 1.77→1.96×, notched_plate 2.36→2.49×, rigid_impactor
+     2.20→2.38×, edge_impact 1.47→1.84×, spot_weld 1.67→1.87× (contended).
+     **Physics-regression gate: PASS** — all nine bundled examples' NumPy
+     T01 stayed byte-identical to their pre-speed reference (0
+     speed-attributable changes; the M39 shell-fidelity T01 shifts are a
+     separate intended physics change, proven distinct by box_beam
+     current==ref_run while the pre-M39 M38 tree differs).
    * Deferred out of M7, explicitly:
      - **the JAX backend** (stretch scope, not started — reasons on
        record): the engine cycle is built on in-place scatter into
@@ -4435,6 +4459,163 @@ Legend: ✅ ported (functional), 🟡 simplified (functional but reduced options
     * carried from M37: material physics for the parsed-but-inactive laws (LAW6
       HYD_VISC 30 blocks, LAW51 22, …), the shell-family full-run deviations,
       the contact/hourglass differential study, gas_piston positive-P0.
+
+38. **M39 — SHELL HOURGLASS FIDELITY + THE `/SKEW`//`/FRAME` CLUSTER + A SPEED
+    PASS (numba kernels + output path)** ✅ (done; a DOUBLE milestone — FIDELITY
+    + SPEED, on the two tracks the M38 §4.7/§6.2 backlog named. Report:
+    `VALIDATION.md` M39 edition, §3.3 the shell-family before/after (the fidelity
+    headline) + §4.8 the corpus re-sweep + §6.3 the SPEED section).
+    Delivered — FIDELITY track:
+    * **the shell hourglass fidelity fix** (`shell_bt4._post`) — replaced the
+      port's BLT84 stiffness hourglass with the `chvis3.F` ELASTIC +
+      QUADRATIC-VISCOUS form (new `hqm`/`hqb`/`hqr` hourglass-force state + `dt`),
+      lifting the port's hourglass dissipation to the reference: **box_beam
+      hourglass-energy channel 0.584 → 0.094, a 6× improvement matching the
+      Fortran's 4.4 % dissipation exactly** (the M36 §2.3 box-beam finding
+      closed), **notched_plate max rel RMS 0.431 → 0.315**, and the **c50 fabric
+      NaN channel fixed** (→ 0.609). NARROW reach, reported honestly: the fix only
+      moves decks with ACTIVE hourglass — the official RD-E-1000 Bending family
+      runs hourglass-OFF (BT) or non-HG formulations (BATOZ/QEPH/DKT) and is
+      byte-identical M38 → M39, so its ~0.55 residual is a SEPARATE bending gap.
+      Regression gate PASS (9/9 bundled classes held);
+    * **the `/SKEW`//`/FRAME` reference-system cluster — the M38 §4.7 #1 gap —
+      100 % CLOSED** via a new `pyradioss/model/skew.py` (readers in
+      `starter_keywords.py`, resolution in `initialization.py`, `SkewSet.update`
+      in the engine loop): `/SKEW/FIX`, `/SKEW/MOV`, `/FRAME/FIX`, `/FRAME/MOV`
+      supported; the §4.8 sweep shows cases_blocking 47 → 0 across all four
+      families (+33 decks to zero-hard-skips); c53 Snap-through (SKEW/FIX) runs
+      end-to-end (DEVIATION 0.346), the RD-E-2100 Cam + RD-V-0530 decks reach
+      CLEAN;
+    * **a small-bug pack** — degenerate `/BRICK` (5/6/7 distinct nodes) now runs
+      as a COLLAPSED HEXA / TETRA4 instead of being rejected (`initialization.py`;
+      the biggest verdict-mover, 7 decks); the /MAT/VOID (LAW0) null-density
+      exemption extended to shells/sh3n (BAT_CIR/BAT_SQR, 2 decks; M38-NEW-2);
+      /PROP/SPRING TYPE32 mass read from the card (RD-V-0031; M38-NEW-1); the
+      RBODY node-overlap check relaxed to Radioss priority resolution (BIKERC;
+      M38-NEW-4);
+    * **the CORPUS RE-SWEEP** (`coverage-m39`, VALIDATION §4.8,
+      `coverage_results_m39.json`): same 529 decks, same driver — verdicts CLEAN
+      9 → 13, SKIPS 431 → 438, ERROR 89 → 78; **15 decks improved verdict** (11
+      ERROR→SKIPS, 4 SKIPS→CLEAN), **0 regressions/crashes/timeouts/parse-errors**;
+      5 error classes resolved, 1 new (M39-BUG-SPRPRE, non-regression). **KEY
+      INTERPRETIVE POINT: gap-closed ≠ verdict-converted** — the 47-case
+      SKEW/FRAME gap is fully closed yet only 5 decks changed verdict, because
+      those decks are predominantly MULTI-BLOCKER (co-occurring INTER/TYPE24,
+      SHEL16, QUAD, MONVOL); this is NOT a failure of the (complete, correct) skew
+      work;
+    * **the PARITY RE-RUN** (`parity-m39`, VALIDATION §3.3, `parity_m39.json` /
+      `perf_m39.json`): 35/65 official cases re-run + all 9 bundled examples on
+      the M39 tree; the shell-family before/after IS the measurement (box_beam HE
+      6×, notched_plate −0.115, fabric NaN fixed; RD-E-1000 byte-identical);
+      every port wall clock contention-flagged (impi=12/12).
+    Delivered — SPEED track (all behind the M7 backend dispatch; the NumPy
+    reference path byte-for-byte unchanged):
+    * **the PROFILER** (`profiler`, `tools/profile_cycle.py`): a cProfile +
+      per-stage timer harness decomposed 5 regimes and root-caused the 65 k-brick
+      "cliff" (0.9 cyc/s) as **linear element-force cost × N — NOT a super-linear
+      pathology** (no O(N²), no per-group Python explosion, no contact); element
+      forces are 67–92 % of every regime; produced a 6-item ranked optimization
+      list (top lever: activate the already-existing numba backend by default,
+      measured −31 % on c46);
+    * **OPTIMIZER-1** (`optimizer-core`, output/assembly path): the anim VTK
+      writer's `np.savetxt` replaced by a single-pass `_write_block` (2.75–3.1×,
+      BYTE-identical md5); a numba `scatter3` fusing the 3 assembly bincount
+      passes → 1 (2.9×, bitwise); a T-file displacement-field guard (skipped when
+      unrequested);
+    * **OPTIMIZER-2** (`optimizer-kernels`, element/material kernels): numba
+      mirrors of the LAW70-foam hot spots — `hexa_hgphys` (the M38 physical
+      hourglass, 4.46× isolated) + the tabulated leaves `law70_tab2d`/`snorm`/
+      `enorm`/`elastic_stress` (0-ulp BITWISE even under numba); combined **1.455×
+      on the c46 numba whole cycle**;
+    * **the SPEED BENCHMARK** (`speed-bench`, `perf_m39_speed.json` + the M7-table
+      addendum in this section): **physics-regression gate PASS — 9/9 bundled
+      NumPy T01 byte-identical to the pre-speed reference, 0 speed-attributable
+      changes**; the re-measured numba/NumPy ratio rose on every compute-heavy
+      deck (box_beam 1.77 → 1.96×, notched_plate 2.36 → 2.49×, rigid_impactor
+      2.20 → 2.38×, edge_impact 1.47 → 1.84×, spot_weld 1.67 → 1.87×). All wall
+      clocks CONTENDED (the user's 12-process MPI job ran throughout).
+    **Builder incidents, named honestly**: THREE builders (`shell-fidelity`,
+    `skew-frame`, `small-bugs`) self-reported FAILED, but their code LANDED and
+    passes **72/72 new M39 tests** (`tests/test_m39_*.py`, re-run green for the
+    report) — "FAILED" is a self-state artifact, not absent code. TWO PRE-EXISTING
+    tests were RED in the shared tree from unreconciled concurrent edits
+    (`test_m7_backends.py::test_shell_pre_post_parity` — the shell `_post` call
+    not updated to the new signature; `test_element_kernels.py::test_degenerated_brick_penta_run_as_collapsed_hexa`
+    — asserted the OLD reject-penta behavior the small-bug pack intentionally
+    changed), now RECONCILED by the integration verifier; neither is a
+    NumPy-physics regression.
+    THE M39 POST-REPORT FIX CASCADE (coordinator addendum, VALIDATION §3.4 —
+    landed as Opus sub-agent fixes on the M39 core, each validation-driven):
+    * **`/PROP/SOLID` reader bug** — the qa/qb/h card was misselected (the flag
+      card ends in `Dn=0.0`, a float, defeating the "skip all-integer cards"
+      heuristic) giving `h=−1`, a NEGATIVE Flanagan–Belytschko hourglass viscosity
+      = an amplifier; fixed-format column-cut restores it. All five RD-V-0700
+      brick/tetra cases NORMAL, HE≈0, LAW2 solids match Fortran at 2.3 %. CORRECTS
+      the M38 "all nine V0700 freed" overclaim (M38 freed shells/trias via the
+      apply_kinematic midstep fix; M39 frees bricks/tetras here);
+    * **`/RBODY` master-node timestep** (`mass_scaling.add_rigid_body`) — ported
+      the `rgbodfp.F`/`rbyfor.F` STIFN→master transport (parallel-axis) + the
+      `dtnoda.F` master step; c04 dt 4.31e-2 → 2.067e-2 (below the 2.585e-2 limit),
+      the t≈890 ms hourglass runaway cleared;
+    * **rotational `/IMPVEL`//`/IMPDISP` XX/YY/ZZ** — were parsed-then-DISCARDED,
+      leaving every RD-E-1000 Bending deck UNDRIVEN (the M38 "shell-family
+      deviations" were the port's flat-zero output, NOT a shell-formulation gap);
+      now `_IMP_DOF` maps XX/YY/ZZ→dof 3/4/5, the apply drives `vr` against
+      rotational inertia at the `fixvel.F` midstep, and an imposed spin on the
+      /RBODY master drives the body (`dL·(w_old+w_imp)/2`). c04 ROLLS: EW tracks
+      Fortran to 0.8 %, max_rel_rms 0.5543 → 0.2444;
+    * **three implicit/solid regressions** — the chvis3 viscous damper as a
+      spurious O(u²) static force in the implicit residual (shell cantilever tip
+      0.0 → 1.8994 vs analytic 1.9048), its NLGEOM sibling, and the /INIVEL/AXIS
+      frame-consumption test realignment;
+    Deferred out of M39, explicitly:
+    * **the RD-E-1000 full-run MATCH** — c04 now rolls (drive correct, EW 0.8 %)
+      but aborts at t≈1051 ms on a DISTINCT later shell-hourglass instability: the
+      /RBODY dt floor (2.067e-2) lacks the shell rotational STIFR term so it's
+      coarser than Fortran's (1.644e-2); completing that term is the clean lead to
+      a full-run MATCH on the now-DRIVEN family;
+    * **the two RED tests — RECONCILED by the integration verifier** (VALIDATION
+      §7 item 1): the shell `_post`/`shell_post` parity call now feeds
+      `k_m,k_w,hqm,hqb,hqr,dt` to both backends (numpy==numba assertion intact),
+      and the renamed penta test asserts run-as-collapsed;
+    * **M39-BUG-SPRPRE** (2 decks, the one new error class; NOT a regression) — the
+      M39 SPR_PRE change reads the card MASS field but RD-HWX-T-1010
+      cantilever_completed + its DYREL variant have a BLANK SPR_PRE mass, so the
+      `mass > 0` check fires; verify whether the real Fortran starter defaults it
+      (if so, 2 more decks convert ERROR→SKIPS);
+    * **the degenerate-brick unlock is PARTIAL** — c12/c18 starter accepts the
+      collapsed `/BRICK` but the engine stalls at ~12 cycles / < 0.1 % of `/RUN`
+      (why it stalls immediately needs a look); c52 spring TYPE32 is partial too
+      (starter parses, /PROP/SPR_PRE element physics unimplemented → engine-fail);
+    * **SPEED — activate the numba backend by default** above a size threshold
+      (the profiler's #1 lever; requires a corpus-wide parity re-run under
+      `PYRADIOSS_BACKEND=numba`), then the ranked #2–#6 (Ogden closed-form
+      symmetric-3×3 eigensolver replacing LAPACK `eigh` ≈ 28 % of the cliff;
+      LAW70-hourglass numba mirror; binary anim output; scatter/einsum fusion;
+      rbody-inertia cache). An **UNCONTENDED re-timing on an idle box is still
+      owed** (deferred from M38 too);
+    * **the c31 V0240 TRIA speed regression** (DEVIATION 0.44 → SKIPPED-SLOW,
+      crossed 900 s from the fix's extra viscous-hourglass work + contention) and
+      the **LAW70 compression trio** still SKIPPED-SLOW (STABLE, HE ≈ 0, but
+      port-throughput-limited — the speed track is the fix, not stability);
+    * **complete the M39 parity coverage** (35/65 official re-run; the un-run 30
+      documented — RD-E-1000 remainder inert, the T1000 family with an apparent
+      c33 engine unlock, slow timeouts, LAW70 c47/c49, the FRAME/MOV tensiles
+      evicted by a background-task limit);
+    * **the shell fix's NARROW reach — the next shell-fidelity target**: the
+      RD-E-1000 ~0.55 residual is a SEPARATE bending / kinematic gap the hourglass
+      fix does not touch, now the dominant open shell deviation;
+    * **the next verdict-conversion frontier** (§4.8): INTER/TYPE24 (18/5 sole),
+      MONVOL/AIRBAG1 16, INTER/LAGMUL 14, ALE/BCS (12/7), SHEL16 12, QUAD (10/5);
+      INTER/TYPE7 Iform/Igap (31 combined) is the largest ERROR class but a
+      contact-formulation feature gap, and "model has no elements" (20) is
+      downstream of the unported SHEL16/QUAD/degenerate-brick families;
+    * **carried from M38**: M38-NEW-3 `RBODY has no mass` (3 decks, UNCHANGED —
+      only the node-overlap check was fixed, not mass accumulation) and the deeper
+      /ADMAS node-group wall (10 decks); the Isolid24/HEPH assumed-strain brick
+      generalized beyond LAW70; the /PROP + LAW2 documented cuts; material physics
+      for the parsed-but-inactive laws; the contact/hourglass differential study;
+      gas_piston positive-P0.
 
 **Unnumbered deferred candidate — pending a project scope decision** (previously
 queued as the next numbered milestone; kept here explicitly, not silently dropped):

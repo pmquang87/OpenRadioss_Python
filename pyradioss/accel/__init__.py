@@ -12,8 +12,9 @@ The element kernels and the TYPE7 contact keep their NumPy code inline —
 that code IS the reference implementation and the readable narrative of
 the port. During the M7 profiling pass each hot kernel was split into
 "pre" and "post" blocks around its Python-level material/failure loop
-(which stays pure Python — material laws dispatch on law objects and are
-NOT part of any backend):
+(which stays pure Python — material laws dispatch on law objects; the one
+M39 exception is a handful of LAW70 tabulated-foam numeric LEAVES, whose
+mirrors are BITWISE-identical, see below):
 
     solid_hexa8.forces:  _pre  (geometry, velocity gradient, Jaumann
                                 rotation, characteristic length)
@@ -21,12 +22,16 @@ NOT part of any backend):
                          _post (bulk viscosity, internal + hourglass
                                 forces, energy increments, scatter,
                                 critical dt)
+                         hexa_hgphys (M38 LAW70 physical/stiffness
+                                hourglass — LAW70 brick groups only, M39)
     shell_bt4.forces:    _pre  (corotational frame, local geometry,
                                 membrane/curvature/shear rates)
                          [layer loop: material laws / failure — Python]
                          _post (resultant forces, BLT84 hourglass,
                                 back-transform, scatter)
     inter_type7:         _narrow (exact node-triangle closest points)
+    law70_tabfoam.solid_update:  the (strain, rate) table lookup and the
+                         Voigt norms / elastic map (M39 — bitwise leaves)
 
 Each block is a plain function of arrays. ``accel.get(name)`` returns
 the active backend's implementation of a block, or ``None`` meaning

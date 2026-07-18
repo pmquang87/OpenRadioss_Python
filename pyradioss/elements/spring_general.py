@@ -30,10 +30,12 @@ exactly as r2def3 accumulates ``RX = RXOLD + …``.
 
 Local frame
 -----------
-* TYPE8 (SPR_GENE): the fixed skew frame ``SKEW(:,skew_ID)``.  The port
-  has no /SKEW reader, so ``skew_ID = 0`` uses the GLOBAL frame (the
-  reference's skew 0) and a nonzero ``skew_ID`` warns and also falls back
-  to global — a documented cut.
+* TYPE8 (SPR_GENE): the skew frame ``SKEW(:,skew_ID)`` (M39) — e1/e2/e3
+  ARE the skew's X'/Y'/Z' axes, read verbatim from the resolved /SKEW as
+  ``r2def3.F`` reads ``EXX = SKEW(1,ISK) ... EZZ = SKEW(9,ISK)``.
+  ``skew_ID = 0`` uses the GLOBAL frame (the reference's skew 0); a
+  /SKEW/MOV frame is RELOADED every cycle, so the spring's six DOFs turn
+  with the skew's nodes.
 * TYPE13 (SPR_BEAM): the element frame — e1 along N1->N2 when the nodes
   are distinct (a default in-plane e2/e3 completes it), else the global
   frame.  It is FROZEN at init: the co-rotational beam frame update
@@ -61,12 +63,22 @@ from ..common.fastmath import norm3
 SPRING_PROP_TYPES = frozenset({8, 13})
 
 
-def _slice_frame(prop, xe, log):
+def _slice_frame(prop, xe, log, skews=None):
     """Local orthonormal frame (e1, e2, e3) for the elements of one slice,
-    each returned as an (m, 3) array.  See the module docstring."""
+    each returned as an (m, 3) array.  See the module docstring.
+
+    TYPE8 with a ``skew_ID`` (M39) takes the /SKEW's axes verbatim:
+    r2def3.F reads ``EXX = SKEW(1,ISK) ... EZZ = SKEW(9,ISK)`` and resolves
+    the relative motion on them, i.e. e1/e2/e3 ARE the skew's X'/Y'/Z'.
+    """
     m = len(xe)
     ptype = getattr(prop, "type", 8)
     skew_id = int(prop.params.get("skew_id", 0) or 0)
+    skew_row = int(prop.params.get("skew_row", 0) or 0)
+    if ptype == 8 and skew_row and skews is not None:
+        a = skews.axes[skew_row]                 # rows = X', Y', Z'
+        return (np.tile(a[0], (m, 1)), np.tile(a[1], (m, 1)),
+                np.tile(a[2], (m, 1)))
     if ptype == 13 and skew_id == 0:
         # element frame: e1 along the element, default perpendicular e2/e3
         d = xe[:, 1] - xe[:, 0]
@@ -82,10 +94,14 @@ def _slice_frame(prop, xe, log):
         e2 /= np.maximum(norm3(e2), EM20)[:, None]
         e3 = np.cross(e1, e2)
         return e1, e2, e3
-    if skew_id != 0 and log is not None:
-        log.warning(f"/PROP/TYPE{ptype}/{getattr(prop, 'id', '?')}: "
-                    f"skew_ID={skew_id} not ported (no /SKEW reader) — "
-                    f"the local frame falls back to global", "SPRING INIT")
+    if skew_id != 0 and ptype == 13 and log is not None:
+        # TYPE13's skew is the INITIAL frame of a co-rotational beam, not a
+        # fixed one — the port's TYPE13 frame is the element frame and no
+        # corpus deck puts a skew on a TYPE13 (warned once at Starter
+        # resolve time too; see starter/initialization.py:resolve_skews)
+        log.warning(f"/PROP/TYPE13/{getattr(prop, 'id', '?')}: "
+                    f"skew_ID={skew_id} not ported — the local frame falls "
+                    f"back to the element frame", "SPRING INIT")
     # global frame (TYPE8 skew 0, or the fallback)
     e1 = np.tile(np.array([1.0, 0.0, 0.0]), (m, 1))
     e2 = np.tile(np.array([0.0, 1.0, 0.0]), (m, 1))
@@ -112,6 +128,8 @@ def init6(group, model, log, idx6, massn, inertn):
 
     # position of each idx6 element within group order -> its slice params
     pos = {int(e): j for j, e in enumerate(idx6)}
+    skews = getattr(model, "skews", None)
+    skew_row = np.zeros(m6, dtype=np.int64)     # 0 = global / element frame
     for sl, mat, prop in st["slices"]:
         if getattr(prop, "type", 4) not in SPRING_PROP_TYPES:
             continue
@@ -121,8 +139,10 @@ def init6(group, model, log, idx6, massn, inertn):
         if not len(local):
             continue
         p = prop.params
-        se1, se2, se3 = _slice_frame(prop, xe[local], log)
+        se1, se2, se3 = _slice_frame(prop, xe[local], log, skews)
         e1[local], e2[local], e3[local] = se1, se2, se3
+        if getattr(prop, "type", 8) == 8:
+            skew_row[local] = int(p.get("skew_row", 0) or 0)
         for i in range(6):
             k6[local, i] = float(p.get(f"k{i + 1}", 0.0))
             c6[local, i] = float(p.get(f"c{i + 1}", 0.0))
@@ -135,12 +155,23 @@ def init6(group, model, log, idx6, massn, inertn):
         np.einsum("mb,mb->m", xe[:, 1] - xe[:, 0], e3),
     ], axis=1)                                 # initial (x2-x1) . e_i
 
+    # a TYPE8 on a /SKEW/MOV must re-read its frame every cycle (the skew
+    # turns with its nodes — r2def3 reloads SKEW(:,ISK) on every call).
+    # ``mov`` selects those elements; when nothing moves the frame stays
+    # the init-time one and forces6 skips the refresh entirely.
+    mov = np.zeros(m6, dtype=bool)
+    if skews is not None:
+        for r in np.unique(skew_row[skew_row > 0]):
+            if skews.is_moving_row(int(r)):
+                mov |= skew_row == r
+
     st["gen6"] = dict(
         idx=np.asarray(idx6, dtype=np.int64), conn=conn6,
         e1=e1, e2=e2, e3=e3, k6=k6, c6=c6, mass=mass, inertia=inertia,
         L0=L0, theta=np.zeros((m6, 3)),
         force=np.zeros((m6, 3)), moment=np.zeros((m6, 3)),
         eint=np.zeros(m6),
+        skews=skews, skew_row=skew_row, skew_mov=mov,
     )
     # half/half lumped mass + inertia into the caller's per-(elem,node)
     # arrays: node_idx = conn.reshape(-1) => slot 2*e (node0), 2*e+1 (node1)
@@ -158,6 +189,15 @@ def forces6(group, x, v, vr, dt, fint, mint, idx6):
     g = group.state["gen6"]
     conn = g["conn"]
     n1, n2 = conn[:, 0], conn[:, 1]
+    # a TYPE8 on a /SKEW/MOV reloads its axes from the (already updated,
+    # engine step 0b) skew rows — r2def3 re-reads SKEW(:,ISK) every call,
+    # so the spring's 6 DOFs turn with the skew's nodes.  The total-form
+    # delta below then measures d(t).e(t) - d(0).e(0), which is exactly
+    # r2def3's total branch (lines 305-307: X21DP*EXX - X0DP).
+    mov = g["skew_mov"]
+    if mov.any():
+        a = g["skews"].axes[g["skew_row"][mov]]        # (k, 3, 3)
+        g["e1"][mov], g["e2"][mov], g["e3"][mov] = a[:, 0], a[:, 1], a[:, 2]
     e1, e2, e3 = g["e1"], g["e2"], g["e3"]
 
     # relative translation (total form) and its rate, per local axis

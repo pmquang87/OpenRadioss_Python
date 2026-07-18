@@ -509,9 +509,13 @@ def run_implicit_static(model, controls, log, out_dir=None, run_name="RUN",
 
     # statics carries no rate effects: disable the solid bulk viscosity
     # (see the module docstring — it would leak a spurious rate pressure
-    # into compressive increments through the pseudo-velocity drive)
+    # into compressive increments through the pseudo-velocity drive) and the
+    # shell chvis3 QUADRATIC viscous hourglass damper (the same rate device,
+    # driven at dt = 1 it would grow the residual with a spurious O(u^2)
+    # hourglass force — see shell_bt4.forces() _impl_static_hg gate).
     nvisc = 0
     for name, group in model.element_groups():
+        group.state["_impl_static_hg"] = True
         for sl, mat, prop in group.state["slices"]:
             if prop.params.get("qa", 0.0) or prop.params.get("qb", 0.0):
                 prop.params["qa"] = 0.0
@@ -984,7 +988,14 @@ def _solve_increment(model, controls, log, dof, loads, solver,
     # DOFs (they are condensed), so f_int feels the imposed motion while the
     # residual balances only the free DOFs (displacement control).
     for idx, d, fct, scale in imposed:
-        u[idx, d] = scale * (fct.eval(lam) - fct.eval(lam_prev))
+        # dof 0..2 seed the translational increment, 3..5 (XX/YY/ZZ) the
+        # rotational increment (M39) — the prescribed-DOF mask is (n, 6) so
+        # the DofMap already condenses either one.
+        val = scale * (fct.eval(lam) - fct.eval(lam_prev))
+        if d < 3:
+            u[idx, d] = val
+        else:
+            ur[idx, d - 3] = val
         # a nonzero applied displacement makes the load reference the
         # reaction it induces, so the residual norm is measured relative to
         # the internal force as well (see ``ref`` update after iter 0)

@@ -26,7 +26,7 @@ listing.
 
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -39,6 +39,7 @@ from ..model.entities import (
     RigidWall, Section, Sensor, Surface, THRequest,
 )
 from ..model.model import Model
+from ..model.skew import SkewFrame
 from . import mat_reader
 from .deck_reader import Card, KeywordBlock, _to_float
 
@@ -69,6 +70,28 @@ def _ival(s: str, default: int = 0) -> int:
 def _fval(s: str, default: float = 0.0) -> float:
     """Fixed field -> float; blank -> default."""
     return _to_float(s) if s else default
+
+
+def _hourglass_defaults(ishell: int) -> Tuple[float, float, float]:
+    """(hm, hf, hr) substituted for a ZERO/blank /PROP/SHELL hourglass
+    coefficient, per ``starter/source/properties/shell/hm_read_prop01.F``
+    lines 204-212::
+
+        IF(IHBE==3)THEN
+          IF(GEO(13)==ZERO)GEO(13)=EM01     ! Hm -> 0.1
+          IF(GEO(14)==ZERO)GEO(14)=EM01     ! Hf -> 0.1
+          IF(GEO(15)==ZERO)GEO(15)=EM02     ! Hr -> 0.01
+        ELSE
+          IF(GEO(13)==ZERO)GEO(13)=EM02     ! all -> 0.01
+          ...
+
+    So a zero is NOT "switch the hourglass off" — a 1-point element with no
+    hourglass control is rank deficient — it selects the default, and
+    Ishell = 3 takes a TEN TIMES larger membrane/flexural one. The port
+    applied 0.01 to every Ishell before M39, running the official type-3
+    decks (c42/c43 E1000_Bending_BT_BT_type3) at a tenth of their Hm/Hf.
+    """
+    return (0.1, 0.1, 0.01) if ishell == 3 else (0.01, 0.01, 0.01)
 
 
 def _is_numeric_card(card: Card) -> bool:
@@ -1199,7 +1222,8 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     params: Dict[str, float] = {}
 
     if ptype == 1:  # SHELL
-        params = {"thick": 1.0, "nip": 3, "hm": 0.01, "hf": 0.01, "hr": 0.01}
+        params = {"thick": 1.0, "nip": 3, "hm": 0.01, "hf": 0.01, "hr": 0.01,
+                  "ishell": 0}
         if block.fixed:
             # REAL layout (cfg prop_p1_shell.cfg radioss2020; M37):
             # flags / Hm Hf Hr Dm Dn / N Istrain Thick Ashear Ithick
@@ -1207,11 +1231,16 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             # (a token view read Thick from the wrong position when
             # Istrain was blank, or died on the 'thickness card
             # missing' guard when the hourglass card was blank)
+            if cards and not cards[0].is_blank:
+                params["ishell"] = _ival(cards[0].cut("PROP_SHELL_FLAGS")[0])
+            hm_d, hf_d, hr_d = _hourglass_defaults(params["ishell"])
             if len(cards) >= 2 and not cards[1].is_blank:
                 h = cards[1].cut("F20X5")
-                params["hm"] = _fval(h[0]) or 0.01
-                params["hf"] = _fval(h[1]) or 0.01
-                params["hr"] = _fval(h[2]) or 0.01
+                params["hm"] = _fval(h[0]) or hm_d
+                params["hf"] = _fval(h[1]) or hf_d
+                params["hr"] = _fval(h[2]) or hr_d
+            else:
+                params["hm"], params["hf"], params["hr"] = hm_d, hf_d, hr_d
             if len(cards) >= 3:
                 f = cards[2].cut("PROP_SHELL_N")
                 params["nip"] = _ival(f[0]) or 3
@@ -1236,12 +1265,21 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 vals[0], int(vals[1]) if vals[1] else 3, vals[2] or 0.01
             params["hf"] = params["hr"] = params["hm"]
         else:
-            # full form: skip flags card, read hourglass + N/Thick cards
+            # full form: flags card carries Ishell, then hourglass + N/Thick
+            toks = cards[0].tokens() if cards else []
+            if toks:
+                try:
+                    params["ishell"] = int(toks[0])
+                except ValueError:
+                    params["ishell"] = 0
+            hm_d, hf_d, hr_d = _hourglass_defaults(params["ishell"])
             if len(cards) >= 2:
                 hm, hf, hr = _floats(cards[1], 3,
-                                     defaults=[0.01, 0.01, 0.01])[:3]
+                                     defaults=[hm_d, hf_d, hr_d])[:3]
                 params["hm"], params["hf"], params["hr"] = \
-                    hm or 0.01, hf or 0.01, hr or 0.01
+                    hm or hm_d, hf or hf_d, hr or hr_d
+            else:
+                params["hm"], params["hf"], params["hr"] = hm_d, hf_d, hr_d
             if len(cards) >= 3:
                 v = _floats(cards[2], 3, defaults=[3, 0, 1.0])
                 params["nip"] = int(v[0]) if v[0] else 3
@@ -1295,14 +1333,41 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif ptype == 14:  # SOLID
         from ..common.constants import DEFAULT_HOURGLASS, DEFAULT_QA, DEFAULT_QB
         params = {"qa": DEFAULT_QA, "qb": DEFAULT_QB, "h": DEFAULT_HOURGLASS}
-        data = [c for c in cards if not all(tok.lstrip("+-").isdigit()
-                                            for tok in c.tokens())]
-        if data:
-            qa, qb, h = _floats(data[0], 3,
-                                defaults=[DEFAULT_QA, DEFAULT_QB,
-                                          DEFAULT_HOURGLASS])
-            params = {"qa": qa or DEFAULT_QA, "qb": qb or DEFAULT_QB,
-                      "h": h or DEFAULT_HOURGLASS}
+        if block.fixed:
+            # REAL layout (cfg prop_p14_solid.cfg): the data cards are
+            #   card 0:  Isolid Ismstr Iale Icpre Itetra10 Inpts Itetra4
+            #            Iframe Dn   (formulation FLAGS + a trailing Dn float)
+            #   card 1:  qa qb h Lambda Mu     (bulk-viscosity qa/qb +
+            #            hourglass coefficient h — %20lg fields)
+            #   card 2:  deltaTmin Vdefmin ...  (element dt controls)
+            # Read qa/qb/h by COLUMN-CUT of data card 1; blank fields keep
+            # the defaults.  The free-format 'skip all-integer cards'
+            # heuristic (else branch) MUST NOT run on the real deck: the
+            # flag card carries a trailing Dn=0.0 FLOAT, so
+            # ``all(tok.isdigit())`` is False and the flag card slips
+            # through as the qa/qb/h card — the port then read qa=Isolid
+            # (=18) and h=Itetra4/Icpre (=-1), a NEGATIVE hourglass
+            # viscosity that turns the Flanagan-Belytschko damper into an
+            # AMPLIFIER and detonates every solid /IMPVEL deck (RD-V-0700
+            # bricks AND tetras; the tetra has no hourglass but inherited
+            # qa=18, a 16x bulk viscosity). Fixed in M39. See VALIDATION.md.
+            if len(cards) >= 2 and not cards[1].is_blank:
+                f = cards[1].cut("F20X5")
+                params["qa"] = _fval(f[0]) or DEFAULT_QA
+                params["qb"] = _fval(f[1]) or DEFAULT_QB
+                params["h"] = _fval(f[2]) or DEFAULT_HOURGLASS
+        else:
+            # free-format / short form: a single 'qa qb h' float card (the
+            # port's historical dialect + tiny hand-built decks). Drop a
+            # leading integer-only formulation-flag card if one is present.
+            data = [c for c in cards if not all(tok.lstrip("+-").isdigit()
+                                                for tok in c.tokens())]
+            if data:
+                qa, qb, h = _floats(data[0], 3,
+                                    defaults=[DEFAULT_QA, DEFAULT_QB,
+                                              DEFAULT_HOURGLASS])
+                params = {"qa": qa or DEFAULT_QA, "qb": qb or DEFAULT_QB,
+                          "h": h or DEFAULT_HOURGLASS}
 
     model.properties[block.user_id] = Property(
         id=block.user_id, type=ptype, title=title, params=params)
@@ -1705,6 +1770,152 @@ def read_surf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 # ============================================================================
+# Reference systems: /SKEW and /FRAME  (M39)
+# ============================================================================
+
+def _skew_dir(tok: str, who: str, log: MessageLog, source: str) -> int:
+    """The MOV cards' DIR field -> IDIR 1/2/3 (ISKN(6,*)).
+
+    hm_read_skw.F 199-205 scans the WHOLE field for an axis letter and
+    leaves IDIR at its default 1 when none is found — a blank DIR column
+    (every pre-radioss2019 /SKEW/MOV card) is therefore X, not an error.
+    """
+    idir = 1
+    for ch in (tok or ""):
+        if ch in "Xx":
+            idir = 1
+        elif ch in "Yy":
+            idir = 2
+        elif ch in "Zz":
+            idir = 3
+        elif not ch.isspace():
+            log.warning(f"{who}: unexpected character '{ch}' in the DIR "
+                        f"field '{tok}' — ignored (the reference scans the "
+                        f"field for X/Y/Z and defaults to X)", source)
+    return idir
+
+
+def _read_reference_system(block: KeywordBlock, model: Model,
+                           log: MessageLog, kind: str) -> None:
+    """Shared /SKEW + /FRAME reader (the two Fortran readers,
+    ``starter/source/tools/skew/hm_read_skw.F`` and ``hm_read_frm.F``, are
+    the same card set and the same geometry — see model/skew.py).
+
+    ``/SKEW/FIX/skew_ID`` — cfg SYSTEM/skew_fix.cfg (FORMAT radioss120)::
+
+        card 1:  title                                     (%-100s)
+        card 2:  Ox  Oy  Oz          origin O'             (3 x %20lg)
+        card 3:  X1  Y1  Z1          the Y' axis           (3 x %20lg)
+        card 4:  X2  Y2  Z2          the Z' axis           (3 x %20lg)
+
+      /SKEW/FIX gained its origin card at radioss120; the radioss51 form
+      is title + the two vector cards (origin 0).  /FRAME/FIX has carried
+      the origin since radioss41 (cfg SYSTEM/frame_fix.cfg).  The port
+      tells them apart by the DATA-CARD COUNT — the two formats differ by
+      exactly that card, so 3+ cards = origin first, 2 = no origin.
+
+    ``/SKEW/MOV/skew_ID`` — cfg SYSTEM/skew_mov.cfg (FORMAT radioss2019)::
+
+        card 1:  title
+        card 2:  N1  N2  N3  DIR     (%10d%10d%10d%10s)
+
+      N1 = origin, N1->N2 = the DIR axis (blank DIR = X), N3 fixes the
+      plane.  Rebuilt EVERY CYCLE from the nodes' current positions by the
+      Engine (newskw.F) — see engine/kinematics.py.
+
+    ``/SKEW/MOV2/skew_ID`` — cfg SYSTEM/skew_mov2.cfg (radioss100): the
+    same three node columns with no DIR, and the Z-primary convention
+    (N1->N2 IS Z', N3 fixes the plane) — geometrically /SKEW/MOV at
+    DIR = Z (proven in model/skew.py:axes_from_nodes).
+
+    ``/FRAME/NOD/frame_ID`` — cfg SYSTEM/frame_nod.cfg (radioss2020):
+    3 nodes (as /FRAME/MOV at DIR = X), or ONE node + the two FIX vector
+    cards (the frame rides the node, orientation fixed).
+    """
+    sub = block.parts[1].upper() if len(block.parts) > 1 else "FIX"
+    who = f"/{kind}/{sub}/{block.user_id}"
+    if sub not in ("FIX", "MOV", "MOV2", "NOD"):
+        log.warning(f"/{kind}/{sub} not ported (FIX, MOV, MOV2 supported"
+                    f"{', NOD' if kind == 'FRAME' else ''}) — block skipped",
+                    block.source)
+        return
+    if sub == "NOD" and kind == "SKEW":
+        log.warning(f"{who}: /SKEW has no NOD subtype — block skipped",
+                    block.source)
+        return
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    cards = [c for c in cards if not c.is_blank]
+    if not cards:
+        log.error(f"{who}: missing data card", block.source)
+        return
+
+    sf = SkewFrame(id=block.user_id, kind=kind, subtype=sub, title=title,
+                   source=block.source)
+    if sub == "FIX" or (sub == "NOD" and len(cards) >= 3):
+        # ---- vector-defined (origin + Y' + Z') ---------------------------
+        if sub == "NOD":
+            # /FRAME/NOD, 1 node + 2 vectors: node card, then Y', Z'
+            sf.n1 = _ival(cards[0].cut("SKEW_MOV2")[0])
+            vecs = cards[1:3]
+            sf.origin_card = None
+        elif len(cards) >= 3:
+            sf.origin_card = np.array(_cut_floats(cards[0], "SKEW_V3")[:3])
+            vecs = cards[1:3]
+        else:
+            sf.origin_card = np.zeros(3)          # radioss51: no origin card
+            vecs = cards[0:2]
+        if len(vecs) < 2:
+            log.error(f"{who}: needs the two vector cards "
+                      f"(Y' then Z'){' after the origin card' if len(cards) >= 3 else ''}",
+                      block.source)
+            return
+        sf.yaxis = np.array(_cut_floats(vecs[0], "SKEW_V3")[:3])
+        sf.zaxis = np.array(_cut_floats(vecs[1], "SKEW_V3")[:3])
+        sf.imov = 0
+    else:
+        # ---- node-defined (MOV / MOV2 / 3-node NOD) ----------------------
+        if sub == "MOV":
+            f = cards[0].cut("SKEW_MOV")
+            sf.idir = _skew_dir(f[3], who, log, block.source)
+            sf.imov = 1
+        else:
+            f = cards[0].cut("SKEW_MOV2")
+            # MOV2: N1->N2 IS Z' (hm_read_skw.F 223-240); the 3-node
+            # /FRAME/NOD uses the X-primary rule (hm_read_frm.F 519-529)
+            sf.idir = 3 if sub == "MOV2" else 1
+            sf.imov = 2 if sub == "MOV2" else 1
+        sf.n1, sf.n2, sf.n3 = (_ival(f[0]), _ival(f[1]), _ival(f[2]))
+        if not (sf.n1 and sf.n2 and sf.n3):
+            log.error(f"{who}: card 2 needs three node ids "
+                      f"(got N1={sf.n1} N2={sf.n2} N3={sf.n3})", block.source)
+            return
+    model.skews.add(sf)
+
+
+def read_skew(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SKEW/FIX``, ``/SKEW/MOV``, ``/SKEW/MOV2`` (M39) — see
+    :func:`_read_reference_system`."""
+    _read_reference_system(block, model, log, "SKEW")
+
+
+def read_frame(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FRAME/FIX``, ``/FRAME/MOV``, ``/FRAME/MOV2``, ``/FRAME/NOD``
+    (M39) — see :func:`_read_reference_system`.
+
+    A /FRAME is built exactly like the matching /SKEW; what makes it a
+    *reference* frame is the Engine's moving-frame formulation
+    (``engine/source/tools/skew/movfram.F`` MOVFRA1/MOVFRA2, which also
+    track the frame's velocity/acceleration so the relative-frame inertia
+    terms of ``relfram.F`` can be added).  The port builds and uses the
+    frame's GEOMETRY (the corpus's only frame consumer, /INIVEL/AXIS, is a
+    Starter-time initial condition that needs the initial orientation and
+    origin); a consumer that would need the moving-frame ENGINE update
+    warns loudly where it is wired.
+    """
+    _read_reference_system(block, model, log, "FRAME")
+
+
+# ============================================================================
 # Boundary conditions, initial conditions, loads
 # ============================================================================
 
@@ -1717,7 +1928,10 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     ``Trarot`` is the classic pair of 3-digit binary flags
     ``XYZ XYZ`` — first triple = translations, second = rotations,
     1 = fixed. Example: ``111 000`` clamps translations only.
-    skew_ID must be 0 (skew frames not ported).
+
+    ``skew_ID`` (M39): the flags name the /SKEW's axes, not the global
+    ones — the condensation rotates with the skew (and, for a /SKEW/MOV,
+    every cycle).  See engine/kinematics.py and bcs1.F.
 
     Fixed dialect (cfg LOADS/bcs.cfg radioss51; M37): the six DOF flags
     live in ONE 10-character field (``   111 011``) with skew_ID and
@@ -1744,14 +1958,11 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                       f"'tra rot skew grnod'", block.source)
             return
         tra, rot, skew, grnod = t[0], t[1], int(t[2]), int(t[3])
-    if skew != 0:
-        log.warning(f"/BCS/{block.user_id}: skew frames not ported, "
-                    f"skew_ID ignored", block.source)
     fix_tra = np.array([ch == "1" for ch in tra.zfill(3)])
     fix_rot = np.array([ch == "1" for ch in rot.zfill(3)])
     model.bcs.append(BoundaryCondition(
         id=block.user_id, grnod_id=grnod, fix_tra=fix_tra, fix_rot=fix_rot,
-        title=title))
+        title=title, skew_id=skew))
 
 
 def read_inivel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -1824,15 +2035,16 @@ def read_inivel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 else [""] * 4
             vt = np.array([_fval(s) for s in g[:3]])
             omega = _fval(g[3])
-            if frame:
-                log.warning(f"/INIVEL/AXIS/{block.user_id}: /FRAME "
-                            f"{frame} not ported — the rotation axis is "
-                            f"taken through the GLOBAL origin along "
-                            f"{f[0].upper()} (deviates unless the frame "
-                            f"is global)", block.source)
+            # /FRAME (M39): the axis is the frame's DIR axis THROUGH THE
+            # FRAME ORIGIN and Vt is written in the frame — resolved by
+            # the Starter once the frames are built (initialization.py:
+            # resolve_inivel_frames).  frame_ID 0 keeps the global axis
+            # through the global origin (hm_read_inivel.F's IFRA == 0).
             model.inivel.append(InitialVelocity(
                 id=block.user_id, grnod_id=grnod, v=vt, title=title,
-                kind="AXIS", omega=omega, axis=axis, origin=np.zeros(3)))
+                kind="AXIS", omega=omega, axis=axis, origin=np.zeros(3),
+                frame_id=frame,
+                dir={"X": 1, "Y": 2, "Z": 3}[f[0].strip().upper()]))
             return
         omega = float(t[0])
         axis = _direction(t[1])
@@ -1940,8 +2152,14 @@ def read_cload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         sens_id=int(float(t[4])) if len(t) > 4 else 0, title=title))
 
 
-#: directions of the /IMPVEL & /IMPDISP cards (rotations parsed, not ported)
-_IMP_DIRS = ("X", "Y", "Z", "XX", "YY", "ZZ")
+#: directions of the /IMPVEL & /IMPDISP cards, mapped to the 6-DOF index
+#: (0..2 = translation X/Y/Z, 3..5 = rotation XX/YY/ZZ — the same ordering
+#: the /MPC and implicit dofmap use). M39: the rotational directions are now
+#: applied to the nodal / rigid-body angular velocity (they were parsed and
+#: DISCARDED before, which left every RD-E-1000 Bending deck — an /IMPVEL/XX
+#: on the /RBODY master — completely undriven).
+_IMP_DOF = {"X": 0, "Y": 1, "Z": 2, "XX": 3, "YY": 4, "ZZ": 5}
+_IMP_DIRS = tuple(_IMP_DOF)
 
 
 def split_imposed_card(cards) -> Optional[dict]:
@@ -2023,25 +2241,37 @@ def _read_imposed(block: KeywordBlock, model: Model, log: MessageLog,
         log.error(f"/{keyword}/{block.user_id}: missing data card",
                   block.source)
         return
-    if c["dir"] not in ("X", "Y", "Z"):
-        log.warning(f"/{keyword}/{block.user_id}: rotational direction "
-                    f"{c['dir']} not ported — condition ignored",
-                    block.source)
+    if c["dir"] not in _IMP_DOF:
+        log.error(f"/{keyword}/{block.user_id}: unknown direction "
+                  f"{c['dir']!r} (expected X|Y|Z|XX|YY|ZZ)", block.source)
         return
-    if c["skew"] or c["frame"]:
-        log.warning(f"/{keyword}/{block.user_id}: skew/frame not ported — "
-                    f"global system used", block.source)
+    # M39: XX/YY/ZZ are rotational conditions (dof 3..5), applied to the
+    # angular velocity — see kinematics.apply_kinematic and, when the group
+    # is an /RBODY master, rigid_body.RigidBodyEngine.advance.
+    # /SKEW is ported (M39): Dir names the skew's axis and fixvel.F imposes
+    # the curve on THAT component only.  Icoor and frame_ID are not.
+    if c["frame"]:
+        log.warning(f"/{keyword}/{block.user_id}: frame_ID={c['frame']} "
+                    f"(imposed motion in a MOVING reference frame, "
+                    f"fixvel.F's IFM>1 branch) NOT PORTED — the condition "
+                    f"is applied in the GLOBAL system and the physics "
+                    f"DEVIATES unless the frame is global", block.source)
     if c["icoor"]:
-        log.warning(f"/{keyword}/{block.user_id}: Icoor=1 (cylindrical) "
-                    f"not ported — cartesian used", block.source)
+        log.warning(f"/{keyword}/{block.user_id}: Icoor=1 (CYLINDRICAL "
+                    f"coordinates about the skew's Z' axis, fixvel.F "
+                    f"419-460) NOT PORTED — the condition is applied along "
+                    f"the CARTESIAN {c['dir']} axis"
+                    f"{' of skew ' + str(c['skew']) if c['skew'] else ''} "
+                    f"and the physics DEVIATES", block.source)
     if c["sens"]:
         log.warning(f"/{keyword}/{block.user_id}: sensor gating not "
                     f"ported — condition active from Tstart", block.source)
     dest.append(cls(
         id=block.user_id, funct_id=c["fct"],
-        dof={"X": 0, "Y": 1, "Z": 2}[c["dir"]], grnod_id=c["grnod"],
+        dof=_IMP_DOF[c["dir"]], grnod_id=c["grnod"],
         scale=c["scale"], xscale=c["xscale"], tstart=c["tstart"],
-        tstop=c["tstop"], sens_id=c["sens"], title=title))
+        tstop=c["tstop"], sens_id=c["sens"], title=title,
+        skew_id=c["skew"]))
 
 
 def read_impvel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -2304,8 +2534,10 @@ def read_rbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       where it is (it is then simply carried rigidly).
 
       Not ported from the full card (documented M5 simplifications):
-      sensors, skew/spherical inertia frames, IKREM and the surface
-      envelope.
+      sensors, the Ispher spherical-inertia flag, IKREM and the surface
+      envelope.  Skew_ID IS ported (M39): the card's Jxx/Jyy/Jzz are
+      written in that /SKEW's axes and rotated into the global frame at
+      init (inirby.F's ``CALL CHBAS(SKEW(1,NOSKEW), RBY(1,NRB))``).
 
     REAL dialect (cfg RBODY/rbody.cfg radioss2021; M37)::
 
@@ -2317,8 +2549,9 @@ def read_rbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       pre-M37 the token view read the Mass column as grnod_ID ('500.0'
       int crash).  Blank ICoG defaults to 1 (cfg DEFAULTS); sens/Ispher/
       Ikrem/surf and the off-diagonal J card are accepted + warned; the
-      Skew column is IGNORED silently when it merely names the identity
-      frame the M36 writer emits for its dual-encoding.
+      Skew column is honoured since M39 (it named the identity frame the
+      M36 writer emits for its dual-encoding, which is why ignoring it was
+      harmless until real decks — RD-E-1601's dummy — put a real one there).
     """
     if block.fixed:
         title, cards = _fixed_data(block)
@@ -2336,10 +2569,18 @@ def read_rbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         jadd = np.array(_cut_floats(cards[1], "XYZ20")[:3]) \
             if len(cards) > 1 else np.zeros(3)
         joff = _cut_floats(cards[2], "XYZ20") if len(cards) > 2 else []
+        # sens_ID stays in the ignored list — the port does NOT gate the
+        # rigid-body kinematics by sensor — but its VALUE is carried onto
+        # the entity: the Starter's shared-node check needs the reference's
+        # ACTIVE/INACTIVE distinction (NPBY(7) = 1 iff sens_ID == 0) to
+        # match checkrby.F (M39 / M38-NEW-4, see initialize_rigid_bodies).
         _warn_ignored(log, f"/RBODY/{block.user_id}", block.source,
                       [("sens_ID", f[1]), ("Ispher", f[3]),
                        ("Ikrem", f[6]), ("surf_ID", f[8])]
                       + [("Jxy/Jyz/Jxz", v) for v in joff if v])
+        # Skew_ID (M39): the axes Jxx/Jyy/Jzz are written in — rotated
+        # into the global frame once, at init (inirby.F's CHBAS call).
+        skew = _ival(f[2])
         if icog not in (0, 1):
             log.warning(f"/RBODY/{block.user_id}: ICoG={icog} approximated "
                         f"as {1 if icog in (2,) else 0} (port: 1 = master "
@@ -2352,7 +2593,7 @@ def read_rbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.rbodies.append(RigidBody(
             id=block.user_id, kind="RBODY", master_id=int(f[0]),
             grnod_id=_ival(f[5]), added_mass=mass, jadd=jadd, icog=icog,
-            title=title))
+            sens_id=_ival(f[1]), title=title, skew_id=skew))
         return
     title, cards = _title_and_data(block)
     if not cards:
@@ -3105,6 +3346,8 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "GRPART": read_gr_elem,
     "BOX": read_box,
     "SURF": read_surf,
+    "SKEW": read_skew,                   # reference systems (M39)
+    "FRAME": read_frame,
     "BCS": read_bcs,
     "INIVEL": read_inivel,
     "GRAV": read_grav,

@@ -55,21 +55,52 @@ def _convert_degenerated_bricks(model: Model, log: MessageLog) -> None:
     """Handle /BRICK cards with repeated node IDs (the classic Radioss way
     of writing lower-order solids in brick format).
 
-    Fortran origin: the brick reader (hm_read_brick / sinit3) detects
-    repeated nodes and switches the element to its degenerated formulation
-    (tetra, penta...). This port converts the 4-distinct-node patterns
-    (e.g. ``n1 n2 n3 n3 n5 n5 n5 n5``) to genuine /TETRA4 elements — the
-    constant-strain tetra IS the right element for that geometry, whereas
-    running it as a collapsed hexa leaves zero-volume sub-shapes in the
-    hourglass base vectors. Distinct nodes are taken in order of first
-    appearance, which maps every standard collapse pattern onto the
-    positively-oriented tetra (checked again at element init).
+    Fortran origin: the reference does NOT convert a degenerated brick into
+    another element type — it runs it through the SAME 8-node hexa kernel
+    with the repeated-node connectivity exactly as written, and merely
+    COUNTS the collapsed nodes for a few local corrections.  That counter is
+    ``engine/source/elements/solid/solide/degenes8.F`` (DEGENES8), whose
+    whole body is "for each node, is it repeated elsewhere in IXS(1..8)?"
+    reduced to ``IDEGE(I) = <repeats>/2``; its consumers are the solid
+    drivers themselves (sforc3.F, s8eforc3.F, s8zforc3.F, szforc3.F ...),
+    which use IDEGE only to pick the small-strain branch, to skip an
+    optimisation, or to correct the characteristic length
+    (``sdlen_dege.F``: "DELTAX correction for degenerated element").  The
+    connectivity itself is never rewritten, and the Starter's element count
+    is unchanged: RD-V-0700's HEXA_DEGE deck — 40 bricks, every one a
+    6-distinct-node collapsed wedge — reports ``NUMELS: NUMBER OF 3D SOLID
+    ELEMENTS . . . 40`` in the reference .out.
 
-    Pentas (6 distinct) and pyramids (5 distinct) are NOT silently
-    degraded: the Starter stops with a clear message (roadmap item), which
-    beats the M1 behaviour of failing later on a zero-volume Jacobian.
+    So this port keeps a degenerated brick AS a brick (M39):
+
+    * **8 distinct** — an ordinary hexa;
+    * **5, 6 or 7 distinct** — a collapsed hexa: the connectivity is passed
+      through UNCHANGED (repeats included) and the standard 8-node kernel
+      runs it.  This is not an approximation of a penta/pyramid element —
+      it *is* how the reference represents one.  The isoparametric map
+      simply degenerates along the collapsed edge; the coincident nodes'
+      shape functions sum, so the mass lumping ``mass/8`` per corner gives
+      a repeated node its 2/8 share (exactly the reference's lumping) and
+      the centroid Jacobian yields the wedge volume.  The classic pattern
+      is the wedge ``n1 n1 n3 n4 n5 n5 n7 n8`` (bottom and top faces each
+      collapsed along one edge), which is what HEXA_DEGE and RD_V_0240's
+      Modele_HEXA_P14 are built from.  Before M39 these were REFUSED
+      ("degenerated brick ... is not ported"), which cost the three
+      official element-verification decks c12/c18/c27 their whole run —
+      and, since every element in HEXA_DEGE is degenerate, also produced
+      the follow-on "model has no elements";
+    * **4 distinct** (e.g. ``n1 n2 n3 n3 n5 n5 n5 n5``) — promoted to a
+      genuine /TETRA4.  Kept from the earlier port: for the FULLY collapsed
+      pattern the constant-strain tetra is the better element (a collapsed
+      hexa leaves zero-volume sub-shapes in the hourglass base vectors),
+      and it is what the port's own /TETRA4 kernel is for.  Distinct nodes
+      are taken in order of first appearance, which maps every standard
+      collapse pattern onto the positively-oriented tetra (re-checked at
+      element init);
+    * **fewer than 4 distinct** — a brick collapsed past any 3-D shape has
+      no volume to integrate; that stays a hard error.
     """
-    kept, moved = [], 0
+    kept, moved, degen = [], 0, 0
     for (eid, pid, nodes) in model.raw_elems["BRICK"]:
         uniq = list(dict.fromkeys(nodes))         # distinct, order preserved
         if len(uniq) == 8:
@@ -77,15 +108,22 @@ def _convert_degenerated_bricks(model: Model, log: MessageLog) -> None:
         elif len(uniq) == 4:
             model.raw_elems["TETRA4"].append((eid, pid, uniq))
             moved += 1
+        elif len(uniq) in (5, 6, 7):
+            # collapsed hexa — connectivity AS WRITTEN, repeats included
+            kept.append((eid, pid, nodes))
+            degen += 1
         else:
             log.error(
-                f"/BRICK {eid}: degenerated brick with {len(uniq)} distinct "
-                f"nodes (penta/pyramid) is not ported — use full hexas or "
-                f"/TETRA4", "BRICK DEGEN")
+                f"/BRICK {eid}: degenerated brick with only {len(uniq)} "
+                f"distinct node(s) — collapsed past any 3-D shape, it has "
+                f"no volume", "BRICK DEGEN")
     model.raw_elems["BRICK"] = kept
     if moved:
         log.info(f"     {moved} DEGENERATED /BRICK ELEMENT(S) CONVERTED "
                  f"TO /TETRA4")
+    if degen:
+        log.info(f"     {degen} DEGENERATED /BRICK ELEMENT(S) RUN AS "
+                 f"COLLAPSED HEXA (penta/pyramid)")
 
 
 # ----------------------------------------------------------------------------
@@ -932,6 +970,93 @@ def resolve_lines(model: Model, log: MessageLog) -> None:
 
 
 # ----------------------------------------------------------------------------
+# Reference systems (/SKEW, /FRAME) and the consumers that name one  (M39)
+# ----------------------------------------------------------------------------
+
+def resolve_skews(model: Model, log: MessageLog) -> None:
+    """Build every /SKEW and /FRAME from the initial geometry, then bind
+    each consumer's ``skew_ID``/``frame_ID`` to its row.
+
+    Fortran origin: ``starter/source/tools/skew/hm_read_skw.F`` +
+    ``hm_read_frm.F`` build the frames; each consumer's reader then walks
+    ``ISKN(4,*)`` to turn the USER id into the array index it stores (e.g.
+    hm_read_rbody.F 246-256, hm_read_prop08.F 141-149,
+    hm_read_inivel.F 415-448).  An unknown id is a hard error there
+    (ANCMSG 184/490) and here.
+
+    Must run after the nodes exist (the MOV frames read x0) and before
+    anything consumes a frame.
+    """
+    model.skews.resolve(model, log)
+
+    def _bind(kind: str, user_id: int, who: str) -> int:
+        """USER skew/frame id -> row; -1 (and an error) when unknown."""
+        row = model.skews.index(kind, user_id)
+        if row < 0:
+            log.error(f"{who}: unknown {kind.lower()}_ID {user_id}",
+                      f"{kind} CHECK")
+        return row
+
+    # ---- /BCS: the fixed DOFs are the skew's axes (bcs1.F) --------------
+    for bc in model.bcs:
+        bc.skew_row = _bind("SKEW", bc.skew_id, f"/BCS/{bc.id}") \
+            if bc.skew_id else 0
+
+    # ---- /IMPVEL + /IMPDISP: the imposed DOF is a skew axis (fixvel.F) --
+    for im in list(model.impvel) + list(model.impdisp):
+        im.skew_row = _bind("SKEW", im.skew_id,
+                            f"/IMP*/{im.id}") if im.skew_id else 0
+
+    # ---- /RBODY: Jxx/Jyy/Jzz are written in the skew (inirby.F CHBAS) ---
+    for rb in model.rbodies:
+        rb.skew_row = _bind("SKEW", rb.skew_id,
+                            f"/RBODY/{rb.id}") if rb.skew_id else 0
+
+    # ---- /PROP TYPE8: the spring's 6 DOFs are the skew's axes (r2def3) --
+    for prop in model.properties.values():
+        sid = int(prop.params.get("skew_id", 0) or 0)
+        if not sid:
+            continue
+        ptype = int(getattr(prop, "type", 0) or 0)
+        who = f"/PROP/{prop.id}"
+        row = _bind("SKEW", sid, who)
+        prop.params["skew_row"] = max(row, 0)
+        if ptype == 13:
+            # TYPE13 (SPR_BEAM) uses its skew as the INITIAL frame of a
+            # co-rotational beam, not as a fixed one — the port's TYPE13
+            # frame is the element frame (spring_general.py) and no corpus
+            # deck puts a skew on a TYPE13, so this stays a loud defer.
+            log.warning(f"{who}: TYPE13 (SPR_BEAM) skew_ID={sid} NOT "
+                        f"PORTED — the port uses the element frame "
+                        f"(N1->N2); the physics DEVIATES when the skew is "
+                        f"not aligned with it", "PROP CHECK")
+
+    # ---- /INIVEL/AXIS: the rotation axis + origin come from the /FRAME --
+    for iv in model.inivel:
+        if iv.kind != "AXIS" or not iv.frame_id:
+            continue
+        row = _bind("FRAME", iv.frame_id, f"/INIVEL/AXIS/{iv.id}")
+        if row < 0:
+            continue
+        # hm_read_inivel.F 581-598: the axis is the frame's IDIR axis and
+        # the rotation is about the FRAME ORIGIN; 437-439: the card's
+        # Vxt/Vyt/Vzt are components IN the frame, rotated to global.
+        iv.axis = model.skews.axes[row][iv.dir - 1].copy()
+        iv.origin = model.skews.origins[row].copy()
+        iv.v = model.skews.to_global(row, iv.v)
+        sf = next((s for s in model.skews.entries
+                   if s.kind == "FRAME" and s.id == iv.frame_id), None)
+        if sf is not None and sf.imov != 0:
+            # a MOVING frame is rebuilt every cycle by movfram.F; as an
+            # /INIVEL it is only ever read ONCE, at t=0, so the initial
+            # orientation IS the whole story and nothing is lost here.
+            log.info(f"     /INIVEL/AXIS/{iv.id}: /FRAME/{sf.subtype}/"
+                     f"{sf.id} is a MOVING frame; an initial condition "
+                     f"reads it only at t=0, so its initial orientation "
+                     f"is used (exact)")
+
+
+# ----------------------------------------------------------------------------
 # Element initialization + lumped mass (inimass)
 # ----------------------------------------------------------------------------
 
@@ -1037,6 +1162,8 @@ def initialize_rigid_bodies(model: Model, log: MessageLog) -> None:
     # integrator has no nesting order).
     seen_slave = np.zeros(model.numnod, dtype=bool)
     seen_master = np.zeros(model.numnod, dtype=bool)
+    # which body claimed each node as a slave first (for the message)
+    slave_owner: dict = {}
     for rb in model.rbodies:
         who = f"/{rb.kind}/{rb.id}"
         try:
@@ -1052,14 +1179,61 @@ def initialize_rigid_bodies(model: Model, log: MessageLog) -> None:
             continue
         rb.slaves = g.node_idx[g.node_idx != rb.master]
 
-        if np.any(seen_slave[rb.slaves]) or seen_master[rb.master]:
-            log.error(f"{who}: node(s) already belong to another rigid "
-                      f"body", "RBODY CHECK")
-            continue
+        # ---- shared SECONDARY nodes (checkrby.F) --------------------------
+        # A node claimed as a slave by two bodies is an over-constraint —
+        # but ONLY when both claimants are ACTIVE.  The reference makes
+        # exactly this distinction (checkrby.F, the "Report of secondary
+        # double nodes" block): it walks the duplicated slave nodes,
+        # collects the bodies sharing each one, and sets IACTI = 0 as soon
+        # as ANY of them is inactive (NPBY(7,IRB) == 0, i.e. sens_ID != 0 —
+        # hm_read_rbody.F: "IF(ISENS == 0) THEN NPBY(7,NRB)=1 ELSE
+        # NPBY(7,NRB)=0").  Then
+        #
+        #     IF (IFOUND==0 .AND. IACTI> 0)  -> ERROR   (MSGID 3121)
+        #     ELSEIF (IFOUND==0 .AND. IACTI==0) -> WARNING (MSGID 1026,
+        #                          "sensor effect will be treated later")
+        #
+        # i.e. sharing is LEGAL between sensor-gated bodies: the sensors
+        # choreograph which one owns the nodes at any instant.  That is a
+        # real modelling technique — RD-E-1200's BIKERC defines overlapping
+        # "all" / "all less wheels" / "rear wheel" bodies, every one gated
+        # by a different /SENSOR, and the port's unconditional error
+        # rejected the deck (M39 / M38-NEW-4).
+        #
+        # IFOUND is upstream's ifrbody_off.F90 probe for a /RBODY/OFF card
+        # in the engine restart decks (a deactivated body cannot clash
+        # either).  The port has no engine-deck /RBODY/OFF reader, so this
+        # takes the IFOUND = 0 branch always — the STRICTER of the two, so
+        # the cut can only ever over-report, never under-report.
+        shared = rb.slaves[seen_slave[rb.slaves]] if len(rb.slaves) else \
+            np.empty(0, dtype=np.int64)
+        if len(shared) or seen_master[rb.master]:
+            others = {}                       # (kind, id) -> body, deduped
+            for n in shared:
+                o = slave_owner.get(int(n))
+                if o is not None:
+                    others.setdefault((o.kind, o.id), o)
+            others = [others[k] for k in sorted(others)]
+            all_active = rb.sens_id == 0 and all(
+                o.sens_id == 0 for o in others)
+            if seen_master[rb.master] or all_active:
+                log.error(f"{who}: node(s) already belong to another rigid "
+                          f"body", "RBODY CHECK")
+                continue
+            names = ", ".join(f"/{o.kind}/{o.id}" for o in others)
+            log.warning(f"{who}: shares slave node(s) with {names} — legal "
+                        f"because the bodies are /SENSOR-gated (upstream "
+                        f"resolves the overlap by activation, checkrby.F "
+                        f"MSGID 1026).  NOTE the port does not gate rigid "
+                        f"bodies by sensor (sens_ID is read but ignored), "
+                        f"so the Engine would drive the shared nodes from "
+                        f"every body at once", "RBODY CHECK")
         if seen_master[rb.slaves].any() or seen_slave[rb.master]:
             log.info(f"     {who}: rigid-body CHAIN (a master of one body "
                      f"is a slave of another) — supported by the IMPLICIT "
                      f"solver only (M14)")
+        for n in rb.slaves:
+            slave_owner.setdefault(int(n), rb)
         seen_slave[rb.slaves] = True
         seen_master[rb.master] = True
 
@@ -1091,7 +1265,18 @@ def initialize_rigid_bodies(model: Model, log: MessageLog) -> None:
         J += m_master * (np.eye(3) * float(rm @ rm) - np.outer(rm, rm))
         inert = model.inertia[rb.slaves]
         J += np.eye(3) * float(inert.sum())
-        J += np.diag(rb.jadd if rb.jadd is not None else np.zeros(3))
+        # the card's added inertia. With a Skew_ID (M39) Jxx/Jyy/Jzz are
+        # written in the SKEW's axes, so the diagonal tensor is rotated
+        # into the global frame before it is added — inirby.F's
+        # ``IF(NOSKEW/=0) CALL CHBAS(SKEW(1,NOSKEW), RBY(1,NRB))``, which
+        # is M = A M A^T with A's columns the skew axes (chbas.F).  Done
+        # ONCE here: the body carries its own rotation afterwards, so even
+        # a /SKEW/MOV only contributes its initial orientation.
+        jadd = np.diag(rb.jadd if rb.jadd is not None else np.zeros(3))
+        row = getattr(rb, "skew_row", 0)
+        if row:
+            jadd = model.skews.rotate_tensor(row, jadd)
+        J += jadd
 
         # regularize a singular tensor (collinear point masses): the spin
         # about the mass line has no physics — keep it bounded, warn once

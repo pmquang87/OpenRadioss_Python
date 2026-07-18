@@ -579,7 +579,18 @@ def test_eos_polynomial_real_two_card_layout(tmp_path):
 
 def test_inivel_axis_real_layout(tmp_path):
     """Real AXIS card 1 is 'DIR FRAME_ID GRNOD_ID' (float('Z') crashed);
-    card 2 carries Vxt Vyt Vzt VR."""
+    card 2 carries Vxt Vyt Vzt VR.
+
+    M39 ported /SKEW//FRAME, so /INIVEL/AXIS now CONSUMES its FRAME_ID
+    (the reader retains it and resolve_skews binds it to the frame's DIR
+    axis + origin — starter/initialization.py resolve_skews, hm_read_inivel.F
+    437-439/581-598; the frame-transform physics is covered by
+    test_m39_skew.py). The pre-M39 'frame not ported' warning is therefore
+    gone. The real card's FRAME_ID must (a) be parsed and retained and
+    (b) — since this byte-faithful fixture names FRAME_ID = 1 but defines no
+    /FRAME/1 — raise the hard 'unknown frame' error real Radioss raises
+    (ANCMSG 184/490), never be silently dropped."""
+    from pyradioss.starter.initialization import resolve_skews
     body = (
         "/INIVEL/AXIS/1\n"
         "INIVEL 1\n"
@@ -594,7 +605,15 @@ def test_inivel_axis_real_layout(tmp_path):
     assert iv.grnod_id == 25
     assert iv.omega == pytest.approx(0.0118)
     assert list(iv.axis) == [0.0, 0.0, 1.0]
-    assert any("FRAME" in w.upper() for w in log.warnings), log.warnings
+    # the FRAME_ID column is parsed and RETAINED (consumed, not dropped):
+    # M39 wires it to the frame at resolve time instead of warning
+    assert iv.frame_id == 1
+    assert not log.warnings, log.warnings         # no stale 'not ported' warn
+    # resolving a reference to a frame that does not exist is a hard error,
+    # exactly like the Fortran starter (an /INIVEL/AXIS whose axis/origin
+    # would come from a missing /FRAME cannot be applied)
+    resolve_skews(model, log)
+    assert any("frame_ID 1" in e for e in log.errors), log.errors
 
 
 def test_inivel_tra_parameter_reference(tmp_path):
@@ -620,8 +639,9 @@ def test_inivel_tra_parameter_reference(tmp_path):
 #      rdv_0530) --------------------------------------------------------------
 
 def test_impvel_rotational_direction_is_legal(tmp_path):
-    """'XX' (rotation about X) is a legal direction value — no parse
-    error; the port warns that rotational conditions are not applied."""
+    """'XX' (rotation about X) resolves to dof 3 (rotation about X) — the
+    exact ROLLING card. M39: rotational conditions are now applied to the
+    angular velocity, not discarded with a warning."""
     body = (
         "/IMPVEL/1\n"
         "New IMPVEL 1\n"
@@ -632,10 +652,15 @@ def test_impvel_rotational_direction_is_legal(tmp_path):
     )
     model, log = _parse_fixed(body, tmp_path)
     assert not log.errors, log.errors
-    assert any("XX" in w for w in log.warnings), log.warnings
+    (iv,) = model.impvel
+    assert iv.dof == 3                       # XX -> rotation about X
+    assert iv.grnod_id == 6
+    assert iv.scale == pytest.approx(0.005)  # Fscale_Y from card 2
+    assert not any("not ported" in w for w in log.warnings), log.warnings
 
 
 def test_impdisp_zz_direction_is_legal(tmp_path):
+    """'ZZ' resolves to dof 5 (rotation about Z), kept not discarded (M39)."""
     body = (
         "/IMPDISP/30\n"
         "impdisp_dof6\n"
@@ -646,7 +671,11 @@ def test_impdisp_zz_direction_is_legal(tmp_path):
     )
     model, log = _parse_fixed(body, tmp_path)
     assert not log.errors, log.errors
-    assert any("ZZ" in w for w in log.warnings), log.warnings
+    (imp,) = model.impdisp
+    assert imp.dof == 5                       # ZZ -> rotation about Z
+    assert imp.grnod_id == 20
+    assert imp.scale == pytest.approx(1.0)
+    assert not any("not ported" in w for w in log.warnings), log.warnings
 
 
 def test_impdisp_abutting_tstart_tstop_columns(tmp_path):

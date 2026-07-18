@@ -1,6 +1,8 @@
 """
 /PROP reader — the M38 property pack (SH_ORTH, SPR_GENE, SPR_BEAM, VOID)
 plus the parse-only + InactiveProperty fallback for every other spelling.
+M39 adds SPR_PRE (TYPE32): still inactive physics, but its MASS field is
+read from the card rather than defaulted (see :func:`parse_spr_pre`).
 
 Fortran origin: ``starter/source/properties/*`` (one ``hm_read_prop##.F``
 per family) driven by the ``hm_cfg_files/config/CFG/radioss*/PROP/*.cfg``
@@ -335,6 +337,73 @@ def parse_spr_beam(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     return Property(id=block.user_id, type=13, title=title, params=params)
 
 
+def parse_spr_pre(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
+    """/PROP/SPR_PRE (TYPE32) — the seatbelt PRETENSIONER spring (cfg
+    prop_p32_spr_pre.cfg radioss100)::
+
+        card 1: title
+        card 2: M                              sens_ID  Ilock
+                CARD("%20lg                              %10d%10d")
+        card 3: Stif0  F1  D1  E1  Stif1       CARD("%20lg" x5)
+        card 4: fct_ID1 fct_ID2                Scale_t Scale_d Scale_f
+                CARD("%10d%10d                    %20lg%20lg%20lg")
+
+    Fortran origin: ``starter/source/properties/spring/hm_read_prop32.F``
+    (HM_GET_FLOATV('MASS'...) + the RINI32 init, which sets
+    ``MASS(I) = AMAS``, ``XINER(I) = 0`` and ``STIFM(I) = STIF0 + STIF1``
+    for the time step).
+
+    Ported: the MASS — and ONLY the mass.  That is the whole point of this
+    reader (M39 / M38-NEW-1): the pretensioner's physics (the sensor-gated
+    lock, the Ilock unloading rule, the pretension force functions, the
+    initial internal energy at activation) is NOT ported, so the property
+    stays an :class:`InactiveProperty` and the Engine refuses element
+    groups that use it.  But a property's MASS is Starter data, not Engine
+    physics — it is what the nodal mass and the explicit time step are
+    built from — and routing TYPE32 through the generic inactive path gave
+    it ``_universal_geo_params()``'s placeholder ``mass = 0.0``, which the
+    /SPRING kernel then reported as "/PROP/SPRING mass must be > 0"
+    (RD-V-0031, whose five SPR_PRE cards all carry a perfectly good
+    M = 1E-5).  The mass is real data on the card; read it.
+
+    Stif0/Stif1 are carried too (upstream's STIFM = STIF0 + STIF1 is the
+    time-step stiffness), so the value is on the property when the
+    pretensioner physics does land.  The cfg CHECK block demands MASS > 0,
+    which the /SPRING mass check enforces — correctly, once the field is
+    actually read (see elements/spring.py _MASS_REQUIRED_SPRING_TYPES).
+    """
+    title, cards, fixed = _data_cards(block)
+    params = _universal_geo_params()
+    head = _get(cards, 0)
+    if head is not None:
+        h = _row(head, "PROP_SPR_PRE_HEAD", fixed)
+        params["mass"] = _fv(h[0])          # h[1] is the cfg's blank gap
+        params["sens_id"] = _iv(h[2])
+        params["ilock"] = _iv(h[3])
+    stif = _get(cards, 1)
+    if stif is not None:
+        s = _row(stif, "F20X5", fixed)
+        params["stif0"] = _fv(s[0])
+        params["f1"] = _fv(s[1])
+        params["d1"] = _fv(s[2])
+        params["e1"] = _fv(s[3])
+        params["stif1"] = _fv(s[4])
+        # upstream STIFM(I) = STIF0 + STIF1 (RINI32) — the spring's
+        # time-step stiffness.  'k' is the axial-spring kernel's field name.
+        params["k"] = params["stif0"] + params["stif1"]
+    fct = _get(cards, 2)
+    if fct is not None:
+        f = _row(fct, "PROP_SPR_PRE_FCT", fixed)
+        params["fct_id1"] = _iv(f[0])
+        params["fct_id2"] = _iv(f[1])
+    log.warning(f"/PROP/SPR_PRE/{block.user_id}: parsed (mass, Stif0/Stif1 "
+                f"read), pretensioner physics not implemented (M39) — the "
+                f"Engine will refuse element groups that use it",
+                block.source)
+    return InactiveProperty(id=block.user_id, type=32, title=title,
+                            params=params, prop_name="SPR_PRE")
+
+
 def parse_void(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     """/PROP/VOID (TYPE0) — no-stiffness placeholder (cfg
     prop_p0_void.cfg radioss140)::
@@ -386,6 +455,8 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
         return parse_spr_gene(block, log)
     if typename in ("SPR_BEAM", "TYPE13"):
         return parse_spr_beam(block, log)
+    if typename in ("SPR_PRE", "TYPE32"):
+        return parse_spr_pre(block, log)
     if typename in ("VOID", "TYPE0"):
         return parse_void(block, log)
     # ---- everything else: parse-only + inactive ----------------------------

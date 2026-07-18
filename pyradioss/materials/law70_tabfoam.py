@@ -81,6 +81,7 @@ import math
 
 import numpy as np
 
+from ..accel import get as accel_get
 from ..model.entities import Material
 
 _EM20 = 1e-20
@@ -336,6 +337,16 @@ def solid_update(mat, sig, deps, dt, extra):
     Returns (sig, c) with c the per-element sound speed sqrt(AA1/rho0).
     """
     p = mat.params
+    # M39: numba-accelerated numeric leaves when that backend is active. These
+    # are the "LAW70 curve lookups" — the (strain, rate) table interpolation
+    # and the Voigt norms / elastic map. Each is a single scalar expression per
+    # element, so the mirrors are BITWISE-identical (not merely ~1e-15) and add
+    # NO backend divergence; the NumPy leaves below stay the reference (numpy
+    # path selects them, byte-for-byte unchanged). See accel.jit_kernels.
+    tab2d = accel_get("law70_tab2d") or _tab2d
+    snorm = accel_get("law70_snorm") or _snorm
+    enorm = accel_get("law70_enorm") or _enorm
+    elastic_stress = accel_get("law70_elastic_stress") or _elastic_stress
     eps = extra["eps70"]
     eps += deps                                   # total strain (global)
     uv = extra["uv70"]
@@ -346,12 +357,12 @@ def solid_update(mat, sig, deps, dt, extra):
     nu = p["nu"]
     iflag = p["iflag"]
 
-    epst = _enorm(eps)
+    epst = enorm(eps)
     eps0_entry = uv[:, 0].copy()                  # EPS0 (restored below)
 
     # filtered tensor-norm strain rate (MSTRAIN_RATE IDEV=0 + mulaw's
     # asrate = min(1, 2*pi*Fcut*dt))
-    rate = _enorm(deps) / max(dt, 1e-30)
+    rate = enorm(deps) / max(dt, 1e-30)
     alpha = min(1.0, 2.0 * math.pi * p["fcut"] * dt)
     epsd = extra["epsd70"]
     epsd[:] = alpha * rate + (1.0 - alpha) * epsd
@@ -360,14 +371,14 @@ def solid_update(mat, sig, deps, dt, extra):
     xg, rl, yl = p["xg_load"], p["r_load"], p["y_load"]
     over = epst >= epsmax
     ext = np.where(over, emax * (epst - epsmax), 0.0)
-    yld_stat = _tab2d(xg, rl, yl, epst, np.full(n, rl[0]))
+    yld_stat = tab2d(xg, rl, yl, epst, np.full(n, rl[0]))
     yldelas = np.where(over, p["YLD_EMAX"] + ext, yld_stat)
-    yldmax = _tab2d(xg, rl, yl, np.minimum(epst, epsmax), epsd) + ext
+    yldmax = tab2d(xg, rl, yl, np.minimum(epst, epsmax), epsd) + ext
     if p.get("xg_un") is not None:
         xu, ru, yu = p["xg_un"], p["r_un"], p["y_un"]
         # NUNLOAD == 1 queries the UNCLAMPED strain (sigeps70)
         x_un = epst if len(ru) == 1 else np.minimum(epst, epsmax)
-        yldmin = _tab2d(xu, ru, yu, x_un, epsd) + ext
+        yldmin = tab2d(xu, ru, yu, x_un, epsd) + ext
     else:
         yldmin = np.zeros(n)                      # Iflag 3/4, unused
 
@@ -406,9 +417,9 @@ def solid_update(mat, sig, deps, dt, extra):
     g = 0.5 * e_new / (1.0 + nu)
 
     # ---- trial estimate and magnitude selection ----------------------------
-    dsig_v = _elastic_stress(aa1, aa2, g, deps)
-    dsig = _snorm(dsig_v)
-    svm = _snorm(sig0 + dsig_v)
+    dsig_v = elastic_stress(aa1, aa2, g, deps)
+    dsig = snorm(dsig_v)
+    svm = snorm(sig0 + dsig_v)
 
     ie_cst = np.zeros(n, dtype=bool)
     if iflag == 0:
@@ -429,8 +440,8 @@ def solid_update(mat, sig, deps, dt, extra):
     c = np.sqrt(aa1 / mat.rho0)
 
     # ---- spherical projection of the total-strain stress -------------------
-    signew = _elastic_stress(aa1, aa2, g, eps)
-    svm_t = _snorm(signew)
+    signew = elastic_stress(aa1, aa2, g, eps)
+    svm_t = snorm(signew)
     r_sc = yld / np.maximum(svm_t, _EM20)
     signew *= r_sc[:, None]
 

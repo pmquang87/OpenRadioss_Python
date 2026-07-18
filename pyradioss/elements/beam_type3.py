@@ -177,11 +177,19 @@ def _exact_dt(L0, mass, inertia_c, slices) -> np.ndarray:
         for k, L in enumerate(Ls):                # small setup loop: init only
             B = _b_operator(L)
             K[k] = L * B.T @ C @ B
-        # symmetric similarity: eig(M^-1 K) = eig(M^-1/2 K M^-1/2)
+        # symmetric similarity: eig(M^-1 K) = eig(M^-1/2 K M^-1/2).
+        # ms/Is are floored at EM20: a legally massless beam (a /MAT/VOID
+        # part with RHO0 = 0) would otherwise divide by zero here and turn
+        # the whole eigenproblem into NaN.  Its K is identically zero
+        # anyway (E = G = 0), so the floor leaves w2 = 0 and the element
+        # claims no time-step limit — the same guard idiom hm_read_mat00.F
+        # uses for the void sound speed, MAX(RHOR,EM20) (M39 / M38-NEW-2).
         minv_sqrt = np.zeros((len(Ls), 12))
         for d in range(3):
-            minv_sqrt[:, d] = minv_sqrt[:, 6 + d] = 1.0 / np.sqrt(ms)
-            minv_sqrt[:, 3 + d] = minv_sqrt[:, 9 + d] = 1.0 / np.sqrt(Is)
+            minv_sqrt[:, d] = minv_sqrt[:, 6 + d] = \
+                1.0 / np.sqrt(np.maximum(ms, EM20))
+            minv_sqrt[:, 3 + d] = minv_sqrt[:, 9 + d] = \
+                1.0 / np.sqrt(np.maximum(Is, EM20))
         Ksym = minv_sqrt[:, :, None] * K * minv_sqrt[:, None, :]
         w2 = np.linalg.eigvalsh(Ksym)[:, -1]      # largest eigenvalue
         dt0[sl] = 2.0 / np.sqrt(np.maximum(w2, EM20))
@@ -215,9 +223,16 @@ def init_group(group, model, log):
     wx = np.zeros(n)                              #  W = sqrt(I*A/3), doc)
     plastic = False
     for sl, mat, prop in group.state["slices"]:
-        if mat.law not in (1, 2):
+        if mat.law not in (0, 1, 2):
             log.error(f"/BEAM: material LAW{mat.law} not ported for beams "
-                      f"(LAW1 elastic, LAW2 global plasticity)", "BEAM INIT")
+                      f"(LAW0 void, LAW1 elastic, LAW2 global plasticity)",
+                      "BEAM INIT")
+        # LAW0 (/MAT/VOID) needs no branch of its own: the void card's
+        # E = G = 0 zeroes the whole elasticity matrix C of the rate-form
+        # resultant update, so a void beam carries mass and geometry but
+        # never any force — exactly the void semantics of
+        # hm_read_mat00.F, which declares LAW0 BEAM_ALL-compatible
+        # (M39 / M38-NEW-2; see starter/checks._ALLOWED_LAWS).
         if mat.law == 2:
             plastic = True
             if mat.params.get("c", 0.0) > 0.0:

@@ -37,6 +37,7 @@ from .entities import (
     Surface, THRequest,
 )
 from ..common.tables import FunctTable
+from .skew import SkewSet
 
 
 @dataclass
@@ -505,6 +506,12 @@ class Model:
         self.unit_input = None
         self.units: Dict[int, tuple] = {}
         self.raw_unit_refs: list = []
+
+        # Reference systems (M39): every /SKEW and /FRAME, resolved to
+        # rotation matrices + origins by starter/initialization.py
+        # (resolve_skews).  Row 0 is the GLOBAL system, so a consumer's
+        # skew_ID/frame_ID = 0 needs no special case — see model/skew.py.
+        self.skews = SkewSet()
 
         # Loads / constraints / contacts
         self.bcs: List[BoundaryCondition] = []

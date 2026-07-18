@@ -386,11 +386,23 @@ def test_beam_shear_force_and_moment_equilibrium(tmp_path):
     assert np.abs(torque).max() < 1e-13
 
 
-def test_shell_bt4_stiffness_hourglass(tmp_path):
-    """BLT84 stiffness hourglass: a pure w-hourglass velocity pattern
-    builds a restoring force that GROWS linearly with time (Q += k q_dot
-    dt), matching the closed-form modal stiffness — and a linear velocity
-    field must leave the hourglass state exactly untouched."""
+def test_shell_bt4_chvis3_hourglass(tmp_path):
+    """chvis3.F hourglass (M39): a pure w-hourglass velocity pattern draws
+    an ELASTIC restoring force that grows linearly with time (Q += HH2
+    q_dot dt) PLUS a quadratic viscous damper q_dot*H2Q*|q_dot| — both at
+    the upstream coefficients — and a linear velocity field must leave the
+    hourglass state exactly untouched.
+
+    Reference: engine/source/elements/shell/coque/chvis3.F with the engine
+    constants HELAS = HVISC = 1/2, HVLIN = 0 (radioss2.F 638-640):
+        HH2 = hf E SHFPR3 t^3 / (8 (B1+B2)),  SHFPR3 = SHF/(3(1+nu))
+        H2Q = (25/2) rho hf sqrt(SHFPR3) t^2
+    with (B1+B2) upstream's AREA-scaled PX1^2+PY1^2+PX2^2+PY2^2 = A^2 bb/2
+    (cderi3.F l.172). Before M39 this file asserted the LS-DYNA BLT84 form
+    (hf kappa G t A bb / 8) with no viscous branch at all — a different
+    code's hourglass, and the reason box_beam_impact dissipated 0.04 % of
+    its energy in hourglass control against the Fortran's 4.4 %.
+    """
     deck = (
         "/BEGIN\nunit shell\n"
         "/NODE\n1 0 0 0\n2 1 0 0\n3 1 1 0\n4 0 1 0\n"
@@ -404,7 +416,10 @@ def test_shell_bt4_stiffness_hourglass(tmp_path):
     mat = g.state["slices"][0][1]
     t, A, hf = 0.1, 1.0, 0.01
     bb = 2.0                                 # B1.B1 + B2.B2 of the unit square
-    k_w = hf * (5.0 / 6.0) * mat.G * t * A * bb / 8.0
+    b12 = A ** 2 * bb / 2.0                  # (B1+B2) in upstream PX scaling
+    shfpr3 = (5.0 / 6.0) / (3.0 * (1.0 + mat.nu))
+    k_w = hf * mat.E * shfpr3 * t ** 3 / (8.0 * b12)      # HH2 (elastic)
+    h2q = 12.5 * mat.rho0 * hf * np.sqrt(shfpr3) * t ** 2  # H2Q (viscous)
 
     w0, dt = 1e-3, 1e-3
     v = np.zeros_like(model.x)
@@ -412,25 +427,40 @@ def test_shell_bt4_stiffness_hourglass(tmp_path):
     f1 = np.zeros_like(model.x)
     mint = np.zeros_like(model.x)
     shell_bt4.forces(g, model.x, v, model.vr, dt, f1, mint)
-    # gamma = h on the square, so q_dot = 4 w0 and f_i = -Q h_i
-    Q1 = k_w * 4.0 * w0 * dt
-    assert f1[0, 2] == pytest.approx(-Q1, rel=1e-10)
+    # gamma = h on the square, so q_dot = 4 w0 and f_i = -F h_i
+    qd = 4.0 * w0
+    Q1 = k_w * qd * dt                       # elastic, one cycle
+    visc = qd * h2q * abs(qd)                # quadratic damper (rate-only)
+    assert f1[0, 2] == pytest.approx(-(Q1 + visc), rel=1e-10)
     # no REAL stress from the hourglass pattern (B1.h = B2.h = 0)
     assert np.abs(g.state["sig"]).max() < 1e-15
     assert np.abs(g.state["qshear"]).max() < 1e-15
 
     f2 = np.zeros_like(model.x)
     shell_bt4.forces(g, model.x, v, model.vr, dt, f2, mint)
-    # stiffness control: same velocity again -> force has DOUBLED
-    assert f2[0, 2] == pytest.approx(-2.0 * Q1, rel=1e-10)
-    # stored (not dissipated) hourglass energy is tracked
+    # the ELASTIC part accumulates (doubles); the viscous part depends only
+    # on the CURRENT rate and so repeats unchanged
+    assert f2[0, 2] == pytest.approx(-(2.0 * Q1 + visc), rel=1e-10)
+    # hourglass energy is tracked (elastic stored + viscous dissipated)
     assert g.state["ehour"][0] > 0
+
+    # the viscous branch is genuinely DISSIPATIVE: with the elastic state
+    # zeroed, a steady hourglass rate keeps drawing positive energy every
+    # cycle (this is the 4.4 % chvis3 puts in HE that BLT84 could not).
+    g.state["hgq"][:] = 0.0
+    g.state["ehour"][:] = 0.0
+    f3 = np.zeros_like(model.x)
+    shell_bt4.forces(g, model.x, v, model.vr, dt, f3, mint)
+    e1 = g.state["ehour"][0]
+    assert e1 > 0
+    assert dt * visc * qd == pytest.approx(e1 - k_w * qd * dt * qd * dt,
+                                           rel=1e-9)
 
     # orthogonality: a linear velocity field leaves hgq untouched
     g.state["hgq"][:] = 0.0
     v = np.zeros_like(model.x)
     v[:, 2] = 0.3 + 0.7 * model.x[:, 0] - 0.2 * model.x[:, 1]
-    shell_bt4.forces(g, model.x, v, model.vr, dt, f2, mint)
+    shell_bt4.forces(g, model.x, v, model.vr, dt, f3, mint)
     assert np.abs(g.state["hgq"]).max() < 1e-15
 
 
@@ -451,8 +481,18 @@ def test_degenerated_brick_converts_to_tetra(tmp_path):
     assert model.tetras.state["mass"][0] == pytest.approx(7.8e-6 / 6.0)
 
 
-def test_degenerated_brick_penta_rejected(tmp_path):
-    """A 6-distinct-node (penta) collapse is refused with a clear error."""
+def test_degenerated_brick_penta_run_as_collapsed_hexa(tmp_path):
+    """A 6-distinct-node (penta) collapse is ACCEPTED and run as a collapsed
+    hexa: the connectivity is kept AS WRITTEN and the ordinary 8-node solid
+    kernel integrates it, exactly as the reference does — degenes8.F only
+    COUNTS the collapse, it never rewrites the element (see
+    ``initialization._convert_degenerated_bricks``; RD-V-0700 HEXA_DEGE, whose
+    reference .out reports every collapsed wedge in ``NUMELS``). Before M39 the
+    port REFUSED this, which was a port limitation, not the reference's
+    behaviour, and cost HEXA_DEGE its whole run. End-to-end guard through
+    ``parse_starter_deck -> build_element_groups``; the collapse *physics*
+    (exact volume, mass lumping, hourglass orthogonality) and the genuinely
+    degenerate ``< 4``-distinct refusal are covered in test_m39_smallbugs.py."""
     deck = (
         "/BEGIN\ndegen penta\n"
         "/NODE\n"
@@ -468,8 +508,13 @@ def test_degenerated_brick_penta_rejected(tmp_path):
     log = MessageLog()
     parse_starter_deck(read_deck(str(f)), model, log)
     build_element_groups(model, log)
-    assert any("penta" in e.lower() or "degenerated" in e.lower()
-               for e in log.errors)
+    # accepted (not refused), kept as a brick with the repeated connectivity,
+    # never rewritten to another element type
+    assert not log.errors, log.errors
+    assert model.raw_elems["BRICK"] == [(1, 1, [1, 2, 3, 4, 5, 6, 6, 5])]
+    assert not model.raw_elems["TETRA4"]
+    # and it forms a solid element group the kernel can run
+    assert any(name == "bricks" for name, _ in model.element_groups())
 
 
 def test_surfaces_from_tetra_and_sh3n_parts(tmp_path):

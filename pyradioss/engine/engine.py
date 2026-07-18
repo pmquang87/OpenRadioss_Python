@@ -257,6 +257,11 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     if noda is not None:
         for rb in rbodies:
             noda.set_prescribed(rb.nodes)
+            # ...but transport their member stiffness to the master so the
+            # body still claims a nodal dt (rgbodfp.F/dtnoda.F — otherwise a
+            # stiff shell welded into the body never constrains dt; the
+            # RD-E-1000 rolling bug). No-op where no /RBODY exists.
+            noda.add_rigid_body(rb.nodes, rb.master, rb.M, rb.J0, model.x0)
         for t2 in tied:
             noda.set_prescribed(t2.snode[t2.active])
         for r3 in rbe3s:
@@ -409,6 +414,15 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         if len(sensors):
             sensors.update(state.t, log)
 
+        # ---- 0b. moving skews (M39, newskw.F) ----------------------------
+        # /SKEW/MOV and /SKEW/MOV2 are rebuilt from the nodes' CURRENT
+        # positions once per cycle, BEFORE the forces — exactly where
+        # resol.F calls NEWSKW ('MOVING SKEW [MONO THREAD]', resol.F 2653).
+        # Everything downstream (the TYPE8 spring frames, the skewed /BCS
+        # projection, the skewed imposed motion) reads the rows it writes,
+        # so a moving skew turns with its nodes. Free when nothing moves.
+        model.skews.update(model.x)
+
         # ---- 1. internal forces, element by element group ----------------
         fint[:] = 0.0
         mint[:] = 0.0
@@ -520,7 +534,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # is what makes an IMPULSIVE imposed-velocity start (RD-V-0700)
         # balance instead of booking twice the work at cycle 1.)
         state.wext += loads.apply_kinematic(state.t + dt, model.v, model.vr,
-                                            mass_eff, model.x, dt, v_old)
+                                            mass_eff, model.x, dt, v_old,
+                                            model.inertia, vr_old)
         de_wall, dw_wall = walls.apply(model.x, model.v, v_old,
                                        model.mass, dt)
         state.econt += de_wall

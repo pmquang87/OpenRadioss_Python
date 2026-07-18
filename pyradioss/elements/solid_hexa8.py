@@ -722,8 +722,16 @@ def forces(group, x, v, vr, dt, fint, mint):
     # book its elastic work, and tighten dt to its frequency (see
     # _phys_hourglass_law70). Untouched for every non-LAW70 group.
     if st.get("has_law70"):
-        f_hg, dehour_hg, dt_hg = _phys_hourglass_law70(
-            st, xe, ve, dndx, vol, c, dt)
+        # dispatched to the numba mirror when that backend is active; the
+        # NumPy path below is the reference (byte-for-byte unchanged)
+        jit = accel_get("hexa_hgphys")
+        if jit is not None:
+            f_hg, dehour_hg, dt_hg = jit(
+                xe, ve, dndx, vol, c, st["law70_mask"], st["mass"],
+                st["vol0"], st["hgqex"], dt)
+        else:
+            f_hg, dehour_hg, dt_hg = _phys_hourglass_law70(
+                st, xe, ve, dndx, vol, c, dt)
         fe = fe + f_hg
         st["ehour"] += dehour_hg
         dt_crit = np.minimum(dt_crit, dt_hg)

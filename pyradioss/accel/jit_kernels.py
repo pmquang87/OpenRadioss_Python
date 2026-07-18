@@ -447,44 +447,56 @@ def shell_pre(xe, ve, vre, off):
 
 @njit(cache=True)
 def shell_post(E, area, B1, B2, gam, V, Nres, Mres, qres, Q,
-               k_m, k_w, k_r, dt):
-    """Mirror of shell_bt4._post — resultant nodal forces, BLT84
-    stiffness hourglass (Q updated in place), back-transform to global
-    axes. Returns (fg, mg, dehg)."""
+               k_m, k_w, hqm, hqb, hqr, dt):
+    """Mirror of shell_bt4._post — resultant nodal forces, chvis3.F
+    hourglass (elastic Q updated in place + quadratic viscous dampers),
+    back-transform to global axes. Returns (fg, mg, dehg)."""
     n = area.shape[0]
     fg = np.empty((n, 4, 3))
     mg = np.empty((n, 4, 3))
     dehg = np.empty(n)
-    kv = np.empty(5)
     qd = np.empty(5)
+    F = np.empty(5)
 
     for e in range(n):
         A = area[e]
-        # modal velocities of the 5 hourglass modes
-        for k in range(5):
+        # modal velocities: translations 0-2 on gamma, rotations 3-4 on the
+        # RAW h = (1,-1,1,-1) pattern (chvis3.F lines 327-330)
+        for k in range(3):
             s = 0.0
             for i in range(4):
                 s += gam[e, i] * V[e, i, k]
             qd[k] = s
-        kv[0] = k_m[e]; kv[1] = k_m[e]; kv[2] = k_w[e]
-        kv[3] = k_r[e]; kv[4] = k_r[e]
+        for k in range(3, 5):
+            qd[k] = V[e, 0, k] - V[e, 1, k] + V[e, 2, k] - V[e, 3, k]
+        # elastic branch (modes 0-2 only); rotation carries no elastic state
+        Q[e, 0] = Q[e, 0] + k_m[e] * qd[0] * dt
+        Q[e, 1] = Q[e, 1] + k_m[e] * qd[1] * dt
+        Q[e, 2] = Q[e, 2] + k_w[e] * qd[2] * dt
+        Q[e, 3] = 0.0
+        Q[e, 4] = 0.0
+        # total modal force = elastic + quadratic viscous damper
+        F[0] = Q[e, 0] + qd[0] * hqm[e] * abs(qd[0])
+        F[1] = Q[e, 1] + qd[1] * hqm[e] * abs(qd[1])
+        F[2] = Q[e, 2] + qd[2] * hqb[e] * abs(qd[2])
+        F[3] = qd[3] * hqr[e] * abs(qd[3])
+        F[4] = qd[4] * hqr[e] * abs(qd[4])
         de = 0.0
         for k in range(5):
-            q_old = Q[e, k]
-            Q[e, k] = q_old + kv[k] * qd[k] * dt
-            de += 0.5 * (q_old + Q[e, k]) * qd[k] * dt
+            de += F[k] * qd[k] * dt
         dehg[e] = de
 
         for i in range(4):
             b1 = B1[e, i]; b2 = B2[e, i]; g = gam[e, i]
-            # local total force = -(internal) - Q*gamma (hourglass)
-            flx = -A * (b1 * Nres[e, 0] + b2 * Nres[e, 2]) - g * Q[e, 0]
-            fly = -A * (b2 * Nres[e, 1] + b1 * Nres[e, 2]) - g * Q[e, 1]
-            flz = -A * (b1 * qres[e, 0] + b2 * qres[e, 1]) - g * Q[e, 2]
+            h = 1.0 if (i % 2) == 0 else -1.0        # raw h = (1,-1,1,-1)
+            # local total force = -(internal) - F*gamma (hourglass)
+            flx = -A * (b1 * Nres[e, 0] + b2 * Nres[e, 2]) - g * F[0]
+            fly = -A * (b2 * Nres[e, 1] + b1 * Nres[e, 2]) - g * F[1]
+            flz = -A * (b1 * qres[e, 0] + b2 * qres[e, 1]) - g * F[2]
             mlx = -A * (-b2 * Mres[e, 1] - b1 * Mres[e, 2]
-                        - 0.25 * qres[e, 1]) - g * Q[e, 3]
+                        - 0.25 * qres[e, 1]) - h * F[3]
             mly = -A * (b1 * Mres[e, 0] + b2 * Mres[e, 2]
-                        + 0.25 * qres[e, 0]) - g * Q[e, 4]
+                        + 0.25 * qres[e, 0]) - h * F[4]
             # back to global axes: fg[b] = sum_a fl[a] E[b,a]  (mlz = 0)
             fg[e, i, 0] = flx * E[e, 0, 0] + fly * E[e, 0, 1] \
                 + flz * E[e, 0, 2]
@@ -607,3 +619,251 @@ def t7_narrow(x, ni, seg):
             best_w[k, 0] = u; best_w[k, 1] = 0.0
             best_w[k, 2] = v; best_w[k, 3] = w
     return best_d, best_pt, best_w
+
+
+# ============================================================================
+# solid_hexa8 physical (Belytschko-Bindeman) hourglass STIFFNESS — LAW70 foam
+# ============================================================================
+# Mirror of solid_hexa8._phys_hourglass_law70 (M38): the HEPH/Isolid=24
+# stiffness-hourglass restoring force the /MAT/LAW70 foam asks for. Under numba
+# this was the c46 regime's #1 self-time block (a per-cycle einsum/matmul stack
+# over the whole brick group). READ solid_hexa8._phys_hourglass_law70 for the
+# physics — every formula is documented there. These two constants MUST match
+# solid_hexa8.HG_PHYS / DT_HG_SF (the numba backend freezes globals at compile
+# time, so they are duplicated here as literals exactly like _H4/_XI8; the M39
+# parity test asserts the two stay equal).
+_HG_PHYS = 0.03      # == solid_hexa8.HG_PHYS
+_DT_HG_SF = 0.9      # == solid_hexa8.DT_HG_SF
+
+
+@njit(cache=True)
+def hexa_hgphys(xe, ve, dndx, vol, c, mask, mass, vol0, q, dt):
+    """Mirror of solid_hexa8._phys_hourglass_law70 — the Flanagan-Belytschko
+    (HEPH) physical hourglass STIFFNESS for the LAW70 slices of a brick group.
+    Accumulates the hourglass MODAL displacement ``q`` (== st['hgqex'], shape
+    (n,4,3)) IN PLACE, exactly as hexa_pre mutates ``sig``: masked (LAW70)
+    elements only. Returns (f_hg, dehour, dt_hg) — the (n,8,3) nodal restoring
+    force to add to the internal force, the (n,) hourglass-energy increment,
+    and the (n,) element time-step cap. Non-LAW70 elements get zero force /
+    EP30 dt. Parity: element-wise expressions bitwise; the 8- and 4-term dot
+    products are sequential (NumPy matmul/einsum may reassociate) — the
+    documented ~1e-15 per-call reduction tolerance (rtol 1e-12 kernel test)."""
+    n = xe.shape[0]
+    f_hg = np.empty((n, 8, 3))
+    dehour = np.empty(n)
+    dt_hg = np.empty(n)
+    gamma = np.empty((4, 8))
+    hx = np.empty((4, 3))
+
+    for e in range(n):
+        # hourglass base vectors: hx[a,b] = sum_i H[a,i] xe[i,b]
+        for a in range(4):
+            hx0 = 0.0; hx1 = 0.0; hx2 = 0.0
+            for i in range(8):
+                h = _H4[a, i]
+                hx0 += h * xe[e, i, 0]
+                hx1 += h * xe[e, i, 1]
+                hx2 += h * xe[e, i, 2]
+            hx[a, 0] = hx0; hx[a, 1] = hx1; hx[a, 2] = hx2
+        # gamma[a,i] = H[a,i] - (sum_b hx[a,b] gradN[i,b]) : orthogonalized
+        for a in range(4):
+            for i in range(8):
+                gamma[a, i] = _H4[a, i] - (hx[a, 0] * dndx[e, i, 0]
+                                           + hx[a, 1] * dndx[e, i, 1]
+                                           + hx[a, 2] * dndx[e, i, 2])
+
+        # current P-wave modulus AA1 = rho0 c^2 (rho0 = mass/vol0)
+        v0 = vol0[e]
+        if v0 < EM20:
+            v0 = EM20
+        aa1 = (mass[e] / v0) * c[e] * c[e]
+        # traceS = sum_{i,a} gradN[i,a]^2  (einsum "nia,nia->n" on dndx)
+        traceS = 0.0
+        for i in range(8):
+            for a in range(3):
+                g = dndx[e, i, a]
+                traceS += g * g
+        if mask[e]:
+            kstiff = _HG_PHYS * aa1 * vol[e] * traceS
+        else:
+            kstiff = 0.0
+
+        # accumulate the hourglass modal displacement (rate form, LAW70 only):
+        # q[a,b] += (sum_i gamma[a,i] ve[i,b]) dt
+        if mask[e]:
+            for a in range(4):
+                s0 = 0.0; s1 = 0.0; s2 = 0.0
+                for i in range(8):
+                    g = gamma[a, i]
+                    s0 += g * ve[e, i, 0]
+                    s1 += g * ve[e, i, 1]
+                    s2 += g * ve[e, i, 2]
+                q[e, a, 0] += s0 * dt
+                q[e, a, 1] += s1 * dt
+                q[e, a, 2] += s2 * dt
+
+        # f_hg[i,b] = -kstiff * sum_a gamma[a,i] q[a,b]; dehour = -f_hg.ve dt
+        nk = -kstiff
+        dh = 0.0
+        for i in range(8):
+            f0 = 0.0; f1 = 0.0; f2 = 0.0
+            for a in range(4):
+                g = gamma[a, i]
+                f0 += g * q[e, a, 0]
+                f1 += g * q[e, a, 1]
+                f2 += g * q[e, a, 2]
+            f0 *= nk; f1 *= nk; f2 *= nk
+            f_hg[e, i, 0] = f0
+            f_hg[e, i, 1] = f1
+            f_hg[e, i, 2] = f2
+            dh += f0 * ve[e, i, 0] + f1 * ve[e, i, 1] + f2 * ve[e, i, 2]
+        dehour[e] = -dh * dt
+
+        # dt cap: omega_max^2 = 2 kstiff gnorm / mass, gnorm = sum|gamma|^2
+        gnorm = 0.0
+        for a in range(4):
+            for i in range(8):
+                g = gamma[a, i]
+                gnorm += g * g
+        if kstiff > 0.0:
+            mm = mass[e]
+            if mm < EM20:
+                mm = EM20
+            den = 2.0 * kstiff * gnorm
+            if den < EM20:
+                den = EM20
+            dt_hg[e] = _DT_HG_SF * np.sqrt(mm / den)
+        else:
+            dt_hg[e] = EP30
+    return f_hg, dehour, dt_hg
+
+
+# ============================================================================
+# force scatter-assembly (Fortran asspar) — the shared force-scatter primitive
+# ============================================================================
+# Mirror of common.fastmath.scatter_add3 (the NumPy reference). Every element
+# kernel scatters its (n_elem*nodes, 3) nodal force block into the global
+# (N, 3) fint/mint via this one primitive; on the 65 439-brick cliff the
+# reference's three np.bincount passes (one per component, each a full pass
+# over the ~0.5 M index list) were the measured assembly cost. This fuses the
+# three components into ONE pass over the index list.
+#
+# The M7 parity contract: this MUST reproduce the bincount reference BITWISE
+# (fastmath.scatter_add3 is what the parity tests assert against). It does, by
+# construction — bincount accumulates weights[k] into bin[idx[k]] in INPUT (k)
+# order, then the reference adds the full-length bin array to the target. This
+# kernel accumulates the three components into a zeroed (N, 3) scratch in the
+# SAME k order, then adds the scratch to the target with the SAME elementwise
+# add — identical operations in an identical order, so the result is
+# bit-for-bit equal to the reference for ANY starting target (a node already
+# carrying force from another group included; the direct-scatter shortcut
+# ((f+v1)+v2) would NOT match the reference's f+(v1+v2), so the scratch is
+# load-bearing, not an optimisation to skip). Verified against the reference on
+# both zero and non-zero targets by tests/test_m7_backends. No parallel (the
+# scatter order must stay deterministic — the restart-chaining canary), no
+# fastmath (it would license reassociation of the per-bin sums).
+@njit(cache=True)
+def scatter3(target, idx, values):
+    """Bitwise mirror of fastmath.scatter_add3: accumulate the (m, 3)
+    ``values`` into ``target`` (N, 3) at rows ``idx`` (m,), in input order,
+    via a zeroed scratch (so cross-group additions associate exactly as the
+    bincount reference does). In place on ``target``; returns nothing."""
+    n = target.shape[0]
+    m = idx.shape[0]
+    acc = np.zeros((n, 3))
+    for k in range(m):
+        j = idx[k]
+        acc[j, 0] += values[k, 0]
+        acc[j, 1] += values[k, 1]
+        acc[j, 2] += values[k, 2]
+    target += acc
+
+
+# ============================================================================
+# LAW70 tabulated-foam numeric leaves (M39 — the "LAW70 curve lookups")
+# ============================================================================
+# Mirrors of the hot leaf helpers of materials/law70_tabfoam.solid_update
+# (sigeps70.F): the (strain, rate) table interpolation and the Voigt
+# strain/stress norms and elastic map. Each is a SINGLE scalar expression per
+# element with NO reduction, so — unlike the reduction-bearing hexa/shell
+# mirrors — these are BITWISE-identical to the NumPy reference (verified 0-ulp
+# in tests/test_m39_accel_law70). They are the c46-regime material hotspot
+# once the hexa blocks are compiled. READ the law70_tabfoam reference for the
+# physics; dispatched by solid_update via accel.get, NumPy path is reference.
+
+@njit(cache=True)
+def law70_tab2d(xg, rates, Y, x, r):
+    """Mirror of law70_tabfoam._tab2d — bilinear (strain, rate) lookup with
+    end-slope extrapolation in both dims (TABLE_MAT_VINTERP). Bitwise: same
+    searchsorted index, same unclamped interpolation expression per element.
+    ``xg`` is strictly increasing (np.unique in _build_table) so the
+    denominators are never zero."""
+    m = xg.shape[0]
+    nr = rates.shape[0]
+    n = x.shape[0]
+    out = np.empty(n)
+    for k in range(n):
+        xk = x[k]
+        i = np.searchsorted(xg, xk, side="right")
+        if i < 1:
+            i = 1
+        elif i > m - 1:
+            i = m - 1
+        t = (xk - xg[i - 1]) / (xg[i] - xg[i - 1])       # unclamped
+        if nr == 1:
+            out[k] = Y[i - 1, 0] + t * (Y[i, 0] - Y[i - 1, 0])
+        else:
+            rk = r[k]
+            j = np.searchsorted(rates, rk, side="right")
+            if j < 1:
+                j = 1
+            elif j > nr - 1:
+                j = nr - 1
+            u = (rk - rates[j - 1]) / (rates[j] - rates[j - 1])   # unclamped
+            y0 = Y[i - 1, j - 1] + t * (Y[i, j - 1] - Y[i - 1, j - 1])
+            y1 = Y[i - 1, j] + t * (Y[i, j] - Y[i - 1, j])
+            out[k] = y0 + u * (y1 - y0)
+    return out
+
+
+@njit(cache=True)
+def law70_enorm(v):
+    """Mirror of law70_tabfoam._enorm — tensor norm of a Voigt STRAIN
+    (0.5 on the engineering shears). Bitwise (per-element scalar sqrt)."""
+    n = v.shape[0]
+    out = np.empty(n)
+    for k in range(n):
+        out[k] = np.sqrt(v[k, 0] ** 2 + v[k, 1] ** 2 + v[k, 2] ** 2
+                         + 0.5 * (v[k, 3] ** 2 + v[k, 4] ** 2 + v[k, 5] ** 2))
+    return out
+
+
+@njit(cache=True)
+def law70_snorm(v):
+    """Mirror of law70_tabfoam._snorm — Frobenius norm of a Voigt STRESS
+    (2.0 on the shears). Bitwise (per-element scalar sqrt)."""
+    n = v.shape[0]
+    out = np.empty(n)
+    for k in range(n):
+        out[k] = np.sqrt(v[k, 0] ** 2 + v[k, 1] ** 2 + v[k, 2] ** 2
+                         + 2.0 * (v[k, 3] ** 2 + v[k, 4] ** 2 + v[k, 5] ** 2))
+    return out
+
+
+@njit(cache=True)
+def law70_elastic_stress(aa1, aa2, g, e):
+    """Mirror of law70_tabfoam._elastic_stress — C(E):eps for per-element
+    moduli (Voigt, engineering shear). Bitwise (per-element, per-component
+    scalar expression identical to the NumPy columns)."""
+    n = e.shape[0]
+    out = np.empty((n, 6))
+    for k in range(n):
+        a1 = aa1[k]; a2 = aa2[k]; gk = g[k]
+        e0 = e[k, 0]; e1 = e[k, 1]; e2 = e[k, 2]
+        out[k, 0] = a1 * e0 + a2 * (e1 + e2)
+        out[k, 1] = a1 * e1 + a2 * (e0 + e2)
+        out[k, 2] = a1 * e2 + a2 * (e0 + e1)
+        out[k, 3] = gk * e[k, 3]
+        out[k, 4] = gk * e[k, 4]
+        out[k, 5] = gk * e[k, 5]
+    return out

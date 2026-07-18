@@ -41,11 +41,23 @@ class LoadsAndConstraints:
 
     def __init__(self, model: Model, log):
         self.model = model
-        # BCS -> per-dof boolean masks
+        # BCS -> per-dof boolean masks (the GLOBAL-system conditions)
         self.fix_tra = np.zeros((model.numnod, 3), dtype=bool)
         self.fix_rot = np.zeros((model.numnod, 3), dtype=bool)
+        # /BCS in a /SKEW (M39): (skew_row, node_idx, tra_mask, rot_mask)
+        # per skewed condition — the constraint is a PROJECTION along the
+        # skew's axes, not a mask on the global components (bcs1.F). Kept
+        # apart from the mask so the (overwhelmingly common) unskewed model
+        # pays nothing.
+        self.skew_bcs = []
         for bc in model.bcs:
             idx = model.node_groups[bc.grnod_id].node_idx
+            row = getattr(bc, "skew_row", 0)
+            if row:
+                self.skew_bcs.append((int(row), idx,
+                                      np.asarray(bc.fix_tra, dtype=bool),
+                                      np.asarray(bc.fix_rot, dtype=bool)))
+                continue
             for d in range(3):
                 if bc.fix_tra[d]:
                     self.fix_tra[idx, d] = True
@@ -79,20 +91,63 @@ class LoadsAndConstraints:
         # /IMPVEL entries: (node_idx, dof, funct, Fscale_Y, 1/Ascale_x,
         # Tstart, Tstop) — the curve is evaluated at t/Ascale_x and the
         # condition only holds inside [Tstart, Tstop] (fixvel.F: FACX,
-        # STARTT/STOPT).
+        # STARTT/STOPT). dof 0..2 drive the translational velocity, 3..5
+        # (XX/YY/ZZ) the ANGULAR velocity (M39; see apply_kinematic).
+        # A condition that names a /SKEW is NOT here: it
+        # goes to skew_impvel/skew_impdisp below and is applied along the
+        # skew axis instead — one condition, ONE application (listing it
+        # in both would impose the curve twice, on the global column AND
+        # on the skew axis).
+        def _skewed(i):
+            return bool(getattr(i, "skew_row", 0))
+
         self.impvel = [(_grp(i.grnod_id), i.dof, model.functions[i.funct_id],
                         i.scale, 1.0 / i.xscale, i.tstart, i.tstop)
-                       for i in model.impvel]
+                       for i in model.impvel if not _skewed(i)]
         # /IMPDISP: like /IMPVEL, plus the base coordinate of each node so
         # the target position x0 + d(t) is exact (no velocity-integration
         # drift). Entries: (node_idx, dof, funct, scale, facx, tstart,
         # tstop, x0_dof).
         self.impdisp = []
         for i in model.impdisp:
+            if _skewed(i):
+                continue
             idx = _grp(i.grnod_id)
+            # a ROTATIONAL /IMPDISP (dof 3..5, M39) has no base position to
+            # correct against — x0d is left zero and the imposed ANGLE is
+            # enforced as the finite-difference angular velocity in
+            # apply_kinematic (exact for a DOF driven from d(tstart)=0).
+            x0d = (model.x0[idx, i.dof].copy() if i.dof < 3
+                   else np.zeros(len(idx)))
             self.impdisp.append((idx, i.dof, model.functions[i.funct_id],
                                  i.scale, 1.0 / i.xscale, i.tstart, i.tstop,
-                                 model.x0[idx, i.dof].copy()))
+                                 x0d))
+        # /IMPVEL + /IMPDISP in a /SKEW (M39): the imposed component is the
+        # one along the skew's Dir axis (fixvel.F 390-418), so the base
+        # coordinate an /IMPDISP lands against is the skew PROJECTION of
+        # x0, not one Cartesian column. Split out of the two lists above so
+        # the unskewed fast path is untouched; each entry carries the skew
+        # row (the axes are re-read every cycle — a /SKEW/MOV turns).
+        self.skew_impvel, self.skew_impdisp = [], []
+        for i in model.impvel:
+            row = getattr(i, "skew_row", 0)
+            if row:
+                self.skew_impvel.append(
+                    (int(row), _grp(i.grnod_id), i.dof,
+                     model.functions[i.funct_id], i.scale, 1.0 / i.xscale,
+                     i.tstart, i.tstop, None))
+        for i in model.impdisp:
+            row = getattr(i, "skew_row", 0)
+            if row:
+                idx = _grp(i.grnod_id)
+                # d0 = x0 . e_dir at t=0: the reference measures the
+                # imposed displacement from the ORIGINAL position along
+                # the CURRENT axis (fixvel.F's DD = SKEW . D, with D the
+                # displacement since t=0)
+                self.skew_impdisp.append(
+                    (int(row), idx, i.dof, model.functions[i.funct_id],
+                     i.scale, 1.0 / i.xscale, i.tstart, i.tstop,
+                     model.x0[idx].copy()))
         # a FROZEN node under an imposed velocity/displacement is a
         # legitimate massless kinematic carrier (the standard way to drive
         # a moving /RWALL): release its auto-fix on the driven DOF, and
@@ -103,7 +158,18 @@ class LoadsAndConstraints:
         self._frozen = frozen
         for entry in self.impvel + self.impdisp:
             idx, dof = entry[0], entry[1]
-            self.fix_tra[idx[frozen[idx]], dof] = False
+            fzn = idx[frozen[idx]]
+            if dof < 3:
+                self.fix_tra[fzn, dof] = False
+            else:
+                self.fix_rot[fzn, dof - 3] = False
+        for entry in self.skew_impvel + self.skew_impdisp:
+            # a skewed condition drives a DIRECTION, not one global column:
+            # release the frozen carrier on all three (the skew axis is a
+            # combination of them and the other two stay free anyway —
+            # nothing else fixes them)
+            idx = entry[1]
+            self.fix_tra[idx[frozen[idx]], :] = False
         for i in model.impdisp:
             f0 = model.functions[i.funct_id].eval(0.0) * i.scale
             if abs(f0) > 0.0:
@@ -181,7 +247,9 @@ class LoadsAndConstraints:
     # ------------------------------------------------------------------
     def apply_kinematic(self, t: float, v: np.ndarray, vr: np.ndarray,
                         mass: np.ndarray, x: np.ndarray,
-                        dt: float, v_old: np.ndarray = None) -> float:
+                        dt: float, v_old: np.ndarray = None,
+                        inertia: np.ndarray = None,
+                        vr_old: np.ndarray = None) -> float:
         """Apply /IMPVEL, /IMPDISP and /BCS to the freshly updated
         velocities (``t`` is the END of the step, t_n + dt).
 
@@ -215,36 +283,120 @@ class LoadsAndConstraints:
           m a dt it briefly acquires is a phantom (it is zeroed before it
           moves anything and before any element sees it), so a fixed DOF
           contributes exactly ZERO work.
+
+        Rotational conditions (dof 3..5 = XX/YY/ZZ, M39) are the exact
+        angular analogue: they overwrite the ANGULAR velocity ``vr`` (not
+        ``v``), the impulse is the angular impulse J_rot (vimp - vr_free)
+        with the nodal rotational INERTIA in place of the mass, and the
+        midstep uses ``vr_old``. ``inertia``/``vr_old`` are the engine's
+        rotational counterparts to ``mass``/``v_old`` (omitted by the pure
+        translational unit-test callers; a rotational entry then falls back
+        to ``mass``/``vr`` — never exercised in practice). When the driven
+        group is an /RBODY master the entry has already been consumed by
+        rigid_body.RigidBodyEngine (its idx is empty here), which drives
+        the body spin so the constraint propagates to the slave nodes.
+
+        /SKEW (M39): a condition that names a skew acts along that skew's
+        AXES.  The skew rows are read fresh every cycle, so a /SKEW/MOV
+        constraint turns with its nodes (the Engine rebuilds the moving
+        rows once per cycle — see engine.py's NEWSKW step).
         """
         w = 0.0
+        skews = getattr(self.model, "skews", None)
+
+        def _book(vel, gen, gold, d, vimp, idx):
+            # shared midstep booking for one imposed DOF ``d`` of the
+            # velocity array ``vel`` (v or vr) against the generalized
+            # inertia ``gen`` (mass or rotational inertia): the leapfrog
+            # impulse J = gen (vimp - vel_free) changes the energy by
+            # J . (gold + vimp)/2 — see the docstring's midstep identity.
+            dv = vimp - vel[idx, d]
+            g = np.where(self._frozen[idx], 0.0, gen[idx])
+            v_mid = 0.5 * ((gold[idx, d] if gold is not None
+                            else vel[idx, d]) + vimp)
+            vel[idx, d] = vimp
+            return float(np.dot(g * dv, v_mid))
+
+        rot_gen = inertia if inertia is not None else mass
         # imposed velocities first (a BCS on the same dof wins, as in the
         # original where BCS is the strongest condition). Outside the
         # [Tstart, Tstop] window the condition is simply not applied —
         # the node is free that cycle (fixvel.F CYCLEs the entry).
+        # dof 0..2 overwrite the translational velocity, 3..5 the ANGULAR
+        # velocity ``vr`` against the rotational inertia (M39).
         for idx, dof, fct, scale, facx, tstart, tstop in self.impvel:
             if len(idx) == 0 or t < tstart or t > tstop:
                 continue
             vimp = scale * fct.eval(t * facx)
-            dv = vimp - v[idx, dof]              # J/m: impulse over free vel
-            m = np.where(self._frozen[idx], 0.0, mass[idx])
-            # midstep velocity (v^{n-1/2} + v^{n+1/2})/2 — the leapfrog work
-            v_mid = 0.5 * ((v_old[idx, dof] if v_old is not None
-                            else v[idx, dof]) + vimp)
-            w += float(np.dot(m * dv, v_mid))
-            v[idx, dof] = vimp
+            if dof < 3:
+                w += _book(v, mass, v_old, dof, vimp, idx)
+            else:
+                w += _book(vr, rot_gen, vr_old, dof - 3, vimp, idx)
         # imposed displacements: land exactly at x0 + d(t_end)
         for idx, dof, fct, scale, facx, tstart, tstop, x0d in self.impdisp:
             if len(idx) == 0 or dt <= 0.0 or t < tstart or t > tstop:
                 continue
-            target = x0d + scale * fct.eval(t * facx)
-            vimp = (target - x[idx, dof]) / dt
-            dv = vimp - v[idx, dof]
+            if dof < 3:
+                target = x0d + scale * fct.eval(t * facx)
+                vimp = (target - x[idx, dof]) / dt
+                w += _book(v, mass, v_old, dof, vimp, idx)
+            else:
+                # rotational /IMPDISP: advance the imposed ANGLE d(t) at the
+                # finite-difference rate over this step — there is no stored
+                # nodal angle to read back (the translational branch reads
+                # x[idx,dof]); exact for a DOF driven from d(tstart)=0.
+                vimp = scale * (fct.eval(t * facx)
+                                - fct.eval((t - dt) * facx)) / dt
+                w += _book(vr, rot_gen, vr_old, dof - 3, vimp, idx)
+        # ---- /IMPVEL + /IMPDISP in a /SKEW (fixvel.F 390-418) ------------
+        # The curve is imposed on the component ALONG the skew's Dir axis;
+        # the two transverse components stay free.  The reference projects
+        # the current velocity onto the axis (VV), turns the curve into the
+        # needed acceleration and adds the correction back along the SAME
+        # axis: A += e * (YC - A0).  At the velocity level (where the port
+        # applies its kinematic conditions) that is exactly
+        # v <- v + e * (v_imp - e.v).
+        for row, idx, dof, fct, scale, facx, tstart, tstop, x0 in \
+                self.skew_impvel + self.skew_impdisp:
+            if len(idx) == 0 or t < tstart or t > tstop:
+                continue
+            e = skews.axes[row][dof]                  # the Dir axis, global
+            vn = v[idx] @ e                           # VV: current v along e
+            if x0 is None:                            # /IMPVEL: v(t) given
+                vimp = scale * fct.eval(t * facx)
+            else:                                     # /IMPDISP: d(t) given
+                if dt <= 0.0:
+                    continue
+                # land on the imposed displacement measured along the axis
+                # from the original position (fixvel.F's DD = SKEW . D)
+                target = (x0 @ e) + scale * fct.eval(t * facx)
+                vimp = (target - (x[idx] @ e)) / dt
+            dv = vimp - vn                            # the impulse / m
             m = np.where(self._frozen[idx], 0.0, mass[idx])
-            v_mid = 0.5 * ((v_old[idx, dof] if v_old is not None
-                            else v[idx, dof]) + vimp)
+            v_mid = 0.5 * ((v_old[idx] @ e if v_old is not None else vn)
+                           + vimp)
             w += float(np.dot(m * dv, v_mid))
-            v[idx, dof] = vimp
-        # fixed DOFs: zero velocity (no work — see docstring)
+            v[idx] += np.outer(dv, e)
+        # ---- fixed DOFs: zero velocity (no work — see docstring) ---------
         v[self.fix_tra] = 0.0
         vr[self.fix_rot] = 0.0
+        # ---- /BCS in a /SKEW (bcs1v, the "USER SYSTEM" branch) -----------
+        # Each constrained skew axis has its component PROJECTED OUT of the
+        # velocity: VV = e.V ; V -= e VV.  The reference does the same to
+        # the acceleration and applies one axis after another (LCOD 3/5/6
+        # are two sequential projections) — legitimate because the axes are
+        # orthonormal, so the order does not matter and the result is the
+        # projection onto the free subspace.  Zero work: the removed
+        # component is a phantom the node never moves with.
+        for row, idx, ftra, frot in self.skew_bcs:
+            if len(idx) == 0:
+                continue
+            axes = skews.axes[row]
+            for d in range(3):
+                if ftra[d]:
+                    e = axes[d]
+                    v[idx] -= np.outer(v[idx] @ e, e)
+                if frot[d]:
+                    e = axes[d]
+                    vr[idx] -= np.outer(vr[idx] @ e, e)
         return w

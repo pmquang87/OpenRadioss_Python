@@ -96,10 +96,11 @@ def test_env_var_selects_backend(monkeypatch):
 def test_numba_backend_provides_kernels():
     assert accel.select_backend("numba") == "numba"
     for k in ("hexa_pre", "hexa_post", "shell_pre", "shell_post",
-              "t7_narrow"):
+              "t7_narrow", "scatter3"):
         assert accel.get(k) is not None
     accel.select_backend("numpy")
     assert accel.get("hexa_pre") is None
+    assert accel.get("scatter3") is None       # inline NumPy scatter path
 
 
 # ============================================================================
@@ -125,6 +126,81 @@ def test_fastmath_bitwise_contracts():
     t2 = np.zeros((40, 3))
     fastmath.scatter_add3(t2, idx, vals)
     assert np.array_equal(t1, t2)
+
+
+@needs_numba
+def test_scatter3_numba_bitwise_parity():
+    """The M39 fused numba force-scatter (accel.scatter3, dispatched by
+    fastmath.scatter_add3 under the numba backend) must reproduce the
+    bincount NumPy reference BIT-FOR-BIT — for ANY starting target, not
+    just a zeroed one. bincount accumulates each component in input order
+    and the reference then adds the full-length bin to the target; the
+    numba mirror accumulates the same values in the same order into a
+    zeroed scratch and adds that, so cross-group additions (a node already
+    carrying force from another element group) associate identically. The
+    direct-scatter shortcut would reassociate and is explicitly NOT used —
+    this test is the canary that keeps it that way."""
+    from pyradioss.accel import jit_kernels as jk
+
+    rng = np.random.default_rng(19)
+    n, m = 40, 700
+    idx = rng.integers(0, n, m)
+    vals = rng.standard_normal((m, 3))
+
+    # kernel vs bincount reference, starting from a NON-ZERO target
+    base = rng.standard_normal((n, 3))
+    t_ref = base.copy()
+    fastmath.scatter_add3(t_ref, idx, vals)         # numpy backend (fixture)
+    t_nb = base.copy()
+    jk.scatter3(t_nb, idx, vals)
+    assert np.array_equal(t_ref, t_nb)
+
+    # and the full dispatch path: fastmath.scatter_add3 under the numba
+    # backend routes to scatter3 and stays bitwise-equal to add.at (zero)
+    accel.select_backend("numba")
+    t_dispatch = np.zeros((n, 3))
+    fastmath.scatter_add3(t_dispatch, idx, vals)
+    accel.select_backend("numpy")
+    t_addat = np.zeros((n, 3))
+    np.add.at(t_addat, idx, vals)
+    assert np.array_equal(t_dispatch, t_addat)
+
+
+def test_anim_write_block_matches_savetxt_byte_for_byte():
+    """The M39 anim output-path replacement (anim_vtk._write_block) must
+    reproduce np.savetxt byte-for-byte over the fmt/shape set write_anim_state
+    uses ("%.9E" floats 1-D/2-D, "%d" ints 1-D/2-D, "%.1f" the OFF flag) —
+    INCLUDING the IEEE edge values (inf, nan, -0.0, denormals, huge) whose
+    text form must not drift. This is what lets write_anim_state drop
+    np.savetxt's per-row Python formatting + per-row fh.write for one C
+    unbox + one write per block without changing a single output byte."""
+    import io
+    from pyradioss.output.anim_vtk import _write_block
+
+    rng = np.random.default_rng(5)
+
+    def _ref(arr, fmt):
+        b = io.StringIO()
+        np.savetxt(b, arr, fmt=fmt)
+        return b.getvalue()
+
+    def _fast(arr, fmt):
+        b = io.StringIO()
+        _write_block(b, arr, fmt)
+        return b.getvalue()
+
+    cases = [
+        (rng.standard_normal((300, 3)) * 1e3, "%.9E"),          # POINTS/VEL
+        (np.array([[0.0, -0.0, 1.0], [-1e-30, 1e30, -3.14159],
+                   [1e-300, -1e300, 0.0],
+                   [np.inf, -np.inf, np.nan]]), "%.9E"),          # IEEE edges
+        (rng.standard_normal(300) * 10, "%.9E"),                 # VONM/EPSP
+        (rng.integers(0, 2, 200).astype(float), "%.1f"),         # OFF flag
+        (rng.integers(0, 72000, (300, 9)).astype(np.int64), "%d"),  # CELLS
+        (np.full(300, 12, dtype=np.int64), "%d"),                # CELL_TYPES
+    ]
+    for arr, fmt in cases:
+        assert _fast(arr, fmt) == _ref(arr, fmt)
 
 
 def test_fastmath_det_inv33_accuracy():
@@ -235,18 +311,25 @@ def test_shell_pre_post_parity(make_deck):
     Nres = rng.standard_normal((n, 3))
     Mres = rng.standard_normal((n, 3))
     qres = rng.standard_normal((n, 2))
+    # chvis3.F coefficients (M39 shell_bt4._post signature): the elastic
+    # membrane/bending stiffness (k_m/k_w) plus the three quadratic viscous
+    # dampers (hqm/hqb/hqr). The SAME inputs drive both backends so the
+    # mirror is still checked bit-for-bit — only the plumbing follows the new
+    # signature; the rotation modes lost their elastic branch (old k_r).
     k_m = np.abs(rng.standard_normal(n))
     k_w = np.abs(rng.standard_normal(n))
-    k_r = np.abs(rng.standard_normal(n))
+    hqm = np.abs(rng.standard_normal(n))
+    hqb = np.abs(rng.standard_normal(n))
+    hqr = np.abs(rng.standard_normal(n))
     Q0 = rng.standard_normal((n, 5))
     dt = 1e-3
 
     Q_np = Q0.copy()
     fg1, mg1, dehg1 = sh._post(E, area, B1, B2, gam, V, Nres, Mres, qres,
-                               Q_np, k_m, k_w, k_r, dt)
+                               Q_np, k_m, k_w, hqm, hqb, hqr, dt)
     Q_nb = Q0.copy()
     fg2, mg2, dehg2 = jk.shell_post(E, area, B1, B2, gam, V, Nres, Mres,
-                                    qres, Q_nb, k_m, k_w, k_r, dt)
+                                    qres, Q_nb, k_m, k_w, hqm, hqb, hqr, dt)
     for a, b in ((fg1, fg2), (mg1, mg2), (dehg1, dehg2), (Q_np, Q_nb)):
         assert np.allclose(a, b, rtol=1e-12, atol=1e-15)
 
