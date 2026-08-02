@@ -488,9 +488,15 @@ def _stream_subprocess(cmd: List[str], cwd: str, emit: EmitFn,
     Returns the exit code (or a negative sentinel on a launch/timeout error).
     """
     try:
+        # decode as UTF-8, never fatally: the Vortex bridge's tqdm bar emits
+        # UTF-8 block characters (▍ = ..0x8d) that the Windows locale codec
+        # (cp1252) cannot decode — with text=True alone the stream loop died
+        # in UnicodeDecodeError mid-conversion whenever a fractional block
+        # happened to be on screen at a flush
         proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1, cwd=cwd)
+            text=True, encoding="utf-8", errors="replace", bufsize=1,
+            cwd=cwd)
     except OSError as exc:
         _line(emit, f"   ** failed to launch: {exc}")
         return -1
