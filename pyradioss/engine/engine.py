@@ -685,7 +685,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         if controls.anim_dt > 0 and state.t >= next_anim:
             path = os.path.join(out_dir, f"{run_name}A{anim_no:03d}.vtk")
             write_anim_state(path, model, state.t,
-                             controls.anim_vect, controls.anim_elem)
+                             controls.anim_vect, controls.anim_elem,
+                             cycle=state.cycle)
             anim_no += 1
             next_anim += controls.anim_dt
         if state.t >= next_state:
@@ -768,7 +769,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     if controls.anim_dt > 0:
         path = os.path.join(out_dir, f"{run_name}A{anim_no:03d}.vtk")
         write_anim_state(path, model, state.t,
-                         controls.anim_vect, controls.anim_elem)
+                         controls.anim_vect, controls.anim_elem,
+                         cycle=state.cycle)
     th.close()
     # the ENGINE restart (M6 chaining contract): RunName_{nn+1}.rad
     # resumes from this file — written on ERROR stops too, so a diverged

@@ -7,13 +7,18 @@ unstructured grids** (RunNameA000.vtk, ...) which ParaView opens natively
 as a time series — select the ``RunNameA..vtk`` file *group*.
 
 Contents per state:
+* field data: TIME (state time) and CYCLE (engine cycle) — the official
+  anim_to_vtk converter's names; the title-line ``t=`` stays for parsers
+  that predate the FIELD block
 * points  = current node positions (deformed geometry)
 * cells   = all elements (hexa/quad/line)
-* point data: DISPLACEMENT, VELOCITY vectors (per /ANIM/VECT)
+* point data: DISPLACEMENT, VELOCITY vectors (per /ANIM/VECT),
+  NODE_ID user node ids (row-aligned with POINTS)
 * cell data:  VONM von Mises stress, EPSP plastic strain (per /ANIM/ELEM),
   OFF element status (always written: 1 = alive, 0 = deleted by a /FAIL
   criterion or a material failure threshold — threshold/select on OFF in
-  ParaView to hide the deleted elements)
+  ParaView to hide the deleted elements),
+  ELEMENT_ID / PART_ID user ids (aligned with the cell order)
   - solids: from the stress tensor; shells: worst layer;
     trusses/springs: |axial stress| (resp. 0)
 """
@@ -92,7 +97,8 @@ def _epsp(group_name: str, group) -> np.ndarray:
 
 
 def write_anim_state(path: str, model: Model, t: float,
-                     vect=("DIS", "VEL"), elem=("VONM", "EPSP")) -> None:
+                     vect=("DIS", "VEL"), elem=("VONM", "EPSP"),
+                     cycle: int = 0) -> None:
     n = model.numnod
     groups = list(model.element_groups())
     ncell = sum(g.n for _, g in groups)
@@ -102,6 +108,11 @@ def write_anim_state(path: str, model: Model, t: float,
         fh.write("# vtk DataFile Version 3.0\n")
         fh.write(f"pyradioss state t={t:.9E}\n")
         fh.write("ASCII\nDATASET UNSTRUCTURED_GRID\n")
+        # state time and engine cycle as typed data, named exactly like the
+        # official anim_to_vtk converter's FIELD block
+        fh.write("FIELD FieldData 2\n")
+        fh.write(f"TIME 1 1 double\n{t:.9E}\n")
+        fh.write(f"CYCLE 1 1 int\n{cycle:d}\n")
         fh.write(f"POINTS {n} double\n")
         _write_block(fh, model.x, "%.9E")
         fh.write(f"CELLS {ncell} {size}\n")
@@ -122,6 +133,10 @@ def write_anim_state(path: str, model: Model, t: float,
         if "VEL" in vect:
             fh.write("VECTORS VELOCITY double\n")
             _write_block(fh, model.v, "%.9E")
+        # user node ids (ITAB), row-aligned with POINTS — appended after the
+        # vectors so parsers reading the historical prefix keep working
+        fh.write("SCALARS NODE_ID int 1\nLOOKUP_TABLE default\n")
+        _write_block(fh, model.node_ids, "%d")
 
         if ncell:
             fh.write(f"CELL_DATA {ncell}\n")
@@ -141,3 +156,12 @@ def write_anim_state(path: str, model: Model, t: float,
                 if off is None:
                     off = np.ones(g.n)
                 _write_block(fh, off, "%.1f")
+            # user element / part ids in cell order (concatenated groups),
+            # named like the official anim_to_vtk converter — appended last
+            # so parsers reading the historical prefix keep working
+            fh.write("SCALARS ELEMENT_ID int 1\nLOOKUP_TABLE default\n")
+            for name, g in groups:
+                _write_block(fh, g.ids, "%d")
+            fh.write("SCALARS PART_ID int 1\nLOOKUP_TABLE default\n")
+            for name, g in groups:
+                _write_block(fh, g.state["part_ids"], "%d")
