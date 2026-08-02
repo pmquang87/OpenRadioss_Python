@@ -112,7 +112,7 @@ def _parse_vtk(path):
         key = parts[0]
         i += 1
         doc["order"].append(" ".join(parts[:2]) if key in
-                            ("SCALARS", "VECTORS") else key)
+                            ("SCALARS", "VECTORS", "TENSORS") else key)
         if key == "FIELD":
             for _ in range(int(parts[2])):
                 name, ncomp, ntup, typ = lines[i].split()
@@ -140,6 +140,9 @@ def _parse_vtk(path):
             i += 1
             conv = int if parts[2] == "int" else float
             doc["arrays"][parts[1]] = take(ncur, conv)
+        elif key == "TENSORS":
+            doc["arrays"][parts[1]] = take(9 * ncur,
+                                           float).reshape(ncur, 3, 3)
         else:
             raise AssertionError(f"unknown block {key} at {path}:{i}")
     return doc
@@ -195,7 +198,14 @@ def test_block_order_backward_compatible(vtk_run):
                 "VECTORS DISPLACEMENT", "VECTORS VELOCITY",
                 "SCALARS NODE_ID", "CELL_DATA", "SCALARS VONM",
                 "SCALARS EPSP", "SCALARS OFF", "SCALARS ELEMENT_ID",
-                "SCALARS PART_ID"]
+                "SCALARS PART_ID",
+                # official anim_to_vtk result arrays (M42), behind the
+                # historical prefix like the id arrays before them
+                "TENSORS 2DELEM_Stress_(lower)",
+                "TENSORS 2DELEM_Stress_(upper)",
+                "SCALARS 2DELEM_Plastic_Strain_Lower",
+                "SCALARS 2DELEM_Plastic_Strain_Upper",
+                "TENSORS 3DELEM_Stress", "SCALARS 3DELEM_Plastic_Strain"]
     assert doc["order"] == expected
 
 

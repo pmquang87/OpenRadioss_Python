@@ -21,12 +21,31 @@ Contents per state:
   ELEMENT_ID / PART_ID user ids (aligned with the cell order)
   - solids: from the stress tensor; shells: worst layer;
     trusses/springs: |axial stress| (resp. 0)
+* full result arrays (M42), named like the official anim_to_vtk output
+  and appended behind the historical prefix; every array spans ALL cells
+  with zero rows for foreign element families (converters read blind
+  token streams):
+  - ``TENSORS 3DELEM_Stress`` — solid Cauchy stress in the GLOBAL frame
+    (the ported solids are the Isolid=1 Jaumann formulation: sig lives in
+    the fixed global basis — a corotational solid kernel, if ever added,
+    must rotate before emitting here).  The Voigt 6 [xx,yy,zz,xy,yz,zx]
+    fills the 3x3 as ``[s0 s3 s4 / s3 s1 s5 / s4 s5 s2]``: yz at (0,2)
+    and zx at (1,2), the official anim_to_vtk placement (not the
+    textbook one) that the VTK->d3plot converter reads back by position
+  - ``TENSORS 2DELEM_Stress_(lower)/(upper)`` — shell outer-fiber
+    in-plane stress as ELEMENT-LOCAL plane-stress 3x3 (like the official
+    tool; the corotational storage frame — rotated fiber->element for
+    orthotropic slices), lower = layer 0 / upper = layer nip-1 per part
+    slice, QBAT reduced by its 4-GP mean
+  - ``SCALARS 3DELEM_Plastic_Strain / 2DELEM_Plastic_Strain_Lower/
+    _Upper`` with the same layer selection
 """
 
 from __future__ import annotations
 
 import numpy as np
 
+from ..elements import shell_ortho
 from ..model.model import Model
 
 # group name -> (VTK cell type id, node count written). Beams write only
@@ -34,6 +53,70 @@ from ..model.model import Model
 _VTK_CELL = {"bricks": (12, 8), "tetras": (10, 4), "shells": (9, 4),
              "shells_qbat": (9, 4), "shells_qeph": (9, 4), "sh3n": (5, 3),
              "trusses": (3, 2), "springs": (3, 2), "beams": (3, 2)}
+
+_SOLID_FAMILIES = ("bricks", "tetras")
+_SHELL_FAMILIES = ("shells", "shells_qbat", "shells_qeph", "sh3n")
+
+# anim_to_vtk's symmetric-3x3 fill of the solid Voigt 6 [xx,yy,zz,xy,yz,
+# zx], row-major: [s0 s3 s4 / s3 s1 s5 / s4 s5 s2].  yz lands at (0,2)
+# and zx at (1,2) — NOT the textbook placement, but the official tool's,
+# and the VTK->d3plot converter maps the slots back purely by position.
+_VOIGT9 = [0, 3, 4, 3, 1, 5, 4, 5, 2]
+
+
+def _plane_rows(s3: np.ndarray) -> np.ndarray:
+    """(n, 3) element-local in-plane [sxx, syy, sxy] -> (n, 9) plane-stress
+    3x3 rows ``[sxx sxy 0 / sxy syy 0 / 0 0 0]`` (the official shell
+    TENSORS layout — transverse shear and szz stay zero)."""
+    out = np.zeros((s3.shape[0], 9))
+    out[:, 0] = s3[:, 0]
+    out[:, 4] = s3[:, 1]
+    out[:, 1] = out[:, 3] = s3[:, 2]
+    return out
+
+
+def _shell_layers(group_name: str, group):
+    """Outer-fiber state of a shell group in the ELEMENT frame:
+    ``(sig_lower (n,3), sig_upper (n,3), ep_lower (n,), ep_upper (n,))``.
+
+    lower = layer 0 and upper = layer nip-1 of each part slice — the
+    leggauss stations ascend from -t/2 (bottom) to +t/2 (top).  QBAT's
+    GP-major ``(n, 4*nip_max, ...)`` state (layer il of GP ng at flat
+    index ``ng*nip_max + il``) is reduced by the 4-GP mean, the GBUF%FOR
+    convention.  Orthotropic slices (PROP types 9/16) store sig in the
+    FIBER frame; it is rotated back to the element frame here exactly
+    like the kernels rotate their resultants (rot_stress_m2e)."""
+    st = group.state
+    sig, ep = st["sig"], st.get("epsp")
+    lo = np.zeros((group.n, 3))
+    up = np.zeros((group.n, 3))
+    eplo = np.zeros(group.n)
+    epup = np.zeros(group.n)
+    if group_name == "shells_qbat":
+        nip_max = st["nip_max"]
+        for isl, (sl, mat, prop) in enumerate(st["slices"]):
+            nip = len(st["zw"][isl][0])
+            kl = [ng * nip_max for ng in range(4)]
+            ku = [ng * nip_max + nip - 1 for ng in range(4)]
+            lo[sl] = sig[sl][:, kl, :].mean(axis=1)
+            up[sl] = sig[sl][:, ku, :].mean(axis=1)
+            if ep is not None:
+                eplo[sl] = ep[sl][:, kl].mean(axis=1)
+                epup[sl] = ep[sl][:, ku].mean(axis=1)
+        return lo, up, eplo, epup
+    ortho = st.get("ortho")
+    for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        nip = len(st["zw"][isl][0])
+        s_lo, s_up = sig[sl, 0, :], sig[sl, nip - 1, :]
+        if ortho is not None and getattr(prop, "type", 0) in \
+                shell_ortho.ORTHO_PROP_TYPES:
+            s_lo = shell_ortho.rot_stress_m2e(s_lo, ortho[sl])
+            s_up = shell_ortho.rot_stress_m2e(s_up, ortho[sl])
+        lo[sl], up[sl] = s_lo, s_up
+        if ep is not None:
+            eplo[sl] = ep[sl, 0]
+            epup[sl] = ep[sl, nip - 1]
+    return lo, up, eplo, epup
 
 
 def _write_block(fh, arr, fmt: str) -> None:
@@ -165,3 +248,37 @@ def write_anim_state(path: str, model: Model, t: float,
             fh.write("SCALARS PART_ID int 1\nLOOKUP_TABLE default\n")
             for name, g in groups:
                 _write_block(fh, g.state["part_ids"], "%d")
+            # ---- official anim_to_vtk result arrays (M42), appended
+            # behind the historical prefix.  Each array spans ALL cells:
+            # rows of foreign families are zeros (downstream converters
+            # consume blind token streams and rely on the counts).
+            if any(name in _SHELL_FAMILIES for name, g in groups):
+                layers = {name: _shell_layers(name, g)
+                          for name, g in groups if name in _SHELL_FAMILIES}
+                for label, comp in (("(lower)", 0), ("(upper)", 1)):
+                    fh.write(f"TENSORS 2DELEM_Stress_{label} double\n")
+                    for name, g in groups:
+                        rows = _plane_rows(layers[name][comp]) \
+                            if name in _SHELL_FAMILIES \
+                            else np.zeros((g.n, 9))
+                        _write_block(fh, rows, "%.9E")
+                for label, comp in (("Lower", 2), ("Upper", 3)):
+                    fh.write(f"SCALARS 2DELEM_Plastic_Strain_{label} "
+                             f"double 1\nLOOKUP_TABLE default\n")
+                    for name, g in groups:
+                        arr = layers[name][comp] \
+                            if name in _SHELL_FAMILIES else np.zeros(g.n)
+                        _write_block(fh, arr, "%.9E")
+            if any(name in _SOLID_FAMILIES for name, g in groups):
+                fh.write("TENSORS 3DELEM_Stress double\n")
+                for name, g in groups:
+                    rows = g.state["sig"][:, _VOIGT9] \
+                        if name in _SOLID_FAMILIES else np.zeros((g.n, 9))
+                    _write_block(fh, rows, "%.9E")
+                fh.write("SCALARS 3DELEM_Plastic_Strain double 1\n"
+                         "LOOKUP_TABLE default\n")
+                for name, g in groups:
+                    arr = g.state.get("epsp") \
+                        if name in _SOLID_FAMILIES else None
+                    _write_block(fh, arr if arr is not None
+                                 else np.zeros(g.n), "%.9E")
