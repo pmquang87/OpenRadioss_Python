@@ -4,6 +4,10 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+.venv/
+
+# IDE
+.idea/
 
 # Solver outputs (regenerate by running the examples)
 *.out

@@ -139,9 +139,14 @@ python -m pyradioss.gui             # without installing
 
 ## What is implemented so far
 
-See [PORTING_GUIDE.md](PORTING_GUIDE.md) for the detailed feature matrix, the
-map from every Python module to the original Fortran directory, and the porting
-roadmap. Milestones 1–11 (this state of the repository) cover:
+> **Current status lives in [docs/STATE.md](docs/STATE.md)** — the milestone
+> history (M1–M41: explicit + implicit solvers, the spectral-fatigue tower,
+> QBAT/QEPH shells, differential validation against the real Fortran solver,
+> the GUI), the known-good test baseline, and the roadmap. See
+> [PORTING_GUIDE.md](PORTING_GUIDE.md) (large; grep, don't read linearly) for
+> the detailed feature matrix and the map from every Python module to the
+> original Fortran directory. The narrative below describes the foundation
+> laid in Milestones 1–11:
 
 - **Input**: the Radioss block-keyword deck format (`/NODE`, `/BRICK`,
   `/TETRA4`, `/SHELL`, `/SH3N`, `/TRUSS`, `/SPRING`, `/BEAM`, `/PART`,

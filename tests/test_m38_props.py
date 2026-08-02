@@ -529,11 +529,15 @@ def test_law19_orientation_changes_shell_stress():
 def test_law19_prop9_corpus_end_to_end(tmp_path):
     import shutil
     from pyradioss.starter.starter import run_starter
-    src = ("C:/Users/pmqua/AppData/Local/Temp/claude/"
-           "C--Users-pmqua-PycharmProjects-OpenRadioss-Python/"
-           "3c2dcf1e-08fd-425b-ab67-ec0215fa4d3d/scratchpad/rd_decks/"
-           "rd_v_material/RD-V-0230_Fabric_LAW19/0230_fabric_LAW19/"
-           "0230_shell_mat_019_01/SHELL_LAW19_PROP9_0000.rad")
+    # vendored corpus deck (tests/data/rd_decks); PYRADIOSS_RD_DECKS
+    # overrides with a full corpus extract — see test_m37_materials_pack1
+    rd_decks = os.environ.get(
+        "PYRADIOSS_RD_DECKS",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                     "data", "rd_decks"))
+    src = os.path.join(rd_decks, "rd_v_material", "RD-V-0230_Fabric_LAW19",
+                       "0230_fabric_LAW19", "0230_shell_mat_019_01",
+                       "SHELL_LAW19_PROP9_0000.rad")
     if not os.path.exists(src):
         pytest.skip("RD-V-0230 corpus deck not extracted")
     # copy out of the shared corpus dir so the run's .out/.rst stay local

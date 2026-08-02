@@ -39,9 +39,14 @@ from pyradioss.starter.initialization import (build_element_groups,
                                               resolve_node_groups,
                                               resolve_surfaces)
 
-RD_DECKS = (r"C:/Users/pmqua/AppData/Local/Temp/claude/"
-            r"C--Users-pmqua-PycharmProjects-OpenRadioss-Python/"
-            r"3c2dcf1e-08fd-425b-ab67-ec0215fa4d3d/scratchpad/rd_decks")
+# Official-deck corpus. The repo vendors the small decks these tests need
+# under tests/data/rd_decks (see the README there for provenance); point
+# PYRADIOSS_RD_DECKS at a full corpus extract to also run the tests whose
+# decks are too large to vendor (e.g. the 15 MB RD-E-1300 blast deck).
+RD_DECKS = os.environ.get(
+    "PYRADIOSS_RD_DECKS",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                 "data", "rd_decks"))
 _HAS_CORPUS = os.path.isdir(RD_DECKS)
 
 
@@ -563,6 +568,8 @@ def test_law70_oracle_deck_material_resolves():
     for k in range(4):
         path = os.path.join(base, f"0220_foam_LAW70_{k}",
                             "BLOCK_H8_0000.rad")
+        if not os.path.isfile(path):
+            pytest.skip("RD-V-0220 deck not in corpus extract")
         model = Model()
         log = MessageLog()
         parse_starter_deck(read_deck(path), model, log)
@@ -807,6 +814,8 @@ def test_law40_corpus_kelvinmax_deck_builds():
     path = os.path.join(RD_DECKS, "rd_e", "RD-E-5200_Creep",
                         "52_cylinder_creep", "cylinder_creep_beta_001",
                         "foam_relax_0000.rad")
+    if not os.path.isfile(path):
+        pytest.skip("RD-E-5200 deck not in corpus extract")
     model = Model()
     log = MessageLog()
     parse_starter_deck(read_deck(path), model, log)
