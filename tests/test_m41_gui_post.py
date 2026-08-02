@@ -191,6 +191,38 @@ def test_convert_th_to_csv_missing_exe(artifact_dir):
     assert res["ok"] is False and "converter not found" in res["message"]
 
 
+def test_stream_subprocess_survives_utf8_progress_bytes(tmp_path):
+    """The Vortex bridge's tqdm bar emits UTF-8 block characters; the
+    fractional block ▍ ends in byte 0x8d, which the Windows locale codec
+    (cp1252) cannot decode. Before pinning encoding='utf-8' +
+    errors='replace' on the Popen this killed the streaming loop with
+    UnicodeDecodeError whenever such a character was on screen at a flush
+    (the intermittent d3plot-conversion failure). The child below replays
+    the exact crash bytes raw."""
+    import sys
+    code = ("import sys;"
+            "sys.stdout.buffer.write("
+            "b'\\r 55%|\\xe2\\x96\\x88\\xe2\\x96\\x8d    | 6/11\\n');"
+            "sys.stdout.buffer.flush()")
+    events = []
+    rc = PP._stream_subprocess([sys.executable, "-c", code], str(tmp_path),
+                               _collect(events), timeout=60.0)
+    assert rc == 0
+    lines = [e[2] for e in events if e[0] == "line"]
+    bar = [ln for ln in lines if "6/11" in ln]
+    assert bar, f"progress line not streamed: {lines}"
+    assert "█▍" in bar[0]        # █▍ decoded intact, not replaced
+
+
+def test_runner_env_pins_child_stdout_to_utf8():
+    """JobRunner decodes its starter/engine child with UTF-8 — the child
+    must therefore EMIT UTF-8 rather than the locale default (cp1252), or
+    non-ASCII listing output would round-trip wrongly."""
+    env = R.JobRunner._package_env()
+    assert env["PYTHONIOENCODING"] == "utf-8"
+    assert env["PYTHONUNBUFFERED"] == "1"      # streaming stays unbuffered
+
+
 # ---------------------------------------------------------------------------
 # PostProcRunner / run_post_actions
 # ---------------------------------------------------------------------------

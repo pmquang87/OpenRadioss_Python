@@ -534,6 +534,10 @@ class JobRunner:
         the deck directory (a source checkout is not on the default path)."""
         env = dict(os.environ)
         env["PYTHONUNBUFFERED"] = "1"
+        # pin BOTH ends of the pipe to UTF-8: without this the child's
+        # stdout follows the Windows locale (cp1252) while _run_phase now
+        # decodes UTF-8 (same latent crash class as the postproc streamer)
+        env["PYTHONIOENCODING"] = "utf-8"
         # dir that contains the 'pyradioss' package (two levels up from this
         # module: .../pyradioss/gui/runner.py -> repo root / install root)
         pkg_root = os.path.dirname(os.path.dirname(os.path.dirname(
@@ -548,7 +552,8 @@ class JobRunner:
         try:
             proc = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1, cwd=self.work_dir, env=env)
+                text=True, encoding="utf-8", errors="replace", bufsize=1,
+                cwd=self.work_dir, env=env)
         except OSError as exc:
             self._emit(("line", name, f" ** GUI: failed to launch {name}: "
                                       f"{exc}"))
