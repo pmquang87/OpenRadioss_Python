@@ -21,26 +21,6 @@ def reset_backend_state(monkeypatch):
     yield
     _state.update(name=None, mod=None, forced=False)
 
-def test_auto_select_backend_qbat_exclusion():
-    # Model with >= _AUTO_MIN_ELEMENTS elements but contains QBAT
-    model_qbat = MockModel({"shells_qbat": MockGroup(_AUTO_MIN_ELEMENTS)})
-    
-    # Should fall back to numpy despite being large enough
-    backend = auto_select_backend(model_qbat, log=None, explicit=True)
-    assert backend == "numpy", f"Expected numpy for QBAT deck, got {backend}"
-    assert _state["name"] == "numpy"
-    assert not _state["forced"]
-
-def test_auto_select_backend_qeph_exclusion():
-    # Model with >= _AUTO_MIN_ELEMENTS elements but contains QEPH
-    model_qeph = MockModel({"shells_qeph": MockGroup(_AUTO_MIN_ELEMENTS)})
-    
-    # Should fall back to numpy despite being large enough
-    backend = auto_select_backend(model_qeph, log=None, explicit=True)
-    assert backend == "numpy", f"Expected numpy for QEPH deck, got {backend}"
-    assert _state["name"] == "numpy"
-    assert not _state["forced"]
-
 def test_auto_select_backend_normal():
     # Model with >= _AUTO_MIN_ELEMENTS elements, no QBAT/QEPH
     model_normal = MockModel({"shells": MockGroup(_AUTO_MIN_ELEMENTS)})

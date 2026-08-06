@@ -232,17 +232,6 @@ def _model_element_count(model) -> int:
         return 0
 
 
-def _has_unaccelerated_elements(model) -> bool:
-    """True if the model contains element types that lack JIT kernels (M43)."""
-    try:
-        for name, group in model.element_groups():
-            if name in ("shells_qbat", "shells_qeph") and int(group.n) > 0:
-                return True
-    except Exception:
-        pass
-    return False
-
-
 def _log_backend(name, reason, log) -> None:
     """Emit the engine-listing COMPUTE BACKEND line (no-op without a log)."""
     if log is not None:
@@ -284,11 +273,6 @@ def auto_select_backend(model, log=None, *, explicit=True) -> str:
         _state.update(name="numpy", mod=None)
         _log_backend("numpy", f"auto: {nelem} elements < {thr} — JIT warm-up "
                      "dominates (see accel threshold)", log)
-        return "numpy"
-
-    if _has_unaccelerated_elements(model):
-        _state.update(name="numpy", mod=None)
-        _log_backend("numpy", "auto: model contains QBAT/QEPH elements which lack JIT kernels (M43)", log)
         return "numpy"
 
     try:

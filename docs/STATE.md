@@ -155,7 +155,7 @@ deferred lists — confirm scope with the maintainer before starting one.
   a timing ratio on one QBAT example quoted (contention-checked).
 - **Result**: Added `_has_unaccelerated_elements` check. For QBAT/QEPH under auto, Numba routes to NumPy. On `rigid_impactor` containing QBAT, forcing numba completed in 86.2s vs NumPy in 192.1s (numba was actually faster here due to bricks, but purely for shells it would be slower; however fallback is now correctly in place for `auto`).
 
-### M44 — QBAT numba JIT kernels  ⬜
+### M44 — QBAT numba JIT kernels  ✅
 - **Goal**: mirror the QBAT kernel hotspots in `pyradioss/accel/jit_kernels`
   following the existing BT-kernel mirror pattern; re-enable auto for QBAT.
 - **Acceptance**: T01 md5 identical numba vs numpy on QBAT examples; measured

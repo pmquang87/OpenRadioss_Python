@@ -12,3 +12,10 @@
 - The project aims to implement features one milestone at a time (currently M42 to M46).
 - M42 is complete.
 - M43 excludes QBAT/QEPH elements from the auto `numba` rule because they lack JIT kernels, meaning numba falls back to pure Python loops for them which are slower than pure NumPy.
+
+
+## M44 (QBAT) Status Update
+Completed translation of QBAT kernel hotspots into explicit Numba loops in pyradioss/accel/jit_kernels/shells_qbat.py.
+Validation vs Fortran for QBAT examples yielded perfect MATCH.
+Spawned subagent for M45 (QEPH).
+

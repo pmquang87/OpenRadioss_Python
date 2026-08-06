@@ -45,7 +45,7 @@ from __future__ import annotations
 import numpy as np
 from numba import njit
 
-from ..common.constants import EM20, EP30
+from ...common.constants import EM20, EP30
 
 # ---- module-level constants (numba freezes global ndarrays) ----------------
 # hexa: uniform-gradient operator signs and FB hourglass vectors — the
@@ -867,3 +867,6 @@ def law70_elastic_stress(aa1, aa2, g, e):
         out[k, 4] = gk * e[k, 4]
         out[k, 5] = gk * e[k, 5]
     return out
+
+from .shells_qbat import qbat_pre_flat, qbat_post_flat, qbat_pre, qbat_post
+
