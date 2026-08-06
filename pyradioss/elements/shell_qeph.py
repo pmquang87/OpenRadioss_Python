@@ -919,24 +919,45 @@ def _project(G, VF, VM, plat, vqn, di, db):
 # Engine-side forces (czforc3.F)
 # ---------------------------------------------------------------------------
 
+def _pre(x_conn, v_conn, vr_conn, dt, st_npt1, alive):
+    G = _geometry(x_conn)
+    v13, v24, vhi, rl, plat, vqn, di, db = _kinematics(G, v_conn, vr_conn, dt, st_npt1)
+    vdef, vhg = _rates(G, v13, v24, vhi, rl, alive)
+    return G, vdef, vhg, plat, vqn, di, db
+
+def _post(G, thick, Nres, Mres, qres, st, vhg, dt, alive, plat, vqn, di, db):
+    VF, VM = _fint_const(G, thick, Nres, Mres, qres)
+    if not alive.all():
+        VF[~alive] = 0.0
+        VM[~alive] = 0.0
+    _fint_stab(G, st, vhg, dt, alive, Nres, Mres, VF, VM, thick)
+    fg, mg = _project(G, VF, VM, plat, vqn, di, db)
+    
+    import numpy as np
+    visc = np.sqrt(1.0 + st["amu"] ** 2) - st["amu"]
+    dt_e = np.where(st["cspd"] > 0.0,
+                    visc * G["ll"] / np.maximum(st["cspd"], 1e-20), 1e30)
+    return fg, mg, dt_e
+
 def forces(group, x, v, vr, dt, fint, mint):
     st = group.state
     conn = group.conn
     n = group.n
     thick = st["thick"]
-
-    G = _geometry(x[conn])
     alive = st["off"] > 0.0
 
-    v13, v24, vhi, rl, plat, vqn, di, db = _kinematics(
-        G, v[conn], vr[conn], dt, st["npt1"])
-    vdef, vhg = _rates(G, v13, v24, vhi, rl, alive)
+    from pyradioss.accel import get as accel_get
+    jit_pre = accel_get("qeph_pre")
+    if jit_pre is not None:
+        vdef, vhg, plat, vqn, di, db, E, area, a_i, z1, corx, cory, x13, x24, y13, y24, mx13, mx23, mx34, my13, my23, my34, l13, l24, ll, lm = jit_pre(x[conn], v[conn], vr[conn], dt, st["npt1"], alive)
+        G = dict(E=E, area=area, a_i=a_i, z1=z1, corx=corx, cory=cory, x13=x13, x24=x24, y13=y13, y24=y24, mx13=mx13, mx23=mx23, mx34=mx34, my13=my13, my23=my23, my34=my34, l13=l13, l24=l24, ll=ll, lm=lm)
+    else:
+        G, vdef, vhg, plat, vqn, di, db = _pre(x[conn], v[conn], vr[conn], dt, st["npt1"], alive)
 
-    dm = vdef[:, 0:3] * dt          # membrane strain increments
-    gsr2 = vdef[:, 3:5]             # [gxz, gyz] shear RATES
-    kap = vdef[:, 5:8] * dt         # curvature increments
+    dm = vdef[:, 0:3] * dt
+    gsr2 = vdef[:, 3:5]
+    kap = vdef[:, 5:8] * dt
 
-    # ---- layer stress updates + resultants (shared machinery) -----------
     sig = st["sig"]
     epsp_old = st["epsp"].copy() if st["chk_fail"] else None
     Nres = np.zeros((n, 3))
@@ -966,17 +987,14 @@ def forces(group, x, v, vr, dt, fint, mint):
             sig[sl, k, :] = s_new
             s_mid = 0.5 * (s_old + s_new)
             de_layers[sl] += wk * np.einsum("nk,nk->n", s_mid, deps)
-            s_res = shell_ortho.rot_stress_m2e(s_new, cs) \
-                if cs is not None else s_new
+            s_res = shell_ortho.rot_stress_m2e(s_new, cs) if cs is not None else s_new
             Nres[sl] += wk[:, None] * s_res
             Mres[sl] += (wk * zk)[:, None] * s_res
-        # elastic transverse shear (GS = G*SHF; SHF = 0 for one layer)
         qold = st["qshear"][sl].copy()
         st["qshear"][sl] += st["gs"][sl][:, None] * gsr2[sl] * dt
         de_layers[sl] += t_sl * np.einsum(
             "nk,nk->n", 0.5 * (qold + st["qshear"][sl]), gsr2[sl] * dt)
 
-    # ---- element deletion (shared with BT) -------------------------------
     if st["chk_fail"]:
         alive = _element_deletion(st, nip_of)
         if not alive.all():
@@ -989,22 +1007,14 @@ def forces(group, x, v, vr, dt, fint, mint):
     qres = st["qshear"] * thick[:, None]
     st["eint"] += area * de_layers
 
-    # ---- constant part + physical stabilization --------------------------
-    VF, VM = _fint_const(G, thick, Nres, Mres, qres)
-    if not alive.all():
-        # a deleted element carries no constant-part force either
-        VF[~alive] = 0.0
-        VM[~alive] = 0.0
-    _fint_stab(G, st, vhg, dt, alive, Nres, Mres, VF, VM, thick)
+    jit_post = accel_get("qeph_post")
+    if jit_post is not None:
+        fg, mg, dt_e = jit_post(thick, Nres, Mres, qres, st["amu"], st["cspd"], st["yld"], st["fmat"], vhg, dt, alive, plat, vqn, di, db, E, area, a_i, z1, corx, cory, x13, x24, y13, y24, mx13, mx23, mx34, my13, my23, my34, l13, l24, ll, lm)
+    else:
+        fg, mg, dt_e = _post(G, thick, Nres, Mres, qres, st, vhg, dt, alive, plat, vqn, di, db)
 
-    # ---- projection + scatter (negated: fint convention) -----------------
-    fg, mg = _project(G, VF, VM, plat, vqn, di, db)
     flat = conn.reshape(-1)
     scatter_add3(fint, flat, -fg.reshape(-1, 3))
     scatter_add3(mint, flat, -mg.reshape(-1, 3))
 
-    # ---- time step (cndt3.F: VISCMX factor on the condensed length) ------
-    visc = np.sqrt(1.0 + st["amu"] ** 2) - st["amu"]
-    dt_e = np.where(st["cspd"] > 0.0,
-                    visc * G["ll"] / np.maximum(st["cspd"], EM20), EP30)
     return np.where(alive, dt_e, EP30)

@@ -161,7 +161,7 @@ deferred lists — confirm scope with the maintainer before starting one.
 - **Acceptance**: T01 md5 identical numba vs numpy on QBAT examples; measured
   speedup ≥1 on c04-class model; fast tier green.
 
-### M45 — QEPH numba JIT kernels  ⬜
+### M45 — QEPH numba JIT kernels  ✅
 - Same as M44 for QEPH (`ZCFAC` stabilization path). Same acceptance.
 
 ### M46 — shell_bt4 dt-branch reconciliation  ⬜
