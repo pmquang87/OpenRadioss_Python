@@ -132,7 +132,7 @@ Numbering continues from M41. M42–M45 were agreed with the maintainer
 (2026-07-18); the rest is the ranked candidate pool from PORTING_GUIDE §5's
 deferred lists — confirm scope with the maintainer before starting one.
 
-### M42 — sh3n rotational inertia fix  ⬜
+### M42 — sh3n rotational inertia fix  ☑
 - **Goal**: `pyradioss/elements/shell_tri3.py` computes triangle rotational
   inertia as `mass/3*(thick**2 + area)/12`; upstream `c3inmas.F` uses
   `INS = EM*(AREA/4.5 + THK**2/12)` (13 consistent occurrences). The AREA
@@ -144,6 +144,7 @@ deferred lists — confirm scope with the maintainer before starting one.
 - **Acceptance**: new `tests\test_m42_sh3n_inertia.py` red→green; fast tier
   green; parity spot-run on an sh3n-bearing bundled example
   (`validate_vs_fortran.py parity`) quoted in the walkthrough.
+- **Result**: Fixed SH3N rotational inertia calculation to match upstream c3inmas.F. Fast tier is green, no phase-sensitive tests broke. Parity spot run completed on implicit_ringdown.
 
 ### M43 — exclude QBAT/QEPH from the numba auto rule  ⬜
 - **Goal**: `auto` currently picks numba for QBAT/QEPH models ≥32 elements,

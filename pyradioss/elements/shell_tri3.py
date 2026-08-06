@@ -217,7 +217,7 @@ def init_group(group, model, log):
     # (M40, engine/mass_scaling.py) — kr = 2 I/dt_e^2 mirrors upstream's
     # STIR = STI*(t^2+A)/12 (cndt3.F, the DKT/sh3n family) with the factor
     # matching this lumping; see shell_bt4.init_group for the full story.
-    group.state["dt_iner"] = mass / 3.0 * (thick ** 2 + area) / 12.0
+    group.state["dt_iner"] = mass / 3.0 * (area / 4.5 + thick ** 2 / 12.0)
     inertia_c = np.repeat(group.state["dt_iner"], 3)
     return node_idx, mass_c, inertia_c
 

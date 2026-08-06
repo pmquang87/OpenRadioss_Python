@@ -1,0 +1,30 @@
+[
+ {
+  "example": "implicit_ringdown",
+  "runname": "IMPLRING",
+  "implicit": true,
+  "class": "PORT-ONLY(implicit)",
+  "fortran": {
+   "mode": "real-format",
+   "starter_rc": 0,
+   "starter_time": 0.84,
+   "engine_rc": 2,
+   "engine_time": 0.09,
+   "n_nodes": 12,
+   "n_elements": 10,
+   "starter_elapsed_self": 0.71,
+   "status": "implicit-port-card",
+   "error": "Abort(2) on node 0 (rank 0 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 2) - process 0"
+  },
+  "pyradioss": {
+   "starter_rc": 0,
+   "starter_time": 0.43,
+   "engine_rc": 0,
+   "engine_time": 10.47,
+   "n_nodes": 12,
+   "n_elements": 10,
+   "starter_elapsed_self": 0.029,
+   "status": "ok-no-th"
+  }
+ }
+]
