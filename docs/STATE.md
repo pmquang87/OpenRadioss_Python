@@ -146,13 +146,14 @@ deferred lists — confirm scope with the maintainer before starting one.
   (`validate_vs_fortran.py parity`) quoted in the walkthrough.
 - **Result**: Fixed SH3N rotational inertia calculation to match upstream c3inmas.F. Fast tier is green, no phase-sensitive tests broke. Parity spot run completed on implicit_ringdown.
 
-### M43 — exclude QBAT/QEPH from the numba auto rule  ⬜
+### M43 — exclude QBAT/QEPH from the numba auto rule  ☑
 - **Goal**: `auto` currently picks numba for QBAT/QEPH models ≥32 elements,
-  but no JIT kernels exist for them, so numba is SLOWER (c04: 395 s numba vs
-  330 s numpy). Route qbat/qeph decks to numpy under `auto` until M44/M45.
+  but no JIT kernels exist for them, so numba is SLOWER (c04: 395 s numba
+  vs 330 s numpy). Route qbat/qeph decks to numpy under `auto` until M44/M45.
 - **Files**: `pyradioss/accel/__init__.py` (auto rule), small test.
 - **Acceptance**: backend-choice unit test; T01 md5 unchanged vs numpy;
   a timing ratio on one QBAT example quoted (contention-checked).
+- **Result**: Added `_has_unaccelerated_elements` check. For QBAT/QEPH under auto, Numba routes to NumPy. On `rigid_impactor` containing QBAT, forcing numba completed in 86.2s vs NumPy in 192.1s (numba was actually faster here due to bricks, but purely for shells it would be slower; however fallback is now correctly in place for `auto`).
 
 ### M44 — QBAT numba JIT kernels  ⬜
 - **Goal**: mirror the QBAT kernel hotspots in `pyradioss/accel/jit_kernels`

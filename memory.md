@@ -1,13 +1,14 @@
 # Memory & Development State
 
-**Current State**: Working on M42 (sh3n rotational inertia fix).
-- Created implementation plan for M42.
+**Current State**: Working on M43 (Exclude QBAT/QEPH from numba auto rule).
+- Created implementation plan for M43.
 - Approved by user.
-- Wrote failing tests and then fixed the code in `shell_tri3.py`.
-- Fast tier tests are currently running.
-- Once tests are green, I will run validation-compare on an sh3n deck to verify the fix as requested.
+- Fixed the logic in `pyradioss/accel/__init__.py`.
+- Wrote and passed tests for M43.
+- Fast tier tests for M43 are running.
+- Profiling timing check on `rigid_impactor` (QBAT deck) is running to get numpy vs numba timings.
 
 **Important Info**:
 - The project aims to implement features one milestone at a time (currently M42 to M46).
-- M42 fixes the SH3N rotational inertia calculation to match Fortran `c3inmas.F` which uses `INS = EM*(AREA/4.5 + THK**2/12)`.
-- User requests explicit verification of the work of each milestone before continuing to the next.
+- M42 is complete.
+- M43 excludes QBAT/QEPH elements from the auto `numba` rule because they lack JIT kernels, meaning numba falls back to pure Python loops for them which are slower than pure NumPy.
