@@ -32,6 +32,7 @@ import numpy as np
 from .entities import (
     AddedMass, BoundaryCondition, Box, ConcentratedLoad, Damping,
     EntityGroup, Gravity, ImposedDisplacement, ImposedVelocity,
+    AleBoundaryCondition,
     InitialVelocity, Interface, Line, Material, Mpc, NodeGroup, Part,
     PressureLoad, Property, Rbe3, RigidBody, RigidWall, Section, Sensor,
     Surface, THRequest,
@@ -527,6 +528,7 @@ class Model:
 
         # Loads / constraints / contacts
         self.bcs: List[BoundaryCondition] = []
+        self.ale_bcs: List[AleBoundaryCondition] = []
         self.inivel: List[InitialVelocity] = []
         self.gravity: List[Gravity] = []
         self.cloads: List[ConcentratedLoad] = []

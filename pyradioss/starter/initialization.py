@@ -1083,6 +1083,11 @@ def resolve_skews(model: Model, log: MessageLog) -> None:
         bc.skew_row = _bind("SKEW", bc.skew_id, f"/BCS/{bc.id}") \
             if bc.skew_id else 0
 
+    # ---- /ALE/BCS: the fixed DOFs are the skew's axes (alewdx_grid_bcs.F) --
+    for bc in model.ale_bcs:
+        bc.skew_row = _bind("SKEW", bc.skew_id, f"/ALE/BCS/{bc.id}") \
+            if bc.skew_id else 0
+
     # ---- /IMPVEL + /IMPDISP: the imposed DOF is a skew axis (fixvel.F) --
     for im in list(model.impvel) + list(model.impdisp):
         im.skew_row = _bind("SKEW", im.skew_id,

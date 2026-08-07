@@ -386,7 +386,7 @@ def _read_elems(block: KeywordBlock, model: Model, log: MessageLog,
 
 def read_quad(block, model, log):
     """``/QUAD``: 4-node 2D solid element."""
-    return _read_element(block, model, log, "quads", 4, "QUAD")
+    return _read_elems(block, model, log, "QUAD", 4)
 
 def read_brick(block, model, log):
     """``/BRICK/part_ID``: 8-node solids (elem_ID + 8 node IDs).
@@ -1000,9 +1000,15 @@ def _read_mat_modifier(kind: str, block: KeywordBlock, model: Model,
 
 
 def read_ale(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/ALE/MAT/mat_ID`` — parse-only note (M37); other /ALE options
-    are not ported."""
-    _read_mat_modifier("ALE", block, model, log)
+    """``/ALE/MAT/mat_ID`` — parse-only note (M37);
+    ``/ALE/BCS/bcs_ID`` — grid boundary conditions (M57)."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub == "MAT":
+        _read_mat_modifier("ALE", block, model, log)
+    elif sub == "BCS":
+        read_ale_bcs(block, model, log)
+    else:
+        log.warning(f"/ALE/{sub} not ported — block skipped", block.source)
 
 
 def read_euler(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -2026,6 +2032,45 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     fix_rot = np.array([ch == "1" for ch in rot.zfill(3)])
     model.bcs.append(BoundaryCondition(
         id=block.user_id, grnod_id=grnod, fix_tra=fix_tra, fix_rot=fix_rot,
+        title=title, skew_id=skew))
+
+
+def read_ale_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ALE/BCS/bcs_ID``::
+    
+        card 1:  title
+        card 2:  WL_flags   skew_ID   grnod_ID
+        
+    ``WL_flags`` is the 6-digit ALE boundary condition flags `WX WY WZ LX LY LZ`
+    representing grid velocity (W) and Lagrange (L) constraints.
+    """
+    title, cards = _fixed_data(block) if block.fixed \
+        else _title_and_data(block)
+    if not cards or (block.fixed and cards[0].is_blank):
+        log.error(f"/ALE/BCS/{block.user_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("BCS")
+        flags = f[0].split()
+        if len(flags) < 2:
+            log.error(f"/ALE/BCS/{block.user_id}: WL_flags field needs "
+                      f"'WWWWLL' flags, got '{f[0]}'", block.source)
+            return
+        wl, skew, grnod = flags[0], _ival(f[1]), _ival(f[2])
+    else:
+        t = cards[0].tokens()
+        if len(t) < 3:
+            log.error(f"/ALE/BCS/{block.user_id}: card 2 needs "
+                      f"'wl_flags skew grnod'", block.source)
+            return
+        wl, skew, grnod = t[0], int(t[1]), int(t[2])
+    w, l = wl[:3].ljust(3, '0'), wl[3:6].ljust(3, '0')
+    fix_w = np.array([ch == "1" for ch in w])
+    fix_l = np.array([ch == "1" for ch in l])
+    
+    from pyradioss.model.entities import AleBoundaryCondition
+    model.ale_bcs.append(AleBoundaryCondition(
+        id=block.user_id, grnod_id=grnod, fix_w=fix_w, fix_l=fix_l,
         title=title, skew_id=skew))
 
 
@@ -3723,6 +3768,7 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "BEAM": read_beam,
     "PART": read_part,
     "MAT": read_mat,
+    "ALE/BCS": read_ale_bcs,
     "ALE": read_ale,        # /ALE/MAT parse-only note (M37)
     "EULER": read_euler,    # /EULER/MAT parse-only note (M37)
     "HEAT": read_heat,      # /HEAT/MAT parse-only note (M37)

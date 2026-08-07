@@ -377,6 +377,22 @@ class BoundaryCondition:
 
 
 @dataclass
+class AleBoundaryCondition:
+    """/ALE/BCS: grid boundary conditions for ALE solver.
+    
+    Fixes the grid velocity (wx, wy, wz) and/or Lagrange conditions
+    (lx, ly, lz) of a node group.
+    """
+    id: int
+    grnod_id: int
+    fix_w: np.ndarray  # (3,) bool for WX WY WZ
+    fix_l: np.ndarray  # (3,) bool for LX LY LZ
+    title: str = ""
+    skew_id: int = 0
+    skew_row: int = 0
+
+
+@dataclass
 class InitialVelocity:
     """/INIVEL/TRA: initial translational velocity on a node group.
     /INIVEL/AXIS (M5): initial *rotational* velocity field about an axis,
