@@ -206,6 +206,7 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
         setattr(model, attr, group)
 
     _dispatch_shell_formulations(model, log)
+    _dispatch_sh3n_formulations(model, log)
 
 
 def _subset_shell_group(src: ElementGroup, mask: np.ndarray) -> ElementGroup:
@@ -253,6 +254,33 @@ def _dispatch_shell_formulations(model: Model, log: MessageLog) -> None:
                  f"{gname.split('_', 1)[1].upper()} FORMULATION KERNEL "
                  f"(Ishell dispatch)")
     model.shells = _subset_shell_group(src, keep) if keep.any() else None
+
+
+def _dispatch_sh3n_formulations(model: Model, log: MessageLog) -> None:
+    """SH3N element-technology dispatch: split /SH3N parts whose
+    /PROP/SHELL Ish3n selects a dedicated formulation kernel out of the
+    generic shell_tri3 group, per elements.SH3N_ISHELL_GROUPS.
+    Decks without such parts are left alone."""
+    from ..elements import SH3N_ISHELL_GROUPS
+    src = model.sh3n
+    if src is None or not src.n:
+        return
+    masks: Dict[str, np.ndarray] = {}
+    for sl, mat, prop in src.state["slices"]:
+        ish3n = int(prop.params.get("ish3n", 0) or 0)
+        gname = SH3N_ISHELL_GROUPS.get(ish3n)
+        if gname is not None:
+            masks.setdefault(gname, np.zeros(src.n, dtype=bool))[sl] = True
+    if not masks:
+        return
+    keep = np.ones(src.n, dtype=bool)
+    for gname, mask in masks.items():
+        keep &= ~mask
+        setattr(model, gname, _subset_shell_group(src, mask))
+        log.info(f"     {int(mask.sum())} /SH3N ELEMENT(S) ROUTED TO THE "
+                 f"{gname.split('_', 1)[1].upper()} FORMULATION KERNEL "
+                 f"(Ish3n dispatch)")
+    model.sh3n = _subset_shell_group(src, keep) if keep.any() else None
 
 
 # ----------------------------------------------------------------------------
