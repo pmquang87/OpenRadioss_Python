@@ -23,6 +23,7 @@ from ..input.starter_keywords import parse_starter_deck
 from ..model.model import Model
 from .checks import check_model
 from ..input.units import apply_unit_conversions
+from .airbag import initialize_monitored_volumes
 from .initialization import (build_element_groups,
                              initialize_elements_and_mass,
                              initialize_rigid_bodies,
@@ -132,6 +133,7 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
         if not log.errors:
             initialize_elements_and_mass(model, log)
             initialize_rigid_bodies(model, log)
+            initialize_monitored_volumes(model)
             # reference (physical, pre-mass-scaling) nodal masses: the
             # Engine's init-time computations (interface dt bounds,
             # gravity) use these so a /DT/NODA/CST-grown model resumes
