@@ -29,4 +29,8 @@ def build_contacts(model, log):
             penalty.append(ContactType11(itf, model, log))
         elif itf.type == 2:
             tied.append(ContactType2(itf, model, log))
+        elif itf.type == 24:
+            raise NotImplementedError(
+                f"/INTER/TYPE24/{itf.id}: parsed, physics not implemented (M49) "
+                f"— the Engine will refuse to run this model")
     return penalty, tied

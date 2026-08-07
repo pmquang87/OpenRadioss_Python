@@ -2970,8 +2970,8 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     scaling.
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if kind not in ("TYPE7", "TYPE2", "TYPE11"):
-        log.warning(f"/INTER/{kind} not ported (TYPE2, TYPE7, TYPE11 "
+    if kind not in ("TYPE7", "TYPE2", "TYPE11", "TYPE24"):
+        log.warning(f"/INTER/{kind} not ported (TYPE2, TYPE7, TYPE11, TYPE24 "
                     f"supported)", block.source)
         return
     title, cards = _title_and_data(block)
@@ -3002,6 +3002,73 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             id=block.user_id, type=2, grnod_id=int(toks[0]),
             surf_id=int(toks[1]), dsearch=f[2], title=title))
         return
+
+    if kind == "TYPE24":
+        if len(cards) < 6:
+            log.error(f"/INTER/TYPE24/{block.user_id}: real-format block "
+                      f"needs at least 6 data cards (got {len(cards)})", block.source)
+            return
+        ign: List[str] = []
+        f0 = _fixed_vals(cards[0], [10] * 9)
+        id1, id2 = _ival(f0[0]), _ival(f0[1])
+        istf = _ival(f0[2])
+        for name, s in (("Irem_i2", f0[4]), ("Idel", f0[6]), ("IPSTIF", f0[8])):
+            if _ival(s) != 0:
+                ign.append(f"{name}={s}")
+                
+        f1 = _fixed_vals(cards[1], [10, 20, 10, 20, 20, 20])
+        grnod_id = _ival(f1[0])
+        if _ival(f1[2]) != 0:
+            ign.append(f"Iedge={f1[2]}")
+        gap_max = _fval(f1[4])  # Gap_max_s
+        # Gap_max_m is f1[5]
+        
+        f2 = _fixed_vals(cards[2], [20, 20, 10, 10, 20, 20])
+        igap = _ival(f2[2])
+        for name, s in (("Stmin", f2[0]), ("Stmax", f2[1]), ("Ipen", f2[3]), ("Ipen_max", f2[4]), ("STFAC_MDT", f2[5])):
+            if s and _to_float(s) != 0.0:
+                ign.append(f"{name}={s}")
+                
+        f3 = _fixed_vals(cards[3], [20, 20, 20, 20, 20])
+        stfac, fric = _fval(f3[0]), _fval(f3[1])
+        for name, s in (("Tstart", f3[3]), ("Tstop", f3[4])):
+            if s and _to_float(s) != 0.0:
+                ign.append(f"{name}={s}")
+                
+        f4 = _fixed_vals(cards[4], [7, 1, 1, 1, 20, 10, 20, 20, 20])
+        if _ival(f4[1]) or _ival(f4[2]) or _ival(f4[3]):
+            ign.append(f"IBC={f4[1] or '0'}{f4[2] or '0'}{f4[3] or '0'}")
+        for name, s in (("Inacti", f4[5]), ("VISs", f4[6]), ("Tpressfit", f4[8])):
+            if s and _to_float(s) != 0.0:
+                ign.append(f"{name}={s}")
+                
+        f5 = _fixed_vals(cards[5], [10, 10, 20, 10, 10, 20, 10, 10])
+        mfrot, ifq = _ival(f5[0]), _ival(f5[1])
+        xfreq, sens = _fval(f5[2]), _ival(f5[4])
+        for name, s in (("DTSTIF", f5[5]), ("Fric_ID", f5[7])):
+            if _to_float(s) != 0.0:
+                ign.append(f"{name}={s}")
+                
+        fric_c = (0.0,) * 6
+        icard = 6
+        if mfrot > 0:
+            cc = [0.0] * 6
+            if len(cards) > icard:
+                cc[:5] = _floats(cards[icard], 5)
+                icard += 1
+                if mfrot > 1 and len(cards) > icard:
+                    cc[5] = _floats(cards[icard], 1)[0]
+                    icard += 1
+            else:
+                log.warning(f"/INTER/TYPE24/{block.user_id}: Ifric={mfrot} "
+                            f"without a C1..C5 card — all coefficients 0",
+                            block.source)
+            fric_c = tuple(cc)
+            
+        if ign:
+            log.warning(f"/INTER/TYPE24/{block.user_id}: real-format fields "
+                        f"not ported — ignored: {'; '.join(ign)}",
+                        block.source)
 
     if kind == "TYPE7" and len(cards) >= 6:
         # ==== the REAL fixed-format TYPE7 layout (see docstring) ===========
@@ -3170,6 +3237,13 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.interfaces.append(Interface(
             id=block.user_id, type=7, grnod_id=id1, surf_id=id2,
             istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap,
+            gap_max=gap_max, sens_id=sens, mfrot=mfrot, ifq=ifq,
+            xfiltr=xfiltr, fric_c=fric_c, title=title))
+    elif kind == "TYPE24":
+        # For TYPE24, gap=0.0 since it does not have a Gap_min parameter on the card.
+        model.interfaces.append(Interface(
+            id=block.user_id, type=24, grnod_id=grnod_id, surf_id1=id1, surf_id=id2,
+            istf=istf, igap=igap, stfac=stfac, fric=fric, gap=0.0,
             gap_max=gap_max, sens_id=sens, mfrot=mfrot, ifq=ifq,
             xfiltr=xfiltr, fric_c=fric_c, title=title))
     else:                          # TYPE11

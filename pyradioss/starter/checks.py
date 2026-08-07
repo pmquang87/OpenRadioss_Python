@@ -224,6 +224,14 @@ def check_model(model: Model, log: MessageLog) -> None:
             for lid in (itf.line_id1, itf.line_id2):
                 if lid not in model.lines:
                     log.error(f"{who}: line {lid} not defined", "CROSS REF")
+        elif itf.type == 24:
+            log.warning(f"{who}: parsed, physics not implemented (M49) — "
+                        f"the Engine will refuse to run this model", "PROP CHECK")
+            if itf.grnod_id != 0:
+                need_group(itf.grnod_id, who)
+            for sid in (itf.surf_id1, itf.surf_id):
+                if sid != 0 and sid not in model.surfaces:
+                    log.error(f"{who}: surface {sid} not defined", "CROSS REF")
     for th in model.th_requests:
         if th.kind == "NODE":
             for nid in th.ids:

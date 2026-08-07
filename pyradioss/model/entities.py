@@ -792,8 +792,9 @@ class Interface:
 
     id: int
     type: int = 7
-    grnod_id: int = 0     # secondary nodes (7: 0 = self-impact; 2: required)
-    surf_id: int = 0      # main surface (types 7 and 2)
+    grnod_id: int = 0     # secondary nodes (7: 0 = self-impact; 2: required; 24: node-to-surface)
+    surf_id: int = 0      # main surface (types 7, 2, 24)
+    surf_id1: int = 0     # secondary surface (type 24 surface-to-surface)
     line_id1: int = 0     # secondary edges (type 11)
     line_id2: int = 0     # main edges (type 11)
     istf: int = 0

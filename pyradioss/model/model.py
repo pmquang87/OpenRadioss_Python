@@ -459,6 +459,7 @@ class Model:
         #                                       (QBAT split, M41 dispatch)
         self.shells_qeph: Optional[ElementGroup] = None  # /SHELL Ishell=24
         #                                       (QEPH split, M41 dispatch)
+        self.shells_dkt18: Optional[ElementGroup] = None  # /SHELL Ishell=18
         self.sh3n: Optional[ElementGroup] = None      # /SH3N   (IXTG)
         self.trusses: Optional[ElementGroup] = None   # /TRUSS  (IXT)
         self.springs: Optional[ElementGroup] = None   # /SPRING (IXR)

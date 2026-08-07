@@ -1,0 +1,19 @@
+/BEGIN
+1
+/INTER/TYPE24/1
+my type24 interface
+# surf_ID1  surf_ID2      Istf                       Irem_i2                Idel              IPSTIF
+         0        10         1                             0                   1                   0
+# grnd_IDs                         Iedge          Edge_angle           Gap_max_s           Gap_max_m
+         5                             0                   0                10.0                15.0
+#              Stmin               Stmax     Igap0     Ipen0           Ipen_max          STFAC_MDT
+                 0.0                 0.0         0         0                0.0                  0.0
+#              Stfac                Fric                                  Tstart               Tstop
+                 2.0                 0.3                                     0.0                 0.0
+#      IBC                        Inacti                VISs                     Tpressfit
+           0 0 0                       0                 0.0                                     0.0
+#    Ifric    Ifiltr               Xfreq             sens_ID              DTSTIF             fric_ID
+         1         0                 0.0                   0                 0.0                   0
+#                 C1                  C2                  C3                  C4                  C5
+                 1.0                 2.0                 3.0                 4.0                 5.0
+/END
