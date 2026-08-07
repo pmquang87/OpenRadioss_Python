@@ -66,6 +66,7 @@ from .damping import Dampers
 from .kinematics import LoadsAndConstraints
 from .lagmul import LagmulSolver
 from .mass_scaling import NodalTimeStep
+from .ams import AMSManager
 from .mpc import build_mpc
 from .rbe3 import build_rbe3
 from .rigid_body import build_rigid_bodies
@@ -301,6 +302,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     sensors = Sensors(model, log)          # /SENSOR (M6)
     if resumed:                            # latched sensors stay latched
         sensors.fire_time.update(saved.get("sensors", {}))
+    ams = AMSManager(model, controls) if getattr(controls, "dt_ams", False) else None
     noda = NodalTimeStep(model, controls, log) if controls.dt_noda else None
     if noda is not None:
         for rb in rbodies:
@@ -392,15 +394,20 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                                         0.0, fint, mint)
             claims.append(dt_e)
             dt_next = min(dt_next, float(dt_e.min()))
+        if ams is not None:
+            ams_nodes = ams.tag_nodes(claims)
+            diag_added, M_offdiag, max_dmels = ams.build_ams_matrix(claims)
+        else:
+            ams_nodes = None
+            M_offdiag = None
         if noda is not None:
             # nodal time step (and, with CST, the initial mass addition —
-            # a deck whose smallest elements already violate dT_min gets
-            # scaled before the first cycle, like the original); the
+            # runs before the kinematics so we can reuse inv_mass). The
             # inertia arrays enable the ROTATIONAL nodal dt sqrt(2 IN/
             # STIFR) and its CST inertia scaling (dtnoda.F 452-516, M40)
             noda.assemble(claims)
             dt_next = noda.apply(mass_eff, inv_mass, model.v, 0.0,
-                                 model.inertia, inv_inertia)
+                                 model.inertia, inv_inertia, ams_nodes)
             state.e_madd = noda.e_madd
         # penalty interfaces bound the step from cycle 0 (their stiffness
         # is static in this port), so an impact on the very first cycles
@@ -539,10 +546,17 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # replaces the worst-element dt as the next-step bound.  The
         # inertia arrays enable the ROTATIONAL nodal dt and its CST
         # inertia scaling (dtnoda.F 452-516, M40 — see mass_scaling.py).
+        if ams is not None:
+            ams_nodes = ams.tag_nodes(claims)
+            diag_added, M_offdiag, max_dmels = ams.build_ams_matrix(claims)
+        else:
+            ams_nodes = None
+            M_offdiag = None
+
         if noda is not None:
             noda.assemble(claims)
             dt_next = noda.apply(mass_eff, inv_mass, model.v, state.t,
-                                 model.inertia, inv_inertia)
+                                 model.inertia, inv_inertia, ams_nodes)
             state.e_madd = noda.e_madd
 
         # ---- 3d. /MPC Lagrange forces (M6): the tiny coupled solve that
@@ -558,7 +572,14 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # ---- 4. acceleration + velocity update (leap-frog) ----------------
         v_old = model.v.copy()     # for wall energy + contact work booking
         vr_old = model.vr.copy()   # for the internal-work ledger (6c)
-        acc = (fint + fcont + fext) * inv_mass[:, None]
+        f_total = fint + fcont + fext
+        if M_offdiag is not None:
+            M_diag = mass_eff + diag_added
+            acc = f_total * inv_mass[:, None]
+            iters, rel_res = ams.solve(acc, f_total, M_diag, M_offdiag)
+            state.ams_iters = getattr(state, "ams_iters", 0) + iters
+        else:
+            acc = f_total * inv_mass[:, None]
         model.v += acc * dt
         model.vr += mint * inv_inertia[:, None] * dt
 
