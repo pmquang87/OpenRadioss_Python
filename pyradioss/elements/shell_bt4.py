@@ -220,59 +220,6 @@ def _char_length(xl: np.ndarray, area: np.ndarray) -> np.ndarray:
     return area / np.maximum(np.sqrt(lmax), EM20)
 
 
-def _condensed_length(xl: np.ndarray, area: np.ndarray,
-                      facdt: float) -> np.ndarray:
-    """The QBAT/QEPH condensed characteristic length (M40).
-
-    Fortran origin: the BATOZ family does NOT use cdlen3's side length —
-    ``cbacoor.F`` lines 360-370 + 1080-1098 (QBAT, Ishell=12) and
-    ``czcorc.F`` lines 377-402 (QEPH, Ishell=22/24, identical up to the
-    FACDT constant — its comment says "same than QBAT") condense the
-    stiffness geometry into
-
-        L13, L24 = |half-diagonal|^2 ,   LL = max(L13, L24)
-        RX,RY = XL2+XL3-XL4 ; SX,SY = -XL2+XL3+XL4   (covariant sums,
-                translation-invariant -> centered coords work directly)
-        C1 = |R|, C2 = |S|
-        FAC1 = 1 + min(1/2, (max(C1,C2)/min(C1,C2) - 1)/4)   (aspect)
-        FAC2 = 0.78 + 0.22*(3.413*max(0, 4A/(C1*C2) - 0.7071))^3  (skew)
-        LM   = max(|x2*y4 - y2*x4|, |x1*y3 - y1*x3|)   (centered corners;
-               zero for a flat parallelogram — the warp/taper term)
-        LC   = A / sqrt(2*FAC1*FAC2*(FACDT + LM/A)*LL)
-
-    with FACDT = 4/3 (QBAT, ``FOUR_OVER_3``) or 5/4 (QEPH,
-    ``FIVE_OVER_4``).  For a square of side a this gives LC = 0.866 a —
-    SHORTER than the side length, so the BATOZ-family claims a stiffness
-    ``STI = 0.5 V A11/LC^2`` that is 4/3 of the side-length reading and
-    runs a correspondingly smaller element dt (cndt3.F line 223).  The
-    RD-E-1000 c04 floor comes from exactly this: the /RBODY master's
-    transported K_rot needs the members' QBAT STI/STIR, and the
-    side-length claim left the port's floor at 1.865e-2 vs the Fortran
-    1.644e-2 (LC = 13.410 vs the port's 15.2 on the welded elements)."""
-    x, y = xl[:, :, 0], xl[:, :, 1]                  # centered local coords
-    x13 = 0.5 * (x[:, 0] - x[:, 2])
-    y13 = 0.5 * (y[:, 0] - y[:, 2])
-    x24 = 0.5 * (x[:, 1] - x[:, 3])
-    y24 = 0.5 * (y[:, 1] - y[:, 3])
-    ll = np.maximum(x13 ** 2 + y13 ** 2, x24 ** 2 + y24 ** 2)
-    rx = x[:, 1] + x[:, 2] - x[:, 3] - x[:, 0]
-    ry = y[:, 1] + y[:, 2] - y[:, 3] - y[:, 0]
-    sx = -x[:, 1] + x[:, 2] + x[:, 3] - x[:, 0]
-    sy = -y[:, 1] + y[:, 2] + y[:, 3] - y[:, 0]
-    c1 = np.sqrt(rx ** 2 + ry ** 2)
-    c2 = np.sqrt(sx ** 2 + sy ** 2)
-    cmax = np.maximum(c1, c2)
-    cmin = np.maximum(np.minimum(c1, c2), EM20)
-    fac1 = np.minimum(0.5, 0.25 * (cmax / cmin - 1.0)) + 1.0
-    fac2 = 4.0 * area / np.maximum(c1 * c2, EM20)
-    fac2 = 3.413 * np.maximum(0.0, fac2 - 0.7071)
-    fac2 = 0.78 + 0.22 * fac2 ** 3
-    faci = 2.0 * fac1 * fac2
-    lm = np.maximum(np.abs(x[:, 1] * y[:, 3] - y[:, 1] * x[:, 3]),
-                    np.abs(x[:, 0] * y[:, 2] - y[:, 0] * x[:, 2]))
-    s = np.sqrt(faci * (facdt + lm / np.maximum(area, EM20)) * ll)
-    return area / np.maximum(s, EM20)
-
 
 #: card Ishell values whose ENGINE formulation flag is IHBE <= 1 — the
 #: hm_read_prop01.F lines 302-315 double storage maps card -> GEO(171):
@@ -285,22 +232,7 @@ def _condensed_length(xl: np.ndarray, area: np.ndarray,
 #: rates this kernel always used.
 _IHBE_LE1_CARDS = (0, 1, 2)
 
-#: Ishell (IHBE) values of the BATOZ family, whose dt claim uses the
-#: condensed length above: {user Ishell: (FACDT, default dn)} with
-#: 12 = QBAT (cbacoor.F, FACDT = 4/3) and 22/24 = QEPH (czcorc.F,
-#: FACDT = 5/4; the starter folds 22/23 into 24, hm_read_prop01.F 185).
-#: ``dn`` is the family's NUMERICAL DAMPING: the engine feeds it to the
-#: dt claim as cndt3.F's ``ALDT = ALDT * (sqrt(1+dn^2) - dn)`` (lines
-#: 84-88, VISCMX with AMU = dn from cncoef3.F).  A zero card value takes
-#: the formulation default — 1e-3 for QBAT (cncoef3.F CNCOEF3 lines
-#: 426-431, the engine-numbering IHBE==11 branch; the c04 Fortran
-#: starter listing prints exactly 'SHELL NUMERICAL DAMPING 1.0E-03') and
-#: 0.015 for QEPH (hm_read_prop01.F line 199 ``GEO(17)=ZEP015`` +
-#: cncoef3.F CNCOEF3B lines 255-261; the c08 listing prints 1.5E-02).
-#: Every other Ishell keeps the BT side-length claim (cdlen3.F) this
-#: kernel always used, with no dn factor — the pre-M40 claim, unchanged.
-_CONDENSED_FACDT = {12: (4.0 / 3.0, 1.0e-3),
-                    22: (1.25, 1.5e-2), 24: (1.25, 1.5e-2)}
+
 
 
 # ----------------------------------------------------------------------------
@@ -423,24 +355,11 @@ def init_group(group, model, log):
         gp, gw = np.polynomial.legendre.leggauss(nip)
         zw.append((gp * 0.5, gw * 0.5))  # relative to thickness
     # dt-claim correction factor on lc/c (static, from initial geometry —
-    # the established M2 convention): the exact BT eigenvalue bound, and,
-    # for BATOZ-family slices (Ishell 12/22/24), CAPPED by the upstream
-    # condensed-length ratio LC/lc (cbacoor.F/czcorc.F via cndt3.F — see
-    # _condensed_length; min() so the claim never exceeds the BT kernel's
-    # own stability limit).  Ishell = 1/2/3/4 (and unset) is untouched —
-    # those decks keep the byte-identical BT claim.
+    # the established M2 convention): the exact BT eigenvalue bound.
     lc0 = _char_length(xl, area)
     dtfac = _exact_dt_factor(B1, B2, area, lc0, thick,
                              group.state["slices"])
-    for sl, mat, prop in group.state["slices"]:
-        fam = _CONDENSED_FACDT.get(int(prop.params.get("ishell", 0)))
-        if fam is not None:
-            facdt, dn_default = fam
-            dn = float(prop.params.get("dn", 0.0)) or dn_default
-            visc = np.sqrt(1.0 + dn * dn) - dn      # cndt3.F line 86
-            rf = visc * _condensed_length(xl, area, facdt)[sl] / \
-                np.maximum(lc0[sl], EM20)
-            dtfac[sl] = np.minimum(dtfac[sl], rf)
+
     group.state.update(
         sig=np.zeros((n, nip_max, 3)),   # in-plane stress per layer
         qshear=np.zeros((n, 2)),         # transverse shear stress (elastic)

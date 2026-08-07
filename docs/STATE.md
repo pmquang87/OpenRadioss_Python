@@ -164,7 +164,7 @@ deferred lists — confirm scope with the maintainer before starting one.
 ### M45 — QEPH numba JIT kernels  ✅
 - Same as M44 for QEPH (`ZCFAC` stabilization path). Same acceptance.
 
-### M46 — shell_bt4 dt-branch reconciliation  ⬜
+### M46 — shell_bt4 dt-branch reconciliation  ✅
 - **Goal**: `shell_bt4.py`'s `_CONDENSED_FACDT` / Ishell 12/22/24 dt branches
   are shadowed for decks now routed to QBAT/QEPH — reconcile before it
   drifts (harmless duplication today).

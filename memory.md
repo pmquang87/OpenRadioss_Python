@@ -25,3 +25,8 @@ Spawned subagent for M45 (QEPH).
 Completed translation of QEPH kernel hotspots into explicit Numba loops in pyradioss/accel/jit_kernels/shells_qeph.py using 5 subagents in parallel.
 Validation vs tests/test_m41_qeph.py with Numba yielded perfect MATCH.
 
+
+
+## M46 Status Update
+Completed shell_bt4 dt-branch reconciliation. Removed dead code and unused _condensed_length from pyradioss/elements/shell_bt4.py.
+
