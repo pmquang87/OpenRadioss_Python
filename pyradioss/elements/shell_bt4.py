@@ -390,14 +390,13 @@ def init_group(group, model, log):
     # frozen for the run (IREP==0) — None when no slice is orthotropic
     group.state["ortho"] = shell_ortho.build_group_ortho(
         group.state["slices"], E, n, log, group.ids)
-    # BT type-1 family mask (engine IHBE <= 1, see _IHBE_LE1_CARDS): the
-    # elements that take the cdefo3.F second-order rotation correction of
-    # forces(). Float 0/1 so the correction vectorizes as a multiplier.
-    rot2 = np.zeros(n)
+    # element engine IHBE formulation flags for cdefo3.F kinematics branching
+    ihbe_mask = np.zeros(n, dtype=int)
     for sl, mat, prop in group.state["slices"]:
-        if int(prop.params.get("ishell", 0)) in _IHBE_LE1_CARDS:
-            rot2[sl] = 1.0
-    group.state["rot2_mask"] = rot2
+        card = int(prop.params.get("ishell", 0))
+        ihbe = {0: 0, 1: 1, 2: 0, 4: 4}.get(card, card - 1 if card > 0 else 0)
+        ihbe_mask[sl] = ihbe
+    group.state["ihbe_mask"] = ihbe_mask
     node_idx = group.conn.reshape(-1)
     mass_c = np.repeat(mass / 4.0, 4)
     # lumped rotational inertia — upstream's cinmas.F "INERTIES ELEMENTS /4"
@@ -737,7 +736,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     # Upstream kills the term for implicit (IMPL_S>0 -> DT1V4=0, l.108):
     # the same gate as the viscous-damper disable below.  Membrane rates
     # only — kap/gs are untouched, exactly as upstream.
-    rot2 = st["rot2_mask"] * alive
+    ihbe_mask = st["ihbe_mask"]
+    rot2 = (ihbe_mask <= 1) * alive
     if rot2.any() and not st.get("_impl_static_hg"):
         vz13 = V[:, 0, 2] - V[:, 2, 2]
         vz24 = V[:, 1, 2] - V[:, 3, 2]
@@ -751,6 +751,86 @@ def forces(group, x, v, vr, dt, fint, mint):
         dm[:, 1] += tmp2b * (B2[:, 0] + B2[:, 1])
         dm[:, 2] += tmp1a * (B2[:, 1] - B2[:, 0]) + tmp2b * (B1[:, 0]
                                                              + B1[:, 1])
+
+    # cdefo3.F IHBE == 2/3 and 4 branches: Z2 warping modifications to VX/VY/VZ
+    # These branches correct membrane rates AND modify the nodal velocities passed
+    # to the hourglass loop (chvis3.F), unlike the type-1 branch which only
+    # touches the membrane rates.
+    mask23 = ((ihbe_mask == 2) | (ihbe_mask == 3)) * alive
+    if mask23.any() and not st.get("_impl_static_hg"):
+        idx = mask23
+        z2 = xl[idx, 1, 2] - xl[idx, 0, 2]
+        gzx = np.sum(B1[idx] * V[idx, :, 2], axis=1)
+        gzy = np.sum(B2[idx] * V[idx, :, 2], axis=1)
+        exzz2 = gzx * z2
+        eyzz2 = gzy * z2
+        dt1v4 = 0.5 * dt
+        exz2 = gzx * gzx * dt1v4
+        eyz2 = gzy * gzy * dt1v4
+
+        dm[idx, 0] -= exz2
+        dm[idx, 1] -= eyz2
+
+        zzz = np.zeros_like(exz2)
+        ihbe2 = (ihbe_mask[idx] == 2)
+        if ihbe2.any():
+            zzz[ihbe2] = (exz2[ihbe2] + eyz2[ihbe2]) * z2[ihbe2]
+
+        x_rel = xl[idx, :, 0] - xl[idx, 0:1, 0]
+        y_rel = xl[idx, :, 1] - xl[idx, 0:1, 1]
+
+        corr_x = np.zeros((np.count_nonzero(mask23), 4))
+        corr_x[:, 1] = exzz2
+        corr_x[:, 3] = exzz2
+        corr_x -= exz2[:, None] * x_rel
+        V[idx, :, 0] += corr_x
+
+        corr_y = np.zeros((np.count_nonzero(mask23), 4))
+        corr_y[:, 1] = eyzz2
+        corr_y[:, 3] = eyzz2
+        corr_y -= eyz2[:, None] * y_rel
+        V[idx, :, 1] += corr_y
+
+        corr_z = np.zeros((np.count_nonzero(mask23), 4))
+        corr_z[:, 1] = -zzz
+        corr_z[:, 3] = -zzz
+        corr_z -= gzx[:, None] * x_rel + gzy[:, None] * y_rel
+        V[idx, :, 2] += corr_z
+
+    mask4 = (ihbe_mask == 4) * alive
+    if mask4.any() and not st.get("_impl_static_hg"):
+        idx = mask4
+        z2 = xl[idx, 1, 2] - xl[idx, 0, 2]
+        zz2 = 0.5 * z2
+        gzx = np.sum(B1[idx] * V[idx, :, 2], axis=1)
+        gzy = np.sum(B2[idx] * V[idx, :, 2], axis=1)
+        exzz2 = gzx * zz2
+        eyzz2 = gzy * zz2
+        dt1v4 = 0.5 * dt
+        exz2 = gzx * gzx * dt1v4
+        eyz2 = gzy * gzy * dt1v4
+
+        px1 = B1[idx, 0] * area[idx]
+        px2 = B1[idx, 1] * area[idx]
+        py1 = B2[idx, 0] * area[idx]
+        py2 = B2[idx, 1] * area[idx]
+
+        dm[idx, 0] += exz2
+        dm[idx, 1] += eyz2
+
+        corr_x = np.zeros((np.count_nonzero(mask4), 4))
+        corr_x[:, 0] = -exzz2 - exz2 * py2
+        corr_x[:, 2] = -exzz2 + exz2 * py2
+        corr_x[:, 1] =  exzz2 + exz2 * py1
+        corr_x[:, 3] =  exzz2 - exz2 * py1
+        V[idx, :, 0] += corr_x
+
+        corr_y = np.zeros((np.count_nonzero(mask4), 4))
+        corr_y[:, 0] = -eyzz2 + eyz2 * px2
+        corr_y[:, 2] = -eyzz2 - eyz2 * px2
+        corr_y[:, 1] =  eyzz2 - eyz2 * px1
+        corr_y[:, 3] =  eyzz2 + eyz2 * px1
+        V[idx, :, 1] += corr_y
 
     # ---- layer stress updates + resultants ---------------------------------
     sig = st["sig"]

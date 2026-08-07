@@ -67,6 +67,8 @@ real history is 41 milestones. One line each:
 | M40 | RD-E-1000 dt parity (/RBODY STIFR dt = Fortran exactly), numba auto-default ≥32 elements, ERROR 89 → 76 |
 | M41 | Shell element technology: QBAT + QEPH ported (5 RD-E-1000 cases → MATCH), BT rate-kinematics fix, `pyradioss-gui` + anim→d3plot post-processing |
 | M47 | [x] DKT18 shell element (`tests/test_m47_dkt18.py`) |
+| M48 | INTER/TYPE24 parsing and engine logic (broad phase, narrow phase _narrow dispatch) |
+| M49 | INTER/TYPE24 stability (dt_int pull-down before impact, penalty damping verification) |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
@@ -174,7 +176,7 @@ deferred lists — confirm scope with the maintainer before starting one.
 ### Candidate pool (bigger — scope with the maintainer first)
 
 Ranked corpus blockers (from `coverage_results_m41.json` `ranked_gaps`;
-cases blocked in parentheses): **INTER/TYPE24** (18), **MONVOL/AIRBAG1**
+cases blocked in parentheses): **MONVOL/AIRBAG1**
 (16), **INTER/LAGMUL** (14), **ALE/BCS** (12), **SHEL16** (12), **QUAD**
 (10). Each is a multi-milestone feature — the first conversation for one
 should only produce a decomposition plan.

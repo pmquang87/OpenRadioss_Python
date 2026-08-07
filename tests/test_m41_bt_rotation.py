@@ -144,7 +144,7 @@ def test_rigid_roll_membrane_rate_correction(tmp_path, theta):
     # rot2_mask off -> +w^2 dt/2, the equal-and-opposite reading
     model2 = _one_element(tmp_path, ishell=1)
     g2 = model2.shells
-    g2.state["rot2_mask"][:] = 0.0
+    g2.state["ihbe_mask"][:] = 99
     _stencil_roll(model2, theta, w, dt)
     fint[:] = 0.0
     mint[:] = 0.0
@@ -161,13 +161,10 @@ def test_rigid_roll_membrane_rate_correction(tmp_path, theta):
 # ---------------------------------------------------------------------------
 
 def test_correction_gated_on_bt_type1_family(tmp_path):
-    """rot2_mask is 1 for the Ishell cards whose engine IHBE <= 1 (0, 1,
-    2 — the BT type-1 double-storage family) and 0 for type 3 (engine 2)
-    and type 4 (engine 4), which have their OWN cdefo3 branches (not
-    ported — their rates must stay untouched)."""
-    for card, expect in ((0, 1.0), (1, 1.0), (2, 1.0), (3, 0.0), (4, 0.0)):
+    """ihbe_mask maps the Ishell cards to engine IHBE formulations."""
+    for card, expect in ((0, 0), (1, 1), (2, 0), (3, 2), (4, 4)):
         model = _one_element(tmp_path, ishell=card)
-        assert model.shells.state["rot2_mask"][0] == expect, card
+        assert model.shells.state["ihbe_mask"][0] == expect, card
 
 
 # ---------------------------------------------------------------------------
