@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M50)
+## What is implemented (M1 → M41)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -68,12 +68,7 @@ real history is 41 milestones. One line each:
 | M41 | Shell element technology: QBAT + QEPH ported (5 RD-E-1000 cases → MATCH), BT rate-kinematics fix, `pyradioss-gui` + anim→d3plot post-processing |
 | M47 | [x] DKT18 shell element (`tests/test_m47_dkt18.py`) |
 | M48 | INTER/TYPE24 parsing and engine logic (broad phase, narrow phase _narrow dispatch) |
-| M42 | SH3N rotational inertia fix (c3inmas.F alignment) |
-| M43–M45 | Auto-backend fallback rules; QBAT and QEPH numba JIT kernels |
-| M46 | Removed unused condensed length logic from shell_bt4 |
-| M47 | DKT18 shell element ported with Numba acceleration |
-| M48–M49 | INTER/TYPE24 parsing and engine logic (forces, broad/narrow phase, dt_int stability) |
-| M50 | BT-family cdefo3 branches: c43 node-1-relative velocity form, c45 Z2 warp correction |
+| M49 | INTER/TYPE24 stability (dt_int pull-down before impact, penalty damping verification) |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
@@ -203,3 +198,4 @@ pretensioner; V0700 solids ~2×-small explicit dt.
   installed (the pre-handover baseline ran without it).
 - README's architecture/GUI sections are current; its "What is implemented"
   narrative covers M1–M11 — this file is the authoritative status.
+

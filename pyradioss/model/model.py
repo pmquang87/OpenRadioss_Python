@@ -490,6 +490,7 @@ class Model:
         self.functions: Dict[int, FunctTable] = {}
         self.node_groups: Dict[int, NodeGroup] = {}
         self.surfaces: Dict[int, Surface] = {}
+        self.monitored_volumes: Dict[int, 'MonitoredVolume'] = {}
         self.lines: Dict[int, Line] = {}
         self.boxes: Dict[int, Box] = {}
         # ELEMENT groups (M37): /GRSHEL, /GRSH3N, /GRBRIC, /GRQUAD,

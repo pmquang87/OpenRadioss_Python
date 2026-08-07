@@ -61,6 +61,7 @@ from ..input.prop_reader import refuse_inactive_properties
 from ..model.model import EngineControls, Model
 from ..output import TimeHistory, write_anim_state
 from ..starter.restart import read_restart, write_restart
+from .airbag import update_airbag_thermodynamics, update_airbag_volume, apply_airbag_forces
 from .damping import Dampers
 from .kinematics import LoadsAndConstraints
 from .mass_scaling import NodalTimeStep
@@ -508,6 +509,13 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # ---- 3. external loads (gravity, /CLOAD, /PLOAD) -------------------
         fext[:] = 0.0
         loads.external_forces(state.t, fext, model.x, sensors)
+
+        for _, mv in model.monitored_volumes.items():
+            if mv.vol_type == "AIRBAG1":
+                # Matches monvol0.F -> airbaga / volpre
+                update_airbag_volume(mv, model, model.x)
+                update_airbag_thermodynamics(mv, model, dt, state.t)
+                apply_airbag_forces(mv, model, model.x, fext)
 
         # ---- 3b. tied interfaces (/INTER/TYPE2, i2for3): move the tied
         # nodes' internal + external forces onto their main segments (the
