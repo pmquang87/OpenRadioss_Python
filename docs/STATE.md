@@ -66,6 +66,7 @@ real history is 41 milestones. One line each:
 | M39 | Shell hourglass fidelity (chvis3.F) + /SKEW//FRAME + numba kernel/output expansion |
 | M40 | RD-E-1000 dt parity (/RBODY STIFR dt = Fortran exactly), numba auto-default ≥32 elements, ERROR 89 → 76 |
 | M41 | Shell element technology: QBAT + QEPH ported (5 RD-E-1000 cases → MATCH), BT rate-kinematics fix, `pyradioss-gui` + anim→d3plot post-processing |
+| M47 | [x] DKT18 shell element (`tests/test_m47_dkt18.py`) |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
