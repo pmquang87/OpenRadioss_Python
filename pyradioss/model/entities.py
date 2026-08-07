@@ -792,12 +792,16 @@ class Interface:
 
     id: int
     type: int = 7
-    grnod_id: int = 0     # secondary nodes (7: 0 = self-impact; 2: required; 24: node-to-surface)
+    grnod_id: int = 0     # secondary nodes (7: 0 = self-impact; 2: required; 24: node-to-surface; 16: secondary nodes)
     surf_id: int = 0      # main surface (types 7, 2, 24)
     surf_id1: int = 0     # secondary surface (type 24 surface-to-surface)
     line_id1: int = 0     # secondary edges (type 11)
     line_id2: int = 0     # main edges (type 11)
+    grbric_id1: int = 0   # secondary brick group (type 17) or main brick group (type 16)
+    grbric_id2: int = 0   # main brick group (type 17)
     istf: int = 0
+    itied: int = 0        # tied option flag (16, 17)
+    lagmul: bool = False  # True if /INTER/LAGMUL
     igap: int = 0
     stfac: float = 1.0
     fric: float = 0.0

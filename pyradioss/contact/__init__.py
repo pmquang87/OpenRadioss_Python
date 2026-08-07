@@ -24,6 +24,9 @@ def build_contacts(model, log):
     tied list (TYPE2 — kinematic, hooked differently into the cycle)."""
     penalty, tied = [], []
     for itf in model.interfaces:
+        if getattr(itf, 'lagmul', False):
+            log.warning(f"Engine logic for /INTER/LAGMUL/TYPE{itf.type} not implemented, ignoring", f"Interface {itf.id}")
+            continue
         if itf.type == 7:
             penalty.append(ContactType7(itf, model, log))
         elif itf.type == 11:

@@ -2970,6 +2970,91 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     scaling.
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if kind == "LAGMUL":
+        subtype = block.parts[2].upper() if len(block.parts) > 2 else ""
+        if subtype not in ("TYPE2", "TYPE7", "TYPE16", "TYPE17"):
+            log.warning(f"/INTER/LAGMUL/{subtype} not ported", block.source)
+            return
+        title, cards = _title_and_data(block)
+        if not cards:
+            log.error(f"/INTER/LAGMUL/{subtype}/{block.user_id}: missing data card", block.source)
+            return
+
+        if subtype == "TYPE16":
+            if block.fixed:
+                f = _fixed_vals(cards[0], [10, 10])
+                grnod_id, grbric_id = _ival(f[0]), _ival(f[1])
+                itied = 0
+                if len(cards) > 1:
+                    f2 = _fixed_vals(cards[1], [20, 10])
+                    itied = _ival(f2[1])
+            else:
+                toks = cards[0].tokens()
+                grnod_id = int(toks[0]) if len(toks) > 0 else 0
+                grbric_id = int(toks[1]) if len(toks) > 1 else 0
+                itied = 0
+                if len(cards) > 1:
+                    t2 = cards[1].tokens()
+                    itied = int(t2[0]) if len(t2) > 0 else 0
+            model.interfaces.append(Interface(
+                id=block.user_id, type=16, grnod_id=grnod_id, grbric_id1=grbric_id,
+                itied=itied, lagmul=True, title=title))
+            return
+        elif subtype == "TYPE17":
+            if block.fixed:
+                f = _fixed_vals(cards[0], [10, 10])
+                grbric_id1, grbric_id2 = _ival(f[0]), _ival(f[1])
+                itied = 0
+                if len(cards) > 1:
+                    f2 = _fixed_vals(cards[1], [20, 10])
+                    itied = _ival(f2[1])
+            else:
+                toks = cards[0].tokens()
+                grbric_id1 = int(toks[0]) if len(toks) > 0 else 0
+                grbric_id2 = int(toks[1]) if len(toks) > 1 else 0
+                itied = 0
+                if len(cards) > 1:
+                    t2 = cards[1].tokens()
+                    itied = int(t2[0]) if len(t2) > 0 else 0
+            model.interfaces.append(Interface(
+                id=block.user_id, type=17, grbric_id1=grbric_id1, grbric_id2=grbric_id2,
+                itied=itied, lagmul=True, title=title))
+            return
+        elif subtype == "TYPE2":
+            if block.fixed:
+                f = _fixed_vals(cards[0], [10, 10, 30, 10, 20, 20])
+                grnod_id, surf_id = _ival(f[0]), _ival(f[1])
+                dsearch = _fval(f[5]) if len(f) > 5 else 0.0
+            else:
+                toks = cards[0].tokens()
+                grnod_id = int(toks[0]) if len(toks) > 0 else 0
+                surf_id = int(toks[1]) if len(toks) > 1 else 0
+                dsearch = float(toks[3]) if len(toks) > 3 else 0.0
+            model.interfaces.append(Interface(
+                id=block.user_id, type=2, grnod_id=grnod_id, surf_id=surf_id,
+                dsearch=dsearch, lagmul=True, title=title))
+            return
+        elif subtype == "TYPE7":
+            if block.fixed:
+                f = _fixed_vals(cards[0], [10, 10, 30, 10])
+                grnod_id, surf_id = _ival(f[0]), _ival(f[1])
+                gap_min = 0.0
+                if len(cards) >= 2:
+                    f4 = _fixed_vals(cards[1], [40, 20])
+                    gap_min = _fval(f4[1])
+            else:
+                toks = cards[0].tokens()
+                grnod_id = int(toks[0]) if len(toks) > 0 else 0
+                surf_id = int(toks[1]) if len(toks) > 1 else 0
+                gap_min = 0.0
+                if len(cards) >= 2:
+                    t4 = cards[1].tokens()
+                    gap_min = float(t4[0]) if len(t4) > 0 else 0.0
+            model.interfaces.append(Interface(
+                id=block.user_id, type=7, grnod_id=grnod_id, surf_id=surf_id,
+                gap=gap_min, lagmul=True, title=title))
+            return
+
     if kind not in ("TYPE7", "TYPE2", "TYPE11", "TYPE24"):
         log.warning(f"/INTER/{kind} not ported (TYPE2, TYPE7, TYPE11, TYPE24 "
                     f"supported)", block.source)
