@@ -182,6 +182,14 @@ deferred lists — confirm scope with the maintainer before starting one.
 - **Goal**: Implement the 4-node quadrilateral 2D solid element `/QUAD` (plane strain `N2D=2` and axisymmetric `N2D=1`), using the Area-Weighted formulation for axisymmetric hoop stresses.
 - **Acceptance**: Implemented `solid_quad.py` with plane strain and axisymmetric tests passing. Hooked into engine `KERNELS` and `element_groups`.
 
+### M60 — Fluid-Structure Contact (`/INTER/TYPE18`) ✅
+- **Goal**: Implement the TYPE18 penalty contact interface (fluid-structure,
+  tied/sliding), focusing on the engine-side force accumulation.
+- **Acceptance**: Parsed cleanly by the Starter; engine-side unit tests
+  verifying the $O(N \times M)$ triangle-projection search and `H1..H4` shape function
+  force distribution; fast tier green.
+- **Result**: Implemented the TYPE18 core penalty forces in `ContactType18`. Split quads into 4 subtriangles using the center point to accurately compute barycentric shape functions (`H1..H4`) per Fortran reference `i18main_kine.F`. Used vectorized NumPy logic since Numba had environment conflicts. Verified via `test_engine_type18.py`.
+
 ### M56 — SHEL16 Thick Shell Elements ✅
 - **Goal**: Implement the 16-node thick shell element `/SHEL16` into pyradioss, including starter buffer allocation, geometry, shape functions, strain calculation, and stress/force integration across multi-point Gauss rules.
 - **Acceptance**: `pyradioss/elements/shell_thick16.py` implemented with scalar physics unrolled for Numba. `tests/test_m56_shel16.py` covers both Starter and Engine integration of a small `SHEL16` model, executing cleanly.
