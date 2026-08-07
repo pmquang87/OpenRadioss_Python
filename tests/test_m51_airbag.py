@@ -33,13 +33,13 @@ Part 1
 /SURF/PART/10
 10
 1
-/MONVOL/AIRBAG1/1
-My Airbag
-10 0.1
-1.0 1.0 1.0 1.0 1.0
-5 1.4 1.0e-4 300.0 0 1
-0
-0
+    /MONVOL/AIRBAG1/1
+    My Airbag
+            10       0.1
+           1.0       1.0       1.0       1.0       1.0
+             5       1.4    1.0e-4     300.0         0         1
+    0
+    0
 """
     p = tmp_path / "test.rad"
     p.write_text(rad)
