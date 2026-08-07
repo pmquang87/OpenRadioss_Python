@@ -251,6 +251,15 @@ LAYOUTS: Dict[str, List[int]] = {
     # SECT/sect.cfg (radioss100+): CARD("%10d%10d%10d%10d%10d%10d%20lg%20lg",
     #     node1, node2, node3, grnod, ISAVE, Frame_ID, deltaT, alpha)
     "SECT": [10, 10, 10, 10, 10, 10, 20, 20],
+    
+    # INTER/inter_type18.cfg (radioss2022)
+    # "%10d%10d%10d%30s%10d%10d" -> [10, 10, 10, 30, 10, 10]
+    "INTER_TYPE18_1": [10, 10, 10, 30, 10, 10],
+    # "%20lg%20s%20lg%20lg%20lg" -> [20, 20, 20, 20, 20]
+    "INTER_TYPE18_2": [20, 20, 20, 20, 20],
+    # "%40s%20lg%20s%20lg" -> [40, 20, 20, 20]
+    "INTER_TYPE18_3": [40, 20, 20, 20],
+    
     # RBODY/rbody.cfg (radioss2021): CARD(
     #  "%10d%10d%10d%10d%20lg%10d%10d%10d%10d",
     #  node, sens, Skew, Ispher, Mass, grnd, Ikrem, ICoG, surf)

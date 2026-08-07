@@ -1,0 +1,11 @@
+#RADIOSS ENGINE
+/RUN/EVOLUTIONARY_FATIGUE/1
+1.0
+/IMPL
+/IMPL/FATIG/EVOL/NSTAT/BASE
+0.0  250.0  3000  10  0  5
+5.0  5000000000000.0  0.03  0.0  0.0  600.0  20260
+20  12
+31.0  200.0  12.0  30.0  12
+/PRINT/-500
+# /STOP 15.0 (port energy-error abort) omitted: the real Engine reader cannot read the block (M35, forrtl severe 24); the port uses its default 15% guard

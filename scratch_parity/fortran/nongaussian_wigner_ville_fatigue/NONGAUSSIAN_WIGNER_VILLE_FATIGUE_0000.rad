@@ -1,0 +1,93 @@
+#RADIOSS STARTER
+/BEGIN
+NONGAUSSIAN_WIGNER_VILLE_FATIGUE
+      2022         0
+                  Mg                  mm                   s
+                  Mg                  mm                   s
+/NODE
+#   node_ID                   X                   Y                   Z
+         1                 0.0                 0.0                 0.0
+         2                10.0                 0.0                 0.0
+         3                20.0                 0.0                 0.0
+         4                30.0                 0.0                 0.0
+         5                40.0                 0.0                 0.0
+         6                50.0                 0.0                 0.0
+/SPRING/1
+         1         1         2
+/SPRING/2
+         2         2         3
+/SPRING/3
+         3         3         4
+/SPRING/4
+         4         4         5
+/SPRING/5
+         5         5         6
+/PART/1
+storey1
+         1         1
+/PART/2
+storey2
+         2         1
+/PART/3
+storey3
+         3         1
+/PART/4
+storey4
+         4         1
+/PART/5
+storey5
+         5         1
+/MAT/LAW1/1
+steel elastic
+             7.8e-06
+               210.0                 0.0
+# PORT-DIALECT block (port simplified TYPE4 spring: real layout splits Mass and K/C across two cards)
+/PROP/SPRING/1
+sp1
+               0.002               800.0                 0.0
+# PORT-DIALECT block (port simplified TYPE4 spring: real layout splits Mass and K/C across two cards)
+/PROP/SPRING/2
+sp2
+               0.002               800.0                 0.0
+# PORT-DIALECT block (port simplified TYPE4 spring: real layout splits Mass and K/C across two cards)
+/PROP/SPRING/3
+sp3
+               0.002               800.0                 0.0
+# PORT-DIALECT block (port simplified TYPE4 spring: real layout splits Mass and K/C across two cards)
+/PROP/SPRING/4
+sp4
+               0.002               800.0                 0.0
+# PORT-DIALECT block (port simplified TYPE4 spring: real layout splits Mass and K/C across two cards)
+/PROP/SPRING/5
+sp5
+               0.002               800.0                 0.0
+/GRNOD/NODE/1
+base
+         1
+/GRNOD/NODE/2
+stack
+         2         3         4         5         6
+/BCS/1
+pinned base (the support)
+   111 111         0         1
+/BCS/2
+axial only (stacked masses)
+   011 111         0         2
+/FUNCT/10
+flat input PSD S_aa(f)
+                 0.0               100.0
+            100000.0               100.0
+/FUNCT/20
+RMS mission profile (run-up / dwell / run-down)
+                 0.0                 0.4
+               150.0                 1.5
+               350.0                 1.5
+               500.0                 0.3
+/FUNCT/30
+target kurtosis gamma_4(t) (bursty transient)
+                 0.0                 3.0
+               120.0                 3.5
+               250.0                 9.0
+               380.0                 4.0
+               500.0                 3.0
+/END

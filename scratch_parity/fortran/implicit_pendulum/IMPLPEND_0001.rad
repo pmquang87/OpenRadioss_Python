@@ -1,0 +1,19 @@
+#RADIOSS ENGINE
+# IMPLICIT DYNAMICS (M10): Newmark trapezoidal rule + nonlinear geometry.
+# The /RUN time and /IMPL/DTINI are PHYSICAL (ms) — unlike implicit
+# statics, where they are the load factor. Expected listing: ~236
+# steps, 2-3 Newton iterations each, energy balance ~0% at termination;
+# the tip crosses the vertical at t = T/4 = 170.2 ms (the
+# elliptic-integral period — the linear pendulum would say 158.6).
+/RUN/IMPLPEND/1
+748.8786210640567
+/VERS/2026
+/IMPL/DYNA/2
+0.5  0.25
+/IMPL/NONLIN
+/IMPL/DTINI
+3.1718699246097066
+/IMPL/NEWTON
+1e-8  25
+/PRINT/-100
+/END

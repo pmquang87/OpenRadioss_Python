@@ -1234,6 +1234,27 @@ class StarterDeck:
                               igap, stfac, fric, gapmin, gapmax, sens,
                               mfrot, ifq, xfreq, fric_c)
 
+    def inter_type18(self, iid: int, title: str, grnod: int, surf: int,
+                     grbric: int, ibag: int = 0, idel18: int = 0,
+                     stfac=1.0, gap=0.0, stiff_dc=0.0, sort_fact=0.2) -> None:
+        """``/INTER/TYPE18`` — cfg INTER/inter_type18.cfg (FORMAT
+        radioss2022)."""
+        self._header("INTER/TYPE18", iid)
+        self._title(title)
+        
+        # Card 1: "%10d%10d%10d%30s%10d%10d"
+        card1 = (fmt_int(grnod, 10) + fmt_int(surf, 10) + fmt_int(grbric, 10) +
+                 " " * 30 + fmt_int(ibag, 10) + fmt_int(idel18, 10))
+        self.lines.append(card1)
+        
+        # Card 2: "%20lg%20s%20lg%20lg%20lg"
+        card2 = fmt_float(stfac, 20) + " " * 20 + fmt_float(gap, 20)
+        self.lines.append(card2)
+        
+        # Card 3: "%40s%20lg%20s%20lg"
+        card3 = " " * 40 + fmt_float(stiff_dc, 20) + " " * 20 + fmt_float(sort_fact, 20)
+        self.lines.append(card3)
+
     # ---- output requests --------------------------------------------------------------
 
     def th(self, kind: str, tid: int, title: str,
@@ -1492,6 +1513,13 @@ def _conv_inter(d: StarterDeck, b: KeywordBlock) -> None:
     if kind == "TYPE2":
         t = cards[0].floats() + [0.0] * 3
         d.inter_type2(iid, title, int(t[0]), int(t[1]), t[2])
+        return
+    if kind == "TYPE18":
+        t = cards[0].ints() + [0] * 6
+        v1 = cards[1].floats() + [0.0] * 5 if len(cards) > 1 else [0.0] * 5
+        v2 = cards[2].floats() + [0.0] * 4 if len(cards) > 2 else [0.0] * 4
+        d.inter_type18(iid, title, grnod=t[0], surf=t[1], grbric=t[2], ibag=t[4], idel18=t[5],
+                       stfac=v1[0], gap=v1[2], stiff_dc=v2[1], sort_fact=v2[3])
         return
     t = cards[0].ints() + [0] * 7
     v = (cards[1].floats() + [1.0, 0.0, 0.0, 0.0, 0.0])[:5] \

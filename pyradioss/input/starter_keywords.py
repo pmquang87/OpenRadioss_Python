@@ -3185,8 +3185,8 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 gap=gap_min, lagmul=True, title=title))
             return
 
-    if kind not in ("TYPE7", "TYPE2", "TYPE11", "TYPE24"):
-        log.warning(f"/INTER/{kind} not ported (TYPE2, TYPE7, TYPE11, TYPE24 "
+    if kind not in ("TYPE2", "TYPE7", "TYPE11", "TYPE18", "TYPE24"):
+        log.warning(f"/INTER/{kind} not ported (TYPE2, TYPE7, TYPE11, TYPE18, TYPE24 "
                     f"supported)", block.source)
         return
     title, cards = _title_and_data(block)
@@ -3195,6 +3195,44 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                   block.source)
         return
     toks = cards[0].tokens()
+
+    if kind == "TYPE18":
+        if block.fixed:
+            f0 = _fixed_vals(cards[0], [10, 10, 10, 30, 10, 10])
+            grnod_id = _ival(f0[0])
+            surf_id = _ival(f0[1])
+            grbric_id = _ival(f0[2])
+            ibag = _ival(f0[4])
+            idel18 = _ival(f0[5])
+            
+            f1 = _fixed_vals(cards[1], [20, 20, 20, 20, 20])
+            stfac = _fval(f1[0])
+            gap = _fval(f1[2])
+            
+            f2 = _fixed_vals(cards[2], [40, 20, 20, 20])
+            stiff_dc = _fval(f2[1])
+            sort_fact = _fval(f2[3])
+        else:
+            t0 = cards[0].tokens()
+            grnod_id = int(t0[0]) if len(t0) > 0 else 0
+            surf_id = int(t0[1]) if len(t0) > 1 else 0
+            grbric_id = int(t0[2]) if len(t0) > 2 else 0
+            ibag = int(t0[3]) if len(t0) > 3 else 0
+            idel18 = int(t0[4]) if len(t0) > 4 else 0
+            
+            t1 = cards[1].tokens()
+            stfac = float(t1[0]) if len(t1) > 0 else 0.0
+            gap = float(t1[2]) if len(t1) > 2 else 0.0
+            
+            t2 = cards[2].tokens()
+            stiff_dc = float(t2[1]) if len(t2) > 1 else 0.0
+            sort_fact = float(t2[3]) if len(t2) > 3 else 0.2
+        
+        model.interfaces.append(Interface(
+            id=block.user_id, type=18, grnod_id=grnod_id, surf_id=surf_id,
+            grbric_id1=grbric_id, ibag=ibag, idel18=idel18, stfac=stfac, gap=gap,
+            stiff_dc=stiff_dc, sort_fact=sort_fact, title=title))
+        return
 
     if kind == "TYPE2":
         if block.fixed:

@@ -1,0 +1,101 @@
+[
+ {
+  "example": "box_beam_impact",
+  "runname": "BOXIMP",
+  "implicit": false,
+  "fortran": {
+   "mode": "real-format",
+   "starter_rc": 0,
+   "starter_time": 1.15,
+   "engine_rc": 0,
+   "engine_time": 0.56,
+   "n_nodes": 220,
+   "n_elements": 200,
+   "starter_elapsed_self": 1.01,
+   "n_cycles": 2900,
+   "engine_elapsed_self": 0.49,
+   "status": "ok",
+   "csv": "scratch\\val_bba\\fortran\\box_beam_impact\\BOXIMPT01.csv"
+  },
+  "pyradioss": {
+   "starter_rc": 0,
+   "starter_time": 1.42,
+   "engine_rc": 0,
+   "engine_time": 7.39,
+   "n_nodes": 220,
+   "n_elements": 200,
+   "starter_elapsed_self": 0.034,
+   "n_cycles": 3465,
+   "engine_elapsed_self": 4.904,
+   "status": "ok",
+   "csv": "scratch\\val_bba\\pyradioss\\box_beam_impact\\BOXIMPT01.csv"
+  },
+  "channels": [
+   {
+    "channel": "IE",
+    "rel_rms": 0.02903211857044635,
+    "final_dev": 0.019563482149438566,
+    "scale": 0.14240473074716184,
+    "significant": true
+   },
+   {
+    "channel": "KE",
+    "rel_rms": 0.013394655330432154,
+    "final_dev": 0.00234091838242084,
+    "scale": 0.156,
+    "significant": true
+   },
+   {
+    "channel": "HE",
+    "rel_rms": 0.11945521796211109,
+    "final_dev": 0.19631613625683234,
+    "scale": 0.006960919715302122,
+    "significant": true
+   },
+   {
+    "channel": "EW",
+    "rel_rms": 0.2793834132921089,
+    "final_dev": 0.2872581877843778,
+    "scale": 0.01129066616,
+    "significant": true
+   },
+   {
+    "channel": "MASS",
+    "rel_rms": 0.0,
+    "final_dev": 0.0,
+    "scale": 0.00312,
+    "significant": true
+   },
+   {
+    "channel": "MOMZ",
+    "rel_rms": 0.0065833014273734315,
+    "final_dev": 0.005435161538461498,
+    "scale": 0.0312,
+    "significant": true
+   },
+   {
+    "channel": "IE+KE",
+    "rel_rms": 0.015399245517807716,
+    "final_dev": 0.015517622694295135,
+    "scale": 0.156,
+    "significant": true
+   },
+   {
+    "channel": "part_IE",
+    "rel_rms": 0.02903211857044635,
+    "final_dev": 0.019563482149438566,
+    "scale": 0.14240473074716184,
+    "significant": true
+   },
+   {
+    "channel": "part_KE",
+    "rel_rms": 0.009491133508454746,
+    "final_dev": 0.0008495207811556393,
+    "scale": 0.156,
+    "significant": true
+   }
+  ],
+  "max_rel_rms": 0.2793834132921089,
+  "class": "DEVIATION"
+ }
+]

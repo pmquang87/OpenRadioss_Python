@@ -1,0 +1,26 @@
+[
+ {
+  "example": "rd_e_1000_dkt18",
+  "runname": "rd_e_1000_dkt18",
+  "implicit": false,
+  "class": "SKIPPED-SLOW",
+  "fortran": {
+   "mode": "translate",
+   "status": "untranslatable",
+   "missing": [
+    "ValueError: invalid literal for int() with base 10: '0point1_group_0'"
+   ],
+   "probe_error": "PLEASE CHECK LISTING FILE FOR FURTHER DETAILS"
+  },
+  "pyradioss": {
+   "starter_rc": 0,
+   "starter_time": 1.77,
+   "engine_rc": -9,
+   "engine_time": 898.28,
+   "n_nodes": 137,
+   "n_elements": 198,
+   "starter_elapsed_self": 0.025,
+   "status": "timeout"
+  }
+ }
+]

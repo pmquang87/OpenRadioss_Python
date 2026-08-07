@@ -837,6 +837,12 @@ class Interface:
     xfiltr: float = 0.0
     fric_c: tuple = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     title: str = ""
+    # ---- TYPE18 (M60) ----------------------------------------------------
+    ibag: int = 0
+    multimp: int = 4
+    idel18: int = 0
+    stiff_dc: float = 0.0
+    sort_fact: float = 0.2
 
 
 @dataclass

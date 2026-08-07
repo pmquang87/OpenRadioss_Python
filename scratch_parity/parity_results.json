@@ -1,0 +1,108 @@
+[
+ {
+  "example": "type24_test",
+  "runname": "TYPE24TEST",
+  "implicit": false,
+  "fortran": {
+   "mode": "real-format",
+   "starter_rc": 0,
+   "starter_time": 0.74,
+   "engine_rc": 0,
+   "engine_time": 1.46,
+   "n_nodes": 170,
+   "n_elements": 118,
+   "starter_elapsed_self": 0.65,
+   "n_cycles": 16974,
+   "engine_elapsed_self": 1.41,
+   "status": "ok",
+   "csv": "scratch_parity\\fortran\\type24_test\\TYPE24TESTT01.csv"
+  },
+  "pyradioss": {
+   "starter_rc": 0,
+   "starter_time": 0.86,
+   "engine_rc": 0,
+   "engine_time": 60.24,
+   "n_nodes": 170,
+   "n_elements": 118,
+   "starter_elapsed_self": 0.019,
+   "n_cycles": 35689,
+   "engine_elapsed_self": 58.698,
+   "status": "ok",
+   "csv": "scratch_parity\\pyradioss\\type24_test\\TYPE24TESTT01.csv"
+  },
+  "channels": [
+   {
+    "channel": "IE",
+    "rel_rms": 0.1070315360286352,
+    "final_dev": 0.05073805991102297,
+    "scale": 0.0001422778501,
+    "significant": true
+   },
+   {
+    "channel": "KE",
+    "rel_rms": 0.8757142435949797,
+    "final_dev": 0.7432634666199345,
+    "scale": 0.0001499829907,
+    "significant": true
+   },
+   {
+    "channel": "HE",
+    "rel_rms": 0.42005822794681946,
+    "final_dev": 0.9999999880313232,
+    "scale": 4.222296067e-07,
+    "significant": false
+   },
+   {
+    "channel": "CE",
+    "rel_rms": 0.5744647514413744,
+    "final_dev": 0.8125635552857461,
+    "scale": 3.403230903e-06,
+    "significant": true
+   },
+   {
+    "channel": "EW",
+    "rel_rms": 0.5440233430890911,
+    "final_dev": 0.09563195621690035,
+    "scale": 2.3870351e-05,
+    "significant": true
+   },
+   {
+    "channel": "MASS",
+    "rel_rms": 0.0,
+    "final_dev": 0.0,
+    "scale": 0.0029288,
+    "significant": true
+   },
+   {
+    "channel": "MOMX",
+    "rel_rms": 0.34367070316907977,
+    "final_dev": 0.4836548527796296,
+    "scale": 2.289614128e-09,
+    "significant": false
+   },
+   {
+    "channel": "MOMY",
+    "rel_rms": 0.34367365915307396,
+    "final_dev": 0.48376442732351443,
+    "scale": 2.289668972e-09,
+    "significant": false
+   },
+   {
+    "channel": "MOMZ",
+    "rel_rms": 0.950801269189221,
+    "final_dev": 1.0354340802355169,
+    "scale": 0.0008666966704,
+    "significant": true
+   },
+   {
+    "channel": "IE+KE",
+    "rel_rms": 0.9026168252998096,
+    "final_dev": 0.7913949375562109,
+    "scale": 0.00014998299085740874,
+    "significant": true
+   }
+  ],
+  "max_rel_rms": 0.950801269189221,
+  "class": "DEVIATION"
+ }
+]
