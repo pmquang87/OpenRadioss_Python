@@ -64,6 +64,7 @@ from ..starter.restart import read_restart, write_restart
 from .airbag import update_airbag_thermodynamics, update_airbag_volume, apply_airbag_forces
 from .damping import Dampers
 from .kinematics import LoadsAndConstraints
+from .lagmul import LagmulSolver
 from .mass_scaling import NodalTimeStep
 from .mpc import build_mpc
 from .rbe3 import build_rbe3
@@ -291,6 +292,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         saved_map=saved.get("rbodies") if resumed else None)
     rbe3s = build_rbe3(model, log)
     mpc = build_mpc(model, loads, log)     # /MPC (M6)
+    lagmul = LagmulSolver(model, loads, log)
     sections = SectionForces(model, log)
     # /DT/NODA[/CST] (M6): nodal time step + mass scaling. Nodes whose
     # motion a constraint prescribes carry no stability constraint of
@@ -355,6 +357,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     # constraint force then does exactly zero work forever (mpc.py)
     if mpc is not None:
         mpc.enforce(model.v, model.vr, inv_mass, inv_inertia)
+    if len(lagmul) > 0:
+        lagmul.enforce(model.v, model.vr, inv_mass, inv_inertia)
 
     real = model.mass < 1e29
     if resumed:
@@ -547,6 +551,9 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         if mpc is not None:
             mpc.transfer_forces(fint, fcont, fext, mint,
                                 inv_mass, inv_inertia)
+        if len(lagmul) > 0:
+            lagmul.transfer_forces(fint, fcont, fext, mint,
+                                   inv_mass, inv_inertia, dt)
 
         # ---- 4. acceleration + velocity update (leap-frog) ----------------
         v_old = model.v.copy()     # for wall energy + contact work booking
@@ -641,6 +648,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # re-injected into G v (zero booked work — see mpc.py)
         if mpc is not None:
             mpc.enforce(model.v, model.vr, inv_mass, inv_inertia)
+        if len(lagmul) > 0:
+            lagmul.enforce(model.v, model.vr, inv_mass, inv_inertia)
 
         # ---- 6c. numerical-dissipation ledger (M6) --------------------------
         # The kernels book internal energy as a STATE FUNCTION

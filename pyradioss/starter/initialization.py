@@ -23,12 +23,14 @@ from ..model.model import ElementGroup, Model
 # element type name -> (attr on Model, nodes per element, required prop type)
 _ETYPES = {
     "BRICK": ("bricks", 8, 14),
+    "QUAD": ("quads", 4, 14),
     "TETRA4": ("tetras", 4, 14),
     "SHELL": ("shells", 4, 1),
     "SH3N": ("sh3n", 3, 1),
     "TRUSS": ("trusses", 2, 2),
     "SPRING": ("springs", 2, 4),
     "BEAM": ("beams", 3, 3),
+    "SHEL16": ("shel16s", 16, 20),
 }
 
 #: the "fictitious material law for spring elements" the reference assigns
@@ -150,7 +152,7 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
         ok = True
         for k, (eid, pid, nodes) in enumerate(raw):
             try:
-                conn[k] = model.node_indices(nodes)
+                conn[k] = [model._id2idx[int(n)] if n != 0 else -1 for n in nodes]
             except KeyError as exc:
                 log.error(f"/{etype} {eid}: unknown node id {exc}",
                           "ELEMENT CHECK")
@@ -445,7 +447,7 @@ _EGROUP_FAMILIES = {
     "SHEL": ("shells", "shells_qbat", "shells_qeph", "shells_dkt18"),
     "SH3N": ("sh3n",),
     "BRIC": ("bricks", "tetras"),
-    "QUAD": (),                      # no 2D quad element in the port
+    "QUAD": ("quads",),
     "TRUS": ("trusses",),
     "BEAM": ("beams",),
     "SPRI": ("springs",),

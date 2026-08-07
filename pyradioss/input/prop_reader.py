@@ -430,6 +430,54 @@ def parse_spr_pre(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
                             params=params, prop_name="SPR_PRE")
 
 
+def parse_tshell(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
+    """/PROP/TSHELL (TYPE20) - thick shell (cfg prop_p20_tshell.cfg)"""
+    title, cards, fixed = _data_cards(block)
+    if not cards:
+        log.error("/PROP/TSHELL block is empty", block.source)
+        return None
+    
+    c1 = _get(cards, 0)
+    c2 = _get(cards, 1)
+    
+    # NBP (Inpts) is at index 3 on the first card
+    nbp = 0
+    if c1:
+        if fixed:
+            nbp = _int(c1, 30, 40)
+        else:
+            ints = c1.ints()
+            nbp = ints[3] if len(ints) > 3 else 0
+            
+    inpts_r, inpts_s, inpts_t = 0, 0, 0
+    if nbp > 200:
+        inpts_r = nbp // 100
+        rem = nbp % 100
+        inpts_s = rem // 10
+        inpts_t = rem % 10
+    else:
+        inpts_s = nbp
+        
+    h = 0.0
+    if c2:
+        if fixed:
+            h = _float(c2, 40, 60)
+        else:
+            floats = c2.floats()
+            h = floats[2] if len(floats) > 2 else 0.0
+            
+    params = {
+        "npts_r": inpts_r,
+        "npts_s": inpts_s,
+        "npts_t": inpts_t,
+        "h": h
+    }
+    
+    # Return an active property so that the Engine can run SHEL16 tests
+    return Property(id=block.user_id, type=20, title=title, params=params)
+
+
+
 def parse_void(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     """/PROP/VOID (TYPE0) — no-stiffness placeholder (cfg
     prop_p0_void.cfg radioss140)::
@@ -483,6 +531,8 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
         return parse_spr_beam(block, log)
     if typename in ("SPR_PRE", "TYPE32"):
         return parse_spr_pre(block, log)
+    if typename in ("TSHELL", "TYPE20"):
+        return parse_tshell(block, log)
     if typename in ("VOID", "TYPE0"):
         return parse_void(block, log)
     # ---- everything else: parse-only + inactive ----------------------------

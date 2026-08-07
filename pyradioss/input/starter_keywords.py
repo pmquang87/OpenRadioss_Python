@@ -384,6 +384,10 @@ def _read_elems(block: KeywordBlock, model: Model, log: MessageLog,
         model.raw_elems[etype].append((t[0], part_id, t[1:1 + nnode]))
 
 
+def read_quad(block, model, log):
+    """``/QUAD``: 4-node 2D solid element."""
+    return _read_element(block, model, log, "quads", 4, "QUAD")
+
 def read_brick(block, model, log):
     """``/BRICK/part_ID``: 8-node solids (elem_ID + 8 node IDs).
     Degenerated bricks with 4 distinct nodes (the classic tetra-in-brick
@@ -398,6 +402,47 @@ def read_tetra4(block, model, log):
     triangle 1-2-3 counter-clockwise seen from node 4). Uses the same
     /PROP/TYPE14 (SOLID) property as bricks."""
     _read_elems(block, model, log, "TETRA4", 4)
+
+
+def read_shel16(block, model, log):
+    """``/SHEL16/part_ID``: 16-node thick shells.
+    Format is 3 cards per element:
+    Card 1: id, n1..n8
+    Card 2: n9..n12
+    Card 3: n13..n16
+    """
+    part_id = block.user_id
+    if part_id is None:
+        log.error("/SHEL16 block without part id", block.source)
+        return
+    
+    if len(block.cards) % 3 != 0:
+        log.error(f"/SHEL16 block has {len(block.cards)} cards, expected a multiple of 3", block.source)
+        return
+
+    for i in range(0, len(block.cards), 3):
+        c1 = block.cards[i]
+        c2 = block.cards[i+1]
+        c3 = block.cards[i+2]
+        
+        if block.fixed:
+            f1 = c1.cut("ELEM_IDS")[:9]
+            f2 = c2.cut("ELEM_IDS")[:4]
+            f3 = c3.cut("ELEM_IDS")[:4]
+            if not f1[0]:
+                log.error("/SHEL16 card without an element id", c1.source)
+                continue
+            if any(not s for s in f1[1:]) or any(not s for s in f2) or any(not s for s in f3):
+                log.error("/SHEL16 card needs 16 ids", c1.source)
+                continue
+            t = [int(s) for s in f1] + [int(s) for s in f2] + [int(s) for s in f3]
+        else:
+            t = c1.ints() + c2.ints() + c3.ints()
+            if len(t) < 17:
+                log.error(f"/SHEL16 card needs 17 ids, got {len(t)}", c1.source)
+                continue
+        model.raw_elems["SHEL16"].append((t[0], part_id, t[1:17]))
+
 
 
 def read_shell(block, model, log):
@@ -2458,6 +2503,21 @@ def read_damp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         tstop=float(t[3]) if len(t) > 3 else 1e30, title=title))
 
 
+def read_analy(block: KeywordBlock, model: Model, log: MessageLog):
+    """
+    /ANALY
+    card 1: N2D
+    """
+    title, cards = _title_and_data(block)
+    if not cards:
+        return
+    model.n2d = cards[0].int_at(0, 0)
+    if model.n2d not in (0, 1, 2):
+        log.warning(f"/ANALY: invalid N2D {model.n2d} (must be 0, 1, 2)",
+                    block.source)
+        model.n2d = 0
+
+
 def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/SENSOR/TIME/sens_ID`` and ``/SENSOR/DISP/sens_ID`` (M6)::
 
@@ -3645,6 +3705,7 @@ def read_monvol(block: KeywordBlock, model: Model, log: MessageLog):
 
 KEYWORD_PARSERS: Dict[str, Callable] = {
     "MONVOL": read_monvol,
+    "ANALY": read_analy,
     "BEGIN": read_begin,
     "TITLE": read_title,
     "END": read_end,
@@ -3652,6 +3713,8 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "UNIT": read_unit,             # local unit systems (M37)
     "NODE": read_node,
     "BRICK": read_brick,
+    "SHEL16": read_shel16,
+    "QUAD": read_quad,
     "TETRA4": read_tetra4,
     "SHELL": read_shell,
     "SH3N": read_sh3n,

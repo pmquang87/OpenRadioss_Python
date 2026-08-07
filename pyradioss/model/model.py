@@ -453,6 +453,7 @@ class Model:
         # Elements by type
         # ------------------------------------------------------------------
         self.bricks: Optional[ElementGroup] = None    # /BRICK  (IXS)
+        self.quads: Optional[ElementGroup] = None     # /QUAD   (IXQ)
         self.tetras: Optional[ElementGroup] = None    # /TETRA4 (IXS10 kin)
         self.shells: Optional[ElementGroup] = None    # /SHELL  (IXC)
         self.shells_qbat: Optional[ElementGroup] = None  # /SHELL Ishell=12
@@ -464,11 +465,12 @@ class Model:
         self.trusses: Optional[ElementGroup] = None   # /TRUSS  (IXT)
         self.springs: Optional[ElementGroup] = None   # /SPRING (IXR)
         self.beams: Optional[ElementGroup] = None     # /BEAM   (IXP)
+        self.shel16s: Optional[ElementGroup] = None   # /SHEL16 (IXS16)
         # raw (id, part_id, node ids...) tuples collected during parsing,
         # converted to ElementGroups in Starter finalization:
         self.raw_elems: Dict[str, list] = {
-            "BRICK": [], "TETRA4": [], "SHELL": [], "SH3N": [],
-            "TRUSS": [], "SPRING": [], "BEAM": []}
+            "BRICK": [], "QUAD": [], "TETRA4": [], "SHELL": [], "SH3N": [],
+            "TRUSS": [], "SPRING": [], "BEAM": [], "SHEL16": []}
 
         # ------------------------------------------------------------------
         # Definitions keyed by user id
@@ -479,6 +481,10 @@ class Model:
         # resolve step (deck order between /MAT and /FAIL is free).
         self.raw_fails: list = []
         # /EOS cards, same pattern (M6): (mat_id, EquationOfState, source)
+        self.global_damping: Optional[Dict] = None
+
+        self.n2d: int = 0  # 0: 3D, 1: axisymmetric, 2: plane strain (from /ANALY)
+
         self.raw_eos: list = []
         # /ALE/MAT, /EULER/MAT, /HEAT/MAT parse-only notes (M37): parsed
         # as (kind, mat_id, params, source), attached to the material's
@@ -566,7 +572,7 @@ class Model:
     # ----------------------------------------------------------------------
     def element_groups(self):
         """Iterate (name, group) over the non-empty element groups."""
-        for name in ("bricks", "tetras", "shells", "shells_qbat",
+        for name in ("bricks", "quads", "tetras", "shel16s", "shells", "shells_qbat",
                      "shells_qeph", "sh3n", "trusses", "springs", "beams"):
             g = getattr(self, name)
             if g is not None and g.n:

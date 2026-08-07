@@ -557,3 +557,137 @@ class ContactType7:
         # energy balance
         wrk = float(np.einsum("nb,nb->", Fvec, vrel)) * dt
         return -wrk, dt_int
+
+
+class LagmulType7:
+    """One /INTER/LAGMUL/TYPE7 constraint, engine-side."""
+    def __init__(self, itf, model: Model, log):
+        self.itf = itf
+        self.model = model
+        
+        # We reuse the initialization logic of ContactType7 to parse groups, segments, etc.
+        # But we create a dummy ContactType7 to hold the state.
+        self.penalty_handler = ContactType7(itf, model, log)
+        
+    def generate_l_matrix(self):
+        """Yield (data, node_indices, dof_indices, eq_indices) arrays for the global L matrix.
+        Only penetrating nodes approaching the surface (VN < 0) generate constraints.
+        If a node hits multiple segments, only the most severe (minimum VN) is kept.
+        """
+        # Run broad/narrow phases using the penalty handler's logic
+        handler = self.penalty_handler
+        x = self.model.x0 + self.model.u # current position
+        v = self.model.v
+        dt = self.model.dt
+        
+        if len(handler.segs) == 0 or len(handler.nodes) == 0:
+            return np.array([]), np.array([]), np.array([]), np.array([]), 0
+            
+        if handler.deletable:
+            handler.seg_alive = tracking.alive_segment_mask(
+                handler.model, handler.seg_gtype, handler.seg_elem)
+
+        cycle = self.model.cycle
+        if cycle - handler._last_refresh >= handler.refresh:
+            if handler.deletable:
+                mask = tracking.tracked_node_mask(handler.model, handler.ref_total)
+                handler.nodes_tracked = handler.nodes[mask[handler.nodes]]
+            handler._broad_phase(x, v, dt)
+            handler._last_refresh = cycle
+            
+        if len(handler.pairs_node) == 0:
+            return np.array([]), np.array([]), np.array([]), np.array([]), 0
+            
+        live = handler.seg_alive[handler.pairs_seg]
+        ni = handler.pairs_node[live]
+        srow = handler.pairs_seg[live]
+        if len(ni) == 0:
+            return np.array([]), np.array([]), np.array([]), np.array([]), 0
+        seg = handler.segs[srow]
+
+        jit = accel_get("t7_narrow")
+        if jit is not None:
+            best_d, best_pt, best_w = jit(x, ni, seg)
+        else:
+            best_d, best_pt, best_w = _narrow(x, ni, seg)
+            
+        loc = np.searchsorted(handler.nodes, ni)
+        if handler.itf.igap == 1:
+            gap = np.clip(handler.gap_s[loc] + handler.gap_m[srow],
+                          handler.gap_min, handler.gap_max)
+        else:
+            gap = np.full(len(ni), handler.gap_const)
+            
+        pen = gap - best_d
+        active = pen > 0.0
+        if not np.any(active):
+            return np.array([]), np.array([]), np.array([]), np.array([]), 0
+            
+        ni = ni[active]
+        seg = seg[active]
+        pen = pen[active]
+        d = np.maximum(best_d[active], EM20)
+        nvec = (x[ni] - best_pt[active]) / d[:, None]
+        wseg = best_w[active]
+        
+        # relative velocity node vs interpolated segment point
+        vseg = np.einsum("nk,nkb->nb", wseg, v[seg])
+        vrel = v[ni] - vseg
+        vn = np.einsum("nb,nb->n", vrel, nvec)
+        
+        # Fortran I7LAGM filter: VN < XTAG (approaching). We only constraint if VN <= 0.
+        approaching = vn <= 0.0
+        if not np.any(approaching):
+            return np.array([]), np.array([]), np.array([]), np.array([]), 0
+            
+        ni = ni[approaching]
+        seg = seg[approaching]
+        nvec = nvec[approaching]
+        wseg = wseg[approaching]
+        vn = vn[approaching]
+        
+        # If a node hits multiple segments, only keep the one with the most severe (minimum) VN
+        # (This matches the XTAG(IG) logic in I7LAGM)
+        sort_idx = np.argsort(vn)  # sorts from most negative (most severe) to least negative
+        ni_sorted = ni[sort_idx]
+        
+        # Find the first occurrence of each node
+        _, unique_idx = np.unique(ni_sorted, return_index=True)
+        # Restore the selected rows from the sorted arrays
+        final_idx = sort_idx[unique_idx]
+        
+        ni_f = ni[final_idx]
+        seg_f = seg[final_idx]
+        nvec_f = nvec[final_idx]
+        wseg_f = wseg[final_idx]
+        
+        # Build the L matrix
+        n = len(ni_f)
+        data = []
+        nodes = []
+        dofs = []
+        eq_ids = []
+        
+        for i in range(n):
+            snode = ni_f[i]
+            s_nodes = seg_f[i]
+            nx, ny, nz = nvec_f[i]
+            # wseg_f[i] contains H1, H2, H3, H4
+            
+            for dof, n_dof in enumerate((nx, ny, nz)):
+                # Master nodes (+Hk * n)
+                for k in range(4):
+                    if s_nodes[k] != s_nodes[k-1]: # handle 3-node segments where node 3==4
+                        data.append(n_dof * wseg_f[i, k])
+                        nodes.append(s_nodes[k])
+                        dofs.append(dof)
+                        eq_ids.append(i)
+                        
+                # Secondary node (-n)
+                data.append(-n_dof)
+                nodes.append(snode)
+                dofs.append(dof)
+                eq_ids.append(i)
+                
+        return np.array(data), np.array(nodes), np.array(dofs), np.array(eq_ids), n
+

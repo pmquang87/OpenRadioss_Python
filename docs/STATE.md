@@ -178,6 +178,10 @@ deferred lists — confirm scope with the maintainer before starting one.
   drifts (harmless duplication today).
 - **Acceptance**: fast tier green; no parity movement on RD-E-1000 cases.
 
+### M55 — QUAD 2D Solid Elements ✅
+- **Goal**: Implement the 4-node quadrilateral 2D solid element `/QUAD` (plane strain `N2D=2` and axisymmetric `N2D=1`), using the Area-Weighted formulation for axisymmetric hoop stresses.
+- **Acceptance**: Implemented `solid_quad.py` with plane strain and axisymmetric tests passing. Hooked into engine `KERNELS` and `element_groups`.
+
 ### Candidate pool (bigger — scope with the maintainer first)
 
 Ranked corpus blockers (from `coverage_results_m41.json` `ranked_gaps`;
