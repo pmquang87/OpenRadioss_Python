@@ -442,7 +442,7 @@ def _nodes_of_parts(model: Model, part_ids: List[int]) -> np.ndarray:
 # solids, like the Fortran IGRBRIC over the whole IXS; BEAM edges use
 # the two END nodes only — the orientation node N3 is no geometry)
 _EGROUP_FAMILIES = {
-    "SHEL": ("shells", "shells_qbat", "shells_qeph"),
+    "SHEL": ("shells", "shells_qbat", "shells_qeph", "shells_dkt18"),
     "SH3N": ("sh3n",),
     "BRIC": ("bricks", "tetras"),
     "QUAD": (),                      # no 2D quad element in the port
@@ -819,6 +819,13 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
                                s.part_ids)
                 if np.any(mask):
                     _add(model.shells_qeph.conn[mask], "shells_qeph",
+                         np.where(mask)[0])
+            # DKT18 shell parts (Ishell=18 split group)
+            if model.shells_dkt18 is not None:
+                mask = np.isin(model.shells_dkt18.state["part_ids"],
+                               s.part_ids)
+                if np.any(mask):
+                    _add(model.shells_dkt18.conn[mask], "shells_dkt18",
                          np.where(mask)[0])
             # 3-node shell parts: triangle segments (3rd node repeated)
             if model.sh3n is not None:

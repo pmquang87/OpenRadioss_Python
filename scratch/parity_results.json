@@ -1,30 +1,108 @@
 [
  {
-  "example": "implicit_ringdown",
-  "runname": "IMPLRING",
-  "implicit": true,
-  "class": "PORT-ONLY(implicit)",
+  "example": "rd_e_1000_dkt18",
+  "runname": "rd_e_1000_dkt18",
+  "implicit": false,
   "fortran": {
-   "mode": "real-format",
+   "mode": "none",
    "starter_rc": 0,
-   "starter_time": 0.84,
-   "engine_rc": 2,
-   "engine_time": 0.09,
-   "n_nodes": 12,
-   "n_elements": 10,
-   "starter_elapsed_self": 0.71,
-   "status": "implicit-port-card",
-   "error": "Abort(2) on node 0 (rank 0 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 2) - process 0"
+   "starter_time": 0.71,
+   "engine_rc": 0,
+   "engine_time": 0.89,
+   "n_nodes": 137,
+   "n_elements": 198,
+   "starter_elapsed_self": 0.62,
+   "n_cycles": 12398,
+   "engine_elapsed_self": 0.84,
+   "status": "ok",
+   "csv": "scratch\\fortran\\rd_e_1000_dkt18\\rd_e_1000_dkt18T01.csv"
   },
   "pyradioss": {
    "starter_rc": 0,
-   "starter_time": 0.43,
+   "starter_time": 0.79,
    "engine_rc": 0,
-   "engine_time": 10.47,
-   "n_nodes": 12,
-   "n_elements": 10,
-   "starter_elapsed_self": 0.029,
-   "status": "ok-no-th"
-  }
+   "engine_time": 24.32,
+   "n_nodes": 137,
+   "n_elements": 198,
+   "starter_elapsed_self": 0.018,
+   "n_cycles": 10774,
+   "engine_elapsed_self": 23.01,
+   "status": "ok",
+   "csv": "scratch\\pyradioss\\rd_e_1000_dkt18\\rd_e_1000_dkt18T01.csv"
+  },
+  "channels": [
+   {
+    "channel": "IE",
+    "rel_rms": 0.018098377797172414,
+    "final_dev": 0.04657374911903014,
+    "scale": 0.08909541124,
+    "significant": true
+   },
+   {
+    "channel": "KE",
+    "rel_rms": 0.018087426728144042,
+    "final_dev": 0.04933505456620285,
+    "scale": 0.03364227439,
+    "significant": true
+   },
+   {
+    "channel": "EW",
+    "rel_rms": 0.018114837206287804,
+    "final_dev": 0.04740089444521129,
+    "scale": 0.123166333,
+    "significant": true
+   },
+   {
+    "channel": "MASS",
+    "rel_rms": 0.0,
+    "final_dev": 0.0,
+    "scale": 4800.0,
+    "significant": true
+   },
+   {
+    "channel": "MOMX",
+    "rel_rms": 0.323692661900609,
+    "final_dev": 0.9935884176857778,
+    "scale": 0.0003084126654,
+    "significant": false
+   },
+   {
+    "channel": "MOMY",
+    "rel_rms": 0.02436974836101883,
+    "final_dev": 0.02318374298495688,
+    "scale": 1.4624335894708604,
+    "significant": true
+   },
+   {
+    "channel": "MOMZ",
+    "rel_rms": 0.00938643579660474,
+    "final_dev": 0.03032217205418052,
+    "scale": 0.003919109441,
+    "significant": false
+   },
+   {
+    "channel": "IE+KE",
+    "rel_rms": 0.018087172267645075,
+    "final_dev": 0.047330620124472,
+    "scale": 0.12273768563000001,
+    "significant": true
+   },
+   {
+    "channel": "part_IE",
+    "rel_rms": 0.018098377797172414,
+    "final_dev": 0.04657374911903014,
+    "scale": 0.08909541124,
+    "significant": true
+   },
+   {
+    "channel": "part_KE",
+    "rel_rms": 0.018155240021035066,
+    "final_dev": 0.04950033200585198,
+    "scale": 0.03364227439,
+    "significant": true
+   }
+  ],
+  "max_rel_rms": 0.02436974836101883,
+  "class": "MATCH"
  }
 ]

@@ -27,7 +27,7 @@ that  a = (fext + fint) / m  (this matches the Fortran A(3,*) accumulation
 where internal forces enter negated).
 """
 
-from . import (beam_type3, shell_bt4, shell_qbat, shell_qeph,  # noqa: F401
+from . import (beam_type3, shell_bt4, shell_dkt18, shell_qbat, shell_qeph,  # noqa: F401
                shell_tri3, solid_hexa8, solid_tetra4, spring, truss)
 
 KERNELS = {
@@ -37,6 +37,7 @@ KERNELS = {
     "shells_qbat": shell_qbat,
     "shells_qeph": shell_qeph,
     "sh3n": shell_tri3,
+    "sh3n_dkt18": shell_dkt18,
     "trusses": truss,
     "springs": spring,
     "beams": beam_type3,
@@ -56,4 +57,10 @@ SHELL_ISHELL_GROUPS = {
     22: "shells_qeph",
     23: "shells_qeph",
     24: "shells_qeph",
+}
+
+#: /PROP/SHELL Ishell -> dedicated element-technology group for 3-node shells.
+#: 18 = DKT18 (Discrete Kirchhoff Triangle — cdkforc3.F).
+SH3N_ISHELL_GROUPS = {
+    18: "sh3n_dkt18",
 }
