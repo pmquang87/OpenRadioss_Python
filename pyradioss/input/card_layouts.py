@@ -196,6 +196,8 @@ LAYOUTS: Dict[str, List[int]] = {
     "EOS_POLY_1": [20] * 6,
     # mat_EOS.cfg POLYNOMIAL card 2: CARD("%20lg"*5, C4, C5, E0, Psh, RHO_0)
     "EOS_POLY_2": [20] * 5,
+    # mat_EOS.cfg LINEAR: CARD("%20lg"*4, LAW5_P0, MAT_BULK, LAW5_PSH, Refer_Rho)
+    "EOS_LINEAR": [20] * 4,
 
     # ---- skews / frames (M39) -------------------------------------------------
     # SYSTEM/skew_fix.cfg (radioss120) + SYSTEM/frame_fix.cfg (radioss51):

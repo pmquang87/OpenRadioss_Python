@@ -511,6 +511,14 @@ class StarterDeck:
                         fmt_float(e0)],
                        note="port extension (see eos_ideal_gas)")
 
+    def eos_linear(self, mat_id: int, p0=0.0, bulk=0.0, psh=0.0,
+                   rho0=0.0) -> None:
+        """``/EOS/LINEAR/mat_ID`` — PORT DIALECT, always.
+        Cards: P0 Bulk Psh Rho0."""
+        self.raw_block(f"EOS/LINEAR/{mat_id}",
+                       ["".join(fmt_float(x) for x in (p0, bulk, psh, rho0))],
+                       note="port extension (see eos_ideal_gas)")
+
     # ---- properties -------------------------------------------------------------
 
     def prop_shell(self, pid: int, title: str, thick, nip=3,
@@ -1571,13 +1579,18 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
                         note=f"unknown failure {kind}")
     elif key0 == "EOS":
         kind = b.parts[1].upper()
+        key = "/EOS/" + kind
         t = b.cards[0].floats() + [0.0] * 6
         if kind in ("IDEAL-GAS", "IDEAL_GAS"):
             d.eos_ideal_gas(b.user_id, t[0], t[1])
-        else:
+        elif key == "/EOS/POLYNOMIAL":
             e0 = b.cards[1].floats()[0] if len(b.cards) > 1 else 0.0
-            d.eos_polynomial(b.user_id, t[0], t[1], t[2], t[3], t[4], t[5],
-                             e0)
+            d.eos_polynomial(b.user_id, t[0], t[1], t[2], t[3], t[4], t[5], e0)
+        elif key == "/EOS/LINEAR":
+            d.eos_linear(b.user_id, t[0], t[1], t[2], t[3])
+        else:
+            d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
+                        note=f"unknown eos {kind}")
     elif key0 == "FUNCT":
         title, cards = _title_cards(b)
         d.funct(b.user_id, title,
