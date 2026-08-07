@@ -14,6 +14,7 @@ Fortran origin: ``engine/source/interfaces/`` —
 from .inter_type2 import ContactType2   # noqa: F401
 from .inter_type7 import ContactType7   # noqa: F401
 from .inter_type11 import ContactType11  # noqa: F401
+from .inter_type24 import ContactType24  # noqa: F401
 
 
 def build_contacts(model, log):
@@ -30,7 +31,5 @@ def build_contacts(model, log):
         elif itf.type == 2:
             tied.append(ContactType2(itf, model, log))
         elif itf.type == 24:
-            raise NotImplementedError(
-                f"/INTER/TYPE24/{itf.id}: parsed, physics not implemented (M49) "
-                f"— the Engine will refuse to run this model")
+            penalty.append(ContactType24(itf, model, log))
     return penalty, tied

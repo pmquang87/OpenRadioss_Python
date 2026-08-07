@@ -225,8 +225,6 @@ def check_model(model: Model, log: MessageLog) -> None:
                 if lid not in model.lines:
                     log.error(f"{who}: line {lid} not defined", "CROSS REF")
         elif itf.type == 24:
-            log.warning(f"{who}: parsed, physics not implemented (M49) — "
-                        f"the Engine will refuse to run this model", "PROP CHECK")
             if itf.grnod_id != 0:
                 need_group(itf.grnod_id, who)
             for sid in (itf.surf_id1, itf.surf_id):

@@ -3003,11 +3003,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             surf_id=int(toks[1]), dsearch=f[2], title=title))
         return
 
-    if kind == "TYPE24":
-        if len(cards) < 6:
-            log.error(f"/INTER/TYPE24/{block.user_id}: real-format block "
-                      f"needs at least 6 data cards (got {len(cards)})", block.source)
-            return
+    if kind == "TYPE24" and len(cards) >= 6:
         ign: List[str] = []
         f0 = _fixed_vals(cards[0], [10] * 9)
         id1, id2 = _ival(f0[0]), _ival(f0[1])
@@ -3021,7 +3017,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if _ival(f1[2]) != 0:
             ign.append(f"Iedge={f1[2]}")
         gap_max = _fval(f1[4])  # Gap_max_s
-        # Gap_max_m is f1[5]
+        gap_max_m = _fval(f1[5]) # Gap_max_m
         
         f2 = _fixed_vals(cards[2], [20, 20, 10, 10, 20, 20])
         igap = _ival(f2[2])
@@ -3070,7 +3066,38 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                         f"not ported — ignored: {'; '.join(ign)}",
                         block.source)
 
-    if kind == "TYPE7" and len(cards) >= 6:
+    if kind in ("TYPE7", "TYPE11", "TYPE24") and len(cards) < 6:
+        # ==== the port's compact layout =====================================
+        t = cards[0].ints()
+        id1 = t[0]
+        id2 = t[1]
+        istf = t[2] if len(t) > 2 else 0
+        igap = t[3] if len(t) > 3 else 0
+        sens = t[4] if len(t) > 4 else 0
+        mfrot = t[5] if len(t) > 5 else 0        # Ifric (M15)
+        ifq = t[6] if len(t) > 6 else 0          # Ifiltr (M15)
+        stfac, fric, gap, gap_max, xfreq = (1.0, 0.0, 0.0, 0.0, 0.0)
+        gap_max_m = 0.0
+        grnod_id = id1
+        if kind == "TYPE24":
+            id1 = 0 # surf_id1 is 0 when using node-to-surface
+        
+        if len(cards) > 1:
+            stfac, fric, gap, gap_max, xfreq = _floats(
+                cards[1], 5, defaults=[1.0, 0.0, 0.0, 0.0, 0.0])
+        # ---- optional C1..C6 card (the original's card 8, Ifric > 0) ------
+        fric_c = (0.0,) * 6
+        if mfrot in (1, 2, 3, 4):
+            if len(cards) > 2:
+                cc = _floats(cards[2], 6, defaults=[0.0] * 6)
+                # C6 is only read for Ifric > 1 (hm_read_inter_type07.F)
+                fric_c = tuple(cc[:5]) + ((cc[5],) if mfrot > 1 else (0.0,))
+            else:
+                log.warning(f"/INTER/{kind}/{block.user_id}: Ifric={mfrot} "
+                            f"without a C1..C6 card — all coefficients 0",
+                            block.source)
+
+    elif kind == "TYPE7" and len(cards) >= 6:
         # ==== the REAL fixed-format TYPE7 layout (see docstring) ===========
         ign: List[str] = []            # non-default fields the port ignores
         f0 = _fixed_vals(cards[0], [10] * 10)
@@ -3156,31 +3183,9 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             log.warning(f"/INTER/TYPE7/{block.user_id}: real-format fields "
                         f"not ported — ignored: {'; '.join(ign)}",
                         block.source)
-    else:
-        # ==== the port's compact layout =====================================
-        t = cards[0].ints()
-        id1 = t[0]
-        id2 = t[1]
-        istf = t[2] if len(t) > 2 else 0
-        igap = t[3] if len(t) > 3 else 0
-        sens = t[4] if len(t) > 4 else 0
-        mfrot = t[5] if len(t) > 5 else 0        # Ifric (M15)
-        ifq = t[6] if len(t) > 6 else 0          # Ifiltr (M15)
-        stfac, fric, gap, gap_max, xfreq = (1.0, 0.0, 0.0, 0.0, 0.0)
-        if len(cards) > 1:
-            stfac, fric, gap, gap_max, xfreq = _floats(
-                cards[1], 5, defaults=[1.0, 0.0, 0.0, 0.0, 0.0])
-        # ---- optional C1..C6 card (the original's card 8, Ifric > 0) ------
-        fric_c = (0.0,) * 6
-        if mfrot in (1, 2, 3, 4):
-            if len(cards) > 2:
-                cc = _floats(cards[2], 6, defaults=[0.0] * 6)
-                # C6 is only read for Ifric > 1 (hm_read_inter_type07.F)
-                fric_c = tuple(cc[:5]) + ((cc[5],) if mfrot > 1 else (0.0,))
-            else:
-                log.warning(f"/INTER/{kind}/{block.user_id}: Ifric={mfrot} "
-                            f"without a C1..C6 card — all coefficients 0",
-                            block.source)
+    elif kind == "TYPE7": # should never reach here since we handle len < 6 above
+        pass
+        # removed dup else block
 
     # ==== shared validation (both dialects) ================================
     if istf not in (0, 1, 2, 3, 4, 5):
@@ -3240,11 +3245,11 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             gap_max=gap_max, sens_id=sens, mfrot=mfrot, ifq=ifq,
             xfiltr=xfiltr, fric_c=fric_c, title=title))
     elif kind == "TYPE24":
-        # For TYPE24, gap=0.0 since it does not have a Gap_min parameter on the card.
+        # For TYPE24, we pass gap so compact mode can explicitly set it for tests.
         model.interfaces.append(Interface(
             id=block.user_id, type=24, grnod_id=grnod_id, surf_id1=id1, surf_id=id2,
-            istf=istf, igap=igap, stfac=stfac, fric=fric, gap=0.0,
-            gap_max=gap_max, sens_id=sens, mfrot=mfrot, ifq=ifq,
+            istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap,
+            gap_max=gap_max, gap_max_m=gap_max_m, sens_id=sens, mfrot=mfrot, ifq=ifq,
             xfiltr=xfiltr, fric_c=fric_c, title=title))
     else:                          # TYPE11
         if mfrot > 0 or ifq > 0:

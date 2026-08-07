@@ -803,6 +803,7 @@ class Interface:
     fric: float = 0.0
     gap: float = 0.0
     gap_max: float = 0.0  # igap=1 cap, 0 = no cap
+    gap_max_m: float = 0.0 # gap_max_m for TYPE24
     dsearch: float = 0.0  # type 2: projection search distance (0 = auto)
     sens_id: int = 0      # M6: /SENSOR gating (types 7/11)
     # ---- friction MODELS (M15, Ifric > 0 — contact/friction.py) ----------

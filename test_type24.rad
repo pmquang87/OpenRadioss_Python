@@ -1,0 +1,50 @@
+/BEGIN
+inset block on cube
+/NODE
+1 0 0 0
+2 1 0 0
+3 1 1 0
+4 0 1 0
+5 0 0 1
+6 1 0 1
+7 1 1 1
+8 0 1 1
+11 0.25 0.25 1.3
+12 0.75 0.25 1.3
+13 0.75 0.75 1.3
+14 0.25 0.75 1.3
+15 0.25 0.25 2.3
+16 0.75 0.25 2.3
+17 0.75 0.75 2.3
+18 0.25 0.75 2.3
+/BRICK/1
+1 1 2 3 4 5 6 7 8
+/BRICK/2
+2 11 12 13 14 15 16 17 18
+/PART/1
+lower
+1 1
+/PART/2
+upper
+2 1
+/MAT/LAW1/1
+steel
+7.8e-6
+210. 0.3
+/PROP/SOLID/1
+solid
+1.1 0.05 0.1
+/PROP/SOLID/2
+solid
+1.1 0.05 0.1
+/GRNOD/PART/2
+upper all
+2
+/SURF/PART/1
+lower surf
+1
+/INTER/TYPE24/1
+impact
+2 1 1 0
+5.0 0.0 0.1
+/END
