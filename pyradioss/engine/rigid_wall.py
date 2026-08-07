@@ -247,7 +247,7 @@ class RigidWalls:
                 - np.einsum("nb,nb->n", v_trial, v_old[i]))).sum())
 
             if wnode < 0:
-                removed += -U                        # fixed wall
+                wext += U                            # fixed wall (does negative work, goes to EW)
             elif driven:
                 wext += U                            # imposed-motion wall
             else:

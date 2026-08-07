@@ -64,12 +64,16 @@ def _fixed_vals(card: Card, widths: List[int]) -> List[str]:
 
 def _ival(s: str, default: int = 0) -> int:
     """Fixed field -> int; blank -> default (Fortran blank-reads-as-zero)."""
-    return int(s) if s else default
+    if not s or not s.strip(): return default
+    try:
+        return int(s)
+    except ValueError:
+        return int(float(s))
 
 
 def _fval(s: str, default: float = 0.0) -> float:
     """Fixed field -> float; blank -> default."""
-    return _to_float(s) if s else default
+    return _to_float(s) if s and s.strip() else default
 
 
 def _hourglass_defaults(ishell: int) -> Tuple[float, float, float]:
@@ -1340,6 +1344,15 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     params["ishell"] = int(toks[0])
                 except ValueError:
                     params["ishell"] = 0
+                if len(toks) > 2:
+                    try:
+                        params["ish3n"] = int(toks[2])
+                    except ValueError:
+                        params["ish3n"] = 0
+                else:
+                    params["ish3n"] = 0
+            else:
+                params["ish3n"] = 0
             hm_d, hf_d, hr_d = _hourglass_defaults(params["ishell"])
             if len(cards) >= 2:
                 hm, hf, hr = _floats(cards[1], 3,
@@ -2556,7 +2569,10 @@ def read_analy(block: KeywordBlock, model: Model, log: MessageLog):
     title, cards = _title_and_data(block)
     if not cards:
         return
-    model.n2d = cards[0].int_at(0, 0)
+    if block.fixed:
+        model.n2d = _ival(cards[0].fields()[0].strip())
+    else:
+        model.n2d = _ival(cards[0].tokens()[0])
     if model.n2d not in (0, 1, 2):
         log.warning(f"/ANALY: invalid N2D {model.n2d} (must be 0, 1, 2)",
                     block.source)
@@ -3195,6 +3211,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     if kind == "TYPE24" and len(cards) >= 6:
         ign: List[str] = []
+        gap = 0.0
         f0 = _fixed_vals(cards[0], [10] * 9)
         id1, id2 = _ival(f0[0]), _ival(f0[1])
         istf = _ival(f0[2])
@@ -3212,28 +3229,28 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         f2 = _fixed_vals(cards[2], [20, 20, 10, 10, 20, 20])
         igap = _ival(f2[2])
         for name, s in (("Stmin", f2[0]), ("Stmax", f2[1]), ("Ipen", f2[3]), ("Ipen_max", f2[4]), ("STFAC_MDT", f2[5])):
-            if s and _to_float(s) != 0.0:
-                ign.append(f"{name}={s}")
+            if s and s.strip() and any(_to_float(tok) != 0.0 for tok in s.split()):
+                ign.append(f"{name}={s.strip()}")
                 
         f3 = _fixed_vals(cards[3], [20, 20, 20, 20, 20])
         stfac, fric = _fval(f3[0]), _fval(f3[1])
         for name, s in (("Tstart", f3[3]), ("Tstop", f3[4])):
-            if s and _to_float(s) != 0.0:
-                ign.append(f"{name}={s}")
+            if s and s.strip() and any(_to_float(tok) != 0.0 for tok in s.split()):
+                ign.append(f"{name}={s.strip()}")
                 
         f4 = _fixed_vals(cards[4], [7, 1, 1, 1, 20, 10, 20, 20, 20])
         if _ival(f4[1]) or _ival(f4[2]) or _ival(f4[3]):
             ign.append(f"IBC={f4[1] or '0'}{f4[2] or '0'}{f4[3] or '0'}")
         for name, s in (("Inacti", f4[5]), ("VISs", f4[6]), ("Tpressfit", f4[8])):
-            if s and _to_float(s) != 0.0:
-                ign.append(f"{name}={s}")
+            if s and s.strip() and any(_to_float(tok) != 0.0 for tok in s.split()):
+                ign.append(f"{name}={s.strip()}")
                 
         f5 = _fixed_vals(cards[5], [10, 10, 20, 10, 10, 20, 10, 10])
         mfrot, ifq = _ival(f5[0]), _ival(f5[1])
         xfreq, sens = _fval(f5[2]), _ival(f5[4])
         for name, s in (("DTSTIF", f5[5]), ("Fric_ID", f5[7])):
-            if _to_float(s) != 0.0:
-                ign.append(f"{name}={s}")
+            if s and s.strip() and any(_to_float(tok) != 0.0 for tok in s.split()):
+                ign.append(f"{name}={s.strip()}")
                 
         fric_c = (0.0,) * 6
         icard = 6
@@ -3588,7 +3605,12 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             else:
                 ids.extend(int(s) for s in c.cut("IDS10") if s)
         else:
-            ids.extend(c.ints())
+            if kind == "NODE":
+                toks = c.tokens()
+                if toks:
+                    ids.append(int(toks[0]))
+            else:
+                ids.extend(c.ints())
     model.th_requests.append(THRequest(
         id=block.user_id, kind=kind, ids=ids, variables=variables,
         title=title))
@@ -3624,26 +3646,40 @@ def read_monvol(block: KeywordBlock, model: Model, log: MessageLog):
         return
 
     # Card 1: surf_IDex hconv
-    t1 = cards[0].tokens()
-    surf_id = int(t1[0]) if len(t1) > 0 else 0
-    hconv = float(t1[1]) if len(t1) > 1 else 0.0
+    f1 = _fixed_vals(cards[0], [10, 20])
+    surf_id = _ival(f1[0]) if f1[0].strip() else (int(cards[0].tokens()[0]) if cards[0].tokens() else 0)
+    
+    if len(cards[0].tokens()) >= 2 and len(cards[0].raw) < 30:
+        hconv = float(cards[0].tokens()[1])
+    else:
+        hconv = _fval(f1[1]) if len(f1) > 1 else 0.0
 
     # Card 2: scale_t scale_p scale_s scale_a scale_d
     t2 = cards[1].tokens()
-    scale_t = float(t2[0]) if len(t2) > 0 else 1.0
-    scale_p = float(t2[1]) if len(t2) > 1 else 1.0
-    scale_s = float(t2[2]) if len(t2) > 2 else 1.0
-    scale_a = float(t2[3]) if len(t2) > 3 else 1.0
-    scale_d = float(t2[4]) if len(t2) > 4 else 1.0
+    if len(t2) == 1 and len(cards[1].raw) > 20:
+        f2 = _fixed_vals(cards[1], [20, 20, 20, 20, 20])
+        scale_t, scale_p = _fval(f2[0], 1.0), _fval(f2[1], 1.0)
+        scale_s, scale_a, scale_d = _fval(f2[2], 1.0), _fval(f2[3], 1.0), _fval(f2[4], 1.0)
+    else:
+        scale_t = float(t2[0]) if len(t2) > 0 else 1.0
+        scale_p = float(t2[1]) if len(t2) > 1 else 1.0
+        scale_s = float(t2[2]) if len(t2) > 2 else 1.0
+        scale_a = float(t2[3]) if len(t2) > 3 else 1.0
+        scale_d = float(t2[4]) if len(t2) > 4 else 1.0
 
     # Card 3: matid mu pext t_initial iequil ittf
     t3 = cards[2].tokens()
-    matid = int(t3[0]) if len(t3) > 0 else 0
-    mu = float(t3[1]) if len(t3) > 1 else 0.0
-    pext = float(t3[2]) if len(t3) > 2 else 0.0
-    t_init = float(t3[3]) if len(t3) > 3 else 293.0
-    iequil = int(t3[4]) if len(t3) > 4 else 0
-    ittf = int(t3[5]) if len(t3) > 5 else 0
+    if len(t3) < 6 and len(cards[2].raw) >= 40:
+        f3 = _fixed_vals(cards[2], [10, 20, 20, 20, 10, 10])
+        matid, mu, pext = _ival(f3[0]), _fval(f3[1]), _fval(f3[2])
+        t_init, iequil, ittf = _fval(f3[3], 293.0), _ival(f3[4]), _ival(f3[5])
+    else:
+        matid = int(t3[0]) if len(t3) > 0 else 0
+        mu = float(t3[1]) if len(t3) > 1 else 0.0
+        pext = float(t3[2]) if len(t3) > 2 else 0.0
+        t_init = float(t3[3]) if len(t3) > 3 else 293.0
+        iequil = int(t3[4]) if len(t3) > 4 else 0
+        ittf = int(t3[5]) if len(t3) > 5 else 0
 
     mv = MonitoredVolume(
         id=block.user_id,

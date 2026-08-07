@@ -444,7 +444,7 @@ def parse_tshell(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     nbp = 0
     if c1:
         if fixed:
-            nbp = _int(c1, 30, 40)
+            nbp = int(float(c1.raw[30:40])) if len(c1.raw) >= 40 and c1.raw[30:40].strip() else 0
         else:
             ints = c1.ints()
             nbp = ints[3] if len(ints) > 3 else 0
@@ -461,7 +461,7 @@ def parse_tshell(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     h = 0.0
     if c2:
         if fixed:
-            h = _float(c2, 40, 60)
+            h = float(c2.raw[40:60]) if len(c2.raw) >= 60 and c2.raw[40:60].strip() else 0.0
         else:
             floats = c2.floats()
             h = floats[2] if len(floats) > 2 else 0.0

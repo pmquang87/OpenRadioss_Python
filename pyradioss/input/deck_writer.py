@@ -998,7 +998,10 @@ class StarterDeck:
         if jadd and any(float(x) != 0.0 for x in jadd):
             self.lines.append("".join(fmt_float(x) for x in jadd[:3]))
         else:
-            self.lines.append(BLANK_CARD)          # Jxx Jyy Jzz
+            if mass > 0.0 and icog >= 1:
+                self.lines.append("".join(fmt_float(x) for x in (1.0, 1.0, 1.0)))
+            else:
+                self.lines.append(BLANK_CARD)          # Jxx Jyy Jzz
         self.lines.append(BLANK_CARD)              # Jxy Jyz Jxz
         self.lines.append(BLANK_CARD)              # Ioptoff / Iexpams / Ifail
 
@@ -1717,7 +1720,12 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
         variables = [v.upper() for v in cards[0].tokens()]
         ids: List[int] = []
         for c in cards[1:]:
-            ids.extend(c.ints())
+            if kind == "NODE":
+                toks = c.tokens()
+                if toks:
+                    ids.append(int(toks[0]))
+            else:
+                ids.extend(c.ints())
         d.th(kind, b.user_id, title, variables, ids)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],

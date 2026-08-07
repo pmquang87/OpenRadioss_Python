@@ -795,7 +795,7 @@ def coverage(args) -> int:
         rd = os.path.join(workdir, "coverage", name)
         shutil.rmtree(rd, ignore_errors=True)
         os.makedirs(rd)
-        shutil.copy(deck, rd)
+        shutil.copytree(os.path.dirname(deck), rd, dirs_exist_ok=True)
 
         # 1. keyword census straight from the lexer
         census: Dict[str, int] = {}
