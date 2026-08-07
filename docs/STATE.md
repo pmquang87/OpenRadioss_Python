@@ -182,6 +182,10 @@ deferred lists — confirm scope with the maintainer before starting one.
 - **Goal**: Implement the 4-node quadrilateral 2D solid element `/QUAD` (plane strain `N2D=2` and axisymmetric `N2D=1`), using the Area-Weighted formulation for axisymmetric hoop stresses.
 - **Acceptance**: Implemented `solid_quad.py` with plane strain and axisymmetric tests passing. Hooked into engine `KERNELS` and `element_groups`.
 
+### M56 — SHEL16 Thick Shell Elements ✅
+- **Goal**: Implement the 16-node thick shell element `/SHEL16` into pyradioss, including starter buffer allocation, geometry, shape functions, strain calculation, and stress/force integration across multi-point Gauss rules.
+- **Acceptance**: `pyradioss/elements/shell_thick16.py` implemented with scalar physics unrolled for Numba. `tests/test_m56_shel16.py` covers both Starter and Engine integration of a small `SHEL16` model, executing cleanly.
+
 ### Candidate pool (bigger — scope with the maintainer first)
 
 Ranked corpus blockers (from `coverage_results_m41.json` `ranked_gaps`;
