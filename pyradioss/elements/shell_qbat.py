@@ -916,26 +916,32 @@ def forces(group, x, v, vr, dt, fint, mint):
         if len(st["zw"][isl][0]) == 1:
             force_flat[sl] = True
 
-    g = _cbacoor(x[conn], v[conn], vr[conn], off, dt, force_flat)
-    i_f, i_w = g["i_f"], g["i_w"]
-    area = g["area"]
+    from pyradioss.accel import get as accel_get
+    jit_pre = accel_get("qbat_pre")
+    if jit_pre is not None:
+        E, area, lc, vdef3, cdet, vdef, i_f, i_w, bm_f, bc_f, bmw_w, bmfw_w, bfw_w, bcq_w, tc_w, vqn_w, corel_w, di_w, x13n_f, x24n_f, y13n_f, y24n_f, x13n_w, x24n_w, y13n_w, y24n_w = jit_pre(x[conn], v[conn], vr[conn], off, dt, force_flat)
+        g = {"lc": lc}
+    else:
+        g = _cbacoor(x[conn], v[conn], vr[conn], off, dt, force_flat)
+        i_f, i_w = g["i_f"], g["i_w"]
+        area = g["area"]
 
-    # ---- CBADEFSH: constant assumed membrane shear ------------------------
-    vdef3 = np.zeros(n)
-    if len(i_f):
-        vf_ = g["vxyz_f"][i_f]
-        vdef3[i_f] = (g["y24n"][i_f] * vf_[:, 0, 1]
-                      - g["y13n"][i_f] * vf_[:, 1, 1]
-                      - g["x24n"][i_f] * vf_[:, 0, 0]
-                      + g["x13n"][i_f] * vf_[:, 1, 0])
-    if len(i_w):
-        vw_ = g["vxyz_w"]
-        vdef3[i_w] = (g["y24n"][i_w] * (vw_[:, 0, 1] - vw_[:, 2, 1])
-                      + g["y13n"][i_w] * (-vw_[:, 1, 1] + vw_[:, 3, 1])
-                      - g["x24n"][i_w] * (vw_[:, 0, 0] - vw_[:, 2, 0])
-                      + g["x13n"][i_w] * (vw_[:, 1, 0] - vw_[:, 3, 0]))
-    vdef3[~alive] = 0.0
-    g["vdef3"] = vdef3
+        # ---- CBADEFSH: constant assumed membrane shear ------------------------
+        vdef3 = np.zeros(n)
+        if len(i_f):
+            vf_ = g["vxyz_f"][i_f]
+            vdef3[i_f] = (g["y24n"][i_f] * vf_[:, 0, 1]
+                          - g["y13n"][i_f] * vf_[:, 1, 1]
+                          - g["x24n"][i_f] * vf_[:, 0, 0]
+                          + g["x13n"][i_f] * vf_[:, 1, 0])
+        if len(i_w):
+            vw_ = g["vxyz_w"]
+            vdef3[i_w] = (g["y24n"][i_w] * (vw_[:, 0, 1] - vw_[:, 2, 1])
+                          + g["y13n"][i_w] * (-vw_[:, 1, 1] + vw_[:, 3, 1])
+                          - g["x24n"][i_w] * (vw_[:, 0, 0] - vw_[:, 2, 0])
+                          + g["x13n"][i_w] * (vw_[:, 1, 0] - vw_[:, 3, 0]))
+        vdef3[~alive] = 0.0
+        g["vdef3"] = vdef3
     volg = area * thick
 
     # CBAENERS (pre): + FOR3_mean_old * vdef3 * A*t*dt/2  (cbaforc3 l.566)
@@ -964,36 +970,40 @@ def forces(group, x, v, vr, dt, fint, mint):
     ops_f = []
     ops_w = []
     for ng in range(4):
-        cdet = g["jac"][:, ng]
-        vdef = np.zeros((n, 8))
-        if len(i_f):
-            bm, bc, vd = _flat_gp(g, ng)
-            vd[~alive[i_f]] = 0.0
-            vdef[i_f] = vd
-            ops_f.append((bm, bc))
+        if jit_pre is not None:
+            cdet_ = cdet[:, ng]
+            vdef_ = vdef[:, ng, :]
         else:
-            ops_f.append(None)
-        if len(i_w):
-            bmw, bmfw, bfw, bcq, tc, vd = _warp_gp(g, ng)
-            vd[~alive[i_w]] = 0.0
-            vdef[i_w] = vd
-            ops_w.append((bmw, bmfw, bfw, bcq, tc))
-        else:
-            ops_w.append(None)
-        vdef[:, 2] = vdef3
+            cdet_ = g["jac"][:, ng]
+            vdef_ = np.zeros((n, 8))
+            if len(i_f):
+                bm, bc, vd = _flat_gp(g, ng)
+                vd[~alive[i_f]] = 0.0
+                vdef_[i_f] = vd
+                ops_f.append((bm, bc))
+            else:
+                ops_f.append(None)
+            if len(i_w):
+                bmw, bmfw, bfw, bcq, tc, vd = _warp_gp(g, ng)
+                vd[~alive[i_w]] = 0.0
+                vdef_[i_w] = vd
+                ops_w.append((bmw, bmfw, bfw, bcq, tc))
+            else:
+                ops_w.append(None)
+            vdef_[:, 2] = vdef3
 
         # strains (cbastra3.F): EXZ=VDEF4, EYZ=VDEF5
-        exx = vdef[:, 0] * dt
-        eyy = vdef[:, 1] * dt
-        exy = vdef[:, 2] * dt
-        exz = vdef[:, 3] * dt
-        eyz = vdef[:, 4] * dt
-        kxx = vdef[:, 5] * dt
-        kyy = vdef[:, 6] * dt
-        kxy = vdef[:, 7] * dt
+        exx = vdef_[:, 0] * dt
+        eyy = vdef_[:, 1] * dt
+        exy = vdef_[:, 2] * dt
+        exz = vdef_[:, 3] * dt
+        eyz = vdef_[:, 4] * dt
+        kxx = vdef_[:, 5] * dt
+        kyy = vdef_[:, 6] * dt
+        kxy = vdef_[:, 7] * dt
 
         # CBAENER (pre): remove the per-GP old-stress shear work
-        de -= 0.5 * off * thick * cdet * forpg[:, ng, 2] * exy
+        de -= 0.5 * off * thick * cdet_ * forpg[:, ng, 2] * exy
 
         # ---- layer stress updates + resultants ---------------------------
         npg_ = np.zeros((n, 3))                  # membrane N (force/length)
@@ -1017,45 +1027,45 @@ def forces(group, x, v, vr, dt, fint, mint):
                                    deps, dt)
                 sig[sl, k, :] = s_new
                 s_mid = 0.5 * (s_old + s_new)
-                de[sl] += cdet[sl] * wk * np.einsum("nk,nk->n", s_mid, deps)
+                de[sl] += cdet_[sl] * wk * np.einsum("nk,nk->n", s_mid, deps)
                 npg_[sl] += wk[:, None] * s_new
                 mpg_[sl] += (wk * zk)[:, None] * s_new
             # elastic transverse shear (per GP)
             qold = qsh[sl, ng].copy()
             dq = np.stack([exz[sl], eyz[sl]], axis=1)
             qsh[sl, ng] += gs_mod[sl][:, None] * dq
-            de[sl] += cdet[sl] * t_sl * np.einsum(
+            de[sl] += cdet_[sl] * t_sl * np.einsum(
                 "nk,nk->n", 0.5 * (qold + qsh[sl, ng]), dq)
 
         # CBAENER (post): remove the per-GP NEW-stress (pre-viscous) work
-        de -= 0.5 * off * thick * cdet * (npg_[:, 2] / np.maximum(
+        de -= 0.5 * off * thick * cdet_ * (npg_[:, 2] / np.maximum(
             thick, EM20)) * exy
 
         # ---- CBAVISC: dn numerical damping ------------------------------
         visc = _ONEP414 * off * st["amu"] * st["rho0"] * st["ssp0"] \
-            * np.sqrt(np.maximum(cdet, 0.0))
+            * np.sqrt(np.maximum(cdet_, 0.0))
         nu = st["nu0"]
         gg = 0.5 / (1.0 + nu)
-        fx = visc * (vdef[:, 0] + nu * vdef[:, 1])
-        fy = visc * (vdef[:, 1] + nu * vdef[:, 0])
-        fxy = visc * vdef[:, 2] * gg
+        fx = visc * (vdef_[:, 0] + nu * vdef_[:, 1])
+        fy = visc * (vdef_[:, 1] + nu * vdef_[:, 0])
+        fxy = visc * vdef_[:, 2] * gg
         npg_v = npg_.copy()
         npg_v[:, 0] += fx * thick
         npg_v[:, 1] += fy * thick
         npg_v[:, 2] += fxy * thick
-        dv = cdet * thick * dt
-        dehg += (fx * vdef[:, 0] + fy * vdef[:, 1]) * dv
+        dv = cdet_ * thick * dt
+        dehg += (fx * vdef_[:, 0] + fy * vdef_[:, 1]) * dv
         viscb = _ZEP3 * thick * visc * bend_visc
-        mvx = viscb * (vdef[:, 5] + nu * vdef[:, 6])
-        mvy = viscb * (vdef[:, 6] + nu * vdef[:, 5])
-        mvxy = viscb * vdef[:, 7] * gg
+        mvx = viscb * (vdef_[:, 5] + nu * vdef_[:, 6])
+        mvy = viscb * (vdef_[:, 6] + nu * vdef_[:, 5])
+        mvxy = viscb * vdef_[:, 7] * gg
         mpg_v = mpg_.copy()
         t2 = thick ** 2
         mpg_v[:, 0] += mvx * t2
         mpg_v[:, 1] += mvy * t2
         mpg_v[:, 2] += mvxy * t2
-        dehg += (mvx * vdef[:, 5] + mvy * vdef[:, 6]
-                 + mvxy * vdef[:, 7]) * dv * thick
+        dehg += (mvx * vdef_[:, 5] + mvy * vdef_[:, 6]
+                 + mvxy * vdef_[:, 7]) * dv * thick
 
         # persist the GBUF%FORPG / MOMPG state (stress / M/t^2 units)
         t_i = 1.0 / np.maximum(thick, EM20)
@@ -1066,11 +1076,12 @@ def forces(group, x, v, vr, dt, fint, mint):
 
         # ---- CBAFORI: internal force assembly ----------------------------
         q_pg = qsh[:, ng] * thick[:, None]       # physical [q_xz, q_yz]
-        if len(i_f):
-            _fori_flat(vf, vm, g, ops_f[ng][0], ops_f[ng][1],
-                       cdet, npg_v, mpg_v, q_pg)
-        if len(i_w):
-            _fori_warp(vf, vm, g, ops_w[ng], cdet, npg_v, mpg_v, q_pg)
+        if jit_pre is None:
+            if len(i_f):
+                _fori_flat(vf, vm, g, ops_f[ng][0], ops_f[ng][1],
+                           cdet_, npg_v, mpg_v, q_pg)
+            if len(i_w):
+                _fori_warp(vf, vm, g, ops_w[ng], cdet_, npg_v, mpg_v, q_pg)
 
     # ---- after the Gauss loop --------------------------------------------
     for_mean = forpg.mean(axis=1)                # GBUF%FOR (cbaforc3 962)
@@ -1078,26 +1089,27 @@ def forces(group, x, v, vr, dt, fint, mint):
 
     # CBAFORCT: constant membrane shear force from the MEAN resultant
     thoff = volg * for_mean[:, 2] * off
-    if len(i_f):
-        th_f = thoff[i_f]
-        vf[i_f, 0, 0] += -th_f * g["x24n"][i_f]
-        vf[i_f, 1, 0] += th_f * g["y24n"][i_f]
-        vf[i_f, 0, 1] += th_f * g["x13n"][i_f]
-        vf[i_f, 1, 1] += -th_f * g["y13n"][i_f]
-    if len(i_w):
-        th_w = thoff[i_w]
-        sx1 = -th_w * g["x24n"][i_w]
-        sy1 = th_w * g["y24n"][i_w]
-        sx2 = th_w * g["x13n"][i_w]
-        sy2 = -th_w * g["y13n"][i_w]
-        vf[i_w, 0, 0] += sx1
-        vf[i_w, 1, 0] += sy1
-        vf[i_w, 0, 1] += sx2
-        vf[i_w, 1, 1] += sy2
-        vf[i_w, 0, 2] -= sx1
-        vf[i_w, 1, 2] -= sy1
-        vf[i_w, 0, 3] -= sx2
-        vf[i_w, 1, 3] -= sy2
+    if jit_pre is None:
+        if len(i_f):
+            th_f = thoff[i_f]
+            vf[i_f, 0, 0] += -th_f * g["x24n"][i_f]
+            vf[i_f, 1, 0] += th_f * g["y24n"][i_f]
+            vf[i_f, 0, 1] += th_f * g["x13n"][i_f]
+            vf[i_f, 1, 1] += -th_f * g["y13n"][i_f]
+        if len(i_w):
+            th_w = thoff[i_w]
+            sx1 = -th_w * g["x24n"][i_w]
+            sy1 = th_w * g["y24n"][i_w]
+            sx2 = th_w * g["x13n"][i_w]
+            sy2 = -th_w * g["y13n"][i_w]
+            vf[i_w, 0, 0] += sx1
+            vf[i_w, 1, 0] += sy1
+            vf[i_w, 0, 1] += sx2
+            vf[i_w, 1, 1] += sy2
+            vf[i_w, 0, 2] -= sx1
+            vf[i_w, 1, 2] -= sy1
+            vf[i_w, 0, 3] -= sx2
+            vf[i_w, 1, 3] -= sy2
 
     # CBAENERS (post): + FOR3_mean_new * vdef3 * A*t*dt/2
     de += off * volg * dt * 0.5 * for_mean[:, 2] * vdef3
@@ -1118,7 +1130,11 @@ def forces(group, x, v, vr, dt, fint, mint):
     st["ehour"] += dehg
 
     # ---- CBAPROJ: local -> global, rigid projection, OFF -----------------
-    fg, mg = _cbaproj(g, vf, vm, off)
+    jit_post = accel_get("qbat_post")
+    if jit_post is not None:
+        fg, mg = jit_post(n, E, off, thick, volg, forpg, mompg, for_mean, cdet, i_f, i_w, bm_f, bc_f, bmw_w, bmfw_w, bfw_w, bcq_w, tc_w, vqn_w, corel_w, di_w, x13n_f, x24n_f, y13n_f, y24n_f, x13n_w, x24n_w, y13n_w, y24n_w)
+    else:
+        fg, mg = _cbaproj(g, vf, vm, off)
 
     # accumulate NEGATED (cupdtn3.F: F -= F11)
     flat_idx = conn.reshape(-1)

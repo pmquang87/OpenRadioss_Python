@@ -1,5 +1,5 @@
-import numpy as np
-from numba import njit
+﻿import numpy as np
+from numba import njit, objmode
 from pyradioss.common.constants import EM20, EP30
 
 
@@ -109,7 +109,7 @@ def qbat_pre_flat(xe, ve, vre, off, dt):
         # velocities
         vg0x = ve[e, 0, 0] - ve[e, 2, 0]; vg0y = ve[e, 0, 1] - ve[e, 2, 1]; vg0z = ve[e, 0, 2] - ve[e, 2, 2]
         vg1x = ve[e, 1, 0] - ve[e, 3, 0]; vg1y = ve[e, 1, 1] - ve[e, 3, 1]; vg1z = ve[e, 1, 2] - ve[e, 3, 2]
-        vg2x = vg0x - vg1x; vg2y = vg0y - vg1y; vg2z = vg0z - vg1z
+        vg2x = ve[e, 0, 0] - ve[e, 1, 0] + ve[e, 2, 0] - ve[e, 3, 0]; vg2y = ve[e, 0, 1] - ve[e, 1, 1] + ve[e, 2, 1] - ve[e, 3, 1]; vg2z = ve[e, 0, 2] - ve[e, 1, 2] + ve[e, 2, 2] - ve[e, 3, 2]
         
         v13x = vg0x * e1x + vg0y * e1y + vg0z * e1z
         v13y = vg0x * e2x + vg0y * e2y + vg0z * e2z
@@ -208,10 +208,10 @@ def qbat_pre_flat(xe, ve, vre, off, dt):
                 bc[e, ng, 16 + m] = 0.5 * _VKSI[ng, m]
                 bc[e, ng, 20 + m] = 0.5 * _VETA[ng, m]
                 
-            vdef[e, ng, 0] = bm[e, ng, 0]*v13x + bm[e, ng, 1]*v24x + bm[e, ng, 4]*vhix
-            vdef[e, ng, 1] = bm[e, ng, 2]*v13y + bm[e, ng, 3]*v24y + bm[e, ng, 5]*vhiy
-            vdef[e, ng, 3] = bm[e, ng, 0]*v13z + bm[e, ng, 1]*v24z + bm[e, ng, 4]*vhiz + bm[e, ng, 6]*r24y + bm[e, ng, 7]*r13y
-            vdef[e, ng, 4] = bm[e, ng, 2]*v13z + bm[e, ng, 3]*v24z + bm[e, ng, 5]*vhiz - bm[e, ng, 6]*r24x - bm[e, ng, 7]*r13x
+            vdef[e, ng, 0] = bm[e, ng, 0]*v13x + bm[e, ng, 1]*v24x + bm[e, ng, 2]*vhix
+            vdef[e, ng, 1] = bm[e, ng, 4]*v13y + bm[e, ng, 5]*v24y + bm[e, ng, 6]*vhiy
+            vdef[e, ng, 3] = (bc[e, ng, 0]*v13z + bc[e, ng, 6]*v24z + bc[e, ng, 12]*vhiz + bc[e, ng, 2]*r13x + bc[e, ng, 8]*r24x + bc[e, ng, 14]*rtix + bc[e, ng, 4]*r13y + bc[e, ng, 10]*r24y + bc[e, ng, 16]*rtiy)
+            vdef[e, ng, 4] = (bc[e, ng, 1]*v13z + bc[e, ng, 7]*v24z + bc[e, ng, 13]*vhiz + bc[e, ng, 3]*r13x + bc[e, ng, 9]*r24x + bc[e, ng, 15]*rtix + bc[e, ng, 5]*r13y + bc[e, ng, 11]*r24y + bc[e, ng, 17]*rtiy)
             vdef[e, ng, 2] = vdef3[e]
             
             kxx = 0.0; kyy = 0.0; kxy = 0.0
@@ -472,12 +472,12 @@ def qbat_pre(xe, ve, vre, off, dt, force_flat):
     area = np.empty(n)
     lc = np.empty(n)
     vdef3 = np.empty(n)
-    cdet = np.empty(n)
-    vdef = np.zeros((n, 8))
+    cdet = np.empty((n, 4))
+    vdef = np.zeros((n, 4, 8))
     
     # Flat
     if num_f > 0:
-        E_f, area_f, lc_f, vdef3_f, cdet_f, vdef_f, bm_f, bc_f, x13n_f, x24n_f, y13n_f, y24n_f = qbat_pre_flat(xe[i_f], ve[i_f], vre[i_f], dt)
+        E_f, area_f, lc_f, vdef3_f, cdet_f, vdef_f, bm_f, bc_f, x13n_f, x24n_f, y13n_f, y24n_f = qbat_pre_flat(xe[i_f], ve[i_f], vre[i_f], off[i_f], dt)
         for i in range(num_f):
             E[i_f[i]] = E_f[i]
             area[i_f[i]] = area_f[i]
@@ -487,15 +487,16 @@ def qbat_pre(xe, ve, vre, off, dt, force_flat):
             vdef[i_f[i]] = vdef_f[i]
     else:
         bm_f = np.empty((0, 4, 8))
-        bc_f = np.empty((0, 4, 5, 2))
-        x13n_f = np.empty((0, 4))
-        x24n_f = np.empty((0, 4))
-        y13n_f = np.empty((0, 4))
-        y24n_f = np.empty((0, 4))
+        bc_f = np.empty((0, 4, 24))
+        x13n_f = np.empty(0)
+        x24n_f = np.empty(0)
+        y13n_f = np.empty(0)
+        y24n_f = np.empty(0)
 
     # Warp
     if num_w > 0:
-        E_w, area_w, lc_w, vdef3_w, cdet_w, vdef_w2, bmw_w, bmfw_w, bfw_w, bcq_w, tc_w, vqn_w, corel_w, di_w, x13n_w, x24n_w, y13n_w, y24n_w = qbat_pre_warp(xe[i_w], ve[i_w], vre[i_w], dt)
+        with objmode(E_w='float64[:, :, :]', area_w='float64[:]', lc_w='float64[:]', vdef3_w='float64[:]', cdet_w='float64[:, :]', vdef_w2='float64[:, :, :]', bmw_w='float64[:, :, :, :, :]', bmfw_w='float64[:, :, :, :, :]', bfw_w='float64[:, :, :, :, :]', bcq_w='float64[:, :, :, :, :]', tc_w='float64[:, :, :, :]', vqn_w='float64[:, :, :]', corel_w='float64[:, :, :]', di_w='float64[:, :, :]', x13n_w='float64[:]', x24n_w='float64[:]', y13n_w='float64[:]', y24n_w='float64[:]'):
+              E_w, area_w, lc_w, vdef3_w, cdet_w, vdef_w2, bmw_w, bmfw_w, bfw_w, bcq_w, tc_w, vqn_w, corel_w, di_w, x13n_w, x24n_w, y13n_w, y24n_w = qbat_pre_warp(xe[i_w], ve[i_w], vre[i_w], dt)
         for i in range(num_w):
             E[i_w[i]] = E_w[i]
             area[i_w[i]] = area_w[i]
@@ -504,18 +505,18 @@ def qbat_pre(xe, ve, vre, off, dt, force_flat):
             cdet[i_w[i]] = cdet_w[i]
             vdef[i_w[i]] = vdef_w2[i]
     else:
-        bmw_w = np.empty((0, 4, 3, 2))
-        bmfw_w = np.empty((0, 4, 3, 3))
-        bfw_w = np.empty((0, 4, 2, 3))
-        bcq_w = np.empty((0, 4, 5, 2))
-        tc_w = np.empty((0, 2, 2))
+        bmw_w = np.empty((0, 4, 4, 3, 2))
+        bmfw_w = np.empty((0, 4, 4, 3, 3))
+        bfw_w = np.empty((0, 4, 4, 2, 3))
+        bcq_w = np.empty((0, 4, 4, 5, 2))
+        tc_w = np.empty((0, 4, 2, 2))
         vqn_w = np.empty((0, 4, 9))
         corel_w = np.empty((0, 3, 4))
-        di_w = np.empty((0, 6))
-        x13n_w = np.empty((0, 4))
-        x24n_w = np.empty((0, 4))
-        y13n_w = np.empty((0, 4))
-        y24n_w = np.empty((0, 4))
+        di_w = np.empty((0, 3, 2))
+        x13n_w = np.empty(0)
+        x24n_w = np.empty(0)
+        y13n_w = np.empty(0)
+        y24n_w = np.empty(0)
         
     return (E, area, lc, vdef3, cdet, vdef, i_f, i_w, bm_f, bc_f, bmw_w, bmfw_w, bfw_w, bcq_w, tc_w, vqn_w, corel_w, di_w, x13n_f, x24n_f, y13n_f, y24n_f, x13n_w, x24n_w, y13n_w, y24n_w)
 
@@ -535,9 +536,86 @@ def qbat_post(n, E, off, thick, volg, forpg, mompg, for_mean, cdet,
             mg[i_f[i]] = mg_f[i]
         
     if len(i_w) > 0:
-        fg_w, mg_w = qbat_post_warp(len(i_w), E[i_w], off[i_w], thick[i_w], volg[i_w], forpg[i_w], mompg[i_w], for_mean[i_w], cdet[i_w], bmw_w, bmfw_w, bfw_w, bcq_w, tc_w, vqn_w, corel_w, di_w, x13n_w, x24n_w, y13n_w, y24n_w)
+        with objmode(fg_w='float64[:, :, :]', mg_w='float64[:, :, :]'):
+              fg_w, mg_w = qbat_post_warp(len(i_w), E[i_w], off[i_w], thick[i_w], volg[i_w], forpg[i_w], mompg[i_w], for_mean[i_w], cdet[i_w], bmw_w, bmfw_w, bfw_w, bcq_w, tc_w, vqn_w, corel_w, di_w, x13n_w, x24n_w, y13n_w, y24n_w)
         for i in range(len(i_w)):
             fg[i_w[i]] = fg_w[i]
             mg[i_w[i]] = mg_w[i]
         
     return fg, mg
+
+
+
+def qbat_pre_warp(xe, ve, vre, dt):
+    from pyradioss.elements.shell_qbat import _cbacoor, _warp_gp
+    n = xe.shape[0]
+    off = np.ones(n)
+    force_flat = np.zeros(n, dtype=bool)
+    g = _cbacoor(xe, ve, vre, off, dt, force_flat)
+    
+    # Warped elements only!
+    E = g["E"]
+    area = g["area"]
+    lc = g["lc"]
+    
+    vw_ = g["vxyz_w"]
+    vdef3 = (g["y24n"] * (vw_[:, 0, 1] - vw_[:, 2, 1])
+                  + g["y13n"] * (-vw_[:, 1, 1] + vw_[:, 3, 1])
+                  - g["x24n"] * (vw_[:, 0, 0] - vw_[:, 2, 0])
+                  + g["x13n"] * (vw_[:, 1, 0] - vw_[:, 3, 0]))
+                  
+    cdet_w = g["jac"]
+    
+    vdef_w2 = np.zeros((n, 4, 8))
+    bmw_w = np.zeros((n, 4, 4, 3, 2))
+    bmfw_w = np.zeros((n, 4, 4, 3, 3))
+    bfw_w = np.zeros((n, 4, 4, 2, 3))
+    bcq_w = np.zeros((n, 4, 4, 5, 2))
+    tc_w = np.zeros((n, 4, 2, 2))
+    
+    for ng in range(4):
+        bmw, bmfw, bfw, bcq, tc, vd = _warp_gp(g, ng)
+        vdef_w2[:, ng, :] = vd
+        bmw_w[:, ng] = bmw
+        bmfw_w[:, ng] = bmfw
+        bfw_w[:, ng] = bfw
+        bcq_w[:, ng] = bcq
+        tc_w[:, ng] = tc
+        vdef_w2[:, ng, 2] = vdef3
+        
+    vqn_w = g["vqn"]
+    corel_w = g["corel"]
+    di_w = g["di"]
+    x13n_w = g["x13n"]
+    x24n_w = g["x24n"]
+    y13n_w = g["y13n"]
+    y24n_w = g["y24n"]
+    
+    return E, area, lc, vdef3, cdet_w, vdef_w2, bmw_w, bmfw_w, bfw_w, bcq_w, tc_w, vqn_w, corel_w, di_w, x13n_w, x24n_w, y13n_w, y24n_w
+    
+def qbat_post_warp(n, E, off, thick, volg, forpg, mompg, for_mean, cdet_w, bmw_w, bmfw_w, bfw_w, bcq_w, tc_w, vqn_w, corel_w, di_w, x13n, x24n, y13n, y24n):
+    from pyradioss.elements.shell_qbat import _fori_warp
+    vf = np.zeros((n, 3, 4))
+    vm = np.zeros((n, 2, 4))
+    
+    g = {
+        "E": E, "area": volg / np.maximum(thick, 1e-20), "thick": thick,
+        "vqn": vqn_w, "corel": corel_w, "di": di_w,
+        "x13n": x13n, "x24n": x24n, "y13n": y13n, "y24n": y24n
+    }
+    
+    ops = []
+    for ng in range(4):
+        ops.append((bmw_w[:, ng], bmfw_w[:, ng], bfw_w[:, ng], bcq_w[:, ng], tc_w[:, ng]))
+        
+    _fori_warp(vf, vm, g, ops, cdet_w, forpg, mompg, forpg[:, :, 3:5]) # q_pg is forpg[..., 3:5]! wait, check shell_qbat.py!
+    
+    # vf (n, 3, 4) -> fg (n, 4, 3)
+    # vm (n, 2, 4) -> mg (n, 4, 3)
+    
+    from pyradioss.elements.shell_qbat import _cbaproj
+    fg, mg = _cbaproj(g, vf, vm, off)
+    return fg, mg
+
+
+
