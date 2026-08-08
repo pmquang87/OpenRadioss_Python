@@ -205,12 +205,13 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
         group.state["part_ids"] = part_ids
         setattr(model, attr, group)
 
+    _dispatch_solid_formulations(model, log)
     _dispatch_shell_formulations(model, log)
     _dispatch_sh3n_formulations(model, log)
 
 
-def _subset_shell_group(src: ElementGroup, mask: np.ndarray) -> ElementGroup:
-    """Row subset of a shell ElementGroup, slices rebuilt. Parts are
+def _subset_element_group(src: ElementGroup, mask: np.ndarray) -> ElementGroup:
+    """Row subset of an ElementGroup, slices rebuilt. Parts are
     contiguous after the part sort and each part routes WHOLLY to one
     formulation (the Ishell lives on the /PROP), so taking whole slices
     preserves both the ordering and the per-part contiguity."""
@@ -226,6 +227,33 @@ def _subset_shell_group(src: ElementGroup, mask: np.ndarray) -> ElementGroup:
     g.state["slices"] = slices
     g.state["part_ids"] = src.state["part_ids"][mask]
     return g
+
+
+def _dispatch_solid_formulations(model: Model, log: MessageLog) -> None:
+    """Solid element-technology dispatch (M64): split /BRICK parts whose
+    /PROP/SOLID Isolid selects a dedicated formulation kernel out of the
+    generic Belytschko-Tsay group, per elements.SOLID_ISOLID_GROUPS.
+    Decks without such parts are left alone."""
+    from ..elements import SOLID_ISOLID_GROUPS
+    src = model.bricks
+    if src is None or not src.n:
+        return
+    masks: Dict[str, np.ndarray] = {}
+    for sl, mat, prop in src.state["slices"]:
+        isolid = int(prop.params.get("isolid", 0) or 0)
+        gname = SOLID_ISOLID_GROUPS.get(isolid)
+        if gname is not None:
+            masks.setdefault(gname, np.zeros(src.n, dtype=bool))[sl] = True
+    if not masks:
+        return
+    keep = np.ones(src.n, dtype=bool)
+    for gname, mask in masks.items():
+        keep &= ~mask
+        setattr(model, gname, _subset_element_group(src, mask))
+        log.info(f"     {int(mask.sum())} /BRICK ELEMENT(S) ROUTED TO THE "
+                 f"{gname.split('_', 1)[1].upper()} FORMULATION KERNEL "
+                 f"(Isolid dispatch)")
+    model.bricks = _subset_element_group(src, keep) if keep.any() else None
 
 
 def _dispatch_shell_formulations(model: Model, log: MessageLog) -> None:
@@ -249,11 +277,11 @@ def _dispatch_shell_formulations(model: Model, log: MessageLog) -> None:
     keep = np.ones(src.n, dtype=bool)
     for gname, mask in masks.items():
         keep &= ~mask
-        setattr(model, gname, _subset_shell_group(src, mask))
+        setattr(model, gname, _subset_element_group(src, mask))
         log.info(f"     {int(mask.sum())} /SHELL ELEMENT(S) ROUTED TO THE "
                  f"{gname.split('_', 1)[1].upper()} FORMULATION KERNEL "
                  f"(Ishell dispatch)")
-    model.shells = _subset_shell_group(src, keep) if keep.any() else None
+    model.shells = _subset_element_group(src, keep) if keep.any() else None
 
 
 def _dispatch_sh3n_formulations(model: Model, log: MessageLog) -> None:
@@ -276,11 +304,11 @@ def _dispatch_sh3n_formulations(model: Model, log: MessageLog) -> None:
     keep = np.ones(src.n, dtype=bool)
     for gname, mask in masks.items():
         keep &= ~mask
-        setattr(model, gname, _subset_shell_group(src, mask))
+        setattr(model, gname, _subset_element_group(src, mask))
         log.info(f"     {int(mask.sum())} /SH3N ELEMENT(S) ROUTED TO THE "
                  f"{gname.split('_', 1)[1].upper()} FORMULATION KERNEL "
                  f"(Ish3n dispatch)")
-    model.sh3n = _subset_shell_group(src, keep) if keep.any() else None
+    model.sh3n = _subset_element_group(src, keep) if keep.any() else None
 
 
 # ----------------------------------------------------------------------------

@@ -28,11 +28,12 @@ where internal forces enter negated).
 """
 
 from . import (beam_type3, shell_bt4, shell_dkt18, shell_qbat, shell_qeph,  # noqa: F401
-               shell_thick16, shell_tri3, solid_hexa8, solid_quad, solid_tetra4,
-               spring, truss)
+               shell_thick16, shell_tri3, solid_heph, solid_hexa8, solid_quad,
+               solid_tetra4, spring, truss)
 
 KERNELS = {
     "bricks": solid_hexa8,
+    "bricks_heph": solid_heph,
     "quads": solid_quad,
     "tetras": solid_tetra4,
     "shells": shell_bt4,
@@ -66,4 +67,10 @@ SHELL_ISHELL_GROUPS = {
 #: 2 = DKT18 (Discrete Kirchhoff Triangle — cdkforc3.F).
 SH3N_ISHELL_GROUPS = {
     2: "sh3n_dkt18",
+}
+
+#: /PROP/SOLID Isolid -> dedicated element-technology group.
+#: 24 = HEPH (physically-stabilized 8-node hexahedral element).
+SOLID_ISOLID_GROUPS = {
+    24: "bricks_heph",
 }
