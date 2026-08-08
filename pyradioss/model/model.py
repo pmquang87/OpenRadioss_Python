@@ -465,8 +465,8 @@ class Model:
         #                                       (QBAT split, M41 dispatch)
         self.shells_qeph: Optional[ElementGroup] = None  # /SHELL Ishell=24
         #                                       (QEPH split, M41 dispatch)
-        self.shells_dkt18: Optional[ElementGroup] = None  # /SHELL Ishell=18
         self.sh3n: Optional[ElementGroup] = None      # /SH3N   (IXTG)
+        self.sh3n_dkt18: Optional[ElementGroup] = None  # /SH3N Ish3n=2
         self.trusses: Optional[ElementGroup] = None   # /TRUSS  (IXT)
         self.springs: Optional[ElementGroup] = None   # /SPRING (IXR)
         self.beams: Optional[ElementGroup] = None     # /BEAM   (IXP)
@@ -580,7 +580,7 @@ class Model:
     def element_groups(self):
         """Iterate (name, group) over the non-empty element groups."""
         for name in ("bricks", "quads", "tetras", "shel16s", "shells", "shells_qbat",
-                     "shells_qeph", "sh3n", "trusses", "springs", "beams"):
+                     "shells_qeph", "sh3n", "sh3n_dkt18", "trusses", "springs", "beams"):
             g = getattr(self, name)
             if g is not None and g.n:
                 yield name, g

@@ -194,6 +194,11 @@ deferred lists — confirm scope with the maintainer before starting one.
 - **Goal**: Implement the 16-node thick shell element `/SHEL16` into pyradioss, including starter buffer allocation, geometry, shape functions, strain calculation, and stress/force integration across multi-point Gauss rules.
 - **Acceptance**: `pyradioss/elements/shell_thick16.py` implemented with scalar physics unrolled for Numba. `tests/test_m56_shel16.py` covers both Starter and Engine integration of a small `SHEL16` model, executing cleanly.
 
+### M63 — ALE Advection / EOS (Starter coverage) ✅
+- **Goal**: Implement parsing/layout for `/ALE/DONE`, `/ALE/GRID/...`, `/MAT/LAW3` and `/MAT/LAW4` so ALE models parse without throwing errors.
+- **Acceptance**: Targeted integration tests ensuring ALE parsing completes and populates the `Model` correctly. Engine runs gracefully refuse without crashing.
+- **Result**: Implemented parsing pass for `/ALE/GRID` and `/ALE/DONE` in `starter_keywords.py`. `LAW3` and `LAW4` seamlessly parsed using fallback mechanics, ensuring safe `InactiveMaterial` assignment. Verified via `test_m63_ale.py`.
+
 ### Candidate pool (bigger — scope with the maintainer first)
 
 Ranked corpus blockers (from `coverage_results_m41.json` `ranked_gaps`;

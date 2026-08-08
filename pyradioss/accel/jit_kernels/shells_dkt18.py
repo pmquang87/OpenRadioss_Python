@@ -381,6 +381,10 @@ def cdkdefo3(vlx, vly, px2, py2, px3, py3, exx, eyy, exy, exz, eyz, dt1, epsdot,
         vdef[i, 2] = px2[i] * vly[i, 0] + px3[i] * vly[i, 1] + py2[i] * vlx[i, 0] + py3[i] * vlx[i, 1]
         exz[i] = 0.0
         eyz[i] = 0.0
+        
+        exx[i] = vdef[i, 0] * dt1
+        eyy[i] = vdef[i, 1] * dt1
+        exy[i] = vdef[i, 2] * dt1
 
     if iepsdot:
         for i in range(n):

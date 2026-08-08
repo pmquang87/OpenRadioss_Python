@@ -52,10 +52,11 @@ from ..model.model import Model
 # their two end nodes (the 3rd is the orientation node, not geometry).
 _VTK_CELL = {"bricks": (12, 8), "tetras": (10, 4), "shells": (9, 4),
              "shells_qbat": (9, 4), "shells_qeph": (9, 4), "sh3n": (5, 3),
+             "sh3n_dkt18": (5, 3),
              "trusses": (3, 2), "springs": (3, 2), "beams": (3, 2)}
 
 _SOLID_FAMILIES = ("bricks", "tetras")
-_SHELL_FAMILIES = ("shells", "shells_qbat", "shells_qeph", "sh3n")
+_SHELL_FAMILIES = ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18")
 
 # anim_to_vtk's symmetric-3x3 fill of the solid Voigt 6 [xx,yy,zz,xy,yz,
 # zx], row-major: [s0 s3 s4 / s3 s1 s5 / s4 s5 s2].  yz lands at (0,2)

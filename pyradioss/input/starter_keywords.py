@@ -1314,7 +1314,10 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             # Istrain was blank, or died on the 'thickness card
             # missing' guard when the hourglass card was blank)
             if cards and not cards[0].is_blank:
-                params["ishell"] = _ival(cards[0].cut("PROP_SHELL_FLAGS")[0])
+                f = cards[0].cut("PROP_SHELL_FLAGS")
+                params["ishell"] = _ival(f[0])
+                if len(f) > 2:
+                    params["ish3n"] = _ival(f[2])
             hm_d, hf_d, hr_d = _hourglass_defaults(params["ishell"])
             if len(cards) >= 2 and not cards[1].is_blank:
                 h = cards[1].cut("F20X5")

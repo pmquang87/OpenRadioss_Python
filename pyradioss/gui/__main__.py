@@ -24,7 +24,17 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("deck", nargs="?", default=None,
                     help="optional starter deck to pre-select "
                          "(RunName_0000.rad)")
+    ap.add_argument("--web", action="store_true", default=True,
+                    help="launch the modern web UI instead of Tkinter")
     args = ap.parse_args(argv)
+
+    if args.web:
+        import webbrowser
+        from .server import run_server
+        # Open in default browser
+        webbrowser.open('http://localhost:8080')
+        run_server(port=8080)
+        return 0
 
     # Import Tk-facing code only after argparse (so --help needs no display).
     try:

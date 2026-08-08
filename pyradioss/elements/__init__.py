@@ -62,8 +62,8 @@ SHELL_ISHELL_GROUPS = {
     24: "shells_qeph",
 }
 
-#: /PROP/SHELL Ishell -> dedicated element-technology group for 3-node shells.
-#: 18 = DKT18 (Discrete Kirchhoff Triangle — cdkforc3.F).
+#: /PROP/SHELL Ish3n -> dedicated element-technology group for 3-node shells.
+#: 2 = DKT18 (Discrete Kirchhoff Triangle — cdkforc3.F).
 SH3N_ISHELL_GROUPS = {
-    18: "sh3n_dkt18",
+    2: "sh3n_dkt18",
 }
