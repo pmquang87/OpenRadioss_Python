@@ -213,7 +213,7 @@ branches** (c43 node-1-relative velocity form, c45 Z2 warp correction).
 
 Smaller known items: NAN/INF divergence backstop tests only KE (extend to
 IE/HE); `coverage_tables.md` regeneration; LAW36 rate-family
-clamp-vs-extrapolation; c20 MOMZ residual (Isolid=24 HEPH); TYPE32
+clamp-vs-extrapolation; TYPE32
 pretensioner; V0700 solids ~2×-small explicit dt.
 
 ## Handover notes (2026-08-02)
