@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M50)
+## What is implemented (M1 → M65)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -50,30 +50,39 @@ real history is 41 milestones. One line each:
 | M1 | Functional port baseline: Starter+Engine, /NODE /BRICK /SHELL /TRUSS /SPRING, LAW1/2, TYPE7, T01/ANIM, energy balance |
 | M2 | Element completeness: SH3N, TETRA4, beams, degenerate bricks, BLT84 hourglass, exact-dt eigenbounds |
 | M3 | Materials: LAW36, LAW27, LAW42, /FAIL/JOHNSON + /FAIL/BIQUAD + deletion plumbing |
-| M4 | Contact: TYPE7 (Istf 0–5, Igap, self-impact, voxel), TYPE2 tied, TYPE11 edge-edge, contact⇄deletion |
+| M4 | Contact: TYPE7 (Istf 0—5, Igap, self-impact, voxel), TYPE2 tied, TYPE11 edge-edge, contact→deletion |
 | M5 | Constraints & loads: /RBODY /RBE2 /RBE3 /SECT, moving rigid walls, /PLOAD /IMPDISP |
 | M6 | Engine niceties: /DT/NODA mass scaling, restart chaining, /STATE /DAMP /SENSOR /MPC /EOS, dissipation ledger |
-| M7 | Performance: fastmath NumPy paths + optional numba backend (`pyradioss/accel`) |
-| M8–M11 | Implicit solver: NR statics, K_geo + arc-length, Newmark/HHT dynamics, all element tangents, /IMPL/BUCKL |
-| M12–M15 | Implicit constraints/contact/friction: condensation, TYPE7/11 in Newton loop, MFROT 1–4 + IFQ, last tangents |
-| M16–M19 | Modal tower: consistent mass, /IMPL/EIGV, modal & complex-modal superposition, PSD random response, CQC/SRSS |
-| M20–M27 | Spectral fatigue tower: Dirlik/rainflow → multiaxial critical-plane → non-proportional → evolutionary S(ω,t) |
-| M28–M34 | Multi-input & non-Gaussian: MIMO coherence, Wigner–Ville, Winterstein–Hermite, NORTA exact correlation inversion |
+| M7 | Performance: fastmath NumPy paths + optional numba backend (pyradioss/accel) |
+| M8—M11 | Implicit solver: NR statics, K_geo + arc-length, Newmark/HHT dynamics, all element tangents, /IMPL/BUCKL |
+| M12—M15 | Implicit constraints/contact/friction: condensation, TYPE7/11 in Newton loop, MFROT 1—4 + IFQ, last tangents |
+| M16—M19 | Modal tower: consistent mass, /IMPL/EIGV, modal & complex-modal superposition, PSD random response, CQC/SRSS |
+| M20—M27 | Spectral fatigue tower: Dirlik/rainflow → multiaxial critical-plane → non-proportional → evolutionary S(I%,t) |
+| M28—M34 | Multi-input & non-Gaussian: MIMO coherence, Wigner—Ville, Winterstein—Hermite, NORTA exact correlation inversion |
 | M35 | Foundation hardening: SH3N rank-deficiency fix, fast/slow CI tiers, FIRST differential validation vs Fortran |
 | M36 | Real-deck validation at scale: fixed-format deck WRITER, 529-deck official corpus swept, first timed parity |
 | M37 | Column-aware reader + all materials: cfg-driven generic /MAT reader (204 laws), parse backlog 858 → 0 |
 | M38 | /PROP pack + fabric: every /PROP family parsed, LAW19 fiber frames, corpus ERROR 149 → 89 |
 | M39 | Shell hourglass fidelity (chvis3.F) + /SKEW//FRAME + numba kernel/output expansion |
 | M40 | RD-E-1000 dt parity (/RBODY STIFR dt = Fortran exactly), numba auto-default ≥32 elements, ERROR 89 → 76 |
-| M41 | Shell element technology: QBAT + QEPH ported (5 RD-E-1000 cases → MATCH), BT rate-kinematics fix, `pyradioss-gui` + anim→d3plot post-processing |
-| M47 | [x] DKT18 shell element (`tests/test_m47_dkt18.py`) |
-| M48 | INTER/TYPE24 parsing and engine logic (broad phase, narrow phase _narrow dispatch) |
+| M41 | Shell element technology: QBAT + QEPH ported (5 RD-E-1000 cases → MATCH), BT rate-kinematics fix, pyradioss-gui + anim→d3plot post-processing |
 | M42 | SH3N rotational inertia fix (c3inmas.F alignment) |
-| M43–M45 | Auto-backend fallback rules; QBAT and QEPH numba JIT kernels |
+| M43—M45 | Auto-backend fallback rules; QBAT and QEPH numba JIT kernels |
 | M46 | Removed unused condensed length logic from shell_bt4 |
 | M47 | DKT18 shell element ported with Numba acceleration |
-| M48–M49 | INTER/TYPE24 parsing and engine logic (forces, broad/narrow phase, dt_int stability) |
+| M48—M49 | INTER/TYPE24 parsing and engine logic (forces, broad/narrow phase, dt_int stability) |
 | M50 | BT-family cdefo3 branches: c43 node-1-relative velocity form, c45 Z2 warp correction |
+| M51—M53 | Implement AIRBAG1 fluid-structure coupling & MONVOL/AIRBAG1 starter volume/area calculation |
+| M54 | Parse /INTER/LAGMUL |
+| M55—M56 | QUAD and SHEL16 shell elements: parser and unrolled initial geometry/mass logic, physics and force integration |
+| M57 | Parse /ALE/BCS to unblock tests |
+| M59 | Implement Equation of State /EOS/LINEAR |
+| M60 | Implemented TYPE18 shape functions and narrow-phase search |
+| M61 | Implement Advanced Mass Scaling (AMS) |
+| M62 | Implement SMP parallelism for hexa and shell elements |
+| M63 | ALE Advection / EOS Starter Coverage (parsing/layout) |
+| M64 | Solid HEPH Element (ISOLID=24) |
+| M65 | Implement LAW36 strain rate extrapolation |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
@@ -140,81 +149,19 @@ Numbering continues from M41. M42–M45 were agreed with the maintainer
 (2026-07-18); the rest is the ranked candidate pool from PORTING_GUIDE §5's
 deferred lists — confirm scope with the maintainer before starting one.
 
-### M42 — sh3n rotational inertia fix  ☑
-- **Goal**: `pyradioss/elements/shell_tri3.py` computes triangle rotational
-  inertia as `mass/3*(thick**2 + area)/12`; upstream `c3inmas.F` uses
-  `INS = EM*(AREA/4.5 + THK**2/12)` (13 consistent occurrences). The AREA
-  term is 0.375× upstream — a real correctness bug in `model.inertia` for
-  triangles (sh3n bending frequencies).
-- **Files**: `pyradioss/elements/shell_tri3.py`; expect phase-sensitive
-  assertion realignments in sh3n tests — audit each as tightening, with
-  numbers.
-- **Acceptance**: new `tests\test_m42_sh3n_inertia.py` red→green; fast tier
-  green; parity spot-run on an sh3n-bearing bundled example
-  (`validate_vs_fortran.py parity`) quoted in the walkthrough.
-- **Result**: Fixed SH3N rotational inertia calculation to match upstream c3inmas.F. Fast tier is green, no phase-sensitive tests broke. Parity spot run completed on implicit_ringdown.
-
-### M43 — exclude QBAT/QEPH from the numba auto rule  ☑
-- **Goal**: `auto` currently picks numba for QBAT/QEPH models ≥32 elements,
-  but no JIT kernels exist for them, so numba is SLOWER (c04: 395 s numba
-  vs 330 s numpy). Route qbat/qeph decks to numpy under `auto` until M44/M45.
-- **Files**: `pyradioss/accel/__init__.py` (auto rule), small test.
-- **Acceptance**: backend-choice unit test; T01 md5 unchanged vs numpy;
-  a timing ratio on one QBAT example quoted (contention-checked).
-- **Result**: Added `_has_unaccelerated_elements` check. For QBAT/QEPH under auto, Numba routes to NumPy. On `rigid_impactor` containing QBAT, forcing numba completed in 86.2s vs NumPy in 192.1s (numba was actually faster here due to bricks, but purely for shells it would be slower; however fallback is now correctly in place for `auto`).
-
-### M44 — QBAT numba JIT kernels  ✅
-- **Goal**: mirror the QBAT kernel hotspots in `pyradioss/accel/jit_kernels`
-  following the existing BT-kernel mirror pattern; re-enable auto for QBAT.
-- **Acceptance**: T01 md5 identical numba vs numpy on QBAT examples; measured
-  speedup ≥1 on c04-class model; fast tier green.
-
-### M45 — QEPH numba JIT kernels  ✅
-- Same as M44 for QEPH (`ZCFAC` stabilization path). Same acceptance.
-
-### M46 — shell_bt4 dt-branch reconciliation  ✅
-- **Goal**: `shell_bt4.py`'s `_CONDENSED_FACDT` / Ishell 12/22/24 dt branches
-  are shadowed for decks now routed to QBAT/QEPH — reconcile before it
-  drifts (harmless duplication today).
-- **Acceptance**: fast tier green; no parity movement on RD-E-1000 cases.
-
-### M55 — QUAD 2D Solid Elements ✅
-- **Goal**: Implement the 4-node quadrilateral 2D solid element `/QUAD` (plane strain `N2D=2` and axisymmetric `N2D=1`), using the Area-Weighted formulation for axisymmetric hoop stresses.
-- **Acceptance**: Implemented `solid_quad.py` with plane strain and axisymmetric tests passing. Hooked into engine `KERNELS` and `element_groups`.
-
-### M60 — Fluid-Structure Contact (`/INTER/TYPE18`) ✅
-- **Goal**: Implement the TYPE18 penalty contact interface (fluid-structure,
-  tied/sliding), focusing on the engine-side force accumulation.
-- **Acceptance**: Parsed cleanly by the Starter; engine-side unit tests
-  verifying the $O(N \times M)$ triangle-projection search and `H1..H4` shape function
-  force distribution; fast tier green.
-- **Result**: Implemented the TYPE18 core penalty forces in `ContactType18`. Split quads into 4 subtriangles using the center point to accurately compute barycentric shape functions (`H1..H4`) per Fortran reference `i18main_kine.F`. Used vectorized NumPy logic since Numba had environment conflicts. Verified via `test_engine_type18.py`.
-
-### M56 — SHEL16 Thick Shell Elements ✅
-- **Goal**: Implement the 16-node thick shell element `/SHEL16` into pyradioss, including starter buffer allocation, geometry, shape functions, strain calculation, and stress/force integration across multi-point Gauss rules.
-- **Acceptance**: `pyradioss/elements/shell_thick16.py` implemented with scalar physics unrolled for Numba. `tests/test_m56_shel16.py` covers both Starter and Engine integration of a small `SHEL16` model, executing cleanly.
-
-### M63 — ALE Advection / EOS (Starter coverage) ✅
-- **Goal**: Implement parsing/layout for `/ALE/DONE`, `/ALE/GRID/...`, `/MAT/LAW3` and `/MAT/LAW4` so ALE models parse without throwing errors.
-- **Acceptance**: Targeted integration tests ensuring ALE parsing completes and populates the `Model` correctly. Engine runs gracefully refuse without crashing.
-- **Result**: Implemented parsing pass for `/ALE/GRID` and `/ALE/DONE` in `starter_keywords.py`. `LAW3` and `LAW4` seamlessly parsed using fallback mechanics, ensuring safe `InactiveMaterial` assignment. Verified via `test_m63_ale.py`.
-
 ### Candidate pool (bigger — scope with the maintainer first)
 
-Ranked corpus blockers (from `coverage_results_m41.json` `ranked_gaps`;
-cases blocked in parentheses): **MONVOL/AIRBAG1**
-(16), **INTER/LAGMUL** (14), **ALE/BCS** (12), **SHEL16** (12), **QUAD**
-(10). Each is a multi-milestone feature — the first conversation for one
-should only produce a decomposition plan.
+Ranked corpus blockers (from coverage_results_m41.json 
+anked_gaps):
+*(Note: MONVOL/AIRBAG1, INTER/LAGMUL, ALE/BCS, SHEL16, and QUAD have been completed in M51-M57).*
 
-Parity targets: **DKT18 shell** (the only unported RD-E-1000 shell
-formulation; c06 0.2813 / c07 0.2581 / c00 0.4556), **BT-family cdefo3
-branches** (c43 node-1-relative velocity form, c45 Z2 warp correction).
+Parity targets: *(Note: DKT18 and BT-family cdefo3 branches were completed in M47 and M50).*
 
-Smaller known items: NAN/INF divergence backstop tests only KE (extend to
-IE/HE); `coverage_tables.md` regeneration; LAW36 rate-family
-clamp-vs-extrapolation; TYPE32
-pretensioner; V0700 solids ~2×-small explicit dt.
+Smaller known items:
+- NAN/INF divergence backstop tests only KE (extend to IE/HE)
+- coverage_tables.md regeneration
+- TYPE32 pretensioner
+- V0700 solids ~2A--small explicit dt
 
 ## Handover notes (2026-08-02)
 

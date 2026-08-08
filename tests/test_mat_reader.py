@@ -729,7 +729,7 @@ def test_ale_euler_heat_mat_notes(tmp_path):
 
 
 def test_other_ale_options_still_skipped(tmp_path):
-    model, log = _parse_deck("/ALE/GRID/DONEA\n0.1 0.2\n/END\n", tmp_path)
+    model, log = _parse_deck("/ALE/UNPORTED/DONEA\n0.1 0.2\n/END\n", tmp_path)
     assert not log.errors
     assert not model.raw_mat_notes
     assert any("not ported" in w for w in log.warnings)

@@ -782,7 +782,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                         f"LIMIT {2.0 * controls.energy_error_stop}% — "
                         f"RUN UNSTABLE")
                     break
-            if not np.isfinite(e["KE"]):
+            if not (np.isfinite(e["KE"]) and np.isfinite(e["IE"])
+                    and np.isfinite(e["HE"])):
                 state.stop_reason = "NAN/INF DETECTED — RUN DIVERGED"
                 break
 
