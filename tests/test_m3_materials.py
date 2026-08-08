@@ -117,13 +117,13 @@ def test_law36_strain_rate_interpolation():
                         + (sig[0, 1] - sig[0, 2]) ** 2
                         + (sig[0, 2] - sig[0, 0]) ** 2))
     assert vm == pytest.approx(0.6, rel=1e-9)
-    # above the last tabulated rate: clamped to the fastest curve
+    # above the last tabulated rate: extrapolates from the table (M65 alignment)
     for _ in range(50):
         law36_tabulated.solid_update(mat, sig, deps * 40, epsp, dt)
     vm = np.sqrt(0.5 * ((sig[0, 0] - sig[0, 1]) ** 2
                         + (sig[0, 1] - sig[0, 2]) ** 2
                         + (sig[0, 2] - sig[0, 0]) ** 2))
-    assert vm == pytest.approx(0.8, rel=1e-9)
+    assert vm == pytest.approx(8.4, rel=1e-9)
 
 
 def test_law36_shell_plane_stress_on_curve():

@@ -134,8 +134,8 @@ def _yield_stress(mat, epsp: np.ndarray, rate: np.ndarray):
     slps = np.empty((nfun, len(epsp)))
     for i in range(nfun):
         vals[i], slps[i] = _curve_eval(cxs[i], cys[i], css[i], epsp)
-    # linear interpolation in strain rate, clamped to the table range
-    r = np.clip(rate, rates[0], rates[-1])
+    # linear interpolation/extrapolation in strain rate
+    r = rate
     j = np.clip(np.searchsorted(rates, r, side="right") - 1, 0, nfun - 2)
     w = (r - rates[j]) / (rates[j + 1] - rates[j])
     cols = np.arange(len(epsp))
@@ -289,8 +289,10 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
 def _static_sy_H(mat, epsp):
     """Yield stress and hardening slope on the STATIC (first) curve at
     plastic strain ``epsp`` — the implicit path's curve (module
-    docstring): rate 0 clamps the family to its lowest-rate member."""
-    return _yield_stress(mat, epsp, np.zeros_like(epsp))
+    docstring)."""
+    rates = mat.params["rates"]
+    r0 = np.full_like(epsp, rates[0]) if len(rates) > 0 else np.zeros_like(epsp)
+    return _yield_stress(mat, epsp, r0)
 
 
 def consistent_solid_tangent(mat, sig, epsp, epsp_incr):
