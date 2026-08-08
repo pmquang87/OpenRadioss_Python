@@ -159,7 +159,6 @@ Parity targets: *(Note: DKT18 and BT-family cdefo3 branches were completed in M4
 
 Smaller known items:
 - NAN/INF divergence backstop tests only KE (extend to IE/HE)
-- coverage_tables.md regeneration
 - TYPE32 pretensioner
 - V0700 solids ~2A--small explicit dt
 
