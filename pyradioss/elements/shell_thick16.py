@@ -782,5 +782,5 @@ def forces(group, x, v, vr, dt, fint, mint):
     conn_flat = conn.reshape(-1)
     fint_e_flat = fint_e.reshape(-1, 3)
     valid = conn_flat >= 0
-    scatter_add3(fint, conn_flat[valid], fint_e_flat[valid])
+    scatter_add3(fint, conn_flat[valid], fint_e_flat[valid], st.get('color_indices'), st.get('color_offsets'))
     return np.full(group.n, 1e20)  # dt_crit placeholder

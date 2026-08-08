@@ -94,7 +94,9 @@ def det_inv33(J: np.ndarray):
 
 
 def scatter_add3(target: np.ndarray, idx: np.ndarray,
-                 values: np.ndarray) -> None:
+                 values: np.ndarray,
+                 color_indices: np.ndarray = None,
+                 color_offsets: np.ndarray = None) -> None:
     """``np.add.at(target, idx, values)`` for (m,) int indices into an
     (N, 3) target — the force scatter-assembly (Fortran ``asspar``).
 
@@ -118,11 +120,23 @@ def scatter_add3(target: np.ndarray, idx: np.ndarray,
     on zero and non-zero targets). On the NumPy backend ``_accel_get``
     returns None and the bincount reference below runs unchanged (one dict
     lookup, the same negligible dispatch every kernel block already pays)."""
+    
+    if color_indices is not None and color_offsets is not None:
+        jit = _accel_get("scatter3_colored")
+        if jit is not None:
+            npe = len(idx) // len(color_indices)
+            jit(target, idx, values, color_indices, color_offsets, npe)
+            return
+
     jit = _accel_get("scatter3")
     if jit is not None:
         jit(target, idx, values)
         return
+        
     n = len(target)
+    
+    # If colored fallback to numpy (for correctness we could group by color here, but 
+    # bincount is so fast in serial that we just run it linearly).
     target[:, 0] += np.bincount(idx, weights=values[:, 0], minlength=n)
     target[:, 1] += np.bincount(idx, weights=values[:, 1], minlength=n)
     target[:, 2] += np.bincount(idx, weights=values[:, 2], minlength=n)

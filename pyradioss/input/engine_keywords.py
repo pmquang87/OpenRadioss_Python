@@ -160,9 +160,13 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     ec.dt_noda = ("CST" if len(block.parts) > 2 and
                                   block.parts[2].upper() == "CST"
                                   else "NODA")
-                elif sub:
-                    log.warning(f"/DT/{sub} not ported — treated as /DT",
-                                block.source)
+                elif sub == "AMS":
+                    ec.dt_ams = True
+                    if len(block.parts) > 2:
+                        try:
+                            ec.dt_ams_igrp = int(block.parts[2])
+                        except ValueError:
+                            pass
                 if block.cards:
                     vals = block.cards[0].floats()
                     if vals:
@@ -174,6 +178,17 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         ec.dt_scale = vals[0] if vals[0] > 0.0 else 0.9
                     if len(vals) > 1:
                         ec.dt_min = vals[1]
+                        
+                    # Advanced Mass Scaling parameters
+                    if ec.dt_ams:
+                        if len(block.cards) > 1:
+                            v1 = block.cards[1].floats()
+                            if v1:
+                                ec.dt_ams_tol = v1[0]
+                        if len(block.cards) > 2:
+                            v2 = block.cards[2].floats()
+                            if v2:
+                                ec.dt_ams_itmax = int(v2[0])
                 if ec.dt_noda == "CST" and ec.dt_min <= 0.0:
                     log.warning("/DT/NODA/CST without a positive dT_min "
                                 "adds no mass", block.source)

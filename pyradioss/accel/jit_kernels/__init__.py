@@ -43,7 +43,7 @@ would eat the win.
 from __future__ import annotations
 
 import numpy as np
-from numba import njit
+from numba import njit, prange
 
 from ...common.constants import EM20, EP30
 
@@ -70,7 +70,7 @@ _FACES6 = np.array([
 # solid_hexa8 mirrors
 # ============================================================================
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def hexa_pre(xe, ve, sig, dt, off):
     """Mirror of solid_hexa8._pre — geometry, velocity gradient, Jaumann
     rotation (in place on sig). Returns (dndx, vol, lc, deps, trD)."""
@@ -81,7 +81,7 @@ def hexa_pre(xe, ve, sig, dt, off):
     deps = np.empty((n, 6))
     trD = np.empty(n)
 
-    for e in range(n):
+    for e in prange(n):
         # Jacobian J[a,b] = sum_i dN[i,a] xe[i,b]
         j00 = 0.0; j01 = 0.0; j02 = 0.0
         j10 = 0.0; j11 = 0.0; j12 = 0.0
@@ -195,7 +195,7 @@ def hexa_pre(xe, ve, sig, dt, off):
     return dndx, vol, lc, deps, trD
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def hexa_post(xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
               qa, qb, c, hcoef, alive, qvw_pend, dt, dtfac):
     """Mirror of solid_hexa8._post — bulk viscosity, internal + hourglass
@@ -208,10 +208,10 @@ def hexa_post(xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
     qvw_new = np.empty(n)
     deint0 = np.empty(n)
     dehour = np.empty(n)
-    gam = np.empty((4, 8))
-    qd = np.empty((4, 3))
+    gam = np.empty((n, 4, 8))
+    qd = np.empty((n, 4, 3))
 
-    for e in range(n):
+    for e in prange(n):
         live = alive[e]
         compressing = (trD[e] < 0.0) and live
         if compressing:
@@ -243,16 +243,16 @@ def hexa_post(xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
                 hx1 += h * xe[e, i, 1]
                 hx2 += h * xe[e, i, 2]
             for i in range(8):
-                gam[a, i] = _H4[a, i] - (hx0 * dndx[e, i, 0]
+                gam[e, a, i] = _H4[a, i] - (hx0 * dndx[e, i, 0]
                                          + hx1 * dndx[e, i, 1]
                                          + hx2 * dndx[e, i, 2])
             q0 = 0.0; q1 = 0.0; q2 = 0.0
             for i in range(8):
-                g = gam[a, i]
+                g = gam[e, a, i]
                 q0 += g * ve[e, i, 0]
                 q1 += g * ve[e, i, 1]
                 q2 += g * ve[e, i, 2]
-            qd[a, 0] = q0; qd[a, 1] = q1; qd[a, 2] = q2
+            qd[e, a, 0] = q0; qd[e, a, 1] = q1; qd[e, a, 2] = q2
         ah = hcoef[e] * rho[e] * c[e] * vol[e] ** (2.0 / 3.0) / 4.0
         if not live:
             ah = 0.0
@@ -260,10 +260,10 @@ def hexa_post(xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
         for i in range(8):
             f0 = 0.0; f1 = 0.0; f2 = 0.0
             for a in range(4):
-                g = gam[a, i]
-                f0 += qd[a, 0] * g
-                f1 += qd[a, 1] * g
-                f2 += qd[a, 2] * g
+                g = gam[e, a, i]
+                f0 += qd[e, a, 0] * g
+                f1 += qd[e, a, 1] * g
+                f2 += qd[e, a, 2] * g
             f0 *= -ah; f1 *= -ah; f2 *= -ah
             fe[e, i, 0] += f0
             fe[e, i, 1] += f1
@@ -297,7 +297,7 @@ def hexa_post(xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
 # shell_bt4 mirrors
 # ============================================================================
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def shell_pre(xe, ve, vre, off):
     """Mirror of shell_bt4._pre — corotational frame, local geometry and
     rate kinematics. Returns (E, area, lc, B1, B2, bb, gam, V, dm, kap,
@@ -314,9 +314,9 @@ def shell_pre(xe, ve, vre, off):
     dm = np.empty((n, 3))
     kap = np.empty((n, 3))
     gs = np.empty((n, 2))
-    xl = np.empty((4, 2))
+    xl = np.empty((n, 4, 2))
 
-    for e in range(n):
+    for e in prange(n):
         # frame: e3 from the diagonals, e1 = side 1-2 projected, e2 = e3xe1
         r31x = xe[e, 2, 0] - xe[e, 0, 0]
         r31y = xe[e, 2, 1] - xe[e, 0, 1]
@@ -357,31 +357,31 @@ def shell_pre(xe, ve, vre, off):
             dx = xe[e, i, 0] - cx
             dy = xe[e, i, 1] - cy
             dz = xe[e, i, 2] - cz
-            xl[i, 0] = dx * e1x + dy * e1y + dz * e1z
-            xl[i, 1] = dx * e2x + dy * e2y + dz * e2z
+            xl[e, i, 0] = dx * e1x + dy * e1y + dz * e1z
+            xl[e, i, 1] = dx * e2x + dy * e2y + dz * e2z
 
-        A = 0.5 * ((xl[2, 0] - xl[0, 0]) * (xl[3, 1] - xl[1, 1])
-                   + (xl[1, 0] - xl[3, 0]) * (xl[2, 1] - xl[0, 1]))
+        A = 0.5 * ((xl[e, 2, 0] - xl[e, 0, 0]) * (xl[e, 3, 1] - xl[e, 1, 1])
+                   + (xl[e, 1, 0] - xl[e, 3, 0]) * (xl[e, 2, 1] - xl[e, 0, 1]))
         twoA = 2.0 * A
         if twoA < EM20:
             twoA = EM20
         inv2A = 1.0 / twoA
-        B1[e, 0] = (xl[1, 1] - xl[3, 1]) * inv2A
-        B1[e, 1] = (xl[2, 1] - xl[0, 1]) * inv2A
-        B1[e, 2] = (xl[3, 1] - xl[1, 1]) * inv2A
-        B1[e, 3] = (xl[0, 1] - xl[2, 1]) * inv2A
-        B2[e, 0] = (xl[3, 0] - xl[1, 0]) * inv2A
-        B2[e, 1] = (xl[0, 0] - xl[2, 0]) * inv2A
-        B2[e, 2] = (xl[1, 0] - xl[3, 0]) * inv2A
-        B2[e, 3] = (xl[2, 0] - xl[0, 0]) * inv2A
+        B1[e, 0] = (xl[e, 1, 1] - xl[e, 3, 1]) * inv2A
+        B1[e, 1] = (xl[e, 2, 1] - xl[e, 0, 1]) * inv2A
+        B1[e, 2] = (xl[e, 3, 1] - xl[e, 1, 1]) * inv2A
+        B1[e, 3] = (xl[e, 0, 1] - xl[e, 2, 1]) * inv2A
+        B2[e, 0] = (xl[e, 3, 0] - xl[e, 1, 0]) * inv2A
+        B2[e, 1] = (xl[e, 0, 0] - xl[e, 2, 0]) * inv2A
+        B2[e, 2] = (xl[e, 1, 0] - xl[e, 3, 0]) * inv2A
+        B2[e, 3] = (xl[e, 2, 0] - xl[e, 0, 0]) * inv2A
         area[e] = A if A > EM20 else EM20
 
         # lc = A / longest side (local 2D)
         lmax = 0.0
         for i in range(4):
             j = i + 1 if i < 3 else 0
-            dx = xl[j, 0] - xl[i, 0]
-            dy = xl[j, 1] - xl[i, 1]
+            dx = xl[e, j, 0] - xl[e, i, 0]
+            dy = xl[e, j, 1] - xl[e, i, 1]
             l2 = dx * dx + dy * dy
             if l2 > lmax:
                 lmax = l2
@@ -432,8 +432,8 @@ def shell_pre(xe, ve, vre, off):
             gs[e, 0] = 0.0; gs[e, 1] = 0.0
 
         # hourglass shape vector and B.B stiffness factor
-        hx = xl[0, 0] - xl[1, 0] + xl[2, 0] - xl[3, 0]
-        hy = xl[0, 1] - xl[1, 1] + xl[2, 1] - xl[3, 1]
+        hx = xl[e, 0, 0] - xl[e, 1, 0] + xl[e, 2, 0] - xl[e, 3, 0]
+        hy = xl[e, 0, 1] - xl[e, 1, 1] + xl[e, 2, 1] - xl[e, 3, 1]
         gam[e, 0] = 1.0 - hx * B1[e, 0] - hy * B2[e, 0]
         gam[e, 1] = -1.0 - hx * B1[e, 1] - hy * B2[e, 1]
         gam[e, 2] = 1.0 - hx * B1[e, 2] - hy * B2[e, 2]
@@ -445,7 +445,7 @@ def shell_pre(xe, ve, vre, off):
     return E, area, lc, B1, B2, bb, gam, V, dm, kap, gs
 
 
-@njit(cache=True)
+@njit(cache=True, parallel=True)
 def shell_post(E, area, B1, B2, gam, V, Nres, Mres, qres, Q,
                k_m, k_w, hqm, hqb, hqr, dt):
     """Mirror of shell_bt4._post — resultant nodal forces, chvis3.F
@@ -455,10 +455,10 @@ def shell_post(E, area, B1, B2, gam, V, Nres, Mres, qres, Q,
     fg = np.empty((n, 4, 3))
     mg = np.empty((n, 4, 3))
     dehg = np.empty(n)
-    qd = np.empty(5)
-    F = np.empty(5)
+    qd = np.empty((n, 5))
+    F = np.empty((n, 5))
 
-    for e in range(n):
+    for e in prange(n):
         A = area[e]
         # modal velocities: translations 0-2 on gamma, rotations 3-4 on the
         # RAW h = (1,-1,1,-1) pattern (chvis3.F lines 327-330)
@@ -466,44 +466,43 @@ def shell_post(E, area, B1, B2, gam, V, Nres, Mres, qres, Q,
             s = 0.0
             for i in range(4):
                 s += gam[e, i] * V[e, i, k]
-            qd[k] = s
+            qd[e, k] = s
         for k in range(3, 5):
-            qd[k] = V[e, 0, k] - V[e, 1, k] + V[e, 2, k] - V[e, 3, k]
+            qd[e, k] = V[e, 0, k] - V[e, 1, k] + V[e, 2, k] - V[e, 3, k]
         # elastic branch (modes 0-2 only); rotation carries no elastic state
-        Q[e, 0] = Q[e, 0] + k_m[e] * qd[0] * dt
-        Q[e, 1] = Q[e, 1] + k_m[e] * qd[1] * dt
-        Q[e, 2] = Q[e, 2] + k_w[e] * qd[2] * dt
+        Q[e, 0] = Q[e, 0] + k_m[e] * qd[e, 0] * dt
+        Q[e, 1] = Q[e, 1] + k_m[e] * qd[e, 1] * dt
+        Q[e, 2] = Q[e, 2] + k_w[e] * qd[e, 2] * dt
         Q[e, 3] = 0.0
         Q[e, 4] = 0.0
         # total modal force = elastic + quadratic viscous damper
-        F[0] = Q[e, 0] + qd[0] * hqm[e] * abs(qd[0])
-        F[1] = Q[e, 1] + qd[1] * hqm[e] * abs(qd[1])
-        F[2] = Q[e, 2] + qd[2] * hqb[e] * abs(qd[2])
-        F[3] = qd[3] * hqr[e] * abs(qd[3])
-        F[4] = qd[4] * hqr[e] * abs(qd[4])
+        F[e, 0] = Q[e, 0] + qd[e, 0] * hqm[e] * abs(qd[e, 0])
+        F[e, 1] = Q[e, 1] + qd[e, 1] * hqm[e] * abs(qd[e, 1])
+        F[e, 2] = Q[e, 2] + qd[e, 2] * hqb[e] * abs(qd[e, 2])
+        F[e, 3] = qd[e, 3] * hqr[e] * abs(qd[e, 3])
+        F[e, 4] = qd[e, 4] * hqr[e] * abs(qd[e, 4])
+        # modal energy increment
         de = 0.0
         for k in range(5):
-            de += F[k] * qd[k] * dt
+            de += F[e, k] * qd[e, k] * dt
         dehg[e] = de
 
+        # distribute back to the 4 nodes
         for i in range(4):
             b1 = B1[e, i]; b2 = B2[e, i]; g = gam[e, i]
             h = 1.0 if (i % 2) == 0 else -1.0        # raw h = (1,-1,1,-1)
             # local total force = -(internal) - F*gamma (hourglass)
-            flx = -A * (b1 * Nres[e, 0] + b2 * Nres[e, 2]) - g * F[0]
-            fly = -A * (b2 * Nres[e, 1] + b1 * Nres[e, 2]) - g * F[1]
-            flz = -A * (b1 * qres[e, 0] + b2 * qres[e, 1]) - g * F[2]
+            flx = -A * (b1 * Nres[e, 0] + b2 * Nres[e, 2]) - g * F[e, 0]
+            fly = -A * (b2 * Nres[e, 1] + b1 * Nres[e, 2]) - g * F[e, 1]
+            flz = -A * (b1 * qres[e, 0] + b2 * qres[e, 1]) - g * F[e, 2]
             mlx = -A * (-b2 * Mres[e, 1] - b1 * Mres[e, 2]
-                        - 0.25 * qres[e, 1]) - h * F[3]
+                        - 0.25 * qres[e, 1]) - h * F[e, 3]
             mly = -A * (b1 * Mres[e, 0] + b2 * Mres[e, 2]
-                        + 0.25 * qres[e, 0]) - h * F[4]
-            # back to global axes: fg[b] = sum_a fl[a] E[b,a]  (mlz = 0)
-            fg[e, i, 0] = flx * E[e, 0, 0] + fly * E[e, 0, 1] \
-                + flz * E[e, 0, 2]
-            fg[e, i, 1] = flx * E[e, 1, 0] + fly * E[e, 1, 1] \
-                + flz * E[e, 1, 2]
-            fg[e, i, 2] = flx * E[e, 2, 0] + fly * E[e, 2, 1] \
-                + flz * E[e, 2, 2]
+                        + 0.25 * qres[e, 0]) - h * F[e, 4]
+            # back to global axes: fg[b] = sum_a fl[a] E[b,a]
+            fg[e, i, 0] = flx * E[e, 0, 0] + fly * E[e, 0, 1] + flz * E[e, 0, 2]
+            fg[e, i, 1] = flx * E[e, 1, 0] + fly * E[e, 1, 1] + flz * E[e, 1, 2]
+            fg[e, i, 2] = flx * E[e, 2, 0] + fly * E[e, 2, 1] + flz * E[e, 2, 2]
             mg[e, i, 0] = mlx * E[e, 0, 0] + mly * E[e, 0, 1]
             mg[e, i, 1] = mlx * E[e, 1, 0] + mly * E[e, 1, 1]
             mg[e, i, 2] = mlx * E[e, 2, 0] + mly * E[e, 2, 1]
@@ -652,11 +651,11 @@ def hexa_hgphys(xe, ve, dndx, vol, c, mask, mass, vol0, q, dt):
     f_hg = np.empty((n, 8, 3))
     dehour = np.empty(n)
     dt_hg = np.empty(n)
-    gamma = np.empty((4, 8))
-    hx = np.empty((4, 3))
+    gamma = np.empty((n, 4, 8))
 
-    for e in range(n):
+    for e in prange(n):
         # hourglass base vectors: hx[a,b] = sum_i H[a,i] xe[i,b]
+        # gamma[a,i] = H[a,i] - (sum_b hx[a,b] gradN[i,b]) : orthogonalized
         for a in range(4):
             hx0 = 0.0; hx1 = 0.0; hx2 = 0.0
             for i in range(8):
@@ -664,13 +663,10 @@ def hexa_hgphys(xe, ve, dndx, vol, c, mask, mass, vol0, q, dt):
                 hx0 += h * xe[e, i, 0]
                 hx1 += h * xe[e, i, 1]
                 hx2 += h * xe[e, i, 2]
-            hx[a, 0] = hx0; hx[a, 1] = hx1; hx[a, 2] = hx2
-        # gamma[a,i] = H[a,i] - (sum_b hx[a,b] gradN[i,b]) : orthogonalized
-        for a in range(4):
             for i in range(8):
-                gamma[a, i] = _H4[a, i] - (hx[a, 0] * dndx[e, i, 0]
-                                           + hx[a, 1] * dndx[e, i, 1]
-                                           + hx[a, 2] * dndx[e, i, 2])
+                gamma[e, a, i] = _H4[a, i] - (hx0 * dndx[e, i, 0]
+                                           + hx1 * dndx[e, i, 1]
+                                           + hx2 * dndx[e, i, 2])
 
         # current P-wave modulus AA1 = rho0 c^2 (rho0 = mass/vol0)
         v0 = vol0[e]
@@ -694,7 +690,7 @@ def hexa_hgphys(xe, ve, dndx, vol, c, mask, mass, vol0, q, dt):
             for a in range(4):
                 s0 = 0.0; s1 = 0.0; s2 = 0.0
                 for i in range(8):
-                    g = gamma[a, i]
+                    g = gamma[e, a, i]
                     s0 += g * ve[e, i, 0]
                     s1 += g * ve[e, i, 1]
                     s2 += g * ve[e, i, 2]
@@ -708,7 +704,7 @@ def hexa_hgphys(xe, ve, dndx, vol, c, mask, mass, vol0, q, dt):
         for i in range(8):
             f0 = 0.0; f1 = 0.0; f2 = 0.0
             for a in range(4):
-                g = gamma[a, i]
+                g = gamma[e, a, i]
                 f0 += g * q[e, a, 0]
                 f1 += g * q[e, a, 1]
                 f2 += g * q[e, a, 2]
@@ -723,7 +719,7 @@ def hexa_hgphys(xe, ve, dndx, vol, c, mask, mass, vol0, q, dt):
         gnorm = 0.0
         for a in range(4):
             for i in range(8):
-                g = gamma[a, i]
+                g = gamma[e, a, i]
                 gnorm += g * g
         if kstiff > 0.0:
             mm = mass[e]
@@ -777,6 +773,19 @@ def scatter3(target, idx, values):
         acc[j, 1] += values[k, 1]
         acc[j, 2] += values[k, 2]
     target += acc
+
+@njit(cache=True, parallel=True)
+def scatter3_colored(target, idx, values, color_indices, color_offsets, npe):
+    """Parallel node-colored accumulation."""
+    num_colors = len(color_offsets) - 1
+    for c in range(num_colors):
+        for k in prange(color_offsets[c], color_offsets[c+1]):
+            e = color_indices[k]
+            for i in range(npe):
+                flat_idx = e * npe + i
+                row = idx[flat_idx]
+                for comp in range(3):
+                    target[row, comp] += values[flat_idx, comp]
 
 
 # ============================================================================

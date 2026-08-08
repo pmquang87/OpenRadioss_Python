@@ -430,7 +430,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     st["qvw_pend"] = 0.5 * vol * qvisc * dt          # booked next cycle
 
     # ---- scatter to global arrays (asspar) ----------------------------------
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
+    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
     # ---- critical time step --------------------------------------------------
     Q = np.where(compressing, qb * c + qa * lc * np.abs(trD), 0.0)
@@ -623,4 +623,4 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     S[:, 1, 2] = S[:, 2, 1] = s[:, 4]
     S[:, 0, 2] = S[:, 2, 0] = s[:, 5]
     fe = -vol[:, None, None] * np.einsum("nid,ncd->nic", dndx, S)
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
+    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))

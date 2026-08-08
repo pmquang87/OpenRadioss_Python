@@ -947,8 +947,8 @@ def forces(group, x, v, vr, dt, fint, mint):
 
     # ---- scatter to global arrays (asspar) ---------------------------------
     flat = conn.reshape(-1)
-    scatter_add3(fint, flat, fg.reshape(-1, 3))
-    scatter_add3(mint, flat, mg.reshape(-1, 3))
+    scatter_add3(fint, flat, fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    scatter_add3(mint, flat, mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
     # ---- critical time step ------------------------------------------------
     # deleted elements no longer constrain the global step
@@ -1260,7 +1260,7 @@ def _static_rot_hourglass(group, x, ur, mint):
     ml[:, :, 0] = -gam * F[:, 0:1]
     ml[:, :, 1] = -gam * F[:, 1:2]
     mg = ml @ E.transpose(0, 2, 1)                     # local -> global
-    scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3))
+    scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
 
 def static_stabilization(group, x, u, ur, fint, mint):
@@ -1474,8 +1474,8 @@ def static_internal_forces(group, x, u, ur, fint, mint):
                       Nres, Mres, qres, st["hgq"],
                       zeros_n, zeros_n, zeros_n, zeros_n, zeros_n, 0.0)
     flat = conn.reshape(-1)
-    scatter_add3(fint, flat, fg.reshape(-1, 3))
-    scatter_add3(mint, flat, mg.reshape(-1, 3))
+    scatter_add3(fint, flat, fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    scatter_add3(mint, flat, mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
     # the elastic ROTATION-hourglass moment — the residual counterpart of
     # tangent()'s k_r regularization, on the END geometry (the M8 path adds
     # it via static_stabilization; NLGEOM folds it in here). Without it the

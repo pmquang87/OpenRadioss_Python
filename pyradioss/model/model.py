@@ -68,6 +68,10 @@ class EngineControls:
     dt_scale: float = 0.9         # /DT  scale factor  (dt = k * dt_critical)
     dt_min: float = 0.0           # /DT  minimum dt: below this -> stop
     dt_noda: str = ""             # '' | 'NODA' | 'CST' (/DT/NODA[/CST], M6)
+    dt_ams: bool = False          # /DT/AMS present (M61)
+    dt_ams_igrp: int = 0          # AMS target part group (0 = all)
+    dt_ams_tol: float = 1e-4      # AMS PCG tolerance
+    dt_ams_itmax: int = 200       # AMS PCG max iterations
     th_dt: float = 0.0            # /TFILE time-history output period
     anim_dt: float = 0.0          # /ANIM/DT animation state period
     state_dt: float = 0.0         # /STATE/DT restart-snapshot period (M6)

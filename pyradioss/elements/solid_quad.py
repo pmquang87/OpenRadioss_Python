@@ -196,7 +196,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     # Scatter to global array (negated because fint is defined as internal force resisting)
     # Radioss accumulates with MINUS sign into fint
     fe = -fe
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
+    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
     
     # Energy bookkeeping
     sig_mid = 0.5 * (sig_old + sig)

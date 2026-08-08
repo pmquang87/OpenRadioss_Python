@@ -340,8 +340,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     ml = -m
     fg = np.einsum("nia,nba->nib", fl, E)
     mg = np.einsum("nia,nba->nib", ml, E)
-    scatter_add3(fint, conn.reshape(-1), fg.reshape(-1, 3))
-    scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3))
+    scatter_add3(fint, conn.reshape(-1), fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
     # ---- critical time step --------------------------------------------------
     # deleted elements no longer constrain the global step
@@ -665,5 +665,5 @@ def static_internal_forces(group, x, u, ur, fint, mint):
                        + qres[:, 0:1] / 3.0)
     fg = np.einsum("nia,nba->nib", -f, E)
     mg = np.einsum("nia,nba->nib", -m, E)
-    scatter_add3(fint, conn.reshape(-1), fg.reshape(-1, 3))
-    scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3))
+    scatter_add3(fint, conn.reshape(-1), fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))

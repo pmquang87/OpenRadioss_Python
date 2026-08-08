@@ -1138,8 +1138,8 @@ def forces(group, x, v, vr, dt, fint, mint):
 
     # accumulate NEGATED (cupdtn3.F: F -= F11)
     flat_idx = conn.reshape(-1)
-    scatter_add3(fint, flat_idx, -fg.reshape(-1, 3))
-    scatter_add3(mint, flat_idx, -mg.reshape(-1, 3))
+    scatter_add3(fint, flat_idx, -fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    scatter_add3(mint, flat_idx, -mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
     # ---- dt claim (cndt3.F): condensed LC * (sqrt(1+dn^2)-dn) / ssp ------
     viscdt = np.sqrt(1.0 + st["amu"] ** 2) - st["amu"]

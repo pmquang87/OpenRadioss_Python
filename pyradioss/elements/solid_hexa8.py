@@ -747,7 +747,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         dt_crit = np.minimum(dt_crit, dt_hg)
 
     # ---- scatter to global arrays (asspar) ---------------------------------
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
+    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
     return dt_crit
 
@@ -878,7 +878,7 @@ def static_stabilization(group, x, u, ur, fint, mint):
     #                                       identity kept — the snapshot/
     #                                       restore contract); committed
     #                                       on convergence
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
+    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
 
 def tangent(group, x, epsp_incr=None):
@@ -1156,4 +1156,4 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     _, gamma, _, k_hg, _ = _hg_operators(group, x)
     modal = np.einsum("nai,nid->nad", gamma, u[conn])          # (n, 4, 3)
     fe -= k_hg[:, None, None] * np.einsum("nad,nai->nid", modal, gamma)
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3))
+    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))

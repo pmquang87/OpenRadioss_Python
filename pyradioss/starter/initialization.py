@@ -1190,6 +1190,12 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
         np.add.at(model.mass, node_idx, mass_c)
         if inertia_c is not None:
             np.add.at(model.inertia, node_idx, inertia_c)
+            
+        from pyradioss.engine.coloring import compute_element_colors
+        if group.conn is not None and len(group.conn) > 0:
+            c_idx, c_off = compute_element_colors(group.conn, model.numnod)
+            group.state["color_indices"] = c_idx
+            group.state["color_offsets"] = c_off
 
     # /ADMAS (M5): non-structural mass, added BEFORE the massless-node
     # check so a standalone node + /ADMAS is a legitimate free point mass

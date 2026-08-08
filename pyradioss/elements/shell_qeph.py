@@ -1014,7 +1014,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         fg, mg, dt_e = _post(G, thick, Nres, Mres, qres, st, vhg, dt, alive, plat, vqn, di, db)
 
     flat = conn.reshape(-1)
-    scatter_add3(fint, flat, -fg.reshape(-1, 3))
-    scatter_add3(mint, flat, -mg.reshape(-1, 3))
+    scatter_add3(fint, flat, -fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    scatter_add3(mint, flat, -mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
     return np.where(alive, dt_e, EP30)
