@@ -1005,12 +1005,17 @@ def _read_mat_modifier(kind: str, block: KeywordBlock, model: Model,
 
 def read_ale(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/ALE/MAT/mat_ID`` — parse-only note (M37);
-    ``/ALE/BCS/bcs_ID`` — grid boundary conditions (M57)."""
+    ``/ALE/BCS/bcs_ID`` — grid boundary conditions (M57);
+    ``/ALE/DONE``, ``/ALE/GRID/...`` — Eulerian phase switch & grid control (M63)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub == "MAT":
         _read_mat_modifier("ALE", block, model, log)
     elif sub == "BCS":
         read_ale_bcs(block, model, log)
+    elif sub == "DONE":
+        read_ale_done(block, model, log)
+    elif sub == "GRID":
+        read_ale_grid(block, model, log)
     else:
         log.warning(f"/ALE/{sub} not ported — block skipped", block.source)
 
@@ -2094,6 +2099,19 @@ def read_ale_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.ale_bcs.append(AleBoundaryCondition(
         id=block.user_id, grnod_id=grnod, fix_w=fix_w, fix_l=fix_l,
         title=title, skew_id=skew))
+
+
+def read_ale_done(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ALE/DONE`` — Eulerian phase switch (M63)."""
+    model.has_ale = True
+
+
+def read_ale_grid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ALE/GRID/...`` — parse-only note (M63)."""
+    # Most /ALE/GRID/... cards are just flags or simple parameters.
+    # We can parse them into `model.ale_grids` as parse-only if needed.
+    # For now, just silently skip it so it doesn't fail the deck.
+    pass
 
 
 def read_inivel(block: KeywordBlock, model: Model, log: MessageLog) -> None:

@@ -489,6 +489,7 @@ class Model:
         self.global_damping: Optional[Dict] = None
 
         self.n2d: int = 0  # 0: 3D, 1: axisymmetric, 2: plane strain (from /ANALY)
+        self.has_ale: bool = False  # True if /ALE/DONE is present (M63)
 
         self.raw_eos: list = []
         # /ALE/MAT, /EULER/MAT, /HEAT/MAT parse-only notes (M37): parsed
