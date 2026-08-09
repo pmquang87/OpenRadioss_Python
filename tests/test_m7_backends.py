@@ -258,9 +258,9 @@ def test_hexa_pre_post_parity(make_deck):
     off = g.state["off"]
 
     sig_np = sig0.copy()
-    dndx, vol, lc, deps, trD = hx._pre(xe, ve, sig_np, dt, off)
+    dndx, vol, lc, deps, trD = hx._pre(xe, ve, sig_np, dt, off, np.ones(g.n))
     sig_nb = sig0.copy()
-    dndx2, vol2, lc2, deps2, trD2 = jk.hexa_pre(xe, ve, sig_nb, dt, off)
+    dndx2, vol2, lc2, deps2, trD2 = jk.hexa_pre(xe, ve, sig_nb, dt, off, np.ones(g.n))
     for a, b in ((dndx, dndx2), (vol, vol2), (lc, lc2), (deps, deps2),
                  (trD, trD2), (sig_np, sig_nb)):
         assert np.allclose(a, b, rtol=1e-12, atol=1e-15)

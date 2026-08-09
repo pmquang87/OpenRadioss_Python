@@ -43,7 +43,7 @@ def _group(n, seed):
     ve = 0.4 * rng.standard_normal((n, 8, 3))
     dt = 7e-4
     dndx, vol, lc, deps, trD = hx._pre(xe, ve, np.zeros((n, 6)), dt,
-                                       np.ones(n))
+                                       np.ones(n), np.ones(n))
     c = 1.0 + np.abs(rng.standard_normal(n))
     mass = 0.5 + np.abs(rng.standard_normal(n))
     vol0 = vol * (0.9 + 0.2 * rng.random(n))
