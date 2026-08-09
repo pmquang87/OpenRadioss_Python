@@ -160,7 +160,7 @@ Parity targets: *(Note: DKT18 and BT-family cdefo3 branches were completed in M4
 
 Smaller known items:
 - ~~NAN/INF divergence backstop tests only KE (extend to IE/HE)~~ (Done: M67)
-- V0700 solids ~2A--small explicit dt
+- ~~V0700 solids ~2A--small explicit dt~~ (Done: IDEGE scaling implemented)
 
 ## Handover notes (2026-08-02)
 

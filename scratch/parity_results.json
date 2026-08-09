@@ -1,36 +1,22 @@
 [
  {
-  "example": "rd_e_1000_dkt18",
-  "runname": "rd_e_1000_dkt18",
+  "example": "c20_V0700_LAW36_HEXA_24",
+  "runname": "c20_V0700_LAW36_HEXA_24",
   "implicit": false,
+  "class": "PYRADIOSS-FAIL",
   "fortran": {
    "mode": "real-format",
-   "starter_rc": 0,
-   "starter_time": 29.47,
-   "engine_rc": 0,
-   "engine_time": 264.59,
-   "n_nodes": 137,
-   "n_elements": 198,
-   "starter_elapsed_self": 28.45,
-   "n_cycles": 1243215,
-   "engine_elapsed_self": 264.17,
-   "status": "ok",
-   "csv": "scratch\\fortran\\rd_e_1000_dkt18\\rd_e_1000_dkt18T01.csv",
-   "error": "no overlapping channels"
+   "starter_rc": 2,
+   "starter_time": 0.09,
+   "status": "starter-reject",
+   "nerr": 3,
+   "error": "ERROR ID : 100101 | ** ERROR IN INPUT FORMAT | DESCRIPTION : | -- BLOCK: /BEGIN | -- LINE: HEXA | STRING \"HEXA\" found instead of an integer"
   },
   "pyradioss": {
-   "starter_rc": 0,
-   "starter_time": 2.55,
-   "engine_rc": 0,
-   "engine_time": 3.94,
-   "n_nodes": 137,
-   "starter_elapsed_self": 0.916,
-   "n_cycles": 200,
-   "engine_elapsed_self": 0.695,
-   "status": "ok",
-   "csv": "scratch\\pyradioss\\rd_e_1000_dkt18\\rd_e_1000_dkt18T01.csv"
-  },
-  "channels": [],
-  "class": "FORTRAN-FAIL"
+   "starter_rc": 2,
+   "starter_time": 0.59,
+   "status": "starter-fail",
+   "error": "ROR    27 IN CROSS REF\n    /IMPDISP/5: function 3 not defined\n\n             27 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.027 s\n\n     STARTER TERMINATION : ERROR\n     27 error(s) found while processing the deck (see messages above); restart file not written.\n"
+  }
  }
 ]

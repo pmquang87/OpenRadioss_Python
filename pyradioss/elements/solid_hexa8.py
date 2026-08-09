@@ -228,7 +228,22 @@ def init_group(group, model, log):
         rho0[sl] = mat.rho0
     mass = rho0 * vol
 
-    lc0 = _char_length(xe, vol)
+    # Degenerate element (wedge/pyramid/tetra) length scale
+    # IDEGE count: duplicate nodes in the connectivity (sdlen_dege.F)
+    eq = group.conn[:, :, None] == group.conn[:, None, :]
+    eq[:, np.arange(8), np.arange(8)] = False
+    idege = eq.any(axis=2).sum(axis=1) // 2
+
+    # Scale characteristic length for degenerate elements
+    # Hex (idege=0, 1): scale = 1.0
+    # Wedge/Pyramid (idege=2): scale = 2.0
+    # Tetra (idege>2): scale = 3.0
+    lc_scale = np.ones(n)
+    lc_scale[idege > 2] = 3.0
+    lc_scale[(idege > 1) & (idege <= 2)] = 2.0
+    group.state["lc_scale"] = lc_scale
+
+    lc0 = _char_length(xe, vol) * lc_scale
     group.state.update(
         sig=np.zeros((n, 6)),        # Cauchy stress, Voigt (GBUF%SIG)
         epsp=np.zeros(n),            # equivalent plastic strain (GBUF%PLA)
@@ -256,6 +271,10 @@ def init_group(group, model, log):
         # exact stability correction to the lc/c estimate (module docstring)
         dtfac=_exact_dt_factor(dndx0, vol, lc0, group.state["slices"]),
     )
+    # Bypass the one-point exact eigenvalue bound for degenerate elements,
+    # as the 24x24 matrix includes kinematically forbidden modes that artificially
+    # shrink the Courant limit. Fortran OpenRadioss safely uses the scaled lc/c.
+    group.state["dtfac"] = np.where(idege > 0, 1.0, group.state["dtfac"])
     # LAW70 tabulated foam needs the physical (stiffness) hourglass its
     # /PROP/SOLID Isolid=24 asks for — the viscous default cannot hold the
     # zero-energy modes through its densification lock-up (see
@@ -330,7 +349,7 @@ def _init_material_state(group, dndx0):
 # Engine-side force computation (one cycle)
 # ----------------------------------------------------------------------------
 
-def _pre(xe, ve, sig, dt, off):
+def _pre(xe, ve, sig, dt, off, lc_scale):
     """Geometry + kinematics + Jaumann rotation: the srcoor3 / sdefo3 /
     srota3 / sdlen3-geometry part of the cycle, everything BEFORE the
     material law. Rotates ``sig`` in place; returns
@@ -341,7 +360,7 @@ def _pre(xe, ve, sig, dt, off):
     # ---- geometry at t_{n+1/2} (srcoor3) --------------------------------
     dndx, vol = _geometry(xe)
     vol = np.maximum(vol, EM20)
-    lc = _char_length(xe, vol)
+    lc = _char_length(xe, vol) * lc_scale
 
     # ---- velocity gradient, D and W (sdefo3) -----------------------------
     # L = sum_i v_i (x) gradN_i as a stacked matmul: (n,3,8) @ (n,8,3)
@@ -577,9 +596,9 @@ def forces(group, x, v, vr, dt, fint, mint):
     # (dispatched to the numba mirror when that backend is active)
     jit = accel_get("hexa_pre")
     if jit is not None:
-        dndx, vol, lc, deps, trD = jit(xe, ve, sig, dt, st["off"])
+        dndx, vol, lc, deps, trD = jit(xe, ve, sig, dt, st["off"], st["lc_scale"])
     else:
-        dndx, vol, lc, deps, trD = _pre(xe, ve, sig, dt, st["off"])
+        dndx, vol, lc, deps, trD = _pre(xe, ve, sig, dt, st["off"], st["lc_scale"])
     rho = st["mass"] / vol                          # current density
 
     # ---- material law per part slice (mmain -> sigeps) -------------------

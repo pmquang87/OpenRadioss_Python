@@ -71,7 +71,7 @@ _FACES6 = np.array([
 # ============================================================================
 
 @njit(cache=True, parallel=True)
-def hexa_pre(xe, ve, sig, dt, off):
+def hexa_pre(xe, ve, sig, dt, off, lc_scale):
     """Mirror of solid_hexa8._pre — geometry, velocity gradient, Jaumann
     rotation (in place on sig). Returns (dndx, vol, lc, deps, trD)."""
     n = xe.shape[0]
@@ -138,7 +138,7 @@ def hexa_pre(xe, ve, sig, dt, off):
             a = 0.5 * np.sqrt(cx * cx + cy * cy + cz * cz)
             if a > amax:
                 amax = a
-        lc[e] = vol[e] / (amax if amax > EM20 else EM20)
+        lc[e] = (vol[e] / (amax if amax > EM20 else EM20)) * lc_scale[e]
 
         # velocity gradient L[b,c] = sum_i ve[i,b] dndx[i,c]
         l00 = 0.0; l01 = 0.0; l02 = 0.0
