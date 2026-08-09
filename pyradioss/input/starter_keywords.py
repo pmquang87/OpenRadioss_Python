@@ -1440,6 +1440,8 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             #   card 1:  qa qb h Lambda Mu     (bulk-viscosity qa/qb +
             #            hourglass coefficient h — %20lg fields)
             #   card 2:  deltaTmin Vdefmin ...  (element dt controls)
+            if cards and not cards[0].is_blank:
+                params["isolid"] = _ival(cards[0].raw[:10])
             # Read qa/qb/h by COLUMN-CUT of data card 1; blank fields keep
             # the defaults.  The free-format 'skip all-integer cards'
             # heuristic (else branch) MUST NOT run on the real deck: the
@@ -1460,6 +1462,11 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             # free-format / short form: a single 'qa qb h' float card (the
             # port's historical dialect + tiny hand-built decks). Drop a
             # leading integer-only formulation-flag card if one is present.
+            flags = [c for c in cards if all(tok.lstrip("+-").isdigit()
+                                             for tok in c.tokens())]
+            if flags and flags[0].tokens():
+                params["isolid"] = int(flags[0].tokens()[0])
+
             data = [c for c in cards if not all(tok.lstrip("+-").isdigit()
                                                 for tok in c.tokens())]
             if data:

@@ -612,6 +612,11 @@ class StarterDeck:
         self._functs[int(fid)] = list(points)
         self._emit_funct(fid, title, points)
 
+    def move_funct(self, fid: int, scx: float, scy: float, shx: float, shy: float) -> None:
+        """``/MOVE_FUNCT`` — cfg CURVE/funct_smooth.cfg: 4x %20lg"""
+        self._header("MOVE_FUNCT", "", fid)
+        self.lines.append(fmt_float(scx) + fmt_float(scy) + fmt_float(shx) + fmt_float(shy))
+
     def _ids_cards(self, ids: Sequence[int], per_card: int = 10) -> None:
         ids = list(ids)
         for i in range(0, len(ids), per_card):
@@ -1623,6 +1628,10 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
         title, cards = _title_cards(b)
         d.funct(b.user_id, title,
                 [c.tokens()[:2] for c in cards if c.tokens()])
+    elif key0 == "MOVE_FUNCT":
+        title, cards = _title_cards(b)
+        t = cards[0].floats()
+        d.move_funct(b.user_id, t[0] if len(t)>0 else 0.0, t[1] if len(t)>1 else 0.0, t[2] if len(t)>2 else 0.0, t[3] if len(t)>3 else 0.0)
     elif key0 == "GRNOD":
         kind = b.parts[1].upper() if len(b.parts) > 1 else "NODE"
         title, cards = _title_cards(b)

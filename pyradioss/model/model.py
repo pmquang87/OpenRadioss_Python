@@ -458,6 +458,7 @@ class Model:
         # Elements by type
         # ------------------------------------------------------------------
         self.bricks: Optional[ElementGroup] = None    # /BRICK  (IXS)
+        self.bricks_heph: Optional[ElementGroup] = None  # /BRICK (HEPH ISOLID=24)
         self.quads: Optional[ElementGroup] = None     # /QUAD   (IXQ)
         self.tetras: Optional[ElementGroup] = None    # /TETRA4 (IXS10 kin)
         self.shells: Optional[ElementGroup] = None    # /SHELL  (IXC)
@@ -501,6 +502,7 @@ class Model:
         self.parts_list: List[Part] = []          # dense order for elements
         self.functions: Dict[int, FunctTable] = {}
         self.node_groups: Dict[int, NodeGroup] = {}
+        self.move_functs: List[Tuple[int, float, float, float, float]] = []
         self.surfaces: Dict[int, Surface] = {}
         self.monitored_volumes: Dict[int, 'MonitoredVolume'] = {}
         self.lines: Dict[int, Line] = {}
@@ -579,7 +581,7 @@ class Model:
     # ----------------------------------------------------------------------
     def element_groups(self):
         """Iterate (name, group) over the non-empty element groups."""
-        for name in ("bricks", "quads", "tetras", "shel16s", "shells", "shells_qbat",
+        for name in ("bricks", "bricks_heph", "quads", "tetras", "shel16s", "shells", "shells_qbat",
                      "shells_qeph", "sh3n", "sh3n_dkt18", "trusses", "springs", "beams"):
             g = getattr(self, name)
             if g is not None and g.n:

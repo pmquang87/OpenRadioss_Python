@@ -50,12 +50,12 @@ from ..model.model import Model
 
 # group name -> (VTK cell type id, node count written). Beams write only
 # their two end nodes (the 3rd is the orientation node, not geometry).
-_VTK_CELL = {"bricks": (12, 8), "tetras": (10, 4), "shells": (9, 4),
+_VTK_CELL = {"bricks": (12, 8), "bricks_heph": (12, 8), "tetras": (10, 4), "shells": (9, 4),
              "shells_qbat": (9, 4), "shells_qeph": (9, 4), "sh3n": (5, 3),
              "sh3n_dkt18": (5, 3),
              "trusses": (3, 2), "springs": (3, 2), "beams": (3, 2)}
 
-_SOLID_FAMILIES = ("bricks", "tetras")
+_SOLID_FAMILIES = ("bricks", "bricks_heph", "tetras")
 _SHELL_FAMILIES = ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18")
 
 # anim_to_vtk's symmetric-3x3 fill of the solid Voigt 6 [xx,yy,zz,xy,yz,

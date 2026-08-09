@@ -49,7 +49,7 @@ def _listing_summary(model: Model, log: MessageLog) -> None:
     log.info("                       -------------")
     log.info(f"     TITLE . . . . . . . . . . . . . . : {model.title}")
     log.info(f"     NUMBER OF NODES . . . . . . . . . : {model.numnod}")
-    counts = {"bricks": "BRICK", "tetras": "TETRA4", "shells": "SHELL",
+    counts = {"bricks": "BRICK", "bricks_heph": "BRICK", "tetras": "TETRA4", "shells": "SHELL",
               "shells_qbat": "SHELL", "shells_qeph": "SHELL",
               "sh3n": "SH3N", "trusses": "TRUSS",
               "springs": "SPRING", "beams": "BEAM"}
@@ -104,6 +104,13 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
         blocks = read_deck(input_file)
         model = Model()
         parse_starter_deck(blocks, model, log)
+
+        # Apply /MOVE_FUNCT scale and shift transformations (M65)
+        for funct_id, scx, scy, shx, shy in getattr(model, "move_functs", []):
+            if funct_id in model.functions:
+                model.functions[funct_id].transform(scx, scy, shx, shy)
+            else:
+                log.warning(f"/MOVE_FUNCT targets unknown function {funct_id}")
 
         # 2. finalize: ids->indices, element groups, node groups, surfaces,
         #    material curve/failure references.  Order matters (M37, the

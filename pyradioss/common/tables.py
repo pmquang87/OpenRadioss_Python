@@ -39,6 +39,18 @@ class FunctTable:
         # and for the extrapolation beyond the ends.
         self.slope = np.diff(y) / np.diff(x)
 
+    def transform(self, scx: float, scy: float, shx: float, shy: float) -> None:
+        """Apply a /MOVE_FUNCT scale and shift to the curve in place.
+        If scx < 0, reverses the point order so abscissae stay strictly
+        increasing (matching hm_read_move_funct.F)."""
+        if scx < 0.0:
+            self.x = self.x[::-1] * scx + shx
+            self.y = self.y[::-1] * scy + shy
+        else:
+            self.x = self.x * scx + shx
+            self.y = self.y * scy + shy
+        self.slope = np.diff(self.y) / np.diff(self.x)
+
     def eval(self, t):
         """Evaluate the curve at scalar or array abscissa ``t``.
 
