@@ -1510,6 +1510,26 @@ def read_funct(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.functions[block.user_id] = FunctTable(block.user_id, x, y, title)
 
 
+def read_move_funct(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MOVE_FUNCT/fct_ID``: Shift and scale a function.
+    Reads (Xscale, Yscale, Xshift, Yshift) from a single float card.
+    The transformation is deferred to Engine phase 2.
+    """
+    if not block.cards:
+        log.error(f"/MOVE_FUNCT/{block.user_id}: missing data card",
+                  block.source)
+        return
+    if block.fixed:
+        f = block.cards[0].cut("MOVE_FUNCT")
+        scx = _fval(f[0]) or 1.0
+        scy = _fval(f[1]) or 1.0
+        shx = _fval(f[2]) or 0.0
+        shy = _fval(f[3]) or 0.0
+    else:
+        scx, scy, shx, shy = _floats(block.cards[0], 4, [1.0, 1.0, 0.0, 0.0])
+    model.move_functs.append((block.user_id, scx, scy, shx, shy))
+
+
 def read_funct_smooth(block: KeywordBlock, model: Model,
                       log: MessageLog) -> None:
     """``/FUNCT_SMOOTH/fct_ID`` (M37) — the smooth-curve variant (cfg
@@ -3888,6 +3908,7 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "PROP": read_prop,
     "FUNCT": read_funct,
     "FUNCT_SMOOTH": read_funct_smooth,   # smooth curves (M37)
+    "MOVE_FUNCT": read_move_funct,
     "GRNOD": read_grnod,
     "GRSHEL": read_gr_elem,              # element groups (M37)
     "GRSH3N": read_gr_elem,
