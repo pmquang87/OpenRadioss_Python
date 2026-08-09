@@ -251,6 +251,8 @@ class EngineControls:
     impl_fatig_ngauss: bool = False  # /IMPL/FATIG/NGAUSS -> non-Gaussian corr.
     impl_fatig_kurt: float = 3.0     # target kurtosis gamma_4 (3 = Gaussian)
     impl_fatig_skew: float = 0.0     # target skewness gamma_3 (0 = symmetric)
+    impl_fatig_copula: str = "gaussian"  # target copula ("gaussian", "t")
+    impl_fatig_copula_params: float = 4.0 # copula degrees of freedom (for t-copula)
     impl_fatig_bwcorr: bool = True   # Benasciutti-Tovo bandwidth attenuation
     # M32 /IMPL/FATIG/NGAUSS + /WVILLE: TIME-VARYING non-Gaussian instantaneous
     # spectrum — the target kurtosis gamma_4(t) (and end value for a linear sweep)

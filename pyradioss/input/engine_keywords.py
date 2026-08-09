@@ -776,6 +776,9 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     # sub-flag. See implicit/joint_nongaussian_fatigue.py.
                     is_exact = bool(subs & {"EXACT", "NORTA", "NATAF",
                                             "GRIGORIU", "COVEXACT"})
+                    # M36: NON-GAUSSIAN COPULA / NON-TRANSLATION JOINT DISTRIBUTION
+                    # Replaces the Gaussian copula with a t-copula.
+                    is_copula = bool(subs & {"COPULA", "TCOPULA"})
                     if is_wville:
                         is_evol = True                # continuous spectrum needs the
                         #                               drifting-shape / evol schedule
@@ -963,6 +966,17 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             ec.impl_fatig_wv_refine = int(vE[5])
                         if len(vE) > 6 and vE[6] >= 0:
                             ec.impl_fatig_wv_smooth = float(vE[6])
+                            
+                    # M36 COPULA: the copula type and params live on a DEDICATED
+                    # card line AFTER the M26 drifting-shape line (and before MINPUT)
+                    if is_copula:
+                        cline = 2 + (1 if is_ngauss else 0) + (1 if is_nstat else 0) + (1 if is_evol else 0)
+                        vC = (block.cards[cline].floats() if len(block.cards) > cline else [])
+                        ec.impl_fatig_copula = "t"
+                        if len(vC) > 0 and vC[0] > 0.0:
+                            ec.impl_fatig_copula_params = vC[0]
+                        else:
+                            ec.impl_fatig_copula_params = 4.0
                     # M28 MULTI-INPUT: the input-pattern TABLE lives on DEDICATED
                     # card lines AFTER any M24 kurtosis / M25 modulation / M26
                     # drifting-shape lines — so its base index is 2 + (1 if NGAUSS)
@@ -973,7 +987,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     if is_minput:
                         miline = (2 + (1 if is_ngauss else 0)
                                   + (1 if is_nstat else 0)
-                                  + (1 if is_evol else 0))
+                                  + (1 if is_evol else 0)
+                                  + (1 if is_copula else 0))
                         _parse_multi_input_table(block, ec, miline, log,
                                                  "/IMPL/FATIG/MINPUT")
                     if is_nprop and ec.impl_fatig_mcdur <= 0.0:
