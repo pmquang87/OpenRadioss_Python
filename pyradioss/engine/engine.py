@@ -300,6 +300,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     # their own (see engine/mass_scaling.py).
     dampers = Dampers(model, log)          # /DAMP   (M6)
     sensors = Sensors(model, log)          # /SENSOR (M6)
+    model.sensors_state = sensors
     if resumed:                            # latched sensors stay latched
         sensors.fire_time.update(saved.get("sensors", {}))
     ams = AMSManager(model, controls) if getattr(controls, "dt_ams", False) else None
@@ -473,6 +474,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     # of a restart chain, M6)
     while state.t < controls.t_end * (1.0 - 1e-14):
         dt = min(dt, controls.t_end - state.t)  # land exactly on t_end
+        model.t = state.t
 
         # ---- 0. sensors (M6): poll and latch before anything acts --------
         if len(sensors):

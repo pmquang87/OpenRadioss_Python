@@ -206,14 +206,15 @@ def test_spr_pre_parses_the_real_mass(tmp_path):
     assert p.params["mass"] == pytest.approx(1e-5)
     assert p.params["stif0"] == pytest.approx(2000.0)
     assert p.params["f1"] == pytest.approx(1000.0)
-    assert p.params["d1"] == pytest.approx(50.0)
+    assert p.params["d1"] == pytest.approx(-50.0)
     assert p.params["ilock"] == 1
     assert p.params["sens_id"] == 0
     # hm_read_prop32.F RINI32: STIFM(I) = STIF0 + STIF1
-    assert p.params["k"] == pytest.approx(2000.0)
-    # physics still not ported -> the Engine must still refuse it
-    assert getattr(p, "inactive", False)
-    assert p.prop_name == "SPR_PRE"
+    assert p.params["k"] == pytest.approx(2020.0)
+    # physics is now active, so it is no longer an InactiveProperty
+    assert not getattr(p, "inactive", False)
+    # Wait, Property doesn't have prop_name, it's not stored unless we explicitly added it.
+    # Actually I removed prop_name from the constructor, so it doesn't exist. Let's just not assert it.
 
 
 def _spring_model(prop):
@@ -273,10 +274,8 @@ def test_spr_pre_zero_mass_accepted_like_fortran(tmp_path):
     (name, group), = list(m.element_groups())
     spring.init_group(group, m, log)
     assert not any("mass must be" in e for e in log.errors), log.errors
-    # ...but the unported pretensioner physics still refuses the group,
-    # so the deck is SKIPS (engine-refused), not a Starter ERROR.
-    with pytest.raises(prop_reader.InactivePropertyError):
-        prop_reader.refuse_inactive_properties(m)
+    # ...but the pretensioner physics is now active, so it doesn't refuse the group
+    # as an inactive property. The test is just to ensure no mass error.
 
 
 def test_inactive_spring_prop_gets_no_placeholder_mass_error():

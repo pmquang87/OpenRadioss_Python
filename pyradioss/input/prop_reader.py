@@ -29,6 +29,7 @@ TYPE1/2/3/4/14 and delegates every other type here.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 from typing import Dict, List, Optional, Tuple
 
 from ..common.messages import MessageLog
@@ -352,82 +353,103 @@ def parse_spr_pre(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     (HM_GET_FLOATV('MASS'...) + the RINI32 init, which sets
     ``MASS(I) = AMAS``, ``XINER(I) = 0`` and ``STIFM(I) = STIF0 + STIF1``
     for the time step).
-
-    Ported: the MASS — and ONLY the mass.  That is the whole point of this
-    reader (M39 / M38-NEW-1): the pretensioner's physics (the sensor-gated
-    lock, the Ilock unloading rule, the pretension force functions, the
-    initial internal energy at activation) is NOT ported, so the property
-    stays an :class:`InactiveProperty` and the Engine refuses element
-    groups that use it.  But a property's MASS is Starter data, not Engine
-    physics — it is what the nodal mass and the explicit time step are
-    built from — and routing TYPE32 through the generic inactive path gave
-    it ``_universal_geo_params()``'s placeholder ``mass = 0.0``, which the
-    /SPRING kernel then reported as "/PROP/SPRING mass must be > 0"
-    (RD-V-0031, whose five SPR_PRE cards all carry a perfectly good
-    M = 1E-5).  The mass is real data on the card; read it.
-
-    Stif0/Stif1 are carried too (upstream's STIFM = STIF0 + STIF1 is the
-    time-step stiffness), so the value is on the property when the
-    pretensioner physics does land.
-
-    A BLANK mass is LEGAL (M40, M39-BUG-SPRPRE).  The cfg CHECK block's
-    ``MASS > 0`` is a HyperMesh-GUI validation, NOT a Starter one:
-    ``hm_read_prop32.F`` reads the field with ``HM_GET_FLOATV('MASS',...)``
-    (blank -> 0), stores it, and never checks it (its only errors are the
-    F1/D1/E1/STIF1 over-specification MSGID 408 and the zero-length MSGID
-    406).  RD-HWX-T-1010 cantilever_completed has a blank SPR_PRE/2 mass and
-    the real ``starter_win64.exe`` accepts it (0 errors, listing
-    ``MASS. . . = 0.000000000000``).  So the port reads the field (0 when
-    blank) and does NOT mass-check TYPE32 — see elements/spring.py
-    ``_MASS_REQUIRED_SPRING_TYPES`` (TYPE4 only).
-
-    Element physics — deferred, InactiveProperty (M40 item 4 assessment).
-    The pretensioner kernel is ``engine/source/elements/spring/ruser32.F``
-    (~260 lines): a 1-DOF axial spring whose axial force accrues the elastic
-    rate ``FX += STIF0*dt*VX`` and, once a /SENSOR fires (ISENS; immediate
-    when ISENS = 0), is pulled up to a pretension ``FX = MAX(FF, FX)`` from
-    one of four ITYP laws — ITYP1 ``FF = F0 + STIF1*X`` (F1/D1/E1 on the
-    card), ITYP2 ``FF = Fscale*fct1(X*Dscale)`` (f of stroke), ITYP3
-    ``F0 = Fscale*fct2(t*Tscale)`` (f of time), ITYP4 their product — with
-    an Ilock retractor lock (D1 threshold / force-exceeds-pretension) and
-    per-element UVAR state (accrued stroke, activation, lock, current STIF).
-    It is genuinely PORTABLE (this reader already carries mass, stif0/stif1,
-    f1/d1/e1, fct_id1/fct_id2; the port has /SENSOR and /FUNCT), but it is a
-    NEW ACTIVE spring type in the shared spring kernel needing per-ITYP
-    channel validation against the RD-V-0031 (c52) T01 force traces across
-    all five pretensioners — a full element-technology port, not a residual.
-    Left InactiveProperty; the Engine refuses TYPE32 element groups.
     """
     title, cards, fixed = _data_cards(block)
     params = _universal_geo_params()
+    params["sens_id"] = 0
+    params["ilock"] = 0
     head = _get(cards, 0)
     if head is not None:
         h = _row(head, "PROP_SPR_PRE_HEAD", fixed)
         params["mass"] = _fv(h[0])          # h[1] is the cfg's blank gap
         params["sens_id"] = _iv(h[2])
         params["ilock"] = _iv(h[3])
+        print("SETTING SENS_ID!", params["sens_id"])
+    
+    stif0 = f1 = d1 = e1 = stif1 = 0.0
     stif = _get(cards, 1)
     if stif is not None:
         s = _row(stif, "F20X5", fixed)
-        params["stif0"] = _fv(s[0])
-        params["f1"] = _fv(s[1])
-        params["d1"] = _fv(s[2])
-        params["e1"] = _fv(s[3])
-        params["stif1"] = _fv(s[4])
-        # upstream STIFM(I) = STIF0 + STIF1 (RINI32) — the spring's
-        # time-step stiffness.  'k' is the axial-spring kernel's field name.
-        params["k"] = params["stif0"] + params["stif1"]
+        stif0 = _fv(s[0])
+        f1 = _fv(s[1])
+        d1 = _fv(s[2])
+        e1 = _fv(s[3])
+        stif1 = _fv(s[4])
+        
+    fct_id1 = fct_id2 = 0
+    tscal = dscal = fscal = 0.0
     fct = _get(cards, 2)
     if fct is not None:
         f = _row(fct, "PROP_SPR_PRE_FCT", fixed)
-        params["fct_id1"] = _iv(f[0])
-        params["fct_id2"] = _iv(f[1])
-    log.warning(f"/PROP/SPR_PRE/{block.user_id}: parsed (mass, Stif0/Stif1 "
-                f"read), pretensioner physics not implemented (M39) — the "
-                f"Engine will refuse element groups that use it",
-                block.source)
-    return InactiveProperty(id=block.user_id, type=32, title=title,
-                            params=params, prop_name="SPR_PRE")
+        fct_id1 = _iv(f[0])
+        fct_id2 = _iv(f[1])
+        if len(f) > 2: tscal = _fv(f[2])
+        if len(f) > 3: dscal = _fv(f[3])
+        if len(f) > 4: fscal = _fv(f[4])
+
+    # Default scales
+    if tscal == 0.0: tscal = 1.0
+    if dscal == 0.0: dscal = 1.0
+    if fscal == 0.0: fscal = 1.0
+
+    # ITYP and missing parameter resolution (from hm_read_prop32.F)
+    d1 = -abs(d1)
+    stif00 = 1e-20
+    if fct_id1 != 0 and fct_id2 != 0:
+        ityp = 4
+    elif fct_id2 != 0:
+        ityp = 3
+    elif fct_id1 != 0:
+        ityp = 2
+    else:
+        ityp = 1
+        # Over-specification checks omitted as port only logs them, we just apply the resolution
+        if f1 != 0.0:
+            if d1 != 0.0:
+                stif1 = -f1 / d1
+            elif e1 != 0.0:
+                stif1 = 0.5 * f1 * f1 / e1
+            elif stif1 == 0.0:
+                stif1 = stif00
+            d1 = -f1 / stif1
+            e1 = -0.5 * f1 * d1
+        elif d1 != 0.0:
+            if e1 != 0.0:
+                stif1 = 2.0 * e1 / (d1 * d1)
+            elif stif1 == 0.0:
+                stif1 = stif00
+            f1 = -stif1 * d1
+            e1 = -0.5 * f1 * d1
+        elif e1 != 0.0:
+            if stif1 == 0.0:
+                stif1 = stif00
+            f1 = math.sqrt(2.0 * e1 * stif1)
+            d1 = -f1 / stif1
+        else:
+            if stif1 == 0.0:
+                stif1 = stif00
+            f1 = e1 = d1 = 0.0
+
+    if stif1 == 0.0: stif1 = stif0
+
+    params["stif0"] = stif0
+    params["stif1"] = stif1
+    params["f1"] = f1
+    params["d1"] = d1
+    params["ityp"] = ityp
+    
+    # upstream STIFM(I) = STIF0 + STIF1 (RINI32) — the spring's
+    # time-step stiffness.  'k' is the axial-spring kernel's field name.
+    params["k"] = stif0 + stif1
+
+    params["fct_id1"] = fct_id1
+    params["fct_id2"] = fct_id2
+    params["scale_t"] = 1.0 / tscal
+    params["scale_d"] = 1.0 / dscal
+    params["scale_f"] = fscal
+
+    return Property(id=block.user_id, type=32, title=title,
+                    params=params)
 
 
 def parse_tshell(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
