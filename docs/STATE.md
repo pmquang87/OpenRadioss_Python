@@ -159,7 +159,7 @@ anked_gaps):
 Parity targets: *(Note: DKT18 and BT-family cdefo3 branches were completed in M47 and M50).*
 
 Smaller known items:
-- NAN/INF divergence backstop tests only KE (extend to IE/HE)
+- ~~NAN/INF divergence backstop tests only KE (extend to IE/HE)~~ (Done: M67)
 - V0700 solids ~2A--small explicit dt
 
 ## Handover notes (2026-08-02)

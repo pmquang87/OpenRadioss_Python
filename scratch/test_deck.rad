@@ -1,7 +1,10 @@
-/FORMAT/1
-/INTER/LAGMUL/TYPE7/4
-Interface 4
-         6         7
-
-
-                                                        0.02
+/BEGIN
+m40-sprpre
+      2021         0
+                  kg                  mm                  ms
+/PROP/SPR_PRE/2
+prop_spring
+                                                                      
+           13744.468                                                                
+                   1                                                   
+/END
