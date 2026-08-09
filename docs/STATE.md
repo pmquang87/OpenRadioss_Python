@@ -83,6 +83,7 @@ real history is 41 milestones. One line each:
 | M63 | ALE Advection / EOS Starter Coverage (parsing/layout) |
 | M64 | Solid HEPH Element (ISOLID=24) |
 | M65 | Implement LAW36 strain rate extrapolation |
+| M66 | Implement TYPE32 pretensioner |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
@@ -159,7 +160,6 @@ Parity targets: *(Note: DKT18 and BT-family cdefo3 branches were completed in M4
 
 Smaller known items:
 - NAN/INF divergence backstop tests only KE (extend to IE/HE)
-- TYPE32 pretensioner
 - V0700 solids ~2A--small explicit dt
 
 ## Handover notes (2026-08-02)
