@@ -798,16 +798,21 @@ def test_fail_biquad_real_card2_and_fail_id(tmp_path):
     assert any("P_thickfail" in w for w in log.warnings), log.warnings
 
 
-def test_fail_biquad_m_flag_preset_is_refused(tmp_path):
-    """M_Flag selects built-in presets the port does not carry — a clean
-    model error, not a crash."""
+def test_fail_biquad_m_flag_preset(tmp_path):
+    """M_Flag selects built-in presets (e.g. 2 for DP600)."""
     body = (
         "/FAIL/BIQUAD/2\n"
         "                                                        0.75\n"
         "                             2         2\n"
     )
     model, log = _parse_fixed(body, tmp_path)
-    assert any("M_Flag=2" in e for e in log.errors), log.errors
+    assert not log.errors, log.errors
+    (mat_id, fm, _), = model.raw_fails
+    assert mat_id == 2
+    # DP600: c3=0.75 -> c1 = 4.3*0.75, c5 = 1.6*0.75
+    assert fm.params["c1"] == pytest.approx(4.3 * 0.75)
+    assert fm.params["c5"] == pytest.approx(1.6 * 0.75)
+    assert fm.params["m_flag"] == 2
 
 
 # ---- /RBODY: real Mass/grnd/ICoG columns, blank title (Front_Impact) -------

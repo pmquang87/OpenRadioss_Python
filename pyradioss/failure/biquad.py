@@ -54,10 +54,68 @@ def _parabola(x0, y0, x1, y1, x2, y2):
 
 
 def fit(params: dict) -> None:
-    """Pre-compute the parabola coefficients from c1..c5 (Starter side)."""
-    c1, c2, c3, c4, c5 = (params[k] for k in ("c1", "c2", "c3", "c4", "c5"))
+    """Pre-compute the parabola coefficients from c1..c5 and M_Flag/S_Flag."""
+    c3 = params.get("c3", 0.0)
+    
+    # M_flag presets (biquad_coefficients.F)
+    m_flag = params.get("m_flag", 0)
+    if m_flag > 0 or (params.get("c1", 0.0) == 0.0 and params.get("c2", 0.0) == 0.0 
+                      and params.get("c4", 0.0) == 0.0 and params.get("c5", 0.0) == 0.0):
+        if m_flag == 2:    # DP600
+            c1, c2, c4, c5 = 4.3 * c3, 1.4 * c3, 0.6 * c3, 1.6 * c3
+        elif m_flag == 3:  # Boron
+            c1, c2, c4, c5 = 5.2 * c3, 3.1 * c3, 0.8 * c3, 3.5 * c3
+        elif m_flag == 4:  # AA5182
+            c1, c2, c4, c5 = 5.0 * c3, 1.0 * c3, 0.4 * c3, 0.8 * c3
+        elif m_flag == 5:  # AA6082-T6
+            c1, c2, c4, c5 = 7.8 * c3, 3.5 * c3, 0.6 * c3, 2.8 * c3
+        elif m_flag == 6:  # PA6GF30
+            c1, c2, c4, c5 = 3.6 * c3, 0.6 * c3, 0.5 * c3, 0.6 * c3
+        elif m_flag == 7:  # PP T40
+            c1, c2, c4, c5 = 10.0 * c3, 2.7 * c3, 0.6 * c3, 0.7 * c3
+        elif m_flag == 99: # user scaling factors
+            e1, e2 = params.get("e1", 0.0), params.get("e2", 0.0)
+            e3, e4 = params.get("e3", 0.0), params.get("e4", 0.0)
+            c1, c2, c4, c5 = e1 * c3, e2 * c3, e3 * c3, e4 * c3
+        else:              # m_flag == 1 or anything else -> Mild Steel
+            c1, c2, c4, c5 = 3.5 * c3, 1.6 * c3, 0.6 * c3, 1.5 * c3
+        # write back the resolved params so they can be inspected
+        params.update({"c1": c1, "c2": c2, "c4": c4, "c5": c5})
+    else:
+        c1, c2, c4, c5 = (params[k] for k in ("c1", "c2", "c4", "c5"))
+
     params["plow"] = _parabola(-1.0 / 3.0, c1, 0.0, c2, 1.0 / 3.0, c3)
-    params["phigh"] = _parabola(1.0 / 3.0, c3, 2.0 / 3.0, c4, 1.0, c5)
+    
+    # S_flag = 2 creates two high parabolas meeting at plane strain with zero slope
+    # plane strain triax = 1/sqrt(3) ~= 0.57735
+    s_flag = params.get("s_flag", 2)
+    if s_flag == 3:
+        inst = params.get("inst_start", 0.0)
+        if inst <= 0.0 or inst >= c4:
+            s_flag = 2
+
+    if s_flag == 2:
+        # P1 = (1/3, c3), S1 = (1/sqrt(3), S1Y) from raw curve
+        sqr3 = np.sqrt(3.0)
+        raw_ah, raw_bh, raw_ch = _parabola(1.0 / 3.0, c3, 2.0 / 3.0, c4, 1.0, c5)
+        s1x = 1.0 / sqr3
+        s1y = raw_ah * s1x**2 + raw_bh * s1x + raw_ch
+        
+        # Parabola 2a through P1 with zero slope at S1
+        p1x, p1y = 1.0 / 3.0, c3
+        a1 = (p1y - s1y) / (p1x - s1x)**2
+        b1 = -2.0 * a1 * s1x
+        c1_c = a1 * s1x**2 + s1y
+        params["phigh_1"] = (a1, b1, c1_c)
+        
+        # Parabola 2b through P2 with zero slope at S1
+        p2x, p2y = 2.0 / 3.0, c4
+        a2 = (p2y - s1y) / (p2x - s1x)**2
+        b2 = -2.0 * a2 * s1x
+        c2_c = a2 * s1x**2 + s1y
+        params["phigh_2"] = (a2, b2, c2_c)
+    else:
+        params["phigh"] = _parabola(1.0 / 3.0, c3, 2.0 / 3.0, c4, 1.0, c5)
 
 
 def eps_f(fail, triax: np.ndarray) -> np.ndarray:

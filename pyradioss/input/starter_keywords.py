@@ -1135,31 +1135,41 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             if block.fixed else _floats(cards[0], 5)
         ifail_sh = 1
         m_flag = 0
+        s_flag = 2
+        inst_start = 0.0
         if len(cards) > 1 and not cards[1].is_blank:
             if block.fixed:
-                # real card 2 (fail_biquad.cfg radioss2018+):
-                # "%20lg%10d%10d%20lg..." P_thickfail M_Flag S_Flag ... —
-                # NOT the port's Ifail_sh card; P_thickfail/S_Flag are
-                # accepted + warned, M_Flag selects the material presets
                 f = cards[1].cut("FAIL_BIQUAD_2")
                 m_flag = _ival(f[1])
+                s_flag = _ival(f[2], default=2)
                 _warn_ignored(log, f"/FAIL/BIQUAD/{mat_id}", block.source,
-                              [("P_thickfail", f[0]), ("S_Flag", f[2])])
+                              [("P_thickfail", f[0])])
             else:
                 v = cards[1].ints()
                 if v and v[0] in (1, 2):
                     ifail_sh = v[0]
-        if m_flag:
-            log.error(f"/FAIL/BIQUAD/{mat_id}: M_Flag={m_flag} (built-in "
-                      f"material presets) is not ported — give c1..c5 "
-                      f"explicitly", block.source)
-            return
-        if min(c1, c2, c3, c4, c5) <= 0.0:
+                elif v and len(v) >= 3:
+                    m_flag = v[1]
+                    s_flag = v[2]
+        
+        # M_Flag=99 needs e1..e4 on an extra card
+        e1, e2, e3, e4 = 0.0, 0.0, 0.0, 0.0
+        if m_flag == 99 and len(cards) > 2:
+            e1, e2, e3, e4 = _floats(cards[2], 4)
+
+        if min(c1, c2, c3, c4, c5) <= 0.0 and m_flag == 0:
             log.error(f"/FAIL/BIQUAD/{mat_id}: all five failure strains "
-                      f"c1..c5 must be > 0 (presets not ported)",
-                      block.source)
+                      f"c1..c5 must be > 0", block.source)
             return
-        params = {"c1": c1, "c2": c2, "c3": c3, "c4": c4, "c5": c5}
+
+        if s_flag == 3:
+            log.warning(f"/FAIL/BIQUAD/{mat_id}: S_Flag=3 (instability necking) "
+                        f"is partially supported (falls back to S_Flag=2)",
+                        "MAT INIT")
+
+        params = {"c1": c1, "c2": c2, "c3": c3, "c4": c4, "c5": c5,
+                  "m_flag": m_flag, "s_flag": s_flag, "inst_start": inst_start,
+                  "e1": e1, "e2": e2, "e3": e3, "e4": e4}
         fail_biquad.fit(params)   # pre-compute the two parabolas
         fm = FailureModel(type="BIQUAD", ifail_sh=ifail_sh, params=params)
     # attachment to the material happens in the Starter resolve step
