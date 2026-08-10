@@ -837,10 +837,14 @@ class Interface:
     xfiltr: float = 0.0
     fric_c: tuple = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     title: str = ""
-    # ---- TYPE18 (M60) ----------------------------------------------------
+    # ---- TYPE18 (M60) / TYPE10 -------------------------------------------
     ibag: int = 0
     multimp: int = 4
     idel18: int = 0
+    idel10: int = 0       # type 10: segment deletion flag
+    tstart: float = 0.0   # type 10: activation time
+    tstop: float = 1e30   # type 10: deactivation time
+    inactiv: int = 0      # type 10: initial penetration treatment
     stiff_dc: float = 0.0
     sort_fact: float = 0.2
 

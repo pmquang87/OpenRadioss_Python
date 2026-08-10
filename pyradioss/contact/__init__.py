@@ -16,6 +16,7 @@ from .inter_type7 import ContactType7   # noqa: F401
 from .inter_type11 import ContactType11  # noqa: F401
 from .inter_type18 import ContactType18  # noqa: F401
 from .inter_type24 import ContactType24  # noqa: F401
+from .inter_type10 import ContactType10 # noqa: F401
 
 
 def build_contacts(model, log):
@@ -38,4 +39,6 @@ def build_contacts(model, log):
             penalty.append(ContactType24(itf, model, log))
         elif itf.type == 18:
             penalty.append(ContactType18(itf, model, log))
+        elif itf.type == 10:
+            penalty.append(ContactType10(itf, model, log))
     return penalty, tied

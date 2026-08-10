@@ -252,6 +252,14 @@ LAYOUTS: Dict[str, List[int]] = {
     #     node1, node2, node3, grnod, ISAVE, Frame_ID, deltaT, alpha)
     "SECT": [10, 10, 10, 10, 10, 10, 20, 20],
     
+    # INTER/inter_type10.cfg (radioss120)
+    # CARD("%10d%10d%10s%10s%10s%10s%10s%10d") -> [10]*8
+    "INTER_TYPE10_1": [10, 10, 10, 10, 10, 10, 10, 10],
+    # CARD("%20lg%20s%20lg%20lg%20lg") -> [20]*5
+    "INTER_TYPE10_2": [20, 20, 20, 20, 20],
+    # CARD("%20s%10d%10d%20lg%20s%20lg") -> [20, 10, 10, 20, 20, 20]
+    "INTER_TYPE10_3": [20, 10, 10, 20, 20, 20],
+
     # INTER/inter_type18.cfg (radioss2022)
     # "%10d%10d%10d%30s%10d%10d" -> [10, 10, 10, 30, 10, 10]
     "INTER_TYPE18_1": [10, 10, 10, 30, 10, 10],
