@@ -112,6 +112,32 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
             else:
                 log.warning(f"/MOVE_FUNCT targets unknown function {funct_id}")
 
+        # Apply /TRANSFORM/TRA translations to node coordinates
+        for tr in getattr(model, "transforms", []):
+            tr_id, grnod, tx, ty, tz, n1, n2, sub_id, skew_id = tr
+            if sub_id > 0:
+                # SUBMODEL-targeted transform — not yet implemented
+                continue
+            if grnod > 0 and grnod in model.node_groups:
+                g = model.node_groups[grnod]
+                if g.node_ids:
+                    try:
+                        idx = model.node_indices(g.node_ids)
+                        model.x0[idx, 0] += tx
+                        model.x0[idx, 1] += ty
+                        model.x0[idx, 2] += tz
+                    except KeyError as exc:
+                        log.warning(f"/TRANSFORM/TRA/{tr_id}: node {exc} "
+                                    f"in group {grnod} not found — skipped")
+                else:
+                    log.warning(f"/TRANSFORM/TRA/{tr_id}: node group "
+                                f"{grnod} has no direct node IDs "
+                                f"(PART/SURF groups need resolve) — skipped")
+            elif grnod > 0:
+                log.warning(f"/TRANSFORM/TRA/{tr_id}: node group "
+                            f"{grnod} not found — skipped")
+
+
         # 2. finalize: ids->indices, element groups, node groups, surfaces,
         #    material curve/failure references.  Order matters (M37, the
         #    upstream two-pass resolve): local /UNIT conversion first

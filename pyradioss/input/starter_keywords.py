@@ -408,6 +408,35 @@ def read_tetra4(block, model, log):
     _read_elems(block, model, log, "TETRA4", 4)
 
 
+def read_tetra10(block, model, log):
+    """``/TETRA10/part_ID``: 10-node solids.
+    Format is usually 2 cards per element:
+    Card 1: elem_id
+    Card 2: n1..n10
+    (or free format equivalent).
+    """
+    part_id = block.user_id
+    if part_id is None:
+        log.error("/TETRA10 block without part id", block.source)
+        return
+    
+    # In some decks, it's 2 cards per element. In others, it might be free format on 1 line.
+    # We will gather all integers in the block and chunk them by 11 (1 ID + 10 nodes).
+    ints = []
+    for card in block.cards:
+        ints.extend(card.ints())
+            
+    if len(ints) % 11 != 0:
+        log.error(f"/TETRA10 block: expected multiple of 11 values (ID + 10 nodes), got {len(ints)}", block.source)
+        # We will parse what we can
+    
+    for i in range(0, len(ints) - 10, 11):
+        elem_id = ints[i]
+        nodes = ints[i+1:i+11]
+        model.raw_elems["TETRA10"].append((elem_id, part_id, nodes))
+
+
+
 def read_shel16(block, model, log):
     """``/SHEL16/part_ID``: 16-node thick shells.
     Format is 3 cards per element:
@@ -3879,6 +3908,118 @@ def read_monvol(block: KeywordBlock, model: Model, log: MessageLog):
     model.monitored_volumes[block.user_id] = mv
 
 
+def read_transform(block: KeywordBlock, model: Model,
+                   log: MessageLog) -> None:
+    """`/TRANSFORM/TRA/transform_id` — Translation transformation.
+
+    Fortran origin: ``starter/source/model/transformation/lectrans.F``.
+    Card format (cfg ``TRANSFORM/tra.cfg``)::
+
+        card 1:  title
+        card 2:  GR_NODE  X_translation  Y_translation  Z_translation
+                 node_ID1  node_ID2  sub_ID
+
+    The transformation is applied to the nodes in GR_NODE (or the nodes
+    of SUBMODEL sub_ID) during the Starter initialization phase: each
+    affected node's coordinates are shifted by (TX, TY, TZ), or by the
+    vector (node2 - node1) if the node pair is given.
+
+    Currently only the direct (TX, TY, TZ) translation with GR_NODE is
+    ported; node-pair vectors, SUBMODEL application, and local /SKEW
+    transforms are accepted with a warning.
+    """
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub != "TRA":
+        log.warning(f"/TRANSFORM/{sub} not ported — block skipped "
+                    f"(only /TRANSFORM/TRA supported)", block.source)
+        return
+
+    if block.fixed:
+        title, cards = _fixed_data(block)
+    else:
+        title, cards = _title_and_data(block)
+    if not cards:
+        log.error(f"/TRANSFORM/TRA/{block.user_id}: missing data card",
+                  block.source)
+        return
+
+    # Card 2: GR_NODE, TX, TY, TZ, node1, node2, sub_ID
+    if block.fixed:
+        f = cards[0].cut("TRANSFORM_TRA")
+        grnod = _ival(f[0]) if len(f) > 0 else 0
+        tx = _fval(f[1]) if len(f) > 1 else 0.0
+        ty = _fval(f[2]) if len(f) > 2 else 0.0
+        tz = _fval(f[3]) if len(f) > 3 else 0.0
+        n1 = _ival(f[4]) if len(f) > 4 else 0
+        n2 = _ival(f[5]) if len(f) > 5 else 0
+        sub_id = _ival(f[6]) if len(f) > 6 else 0
+    else:
+        toks = cards[0].tokens()
+        grnod = int(toks[0]) if len(toks) > 0 else 0
+        tx = float(toks[1]) if len(toks) > 1 else 0.0
+        ty = float(toks[2]) if len(toks) > 2 else 0.0
+        tz = float(toks[3]) if len(toks) > 3 else 0.0
+        n1 = int(toks[4]) if len(toks) > 4 else 0
+        n2 = int(toks[5]) if len(toks) > 5 else 0
+        sub_id = int(toks[6]) if len(toks) > 6 else 0
+
+    # optional card 3: skew_ID
+    skew_id = 0
+    if len(cards) > 1:
+        toks = cards[1].tokens()
+        if toks:
+            skew_id = int(toks[0])
+
+    if n1 > 0 and n2 > 0:
+        log.warning(f"/TRANSFORM/TRA/{block.user_id}: node-pair vector "
+                    f"(node1={n1}, node2={n2}) accepted but the vector is "
+                    f"computed from (TX, TY, TZ) only — node delta not "
+                    f"yet implemented", block.source)
+    if sub_id > 0:
+        log.warning(f"/TRANSFORM/TRA/{block.user_id}: SUBMODEL application "
+                    f"(sub_ID={sub_id}) accepted but not yet implemented "
+                    f"— transform will be skipped", block.source)
+    if skew_id > 0:
+        log.warning(f"/TRANSFORM/TRA/{block.user_id}: local skew "
+                    f"(skew_ID={skew_id}) not yet implemented — using "
+                    f"global coordinates", block.source)
+
+    # Store the transform for application in the Starter init phase.
+    # Format: (transform_id, grnod_id, tx, ty, tz, n1, n2, sub_id, skew_id)
+    if not hasattr(model, 'transforms'):
+        model.transforms = []
+    model.transforms.append((block.user_id, grnod, tx, ty, tz, n1, n2,
+                             sub_id, skew_id))
+
+
+def read_submodel(block: KeywordBlock, model: Model,
+                  log: MessageLog) -> None:
+    """`/SUBMODEL/submodel_id` — Sub-model container.
+
+    Fortran origin: ``starter/source/model/submodel/lecsubmod.F``.
+    In the real Starter, /SUBMODEL opens a container block whose entities
+    (nodes, elements, etc.) are tagged with the submodel ID; /ENDSUB closes
+    it.  The port accepts (parses and does not error on) the keyword but
+    does NOT implement the submodel tagging — entities inside the block are
+    parsed normally into the flat model, the submodel boundary is ignored.
+    This is sufficient for decks where /SUBMODEL is used purely for
+    organizational grouping without /TRANSFORM applications on the sub_ID.
+    """
+    log.warning(f"/SUBMODEL/{block.user_id}: accepted (entities parsed "
+                f"flat — submodel grouping not yet implemented)",
+                block.source)
+
+
+def read_endsub(block: KeywordBlock, model: Model,
+                log: MessageLog) -> None:
+    """`/ENDSUB` — End of sub-model block.
+
+    The closing delimiter for a /SUBMODEL block. Accepted as a no-op
+    (the port does not track the submodel open/close stack).
+    """
+    pass  # silent accept
+
+
 KEYWORD_PARSERS: Dict[str, Callable] = {
     "MONVOL": read_monvol,
     "ANALY": read_analy,
@@ -3942,6 +4083,10 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "INTER": read_inter,
     "LINE": read_line,
     "TH": read_th,
+    "TETRA10": read_tetra10,
+    "TRANSFORM": read_transform,
+    "SUBMODEL": read_submodel,
+    "ENDSUB": read_endsub,
 }
 
 

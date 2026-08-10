@@ -1,0 +1,28 @@
+import pytest
+import numpy as np
+from pyradioss.input.engine_keywords import _read_impl_fatig
+
+def test_parse_impl_fatig_copula():
+    # Mocking the engine control parse
+    from pyradioss.model.model import EngineControl
+    class MockBlock:
+        def __init__(self, text):
+            lines = text.split('\n')
+            self.title = lines[0]
+            self.cards = [self.MockCard(line) for line in lines[1:] if line.strip()]
+        class MockCard:
+            def __init__(self, text):
+                self.text = text
+            def floats(self):
+                return [float(x) for x in self.text.split()]
+    
+    ec = EngineControl()
+    text = '''/IMPL/FATIG/MULT/NGAUSS/COPULA
+10 100 10 1
+3.0 1.0
+4.0 0.0
+4.0'''
+    block = MockBlock(text)
+    _read_impl_fatig(ec, block)
+    assert getattr(ec, 'impl_fatig_copula', None) == 't'
+    assert getattr(ec, 'impl_fatig_copula_params', None) == 4.0

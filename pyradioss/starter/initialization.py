@@ -25,6 +25,7 @@ _ETYPES = {
     "BRICK": ("bricks", 8, 14),
     "QUAD": ("quads", 4, 14),
     "TETRA4": ("tetras", 4, 14),
+    "TETRA10": ("tetra10s", 10, 14),
     "SHELL": ("shells", 4, 1),
     "SH3N": ("sh3n", 3, 1),
     "TRUSS": ("trusses", 2, 2),

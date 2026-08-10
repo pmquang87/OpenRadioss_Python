@@ -6,11 +6,13 @@ import error is caught by ``accel.select_backend`` which then falls back
 to NumPy). Each function here mirrors, operation for operation, one
 NumPy block of the reference kernels:
 
-    hexa_pre   <-> elements/solid_hexa8._pre     (srcoor3/sdefo3/srota3)
-    hexa_post  <-> elements/solid_hexa8._post    (sbulk3/sfint3/shour3/sdlen3)
-    shell_pre  <-> elements/shell_bt4._pre       (ccoor3/cdefo3)
-    shell_post <-> elements/shell_bt4._post      (czforc3/chour3)
-    t7_narrow  <-> contact/inter_type7._narrow   (i7dst3)
+    hexa_pre      <-> elements/solid_hexa8._pre     (srcoor3/sdefo3/srota3)
+    hexa_post     <-> elements/solid_hexa8._post    (sbulk3/sfint3/shour3/sdlen3)
+    tetra10_pre   <-> elements/solid_tetra10._pre   (geometry/kinematics/Jaumann)
+    tetra10_post  <-> elements/solid_tetra10._post  (viscosity/forces/energies/dt)
+    shell_pre     <-> elements/shell_bt4._pre       (ccoor3/cdefo3)
+    shell_post    <-> elements/shell_bt4._post      (czforc3/chour3)
+    t7_narrow     <-> contact/inter_type7._narrow   (i7dst3)
 
 READ THE NUMPY REFERENCE FIRST. The functions here are deliberately
 comment-light on physics: every formula is documented in the reference
@@ -876,6 +878,309 @@ def law70_elastic_stress(aa1, aa2, g, e):
         out[k, 4] = gk * e[k, 4]
         out[k, 5] = gk * e[k, 5]
     return out
+
+# ============================================================================
+# solid_tetra10 mirrors (10-node tet, 4-point Gauss integration)
+# ============================================================================
+# Mirror of solid_tetra10._pre/_post — the same parity contract as hexa_pre/
+# hexa_post: element-wise expressions bitwise, short reductions sequential.
+# READ solid_tetra10 for the physics (every formula documented there).
+
+# Shape-function derivatives at 4 Gauss points: _DN_DXI_T10[k, i, a] =
+# dN_i/dxi_a at Gauss point k.  (4 Gauss pts × 10 nodes × 3 parent dims)
+_DN_DXI_T10 = np.array([[[-0.44721360, 0.00000000, 0.00000000],
+  [ 0.00000000,-0.44721360, 0.00000000],
+  [ 0.00000000, 0.00000000,-0.44721360],
+  [-1.34164079,-1.34164079,-1.34164079],
+  [ 0.55278640, 0.55278640, 0.00000000],
+  [ 0.00000000, 0.55278640, 0.55278640],
+  [ 0.55278640, 0.00000000, 0.55278640],
+  [ 1.78885438,-0.55278640,-0.55278640],
+  [-0.55278640, 1.78885438,-0.55278640],
+  [-0.55278640,-0.55278640, 1.78885438]],
+ [[ 1.34164079, 0.00000000, 0.00000000],
+  [ 0.00000000,-0.44721360, 0.00000000],
+  [ 0.00000000, 0.00000000,-0.44721360],
+  [ 0.44721360, 0.44721360, 0.44721360],
+  [ 0.55278640, 2.34164079, 0.00000000],
+  [ 0.00000000, 0.55278640, 0.55278640],
+  [ 0.55278640, 0.00000000, 2.34164079],
+  [-1.78885438,-2.34164079,-2.34164079],
+  [-0.55278640, 0.00000000,-0.55278640],
+  [-0.55278640,-0.55278640, 0.00000000]],
+ [[-0.44721360, 0.00000000, 0.00000000],
+  [ 0.00000000, 1.34164079, 0.00000000],
+  [ 0.00000000, 0.00000000,-0.44721360],
+  [ 0.44721360, 0.44721360, 0.44721360],
+  [ 2.34164079, 0.55278640, 0.00000000],
+  [ 0.00000000, 0.55278640, 2.34164079],
+  [ 0.55278640, 0.00000000, 0.55278640],
+  [ 0.00000000,-0.55278640,-0.55278640],
+  [-2.34164079,-1.78885438,-2.34164079],
+  [-0.55278640,-0.55278640, 0.00000000]],
+ [[-0.44721360, 0.00000000, 0.00000000],
+  [ 0.00000000,-0.44721360, 0.00000000],
+  [ 0.00000000, 0.00000000, 1.34164079],
+  [ 0.44721360, 0.44721360, 0.44721360],
+  [ 0.55278640, 0.55278640, 0.00000000],
+  [ 0.00000000, 2.34164079, 0.55278640],
+  [ 2.34164079, 0.00000000, 0.55278640],
+  [ 0.00000000,-0.55278640,-0.55278640],
+  [-0.55278640, 0.00000000,-0.55278640],
+  [-2.34164079,-2.34164079,-1.78885438]]])
+
+_WIP_T10 = np.array([0.25, 0.25, 0.25, 0.25])
+
+# 4 triangular faces of the corner tetrahedron (corner node indices only)
+_FACES_T10 = np.array([
+    [0, 2, 1], [0, 1, 3], [1, 2, 3], [0, 3, 2],
+], dtype=np.int64)
+
+
+@njit(cache=True, parallel=True)
+def tetra10_pre(xe, ve, sig, dt, off):
+    """Mirror of solid_tetra10._pre — geometry at 4 Gauss points, velocity
+    gradient, Jaumann rotation (in place on sig).  Returns
+    (dndx, vol, vol_tot, lc, deps, trD).
+
+    dndx: (n, 4, 10, 3)  —  shape-function derivatives in physical space
+    vol:  (n, 4)          —  sub-volumes at each Gauss point (detJ / 6)
+    vol_tot: (n,)         —  total volume (weighted sum)
+    lc:   (n,)            —  characteristic length
+    deps: (n, 4, 6)       —  strain increment (Voigt, engineering shear)
+    trD:  (n, 4)          —  trace of rate-of-deformation
+    """
+    n = xe.shape[0]
+    dndx = np.empty((n, 4, 10, 3))
+    vol = np.empty((n, 4))
+    vol_tot = np.empty(n)
+    lc = np.empty(n)
+    deps = np.empty((n, 4, 6))
+    trD = np.empty((n, 4))
+
+    for e in prange(n):
+        # ---- geometry: Jacobian + inverse at each Gauss point ----------
+        vtot = 0.0
+        for k in range(4):
+            # J[a,b] = sum_i dN_dxi[k,i,a] * xe[i,b]
+            j00 = 0.0; j01 = 0.0; j02 = 0.0
+            j10 = 0.0; j11 = 0.0; j12 = 0.0
+            j20 = 0.0; j21 = 0.0; j22 = 0.0
+            for i in range(10):
+                d0 = _DN_DXI_T10[k, i, 0]
+                d1 = _DN_DXI_T10[k, i, 1]
+                d2 = _DN_DXI_T10[k, i, 2]
+                x0 = xe[e, i, 0]; x1 = xe[e, i, 1]; x2 = xe[e, i, 2]
+                j00 += d0 * x0; j01 += d0 * x1; j02 += d0 * x2
+                j10 += d1 * x0; j11 += d1 * x1; j12 += d1 * x2
+                j20 += d2 * x0; j21 += d2 * x1; j22 += d2 * x2
+            # cofactor determinant / inverse
+            A = j11 * j22 - j12 * j21
+            B = j12 * j20 - j10 * j22
+            C = j10 * j21 - j11 * j20
+            det = j00 * A + j01 * B + j02 * C
+            vol[e, k] = det / 6.0
+            idet = np.divide(1.0, det)
+            i00 = A * idet
+            i01 = (j02 * j21 - j01 * j22) * idet
+            i02 = (j01 * j12 - j02 * j11) * idet
+            i10 = B * idet
+            i11 = (j00 * j22 - j02 * j20) * idet
+            i12 = (j02 * j10 - j00 * j12) * idet
+            i20 = C * idet
+            i21 = (j01 * j20 - j00 * j21) * idet
+            i22 = (j00 * j11 - j01 * j10) * idet
+            # dndx[k,i,b] = sum_a dN_dxi[k,i,a] * Jinv[b,a]
+            for i in range(10):
+                d0 = _DN_DXI_T10[k, i, 0]
+                d1 = _DN_DXI_T10[k, i, 1]
+                d2 = _DN_DXI_T10[k, i, 2]
+                dndx[e, k, i, 0] = d0 * i00 + d1 * i01 + d2 * i02
+                dndx[e, k, i, 1] = d0 * i10 + d1 * i11 + d2 * i12
+                dndx[e, k, i, 2] = d0 * i20 + d1 * i21 + d2 * i22
+            vtot += _WIP_T10[k] * vol[e, k]
+
+        if vtot < EM20:
+            vtot = EM20
+        vol_tot[e] = vtot
+
+        # characteristic length: 3 * V / max face area (corner faces only)
+        amax = 0.0
+        for f in range(4):
+            f0 = _FACES_T10[f, 0]; f1 = _FACES_T10[f, 1]; f2 = _FACES_T10[f, 2]
+            e1x = xe[e, f1, 0] - xe[e, f0, 0]
+            e1y = xe[e, f1, 1] - xe[e, f0, 1]
+            e1z = xe[e, f1, 2] - xe[e, f0, 2]
+            e2x = xe[e, f2, 0] - xe[e, f0, 0]
+            e2y = xe[e, f2, 1] - xe[e, f0, 1]
+            e2z = xe[e, f2, 2] - xe[e, f0, 2]
+            cx = e1y * e2z - e1z * e2y
+            cy = e1z * e2x - e1x * e2z
+            cz = e1x * e2y - e1y * e2x
+            a = 0.5 * np.sqrt(cx * cx + cy * cy + cz * cz)
+            if a > amax:
+                amax = a
+        if amax < EM20:
+            amax = EM20
+        lc[e] = 3.0 * vtot / amax
+
+        # ---- velocity gradient at each Gauss point --------------------
+        alive = off[e] > 0.0
+        for k in range(4):
+            # L[b,c] = sum_i ve[i,b] * dndx[k,i,c]
+            l00 = 0.0; l01 = 0.0; l02 = 0.0
+            l10 = 0.0; l11 = 0.0; l12 = 0.0
+            l20 = 0.0; l21 = 0.0; l22 = 0.0
+            for i in range(10):
+                v0 = ve[e, i, 0]; v1 = ve[e, i, 1]; v2 = ve[e, i, 2]
+                g0 = dndx[e, k, i, 0]
+                g1 = dndx[e, k, i, 1]
+                g2 = dndx[e, k, i, 2]
+                l00 += v0 * g0; l01 += v0 * g1; l02 += v0 * g2
+                l10 += v1 * g0; l11 += v1 * g1; l12 += v1 * g2
+                l20 += v2 * g0; l21 += v2 * g1; l22 += v2 * g2
+
+            if alive:
+                tr = l00 + l11 + l22
+                # round-off trace flush
+                vmax = 0.0
+                gmax = 0.0
+                for i in range(10):
+                    for b in range(3):
+                        av = abs(ve[e, i, b])
+                        if av > vmax:
+                            vmax = av
+                        ag = abs(dndx[e, k, i, b])
+                        if ag > gmax:
+                            gmax = ag
+                if abs(tr) <= 1e-14 * (vmax * gmax):
+                    tr = 0.0
+                trD[e, k] = tr
+                deps[e, k, 0] = l00 * dt
+                deps[e, k, 1] = l11 * dt
+                deps[e, k, 2] = l22 * dt
+                deps[e, k, 3] = (l01 + l10) * dt
+                deps[e, k, 4] = (l12 + l21) * dt
+                deps[e, k, 5] = (l02 + l20) * dt
+            else:
+                trD[e, k] = 0.0
+                for j in range(6):
+                    deps[e, k, j] = 0.0
+
+            # Jaumann rotation of stress at this Gauss point
+            wxy = 0.5 * (l01 - l10) * dt
+            wyz = 0.5 * (l12 - l21) * dt
+            wxz = 0.5 * (l02 - l20) * dt
+            sxx = sig[e, k, 0]; syy = sig[e, k, 1]; szz = sig[e, k, 2]
+            sxy = sig[e, k, 3]; syz_s = sig[e, k, 4]; szx = sig[e, k, 5]
+            sig[e, k, 0] = sxx + 2.0 * (wxy * sxy + wxz * szx)
+            sig[e, k, 1] = syy + 2.0 * (-wxy * sxy + wyz * syz_s)
+            sig[e, k, 2] = szz + 2.0 * (-wxz * szx - wyz * syz_s)
+            sig[e, k, 3] = sxy + wxy * (syy - sxx) + wxz * syz_s + wyz * szx
+            sig[e, k, 4] = syz_s + wyz * (szz - syy) - wxy * szx - wxz * sxy
+            sig[e, k, 5] = szx + wxz * (szz - sxx) + wxy * syz_s - wyz * sxy
+
+    return dndx, vol, vol_tot, lc, deps, trD
+
+
+@njit(cache=True, parallel=True)
+def tetra10_post(xe, dndx, vol, vol_tot, lc, rho, trD, deps, sig, sig_old,
+                 qa, qb, c, alive, qvw_pend, dt, dtfac):
+    """Mirror of solid_tetra10._post — bulk viscosity, internal forces,
+    energies, critical dt.  Returns (fe, dt_crit, w_visc, qvw_new, deint0).
+
+    fe:      (n, 10, 3) nodal forces (negated for fint accumulation)
+    dt_crit: (n,)       element critical time step
+    w_visc:  (n,)       viscous energy increment
+    qvw_new: (n,)       pending viscous work
+    deint0:  (n,)       internal energy increment
+    """
+    n = xe.shape[0]
+    fe = np.empty((n, 10, 3))
+    dt_crit = np.empty(n)
+    w_visc = np.empty(n)
+    qvw_new = np.empty(n)
+    deint0 = np.empty(n)
+
+    for e in prange(n):
+        live = alive[e]
+
+        # zero the nodal forces — accumulated over 4 Gauss points
+        for i in range(10):
+            fe[e, i, 0] = 0.0
+            fe[e, i, 1] = 0.0
+            fe[e, i, 2] = 0.0
+
+        wv = 0.0       # viscous energy accumulator
+        qvn = 0.0      # pending viscous work accumulator
+        de = 0.0        # internal energy accumulator
+        trD_min = trD[e, 0]
+
+        for k in range(4):
+            # bulk viscosity at this Gauss point
+            compressing = (trD[e, k] < 0.0) and live
+            if compressing:
+                qv = (rho[e] * lc[e]
+                      * (qa[e] * qa[e] * lc[e] * trD[e, k] * trD[e, k]
+                         - qb[e] * c[e] * trD[e, k]))
+            else:
+                qv = 0.0
+
+            # total stress with viscous pressure
+            s00 = sig[e, k, 0] - qv
+            s11 = sig[e, k, 1] - qv
+            s22 = sig[e, k, 2] - qv
+            s01 = sig[e, k, 3]
+            s12 = sig[e, k, 4]
+            s02 = sig[e, k, 5]
+
+            # internal force: fe[i,b] += -w_k * vol_k * S[b,c] * dndx[k,i,c]
+            wv_k = -_WIP_T10[k] * vol[e, k]
+            for i in range(10):
+                g0 = dndx[e, k, i, 0]
+                g1 = dndx[e, k, i, 1]
+                g2 = dndx[e, k, i, 2]
+                fe[e, i, 0] += wv_k * (g0 * s00 + g1 * s01 + g2 * s02)
+                fe[e, i, 1] += wv_k * (g0 * s01 + g1 * s11 + g2 * s12)
+                fe[e, i, 2] += wv_k * (g0 * s02 + g1 * s12 + g2 * s22)
+
+            # energy contributions at this Gauss point
+            wk_vol = _WIP_T10[k] * vol[e, k]
+            wv += wk_vol * 0.5 * qv * (-trD[e, k] * dt)
+            qvn += wk_vol * 0.5 * qv * dt
+
+            # internal energy: sig_mid . deps
+            de_k = 0.0
+            for j in range(6):
+                de_k += 0.5 * (sig_old[e, k, j] + sig[e, k, j]) * deps[e, k, j]
+            de += wk_vol * de_k
+
+            # track minimum trD for dt calculation
+            if trD[e, k] < trD_min:
+                trD_min = trD[e, k]
+
+        # add pending viscous work from previous cycle
+        sum_neg_trD = 0.0
+        for k in range(4):
+            sum_neg_trD += -trD[e, k]
+        wv += qvw_pend[e] * sum_neg_trD / 4.0
+
+        w_visc[e] = wv
+        qvw_new[e] = qvn
+        deint0[e] = de + wv
+
+        # critical time step
+        if trD_min < 0.0:
+            Q = qb[e] * c[e] + qa[e] * lc[e] * abs(trD_min)
+        else:
+            Q = 0.0
+        if live:
+            dt_crit[e] = dtfac[e] * lc[e] / (Q + np.sqrt(Q * Q + c[e] * c[e]))
+        else:
+            dt_crit[e] = EP30
+
+    return fe, dt_crit, w_visc, qvw_new, deint0
+
 
 from .shells_qbat import qbat_pre_flat, qbat_post_flat, qbat_pre, qbat_post
 
