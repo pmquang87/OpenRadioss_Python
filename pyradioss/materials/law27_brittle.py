@@ -62,6 +62,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from .law02_johnson_cook import _yield_stress, _rate_factor, _NEWTON_ITERS
+
 
 def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
                  epsp: np.ndarray, dt: float, extra: dict):
@@ -127,6 +129,7 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
         # layer rupture at the failure strain (either direction)
         broken = (en1 > eps_f1) | (en2 > eps_f2)
         if np.any(broken):
+            print(f"BROKEN! en1={en1[broken]}, eps_f1={eps_f1}, en2={en2[broken]}, eps_f2={eps_f2}")
             bidx = np.where(cracked)[0][broken]
             layfail[bidx] = 0.0
 
@@ -148,8 +151,43 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
         syy[cracked] = syy_c
         sxy[cracked] = sxy_c
 
+    # ---- Johnson-Cook Plasticity (Iplas=2 radial return) -------------------
+    # Plasticity is evaluated on the damaged trial stress (matching M27PLAS)
+    if "A" in p and p["A"] > 0.0:
+        sig_eq = np.sqrt(sxx ** 2 - sxx * syy + syy ** 2 + 3.0 * sxy ** 2) + 1e-30
+        
+        # in-plane equivalent strain rate
+        dxx, dyy, dxy = deps[:, 0], deps[:, 1], deps[:, 2]
+        dzz = -(dxx + dyy) * 0.5
+        tr3 = (dxx + dyy + dzz) / 3.0
+        ee = (dxx - tr3) ** 2 + (dyy - tr3) ** 2 + (dzz - tr3) ** 2 + 0.5 * dxy ** 2
+        rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, 1e-30)
+        rate_fac = _rate_factor(mat, rate)
+
+        sy, _ = _yield_stress(mat, epsp, rate_fac)
+        plastic = sig_eq > sy
+        if np.any(plastic):
+            idx = np.where(plastic)[0]
+            dl = np.zeros(len(idx))
+            seq = sig_eq[idx]
+            ep0 = epsp[idx]
+            rf = rate_fac[idx] if np.ndim(rate_fac) else rate_fac
+            for _ in range(_NEWTON_ITERS):
+                sy_i, H_i = _yield_stress(mat, ep0 + dl, rf)
+                res = seq - 3.0 * G * dl - sy_i
+                dl += res / (3.0 * G + np.maximum(H_i, 0.0))
+                dl = np.maximum(dl, 0.0)
+            sy_new, _ = _yield_stress(mat, ep0 + dl, rf)
+
+            scale = sy_new / seq
+            sxx[idx] *= scale
+            syy[idx] *= scale
+            sxy[idx] *= scale
+            epsp[idx] = ep0 + dl
+
     # broken layers carry no stress at all
     dead = layfail == 0.0
+    print("dead=", dead, "sxx=", sxx)
     sig[:, 0] = np.where(dead, 0.0, sxx)
     sig[:, 1] = np.where(dead, 0.0, syy)
     sig[:, 2] = np.where(dead, 0.0, sxy)

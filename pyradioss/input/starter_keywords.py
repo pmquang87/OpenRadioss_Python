@@ -632,12 +632,15 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         card 1:  mat_title
         card 2:  rho_0
         card 3:  E   nu
-        card 4:  eps_t1   eps_m1   dmax1   eps_f1     (crack direction 1)
-        card 5:  eps_t2   eps_m2   dmax2   eps_f2     (optional, = card 4)
+        card 4:  A   B   n   eps_p_max   sig_max      (plasticity card 1)
+        card 5:  c   eps_dot_0   [STRFLAG...]         (plasticity card 2)
+        card 6:  eps_t1   eps_m1   dmax1   eps_f1     (crack direction 1)
+        card 7:  eps_t2   eps_m2   dmax2   eps_f2     (optional, = card 6)
 
       tensile cracking: damage starts at strain eps_t, reaches dmax at
       eps_m, layer breaks at eps_f (see law27_brittle.py). The plastic
-      block of the original PLAS_BRIT is not ported (elastic to crack).
+      block implements Johnson-Cook hardening with iterative exact
+      plane-stress return (or radial projection).
 
     LAW36 (tabulated plasticity) — Fortran .../mat036. TWO dialects are
     accepted (dispatched on the card count — the real layout always has
@@ -840,10 +843,6 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             elif mT > 0:
                 params.update(mT=mT, T_melt=tmelt, rho_cp=rho_cp, T_i=ti)
     elif law == 27:
-        # fixed dialect (matl27_plas_brit.cfg, radioss51): rho / E nu /
-        # A B N EPSMAX SIGMAX / C EPS0 ICC / damage 1 / damage 2 — the
-        # plastic cards sit BEFORE the damage cards (the port's LAW27 is
-        # elastic-to-crack: non-default plastic fields are warned about)
         if block.fixed:
             if len(cards) < 5:
                 log.error(f"/MAT/LAW27/{block.user_id}: missing damage "
@@ -852,9 +851,8 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 return
             plast = _cut_floats(cards[2], "LAW2_A") \
                 + _cut_floats(cards[3], "LAW2_A")[:2]
-            _warn_ignored(log, f"/MAT/LAW27/{block.user_id}", block.source,
-                          zip(("A", "B", "N", "EPSMAX", "SIGMAX",
-                               "C", "EPS0"), plast))
+            a, b, n, epsmax, ymax, c, eps0 = plast
+            params.update(A=a, B=b, n=n, sig_max=ymax, c=c, eps_dot_0=eps0)
             dmg = cards[4:6]
         else:
             if len(cards) < 3:
@@ -862,7 +860,16 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                           f"card 'eps_t1 eps_m1 dmax1 eps_f1'",
                           block.source)
                 return
-            dmg = cards[2:4]
+            if len(cards) >= 5:
+                plast = _floats(cards[2], 5, defaults=[0.0]*5)
+                plast2 = _floats(cards[3], 3, defaults=[0.0]*3)
+                a, b, n, epsmax, ymax = plast
+                c, eps0, icc = plast2
+                params.update(A=a, B=b, n=n, sig_max=ymax, c=c, eps_dot_0=eps0)
+                dmg = cards[4:6]
+            else:
+                params.update(A=0.0, B=0.0, n=0.0, sig_max=1e30, c=0.0, eps_dot_0=1.0)
+                dmg = cards[2:4]
 
         def _dmg_vals(card, defaults):
             return _cut_floats(card, "LAW27_DMG") if block.fixed \
@@ -1481,6 +1488,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             #   card 2:  deltaTmin Vdefmin ...  (element dt controls)
             if cards and not cards[0].is_blank:
                 params["isolid"] = _ival(cards[0].raw[:10])
+                params["itetra4"] = _ival(cards[0].raw[60:70])
             # Read qa/qb/h by COLUMN-CUT of data card 1; blank fields keep
             # the defaults.  The free-format 'skip all-integer cards'
             # heuristic (else branch) MUST NOT run on the real deck: the
@@ -1504,7 +1512,10 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             flags = [c for c in cards if all(tok.lstrip("+-").isdigit()
                                              for tok in c.tokens())]
             if flags and flags[0].tokens():
-                params["isolid"] = int(flags[0].tokens()[0])
+                toks = flags[0].tokens()
+                params["isolid"] = int(toks[0])
+                if len(toks) > 6:
+                    params["itetra4"] = int(toks[6])
 
             data = [c for c in cards if not all(tok.lstrip("+-").isdigit()
                                                 for tok in c.tokens())]
@@ -1512,8 +1523,8 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 qa, qb, h = _floats(data[0], 3,
                                     defaults=[DEFAULT_QA, DEFAULT_QB,
                                               DEFAULT_HOURGLASS])
-                params = {"qa": qa or DEFAULT_QA, "qb": qb or DEFAULT_QB,
-                          "h": h or DEFAULT_HOURGLASS}
+                params.update(qa=qa or DEFAULT_QA, qb=qb or DEFAULT_QB,
+                              h=h or DEFAULT_HOURGLASS)
 
     model.properties[block.user_id] = Property(
         id=block.user_id, type=ptype, title=title, params=params)
@@ -3380,12 +3391,15 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                            ("Idel2", f[6])])
             model.interfaces.append(Interface(
                 id=block.user_id, type=2, grnod_id=_ival(f[0]),
-                surf_id=_ival(f[1]), dsearch=_fval(f[8]), title=title))
+                surf_id=_ival(f[1]), dsearch=_fval(f[8]), spotflag=_ival(f[3]), title=title))
             return
-        f = _floats(cards[0], 3)
+        
+        toks = cards[0].tokens()
+        spotflag = int(toks[3]) if len(toks) > 3 else 0
+        f = _floats(cards[0], 9)
         model.interfaces.append(Interface(
             id=block.user_id, type=2, grnod_id=int(toks[0]),
-            surf_id=int(toks[1]), dsearch=f[2], title=title))
+            surf_id=int(toks[1]), dsearch=f[8] if len(f) > 8 else 0.0, spotflag=spotflag, title=title))
         return
 
     if kind == "TYPE24" and len(cards) >= 6:

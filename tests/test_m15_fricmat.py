@@ -71,9 +71,13 @@ from pyradioss.starter.starter import run_starter
 def _run(make_deck, name, starter, engine):
     s, e = make_deck(name, starter, engine)
     buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        run_starter(s)
-        model = run_engine(e)
+    try:
+        with contextlib.redirect_stdout(buf):
+            run_starter(s)
+            model = run_engine(e)
+    except Exception as exc:
+        print("STARTER ERROR OUTPUT:\n", buf.getvalue())
+        raise
     return model, buf.getvalue()
 
 
@@ -775,6 +779,8 @@ def _law27_shell_deck(eps_t1="0.001", extra_cards="", E="70000.0",
 glass
    2.5e-6
      {E}      0.22
+       0.0       0.0       0.0       0.0       0.0
+       0.0       0.0       0.0
      {eps_t1}     0.005       0.9      0.10
     0.0012     0.006      0.85      0.10
 """ if mat27 else f"""/MAT/LAW1/1
@@ -984,18 +990,22 @@ strip
 /PART/2
 notch
          1         2
-/MAT/LAW27/1
-glass
-   2.5e-6
-     70000.0      0.22
-     0.004     0.008       0.9      0.10
-     0.004     0.008      0.85      0.10
-/MAT/LAW27/2
-weak glass
-   2.5e-6
-     70000.0      0.22
-     0.001     0.005       0.9      0.10
-    0.0012     0.006      0.85      0.10
+    /MAT/LAW27/1
+    glass
+       2.5e-6
+         70000.0      0.22
+           0.0       0.0       0.0       0.0       0.0
+           0.0       0.0       0.0
+         0.004     0.008       0.9      0.10
+         0.004     0.008      0.85      0.10
+    /MAT/LAW27/2
+    weak glass
+       2.5e-6
+         70000.0      0.22
+           0.0       0.0       0.0       0.0       0.0
+           0.0       0.0       0.0
+         0.001     0.005       0.9      0.10
+        0.0012     0.006      0.85      0.10
 /PROP/SHELL/1
 sheet
          1.0         3

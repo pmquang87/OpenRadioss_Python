@@ -407,9 +407,8 @@ class TestLaw24Concrete:
         assert ext_b["dam24"][0].max() == pytest.approx(
             ext_a["dam24"][0].max(), rel=1e-6)
 
-    def test_reinforcement_refused(self, tmp_path):
-        """Documented cut: ARM > 0 must refuse cleanly, not silently
-        drop the steel."""
+    def test_reinforcement_parsed(self, tmp_path):
+        """Documented cut: ARM > 0 is now parsed and supported."""
         card = CONC_CARD.replace(_f20(0, 0, 0) + _f20(0, 0, 0),
                                  _f20(0, 0, 0) + _f20(".1", 0, 0), 1)
         # replace only the LAST card (arm percentages)
@@ -430,10 +429,12 @@ class TestLaw24Concrete:
         for b in read_deck(str(deck)):
             if b.key0 == "MAT":
                 mat_reader.read_generic_mat(b, model, log)
-        # builder raised -> error logged, material NOT registered active
-        assert not model.materials or \
-            getattr(list(model.materials.values())[0], "inactive", False) \
-            or any("not ported" in str(m) for m in log.errors)
+        
+        # Now it is parsed and active
+        assert model.materials
+        mat = list(model.materials.values())[0]
+        assert not getattr(mat, "inactive", False)
+        assert mat.params["ARM1"] == 0.05
 
 
 # ============================================================================

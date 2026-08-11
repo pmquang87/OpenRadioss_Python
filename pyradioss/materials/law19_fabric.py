@@ -114,7 +114,15 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
     g12 = p["G12"]
     rcomp = p["RCOMP"]
     zerostress = p["ZEROSTRESS"]
-    tstart = p.get("TSTART", 0.0)
+    isens = p.get("ISENSOR", 0)
+    tstart = 0.0
+    if isens > 0 and getattr(mat, "sensors", None) is not None:
+        if mat.sensors.active(isens):
+            tstart = mat.sensors.fire_time.get(isens, 0.0)
+        else:
+            tstart = 1e20
+    else:
+        tstart = p.get("TSTART", 0.0)
 
     eps = extra["eps19"]                    # (m, 3) accumulated strain
     eps += deps
@@ -220,7 +228,7 @@ def build_fabric(rec) -> FabricMaterial:
         "A11": a11, "A22": a22, "A12": a12,
         "RCOMP": rcomp, "ZEROSTRESS": zerostress,
         "POROSITY": porosity, "ISENSOR": isens,
-        "TSTART": 0.0,     # /SENSOR wiring not ported (documented cut)
+        "TSTART": 0.0,
     }
     return FabricMaterial(id=rec.id, law=19, rho0=rec.density,
                           title=rec.title, params=params)

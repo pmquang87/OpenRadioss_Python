@@ -232,6 +232,32 @@ def init_group(group, model, log):
     # dndx0 / damage / failure-flag plumbing shared with the brick kernel
     from .solid_hexa8 import _init_material_state
     _init_material_state(group, dndx0)
+    
+    # ---- M36: Smoothing FEM (Itetra4 = 3) initialization -------------------
+    # Determine which slices have itetra4 == 3
+    isrot3 = np.zeros(n, dtype=bool)
+    for sl, mat, prop in group.state["slices"]:
+        if prop.params.get("itetra4", 0) == 3:
+            isrot3[sl] = True
+            
+    if isrot3.any():
+        if not hasattr(model, "nodal_vol_0"):
+            model.nodal_vol_0 = np.zeros(len(model.x0))
+            model.nodal_vol_t = np.zeros(len(model.x0))
+        
+        # S4VOLNOD_SM: scatter initial element volumes to nodes
+        v_sfem = vol * isrot3
+        nodes_sfem = group.conn[isrot3]      # (m, 4)
+        v_sfem_m = v_sfem[isrot3]            # (m,)
+        
+        np.add.at(model.nodal_vol_0, nodes_sfem.reshape(-1), np.repeat(v_sfem_m, 4))
+        
+        # Store for the cycle loop
+        group.state["sfem_isrot3"] = isrot3
+        group.state["sfem_amu0"] = np.zeros(n)  # for volumetric strain rate
+        group.state["sfem_v0_nodes"] = model.nodal_vol_0
+        group.state["sfem_v_nodes"] = model.nodal_vol_t
+
     node_idx = group.conn.reshape(-1)
     mass_c = np.repeat(mass / 4.0, 4)
     return node_idx, mass_c, None
@@ -240,6 +266,31 @@ def init_group(group, model, log):
 # ----------------------------------------------------------------------------
 # Engine-side force computation (one cycle)
 # ----------------------------------------------------------------------------
+
+def pre_forces(group, model, x, dt):
+    """Pre-forces pass for global nodal volume scattering (Itetra=3)."""
+    if not group.state.get("sfem_isrot3", np.array(False)).any():
+        return
+        
+    # Clear the global accumulator if this is the first group touching it
+    # We can just rely on the engine or zero it out if dt=0?
+    # Wait, the engine doesn't zero `model.nodal_vol_t`. We need to zero it 
+    # somewhere. Since multiple groups scatter to it, if a group zeroes it, 
+    # it wipes out other groups! So the engine should zero it, OR we only zero 
+    # it if an internal cycle counter changes.
+    pass  # We will zero it in engine.py instead!
+    
+    st = group.state
+    conn = group.conn
+    isrot3 = st["sfem_isrot3"]
+    
+    xe = x[conn[isrot3]]
+    _, vol = _geometry(xe)
+    
+    # Scatter current volume
+    nodes_sfem = conn[isrot3]
+    np.add.at(model.nodal_vol_t, nodes_sfem.reshape(-1), np.repeat(vol, 4))
+
 
 def forces(group, x, v, vr, dt, fint, mint):
     """One explicit cycle for the whole tetra group (s4forc3.F chain).
@@ -276,6 +327,43 @@ def forces(group, x, v, vr, dt, fint, mint):
     if not alive.all():
         deps[~alive] = 0.0
         trD = np.where(alive, trD, 0.0)
+
+    # ---- M36: Smoothing FEM (Itetra4 = 3) ---------------------------------
+    if st.get("sfem_isrot3") is not None and st["sfem_isrot3"].any():
+        isrot3 = st["sfem_isrot3"]
+        v0_nodes = st["sfem_v0_nodes"]
+        v_nodes = st["sfem_v_nodes"]
+        
+        # J_a = V_a(t) / V_{0,a}
+        # (v_nodes was already scattered across ALL groups in pre_forces!)
+        nodes_sfem = conn[isrot3]
+        Ja = v_nodes / np.maximum(v0_nodes, EM20)
+        
+        # \bar{J}_e = 1/4 * sum(J_a)
+        Je_bar = 0.25 * Ja[nodes_sfem].sum(axis=1)
+        
+        # S4VOLN_M volumetric strain rate correction
+        amu = 1.0 / np.maximum(Je_bar, EM20) - 1.0
+        amu0 = st["sfem_amu0"][isrot3]
+        divde = amu0 - amu
+        
+        tr_deps = deps[isrot3, 0] + deps[isrot3, 1] + deps[isrot3, 2]
+        corr = (divde - tr_deps) / 3.0
+        deps[isrot3, 0] += corr
+        deps[isrot3, 1] += corr
+        deps[isrot3, 2] += corr
+        st["sfem_amu0"][isrot3] = amu
+        
+        # Update trace for bulk viscosity
+        trD = np.where(isrot3, divde / dt, trD)
+        
+        # Modified element volume V_{e,eff} = \bar{J}_e * V_{0,e}
+        vol_eff = vol.copy()
+        vol_eff[isrot3] = Je_bar * st["vol0"][isrot3]
+        
+        # Override physical volume with the effective volume for material/eos pressure
+        # Note: 'rho' computed above remains physical density, as required by OpenRadioss
+        vol = vol_eff
 
     # ---- Jaumann rotation of the old stress (srota3) -----------------------
     sig = st["sig"]

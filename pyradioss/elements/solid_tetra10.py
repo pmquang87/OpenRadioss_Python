@@ -249,6 +249,15 @@ def forces(group, x, v, vr, dt, fint, mint):
     xe = x[conn]
     ve = v[conn]
 
+    is_slaved = len(conn) > 0 and conn[0, 4] == -1
+    if is_slaved:
+        # Virtual slaved mid-side nodes for TETRA4 Itetra=1/2 Nodal-Pressure variants.
+        # Nodes 4,5,6 are mid-edges of the base (01, 12, 20).
+        # Nodes 7,8,9 are mid-edges to the apex (03, 13, 23).
+        for m, (n1, n2) in enumerate([(0, 1), (1, 2), (2, 0), (0, 3), (1, 3), (2, 3)]):
+            xe[:, 4 + m] = 0.5 * (xe[:, n1] + xe[:, n2])
+            ve[:, 4 + m] = 0.5 * (ve[:, n1] + ve[:, n2])
+
     sig = st["sig"]
     sig_old = sig.copy()
     alive = st["off"] > 0.0
@@ -299,8 +308,20 @@ def forces(group, x, v, vr, dt, fint, mint):
     st["eint"] += deint0
     st["qvw_pend"] = qvw_new
 
+    if is_slaved:
+        # 100% of the element mass is on the 4 corners. The internal forces computed
+        # at the virtual mid-side nodes must be redistributed 50/50 back to the corner
+        # pairs to balance the equations of motion and prevent adding to node 0 (idx -1).
+        for m, (n1, n2) in enumerate([(0, 1), (1, 2), (2, 0), (0, 3), (1, 3), (2, 3)]):
+            fe[:, n1] += 0.5 * fe[:, 4 + m]
+            fe[:, n2] += 0.5 * fe[:, 4 + m]
+            fe[:, 4 + m] = 0.0
+
     # ---- scatter to global arrays --------------------------------------
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get("color_indices"), st.get("color_offsets"))
+    if is_slaved:
+        scatter_add3(fint, conn[:, :4].reshape(-1), fe[:, :4].reshape(-1, 3), st.get("color_indices"), st.get("color_offsets"))
+    else:
+        scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get("color_indices"), st.get("color_offsets"))
 
     return dt_crit
 

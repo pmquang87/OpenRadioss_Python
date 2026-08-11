@@ -247,8 +247,8 @@ class ContactType2:
 
     # ------------------------------------------------------------------
     def transfer_forces(self, fint: np.ndarray, fext: np.ndarray,
-                        fcont: np.ndarray, mass_eff: np.ndarray,
-                        inv_mass_eff: np.ndarray, cycle: int) -> None:
+                        fcont: np.ndarray, mint: np.ndarray, x: np.ndarray,
+                        mass_eff: np.ndarray, inv_mass_eff: np.ndarray, cycle: int) -> None:
         """Per-cycle step 1 (i2for3): move the tied nodes' assembled
         forces (internal, external AND contact — a tied node can also be
         a penalty secondary) to their main segments. Also polls the
@@ -269,14 +269,60 @@ class ContactType2:
         sn = self.snode[act]
         seg = self.seg[act]
         w = self.w[act]
+        
+        sf = self.itf.spotflag
+        if sf in (1, 2):
+            # M_offset = dvec x F_slave
+            xc = np.einsum("nk,nkb->nb", w, x[seg])
+            dvec = x[sn] - xc
+        
         for arr in (fint, fext, fcont):
             F = arr[sn]
-            for k in range(4):
-                np.add.at(arr, seg[:, k], w[:, k, None] * F)
+            if sf in (1, 2):
+                # Total moment to transfer = M_slave (if any) + offset moment
+                M_tot = np.cross(dvec, F)
+                if arr is fint:
+                    M_tot += mint[sn]
+                    mint[sn] = 0.0
+                
+                if sf == 1:
+                    # Spotflag 1 (Solid main): moment to force couple (I2FOMO3)
+                    xs = x[seg]
+                    x0 = np.mean(xs, axis=1)
+                    r = xs - x0[:, None, :]
+                    
+                    # Pseudo-inertia tensor I (unit mass at each node)
+                    I_tensor = np.zeros((len(sn), 3, 3))
+                    I_tensor[:, 0, 0] = np.sum(r[:, :, 1]**2 + r[:, :, 2]**2, axis=1)
+                    I_tensor[:, 1, 1] = np.sum(r[:, :, 0]**2 + r[:, :, 2]**2, axis=1)
+                    I_tensor[:, 2, 2] = np.sum(r[:, :, 0]**2 + r[:, :, 1]**2, axis=1)
+                    I_tensor[:, 0, 1] = I_tensor[:, 1, 0] = -np.sum(r[:, :, 0] * r[:, :, 1], axis=1)
+                    I_tensor[:, 0, 2] = I_tensor[:, 2, 0] = -np.sum(r[:, :, 0] * r[:, :, 2], axis=1)
+                    I_tensor[:, 1, 2] = I_tensor[:, 2, 1] = -np.sum(r[:, :, 1] * r[:, :, 2], axis=1)
+                    
+                    try:
+                        I_inv = np.linalg.inv(I_tensor)
+                        A = np.einsum("nij,nj->ni", I_inv, M_tot)
+                        F_couple = np.cross(A[:, None, :], r)
+                    except np.linalg.LinAlgError:
+                        F_couple = np.zeros_like(r)
+                    
+                    for k in range(4):
+                        np.add.at(arr, seg[:, k], w[:, k, None] * F + F_couple[:, k, :])
+                else:
+                    # Spotflag 2 (Shell main): moment directly to rotational DOFs (I2MOM3)
+                    for k in range(4):
+                        np.add.at(arr, seg[:, k], w[:, k, None] * F)
+                        if arr is fint:
+                            np.add.at(mint, seg[:, k], w[:, k, None] * M_tot)
+            else:
+                for k in range(4):
+                    np.add.at(arr, seg[:, k], w[:, k, None] * F)
+            
             arr[sn] = 0.0
 
     # ------------------------------------------------------------------
-    def enforce(self, x: np.ndarray, v: np.ndarray, dt: float) -> None:
+    def enforce(self, x: np.ndarray, v: np.ndarray, vr: np.ndarray, dt: float) -> None:
         """Per-cycle step 3 (i2vit3): place the tied nodes on their
         segments (weights + co-rotated offset) and set the consistent
         velocity. Called after the main nodes' position update."""
@@ -289,7 +335,46 @@ class ContactType2:
         loc = self.off_loc[act]
         x_new = (np.einsum("nk,nkb->nb", self.w[act], xs)
                  + loc[:, 0:1] * t1 + loc[:, 1:2] * t2 + loc[:, 2:3] * n)
+        
+        sf = self.itf.spotflag
         if dt > EM20:
             v[sn] = (x_new - self.x_prev[act]) / dt
+            
+            if sf == 1:
+                # Spotflag 1 (Solid main): derive rotational velocity (I2VIROT3)
+                x0 = np.mean(xs, axis=1)
+                r = xs - x0[:, None, :]
+                vs = v[self.seg[act]]
+                L = np.sum(np.cross(r, vs), axis=1)
+                
+                I_tensor = np.zeros((len(sn), 3, 3))
+                I_tensor[:, 0, 0] = np.sum(r[:, :, 1]**2 + r[:, :, 2]**2, axis=1)
+                I_tensor[:, 1, 1] = np.sum(r[:, :, 0]**2 + r[:, :, 2]**2, axis=1)
+                I_tensor[:, 2, 2] = np.sum(r[:, :, 0]**2 + r[:, :, 1]**2, axis=1)
+                I_tensor[:, 0, 1] = I_tensor[:, 1, 0] = -np.sum(r[:, :, 0] * r[:, :, 1], axis=1)
+                I_tensor[:, 0, 2] = I_tensor[:, 2, 0] = -np.sum(r[:, :, 0] * r[:, :, 2], axis=1)
+                I_tensor[:, 1, 2] = I_tensor[:, 2, 1] = -np.sum(r[:, :, 1] * r[:, :, 2], axis=1)
+                
+                try:
+                    I_inv = np.linalg.inv(I_tensor)
+                    omega_main = np.einsum("nij,nj->ni", I_inv, L)
+                    vr[sn] = omega_main
+                    
+                    # Add offset rotation to translational velocity
+                    # d_center = x[sn] - x0
+                    d_center = x_new - x0
+                    v[sn] += np.cross(omega_main, d_center)
+                except np.linalg.LinAlgError:
+                    pass
+            elif sf == 2:
+                # Spotflag 2 (Shell main): interpolate rotational DOFs (I2ROT3)
+                vrs = vr[self.seg[act]]
+                omega_main = np.einsum("nk,nkb->nb", self.w[act], vrs)
+                vr[sn] = omega_main
+                
+                # Add offset rotation to translational velocity
+                d_interp = x_new - np.einsum("nk,nkb->nb", self.w[act], xs)
+                v[sn] += np.cross(omega_main, d_interp)
+
         x[sn] = x_new
         self.x_prev[act] = x_new

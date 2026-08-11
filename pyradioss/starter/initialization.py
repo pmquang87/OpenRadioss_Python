@@ -129,6 +129,29 @@ def _convert_degenerated_bricks(model: Model, log: MessageLog) -> None:
                  f"COLLAPSED HEXA (penta/pyramid)")
 
 
+def _convert_tetras(model: Model, log: MessageLog) -> None:
+    """Convert /TETRA4 elements with nodal-pressure variants (Itetra4 = 1, 2)
+    into /TETRA10 elements with zeroed mid-side nodes, maintaining Fortran
+    physics parity (virtual slaved mid-side nodes).
+    """
+    kept, moved = [], 0
+    for (eid, pid, nodes) in model.raw_elems["TETRA4"]:
+        # part -> property -> itetra4 flag
+        prop_id = model.parts[pid].prop_id
+        prop = model.properties.get(prop_id)
+        if prop and prop.params.get("itetra4", 0) in (1, 2):
+            # Pad with 6 zeros for the mid-side nodes
+            nodes10 = list(nodes) + [0] * 6
+            model.raw_elems["TETRA10"].append((eid, pid, nodes10))
+            moved += 1
+        else:
+            kept.append((eid, pid, nodes))
+    model.raw_elems["TETRA4"] = kept
+    if moved:
+        log.info(f"     {moved} /TETRA4 ELEMENT(S) CONVERTED TO /TETRA10 "
+                 f"(Nodal-pressure variant Itetra4=1/2)")
+
+
 # ----------------------------------------------------------------------------
 # Elements: raw tuples -> ElementGroups with per-part slices
 # ----------------------------------------------------------------------------
@@ -140,6 +163,7 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
     *groups* (NGROUP blocks of same type/mat/prop), which lets the material
     law run vectorized on each slice."""
     _convert_degenerated_bricks(model, log)
+    _convert_tetras(model, log)
     for etype, (attr, nnode, req_prop) in _ETYPES.items():
         raw = model.raw_elems[etype]
         if not raw:

@@ -3,7 +3,7 @@
 Cantilever_beam                                                                 
 #
 /RUN/Cantilever_beam/1/
-1.0e-5
+0.100000000000000   
 #
 /PRINT/-500/0         
 #

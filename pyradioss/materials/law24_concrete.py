@@ -991,10 +991,43 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     di = np.where(dsum > 0.0)[0]
     if len(di):
         out[di] = _rot_stress_from_crack(out[di], ang[di])
+        
+    # ---- Steel reinforcement (ARM1, ARM2, ARM3) -----------------------------
+    arm1, arm2, arm3 = p["ARM1"], p["ARM2"], p["ARM3"]
+    if arm1 > 0.0 or arm2 > 0.0 or arm3 > 0.0:
+        siga24 = extra["siga24"]
+        epsa24 = extra["epsa24"]
+        
+        # update steel stresses and plastic strains
+        _carm24(p["YMS"], p["Y0S"], p["ETS"], epsa24, siga24, deps[:, :3])
+        
+        # Rule of Mixtures in the orthotropic frame
+        if arm1 > 0.0:
+            out[:, 0] = out[:, 0] * (1.0 - arm1) + arm1 * siga24[:, 0]
+        if arm2 > 0.0:
+            out[:, 1] = out[:, 1] * (1.0 - arm2) + arm2 * siga24[:, 1]
+        if arm3 > 0.0:
+            out[:, 2] = out[:, 2] * (1.0 - arm3) + arm3 * siga24[:, 2]
+
     sig[:] = out * off[:, None]
 
     c = np.full(m, np.sqrt(p["A11c"] / p["RHO0"]))     # m24law SSP
     return sig, epsp, c
+
+
+def _carm24(yms, y0s, ets, epsa, siga, deps_norm):
+    """Update independent 1D elasto-plastic steel bars (carm24.F)."""
+    hs = yms * ets / max(yms - ets, 1e-20)
+    s_trial = siga + yms * deps_norm
+    s_yield = y0s + hs * np.abs(epsa)
+    
+    yielded = np.abs(s_trial) > s_yield
+    scal = np.maximum(np.abs(s_trial) - s_yield, 0.0) / np.maximum(np.abs(yms * deps_norm), 1e-20)
+    d_eps_plas = yielded * scal * (1.0 - ets / (yms + 1e-10)) * deps_norm
+    
+    epsa += d_eps_plas
+    s_yield_new = s_yield * np.sign(s_trial) + hs * d_eps_plas
+    siga[:] = np.where(yielded, s_yield_new, s_trial)
 
 
 # ----------------------------------------------------------------------------
@@ -1029,12 +1062,12 @@ def build_conc(rec) -> Material:
     hv0 = float(q.get("MAT_TPMOD", 0.0) or 0.0)
     arm = [float(q.get(k, 0.0) or 0.0)
            for k in ("MAT_PDIR1", "MAT_PDIR2", "MAT_PDIR3")]
+    yms = float(q.get("MAT_E2", 0.0) or 0.0)
+    y0s = float(q.get("MAT_SSIG", 0.0) or 0.0)
+    ets = float(q.get("MAT_SETAN", 0.0) or 0.0)
 
     if ymc <= 0.0 or fc <= 0.0:
         raise ValueError("LAW24 needs positive E and fc")
-    if any(a != 0.0 for a in arm):
-        raise ValueError("LAW24 steel reinforcement (ARM1-3) is not ported "
-                         "(documented cut) — remove the reinforcement card")
     if icap == 2:
         raise ValueError("LAW24 Icap=2 (plas24b 'new cap formulation') is "
                          "not ported (documented cut) — use Icap 0 or 1")
@@ -1119,6 +1152,8 @@ def build_conc(rec) -> Material:
         "HV0": hv0, "EXPO": expo,             # PM(48) / PM(49)
         "ICAP": icap,                         # PM(57)
         "FT": ft, "FB": fb, "F2D": f2d, "S0FC": s0, "CCOTT": cc,
+        "YMS": yms, "Y0S": y0s, "ETS": ets,
+        "ARM1": arm[0], "ARM2": arm[1], "ARM3": arm[2],
     }
     return Material(id=rec.id, law=24, rho0=rec.density,
                     title=rec.title, params=params)

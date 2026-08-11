@@ -76,8 +76,10 @@ def extra_shapes(mat, nip=None):
         shapes.update(eps19=(nip, 3), sigi19=(nip, 3), t19=(nip,))
     if mat.law == 24:
         # M37 pack 2: the LBUF state of conc24.F (law24_concrete docstring)
+        # Includes steel reinforcement state (siga24, epsa24)
         shapes.update(strain24=(6,), sigc24=(6,), crak24=(3,),
                       dam24=(3,), ang24=(6,), epsf24=(3,),
+                      siga24=(3,), epsa24=(3,),
                       vk024=(), vk24=(), rob24=(), off24=(), ini24=())
     if mat.law == 81:
         # M37 pack 2: the defp(nel, 2) plastic strains of sigeps81.F90

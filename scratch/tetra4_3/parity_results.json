@@ -1,0 +1,37 @@
+[
+ {
+  "example": "tetra4_3",
+  "runname": "Cantilever_beam",
+  "implicit": false,
+  "fortran": {
+   "mode": "real-format",
+   "starter_rc": 0,
+   "starter_time": 0.63,
+   "engine_rc": 0,
+   "engine_time": 192.1,
+   "n_nodes": 788,
+   "n_elements": 2166,
+   "starter_elapsed_self": 0.57,
+   "n_cycles": 344256,
+   "engine_elapsed_self": 192.04,
+   "status": "ok",
+   "csv": "scratch/tetra4_3\\fortran\\tetra4_3\\Cantilever_beamT01.csv",
+   "error": "no overlapping channels"
+  },
+  "pyradioss": {
+   "starter_rc": 0,
+   "starter_time": 1.73,
+   "engine_rc": 0,
+   "engine_time": 6.1,
+   "n_nodes": 788,
+   "n_elements": 2166,
+   "starter_elapsed_self": 0.676,
+   "n_cycles": 500,
+   "engine_elapsed_self": 4.863,
+   "status": "ok",
+   "csv": "scratch/tetra4_3\\pyradioss\\tetra4_3\\Cantilever_beamT01.csv"
+  },
+  "channels": [],
+  "class": "FORTRAN-FAIL"
+ }
+]

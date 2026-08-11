@@ -301,6 +301,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     dampers = Dampers(model, log)          # /DAMP   (M6)
     sensors = Sensors(model, log)          # /SENSOR (M6)
     model.sensors_state = sensors
+    for mat in model.materials.values():
+        mat.sensors = sensors
     if resumed:                            # latched sensors stay latched
         sensors.fire_time.update(saved.get("sensors", {}))
     ams = AMSManager(model, controls) if getattr(controls, "dt_ams", False) else None
@@ -390,6 +392,13 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         dt = 0.0
         dt_next = EP30
         claims = []                # per-group dt_e arrays (for /DT/NODA)
+        
+        if hasattr(model, "nodal_vol_t"):
+            model.nodal_vol_t[:] = 0.0
+        for name, group in model.element_groups():
+            if hasattr(KERNELS[name], "pre_forces"):
+                KERNELS[name].pre_forces(group, model, model.x, 0.0)
+
         for name, group in model.element_groups():
             dt_e = KERNELS[name].forces(group, model.x, model.v, model.vr,
                                         0.0, fint, mint)
@@ -489,6 +498,13 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # so a moving skew turns with its nodes. Free when nothing moves.
         model.skews.update(model.x)
 
+        # ---- 0c. pre-forces pass (SFEM nodal volume scattering) ----------
+        if hasattr(model, "nodal_vol_t"):
+            model.nodal_vol_t[:] = 0.0
+        for name, group in model.element_groups():
+            if hasattr(KERNELS[name], "pre_forces"):
+                KERNELS[name].pre_forces(group, model, model.x, dt)
+
         # ---- 1. internal forces, element by element group ----------------
         fint[:] = 0.0
         mint[:] = 0.0
@@ -537,7 +553,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         # nothing is booked into econt. /RBE3 distributes its dependent
         # node's forces to the masters the same way (rbe3f).
         for t2 in tied:
-            t2.transfer_forces(fint, fext, fcont, mass_eff, inv_mass,
+            t2.transfer_forces(fint, fext, fcont, mint, model.x, mass_eff, inv_mass,
                                state.cycle)
         for r3 in rbe3s:
             r3.transfer_forces(fint, fext, fcont, mint, model.x)
@@ -664,7 +680,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         for rb in rbodies:
             rb.enforce(model.x, model.v, dt)
         for t2 in tied:
-            t2.enforce(model.x, model.v, dt)
+            t2.enforce(model.x, model.v, model.vr, dt)
         for r3 in rbe3s:
             r3.enforce(model.x, model.v, model.vr, dt)
         # /MPC velocity cleanup: remove what walls/BCS/placements may have

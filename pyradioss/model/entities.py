@@ -825,7 +825,15 @@ class Interface:
     gap_max: float = 0.0  # igap=1 cap, 0 = no cap
     gap_max_m: float = 0.0 # gap_max_m for TYPE24
     dsearch: float = 0.0  # type 2: projection search distance (0 = auto)
+    spotflag: int = 0     # type 2: tied rotational kinematics flag (1: tie rotations, 2: shell rotations)
     sens_id: int = 0      # M6: /SENSOR gating (types 7/11)
+    multimp: int = 4      # type 10: max average number of impacted main segments
+    idel10: int = 0       # type 10: node and segment deletion flag
+    tstart: float = 0.0   # type 10: activation start time
+    tstop: float = 1e30   # type 10: deactivation stop time
+    inactiv: int = 0      # type 10: initial penetration deactivation flag
+    stiff_dc: float = 0.05 # type 10: critical damping coefficient on interface stiffness (VISC)
+    sort_fact: float = 0.20 # type 10: bucket sorting search factor
     # ---- friction MODELS (M15, Ifric > 0 — contact/friction.py) ----------
     # mfrot = Ifric (the MFROT law), fric_c = C1..C6, ifq = Ifiltr and
     # xfiltr the reader-derived filter coefficient (hm_read_inter_type07.F:

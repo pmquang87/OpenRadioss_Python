@@ -121,11 +121,23 @@ def fit(params: dict) -> None:
 def eps_f(fail, triax: np.ndarray) -> np.ndarray:
     """Failure strain at the given triaxiality (vectorized)."""
     al, bl, cl = fail.params["plow"]
-    ah, bh, ch = fail.params["phigh"]
     low = triax <= 1.0 / 3.0
-    e = np.where(low,
-                 al * triax ** 2 + bl * triax + cl,
-                 ah * triax ** 2 + bh * triax + ch)
+    
+    if "phigh" in fail.params:
+        ah, bh, ch = fail.params["phigh"]
+        e = np.where(low,
+                     al * triax ** 2 + bl * triax + cl,
+                     ah * triax ** 2 + bh * triax + ch)
+    else:
+        ah1, bh1, ch1 = fail.params["phigh_1"]
+        ah2, bh2, ch2 = fail.params["phigh_2"]
+        s1x = 1.0 / np.sqrt(3.0)
+        high1 = (triax > 1.0 / 3.0) & (triax <= s1x)
+        high2 = (triax > s1x)
+        e = np.where(low, al * triax ** 2 + bl * triax + cl, 0.0)
+        e = np.where(high1, ah1 * triax ** 2 + bh1 * triax + ch1, e)
+        e = np.where(high2, ah2 * triax ** 2 + bh2 * triax + ch2, e)
+        
     return np.maximum(e, _FLOOR)
 
 

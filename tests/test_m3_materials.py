@@ -403,7 +403,7 @@ def test_fail_johnson_triaxiality_and_accumulation():
 def test_fail_biquad_hits_the_five_anchor_points():
     """The two parabolas must pass exactly through the five calibration
     strains at the canonical triaxialities."""
-    params = {"c1": 0.9, "c2": 0.55, "c3": 0.35, "c4": 0.25, "c5": 0.30}
+    params = {"c1": 0.9, "c2": 0.55, "c3": 0.35, "c4": 0.25, "c5": 0.30, "s_flag": 0}
     biquad.fit(params)
     fail = FailureModel(type="BIQUAD", params=params)
     tri = np.array([-1 / 3, 0.0, 1 / 3, 2 / 3, 1.0])
