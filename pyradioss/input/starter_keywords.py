@@ -4055,15 +4055,6 @@ def read_transform(block: KeywordBlock, model: Model,
         if toks:
             skew_id = int(toks[0])
 
-    if n1 > 0 and n2 > 0:
-        log.warning(f"/TRANSFORM/TRA/{block.user_id}: node-pair vector "
-                    f"(node1={n1}, node2={n2}) accepted but the vector is "
-                    f"computed from (TX, TY, TZ) only — node delta not "
-                    f"yet implemented", block.source)
-    if sub_id > 0:
-        log.warning(f"/TRANSFORM/TRA/{block.user_id}: SUBMODEL application "
-                    f"(sub_ID={sub_id}) accepted but not yet implemented "
-                    f"— transform will be skipped", block.source)
     if skew_id > 0:
         log.warning(f"/TRANSFORM/TRA/{block.user_id}: local skew "
                     f"(skew_ID={skew_id}) not yet implemented — using "
@@ -4084,25 +4075,20 @@ def read_submodel(block: KeywordBlock, model: Model,
     Fortran origin: ``starter/source/model/submodel/lecsubmod.F``.
     In the real Starter, /SUBMODEL opens a container block whose entities
     (nodes, elements, etc.) are tagged with the submodel ID; /ENDSUB closes
-    it.  The port accepts (parses and does not error on) the keyword but
-    does NOT implement the submodel tagging — entities inside the block are
-    parsed normally into the flat model, the submodel boundary is ignored.
-    This is sufficient for decks where /SUBMODEL is used purely for
-    organizational grouping without /TRANSFORM applications on the sub_ID.
+    it.
     """
-    log.warning(f"/SUBMODEL/{block.user_id}: accepted (entities parsed "
-                f"flat — submodel grouping not yet implemented)",
-                block.source)
+    if block.user_id is not None:
+        model.active_submodels.append(block.user_id)
 
 
 def read_endsub(block: KeywordBlock, model: Model,
                 log: MessageLog) -> None:
     """`/ENDSUB` — End of sub-model block.
 
-    The closing delimiter for a /SUBMODEL block. Accepted as a no-op
-    (the port does not track the submodel open/close stack).
+    The closing delimiter for a /SUBMODEL block.
     """
-    pass  # silent accept
+    if getattr(model, "active_submodels", None):
+        model.active_submodels.pop()
 
 
 KEYWORD_PARSERS: Dict[str, Callable] = {

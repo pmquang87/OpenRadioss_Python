@@ -536,6 +536,10 @@ class Model:
         # skew_ID/frame_ID = 0 needs no special case — see model/skew.py.
         self.skews = SkewSet()
 
+        # SUBMODEL tracking (M42)
+        self.active_submodels: List[int] = []
+        self.node_submodel: np.ndarray = np.zeros(0, dtype=np.int32)
+
         # Loads / constraints / contacts
         self.bcs: List[BoundaryCondition] = []
         self.ale_bcs: List[AleBoundaryCondition] = []
@@ -567,6 +571,13 @@ class Model:
         start = len(self.node_ids)
         self.node_ids = np.concatenate([self.node_ids, ids.astype(np.int64)])
         self.x0 = np.vstack([self.x0, xyz])
+        
+        sub_id = self.active_submodels[-1] if self.active_submodels else 0
+        self.node_submodel = np.concatenate([
+            self.node_submodel, 
+            np.full(len(ids), sub_id, dtype=np.int32)
+        ])
+        
         for k, nid in enumerate(ids):
             self._id2idx[int(nid)] = start + k
 

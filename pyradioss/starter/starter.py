@@ -115,27 +115,50 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
         # Apply /TRANSFORM/TRA translations to node coordinates
         for tr in getattr(model, "transforms", []):
             tr_id, grnod, tx, ty, tz, n1, n2, sub_id, skew_id = tr
+            
+            idx = None
             if sub_id > 0:
-                # SUBMODEL-targeted transform — not yet implemented
-                continue
-            if grnod > 0 and grnod in model.node_groups:
+                idx = np.where(model.node_submodel == sub_id)[0]
+                if len(idx) == 0:
+                    log.warning(f"/TRANSFORM/TRA/{tr_id}: submodel {sub_id} has no nodes — skipped")
+                    continue
+            elif grnod > 0 and grnod in model.node_groups:
                 g = model.node_groups[grnod]
                 if g.node_ids:
                     try:
                         idx = model.node_indices(g.node_ids)
-                        model.x0[idx, 0] += tx
-                        model.x0[idx, 1] += ty
-                        model.x0[idx, 2] += tz
                     except KeyError as exc:
                         log.warning(f"/TRANSFORM/TRA/{tr_id}: node {exc} "
                                     f"in group {grnod} not found — skipped")
+                        continue
                 else:
                     log.warning(f"/TRANSFORM/TRA/{tr_id}: node group "
                                 f"{grnod} has no direct node IDs "
                                 f"(PART/SURF groups need resolve) — skipped")
+                    continue
             elif grnod > 0:
                 log.warning(f"/TRANSFORM/TRA/{tr_id}: node group "
                             f"{grnod} not found — skipped")
+                continue
+
+            # Add node-pair vector delta if n1, n2 are specified
+            if n1 > 0 and n2 > 0:
+                try:
+                    idx1 = model.node_index(n1)
+                    idx2 = model.node_index(n2)
+                    v = model.x0[idx2] - model.x0[idx1]
+                    tx += v[0]
+                    ty += v[1]
+                    tz += v[2]
+                except KeyError as exc:
+                    log.warning(f"/TRANSFORM/TRA/{tr_id}: node {exc} for "
+                                f"node-pair vector not found")
+                    continue
+
+            if idx is not None:
+                model.x0[idx, 0] += tx
+                model.x0[idx, 1] += ty
+                model.x0[idx, 2] += tz
 
 
         # 2. finalize: ids->indices, element groups, node groups, surfaces,
