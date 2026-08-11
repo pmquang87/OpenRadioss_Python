@@ -187,7 +187,6 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
 
     # broken layers carry no stress at all
     dead = layfail == 0.0
-    print("dead=", dead, "sxx=", sxx)
     sig[:, 0] = np.where(dead, 0.0, sxx)
     sig[:, 1] = np.where(dead, 0.0, syy)
     sig[:, 2] = np.where(dead, 0.0, sxy)

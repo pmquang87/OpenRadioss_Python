@@ -137,17 +137,31 @@ def _yield_stress(mat, epsp: np.ndarray, rate: np.ndarray):
     # linear interpolation/extrapolation in strain rate
     r = rate
     j = np.clip(np.searchsorted(rates, r, side="right") - 1, 0, nfun - 2)
-    w = (r - rates[j]) / (rates[j + 1] - rates[j])
+    ismth = mat.params.get("f_smooth", 1.0)
+    if ismth == 2:
+        r_clamp = np.maximum(r, 1e-10)
+        r0 = np.maximum(rates[j], 1e-10)
+        r1 = np.maximum(rates[j + 1], 1e-10)
+        w = np.log(r_clamp / r0) / np.log(r1 / r0)
+    else:
+        w = (r - rates[j]) / (rates[j + 1] - rates[j])
     cols = np.arange(len(epsp))
     sy = (1.0 - w) * vals[j, cols] + w * vals[j + 1, cols]
     H = (1.0 - w) * slps[j, cols] + w * slps[j + 1, cols]
     return sy, H
 
 
-def _radial_return(mat, sig_eq, epsp, rate, G3):
+def _radial_return(mat, sig_eq, epsp, rate, G3, dt):
     """Shared Newton solve of  sig_eq - 3G*dl = sigma_y(eps_p + dl, rate)
     on the plastic subset; returns (indices, scale, dl). G3 = 3G."""
+    c_hard = mat.params.get("c_hard", 0.0)
+    vp = mat.params.get("vp", 0.0)
+    
     sy, _ = _yield_stress(mat, epsp, rate)
+    if c_hard > 0.0:
+        sy0, _ = _yield_stress(mat, np.zeros_like(epsp), rate)
+        sy = (1.0 - c_hard) * sy + c_hard * sy0
+
     plastic = sig_eq > sy
     if not np.any(plastic):
         return None, None, None
@@ -156,8 +170,20 @@ def _radial_return(mat, sig_eq, epsp, rate, G3):
     seq = sig_eq[idx]
     ep0 = epsp[idx]
     rt = rate[idx]
+    if c_hard > 0.0:
+        sy0_idx = sy0[idx]
     for _ in range(_NEWTON_ITERS):
+        if vp > 0.0:
+            rt = dl / max(dt, 1e-30)
         sy_i, H_i = _yield_stress(mat, ep0 + dl, rt)
+        if c_hard > 0.0:
+            if vp > 0.0:
+                sy0_i, _ = _yield_stress(mat, np.zeros_like(ep0), rt)
+                sy_i = (1.0 - c_hard) * sy_i + c_hard * sy0_i
+            else:
+                sy_i = (1.0 - c_hard) * sy_i + c_hard * sy0_idx
+            H_i = (1.0 - c_hard) * H_i
+            
         res = seq - G3 * dl - sy_i
         dl_prev = dl.copy()
         # H may be <= 0 (softening table): keep the denominator positive
@@ -168,9 +194,15 @@ def _radial_return(mat, sig_eq, epsp, rate, G3):
         # further iterations reproduce dl bit for bit — skipping them
         # cannot change any result (an M7 cheap win: LAW36 evaluated the
         # full 8 iterations on every cycle, ~2.5x the needed table walks)
-        if np.array_equal(dl, dl_prev):
+        if np.array_equal(dl, dl_prev) and vp == 0.0:
             break
     sy_new, _ = _yield_stress(mat, ep0 + dl, rt)
+    if c_hard > 0.0:
+        if vp > 0.0:
+            sy0_new, _ = _yield_stress(mat, np.zeros_like(ep0), rt)
+            sy_new = (1.0 - c_hard) * sy_new + c_hard * sy0_new
+        else:
+            sy_new = (1.0 - c_hard) * sy_new + c_hard * sy0_idx
     return idx, sy_new / seq, dl
 
 
@@ -223,22 +255,44 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
     else:
         p_new = p_old + mat.K * 3.0 * tr3
 
-    j2 = 0.5 * (s[:, 0] ** 2 + s[:, 1] ** 2 + s[:, 2] ** 2) \
-        + s[:, 3] ** 2 + s[:, 4] ** 2 + s[:, 5] ** 2
-    sig_eq = np.sqrt(3.0 * j2) + 1e-30
-
     # equivalent deviatoric strain rate of the increment (rate table entry)
     exx, eyy, ezz = deps[:, 0] - tr3, deps[:, 1] - tr3, deps[:, 2] - tr3
     ee = exx ** 2 + eyy ** 2 + ezz ** 2 \
         + 0.5 * (deps[:, 3] ** 2 + deps[:, 4] ** 2 + deps[:, 5] ** 2)
     rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, 1e-30)
 
+    f_cut = mat.params.get("f_cut", 0.0)
+    if f_cut > 0.0 and extra is not None and "epsd36" in extra:
+        asrate = 2.0 * np.pi * f_cut
+        alpha = min(1.0, asrate * dt)
+        extra["epsd36"][:] = alpha * rate + (1.0 - alpha) * extra["epsd36"]
+        rate = extra["epsd36"].copy()
+
+    c_hard = mat.params.get("c_hard", 0.0)
+    if c_hard > 0.0 and extra is not None and "sigb36" in extra:
+        s_trial = s.copy()
+        s -= extra["sigb36"]
+
+    j2 = 0.5 * (s[:, 0] ** 2 + s[:, 1] ** 2 + s[:, 2] ** 2) \
+        + s[:, 3] ** 2 + s[:, 4] ** 2 + s[:, 5] ** 2
+    sig_eq = np.sqrt(3.0 * j2) + 1e-30
+
     # 3./4. yield check + radial return to the tabulated curve
-    idx, scale, dl = _radial_return(mat, sig_eq, epsp, rate, 3.0 * G)
+    idx, scale, dl = _radial_return(mat, sig_eq, epsp, rate, 3.0 * G, dt)
     if idx is not None:
         for k in range(6):
             s[idx, k] *= scale
         epsp[idx] += dl
+        
+        if c_hard > 0.0 and extra is not None and "sigb36" in extra:
+            s_new_tot = s[idx] + extra["sigb36"][idx]
+            _, H_i = _yield_stress(mat, epsp[idx], rate[idx])
+            H_kin = (2.0/3.0) * c_hard * H_i
+            alpha_pz = H_kin / (2.0 * G + H_kin)
+            for k in range(6):
+                extra["sigb36"][idx, k] += alpha_pz * (s_trial[idx, k] - s_new_tot[:, k])
+                s[idx, k] += extra["sigb36"][idx, k]
+
     sig[:, :] = s
     sig[:, 0] += p_new
     sig[:, 1] += p_new
@@ -272,13 +326,41 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
         + 0.5 * dxy ** 2
     rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, 1e-30)
 
-    idx, scale, dl = _radial_return(mat, sig_eq, epsp, rate, 3.0 * G)
+    f_cut = mat.params.get("f_cut", 0.0)
+    if f_cut > 0.0 and extra is not None and "epsd36" in extra:
+        asrate = 2.0 * np.pi * f_cut
+        alpha = min(1.0, asrate * dt)
+        extra["epsd36"][:] = alpha * rate + (1.0 - alpha) * extra["epsd36"]
+        rate = extra["epsd36"].copy()
+
+    c_hard = mat.params.get("c_hard", 0.0)
+    if c_hard > 0.0 and extra is not None and "sigb36" in extra:
+        s_trial = sig.copy()
+        sig -= extra["sigb36"]
+
+    # plane-stress von Mises
+    sxx, syy, sxy = sig[:, 0], sig[:, 1], sig[:, 2]
+    sig_eq = np.sqrt(sxx ** 2 - sxx * syy + syy ** 2 + 3.0 * sxy ** 2) + 1e-30
+
+    idx, scale, dl = _radial_return(mat, sig_eq, epsp, rate, 3.0 * G, dt)
     if idx is None:
+        if c_hard > 0.0 and extra is not None and "sigb36" in extra:
+            sig[:, :] = s_trial
         return sig, epsp
     sig[idx, 0] *= scale
     sig[idx, 1] *= scale
     sig[idx, 2] *= scale
     epsp[idx] += dl
+
+    if c_hard > 0.0 and extra is not None and "sigb36" in extra:
+        sig_new_tot = sig[idx] + extra["sigb36"][idx]
+        _, H_i = _yield_stress(mat, epsp[idx], rate[idx])
+        H_kin = (2.0/3.0) * c_hard * H_i
+        alpha_pz = H_kin / (2.0 * G + H_kin)
+        for k in range(3):
+            extra["sigb36"][idx, k] += alpha_pz * (s_trial[idx, k] - sig_new_tot[:, k])
+            sig[idx, k] += extra["sigb36"][idx, k]
+
     return sig, epsp
 
 

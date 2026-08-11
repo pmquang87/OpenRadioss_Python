@@ -760,15 +760,17 @@ class RigidWall:
 
     id: int
     point: np.ndarray    # (3,) plane point / sphere center / cyl axis point
-    normal: np.ndarray   # (3,) plane outward normal / cylinder axis
+    normal: np.ndarray   # (3,) plane outward normal / cylinder axis / paral normal
     slide: int = 0       # 0=sliding, 1=tied, 2=sliding with friction
     fric: float = 0.0
     grnod_id: Optional[int] = None  # None = all nodes are candidates
     dist: float = 0.0    # activation distance (search band), 0 = auto
     title: str = ""
-    geom: str = "PLANE"  # 'PLANE' | 'SPHER' | 'CYL'
+    geom: str = "PLANE"  # 'PLANE' | 'SPHER' | 'CYL' | 'PARAL'
     radius: float = 0.0  # SPHER / CYL
     node_id: int = 0     # > 0: wall tied to this (user id) node — moving
+    axis1: Optional[np.ndarray] = None  # (3,) PARAL first edge vector
+    axis2: Optional[np.ndarray] = None  # (3,) PARAL second edge vector
 
 
 @dataclass

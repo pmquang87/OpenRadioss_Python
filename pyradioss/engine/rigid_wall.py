@@ -156,6 +156,8 @@ class RigidWalls:
             r = xc - point
             d = np.linalg.norm(r, axis=1)
             n = r / np.maximum(d, EM20)[:, None]
+            if rw.radius < 0.0:
+                return -rw.radius - d, -n
             return d - rw.radius, n
         if rw.geom == "CYL":
             a = rw.normal                     # unit axis direction
@@ -163,7 +165,26 @@ class RigidWalls:
             r = r - (r @ a)[:, None] * a[None, :]   # radial component
             d = np.linalg.norm(r, axis=1)
             n = r / np.maximum(d, EM20)[:, None]
+            if rw.radius < 0.0:
+                return -rw.radius - d, -n
             return d - rw.radius, n
+        if rw.geom == "PARAL":
+            r = xc - point
+            s = r @ rw.normal
+            p_proj = r - s[:, None] * rw.normal[None, :]
+            e1 = rw.axis1
+            e2 = rw.axis2
+            dot11 = e1 @ e1
+            dot22 = e2 @ e2
+            dot12 = e1 @ e2
+            det = dot11 * dot22 - dot12 * dot12
+            v_dot_1 = p_proj @ e1
+            v_dot_2 = p_proj @ e2
+            a = (v_dot_1 * dot22 - v_dot_2 * dot12) / det
+            b = (v_dot_2 * dot11 - v_dot_1 * dot12) / det
+            s = np.where((a >= 0.0) & (a <= 1.0) & (b >= 0.0) & (b <= 1.0), s, np.inf)
+            n = np.broadcast_to(rw.normal, (len(xc), 3))
+            return s, n
         # PLANE
         s = (xc - point) @ rw.normal
         n = np.broadcast_to(rw.normal, (len(xc), 3))

@@ -918,11 +918,13 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                           f"(needs at least one hardening curve)",
                           block.source)
                 return
-            for name, s in (("F_smooth", f2[1]), ("C_hard", f2[2]),
-                            ("F_cut", f2[3]), ("Eps_f", f2[4]),
-                            ("VP", f2[6])):
+            for name, s, key in (("F_smooth", f2[1], "f_smooth"), ("C_hard", f2[2], "c_hard"),
+                                 ("F_cut", f2[3], "f_cut"), ("VP", f2[6], "vp")):
                 if s and _to_float(s) != 0.0:
-                    ign.append(f"{name}={s}")
+                    params[key] = _to_float(s)
+            
+            if f2[4] and _to_float(f2[4]) != 0.0:
+                ign.append(f"Eps_f={f2[4]}")
             # card 5: fct_IDp Fscale fct_IDE EInf CE
             f3 = _fixed_vals(cards[3], [10, 20, 10, 20, 20])
             if _ival(f3[0]) != 0:
@@ -3041,8 +3043,8 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       friction-filter ffac/ifq are warned when set.
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else "PLANE"
-    if kind not in ("PLANE", "SPHER", "CYL"):
-        log.warning(f"/RWALL/{kind} not ported (PLANE, SPHER, CYL "
+    if kind not in ("PLANE", "SPHER", "CYL", "PARAL"):
+        log.warning(f"/RWALL/{kind} not ported (PLANE, SPHER, CYL, PARAL "
                     f"supported)", block.source)
         return
     title, cards = _fixed_data(block) if block.fixed \
@@ -3051,7 +3053,7 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if block.fixed:
         # real layout: ids card + d/fric/Diameter card, then geometry —
         # realign onto the legacy card indexing (geometry from index 1)
-        ncards = {"PLANE": 4, "SPHER": 3, "CYL": 4}[kind]
+        ncards = {"PLANE": 4, "SPHER": 3, "CYL": 4, "PARAL": 5}[kind]
         if len(cards) < ncards:
             log.error(f"/RWALL/{kind}/{block.user_id}: needs {ncards} "
                       f"data cards (real layout: ids / d fric D / "
@@ -3067,7 +3069,7 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                        ("ffac", g[3]), ("ifq", g[4])])
         cards = cards[1:]                # geometry starts at legacy index 1
     else:
-        ncards = {"PLANE": 3, "SPHER": 3, "CYL": 4}[kind]
+        ncards = {"PLANE": 3, "SPHER": 3, "CYL": 4, "PARAL": 4}[kind]
         if len(cards) < ncards:
             log.error(f"/RWALL/{kind}/{block.user_id}: needs {ncards} data "
                       f"cards", block.source)
@@ -3085,7 +3087,9 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     m = _xyz(cards[1])
     normal = np.array([0.0, 0.0, 1.0])
-    if kind in ("PLANE", "CYL"):
+    axis1 = None
+    axis2 = None
+    if kind in ("PLANE", "CYL", "PARAL"):
         m1 = _xyz(cards[2])
         n = m1 - m
         nn = np.linalg.norm(n)
@@ -3094,19 +3098,32 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                       f"(zero normal/axis)", block.source)
             return
         normal = n / nn
+    
+    if kind == "PARAL":
+        axis1 = m1 - m
+        m2 = _xyz(cards[3])
+        axis2 = m2 - m
+        n = np.cross(axis1, axis2)
+        nn = np.linalg.norm(n)
+        if nn < 1e-20:
+            log.error(f"/RWALL/{block.user_id}: M, M1 and M2 are collinear "
+                      f"(zero normal)", block.source)
+            return
+        normal = n / nn
+
     if kind in ("SPHER", "CYL"):
         if not block.fixed:
             # port compact dialect: the radius rides on its own card
             rcard = cards[2] if kind == "SPHER" else cards[3]
             radius = rcard.floats()[0]
-        if radius <= 0.0:
-            log.error(f"/RWALL/{kind}/{block.user_id}: radius must be > 0",
+        if radius == 0.0:
+            log.error(f"/RWALL/{kind}/{block.user_id}: radius cannot be 0 (use negative for containment)",
                       block.source)
             return
     model.rwalls.append(RigidWall(
         id=block.user_id, point=m, normal=normal, slide=slide, fric=fric,
         grnod_id=grnod or None, dist=dist, title=title, geom=kind,
-        radius=radius, node_id=node_id))
+        radius=radius, node_id=node_id, axis1=axis1, axis2=axis2))
 
 
 def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -3396,10 +3413,9 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         
         toks = cards[0].tokens()
         spotflag = int(toks[3]) if len(toks) > 3 else 0
-        f = _floats(cards[0], 9)
         model.interfaces.append(Interface(
             id=block.user_id, type=2, grnod_id=int(toks[0]),
-            surf_id=int(toks[1]), dsearch=f[8] if len(f) > 8 else 0.0, spotflag=spotflag, title=title))
+            surf_id=int(toks[1]), dsearch=float(toks[2]) if len(toks) > 2 else 0.0, spotflag=spotflag, title=title))
         return
 
     if kind == "TYPE24" and len(cards) >= 6:

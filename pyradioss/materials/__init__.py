@@ -70,6 +70,11 @@ def extra_shapes(mat, nip=None):
     if mat.law == 27:
         shapes.update(eps27=(nip, 3), crk27=(nip,), ang27=(nip,),
                       dmg27=(nip, 2))
+    if mat.law == 36:
+        if mat.params.get("c_hard", 0.0) > 0.0:
+            shapes.update(sigb36=(nip, 3) if nip else (6,))
+        if mat.params.get("f_cut", 0.0) > 0.0:
+            shapes.update(epsd36=(nip,) if nip else ())
     if mat.law == 19:
         # M37 pack 2: total strain, zerostress reference stress SIGI and
         # the law's own time accumulator (see law19_fabric docstring)
