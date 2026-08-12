@@ -151,7 +151,7 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
         syy[cracked] = syy_c
         sxy[cracked] = sxy_c
 
-    # ---- Johnson-Cook Plasticity (Iplas=2 radial return) -------------------
+    # ---- Johnson-Cook Plasticity (Iplas=1 iterative plane-stress return) ---
     # Plasticity is evaluated on the damaged trial stress (matching M27PLAS)
     if "A" in p and p["A"] > 0.0:
         sig_eq = np.sqrt(sxx ** 2 - sxx * syy + syy ** 2 + 3.0 * sxy ** 2) + 1e-30
@@ -165,25 +165,73 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
         rate_fac = _rate_factor(mat, rate)
 
         sy, _ = _yield_stress(mat, epsp, rate_fac)
-        plastic = sig_eq > sy
+        plastic = (sig_eq > sy) & (layfail > 0.0)
         if np.any(plastic):
             idx = np.where(plastic)[0]
-            dl = np.zeros(len(idx))
-            seq = sig_eq[idx]
+            
+            S1_t = sxx[idx] + syy[idx]
+            S2_t = sxx[idx] - syy[idx]
+            S3_t = sxy[idx]
+            
+            A_i = 0.25 * S1_t * S1_t
+            B_i = 0.75 * S2_t * S2_t + 3.0 * S3_t * S3_t
+            
+            svm_i = sig_eq[idx]
             ep0 = epsp[idx]
+            y_i = sy[idx]
             rf = rate_fac[idx] if np.ndim(rate_fac) else rate_fac
-            for _ in range(_NEWTON_ITERS):
-                sy_i, H_i = _yield_stress(mat, ep0 + dl, rf)
-                res = seq - 3.0 * G * dl - sy_i
-                dl += res / (3.0 * G + np.maximum(H_i, 0.0))
-                dl = np.maximum(dl, 0.0)
-            sy_new, _ = _yield_stress(mat, ep0 + dl, rf)
-
-            scale = sy_new / seq
-            sxx[idx] *= scale
-            syy[idx] *= scale
-            sxy[idx] *= scale
-            epsp[idx] = ep0 + dl
+            
+            p_A, p_B, p_n, p_sigmax = p["A"], p["B"], p["n"], p["sig_max"]
+            
+            # H_i at the beginning of the step (M27PLAS uses SMALL=1e-7)
+            H_i = p_n * p_B * ((ep0 + 1e-7) ** (p_n - 1.0)) * rf
+            if p_sigmax > 0.0:
+                H_i = np.where(y_i >= p_sigmax, 0.0, H_i)
+                
+            dpla_j = (svm_i - y_i) / (3.0 * G + H_i)
+            
+            nu1 = 1.0 / (1.0 - nu)
+            nu2 = 1.0 / (1.0 + nu)
+            
+            for _ in range(3):
+                dpla_i = dpla_j
+                
+                e_new = np.maximum(ep0 + dpla_i, 1e-20)
+                yld_i = (p_A + p_B * (e_new ** p_n)) * rf
+                if p_sigmax > 0.0:
+                    yld_i = np.where(yld_i > p_sigmax, p_sigmax, yld_i)
+                    
+                dr = 0.5 * E * dpla_i / yld_i
+                
+                P_ = 1.0 / (1.0 + dr * nu1)
+                Q_ = 1.0 / (1.0 + 3.0 * dr * nu2)
+                
+                P2 = P_ * P_
+                Q2 = Q_ * Q_
+                
+                f = A_i * P2 + B_i * Q2 - yld_i * yld_i
+                df = -(A_i * nu1 * P2 * P_ + 3.0 * B_i * nu2 * Q2 * Q_) * (E - 2.0 * dr * H_i) / yld_i - 2.0 * H_i * yld_i
+                
+                dpla_j = np.where(dpla_i > 0.0, np.maximum(0.0, dpla_i - f / df), 0.0)
+                
+            epsp[idx] = ep0 + dpla_j
+            
+            # Final stress components update
+            e_new = np.maximum(ep0 + dpla_j, 1e-20)
+            yld_i = (p_A + p_B * (e_new ** p_n)) * rf
+            if p_sigmax > 0.0:
+                yld_i = np.where(yld_i > p_sigmax, p_sigmax, yld_i)
+                
+            dr = 0.5 * E * dpla_j / yld_i
+            P_ = 1.0 / (1.0 + dr * nu1)
+            Q_ = 1.0 / (1.0 + 3.0 * dr * nu2)
+            
+            S1_new = S1_t * P_
+            S2_new = S2_t * Q_
+            
+            sxx[idx] = 0.5 * (S1_new + S2_new)
+            syy[idx] = 0.5 * (S1_new - S2_new)
+            sxy[idx] = S3_t * Q_
 
     # broken layers carry no stress at all
     dead = layfail == 0.0

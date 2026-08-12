@@ -776,12 +776,12 @@ def scatter3(target, idx, values):
         acc[j, 2] += values[k, 2]
     target += acc
 
-@njit(cache=True, parallel=True)
+@njit(cache=True)
 def scatter3_colored(target, idx, values, color_indices, color_offsets, npe):
-    """Parallel node-colored accumulation."""
+    """Node-colored accumulation (serial fallback without parallel overhead)."""
     num_colors = len(color_offsets) - 1
     for c in range(num_colors):
-        for k in prange(color_offsets[c], color_offsets[c+1]):
+        for k in range(color_offsets[c], color_offsets[c+1]):
             e = color_indices[k]
             for i in range(npe):
                 flat_idx = e * npe + i

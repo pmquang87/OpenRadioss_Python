@@ -87,7 +87,7 @@ class LoadsAndConstraints:
                          g.scale) for g in model.gravity]
         # /CLOAD entries carry their /SENSOR id (M6): 0 = always active
         self.cloads = [(_grp(c.grnod_id), c.direction, model.functions[c.funct_id],
-                        c.scale, c.sens_id) for c in model.cloads]
+                        c.scale, c.sens_id, c.time_scale) for c in model.cloads]
         # /IMPVEL entries: (node_idx, dof, funct, Fscale_Y, 1/Ascale_x,
         # Tstart, Tstop) — the curve is evaluated at t/Ascale_x and the
         # condition only holds inside [Tstart, Tstop] (fixvel.F: FACX,
@@ -223,10 +223,12 @@ class LoadsAndConstraints:
         for idx, direction, fct, scale in self.gravity:
             acc = scale * fct.eval(t)
             fext[idx] += (m[idx, None] * acc) * direction[None, :]
-        for idx, direction, fct, scale, sens in self.cloads:
+        for idx, direction, fct, scale, sens, t_scale in self.cloads:
             te = t if sensors is None else sensors.shifted_time(sens, t)
             if te is None:
                 continue                      # sensor has not fired yet
+            if t_scale != 1.0 and t_scale != 0.0:
+                te = te / t_scale
             F = scale * fct.eval(te)
             fext[idx] += F * direction[None, :]
         for segs, wgt, fct, scale, gtype, elem, deletable, sens \

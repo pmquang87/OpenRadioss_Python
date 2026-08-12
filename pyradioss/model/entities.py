@@ -446,6 +446,7 @@ class ConcentratedLoad:
     funct_id: int
     direction: np.ndarray  # (3,) unit vector
     scale: float = 1.0
+    time_scale: float = 1.0
     sens_id: int = 0
     title: str = ""
 

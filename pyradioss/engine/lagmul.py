@@ -60,8 +60,6 @@ class LagmulSolver:
         if self.nc == 0:
             return
             
-        # TODO: Implement the dynamic L matrix assembly and scipy.sparse PCG solve:
-        # 1. Ask each interface to contribute its (data, row, col) sparse entries for L.
         all_data = []
         all_col = []
         all_row = []

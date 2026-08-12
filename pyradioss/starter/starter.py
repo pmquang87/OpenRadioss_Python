@@ -29,7 +29,8 @@ from .initialization import (build_element_groups,
                              initialize_rigid_bodies,
                              resolve_entity_groups,
                              resolve_lines, resolve_materials,
-                             resolve_node_groups, resolve_skews,
+                             resolve_node_groups, resolve_single_node_group,
+                             resolve_skews,
                              resolve_surfaces)
 from .restart import write_restart
 
@@ -124,17 +125,10 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
                     continue
             elif grnod > 0 and grnod in model.node_groups:
                 g = model.node_groups[grnod]
-                if g.node_ids:
-                    try:
-                        idx = model.node_indices(g.node_ids)
-                    except KeyError as exc:
-                        log.warning(f"/TRANSFORM/TRA/{tr_id}: node {exc} "
-                                    f"in group {grnod} not found — skipped")
-                        continue
-                else:
+                idx = resolve_single_node_group(model, g, log)
+                if len(idx) == 0:
                     log.warning(f"/TRANSFORM/TRA/{tr_id}: node group "
-                                f"{grnod} has no direct node IDs "
-                                f"(PART/SURF groups need resolve) — skipped")
+                                f"{grnod} evaluated to empty — skipped")
                     continue
             elif grnod > 0:
                 log.warning(f"/TRANSFORM/TRA/{tr_id}: node group "

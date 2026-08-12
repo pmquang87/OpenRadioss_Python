@@ -51,8 +51,6 @@ hm_read_mat19's PM table.
 
 Documented deviations of the port
 ---------------------------------
-* the /SENSOR-driven TSTART is not wired (the corpus decks use
-  SENS_ID = 0): a nonzero ISENSOR parses but TSTART stays 0.0;
 * the QEPH ZCFAC stiffness-reduction feedback (FLAG_ZCFAC) has no port
   equivalent (the port shells are BT4/C3-style);
 * if G23 != G31 the kernel's single transverse modulus uses their max

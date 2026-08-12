@@ -117,9 +117,9 @@ def test_law36_real_format_warns_on_unported_fields(tmp_path):
     assert not log.errors, log.errors
     assert 8 in model.materials
     w = "\n".join(log.warnings)
-    assert "F_smooth" in w
     assert "fct_IDp" in w
     assert "Fscale_i" not in w                       # ported in M40
+    assert "F_smooth" not in w                       # ported
     assert model.materials[8].params["yfac"] == [3.0]
 
 

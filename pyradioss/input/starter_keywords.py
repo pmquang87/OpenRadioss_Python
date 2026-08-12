@@ -2363,13 +2363,12 @@ def read_cload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         f = cards[0].cut("CLOAD")
         scale = _fval(f[7], 1.0)
         _warn_ignored(log, f"/CLOAD/{block.user_id}", block.source,
-                      [("skew_ID", f[2]),
-                       ("Ascale_x", f[6] if _fval(f[6]) not in (0.0, 1.0)
-                        else "")])
+                      [("skew_ID", f[2])])
         model.cloads.append(ConcentratedLoad(
             id=block.user_id, funct_id=_ival(f[0]),
             direction=_direction(f[1]), grnod_id=_ival(f[4]),
             scale=scale if scale != 0.0 else 1.0,
+            time_scale=_fval(f[6], 1.0),
             sens_id=_ival(f[3]), title=title))
         return
     title, cards = _title_and_data(block)

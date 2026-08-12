@@ -723,6 +723,71 @@ def _nodes_in_box(model: Model, box, log: MessageLog,
     return np.where(inside)[0]
 
 
+def resolve_node_group_base(model: Model, g, log: MessageLog) -> np.ndarray:
+    """Evaluate the non-recursive content of a node group."""
+    idx: List[np.ndarray] = []
+    if g.node_ids:
+        try:
+            idx.append(model.node_indices(g.node_ids))
+        except KeyError as exc:
+            log.error(f"/GRNOD/{g.id}: unknown node id {exc}", "GROUP CHECK")
+    if g.part_ids:
+        idx.append(_nodes_of_parts(model, g.part_ids))
+    for bid in g.box_ids:
+        box = model.boxes.get(bid)
+        if box is None:
+            log.error(f"/GRNOD/{g.id}: unknown box {bid}", "GROUP CHECK")
+            continue
+        idx.append(_nodes_in_box(model, box, log, f"/GRNOD/{g.id}"))
+    for first, last, incr in g.gene_ranges:
+        uid = model.node_ids
+        mask = (uid >= first) & (uid <= last)
+        if incr > 1:
+            mask &= (uid - first) % incr == 0
+        idx.append(np.where(mask)[0])
+    for sid in g.surf_ids:
+        surf = model.surfaces.get(sid)
+        if surf is None or surf.segments is None:
+            log.error(f"/GRNOD/{g.id}: surface {sid} missing or unresolved", "GROUP CHECK")
+            continue
+        if surf.segments.size:
+            idx.append(np.unique(surf.segments))
+    for family, gid in g.egroup_refs:
+        eg = model.egroups.get(family, {}).get(gid)
+        if eg is None:
+            log.error(f"/GRNOD/{g.id}: unknown /GR{family} group {gid}", "GROUP CHECK")
+            continue
+        for attr, rows in (eg.members or []):
+            idx.append(np.unique(getattr(model, attr).conn[rows]))
+    return np.unique(np.concatenate(idx)) if idx else np.zeros(0, dtype=np.int64)
+
+
+def resolve_single_node_group(model: Model, g, log: MessageLog, visited: set = None) -> np.ndarray:
+    """Evaluate a node group on-demand, resolving its base content and recursive references."""
+    if getattr(g, "node_idx", None) is not None and g.node_idx.size > 0:
+        return g.node_idx
+        
+    if visited is None:
+        visited = set()
+    if g.id in visited:
+        return np.zeros(0, dtype=np.int64)  # cycle detected
+    visited.add(g.id)
+    
+    add = [resolve_node_group_base(model, g, log)]
+    rem = [np.zeros(0, dtype=np.int64)]
+    
+    for ref in g.grnod_ids:
+        other = model.node_groups.get(abs(ref))
+        if other is None:
+            continue
+        res = resolve_single_node_group(model, other, log, visited)
+        (add if ref > 0 else rem).append(res)
+        
+    final = np.setdiff1d(np.unique(np.concatenate(add)),
+                         np.unique(np.concatenate(rem)))
+    return final
+
+
 def resolve_node_groups(model: Model, log: MessageLog) -> None:
     """/GRNOD content -> dense node index arrays.
 
@@ -735,53 +800,12 @@ def resolve_node_groups(model: Model, log: MessageLog) -> None:
     whatever the order (the upstream BUFTMP = -1 convention).  Groups
     are stored sorted by node index, like the upstream sorted groups.
     """
-    def _base(g) -> np.ndarray:
-        idx: List[np.ndarray] = []
-        if g.node_ids:
-            try:
-                idx.append(model.node_indices(g.node_ids))
-            except KeyError as exc:
-                log.error(f"/GRNOD/{g.id}: unknown node id {exc}",
-                          "GROUP CHECK")
-        if g.part_ids:
-            idx.append(_nodes_of_parts(model, g.part_ids))
-        for bid in g.box_ids:
-            box = model.boxes.get(bid)
-            if box is None:
-                log.error(f"/GRNOD/{g.id}: unknown box {bid}", "GROUP CHECK")
-                continue
-            idx.append(_nodes_in_box(model, box, log, f"/GRNOD/{g.id}"))
-        for first, last, incr in g.gene_ranges:
-            uid = model.node_ids
-            mask = (uid >= first) & (uid <= last)
-            if incr > 1:
-                mask &= (uid - first) % incr == 0
-            idx.append(np.where(mask)[0])
-        for sid in g.surf_ids:
-            surf = model.surfaces.get(sid)
-            if surf is None or surf.segments is None:
-                log.error(f"/GRNOD/{g.id}: surface {sid} missing or "
-                          f"unresolved", "GROUP CHECK")
-                continue
-            if surf.segments.size:
-                idx.append(np.unique(surf.segments))
-        for family, gid in g.egroup_refs:
-            eg = model.egroups.get(family, {}).get(gid)
-            if eg is None:
-                log.error(f"/GRNOD/{g.id}: unknown /GR{family} group "
-                          f"{gid}", "GROUP CHECK")
-                continue
-            for attr, rows in (eg.members or []):
-                idx.append(np.unique(getattr(model, attr).conn[rows]))
-        return (np.unique(np.concatenate(idx)) if idx
-                else np.zeros(0, dtype=np.int64))
-
     resolved: dict = {}
     base_cache: dict = {}
 
     def _try(g) -> bool:
         if g.id not in base_cache:       # once — errors not duplicated
-            base_cache[g.id] = _base(g)
+            base_cache[g.id] = resolve_node_group_base(model, g, log)
         add = [base_cache[g.id]]
         rem = [np.zeros(0, dtype=np.int64)]
         for ref in g.grnod_ids:

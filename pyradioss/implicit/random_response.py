@@ -2728,8 +2728,8 @@ def _multi_input_force_pattern(model, loads, cload_funct):
             f"/IMPL/FATIG/MINPUT input references /CLOAD /FUNCT/{cload_funct}, "
             "which is not defined in the deck.")
     hit = False
-    for idx, direction, fct, scale, _sens in loads.cloads:
-        if fct is target:
+    for idx, direction, fct, scale, _sens, _t_scale in loads.cloads:
+        if id(fct) == id(target):
             F[idx] += float(scale) * np.asarray(direction, dtype=float)
             hit = True
     if not hit:

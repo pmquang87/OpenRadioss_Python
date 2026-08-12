@@ -279,7 +279,8 @@ def test_type2_projection_reconstruction(make_deck):
     # enforce() on the unmoved mesh must reproduce x0 exactly
     x = model.x0.copy()
     v = np.zeros_like(x)
-    ct.enforce(x, v, 1.0)
+    vr = np.zeros_like(v)
+    ct.enforce(x, v, vr, 1.0)
     assert np.abs(x[ct.snode] - model.x0[ct.snode]).max() < 1e-12
     assert np.abs(v[ct.snode]).max() < 1e-12
 
@@ -303,7 +304,8 @@ def test_type2_tied_nodes_follow_rigid_motion(make_deck):
 
     x = model.x0 @ R.T + c
     v = np.zeros_like(x)
-    ct.enforce(x, v, 1.0)
+    vr = np.zeros_like(v)
+    ct.enforce(x, v, vr, 1.0)
     assert np.abs(x[ct.snode]
                   - (model.x0[ct.snode] @ R.T + c)).max() < 1e-9
 
@@ -324,9 +326,10 @@ def test_type2_transfer_conserves_force_and_mass(make_deck):
     fint = rng.normal(size=model.x.shape)
     fext = rng.normal(size=model.x.shape)
     fcont = rng.normal(size=model.x.shape)
+    mint = np.zeros_like(fint)
     tot = fint.sum(axis=0) + fext.sum(axis=0) + fcont.sum(axis=0)
     inv = 1.0 / mass_eff
-    ct.transfer_forces(fint, fext, fcont, mass_eff, inv, cycle=1)
+    ct.transfer_forces(fint, fext, fcont, mint, model.x, mass_eff, inv, cycle=1)
     assert (fint.sum(axis=0) + fext.sum(axis=0)
             + fcont.sum(axis=0)) == pytest.approx(tot)
     assert np.abs(fint[ct.snode]).max() == 0.0
