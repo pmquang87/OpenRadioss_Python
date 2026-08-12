@@ -188,8 +188,11 @@ LAYOUTS: Dict[str, List[int]] = {
     #  inspects are identical in both formats)
     "FAIL_BIQUAD_2": [20, 10, 10, 20],
     # mat_EOS.cfg (radioss2022) EOS_Options == 12 (IDEAL-GAS):
-    # CARD("%20lg"*5, Gamma, P0, PSH, T0, RHO_0)
+    #   card 1: Gamma  P0  PSH  T0  RHO_0
     "EOS_IDEAL_GAS": [20] * 5,
+    # mat_EOS.cfg (radioss2022) EOS_Options == 11 (STIFF-GAS):
+    #   card 1: Gamma  P0  PSH  P_star  RHO_0
+    "EOS_STIFF_GAS": [20] * 5,
     # mat_EOS.cfg POLYNOMIAL card 1: CARD("%20lg"*4, C0, C1, C2, C3)
     # (the port's compact dialect packs C0..C5 on one card — 6 fields —
     #  so a card with fields 5/6 non-blank is compact, else real)

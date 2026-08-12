@@ -1226,9 +1226,9 @@ def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     from ..model.entities import EquationOfState
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
     kind = {"IDEAL_GAS": "IDEAL-GAS"}.get(kind, kind)
-    if kind not in ("POLYNOMIAL", "IDEAL-GAS", "LINEAR"):
+    if kind not in ("POLYNOMIAL", "IDEAL-GAS", "LINEAR", "STIFF-GAS"):
         log.warning(f"/EOS/{kind} not ported — skipped (supported: "
-                    f"POLYNOMIAL, IDEAL-GAS, LINEAR)", block.source)
+                    f"POLYNOMIAL, IDEAL-GAS, LINEAR, STIFF-GAS)", block.source)
         return
     mat_id = block.user_id
     # the real /EOS block starts with a title card; the port's compact
@@ -1286,6 +1286,19 @@ def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         params = {"c0": p0 - psh, "c1": bulk, "c2": 0.0, "c3": 0.0,
                   "c4": 0.0, "c5": 0.0, "e0": 0.0, "psh": psh,
                   "rho0_card": rho0_card}
+    elif kind == "STIFF-GAS":
+        if block.fixed:
+            f = cards[0].cut("EOS_STIFF_GAS")
+            gamma, p0, psh, p_star = _fval(f[0]), _fval(f[1]), _fval(f[2]), _fval(f[3])
+            rho0_card = _fval(f[4])
+        else:
+            gamma, p0, psh, p_star, rho0_card = _floats(cards[0], 5)
+        
+        if gamma is None or gamma <= 1.0:
+            log.error(f"/EOS/STIFF-GAS/{mat_id}: gamma must be > 1.0", block.source)
+            return
+            
+        params = {"gamma": gamma, "p0": p0, "psh": psh, "p_star": p_star, "rho0_card": rho0_card}
     model.raw_eos.append((mat_id, EquationOfState(kind=kind, params=params),
                           block.source))
 
