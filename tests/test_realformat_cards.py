@@ -281,10 +281,10 @@ def test_inter7_real_format_parses_without_range_error(tmp_path):
         log.warnings
 
 
-def test_inter7_real_format_iform2_with_friction_is_refused(tmp_path):
+def test_inter7_real_format_iform2_with_friction_is_accepted(tmp_path):
     """Iform = 2 IS the incremental tangential formulation (upstream:
-    IFQ += 10) — not ported; with actual friction it must error loudly,
-    exactly like the compact dialect's IFQ >= 10 refusal."""
+    IFQ += 10).  Now ported (M15/Iform=2); with actual friction the
+    real-format Iform=2 maps to IFQ + 10 and is accepted."""
     deck = INTER7_W13.replace(
         "                   0                   0                   0"
         "                   0                   0\n"
@@ -294,7 +294,10 @@ def test_inter7_real_format_iform2_with_friction_is_refused(tmp_path):
         "#      IBC", 1)
     assert "0.2" in deck              # Fric really patched in
     model, log = _parse(deck, tmp_path)
-    assert any("Iform=2" in e for e in log.errors), log.errors
+    assert not log.errors, log.errors
+    (i,) = model.interfaces
+    assert i.ifq >= 10               # Iform=2 mapped to IFQ += 10
+    assert i.fric == pytest.approx(0.2)
 
 
 def test_inter7_compact_xfreq_zero_turns_filter_off(tmp_path):

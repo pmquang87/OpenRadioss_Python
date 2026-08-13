@@ -3588,9 +3588,14 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             ign.append(f"AscaleF={f5[6]}")
         # Iform = MODFR: 2 selects the incremental (stiffness) tangential
         # formulation (upstream turns it into IFQ >= 10). Without friction
-        # it changes nothing.
+        # it changes nothing.  The IFQ += 10 offset is applied AFTER the
+        # xfreq/ALPHA mapping (shared validation section) — matching the
+        # Fortran order where MODFR is applied last.
+        _iform2_active = False
         if iform == 2 and fric == 0.0 and mfrot == 0:
             ign.append("Iform=2 (no friction defined — inert)")
+        elif iform == 2 and (fric != 0.0 or mfrot != 0):
+            _iform2_active = True
         # C1..C5 (Ifric > 0) and C6 (Ifric > 1) cards
         fric_c = (0.0,) * 6
         icard += 3
@@ -3650,6 +3655,13 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     # original's MSGID 554 errors are mirrored.
     if xfreq == 0.0:
         ifq = 0
+    # Apply the Iform=2 → IFQ += 10 offset (real-format only) AFTER the
+    # xfreq reset, matching Fortran order (MODFR applied last).
+    try:
+        if _iform2_active:
+            ifq = ifq + 10
+    except NameError:
+        pass   # compact path — variable not defined
     xfiltr = 0.0
     if ifq > 0:
         if ifq == 1:
@@ -3827,12 +3839,16 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         variables = defaults + [v for v in rest if v not in defaults]
 
     # -- id cards ------------------------------------------------------------
+    # Element-level kinds (SHEL, SH3N, BRIC) use the same card layout as
+    # NODE: CARD("%10d%10d%-80s", Elid, Skew_ID, Elname) — one per card.
+    # Aggregate kinds (PART, SECT, RBODY, ...) pack plain %10d IDs.
+    _ONE_PER_CARD = {"NODE", "SHEL", "SH3N", "BRIC"}
     ids: List[int] = []
     for c in cards[n_var_cards:]:
         if c.is_blank:
             continue
         if block.fixed:
-            if kind == "NODE":
+            if kind in _ONE_PER_CARD:
                 # %10d%10d%-80s — id column only (skew/name informative)
                 f = c.cut("TH_NODE_ID")
                 if f[0]:
@@ -3840,7 +3856,7 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             else:
                 ids.extend(int(s) for s in c.cut("IDS10") if s)
         else:
-            if kind == "NODE":
+            if kind in _ONE_PER_CARD:
                 toks = c.tokens()
                 if toks:
                     ids.append(int(toks[0]))
