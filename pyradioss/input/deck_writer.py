@@ -480,6 +480,36 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
+    def mat_law51(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/LAW51``."""
+        self._header("MAT", "LAW51", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def mat_law81(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/LAW81``."""
+        self._header("MAT", "LAW81", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def mat_law62(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/LAW62``."""
+        self._header("MAT", "LAW62", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def mat_law83(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/LAW83``."""
+        self._header("MAT", "LAW83", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def mat_kelvinmax(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/KELVINMAX``."""
+        self._header("MAT", "KELVINMAX", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
     # ---- failure / EOS -----------------------------------------------------------
 
     def fail_johnson(self, mat_id: int, d1, d2, d3, d4, d5=0.0,
@@ -647,6 +677,12 @@ class StarterDeck:
     def prop_void(self, pid: int, title: str, data_cards) -> None:
         """``/PROP/VOID`` (TYPE0)."""
         self._header("PROP", "VOID", pid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def prop_connect(self, pid: int, title: str, data_cards) -> None:
+        """``/PROP/CONNECT``."""
+        self._header("PROP", "CONNECT", pid)
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
@@ -1409,6 +1445,12 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
+    def inter_type10(self, iid: int, title: str, data_cards) -> None:
+        """``/INTER/TYPE10``."""
+        self._header("INTER", "TYPE10", iid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
     # ---- output requests --------------------------------------------------------------
 
     def th(self, kind: str, tid: int, title: str,
@@ -1610,6 +1652,16 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_void(mid, title, cards)
     elif law in ("LAW24", "CONC"):
         d.mat_conc(mid, title, cards)
+    elif law == "LAW51":
+        d.mat_law51(mid, title, cards)
+    elif law == "LAW81":
+        d.mat_law81(mid, title, cards)
+    elif law == "LAW62":
+        d.mat_law62(mid, title, cards)
+    elif law == "LAW83":
+        d.mat_law83(mid, title, cards)
+    elif law == "KELVINMAX":
+        d.mat_kelvinmax(mid, title, cards)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")
@@ -1679,6 +1731,8 @@ def _conv_prop(d: StarterDeck, b: KeywordBlock) -> None:
         d.prop_type20(pid, title, cards)
     elif kind in ("TYPE0", "VOID"):
         d.prop_void(pid, title, cards)
+    elif kind in ("CONNECT", "TYPE43"):
+        d.prop_connect(pid, title, cards)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown property {kind}")
@@ -1690,6 +1744,9 @@ def _conv_inter(d: StarterDeck, b: KeywordBlock) -> None:
     iid = b.user_id
     if kind == "TYPE24":
         d.inter_type24(iid, title, cards)
+        return
+    if kind == "TYPE10":
+        d.inter_type10(iid, title, cards)
         return
     if kind == "LAGMUL":
         subtype = b.parts[2].upper() if len(b.parts) > 2 else ""
