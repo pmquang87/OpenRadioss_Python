@@ -235,6 +235,7 @@ LAYOUTS: Dict[str, List[int]] = {
     "INIVEL_AXIS_2": [20] * 4,
     # LOADS/grav.cfg (radioss51): fct DIR skew sens grnod <blank>
     #                             Ascale_x Fscale_Y
+    "MOVE_FUNCT": [20] * 4,
     "GRAV": [10, 10, 10, 10, 10, 10, 20, 20],
     # LOADS/cload.cfg (radioss51): same columns as /GRAV
     "CLOAD": [10, 10, 10, 10, 10, 10, 20, 20],

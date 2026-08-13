@@ -1580,18 +1580,24 @@ def read_move_funct(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     Reads (Xscale, Yscale, Xshift, Yshift) from a single float card.
     The transformation is deferred to Engine phase 2.
     """
-    if not block.cards:
+    if block.fixed:
+        title, cards = _fixed_data(block)
+    else:
+        title, cards = _title_and_data(block)
+
+    if not cards:
         log.error(f"/MOVE_FUNCT/{block.user_id}: missing data card",
                   block.source)
         return
+
     if block.fixed:
-        f = block.cards[0].cut("MOVE_FUNCT")
+        f = cards[0].cut("MOVE_FUNCT")
         scx = _fval(f[0]) or 1.0
         scy = _fval(f[1]) or 1.0
         shx = _fval(f[2]) or 0.0
         shy = _fval(f[3]) or 0.0
     else:
-        scx, scy, shx, shy = _floats(block.cards[0], 4, [1.0, 1.0, 0.0, 0.0])
+        scx, scy, shx, shy = _floats(cards[0], 4, [1.0, 1.0, 0.0, 0.0])
     model.move_functs.append((block.user_id, scx, scy, shx, shy))
 
 
