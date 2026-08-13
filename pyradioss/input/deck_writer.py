@@ -1200,6 +1200,11 @@ class StarterDeck:
         self._header("XREF")
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
+    def ams(self, data_cards) -> None:
+        """``/AMS``."""
+        self._header("AMS")
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
     # ---- boundary / initial conditions / loads ---------------------------------
 
     def bcs(self, bid: int, title: str, tra: str, rot: str,
@@ -2540,6 +2545,8 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
         d.impacc(b.user_id, title, cards)
     elif key0 == "XREF":
         d.xref(b.cards)
+    elif key0 == "AMS":
+        d.ams(b.cards)
     elif key0 == "TH":
         kind = b.parts[1].upper() if len(b.parts) > 1 else "NODE"
         title, cards = _title_cards(b)
