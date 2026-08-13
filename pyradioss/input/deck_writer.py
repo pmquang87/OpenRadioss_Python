@@ -196,14 +196,14 @@ class StarterDeck:
         the line and its title-detection falls through to '' as well."""
         self.lines.append(title.rstrip() if title.strip() else BLANK_CARD)
 
-    def raw_block(self, header: str, cards: Sequence[str],
+    def raw_block(self, header: str, cards: Iterable[str],
                   note: str = "") -> None:
         """Escape hatch: emit a block verbatim in the port dialect.  Used
         by the documented fallbacks; always announced in the deck."""
         self.comment(f"PORT-DIALECT block ({note})" if note
                      else "PORT-DIALECT block")
         self.lines.append(header if header.startswith("/") else "/" + header)
-        self.lines.extend(str(c).rstrip() for c in cards)
+        self.lines.extend(str(c).rstrip("\r\n") for c in cards)
 
     def render(self) -> str:
         if not self._ended:
@@ -450,6 +450,18 @@ class StarterDeck:
         self.lines.append("".join(fmt_float(x) for x in list(alpha)[:5]))
         self.lines.append(BLANK_CARD)          # alpha_6..10
 
+    def mat_hyd_visc(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/LAW6`` (HYD_VISC)."""
+        self._header("MAT", "LAW6", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def mat_fabri(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/LAW58`` (FABRI)."""
+        self._header("MAT", "LAW58", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
     # ---- failure / EOS -----------------------------------------------------------
 
     def fail_johnson(self, mat_id: int, d1, d2, d3, d4, d5=0.0,
@@ -583,6 +595,19 @@ class StarterDeck:
                           + fmt_float(ixx))
         self.lines.append(BLANK_CARD)                      # Wdof / Ishear
 
+    def prop_sh_orth(self, pid: int, title: str, data_cards, ptype=9) -> None:
+        """``/PROP/SH_ORTH`` (TYPE9) and ``/PROP/SH_FABR`` (TYPE16)."""
+        kind = "SH_ORTH" if ptype == 9 else "SH_FABR"
+        self._header("PROP", kind, pid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def prop_spr_beam(self, pid: int, title: str, data_cards) -> None:
+        """``/PROP/SPR_BEAM`` (TYPE13)."""
+        self._header("PROP", "SPR_BEAM", pid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
     def prop_spring(self, pid: int, title: str, mass, k, c=0.0) -> None:
         """``/PROP/SPRING`` (TYPE4) — PORT DIALECT, always.
 
@@ -648,9 +673,9 @@ class StarterDeck:
         self._title(title)
         self._ids_cards(ids)
 
-    def gr_elem_generic(self, family: str, kind: str, gid: int, title: str, ids: Sequence[int]) -> None:
-        """``/<family>/<kind>`` — generic writer for element groups (GRSHEL, etc.)."""
-        self._header(family, kind, gid)
+    def gr_elem_generic(self, header: str, gid: int, title: str, ids: Sequence[int]) -> None:
+        """``/<header>`` — generic writer for element groups."""
+        self._header(header, gid)
         self._title(title)
         self._ids_cards(ids)
 
@@ -1491,6 +1516,10 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         nu = cards[3].floats()[0] if len(cards) >= 4 else 0.495
         d.mat_law42(mid, title, rho, mu, alpha,
                     nu=nu if nu > 0 else 0.495)
+    elif law in ("LAW6", "HYD_VISC"):
+        d.mat_hyd_visc(mid, title, cards)
+    elif law in ("LAW58", "FABRI"):
+        d.mat_fabri(mid, title, cards)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")
@@ -1546,6 +1575,12 @@ def _conv_prop(d: StarterDeck, b: KeywordBlock) -> None:
     elif kind in ("SPRING", "TYPE4"):
         t = cards[0].floats() + [0.0] * 3
         d.prop_spring(pid, title, t[0], t[1], t[2])
+    elif kind in ("SH_ORTH", "TYPE9"):
+        d.prop_sh_orth(pid, title, cards)
+    elif kind in ("SH_FABR", "TYPE16"):
+        d.prop_sh_orth(pid, title, cards, ptype=16)
+    elif kind in ("SPR_BEAM", "TYPE13"):
+        d.prop_spr_beam(pid, title, cards)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown property {kind}")
