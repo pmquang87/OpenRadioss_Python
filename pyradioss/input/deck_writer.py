@@ -642,6 +642,46 @@ class StarterDeck:
         self._title(title)
         self._ids_cards(ids)
 
+    def grnod_generic(self, gid: int, kind: str, title: str, ids: Sequence[int]) -> None:
+        """``/GRNOD/<kind>`` — generic fallback for SURF, GRNOD, GRSHEL, etc."""
+        self._header("GRNOD", kind, gid)
+        self._title(title)
+        self._ids_cards(ids)
+
+    def gr_elem_generic(self, family: str, kind: str, gid: int, title: str, ids: Sequence[int]) -> None:
+        """``/<family>/<kind>`` — generic writer for element groups (GRSHEL, etc.)."""
+        self._header(family, kind, gid)
+        self._title(title)
+        self._ids_cards(ids)
+
+    def surf_generic(self, kind: str, sid: int, title: str, ids: Sequence[int]) -> None:
+        """``/SURF/<kind>`` — generic writer for SURF, GRSHEL, GRSH3N, etc."""
+        self._header("SURF", kind, sid)
+        self._title(title)
+        self._ids_cards(ids)
+
+    def line_generic(self, kind: str, lid: int, title: str, ids: Sequence[int]) -> None:
+        """``/LINE/<kind>`` — generic writer for EDGE, etc."""
+        self._header("LINE", kind, lid)
+        self._title(title)
+        self._ids_cards(ids)
+
+    def funct_smooth(self, fid: int, title: str, c1: Sequence, c2: Sequence) -> None:
+        """``/FUNCT_SMOOTH/id`` (M37)"""
+        self._header("FUNCT_SMOOTH", "", fid)
+        self._title(title)
+        l1 = "".join(fmt_float(x) for x in c1[:3]) + "".join(fmt_int(int(x)) for x in c1[3:5])
+        l2 = "".join(fmt_float(x) for x in c2[:4])
+        self.lines.append(l1)
+        self.lines.append(l2)
+
+    def unit(self, uid: int, title: str, m_unit: float, l_unit: float, t_unit: float) -> None:
+        """``/UNIT/id`` (M37)"""
+        self._header("UNIT", "", uid)
+        self._title(title)
+        self.lines.append("".join(fmt_float(x) for x in (m_unit, l_unit, t_unit)))
+
+
     def box_recta(self, bid: int, title: str, p1: Sequence,
                   p2: Sequence) -> None:
         """``/BOX/RECTA`` — cfg BOX/recta.cfg (FORMAT radioss110): title /
@@ -1628,10 +1668,26 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
         title, cards = _title_cards(b)
         d.funct(b.user_id, title,
                 [c.tokens()[:2] for c in cards if c.tokens()])
+    elif key0 == "FUNCT_SMOOTH":
+        title, cards = _title_cards(b)
+        if len(cards) >= 2:
+            c1 = cards[0].floats() + [0.0]*5
+            c2 = cards[1].floats() + [0.0]*4
+            d.funct_smooth(b.user_id, title, c1, c2)
+        else:
+            d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
+                        note="FUNCT_SMOOTH too short")
     elif key0 == "MOVE_FUNCT":
         title, cards = _title_cards(b)
         t = cards[0].floats()
         d.move_funct(b.user_id, t[0] if len(t)>0 else 0.0, t[1] if len(t)>1 else 0.0, t[2] if len(t)>2 else 0.0, t[3] if len(t)>3 else 0.0)
+    elif key0 == "UNIT":
+        title, cards = _title_cards(b)
+        if cards:
+            c = cards[0].floats() + [0.0]*3
+            d.unit(b.user_id, title, c[0], c[1], c[2])
+        else:
+            d.raw_block("/".join(b.parts), [c.raw for c in b.cards], note="UNIT too short")
     elif key0 == "GRNOD":
         kind = b.parts[1].upper() if len(b.parts) > 1 else "NODE"
         title, cards = _title_cards(b)
@@ -1645,8 +1701,14 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
         elif kind == "BOX":
             d.grnod_box(b.user_id, title, ids)
         else:
-            d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
-                        note=f"unknown group {kind}")
+            d.grnod_generic(b.user_id, kind, title, ids)
+    elif key0 in ("GRSHEL", "GRSH3N", "GRTRIA", "GRBRIC", "GRQUAD", "GRTRUS", "GRBEAM", "GRSPRI", "GRPART"):
+        kind = b.parts[1].upper() if len(b.parts) > 1 else (b.parts[0].replace("GR", "") if b.parts[0] != "GRPART" else "PART")
+        title, cards = _title_cards(b)
+        ids: List[int] = []
+        for c in cards:
+            ids.extend(c.ints())
+        d.gr_elem_generic(key0, kind, b.user_id, title, ids)
     elif key0 == "BOX":
         title, cards = _title_cards(b)
         vals: List[float] = []
@@ -1657,22 +1719,32 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
         kind = b.parts[1].upper() if len(b.parts) > 1 else "SEG"
         title, cards = _title_cards(b)
         if kind == "PART":
-            ids = []
+            ids: List[int] = []
             for c in cards:
                 ids.extend(c.ints())
             d.surf_part(b.user_id, title, ids)
-        else:
+        elif kind == "SEG":
             d.surf_seg(b.user_id, title, [c.ints() for c in cards])
+        else:
+            ids: List[int] = []
+            for c in cards:
+                ids.extend(c.ints())
+            d.surf_generic(kind, b.user_id, title, ids)
     elif key0 == "LINE":
         kind = b.parts[1].upper() if len(b.parts) > 1 else "SURF"
         title, cards = _title_cards(b)
         if kind == "SURF":
-            ids = []
+            ids: List[int] = []
             for c in cards:
                 ids.extend(c.ints())
             d.line_surf(b.user_id, title, ids)
-        else:
+        elif kind == "SEG":
             d.line_seg(b.user_id, title, [c.ints() for c in cards])
+        else:
+            ids: List[int] = []
+            for c in cards:
+                ids.extend(c.ints())
+            d.line_generic(kind, b.user_id, title, ids)
     elif key0 == "BCS":
         title, cards = _title_cards(b)
         t = cards[0].tokens()
