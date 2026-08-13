@@ -495,6 +495,16 @@ class Model:
         self.n2d: int = 0  # 0: 3D, 1: axisymmetric, 2: plane strain (from /ANALY)
         self.has_ale: bool = False  # True if /ALE/DONE is present (M63)
 
+        # Global element defaults (M68): /DEF_SHELL and /DEF_SOLID.
+        # Mirrors Fortran DEFAULTS_SHELL / DEFAULTS_SOLID (defaults_mod.F90).
+        # Values of 0 mean "use the Starter's init_def_elem fallback".
+        self.def_shell: Dict[str, int] = {
+            'ishell': 0, 'ismstr': 0, 'ithick': 0, 'iplas': 0,
+            'istrain': 0, 'ish3n': 0, 'idrill': 0}
+        self.def_solid: Dict[str, int] = {
+            'isolid': 0, 'ismstr': 0, 'icpre': 0,
+            'itetra4': 0, 'itetra10': 0, 'imas': 0, 'iframe': 0}
+
         self.raw_eos: list = []
         # /ALE/MAT, /EULER/MAT, /HEAT/MAT parse-only notes (M37): parsed
         # as (kind, mat_id, params, source), attached to the material's

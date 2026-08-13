@@ -3746,7 +3746,7 @@ def read_line(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 # ============================================================================
 
 def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/TH/NODE|PART|SECT/th_ID``::
+    """``/TH/NODE|PART|SECT|RBODY|SHEL|SH3N|SPRING|BRIC|RWALL|SECTIO|INTER/th_ID``::
 
         card 1:  title
         card 2:  variable names (e.g. ``DX DY DZ VX VY VZ``) or ``DEF``
@@ -3768,11 +3768,17 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       per card whose skew/name columns abut the id ('        2
       01x3' = node 2, skew 0, name '1x3'; pre-M37 the token view
       crashed on int('01x3')).  Other kinds pack plain %10d ids.
+
+    M68: expanded from NODE/PART/SECT to all entity types.
     """
+    _TH_KINDS = {"NODE", "PART", "SECT", "RBODY", "SHEL", "SH3N",
+                 "SPRING", "BRIC", "RWALL", "SECTIO", "INTER"}
     kind = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
-    if kind not in ("NODE", "PART", "SECT"):
-        log.warning(f"/TH/{kind} not ported (NODE, PART, SECT supported)",
-                    block.source)
+    # /TH/SECTIO is the Fortran spelling; normalise to SECT for the model
+    if kind == "SECTIO":
+        kind = "SECT"
+    if kind not in _TH_KINDS:
+        log.warning(f"/TH/{kind} not ported", block.source)
         return
     title, cards = _fixed_data(block) if block.fixed \
         else _title_and_data(block)
@@ -3804,9 +3810,19 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                   block.source)
         return
     if "DEF" in variables:
-        defaults = {"NODE": ["DX", "DY", "DZ", "VX", "VY", "VZ"],
-                    "PART": ["IE", "KE"],
-                    "SECT": ["FX", "FY", "FZ", "MX", "MY", "MZ"]}[kind]
+        _TH_DEFAULTS = {
+            "NODE":   ["DX", "DY", "DZ", "VX", "VY", "VZ"],
+            "PART":   ["IE", "KE"],
+            "SECT":   ["FX", "FY", "FZ", "MX", "MY", "MZ"],
+            "RBODY":  ["DX", "DY", "DZ", "VX", "VY", "VZ"],
+            "SHEL":   ["SIGXX", "SIGYY", "SIGXY", "SIGYZ", "SIGZX"],
+            "SH3N":   ["SIGXX", "SIGYY", "SIGXY", "SIGYZ", "SIGZX"],
+            "SPRING": ["FX", "FY", "FZ", "DX", "DY", "DZ"],
+            "BRIC":   ["SIGXX", "SIGYY", "SIGZZ", "SIGXY", "SIGYZ", "SIGZX"],
+            "RWALL":  ["FN", "FT"],
+            "INTER":  ["FN", "FT"],
+        }
+        defaults = _TH_DEFAULTS.get(kind, [])
         rest = [v for v in variables if v != "DEF"]
         variables = defaults + [v for v in rest if v not in defaults]
 
@@ -3833,6 +3849,99 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.th_requests.append(THRequest(
         id=block.user_id, kind=kind, ids=ids, variables=variables,
         title=title))
+
+
+# ============================================================================
+# Global defaults (M68)
+# ============================================================================
+
+def read_def_shell(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DEF_SHELL`` — global shell formulation defaults (M68).
+
+    Single data card (NO title card)::
+
+        ISHELL  ISMSTR  ITHICK  IPLAS  ISTRAIN  (gap)  ISH3N  IDRILL
+
+    Mirrors ``hm_read_defshell.F``.  The values are stored on
+    ``model.def_shell`` and consulted when /PROP/SHELL fields are 0."""
+    # /DEF_SHELL has no title card — read cards directly
+    if block.fixed:
+        cards = [c for c in block.fixed_cards() if not c.is_blank]
+    else:
+        cards = [c for c in block.cards if not c.is_blank]
+    if not cards:
+        return
+    c = cards[0]
+    if block.fixed:
+        vals = c.cut("IDS10")   # 10-wide integer fields
+    else:
+        vals = c.tokens()
+    def _iv(idx):
+        try:
+            return int(vals[idx])
+        except (IndexError, ValueError):
+            return 0
+    model.def_shell = {
+        'ishell': _iv(0), 'ismstr': _iv(1), 'ithick': _iv(2),
+        'iplas': _iv(3), 'istrain': _iv(4),
+        # fixed: col 5 is gap/reserved (col index 5), ISH3N at 6, IDRILL at 7
+        # free:  no gap field, ISH3N at 5, IDRILL at 6
+        'ish3n': _iv(6 if block.fixed else 5),
+        'idrill': _iv(7 if block.fixed else 6),
+    }
+
+
+def read_def_solid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DEF_SOLID`` — global solid formulation defaults (M68).
+
+    Single data card (NO title card)::
+
+        ISOLID  ISMSTR  ICPRE  (gap)  ITETRA4  ITETRA10  IMAS  IFRAME
+
+    Mirrors ``hm_read_defsolid.F``."""
+    # /DEF_SOLID has no title card — read cards directly
+    if block.fixed:
+        cards = [c for c in block.fixed_cards() if not c.is_blank]
+    else:
+        cards = [c for c in block.cards if not c.is_blank]
+    if not cards:
+        return
+    c = cards[0]
+    if block.fixed:
+        vals = c.cut("IDS10")
+    else:
+        vals = c.tokens()
+    def _iv(idx):
+        try:
+            return int(vals[idx])
+        except (IndexError, ValueError):
+            return 0
+    model.def_solid = {
+        'isolid': _iv(0), 'ismstr': _iv(1), 'icpre': _iv(2),
+        # fixed: col 3 is gap, ITETRA4 at 4, ITETRA10 at 5, IMAS at 6, IFRAME at 7
+        # free:  no gap field
+        'itetra4': _iv(4 if block.fixed else 3),
+        'itetra10': _iv(5 if block.fixed else 4),
+        'imas': _iv(6 if block.fixed else 5),
+        'iframe': _iv(7 if block.fixed else 6),
+    }
+
+
+def read_ioflag(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/IOFLAG`` — output control flags (M68, parse-and-skip).
+
+    Reads the single data card (IPRI, IGTYP, IOUTP, ...) but does not
+    store anything — the port's output path is fixed.  Accepting the
+    keyword prevents "not ported" warnings on 29 corpus decks."""
+    pass   # consume the block; nothing to store
+
+
+def read_spmd(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SPMD`` — domain-decomposition control (M68, parse-and-skip).
+
+    The port is single-process; we accept and discard /SPMD so that
+    24 corpus decks stop producing "not ported" warnings."""
+    pass   # consume the block; nothing to store
 
 
 # ============================================================================
@@ -4109,6 +4218,10 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "END": read_end,
     "PARAMETER": read_parameter,   # substituted by the reader (M37)
     "UNIT": read_unit,             # local unit systems (M37)
+    "DEF_SHELL": read_def_shell,   # global shell defaults (M68)
+    "DEF_SOLID": read_def_solid,   # global solid defaults (M68)
+    "IOFLAG": read_ioflag,         # output flags, parse-skip (M68)
+    "SPMD": read_spmd,             # domain decomposition, parse-skip (M68)
     "NODE": read_node,
     "BRICK": read_brick,
     "SHEL16": read_shel16,

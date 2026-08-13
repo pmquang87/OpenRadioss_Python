@@ -862,10 +862,12 @@ class Interface:
 
 @dataclass
 class THRequest:
-    """/TH/NODE, /TH/PART or /TH/SECT (M5): time-history output request."""
+    """/TH/NODE, /TH/PART, /TH/SECT and element/entity variants (M68):
+    time-history output request."""
 
     id: int
-    kind: str            # 'NODE' | 'PART' | 'SECT'
+    kind: str            # 'NODE' | 'PART' | 'SECT' | 'RBODY' | 'SHEL' |
+                         # 'SH3N' | 'SPRING' | 'BRIC' | 'RWALL' | 'INTER'
     ids: List[int] = field(default_factory=list)
     variables: List[str] = field(default_factory=list)  # e.g. DX, VX, IE
     title: str = ""
