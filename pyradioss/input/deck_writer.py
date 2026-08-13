@@ -528,6 +528,36 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
+    def mat_law37(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/LAW37``."""
+        self._header("MAT", "LAW37", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def mat_law66(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/LAW66``."""
+        self._header("MAT", "LAW66", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def mat_hyd_jcook(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/HYD_JCOOK``."""
+        self._header("MAT", "HYD_JCOOK", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def mat_jwl(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/JWL``."""
+        self._header("MAT", "JWL", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def mat_plas_predef(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/PLAS_PREDEF``."""
+        self._header("MAT", "PLAS_PREDEF", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
     # ---- failure / EOS -----------------------------------------------------------
 
     def fail_johnson(self, mat_id: int, d1, d2, d3, d4, d5=0.0,
@@ -707,6 +737,18 @@ class StarterDeck:
     def prop_connect(self, pid: int, title: str, data_cards) -> None:
         """``/PROP/CONNECT``."""
         self._header("PROP", "CONNECT", pid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def prop_type34(self, pid: int, title: str, data_cards) -> None:
+        """``/PROP/TYPE34`` (SPH)."""
+        self._header("PROP", "SPH", pid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def prop_fluid(self, pid: int, title: str, data_cards) -> None:
+        """``/PROP/FLUID`` (TYPE6)."""
+        self._header("PROP", "FLUID", pid)
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
@@ -920,6 +962,33 @@ class StarterDeck:
     def parameter_global(self, data_cards) -> None:
         """``/PARAMETER/GLOBAL``."""
         self._header("PARAMETER", "GLOBAL")
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def heat_mat(self, mid: int, title: str, data_cards) -> None:
+        """``/HEAT/MAT``."""
+        self._header("HEAT", "MAT", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def fail_snconnect(self, fid: int, data_cards) -> None:
+        """``/FAIL/SNCONNECT``."""
+        self._header("FAIL", "SNCONNECT", fid)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def fail_fld(self, fid: int, data_cards) -> None:
+        """``/FAIL/FLD``."""
+        self._header("FAIL", "FLD", fid)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def subdomain(self, sid: int, title: str, data_cards) -> None:
+        """``/SUBDOMAIN``."""
+        self._header("SUBDOMAIN", sid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def sphglo(self, data_cards) -> None:
+        """``/SPHGLO``."""
+        self._header("SPHGLO")
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
     # ---- boundary / initial conditions / loads ---------------------------------
@@ -1713,6 +1782,16 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law151(mid, title, cards)
     elif law == "BOUND":
         d.mat_bound(mid, title, cards)
+    elif law == "LAW37":
+        d.mat_law37(mid, title, cards)
+    elif law == "LAW66":
+        d.mat_law66(mid, title, cards)
+    elif law == "HYD_JCOOK":
+        d.mat_hyd_jcook(mid, title, cards)
+    elif law == "JWL":
+        d.mat_jwl(mid, title, cards)
+    elif law == "PLAS_PREDEF":
+        d.mat_plas_predef(mid, title, cards)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")
@@ -1784,6 +1863,10 @@ def _conv_prop(d: StarterDeck, b: KeywordBlock) -> None:
         d.prop_void(pid, title, cards)
     elif kind in ("CONNECT", "TYPE43"):
         d.prop_connect(pid, title, cards)
+    elif kind in ("SPH", "TYPE34"):
+        d.prop_type34(pid, title, cards)
+    elif kind in ("FLUID", "TYPE6"):
+        d.prop_fluid(pid, title, cards)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown property {kind}")
@@ -1869,7 +1952,7 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
     if key0 == "NODE":
         d.node([c.tokens()[:4] for c in b.cards])
     elif key0 in ("BRICK", "TETRA4", "SHELL", "SH3N", "TRUSS", "SPRING",
-                  "BEAM", "SHEL16", "QUAD", "TETRA10", "SPHCEL"):
+                  "BEAM", "SHEL16", "QUAD", "TETRA10", "SPHCEL", "BRIC20"):
         d._elems(key0, b.user_id, [c.ints() for c in b.cards])
     elif key0 == "PART":
         title, cards = _title_cards(b)
@@ -1897,6 +1980,10 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
                 ifail = cards[1].ints()[0]
             d.fail_biquad(b.user_id, v[0], v[1], v[2], v[3], v[4],
                           ifail_sh=ifail)
+        elif kind == "SNCONNECT":
+            d.fail_snconnect(b.user_id, cards)
+        elif kind == "FLD":
+            d.fail_fld(b.user_id, cards)
         else:
             d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                         note=f"unknown failure {kind}")
@@ -2129,6 +2216,18 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
             d.parameter_global(cards)
         else:
             d.raw_block("/".join(b.parts), [c.raw for c in b.cards], note=f"unknown parameter {kind}")
+    elif key0 == "HEAT":
+        kind = b.parts[1].upper() if len(b.parts) > 1 else ""
+        title, cards = _title_cards(b)
+        if kind == "MAT":
+            d.heat_mat(b.user_id, title, cards)
+        else:
+            d.raw_block("/".join(b.parts), [c.raw for c in b.cards], note=f"unknown heat {kind}")
+    elif key0 == "SUBDOMAIN":
+        title, cards = _title_cards(b)
+        d.subdomain(b.user_id, title, cards)
+    elif key0 == "SPHGLO":
+        d.sphglo(b.cards)
     elif key0 == "TH":
         kind = b.parts[1].upper() if len(b.parts) > 1 else "NODE"
         title, cards = _title_cards(b)
