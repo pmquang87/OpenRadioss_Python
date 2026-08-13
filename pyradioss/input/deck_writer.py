@@ -468,6 +468,12 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
+    def mat_void(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/VOID`` (LAW0)."""
+        self._header("MAT", "VOID", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
     # ---- failure / EOS -----------------------------------------------------------
 
     def fail_johnson(self, mat_id: int, d1, d2, d3, d4, d5=0.0,
@@ -617,6 +623,12 @@ class StarterDeck:
     def prop_inject1(self, pid: int, title: str, data_cards) -> None:
         """``/PROP/INJECT1``."""
         self._header("PROP", "INJECT1", pid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def prop_spr_gene(self, pid: int, title: str, data_cards) -> None:
+        """``/PROP/SPR_GENE``."""
+        self._header("PROP", "SPR_GENE", pid)
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
@@ -787,6 +799,18 @@ class StarterDeck:
     def skew_generic(self, header: str, sid: int, title: str, data_cards) -> None:
         """Generic fallback for ``/SKEW/MOV`` etc."""
         self._header(header, sid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def frame_generic(self, header: str, fid: int, title: str, data_cards) -> None:
+        """Generic fallback for ``/FRAME``."""
+        self._header(header, fid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def monvol_airbag1(self, vid: int, title: str, data_cards) -> None:
+        """``/MONVOL/AIRBAG1``."""
+        self._header("MONVOL", "AIRBAG1", vid)
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
@@ -1349,6 +1373,15 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
+    def inter_lagmul(self, subtype: str, iid: int, title: str, data_cards) -> None:
+        """``/INTER/LAGMUL``."""
+        if subtype:
+            self._header("INTER", "LAGMUL", subtype, iid)
+        else:
+            self._header("INTER", "LAGMUL", iid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
     # ---- output requests --------------------------------------------------------------
 
     def th(self, kind: str, tid: int, title: str,
@@ -1546,6 +1579,8 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_fabri(mid, title, cards)
     elif law in ("LAW5", "GAS"):
         d.mat_gas(mid, title, cards)
+    elif law in ("LAW0", "VOID"):
+        d.mat_void(mid, title, cards)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")
@@ -1607,6 +1642,8 @@ def _conv_prop(d: StarterDeck, b: KeywordBlock) -> None:
         d.prop_sh_orth(pid, title, cards, ptype=16)
     elif kind in ("SPR_BEAM", "TYPE13"):
         d.prop_spr_beam(pid, title, cards)
+    elif kind == "SPR_GENE":
+        d.prop_spr_gene(pid, title, cards)
     elif kind == "INJECT1":
         d.prop_inject1(pid, title, cards)
     else:
@@ -1620,6 +1657,10 @@ def _conv_inter(d: StarterDeck, b: KeywordBlock) -> None:
     iid = b.user_id
     if kind == "TYPE24":
         d.inter_type24(iid, title, cards)
+        return
+    if kind == "LAGMUL":
+        subtype = b.parts[2].upper() if len(b.parts) > 2 else ""
+        d.inter_lagmul(subtype, iid, title, cards)
         return
     if kind == "TYPE2":
         t = cards[0].floats() + [0.0] * 3
@@ -1905,10 +1946,21 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
             d.skew_fix(b.user_id, title)
         else:
             d.skew_generic(f"SKEW/{kind}", b.user_id, title, cards)
+    elif key0 == "FRAME":
+        kind = b.parts[1].upper() if len(b.parts) > 1 else ""
+        title, cards = _title_cards(b)
+        d.frame_generic(f"FRAME/{kind}", b.user_id, title, cards)
     elif key0 == "INTER":
         _conv_inter(d, b)
     elif key0 == "RWALL":
         _conv_rwall(d, b)
+    elif key0 == "MONVOL":
+        kind = b.parts[1].upper() if len(b.parts) > 1 else ""
+        title, cards = _title_cards(b)
+        if kind == "AIRBAG1":
+            d.monvol_airbag1(b.user_id, title, cards)
+        else:
+            d.raw_block("/".join(b.parts), [c.raw for c in b.cards], note=f"unknown monvol {kind}")
     elif key0 == "TH":
         kind = b.parts[1].upper() if len(b.parts) > 1 else "NODE"
         title, cards = _title_cards(b)
