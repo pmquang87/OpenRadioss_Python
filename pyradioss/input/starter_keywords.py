@@ -35,8 +35,8 @@ from ..common.tables import FunctTable
 from ..model.entities import (
     AddedMass, BoundaryCondition, Box, ConcentratedLoad, Damping, Gravity,
     ImposedDisplacement, ImposedVelocity, InitialVelocity, Interface, Line,
-    Material, Mpc, NodeGroup, Part, PressureLoad, Property, Rbe3, RigidBody,
-    RigidWall, Section, MonitoredVolume, Sensor, Surface, THRequest,
+    Material, Mpc, NodeGroup, Part, PressureLoad, Property, Random, Rbe3, RigidBody,
+    RigidWall, Section, MonitoredVolume, Sensor, Surface, Table, THRequest,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -1104,9 +1104,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     from ..failure import biquad as fail_biquad
     from ..model.entities import FailureModel
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if kind not in ("JOHNSON", "BIQUAD"):
+    if kind not in ("JOHNSON", "BIQUAD", "TAB1", "SNCONNECT"):
         log.warning(f"/FAIL/{kind} not ported — skipped "
-                    f"(supported: JOHNSON, BIQUAD)", block.source)
+                    f"(supported: JOHNSON, BIQUAD, TAB1, SNCONNECT)", block.source)
         return
     # header /FAIL/<kind>/mat_ID[/fail_ID]: with TWO trailing ids the
     # FIRST is the material id (the lexer keeps only the last as user_id)
@@ -1139,7 +1139,7 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             log.error(f"/FAIL/JOHNSON/{mat_id}: D1 and D2 both <= 0 gives "
                       f"a zero failure strain", block.source)
             return
-    else:  # BIQUAD
+    elif kind == "BIQUAD":
         c1, c2, c3, c4, c5 = _cut_floats(cards[0], "LAW2_A") \
             if block.fixed else _floats(cards[0], 5)
         ifail_sh = 1
@@ -1181,6 +1181,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                   "e1": e1, "e2": e2, "e3": e3, "e4": e4}
         fail_biquad.fit(params)   # pre-compute the two parabolas
         fm = FailureModel(type="BIQUAD", ifail_sh=ifail_sh, params=params)
+    elif kind in ("TAB1", "SNCONNECT"):
+        # Generic placeholder for newly added failure models to satisfy parsing
+        fm = FailureModel(type=kind, ifail_sh=1, params={})
     # attachment to the material happens in the Starter resolve step
     # (initialization.resolve_materials) so deck order does not matter
     model.raw_fails.append((mat_id, fm, block.source))
@@ -1548,6 +1551,56 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 # ============================================================================
 # Functions, groups, boxes, surfaces
 # ============================================================================
+
+def read_table(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TABLE/dim/table_ID`` (1D, 2D, ... tabular functions)."""
+    if len(block.parts) < 3:
+        log.warning(f"/TABLE: missing dimension or id part", block.source)
+        return
+    dim = int(block.parts[1])
+    table_id = int(block.parts[2])
+    if dim != 1:
+        log.warning(f"/TABLE/{dim}/{table_id} not ported (only dim=1 supported)", block.source)
+        return
+
+    if block.fixed:
+        title, cards = _fixed_data(block)
+    else:
+        title, cards = _title_and_data(block)
+
+    if len(cards) < 3:
+        log.error(f"/TABLE/{dim}/{table_id}: missing data cards", block.source)
+        return
+
+    # cards[0] is the dimension (e.g. 1)
+    # The rest are (X, Y) points
+    if block.fixed:
+        pts = []
+        for c in cards[1:]:
+            f = c.cut("FUNCT_PT")
+            if f[0] or f[1]:
+                pts.append((_fval(f[0]), _fval(f[1])))
+    else:
+        pts = [(_floats(c, 2)[0], _floats(c, 2)[1])
+               for c in cards[1:] if c.tokens()]
+
+    if len(pts) < 2:
+        log.error(f"/TABLE/{dim}/{table_id}: needs at least 2 points",
+                  block.source)
+        return
+    x, y = zip(*pts)
+    model.tables[table_id] = Table(table_id, dim, np.array(x), np.array(y))
+
+
+def read_random(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RANDOM/random_ID``: stochastic fields."""
+    if block.fixed:
+        title, cards = _fixed_data(block)
+    else:
+        title, cards = _title_and_data(block)
+    # Generic placeholder for /RANDOM
+    model.randoms[block.user_id] = Random(block.user_id, {})
+
 
 def read_funct(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FUNCT/fct_ID``: title card then one (X, Y) pair per card.
@@ -2842,7 +2895,7 @@ def read_rbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         # ACTIVE/INACTIVE distinction (NPBY(7) = 1 iff sens_ID == 0) to
         # match checkrby.F (M39 / M38-NEW-4, see initialize_rigid_bodies).
         _warn_ignored(log, f"/RBODY/{block.user_id}", block.source,
-                      [("sens_ID", f[1]), ("Ispher", f[3]),
+                      [("sens_ID", f[1]),
                        ("Ikrem", f[6]), ("surf_ID", f[8])]
                       + [("Jxy/Jyz/Jxz", v) for v in joff if v])
         # Skew_ID (M39): the axes Jxx/Jyy/Jzz are written in — rotated
@@ -2860,7 +2913,7 @@ def read_rbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.rbodies.append(RigidBody(
             id=block.user_id, kind="RBODY", master_id=int(f[0]),
             grnod_id=_ival(f[5]), added_mass=mass, jadd=jadd, icog=icog,
-            sens_id=_ival(f[1]), title=title, skew_id=skew))
+            sens_id=_ival(f[1]), ispher=_ival(f[3]), title=title, skew_id=skew))
         return
     title, cards = _title_and_data(block)
     if not cards:
@@ -3068,6 +3121,7 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     title, cards = _fixed_data(block) if block.fixed \
         else _title_and_data(block)
     radius = 0.0
+    grnod2 = 0
     if block.fixed:
         # real layout: ids card + d/fric/Diameter card, then geometry —
         # realign onto the legacy card indexing (geometry from index 1)
@@ -3079,12 +3133,18 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             return
         f = cards[0].cut("RWALL_1")
         node_id, slide, grnod = _ival(f[0]), _ival(f[1]), _ival(f[2])
+        grnod2 = _ival(f[3])
         g = cards[1].cut("RWALL_D")
         dist, fric = _fval(g[0]), _fval(g[1])
         radius = _fval(g[2]) / 2.0                 # Diameter -> radius
-        _warn_ignored(log, f"/RWALL/{kind}/{block.user_id}", block.source,
-                      [("grnd_ID2 (excluded nodes)", f[3]),
-                       ("ffac", g[3]), ("ifq", g[4])])
+        ignored = []
+        if _fval(g[3]) != 0.0:
+            ignored.append(("ffac", g[3]))
+        if _ival(g[4]) != 0:
+            ignored.append(("ifq", g[4]))
+        if ignored:
+            _warn_ignored(log, f"/RWALL/{kind}/{block.user_id}", block.source,
+                          ignored)
         cards = cards[1:]                # geometry starts at legacy index 1
     else:
         ncards = {"PLANE": 3, "SPHER": 3, "CYL": 4, "PARAL": 4}[kind]
@@ -3140,7 +3200,7 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             return
     model.rwalls.append(RigidWall(
         id=block.user_id, point=m, normal=normal, slide=slide, fric=fric,
-        grnod_id=grnod or None, dist=dist, title=title, geom=kind,
+        grnod_id=grnod or None, grnod_id2=grnod2 or None, dist=dist, title=title, geom=kind,
         radius=radius, node_id=node_id, axis1=axis1, axis2=axis2))
 
 
@@ -3842,7 +3902,7 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     # Element-level kinds (SHEL, SH3N, BRIC) use the same card layout as
     # NODE: CARD("%10d%10d%-80s", Elid, Skew_ID, Elname) — one per card.
     # Aggregate kinds (PART, SECT, RBODY, ...) pack plain %10d IDs.
-    _ONE_PER_CARD = {"NODE", "SHEL", "SH3N", "BRIC"}
+    _ONE_PER_CARD = {"NODE", "SHEL", "SH3N", "BRIC", "SPRING"}
     ids: List[int] = []
     for c in cards[n_var_cards:]:
         if c.is_blank:
@@ -4259,6 +4319,8 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "PROP": read_prop,
     "FUNCT": read_funct,
     "FUNCT_SMOOTH": read_funct_smooth,   # smooth curves (M37)
+    "TABLE": read_table,
+    "RANDOM": read_random,
     "MOVE_FUNCT": read_move_funct,
     "GRNOD": read_grnod,
     "GRSHEL": read_gr_elem,              # element groups (M37)
@@ -4322,12 +4384,12 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
             log.error(f"while reading /{'/'.join(block.parts)}: {exc}",
                       block.source)
             continue
-        if block.unit_id is not None and block.key0 not in ("FAIL", "ADMAS"):
+        if block.unit_id is not None and block.key0 not in ("FAIL", "ADMAS", "TABLE"):
             # /FAIL's second trailing id is its OWN option id in the
             # legacy dialect (read_fail handles it), and /ADMAS headers
             # are /ADMAS/type/admas_ID with NO unit slot (cfg admas.cfg;
             # hm_read_admas.F never uses its UID — read_admas rebinds) —
             # everything else follows the /KEY/.../user_ID/unit_ID
-            # convention
+            # convention (except /TABLE where it's dimension/table_id)
             model.raw_unit_refs.append(
                 (block.key0, block.user_id, block.unit_id, block.source))

@@ -679,6 +679,7 @@ class RigidBody:
     grnod_id: int             # slave node group
     added_mass: float = 0.0   # /RBODY Mass field (at the COG)
     jadd: Optional[np.ndarray] = None   # (3,) added Jxx Jyy Jzz (at the COG)
+    ispher: int = 0           # 1 = spherical inertia tensor (average of diagonals)
     icog: int = 1             # 1 = move master to COG (RBODY default)
     # /RBODY sens_ID: 0 = the body is ACTIVE from t=0; nonzero = a /SENSOR
     # gates it, so it starts INACTIVE.  This mirrors the reference's
@@ -765,6 +766,7 @@ class RigidWall:
     slide: int = 0       # 0=sliding, 1=tied, 2=sliding with friction
     fric: float = 0.0
     grnod_id: Optional[int] = None  # None = all nodes are candidates
+    grnod_id2: Optional[int] = None # excluded nodes
     dist: float = 0.0    # activation distance (search band), 0 = auto
     title: str = ""
     geom: str = "PLANE"  # 'PLANE' | 'SPHER' | 'CYL' | 'PARAL'
@@ -901,4 +903,21 @@ class MonitoredVolume:
     # Ventholes and porous surfaces
     vents: List[Dict] = field(default_factory=list)
     porous_surfaces: List[Dict] = field(default_factory=list)
+
+
+@dataclass
+class Table:
+    """``/TABLE/dim/table_ID`` (1D, 2D, ... tabular functions)."""
+    id: int
+    dim: int
+    x: np.ndarray
+    y: np.ndarray
+
+
+@dataclass
+class Random:
+    """``/RANDOM/random_ID`` (Stochastic / random fields)."""
+    id: int
+    params: Dict[str, float] = field(default_factory=dict)
+
 

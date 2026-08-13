@@ -110,6 +110,10 @@ class RigidWalls:
                 idx = np.arange(model.numnod)
             else:
                 idx = model.node_groups[rw.grnod_id].node_idx
+            if getattr(rw, "grnod_id2", None):
+                g2 = model.node_groups.get(rw.grnod_id2)
+                if g2 is not None and g2.node_idx is not None:
+                    idx = np.setdiff1d(idx, g2.node_idx)
             # frozen (massless) nodes and the wall's own carrier node are
             # never wall candidates (a 1e30 mass would wreck the ledger)
             idx = idx[model.mass[idx] < 1e29]

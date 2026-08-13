@@ -527,7 +527,7 @@ def _nodes_of_parts(model: Model, part_ids: List[int]) -> np.ndarray:
 _EGROUP_FAMILIES = {
     "SHEL": ("shells", "shells_qbat", "shells_qeph"),
     "SH3N": ("sh3n", "sh3n_dkt18"),
-    "BRIC": ("bricks", "tetras"),
+    "BRIC": ("bricks", "bricks_heph", "tetras", "tetra10s"),
     "QUAD": ("quads",),
     "TRUS": ("trusses",),
     "BEAM": ("beams",),
@@ -1475,6 +1475,8 @@ def initialize_rigid_bodies(model: Model, log: MessageLog) -> None:
         if row:
             jadd = model.skews.rotate_tensor(row, jadd)
         J += jadd
+        if rb.ispher == 1:
+            J = np.eye(3) * (np.trace(J) / 3.0)
 
         # regularize a singular tensor (collinear point masses): the spin
         # about the mass line has no physics — keep it bounded, warn once

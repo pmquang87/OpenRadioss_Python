@@ -204,6 +204,8 @@ def check_model(model: Model, log: MessageLog) -> None:
                       f"{sc.node_id_ref}", "CROSS REF")
     for rw in model.rwalls:
         need_group(rw.grnod_id, f"/RWALL/{rw.id}")
+        if rw.grnod_id2:
+            need_group(rw.grnod_id2, f"/RWALL/{rw.id}")
         if rw.node_id and rw.node_id not in model._id2idx:
             log.error(f"/RWALL/{rw.id}: unknown wall node {rw.node_id}",
                       "CROSS REF")
