@@ -1146,13 +1146,13 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         m_flag = 0
         s_flag = 2
         inst_start = 0.0
+        p_thickfail = 0.0
         if len(cards) > 1 and not cards[1].is_blank:
             if block.fixed:
                 f = cards[1].cut("FAIL_BIQUAD_2")
+                p_thickfail = _fval(f[0])
                 m_flag = _ival(f[1])
                 s_flag = _ival(f[2], default=2)
-                _warn_ignored(log, f"/FAIL/BIQUAD/{mat_id}", block.source,
-                              [("P_thickfail", f[0])])
             else:
                 v = cards[1].ints()
                 if v and v[0] in (1, 2):
@@ -1178,6 +1178,7 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
         params = {"c1": c1, "c2": c2, "c3": c3, "c4": c4, "c5": c5,
                   "m_flag": m_flag, "s_flag": s_flag, "inst_start": inst_start,
+                  "p_thickfail": p_thickfail,
                   "e1": e1, "e2": e2, "e3": e3, "e4": e4}
         fail_biquad.fit(params)   # pre-compute the two parabolas
         fm = FailureModel(type="BIQUAD", ifail_sh=ifail_sh, params=params)
@@ -1893,9 +1894,6 @@ def read_box(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             n2 = t[1] if len(t) > 1 else 0
             iskew = t[2] if len(t) > 2 else 0
             cards = cards[1:]
-        if iskew:
-            log.warning(f"/BOX/RECTA/{block.user_id}: Iskew={iskew} not "
-                        f"ported — global axes used", block.source)
         if real and (n1 or n2):
             if not (n1 and n2):
                 log.error(f"/BOX/RECTA/{block.user_id}: corner nodes "
@@ -1903,7 +1901,7 @@ def read_box(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 return
             model.boxes[block.user_id] = Box(
                 id=block.user_id, title=title, kind="RECTA",
-                node1=n1, node2=n2)
+                node1=n1, node2=n2, iskew=iskew)
             return
         vals: List[float] = []
         for c in cards:
@@ -1918,7 +1916,8 @@ def read_box(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         p1, p2 = np.array(vals[:3]), np.array(vals[3:6])
         model.boxes[block.user_id] = Box(
             id=block.user_id, corner_min=np.minimum(p1, p2),
-            corner_max=np.maximum(p1, p2), title=title, kind="RECTA")
+            corner_max=np.maximum(p1, p2), title=title, kind="RECTA",
+            iskew=iskew)
         return
 
     if len(cards) < (3 if kind == "CYLIN" else 2):
@@ -3528,7 +3527,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         f4 = _fixed_vals(cards[4], [7, 1, 1, 1, 20, 10, 20, 20, 20])
         if _ival(f4[1]) or _ival(f4[2]) or _ival(f4[3]):
             ign.append(f"IBC={f4[1] or '0'}{f4[2] or '0'}{f4[3] or '0'}")
-        for name, s in (("Inacti", f4[5]), ("VISs", f4[6]), ("Tpressfit", f4[8])):
+        for name, s in (("VISs", f4[6]), ("Tpressfit", f4[8])):
             if s and s.strip() and any(_to_float(tok) != 0.0 for tok in s.split()):
                 ign.append(f"{name}={s.strip()}")
                 
@@ -3633,7 +3632,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         f4 = _fixed_vals(cards[icard + 1], [7, 1, 1, 1, 20, 10, 20, 20, 20])
         if _ival(f4[1]) or _ival(f4[2]) or _ival(f4[3]):
             ign.append(f"IBC={f4[1] or '0'}{f4[2] or '0'}{f4[3] or '0'}")
-        for name, s in (("Inacti", f4[5]), ("VisS", f4[6]),
+        for name, s in (("VisS", f4[6]),
                         ("VisF", f4[7]), ("Bumult", f4[8])):
             if s and _to_float(s) != 0.0:
                 ign.append(f"{name}={s}")

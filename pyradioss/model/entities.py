@@ -184,7 +184,8 @@ class Box:
       Corners come either from the coordinate cards (``corner_min``/
       ``corner_max`` filled at read time) or from two NODES (``node1``/
       ``node2`` > 0 — resolved against the mesh at group-resolution
-      time, the cfg recta.cfg N1/N2 fields);
+      time, the cfg recta.cfg N1/N2 fields); ``iskew`` > 0 evaluates
+      limits in the local skew frame;
     * ``'CYLIN'`` — finite cylinder: axis segment ``p1``->``p2``,
       ``diameter``; a node is inside when its axis projection falls
       between the caps and its distance from the axis is <= D/2
@@ -200,6 +201,7 @@ class Box:
     p1: Optional[np.ndarray] = None          # (3,) CYLIN base / SPHER center
     p2: Optional[np.ndarray] = None          # (3,) CYLIN axis end
     diameter: float = 0.0                    # CYLIN / SPHER
+    iskew: int = 0                           # CYLIN / SPHER
     node1: int = 0                           # RECTA/CYLIN corner/axis node
     node2: int = 0
 

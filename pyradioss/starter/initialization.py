@@ -696,7 +696,13 @@ def _nodes_in_box(model: Model, box, log: MessageLog,
             if p1 is None or p2 is None:
                 return np.zeros(0, dtype=np.int64)
             cmin, cmax = np.minimum(p1, p2), np.maximum(p1, p2)
-        inside = np.all((x >= cmin) & (x <= cmax), axis=1)
+        if box.iskew:
+            axes = model.skews.axes[box.iskew]
+            origin = model.skews.origins[box.iskew]
+            x_test = (x - origin) @ axes.T
+        else:
+            x_test = x
+        inside = np.all((x_test >= cmin) & (x_test <= cmax), axis=1)
         return np.where(inside)[0]
     if box.kind == "SPHER":
         c = _pt(box.node1, box.p1)

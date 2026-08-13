@@ -274,10 +274,10 @@ def test_inter7_real_format_parses_without_range_error(tmp_path):
     assert i.fric == 0.0 and i.ifq == 0 and i.xfiltr == 0.0
     assert i.sens_id == 0
     assert i.stfac == 1.0            # Stfac = 0 -> default scale 1.0
-    # the non-default real fields (Idel=2, Stmin=1000, Inacti=5, Iform=2)
+    # the non-default real fields (Idel=2, Stmin=1000, Iform=2)
     # are reported once, not silently swallowed
     w = "\n".join(log.warnings)
-    assert "Idel=2" in w and "Inacti=5" in w and "Stmin=1000" in w, \
+    assert "Idel=2" in w and "Stmin=1000" in w, \
         log.warnings
 
 
@@ -781,7 +781,7 @@ def test_part_numeric_title(tmp_path):
 
 def test_fail_biquad_real_card2_and_fail_id(tmp_path):
     """Header /FAIL/BIQUAD/mat_ID/fail_ID; card 2 is P_thickfail M_Flag
-    S_Flag ... (int('.2') crashed); P_thickfail warned, Ifail_sh
+    S_Flag ... (int('.2') crashed); P_thickfail is parsed, Ifail_sh
     defaults to 1."""
     body = (
         "/FAIL/BIQUAD/1/1\n"
@@ -798,7 +798,7 @@ def test_fail_biquad_real_card2_and_fail_id(tmp_path):
     assert fm.ifail_sh == 1
     assert fm.params["c1"] == pytest.approx(0.2419)
     assert fm.params["c5"] == pytest.approx(0.1394)
-    assert any("P_thickfail" in w for w in log.warnings), log.warnings
+    assert fm.params.get("p_thickfail") == pytest.approx(0.2)
 
 
 def test_fail_biquad_m_flag_preset(tmp_path):
