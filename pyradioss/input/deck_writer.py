@@ -594,6 +594,30 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
+    def mat_law46(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/LAW46``."""
+        self._header("MAT", "LAW46", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def mat_law59(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/LAW59``."""
+        self._header("MAT", "LAW59", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def mat_law88(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/LAW88``."""
+        self._header("MAT", "LAW88", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def mat_connect(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/CONNECT``."""
+        self._header("MAT", "CONNECT", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
     # ---- failure / EOS -----------------------------------------------------------
 
     def fail_johnson(self, mat_id: int, d1, d2, d3, d4, d5=0.0,
@@ -791,6 +815,12 @@ class StarterDeck:
     def prop_spr_pre(self, pid: int, title: str, data_cards) -> None:
         """``/PROP/SPR_PRE``."""
         self._header("PROP", "SPR_PRE", pid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def prop_sh_sandw(self, pid: int, title: str, data_cards) -> None:
+        """``/PROP/SH_SANDW``."""
+        self._header("PROP", "SH_SANDW", pid)
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
@@ -1101,6 +1131,73 @@ class StarterDeck:
         """``/TABLE``."""
         self._header("TABLE", tid)
         self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def eos_gruneisen(self, eid: int, title: str, data_cards) -> None:
+        """``/EOS/GRUNEISEN``."""
+        self._header("EOS", "GRUNEISEN", eid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def euler_mat(self, mid: int, title: str, data_cards) -> None:
+        """``/EULER/MAT``."""
+        self._header("EULER", "MAT", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def parith_on(self) -> None:
+        """``/PARITH/ON``."""
+        self.lines.append("/PARITH/ON")
+
+    def upwind(self, data_cards) -> None:
+        """``/UPWIND``."""
+        self._header("UPWIND")
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def caa(self, data_cards) -> None:
+        """``/CAA``."""
+        self._header("CAA")
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def inivol(self, iid: int, title: str, data_cards) -> None:
+        """``/INIVOL``."""
+        self._header("INIVOL", iid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def imptemp(self, iid: int, title: str, data_cards) -> None:
+        """``/IMPTEMP``."""
+        self._header("IMPTEMP", iid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def convec(self, cid: int, title: str, data_cards) -> None:
+        """``/CONVEC``."""
+        self._header("CONVEC", cid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def load_centri(self, lid: int, title: str, data_cards) -> None:
+        """``/LOAD/CENTRI``."""
+        self._header("LOAD", "CENTRI", lid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def inishe_generic(self, kind: str, iid: int, title: str, data_cards) -> None:
+        """Generic pass-through for ``/INISHE/<kind>``."""
+        self._header("INISHE", kind, iid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def impacc(self, iid: int, title: str, data_cards) -> None:
+        """``/IMPACC``."""
+        self._header("IMPACC", iid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def xref(self, data_cards) -> None:
+        """``/XREF``."""
+        self._header("XREF")
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
     # ---- boundary / initial conditions / loads ---------------------------------
@@ -1916,6 +2013,14 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law82(mid, title, cards)
     elif law == "MULTIFLUID":
         d.mat_multifluid(mid, title, cards)
+    elif law == "LAW46":
+        d.mat_law46(mid, title, cards)
+    elif law == "LAW59":
+        d.mat_law59(mid, title, cards)
+    elif law == "LAW88":
+        d.mat_law88(mid, title, cards)
+    elif law in ("CONNECT",):
+        d.mat_connect(mid, title, cards)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")
@@ -1993,6 +2098,8 @@ def _conv_prop(d: StarterDeck, b: KeywordBlock) -> None:
         d.prop_fluid(pid, title, cards)
     elif kind in ("SPR_PRE", "TYPE32"):
         d.prop_spr_pre(pid, title, cards)
+    elif kind in ("SH_SANDW", "TYPE17"):
+        d.prop_sh_sandw(pid, title, cards)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown property {kind}")
@@ -2136,6 +2243,8 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
             d.eos_linear(b.user_id, t[0], t[1], t[2], t[3])
         elif key == "/EOS/STIFF-GAS":
             d.eos_stiff_gas(b.user_id, title, b.cards)
+        elif key == "/EOS/GRUNEISEN":
+            d.eos_gruneisen(b.user_id, title, b.cards)
         else:
             d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                         note=f"unknown eos {kind}")
@@ -2382,6 +2491,8 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
         title, cards = _title_cards(b)
         if kind == "DETPLAN":
             d.dfs_detplan(b.user_id, title, cards)
+        elif kind == "DETPOINT":
+            d.dfs_detplan(b.user_id, title, cards)  # same pass-through
         else:
             d.raw_block("/".join(b.parts), [c.raw for c in b.cards], note=f"unknown dfs {kind}")
     elif key0 == "EBCS":
@@ -2391,6 +2502,44 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
     elif key0 == "TABLE":
         title, cards = _title_cards(b)
         d.table(b.user_id, title, cards)
+    elif key0 == "EULER":
+        kind = b.parts[1].upper() if len(b.parts) > 1 else ""
+        title, cards = _title_cards(b)
+        if kind == "MAT":
+            d.euler_mat(b.user_id, title, cards)
+        else:
+            d.raw_block("/".join(b.parts), [c.raw for c in b.cards], note=f"unknown euler {kind}")
+    elif key0 == "PARITH":
+        d.parith_on()
+    elif key0 == "UPWIND":
+        d.upwind(b.cards)
+    elif key0 == "CAA":
+        d.caa(b.cards)
+    elif key0 == "INIVOL":
+        title, cards = _title_cards(b)
+        d.inivol(b.user_id, title, cards)
+    elif key0 == "IMPTEMP":
+        title, cards = _title_cards(b)
+        d.imptemp(b.user_id, title, cards)
+    elif key0 == "CONVEC":
+        title, cards = _title_cards(b)
+        d.convec(b.user_id, title, cards)
+    elif key0 == "LOAD":
+        kind = b.parts[1].upper() if len(b.parts) > 1 else ""
+        title, cards = _title_cards(b)
+        if kind == "CENTRI":
+            d.load_centri(b.user_id, title, cards)
+        else:
+            d.raw_block("/".join(b.parts), [c.raw for c in b.cards], note=f"unknown load {kind}")
+    elif key0 == "INISHE":
+        kind = b.parts[1].upper() if len(b.parts) > 1 else ""
+        title, cards = _title_cards(b)
+        d.inishe_generic(kind, b.user_id, title, cards)
+    elif key0 == "IMPACC":
+        title, cards = _title_cards(b)
+        d.impacc(b.user_id, title, cards)
+    elif key0 == "XREF":
+        d.xref(b.cards)
     elif key0 == "TH":
         kind = b.parts[1].upper() if len(b.parts) > 1 else "NODE"
         title, cards = _title_cards(b)
