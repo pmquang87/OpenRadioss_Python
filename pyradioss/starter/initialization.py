@@ -697,8 +697,12 @@ def _nodes_in_box(model: Model, box, log: MessageLog,
                 return np.zeros(0, dtype=np.int64)
             cmin, cmax = np.minimum(p1, p2), np.maximum(p1, p2)
         if box.iskew:
-            axes = model.skews.axes[box.iskew]
-            origin = model.skews.origins[box.iskew]
+            row = model.skews.index("SKEW", box.iskew)
+            if row < 0:
+                log.error(f"{who}: /BOX/{box.id} references unknown /SKEW {box.iskew}", "GROUP CHECK")
+                return np.zeros(0, dtype=np.int64)
+            axes = model.skews.axes[row]
+            origin = model.skews.origins[row]
             x_test = (x - origin) @ axes.T
         else:
             x_test = x

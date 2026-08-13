@@ -102,7 +102,11 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
         t0 = time.time()
 
         # 1. read + parse the deck (lectur.F)
-        blocks = read_deck(input_file)
+        try:
+            blocks = read_deck(input_file)
+        except FileNotFoundError as e:
+            log.error(f"LEXER CRASH: {e}", "LEXER")
+            return 1
         model = Model()
         parse_starter_deck(blocks, model, log)
 
