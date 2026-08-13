@@ -510,6 +510,24 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
+    def mat_law70(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/LAW70``."""
+        self._header("MAT", "LAW70", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def mat_law151(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/LAW151``."""
+        self._header("MAT", "LAW151", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def mat_bound(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/BOUND``."""
+        self._header("MAT", "BOUND", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
     # ---- failure / EOS -----------------------------------------------------------
 
     def fail_johnson(self, mat_id: int, d1, d2, d3, d4, d5=0.0,
@@ -578,6 +596,12 @@ class StarterDeck:
         self.raw_block(f"EOS/LINEAR/{mat_id}",
                        ["".join(fmt_float(x) for x in (p0, bulk, psh, rho0))],
                        note="port extension (see eos_ideal_gas)")
+
+    def eos_stiff_gas(self, eid: int, title: str, data_cards) -> None:
+        """``/EOS/STIFF-GAS``."""
+        self._header("EOS", "STIFF-GAS", eid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
     # ---- properties -------------------------------------------------------------
 
@@ -875,6 +899,27 @@ class StarterDeck:
         else:
             self._header(header)
         self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def submodel(self, sid: int, title: str, data_cards) -> None:
+        """``/SUBMODEL``."""
+        self._header("SUBMODEL", sid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def endsub(self) -> None:
+        """``/ENDSUB``."""
+        self.lines.append("/ENDSUB")
+
+    def transform_tra(self, tid: int, title: str, data_cards) -> None:
+        """``/TRANSFORM/TRA``."""
+        self._header("TRANSFORM", "TRA", tid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def parameter_global(self, data_cards) -> None:
+        """``/PARAMETER/GLOBAL``."""
+        self._header("PARAMETER", "GLOBAL")
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
     # ---- boundary / initial conditions / loads ---------------------------------
@@ -1662,6 +1707,12 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law83(mid, title, cards)
     elif law == "KELVINMAX":
         d.mat_kelvinmax(mid, title, cards)
+    elif law == "LAW70":
+        d.mat_law70(mid, title, cards)
+    elif law == "LAW151":
+        d.mat_law151(mid, title, cards)
+    elif law == "BOUND":
+        d.mat_bound(mid, title, cards)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")
@@ -1796,6 +1847,8 @@ def _conv_rwall(d: StarterDeck, b: KeywordBlock) -> None:
     elif kind == "CYL":
         d.rwall_cyl(b.user_id, title, cards[1].floats()[:3],
                     cards[2].floats()[:3], cards[3].floats()[0], **kw)
+    elif kind == "PARAL":
+        d.rwall_paral(b.user_id, title, cards)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown rwall {kind}")
@@ -1816,7 +1869,7 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
     if key0 == "NODE":
         d.node([c.tokens()[:4] for c in b.cards])
     elif key0 in ("BRICK", "TETRA4", "SHELL", "SH3N", "TRUSS", "SPRING",
-                  "BEAM", "SHEL16", "QUAD"):
+                  "BEAM", "SHEL16", "QUAD", "TETRA10", "SPHCEL"):
         d._elems(key0, b.user_id, [c.ints() for c in b.cards])
     elif key0 == "PART":
         title, cards = _title_cards(b)
@@ -1858,6 +1911,8 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
             d.eos_polynomial(b.user_id, t[0], t[1], t[2], t[3], t[4], t[5], e0)
         elif key == "/EOS/LINEAR":
             d.eos_linear(b.user_id, t[0], t[1], t[2], t[3])
+        elif key == "/EOS/STIFF-GAS":
+            d.eos_stiff_gas(b.user_id, title, b.cards)
         else:
             d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                         note=f"unknown eos {kind}")
@@ -2055,6 +2110,25 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
         kind = b.parts[1].upper() if len(b.parts) > 1 else ""
         title, cards = _title_cards(b)
         d.ale_generic(f"ALE/{kind}", b.user_id, title, cards)
+    elif key0 == "SUBMODEL":
+        title, cards = _title_cards(b)
+        d.submodel(b.user_id, title, cards)
+    elif key0 == "ENDSUB":
+        d.endsub()
+    elif key0 == "TRANSFORM":
+        kind = b.parts[1].upper() if len(b.parts) > 1 else ""
+        title, cards = _title_cards(b)
+        if kind == "TRA":
+            d.transform_tra(b.user_id, title, cards)
+        else:
+            d.raw_block("/".join(b.parts), [c.raw for c in b.cards], note=f"unknown transform {kind}")
+    elif key0 == "PARAMETER":
+        kind = b.parts[1].upper() if len(b.parts) > 1 else ""
+        title, cards = _title_cards(b)
+        if kind == "GLOBAL":
+            d.parameter_global(cards)
+        else:
+            d.raw_block("/".join(b.parts), [c.raw for c in b.cards], note=f"unknown parameter {kind}")
     elif key0 == "TH":
         kind = b.parts[1].upper() if len(b.parts) > 1 else "NODE"
         title, cards = _title_cards(b)
