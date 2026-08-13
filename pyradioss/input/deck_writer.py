@@ -474,6 +474,12 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
+    def mat_conc(self, mid: int, title: str, data_cards) -> None:
+        """``/MAT/CONC`` (LAW24)."""
+        self._header("MAT", "CONC", mid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
     # ---- failure / EOS -----------------------------------------------------------
 
     def fail_johnson(self, mat_id: int, d1, d2, d3, d4, d5=0.0,
@@ -629,6 +635,18 @@ class StarterDeck:
     def prop_spr_gene(self, pid: int, title: str, data_cards) -> None:
         """``/PROP/SPR_GENE``."""
         self._header("PROP", "SPR_GENE", pid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def prop_type20(self, pid: int, title: str, data_cards) -> None:
+        """``/PROP/TYPE20``."""
+        self._header("PROP", "TYPE20", pid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def prop_void(self, pid: int, title: str, data_cards) -> None:
+        """``/PROP/VOID`` (TYPE0)."""
+        self._header("PROP", "VOID", pid)
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
@@ -811,6 +829,15 @@ class StarterDeck:
     def monvol_airbag1(self, vid: int, title: str, data_cards) -> None:
         """``/MONVOL/AIRBAG1``."""
         self._header("MONVOL", "AIRBAG1", vid)
+        self._title(title)
+        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+    def ale_generic(self, header: str, aid: int, title: str, data_cards) -> None:
+        """Generic fallback for ``/ALE``."""
+        if aid > 0:
+            self._header(header, aid)
+        else:
+            self._header(header)
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
@@ -1581,6 +1608,8 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_gas(mid, title, cards)
     elif law in ("LAW0", "VOID"):
         d.mat_void(mid, title, cards)
+    elif law in ("LAW24", "CONC"):
+        d.mat_conc(mid, title, cards)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")
@@ -1646,6 +1675,10 @@ def _conv_prop(d: StarterDeck, b: KeywordBlock) -> None:
         d.prop_spr_gene(pid, title, cards)
     elif kind == "INJECT1":
         d.prop_inject1(pid, title, cards)
+    elif kind in ("TYPE20", "TSHELL"):
+        d.prop_type20(pid, title, cards)
+    elif kind in ("TYPE0", "VOID"):
+        d.prop_void(pid, title, cards)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown property {kind}")
@@ -1726,7 +1759,7 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
     if key0 == "NODE":
         d.node([c.tokens()[:4] for c in b.cards])
     elif key0 in ("BRICK", "TETRA4", "SHELL", "SH3N", "TRUSS", "SPRING",
-                  "BEAM"):
+                  "BEAM", "SHEL16", "QUAD"):
         d._elems(key0, b.user_id, [c.ints() for c in b.cards])
     elif key0 == "PART":
         title, cards = _title_cards(b)
@@ -1961,6 +1994,10 @@ def _convert_block(d: StarterDeck, b: KeywordBlock,
             d.monvol_airbag1(b.user_id, title, cards)
         else:
             d.raw_block("/".join(b.parts), [c.raw for c in b.cards], note=f"unknown monvol {kind}")
+    elif key0 == "ALE":
+        kind = b.parts[1].upper() if len(b.parts) > 1 else ""
+        title, cards = _title_cards(b)
+        d.ale_generic(f"ALE/{kind}", b.user_id, title, cards)
     elif key0 == "TH":
         kind = b.parts[1].upper() if len(b.parts) > 1 else "NODE"
         title, cards = _title_cards(b)
