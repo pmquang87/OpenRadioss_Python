@@ -187,9 +187,9 @@ def has_velocity_terms(mfrot, c) -> bool:
 
 def filter_alpha(ifq, xfiltr, dt):
     """The per-cycle IFQ filter coefficient ALPHA (module docstring).
-    IFQ 1/2: the constant XFILTR; IFQ 3: min(1, XFILTR*dt) — the
+    IFQ 1/2/11/12: the constant XFILTR; IFQ 3/13: min(1, XFILTR*dt) — the
     cutoff-frequency form (the documented MAX->MIN deviation)."""
-    if ifq == 3:
+    if ifq in (3, 13):
         return min(1.0, xfiltr * dt)
     return xfiltr
 
@@ -214,5 +214,44 @@ def apply_filter(keys, ft_target, alpha, filt_keys, filt_vals):
         hit = filt_keys[pos] == keys
         prev[hit] = filt_vals[pos[hit]]
     ft = alpha * ft_target + (1.0 - alpha) * prev
+    order = np.argsort(keys)
+    return ft, keys[order], ft[order]
+
+
+def apply_incremental_stiffness(keys, k, v_rel, dt, normal, mu, fn, alpha, filt_keys, filt_vals):
+    """One incremental stiffness tangential force step (MODFR=2 / IFQ>=10)
+    over the active pairs (the CAND_F explicit path in i7for3.F).
+    
+    Returns (ft, new_keys, new_vals), where `ft` is the tangential force 
+    vector. The incremental formula is:
+      F_trial = CAND_F + alpha * k * v_rel * dt
+      F_trial_tan = F_trial - (F_trial . normal) * normal
+      ft = F_trial_tan * min(1.0, mu * fn / |F_trial_tan|)
+      
+    This implicitly handles stick/slip transitions."""
+    prev = np.zeros_like(v_rel)
+    if len(filt_keys):
+        pos = np.searchsorted(filt_keys, keys)
+        pos = np.minimum(pos, len(filt_keys) - 1)
+        hit = filt_keys[pos] == keys
+        prev[hit] = filt_vals[pos[hit]]
+
+    # F_trial = CAND_F + alpha * k * v_rel * dt
+    f_trial = prev + (alpha * k * dt)[:, None] * v_rel
+    
+    # Project to tangential plane (F_trial_tan)
+    ftn = np.einsum('ij,ij->i', f_trial, normal)
+    f_trial_tan = f_trial - ftn[:, None] * normal
+    
+    # Frictional limit
+    ft_mag = np.linalg.norm(f_trial_tan, axis=1)
+    
+    # beta = min(1.0, mu * fn / ft_mag)
+    # Handle division by zero where ft_mag is extremely small
+    safe_mag = np.maximum(ft_mag, 1e-30)
+    beta = np.minimum(1.0, (mu * fn) / safe_mag)
+    
+    ft = f_trial_tan * beta[:, None]
+    
     order = np.argsort(keys)
     return ft, keys[order], ft[order]

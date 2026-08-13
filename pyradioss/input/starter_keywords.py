@@ -3587,16 +3587,10 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if f5[6] and _to_float(f5[6]) not in (0.0, 1.0):
             ign.append(f"AscaleF={f5[6]}")
         # Iform = MODFR: 2 selects the incremental (stiffness) tangential
-        # formulation (upstream turns it into IFQ >= 10) — the same
-        # not-ported path the compact dialect refuses. Without friction
-        # it changes nothing and is only reported.
-        if iform == 2:
-            if fric != 0.0 or mfrot > 0:
-                log.error(f"/INTER/TYPE7/{block.user_id}: Iform=2 (the "
-                          f"incremental stiffness tangential formulation) "
-                          f"is not ported — use Iform 0/1", block.source)
-            else:
-                ign.append("Iform=2 (no friction defined — inert)")
+        # formulation (upstream turns it into IFQ >= 10). Without friction
+        # it changes nothing.
+        if iform == 2 and fric == 0.0 and mfrot == 0:
+            ign.append("Iform=2 (no friction defined — inert)")
         # C1..C5 (Ifric > 0) and C6 (Ifric > 1) cards
         fric_c = (0.0,) * 6
         icard += 3
@@ -3634,14 +3628,12 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                   f"exponential decay)", block.source)
         mfrot = 0
     if ifq >= 10:
-        # MODFR = 2 / the incremental (stiffness) tangential formulation —
-        # a different explicit force path, deferred loudly (M15; the
-        # implicit solver's return mapping IS that formulation)
-        log.error(f"/INTER/{kind}/{block.user_id}: Ifiltr={ifq} (the "
-                  f"IFQ >= 10 incremental stiffness formulation) is not "
-                  f"ported — use Ifiltr 0..3", block.source)
-        ifq = 0
-    if ifq not in (0, 1, 2, 3):
+        # MODFR = 2 / the incremental (stiffness) tangential formulation.
+        if ifq not in (10, 11, 12, 13):
+            log.error(f"/INTER/{kind}/{block.user_id}: Ifiltr={ifq} "
+                      f"(incremental stiffness Ifiltr must be 10..13)", block.source)
+            ifq = 0
+    elif ifq not in (0, 1, 2, 3):
         log.error(f"/INTER/{kind}/{block.user_id}: Ifiltr={ifq} (0..3)",
                   block.source)
         ifq = 0

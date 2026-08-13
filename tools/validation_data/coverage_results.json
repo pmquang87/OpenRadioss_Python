@@ -1,17 +1,17 @@
 {
  "schema": "M78 coverage sweep",
- "generated": "2026-08-13 19:31:14",
+ "generated": "2026-08-13 21:20:49",
  "port_timeout_s": 120,
  "summary": {
   "total": 89,
   "verdicts": {
-   "SKIPS": 77,
-   "ERROR": 4,
+   "SKIPS": 80,
    "CRASH": 6,
-   "CLEAN": 2
+   "CLEAN": 2,
+   "ERROR": 1
   },
-  "cases_with_parse_errors": 1,
-  "wall_time_s": 76.6
+  "cases_with_parse_errors": 0,
+  "wall_time_s": 185.0
  },
  "ranked_gaps": [
   {
@@ -99,13 +99,6 @@
    "cases_sole_blocker": 0
   },
   {
-   "family": "TH/SH3N",
-   "cases_using": 2,
-   "cases_blocking": 2,
-   "blocks_total": 4,
-   "cases_sole_blocker": 1
-  },
-  {
    "family": "TH/SECTIO",
    "cases_using": 2,
    "cases_blocking": 2,
@@ -113,32 +106,11 @@
    "cases_sole_blocker": 0
   },
   {
-   "family": "INTER/TYPE7/1",
-   "cases_using": 0,
+   "family": "TH/SH3N",
+   "cases_using": 2,
    "cases_blocking": 2,
-   "blocks_total": 0,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "FAIL/SNCONNECT",
-   "cases_using": 1,
-   "cases_blocking": 1,
-   "blocks_total": 1,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "TH/INTER",
-   "cases_using": 1,
-   "cases_blocking": 1,
-   "blocks_total": 2,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "RANDOM",
-   "cases_using": 1,
-   "cases_blocking": 1,
-   "blocks_total": 1,
-   "cases_sole_blocker": 0
+   "blocks_total": 4,
+   "cases_sole_blocker": 1
   },
   {
    "family": "FAIL/TAB1",
@@ -155,84 +127,28 @@
    "cases_sole_blocker": 0
   },
   {
-   "family": "RBODY/1002",
-   "cases_using": 0,
+   "family": "RANDOM",
+   "cases_using": 1,
    "cases_blocking": 1,
-   "blocks_total": 0,
+   "blocks_total": 1,
    "cases_sole_blocker": 0
   },
   {
-   "family": "RBODY/1003",
-   "cases_using": 0,
+   "family": "TH/INTER",
+   "cases_using": 1,
    "cases_blocking": 1,
-   "blocks_total": 0,
+   "blocks_total": 2,
    "cases_sole_blocker": 0
   },
   {
-   "family": "RBODY/1008",
-   "cases_using": 0,
+   "family": "FAIL/SNCONNECT",
+   "cases_using": 1,
    "cases_blocking": 1,
-   "blocks_total": 0,
+   "blocks_total": 1,
    "cases_sole_blocker": 0
   },
   {
-   "family": "RBODY/1007",
-   "cases_using": 0,
-   "cases_blocking": 1,
-   "blocks_total": 0,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "FAIL/BIQUAD/1",
-   "cases_using": 0,
-   "cases_blocking": 1,
-   "blocks_total": 0,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "RBODY/1005",
-   "cases_using": 0,
-   "cases_blocking": 1,
-   "blocks_total": 0,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "RBODY/1001",
-   "cases_using": 0,
-   "cases_blocking": 1,
-   "blocks_total": 0,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "RBODY/1004",
-   "cases_using": 0,
-   "cases_blocking": 1,
-   "blocks_total": 0,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "RBODY/1006",
-   "cases_using": 0,
-   "cases_blocking": 1,
-   "blocks_total": 0,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "RBODY/1010",
-   "cases_using": 0,
-   "cases_blocking": 1,
-   "blocks_total": 0,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "TABLE/1/4711",
-   "cases_using": 0,
-   "cases_blocking": 1,
-   "blocks_total": 0,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "RBODY/1009",
+   "family": "INTER/TYPE7/1",
    "cases_using": 0,
    "cases_blocking": 1,
    "blocks_total": 0,
@@ -253,10 +169,87 @@
    "cases_sole_blocker": 0
   },
   {
-   "family": "BCS",
-   "cases_using": 83,
-   "cases_blocking": 0,
-   "blocks_total": 1834,
+   "family": "RBODY/1005",
+   "cases_using": 0,
+   "cases_blocking": 1,
+   "blocks_total": 0,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "RBODY/1003",
+   "cases_using": 0,
+   "cases_blocking": 1,
+   "blocks_total": 0,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "TABLE/1/4711",
+   "cases_using": 0,
+   "cases_blocking": 1,
+   "blocks_total": 0,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "RBODY/1007",
+   "cases_using": 0,
+   "cases_blocking": 1,
+   "blocks_total": 0,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "RBODY/1004",
+   "cases_using": 0,
+   "cases_blocking": 1,
+   "blocks_total": 0,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "RBODY/1010",
+   "cases_using": 0,
+   "cases_blocking": 1,
+   "blocks_total": 0,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "RBODY/1006",
+   "cases_using": 0,
+   "cases_blocking": 1,
+   "blocks_total": 0,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "RBODY/1002",
+   "cases_using": 0,
+   "cases_blocking": 1,
+   "blocks_total": 0,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "FAIL/BIQUAD/1",
+   "cases_using": 0,
+   "cases_blocking": 1,
+   "blocks_total": 0,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "RBODY/1008",
+   "cases_using": 0,
+   "cases_blocking": 1,
+   "blocks_total": 0,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "RBODY/1009",
+   "cases_using": 0,
+   "cases_blocking": 1,
+   "blocks_total": 0,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "RBODY/1001",
+   "cases_using": 0,
+   "cases_blocking": 1,
+   "blocks_total": 0,
    "cases_sole_blocker": 0
   },
   {
@@ -264,6 +257,20 @@
    "cases_using": 83,
    "cases_blocking": 0,
    "blocks_total": 100,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "NODE",
+   "cases_using": 83,
+   "cases_blocking": 0,
+   "blocks_total": 85,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "PART",
+   "cases_using": 83,
+   "cases_blocking": 0,
+   "blocks_total": 394,
    "cases_sole_blocker": 0
   },
   {
@@ -281,17 +288,10 @@
    "cases_sole_blocker": 0
   },
   {
-   "family": "PART",
+   "family": "BCS",
    "cases_using": 83,
    "cases_blocking": 0,
-   "blocks_total": 394,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "NODE",
-   "cases_using": 83,
-   "cases_blocking": 0,
-   "blocks_total": 85,
+   "blocks_total": 1834,
    "cases_sole_blocker": 0
   },
   {
@@ -351,17 +351,17 @@
    "cases_sole_blocker": 0
   },
   {
-   "family": "IMPDISP",
-   "cases_using": 30,
-   "cases_blocking": 0,
-   "blocks_total": 36,
-   "cases_sole_blocker": 0
-  },
-  {
    "family": "FUNCT_SMOOTH",
    "cases_using": 30,
    "cases_blocking": 0,
    "blocks_total": 30,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "IMPDISP",
+   "cases_using": 30,
+   "cases_blocking": 0,
+   "blocks_total": 36,
    "cases_sole_blocker": 0
   },
   {
@@ -428,13 +428,6 @@
    "cases_sole_blocker": 0
   },
   {
-   "family": "SKEW/FIX",
-   "cases_using": 12,
-   "cases_blocking": 0,
-   "blocks_total": 12,
-   "cases_sole_blocker": 0
-  },
-  {
    "family": "PROP/SPR_GENE",
    "cases_using": 12,
    "cases_blocking": 0,
@@ -442,10 +435,10 @@
    "cases_sole_blocker": 0
   },
   {
-   "family": "SH3N",
-   "cases_using": 8,
+   "family": "SKEW/FIX",
+   "cases_using": 12,
    "cases_blocking": 0,
-   "blocks_total": 18,
+   "blocks_total": 12,
    "cases_sole_blocker": 0
   },
   {
@@ -453,6 +446,13 @@
    "cases_using": 8,
    "cases_blocking": 0,
    "blocks_total": 19,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "SH3N",
+   "cases_using": 8,
+   "cases_blocking": 0,
+   "blocks_total": 18,
    "cases_sole_blocker": 0
   },
   {
@@ -484,13 +484,6 @@
    "cases_sole_blocker": 0
   },
   {
-   "family": "BOX/RECTA",
-   "cases_using": 4,
-   "cases_blocking": 0,
-   "blocks_total": 8,
-   "cases_sole_blocker": 0
-  },
-  {
    "family": "GRNOD/BOX",
    "cases_using": 4,
    "cases_blocking": 0,
@@ -505,10 +498,10 @@
    "cases_sole_blocker": 0
   },
   {
-   "family": "PROP/SPR_BEAM",
-   "cases_using": 3,
+   "family": "BOX/RECTA",
+   "cases_using": 4,
    "cases_blocking": 0,
-   "blocks_total": 11,
+   "blocks_total": 8,
    "cases_sole_blocker": 0
   },
   {
@@ -519,17 +512,10 @@
    "cases_sole_blocker": 0
   },
   {
-   "family": "PROP/BEAM",
-   "cases_using": 2,
+   "family": "PROP/SPR_BEAM",
+   "cases_using": 3,
    "cases_blocking": 0,
-   "blocks_total": 2,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "SECT",
-   "cases_using": 2,
-   "cases_blocking": 0,
-   "blocks_total": 6,
+   "blocks_total": 11,
    "cases_sole_blocker": 0
   },
   {
@@ -547,6 +533,13 @@
    "cases_sole_blocker": 0
   },
   {
+   "family": "SECT",
+   "cases_using": 2,
+   "cases_blocking": 0,
+   "blocks_total": 6,
+   "cases_sole_blocker": 0
+  },
+  {
    "family": "INTER/TYPE7",
    "cases_using": 2,
    "cases_blocking": 0,
@@ -554,21 +547,14 @@
    "cases_sole_blocker": 0
   },
   {
-   "family": "GRSHEL/SHEL",
-   "cases_using": 1,
+   "family": "PROP/BEAM",
+   "cases_using": 2,
    "cases_blocking": 0,
-   "blocks_total": 5,
+   "blocks_total": 2,
    "cases_sole_blocker": 0
   },
   {
-   "family": "SKEW/MOV",
-   "cases_using": 1,
-   "cases_blocking": 0,
-   "blocks_total": 1,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "GRBRIC/BRIC",
+   "family": "SURF/PART/EXT",
    "cases_using": 1,
    "cases_blocking": 0,
    "blocks_total": 1,
@@ -582,21 +568,28 @@
    "cases_sole_blocker": 0
   },
   {
-   "family": "MAT/KELVINMAX",
+   "family": "FAIL/BIQUAD",
    "cases_using": 1,
    "cases_blocking": 0,
    "blocks_total": 1,
    "cases_sole_blocker": 0
   },
   {
-   "family": "INTER/TYPE2",
+   "family": "GRSHEL/SHEL",
    "cases_using": 1,
    "cases_blocking": 0,
-   "blocks_total": 1,
+   "blocks_total": 5,
    "cases_sole_blocker": 0
   },
   {
-   "family": "FRAME/MOV",
+   "family": "SURF/PART",
+   "cases_using": 1,
+   "cases_blocking": 0,
+   "blocks_total": 2,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "SKEW/MOV",
    "cases_using": 1,
    "cases_blocking": 0,
    "blocks_total": 1,
@@ -610,56 +603,7 @@
    "cases_sole_blocker": 0
   },
   {
-   "family": "FAIL/BIQUAD",
-   "cases_using": 1,
-   "cases_blocking": 0,
-   "blocks_total": 1,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "PROP/SH_ORTH",
-   "cases_using": 1,
-   "cases_blocking": 0,
-   "blocks_total": 3,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "MAT/LAW83",
-   "cases_using": 1,
-   "cases_blocking": 0,
-   "blocks_total": 1,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "SURF/PART",
-   "cases_using": 1,
-   "cases_blocking": 0,
-   "blocks_total": 2,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "MOVE_FUNCT",
-   "cases_using": 1,
-   "cases_blocking": 0,
-   "blocks_total": 5,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "MAT/LAW69",
-   "cases_using": 1,
-   "cases_blocking": 0,
-   "blocks_total": 1,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "SURF/PART/EXT",
-   "cases_using": 1,
-   "cases_blocking": 0,
-   "blocks_total": 1,
-   "cases_sole_blocker": 0
-  },
-  {
-   "family": "PROP/CONNECT",
+   "family": "GRBRIC/BRIC",
    "cases_using": 1,
    "cases_blocking": 0,
    "blocks_total": 1,
@@ -673,7 +617,63 @@
    "cases_sole_blocker": 0
   },
   {
+   "family": "MAT/LAW83",
+   "cases_using": 1,
+   "cases_blocking": 0,
+   "blocks_total": 1,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "PROP/SH_ORTH",
+   "cases_using": 1,
+   "cases_blocking": 0,
+   "blocks_total": 3,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "MAT/KELVINMAX",
+   "cases_using": 1,
+   "cases_blocking": 0,
+   "blocks_total": 1,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "MOVE_FUNCT",
+   "cases_using": 1,
+   "cases_blocking": 0,
+   "blocks_total": 5,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "PROP/CONNECT",
+   "cases_using": 1,
+   "cases_blocking": 0,
+   "blocks_total": 1,
+   "cases_sole_blocker": 0
+  },
+  {
    "family": "GRNOD/GENE",
+   "cases_using": 1,
+   "cases_blocking": 0,
+   "blocks_total": 1,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "INTER/TYPE2",
+   "cases_using": 1,
+   "cases_blocking": 0,
+   "blocks_total": 1,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "MAT/LAW69",
+   "cases_using": 1,
+   "cases_blocking": 0,
+   "blocks_total": 1,
+   "cases_sole_blocker": 0
+  },
+  {
+   "family": "FRAME/MOV",
    "cases_using": 1,
    "cases_blocking": 0,
    "blocks_total": 1,
@@ -719,8 +719,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "3  Alu\n\n     PARTS\n       PART        1  PROP=1        MAT=1        SHELL4N\n\n              0 ERROR(S)\n              9 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.350 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\FAILURE_BIQUAD_0000\\FAILURE_BIQUAD_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.8,
+   "stdout_tail": "3  Alu\n\n     PARTS\n       PART        1  PROP=1        MAT=1        SHELL4N\n\n              0 ERROR(S)\n              9 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.675 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\FAILURE_BIQUAD_0000\\FAILURE_BIQUAD_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -749,23 +749,23 @@
    "verdict": "SKIPS",
    "n_skipped_families": 8,
    "hard_skips": [
-    "DEF_SHELL",
-    "FAIL/BIQUAD/1",
-    "IOFLAG",
-    "DEF_SOLID",
-    "RWALL/SPHER/1",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "RWALL/SPHER/1",
     "TH/RWALL",
+    "FAIL/BIQUAD/1",
+    "DEF_SOLID",
     "TH/SHEL"
    ],
    "blockers": [
-    "DEF_SHELL",
-    "FAIL/BIQUAD/1",
-    "IOFLAG",
-    "DEF_SOLID",
-    "RWALL/SPHER/1",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "RWALL/SPHER/1",
     "TH/RWALL",
+    "FAIL/BIQUAD/1",
+    "DEF_SOLID",
     "TH/SHEL"
    ]
   },
@@ -798,8 +798,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "nium\n\n     PARTS\n       PART        1  PROP=1        MAT=1        SHELL4N\n\n              0 ERROR(S)\n              8 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.296 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\FAILURE_JOHNSON_0000\\FAILURE_JOHNSON_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.8,
+   "stdout_tail": "nium\n\n     PARTS\n       PART        1  PROP=1        MAT=1        SHELL4N\n\n              0 ERROR(S)\n              8 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.682 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\FAILURE_JOHNSON_0000\\FAILURE_JOHNSON_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -827,21 +827,21 @@
    "verdict": "SKIPS",
    "n_skipped_families": 7,
    "hard_skips": [
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
-    "RWALL/SPHER/1",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "RWALL/SPHER/1",
     "TH/RWALL",
+    "DEF_SOLID",
     "TH/SHEL"
    ],
    "blockers": [
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
-    "RWALL/SPHER/1",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "RWALL/SPHER/1",
     "TH/RWALL",
+    "DEF_SOLID",
     "TH/SHEL"
    ]
   },
@@ -874,8 +874,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "nium\n\n     PARTS\n       PART        1  PROP=1        MAT=1        SHELL4N\n\n              0 ERROR(S)\n              8 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.327 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\FAILURE_JOHNSON_0000\\FAILURE_JOHNSON_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.8,
+   "stdout_tail": "nium\n\n     PARTS\n       PART        1  PROP=1        MAT=1        SHELL4N\n\n              0 ERROR(S)\n              8 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.677 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\FAILURE_JOHNSON_0000\\FAILURE_JOHNSON_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -903,21 +903,21 @@
    "verdict": "SKIPS",
    "n_skipped_families": 7,
    "hard_skips": [
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
-    "RWALL/SPHER/1",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "RWALL/SPHER/1",
     "TH/RWALL",
+    "DEF_SOLID",
     "TH/SHEL"
    ],
    "blockers": [
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
-    "RWALL/SPHER/1",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "RWALL/SPHER/1",
     "TH/RWALL",
+    "DEF_SOLID",
     "TH/SHEL"
    ]
   },
@@ -951,8 +951,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "nium\n\n     PARTS\n       PART        1  PROP=1        MAT=1        SHELL4N\n\n              0 ERROR(S)\n              9 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.301 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\FAILURE_JOHNSON_0000\\FAILURE_JOHNSON_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.1,
+   "stdout_tail": "nium\n\n     PARTS\n       PART        1  PROP=1        MAT=1        SHELL4N\n\n              0 ERROR(S)\n              9 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.790 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\FAILURE_JOHNSON_0000\\FAILURE_JOHNSON_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -982,24 +982,24 @@
    "verdict": "SKIPS",
    "n_skipped_families": 8,
    "hard_skips": [
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
-    "RWALL/SPHER/1",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "RWALL/SPHER/1",
     "TH/RWALL",
-    "RANDOM",
-    "TH/SHEL"
+    "DEF_SOLID",
+    "TH/SHEL",
+    "RANDOM"
    ],
    "blockers": [
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
-    "RWALL/SPHER/1",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "RWALL/SPHER/1",
     "TH/RWALL",
-    "RANDOM",
-    "TH/SHEL"
+    "DEF_SOLID",
+    "TH/SHEL",
+    "RANDOM"
    ]
   },
   {
@@ -1031,8 +1031,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "nium\n\n     PARTS\n       PART        1  PROP=1        MAT=1        SHELL4N\n\n              0 ERROR(S)\n              8 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.317 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\FAILURE_JOHNSON_0000\\FAILURE_JOHNSON_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.8,
+   "stdout_tail": "nium\n\n     PARTS\n       PART        1  PROP=1        MAT=1        SHELL4N\n\n              0 ERROR(S)\n              8 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.620 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\FAILURE_JOHNSON_0000\\FAILURE_JOHNSON_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -1060,21 +1060,21 @@
    "verdict": "SKIPS",
    "n_skipped_families": 7,
    "hard_skips": [
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
-    "RWALL/SPHER/1",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "RWALL/SPHER/1",
     "TH/RWALL",
+    "DEF_SOLID",
     "TH/SHEL"
    ],
    "blockers": [
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
-    "RWALL/SPHER/1",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "RWALL/SPHER/1",
     "TH/RWALL",
+    "DEF_SOLID",
     "TH/SHEL"
    ]
   },
@@ -1107,8 +1107,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "nium\n\n     PARTS\n       PART        1  PROP=1        MAT=1        SHELL4N\n\n              0 ERROR(S)\n              8 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.282 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\FAILURE_JOHNSON_0000\\FAILURE_JOHNSON_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.8,
+   "stdout_tail": "nium\n\n     PARTS\n       PART        1  PROP=1        MAT=1        SHELL4N\n\n              0 ERROR(S)\n              8 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.661 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\FAILURE_JOHNSON_0000\\FAILURE_JOHNSON_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -1136,21 +1136,21 @@
    "verdict": "SKIPS",
    "n_skipped_families": 7,
    "hard_skips": [
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
-    "RWALL/SPHER/1",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "RWALL/SPHER/1",
     "TH/RWALL",
+    "DEF_SOLID",
     "TH/SHEL"
    ],
    "blockers": [
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
-    "RWALL/SPHER/1",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "RWALL/SPHER/1",
     "TH/RWALL",
+    "DEF_SOLID",
     "TH/SHEL"
    ]
   },
@@ -1185,8 +1185,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "0E-03  Alu\n\n     PARTS\n       PART        1  PROP=1        MAT=1        SHELL4N\n\n              0 ERROR(S)\n             10 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.300 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\FAILURE_TAB1_0000\\FAILURE_TAB1_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.2,
+   "stdout_tail": "0E-03  Alu\n\n     PARTS\n       PART        1  PROP=1        MAT=1        SHELL4N\n\n              0 ERROR(S)\n             10 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.909 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\FAILURE_TAB1_0000\\FAILURE_TAB1_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -1217,27 +1217,27 @@
    "verdict": "SKIPS",
    "n_skipped_families": 10,
    "hard_skips": [
-    "FAIL/TAB1",
-    "DEF_SHELL",
-    "TABLE",
-    "IOFLAG",
-    "TABLE/1/4711",
-    "DEF_SOLID",
-    "RWALL/SPHER/1",
     "SPMD",
+    "FAIL/TAB1",
+    "IOFLAG",
+    "TABLE",
+    "TABLE/1/4711",
+    "DEF_SHELL",
+    "RWALL/SPHER/1",
     "TH/RWALL",
+    "DEF_SOLID",
     "TH/SHEL"
    ],
    "blockers": [
-    "FAIL/TAB1",
-    "DEF_SHELL",
-    "TABLE",
-    "IOFLAG",
-    "TABLE/1/4711",
-    "DEF_SOLID",
-    "RWALL/SPHER/1",
     "SPMD",
+    "FAIL/TAB1",
+    "IOFLAG",
+    "TABLE",
+    "TABLE/1/4711",
+    "DEF_SHELL",
+    "RWALL/SPHER/1",
     "TH/RWALL",
+    "DEF_SOLID",
     "TH/SHEL"
    ]
   },
@@ -1283,16 +1283,15 @@
     "TH/SECTIO": 5,
     "TH/NODE": 5
    },
-   "rc": 2,
-   "elapsed": 0.7,
-   "stdout_tail": "T/301 on bricks elements: parsed, physics not implemented (M38) \u2014 the Engine will refuse to run this model\n ** WARNING    42 IN PROP CHECK\n    /PROP/CONNECT/301 on bricks elements: parsed, physics not implemented (M38) \u2014 the Engine will refuse to run this model\n\n              6 ERROR(S)\n             42 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.120 s\n\n     STARTER TERMINATION : ERROR\n     6 error(s) found while processing the deck (see messages above); restart file not written.\n\n",
+   "rc": 0,
+   "elapsed": 2.2,
+   "stdout_tail": "ten 0grad\n       PART      730  PROP=302      MAT=0        Beams unten 60grad\n\n              0 ERROR(S)\n             43 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.976 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\KS2_model_v01_0000\\KS2_model_v01_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "FAIL/SNCONNECT",
     "TH/INTER",
     "DEF_SHELL",
     "DEF_SOLID",
     "IOFLAG",
-    "INTER/TYPE7/1",
     "RBODY/1001",
     "RBODY/1002",
     "RBODY/1003",
@@ -1308,67 +1307,52 @@
     "TH/SECTIO",
     "TH/SECTIO",
     "TH/SECTIO",
-    "TH/SECTIO",
     "TH/SECTIO"
    ],
-   "error_messages": [
-    "** ERROR     1 IN MAT83_solid_spotweld.inc:37     while reading /MOVE_FUNCT/200: 'MOVE_FUNCT'",
-    "** ERROR     2 IN MAT83_solid_spotweld.inc:66     while reading /MOVE_FUNCT/2001: 'MOVE_FUNCT'",
-    "** ERROR     3 IN MAT83_solid_spotweld.inc:76     while reading /MOVE_FUNCT/2002: 'MOVE_FUNCT'",
-    "** ERROR     4 IN MAT83_solid_spotweld.inc:86     while reading /MOVE_FUNCT/2003: 'MOVE_FUNCT'",
-    "** ERROR     5 IN MAT83_solid_spotweld.inc:96     while reading /MOVE_FUNCT/2004: 'MOVE_FUNCT'"
-   ],
-   "parse_errors": [
-    "** ERROR     1 IN MAT83_solid_spotweld.inc:37     while reading /MOVE_FUNCT/200: 'MOVE_FUNCT'",
-    "** ERROR     2 IN MAT83_solid_spotweld.inc:66     while reading /MOVE_FUNCT/2001: 'MOVE_FUNCT'",
-    "** ERROR     3 IN MAT83_solid_spotweld.inc:76     while reading /MOVE_FUNCT/2002: 'MOVE_FUNCT'",
-    "** ERROR     4 IN MAT83_solid_spotweld.inc:86     while reading /MOVE_FUNCT/2003: 'MOVE_FUNCT'",
-    "** ERROR     5 IN MAT83_solid_spotweld.inc:96     while reading /MOVE_FUNCT/2004: 'MOVE_FUNCT'"
-   ],
+   "error_messages": [],
+   "parse_errors": [],
    "census_unsupported": [
     "DEF_SHELL",
     "DEF_SOLID",
     "IOFLAG"
    ],
-   "verdict": "ERROR",
-   "n_skipped_families": 17,
+   "verdict": "SKIPS",
+   "n_skipped_families": 16,
    "hard_skips": [
+    "IOFLAG",
     "FAIL/SNCONNECT",
-    "RBODY/1002",
-    "RBODY/1003",
-    "INTER/TYPE7/1",
-    "RBODY/1001",
-    "DEF_SOLID",
-    "RBODY/1009",
-    "RBODY/1004",
-    "RBODY/1007",
     "DEF_SHELL",
     "RBODY/1008",
+    "TH/SECTIO",
+    "RBODY/1009",
+    "RBODY/1007",
+    "RBODY/1004",
+    "RBODY/1010",
     "TH/INTER",
-    "IOFLAG",
     "RBODY/1005",
     "RBODY/1006",
-    "TH/SECTIO",
-    "RBODY/1010"
+    "DEF_SOLID",
+    "RBODY/1001",
+    "RBODY/1003",
+    "RBODY/1002"
    ],
    "blockers": [
+    "IOFLAG",
     "FAIL/SNCONNECT",
-    "RBODY/1002",
-    "RBODY/1003",
-    "INTER/TYPE7/1",
-    "RBODY/1001",
-    "DEF_SOLID",
-    "RBODY/1009",
-    "RBODY/1004",
-    "RBODY/1007",
     "DEF_SHELL",
     "RBODY/1008",
+    "TH/SECTIO",
+    "RBODY/1009",
+    "RBODY/1007",
+    "RBODY/1004",
+    "RBODY/1010",
     "TH/INTER",
-    "IOFLAG",
     "RBODY/1005",
     "RBODY/1006",
-    "TH/SECTIO",
-    "RBODY/1010"
+    "DEF_SOLID",
+    "RBODY/1001",
+    "RBODY/1003",
+    "RBODY/1002"
    ]
   },
   {
@@ -1414,8 +1398,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 1.0,
-   "stdout_tail": ")]\n\n     PARTS\n       PART        1  PROP=1        MAT=1        LAW42\n\n              0 ERROR(S)\n              5 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.344 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\rubber_tension_v1_0000\\rubber_tension_v1_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.0,
+   "stdout_tail": ")]\n\n     PARTS\n       PART        1  PROP=1        MAT=1        LAW42\n\n              0 ERROR(S)\n              5 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.803 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\rubber_tension_v1_0000\\rubber_tension_v1_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -1439,18 +1423,18 @@
    "verdict": "SKIPS",
    "n_skipped_families": 5,
    "hard_skips": [
-    "TH/BRIC",
-    "DEF_SHELL",
+    "SPMD",
     "IOFLAG",
-    "DEF_SOLID",
-    "SPMD"
+    "DEF_SHELL",
+    "TH/BRIC",
+    "DEF_SOLID"
    ],
    "blockers": [
-    "TH/BRIC",
-    "DEF_SHELL",
+    "SPMD",
     "IOFLAG",
-    "DEF_SOLID",
-    "SPMD"
+    "DEF_SHELL",
+    "TH/BRIC",
+    "DEF_SOLID"
    ]
   },
   {
@@ -1528,8 +1512,8 @@
     "TH/NODE": 1
    },
    "rc": 0,
-   "elapsed": 1.1,
-   "stdout_tail": ")]\n\n     PARTS\n       PART        1  PROP=1        MAT=1        LAW42\n\n              0 ERROR(S)\n              5 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.380 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\rubber_tension_v1_0000\\rubber_tension_v1_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.2,
+   "stdout_tail": ")]\n\n     PARTS\n       PART        1  PROP=1        MAT=1        LAW42\n\n              0 ERROR(S)\n              5 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      1.034 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\rubber_tension_v1_0000\\rubber_tension_v1_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -1553,18 +1537,18 @@
    "verdict": "SKIPS",
    "n_skipped_families": 5,
    "hard_skips": [
-    "TH/BRIC",
-    "DEF_SHELL",
+    "SPMD",
     "IOFLAG",
-    "DEF_SOLID",
-    "SPMD"
+    "DEF_SHELL",
+    "TH/BRIC",
+    "DEF_SOLID"
    ],
    "blockers": [
-    "TH/BRIC",
-    "DEF_SHELL",
+    "SPMD",
     "IOFLAG",
-    "DEF_SOLID",
-    "SPMD"
+    "DEF_SHELL",
+    "TH/BRIC",
+    "DEF_SOLID"
    ]
   },
   {
@@ -1604,8 +1588,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "   PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.336 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.8,
+   "stdout_tail": "   PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.705 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -1623,14 +1607,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ],
    "blockers": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ]
   },
   {
@@ -1654,8 +1638,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 1.0,
-   "stdout_tail": "   PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.322 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.9,
+   "stdout_tail": "   PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.647 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -1673,14 +1657,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ],
    "blockers": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ]
   },
   {
@@ -1704,8 +1688,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "   PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.326 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.8,
+   "stdout_tail": "   PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.648 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -1723,14 +1707,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ],
    "blockers": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ]
   },
   {
@@ -1754,8 +1738,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "   PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.322 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.0,
+   "stdout_tail": "   PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.789 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -1773,14 +1757,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ],
    "blockers": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ]
   },
   {
@@ -1804,8 +1788,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "   PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.337 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.0,
+   "stdout_tail": "   PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.727 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -1823,14 +1807,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ],
    "blockers": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ]
   },
   {
@@ -1854,8 +1838,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 1.1,
-   "stdout_tail": "   PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.479 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.0,
+   "stdout_tail": "   PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.722 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -1873,14 +1857,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ],
    "blockers": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ]
   },
   {
@@ -1904,8 +1888,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "T=0        Spring non linear elastic + function velocity faster\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.314 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.9,
+   "stdout_tail": "T=0        Spring non linear elastic + function velocity faster\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.682 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -1923,14 +1907,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ],
    "blockers": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ]
   },
   {
@@ -1954,8 +1938,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "T=0        Spring non linear elastic + function velocity faster\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.371 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.6,
+   "stdout_tail": "T=0        Spring non linear elastic + function velocity faster\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      1.183 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -1973,14 +1957,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ],
    "blockers": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ]
   },
   {
@@ -2004,8 +1988,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 1.0,
-   "stdout_tail": "T=0        Spring non linear elastic + function velocity faster\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.362 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.4,
+   "stdout_tail": "T=0        Spring non linear elastic + function velocity faster\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.834 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -2023,14 +2007,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ],
    "blockers": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ]
   },
   {
@@ -2054,8 +2038,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "T=0        Spring non linear elastic + function velocity faster\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.354 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.2,
+   "stdout_tail": "T=0        Spring non linear elastic + function velocity faster\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.796 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -2073,14 +2057,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ],
    "blockers": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ]
   },
   {
@@ -2104,8 +2088,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "T=0        Spring non linear elastic + function velocity faster\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.339 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.8,
+   "stdout_tail": "T=0        Spring non linear elastic + function velocity faster\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.877 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -2123,14 +2107,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ],
    "blockers": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ]
   },
   {
@@ -2154,8 +2138,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 1.1,
-   "stdout_tail": "T=0        Spring non linear elastic + function velocity faster\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.354 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.4,
+   "stdout_tail": "T=0        Spring non linear elastic + function velocity faster\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.872 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE8_element_0000\\Spring_TYPE8_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -2173,14 +2157,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ],
    "blockers": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ]
   },
   {
@@ -2203,8 +2187,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": " PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.317 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE13_element_0000\\Spring_TYPE13_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.5,
+   "stdout_tail": " PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      1.046 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE13_element_0000\\Spring_TYPE13_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -2222,14 +2206,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ],
    "blockers": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ]
   },
   {
@@ -2252,8 +2236,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": " PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.299 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE13_element_0000\\Spring_TYPE13_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.5,
+   "stdout_tail": " PART        5  PROP=5        MAT=0        Spring plastic H=6\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.738 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Spring_TYPE13_element_0000\\Spring_TYPE13_element_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -2271,14 +2255,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ],
    "blockers": [
+    "DEF_SOLID",
     "DEF_SHELL",
-    "TH/SPRING",
-    "DEF_SOLID"
+    "TH/SPRING"
    ]
   },
   {
@@ -2302,8 +2286,8 @@
     "TH/NODE": 5
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "     Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.331 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\HEXA_DEGE_0000\\HEXA_DEGE_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.5,
+   "stdout_tail": "     Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.935 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\HEXA_DEGE_0000\\HEXA_DEGE_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "TH/BRIC"
    ],
@@ -2340,8 +2324,8 @@
     "TH/NODE": 5
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "   Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.319 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\HEXAP14_18_0000\\HEXAP14_18_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.5,
+   "stdout_tail": "   Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.883 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\HEXAP14_18_0000\\HEXAP14_18_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "TH/BRIC"
    ],
@@ -2378,8 +2362,8 @@
     "TH/NODE": 5
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "     Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.309 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\HEXA_LAW2_0000\\HEXA_LAW2_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.5,
+   "stdout_tail": "     Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      1.028 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\HEXA_LAW2_0000\\HEXA_LAW2_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "TH/BRIC"
    ],
@@ -2414,22 +2398,16 @@
     "TH/BRIC": 1,
     "TH/NODE": 1
    },
-   "rc": 2,
-   "elapsed": 0.5,
-   "stdout_tail": "    18 IN PART CHECK\n    /PART/18: /BRICK elements need /PROP/TYPE14, got TYPE20\n ** ERROR    19 IN PART CHECK\n    /PART/19: /BRICK elements need /PROP/TYPE14, got TYPE20\n ** ERROR    20 IN PART CHECK\n    /PART/20: /BRICK elements need /PROP/TYPE14, got TYPE20\n\n             20 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.020 s\n\n     STARTER TERMINATION : ERROR\n     20 error(s) found while processing the deck (see messages above); restart file not written.\n\n",
+   "rc": 0,
+   "elapsed": 2.2,
+   "stdout_tail": "t 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.872 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\HEXA_TSHELL_LAW2_0000\\HEXA_TSHELL_LAW2_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "TH/BRIC"
    ],
-   "error_messages": [
-    "** ERROR     1 IN PART CHECK     /PART/1: /BRICK elements need /PROP/TYPE14, got TYPE20",
-    "** ERROR     2 IN PART CHECK     /PART/2: /BRICK elements need /PROP/TYPE14, got TYPE20",
-    "** ERROR     3 IN PART CHECK     /PART/3: /BRICK elements need /PROP/TYPE14, got TYPE20",
-    "** ERROR     4 IN PART CHECK     /PART/4: /BRICK elements need /PROP/TYPE14, got TYPE20",
-    "** ERROR     5 IN PART CHECK     /PART/5: /BRICK elements need /PROP/TYPE14, got TYPE20"
-   ],
+   "error_messages": [],
    "parse_errors": [],
    "census_unsupported": [],
-   "verdict": "ERROR",
+   "verdict": "SKIPS",
    "n_skipped_families": 1,
    "hard_skips": [
     "TH/BRIC"
@@ -2459,8 +2437,8 @@
     "TH/NODE": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "  PART        9  PROP=2        MAT=2        Uniaxial tension in y\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.331 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\shell_Ishell24_LAW2_0000\\shell_Ishell24_LAW2_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.4,
+   "stdout_tail": "  PART        9  PROP=2        MAT=2        Uniaxial tension in y\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.985 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\shell_Ishell24_LAW2_0000\\shell_Ishell24_LAW2_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "TH/SHEL",
     "TH/SHEL"
@@ -2497,8 +2475,8 @@
     "TH/NODE": 5
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "   Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              0 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.325 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\TETRA_LAW2_0000\\TETRA_LAW2_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.3,
+   "stdout_tail": "   Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              0 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.876 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\TETRA_LAW2_0000\\TETRA_LAW2_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [],
    "error_messages": [],
    "parse_errors": [],
@@ -2529,8 +2507,8 @@
     "TH/NODE": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "re shear\n       PART        9  PROP=2        MAT=2        Uniaxial tension in y\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.317 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\TRIA_JC_LAW2_0000\\TRIA_JC_LAW2_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.5,
+   "stdout_tail": "re shear\n       PART        9  PROP=2        MAT=2        Uniaxial tension in y\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.830 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\TRIA_JC_LAW2_0000\\TRIA_JC_LAW2_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "TH/SH3N",
     "TH/SH3N"
@@ -2568,8 +2546,8 @@
     "TH/NODE": 5
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "     Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.326 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\HEXA_DEGE_0000\\HEXA_DEGE_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.8,
+   "stdout_tail": "     Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.732 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\HEXA_DEGE_0000\\HEXA_DEGE_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "TH/BRIC"
    ],
@@ -2606,8 +2584,8 @@
     "TH/NODE": 5
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "   Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.339 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\HEXAP14_18_0000\\HEXAP14_18_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.0,
+   "stdout_tail": "   Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.823 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\HEXAP14_18_0000\\HEXAP14_18_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "TH/BRIC"
    ],
@@ -2644,8 +2622,8 @@
     "TH/NODE": 5
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "MAT=1        Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.303 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\HEXA1_0000\\HEXA1_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.3,
+   "stdout_tail": "MAT=1        Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.779 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\HEXA1_0000\\HEXA1_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "TH/BRIC"
    ],
@@ -2681,22 +2659,16 @@
     "TH/BRIC": 1,
     "TH/NODE": 5
    },
-   "rc": 2,
-   "elapsed": 0.5,
-   "stdout_tail": "    18 IN PART CHECK\n    /PART/18: /BRICK elements need /PROP/TYPE14, got TYPE20\n ** ERROR    19 IN PART CHECK\n    /PART/19: /BRICK elements need /PROP/TYPE14, got TYPE20\n ** ERROR    20 IN PART CHECK\n    /PART/20: /BRICK elements need /PROP/TYPE14, got TYPE20\n\n             20 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.020 s\n\n     STARTER TERMINATION : ERROR\n     20 error(s) found while processing the deck (see messages above); restart file not written.\n\n",
+   "rc": 0,
+   "elapsed": 2.2,
+   "stdout_tail": " Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.917 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\HEXA_TSHELL_0000\\HEXA_TSHELL_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "TH/BRIC"
    ],
-   "error_messages": [
-    "** ERROR     1 IN PART CHECK     /PART/1: /BRICK elements need /PROP/TYPE14, got TYPE20",
-    "** ERROR     2 IN PART CHECK     /PART/2: /BRICK elements need /PROP/TYPE14, got TYPE20",
-    "** ERROR     3 IN PART CHECK     /PART/3: /BRICK elements need /PROP/TYPE14, got TYPE20",
-    "** ERROR     4 IN PART CHECK     /PART/4: /BRICK elements need /PROP/TYPE14, got TYPE20",
-    "** ERROR     5 IN PART CHECK     /PART/5: /BRICK elements need /PROP/TYPE14, got TYPE20"
-   ],
+   "error_messages": [],
    "parse_errors": [],
    "census_unsupported": [],
-   "verdict": "ERROR",
+   "verdict": "SKIPS",
    "n_skipped_families": 1,
    "hard_skips": [
     "TH/BRIC"
@@ -2726,8 +2698,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "e shear\n       PART        9  PROP=2        MAT=2        Uniaxial tension b\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.318 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\shell_Ishell12_0000\\shell_Ishell12_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.1,
+   "stdout_tail": "e shear\n       PART        9  PROP=2        MAT=2        Uniaxial tension b\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.812 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\shell_Ishell12_0000\\shell_Ishell12_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "TH/SHEL",
     "TH/SHEL"
@@ -2765,8 +2737,8 @@
     "TH/NODE": 1
    },
    "rc": 0,
-   "elapsed": 4.1,
-   "stdout_tail": "hear\n       PART        9  PROP=2        MAT=2        Uniaxial tension in y\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.497 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\shell_Ishell24_0000\\shell_Ishell24_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.3,
+   "stdout_tail": "hear\n       PART        9  PROP=2        MAT=2        Uniaxial tension in y\n\n              0 ERROR(S)\n              1 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.858 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\shell_Ishell24_0000\\shell_Ishell24_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "TH/SHEL",
     "TH/SHEL"
@@ -2803,8 +2775,8 @@
     "TH/NODE": 5
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "MAT=1        Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              0 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.334 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\TETRA_0000\\TETRA_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.1,
+   "stdout_tail": "MAT=1        Solid part 19-0\n       PART       20  PROP=100001   MAT=1        Solid part 20-0\n\n              0 ERROR(S)\n              0 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.808 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\TETRA_0000\\TETRA_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [],
    "error_messages": [],
    "parse_errors": [],
@@ -2858,8 +2830,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        5  PROP=101      MAT=102      BATOZ\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.341 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.2,
+   "stdout_tail": "= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        5  PROP=101      MAT=102      BATOZ\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.807 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -2885,19 +2857,19 @@
    "verdict": "SKIPS",
    "n_skipped_families": 6,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ]
   },
@@ -2929,8 +2901,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        5  PROP=101      MAT=102      BATOZ\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.349 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.2,
+   "stdout_tail": "= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        5  PROP=101      MAT=102      BATOZ\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.810 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -2956,19 +2928,19 @@
    "verdict": "SKIPS",
    "n_skipped_families": 6,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ]
   },
@@ -3000,8 +2972,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        5  PROP=101      MAT=102      BATOZ\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.339 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.7,
+   "stdout_tail": "= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        5  PROP=101      MAT=102      BATOZ\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.637 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3027,19 +2999,19 @@
    "verdict": "SKIPS",
    "n_skipped_families": 6,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ]
   },
@@ -3072,8 +3044,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": ".00000E-02  ELASTIC\n\n     PARTS\n       PART        4  PROP=202      MAT=102      BT_TYPE1\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.311 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.1,
+   "stdout_tail": ".00000E-02  ELASTIC\n\n     PARTS\n       PART        4  PROP=202      MAT=102      BT_TYPE1\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.772 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3099,19 +3071,19 @@
    "verdict": "SKIPS",
    "n_skipped_families": 6,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ]
   },
@@ -3144,8 +3116,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": ".00000E-02  ELASTIC\n\n     PARTS\n       PART        4  PROP=202      MAT=102      BT_TYPE1\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.291 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.1,
+   "stdout_tail": ".00000E-02  ELASTIC\n\n     PARTS\n       PART        4  PROP=202      MAT=102      BT_TYPE1\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.764 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3171,19 +3143,19 @@
    "verdict": "SKIPS",
    "n_skipped_families": 6,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ]
   },
@@ -3216,8 +3188,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": ".00000E-02  ELASTIC\n\n     PARTS\n       PART        4  PROP=202      MAT=102      BT_TYPE3\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.290 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.8,
+   "stdout_tail": ".00000E-02  ELASTIC\n\n     PARTS\n       PART        4  PROP=202      MAT=102      BT_TYPE3\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.656 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3243,19 +3215,19 @@
    "verdict": "SKIPS",
    "n_skipped_families": 6,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ]
   },
@@ -3288,8 +3260,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": ".00000E-02  ELASTIC\n\n     PARTS\n       PART        4  PROP=202      MAT=102      BT_TYPE3\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.286 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.0,
+   "stdout_tail": ".00000E-02  ELASTIC\n\n     PARTS\n       PART        4  PROP=202      MAT=102      BT_TYPE3\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.779 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3315,19 +3287,19 @@
    "verdict": "SKIPS",
    "n_skipped_families": 6,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ]
   },
@@ -3360,8 +3332,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": ".00000E-02  ELASTIC\n\n     PARTS\n       PART        4  PROP=202      MAT=102      BT_TYPE4\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.310 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.9,
+   "stdout_tail": ".00000E-02  ELASTIC\n\n     PARTS\n       PART        4  PROP=202      MAT=102      BT_TYPE4\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.739 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3387,19 +3359,19 @@
    "verdict": "SKIPS",
    "n_skipped_families": 6,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ]
   },
@@ -3432,8 +3404,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": ".00000E-02  ELASTIC\n\n     PARTS\n       PART        4  PROP=202      MAT=102      BT_TYPE4\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.347 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.9,
+   "stdout_tail": ".00000E-02  ELASTIC\n\n     PARTS\n       PART        4  PROP=202      MAT=102      BT_TYPE4\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.676 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3459,19 +3431,19 @@
    "verdict": "SKIPS",
    "n_skipped_families": 6,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ]
   },
@@ -3502,8 +3474,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "RHO= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        6  PROP=303      MAT=102      T3\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.331 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.0,
+   "stdout_tail": "RHO= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        6  PROP=303      MAT=102      T3\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.743 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3527,18 +3499,18 @@
    "verdict": "SKIPS",
    "n_skipped_families": 5,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
+    "SPMD",
     "IOFLAG",
+    "DEF_SHELL",
     "DEF_SOLID",
-    "SPMD"
+    "TH/RBODY"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
+    "SPMD",
     "IOFLAG",
+    "DEF_SHELL",
     "DEF_SOLID",
-    "SPMD"
+    "TH/RBODY"
    ]
   },
   {
@@ -3568,8 +3540,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "RHO= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        6  PROP=303      MAT=102      T3\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.296 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.1,
+   "stdout_tail": "RHO= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        6  PROP=303      MAT=102      T3\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.788 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3593,18 +3565,18 @@
    "verdict": "SKIPS",
    "n_skipped_families": 5,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
+    "SPMD",
     "IOFLAG",
+    "DEF_SHELL",
     "DEF_SOLID",
-    "SPMD"
+    "TH/RBODY"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
+    "SPMD",
     "IOFLAG",
+    "DEF_SHELL",
     "DEF_SOLID",
-    "SPMD"
+    "TH/RBODY"
    ]
   },
   {
@@ -3634,8 +3606,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "RHO= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        6  PROP=303      MAT=102      T3\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.297 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.2,
+   "stdout_tail": "RHO= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        6  PROP=303      MAT=102      T3\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.812 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3659,18 +3631,18 @@
    "verdict": "SKIPS",
    "n_skipped_families": 5,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
+    "SPMD",
     "IOFLAG",
+    "DEF_SHELL",
     "DEF_SOLID",
-    "SPMD"
+    "TH/RBODY"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
+    "SPMD",
     "IOFLAG",
+    "DEF_SHELL",
     "DEF_SOLID",
-    "SPMD"
+    "TH/RBODY"
    ]
   },
   {
@@ -3701,8 +3673,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "O= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        5  PROP=101      MAT=102      QEPH\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.311 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.1,
+   "stdout_tail": "O= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        5  PROP=101      MAT=102      QEPH\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.746 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3728,19 +3700,19 @@
    "verdict": "SKIPS",
    "n_skipped_families": 6,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ]
   },
@@ -3772,8 +3744,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 1.0,
-   "stdout_tail": "O= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        5  PROP=101      MAT=102      QEPH\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.350 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.0,
+   "stdout_tail": "O= 1.00000E-02  ELASTIC\n\n     PARTS\n       PART        5  PROP=101      MAT=102      QEPH\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.701 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\ROLLING_0000\\ROLLING_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3799,19 +3771,19 @@
    "verdict": "SKIPS",
    "n_skipped_families": 6,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
-    "IOFLAG",
-    "DEF_SOLID",
     "SPMD",
+    "IOFLAG",
+    "DEF_SHELL",
+    "DEF_SOLID",
+    "TH/RBODY",
     "TH/SHEL"
    ]
   },
@@ -3848,8 +3820,8 @@
     "END": 1
    },
    "rc": 2,
-   "elapsed": 0.5,
-   "stdout_tail": ", 599, 604, 609, 615]...\n ** WARNING    10 IN GROUP CHECK\n    /GRBRIC/20 'SECTION' is empty\n ** WARNING    11 IN SURFACE CHECK\n    /SURF/16 'INTER_group_16_of_PART' has no segments\n ** WARNING    12 IN GROUP CHECK\n    /GRNOD/17 'INTER_group_17_of_SURF' is empty\n\n              1 ERROR(S)\n             12 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.050 s\n\n     STARTER TERMINATION : ERROR\n     1 error(s) found while processing the deck (see messages above); restart file not written.\n\n",
+   "elapsed": 1.1,
+   "stdout_tail": ", 599, 604, 609, 615]...\n ** WARNING    10 IN GROUP CHECK\n    /GRBRIC/20 'SECTION' is empty\n ** WARNING    11 IN SURFACE CHECK\n    /SURF/16 'INTER_group_16_of_PART' has no segments\n ** WARNING    12 IN GROUP CHECK\n    /GRNOD/17 'INTER_group_17_of_SURF' is empty\n\n              1 ERROR(S)\n             12 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.106 s\n\n     STARTER TERMINATION : ERROR\n     1 error(s) found while processing the deck (see messages above); restart file not written.\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3884,24 +3856,24 @@
    "verdict": "ERROR",
    "n_skipped_families": 8,
    "hard_skips": [
-    "TH/RBODY",
-    "TH/BRIC",
+    "SPMD",
+    "IOFLAG",
     "DEF_SHELL",
     "INTER/TYPE7/1",
-    "IOFLAG",
+    "TH/BRIC",
     "DEF_SOLID",
-    "TH/SECTIO",
-    "SPMD"
+    "TH/RBODY",
+    "TH/SECTIO"
    ],
    "blockers": [
-    "TH/RBODY",
-    "TH/BRIC",
+    "SPMD",
+    "IOFLAG",
     "DEF_SHELL",
     "INTER/TYPE7/1",
-    "IOFLAG",
+    "TH/BRIC",
     "DEF_SOLID",
-    "TH/SECTIO",
-    "SPMD"
+    "TH/RBODY",
+    "TH/SECTIO"
    ]
   },
   {
@@ -3925,8 +3897,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "c Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Beam\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.307 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.1,
+   "stdout_tail": "c Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Beam\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.730 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3973,8 +3945,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.303 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.1,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.805 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -3992,14 +3964,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4025,8 +3997,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.289 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.1,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.834 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4044,14 +4016,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4077,8 +4049,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.295 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.2,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.806 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4096,14 +4068,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4129,8 +4101,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.297 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.2,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.836 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4147,14 +4119,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4180,8 +4152,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": " Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Trias\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.323 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.2,
+   "stdout_tail": " Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Trias\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.902 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4198,14 +4170,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4231,8 +4203,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": " Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Trias\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.315 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.9,
+   "stdout_tail": " Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Trias\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.707 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4249,14 +4221,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4282,8 +4254,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Shells\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.290 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.1,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Shells\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.838 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4299,14 +4271,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4332,8 +4304,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Shells\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.312 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.2,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Shells\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.923 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4349,14 +4321,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4382,8 +4354,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.328 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.4,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      1.132 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4399,14 +4371,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4432,8 +4404,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.329 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.7,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      1.424 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4449,14 +4421,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4482,8 +4454,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.333 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.7,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.977 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4499,14 +4471,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4532,8 +4504,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.337 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 1.8,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.701 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4549,14 +4521,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4582,8 +4554,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.370 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.8,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.971 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4599,14 +4571,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4630,8 +4602,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "c Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Beam\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.317 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.3,
+   "stdout_tail": "c Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Beam\n\n              0 ERROR(S)\n              3 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.857 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4678,8 +4650,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.300 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.4,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.896 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4697,14 +4669,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4730,8 +4702,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.294 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.4,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.962 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4749,14 +4721,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4782,8 +4754,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.303 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.4,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.847 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4801,14 +4773,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4834,8 +4806,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.300 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.6,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Bricks\n\n              0 ERROR(S)\n              4 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      1.108 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4852,14 +4824,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4885,8 +4857,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": " Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Trias\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.313 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.7,
+   "stdout_tail": " Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Trias\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      1.173 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4903,14 +4875,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4936,8 +4908,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Shells\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.316 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.1,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Shells\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.802 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -4953,14 +4925,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -4986,8 +4958,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Shells\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.287 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.0,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Shells\n\n              0 ERROR(S)\n              6 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.739 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -5003,14 +4975,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -5036,8 +5008,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.330 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 3.1,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      1.137 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -5053,14 +5025,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -5086,8 +5058,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.8,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.314 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.3,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.889 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -5103,14 +5075,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -5136,8 +5108,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.324 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.1,
+   "stdout_tail": "Steel\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Tetras\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.752 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\Cantilever_beam_0000\\Cantilever_beam_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -5153,14 +5125,14 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ],
    "blockers": [
+    "DEF_SOLID",
     "TH/RBODY",
-    "DEF_SHELL",
-    "DEF_SOLID"
+    "DEF_SHELL"
    ]
   },
   {
@@ -5192,8 +5164,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": " Foam material\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Solid block\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.346 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\BLOCK_H8_0000\\BLOCK_H8_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.4,
+   "stdout_tail": " Foam material\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Solid block\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.987 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\BLOCK_H8_0000\\BLOCK_H8_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -5216,20 +5188,20 @@
    "verdict": "SKIPS",
    "n_skipped_families": 6,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
     "IOFLAG",
-    "DEF_SOLID",
+    "DEF_SHELL",
     "RBODY/2",
-    "RBODY/1"
+    "RBODY/1",
+    "DEF_SOLID",
+    "TH/RBODY"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
     "IOFLAG",
-    "DEF_SOLID",
+    "DEF_SHELL",
     "RBODY/2",
-    "RBODY/1"
+    "RBODY/1",
+    "DEF_SOLID",
+    "TH/RBODY"
    ]
   },
   {
@@ -5261,8 +5233,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": " Foam material\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Solid block\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.364 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\BLOCK_H8_0000\\BLOCK_H8_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.5,
+   "stdout_tail": " Foam material\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Solid block\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      1.014 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\BLOCK_H8_0000\\BLOCK_H8_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -5285,20 +5257,20 @@
    "verdict": "SKIPS",
    "n_skipped_families": 6,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
     "IOFLAG",
-    "DEF_SOLID",
+    "DEF_SHELL",
     "RBODY/2",
-    "RBODY/1"
+    "RBODY/1",
+    "DEF_SOLID",
+    "TH/RBODY"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
     "IOFLAG",
-    "DEF_SOLID",
+    "DEF_SHELL",
     "RBODY/2",
-    "RBODY/1"
+    "RBODY/1",
+    "DEF_SOLID",
+    "TH/RBODY"
    ]
   },
   {
@@ -5330,8 +5302,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": " Foam material\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Solid block\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.389 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\BLOCK_H8_0000\\BLOCK_H8_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.3,
+   "stdout_tail": " Foam material\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Solid block\n\n              0 ERROR(S)\n              7 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.935 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\BLOCK_H8_0000\\BLOCK_H8_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -5354,20 +5326,20 @@
    "verdict": "SKIPS",
    "n_skipped_families": 6,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
     "IOFLAG",
-    "DEF_SOLID",
+    "DEF_SHELL",
     "RBODY/2",
-    "RBODY/1"
+    "RBODY/1",
+    "DEF_SOLID",
+    "TH/RBODY"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
     "IOFLAG",
-    "DEF_SOLID",
+    "DEF_SHELL",
     "RBODY/2",
-    "RBODY/1"
+    "RBODY/1",
+    "DEF_SOLID",
+    "TH/RBODY"
    ]
   },
   {
@@ -5401,8 +5373,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 0.9,
-   "stdout_tail": " Foam material\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Solid block\n\n              0 ERROR(S)\n              9 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.380 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\BLOCK_H8_0000\\BLOCK_H8_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.4,
+   "stdout_tail": " Foam material\n\n     PARTS\n       PART        1  PROP=1        MAT=1        Solid block\n\n              0 ERROR(S)\n              9 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      1.001 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\BLOCK_H8_0000\\BLOCK_H8_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "DEF_SHELL",
     "DEF_SOLID",
@@ -5427,24 +5399,24 @@
    "verdict": "SKIPS",
    "n_skipped_families": 8,
    "hard_skips": [
-    "TH/RBODY",
-    "DEF_SHELL",
     "IOFLAG",
-    "DEF_SOLID",
-    "BOX/RECTA/2",
-    "RBODY/2",
     "BOX/RECTA/1",
-    "RBODY/1"
+    "BOX/RECTA/2",
+    "DEF_SHELL",
+    "RBODY/2",
+    "RBODY/1",
+    "DEF_SOLID",
+    "TH/RBODY"
    ],
    "blockers": [
-    "TH/RBODY",
-    "DEF_SHELL",
     "IOFLAG",
-    "DEF_SOLID",
-    "BOX/RECTA/2",
-    "RBODY/2",
     "BOX/RECTA/1",
-    "RBODY/1"
+    "BOX/RECTA/2",
+    "DEF_SHELL",
+    "RBODY/2",
+    "RBODY/1",
+    "DEF_SOLID",
+    "TH/RBODY"
    ]
   },
   {
@@ -5472,8 +5444,8 @@
     "END": 1
    },
    "rc": 0,
-   "elapsed": 1.0,
-   "stdout_tail": "\n       PART    50002  PROP=3        MAT=1        sh3n_part_45_degree\n\n              0 ERROR(S)\n             13 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.385 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\SHELL_LAW19_PROP9_0000\\SHELL_LAW19_PROP9_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
+   "elapsed": 2.3,
+   "stdout_tail": "\n       PART    50002  PROP=3        MAT=1        sh3n_part_45_degree\n\n              0 ERROR(S)\n             13 WARNING(S)\n\n STARTER ELAPSED TIME . . . . . . . . :      0.893 s\n RESTART FILE WRITTEN . . . . . . . . : C:\\Users\\pmqua\\PycharmProjects\\OpenRadioss_Python\\tools\\validation_data\\coverage_workdir\\SHELL_LAW19_PROP9_0000\\SHELL_LAW19_PROP9_0000.rst\n\n     ------------------------------------------------\n     STARTER TERMINATION : NORMAL\n     ------------------------------------------------\n\n",
    "skipped_families": [
     "TH/RBODY",
     "TH/SHEL",
@@ -5494,18 +5466,16 @@
    "verdict": "SKIPS",
    "n_skipped_families": 3,
    "hard_skips": [
-    "TH/RBODY",
     "TH/SH3N",
-    "TH/SHEL"
+    "TH/SHEL",
+    "TH/RBODY"
    ],
    "blockers": [
-    "TH/RBODY",
     "TH/SH3N",
-    "TH/SHEL"
+    "TH/SHEL",
+    "TH/RBODY"
    ]
   }
  ],
- "parse_error_signatures": {
-  "** ERROR     N IN MATN_solid_spotweld.inc:N     while reading /MOVE_FUNCT/N: 'MOVE_FUNCT'": 5
- }
+ "parse_error_signatures": {}
 }

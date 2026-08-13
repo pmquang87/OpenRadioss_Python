@@ -285,10 +285,10 @@ def test_reader_friction_fields_and_xfiltr_mapping(make_deck):
 
 
 def test_reader_refusals(make_deck):
-    """Ifiltr >= 10 (the MODFR = 2 incremental formulation) and an
+    """Ifiltr >= 14 (out of range incremental formulation) and an
     out-of-range Ifric are refused loudly."""
     with pytest.raises(StarterError):
-        _model(make_deck, "RF1", _fric_deck(0.2, ifric=1, ifq=10,
+        _model(make_deck, "RF1", _fric_deck(0.2, ifric=1, ifq=14,
                                             coefs=(0.1,) * 6))
     with pytest.raises(StarterError):
         _model(make_deck, "RF2", _fric_deck(0.2, ifric=5, ifq=0))

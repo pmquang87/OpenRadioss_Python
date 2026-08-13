@@ -277,6 +277,7 @@ class ContactType7:
         # node*nseg + segrow, sorted; rebuilt from the active pairs each
         # cycle (a separated pair restarts its history — the IFPEN scope).
         self.mfrot = int(getattr(itf, "mfrot", 0))
+        self.iform = int(getattr(itf, "iform", 0))
         self.ifq = int(getattr(itf, "ifq", 0))
         self.xfiltr = float(getattr(itf, "xfiltr", 0.0))
         self.fric_c = np.asarray(getattr(itf, "fric_c",
@@ -286,7 +287,7 @@ class ContactType7:
         if self.mfrot > 0:
             log.info(f"     /INTER/TYPE7/{itf.id}: FRICTION MODEL "
                      f"MFROT={self.mfrot} (i7for3.F mu(p, v)), "
-                     f"IFQ={self.ifq}")
+                     f"IFQ={self.ifq}, IFORM={self.iform}")
 
         # --- interface time step bound (see module docstring) --------------
         # Worst node-on-spring combination on each side, evaluated once
@@ -536,15 +537,24 @@ class ContactType7:
                                          self.fric_c, pres, vt_mag)
             else:
                 mu = self.fric
-            Ft = mu * Fn * vt_mag / (
-                vt_mag + 1e-3 * gap_ref / max(dt, EM20))
-            ftvec = -(Ft / np.maximum(vt_mag, EM20))[:, None] * vt
-            if self.ifq > 0:
+
+            if self.iform == 2 or self.ifq >= 10:
                 alpha = friction.filter_alpha(self.ifq, self.xfiltr, dt)
                 keys = ni * max(len(self.segs), 1) + srow[active]
                 ftvec, self._filt_keys, self._filt_vals = friction.\
-                    apply_filter(keys, ftvec, alpha, self._filt_keys,
-                                 self._filt_vals)
+                    apply_incremental_stiffness(keys, K, vrel, dt, nvec, mu, Fn,
+                                                alpha, self._filt_keys,
+                                                self._filt_vals)
+            else:
+                Ft = mu * Fn * vt_mag / (
+                    vt_mag + 1e-3 * gap_ref / max(dt, EM20))
+                ftvec = -(Ft / np.maximum(vt_mag, EM20))[:, None] * vt
+                if self.ifq > 0:
+                    alpha = friction.filter_alpha(self.ifq, self.xfiltr, dt)
+                    keys = ni * max(len(self.segs), 1) + srow[active]
+                    ftvec, self._filt_keys, self._filt_vals = friction.\
+                        apply_filter(keys, ftvec, alpha, self._filt_keys,
+                                     self._filt_vals)
             Fvec += ftvec
 
         # scatter: action on the node, exact opposite reaction on the
