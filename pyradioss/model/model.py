@@ -41,8 +41,9 @@ from .entities import (
     InitialBrickState, InitialShellState,
     InitialTrussState, InitialBeamState, InitialSpringState,
     CyclicBoundaryCondition, SolidPartPerturbation, PBlastLoad,
-    Ply, Laminate, SubInterface,
     ShellPartPerturbation, FailurePerturbation, SphGlobal, SmsGlobal,
+    BcsNrf, BcsWall, RigidLink, CylJoint, GeneralJoint,
+    MergeNode, MergeRbody, IniCrack, IniCrackSegment, LaserLoad,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -614,6 +615,15 @@ class Model:
         self.sub_interfaces: List[SubInterface] = []   # /INTER/SUB (M100)
         self.plies: Dict[int, Ply] = {}                # /PLY (M100)
         self.laminates: Dict[int, Laminate] = {}       # /LAMINATE (M100)
+        self.bcs_nrf: Dict[int, BcsNrf] = {}           # /BCS/NRF (M102)
+        self.bcs_walls: Dict[int, BcsWall] = {}        # /BCS/WALL (M102)
+        self.rlinks: Dict[int, RigidLink] = {}         # /RLINK (M102)
+        self.cyl_joints: Dict[int, CylJoint] = {}      # /CYL_JOINT (M102)
+        self.gjoints: Dict[int, GeneralJoint] = {}     # /GJOINT (M102)
+        self.node_merges: Dict[int, MergeNode] = {}    # /MERGE/NODE (M102)
+        self.rbody_merges: Dict[int, MergeRbody] = {}  # /MERGE/RBODY (M102)
+        self.inicracks: Dict[int, IniCrack] = {}       # /INICRACK (M102)
+        self.laser_loads: Dict[int, LaserLoad] = {}    # /LASER (M102)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

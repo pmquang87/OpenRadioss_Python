@@ -593,6 +593,33 @@ LAYOUTS: Dict[str, List[int]] = {
     # SMS / AMS (M101)
     # Selective Mass Scaling global parameters
     "SMS_1": [10, 20],
+
+    # BCS/WALL (M102)
+    "BCS_WALL_1": [10, 10],
+    "BCS_WALL_2": [20, 20],
+
+    # RLINK (M102)
+    #   %1d%1d%1d %1d%1d%1d%10d%10d%10d
+    "RLINK_1": [3, 1, 1, 1, 1, 1, 1, 1, 10, 10, 10],
+
+    # CYL_JOINT (M102)
+    "CYL_JOINT_1": [10, 10, 10],
+
+    # GJOINT (M102)
+    "GJOINT_1": [10, 20, 20, 20, 10, 10, 10],
+    "GJOINT_2": [20, 20, 20, 20, 20],
+
+    # MERGE (M102)
+    "MERGE_NODE_1": [20, 10, 10],
+    "MERGE_RBODY_ITEM": [10, 10, 10, 10, 10],
+
+    # INICRACK (M102)
+    "INICRACK_ITEM": [10, 10, 20],
+
+    # LASER (M102)
+    "LASER_1": [20, 10, 10, 20, 10],
+    "LASER_2": [20, 20, 20, 20, 20],
+    "LASER_3": [10, 10],
 }
 
 

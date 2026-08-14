@@ -2974,6 +2974,14 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """
     from ..model.entities import CyclicBoundaryCondition
 
+    if len(block.parts) > 1 and block.parts[1].upper() == "NRF":
+        read_bcs_nrf(block, model, log)
+        return
+
+    if len(block.parts) > 1 and block.parts[1].upper() == "WALL":
+        read_bcs_wall(block, model, log)
+        return
+
     if len(block.parts) > 1 and block.parts[1].upper() == "CYCLIC":
         title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
         if not cards or (block.fixed and cards[0].is_blank):
@@ -5469,6 +5477,427 @@ def read_sms(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.sms_global = SmsGlobal(grpart_id=grpart_id, dt_target=dt_target)
 
 
+# ============================================================================
+# Boundary conditions & joints & special initial states (M102)
+# ============================================================================
+
+def read_bcs_nrf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/BCS/NRF/id`` (M102): non-reflecting boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/hm_read_bcs_nrf.F90``.
+    Card 1: TITLE (%-100s)
+    Card 2: grnod_ID (%10d)
+    """
+    from ..model.entities import BcsNrf
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        model.bcs_nrf[block.user_id] = BcsNrf(id=block.user_id, title=title)
+        return
+    c = cards[0]
+    if block.fixed:
+        f = c.cut("IDS10")
+        grnod_id = _ival(f[0]) if len(f) > 0 else 0
+    else:
+        toks = c.tokens()
+        grnod_id = int(float(toks[0])) if len(toks) > 0 else 0
+    model.bcs_nrf[block.user_id] = BcsNrf(id=block.user_id, title=title, grnod_id=grnod_id)
+
+
+def read_bcs_wall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/BCS/WALL/id`` (M102): sliding wall boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/hm_read_bcs_wall.F90``.
+    Card 1: TITLE (%-100s)
+    Card 2: grnod_ID, sensor_ID (%10d%10d)
+    Card 3: Tstart, Tstop (%20lg%20lg)
+    """
+    from ..model.entities import BcsWall
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    grnod_id = 0
+    sensor_id = 0
+    tstart = 0.0
+    tstop = 0.0
+    if cards:
+        c1 = cards[0]
+        if block.fixed:
+            f1 = c1.cut("BCS_WALL_1")
+            grnod_id = _ival(f1[0]) if len(f1) > 0 else 0
+            sensor_id = _ival(f1[1]) if len(f1) > 1 else 0
+        else:
+            toks1 = c1.tokens()
+            grnod_id = int(float(toks1[0])) if len(toks1) > 0 else 0
+            sensor_id = int(float(toks1[1])) if len(toks1) > 1 else 0
+    if len(cards) > 1:
+        c2 = cards[1]
+        if block.fixed:
+            f2 = c2.cut("BCS_WALL_2")
+            tstart = _fval(f2[0]) if len(f2) > 0 else 0.0
+            tstop = _fval(f2[1]) if len(f2) > 1 else 0.0
+        else:
+            toks2 = c2.tokens()
+            tstart = float(toks2[0]) if len(toks2) > 0 else 0.0
+            tstop = float(toks2[1]) if len(toks2) > 1 else 0.0
+    model.bcs_walls[block.user_id] = BcsWall(
+        id=block.user_id, title=title, grnod_id=grnod_id, sensor_id=sensor_id,
+        tstart=tstart, tstop=tstop
+    )
+
+
+def read_rlink(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RLINK/id`` (M102): standard rigid link definition.
+
+    Fortran origin: ``starter/source/constraints/rigidlink/hm_read_rlink.F``.
+    Card 1: TITLE (%-100s)
+    Card 2:   %1d%1d%1d %1d%1d%1d%10d%10d%10d (Tx, Ty, Tz, OmegaX, OmegaY, OmegaZ, skew_ID, grnod_ID, Ipol)
+    """
+    from ..model.entities import RigidLink
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        model.rlinks[block.user_id] = RigidLink(id=block.user_id, title=title)
+        return
+    c = cards[0]
+    if block.fixed:
+        f = c.cut("RLINK_1")
+        dofs = (
+            _ival(f[1]) if len(f) > 1 else 1,
+            _ival(f[2]) if len(f) > 2 else 1,
+            _ival(f[3]) if len(f) > 3 else 1,
+            _ival(f[5]) if len(f) > 5 else 1,
+            _ival(f[6]) if len(f) > 6 else 1,
+            _ival(f[7]) if len(f) > 7 else 1,
+        )
+        skew_id = _ival(f[8]) if len(f) > 8 else 0
+        grnod_id = _ival(f[9]) if len(f) > 9 else 0
+        ipol = _ival(f[10]) if len(f) > 10 else 0
+    else:
+        toks = c.tokens()
+        if len(toks) >= 9:
+            dofs = tuple(int(float(t)) for t in toks[:6])
+            skew_id = int(float(toks[6]))
+            grnod_id = int(float(toks[7]))
+            ipol = int(float(toks[8]))
+        elif len(toks) >= 4:
+            s = toks[0]
+            if len(s) == 6 and s.isdigit():
+                dofs = tuple(int(ch) for ch in s)
+            else:
+                dofs = (1, 1, 1, 1, 1, 1)
+            skew_id = int(float(toks[1])) if len(toks) > 1 else 0
+            grnod_id = int(float(toks[2])) if len(toks) > 2 else 0
+            ipol = int(float(toks[3])) if len(toks) > 3 else 0
+        else:
+            dofs = (1, 1, 1, 1, 1, 1)
+            skew_id = 0
+            grnod_id = 0
+            ipol = 0
+    model.rlinks[block.user_id] = RigidLink(
+        id=block.user_id, title=title, dofs=dofs,
+        skew_id=skew_id, grnod_id=grnod_id, ipol=ipol
+    )
+
+
+def read_cyl_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CYL_JOINT/id`` (M102): cylindrical joint definition.
+
+    Fortran origin: ``starter/source/constraints/general/cyl_joint/hm_read_cyljoint.F``.
+    Card 1: TITLE (%-100s)
+    Card 2: node_id1, node_id2, grnod_id (%10d%10d%10d)
+    """
+    from ..model.entities import CylJoint
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        model.cyl_joints[block.user_id] = CylJoint(id=block.user_id, title=title)
+        return
+    c = cards[0]
+    if block.fixed:
+        f = c.cut("CYL_JOINT_1")
+        n1 = _ival(f[0]) if len(f) > 0 else 0
+        n2 = _ival(f[1]) if len(f) > 1 else 0
+        gr = _ival(f[2]) if len(f) > 2 else 0
+    else:
+        toks = c.tokens()
+        n1 = int(float(toks[0])) if len(toks) > 0 else 0
+        n2 = int(float(toks[1])) if len(toks) > 1 else 0
+        gr = int(float(toks[2])) if len(toks) > 2 else 0
+    model.cyl_joints[block.user_id] = CylJoint(
+        id=block.user_id, title=title, node_id1=n1, node_id2=n2, grnod_id=gr
+    )
+
+
+def read_gjoint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/GJOINT[/<SUBTYPE>]/id`` (M102): general kinematic joint (GEAR, RACK, DIFF).
+
+    Fortran origin: ``starter/source/constraints/general/gjoint/hm_read_gjoint.F``.
+    """
+    from ..model.entities import GeneralJoint
+    parts = block.keyword.split("/")
+    subtype = "DEFAULT"
+    if len(parts) > 1 and parts[1].upper() in ("GEAR", "RACK", "DIFF"):
+        subtype = parts[1].upper()
+
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    node_id0 = 0
+    fscale = 1.0
+    mass0 = 0.0
+    inertia0 = 0.0
+    node_id1 = 0
+    node_id2 = 0
+    node_id3 = 0
+    mass1 = inertia1 = mass2 = inertia2 = mass3 = inertia3 = 0.0
+    r1 = (1.0, 0.0, 0.0)
+    r2 = (1.0, 0.0, 0.0)
+    r3 = (1.0, 0.0, 0.0)
+
+    if cards:
+        c1 = cards[0]
+        if block.fixed:
+            f1 = c1.cut("GJOINT_1")
+            node_id0 = _ival(f1[0]) if len(f1) > 0 else 0
+            fscale = _fval(f1[1]) if len(f1) > 1 and f1[1].strip() else 1.0
+            mass0 = _fval(f1[2]) if len(f1) > 2 else 0.0
+            inertia0 = _fval(f1[3]) if len(f1) > 3 else 0.0
+            node_id1 = _ival(f1[4]) if len(f1) > 4 else 0
+            node_id2 = _ival(f1[5]) if len(f1) > 5 else 0
+            node_id3 = _ival(f1[6]) if len(f1) > 6 else 0
+        else:
+            toks1 = c1.tokens()
+            node_id0 = int(float(toks1[0])) if len(toks1) > 0 else 0
+            fscale = float(toks1[1]) if len(toks1) > 1 else 1.0
+            mass0 = float(toks1[2]) if len(toks1) > 2 else 0.0
+            inertia0 = float(toks1[3]) if len(toks1) > 3 else 0.0
+            node_id1 = int(float(toks1[4])) if len(toks1) > 4 else 0
+            node_id2 = int(float(toks1[5])) if len(toks1) > 5 else 0
+            node_id3 = int(float(toks1[6])) if len(toks1) > 6 else 0
+
+    if len(cards) > 1:
+        c2 = cards[1]
+        if block.fixed:
+            f2 = c2.cut("GJOINT_2")
+            mass1 = _fval(f2[0]) if len(f2) > 0 else 0.0
+            inertia1 = _fval(f2[1]) if len(f2) > 1 else 0.0
+            rx = _fval(f2[2]) if len(f2) > 2 else 0.0
+            ry = _fval(f2[3]) if len(f2) > 3 else 0.0
+            rz = _fval(f2[4]) if len(f2) > 4 else 0.0
+        else:
+            toks2 = c2.tokens()
+            mass1 = float(toks2[0]) if len(toks2) > 0 else 0.0
+            inertia1 = float(toks2[1]) if len(toks2) > 1 else 0.0
+            rx = float(toks2[2]) if len(toks2) > 2 else 0.0
+            ry = float(toks2[3]) if len(toks2) > 3 else 0.0
+            rz = float(toks2[4]) if len(toks2) > 4 else 0.0
+        if rx != 0.0 or ry != 0.0 or rz != 0.0:
+            r1 = (rx, ry, rz)
+
+    if len(cards) > 2:
+        c3 = cards[2]
+        if block.fixed:
+            f3 = c3.cut("GJOINT_2")
+            mass2 = _fval(f3[0]) if len(f3) > 0 else 0.0
+            inertia2 = _fval(f3[1]) if len(f3) > 1 else 0.0
+            rx = _fval(f3[2]) if len(f3) > 2 else 0.0
+            ry = _fval(f3[3]) if len(f3) > 3 else 0.0
+            rz = _fval(f3[4]) if len(f3) > 4 else 0.0
+        else:
+            toks3 = c3.tokens()
+            mass2 = float(toks3[0]) if len(toks3) > 0 else 0.0
+            inertia2 = float(toks3[1]) if len(toks3) > 1 else 0.0
+            rx = float(toks3[2]) if len(toks3) > 2 else 0.0
+            ry = float(toks3[3]) if len(toks3) > 3 else 0.0
+            rz = float(toks3[4]) if len(toks3) > 4 else 0.0
+        if rx != 0.0 or ry != 0.0 or rz != 0.0:
+            r2 = (rx, ry, rz)
+
+    if len(cards) > 3 and subtype == "DIFF":
+        c4 = cards[3]
+        if block.fixed:
+            f4 = c4.cut("GJOINT_2")
+            mass3 = _fval(f4[0]) if len(f4) > 0 else 0.0
+            inertia3 = _fval(f4[1]) if len(f4) > 1 else 0.0
+            rx = _fval(f4[2]) if len(f4) > 2 else 0.0
+            ry = _fval(f4[3]) if len(f4) > 3 else 0.0
+            rz = _fval(f4[4]) if len(f4) > 4 else 0.0
+        else:
+            toks4 = c4.tokens()
+            mass3 = float(toks4[0]) if len(toks4) > 0 else 0.0
+            inertia3 = float(toks4[1]) if len(toks4) > 1 else 0.0
+            rx = float(toks4[2]) if len(toks4) > 2 else 0.0
+            ry = float(toks4[3]) if len(toks4) > 3 else 0.0
+            rz = float(toks4[4]) if len(toks4) > 4 else 0.0
+        if rx != 0.0 or ry != 0.0 or rz != 0.0:
+            r3 = (rx, ry, rz)
+
+    model.gjoints[block.user_id] = GeneralJoint(
+        id=block.user_id, title=title, subtype=subtype,
+        node_id0=node_id0, fscale=fscale, mass0=mass0, inertia0=inertia0,
+        node_id1=node_id1, node_id2=node_id2, node_id3=node_id3,
+        mass1=mass1, inertia1=inertia1, r1=r1,
+        mass2=mass2, inertia2=inertia2, r2=r2,
+        mass3=mass3, inertia3=inertia3, r3=r3,
+    )
+
+
+def read_merge(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MERGE[/<SUBTYPE>]/id`` (M102): merge nodes or rigid bodies.
+
+    Fortran origin: ``starter/source/constraints/general/merge/hm_read_merge.F``.
+    """
+    from ..model.entities import MergeNode, MergeRbody
+    parts = block.keyword.split("/")
+    is_node = len(parts) > 1 and parts[1].upper() == "NODE"
+
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if is_node:
+        tol = 0.0
+        grnod_id = 0
+        merge_type = 0
+        if cards:
+            c = cards[0]
+            if block.fixed:
+                f = c.cut("MERGE_NODE_1")
+                tol = _fval(f[0]) if len(f) > 0 else 0.0
+                grnod_id = _ival(f[1]) if len(f) > 1 else 0
+                merge_type = _ival(f[2]) if len(f) > 2 else 0
+            else:
+                toks = c.tokens()
+                tol = float(toks[0]) if len(toks) > 0 else 0.0
+                grnod_id = int(float(toks[1])) if len(toks) > 1 else 0
+                merge_type = int(float(toks[2])) if len(toks) > 2 else 0
+        model.node_merges[block.user_id] = MergeNode(
+            id=block.user_id, title=title, tol=tol, grnod_id=grnod_id, merge_type=merge_type
+        )
+    else:
+        items = []
+        if cards:
+            start_idx = 0
+            first_toks = cards[0].tokens()
+            if len(first_toks) == 1:
+                start_idx = 1
+            for c in cards[start_idx:]:
+                if block.fixed:
+                    f = c.cut("MERGE_RBODY_ITEM")
+                    if len(f) >= 3 and any(f):
+                        m_id = _ival(f[0])
+                        m_t = _ival(f[1]) or 1
+                        s_id = _ival(f[2])
+                        s_t = _ival(f[3]) or 1
+                        ifl = _ival(f[4]) or 2
+                        items.append((m_id, m_t, s_id, s_t, ifl))
+                else:
+                    toks = c.tokens()
+                    if len(toks) >= 2:
+                        m_id = int(float(toks[0]))
+                        m_t = int(float(toks[1])) if len(toks) > 1 else 1
+                        s_id = int(float(toks[2])) if len(toks) > 2 else 0
+                        s_t = int(float(toks[3])) if len(toks) > 3 else 1
+                        ifl = int(float(toks[4])) if len(toks) > 4 else 2
+                        items.append((m_id, m_t, s_id, s_t, ifl))
+        model.rbody_merges[block.user_id] = MergeRbody(
+            id=block.user_id, title=title, items=items
+        )
+
+
+def read_inicrack(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INICRACK/id`` (M102): initial crack definition.
+
+    Fortran origin: ``starter/source/initial_conditions/inicrack/hm_read_inicrack.F``.
+    """
+    from ..model.entities import IniCrack, IniCrackSegment
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    segments = []
+    if cards:
+        start_idx = 0
+        if len(cards[0].tokens()) == 1:
+            start_idx = 1
+        for c in cards[start_idx:]:
+            if block.fixed:
+                f = c.cut("INICRACK_ITEM")
+                if len(f) >= 2 and any(f):
+                    n1 = _ival(f[0])
+                    n2 = _ival(f[1])
+                    rat = _fval(f[2]) if len(f) > 2 else 0.0
+                    segments.append(IniCrackSegment(node_id1=n1, node_id2=n2, ratio=rat))
+            else:
+                toks = c.tokens()
+                if len(toks) >= 2:
+                    n1 = int(float(toks[0]))
+                    n2 = int(float(toks[1]))
+                    rat = float(toks[2]) if len(toks) > 2 else 0.0
+                    segments.append(IniCrackSegment(node_id1=n1, node_id2=n2, ratio=rat))
+    model.inicracks[block.user_id] = IniCrack(
+        id=block.user_id, title=title, segments=segments
+    )
+
+
+def read_laser(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/LASER/id`` or ``/DFS/LASER/id`` (M102): laser beam impact.
+
+    Fortran origin: ``starter/source/loads/laser/leclas.F``.
+    """
+    from ..model.entities import LaserLoad
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    magnitude = 0.0
+    curve_id = 0
+    s_target = 0.0
+    fct_id_target = 0
+    hn = vcp = k0 = rd = ks = 0.0
+    np = 0
+    nc = 0
+    plasma_elements = []
+
+    if cards:
+        c1 = cards[0]
+        if block.fixed:
+            f1 = c1.cut("LASER_1")
+            magnitude = _fval(f1[0]) if len(f1) > 0 else 0.0
+            curve_id = _ival(f1[1]) if len(f1) > 1 else 0
+            s_target = _fval(f1[3]) if len(f1) > 3 else 0.0
+            fct_id_target = _ival(f1[4]) if len(f1) > 4 else 0
+        else:
+            toks1 = c1.tokens()
+            magnitude = float(toks1[0]) if len(toks1) > 0 else 0.0
+            curve_id = int(float(toks1[1])) if len(toks1) > 1 else 0
+            s_target = float(toks1[2]) if len(toks1) > 2 else 0.0
+            fct_id_target = int(float(toks1[3])) if len(toks1) > 3 else 0
+
+    if len(cards) > 1:
+        c2 = cards[1]
+        if block.fixed:
+            f2 = c2.cut("LASER_2")
+            hn = _fval(f2[0]) if len(f2) > 0 else 0.0
+            vcp = _fval(f2[1]) if len(f2) > 1 else 0.0
+            k0 = _fval(f2[2]) if len(f2) > 2 else 0.0
+            rd = _fval(f2[3]) if len(f2) > 3 else 0.0
+            ks = _fval(f2[4]) if len(f2) > 4 else 0.0
+        else:
+            toks2 = c2.tokens()
+            hn = float(toks2[0]) if len(toks2) > 0 else 0.0
+            vcp = float(toks2[1]) if len(toks2) > 1 else 0.0
+            k0 = float(toks2[2]) if len(toks2) > 2 else 0.0
+            rd = float(toks2[3]) if len(toks2) > 3 else 0.0
+            ks = float(toks2[4]) if len(toks2) > 4 else 0.0
+
+    if len(cards) > 2:
+        c3 = cards[2]
+        if block.fixed:
+            f3 = c3.cut("LASER_3")
+            np = _ival(f3[0]) if len(f3) > 0 else 0
+            nc = _ival(f3[1]) if len(f3) > 1 else 0
+        else:
+            toks3 = c3.tokens()
+            np = int(float(toks3[0])) if len(toks3) > 0 else 0
+            nc = int(float(toks3[1])) if len(toks3) > 1 else 0
+
+    for c in cards[3:]:
+        for t in c.tokens():
+            plasma_elements.append(int(float(t)))
+
+    model.laser_loads[block.user_id] = LaserLoad(
+        id=block.user_id, title=title, magnitude=magnitude, curve_id=curve_id,
+        s_target=s_target, fct_id_target=fct_id_target,
+        hn=hn, vcp=vcp, k0=k0, rd=rd, ks=ks,
+        np=np, nc=nc, plasma_elements=plasma_elements,
+    )
+
 
 def read_ioflag(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/IOFLAG`` — output control flags (M68, parse-and-skip).
@@ -6051,6 +6480,9 @@ def read_dfs(block: KeywordBlock, model: Model,
         card 2:  NX  NY  NZ                            (%20lg*3)
     """
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub == "LASER":
+        read_laser(block, model, log)
+        return
     det_id = block.user_id if block.user_id is not None else 0
     cards = block.cards
 
@@ -6913,6 +7345,12 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "AMS": read_sms,
     "PLY": read_ply,
     "LAMINATE": read_laminate,
+    "RLINK": read_rlink,
+    "CYL_JOINT": read_cyl_joint,
+    "GJOINT": read_gjoint,
+    "MERGE": read_merge,
+    "INICRACK": read_inicrack,
+    "LASER": read_laser,
 }
 
 ENGINE_KEYWORDS_IGNORE = {

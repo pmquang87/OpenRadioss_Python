@@ -419,4 +419,53 @@ def check_model(model: Model, log: MessageLog) -> None:
         if sms.grpart_id > 0 and sms.grpart_id not in part_groups and sms.grpart_id not in model.parts:
             log.error(f"/SMS: part group/part {sms.grpart_id} not defined", "CROSS REF")
 
+    # Boundary conditions, Joints, Merge, Inicrack, Laser (M102)
+    for bid, bcs in getattr(model, "bcs_nrf", {}).items():
+        if bcs.grnod_id > 0 and bcs.grnod_id not in model.node_groups:
+            log.error(f"/BCS/NRF/{bid}: node group {bcs.grnod_id} not defined", "CROSS REF")
+
+    sensor_ids = {s.id for s in model.sensors}
+    for bid, bcs in getattr(model, "bcs_walls", {}).items():
+        if bcs.grnod_id > 0 and bcs.grnod_id not in model.node_groups:
+            log.error(f"/BCS/WALL/{bid}: node group {bcs.grnod_id} not defined", "CROSS REF")
+        if bcs.sensor_id > 0 and bcs.sensor_id not in sensor_ids:
+            log.error(f"/BCS/WALL/{bid}: sensor {bcs.sensor_id} not defined", "CROSS REF")
+
+    for rid, rl in getattr(model, "rlinks", {}).items():
+        if rl.grnod_id > 0 and rl.grnod_id not in model.node_groups:
+            log.error(f"/RLINK/{rid}: node group {rl.grnod_id} not defined", "CROSS REF")
+        if rl.skew_id > 0 and rl.skew_id not in model.skews:
+            log.error(f"/RLINK/{rid}: skew {rl.skew_id} not defined", "CROSS REF")
+
+    for cid, cj in getattr(model, "cyl_joints", {}).items():
+        if cj.node_id1 > 0 and cj.node_id1 not in model._id2idx:
+            log.error(f"/CYL_JOINT/{cid}: node {cj.node_id1} not defined", "CROSS REF")
+        if cj.node_id2 > 0 and cj.node_id2 not in model._id2idx:
+            log.error(f"/CYL_JOINT/{cid}: node {cj.node_id2} not defined", "CROSS REF")
+        if cj.grnod_id > 0 and cj.grnod_id not in model.node_groups:
+            log.error(f"/CYL_JOINT/{cid}: node group {cj.grnod_id} not defined", "CROSS REF")
+
+    for gid, gj in getattr(model, "gjoints", {}).items():
+        for nid in (gj.node_id0, gj.node_id1, gj.node_id2, gj.node_id3):
+            if nid > 0 and nid not in model._id2idx:
+                log.error(f"/GJOINT/{gid}: node {nid} not defined", "CROSS REF")
+
+    for mid, mn in getattr(model, "node_merges", {}).items():
+        if mn.grnod_id > 0 and mn.grnod_id not in model.node_groups:
+            log.error(f"/MERGE/NODE/{mid}: node group {mn.grnod_id} not defined", "CROSS REF")
+
+    for iid, ic in getattr(model, "inicracks", {}).items():
+        for seg in ic.segments:
+            if seg.node_id1 > 0 and seg.node_id1 not in model._id2idx:
+                log.error(f"/INICRACK/{iid}: node {seg.node_id1} not defined", "CROSS REF")
+            if seg.node_id2 > 0 and seg.node_id2 not in model._id2idx:
+                log.error(f"/INICRACK/{iid}: node {seg.node_id2} not defined", "CROSS REF")
+
+    for lid, las in getattr(model, "laser_loads", {}).items():
+        if las.curve_id > 0 and las.curve_id not in model.functions:
+            log.error(f"/LASER/{lid}: function {las.curve_id} not defined", "CROSS REF")
+        if las.fct_id_target > 0 and las.fct_id_target not in model.functions:
+            log.error(f"/LASER/{lid}: function {las.fct_id_target} not defined", "CROSS REF")
+
+
 

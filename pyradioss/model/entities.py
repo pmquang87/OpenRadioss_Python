@@ -1435,4 +1435,153 @@ class SmsGlobal:
     dt_target: float = 0.0
 
 
+# ----------------------------------------------------------------------------
+# Boundary conditions & joints & special initial states (M102)
+# ----------------------------------------------------------------------------
+
+@dataclass
+class BcsNrf:
+    """/BCS/NRF (M102): Non-reflecting boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/hm_read_bcs_nrf.F90``.
+    """
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+
+
+@dataclass
+class BcsWall:
+    """/BCS/WALL (M102): Sliding wall boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/hm_read_bcs_wall.F90``.
+    """
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+    sensor_id: int = 0
+    tstart: float = 0.0
+    tstop: float = 0.0
+
+
+@dataclass
+class RigidLink:
+    """/RLINK (M102): Standard rigid link definition between node group and main/skew frame.
+
+    Fortran origin: ``starter/source/constraints/rigidlink/hm_read_rlink.F``.
+    """
+    id: int
+    title: str = ""
+    dofs: Tuple[int, int, int, int, int, int] = (1, 1, 1, 1, 1, 1)
+    skew_id: int = 0
+    grnod_id: int = 0
+    ipol: int = 0
+
+
+@dataclass
+class CylJoint:
+    """/CYL_JOINT (M102): Cylindrical joint constraint between independent and dependent nodes.
+
+    Fortran origin: ``starter/source/constraints/general/cyl_joint/hm_read_cyljoint.F``.
+    """
+    id: int
+    title: str = ""
+    node_id1: int = 0
+    node_id2: int = 0
+    grnod_id: int = 0
+
+
+@dataclass
+class GeneralJoint:
+    """/GJOINT (M102): General kinematic joint (GEAR, RACK, DIFF).
+
+    Fortran origin: ``starter/source/constraints/general/gjoint/hm_read_gjoint.F``.
+    """
+    id: int
+    title: str = ""
+    subtype: str = "DEFAULT"  # DEFAULT, GEAR, RACK, DIFF
+    node_id0: int = 0
+    fscale: float = 1.0
+    mass0: float = 0.0
+    inertia0: float = 0.0
+    node_id1: int = 0
+    node_id2: int = 0
+    node_id3: int = 0
+    mass1: float = 0.0
+    inertia1: float = 0.0
+    r1: Tuple[float, float, float] = (1.0, 0.0, 0.0)
+    mass2: float = 0.0
+    inertia2: float = 0.0
+    r2: Tuple[float, float, float] = (1.0, 0.0, 0.0)
+    mass3: float = 0.0
+    inertia3: float = 0.0
+    r3: Tuple[float, float, float] = (1.0, 0.0, 0.0)
+
+
+@dataclass
+class MergeNode:
+    """/MERGE/NODE (M102): Merge nodes in node group within tolerance.
+
+    Fortran origin: ``starter/source/constraints/general/merge/hm_read_merge.F``.
+    """
+    id: int
+    title: str = ""
+    tol: float = 0.0
+    grnod_id: int = 0
+    merge_type: int = 0
+
+
+@dataclass
+class MergeRbody:
+    """/MERGE/RBODY (M102): Merge rigid bodies.
+
+    Fortran origin: ``starter/source/constraints/general/merge/hm_read_merge.F``.
+    """
+    id: int
+    title: str = ""
+    items: List[Tuple[int, int, int, int, int]] = field(default_factory=list)  # (main_id, m_type, secon_id, s_type, iflag)
+
+
+@dataclass
+class IniCrackSegment:
+    """Segment definition for /INICRACK."""
+    node_id1: int
+    node_id2: int
+    ratio: float = 0.0
+
+
+@dataclass
+class IniCrack:
+    """/INICRACK (M102): Initial crack definition for XFEM.
+
+    Fortran origin: ``starter/source/initial_conditions/inicrack/hm_read_inicrack.F``.
+    """
+    id: int
+    title: str = ""
+    segments: List[IniCrackSegment] = field(default_factory=list)
+
+
+@dataclass
+class LaserLoad:
+    """/LASER or /DFS/LASER (M102): Laser beam impact load.
+
+    Fortran origin: ``starter/source/loads/laser/leclas.F``.
+    """
+    id: int
+    title: str = ""
+    magnitude: float = 0.0
+    curve_id: int = 0
+    s_target: float = 0.0
+    fct_id_target: int = 0
+    hn: float = 0.0
+    vcp: float = 0.0
+    k0: float = 0.0
+    rd: float = 0.0
+    ks: float = 0.0
+    np: int = 0
+    nc: int = 0
+    plasma_elements: List[int] = field(default_factory=list)
+
+
+
 

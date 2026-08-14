@@ -107,6 +107,7 @@ real history is 41 milestones. One line each:
 | M99 | Add /TRANSFORM/POS, /BCS/CYCLIC, /PERTURB/PART/SOLID, /LOAD/PBLAST, /DEF_INTER |
 | M100 | Add /PROP/TYPE10, /TYPE11, /TYPE16, /TYPE6, /PLY, /LAMINATE, /INTER/TYPE25, /INTER/SUB |
 | M101 | Add /DEF_SHELL, /DEF_SOLID, extended /DEF_INTER, /PERTURB (SHELL, FAIL), /SPHGLO, /SMS suite |
+| M102 | Add /BCS/NRF, /BCS/WALL, /RLINK, /CYL_JOINT, /GJOINT, /MERGE, /INICRACK, /LASER suite |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
