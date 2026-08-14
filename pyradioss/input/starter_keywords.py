@@ -40,6 +40,7 @@ from ..model.entities import (
     DetonatorPoint, DetonatorPlane,
     ConvectionLoad, InivolContainer, InitialVolume,
     RadiationLoad, ImposedFlux, InitialTemperature,
+    InitialBrickState, InitialShellState,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -5254,6 +5255,197 @@ def read_initemp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.initemp.append(it)
 
 
+def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INIBRI/{STRESS|EPSP|DENS|ENER}[/id]`` (M96)::
+
+        /INIBRI/STRESS:
+          card 1: bric_IDst  SIGMA_x   SIGMA_y   SIGMA_z
+          card 2:            SIGMA_xy  SIGMA_yz  SIGMA_xz
+        /INIBRI/EPSP, /INIBRI/DENS, /INIBRI/ENER:
+          card 1: bric_ID  value
+    """
+    sub = block.parts[1].upper() if len(block.parts) > 1 else "STRESS"
+    cards = [c for c in block.cards if not c.is_blank]
+    if not cards:
+        log.error(f"/INIBRI/{sub}: missing data card", block.source)
+        return
+
+    if sub == "STRESS":
+        idx = 0
+        while idx < len(cards):
+            c1 = cards[idx]
+            if block.fixed:
+                f = c1.cut("INIBRI_STRESS_1")
+                elem_id = _ival(f[0])
+                s1 = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+                s2 = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+                s3 = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+                idx += 1
+                if idx < len(cards):
+                    g = cards[idx].cut("INIBRI_STRESS_2")
+                    s12 = _fval(g[0], 0.0) if len(g) > 0 else 0.0
+                    s23 = _fval(g[1], 0.0) if len(g) > 1 else 0.0
+                    s31 = _fval(g[2], 0.0) if len(g) > 2 else 0.0
+                    idx += 1
+                else:
+                    s12, s23, s31 = 0.0, 0.0, 0.0
+            else:
+                t = c1.tokens()
+                elem_id = int(float(t[0]))
+                if len(t) >= 7:
+                    s1, s2, s3, s12, s23, s31 = [float(x) for x in t[1:7]]
+                    idx += 1
+                else:
+                    s1 = float(t[1]) if len(t) > 1 else 0.0
+                    s2 = float(t[2]) if len(t) > 2 else 0.0
+                    s3 = float(t[3]) if len(t) > 3 else 0.0
+                    idx += 1
+                    if idx < len(cards):
+                        t2 = cards[idx].tokens()
+                        s12 = float(t2[0]) if len(t2) > 0 else 0.0
+                        s23 = float(t2[1]) if len(t2) > 1 else 0.0
+                        s31 = float(t2[2]) if len(t2) > 2 else 0.0
+                        idx += 1
+                    else:
+                        s12, s23, s31 = 0.0, 0.0, 0.0
+
+            st = model.ini_bricks.setdefault(elem_id, InitialBrickState(elem_id=elem_id))
+            st.sigma = np.array([s1, s2, s3, s12, s23, s31], dtype=float)
+
+    elif sub in ("EPSP", "DENS", "ENER"):
+        for c in cards:
+            if block.fixed:
+                f = c.cut("INIBRI_SCALAR")
+                elem_id = _ival(f[0])
+                val = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            else:
+                t = c.tokens()
+                elem_id = int(float(t[0]))
+                val = float(t[1]) if len(t) > 1 else 0.0
+
+            st = model.ini_bricks.setdefault(elem_id, InitialBrickState(elem_id=elem_id))
+            if sub == "EPSP":
+                st.epsp = val
+            elif sub == "DENS":
+                st.rho = val
+            elif sub == "ENER":
+                st.ener = val
+    else:
+        log.warning(f"/INIBRI/{sub} not ported — block skipped", block.source)
+
+
+def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INISHE/{STRS_F|EPSP|THICK}[/id]`` (M96)::
+
+        /INISHE/EPSP, /INISHE/THICK:
+          card 1: shell_ID  value
+        /INISHE/STRS_F:
+          card 1: shell_ID  nb_integr  npg  Thick
+          card 2: Em  Eb  H1  H2  H3
+          card 3: sigma_1  sigma_2  sigma_12  sigma_23  sigma_31
+          card 4: eps_p  sigma_b1  sigma_b2  sigma_b12
+    """
+    sub = block.parts[1].upper() if len(block.parts) > 1 else "STRS_F"
+    cards = [c for c in block.cards if not c.is_blank]
+    if not cards:
+        log.error(f"/INISHE/{sub}: missing data card", block.source)
+        return
+
+    if sub in ("EPSP", "THICK"):
+        for c in cards:
+            if block.fixed:
+                f = c.cut("INISHE_SCALAR")
+                elem_id = _ival(f[0])
+                val = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            else:
+                t = c.tokens()
+                elem_id = int(float(t[0]))
+                val = float(t[1]) if len(t) > 1 else 0.0
+
+            st = model.ini_shells.setdefault(elem_id, InitialShellState(elem_id=elem_id))
+            if sub == "EPSP":
+                st.epsp = val
+            elif sub == "THICK":
+                st.thick = val
+
+    elif sub in ("STRS_F", "STRS_FGLO", "STRS_F/GLOB"):
+        idx = 0
+        while idx < len(cards):
+            c0 = cards[idx]
+            if block.fixed:
+                f = c0.cut("INISHE_STRS_1")
+                elem_id = _ival(f[0])
+                thick = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+                idx += 1
+
+                g = cards[idx].cut("INISHE_STRS_2") if idx < len(cards) else []
+                em = _fval(g[0], 0.0) if len(g) > 0 else 0.0
+                eb = _fval(g[1], 0.0) if len(g) > 1 else 0.0
+                h1 = _fval(g[2], 0.0) if len(g) > 2 else 0.0
+                h2 = _fval(g[3], 0.0) if len(g) > 3 else 0.0
+                h3 = _fval(g[4], 0.0) if len(g) > 4 else 0.0
+                idx += 1
+
+                h = cards[idx].cut("INISHE_STRS_3") if idx < len(cards) else []
+                s1 = _fval(h[0], 0.0) if len(h) > 0 else 0.0
+                s2 = _fval(h[1], 0.0) if len(h) > 1 else 0.0
+                s12 = _fval(h[2], 0.0) if len(h) > 2 else 0.0
+                s23 = _fval(h[3], 0.0) if len(h) > 3 else 0.0
+                s31 = _fval(h[4], 0.0) if len(h) > 4 else 0.0
+                idx += 1
+
+                k = cards[idx].cut("INISHE_STRS_4") if idx < len(cards) else []
+                epsp = _fval(k[0], 0.0) if len(k) > 0 else 0.0
+                sb1 = _fval(k[1], 0.0) if len(k) > 1 else 0.0
+                sb2 = _fval(k[2], 0.0) if len(k) > 2 else 0.0
+                sb12 = _fval(k[3], 0.0) if len(k) > 3 else 0.0
+                idx += 1
+            else:
+                t0 = c0.tokens()
+                elem_id = int(float(t0[0]))
+                thick = float(t0[3]) if len(t0) > 3 else 0.0
+                idx += 1
+
+                t1 = cards[idx].tokens() if idx < len(cards) else []
+                em = float(t1[0]) if len(t1) > 0 else 0.0
+                eb = float(t1[1]) if len(t1) > 1 else 0.0
+                h1 = float(t1[2]) if len(t1) > 2 else 0.0
+                h2 = float(t1[3]) if len(t1) > 3 else 0.0
+                h3 = float(t1[4]) if len(t1) > 4 else 0.0
+                idx += 1
+
+                t2 = cards[idx].tokens() if idx < len(cards) else []
+                s1 = float(t2[0]) if len(t2) > 0 else 0.0
+                s2 = float(t2[1]) if len(t2) > 1 else 0.0
+                s12 = float(t2[2]) if len(t2) > 2 else 0.0
+                s23 = float(t2[3]) if len(t2) > 3 else 0.0
+                s31 = float(t2[4]) if len(t2) > 4 else 0.0
+                idx += 1
+
+                t3 = cards[idx].tokens() if idx < len(cards) else []
+                epsp = float(t3[0]) if len(t3) > 0 else 0.0
+                sb1 = float(t3[1]) if len(t3) > 1 else 0.0
+                sb2 = float(t3[2]) if len(t3) > 2 else 0.0
+                sb12 = float(t3[3]) if len(t3) > 3 else 0.0
+                idx += 1
+
+            st = model.ini_shells.setdefault(elem_id, InitialShellState(elem_id=elem_id))
+            st.thick = thick
+            st.em = em
+            st.eb = eb
+            st.h_energy = np.array([h1, h2, h3], dtype=float)
+            st.sigma = np.array([s1, s2, 0.0, s12, s23, s31], dtype=float)
+            st.sigma_b = np.array([sb1, sb2, 0.0, sb12, 0.0, 0.0], dtype=float)
+            st.epsp = epsp
+    else:
+        log.warning(f"/INISHE/{sub} not ported — block skipped", block.source)
+
+
+def read_inish3(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INISH3/{STRS_F|EPSP|THICK}[/id]`` (M96):: initial state for 3-node shells."""
+    read_inishe(block, model, log)
+
+
 KEYWORD_PARSERS: Dict[str, Callable] = {
     "MONVOL": read_monvol,
     "ANALY": read_analy,
@@ -5338,6 +5530,9 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "RADIATION": read_radiation,
     "IMPFLUX": read_impflux,
     "INITEMP": read_initemp,
+    "INIBRI": read_inibri,
+    "INISHE": read_inishe,
+    "INISH3": read_inish3,
 }
 
 ENGINE_KEYWORDS_IGNORE = {
@@ -5371,7 +5566,7 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
             log.error(f"while reading /{'/'.join(block.parts)}: {exc}",
                       block.source)
             continue
-        if block.unit_id is not None and block.key0 not in ("FAIL", "ADMAS", "TABLE", "INIVOL"):
+        if block.unit_id is not None and block.key0 not in ("FAIL", "ADMAS", "TABLE", "INIVOL", "INIBRI", "INISHE", "INISH3"):
             # /FAIL's second trailing id is its OWN option id in the
             # legacy dialect (read_fail handles it), and /ADMAS headers
             # are /ADMAS/type/admas_ID with NO unit slot (cfg admas.cfg;

@@ -38,6 +38,7 @@ from .entities import (
     DetonatorPlane, DetonatorPoint,
     ConvectionLoad, InivolContainer, InitialVolume,
     RadiationLoad, ImposedFlux, InitialTemperature,
+    InitialBrickState, InitialShellState,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -571,6 +572,8 @@ class Model:
         self.bcs: List[BoundaryCondition] = []
         self.ale_bcs: List[AleBoundaryCondition] = []
         self.inivel: List[InitialVelocity] = []
+        self.ini_bricks: Dict[int, InitialBrickState] = {}  # /INIBRI (M96)
+        self.ini_shells: Dict[int, InitialShellState] = {}  # /INISHE, /INISH3 (M96)
         self.gravity: List[Gravity] = []
         self.cloads: List[ConcentratedLoad] = []
         self.centri_loads: List[CentrifugalLoad] = []  # /LOAD/CENTRI (M93)

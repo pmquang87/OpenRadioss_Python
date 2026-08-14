@@ -225,6 +225,25 @@ def check_model(model: Model, log: MessageLog) -> None:
             if c.surf_id not in model.surfaces and c.surf_id not in model.node_groups:
                 log.error(f"/INIVOL/{iv.id}: container surface/group {c.surf_id} not defined",
                           "CROSS REF")
+    solid_ids = set()
+    for name in ("bricks", "tetra4", "tetra10"):
+        grp = getattr(model, name, None)
+        if grp is not None and hasattr(grp, "ids") and len(grp.ids) > 0:
+            solid_ids.update(grp.ids.tolist())
+    for elem_id in model.ini_bricks:
+        if elem_id not in solid_ids:
+            log.error(f"/INIBRI: solid element {elem_id} not defined",
+                      "CROSS REF")
+
+    shell_ids = set()
+    for name in ("shells", "sh3n", "quads"):
+        grp = getattr(model, name, None)
+        if grp is not None and hasattr(grp, "ids") and len(grp.ids) > 0:
+            shell_ids.update(grp.ids.tolist())
+    for elem_id in model.ini_shells:
+        if elem_id not in shell_ids:
+            log.error(f"/INISHE: shell element {elem_id} not defined",
+                      "CROSS REF")
     for am in model.admas:
         need_group(am.grnod_id, f"/ADMAS/{am.id}")
     for rb in model.rbodies:

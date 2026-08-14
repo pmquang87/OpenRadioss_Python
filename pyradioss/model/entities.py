@@ -1161,4 +1161,34 @@ class InitialTemperature:
     title: str = ""
 
 
+@dataclass
+class InitialBrickState:
+    """/INIBRI (M96): initial state for solid/brick elements.
+
+    Fortran origin: ``starter/source/elements/initia/hm_read_inistate_d00.F``.
+    """
+    elem_id: int
+    sigma: np.ndarray = field(default_factory=lambda: np.zeros(6))  # [sxx, syy, szz, sxy, syz, sxz]
+    epsp: float = 0.0      # plastic strain
+    rho: float = 0.0       # initial density
+    ener: float = 0.0      # internal energy
+
+
+@dataclass
+class InitialShellState:
+    """/INISHE and /INISH3 (M96): initial state for shell elements.
+
+    Fortran origin: ``starter/source/elements/initia/hm_read_inistate_d00.F``.
+    """
+    elem_id: int
+    thick: float = 0.0     # initial thickness override
+    epsp: float = 0.0      # plastic strain
+    sigma: np.ndarray = field(default_factory=lambda: np.zeros(6))  # membrane stress
+    sigma_b: np.ndarray = field(default_factory=lambda: np.zeros(6)) # bending stress
+    em: float = 0.0        # membrane energy
+    eb: float = 0.0        # bending energy
+    h_energy: np.ndarray = field(default_factory=lambda: np.zeros(3)) # H1, H2, H3
+
+
+
 

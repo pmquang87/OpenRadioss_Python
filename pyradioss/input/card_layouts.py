@@ -302,6 +302,22 @@ LAYOUTS: Dict[str, List[int]] = {
     "INITEMP_1": [20, 10, 10],
     # LOADS/initemp_set_expand_subgrp.cfg: T0i node_IDi
     "INITEMP_SUB": [20, 10],
+    # INIBRI/stress.cfg: bric_IDst SIGMA_x SIGMA_y SIGMA_z
+    "INIBRI_STRESS_1": [10, 20, 20, 20],
+    # INIBRI/stress.cfg: SIGMA_xy SIGMA_yz SIGMA_xz
+    "INIBRI_STRESS_2": [20, 20, 20],
+    # INIBRI/epsp.cfg, dens.cfg, ener.cfg: bric_ID value
+    "INIBRI_SCALAR": [10, 20],
+    # INISHE/epsp.cfg, thick.cfg: shell_ID value
+    "INISHE_SCALAR": [10, 20],
+    # INISHE/strs_f.cfg: shell_ID nb_integr npg Thick
+    "INISHE_STRS_1": [10, 10, 10, 20],
+    # INISHE/strs_f.cfg: Em Eb H1 H2 H3
+    "INISHE_STRS_2": [20, 20, 20, 20, 20],
+    # INISHE/strs_f.cfg: sigma_1 sigma_2 sigma_12 sigma_23 sigma_31
+    "INISHE_STRS_3": [20, 20, 20, 20, 20],
+    # INISHE/strs_f.cfg: eps_p sigma_b1 sigma_b2 sigma_b12
+    "INISHE_STRS_4": [20, 20, 20, 20],
     # LOADS/impvel.cfg + impdisp.cfg (radioss120):
     # CARD("%10d%10s%10d%10d%10d%10d%10d",
     #      fct, Dir, skew, sens, grnod, frame, Icoor)
