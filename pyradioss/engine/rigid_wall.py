@@ -257,6 +257,8 @@ class RigidWalls:
             vn = np.einsum("nb,nb->n", v[idx], n)
             vwn = n @ v_w
             hit = s + (vn - vwn) * dt < 0.0          # ends behind the wall
+            if rw.dist > 0.0:
+                hit &= (s <= rw.dist)                # ends behind the wall, AND started within the search band
             if not np.any(hit):
                 continue
             i = idx[hit]

@@ -2969,15 +2969,14 @@ def read_rbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         jadd = np.array(_cut_floats(cards[1], "XYZ20")[:3]) \
             if len(cards) > 1 else np.zeros(3)
         joff = _cut_floats(cards[2], "XYZ20") if len(cards) > 2 else []
-        # sens_ID stays in the ignored list — the port does NOT gate the
-        # rigid-body kinematics by sensor — but its VALUE is carried onto
-        # the entity: the Starter's shared-node check needs the reference's
+        # The Starter's shared-node check needs the reference's
         # ACTIVE/INACTIVE distinction (NPBY(7) = 1 iff sens_ID == 0) to
         # match checkrby.F (M39 / M38-NEW-4, see initialize_rigid_bodies).
         _warn_ignored(log, f"/RBODY/{block.user_id}", block.source,
                       [("sens_ID", f[1]),
                        ("Ikrem", f[6]), ("surf_ID", f[8])]
                       + [("Jxy/Jyz/Jxz", v) for v in joff if v])
+        
         # Skew_ID (M39): the axes Jxx/Jyy/Jzz are written in — rotated
         # into the global frame once, at init (inirby.F's CHBAS call).
         skew = _ival(f[2])
@@ -2993,7 +2992,7 @@ def read_rbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.rbodies.append(RigidBody(
             id=block.user_id, kind="RBODY", master_id=int(f[0]),
             grnod_id=_ival(f[5]), added_mass=mass, jadd=jadd, icog=icog,
-            sens_id=_ival(f[1]), ispher=_ival(f[3]), title=title, skew_id=skew))
+            sens_id=_ival(f[1], default=0), ispher=_ival(f[3]), title=title, skew_id=skew))
         return
     title, cards = _title_and_data(block)
     if not cards:
