@@ -1090,6 +1090,11 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 # sign is the Radioss convention for 'every n cycles').
                 if len(block.parts) > 1:
                     ec.print_cycles = abs(int(block.parts[1]))
+                elif block.cards:
+                    # Alternately, /PRINT \n N_print (M82)
+                    v = block.cards[0].floats()
+                    if v and v[0] != 0.0:
+                        ec.print_cycles = abs(int(v[0]))
             elif key == "STOP":
                 # /STOP card: Emax Mmax Nmax NTH NANIM. Emax = 0.0 (blank or
                 # explicit 0, as official decks write '0 0 0 1 1') means "no

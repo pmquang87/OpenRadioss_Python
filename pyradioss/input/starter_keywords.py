@@ -4489,6 +4489,9 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "ENDSUB": read_endsub,
 }
 
+ENGINE_KEYWORDS_IGNORE = {
+    "ANIM", "DT", "H3D", "MON", "PARITH", "PRINT", "RFILE", "RUN", "STATE", "STOP", "TFILE", "VERS"
+}
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
                        log: MessageLog) -> None:
@@ -4503,6 +4506,11 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
     for block in blocks:
         parser = KEYWORD_PARSERS.get(block.key0)
         if parser is None:
+            if block.key0 in ENGINE_KEYWORDS_IGNORE:
+                # Silently bypass engine output requests and control flags
+                # that often slip into shared input decks. The engine will
+                # parse them later if they are in the engine deck.
+                continue
             log.warning(f"keyword /{'/'.join(block.parts)} not ported — "
                         f"block skipped", block.source)
             continue
