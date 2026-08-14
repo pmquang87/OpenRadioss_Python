@@ -86,6 +86,29 @@ def _listing_summary(model: Model, log: MessageLog) -> None:
                  f"MAT={part.mat_id:<8d} {part.title}")
 
 
+def _resolve_transform_nodes(model: Model, tr_id: int, tr_type: str,
+                             grnod: int, sub_id: int, log: MessageLog):
+    if sub_id > 0:
+        idx = np.where(model.node_submodel == sub_id)[0]
+        if len(idx) == 0:
+            log.warning(f"/TRANSFORM/{tr_type}/{tr_id}: submodel {sub_id} has no nodes — skipped")
+            return None
+        return idx
+    elif grnod > 0 and grnod in model.node_groups:
+        g = model.node_groups[grnod]
+        idx = resolve_single_node_group(model, g, log)
+        if len(idx) == 0:
+            log.warning(f"/TRANSFORM/{tr_type}/{tr_id}: node group "
+                        f"{grnod} evaluated to empty — skipped")
+            return None
+        return idx
+    elif grnod > 0:
+        log.warning(f"/TRANSFORM/{tr_type}/{tr_id}: node group "
+                    f"{grnod} not found — skipped")
+        return None
+    return None
+
+
 def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
     """Run the full Starter on ``input_file``; returns the initialized
     model (and writes the .out listing and .rst restart next to it)."""
@@ -117,46 +140,107 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
             else:
                 log.warning(f"/MOVE_FUNCT targets unknown function {funct_id}")
 
-        # Apply /TRANSFORM/TRA translations to node coordinates
+        # Apply /TRANSFORM transformations (TRA, ROT, SYM, SCA - M63, M85) to node coordinates
         for tr in getattr(model, "transforms", []):
-            tr_id, grnod, tx, ty, tz, n1, n2, sub_id, skew_id = tr
-            
-            idx = None
-            if sub_id > 0:
-                idx = np.where(model.node_submodel == sub_id)[0]
-                if len(idx) == 0:
-                    log.warning(f"/TRANSFORM/TRA/{tr_id}: submodel {sub_id} has no nodes — skipped")
-                    continue
-            elif grnod > 0 and grnod in model.node_groups:
-                g = model.node_groups[grnod]
-                idx = resolve_single_node_group(model, g, log)
-                if len(idx) == 0:
-                    log.warning(f"/TRANSFORM/TRA/{tr_id}: node group "
-                                f"{grnod} evaluated to empty — skipped")
-                    continue
-            elif grnod > 0:
-                log.warning(f"/TRANSFORM/TRA/{tr_id}: node group "
-                            f"{grnod} not found — skipped")
-                continue
+            tr_id = tr[0]
+            if isinstance(tr[1], str):
+                tr_type = tr[1]
+                args = tr[2:]
+            else:
+                tr_type = "TRA"
+                args = tr[1:]
 
-            # Add node-pair vector delta if n1, n2 are specified
-            if n1 > 0 and n2 > 0:
-                try:
-                    idx1 = model.node_index(n1)
-                    idx2 = model.node_index(n2)
-                    v = model.x0[idx2] - model.x0[idx1]
-                    tx += v[0]
-                    ty += v[1]
-                    tz += v[2]
-                except KeyError as exc:
-                    log.warning(f"/TRANSFORM/TRA/{tr_id}: node {exc} for "
-                                f"node-pair vector not found")
+            if tr_type == "TRA":
+                grnod, tx, ty, tz, n1, n2, sub_id, skew_id = args
+                idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
+                if idx is None or len(idx) == 0:
                     continue
-
-            if idx is not None:
+                if n1 > 0 and n2 > 0:
+                    try:
+                        idx1 = model.node_index(n1)
+                        idx2 = model.node_index(n2)
+                        v = model.x0[idx2] - model.x0[idx1]
+                        tx += v[0]
+                        ty += v[1]
+                        tz += v[2]
+                    except KeyError as exc:
+                        log.warning(f"/TRANSFORM/TRA/{tr_id}: node {exc} for "
+                                    f"node-pair vector not found")
+                        continue
                 model.x0[idx, 0] += tx
                 model.x0[idx, 1] += ty
                 model.x0[idx, 2] += tz
+
+            elif tr_type == "ROT":
+                grnod, p1, p2, angle_deg, n1, n2, sub_id = args
+                idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
+                if idx is None or len(idx) == 0:
+                    continue
+                p1 = np.array(p1, dtype=float)
+                p2 = np.array(p2, dtype=float)
+                if n1 > 0 or n2 > 0:
+                    try:
+                        if n1 > 0:
+                            p1 = model.x0[model.node_index(n1)].copy()
+                        if n2 > 0:
+                            p2 = model.x0[model.node_index(n2)].copy()
+                    except KeyError as exc:
+                        log.warning(f"/TRANSFORM/ROT/{tr_id}: node {exc} not found")
+                        continue
+                axis = p2 - p1
+                norm_axis = np.linalg.norm(axis)
+                if norm_axis > 1e-20 and abs(angle_deg) > 1e-12:
+                    u = axis / norm_axis
+                    theta = np.radians(angle_deg)
+                    v = model.x0[idx] - p1
+                    cos_t = np.cos(theta)
+                    sin_t = np.sin(theta)
+                    dot = np.sum(v * u, axis=1, keepdims=True)
+                    cross = np.cross(u, v)
+                    v_rot = v * cos_t + cross * sin_t + u * dot * (1.0 - cos_t)
+                    model.x0[idx] = p1 + v_rot
+
+            elif tr_type == "SYM":
+                grnod, p1, p2, n1, n2, sub_id = args
+                idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
+                if idx is None or len(idx) == 0:
+                    continue
+                p1 = np.array(p1, dtype=float)
+                p2 = np.array(p2, dtype=float)
+                if n1 > 0 or n2 > 0:
+                    try:
+                        if n1 > 0:
+                            p1 = model.x0[model.node_index(n1)].copy()
+                        if n2 > 0:
+                            p2 = model.x0[model.node_index(n2)].copy()
+                    except KeyError as exc:
+                        log.warning(f"/TRANSFORM/SYM/{tr_id}: node {exc} not found")
+                        continue
+                normal = p2 - p1
+                norm_n = np.linalg.norm(normal)
+                if norm_n > 1e-20:
+                    n_unit = normal / norm_n
+                    v = model.x0[idx] - p1
+                    d = np.sum(v * n_unit, axis=1, keepdims=True)
+                    model.x0[idx] -= 2.0 * d * n_unit
+
+            elif tr_type == "SCA":
+                grnod, (sx, sy, sz), n1, sub_id = args
+                idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
+                if idx is None or len(idx) == 0:
+                    continue
+                center = np.zeros(3, dtype=float)
+                if n1 > 0:
+                    try:
+                        center = model.x0[model.node_index(n1)].copy()
+                    except KeyError as exc:
+                        log.warning(f"/TRANSFORM/SCA/{tr_id}: center node {exc} not found")
+                        continue
+                scale = np.array([sx if sx != 0.0 else 1.0,
+                                  sy if sy != 0.0 else 1.0,
+                                  sz if sz != 0.0 else 1.0], dtype=float)
+                model.x0[idx] = center + (model.x0[idx] - center) * scale
+
 
 
         # 2. finalize: ids->indices, element groups, node groups, surfaces,

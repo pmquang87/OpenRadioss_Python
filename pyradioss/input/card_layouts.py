@@ -325,6 +325,22 @@ LAYOUTS: Dict[str, List[int]] = {
     "BOX_CYLIN_N": [10, 10, 10, 20],
     # BOX/spher.cfg (radioss110): CARD("%10d%20s%20lg", N1, blank, Diameter)
     "BOX_SPHER_N": [10, 20, 20],
+
+    # TRANSFORM (M85)
+    # TRANSFORM/tra.cfg (radioss100): CARD("%10d%20lg%20lg%20lg%10d%10d%10d", GR_NODE, TX, TY, TZ, n1, n2, sub_ID)
+    "TRANSFORM_TRA": [10, 20, 20, 20, 10, 10, 10],
+    # TRANSFORM/rot.cfg (radioss100):
+    # card 1: CARD("%10d%20lg%20lg%20lg%10d%10d%10d", GR_NODE, X1, Y1, Z1, n1, n2, sub_ID)
+    # card 2: CARD("          %20lg%20lg%20lg%20lg", X2, Y2, Z2, Angle)
+    "TRANSFORM_ROT_1": [10, 20, 20, 20, 10, 10, 10],
+    "TRANSFORM_ROT_2": [10, 20, 20, 20, 20],
+    # TRANSFORM/sym.cfg (radioss100):
+    # card 1: CARD("%10d%20lg%20lg%20lg%10d%10d", GR_NODE, X1, Y1, Z1, n1, n2)
+    # card 2: CARD("          %20lg%20lg%20lg", X2, Y2, Z2)
+    "TRANSFORM_SYM_1": [10, 20, 20, 20, 10, 10, 10],
+    "TRANSFORM_SYM_2": [10, 20, 20, 20],
+    # TRANSFORM/sca.cfg (radioss100): CARD("%10d%20lg%20lg%20lg%10d", GR_NODE, SX, SY, SZ, node1)
+    "TRANSFORM_SCA": [10, 20, 20, 20, 10, 10],
 }
 
 

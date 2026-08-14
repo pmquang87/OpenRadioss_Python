@@ -90,6 +90,7 @@ real history is 41 milestones. One line each:
 | M82 | Input parser fixes: /PRINT card format in Engine; silent Starter bypass for Engine output requests (/H3D, /MON, /PARITH, /RFILE, /ANIM, etc.) to clear coverage noise |
 | M83 | Implement /IMPL/DT/FIXP in Engine parser (deferred in M11 implicit completeness) |
 | M84 | Implement /SENSOR/VEL, /SENSOR/NOT, /SENSOR/AND, /SENSOR/OR in Starter and Engine |
+| M85 | Complete /TRANSFORM suite: /TRANSFORM/ROT, /TRANSFORM/SYM, /TRANSFORM/SCA in Starter |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

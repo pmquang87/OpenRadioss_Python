@@ -4361,28 +4361,30 @@ def read_monvol(block: KeywordBlock, model: Model, log: MessageLog):
 
 def read_transform(block: KeywordBlock, model: Model,
                    log: MessageLog) -> None:
-    """`/TRANSFORM/TRA/transform_id` — Translation transformation.
+    """`/TRANSFORM/{TRA|ROT|SYM|SCA}/transform_id` (M63, M85) — Mesh transformations.
 
     Fortran origin: ``starter/source/model/transformation/lectrans.F``.
-    Card format (cfg ``TRANSFORM/tra.cfg``)::
-
-        card 1:  title
-        card 2:  GR_NODE  X_translation  Y_translation  Z_translation
-                 node_ID1  node_ID2  sub_ID
-
-    The transformation is applied to the nodes in GR_NODE (or the nodes
-    of SUBMODEL sub_ID) during the Starter initialization phase: each
-    affected node's coordinates are shifted by (TX, TY, TZ), or by the
-    vector (node2 - node1) if the node pair is given.
-
-    Currently only the direct (TX, TY, TZ) translation with GR_NODE is
-    ported; node-pair vectors, SUBMODEL application, and local /SKEW
-    transforms are accepted with a warning.
+    Card format:
+    * `/TRANSFORM/TRA`:
+        card 1: title
+        card 2: GR_NODE  TX  TY  TZ  node_ID1  node_ID2  sub_ID
+        card 3 (optional): skew_ID
+    * `/TRANSFORM/ROT`:
+        card 1: title
+        card 2: GR_NODE  X_p1  Y_p1  Z_p1  node_ID1  node_ID2  sub_ID
+        card 3:          X_p2  Y_p2  Z_p2  Angle
+    * `/TRANSFORM/SYM`:
+        card 1: title
+        card 2: GR_NODE  X_p1  Y_p1  Z_p1  node_ID1  node_ID2  sub_ID
+        card 3:          X_p2  Y_p2  Z_p2
+    * `/TRANSFORM/SCA`:
+        card 1: title
+        card 2: GR_NODE  Fscale_X  Fscale_Y  Fscale_Z  node_IDc  sub_ID
     """
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if sub != "TRA":
+    if sub not in ("TRA", "ROT", "SYM", "SCA"):
         log.warning(f"/TRANSFORM/{sub} not ported — block skipped "
-                    f"(only /TRANSFORM/TRA supported)", block.source)
+                    f"(supported: TRA, ROT, SYM, SCA)", block.source)
         return
 
     if block.fixed:
@@ -4390,48 +4392,144 @@ def read_transform(block: KeywordBlock, model: Model,
     else:
         title, cards = _title_and_data(block)
     if not cards:
-        log.error(f"/TRANSFORM/TRA/{block.user_id}: missing data card",
+        log.error(f"/TRANSFORM/{sub}/{block.user_id}: missing data card",
                   block.source)
         return
 
-    # Card 2: GR_NODE, TX, TY, TZ, node1, node2, sub_ID
-    if block.fixed:
-        f = cards[0].cut("TRANSFORM_TRA")
-        grnod = _ival(f[0]) if len(f) > 0 else 0
-        tx = _fval(f[1]) if len(f) > 1 else 0.0
-        ty = _fval(f[2]) if len(f) > 2 else 0.0
-        tz = _fval(f[3]) if len(f) > 3 else 0.0
-        n1 = _ival(f[4]) if len(f) > 4 else 0
-        n2 = _ival(f[5]) if len(f) > 5 else 0
-        sub_id = _ival(f[6]) if len(f) > 6 else 0
-    else:
-        toks = cards[0].tokens()
-        grnod = int(toks[0]) if len(toks) > 0 else 0
-        tx = float(toks[1]) if len(toks) > 1 else 0.0
-        ty = float(toks[2]) if len(toks) > 2 else 0.0
-        tz = float(toks[3]) if len(toks) > 3 else 0.0
-        n1 = int(toks[4]) if len(toks) > 4 else 0
-        n2 = int(toks[5]) if len(toks) > 5 else 0
-        sub_id = int(toks[6]) if len(toks) > 6 else 0
-
-    # optional card 3: skew_ID
-    skew_id = 0
-    if len(cards) > 1:
-        toks = cards[1].tokens()
-        if toks:
-            skew_id = int(toks[0])
-
-    if skew_id > 0:
-        log.warning(f"/TRANSFORM/TRA/{block.user_id}: local skew "
-                    f"(skew_ID={skew_id}) not yet implemented — using "
-                    f"global coordinates", block.source)
-
-    # Store the transform for application in the Starter init phase.
-    # Format: (transform_id, grnod_id, tx, ty, tz, n1, n2, sub_id, skew_id)
     if not hasattr(model, 'transforms'):
         model.transforms = []
-    model.transforms.append((block.user_id, grnod, tx, ty, tz, n1, n2,
-                             sub_id, skew_id))
+
+    if sub == "TRA":
+        if block.fixed:
+            f = cards[0].cut("TRANSFORM_TRA")
+            grnod = _ival(f[0]) if len(f) > 0 else 0
+            tx = _fval(f[1]) if len(f) > 1 else 0.0
+            ty = _fval(f[2]) if len(f) > 2 else 0.0
+            tz = _fval(f[3]) if len(f) > 3 else 0.0
+            n1 = _ival(f[4]) if len(f) > 4 else 0
+            n2 = _ival(f[5]) if len(f) > 5 else 0
+            sub_id = _ival(f[6]) if len(f) > 6 else 0
+        else:
+            toks = cards[0].tokens()
+            grnod = int(toks[0]) if len(toks) > 0 else 0
+            tx = float(toks[1]) if len(toks) > 1 else 0.0
+            ty = float(toks[2]) if len(toks) > 2 else 0.0
+            tz = float(toks[3]) if len(toks) > 3 else 0.0
+            n1 = int(toks[4]) if len(toks) > 4 else 0
+            n2 = int(toks[5]) if len(toks) > 5 else 0
+            sub_id = int(toks[6]) if len(toks) > 6 else 0
+
+        skew_id = 0
+        if len(cards) > 1:
+            toks = cards[1].tokens()
+            if toks:
+                skew_id = int(toks[0])
+
+        if skew_id > 0:
+            log.warning(f"/TRANSFORM/TRA/{block.user_id}: local skew "
+                        f"(skew_ID={skew_id}) not yet implemented — using "
+                        f"global coordinates", block.source)
+
+        model.transforms.append((block.user_id, "TRA", grnod, tx, ty, tz, n1, n2,
+                                 sub_id, skew_id))
+
+    elif sub == "ROT":
+        if block.fixed:
+            f1 = cards[0].cut("TRANSFORM_ROT_1")
+            grnod = _ival(f1[0]) if len(f1) > 0 else 0
+            x0 = _fval(f1[1]) if len(f1) > 1 else 0.0
+            y0 = _fval(f1[2]) if len(f1) > 2 else 0.0
+            z0 = _fval(f1[3]) if len(f1) > 3 else 0.0
+            n1 = _ival(f1[4]) if len(f1) > 4 else 0
+            n2 = _ival(f1[5]) if len(f1) > 5 else 0
+            sub_id = _ival(f1[6]) if len(f1) > 6 else 0
+
+            x1, y1, z1, angle = 0.0, 0.0, 0.0, 0.0
+            if len(cards) > 1:
+                f2 = cards[1].cut("TRANSFORM_ROT_2")
+                x1 = _fval(f2[1]) if len(f2) > 1 else 0.0
+                y1 = _fval(f2[2]) if len(f2) > 2 else 0.0
+                z1 = _fval(f2[3]) if len(f2) > 3 else 0.0
+                angle = _fval(f2[4]) if len(f2) > 4 else 0.0
+        else:
+            toks1 = cards[0].tokens()
+            grnod = int(toks1[0]) if len(toks1) > 0 else 0
+            x0 = float(toks1[1]) if len(toks1) > 1 else 0.0
+            y0 = float(toks1[2]) if len(toks1) > 2 else 0.0
+            z0 = float(toks1[3]) if len(toks1) > 3 else 0.0
+            n1 = int(toks1[4]) if len(toks1) > 4 else 0
+            n2 = int(toks1[5]) if len(toks1) > 5 else 0
+            sub_id = int(toks1[6]) if len(toks1) > 6 else 0
+
+            x1, y1, z1, angle = 0.0, 0.0, 0.0, 0.0
+            if len(cards) > 1:
+                toks2 = cards[1].tokens()
+                x1 = float(toks2[0]) if len(toks2) > 0 else 0.0
+                y1 = float(toks2[1]) if len(toks2) > 1 else 0.0
+                z1 = float(toks2[2]) if len(toks2) > 2 else 0.0
+                angle = float(toks2[3]) if len(toks2) > 3 else 0.0
+
+        model.transforms.append((block.user_id, "ROT", grnod, (x0, y0, z0),
+                                 (x1, y1, z1), angle, n1, n2, sub_id))
+
+    elif sub == "SYM":
+        if block.fixed:
+            f1 = cards[0].cut("TRANSFORM_SYM_1")
+            grnod = _ival(f1[0]) if len(f1) > 0 else 0
+            x0 = _fval(f1[1]) if len(f1) > 1 else 0.0
+            y0 = _fval(f1[2]) if len(f1) > 2 else 0.0
+            z0 = _fval(f1[3]) if len(f1) > 3 else 0.0
+            n1 = _ival(f1[4]) if len(f1) > 4 else 0
+            n2 = _ival(f1[5]) if len(f1) > 5 else 0
+            sub_id = _ival(f1[6]) if len(f1) > 6 else 0
+
+            x1, y1, z1 = 0.0, 0.0, 0.0
+            if len(cards) > 1:
+                f2 = cards[1].cut("TRANSFORM_SYM_2")
+                x1 = _fval(f2[1]) if len(f2) > 1 else 0.0
+                y1 = _fval(f2[2]) if len(f2) > 2 else 0.0
+                z1 = _fval(f2[3]) if len(f2) > 3 else 0.0
+        else:
+            toks1 = cards[0].tokens()
+            grnod = int(toks1[0]) if len(toks1) > 0 else 0
+            x0 = float(toks1[1]) if len(toks1) > 1 else 0.0
+            y0 = float(toks1[2]) if len(toks1) > 2 else 0.0
+            z0 = float(toks1[3]) if len(toks1) > 3 else 0.0
+            n1 = int(toks1[4]) if len(toks1) > 4 else 0
+            n2 = int(toks1[5]) if len(toks1) > 5 else 0
+            sub_id = int(toks1[6]) if len(toks1) > 6 else 0
+
+            x1, y1, z1 = 0.0, 0.0, 0.0
+            if len(cards) > 1:
+                toks2 = cards[1].tokens()
+                x1 = float(toks2[0]) if len(toks2) > 0 else 0.0
+                y1 = float(toks2[1]) if len(toks2) > 1 else 0.0
+                z1 = float(toks2[2]) if len(toks2) > 2 else 0.0
+
+        model.transforms.append((block.user_id, "SYM", grnod, (x0, y0, z0),
+                                 (x1, y1, z1), n1, n2, sub_id))
+
+    elif sub == "SCA":
+        if block.fixed:
+            f = cards[0].cut("TRANSFORM_SCA")
+            grnod = _ival(f[0]) if len(f) > 0 else 0
+            sx = _fval(f[1]) if len(f) > 1 else 1.0
+            sy = _fval(f[2]) if len(f) > 2 else 1.0
+            sz = _fval(f[3]) if len(f) > 3 else 1.0
+            n1 = _ival(f[4]) if len(f) > 4 else 0
+            sub_id = _ival(f[5]) if len(f) > 5 else 0
+        else:
+            toks = cards[0].tokens()
+            grnod = int(toks[0]) if len(toks) > 0 else 0
+            sx = float(toks[1]) if len(toks) > 1 else 1.0
+            sy = float(toks[2]) if len(toks) > 2 else 1.0
+            sz = float(toks[3]) if len(toks) > 3 else 1.0
+            n1 = int(toks[4]) if len(toks) > 4 else 0
+            sub_id = int(toks[5]) if len(toks) > 5 else 0
+
+        model.transforms.append((block.user_id, "SCA", grnod, (sx, sy, sz),
+                                 n1, sub_id))
+
 
 
 def read_submodel(block: KeywordBlock, model: Model,
