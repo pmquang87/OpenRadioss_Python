@@ -557,6 +557,42 @@ class PressureLoad:
 
 
 @dataclass
+class CentrifugalLoad:
+    """/LOAD/CENTRI (M93): centrifugal rotational load on a node group.
+
+    Fortran origin: ``starter/source/loads/general/load_centri/hm_read_load_centri.F``.
+    """
+    id: int
+    funct_id: int
+    dir: str = "XX"         # rotation axis: X, Y, Z, XX, YY, ZZ
+    frame_id: int = 0       # reference frame
+    sens_id: int = 0        # /SENSOR gating
+    grnod_id: int = 0       # node group
+    ivar: int = 1           # 1 = ignore d_omega/dt, 2 = account for d_omega/dt
+    scale_x: float = 1.0    # Ascalex (time scale)
+    scale_y: float = 1.0    # Fscaley (rotational velocity scale)
+    title: str = ""
+
+
+@dataclass
+class ImposedTemperature:
+    """/IMPTEMP (M93): imposed nodal temperature T(t) = scale * funct(t / xscale)
+    on a node group.
+
+    Fortran origin: ``starter/source/loads/thermal/imptemp/read_imptemp.F``.
+    """
+    id: int
+    funct_id: int
+    grnod_id: int
+    sens_id: int = 0
+    scale: float = 1.0      # Fscale_y (temperature ordinate scale)
+    xscale: float = 1.0     # Ascale_x (time scale)
+    tstart: float = 0.0     # T_start
+    tstop: float = 1.0e30   # T_stop
+    title: str = ""
+
+
+@dataclass
 class Damping:
     """/DAMP (M6): Rayleigh MASS damping — force f = -alpha m v on every
     node of the group, active in the [tstart, tstop] window.

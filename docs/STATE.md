@@ -98,6 +98,7 @@ real history is 41 milestones. One line each:
 | M90 | Add /FAIL/CONNECT connector failure model (Starter parsing) |
 | M91 | Add /DFS/DETPOINT and /DFS/DETPLAN detonation ignition keywords |
 | M92 | Add /IMPACC imposed acceleration and /SURF/PLANE infinite plane |
+| M93 | Add /LOAD/CENTRI centrifugal load and /IMPTEMP imposed temperature |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

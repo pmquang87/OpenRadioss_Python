@@ -183,6 +183,12 @@ def check_model(model: Model, log: MessageLog) -> None:
     for imp in model.impacc:
         need_group(imp.grnod_id, f"/IMPACC/{imp.id}")
         need_funct(imp.funct_id, f"/IMPACC/{imp.id}")
+    for it in model.imptemp:
+        need_group(it.grnod_id, f"/IMPTEMP/{it.id}")
+        need_funct(it.funct_id, f"/IMPTEMP/{it.id}")
+    for cl in model.centri_loads:
+        need_group(cl.grnod_id, f"/LOAD/CENTRI/{cl.id}")
+        need_funct(cl.funct_id, f"/LOAD/CENTRI/{cl.id}")
     for pl in model.ploads:
         need_funct(pl.funct_id, f"/PLOAD/{pl.id}")
         if pl.surf_id not in model.surfaces:

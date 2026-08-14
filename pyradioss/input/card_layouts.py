@@ -278,6 +278,12 @@ LAYOUTS: Dict[str, List[int]] = {
     "CLOAD": [10, 10, 10, 10, 10, 10, 20, 20],
     # LOADS/pload.cfg (radioss51): surf fct sens <30 blank> Ascale Fscale
     "PLOAD": [10, 10, 10, 30, 20, 20],
+    # LOADS/centri.cfg (radioss120): funct_IDT Dir frame_ID sensor_ID grnod_ID Ivar Ascalex Fscaley
+    "LOAD_CENTRI": [10, 10, 10, 10, 10, 10, 20, 20],
+    # LOADS/imptemp.cfg (radioss100): func_IDT sensor_ID grnod_ID
+    "IMPTEMP_1": [10, 10, 10],
+    # LOADS/imptemp.cfg (radioss100): Ascale_x Fscale_y T_start T_stop
+    "IMPTEMP_2": [20, 20, 20, 20],
     # LOADS/impvel.cfg + impdisp.cfg (radioss120):
     # CARD("%10d%10s%10d%10d%10d%10d%10d",
     #      fct, Dir, skew, sens, grnod, frame, Icoor)

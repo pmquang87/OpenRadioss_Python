@@ -34,7 +34,7 @@ from ..common.messages import MessageLog
 from ..common.tables import FunctTable
 from ..model.entities import (
     AddedMass, BoundaryCondition, Box, ConcentratedLoad, Damping, Gravity,
-    ImposedAcceleration, ImposedDisplacement, ImposedVelocity, InitialVelocity, Interface, Line,
+    CentrifugalLoad, ImposedAcceleration, ImposedDisplacement, ImposedTemperature, ImposedVelocity, InitialVelocity, Interface, Line,
     Material, Mpc, NodeGroup, Part, PressureLoad, Property, Random, Rbe3, RigidBody,
     RigidWall, Section, MonitoredVolume, Sensor, Subdomain, Submodel, Surface, Table, THRequest, Xref,
     DetonatorPoint, DetonatorPlane,
@@ -2647,6 +2647,108 @@ def read_cload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         sens_id=int(float(t[4])) if len(t) > 4 else 0, title=title))
 
 
+def read_load_centri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/LOAD/CENTRI/load_ID`` (M93)::
+
+        card 1:  title
+        card 2:  funct_IDT  Dir  frame_ID  sensor_ID  grnod_ID  Ivar  Ascalex  Fscaley
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/LOAD/CENTRI/{block.user_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("LOAD_CENTRI")
+        funct_id = _ival(f[0])
+        dir_str = f[1].strip().upper() if len(f) > 1 and f[1].strip() else "XX"
+        frame_id = _ival(f[2]) if len(f) > 2 else 0
+        sens_id = _ival(f[3]) if len(f) > 3 else 0
+        grnod_id = _ival(f[4]) if len(f) > 4 else 0
+        ivar = _ival(f[5], default=1) if len(f) > 5 else 1
+        scale_x = _fval(f[6], default=1.0) if len(f) > 6 else 1.0
+        scale_y = _fval(f[7], default=1.0) if len(f) > 7 else 1.0
+    else:
+        t = cards[0].tokens()
+        funct_id = int(t[0]) if len(t) > 0 else 0
+        dir_str = t[1].upper() if len(t) > 1 and t[1] else "XX"
+        frame_id = int(t[2]) if len(t) > 2 else 0
+        sens_id = int(t[3]) if len(t) > 3 else 0
+        grnod_id = int(t[4]) if len(t) > 4 else 0
+        ivar = int(t[5]) if len(t) > 5 else 1
+        scale_x = float(t[6]) if len(t) > 6 else 1.0
+        scale_y = float(t[7]) if len(t) > 7 else 1.0
+
+    if scale_x == 0.0:
+        scale_x = 1.0
+    if scale_y == 0.0:
+        scale_y = 1.0
+
+    cl = CentrifugalLoad(
+        id=block.user_id, funct_id=funct_id, dir=dir_str,
+        frame_id=frame_id, sens_id=sens_id, grnod_id=grnod_id,
+        ivar=ivar, scale_x=scale_x, scale_y=scale_y, title=title,
+    )
+    model.centri_loads.append(cl)
+
+
+def read_load(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/LOAD/<subtype>/load_ID`` dispatcher (M93)."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub == "CENTRI":
+        read_load_centri(block, model, log)
+    else:
+        log.warning(f"/LOAD/{sub} not ported (CENTRI supported)", block.source)
+
+
+def read_imptemp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/IMPTEMP/imptemp_ID`` (M93)::
+
+        card 1:  title
+        card 2:  func_IDT  sensor_ID  grnod_ID
+        card 3:  Ascale_x  Fscale_y  T_start  T_stop
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/IMPTEMP/{block.user_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("IMPTEMP_1")
+        funct_id = _ival(f[0])
+        sens_id = _ival(f[1]) if len(f) > 1 else 0
+        grnod_id = _ival(f[2]) if len(f) > 2 else 0
+
+        g = cards[1].cut("IMPTEMP_2") if len(cards) > 1 and not cards[1].is_blank else []
+        xscale = _fval(g[0], 1.0) if len(g) > 0 else 1.0
+        scale = _fval(g[1], 1.0) if len(g) > 1 else 1.0
+        tstart = _fval(g[2], 0.0) if len(g) > 2 else 0.0
+        tstop = _fval(g[3], 1.0e30) if len(g) > 3 else 1.0e30
+    else:
+        t0 = cards[0].tokens()
+        funct_id = int(t0[0]) if len(t0) > 0 else 0
+        sens_id = int(t0[1]) if len(t0) > 1 else 0
+        grnod_id = int(t0[2]) if len(t0) > 2 else 0
+
+        t1 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        xscale = float(t1[0]) if len(t1) > 0 else 1.0
+        scale = float(t1[1]) if len(t1) > 1 else 1.0
+        tstart = float(t1[2]) if len(t1) > 2 else 0.0
+        tstop = float(t1[3]) if len(t1) > 3 else 1.0e30
+
+    if xscale == 0.0:
+        xscale = 1.0
+    if scale == 0.0:
+        scale = 1.0
+    if tstop == 0.0:
+        tstop = 1.0e30
+
+    it = ImposedTemperature(
+        id=block.user_id, funct_id=funct_id, grnod_id=grnod_id,
+        sens_id=sens_id, scale=scale, xscale=xscale,
+        tstart=tstart, tstop=tstop, title=title,
+    )
+    model.imptemp.append(it)
+
+
 #: directions of the /IMPVEL & /IMPDISP cards, mapped to the 6-DOF index
 #: (0..2 = translation X/Y/Z, 3..5 = rotation XX/YY/ZZ — the same ordering
 #: the /MPC and implicit dofmap use). M39: the rotational directions are now
@@ -4957,9 +5059,11 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "INIVEL": read_inivel,
     "GRAV": read_grav,
     "CLOAD": read_cload,
+    "LOAD": read_load,
     "IMPVEL": read_impvel,
     "IMPDISP": read_impdisp,
     "IMPACC": read_impacc,
+    "IMPTEMP": read_imptemp,
     "PLOAD": read_pload,
     "ADMAS": read_admas,
     "DAMP": read_damp,
