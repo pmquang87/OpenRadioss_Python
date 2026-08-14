@@ -96,6 +96,7 @@ real history is 41 milestones. One line each:
 | M88 | Implement /SUBDOMAIN domain-partition keyword for Rad2Rad coupling |
 | M89 | Add /GRNOD/NODENS subtype and /XREF reference geometry keyword |
 | M90 | Add /FAIL/CONNECT connector failure model (Starter parsing) |
+| M91 | Add /DFS/DETPOINT and /DFS/DETPLAN detonation ignition keywords |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

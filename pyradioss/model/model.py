@@ -35,6 +35,7 @@ from .entities import (
     AleBoundaryCondition,
     InitialVelocity, Interface, Line, Material, Mpc, NodeGroup, Part,
     PressureLoad, Property, Random, Rbe3, RigidBody, RigidWall, Section, Sensor,
+    DetonatorPlane, DetonatorPoint,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -559,6 +560,10 @@ class Model:
 
         # XREF reference geometry (M89)
         self.xrefs: Dict[int, Xref] = {}
+
+        # Detonation ignition sources (M91)
+        self.det_points: List[DetonatorPoint] = []
+        self.det_planes: List[DetonatorPlane] = []
 
         # Loads / constraints / contacts
         self.bcs: List[BoundaryCondition] = []

@@ -214,6 +214,14 @@ LAYOUTS: Dict[str, List[int]] = {
     # CARD("%10d%10d%10d%10d%10d%10d%10d", alloptionoffset, nodeoffset, elementoffset, componentoffset, materialoffset, propertyoffset, submodeloffset)
     "SUBMODEL": [10, 10, 10, 10, 10, 10, 10],
 
+    # detpoint.cfg (radioss51): CARD("%20lg%20lg%20lg%20lg%10d", XDET, YDET, ZDET, TDET, mat_IDDET)
+    "DFS_DETPOINT": [20, 20, 20, 20, 10],
+    # detplan.cfg (radioss110):
+    # card 1: CARD("%20lg%20lg%20lg%20lg%10d", XP, YP, ZP, TDET, mat_IDDET)
+    "DFS_DETPLAN_1": [20, 20, 20, 20, 10],
+    # card 2: CARD("%20lg%20lg%20lg", NX, NY, NZ)
+    "DFS_DETPLAN_2": [20, 20, 20],
+
     # mat_EOS.cfg (radioss2022) EOS_Options == 12 (IDEAL-GAS):
     #   card 1: Gamma  P0  PSH  T0  RHO_0
     "EOS_IDEAL_GAS": [20] * 5,

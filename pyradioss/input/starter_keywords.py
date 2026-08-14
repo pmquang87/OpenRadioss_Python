@@ -37,6 +37,7 @@ from ..model.entities import (
     ImposedDisplacement, ImposedVelocity, InitialVelocity, Interface, Line,
     Material, Mpc, NodeGroup, Part, PressureLoad, Property, Random, Rbe3, RigidBody,
     RigidWall, Section, MonitoredVolume, Sensor, Subdomain, Submodel, Surface, Table, THRequest, Xref,
+    DetonatorPoint, DetonatorPlane,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -4794,6 +4795,95 @@ def read_xref(block: KeywordBlock, model: Model,
     model.xrefs[part_id] = xr
 
 
+def read_dfs(block: KeywordBlock, model: Model,
+             log: MessageLog) -> None:
+    """`/DFS/DETPOINT/det_id` and `/DFS/DETPLAN/det_id` — detonation ignition.
+
+    Fortran origin: ``starter/source/initial_conditions/detonation/
+    read_dfs_detpoint.F`` and ``read_dfs_detplan.F``.
+
+    DETPOINT — point-source detonation::
+
+        card 1:  XDET  YDET  ZDET  TDET  mat_IDDET   (%20lg*4 %10d)
+
+    DETPLAN — planar detonation front::
+
+        card 1:  XP  YP  ZP  TDET  mat_IDDET          (%20lg*4 %10d)
+        card 2:  NX  NY  NZ                            (%20lg*3)
+    """
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    det_id = block.user_id if block.user_id is not None else 0
+    cards = block.cards
+
+    # Check for NODE/SET/GRNOD variants — warn and parse what we can
+    has_node = any(p.upper() in ("NODE",) for p in block.parts[2:]
+                   if not p.lstrip("-").isdigit())
+    has_set = any(p.upper() in ("SET", "GRNOD") for p in block.parts[2:]
+                  if not p.lstrip("-").isdigit())
+    if has_node:
+        log.warning(f"/DFS/{sub}/NODE not fully ported — node coordinate "
+                    f"lookup deferred", block.source)
+        return
+    if has_set:
+        log.warning(f"/DFS/{sub}/SET not fully ported — node group "
+                    f"expansion deferred", block.source)
+        return
+
+    if not cards:
+        log.error(f"/DFS/{sub}/{det_id}: missing data card", block.source)
+        return
+
+    if sub in ("DETPOINT", "DETPOIN"):
+        # Card 1: XDET YDET ZDET TDET mat_IDDET
+        if block.fixed:
+            f = _cut_floats(cards[0], "DFS_DETPOINT")
+        else:
+            f = _floats(cards[0], 5)
+        x = f[0] if len(f) > 0 else 0.0
+        y = f[1] if len(f) > 1 else 0.0
+        z = f[2] if len(f) > 2 else 0.0
+        tdet = f[3] if len(f) > 3 else 0.0
+        mat_id = int(f[4]) if len(f) > 4 and f[4] else 0
+        dp = DetonatorPoint(id=det_id, x=x, y=y, z=z,
+                            tdet=tdet, mat_id=mat_id)
+        model.det_points.append(dp)
+
+    elif sub in ("DETPLAN", "DETPLANE"):
+        # Card 1: XP YP ZP TDET mat_IDDET
+        if block.fixed:
+            f = _cut_floats(cards[0], "DFS_DETPLAN_1")
+        else:
+            f = _floats(cards[0], 5)
+        x = f[0] if len(f) > 0 else 0.0
+        y = f[1] if len(f) > 1 else 0.0
+        z = f[2] if len(f) > 2 else 0.0
+        tdet = f[3] if len(f) > 3 else 0.0
+        mat_id = int(f[4]) if len(f) > 4 and f[4] else 0
+
+        # Card 2: NX NY NZ
+        nx, ny, nz = 0.0, 0.0, 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            if block.fixed:
+                g = _cut_floats(cards[1], "DFS_DETPLAN_2")
+            else:
+                g = _floats(cards[1], 3)
+            nx = g[0] if len(g) > 0 else 0.0
+            ny = g[1] if len(g) > 1 else 0.0
+            nz = g[2] if len(g) > 2 else 0.0
+
+        if nx == 0.0 and ny == 0.0 and nz == 0.0:
+            log.warning(f"/DFS/DETPLAN/{det_id}: direction vector is zero",
+                        block.source)
+
+        dp = DetonatorPlane(id=det_id, x=x, y=y, z=z, tdet=tdet,
+                            mat_id=mat_id, nx=nx, ny=ny, nz=nz)
+        model.det_planes.append(dp)
+
+    else:
+        log.warning(f"/DFS/{sub} not ported (DETPOINT, DETPLAN supported)",
+                    block.source)
+
+
 KEYWORD_PARSERS: Dict[str, Callable] = {
     "MONVOL": read_monvol,
     "ANALY": read_analy,
@@ -4869,6 +4959,7 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "ENDSUB": read_endsub,
     "SUBDOMAIN": read_subdomain,
     "XREF": read_xref,
+    "DFS": read_dfs,
 }
 
 ENGINE_KEYWORDS_IGNORE = {

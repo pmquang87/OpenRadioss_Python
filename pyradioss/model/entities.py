@@ -975,3 +975,38 @@ class Xref:
     node_ids: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.int32))
     coords: np.ndarray = field(default_factory=lambda: np.zeros((0, 3)))
 
+
+@dataclass
+class DetonatorPoint:
+    """`/DFS/DETPOINT/det_id` — Point-source detonation (read_dfs_detpoint.F).
+
+    Ignites explosive elements from a point source; lighting time for each
+    element is ``tdet + dist / D_det`` where D_det is the material's
+    detonation velocity.
+    """
+    id: int
+    x: float = 0.0
+    y: float = 0.0
+    z: float = 0.0
+    tdet: float = 0.0
+    mat_id: int = 0
+
+
+@dataclass
+class DetonatorPlane:
+    """`/DFS/DETPLAN/det_id` — Planar detonation front (read_dfs_detplan.F).
+
+    Ignites explosive elements from a planar wave; the plane passes
+    through point (x, y, z) with propagation normal (nx, ny, nz).
+    """
+    id: int
+    x: float = 0.0
+    y: float = 0.0
+    z: float = 0.0
+    tdet: float = 0.0
+    mat_id: int = 0
+    nx: float = 0.0
+    ny: float = 0.0
+    nz: float = 0.0
+
+
