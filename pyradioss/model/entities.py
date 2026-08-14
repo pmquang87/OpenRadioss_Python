@@ -931,3 +931,19 @@ class Random:
     params: Dict[str, float] = field(default_factory=dict)
 
 
+@dataclass
+class Submodel:
+    """``/SUBMODEL/submodel_ID`` container block (Fortran lecsubmod.F)."""
+    id: int
+    title: str = ""
+    unit_id: int = 0
+    off_def: int = 0
+    off_nod: int = 0
+    off_ele: int = 0
+    off_part: int = 0
+    off_mat: int = 0
+    off_type: int = 0
+    off_sub: int = 0
+
+
+

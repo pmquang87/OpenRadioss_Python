@@ -92,6 +92,7 @@ real history is 41 milestones. One line each:
 | M84 | Implement /SENSOR/VEL, /SENSOR/NOT, /SENSOR/AND, /SENSOR/OR in Starter and Engine |
 | M85 | Complete /TRANSFORM suite: /TRANSFORM/ROT, /TRANSFORM/SYM, /TRANSFORM/SCA in Starter |
 | M86 | Implement /FAIL/FLD Forming Limit Diagram failure model for shell elements |
+| M87 | Implement /SUBMODEL & /ENDSUB container architecture and scoping |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

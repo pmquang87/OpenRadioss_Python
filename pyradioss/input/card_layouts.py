@@ -201,6 +201,10 @@ LAYOUTS: Dict[str, List[int]] = {
     # CARD("%10d%10d          %10d%20lg%20lg%10d%10d", fct_ID, Ifail_sh, fct_IDadv, Rani, Dadv, Istrain, Ixfem)
     "FAIL_FLD_1": [10, 10, 10, 10, 20, 20, 10, 10],
 
+    # submodel.cfg (radioss51):
+    # CARD("%10d%10d%10d%10d%10d%10d%10d", alloptionoffset, nodeoffset, elementoffset, componentoffset, materialoffset, propertyoffset, submodeloffset)
+    "SUBMODEL": [10, 10, 10, 10, 10, 10, 10],
+
     # mat_EOS.cfg (radioss2022) EOS_Options == 12 (IDEAL-GAS):
     #   card 1: Gamma  P0  PSH  T0  RHO_0
     "EOS_IDEAL_GAS": [20] * 5,

@@ -36,7 +36,7 @@ from ..model.entities import (
     AddedMass, BoundaryCondition, Box, ConcentratedLoad, Damping, Gravity,
     ImposedDisplacement, ImposedVelocity, InitialVelocity, Interface, Line,
     Material, Mpc, NodeGroup, Part, PressureLoad, Property, Random, Rbe3, RigidBody,
-    RigidWall, Section, MonitoredVolume, Sensor, Surface, Table, THRequest,
+    RigidWall, Section, MonitoredVolume, Sensor, Submodel, Surface, Table, THRequest,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -4565,15 +4565,50 @@ def read_transform(block: KeywordBlock, model: Model,
 
 def read_submodel(block: KeywordBlock, model: Model,
                   log: MessageLog) -> None:
-    """`/SUBMODEL/submodel_id` — Sub-model container.
+    """`/SUBMODEL/submodel_id[/unit_id]` — Sub-model container.
 
-    Fortran origin: ``starter/source/model/submodel/lecsubmod.F``.
+    Fortran origin: ``starter/source/model/submodel/lecsubmod.F`` and
+    ``hm_cfg_files/config/CFG/radioss51/SUBMODEL/submodel.cfg``.
     In the real Starter, /SUBMODEL opens a container block whose entities
     (nodes, elements, etc.) are tagged with the submodel ID; /ENDSUB closes
     it.
     """
-    if block.user_id is not None:
-        model.active_submodels.append(block.user_id)
+    sub_id = block.user_id if block.user_id is not None else 0
+    unit_id = block.unit_id if block.unit_id is not None else 0
+    title = ""
+    off_def = off_nod = off_ele = off_part = off_mat = off_type = off_sub = 0
+    if block.cards:
+        if block.fixed:
+            title, cards = _fixed_data(block)
+            if cards:
+                f = cards[0].cut("SUBMODEL")
+                off_def = _ival(f[0]) if len(f) > 0 else 0
+                off_nod = _ival(f[1]) if len(f) > 1 else 0
+                off_ele = _ival(f[2]) if len(f) > 2 else 0
+                off_part = _ival(f[3]) if len(f) > 3 else 0
+                off_mat = _ival(f[4]) if len(f) > 4 else 0
+                off_type = _ival(f[5]) if len(f) > 5 else 0
+                off_sub = _ival(f[6]) if len(f) > 6 else 0
+        else:
+            title, cards = _title_and_data(block)
+            if cards:
+                t = cards[0].tokens()
+                off_def = int(float(t[0])) if len(t) > 0 else 0
+                off_nod = int(float(t[1])) if len(t) > 1 else 0
+                off_ele = int(float(t[2])) if len(t) > 2 else 0
+                off_part = int(float(t[3])) if len(t) > 3 else 0
+                off_mat = int(float(t[4])) if len(t) > 4 else 0
+                off_type = int(float(t[5])) if len(t) > 5 else 0
+                off_sub = int(float(t[6])) if len(t) > 6 else 0
+
+    sm = Submodel(
+        id=sub_id, title=title, unit_id=unit_id,
+        off_def=off_def, off_nod=off_nod, off_ele=off_ele,
+        off_part=off_part, off_mat=off_mat, off_type=off_type,
+        off_sub=off_sub,
+    )
+    model.submodels[sub_id] = sm
+    model.active_submodels.append(sub_id)
 
 
 def read_endsub(block: KeywordBlock, model: Model,
@@ -4584,6 +4619,8 @@ def read_endsub(block: KeywordBlock, model: Model,
     """
     if getattr(model, "active_submodels", None):
         model.active_submodels.pop()
+    else:
+        log.warning("/ENDSUB encountered without an active /SUBMODEL", block.source)
 
 
 KEYWORD_PARSERS: Dict[str, Callable] = {
