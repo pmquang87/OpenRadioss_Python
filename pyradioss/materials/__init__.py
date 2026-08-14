@@ -51,7 +51,7 @@ exceed the ground-state one (LAW42 at large stretch!) MUST return the
 true current sound speed or the Courant time step is not a bound.
 """
 
-from . import (eos, law01_elastic, law02_johnson_cook,  # noqa: F401
+from . import (eos, law01_elastic, law02_johnson_cook, law06_hyd_visc,  # noqa: F401
                law19_fabric, law24_concrete, law27_brittle,
                law35_kelvinmax, law36_tabulated, law40_kelvinmax,
                law42_ogden, law44_cowper, law62_hypervisco,
@@ -61,6 +61,9 @@ from . import (eos, law01_elastic, law02_johnson_cook,  # noqa: F401
 
 def register_materials():
     eos._register()
+    law01_elastic._register()
+    law02_johnson_cook._register()
+    law06_hyd_visc._register()
     law19_fabric._register()
     law24_concrete._register()
     law35_kelvinmax._register()
@@ -186,6 +189,9 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
                                              extra)
     if mat.law == 0:
         return mat_void.solid_update(mat, sig, deps), epsp, None
+    if mat.law == 6:
+        sig, epsp, c = law06_hyd_visc.solid_update(mat, sig, deps, epsp, dt, extra)
+        return sig, epsp, c
     if mat.law == 999:
         # /MAT/GAS: zero deviator; the pressure and the sound speed come
         # from the attached IDEAL-GAS /EOS through the kernels' EOS block
