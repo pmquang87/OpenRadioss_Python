@@ -211,6 +211,32 @@ LAYOUTS: Dict[str, List[int]] = {
     "FAIL_CONNECT_3": [20, 20, 20, 20, 20],
     # CARD("%20lg%20lg", T_max, N_soft)
     "FAIL_CONNECT_4": [20, 20],
+    # fail_tensstrain.cfg (radioss2021):
+    # CARD("%20lg%20lg%10d%20lg%20lg%10d", Epsilon_t1, Epsilon_t2, fct_ID, Epsilon_f1, Epsilon_f2, S_Flag)
+    "FAIL_TENSSTRAIN_1": [20, 20, 10, 20, 20, 10],
+    # CARD("%10d%20lg%20lg", fct_IDel, Fscale_el, EI_ref)
+    "FAIL_TENSSTRAIN_2": [10, 20, 20],
+    # CARD("%10d%20lg", fct_IDt, FscaleT)
+    "FAIL_TENSSTRAIN_3": [10, 20],
+    # fail_orthstrain.cfg (radioss2021):
+    "FAIL_ORTHSTRAIN_1": [20, 20],
+    "FAIL_ORTHSTRAIN_2": [20, 20],
+    "FAIL_ORTHSTRAIN_3": [10, 20, 20, 10],
+    "FAIL_ORTHSTRAIN_DIR": [20, 20, 10, 20, 20, 10],
+    # fail_gurson.cfg (radioss2021):
+    "FAIL_GURSON_1": [20, 20, 50, 10],
+    "FAIL_GURSON_2": [20, 20, 20],
+    "FAIL_GURSON_3": [20, 20, 20],
+    "FAIL_GURSON_4": [20, 20],
+    # fail_alter.cfg (radioss2021):
+    "FAIL_ALTER_1": [20, 20, 20, 10, 10, 10, 10],
+    "FAIL_ALTER_2": [20, 20, 20, 20, 10, 10],
+    "FAIL_ALTER_3": [20, 20, 20, 20],
+    "FAIL_ALTER_4": [20, 20],
+    # fail_visual.cfg (radioss2021):
+    "FAIL_VISUAL_1": [10, 20, 20, 20, 10, 10, 10],
+    # fail_mullins_or.cfg (radioss2021):
+    "FAIL_MULLINS_OR_1": [20, 20, 20],
 
     # submodel.cfg (radioss51):
     # CARD("%10d%10d%10d%10d%10d%10d%10d", alloptionoffset, nodeoffset, elementoffset, componentoffset, materialoffset, propertyoffset, submodeloffset)

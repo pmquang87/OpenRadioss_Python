@@ -455,6 +455,36 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
                 log.error(f"/FAIL/FLD/{mat_id}: function {fid} not defined", source)
             else:
                 fm.params["function"] = model.functions[fid]
+        elif fm.type == "TENSSTRAIN":
+            fid = fm.params.get("fct_id", 0)
+            if fid > 0 and fid not in model.functions:
+                log.error(f"/FAIL/TENSSTRAIN/{mat_id}: function {fid} not defined", source)
+            elif fid > 0:
+                fm.params["function"] = model.functions[fid]
+            fidel = fm.params.get("fct_idel", 0)
+            if fidel > 0 and fidel not in model.functions:
+                log.error(f"/FAIL/TENSSTRAIN/{mat_id}: function {fidel} not defined", source)
+            elif fidel > 0:
+                fm.params["function_el"] = model.functions[fidel]
+            fidt = fm.params.get("fct_id_t", 0)
+            if fidt > 0 and fidt not in model.functions:
+                log.error(f"/FAIL/TENSSTRAIN/{mat_id}: function {fidt} not defined", source)
+            elif fidt > 0:
+                fm.params["function_t"] = model.functions[fidt]
+        elif fm.type == "ORTHSTRAIN":
+            fidel = fm.params.get("fct_idel", 0)
+            if fidel > 0 and fidel not in model.functions:
+                log.error(f"/FAIL/ORTHSTRAIN/{mat_id}: function {fidel} not defined", source)
+            elif fidel > 0:
+                fm.params["function_el"] = model.functions[fidel]
+            for d in ("11", "22", "33", "12", "23", "31"):
+                for suffix in ("t", "c"):
+                    key = f"fct_id_{d}_{suffix}"
+                    fid = fm.params.get(key, 0)
+                    if fid > 0 and fid not in model.functions:
+                        log.error(f"/FAIL/ORTHSTRAIN/{mat_id}: function {fid} not defined", source)
+                    elif fid > 0:
+                        fm.params[f"function_{d}_{suffix}"] = model.functions[fid]
                 
         mat.fail = fm
 

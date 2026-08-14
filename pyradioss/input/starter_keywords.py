@@ -1109,9 +1109,11 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     from ..failure import biquad as fail_biquad
     from ..model.entities import FailureModel
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if kind not in ("JOHNSON", "BIQUAD", "TAB1", "SNCONNECT", "FLD", "CONNECT"):
+    if kind not in ("JOHNSON", "BIQUAD", "TAB1", "SNCONNECT", "FLD", "CONNECT",
+                    "TENSSTRAIN", "ORTHSTRAIN", "GURSON", "ALTER", "VISUAL", "MULLINS_OR"):
         log.warning(f"/FAIL/{kind} not ported — skipped "
-                    f"(supported: JOHNSON, BIQUAD, TAB1, SNCONNECT, FLD, CONNECT)", block.source)
+                    f"(supported: JOHNSON, BIQUAD, TAB1, SNCONNECT, FLD, CONNECT, "
+                    f"TENSSTRAIN, ORTHSTRAIN, GURSON, ALTER, VISUAL, MULLINS_OR)", block.source)
         return
     # header /FAIL/<kind>/mat_ID[/fail_ID]: with TWO trailing ids the
     # FIRST is the material id (the lexer keeps only the last as user_id)
@@ -1372,6 +1374,189 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "T_max": T_max, "N_soft": N_soft,
         }
         fm = FailureModel(type="CONNECT", ifail_sh=1, params=params)
+    elif kind == "TENSSTRAIN":
+        # Card 1: EPSILON_T1, EPSILON_T2, FCT_ID, EPSILON_F1, EPSILON_F2, S_Flag
+        if block.fixed:
+            c1 = _cut_floats(cards[0], "FAIL_TENSSTRAIN_1")
+        else:
+            c1 = _floats(cards[0], 6)
+        eps_t1 = c1[0] if len(c1) > 0 and c1[0] else 0.0
+        eps_t2 = c1[1] if len(c1) > 1 and c1[1] else 0.0
+        fct_id = int(c1[2]) if len(c1) > 2 and c1[2] else 0
+        eps_f1 = c1[3] if len(c1) > 3 and c1[3] else 0.0
+        eps_f2 = c1[4] if len(c1) > 4 and c1[4] else 0.0
+        s_flag = int(c1[5]) if len(c1) > 5 and c1[5] else 1
+
+        fct_idel, fscale_el, ei_ref = 0, 1.0, 0.0
+        fct_id_t, fscale_t = 0, 1.0
+        if s_flag in (2, 3, 12, 13, 22, 23):
+            if len(cards) > 1 and not cards[1].is_blank:
+                c2 = _cut_floats(cards[1], "FAIL_TENSSTRAIN_2") if block.fixed else _floats(cards[1], 3)
+                fct_idel = int(c2[0]) if len(c2) > 0 and c2[0] else 0
+                fscale_el = c2[1] if len(c2) > 1 and c2[1] else 1.0
+                ei_ref = c2[2] if len(c2) > 2 and c2[2] else 0.0
+            if len(cards) > 2 and not cards[2].is_blank:
+                c3 = _cut_floats(cards[2], "FAIL_TENSSTRAIN_3") if block.fixed else _floats(cards[2], 2)
+                fct_id_t = int(c3[0]) if len(c3) > 0 and c3[0] else 0
+                fscale_t = c3[1] if len(c3) > 1 and c3[1] else 1.0
+
+        params = {
+            "eps_t1": eps_t1, "eps_t2": eps_t2, "fct_id": fct_id,
+            "eps_f1": eps_f1, "eps_f2": eps_f2, "s_flag": s_flag,
+            "fct_idel": fct_idel, "fscale_el": fscale_el, "ei_ref": ei_ref,
+            "fct_id_t": fct_id_t, "fscale_t": fscale_t,
+        }
+        fm = FailureModel(type="TENSSTRAIN", ifail_sh=1, params=params)
+    elif kind == "ORTHSTRAIN":
+        # Card 1: (blank), Pthk
+        c1 = _cut_floats(cards[0], "FAIL_ORTHSTRAIN_1") if block.fixed else _floats(cards[0], 2)
+        pthk = c1[1] if len(c1) > 1 and c1[1] else (c1[0] if len(c1) > 0 else 0.0)
+
+        # Card 2: Epsilon_Dot_ref, Fcut
+        c2 = _cut_floats(cards[1], "FAIL_ORTHSTRAIN_2") if block.fixed and len(cards) > 1 else (_floats(cards[1], 2) if len(cards) > 1 else [0.0, 0.0])
+        eps_dot_ref = c2[0] if len(c2) > 0 and c2[0] else 0.0
+        fcut = c2[1] if len(c2) > 1 and c2[1] else 0.0
+
+        # Card 3: fct_IDel, Fscale_el, EI_ref, Strdef
+        c3 = _cut_floats(cards[2], "FAIL_ORTHSTRAIN_3") if block.fixed and len(cards) > 2 else (_floats(cards[2], 4) if len(cards) > 2 else [0, 1.0, 0.0, 0])
+        fct_idel = int(c3[0]) if len(c3) > 0 and c3[0] else 0
+        fscale_el = c3[1] if len(c3) > 1 and c3[1] else 1.0
+        ei_ref = c3[2] if len(c3) > 2 and c3[2] else 0.0
+        strdef = int(c3[3]) if len(c3) > 3 and c3[3] else 0
+
+        # Directional cards: 11, 22, 33, 12, 23, 31
+        dirs = ["11", "22", "33", "12", "23", "31"]
+        dir_params = {}
+        for i, d in enumerate(dirs):
+            idx = 3 + i
+            if idx < len(cards) and not cards[idx].is_blank:
+                cd = _cut_floats(cards[idx], "FAIL_ORTHSTRAIN_DIR") if block.fixed else _floats(cards[idx], 6)
+                dir_params[f"eps_{d}_tf"] = cd[0] if len(cd) > 0 else 0.0
+                dir_params[f"eps_{d}_tm"] = cd[1] if len(cd) > 1 else 0.0
+                dir_params[f"fct_id_{d}_t"] = int(cd[2]) if len(cd) > 2 and cd[2] else 0
+                dir_params[f"eps_{d}_cf"] = cd[3] if len(cd) > 3 else 0.0
+                dir_params[f"eps_{d}_cm"] = cd[4] if len(cd) > 4 else 0.0
+                dir_params[f"fct_id_{d}_c"] = int(cd[5]) if len(cd) > 5 and cd[5] else 0
+            else:
+                dir_params[f"eps_{d}_tf"] = 0.0
+                dir_params[f"eps_{d}_tm"] = 0.0
+                dir_params[f"fct_id_{d}_t"] = 0
+                dir_params[f"eps_{d}_cf"] = 0.0
+                dir_params[f"eps_{d}_cm"] = 0.0
+                dir_params[f"fct_id_{d}_c"] = 0
+
+        params = {
+            "pthk": pthk, "eps_dot_ref": eps_dot_ref, "fcut": fcut,
+            "fct_idel": fct_idel, "fscale_el": fscale_el, "ei_ref": ei_ref, "strdef": strdef,
+            **dir_params,
+        }
+        fm = FailureModel(type="ORTHSTRAIN", ifail_sh=1, params=params)
+    elif kind == "GURSON":
+        # Card 1: q1, q2, (blank 50), i_loc
+        if block.fixed:
+            c1 = _cut_floats(cards[0], "FAIL_GURSON_1")
+            q1 = c1[0] if len(c1) > 0 and c1[0] else 1.5
+            q2 = c1[1] if len(c1) > 1 and c1[1] else 1.0
+            iloc = int(c1[3]) if len(c1) > 3 and c1[3] else 1
+        else:
+            t1 = cards[0].tokens()
+            q1 = float(t1[0]) if len(t1) > 0 else 1.5
+            q2 = float(t1[1]) if len(t1) > 1 else 1.0
+            iloc = int(float(t1[2])) if len(t1) > 2 else 1
+
+        # Card 2: eps_n, a_s, k_w
+        c2 = _cut_floats(cards[1], "FAIL_GURSON_2") if block.fixed and len(cards) > 1 else (_floats(cards[1], 3) if len(cards) > 1 else [0.0, 0.0, 0.0])
+        eps_n = c2[0] if len(c2) > 0 and c2[0] else 0.0
+        a_s = c2[1] if len(c2) > 1 and c2[1] else 0.0
+        k_w = c2[2] if len(c2) > 2 and c2[2] else 0.0
+
+        # Card 3: f_c, f_r, f_0
+        c3 = _cut_floats(cards[2], "FAIL_GURSON_3") if block.fixed and len(cards) > 2 else (_floats(cards[2], 3) if len(cards) > 2 else [0.0, 0.0, 0.0])
+        f_c = c3[0] if len(c3) > 0 and c3[0] else 0.0
+        f_r = c3[1] if len(c3) > 1 and c3[1] else 0.0
+        f_0 = c3[2] if len(c3) > 2 and c3[2] else 0.0
+
+        # Card 4: r_len, h_chi
+        c4 = _cut_floats(cards[3], "FAIL_GURSON_4") if block.fixed and len(cards) > 3 else (_floats(cards[3], 2) if len(cards) > 3 else [0.0, 0.0])
+        r_len = c4[0] if len(c4) > 0 and c4[0] else 0.0
+        h_chi = c4[1] if len(c4) > 1 and c4[1] else 0.0
+
+        params = {
+            "q1": q1, "q2": q2, "iloc": iloc,
+            "eps_n": eps_n, "a_s": a_s, "k_w": k_w,
+            "f_c": f_c, "f_r": f_r, "f_0": f_0,
+            "r_len": r_len, "h_chi": h_chi,
+        }
+        fm = FailureModel(type="GURSON", ifail_sh=1, params=params)
+    elif kind == "ALTER":
+        # Card 1: Exp_n, V0, Vc, EMA, Irate, Iside, mode
+        if block.fixed:
+            c1 = _cut_floats(cards[0], "FAIL_ALTER_1")
+        else:
+            c1 = _floats(cards[0], 7)
+        exp_n = c1[0] if len(c1) > 0 and c1[0] else 0.0
+        v0 = c1[1] if len(c1) > 1 and c1[1] else 0.0
+        vc = c1[2] if len(c1) > 2 and c1[2] else 0.0
+        ema = int(c1[3]) if len(c1) > 3 and c1[3] else 0
+        irate = int(c1[4]) if len(c1) > 4 and c1[4] else 0
+        iside = int(c1[5]) if len(c1) > 5 and c1[5] else 0
+        mode = int(c1[6]) if len(c1) > 6 and c1[6] else 0
+
+        # Card 2: Cr_foil, Cr_air, Cr_core, Cr_edge, grsh4N, grsh3N
+        c2 = _cut_floats(cards[1], "FAIL_ALTER_2") if block.fixed and len(cards) > 1 else (_floats(cards[1], 6) if len(cards) > 1 else [0.0]*6)
+        cr_foil = c2[0] if len(c2) > 0 else 0.0
+        cr_air = c2[1] if len(c2) > 1 else 0.0
+        cr_core = c2[2] if len(c2) > 2 else 0.0
+        cr_edge = c2[3] if len(c2) > 3 else 0.0
+        grsh4n = int(c2[4]) if len(c2) > 4 and c2[4] else 0
+        grsh3n = int(c2[5]) if len(c2) > 5 and c2[5] else 0
+
+        # Card 3: KIC, KTH, Rlen, Tdel
+        c3 = _cut_floats(cards[2], "FAIL_ALTER_3") if block.fixed and len(cards) > 2 else (_floats(cards[2], 4) if len(cards) > 2 else [0.0]*4)
+        kic = c3[0] if len(c3) > 0 else 0.0
+        kth = c3[1] if len(c3) > 1 else 0.0
+        rlen = c3[2] if len(c3) > 2 else 0.0
+        tdel = c3[3] if len(c3) > 3 else 0.0
+
+        # Card 4: Kres1, Kres2
+        c4 = _cut_floats(cards[3], "FAIL_ALTER_4") if block.fixed and len(cards) > 3 else (_floats(cards[3], 2) if len(cards) > 3 else [0.0]*2)
+        kres1 = c4[0] if len(c4) > 0 else 0.0
+        kres2 = c4[1] if len(c4) > 1 else 0.0
+
+        params = {
+            "exp_n": exp_n, "v0": v0, "vc": vc, "ema": ema, "irate": irate, "iside": iside, "mode": mode,
+            "cr_foil": cr_foil, "cr_air": cr_air, "cr_core": cr_core, "cr_edge": cr_edge,
+            "grsh4n": grsh4n, "grsh3n": grsh3n,
+            "kic": kic, "kth": kth, "rlen": rlen, "tdel": tdel,
+            "kres1": kres1, "kres2": kres2,
+        }
+        fm = FailureModel(type="ALTER", ifail_sh=1, params=params)
+    elif kind == "VISUAL":
+        # Card 1: Type, C_min, C_max, F_coeff, f_flag, (blank), Strdef
+        c1 = _cut_floats(cards[0], "FAIL_VISUAL_1") if block.fixed else _floats(cards[0], 6)
+        vtype = int(c1[0]) if len(c1) > 0 and c1[0] else 1
+        c_min = c1[1] if len(c1) > 1 else 0.0
+        c_max = c1[2] if len(c1) > 2 else 0.0
+        f_coeff = c1[3] if len(c1) > 3 else 1.0
+        f_flag = int(c1[4]) if len(c1) > 4 and c1[4] else 1
+        strdef = int(c1[6]) if len(c1) > 6 and c1[6] else (int(c1[5]) if len(c1) > 5 and not block.fixed and c1[5] else 0)
+
+        params = {
+            "type": vtype, "c_min": c_min, "c_max": c_max,
+            "f_coeff": f_coeff, "f_flag": f_flag, "strdef": strdef,
+        }
+        fm = FailureModel(type="VISUAL", ifail_sh=1, params=params)
+    elif kind == "MULLINS_OR":
+        # Card 1: COEFR, BETA, COEFM
+        c1 = _cut_floats(cards[0], "FAIL_MULLINS_OR_1") if block.fixed else _floats(cards[0], 3)
+        coefr = c1[0] if len(c1) > 0 and c1[0] else 1.0
+        beta = c1[1] if len(c1) > 1 else 0.0
+        coefm = c1[2] if len(c1) > 2 else 0.0
+
+        params = {
+            "coefr": coefr, "beta": beta, "coefm": coefm,
+        }
+        fm = FailureModel(type="MULLINS_OR", ifail_sh=1, params=params)
     # attachment to the material happens in the Starter resolve step
     # (initialization.resolve_materials) so deck order does not matter
     model.raw_fails.append((mat_id, fm, block.source))
