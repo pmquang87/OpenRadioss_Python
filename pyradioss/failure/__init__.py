@@ -39,7 +39,7 @@ array (in-place) and tstar the homologous temperature of the points
 D5 term reads it). All vectorized over the element slice.
 """
 
-from . import biquad, johnson, snconnect, tab1  # noqa: F401
+from . import biquad, fld, johnson, snconnect, tab1  # noqa: F401
 
 
 def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
@@ -52,10 +52,12 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
         return tab1.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar)
     if fail.type == "SNCONNECT":
         return snconnect.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar)
+    if fail.type == "FLD":
+        return fld.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")
 
 
-def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
+def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None, eps_tot=None):
     """Advance the damage of one shell layer; returns the broken mask."""
     if fail.type == "JOHNSON":
         return johnson.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar)
@@ -63,4 +65,6 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
         return biquad.shell_step(fail, sig, d_epsp, deps, dt, dama)
     if fail.type == "TAB1":
         return tab1.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar)
+    if fail.type == "FLD":
+        return fld.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar, eps_tot=eps_tot)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")

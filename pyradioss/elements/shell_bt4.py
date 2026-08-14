@@ -492,8 +492,12 @@ def _layer_failure(st, sl, mat, k, sig_k, epsp_old, deps_k, dt):
             tstar = np.clip(
                 st["mat_extra"]["temp"][sl, k]
                 / (mat.params["T_melt"] - mat.params["T_i"]), 0.0, 1.0)
+        eps_tot = None
+        if "eps_fld" in st["mat_extra"]:
+            st["mat_extra"]["eps_fld"][sl, k] += deps_k
+            eps_tot = st["mat_extra"]["eps_fld"][sl, k]
         broken = failure.shell_step(mat.fail, sig_k, d_ep, deps_k, dt,
-                                    st["dama"][sl, k], tstar)
+                                    st["dama"][sl, k], tstar, eps_tot=eps_tot)
         layf[broken] = 0.0
     eps_max = mat.params.get("eps_p_max", EP30)
     if eps_max < 1e30:
@@ -506,8 +510,9 @@ def _element_deletion(st, nip_of):
 
     Deletion rule: /FAIL's Ifail_sh (1 = one broken layer kills the
     element — the Radioss default, also used for the material eps_p_max
-    thresholds; 2 = all layers), while LAW27 uses the all-layers rule of
-    the original brittle law. Returns the updated alive mask."""
+    thresholds; 2 = all layers; 3 = membrane criterion; 4 = no deletion),
+    while LAW27 uses the all-layers rule of the original brittle law.
+    Returns the updated alive mask."""
     off = st["off"]
     layfail = st["layfail"]
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
@@ -516,7 +521,13 @@ def _element_deletion(st, nip_of):
             continue
         nip = nip_of[isl]
         nbroken = (layfail[sl, :nip] == 0.0).sum(axis=1)
-        if mat.law == 27 or (mat.fail is not None and mat.fail.ifail_sh == 2):
+        if mat.fail is not None and getattr(mat.fail, "ifail_sh", 1) == 4:
+            dead = np.zeros(len(off[sl]), dtype=bool)
+        elif mat.fail is not None and getattr(mat.fail, "ifail_sh", 1) == 3:
+            # Membrane criterion: mid-surface layer (or all layers)
+            mid = nip // 2
+            dead = layfail[sl, mid] == 0.0
+        elif mat.law == 27 or (mat.fail is not None and getattr(mat.fail, "ifail_sh", 1) == 2):
             dead = nbroken == nip
         else:
             dead = nbroken >= 1

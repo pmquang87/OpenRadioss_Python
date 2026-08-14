@@ -449,6 +449,12 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
                 log.error(f"/FAIL/TAB1/{mat_id}: table {tid} not defined", source)
             else:
                 fm.params["table"] = model.tables[tid]
+        elif fm.type == "FLD":
+            fid = fm.params.get("fct_id", 0)
+            if fid not in model.functions:
+                log.error(f"/FAIL/FLD/{mat_id}: function {fid} not defined", source)
+            else:
+                fm.params["function"] = model.functions[fid]
                 
         mat.fail = fm
 

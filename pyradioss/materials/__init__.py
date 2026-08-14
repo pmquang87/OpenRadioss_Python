@@ -137,6 +137,8 @@ def extra_shapes(mat, nip=None):
         shapes["temp"] = (nip,) if nip is not None else ()
     if getattr(mat, "law", None) == 83 or type(mat).__name__ == "Law83":
         shapes.update(epsp=(), asrate=())
+    if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
+        shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
     return shapes
 
 

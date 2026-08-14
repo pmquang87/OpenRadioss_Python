@@ -1104,9 +1104,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     from ..failure import biquad as fail_biquad
     from ..model.entities import FailureModel
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if kind not in ("JOHNSON", "BIQUAD", "TAB1", "SNCONNECT"):
+    if kind not in ("JOHNSON", "BIQUAD", "TAB1", "SNCONNECT", "FLD"):
         log.warning(f"/FAIL/{kind} not ported — skipped "
-                    f"(supported: JOHNSON, BIQUAD, TAB1, SNCONNECT)", block.source)
+                    f"(supported: JOHNSON, BIQUAD, TAB1, SNCONNECT, FLD)", block.source)
         return
     # header /FAIL/<kind>/mat_ID[/fail_ID]: with TWO trailing ids the
     # FIRST is the material id (the lexer keeps only the last as user_id)
@@ -1266,6 +1266,37 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "fct_id_t": fct_id_t, "fscale_t": fscale_t,
         }
         fm = FailureModel(type="TAB1", ifail_sh=ifail_sh, params=params)
+    elif kind == "FLD":
+        if block.fixed:
+            c1 = cards[0].cut("FAIL_FLD_1")
+            fct_id = _ival(c1[0]) if len(c1) > 0 else 0
+            ifail_sh = _ival(c1[1], default=1) if len(c1) > 1 else 1
+            fct_idadv = _ival(c1[3]) if len(c1) > 3 else 0
+            rani = _fval(c1[4]) if len(c1) > 4 else 0.0
+            dadv = _fval(c1[5]) if len(c1) > 5 else 0.0
+            istrain = _ival(c1[6]) if len(c1) > 6 else 0
+            ixfem = _ival(c1[7]) if len(c1) > 7 else 0
+        else:
+            t = cards[0].tokens()
+            fct_id = int(float(t[0])) if len(t) > 0 else 0
+            ifail_sh = int(float(t[1])) if len(t) > 1 and int(float(t[1])) != 0 else 1
+            fct_idadv = int(float(t[2])) if len(t) > 2 else 0
+            rani = float(t[3]) if len(t) > 3 else 0.0
+            dadv = float(t[4]) if len(t) > 4 else 0.0
+            istrain = int(float(t[5])) if len(t) > 5 else 0
+            ixfem = int(float(t[6])) if len(t) > 6 else 0
+        if ifail_sh not in (1, 2, 3, 4):
+            ifail_sh = 1
+        params = {
+            "fct_id": fct_id,
+            "ifail_sh": ifail_sh,
+            "fct_idadv": fct_idadv,
+            "rani": rani,
+            "dadv": dadv,
+            "istrain": istrain,
+            "ixfem": ixfem,
+        }
+        fm = FailureModel(type="FLD", ifail_sh=ifail_sh, params=params)
     # attachment to the material happens in the Starter resolve step
     # (initialization.resolve_materials) so deck order does not matter
     model.raw_fails.append((mat_id, fm, block.source))
