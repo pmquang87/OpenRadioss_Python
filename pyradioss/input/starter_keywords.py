@@ -38,6 +38,7 @@ from ..model.entities import (
     Material, Mpc, NodeGroup, Part, PressureLoad, Property, Random, Rbe3, RigidBody,
     RigidWall, Section, MonitoredVolume, Sensor, Subdomain, Submodel, Surface, Table, THRequest, Xref,
     DetonatorPoint, DetonatorPlane,
+    ConvectionLoad, InivolContainer, InitialVolume,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -5005,6 +5006,103 @@ def read_dfs(block: KeywordBlock, model: Model,
                     block.source)
 
 
+def read_convec(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CONVEC/convec_ID`` (M94)::
+
+        card 1:  title
+        card 2:  surf_ID  funct_ID  sensor_ID
+        card 3:  Ascale   Fscale    Tstart   Tstop   H
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/CONVEC/{block.user_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("CONVEC_1")
+        surf_id = _ival(f[0])
+        funct_id = _ival(f[1]) if len(f) > 1 else 0
+        sens_id = _ival(f[2]) if len(f) > 2 else 0
+
+        g = cards[1].cut("CONVEC_2") if len(cards) > 1 and not cards[1].is_blank else []
+        xscale = _fval(g[0], 1.0) if len(g) > 0 else 1.0
+        scale = _fval(g[1], 1.0) if len(g) > 1 else 1.0
+        tstart = _fval(g[2], 0.0) if len(g) > 2 else 0.0
+        tstop = _fval(g[3], 1.0e30) if len(g) > 3 else 1.0e30
+        h = _fval(g[4], 0.0) if len(g) > 4 else 0.0
+    else:
+        t0 = cards[0].tokens()
+        surf_id = int(t0[0]) if len(t0) > 0 else 0
+        funct_id = int(t0[1]) if len(t0) > 1 else 0
+        sens_id = int(t0[2]) if len(t0) > 2 else 0
+
+        t1 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        xscale = float(t1[0]) if len(t1) > 0 else 1.0
+        scale = float(t1[1]) if len(t1) > 1 else 1.0
+        tstart = float(t1[2]) if len(t1) > 2 else 0.0
+        tstop = float(t1[3]) if len(t1) > 3 else 1.0e30
+        h = float(t1[4]) if len(t1) > 4 else 0.0
+
+    if xscale == 0.0:
+        xscale = 1.0
+    if scale == 0.0:
+        scale = 1.0
+    if tstop == 0.0:
+        tstop = 1.0e30
+
+    cl = ConvectionLoad(
+        id=block.user_id, surf_id=surf_id, funct_id=funct_id,
+        sens_id=sens_id, xscale=xscale, scale=scale,
+        tstart=tstart, tstop=tstop, h=h, title=title,
+    )
+    model.convec_loads.append(cl)
+
+
+def read_inivol(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INIVOL/[part_ID/]inivol_ID`` (M94)::
+
+        card 1:  title
+        cards 2+: surf_ID  ale_phase  fill_opt  icumu  fill_ratio
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if block.unit_id is not None:
+        part_id, inivol_id = block.user_id or 0, block.unit_id
+    else:
+        part_id = 0
+        inivol_id = block.user_id or 0
+
+    containers: List[InivolContainer] = []
+    for c in cards:
+        if c.is_blank:
+            continue
+        if block.fixed:
+            f = c.cut("INIVOL")
+            surf_id = _ival(f[0])
+            ale_phase = _ival(f[1], default=1) if len(f) > 1 else 1
+            fill_opt = _ival(f[2], default=0) if len(f) > 2 else 0
+            icumu = _ival(f[3], default=0) if len(f) > 3 else 0
+            fill_ratio = _fval(f[4], default=1.0) if len(f) > 4 else 1.0
+        else:
+            t = c.tokens()
+            if not t:
+                continue
+            surf_id = int(float(t[0]))
+            ale_phase = int(float(t[1])) if len(t) > 1 else 1
+            fill_opt = int(float(t[2])) if len(t) > 2 else 0
+            icumu = int(float(t[3])) if len(t) > 3 else 0
+            fill_ratio = float(t[4]) if len(t) > 4 else 1.0
+
+        if fill_ratio == 0.0:
+            fill_ratio = 1.0
+
+        containers.append(InivolContainer(
+            surf_id=surf_id, ale_phase=ale_phase, fill_opt=fill_opt,
+            icumu=icumu, fill_ratio=fill_ratio,
+        ))
+
+    iv = InitialVolume(id=inivol_id, part_id=part_id, title=title, containers=containers)
+    model.inivol.append(iv)
+
+
 KEYWORD_PARSERS: Dict[str, Callable] = {
     "MONVOL": read_monvol,
     "ANALY": read_analy,
@@ -5084,6 +5182,8 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "SUBDOMAIN": read_subdomain,
     "XREF": read_xref,
     "DFS": read_dfs,
+    "CONVEC": read_convec,
+    "INIVOL": read_inivol,
 }
 
 ENGINE_KEYWORDS_IGNORE = {
@@ -5117,7 +5217,7 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
             log.error(f"while reading /{'/'.join(block.parts)}: {exc}",
                       block.source)
             continue
-        if block.unit_id is not None and block.key0 not in ("FAIL", "ADMAS", "TABLE"):
+        if block.unit_id is not None and block.key0 not in ("FAIL", "ADMAS", "TABLE", "INIVOL"):
             # /FAIL's second trailing id is its OWN option id in the
             # legacy dialect (read_fail handles it), and /ADMAS headers
             # are /ADMAS/type/admas_ID with NO unit slot (cfg admas.cfg;

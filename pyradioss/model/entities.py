@@ -1069,3 +1069,44 @@ class DetonatorPlane:
     nz: float = 0.0
 
 
+@dataclass
+class ConvectionLoad:
+    """/CONVEC (M94): convection heat flux boundary condition on a /SURF.
+
+    Fortran origin: ``starter/source/loads/thermic/hm_read_convec.F``.
+    q = h * (T_surf - T_inf(t))
+    """
+    id: int
+    surf_id: int
+    funct_id: int
+    sens_id: int = 0
+    xscale: float = 1.0     # ASCALE (time scale for T_inf curve)
+    scale: float = 1.0      # FSCALE (temperature scale)
+    tstart: float = 0.0     # TSTART
+    tstop: float = 1.0e30   # TSTOP
+    h: float = 0.0          # H (convection coefficient)
+    title: str = ""
+
+
+@dataclass
+class InivolContainer:
+    """Container surface entry for /INIVOL (M94)."""
+    surf_id: int
+    ale_phase: int = 1
+    fill_opt: int = 0       # 0 = along normal, 1 = against normal (reversed)
+    icumu: int = 0          # 0 = erase, 1 = additive, -1 = subtractive
+    fill_ratio: float = 1.0 # filling volume fraction in [0, 1]
+
+
+@dataclass
+class InitialVolume:
+    """/INIVOL (M94): initial volume fraction for multi-material fluid / ALE.
+
+    Fortran origin: ``starter/source/initial_conditions/inivol/hm_read_inivol.F90``.
+    """
+    id: int
+    part_id: int = 0
+    title: str = ""
+    containers: List[InivolContainer] = field(default_factory=list)
+
+

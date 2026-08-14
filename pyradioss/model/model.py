@@ -36,6 +36,7 @@ from .entities import (
     InitialVelocity, Interface, Line, Material, Mpc, NodeGroup, Part,
     PressureLoad, Property, Random, Rbe3, RigidBody, RigidWall, Section, Sensor,
     DetonatorPlane, DetonatorPoint,
+    ConvectionLoad, InivolContainer, InitialVolume,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -576,6 +577,8 @@ class Model:
         self.impdisp: List[ImposedDisplacement] = []   # /IMPDISP (M5)
         self.impacc: List[ImposedAcceleration] = []    # /IMPACC  (M92)
         self.imptemp: List[ImposedTemperature] = []    # /IMPTEMP (M93)
+        self.convec_loads: List[ConvectionLoad] = []    # /CONVEC  (M94)
+        self.inivol: List[InitialVolume] = []          # /INIVOL  (M94)
         self.ploads: List[PressureLoad] = []           # /PLOAD   (M5)
         self.admas: List[AddedMass] = []               # /ADMAS   (M5)
         self.rwalls: List[RigidWall] = []

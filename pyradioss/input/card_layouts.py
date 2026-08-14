@@ -284,6 +284,12 @@ LAYOUTS: Dict[str, List[int]] = {
     "IMPTEMP_1": [10, 10, 10],
     # LOADS/imptemp.cfg (radioss100): Ascale_x Fscale_y T_start T_stop
     "IMPTEMP_2": [20, 20, 20, 20],
+    # LOADS/convec.cfg (radioss100): SURF_ID FUNCT_ID SENSOR_ID
+    "CONVEC_1": [10, 10, 10],
+    # LOADS/convec.cfg (radioss100): ASCALE FSCALE TSTART TSTOP H
+    "CONVEC_2": [20, 20, 20, 20, 20],
+    # TABLE/inivol.cfg (radioss2019): surf_ID ALE_PHASE FILL_OPT ICUMU FILL_RATIO
+    "INIVOL": [10, 10, 10, 10, 20],
     # LOADS/impvel.cfg + impdisp.cfg (radioss120):
     # CARD("%10d%10s%10d%10d%10d%10d%10d",
     #      fct, Dir, skew, sens, grnod, frame, Icoor)
