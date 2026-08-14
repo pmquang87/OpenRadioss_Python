@@ -2840,19 +2840,18 @@ def read_analy(block: KeywordBlock, model: Model, log: MessageLog):
 
 
 def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/SENSOR/TIME/sens_ID`` and ``/SENSOR/DISP/sens_ID`` (M6)::
+    """``/SENSOR/{TIME|DISP|VEL|NOT|AND|OR}/sens_ID`` (M6, M84)::
 
-        /SENSOR/TIME:  card 1: title,  card 2: Tdelay
-        /SENSOR/DISP:  card 1: title,  card 2: node_ID   Dmin
-
-      TIME fires at t = Tdelay; DISP fires when the node's displacement
-      magnitude first exceeds Dmin. Sensors LATCH (once fired, active
-      forever) and gate /CLOAD, /PLOAD and /INTER/TYPE7|11 through their
-      sens_ID field — see engine/sensors.py for the exact semantics.
+        /SENSOR/TIME: card 1: title, card 2: Tdelay
+        /SENSOR/DISP: card 1: title, card 2: Tdelay, card 3: node_ID Dmin
+        /SENSOR/VEL:  card 1: title, card 2: Tdelay, card 3: node_ID Vmax Fcut
+        /SENSOR/NOT:  card 1: title, card 2: Tdelay, card 3: sens_ID1
+        /SENSOR/AND:  card 1: title, card 2: Tdelay, card 3: sens_ID1 sens_ID2
+        /SENSOR/OR:   card 1: title, card 2: Tdelay, card 3: sens_ID1 sens_ID2
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if kind not in ("TIME", "DISP"):
-        log.warning(f"/SENSOR/{kind} not ported (TIME, DISP supported)",
+    if kind not in ("TIME", "DISP", "VEL", "NOT", "AND", "OR"):
+        log.warning(f"/SENSOR/{kind} not ported (TIME, DISP, VEL, NOT, AND, OR supported)",
                     block.source)
         return
     title, cards = _title_and_data(block)
@@ -2860,13 +2859,26 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/SENSOR/{block.user_id}: missing data card",
                   block.source)
         return
-    t = cards[0].tokens()
+
+    tdelay = 0.0
+    data_card_idx = 0
+    if len(cards) > 1 and kind != "TIME":
+        t0 = cards[0].tokens()
+        if t0:
+            try:
+                tdelay = float(t0[0])
+            except ValueError:
+                pass
+        data_card_idx = 1
+
+    t = cards[data_card_idx].tokens()
     if kind == "TIME":
+        tdelay = float(t[0]) if t else 0.0
         model.sensors.append(Sensor(
-            id=block.user_id, kind="TIME", tdelay=float(t[0]), title=title))
-    else:
+            id=block.user_id, kind="TIME", tdelay=tdelay, title=title))
+    elif kind == "DISP":
         if len(t) < 2:
-            log.error(f"/SENSOR/DISP/{block.user_id}: card 2 needs "
+            log.error(f"/SENSOR/DISP/{block.user_id}: card needs "
                       f"'node_ID Dmin'", block.source)
             return
         dmin = float(t[1])
@@ -2875,8 +2887,39 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                       block.source)
             return
         model.sensors.append(Sensor(
-            id=block.user_id, kind="DISP", node_id=int(t[0]), dmin=dmin,
+            id=block.user_id, kind="DISP", tdelay=tdelay, node_id=int(t[0]), dmin=dmin,
             title=title))
+    elif kind == "VEL":
+        if len(t) < 2:
+            log.error(f"/SENSOR/VEL/{block.user_id}: card needs "
+                      f"'node_ID Vmax'", block.source)
+            return
+        node_id = int(t[0])
+        vmax = float(t[1])
+        fcut = float(t[2]) if len(t) > 2 else 0.0
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="VEL", tdelay=tdelay, node_id=node_id,
+            vmax=vmax, fcut=fcut, title=title))
+    elif kind == "NOT":
+        if len(t) < 1:
+            log.error(f"/SENSOR/NOT/{block.user_id}: card needs "
+                      f"'sens_ID1'", block.source)
+            return
+        sens_id1 = int(t[0])
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="NOT", tdelay=tdelay, sens_id1=sens_id1,
+            title=title))
+    elif kind in ("AND", "OR"):
+        if len(t) < 2:
+            log.error(f"/SENSOR/{kind}/{block.user_id}: card needs "
+                      f"'sens_ID1 sens_ID2'", block.source)
+            return
+        sens_id1 = int(t[0])
+        sens_id2 = int(t[1])
+        model.sensors.append(Sensor(
+            id=block.user_id, kind=kind, tdelay=tdelay, sens_id1=sens_id1,
+            sens_id2=sens_id2, title=title))
+
 
 
 def read_mpc(block: KeywordBlock, model: Model, log: MessageLog) -> None:

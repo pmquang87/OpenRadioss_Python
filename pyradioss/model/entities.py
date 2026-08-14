@@ -554,19 +554,27 @@ class Damping:
 
 @dataclass
 class Sensor:
-    """/SENSOR (M6): an event source gating loads and interfaces.
+    """/SENSOR (M6, M84): an event source gating loads and interfaces.
 
     Fortran origin: ``starter/source/tools/sensor/hm_read_sensor.F`` +
-    ``engine/source/tools/sensor/``. Ported types: ``kind='TIME'``
-    (fires at tdelay) and ``kind='DISP'`` (fires when node_id's
-    displacement magnitude first exceeds dmin). Sensors latch — see
-    engine/sensors.py."""
+    ``engine/source/tools/sensor/``. Ported types:
+    * ``kind='TIME'`` — fires at tdelay
+    * ``kind='DISP'`` — fires when displacement magnitude of node_id exceeds dmin
+    * ``kind='VEL'``  — fires when velocity magnitude of node_id exceeds vmax
+    * ``kind='NOT'``  — active when sens_id1 is not active
+    * ``kind='AND'``  — active when both sens_id1 and sens_id2 are active
+    * ``kind='OR'``   — active when either sens_id1 or sens_id2 is active
+    Sensors latch or update dynamically — see engine/sensors.py."""
 
     id: int
-    kind: str              # 'TIME' | 'DISP'
-    tdelay: float = 0.0    # TIME
-    node_id: int = 0       # DISP
+    kind: str              # 'TIME' | 'DISP' | 'VEL' | 'NOT' | 'AND' | 'OR'
+    tdelay: float = 0.0    # Time delay before activation
+    node_id: int = 0       # DISP, VEL
     dmin: float = 0.0      # DISP
+    vmax: float = 0.0      # VEL
+    fcut: float = 0.0      # VEL
+    sens_id1: int = 0      # NOT, AND, OR
+    sens_id2: int = 0      # AND, OR
     title: str = ""
 
 
