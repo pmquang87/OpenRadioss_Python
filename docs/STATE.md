@@ -105,6 +105,7 @@ real history is 41 milestones. One line each:
 | M97 | Add 1D inistate (/INITRU, /INIBEA, /INISPR) and extended /SENSOR suite |
 | M98 | Add extended /FAIL models (/FAIL/TENSSTRAIN, /ORTHSTRAIN, /GURSON, /ALTER, /VISUAL, /MULLINS_OR) |
 | M99 | Add /TRANSFORM/POS, /BCS/CYCLIC, /PERTURB/PART/SOLID, /LOAD/PBLAST, /DEF_INTER |
+| M100 | Add /PROP/TYPE10, /TYPE11, /TYPE16, /TYPE6, /PLY, /LAMINATE, /INTER/TYPE25, /INTER/SUB |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

@@ -1326,3 +1326,52 @@ class PBlastLoad:
     wtnt: float = 0.0
     pmin: float = 0.0
 
+
+@dataclass
+class Ply:
+    """/PLY/ply_id (M100): Composite ply definition.
+
+    Fortran origin: ``starter/source/model/laminate/leclamply.F``.
+    """
+    id: int
+    mat_id: int
+    thick: float
+    title: str = ""
+    skew_id: int = 0
+
+
+@dataclass
+class LaminatePly:
+    """Layer definition inside a /LAMINATE stack."""
+    ply_id: int
+    phi: float = 0.0
+    zi: float = 0.0
+    mat_interply: int = 0
+    f_weight: float = 1.0
+
+
+@dataclass
+class Laminate:
+    """/LAMINATE/laminate_id (M100): Composite laminate stack definition.
+
+    Fortran origin: ``starter/source/model/laminate/leclam.F``.
+    """
+    id: int
+    title: str = ""
+    plies: List[LaminatePly] = field(default_factory=list)
+
+
+@dataclass
+class SubInterface:
+    """/INTER/SUB/sub_inter_ID (M100): Contact sub-interface.
+
+    Fortran origin: ``starter/source/interfaces/sub/hm_read_inter_sub.F``.
+    """
+    id: int
+    inter_id: int
+    main_id1: int
+    second_id: int
+    main_id2: int = 0
+    title: str = ""
+
+

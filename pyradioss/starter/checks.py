@@ -364,3 +364,40 @@ def check_model(model: Model, log: MessageLog) -> None:
         if pb.node_id > 0 and pb.node_id not in model._id2idx:
             log.error(f"/LOAD/PBLAST/{bid}: detonation node {pb.node_id} not defined", "CROSS REF")
 
+    # Plies & Laminates (M100)
+    for ply_id, ply in getattr(model, "plies", {}).items():
+        if ply.mat_id > 0 and ply.mat_id not in model.materials:
+            log.error(f"/PLY/{ply_id}: material {ply.mat_id} not defined", "CROSS REF")
+        if ply.skew_id > 0 and ply.skew_id not in model.skews:
+            log.error(f"/PLY/{ply_id}: skew {ply.skew_id} not defined", "CROSS REF")
+
+    for lam_id, lam in getattr(model, "laminates", {}).items():
+        for lp in lam.plies:
+            if lp.ply_id not in model.plies:
+                log.error(f"/LAMINATE/{lam_id}: ply {lp.ply_id} not defined", "CROSS REF")
+            if lp.mat_interply > 0 and lp.mat_interply not in model.materials:
+                log.error(f"/LAMINATE/{lam_id}: interply material {lp.mat_interply} not defined", "CROSS REF")
+
+    # Sub-interfaces (M100)
+    inter_ids = {itf.id for itf in model.interfaces}
+    for sub in getattr(model, "sub_interfaces", []):
+        if sub.inter_id not in inter_ids:
+            log.error(f"/INTER/SUB/{sub.id}: main interface {sub.inter_id} not defined", "CROSS REF")
+        if sub.main_id1 > 0 and sub.main_id1 not in model.surfaces and sub.main_id1 not in model.lines:
+            log.error(f"/INTER/SUB/{sub.id}: main entity 1 {sub.main_id1} not defined", "CROSS REF")
+        if sub.main_id2 > 0 and sub.main_id2 not in model.surfaces:
+            log.error(f"/INTER/SUB/{sub.id}: main entity 2 {sub.main_id2} not defined", "CROSS REF")
+
+    # Composite properties (M100)
+    for prop_id, prop in model.properties.items():
+        if prop.type in (10, 11, 16, 6) and hasattr(prop, "params"):
+            sk = prop.params.get("skew_id", 0)
+            if sk > 0 and sk not in model.skews:
+                log.error(f"/PROP/TYPE{prop.type}/{prop_id}: skew {sk} not defined", "CROSS REF")
+        if prop.type == 11 and hasattr(prop, "params"):
+            for ly in prop.params.get("layers", []):
+                mid = ly.get("mat_id", 0)
+                if mid > 0 and mid not in model.materials:
+                    log.error(f"/PROP/TYPE11/{prop_id}: layer material {mid} not defined", "CROSS REF")
+
+

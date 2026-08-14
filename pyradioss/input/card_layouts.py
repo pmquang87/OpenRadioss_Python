@@ -501,6 +501,71 @@ LAYOUTS: Dict[str, List[int]] = {
     # CARDS/def_intertype_25.cfg:
     # CARD("%10d%10d%10d%10d%10d%10d%10d%10d", Istf, Igap, Irem_i2, Idel, Itied, Ishape, Irs, Iedge)
     "DEF_INTER_25": [10, 10, 10, 10, 10, 10, 10, 10],
+
+    # PLY (M100)
+    # LAMINATE/ply.cfg: CARD("%10d%20lg", Mat_id, Thick)
+    "PLY_1": [10, 20],
+
+    # LAMINATE (M100)
+    # LAMINATE/laminate.cfg:
+    # card 2: CARD("%10d%20lg%20lg", Ply_id, Phi, Zi)
+    "LAMINATE_LAYER": [10, 20, 20],
+    # card 3: CARD("%10d", Minterply)
+    "LAMINATE_INTERPLY": [10],
+
+    # PROP/TYPE10 / SH_COMP (M100)
+    # PROP/prop_p10_sh_comp.cfg:
+    # card 2: CARD("%10d%10d%10d%10d%20s%20lg", Ishell, Ismstr, Ish3n, Idrill, blank, P_Thick_Fail)
+    "PROP_SH_COMP_FLAGS": [10, 10, 10, 10, 20, 20],
+    # card 5: CARD("%20lg%20lg%20lg%10d%20s%10d", Vx, Vy, Vz, Iskew, blank, Ip)
+    "PROP_SH_COMP_VEC": [20, 20, 20, 10, 20, 10],
+
+    # PROP/TYPE11 / SH_SANDW (M100)
+    # PROP/prop_p11_sh_sandw.cfg:
+    # card 5: CARD("%20lg%20lg%20lg%10d%10d%10d%10d", Vx, Vy, Vz, Iskew, Iorth, Ipos, Ip)
+    "PROP_SH_SANDW_VEC": [20, 20, 20, 10, 10, 10, 10],
+    # card 6+: CARD("%20lg%20lg%20lg%10d%10s%20lg", Phi, Thick, Zi, Mat_id, blank, W_Fi)
+    "PROP_SH_SANDW_LAYER": [20, 20, 20, 10, 10, 20],
+
+    # PROP/TYPE16 / SH_FABR (M100)
+    # PROP/prop_p16_sh_fabr.cfg:
+    # card 2: CARD("%10d%10d%10d%30s%20lg", Ishell, Ismstr, Ish3n, blank, P_Thick_Fail)
+    "PROP_SH_FABR_FLAGS": [10, 10, 10, 30, 20],
+    # card 4: CARD("%10d%10d%20lg%20lg%10s%10d", NIP, Istrain, Thick, Ashear, blank, Ithick)
+    "PROP_SH_FABR_N": [10, 10, 20, 20, 10, 10],
+    # card 5: CARD("%20lg%20lg%20lg%10d%10d%18s%2d", Vx, Vy, Vz, Iskew, Ipos, blank, Ip)
+    "PROP_SH_FABR_VEC": [20, 20, 20, 10, 10, 18, 2],
+
+    # PROP/TYPE6 / SOL_ORTH (M100)
+    # PROP/prop_p6_sol_orth.cfg:
+    # card 2: CARD("%10d%10d%10s%10d%10d%10d%10d%10d%20lg", Isolid, Ismstr, blank, Icpre, Itetra10, NBP, Itetra4, Iframe, Dn)
+    "PROP_SOL_ORTH_1": [10, 10, 10, 10, 10, 10, 10, 10, 20],
+    "PROP_SOLID_Q": [20, 20, 20],
+    # card 4: CARD("%20lg%20lg%20lg%10d%10d%10d", Vx, Vy, Vz, Iskew, Ip, Iorth)
+    "PROP_SOL_ORTH_VEC": [20, 20, 20, 10, 10, 10],
+    # card 5: CARD("%20lg%20lg%20lg%20lg", Phi, Px, Py, Pz)
+    "PROP_SOL_ORTH_ANG": [20, 20, 20, 20],
+    # card 6: CARD("%20lg%10d%10d", deltaT_min, Istrain, Ihkt)
+    "PROP_SOL_ORTH_DT": [20, 10, 10],
+
+    # INTER/SUB (M100)
+    # INTER/inter_sub.cfg: CARD("%10d%10d%10d%10d", inter_ID, Main_ID1, Second_ID, Main_ID2)
+    "INTER_SUB_1": [10, 10, 10, 10],
+
+    # INTER/TYPE25 (M100)
+    # INTER/inter_type25.cfg:
+    # card 2: CARD("%10d%10d%10d%10d%10d%10d%10s%10d%10d", surf_ID1, surf_ID2, Istf, Ithe, Igap, Irem_i2, blank, Idel, Iedge)
+    "INTER_TYPE25_1": [10, 10, 10, 10, 10, 10, 10, 10, 10],
+    # card 3: CARD("%10d%10s%20lg%20lg%20lg%20lg", grnod_ID, blank, Gap_scale, PrMesh_Size, Gap1, Gap2)
+    "INTER_TYPE25_2": [10, 10, 20, 20, 20, 20],
+    # card 4: CARD("%20lg%20lg%10d%10d%20lg", Stmin, Stmax, Igap_edge, Ishape, Edge_angle)
+    "INTER_TYPE25_3": [20, 20, 10, 10, 20],
+    # card 5: CARD("%20lg%20lg%20s%20lg%20lg", Stfac, Fric, blank, Tstart, Tstop)
+    "INTER_TYPE25_4": [20, 20, 20, 20, 20],
+    # card 6: CARD("%7s%1d%1d%1d%10s%10d%10d%20lg%10d%10s%20lg", blank, Deactivate_X_BC, Deactivate_Y_BC, Deactivate_Z_BC, blank, IVIS2, INACTIV, STIFF_DC, Ithick, blank, Pmax)
+    "INTER_TYPE25_5": [7, 1, 1, 1, 10, 10, 10, 20, 10, 10, 20],
+    # card 7: CARD("%10d%10d%20lg%10s%10d%30s%10d", Ifric, Ifiltr, Xfreq, blank, ISENSOR, blank, Fric_ID)
+    "INTER_TYPE25_6": [10, 10, 20, 10, 10, 30, 10],
 }
 
 

@@ -41,6 +41,7 @@ from .entities import (
     InitialBrickState, InitialShellState,
     InitialTrussState, InitialBeamState, InitialSpringState,
     CyclicBoundaryCondition, SolidPartPerturbation, PBlastLoad,
+    Ply, Laminate, SubInterface,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -605,6 +606,9 @@ class Model:
         self.sensors: List[Sensor] = []                # /SENSOR  (M6)
         self.mpcs: List[Mpc] = []                      # /MPC     (M6)
         self.interfaces: List[Interface] = []
+        self.sub_interfaces: List[SubInterface] = []   # /INTER/SUB (M100)
+        self.plies: Dict[int, Ply] = {}                # /PLY (M100)
+        self.laminates: Dict[int, Laminate] = {}       # /LAMINATE (M100)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
