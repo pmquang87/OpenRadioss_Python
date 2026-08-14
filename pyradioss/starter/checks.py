@@ -244,6 +244,39 @@ def check_model(model: Model, log: MessageLog) -> None:
         if elem_id not in shell_ids:
             log.error(f"/INISHE: shell element {elem_id} not defined",
                       "CROSS REF")
+
+    truss_ids = set(model.trusses.ids.tolist()) if model.trusses is not None and hasattr(model.trusses, "ids") and len(model.trusses.ids) > 0 else set()
+    for elem_id in model.ini_trusses:
+        if elem_id not in truss_ids:
+            log.error(f"/INITRU: truss element {elem_id} not defined",
+                      "CROSS REF")
+
+    beam_ids = set(model.beams.ids.tolist()) if model.beams is not None and hasattr(model.beams, "ids") and len(model.beams.ids) > 0 else set()
+    for elem_id in model.ini_beams:
+        if elem_id not in beam_ids:
+            log.error(f"/INIBEA: beam element {elem_id} not defined",
+                      "CROSS REF")
+
+    spring_ids = set(model.springs.ids.tolist()) if model.springs is not None and hasattr(model.springs, "ids") and len(model.springs.ids) > 0 else set()
+    for elem_id in model.ini_springs:
+        if elem_id not in spring_ids:
+            log.error(f"/INISPR: spring element {elem_id} not defined",
+                      "CROSS REF")
+
+    for sens in model.sensors:
+        who = f"/SENSOR/{sens.kind}/{sens.id}"
+        if sens.kind in ("DISP", "VEL") and sens.node_id and sens.node_id not in model._id2idx:
+            log.error(f"{who}: unknown node {sens.node_id}", "CROSS REF")
+        elif sens.kind == "DIST":
+            if sens.node_id1 and sens.node_id1 not in model._id2idx:
+                log.error(f"{who}: unknown node 1 {sens.node_id1}", "CROSS REF")
+            if sens.node_id2 and sens.node_id2 not in model._id2idx:
+                log.error(f"{who}: unknown node 2 {sens.node_id2}", "CROSS REF")
+        elif sens.kind == "ENERGY" and sens.part_id and sens.part_id not in model.parts:
+            log.error(f"{who}: unknown part {sens.part_id}", "CROSS REF")
+        elif sens.kind == "TEMP" and sens.grnod_id:
+            need_group(sens.grnod_id, who)
+
     for am in model.admas:
         need_group(am.grnod_id, f"/ADMAS/{am.id}")
     for rb in model.rbodies:

@@ -41,6 +41,7 @@ from ..model.entities import (
     ConvectionLoad, InivolContainer, InitialVolume,
     RadiationLoad, ImposedFlux, InitialTemperature,
     InitialBrickState, InitialShellState,
+    InitialTrussState, InitialBeamState, InitialSpringState,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -3066,18 +3067,24 @@ def read_analy(block: KeywordBlock, model: Model, log: MessageLog):
 
 
 def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/SENSOR/{TIME|DISP|VEL|NOT|AND|OR}/sens_ID`` (M6, M84)::
+    """``/SENSOR/{TIME|DISP|VEL|NOT|AND|OR|DIST|ENERGY|INTER|RBODY|TEMP}/sens_ID`` (M6, M84, M97)::
 
-        /SENSOR/TIME: card 1: title, card 2: Tdelay
-        /SENSOR/DISP: card 1: title, card 2: Tdelay, card 3: node_ID Dmin
-        /SENSOR/VEL:  card 1: title, card 2: Tdelay, card 3: node_ID Vmax Fcut
-        /SENSOR/NOT:  card 1: title, card 2: Tdelay, card 3: sens_ID1
-        /SENSOR/AND:  card 1: title, card 2: Tdelay, card 3: sens_ID1 sens_ID2
-        /SENSOR/OR:   card 1: title, card 2: Tdelay, card 3: sens_ID1 sens_ID2
+        /SENSOR/TIME:   card 1: title, card 2: Tdelay
+        /SENSOR/DISP:   card 1: title, card 2: Tdelay, card 3: node_ID Dmin
+        /SENSOR/VEL:    card 1: title, card 2: Tdelay, card 3: node_ID Vmax Fcut
+        /SENSOR/NOT:    card 1: title, card 2: Tdelay, card 3: sens_ID1
+        /SENSOR/AND:    card 1: title, card 2: Tdelay, card 3: sens_ID1 sens_ID2
+        /SENSOR/OR:     card 1: title, card 2: Tdelay, card 3: sens_ID1 sens_ID2
+        /SENSOR/DIST:   card 1: title, card 2: Tdelay, card 3: node_ID1 node_ID2 Dmin Dmax Tmin
+        /SENSOR/ENERGY: card 1: title, card 2: Tdelay, card 3: part_ID subset_ID Iselect, card 4: IEmin IEmax KEmin KEmax Tmin
+        /SENSOR/INTER:  card 1: title, card 2: Tdelay, card 3: int_ID DIR Fmin Fmax Tmin Fcut
+        /SENSOR/RBODY:  card 1: title, card 2: Tdelay, card 3: rbody_ID DIR Fmin Fmax Tmin
+        /SENSOR/TEMP:   card 1: title, card 2: Tdelay, card 3: Grnod_Id Tempmax Tempmin Tempmean Tmin
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if kind not in ("TIME", "DISP", "VEL", "NOT", "AND", "OR"):
-        log.warning(f"/SENSOR/{kind} not ported (TIME, DISP, VEL, NOT, AND, OR supported)",
+    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP")
+    if kind not in supported:
+        log.warning(f"/SENSOR/{kind} not ported ({', '.join(supported)} supported)",
                     block.source)
         return
     title, cards = _title_and_data(block)
@@ -3145,6 +3152,109 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.sensors.append(Sensor(
             id=block.user_id, kind=kind, tdelay=tdelay, sens_id1=sens_id1,
             sens_id2=sens_id2, title=title))
+    elif kind == "DIST":
+        if block.fixed:
+            f = cards[data_card_idx].cut("SENSOR_DIST_2")
+            n1 = _ival(f[0])
+            n2 = _ival(f[1])
+            dmin = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            dmax = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            tmin = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        else:
+            if len(t) < 2:
+                log.error(f"/SENSOR/DIST/{block.user_id}: card needs 'node_ID1 node_ID2'", block.source)
+                return
+            n1, n2 = int(t[0]), int(t[1])
+            dmin = float(t[2]) if len(t) > 2 else 0.0
+            dmax = float(t[3]) if len(t) > 3 else 0.0
+            tmin = float(t[4]) if len(t) > 4 else 0.0
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="DIST", tdelay=tdelay, node_id1=n1, node_id2=n2,
+            dmin=dmin, dmax=dmax, tmin=tmin, title=title))
+    elif kind == "ENERGY":
+        if block.fixed:
+            f = cards[data_card_idx].cut("SENSOR_ENERGY_2")
+            part_id = _ival(f[0])
+            subset_id = _ival(f[1]) if len(f) > 1 else 0
+            iselect = _ival(f[2], 1) if len(f) > 2 else 1
+            if data_card_idx + 1 < len(cards):
+                g = cards[data_card_idx + 1].cut("SENSOR_ENERGY_3")
+                iemin = _fval(g[0], -1e30) if len(g) > 0 else -1e30
+                iemax = _fval(g[1], 1e30) if len(g) > 1 else 1e30
+                kemin = _fval(g[2], -1e30) if len(g) > 2 else -1e30
+                kemax = _fval(g[3], 1e30) if len(g) > 3 else 1e30
+                tmin = _fval(g[4], 0.0) if len(g) > 4 else 0.0
+            else:
+                iemin, iemax, kemin, kemax, tmin = -1e30, 1e30, -1e30, 1e30, 0.0
+        else:
+            part_id = int(t[0]) if len(t) > 0 else 0
+            subset_id = int(t[1]) if len(t) > 1 else 0
+            iselect = int(t[2]) if len(t) > 2 else 1
+            if data_card_idx + 1 < len(cards):
+                t2 = cards[data_card_idx + 1].tokens()
+                iemin = float(t2[0]) if len(t2) > 0 else -1e30
+                iemax = float(t2[1]) if len(t2) > 1 else 1e30
+                kemin = float(t2[2]) if len(t2) > 2 else -1e30
+                kemax = float(t2[3]) if len(t2) > 3 else 1e30
+                tmin = float(t2[4]) if len(t2) > 4 else 0.0
+            else:
+                iemin, iemax, kemin, kemax, tmin = -1e30, 1e30, -1e30, 1e30, 0.0
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="ENERGY", tdelay=tdelay, part_id=part_id, subset_id=subset_id,
+            iselect=iselect, iemin=iemin, iemax=iemax, kemin=kemin, kemax=kemax, tmin=tmin, title=title))
+    elif kind == "INTER":
+        if block.fixed:
+            f = cards[data_card_idx].cut("SENSOR_INTER_2")
+            int_id = _ival(f[0])
+            sdir = f[1].strip() if len(f) > 1 else ""
+            fmin = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            fmax = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            tmin = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+            fcut = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+        else:
+            int_id = int(t[0]) if len(t) > 0 else 0
+            sdir = t[1] if len(t) > 1 else ""
+            fmin = float(t[2]) if len(t) > 2 else 0.0
+            fmax = float(t[3]) if len(t) > 3 else 0.0
+            tmin = float(t[4]) if len(t) > 4 else 0.0
+            fcut = float(t[5]) if len(t) > 5 else 0.0
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="INTER", tdelay=tdelay, int_id=int_id, dir=sdir,
+            fmin=fmin, fmax=fmax, tmin=tmin, fcut=fcut, title=title))
+    elif kind == "RBODY":
+        if block.fixed:
+            f = cards[data_card_idx].cut("SENSOR_RBODY_2")
+            rb_id = _ival(f[0])
+            sdir = f[1].strip() if len(f) > 1 else ""
+            fmin = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            fmax = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            tmin = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        else:
+            rb_id = int(t[0]) if len(t) > 0 else 0
+            sdir = t[1] if len(t) > 1 else ""
+            fmin = float(t[2]) if len(t) > 2 else 0.0
+            fmax = float(t[3]) if len(t) > 3 else 0.0
+            tmin = float(t[4]) if len(t) > 4 else 0.0
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="RBODY", tdelay=tdelay, rbody_id=rb_id, dir=sdir,
+            fmin=fmin, fmax=fmax, tmin=tmin, title=title))
+    elif kind == "TEMP":
+        if block.fixed:
+            f = cards[data_card_idx].cut("SENSOR_TEMP_2")
+            grnod_id = _ival(f[0])
+            tempmax = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+            tempmin = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            tempmean = _fval(f[3], 1e30) if len(f) > 3 else 1e30
+            tmin = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        else:
+            grnod_id = int(t[0]) if len(t) > 0 else 0
+            tempmax = float(t[1]) if len(t) > 1 else 1e30
+            tempmin = float(t[2]) if len(t) > 2 else 0.0
+            tempmean = float(t[3]) if len(t) > 3 else 1e30
+            tmin = float(t[4]) if len(t) > 4 else 0.0
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="TEMP", tdelay=tdelay, grnod_id=grnod_id,
+            tempmax=tempmax, tempmin=tempmin, tempmean=tempmean, tmin=tmin, title=title))
 
 
 
@@ -5446,6 +5556,254 @@ def read_inish3(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     read_inishe(block, model, log)
 
 
+def read_initru(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INITRU/{FULL|EPSP|FORCE|TENS}[/id]`` (M97)::
+
+        /INITRU/FULL:
+          card 1: truss_ID  prop_type  EINT  FOR  AREA  EPSP
+        /INITRU/EPSP, /INITRU/FORCE, /INITRU/TENS:
+          card 1: truss_ID  value
+    """
+    sub = block.parts[1].upper() if len(block.parts) > 1 else "FULL"
+    cards = [c for c in block.cards if not c.is_blank]
+    if not cards:
+        log.error(f"/INITRU/{sub}: missing data card", block.source)
+        return
+
+    if sub in ("EPSP", "FORCE", "TENS"):
+        for c in cards:
+            if block.fixed:
+                f = c.cut("INITRU_SCALAR")
+                elem_id = _ival(f[0])
+                val = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            else:
+                t = c.tokens()
+                elem_id = int(float(t[0]))
+                val = float(t[1]) if len(t) > 1 else 0.0
+
+            st = model.ini_trusses.setdefault(elem_id, InitialTrussState(elem_id=elem_id))
+            if sub == "EPSP":
+                st.epsp = val
+            elif sub in ("FORCE", "TENS"):
+                st.force = val
+    elif sub in ("FULL", "TRUSS"):
+        for c in cards:
+            if block.fixed:
+                f = c.cut("INITRU_FULL")
+                elem_id = _ival(f[0])
+                ptype = _ival(f[1], 2) if len(f) > 1 else 2
+                eint = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+                force = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+                area = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+                epsp = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+            else:
+                t = c.tokens()
+                elem_id = int(float(t[0]))
+                ptype = int(float(t[1])) if len(t) > 1 else 2
+                eint = float(t[2]) if len(t) > 2 else 0.0
+                force = float(t[3]) if len(t) > 3 else 0.0
+                area = float(t[4]) if len(t) > 4 else 0.0
+                epsp = float(t[5]) if len(t) > 5 else 0.0
+
+            st = model.ini_trusses.setdefault(elem_id, InitialTrussState(elem_id=elem_id))
+            st.prop_type = ptype
+            st.eint = eint
+            st.force = force
+            st.area = area
+            st.epsp = epsp
+    else:
+        log.warning(f"/INITRU/{sub} not ported — block skipped", block.source)
+
+
+def read_inibea(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INIBEA/{FULL|FORCE|MOMENT|EPSP}[/id]`` (M97)::
+
+        /INIBEA/FORCE, /INIBEA/MOMENT, /INIBEA/EPSP:
+          card 1: beam_ID  value
+        /INIBEA/FULL:
+          card 1: beam_ID  nb_integr  prop_type
+          card 2: EImemb  EIbend  F1  F2  F3  M1  M2  M3
+          card 3: EpsilonP
+    """
+    sub = block.parts[1].upper() if len(block.parts) > 1 else "FULL"
+    cards = [c for c in block.cards if not c.is_blank]
+    if not cards:
+        log.error(f"/INIBEA/{sub}: missing data card", block.source)
+        return
+
+    if sub in ("FORCE", "MOMENT", "EPSP"):
+        for c in cards:
+            if block.fixed:
+                f = c.cut("INIBEA_SCALAR")
+                elem_id = _ival(f[0])
+                val = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            else:
+                t = c.tokens()
+                elem_id = int(float(t[0]))
+                val = float(t[1]) if len(t) > 1 else 0.0
+
+            st = model.ini_beams.setdefault(elem_id, InitialBeamState(elem_id=elem_id))
+            if sub == "FORCE":
+                st.force[0] = val
+            elif sub == "MOMENT":
+                st.moment[0] = val
+            elif sub == "EPSP":
+                st.epsp = val
+    elif sub in ("FULL", "BEAM"):
+        idx = 0
+        while idx < len(cards):
+            c0 = cards[idx]
+            if block.fixed:
+                f = c0.cut("INIBEA_FULL_1")
+                elem_id = _ival(f[0])
+                nip = _ival(f[1], 0) if len(f) > 1 else 0
+                ptype = _ival(f[2], 3) if len(f) > 2 else 3
+                idx += 1
+
+                g = cards[idx].cut("INIBEA_FULL_2") if idx < len(cards) else []
+                eimemb = _fval(g[0], 0.0) if len(g) > 0 else 0.0
+                eibend = _fval(g[1], 0.0) if len(g) > 1 else 0.0
+                f1 = _fval(g[2], 0.0) if len(g) > 2 else 0.0
+                f2 = _fval(g[3], 0.0) if len(g) > 3 else 0.0
+                f3 = _fval(g[4], 0.0) if len(g) > 4 else 0.0
+                idx += 1
+
+                h = cards[idx].cut("INIBEA_FULL_3") if idx < len(cards) else []
+                m1 = _fval(h[0], 0.0) if len(h) > 0 else 0.0
+                m2 = _fval(h[1], 0.0) if len(h) > 1 else 0.0
+                m3 = _fval(h[2], 0.0) if len(h) > 2 else 0.0
+                idx += 1
+
+                k = cards[idx].cut("INIBEA_FULL_4") if idx < len(cards) else []
+                epsp = _fval(k[0], 0.0) if len(k) > 0 else 0.0
+                idx += 1
+            else:
+                t0 = c0.tokens()
+                elem_id = int(float(t0[0]))
+                nip = int(float(t0[1])) if len(t0) > 1 else 0
+                ptype = int(float(t0[2])) if len(t0) > 2 else 3
+                idx += 1
+
+                t1 = cards[idx].tokens() if idx < len(cards) else []
+                if len(t1) >= 8:
+                    eimemb, eibend, f1, f2, f3, m1, m2, m3 = [float(x) for x in t1[:8]]
+                    idx += 1
+                else:
+                    eimemb = float(t1[0]) if len(t1) > 0 else 0.0
+                    eibend = float(t1[1]) if len(t1) > 1 else 0.0
+                    f1 = float(t1[2]) if len(t1) > 2 else 0.0
+                    f2 = float(t1[3]) if len(t1) > 3 else 0.0
+                    f3 = float(t1[4]) if len(t1) > 4 else 0.0
+                    idx += 1
+
+                    t2 = cards[idx].tokens() if idx < len(cards) else []
+                    m1 = float(t2[0]) if len(t2) > 0 else 0.0
+                    m2 = float(t2[1]) if len(t2) > 1 else 0.0
+                    m3 = float(t2[2]) if len(t2) > 2 else 0.0
+                    idx += 1
+
+                t3 = cards[idx].tokens() if idx < len(cards) else []
+                epsp = float(t3[0]) if len(t3) > 0 else 0.0
+                idx += 1
+
+            st = model.ini_beams.setdefault(elem_id, InitialBeamState(elem_id=elem_id))
+            st.prop_type = ptype
+            st.nb_integr = nip
+            st.eint_memb = eimemb
+            st.eint_bend = eibend
+            st.force = np.array([f1, f2, f3], dtype=float)
+            st.moment = np.array([m1, m2, m3], dtype=float)
+            st.epsp = epsp
+    else:
+        log.warning(f"/INIBEA/{sub} not ported — block skipped", block.source)
+
+
+def read_inispr(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INISPR/{FULL|DISP|FORCE}[/id]`` (M97)::
+
+        /INISPR/DISP, /INISPR/FORCE:
+          card 1: spring_ID  value
+        /INISPR/FULL:
+          card 1: spring_ID  prop_type  nvars
+          card 2: F_X  D_X  FEP_X  DPL_XP  DPL_XM
+          card 3: L_X  EI
+    """
+    sub = block.parts[1].upper() if len(block.parts) > 1 else "FULL"
+    cards = [c for c in block.cards if not c.is_blank]
+    if not cards:
+        log.error(f"/INISPR/{sub}: missing data card", block.source)
+        return
+
+    if sub in ("DISP", "FORCE"):
+        for c in cards:
+            if block.fixed:
+                f = c.cut("INISPR_SCALAR")
+                elem_id = _ival(f[0])
+                val = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            else:
+                t = c.tokens()
+                elem_id = int(float(t[0]))
+                val = float(t[1]) if len(t) > 1 else 0.0
+
+            st = model.ini_springs.setdefault(elem_id, InitialSpringState(elem_id=elem_id))
+            if sub == "DISP":
+                st.disp = val
+            elif sub == "FORCE":
+                st.force = val
+    elif sub in ("FULL", "SPRING"):
+        idx = 0
+        while idx < len(cards):
+            c0 = cards[idx]
+            if block.fixed:
+                f = c0.cut("INISPR_FULL_1")
+                elem_id = _ival(f[0])
+                ptype = _ival(f[1], 4) if len(f) > 1 else 4
+                idx += 1
+
+                g = cards[idx].cut("INISPR_FULL_2") if idx < len(cards) else []
+                fx = _fval(g[0], 0.0) if len(g) > 0 else 0.0
+                dx = _fval(g[1], 0.0) if len(g) > 1 else 0.0
+                fep = _fval(g[2], 0.0) if len(g) > 2 else 0.0
+                dpl_pos = _fval(g[3], 0.0) if len(g) > 3 else 0.0
+                dpl_neg = _fval(g[4], 0.0) if len(g) > 4 else 0.0
+                idx += 1
+
+                h = cards[idx].cut("INISPR_FULL_3") if idx < len(cards) else []
+                lx = _fval(h[0], 0.0) if len(h) > 0 else 0.0
+                ei = _fval(h[1], 0.0) if len(h) > 1 else 0.0
+                idx += 1
+            else:
+                t0 = c0.tokens()
+                elem_id = int(float(t0[0]))
+                ptype = int(float(t0[1])) if len(t0) > 1 else 4
+                idx += 1
+
+                t1 = cards[idx].tokens() if idx < len(cards) else []
+                fx = float(t1[0]) if len(t1) > 0 else 0.0
+                dx = float(t1[1]) if len(t1) > 1 else 0.0
+                fep = float(t1[2]) if len(t1) > 2 else 0.0
+                dpl_pos = float(t1[3]) if len(t1) > 3 else 0.0
+                dpl_neg = float(t1[4]) if len(t1) > 4 else 0.0
+                idx += 1
+
+                t2 = cards[idx].tokens() if idx < len(cards) else []
+                lx = float(t2[0]) if len(t2) > 0 else 0.0
+                ei = float(t2[1]) if len(t2) > 1 else 0.0
+                idx += 1
+
+            st = model.ini_springs.setdefault(elem_id, InitialSpringState(elem_id=elem_id))
+            st.prop_type = ptype
+            st.force = fx
+            st.disp = dx
+            st.fep = fep
+            st.dpl_pos = dpl_pos
+            st.dpl_neg = dpl_neg
+            st.length = lx
+            st.eint = ei
+    else:
+        log.warning(f"/INISPR/{sub} not ported — block skipped", block.source)
+
+
 KEYWORD_PARSERS: Dict[str, Callable] = {
     "MONVOL": read_monvol,
     "ANALY": read_analy,
@@ -5533,6 +5891,12 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "INIBRI": read_inibri,
     "INISHE": read_inishe,
     "INISH3": read_inish3,
+    "INITRU": read_initru,
+    "INITRUSS": read_initru,
+    "INIBEA": read_inibea,
+    "INIBEAM": read_inibea,
+    "INISPR": read_inispr,
+    "INISPRI": read_inispr,
 }
 
 ENGINE_KEYWORDS_IGNORE = {
@@ -5566,7 +5930,10 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
             log.error(f"while reading /{'/'.join(block.parts)}: {exc}",
                       block.source)
             continue
-        if block.unit_id is not None and block.key0 not in ("FAIL", "ADMAS", "TABLE", "INIVOL", "INIBRI", "INISHE", "INISH3"):
+        if block.unit_id is not None and block.key0 not in (
+            "FAIL", "ADMAS", "TABLE", "INIVOL", "INIBRI", "INISHE", "INISH3",
+            "INITRU", "INITRUSS", "INIBEA", "INIBEAM", "INISPR", "INISPRI"
+        ):
             # /FAIL's second trailing id is its OWN option id in the
             # legacy dialect (read_fail handles it), and /ADMAS headers
             # are /ADMAS/type/admas_ID with NO unit slot (cfg admas.cfg;

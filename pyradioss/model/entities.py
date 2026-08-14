@@ -613,27 +613,59 @@ class Damping:
 
 @dataclass
 class Sensor:
-    """/SENSOR (M6, M84): an event source gating loads and interfaces.
+    """/SENSOR (M6, M84, M97): an event source gating loads and interfaces.
 
     Fortran origin: ``starter/source/tools/sensor/hm_read_sensor.F`` +
     ``engine/source/tools/sensor/``. Ported types:
-    * ``kind='TIME'`` — fires at tdelay
-    * ``kind='DISP'`` — fires when displacement magnitude of node_id exceeds dmin
-    * ``kind='VEL'``  — fires when velocity magnitude of node_id exceeds vmax
-    * ``kind='NOT'``  — active when sens_id1 is not active
-    * ``kind='AND'``  — active when both sens_id1 and sens_id2 are active
-    * ``kind='OR'``   — active when either sens_id1 or sens_id2 is active
+    * ``kind='TIME'``   — fires at tdelay
+    * ``kind='DISP'``   — fires when displacement magnitude of node_id exceeds dmin
+    * ``kind='VEL'``    — fires when velocity magnitude of node_id exceeds vmax
+    * ``kind='NOT'``    — active when sens_id1 is not active
+    * ``kind='AND'``    — active when both sens_id1 and sens_id2 are active
+    * ``kind='OR'``     — active when either sens_id1 or sens_id2 is active
+    * ``kind='DIST'``   — fires based on distance between node_id1 and node_id2 (M97)
+    * ``kind='ENERGY'`` — fires on part/system internal or kinetic energy thresholds (M97)
+    * ``kind='INTER'``  — fires on contact interface force thresholds (M97)
+    * ``kind='RBODY'``  — fires on rigid body force/moment thresholds (M97)
+    * ``kind='TEMP'``   — fires on nodal/group temperature thresholds (M97)
     Sensors latch or update dynamically — see engine/sensors.py."""
 
     id: int
-    kind: str              # 'TIME' | 'DISP' | 'VEL' | 'NOT' | 'AND' | 'OR'
+    kind: str              # 'TIME' | 'DISP' | 'VEL' | 'NOT' | 'AND' | 'OR' | 'DIST' | 'ENERGY' | 'INTER' | 'RBODY' | 'TEMP'
     tdelay: float = 0.0    # Time delay before activation
     node_id: int = 0       # DISP, VEL
-    dmin: float = 0.0      # DISP
+    dmin: float = 0.0      # DISP, DIST
+    dmax: float = 0.0      # DIST
     vmax: float = 0.0      # VEL
-    fcut: float = 0.0      # VEL
+    fcut: float = 0.0      # VEL, INTER
     sens_id1: int = 0      # NOT, AND, OR
     sens_id2: int = 0      # AND, OR
+    # DIST (M97)
+    node_id1: int = 0
+    node_id2: int = 0
+    # ENERGY (M97)
+    part_id: int = 0
+    subset_id: int = 0
+    iselect: int = 1
+    iemin: float = -1e30
+    iemax: float = 1e30
+    kemin: float = -1e30
+    kemax: float = 1e30
+    # INTER (M97)
+    int_id: int = 0
+    # RBODY (M97)
+    rbody_id: int = 0
+    # Common force/moment thresholds & direction (M97)
+    dir: str = ""
+    fmin: float = 0.0
+    fmax: float = 0.0
+    # TEMP (M97)
+    grnod_id: int = 0
+    tempmax: float = 1e30
+    tempmin: float = 0.0
+    tempmean: float = 1e30
+    # Duration limit (M97)
+    tmin: float = 0.0
     title: str = ""
 
 
@@ -1190,5 +1222,52 @@ class InitialShellState:
     h_energy: np.ndarray = field(default_factory=lambda: np.zeros(3)) # H1, H2, H3
 
 
+@dataclass
+class InitialTrussState:
+    """/INITRU (M97): initial state for truss elements.
 
+    Fortran origin: ``starter/source/elements/initia/hm_read_inistate_d00.F`` and
+    ``starter/source/elements/truss/tsigini.F``.
+    """
+    elem_id: int
+    prop_type: int = 2
+    eint: float = 0.0      # initial internal energy
+    force: float = 0.0     # initial axial force / tension
+    area: float = 0.0      # initial area override
+    epsp: float = 0.0      # plastic strain
+
+
+@dataclass
+class InitialBeamState:
+    """/INIBEA (M97): initial state for beam elements.
+
+    Fortran origin: ``starter/source/elements/initia/hm_read_inistate_d00.F`` and
+    ``starter/source/elements/beam/bsigini.F``.
+    """
+    elem_id: int
+    prop_type: int = 3
+    nb_integr: int = 0
+    eint_memb: float = 0.0 # membrane internal energy
+    eint_bend: float = 0.0 # bending internal energy
+    force: np.ndarray = field(default_factory=lambda: np.zeros(3))   # [Fx, Fy, Fz]
+    moment: np.ndarray = field(default_factory=lambda: np.zeros(3))  # [Mx, My, Mz]
+    epsp: float = 0.0      # plastic strain
+
+
+@dataclass
+class InitialSpringState:
+    """/INISPR (M97): initial state for spring elements.
+
+    Fortran origin: ``starter/source/elements/initia/hm_read_inistate_d00.F`` and
+    ``starter/source/elements/spring/rinit3.F``.
+    """
+    elem_id: int
+    prop_type: int = 4
+    force: float = 0.0     # initial force
+    disp: float = 0.0      # initial displacement
+    fep: float = 0.0       # elasto-plastic limit force
+    dpl_pos: float = 0.0   # positive plastic displacement
+    dpl_neg: float = 0.0   # negative plastic displacement
+    length: float = 0.0    # initial length
+    eint: float = 0.0      # internal energy
 

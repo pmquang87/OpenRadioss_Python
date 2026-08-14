@@ -39,6 +39,7 @@ from .entities import (
     ConvectionLoad, InivolContainer, InitialVolume,
     RadiationLoad, ImposedFlux, InitialTemperature,
     InitialBrickState, InitialShellState,
+    InitialTrussState, InitialBeamState, InitialSpringState,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -574,6 +575,9 @@ class Model:
         self.inivel: List[InitialVelocity] = []
         self.ini_bricks: Dict[int, InitialBrickState] = {}  # /INIBRI (M96)
         self.ini_shells: Dict[int, InitialShellState] = {}  # /INISHE, /INISH3 (M96)
+        self.ini_trusses: Dict[int, InitialTrussState] = {} # /INITRU (M97)
+        self.ini_beams: Dict[int, InitialBeamState] = {}    # /INIBEA (M97)
+        self.ini_springs: Dict[int, InitialSpringState] = {} # /INISPR (M97)
         self.gravity: List[Gravity] = []
         self.cloads: List[ConcentratedLoad] = []
         self.centri_loads: List[CentrifugalLoad] = []  # /LOAD/CENTRI (M93)

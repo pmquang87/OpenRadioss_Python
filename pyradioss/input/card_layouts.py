@@ -318,6 +318,44 @@ LAYOUTS: Dict[str, List[int]] = {
     "INISHE_STRS_3": [20, 20, 20, 20, 20],
     # INISHE/strs_f.cfg: eps_p sigma_b1 sigma_b2 sigma_b12
     "INISHE_STRS_4": [20, 20, 20, 20],
+    # INITRU (M97)
+    # INITRU/epsp.cfg, force.cfg, tens.cfg: truss_ID value
+    "INITRU_SCALAR": [10, 20],
+    # INITRU/full.cfg: truss_ID prop_type EINT FOR AREA EPSP
+    "INITRU_FULL": [10, 10, 20, 20, 20, 20],
+    # INIBEA (M97)
+    # INIBEA/force.cfg, moment.cfg, epsp.cfg: beam_ID value
+    "INIBEA_SCALAR": [10, 20],
+    # INIBEA/full.cfg card 1: beam_ID nb_integr prop_type
+    "INIBEA_FULL_1": [10, 10, 10],
+    # INIBEA/full.cfg card 2: EImemb EIbend F1 F2 F3
+    "INIBEA_FULL_2": [20, 20, 20, 20, 20],
+    # INIBEA/full.cfg card 3: M1 M2 M3
+    "INIBEA_FULL_3": [20, 20, 20],
+    # INIBEA/full.cfg card 4: EpsilonP
+    "INIBEA_FULL_4": [20],
+    # INISPR (M97)
+    # INISPR/disp.cfg, force.cfg: spring_ID value
+    "INISPR_SCALAR": [10, 20],
+    # INISPR/full.cfg card 1: spring_ID prop_type nvars
+    "INISPR_FULL_1": [10, 10, 10],
+    # INISPR/full.cfg card 2: F_X D_X FEP_X DPL_XP DPL_XM
+    "INISPR_FULL_2": [20, 20, 20, 20, 20],
+    # INISPR/full.cfg card 3: L_X EI
+    "INISPR_FULL_3": [20, 20],
+    # SENSOR extended (M97)
+    # SENSOR/sensor_dist.cfg: node_ID1 node_ID2 Dmin Dmax Tmin
+    "SENSOR_DIST_2": [10, 10, 20, 20, 20],
+    # SENSOR/sensor_energy.cfg card 2: part_ID subset_ID Iselect
+    "SENSOR_ENERGY_2": [10, 10, 10],
+    # SENSOR/sensor_energy.cfg card 3: IEmin IEmax KEmin KEmax Tmin
+    "SENSOR_ENERGY_3": [20, 20, 20, 20, 20],
+    # SENSOR/sensor_inter.cfg: int_ID DIR Fmin Fmax Tmin Fcut
+    "SENSOR_INTER_2": [10, 10, 20, 20, 20, 20],
+    # SENSOR/sensor_rbody.cfg: rbody_ID DIR Fmin Fmax Tmin
+    "SENSOR_RBODY_2": [10, 10, 20, 20, 20],
+    # SENSOR/sensor_temp.cfg: Grnod_Id Tempmax Tempmin Tempmean Tmin
+    "SENSOR_TEMP_2": [10, 20, 20, 20, 20],
     # LOADS/impvel.cfg + impdisp.cfg (radioss120):
     # CARD("%10d%10s%10d%10d%10d%10d%10d",
     #      fct, Dir, skew, sens, grnod, frame, Icoor)

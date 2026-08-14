@@ -102,6 +102,7 @@ real history is 41 milestones. One line each:
 | M94 | Add /CONVEC thermal convection and /INIVOL initial volume fraction |
 | M95 | Add /RADIATION, /IMPFLUX, /INITEMP thermal loads & initial conditions |
 | M96 | Add /INIBRI and /INISHE / /INISH3 initial element state suite |
+| M97 | Add 1D inistate (/INITRU, /INIBEA, /INISPR) and extended /SENSOR suite |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
