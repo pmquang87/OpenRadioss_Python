@@ -84,6 +84,8 @@ real history is 41 milestones. One line each:
 | M64 | Solid HEPH Element (ISOLID=24) |
 | M65 | Implement LAW36 strain rate extrapolation |
 | M66 | Implement TYPE32 pretensioner |
+| M67 | Divergence backstops: extend KE to IE/HE checks |
+| M68—M80 | DeckWriter support gaps closed, input parser fixes for /BOX, /TH, /RBODY, /RWALL; implemented LAW83, LAW6, /FAIL/TAB1, /FAIL/SNCONNECT |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
