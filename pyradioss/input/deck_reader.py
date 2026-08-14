@@ -119,7 +119,7 @@ class Card:
     # -- typed helpers used by the keyword parsers ---------------------------
     def ints(self) -> List[int]:
         """All tokens parsed as ints (for connectivity cards)."""
-        return [int(t) for t in self.tokens()]
+        return [_to_int(t) for t in self.tokens()]
 
     def floats(self) -> List[float]:
         """All tokens parsed as floats (Fortran-style '1.0D3' accepted)."""
@@ -132,6 +132,13 @@ def _to_float(tok: str) -> float:
         return float(tok)
     except ValueError:
         return float(tok.replace("D", "E").replace("d", "e"))
+
+def _to_int(tok: str) -> int:
+    """Parse an integer: allows float strings by truncating them (e.g., '500.0' -> 500)."""
+    try:
+        return int(tok)
+    except ValueError:
+        return int(float(tok))
 
 
 @dataclass
@@ -285,13 +292,13 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
                 kw_parts = parts
                 if len(parts) > 1:
                     try:
-                        user_id = int(parts[-1])
+                        user_id = _to_int(parts[-1])
                         kw_parts = parts[:-1]
                     except ValueError:
                         user_id = None
                 if user_id is not None and len(parts) > 2:
                     try:
-                        first = int(parts[-2])
+                        first = _to_int(parts[-2])
                     except ValueError:
                         first = None
                     if first is not None:

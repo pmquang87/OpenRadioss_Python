@@ -136,6 +136,38 @@ class RigidWalls:
                                 f"treated as driven at its (zero) "
                                 f"velocity", "RWALL INIT")
                     driven = True
+            if wnode >= 0:
+                if np.isnan(rw.point).any():
+                    rw.point = model.x0[wnode].copy()
+                    if rw.geom in ("PLANE", "CYL", "PARAL"):
+                        # For PLANE/CYL, normal holds M1. For PARAL, normal holds M1 and axis2 holds M2 (we will fix parser to store M1 in normal and M2 in axis2).
+                        if rw.geom == "PARAL":
+                            m1 = rw.normal
+                            m2 = rw.axis2
+                            a1 = m1 - rw.point
+                            a2 = m2 - rw.point
+                            nn1 = np.linalg.norm(a1)
+                            nn2 = np.linalg.norm(a2)
+                            if nn1 < 1e-20 or nn2 < 1e-20:
+                                log.error(f"/RWALL/{rw.id}: moving wall node coincides with M1 or M2", "RWALL INIT")
+                            else:
+                                rw.axis1 = a1 / nn1
+                                rw.axis2 = a2 / nn2
+                                n = np.cross(rw.axis1, rw.axis2)
+                                nn = np.linalg.norm(n)
+                                if nn < 1e-20:
+                                    log.error(f"/RWALL/{rw.id}: M, M1 and M2 are collinear", "RWALL INIT")
+                                else:
+                                    rw.normal = n / nn
+                        else:
+                            n = rw.normal - rw.point
+                            nn = np.linalg.norm(n)
+                            if nn < 1e-20:
+                                log.error(f"/RWALL/{rw.id}: moving wall node "
+                                          f"and M1 coincide (zero normal)",
+                                          "RWALL INIT")
+                            else:
+                                rw.normal = n / nn
             self.walls.append((rw, idx, wnode, driven,
                                model.x0[wnode].copy() if wnode >= 0
                                else None))
