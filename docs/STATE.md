@@ -88,6 +88,7 @@ real history is 41 milestones. One line each:
 | M68—M80 | DeckWriter support gaps closed, input parser fixes for /BOX, /TH, /RBODY, /RWALL; implemented LAW83, LAW6, /FAIL/TAB1, /FAIL/SNCONNECT |
 | M81 | /RWALL search distance (Dist) implemented and /RBODY sens_ID parsed for starter topology checks |
 | M82 | Input parser fixes: /PRINT card format in Engine; silent Starter bypass for Engine output requests (/H3D, /MON, /PARITH, /RFILE, /ANIM, etc.) to clear coverage noise |
+| M83 | Implement /IMPL/DT/FIXP in Engine parser (deferred in M11 implicit completeness) |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

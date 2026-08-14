@@ -124,11 +124,12 @@ class EngineControls:
     # imp_dt.F IMP_DTN with IDTC = 1): cut on non-convergence, grow back
     # toward /IMPL/DTINI on easy steps. Defaults are PORT choices where the
     # original reads them from the card (documented in statics.py).
-    impl_dt_itw: int = 6          # NL_DTP — target iterations (grow below)
-    impl_dt_scaleup: float = 1.1  # SCAL_DTP — growth factor per easy step
-    impl_dt_scaledn: float = 0.5  # SCAL_DTN — cut factor on non-convergence
+    impl_dt_itw: int = 6          # NL_DTP - target iterations (grow below)
+    impl_dt_scaleup: float = 1.1  # SCAL_DTP - growth factor per easy step
+    impl_dt_scaledn: float = 0.5  # SCAL_DTN - cut factor on non-convergence
     impl_dt_min: float = 0.0      # /IMPL/DT/STOP dt_min (0 = dtini * 1e-4)
     impl_dt_max: float = 0.0      # /IMPL/DT/STOP dt_max (0 = dtini)
+    impl_dt_fixp: list[float] = field(default_factory=list) # /IMPL/DT/FIXP sequence
     # -- M11 /IMPL/BUCKL (imp_buck.F): linearized buckling extraction after
     # the static prestress increments. 0 = off; 1|2 mirrors /IMPL/BUCKL/n.
     impl_buckl: int = 0           # /IMPL/BUCKL/n present

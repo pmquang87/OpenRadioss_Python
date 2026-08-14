@@ -366,9 +366,19 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         # IDTC 2/3 variants — accepted, unused here
                         if len(vals) > 3 and 0.0 < vals[3] < 1.0:
                             ec.impl_dt_scaledn = vals[3]
+                    elif sub2 == "FIXP":
+                        fixp_vals = []
+                        for card in block.cards:
+                            fixp_vals.extend(card.floats())
+                        if len(fixp_vals) > 100:
+                            log.warning(f"/IMPL/DT/FIXP/{block.user_id} maximum "
+                                        f"100 fix points permitted", block.source)
+                            fixp_vals = fixp_vals[:100]
+                        # Fortran reads into DTIMPF and then calls ORDER_DTF
+                        ec.impl_dt_fixp = sorted(fixp_vals)
                     else:
                         log.warning(f"/IMPL/DT/{sub2} not ported — ignored "
-                                    f"(supports STOP, 1; the IDTC 2/3 "
+                                    f"(supports STOP, 1, FIXP; the IDTC 2/3 "
                                     f"arc-length step controls are "
                                     f"deferred)", block.source)
                 elif sub == "BUCKL":
