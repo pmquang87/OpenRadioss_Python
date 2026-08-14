@@ -341,3 +341,26 @@ def check_model(model: Model, log: MessageLog) -> None:
                 if sid not in defined:
                     log.error(f"/TH/SECT/{th.id}: unknown section {sid}",
                               "CROSS REF")
+
+    # Cyclic boundary conditions (M99)
+    for cid, cb in getattr(model, "cyclic_bcs", {}).items():
+        if cb.grnod1_id not in model.node_groups:
+            log.error(f"/BCS/CYCLIC/{cid}: node group 1 {cb.grnod1_id} not defined", "CROSS REF")
+        if cb.grnod2_id not in model.node_groups:
+            log.error(f"/BCS/CYCLIC/{cid}: node group 2 {cb.grnod2_id} not defined", "CROSS REF")
+        if cb.skew_id > 0 and cb.skew_id not in model.skews:
+            log.error(f"/BCS/CYCLIC/{cid}: skew {cb.skew_id} not defined", "CROSS REF")
+
+    # Solid part perturbations (M99)
+    part_groups = model.egroups.get("PART", {})
+    for pid, pt in getattr(model, "perturbations", {}).items():
+        if pt.grpart_id > 0 and pt.grpart_id not in part_groups and pt.grpart_id not in model.parts:
+            log.error(f"/PERTURB/PART/SOLID/{pid}: part group {pt.grpart_id} not defined", "CROSS REF")
+
+    # Blast loads (M99)
+    for bid, pb in getattr(model, "pblast_loads", {}).items():
+        if pb.surf_id > 0 and pb.surf_id not in model.surfaces:
+            log.error(f"/LOAD/PBLAST/{bid}: surface {pb.surf_id} not defined", "CROSS REF")
+        if pb.node_id > 0 and pb.node_id not in model._id2idx:
+            log.error(f"/LOAD/PBLAST/{bid}: detonation node {pb.node_id} not defined", "CROSS REF")
+

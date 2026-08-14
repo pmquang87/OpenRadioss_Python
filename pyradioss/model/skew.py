@@ -232,6 +232,13 @@ class SkewSet:
             return 0
         return self._by_key.get((kind, int(user_id)), -1)
 
+    def __contains__(self, item) -> bool:
+        if isinstance(item, tuple):
+            return item in self._by_key
+        if isinstance(item, (int, np.integer)):
+            return ("SKEW", int(item)) in self._by_key or ("FRAME", int(item)) in self._by_key
+        return False
+
     def has_moving(self) -> bool:
         return len(self._mov_rows) > 0
 

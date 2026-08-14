@@ -1271,3 +1271,58 @@ class InitialSpringState:
     length: float = 0.0    # initial length
     eint: float = 0.0      # internal energy
 
+
+@dataclass
+class CyclicBoundaryCondition:
+    """/BCS/CYCLIC (M99): cyclic boundary condition linking two node groups.
+
+    Fortran origin: ``starter/source/model/bcs/hm_read_bcscyclic.F`` and
+    ``engine/source/assembly/bcs/``.
+    """
+    id: int
+    title: str = ""
+    skew_id: int = 0
+    grnod1_id: int = 0
+    grnod2_id: int = 0
+
+
+@dataclass
+class SolidPartPerturbation:
+    """/PERTURB/PART/SOLID (M99): material/geometric perturbation on solid parts.
+
+    Fortran origin: ``starter/source/model/perturbation/hm_read_perturb_solid.F``.
+    """
+    id: int
+    title: str = ""
+    f_mean: float = 0.0
+    deviation: float = 0.0
+    min_cut: float = 0.0
+    max_cut: float = 0.0
+    seed: int = 0
+    idistri: int = 2
+    grpart_id: int = 0
+    var_name: str = ""
+
+
+@dataclass
+class PBlastLoad:
+    """/LOAD/PBLAST (M99): air/ground blast pressure load.
+
+    Fortran origin: ``starter/source/model/loads/hm_read_pblast.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    exp_data: int = 1
+    i_tshift: int = 1
+    ndt: int = 0
+    iz: int = 2
+    imodel: int = 0
+    node_id: int = 0
+    xdet: float = 0.0
+    ydet: float = 0.0
+    zdet: float = 0.0
+    tdet: float = 0.0
+    wtnt: float = 0.0
+    pmin: float = 0.0
+

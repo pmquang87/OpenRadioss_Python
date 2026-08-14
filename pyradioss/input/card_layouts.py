@@ -471,6 +471,36 @@ LAYOUTS: Dict[str, List[int]] = {
     "TRANSFORM_SYM_2": [10, 20, 20, 20],
     # TRANSFORM/sca.cfg (radioss100): CARD("%10d%20lg%20lg%20lg%10d", GR_NODE, SX, SY, SZ, node1)
     "TRANSFORM_SCA": [10, 20, 20, 20, 10, 10],
+    # TRANSFORM/pos.cfg (radioss2021) (M99):
+    # CARD("%10d%10d%10d%10d%10d%10d%10d%10s%10s%10d", GR_NODE, n1..n6, blank, blank, SUBMODEL)
+    "TRANSFORM_POS_1": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+    # CARD("%10s%20lg%20lg%20lg", blank, X, Y, Z) per point
+    "TRANSFORM_POS_PT": [10, 20, 20, 20],
+
+    # BCS/CYCLIC (M99)
+    # LOADS/bcs_cyclic.cfg: CARD("%10d%10d%10d", skew_ID, grnd_ID1, grnd_ID2)
+    "BCS_CYCLIC": [10, 10, 10],
+
+    # PERTURB/PART/SOLID (M99)
+    # PERTURBATION/perturb_part_solid.cfg:
+    # card 1: CARD("%20lg%20lg%20lg%20lg%10d%10d", F_Mean, Deviation, Min_cut, Max_cut, Seed, Idistri)
+    "PERTURB_PART_SOLID_1": [20, 20, 20, 20, 10, 10],
+    # card 2: CARD("%10d%20s", grpart_ID, chvar)
+    "PERTURB_PART_SOLID_2": [10, 20],
+
+    # LOAD/PBLAST (M99)
+    # LOADS/pblast.cfg (radioss2021):
+    # card 1: CARD("%10d%10d%10d%10d%10d%10d%10s%10s%10s%10d", surf_ID, Exp_data, I_tshift, Ndt, IZ, Imodel, blank, blank, blank, Node_id)
+    "LOAD_PBLAST_1": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+    # card 2: CARD("%20lg%20lg%20lg%20lg%20lg", Xdet, Ydet, Zdet, Tdet, WTNT)
+    "LOAD_PBLAST_2": [20, 20, 20, 20, 20],
+    # card 3: CARD("%20lg", PMIN)
+    "LOAD_PBLAST_3": [20],
+
+    # DEF_INTER/TYPE25 (M99)
+    # CARDS/def_intertype_25.cfg:
+    # CARD("%10d%10d%10d%10d%10d%10d%10d%10d", Istf, Igap, Irem_i2, Idel, Itied, Ishape, Irs, Iedge)
+    "DEF_INTER_25": [10, 10, 10, 10, 10, 10, 10, 10],
 }
 
 

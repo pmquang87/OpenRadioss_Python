@@ -40,6 +40,7 @@ from .entities import (
     RadiationLoad, ImposedFlux, InitialTemperature,
     InitialBrickState, InitialShellState,
     InitialTrussState, InitialBeamState, InitialSpringState,
+    CyclicBoundaryCondition, SolidPartPerturbation, PBlastLoad,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -571,6 +572,7 @@ class Model:
 
         # Loads / constraints / contacts
         self.bcs: List[BoundaryCondition] = []
+        self.cyclic_bcs: Dict[int, CyclicBoundaryCondition] = {} # /BCS/CYCLIC (M99)
         self.ale_bcs: List[AleBoundaryCondition] = []
         self.inivel: List[InitialVelocity] = []
         self.ini_bricks: Dict[int, InitialBrickState] = {}  # /INIBRI (M96)
@@ -578,6 +580,7 @@ class Model:
         self.ini_trusses: Dict[int, InitialTrussState] = {} # /INITRU (M97)
         self.ini_beams: Dict[int, InitialBeamState] = {}    # /INIBEA (M97)
         self.ini_springs: Dict[int, InitialSpringState] = {} # /INISPR (M97)
+        self.perturbations: Dict[int, SolidPartPerturbation] = {} # /PERTURB/PART/SOLID (M99)
         self.gravity: List[Gravity] = []
         self.cloads: List[ConcentratedLoad] = []
         self.centri_loads: List[CentrifugalLoad] = []  # /LOAD/CENTRI (M93)
@@ -591,6 +594,8 @@ class Model:
         self.initemp: List[InitialTemperature] = []    # /INITEMP (M95)
         self.inivol: List[InitialVolume] = []          # /INIVOL  (M94)
         self.ploads: List[PressureLoad] = []           # /PLOAD   (M5)
+        self.pblast_loads: Dict[int, PBlastLoad] = {}  # /LOAD/PBLAST (M99)
+        self.def_inter: Dict[str, Any] = {}            # /DEF_INTER (M99)
         self.admas: List[AddedMass] = []               # /ADMAS   (M5)
         self.rwalls: List[RigidWall] = []
         self.rbodies: List[RigidBody] = []             # /RBODY + /RBE2 (M5)

@@ -241,6 +241,66 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
                                   sz if sz != 0.0 else 1.0], dtype=float)
                 model.x0[idx] = center + (model.x0[idx] - center) * scale
 
+            elif tr_type == "POS":
+                grnod, nodes, pts, sub_id = args
+                idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
+                if idx is None or len(idx) == 0:
+                    continue
+                p = np.array(pts, dtype=float)
+                n1, n2, n3, n4, n5, n6 = nodes
+                node_list = [n1, n2, n3, n4, n5, n6]
+                skip = False
+                for i, nid in enumerate(node_list):
+                    if nid > 0:
+                        try:
+                            p[i] = model.x0[model.node_index(nid)].copy()
+                        except KeyError as exc:
+                            log.warning(f"/TRANSFORM/POS/{tr_id}: node {exc} not found")
+                            skip = True
+                            break
+                if skip:
+                    continue
+
+                # Build orthonormal frame 1 (P1, P2, P3)
+                v12 = p[1] - p[0]
+                norm12 = np.linalg.norm(v12)
+                if norm12 < 1e-20:
+                    log.warning(f"/TRANSFORM/POS/{tr_id}: source frame X-axis has zero length")
+                    continue
+                ex1 = v12 / norm12
+                v13 = p[2] - p[0]
+                ez1_raw = np.cross(ex1, v13)
+                normz1 = np.linalg.norm(ez1_raw)
+                if normz1 < 1e-20:
+                    log.warning(f"/TRANSFORM/POS/{tr_id}: source frame points 1, 2, 3 are collinear")
+                    continue
+                ez1 = ez1_raw / normz1
+                ey1 = np.cross(ez1, ex1)
+                R1 = np.column_stack([ex1, ey1, ez1])
+
+                # Build orthonormal frame 2 (P4, P5, P6)
+                v45 = p[4] - p[3]
+                norm45 = np.linalg.norm(v45)
+                if norm45 < 1e-20:
+                    log.warning(f"/TRANSFORM/POS/{tr_id}: target frame X-axis has zero length")
+                    continue
+                ex2 = v45 / norm45
+                v46 = p[5] - p[3]
+                ez2_raw = np.cross(ex2, v46)
+                normz2 = np.linalg.norm(ez2_raw)
+                if normz2 < 1e-20:
+                    log.warning(f"/TRANSFORM/POS/{tr_id}: target frame points 4, 5, 6 are collinear")
+                    continue
+                ez2 = ez2_raw / normz2
+                ey2 = np.cross(ez2, ex2)
+                R2 = np.column_stack([ex2, ey2, ez2])
+
+                # Total rotation: R = R2 @ R1.T
+                R = R2 @ R1.T
+                O1 = p[0]
+                O2 = p[3]
+                model.x0[idx] = O2 + (model.x0[idx] - O1) @ R.T
+
 
 
         # 2. finalize: ids->indices, element groups, node groups, surfaces,

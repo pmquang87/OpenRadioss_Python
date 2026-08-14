@@ -2553,10 +2553,12 @@ def read_frame(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 # ============================================================================
 
 def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/BCS/bcs_ID``::
+    """``/BCS/bcs_ID`` and ``/BCS/CYCLIC/bcs_ID``::
 
         card 1:  title
         card 2:  Trarot   skew_ID   grnod_ID
+        or (for CYCLIC):
+        card 2:  skew_ID  grnd_ID1  grnd_ID2
 
     ``Trarot`` is the classic pair of 3-digit binary flags
     ``XYZ XYZ`` — first triple = translations, second = rotations,
@@ -2571,6 +2573,28 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     grnod_ID in the following %10d columns — a blank skew column made
     the token view miscount ('card 2 needs tra rot skew grnod').
     """
+    from ..model.entities import CyclicBoundaryCondition
+
+    if len(block.parts) > 1 and block.parts[1].upper() == "CYCLIC":
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or (block.fixed and cards[0].is_blank):
+            log.error(f"/BCS/CYCLIC/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("BCS_CYCLIC")
+            skew = _ival(f[0]) if len(f) > 0 else 0
+            grnd1 = _ival(f[1]) if len(f) > 1 else 0
+            grnd2 = _ival(f[2]) if len(f) > 2 else 0
+        else:
+            t = cards[0].tokens()
+            skew = int(float(t[0])) if len(t) > 0 else 0
+            grnd1 = int(float(t[1])) if len(t) > 1 else 0
+            grnd2 = int(float(t[2])) if len(t) > 2 else 0
+        model.cyclic_bcs[block.user_id] = CyclicBoundaryCondition(
+            id=block.user_id, title=title, skew_id=skew, grnod1_id=grnd1, grnod2_id=grnd2
+        )
+        return
+
     title, cards = _fixed_data(block) if block.fixed \
         else _title_and_data(block)
     if not cards or (block.fixed and cards[0].is_blank):
@@ -2880,13 +2904,125 @@ def read_load_centri(block: KeywordBlock, model: Model, log: MessageLog) -> None
     model.centri_loads.append(cl)
 
 
+def read_pblast(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/LOAD/PBLAST/id`` or ``/PBLAST/id`` (M99): Blast pressure load.
+
+    Fortran origin: ``starter/source/model/loads/hm_read_pblast.F``.
+    Card format:
+        card 1: title
+        card 2: surf_ID  Exp_data  I_tshift  Ndt  IZ  Imodel  (3x blank)  Node_id
+        card 3: Xdet  Ydet  Zdet  Tdet  WTNT
+        card 4 (optional): PMIN
+    """
+    from ..model.entities import PBlastLoad
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/LOAD/PBLAST/{block.user_id}: missing data cards", block.source)
+        return
+
+    if block.fixed:
+        c1 = cards[0].cut("LOAD_PBLAST_1")
+        surf_id = _ival(c1[0]) if len(c1) > 0 else 0
+        exp_data = _ival(c1[1], 1) if len(c1) > 1 else 1
+        i_tshift = _ival(c1[2], 1) if len(c1) > 2 else 1
+        ndt = _ival(c1[3]) if len(c1) > 3 else 0
+        iz = _ival(c1[4], 2) if len(c1) > 4 else 2
+        imodel = _ival(c1[5]) if len(c1) > 5 else 0
+        node_id = _ival(c1[9]) if len(c1) > 9 else 0
+
+        c2 = cards[1].cut("LOAD_PBLAST_2") if len(cards) > 1 else []
+        xdet = _fval(c2[0]) if len(c2) > 0 else 0.0
+        ydet = _fval(c2[1]) if len(c2) > 1 else 0.0
+        zdet = _fval(c2[2]) if len(c2) > 2 else 0.0
+        tdet = _fval(c2[3]) if len(c2) > 3 else 0.0
+        wtnt = _fval(c2[4]) if len(c2) > 4 else 0.0
+
+        pmin = 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            c3 = cards[2].cut("LOAD_PBLAST_3")
+            pmin = _fval(c3[0]) if len(c3) > 0 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+        exp_data = int(float(t1[1])) if len(t1) > 1 else 1
+        i_tshift = int(float(t1[2])) if len(t1) > 2 else 1
+        ndt = int(float(t1[3])) if len(t1) > 3 else 0
+        iz = int(float(t1[4])) if len(t1) > 4 else 2
+        imodel = int(float(t1[5])) if len(t1) > 5 else 0
+        node_id = int(float(t1[6])) if len(t1) > 6 else 0
+
+        t2 = cards[1].tokens() if len(cards) > 1 else []
+        xdet = float(t2[0]) if len(t2) > 0 else 0.0
+        ydet = float(t2[1]) if len(t2) > 1 else 0.0
+        zdet = float(t2[2]) if len(t2) > 2 else 0.0
+        tdet = float(t2[3]) if len(t2) > 3 else 0.0
+        wtnt = float(t2[4]) if len(t2) > 4 else 0.0
+
+        pmin = float(cards[2].tokens()[0]) if len(cards) > 2 and cards[2].tokens() else 0.0
+
+    model.pblast_loads[block.user_id] = PBlastLoad(
+        id=block.user_id, title=title, surf_id=surf_id, exp_data=exp_data,
+        i_tshift=i_tshift, ndt=ndt, iz=iz, imodel=imodel, node_id=node_id,
+        xdet=xdet, ydet=ydet, zdet=zdet, tdet=tdet, wtnt=wtnt, pmin=pmin
+    )
+
+
+def read_perturb(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PERTURB/PART/SOLID/id`` (M99): Part parameter random / Gaussian perturbation.
+
+    Fortran origin: ``starter/source/model/perturbation/hm_read_perturb_solid.F``.
+    Card format:
+        card 1: title
+        card 2: F_Mean  Deviation  Min_cut  Max_cut  Seed  Idistri
+        card 3: grpart_ID  parameter
+    """
+    from ..model.entities import SolidPartPerturbation
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/PERTURB/{block.user_id}: missing data cards", block.source)
+        return
+
+    if block.fixed:
+        c1 = cards[0].cut("PERTURB_PART_SOLID_1")
+        f_mean = _fval(c1[0]) if len(c1) > 0 else 0.0
+        dev = _fval(c1[1]) if len(c1) > 1 else 0.0
+        min_cut = _fval(c1[2]) if len(c1) > 2 else 0.0
+        max_cut = _fval(c1[3]) if len(c1) > 3 else 0.0
+        seed = _ival(c1[4]) if len(c1) > 4 else 0
+        idistri = _ival(c1[5], 2) if len(c1) > 5 else 2
+
+        c2 = cards[1].cut("PERTURB_PART_SOLID_2") if len(cards) > 1 else []
+        grpart_id = _ival(c2[0]) if len(c2) > 0 else 0
+        chvar = c2[1].strip() if len(c2) > 1 else ""
+    else:
+        t1 = cards[0].tokens()
+        f_mean = float(t1[0]) if len(t1) > 0 else 0.0
+        dev = float(t1[1]) if len(t1) > 1 else 0.0
+        min_cut = float(t1[2]) if len(t1) > 2 else 0.0
+        max_cut = float(t1[3]) if len(t1) > 3 else 0.0
+        seed = int(float(t1[4])) if len(t1) > 4 else 0
+        idistri = int(float(t1[5])) if len(t1) > 5 else 2
+
+        t2 = cards[1].tokens() if len(cards) > 1 else []
+        grpart_id = int(float(t2[0])) if len(t2) > 0 else 0
+        chvar = t2[1].strip() if len(t2) > 1 else ""
+
+    model.perturbations[block.user_id] = SolidPartPerturbation(
+        id=block.user_id, title=title, f_mean=f_mean, deviation=dev,
+        min_cut=min_cut, max_cut=max_cut, seed=seed, idistri=idistri,
+        grpart_id=grpart_id, var_name=chvar
+    )
+
+
 def read_load(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/LOAD/<subtype>/load_ID`` dispatcher (M93)."""
+    """``/LOAD/<subtype>/load_ID`` dispatcher (M93, M99)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub == "CENTRI":
         read_load_centri(block, model, log)
+    elif sub == "PBLAST":
+        read_pblast(block, model, log)
     else:
-        log.warning(f"/LOAD/{sub} not ported (CENTRI supported)", block.source)
+        log.warning(f"/LOAD/{sub} not ported (CENTRI, PBLAST supported)", block.source)
 
 
 def read_imptemp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -4695,6 +4831,37 @@ def read_def_solid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     }
 
 
+def read_def_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DEF_INTER/TYPE25``, ``/DEFAULT/INTER/TYPE25`` (M99) — Global contact defaults.
+
+    Card format:
+        Istf  Igap  Irem_i2  TYPE24_Idel  Itied  Ishape  Irs  TYPE24_Iedge
+    """
+    if block.fixed:
+        cards = [c for c in block.fixed_cards() if not c.is_blank]
+    else:
+        cards = [c for c in block.cards if not c.is_blank]
+    if not cards:
+        return
+    c = cards[0]
+    if block.fixed:
+        vals = c.cut("DEF_INTER_25")
+    else:
+        vals = c.tokens()
+
+    def _iv(idx, default=0):
+        try:
+            return int(float(vals[idx]))
+        except (IndexError, ValueError):
+            return default
+
+    model.def_inter = {
+        'istf': _iv(0, 1000), 'igap': _iv(1, 1), 'irem_i2': _iv(2, 1),
+        'idel': _iv(3, 1000), 'itied': _iv(4, 1000), 'ishape': _iv(5, 1),
+        'irs': _iv(6, 1000), 'iedge': _iv(7, 1000),
+    }
+
+
 def read_ioflag(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/IOFLAG`` — output control flags (M68, parse-and-skip).
 
@@ -4882,7 +5049,7 @@ def read_monvol(block: KeywordBlock, model: Model, log: MessageLog):
 
 def read_transform(block: KeywordBlock, model: Model,
                    log: MessageLog) -> None:
-    """`/TRANSFORM/{TRA|ROT|SYM|SCA}/transform_id` (M63, M85) — Mesh transformations.
+    """`/TRANSFORM/{TRA|ROT|SYM|SCA|POS|POSITION}/transform_id` (M63, M85, M99) — Mesh transformations.
 
     Fortran origin: ``starter/source/model/transformation/lectrans.F``.
     Card format:
@@ -4901,11 +5068,15 @@ def read_transform(block: KeywordBlock, model: Model,
     * `/TRANSFORM/SCA`:
         card 1: title
         card 2: GR_NODE  Fscale_X  Fscale_Y  Fscale_Z  node_IDc  sub_ID
+    * `/TRANSFORM/POS` or `/TRANSFORM/POSITION`:
+        card 1: title
+        card 2: GR_NODE  n1  n2  n3  n4  n5  n6  (blank)  (blank)  sub_ID
+        cards 3..8 (optional): (blank)  X  Y  Z  for points 1..6
     """
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if sub not in ("TRA", "ROT", "SYM", "SCA"):
+    if sub not in ("TRA", "ROT", "SYM", "SCA", "POS", "POSITION"):
         log.warning(f"/TRANSFORM/{sub} not ported — block skipped "
-                    f"(supported: TRA, ROT, SYM, SCA)", block.source)
+                    f"(supported: TRA, ROT, SYM, SCA, POS)", block.source)
         return
 
     if block.fixed:
@@ -5050,6 +5221,47 @@ def read_transform(block: KeywordBlock, model: Model,
 
         model.transforms.append((block.user_id, "SCA", grnod, (sx, sy, sz),
                                  n1, sub_id))
+
+    elif sub in ("POS", "POSITION"):
+        if block.fixed:
+            f = cards[0].cut("TRANSFORM_POS_1")
+            grnod = _ival(f[0]) if len(f) > 0 else 0
+            n1 = _ival(f[1]) if len(f) > 1 else 0
+            n2 = _ival(f[2]) if len(f) > 2 else 0
+            n3 = _ival(f[3]) if len(f) > 3 else 0
+            n4 = _ival(f[4]) if len(f) > 4 else 0
+            n5 = _ival(f[5]) if len(f) > 5 else 0
+            n6 = _ival(f[6]) if len(f) > 6 else 0
+            sub_id = _ival(f[9]) if len(f) > 9 else 0
+            pts = []
+            for i in range(1, 7):
+                if i < len(cards) and not cards[i].is_blank:
+                    p_cut = cards[i].cut("TRANSFORM_POS_PT")
+                    pts.append([_fval(p_cut[1]), _fval(p_cut[2]), _fval(p_cut[3])])
+                else:
+                    pts.append([0.0, 0.0, 0.0])
+        else:
+            toks = cards[0].tokens()
+            grnod = int(toks[0]) if len(toks) > 0 else 0
+            n1 = int(toks[1]) if len(toks) > 1 else 0
+            n2 = int(toks[2]) if len(toks) > 2 else 0
+            n3 = int(toks[3]) if len(toks) > 3 else 0
+            n4 = int(toks[4]) if len(toks) > 4 else 0
+            n5 = int(toks[5]) if len(toks) > 5 else 0
+            n6 = int(toks[6]) if len(toks) > 6 else 0
+            sub_id = int(toks[7]) if len(toks) > 7 else 0
+            pts = []
+            for i in range(1, 7):
+                if i < len(cards) and not cards[i].is_blank:
+                    p_toks = cards[i].tokens()
+                    pts.append([float(p_toks[0]) if len(p_toks) > 0 else 0.0,
+                                float(p_toks[1]) if len(p_toks) > 1 else 0.0,
+                                float(p_toks[2]) if len(p_toks) > 2 else 0.0])
+                else:
+                    pts.append([0.0, 0.0, 0.0])
+
+        model.transforms.append((block.user_id, "POS", grnod, (n1, n2, n3, n4, n5, n6),
+                                 pts, sub_id))
 
 
 
@@ -6082,6 +6294,10 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "INIBEAM": read_inibea,
     "INISPR": read_inispr,
     "INISPRI": read_inispr,
+    "PERTURB": read_perturb,
+    "PBLAST": read_pblast,
+    "DEF_INTER": read_def_inter,
+    "DEFAULT": read_def_inter,
 }
 
 ENGINE_KEYWORDS_IGNORE = {
