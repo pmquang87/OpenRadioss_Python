@@ -13,7 +13,7 @@ exactly like the Fortran ``USR2SYS`` machinery.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 
@@ -872,7 +872,7 @@ class THRequest:
     id: int
     kind: str            # 'NODE' | 'PART' | 'SECT' | 'RBODY' | 'SHEL' |
                          # 'SH3N' | 'SPRING' | 'BRIC' | 'RWALL' | 'INTER'
-    ids: List[int] = field(default_factory=list)
+    ids: List[Union[int, str]] = field(default_factory=list)
     variables: List[str] = field(default_factory=list)  # e.g. DX, VX, IE
     title: str = ""
 

@@ -17,7 +17,7 @@
   {
    "family": "RWALL/SPHER/1",
    "cases_using": 0,
-   "cases_blocking": 7,
+   "cases_blocking": 0,
    "blocks_total": 0,
    "cases_sole_blocker": 4
   },
@@ -731,10 +731,7 @@
     "** ERROR     1 IN FAILURE_BIQUAD_0000.rad:858     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'",
     "** ERROR     1 IN FAILURE_BIQUAD_0000.rad:858     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'"
    ],
-   "parse_errors": [
-    "** ERROR     1 IN FAILURE_BIQUAD_0000.rad:858     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'",
-    "** ERROR     1 IN FAILURE_BIQUAD_0000.rad:858     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'"
-   ],
+   "parse_errors": [],
    "census_unsupported": [],
    "verdict": "ERROR",
    "n_skipped_families": 2,
@@ -743,8 +740,7 @@
     "RWALL/SPHER/1"
    ],
    "blockers": [
-    "FAIL/BIQUAD/1",
-    "RWALL/SPHER/1"
+    "FAIL/BIQUAD/1"
    ]
   },
   {
@@ -786,19 +782,14 @@
     "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'",
     "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'"
    ],
-   "parse_errors": [
-    "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'",
-    "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'"
-   ],
+   "parse_errors": [],
    "census_unsupported": [],
    "verdict": "ERROR",
    "n_skipped_families": 1,
    "hard_skips": [
     "RWALL/SPHER/1"
    ],
-   "blockers": [
-    "RWALL/SPHER/1"
-   ]
+   "blockers": []
   },
   {
    "case_id": "rd_e/RD-E-2602_Ductile/ductile_failure_model/plate_model/JOHNSON_Ifail_sh_model/Ishell=1_without_epsmax/FAILURE_JOHNSON_0000.rad",
@@ -839,19 +830,14 @@
     "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'",
     "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'"
    ],
-   "parse_errors": [
-    "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'",
-    "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'"
-   ],
+   "parse_errors": [],
    "census_unsupported": [],
    "verdict": "ERROR",
    "n_skipped_families": 1,
    "hard_skips": [
     "RWALL/SPHER/1"
    ],
-   "blockers": [
-    "RWALL/SPHER/1"
-   ]
+   "blockers": []
   },
   {
    "case_id": "rd_e/RD-E-2602_Ductile/ductile_failure_model/plate_model/JOHNSON_Ifail_sh_model/Ishell=2_and_epsmax/FAILURE_JOHNSON_0000.rad",
@@ -895,10 +881,7 @@
     "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:853     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'",
     "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:853     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'"
    ],
-   "parse_errors": [
-    "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:853     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'",
-    "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:853     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'"
-   ],
+   "parse_errors": [],
    "census_unsupported": [
     "RANDOM"
    ],
@@ -909,7 +892,6 @@
     "RANDOM"
    ],
    "blockers": [
-    "RWALL/SPHER/1",
     "RANDOM"
    ]
   },
@@ -952,19 +934,14 @@
     "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'",
     "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'"
    ],
-   "parse_errors": [
-    "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'",
-    "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'"
-   ],
+   "parse_errors": [],
    "census_unsupported": [],
    "verdict": "ERROR",
    "n_skipped_families": 1,
    "hard_skips": [
     "RWALL/SPHER/1"
    ],
-   "blockers": [
-    "RWALL/SPHER/1"
-   ]
+   "blockers": []
   },
   {
    "case_id": "rd_e/RD-E-2602_Ductile/ductile_failure_model/plate_model/JOHNSON_model/Ishell=1_without_epsmax/FAILURE_JOHNSON_0000.rad",
@@ -1005,19 +982,14 @@
     "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'",
     "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'"
    ],
-   "parse_errors": [
-    "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'",
-    "** ERROR     1 IN FAILURE_JOHNSON_0000.rad:849     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'"
-   ],
+   "parse_errors": [],
    "census_unsupported": [],
    "verdict": "ERROR",
    "n_skipped_families": 1,
    "hard_skips": [
     "RWALL/SPHER/1"
    ],
-   "blockers": [
-    "RWALL/SPHER/1"
-   ]
+   "blockers": []
   },
   {
    "case_id": "rd_e/RD-E-2602_Ductile/ductile_failure_model/plate_model/TAB1_model/Ishell=1_without_epsmax/FAILURE_TAB1_0000.rad",
@@ -1064,10 +1036,7 @@
     "** ERROR     1 IN FAILURE_TAB1_0000.rad:891     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'",
     "** ERROR     1 IN FAILURE_TAB1_0000.rad:891     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'"
    ],
-   "parse_errors": [
-    "** ERROR     1 IN FAILURE_TAB1_0000.rad:891     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'",
-    "** ERROR     1 IN FAILURE_TAB1_0000.rad:891     while reading /TH/SHEL/2: invalid literal for int() with base 10: 'Master_gro'"
-   ],
+   "parse_errors": [],
    "census_unsupported": [
     "TABLE"
    ],
@@ -1081,7 +1050,6 @@
    ],
    "blockers": [
     "TABLE/1/4711",
-    "RWALL/SPHER/1",
     "TABLE",
     "FAIL/TAB1"
    ]

@@ -26,7 +26,7 @@ listing.
 
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -4017,7 +4017,7 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     # NODE: CARD("%10d%10d%-80s", Elid, Skew_ID, Elname) — one per card.
     # Aggregate kinds (PART, SECT, RBODY, ...) pack plain %10d IDs.
     _ONE_PER_CARD = {"NODE", "SHEL", "SH3N", "BRIC", "SPRING"}
-    ids: List[int] = []
+    ids: List[Union[int, str]] = []
     for c in cards[n_var_cards:]:
         if c.is_blank:
             continue
@@ -4026,16 +4026,31 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 # %10d%10d%-80s — id column only (skew/name informative)
                 f = c.cut("TH_NODE_ID")
                 if f[0]:
-                    ids.append(int(f[0]))
+                    try:
+                        ids.append(int(f[0]))
+                    except ValueError:
+                        ids.append(f[0].strip())
             else:
-                ids.extend(int(s) for s in c.cut("IDS10") if s)
+                for s in c.cut("IDS10"):
+                    if s:
+                        try:
+                            ids.append(int(s))
+                        except ValueError:
+                            ids.append(s.strip())
         else:
             if kind in _ONE_PER_CARD:
                 toks = c.tokens()
                 if toks:
-                    ids.append(int(toks[0]))
+                    try:
+                        ids.append(int(toks[0]))
+                    except ValueError:
+                        ids.append(toks[0])
             else:
-                ids.extend(c.ints())
+                for t in c.tokens():
+                    try:
+                        ids.append(int(t))
+                    except ValueError:
+                        ids.append(t)
     model.th_requests.append(THRequest(
         id=block.user_id, kind=kind, ids=ids, variables=variables,
         title=title))
