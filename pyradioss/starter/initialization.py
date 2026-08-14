@@ -443,6 +443,13 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
         if mat.fail is not None:
             log.warning(f"/FAIL/{fm.type}/{mat_id}: material already has a "
                         f"/FAIL card — replaced", source)
+        if fm.type == "TAB1":
+            tid = fm.params.get("table1_id", 0)
+            if tid not in model.tables:
+                log.error(f"/FAIL/TAB1/{mat_id}: table {tid} not defined", source)
+            else:
+                fm.params["table"] = model.tables[tid]
+                
         mat.fail = fm
 
     # /EOS attachment (M6, same free-order pattern as /FAIL): the EOS

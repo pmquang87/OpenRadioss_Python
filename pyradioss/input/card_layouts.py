@@ -190,8 +190,14 @@ LAYOUTS: Dict[str, List[int]] = {
     # fail_snconnect.cfg (radioss2017):
     # CARD("%20lg%20lg%20lg%20lg%10d%10d", Alpha_0, Beta_0, Alpha_f, Beta_f, Ifail_so, ISYM)
     "FAIL_SNCONNECT_1": [20, 20, 20, 20, 10, 10],
-    # CARD("%10d%10d%10d%10d%20lg%20lg%20lg", fct_IDON, fct_IDOS, fct_IDFN, fct_IDFS, XSCALE_0, XSCALE_F, AREA_scale)
     "FAIL_SNCONNECT_2": [10, 10, 10, 10, 20, 20, 20],
+    
+    "FAIL_TAB1_1": [10, 10, 20, 20, 20, 10, 10],
+    "FAIL_TAB1_2": [20, 20, 20, 20, 10],
+    "FAIL_TAB1_3": [10, 20, 20, 10, 20, 20],
+    "FAIL_TAB1_4": [10, 20, 20, 20, 20, 10],
+    "FAIL_TAB1_5": [10, 20, 30, 20, 20],
+
     # mat_EOS.cfg (radioss2022) EOS_Options == 12 (IDEAL-GAS):
     #   card 1: Gamma  P0  PSH  T0  RHO_0
     "EOS_IDEAL_GAS": [20] * 5,
@@ -283,6 +289,7 @@ LAYOUTS: Dict[str, List[int]] = {
     "RBODY": [10, 10, 10, 10, 20, 10, 10, 10, 10],
     # RBODY/rbody.cfg: CARD("%20lg"*3, Jxx, Jyy, Jzz)
     "XYZ20": [20] * 3,
+    "XYZM20": [20] * 4,
     # RBODY/rbe2.cfg (radioss140): CARD("%10d%10d%10d%10d%10d",
     #                                   node, Trarot, skew, grnod, Iflag)
     "RBE2": [10] * 5,

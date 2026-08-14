@@ -39,7 +39,7 @@ array (in-place) and tstar the homologous temperature of the points
 D5 term reads it). All vectorized over the element slice.
 """
 
-from . import biquad, johnson  # noqa: F401
+from . import biquad, johnson, tab1  # noqa: F401
 
 
 def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
@@ -48,6 +48,8 @@ def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
         return johnson.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar)
     if fail.type == "BIQUAD":
         return biquad.solid_step(fail, sig, d_epsp, deps, dt, dama)
+    if fail.type == "TAB1":
+        return tab1.solid_step(fail, sig, d_epsp, deps, dt, dama, tstar)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")
 
 
@@ -57,4 +59,6 @@ def shell_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
         return johnson.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar)
     if fail.type == "BIQUAD":
         return biquad.shell_step(fail, sig, d_epsp, deps, dt, dama)
+    if fail.type == "TAB1":
+        return tab1.shell_step(fail, sig, d_epsp, deps, dt, dama, tstar)
     raise NotImplementedError(f"/FAIL/{fail.type} not ported")
