@@ -566,6 +566,33 @@ LAYOUTS: Dict[str, List[int]] = {
     "INTER_TYPE25_5": [7, 1, 1, 1, 10, 10, 10, 20, 10, 10, 20],
     # card 7: CARD("%10d%10d%20lg%10s%10d%30s%10d", Ifric, Ifiltr, Xfreq, blank, ISENSOR, blank, Fric_ID)
     "INTER_TYPE25_6": [10, 10, 20, 10, 10, 30, 10],
+
+    # DEF_SHELL (M101)
+    # CARDS/def_shell.cfg: CARD("%10d%10d%10d%10d%10d%20s%10d%10d", ISHELL, Ismstr, Ithick, Iplas, Istrain, blank, ISH3N, Idrill)
+    "DEF_SHELL_1": [10, 10, 10, 10, 10, 20, 10, 10],
+
+    # DEF_SOLID (M101)
+    # CARDS/def_solid.cfg: CARD("%10d%10d%10d%10s%10d%10d%10d%10d", ISOLID, Ismstr, Icpre, blank, Itetra4, Itetra10, Imas, Iframe)
+    "DEF_SOLID_1": [10, 10, 10, 10, 10, 10, 10, 10],
+
+    # DEF_INTER (M101)
+    "DEF_INTER_2": [10, 10, 10, 10, 10, 10],
+    "DEF_INTER_7": [10, 10, 10, 10, 10, 10, 10, 10],
+    "DEF_INTER_11": [10, 10, 10, 10, 10, 10],
+    "DEF_INTER_19": [10, 10, 10, 10, 10, 10, 10, 10],
+    "DEF_INTER_24": [10, 10, 10, 10, 10, 10, 10, 10],
+
+    # PERTURB/FAIL (M101)
+    "PERTURB_FAIL_1": [20, 20, 20, 20, 10, 10],
+    "PERTURB_FAIL_2": [10, 20],
+
+    # SPHGLO (M101)
+    # SPH global computation controls
+    "SPHGLO_1": [20, 10, 10, 10, 10],
+
+    # SMS / AMS (M101)
+    # Selective Mass Scaling global parameters
+    "SMS_1": [10, 20],
 }
 
 

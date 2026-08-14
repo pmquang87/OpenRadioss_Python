@@ -3367,20 +3367,52 @@ def read_pblast(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_perturb(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/PERTURB/PART/SOLID/id`` (M99): Part parameter random / Gaussian perturbation.
-
-    Fortran origin: ``starter/source/model/perturbation/hm_read_perturb_solid.F``.
-    Card format:
-        card 1: title
-        card 2: F_Mean  Deviation  Min_cut  Max_cut  Seed  Idistri
-        card 3: grpart_ID  parameter
+    """``/PERTURB/PART/SOLID/id``, ``/PERTURB/PART/SHELL/id``, ``/PERTURB/FAIL/BIQUAD/id`` (M99/M101):
+    Part / failure parameter random / Gaussian perturbation.
     """
-    from ..model.entities import SolidPartPerturbation
+    from ..model.entities import SolidPartPerturbation, ShellPartPerturbation, FailurePerturbation
+    sub1 = block.parts[1].upper() if len(block.parts) > 1 else "PART"
+    sub2 = block.parts[2].upper() if len(block.parts) > 2 else "SOLID"
+
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards:
         log.error(f"/PERTURB/{block.user_id}: missing data cards", block.source)
         return
 
+    if sub1 == "FAIL":
+        if block.fixed:
+            c1 = cards[0].cut("PERTURB_FAIL_1")
+            f_mean = _fval(c1[0]) if len(c1) > 0 else 0.0
+            dev = _fval(c1[1]) if len(c1) > 1 else 0.0
+            min_cut = _fval(c1[2]) if len(c1) > 2 else 0.0
+            max_cut = _fval(c1[3]) if len(c1) > 3 else 0.0
+            seed = _ival(c1[4]) if len(c1) > 4 else 0
+            idistri = _ival(c1[5], 2) if len(c1) > 5 else 2
+
+            c2 = cards[1].cut("PERTURB_FAIL_2") if len(cards) > 1 else []
+            fail_id = _ival(c2[0]) if len(c2) > 0 else 0
+            param = c2[1].strip() if len(c2) > 1 else "C3"
+        else:
+            t1 = cards[0].tokens()
+            f_mean = float(t1[0]) if len(t1) > 0 else 0.0
+            dev = float(t1[1]) if len(t1) > 1 else 0.0
+            min_cut = float(t1[2]) if len(t1) > 2 else 0.0
+            max_cut = float(t1[3]) if len(t1) > 3 else 0.0
+            seed = int(float(t1[4])) if len(t1) > 4 else 0
+            idistri = int(float(t1[5])) if len(t1) > 5 else 2
+
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            fail_id = int(float(t2[0])) if len(t2) > 0 else 0
+            param = t2[1].strip() if len(t2) > 1 else "C3"
+
+        model.perturb_fails[block.user_id] = FailurePerturbation(
+            id=block.user_id, title=title, fail_id=fail_id, parameter=param,
+            fail_type=sub2, f_mean=f_mean, deviation=dev, min_cut=min_cut,
+            max_cut=max_cut, seed=seed, idistri=idistri
+        )
+        return
+
+    # PART perturbation (SHELL or SOLID)
     if block.fixed:
         c1 = cards[0].cut("PERTURB_PART_SOLID_1")
         f_mean = _fval(c1[0]) if len(c1) > 0 else 0.0
@@ -3406,11 +3438,18 @@ def read_perturb(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         grpart_id = int(float(t2[0])) if len(t2) > 0 else 0
         chvar = t2[1].strip() if len(t2) > 1 else ""
 
-    model.perturbations[block.user_id] = SolidPartPerturbation(
-        id=block.user_id, title=title, f_mean=f_mean, deviation=dev,
-        min_cut=min_cut, max_cut=max_cut, seed=seed, idistri=idistri,
-        grpart_id=grpart_id, var_name=chvar
-    )
+    if sub2 == "SHELL":
+        model.perturb_shells[block.user_id] = ShellPartPerturbation(
+            id=block.user_id, title=title, f_mean=f_mean, deviation=dev,
+            min_cut=min_cut, max_cut=max_cut, seed=seed, idistri=idistri,
+            grpart_id=grpart_id, chvar=chvar or "THICK"
+        )
+    else:
+        model.perturbations[block.user_id] = SolidPartPerturbation(
+            id=block.user_id, title=title, f_mean=f_mean, deviation=dev,
+            min_cut=min_cut, max_cut=max_cut, seed=seed, idistri=idistri,
+            grpart_id=grpart_id, var_name=chvar
+        )
 
 
 def read_load(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -5235,15 +5274,14 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 # ============================================================================
 
 def read_def_shell(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/DEF_SHELL`` — global shell formulation defaults (M68).
+    """``/DEF_SHELL`` — global shell formulation defaults (M68/M101).
 
     Single data card (NO title card)::
 
-        ISHELL  ISMSTR  ITHICK  IPLAS  ISTRAIN  (gap)  ISH3N  IDRILL
+        ISHELL  ISMSTR  ITHICK  IPLAS  ISTRAIN  (20-char gap)  ISH3N  IDRILL
 
     Mirrors ``hm_read_defshell.F``.  The values are stored on
     ``model.def_shell`` and consulted when /PROP/SHELL fields are 0."""
-    # /DEF_SHELL has no title card — read cards directly
     if block.fixed:
         cards = [c for c in block.fixed_cards() if not c.is_blank]
     else:
@@ -5252,18 +5290,18 @@ def read_def_shell(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     c = cards[0]
     if block.fixed:
-        vals = c.cut("IDS10")   # 10-wide integer fields
+        vals = c.cut("DEF_SHELL_1")
     else:
         vals = c.tokens()
     def _iv(idx):
         try:
-            return int(vals[idx])
+            return int(float(vals[idx]))
         except (IndexError, ValueError):
             return 0
     model.def_shell = {
         'ishell': _iv(0), 'ismstr': _iv(1), 'ithick': _iv(2),
         'iplas': _iv(3), 'istrain': _iv(4),
-        # fixed: col 5 is gap/reserved (col index 5), ISH3N at 6, IDRILL at 7
+        # fixed: index 5 is 20-char gap, ISH3N at 6, IDRILL at 7
         # free:  no gap field, ISH3N at 5, IDRILL at 6
         'ish3n': _iv(6 if block.fixed else 5),
         'idrill': _iv(7 if block.fixed else 6),
@@ -5271,14 +5309,13 @@ def read_def_shell(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_def_solid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/DEF_SOLID`` — global solid formulation defaults (M68).
+    """``/DEF_SOLID`` — global solid formulation defaults (M68/M101).
 
     Single data card (NO title card)::
 
-        ISOLID  ISMSTR  ICPRE  (gap)  ITETRA4  ITETRA10  IMAS  IFRAME
+        ISOLID  ISMSTR  ICPRE  (10-char gap)  ITETRA4  ITETRA10  IMAS  IFRAME
 
     Mirrors ``hm_read_defsolid.F``."""
-    # /DEF_SOLID has no title card — read cards directly
     if block.fixed:
         cards = [c for c in block.fixed_cards() if not c.is_blank]
     else:
@@ -5287,18 +5324,18 @@ def read_def_solid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     c = cards[0]
     if block.fixed:
-        vals = c.cut("IDS10")
+        vals = c.cut("DEF_SOLID_1")
     else:
         vals = c.tokens()
     def _iv(idx):
         try:
-            return int(vals[idx])
+            return int(float(vals[idx]))
         except (IndexError, ValueError):
             return 0
     model.def_solid = {
         'isolid': _iv(0), 'ismstr': _iv(1), 'icpre': _iv(2),
-        # fixed: col 3 is gap, ITETRA4 at 4, ITETRA10 at 5, IMAS at 6, IFRAME at 7
-        # free:  no gap field
+        # fixed: index 3 is 10-char gap, ITETRA4 at 4, ITETRA10 at 5, IMAS at 6, IFRAME at 7
+        # free:  no gap field, ITETRA4 at 3, ITETRA10 at 4, IMAS at 5, IFRAME at 6
         'itetra4': _iv(4 if block.fixed else 3),
         'itetra10': _iv(5 if block.fixed else 4),
         'imas': _iv(6 if block.fixed else 5),
@@ -5307,11 +5344,8 @@ def read_def_solid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_def_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/DEF_INTER/TYPE25``, ``/DEFAULT/INTER/TYPE25`` (M99) — Global contact defaults.
-
-    Card format:
-        Istf  Igap  Irem_i2  TYPE24_Idel  Itied  Ishape  Irs  TYPE24_Iedge
-    """
+    """``/DEF_INTER/type``, ``/DEFAULT/INTER/type`` (M99/M101) — Global contact defaults."""
+    subtype = block.parts[-1].upper() if len(block.parts) > 1 else "TYPE25"
     if block.fixed:
         cards = [c for c in block.fixed_cards() if not c.is_blank]
     else:
@@ -5319,22 +5353,121 @@ def read_def_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if not cards:
         return
     c = cards[0]
-    if block.fixed:
-        vals = c.cut("DEF_INTER_25")
-    else:
-        vals = c.tokens()
 
-    def _iv(idx, default=0):
+    def _iv_from(vals, idx, default=0):
         try:
             return int(float(vals[idx]))
         except (IndexError, ValueError):
             return default
 
-    model.def_inter = {
-        'istf': _iv(0, 1000), 'igap': _iv(1, 1), 'irem_i2': _iv(2, 1),
-        'idel': _iv(3, 1000), 'itied': _iv(4, 1000), 'ishape': _iv(5, 1),
-        'irs': _iv(6, 1000), 'iedge': _iv(7, 1000),
-    }
+    if subtype == "TYPE2":
+        vals = c.cut("DEF_INTER_2") if block.fixed else c.tokens()
+        entry = {
+            'idel': _iv_from(vals, 0), 'icurv': _iv_from(vals, 1), 'icurv_r': _iv_from(vals, 2),
+            'icurv_s': _iv_from(vals, 3), 'ishape': _iv_from(vals, 4), 'iedge': _iv_from(vals, 5),
+        }
+    elif subtype == "TYPE7":
+        vals = c.cut("DEF_INTER_7") if block.fixed else c.tokens()
+        entry = {
+            'istf': _iv_from(vals, 0), 'igap': _iv_from(vals, 1), 'ibag': _iv_from(vals, 2),
+            'idel7': _iv_from(vals, 3), 'ikrem': _iv_from(vals, 4), 'irem7i2': _iv_from(vals, 5),
+            'inactiv': _iv_from(vals, 6), 'iform': _iv_from(vals, 7),
+        }
+    elif subtype == "TYPE11":
+        vals = c.cut("DEF_INTER_11") if block.fixed else c.tokens()
+        entry = {
+            'istf': _iv_from(vals, 0), 'igap': _iv_from(vals, 1), 'ibag': _iv_from(vals, 2),
+            'idel11': _iv_from(vals, 3), 'ikrem': _iv_from(vals, 4), 'inactiv': _iv_from(vals, 5),
+        }
+    elif subtype == "TYPE19":
+        vals = c.cut("DEF_INTER_19") if block.fixed else c.tokens()
+        entry = {
+            'istf': _iv_from(vals, 0), 'igap': _iv_from(vals, 1), 'ibag': _iv_from(vals, 2),
+            'idel': _iv_from(vals, 3), 'ikrem': _iv_from(vals, 4), 'irem_i2': _iv_from(vals, 5),
+            'inactiv': _iv_from(vals, 6), 'iform': _iv_from(vals, 7),
+        }
+    elif subtype == "TYPE24":
+        vals = c.cut("DEF_INTER_24") if block.fixed else c.tokens()
+        entry = {
+            'istf': _iv_from(vals, 0), 'igap': _iv_from(vals, 1), 'irem_i2': _iv_from(vals, 2),
+            'idel': _iv_from(vals, 3), 'itied': _iv_from(vals, 4), 'ishape': _iv_from(vals, 5),
+            'irs': _iv_from(vals, 6), 'iedge': _iv_from(vals, 7),
+        }
+    else:  # TYPE25 or default
+        vals = c.cut("DEF_INTER_25") if block.fixed else c.tokens()
+        entry = {
+            'istf': _iv_from(vals, 0, 1000), 'igap': _iv_from(vals, 1, 1), 'irem_i2': _iv_from(vals, 2, 1),
+            'idel': _iv_from(vals, 3, 1000), 'itied': _iv_from(vals, 4, 1000), 'ishape': _iv_from(vals, 5, 1),
+            'irs': _iv_from(vals, 6, 1000), 'iedge': _iv_from(vals, 7, 1000),
+        }
+    model.def_inter[subtype] = entry
+    if subtype == "TYPE25":
+        model.def_inter.update(entry)
+
+
+def read_sphglo(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SPHGLO`` (M101) — SPH global computation controls.
+
+    Card format:
+        SPASORT  ALE_MAXSPH  ALE_KVOISPH  ALE_Form  SPHGLO_Isol2sph
+    """
+    from ..model.entities import SphGlobal
+    if block.fixed:
+        cards = [c for c in block.fixed_cards() if not c.is_blank]
+    else:
+        cards = [c for c in block.cards if not c.is_blank]
+    if not cards:
+        model.sph_global = SphGlobal()
+        return
+
+    c = cards[0]
+    if block.fixed:
+        f = c.cut("SPHGLO_1")
+        spasort = _fval(f[0]) or 0.25
+        maxsph = _ival(f[1]) if len(f) > 1 else 0
+        lvois = _ival(f[2], 120) if len(f) > 2 else 120
+        kvois = _ival(f[3], 240) if len(f) > 3 else 240
+        isol2sph = _ival(f[4], 1) if len(f) > 4 else 1
+    else:
+        toks = c.tokens()
+        spasort = float(toks[0]) if len(toks) > 0 else 0.25
+        maxsph = int(float(toks[1])) if len(toks) > 1 else 0
+        lvois = int(float(toks[2])) if len(toks) > 2 else 120
+        kvois = int(float(toks[3])) if len(toks) > 3 else 240
+        isol2sph = int(float(toks[4])) if len(toks) > 4 else 1
+
+    model.sph_global = SphGlobal(
+        spasort=spasort, ale_maxsph=maxsph, lvoisph=lvois, kvoisph=kvois, isol2sph=isol2sph
+    )
+
+
+def read_sms(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SMS``, ``/AMS`` (M101) — Selective Mass Scaling global parameters.
+
+    Card format:
+        grpart_ID  [dt_target]
+    """
+    from ..model.entities import SmsGlobal
+    if block.fixed:
+        cards = [c for c in block.fixed_cards() if not c.is_blank]
+    else:
+        cards = [c for c in block.cards if not c.is_blank]
+    if not cards:
+        model.sms_global = SmsGlobal()
+        return
+
+    c = cards[0]
+    if block.fixed:
+        f = c.cut("SMS_1")
+        grpart_id = _ival(f[0]) if len(f) > 0 else 0
+        dt_target = _fval(f[1]) if len(f) > 1 else 0.0
+    else:
+        toks = c.tokens()
+        grpart_id = int(float(toks[0])) if len(toks) > 0 else 0
+        dt_target = float(toks[1]) if len(toks) > 1 else 0.0
+
+    model.sms_global = SmsGlobal(grpart_id=grpart_id, dt_target=dt_target)
+
 
 
 def read_ioflag(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -6773,6 +6906,11 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "PBLAST": read_pblast,
     "DEF_INTER": read_def_inter,
     "DEFAULT": read_def_inter,
+    "DEF_SHELL": read_def_shell,
+    "DEF_SOLID": read_def_solid,
+    "SPHGLO": read_sphglo,
+    "SMS": read_sms,
+    "AMS": read_sms,
     "PLY": read_ply,
     "LAMINATE": read_laminate,
 }

@@ -42,6 +42,7 @@ from .entities import (
     InitialTrussState, InitialBeamState, InitialSpringState,
     CyclicBoundaryCondition, SolidPartPerturbation, PBlastLoad,
     Ply, Laminate, SubInterface,
+    ShellPartPerturbation, FailurePerturbation, SphGlobal, SmsGlobal,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -596,7 +597,11 @@ class Model:
         self.inivol: List[InitialVolume] = []          # /INIVOL  (M94)
         self.ploads: List[PressureLoad] = []           # /PLOAD   (M5)
         self.pblast_loads: Dict[int, PBlastLoad] = {}  # /LOAD/PBLAST (M99)
-        self.def_inter: Dict[str, Any] = {}            # /DEF_INTER (M99)
+        self.def_inter: Dict[str, Any] = {}            # /DEF_INTER (M99/M101)
+        self.perturb_shells: Dict[int, ShellPartPerturbation] = {} # /PERTURB/PART/SHELL (M101)
+        self.perturb_fails: Dict[int, FailurePerturbation] = {}    # /PERTURB/FAIL (M101)
+        self.sph_global: Optional[SphGlobal] = None    # /SPHGLO (M101)
+        self.sms_global: Optional[SmsGlobal] = None    # /SMS, /AMS (M101)
         self.admas: List[AddedMass] = []               # /ADMAS   (M5)
         self.rwalls: List[RigidWall] = []
         self.rbodies: List[RigidBody] = []             # /RBODY + /RBE2 (M5)

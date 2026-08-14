@@ -400,4 +400,23 @@ def check_model(model: Model, log: MessageLog) -> None:
                 if mid > 0 and mid not in model.materials:
                     log.error(f"/PROP/TYPE11/{prop_id}: layer material {mid} not defined", "CROSS REF")
 
+    # Shell and Failure Perturbations & SMS (M101)
+    part_groups = model.egroups.get("PART", {})
+    for pid, ps in getattr(model, "perturb_shells", {}).items():
+        if ps.grpart_id > 0 and ps.grpart_id not in part_groups and ps.grpart_id not in model.parts:
+            log.error(f"/PERTURB/PART/SHELL/{pid}: part group/part {ps.grpart_id} not defined", "CROSS REF")
+
+    fail_ids = {mat_id for mat_id, _, _ in getattr(model, "raw_fails", [])}
+    for m in model.materials.values():
+        if getattr(m, "failure", None) is not None:
+            fail_ids.add(m.id)
+    for pid, pf in getattr(model, "perturb_fails", {}).items():
+        if pf.fail_id > 0 and pf.fail_id not in fail_ids:
+            log.error(f"/PERTURB/FAIL/{pf.fail_type}/{pid}: failure criterion {pf.fail_id} not defined", "CROSS REF")
+
+    if getattr(model, "sms_global", None) is not None:
+        sms = model.sms_global
+        if sms.grpart_id > 0 and sms.grpart_id not in part_groups and sms.grpart_id not in model.parts:
+            log.error(f"/SMS: part group/part {sms.grpart_id} not defined", "CROSS REF")
+
 

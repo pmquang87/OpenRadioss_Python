@@ -1375,3 +1375,64 @@ class SubInterface:
     title: str = ""
 
 
+@dataclass
+class ShellPartPerturbation:
+    """/PERTURB/PART/SHELL/perturb_ID (M101): Shell part perturbation.
+
+    Fortran origin: ``starter/source/general_controls/computation/hm_read_perturb_part_shell.F``.
+    """
+    id: int
+    title: str = ""
+    grpart_id: int = 0
+    chvar: str = "THICK"
+    f_mean: float = 0.0
+    deviation: float = 0.0
+    min_cut: float = 0.0
+    max_cut: float = 0.0
+    seed: int = 0
+    idistri: int = 2
+
+
+@dataclass
+class FailurePerturbation:
+    """/PERTURB/FAIL/BIQUAD/perturb_ID (M101): Failure parameter perturbation.
+
+    Fortran origin: ``starter/source/general_controls/computation/hm_read_perturb_fail.F``.
+    """
+    id: int
+    title: str = ""
+    fail_id: int = 0
+    parameter: str = "C3"
+    fail_type: str = "BIQUAD"
+    f_mean: float = 0.0
+    deviation: float = 0.0
+    min_cut: float = 0.0
+    max_cut: float = 0.0
+    seed: int = 0
+    idistri: int = 2
+
+
+@dataclass
+class SphGlobal:
+    """/SPHGLO (M101): SPH global computation controls.
+
+    Fortran origin: ``starter/source/general_controls/computation/hm_read_sphglo.F``.
+    """
+    spasort: float = 0.25
+    ale_maxsph: int = 0
+    lvoisph: int = 120
+    kvoisph: int = 240
+    isol2sph: int = 1
+
+
+@dataclass
+class SmsGlobal:
+    """/SMS or /AMS (M101): Selective Mass Scaling global parameters.
+
+    Fortran origin: ``starter/source/general_controls/computation/hm_read_sms.F``.
+    """
+    grpart_id: int = 0
+    dt_target: float = 0.0
+
+
+
