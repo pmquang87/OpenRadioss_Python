@@ -1104,9 +1104,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     from ..failure import biquad as fail_biquad
     from ..model.entities import FailureModel
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if kind not in ("JOHNSON", "BIQUAD", "TAB1", "SNCONNECT", "FLD"):
+    if kind not in ("JOHNSON", "BIQUAD", "TAB1", "SNCONNECT", "FLD", "CONNECT"):
         log.warning(f"/FAIL/{kind} not ported — skipped "
-                    f"(supported: JOHNSON, BIQUAD, TAB1, SNCONNECT, FLD)", block.source)
+                    f"(supported: JOHNSON, BIQUAD, TAB1, SNCONNECT, FLD, CONNECT)", block.source)
         return
     # header /FAIL/<kind>/mat_ID[/fail_ID]: with TWO trailing ids the
     # FIRST is the material id (the lexer keeps only the last as user_id)
@@ -1297,6 +1297,76 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "ixfem": ixfem,
         }
         fm = FailureModel(type="FLD", ifail_sh=ifail_sh, params=params)
+    elif kind == "CONNECT":
+        # /FAIL/CONNECT: 4 cards (normal, tangential, energy, softening)
+        # Card 1: Epsilon_maxN, Exponent_N, Alpha_N, R_fct_ID_N, Ifail, Ifail_so, ISYM
+        if block.fixed:
+            c1 = _cut_floats(cards[0], "FAIL_CONNECT_1")
+        else:
+            c1 = _floats(cards[0], 7)
+        epsilon_maxN = c1[0] if len(c1) > 0 and c1[0] else 0.0
+        exponent_N = c1[1] if len(c1) > 1 and c1[1] else 1.0
+        alpha_N = c1[2] if len(c1) > 2 and c1[2] else 1.0
+        r_fct_id_n = int(c1[3]) if len(c1) > 3 and c1[3] else 0
+        ifail = int(c1[4]) if len(c1) > 4 and c1[4] else 0
+        ifail_so = int(c1[5]) if len(c1) > 5 and c1[5] else 0
+        isym = int(c1[6]) if len(c1) > 6 and c1[6] else 0
+        # Defaults per Fortran: exponent=1 when 0, alpha=1 when 0
+        if exponent_N == 0.0:
+            exponent_N = 1.0
+        if alpha_N == 0.0:
+            alpha_N = 1.0
+
+        # Card 2: Epsilon_maxT, Exponent_T, Alpha_T, R_fct_ID_T
+        epsilon_maxT, exponent_T, alpha_T, r_fct_id_t = 0.0, 1.0, 1.0, 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            if block.fixed:
+                c2 = _cut_floats(cards[1], "FAIL_CONNECT_2")
+            else:
+                c2 = _floats(cards[1], 4)
+            epsilon_maxT = c2[0] if len(c2) > 0 and c2[0] else 0.0
+            exponent_T = c2[1] if len(c2) > 1 and c2[1] else 1.0
+            alpha_T = c2[2] if len(c2) > 2 and c2[2] else 1.0
+            r_fct_id_t = int(c2[3]) if len(c2) > 3 and c2[3] else 0
+            if exponent_T == 0.0:
+                exponent_T = 1.0
+            if alpha_T == 0.0:
+                alpha_T = 1.0
+
+        # Card 3: EI_max, EN_max, ET_max, N_n, N_t
+        EI_max, EN_max, ET_max, N_n, N_t = 0.0, 0.0, 0.0, 0.0, 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            if block.fixed:
+                c3 = _cut_floats(cards[2], "FAIL_CONNECT_3")
+            else:
+                c3 = _floats(cards[2], 5)
+            EI_max = c3[0] if len(c3) > 0 else 0.0
+            EN_max = c3[1] if len(c3) > 1 else 0.0
+            ET_max = c3[2] if len(c3) > 2 else 0.0
+            N_n = c3[3] if len(c3) > 3 else 0.0
+            N_t = c3[4] if len(c3) > 4 else 0.0
+
+        # Card 4: T_max, N_soft
+        T_max, N_soft = 0.0, 0.0
+        if len(cards) > 3 and not cards[3].is_blank:
+            if block.fixed:
+                c4 = _cut_floats(cards[3], "FAIL_CONNECT_4")
+            else:
+                c4 = _floats(cards[3], 2)
+            T_max = c4[0] if len(c4) > 0 else 0.0
+            N_soft = c4[1] if len(c4) > 1 else 0.0
+
+        params = {
+            "epsilon_maxN": epsilon_maxN, "exponent_N": exponent_N,
+            "alpha_N": alpha_N, "r_fct_id_n": r_fct_id_n,
+            "ifail": ifail, "ifail_so": ifail_so, "isym": isym,
+            "epsilon_maxT": epsilon_maxT, "exponent_T": exponent_T,
+            "alpha_T": alpha_T, "r_fct_id_t": r_fct_id_t,
+            "EI_max": EI_max, "EN_max": EN_max, "ET_max": ET_max,
+            "N_n": N_n, "N_t": N_t,
+            "T_max": T_max, "N_soft": N_soft,
+        }
+        fm = FailureModel(type="CONNECT", ifail_sh=1, params=params)
     # attachment to the material happens in the Starter resolve step
     # (initialization.resolve_materials) so deck order does not matter
     model.raw_fails.append((mat_id, fm, block.source))

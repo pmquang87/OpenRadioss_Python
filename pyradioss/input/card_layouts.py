@@ -200,6 +200,15 @@ LAYOUTS: Dict[str, List[int]] = {
     # fail_fld.cfg (radioss2017):
     # CARD("%10d%10d          %10d%20lg%20lg%10d%10d", fct_ID, Ifail_sh, fct_IDadv, Rani, Dadv, Istrain, Ixfem)
     "FAIL_FLD_1": [10, 10, 10, 10, 20, 20, 10, 10],
+    # fail_connect.cfg (radioss130):
+    # CARD("%20lg%20lg%20lg%10d%10d%10d%10d", Epsilon_maxN, Exponent_N, Alpha_N, R_fct_ID_N, Ifail, Ifail_so, ISYM)
+    "FAIL_CONNECT_1": [20, 20, 20, 10, 10, 10, 10],
+    # CARD("%20lg%20lg%20lg%10d", Epsilon_maxT, Exponent_T, Alpha_T, R_fct_ID_T)
+    "FAIL_CONNECT_2": [20, 20, 20, 10],
+    # CARD("%20lg%20lg%20lg%20lg%20lg", EI_max, EN_max, ET_max, N_n, N_t)
+    "FAIL_CONNECT_3": [20, 20, 20, 20, 20],
+    # CARD("%20lg%20lg", T_max, N_soft)
+    "FAIL_CONNECT_4": [20, 20],
 
     # submodel.cfg (radioss51):
     # CARD("%10d%10d%10d%10d%10d%10d%10d", alloptionoffset, nodeoffset, elementoffset, componentoffset, materialoffset, propertyoffset, submodeloffset)
