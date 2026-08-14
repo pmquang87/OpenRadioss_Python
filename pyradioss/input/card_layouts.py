@@ -187,6 +187,11 @@ LAYOUTS: Dict[str, List[int]] = {
     # (radioss2026 inserts IREG after Inst — the first 4 fields the port
     #  inspects are identical in both formats)
     "FAIL_BIQUAD_2": [20, 10, 10, 20],
+    # fail_snconnect.cfg (radioss2017):
+    # CARD("%20lg%20lg%20lg%20lg%10d%10d", Alpha_0, Beta_0, Alpha_f, Beta_f, Ifail_so, ISYM)
+    "FAIL_SNCONNECT_1": [20, 20, 20, 20, 10, 10],
+    # CARD("%10d%10d%10d%10d%20lg%20lg%20lg", fct_IDON, fct_IDOS, fct_IDFN, fct_IDFS, XSCALE_0, XSCALE_F, AREA_scale)
+    "FAIL_SNCONNECT_2": [10, 10, 10, 10, 20, 20, 20],
     # mat_EOS.cfg (radioss2022) EOS_Options == 12 (IDEAL-GAS):
     #   card 1: Gamma  P0  PSH  T0  RHO_0
     "EOS_IDEAL_GAS": [20] * 5,

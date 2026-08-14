@@ -552,6 +552,7 @@ def run_fortran(name: str, runname: str, deck0: str, deck1: str,
     rd = os.path.join(workdir, "fortran", name)
     shutil.rmtree(rd, ignore_errors=True)
     os.makedirs(rd)
+    shutil.copytree(os.path.dirname(deck0), rd, dirs_exist_ok=True)
     d0 = os.path.join(rd, os.path.basename(deck0))
     d1 = os.path.join(rd, os.path.basename(deck1))
     info: Dict = {"mode": shim, "dir": rd}
@@ -628,8 +629,7 @@ def run_pyradioss(name: str, runname: str, deck0: str, deck1: str,
     rd = os.path.join(workdir, "pyradioss", name)
     shutil.rmtree(rd, ignore_errors=True)
     os.makedirs(rd)
-    shutil.copy(deck0, rd)
-    shutil.copy(deck1, rd)
+    shutil.copytree(os.path.dirname(deck0), rd, dirs_exist_ok=True)
     env = dict(os.environ)
     env["PYTHONPATH"] = REPO
     info: Dict = {"dir": rd}

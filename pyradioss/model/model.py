@@ -34,8 +34,8 @@ from .entities import (
     EntityGroup, Gravity, ImposedDisplacement, ImposedVelocity,
     AleBoundaryCondition,
     InitialVelocity, Interface, Line, Material, Mpc, NodeGroup, Part,
-    PressureLoad, Property, Rbe3, RigidBody, RigidWall, Section, Sensor,
-    Surface, THRequest,
+    PressureLoad, Property, Random, Rbe3, RigidBody, RigidWall, Section, Sensor,
+    Surface, Table, THRequest,
 )
 from ..common.tables import FunctTable
 from .skew import SkewSet
@@ -514,6 +514,8 @@ class Model:
         self.parts: Dict[int, Part] = {}
         self.parts_list: List[Part] = []          # dense order for elements
         self.functions: Dict[int, FunctTable] = {}
+        self.tables: Dict[int, Table] = {}
+        self.randoms: Dict[int, Random] = {}
         self.node_groups: Dict[int, NodeGroup] = {}
         self.move_functs: List[Tuple[int, float, float, float, float]] = []
         self.surfaces: Dict[int, Surface] = {}

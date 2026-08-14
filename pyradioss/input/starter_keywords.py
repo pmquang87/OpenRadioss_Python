@@ -1182,7 +1182,36 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                   "e1": e1, "e2": e2, "e3": e3, "e4": e4}
         fail_biquad.fit(params)   # pre-compute the two parabolas
         fm = FailureModel(type="BIQUAD", ifail_sh=ifail_sh, params=params)
-    elif kind in ("TAB1", "SNCONNECT"):
+    elif kind == "SNCONNECT":
+        if len(cards) < 2:
+            log.error(f"/FAIL/SNCONNECT/{mat_id}: requires 2 data cards", block.source)
+            return
+            
+        a2, b2, a3, b3, ifail_so, isym = _cut_floats(cards[0], "FAIL_SNCONNECT_1") \
+            if block.fixed else _floats(cards[0], 6)
+        ifail_so, isym = int(ifail_so), int(isym)
+        
+        c2 = cards[1].cut("FAIL_SNCONNECT_2") if block.fixed else cards[1].tokens()
+        id_0n = _ival(c2[0]) if len(c2) > 0 else 0
+        id_0s = _ival(c2[1]) if len(c2) > 1 else 0
+        id_fn = _ival(c2[2]) if len(c2) > 2 else 0
+        id_fs = _ival(c2[3]) if len(c2) > 3 else 0
+        xscale0 = _fval(c2[4]) if len(c2) > 4 else 0.0
+        xscalef = _fval(c2[5]) if len(c2) > 5 else 0.0
+        areascale = _fval(c2[6]) if len(c2) > 6 else 0.0
+
+        nfail = 4 if ifail_so == 2 else 1
+        if b2 == 0.0: b2 = 1.0
+        if b3 == 0.0: b3 = 1.0
+        
+        params = {
+            "a2": a2, "b2": b2, "a3": a3, "b3": b3,
+            "nfail": nfail, "isym": isym,
+            "id_0n": id_0n, "id_0s": id_0s, "id_fn": id_fn, "id_fs": id_fs,
+            "xscale0": xscale0, "xscalef": xscalef, "areascale": areascale
+        }
+        fm = FailureModel(type="SNCONNECT", ifail_sh=1, params=params)
+    elif kind == "TAB1":
         # Generic placeholder for newly added failure models to satisfy parsing
         fm = FailureModel(type=kind, ifail_sh=1, params={})
     # attachment to the material happens in the Starter resolve step

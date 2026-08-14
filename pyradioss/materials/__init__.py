@@ -55,7 +55,23 @@ from . import (eos, law01_elastic, law02_johnson_cook,  # noqa: F401
                law19_fabric, law24_concrete, law27_brittle,
                law35_kelvinmax, law36_tabulated, law40_kelvinmax,
                law42_ogden, law44_cowper, law62_hypervisco,
-               law70_tabfoam, law81_druckerprager, mat_gas, mat_void)
+               law70_tabfoam, law81_druckerprager, law83_spotweld,
+               mat_gas, mat_void)
+
+
+def register_materials():
+    eos._register()
+    law19_fabric._register()
+    law24_concrete._register()
+    law35_kelvinmax._register()
+    law40_kelvinmax._register()
+    law44_cowper._register()
+    law62_hypervisco._register()
+    law70_tabfoam._register()
+    law81_druckerprager._register()
+    law83_spotweld._register()
+    mat_gas._register()
+    mat_void._register()
 
 
 def extra_shapes(mat, nip=None):
@@ -116,6 +132,8 @@ def extra_shapes(mat, nip=None):
     if mat.law == 2 and "mT" in mat.params:
         # adiabatic temperature RISE above T_i (M6 thermal terms)
         shapes["temp"] = (nip,) if nip is not None else ()
+    if getattr(mat, "law", None) == 83 or type(mat).__name__ == "Law83":
+        shapes.update(epsp=(), asrate=())
     return shapes
 
 
@@ -161,6 +179,8 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     if mat.law == 81:
         return law81_druckerprager.solid_update(mat, sig, deps, epsp, dt,
                                                 extra)
+    if mat.law == 83:
+        return law83_spotweld.solid_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 62:
         return law62_hypervisco.solid_update(mat, sig, deps, epsp, dt,
                                              extra)

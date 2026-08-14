@@ -1,0 +1,33 @@
+/ANIM/GZIP
+/ANIM/MASS
+/ANIM/DT
+#   TSTART     TFREQ
+0.000000 0.015000
+/DT
+0.500000 0.000000
+/MON/ON
+/PARITH/ON
+/PRINT/-1000
+/RFILE
+#   NCYCLE
+10000
+/RUN/rubber_tension_v1/1/
+               0.801
+/TFILE/0
+#            dT_HIS
+0.001
+/TITLE
+One Solid                                                                                           
+/VERS/2017
+/ANIM/VECT/CONT
+/ANIM/VECT/FOPT
+/ANIM/VECT/ACC
+/ANIM/VECT/FEXT
+/ANIM/VECT/VEL
+/ANIM/ELEM/DENS
+/ANIM/ELEM/ENER
+/ANIM/ELEM/P
+/ANIM/ELEM/TEMP
+/ANIM/ELEM/DT
+/ANIM/BRICK/TENS/STRAIN
+/ANIM/BRICK/TENS/STRESS

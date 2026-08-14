@@ -1,0 +1,19 @@
+#-  1. :
+#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|
+/ANIM/DT
+#   TSTART     TFREQ
+0.000000 0.500000
+/ANIM/SHELL/EPSP/ALL
+/ANIM/GZIP
+/MON/ON
+/PRINT/-100/55
+/RUN/LAW2/1
+                5.01
+/TFILE/4
+#            dT_HIS
+0.010000
+/VERS/2019
+/ANIM/VECT/VEL
+/ANIM/VECT/DISP
+/ANIM/ELEM/VONM
+/ANIM/SHELL/TENS/STRAIN/ALL

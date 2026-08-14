@@ -1,0 +1,33 @@
+# ENGINE OPTIONS
+# 
+/TITLE
+Dummy positioning by explicit using kinetic relaxation
+#
+/RUN/SEAT_KEREL/1
+1.5
+#
+#
+/TFILE
+1e-03
+#
+/PRINT/-500
+#
+/H3D/DT 
+0 0.025
+#
+/H3D/ELEM/EPSP
+/H3D/NODA/CONT
+/H3D/NODA/FOPT
+/H3D/NODA/DMASS
+/H3D/ELEM/ENER
+/H3D/ELEM/EPSP
+/H3D/ELEM/VONM
+/H3D/NODA/VEL
+#
+/DT
+0.4 1E-11
+#
+/KEREL
+#                                                              
+/MON/ON
+#

@@ -1,0 +1,63 @@
+#-  1. :
+#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|
+#/ANIM/DT
+#   TSTART     TFREQ
+#0.000000 0.250000
+#  Version
+#/ANIM/VERS/44
+#/ANIM/GZIP
+#/ANIM/SHELL/EPSP/1
+#/ANIM/SHELL/EPSP/5
+#/ANIM/SHELL/EPSP/9
+#/ANIM/SHELL/TENS/STRESS/1
+#/ANIM/SHELL/TENS/STRESS/5
+#/ANIM/SHELL/TENS/STRESS/9
+#
+/MON/ON
+/PRINT/-100/0
+/RFILE
+#   NCYCLE
+50000
+/RUN/BIRD_WINDSHIELD/1/
+                  10
+/TFILE/0
+#            dT_HIS
+0.100000
+/TITLE
+WINSHIELD_STRIKE                                                                                    
+/VERS/2019
+#/ANIM/BEAM/EPSP
+#/ANIM/BEAM/VONM
+# h3d output
+/H3D/DT
+#   TSTART     TFREQ
+0.000000 0.250000
+# upper and lower stress and plastic strain results for the /PROP/SHELL
+/H3D/SHELL/TENS/STRESS/NPT=LOWER
+/H3D/SHELL/TENS/STRESS/NPT=UPPER
+/H3D/SHELL/EPSP/NPT=LOWER
+/H3D/SHELL/EPSP/NPT=UPPER
+# output layer 1, 5, and 9 for part_ID=1 /PROP/SH_SANDW 
+/H3D/SHELL/TENS/STRESS/LAYER=1
+1
+/H3D/SHELL/TENS/STRESS/LAYER=5
+1
+/H3D/SHELL/TENS/STRESS/LAYER=9
+1
+/H3D/SHELL/EPSP/LAYER=1
+1
+/H3D/SHELL/EPSP/LAYER=5
+1
+/H3D/SHELL/EPSP/LAYER=9
+1
+/H3D/BEAM/VONM
+/H3D/BEAM/EPSP
+/H3D/SPH/TENS/STRESS
+/H3D/SPH/EPSP
+/H3D/SPH/DIAMETER
+/H3D/COMPRESS
+0.01
+# end h3d output
+/DT/NODA/CST/1
+0.9 0.0006
+292

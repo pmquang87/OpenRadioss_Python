@@ -1,0 +1,47 @@
+/ANIM/DT
+#   TSTART     TFREQ
+0.000000 500.000000
+/DT
+0.900000 0.000000
+/MON/ON
+/PRINT/-1000
+/RUN/SNAP_IMP/1
+                3000
+/TFILE/4
+#            dT_HIS
+50.000000
+/TITLE
+SnapRoof_implicit                                                                                   
+/VERS/140
+/ANIM/VECT/VEL
+/ANIM/SHELL/TENS/STRESS/MEMB
+/ABF
+50. 1e30
+
+
+####################
+# IMPLICIT OPTIONS #
+####################
+
+/IMPL/PRINT/NONL/-1
+
+/IMPL/NONLIN
+# upd_K_LIM NITOL N_TOL
+3 1 0.20e-3
+
+/IMPL/DTINI
+10
+
+/IMPL/SOLVER/2
+# IPREC L_LIM ITOL L_TOL
+5 0 0 0.0
+
+/IMPL/DT/STOP
+0.5 10
+
+#/IMPL/DT/1
+#6 1.05 50 0.8
+
+/IMPL/DT/2
+6 .0 20 0.8 1.05
+ 

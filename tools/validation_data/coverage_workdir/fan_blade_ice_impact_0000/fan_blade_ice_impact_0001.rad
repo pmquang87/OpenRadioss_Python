@@ -1,0 +1,32 @@
+# initialize the explicit rotation
+/RUN/fan_blade_ice_impact/1
+            0.08
+/VERS/140
+/ANIM/VERS/44 
+/ANIM/VECT/PCONT
+/ANIM/VECT/VEL
+/ANIM/ELEM/ENER
+/TFILE/0
+#            dT_HIS
+0.000050
+/RFILE
+#   NCYCLE     IREAD     IWRITE
+10000000 0 0
+/ANIM/DT
+#   TSTART     TFREQ
+0.000000 0.008
+/ANIM/SHELL/TENS/STRAIN/ALL
+/ANIM/BRICK/TENS/STRAIN
+/ANIM/SHELL/TENS/STRESS/ALL
+/ANIM/ELEM/EPSP
+/ANIM/GZIP
+/PARITH/ON
+/MON/ON
+/PRINT/-500
+/DT
+0.9 0
+# apply initial rotational velocity
+/INIV/AXIS/Z/1
+0
+0 0 0 104.72
+1 3650

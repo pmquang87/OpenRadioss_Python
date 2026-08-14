@@ -1,0 +1,126 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%   Please visit                                                             %
+%   http://www.solidthinking.com/compose_land.html                           %
+%   for more info about Altair Compose                                       %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+clear all
+clc
+close all
+format(1,15)
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    Read input data                                                         %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% read file
+[name_i, path_i, index] = uigetfile({'*.txt;*.dat','Text files';'*.oml','Compose files'}, 'Read Test Data');
+
+fid=fopen(fullfile(path_i,name_i),'r');
+% read data size
+A=fscanf(fid, '%f %f\n',[2 Inf]);
+fclose(fid)
+%disp(A')
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%    Start fitting                                                           %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function y=FittingFunc(C_i0,eps_e)
+	
+	lamda=eps_e+1;
+        dW_dlamda_1=2*C_i0(1)*(lamda-lamda.^(-2));
+		dW_dlamda_2=4*C_i0(2)*(lamda.^3-3*lamda+1+3*lamda.^(-2)-2*lamda.^(-3));
+		dW_dlamda_3=6*C_i0(3)*(lamda.^5-6*lamda.^3+3*lamda.^2+9*lamda-6-9*lamda.^(-2)+12*lamda.^(-3)-4*lamda.^(-4));
+		%true stress of yeoh
+		yeoh_2=lamda.*(dW_dlamda_1+dW_dlamda_2+dW_dlamda_3);
+		%engineer stress of yeoh
+		y=yeoh_2./lamda;
+	
+end
+
+eps_e=A(1,:);
+y=A(2,:);
+
+%plot curve	
+	fig2 = figure(2); clf;
+	figure(2);	
+	plot(eps_e,y,'b-','LineWidth',2);
+	xlabel('Engineer Strain');
+	ylabel('Engineer Stress');
+	hold on
+
+% start to fitting Yeoh parameter
+initial = rand(1,3);
+
+[C_i0,res] = lsqcurvefit(@FittingFunc,initial,eps_e,y);
+
+ % plot fitting curve
+	max_eps=1.1*max(eps_e);
+	eps_e_full=[-0.99:0.01:max_eps];
+	xf=FittingFunc(C_i0,eps_e_full);
+	plot(eps_e_full,xf,'r-','LineWidth',2);
+    axis([-1 max_eps -max(y) 1.1*max(y)]);
+
+	legend('on');
+	legend('Test data','Fitted Yeoh curve');
+	hold on
+ % plot results in command window
+	disp('C10 is: '), disp(C_i0(1))
+	disp('C20 is: '), disp(C_i0(2))
+	disp('C30 is: '), disp(C_i0(3))
+	disp('residule of fitting is: '), disp(res)
+
+%% read mat data for LAW94 Card output
+RHO=inputdlg({'Initial Density? e.g. 1.1e-9', 'Poisson Ratio? recommand 0.495'}, 'Input Other Material Data for LAW94 Card output', [1, 2]);
+RHO_I=str2num(cell2mat(RHO(1,1)));
+NU=str2num(cell2mat(RHO(2,1)));	
+
+%% computer Bulk modulus
+shear_modulus=2*C_i0(1);
+D1=(3*(1-2*NU))/(shear_modulus*(1+NU));
+
+	
+name_o = uiputfile({'*.txt;*.dat','Text files';'*.oml','Compose files'}, 'Save Fitted Results');	
+disp ('Fitted Yeoh parameter is saved in: '), disp(fullfile(path_i,name_o))
+fid1=fopen(fullfile(path_i,name_o),'wt');
+
+fprintf(fid1,'%8s\n','Fitted Yeoh parameter C10 is:');
+fprintf(fid1,'%f\n',C_i0(1));
+fprintf(fid1,'%8s\n','Fitted Yeoh parameter C20 is:');
+fprintf(fid1,'%f\n',C_i0(2));
+fprintf(fid1,'%8s\n','Fitted Yeoh parameter C30 is:');
+fprintf(fid1,'%f\n',C_i0(3));
+fprintf(fid1,'%8s\n','Quality of Fitted Yeoh parameter is:');
+fprintf(fid1,'%f\n',res);
+fprintf(fid1,'%8s\n','');
+fprintf(fid1,'%8s\n','');
+%% output RADIOSS LAW94 Card
+fprintf(fid1,'%8s\n','#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|');
+fprintf(fid1,'%8s\n','/MAT/LAW94/1');
+fprintf(fid1,'%8s\n','Fitted Yeoh');
+fprintf(fid1,'%8s\n','#              RHO_I');
+fprintf(fid1,'%20.15f\n',RHO_I);
+fprintf(fid1,'%8s\n','#         blank');
+fprintf(fid1,'%8s\n','');
+fprintf(fid1,'%8s\n','#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|');
+fprintf(fid1,'%8s\n','#                C10                 C20                 C30');
+fprintf(fid1,'%20.15f',C_i0(1));
+fprintf(fid1,'%20.15f',C_i0(2));
+fprintf(fid1,'%20.15f\n',C_i0(3));
+fprintf(fid1,'%8s\n','#                 D1                  D2                  D3');
+fprintf(fid1,'%20.15f\n',D1);
+fprintf(fid1,'%8s\n','#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|');
+fprintf(fid1,'%8s\n','');
+fprintf(fid1,'%8s\n','');
+fprintf(fid1,'%8s\n','-------------------------------------');
+fprintf(fid1,'%8s\n','Curve with fitted Yeoh parameter');
+fprintf(fid1,'%8s\n','-------------------------------------');
+fprintf(fid1,'%8s %8s\n','EPS_e','SIGMA_e');
+
+for ii=1:size(eps_e_full,2)
+fprintf(fid1,'%f %f\n',eps_e_full(ii),xf(ii));
+ii=ii+1;
+end
+fclose(fid1)

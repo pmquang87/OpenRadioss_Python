@@ -1,0 +1,22 @@
+# 
+/TITLE 
+
+/VERS/140 
+/ANIM/DT 
+0.000000e+000 5.000000e-002
+/TFILE
+1.000000e-004
+/ABF
+1.000000e-004 1e30
+/RFILE
+1400 0 0
+/PRINT/-50
+##/PROC/1
+/RUN/TWISBEAM/2
+0.05001
+/DT                                                                             
+ 0.9 0.0                                                                        
+/DYREL
+1.0 0.0025                                                                                
+                                                                                
+/MON/ON

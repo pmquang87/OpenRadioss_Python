@@ -1,0 +1,20 @@
+/ANIM/DT
+#   TSTART     TFREQ
+0.000000 0.010000
+/DT
+0.900000 0.000000
+/MON/ON
+/PRINT/-50
+/RFILE
+#   NCYCLE     IREAD     IWRITE
+1000 0 0
+/RUN/TWISBEAM/1
+             0.02001
+/TFILE/4
+#            dT_HIS
+0.000100
+/TITLE
+                                                                                                    
+/VERS/140
+/ABF
+1.000000e-004 1e30

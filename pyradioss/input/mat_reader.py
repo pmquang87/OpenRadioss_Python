@@ -1252,6 +1252,7 @@ def read_generic_mat(block: KeywordBlock, model, log: MessageLog) -> None:
             log.error(f"/MAT/{rec.law_name}/{rec.id}: registered physics "
                       f"constructor failed: {exc}", block.source)
             return
+        mat.record = rec
         model.materials[rec.id] = mat
         return
     model.materials[rec.id] = make_inactive_material(rec)

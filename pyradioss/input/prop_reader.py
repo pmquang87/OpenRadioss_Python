@@ -94,7 +94,7 @@ def prop_type_ok(req_prop: int, prop: Property) -> bool:
         return True
     if req_prop == 4 and pt in (8, 13):
         return True
-    if req_prop == 14 and pt in (20, 21, 22):
+    if req_prop == 14 and pt in (20, 21, 22, 43):
         return True
     return False
 
@@ -559,6 +559,8 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
         return parse_tshell(block, log)
     if typename in ("VOID", "TYPE0"):
         return parse_void(block, log)
+    if typename in ("CONNECT", "TYPE43"):
+        return parse_connect(block, log)
     # ---- everything else: parse-only + inactive ----------------------------
     title, _cards, _fixed = _data_cards(block)
     params = _universal_geo_params()
@@ -568,6 +570,32 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     return InactiveProperty(id=block.user_id, type=ptype, title=title,
                             params=params, prop_name=typename)
 
+
+def parse_connect(block: KeywordBlock, log: MessageLog) -> Property:
+    """/PROP/CONNECT (TYPE43) — solid spotweld connection (M75)."""
+    title, cards, _fixed = _data_cards(block)
+    params = _universal_geo_params()
+    params["ismstr"] = 1
+    params["thick"] = 0.0
+
+    if cards and not cards[0].is_blank:
+        # TYPE43 fixed format just has Ismstr, THICK or Ismstr THICK in tokens.
+        # But wait, TYPE43 has no standard config layout for Ismstr/Thick. 
+        # But hm_read_prop43.F extracts Ismstr and THICK. We will try to parse them if present.
+        t = cards[0].tokens()
+        try:
+            if len(t) > 0:
+                params["ismstr"] = int(t[0])
+                if params["ismstr"] <= 0 or params["ismstr"] == 2 or params["ismstr"] == 3:
+                    params["ismstr"] = 1
+                if params["ismstr"] == 10:
+                    params["ismstr"] = 4
+            if len(t) > 1:
+                params["thick"] = float(t[1])
+        except ValueError:
+            pass
+            
+    return Property(id=block.user_id, type=43, title=title, params=params)
 
 def _type_number(typename: str) -> int:
     if typename in PROP_TYPE_NUMBERS:

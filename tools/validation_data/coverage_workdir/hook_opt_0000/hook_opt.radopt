@@ -1,0 +1,41 @@
+/DESOBJ
+myobj 
+#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|
+#     type   resp_ID
+#    0=min
+         0        10
+#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|
+/DTPL/16
+grpart 4 for topology optimization
+#grpart_ID      TMIN    STRESS	 MEMBSIZ     PATRN    PATREP      EXTR      MESH      DRAW    MMOCID
+         4     	   0         0         1         0         0         0         0         1         0                        
+#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|
+#Card for MEMBSIZ=1
+#   MINDIM              MAXDIM              MINGAP
+       2.5
+#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|
+#Card for DRAW=1
+#     DTYP      DAID                 XDA                 YDA                 ZDA
+         1      5314
+#               DFID                 XDF                 YDF                 ZDF
+                5291
+#  ogrpart    NOHOLE              TSTAMP                  
+
+#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|
+/DRESP1/10
+volume - response for object
+#    RTYPE    PTYPE     REGION      ATTA      ATTB      ATTI
+# 3=volume    3=part                                  grpart
+         3         3                                       4
+#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|   
+/DRESP1/11       
+displacement - response for constraint
+#    RTYPE    PTYPE     REGION      ATTA      ATTB      ATTI      ATTJ
+#   5=disp    1=node          7=tot disp              grnode
+         5         1                   7                 120
+#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|
+/DCONSTR/16  
+constraint for displacement
+#  resp_ID               cmin                 cmax
+        11                                     5.0
+#---1----|----2----|----3----|----4----|----5----|----6----|----7----|----8----|----9----|---10----|

@@ -426,6 +426,9 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
         elif mat.law == 44:
             from ..materials import law44_cowper
             law44_cowper.resolve(mat, model, log)
+        elif mat.law == 83:
+            from ..materials import law83_spotweld
+            law83_spotweld.resolve(mat, model, log)
 
     for mat_id, fm, source in model.raw_fails:
         mat = model.materials.get(mat_id)
