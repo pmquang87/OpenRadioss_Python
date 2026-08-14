@@ -279,6 +279,9 @@ class Surface:
     # seg_elem[i]  = row in that group (-1 for explicit segments).
     seg_gtype: Optional[np.ndarray] = None    # (nseg,) dtype '<U8'
     seg_elem: Optional[np.ndarray] = None     # (nseg,) int64
+    # /SURF/PLANE (M92): infinite plane defined by point P1 and normal point P2
+    plane_p1: Optional[np.ndarray] = None     # (3,) float [X_A, Y_A, Z_A]
+    plane_p2: Optional[np.ndarray] = None     # (3,) float [X_B, Y_B, Z_B]
 
 
 @dataclass
@@ -497,6 +500,26 @@ class ImposedDisplacement:
     ``dof`` axis (fixvel.F 390-418 projects the current velocity onto the
     skew axis, imposes the curve there and adds the correction back along
     the SAME axis, leaving the other two components free).
+    """
+
+    id: int
+    grnod_id: int
+    funct_id: int
+    dof: int              # 0/1/2 = tra X/Y/Z, 3/4/5 = rot XX/YY/ZZ (M39)
+    scale: float = 1.0    # Fscale_Y (curve ordinate scale)
+    xscale: float = 1.0   # Ascale_x (curve abscissa scale, never 0)
+    tstart: float = 0.0   # activation window
+    tstop: float = 1.0e30
+    sens_id: int = 0      # /SENSOR gate (parsed; engine gating not ported)
+    title: str = ""
+    skew_id: int = 0      # /SKEW: dof is the skew's axis, not the global one
+    skew_row: int = 0     # resolved SkewSet row (0 = global)
+
+
+@dataclass
+class ImposedAcceleration:
+    """/IMPACC (M92): imposed acceleration a(t) = scale * funct(t) on one
+    DOF of a node group. Same card structure and fields as :class:`ImposedVelocity`.
     """
 
     id: int

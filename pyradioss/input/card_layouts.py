@@ -114,6 +114,8 @@ LAYOUTS: Dict[str, List[int]] = {
     "ELEM_IDS": [10] * 10,
     # packed id lists (/GRNOD ids, /TH/PART ids, ...): 10 x %10d
     "IDS10": [10] * 10,
+    # SETS/surf.cfg (radioss110+): CARD("%20lg%20lg%20lg", X, Y, Z) for /SURF/PLANE
+    "SURF_PLANE": [20, 20, 20],
 
     # ---- part / mat -------------------------------------------------------
     # PART/part.cfg (radioss51+): CARD("%10d%10d%10d%20lg",

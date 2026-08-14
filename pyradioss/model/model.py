@@ -31,7 +31,7 @@ import numpy as np
 
 from .entities import (
     AddedMass, BoundaryCondition, Box, ConcentratedLoad, Damping,
-    EntityGroup, Gravity, ImposedDisplacement, ImposedVelocity,
+    EntityGroup, Gravity, ImposedAcceleration, ImposedDisplacement, ImposedVelocity,
     AleBoundaryCondition,
     InitialVelocity, Interface, Line, Material, Mpc, NodeGroup, Part,
     PressureLoad, Property, Random, Rbe3, RigidBody, RigidWall, Section, Sensor,
@@ -573,6 +573,7 @@ class Model:
         self.cloads: List[ConcentratedLoad] = []
         self.impvel: List[ImposedVelocity] = []
         self.impdisp: List[ImposedDisplacement] = []   # /IMPDISP (M5)
+        self.impacc: List[ImposedAcceleration] = []    # /IMPACC  (M92)
         self.ploads: List[PressureLoad] = []           # /PLOAD   (M5)
         self.admas: List[AddedMass] = []               # /ADMAS   (M5)
         self.rwalls: List[RigidWall] = []

@@ -34,7 +34,7 @@ from ..common.messages import MessageLog
 from ..common.tables import FunctTable
 from ..model.entities import (
     AddedMass, BoundaryCondition, Box, ConcentratedLoad, Damping, Gravity,
-    ImposedDisplacement, ImposedVelocity, InitialVelocity, Interface, Line,
+    ImposedAcceleration, ImposedDisplacement, ImposedVelocity, InitialVelocity, Interface, Line,
     Material, Mpc, NodeGroup, Part, PressureLoad, Property, Random, Rbe3, RigidBody,
     RigidWall, Section, MonitoredVolume, Sensor, Subdomain, Submodel, Surface, Table, THRequest, Xref,
     DetonatorPoint, DetonatorPlane,
@@ -2197,9 +2197,20 @@ def read_surf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif kind in ("GRSHEL", "GRSH3N", "GRTRIA"):
         fam = _GR_FAMILIES[kind]
         s.egroup_refs.extend((fam, i) for i in _id_list(block, cards))
+    elif kind == "PLANE":
+        if len(cards) < 2:
+            log.error(f"/SURF/PLANE/{block.user_id}: requires 2 data cards (P1, P2)", block.source)
+        else:
+            p1 = _cut_floats(cards[0], "SURF_PLANE") if block.fixed else _floats(cards[0], 3)
+            p2 = _cut_floats(cards[1], "SURF_PLANE") if block.fixed else _floats(cards[1], 3)
+            v = np.array(p2[:3]) - np.array(p1[:3])
+            if np.linalg.norm(v) <= 1e-10:
+                log.error(f"/SURF/PLANE/{block.user_id}: plane points P1 and P2 are identical (zero normal)", block.source)
+            s.plane_p1 = np.array(p1[:3], dtype=float)
+            s.plane_p2 = np.array(p2[:3], dtype=float)
     else:
         log.warning(f"/SURF/{kind} not ported (PART, SEG, SURF, GRSHEL, "
-                    f"GRSH3N supported)", block.source)
+                    f"GRSH3N, PLANE supported)", block.source)
 
 
 # ============================================================================
@@ -2783,6 +2794,14 @@ def read_impdisp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """
     _read_imposed(block, model, log, "IMPDISP", ImposedDisplacement,
                   model.impdisp)
+
+
+def read_impacc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/IMPACC/impacc_ID`` (M92) — imposed acceleration a(t) = scale * funct(t)
+    on one DOF of a node group. Same cards and layout as /IMPVEL.
+    """
+    _read_imposed(block, model, log, "IMPACC", ImposedAcceleration,
+                  model.impacc)
 
 
 def read_pload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -4940,6 +4959,7 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "CLOAD": read_cload,
     "IMPVEL": read_impvel,
     "IMPDISP": read_impdisp,
+    "IMPACC": read_impacc,
     "PLOAD": read_pload,
     "ADMAS": read_admas,
     "DAMP": read_damp,

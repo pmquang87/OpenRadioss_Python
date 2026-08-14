@@ -1220,8 +1220,8 @@ def resolve_skews(model: Model, log: MessageLog) -> None:
         bc.skew_row = _bind("SKEW", bc.skew_id, f"/ALE/BCS/{bc.id}") \
             if bc.skew_id else 0
 
-    # ---- /IMPVEL + /IMPDISP: the imposed DOF is a skew axis (fixvel.F) --
-    for im in list(model.impvel) + list(model.impdisp):
+    # ---- /IMPVEL + /IMPDISP + /IMPACC: the imposed DOF is a skew axis (fixvel.F) --
+    for im in list(model.impvel) + list(model.impdisp) + list(model.impacc):
         im.skew_row = _bind("SKEW", im.skew_id,
                             f"/IMP*/{im.id}") if im.skew_id else 0
 
