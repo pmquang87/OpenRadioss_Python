@@ -172,12 +172,13 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
         resolve_entity_groups(model, log)
         resolve_surfaces(model, log)
         resolve_lines(model, log)     # after surfaces: /LINE/SURF reads them
-        resolve_node_groups(model, log)
         # reference systems (M39): built from the node positions, then
         # bound to every consumer that names one (/BCS, /IMP*, /RBODY,
         # /PROP TYPE8, /INIVEL/AXIS) — before the checks so an unknown
         # skew_ID is reported with all the other model errors
         resolve_skews(model, log)
+        # node groups evaluate /BOX which may need resolved skews
+        resolve_node_groups(model, log)
 
         # 3. checks before any heavy work (fail early with ALL messages)
         check_model(model, log)
