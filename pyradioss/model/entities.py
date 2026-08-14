@@ -946,4 +946,17 @@ class Submodel:
     off_sub: int = 0
 
 
+@dataclass
+class Subdomain:
+    """`/SUBDOMAIN/sub_id` domain partition for Rad2Rad coupling (lecextlnk.F).
+
+    In the Fortran Starter, ``ISUBDOM(1,I)`` stores the count of parts,
+    ``ISUBDOM(2,I)`` the user subdomain ID, and ``ISUBDOM_PART`` the
+    flat list of internal part indices.  Here we store user-facing part
+    IDs directly.
+    """
+    id: int
+    title: str = ""
+    part_ids: List[int] = field(default_factory=list)
+    neg_part_ids: List[int] = field(default_factory=list)
 

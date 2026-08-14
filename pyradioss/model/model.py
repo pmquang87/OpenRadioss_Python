@@ -35,7 +35,7 @@ from .entities import (
     AleBoundaryCondition,
     InitialVelocity, Interface, Line, Material, Mpc, NodeGroup, Part,
     PressureLoad, Property, Random, Rbe3, RigidBody, RigidWall, Section, Sensor,
-    Submodel, Surface, Table, THRequest,
+    Subdomain, Submodel, Surface, Table, THRequest,
 )
 from ..common.tables import FunctTable
 from .skew import SkewSet
@@ -553,6 +553,9 @@ class Model:
         self.active_submodels: List[int] = []
         self.node_submodel: np.ndarray = np.zeros(0, dtype=np.int32)
         self.submodels: Dict[int, Submodel] = {}
+
+        # SUBDOMAIN domain partitions (M88 — Rad2Rad coupling)
+        self.subdomains: Dict[int, Subdomain] = {}
 
         # Loads / constraints / contacts
         self.bcs: List[BoundaryCondition] = []

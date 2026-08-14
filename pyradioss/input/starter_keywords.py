@@ -36,7 +36,7 @@ from ..model.entities import (
     AddedMass, BoundaryCondition, Box, ConcentratedLoad, Damping, Gravity,
     ImposedDisplacement, ImposedVelocity, InitialVelocity, Interface, Line,
     Material, Mpc, NodeGroup, Part, PressureLoad, Property, Random, Rbe3, RigidBody,
-    RigidWall, Section, MonitoredVolume, Sensor, Submodel, Surface, Table, THRequest,
+    RigidWall, Section, MonitoredVolume, Sensor, Subdomain, Submodel, Surface, Table, THRequest,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -4623,6 +4623,44 @@ def read_endsub(block: KeywordBlock, model: Model,
         log.warning("/ENDSUB encountered without an active /SUBMODEL", block.source)
 
 
+def read_subdomain(block: KeywordBlock, model: Model,
+                   log: MessageLog) -> None:
+    """`/SUBDOMAIN/sub_id` — Domain partition for Rad2Rad coupling.
+
+    Fortran origin: ``starter/source/coupling/rad2rad/lecextlnk.F``
+    and ``hm_cfg_files/config/CFG/radioss2022/RAD2R/subdomain.cfg``.
+
+    Card 1: title (100 chars).
+    Cards 2+: free object list of part IDs — 10 per line in 10-column
+    fixed format, or whitespace/comma separated in free format.
+    Negative IDs mark exclusions (Fortran ``negativeIds``).
+    """
+    sub_id = block.user_id if block.user_id is not None else 0
+    title, cards = _fixed_data(block) if block.fixed \
+        else _title_and_data(block)
+
+    # Collect all part IDs from the object list cards (reuse _id_list
+    # which handles both fixed IDS10 layout and free-format tokens).
+    all_ids = _id_list(block, cards)
+
+    part_ids: List[int] = []
+    neg_part_ids: List[int] = []
+    for pid in all_ids:
+        if pid > 0:
+            part_ids.append(pid)
+            if pid not in model.parts:
+                log.warning(
+                    f"/SUBDOMAIN/{sub_id}: part {pid} not found in model",
+                    block.source,
+                )
+        elif pid < 0:
+            neg_part_ids.append(abs(pid))
+
+    sd = Subdomain(id=sub_id, title=title,
+                   part_ids=part_ids, neg_part_ids=neg_part_ids)
+    model.subdomains[sub_id] = sd
+
+
 KEYWORD_PARSERS: Dict[str, Callable] = {
     "MONVOL": read_monvol,
     "ANALY": read_analy,
@@ -4696,6 +4734,7 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "TRANSFORM": read_transform,
     "SUBMODEL": read_submodel,
     "ENDSUB": read_endsub,
+    "SUBDOMAIN": read_subdomain,
 }
 
 ENGINE_KEYWORDS_IGNORE = {
