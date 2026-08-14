@@ -39,6 +39,7 @@ from ..model.entities import (
     RigidWall, Section, MonitoredVolume, Sensor, Subdomain, Submodel, Surface, Table, THRequest, Xref,
     DetonatorPoint, DetonatorPlane,
     ConvectionLoad, InivolContainer, InitialVolume,
+    RadiationLoad, ImposedFlux, InitialTemperature,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -5103,6 +5104,156 @@ def read_inivol(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.inivol.append(iv)
 
 
+def read_radiation(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RADIATION/rad_ID`` (M95)::
+
+        card 1:  title
+        card 2:  surf_ID  funct_ID  sensor_ID
+        card 3:  Ascale   Fscale    Tstart   Tstop   E
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/RADIATION/{block.user_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("RADIATION_1")
+        surf_id = _ival(f[0])
+        funct_id = _ival(f[1]) if len(f) > 1 else 0
+        sens_id = _ival(f[2]) if len(f) > 2 else 0
+
+        g = cards[1].cut("RADIATION_2") if len(cards) > 1 and not cards[1].is_blank else []
+        xscale = _fval(g[0], 1.0) if len(g) > 0 else 1.0
+        scale = _fval(g[1], 1.0) if len(g) > 1 else 1.0
+        tstart = _fval(g[2], 0.0) if len(g) > 2 else 0.0
+        tstop = _fval(g[3], 1.0e30) if len(g) > 3 else 1.0e30
+        emissivity = _fval(g[4], 0.0) if len(g) > 4 else 0.0
+    else:
+        t0 = cards[0].tokens()
+        surf_id = int(t0[0]) if len(t0) > 0 else 0
+        funct_id = int(t0[1]) if len(t0) > 1 else 0
+        sens_id = int(t0[2]) if len(t0) > 2 else 0
+
+        t1 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        xscale = float(t1[0]) if len(t1) > 0 else 1.0
+        scale = float(t1[1]) if len(t1) > 1 else 1.0
+        tstart = float(t1[2]) if len(t1) > 2 else 0.0
+        tstop = float(t1[3]) if len(t1) > 3 else 1.0e30
+        emissivity = float(t1[4]) if len(t1) > 4 else 0.0
+
+    if xscale == 0.0:
+        xscale = 1.0
+    if scale == 0.0:
+        scale = 1.0
+    if tstop == 0.0:
+        tstop = 1.0e30
+
+    rl = RadiationLoad(
+        id=block.user_id, surf_id=surf_id, funct_id=funct_id,
+        sens_id=sens_id, xscale=xscale, scale=scale,
+        tstart=tstart, tstop=tstop, emissivity=emissivity, title=title,
+    )
+    model.radiation_loads.append(rl)
+
+
+def read_impflux(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/IMPFLUX/impflux_ID`` (M95)::
+
+        card 1:  title
+        card 2:  surf_ID  funct_ID  sensor_ID  grbric_ID
+        card 3:  Ascale   Fscale    Tstart     Tstop
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/IMPFLUX/{block.user_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("IMPFLUX_1")
+        surf_id = _ival(f[0])
+        funct_id = _ival(f[1]) if len(f) > 1 else 0
+        sens_id = _ival(f[2]) if len(f) > 2 else 0
+        grbric_id = _ival(f[3]) if len(f) > 3 else 0
+
+        g = cards[1].cut("IMPFLUX_2") if len(cards) > 1 and not cards[1].is_blank else []
+        xscale = _fval(g[0], 1.0) if len(g) > 0 else 1.0
+        scale = _fval(g[1], 1.0) if len(g) > 1 else 1.0
+        tstart = _fval(g[2], 0.0) if len(g) > 2 else 0.0
+        tstop = _fval(g[3], 1.0e30) if len(g) > 3 else 1.0e30
+    else:
+        t0 = cards[0].tokens()
+        surf_id = int(t0[0]) if len(t0) > 0 else 0
+        funct_id = int(t0[1]) if len(t0) > 1 else 0
+        sens_id = int(t0[2]) if len(t0) > 2 else 0
+        grbric_id = int(t0[3]) if len(t0) > 3 else 0
+
+        t1 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        xscale = float(t1[0]) if len(t1) > 0 else 1.0
+        scale = float(t1[1]) if len(t1) > 1 else 1.0
+        tstart = float(t1[2]) if len(t1) > 2 else 0.0
+        tstop = float(t1[3]) if len(t1) > 3 else 1.0e30
+
+    if xscale == 0.0:
+        xscale = 1.0
+    if scale == 0.0:
+        scale = 1.0
+    if tstop == 0.0:
+        tstop = 1.0e30
+
+    fl = ImposedFlux(
+        id=block.user_id, surf_id=surf_id, funct_id=funct_id,
+        sens_id=sens_id, grbric_id=grbric_id, xscale=xscale,
+        scale=scale, tstart=tstart, tstop=tstop, title=title,
+    )
+    model.impflux_loads.append(fl)
+
+
+def read_initemp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INITEMP/initemp_ID`` (M95)::
+
+        card 1:  title
+        card 2:  T0  grnd_ID  [fld_type]
+        cards 3+ (if fld_type==1): T0i  node_IDi
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/INITEMP/{block.user_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("INITEMP_1")
+        t0 = _fval(f[0], 0.0)
+        grnod_id = _ival(f[1]) if len(f) > 1 else 0
+        fld_type = _ival(f[2], default=0) if len(f) > 2 else 0
+    else:
+        t = cards[0].tokens()
+        t0 = float(t[0]) if len(t) > 0 else 0.0
+        grnod_id = int(t[1]) if len(t) > 1 else 0
+        fld_type = int(t[2]) if len(t) > 2 else 0
+
+    nodal_temps: Dict[int, float] = {}
+    if fld_type == 1 and len(cards) > 1:
+        for c in cards[1:]:
+            if c.is_blank:
+                continue
+            if block.fixed:
+                sub = c.cut("INITEMP_SUB")
+                t_val = _fval(sub[0], 0.0)
+                n_id = _ival(sub[1]) if len(sub) > 1 else 0
+            else:
+                st = c.tokens()
+                if not st:
+                    continue
+                t_val = float(st[0])
+                n_id = int(st[1]) if len(st) > 1 else 0
+            if n_id:
+                nodal_temps[n_id] = t_val
+
+    it = InitialTemperature(
+        id=block.user_id, t0=t0, grnod_id=grnod_id,
+        fld_type=fld_type, nodal_temps=nodal_temps, title=title,
+    )
+    model.initemp.append(it)
+
+
 KEYWORD_PARSERS: Dict[str, Callable] = {
     "MONVOL": read_monvol,
     "ANALY": read_analy,
@@ -5184,6 +5335,9 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "DFS": read_dfs,
     "CONVEC": read_convec,
     "INIVOL": read_inivol,
+    "RADIATION": read_radiation,
+    "IMPFLUX": read_impflux,
+    "INITEMP": read_initemp,
 }
 
 ENGINE_KEYWORDS_IGNORE = {

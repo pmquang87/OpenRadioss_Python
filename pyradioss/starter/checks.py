@@ -199,6 +199,24 @@ def check_model(model: Model, log: MessageLog) -> None:
         if conv.surf_id not in model.surfaces:
             log.error(f"/CONVEC/{conv.id}: surface {conv.surf_id} not defined",
                       "CROSS REF")
+    for rad in model.radiation_loads:
+        if rad.funct_id:
+            need_funct(rad.funct_id, f"/RADIATION/{rad.id}")
+        if rad.surf_id not in model.surfaces:
+            log.error(f"/RADIATION/{rad.id}: surface {rad.surf_id} not defined",
+                      "CROSS REF")
+    for fl in model.impflux_loads:
+        if fl.funct_id:
+            need_funct(fl.funct_id, f"/IMPFLUX/{fl.id}")
+        if fl.surf_id and fl.surf_id not in model.surfaces:
+            log.error(f"/IMPFLUX/{fl.id}: surface {fl.surf_id} not defined",
+                      "CROSS REF")
+        if fl.grbric_id and ("bricks", fl.grbric_id) not in model.element_groups:
+            log.error(f"/IMPFLUX/{fl.id}: brick group {fl.grbric_id} not defined",
+                      "CROSS REF")
+    for itemp in model.initemp:
+        if itemp.grnod_id:
+            need_group(itemp.grnod_id, f"/INITEMP/{itemp.id}")
     for iv in model.inivol:
         if iv.part_id and iv.part_id not in model.parts:
             log.error(f"/INIVOL/{iv.id}: part {iv.part_id} not defined",

@@ -1110,3 +1110,55 @@ class InitialVolume:
     containers: List[InivolContainer] = field(default_factory=list)
 
 
+@dataclass
+class RadiationLoad:
+    """/RADIATION (M95): radiation heat flux boundary condition on a /SURF.
+
+    Fortran origin: ``starter/source/loads/thermic/hm_read_radiation.F``.
+    q = epsilon * sigma * (T_surf^4 - T_inf(t)^4)
+    """
+    id: int
+    surf_id: int
+    funct_id: int = 0       # time function for T_inf
+    sens_id: int = 0
+    xscale: float = 1.0     # ASCALE (time scale)
+    scale: float = 1.0      # FSCALE (temperature scale)
+    tstart: float = 0.0     # TSTART
+    tstop: float = 1.0e30   # TSTOP
+    emissivity: float = 0.0 # E (surface emissivity)
+    title: str = ""
+
+
+@dataclass
+class ImposedFlux:
+    """/IMPFLUX (M95): imposed surface or volumetric heat flux.
+
+    Fortran origin: ``starter/source/constraints/thermic/hm_read_impflux.F``.
+    """
+    id: int
+    surf_id: int = 0        # surface ID for surfacic flux
+    funct_id: int = 0       # time function for flux density
+    sens_id: int = 0
+    grbric_id: int = 0      # brick group ID for volumetric flux
+    xscale: float = 1.0     # ASCALE
+    scale: float = 1.0      # FSCALE
+    tstart: float = 0.0     # TSTART
+    tstop: float = 1.0e30   # TSTOP
+    title: str = ""
+
+
+@dataclass
+class InitialTemperature:
+    """/INITEMP (M95): initial nodal temperature.
+
+    Fortran origin: ``starter/source/initial_conditions/thermic/hm_read_initemp.F``.
+    """
+    id: int
+    t0: float = 0.0
+    grnod_id: int = 0
+    fld_type: int = 0       # 0 = uniform on group, 1 = nodal table
+    nodal_temps: Dict[int, float] = field(default_factory=dict)  # node_id -> temp
+    title: str = ""
+
+
+
