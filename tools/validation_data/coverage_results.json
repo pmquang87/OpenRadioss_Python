@@ -52,8 +52,8 @@
   {
    "family": "FAIL/SNCONNECT",
    "cases_using": 1,
-   "cases_blocking": 1,
-   "blocks_total": 1,
+   "cases_blocking": 0,
+   "blocks_total": 0,
    "cases_sole_blocker": 0
   },
   {
@@ -1167,7 +1167,6 @@
     "RBODY/1001",
     "RBODY/1006",
     "RBODY/1007",
-    "FAIL/SNCONNECT",
     "RBODY/1010",
     "RBODY/1002",
     "RBODY/1009",
