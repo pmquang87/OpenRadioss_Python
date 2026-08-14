@@ -94,6 +94,7 @@ real history is 41 milestones. One line each:
 | M86 | Implement /FAIL/FLD Forming Limit Diagram failure model for shell elements |
 | M87 | Implement /SUBMODEL & /ENDSUB container architecture and scoping |
 | M88 | Implement /SUBDOMAIN domain-partition keyword for Rad2Rad coupling |
+| M89 | Add /GRNOD/NODENS subtype and /XREF reference geometry keyword |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

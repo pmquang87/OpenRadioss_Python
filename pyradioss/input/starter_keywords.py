@@ -36,7 +36,7 @@ from ..model.entities import (
     AddedMass, BoundaryCondition, Box, ConcentratedLoad, Damping, Gravity,
     ImposedDisplacement, ImposedVelocity, InitialVelocity, Interface, Line,
     Material, Mpc, NodeGroup, Part, PressureLoad, Property, Random, Rbe3, RigidBody,
-    RigidWall, Section, MonitoredVolume, Sensor, Subdomain, Submodel, Surface, Table, THRequest,
+    RigidWall, Section, MonitoredVolume, Sensor, Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -1887,7 +1887,7 @@ def read_grnod(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             g.gene_ranges.append((first, last, incr))
         return
     ids = _id_list(block, cards)
-    if kind == "NODE":
+    if kind in ("NODE", "NODENS"):
         g.node_ids.extend(ids)
     elif kind == "PART":
         g.part_ids.extend(ids)
@@ -1900,7 +1900,7 @@ def read_grnod(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif kind in _GR_FAMILIES:
         g.egroup_refs.extend((_GR_FAMILIES[kind], i) for i in ids)
     else:
-        log.warning(f"/GRNOD/{kind} not ported (NODE, PART, BOX, SURF, "
+        log.warning(f"/GRNOD/{kind} not ported (NODE, NODENS, PART, BOX, SURF, "
                     f"GRNOD, GR<elem>, GENE supported)", block.source)
 
 
@@ -4661,6 +4661,69 @@ def read_subdomain(block: KeywordBlock, model: Model,
     model.subdomains[sub_id] = sd
 
 
+def read_xref(block: KeywordBlock, model: Model,
+              log: MessageLog) -> None:
+    """`/XREF/part_id` — Reference geometry (initial reference state).
+
+    Fortran origin: ``starter/source/loads/reference_state/xref/hm_read_xref.F``
+    and ``hm_cfg_files/config/CFG/radioss90/INITIAL_GEOMETRY/xref.cfg``.
+
+    Card 1: title (100 chars).
+    Card 2: nitrs (%10d) — number of steps from reference to initial state.
+    Cards 3+: node coordinate table — node_ID X Y Z (%10d%20lg%20lg%20lg).
+    """
+    part_id = block.user_id if block.user_id is not None else 0
+    title, cards = _fixed_data(block) if block.fixed \
+        else _title_and_data(block)
+
+    # Card 1 (after title): nitrs
+    nitrs = 100  # Fortran default
+    if cards:
+        if block.fixed:
+            f = cards[0].fields(10, 1)
+            nitrs = _ival(f[0]) if f[0] else 100
+        else:
+            t = cards[0].tokens()
+            nitrs = int(float(t[0])) if t else 100
+        if nitrs == 0:
+            nitrs = 100  # Fortran default when 0
+        cards = cards[1:]
+
+    # Remaining cards: node coordinate table
+    node_ids: List[int] = []
+    coords: List[List[float]] = []
+    for c in cards:
+        if c.is_blank:
+            continue
+        if block.fixed:
+            f = c.cut("NODE")  # [10, 20, 20, 20] layout
+            nid = _ival(f[0])
+            if nid == 0:
+                continue
+            x = _fval(f[1]) if len(f) > 1 else 0.0
+            y = _fval(f[2]) if len(f) > 2 else 0.0
+            z = _fval(f[3]) if len(f) > 3 else 0.0
+        else:
+            t = c.tokens()
+            if not t:
+                continue
+            nid = int(float(t[0]))
+            if nid == 0:
+                continue
+            x = float(t[1]) if len(t) > 1 else 0.0
+            y = float(t[2]) if len(t) > 2 else 0.0
+            z = float(t[3]) if len(t) > 3 else 0.0
+        node_ids.append(nid)
+        coords.append([x, y, z])
+
+    xr = Xref(
+        part_id=part_id, title=title, nitrs=nitrs,
+        node_ids=np.array(node_ids, dtype=np.int32),
+        coords=np.array(coords) if coords else np.zeros((0, 3)),
+    )
+    model.xrefs[part_id] = xr
+
+
 KEYWORD_PARSERS: Dict[str, Callable] = {
     "MONVOL": read_monvol,
     "ANALY": read_analy,
@@ -4735,6 +4798,7 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "SUBMODEL": read_submodel,
     "ENDSUB": read_endsub,
     "SUBDOMAIN": read_subdomain,
+    "XREF": read_xref,
 }
 
 ENGINE_KEYWORDS_IGNORE = {

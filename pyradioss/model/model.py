@@ -35,7 +35,7 @@ from .entities import (
     AleBoundaryCondition,
     InitialVelocity, Interface, Line, Material, Mpc, NodeGroup, Part,
     PressureLoad, Property, Random, Rbe3, RigidBody, RigidWall, Section, Sensor,
-    Subdomain, Submodel, Surface, Table, THRequest,
+    Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
 from .skew import SkewSet
@@ -556,6 +556,9 @@ class Model:
 
         # SUBDOMAIN domain partitions (M88 — Rad2Rad coupling)
         self.subdomains: Dict[int, Subdomain] = {}
+
+        # XREF reference geometry (M89)
+        self.xrefs: Dict[int, Xref] = {}
 
         # Loads / constraints / contacts
         self.bcs: List[BoundaryCondition] = []

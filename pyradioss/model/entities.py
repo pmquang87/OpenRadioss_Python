@@ -960,3 +960,18 @@ class Subdomain:
     part_ids: List[int] = field(default_factory=list)
     neg_part_ids: List[int] = field(default_factory=list)
 
+
+@dataclass
+class Xref:
+    """`/XREF/part_id` reference geometry (hm_read_xref.F).
+
+    Stores the initial reference configuration (undeformed coordinates)
+    for elements of a given part — used for springback, pre-straining,
+    or metric tensor initialization.
+    """
+    part_id: int
+    title: str = ""
+    nitrs: int = 100          # steps from reference to initial state
+    node_ids: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.int32))
+    coords: np.ndarray = field(default_factory=lambda: np.zeros((0, 3)))
+
