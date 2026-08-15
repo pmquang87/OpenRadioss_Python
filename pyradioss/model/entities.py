@@ -2768,6 +2768,43 @@ class MoveFunct:
     f_shift_y: float = 0.0
 
 
+@dataclass
+class EigenMode:
+    """/EIG (M117): Eigenvalue extraction & modal analysis configuration."""
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+    grnod_bc: int = 0
+    trarot: str = ""
+    ifile: int = 0
+    imls: int = 0
+    nmod: int = 0
+    inorm: int = 0
+    cutfreq: float = 0.0
+    freqmin: float = 0.0
+    nbloc: int = 0
+    incv: int = 0
+    niter: int = 0
+    ipri: int = 0
+    tol: float = 0.0
+    filename: str = ""
+
+
+@dataclass
+class StressFile:
+    """/STATE/STR_FILE or /STR_FILE (M117): Stress output file specification."""
+    izip: int = 0
+    filename: str = ""
+
+
+@dataclass
+class MemoryRequest:
+    """/MEMORY (M117): Memory allocation request."""
+    nmots: int = 0
+    rate: float = 0.66
+
+
+
 
 
 

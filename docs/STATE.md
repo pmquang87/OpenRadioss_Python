@@ -122,6 +122,7 @@ real history is 41 milestones. One line each:
 | M114 | Add /FAIL/COMPOSITE (3D anisotropic composite failure), /EBCS/PROPELLANT (/BCS/PROPELLANT), /CHECKSUM, /DYNAIN/SHELL/*, /ADMAS/NON_UNIFORM, /ADMAS/NON_UNIFORM_PART, /SECT/CIRCLE, /SECT/PARAL |
 | M115 | Add /SET & /SETS (generalized entity sets), extended /SURF modifiers (/SURF/EXT, /ALL, /FREE, /BOX, /MAT, /PROP), /MONVOL/AREA, /TH/TITLE, /STATE/DT, /DYNAIN/DT, /STATE/* output filters |
 | M116 | Add /INIQUA & /INIQUAD (quad initial states), /INISTA & /INISTATE (state dispatcher), /FRAME/MOV2 & /SKEW/MOV2 (kinematic moving frames), /SPH/RESERVE (particle buffer), /MOVE_FUNCT & /FUNCT/MOVE, extended /TH channels (/TH/SPHCEL, /TH/NSTRAND, /TH/MODE, /TH/CYL_JO, /TH/FXBODY, /TH/GAUGE, /TH/GR*) |
+| M117 | Add /EIG (eigenvalue extraction / modal analysis), /SHFRA/V4 (shell local frame formulation), /INTTHICK/V5 (integration thickness flag), /STATE/STR_FILE & /STR_FILE (stress output file), /MEMORY (memory request allocation), /DEF_INTER/TYPE25 (default contact type 25), /PLOAD (pressure load alias) |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

@@ -8553,10 +8553,12 @@ def read_dynain_dt(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_state(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/STATE/<type>/...`` (M115): State output entity selection and controls."""
+    """``/STATE/<type>/...`` (M115/M117): State output entity selection and controls."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub == "DT":
         read_state_dt(block, model, log)
+    elif sub in ("STR_FILE", "STRFILE"):
+        read_str_file(block, model, log)
     else:
         pass
 
@@ -12077,6 +12079,126 @@ def read_iniqua(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     read_inishe(block, model, log)
 
 
+def read_eig(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EIG/<id>`` (M117): Eigenvalue extraction & modal analysis setup."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    from ..model.entities import EigenMode
+    eid = block.user_id if block.user_id is not None else 1
+    if not cards:
+        model.eigen_modes[eid] = EigenMode(id=eid, title=title)
+        return
+
+    # Card 1: grnd_id, grnd_bc, trarot, ifile
+    c0 = cards[0]
+    grnd_id, grnd_bc, trarot, ifile, imls = 0, 0, "", 0, 0
+    if block.fixed:
+        f = c0.cut("EIG_1")
+        grnd_id = _ival(f[0]) if len(f) > 0 else 0
+        grnd_bc = _ival(f[1]) if len(f) > 1 else 0
+        if len(f) > 8:
+            trarot = "".join(f[3:9]).strip()
+        ifile = _ival(f[9]) if len(f) > 9 else 0
+    else:
+        toks = c0.tokens()
+        grnd_id = int(float(toks[0])) if len(toks) > 0 else 0
+        grnd_bc = int(float(toks[1])) if len(toks) > 1 else 0
+        trarot = toks[2] if len(toks) > 2 else ""
+        ifile = int(float(toks[3])) if len(toks) > 3 else 0
+
+    # Card 2: nmod, inorm, cutfreq, freqmin
+    nmod, inorm, cutfreq, freqmin = 0, 0, 0.0, 0.0
+    if len(cards) > 1 and not cards[1].is_blank:
+        c1 = cards[1]
+        if block.fixed:
+            f1 = c1.cut("EIG_2")
+            nmod = _ival(f1[0]) if len(f1) > 0 else 0
+            inorm = _ival(f1[1]) if len(f1) > 1 else 0
+            cutfreq = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+            freqmin = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+        else:
+            t1 = c1.tokens()
+            nmod = int(float(t1[0])) if len(t1) > 0 else 0
+            inorm = int(float(t1[1])) if len(t1) > 1 else 0
+            cutfreq = float(t1[2]) if len(t1) > 2 else 0.0
+            freqmin = float(t1[3]) if len(t1) > 3 else 0.0
+
+    # Card 3: nbloc, incv, niter, ipri, tol
+    nbloc, incv, niter, ipri, tol = 0, 0, 0, 0, 0.0
+    if len(cards) > 2 and not cards[2].is_blank:
+        c2 = cards[2]
+        if block.fixed:
+            f2 = c2.cut("EIG_3")
+            nbloc = _ival(f2[0]) if len(f2) > 0 else 0
+            incv = _ival(f2[1]) if len(f2) > 1 else 0
+            niter = _ival(f2[2]) if len(f2) > 2 else 0
+            ipri = _ival(f2[3]) if len(f2) > 3 else 0
+            tol = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+        else:
+            t2 = c2.tokens()
+            nbloc = int(float(t2[0])) if len(t2) > 0 else 0
+            incv = int(float(t2[1])) if len(t2) > 1 else 0
+            niter = int(float(t2[2])) if len(t2) > 2 else 0
+            ipri = int(float(t2[3])) if len(t2) > 3 else 0
+            tol = float(t2[4]) if len(t2) > 4 else 0.0
+
+    # Card 4: filename
+    fn = ""
+    if len(cards) > 3 and not cards[3].is_blank:
+        fn = cards[3].raw.strip()
+
+    model.eigen_modes[eid] = EigenMode(
+        id=eid, title=title, grnod_id=grnd_id, grnod_bc=grnd_bc,
+        trarot=trarot, ifile=ifile, imls=imls, nmod=nmod, inorm=inorm,
+        cutfreq=cutfreq, freqmin=freqmin, nbloc=nbloc, incv=incv,
+        niter=niter, ipri=ipri, tol=tol, filename=fn
+    )
+
+
+def read_shfra(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SHFRA/V4`` (M117): Shell local coordinate framing formulation flag."""
+    model.shfra_v4 = True
+
+
+def read_intthick(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INTTHICK/V5`` or ``/INT_THICK`` (M117): Shell integration thickness flag."""
+    model.intthick_v5 = True
+
+
+def read_str_file(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/STATE/STR_FILE`` or ``/STR_FILE`` (M117): Stress output file specification."""
+    from ..model.entities import StressFile
+    cards = [c for c in block.cards if not c.is_blank]
+    izip = 0
+    fn = ""
+    if cards:
+        if block.fixed:
+            izip = _ival(cards[0].raw[:10]) if len(cards[0].raw) >= 10 else 0
+        else:
+            t = cards[0].tokens()
+            izip = int(float(t[0])) if t else 0
+    if len(cards) > 1:
+        fn = cards[1].raw.strip()
+    model.stress_files.append(StressFile(izip=izip, filename=fn))
+
+
+def read_memory(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MEMORY`` (M117): Explicit solver memory request."""
+    from ..model.entities import MemoryRequest
+    cards = [c for c in block.cards if not c.is_blank]
+    nmots = 0
+    rate = 0.66
+    if cards:
+        if block.fixed:
+            f = cards[0].cut("MEMORY_1")
+            nmots = _ival(f[0]) if len(f) > 0 else 0
+            rate = _fval(f[2], 0.66) if len(f) > 2 and f[2] else 0.66
+        else:
+            t = cards[0].tokens()
+            nmots = int(float(t[0])) if len(t) > 0 else 0
+            rate = float(t[1]) if len(t) > 1 else 0.66
+    model.memory_requests.append(MemoryRequest(nmots=nmots, rate=rate))
+
+
 def read_init(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/INIT/<subtype>/id`` dispatcher (M110)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
@@ -12248,6 +12370,14 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "INISTATE": read_inista,
     "SPH_RESERVE": read_sph_reserve,
     "MOVE_FUNCT": read_move_funct,
+    "EIG": read_eig,
+    "SHFRA": read_shfra,
+    "SHFRA_V4": read_shfra,
+    "INTTHICK": read_intthick,
+    "INT_THICK": read_intthick,
+    "STR_FILE": read_str_file,
+    "MEMORY": read_memory,
+    "PLOAD": read_pload,
 }
 
 
@@ -12286,7 +12416,8 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
             "FAIL", "ADMAS", "TABLE", "INIVOL", "INIBRI", "INISHE", "INISH3",
             "INITRU", "INITRUSS", "INIBEA", "INIBEAM", "INISPR", "INISPRI",
             "SET", "SETS", "STATE", "CHECKSUM", "DYNAIN", "SECT", "EBCS",
-            "INIQUA", "INIQUAD", "INISTA", "INISTATE", "SPH_RESERVE", "MOVE_FUNCT"
+            "INIQUA", "INIQUAD", "INISTA", "INISTATE", "SPH_RESERVE", "MOVE_FUNCT",
+            "EIG", "SHFRA", "SHFRA_V4", "INTTHICK", "INT_THICK", "STR_FILE", "MEMORY", "PLOAD"
         ):
             # /FAIL's second trailing id is its OWN option id in the
             # legacy dialect (read_fail handles it), and /ADMAS headers

@@ -1009,6 +1009,12 @@ LAYOUTS: Dict[str, List[int]] = {
 
     # SPH/RESERVE (M116)
     "SPH_RESERVE_1": [10],
+
+    # EIG & MEMORY (M117)
+    "EIG_1": [10, 10, 3, 1, 1, 1, 1, 1, 1, 10],
+    "EIG_2": [10, 10, 20, 20],
+    "EIG_3": [10, 10, 10, 10, 20],
+    "MEMORY_1": [10, 10, 20],
 }
 
 

@@ -59,6 +59,7 @@ from .entities import (
     FailComposite, EbcsPropellant, AdmasNonUniform, AdmasNonUniformItem,
     SectCircle, SectParal, DynainShell, MonvolArea, StateDt,
     SphReserve, MoveFunct,
+    EigenMode, StressFile, MemoryRequest,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -710,6 +711,11 @@ class Model:
         self.state_dts: List[StateDt] = []                  # /STATE/DT, /DYNAIN/DT (M115)
         self.th_titles: List[str] = []                      # /TH/TITLE (M115)
         self.sph_reserves: Dict[int, SphReserve] = {}       # /SPH/RESERVE (M116)
+        self.eigen_modes: Dict[int, EigenMode] = {}         # /EIG (M117)
+        self.stress_files: List[StressFile] = []            # /STATE/STR_FILE (M117)
+        self.memory_requests: List[MemoryRequest] = []      # /MEMORY (M117)
+        self.shfra_v4: bool = False                         # /SHFRA/V4 (M117)
+        self.intthick_v5: bool = False                      # /INTTHICK/V5 (M117)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

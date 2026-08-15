@@ -951,6 +951,12 @@ def check_model(model: Model, log: MessageLog) -> None:
         if fid > 0 and fid not in model.functions:
             log.error(f"/MOVE_FUNCT/{fid}: function {fid} not defined", "CROSS REF")
 
+    for eid, em in getattr(model, "eigen_modes", {}).items():
+        if em.grnod_id > 0 and em.grnod_id not in model.node_groups:
+            log.error(f"/EIG/{eid}: node group {em.grnod_id} not defined", "CROSS REF")
+        if em.grnod_bc > 0 and em.grnod_bc not in model.node_groups:
+            log.error(f"/EIG/{eid}: node group {em.grnod_bc} not defined", "CROSS REF")
+
 
 
 
