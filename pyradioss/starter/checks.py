@@ -942,6 +942,15 @@ def check_model(model: Model, log: MessageLog) -> None:
             if bid > 0 and bid not in model.boxes:
                 log.error(f"/SURF/{sid}: box {bid} not defined", "CROSS REF")
 
+    for pid, sr in getattr(model, "sph_reserves", {}).items():
+        if sr.part_id > 0 and sr.part_id not in model.parts:
+            log.error(f"/SPH/RESERVE/{pid}: part {sr.part_id} not defined", "CROSS REF")
+
+    for item in getattr(model, "move_functs", []):
+        fid = item[0] if isinstance(item, (tuple, list)) else getattr(item, "id", 0)
+        if fid > 0 and fid not in model.functions:
+            log.error(f"/MOVE_FUNCT/{fid}: function {fid} not defined", "CROSS REF")
+
 
 
 

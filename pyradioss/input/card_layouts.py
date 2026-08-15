@@ -1006,6 +1006,9 @@ LAYOUTS: Dict[str, List[int]] = {
     "MONVOL_AREA_1": [10],
     "MONVOL_AREA_2": [20, 20, 20, 20, 20],
     "STATE_DT_1": [20, 20],
+
+    # SPH/RESERVE (M116)
+    "SPH_RESERVE_1": [10],
 }
 
 

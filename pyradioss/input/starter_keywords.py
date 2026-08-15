@@ -3276,12 +3276,10 @@ def read_random(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_funct(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/FUNCT/fct_ID``: title card then one (X, Y) pair per card.
-
-    Fixed dialect (cfg CURVE/funct.cfg ``%20lg%20lg``): the X and Y
-    columns may abut with no whitespace
-    ('5.00000000000000E-061.22464679910000E-16') — cut at the column
-    boundary, not tokenized (M37)."""
+    """``/FUNCT/fct_ID`` or ``/FUNCT/MOVE/fct_ID``: function curve."""
+    if len(block.parts) > 1 and block.parts[1].upper() == "MOVE":
+        read_move_funct(block, model, log)
+        return
     if block.fixed:
         title, cards = _fixed_data(block)
         pts = []
@@ -7392,10 +7390,15 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     M68: expanded from NODE/PART/SECT to all entity types.
     """
-    _TH_KINDS = {"NODE", "PART", "SECT", "RBODY", "SHEL", "SH3N",
-                 "SPRING", "BRIC", "RWALL", "SECTIO", "INTER",
-                 "RETRACTOR", "SLIPRING", "TRIA", "TETRA4", "BEAM", "TRUSS",
-                 "SHELL", "SOLID"}
+    _TH_KINDS = {
+        "NODE", "PART", "SECT", "RBODY", "SHEL", "SH3N",
+        "SPRING", "BRIC", "RWALL", "SECTIO", "INTER",
+        "RETRACTOR", "SLIPRING", "TRIA", "TETRA4", "BEAM", "TRUSS",
+        "SHELL", "SOLID", "QUAD", "SURF", "LINE", "ACCEL", "BOX",
+        "NSTRAND", "STRAND", "SPHCEL", "SPH", "MODE", "CYL_JO", "CYL_JOINT",
+        "FXBODY", "GAUGE", "GRSHEL", "GRBRIC", "GRQUAD", "GRSH3N",
+        "GRBEAM", "GRTRUS", "GRSPRI"
+    }
     kind = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
     if kind == "TITLE":
         read_th_title(block, model, log)
@@ -7409,6 +7412,12 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "BRIC"
     elif kind == "TRIA":
         kind = "SH3N"
+    elif kind == "STRAND":
+        kind = "NSTRAND"
+    elif kind == "SPH":
+        kind = "SPHCEL"
+    elif kind == "CYL_JOINT":
+        kind = "CYL_JO"
     if kind not in _TH_KINDS:
         log.warning(f"/TH/{kind} not ported", block.source)
         return
@@ -7718,13 +7727,31 @@ def read_sph_inout(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_sph_reserve(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SPH/RESERVE/part_ID`` (M116): SPH reserve particle buffer allocation."""
+    cards = [c for c in block.cards if not c.is_blank]
+    from ..model.entities import SphReserve
+    part_id = block.user_id if block.user_id is not None else 0
+    np_part = 0
+    if cards:
+        if block.fixed:
+            f = cards[0].cut("SPH_RESERVE_1")
+            np_part = _ival(f[0]) if len(f) > 0 else 0
+        else:
+            t = cards[0].tokens()
+            np_part = int(float(t[0])) if len(t) > 0 else 0
+    model.sph_reserves[part_id] = SphReserve(part_id=part_id, np_particles=np_part)
+
+
 def read_sph(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/SPH/<subtype>/id`` dispatcher (M101, M112)."""
+    """``/SPH/<subtype>/id`` dispatcher (M101, M112, M116)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub in ("INOUT", "IO"):
         read_sph_inout(block, model, log)
     elif sub in ("GLO", "GLOBAL"):
         read_sphglo(block, model, log)
+    elif sub in ("RESERVE", "RES"):
+        read_sph_reserve(block, model, log)
     else:
         read_sph_inout(block, model, log)
 
@@ -9809,30 +9836,109 @@ def read_inimap2d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_inista(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INISTATE`` or ``/INISTATE/FILE`` (M104)::
+    """``/INISTATE``, ``/INISTATE/FILE`` (M104), or ``/INISTA/<elem_type>/...`` (M116)."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub in ("FILE", ""):
+        cards = block.cards
+        if not cards or cards[0].is_blank:
+            log.error("/INISTATE: missing data card", block.source)
+            return
 
-        card 1:  filename
-        card 2:  isigi  ioutp_fmt
-    """
-    cards = block.cards
-    if not cards or cards[0].is_blank:
-        log.error("/INISTATE: missing data card", block.source)
+        filename = cards[0].raw.strip()
+        isigi = 0
+        ioutp_fmt = 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            if block.fixed:
+                f = cards[1].cut("INISTATE_1")
+                isigi = _ival(f[0]) if len(f) > 0 else 0
+                ioutp_fmt = _ival(f[1]) if len(f) > 1 else 0
+            else:
+                toks = cards[1].tokens()
+                isigi = int(float(toks[0])) if len(toks) > 0 else 0
+                ioutp_fmt = int(float(toks[1])) if len(toks) > 1 else 0
+
+        model.ini_state_file = IniStateFile(filename=filename, isigi=isigi, ioutp_fmt=ioutp_fmt)
         return
 
-    filename = cards[0].raw.strip()
-    isigi = 0
-    ioutp_fmt = 0
-    if len(cards) > 1 and not cards[1].is_blank:
-        if block.fixed:
-            f = cards[1].cut("INISTATE_1")
-            isigi = _ival(f[0]) if len(f) > 0 else 0
-            ioutp_fmt = _ival(f[1]) if len(f) > 1 else 0
-        else:
-            toks = cards[1].tokens()
-            isigi = int(float(toks[0])) if len(toks) > 0 else 0
-            ioutp_fmt = int(float(toks[1])) if len(toks) > 1 else 0
-
-    model.ini_state_file = IniStateFile(filename=filename, isigi=isigi, ioutp_fmt=ioutp_fmt)
+    if sub in ("SHE", "SHEL", "SHELL"):
+        mod_block = KeywordBlock(
+            keyword="/".join(["INISHE"] + block.parts[2:]),
+            parts=["INISHE"] + block.parts[2:],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_inishe(mod_block, model, log)
+    elif sub in ("BRI", "BRIC", "BRICK", "SOLID"):
+        mod_block = KeywordBlock(
+            keyword="/".join(["INIBRI"] + block.parts[2:]),
+            parts=["INIBRI"] + block.parts[2:],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_inibri(mod_block, model, log)
+    elif sub in ("SH3", "SH3N", "TRIA"):
+        mod_block = KeywordBlock(
+            keyword="/".join(["INISH3"] + block.parts[2:]),
+            parts=["INISH3"] + block.parts[2:],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_inish3(mod_block, model, log)
+    elif sub in ("TRU", "TRUS", "TRUSS"):
+        mod_block = KeywordBlock(
+            keyword="/".join(["INITRU"] + block.parts[2:]),
+            parts=["INITRU"] + block.parts[2:],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_initru(mod_block, model, log)
+    elif sub in ("BEA", "BEAM"):
+        mod_block = KeywordBlock(
+            keyword="/".join(["INIBEA"] + block.parts[2:]),
+            parts=["INIBEA"] + block.parts[2:],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_inibea(mod_block, model, log)
+    elif sub in ("SPR", "SPRI", "SPRING"):
+        mod_block = KeywordBlock(
+            keyword="/".join(["INISPR"] + block.parts[2:]),
+            parts=["INISPR"] + block.parts[2:],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_inispr(mod_block, model, log)
+    elif sub in ("QUA", "QUAD"):
+        mod_block = KeywordBlock(
+            keyword="/".join(["INIQUA"] + block.parts[2:]),
+            parts=["INIQUA"] + block.parts[2:],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_iniqua(mod_block, model, log)
+    else:
+        read_inishe(block, model, log)
 
 
 
@@ -11966,6 +12072,11 @@ def read_inispr(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.warning(f"/INISPR/{sub} not ported — block skipped", block.source)
 
 
+def read_iniqua(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INIQUA/{STRS_F|EPSP|DENS|ENER}[/id]`` (M116): Initial state for quadrilateral shell elements."""
+    read_inishe(block, model, log)
+
+
 def read_init(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/INIT/<subtype>/id`` dispatcher (M110)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
@@ -12131,6 +12242,12 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "SET": read_set,
     "SETS": read_set,
     "STATE": read_state,
+    "INIQUA": read_iniqua,
+    "INIQUAD": read_iniqua,
+    "INISTA": read_inista,
+    "INISTATE": read_inista,
+    "SPH_RESERVE": read_sph_reserve,
+    "MOVE_FUNCT": read_move_funct,
 }
 
 
@@ -12168,7 +12285,8 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
         if block.unit_id is not None and block.key0 not in (
             "FAIL", "ADMAS", "TABLE", "INIVOL", "INIBRI", "INISHE", "INISH3",
             "INITRU", "INITRUSS", "INIBEA", "INIBEAM", "INISPR", "INISPRI",
-            "SET", "SETS", "STATE", "CHECKSUM", "DYNAIN", "SECT", "EBCS"
+            "SET", "SETS", "STATE", "CHECKSUM", "DYNAIN", "SECT", "EBCS",
+            "INIQUA", "INIQUAD", "INISTA", "INISTATE", "SPH_RESERVE", "MOVE_FUNCT"
         ):
             # /FAIL's second trailing id is its OWN option id in the
             # legacy dialect (read_fail handles it), and /ADMAS headers

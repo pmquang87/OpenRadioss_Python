@@ -2750,6 +2750,25 @@ class StateDt:
     component_ids: List[int] = field(default_factory=list)
 
 
+@dataclass
+class SphReserve:
+    """/SPH/RESERVE (M116): SPH reserve particle buffer allocation."""
+    part_id: int
+    np_particles: int = 0
+
+
+@dataclass
+class MoveFunct:
+    """/MOVE_FUNCT (M116): Function curve scale and shift transformation."""
+    id: int
+    title: str = ""
+    a_scale_x: float = 1.0
+    f_scale_y: float = 1.0
+    a_shift_x: float = 0.0
+    f_shift_y: float = 0.0
+
+
+
 
 
 
