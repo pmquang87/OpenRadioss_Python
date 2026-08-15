@@ -970,7 +970,7 @@ class Interface:
     xfiltr: float = 0.0
     fric_c: tuple = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     title: str = ""
-    # ---- TYPE18 (M60) / TYPE10 / TYPE19 / TYPE21 -------------------------
+    # ---- TYPE18 (M60) / TYPE10 / TYPE19 / TYPE21 / GUIDED_CABLE ---------
     ibag: int = 0
     multimp: int = 4
     idel18: int = 0
@@ -978,6 +978,8 @@ class Interface:
     idel: int = 0         # type 19: deletion flag
     icurv: int = 0        # type 19: curve geometry flag
     iadm: int = 0         # type 21: admission flag
+    grpart_id: int = 0    # guided cable: part group
+    istiff: int = 1       # guided cable: stiffness formulation flag
     gap_scale: float = 1.0 # type 19/21/25: scale factor for gap
     gap_min: float = 0.0   # type 19: min gap
     tstart: float = 0.0   # type 10: activation time

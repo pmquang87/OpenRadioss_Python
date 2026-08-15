@@ -810,6 +810,32 @@ LAYOUTS: Dict[str, List[int]] = {
     "MONVOL_FVMBAG1_1": [10],
     "MONVOL_FVMBAG1_2": [20, 20, 20, 20, 20],
     "MONVOL_FVMBAG1_3": [10, 30, 20, 20],
+
+    # PROP/TSHELL / PROP/TYPE20 (M109)
+    "PROP_TSHELL_1": [10, 10, 10, 20],
+    "PROP_TSHELL_2": [20, 20, 20, 20, 20],
+    "PROP_TSHELL_3": [10, 10, 20, 20, 10, 10],
+
+    # PROP/TSH_ORTH / PROP/TYPE21 (M109)
+    "PROP_TSH_ORTH_1": [20, 20, 20, 10, 10, 10, 10],
+
+    # PROP/INT_BEAM / PROP/TYPE18 (M109)
+    "PROP_INT_BEAM_1": [10, 10, 10],
+    "PROP_INT_BEAM_2": [20, 20, 20, 20],
+    "PROP_INT_BEAM_3": [20, 20],
+
+    # PROP/SPH / PROP/TYPE34 (M109)
+    "PROP_SPH_1": [20, 20, 20],
+    "PROP_SPH_2": [20, 20, 20, 20],
+
+    # INTER/GUIDED_CABLE (M109)
+    "INTER_GUIDED_CABLE_1": [10, 10, 10, 20, 20],
+
+    # SENSOR/ENERGY (M109) card 4: IEtol, IEtime, KEtol, KEtime
+    "SENSOR_ENERGY_4": [20, 20, 20, 20],
+
+    # SENSOR/TEMP (M109)
+    "SENSOR_TEMP_1": [10, 10, 20, 20, 20, 20],
 }
 
 

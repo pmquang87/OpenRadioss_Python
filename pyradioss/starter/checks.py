@@ -688,6 +688,33 @@ def check_model(model: Model, log: MessageLog) -> None:
                 log.error(f"/INTER/TYPE21/{inter.id}: surface {inter.surf_id} not defined", "CROSS REF")
             if inter.surf_id1 > 0 and inter.surf_id1 not in model.surfaces:
                 log.error(f"/INTER/TYPE21/{inter.id}: surface {inter.surf_id1} not defined", "CROSS REF")
+        elif inter.type == 29:  # GUIDED_CABLE
+            if inter.grnod_id > 0 and inter.grnod_id not in model.node_groups:
+                log.error(f"/INTER/GUIDED_CABLE/{inter.id}: node group {inter.grnod_id} not defined", "CROSS REF")
+            if inter.grpart_id > 0 and inter.grpart_id not in model.egroups.get("PART", {}):
+                log.error(f"/INTER/GUIDED_CABLE/{inter.id}: part group {inter.grpart_id} not defined", "CROSS REF")
+
+    # M109: Extended Multi-Physics Sensors & Properties
+    for sens in getattr(model, "sensors", []):
+        if sens.kind == "ENERGY":
+            if sens.part_id > 0 and sens.part_id not in model.parts:
+                log.error(f"/SENSOR/ENERGY/{sens.id}: part {sens.part_id} not defined", "CROSS REF")
+            if sens.subset_id > 0 and sens.subset_id not in model.subsets:
+                log.error(f"/SENSOR/ENERGY/{sens.id}: subset {sens.subset_id} not defined", "CROSS REF")
+        elif sens.kind == "TEMP":
+            if sens.grnod_id > 0 and sens.grnod_id not in model.node_groups:
+                log.error(f"/SENSOR/TEMP/{sens.id}: node group {sens.grnod_id} not defined", "CROSS REF")
+
+    for pid, prop in getattr(model, "properties", {}).items():
+        if getattr(prop, "type", 0) in (21, 22):
+            skew_id = prop.params.get("skew_id", 0)
+            if skew_id > 0 and skew_id not in model.skews:
+                log.error(f"/PROP/{pid}: skew {skew_id} not defined", "CROSS REF")
+            for layer in prop.params.get("layers", []):
+                mid = layer.get("mat_id", 0)
+                if mid > 0 and mid not in model.materials:
+                    log.error(f"/PROP/{pid}: material {mid} not defined in layer", "CROSS REF")
+
 
 
 
