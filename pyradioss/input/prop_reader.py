@@ -92,7 +92,7 @@ def prop_type_ok(req_prop: int, prop: Property) -> bool:
         return True
     if req_prop == 1 and pt in (9, 16):
         return True
-    if req_prop == 4 and pt in (8, 13):
+    if req_prop == 4 and pt in (8, 12, 13, 23, 25, 26, 27, 32, 44, 45, 46):
         return True
     if req_prop == 14 and pt in (20, 21, 22, 23, 43):
         return True
@@ -155,22 +155,22 @@ def refuse_inactive_properties(model, log: Optional[MessageLog] = None) -> None:
 # Card helpers (fixed-column cut, with a token fallback for free decks)
 # ============================================================================
 
-def _fv(s) -> float:
+def _fv(s, default: float = 0.0) -> float:
     if s in ("", None):
-        return 0.0
+        return default
     try:
         return float(str(s).replace("D", "E").replace("d", "e"))
     except ValueError:
-        return 0.0
+        return default
 
 
-def _iv(s) -> int:
+def _iv(s, default: int = 0) -> int:
     if s in ("", None):
-        return 0
+        return default
     try:
         return int(float(str(s).replace("D", "E").replace("d", "e")))
     except ValueError:
-        return 0
+        return default
 
 
 def _data_cards(block: KeywordBlock) -> Tuple[str, List[Card], bool]:
@@ -456,6 +456,136 @@ def parse_spr_pre(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
                     params=params)
 
 
+def parse_spr_tab(block: KeywordBlock, log: MessageLog) -> Property:
+    """/PROP/TYPE26 or /PROP/SPR_TAB (M124): Tabular nonlinear spring."""
+    title, cards, fixed = _data_cards(block)
+    params = _universal_geo_params()
+    mass, sens_id, isflag, ileng = 0.0, 0, 0, 0
+    nfunc, nraten = 0, 0
+    scale, stiff0, dmax, alpha1 = 1.0, 0.0, 0.0, 0.0
+    if cards:
+        if fixed:
+            f1 = _row(cards[0], "PROP_SPR_TAB_1", True)
+            mass = _fv(f1[0]) if len(f1) > 0 else 0.0
+            sens_id = _iv(f1[2]) if len(f1) > 2 else 0
+            isflag = _iv(f1[3]) if len(f1) > 3 else 0
+            ileng = _iv(f1[4]) if len(f1) > 4 else 0
+            nfunc = _iv(f1[5]) if len(f1) > 5 else 0
+            nraten = _iv(f1[6]) if len(f1) > 6 else 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = _row(cards[1], "PROP_SPR_TAB_2", True)
+                scale = _fv(f2[0], 1.0) if len(f2) > 0 and f2[0].strip() else 1.0
+                stiff0 = _fv(f2[1]) if len(f2) > 1 else 0.0
+                dmax = _fv(f2[2]) if len(f2) > 2 else 0.0
+                alpha1 = _fv(f2[3]) if len(f2) > 3 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            mass = float(t1[0]) if len(t1) > 0 else 0.0
+            sens_id = int(float(t1[1])) if len(t1) > 1 else 0
+            isflag = int(float(t1[2])) if len(t1) > 2 else 0
+            ileng = int(float(t1[3])) if len(t1) > 3 else 0
+            nfunc = int(float(t1[4])) if len(t1) > 4 else 0
+            nraten = int(float(t1[5])) if len(t1) > 5 else 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t2 = cards[1].tokens()
+                scale = float(t2[0]) if len(t2) > 0 else 1.0
+                stiff0 = float(t2[1]) if len(t2) > 1 else 0.0
+                dmax = float(t2[2]) if len(t2) > 2 else 0.0
+                alpha1 = float(t2[3]) if len(t2) > 3 else 0.0
+    params.update({
+        "mass": mass, "sens_id": sens_id, "isflag": isflag, "ileng": ileng,
+        "nfunc": nfunc, "nraten": nraten, "scale": scale, "stiff0": stiff0,
+        "dmax": dmax, "alpha1": alpha1, "k": stiff0,
+    })
+    typename = block.parts[1].upper() if len(block.parts) > 1 else "TYPE26"
+    log.warning(f"/PROP/{typename}/{block.user_id}: parsed, physics not "
+                f"implemented (M38) — the Engine will refuse element groups "
+                f"that use it", block.source)
+    return InactiveProperty(id=block.user_id, type=26, title=title,
+                            params=params, prop_name=typename)
+
+
+def parse_spr_bdamp(block: KeywordBlock, log: MessageLog) -> Property:
+    """/PROP/TYPE27 or /PROP/SPR_BDAMP (M124): Bilinear / damped spring."""
+    title, cards, fixed = _data_cards(block)
+    params = _universal_geo_params()
+    mass, sens_id, isflag, ileng, itens, ifail = 0.0, 0, 0, 0, 0, 0
+    k, c, n, delta_min, delta_max = 0.0, 0.0, 1.0, 0.0, 0.0
+    gap, fsmooth, fcut = 0.0, 0, 0.0
+    fct1, fct2, ascale1, fscale1, ascale2, fscale2 = 0, 0, 1.0, 1.0, 1.0, 1.0
+    if cards:
+        if fixed:
+            f1 = _row(cards[0], "PROP_SPR_BDAMP_1", True)
+            mass = _fv(f1[0]) if len(f1) > 0 else 0.0
+            sens_id = _iv(f1[2]) if len(f1) > 2 else 0
+            isflag = _iv(f1[3]) if len(f1) > 3 else 0
+            ileng = _iv(f1[4]) if len(f1) > 4 else 0
+            itens = _iv(f1[5]) if len(f1) > 5 else 0
+            ifail = _iv(f1[6]) if len(f1) > 6 else 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = _row(cards[1], "PROP_SPR_BDAMP_2", True)
+                k = _fv(f2[0]) if len(f2) > 0 else 0.0
+                c = _fv(f2[1]) if len(f2) > 1 else 0.0
+                n = _fv(f2[2], 1.0) if len(f2) > 2 and f2[2].strip() else 1.0
+                delta_min = _fv(f2[3]) if len(f2) > 3 else 0.0
+                delta_max = _fv(f2[4]) if len(f2) > 4 else 0.0
+            if len(cards) > 2 and not cards[2].is_blank:
+                f3 = _row(cards[2], "PROP_SPR_BDAMP_3", True)
+                gap = _fv(f3[0]) if len(f3) > 0 else 0.0
+                fsmooth = _iv(f3[2]) if len(f3) > 2 else 0
+                fcut = _fv(f3[3]) if len(f3) > 3 else 0.0
+            if len(cards) > 3 and not cards[3].is_blank:
+                f4 = _row(cards[3], "PROP_SPR_BDAMP_4", True)
+                fct1 = _iv(f4[0]) if len(f4) > 0 else 0
+                fct2 = _iv(f4[1]) if len(f4) > 1 else 0
+                ascale1 = _fv(f4[2], 1.0) if len(f4) > 2 and f4[2].strip() else 1.0
+                fscale1 = _fv(f4[3], 1.0) if len(f4) > 3 and f4[3].strip() else 1.0
+                ascale2 = _fv(f4[4], 1.0) if len(f4) > 4 and f4[4].strip() else 1.0
+                fscale2 = _fv(f4[5], 1.0) if len(f4) > 5 and f4[5].strip() else 1.0
+        else:
+            t1 = cards[0].tokens()
+            mass = float(t1[0]) if len(t1) > 0 else 0.0
+            sens_id = int(float(t1[1])) if len(t1) > 1 else 0
+            isflag = int(float(t1[2])) if len(t1) > 2 else 0
+            ileng = int(float(t1[3])) if len(t1) > 3 else 0
+            itens = int(float(t1[4])) if len(t1) > 4 else 0
+            ifail = int(float(t1[5])) if len(t1) > 5 else 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t2 = cards[1].tokens()
+                k = float(t2[0]) if len(t2) > 0 else 0.0
+                c = float(t2[1]) if len(t2) > 1 else 0.0
+                n = float(t2[2]) if len(t2) > 2 else 1.0
+                delta_min = float(t2[3]) if len(t2) > 3 else 0.0
+                delta_max = float(t2[4]) if len(t2) > 4 else 0.0
+            if len(cards) > 2 and not cards[2].is_blank:
+                t3 = cards[2].tokens()
+                gap = float(t3[0]) if len(t3) > 0 else 0.0
+                fsmooth = int(float(t3[1])) if len(t3) > 1 else 0
+                fcut = float(t3[2]) if len(t3) > 2 else 0.0
+            if len(cards) > 3 and not cards[3].is_blank:
+                t4 = cards[3].tokens()
+                fct1 = int(float(t4[0])) if len(t4) > 0 else 0
+                fct2 = int(float(t4[1])) if len(t4) > 1 else 0
+                ascale1 = float(t4[2]) if len(t4) > 2 else 1.0
+                fscale1 = float(t4[3]) if len(t4) > 3 else 1.0
+                ascale2 = float(t4[4]) if len(t4) > 4 else 1.0
+                fscale2 = float(t4[5]) if len(t4) > 5 else 1.0
+    params.update({
+        "mass": mass, "sens_id": sens_id, "isflag": isflag, "ileng": ileng,
+        "itens": itens, "ifail": ifail, "k": k, "c": c, "n": n,
+        "delta_min": delta_min, "delta_max": delta_max, "gap": gap,
+        "fsmooth": fsmooth, "fcut": fcut, "fct1": fct1, "fct2": fct2,
+        "ascale1": ascale1, "fscale1": fscale1, "ascale2": ascale2, "fscale2": fscale2,
+    })
+    typename = block.parts[1].upper() if len(block.parts) > 1 else "TYPE27"
+    log.warning(f"/PROP/{typename}/{block.user_id}: parsed, physics not "
+                f"implemented (M38) — the Engine will refuse element groups "
+                f"that use it", block.source)
+    return InactiveProperty(id=block.user_id, type=27, title=title,
+                            params=params, prop_name=typename)
+
+
+
 def parse_tshell(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     """/PROP/TSHELL (TYPE20) - thick shell (cfg prop_p20_tshell.cfg)"""
     title, cards, fixed = _data_cards(block)
@@ -557,6 +687,10 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
         return parse_spr_beam(block, log)
     if typename in ("SPR_PRE", "TYPE32"):
         return parse_spr_pre(block, log)
+    if typename in ("SPR_TAB", "TYPE26"):
+        return parse_spr_tab(block, log)
+    if typename in ("SPR_BDAMP", "TYPE27"):
+        return parse_spr_bdamp(block, log)
     if typename in ("TSHELL", "TYPE20"):
         return parse_tshell(block, log)
     if typename in ("VOID", "TYPE0"):

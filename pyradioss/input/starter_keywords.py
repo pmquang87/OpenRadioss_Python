@@ -7997,8 +7997,8 @@ def read_def_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif subtype == "TYPE19":
         vals = c.cut("DEF_INTER_19") if block.fixed else c.tokens()
         entry = {
-            'istf': _iv_from(vals, 0), 'igap': _iv_from(vals, 1), 'ibag': _iv_from(vals, 2),
-            'idel': _iv_from(vals, 3), 'ikrem': _iv_from(vals, 4), 'irem_i2': _iv_from(vals, 5),
+            'istf': _iv_from(vals, 0), 'igap': _iv_from(vals, 1), 'iedge': _iv_from(vals, 2),
+            'ibag': _iv_from(vals, 3), 'idel': _iv_from(vals, 4), 'icurv': _iv_from(vals, 5),
             'inactiv': _iv_from(vals, 6), 'iform': _iv_from(vals, 7),
         }
     elif subtype == "TYPE24":

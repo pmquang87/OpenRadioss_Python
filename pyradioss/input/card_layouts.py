@@ -1068,6 +1068,16 @@ LAYOUTS: Dict[str, List[int]] = {
     "SLIPRING_SHELL_1": [10, 10, 10, 10, 10, 20, 20],
     "SLIPRING_SHELL_2": [10, 10, 20, 20, 20, 20],
     "SLIPRING_SHELL_3": [10, 10, 20, 20, 20, 20],
+
+    # PROP/SPR_BDAMP, PROP/SPR_TAB, PROP/SPR_MAT, INTER/TYPE22 (M124)
+    "PROP_SPR_BDAMP_1": [20, 30, 10, 10, 10, 10, 10],
+    "PROP_SPR_BDAMP_2": [20, 20, 20, 20, 20],
+    "PROP_SPR_BDAMP_3": [20, 50, 10, 20],
+    "PROP_SPR_BDAMP_4": [10, 10, 20, 20, 20, 20],
+    "PROP_SPR_TAB_1": [20, 30, 10, 10, 10, 10, 10],
+    "PROP_SPR_TAB_2": [20, 20, 20, 20],
+    "PROP_SPR_MAT_1": [10, 20, 20, 20, 10, 10, 10],
+    "INTER_TYPE22_1": [10, 10],
 }
 
 
