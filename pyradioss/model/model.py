@@ -57,7 +57,7 @@ from .entities import (
     AleGridDonea, AleGridSpring, AleGridStandard, AleGridDisp, AleGridLaplacian, AleGridVolume,
     AdmeshGlobal, StampingInit, RandomNoise, Accelerometer, Subset,
     FailComposite, EbcsPropellant, AdmasNonUniform, AdmasNonUniformItem,
-    SectCircle, SectParal, DynainShell,
+    SectCircle, SectParal, DynainShell, MonvolArea, StateDt,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -705,6 +705,9 @@ class Model:
         self.sect_circles: Dict[int, SectCircle] = {}       # /SECT/CIRCLE (M114)
         self.sect_parals: Dict[int, SectParal] = {}         # /SECT/PARAL (M114)
         self.dynain_shells: List[DynainShell] = []          # /DYNAIN/SHELL (M114)
+        self.monvol_areas: Dict[int, MonvolArea] = {}       # /MONVOL/AREA (M115)
+        self.state_dts: List[StateDt] = []                  # /STATE/DT, /DYNAIN/DT (M115)
+        self.th_titles: List[str] = []                      # /TH/TITLE (M115)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

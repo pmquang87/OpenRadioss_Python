@@ -1001,6 +1001,11 @@ LAYOUTS: Dict[str, List[int]] = {
     "SECT_CIRCLE_3": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
     "SECT_PARAL_1": [10, 10, 10, 10, 10, 10, 20, 20],
     "SCALE20": [20],
+
+    # MONVOL/AREA & STATE/DT (M115)
+    "MONVOL_AREA_1": [10],
+    "MONVOL_AREA_2": [20, 20, 20, 20, 20],
+    "STATE_DT_1": [20, 20],
 }
 
 

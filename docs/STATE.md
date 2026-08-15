@@ -120,6 +120,7 @@ real history is 41 milestones. One line each:
 | M112 | Add /LOAD/CENTRI (/CENTRIF), /LOAD/PRESSURE (/PRESS, /PRESSURE), /LOAD/PFLUID, /INIVEL/AXIS, /INIVEL/FVM, /INIVEL/NODE, /INIVEL/ROT, /IMPDISP/FGEO, /IMPVEL/FGEO, /RWALL/THERM, /SPH/INOUT (/SPH/IO) |
 | M113 | Add /SPHBCS, /MADYMO/LINK, /MADYMO/EXFEM, /ALE/GRID/* (DONEA, SPRING, STANDARD, DISP, LAPLACIAN, VOLUME), /ADMESH/GLOBAL (/ADGLOB), /STAMPING, /RANDOM (/RANDOM/GRNOD), /ACCEL, /SUBSET |
 | M114 | Add /FAIL/COMPOSITE (3D anisotropic composite failure), /EBCS/PROPELLANT (/BCS/PROPELLANT), /CHECKSUM, /DYNAIN/SHELL/*, /ADMAS/NON_UNIFORM, /ADMAS/NON_UNIFORM_PART, /SECT/CIRCLE, /SECT/PARAL |
+| M115 | Add /SET & /SETS (generalized entity sets), extended /SURF modifiers (/SURF/EXT, /ALL, /FREE, /BOX, /MAT, /PROP), /MONVOL/AREA, /TH/TITLE, /STATE/DT, /DYNAIN/DT, /STATE/* output filters |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

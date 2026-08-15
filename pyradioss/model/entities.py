@@ -282,6 +282,11 @@ class Surface:
     # /SURF/PLANE (M92): infinite plane defined by point P1 and normal point P2
     plane_p1: Optional[np.ndarray] = None     # (3,) float [X_A, Y_A, Z_A]
     plane_p2: Optional[np.ndarray] = None     # (3,) float [X_B, Y_B, Z_B]
+    # M115 extensions:
+    mat_ids: List[int] = field(default_factory=list)   # /SURF/MAT
+    prop_ids: List[int] = field(default_factory=list)  # /SURF/PROP
+    box_ids: List[int] = field(default_factory=list)   # /SURF/BOX
+    modifier: str = ""                                 # 'EXT', 'ALL', 'FREE'
 
 
 @dataclass
@@ -2721,6 +2726,29 @@ class SectParal:
 class DynainShell:
     """/DYNAIN/SHELL (M114): LS-DYNA shell history initialization."""
     option: str = "AUX/FULL"  # 'AUX/FULL' | 'STRES/FULL' | 'STRAIN/FULL'
+
+
+@dataclass
+class MonvolArea:
+    """/MONVOL/AREA (M115): Monitored volume surface area monitoring."""
+    id: int
+    title: str = ""
+    surf_id_ext: int = 0
+    scale_t: float = 1.0
+    scale_p: float = 1.0
+    scale_s: float = 1.0
+    scale_a: float = 1.0
+    scale_d: float = 1.0
+
+
+@dataclass
+class StateDt:
+    """/STATE/DT or /DYNAIN/DT (M115): State output time-step controls."""
+    tstart: float = 0.0
+    tfreq: float = 0.0
+    is_all: bool = False
+    component_ids: List[int] = field(default_factory=list)
+
 
 
 

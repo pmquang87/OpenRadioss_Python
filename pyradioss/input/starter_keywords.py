@@ -3650,21 +3650,43 @@ def read_surf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     * GRSHEL / GRSH3N (M37): every element of the /GRSHEL / /GRSH3N
       element group becomes a segment (hm_surfgr2 + surftage).
     """
-    kparts = block.keyword.split("/")      # ids already stripped
-    kind = kparts[1] if len(kparts) > 1 else "SEG"
     title, cards = _fixed_data(block) if block.fixed \
         else _title_and_data(block)
+    sid = block.user_id
+    if sid is None:
+        for p in block.parts[1:]:
+            try:
+                sid = int(p)
+                break
+            except ValueError:
+                pass
+    if sid is None:
+        sid = len(model.surfaces) + 1
+    block.user_id = sid
+
     s = model.surfaces.setdefault(
-        block.user_id, Surface(id=block.user_id, title=title))
-    if kind == "PART":
-        quals = [q for q in kparts[2:] if q != "EXT"]
-        if quals:
-            log.warning(f"/SURF/PART/{'/'.join(quals)}/{block.user_id}: the "
-                        f"{'/'.join(quals)} qualifier is ignored — treated "
+        sid, Surface(id=sid, title=title))
+    s.id = sid
+
+    all_parts = [p.upper() for p in block.parts]
+    modifier = ""
+    for m in ("EXT", "ALL", "FREE"):
+        if m in all_parts:
+            modifier = m
+            break
+    s.modifier = modifier
+
+    non_mods = [p for p in all_parts[1:] if p not in ("EXT", "ALL", "FREE") and not p.isdigit()]
+    target = non_mods[0] if non_mods else "PART"
+
+    if target == "PART":
+        if modifier and modifier != "EXT":
+            log.warning(f"/SURF/PART/{modifier}/{block.user_id}: the "
+                        f"{modifier} qualifier is ignored — treated "
                         f"as plain /SURF/PART (the port extracts the free "
                         f"outer faces of the parts)", block.source)
         s.part_ids.extend(_id_list(block, cards))
-    elif kind == "SEG":
+    elif target == "SEG":
         for c in cards:
             if c.is_blank:
                 continue
@@ -3681,12 +3703,12 @@ def read_surf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             if t[3] == 0:
                 t[3] = t[2]                # upstream: N4 = 0 -> triangle
             s.seg_nodes.append(t)
-    elif kind == "SURF":
+    elif target == "SURF":
         s.surf_ids.extend(_id_list(block, cards))
-    elif kind in ("GRSHEL", "GRSH3N", "GRTRIA"):
-        fam = _GR_FAMILIES[kind]
+    elif target in ("GRSHEL", "GRSH3N", "GRTRIA", "GRBRIC"):
+        fam = _GR_FAMILIES.get(target, target[2:])
         s.egroup_refs.extend((fam, i) for i in _id_list(block, cards))
-    elif kind == "PLANE":
+    elif target == "PLANE":
         if len(cards) < 2:
             log.error(f"/SURF/PLANE/{block.user_id}: requires 2 data cards (P1, P2)", block.source)
         else:
@@ -3697,9 +3719,14 @@ def read_surf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 log.error(f"/SURF/PLANE/{block.user_id}: plane points P1 and P2 are identical (zero normal)", block.source)
             s.plane_p1 = np.array(p1[:3], dtype=float)
             s.plane_p2 = np.array(p2[:3], dtype=float)
+    elif target == "MAT":
+        s.mat_ids.extend(_id_list(block, cards))
+    elif target == "PROP":
+        s.prop_ids.extend(_id_list(block, cards))
+    elif target == "BOX":
+        s.box_ids.extend(_id_list(block, cards))
     else:
-        log.warning(f"/SURF/{kind} not ported (PART, SEG, SURF, GRSHEL, "
-                    f"GRSH3N, PLANE supported)", block.source)
+        log.warning(f"/SURF/{'/'.join(all_parts[1:])} not ported", block.source)
 
 
 # ============================================================================
@@ -7370,6 +7397,9 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                  "RETRACTOR", "SLIPRING", "TRIA", "TETRA4", "BEAM", "TRUSS",
                  "SHELL", "SOLID"}
     kind = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
+    if kind == "TITLE":
+        read_th_title(block, model, log)
+        return
     # /TH/SECTIO is the Fortran spelling; normalise to SECT for the model
     if kind == "SECTIO":
         kind = "SECT"
@@ -8289,10 +8319,220 @@ def read_checksum(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_dynain(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/DYNAIN/SHELL/...`` (M114)."""
-    sub = "/".join(block.parts[1:]).upper() if len(block.parts) > 1 else ""
+    """``/DYNAIN/SHELL/...`` or ``/DYNAIN/DT`` (M114/M115)."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub == "DT":
+        read_dynain_dt(block, model, log)
+        return
+    full_opt = "/".join(block.parts[1:]).upper()
     from ..model.entities import DynainShell
-    model.dynain_shells.append(DynainShell(option=sub))
+    model.dynain_shells.append(DynainShell(option=full_opt))
+
+
+def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SET/<subtype>/<id>`` or ``/SETS/<subtype>/<id>`` (M115): Entity sets."""
+    stype = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
+    all_p = [p.upper() for p in block.parts]
+    sub_qual = "PART" if "PART" in all_p else ("GENE" if "GENE" in all_p else ("GEN_INCR" if "GEN_INCR" in all_p else None))
+
+    if stype in ("NODE", "NODENS"):
+        qual = "GEN_INCR" if "GEN_INCR" in all_p else ("GENE" if "GENE" in all_p else ("NODENS" if "NODENS" in all_p else ("PART" if "PART" in all_p else ("BOX" if "BOX" in all_p else ("SURF" if "SURF" in all_p else ("GRNOD" if "GRNOD" in all_p else "NODE"))))))
+        mod_block = KeywordBlock(
+            keyword=f"/GRNOD/{qual}/{block.user_id}",
+            parts=["GRNOD", qual, str(block.user_id)],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_grnod(mod_block, model, log)
+    elif stype == "PART":
+        mod_block = KeywordBlock(
+            keyword=f"/GRPART/PART/{block.user_id}",
+            parts=["GRPART", "PART", str(block.user_id)],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_gr_elem(mod_block, model, log)
+    elif stype in ("SHELL", "SHEL"):
+        qual = sub_qual or "SHEL"
+        mod_block = KeywordBlock(
+            keyword=f"/GRSHEL/{qual}/{block.user_id}",
+            parts=["GRSHEL", qual, str(block.user_id)],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_gr_elem(mod_block, model, log)
+    elif stype in ("SH3N", "TRIA"):
+        qual = sub_qual or "SH3N"
+        mod_block = KeywordBlock(
+            keyword=f"/GRSH3N/{qual}/{block.user_id}",
+            parts=["GRSH3N", qual, str(block.user_id)],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_gr_elem(mod_block, model, log)
+    elif stype in ("BRIC", "SOLID"):
+        qual = sub_qual or "BRIC"
+        mod_block = KeywordBlock(
+            keyword=f"/GRBRIC/{qual}/{block.user_id}",
+            parts=["GRBRIC", qual, str(block.user_id)],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_gr_elem(mod_block, model, log)
+    elif stype == "QUAD":
+        qual = sub_qual or "QUAD"
+        mod_block = KeywordBlock(
+            keyword=f"/GRQUAD/{qual}/{block.user_id}",
+            parts=["GRQUAD", qual, str(block.user_id)],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_gr_elem(mod_block, model, log)
+    elif stype in ("TRUS", "TRUSS"):
+        qual = sub_qual or "TRUS"
+        mod_block = KeywordBlock(
+            keyword=f"/GRTRUS/{qual}/{block.user_id}",
+            parts=["GRTRUS", qual, str(block.user_id)],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_gr_elem(mod_block, model, log)
+    elif stype == "BEAM":
+        qual = sub_qual or "BEAM"
+        mod_block = KeywordBlock(
+            keyword=f"/GRBEAM/{qual}/{block.user_id}",
+            parts=["GRBEAM", qual, str(block.user_id)],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_gr_elem(mod_block, model, log)
+    elif stype in ("SPRI", "SPRING"):
+        qual = sub_qual or "SPRI"
+        mod_block = KeywordBlock(
+            keyword=f"/GRSPRI/{qual}/{block.user_id}",
+            parts=["GRSPRI", qual, str(block.user_id)],
+            user_id=block.user_id,
+            cards=block.cards,
+            fixed=block.fixed,
+            source=block.source,
+            blank_slots=block.blank_slots,
+        )
+        read_gr_elem(mod_block, model, log)
+    elif stype in ("SURF", "SURF_ALL", "SURF_EXT", "SURF_FREE"):
+        read_surf(block, model, log)
+    elif stype == "LINE":
+        read_line(block, model, log)
+    else:
+        log.warning(f"/SET/{stype} not ported", block.source)
+
+
+def read_monvol_area(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MONVOL/AREA/id`` (M115): Monitored volume surface area monitoring."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    from ..model.entities import MonvolArea
+
+    surf_id_ext = 0
+    scale_t, scale_p, scale_s, scale_a, scale_d = 1.0, 1.0, 1.0, 1.0, 1.0
+
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f1 = cards[0].cut("MONVOL_AREA_1")
+            surf_id_ext = _ival(f1[0]) if len(f1) > 0 else 0
+        else:
+            t1 = cards[0].tokens()
+            surf_id_ext = int(float(t1[0])) if len(t1) > 0 else 0
+
+    if len(cards) > 1 and not cards[1].is_blank:
+        if block.fixed:
+            f2 = cards[1].cut("MONVOL_AREA_2")
+            scale_t = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+            scale_p = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
+            scale_s = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            scale_a = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+            scale_d = _fval(f2[4], 1.0) if len(f2) > 4 else 1.0
+        else:
+            t2 = cards[1].tokens()
+            scale_t = float(t2[0]) if len(t2) > 0 else 1.0
+            scale_p = float(t2[1]) if len(t2) > 1 else 1.0
+            scale_s = float(t2[2]) if len(t2) > 2 else 1.0
+            scale_a = float(t2[3]) if len(t2) > 3 else 1.0
+            scale_d = float(t2[4]) if len(t2) > 4 else 1.0
+
+    model.monvol_areas[block.user_id] = MonvolArea(
+        id=block.user_id, title=title, surf_id_ext=surf_id_ext,
+        scale_t=scale_t, scale_p=scale_p, scale_s=scale_s,
+        scale_a=scale_a, scale_d=scale_d
+    )
+
+
+def read_th_title(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TH/TITLE`` (M115): Time history descriptive title card."""
+    for c in block.cards:
+        if not c.is_blank:
+            model.th_titles.append(c.raw.strip())
+
+
+def read_state_dt(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/STATE/DT`` or ``/STATE/DT/ALL`` (M115): State output time step controls."""
+    from ..model.entities import StateDt
+    is_all = any(p.upper() == "ALL" for p in block.parts)
+    cards = block.fixed_cards() if block.fixed else block.cards
+    tstart, tfreq = 0.0, 0.0
+    comp_ids = []
+
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("STATE_DT_1")
+            tstart = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            tfreq = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        else:
+            toks = cards[0].tokens()
+            tstart = float(toks[0]) if len(toks) > 0 else 0.0
+            tfreq = float(toks[1]) if len(toks) > 1 else 0.0
+
+    if not is_all and len(cards) > 1:
+        comp_ids = _id_list(block, cards[1:])
+
+    model.state_dts.append(StateDt(tstart=tstart, tfreq=tfreq, is_all=is_all, component_ids=comp_ids))
+
+
+def read_dynain_dt(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DYNAIN/DT`` or ``/DYNAIN/DT/ALL`` (M115): Dynain output time step controls."""
+    read_state_dt(block, model, log)
+
+
+def read_state(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/STATE/<type>/...`` (M115): State output entity selection and controls."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub == "DT":
+        read_state_dt(block, model, log)
+    else:
+        pass
+
 
 
 def read_sms(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -9650,8 +9890,11 @@ def read_monvol(block: KeywordBlock, model: Model, log: MessageLog):
     elif vol_type == "FVMBAG2":
         read_monvol_fvmbag2(block, model, log)
         return
+    elif vol_type == "AREA":
+        read_monvol_area(block, model, log)
+        return
     elif vol_type != "AIRBAG1":
-        log.warning(f"/MONVOL/{vol_type} not ported - skipped (supported: AIRBAG1, PRES, GAS, COMMU1, LFLUID, FVMBAG1, FVMBAG2)",
+        log.warning(f"/MONVOL/{vol_type} not ported - skipped (supported: AIRBAG1, PRES, GAS, COMMU1, LFLUID, FVMBAG1, FVMBAG2, AREA)",
                     block.source)
         return
 
@@ -11885,11 +12128,14 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "EBCS": read_ebcs,
     "CHECKSUM": read_checksum,
     "DYNAIN": read_dynain,
+    "SET": read_set,
+    "SETS": read_set,
+    "STATE": read_state,
 }
 
 
 ENGINE_KEYWORDS_IGNORE = {
-    "ANIM", "DT", "H3D", "MON", "PARITH", "PRINT", "RFILE", "RUN", "STATE", "STOP", "TFILE", "VERS"
+    "ANIM", "DT", "H3D", "MON", "PARITH", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
@@ -11921,7 +12167,8 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
             continue
         if block.unit_id is not None and block.key0 not in (
             "FAIL", "ADMAS", "TABLE", "INIVOL", "INIBRI", "INISHE", "INISH3",
-            "INITRU", "INITRUSS", "INIBEA", "INIBEAM", "INISPR", "INISPRI"
+            "INITRU", "INITRUSS", "INIBEA", "INIBEAM", "INISPR", "INISPRI",
+            "SET", "SETS", "STATE", "CHECKSUM", "DYNAIN", "SECT", "EBCS"
         ):
             # /FAIL's second trailing id is its OWN option id in the
             # legacy dialect (read_fail handles it), and /ADMAS headers

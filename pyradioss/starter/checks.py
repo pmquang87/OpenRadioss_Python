@@ -927,6 +927,21 @@ def check_model(model: Model, log: MessageLog) -> None:
         if sp.grbric_id > 0 and sp.grbric_id not in egroups_bric:
             log.error(f"/SECT/PARAL/{spid}: brick group {sp.grbric_id} not defined", "CROSS REF")
 
+    for maid, ma in getattr(model, "monvol_areas", {}).items():
+        if ma.surf_id_ext > 0 and ma.surf_id_ext not in model.surfaces:
+            log.error(f"/MONVOL/AREA/{maid}: surface {ma.surf_id_ext} not defined", "CROSS REF")
+
+    for sid, s in getattr(model, "surfaces", {}).items():
+        for mid in getattr(s, "mat_ids", []):
+            if mid > 0 and mid not in model.materials:
+                log.error(f"/SURF/{sid}: material {mid} not defined", "CROSS REF")
+        for pid in getattr(s, "prop_ids", []):
+            if pid > 0 and pid not in model.properties:
+                log.error(f"/SURF/{sid}: property {pid} not defined", "CROSS REF")
+        for bid in getattr(s, "box_ids", []):
+            if bid > 0 and bid not in model.boxes:
+                log.error(f"/SURF/{sid}: box {bid} not defined", "CROSS REF")
+
 
 
 
