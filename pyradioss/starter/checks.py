@@ -528,6 +528,43 @@ def check_model(model: Model, log: MessageLog) -> None:
         if caa.sens_id > 0 and caa.sens_id not in sensor_ids:
             log.error(f"/CAA/{cid}: sensor {caa.sens_id} not defined", "CROSS REF")
 
+    # Gauges, Clusters, Ext Links, Flexible Bodies & Initial Fields (M104)
+    for gid, g in getattr(model, "gauges", {}).items():
+        if g.node_id > 0 and g.node_id not in model._id2idx:
+            log.error(f"/GAUGE/{gid}: node {g.node_id} not defined", "CROSS REF")
+
+    for cid, c in getattr(model, "clusters", {}).items():
+        if c.skew_id > 0 and c.skew_id not in model.skews:
+            log.error(f"/CLUSTER/{cid}: skew {c.skew_id} not defined", "CROSS REF")
+
+    for lid, el in getattr(model, "ext_links", {}).items():
+        if el.grnod_id > 0 and el.grnod_id not in model.node_groups:
+            log.error(f"/EXTLNK/{lid}: node group {el.grnod_id} not defined", "CROSS REF")
+
+    for fid, fx in getattr(model, "fxbodies", {}).items():
+        if fx.node_id > 0 and fx.node_id not in model._id2idx:
+            log.error(f"/FXBODY/{fid}: node {fx.node_id} not defined", "CROSS REF")
+
+    grav_ids = {g.id for g in model.gravity}
+    for iid, ig in getattr(model, "ini_gravs", {}).items():
+        if ig.grpart_id > 0 and ig.grpart_id not in part_groups and ig.grpart_id not in model.parts:
+            log.error(f"/INIGRAV/{iid}: part group/part {ig.grpart_id} not defined", "CROSS REF")
+        if ig.surf_id > 0 and ig.surf_id not in model.surfaces:
+            log.error(f"/INIGRAV/{iid}: surface {ig.surf_id} not defined", "CROSS REF")
+        if ig.grav_id > 0 and ig.grav_id not in grav_ids:
+            log.error(f"/INIGRAV/{iid}: gravity {ig.grav_id} not defined", "CROSS REF")
+
+    for mid, m1 in getattr(model, "ini_map1ds", {}).items():
+        for nid in (m1.node_id1, m1.node_id2):
+            if nid > 0 and nid not in model._id2idx:
+                log.error(f"/INIMAP1D/{mid}: node {nid} not defined", "CROSS REF")
+
+    for mid, m2 in getattr(model, "ini_map2ds", {}).items():
+        for nid in (m2.node_id1, m2.node_id2, m2.node_id3):
+            if nid > 0 and nid not in model._id2idx:
+                log.error(f"/INIMAP2D/{mid}: node {nid} not defined", "CROSS REF")
+
+
 
 
 

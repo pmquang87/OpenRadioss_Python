@@ -46,6 +46,7 @@ from ..model.entities import (
     MergeNode, MergeRbody, IniCrack, IniCrackSegment, LaserLoad,
     PcylLoad, PfluidLoad, Preload, PreloadAxial, DampInter, DampRange,
     AnalyGlobal, UpwindGlobal, CaaControl,
+    Gauge, Cluster, ExtLink, FxBody, IniGrav, IniMap1D, IniMap2D, IniStateFile,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -2910,17 +2911,29 @@ def _read_reference_system(block: KeywordBlock, model: Model,
         sf.imov = 0
     else:
         # ---- node-defined (MOV / MOV2 / 3-node NOD) ----------------------
-        if sub == "MOV":
-            f = cards[0].cut("SKEW_MOV")
-            sf.idir = _skew_dir(f[3], who, log, block.source)
-            sf.imov = 1
+        if block.fixed:
+            if sub == "MOV":
+                f = cards[0].cut("SKEW_MOV")
+                sf.idir = _skew_dir(f[3], who, log, block.source)
+                sf.imov = 1
+            else:
+                f = cards[0].cut("SKEW_MOV2")
+                # MOV2: N1->N2 IS Z' (hm_read_skw.F 223-240); the 3-node
+                # /FRAME/NOD uses the X-primary rule (hm_read_frm.F 519-529)
+                sf.idir = 3 if sub == "MOV2" else 1
+                sf.imov = 2 if sub == "MOV2" else 1
+            sf.n1, sf.n2, sf.n3 = (_ival(f[0]), _ival(f[1]), _ival(f[2]))
         else:
-            f = cards[0].cut("SKEW_MOV2")
-            # MOV2: N1->N2 IS Z' (hm_read_skw.F 223-240); the 3-node
-            # /FRAME/NOD uses the X-primary rule (hm_read_frm.F 519-529)
-            sf.idir = 3 if sub == "MOV2" else 1
-            sf.imov = 2 if sub == "MOV2" else 1
-        sf.n1, sf.n2, sf.n3 = (_ival(f[0]), _ival(f[1]), _ival(f[2]))
+            toks = cards[0].tokens()
+            if sub == "MOV":
+                sf.idir = _skew_dir(toks[3] if len(toks) > 3 else "", who, log, block.source)
+                sf.imov = 1
+            else:
+                sf.idir = 3 if sub == "MOV2" else 1
+                sf.imov = 2 if sub == "MOV2" else 1
+            sf.n1 = int(float(toks[0])) if len(toks) > 0 else 0
+            sf.n2 = int(float(toks[1])) if len(toks) > 1 else 0
+            sf.n3 = int(float(toks[2])) if len(toks) > 2 else 0
         if not (sf.n1 and sf.n2 and sf.n3):
             log.error(f"{who}: card 2 needs three node ids "
                       f"(got N1={sf.n1} N2={sf.n2} N3={sf.n3})", block.source)
@@ -6321,6 +6334,356 @@ def read_caa(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_gauge(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/GAUGE[/<subtype>]/gauge_ID`` (M104)::
+
+        card 1:  title
+        card 2:  node_ID  [gap]  elem_ID  dist
+    """
+    subtype = block.parts[1].upper() if len(block.parts) > 1 else ""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/GAUGE/{block.user_id}: missing data card", block.source)
+        return
+
+    node_id = 0
+    elem_id = 0
+    dist = 0.0
+    fcut = 0.0
+
+    if block.fixed:
+        if subtype == "SPH":
+            f = cards[0].cut("GAUGE_SPH_1")
+            node_id = _ival(f[0]) if len(f) > 0 else 0
+            fcut = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            elem_id = _ival(f[3]) if len(f) > 3 else 0
+            dist = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        else:
+            f = cards[0].cut("GAUGE_1")
+            node_id = _ival(f[0]) if len(f) > 0 else 0
+            elem_id = _ival(f[2]) if len(f) > 2 else 0
+            dist = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+    else:
+        toks = cards[0].tokens()
+        node_id = int(float(toks[0])) if len(toks) > 0 else 0
+        if subtype == "SPH":
+            fcut = float(toks[1]) if len(toks) > 1 else 0.0
+            elem_id = int(float(toks[2])) if len(toks) > 2 else 0
+            dist = float(toks[3]) if len(toks) > 3 else 0.0
+        else:
+            elem_id = int(float(toks[1])) if len(toks) > 1 else 0
+            dist = float(toks[2]) if len(toks) > 2 else 0.0
+
+    model.gauges[block.user_id] = Gauge(
+        id=block.user_id, subtype=subtype, title=title, node_id=node_id,
+        elem_id=elem_id, dist=dist, fcut=fcut,
+    )
+
+
+def read_cluster(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CLUSTER[/<subtype>]/cluster_ID`` (M104)::
+
+        card 1:  title
+        card 2:  group_ID  skew_ID  ifail
+        card 3:  fn_fail  sca_a1  sca_b1
+        card 4:  fs_fail  sca_a2  sca_b2
+        card 5:  mt_fail  sca_a3  sca_b3
+        card 6:  mb_fail  sca_a4  sca_b4
+    """
+    subtype = block.parts[1].upper() if len(block.parts) > 1 else ""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/CLUSTER/{block.user_id}: missing data card", block.source)
+        return
+
+    group_id = 0
+    skew_id = 0
+    ifail = 0
+    fn_fail, sca_a1, sca_b1 = 0.0, 1.0, 1.0
+    fs_fail, sca_a2, sca_b2 = 0.0, 1.0, 1.0
+    mt_fail, sca_a3, sca_b3 = 0.0, 1.0, 1.0
+    mb_fail, sca_a4, sca_b4 = 0.0, 1.0, 1.0
+
+    if block.fixed:
+        f1 = cards[0].cut("CLUSTER_1")
+        group_id = _ival(f1[0]) if len(f1) > 0 else 0
+        skew_id = _ival(f1[1]) if len(f1) > 1 else 0
+        ifail = _ival(f1[2]) if len(f1) > 2 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("CLUSTER_2")
+            fn_fail = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            sca_a1 = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
+            sca_b1 = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("CLUSTER_2")
+            fs_fail = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+            sca_a2 = _fval(f3[1], 1.0) if len(f3) > 1 else 1.0
+            sca_b2 = _fval(f3[2], 1.0) if len(f3) > 2 else 1.0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("CLUSTER_2")
+            mt_fail = _fval(f4[0], 0.0) if len(f4) > 0 else 0.0
+            sca_a3 = _fval(f4[1], 1.0) if len(f4) > 1 else 1.0
+            sca_b3 = _fval(f4[2], 1.0) if len(f4) > 2 else 1.0
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            f5 = cards[4].cut("CLUSTER_2")
+            mb_fail = _fval(f5[0], 0.0) if len(f5) > 0 else 0.0
+            sca_a4 = _fval(f5[1], 1.0) if len(f5) > 1 else 1.0
+            sca_b4 = _fval(f5[2], 1.0) if len(f5) > 2 else 1.0
+    else:
+        t1 = cards[0].tokens()
+        group_id = int(float(t1[0])) if len(t1) > 0 else 0
+        skew_id = int(float(t1[1])) if len(t1) > 1 else 0
+        ifail = int(float(t1[2])) if len(t1) > 2 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            fn_fail = float(t2[0]) if len(t2) > 0 else 0.0
+            sca_a1 = float(t2[1]) if len(t2) > 1 else 1.0
+            sca_b1 = float(t2[2]) if len(t2) > 2 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            fs_fail = float(t3[0]) if len(t3) > 0 else 0.0
+            sca_a2 = float(t3[1]) if len(t3) > 1 else 1.0
+            sca_b2 = float(t3[2]) if len(t3) > 2 else 1.0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            t4 = cards[3].tokens()
+            mt_fail = float(t4[0]) if len(t4) > 0 else 0.0
+            sca_a3 = float(t4[1]) if len(t4) > 1 else 1.0
+            sca_b3 = float(t4[2]) if len(t4) > 2 else 1.0
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            t5 = cards[4].tokens()
+            mb_fail = float(t5[0]) if len(t5) > 0 else 0.0
+            sca_a4 = float(t5[1]) if len(t5) > 1 else 1.0
+            sca_b4 = float(t5[2]) if len(t5) > 2 else 1.0
+
+    model.clusters[block.user_id] = Cluster(
+        id=block.user_id, subtype=subtype, title=title, group_id=group_id,
+        skew_id=skew_id, ifail=ifail, fn_fail=fn_fail, sca_a1=sca_a1,
+        sca_b1=sca_b1, fs_fail=fs_fail, sca_a2=sca_a2, sca_b2=sca_b2,
+        mt_fail=mt_fail, sca_a3=sca_a3, sca_b3=sca_b3, mb_fail=mb_fail,
+        sca_a4=sca_a4, sca_b4=sca_b4,
+    )
+
+
+def read_extlnk(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EXTLNK/link_ID`` (M104)::
+
+        card 1:  title
+        card 2:  grnod_ID
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/EXTLNK/{block.user_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("EXTLNK_1")
+        grnod_id = _ival(f[0]) if len(f) > 0 else 0
+    else:
+        toks = cards[0].tokens()
+        grnod_id = int(float(toks[0])) if len(toks) > 0 else 0
+
+    model.ext_links[block.user_id] = ExtLink(
+        id=block.user_id, title=title, grnod_id=grnod_id,
+    )
+
+
+def read_fxbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FXBODY/body_ID`` (M104)::
+
+        card 1:  title
+        card 2:  node_IDm  Ianim  Imin  Imax
+        card 3:  filename
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FXBODY/{block.user_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("FXBODY_1")
+        node_id = _ival(f[0]) if len(f) > 0 else 0
+        ianim = _ival(f[1]) if len(f) > 1 else 0
+        imin = _ival(f[2]) if len(f) > 2 else 0
+        imax = _ival(f[3]) if len(f) > 3 else 0
+    else:
+        toks = cards[0].tokens()
+        node_id = int(float(toks[0])) if len(toks) > 0 else 0
+        ianim = int(float(toks[1])) if len(toks) > 1 else 0
+        imin = int(float(toks[2])) if len(toks) > 2 else 0
+        imax = int(float(toks[3])) if len(toks) > 3 else 0
+
+    filename = cards[1].raw.strip() if len(cards) > 1 else ""
+
+    model.fxbodies[block.user_id] = FxBody(
+        id=block.user_id, title=title, node_id=node_id,
+        ianim=ianim, imin=imin, imax=imax, filename=filename,
+    )
+
+
+def read_inigrav(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INIGRAV/inigrav_ID`` (M104)::
+
+        card 1:  title
+        card 2:  grpart_ID  surf_ID  grav_ID  [gap]  Pref  Bx  By  Bz
+    """
+    inigrav_id = block.user_id if block.user_id is not None else 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/INIGRAV/{inigrav_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("INIGRAV_1")
+        grpart_id = _ival(f[0]) if len(f) > 0 else 0
+        surf_id = _ival(f[1]) if len(f) > 1 else 0
+        grav_id = _ival(f[2]) if len(f) > 2 else 0
+        pref = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        bx = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+        by = _fval(f[6], 0.0) if len(f) > 6 else 0.0
+        bz = _fval(f[7], 0.0) if len(f) > 7 else 0.0
+    else:
+        toks = cards[0].tokens()
+        grpart_id = int(float(toks[0])) if len(toks) > 0 else 0
+        surf_id = int(float(toks[1])) if len(toks) > 1 else 0
+        grav_id = int(float(toks[2])) if len(toks) > 2 else 0
+        pref = float(toks[3]) if len(toks) > 3 else 0.0
+        bx = float(toks[4]) if len(toks) > 4 else 0.0
+        by = float(toks[5]) if len(toks) > 5 else 0.0
+        bz = float(toks[6]) if len(toks) > 6 else 0.0
+
+    model.ini_gravs[inigrav_id] = IniGrav(
+        id=inigrav_id, title=title, grpart_id=grpart_id, surf_id=surf_id,
+        grav_id=grav_id, pref=pref, bx=bx, by=by, bz=bz,
+    )
+
+
+def read_inimap(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INIMAP/1D`` or ``/INIMAP/2D`` dispatcher (M104)."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub == "1D" or "1D" in block.parts[0].upper():
+        read_inimap1d(block, model, log)
+    elif sub == "2D" or "2D" in block.parts[0].upper():
+        read_inimap2d(block, model, log)
+    else:
+        log.warning(f"/INIMAP/{sub} not ported (1D, 2D supported)", block.source)
+
+
+def read_inimap1d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INIMAP1D/map_ID`` or ``/INIMAP/1D/map_ID`` (M104)::
+
+        card 1:  title
+        card 2:  type  node_ID1  node_ID2  grbric_ID  grquad_ID  grsh3n_ID  Fscale_V
+        card 3:  filename
+    """
+    map_id = block.user_id if block.user_id is not None else 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/INIMAP1D/{map_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("INIMAP1D_1")
+        map_type = _ival(f[0]) if len(f) > 0 else 0
+        n1 = _ival(f[1]) if len(f) > 1 else 0
+        n2 = _ival(f[2]) if len(f) > 2 else 0
+        grbric = _ival(f[3]) if len(f) > 3 else 0
+        grquad = _ival(f[4]) if len(f) > 4 else 0
+        grsh3n = _ival(f[5]) if len(f) > 5 else 0
+        fscale_v = _fval(f[6], 1.0) if len(f) > 6 else 1.0
+    else:
+        toks = cards[0].tokens()
+        map_type = int(float(toks[0])) if len(toks) > 0 else 0
+        n1 = int(float(toks[1])) if len(toks) > 1 else 0
+        n2 = int(float(toks[2])) if len(toks) > 2 else 0
+        grbric = int(float(toks[3])) if len(toks) > 3 else 0
+        grquad = int(float(toks[4])) if len(toks) > 4 else 0
+        grsh3n = int(float(toks[5])) if len(toks) > 5 else 0
+        fscale_v = float(toks[6]) if len(toks) > 6 else 1.0
+
+    filename = cards[1].raw.strip() if len(cards) > 1 else ""
+
+    model.ini_map1ds[map_id] = IniMap1D(
+        id=map_id, title=title, map_type=map_type, node_id1=n1,
+        node_id2=n2, grbric_id=grbric, grquad_id=grquad,
+        grsh3n_id=grsh3n, fscale_v=fscale_v, filename=filename,
+    )
+
+
+def read_inimap2d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INIMAP2D/map_ID`` or ``/INIMAP/2D/map_ID`` (M104)::
+
+        card 1:  title
+        card 2:  type  node_ID1  node_ID2  node_ID3  grbric_ID  Fscale_V
+        card 3:  filename
+    """
+    map_id = block.user_id if block.user_id is not None else 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/INIMAP2D/{map_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("INIMAP2D_1")
+        map_type = _ival(f[0]) if len(f) > 0 else 0
+        n1 = _ival(f[1]) if len(f) > 1 else 0
+        n2 = _ival(f[2]) if len(f) > 2 else 0
+        n3 = _ival(f[3]) if len(f) > 3 else 0
+        grbric = _ival(f[4]) if len(f) > 4 else 0
+        fscale_v = _fval(f[5], 1.0) if len(f) > 5 else 1.0
+    else:
+        toks = cards[0].tokens()
+        map_type = int(float(toks[0])) if len(toks) > 0 else 0
+        n1 = int(float(toks[1])) if len(toks) > 1 else 0
+        n2 = int(float(toks[2])) if len(toks) > 2 else 0
+        n3 = int(float(toks[3])) if len(toks) > 3 else 0
+        grbric = int(float(toks[4])) if len(toks) > 4 else 0
+        fscale_v = float(toks[5]) if len(toks) > 5 else 1.0
+
+    filename = cards[1].raw.strip() if len(cards) > 1 else ""
+
+    model.ini_map2ds[map_id] = IniMap2D(
+        id=map_id, title=title, map_type=map_type, node_id1=n1,
+        node_id2=n2, node_id3=n3, grbric_id=grbric, fscale_v=fscale_v,
+        filename=filename,
+    )
+
+
+def read_inista(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INISTATE`` or ``/INISTATE/FILE`` (M104)::
+
+        card 1:  filename
+        card 2:  isigi  ioutp_fmt
+    """
+    cards = block.cards
+    if not cards or cards[0].is_blank:
+        log.error("/INISTATE: missing data card", block.source)
+        return
+
+    filename = cards[0].raw.strip()
+    isigi = 0
+    ioutp_fmt = 0
+    if len(cards) > 1 and not cards[1].is_blank:
+        if block.fixed:
+            f = cards[1].cut("INISTATE_1")
+            isigi = _ival(f[0]) if len(f) > 0 else 0
+            ioutp_fmt = _ival(f[1]) if len(f) > 1 else 0
+        else:
+            toks = cards[1].tokens()
+            isigi = int(float(toks[0])) if len(toks) > 0 else 0
+            ioutp_fmt = int(float(toks[1])) if len(toks) > 1 else 0
+
+    model.ini_state_file = IniStateFile(filename=filename, isigi=isigi, ioutp_fmt=ioutp_fmt)
+
+
+
 
 def read_ioflag(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/IOFLAG`` — output control flags (M68, parse-and-skip).
@@ -7778,6 +8141,15 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "ANALY": read_analy,
     "UPWIND": read_upwind,
     "CAA": read_caa,
+    "GAUGE": read_gauge,
+    "CLUSTER": read_cluster,
+    "EXTLNK": read_extlnk,
+    "FXBODY": read_fxbody,
+    "INIGRAV": read_inigrav,
+    "INIMAP": read_inimap,
+    "INIMAP1D": read_inimap1d,
+    "INIMAP2D": read_inimap2d,
+    "INISTATE": read_inista,
 }
 
 ENGINE_KEYWORDS_IGNORE = {

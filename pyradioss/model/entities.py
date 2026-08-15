@@ -1730,6 +1730,141 @@ class CaaControl:
     sens_id: int = 0
 
 
+# ----------------------------------------------------------------------------
+# Virtual sensors, clusters, flexible bodies & advanced initial states (M104)
+# ----------------------------------------------------------------------------
+
+@dataclass
+class Gauge:
+    """/GAUGE (M104): Numerical strain/stress gauge virtual sensor.
+
+    Fortran origin: ``starter/source/output/gauge/hm_read_gauge.F``.
+    """
+    id: int
+    subtype: str = ""
+    title: str = ""
+    node_id: int = 0
+    elem_id: int = 0
+    dist: float = 0.0
+    fcut: float = 0.0
+
+
+@dataclass
+class Cluster:
+    """/CLUSTER (M104): Element failure/grouping cluster.
+
+    Fortran origin: ``starter/source/output/cluster/hm_read_cluster.F``.
+    """
+    id: int
+    subtype: str = ""
+    title: str = ""
+    group_id: int = 0
+    skew_id: int = 0
+    ifail: int = 0
+    fn_fail: float = 0.0
+    sca_a1: float = 0.0
+    sca_b1: float = 0.0
+    fs_fail: float = 0.0
+    sca_a2: float = 0.0
+    sca_b2: float = 0.0
+    mt_fail: float = 0.0
+    sca_a3: float = 0.0
+    sca_b3: float = 0.0
+    mb_fail: float = 0.0
+    sca_a4: float = 0.0
+    sca_b4: float = 0.0
+
+
+@dataclass
+class ExtLink:
+    """/EXTLNK (M104): Multi-code external link coupling.
+
+    Fortran origin: ``starter/source/coupling/rad2rad/lecextlnk.F``.
+    """
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+
+
+@dataclass
+class FxBody:
+    """/FXBODY (M104): Component mode synthesis (CMS) flexible body.
+
+    Fortran origin: ``starter/source/constraints/fxbody/hm_read_fxb.F``.
+    """
+    id: int
+    title: str = ""
+    node_id: int = 0
+    ianim: int = 0
+    imin: int = 0
+    imax: int = 0
+    filename: str = ""
+
+
+@dataclass
+class IniGrav:
+    """/INIGRAV (M104): Initial gravity equilibrium state.
+
+    Fortran origin: ``starter/source/initial_conditions/inigrav/hm_read_inigrav.F``.
+    """
+    id: int
+    title: str = ""
+    grpart_id: int = 0
+    surf_id: int = 0
+    grav_id: int = 0
+    pref: float = 0.0
+    bx: float = 0.0
+    by: float = 0.0
+    bz: float = 0.0
+
+
+@dataclass
+class IniMap1D:
+    """/INIMAP1D (M104): 1D mapped field initial condition.
+
+    Fortran origin: ``starter/source/initial_conditions/inimap/hm_read_inimap1d.F``.
+    """
+    id: int
+    title: str = ""
+    map_type: int = 0
+    node_id1: int = 0
+    node_id2: int = 0
+    grbric_id: int = 0
+    grquad_id: int = 0
+    grsh3n_id: int = 0
+    fscale_v: float = 1.0
+    filename: str = ""
+
+
+@dataclass
+class IniMap2D:
+    """/INIMAP2D (M104): 2D mapped field initial condition.
+
+    Fortran origin: ``starter/source/initial_conditions/inimap/hm_read_inimap2d.F``.
+    """
+    id: int
+    title: str = ""
+    map_type: int = 0
+    node_id1: int = 0
+    node_id2: int = 0
+    node_id3: int = 0
+    grbric_id: int = 0
+    fscale_v: float = 1.0
+    filename: str = ""
+
+
+@dataclass
+class IniStateFile:
+    """/INISTATE or /INISTATE/FILE (M104): External initial state file.
+
+    Fortran origin: ``starter/source/initial_conditions/inista/hm_read_inista.F``.
+    """
+    filename: str = ""
+    isigi: int = 0
+    ioutp_fmt: int = 0
+
+
+
 
 
 

@@ -46,6 +46,7 @@ from .entities import (
     MergeNode, MergeRbody, IniCrack, IniCrackSegment, LaserLoad,
     PcylLoad, PfluidLoad, Preload, PreloadAxial, DampInter, DampRange,
     AnalyGlobal, UpwindGlobal, CaaControl,
+    Gauge, Cluster, ExtLink, FxBody, IniGrav, IniMap1D, IniMap2D, IniStateFile,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -635,6 +636,14 @@ class Model:
         self.analy_global: Optional[AnalyGlobal] = None # /ANALY (M103)
         self.upwind_global: Optional[UpwindGlobal] = None # /UPWIND (M103)
         self.caa_controls: Dict[int, CaaControl] = {}  # /CAA (M103)
+        self.gauges: Dict[int, Gauge] = {}             # /GAUGE (M104)
+        self.clusters: Dict[int, Cluster] = {}         # /CLUSTER (M104)
+        self.ext_links: Dict[int, ExtLink] = {}        # /EXTLNK (M104)
+        self.fxbodies: Dict[int, FxBody] = {}          # /FXBODY (M104)
+        self.ini_gravs: Dict[int, IniGrav] = {}        # /INIGRAV (M104)
+        self.ini_map1ds: Dict[int, IniMap1D] = {}      # /INIMAP1D (M104)
+        self.ini_map2ds: Dict[int, IniMap2D] = {}      # /INIMAP2D (M104)
+        self.ini_state_file: Optional[IniStateFile] = None # /INISTATE (M104)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

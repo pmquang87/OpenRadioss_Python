@@ -650,6 +650,30 @@ LAYOUTS: Dict[str, List[int]] = {
 
     # CAA (M103)
     "CAA_1": [10, 10, 10],
+
+    # GAUGE (M104)
+    "GAUGE_1": [10, 40, 10, 20],
+    "GAUGE_SPH_1": [10, 20, 20, 10, 20],
+
+    # CLUSTER (M104)
+    "CLUSTER_1": [10, 10, 10],
+    "CLUSTER_2": [20, 20, 20],
+
+    # EXTLNK (M104)
+    "EXTLNK_1": [10],
+
+    # FXBODY (M104)
+    "FXBODY_1": [10, 10, 10, 10],
+
+    # INIGRAV (M104)
+    "INIGRAV_1": [10, 10, 10, 10, 20, 20, 20, 20],
+
+    # INIMAP (M104)
+    "INIMAP1D_1": [10, 10, 10, 10, 10, 10, 20],
+    "INIMAP2D_1": [10, 10, 10, 10, 10, 20],
+
+    # INISTATE (M104)
+    "INISTATE_1": [10, 10],
 }
 
 
