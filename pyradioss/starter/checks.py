@@ -969,6 +969,28 @@ def check_model(model: Model, log: MessageLog) -> None:
         if el.grnod_id > 0 and el.grnod_id not in model.node_groups:
             log.error(f"/EXTERN/LINK/{lid}: node group {el.grnod_id} not defined", "CROSS REF")
 
+    for fid, fm in getattr(model, "friction_models", {}).items():
+        for p in fm.pairs:
+            if p.part_id1 > 0 and p.part_id1 not in model.parts:
+                log.error(f"/FRICTION/{fid}: part {p.part_id1} not defined", "CROSS REF")
+            if p.part_id2 > 0 and p.part_id2 not in model.parts:
+                log.error(f"/FRICTION/{fid}: part {p.part_id2} not defined", "CROSS REF")
+            if p.grpart_id1 > 0 and p.grpart_id1 not in getattr(model, "part_groups", {}):
+                log.error(f"/FRICTION/{fid}: part group {p.grpart_id1} not defined", "CROSS REF")
+            if p.grpart_id2 > 0 and p.grpart_id2 not in getattr(model, "part_groups", {}):
+                log.error(f"/FRICTION/{fid}: part group {p.grpart_id2} not defined", "CROSS REF")
+
+    for bid, nb in getattr(model, "nbcs_blocks", {}).items():
+        for n in nb.nodes:
+            if n.node_id > 0 and n.node_id not in model._id2idx:
+                log.error(f"/NBCS/{bid}: node {n.node_id} not defined", "CROSS REF")
+            if n.skew_id > 0 and n.skew_id not in model.skews:
+                log.error(f"/NBCS/{bid}: skew {n.skew_id} not defined", "CROSS REF")
+
+    for nid in getattr(model, "refsta_nodes", {}):
+        if nid > 0 and nid not in model._id2idx:
+            log.error(f"/REFSTA: node {nid} not defined", "CROSS REF")
+
 
 
 

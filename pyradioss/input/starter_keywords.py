@@ -1078,6 +1078,8 @@ def read_ale(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_ale_close(block, model, log)
     elif sub == "ZERO":
         model.ale_zero = True
+    elif sub == "MUSCL" or (len(block.parts) > 2 and block.parts[2].upper() == "MUSCL"):
+        read_ale_muscl(block, model, log)
     else:
         log.warning(f"/ALE/{sub} not ported — block skipped", block.source)
 
@@ -12348,6 +12350,295 @@ def read_arch(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.arch_specs.append(ArchSpec(mach=mach))
 
 
+def read_funct_python(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FUNCT_PYTHON/id`` (M119): Python mathematical function definition."""
+    fid = block.user_id if block.user_id is not None else 1
+    cards = block.cards
+    from ..model.entities import FunctPython
+    lines = [c.raw.rstrip("\r\n") for c in cards if not c.is_blank]
+    model.funct_pythons[fid] = FunctPython(id=fid, lines=lines)
+
+
+def read_friction(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FRICTION/fric_ID`` (M119)::
+
+        card 1: Title
+        card 2: Ifric, Ifiltr, Xfreq, Iform
+        card 3: C1, C2, C3, C4, C5
+        card 4: C6, FRIC, VIS_f
+        cards 5+: Part pair friction definitions
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/FRICTION/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import FrictionModel, FrictionPartPair
+
+    fid = block.user_id if block.user_id is not None else 1
+
+    ifric, ifiltr, iform = 0, 0, 1
+    xfreq = 0.0
+    c1, c2, c3, c4, c5, c6 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    fric = 0.0
+    vis_f = 1.0
+
+    idx = 0
+    if len(cards) > idx and not cards[idx].is_blank:
+        if block.fixed:
+            f1 = cards[idx].cut("FRICTION_1")
+            ifric = _ival(f1[0]) if len(f1) > 0 else 0
+            ifiltr = _ival(f1[1]) if len(f1) > 1 else 0
+            xfreq = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+            iform = _ival(f1[3], 1) if len(f1) > 3 else 1
+        else:
+            t1 = cards[idx].tokens()
+            ifric = int(float(t1[0])) if len(t1) > 0 else 0
+            ifiltr = int(float(t1[1])) if len(t1) > 1 else 0
+            xfreq = float(t1[2]) if len(t1) > 2 else 0.0
+            iform = int(float(t1[3])) if len(t1) > 3 else 1
+        idx += 1
+
+    if len(cards) > idx and not cards[idx].is_blank:
+        if block.fixed:
+            f2 = cards[idx].cut("FRICTION_2")
+            c1 = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            c2 = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            c3 = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            c4 = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+            c5 = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+        else:
+            t2 = cards[idx].tokens()
+            c1 = float(t2[0]) if len(t2) > 0 else 0.0
+            c2 = float(t2[1]) if len(t2) > 1 else 0.0
+            c3 = float(t2[2]) if len(t2) > 2 else 0.0
+            c4 = float(t2[3]) if len(t2) > 3 else 0.0
+            c5 = float(t2[4]) if len(t2) > 4 else 0.0
+        idx += 1
+
+    if len(cards) > idx and not cards[idx].is_blank:
+        if block.fixed:
+            f3 = cards[idx].cut("FRICTION_3")
+            c6 = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+            fric = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+            vis_f = _fval(f3[2], 1.0) if len(f3) > 2 else 1.0
+        else:
+            t3 = cards[idx].tokens()
+            c6 = float(t3[0]) if len(t3) > 0 else 0.0
+            fric = float(t3[1]) if len(t3) > 1 else 0.0
+            vis_f = float(t3[2]) if len(t3) > 2 else 1.0
+        idx += 1
+
+    pairs: list[FrictionPartPair] = []
+    while idx < len(cards):
+        if cards[idx].is_blank:
+            idx += 1
+            continue
+        if block.fixed:
+            fp1 = cards[idx].cut("FRICTION_PAIR_1")
+            grpart_id1 = _ival(fp1[0]) if len(fp1) > 0 else 0
+            grpart_id2 = _ival(fp1[1]) if len(fp1) > 1 else 0
+            part_id1 = _ival(fp1[2]) if len(fp1) > 2 else 0
+            part_id2 = _ival(fp1[3]) if len(fp1) > 3 else 0
+            idir = _ival(fp1[5]) if len(fp1) > 5 else (_ival(fp1[4]) if len(fp1) > 4 else 0)
+        else:
+            tp1 = cards[idx].tokens()
+            grpart_id1 = int(float(tp1[0])) if len(tp1) > 0 else 0
+            grpart_id2 = int(float(tp1[1])) if len(tp1) > 1 else 0
+            part_id1 = int(float(tp1[2])) if len(tp1) > 2 else 0
+            part_id2 = int(float(tp1[3])) if len(tp1) > 3 else 0
+            idir = int(float(tp1[4])) if len(tp1) > 4 else 0
+        idx += 1
+
+        c1_p, c2_p, c3_p, c4_p, c5_p = 0.0, 0.0, 0.0, 0.0, 0.0
+        if idx < len(cards) and not cards[idx].is_blank:
+            if block.fixed:
+                fp2 = cards[idx].cut("FRICTION_2")
+                c1_p = _fval(fp2[0], 0.0) if len(fp2) > 0 else 0.0
+                c2_p = _fval(fp2[1], 0.0) if len(fp2) > 1 else 0.0
+                c3_p = _fval(fp2[2], 0.0) if len(fp2) > 2 else 0.0
+                c4_p = _fval(fp2[3], 0.0) if len(fp2) > 3 else 0.0
+                c5_p = _fval(fp2[4], 0.0) if len(fp2) > 4 else 0.0
+            else:
+                tp2 = cards[idx].tokens()
+                c1_p = float(tp2[0]) if len(tp2) > 0 else 0.0
+                c2_p = float(tp2[1]) if len(tp2) > 1 else 0.0
+                c3_p = float(tp2[2]) if len(tp2) > 2 else 0.0
+                c4_p = float(tp2[3]) if len(tp2) > 3 else 0.0
+                c5_p = float(tp2[4]) if len(tp2) > 4 else 0.0
+            idx += 1
+
+        c6_p, fric_p, vis_f_p = 0.0, 0.0, 1.0
+        if idx < len(cards) and not cards[idx].is_blank:
+            if block.fixed:
+                fp3 = cards[idx].cut("FRICTION_3")
+                c6_p = _fval(fp3[0], 0.0) if len(fp3) > 0 else 0.0
+                fric_p = _fval(fp3[1], 0.0) if len(fp3) > 1 else 0.0
+                vis_f_p = _fval(fp3[2], 1.0) if len(fp3) > 2 else 1.0
+            else:
+                tp3 = cards[idx].tokens()
+                c6_p = float(tp3[0]) if len(tp3) > 0 else 0.0
+                fric_p = float(tp3[1]) if len(tp3) > 1 else 0.0
+                vis_f_p = float(tp3[2]) if len(tp3) > 2 else 1.0
+            idx += 1
+
+        c1_2, c2_2, c3_2, c4_2, c5_2, c6_2 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        fric_2, vis_f_2 = 0.0, 1.0
+        if idir == 1:
+            if idx < len(cards) and not cards[idx].is_blank:
+                if block.fixed:
+                    fp4 = cards[idx].cut("FRICTION_2")
+                    c1_2 = _fval(fp4[0], 0.0) if len(fp4) > 0 else 0.0
+                    c2_2 = _fval(fp4[1], 0.0) if len(fp4) > 1 else 0.0
+                    c3_2 = _fval(fp4[2], 0.0) if len(fp4) > 2 else 0.0
+                    c4_2 = _fval(fp4[3], 0.0) if len(fp4) > 3 else 0.0
+                    c5_2 = _fval(fp4[4], 0.0) if len(fp4) > 4 else 0.0
+                else:
+                    tp4 = cards[idx].tokens()
+                    c1_2 = float(tp4[0]) if len(tp4) > 0 else 0.0
+                    c2_2 = float(tp4[1]) if len(tp4) > 1 else 0.0
+                    c3_2 = float(tp4[2]) if len(tp4) > 2 else 0.0
+                    c4_2 = float(tp4[3]) if len(tp4) > 3 else 0.0
+                    c5_2 = float(tp4[4]) if len(tp4) > 4 else 0.0
+                idx += 1
+
+            if idx < len(cards) and not cards[idx].is_blank:
+                if block.fixed:
+                    fp5 = cards[idx].cut("FRICTION_3")
+                    c6_2 = _fval(fp5[0], 0.0) if len(fp5) > 0 else 0.0
+                    fric_2 = _fval(fp5[1], 0.0) if len(fp5) > 1 else 0.0
+                    vis_f_2 = _fval(fp5[2], 1.0) if len(fp5) > 2 else 1.0
+                else:
+                    tp5 = cards[idx].tokens()
+                    c6_2 = float(tp5[0]) if len(tp5) > 0 else 0.0
+                    fric_2 = float(tp5[1]) if len(tp5) > 1 else 0.0
+                    vis_f_2 = float(tp5[2]) if len(tp5) > 2 else 1.0
+                idx += 1
+
+        pairs.append(FrictionPartPair(
+            grpart_id1=grpart_id1, grpart_id2=grpart_id2,
+            part_id1=part_id1, part_id2=part_id2,
+            idir=idir,
+            c1=c1_p, c2=c2_p, c3=c3_p, c4=c4_p, c5=c5_p, c6=c6_p,
+            fric=fric_p, vis_f=vis_f_p,
+            c1_dir2=c1_2, c2_dir2=c2_2, c3_dir2=c3_2, c4_dir2=c4_2, c5_dir2=c5_2, c6_dir2=c6_2,
+            fric_dir2=fric_2, vis_f_dir2=vis_f_2,
+        ))
+
+    model.friction_models[fid] = FrictionModel(
+        id=fid, title=title, ifric=ifric, ifiltr=ifiltr, xfreq=xfreq, iform=iform,
+        c1=c1, c2=c2, c3=c3, c4=c4, c5=c5, c6=c6, fric=fric, vis_f=vis_f,
+        pairs=pairs,
+    )
+
+
+def read_refsta(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/REFSTA`` (M119): Global reference state geometry node coordinates."""
+    cards = [c for c in (block.fixed_cards() if block.fixed else block.cards) if not c.is_blank]
+    from ..model.entities import RefstaNode
+    for c in cards:
+        if block.fixed:
+            f = c.cut("REFSTA_1")
+            nid = _ival(f[0]) if len(f) > 0 else 0
+            x = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            y = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            z = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        else:
+            toks = c.tokens()
+            if not toks:
+                continue
+            nid = int(float(toks[0]))
+            x = float(toks[1]) if len(toks) > 1 else 0.0
+            y = float(toks[2]) if len(toks) > 2 else 0.0
+            z = float(toks[3]) if len(toks) > 3 else 0.0
+        if nid > 0:
+            model.refsta_nodes[nid] = RefstaNode(node_id=nid, x=x, y=y, z=z)
+
+
+def read_eref(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EREF/part_id``, ``/EREF/SHELL/part_id``, ``/EREF/SOLID/part_id`` (M119): Element reference configuration."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    from ..model.entities import ErefSpec
+    pid = block.user_id if block.user_id is not None else 0
+    subtype = block.parts[1].upper() if len(block.parts) > 2 else ""
+    model.eref_specs[pid] = ErefSpec(id=pid, title=title, part_id=pid, subtype=subtype)
+
+
+def read_nbcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/NBCS/id`` (M119): Non-linear boundary conditions block::
+
+        card 1: Title
+        cards 2+: Tx Ty Tz Wx Wy Wz Skew_ID Node_ID
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    from ..model.entities import NbcsBlock, NbcsNode
+
+    bid = block.user_id if block.user_id is not None else 1
+    nodes: list[NbcsNode] = []
+    for c in cards:
+        if c.is_blank:
+            continue
+        if block.fixed:
+            f = c.cut("NBCS_1")
+            tx = _ival(f[1]) if len(f) > 1 else 0
+            ty = _ival(f[2]) if len(f) > 2 else 0
+            tz = _ival(f[3]) if len(f) > 3 else 0
+            wx = _ival(f[5]) if len(f) > 5 else 0
+            wy = _ival(f[6]) if len(f) > 6 else 0
+            wz = _ival(f[7]) if len(f) > 7 else 0
+            skew_id = _ival(f[8]) if len(f) > 8 else 0
+            node_id = _ival(f[9]) if len(f) > 9 else 0
+        else:
+            toks = c.tokens()
+            if len(toks) >= 8:
+                tx, ty, tz = int(float(toks[0])), int(float(toks[1])), int(float(toks[2]))
+                wx, wy, wz = int(float(toks[3])), int(float(toks[4])), int(float(toks[5]))
+                skew_id = int(float(toks[6]))
+                node_id = int(float(toks[7]))
+            elif len(toks) == 3:
+                # e.g., "111 000", skew, node
+                dofs = toks[0]
+                tx = int(dofs[0]) if len(dofs) > 0 else 0
+                ty = int(dofs[1]) if len(dofs) > 1 else 0
+                tz = int(dofs[2]) if len(dofs) > 2 else 0
+                wx = int(dofs[3]) if len(dofs) > 3 else 0
+                wy = int(dofs[4]) if len(dofs) > 4 else 0
+                wz = int(dofs[5]) if len(dofs) > 5 else 0
+                skew_id = int(float(toks[1]))
+                node_id = int(float(toks[2]))
+            else:
+                continue
+        if node_id > 0:
+            nodes.append(NbcsNode(tx=tx, ty=ty, tz=tz, wx=wx, wy=wy, wz=wz, skew_id=skew_id, node_id=node_id))
+
+    model.nbcs_blocks[bid] = NbcsBlock(id=bid, title=title, nodes=nodes)
+
+
+def read_ale_muscl(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ALE/MUSCL`` or ``/ALE/SOLVER/MUSCL`` (M119)::
+
+        card 1: BETA
+    """
+    cards = [c for c in (block.fixed_cards() if block.fixed else block.cards) if not c.is_blank]
+    from ..model.entities import AleMuscl
+    beta = 2.0
+    if cards:
+        if block.fixed:
+            f = cards[0].cut("ALE_MUSCL_1")
+            beta = _fval(f[0], 2.0) if len(f) > 0 else 2.0
+        else:
+            toks = cards[0].tokens()
+            beta = float(toks[0]) if len(toks) > 0 else 2.0
+    model.ale_muscl = AleMuscl(beta=beta)
+
+
+def read_bem(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/BEM`` (M119): Boundary element method container."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    bid = block.user_id if block.user_id is not None else 1
+    from ..model.entities import BemModel
+    model.bem_models[bid] = BemModel(id=bid, title=title)
+
+
 def read_altdoctag(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/ALTDOCTAG`` (M118): Keyword reference documentation tag."""
     cards = [c for c in (block.fixed_cards() if block.fixed else block.cards) if not c.is_blank]
@@ -12542,6 +12833,12 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PLOAD": read_pload,
     "ARCH": read_arch,
     "ALTDOCTAG": read_altdoctag,
+    "FUNCT_PYTHON": read_funct_python,
+    "FRICTION": read_friction,
+    "REFSTA": read_refsta,
+    "EREF": read_eref,
+    "NBCS": read_nbcs,
+    "BEM": read_bem,
 }
 
 
@@ -12582,7 +12879,8 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
             "SET", "SETS", "STATE", "CHECKSUM", "DYNAIN", "SECT", "EBCS",
             "INIQUA", "INIQUAD", "INISTA", "INISTATE", "SPH_RESERVE", "MOVE_FUNCT",
             "EIG", "SHFRA", "SHFRA_V4", "INTTHICK", "INT_THICK", "STR_FILE", "MEMORY", "PLOAD",
-            "ARCH", "ALTDOCTAG", "EXTERN", "EXTLNK", "SUBDOMAIN"
+            "ARCH", "ALTDOCTAG", "EXTERN", "EXTLNK", "SUBDOMAIN",
+            "FUNCT_PYTHON", "FRICTION", "REFSTA", "EREF", "NBCS", "BEM"
         ):
             # /FAIL's second trailing id is its OWN option id in the
             # legacy dialect (read_fail handles it), and /ADMAS headers

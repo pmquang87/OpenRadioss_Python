@@ -2845,6 +2845,114 @@ class ArchSpec:
     mach: tuple[int, ...] = (0, 0, 0, 0, 0, 0, 0, 0)
 
 
+@dataclass
+class FunctPython:
+    """/FUNCT_PYTHON/id (M119): Python mathematical function definition."""
+    id: int
+    lines: list[str] = field(default_factory=list)
+
+
+@dataclass
+class FrictionPartPair:
+    """Connected part pair friction specification for /FRICTION."""
+    grpart_id1: int = 0
+    grpart_id2: int = 0
+    part_id1: int = 0
+    part_id2: int = 0
+    idir: int = 0
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+    c4: float = 0.0
+    c5: float = 0.0
+    c6: float = 0.0
+    fric: float = 0.0
+    vis_f: float = 1.0
+    c1_dir2: float = 0.0
+    c2_dir2: float = 0.0
+    c3_dir2: float = 0.0
+    c4_dir2: float = 0.0
+    c5_dir2: float = 0.0
+    c6_dir2: float = 0.0
+    fric_dir2: float = 0.0
+    vis_f_dir2: float = 1.0
+
+
+@dataclass
+class FrictionModel:
+    """/FRICTION/fric_id (M119): Generalized multi-part and orthotropic friction model."""
+    id: int
+    title: str = ""
+    ifric: int = 0
+    ifiltr: int = 0
+    xfreq: float = 0.0
+    iform: int = 1
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+    c4: float = 0.0
+    c5: float = 0.0
+    c6: float = 0.0
+    fric: float = 0.0
+    vis_f: float = 1.0
+    pairs: list[FrictionPartPair] = field(default_factory=list)
+
+
+@dataclass
+class RefstaNode:
+    """/REFSTA (M119): Reference state node coordinate."""
+    node_id: int
+    x: float = 0.0
+    y: float = 0.0
+    z: float = 0.0
+
+
+@dataclass
+class ErefSpec:
+    """/EREF (M119): Element reference configuration."""
+    id: int
+    title: str = ""
+    part_id: int = 0
+    subtype: str = ""
+    elem_coords: list[tuple[int, tuple[tuple[float, float, float], ...]]] = field(default_factory=list)
+
+
+@dataclass
+class NbcsNode:
+    """Single node DOF constraint entry in /NBCS."""
+    tx: int = 0
+    ty: int = 0
+    tz: int = 0
+    wx: int = 0
+    wy: int = 0
+    wz: int = 0
+    skew_id: int = 0
+    node_id: int = 0
+
+
+@dataclass
+class NbcsBlock:
+    """/NBCS/id (M119): Non-linear boundary conditions block."""
+    id: int
+    title: str = ""
+    nodes: list[NbcsNode] = field(default_factory=list)
+
+
+@dataclass
+class AleMuscl:
+    """/ALE/MUSCL (M119): MUSCL advection compression factor."""
+    beta: float = 2.0
+
+
+@dataclass
+class BemModel:
+    """/BEM (M119): Boundary element method container."""
+    id: int = 1
+    title: str = ""
+    params: dict[str, Any] = field(default_factory=dict)
+
+
+
 
 
 

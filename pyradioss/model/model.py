@@ -61,6 +61,8 @@ from .entities import (
     SphReserve, MoveFunct,
     EigenMode, StressFile, MemoryRequest,
     FailFractal, TransformPosition, ExternalLink, ArchSpec,
+    FunctPython, FrictionModel, FrictionPartPair, RefstaNode, ErefSpec,
+    NbcsBlock, NbcsNode, AleMuscl, BemModel,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -726,6 +728,13 @@ class Model:
         self.ale_grid_flow_tracking: Optional[Dict[str, Any]] = None # /ALE/GRID/FLOW-TRACKING (M118)
         self.ale_grid_lagrange: bool = False                # /ALE/GRID/LAGRANGE (M118)
         self.ale_zero: bool = False                         # /ALE/ZERO (M118)
+        self.funct_pythons: Dict[int, FunctPython] = {}     # /FUNCT_PYTHON (M119)
+        self.friction_models: Dict[int, FrictionModel] = {} # /FRICTION (M119)
+        self.refsta_nodes: Dict[int, RefstaNode] = {}       # /REFSTA (M119)
+        self.eref_specs: Dict[int, ErefSpec] = {}           # /EREF (M119)
+        self.nbcs_blocks: Dict[int, NbcsBlock] = {}         # /NBCS (M119)
+        self.ale_muscl: Optional[AleMuscl] = None           # /ALE/MUSCL (M119)
+        self.bem_models: Dict[int, BemModel] = {}           # /BEM (M119)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

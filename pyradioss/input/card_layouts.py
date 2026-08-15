@@ -1024,6 +1024,15 @@ LAYOUTS: Dict[str, List[int]] = {
     "ALE_GRID_FLOW_TRACK": [10, 20],
     "ARCH_1": [10, 10, 10, 10, 10, 10, 10, 10],
     "EXTLINK_1": [10],
+
+    # FRICTION, NBCS, REFSTA, ALE_MUSCL (M119)
+    "FRICTION_1": [10, 10, 20, 10],
+    "FRICTION_2": [20, 20, 20, 20, 20],
+    "FRICTION_3": [20, 20, 20],
+    "FRICTION_PAIR_1": [10, 10, 10, 10, 10, 10],
+    "NBCS_1": [3, 1, 1, 1, 1, 1, 1, 1, 10, 10],
+    "REFSTA_1": [10, 20, 20, 20],
+    "ALE_MUSCL_1": [20],
 }
 
 
