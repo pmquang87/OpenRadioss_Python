@@ -3205,6 +3205,49 @@ class FailGene1:
     fail_id: int = 0
 
 
+@dataclass
+class StackPly:
+    """Layer definition inside a /STACK (M127)."""
+    ply_id: int
+    phi: float = 0.0
+    zi: float = 0.0
+    p_thick_fail: float = 0.0
+    f_weight: float = 1.0
+
+
+@dataclass
+class Stack:
+    """/STACK/stack_id (M127): Composite laminate stack definition.
+
+    Fortran origin: ``starter/source/model/laminate/leclamply.F`` / CFG ``stack.cfg``.
+    """
+    id: int
+    title: str = ""
+    ishell: int = 0
+    ismstr: int = 0
+    ish3n: int = 0
+    idrill: int = 0
+    z0: float = 0.0
+    hm: float = 0.0
+    hf: float = 0.0
+    hr: float = 0.0
+    dm: float = 0.0
+    dn: float = 0.0
+    istrain: int = 0
+    ashear: float = 0.833333
+    iint: int = 0
+    ithick: int = 0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    skew_id: int = 0
+    iorth: int = 0
+    ipos: int = 0
+    ip: int = 0
+    plies: List[StackPly] = field(default_factory=list)
+
+
+
 
 
 

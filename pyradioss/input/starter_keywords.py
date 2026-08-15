@@ -2619,6 +2619,8 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                "TYPE18": 18, "INT_BEAM": 18,
                "TYPE34": 34, "SPH": 34,
                "TYPE43": 43, "CONNECT": 43,
+               "TYPE17": 17, "STACK": 17, "PROP_STACK": 17,
+               "TYPE51": 51, "P51": 51, "LAMINATE_P51": 51,
                "TYPE0": 0, "VOID": 0}
     if typename not in aliases:
         # M38: SH_ORTH/SPR_GENE/SPR_BEAM/VOID (ported physics) + every
@@ -3413,6 +3415,141 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 thick = float(toks[1]) if len(toks) > 1 else 0.0
         params = {"ismstr": ismstr, "thick": thick}
 
+    elif ptype == 17:  # STACK
+        params = {"ishell": 0, "ismstr": 0, "ish3n": 0, "idrill": 0, "z0": 0.0,
+                  "hm": 0.01, "hf": 0.01, "hr": 0.01, "dm": 0.0, "dn": 0.0,
+                  "istrain": 0, "ashear": 0.833333, "iint": 0, "ithick": 0,
+                  "vx": 0.0, "vy": 0.0, "vz": 0.0, "skew_id": 0, "iorth": 0, "ipos": 0, "ip": 0}
+        if block.fixed:
+            if len(cards) >= 1 and not cards[0].is_blank:
+                f = cards[0].cut("STACK_1")
+                params["ishell"] = _ival(f[0])
+                params["ismstr"] = _ival(f[1]) if len(f) > 1 else 0
+                params["ish3n"] = _ival(f[2]) if len(f) > 2 else 0
+                params["idrill"] = _ival(f[3]) if len(f) > 3 else 0
+                params["z0"] = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+            if len(cards) >= 2 and not cards[1].is_blank:
+                f = cards[1].cut("STACK_2")
+                params["hm"] = _fval(f[0], 0.01) if len(f) > 0 else 0.01
+                params["hf"] = _fval(f[1], 0.01) if len(f) > 1 else 0.01
+                params["hr"] = _fval(f[2], 0.01) if len(f) > 2 else 0.01
+                params["dm"] = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+                params["dn"] = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+            if len(cards) >= 3 and not cards[2].is_blank:
+                f = cards[2].cut("STACK_3")
+                params["istrain"] = _ival(f[1]) if len(f) > 1 else 0
+                params["ashear"] = _fval(f[2], 0.833333) if len(f) > 2 else 0.833333
+                params["iint"] = _ival(f[4]) if len(f) > 4 else 0
+                params["ithick"] = _ival(f[6]) if len(f) > 6 else 0
+            if len(cards) >= 4 and not cards[3].is_blank:
+                f = cards[3].cut("STACK_4")
+                params["vx"] = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+                params["vy"] = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+                params["vz"] = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+                params["skew_id"] = _ival(f[3]) if len(f) > 3 else 0
+                params["iorth"] = _ival(f[4]) if len(f) > 4 else 0
+                params["ipos"] = _ival(f[5]) if len(f) > 5 else 0
+                params["ip"] = _ival(f[6]) if len(f) > 6 else 0
+        else:
+            if len(cards) >= 1 and not cards[0].is_blank:
+                t = cards[0].tokens()
+                params["ishell"] = int(float(t[0])) if len(t) > 0 else 0
+                params["ismstr"] = int(float(t[1])) if len(t) > 1 else 0
+                params["ish3n"] = int(float(t[2])) if len(t) > 2 else 0
+                params["idrill"] = int(float(t[3])) if len(t) > 3 else 0
+                params["z0"] = float(t[4]) if len(t) > 4 else 0.0
+            if len(cards) >= 2 and not cards[1].is_blank:
+                t = cards[1].tokens()
+                params["hm"] = float(t[0]) if len(t) > 0 else 0.01
+                params["hf"] = float(t[1]) if len(t) > 1 else 0.01
+                params["hr"] = float(t[2]) if len(t) > 2 else 0.01
+                params["dm"] = float(t[3]) if len(t) > 3 else 0.0
+                params["dn"] = float(t[4]) if len(t) > 4 else 0.0
+            if len(cards) >= 3 and not cards[2].is_blank:
+                t = cards[2].tokens()
+                params["istrain"] = int(float(t[0])) if len(t) > 0 else 0
+                params["ashear"] = float(t[1]) if len(t) > 1 else 0.833333
+                params["iint"] = int(float(t[2])) if len(t) > 2 else 0
+                params["ithick"] = int(float(t[3])) if len(t) > 3 else 0
+            if len(cards) >= 4 and not cards[3].is_blank:
+                t = cards[3].tokens()
+                params["vx"] = float(t[0]) if len(t) > 0 else 0.0
+                params["vy"] = float(t[1]) if len(t) > 1 else 0.0
+                params["vz"] = float(t[2]) if len(t) > 2 else 0.0
+                params["skew_id"] = int(float(t[3])) if len(t) > 3 else 0
+                params["iorth"] = int(float(t[4])) if len(t) > 4 else 0
+                params["ipos"] = int(float(t[5])) if len(t) > 5 else 0
+                params["ip"] = int(float(t[6])) if len(t) > 6 else 0
+
+    elif ptype == 51:  # P51
+        params = {"ishell": 0, "ismstr": 0, "ish3n": 0, "idrill": 0, "z0": 0.0,
+                  "hm": 0.01, "hf": 0.01, "hr": 0.01, "dm": 0.0, "dn": 0.0,
+                  "istrain": 0, "ashear": 0.833333, "ithick": 0,
+                  "vx": 0.0, "vy": 0.0, "vz": 0.0, "skew_id": 0, "iorth": 0, "ipos": 0,
+                  "p_thick_fail": 0.0, "fexp": 0.0, "ip": 0}
+        if block.fixed:
+            if len(cards) >= 1 and not cards[0].is_blank:
+                f = cards[0].cut("PROP_P51_1")
+                params["ishell"] = _ival(f[0])
+                params["ismstr"] = _ival(f[1]) if len(f) > 1 else 0
+                params["ish3n"] = _ival(f[2]) if len(f) > 2 else 0
+                params["idrill"] = _ival(f[3]) if len(f) > 3 else 0
+                params["z0"] = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+            if len(cards) >= 2 and not cards[1].is_blank:
+                f = cards[1].cut("PROP_P51_2")
+                params["hm"] = _fval(f[0], 0.01) if len(f) > 0 else 0.01
+                params["hf"] = _fval(f[1], 0.01) if len(f) > 1 else 0.01
+                params["hr"] = _fval(f[2], 0.01) if len(f) > 2 else 0.01
+                params["dm"] = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+                params["dn"] = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+            if len(cards) >= 3 and not cards[2].is_blank:
+                f = cards[2].cut("PROP_P51_3")
+                params["istrain"] = _ival(f[1]) if len(f) > 1 else 0
+                params["ashear"] = _fval(f[2], 0.833333) if len(f) > 2 else 0.833333
+                params["ithick"] = _ival(f[4]) if len(f) > 4 else 0
+            if len(cards) >= 4 and not cards[3].is_blank:
+                f = cards[3].cut("PROP_P51_4")
+                params["vx"] = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+                params["vy"] = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+                params["vz"] = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+                params["skew_id"] = _ival(f[3]) if len(f) > 3 else 0
+                params["iorth"] = _ival(f[4]) if len(f) > 4 else 0
+                params["ipos"] = _ival(f[5]) if len(f) > 5 else 0
+                params["p_thick_fail"] = _fval(f[6], 0.0) if len(f) > 6 else 0.0
+                params["fexp"] = _fval(f[7], 0.0) if len(f) > 7 else 0.0
+                params["ip"] = _ival(f[8]) if len(f) > 8 else 0
+        else:
+            if len(cards) >= 1 and not cards[0].is_blank:
+                t = cards[0].tokens()
+                params["ishell"] = int(float(t[0])) if len(t) > 0 else 0
+                params["ismstr"] = int(float(t[1])) if len(t) > 1 else 0
+                params["ish3n"] = int(float(t[2])) if len(t) > 2 else 0
+                params["idrill"] = int(float(t[3])) if len(t) > 3 else 0
+                params["z0"] = float(t[4]) if len(t) > 4 else 0.0
+            if len(cards) >= 2 and not cards[1].is_blank:
+                t = cards[1].tokens()
+                params["hm"] = float(t[0]) if len(t) > 0 else 0.01
+                params["hf"] = float(t[1]) if len(t) > 1 else 0.01
+                params["hr"] = float(t[2]) if len(t) > 2 else 0.01
+                params["dm"] = float(t[3]) if len(t) > 3 else 0.0
+                params["dn"] = float(t[4]) if len(t) > 4 else 0.0
+            if len(cards) >= 3 and not cards[2].is_blank:
+                t = cards[2].tokens()
+                params["istrain"] = int(float(t[0])) if len(t) > 0 else 0
+                params["ashear"] = float(t[1]) if len(t) > 1 else 0.833333
+                params["ithick"] = int(float(t[2])) if len(t) > 2 else 0
+            if len(cards) >= 4 and not cards[3].is_blank:
+                t = cards[3].tokens()
+                params["vx"] = float(t[0]) if len(t) > 0 else 0.0
+                params["vy"] = float(t[1]) if len(t) > 1 else 0.0
+                params["vz"] = float(t[2]) if len(t) > 2 else 0.0
+                params["skew_id"] = int(float(t[3])) if len(t) > 3 else 0
+                params["iorth"] = int(float(t[4])) if len(t) > 4 else 0
+                params["ipos"] = int(float(t[5])) if len(t) > 5 else 0
+                params["p_thick_fail"] = float(t[6]) if len(t) > 6 else 0.0
+                params["fexp"] = float(t[7]) if len(t) > 7 else 0.0
+                params["ip"] = int(float(t[8])) if len(t) > 8 else 0
+
     model.properties[block.user_id] = Property(
         id=block.user_id, type=ptype, title=title, params=params)
 
@@ -3495,6 +3632,118 @@ def read_laminate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         plies.append(LaminatePly(ply_id=ply_id, phi=phi, zi=zi, mat_interply=mat_inter))
 
     model.laminates[block.user_id] = Laminate(id=block.user_id, title=title, plies=plies)
+
+
+def read_stack(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/STACK/stack_ID`` (M127): Composite laminate stack definition."""
+    from ..model.entities import Stack, StackPly
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/STACK/{block.user_id}: missing data card", block.source)
+        return
+
+    ishell, ismstr, ish3n, idrill, z0 = 0, 0, 0, 0, 0.0
+    hm, hf, hr, dm, dn = 0.01, 0.01, 0.01, 0.0, 0.0
+    istrain, ashear, iint, ithick = 0, 0.833333, 0, 0
+    vx, vy, vz, skew_id, iorth, ipos, ip = 0.0, 0.0, 0.0, 0, 0, 0, 0
+
+    if block.fixed:
+        f1 = cards[0].cut("STACK_1")
+        ishell = _ival(f1[0]) if len(f1) > 0 else 0
+        ismstr = _ival(f1[1]) if len(f1) > 1 else 0
+        ish3n = _ival(f1[2]) if len(f1) > 2 else 0
+        idrill = _ival(f1[3]) if len(f1) > 3 else 0
+        z0 = _fval(f1[5], 0.0) if len(f1) > 5 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("STACK_2")
+            hm = _fval(f2[0], 0.01) if len(f2) > 0 else 0.01
+            hf = _fval(f2[1], 0.01) if len(f2) > 1 else 0.01
+            hr = _fval(f2[2], 0.01) if len(f2) > 2 else 0.01
+            dm = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+            dn = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("STACK_3")
+            istrain = _ival(f3[1]) if len(f3) > 1 else 0
+            ashear = _fval(f3[2], 0.833333) if len(f3) > 2 else 0.833333
+            iint = _ival(f3[4]) if len(f3) > 4 else 0
+            ithick = _ival(f3[6]) if len(f3) > 6 else 0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("STACK_4")
+            vx = _fval(f4[0], 0.0) if len(f4) > 0 else 0.0
+            vy = _fval(f4[1], 0.0) if len(f4) > 1 else 0.0
+            vz = _fval(f4[2], 0.0) if len(f4) > 2 else 0.0
+            skew_id = _ival(f4[3]) if len(f4) > 3 else 0
+            iorth = _ival(f4[4]) if len(f4) > 4 else 0
+            ipos = _ival(f4[5]) if len(f4) > 5 else 0
+            ip = _ival(f4[6]) if len(f4) > 6 else 0
+
+        ply_cards = cards[4:]
+    else:
+        t1 = cards[0].tokens()
+        ishell = int(float(t1[0])) if len(t1) > 0 else 0
+        ismstr = int(float(t1[1])) if len(t1) > 1 else 0
+        ish3n = int(float(t1[2])) if len(t1) > 2 else 0
+        idrill = int(float(t1[3])) if len(t1) > 3 else 0
+        z0 = float(t1[4]) if len(t1) > 4 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            hm = float(t2[0]) if len(t2) > 0 else 0.01
+            hf = float(t2[1]) if len(t2) > 1 else 0.01
+            hr = float(t2[2]) if len(t2) > 2 else 0.01
+            dm = float(t2[3]) if len(t2) > 3 else 0.0
+            dn = float(t2[4]) if len(t2) > 4 else 0.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            istrain = int(float(t3[0])) if len(t3) > 0 else 0
+            ashear = float(t3[1]) if len(t3) > 1 else 0.833333
+            iint = int(float(t3[2])) if len(t3) > 2 else 0
+            ithick = int(float(t3[3])) if len(t3) > 3 else 0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            t4 = cards[3].tokens()
+            vx = float(t4[0]) if len(t4) > 0 else 0.0
+            vy = float(t4[1]) if len(t4) > 1 else 0.0
+            vz = float(t4[2]) if len(t4) > 2 else 0.0
+            skew_id = int(float(t4[3])) if len(t4) > 3 else 0
+            iorth = int(float(t4[4])) if len(t4) > 4 else 0
+            ipos = int(float(t4[5])) if len(t4) > 5 else 0
+            ip = int(float(t4[6])) if len(t4) > 6 else 0
+
+        ply_cards = cards[4:]
+
+    plies = []
+    for c in ply_cards:
+        if c.is_blank:
+            continue
+        if block.fixed:
+            f = c.cut("STACK_PLY")
+            pid = _ival(f[0])
+            phi = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            zi = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            ptf = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            fw = _fval(f[4], 1.0) if len(f) > 4 else 1.0
+        else:
+            t = c.tokens()
+            pid = int(float(t[0])) if len(t) > 0 else 0
+            phi = float(t[1]) if len(t) > 1 else 0.0
+            zi = float(t[2]) if len(t) > 2 else 0.0
+            ptf = float(t[3]) if len(t) > 3 else 0.0
+            fw = float(t[4]) if len(t) > 4 else 1.0
+        plies.append(StackPly(ply_id=pid, phi=phi, zi=zi, p_thick_fail=ptf, f_weight=fw))
+
+    stack_id = block.user_id if block.user_id is not None else 1
+    model.stacks[stack_id] = Stack(
+        id=stack_id, title=title, ishell=ishell, ismstr=ismstr, ish3n=ish3n, idrill=idrill,
+        z0=z0, hm=hm, hf=hf, hr=hr, dm=dm, dn=dn, istrain=istrain, ashear=ashear,
+        iint=iint, ithick=ithick, vx=vx, vy=vy, vz=vz, skew_id=skew_id, iorth=iorth,
+        ipos=ipos, ip=ip, plies=plies,
+    )
+
 
 
 
@@ -5805,7 +6054,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         /SENSOR/TEMP:   card 1: title, card 2: Tdelay, card 3: Grnod_Id Tempmax Tempmin Tempmean Tmin
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF")
+    if kind == "NIC_NIJ":
+        kind = "NIC"
+    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF")
     if kind not in supported:
         log.warning(f"/SENSOR/{kind} not ported ({', '.join(supported)} supported)",
                     block.source)
@@ -13191,6 +13442,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "AMS": read_sms,
     "PLY": read_ply,
     "LAMINATE": read_laminate,
+    "STACK": read_stack,
     "RLINK": read_rlink,
     "CYL_JOINT": read_cyl_joint,
     "GJOINT": read_gjoint,

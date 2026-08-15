@@ -67,6 +67,7 @@ from .entities import (
     FailOrthBiquad, SlipringShell,
     EbcsNrf, FailRtcl, FailGurson,
     FailPuck, FailSahraei, FailSyazwan, FailTab2, FailGene1,
+    Stack, StackPly,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -778,6 +779,7 @@ class Model:
         self.fail_syazwans: Dict[int, FailSyazwan] = {}       # /FAIL/SYAZWAN (M126)
         self.fail_tab2s: Dict[int, FailTab2] = {}             # /FAIL/TAB2 (M126)
         self.fail_gene1s: Dict[int, FailGene1] = {}           # /FAIL/GENE1 (M126)
+        self.stacks: Dict[int, Stack] = {}                   # /STACK (M127)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
