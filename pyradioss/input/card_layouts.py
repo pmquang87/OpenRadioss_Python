@@ -951,6 +951,35 @@ LAYOUTS: Dict[str, List[int]] = {
     # SPH/INOUT (M112)
     "SPH_INOUT_1": [10, 10, 10],
     "SPH_INOUT_2": [20, 20, 20],
+
+    # SPHBCS (M113)
+    "SPHBCS_1": [10, 10, 10, 10, 10],
+
+    # MADYMO/LINK (M113)
+    "MADYMO_LINK_1": [10, 10],
+
+    # ALE/GRID (M113)
+    "ALE_GRID_DONEA_1": [20, 20, 20, 20, 20],
+    "ALE_GRID_DONEA_2": [20],
+    "ALE_GRID_SPRING_1": [20, 20, 20, 20],
+    "ALE_GRID_SPRING_2": [20],
+    "ALE_GRID_STANDARD_1": [20, 20, 20, 20],
+    "ALE_GRID_DISP_1": [20],
+    "ALE_GRID_DISP_2": [20],
+    "ALE_GRID_LAPLACIAN_1": [20, 20, 20],
+    "ALE_GRID_VOLUME_1": [20, 20],
+
+    # ADMESH/GLOBAL (M113)
+    "ADMESH_GLOBAL_1": [10, 10, 20, 10],
+
+    # RANDOM (M113)
+    "RANDOM_1": [20, 20],
+
+    # ACCEL (M113)
+    "ACCEL_1": [10, 10, 10, 20],
+
+    # SUBSET (M113)
+    "SUBSET_1": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
 }
 
 

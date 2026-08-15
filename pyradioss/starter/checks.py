@@ -859,6 +859,33 @@ def check_model(model: Model, log: MessageLog) -> None:
         if sio.fct_id > 0 and sio.fct_id not in model.functions:
             log.error(f"/SPH/INOUT/{sioid}: function {sio.fct_id} not defined", "CROSS REF")
 
+    # M113: SPH Symmetry, Madymo Links/EXFEM, Random Noise, Accelerometers
+    for sbid, sb in getattr(model, "sph_bcs", {}).items():
+        if sb.frame_id > 0 and sb.frame_id not in model.skews:
+            log.error(f"/SPHBCS/{sbid}: skew/frame {sb.frame_id} not defined", "CROSS REF")
+        if sb.grnod_id > 0 and sb.grnod_id not in model.node_groups:
+            log.error(f"/SPHBCS/{sbid}: node group {sb.grnod_id} not defined", "CROSS REF")
+
+    for mlid, ml in getattr(model, "madymo_links", {}).items():
+        if ml.node_id > 0 and ml.node_id not in model._id2idx:
+            log.error(f"/MADYMO/LINK/{mlid}: node {ml.node_id} not defined", "CROSS REF")
+
+    for meid, me in getattr(model, "madymo_exfems", {}).items():
+        for pid in me.part_ids:
+            if pid > 0 and pid not in model.parts:
+                log.error(f"/MADYMO/EXFEM/{meid}: part {pid} not defined", "CROSS REF")
+
+    for rn in getattr(model, "random_noises", []):
+        if rn.grnod_id > 0 and rn.grnod_id not in model.node_groups:
+            log.error(f"/RANDOM/GRNOD/{rn.grnod_id}: node group {rn.grnod_id} not defined", "CROSS REF")
+
+    for aid, acc in getattr(model, "accelerometers", {}).items():
+        if acc.node_id > 0 and acc.node_id not in model._id2idx:
+            log.error(f"/ACCEL/{aid}: node {acc.node_id} not defined", "CROSS REF")
+        if acc.skew_id > 0 and acc.skew_id not in model.skews:
+            log.error(f"/ACCEL/{aid}: skew {acc.skew_id} not defined", "CROSS REF")
+
+
 
 
 

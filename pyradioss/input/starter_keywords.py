@@ -3923,29 +3923,129 @@ def read_ale_done(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_ale_grid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/ALE/GRID/...`` (M63, M105): ALE grid formulation and damping controls."""
+    """``/ALE/GRID/...`` (M63, M105, M113): ALE grid formulation and damping controls."""
     grid_sub = block.parts[2].upper() if len(block.parts) > 2 else (block.parts[1].upper() if len(block.parts) > 1 else "STANDARD")
     gid = block.user_id if block.user_id is not None else 1
-    cards = block.cards
+    cards = [c for c in (block.fixed_cards() if block.fixed else block.cards) if not c.is_blank]
     dt_min, gamma, damp, nu_g = 0.0, 0.0, 0.0, 0.0
-    if cards and not cards[0].is_blank:
-        if block.fixed:
-            f = cards[0].cut("ALE_GRID_1")
-            dt_min = _fval(f[0], 0.0) if len(f) > 0 else 0.0
-            gamma = _fval(f[1], 0.0) if len(f) > 1 else 0.0
-            damp = _fval(f[2], 0.0) if len(f) > 2 else 0.0
-            nu_g = _fval(f[3], 0.0) if len(f) > 3 else 0.0
-        else:
-            toks = cards[0].tokens()
-            dt_min = float(toks[0]) if len(toks) > 0 else 0.0
-            gamma = float(toks[1]) if len(toks) > 1 else 0.0
-            damp = float(toks[2]) if len(toks) > 2 else 0.0
-            nu_g = float(toks[3]) if len(toks) > 3 else 0.0
+    from ..model.entities import (
+        AleGridDonea, AleGridSpring, AleGridStandard, AleGridDisp,
+        AleGridLaplacian, AleGridVolume
+    )
+
+    if grid_sub == "DONEA":
+        alpha, gamma, vx, vy, vz = 0.0, 100.0, 1.0, 1.0, 1.0
+        vmin = -1e30
+        if cards:
+            if block.fixed:
+                f1 = cards[0].cut("ALE_GRID_DONEA_1")
+                alpha = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+                gamma = _fval(f1[1], 100.0) if len(f1) > 1 else 100.0
+                vx = _fval(f1[2], 1.0) if len(f1) > 2 else 1.0
+                vy = _fval(f1[3], 1.0) if len(f1) > 3 else 1.0
+                vz = _fval(f1[4], 1.0) if len(f1) > 4 else 1.0
+                if len(cards) > 1:
+                    f2 = cards[1].cut("ALE_GRID_DONEA_2")
+                    vmin = _fval(f2[0], -1e30) if len(f2) > 0 else -1e30
+            else:
+                t1 = cards[0].tokens()
+                alpha = float(t1[0]) if len(t1) > 0 else 0.0
+                gamma = float(t1[1]) if len(t1) > 1 else 100.0
+                vx = float(t1[2]) if len(t1) > 2 else 1.0
+                vy = float(t1[3]) if len(t1) > 3 else 1.0
+                vz = float(t1[4]) if len(t1) > 4 else 1.0
+                if len(cards) > 1:
+                    t2 = cards[1].tokens()
+                    vmin = float(t2[0]) if len(t2) > 0 else -1e30
+        model.ale_grid_donea = AleGridDonea(alpha=alpha, gamma=gamma, vel_x=vx, vel_y=vy, vel_z=vz, v_min=vmin)
+    elif grid_sub == "SPRING":
+        dt, gamma, damp, nu = 0.0, 0.0, 0.5, 1.0
+        vmin = -1e30
+        if cards:
+            if block.fixed:
+                f1 = cards[0].cut("ALE_GRID_SPRING_1")
+                dt = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+                gamma = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                damp = _fval(f1[2], 0.5) if len(f1) > 2 else 0.5
+                nu = _fval(f1[3], 1.0) if len(f1) > 3 else 1.0
+                if len(cards) > 1:
+                    f2 = cards[1].cut("ALE_GRID_SPRING_2")
+                    vmin = _fval(f2[0], -1e30) if len(f2) > 0 else -1e30
+            else:
+                t1 = cards[0].tokens()
+                dt = float(t1[0]) if len(t1) > 0 else 0.0
+                gamma = float(t1[1]) if len(t1) > 1 else 0.0
+                damp = float(t1[2]) if len(t1) > 2 else 0.5
+                nu = float(t1[3]) if len(t1) > 3 else 1.0
+                if len(cards) > 1:
+                    t2 = cards[1].tokens()
+                    vmin = float(t2[0]) if len(t2) > 0 else -1e30
+        model.ale_grid_spring = AleGridSpring(dt=dt, gamma=gamma, damp=damp, nu=nu, v_min=vmin)
+    elif grid_sub == "DISP":
+        umax, vmin = -1e30, -1e30
+        if cards:
+            if block.fixed:
+                f1 = cards[0].cut("ALE_GRID_DISP_1")
+                umax = _fval(f1[0], -1e30) if len(f1) > 0 else -1e30
+                if len(cards) > 1:
+                    f2 = cards[1].cut("ALE_GRID_DISP_2")
+                    vmin = _fval(f2[0], -1e30) if len(f2) > 0 else -1e30
+            else:
+                t1 = cards[0].tokens()
+                umax = float(t1[0]) if len(t1) > 0 else -1e30
+                if len(cards) > 1:
+                    t2 = cards[1].tokens()
+                    vmin = float(t2[0]) if len(t2) > 0 else -1e30
+        model.ale_grid_disp = AleGridDisp(u_max=umax, v_min=vmin)
+    elif grid_sub == "LAPLACIAN":
+        alpha, gamma, damp = 0.0, 0.0, 0.5
+        if cards:
+            if block.fixed:
+                f = cards[0].cut("ALE_GRID_LAPLACIAN_1")
+                alpha = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+                gamma = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+                damp = _fval(f[2], 0.5) if len(f) > 2 else 0.5
+            else:
+                t = cards[0].tokens()
+                alpha = float(t[0]) if len(t) > 0 else 0.0
+                gamma = float(t[1]) if len(t) > 1 else 0.0
+                damp = float(t[2]) if len(t) > 2 else 0.5
+        model.ale_grid_laplacian = AleGridLaplacian(alpha=alpha, gamma=gamma, damp=damp)
+    elif grid_sub == "VOLUME":
+        alpha, gamma = 0.0, 0.0
+        if cards:
+            if block.fixed:
+                f = cards[0].cut("ALE_GRID_VOLUME_1")
+                alpha = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+                gamma = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            else:
+                t = cards[0].tokens()
+                alpha = float(t[0]) if len(t) > 0 else 0.0
+                gamma = float(t[1]) if len(t) > 1 else 0.0
+        model.ale_grid_volume = AleGridVolume(alpha=alpha, gamma=gamma)
+    else:  # STANDARD
+        alpha, gamma, damp, lc = 0.0, 0.0, 0.5, 1.0
+        if cards:
+            if block.fixed:
+                f = cards[0].cut("ALE_GRID_STANDARD_1")
+                alpha = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+                gamma = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+                damp = _fval(f[2], 0.5) if len(f) > 2 else 0.5
+                lc = _fval(f[3], 1.0) if len(f) > 3 else 1.0
+            else:
+                t = cards[0].tokens()
+                alpha = float(t[0]) if len(t) > 0 else 0.0
+                gamma = float(t[1]) if len(t) > 1 else 0.0
+                damp = float(t[2]) if len(t) > 2 else 0.5
+                lc = float(t[3]) if len(t) > 3 else 1.0
+        model.ale_grid_standard = AleGridStandard(alpha=alpha, gamma=gamma, damp=damp, l_c=lc)
+        dt_min, nu_g = alpha, lc
 
     model.ale_grids[gid] = AleGrid(
         id=gid, subtype=grid_sub, dt_min=dt_min,
         gamma=gamma, damp=damp, nu_g=nu_g,
     )
+
 
 
 def read_ale_link(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -7522,6 +7622,234 @@ def read_sph(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_sphglo(block, model, log)
     else:
         read_sph_inout(block, model, log)
+
+
+def read_sphbcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SPHBCS/<type>/id`` (M113): SPH symmetry boundary condition::
+
+        card 1:  title
+        card 2:  Dir  frame_ID  grnod_ID  (blank)  Ilev
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SPHBCS/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import SphBcs
+
+    bcs_type = block.parts[1].upper() if len(block.parts) > 1 else "SYM"
+
+    if block.fixed:
+        f = cards[0].cut("SPHBCS_1")
+        dir_str = f[0].strip().upper() if len(f) > 0 and f[0].strip() else "X"
+        frame_id = _ival(f[1]) if len(f) > 1 else 0
+        grnod_id = _ival(f[2]) if len(f) > 2 else 0
+        ilevel = _ival(f[4]) if len(f) > 4 else 0
+    else:
+        t = cards[0].tokens()
+        dir_str = t[0].strip().upper() if len(t) > 0 and t[0].strip() else "X"
+        frame_id = int(float(t[1])) if len(t) > 1 else 0
+        grnod_id = int(float(t[2])) if len(t) > 2 else 0
+        ilevel = int(float(t[3])) if len(t) > 3 else 0
+
+    model.sph_bcs[block.user_id] = SphBcs(
+        id=block.user_id, bcs_type=bcs_type, title=title, dir=dir_str,
+        frame_id=frame_id, grnod_id=grnod_id, ilevel=ilevel
+    )
+
+
+def read_madymo(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MADYMO/LINK/id`` or ``/MADYMO/EXFEM/id`` (M113)."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub == "LINK":
+        read_madymo_link(block, model, log)
+    elif sub == "EXFEM":
+        read_madymo_exfem(block, model, log)
+    else:
+        log.warning(f"/MADYMO/{sub} not ported (LINK, EXFEM supported)", block.source)
+
+
+def read_madymo_link(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MADYMO/LINK/id`` (M113): Madymo coupling link::
+
+        card 1:  title
+        card 2:  MDref  node_ID
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MADYMO/LINK/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import MadymoLink
+
+    if block.fixed:
+        f = cards[0].cut("MADYMO_LINK_1")
+        mdref = _ival(f[0]) if len(f) > 0 else 0
+        node_id = _ival(f[1]) if len(f) > 1 else 0
+    else:
+        t = cards[0].tokens()
+        mdref = int(float(t[0])) if len(t) > 0 else 0
+        node_id = int(float(t[1])) if len(t) > 1 else 0
+
+    model.madymo_links[block.user_id] = MadymoLink(
+        id=block.user_id, title=title, mdref=mdref, node_id=node_id
+    )
+
+
+def read_madymo_exfem(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MADYMO/EXFEM/id`` (M113): Madymo submodel part exchange::
+
+        card 1:  title
+        card list: part_ID
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    from ..model.entities import MadymoExfem
+
+    part_ids = []
+    for c in cards:
+        if c.is_blank:
+            continue
+        if block.fixed:
+            part_ids.extend([_ival(v) for v in c.cut("IDS10") if v.strip()])
+        else:
+            part_ids.extend([int(float(v)) for v in c.tokens() if v.strip()])
+
+    model.madymo_exfems[block.user_id] = MadymoExfem(
+        id=block.user_id, title=title, part_ids=part_ids
+    )
+
+
+def read_admesh_global(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ADMESH/GLOBAL``, ``/ADGLOB``, ``/ADGLOB/MESH`` (M113): Global adaptive meshing parameters::
+
+        card 1:  Levelmax  Iadmrule  Tdelay  [Idt]
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        cards = block.cards
+    from ..model.entities import AdmeshGlobal
+
+    level_max, iadm_rule, t_delay, istat_cnd = 0, 0, 0.0, 0
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("ADMESH_GLOBAL_1")
+            level_max = _ival(f[0]) if len(f) > 0 else 0
+            iadm_rule = _ival(f[1]) if len(f) > 1 else 0
+            t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            istat_cnd = _ival(f[3]) if len(f) > 3 else 0
+        else:
+            t = cards[0].tokens()
+            level_max = int(float(t[0])) if len(t) > 0 else 0
+            iadm_rule = int(float(t[1])) if len(t) > 1 else 0
+            t_delay = float(t[2]) if len(t) > 2 else 0.0
+            istat_cnd = int(float(t[3])) if len(t) > 3 else 0
+
+    model.admesh_global = AdmeshGlobal(
+        level_max=level_max, iadm_rule=iadm_rule, t_delay=t_delay, istat_cnd=istat_cnd
+    )
+
+
+def read_stamping(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/STAMPING`` (M113): Sheet metal forming stamping history input::
+
+        optional card 1:  #HF TIME SCALE <val>
+        data line list
+    """
+    from ..model.entities import StampingInit
+
+    time_scale = 1.0
+    data_lines = []
+    cards = block.fixed_cards() if block.fixed else block.cards
+    for c in cards:
+        line_str = c.raw.strip() if hasattr(c, "raw") else str(c).strip()
+        if not line_str:
+            continue
+        if line_str.upper().startswith("#HF TIME SCALE"):
+            parts = line_str.split()
+            if len(parts) >= 4:
+                try:
+                    time_scale = float(parts[3])
+                except ValueError:
+                    pass
+        else:
+            data_lines.append(line_str)
+
+    model.stamping_inits.append(StampingInit(time_scale=time_scale, data_lines=data_lines))
+
+
+def read_random(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RANDOM`` or ``/RANDOM/GRNOD/grnod_ID`` (M113): Random vibration/noise parameters::
+
+        card 1:  Xalea  Seed
+    """
+    from ..model.entities import RandomNoise
+    grnod_id = 0
+    if len(block.parts) > 1 and block.parts[1].upper() == "GRNOD":
+        grnod_id = block.user_id if block.user_id is not None else 0
+
+    cards = [c for c in (block.fixed_cards() if block.fixed else block.cards) if not c.is_blank]
+    xalea = 0.0
+    seed = 0.0
+    if cards:
+        if block.fixed:
+            f = cards[0].cut("RANDOM_1")
+            xalea = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            seed = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        else:
+            t = cards[0].tokens()
+            xalea = float(t[0]) if len(t) > 0 else 0.0
+            seed = float(t[1]) if len(t) > 1 else 0.0
+
+    model.random_noises.append(RandomNoise(grnod_id=grnod_id, xalea=xalea, seed=seed))
+
+
+def read_accel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ACCEL/accel_ID`` (M113): Accelerometer measurement sensor::
+
+        card 1:  title
+        card 2:  node_ID  skew_ID  (blank)  cutoff
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ACCEL/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import Accelerometer
+
+    if block.fixed:
+        f = cards[0].cut("ACCEL_1")
+        node_id = _ival(f[0]) if len(f) > 0 else 0
+        skew_id = _ival(f[1]) if len(f) > 1 else 0
+        cutoff = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+    else:
+        t = cards[0].tokens()
+        node_id = int(float(t[0])) if len(t) > 0 else 0
+        skew_id = int(float(t[1])) if len(t) > 1 else 0
+        cutoff = float(t[2]) if len(t) > 2 else 0.0
+
+    model.accelerometers[block.user_id] = Accelerometer(
+        id=block.user_id, title=title, node_id=node_id, skew_id=skew_id, cutoff=cutoff
+    )
+
+
+def read_subset(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SUBSET/subset_ID`` (M113): Hierarchical model subset::
+
+        card 1:  title
+        card list: assembly_IDs
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    from ..model.entities import Subset
+
+    assembly_ids = []
+    for c in cards:
+        if c.is_blank:
+            continue
+        if block.fixed:
+            assembly_ids.extend([_ival(v) for v in c.cut("SUBSET_1") if v.strip()])
+        else:
+            assembly_ids.extend([int(float(v)) for v in c.tokens() if v.strip()])
+
+    model.subsets[block.user_id] = Subset(
+        id=block.user_id, title=title, assembly_ids=assembly_ids
+    )
 
 
 def read_sms(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -11103,7 +11431,14 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "AUTOPOSITION": read_transform,
     "AUTOPOS": read_transform,
     "SPH": read_sph,
+    "SPHBCS": read_sphbcs,
     "PRESSURE": read_load_pressure,
+    "MADYMO": read_madymo,
+    "ADGLOB": read_admesh_global,
+    "ADMESH": read_admesh_global,
+    "STAMPING": read_stamping,
+    "ACCEL": read_accel,
+    "SUBSET": read_subset,
 }
 
 

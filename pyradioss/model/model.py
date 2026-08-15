@@ -53,6 +53,9 @@ from .entities import (
     DetonationWave, ElementActivation, MonvolFvmBag2, Autoposition,
     LoadCentri, LoadPfluid, LoadPressure, InivelAxis, InivelFvm, InivelNode,
     ImpdispFgeo, ImpvelFgeo, RwallTherm, SphInOut,
+    SphBcs, MadymoLink, MadymoExfem,
+    AleGridDonea, AleGridSpring, AleGridStandard, AleGridDisp, AleGridLaplacian, AleGridVolume,
+    AdmeshGlobal, StampingInit, RandomNoise, Accelerometer, Subset,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -680,6 +683,20 @@ class Model:
         self.impvel_fgeos: Dict[int, ImpvelFgeo] = {}       # /IMPVEL/FGEO (M112)
         self.rwall_therms: Dict[int, RwallTherm] = {}       # /RWALL/THERM (M112)
         self.sph_inouts: Dict[int, SphInOut] = {}           # /SPH/INOUT (M112)
+        self.sph_bcs: Dict[int, SphBcs] = {}                # /SPHBCS (M113)
+        self.madymo_links: Dict[int, MadymoLink] = {}       # /MADYMO/LINK (M113)
+        self.madymo_exfems: Dict[int, MadymoExfem] = {}     # /MADYMO/EXFEM (M113)
+        self.ale_grid_donea: Optional[AleGridDonea] = None  # /ALE/GRID/DONEA (M113)
+        self.ale_grid_spring: Optional[AleGridSpring] = None # /ALE/GRID/SPRING (M113)
+        self.ale_grid_standard: Optional[AleGridStandard] = None # /ALE/GRID/STANDARD (M113)
+        self.ale_grid_disp: Optional[AleGridDisp] = None    # /ALE/GRID/DISP (M113)
+        self.ale_grid_laplacian: Optional[AleGridLaplacian] = None # /ALE/GRID/LAPLACIAN (M113)
+        self.ale_grid_volume: Optional[AleGridVolume] = None # /ALE/GRID/VOLUME (M113)
+        self.admesh_global: Optional[AdmeshGlobal] = None   # /ADMESH/GLOBAL (M113)
+        self.stamping_inits: List[StampingInit] = []        # /STAMPING (M113)
+        self.random_noises: List[RandomNoise] = []          # /RANDOM (M113)
+        self.accelerometers: Dict[int, Accelerometer] = {}  # /ACCEL (M113)
+        self.subsets: Dict[int, Subset] = {}                # /SUBSET (M113)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

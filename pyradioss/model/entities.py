@@ -2462,6 +2462,139 @@ class SphInOut:
     e_in: float = 0.0
 
 
+@dataclass
+class SphBcs:
+    """/SPHBCS (M113): SPH symmetry boundary condition.
+
+    Fortran origin: ``starter/source/loads/sph/hm_read_sphbcs.F``.
+    """
+    id: int
+    bcs_type: str = "SYM"  # 'SYM', 'CYCL', 'PERIOD'
+    title: str = ""
+    dir: str = "X"
+    frame_id: int = 0
+    grnod_id: int = 0
+    ilevel: int = 0
+
+
+@dataclass
+class MadymoLink:
+    """/MADYMO/LINK (M113): Madymo coupling link.
+
+    Fortran origin: ``starter/source/madymo/hm_read_madymo_link.F``.
+    """
+    id: int
+    title: str = ""
+    mdref: int = 0
+    node_id: int = 0
+
+
+@dataclass
+class MadymoExfem:
+    """/MADYMO/EXFEM (M113): Madymo sub-model part exchange.
+
+    Fortran origin: ``starter/source/madymo/hm_read_madymo_exfem.F``.
+    """
+    id: int
+    title: str = ""
+    part_ids: List[int] = field(default_factory=list)
+
+
+@dataclass
+class AleGridDonea:
+    """/ALE/GRID/DONEA (M113): Donea ALE grid solver."""
+    alpha: float = 0.0
+    gamma: float = 100.0
+    vel_x: float = 1.0
+    vel_y: float = 1.0
+    vel_z: float = 1.0
+    v_min: float = -1e30
+
+
+@dataclass
+class AleGridSpring:
+    """/ALE/GRID/SPRING (M113): Spring analogy ALE grid solver."""
+    dt: float = 0.0
+    gamma: float = 0.0
+    damp: float = 0.5
+    nu: float = 1.0
+    v_min: float = -1e30
+
+
+@dataclass
+class AleGridStandard:
+    """/ALE/GRID/STANDARD (M113): Standard ALE grid solver."""
+    alpha: float = 0.0
+    gamma: float = 0.0
+    damp: float = 0.5
+    l_c: float = 1.0
+
+
+@dataclass
+class AleGridDisp:
+    """/ALE/GRID/DISP (M113): Displacement-based ALE grid solver."""
+    u_max: float = -1e30
+    v_min: float = -1e30
+
+
+@dataclass
+class AleGridLaplacian:
+    """/ALE/GRID/LAPLACIAN (M113): Laplacian smoothing ALE grid solver."""
+    alpha: float = 0.0
+    gamma: float = 0.0
+    damp: float = 0.5
+
+
+@dataclass
+class AleGridVolume:
+    """/ALE/GRID/VOLUME (M113): Volume-preserving ALE grid solver."""
+    alpha: float = 0.0
+    gamma: float = 0.0
+
+
+@dataclass
+class AdmeshGlobal:
+    """/ADMESH/GLOBAL, /ADGLOB, /ADGLOB/MESH (M113): Adaptive meshing global parameters."""
+    level_max: int = 0
+    iadm_rule: int = 0
+    t_delay: float = 0.0
+    istat_cnd: int = 0
+
+
+@dataclass
+class StampingInit:
+    """/STAMPING (M113): Sheet metal forming stamping history input."""
+    time_scale: float = 1.0
+    data_lines: List[str] = field(default_factory=list)
+
+
+@dataclass
+class RandomNoise:
+    """/RANDOM, /RANDOM/GRNOD (M113): Random vibration and stochastic input noise."""
+    grnod_id: int = 0
+    xalea: float = 0.0
+    seed: float = 0.0
+
+
+@dataclass
+class Accelerometer:
+    """/ACCEL (M113): Accelerometer measurement sensor."""
+    id: int
+    title: str = ""
+    node_id: int = 0
+    skew_id: int = 0
+    cutoff: float = 0.0
+
+
+@dataclass
+class Subset:
+    """/SUBSET (M113): Hierarchical model component subset."""
+    id: int
+    title: str = ""
+    assembly_ids: List[int] = field(default_factory=list)
+
+
+
 
 
 
