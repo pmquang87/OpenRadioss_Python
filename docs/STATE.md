@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M121)
+## What is implemented (M1 → M122)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -127,6 +127,7 @@ real history is 41 milestones. One line each:
 | M119 | Add /FUNCT_PYTHON (Python function definition), /FRICTION (generalized multi-part & orthotropic friction model), /REFSTA & /EREF (global & element reference states), /NBCS (non-linear boundary conditions), /ALE/MUSCL (/ALE/SOLVER/MUSCL, MUSCL advection compression factor), /BEM (boundary element method container) |
 | M120 | Add extended Engine deck control keywords (/DEBUG, /BCS/ON & /BCS/OFF, /RBODY/ON & /RBODY/OFF, /ALE/ON & /ALE/OFF, /NOIS, /H3D, /FLOW, /UPWIND, /EIG/OFF) |
 | M121 | Add extended /SENSOR suite (/SENSOR/GAUGE, /HIC, /WORK, /RWALL, /XSECTION, /DIST_SURF), /GAUGE/POINT, /SPHGLO, /ANALY, cross-reference validation, and Engine element-specific /DT controls (/DT/BRICK, /DT/SHELL, /DT/QUAD, /DT/TETRA10, /DT/INTER) |
+| M122 | Add 20-node quadratic bricks (/BRIC20, /HEXA20, /PROP/TYPE23, /GRBR20), coupled ALE/CFD/SPH interaction (/ALECFDSPH), and tensor animation requests (/ANIM/*/TENS) |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

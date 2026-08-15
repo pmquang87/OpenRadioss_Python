@@ -32,6 +32,7 @@ _ETYPES = {
     "SPRING": ("springs", 2, 4),
     "BEAM": ("beams", 3, 3),
     "SHEL16": ("shel16s", 16, 20),
+    "BRIC20": ("bric20s", 20, 23),
 }
 
 #: the "fictitious material law for spring elements" the reference assigns

@@ -2991,6 +2991,19 @@ class AnalyOptions:
     isubcyc: int = 0       # 0=none, 2=subcycling n2
 
 
+@dataclass
+class AleCfdSph:
+    """/ALECFDSPH (M122): Coupled ALE / CFD / SPH fluid-structure interaction parameters."""
+    title: str = ""
+    icfd: int = 0
+    isph: int = 0
+    tstart: float = 0.0
+    tstop: float = 1e30
+    fscale_c: float = 1.0
+    fscale_s: float = 1.0
+
+
+
 
 
 

@@ -51,7 +51,7 @@ from ..model.entities import (
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
     Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
-    GaugePoint, SphGlo, AnalyOptions,
+    GaugePoint, SphGlo, AnalyOptions, AleCfdSph,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -491,6 +491,48 @@ def read_shel16(block, model, log):
                 log.error(f"/SHEL16 card needs 17 ids, got {len(t)}", c1.source)
                 continue
         model.raw_elems["SHEL16"].append((t[0], part_id, t[1:17]))
+
+
+def read_bric20(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/BRIC20/part_ID`` or ``/HEXA20/part_ID`` (M122): 20-node quadratic hexahedral solids.
+    Format is 2 cards per element:
+    Card 1: elem_id, n1..n10
+    Card 2: n11..n20
+    (or free-format stream of integers chunked by 21).
+    """
+    part_id = block.user_id
+    if part_id is None:
+        log.error(f"/{block.key0} block without part id", block.source)
+        return
+
+    if block.fixed and len(block.cards) % 2 == 0:
+        for i in range(0, len(block.cards), 2):
+            c1 = block.cards[i]
+            c2 = block.cards[i+1]
+            f1 = c1.cut("ELEM_BRIC20_1")
+            f2 = c2.cut("ELEM_BRIC20_2")
+            if not f1[0].strip():
+                continue
+            try:
+                elem_id = _ival(f1[0])
+                nodes = [_ival(x) for x in f1[1:] if x.strip()] + [_ival(x) for x in f2 if x.strip()]
+                if len(nodes) == 20:
+                    model.raw_elems["BRIC20"].append((elem_id, part_id, nodes))
+                else:
+                    log.error(f"/{block.key0} {elem_id}: expected 20 nodes, got {len(nodes)}", c1.source)
+            except ValueError as e:
+                log.error(f"/{block.key0}: {e}", c1.source)
+    else:
+        ints = []
+        for card in block.cards:
+            ints.extend(card.ints())
+        if len(ints) % 21 != 0:
+            log.warning(f"/{block.key0} block: expected multiple of 21 values (ID + 20 nodes), got {len(ints)}", block.source)
+        for i in range(0, len(ints) - 20, 21):
+            elem_id = ints[i]
+            nodes = ints[i+1:i+21]
+            model.raw_elems["BRIC20"].append((elem_id, part_id, nodes))
+
 
 
 
@@ -3497,7 +3539,8 @@ def _id_list(block: KeywordBlock, cards) -> List[int]:
 
 #: /GRNOD subtypes naming an ELEMENT-group family -> canonical family key
 _GR_FAMILIES = {"GRSHEL": "SHEL", "GRSH3N": "SH3N", "GRTRIA": "SH3N",
-                "GRBRIC": "BRIC", "GRQUAD": "QUAD", "GRTRUS": "TRUS",
+                "GRBRIC": "BRIC", "GRBR20": "BRIC", "GRHEX20": "BRIC",
+                "GRQUAD": "QUAD", "GRTRUS": "TRUS",
                 "GRBEAM": "BEAM", "GRSPRI": "SPRI"}
 
 
@@ -8016,6 +8059,34 @@ def read_sph(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_sph_reserve(block, model, log)
     else:
         read_sph_inout(block, model, log)
+
+
+def read_alecfdsph(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ALECFDSPH`` (M122): Coupled ALE / CFD / SPH fluid-structure interaction parameters."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        model.alecfdsph = AleCfdSph(title=title)
+        return
+    if block.fixed:
+        f = cards[0].cut("ALECFDSPH_1")
+        icfd = _ival(f[0]) if len(f) > 0 else 0
+        isph = _ival(f[1]) if len(f) > 1 else 0
+        tstart = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        tstop = _fval(f[3], 1e30) if len(f) > 3 and f[3].strip() else 1e30
+        fscale_c = _fval(f[4], 1.0) if len(f) > 4 and f[4].strip() else 1.0
+        fscale_s = _fval(f[5], 1.0) if len(f) > 5 and f[5].strip() else 1.0
+    else:
+        t = cards[0].tokens()
+        icfd = int(float(t[0])) if len(t) > 0 else 0
+        isph = int(float(t[1])) if len(t) > 1 else 0
+        tstart = float(t[2]) if len(t) > 2 else 0.0
+        tstop = float(t[3]) if len(t) > 3 else 1e30
+        fscale_c = float(t[4]) if len(t) > 4 else 1.0
+        fscale_s = float(t[5]) if len(t) > 5 else 1.0
+    model.alecfdsph = AleCfdSph(
+        title=title, icfd=icfd, isph=isph, tstart=tstart, tstop=tstop,
+        fscale_c=fscale_c, fscale_s=fscale_s,
+    )
 
 
 def read_sphbcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -13002,6 +13073,11 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "EREF": read_eref,
     "NBCS": read_nbcs,
     "BEM": read_bem,
+    "BRIC20": read_bric20,
+    "HEXA20": read_bric20,
+    "GRBR20": read_gr_elem,
+    "GRHEX20": read_gr_elem,
+    "ALECFDSPH": read_alecfdsph,
 }
 
 

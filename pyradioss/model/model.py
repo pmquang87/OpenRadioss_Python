@@ -63,7 +63,7 @@ from .entities import (
     FailFractal, TransformPosition, ExternalLink, ArchSpec,
     FunctPython, FrictionModel, FrictionPartPair, RefstaNode, ErefSpec,
     NbcsBlock, NbcsNode, AleMuscl, BemModel,
-    GaugePoint, SphGlo, AnalyOptions,
+    GaugePoint, SphGlo, AnalyOptions, AleCfdSph,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -110,6 +110,7 @@ class EngineControls:
     energy_error_stop: float = 15.0  # %, /STOP-like divergence guard
     anim_vect: List[str] = field(default_factory=lambda: ["VEL", "DIS"])
     anim_elem: List[str] = field(default_factory=lambda: ["VONM", "EPSP"])
+    anim_tens: List[str] = field(default_factory=list) # /ANIM/ELEM/TENS, /ANIM/BRICK/TENS, /ANIM/SHELL/TENS (M122)
 
     # M120: Extended Engine control cards
     debug_flags: Dict[str, int] = field(default_factory=dict)  # /DEBUG options
@@ -525,11 +526,12 @@ class Model:
         self.springs: Optional[ElementGroup] = None   # /SPRING (IXR)
         self.beams: Optional[ElementGroup] = None     # /BEAM   (IXP)
         self.shel16s: Optional[ElementGroup] = None   # /SHEL16 (IXS16)
+        self.bric20s: Optional[ElementGroup] = None   # /BRIC20 / /HEXA20 (M122)
         # raw (id, part_id, node ids...) tuples collected during parsing,
         # converted to ElementGroups in Starter finalization:
         self.raw_elems: Dict[str, list] = {
             "BRICK": [], "QUAD": [], "TETRA4": [], "TETRA10": [], "SHELL": [], "SH3N": [],
-            "TRUSS": [], "SPRING": [], "BEAM": [], "SHEL16": []}
+            "TRUSS": [], "SPRING": [], "BEAM": [], "SHEL16": [], "BRIC20": [], "HEXA20": []}
 
         # ------------------------------------------------------------------
         # Definitions keyed by user id
@@ -759,6 +761,7 @@ class Model:
         self.gauge_points: Dict[int, GaugePoint] = {}       # /GAUGE/POINT (M121)
         self.sphglo: Optional[SphGlo] = None                # /SPHGLO (M121)
         self.analy: Optional[AnalyOptions] = None           # /ANALY (M121)
+        self.alecfdsph: Optional[AleCfdSph] = None          # /ALECFDSPH (M122)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
@@ -796,8 +799,9 @@ class Model:
     # ----------------------------------------------------------------------
     def element_groups(self):
         """Iterate (name, group) over the non-empty element groups."""
-        for name in ("bricks", "bricks_heph", "quads", "tetras", "tetra10s", "shel16s", "shells", "shells_qbat",
+        for name in ("bricks", "bricks_heph", "bric20s", "quads", "tetras", "tetra10s", "shel16s", "shells", "shells_qbat",
                      "shells_qeph", "sh3n", "sh3n_dkt18", "trusses", "springs", "beams"):
             g = getattr(self, name)
             if g is not None and g.n:
                 yield name, g
+

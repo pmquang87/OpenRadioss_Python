@@ -129,18 +129,34 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     ec.th_dt = block.cards[0].floats()[0]
             elif key == "ANIM":
                 sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                sub2 = block.parts[2].upper() if len(block.parts) > 2 else ""
                 if sub == "DT":
                     vals = block.cards[0].floats() if block.cards else [0.0]
                     # card: T_start dT  (a single value is taken as dT)
                     ec.anim_dt = vals[1] if len(vals) > 1 else vals[0]
-                elif sub == "VECT" and len(block.parts) > 2:
-                    v = block.parts[2].upper()
-                    if v not in ec.anim_vect:
-                        ec.anim_vect.append(v)
-                elif sub == "ELEM" and len(block.parts) > 2:
-                    v = block.parts[2].upper()
-                    if v not in ec.anim_elem:
-                        ec.anim_elem.append(v)
+                elif sub == "VECT" and sub2:
+                    if sub2 not in ec.anim_vect:
+                        ec.anim_vect.append(sub2)
+                elif sub == "ELEM" and sub2:
+                    if sub2 in ("TENS", "SIG", "EPS") or "TENS" in sub2:
+                        if f"ELEM/{sub2}" not in ec.anim_tens:
+                            ec.anim_tens.append(f"ELEM/{sub2}")
+                    elif sub2 not in ec.anim_elem:
+                        ec.anim_elem.append(sub2)
+                elif sub in ("BRICK", "BRI", "SHELL", "SH3N", "SHE", "QUAD", "QUA", "TETRA10", "TETRA4", "SOLID"):
+                    chan = f"{sub}/{sub2}" if sub2 else sub
+                    if sub2 == "TENS" or "TENS" in chan:
+                        if chan not in ec.anim_tens:
+                            ec.anim_tens.append(chan)
+                    elif chan not in ec.anim_elem:
+                        ec.anim_elem.append(chan)
+                elif sub in ("NODA", "MASS", "GPS", "INTER", "BEAM", "SPRING", "TRUSS", "TENS"):
+                    chan = f"{sub}/{sub2}" if sub2 else sub
+                    if "TENS" in chan:
+                        if chan not in ec.anim_tens:
+                            ec.anim_tens.append(chan)
+                    elif chan not in ec.anim_elem:
+                        ec.anim_elem.append(chan)
                 else:
                     log.warning(f"/ANIM/{sub} not ported", block.source)
             elif key == "DT":
@@ -1266,6 +1282,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                                     ec.eig_off.append(m_id)
                             except ValueError:
                                 pass
+            elif key == "ALECFDSPH":
+                pass # /ALECFDSPH (M122) accepted in engine deck
             else:
                 log.warning(f"engine keyword /{'/'.join(block.parts)} "
                             f"not ported — ignored", block.source)
