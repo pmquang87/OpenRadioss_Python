@@ -50,8 +50,9 @@ from .entities import (
     MonvolPres, MonvolGas, MonvolCommu1, MonvolLFluid, LeakMat,
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
-    Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
     DetonationWave, ElementActivation, MonvolFvmBag2, Autoposition,
+    LoadCentri, LoadPfluid, LoadPressure, InivelAxis, InivelFvm, InivelNode,
+    ImpdispFgeo, ImpvelFgeo, RwallTherm, SphInOut,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -669,6 +670,16 @@ class Model:
         self.activations: List[ElementActivation] = [] # /ACTIV (M110)
         self.monvol_fvmbag2s: Dict[int, MonvolFvmBag2] = {} # /MONVOL/FVMBAG2 (M111)
         self.autopositions: List[Autoposition] = []    # /TRANSFORM/AUTOPOSITION (M111)
+        self.load_centris: Dict[int, LoadCentri] = {}       # /LOAD/CENTRI (M112)
+        self.load_pfluids: Dict[int, LoadPfluid] = {}       # /LOAD/PFLUID (M112)
+        self.load_pressures: Dict[int, LoadPressure] = {}   # /LOAD/PRESSURE (M112)
+        self.inivel_axes: Dict[int, InivelAxis] = {}        # /INIVEL/AXIS (M112)
+        self.inivel_fvms: Dict[int, InivelFvm] = {}         # /INIVEL/FVM (M112)
+        self.inivel_nodes: Dict[int, InivelNode] = {}       # /INIVEL/NODE (M112)
+        self.impdisp_fgeos: Dict[int, ImpdispFgeo] = {}     # /IMPDISP/FGEO (M112)
+        self.impvel_fgeos: Dict[int, ImpvelFgeo] = {}       # /IMPVEL/FGEO (M112)
+        self.rwall_therms: Dict[int, RwallTherm] = {}       # /RWALL/THERM (M112)
+        self.sph_inouts: Dict[int, SphInOut] = {}           # /SPH/INOUT (M112)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

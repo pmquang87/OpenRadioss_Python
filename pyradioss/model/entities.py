@@ -2269,6 +2269,200 @@ class Autoposition:
     zflag: int = 0
 
 
+@dataclass
+class LoadCentri:
+    """/LOAD/CENTRI (M112): Centrifugal body force loading.
+
+    Fortran origin: ``starter/source/loads/general/load_centri/hm_read_load_centri.F`` / CFG ``centri.cfg``.
+    """
+    id: int
+    title: str = ""
+    fct_id: int = 0
+    dir: str = ""
+    frame_id: int = 0
+    sens_id: int = 0
+    grnod_id: int = 0
+    ivar: int = 0
+    ascalex: float = 1.0
+    fscaley: float = 1.0
+
+
+@dataclass
+class LoadPfluid:
+    """/LOAD/PFLUID (M112): Hydrostatic/fluid pressure on surfaces.
+
+    Fortran origin: ``starter/source/loads/general/pfluid/hm_read_pfluid.F`` / CFG ``pfluid.cfg``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    sens_id: int = 0
+    fct_hsp: int = 0
+    ascalex_hsp: float = 1.0
+    fscaley_hsp: float = 1.0
+    dir_hsp: str = "Z"
+    frame_hsp: int = 0
+    fct_pc: int = 0
+    ascalex_pc: float = 1.0
+    fscaley_pc: float = 1.0
+    fct_vel: int = 0
+    ascalex_vel: float = 1.0
+    fscaley_vel: float = 1.0
+    dir_vel: str = ""
+    frame_vel: int = 0
+
+
+@dataclass
+class LoadPressure:
+    """/LOAD/PRESSURE (M112): Surface pressure loading.
+
+    Fortran origin: ``starter/source/loads/general/load_pressure/hm_read_load_pressure.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    fct_id: int = 0
+    sens_id: int = 0
+    scale: float = 1.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+
+
+@dataclass
+class InivelAxis:
+    """/INIVEL/AXIS (M112): Axisymmetric initial velocity around frame axis.
+
+    Fortran origin: ``starter/source/initial_conditions/general/inivel/hm_read_inivel.F`` / CFG ``inivel_axis.cfg``.
+    """
+    id: int
+    title: str = ""
+    dir: str = "Z"
+    frame_id: int = 0
+    grnod_id: int = 0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    vr: float = 0.0
+    tstart: float = 0.0
+    sens_id: int = 0
+
+
+@dataclass
+class InivelFvm:
+    """/INIVEL/FVM (M112): FVM airbag initial velocity on brick/quad/tria groups.
+
+    Fortran origin: ``starter/source/initial_conditions/general/inivel/hm_read_inivel.F`` / CFG ``inivel_fvm.cfg``.
+    """
+    id: int
+    title: str = ""
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    grbric_id: int = 0
+    grquad_id: int = 0
+    grsh3n_id: int = 0
+    skew_id: int = 0
+    tstart: float = 0.0
+    sens_id: int = 0
+
+
+@dataclass
+class InivelNodeItem:
+    """Single node entry for /INIVEL/NODE (M112)."""
+    node_id: int
+    skew_id: int = 0
+    vxt: float = 0.0
+    vyt: float = 0.0
+    vzt: float = 0.0
+    vxr: float = 0.0
+    vyr: float = 0.0
+    vzr: float = 0.0
+
+
+@dataclass
+class InivelNode:
+    """/INIVEL/NODE (M112): Nodal vector initial velocities.
+
+    Fortran origin: ``starter/source/initial_conditions/general/inivel/hm_read_inivel.F`` / CFG ``inivel_node.cfg``.
+    """
+    id: int
+    title: str = ""
+    items: List[InivelNodeItem] = field(default_factory=list)
+
+
+@dataclass
+class ImpdispFgeo:
+    """/IMPDISP/FGEO (M112): Imposed final geometry displacement.
+
+    Fortran origin: ``starter/source/constraints/general/impvel/read_impdisp_fgeo.F`` / CFG ``impdisp_fgeo.cfg``.
+    """
+    id: int
+    title: str = ""
+    fct_id: int = 0
+    part_id: int = 0
+    sens_id: int = 0
+    ascale: float = 1.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+    nodes: List[Dict[str, float]] = field(default_factory=list)
+
+
+@dataclass
+class ImpvelFgeo:
+    """/IMPVEL/FGEO (M112): Imposed final geometry velocity.
+
+    Fortran origin: ``starter/source/constraints/general/impvel/read_impvel_fgeo.F`` / CFG ``impvel_fgeo.cfg``.
+    """
+    id: int
+    title: str = ""
+    fct_id: int = 0
+    part_id: int = 0
+    fct_l_id: int = 0
+    sens_id: int = 0
+    ascale: float = 1.0
+    t0: float = 0.0
+    tstart: float = 0.0
+    fscale_l: float = 1.0
+    dmin: float = 0.0
+    pairs: List[Tuple[int, int]] = field(default_factory=list)
+
+
+@dataclass
+class RwallTherm:
+    """/RWALL/THERM (M112): Thermal rigid wall.
+
+    Fortran origin: ``starter/source/constraints/general/rwall/hm_read_rwall_therm.F``.
+    """
+    id: int
+    title: str = ""
+    typ: int = 1
+    tied: int = 0
+    node_id: int = 0
+    grnod_id1: int = 0
+    grnod_id2: int = 0
+    fct_id: int = 0
+    temp: float = 0.0
+    tstif: float = 0.0
+    fric: float = 0.0
+
+
+@dataclass
+class SphInOut:
+    """/SPH/INOUT or /SPH/IO (M112): SPH particle inlet/outlet boundary condition.
+
+    Fortran origin: ``starter/source/loads/sph/hm_read_sphio.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    part_id: int = 0
+    fct_id: int = 0
+    rho_in: float = 0.0
+    p_in: float = 0.0
+    e_in: float = 0.0
+
+
+
 
 
 

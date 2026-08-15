@@ -763,6 +763,103 @@ def check_model(model: Model, log: MessageLog) -> None:
         if ap.skew_id > 0 and ap.skew_id not in model.skews:
             log.error(f"/TRANSFORM/AUTOPOSITION/{ap.id}: skew {ap.skew_id} not defined", "CROSS REF")
 
+    # M112: Centrifugal & Pressure Loads, Advanced Initial Velocities, Final Geometry Imposed Fields, Thermal Rigid Walls, and SPH Boundary Suite
+    for lcid, lc in getattr(model, "load_centris", {}).items():
+        if lc.fct_id > 0 and lc.fct_id not in model.functions:
+            log.error(f"/LOAD/CENTRI/{lcid}: function {lc.fct_id} not defined", "CROSS REF")
+        if lc.sens_id > 0 and lc.sens_id not in sensor_ids:
+            log.error(f"/LOAD/CENTRI/{lcid}: sensor {lc.sens_id} not defined", "CROSS REF")
+        if lc.grnod_id > 0 and lc.grnod_id not in model.node_groups:
+            log.error(f"/LOAD/CENTRI/{lcid}: node group {lc.grnod_id} not defined", "CROSS REF")
+        if lc.frame_id > 0 and lc.frame_id not in model.skews:
+            log.error(f"/LOAD/CENTRI/{lcid}: skew {lc.frame_id} not defined", "CROSS REF")
+
+    for lpid, lp in getattr(model, "load_pfluids", {}).items():
+        if lp.surf_id > 0 and lp.surf_id not in model.surfaces:
+            log.error(f"/LOAD/PFLUID/{lpid}: surface {lp.surf_id} not defined", "CROSS REF")
+        if lp.sens_id > 0 and lp.sens_id not in sensor_ids:
+            log.error(f"/LOAD/PFLUID/{lpid}: sensor {lp.sens_id} not defined", "CROSS REF")
+        for fid in (lp.fct_hsp, lp.fct_pc, lp.fct_vel):
+            if fid > 0 and fid not in model.functions:
+                log.error(f"/LOAD/PFLUID/{lpid}: function {fid} not defined", "CROSS REF")
+        for fid in (lp.frame_hsp, lp.frame_vel):
+            if fid > 0 and fid not in model.skews:
+                log.error(f"/LOAD/PFLUID/{lpid}: skew {fid} not defined", "CROSS REF")
+
+    for lpid, lp in getattr(model, "load_pressures", {}).items():
+        if lp.surf_id > 0 and lp.surf_id not in model.surfaces:
+            log.error(f"/LOAD/PRESSURE/{lpid}: surface {lp.surf_id} not defined", "CROSS REF")
+        if lp.fct_id > 0 and lp.fct_id not in model.functions:
+            log.error(f"/LOAD/PRESSURE/{lpid}: function {lp.fct_id} not defined", "CROSS REF")
+        if lp.sens_id > 0 and lp.sens_id not in sensor_ids:
+            log.error(f"/LOAD/PRESSURE/{lpid}: sensor {lp.sens_id} not defined", "CROSS REF")
+
+    for iaid, ia in getattr(model, "inivel_axes", {}).items():
+        if ia.grnod_id > 0 and ia.grnod_id not in model.node_groups:
+            log.error(f"/INIVEL/AXIS/{iaid}: node group {ia.grnod_id} not defined", "CROSS REF")
+        if ia.frame_id > 0 and ia.frame_id not in model.skews:
+            log.error(f"/INIVEL/AXIS/{iaid}: skew {ia.frame_id} not defined", "CROSS REF")
+        if ia.sens_id > 0 and ia.sens_id not in sensor_ids:
+            log.error(f"/INIVEL/AXIS/{iaid}: sensor {ia.sens_id} not defined", "CROSS REF")
+
+    for ivid, iv in getattr(model, "inivel_fvms", {}).items():
+        if iv.skew_id > 0 and iv.skew_id not in model.skews:
+            log.error(f"/INIVEL/FVM/{ivid}: skew {iv.skew_id} not defined", "CROSS REF")
+        if iv.sens_id > 0 and iv.sens_id not in sensor_ids:
+            log.error(f"/INIVEL/FVM/{ivid}: sensor {iv.sens_id} not defined", "CROSS REF")
+
+    for inid, in_obj in getattr(model, "inivel_nodes", {}).items():
+        for itm in in_obj.items:
+            if itm.node_id > 0 and itm.node_id not in model._id2idx:
+                log.error(f"/INIVEL/NODE/{inid}: node {itm.node_id} not defined", "CROSS REF")
+            if itm.skew_id > 0 and itm.skew_id not in model.skews:
+                log.error(f"/INIVEL/NODE/{inid}: skew {itm.skew_id} not defined", "CROSS REF")
+
+    for idfid, idf in getattr(model, "impdisp_fgeos", {}).items():
+        if idf.fct_id > 0 and idf.fct_id not in model.functions:
+            log.error(f"/IMPDISP/FGEO/{idfid}: function {idf.fct_id} not defined", "CROSS REF")
+        if idf.part_id > 0 and idf.part_id not in model.parts:
+            log.error(f"/IMPDISP/FGEO/{idfid}: part {idf.part_id} not defined", "CROSS REF")
+        if idf.sens_id > 0 and idf.sens_id not in sensor_ids:
+            log.error(f"/IMPDISP/FGEO/{idfid}: sensor {idf.sens_id} not defined", "CROSS REF")
+        for nd in idf.nodes:
+            if nd["node_id"] > 0 and nd["node_id"] not in model._id2idx:
+                log.error(f"/IMPDISP/FGEO/{idfid}: node {nd['node_id']} not defined", "CROSS REF")
+
+    for ivfid, ivf in getattr(model, "impvel_fgeos", {}).items():
+        if ivf.fct_id > 0 and ivf.fct_id not in model.functions:
+            log.error(f"/IMPVEL/FGEO/{ivfid}: function {ivf.fct_id} not defined", "CROSS REF")
+        if ivf.fct_l_id > 0 and ivf.fct_l_id not in model.functions:
+            log.error(f"/IMPVEL/FGEO/{ivfid}: function {ivf.fct_l_id} not defined", "CROSS REF")
+        if ivf.part_id > 0 and ivf.part_id not in model.parts:
+            log.error(f"/IMPVEL/FGEO/{ivfid}: part {ivf.part_id} not defined", "CROSS REF")
+        if ivf.sens_id > 0 and ivf.sens_id not in sensor_ids:
+            log.error(f"/IMPVEL/FGEO/{ivfid}: sensor {ivf.sens_id} not defined", "CROSS REF")
+        for n1, n2 in ivf.pairs:
+            if n1 > 0 and n1 not in model._id2idx:
+                log.error(f"/IMPVEL/FGEO/{ivfid}: node {n1} not defined", "CROSS REF")
+            if n2 > 0 and n2 not in model._id2idx:
+                log.error(f"/IMPVEL/FGEO/{ivfid}: node {n2} not defined", "CROSS REF")
+
+    for rtid, rt in getattr(model, "rwall_therms", {}).items():
+        if rt.node_id > 0 and rt.node_id not in model._id2idx:
+            log.error(f"/RWALL/THERM/{rtid}: node {rt.node_id} not defined", "CROSS REF")
+        if rt.grnod_id1 > 0 and rt.grnod_id1 not in model.node_groups:
+            log.error(f"/RWALL/THERM/{rtid}: node group 1 {rt.grnod_id1} not defined", "CROSS REF")
+        if rt.grnod_id2 > 0 and rt.grnod_id2 not in model.node_groups:
+            log.error(f"/RWALL/THERM/{rtid}: node group 2 {rt.grnod_id2} not defined", "CROSS REF")
+        if rt.fct_id > 0 and rt.fct_id not in model.functions:
+            log.error(f"/RWALL/THERM/{rtid}: function {rt.fct_id} not defined", "CROSS REF")
+
+    for sioid, sio in getattr(model, "sph_inouts", {}).items():
+        if sio.surf_id > 0 and sio.surf_id not in model.surfaces:
+            log.error(f"/SPH/INOUT/{sioid}: surface {sio.surf_id} not defined", "CROSS REF")
+        if sio.part_id > 0 and sio.part_id not in model.parts:
+            log.error(f"/SPH/INOUT/{sioid}: part {sio.part_id} not defined", "CROSS REF")
+        if sio.fct_id > 0 and sio.fct_id not in model.functions:
+            log.error(f"/SPH/INOUT/{sioid}: function {sio.fct_id} not defined", "CROSS REF")
+
+
 
 
 

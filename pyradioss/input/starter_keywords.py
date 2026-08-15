@@ -146,9 +146,10 @@ def _floats(card: Card, n: int, defaults: Optional[List[float]] = None) -> List[
 
 def _direction(tok: str) -> np.ndarray:
     """Parse a direction token: the Radioss axis letters X/Y/Z (also
-    accepts lowercase). Returns a unit vector."""
-    axis = {"X": [1, 0, 0], "Y": [0, 1, 0], "Z": [0, 0, 1]}
-    t = tok.upper()
+    accepts lowercase and rotational axis notation XX/YY/ZZ). Returns a unit vector."""
+    axis = {"X": [1, 0, 0], "Y": [0, 1, 0], "Z": [0, 0, 1],
+            "XX": [1, 0, 0], "YY": [0, 1, 0], "ZZ": [0, 0, 1]}
+    t = tok.strip().upper()
     if t not in axis:
         raise ValueError(f"unsupported direction '{tok}' (expected X, Y or Z)")
     return np.array(axis[t], dtype=float)
@@ -4060,7 +4061,8 @@ def read_inivel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             grnod = int(float(toks[3])) if len(toks) > 3 else 0
         model.inivel.append(InitialVelocity(
             id=block.user_id, grnod_id=grnod, v=np.array(v), title=title))
-    elif kind == "AXIS":
+    elif kind in ("AXIS", "ROT"):
+        from ..model.entities import InivelAxis
         t = cards[0].tokens()
         real_layout = False
         if t:
@@ -4076,28 +4078,159 @@ def read_inivel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 else [""] * 4
             vt = np.array([_fval(s) for s in g[:3]])
             omega = _fval(g[3])
-            # /FRAME (M39): the axis is the frame's DIR axis THROUGH THE
-            # FRAME ORIGIN and Vt is written in the frame — resolved by
-            # the Starter once the frames are built (initialization.py:
-            # resolve_inivel_frames).  frame_ID 0 keeps the global axis
-            # through the global origin (hm_read_inivel.F's IFRA == 0).
+            tstart = 0.0
+            sens_id = 0
+            if len(cards) > 2 and not cards[2].is_blank:
+                h = cards[2].cut("INIVEL_AXIS_3")
+                tstart = _fval(h[0], 0.0) if len(h) > 0 else 0.0
+                sens_id = _ival(h[1]) if len(h) > 1 else 0
+
             model.inivel.append(InitialVelocity(
                 id=block.user_id, grnod_id=grnod, v=vt, title=title,
                 kind="AXIS", omega=omega, axis=axis, origin=np.zeros(3),
                 frame_id=frame,
-                dir={"X": 1, "Y": 2, "Z": 3}[f[0].strip().upper()]))
+                dir={"X": 1, "Y": 2, "Z": 3}.get(f[0].strip().upper(), 3)))
+            model.inivel_axes[block.user_id] = InivelAxis(
+                id=block.user_id, title=title, dir=f[0].strip().upper() if f[0].strip() else "Z",
+                frame_id=frame, grnod_id=grnod, vx=vt[0], vy=vt[1], vz=vt[2],
+                vr=omega, tstart=tstart, sens_id=sens_id
+            )
             return
         omega = float(t[0])
-        axis = _direction(t[1])
-        grnod = int(t[2]) if len(t) > 2 else 0
+        axis = _direction(t[1]) if len(t) > 1 else np.array([0.0, 0.0, 1.0])
+        grnod = int(float(t[2])) if len(t) > 2 else 0
         origin = np.array([float(x) for x in t[3:6]]) if len(t) >= 6 \
             else np.zeros(3)
         model.inivel.append(InitialVelocity(
             id=block.user_id, grnod_id=grnod, v=np.zeros(3), title=title,
             kind="AXIS", omega=omega, axis=axis, origin=origin))
+        model.inivel_axes[block.user_id] = InivelAxis(
+            id=block.user_id, title=title, dir=t[1].upper() if len(t) > 1 else "Z",
+            frame_id=0, grnod_id=grnod, vx=0.0, vy=0.0, vz=0.0,
+            vr=omega, tstart=0.0, sens_id=0
+        )
+    elif kind == "FVM":
+        read_inivel_fvm(block, model, log)
+    elif kind == "NODE":
+        read_inivel_node(block, model, log)
     else:
-        log.warning(f"/INIVEL/{kind} not ported (TRA, AXIS supported)",
+        log.warning(f"/INIVEL/{kind} not ported (TRA, AXIS, FVM, NODE, ROT supported)",
                     block.source)
+
+
+def read_inivel_fvm(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INIVEL/FVM/inivel_ID`` (M112): FVM airbag initial velocity::
+
+        card 1:  title
+        card 2:  Vx  Vy  Vz  grbric_ID  grqd_ID  grtria_ID  skew_ID
+        card 3 (optional):  Tstart  sens_ID
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/INIVEL/FVM/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import InivelFvm
+
+    vx, vy, vz = 0.0, 0.0, 0.0
+    grbric_id, grquad_id, grsh3n_id, skew_id = 0, 0, 0, 0
+    tstart, sens_id = 0.0, 0
+
+    if block.fixed:
+        f1 = cards[0].cut("INIVEL_FVM_1")
+        vx = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        vy = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        vz = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        grbric_id = _ival(f1[3]) if len(f1) > 3 else 0
+        grquad_id = _ival(f1[4]) if len(f1) > 4 else 0
+        grsh3n_id = _ival(f1[5]) if len(f1) > 5 else 0
+        skew_id = _ival(f1[6]) if len(f1) > 6 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("INIVEL_FVM_2")
+            tstart = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            sens_id = _ival(f2[1]) if len(f2) > 1 else 0
+    else:
+        t1 = cards[0].tokens()
+        vx = float(t1[0]) if len(t1) > 0 else 0.0
+        vy = float(t1[1]) if len(t1) > 1 else 0.0
+        vz = float(t1[2]) if len(t1) > 2 else 0.0
+        grbric_id = int(float(t1[3])) if len(t1) > 3 else 0
+        grquad_id = int(float(t1[4])) if len(t1) > 4 else 0
+        grsh3n_id = int(float(t1[5])) if len(t1) > 5 else 0
+        skew_id = int(float(t1[6])) if len(t1) > 6 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            tstart = float(t2[0]) if len(t2) > 0 else 0.0
+            sens_id = int(float(t2[1])) if len(t2) > 1 else 0
+
+    model.inivel_fvms[block.user_id] = InivelFvm(
+        id=block.user_id, title=title, vx=vx, vy=vy, vz=vz,
+        grbric_id=grbric_id, grquad_id=grquad_id, grsh3n_id=grsh3n_id,
+        skew_id=skew_id, tstart=tstart, sens_id=sens_id
+    )
+
+
+def read_inivel_node(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INIVEL/NODE/inivel_ID`` (M112): Nodal vector initial velocities::
+
+        card 1:  title
+        card list:
+            card a: Node_ID  Skew_ID  Vxt  Vyt  Vzt
+            card b: (blank)  Vxr  Vyr  Vzr
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    from ..model.entities import InivelNode, InivelNodeItem
+
+    items = []
+    i = 0
+    while i < len(cards):
+        c1 = cards[i]
+        if c1.is_blank:
+            i += 1
+            continue
+        c2 = cards[i+1] if i+1 < len(cards) and not cards[i+1].is_blank else None
+        if block.fixed:
+            f1 = c1.cut("INIVEL_NODE_1")
+            nid = _ival(f1[0]) if len(f1) > 0 else 0
+            skw = _ival(f1[1]) if len(f1) > 1 else 0
+            vxt = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+            vyt = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+            vzt = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+
+            vxr, vyr, vzr = 0.0, 0.0, 0.0
+            if c2 is not None:
+                f2 = c2.cut("INIVEL_NODE_2")
+                vxr = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                vyr = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+                vzr = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+                i += 2
+            else:
+                i += 1
+        else:
+            t1 = c1.tokens()
+            nid = int(float(t1[0])) if len(t1) > 0 else 0
+            skw = int(float(t1[1])) if len(t1) > 1 else 0
+            vxt = float(t1[2]) if len(t1) > 2 else 0.0
+            vyt = float(t1[3]) if len(t1) > 3 else 0.0
+            vzt = float(t1[4]) if len(t1) > 4 else 0.0
+
+            vxr, vyr, vzr = 0.0, 0.0, 0.0
+            if c2 is not None:
+                t2 = c2.tokens()
+                vxr = float(t2[0]) if len(t2) > 0 else 0.0
+                vyr = float(t2[1]) if len(t2) > 1 else 0.0
+                vzr = float(t2[2]) if len(t2) > 2 else 0.0
+                i += 2
+            else:
+                i += 1
+        items.append(InivelNodeItem(
+            node_id=nid, skew_id=skw, vxt=vxt, vyt=vyt, vzt=vzt,
+            vxr=vxr, vyr=vyr, vzr=vzr
+        ))
+
+    model.inivel_nodes[block.user_id] = InivelNode(id=block.user_id, title=title, items=items)
+
 
 
 def read_grav(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -4234,6 +4367,61 @@ def read_load_centri(block: KeywordBlock, model: Model, log: MessageLog) -> None
         ivar=ivar, scale_x=scale_x, scale_y=scale_y, title=title,
     )
     model.centri_loads.append(cl)
+    from ..model.entities import LoadCentri
+    model.load_centris[block.user_id] = LoadCentri(
+        id=block.user_id, title=title, fct_id=funct_id, dir=dir_str,
+        frame_id=frame_id, sens_id=sens_id, grnod_id=grnod_id,
+        ivar=ivar, ascalex=scale_x, fscaley=scale_y,
+    )
+
+
+def read_load_pressure(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/LOAD/PRESSURE/load_ID`` (M112): Surface pressure loading::
+
+        card 1:  title
+        card 2:  surf_ID  fct_ID  sens_ID
+        card 3:  Scale  Tstart  Tstop
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/LOAD/PRESSURE/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import LoadPressure
+
+    if block.fixed:
+        f1 = cards[0].cut("LOAD_PRESSURE_1")
+        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+        fct_id = _ival(f1[1]) if len(f1) > 1 else 0
+        sens_id = _ival(f1[2]) if len(f1) > 2 else 0
+
+        scale = 1.0
+        tstart = 0.0
+        tstop = 1.0e30
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("LOAD_PRESSURE_2")
+            scale = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+            tstart = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            tstop = _fval(f2[2], 1.0e30) if len(f2) > 2 else 1.0e30
+    else:
+        t1 = cards[0].tokens()
+        surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+        fct_id = int(float(t1[1])) if len(t1) > 1 else 0
+        sens_id = int(float(t1[2])) if len(t1) > 2 else 0
+
+        scale = 1.0
+        tstart = 0.0
+        tstop = 1.0e30
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            scale = float(t2[0]) if len(t2) > 0 else 1.0
+            tstart = float(t2[1]) if len(t2) > 1 else 0.0
+            tstop = float(t2[2]) if len(t2) > 2 else 1.0e30
+
+    model.load_pressures[block.user_id] = LoadPressure(
+        id=block.user_id, title=title, surf_id=surf_id, fct_id=fct_id,
+        sens_id=sens_id, scale=scale, tstart=tstart, tstop=tstop
+    )
+
 
 
 def read_pblast(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -4571,9 +4759,9 @@ def read_perturb(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_load(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/LOAD/<subtype>/load_ID`` dispatcher (M93, M99, M103)."""
+    """``/LOAD/<subtype>/load_ID`` dispatcher (M93, M99, M103, M112)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if sub == "CENTRI":
+    if sub in ("CENTRI", "CENTRIF"):
         read_load_centri(block, model, log)
     elif sub == "PBLAST":
         read_pblast(block, model, log)
@@ -4581,8 +4769,10 @@ def read_load(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_pcyl(block, model, log)
     elif sub == "PFLUID":
         read_pfluid(block, model, log)
+    elif sub in ("PRESSURE", "PRESS"):
+        read_load_pressure(block, model, log)
     else:
-        log.warning(f"/LOAD/{sub} not ported (CENTRI, PBLAST, PCYL, PFLUID supported)", block.source)
+        log.warning(f"/LOAD/{sub} not ported (CENTRI, PBLAST, PCYL, PFLUID, PRESSURE supported)", block.source)
 
 
 def read_imptemp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -4768,19 +4958,174 @@ def read_impvel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       equations of motion for that DOF). Format details + the legacy
       free-format fallback: :func:`split_imposed_card`.
     """
+    if len(block.parts) > 1 and block.parts[1].upper() == "FGEO":
+        read_impvel_fgeo(block, model, log)
+        return
     _read_imposed(block, model, log, "IMPVEL", ImposedVelocity, model.impvel)
 
 
 def read_impdisp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/IMPDISP/impdisp_ID`` (M5) — same cards as /IMPVEL (they share
+    """``/IMPDISP/impdisp_ID`` (M5, M112) — same cards as /IMPVEL (they share
     the cfg layout and the Fortran reader), but the curve is a
     *displacement*: d(t) = Fscale_Y * f(t / Ascale_x), the Engine sets the
     velocity each cycle so the node lands at x0 + d(t+dt). The curve
     should start at f(0) = 0 — a nonzero start makes the node JUMP in the
     first cycle.
     """
+    if len(block.parts) > 1 and block.parts[1].upper() == "FGEO":
+        read_impdisp_fgeo(block, model, log)
+        return
     _read_imposed(block, model, log, "IMPDISP", ImposedDisplacement,
                   model.impdisp)
+
+
+def read_impdisp_fgeo(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/IMPDISP/FGEO/impdisp_ID`` (M112): Imposed final geometry displacement::
+
+        card 1:  title
+        card 2:  fct_ID  part_ID  (blank)  sens_ID
+        card 3:  Ascale  (blank)  Tstart  Tstop
+        card list: node_IDN  Xn  Yn  Zn
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/IMPDISP/FGEO/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import ImpdispFgeo
+
+    if block.fixed:
+        f1 = cards[0].cut("IMPDISP_FGEO_1")
+        fct_id = _ival(f1[0]) if len(f1) > 0 else 0
+        part_id = _ival(f1[1]) if len(f1) > 1 else 0
+        sens_id = _ival(f1[3]) if len(f1) > 3 else 0
+
+        ascale = 1.0
+        tstart = 0.0
+        tstop = 1.0e30
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("IMPDISP_FGEO_2")
+            ascale = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+            tstart = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            tstop = _fval(f2[3], 1.0e30) if len(f2) > 3 else 1.0e30
+
+        nodes = []
+        for c in cards[2:]:
+            if c.is_blank:
+                continue
+            fl = c.cut("IMPDISP_FGEO_LIST")
+            nodes.append({
+                "node_id": _ival(fl[0]),
+                "x": _fval(fl[1], 0.0) if len(fl) > 1 else 0.0,
+                "y": _fval(fl[2], 0.0) if len(fl) > 2 else 0.0,
+                "z": _fval(fl[3], 0.0) if len(fl) > 3 else 0.0,
+            })
+    else:
+        t1 = cards[0].tokens()
+        fct_id = int(float(t1[0])) if len(t1) > 0 else 0
+        part_id = int(float(t1[1])) if len(t1) > 1 else 0
+        sens_id = int(float(t1[2])) if len(t1) > 2 else 0
+
+        ascale = 1.0
+        tstart = 0.0
+        tstop = 1.0e30
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            ascale = float(t2[0]) if len(t2) > 0 else 1.0
+            tstart = float(t2[1]) if len(t2) > 1 else 0.0
+            tstop = float(t2[2]) if len(t2) > 2 else 1.0e30
+
+        nodes = []
+        for c in cards[2:]:
+            if c.is_blank:
+                continue
+            tl = c.tokens()
+            nodes.append({
+                "node_id": int(float(tl[0])) if len(tl) > 0 else 0,
+                "x": float(tl[1]) if len(tl) > 1 else 0.0,
+                "y": float(tl[2]) if len(tl) > 2 else 0.0,
+                "z": float(tl[3]) if len(tl) > 3 else 0.0,
+            })
+
+    model.impdisp_fgeos[block.user_id] = ImpdispFgeo(
+        id=block.user_id, title=title, fct_id=fct_id, part_id=part_id,
+        sens_id=sens_id, ascale=ascale, tstart=tstart, tstop=tstop,
+        nodes=nodes
+    )
+
+
+def read_impvel_fgeo(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/IMPVEL/FGEO/impvel_ID`` (M112): Imposed final geometry velocity::
+
+        card 1:  title
+        card 2:  fct_ID  part_ID  fct_ID_L  sens_ID
+        card 3:  Ascale  T0  Tstart  Fscale_L  Dmin
+        card list: node_IDN  node_ID'N
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/IMPVEL/FGEO/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import ImpvelFgeo
+
+    if block.fixed:
+        f1 = cards[0].cut("IMPVEL_FGEO_1")
+        fct_id = _ival(f1[0]) if len(f1) > 0 else 0
+        part_id = _ival(f1[1]) if len(f1) > 1 else 0
+        fct_l_id = _ival(f1[2]) if len(f1) > 2 else 0
+        sens_id = _ival(f1[3]) if len(f1) > 3 else 0
+
+        ascale = 1.0
+        t0 = 0.0
+        tstart = 0.0
+        fscale_l = 1.0
+        dmin = 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("IMPVEL_FGEO_2")
+            ascale = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+            t0 = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            tstart = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            fscale_l = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+            dmin = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+
+        pairs = []
+        for c in cards[2:]:
+            if c.is_blank:
+                continue
+            fl = c.cut("IMPVEL_FGEO_LIST")
+            pairs.append((_ival(fl[0]), _ival(fl[1]) if len(fl) > 1 else 0))
+    else:
+        t1 = cards[0].tokens()
+        fct_id = int(float(t1[0])) if len(t1) > 0 else 0
+        part_id = int(float(t1[1])) if len(t1) > 1 else 0
+        fct_l_id = int(float(t1[2])) if len(t1) > 2 else 0
+        sens_id = int(float(t1[3])) if len(t1) > 3 else 0
+
+        ascale = 1.0
+        t0 = 0.0
+        tstart = 0.0
+        fscale_l = 1.0
+        dmin = 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            ascale = float(t2[0]) if len(t2) > 0 else 1.0
+            t0 = float(t2[1]) if len(t2) > 1 else 0.0
+            tstart = float(t2[2]) if len(t2) > 2 else 0.0
+            fscale_l = float(t2[3]) if len(t2) > 3 else 1.0
+            dmin = float(t2[4]) if len(t2) > 4 else 0.0
+
+        pairs = []
+        for c in cards[2:]:
+            if c.is_blank:
+                continue
+            tl = c.tokens()
+            pairs.append((int(float(tl[0])), int(float(tl[1])) if len(tl) > 1 else 0))
+
+    model.impvel_fgeos[block.user_id] = ImpvelFgeo(
+        id=block.user_id, title=title, fct_id=fct_id, part_id=part_id,
+        fct_l_id=fct_l_id, sens_id=sens_id, ascale=ascale, t0=t0,
+        tstart=tstart, fscale_l=fscale_l, dmin=dmin, pairs=pairs
+    )
+
 
 
 def read_impacc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -5511,8 +5856,11 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     kind = block.parts[1].upper() if len(block.parts) > 1 else "PLANE"
     if kind == "SPHERE":
         kind = "SPHER"
+    if kind == "THERM":
+        read_rwall_therm(block, model, log)
+        return
     if kind not in ("PLANE", "SPHER", "CYL", "PARAL"):
-        log.warning(f"/RWALL/{kind} not ported (PLANE, SPHER, CYL, PARAL "
+        log.warning(f"/RWALL/{kind} not ported (PLANE, SPHER, CYL, PARAL, THERM "
                     f"supported)", block.source)
         return
     title, cards = _fixed_data(block) if block.fixed \
@@ -5633,6 +5981,62 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=block.user_id, point=m, normal=normal, slide=slide, fric=fric,
         grnod_id=grnod or None, grnod_id2=grnod2 or None, dist=dist, title=title, geom=kind,
         radius=radius, node_id=node_id, axis1=axis1, axis2=axis2))
+
+
+def read_rwall_therm(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RWALL/THERM/rwall_ID`` (M112): Thermal rigid wall::
+
+        card 1:  title
+        card 2:  node_ID  Slide  grnd_ID1  grnd_ID2
+        card 3:  fct_ID  temp  tstif  fric
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/RWALL/THERM/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import RwallTherm
+
+    if block.fixed:
+        f1 = cards[0].cut("RWALL_THERM_1")
+        node_id = _ival(f1[0]) if len(f1) > 0 else 0
+        tied = _ival(f1[1]) if len(f1) > 1 else 0
+        grnod_id1 = _ival(f1[2]) if len(f1) > 2 else 0
+        grnod_id2 = _ival(f1[3]) if len(f1) > 3 else 0
+
+        fct_id = 0
+        temp = 0.0
+        tstif = 0.0
+        fric = 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("RWALL_THERM_2")
+            fct_id = _ival(f2[0]) if len(f2) > 0 else 0
+            temp = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            tstif = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            fric = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        node_id = int(float(t1[0])) if len(t1) > 0 else 0
+        tied = int(float(t1[1])) if len(t1) > 1 else 0
+        grnod_id1 = int(float(t1[2])) if len(t1) > 2 else 0
+        grnod_id2 = int(float(t1[3])) if len(t1) > 3 else 0
+
+        fct_id = 0
+        temp = 0.0
+        tstif = 0.0
+        fric = 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            fct_id = int(float(t2[0])) if len(t2) > 0 else 0
+            temp = float(t2[1]) if len(t2) > 1 else 0.0
+            tstif = float(t2[2]) if len(t2) > 2 else 0.0
+            fric = float(t2[3]) if len(t2) > 3 else 0.0
+
+    model.rwall_therms[block.user_id] = RwallTherm(
+        id=block.user_id, title=title, node_id=node_id, tied=tied,
+        grnod_id1=grnod_id1, grnod_id2=grnod_id2, fct_id=fct_id,
+        temp=temp, tstif=tstif, fric=fric
+    )
+
 
 
 def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -7063,6 +7467,61 @@ def read_sphglo(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.sph_global = SphGlobal(
         spasort=spasort, ale_maxsph=maxsph, lvoisph=lvois, kvoisph=kvois, isol2sph=isol2sph
     )
+
+
+def read_sph_inout(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SPH/INOUT/id`` or ``/SPH/IO/id`` (M112): SPH particle inlet/outlet boundary condition::
+
+        card 1:  title
+        card 2:  surf_ID  part_ID  fct_ID
+        card 3:  rho_in  p_in  e_in
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SPH/INOUT/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import SphInOut
+
+    if block.fixed:
+        f1 = cards[0].cut("SPH_INOUT_1")
+        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+        part_id = _ival(f1[1]) if len(f1) > 1 else 0
+        fct_id = _ival(f1[2]) if len(f1) > 2 else 0
+
+        rho_in, p_in, e_in = 0.0, 0.0, 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("SPH_INOUT_2")
+            rho_in = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            p_in = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            e_in = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+        part_id = int(float(t1[1])) if len(t1) > 1 else 0
+        fct_id = int(float(t1[2])) if len(t1) > 2 else 0
+
+        rho_in, p_in, e_in = 0.0, 0.0, 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            rho_in = float(t2[0]) if len(t2) > 0 else 0.0
+            p_in = float(t2[1]) if len(t2) > 1 else 0.0
+            e_in = float(t2[2]) if len(t2) > 2 else 0.0
+
+    model.sph_inouts[block.user_id] = SphInOut(
+        id=block.user_id, title=title, surf_id=surf_id, part_id=part_id,
+        fct_id=fct_id, rho_in=rho_in, p_in=p_in, e_in=e_in
+    )
+
+
+def read_sph(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SPH/<subtype>/id`` dispatcher (M101, M112)."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub in ("INOUT", "IO"):
+        read_sph_inout(block, model, log)
+    elif sub in ("GLO", "GLOBAL"):
+        read_sphglo(block, model, log)
+    else:
+        read_sph_inout(block, model, log)
 
 
 def read_sms(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -10643,6 +11102,8 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "ACTIV": read_activ,
     "AUTOPOSITION": read_transform,
     "AUTOPOS": read_transform,
+    "SPH": read_sph,
+    "PRESSURE": read_load_pressure,
 }
 
 

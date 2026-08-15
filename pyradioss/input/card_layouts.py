@@ -904,6 +904,53 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_CONNECT_2": [20, 20],
     "MAT_CONNECT_3": [10, 10, 20, 10],
     "MAT_CONNECT_LIST": [10, 10, 20, 20],
+
+    # LOAD/CENTRI (M112)
+    "LOAD_CENTRI_1": [10, 10, 10, 10, 10, 10, 20, 20],
+
+    # LOAD/PFLUID (M112)
+    "LOAD_PFLUID_1": [10, 10],
+    "LOAD_PFLUID_2": [10, 10, 20, 20],
+    "LOAD_PFLUID_3": [10, 10],
+    "LOAD_PFLUID_4": [10, 10, 20, 20],
+    "LOAD_PFLUID_5": [10, 10, 20, 20],
+    "LOAD_PFLUID_6": [10, 10],
+
+    # LOAD/PRESSURE (M112)
+    "LOAD_PRESSURE_1": [10, 10, 10, 10],
+    "LOAD_PRESSURE_2": [20, 20, 20],
+
+    # INIVEL/AXIS (M112)
+    "INIVEL_AXIS_1": [10, 10, 10],
+    "INIVEL_AXIS_2": [20, 20, 20, 20],
+    "INIVEL_AXIS_3": [20, 10],
+
+    # INIVEL/FVM (M112)
+    "INIVEL_FVM_1": [20, 20, 20, 10, 10, 10, 10],
+    "INIVEL_FVM_2": [20, 10],
+
+    # INIVEL/NODE (M112)
+    "INIVEL_NODE_1": [10, 10, 20, 20, 20],
+    "INIVEL_NODE_2": [20, 20, 20, 20],
+
+    # IMPDISP/FGEO (M112)
+    "IMPDISP_FGEO_1": [10, 10, 10, 10],
+    "IMPDISP_FGEO_2": [20, 20, 20, 20],
+    "IMPDISP_FGEO_LIST": [10, 20, 20, 20],
+
+    # IMPVEL/FGEO (M112)
+    "IMPVEL_FGEO_1": [10, 10, 10, 10],
+    "IMPVEL_FGEO_2": [20, 20, 20, 20, 20],
+    "IMPVEL_FGEO_LIST": [10, 10],
+
+    # RWALL/THERM (M112)
+    "RWALL_THERM_1": [10, 10, 10, 10],
+    "RWALL_THERM_2": [20, 20, 20, 20, 20],
+    "RWALL_THERM_3": [10, 20, 20],
+
+    # SPH/INOUT (M112)
+    "SPH_INOUT_1": [10, 10, 10],
+    "SPH_INOUT_2": [20, 20, 20],
 }
 
 
