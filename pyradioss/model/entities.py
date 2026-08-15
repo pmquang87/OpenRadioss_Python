@@ -1351,6 +1351,52 @@ class PBlastLoad:
     tdet: float = 0.0
     wtnt: float = 0.0
     pmin: float = 0.0
+    tstop: float = 1.0e30
+    surf_ground_id: int = 0
+    ishape: int = 0
+
+
+@dataclass
+class DetonationWave:
+    """/INIT/DET_POINT, /INIT/DET_LINE, /INIT/DET_PLAN, /INIT/DET_CORD (M110):
+    High-explosive detonation wavefront initialization.
+    
+    Fortran origin: ``starter/source/initial_conditions/detonation/``.
+    """
+    id: int
+    kind: str = "POINT"  # 'POINT' | 'LINE' | 'PLAN' | 'CORD'
+    title: str = ""
+    x: float = 0.0
+    y: float = 0.0
+    z: float = 0.0
+    x2: float = 0.0
+    y2: float = 0.0
+    z2: float = 0.0
+    tdet: float = 0.0
+    mat_id: int = 0
+    ddet: float = 0.0
+    iopt: int = 0
+
+
+@dataclass
+class ElementActivation:
+    """/ACTIV (M110): Dynamic activation/deactivation of element groups.
+    
+    Fortran origin: ``starter/source/tools/activ/hm_read_activ.F``.
+    """
+    id: int
+    title: str = ""
+    sens_id: int = 0
+    grbric_id: int = 0
+    grquad_id: int = 0
+    grshel_id: int = 0
+    grtrus_id: int = 0
+    grbeam_id: int = 0
+    grspri_id: int = 0
+    grsh3n_id: int = 0
+    iform: int = 1
+    tstart: float = 0.0
+    tstop: float = 1.0e30
 
 
 @dataclass

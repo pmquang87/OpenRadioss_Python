@@ -1970,10 +1970,26 @@ def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """
     from ..model.entities import EquationOfState
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    kind = {"IDEAL_GAS": "IDEAL-GAS"}.get(kind, kind)
-    if kind not in ("POLYNOMIAL", "IDEAL-GAS", "LINEAR", "STIFF-GAS"):
-        log.warning(f"/EOS/{kind} not ported — skipped (supported: "
-                    f"POLYNOMIAL, IDEAL-GAS, LINEAR, STIFF-GAS)", block.source)
+    aliases = {
+        "IDEAL_GAS": "IDEAL-GAS",
+        "STIFF_GAS": "STIFF-GAS",
+        "STIFFENED_GAS": "STIFF-GAS",
+        "NOBLE_ABEL": "NOBLE-ABEL",
+        "GRUN": "GRUNEISEN",
+        "POLY": "POLYNOMIAL",
+        "LINE": "LINEAR",
+        "TILL": "TILLOTSON",
+        "MURN": "MURNAGHAN",
+        "OSBO": "OSBORNE",
+    }
+    kind = aliases.get(kind, kind)
+    supported_eos = (
+        "POLYNOMIAL", "IDEAL-GAS", "LINEAR", "STIFF-GAS",
+        "GRUNEISEN", "PUFF", "TILLOTSON", "MURNAGHAN",
+        "OSBORNE", "LSZK", "NOBLE-ABEL"
+    )
+    if kind not in supported_eos:
+        log.warning(f"/EOS/{kind} not ported — skipped", block.source)
         return
     mat_id = block.user_id
     # the real /EOS block starts with a title card; the port's compact
@@ -2033,9 +2049,9 @@ def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                   "rho0_card": rho0_card}
     elif kind == "STIFF-GAS":
         if block.fixed:
-            f = cards[0].cut("EOS_STIFF_GAS")
+            f = cards[0].cut("EOS_STIFF_1")
             gamma, p0, psh, p_star = _fval(f[0]), _fval(f[1]), _fval(f[2]), _fval(f[3])
-            rho0_card = _fval(f[4])
+            rho0_card = _fval(f[4]) if len(f) > 4 else 0.0
         else:
             gamma, p0, psh, p_star, rho0_card = _floats(cards[0], 5)
         
@@ -2044,6 +2060,162 @@ def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             return
             
         params = {"gamma": gamma, "p0": p0, "psh": psh, "p_star": p_star, "rho0_card": rho0_card}
+    elif kind == "GRUNEISEN":
+        if block.fixed:
+            c1 = cards[0].cut("EOS_GRUN_1")
+            c, s1, s2, s3 = [_fval(x) for x in c1[:4]]
+            c2 = cards[1].cut("EOS_GRUN_2") if len(cards) > 1 else []
+            gamma0 = _fval(c2[0]) if len(c2) > 0 else 0.0
+            a = _fval(c2[1]) if len(c2) > 1 else 0.0
+            e0 = _fval(c2[2]) if len(c2) > 2 else 0.0
+            rho0_card = _fval(c2[3]) if len(c2) > 3 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            c = float(t1[0]) if len(t1) > 0 else 0.0
+            s1 = float(t1[1]) if len(t1) > 1 else 0.0
+            s2 = float(t1[2]) if len(t1) > 2 else 0.0
+            s3 = float(t1[3]) if len(t1) > 3 else 0.0
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            gamma0 = float(t2[0]) if len(t2) > 0 else 0.0
+            a = float(t2[1]) if len(t2) > 1 else 0.0
+            e0 = float(t2[2]) if len(t2) > 2 else 0.0
+            rho0_card = float(t2[3]) if len(t2) > 3 else 0.0
+        params = {"c": c, "s1": s1, "s2": s2, "s3": s3, "gamma0": gamma0, "a": a, "e0": e0, "rho0_card": rho0_card}
+    elif kind == "PUFF":
+        if block.fixed:
+            c1 = cards[0].cut("EOS_PUFF_1")
+            c1_val, c2_val, c3_val, gamma0 = [_fval(x) for x in c1[:4]]
+            c2 = cards[1].cut("EOS_PUFF_2") if len(cards) > 1 else []
+            t1 = _fval(c2[0]) if len(c2) > 0 else 0.0
+            t2 = _fval(c2[1]) if len(c2) > 1 else 0.0
+            es = _fval(c2[2]) if len(c2) > 2 else 0.0
+            c3 = cards[2].cut("EOS_PUFF_3") if len(cards) > 2 else []
+            h = _fval(c3[0]) if len(c3) > 0 else 0.0
+            e0 = _fval(c3[1]) if len(c3) > 1 else 0.0
+            rho0_card = _fval(c3[2]) if len(c3) > 2 else 0.0
+        else:
+            t1_tok = cards[0].tokens()
+            c1_val = float(t1_tok[0]) if len(t1_tok) > 0 else 0.0
+            c2_val = float(t1_tok[1]) if len(t1_tok) > 1 else 0.0
+            c3_val = float(t1_tok[2]) if len(t1_tok) > 2 else 0.0
+            gamma0 = float(t1_tok[3]) if len(t1_tok) > 3 else 0.0
+            t2_tok = cards[1].tokens() if len(cards) > 1 else []
+            t1 = float(t2_tok[0]) if len(t2_tok) > 0 else 0.0
+            t2 = float(t2_tok[1]) if len(t2_tok) > 1 else 0.0
+            es = float(t2_tok[2]) if len(t2_tok) > 2 else 0.0
+            t3_tok = cards[2].tokens() if len(cards) > 2 else []
+            h = float(t3_tok[0]) if len(t3_tok) > 0 else 0.0
+            e0 = float(t3_tok[1]) if len(t3_tok) > 1 else 0.0
+            rho0_card = float(t3_tok[2]) if len(t3_tok) > 2 else 0.0
+        params = {"c1": c1_val, "c2": c2_val, "c3": c3_val, "gamma0": gamma0, "t1": t1, "t2": t2, "es": es, "h": h, "e0": e0, "rho0_card": rho0_card}
+    elif kind == "TILLOTSON":
+        if block.fixed:
+            c1 = cards[0].cut("EOS_TILL_1")
+            c1_val, c2_val, a, b = [_fval(x) for x in c1[:4]]
+            c2 = cards[1].cut("EOS_TILL_2") if len(cards) > 1 else []
+            er = _fval(c2[0]) if len(c2) > 0 else 0.0
+            es = _fval(c2[1]) if len(c2) > 1 else 0.0
+            vs = _fval(c2[2]) if len(c2) > 2 else 0.0
+            e0 = _fval(c2[3]) if len(c2) > 3 else 0.0
+            rho0_card = _fval(c2[4]) if len(c2) > 4 else 0.0
+            c3 = cards[2].cut("EOS_TILL_3") if len(cards) > 2 else []
+            alpha = _fval(c3[0]) if len(c3) > 0 else 0.0
+            beta = _fval(c3[1]) if len(c3) > 1 else 0.0
+        else:
+            t1_tok = cards[0].tokens()
+            c1_val = float(t1_tok[0]) if len(t1_tok) > 0 else 0.0
+            c2_val = float(t1_tok[1]) if len(t1_tok) > 1 else 0.0
+            a = float(t1_tok[2]) if len(t1_tok) > 2 else 0.0
+            b = float(t1_tok[3]) if len(t1_tok) > 3 else 0.0
+            t2_tok = cards[1].tokens() if len(cards) > 1 else []
+            er = float(t2_tok[0]) if len(t2_tok) > 0 else 0.0
+            es = float(t2_tok[1]) if len(t2_tok) > 1 else 0.0
+            vs = float(t2_tok[2]) if len(t2_tok) > 2 else 0.0
+            e0 = float(t2_tok[3]) if len(t2_tok) > 3 else 0.0
+            rho0_card = float(t2_tok[4]) if len(t2_tok) > 4 else 0.0
+            t3_tok = cards[2].tokens() if len(cards) > 2 else []
+            alpha = float(t3_tok[0]) if len(t3_tok) > 0 else 0.0
+            beta = float(t3_tok[1]) if len(t3_tok) > 1 else 0.0
+        params = {"c1": c1_val, "c2": c2_val, "a": a, "b": b, "er": er, "es": es, "vs": vs, "e0": e0, "rho0_card": rho0_card, "alpha": alpha, "beta": beta}
+    elif kind == "MURNAGHAN":
+        if block.fixed:
+            c1 = cards[0].cut("EOS_MURN_1")
+            k0 = _fval(c1[0]) if len(c1) > 0 else 0.0
+            k1 = _fval(c1[1]) if len(c1) > 1 else 0.0
+            p0 = _fval(c1[2]) if len(c1) > 2 else 0.0
+            psh = _fval(c1[3]) if len(c1) > 3 else 0.0
+            rho0_card = _fval(c1[4]) if len(c1) > 4 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            k0 = float(t1[0]) if len(t1) > 0 else 0.0
+            k1 = float(t1[1]) if len(t1) > 1 else 0.0
+            p0 = float(t1[2]) if len(t1) > 2 else 0.0
+            psh = float(t1[3]) if len(t1) > 3 else 0.0
+            rho0_card = float(t1[4]) if len(t1) > 4 else 0.0
+        params = {"k0": k0, "k1": k1, "p0": p0, "psh": psh, "rho0_card": rho0_card}
+    elif kind == "OSBORNE":
+        if block.fixed:
+            c1 = cards[0].cut("EOS_OSBO_1")
+            a1, a2, b0, b1, b2 = [_fval(x) for x in c1[:5]]
+            c2 = cards[1].cut("EOS_OSBO_2") if len(cards) > 1 else []
+            c0 = _fval(c2[0]) if len(c2) > 0 else 0.0
+            c1_val = _fval(c2[1]) if len(c2) > 1 else 0.0
+            d0 = _fval(c2[2]) if len(c2) > 2 else 0.0
+            p0 = _fval(c2[3]) if len(c2) > 3 else 0.0
+            c3 = cards[2].cut("F20X5") if len(cards) > 2 else []
+            rho0_card = _fval(c3[0]) if len(c3) > 0 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            a1 = float(t1[0]) if len(t1) > 0 else 0.0
+            a2 = float(t1[1]) if len(t1) > 1 else 0.0
+            b0 = float(t1[2]) if len(t1) > 2 else 0.0
+            b1 = float(t1[3]) if len(t1) > 3 else 0.0
+            b2 = float(t1[4]) if len(t1) > 4 else 0.0
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            c0 = float(t2[0]) if len(t2) > 0 else 0.0
+            c1_val = float(t2[1]) if len(t2) > 1 else 0.0
+            d0 = float(t2[2]) if len(t2) > 2 else 0.0
+            p0 = float(t2[3]) if len(t2) > 3 else 0.0
+            t3 = cards[2].tokens() if len(cards) > 2 else []
+            rho0_card = float(t3[0]) if len(t3) > 0 else 0.0
+        params = {"a1": a1, "a2": a2, "b0": b0, "b1": b1, "b2": b2, "c0": c0, "c1": c1_val, "d0": d0, "p0": p0, "rho0_card": rho0_card}
+    elif kind == "LSZK":
+        if block.fixed:
+            c1 = cards[0].cut("EOS_LSZK_1")
+            gamma = _fval(c1[0]) if len(c1) > 0 else 0.0
+            p0 = _fval(c1[1]) if len(c1) > 1 else 0.0
+            psh = _fval(c1[2]) if len(c1) > 2 else 0.0
+            a = _fval(c1[3]) if len(c1) > 3 else 0.0
+            b = _fval(c1[4]) if len(c1) > 4 else 0.0
+            c2 = cards[1].cut("F20X5") if len(cards) > 1 else []
+            rho0_card = _fval(c2[0]) if len(c2) > 0 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            gamma = float(t1[0]) if len(t1) > 0 else 0.0
+            p0 = float(t1[1]) if len(t1) > 1 else 0.0
+            psh = float(t1[2]) if len(t1) > 2 else 0.0
+            a = float(t1[3]) if len(t1) > 3 else 0.0
+            b = float(t1[4]) if len(t1) > 4 else 0.0
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            rho0_card = float(t2[0]) if len(t2) > 0 else 0.0
+        params = {"gamma": gamma, "p0": p0, "psh": psh, "a": a, "b": b, "rho0_card": rho0_card}
+    elif kind == "NOBLE-ABEL":
+        if block.fixed:
+            c1 = cards[0].cut("EOS_NOBLE_1")
+            b = _fval(c1[0]) if len(c1) > 0 else 0.0
+            gamma = _fval(c1[1]) if len(c1) > 1 else 0.0
+            e0 = _fval(c1[2]) if len(c1) > 2 else 0.0
+            psh = _fval(c1[3]) if len(c1) > 3 else 0.0
+            rho0_card = _fval(c1[4]) if len(c1) > 4 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            b = float(t1[0]) if len(t1) > 0 else 0.0
+            gamma = float(t1[1]) if len(t1) > 1 else 0.0
+            e0 = float(t1[2]) if len(t1) > 2 else 0.0
+            psh = float(t1[3]) if len(t1) > 3 else 0.0
+            rho0_card = float(t1[4]) if len(t1) > 4 else 0.0
+        params = {"b": b, "gamma": gamma, "e0": e0, "psh": psh, "rho0_card": rho0_card}
+
     model.raw_eos.append((mat_id, EquationOfState(kind=kind, params=params),
                           block.source))
 
@@ -4065,6 +4237,11 @@ def read_pblast(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/LOAD/PBLAST/{block.user_id}: missing data cards", block.source)
         return
 
+    pmin = 0.0
+    tstop = 1.0e30
+    surf_ground_id = 0
+    ishape = 0
+
     if block.fixed:
         c1 = cards[0].cut("LOAD_PBLAST_1")
         surf_id = _ival(c1[0]) if len(c1) > 0 else 0
@@ -4082,10 +4259,15 @@ def read_pblast(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         tdet = _fval(c2[3]) if len(c2) > 3 else 0.0
         wtnt = _fval(c2[4]) if len(c2) > 4 else 0.0
 
-        pmin = 0.0
         if len(cards) > 2 and not cards[2].is_blank:
-            c3 = cards[2].cut("LOAD_PBLAST_3")
+            c3 = cards[2].cut("PBLAST_3")
             pmin = _fval(c3[0]) if len(c3) > 0 else 0.0
+            tstop = _fval(c3[1], 1.0e30) if len(c3) > 1 and c3[1].strip() else 1.0e30
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            c4 = cards[3].cut("PBLAST_4")
+            surf_ground_id = _ival(c4[0]) if len(c4) > 0 else 0
+            ishape = _ival(c4[1]) if len(c4) > 1 else 0
     else:
         t1 = cards[0].tokens()
         surf_id = int(float(t1[0])) if len(t1) > 0 else 0
@@ -4103,13 +4285,188 @@ def read_pblast(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         tdet = float(t2[3]) if len(t2) > 3 else 0.0
         wtnt = float(t2[4]) if len(t2) > 4 else 0.0
 
-        pmin = float(cards[2].tokens()[0]) if len(cards) > 2 and cards[2].tokens() else 0.0
+        if len(cards) > 2 and cards[2].tokens():
+            t3 = cards[2].tokens()
+            pmin = float(t3[0]) if len(t3) > 0 else 0.0
+            tstop = float(t3[1]) if len(t3) > 1 else 1.0e30
+
+        if len(cards) > 3 and cards[3].tokens():
+            t4 = cards[3].tokens()
+            surf_ground_id = int(float(t4[0])) if len(t4) > 0 else 0
+            ishape = int(float(t4[1])) if len(t4) > 1 else 0
 
     model.pblast_loads[block.user_id] = PBlastLoad(
         id=block.user_id, title=title, surf_id=surf_id, exp_data=exp_data,
         i_tshift=i_tshift, ndt=ndt, iz=iz, imodel=imodel, node_id=node_id,
-        xdet=xdet, ydet=ydet, zdet=zdet, tdet=tdet, wtnt=wtnt, pmin=pmin
+        xdet=xdet, ydet=ydet, zdet=zdet, tdet=tdet, wtnt=wtnt, pmin=pmin,
+        tstop=tstop, surf_ground_id=surf_ground_id, ishape=ishape,
     )
+
+
+def read_det(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INIT/DET_POINT``, ``/INIT/DET_LINE``, ``/INIT/DET_PLAN``, ``/INIT/DET_CORD``,
+    or ``/DET_POINT``, ``/DET_LINE``, ``/DET_PLAN``, ``/DET_CORD`` (M110):
+    High-explosive detonation wavefront initialization.
+    """
+    from ..model.entities import DetonationWave
+    key0 = block.key0
+    sub = ""
+    if key0.startswith("DET_"):
+        sub = key0[4:]
+    elif key0 == "DET" and len(block.parts) > 1 and not block.parts[1].isdigit():
+        sub = block.parts[1].upper()
+    elif key0 in ("INIT", "LOAD") and len(block.parts) > 1:
+        p1 = block.parts[1].upper()
+        if p1.startswith("DET_"):
+            sub = p1[4:]
+        elif p1 == "DET" and len(block.parts) > 2 and not block.parts[2].isdigit():
+            sub = block.parts[2].upper()
+        elif p1 in ("POINT", "LINE", "PLAN", "CORD"):
+            sub = p1
+    if not sub:
+        parts_str = "_".join(block.parts).upper()
+        if "POINT" in parts_str:
+            sub = "POINT"
+        elif "LINE" in parts_str:
+            sub = "LINE"
+        elif "PLAN" in parts_str:
+            sub = "PLAN"
+        elif "CORD" in parts_str:
+            sub = "CORD"
+        else:
+            sub = "POINT"
+
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/{key0}/{sub}/{block.user_id}: missing data cards", block.source)
+        return
+
+    det = DetonationWave(id=block.user_id, kind=sub, title=title)
+    if sub == "POINT":
+        if block.fixed:
+            c = cards[0].cut("DET_POINT_1")
+            det.x = _fval(c[0])
+            det.y = _fval(c[1])
+            det.z = _fval(c[2])
+            det.tdet = _fval(c[3])
+            det.mat_id = _ival(c[4])
+        else:
+            t = cards[0].tokens()
+            det.x = float(t[0]) if len(t) > 0 else 0.0
+            det.y = float(t[1]) if len(t) > 1 else 0.0
+            det.z = float(t[2]) if len(t) > 2 else 0.0
+            det.tdet = float(t[3]) if len(t) > 3 else 0.0
+            det.mat_id = int(float(t[4])) if len(t) > 4 else 0
+    elif sub == "LINE":
+        if block.fixed:
+            c = cards[0].cut("DET_LINE_1")
+            det.x = _fval(c[0])
+            det.y = _fval(c[1])
+            det.z = _fval(c[2])
+            det.x2 = _fval(c[3])
+            det.y2 = _fval(c[4])
+            det.z2 = _fval(c[5])
+            det.tdet = _fval(c[6])
+            det.mat_id = _ival(c[7])
+            det.ddet = _fval(c[8])
+        else:
+            t = cards[0].tokens()
+            det.x = float(t[0]) if len(t) > 0 else 0.0
+            det.y = float(t[1]) if len(t) > 1 else 0.0
+            det.z = float(t[2]) if len(t) > 2 else 0.0
+            det.x2 = float(t[3]) if len(t) > 3 else 0.0
+            det.y2 = float(t[4]) if len(t) > 4 else 0.0
+            det.z2 = float(t[5]) if len(t) > 5 else 0.0
+            det.tdet = float(t[6]) if len(t) > 6 else 0.0
+            det.mat_id = int(float(t[7])) if len(t) > 7 else 0
+            det.ddet = float(t[8]) if len(t) > 8 else 0.0
+    elif sub == "PLAN":
+        if block.fixed:
+            c = cards[0].cut("DET_PLAN_1")
+            det.x = _fval(c[0])
+            det.y = _fval(c[1])
+            det.z = _fval(c[2])
+            det.x2 = _fval(c[3])
+            det.y2 = _fval(c[4])
+            det.z2 = _fval(c[5])
+            det.tdet = _fval(c[6])
+            det.mat_id = _ival(c[7])
+            det.ddet = _fval(c[8])
+        else:
+            t = cards[0].tokens()
+            det.x = float(t[0]) if len(t) > 0 else 0.0
+            det.y = float(t[1]) if len(t) > 1 else 0.0
+            det.z = float(t[2]) if len(t) > 2 else 0.0
+            det.x2 = float(t[3]) if len(t) > 3 else 0.0
+            det.y2 = float(t[4]) if len(t) > 4 else 0.0
+            det.z2 = float(t[5]) if len(t) > 5 else 0.0
+            det.tdet = float(t[6]) if len(t) > 6 else 0.0
+            det.mat_id = int(float(t[7])) if len(t) > 7 else 0
+            det.ddet = float(t[8]) if len(t) > 8 else 0.0
+    elif sub == "CORD":
+        if block.fixed:
+            c = cards[0].cut("DET_CORD_1")
+            det.ddet = _fval(c[0])
+            det.iopt = _ival(c[1])
+            det.tdet = _fval(c[2])
+            det.mat_id = _ival(c[3])
+        else:
+            t = cards[0].tokens()
+            det.ddet = float(t[0]) if len(t) > 0 else 0.0
+            det.iopt = int(float(t[1])) if len(t) > 1 else 0
+            det.tdet = float(t[2]) if len(t) > 2 else 0.0
+            det.mat_id = int(float(t[3])) if len(t) > 3 else 0
+
+    model.detonations.append(det)
+
+
+def read_activ(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ACTIV/activ_id`` (M110): Dynamic element activation/deactivation.
+    
+    Fortran origin: ``starter/source/tools/activ/hm_read_activ.F``.
+    """
+    from ..model.entities import ElementActivation
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/ACTIV/{block.user_id}: missing data cards", block.source)
+        return
+
+    act = ElementActivation(id=block.user_id, title=title)
+    if block.fixed:
+        c1 = cards[0].cut("ACTIV_1")
+        act.sens_id = _ival(c1[0]) if len(c1) > 0 else 0
+        act.grbric_id = _ival(c1[1]) if len(c1) > 1 else 0
+        act.grquad_id = _ival(c1[2]) if len(c1) > 2 else 0
+        act.grshel_id = _ival(c1[3]) if len(c1) > 3 else 0
+        act.grtrus_id = _ival(c1[4]) if len(c1) > 4 else 0
+        act.grbeam_id = _ival(c1[5]) if len(c1) > 5 else 0
+        act.grspri_id = _ival(c1[6]) if len(c1) > 6 else 0
+        act.grsh3n_id = _ival(c1[7]) if len(c1) > 7 else 0
+        act.iform = _ival(c1[9], 1) if len(c1) > 9 and c1[9].strip() else 1
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("ACTIV_2")
+            act.tstart = _fval(c2[0]) if len(c2) > 0 else 0.0
+            act.tstop = _fval(c2[1], 1.0e30) if len(c2) > 1 and c2[1].strip() else 1.0e30
+    else:
+        t1 = cards[0].tokens()
+        act.sens_id = int(float(t1[0])) if len(t1) > 0 else 0
+        act.grbric_id = int(float(t1[1])) if len(t1) > 1 else 0
+        act.grquad_id = int(float(t1[2])) if len(t1) > 2 else 0
+        act.grshel_id = int(float(t1[3])) if len(t1) > 3 else 0
+        act.grtrus_id = int(float(t1[4])) if len(t1) > 4 else 0
+        act.grbeam_id = int(float(t1[5])) if len(t1) > 5 else 0
+        act.grspri_id = int(float(t1[6])) if len(t1) > 6 else 0
+        act.grsh3n_id = int(float(t1[7])) if len(t1) > 7 else 0
+        act.iform = int(float(t1[8])) if len(t1) > 8 else 1
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            act.tstart = float(t2[0]) if len(t2) > 0 else 0.0
+            act.tstop = float(t2[1]) if len(t2) > 1 else 1.0e30
+
+    model.activations.append(act)
+
 
 
 def read_perturb(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -9737,6 +10094,15 @@ def read_inispr(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.warning(f"/INISPR/{sub} not ported — block skipped", block.source)
 
 
+def read_init(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INIT/<subtype>/id`` dispatcher (M110)."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub.startswith("DET") or sub in ("POINT", "LINE", "PLAN", "CORD"):
+        read_det(block, model, log)
+    else:
+        log.warning(f"/INIT/{sub} not ported", block.source)
+
+
 KEYWORD_PARSERS: Dict[str, Callable] = {
     "MONVOL": read_monvol,
     "ANALY": read_analy,
@@ -9869,7 +10235,15 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "INCLUDE_DYNA": read_includedyna,
     "INCLUDE_LS-DYNA": read_includedyna,
     "INCL_DYNA": read_includedyna,
+    "INIT": read_init,
+    "DET_POINT": read_det,
+    "DET_LINE": read_det,
+    "DET_PLAN": read_det,
+    "DET_CORD": read_det,
+    "DET": read_det,
+    "ACTIV": read_activ,
 }
+
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "H3D", "MON", "PARITH", "PRINT", "RFILE", "RUN", "STATE", "STOP", "TFILE", "VERS"

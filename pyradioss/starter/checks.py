@@ -715,6 +715,24 @@ def check_model(model: Model, log: MessageLog) -> None:
                 if mid > 0 and mid not in model.materials:
                     log.error(f"/PROP/{pid}: material {mid} not defined in layer", "CROSS REF")
 
+    # M110: Detonation Wavefronts, Air Blast Loading & Dynamic Element Activation
+    for det in getattr(model, "detonations", []):
+        if det.mat_id > 0 and det.mat_id not in model.materials:
+            log.error(f"/INIT/DET_{det.kind}/{det.id}: material {det.mat_id} not defined", "CROSS REF")
+
+    for pbid, pb in getattr(model, "pblast_loads", {}).items():
+        if pb.surf_id > 0 and pb.surf_id not in model.surfaces:
+            log.error(f"/LOAD/PBLAST/{pbid}: surface {pb.surf_id} not defined", "CROSS REF")
+        if pb.surf_ground_id > 0 and pb.surf_ground_id not in model.surfaces:
+            log.error(f"/LOAD/PBLAST/{pbid}: ground surface {pb.surf_ground_id} not defined", "CROSS REF")
+        if pb.node_id > 0 and pb.node_id not in model._id2idx:
+            log.error(f"/LOAD/PBLAST/{pbid}: node {pb.node_id} not defined", "CROSS REF")
+
+    for act in getattr(model, "activations", []):
+        if act.sens_id > 0 and act.sens_id not in sensor_ids:
+            log.error(f"/ACTIV/{act.id}: sensor {act.sens_id} not defined", "CROSS REF")
+
+
 
 
 

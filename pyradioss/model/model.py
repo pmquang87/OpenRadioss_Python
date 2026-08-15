@@ -664,6 +664,8 @@ class Model:
         self.inibri_erefs: List[IniBriEref] = []       # /INIBRI/EREF (M107)
         self.dyna_includes: List[IncludeDyna] = []     # /INCLUDE_DYNA (M107)
         self.monvol_fvmbags: Dict[int, MonvolFvmBag1] = {} # /MONVOL/FVMBAG1 (M108)
+        self.detonations: List[DetonationWave] = []    # /INIT/DET_* (M110)
+        self.activations: List[ElementActivation] = [] # /ACTIV (M110)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
