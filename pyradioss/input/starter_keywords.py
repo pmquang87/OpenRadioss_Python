@@ -1830,11 +1830,21 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             c3 = cards[2].cut("FAIL_PUCK_3") if block.fixed else cards[2].tokens()
             fcut = _fval(c3[0]) if len(c3) > 0 else 0.0
 
+        fail_id = 0
+        if len(cards) > 3 and not cards[3].is_blank:
+            fail_id = _ival(cards[3].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[3].tokens()[0]))
+
         params = {
             "sigma_1t": s1t, "sigma_2t": s2t, "sigma_12": s12, "sigma_1c": s1c, "sigma_2c": s2c,
             "p12_pos": p12_pos, "p12_neg": p12_neg, "p22_neg": p22_neg, "tau_max": tau_max,
-            "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fcut": fcut,
+            "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fcut": fcut, "fail_id": fail_id,
         }
+        from ..model.entities import FailPuck
+        model.fail_pucks[mat_id] = FailPuck(
+            mat_id=mat_id, sigma_1t=s1t, sigma_2t=s2t, sigma_12=s12, sigma_1c=s1c, sigma_2c=s2c,
+            p12_pos=p12_pos, p12_neg=p12_neg, p22_neg=p22_neg, tau_max=tau_max,
+            ifail_sh=ifail_sh, ifail_so=ifail_so, fcut=fcut, fail_id=fail_id,
+        )
         fm = FailureModel(type="PUCK", ifail_sh=ifail_sh, params=params)
     elif kind == "RTCL":
         c1 = cards[0].cut("FAIL_RTCL_1") if block.fixed else cards[0].tokens()
@@ -1868,12 +1878,23 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             max_comp_strain = _fval(c2[2]) if len(c2) > 2 else 0.0
             ratio = _fval(c2[3]) if len(c2) > 3 else 0.0
 
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0]))
+
         params = {
             "fct_ratio": fct_ratio, "num": num, "den": den, "ordi": ordi,
             "vol_strain": vol_strain, "fct_elsize": fct_elsize, "el_ref": el_ref,
             "comp_dir": comp_dir, "idel": idel, "max_comp_strain": max_comp_strain,
-            "ratio": ratio,
+            "ratio": ratio, "fail_id": fail_id,
         }
+        from ..model.entities import FailSahraei
+        model.fail_sahraeis[mat_id] = FailSahraei(
+            mat_id=mat_id, fct_ratio=fct_ratio, num=num, den=den, ordi=ordi,
+            vol_strain=vol_strain, fct_elsize=fct_elsize, el_ref=el_ref,
+            comp_dir=comp_dir, idel=idel, max_comp_strain=max_comp_strain,
+            ratio=ratio, fail_id=fail_id,
+        )
         fm = FailureModel(type="SAHRAEI", ifail_sh=1, params=params)
     elif kind == "SYAZWAN":
         c1 = cards[0].cut("FAIL_SYAZWAN_1") if block.fixed else cards[0].tokens()
@@ -1885,7 +1906,15 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             c2 = cards[1].cut("FAIL_SYAZWAN_2") if block.fixed else cards[1].tokens()
             c2_vals = [_fval(v) for v in c2]
 
-        params = {"icard": icard, "epfmin": epfmin, "coeffs": c2_vals}
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0]))
+
+        params = {"icard": icard, "epfmin": epfmin, "coeffs": c2_vals, "fail_id": fail_id}
+        from ..model.entities import FailSyazwan
+        model.fail_syazwans[mat_id] = FailSyazwan(
+            mat_id=mat_id, icard=icard, epfmin=epfmin, coeffs=c2_vals, fail_id=fail_id,
+        )
         fm = FailureModel(type="SYAZWAN", ifail_sh=1, params=params)
     elif kind == "TAB2":
         c1 = cards[0].cut("FAIL_TAB2_1") if block.fixed else cards[0].tokens()
@@ -1909,11 +1938,21 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             exp_ref = _fval(c3[1]) if len(c3) > 1 else 0.0
             exp_val = _fval(c3[2]) if len(c3) > 2 else 0.0
 
+        fail_id = 0
+        if len(cards) > 3 and not cards[3].is_blank:
+            fail_id = _ival(cards[3].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[3].tokens()[0]))
+
         params = {
             "epsf_id": epsf_id, "fcrit": fcrit, "failip": failip, "pthk": pthk,
             "n": n, "dcrit": dcrit, "inst_id": inst_id, "ecrit": ecrit,
-            "fct_exp": fct_exp, "exp_ref": exp_ref, "exp": exp_val,
+            "fct_exp": fct_exp, "exp_ref": exp_ref, "exp": exp_val, "fail_id": fail_id,
         }
+        from ..model.entities import FailTab2
+        model.fail_tab2s[mat_id] = FailTab2(
+            mat_id=mat_id, epsf_id=epsf_id, fcrit=fcrit, failip=failip, pthk=pthk,
+            n=n, dcrit=dcrit, inst_id=inst_id, ecrit=ecrit,
+            fct_exp=fct_exp, exp_ref=exp_ref, exp=exp_val, fail_id=fail_id,
+        )
         fm = FailureModel(type="TAB2", ifail_sh=1, params=params)
     elif kind == "GENE1":
         c1 = cards[0].cut("FAIL_GENE1_1") if block.fixed else cards[0].tokens()
@@ -1941,11 +1980,23 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             eps_eff = _fval(c3[4] if block.fixed else (c3[3] if len(c3) > 3 else 0.0)) if len(c3) > (4 if block.fixed else 3) else 0.0
             eps_vol = _fval(c3[5] if block.fixed else (c3[4] if len(c3) > 4 else 0.0)) if len(c3) > (5 if block.fixed else 4) else 0.0
 
+        fail_id = 0
+        if len(cards) > 3 and not cards[3].is_blank:
+            fail_id = _ival(cards[3].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[3].tokens()[0]))
+
         params = {
             "pmin": pmin, "pmax": pmax, "sigp1_max": sigp1_max, "time_max": time_max, "dtmin": dtmin,
             "fct_idsm": fct_idsm, "eps_dot_sm": eps_dot_sm, "sig_max": sig_max, "sigr": sigr, "k": k,
             "fct_idps": fct_idps, "eps_dot_ps": eps_dot_ps, "eps_max": eps_max, "eps_eff": eps_eff, "eps_vol": eps_vol,
+            "fail_id": fail_id,
         }
+        from ..model.entities import FailGene1
+        model.fail_gene1s[mat_id] = FailGene1(
+            mat_id=mat_id, pmin=pmin, pmax=pmax, sigp1_max=sigp1_max, time_max=time_max, dtmin=dtmin,
+            fct_idsm=fct_idsm, eps_dot_sm=eps_dot_sm, sig_max=sig_max, sigr=sigr, k=k,
+            fct_idps=fct_idps, eps_dot_ps=eps_dot_ps, eps_max=eps_max, eps_eff=eps_eff, eps_vol=eps_vol,
+            fail_id=fail_id,
+        )
         fm = FailureModel(type="GENE1", ifail_sh=1, params=params)
     elif kind == "INIEVO":
         c1 = cards[0].cut("FAIL_INIEVO_1") if block.fixed else cards[0].tokens()
@@ -7791,7 +7842,7 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "SHELL", "SOLID", "QUAD", "SURF", "LINE", "ACCEL", "BOX",
         "NSTRAND", "STRAND", "SPHCEL", "SPH", "MODE", "CYL_JO", "CYL_JOINT",
         "FXBODY", "GAUGE", "GRSHEL", "GRBRIC", "GRQUAD", "GRSH3N",
-        "GRBEAM", "GRTRUS", "GRSPRI"
+        "GRBEAM", "GRTRUS", "GRSPRI", "SENSOR", "CLUSTER"
     }
     kind = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
     if kind == "TITLE":

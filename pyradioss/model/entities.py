@@ -3103,6 +3103,109 @@ class FailGurson:
     fail_id: int = 0
 
 
+@dataclass
+class FailPuck:
+    """/FAIL/PUCK (M126): Puck composite failure model.
+
+    Fortran origin: ``starter/source/materials/fail/fail_puck.F`` / CFG ``fail_puck.cfg``.
+    """
+    mat_id: int
+    sigma_1t: float = 0.0
+    sigma_2t: float = 0.0
+    sigma_12: float = 0.0
+    sigma_1c: float = 0.0
+    sigma_2c: float = 0.0
+    p12_pos: float = 0.0
+    p12_neg: float = 0.0
+    p22_neg: float = 0.0
+    tau_max: float = 0.0
+    ifail_sh: int = 1
+    ifail_so: int = 1
+    fcut: float = 0.0
+    fail_id: int = 0
+
+
+@dataclass
+class FailSahraei:
+    """/FAIL/SAHRAEI (M126): Sahraei failure model.
+
+    Fortran origin: ``starter/source/materials/fail/fail_sahraei.F`` / CFG ``fail_sahraei.cfg``.
+    """
+    mat_id: int
+    fct_ratio: int = 0
+    num: int = 0
+    den: int = 0
+    ordi: int = 0
+    vol_strain: float = 0.0
+    fct_elsize: int = 0
+    el_ref: float = 0.0
+    comp_dir: int = 0
+    idel: int = 0
+    max_comp_strain: float = 0.0
+    ratio: float = 0.0
+    fail_id: int = 0
+
+
+@dataclass
+class FailSyazwan:
+    """/FAIL/SYAZWAN (M126): Syazwan fracture and damage failure model.
+
+    Fortran origin: ``starter/source/materials/fail/fail_syazwan.F`` / CFG ``fail_syazwan.cfg``.
+    """
+    mat_id: int
+    icard: int = 0
+    epfmin: float = 0.0
+    coeffs: List[float] = field(default_factory=list)
+    fail_id: int = 0
+
+
+@dataclass
+class FailTab2:
+    """/FAIL/TAB2 (M126): Tabulated failure model Version 2.
+
+    Fortran origin: ``starter/source/materials/fail/fail_tab2.F`` / CFG ``fail_tab2.cfg``.
+    """
+    mat_id: int
+    epsf_id: int = 0
+    fcrit: float = 0.0
+    failip: int = 0
+    pthk: float = 0.0
+    n: float = 0.0
+    dcrit: float = 0.0
+    inst_id: int = 0
+    ecrit: float = 0.0
+    fct_exp: int = 0
+    exp_ref: float = 0.0
+    exp: float = 0.0
+    fail_id: int = 0
+
+
+@dataclass
+class FailGene1:
+    """/FAIL/GENE1 (M126): General multi-criteria failure model.
+
+    Fortran origin: ``starter/source/materials/fail/fail_gene1.F`` / CFG ``fail_gene1.cfg``.
+    """
+    mat_id: int
+    pmin: float = 0.0
+    pmax: float = 0.0
+    sigp1_max: float = 0.0
+    time_max: float = 0.0
+    dtmin: float = 0.0
+    fct_idsm: int = 0
+    eps_dot_sm: float = 0.0
+    sig_max: float = 0.0
+    sigr: float = 0.0
+    k: float = 0.0
+    fct_idps: int = 0
+    eps_dot_ps: float = 0.0
+    eps_max: float = 0.0
+    eps_eff: float = 0.0
+    eps_vol: float = 0.0
+    fail_id: int = 0
+
+
+
 
 
 

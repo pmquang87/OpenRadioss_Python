@@ -66,6 +66,7 @@ from .entities import (
     GaugePoint, SphGlo, AnalyOptions, AleCfdSph,
     FailOrthBiquad, SlipringShell,
     EbcsNrf, FailRtcl, FailGurson,
+    FailPuck, FailSahraei, FailSyazwan, FailTab2, FailGene1,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -772,6 +773,11 @@ class Model:
         self.ebcs_nrfs: Dict[int, EbcsNrf] = {}               # /EBCS/NRF (M125)
         self.fail_rtcls: Dict[int, FailRtcl] = {}             # /FAIL/RTCL (M125)
         self.fail_gursons: Dict[int, FailGurson] = {}         # /FAIL/GURSON (M125)
+        self.fail_pucks: Dict[int, FailPuck] = {}             # /FAIL/PUCK (M126)
+        self.fail_sahraeis: Dict[int, FailSahraei] = {}       # /FAIL/SAHRAEI (M126)
+        self.fail_syazwans: Dict[int, FailSyazwan] = {}       # /FAIL/SYAZWAN (M126)
+        self.fail_tab2s: Dict[int, FailTab2] = {}             # /FAIL/TAB2 (M126)
+        self.fail_gene1s: Dict[int, FailGene1] = {}           # /FAIL/GENE1 (M126)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
