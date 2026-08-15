@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M124)
+## What is implemented (M1 → M125)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -130,6 +130,7 @@ real history is 41 milestones. One line each:
 | M122 | Add 20-node quadratic bricks (/BRIC20, /HEXA20, /PROP/TYPE23, /GRBR20), coupled ALE/CFD/SPH interaction (/ALECFDSPH), and tensor animation requests (/ANIM/*/TENS) |
 | M123 | Add /FAIL/ORTHBIQUAD (orthotropic biquadratic failure), /SLIPRING/SHELL (seatbelt shell sliprings), /SET/* entity set aliases, and extended Engine /STOP controls (/STOP/NSTEP, /STOP/TSTOP, /STOP/TIMET) |
 | M124 | Add advanced spring properties (/PROP/TYPE26 SPR_TAB, /PROP/TYPE27 SPR_BDAMP, /PROP/SPR_MAT), /INTER/TYPE22 fluid-structure interface, and /DEF_INTER/TYPE19 defaults |
+| M125 | Add non-reflecting boundary conditions (/EBCS/NRF), /FAIL/RTCL & /FAIL/GURSON failure models, and /DEF_INTER/TYPE24 contact defaults |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

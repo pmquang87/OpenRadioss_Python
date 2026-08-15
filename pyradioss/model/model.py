@@ -65,6 +65,7 @@ from .entities import (
     NbcsBlock, NbcsNode, AleMuscl, BemModel,
     GaugePoint, SphGlo, AnalyOptions, AleCfdSph,
     FailOrthBiquad, SlipringShell,
+    EbcsNrf, FailRtcl, FailGurson,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -768,6 +769,9 @@ class Model:
         self.alecfdsph: Optional[AleCfdSph] = None          # /ALECFDSPH (M122)
         self.fail_orthbiquads: Dict[int, FailOrthBiquad] = {} # /FAIL/ORTHBIQUAD (M123)
         self.slipring_shells: Dict[int, SlipringShell] = {}   # /SLIPRING/SHELL (M123)
+        self.ebcs_nrfs: Dict[int, EbcsNrf] = {}               # /EBCS/NRF (M125)
+        self.fail_rtcls: Dict[int, FailRtcl] = {}             # /FAIL/RTCL (M125)
+        self.fail_gursons: Dict[int, FailGurson] = {}         # /FAIL/GURSON (M125)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

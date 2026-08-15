@@ -3055,6 +3055,55 @@ class SlipringShell:
     title: str = ""
 
 
+@dataclass
+class EbcsNrf:
+    """/EBCS/NRF or /EBCS/NON_REFLECT (M125): Non-reflecting frontier boundary condition.
+
+    Fortran origin: ``starter/source/loads/ebcs/hm_read_ebcs_nrf.F`` / CFG ``ebcs_nrf.cfg``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    tcar_p: float = 0.0
+    tcar_vf: float = 0.0
+
+
+@dataclass
+class FailRtcl:
+    """/FAIL/RTCL (M125): RTCL ductile failure model.
+
+    Fortran origin: ``starter/source/materials/fail/fail_rtcl.F`` / CFG ``fail_rtcl.cfg``.
+    """
+    mat_id: int
+    epscal: float = 0.0
+    inst: int = 0
+    n: float = 0.0
+    fail_id: int = 0
+
+
+@dataclass
+class FailGurson:
+    """/FAIL/GURSON (M125): Gurson-Tvergaard-Needleman porous plasticity failure model.
+
+    Fortran origin: ``starter/source/materials/fail/fail_gurson.F`` / CFG ``fail_gurson.cfg``.
+    """
+    mat_id: int
+    q1: float = 0.0
+    q2: float = 0.0
+    iloc: int = 1
+    eps_n: float = 0.0
+    a_s: float = 0.0
+    k_w: float = 0.0
+    f_c: float = 0.0
+    f_r: float = 0.0
+    f_0: float = 0.0
+    r_len: float = 0.0
+    h_chi: float = 0.0
+    le_max: float = 0.0
+    fail_id: int = 0
+
+
+
 
 
 

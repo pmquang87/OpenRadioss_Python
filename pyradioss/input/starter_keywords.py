@@ -1711,17 +1711,31 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         f_r = c3[1] if len(c3) > 1 and c3[1] else 0.0
         f_0 = c3[2] if len(c3) > 2 and c3[2] else 0.0
 
-        # Card 4: r_len, h_chi
-        c4 = _cut_floats(cards[3], "FAIL_GURSON_4") if block.fixed and len(cards) > 3 else (_floats(cards[3], 2) if len(cards) > 3 else [0.0, 0.0])
+        # Card 4: r_len, h_chi, le_max
+        c4 = _cut_floats(cards[3], "FAIL_GURSON_4") if block.fixed and len(cards) > 3 else (_floats(cards[3], 3) if len(cards) > 3 else [0.0, 0.0, 0.0])
         r_len = c4[0] if len(c4) > 0 and c4[0] else 0.0
         h_chi = c4[1] if len(c4) > 1 and c4[1] else 0.0
+
+        le_max = 0.0
+        if len(c4) > 2:
+            le_max = c4[2] if c4[2] else 0.0
+        fail_id = 0
+        if len(cards) > 4 and not cards[4].is_blank:
+            fail_id = _ival(cards[4].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[4].tokens()[0]))
 
         params = {
             "q1": q1, "q2": q2, "iloc": iloc,
             "eps_n": eps_n, "a_s": a_s, "k_w": k_w,
             "f_c": f_c, "f_r": f_r, "f_0": f_0,
-            "r_len": r_len, "h_chi": h_chi,
+            "r_len": r_len, "h_chi": h_chi, "le_max": le_max,
+            "fail_id": fail_id,
         }
+        from ..model.entities import FailGurson
+        model.fail_gursons[mat_id] = FailGurson(
+            mat_id=mat_id, q1=q1, q2=q2, iloc=iloc,
+            eps_n=eps_n, a_s=a_s, k_w=k_w, f_c=f_c, f_r=f_r, f_0=f_0,
+            r_len=r_len, h_chi=h_chi, le_max=le_max, fail_id=fail_id,
+        )
         fm = FailureModel(type="GURSON", ifail_sh=1, params=params)
     elif kind == "ALTER":
         # Card 1: Exp_n, V0, Vc, EMA, Irate, Iside, mode
@@ -1827,7 +1841,14 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         epscal = _fval(c1[0]) if len(c1) > 0 else 0.0
         inst = _ival(c1[1]) if len(c1) > 1 else 0
         n = _fval(c1[2]) if len(c1) > 2 else 0.0
-        params = {"epscal": epscal, "inst": inst, "n": n}
+        fail_id = 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            fail_id = _ival(cards[1].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[1].tokens()[0]))
+        params = {"epscal": epscal, "inst": inst, "n": n, "fail_id": fail_id}
+        from ..model.entities import FailRtcl
+        model.fail_rtcls[mat_id] = FailRtcl(
+            mat_id=mat_id, epscal=epscal, inst=inst, n=n, fail_id=fail_id,
+        )
         fm = FailureModel(type="RTCL", ifail_sh=1, params=params)
     elif kind == "SAHRAEI":
         c1 = cards[0].cut("FAIL_SAHRAEI_1") if block.fixed else cards[0].tokens()
@@ -8007,6 +8028,7 @@ def read_def_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             'istf': _iv_from(vals, 0), 'igap': _iv_from(vals, 1), 'irem_i2': _iv_from(vals, 2),
             'idel': _iv_from(vals, 3), 'itied': _iv_from(vals, 4), 'ishape': _iv_from(vals, 5),
             'irs': _iv_from(vals, 6), 'iedge': _iv_from(vals, 7),
+            'ipen': _iv_from(vals, 8) if len(vals) > 8 else 0,
         }
     else:  # TYPE25 or default
         vals = c.cut("DEF_INTER_25") if block.fixed else c.tokens()
@@ -8490,11 +8512,49 @@ def read_ebcs_propellant(block: KeywordBlock, model: Model, log: MessageLog) -> 
     )
 
 
+def read_ebcs_nrf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/NRF`` or ``/EBCS/NON_REFLECT`` (M125): Non-reflecting frontier boundary condition."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/EBCS/NRF/{block.user_id}: missing data card", block.source)
+        return
+
+    surf_id = 0
+    tcar_p, tcar_vf = 0.0, 0.0
+    from ..model.entities import EbcsNrf
+
+    if block.fixed:
+        f0 = cards[0].cut("EBCS_NRF_1")
+        surf_id = _ival(f0[0]) if len(f0) > 0 else 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f1 = cards[1].cut("EBCS_NRF_2")
+            tcar_p = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+            tcar_vf = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+    else:
+        t0 = cards[0].tokens()
+        surf_id = int(float(t0[0])) if len(t0) > 0 else 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            t1 = cards[1].tokens()
+            tcar_p = float(t1[0]) if len(t1) > 0 else 0.0
+            tcar_vf = float(t1[1]) if len(t1) > 1 else 0.0
+
+    ebcs_id = block.user_id if block.user_id is not None else 1
+    model.ebcs_nrfs[ebcs_id] = EbcsNrf(
+        id=ebcs_id,
+        title=title,
+        surf_id=surf_id,
+        tcar_p=tcar_p,
+        tcar_vf=tcar_vf,
+    )
+
+
 def read_ebcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/EBCS/<subtype>/id`` dispatcher (M114)."""
+    """``/EBCS/<subtype>/id`` dispatcher (M114, M125)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub == "PROPELLANT":
         read_ebcs_propellant(block, model, log)
+    elif sub in ("NRF", "NON_REFLECT", "NONREFLECT"):
+        read_ebcs_nrf(block, model, log)
     else:
         read_bcs(block, model, log)
 

@@ -227,7 +227,7 @@ LAYOUTS: Dict[str, List[int]] = {
     "FAIL_GURSON_1": [20, 20, 50, 10],
     "FAIL_GURSON_2": [20, 20, 20],
     "FAIL_GURSON_3": [20, 20, 20],
-    "FAIL_GURSON_4": [20, 20],
+    "FAIL_GURSON_4": [20, 20, 20],
     # fail_alter.cfg (radioss2021):
     "FAIL_ALTER_1": [20, 20, 20, 10, 10, 10, 10],
     "FAIL_ALTER_2": [20, 20, 20, 20, 10, 10],
@@ -1078,6 +1078,12 @@ LAYOUTS: Dict[str, List[int]] = {
     "PROP_SPR_TAB_2": [20, 20, 20, 20],
     "PROP_SPR_MAT_1": [10, 20, 20, 20, 10, 10, 10],
     "INTER_TYPE22_1": [10, 10],
+
+    # EBCS/NRF, FAIL/RTCL, DEF_INTER/TYPE24 (M125)
+    "EBCS_NRF_1": [10],
+    "EBCS_NRF_2": [20, 20],
+    "FAIL_RTCL_1": [20, 10, 20],
+    "FAIL_RTCL_2": [10],
 }
 
 
