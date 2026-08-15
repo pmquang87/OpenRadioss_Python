@@ -674,6 +674,31 @@ LAYOUTS: Dict[str, List[int]] = {
 
     # INISTATE (M104)
     "INISTATE_1": [10, 10],
+
+    # MONVOL (M105)
+    "MONVOL_PRES_1": [10, 20, 20, 10],
+    "MONVOL_GAS_1": [10, 10, 20],
+    "MONVOL_GAS_2": [20, 20, 20, 20, 20],
+    "MONVOL_GAS_3": [20, 20, 20, 20, 20],
+    "MONVOL_GAS_4": [20, 20, 20, 20, 20],
+    "MONVOL_COMMU_1": [10, 10, 20],
+    "MONVOL_COMMU_2": [20, 20, 20, 20, 20],
+    "MONVOL_COMMU_3": [10, 10, 20, 20, 20, 10, 10],
+    "MONVOL_LFLUID_1": [10],
+    "MONVOL_LFLUID_2": [20, 20],
+    "MONVOL_LFLUID_3": [20],
+    "MONVOL_LFLUID_4": [10, 10, 20, 20],
+
+    # LEAK (M105)
+    "LEAK_1": [10, 20, 20],
+    "LEAK_2": [20, 10, 20],
+    "LEAK_3": [20, 20, 10, 10, 20, 20],
+
+    # ALE (M105)
+    "ALE_GRID_1": [20, 20, 20, 20],
+    "ALE_LINK_1": [10, 10, 20],
+    "ALE_SOLVER_1": [10, 10],
+    "ALE_CLOS_1": [20, 20],
 }
 
 

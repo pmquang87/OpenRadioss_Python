@@ -47,6 +47,8 @@ from ..model.entities import (
     PcylLoad, PfluidLoad, Preload, PreloadAxial, DampInter, DampRange,
     AnalyGlobal, UpwindGlobal, CaaControl,
     Gauge, Cluster, ExtLink, FxBody, IniGrav, IniMap1D, IniMap2D, IniStateFile,
+    MonvolPres, MonvolGas, MonvolCommu1, MonvolLFluid, LeakMat,
+    AleGrid, AleLink, AleSolver, AleClose,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -1054,16 +1056,23 @@ def _read_mat_modifier(kind: str, block: KeywordBlock, model: Model,
 def read_ale(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/ALE/MAT/mat_ID`` — parse-only note (M37);
     ``/ALE/BCS/bcs_ID`` — grid boundary conditions (M57);
-    ``/ALE/DONE``, ``/ALE/GRID/...`` — Eulerian phase switch & grid control (M63)."""
+    ``/ALE/DONE``, ``/ALE/GRID/...`` — Eulerian phase switch & grid control (M63, M105);
+    ``/ALE/LINK``, ``/ALE/SOLVER``, ``/ALE/CLOS`` (M105)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub == "MAT":
         _read_mat_modifier("ALE", block, model, log)
     elif sub == "BCS":
         read_ale_bcs(block, model, log)
-    elif sub == "DONE":
+    elif sub in ("DONE", "GRID/DONE"):
         read_ale_done(block, model, log)
-    elif sub == "GRID":
+    elif sub in ("GRID", "STANDARD", "SPRING", "DISP", "LAPLACIAN", "VOLUME", "LAGRANGE") or (len(block.parts) > 2 and block.parts[1].upper() == "GRID"):
         read_ale_grid(block, model, log)
+    elif sub == "LINK" or (len(block.parts) > 2 and block.parts[1].upper() == "LINK"):
+        read_ale_link(block, model, log)
+    elif sub == "SOLVER":
+        read_ale_solver(block, model, log)
+    elif sub in ("CLOS", "CLOSE"):
+        read_ale_close(block, model, log)
     else:
         log.warning(f"/ALE/{sub} not ported — block skipped", block.source)
 
@@ -3091,11 +3100,88 @@ def read_ale_done(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_ale_grid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/ALE/GRID/...`` — parse-only note (M63)."""
-    # Most /ALE/GRID/... cards are just flags or simple parameters.
-    # We can parse them into `model.ale_grids` as parse-only if needed.
-    # For now, just silently skip it so it doesn't fail the deck.
-    pass
+    """``/ALE/GRID/...`` (M63, M105): ALE grid formulation and damping controls."""
+    grid_sub = block.parts[2].upper() if len(block.parts) > 2 else (block.parts[1].upper() if len(block.parts) > 1 else "STANDARD")
+    gid = block.user_id if block.user_id is not None else 1
+    cards = block.cards
+    dt_min, gamma, damp, nu_g = 0.0, 0.0, 0.0, 0.0
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("ALE_GRID_1")
+            dt_min = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            gamma = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            damp = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            nu_g = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        else:
+            toks = cards[0].tokens()
+            dt_min = float(toks[0]) if len(toks) > 0 else 0.0
+            gamma = float(toks[1]) if len(toks) > 1 else 0.0
+            damp = float(toks[2]) if len(toks) > 2 else 0.0
+            nu_g = float(toks[3]) if len(toks) > 3 else 0.0
+
+    model.ale_grids[gid] = AleGrid(
+        id=gid, subtype=grid_sub, dt_min=dt_min,
+        gamma=gamma, damp=damp, nu_g=nu_g,
+    )
+
+
+def read_ale_link(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ALE/LINK[/<subtype>]/link_ID`` (M105): ALE grid velocity link."""
+    lid = block.user_id if block.user_id is not None else 1
+    link_sub = block.parts[2].upper() if len(block.parts) > 2 else "VEL"
+    cards = block.cards
+    if not cards or cards[0].is_blank:
+        return
+    if block.fixed:
+        f = cards[0].cut("ALE_LINK_1")
+        grnod_id = _ival(f[0]) if len(f) > 0 else 0
+        fct_id = _ival(f[1]) if len(f) > 1 else 0
+        scale = _fval(f[2], 1.0) if len(f) > 2 else 1.0
+    else:
+        toks = cards[0].tokens()
+        grnod_id = int(float(toks[0])) if len(toks) > 0 else 0
+        fct_id = int(float(toks[1])) if len(toks) > 1 else 0
+        scale = float(toks[2]) if len(toks) > 2 else 1.0
+
+    model.ale_links[lid] = AleLink(
+        id=lid, subtype=link_sub, grnod_id=grnod_id, fct_id=fct_id,
+        scale=scale,
+    )
+
+
+def read_ale_solver(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ALE/SOLVER`` (M105): Global ALE momentum/interface solver control."""
+    cards = block.cards
+    if not cards or cards[0].is_blank:
+        return
+    if block.fixed:
+        f = cards[0].cut("ALE_SOLVER_1")
+        imom = _ival(f[0]) if len(f) > 0 else 0
+        isfint = _ival(f[1]) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        imom = int(float(toks[0])) if len(toks) > 0 else 0
+        isfint = int(float(toks[1])) if len(toks) > 1 else 0
+
+    model.ale_solver = AleSolver(imom=imom, isfint=isfint)
+
+
+def read_ale_close(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ALE/CLOS`` or ``/ALE/CLOSE`` (M105): ALE mesh closing boundary distance."""
+    cards = block.cards
+    if not cards or cards[0].is_blank:
+        return
+    if block.fixed:
+        f = cards[0].cut("ALE_CLOS_1")
+        htest = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        hclose = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+    else:
+        toks = cards[0].tokens()
+        htest = float(toks[0]) if len(toks) > 0 else 0.0
+        hclose = float(toks[1]) if len(toks) > 1 else 0.0
+
+    model.ale_close = AleClose(htest=htest, hclose=hclose)
+
 
 
 def read_inivel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -6720,8 +6806,20 @@ def read_monvol(block: KeywordBlock, model: Model, log: MessageLog):
     ... (vent lines)
     """
     vol_type = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if vol_type != "AIRBAG1":
-        log.warning(f"/MONVOL/{vol_type} not ported - skipped (supported: AIRBAG1)",
+    if vol_type == "PRES":
+        read_monvol_pres(block, model, log)
+        return
+    elif vol_type == "GAS":
+        read_monvol_gas(block, model, log)
+        return
+    elif vol_type in ("COMMU1", "COMMU"):
+        read_monvol_commu(block, model, log)
+        return
+    elif vol_type == "LFLUID":
+        read_monvol_lfluid(block, model, log)
+        return
+    elif vol_type != "AIRBAG1":
+        log.warning(f"/MONVOL/{vol_type} not ported - skipped (supported: AIRBAG1, PRES, GAS, COMMU1, LFLUID)",
                     block.source)
         return
 
@@ -6868,6 +6966,371 @@ def read_monvol(block: KeywordBlock, model: Model, log: MessageLog):
             card_idx += 3
 
     model.monitored_volumes[block.user_id] = mv
+
+
+def read_monvol_pres(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MONVOL/PRES/monvol_ID`` (M105)::
+
+        card 1:  title
+        card 2:  surf_ID  Fscale  P_ext  fct_ID
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MONVOL/PRES/{block.user_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("MONVOL_PRES_1")
+        surf_id = _ival(f[0]) if len(f) > 0 else 0
+        fscale = _fval(f[1], 1.0) if len(f) > 1 else 1.0
+        p_ext = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        fct_id = _ival(f[3]) if len(f) > 3 else 0
+    else:
+        toks = cards[0].tokens()
+        surf_id = int(float(toks[0])) if len(toks) > 0 else 0
+        fscale = float(toks[1]) if len(toks) > 1 else 1.0
+        p_ext = float(toks[2]) if len(toks) > 2 else 0.0
+        fct_id = int(float(toks[3])) if len(toks) > 3 else 0
+
+    model.monvol_pres[block.user_id] = MonvolPres(
+        id=block.user_id, title=title, surf_id=surf_id, fscale=fscale,
+        p_ext=p_ext, fct_id=fct_id,
+    )
+
+
+def read_monvol_gas(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MONVOL/GAS/monvol_ID`` (M105)::
+
+        card 1:  title
+        card 2:  surf_ID  [gap]  heat_T0
+        card 3:  Scal_T  Scal_P  Scal_S  Scal_A  Scal_D
+        card 4:  GAMMA  MU  Trelax  TINI  Rho_Gas
+        card 5:  PEXT  PINI  PMAX  VINC  MINI
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MONVOL/GAS/{block.user_id}: missing data card", block.source)
+        return
+
+    surf_id = 0
+    heat_t0 = 0.0
+    scal_t, scal_p, scal_s, scal_a, scal_d = 1.0, 1.0, 1.0, 1.0, 1.0
+    gamma, mu, trelax, tini, rho_gas = 1.4, 0.0, 0.0, 293.15, 1.2
+    pext, pini, pmax, vinc, mini = 0.0, 0.0, 0.0, 0.0, 0.0
+
+    if block.fixed:
+        f1 = cards[0].cut("MONVOL_GAS_1")
+        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+        heat_t0 = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MONVOL_GAS_2")
+            scal_t = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+            scal_p = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
+            scal_s = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            scal_a = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+            scal_d = _fval(f2[4], 1.0) if len(f2) > 4 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("MONVOL_GAS_3")
+            gamma = _fval(f3[0], 1.4) if len(f3) > 0 else 1.4
+            mu = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+            trelax = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+            tini = _fval(f3[3], 293.15) if len(f3) > 3 else 293.15
+            rho_gas = _fval(f3[4], 1.2) if len(f3) > 4 else 1.2
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("MONVOL_GAS_4")
+            pext = _fval(f4[0], 0.0) if len(f4) > 0 else 0.0
+            pini = _fval(f4[1], 0.0) if len(f4) > 1 else 0.0
+            pmax = _fval(f4[2], 0.0) if len(f4) > 2 else 0.0
+            vinc = _fval(f4[3], 0.0) if len(f4) > 3 else 0.0
+            mini = _fval(f4[4], 0.0) if len(f4) > 4 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+        heat_t0 = float(t1[1]) if len(t1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            scal_t = float(t2[0]) if len(t2) > 0 else 1.0
+            scal_p = float(t2[1]) if len(t2) > 1 else 1.0
+            scal_s = float(t2[2]) if len(t2) > 2 else 1.0
+            scal_a = float(t2[3]) if len(t2) > 3 else 1.0
+            scal_d = float(t2[4]) if len(t2) > 4 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            gamma = float(t3[0]) if len(t3) > 0 else 1.4
+            mu = float(t3[1]) if len(t3) > 1 else 0.0
+            trelax = float(t3[2]) if len(t3) > 2 else 0.0
+            tini = float(t3[3]) if len(t3) > 3 else 293.15
+            rho_gas = float(t3[4]) if len(t3) > 4 else 1.2
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            t4 = cards[3].tokens()
+            pext = float(t4[0]) if len(t4) > 0 else 0.0
+            pini = float(t4[1]) if len(t4) > 1 else 0.0
+            pmax = float(t4[2]) if len(t4) > 2 else 0.0
+            vinc = float(t4[3]) if len(t4) > 3 else 0.0
+            mini = float(t4[4]) if len(t4) > 4 else 0.0
+
+    model.monvol_gases[block.user_id] = MonvolGas(
+        id=block.user_id, title=title, surf_id=surf_id, heat_t0=heat_t0,
+        scal_t=scal_t, scal_p=scal_p, scal_s=scal_s, scal_a=scal_a,
+        scal_d=scal_d, gamma=gamma, mu=mu, trelax=trelax, tini=tini,
+        rho_gas=rho_gas, pext=pext, pini=pini, pmax=pmax, vinc=vinc,
+        mini=mini,
+    )
+
+
+def read_monvol_commu(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MONVOL/COMMU1/monvol_ID`` (M105)::
+
+        card 1:  title
+        card 2:  surf_ID  [gap]  heat_T0
+        card 3:  Scal_T  Scal_P  Scal_S  Scal_A  Scal_D
+        card 4:  MAT_ID  [gap]  MU  PEXT  T_Initial  Iequil  I_ttf
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MONVOL/COMMU1/{block.user_id}: missing data card", block.source)
+        return
+
+    surf_id = 0
+    heat_t0 = 0.0
+    scal_t, scal_p, scal_s, scal_a, scal_d = 1.0, 1.0, 1.0, 1.0, 1.0
+    mat_id = 0
+    mu, pext, t_initial = 0.0, 0.0, 293.15
+    iequil, ittf = 0, 0
+
+    if block.fixed:
+        f1 = cards[0].cut("MONVOL_COMMU_1")
+        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+        heat_t0 = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MONVOL_COMMU_2")
+            scal_t = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+            scal_p = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
+            scal_s = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            scal_a = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+            scal_d = _fval(f2[4], 1.0) if len(f2) > 4 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("MONVOL_COMMU_3")
+            mat_id = _ival(f3[0]) if len(f3) > 0 else 0
+            mu = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+            pext = _fval(f3[3], 0.0) if len(f3) > 3 else 0.0
+            t_initial = _fval(f3[4], 293.15) if len(f3) > 4 else 293.15
+            iequil = _ival(f3[5]) if len(f3) > 5 else 0
+            ittf = _ival(f3[6]) if len(f3) > 6 else 0
+    else:
+        t1 = cards[0].tokens()
+        surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+        heat_t0 = float(t1[1]) if len(t1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            scal_t = float(t2[0]) if len(t2) > 0 else 1.0
+            scal_p = float(t2[1]) if len(t2) > 1 else 1.0
+            scal_s = float(t2[2]) if len(t2) > 2 else 1.0
+            scal_a = float(t2[3]) if len(t2) > 3 else 1.0
+            scal_d = float(t2[4]) if len(t2) > 4 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            mat_id = int(float(t3[0])) if len(t3) > 0 else 0
+            mu = float(t3[1]) if len(t3) > 1 else 0.0
+            pext = float(t3[2]) if len(t3) > 2 else 0.0
+            t_initial = float(t3[3]) if len(t3) > 3 else 293.15
+            iequil = int(float(t3[4])) if len(t3) > 4 else 0
+            ittf = int(float(t3[5])) if len(t3) > 5 else 0
+
+    model.monvol_commus[block.user_id] = MonvolCommu1(
+        id=block.user_id, title=title, surf_id=surf_id, heat_t0=heat_t0,
+        scal_t=scal_t, scal_p=scal_p, scal_s=scal_s, scal_a=scal_a,
+        scal_d=scal_d, mat_id=mat_id, mu=mu, pext=pext,
+        t_initial=t_initial, iequil=iequil, ittf=ittf,
+    )
+
+
+def read_monvol_lfluid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MONVOL/LFLUID/monvol_ID`` (M105)::
+
+        card 1:  title
+        card 2:  surf_ID
+        card 3:  Scal_T  Scal_P
+        card 4:  Rho_Fluid
+        card 5:  Fct_K  Fct_Mtin  Fscale_K  Fscale_Mtin
+        card 6:  Fct_Mtout  Fct_Mpout  Fscale_Mtout  Fscale_Mpout
+        card 7:  Fct_Padd  Fct_Pmax  Fscale_Padd  Fscale_Pmax
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MONVOL/LFLUID/{block.user_id}: missing data card", block.source)
+        return
+
+    surf_id = 0
+    scal_t, scal_p = 1.0, 1.0
+    rho_fluid = 1000.0
+    fct_k, fct_mtin, fscale_k, fscale_mtin = 0, 0, 1.0, 1.0
+    fct_mtout, fct_mpout, fscale_mtout, fscale_mpout = 0, 0, 1.0, 1.0
+    fct_padd, fct_pmax, fscale_padd, fscale_pmax = 0, 0, 1.0, 1.0
+
+    if block.fixed:
+        f1 = cards[0].cut("MONVOL_LFLUID_1")
+        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MONVOL_LFLUID_2")
+            scal_t = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+            scal_p = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("MONVOL_LFLUID_3")
+            rho_fluid = _fval(f3[0], 1000.0) if len(f3) > 0 else 1000.0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("MONVOL_LFLUID_4")
+            fct_k = _ival(f4[0]) if len(f4) > 0 else 0
+            fct_mtin = _ival(f4[1]) if len(f4) > 1 else 0
+            fscale_k = _fval(f4[2], 1.0) if len(f4) > 2 else 1.0
+            fscale_mtin = _fval(f4[3], 1.0) if len(f4) > 3 else 1.0
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            f5 = cards[4].cut("MONVOL_LFLUID_4")
+            fct_mtout = _ival(f5[0]) if len(f5) > 0 else 0
+            fct_mpout = _ival(f5[1]) if len(f5) > 1 else 0
+            fscale_mtout = _fval(f5[2], 1.0) if len(f5) > 2 else 1.0
+            fscale_mpout = _fval(f5[3], 1.0) if len(f5) > 3 else 1.0
+
+        if len(cards) > 5 and not cards[5].is_blank:
+            f6 = cards[5].cut("MONVOL_LFLUID_4")
+            fct_padd = _ival(f6[0]) if len(f6) > 0 else 0
+            fct_pmax = _ival(f6[1]) if len(f6) > 1 else 0
+            fscale_padd = _fval(f6[2], 1.0) if len(f6) > 2 else 1.0
+            fscale_pmax = _fval(f6[3], 1.0) if len(f6) > 3 else 1.0
+    else:
+        t1 = cards[0].tokens()
+        surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            scal_t = float(t2[0]) if len(t2) > 0 else 1.0
+            scal_p = float(t2[1]) if len(t2) > 1 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            rho_fluid = float(t3[0]) if len(t3) > 0 else 1000.0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            t4 = cards[3].tokens()
+            fct_k = int(float(t4[0])) if len(t4) > 0 else 0
+            fct_mtin = int(float(t4[1])) if len(t4) > 1 else 0
+            fscale_k = float(t4[2]) if len(t4) > 2 else 1.0
+            fscale_mtin = float(t4[3]) if len(t4) > 3 else 1.0
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            t5 = cards[4].tokens()
+            fct_mtout = int(float(t5[0])) if len(t5) > 0 else 0
+            fct_mpout = int(float(t5[1])) if len(t5) > 1 else 0
+            fscale_mtout = float(t5[2]) if len(t5) > 2 else 1.0
+            fscale_mpout = float(t5[3]) if len(t5) > 3 else 1.0
+
+        if len(cards) > 5 and not cards[5].is_blank:
+            t6 = cards[5].tokens()
+            fct_padd = int(float(t6[0])) if len(t6) > 0 else 0
+            fct_pmax = int(float(t6[1])) if len(t6) > 1 else 0
+            fscale_padd = float(t6[2]) if len(t6) > 2 else 1.0
+            fscale_pmax = float(t6[3]) if len(t6) > 3 else 1.0
+
+    model.monvol_lfluids[block.user_id] = MonvolLFluid(
+        id=block.user_id, title=title, surf_id=surf_id, scal_t=scal_t,
+        scal_p=scal_p, rho_fluid=rho_fluid, fct_k=fct_k,
+        fct_mtin=fct_mtin, fscale_k=fscale_k, fscale_mtin=fscale_mtin,
+        fct_mtout=fct_mtout, fct_mpout=fct_mpout,
+        fscale_mtout=fscale_mtout, fscale_mpout=fscale_mpout,
+        fct_padd=fct_padd, fct_pmax=fct_pmax, fscale_padd=fscale_padd,
+        fscale_pmax=fscale_pmax,
+    )
+
+
+def read_leak(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/LEAK[/<subtype>]/leak_ID`` (M105)::
+
+        card 1:  title
+        card 2:  Ileakage  scale1  scale2
+        card 3:  Acoeft1  MAT_fct_IDE  FScale11
+        card 4:  Bcoeft1  Acoeft2  LEAK_FCT_IDLC  FUN_B1  FScale22  FScale33
+    """
+    subtype = block.parts[1].upper() if len(block.parts) > 1 else ""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/LEAK/{block.user_id}: missing data card", block.source)
+        return
+
+    ileakage = 0
+    scale_t, scale_p = 1.0, 1.0
+    acoeft1 = 0.0
+    fct_id_e = 0
+    fscale_e = 1.0
+    bcoeft1 = 0.0
+    acoeft2 = 0.0
+    fct_id_lc = 0
+    fct_id_ac = 0
+    fscale_lc = 1.0
+    fscale_ac = 1.0
+
+    if block.fixed:
+        f1 = cards[0].cut("LEAK_1")
+        ileakage = _ival(f1[0]) if len(f1) > 0 else 0
+        scale_t = _fval(f1[1], 1.0) if len(f1) > 1 else 1.0
+        scale_p = _fval(f1[2], 1.0) if len(f1) > 2 else 1.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("LEAK_2")
+            acoeft1 = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            fct_id_e = _ival(f2[1]) if len(f2) > 1 else 0
+            fscale_e = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("LEAK_3")
+            bcoeft1 = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+            acoeft2 = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+            fct_id_lc = _ival(f3[2]) if len(f3) > 2 else 0
+            fct_id_ac = _ival(f3[3]) if len(f3) > 3 else 0
+            fscale_lc = _fval(f3[4], 1.0) if len(f3) > 4 else 1.0
+            fscale_ac = _fval(f3[5], 1.0) if len(f3) > 5 else 1.0
+    else:
+        t1 = cards[0].tokens()
+        ileakage = int(float(t1[0])) if len(t1) > 0 else 0
+        scale_t = float(t1[1]) if len(t1) > 1 else 1.0
+        scale_p = float(t1[2]) if len(t1) > 2 else 1.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            acoeft1 = float(t2[0]) if len(t2) > 0 else 0.0
+            fct_id_e = int(float(t2[1])) if len(t2) > 1 else 0
+            fscale_e = float(t2[2]) if len(t2) > 2 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            bcoeft1 = float(t3[0]) if len(t3) > 0 else 0.0
+            acoeft2 = float(t3[1]) if len(t3) > 1 else 0.0
+            fct_id_lc = int(float(t3[2])) if len(t3) > 2 else 0
+            fct_id_ac = int(float(t3[3])) if len(t3) > 3 else 0
+            fscale_lc = float(t3[4]) if len(t3) > 4 else 1.0
+            fscale_ac = float(t3[5]) if len(t3) > 5 else 1.0
+
+    model.leak_mats[block.user_id] = LeakMat(
+        id=block.user_id, subtype=subtype, title=title, ileakage=ileakage,
+        scale_t=scale_t, scale_p=scale_p, acoeft1=acoeft1,
+        fct_id_e=fct_id_e, fscale_e=fscale_e, bcoeft1=bcoeft1,
+        acoeft2=acoeft2, fct_id_lc=fct_id_lc, fct_id_ac=fct_id_ac,
+        fscale_lc=fscale_lc, fscale_ac=fscale_ac,
+    )
+
 
 
 def read_transform(block: KeywordBlock, model: Model,
@@ -8150,6 +8613,8 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "INIMAP1D": read_inimap1d,
     "INIMAP2D": read_inimap2d,
     "INISTATE": read_inista,
+    "LEAK": read_leak,
+    "ALE": read_ale,
 }
 
 ENGINE_KEYWORDS_IGNORE = {

@@ -564,6 +564,42 @@ def check_model(model: Model, log: MessageLog) -> None:
             if nid > 0 and nid not in model._id2idx:
                 log.error(f"/INIMAP2D/{mid}: node {nid} not defined", "CROSS REF")
 
+    # Monitored Volumes, Airbag Leakage & ALE Controls (M105)
+    for mid, mp in getattr(model, "monvol_pres", {}).items():
+        if mp.surf_id > 0 and mp.surf_id not in model.surfaces:
+            log.error(f"/MONVOL/PRES/{mid}: surface {mp.surf_id} not defined", "CROSS REF")
+        if mp.fct_id > 0 and mp.fct_id not in model.functions:
+            log.error(f"/MONVOL/PRES/{mid}: function {mp.fct_id} not defined", "CROSS REF")
+
+    for mid, mg in getattr(model, "monvol_gases", {}).items():
+        if mg.surf_id > 0 and mg.surf_id not in model.surfaces:
+            log.error(f"/MONVOL/GAS/{mid}: surface {mg.surf_id} not defined", "CROSS REF")
+
+    for mid, mc in getattr(model, "monvol_commus", {}).items():
+        if mc.surf_id > 0 and mc.surf_id not in model.surfaces:
+            log.error(f"/MONVOL/COMMU1/{mid}: surface {mc.surf_id} not defined", "CROSS REF")
+        if mc.mat_id > 0 and mc.mat_id not in model.materials:
+            log.error(f"/MONVOL/COMMU1/{mid}: material {mc.mat_id} not defined", "CROSS REF")
+
+    for mid, ml in getattr(model, "monvol_lfluids", {}).items():
+        if ml.surf_id > 0 and ml.surf_id not in model.surfaces:
+            log.error(f"/MONVOL/LFLUID/{mid}: surface {ml.surf_id} not defined", "CROSS REF")
+        for fid in (ml.fct_k, ml.fct_mtin, ml.fct_mtout, ml.fct_mpout, ml.fct_padd, ml.fct_pmax):
+            if fid > 0 and fid not in model.functions:
+                log.error(f"/MONVOL/LFLUID/{mid}: function {fid} not defined", "CROSS REF")
+
+    for lid, lm in getattr(model, "leak_mats", {}).items():
+        for fid in (lm.fct_id_e, lm.fct_id_lc, lm.fct_id_ac):
+            if fid > 0 and fid not in model.functions:
+                log.error(f"/LEAK/{lid}: function {fid} not defined", "CROSS REF")
+
+    for lid, al in getattr(model, "ale_links", {}).items():
+        if al.grnod_id > 0 and al.grnod_id not in model.node_groups:
+            log.error(f"/ALE/LINK/{lid}: node group {al.grnod_id} not defined", "CROSS REF")
+        if al.fct_id > 0 and al.fct_id not in model.functions:
+            log.error(f"/ALE/LINK/{lid}: function {al.fct_id} not defined", "CROSS REF")
+
+
 
 
 

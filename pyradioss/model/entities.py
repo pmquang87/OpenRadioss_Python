@@ -1864,6 +1864,173 @@ class IniStateFile:
     ioutp_fmt: int = 0
 
 
+# ----------------------------------------------------------------------------
+# Extended Control Volumes, Airbag Leakage & ALE Grid Controls (M105)
+# ----------------------------------------------------------------------------
+
+@dataclass
+class MonvolPres:
+    """/MONVOL/PRES (M105): Pressure monitored volume.
+
+    Fortran origin: ``starter/source/airbag/hm_read_monvol_type1.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    fscale: float = 1.0
+    p_ext: float = 0.0
+    fct_id: int = 0
+
+
+@dataclass
+class MonvolGas:
+    """/MONVOL/GAS (M105): Monitored gas control volume.
+
+    Fortran origin: ``starter/source/airbag/hm_read_monvol_type10.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    heat_t0: float = 0.0
+    scal_t: float = 1.0
+    scal_p: float = 1.0
+    scal_s: float = 1.0
+    scal_a: float = 1.0
+    scal_d: float = 1.0
+    gamma: float = 1.4
+    mu: float = 0.0
+    trelax: float = 0.0
+    tini: float = 293.15
+    rho_gas: float = 1.2
+    pext: float = 0.0
+    pini: float = 0.0
+    pmax: float = 0.0
+    vinc: float = 0.0
+    mini: float = 0.0
+
+
+@dataclass
+class MonvolCommu1:
+    """/MONVOL/COMMU1 (M105): Communicating multi-chamber airbag volume.
+
+    Fortran origin: ``starter/source/airbag/hm_read_monvol_type2.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    heat_t0: float = 0.0
+    scal_t: float = 1.0
+    scal_p: float = 1.0
+    scal_s: float = 1.0
+    scal_a: float = 1.0
+    scal_d: float = 1.0
+    mat_id: int = 0
+    mu: float = 0.0
+    pext: float = 0.0
+    t_initial: float = 293.15
+    iequil: int = 0
+    ittf: int = 0
+
+
+@dataclass
+class MonvolLFluid:
+    """/MONVOL/LFLUID (M105): Liquid fluid control volume.
+
+    Fortran origin: ``starter/source/airbag/hm_read_monvol_type11.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    scal_t: float = 1.0
+    scal_p: float = 1.0
+    rho_fluid: float = 1000.0
+    fct_k: int = 0
+    fct_mtin: int = 0
+    fscale_k: float = 1.0
+    fscale_mtin: float = 1.0
+    fct_mtout: int = 0
+    fct_mpout: int = 0
+    fscale_mtout: float = 1.0
+    fscale_mpout: float = 1.0
+    fct_padd: int = 0
+    fct_pmax: int = 0
+    fscale_padd: float = 1.0
+    fscale_pmax: float = 1.0
+
+
+@dataclass
+class LeakMat:
+    """/LEAK/MAT or /LEAK (M105): Airbag fabric leakage model.
+
+    Fortran origin: ``starter/source/airbag/hm_read_leak.F``.
+    """
+    id: int
+    subtype: str = ""
+    title: str = ""
+    ileakage: int = 0
+    scale_t: float = 1.0
+    scale_p: float = 1.0
+    acoeft1: float = 0.0
+    fct_id_e: int = 0
+    fscale_e: float = 1.0
+    bcoeft1: float = 0.0
+    acoeft2: float = 0.0
+    fct_id_lc: int = 0
+    fct_id_ac: int = 0
+    fscale_lc: float = 1.0
+    fscale_ac: float = 1.0
+
+
+@dataclass
+class AleGrid:
+    """/ALE/GRID (M105): ALE grid formulation and damping controls.
+
+    Fortran origin: ``starter/source/ale/alelec.F``.
+    """
+    id: int = 1
+    subtype: str = "STANDARD"
+    title: str = ""
+    dt_min: float = 0.0
+    gamma: float = 0.0
+    damp: float = 0.0
+    nu_g: float = 0.0
+
+
+@dataclass
+class AleLink:
+    """/ALE/LINK (M105): ALE grid link velocity condition.
+
+    Fortran origin: ``starter/source/ale/alelec.F``.
+    """
+    id: int
+    subtype: str = "VEL"
+    title: str = ""
+    grnod_id: int = 0
+    fct_id: int = 0
+    scale: float = 1.0
+
+
+@dataclass
+class AleSolver:
+    """/ALE/SOLVER (M105): Global ALE momentum/interface solver.
+
+    Fortran origin: ``starter/source/ale/alelec.F``.
+    """
+    imom: int = 0
+    isfint: int = 0
+
+
+@dataclass
+class AleClose:
+    """/ALE/CLOS or /ALE/CLOSE (M105): ALE mesh closing boundary distance.
+
+    Fortran origin: ``starter/source/ale/hm_read_ale_close.F``.
+    """
+    htest: float = 0.0
+    hclose: float = 0.0
+
+
+
 
 
 

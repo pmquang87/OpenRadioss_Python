@@ -47,6 +47,8 @@ from .entities import (
     PcylLoad, PfluidLoad, Preload, PreloadAxial, DampInter, DampRange,
     AnalyGlobal, UpwindGlobal, CaaControl,
     Gauge, Cluster, ExtLink, FxBody, IniGrav, IniMap1D, IniMap2D, IniStateFile,
+    MonvolPres, MonvolGas, MonvolCommu1, MonvolLFluid, LeakMat,
+    AleGrid, AleLink, AleSolver, AleClose,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -644,6 +646,15 @@ class Model:
         self.ini_map1ds: Dict[int, IniMap1D] = {}      # /INIMAP1D (M104)
         self.ini_map2ds: Dict[int, IniMap2D] = {}      # /INIMAP2D (M104)
         self.ini_state_file: Optional[IniStateFile] = None # /INISTATE (M104)
+        self.monvol_pres: Dict[int, MonvolPres] = {}   # /MONVOL/PRES (M105)
+        self.monvol_gases: Dict[int, MonvolGas] = {}   # /MONVOL/GAS (M105)
+        self.monvol_commus: Dict[int, MonvolCommu1] = {} # /MONVOL/COMMU1 (M105)
+        self.monvol_lfluids: Dict[int, MonvolLFluid] = {} # /MONVOL/LFLUID (M105)
+        self.leak_mats: Dict[int, LeakMat] = {}        # /LEAK (M105)
+        self.ale_grids: Dict[int, AleGrid] = {}        # /ALE/GRID (M105)
+        self.ale_links: Dict[int, AleLink] = {}        # /ALE/LINK (M105)
+        self.ale_solver: Optional[AleSolver] = None    # /ALE/SOLVER (M105)
+        self.ale_close: Optional[AleClose] = None      # /ALE/CLOS (M105)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
