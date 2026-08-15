@@ -1136,6 +1136,15 @@ LAYOUTS: Dict[str, List[int]] = {
     "GEAR_1": [10, 10, 20, 10, 10, 10, 10],
     "RACK_1": [10, 10, 20, 10, 10, 10, 10],
     "DIFF_1": [10, 10, 10, 20],
+
+    # GEOMETRY & DETONATION SHAPING (M132)
+    "BOX_BOX_1": [10, 10],
+    "SURF_PLANE_1": [20, 20, 20],
+    "SURF_PLANE_2": [20, 20, 20],
+    "SURF_ELLIPSE_1": [10, 10],
+    "SURF_ELLIPSE_2": [20, 20, 20],
+    "SURF_ELLIPSE_3": [20, 20, 20],
+    "DFS_WAVE_SHAPER_1": [10, 10, 20, 20],
 }
 
 

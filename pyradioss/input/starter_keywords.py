@@ -4061,12 +4061,59 @@ def read_box(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     blank-N-card emission collapses to for non-fixed decks.
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else "RECTA"
-    if kind not in ("RECTA", "CYLIN", "SPHER"):
-        log.warning(f"/BOX/{kind} not ported (RECTA, CYLIN, SPHER "
+    if kind in ("RECT", "RECTA"):
+        kind = "RECTA"
+    elif kind in ("CYL", "CYLIN"):
+        kind = "CYLIN"
+    elif kind in ("SPH", "SPHER"):
+        kind = "SPHER"
+    elif kind in ("BOX", "COMB"):
+        kind = "BOX"
+    if kind not in ("RECTA", "CYLIN", "SPHER", "BOX"):
+        log.warning(f"/BOX/{kind} not ported (RECTA, CYLIN, SPHER, BOX "
                     f"supported)", block.source)
         return
     title, cards = _fixed_data(block) if block.fixed \
         else _title_and_data(block)
+
+    if kind == "BOX":
+        # /BOX/BOX/id or /BOX/COMB/id (M132): Box composed of other boxes
+        if not cards:
+            log.error(f"/BOX/BOX/{block.user_id}: missing data card", block.source)
+            return
+        nbox, nboxneg = 0, 0
+        if block.fixed:
+            f = cards[0].cut("BOX_BOX_1")
+            nbox = _ival(f[0])
+            nboxneg = _ival(f[1])
+        else:
+            toks = cards[0].tokens()
+            nbox = int(float(toks[0])) if len(toks) > 0 else 0
+            nboxneg = int(float(toks[1])) if len(toks) > 1 else 0
+
+        box_ids = []
+        idx = 1
+        pos_read = 0
+        while idx < len(cards) and pos_read < nbox:
+            for tok in cards[idx].tokens():
+                if pos_read < nbox:
+                    box_ids.append(int(float(tok)))
+                    pos_read += 1
+            idx += 1
+
+        neg_read = 0
+        while idx < len(cards) and neg_read < nboxneg:
+            for tok in cards[idx].tokens():
+                if neg_read < nboxneg:
+                    bid = int(float(tok))
+                    box_ids.append(-abs(bid))
+                    neg_read += 1
+            idx += 1
+
+        model.boxes[block.user_id] = Box(
+            id=block.user_id, title=title, kind="BOX", box_ids=box_ids
+        )
+        return
 
     def _xyz(card):
         return np.array(_cut_floats(card, "XYZ20")[:3]) if block.fixed \
@@ -4250,6 +4297,40 @@ def read_surf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         s.prop_ids.extend(_id_list(block, cards))
     elif target == "BOX":
         s.box_ids.extend(_id_list(block, cards))
+    elif target in ("ELLIPSE", "ELLIPSOID"):
+        # /SURF/ELLIPSE (M132):
+        # Card 1: Skew_ID, n
+        # Card 2: Xc, Yc, Zc
+        # Card 3: a, b, c (semi-axes)
+        if len(cards) < 3:
+            log.error(f"/SURF/ELLIPSE/{block.user_id}: requires 3 data cards (Skew/n, Center, Semiaxes)", block.source)
+        else:
+            if block.fixed:
+                f1 = cards[0].cut("SURF_ELLIPSE_1")
+                skew_id = _ival(f1[0]) if len(f1) > 0 else 0
+                f2 = cards[1].cut("SURF_ELLIPSE_2")
+                xc = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                yc = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                zc = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+                f3 = cards[2].cut("SURF_ELLIPSE_3")
+                sa = _fval(f3[0], 1.0) if len(f3) > 0 else 1.0
+                sb = _fval(f3[1], 1.0) if len(f3) > 1 else 1.0
+                sc = _fval(f3[2], 1.0) if len(f3) > 2 else 1.0
+            else:
+                t1 = cards[0].tokens()
+                skew_id = int(float(t1[0])) if len(t1) > 0 else 0
+                t2 = cards[1].tokens()
+                xc = float(t2[0]) if len(t2) > 0 else 0.0
+                yc = float(t2[1]) if len(t2) > 1 else 0.0
+                zc = float(t2[2]) if len(t2) > 2 else 0.0
+                t3 = cards[2].tokens()
+                sa = float(t3[0]) if len(t3) > 0 else 1.0
+                sb = float(t3[1]) if len(t3) > 1 else 1.0
+                sc = float(t3[2]) if len(t3) > 2 else 1.0
+
+            s.ellipse_skew = skew_id
+            s.ellipse_center = np.array([xc, yc, zc], dtype=float)
+            s.ellipse_semiaxes = np.array([sa, sb, sc], dtype=float)
     else:
         log.warning(f"/SURF/{'/'.join(all_parts[1:])} not ported", block.source)
 
@@ -5365,6 +5446,27 @@ def read_det(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             det.iopt = int(float(t[1])) if len(t) > 1 else 0
             det.tdet = float(t[2]) if len(t) > 2 else 0.0
             det.mat_id = int(float(t[3])) if len(t) > 3 else 0
+    elif sub in ("WAVE_SHAPER", "WAVESHAPER"):
+        from ..model.entities import WaveShaper
+        surf_id, mat_id, thick, delay = 0, 0, 0.0, 0.0
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f = cards[0].cut("DFS_WAVE_SHAPER_1")
+                surf_id = _ival(f[0]) if len(f) > 0 else 0
+                mat_id = _ival(f[1]) if len(f) > 1 else 0
+                thick = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+                delay = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            else:
+                toks = cards[0].tokens()
+                surf_id = int(float(toks[0])) if len(toks) > 0 else 0
+                mat_id = int(float(toks[1])) if len(toks) > 1 else 0
+                thick = float(toks[2]) if len(toks) > 2 else 0.0
+                delay = float(toks[3]) if len(toks) > 3 else 0.0
+        model.wave_shapers[block.user_id or 0] = WaveShaper(
+            id=block.user_id or 0, title=title, surf_id=surf_id,
+            mat_id=mat_id, thick=thick, delay=delay
+        )
+        return
 
     model.detonations.append(det)
 
@@ -9302,8 +9404,8 @@ def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     all_p = [p.upper() for p in block.parts]
     sub_qual = "PART" if "PART" in all_p else ("GENE" if "GENE" in all_p else ("GEN_INCR" if "GEN_INCR" in all_p else None))
 
-    if stype in ("NODE", "NODENS", "GRNOD"):
-        qual = "GEN_INCR" if "GEN_INCR" in all_p else ("GENE" if "GENE" in all_p else ("NODENS" if "NODENS" in all_p else ("PART" if "PART" in all_p else ("BOX" if "BOX" in all_p else ("SURF" if "SURF" in all_p else ("GRNOD" if "GRNOD" in all_p else "NODE"))))))
+    if stype in ("NODE", "NODENS", "GRNOD", "NS"):
+        qual = "GEN_INCR" if "GEN_INCR" in all_p else ("GENE" if "GENE" in all_p else ("NODENS" if ("NODENS" in all_p or "NS" in all_p) else ("PART" if "PART" in all_p else ("BOX" if "BOX" in all_p else ("SURF" if "SURF" in all_p else ("GRNOD" if "GRNOD" in all_p else "NODE"))))))
         mod_block = KeywordBlock(
             keyword=f"/GRNOD/{qual}/{block.user_id}",
             parts=["GRNOD", qual, str(block.user_id)],
@@ -12326,7 +12428,7 @@ def read_dfs(block: KeywordBlock, model: Model,
         read_laser(block, model, log)
         return
     det_id = block.user_id if block.user_id is not None else 0
-    cards = block.cards
+    title, cards = ("", block.cards) if block.fixed else _title_and_data(block)
 
     # Check for NODE/SET/GRNOD variants — warn and parse what we can
     has_node = any(p.upper() in ("NODE",) for p in block.parts[2:]
@@ -12392,8 +12494,31 @@ def read_dfs(block: KeywordBlock, model: Model,
                             mat_id=mat_id, nx=nx, ny=ny, nz=nz)
         model.det_planes.append(dp)
 
+    elif sub in ("WAVE_SHAPER", "WAVESHAPER"):
+        # /DFS/WAVE_SHAPER/id (M132)
+        # Card 1: surf_ID, mat_ID, thick, delay
+        from ..model.entities import WaveShaper
+        surf_id, mat_id, thick, delay = 0, 0, 0.0, 0.0
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f = cards[0].cut("DFS_WAVE_SHAPER_1")
+                surf_id = _ival(f[0]) if len(f) > 0 else 0
+                mat_id = _ival(f[1]) if len(f) > 1 else 0
+                thick = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+                delay = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            else:
+                toks = cards[0].tokens()
+                surf_id = int(float(toks[0])) if len(toks) > 0 else 0
+                mat_id = int(float(toks[1])) if len(toks) > 1 else 0
+                thick = float(toks[2]) if len(toks) > 2 else 0.0
+                delay = float(toks[3]) if len(toks) > 3 else 0.0
+        model.wave_shapers[det_id] = WaveShaper(
+            id=det_id, title=title,
+            surf_id=surf_id, mat_id=mat_id, thick=thick, delay=delay
+        )
+
     else:
-        log.warning(f"/DFS/{sub} not ported (DETPOINT, DETPLAN supported)",
+        log.warning(f"/DFS/{sub} not ported (DETPOINT, DETPLAN, WAVE_SHAPER supported)",
                     block.source)
 
 

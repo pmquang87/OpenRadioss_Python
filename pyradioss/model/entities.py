@@ -204,6 +204,7 @@ class Box:
     iskew: int = 0                           # CYLIN / SPHER
     node1: int = 0                           # RECTA/CYLIN corner/axis node
     node2: int = 0
+    box_ids: List[int] = field(default_factory=list) # /BOX/BOX (M132): positive for union, negative for subtraction
 
 
 @dataclass
@@ -287,6 +288,10 @@ class Surface:
     prop_ids: List[int] = field(default_factory=list)  # /SURF/PROP
     box_ids: List[int] = field(default_factory=list)   # /SURF/BOX
     modifier: str = ""                                 # 'EXT', 'ALL', 'FREE'
+    # /SURF/ELLIPSE (M132): ellipsoidal quadric surface
+    ellipse_center: Optional[np.ndarray] = None        # (3,) [Xc, Yc, Zc]
+    ellipse_semiaxes: Optional[np.ndarray] = None      # (3,) [a, b, c]
+    ellipse_skew: int = 0
 
 
 @dataclass
@@ -1407,6 +1412,17 @@ class DetonationWave:
     mat_id: int = 0
     ddet: float = 0.0
     iopt: int = 0
+
+
+@dataclass
+class WaveShaper:
+    """/DFS/WAVE_SHAPER, /INIT/DET/WAVE_SHAPER (M132): Explosive detonation wave shaper barrier."""
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    mat_id: int = 0
+    thick: float = 0.0
+    delay: float = 0.0
 
 
 @dataclass

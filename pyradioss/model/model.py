@@ -69,6 +69,7 @@ from .entities import (
     FailPuck, FailSahraei, FailSyazwan, FailTab2, FailGene1,
     Stack, StackPly,
     LagmulGlobal, GearConstraint, RackConstraint, DiffConstraint,
+    WaveShaper,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -785,6 +786,7 @@ class Model:
         self.gears: Dict[int, GearConstraint] = {}            # /GEAR (M131)
         self.racks: Dict[int, RackConstraint] = {}            # /RACK (M131)
         self.diffs: Dict[int, DiffConstraint] = {}            # /DIFF (M131)
+        self.wave_shapers: Dict[int, WaveShaper] = {}         # /DFS/WAVE_SHAPER (M132)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
