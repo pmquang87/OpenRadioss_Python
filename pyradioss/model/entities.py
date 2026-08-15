@@ -228,6 +228,7 @@ class NodeGroup:
     part_ids: List[int] = field(default_factory=list)   # /GRNOD/PART
     box_ids: List[int] = field(default_factory=list)    # /GRNOD/BOX
     surf_ids: List[int] = field(default_factory=list)   # /GRNOD/SURF (M37)
+    line_ids: List[int] = field(default_factory=list)   # /GRNOD/LINE (M136)
     grnod_ids: List[int] = field(default_factory=list)  # /GRNOD/GRNOD, signed
     # /GRNOD/GRSHEL|GRSH3N|GRBRIC|GRTRUS|GRBEAM|GRSPRI: (family, group id)
     # pairs — family is the canonical element-group key ('SHEL', 'SH3N',
@@ -376,6 +377,8 @@ class EntityGroup:
     elem_ids: List[int] = field(default_factory=list)   # direct element ids
     part_ids: List[int] = field(default_factory=list)   # /GR*/PART
     group_ids: List[int] = field(default_factory=list)  # group-of-groups, signed
+    box_ids: List[int] = field(default_factory=list)    # /GR*/BOX (M136)
+    surf_ids: List[int] = field(default_factory=list)   # /GR*/SURF (M136)
     # Resolved by the Starter:
     members: Optional[list] = None            # [(gtype attr, rows ndarray)]
     part_ids_resolved: Optional[list] = None  # family 'PART' only
@@ -731,6 +734,7 @@ class Sensor:
     acc_entries: List[Tuple[int, str, float, float]] = field(default_factory=list) # (acc_id, dir, tomin, tmin)
     script_name: str = ""
     func_name: str = ""
+    target_id: int = 0   # SPH, AIRBAG, MONVOL, SHELL, SOLID (M136)
 
 
 @dataclass
@@ -940,6 +944,58 @@ class RigidWall:
     node_id: int = 0     # > 0: wall tied to this (user id) node — moving
     axis1: Optional[np.ndarray] = None  # (3,) PARAL first edge vector
     axis2: Optional[np.ndarray] = None  # (3,) PARAL second edge vector
+
+
+@dataclass
+class RwallBox:
+    """/RWALL/BOX (M136): Rigid bounding box wall."""
+    id: int
+    title: str = ""
+    node_id: int = 0
+    slide: int = 0
+    fric: float = 0.0
+    grnod_id: int = 0
+    grnod_id2: int = 0
+    dist: float = 0.0
+    p1: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    p2: tuple[float, float, float] = (0.0, 0.0, 0.0)
+
+
+@dataclass
+class RwallCone:
+    """/RWALL/CONE (M136): Rigid conical wall."""
+    id: int
+    title: str = ""
+    node_id: int = 0
+    slide: int = 0
+    fric: float = 0.0
+    grnod_id: int = 0
+    grnod_id2: int = 0
+    dist: float = 0.0
+    apex: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    axis: tuple[float, float, float] = (0.0, 0.0, 1.0)
+    angle: float = 0.0
+
+
+@dataclass
+class SectBox:
+    """/SECT/BOX (M136): Section cutting defined by bounding box."""
+    id: int
+    title: str = ""
+    box_id: int = 0
+    grnod_id: int = 0
+    frame_id: int = 0
+
+
+@dataclass
+class SectCut:
+    """/SECT/CUT (M136): Section defined by cutting plane."""
+    id: int
+    title: str = ""
+    orig: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    normal: tuple[float, float, float] = (0.0, 0.0, 1.0)
+    grnod_id: int = 0
+    frame_id: int = 0
 
 
 @dataclass

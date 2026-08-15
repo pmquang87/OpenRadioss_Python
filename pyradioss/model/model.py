@@ -54,12 +54,12 @@ from .entities import (
     DetonationWave, ElementActivation, MonvolFvmBag2, Autoposition,
     LoadCentri, LoadPfluid, LoadPressure, LoadGravity, LoadBody, LoadTherm,
     EulerBcs, HeatBcs, InivelAxis, InivelFvm, InivelNode,
-    ImpdispFgeo, ImpvelFgeo, RwallTherm, SphInOut,
+    ImpdispFgeo, ImpvelFgeo, RwallTherm, RwallBox, RwallCone, SphInOut,
     SphBcs, MadymoLink, MadymoExfem,
     AleGridDonea, AleGridSpring, AleGridStandard, AleGridDisp, AleGridLaplacian, AleGridVolume,
     AdmeshGlobal, StampingInit, RandomNoise, Accelerometer, Subset,
     FailComposite, EbcsPropellant, AdmasNonUniform, AdmasNonUniformItem,
-    SectCircle, SectParal, DynainShell, MonvolArea, StateDt,
+    SectCircle, SectParal, SectBox, SectCut, DynainShell, MonvolArea, StateDt,
     SphReserve, MoveFunct,
     EigenMode, StressFile, MemoryRequest,
     FailFractal, TransformPosition, TransformProjection, TransformFrame,
@@ -738,6 +738,10 @@ class Model:
         self.impdisp_fgeos: Dict[int, ImpdispFgeo] = {}     # /IMPDISP/FGEO (M112)
         self.impvel_fgeos: Dict[int, ImpvelFgeo] = {}       # /IMPVEL/FGEO (M112)
         self.rwall_therms: Dict[int, RwallTherm] = {}       # /RWALL/THERM (M112)
+        self.rwall_boxes: Dict[int, RwallBox] = {}         # /RWALL/BOX (M136)
+        self.rwall_cones: Dict[int, RwallCone] = {}         # /RWALL/CONE (M136)
+        self.sect_boxes: Dict[int, SectBox] = {}           # /SECT/BOX (M136)
+        self.sect_cuts: Dict[int, SectCut] = {}             # /SECT/CUT (M136)
         self.sph_inouts: Dict[int, SphInOut] = {}           # /SPH/INOUT (M112)
         self.sph_bcs: Dict[int, SphBcs] = {}                # /SPHBCS (M113)
         self.madymo_links: Dict[int, MadymoLink] = {}       # /MADYMO/LINK (M113)

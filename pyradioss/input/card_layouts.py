@@ -1181,6 +1181,14 @@ LAYOUTS: Dict[str, List[int]] = {
     "LOAD_THERM_1": [10, 20, 10, 20, 10],
     "EULER_BCS_1": [10, 10, 20, 20, 20],
     "HEAT_BCS_1": [10, 10, 20, 10, 20, 10],
+
+    # EXTENDED GROUPS, RIGID WALLS, CROSS SECTIONS & SENSORS (M136)
+    "RWALL_BOX_1": [10, 10, 10, 10],
+    "RWALL_BOX_2": [20, 20, 20, 20, 20, 20],
+    "RWALL_CONE_1": [10, 10, 10, 10],
+    "RWALL_CONE_2": [20, 20, 20, 20, 20, 20, 20],
+    "SECT_BOX_1": [10, 10, 10],
+    "SECT_CUT_1": [20, 20, 20, 20, 20, 20],
 }
 
 

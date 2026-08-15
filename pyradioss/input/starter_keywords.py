@@ -51,6 +51,7 @@ from ..model.entities import (
     MonvolAirbag, MonvolAirbagJet, MonvolAirbagVent, MonvolCommu, MonvolPart,
     DampGlobal, DampPart, TransformProjection, TransformFrame,
     LoadGravity, LoadBody, LoadTherm, EulerBcs, HeatBcs,
+    RwallBox, RwallCone, SectBox, SectCut,
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
     Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
@@ -4038,18 +4039,20 @@ def read_grnod(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         g.box_ids.extend(ids)
     elif kind == "SURF":
         g.surf_ids.extend(ids)
-    elif kind == "GRNOD":
+    elif kind == "LINE":
+        g.line_ids.extend(ids)
+    elif kind in ("GRNOD", "SUB", "SUBSET"):
         g.grnod_ids.extend(ids)
     elif kind in _GR_FAMILIES:
         g.egroup_refs.extend((_GR_FAMILIES[kind], i) for i in ids)
     else:
-        log.warning(f"/GRNOD/{kind} not ported (NODE, NODENS, PART, BOX, SURF, "
+        log.warning(f"/GRNOD/{kind} not ported (NODE, NODENS, PART, BOX, SURF, LINE, "
                     f"GRNOD, GR<elem>, GENE supported)", block.source)
 
 
 def read_gr_elem(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """Element groups ``/GRSHEL|GRSH3N|GRBRIC|GRQUAD|GRTRUS|GRBEAM|
-    GRSPRI/<subtype>/id`` and part groups ``/GRPART/PART/id`` (M37).
+    GRSPRI/<subtype>/id`` and part groups ``/GRPART/PART/id`` (M37, M136).
 
     Fortran: hm_lecgre.F (direct lists + parts) and hm_grogro.F
     (recursive group-of-groups, same fixpoint/cycle/negative-id
@@ -4060,6 +4063,8 @@ def read_gr_elem(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                                         family (GRBRIC = ALL solids)
         /GRSHEL/GRSHEL ...              group of groups (signed ids)
         /GRPART/PART                    part ids (the group IS parts)
+        /GR*/BOX                        elements inside bounding box
+        /GR*/SURF                       elements of contact surface
 
     Each family is its own id namespace (Model.egroups), exactly like
     the separate IGRSH4N/IGRSH3N/IGRBRIC arrays of groupdef_mod.F.
@@ -4088,10 +4093,14 @@ def read_gr_elem(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         g.elem_ids.extend(ids)
     elif kind == "PART":
         g.part_ids.extend(ids)
-    elif kind == key0:                        # /GRSHEL/GRSHEL/... etc.
+    elif kind == "BOX":
+        g.box_ids.extend(ids)
+    elif kind == "SURF":
+        g.surf_ids.extend(ids)
+    elif kind in (key0, "SUB", "SUBSET"):     # /GRSHEL/GRSHEL/... etc.
         g.group_ids.extend(ids)
     else:
-        log.warning(f"/{key0}/{kind} not ported (direct ids, PART and "
+        log.warning(f"/{key0}/{kind} not ported (direct ids, PART, BOX, SURF and "
                     f"/{key0}/{key0} group-of-groups supported)",
                     block.source)
 
@@ -6421,7 +6430,7 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
     if kind == "NIC_NIJ":
         kind = "NIC"
-    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "PYTHON")
+    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID")
     if kind not in supported:
         log.warning(f"/SENSOR/{kind} not ported ({', '.join(supported)} supported)",
                     block.source)
@@ -6838,6 +6847,16 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.sensors.append(Sensor(
             id=block.user_id, kind="PYTHON", tdelay=tdelay, script_name=script_name, func_name=func_name, title=title
         ))
+    elif kind in ("SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID"):
+        # M136 subsystem sensors
+        target_id = int(float(t[0])) if len(t) > 0 and t[0].strip() else 0
+        v1 = float(t[1]) if len(t) > 1 and t[1].strip() else 0.0
+        v2 = float(t[2]) if len(t) > 2 and t[2].strip() else 0.0
+        tmin = float(t[3]) if len(t) > 3 and t[3].strip() else 0.0
+        model.sensors.append(Sensor(
+            id=block.user_id, kind=kind, tdelay=tdelay, target_id=target_id,
+            dmin=v1, dmax=v2, tmin=tmin, title=title
+        ))
 
 
 def read_gauge_point(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -7119,8 +7138,56 @@ def read_sect(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub == "PARAL":
         read_sect_paral(block, model, log)
         return
+    elif sub == "BOX":
+        # /SECT/BOX (M136)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/SECT/BOX/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("SECT_BOX_1")
+            box_id = _ival(f[0]) if len(f) > 0 else 0
+            grnod_id = _ival(f[1]) if len(f) > 1 else 0
+            frame_id = _ival(f[2]) if len(f) > 2 else 0
+        else:
+            t = cards[0].tokens()
+            box_id = int(float(t[0])) if len(t) > 0 else 0
+            grnod_id = int(float(t[1])) if len(t) > 1 else 0
+            frame_id = int(float(t[2])) if len(t) > 2 else 0
+        model.sect_boxes[block.user_id] = SectBox(
+            id=block.user_id, title=title, box_id=box_id,
+            grnod_id=grnod_id, frame_id=frame_id
+        )
+        return
+    elif sub == "CUT":
+        # /SECT/CUT (M136)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/SECT/CUT/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("SECT_CUT_1")
+            x0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            y0 = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            z0 = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            nx = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            ny = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+            nz = _fval(f[5], 1.0) if len(f) > 5 else 1.0
+        else:
+            t = cards[0].tokens()
+            x0 = float(t[0]) if len(t) > 0 else 0.0
+            y0 = float(t[1]) if len(t) > 1 else 0.0
+            z0 = float(t[2]) if len(t) > 2 else 0.0
+            nx = float(t[3]) if len(t) > 3 else 0.0
+            ny = float(t[4]) if len(t) > 4 else 0.0
+            nz = float(t[5]) if len(t) > 5 else 1.0
+        model.sect_cuts[block.user_id] = SectCut(
+            id=block.user_id, title=title, orig=(x0, y0, z0),
+            normal=(nx, ny, nz)
+        )
+        return
     elif sub:
-        log.warning(f"/SECT/{sub} not ported (plain /SECT, /SECT/CIRCLE, /SECT/PARAL supported)", block.source)
+        log.warning(f"/SECT/{sub} not ported (plain /SECT, /SECT/CIRCLE, /SECT/PARAL, /SECT/BOX, /SECT/CUT supported)", block.source)
         return
     if block.fixed:
         title, cards = _fixed_data(block)
@@ -7194,8 +7261,86 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind == "THERM":
         read_rwall_therm(block, model, log)
         return
+    elif kind == "BOX":
+        # /RWALL/BOX (M136)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/RWALL/BOX/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("RWALL_BOX_1")
+            node_id = _ival(f[0]) if len(f) > 0 else 0
+            slide = _ival(f[1]) if len(f) > 1 else 0
+            grnod = _ival(f[2]) if len(f) > 2 else 0
+            grnod2 = _ival(f[3]) if len(f) > 3 else 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                g = cards[1].cut("RWALL_BOX_2")
+                p1 = (_fval(g[0]), _fval(g[1]), _fval(g[2]))
+                p2 = (_fval(g[3]), _fval(g[4]), _fval(g[5]))
+            else:
+                p1 = (0.0, 0.0, 0.0)
+                p2 = (0.0, 0.0, 0.0)
+        else:
+            t = cards[0].tokens()
+            node_id = int(float(t[0])) if len(t) > 0 else 0
+            slide = int(float(t[1])) if len(t) > 1 else 0
+            grnod = int(float(t[2])) if len(t) > 2 else 0
+            grnod2 = int(float(t[3])) if len(t) > 3 else 0
+            if len(cards) > 1:
+                t2 = cards[1].tokens()
+                p1 = (float(t2[0]), float(t2[1]), float(t2[2])) if len(t2) >= 3 else (0.0, 0.0, 0.0)
+                p2 = (float(t2[3]), float(t2[4]), float(t2[5])) if len(t2) >= 6 else (0.0, 0.0, 0.0)
+            else:
+                p1 = (0.0, 0.0, 0.0)
+                p2 = (0.0, 0.0, 0.0)
+        model.rwall_boxes[block.user_id] = RwallBox(
+            id=block.user_id, title=title, node_id=node_id, slide=slide,
+            grnod_id=grnod, grnod_id2=grnod2, p1=p1, p2=p2
+        )
+        return
+    elif kind == "CONE":
+        # /RWALL/CONE (M136)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/RWALL/CONE/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("RWALL_CONE_1")
+            node_id = _ival(f[0]) if len(f) > 0 else 0
+            slide = _ival(f[1]) if len(f) > 1 else 0
+            grnod = _ival(f[2]) if len(f) > 2 else 0
+            grnod2 = _ival(f[3]) if len(f) > 3 else 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                g = cards[1].cut("RWALL_CONE_2")
+                apex = (_fval(g[0]), _fval(g[1]), _fval(g[2]))
+                axis = (_fval(g[3]), _fval(g[4]), _fval(g[5], 1.0))
+                angle = _fval(g[6])
+            else:
+                apex = (0.0, 0.0, 0.0)
+                axis = (0.0, 0.0, 1.0)
+                angle = 0.0
+        else:
+            t = cards[0].tokens()
+            node_id = int(float(t[0])) if len(t) > 0 else 0
+            slide = int(float(t[1])) if len(t) > 1 else 0
+            grnod = int(float(t[2])) if len(t) > 2 else 0
+            grnod2 = int(float(t[3])) if len(t) > 3 else 0
+            if len(cards) > 1:
+                t2 = cards[1].tokens()
+                apex = (float(t2[0]), float(t2[1]), float(t2[2])) if len(t2) >= 3 else (0.0, 0.0, 0.0)
+                axis = (float(t2[3]), float(t2[4]), float(t2[5])) if len(t2) >= 6 else (0.0, 0.0, 1.0)
+                angle = float(t2[6]) if len(t2) >= 7 else 0.0
+            else:
+                apex = (0.0, 0.0, 0.0)
+                axis = (0.0, 0.0, 1.0)
+                angle = 0.0
+        model.rwall_cones[block.user_id] = RwallCone(
+            id=block.user_id, title=title, node_id=node_id, slide=slide,
+            grnod_id=grnod, grnod_id2=grnod2, apex=apex, axis=axis, angle=angle
+        )
+        return
     if kind not in ("PLANE", "SPHER", "CYL", "PARAL"):
-        log.warning(f"/RWALL/{kind} not ported (PLANE, SPHER, CYL, PARAL, THERM "
+        log.warning(f"/RWALL/{kind} not ported (PLANE, SPHER, CYL, PARAL, THERM, BOX, CONE "
                     f"supported)", block.source)
         return
     title, cards = _fixed_data(block) if block.fixed \
