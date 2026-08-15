@@ -48,6 +48,7 @@ from ..model.entities import (
     AnalyGlobal, UpwindGlobal, CaaControl,
     Gauge, Cluster, ExtLink, FxBody, IniGrav, IniMap1D, IniMap2D, IniStateFile,
     MonvolPres, MonvolGas, MonvolCommu1, MonvolLFluid, LeakMat,
+    MonvolAirbag, MonvolAirbagJet, MonvolAirbagVent, MonvolCommu, MonvolPart,
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
     Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
@@ -11061,6 +11062,329 @@ def read_spmd(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 # ============================================================================
 
 
+def read_monvol_airbag(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MONVOL/AIRBAG/id`` or ``/MONVOL/TYPE4/id`` (M133)::
+
+        card 1:  title
+        card 2:  surf_IDex
+        card 3:  Ascalet  AscaleP  AscaleS  AscaleA  AscaleD
+        card 4:  MU  Pext  T0  Iequi  Ittf
+        card 5:  GAMMAi  cpai  cpbi  cpci
+        card 6:  Njet
+        ... (Njet blocks of 3 cards)
+        card x:  Nvent
+        ... (Nvent blocks of 2 cards)
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MONVOL/AIRBAG/{block.user_id}: missing data card", block.source)
+        return
+
+    c_idx = 0
+    surf_id = 0
+    if block.fixed:
+        f1 = cards[c_idx].cut("MONVOL_AIRBAG_1")
+        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+    else:
+        toks = cards[c_idx].tokens()
+        surf_id = int(float(toks[0])) if len(toks) > 0 else 0
+    c_idx += 1
+
+    scal_t, scal_p, scal_s, scal_a, scal_d = 1.0, 1.0, 1.0, 1.0, 1.0
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        if block.fixed:
+            f2 = cards[c_idx].cut("MONVOL_AIRBAG_2")
+            scal_t = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+            scal_p = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
+            scal_s = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            scal_a = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+            scal_d = _fval(f2[4], 1.0) if len(f2) > 4 else 1.0
+        else:
+            t = cards[c_idx].tokens()
+            scal_t = float(t[0]) if len(t) > 0 else 1.0
+            scal_p = float(t[1]) if len(t) > 1 else 1.0
+            scal_s = float(t[2]) if len(t) > 2 else 1.0
+            scal_a = float(t[3]) if len(t) > 3 else 1.0
+            scal_d = float(t[4]) if len(t) > 4 else 1.0
+        c_idx += 1
+
+    mu, pext, t0 = 0.0, 0.0, 293.15
+    iequi, ittf = 0, 0
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        if block.fixed:
+            f3 = cards[c_idx].cut("MONVOL_AIRBAG_3")
+            mu = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+            pext = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+            t0 = _fval(f3[2], 293.15) if len(f3) > 2 else 293.15
+            iequi = _ival(f3[3], 0) if len(f3) > 3 else 0
+            ittf = _ival(f3[4], 0) if len(f3) > 4 else 0
+        else:
+            t = cards[c_idx].tokens()
+            mu = float(t[0]) if len(t) > 0 else 0.0
+            pext = float(t[1]) if len(t) > 1 else 0.0
+            t0 = float(t[2]) if len(t) > 2 else 293.15
+            iequi = int(float(t[3])) if len(t) > 3 else 0
+            ittf = int(float(t[4])) if len(t) > 4 else 0
+        c_idx += 1
+
+    gammai, cpai, cpbi, cpci = 1.4, 0.0, 0.0, 0.0
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        if block.fixed:
+            f4 = cards[c_idx].cut("MONVOL_AIRBAG_4")
+            gammai = _fval(f4[0], 1.4) if len(f4) > 0 else 1.4
+            cpai = _fval(f4[1], 0.0) if len(f4) > 1 else 0.0
+            cpbi = _fval(f4[2], 0.0) if len(f4) > 2 else 0.0
+            cpci = _fval(f4[3], 0.0) if len(f4) > 3 else 0.0
+        else:
+            t = cards[c_idx].tokens()
+            gammai = float(t[0]) if len(t) > 0 else 1.4
+            cpai = float(t[1]) if len(t) > 1 else 0.0
+            cpbi = float(t[2]) if len(t) > 2 else 0.0
+            cpci = float(t[3]) if len(t) > 3 else 0.0
+        c_idx += 1
+
+    njet = 0
+    jets: List[MonvolAirbagJet] = []
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        njet = int(float(cards[c_idx].tokens()[0])) if cards[c_idx].tokens() else 0
+        c_idx += 1
+        for _ in range(njet):
+            if c_idx >= len(cards):
+                break
+            t_j1 = cards[c_idx].tokens()
+            jg = float(t_j1[0]) if len(t_j1) > 0 else 1.4
+            jcpa = float(t_j1[1]) if len(t_j1) > 1 else 0.0
+            jcpb = float(t_j1[2]) if len(t_j1) > 2 else 0.0
+            jcpc = float(t_j1[3]) if len(t_j1) > 3 else 0.0
+            c_idx += 1
+            t_j2 = cards[c_idx].tokens() if c_idx < len(cards) else []
+            f_mas = int(float(t_j2[0])) if len(t_j2) > 0 else 0
+            iflow = int(float(t_j2[1])) if len(t_j2) > 1 else 0
+            fsc_m = float(t_j2[2]) if len(t_j2) > 2 else 1.0
+            f_t = int(float(t_j2[3])) if len(t_j2) > 3 else 0
+            fsc_t = float(t_j2[4]) if len(t_j2) > 4 else 1.0
+            sens = int(float(t_j2[5])) if len(t_j2) > 5 else 0
+            c_idx += 1
+            t_j3 = cards[c_idx].tokens() if c_idx < len(cards) else []
+            ijet = int(float(t_j3[0])) if len(t_j3) > 0 else 0
+            n1 = int(float(t_j3[1])) if len(t_j3) > 1 else 0
+            n2 = int(float(t_j3[2])) if len(t_j3) > 2 else 0
+            n3 = int(float(t_j3[3])) if len(t_j3) > 3 else 0
+            c_idx += 1
+            jets.append(MonvolAirbagJet(
+                gamma=jg, cpa=jcpa, cpb=jcpb, cpc=jcpc,
+                fct_id_mass=f_mas, iflow=iflow, fscale_mass=fsc_m,
+                fct_id_t=f_t, fscale_t=fsc_t, sens_id=sens,
+                ijet=ijet, n1=n1, n2=n2, n3=n3,
+            ))
+
+    nvent = 0
+    vents: List[MonvolAirbagVent] = []
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        nvent = int(float(cards[c_idx].tokens()[0])) if cards[c_idx].tokens() else 0
+        c_idx += 1
+        for _ in range(nvent):
+            if c_idx >= len(cards):
+                break
+            t_v1 = cards[c_idx].tokens()
+            sv = int(float(t_v1[0])) if len(t_v1) > 0 else 0
+            av = float(t_v1[1]) if len(t_v1) > 1 else 0.0
+            bv = float(t_v1[2]) if len(t_v1) > 2 else 0.0
+            ts = float(t_v1[3]) if len(t_v1) > 3 else 0.0
+            c_idx += 1
+            vents.append(MonvolAirbagVent(
+                surf_id_v=sv, avent=av, bvent=bv, tstop=ts
+            ))
+
+    mv = MonvolAirbag(
+        id=block.user_id, title=title, surf_id=surf_id,
+        scal_t=scal_t, scal_p=scal_p, scal_s=scal_s, scal_a=scal_a, scal_d=scal_d,
+        mu=mu, pext=pext, t0=t0, iequi=iequi, ittf=ittf,
+        gammai=gammai, cpai=cpai, cpbi=cpbi, cpci=cpci,
+        njet=njet, jets=jets, nvent=nvent, vents=vents
+    )
+    model.monvol_airbags[block.user_id] = mv
+
+
+def read_monvol_commu_type5(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MONVOL/COMMU/id`` or ``/MONVOL/TYPE5/id`` (M133)::
+
+        card 1:  title
+        card 2:  surf_IDex
+        card 3:  Ascalet  AscaleP  AscaleS  AscaleA  AscaleD
+        card 4:  Mu  Pext  T0  Iequi  Ittf
+        card 5:  Gammai  cpai  cpbi  cpci
+        card 6:  Njet + jets
+        card x:  Nvent + vents
+        card y:  Ncomm + communicating chambers
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MONVOL/COMMU/{block.user_id}: missing data card", block.source)
+        return
+
+    c_idx = 0
+    surf_id = 0
+    if block.fixed:
+        f1 = cards[c_idx].cut("MONVOL_COMMU5_1")
+        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+    else:
+        toks = cards[c_idx].tokens()
+        surf_id = int(float(toks[0])) if len(toks) > 0 else 0
+    c_idx += 1
+
+    scal_t, scal_p, scal_s, scal_a, scal_d = 1.0, 1.0, 1.0, 1.0, 1.0
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        if block.fixed:
+            f2 = cards[c_idx].cut("MONVOL_COMMU5_2")
+            scal_t = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+            scal_p = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
+            scal_s = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            scal_a = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+            scal_d = _fval(f2[4], 1.0) if len(f2) > 4 else 1.0
+        else:
+            t = cards[c_idx].tokens()
+            scal_t = float(t[0]) if len(t) > 0 else 1.0
+            scal_p = float(t[1]) if len(t) > 1 else 1.0
+            scal_s = float(t[2]) if len(t) > 2 else 1.0
+            scal_a = float(t[3]) if len(t) > 3 else 1.0
+            scal_d = float(t[4]) if len(t) > 4 else 1.0
+        c_idx += 1
+
+    mu, pext, t0 = 0.0, 0.0, 293.15
+    iequi, ittf = 0, 0
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        if block.fixed:
+            f3 = cards[c_idx].cut("MONVOL_COMMU5_3")
+            mu = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+            pext = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+            t0 = _fval(f3[2], 293.15) if len(f3) > 2 else 293.15
+            iequi = _ival(f3[3], 0) if len(f3) > 3 else 0
+            ittf = _ival(f3[4], 0) if len(f3) > 4 else 0
+        else:
+            t = cards[c_idx].tokens()
+            mu = float(t[0]) if len(t) > 0 else 0.0
+            pext = float(t[1]) if len(t) > 1 else 0.0
+            t0 = float(t[2]) if len(t) > 2 else 293.15
+            iequi = int(float(t[3])) if len(t) > 3 else 0
+            ittf = int(float(t[4])) if len(t) > 4 else 0
+        c_idx += 1
+
+    gammai, cpai, cpbi, cpci = 1.4, 0.0, 0.0, 0.0
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        if block.fixed:
+            f4 = cards[c_idx].cut("MONVOL_COMMU5_4")
+            gammai = _fval(f4[0], 1.4) if len(f4) > 0 else 1.4
+            cpai = _fval(f4[1], 0.0) if len(f4) > 1 else 0.0
+            cpbi = _fval(f4[2], 0.0) if len(f4) > 2 else 0.0
+            cpci = _fval(f4[3], 0.0) if len(f4) > 3 else 0.0
+        else:
+            t = cards[c_idx].tokens()
+            gammai = float(t[0]) if len(t) > 0 else 1.4
+            cpai = float(t[1]) if len(t) > 1 else 0.0
+            cpbi = float(t[2]) if len(t) > 2 else 0.0
+            cpci = float(t[3]) if len(t) > 3 else 0.0
+        c_idx += 1
+
+    njet = 0
+    jets: List[MonvolAirbagJet] = []
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        njet = int(float(cards[c_idx].tokens()[0])) if cards[c_idx].tokens() else 0
+        c_idx += 1
+        for _ in range(njet):
+            if c_idx >= len(cards):
+                break
+            t_j1 = cards[c_idx].tokens()
+            jg = float(t_j1[0]) if len(t_j1) > 0 else 1.4
+            jcpa = float(t_j1[1]) if len(t_j1) > 1 else 0.0
+            jcpb = float(t_j1[2]) if len(t_j1) > 2 else 0.0
+            jcpc = float(t_j1[3]) if len(t_j1) > 3 else 0.0
+            c_idx += 1
+            t_j2 = cards[c_idx].tokens() if c_idx < len(cards) else []
+            f_mas = int(float(t_j2[0])) if len(t_j2) > 0 else 0
+            iflow = int(float(t_j2[1])) if len(t_j2) > 1 else 0
+            fsc_m = float(t_j2[2]) if len(t_j2) > 2 else 1.0
+            f_t = int(float(t_j2[3])) if len(t_j2) > 3 else 0
+            fsc_t = float(t_j2[4]) if len(t_j2) > 4 else 1.0
+            sens = int(float(t_j2[5])) if len(t_j2) > 5 else 0
+            c_idx += 1
+            t_j3 = cards[c_idx].tokens() if c_idx < len(cards) else []
+            ijet = int(float(t_j3[0])) if len(t_j3) > 0 else 0
+            n1 = int(float(t_j3[1])) if len(t_j3) > 1 else 0
+            n2 = int(float(t_j3[2])) if len(t_j3) > 2 else 0
+            n3 = int(float(t_j3[3])) if len(t_j3) > 3 else 0
+            c_idx += 1
+            jets.append(MonvolAirbagJet(
+                gamma=jg, cpa=jcpa, cpb=jcpb, cpc=jcpc,
+                fct_id_mass=f_mas, iflow=iflow, fscale_mass=fsc_m,
+                fct_id_t=f_t, fscale_t=fsc_t, sens_id=sens,
+                ijet=ijet, n1=n1, n2=n2, n3=n3,
+            ))
+
+    nvent = 0
+    vents: List[MonvolAirbagVent] = []
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        nvent = int(float(cards[c_idx].tokens()[0])) if cards[c_idx].tokens() else 0
+        c_idx += 1
+        for _ in range(nvent):
+            if c_idx >= len(cards):
+                break
+            t_v1 = cards[c_idx].tokens()
+            sv = int(float(t_v1[0])) if len(t_v1) > 0 else 0
+            av = float(t_v1[1]) if len(t_v1) > 1 else 0.0
+            bv = float(t_v1[2]) if len(t_v1) > 2 else 0.0
+            ts = float(t_v1[3]) if len(t_v1) > 3 else 0.0
+            c_idx += 1
+            vents.append(MonvolAirbagVent(
+                surf_id_v=sv, avent=av, bvent=bv, tstop=ts
+            ))
+
+    comm_ids: List[int] = []
+    if len(cards) > c_idx and not cards[c_idx].is_blank:
+        comm_ids = [int(float(x)) for x in cards[c_idx].tokens() if x.strip()]
+
+    mv = MonvolCommu(
+        id=block.user_id, title=title, surf_id=surf_id,
+        scal_t=scal_t, scal_p=scal_p, scal_s=scal_s, scal_a=scal_a, scal_d=scal_d,
+        mu=mu, pext=pext, t0=t0, iequi=iequi, ittf=ittf,
+        gammai=gammai, cpai=cpai, cpbi=cpbi, cpci=cpci,
+        njet=njet, jets=jets, nvent=nvent, vents=vents, comm_ids=comm_ids
+    )
+    model.monvol_commu_type5[block.user_id] = mv
+
+
+def read_monvol_part(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MONVOL/PART/id`` (M133)::
+
+        card 1:  title
+        card 2:  part_ID/grpart_ID  monvol_type  pini
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MONVOL/PART/{block.user_id}: missing data card", block.source)
+        return
+
+    part_id, grpart_id = 0, 0
+    monvol_type = "PRES"
+    pini = 0.0
+    if block.fixed:
+        f = cards[0].cut("MONVOL_PART_1")
+        pid = _ival(f[0]) if len(f) > 0 else 0
+        part_id = pid
+        monvol_type = f[1].strip() if len(f) > 1 and f[1].strip() else "PRES"
+        pini = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        part_id = int(float(toks[0])) if len(toks) > 0 else 0
+        monvol_type = toks[1].upper() if len(toks) > 1 else "PRES"
+        pini = float(toks[2]) if len(toks) > 2 else 0.0
+
+    model.monvol_parts[block.user_id] = MonvolPart(
+        id=block.user_id, title=title, part_id=part_id, grpart_id=grpart_id,
+        monvol_type=monvol_type, pini=pini
+    )
+
+
 def read_monvol(block: KeywordBlock, model: Model, log: MessageLog):
     """
     /MONVOL/AIRBAG1
@@ -11074,29 +11398,38 @@ def read_monvol(block: KeywordBlock, model: Model, log: MessageLog):
     ... (vent lines)
     """
     vol_type = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if vol_type == "PRES":
+    if vol_type in ("PRES", "TYPE2"):
         read_monvol_pres(block, model, log)
         return
-    elif vol_type == "GAS":
+    elif vol_type in ("GAS", "TYPE3"):
         read_monvol_gas(block, model, log)
         return
-    elif vol_type in ("COMMU1", "COMMU"):
+    elif vol_type in ("COMMU1", "TYPE9"):
         read_monvol_commu(block, model, log)
         return
-    elif vol_type == "LFLUID":
+    elif vol_type in ("COMMU", "TYPE5"):
+        read_monvol_commu_type5(block, model, log)
+        return
+    elif vol_type in ("LFLUID", "TYPE10"):
         read_monvol_lfluid(block, model, log)
         return
-    elif vol_type in ("FVMBAG1", "FVMBAG"):
+    elif vol_type in ("FVMBAG1", "FVMBAG", "TYPE6", "TYPE8"):
         read_monvol_fvmbag1(block, model, log)
         return
-    elif vol_type == "FVMBAG2":
+    elif vol_type in ("FVMBAG2", "TYPE11"):
         read_monvol_fvmbag2(block, model, log)
         return
-    elif vol_type == "AREA":
+    elif vol_type in ("AREA", "TYPE1"):
         read_monvol_area(block, model, log)
         return
-    elif vol_type != "AIRBAG1":
-        log.warning(f"/MONVOL/{vol_type} not ported - skipped (supported: AIRBAG1, PRES, GAS, COMMU1, LFLUID, FVMBAG1, FVMBAG2, AREA)",
+    elif vol_type in ("AIRBAG", "TYPE4"):
+        read_monvol_airbag(block, model, log)
+        return
+    elif vol_type == "PART":
+        read_monvol_part(block, model, log)
+        return
+    elif vol_type not in ("AIRBAG1", "TYPE7"):
+        log.warning(f"/MONVOL/{vol_type} not ported - skipped (supported: AIRBAG, AIRBAG1, COMMU, COMMU1, PRES, GAS, LFLUID, FVMBAG, FVMBAG1, FVMBAG2, AREA, PART, TYPE1-11)",
                     block.source)
         return
 
@@ -11646,14 +11979,16 @@ def read_monvol_fvmbag2(block: KeywordBlock, model: Model, log: MessageLog) -> N
 
 
 def read_leak(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/LEAK[/<subtype>]/leak_ID`` (M105)::
+    """``/LEAK[/<subtype>]/leak_ID`` (M105, M133)::
 
         card 1:  title
         card 2:  Ileakage  scale1  scale2
         card 3:  Acoeft1  MAT_fct_IDE  FScale11
-        card 4:  Bcoeft1  Acoeft2  LEAK_FCT_IDLC  FUN_B1  FScale22  FScale33
+        card 4 (Ileakage 1..4):  Bcoeft1  Acoeft2  LEAK_FCT_IDLC  FUN_B1  FScale22  FScale33
+        card 4 (Ileakage 5):     LENGTH   THICK1
+        card 5 (Ileakage 5):     C1       C2       C3
     """
-    subtype = block.parts[1].upper() if len(block.parts) > 1 else ""
+    subtype = block.parts[1].upper() if len(block.parts) > 1 else "MAT"
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/LEAK/{block.user_id}: missing data card", block.source)
@@ -11670,6 +12005,8 @@ def read_leak(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     fct_id_ac = 0
     fscale_lc = 1.0
     fscale_ac = 1.0
+    length, thick = 1.0, 1.0
+    c1, c2, c3 = 0.0, 1.0, 0.0
 
     if block.fixed:
         f1 = cards[0].cut("LEAK_1")
@@ -11683,14 +12020,25 @@ def read_leak(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             fct_id_e = _ival(f2[1]) if len(f2) > 1 else 0
             fscale_e = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
 
-        if len(cards) > 2 and not cards[2].is_blank:
-            f3 = cards[2].cut("LEAK_3")
-            bcoeft1 = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
-            acoeft2 = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
-            fct_id_lc = _ival(f3[2]) if len(f3) > 2 else 0
-            fct_id_ac = _ival(f3[3]) if len(f3) > 3 else 0
-            fscale_lc = _fval(f3[4], 1.0) if len(f3) > 4 else 1.0
-            fscale_ac = _fval(f3[5], 1.0) if len(f3) > 5 else 1.0
+        if ileakage == 5:
+            if len(cards) > 2 and not cards[2].is_blank:
+                f3 = cards[2].cut("LEAK_5_1")
+                length = _fval(f3[0], 1.0) if len(f3) > 0 else 1.0
+                thick = _fval(f3[1], 1.0) if len(f3) > 1 else 1.0
+            if len(cards) > 3 and not cards[3].is_blank:
+                f4 = cards[3].cut("LEAK_5_2")
+                c1 = _fval(f4[0], 0.0) if len(f4) > 0 else 0.0
+                c2 = _fval(f4[1], 1.0) if len(f4) > 1 else 1.0
+                c3 = _fval(f4[2], 0.0) if len(f4) > 2 else 0.0
+        else:
+            if len(cards) > 2 and not cards[2].is_blank:
+                f3 = cards[2].cut("LEAK_3")
+                bcoeft1 = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+                acoeft2 = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+                fct_id_lc = _ival(f3[2]) if len(f3) > 2 else 0
+                fct_id_ac = _ival(f3[3]) if len(f3) > 3 else 0
+                fscale_lc = _fval(f3[4], 1.0) if len(f3) > 4 else 1.0
+                fscale_ac = _fval(f3[5], 1.0) if len(f3) > 5 else 1.0
     else:
         t1 = cards[0].tokens()
         ileakage = int(float(t1[0])) if len(t1) > 0 else 0
@@ -11703,22 +12051,40 @@ def read_leak(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             fct_id_e = int(float(t2[1])) if len(t2) > 1 else 0
             fscale_e = float(t2[2]) if len(t2) > 2 else 1.0
 
-        if len(cards) > 2 and not cards[2].is_blank:
-            t3 = cards[2].tokens()
-            bcoeft1 = float(t3[0]) if len(t3) > 0 else 0.0
-            acoeft2 = float(t3[1]) if len(t3) > 1 else 0.0
-            fct_id_lc = int(float(t3[2])) if len(t3) > 2 else 0
-            fct_id_ac = int(float(t3[3])) if len(t3) > 3 else 0
-            fscale_lc = float(t3[4]) if len(t3) > 4 else 1.0
-            fscale_ac = float(t3[5]) if len(t3) > 5 else 1.0
+        if ileakage == 5:
+            if len(cards) > 2 and not cards[2].is_blank:
+                t3 = cards[2].tokens()
+                length = float(t3[0]) if len(t3) > 0 else 1.0
+                thick = float(t3[1]) if len(t3) > 1 else 1.0
+            if len(cards) > 3 and not cards[3].is_blank:
+                t4 = cards[3].tokens()
+                c1 = float(t4[0]) if len(t4) > 0 else 0.0
+                c2 = float(t4[1]) if len(t4) > 1 else 1.0
+                c3 = float(t4[2]) if len(t4) > 2 else 0.0
+        else:
+            if len(cards) > 2 and not cards[2].is_blank:
+                t3 = cards[2].tokens()
+                bcoeft1 = float(t3[0]) if len(t3) > 0 else 0.0
+                acoeft2 = float(t3[1]) if len(t3) > 1 else 0.0
+                fct_id_lc = int(float(t3[2])) if len(t3) > 2 else 0
+                fct_id_ac = int(float(t3[3])) if len(t3) > 3 else 0
+                fscale_lc = float(t3[4]) if len(t3) > 4 else 1.0
+                fscale_ac = float(t3[5]) if len(t3) > 5 else 1.0
 
-    model.leak_mats[block.user_id] = LeakMat(
+    lm = LeakMat(
         id=block.user_id, subtype=subtype, title=title, ileakage=ileakage,
         scale_t=scale_t, scale_p=scale_p, acoeft1=acoeft1,
         fct_id_e=fct_id_e, fscale_e=fscale_e, bcoeft1=bcoeft1,
         acoeft2=acoeft2, fct_id_lc=fct_id_lc, fct_id_ac=fct_id_ac,
         fscale_lc=fscale_lc, fscale_ac=fscale_ac,
+        length=length, thick=thick, c1=c1, c2=c2, c3=c3,
     )
+    if subtype == "PART":
+        model.leak_parts[block.user_id] = lm
+    elif subtype == "AREA":
+        model.leak_areas[block.user_id] = lm
+    else:
+        model.leak_mats[block.user_id] = lm
 
 
 def read_retractor(block: KeywordBlock, model: Model, log: MessageLog) -> None:

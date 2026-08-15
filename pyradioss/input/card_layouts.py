@@ -675,7 +675,7 @@ LAYOUTS: Dict[str, List[int]] = {
     # INISTATE (M104)
     "INISTATE_1": [10, 10],
 
-    # MONVOL (M105)
+    # MONVOL (M105, M133)
     "MONVOL_PRES_1": [10, 20, 20, 10],
     "MONVOL_GAS_1": [10, 10, 20],
     "MONVOL_GAS_2": [20, 20, 20, 20, 20],
@@ -688,11 +688,27 @@ LAYOUTS: Dict[str, List[int]] = {
     "MONVOL_LFLUID_2": [20, 20],
     "MONVOL_LFLUID_3": [20],
     "MONVOL_LFLUID_4": [10, 10, 20, 20],
+    "MONVOL_AIRBAG_1": [10],
+    "MONVOL_AIRBAG_2": [20, 20, 20, 20, 20],
+    "MONVOL_AIRBAG_3": [20, 20, 20, 10, 10],
+    "MONVOL_AIRBAG_4": [20, 20, 20, 20],
+    "MONVOL_AIRBAG_JET1": [20, 20, 20, 20],
+    "MONVOL_AIRBAG_JET2": [10, 10, 20, 10, 20, 10],
+    "MONVOL_AIRBAG_JET3": [10, 10, 10, 10],
+    "MONVOL_AIRBAG_VENT1": [10, 20, 20, 20],
+    "MONVOL_AIRBAG_VENT2": [20, 20, 20, 10, 20, 10],
+    "MONVOL_COMMU5_1": [10],
+    "MONVOL_COMMU5_2": [20, 20, 20, 20, 20],
+    "MONVOL_COMMU5_3": [20, 20, 20, 10, 10],
+    "MONVOL_COMMU5_4": [20, 20, 20, 20],
+    "MONVOL_PART_1": [10, 10, 20],
 
-    # LEAK (M105)
+    # LEAK (M105, M133)
     "LEAK_1": [10, 20, 20],
     "LEAK_2": [20, 10, 20],
     "LEAK_3": [20, 20, 10, 10, 20, 20],
+    "LEAK_5_1": [20, 20],
+    "LEAK_5_2": [20, 20, 20],
 
     # ALE (M105)
     "ALE_GRID_1": [20, 20, 20, 20],

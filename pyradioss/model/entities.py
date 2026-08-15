@@ -2180,8 +2180,111 @@ class MonvolLFluid:
 
 
 @dataclass
+class MonvolAirbagJet:
+    """Injector jet specification for /MONVOL/AIRBAG or /MONVOL/COMMU."""
+    gamma: float = 1.4
+    cpa: float = 0.0
+    cpb: float = 0.0
+    cpc: float = 0.0
+    fct_id_mass: int = 0
+    iflow: int = 0
+    fscale_mass: float = 1.0
+    fct_id_t: int = 0
+    fscale_t: float = 1.0
+    sens_id: int = 0
+    ijet: int = 0
+    n1: int = 0
+    n2: int = 0
+    n3: int = 0
+
+
+@dataclass
+class MonvolAirbagVent:
+    """Vent hole or porous surface specification for /MONVOL/AIRBAG or /MONVOL/COMMU."""
+    surf_id_v: int = 0
+    avent: float = 0.0
+    bvent: float = 0.0
+    tstop: float = 0.0
+    tvent: float = 0.0
+    dpdef: float = 0.0
+    dtpdef: float = 0.0
+    fct_id_v: int = 0
+    fscale_v: float = 1.0
+
+
+@dataclass
+class MonvolAirbag:
+    """/MONVOL/AIRBAG or /MONVOL/TYPE4 (M133): Multi-gas airbag control volume.
+
+    Fortran origin: ``starter/source/airbag/hm_read_monvol_type4.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    scal_t: float = 1.0
+    scal_p: float = 1.0
+    scal_s: float = 1.0
+    scal_a: float = 1.0
+    scal_d: float = 1.0
+    mu: float = 0.0
+    pext: float = 0.0
+    t0: float = 293.15
+    iequi: int = 0
+    ittf: int = 0
+    gammai: float = 1.4
+    cpai: float = 0.0
+    cpbi: float = 0.0
+    cpci: float = 0.0
+    njet: int = 0
+    jets: List[MonvolAirbagJet] = field(default_factory=list)
+    nvent: int = 0
+    vents: List[MonvolAirbagVent] = field(default_factory=list)
+
+
+@dataclass
+class MonvolCommu:
+    """/MONVOL/COMMU or /MONVOL/TYPE5 (M133): Multi-chamber communicating volume.
+
+    Fortran origin: ``starter/source/airbag/hm_read_monvol_type5.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    scal_t: float = 1.0
+    scal_p: float = 1.0
+    scal_s: float = 1.0
+    scal_a: float = 1.0
+    scal_d: float = 1.0
+    mu: float = 0.0
+    pext: float = 0.0
+    t0: float = 293.15
+    iequi: int = 0
+    ittf: int = 0
+    gammai: float = 1.4
+    cpai: float = 0.0
+    cpbi: float = 0.0
+    cpci: float = 0.0
+    njet: int = 0
+    jets: List[MonvolAirbagJet] = field(default_factory=list)
+    nvent: int = 0
+    vents: List[MonvolAirbagVent] = field(default_factory=list)
+    comm_ids: List[int] = field(default_factory=list)
+
+
+@dataclass
+class MonvolPart:
+    """/MONVOL/PART (M133): Monitored volume defined by part ID / group."""
+    id: int
+    title: str = ""
+    part_id: int = 0
+    grpart_id: int = 0
+    monvol_type: str = "PRES"
+    pini: float = 0.0
+
+
+@dataclass
 class LeakMat:
-    """/LEAK/MAT or /LEAK (M105): Airbag fabric leakage model.
+    """/LEAK/MAT, /LEAK/PART, /LEAK/AREA (M105, M133): Airbag fabric leakage model.
 
     Fortran origin: ``starter/source/airbag/hm_read_leak.F``.
     """
@@ -2200,6 +2303,12 @@ class LeakMat:
     fct_id_ac: int = 0
     fscale_lc: float = 1.0
     fscale_ac: float = 1.0
+    # Ileakage == 5 micromechanical formulation:
+    length: float = 1.0
+    thick: float = 1.0
+    c1: float = 0.0
+    c2: float = 1.0
+    c3: float = 0.0
 
 
 @dataclass
@@ -2874,6 +2983,10 @@ class MonvolArea:
     scale_s: float = 1.0
     scale_a: float = 1.0
     scale_d: float = 1.0
+
+    @property
+    def surf_id(self) -> int:
+        return self.surf_id_ext
 
 
 @dataclass

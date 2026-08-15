@@ -48,6 +48,7 @@ from .entities import (
     AnalyGlobal, UpwindGlobal, CaaControl,
     Gauge, Cluster, ExtLink, FxBody, IniGrav, IniMap1D, IniMap2D, IniStateFile,
     MonvolPres, MonvolGas, MonvolCommu1, MonvolLFluid, LeakMat,
+    MonvolAirbag, MonvolCommu, MonvolPart,
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
     DetonationWave, ElementActivation, MonvolFvmBag2, Autoposition,
@@ -696,7 +697,12 @@ class Model:
         self.monvol_gases: Dict[int, MonvolGas] = {}   # /MONVOL/GAS (M105)
         self.monvol_commus: Dict[int, MonvolCommu1] = {} # /MONVOL/COMMU1 (M105)
         self.monvol_lfluids: Dict[int, MonvolLFluid] = {} # /MONVOL/LFLUID (M105)
-        self.leak_mats: Dict[int, LeakMat] = {}        # /LEAK (M105)
+        self.monvol_airbags: Dict[int, MonvolAirbag] = {} # /MONVOL/AIRBAG (M133)
+        self.monvol_commu_type5: Dict[int, MonvolCommu] = {} # /MONVOL/COMMU TYPE5 (M133)
+        self.monvol_parts: Dict[int, MonvolPart] = {}   # /MONVOL/PART (M133)
+        self.leak_mats: Dict[int, LeakMat] = {}        # /LEAK/MAT (M105, M133)
+        self.leak_parts: Dict[int, LeakMat] = {}       # /LEAK/PART (M133)
+        self.leak_areas: Dict[int, LeakMat] = {}       # /LEAK/AREA (M133)
         self.ale_grids: Dict[int, AleGrid] = {}        # /ALE/GRID (M105)
         self.ale_links: Dict[int, AleLink] = {}        # /ALE/LINK (M105)
         self.ale_solver: Optional[AleSolver] = None    # /ALE/SOLVER (M105)
