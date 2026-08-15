@@ -1161,6 +1161,19 @@ LAYOUTS: Dict[str, List[int]] = {
     "SURF_ELLIPSE_2": [20, 20, 20],
     "SURF_ELLIPSE_3": [20, 20, 20],
     "DFS_WAVE_SHAPER_1": [10, 10, 20, 20],
+
+    # EXTENDED GEOMETRY, TRANSFORMS & DAMPING (M134)
+    "SURF_CYL_1": [10, 20, 20],
+    "SURF_CYL_2": [20, 20, 20],
+    "SURF_CYL_3": [20, 20, 20],
+    "SURF_SPHER_1": [10, 20],
+    "SURF_SPHER_2": [20, 20, 20],
+    "LINE_CIRC_1": [20, 20, 20, 20],
+    "LINE_CIRC_2": [20, 20, 20],
+    "TRANSFORM_PROJ_1": [10, 10, 10, 20],
+    "TRANSFORM_PROJ_2": [20, 20, 20],
+    "TRANSFORM_FRAME_1": [10, 10, 10],
+    "DAMP_PART_1": [10, 20, 20, 20, 20],
 }
 
 

@@ -49,6 +49,7 @@ from ..model.entities import (
     Gauge, Cluster, ExtLink, FxBody, IniGrav, IniMap1D, IniMap2D, IniStateFile,
     MonvolPres, MonvolGas, MonvolCommu1, MonvolLFluid, LeakMat,
     MonvolAirbag, MonvolAirbagJet, MonvolAirbagVent, MonvolCommu, MonvolPart,
+    DampGlobal, DampPart, TransformProjection, TransformFrame,
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
     Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
@@ -4332,6 +4333,73 @@ def read_surf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             s.ellipse_skew = skew_id
             s.ellipse_center = np.array([xc, yc, zc], dtype=float)
             s.ellipse_semiaxes = np.array([sa, sb, sc], dtype=float)
+    elif target in ("CYL", "CYLIND"):
+        # /SURF/CYL (M134):
+        # Card 1: Skew_ID, Radius, Length
+        # Card 2: X0, Y0, Z0
+        # Card 3: Ax, Ay, Az
+        if len(cards) < 3:
+            log.error(f"/SURF/CYL/{block.user_id}: requires 3 data cards (Skew/R/L, Origin, Axis)", block.source)
+        else:
+            if block.fixed:
+                f1 = cards[0].cut("SURF_CYL_1")
+                rad = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                leng = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+                f2 = cards[1].cut("SURF_CYL_2")
+                x0 = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                y0 = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                z0 = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+                f3 = cards[2].cut("SURF_CYL_3")
+                ax = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+                ay = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+                az = _fval(f3[2], 1.0) if len(f3) > 2 else 1.0
+            else:
+                t1 = cards[0].tokens()
+                rad = float(t1[1]) if len(t1) > 1 else 0.0
+                leng = float(t1[2]) if len(t1) > 2 else 0.0
+                t2 = cards[1].tokens()
+                x0 = float(t2[0]) if len(t2) > 0 else 0.0
+                y0 = float(t2[1]) if len(t2) > 1 else 0.0
+                z0 = float(t2[2]) if len(t2) > 2 else 0.0
+                t3 = cards[2].tokens()
+                ax = float(t3[0]) if len(t3) > 0 else 0.0
+                ay = float(t3[1]) if len(t3) > 1 else 0.0
+                az = float(t3[2]) if len(t3) > 2 else 1.0
+            s.cyl_radius = rad
+            s.cyl_length = leng
+            s.cyl_center = np.array([x0, y0, z0], dtype=float)
+            s.cyl_axis = np.array([ax, ay, az], dtype=float)
+    elif target in ("SPHER", "SPHERE"):
+        # /SURF/SPHER (M134):
+        # Card 1: Skew_ID, Radius
+        # Card 2: Xc, Yc, Zc
+        if len(cards) < 2:
+            log.error(f"/SURF/SPHER/{block.user_id}: requires 2 data cards (Skew/R, Center)", block.source)
+        else:
+            if block.fixed:
+                f1 = cards[0].cut("SURF_SPHER_1")
+                rad = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                f2 = cards[1].cut("SURF_SPHER_2")
+                xc = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                yc = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                zc = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            else:
+                t1 = cards[0].tokens()
+                rad = float(t1[1]) if len(t1) > 1 else 0.0
+                t2 = cards[1].tokens()
+                xc = float(t2[0]) if len(t2) > 0 else 0.0
+                yc = float(t2[1]) if len(t2) > 1 else 0.0
+                zc = float(t2[2]) if len(t2) > 2 else 0.0
+            s.spher_radius = rad
+            s.spher_center = np.array([xc, yc, zc], dtype=float)
+    elif target in ("SUB", "SUBSET"):
+        sub_ids = _id_list(block, cards)
+        s.subset_surf_ids.extend(sub_ids)
+        s.surf_ids.extend(sub_ids)
+    elif target in ("ALL", "EXT", "FREE"):
+        s.modifier = target
+        if cards and not cards[0].is_blank:
+            s.part_ids.extend(_id_list(block, cards))
     else:
         log.warning(f"/SURF/{'/'.join(all_parts[1:])} not ported", block.source)
 
@@ -6111,6 +6179,54 @@ def read_damp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if sub in ("FUNCT", "FUNCTION"):
         read_damp_funct(block, model, log)
+        return
+    if sub in ("GLOBAL", "GLOB"):
+        # /DAMP/GLOBAL (M134)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/DAMP/GLOBAL/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("DAMP")
+            alpha = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            beta = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            tstart = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+            tstop = _fval(f[5], 1.0e30) if len(f) > 5 and _fval(f[5]) > 0.0 else 1.0e30
+        else:
+            t = cards[0].tokens()
+            alpha = float(t[0]) if len(t) > 0 else 0.0
+            beta = float(t[1]) if len(t) > 1 else 0.0
+            tstart = float(t[2]) if len(t) > 2 else 0.0
+            tstop = float(t[3]) if len(t) > 3 else 1.0e30
+        model.damp_globals.append(DampGlobal(
+            id=block.user_id, title=title, alpha=alpha, beta=beta,
+            tstart=tstart, tstop=tstop
+        ))
+        return
+    if sub == "PART":
+        # /DAMP/PART (M134)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/DAMP/PART/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("DAMP_PART_1")
+            part_id = _ival(f[0]) if len(f) > 0 else 0
+            alpha = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            beta = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            tstart = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            tstop = _fval(f[4], 1.0e30) if len(f) > 4 and _fval(f[4]) > 0.0 else 1.0e30
+        else:
+            t = cards[0].tokens()
+            part_id = int(float(t[0])) if len(t) > 0 else 0
+            alpha = float(t[1]) if len(t) > 1 else 0.0
+            beta = float(t[2]) if len(t) > 2 else 0.0
+            tstart = float(t[3]) if len(t) > 3 else 0.0
+            tstop = float(t[4]) if len(t) > 4 else 1.0e30
+        model.damp_parts[block.user_id] = DampPart(
+            id=block.user_id, title=title, part_id=part_id,
+            alpha=alpha, beta=beta, tstart=tstart, tstop=tstop
+        )
         return
 
     if block.fixed:
@@ -8291,8 +8407,8 @@ def read_line(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         /LINE/SEG:  card 1 = title, card 2+ = node_ID1 node_ID2 per card
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else "SURF"
-    if kind not in ("SURF", "SEG", "EDGE", "LINE", "PART"):
-        log.warning(f"/LINE/{kind} not ported (SURF, EDGE, LINE, PART, "
+    if kind not in ("SURF", "SEG", "EDGE", "LINE", "PART", "BEAM", "TRUSS", "SPRING", "BOX", "CYL", "SPH", "CIRC", "ALL"):
+        log.warning(f"/LINE/{kind} not ported (SURF, EDGE, LINE, PART, BEAM, TRUSS, SPRING, BOX, CIRC, ALL, "
                     f"SEG supported)", block.source)
         return
     title, cards = _fixed_data(block) if block.fixed \
@@ -8307,6 +8423,46 @@ def read_line(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         line.line_ids.extend(_id_list(block, cards))
     elif kind == "PART":
         line.part_ids.extend(_id_list(block, cards))
+    elif kind == "BEAM":
+        line.beam_ids.extend(_id_list(block, cards))
+    elif kind == "TRUSS":
+        line.truss_ids.extend(_id_list(block, cards))
+    elif kind == "SPRING":
+        line.spring_ids.extend(_id_list(block, cards))
+    elif kind in ("BOX", "CYL", "SPH"):
+        line.box_ids.extend(_id_list(block, cards))
+    elif kind == "CIRC":
+        # /LINE/CIRC (M134):
+        # Card 1: Xc, Yc, Zc, Radius
+        # Card 2: Nx, Ny, Nz
+        if len(cards) < 2:
+            log.error(f"/LINE/CIRC/{block.user_id}: requires 2 data cards (Center/Radius, Normal)", block.source)
+        else:
+            if block.fixed:
+                f1 = cards[0].cut("LINE_CIRC_1")
+                xc = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+                yc = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                zc = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+                rad = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+                f2 = cards[1].cut("LINE_CIRC_2")
+                nx = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                ny = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                nz = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            else:
+                t1 = cards[0].tokens()
+                xc = float(t1[0]) if len(t1) > 0 else 0.0
+                yc = float(t1[1]) if len(t1) > 1 else 0.0
+                zc = float(t1[2]) if len(t1) > 2 else 0.0
+                rad = float(t1[3]) if len(t1) > 3 else 0.0
+                t2 = cards[1].tokens()
+                nx = float(t2[0]) if len(t2) > 0 else 0.0
+                ny = float(t2[1]) if len(t2) > 1 else 0.0
+                nz = float(t2[2]) if len(t2) > 2 else 1.0
+            line.circ_center = np.array([xc, yc, zc], dtype=float)
+            line.circ_radius = rad
+            line.circ_axis = np.array([nx, ny, nz], dtype=float)
+    elif kind == "ALL":
+        line.all_boundary = True
     else:
         for card in cards:
             if card.is_blank:
@@ -12366,9 +12522,9 @@ def read_transform(block: KeywordBlock, model: Model,
     else:
         sub = ""
 
-    if sub not in ("TRA", "ROT", "SYM", "SCA", "POS", "POSITION", "AUTOPOSITION", "AUTOPOS"):
+    if sub not in ("TRA", "ROT", "SYM", "SCA", "POS", "POSITION", "AUTOPOSITION", "AUTOPOS", "PROJ", "PROJECTION", "FRAME"):
         log.warning(f"/TRANSFORM/{sub} not ported — block skipped "
-                    f"(supported: TRA, ROT, SYM, SCA, POS, AUTOPOSITION)", block.source)
+                    f"(supported: TRA, ROT, SYM, SCA, POS, AUTOPOSITION, PROJ, FRAME)", block.source)
         return
 
     if block.fixed:
@@ -12423,6 +12579,62 @@ def read_transform(block: KeywordBlock, model: Model,
             id=block.user_id, title=title, grnod_id=grnod_id, surf_id=surf_id,
             skew_id=skew_id, dir=dir_str, gap=gap, pflag=pflag,
             xpos=xpos, ypos=ypos, zpos=zpos, xflag=xflag, yflag=yflag, zflag=zflag
+        ))
+        return
+
+    if sub in ("PROJ", "PROJECTION"):
+        # /TRANSFORM/PROJ (M134):
+        # Card 1: GRNOD_ID, Proj_type, Target_ID, Dist
+        # Card 2: Dir_X, Dir_Y, Dir_Z
+        if block.fixed:
+            f1 = cards[0].cut("TRANSFORM_PROJ_1")
+            grnod_id = _ival(f1[0]) if len(f1) > 0 else 0
+            proj_type = f1[1].strip() if len(f1) > 1 and f1[1].strip() else "PLANE"
+            target_id = _ival(f1[2]) if len(f1) > 2 else 0
+            dist = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+            dir_x, dir_y, dir_z = 0.0, 0.0, 1.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = cards[1].cut("TRANSFORM_PROJ_2")
+                dir_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                dir_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                dir_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+        else:
+            t1 = cards[0].tokens()
+            grnod_id = int(float(t1[0])) if len(t1) > 0 else 0
+            proj_type = t1[1].upper() if len(t1) > 1 else "PLANE"
+            target_id = int(float(t1[2])) if len(t1) > 2 else 0
+            dist = float(t1[3]) if len(t1) > 3 else 0.0
+            dir_x, dir_y, dir_z = 0.0, 0.0, 1.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t2 = cards[1].tokens()
+                dir_x = float(t2[0]) if len(t2) > 0 else 0.0
+                dir_y = float(t2[1]) if len(t2) > 1 else 0.0
+                dir_z = float(t2[2]) if len(t2) > 2 else 1.0
+
+        model.transform_projections.append(TransformProjection(
+            id=block.user_id, title=title, grnod_id=grnod_id,
+            proj_type=proj_type, target_id=target_id,
+            dir_vector=(dir_x, dir_y, dir_z), dist=dist
+        ))
+        return
+
+    if sub == "FRAME":
+        # /TRANSFORM/FRAME (M134):
+        # Card 1: GRNOD_ID, Frame_orig, Frame_dest
+        if block.fixed:
+            f = cards[0].cut("TRANSFORM_FRAME_1")
+            grnod_id = _ival(f[0]) if len(f) > 0 else 0
+            frame_orig = _ival(f[1]) if len(f) > 1 else 0
+            frame_dest = _ival(f[2]) if len(f) > 2 else 0
+        else:
+            t = cards[0].tokens()
+            grnod_id = int(float(t[0])) if len(t) > 0 else 0
+            frame_orig = int(float(t[1])) if len(t) > 1 else 0
+            frame_dest = int(float(t[2])) if len(t) > 2 else 0
+
+        model.transform_frames.append(TransformFrame(
+            id=block.user_id, title=title, grnod_id=grnod_id,
+            frame_orig=frame_orig, frame_dest=frame_dest
         ))
         return
 

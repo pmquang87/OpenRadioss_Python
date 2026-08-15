@@ -292,6 +292,14 @@ class Surface:
     ellipse_center: Optional[np.ndarray] = None        # (3,) [Xc, Yc, Zc]
     ellipse_semiaxes: Optional[np.ndarray] = None      # (3,) [a, b, c]
     ellipse_skew: int = 0
+    # /SURF/CYL & /SURF/SPHER & /SURF/SUB (M134):
+    cyl_center: Optional[np.ndarray] = None            # (3,) [X0, Y0, Z0]
+    cyl_axis: Optional[np.ndarray] = None              # (3,) [Ax, Ay, Az]
+    cyl_radius: float = 0.0
+    cyl_length: float = 0.0
+    spher_center: Optional[np.ndarray] = None          # (3,) [Xc, Yc, Zc]
+    spher_radius: float = 0.0
+    subset_surf_ids: List[int] = field(default_factory=list)
 
 
 @dataclass
@@ -314,7 +322,9 @@ class Line:
     * ``/LINE/LINE`` (M37) — line-of-lines: the listed lines' edges
       concatenated (hm_lines_of_lines.F, fixpoint + cycle detection);
     * ``/LINE/PART`` (M37) — every 1-D element (truss/beam/spring) of
-      the listed parts becomes an edge (elem_1D_line_buffer.F).
+      the listed parts becomes an edge (elem_1D_line_buffer.F);
+    * ``/LINE/BEAM``, ``/LINE/TRUSS``, ``/LINE/SPRING`` (M134) — direct 1D sets;
+    * ``/LINE/BOX``, ``/LINE/CIRC``, ``/LINE/ALL`` (M134) — geometric/boundary lines.
     """
 
     id: int
@@ -324,6 +334,15 @@ class Line:
     edge_surf_ids: List[int] = field(default_factory=list)    # /LINE/EDGE (M37)
     line_ids: List[int] = field(default_factory=list)         # /LINE/LINE (M37)
     part_ids: List[int] = field(default_factory=list)         # /LINE/PART (M37)
+    # M134 extensions:
+    beam_ids: List[int] = field(default_factory=list)         # /LINE/BEAM
+    truss_ids: List[int] = field(default_factory=list)        # /LINE/TRUSS
+    spring_ids: List[int] = field(default_factory=list)       # /LINE/SPRING
+    box_ids: List[int] = field(default_factory=list)          # /LINE/BOX
+    circ_center: Optional[np.ndarray] = None                  # /LINE/CIRC center
+    circ_radius: float = 0.0                                  # /LINE/CIRC radius
+    circ_axis: Optional[np.ndarray] = None                    # /LINE/CIRC normal
+    all_boundary: bool = False                                # /LINE/ALL
     # Resolved by the Starter: (nseg, 2) node indices + provenance
     # (same convention as Surface.seg_gtype/seg_elem).
     segments: Optional[np.ndarray] = None
@@ -1917,6 +1936,29 @@ class DampRange:
 
 
 @dataclass
+class DampGlobal:
+    """/DAMP/GLOBAL (M134): Global mass/stiffness Rayleigh damping."""
+    id: int = 1
+    title: str = ""
+    alpha: float = 0.0
+    beta: float = 0.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+
+
+@dataclass
+class DampPart:
+    """/DAMP/PART (M134): Per-part Rayleigh damping factor."""
+    id: int
+    title: str = ""
+    part_id: int = 0
+    alpha: float = 0.0
+    beta: float = 0.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+
+
+@dataclass
 class AnalyGlobal:
     """/ANALY (M103): Global analysis type options.
 
@@ -3077,6 +3119,28 @@ class TransformPosition:
     node_ids: tuple[int, ...] = (0, 0, 0, 0, 0, 0)
     submodel: int = 0
     points: tuple[tuple[float, float, float], ...] = ()
+
+
+@dataclass
+class TransformProjection:
+    """/TRANSFORM/PROJ (M134): Node group projection transformation."""
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+    proj_type: str = "PLANE"
+    target_id: int = 0
+    dir_vector: tuple[float, float, float] = (0.0, 0.0, 1.0)
+    dist: float = 0.0
+
+
+@dataclass
+class TransformFrame:
+    """/TRANSFORM/FRAME (M134): Coordinate frame transformation."""
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+    frame_orig: int = 0
+    frame_dest: int = 0
 
 
 @dataclass

@@ -61,7 +61,8 @@ from .entities import (
     SectCircle, SectParal, DynainShell, MonvolArea, StateDt,
     SphReserve, MoveFunct,
     EigenMode, StressFile, MemoryRequest,
-    FailFractal, TransformPosition, ExternalLink, ArchSpec,
+    FailFractal, TransformPosition, TransformProjection, TransformFrame,
+    DampGlobal, DampPart, ExternalLink, ArchSpec,
     FunctPython, FrictionModel, FrictionPartPair, RefstaNode, ErefSpec,
     NbcsBlock, NbcsNode, AleMuscl, BemModel,
     GaugePoint, SphGlo, AnalyOptions, AleCfdSph,
@@ -718,6 +719,10 @@ class Model:
         self.activations: List[ElementActivation] = [] # /ACTIV (M110)
         self.monvol_fvmbag2s: Dict[int, MonvolFvmBag2] = {} # /MONVOL/FVMBAG2 (M111)
         self.autopositions: List[Autoposition] = []    # /TRANSFORM/AUTOPOSITION (M111)
+        self.transform_projections: List[TransformProjection] = [] # /TRANSFORM/PROJ (M134)
+        self.transform_frames: List[TransformFrame] = [] # /TRANSFORM/FRAME (M134)
+        self.damp_globals: List[DampGlobal] = []       # /DAMP/GLOBAL (M134)
+        self.damp_parts: Dict[int, DampPart] = {}      # /DAMP/PART (M134)
         self.load_centris: Dict[int, LoadCentri] = {}       # /LOAD/CENTRI (M112)
         self.load_pfluids: Dict[int, LoadPfluid] = {}       # /LOAD/PFLUID (M112)
         self.load_pressures: Dict[int, LoadPressure] = {}   # /LOAD/PRESSURE (M112)
