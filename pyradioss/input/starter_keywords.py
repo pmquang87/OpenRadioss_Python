@@ -1137,13 +1137,13 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     "TENSSTRAIN", "ORTHSTRAIN", "GURSON", "ALTER", "VISUAL", "MULLINS_OR",
                     "PUCK", "RTCL", "SAHRAEI", "SYAZWAN", "TAB2", "GENE1", "INIEVO",
                     "CHANG", "TSAIWU", "TSAIHILL", "HOFFMAN", "MAXSTRAIN", "HASHIN",
-                    "LEMAITRE", "COCKCROFT", "ENERGY"):
+                    "LEMAITRE", "COCKCROFT", "ENERGY", "COMPOSITE"):
         log.warning(f"/FAIL/{kind} not ported — skipped "
                     f"(supported: JOHNSON, BIQUAD, TAB1, SNCONNECT, FLD, CONNECT, "
                     f"TENSSTRAIN, ORTHSTRAIN, GURSON, ALTER, VISUAL, MULLINS_OR, "
                     f"PUCK, RTCL, SAHRAEI, SYAZWAN, TAB2, GENE1, INIEVO, "
                     f"CHANG, TSAIWU, TSAIHILL, HOFFMAN, MAXSTRAIN, HASHIN, "
-                    f"LEMAITRE, COCKCROFT, ENERGY)", block.source)
+                    f"LEMAITRE, COCKCROFT, ENERGY, COMPOSITE)", block.source)
         return
     # header /FAIL/<kind>/mat_ID[/fail_ID]: with TWO trailing ids the
     # FIRST is the material id (the lexer keeps only the last as user_id)
@@ -1927,6 +1927,70 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "e1": e1, "e2": e2, "fct_id": fct_id, "xscale": xscale, "i_dam": i_dam, "failip": failip,
         }
         fm = FailureModel(type="ENERGY", ifail_sh=1, params=params)
+    elif kind == "COMPOSITE":
+        from ..model.entities import FailComposite
+        if len(cards) < 3:
+            log.error(f"/FAIL/COMPOSITE/{mat_id}: requires at least 3 data cards", block.source)
+            return
+        if block.fixed:
+            f1 = cards[0].cut("FAIL_COMPOSITE_1")
+            s1t = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+            s1c = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+            s2t = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+            s2c = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+            s12 = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+
+            f2 = cards[1].cut("FAIL_COMPOSITE_2")
+            s3t = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            s3c = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            s23 = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            s31 = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+
+            f3 = cards[2].cut("FAIL_COMPOSITE_3")
+            beta = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+            tau_max = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+            expn = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+            ifail_sh = _ival(f3[3], 0) if len(f3) > 3 else 0
+            ifail_so = _ival(f3[4], 0) if len(f3) > 4 else 0
+
+            fail_id = 0
+            if len(cards) > 3 and not cards[3].is_blank:
+                fail_id = _ival(cards[3].raw.strip())
+        else:
+            t1 = cards[0].tokens()
+            s1t = float(t1[0]) if len(t1) > 0 else 0.0
+            s1c = float(t1[1]) if len(t1) > 1 else 0.0
+            s2t = float(t1[2]) if len(t1) > 2 else 0.0
+            s2c = float(t1[3]) if len(t1) > 3 else 0.0
+            s12 = float(t1[4]) if len(t1) > 4 else 0.0
+
+            t2 = cards[1].tokens()
+            s3t = float(t2[0]) if len(t2) > 0 else 0.0
+            s3c = float(t2[1]) if len(t2) > 1 else 0.0
+            s23 = float(t2[2]) if len(t2) > 2 else 0.0
+            s31 = float(t2[3]) if len(t2) > 3 else 0.0
+
+            t3 = cards[2].tokens()
+            beta = float(t3[0]) if len(t3) > 0 else 0.0
+            tau_max = float(t3[1]) if len(t3) > 1 else 0.0
+            expn = float(t3[2]) if len(t3) > 2 else 0.0
+            ifail_sh = int(float(t3[3])) if len(t3) > 3 else 0
+            ifail_so = int(float(t3[4])) if len(t3) > 4 else 0
+
+            fail_id = 0
+            if len(cards) > 3 and not cards[3].is_blank:
+                fail_id = int(float(cards[3].tokens()[0]))
+
+        fc = FailComposite(
+            mat_id=mat_id, sig_1t=s1t, sig_1c=s1c, sig_2t=s2t, sig_2c=s2c, sig_12=s12,
+            sig_3t=s3t, sig_3c=s3c, sig_23=s23, sig_31=s31, beta=beta, tau_max=tau_max,
+            expn=expn, ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id
+        )
+        model.fail_composites[mat_id] = fc
+        params = {"sig_1t": s1t, "sig_1c": s1c, "sig_2t": s2t, "sig_2c": s2c, "sig_12": s12,
+                  "sig_3t": s3t, "sig_3c": s3c, "sig_23": s23, "sig_31": s31,
+                  "beta": beta, "tau_max": tau_max, "expn": expn, "ifail_so": ifail_so}
+        fm = FailureModel(type="COMPOSITE", ifail_sh=ifail_sh if ifail_sh else 1, params=params)
     # attachment to the material happens in the Starter resolve step
     # (initialization.resolve_materials) so deck order does not matter
     model.raw_fails.append((mat_id, fm, block.source))
@@ -3831,6 +3895,10 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_bcs_wall(block, model, log)
         return
 
+    if len(block.parts) > 1 and block.parts[1].upper() == "PROPELLANT":
+        read_ebcs_propellant(block, model, log)
+        return
+
     if len(block.parts) > 1 and block.parts[1].upper() == "CYCLIC":
         title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
         if not cards or (block.fixed and cards[0].is_blank):
@@ -5299,6 +5367,10 @@ def read_admas(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       Non-zero types (distributed-total variants) are read with the
       per-node semantics and warned, as before M37.
     """
+    if len(block.parts) > 1 and "NON_UNIFORM" in block.parts[1].upper():
+        read_admas_non_uniform(block, model, log)
+        return
+
     admas_id = block.user_id
     if block.unit_id is not None:
         # two-int header: first int is the TYPE, second the option id
@@ -5881,11 +5953,14 @@ def read_sect(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """
     sub = block.parts[1].upper() if (
         len(block.parts) > 1 and not block.parts[1].isdigit()) else ""
-    if sub:
-        log.warning(f"/SECT/{sub} not ported (plain /SECT supported: the "
-                    f"port section is a side-set force sum — the "
-                    f"{sub} cut defines no node group) — block skipped",
-                    block.source)
+    if sub == "CIRCLE":
+        read_sect_circle(block, model, log)
+        return
+    elif sub == "PARAL":
+        read_sect_paral(block, model, log)
+        return
+    elif sub:
+        log.warning(f"/SECT/{sub} not ported (plain /SECT, /SECT/CIRCLE, /SECT/PARAL supported)", block.source)
         return
     if block.fixed:
         title, cards = _fixed_data(block)
@@ -7850,6 +7925,374 @@ def read_subset(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.subsets[block.user_id] = Subset(
         id=block.user_id, title=title, assembly_ids=assembly_ids
     )
+
+
+def read_ebcs_propellant(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/PROPELLANT/id`` or ``/BCS/PROPELLANT/id`` (M114): Solid propellant combustion boundary::
+
+        card 1:  title
+        card 2:  surf_ID  sensor_id  submat_id  ienthalpy
+        card 3:  rho0s  Tburn
+        card 4:  param_a  param_n
+        card 5:  ffunc_id  (blank)  fscaleX  fscaleY
+        card 6:  gfunc_id  (blank)  gscaleX  gscaleY
+        card 7:  hfunc_id  (blank)  hscaleX  hscaleY
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/EBCS/PROPELLANT/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import EbcsPropellant
+
+    surf_id, sens_id, submat_id, ienthalpy = 0, 0, 1, 1
+    rho0s, tburn = 0.0, 300.0
+    param_a, param_n = 0.0, 0.0
+    ffunc_id, fscaleX, fscaleY = 0, 1.0, 1.0
+    gfunc_id, gscaleX, gscaleY = 0, 1.0, 1.0
+    hfunc_id, hscaleX, hscaleY = 0, 1.0, 1.0
+
+    if block.fixed:
+        f1 = cards[0].cut("EBCS_PROPELLANT_1")
+        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+        sens_id = _ival(f1[1]) if len(f1) > 1 else 0
+        submat_id = _ival(f1[2], default=1) if len(f1) > 2 else 1
+        ienthalpy = _ival(f1[3], default=1) if len(f1) > 3 else 1
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("EBCS_PROPELLANT_2")
+            rho0s = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            tburn = _fval(f2[1], 300.0) if len(f2) > 1 else 300.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("EBCS_PROPELLANT_3")
+            param_a = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+            param_n = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("EBCS_PROPELLANT_FUNC")
+            ffunc_id = _ival(f4[0]) if len(f4) > 0 else 0
+            fscaleX = _fval(f4[2], 1.0) if len(f4) > 2 else 1.0
+            fscaleY = _fval(f4[3], 1.0) if len(f4) > 3 else 1.0
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            f5 = cards[4].cut("EBCS_PROPELLANT_FUNC")
+            gfunc_id = _ival(f5[0]) if len(f5) > 0 else 0
+            gscaleX = _fval(f5[2], 1.0) if len(f5) > 2 else 1.0
+            gscaleY = _fval(f5[3], 1.0) if len(f5) > 3 else 1.0
+
+        if len(cards) > 5 and not cards[5].is_blank:
+            f6 = cards[5].cut("EBCS_PROPELLANT_FUNC")
+            hfunc_id = _ival(f6[0]) if len(f6) > 0 else 0
+            hscaleX = _fval(f6[2], 1.0) if len(f6) > 2 else 1.0
+            hscaleY = _fval(f6[3], 1.0) if len(f6) > 3 else 1.0
+    else:
+        t1 = cards[0].tokens()
+        surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+        sens_id = int(float(t1[1])) if len(t1) > 1 else 0
+        submat_id = int(float(t1[2])) if len(t1) > 2 else 1
+        ienthalpy = int(float(t1[3])) if len(t1) > 3 else 1
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            rho0s = float(t2[0]) if len(t2) > 0 else 0.0
+            tburn = float(t2[1]) if len(t2) > 1 else 300.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            param_a = float(t3[0]) if len(t3) > 0 else 0.0
+            param_n = float(t3[1]) if len(t3) > 1 else 0.0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            t4 = cards[3].tokens()
+            ffunc_id = int(float(t4[0])) if len(t4) > 0 else 0
+            fscaleX = float(t4[1]) if len(t4) > 1 else 1.0
+            fscaleY = float(t4[2]) if len(t4) > 2 else 1.0
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            t5 = cards[4].tokens()
+            gfunc_id = int(float(t5[0])) if len(t5) > 0 else 0
+            gscaleX = float(t5[1]) if len(t5) > 1 else 1.0
+            gscaleY = float(t5[2]) if len(t5) > 2 else 1.0
+
+        if len(cards) > 5 and not cards[5].is_blank:
+            t6 = cards[5].tokens()
+            hfunc_id = int(float(t6[0])) if len(t6) > 0 else 0
+            hscaleX = float(t6[1]) if len(t6) > 1 else 1.0
+            hscaleY = float(t6[2]) if len(t6) > 2 else 1.0
+
+    model.ebcs_propellants[block.user_id] = EbcsPropellant(
+        id=block.user_id, title=title, surf_id=surf_id, sens_id=sens_id,
+        submat_id=submat_id, ienthalpy=ienthalpy, rho0s=rho0s, tburn=tburn,
+        param_a=param_a, param_n=param_n, f_func_id=ffunc_id, f_scale_x=fscaleX,
+        f_scale_y=fscaleY, g_func_id=gfunc_id, g_scale_x=gscaleX, g_scale_y=gscaleY,
+        h_func_id=hfunc_id, h_scale_x=hscaleX, h_scale_y=hscaleY
+    )
+
+
+def read_ebcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/<subtype>/id`` dispatcher (M114)."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub == "PROPELLANT":
+        read_ebcs_propellant(block, model, log)
+    else:
+        read_bcs(block, model, log)
+
+
+def read_admas_non_uniform(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ADMAS/NON_UNIFORM`` or ``/ADMAS/NON_UNIFORM_PART`` (M114): Non-uniform added mass."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else "NON_UNIFORM"
+    is_part = "PART" in sub
+    from ..model.entities import AdmasNonUniform, AdmasNonUniformItem
+
+    cards = block.fixed_cards() if block.fixed else block.cards
+    items = []
+    for c in cards:
+        if c.is_blank:
+            continue
+        if block.fixed:
+            if is_part:
+                f = c.cut("ADMAS_NON_UNIFORM_PART_1")
+                mass = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+                pid = _ival(f[1]) if len(f) > 1 else 0
+                iflag = _ival(f[2]) if len(f) > 2 else 0
+                items.append(AdmasNonUniformItem(mass=mass, entity_id=pid, iflag=iflag))
+            else:
+                f = c.cut("ADMAS_NON_UNIFORM_1")
+                mass = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+                nid = _ival(f[1]) if len(f) > 1 else 0
+                items.append(AdmasNonUniformItem(mass=mass, entity_id=nid, iflag=0))
+        else:
+            toks = c.tokens()
+            if not toks:
+                continue
+            mass = float(toks[0]) if len(toks) > 0 else 0.0
+            eid = int(float(toks[1])) if len(toks) > 1 else 0
+            iflag = int(float(toks[2])) if len(toks) > 2 else 0
+            items.append(AdmasNonUniformItem(mass=mass, entity_id=eid, iflag=iflag))
+
+    aid = block.user_id if block.user_id is not None else (len(model.admas_non_uniforms) + 1)
+    kind = "PART" if is_part else "NODE"
+    model.admas_non_uniforms[aid] = AdmasNonUniform(id=aid, kind=kind, items=items)
+
+
+def read_sect_circle(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SECT/CIRCLE/sect_ID`` (M114): Circular section cut."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SECT/CIRCLE/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import SectCircle
+
+    if block.fixed:
+        f1 = cards[0].cut("SECT_CIRCLE_1")
+        n1 = _ival(f1[0]) if len(f1) > 0 else 0
+        n2 = _ival(f1[1]) if len(f1) > 1 else 0
+        n3 = _ival(f1[2]) if len(f1) > 2 else 0
+        isave = _ival(f1[4]) if len(f1) > 4 else 0
+        delta_t = _fval(f1[6], 0.0) if len(f1) > 6 else 0.0
+        alpha = _fval(f1[7], 0.0) if len(f1) > 7 else 0.0
+
+        file_name = cards[1].raw.strip() if len(cards) > 1 else ""
+
+        f3 = cards[2].cut("SECT_CIRCLE_3") if len(cards) > 2 else []
+        grbric = _ival(f3[0]) if len(f3) > 0 else 0
+        grshel = _ival(f3[2]) if len(f3) > 2 else 0
+        grtrus = _ival(f3[3]) if len(f3) > 3 else 0
+        grbeam = _ival(f3[4]) if len(f3) > 4 else 0
+        grsprg = _ival(f3[5]) if len(f3) > 5 else 0
+        grtria = _ival(f3[6]) if len(f3) > 6 else 0
+        niter = _ival(f3[7]) if len(f3) > 7 else 0
+        iframe = _ival(f3[9]) if len(f3) > 9 else 0
+
+        card_idx = 3
+        int_ids = []
+        if niter > 0 and len(cards) > card_idx:
+            int_ids = [_ival(v) for v in cards[card_idx].cut("IDS10") if v.strip()]
+            card_idx += 1
+
+        center = np.zeros(3)
+        if len(cards) > card_idx and not cards[card_idx].is_blank:
+            fc = cards[card_idx].cut("XYZ20")
+            center = np.array([_fval(fc[0]), _fval(fc[1]), _fval(fc[2])])
+            card_idx += 1
+
+        normal = np.zeros(3)
+        if len(cards) > card_idx and not cards[card_idx].is_blank:
+            fn = cards[card_idx].cut("XYZ20")
+            normal = np.array([_fval(fn[0]), _fval(fn[1]), _fval(fn[2])])
+            card_idx += 1
+
+        radius = 0.0
+        if len(cards) > card_idx and not cards[card_idx].is_blank:
+            radius = _fval(cards[card_idx].cut("SCALE20")[0])
+    else:
+        t1 = cards[0].tokens()
+        n1 = int(float(t1[0])) if len(t1) > 0 else 0
+        n2 = int(float(t1[1])) if len(t1) > 1 else 0
+        n3 = int(float(t1[2])) if len(t1) > 2 else 0
+        isave = int(float(t1[3])) if len(t1) > 3 else 0
+        delta_t = float(t1[4]) if len(t1) > 4 else 0.0
+        alpha = float(t1[5]) if len(t1) > 5 else 0.0
+
+        file_name = cards[1].raw.strip() if len(cards) > 1 else ""
+
+        t3 = cards[2].tokens() if len(cards) > 2 else []
+        grbric = int(float(t3[0])) if len(t3) > 0 else 0
+        grshel = int(float(t3[1])) if len(t3) > 1 else 0
+        grtrus = int(float(t3[2])) if len(t3) > 2 else 0
+        grbeam = int(float(t3[3])) if len(t3) > 3 else 0
+        grsprg = int(float(t3[4])) if len(t3) > 4 else 0
+        grtria = int(float(t3[5])) if len(t3) > 5 else 0
+        niter = int(float(t3[6])) if len(t3) > 6 else 0
+        iframe = int(float(t3[7])) if len(t3) > 7 else 0
+
+        card_idx = 3
+        int_ids = []
+        if niter > 0 and len(cards) > card_idx:
+            int_ids = [int(float(v)) for v in cards[card_idx].tokens() if v.strip()]
+            card_idx += 1
+
+        center = np.zeros(3)
+        if len(cards) > card_idx and not cards[card_idx].is_blank:
+            tc = cards[card_idx].tokens()
+            center = np.array([float(tc[0]), float(tc[1]), float(tc[2])])
+            card_idx += 1
+
+        normal = np.zeros(3)
+        if len(cards) > card_idx and not cards[card_idx].is_blank:
+            tn = cards[card_idx].tokens()
+            normal = np.array([float(tn[0]), float(tn[1]), float(tn[2])])
+            card_idx += 1
+
+        radius = 0.0
+        if len(cards) > card_idx and not cards[card_idx].is_blank:
+            radius = float(cards[card_idx].tokens()[0])
+
+    model.sect_circles[block.user_id] = SectCircle(
+        id=block.user_id, title=title, n1=n1, n2=n2, n3=n3, isave=isave,
+        delta_t=delta_t, alpha=alpha, file_name=file_name, grbric_id=grbric,
+        grshel_id=grshel, grtrus_id=grtrus, grbeam_id=grbeam, grsprg_id=grsprg,
+        grtria_id=grtria, int_ids=int_ids, iframe=iframe, center=center,
+        normal=normal, radius=radius
+    )
+    log.warning(f"/SECT/CIRCLE/{block.user_id}: geometric section cut parsed (/SECT/CIRCLE defines a geometric disc, not a node group side-set sum)", block.source)
+
+
+def read_sect_paral(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SECT/PARAL/sect_ID`` (M114): Parallelogram section cut."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SECT/PARAL/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import SectParal
+
+    if block.fixed:
+        f1 = cards[0].cut("SECT_PARAL_1")
+        n1 = _ival(f1[0]) if len(f1) > 0 else 0
+        n2 = _ival(f1[1]) if len(f1) > 1 else 0
+        n3 = _ival(f1[2]) if len(f1) > 2 else 0
+        isave = _ival(f1[4]) if len(f1) > 4 else 0
+        delta_t = _fval(f1[6], 0.0) if len(f1) > 6 else 0.0
+        alpha = _fval(f1[7], 0.0) if len(f1) > 7 else 0.0
+
+        file_name = cards[1].raw.strip() if len(cards) > 1 else ""
+
+        f3 = cards[2].cut("SECT_CIRCLE_3") if len(cards) > 2 else []
+        grbric = _ival(f3[0]) if len(f3) > 0 else 0
+        grshel = _ival(f3[2]) if len(f3) > 2 else 0
+        grtrus = _ival(f3[3]) if len(f3) > 3 else 0
+        grbeam = _ival(f3[4]) if len(f3) > 4 else 0
+        grsprg = _ival(f3[5]) if len(f3) > 5 else 0
+        grtria = _ival(f3[6]) if len(f3) > 6 else 0
+        niter = _ival(f3[7]) if len(f3) > 7 else 0
+        iframe = _ival(f3[9]) if len(f3) > 9 else 0
+
+        card_idx = 3
+        int_ids = []
+        if niter > 0 and len(cards) > card_idx:
+            int_ids = [_ival(v) for v in cards[card_idx].cut("IDS10") if v.strip()]
+            card_idx += 1
+
+        origin = np.zeros(3)
+        if len(cards) > card_idx and not cards[card_idx].is_blank:
+            fo = cards[card_idx].cut("XYZ20")
+            origin = np.array([_fval(fo[0]), _fval(fo[1]), _fval(fo[2])])
+            card_idx += 1
+
+        corner1 = np.zeros(3)
+        if len(cards) > card_idx and not cards[card_idx].is_blank:
+            fc1 = cards[card_idx].cut("XYZ20")
+            corner1 = np.array([_fval(fc1[0]), _fval(fc1[1]), _fval(fc1[2])])
+            card_idx += 1
+
+        corner2 = np.zeros(3)
+        if len(cards) > card_idx and not cards[card_idx].is_blank:
+            fc2 = cards[card_idx].cut("XYZ20")
+            corner2 = np.array([_fval(fc2[0]), _fval(fc2[1]), _fval(fc2[2])])
+    else:
+        t1 = cards[0].tokens()
+        n1 = int(float(t1[0])) if len(t1) > 0 else 0
+        n2 = int(float(t1[1])) if len(t1) > 1 else 0
+        n3 = int(float(t1[2])) if len(t1) > 2 else 0
+        isave = int(float(t1[3])) if len(t1) > 3 else 0
+        delta_t = float(t1[4]) if len(t1) > 4 else 0.0
+        alpha = float(t1[5]) if len(t1) > 5 else 0.0
+
+        file_name = cards[1].raw.strip() if len(cards) > 1 else ""
+
+        t3 = cards[2].tokens() if len(cards) > 2 else []
+        grbric = int(float(t3[0])) if len(t3) > 0 else 0
+        grshel = int(float(t3[1])) if len(t3) > 1 else 0
+        grtrus = int(float(t3[2])) if len(t3) > 2 else 0
+        grbeam = int(float(t3[3])) if len(t3) > 3 else 0
+        grsprg = int(float(t3[4])) if len(t3) > 4 else 0
+        grtria = int(float(t3[5])) if len(t3) > 5 else 0
+        niter = int(float(t3[6])) if len(t3) > 6 else 0
+        iframe = int(float(t3[7])) if len(t3) > 7 else 0
+
+        card_idx = 3
+        int_ids = []
+        if niter > 0 and len(cards) > card_idx:
+            int_ids = [int(float(v)) for v in cards[card_idx].tokens() if v.strip()]
+            card_idx += 1
+
+        origin = np.zeros(3)
+        if len(cards) > card_idx and not cards[card_idx].is_blank:
+            to = cards[card_idx].tokens()
+            origin = np.array([float(to[0]), float(to[1]), float(to[2])])
+            card_idx += 1
+
+        corner1 = np.zeros(3)
+        if len(cards) > card_idx and not cards[card_idx].is_blank:
+            tc1 = cards[card_idx].tokens()
+            corner1 = np.array([float(tc1[0]), float(tc1[1]), float(tc1[2])])
+            card_idx += 1
+
+        corner2 = np.zeros(3)
+        if len(cards) > card_idx and not cards[card_idx].is_blank:
+            tc2 = cards[card_idx].tokens()
+            corner2 = np.array([float(tc2[0]), float(tc2[1]), float(tc2[2])])
+
+    model.sect_parals[block.user_id] = SectParal(
+        id=block.user_id, title=title, n1=n1, n2=n2, n3=n3, isave=isave,
+        delta_t=delta_t, alpha=alpha, file_name=file_name, grbric_id=grbric,
+        grshel_id=grshel, grtrus_id=grtrus, grbeam_id=grbeam, grsprg_id=grsprg,
+        grtria_id=grtria, int_ids=int_ids, iframe=iframe, origin=origin,
+        corner1=corner1, corner2=corner2
+    )
+    log.warning(f"/SECT/PARAL/{block.user_id}: geometric section cut parsed (/SECT/PARAL defines a geometric plane, not a node group side-set sum)", block.source)
+
+
+def read_checksum(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CHECKSUM``, ``/CHECKSUM/START``, ``/CHECKSUM/END`` (M114)."""
+    pass
+
+
+def read_dynain(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DYNAIN/SHELL/...`` (M114)."""
+    sub = "/".join(block.parts[1:]).upper() if len(block.parts) > 1 else ""
+    from ..model.entities import DynainShell
+    model.dynain_shells.append(DynainShell(option=sub))
 
 
 def read_sms(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -11439,6 +11882,9 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "STAMPING": read_stamping,
     "ACCEL": read_accel,
     "SUBSET": read_subset,
+    "EBCS": read_ebcs,
+    "CHECKSUM": read_checksum,
+    "DYNAIN": read_dynain,
 }
 
 

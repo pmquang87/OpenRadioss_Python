@@ -2594,6 +2594,136 @@ class Subset:
     assembly_ids: List[int] = field(default_factory=list)
 
 
+@dataclass
+class FailComposite:
+    """/FAIL/COMPOSITE (M114): 3D anisotropic composite failure model.
+
+    Fortran origin: ``starter/source/materials/failure/fail_composite.F``.
+    """
+    mat_id: int
+    sig_1t: float = 0.0
+    sig_1c: float = 0.0
+    sig_2t: float = 0.0
+    sig_2c: float = 0.0
+    sig_12: float = 0.0
+    sig_3t: float = 0.0
+    sig_3c: float = 0.0
+    sig_23: float = 0.0
+    sig_31: float = 0.0
+    beta: float = 0.0
+    tau_max: float = 0.0
+    expn: float = 0.0
+    ifail_sh: int = 0
+    ifail_so: int = 0
+    fail_id: int = 0
+
+
+@dataclass
+class EbcsPropellant:
+    """/EBCS/PROPELLANT or /BCS/PROPELLANT (M114): Solid propellant combustion boundary condition.
+
+    Fortran origin: ``starter/source/loads/ebcs/hm_read_ebcs_propellant.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    sens_id: int = 0
+    submat_id: int = 1
+    ienthalpy: int = 1
+    rho0s: float = 0.0
+    tburn: float = 300.0
+    param_a: float = 0.0
+    param_n: float = 0.0
+    f_func_id: int = 0
+    f_scale_x: float = 1.0
+    f_scale_y: float = 1.0
+    g_func_id: int = 0
+    g_scale_x: float = 1.0
+    g_scale_y: float = 1.0
+    h_func_id: int = 0
+    h_scale_x: float = 1.0
+    h_scale_y: float = 1.0
+
+
+@dataclass
+class AdmasNonUniformItem:
+    """Item for /ADMAS/NON_UNIFORM (M114)."""
+    mass: float = 0.0
+    entity_id: int = 0
+    iflag: int = 0
+
+
+@dataclass
+class AdmasNonUniform:
+    """/ADMAS/NON_UNIFORM or /ADMAS/NON_UNIFORM_PART (M114): Non-uniform added mass list."""
+    id: int
+    kind: str = "NODE"  # 'NODE' | 'PART'
+    items: List[AdmasNonUniformItem] = field(default_factory=list)
+
+
+@dataclass
+class SectCircle:
+    """/SECT/CIRCLE (M114): Circular cross-section cut.
+
+    Fortran origin: ``starter/source/tools/sect/hm_read_sect_circle.F``.
+    """
+    id: int
+    title: str = ""
+    n1: int = 0
+    n2: int = 0
+    n3: int = 0
+    isave: int = 0
+    delta_t: float = 0.0
+    alpha: float = 0.0
+    file_name: str = ""
+    grbric_id: int = 0
+    grshel_id: int = 0
+    grtrus_id: int = 0
+    grbeam_id: int = 0
+    grsprg_id: int = 0
+    grtria_id: int = 0
+    int_ids: List[int] = field(default_factory=list)
+    iframe: int = 0
+    center: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    normal: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    radius: float = 0.0
+
+
+@dataclass
+class SectParal:
+    """/SECT/PARAL (M114): Parallelogram cross-section cut.
+
+    Fortran origin: ``starter/source/tools/sect/hm_read_sect_paral.F``.
+    """
+    id: int
+    title: str = ""
+    n1: int = 0
+    n2: int = 0
+    n3: int = 0
+    isave: int = 0
+    delta_t: float = 0.0
+    alpha: float = 0.0
+    file_name: str = ""
+    grbric_id: int = 0
+    grshel_id: int = 0
+    grtrus_id: int = 0
+    grbeam_id: int = 0
+    grsprg_id: int = 0
+    grtria_id: int = 0
+    int_ids: List[int] = field(default_factory=list)
+    iframe: int = 0
+    origin: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    corner1: np.ndarray = field(default_factory=lambda: np.zeros(3))
+    corner2: np.ndarray = field(default_factory=lambda: np.zeros(3))
+
+
+@dataclass
+class DynainShell:
+    """/DYNAIN/SHELL (M114): LS-DYNA shell history initialization."""
+    option: str = "AUX/FULL"  # 'AUX/FULL' | 'STRES/FULL' | 'STRAIN/FULL'
+
+
+
 
 
 

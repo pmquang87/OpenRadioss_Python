@@ -980,6 +980,27 @@ LAYOUTS: Dict[str, List[int]] = {
 
     # SUBSET (M113)
     "SUBSET_1": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+
+    # FAIL/COMPOSITE (M114)
+    "FAIL_COMPOSITE_1": [20, 20, 20, 20, 20],
+    "FAIL_COMPOSITE_2": [20, 20, 20, 20],
+    "FAIL_COMPOSITE_3": [20, 20, 20, 10, 10],
+
+    # EBCS/PROPELLANT (M114)
+    "EBCS_PROPELLANT_1": [10, 10, 10, 10],
+    "EBCS_PROPELLANT_2": [20, 20],
+    "EBCS_PROPELLANT_3": [20, 20],
+    "EBCS_PROPELLANT_FUNC": [10, 10, 20, 20],
+
+    # ADMAS/NON_UNIFORM (M114)
+    "ADMAS_NON_UNIFORM_1": [20, 10],
+    "ADMAS_NON_UNIFORM_PART_1": [20, 10, 10],
+
+    # SECT/CIRCLE & SECT/PARAL (M114)
+    "SECT_CIRCLE_1": [10, 10, 10, 10, 10, 10, 20, 20],
+    "SECT_CIRCLE_3": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+    "SECT_PARAL_1": [10, 10, 10, 10, 10, 10, 20, 20],
+    "SCALE20": [20],
 }
 
 

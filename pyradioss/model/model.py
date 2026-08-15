@@ -56,6 +56,8 @@ from .entities import (
     SphBcs, MadymoLink, MadymoExfem,
     AleGridDonea, AleGridSpring, AleGridStandard, AleGridDisp, AleGridLaplacian, AleGridVolume,
     AdmeshGlobal, StampingInit, RandomNoise, Accelerometer, Subset,
+    FailComposite, EbcsPropellant, AdmasNonUniform, AdmasNonUniformItem,
+    SectCircle, SectParal, DynainShell,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -697,6 +699,12 @@ class Model:
         self.random_noises: List[RandomNoise] = []          # /RANDOM (M113)
         self.accelerometers: Dict[int, Accelerometer] = {}  # /ACCEL (M113)
         self.subsets: Dict[int, Subset] = {}                # /SUBSET (M113)
+        self.fail_composites: Dict[int, FailComposite] = {} # /FAIL/COMPOSITE (M114)
+        self.ebcs_propellants: Dict[int, EbcsPropellant] = {} # /EBCS/PROPELLANT (M114)
+        self.admas_non_uniforms: Dict[int, AdmasNonUniform] = {} # /ADMAS/NON_UNIFORM (M114)
+        self.sect_circles: Dict[int, SectCircle] = {}       # /SECT/CIRCLE (M114)
+        self.sect_parals: Dict[int, SectParal] = {}         # /SECT/PARAL (M114)
+        self.dynain_shells: List[DynainShell] = []          # /DYNAIN/SHELL (M114)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

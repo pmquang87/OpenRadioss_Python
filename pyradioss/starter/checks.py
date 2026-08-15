@@ -885,6 +885,48 @@ def check_model(model: Model, log: MessageLog) -> None:
         if acc.skew_id > 0 and acc.skew_id not in model.skews:
             log.error(f"/ACCEL/{aid}: skew {acc.skew_id} not defined", "CROSS REF")
 
+    # M114: Composite Failure, Propellant Combustion, Non-Uniform Added Mass, Extended Sections
+    for mat_id, fc in getattr(model, "fail_composites", {}).items():
+        if mat_id > 0 and mat_id not in model.materials:
+            log.error(f"/FAIL/COMPOSITE/{mat_id}: material {mat_id} not defined", "CROSS REF")
+
+    for pbid, pb in getattr(model, "ebcs_propellants", {}).items():
+        if pb.surf_id > 0 and pb.surf_id not in model.surfaces:
+            log.error(f"/EBCS/PROPELLANT/{pbid}: surface {pb.surf_id} not defined", "CROSS REF")
+        if pb.sens_id > 0 and pb.sens_id not in sensor_ids:
+            log.error(f"/EBCS/PROPELLANT/{pbid}: sensor {pb.sens_id} not defined", "CROSS REF")
+        for fid in (pb.f_func_id, pb.g_func_id, pb.h_func_id):
+            if fid > 0 and fid not in model.functions:
+                log.error(f"/EBCS/PROPELLANT/{pbid}: function {fid} not defined", "CROSS REF")
+
+    for anid, an in getattr(model, "admas_non_uniforms", {}).items():
+        for item in an.items:
+            if an.kind == "NODE" and item.entity_id > 0 and item.entity_id not in model._id2idx:
+                log.error(f"/ADMAS/NON_UNIFORM/{anid}: node {item.entity_id} not defined", "CROSS REF")
+            elif an.kind == "PART" and item.entity_id > 0 and item.entity_id not in model.parts:
+                log.error(f"/ADMAS/NON_UNIFORM_PART/{anid}: part {item.entity_id} not defined", "CROSS REF")
+
+    egroups_shel = {**getattr(model, "egroups", {}).get("GRSHEL", {}), **getattr(model, "egroups", {}).get("SHEL", {})}
+    egroups_bric = {**getattr(model, "egroups", {}).get("GRBRIC", {}), **getattr(model, "egroups", {}).get("BRIC", {})}
+
+    for scid, sc in getattr(model, "sect_circles", {}).items():
+        for nid in (sc.n1, sc.n2, sc.n3):
+            if nid > 0 and nid not in model._id2idx:
+                log.error(f"/SECT/CIRCLE/{scid}: node {nid} not defined", "CROSS REF")
+        if sc.grshel_id > 0 and sc.grshel_id not in egroups_shel:
+            log.error(f"/SECT/CIRCLE/{scid}: shell group {sc.grshel_id} not defined", "CROSS REF")
+        if sc.grbric_id > 0 and sc.grbric_id not in egroups_bric:
+            log.error(f"/SECT/CIRCLE/{scid}: brick group {sc.grbric_id} not defined", "CROSS REF")
+
+    for spid, sp in getattr(model, "sect_parals", {}).items():
+        for nid in (sp.n1, sp.n2, sp.n3):
+            if nid > 0 and nid not in model._id2idx:
+                log.error(f"/SECT/PARAL/{spid}: node {nid} not defined", "CROSS REF")
+        if sp.grshel_id > 0 and sp.grshel_id not in egroups_shel:
+            log.error(f"/SECT/PARAL/{spid}: shell group {sp.grshel_id} not defined", "CROSS REF")
+        if sp.grbric_id > 0 and sp.grbric_id not in egroups_bric:
+            log.error(f"/SECT/PARAL/{spid}: brick group {sp.grbric_id} not defined", "CROSS REF")
+
 
 
 
