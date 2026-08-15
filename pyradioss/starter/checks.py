@@ -467,5 +467,67 @@ def check_model(model: Model, log: MessageLog) -> None:
         if las.fct_id_target > 0 and las.fct_id_target not in model.functions:
             log.error(f"/LASER/{lid}: function {las.fct_id_target} not defined", "CROSS REF")
 
+    # Specialized loads, Preload, Damping & Controls (M103)
+    for lid, pcyl in getattr(model, "pcyl_loads", {}).items():
+        if pcyl.surf_id > 0 and pcyl.surf_id not in model.surfaces:
+            log.error(f"/LOAD/PCYL/{lid}: surface {pcyl.surf_id} not defined", "CROSS REF")
+        if pcyl.sens_id > 0 and pcyl.sens_id not in sensor_ids:
+            log.error(f"/LOAD/PCYL/{lid}: sensor {pcyl.sens_id} not defined", "CROSS REF")
+        if pcyl.frame_id > 0 and pcyl.frame_id not in model.skews:
+            log.error(f"/LOAD/PCYL/{lid}: skew {pcyl.frame_id} not defined", "CROSS REF")
+        if pcyl.table_id > 0 and pcyl.table_id not in model.tables:
+            log.error(f"/LOAD/PCYL/{lid}: table {pcyl.table_id} not defined", "CROSS REF")
+
+    for lid, pf in getattr(model, "pfluid_loads", {}).items():
+        if pf.surf_id > 0 and pf.surf_id not in model.surfaces:
+            log.error(f"/LOAD/PFLUID/{lid}: surface {pf.surf_id} not defined", "CROSS REF")
+        if pf.sens_id > 0 and pf.sens_id not in sensor_ids:
+            log.error(f"/LOAD/PFLUID/{lid}: sensor {pf.sens_id} not defined", "CROSS REF")
+        if pf.fct_id_t > 0 and pf.fct_id_t not in model.functions:
+            log.error(f"/LOAD/PFLUID/{lid}: function {pf.fct_id_t} not defined", "CROSS REF")
+        if pf.fct_id_pc > 0 and pf.fct_id_pc not in model.functions:
+            log.error(f"/LOAD/PFLUID/{lid}: function {pf.fct_id_pc} not defined", "CROSS REF")
+        if pf.fct_id_vel > 0 and pf.fct_id_vel not in model.functions:
+            log.error(f"/LOAD/PFLUID/{lid}: function {pf.fct_id_vel} not defined", "CROSS REF")
+        if pf.frame_id > 0 and pf.frame_id not in model.skews:
+            log.error(f"/LOAD/PFLUID/{lid}: skew {pf.frame_id} not defined", "CROSS REF")
+        if pf.frame_id_vel > 0 and pf.frame_id_vel not in model.skews:
+            log.error(f"/LOAD/PFLUID/{lid}: skew {pf.frame_id_vel} not defined", "CROSS REF")
+
+    for pid, pr in getattr(model, "preloads", {}).items():
+        if pr.sect_id > 0 and pr.sect_id not in model.sections and pr.sect_id not in model.properties:
+            log.error(f"/PRELOAD/{pid}: section {pr.sect_id} not defined", "CROSS REF")
+        if pr.sens_id > 0 and pr.sens_id not in sensor_ids:
+            log.error(f"/PRELOAD/{pid}: sensor {pr.sens_id} not defined", "CROSS REF")
+        if pr.fct_id > 0 and pr.fct_id not in model.functions:
+            log.error(f"/PRELOAD/{pid}: function {pr.fct_id} not defined", "CROSS REF")
+
+    for pid, pra in getattr(model, "preload_axials", {}).items():
+        if pra.grpart_id > 0 and pra.grpart_id not in part_groups and pra.grpart_id not in model.parts:
+            log.error(f"/PRELOAD/AXIAL/{pid}: part group/part {pra.grpart_id} not defined", "CROSS REF")
+        if pra.sens_id > 0 and pra.sens_id not in sensor_ids:
+            log.error(f"/PRELOAD/AXIAL/{pid}: sensor {pra.sens_id} not defined", "CROSS REF")
+        if pra.fct_id > 0 and pra.fct_id not in model.functions:
+            log.error(f"/PRELOAD/AXIAL/{pid}: function {pra.fct_id} not defined", "CROSS REF")
+
+    for did, di in getattr(model, "damp_inters", {}).items():
+        if di.grnod_id > 0 and di.grnod_id not in model.node_groups:
+            log.error(f"/DAMP/INTER/{did}: node group {di.grnod_id} not defined", "CROSS REF")
+        if di.skew_id > 0 and di.skew_id not in model.skews:
+            log.error(f"/DAMP/INTER/{did}: skew {di.skew_id} not defined", "CROSS REF")
+
+    for did, dr in getattr(model, "damp_ranges", {}).items():
+        if dr.grpart_id > 0 and dr.grpart_id not in part_groups and dr.grpart_id not in model.parts:
+            log.error(f"/DAMP/RANGE/{did}: part group/part {dr.grpart_id} not defined", "CROSS REF")
+
+    for cid, caa in getattr(model, "caa_controls", {}).items():
+        if caa.surf_id > 0 and caa.surf_id not in model.surfaces:
+            log.error(f"/CAA/{cid}: surface {caa.surf_id} not defined", "CROSS REF")
+        if caa.grnod_id > 0 and caa.grnod_id not in model.node_groups:
+            log.error(f"/CAA/{cid}: node group {caa.grnod_id} not defined", "CROSS REF")
+        if caa.sens_id > 0 and caa.sens_id not in sensor_ids:
+            log.error(f"/CAA/{cid}: sensor {caa.sens_id} not defined", "CROSS REF")
+
+
 
 

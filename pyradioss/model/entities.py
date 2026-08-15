@@ -1583,5 +1583,153 @@ class LaserLoad:
     plasma_elements: List[int] = field(default_factory=list)
 
 
+# ----------------------------------------------------------------------------
+# Specialized loads, preload, extended damping & solver modes (M103)
+# ----------------------------------------------------------------------------
+
+@dataclass
+class PcylLoad:
+    """/LOAD/PCYL (M103): Cylindrical pressure load.
+
+    Fortran origin: ``starter/source/loads/general/load_pcyl/hm_read_pcyl.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    sens_id: int = 0
+    frame_id: int = 0
+    table_id: int = 0
+    xscale_r: float = 1.0
+    xscale_t: float = 1.0
+    yscale_p: float = 1.0
+
+
+@dataclass
+class PfluidLoad:
+    """/LOAD/PFLUID (M103): Hydrostatic / fluid surface pressure load.
+
+    Fortran origin: ``starter/source/loads/general/pfluid/hm_read_pfluid.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    sens_id: int = 0
+    fct_id_t: int = 0
+    ascalex: float = 1.0
+    fscaley: float = 1.0
+    dir_p: str = "Z"
+    frame_id: int = 0
+    fct_id_pc: int = 0
+    ascalex_pc: float = 1.0
+    fscaley_pc: float = 1.0
+    fct_id_vel: int = 0
+    ascalex_vel: float = 1.0
+    fscaley_vel: float = 1.0
+    dir_vel: str = "Z"
+    frame_id_vel: int = 0
+
+
+@dataclass
+class Preload:
+    """/PRELOAD (M103): Bolt cross-section preload.
+
+    Fortran origin: ``starter/source/loads/general/preload/hm_read_preload.F``.
+    """
+    id: int
+    title: str = ""
+    sect_id: int = 0
+    sens_id: int = 0
+    itype: int = 0
+    fct_id: int = 0
+    preload: float = 0.0
+    tstart: float = 0.0
+    tstop: float = 0.0
+
+
+@dataclass
+class PreloadAxial:
+    """/PRELOAD/AXIAL (M103): Axial preload on 1D/solid part groups.
+
+    Fortran origin: ``starter/source/loads/general/preload/hm_read_preload_axial.F90``.
+    """
+    id: int
+    title: str = ""
+    grpart_id: int = 0
+    sens_id: int = 0
+    fct_id: int = 0
+    preload: float = 0.0
+    damp: float = 0.0
+
+
+@dataclass
+class DampInter:
+    """/DAMP/INTER (M103): Interface / relative velocity damping.
+
+    Fortran origin: ``starter/source/general_controls/damping/hm_read_damp.F``.
+    """
+    id: int
+    title: str = ""
+    nb_time_step: int = 0
+    damp_range: int = 0
+    alpha: float = 0.0
+    beta: float = 0.0
+    grnod_id: int = 0
+    skew_id: int = 0
+    tstart: float = 0.0
+    tstop: float = 0.0
+
+
+@dataclass
+class DampRange:
+    """/DAMP/RANGE or /DAMP/FREQUENCY_RANGE (M103): Frequency range damping.
+
+    Fortran origin: ``starter/source/general_controls/damping/hm_read_damp.F``.
+    """
+    id: int
+    title: str = ""
+    cdamp: float = 0.0
+    grpart_id: int = 0
+    tstart: float = 0.0
+    tstop: float = 0.0
+    freq_low: float = 0.0
+    freq_high: float = 0.0
+
+
+@dataclass
+class AnalyGlobal:
+    """/ANALY (M103): Global analysis type options.
+
+    Fortran origin: ``starter/source/general_controls/computation/hm_read_analy.F``.
+    """
+    n2d3d: int = 0
+    analy_temp: int = 0
+    iparith: int = 0
+
+
+@dataclass
+class UpwindGlobal:
+    """/UPWIND (M103): Upwind advection factors for ALE.
+
+    Fortran origin: ``starter/source/general_controls/computation/hm_read_upwind.F``.
+    """
+    eta1: float = 0.0
+    eta2: float = 0.0
+    eta3: float = 0.0
+
+
+@dataclass
+class CaaControl:
+    """/CAA (M103): Computational Aeroacoustics control.
+
+    Fortran origin: ``starter/source/general_controls/computation/hm_read_caa.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    grnod_id: int = 0
+    sens_id: int = 0
+
+
+
 
 

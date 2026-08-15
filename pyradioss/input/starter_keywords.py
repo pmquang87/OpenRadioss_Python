@@ -42,6 +42,10 @@ from ..model.entities import (
     RadiationLoad, ImposedFlux, InitialTemperature,
     InitialBrickState, InitialShellState,
     InitialTrussState, InitialBeamState, InitialSpringState,
+    BcsNrf, BcsWall, RigidLink, CylJoint, GeneralJoint,
+    MergeNode, MergeRbody, IniCrack, IniCrackSegment, LaserLoad,
+    PcylLoad, PfluidLoad, Preload, PreloadAxial, DampInter, DampRange,
+    AnalyGlobal, UpwindGlobal, CaaControl,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -3461,14 +3465,18 @@ def read_perturb(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_load(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/LOAD/<subtype>/load_ID`` dispatcher (M93, M99)."""
+    """``/LOAD/<subtype>/load_ID`` dispatcher (M93, M99, M103)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub == "CENTRI":
         read_load_centri(block, model, log)
     elif sub == "PBLAST":
         read_pblast(block, model, log)
+    elif sub == "PCYL":
+        read_pcyl(block, model, log)
+    elif sub == "PFLUID":
+        read_pfluid(block, model, log)
     else:
-        log.warning(f"/LOAD/{sub} not ported (CENTRI, PBLAST supported)", block.source)
+        log.warning(f"/LOAD/{sub} not ported (CENTRI, PBLAST, PCYL, PFLUID supported)", block.source)
 
 
 def read_imptemp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -3779,6 +3787,13 @@ def read_damp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     token view read Beta as the group id ('1E-5' int crash).  Beta and
     skew are accepted + warned when set.
     """
+    if len(block.parts) > 1 and block.parts[1].upper() in ("INTER", "VREL"):
+        read_damp_inter(block, model, log)
+        return
+    if len(block.parts) > 1 and block.parts[1].upper() in ("RANGE", "FREQUENCY_RANGE", "FREQ_RANGE"):
+        read_damp_range(block, model, log)
+        return
+
     if block.fixed:
         title, cards = _fixed_data(block)
         if not cards or cards[0].is_blank:
@@ -5899,6 +5914,414 @@ def read_laser(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_pcyl(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/LOAD/PCYL/load_ID`` (M103)::
+
+        card 1:  title
+        card 2:  surf_ID  sens_ID  frame_ID
+        card 3:  table_ID [gap]  xscale_r  xscale_t  yscale_p
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/LOAD/PCYL/{block.user_id}: missing data card", block.source)
+        return
+
+    surf_id = 0
+    sens_id = 0
+    frame_id = 0
+    table_id = 0
+    xscale_r = 1.0
+    xscale_t = 1.0
+    yscale_p = 1.0
+
+    if block.fixed:
+        f1 = cards[0].cut("PCYL_1")
+        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+        sens_id = _ival(f1[1]) if len(f1) > 1 else 0
+        frame_id = _ival(f1[2]) if len(f1) > 2 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("PCYL_2")
+            table_id = _ival(f2[0]) if len(f2) > 0 else 0
+            xscale_r = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            xscale_t = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+            yscale_p = _fval(f2[4], 1.0) if len(f2) > 4 else 1.0
+    else:
+        t1 = cards[0].tokens()
+        surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+        sens_id = int(float(t1[1])) if len(t1) > 1 else 0
+        frame_id = int(float(t1[2])) if len(t1) > 2 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            table_id = int(float(t2[0])) if len(t2) > 0 else 0
+            xscale_r = float(t2[1]) if len(t2) > 1 else 1.0
+            xscale_t = float(t2[2]) if len(t2) > 2 else 1.0
+            yscale_p = float(t2[3]) if len(t2) > 3 else 1.0
+
+    model.pcyl_loads[block.user_id] = PcylLoad(
+        id=block.user_id, title=title, surf_id=surf_id, sens_id=sens_id,
+        frame_id=frame_id, table_id=table_id, xscale_r=xscale_r,
+        xscale_t=xscale_t, yscale_p=yscale_p,
+    )
+
+
+def read_pfluid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/LOAD/PFLUID/load_ID`` (M103)::
+
+        card 1:  title
+        card 2:  surf_ID  sens_ID
+        card 3:  fct_ID_t [gap]  ascalex  fscaley
+        card 4:  dir_p  frame_ID
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/LOAD/PFLUID/{block.user_id}: missing data card", block.source)
+        return
+
+    surf_id = 0
+    sens_id = 0
+    fct_id_t = 0
+    ascalex = 1.0
+    fscaley = 1.0
+    dir_p = "Z"
+    frame_id = 0
+    fct_id_pc = 0
+    ascalex_pc = 1.0
+    fscaley_pc = 1.0
+    fct_id_vel = 0
+    ascalex_vel = 1.0
+    fscaley_vel = 1.0
+    dir_vel = "Z"
+    frame_id_vel = 0
+
+    if block.fixed:
+        f1 = cards[0].cut("PFLUID_1")
+        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+        sens_id = _ival(f1[1]) if len(f1) > 1 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("PFLUID_2")
+            fct_id_t = _ival(f2[0]) if len(f2) > 0 else 0
+            ascalex = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            fscaley = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("PFLUID_3")
+            dir_p = f3[0].strip().upper() if len(f3) > 0 and f3[0].strip() else "Z"
+            frame_id = _ival(f3[1]) if len(f3) > 1 else 0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("PFLUID_2")
+            fct_id_pc = _ival(f4[0]) if len(f4) > 0 else 0
+            ascalex_pc = _fval(f4[2], 1.0) if len(f4) > 2 else 1.0
+            fscaley_pc = _fval(f4[3], 1.0) if len(f4) > 3 else 1.0
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            f5 = cards[4].cut("PFLUID_2")
+            fct_id_vel = _ival(f5[0]) if len(f5) > 0 else 0
+            ascalex_vel = _fval(f5[2], 1.0) if len(f5) > 2 else 1.0
+            fscaley_vel = _fval(f5[3], 1.0) if len(f5) > 3 else 1.0
+
+        if len(cards) > 5 and not cards[5].is_blank:
+            f6 = cards[5].cut("PFLUID_3")
+            dir_vel = f6[0].strip().upper() if len(f6) > 0 and f6[0].strip() else "Z"
+            frame_id_vel = _ival(f6[1]) if len(f6) > 1 else 0
+    else:
+        t1 = cards[0].tokens()
+        surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+        sens_id = int(float(t1[1])) if len(t1) > 1 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            fct_id_t = int(float(t2[0])) if len(t2) > 0 else 0
+            ascalex = float(t2[1]) if len(t2) > 1 else 1.0
+            fscaley = float(t2[2]) if len(t2) > 2 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            dir_p = t3[0].strip().upper() if len(t3) > 0 else "Z"
+            frame_id = int(float(t3[1])) if len(t3) > 1 else 0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            t4 = cards[3].tokens()
+            fct_id_pc = int(float(t4[0])) if len(t4) > 0 else 0
+            ascalex_pc = float(t4[1]) if len(t4) > 1 else 1.0
+            fscaley_pc = float(t4[2]) if len(t4) > 2 else 1.0
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            t5 = cards[4].tokens()
+            fct_id_vel = int(float(t5[0])) if len(t5) > 0 else 0
+            ascalex_vel = float(t5[1]) if len(t5) > 1 else 1.0
+            fscaley_vel = float(t5[2]) if len(t5) > 2 else 1.0
+
+        if len(cards) > 5 and not cards[5].is_blank:
+            t6 = cards[5].tokens()
+            dir_vel = t6[0].strip().upper() if len(t6) > 0 else "Z"
+            frame_id_vel = int(float(t6[1])) if len(t6) > 1 else 0
+
+    model.pfluid_loads[block.user_id] = PfluidLoad(
+        id=block.user_id, title=title, surf_id=surf_id, sens_id=sens_id,
+        fct_id_t=fct_id_t, ascalex=ascalex, fscaley=fscaley, dir_p=dir_p,
+        frame_id=frame_id, fct_id_pc=fct_id_pc, ascalex_pc=ascalex_pc,
+        fscaley_pc=fscaley_pc, fct_id_vel=fct_id_vel, ascalex_vel=ascalex_vel,
+        fscaley_vel=fscaley_vel, dir_vel=dir_vel, frame_id_vel=frame_id_vel,
+    )
+
+
+def read_preload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PRELOAD/preload_ID`` (M103)::
+
+        card 1:  title
+        card 2:  sect_ID  sens_ID  Itype  fct_ID  Preload  Tstart  Tstop
+    """
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub == "AXIAL":
+        read_preload_axial(block, model, log)
+        return
+
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PRELOAD/{block.user_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("PRELOAD_1")
+        sect_id = _ival(f[0]) if len(f) > 0 else 0
+        sens_id = _ival(f[1]) if len(f) > 1 else 0
+        itype = _ival(f[2]) if len(f) > 2 else 0
+        fct_id = _ival(f[3]) if len(f) > 3 else 0
+        preload = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        tstart = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+        tstop = _fval(f[6], 1.0e30) if len(f) > 6 else 1.0e30
+    else:
+        toks = cards[0].tokens()
+        sect_id = int(float(toks[0])) if len(toks) > 0 else 0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+        itype = int(float(toks[2])) if len(toks) > 2 else 0
+        fct_id = int(float(toks[3])) if len(toks) > 3 else 0
+        preload = float(toks[4]) if len(toks) > 4 else 0.0
+        tstart = float(toks[5]) if len(toks) > 5 else 0.0
+        tstop = float(toks[6]) if len(toks) > 6 else 1.0e30
+
+    model.preloads[block.user_id] = Preload(
+        id=block.user_id, title=title, sect_id=sect_id, sens_id=sens_id,
+        itype=itype, fct_id=fct_id, preload=preload, tstart=tstart, tstop=tstop,
+    )
+
+
+def read_preload_axial(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PRELOAD/AXIAL/preload_ID`` (M103)::
+
+        card 1:  title
+        card 2:  grpart_ID  sens_ID  [gap]  fct_ID  Preload  Damp
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PRELOAD/AXIAL/{block.user_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("PRELOAD_AXIAL_1")
+        grpart_id = _ival(f[0]) if len(f) > 0 else 0
+        sens_id = _ival(f[1]) if len(f) > 1 else 0
+        fct_id = _ival(f[3]) if len(f) > 3 else 0
+        preload = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        damp = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+    else:
+        toks = cards[0].tokens()
+        grpart_id = int(float(toks[0])) if len(toks) > 0 else 0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+        fct_id = int(float(toks[2])) if len(toks) > 2 else 0
+        preload = float(toks[3]) if len(toks) > 3 else 0.0
+        damp = float(toks[4]) if len(toks) > 4 else 0.0
+
+    model.preload_axials[block.user_id] = PreloadAxial(
+        id=block.user_id, title=title, grpart_id=grpart_id, sens_id=sens_id,
+        fct_id=fct_id, preload=preload, damp=damp,
+    )
+
+
+def read_damp_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DAMP/INTER/damp_ID`` (M103)::
+
+        card 1:  title
+        card 2:  Nb_time_step  Range
+        card 3:  Alpha  Beta  grnod_ID  skew_ID  Tstart  Tstop
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/DAMP/INTER/{block.user_id}: missing data card", block.source)
+        return
+
+    nb_time_step = 0
+    damp_range = 0
+    alpha = 0.0
+    beta = 0.0
+    grnod_id = 0
+    skew_id = 0
+    tstart = 0.0
+    tstop = 1.0e30
+
+    if block.fixed:
+        f1 = cards[0].cut("DAMP_INTER_1")
+        nb_time_step = _ival(f1[0]) if len(f1) > 0 else 0
+        damp_range = _ival(f1[1]) if len(f1) > 1 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("DAMP_INTER_2")
+            alpha = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            beta = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            grnod_id = _ival(f2[2]) if len(f2) > 2 else 0
+            skew_id = _ival(f2[3]) if len(f2) > 3 else 0
+            tstart = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+            tstop = _fval(f2[5], 1.0e30) if len(f2) > 5 else 1.0e30
+    else:
+        t1 = cards[0].tokens()
+        nb_time_step = int(float(t1[0])) if len(t1) > 0 else 0
+        damp_range = int(float(t1[1])) if len(t1) > 1 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            alpha = float(t2[0]) if len(t2) > 0 else 0.0
+            beta = float(t2[1]) if len(t2) > 1 else 0.0
+            grnod_id = int(float(t2[2])) if len(t2) > 2 else 0
+            skew_id = int(float(t2[3])) if len(t2) > 3 else 0
+            tstart = float(t2[4]) if len(t2) > 4 else 0.0
+            tstop = float(t2[5]) if len(t2) > 5 else 1.0e30
+
+    model.damp_inters[block.user_id] = DampInter(
+        id=block.user_id, title=title, nb_time_step=nb_time_step,
+        damp_range=damp_range, alpha=alpha, beta=beta,
+        grnod_id=grnod_id, skew_id=skew_id, tstart=tstart, tstop=tstop,
+    )
+
+
+def read_damp_range(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DAMP/RANGE/damp_ID`` (M103)::
+
+        card 1:  title
+        card 2:  Cdamp  [gap]  grpart_ID  [gap]  Tstart  Tstop
+        card 3:  Freq_low  Freq_high
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/DAMP/RANGE/{block.user_id}: missing data card", block.source)
+        return
+
+    cdamp = 0.0
+    grpart_id = 0
+    tstart = 0.0
+    tstop = 1.0e30
+    freq_low = 0.0
+    freq_high = 0.0
+
+    if block.fixed:
+        f1 = cards[0].cut("DAMP_RANGE_1")
+        cdamp = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        grpart_id = _ival(f1[3]) if len(f1) > 3 else 0
+        tstart = _fval(f1[5], 0.0) if len(f1) > 5 else 0.0
+        tstop = _fval(f1[6], 1.0e30) if len(f1) > 6 else 1.0e30
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("DAMP_RANGE_2")
+            freq_low = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            freq_high = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        cdamp = float(t1[0]) if len(t1) > 0 else 0.0
+        grpart_id = int(float(t1[1])) if len(t1) > 1 else 0
+        tstart = float(t1[2]) if len(t1) > 2 else 0.0
+        tstop = float(t1[3]) if len(t1) > 3 else 1.0e30
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            freq_low = float(t2[0]) if len(t2) > 0 else 0.0
+            freq_high = float(t2[1]) if len(t2) > 1 else 0.0
+
+    model.damp_ranges[block.user_id] = DampRange(
+        id=block.user_id, title=title, cdamp=cdamp, grpart_id=grpart_id,
+        tstart=tstart, tstop=tstop, freq_low=freq_low, freq_high=freq_high,
+    )
+
+
+def read_analy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ANALY`` (M103)::
+
+        card 1:  N2D3D  ANALY_TEMP  IPARITH
+    """
+    cards = block.cards
+    if not cards or cards[0].is_blank:
+        log.error("/ANALY: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("ANALY_1")
+        n2d3d = _ival(f[0]) if len(f) > 0 else 0
+        analy_temp = _ival(f[1]) if len(f) > 1 else 0
+        iparith = _ival(f[2]) if len(f) > 2 else 0
+    else:
+        toks = cards[0].tokens()
+        n2d3d = int(float(toks[0])) if len(toks) > 0 else 0
+        analy_temp = int(float(toks[1])) if len(toks) > 1 else 0
+        iparith = int(float(toks[2])) if len(toks) > 2 else 0
+
+    model.analy_global = AnalyGlobal(n2d3d=n2d3d, analy_temp=analy_temp, iparith=iparith)
+
+
+def read_upwind(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/UPWIND`` (M103)::
+
+        card 1:  eta1  eta2  eta3
+    """
+    cards = block.cards
+    if not cards or cards[0].is_blank:
+        log.error("/UPWIND: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("UPWIND_1")
+        eta1 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        eta2 = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        eta3 = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        eta1 = float(toks[0]) if len(toks) > 0 else 0.0
+        eta2 = float(toks[1]) if len(toks) > 1 else 0.0
+        eta3 = float(toks[2]) if len(toks) > 2 else 0.0
+
+    model.upwind_global = UpwindGlobal(eta1=eta1, eta2=eta2, eta3=eta3)
+
+
+def read_caa(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CAA/caa_ID`` (M103)::
+
+        card 1:  title
+        card 2:  surf_ID  grnod_ID  sens_ID
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/CAA/{block.user_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("CAA_1")
+        surf_id = _ival(f[0]) if len(f) > 0 else 0
+        grnod_id = _ival(f[1]) if len(f) > 1 else 0
+        sens_id = _ival(f[2]) if len(f) > 2 else 0
+    else:
+        toks = cards[0].tokens()
+        surf_id = int(float(toks[0])) if len(toks) > 0 else 0
+        grnod_id = int(float(toks[1])) if len(toks) > 1 else 0
+        sens_id = int(float(toks[2])) if len(toks) > 2 else 0
+
+    model.caa_controls[block.user_id] = CaaControl(
+        id=block.user_id, title=title, surf_id=surf_id, grnod_id=grnod_id,
+        sens_id=sens_id,
+    )
+
+
+
 def read_ioflag(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/IOFLAG`` — output control flags (M68, parse-and-skip).
 
@@ -7351,6 +7774,10 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "MERGE": read_merge,
     "INICRACK": read_inicrack,
     "LASER": read_laser,
+    "PRELOAD": read_preload,
+    "ANALY": read_analy,
+    "UPWIND": read_upwind,
+    "CAA": read_caa,
 }
 
 ENGINE_KEYWORDS_IGNORE = {

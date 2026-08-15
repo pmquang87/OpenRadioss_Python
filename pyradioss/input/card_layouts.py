@@ -620,6 +620,36 @@ LAYOUTS: Dict[str, List[int]] = {
     "LASER_1": [20, 10, 10, 20, 10],
     "LASER_2": [20, 20, 20, 20, 20],
     "LASER_3": [10, 10],
+
+    # PCYL (M103)
+    "PCYL_1": [10, 10, 10],
+    "PCYL_2": [10, 10, 20, 20, 20],
+
+    # PFLUID (M103)
+    "PFLUID_1": [10, 10],
+    "PFLUID_2": [10, 10, 20, 20],
+    "PFLUID_3": [10, 10],
+
+    # PRELOAD (M103)
+    "PRELOAD_1": [10, 10, 10, 10, 20, 20, 20],
+    "PRELOAD_AXIAL_1": [10, 10, 10, 10, 20, 20],
+
+    # DAMP/INTER (M103)
+    "DAMP_INTER_1": [10, 10],
+    "DAMP_INTER_2": [20, 20, 10, 10, 20, 20],
+
+    # DAMP/RANGE (M103)
+    "DAMP_RANGE_1": [20, 10, 10, 10, 10, 20, 20],
+    "DAMP_RANGE_2": [20, 20],
+
+    # ANALY (M103)
+    "ANALY_1": [10, 10, 10],
+
+    # UPWIND (M103)
+    "UPWIND_1": [20, 20, 20],
+
+    # CAA (M103)
+    "CAA_1": [10, 10, 10],
 }
 
 

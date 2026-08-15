@@ -44,6 +44,8 @@ from .entities import (
     ShellPartPerturbation, FailurePerturbation, SphGlobal, SmsGlobal,
     BcsNrf, BcsWall, RigidLink, CylJoint, GeneralJoint,
     MergeNode, MergeRbody, IniCrack, IniCrackSegment, LaserLoad,
+    PcylLoad, PfluidLoad, Preload, PreloadAxial, DampInter, DampRange,
+    AnalyGlobal, UpwindGlobal, CaaControl,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -624,6 +626,15 @@ class Model:
         self.rbody_merges: Dict[int, MergeRbody] = {}  # /MERGE/RBODY (M102)
         self.inicracks: Dict[int, IniCrack] = {}       # /INICRACK (M102)
         self.laser_loads: Dict[int, LaserLoad] = {}    # /LASER (M102)
+        self.pcyl_loads: Dict[int, PcylLoad] = {}      # /LOAD/PCYL (M103)
+        self.pfluid_loads: Dict[int, PfluidLoad] = {}  # /LOAD/PFLUID (M103)
+        self.preloads: Dict[int, Preload] = {}         # /PRELOAD (M103)
+        self.preload_axials: Dict[int, PreloadAxial] = {} # /PRELOAD/AXIAL (M103)
+        self.damp_inters: Dict[int, DampInter] = {}    # /DAMP/INTER (M103)
+        self.damp_ranges: Dict[int, DampRange] = {}    # /DAMP/RANGE (M103)
+        self.analy_global: Optional[AnalyGlobal] = None # /ANALY (M103)
+        self.upwind_global: Optional[UpwindGlobal] = None # /UPWIND (M103)
+        self.caa_controls: Dict[int, CaaControl] = {}  # /CAA (M103)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
