@@ -1076,6 +1076,8 @@ def read_ale(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_ale_solver(block, model, log)
     elif sub in ("CLOS", "CLOSE"):
         read_ale_close(block, model, log)
+    elif sub == "ZERO":
+        model.ale_zero = True
     else:
         log.warning(f"/ALE/{sub} not ported — block skipped", block.source)
 
@@ -1090,6 +1092,90 @@ def read_heat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/HEAT/MAT/mat_ID`` — parse-only note (M37); other /HEAT options
     are not ported."""
     _read_mat_modifier("HEAT", block, model, log)
+
+
+def read_fail_fractal(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/FRACTAL_DMG/mat_ID`` or ``/FAIL/FRACTAL/mat_ID`` (M118)::
+
+        card 1:  grsh4n_1  grsh3n_1  grsh4n_2  grsh3n_2
+        card 2:  Damage  Probability  Seed  Num_walk  Printout
+        card 3:  fail_ID (optional)
+    """
+    cards = [c for c in (block.fixed_cards() if block.fixed else block.cards) if not c.is_blank]
+    if not cards:
+        log.error(f"/FAIL/FRACTAL_DMG/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import FailFractal
+
+    mat_id = block.user_id
+    if len(block.parts) > 2:
+        try:
+            mat_id = int(block.parts[-1])
+        except ValueError:
+            pass
+
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_FRACTAL_1")
+        grsh4n_1 = _ival(f1[0]) if len(f1) > 0 else 0
+        grsh3n_1 = _ival(f1[1]) if len(f1) > 1 else 0
+        grsh4n_2 = _ival(f1[2]) if len(f1) > 2 else 0
+        grsh3n_2 = _ival(f1[3]) if len(f1) > 3 else 0
+
+        damage = 0.0
+        probability = 0.0
+        seed = 0
+        num_walk = 0
+        printout = 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_FRACTAL_2")
+            damage = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            probability = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            seed = _ival(f2[2]) if len(f2) > 2 else 0
+            num_walk = _ival(f2[3]) if len(f2) > 3 else 0
+            printout = _ival(f2[4]) if len(f2) > 4 else 0
+
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("IDS10")
+            fail_id = _ival(f3[0]) if len(f3) > 0 else 0
+    else:
+        t1 = cards[0].tokens()
+        grsh4n_1 = int(float(t1[0])) if len(t1) > 0 else 0
+        grsh3n_1 = int(float(t1[1])) if len(t1) > 1 else 0
+        grsh4n_2 = int(float(t1[2])) if len(t1) > 2 else 0
+        grsh3n_2 = int(float(t1[3])) if len(t1) > 3 else 0
+
+        damage = 0.0
+        probability = 0.0
+        seed = 0
+        num_walk = 0
+        printout = 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            damage = float(t2[0]) if len(t2) > 0 else 0.0
+            probability = float(t2[1]) if len(t2) > 1 else 0.0
+            seed = int(float(t2[2])) if len(t2) > 2 else 0
+            num_walk = int(float(t2[3])) if len(t2) > 3 else 0
+            printout = int(float(t2[4])) if len(t2) > 4 else 0
+
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            fail_id = int(float(t3[0])) if len(t3) > 0 else 0
+
+    model.fail_fractals[mat_id] = FailFractal(
+        mat_id=mat_id,
+        grsh4n_1=grsh4n_1,
+        grsh3n_1=grsh3n_1,
+        grsh4n_2=grsh4n_2,
+        grsh3n_2=grsh3n_2,
+        damage=damage,
+        probability=probability,
+        seed=seed,
+        num_walk=num_walk,
+        printout=printout,
+        fail_id=fail_id,
+    )
 
 
 def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -1137,13 +1223,13 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     "TENSSTRAIN", "ORTHSTRAIN", "GURSON", "ALTER", "VISUAL", "MULLINS_OR",
                     "PUCK", "RTCL", "SAHRAEI", "SYAZWAN", "TAB2", "GENE1", "INIEVO",
                     "CHANG", "TSAIWU", "TSAIHILL", "HOFFMAN", "MAXSTRAIN", "HASHIN",
-                    "LEMAITRE", "COCKCROFT", "ENERGY", "COMPOSITE"):
+                    "LEMAITRE", "COCKCROFT", "ENERGY", "COMPOSITE", "FRACTAL", "FRACTAL_DMG"):
         log.warning(f"/FAIL/{kind} not ported — skipped "
                     f"(supported: JOHNSON, BIQUAD, TAB1, SNCONNECT, FLD, CONNECT, "
                     f"TENSSTRAIN, ORTHSTRAIN, GURSON, ALTER, VISUAL, MULLINS_OR, "
                     f"PUCK, RTCL, SAHRAEI, SYAZWAN, TAB2, GENE1, INIEVO, "
                     f"CHANG, TSAIWU, TSAIHILL, HOFFMAN, MAXSTRAIN, HASHIN, "
-                    f"LEMAITRE, COCKCROFT, ENERGY, COMPOSITE)", block.source)
+                    f"LEMAITRE, COCKCROFT, ENERGY, COMPOSITE, FRACTAL, FRACTAL_DMG)", block.source)
         return
     # header /FAIL/<kind>/mat_ID[/fail_ID]: with TWO trailing ids the
     # FIRST is the material id (the lexer keeps only the last as user_id)
@@ -1156,6 +1242,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     cards = block.cards
     if not cards:
         log.error(f"/FAIL/{kind}/{mat_id}: missing data card", block.source)
+        return
+    if kind in ("FRACTAL", "FRACTAL_DMG"):
+        read_fail_fractal(block, model, log)
         return
     if kind == "JOHNSON":
         # card 1: D1..D5 "%20lg"*5 (fail_johnson.cfg radioss51); card 2:
@@ -4116,6 +4205,32 @@ def read_ale_grid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 alpha = float(t[0]) if len(t) > 0 else 0.0
                 gamma = float(t[1]) if len(t) > 1 else 0.0
         model.ale_grid_volume = AleGridVolume(alpha=alpha, gamma=gamma)
+    elif grid_sub in ("FLOW-TRACKING", "FLOW_TRACKING", "MASS-WEIGHTED-VEL", "MASS_WEIGHTED_VEL"):
+        is_def, is_rot = 0, 0
+        scale_def, scale_rot = 1.0, 1.0
+        if cards:
+            if block.fixed:
+                f1 = cards[0].cut("ALE_GRID_FLOW_TRACK")
+                is_def = _ival(f1[0]) if len(f1) > 0 else 0
+                scale_def = _fval(f1[1], 1.0) if len(f1) > 1 else 1.0
+                if len(cards) > 1:
+                    f2 = cards[1].cut("ALE_GRID_FLOW_TRACK")
+                    is_rot = _ival(f2[0]) if len(f2) > 0 else 0
+                    scale_rot = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
+            else:
+                t1 = cards[0].tokens()
+                is_def = int(float(t1[0])) if len(t1) > 0 else 0
+                scale_def = float(t1[1]) if len(t1) > 1 else 1.0
+                if len(cards) > 1:
+                    t2 = cards[1].tokens()
+                    is_rot = int(float(t2[0])) if len(t2) > 0 else 0
+                    scale_rot = float(t2[1]) if len(t2) > 1 else 1.0
+        model.ale_grid_flow_tracking = {
+            "is_def": is_def, "scale_def": scale_def,
+            "is_rot": is_rot, "scale_rot": scale_rot,
+        }
+    elif grid_sub == "LAGRANGE":
+        model.ale_grid_lagrange = True
     else:  # STANDARD
         alpha, gamma, damp, lc = 0.0, 0.0, 0.5, 1.0
         if cards:
@@ -9671,6 +9786,10 @@ def read_extlnk(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         toks = cards[0].tokens()
         grnod_id = int(float(toks[0])) if len(toks) > 0 else 0
 
+    from ..model.entities import ExternalLink
+    model.external_links[block.user_id] = ExternalLink(
+        id=block.user_id, title=title, grnod_id=grnod_id,
+    )
     model.ext_links[block.user_id] = ExtLink(
         id=block.user_id, title=title, grnod_id=grnod_id,
     )
@@ -11128,6 +11247,15 @@ def read_transform(block: KeywordBlock, model: Model,
                 else:
                     pts.append([0.0, 0.0, 0.0])
 
+        from ..model.entities import TransformPosition
+        model.transform_positions[block.user_id] = TransformPosition(
+            id=block.user_id,
+            title=title,
+            grnod_id=grnod,
+            node_ids=(n1, n2, n3, n4, n5, n6),
+            submodel=sub_id,
+            points=tuple((p[0], p[1], p[2]) for p in pts),
+        )
         model.transforms.append((block.user_id, "POS", grnod, (n1, n2, n3, n4, n5, n6),
                                  pts, sub_id))
 
@@ -12199,6 +12327,34 @@ def read_memory(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.memory_requests.append(MemoryRequest(nmots=nmots, rate=rate))
 
 
+def read_arch(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ARCH`` (M118): Machine architecture configuration::
+
+        card 1: Mach1 Mach2 Mach3 Mach4 Mach5 Mach6 Mach7 Mach8
+    """
+    cards = [c for c in (block.fixed_cards() if block.fixed else block.cards) if not c.is_blank]
+    from ..model.entities import ArchSpec
+    if not cards:
+        model.arch_specs.append(ArchSpec())
+        return
+
+    if block.fixed:
+        f = cards[0].cut("ARCH_1")
+        mach = tuple(_ival(f[i]) if i < len(f) else 0 for i in range(8))
+    else:
+        t = cards[0].tokens()
+        mach = tuple(int(float(t[i])) if i < len(t) else 0 for i in range(8))
+
+    model.arch_specs.append(ArchSpec(mach=mach))
+
+
+def read_altdoctag(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ALTDOCTAG`` (M118): Keyword reference documentation tag."""
+    cards = [c for c in (block.fixed_cards() if block.fixed else block.cards) if not c.is_blank]
+    tag = cards[0].raw.strip() if cards else ""
+    model.altdoctags.append(tag)
+
+
 def read_init(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/INIT/<subtype>/id`` dispatcher (M110)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
@@ -12208,7 +12364,9 @@ def read_init(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.warning(f"/INIT/{sub} not ported", block.source)
 
 
-KEYWORD_PARSERS: Dict[str, Callable] = {
+KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = {
+    # M37: complete table of Starter keywords. All 204 law numbers
+    # route to read_mat; all /PROP numbers route to read_prop.
     "MONVOL": read_monvol,
     "ANALY": read_analy,
     "BEGIN": read_begin,
@@ -12220,15 +12378,19 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "DEF_SOLID": read_def_solid,   # global solid defaults (M68)
     "IOFLAG": read_ioflag,         # output flags, parse-skip (M68)
     "SPMD": read_spmd,             # domain decomposition, parse-skip (M68)
-    "NODE": read_node,
-    "BRICK": read_brick,
     "SHEL16": read_shel16,
     "QUAD": read_quad,
-    "TETRA4": read_tetra4,
-    "SHELL": read_shell,
+    "NODE": read_node,
     "SH3N": read_sh3n,
+    "TRIA": read_sh3n,
+    "SHELL": read_shell,
+    "SHEL": read_shell,
+    "BRICK": read_brick,
+    "BRIC": read_brick,
+    "TETRA4": read_tetra4,
     "TRUSS": read_truss,
     "SPRING": read_spring,
+    "SPRI": read_spring,
     "BEAM": read_beam,
     "PART": read_part,
     "MAT": read_mat,
@@ -12325,6 +12487,8 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "GAUGE": read_gauge,
     "CLUSTER": read_cluster,
     "EXTLNK": read_extlnk,
+    "EXTLINK": read_extlnk,
+    "EXTERN": read_extlnk,
     "FXBODY": read_fxbody,
     "INIGRAV": read_inigrav,
     "INIMAP": read_inimap,
@@ -12367,9 +12531,7 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "INIQUA": read_iniqua,
     "INIQUAD": read_iniqua,
     "INISTA": read_inista,
-    "INISTATE": read_inista,
     "SPH_RESERVE": read_sph_reserve,
-    "MOVE_FUNCT": read_move_funct,
     "EIG": read_eig,
     "SHFRA": read_shfra,
     "SHFRA_V4": read_shfra,
@@ -12378,6 +12540,8 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "STR_FILE": read_str_file,
     "MEMORY": read_memory,
     "PLOAD": read_pload,
+    "ARCH": read_arch,
+    "ALTDOCTAG": read_altdoctag,
 }
 
 
@@ -12417,7 +12581,8 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
             "INITRU", "INITRUSS", "INIBEA", "INIBEAM", "INISPR", "INISPRI",
             "SET", "SETS", "STATE", "CHECKSUM", "DYNAIN", "SECT", "EBCS",
             "INIQUA", "INIQUAD", "INISTA", "INISTATE", "SPH_RESERVE", "MOVE_FUNCT",
-            "EIG", "SHFRA", "SHFRA_V4", "INTTHICK", "INT_THICK", "STR_FILE", "MEMORY", "PLOAD"
+            "EIG", "SHFRA", "SHFRA_V4", "INTTHICK", "INT_THICK", "STR_FILE", "MEMORY", "PLOAD",
+            "ARCH", "ALTDOCTAG", "EXTERN", "EXTLNK", "SUBDOMAIN"
         ):
             # /FAIL's second trailing id is its OWN option id in the
             # legacy dialect (read_fail handles it), and /ADMAS headers

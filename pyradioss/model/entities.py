@@ -2804,6 +2804,48 @@ class MemoryRequest:
     rate: float = 0.66
 
 
+@dataclass
+class FailFractal:
+    """/FAIL/FRACTAL_DMG or /FAIL/FRACTAL (M118): Fractal damage failure model."""
+    mat_id: int
+    grsh4n_1: int = 0
+    grsh3n_1: int = 0
+    grsh4n_2: int = 0
+    grsh3n_2: int = 0
+    damage: float = 0.0
+    probability: float = 0.0
+    seed: int = 0
+    num_walk: int = 0
+    printout: int = 0
+    fail_id: int = 0
+
+
+@dataclass
+class TransformPosition:
+    """/TRANSFORM/POSITION or /TRANSFORM/POS (M118): Spatial positioning transform."""
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+    node_ids: tuple[int, ...] = (0, 0, 0, 0, 0, 0)
+    submodel: int = 0
+    points: tuple[tuple[float, float, float], ...] = ()
+
+
+@dataclass
+class ExternalLink:
+    """/EXTERN/LINK or /EXTLINK (M118): External interface link."""
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+
+
+@dataclass
+class ArchSpec:
+    """/ARCH (M118): Architecture specification card."""
+    mach: tuple[int, ...] = (0, 0, 0, 0, 0, 0, 0, 0)
+
+
+
 
 
 

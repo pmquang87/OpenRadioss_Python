@@ -957,6 +957,18 @@ def check_model(model: Model, log: MessageLog) -> None:
         if em.grnod_bc > 0 and em.grnod_bc not in model.node_groups:
             log.error(f"/EIG/{eid}: node group {em.grnod_bc} not defined", "CROSS REF")
 
+    for mid, ff in getattr(model, "fail_fractals", {}).items():
+        if ff.mat_id > 0 and ff.mat_id not in model.materials:
+            log.error(f"/FAIL/FRACTAL/{mid}: material {ff.mat_id} not defined", "CROSS REF")
+
+    for tid, tp in getattr(model, "transform_positions", {}).items():
+        if tp.grnod_id > 0 and tp.grnod_id not in model.node_groups:
+            log.error(f"/TRANSFORM/{tid}: node group {tp.grnod_id} not defined", "CROSS REF")
+
+    for lid, el in getattr(model, "external_links", {}).items():
+        if el.grnod_id > 0 and el.grnod_id not in model.node_groups:
+            log.error(f"/EXTERN/LINK/{lid}: node group {el.grnod_id} not defined", "CROSS REF")
+
 
 
 

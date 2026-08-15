@@ -1015,6 +1015,15 @@ LAYOUTS: Dict[str, List[int]] = {
     "EIG_2": [10, 10, 20, 20],
     "EIG_3": [10, 10, 10, 10, 20],
     "MEMORY_1": [10, 10, 20],
+
+    # FAIL_FRACTAL, TRANSFORM_POS, ALE_GRID_FLOW_TRACK, ARCH, EXTLINK (M118)
+    "FAIL_FRACTAL_1": [10, 10, 10, 10],
+    "FAIL_FRACTAL_2": [20, 20, 10, 10, 10],
+    "TRANSFORM_POS_1": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+    "TRANSFORM_POS_POINT": [10, 20, 20, 20],
+    "ALE_GRID_FLOW_TRACK": [10, 20],
+    "ARCH_1": [10, 10, 10, 10, 10, 10, 10, 10],
+    "EXTLINK_1": [10],
 }
 
 

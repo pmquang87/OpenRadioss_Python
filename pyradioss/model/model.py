@@ -60,6 +60,7 @@ from .entities import (
     SectCircle, SectParal, DynainShell, MonvolArea, StateDt,
     SphReserve, MoveFunct,
     EigenMode, StressFile, MemoryRequest,
+    FailFractal, TransformPosition, ExternalLink, ArchSpec,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -716,6 +717,15 @@ class Model:
         self.memory_requests: List[MemoryRequest] = []      # /MEMORY (M117)
         self.shfra_v4: bool = False                         # /SHFRA/V4 (M117)
         self.intthick_v5: bool = False                      # /INTTHICK/V5 (M117)
+        self.fail_fractals: Dict[int, FailFractal] = {}     # /FAIL/FRACTAL (M118)
+        self.transform_positions: Dict[int, TransformPosition] = {} # /TRANSFORM/POS (M118)
+        self.external_links: Dict[int, ExternalLink] = {}   # /EXTERN/LINK (M118)
+        self.subdomains: Dict[int, Subdomain] = {}          # /SUBDOMAIN (M118)
+        self.arch_specs: List[ArchSpec] = []                # /ARCH (M118)
+        self.altdoctags: List[str] = []                     # /ALTDOCTAG (M118)
+        self.ale_grid_flow_tracking: Optional[Dict[str, Any]] = None # /ALE/GRID/FLOW-TRACKING (M118)
+        self.ale_grid_lagrange: bool = False                # /ALE/GRID/LAGRANGE (M118)
+        self.ale_zero: bool = False                         # /ALE/ZERO (M118)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

@@ -123,6 +123,7 @@ real history is 41 milestones. One line each:
 | M115 | Add /SET & /SETS (generalized entity sets), extended /SURF modifiers (/SURF/EXT, /ALL, /FREE, /BOX, /MAT, /PROP), /MONVOL/AREA, /TH/TITLE, /STATE/DT, /DYNAIN/DT, /STATE/* output filters |
 | M116 | Add /INIQUA & /INIQUAD (quad initial states), /INISTA & /INISTATE (state dispatcher), /FRAME/MOV2 & /SKEW/MOV2 (kinematic moving frames), /SPH/RESERVE (particle buffer), /MOVE_FUNCT & /FUNCT/MOVE, extended /TH channels (/TH/SPHCEL, /TH/NSTRAND, /TH/MODE, /TH/CYL_JO, /TH/FXBODY, /TH/GAUGE, /TH/GR*) |
 | M117 | Add /EIG (eigenvalue extraction / modal analysis), /SHFRA/V4 (shell local frame formulation), /INTTHICK/V5 (integration thickness flag), /STATE/STR_FILE & /STR_FILE (stress output file), /MEMORY (memory request allocation), /DEF_INTER/TYPE25 (default contact type 25), /PLOAD (pressure load alias) |
+| M118 | Add /FAIL/FRACTAL_DMG & /FAIL/FRACTAL (fractal damage failure), /TRANSFORM/POSITION & /TRANSFORM/POS (spatial positioning transform), /ALE/GRID/FLOW-TRACKING & /ALE/GRID/LAGRANGE & /ALE/ZERO (ALE grid formulation controls), /ARCH (architecture specs), /ALTDOCTAG (doc metadata tag), /EXTERN/LINK (/EXTLINK), /SUBDOMAIN, /INCLUDE_LS-DYNA (/INCLUDE_DYNA) |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
