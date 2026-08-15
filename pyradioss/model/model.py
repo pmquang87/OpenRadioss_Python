@@ -68,7 +68,7 @@ from .entities import (
     NbcsBlock, NbcsNode, AleMuscl, BemModel,
     GaugePoint, SphGlo, AnalyOptions, AleCfdSph,
     FailOrthBiquad, SlipringShell,
-    EbcsNrf, FailRtcl, FailGurson,
+    EbcsNrf, EbcsPeriodic, EbcsCyclic, FailRtcl, FailGurson,
     FailPuck, FailSahraei, FailSyazwan, FailTab2, FailGene1,
     Stack, StackPly,
     LagmulGlobal, GearConstraint, RackConstraint, DiffConstraint,
@@ -815,6 +815,8 @@ class Model:
         self.det_circs: Dict[int, DetCirc] = {}            # /DFS/DETCIRC (M137)
         self.ini_map3ds: Dict[int, IniMap3D] = {}          # /INIMAP/3D (M137)
         self.generic_sets: Dict[str, Dict[int, SetGeneric]] = {} # /SET (M137)
+        self.ebcs_periodics: Dict[int, EbcsPeriodic] = {}  # /EBCS/PERIODIC (M138)
+        self.ebcs_cyclics: Dict[int, EbcsCyclic] = {}      # /EBCS/CYCLIC (M138)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

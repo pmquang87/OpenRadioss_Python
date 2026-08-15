@@ -1196,6 +1196,11 @@ LAYOUTS: Dict[str, List[int]] = {
     "DFS_DETLINE_1": [20, 20, 20, 20, 20, 20, 20, 20],
     "DFS_DETCIRC_1": [20, 20, 20, 20, 20, 20, 20, 20, 20],
     "INIMAP3D_1": [10, 10, 10, 10, 10, 20],
+
+    # EXTENDED INISTATE, BCS & COORDINATE TRANSFORMATIONS (M138)
+    "EBCS_PERIODIC_1": [10, 10, 10, 10],
+    "BCS_TRA_1": [10, 10, 10],
+    "BCS_ROT_1": [10, 10, 10],
 }
 
 

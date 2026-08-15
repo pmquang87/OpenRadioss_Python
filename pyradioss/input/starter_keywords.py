@@ -4655,19 +4655,20 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """
     from ..model.entities import CyclicBoundaryCondition
 
-    if len(block.parts) > 1 and block.parts[1].upper() == "NRF":
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub == "NRF":
         read_bcs_nrf(block, model, log)
         return
 
-    if len(block.parts) > 1 and block.parts[1].upper() == "WALL":
+    if sub == "WALL":
         read_bcs_wall(block, model, log)
         return
 
-    if len(block.parts) > 1 and block.parts[1].upper() == "PROPELLANT":
+    if sub == "PROPELLANT":
         read_ebcs_propellant(block, model, log)
         return
 
-    if len(block.parts) > 1 and block.parts[1].upper() == "CYCLIC":
+    if sub == "CYCLIC":
         title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
         if not cards or (block.fixed and cards[0].is_blank):
             log.error(f"/BCS/CYCLIC/{block.user_id}: missing data card", block.source)
@@ -4692,23 +4693,54 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if not cards or (block.fixed and cards[0].is_blank):
         log.error(f"/BCS/{block.user_id}: missing data card", block.source)
         return
-    if block.fixed:
-        f = cards[0].cut("BCS")
-        flags = f[0].split()
-        if len(flags) < 2:
-            log.error(f"/BCS/{block.user_id}: Trarot field needs "
-                      f"'TTT RRR' flags, got '{f[0]}'", block.source)
-            return
-        tra, rot, skew, grnod = flags[0], flags[1], _ival(f[1]), _ival(f[2])
+
+    if sub in ("TRA", "TRANS"):
+        # /BCS/TRA (M138): pure translational constraints
+        if block.fixed:
+            f = cards[0].cut("BCS_TRA_1")
+            tra = f[0].strip() if len(f) > 0 else "111"
+            skew = _ival(f[1]) if len(f) > 1 else 0
+            grnod = _ival(f[2]) if len(f) > 2 else 0
+        else:
+            t = cards[0].tokens()
+            tra = t[0] if len(t) > 0 else "111"
+            skew = int(float(t[1])) if len(t) > 1 else 0
+            grnod = int(float(t[2])) if len(t) > 2 else 0
+        fix_tra = np.array([ch == "1" for ch in tra.zfill(3)])
+        fix_rot = np.array([False, False, False])
+    elif sub in ("ROT", "ROTA"):
+        # /BCS/ROT (M138): pure rotational constraints
+        if block.fixed:
+            f = cards[0].cut("BCS_ROT_1")
+            rot = f[0].strip() if len(f) > 0 else "111"
+            skew = _ival(f[1]) if len(f) > 1 else 0
+            grnod = _ival(f[2]) if len(f) > 2 else 0
+        else:
+            t = cards[0].tokens()
+            rot = t[0] if len(t) > 0 else "111"
+            skew = int(float(t[1])) if len(t) > 1 else 0
+            grnod = int(float(t[2])) if len(t) > 2 else 0
+        fix_tra = np.array([False, False, False])
+        fix_rot = np.array([ch == "1" for ch in rot.zfill(3)])
     else:
-        t = cards[0].tokens()
-        if len(t) < 4:
-            log.error(f"/BCS/{block.user_id}: card 2 needs "
-                      f"'tra rot skew grnod'", block.source)
-            return
-        tra, rot, skew, grnod = t[0], t[1], int(t[2]), int(t[3])
-    fix_tra = np.array([ch == "1" for ch in tra.zfill(3)])
-    fix_rot = np.array([ch == "1" for ch in rot.zfill(3)])
+        if block.fixed:
+            f = cards[0].cut("BCS")
+            flags = f[0].split()
+            if len(flags) < 2:
+                log.error(f"/BCS/{block.user_id}: Trarot field needs "
+                          f"'TTT RRR' flags, got '{f[0]}'", block.source)
+                return
+            tra, rot, skew, grnod = flags[0], flags[1], _ival(f[1]), _ival(f[2])
+        else:
+            t = cards[0].tokens()
+            if len(t) < 4:
+                log.error(f"/BCS/{block.user_id}: card 2 needs "
+                          f"'tra rot skew grnod'", block.source)
+                return
+            tra, rot, skew, grnod = t[0], t[1], int(t[2]), int(t[3])
+        fix_tra = np.array([ch == "1" for ch in tra.zfill(3)])
+        fix_rot = np.array([ch == "1" for ch in rot.zfill(3)])
+
     model.bcs.append(BoundaryCondition(
         id=block.user_id, grnod_id=grnod, fix_tra=fix_tra, fix_rot=fix_rot,
         title=title, skew_id=skew))
@@ -9627,13 +9659,67 @@ def read_ebcs_nrf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_ebcs_periodic(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/PERIODIC/id`` (M138): Eulerian periodic boundary condition."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    ebcs_id = block.user_id if block.user_id is not None else 1
+    if not cards or cards[0].is_blank:
+        log.error(f"/EBCS/PERIODIC/{ebcs_id}: missing data card", block.source)
+        return
+    from ..model.entities import EbcsPeriodic
+    if block.fixed:
+        f = cards[0].cut("EBCS_PERIODIC_1")
+        surf1 = _ival(f[0]) if len(f) > 0 else 0
+        surf2 = _ival(f[1]) if len(f) > 1 else 0
+        skew = _ival(f[2]) if len(f) > 2 else 0
+        grpart = _ival(f[3]) if len(f) > 3 else 0
+    else:
+        toks = cards[0].tokens()
+        surf1 = int(float(toks[0])) if len(toks) > 0 else 0
+        surf2 = int(float(toks[1])) if len(toks) > 1 else 0
+        skew = int(float(toks[2])) if len(toks) > 2 else 0
+        grpart = int(float(toks[3])) if len(toks) > 3 else 0
+    model.ebcs_periodics[ebcs_id] = EbcsPeriodic(
+        id=ebcs_id, title=title, surf1_id=surf1, surf2_id=surf2, skew_id=skew, grpart_id=grpart
+    )
+
+
+def read_ebcs_cyclic(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/CYCLIC/id`` (M138): Eulerian cyclic boundary condition."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    ebcs_id = block.user_id if block.user_id is not None else 1
+    if not cards or cards[0].is_blank:
+        log.error(f"/EBCS/CYCLIC/{ebcs_id}: missing data card", block.source)
+        return
+    from ..model.entities import EbcsCyclic
+    if block.fixed:
+        f = cards[0].cut("EBCS_PERIODIC_1")
+        surf1 = _ival(f[0]) if len(f) > 0 else 0
+        surf2 = _ival(f[1]) if len(f) > 1 else 0
+        skew = _ival(f[2]) if len(f) > 2 else 0
+        grpart = _ival(f[3]) if len(f) > 3 else 0
+    else:
+        toks = cards[0].tokens()
+        surf1 = int(float(toks[0])) if len(toks) > 0 else 0
+        surf2 = int(float(toks[1])) if len(toks) > 1 else 0
+        skew = int(float(toks[2])) if len(toks) > 2 else 0
+        grpart = int(float(toks[3])) if len(toks) > 3 else 0
+    model.ebcs_cyclics[ebcs_id] = EbcsCyclic(
+        id=ebcs_id, title=title, surf1_id=surf1, surf2_id=surf2, skew_id=skew, grpart_id=grpart
+    )
+
+
 def read_ebcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/EBCS/<subtype>/id`` dispatcher (M114, M125)."""
+    """``/EBCS/<subtype>/id`` dispatcher (M114, M125, M138)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub == "PROPELLANT":
         read_ebcs_propellant(block, model, log)
     elif sub in ("NRF", "NON_REFLECT", "NONREFLECT"):
         read_ebcs_nrf(block, model, log)
+    elif sub == "PERIODIC":
+        read_ebcs_periodic(block, model, log)
+    elif sub == "CYCLIC":
+        read_ebcs_cyclic(block, model, log)
     else:
         read_bcs(block, model, log)
 
@@ -12950,6 +13036,16 @@ def read_transform(block: KeywordBlock, model: Model,
     else:
         sub = ""
 
+    # Normalization of aliases (M138)
+    if sub in ("SYMET", "MIRROR", "PLANE"):
+        sub = "SYM"
+    elif sub in ("SCALE",):
+        sub = "SCA"
+    elif sub in ("TRANSL", "TRANSLATION"):
+        sub = "TRA"
+    elif sub in ("ROTATE", "ROTATION"):
+        sub = "ROT"
+
     if sub not in ("TRA", "ROT", "SYM", "SCA", "POS", "POSITION", "AUTOPOSITION", "AUTOPOS", "PROJ", "PROJECTION", "FRAME"):
         log.warning(f"/TRANSFORM/{sub} not ported — block skipped "
                     f"(supported: TRA, ROT, SYM, SCA, POS, AUTOPOSITION, PROJ, FRAME)", block.source)
@@ -13878,7 +13974,7 @@ def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             st = model.ini_bricks.setdefault(elem_id, InitialBrickState(elem_id=elem_id))
             st.sigma = np.array([s1, s2, s3, s12, s23, s31], dtype=float)
 
-    elif sub in ("EPSP", "DENS", "ENER"):
+    elif sub in ("EPSP", "DENS", "ENER", "TEMP", "PRES", "VOID"):
         for c in cards:
             if block.fixed:
                 f = c.cut("INIBRI_SCALAR")
@@ -13896,6 +13992,12 @@ def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 st.rho = val
             elif sub == "ENER":
                 st.ener = val
+            elif sub == "TEMP":
+                st.temp = val
+            elif sub == "PRES":
+                st.pres = val
+            elif sub == "VOID":
+                st.void = val
     elif sub == "EREF":
         read_inibri_eref(block, model, log)
     else:
@@ -13919,7 +14021,7 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/INISHE/{sub}: missing data card", block.source)
         return
 
-    if sub in ("EPSP", "THICK"):
+    if sub in ("EPSP", "THICK", "TEMP", "ENER"):
         for c in cards:
             if block.fixed:
                 f = c.cut("INISHE_SCALAR")
@@ -13935,6 +14037,10 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 st.epsp = val
             elif sub == "THICK":
                 st.thick = val
+            elif sub == "TEMP":
+                st.temp = val
+            elif sub == "ENER":
+                st.em = val
 
     elif sub in ("STRS_F", "STRS_FGLO", "STRS_F/GLOB"):
         idx = 0
@@ -14028,7 +14134,7 @@ def read_initru(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/INITRU/{sub}: missing data card", block.source)
         return
 
-    if sub in ("EPSP", "FORCE", "TENS"):
+    if sub in ("EPSP", "FORCE", "TENS", "TEMP"):
         for c in cards:
             if block.fixed:
                 f = c.cut("INITRU_SCALAR")
@@ -14044,6 +14150,8 @@ def read_initru(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 st.epsp = val
             elif sub in ("FORCE", "TENS"):
                 st.force = val
+            elif sub == "TEMP":
+                st.temp = val
     elif sub in ("FULL", "TRUSS"):
         for c in cards:
             if block.fixed:
@@ -14089,7 +14197,7 @@ def read_inibea(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/INIBEA/{sub}: missing data card", block.source)
         return
 
-    if sub in ("FORCE", "MOMENT", "EPSP"):
+    if sub in ("FORCE", "MOMENT", "EPSP", "TEMP"):
         for c in cards:
             if block.fixed:
                 f = c.cut("INIBEA_SCALAR")
@@ -14107,6 +14215,8 @@ def read_inibea(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 st.moment[0] = val
             elif sub == "EPSP":
                 st.epsp = val
+            elif sub == "TEMP":
+                st.temp = val
     elif sub in ("FULL", "BEAM"):
         idx = 0
         while idx < len(cards):
@@ -14192,7 +14302,7 @@ def read_inispr(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/INISPR/{sub}: missing data card", block.source)
         return
 
-    if sub in ("DISP", "FORCE"):
+    if sub in ("DISP", "FORCE", "TEMP"):
         for c in cards:
             if block.fixed:
                 f = c.cut("INISPR_SCALAR")
@@ -14208,6 +14318,8 @@ def read_inispr(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 st.disp = val
             elif sub == "FORCE":
                 st.force = val
+            elif sub == "TEMP":
+                st.temp = val
     elif sub in ("FULL", "SPRING"):
         idx = 0
         while idx < len(cards):

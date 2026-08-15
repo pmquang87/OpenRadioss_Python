@@ -1332,7 +1332,7 @@ class InitialTemperature:
 
 @dataclass
 class InitialBrickState:
-    """/INIBRI (M96): initial state for solid/brick elements.
+    """/INIBRI (M96, M138): initial state for solid/brick elements.
 
     Fortran origin: ``starter/source/elements/initia/hm_read_inistate_d00.F``.
     """
@@ -1341,11 +1341,14 @@ class InitialBrickState:
     epsp: float = 0.0      # plastic strain
     rho: float = 0.0       # initial density
     ener: float = 0.0      # internal energy
+    temp: float = 0.0      # initial temperature (M138)
+    pres: float = 0.0      # initial hydrostatic pressure (M138)
+    void: float = 0.0      # initial void fraction (M138)
 
 
 @dataclass
 class InitialShellState:
-    """/INISHE and /INISH3 (M96): initial state for shell elements.
+    """/INISHE and /INISH3 (M96, M138): initial state for shell elements.
 
     Fortran origin: ``starter/source/elements/initia/hm_read_inistate_d00.F``.
     """
@@ -1357,11 +1360,12 @@ class InitialShellState:
     em: float = 0.0        # membrane energy
     eb: float = 0.0        # bending energy
     h_energy: np.ndarray = field(default_factory=lambda: np.zeros(3)) # H1, H2, H3
+    temp: float = 0.0      # initial temperature (M138)
 
 
 @dataclass
 class InitialTrussState:
-    """/INITRU (M97): initial state for truss elements.
+    """/INITRU (M97, M138): initial state for truss elements.
 
     Fortran origin: ``starter/source/elements/initia/hm_read_inistate_d00.F`` and
     ``starter/source/elements/truss/tsigini.F``.
@@ -1372,11 +1376,12 @@ class InitialTrussState:
     force: float = 0.0     # initial axial force / tension
     area: float = 0.0      # initial area override
     epsp: float = 0.0      # plastic strain
+    temp: float = 0.0      # initial temperature (M138)
 
 
 @dataclass
 class InitialBeamState:
-    """/INIBEA (M97): initial state for beam elements.
+    """/INIBEA (M97, M138): initial state for beam elements.
 
     Fortran origin: ``starter/source/elements/initia/hm_read_inistate_d00.F`` and
     ``starter/source/elements/beam/bsigini.F``.
@@ -1389,11 +1394,12 @@ class InitialBeamState:
     force: np.ndarray = field(default_factory=lambda: np.zeros(3))   # [Fx, Fy, Fz]
     moment: np.ndarray = field(default_factory=lambda: np.zeros(3))  # [Mx, My, Mz]
     epsp: float = 0.0      # plastic strain
+    temp: float = 0.0      # initial temperature (M138)
 
 
 @dataclass
 class InitialSpringState:
-    """/INISPR (M97): initial state for spring elements.
+    """/INISPR (M97, M138): initial state for spring elements.
 
     Fortran origin: ``starter/source/elements/initia/hm_read_inistate_d00.F`` and
     ``starter/source/elements/spring/rinit3.F``.
@@ -1407,6 +1413,7 @@ class InitialSpringState:
     dpl_neg: float = 0.0   # negative plastic displacement
     length: float = 0.0    # initial length
     eint: float = 0.0      # internal energy
+    temp: float = 0.0      # initial temperature (M138)
 
 
 @dataclass
@@ -3483,6 +3490,34 @@ class EbcsNrf:
     surf_id: int = 0
     tcar_p: float = 0.0
     tcar_vf: float = 0.0
+
+
+@dataclass
+class EbcsPeriodic:
+    """/EBCS/PERIODIC (M138): Eulerian periodic boundary condition.
+
+    Fortran origin: ``starter/source/loads/ebcs/hm_read_ebcs_perio.F``.
+    """
+    id: int
+    title: str = ""
+    surf1_id: int = 0
+    surf2_id: int = 0
+    skew_id: int = 0
+    grpart_id: int = 0
+
+
+@dataclass
+class EbcsCyclic:
+    """/EBCS/CYCLIC (M138): Eulerian cyclic boundary condition.
+
+    Fortran origin: ``starter/source/loads/ebcs/hm_read_ebcs_cyclic.F``.
+    """
+    id: int
+    title: str = ""
+    surf1_id: int = 0
+    surf2_id: int = 0
+    skew_id: int = 0
+    grpart_id: int = 0
 
 
 @dataclass
