@@ -276,6 +276,29 @@ def check_model(model: Model, log: MessageLog) -> None:
             log.error(f"{who}: unknown part {sens.part_id}", "CROSS REF")
         elif sens.kind == "TEMP" and sens.grnod_id:
             need_group(sens.grnod_id, who)
+        elif sens.kind == "GAUGE":
+            for gid, _, _ in sens.gauge_entries:
+                if gid > 0 and gid not in model.gauge_points and gid not in model.gauges:
+                    log.error(f"{who}: unknown gauge {gid}", "CROSS REF")
+        elif sens.kind == "HIC":
+            if sens.accel_id > 0 and sens.accel_id not in model.accelerometers:
+                log.error(f"{who}: unknown accelerometer {sens.accel_id}", "CROSS REF")
+        elif sens.kind == "WORK":
+            if sens.node_id1 and sens.node_id1 not in model._id2idx:
+                log.error(f"{who}: unknown node 1 {sens.node_id1}", "CROSS REF")
+            if sens.node_id2 and sens.node_id2 not in model._id2idx:
+                log.error(f"{who}: unknown node 2 {sens.node_id2}", "CROSS REF")
+        elif sens.kind == "RWALL":
+            rw_ids = {rw.id for rw in model.rwalls}
+            if sens.rwall_id > 0 and sens.rwall_id not in rw_ids:
+                log.error(f"{who}: unknown rigid wall {sens.rwall_id}", "CROSS REF")
+        elif sens.kind in ("XSECTION", "CROSSSECTION", "SECT"):
+            sect_ids = {s.id for s in model.sections}
+            if sens.sect_id > 0 and sens.sect_id not in sect_ids:
+                log.error(f"{who}: unknown section {sens.sect_id}", "CROSS REF")
+        elif sens.kind == "DIST_SURF":
+            if sens.node_id1 and sens.node_id1 not in model._id2idx:
+                log.error(f"{who}: unknown node 1 {sens.node_id1}", "CROSS REF")
 
     for am in model.admas:
         need_group(am.grnod_id, f"/ADMAS/{am.id}")

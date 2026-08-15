@@ -63,6 +63,7 @@ from .entities import (
     FailFractal, TransformPosition, ExternalLink, ArchSpec,
     FunctPython, FrictionModel, FrictionPartPair, RefstaNode, ErefSpec,
     NbcsBlock, NbcsNode, AleMuscl, BemModel,
+    GaugePoint, SphGlo, AnalyOptions,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -100,6 +101,7 @@ class EngineControls:
     dt_ams_igrp: int = 0          # AMS target part group (0 = all)
     dt_ams_tol: float = 1e-4      # AMS PCG tolerance
     dt_ams_itmax: int = 200       # AMS PCG max iterations
+    dt_controls: Dict[str, Dict[str, Any]] = field(default_factory=dict) # /DT/<elem_type>[/<action>] (M121)
     th_dt: float = 0.0            # /TFILE time-history output period
     anim_dt: float = 0.0          # /ANIM/DT animation state period
     state_dt: float = 0.0         # /STATE/DT restart-snapshot period (M6)
@@ -754,6 +756,9 @@ class Model:
         self.nbcs_blocks: Dict[int, NbcsBlock] = {}         # /NBCS (M119)
         self.ale_muscl: Optional[AleMuscl] = None           # /ALE/MUSCL (M119)
         self.bem_models: Dict[int, BemModel] = {}           # /BEM (M119)
+        self.gauge_points: Dict[int, GaugePoint] = {}       # /GAUGE/POINT (M121)
+        self.sphglo: Optional[SphGlo] = None                # /SPHGLO (M121)
+        self.analy: Optional[AnalyOptions] = None           # /ANALY (M121)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

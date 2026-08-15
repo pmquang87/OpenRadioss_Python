@@ -1033,6 +1033,26 @@ LAYOUTS: Dict[str, List[int]] = {
     "NBCS_1": [3, 1, 1, 1, 1, 1, 1, 1, 10, 10],
     "REFSTA_1": [10, 20, 20, 20],
     "ALE_MUSCL_1": [20],
+
+    # SENSOR extended, GAUGE/POINT, SPHGLO, ANALY (M121)
+    "SENSOR_GAUGE_1": [20],
+    "SENSOR_GAUGE_2": [10],
+    "SENSOR_GAUGE_3": [10, 20, 20],
+    "SENSOR_HIC_1": [20],
+    "SENSOR_HIC_2": [10, 10, 20, 20, 20, 20],
+    "SENSOR_WORK_1": [20],
+    "SENSOR_WORK_2": [10, 10, 20, 20],
+    "SENSOR_WORK_3": [10, 10, 10, 10],
+    "SENSOR_RWALL_1": [20],
+    "SENSOR_RWALL_2": [10, 10, 20, 20, 20],
+    "SENSOR_XSECTION_1": [20],
+    "SENSOR_XSECTION_2": [10, 10, 20, 20, 20],
+    "SENSOR_DIST_SURF_1": [20],
+    "SENSOR_DIST_SURF_2": [10, 10, 10, 10, 10],
+    "SENSOR_DIST_SURF_3": [20, 20, 40, 20],
+    "GAUGE_POINT_1": [20, 20, 20, 20, 20],
+    "SPHGLO_1": [20, 10, 10, 10, 10],
+    "ANALY_1": [10, 10, 10, 10],
 }
 
 

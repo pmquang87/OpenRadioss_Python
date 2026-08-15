@@ -156,6 +156,8 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 # (mass scaling — the added mass and its momentum/energy
                 # effect are tracked and reported).
                 sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                sub2 = block.parts[2].upper() if len(block.parts) > 2 else ""
+                sub3 = block.parts[3].upper() if len(block.parts) > 3 else ""
                 if sub == "NODA":
                     ec.dt_noda = ("CST" if len(block.parts) > 2 and
                                   block.parts[2].upper() == "CST"
@@ -167,6 +169,21 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             ec.dt_ams_igrp = int(block.parts[2])
                         except ValueError:
                             pass
+                elif sub in ("BRICK", "BRI", "SHELL", "SH3N", "SHE", "QUAD", "QUA", "TETRA10", "TETRA4", "INTER", "SPRING", "BEAM", "TRUSS", "SPH"):
+                    action = sub2 if sub2 else "STOP"
+                    scale_elem, dt_min_elem = 0.9, 0.0
+                    if block.cards:
+                        vals_el = block.cards[0].floats()
+                        if vals_el:
+                            scale_elem = vals_el[0] if vals_el[0] > 0.0 else 0.9
+                        if len(vals_el) > 1:
+                            dt_min_elem = vals_el[1]
+                    ec.dt_controls[sub] = {
+                        "action": action,
+                        "flag": sub3,
+                        "scale": scale_elem,
+                        "dt_min": dt_min_elem,
+                    }
                 if block.cards:
                     vals = block.cards[0].floats()
                     if vals:

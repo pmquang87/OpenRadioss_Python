@@ -683,6 +683,18 @@ class Sensor:
     mint_flex: float = 0.0
     mint_ext: float = 0.0
     spring_id: int = 0
+    # M121: GAUGE, HIC, WORK, RWALL, XSECTION, DIST_SURF
+    gauge_entries: List[Tuple[int, float, float]] = field(default_factory=list) # (gauge_id, fporp, fport)
+    accel_id: int = 0
+    hic_period: float = 0.0
+    hic_val: float = 0.0
+    gravity: float = 9.81
+    work_max: float = 0.0
+    sect_id: int = 0
+    rwall_id: int = 0
+    node_id3: int = 0
+    node_id4: int = 0
+    surf_id: int = 0
     skew_id: int = 0
     ax_dir: str = ""
     bend_dir: str = ""
@@ -2950,6 +2962,34 @@ class BemModel:
     id: int = 1
     title: str = ""
     params: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class GaugePoint:
+    """/GAUGE/POINT (M121): Point gauge definition for spatial measurement."""
+    id: int
+    title: str = ""
+    subtitle: str = ""
+    points: list[tuple[float, float, float, float, str]] = field(default_factory=list) # (x, y, z, dist, subtitle)
+
+
+@dataclass
+class SphGlo:
+    """/SPHGLO (M121): Global SPH particle formulation settings."""
+    alpha_sort: float = 0.25
+    maxsph: int = 0
+    lneigh: int = 120
+    nneigh: int = 120
+    isol2sph: int = 0
+
+
+@dataclass
+class AnalyOptions:
+    """/ANALY (M121): Global analysis dimension and arithmetic options."""
+    n2d3d: int = 0         # 0=3D, 1=axisymmetric, 2=plane strain
+    iparith: int = 1       # 1=ON, 2=OFF
+    isubcyc: int = 0       # 0=none, 2=subcycling n2
+
 
 
 

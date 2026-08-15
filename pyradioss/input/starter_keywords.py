@@ -51,6 +51,7 @@ from ..model.entities import (
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
     Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
+    GaugePoint, SphGlo, AnalyOptions,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -5602,24 +5603,6 @@ def read_damp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         tstop=float(t[3]) if len(t) > 3 else 1e30, title=title))
 
 
-def read_analy(block: KeywordBlock, model: Model, log: MessageLog):
-    """
-    /ANALY
-    card 1: N2D
-    """
-    title, cards = _title_and_data(block)
-    if not cards:
-        return
-    if block.fixed:
-        model.n2d = _ival(cards[0].fields()[0].strip())
-    else:
-        model.n2d = _ival(cards[0].tokens()[0])
-    if model.n2d not in (0, 1, 2):
-        log.warning(f"/ANALY: invalid N2D {model.n2d} (must be 0, 1, 2)",
-                    block.source)
-        model.n2d = 0
-
-
 def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/SENSOR/{TIME|DISP|VEL|NOT|AND|OR|DIST|ENERGY|INTER|RBODY|TEMP}/sens_ID`` (M6, M84, M97)::
 
@@ -5636,7 +5619,7 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         /SENSOR/TEMP:   card 1: title, card 2: Tdelay, card 3: Grnod_Id Tempmax Tempmin Tempmean Tmin
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC")
+    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF")
     if kind not in supported:
         log.warning(f"/SENSOR/{kind} not ported ({', '.join(supported)} supported)",
                     block.source)
@@ -5850,12 +5833,171 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             ax_dir=ax_dir, bend_dir=bend_dir, tmin=tmin, alpha=alpha,
             cfc=cfc, title=title,
         ))
+    elif kind == "GAUGE":
+        entries = []
+        if data_card_idx < len(cards):
+            ngau_tok = cards[data_card_idx].tokens()
+            ngau = int(ngau_tok[0]) if ngau_tok else 0
+            for k in range(data_card_idx + 1, data_card_idx + 1 + ngau):
+                if k < len(cards):
+                    if block.fixed:
+                        f = cards[k].cut("SENSOR_GAUGE_3")
+                        gid = _ival(f[0])
+                        fp = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+                        ft = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+                    else:
+                        gt = cards[k].tokens()
+                        gid = int(gt[0]) if len(gt) > 0 else 0
+                        fp = float(gt[1]) if len(gt) > 1 else 0.0
+                        ft = float(gt[2]) if len(gt) > 2 else 0.0
+                    entries.append((gid, fp, ft))
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="GAUGE", tdelay=tdelay, gauge_entries=entries, title=title))
+    elif kind == "HIC":
+        if block.fixed:
+            f = cards[data_card_idx].cut("SENSOR_HIC_2")
+            accel_id = _ival(f[0])
+            sdir = f[1].strip() if len(f) > 1 else ""
+            hic_p = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            hic_v = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            grav = _fval(f[4], 9.81) if len(f) > 4 else 9.81
+            tmin = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+        else:
+            accel_id = int(t[0]) if len(t) > 0 else 0
+            sdir = t[1] if len(t) > 1 else ""
+            hic_p = float(t[2]) if len(t) > 2 else 0.0
+            hic_v = float(t[3]) if len(t) > 3 else 0.0
+            grav = float(t[4]) if len(t) > 4 else 9.81
+            tmin = float(t[5]) if len(t) > 5 else 0.0
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="HIC", tdelay=tdelay, accel_id=accel_id, dir=sdir,
+            hic_period=hic_p, hic_val=hic_v, gravity=grav, tmin=tmin, title=title))
+    elif kind == "WORK":
+        if block.fixed:
+            f = cards[data_card_idx].cut("SENSOR_WORK_2")
+            n1 = _ival(f[0])
+            n2 = _ival(f[1]) if len(f) > 1 else 0
+            wmax = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            tmin = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            sect_id, int_id, rb_id, rw_id = 0, 0, 0, 0
+            if data_card_idx + 1 < len(cards):
+                g = cards[data_card_idx + 1].cut("SENSOR_WORK_3")
+                sect_id = _ival(g[0]) if len(g) > 0 else 0
+                int_id = _ival(g[1]) if len(g) > 1 else 0
+                rb_id = _ival(g[2]) if len(g) > 2 else 0
+                rw_id = _ival(g[3]) if len(g) > 3 else 0
+        else:
+            n1 = int(t[0]) if len(t) > 0 else 0
+            n2 = int(t[1]) if len(t) > 1 else 0
+            wmax = float(t[2]) if len(t) > 2 else 0.0
+            tmin = float(t[3]) if len(t) > 3 else 0.0
+            sect_id, int_id, rb_id, rw_id = 0, 0, 0, 0
+            if data_card_idx + 1 < len(cards):
+                g = cards[data_card_idx + 1].tokens()
+                sect_id = int(g[0]) if len(g) > 0 else 0
+                int_id = int(g[1]) if len(g) > 1 else 0
+                rb_id = int(g[2]) if len(g) > 2 else 0
+                rw_id = int(g[3]) if len(g) > 3 else 0
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="WORK", tdelay=tdelay, node_id1=n1, node_id2=n2,
+            work_max=wmax, tmin=tmin, sect_id=sect_id, int_id=int_id, rbody_id=rb_id,
+            rwall_id=rw_id, title=title))
+    elif kind == "RWALL":
+        if block.fixed:
+            f = cards[data_card_idx].cut("SENSOR_RWALL_2")
+            rwall_id = _ival(f[0])
+            sdir = f[1].strip() if len(f) > 1 else ""
+            fmin = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            fmax = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            tmin = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        else:
+            rwall_id = int(t[0]) if len(t) > 0 else 0
+            sdir = t[1] if len(t) > 1 else ""
+            fmin = float(t[2]) if len(t) > 2 else 0.0
+            fmax = float(t[3]) if len(t) > 3 else 0.0
+            tmin = float(t[4]) if len(t) > 4 else 0.0
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="RWALL", tdelay=tdelay, rwall_id=rwall_id, dir=sdir,
+            fmin=fmin, fmax=fmax, tmin=tmin, title=title))
+    elif kind in ("XSECTION", "CROSSSECTION", "SECT"):
+        if block.fixed:
+            f = cards[data_card_idx].cut("SENSOR_XSECTION_2")
+            sect_id = _ival(f[0])
+            sdir = f[1].strip() if len(f) > 1 else ""
+            fmin = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            fmax = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            tmin = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        else:
+            sect_id = int(t[0]) if len(t) > 0 else 0
+            sdir = t[1] if len(t) > 1 else ""
+            fmin = float(t[2]) if len(t) > 2 else 0.0
+            fmax = float(t[3]) if len(t) > 3 else 0.0
+            tmin = float(t[4]) if len(t) > 4 else 0.0
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="XSECTION", tdelay=tdelay, sect_id=sect_id, dir=sdir,
+            fmin=fmin, fmax=fmax, tmin=tmin, title=title))
+    elif kind == "DIST_SURF":
+        if block.fixed:
+            f = cards[data_card_idx].cut("SENSOR_DIST_SURF_2")
+            n1 = _ival(f[0])
+            surf_id = _ival(f[1]) if len(f) > 1 else 0
+            n2 = _ival(f[2]) if len(f) > 2 else 0
+            n3 = _ival(f[3]) if len(f) > 3 else 0
+            n4 = _ival(f[4]) if len(f) > 4 else 0
+            dmin, dmax, tmin = 0.0, 0.0, 0.0
+            if data_card_idx + 1 < len(cards):
+                g = cards[data_card_idx + 1].cut("SENSOR_DIST_SURF_3")
+                dmin = _fval(g[0], 0.0) if len(g) > 0 else 0.0
+                dmax = _fval(g[1], 0.0) if len(g) > 1 else 0.0
+                tmin = _fval(g[3], 0.0) if len(g) > 3 else 0.0
+        else:
+            n1 = int(t[0]) if len(t) > 0 else 0
+            surf_id = int(t[1]) if len(t) > 1 else 0
+            n2 = int(t[2]) if len(t) > 2 else 0
+            n3 = int(t[3]) if len(t) > 3 else 0
+            n4 = int(t[4]) if len(t) > 4 else 0
+            dmin, dmax, tmin = 0.0, 0.0, 0.0
+            if data_card_idx + 1 < len(cards):
+                g = cards[data_card_idx + 1].tokens()
+                dmin = float(g[0]) if len(g) > 0 else 0.0
+                dmax = float(g[1]) if len(g) > 1 else 0.0
+                tmin = float(g[2]) if len(g) > 2 else 0.0
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="DIST_SURF", tdelay=tdelay, node_id1=n1, surf_id=surf_id,
+            node_id2=n2, node_id3=n3, node_id4=n4, dmin=dmin, dmax=dmax, tmin=tmin, title=title))
+
+
+def read_gauge_point(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/GAUGE/POINT/id`` (M121): Point gauge definition for spatial measurement."""
+    title, cards = _title_and_data(block)
+    points = []
+    for c in cards:
+        if c.is_blank:
+            continue
+        if block.fixed:
+            f = c.cut("GAUGE_POINT_1")
+            xi = _fval(f[0]) if len(f) > 0 else 0.0
+            yi = _fval(f[1]) if len(f) > 1 else 0.0
+            zi = _fval(f[2]) if len(f) > 2 else 0.0
+            dist = _fval(f[3]) if len(f) > 3 else 0.0
+            sub = f[4].strip() if len(f) > 4 else ""
+        else:
+            t = c.tokens()
+            xi = float(t[0]) if len(t) > 0 else 0.0
+            yi = float(t[1]) if len(t) > 1 else 0.0
+            zi = float(t[2]) if len(t) > 2 else 0.0
+            dist = float(t[3]) if len(t) > 3 else 0.0
+            sub = t[4] if len(t) > 4 else ""
+        points.append((xi, yi, zi, dist, sub))
+    gid = block.user_id or 1
+    model.gauge_points[gid] = GaugePoint(id=gid, title=title, points=points)
+
 
 
 
 
 def read_mpc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MPC/mpc_ID`` (M6) — one linear multi-point constraint row::
+    """``/MPC/mpc_ID`` (M6) -- one linear multi-point constraint row::
 
         card 1:  title
         card 2+: node_ID   dof   coef        (one term per card)
@@ -7798,6 +7940,9 @@ def read_sphglo(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.sph_global = SphGlobal(
         spasort=spasort, ale_maxsph=maxsph, lvoisph=lvois, kvoisph=kvois, isol2sph=isol2sph
     )
+    model.sphglo = SphGlo(
+        alpha_sort=spasort, maxsph=maxsph, lneigh=lvois, nneigh=kvois, isol2sph=isol2sph
+    )
 
 
 def read_sph_inout(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -9557,9 +9702,9 @@ def read_damp_funct(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_analy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/ANALY`` (M103)::
+    """``/ANALY`` (M103/M121)::
 
-        card 1:  N2D3D  ANALY_TEMP  IPARITH
+        card 1:  N2D3D  ANALY_TEMP  IPARITH  ISUBCYC
     """
     cards = block.cards
     if not cards or cards[0].is_blank:
@@ -9570,14 +9715,30 @@ def read_analy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         f = cards[0].cut("ANALY_1")
         n2d3d = _ival(f[0]) if len(f) > 0 else 0
         analy_temp = _ival(f[1]) if len(f) > 1 else 0
-        iparith = _ival(f[2]) if len(f) > 2 else 0
+        iparith = _ival(f[2], 1) if len(f) > 2 and f[2].strip() else 1
+        isubcyc = _ival(f[3], 0) if len(f) > 3 else 0
     else:
         toks = cards[0].tokens()
         n2d3d = int(float(toks[0])) if len(toks) > 0 else 0
-        analy_temp = int(float(toks[1])) if len(toks) > 1 else 0
-        iparith = int(float(toks[2])) if len(toks) > 2 else 0
+        if len(toks) == 3:
+            analy_temp = 0
+            iparith = int(float(toks[1]))
+            isubcyc = int(float(toks[2]))
+        elif len(toks) >= 4:
+            analy_temp = int(float(toks[1]))
+            iparith = int(float(toks[2]))
+            isubcyc = int(float(toks[3]))
+        elif len(toks) == 2:
+            analy_temp = 0
+            iparith = int(float(toks[1]))
+            isubcyc = 0
+        else:
+            analy_temp, iparith, isubcyc = 0, 1, 0
 
+    model.n2d = n2d3d
     model.analy_global = AnalyGlobal(n2d3d=n2d3d, analy_temp=analy_temp, iparith=iparith)
+    model.analy = AnalyOptions(n2d3d=n2d3d, iparith=iparith, isubcyc=isubcyc)
+
 
 
 def read_upwind(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -9639,6 +9800,8 @@ def read_gauge(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         card 2:  node_ID  [gap]  elem_ID  dist
     """
     subtype = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if subtype == "POINT":
+        return read_gauge_point(block, model, log)
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/GAUGE/{block.user_id}: missing data card", block.source)
