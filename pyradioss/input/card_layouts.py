@@ -1117,6 +1117,15 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_LAW121_1": [20, 20, 20, 10, 10, 20],
     "MAT_LAW124_1": [20, 20, 20, 10, 20],
     "MAT_LAW90_1": [20, 20, 20, 10, 10, 20],
+
+    # LOADS & PRELOADS (M130)
+    "LOAD_PCYL_1": [10, 10, 10],
+    "LOAD_PCYL_2": [10, 10, 20, 20, 20],
+    "LOAD_LASER_1": [20, 10, 10, 20, 10],
+    "LOAD_LASER_2": [20, 20, 20, 20, 20],
+    "LOAD_LASER_3": [10, 10],
+    "PRELOAD_AXIAL_2": [20, 20],
+    "PRELOAD_AXIAL_LEGACY": [10, 10, 10, 10, 20, 20],
 }
 
 

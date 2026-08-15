@@ -5517,8 +5517,12 @@ def read_load(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_pfluid(block, model, log)
     elif sub in ("PRESSURE", "PRESS"):
         read_load_pressure(block, model, log)
+    elif sub == "LASER":
+        read_laser(block, model, log)
+    elif sub in ("PRELOAD_AXIAL", "PRELOAD"):
+        read_preload_axial(block, model, log)
     else:
-        log.warning(f"/LOAD/{sub} not ported (CENTRI, PBLAST, PCYL, PFLUID, PRESSURE supported)", block.source)
+        log.warning(f"/LOAD/{sub} not ported (CENTRI, PBLAST, PCYL, PFLUID, PRESSURE, LASER, PRELOAD supported)", block.source)
 
 
 def read_imptemp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -5883,7 +5887,7 @@ def read_impacc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_pload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/PLOAD/pload_ID`` (M5)::
+    """``/PLOAD/pload_ID`` (M5) or ``/PLOAD/PCYL/load_ID`` (M130)::
 
         card 1:  title
         card 2:  surf_ID   fct_ID   Fscale   [sens_ID]
@@ -5898,6 +5902,10 @@ def read_pload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     fct_IDT sens_ID <blank> Ascale_x Fscale_Y`` — the scale is column
     81-100's Fscale_Y (blank -> 1.0), Ascale_x warned when set.
     """
+    if len(block.parts) > 1 and block.parts[1].upper() == "PCYL":
+        read_pcyl(block, model, log)
+        return
+
     if block.fixed:
         title, cards = _fixed_data(block)
         if not cards or cards[0].is_blank:
@@ -10069,33 +10077,63 @@ def read_preload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_preload_axial(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/PRELOAD/AXIAL/preload_ID`` (M103)::
+    """``/PRELOAD/AXIAL/preload_ID`` or ``/LOAD/PRELOAD_AXIAL/id`` (M103/M130)::
 
         card 1:  title
-        card 2:  grpart_ID  sens_ID  [gap]  fct_ID  Preload  Damp
+        card 2:  set_id  sens_id  curveid
+        card 3:  Preload  Damp
+      (also accepts 1-card format: set_id sens_id [gap] fct_id Preload Damp)
     """
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/PRELOAD/AXIAL/{block.user_id}: missing data card", block.source)
         return
 
+    set_id = 0
+    sens_id = 0
+    fct_id = 0
+    preload = 1.0
+    damp = 0.0
+
     if block.fixed:
-        f = cards[0].cut("PRELOAD_AXIAL_1")
-        grpart_id = _ival(f[0]) if len(f) > 0 else 0
-        sens_id = _ival(f[1]) if len(f) > 1 else 0
-        fct_id = _ival(f[3]) if len(f) > 3 else 0
-        preload = _fval(f[4], 0.0) if len(f) > 4 else 0.0
-        damp = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+        if len(cards) >= 2 and not cards[1].is_blank:
+            f1 = cards[0].cut("PRELOAD_AXIAL_1")
+            set_id = _ival(f1[0]) if len(f1) > 0 else 0
+            sens_id = _ival(f1[1]) if len(f1) > 1 else 0
+            fct_id = _ival(f1[2]) if len(f1) > 2 else 0
+
+            f2 = cards[1].cut("PRELOAD_AXIAL_2")
+            preload = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+            damp = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+        else:
+            f = cards[0].cut("PRELOAD_AXIAL_LEGACY")
+            set_id = _ival(f[0]) if len(f) > 0 else 0
+            sens_id = _ival(f[1]) if len(f) > 1 else 0
+            fct_id = _ival(f[3]) if len(f) > 3 else (_ival(f[2]) if len(f) > 2 else 0)
+            preload = _fval(f[4], 1.0) if len(f) > 4 else (_fval(f[3], 1.0) if len(f) > 3 else 1.0)
+            damp = _fval(f[5], 0.0) if len(f) > 5 else (_fval(f[4], 0.0) if len(f) > 4 else 0.0)
     else:
-        toks = cards[0].tokens()
-        grpart_id = int(float(toks[0])) if len(toks) > 0 else 0
-        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
-        fct_id = int(float(toks[2])) if len(toks) > 2 else 0
-        preload = float(toks[3]) if len(toks) > 3 else 0.0
-        damp = float(toks[4]) if len(toks) > 4 else 0.0
+        toks1 = cards[0].tokens()
+        if len(cards) >= 2 and not cards[1].is_blank and len(toks1) <= 3:
+            set_id = int(float(toks1[0])) if len(toks1) > 0 else 0
+            sens_id = int(float(toks1[1])) if len(toks1) > 1 else 0
+            fct_id = int(float(toks1[2])) if len(toks1) > 2 else 0
+
+            toks2 = cards[1].tokens()
+            preload = float(toks2[0]) if len(toks2) > 0 else 1.0
+            damp = float(toks2[1]) if len(toks2) > 1 else 0.0
+        else:
+            set_id = int(float(toks1[0])) if len(toks1) > 0 else 0
+            sens_id = int(float(toks1[1])) if len(toks1) > 1 else 0
+            fct_id = int(float(toks1[2])) if len(toks1) > 2 else 0
+            preload = float(toks1[3]) if len(toks1) > 3 else 1.0
+            damp = float(toks1[4]) if len(toks1) > 4 else 0.0
+
+    if preload == 0.0:
+        preload = 1.0
 
     model.preload_axials[block.user_id] = PreloadAxial(
-        id=block.user_id, title=title, grpart_id=grpart_id, sens_id=sens_id,
+        id=block.user_id, title=title, grpart_id=set_id, sens_id=sens_id,
         fct_id=fct_id, preload=preload, damp=damp,
     )
 

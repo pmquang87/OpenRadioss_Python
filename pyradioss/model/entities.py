@@ -1419,10 +1419,63 @@ class ElementActivation:
     grtrus_id: int = 0
     grbeam_id: int = 0
     grspri_id: int = 0
-    grsh3n_id: int = 0
     iform: int = 1
     tstart: float = 0.0
     tstop: float = 1.0e30
+
+
+@dataclass
+class PCylLoad:
+    """/LOAD/PCYL, /PLOAD/PCYL (M130): Cylindrical coordinate pressure load."""
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    sens_id: int = 0
+    skew_id: int = 0
+    table_id: int = 0
+    xscale_r: float = 1.0
+    xscale_t: float = 1.0
+    yscale_p: float = 1.0
+
+
+@dataclass
+class PreloadAxial:
+    """/PRELOAD/AXIAL, /LOAD/PRELOAD_AXIAL (M130): Axial spring/beam preload."""
+    id: int
+    title: str = ""
+    set_id: int = 0
+    sens_id: int = 0
+    fun_id: int = 0
+    preload: float = 1.0
+    damp: float = 0.0
+
+
+@dataclass
+class LaserLoad:
+    """/LOAD/LASER, /LASER, /DFS/LASER (M130): Laser beam impact load."""
+    id: int
+    title: str = ""
+    slas: float = 0.0
+    fct_idlas: int = 0
+    star: float = 0.0
+    fct_idtar: int = 0
+    hn: float = 0.0
+    vcp: float = 0.0
+    k0: float = 0.0
+    rd: float = 0.0
+    ks: float = 0.0
+    np: int = 0
+    params: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class NodeMergeOption:
+    """/MERGE/NODE, /MERGE (M130): Node group merge tolerance option."""
+    id: int
+    title: str = ""
+    tol: float = 0.0
+    grnod_id: int = 0
+    merge_type: int = 0
 
 
 @dataclass
