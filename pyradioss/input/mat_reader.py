@@ -792,6 +792,42 @@ class _CfgInterpreter:
         segs = _split_fmt(fmt)
         pos = 0
         ai = 0
+        tokens = line.split()
+
+        # Detect free-format input: any fixed-width slice containing >1 whitespace-separated token
+        is_free_format = False
+        scan_pos = 0
+        for seg in segs:
+            if seg[0] == "lit":
+                scan_pos += len(seg[1])
+                continue
+            _tag, _typ, width = seg
+            if width:
+                if len(line[scan_pos:scan_pos + width].split()) > 1:
+                    is_free_format = True
+                    break
+                scan_pos += width
+
+        if is_free_format and tokens:
+            data_segs = [s for s in segs if s[0] != "lit"]
+            non_blank_pairs = [(s[1], a) for s, a in zip(data_segs, args) if a != "_BLANK_"]
+            if len(tokens) <= len(non_blank_pairs):
+                for tok_idx, (typ, arg) in enumerate(non_blank_pairs):
+                    raw = tokens[tok_idx] if tok_idx < len(tokens) else ""
+                    self._set(arg, self._convert(typ, raw))
+                return
+            tok_idx = 0
+            for seg in segs:
+                if seg[0] == "lit":
+                    continue
+                _tag, typ, _w = seg
+                if ai < len(args):
+                    raw = tokens[tok_idx] if tok_idx < len(tokens) else ""
+                    tok_idx += 1
+                    self._set(args[ai], self._convert(typ, raw))
+                    ai += 1
+            return
+
         for seg in segs:
             if seg[0] == "lit":
                 pos += len(seg[1])
@@ -805,7 +841,8 @@ class _CfgInterpreter:
                 raw = m.group(0) if m else ""
                 pos = m.end() if m else len(line)
             if ai < len(args):
-                self._set(args[ai], self._convert(typ, raw))
+                val = self._convert(typ, raw)
+                self._set(args[ai], val)
                 ai += 1
 
     # -- statement execution -----------------------------------------------------

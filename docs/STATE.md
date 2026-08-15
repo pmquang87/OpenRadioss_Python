@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M128)
+## What is implemented (M1 → M129)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -134,6 +134,7 @@ real history is 41 milestones. One line each:
 | M126 | Add extended failure models suite (/FAIL/PUCK, /FAIL/SAHRAEI, /FAIL/SYAZWAN, /FAIL/TAB2, /FAIL/GENE1) & /TH/SENSOR, /TH/CLUSTER output requests |
 | M127 | Add composite laminate stacks (/STACK), composite shell properties (/PROP/TYPE17 STACK, /PROP/TYPE51), and /SENSOR/NIC_NIJ aliasing |
 | M128 | Add fluid-structure coupling interface (/INTER/TYPE18, /DEF_INTER/TYPE18) and /DEF_INTER/TYPE8 defaults |
+| M129 | Add extended seatbelt & advanced material laws suite (/MAT/LAW114, /MAT/LAW117, /MAT/LAW119, /MAT/LAW120, /MAT/LAW121, /MAT/LAW124, /MAT/LAW90) |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

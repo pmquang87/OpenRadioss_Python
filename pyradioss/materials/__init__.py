@@ -56,6 +56,7 @@ from . import (eos, law01_elastic, law02_johnson_cook, law06_hyd_visc,  # noqa: 
                law35_kelvinmax, law36_tabulated, law40_kelvinmax,
                law42_ogden, law44_cowper, law62_hypervisco,
                law70_tabfoam, law81_druckerprager, law83_spotweld,
+               law114_seatbelt, law120_advanced,
                mat_gas, mat_void)
 
 
@@ -73,6 +74,8 @@ def register_materials():
     law70_tabfoam._register()
     law81_druckerprager._register()
     law83_spotweld._register()
+    law114_seatbelt._register()
+    law120_advanced._register()
     mat_gas._register()
     mat_void._register()
 
