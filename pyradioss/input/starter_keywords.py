@@ -2276,6 +2276,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                "TYPE22": 22, "TSH_COMP": 22,
                "TYPE18": 18, "INT_BEAM": 18,
                "TYPE34": 34, "SPH": 34,
+               "TYPE43": 43, "CONNECT": 43,
                "TYPE0": 0, "VOID": 0}
     if typename not in aliases:
         # M38: SH_ORTH/SPR_GENE/SPR_BEAM/VOID (ported physics) + every
@@ -3055,6 +3056,20 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             else:
                 t = cards[0].tokens()
                 params["thick"] = float(t[0]) if t else 1.0
+
+    elif ptype == 43:  # CONNECT / TYPE43
+        ismstr = 0
+        thick = 0.0
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f = cards[0].cut("PROP_CONNECT_1")
+                ismstr = _ival(f[0]) if len(f) > 0 else 0
+                thick = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            else:
+                toks = cards[0].tokens()
+                ismstr = int(float(toks[0])) if len(toks) > 0 else 0
+                thick = float(toks[1]) if len(toks) > 1 else 0.0
+        params = {"ismstr": ismstr, "thick": thick}
 
     model.properties[block.user_id] = Property(
         id=block.user_id, type=ptype, title=title, params=params)
@@ -5794,9 +5809,10 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 gap=gap_min, lagmul=True, title=title))
             return
 
-    if kind not in ("TYPE2", "TYPE7", "TYPE8", "TYPE10", "TYPE11", "TYPE18", "TYPE19", "TYPE21", "TYPE24", "TYPE25", "SUB", "GUIDED_CABLE"):
-        log.warning(f"/INTER/{kind} not ported (TYPE2, TYPE7, TYPE8, TYPE10, TYPE11, TYPE18, TYPE19, TYPE21, TYPE24, "
-                    f"TYPE25, SUB, GUIDED_CABLE supported)", block.source)
+    if kind not in ("TYPE1", "TYPE2", "TYPE3", "TYPE5", "TYPE6", "TYPE7", "TYPE8", "TYPE10", "TYPE11",
+                    "TYPE12", "TYPE14", "TYPE15", "TYPE18", "TYPE19", "TYPE20", "TYPE21", "TYPE22",
+                    "TYPE23", "TYPE24", "TYPE25", "SUB", "GUIDED_CABLE"):
+        log.warning(f"/INTER/{kind} not ported", block.source)
         return
     title, cards = _title_and_data(block)
     if not cards:
@@ -6038,6 +6054,279 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.interfaces.append(Interface(
             id=block.user_id, type=29, grnod_id=grnod_id, grpart_id=grpart_id,
             istiff=istiff, stfac=stfac, fric=fric, title=title
+        ))
+        return
+
+    if kind == "TYPE1":
+        if block.fixed:
+            f0 = cards[0].cut("INTER_TYPE1_1")
+            surf1 = _ival(f0[0]) if len(f0) > 0 else 0
+            surf2 = _ival(f0[1]) if len(f0) > 1 else 0
+        else:
+            t0 = cards[0].tokens()
+            surf1 = int(float(t0[0])) if len(t0) > 0 else 0
+            surf2 = int(float(t0[1])) if len(t0) > 1 else 0
+        model.interfaces.append(Interface(
+            id=block.user_id, type=1, surf_id=surf1, surf_id1=surf2, title=title
+        ))
+        return
+
+    if kind == "TYPE3":
+        if block.fixed:
+            f0 = cards[0].cut("INTER_TYPE3_1")
+            surf1 = _ival(f0[0]) if len(f0) > 0 else 0
+            surf2 = _ival(f0[1]) if len(f0) > 1 else 0
+            stfac, fric, gap, tstart, tstop = 1.0, 0.0, 0.0, 0.0, 1.0e30
+            if len(cards) > 1 and not cards[1].is_blank:
+                f1 = cards[1].cut("INTER_TYPE3_2")
+                stfac = _fval(f1[0], 1.0) if len(f1) > 0 else 1.0
+                fric = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                gap = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+                tstart = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+                tstop = _fval(f1[4], 1.0e30) if len(f1) > 4 else 1.0e30
+        else:
+            t0 = cards[0].tokens()
+            surf1 = int(float(t0[0])) if len(t0) > 0 else 0
+            surf2 = int(float(t0[1])) if len(t0) > 1 else 0
+            stfac, fric, gap, tstart, tstop = 1.0, 0.0, 0.0, 0.0, 1.0e30
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                stfac = float(t1[0]) if len(t1) > 0 else 1.0
+                fric = float(t1[1]) if len(t1) > 1 else 0.0
+                gap = float(t1[2]) if len(t1) > 2 else 0.0
+                tstart = float(t1[3]) if len(t1) > 3 else 0.0
+                tstop = float(t1[4]) if len(t1) > 4 else 1.0e30
+        model.interfaces.append(Interface(
+            id=block.user_id, type=3, surf_id=surf1, surf_id1=surf2,
+            stfac=stfac, fric=fric, gap=gap, tstart=tstart, tstop=tstop, title=title
+        ))
+        return
+
+    if kind == "TYPE5":
+        if block.fixed:
+            f0 = cards[0].cut("INTER_TYPE5_1")
+            grnod_id = _ival(f0[0]) if len(f0) > 0 else 0
+            surf_id = _ival(f0[1]) if len(f0) > 1 else 0
+            stfac, fric, gap, tstart, tstop = 1.0, 0.0, 0.0, 0.0, 1.0e30
+            if len(cards) > 1 and not cards[1].is_blank:
+                f1 = cards[1].cut("INTER_TYPE5_2")
+                stfac = _fval(f1[0], 1.0) if len(f1) > 0 else 1.0
+                fric = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                gap = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+                tstart = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+                tstop = _fval(f1[4], 1.0e30) if len(f1) > 4 else 1.0e30
+        else:
+            t0 = cards[0].tokens()
+            grnod_id = int(float(t0[0])) if len(t0) > 0 else 0
+            surf_id = int(float(t0[1])) if len(t0) > 1 else 0
+            stfac, fric, gap, tstart, tstop = 1.0, 0.0, 0.0, 0.0, 1.0e30
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                stfac = float(t1[0]) if len(t1) > 0 else 1.0
+                fric = float(t1[1]) if len(t1) > 1 else 0.0
+                gap = float(t1[2]) if len(t1) > 2 else 0.0
+                tstart = float(t1[3]) if len(t1) > 3 else 0.0
+                tstop = float(t1[4]) if len(t1) > 4 else 1.0e30
+        model.interfaces.append(Interface(
+            id=block.user_id, type=5, grnod_id=grnod_id, surf_id=surf_id,
+            stfac=stfac, fric=fric, gap=gap, tstart=tstart, tstop=tstop, title=title
+        ))
+        return
+
+    if kind == "TYPE6":
+        if block.fixed:
+            f0 = cards[0].cut("INTER_TYPE6_1")
+            surf1 = _ival(f0[0]) if len(f0) > 0 else 0
+            surf2 = _ival(f0[1]) if len(f0) > 1 else 0
+            scale, fric, gap, tstart, tstop = 1.0, 0.0, 0.0, 0.0, 1.0e30
+            if len(cards) > 1 and not cards[1].is_blank:
+                f1 = cards[1].cut("INTER_TYPE6_2")
+                scale = _fval(f1[0], 1.0) if len(f1) > 0 else 1.0
+                fric = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                gap = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+                tstart = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+                tstop = _fval(f1[4], 1.0e30) if len(f1) > 4 else 1.0e30
+        else:
+            t0 = cards[0].tokens()
+            surf1 = int(float(t0[0])) if len(t0) > 0 else 0
+            surf2 = int(float(t0[1])) if len(t0) > 1 else 0
+            scale, fric, gap, tstart, tstop = 1.0, 0.0, 0.0, 0.0, 1.0e30
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                scale = float(t1[0]) if len(t1) > 0 else 1.0
+                fric = float(t1[1]) if len(t1) > 1 else 0.0
+                gap = float(t1[2]) if len(t1) > 2 else 0.0
+                tstart = float(t1[3]) if len(t1) > 3 else 0.0
+                tstop = float(t1[4]) if len(t1) > 4 else 1.0e30
+        model.interfaces.append(Interface(
+            id=block.user_id, type=6, surf_id=surf1, surf_id1=surf2,
+            stfac=scale, fric=fric, gap=gap, tstart=tstart, tstop=tstop, title=title
+        ))
+        return
+
+    if kind == "TYPE12":
+        if block.fixed:
+            f0 = cards[0].cut("INTER_TYPE12_1")
+            surf1 = _ival(f0[0]) if len(f0) > 0 else 0
+            surf2 = _ival(f0[1]) if len(f0) > 1 else 0
+            tol, tstart, tstop = 0.0, 0.0, 1.0e30
+            if len(cards) > 1 and not cards[1].is_blank:
+                f1 = cards[1].cut("INTER_TYPE12_2")
+                tol = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                tstart = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+                tstop = _fval(f1[3], 1.0e30) if len(f1) > 3 else 1.0e30
+        else:
+            t0 = cards[0].tokens()
+            surf1 = int(float(t0[0])) if len(t0) > 0 else 0
+            surf2 = int(float(t0[1])) if len(t0) > 1 else 0
+            tol, tstart, tstop = 0.0, 0.0, 1.0e30
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                tol = float(t1[0]) if len(t1) > 0 else 0.0
+                tstart = float(t1[1]) if len(t1) > 1 else 0.0
+                tstop = float(t1[2]) if len(t1) > 2 else 1.0e30
+        model.interfaces.append(Interface(
+            id=block.user_id, type=12, surf_id=surf1, surf_id1=surf2,
+            tol=tol, tstart=tstart, tstop=tstop, title=title
+        ))
+        return
+
+    if kind == "TYPE14":
+        if block.fixed:
+            f0 = cards[0].cut("INTER_TYPE14_1")
+            grnod_id = _ival(f0[0]) if len(f0) > 0 else 0
+            surf_id = _ival(f0[1]) if len(f0) > 1 else 0
+            iload = _ival(f0[2]) if len(f0) > 2 else 0
+            ifric = _ival(f0[3]) if len(f0) > 3 else 0
+            fun_id1 = _ival(f0[4]) if len(f0) > 4 else 0
+            fun_id2 = _ival(f0[5]) if len(f0) > 5 else 0
+
+            stif, fric, gap = 1.0, 0.0, 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f1 = cards[1].cut("INTER_TYPE14_2")
+                stif = _fval(f1[0], 1.0) if len(f1) > 0 else 1.0
+                fric = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                gap = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+        else:
+            t0 = cards[0].tokens()
+            grnod_id = int(float(t0[0])) if len(t0) > 0 else 0
+            surf_id = int(float(t0[1])) if len(t0) > 1 else 0
+            iload = int(float(t0[2])) if len(t0) > 2 else 0
+            ifric = int(float(t0[3])) if len(t0) > 3 else 0
+            fun_id1 = int(float(t0[4])) if len(t0) > 4 else 0
+            fun_id2 = int(float(t0[5])) if len(t0) > 5 else 0
+
+            stif, fric, gap = 1.0, 0.0, 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                stif = float(t1[0]) if len(t1) > 0 else 1.0
+                fric = float(t1[1]) if len(t1) > 1 else 0.0
+                gap = float(t1[3]) if len(t1) > 3 else 0.0
+        model.interfaces.append(Interface(
+            id=block.user_id, type=14, grnod_id=grnod_id, surf_id=surf_id,
+            iload=iload, mfrot=ifric, fun_id1=fun_id1, fun_id2=fun_id2,
+            stfac=stif, fric=fric, gap=gap, title=title
+        ))
+        return
+
+    if kind == "TYPE15":
+        if block.fixed:
+            f0 = cards[0].cut("INTER_TYPE15_1")
+            surf1 = _ival(f0[0]) if len(f0) > 0 else 0
+            surf2 = _ival(f0[1]) if len(f0) > 1 else 0
+            stif, fric = 1.0, 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f1 = cards[1].cut("INTER_TYPE15_2")
+                stif = _fval(f1[0], 1.0) if len(f1) > 0 else 1.0
+                fric = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        else:
+            t0 = cards[0].tokens()
+            surf1 = int(float(t0[0])) if len(t0) > 0 else 0
+            surf2 = int(float(t0[1])) if len(t0) > 1 else 0
+            stif, fric = 1.0, 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                stif = float(t1[0]) if len(t1) > 0 else 1.0
+                fric = float(t1[1]) if len(t1) > 1 else 0.0
+        model.interfaces.append(Interface(
+            id=block.user_id, type=15, surf_id=surf1, surf_id1=surf2,
+            stfac=stif, fric=fric, title=title
+        ))
+        return
+
+    if kind == "TYPE20":
+        if block.fixed:
+            f0 = cards[0].cut("INTER_TYPE20_1")
+            surf1 = _ival(f0[0]) if len(f0) > 0 else 0
+            surf2 = _ival(f0[1]) if len(f0) > 1 else 0
+            isym = _ival(f0[2]) if len(f0) > 2 else 0
+            iedge = _ival(f0[3]) if len(f0) > 3 else 0
+            grnod_id = _ival(f0[4]) if len(f0) > 4 else 0
+            line_id1 = _ival(f0[5]) if len(f0) > 5 else 0
+            line_id2 = _ival(f0[6]) if len(f0) > 6 else 0
+            edge_angle = _fval(f0[8], 0.0) if len(f0) > 8 else 0.0
+        else:
+            t0 = cards[0].tokens()
+            surf1 = int(float(t0[0])) if len(t0) > 0 else 0
+            surf2 = int(float(t0[1])) if len(t0) > 1 else 0
+            isym = int(float(t0[2])) if len(t0) > 2 else 0
+            iedge = int(float(t0[3])) if len(t0) > 3 else 0
+            grnod_id = int(float(t0[4])) if len(t0) > 4 else 0
+            line_id1 = int(float(t0[5])) if len(t0) > 5 else 0
+            line_id2 = int(float(t0[6])) if len(t0) > 6 else 0
+            edge_angle = float(t0[7]) if len(t0) > 7 else 0.0
+        model.interfaces.append(Interface(
+            id=block.user_id, type=20, surf_id=surf1, surf_id1=surf2,
+            isym=isym, iedge=iedge, grnod_id=grnod_id, line_id1=line_id1,
+            line_id2=line_id2, edge_angle=edge_angle, title=title
+        ))
+        return
+
+    if kind == "TYPE22":
+        if block.fixed:
+            f0 = cards[0].cut("INTER_TYPE22_1")
+            grbric_id = _ival(f0[0]) if len(f0) > 0 else 0
+            surf_id = _ival(f0[1]) if len(f0) > 1 else 0
+        else:
+            t0 = cards[0].tokens()
+            grbric_id = int(float(t0[0])) if len(t0) > 0 else 0
+            surf_id = int(float(t0[1])) if len(t0) > 1 else 0
+        model.interfaces.append(Interface(
+            id=block.user_id, type=22, grbric_id1=grbric_id, surf_id=surf_id, title=title
+        ))
+        return
+
+    if kind == "TYPE23":
+        if block.fixed:
+            f0 = cards[0].cut("INTER_TYPE23_1")
+            surf_s = _ival(f0[0]) if len(f0) > 0 else 0
+            surf_m = _ival(f0[1]) if len(f0) > 1 else 0
+            istf = _ival(f0[2]) if len(f0) > 2 else 0
+            igap = _ival(f0[4]) if len(f0) > 4 else 0
+            ibag = _ival(f0[6]) if len(f0) > 6 else 0
+            idel = _ival(f0[7]) if len(f0) > 7 else 0
+            fscale_gap, gap_max = 1.0, 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f1 = cards[1].cut("INTER_TYPE23_2")
+                fscale_gap = _fval(f1[0], 1.0) if len(f1) > 0 else 1.0
+                gap_max = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        else:
+            t0 = cards[0].tokens()
+            surf_s = int(float(t0[0])) if len(t0) > 0 else 0
+            surf_m = int(float(t0[1])) if len(t0) > 1 else 0
+            istf = int(float(t0[2])) if len(t0) > 2 else 0
+            igap = int(float(t0[3])) if len(t0) > 3 else 0
+            ibag = int(float(t0[4])) if len(t0) > 4 else 0
+            idel = int(float(t0[5])) if len(t0) > 5 else 0
+            fscale_gap, gap_max = 1.0, 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                fscale_gap = float(t1[0]) if len(t1) > 0 else 1.0
+                gap_max = float(t1[1]) if len(t1) > 1 else 0.0
+        model.interfaces.append(Interface(
+            id=block.user_id, type=23, surf_id=surf_m, surf_id1=surf_s,
+            istf=istf, igap=igap, ibag=ibag, idel=idel, fscale_gap=fscale_gap,
+            gap_max=gap_max, title=title
         ))
         return
 
@@ -8128,8 +8417,11 @@ def read_monvol(block: KeywordBlock, model: Model, log: MessageLog):
     elif vol_type in ("FVMBAG1", "FVMBAG"):
         read_monvol_fvmbag1(block, model, log)
         return
+    elif vol_type == "FVMBAG2":
+        read_monvol_fvmbag2(block, model, log)
+        return
     elif vol_type != "AIRBAG1":
-        log.warning(f"/MONVOL/{vol_type} not ported - skipped (supported: AIRBAG1, PRES, GAS, COMMU1, LFLUID, FVMBAG1)",
+        log.warning(f"/MONVOL/{vol_type} not ported - skipped (supported: AIRBAG1, PRES, GAS, COMMU1, LFLUID, FVMBAG1, FVMBAG2)",
                     block.source)
         return
 
@@ -8626,6 +8918,57 @@ def read_monvol_fvmbag1(block: KeywordBlock, model: Model, log: MessageLog) -> N
     )
 
 
+def read_monvol_fvmbag2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MONVOL/FVMBAG2/monvol_ID`` (M111)::
+
+        card 1:  title
+        card 2:  surf_IDex  surf_IDin  Hconv  IH3D
+        card 3:  mat_ID  _blank_  Pext  T0  _blank_  Ittf
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MONVOL/FVMBAG2/{block.user_id}: missing data card", block.source)
+        return
+    from ..model.entities import MonvolFvmBag2
+
+    surf_id_ex, surf_id_in, hconv, ih3d = 0, 0, 0.0, 0
+    mat_id, pext, t0, i_ttf = 0, 0.0, 0.0, 0
+
+    if block.fixed:
+        f1 = cards[0].cut("MONVOL_FVMBAG2_1")
+        surf_id_ex = _ival(f1[0]) if len(f1) > 0 else 0
+        surf_id_in = _ival(f1[1]) if len(f1) > 1 else 0
+        hconv = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        ih3d = _ival(f1[3], 0) if len(f1) > 3 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MONVOL_FVMBAG2_2")
+            mat_id = _ival(f2[0]) if len(f2) > 0 else 0
+            pext = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            t0 = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+            i_ttf = _ival(f2[5], 0) if len(f2) > 5 else 0
+    else:
+        t1 = cards[0].tokens()
+        surf_id_ex = int(float(t1[0])) if len(t1) > 0 else 0
+        surf_id_in = int(float(t1[1])) if len(t1) > 1 else 0
+        hconv = float(t1[2]) if len(t1) > 2 else 0.0
+        ih3d = int(float(t1[3])) if len(t1) > 3 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            mat_id = int(float(t2[0])) if len(t2) > 0 else 0
+            pext = float(t2[1]) if len(t2) > 1 else 0.0
+            t0 = float(t2[2]) if len(t2) > 2 else 0.0
+            i_ttf = int(float(t2[3])) if len(t2) > 3 else 0
+
+    model.monvol_fvmbag2s[block.user_id] = MonvolFvmBag2(
+        id=block.user_id, title=title, surf_id_ex=surf_id_ex,
+        surf_id_in=surf_id_in, hconv=hconv, ih3d=ih3d,
+        mat_id=mat_id, pext=pext, t0=t0, i_ttf=i_ttf
+    )
+
+
+
 
 def read_leak(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/LEAK[/<subtype>]/leak_ID`` (M105)::
@@ -8960,11 +9303,21 @@ def read_transform(block: KeywordBlock, model: Model,
         card 1: title
         card 2: GR_NODE  n1  n2  n3  n4  n5  n6  (blank)  (blank)  sub_ID
         cards 3..8 (optional): (blank)  X  Y  Z  for points 1..6
+    * `/TRANSFORM/AUTOPOSITION` (M111):
+        card 1: title
+        card 2: GR_NODE  Surf_ID  skew_ID  Dir  Gap  Pflag
+        card 3: Xpos  Ypos  Zpos  Xflag  Yflag  Zflag
     """
-    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if sub not in ("TRA", "ROT", "SYM", "SCA", "POS", "POSITION"):
+    if block.key0 in ("AUTOPOSITION", "AUTOPOS"):
+        sub = "AUTOPOSITION"
+    elif len(block.parts) > 1:
+        sub = block.parts[1].upper()
+    else:
+        sub = ""
+
+    if sub not in ("TRA", "ROT", "SYM", "SCA", "POS", "POSITION", "AUTOPOSITION", "AUTOPOS"):
         log.warning(f"/TRANSFORM/{sub} not ported — block skipped "
-                    f"(supported: TRA, ROT, SYM, SCA, POS)", block.source)
+                    f"(supported: TRA, ROT, SYM, SCA, POS, AUTOPOSITION)", block.source)
         return
 
     if block.fixed:
@@ -8974,6 +9327,52 @@ def read_transform(block: KeywordBlock, model: Model,
     if not cards:
         log.error(f"/TRANSFORM/{sub}/{block.user_id}: missing data card",
                   block.source)
+        return
+
+    if sub in ("AUTOPOSITION", "AUTOPOS"):
+        from ..model.entities import Autoposition
+        if block.fixed:
+            f1 = cards[0].cut("AUTOPOSITION_1")
+            grnod_id = _ival(f1[0]) if len(f1) > 0 else 0
+            surf_id = _ival(f1[1]) if len(f1) > 1 else 0
+            skew_id = _ival(f1[2]) if len(f1) > 2 else 0
+            dir_str = f1[3].strip() if len(f1) > 3 else ""
+            gap = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+            pflag = _ival(f1[5], 0) if len(f1) > 5 else 0
+
+            xpos, ypos, zpos, xflag, yflag, zflag = 0.0, 0.0, 0.0, 0, 0, 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = cards[1].cut("AUTOPOSITION_2")
+                xpos = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                ypos = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                zpos = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+                xflag = _ival(f2[3], 0) if len(f2) > 3 else 0
+                yflag = _ival(f2[4], 0) if len(f2) > 4 else 0
+                zflag = _ival(f2[5], 0) if len(f2) > 5 else 0
+        else:
+            t1 = cards[0].tokens()
+            grnod_id = int(float(t1[0])) if len(t1) > 0 else 0
+            surf_id = int(float(t1[1])) if len(t1) > 1 else 0
+            skew_id = int(float(t1[2])) if len(t1) > 2 else 0
+            dir_str = t1[3] if len(t1) > 3 else ""
+            gap = float(t1[4]) if len(t1) > 4 else 0.0
+            pflag = int(float(t1[5])) if len(t1) > 5 else 0
+
+            xpos, ypos, zpos, xflag, yflag, zflag = 0.0, 0.0, 0.0, 0, 0, 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t2 = cards[1].tokens()
+                xpos = float(t2[0]) if len(t2) > 0 else 0.0
+                ypos = float(t2[1]) if len(t2) > 1 else 0.0
+                zpos = float(t2[2]) if len(t2) > 2 else 0.0
+                xflag = int(float(t2[3])) if len(t2) > 3 else 0
+                yflag = int(float(t2[4])) if len(t2) > 4 else 0
+                zflag = int(float(t2[5])) if len(t2) > 5 else 0
+
+        model.autopositions.append(Autoposition(
+            id=block.user_id, title=title, grnod_id=grnod_id, surf_id=surf_id,
+            skew_id=skew_id, dir=dir_str, gap=gap, pflag=pflag,
+            xpos=xpos, ypos=ypos, zpos=zpos, xflag=xflag, yflag=yflag, zflag=zflag
+        ))
         return
 
     if not hasattr(model, 'transforms'):
@@ -10242,6 +10641,8 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "DET_CORD": read_det,
     "DET": read_det,
     "ACTIV": read_activ,
+    "AUTOPOSITION": read_transform,
+    "AUTOPOS": read_transform,
 }
 
 

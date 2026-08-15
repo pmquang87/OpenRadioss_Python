@@ -868,6 +868,42 @@ LAYOUTS: Dict[str, List[int]] = {
     # ACTIV (M110)
     "ACTIV_1": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
     "ACTIV_2": [20, 20],
+
+    # Extended INTER suite (M111)
+    "INTER_TYPE1_1": [10, 10],
+    "INTER_TYPE3_1": [10, 10],
+    "INTER_TYPE3_2": [20, 20, 20, 20, 20],
+    "INTER_TYPE5_1": [10, 10],
+    "INTER_TYPE5_2": [20, 20, 20, 20, 20],
+    "INTER_TYPE6_1": [10, 10],
+    "INTER_TYPE6_2": [20, 20, 20, 20, 20],
+    "INTER_TYPE12_1": [10, 10, 10],
+    "INTER_TYPE12_2": [30, 20, 20, 20],
+    "INTER_TYPE14_1": [10, 10, 10, 10, 10, 10],
+    "INTER_TYPE14_2": [20, 20, 20, 20],
+    "INTER_TYPE15_1": [10, 10],
+    "INTER_TYPE15_2": [20, 20],
+    "INTER_TYPE20_1": [10, 10, 10, 10, 10, 10, 10, 10, 20],
+    "INTER_TYPE22_1": [10, 10],
+    "INTER_TYPE23_1": [10, 10, 10, 10, 10, 10, 10, 10],
+    "INTER_TYPE23_2": [20, 20],
+
+    # MONVOL/FVMBAG2 (M111)
+    "MONVOL_FVMBAG2_1": [10, 10, 20, 10],
+    "MONVOL_FVMBAG2_2": [10, 30, 20, 20, 10, 10],
+
+    # TRANSFORM/AUTOPOSITION (M111)
+    "AUTOPOSITION_1": [10, 10, 10, 10, 20, 10],
+    "AUTOPOSITION_2": [20, 20, 20, 10, 10, 10],
+
+    # PROP/CONNECT / PROP/TYPE43 (M111)
+    "PROP_CONNECT_1": [10, 70, 20],
+
+    # MAT/LAW59 / MAT/CONNECT (M111)
+    "MAT_CONNECT_1": [20, 20],
+    "MAT_CONNECT_2": [20, 20],
+    "MAT_CONNECT_3": [10, 10, 20, 10],
+    "MAT_CONNECT_LIST": [10, 10, 20, 20],
 }
 
 

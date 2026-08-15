@@ -987,6 +987,15 @@ class Interface:
     inactiv: int = 0      # type 10: initial penetration treatment
     stiff_dc: float = 0.0
     sort_fact: float = 0.2
+    isym: int = 0         # type 20: symmetric contact flag
+    iedge: int = 0        # type 20: edge contact flag
+    edge_angle: float = 0.0 # type 20: edge angle
+    iload: int = 0        # type 14: load formulation flag
+    fun_id1: int = 0      # type 14: fct_ID1
+    fun_id2: int = 0      # type 14: fct_ID2
+    fscale_gap: float = 1.0 # type 23: gap scale
+    idel: int = 0         # type 23: element deletion flag
+    tol: float = 0.0      # type 12: tolerance
 
 
 @dataclass
@@ -2217,6 +2226,48 @@ class MonvolFvmBag1:
     pext: float = 0.0
     ttot: float = 0.0
     params: Dict = field(default_factory=dict)
+
+
+@dataclass
+class MonvolFvmBag2:
+    """/MONVOL/FVMBAG2 (M111): Dual-Chamber Finite Volume Method Airbag model.
+
+    Fortran origin: ``starter/source/control_volume/fvmbag2.F`` / CFG ``monvol_fvmbag2.cfg``.
+    """
+    id: int
+    title: str = ""
+    surf_id_ex: int = 0
+    surf_id_in: int = 0
+    hconv: float = 0.0
+    ih3d: int = 0
+    mat_id: int = 0
+    pext: float = 0.0
+    t0: float = 0.0
+    i_ttf: int = 0
+    params: Dict = field(default_factory=dict)
+
+
+@dataclass
+class Autoposition:
+    """/TRANSFORM/AUTOPOSITION (M111): Automated nodal repositioning.
+
+    Fortran origin: ``starter/source/model/transformation/lectrans.F`` / CFG ``autoposition.cfg``.
+    """
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+    surf_id: int = 0
+    skew_id: int = 0
+    dir: str = ""
+    gap: float = 0.0
+    pflag: int = 0
+    xpos: float = 0.0
+    ypos: float = 0.0
+    zpos: float = 0.0
+    xflag: int = 0
+    yflag: int = 0
+    zflag: int = 0
+
 
 
 

@@ -324,6 +324,20 @@ def check_model(model: Model, log: MessageLog) -> None:
             for sid in (itf.surf_id1, itf.surf_id):
                 if sid != 0 and sid not in model.surfaces:
                     log.error(f"{who}: surface {sid} not defined", "CROSS REF")
+        elif itf.type in (1, 3, 6, 12, 15, 20, 21, 23):
+            for sid in (itf.surf_id, itf.surf_id1):
+                if sid > 0 and sid not in model.surfaces:
+                    log.error(f"{who}: surface {sid} not defined", "CROSS REF")
+            if itf.grnod_id > 0 and itf.grnod_id not in model.node_groups:
+                log.error(f"{who}: node group {itf.grnod_id} not defined", "CROSS REF")
+        elif itf.type in (5, 14):
+            if itf.grnod_id > 0 and itf.grnod_id not in model.node_groups:
+                log.error(f"{who}: node group {itf.grnod_id} not defined", "CROSS REF")
+            if itf.surf_id > 0 and itf.surf_id not in model.surfaces:
+                log.error(f"{who}: surface {itf.surf_id} not defined", "CROSS REF")
+        elif itf.type == 22:
+            if itf.surf_id > 0 and itf.surf_id not in model.surfaces:
+                log.error(f"{who}: surface {itf.surf_id} not defined", "CROSS REF")
     for th in model.th_requests:
         if th.kind == "NODE":
             for nid in th.ids:
@@ -731,6 +745,24 @@ def check_model(model: Model, log: MessageLog) -> None:
     for act in getattr(model, "activations", []):
         if act.sens_id > 0 and act.sens_id not in sensor_ids:
             log.error(f"/ACTIV/{act.id}: sensor {act.sens_id} not defined", "CROSS REF")
+
+    # M111: Extended Interfaces, Dual-Chamber Airbags & Autopositioning
+    for mvid, mv in getattr(model, "monvol_fvmbag2s", {}).items():
+        if mv.surf_id_ex > 0 and mv.surf_id_ex not in model.surfaces:
+            log.error(f"/MONVOL/FVMBAG2/{mvid}: external surface {mv.surf_id_ex} not defined", "CROSS REF")
+        if mv.surf_id_in > 0 and mv.surf_id_in not in model.surfaces:
+            log.error(f"/MONVOL/FVMBAG2/{mvid}: internal surface {mv.surf_id_in} not defined", "CROSS REF")
+        if mv.mat_id > 0 and mv.mat_id not in model.materials:
+            log.error(f"/MONVOL/FVMBAG2/{mvid}: material {mv.mat_id} not defined", "CROSS REF")
+
+    for ap in getattr(model, "autopositions", []):
+        if ap.grnod_id > 0 and ap.grnod_id not in model.node_groups:
+            log.error(f"/TRANSFORM/AUTOPOSITION/{ap.id}: node group {ap.grnod_id} not defined", "CROSS REF")
+        if ap.surf_id > 0 and ap.surf_id not in model.surfaces:
+            log.error(f"/TRANSFORM/AUTOPOSITION/{ap.id}: surface {ap.surf_id} not defined", "CROSS REF")
+        if ap.skew_id > 0 and ap.skew_id not in model.skews:
+            log.error(f"/TRANSFORM/AUTOPOSITION/{ap.id}: skew {ap.skew_id} not defined", "CROSS REF")
+
 
 
 

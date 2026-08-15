@@ -51,6 +51,7 @@ from .entities import (
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
     Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
+    DetonationWave, ElementActivation, MonvolFvmBag2, Autoposition,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -666,6 +667,8 @@ class Model:
         self.monvol_fvmbags: Dict[int, MonvolFvmBag1] = {} # /MONVOL/FVMBAG1 (M108)
         self.detonations: List[DetonationWave] = []    # /INIT/DET_* (M110)
         self.activations: List[ElementActivation] = [] # /ACTIV (M110)
+        self.monvol_fvmbag2s: Dict[int, MonvolFvmBag2] = {} # /MONVOL/FVMBAG2 (M111)
+        self.autopositions: List[Autoposition] = []    # /TRANSFORM/AUTOPOSITION (M111)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
