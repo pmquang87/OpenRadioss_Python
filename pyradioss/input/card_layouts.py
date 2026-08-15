@@ -853,7 +853,7 @@ LAYOUTS: Dict[str, List[int]] = {
     # SENSOR/TEMP (M109)
     "SENSOR_TEMP_1": [10, 10, 20, 20, 20, 20],
 
-    # EOS suite (M110)
+    # EOS suite (M110, M140)
     "EOS_GRUN_1": [20, 20, 20, 20],
     "EOS_GRUN_2": [20, 20, 20, 20],
     "EOS_PUFF_1": [20, 20, 20, 20],
@@ -868,6 +868,10 @@ LAYOUTS: Dict[str, List[int]] = {
     "EOS_LSZK_1": [20, 20, 20, 20, 20],
     "EOS_NOBLE_1": [20, 20, 20, 20, 20],
     "EOS_STIFF_1": [20, 20, 20, 20, 20],
+    "EOS_JWL_1": [20, 20, 20, 20, 20],
+    "EOS_JWL_2": [20, 20, 20],
+    "EOS_COMPACT_1": [20, 20, 20, 20, 20],
+    "EOS_SESAME_1": [20, 20, 20, 20, 20],
 
     # Detonation suite (M110)
     "DET_POINT_1": [20, 20, 20, 20, 10],

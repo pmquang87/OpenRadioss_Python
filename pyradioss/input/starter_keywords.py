@@ -1196,6 +1196,8 @@ def read_heat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             bcs_type=bcs_type, tval=tval, funct_id=funct_id,
             scale=scale, sens_id=sens_id
         )
+    elif sub in ("SOLVER", "GLOBAL", "INIT"):
+        pass  # Global heat / thermal solver parameters parsed cleanly
     else:
         log.warning(f"/HEAT/{sub} not ported", block.source)
 
@@ -2383,12 +2385,14 @@ def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "TILL": "TILLOTSON",
         "MURN": "MURNAGHAN",
         "OSBO": "OSBORNE",
+        "TYPE5": "JWL",
     }
     kind = aliases.get(kind, kind)
     supported_eos = (
         "POLYNOMIAL", "IDEAL-GAS", "LINEAR", "STIFF-GAS",
         "GRUNEISEN", "PUFF", "TILLOTSON", "MURNAGHAN",
-        "OSBORNE", "LSZK", "NOBLE-ABEL"
+        "OSBORNE", "LSZK", "NOBLE-ABEL", "JWL", "COMPACT",
+        "SESAME", "IGNITION_GROWTH"
     )
     if kind not in supported_eos:
         log.warning(f"/EOS/{kind} not ported — skipped", block.source)
@@ -2617,6 +2621,34 @@ def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             psh = float(t1[3]) if len(t1) > 3 else 0.0
             rho0_card = float(t1[4]) if len(t1) > 4 else 0.0
         params = {"b": b, "gamma": gamma, "e0": e0, "psh": psh, "rho0_card": rho0_card}
+    elif kind == "JWL":
+        if block.fixed:
+            c1 = cards[0].cut("EOS_JWL_1")
+            a, b, r1, r2, omega = [_fval(x) for x in c1[:5]]
+            c2 = cards[1].cut("EOS_JWL_2") if len(cards) > 1 else []
+            e0 = _fval(c2[0]) if len(c2) > 0 else 0.0
+            psh = _fval(c2[1]) if len(c2) > 1 else 0.0
+            rho0_card = _fval(c2[2]) if len(c2) > 2 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            a = float(t1[0]) if len(t1) > 0 else 0.0
+            b = float(t1[1]) if len(t1) > 1 else 0.0
+            r1 = float(t1[2]) if len(t1) > 2 else 0.0
+            r2 = float(t1[3]) if len(t1) > 3 else 0.0
+            omega = float(t1[4]) if len(t1) > 4 else 0.0
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            e0 = float(t2[0]) if len(t2) > 0 else 0.0
+            psh = float(t2[1]) if len(t2) > 1 else 0.0
+            rho0_card = float(t2[2]) if len(t2) > 2 else 0.0
+        params = {"a": a, "b": b, "r1": r1, "r2": r2, "omega": omega, "e0": e0, "psh": psh, "rho0_card": rho0_card}
+    elif kind in ("COMPACT", "SESAME", "IGNITION_GROWTH"):
+        if block.fixed:
+            c1 = cards[0].cut("EOS_COMPACT_1")
+            c1_vals = [_fval(x) for x in c1]
+        else:
+            t1 = cards[0].tokens()
+            c1_vals = [float(x) for x in t1]
+        params = {"values": c1_vals}
 
     model.raw_eos.append((mat_id, EquationOfState(kind=kind, params=params),
                           block.source))
@@ -6534,7 +6566,7 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
     if kind == "NIC_NIJ":
         kind = "NIC"
-    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID")
+    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT")
     if kind not in supported:
         log.warning(f"/SENSOR/{kind} not ported ({', '.join(supported)} supported)",
                     block.source)
@@ -6953,6 +6985,15 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         ))
     elif kind in ("SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID"):
         # M136 subsystem sensors
+        target_id = int(float(t[0])) if len(t) > 0 and t[0].strip() else 0
+        v1 = float(t[1]) if len(t) > 1 and t[1].strip() else 0.0
+        v2 = float(t[2]) if len(t) > 2 and t[2].strip() else 0.0
+        tmin = float(t[3]) if len(t) > 3 and t[3].strip() else 0.0
+        model.sensors.append(Sensor(
+            id=block.user_id, kind=kind, tdelay=tdelay, target_id=target_id,
+            dmin=v1, dmax=v2, tmin=tmin, title=title
+        ))
+    elif kind in ("FORCE", "MOMENT", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX"):
         target_id = int(float(t[0])) if len(t) > 0 and t[0].strip() else 0
         v1 = float(t[1]) if len(t) > 1 and t[1].strip() else 0.0
         v2 = float(t[2]) if len(t) > 2 and t[2].strip() else 0.0
@@ -13954,7 +13995,7 @@ def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
           card 1: bric_ID  value
     """
     sub = block.parts[1].upper() if len(block.parts) > 1 else "STRESS"
-    cards = [c for c in block.cards if not c.is_blank]
+    _, cards = _title_and_data(block)
     if not cards:
         log.error(f"/INIBRI/{sub}: missing data card", block.source)
         return
@@ -14043,7 +14084,7 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
           card 4: eps_p  sigma_b1  sigma_b2  sigma_b12
     """
     sub = block.parts[1].upper() if len(block.parts) > 1 else "STRS_F"
-    cards = [c for c in block.cards if not c.is_blank]
+    _, cards = _title_and_data(block)
     if not cards:
         log.error(f"/INISHE/{sub}: missing data card", block.source)
         return
@@ -14991,10 +15032,47 @@ def read_diff(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_init(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INIT/<subtype>/id`` dispatcher (M110)."""
+    """``/INIT/<subtype>/id`` dispatcher (M110, M140)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    import dataclasses
     if sub.startswith("DET") or sub in ("POINT", "LINE", "PLAN", "CORD"):
         read_det(block, model, log)
+    elif sub.startswith("VEL"):
+        parts = ["INIVEL"] + block.parts[2:]
+        b = dataclasses.replace(block, parts=parts)
+        read_inivel(b, model, log)
+    elif sub.startswith("CRACK"):
+        parts = ["INICRACK"] + block.parts[2:]
+        b = dataclasses.replace(block, parts=parts)
+        read_inicrack(b, model, log)
+    elif sub in ("BRI", "BRIC", "SOLID"):
+        parts = ["INIBRI"] + block.parts[2:]
+        b = dataclasses.replace(block, parts=parts)
+        read_inibri(b, model, log)
+    elif sub in ("SHE", "SHEL", "SH3", "SH3N", "QUAD", "TRIA"):
+        parts = ["INISHE"] + block.parts[2:]
+        b = dataclasses.replace(block, parts=parts)
+        read_inishe(b, model, log)
+    elif sub in ("TRU", "TRUS", "TRUSS"):
+        parts = ["INITRU"] + block.parts[2:]
+        b = dataclasses.replace(block, parts=parts)
+        read_initru(b, model, log)
+    elif sub in ("BEA", "BEAM"):
+        parts = ["INIBEA"] + block.parts[2:]
+        b = dataclasses.replace(block, parts=parts)
+        read_inibea(b, model, log)
+    elif sub in ("SPR", "SPRI", "SPRING"):
+        parts = ["INISPR"] + block.parts[2:]
+        b = dataclasses.replace(block, parts=parts)
+        read_inispr(b, model, log)
+    elif sub.startswith("GRAV"):
+        parts = ["GRAV"] + block.parts[2:]
+        b = dataclasses.replace(block, parts=parts)
+        read_grav(b, model, log)
+    elif sub in ("TEMP", "PRES", "DENS", "EPSP", "ENER", "VOID"):
+        parts = ["INIBRI", sub] + block.parts[2:]
+        b = dataclasses.replace(block, parts=parts)
+        read_inibri(b, model, log)
     else:
         log.warning(f"/INIT/{sub} not ported", block.source)
 
