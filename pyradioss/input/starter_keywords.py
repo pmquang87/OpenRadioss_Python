@@ -7148,6 +7148,87 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         ))
         return
 
+    if kind == "TYPE18":
+        grnod_id = 0
+        surf_id = 0
+        grbric_id = 0
+        igap = 0
+        ibag = 0
+        idel18 = 0
+        iauto = 0
+        stfac = 1.0
+        vref = 0.0
+        gap = 0.0
+        tstart = 0.0
+        tstop = 1.0e30
+        stiff_dc = 0.0
+        sort_fact = 0.2
+
+        if block.fixed:
+            if len(cards) >= 1 and not cards[0].is_blank:
+                raw0 = cards[0].raw
+                grnod_id = _ival(raw0[:10])
+                surf_id = _ival(raw0[10:20])
+                grbric_id = _ival(raw0[20:30])
+                if len(raw0) > 80:
+                    f0 = cards[0].cut("INTER_TYPE18_1")
+                    igap = _ival(f0[4]) if len(f0) > 4 else 0
+                    ibag = _ival(f0[6]) if len(f0) > 6 else 0
+                    idel18 = _ival(f0[7]) if len(f0) > 7 else 0
+                    iauto = _ival(f0[9]) if len(f0) > 9 else 0
+                else:
+                    ibag = _ival(raw0[60:70])
+                    idel18 = _ival(raw0[70:80])
+            if len(cards) >= 2 and not cards[1].is_blank:
+                raw1 = cards[1].raw
+                stfac = _fval(raw1[:20], 1.0)
+                if len(raw1) > 80:
+                    f1 = cards[1].cut("INTER_TYPE18_2")
+                    vref = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                    gap = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+                    tstart = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+                    tstop = _fval(f1[4], 1.0e30) if len(f1) > 4 else 1.0e30
+                else:
+                    gap = _fval(raw1[40:60], 0.0) if len(raw1) > 40 else 0.0
+                    tstart = _fval(raw1[60:80], 0.0) if len(raw1) > 60 else 0.0
+                    tstop = _fval(raw1[80:100], 1.0e30) if len(raw1) > 80 else 1.0e30
+            if len(cards) >= 3 and not cards[2].is_blank:
+                raw2 = cards[2].raw
+                stiff_dc = _fval(raw2[40:60], 0.0) if len(raw2) > 40 else 0.0
+                sf = _fval(raw2[80:100], 0.0) if len(raw2) > 80 else 0.0
+                if sf == 0.0 and len(raw2) > 60:
+                    sf = _fval(raw2[60:80], 0.0)
+                sort_fact = sf if sf != 0.0 else 0.2
+        else:
+            if len(cards) >= 1 and not cards[0].is_blank:
+                t0 = cards[0].tokens()
+                grnod_id = int(float(t0[0])) if len(t0) > 0 else 0
+                surf_id = int(float(t0[1])) if len(t0) > 1 else 0
+                grbric_id = int(float(t0[2])) if len(t0) > 2 else 0
+                igap = int(float(t0[3])) if len(t0) > 3 else 0
+                ibag = int(float(t0[4])) if len(t0) > 4 else 0
+                idel18 = int(float(t0[5])) if len(t0) > 5 else 0
+                iauto = int(float(t0[6])) if len(t0) > 6 else 0
+            if len(cards) >= 2 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                stfac = float(t1[0]) if len(t1) > 0 else 1.0
+                vref = float(t1[1]) if len(t1) > 1 else 0.0
+                gap = float(t1[2]) if len(t1) > 2 else 0.0
+                tstart = float(t1[3]) if len(t1) > 3 else 0.0
+                tstop = float(t1[4]) if len(t1) > 4 else 1.0e30
+            if len(cards) >= 3 and not cards[2].is_blank:
+                t2 = cards[2].tokens()
+                stiff_dc = float(t2[0]) if len(t2) > 0 else 0.0
+                sort_fact = float(t2[1]) if len(t2) > 1 else 0.2
+
+        model.interfaces.append(Interface(
+            id=block.user_id, type=18, grnod_id=grnod_id, surf_id=surf_id,
+            grbric_id1=grbric_id, igap=igap, ibag=ibag, idel=idel18, idel18=idel18,
+            stfac=stfac, gap=gap, tstart=tstart, tstop=tstop,
+            stiff_dc=stiff_dc, sort_fact=sort_fact, title=title,
+        ))
+        return
+
     if kind == "SUB":
         from ..model.entities import SubInterface
         if block.fixed:
@@ -8323,6 +8404,17 @@ def read_def_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             'istf': _iv_from(vals, 0), 'igap': _iv_from(vals, 1), 'iedge': _iv_from(vals, 2),
             'ibag': _iv_from(vals, 3), 'idel': _iv_from(vals, 4), 'icurv': _iv_from(vals, 5),
             'inactiv': _iv_from(vals, 6), 'iform': _iv_from(vals, 7),
+        }
+    elif subtype == "TYPE18":
+        vals = c.cut("DEF_INTER_18") if block.fixed else c.tokens()
+        entry = {
+            'istf': _iv_from(vals, 0), 'multimp': _iv_from(vals, 1), 'ibag': _iv_from(vals, 2),
+            'idel18': _iv_from(vals, 3), 'igap': _iv_from(vals, 4), 'iauto': _iv_from(vals, 5),
+        }
+    elif subtype == "TYPE8":
+        vals = c.cut("DEF_INTER_8") if block.fixed else c.tokens()
+        entry = {
+            'iform1': _iv_from(vals, 0),
         }
     elif subtype == "TYPE24":
         vals = c.cut("DEF_INTER_24") if block.fixed else c.tokens()
