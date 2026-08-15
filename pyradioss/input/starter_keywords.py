@@ -1136,7 +1136,7 @@ def read_ale(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 def read_euler(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/EULER/MAT/mat_ID`` (M37); ``/EULER/BCS/bcs_ID`` (M135): Eulerian boundary conditions."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if sub == "MAT":
+    if sub in ("MAT", "VOID", "MAT_VOID"):
         _read_mat_modifier("EULER", block, model, log)
     elif sub == "BCS":
         title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -3812,43 +3812,64 @@ def read_stack(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 # ============================================================================
 
 def read_table(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/TABLE/dim/table_ID`` (1D, 2D, ... tabular functions)."""
+    """``/TABLE/dim/table_ID`` (1D, 2D, 3D tabular functions; M139)."""
     if len(block.parts) < 3:
         log.warning(f"/TABLE: missing dimension or id part", block.source)
         return
     dim = int(block.parts[1])
     table_id = int(block.parts[2])
-    if dim != 1:
-        log.warning(f"/TABLE/{dim}/{table_id} not ported (only dim=1 supported)", block.source)
-        return
 
     if block.fixed:
         title, cards = _fixed_data(block)
     else:
         title, cards = _title_and_data(block)
 
-    if len(cards) < 3:
+    if not cards:
         log.error(f"/TABLE/{dim}/{table_id}: missing data cards", block.source)
         return
 
-    # cards[0] is the dimension (e.g. 1)
-    # The rest are (X, Y) points
-    if block.fixed:
-        pts = []
-        for c in cards[1:]:
-            f = c.cut("FUNCT_PT")
-            if f[0] or f[1]:
-                pts.append((_fval(f[0]), _fval(f[1])))
-    else:
-        pts = [(_floats(c, 2)[0], _floats(c, 2)[1])
-               for c in cards[1:] if c.tokens()]
+    if dim == 1:
+        if block.fixed:
+            pts = []
+            for c in cards[1:]:
+                f = c.cut("FUNCT_PT")
+                if f[0] or f[1]:
+                    pts.append((_fval(f[0]), _fval(f[1])))
+        else:
+            pts = [(_floats(c, 2)[0], _floats(c, 2)[1])
+                   for c in cards[1:] if c.tokens()]
 
-    if len(pts) < 2:
-        log.error(f"/TABLE/{dim}/{table_id}: needs at least 2 points",
-                  block.source)
-        return
-    x, y = zip(*pts)
-    model.tables[table_id] = Table(table_id, dim, np.array(x), np.array(y))
+        if len(pts) < 2:
+            log.error(f"/TABLE/{dim}/{table_id}: needs at least 2 points",
+                      block.source)
+            return
+        x, y = zip(*pts)
+        model.tables[table_id] = Table(id=table_id, dim=dim, x=np.array(x), y=np.array(y), title=title)
+    elif dim in (2, 3):
+        curves = []
+        cur_y = 0.0
+        cur_pts = []
+        for c in cards[1:]:
+            if c.is_blank:
+                continue
+            toks = c.tokens()
+            if len(toks) == 1:
+                if cur_pts:
+                    cx, cz = zip(*cur_pts)
+                    curves.append((cur_y, np.array(cx), np.array(cz)))
+                    cur_pts = []
+                cur_y = float(toks[0])
+            elif len(toks) == 2:
+                cur_pts.append((float(toks[0]), float(toks[1])))
+            elif len(toks) >= 3:
+                cur_pts.append((float(toks[0]), float(toks[2])))
+                cur_y = float(toks[1])
+        if cur_pts:
+            cx, cz = zip(*cur_pts)
+            curves.append((cur_y, np.array(cx), np.array(cz)))
+        model.tables[table_id] = Table(id=table_id, dim=dim, curves=curves, title=title)
+    else:
+        log.warning(f"/TABLE/{dim}/{table_id} not ported (only dim=1, 2, 3 supported)", block.source)
 
 
 def read_random(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -6341,37 +6362,31 @@ def read_pload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_admas(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/ADMAS/admas_ID`` or ``/ADMAS/type/admas_ID`` (M5)::
+    """``/ADMAS/admas_ID`` or ``/ADMAS/type/admas_ID`` (M5, M139)::
 
         card 1:  title
         card 2:  Mass   grnod_ID
-
-      adds Mass to EVERY node of the group (the Radioss type-0 per-node
-      semantics; the distributed-total variants are not ported). Applied
-      before the massless-node check, so a standalone node + /ADMAS is a
-      legitimate free point mass — e.g. the carrier node of a moving
-      /RWALL.
-
-      M37: the official header is ``/ADMAS/type/admas_ID`` (cfg
-      admas.cfg: ``HEADER("/ADMAS/%d/%d", type, _ID_)``) — there is NO
-      unit_ID slot, so the deck reader's generic two-int split binds
-      user_id=type / unit_id=admas_ID. Rebind here (and /ADMAS is
-      exempted from the raw_unit_refs recording in parse_starter_deck).
-      Non-zero types (distributed-total variants) are read with the
-      per-node semantics and warned, as before M37.
     """
-    if len(block.parts) > 1 and "NON_UNIFORM" in block.parts[1].upper():
-        read_admas_non_uniform(block, model, log)
-        return
+    mass_type = 0
+    if len(block.parts) > 1:
+        p1 = block.parts[1].upper()
+        if "NON_UNIFORM" in p1:
+            read_admas_non_uniform(block, model, log)
+            return
+        if "TOTAL_BOX" in p1 or "BOX" in p1:
+            mass_type = 3
+        elif "TOTAL_SURF" in p1 or "SURF" in p1:
+            mass_type = 2
+        elif "TOTAL_PART" in p1 or "PART" in p1:
+            mass_type = 1
+        elif "TOTAL" in p1 or "TOTAL_NOD" in p1:
+            mass_type = 1
 
     admas_id = block.user_id
     if block.unit_id is not None:
         # two-int header: first int is the TYPE, second the option id
         mass_type, admas_id = block.user_id, block.unit_id
-        if mass_type:
-            log.warning(f"/ADMAS/{mass_type}/{admas_id}: type "
-                        f"{mass_type} not ported — Mass applied per node "
-                        f"(type-0 semantics)", block.source)
+
     title, cards = _title_and_data(block)
     if not cards:
         log.error(f"/ADMAS/{admas_id}: missing data card", block.source)
@@ -6382,7 +6397,7 @@ def read_admas(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/ADMAS/{admas_id}: Mass must be > 0", block.source)
         return
     model.admas.append(AddedMass(
-        id=admas_id, grnod_id=int(t[1]), mass=mass, title=title))
+        id=admas_id, grnod_id=int(t[1]), mass=mass, title=title, mass_type=mass_type))
 
 
 def read_damp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -7699,7 +7714,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
     if kind == "LAGMUL":
         subtype = block.parts[2].upper() if len(block.parts) > 2 else ""
-        if subtype not in ("TYPE2", "TYPE7", "TYPE16", "TYPE17"):
+        if subtype not in ("TYPE2", "TYPE7", "TYPE11", "TYPE16", "TYPE17", "SPOTWELD", "SURF", "PART", "TIED", "BEAM", "EDGE"):
             log.warning(f"/INTER/LAGMUL/{subtype} not ported", block.source)
             return
         title, cards = _title_and_data(block)
@@ -7707,7 +7722,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             log.error(f"/INTER/LAGMUL/{subtype}/{block.user_id}: missing data card", block.source)
             return
 
-        if subtype == "TYPE16":
+        if subtype in ("TYPE16", "SPOTWELD"):
             if block.fixed:
                 f = _fixed_vals(cards[0], [10, 10])
                 grnod_id, grbric_id = _ival(f[0]), _ival(f[1])
@@ -7722,7 +7737,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 itied = 0
                 if len(cards) > 1:
                     t2 = cards[1].tokens()
-                    itied = int(t2[0]) if len(t2) > 0 else 0
+                    itied = int(t2[1]) if len(t2) > 1 else (int(t2[0]) if len(t2) > 0 else 0)
             model.interfaces.append(Interface(
                 id=block.user_id, type=16, grnod_id=grnod_id, grbric_id1=grbric_id,
                 itied=itied, lagmul=True, title=title))
@@ -7747,7 +7762,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 id=block.user_id, type=17, grbric_id1=grbric_id1, grbric_id2=grbric_id2,
                 itied=itied, lagmul=True, title=title))
             return
-        elif subtype == "TYPE2":
+        elif subtype in ("TYPE2", "PART", "TIED"):
             if block.fixed:
                 f = _fixed_vals(cards[0], [10, 10, 30, 10, 20, 20])
                 grnod_id, surf_id = _ival(f[0]), _ival(f[1])
@@ -7761,7 +7776,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 id=block.user_id, type=2, grnod_id=grnod_id, surf_id=surf_id,
                 dsearch=dsearch, lagmul=True, title=title))
             return
-        elif subtype == "TYPE7":
+        elif subtype in ("TYPE7", "SURF"):
             if block.fixed:
                 f = _fixed_vals(cards[0], [10, 10, 30, 10])
                 grnod_id, surf_id = _ival(f[0]), _ival(f[1])
@@ -7776,10 +7791,22 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 gap_min = 0.0
                 if len(cards) >= 2:
                     t4 = cards[1].tokens()
-                    gap_min = float(t4[0]) if len(t4) > 0 else 0.0
+                    gap_min = float(t4[-1]) if len(t4) > 1 else (float(t4[0]) if len(t4) > 0 else 0.0)
             model.interfaces.append(Interface(
                 id=block.user_id, type=7, grnod_id=grnod_id, surf_id=surf_id,
                 gap=gap_min, lagmul=True, title=title))
+            return
+        elif subtype in ("TYPE11", "BEAM", "EDGE"):
+            if block.fixed:
+                f = _fixed_vals(cards[0], [10, 10])
+                line_id1, line_id2 = _ival(f[0]), _ival(f[1])
+            else:
+                toks = cards[0].tokens()
+                line_id1 = int(toks[0]) if len(toks) > 0 else 0
+                line_id2 = int(toks[1]) if len(toks) > 1 else 0
+            model.interfaces.append(Interface(
+                id=block.user_id, type=11, line_id1=line_id1, line_id2=line_id2,
+                lagmul=True, title=title))
             return
 
     if kind not in ("TYPE1", "TYPE2", "TYPE3", "TYPE5", "TYPE6", "TYPE7", "TYPE8", "TYPE10", "TYPE11",

@@ -761,8 +761,7 @@ class Mpc:
 
 @dataclass
 class AddedMass:
-    """/ADMAS (M5): concentrated non-structural mass added to every node
-    of a group (Radioss type-0 semantics: the value is PER NODE).
+    """/ADMAS (M5, M139): concentrated or distributed non-structural mass.
 
     Fortran origin: ``starter/source/tools/admas/hm_read_admas.F``. Beyond
     its normal use (payload, joints), this is how a *moving rigid wall
@@ -774,6 +773,7 @@ class AddedMass:
     grnod_id: int
     mass: float
     title: str = ""
+    mass_type: int = 0  # 0: per node, 1: total on nodes, 2: total on surface, 3: total on elements
 
 
 @dataclass
@@ -1145,11 +1145,14 @@ class MonitoredVolume:
 
 @dataclass
 class Table:
-    """``/TABLE/dim/table_ID`` (1D, 2D, ... tabular functions)."""
+    """``/TABLE/dim/table_ID`` (1D, 2D, 3D tabular functions; M139)."""
     id: int
     dim: int
-    x: np.ndarray
-    y: np.ndarray
+    x: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    y: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    z: Optional[np.ndarray] = None
+    curves: List[Tuple[float, np.ndarray, np.ndarray]] = field(default_factory=list)
+    title: str = ""
 
 
 @dataclass

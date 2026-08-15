@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M138)
+## What is implemented (M1 → M139)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -144,6 +144,7 @@ real history is 41 milestones. One line each:
 | M136 | Add extended entity groups, rigid wall geometries, cross sections & advanced sensors suite (/GRNOD/LINE, /GR*/BOX, /GR*/SURF, /RWALL/BOX, /RWALL/CONE, /SECT/BOX, /SECT/CUT, /SENSOR/SPH, /SENSOR/AIRBAG, /SENSOR/SHELL, /SENSOR/SOLID) |
 | M137 | Add extended initial velocities, detonation fronts, state mapping & set routing suite (/INIVEL/PART, /INIVEL/SPH, /DFS/DETLINE, /DFS/DETCIRC, /INIMAP/3D, /INIMAP3D, /SET/PART, /SET/MAT, /SET/PROP, /SET/SUB) |
 | M138 | Add extended element initial thermodynamic states, boundary condition constraints & coordinate symmetry suite (/INIBRI, /INISHE, /INITRU, /INIBEA, /INISPR, /BCS/TRA, /BCS/ROT, /TRANSFORM/SYMET, /EBCS/PERIODIC, /EBCS/CYCLIC) |
+| M139 | Add multi-dimensional tabular functions, Lagrange multiplier contacts & Eulerian mass distributions suite (/TABLE/2, /TABLE/3, /INTER/LAGMUL/SPOTWELD, /INTER/LAGMUL/SURF, /INTER/LAGMUL/PART, /INTER/LAGMUL/BEAM, /EULER/VOID, /ADMAS/TOTAL_*) |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
