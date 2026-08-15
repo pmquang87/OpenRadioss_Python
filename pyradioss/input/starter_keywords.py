@@ -52,6 +52,7 @@ from ..model.entities import (
     DampGlobal, DampPart, TransformProjection, TransformFrame,
     LoadGravity, LoadBody, LoadTherm, EulerBcs, HeatBcs,
     RwallBox, RwallCone, SectBox, SectCut,
+    InivelPart, InivelSph, DetLine, DetCirc, IniMap3D, SetGeneric,
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
     Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
@@ -5074,8 +5075,64 @@ def read_inivel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_inivel_fvm(block, model, log)
     elif kind == "NODE":
         read_inivel_node(block, model, log)
+    elif kind == "PART":
+        # /INIVEL/PART (M137)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/INIVEL/PART/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("INIVEL_PART_1")
+            part_id = _ival(f[0]) if len(f) > 0 else 0
+            vx = _fval(f[1]) if len(f) > 1 else 0.0
+            vy = _fval(f[2]) if len(f) > 2 else 0.0
+            vz = _fval(f[3]) if len(f) > 3 else 0.0
+            vr = _fval(f[4]) if len(f) > 4 else 0.0
+            skew_id = _ival(f[5]) if len(f) > 5 else 0
+        else:
+            t = cards[0].tokens()
+            part_id = int(float(t[0])) if len(t) > 0 else 0
+            vx = float(t[1]) if len(t) > 1 else 0.0
+            vy = float(t[2]) if len(t) > 2 else 0.0
+            vz = float(t[3]) if len(t) > 3 else 0.0
+            vr = float(t[4]) if len(t) > 4 else 0.0
+            skew_id = int(float(t[5])) if len(t) > 5 else 0
+        tstart, sens_id = 0.0, 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            tstart = float(t2[0]) if len(t2) > 0 else 0.0
+            sens_id = int(float(t2[1])) if len(t2) > 1 else 0
+        model.inivel_parts[block.user_id] = InivelPart(
+            id=block.user_id, title=title, part_id=part_id,
+            vx=vx, vy=vy, vz=vz, vr=vr, skew_id=skew_id,
+            tstart=tstart, sens_id=sens_id
+        )
+    elif kind == "SPH":
+        # /INIVEL/SPH (M137)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/INIVEL/SPH/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("INIVEL_SPH_1")
+            grsph_id = _ival(f[0]) if len(f) > 0 else 0
+            vx = _fval(f[1]) if len(f) > 1 else 0.0
+            vy = _fval(f[2]) if len(f) > 2 else 0.0
+            vz = _fval(f[3]) if len(f) > 3 else 0.0
+            skew_id = _ival(f[4]) if len(f) > 4 else 0
+        else:
+            t = cards[0].tokens()
+            grsph_id = int(float(t[0])) if len(t) > 0 else 0
+            vx = float(t[1]) if len(t) > 1 else 0.0
+            vy = float(t[2]) if len(t) > 2 else 0.0
+            vz = float(t[3]) if len(t) > 3 else 0.0
+            skew_id = int(float(t[4])) if len(t) > 4 else 0
+        model.inivel_sphs[block.user_id] = InivelSph(
+            id=block.user_id, title=title, grsph_id=grsph_id,
+            vx=vx, vy=vy, vz=vz, skew_id=skew_id
+        )
     else:
-        log.warning(f"/INIVEL/{kind} not ported (TRA, AXIS, FVM, NODE, ROT supported)",
+        log.warning(f"/INIVEL/{kind} not ported (TRA, AXIS, FVM, NODE, ROT, PART, SPH supported)",
                     block.source)
 
 
@@ -9959,6 +10016,51 @@ def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_surf(block, model, log)
     elif stype == "LINE":
         read_line(block, model, log)
+    elif stype in ("MAT", "GRMAT", "MATERIAL"):
+        # /SET/MAT/id (M137)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        ids = []
+        for c in cards:
+            if c.is_blank:
+                continue
+            for t in c.tokens():
+                try:
+                    ids.append(int(float(t)))
+                except ValueError:
+                    pass
+        model.generic_sets.setdefault("MAT", {})[block.user_id] = SetGeneric(
+            id=block.user_id, set_type="MAT", title=title, ids=ids
+        )
+    elif stype in ("PROP", "GRPROP", "PROPERTY"):
+        # /SET/PROP/id (M137)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        ids = []
+        for c in cards:
+            if c.is_blank:
+                continue
+            for t in c.tokens():
+                try:
+                    ids.append(int(float(t)))
+                except ValueError:
+                    pass
+        model.generic_sets.setdefault("PROP", {})[block.user_id] = SetGeneric(
+            id=block.user_id, set_type="PROP", title=title, ids=ids
+        )
+    elif stype in ("SUB", "SUBSET"):
+        # /SET/SUB/id (M137)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        ids = []
+        for c in cards:
+            if c.is_blank:
+                continue
+            for t in c.tokens():
+                try:
+                    ids.append(int(float(t)))
+                except ValueError:
+                    pass
+        model.generic_sets.setdefault("SUB", {})[block.user_id] = SetGeneric(
+            id=block.user_id, set_type="SUB", title=title, ids=ids
+        )
     else:
         log.warning(f"/SET/{stype} not ported", block.source)
 
@@ -11285,14 +11387,16 @@ def read_inigrav(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_inimap(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INIMAP/1D`` or ``/INIMAP/2D`` dispatcher (M104)."""
+    """``/INIMAP/1D``, ``/INIMAP/2D``, or ``/INIMAP/3D`` dispatcher (M104, M137)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub == "1D" or "1D" in block.parts[0].upper():
         read_inimap1d(block, model, log)
     elif sub == "2D" or "2D" in block.parts[0].upper():
         read_inimap2d(block, model, log)
+    elif sub == "3D" or "3D" in block.parts[0].upper():
+        read_inimap3d(block, model, log)
     else:
-        log.warning(f"/INIMAP/{sub} not ported (1D, 2D supported)", block.source)
+        log.warning(f"/INIMAP/{sub} not ported (1D, 2D, 3D supported)", block.source)
 
 
 def read_inimap1d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -11372,6 +11476,43 @@ def read_inimap2d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=map_id, title=title, map_type=map_type, node_id1=n1,
         node_id2=n2, node_id3=n3, grbric_id=grbric, fscale_v=fscale_v,
         filename=filename,
+    )
+
+
+def read_inimap3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INIMAP3D/map_ID`` or ``/INIMAP/3D/map_ID`` (M137)::
+
+        card 1:  title
+        card 2:  type  grbric_ID  grquad_ID  grsh3n_ID  skew_ID  Fscale_V
+        card 3:  filename
+    """
+    map_id = block.user_id if block.user_id is not None else 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/INIMAP3D/{map_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("INIMAP3D_1")
+        map_type = _ival(f[0]) if len(f) > 0 else 0
+        grbric = _ival(f[1]) if len(f) > 1 else 0
+        grquad = _ival(f[2]) if len(f) > 2 else 0
+        grsh3n = _ival(f[3]) if len(f) > 3 else 0
+        fscale_v = _fval(f[5], 1.0) if len(f) > 5 else 1.0
+    else:
+        toks = cards[0].tokens()
+        map_type = int(float(toks[0])) if len(toks) > 0 else 0
+        grbric = int(float(toks[1])) if len(toks) > 1 else 0
+        grquad = int(float(toks[2])) if len(toks) > 2 else 0
+        grsh3n = int(float(toks[3])) if len(toks) > 3 else 0
+        fscale_v = float(toks[5]) if len(toks) > 5 else 1.0
+
+    filename = cards[1].raw.strip() if len(cards) > 1 else ""
+
+    model.ini_map3ds[map_id] = IniMap3D(
+        id=map_id, title=title, map_type=map_type,
+        grbric_id=grbric, grquad_id=grquad, grsh3n_id=grsh3n,
+        filename=filename, fscale_v=fscale_v,
     )
 
 
@@ -13382,8 +13523,54 @@ def read_dfs(block: KeywordBlock, model: Model,
             surf_id=surf_id, mat_id=mat_id, thick=thick, delay=delay
         )
 
+    elif sub == "DETLINE":
+        # /DFS/DETLINE/id (M137)
+        # Card 1: X1 Y1 Z1 X2 Y2 Z2 T0 Dvel
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f = cards[0].cut("DFS_DETLINE_1")
+                p1 = (_fval(f[0]), _fval(f[1]), _fval(f[2]))
+                p2 = (_fval(f[3]), _fval(f[4]), _fval(f[5]))
+                t0 = _fval(f[6]) if len(f) > 6 else 0.0
+                dvel = _fval(f[7]) if len(f) > 7 else 0.0
+            else:
+                toks = cards[0].tokens()
+                p1 = (float(toks[0]), float(toks[1]), float(toks[2])) if len(toks) >= 3 else (0.0, 0.0, 0.0)
+                p2 = (float(toks[3]), float(toks[4]), float(toks[5])) if len(toks) >= 6 else (0.0, 0.0, 0.0)
+                t0 = float(toks[6]) if len(toks) > 6 else 0.0
+                dvel = float(toks[7]) if len(toks) > 7 else 0.0
+        else:
+            p1, p2, t0, dvel = (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.0, 0.0
+        model.det_lines[det_id] = DetLine(
+            id=det_id, title=title, p1=p1, p2=p2, t0=t0, dvel=dvel
+        )
+
+    elif sub == "DETCIRC":
+        # /DFS/DETCIRC/id (M137)
+        # Card 1: Xc Yc Zc Nx Ny Nz R T0 Dvel
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f = cards[0].cut("DFS_DETCIRC_1")
+                center = (_fval(f[0]), _fval(f[1]), _fval(f[2]))
+                axis = (_fval(f[3]), _fval(f[4]), _fval(f[5], 1.0))
+                r = _fval(f[6]) if len(f) > 6 else 0.0
+                t0 = _fval(f[7]) if len(f) > 7 else 0.0
+                dvel = _fval(f[8]) if len(f) > 8 else 0.0
+            else:
+                toks = cards[0].tokens()
+                center = (float(toks[0]), float(toks[1]), float(toks[2])) if len(toks) >= 3 else (0.0, 0.0, 0.0)
+                axis = (float(toks[3]), float(toks[4]), float(toks[5])) if len(toks) >= 6 else (0.0, 0.0, 1.0)
+                r = float(toks[6]) if len(toks) > 6 else 0.0
+                t0 = float(toks[7]) if len(toks) > 7 else 0.0
+                dvel = float(toks[8]) if len(toks) > 8 else 0.0
+        else:
+            center, axis, r, t0, dvel = (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 0.0, 0.0, 0.0
+        model.det_circs[det_id] = DetCirc(
+            id=det_id, title=title, center=center, axis=axis, radius=r, t0=t0, dvel=dvel
+        )
+
     else:
-        log.warning(f"/DFS/{sub} not ported (DETPOINT, DETPLAN, WAVE_SHAPER supported)",
+        log.warning(f"/DFS/{sub} not ported (DETPOINT, DETPLAN, WAVE_SHAPER, DETLINE, DETCIRC supported)",
                     block.source)
 
 
@@ -14804,6 +14991,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "INIMAP": read_inimap,
     "INIMAP1D": read_inimap1d,
     "INIMAP2D": read_inimap2d,
+    "INIMAP3D": read_inimap3d,
     "INISTATE": read_inista,
     "LEAK": read_leak,
     "ALE": read_ale,

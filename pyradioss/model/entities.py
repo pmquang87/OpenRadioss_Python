@@ -3664,6 +3664,79 @@ class Stack:
     plies: List[StackPly] = field(default_factory=list)
 
 
+@dataclass
+class InivelPart:
+    """/INIVEL/PART (M137): Initial velocity on a part."""
+    id: int
+    title: str = ""
+    part_id: int = 0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    vr: float = 0.0
+    skew_id: int = 0
+    tstart: float = 0.0
+    sens_id: int = 0
+
+
+@dataclass
+class InivelSph:
+    """/INIVEL/SPH (M137): Initial velocity on SPH particles."""
+    id: int
+    title: str = ""
+    grsph_id: int = 0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    skew_id: int = 0
+
+
+@dataclass
+class DetLine:
+    """/DFS/DETLINE (M137): Detonation along a line segment."""
+    id: int
+    title: str = ""
+    p1: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    p2: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    t0: float = 0.0
+    dvel: float = 0.0
+
+
+@dataclass
+class DetCirc:
+    """/DFS/DETCIRC (M137): Detonation along a circle."""
+    id: int
+    title: str = ""
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    axis: tuple[float, float, float] = (0.0, 0.0, 1.0)
+    radius: float = 0.0
+    t0: float = 0.0
+    dvel: float = 0.0
+
+
+@dataclass
+class IniMap3D:
+    """/INIMAP/3D (M137): 3D solution mapping descriptor."""
+    id: int
+    title: str = ""
+    map_type: int = 0
+    grbric_id: int = 0
+    grquad_id: int = 0
+    grsh3n_id: int = 0
+    filename: str = ""
+    fscale_v: float = 1.0
+
+
+@dataclass
+class SetGeneric:
+    """/SET (M137): Generic ID collection set."""
+    id: int
+    set_type: str
+    title: str = ""
+    ids: List[int] = field(default_factory=list)
+
+
+
 
 
 

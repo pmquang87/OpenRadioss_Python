@@ -1189,6 +1189,13 @@ LAYOUTS: Dict[str, List[int]] = {
     "RWALL_CONE_2": [20, 20, 20, 20, 20, 20, 20],
     "SECT_BOX_1": [10, 10, 10],
     "SECT_CUT_1": [20, 20, 20, 20, 20, 20],
+
+    # EXTENDED INIVEL, DETONATION FRONTS, STATE MAPPING & SETS (M137)
+    "INIVEL_PART_1": [10, 20, 20, 20, 20, 10],
+    "INIVEL_SPH_1": [10, 20, 20, 20, 10],
+    "DFS_DETLINE_1": [20, 20, 20, 20, 20, 20, 20, 20],
+    "DFS_DETCIRC_1": [20, 20, 20, 20, 20, 20, 20, 20, 20],
+    "INIMAP3D_1": [10, 10, 10, 10, 10, 20],
 }
 
 

@@ -53,7 +53,7 @@ from .entities import (
     Retractor, Slipring, UserWindow,
     DetonationWave, ElementActivation, MonvolFvmBag2, Autoposition,
     LoadCentri, LoadPfluid, LoadPressure, LoadGravity, LoadBody, LoadTherm,
-    EulerBcs, HeatBcs, InivelAxis, InivelFvm, InivelNode,
+    EulerBcs, HeatBcs, InivelAxis, InivelFvm, InivelNode, InivelPart, InivelSph,
     ImpdispFgeo, ImpvelFgeo, RwallTherm, RwallBox, RwallCone, SphInOut,
     SphBcs, MadymoLink, MadymoExfem,
     AleGridDonea, AleGridSpring, AleGridStandard, AleGridDisp, AleGridLaplacian, AleGridVolume,
@@ -72,7 +72,7 @@ from .entities import (
     FailPuck, FailSahraei, FailSyazwan, FailTab2, FailGene1,
     Stack, StackPly,
     LagmulGlobal, GearConstraint, RackConstraint, DiffConstraint,
-    WaveShaper,
+    WaveShaper, DetLine, DetCirc, IniMap3D, SetGeneric,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -735,6 +735,8 @@ class Model:
         self.inivel_axes: Dict[int, InivelAxis] = {}        # /INIVEL/AXIS (M112)
         self.inivel_fvms: Dict[int, InivelFvm] = {}         # /INIVEL/FVM (M112)
         self.inivel_nodes: Dict[int, InivelNode] = {}       # /INIVEL/NODE (M112)
+        self.inivel_parts: Dict[int, InivelPart] = {}       # /INIVEL/PART (M137)
+        self.inivel_sphs: Dict[int, InivelSph] = {}         # /INIVEL/SPH (M137)
         self.impdisp_fgeos: Dict[int, ImpdispFgeo] = {}     # /IMPDISP/FGEO (M112)
         self.impvel_fgeos: Dict[int, ImpvelFgeo] = {}       # /IMPVEL/FGEO (M112)
         self.rwall_therms: Dict[int, RwallTherm] = {}       # /RWALL/THERM (M112)
@@ -807,7 +809,12 @@ class Model:
         self.gears: Dict[int, GearConstraint] = {}            # /GEAR (M131)
         self.racks: Dict[int, RackConstraint] = {}            # /RACK (M131)
         self.diffs: Dict[int, DiffConstraint] = {}            # /DIFF (M131)
-        self.wave_shapers: Dict[int, WaveShaper] = {}         # /DFS/WAVE_SHAPER (M132)
+        self.diff_constraints = self.diffs
+        self.wave_shapers: Dict[int, WaveShaper] = {}      # /DFS/WAVE_SHAPER (M132)
+        self.det_lines: Dict[int, DetLine] = {}            # /DFS/DETLINE (M137)
+        self.det_circs: Dict[int, DetCirc] = {}            # /DFS/DETCIRC (M137)
+        self.ini_map3ds: Dict[int, IniMap3D] = {}          # /INIMAP/3D (M137)
+        self.generic_sets: Dict[str, Dict[int, SetGeneric]] = {} # /SET (M137)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
