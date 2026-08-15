@@ -50,7 +50,7 @@ from ..model.entities import (
     MonvolPres, MonvolGas, MonvolCommu1, MonvolLFluid, LeakMat,
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
-    Drape, IniBriEref, IncludeDyna,
+    Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -1125,13 +1125,24 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     from ..failure import biquad as fail_biquad
     from ..model.entities import FailureModel
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if kind in ("TSAI-WU", "TSAI_WU"):
+        kind = "TSAIWU"
+    elif kind in ("TSAI-HILL", "TSAI_HILL"):
+        kind = "TSAIHILL"
+    elif kind in ("MAX_STRAIN",):
+        kind = "MAXSTRAIN"
+
     if kind not in ("JOHNSON", "BIQUAD", "TAB1", "SNCONNECT", "FLD", "CONNECT",
                     "TENSSTRAIN", "ORTHSTRAIN", "GURSON", "ALTER", "VISUAL", "MULLINS_OR",
-                    "PUCK", "RTCL", "SAHRAEI", "SYAZWAN", "TAB2", "GENE1", "INIEVO"):
+                    "PUCK", "RTCL", "SAHRAEI", "SYAZWAN", "TAB2", "GENE1", "INIEVO",
+                    "CHANG", "TSAIWU", "TSAIHILL", "HOFFMAN", "MAXSTRAIN", "HASHIN",
+                    "LEMAITRE", "COCKCROFT", "ENERGY"):
         log.warning(f"/FAIL/{kind} not ported — skipped "
                     f"(supported: JOHNSON, BIQUAD, TAB1, SNCONNECT, FLD, CONNECT, "
                     f"TENSSTRAIN, ORTHSTRAIN, GURSON, ALTER, VISUAL, MULLINS_OR, "
-                    f"PUCK, RTCL, SAHRAEI, SYAZWAN, TAB2, GENE1, INIEVO)", block.source)
+                    f"PUCK, RTCL, SAHRAEI, SYAZWAN, TAB2, GENE1, INIEVO, "
+                    f"CHANG, TSAIWU, TSAIHILL, HOFFMAN, MAXSTRAIN, HASHIN, "
+                    f"LEMAITRE, COCKCROFT, ENERGY)", block.source)
         return
     # header /FAIL/<kind>/mat_ID[/fail_ID]: with TWO trailing ids the
     # FIRST is the material id (the lexer keeps only the last as user_id)
@@ -1742,6 +1753,179 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "pthk": pthk, "evolution_models": subcards,
         }
         fm = FailureModel(type="INIEVO", ifail_sh=1, params=params)
+    elif kind == "CHANG":
+        c1 = cards[0].cut("FAIL_CHANG_1") if block.fixed else cards[0].tokens()
+        s1t = _fval(c1[0]) if len(c1) > 0 else 0.0
+        s2t = _fval(c1[1]) if len(c1) > 1 else 0.0
+        s12 = _fval(c1[2]) if len(c1) > 2 else 0.0
+        s1c = _fval(c1[3]) if len(c1) > 3 else 0.0
+        s2c = _fval(c1[4]) if len(c1) > 4 else 0.0
+
+        beta, tau_max, ifail_sh, failip = 0.0, 0.0, 1, 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_CHANG_2") if block.fixed else cards[1].tokens()
+            beta = _fval(c2[0]) if len(c2) > 0 else 0.0
+            tau_max = _fval(c2[1]) if len(c2) > 1 else 0.0
+            ifail_sh = _ival(c2[2], 1) if len(c2) > 2 else 1
+            failip = _ival(c2[3]) if len(c2) > 3 else 0
+
+        params = {
+            "sigma_1t": s1t, "sigma_2t": s2t, "sigma_12": s12, "sigma_1c": s1c, "sigma_2c": s2c,
+            "beta": beta, "tau_max": tau_max, "failip": failip,
+        }
+        fm = FailureModel(type="CHANG", ifail_sh=ifail_sh, params=params)
+    elif kind == "TSAIWU":
+        c1 = cards[0].cut("FAIL_TSAIWU_1") if block.fixed else cards[0].tokens()
+        s1t = _fval(c1[0]) if len(c1) > 0 else 0.0
+        s2t = _fval(c1[1]) if len(c1) > 1 else 0.0
+        s1c = _fval(c1[2]) if len(c1) > 2 else 0.0
+        s2c = _fval(c1[3]) if len(c1) > 3 else 0.0
+        s12 = _fval(c1[4]) if len(c1) > 4 else 0.0
+
+        alpha, tau_max, fcut, ifail_sh, ifail_so = 0.0, 0.0, 0.0, 1, 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_TSAIWU_2") if block.fixed else cards[1].tokens()
+            alpha = _fval(c2[0]) if len(c2) > 0 else 0.0
+            tau_max = _fval(c2[1]) if len(c2) > 1 else 0.0
+            fcut = _fval(c2[2]) if len(c2) > 2 else 0.0
+            ifail_sh = _ival(c2[4] if block.fixed else (c2[3] if len(c2) > 3 else 1), 1) if len(c2) > (4 if block.fixed else 3) else 1
+            ifail_so = _ival(c2[5] if block.fixed else (c2[4] if len(c2) > 4 else 0)) if len(c2) > (5 if block.fixed else 4) else 0
+
+        params = {
+            "sigma_1t": s1t, "sigma_2t": s2t, "sigma_1c": s1c, "sigma_2c": s2c, "sigma_12": s12,
+            "alpha": alpha, "tau_max": tau_max, "fcut": fcut, "ifail_so": ifail_so,
+        }
+        fm = FailureModel(type="TSAIWU", ifail_sh=ifail_sh, params=params)
+    elif kind == "TSAIHILL":
+        c1 = cards[0].cut("FAIL_TSAIHILL_1") if block.fixed else cards[0].tokens()
+        x11 = _fval(c1[0]) if len(c1) > 0 else 0.0
+        x22 = _fval(c1[1]) if len(c1) > 1 else 0.0
+        s12 = _fval(c1[2]) if len(c1) > 2 else 0.0
+        ifail_sh = _ival(c1[4] if block.fixed else (c1[3] if len(c1) > 3 else 1), 1) if len(c1) > (4 if block.fixed else 3) else 1
+        ifail_so = _ival(c1[5] if block.fixed else (c1[4] if len(c1) > 4 else 0)) if len(c1) > (5 if block.fixed else 4) else 0
+
+        tau_max, fcut = 0.0, 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_TSAIHILL_2") if block.fixed else cards[1].tokens()
+            tau_max = _fval(c2[0]) if len(c2) > 0 else 0.0
+            fcut = _fval(c2[1]) if len(c2) > 1 else 0.0
+
+        params = {
+            "x11": x11, "x22": x22, "s12": s12, "ifail_so": ifail_so,
+            "tau_max": tau_max, "fcut": fcut,
+        }
+        fm = FailureModel(type="TSAIHILL", ifail_sh=ifail_sh, params=params)
+    elif kind == "HOFFMAN":
+        c1 = cards[0].cut("FAIL_HOFFMAN_1") if block.fixed else cards[0].tokens()
+        s1t = _fval(c1[0]) if len(c1) > 0 else 0.0
+        s2t = _fval(c1[1]) if len(c1) > 1 else 0.0
+        s1c = _fval(c1[2]) if len(c1) > 2 else 0.0
+        s2c = _fval(c1[3]) if len(c1) > 3 else 0.0
+        s12 = _fval(c1[4]) if len(c1) > 4 else 0.0
+
+        tau_max, fcut, ifail_sh, ifail_so = 0.0, 0.0, 1, 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_HOFFMAN_2") if block.fixed else cards[1].tokens()
+            tau_max = _fval(c2[0]) if len(c2) > 0 else 0.0
+            fcut = _fval(c2[1]) if len(c2) > 1 else 0.0
+            ifail_sh = _ival(c2[3] if block.fixed else (c2[2] if len(c2) > 2 else 1), 1) if len(c2) > (3 if block.fixed else 2) else 1
+            ifail_so = _ival(c2[4] if block.fixed else (c2[3] if len(c2) > 3 else 0)) if len(c2) > (4 if block.fixed else 3) else 0
+
+        params = {
+            "sigma_1t": s1t, "sigma_2t": s2t, "sigma_1c": s1c, "sigma_2c": s2c, "sigma_12": s12,
+            "tau_max": tau_max, "fcut": fcut, "ifail_so": ifail_so,
+        }
+        fm = FailureModel(type="HOFFMAN", ifail_sh=ifail_sh, params=params)
+    elif kind == "MAXSTRAIN":
+        c1 = cards[0].cut("FAIL_MAXSTRAIN_1") if block.fixed else cards[0].tokens()
+        e1 = _fval(c1[0]) if len(c1) > 0 else 0.0
+        e2 = _fval(c1[1]) if len(c1) > 1 else 0.0
+        g12 = _fval(c1[2]) if len(c1) > 2 else 0.0
+        ifail_sh = _ival(c1[4] if block.fixed else (c1[3] if len(c1) > 3 else 1), 1) if len(c1) > (4 if block.fixed else 3) else 1
+        ifail_so = _ival(c1[5] if block.fixed else (c1[4] if len(c1) > 4 else 0)) if len(c1) > (5 if block.fixed else 4) else 0
+
+        tau_max, fcut = 0.0, 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_MAXSTRAIN_2") if block.fixed else cards[1].tokens()
+            tau_max = _fval(c2[0]) if len(c2) > 0 else 0.0
+            fcut = _fval(c2[1]) if len(c2) > 1 else 0.0
+
+        params = {
+            "eps1_max": e1, "eps2_max": e2, "gam12_max": g12, "ifail_so": ifail_so,
+            "tau_max": tau_max, "fcut": fcut,
+        }
+        fm = FailureModel(type="MAXSTRAIN", ifail_sh=ifail_sh, params=params)
+    elif kind == "HASHIN":
+        c1 = cards[0].cut("FAIL_HASHIN_1") if block.fixed else cards[0].tokens()
+        iform = _ival(c1[0]) if len(c1) > 0 else 0
+        ifail_sh = _ival(c1[1], 1) if len(c1) > 1 else 1
+        ifail_so = _ival(c1[2]) if len(c1) > 2 else 0
+        ratio = _fval(c1[3]) if len(c1) > 3 else 0.0
+
+        s1t, s2t, s3t, s1c, s2c = 0.0, 0.0, 0.0, 0.0, 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_HASHIN_2") if block.fixed else cards[1].tokens()
+            s1t = _fval(c2[0]) if len(c2) > 0 else 0.0
+            s2t = _fval(c2[1]) if len(c2) > 1 else 0.0
+            s3t = _fval(c2[2]) if len(c2) > 2 else 0.0
+            s1c = _fval(c2[3]) if len(c2) > 3 else 0.0
+            s2c = _fval(c2[4]) if len(c2) > 4 else 0.0
+
+        s3c, s12, s23, s31, tau_max = 0.0, 0.0, 0.0, 0.0, 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            c3 = cards[2].cut("FAIL_HASHIN_3") if block.fixed else cards[2].tokens()
+            s3c = _fval(c3[0]) if len(c3) > 0 else 0.0
+            s12 = _fval(c3[1]) if len(c3) > 1 else 0.0
+            s23 = _fval(c3[2]) if len(c3) > 2 else 0.0
+            s31 = _fval(c3[3]) if len(c3) > 3 else 0.0
+            tau_max = _fval(c3[4]) if len(c3) > 4 else 0.0
+
+        alpha, fcut = 0.0, 0.0
+        if len(cards) > 3 and not cards[3].is_blank:
+            c4 = cards[3].cut("FAIL_HASHIN_4") if block.fixed else cards[3].tokens()
+            alpha = _fval(c4[0]) if len(c4) > 0 else 0.0
+            fcut = _fval(c4[1]) if len(c4) > 1 else 0.0
+
+        params = {
+            "iform": iform, "ifail_so": ifail_so, "ratio": ratio,
+            "sigma_1t": s1t, "sigma_2t": s2t, "sigma_3t": s3t, "sigma_1c": s1c, "sigma_2c": s2c,
+            "sigma_3c": s3c, "sigma_12": s12, "sigma_23": s23, "sigma_31": s31, "tau_max": tau_max,
+            "alpha": alpha, "fcut": fcut,
+        }
+        fm = FailureModel(type="HASHIN", ifail_sh=ifail_sh, params=params)
+    elif kind == "LEMAITRE":
+        c1 = cards[0].cut("FAIL_LEMAITRE_1") if block.fixed else cards[0].tokens()
+        eps_d = _fval(c1[0]) if len(c1) > 0 else 0.0
+        s_d = _fval(c1[1]) if len(c1) > 1 else 0.0
+        dc = _fval(c1[2]) if len(c1) > 2 else 0.0
+        failip = _ival(c1[4] if block.fixed else (c1[3] if len(c1) > 3 else 0)) if len(c1) > (4 if block.fixed else 3) else 0
+        p_thickfail = _fval(c1[5] if block.fixed else (c1[4] if len(c1) > 4 else 0.0)) if len(c1) > (5 if block.fixed else 4) else 0.0
+
+        params = {
+            "eps_d": eps_d, "s_d": s_d, "dc": dc, "failip": failip, "p_thickfail": p_thickfail,
+        }
+        fm = FailureModel(type="LEMAITRE", ifail_sh=1, params=params)
+    elif kind == "COCKCROFT":
+        c1 = cards[0].cut("FAIL_COCKCROFT_1") if block.fixed else cards[0].tokens()
+        c0 = _fval(c1[0]) if len(c1) > 0 else 0.0
+        alpha = _fval(c1[1]) if len(c1) > 1 else 0.0
+        failip = _ival(c1[2]) if len(c1) > 2 else 0
+
+        params = {"c0": c0, "alpha": alpha, "failip": failip}
+        fm = FailureModel(type="COCKCROFT", ifail_sh=1, params=params)
+    elif kind == "ENERGY":
+        c1 = cards[0].cut("FAIL_ENERGY_1") if block.fixed else cards[0].tokens()
+        e1 = _fval(c1[0]) if len(c1) > 0 else 0.0
+        e2 = _fval(c1[1]) if len(c1) > 1 else 0.0
+        fct_id = _ival(c1[2]) if len(c1) > 2 else 0
+        xscale = _fval(c1[3], 1.0) if len(c1) > 3 else 1.0
+        i_dam = _ival(c1[4]) if len(c1) > 4 else 0
+        failip = _ival(c1[5]) if len(c1) > 5 else 0
+
+        params = {
+            "e1": e1, "e2": e2, "fct_id": fct_id, "xscale": xscale, "i_dam": i_dam, "failip": failip,
+        }
+        fm = FailureModel(type="ENERGY", ifail_sh=1, params=params)
     # attachment to the material happens in the Starter resolve step
     # (initialization.resolve_materials) so deck order does not matter
     model.raw_fails.append((mat_id, fm, block.source))
@@ -4057,11 +4241,18 @@ def read_damp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     token view read Beta as the group id ('1E-5' int crash).  Beta and
     skew are accepted + warned when set.
     """
-    if len(block.parts) > 1 and block.parts[1].upper() in ("INTER", "VREL"):
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub == "INTER":
         read_damp_inter(block, model, log)
         return
-    if len(block.parts) > 1 and block.parts[1].upper() in ("RANGE", "FREQUENCY_RANGE", "FREQ_RANGE"):
+    if sub == "VREL":
+        read_damp_vrel(block, model, log)
+        return
+    if sub in ("RANGE", "FREQUENCY_RANGE", "FREQ_RANGE"):
         read_damp_range(block, model, log)
+        return
+    if sub in ("FUNCT", "FUNCTION"):
+        read_damp_funct(block, model, log)
         return
 
     if block.fixed:
@@ -4955,8 +5146,8 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 gap=gap_min, lagmul=True, title=title))
             return
 
-    if kind not in ("TYPE2", "TYPE7", "TYPE8", "TYPE10", "TYPE11", "TYPE18", "TYPE24", "TYPE25", "SUB"):
-        log.warning(f"/INTER/{kind} not ported (TYPE2, TYPE7, TYPE8, TYPE10, TYPE11, TYPE18, TYPE24, "
+    if kind not in ("TYPE2", "TYPE7", "TYPE8", "TYPE10", "TYPE11", "TYPE18", "TYPE19", "TYPE21", "TYPE24", "TYPE25", "SUB"):
+        log.warning(f"/INTER/{kind} not ported (TYPE2, TYPE7, TYPE8, TYPE10, TYPE11, TYPE18, TYPE19, TYPE21, TYPE24, "
                     f"TYPE25, SUB supported)", block.source)
         return
     title, cards = _title_and_data(block)
@@ -5065,6 +5256,118 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.interfaces.append(Interface(
             id=block.user_id, type=25, surf_id=surf1, surf_id1=surf2, grnod_id=grnod_id,
             istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap1, gap_max=gap2, title=title
+        ))
+        return
+
+    if kind == "TYPE19":
+        if block.fixed:
+            f0 = _fixed_vals(cards[0], [10, 10, 10, 10, 10, 10, 10, 10, 10])
+            grnod_id = _ival(f0[0])
+            surf_id = _ival(f0[1])
+            istf = _ival(f0[2])
+            igap = _ival(f0[4])
+            multimp = _ival(f0[5])
+            ibag = _ival(f0[6])
+            idel = _ival(f0[7])
+            icurv = _ival(f0[8])
+
+            gap_scale = 1.0
+            gap_max = 0.0
+            gap_min = 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f1 = _fixed_vals(cards[1], [20, 20, 20, 20, 20])
+                gap_scale = _fval(f1[0], 1.0)
+                gap_max = _fval(f1[1], 0.0)
+                gap_min = _fval(f1[2], 0.0)
+
+            stfac = 1.0
+            fric = 0.0
+            if len(cards) > 2 and not cards[2].is_blank:
+                f2 = _fixed_vals(cards[2], [20, 20, 20, 20, 20])
+                stfac = _fval(f2[2], 1.0)
+                fric = _fval(f2[3], 0.0)
+        else:
+            t0 = cards[0].tokens()
+            grnod_id = int(float(t0[0])) if len(t0) > 0 else 0
+            surf_id = int(float(t0[1])) if len(t0) > 1 else 0
+            istf = int(float(t0[2])) if len(t0) > 2 else 0
+            igap = int(float(t0[3])) if len(t0) > 3 else 0
+            multimp = int(float(t0[4])) if len(t0) > 4 else 0
+            ibag = int(float(t0[5])) if len(t0) > 5 else 0
+            idel = int(float(t0[6])) if len(t0) > 6 else 0
+            icurv = int(float(t0[7])) if len(t0) > 7 else 0
+
+            gap_scale, gap_max, gap_min = 1.0, 0.0, 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                gap_scale = float(t1[0]) if len(t1) > 0 else 1.0
+                gap_max = float(t1[1]) if len(t1) > 1 else 0.0
+                gap_min = float(t1[2]) if len(t1) > 2 else 0.0
+
+            stfac, fric = 1.0, 0.0
+            if len(cards) > 2 and not cards[2].is_blank:
+                t2 = cards[2].tokens()
+                stfac = float(t2[2]) if len(t2) > 2 else 1.0
+                fric = float(t2[3]) if len(t2) > 3 else 0.0
+
+        model.interfaces.append(Interface(
+            id=block.user_id, type=19, grnod_id=grnod_id, surf_id=surf_id,
+            istf=istf, igap=igap, multimp=multimp, ibag=ibag, idel=idel, icurv=icurv,
+            gap_scale=gap_scale, gap_max=gap_max, gap_min=gap_min, stfac=stfac, fric=fric, title=title
+        ))
+        return
+
+    if kind == "TYPE21":
+        if block.fixed:
+            f0 = _fixed_vals(cards[0], [10, 10, 10, 10, 10, 10, 30, 10])
+            surf_id1 = _ival(f0[0])
+            surf_id2 = _ival(f0[1])
+            istf = _ival(f0[2])
+            igap = _ival(f0[4])
+            multimp = _ival(f0[5])
+            iadm = _ival(f0[7])
+
+            gap_scale = 1.0
+            gap_max = 0.0
+            dsearch = 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f1 = _fixed_vals(cards[1], [20, 20, 20, 20, 20])
+                gap_scale = _fval(f1[0], 1.0)
+                gap_max = _fval(f1[1], 0.0)
+                dsearch = _fval(f1[2], 0.0)
+
+            stfac = 1.0
+            fric = 0.0
+            if len(cards) > 2 and not cards[2].is_blank:
+                f2 = _fixed_vals(cards[2], [20, 20, 20, 20, 20])
+                stfac = _fval(f2[2], 1.0)
+                fric = _fval(f2[3], 0.0)
+        else:
+            t0 = cards[0].tokens()
+            surf_id1 = int(float(t0[0])) if len(t0) > 0 else 0
+            surf_id2 = int(float(t0[1])) if len(t0) > 1 else 0
+            istf = int(float(t0[2])) if len(t0) > 2 else 0
+            igap = int(float(t0[3])) if len(t0) > 3 else 0
+            multimp = int(float(t0[4])) if len(t0) > 4 else 0
+            iadm = int(float(t0[5])) if len(t0) > 5 else 0
+
+            gap_scale, gap_max, dsearch = 1.0, 0.0, 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                gap_scale = float(t1[0]) if len(t1) > 0 else 1.0
+                gap_max = float(t1[1]) if len(t1) > 1 else 0.0
+                dsearch = float(t1[2]) if len(t1) > 2 else 0.0
+
+            stfac, fric = 1.0, 0.0
+            if len(cards) > 2 and not cards[2].is_blank:
+                t2 = cards[2].tokens()
+                stfac = float(t2[2]) if len(t2) > 2 else 1.0
+                fric = float(t2[3]) if len(t2) > 3 else 0.0
+
+        model.interfaces.append(Interface(
+            id=block.user_id, type=21, surf_id=surf_id1, surf_id1=surf_id2,
+            istf=istf, igap=igap, multimp=multimp, iadm=iadm, dsearch=dsearch,
+            gap_scale=gap_scale, gap_max=gap_max, stfac=stfac, fric=fric, title=title
         ))
         return
 
@@ -6584,6 +6887,100 @@ def read_damp_range(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_damp_vrel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DAMP/VREL/damp_ID`` (M108)::
+
+        card 1:  title
+        card 2:  Alpha_x  _blank_  grnod_ID  skew_ID  Tstart  Tstop
+        card 3:  Alpha_y  Alpha_z
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/DAMP/VREL/{block.user_id}: missing data card", block.source)
+        return
+
+    alpha_x, alpha_y, alpha_z = 0.0, 0.0, 0.0
+    grnod_id, skew_id = 0, 0
+    tstart, tstop = 0.0, 1.0e30
+
+    if block.fixed:
+        f1 = cards[0].cut("DAMP_VREL_1")
+        alpha_x = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        grnod_id = _ival(f1[2]) if len(f1) > 2 else 0
+        skew_id = _ival(f1[3]) if len(f1) > 3 else 0
+        tstart = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+        tstop = _fval(f1[5], 1.0e30) if len(f1) > 5 and f1[5] else 1.0e30
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("DAMP_VREL_2")
+            alpha_y = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            alpha_z = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        alpha_x = float(t1[0]) if len(t1) > 0 else 0.0
+        grnod_id = int(float(t1[1])) if len(t1) > 1 else 0
+        skew_id = int(float(t1[2])) if len(t1) > 2 else 0
+        tstart = float(t1[3]) if len(t1) > 3 else 0.0
+        tstop = float(t1[4]) if len(t1) > 4 else 1.0e30
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            alpha_y = float(t2[0]) if len(t2) > 0 else 0.0
+            alpha_z = float(t2[1]) if len(t2) > 1 else 0.0
+
+    model.damps.append(Damping(
+        id=block.user_id, grnod_id=grnod_id, alpha=alpha_x,
+        tstart=tstart, tstop=tstop, title=title, kind="VREL",
+        skew_id=skew_id, alpha_x=alpha_x, alpha_y=alpha_y, alpha_z=alpha_z
+    ))
+
+
+def read_damp_funct(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DAMP/FUNCT/damp_ID`` (M108)::
+
+        card 1:  title
+        card 2:  Fct_ID  grnod_ID  Alpha
+        card 3:  Alpha_x  Alpha_y  Alpha_z
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/DAMP/FUNCT/{block.user_id}: missing data card", block.source)
+        return
+
+    fct_id, grnod_id = 0, 0
+    alpha = 0.0
+    alpha_x, alpha_y, alpha_z = 0.0, 0.0, 0.0
+
+    if block.fixed:
+        f1 = cards[0].cut("DAMP_FUNCT_1")
+        fct_id = _ival(f1[0]) if len(f1) > 0 else 0
+        grnod_id = _ival(f1[1]) if len(f1) > 1 else 0
+        alpha = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("DAMP_FUNCT_2")
+            alpha_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            alpha_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            alpha_z = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        fct_id = int(float(t1[0])) if len(t1) > 0 else 0
+        grnod_id = int(float(t1[1])) if len(t1) > 1 else 0
+        alpha = float(t1[2]) if len(t1) > 2 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            alpha_x = float(t2[0]) if len(t2) > 0 else 0.0
+            alpha_y = float(t2[1]) if len(t2) > 1 else 0.0
+            alpha_z = float(t2[2]) if len(t2) > 2 else 0.0
+
+    model.damps.append(Damping(
+        id=block.user_id, grnod_id=grnod_id, alpha=alpha,
+        title=title, kind="FUNCT", fct_id=fct_id,
+        alpha_x=alpha_x, alpha_y=alpha_y, alpha_z=alpha_z
+    ))
+
+
 def read_analy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/ANALY`` (M103)::
 
@@ -7058,8 +7455,11 @@ def read_monvol(block: KeywordBlock, model: Model, log: MessageLog):
     elif vol_type == "LFLUID":
         read_monvol_lfluid(block, model, log)
         return
+    elif vol_type in ("FVMBAG1", "FVMBAG"):
+        read_monvol_fvmbag1(block, model, log)
+        return
     elif vol_type != "AIRBAG1":
-        log.warning(f"/MONVOL/{vol_type} not ported - skipped (supported: AIRBAG1, PRES, GAS, COMMU1, LFLUID)",
+        log.warning(f"/MONVOL/{vol_type} not ported - skipped (supported: AIRBAG1, PRES, GAS, COMMU1, LFLUID, FVMBAG1)",
                     block.source)
         return
 
@@ -7494,6 +7894,67 @@ def read_monvol_lfluid(block: KeywordBlock, model: Model, log: MessageLog) -> No
         fct_padd=fct_padd, fct_pmax=fct_pmax, fscale_padd=fscale_padd,
         fscale_pmax=fscale_pmax,
     )
+
+
+def read_monvol_fvmbag1(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MONVOL/FVMBAG1/monvol_ID`` (M108)::
+
+        card 1:  title
+        card 2:  surf_ID
+        card 3:  Scale_t  Scale_p  Scale_s  Scale_a  Scale_d
+        card 4:  mat_ID  _blank_  Pext  Ttot
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MONVOL/FVMBAG1/{block.user_id}: missing data card", block.source)
+        return
+
+    surf_id = 0
+    scal_t, scal_p, scal_s, scal_a, scal_d = 1.0, 1.0, 1.0, 1.0, 1.0
+    mat_id = 0
+    pext, ttot = 0.0, 0.0
+
+    if block.fixed:
+        f1 = cards[0].cut("MONVOL_FVMBAG1_1")
+        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MONVOL_FVMBAG1_2")
+            scal_t = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+            scal_p = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
+            scal_s = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            scal_a = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+            scal_d = _fval(f2[4], 1.0) if len(f2) > 4 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("MONVOL_FVMBAG1_3")
+            mat_id = _ival(f3[0]) if len(f3) > 0 else 0
+            pext = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+            ttot = _fval(f3[3], 0.0) if len(f3) > 3 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            scal_t = float(t2[0]) if len(t2) > 0 else 1.0
+            scal_p = float(t2[1]) if len(t2) > 1 else 1.0
+            scal_s = float(t2[2]) if len(t2) > 2 else 1.0
+            scal_a = float(t2[3]) if len(t2) > 3 else 1.0
+            scal_d = float(t2[4]) if len(t2) > 4 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            mat_id = int(float(t3[0])) if len(t3) > 0 else 0
+            pext = float(t3[1]) if len(t3) > 1 else 0.0
+            ttot = float(t3[2]) if len(t3) > 2 else 0.0
+
+    model.monvol_fvmbags[block.user_id] = MonvolFvmBag1(
+        id=block.user_id, title=title, surf_id=surf_id,
+        scale_t=scal_t, scale_p=scal_p, scale_s=scal_s, scale_a=scal_a, scale_d=scal_d,
+        mat_id=mat_id, pext=pext, ttot=ttot
+    )
+
 
 
 def read_leak(block: KeywordBlock, model: Model, log: MessageLog) -> None:

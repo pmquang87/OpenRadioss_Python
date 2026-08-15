@@ -50,7 +50,7 @@ from .entities import (
     MonvolPres, MonvolGas, MonvolCommu1, MonvolLFluid, LeakMat,
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
-    Drape, IniBriEref, IncludeDyna,
+    Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -663,6 +663,7 @@ class Model:
         self.drapes: Dict[int, Drape] = {}             # /DRAPE (M107)
         self.inibri_erefs: List[IniBriEref] = []       # /INIBRI/EREF (M107)
         self.dyna_includes: List[IncludeDyna] = []     # /INCLUDE_DYNA (M107)
+        self.monvol_fvmbags: Dict[int, MonvolFvmBag1] = {} # /MONVOL/FVMBAG1 (M108)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

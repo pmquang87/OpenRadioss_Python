@@ -652,6 +652,44 @@ def check_model(model: Model, log: MessageLog) -> None:
             if sens.skew_id > 0 and sens.skew_id not in model.skews:
                 log.error(f"/SENSOR/NIC/{sens.id}: skew {sens.skew_id} not defined", "CROSS REF")
 
+    # M108: Classical Failure Models, Relative/Function Damping, FVM Airbags, Extended Contacts
+    for mat_id, fm, src in getattr(model, "raw_fails", []):
+        if fm.type == "ENERGY":
+            fid = fm.params.get("fct_id", 0)
+            if fid > 0 and fid not in model.functions:
+                log.error(f"/FAIL/ENERGY on MAT/{mat_id}: function {fid} not defined", "CROSS REF")
+
+    for d in getattr(model, "damps", []):
+        if getattr(d, "kind", "GLOBAL") == "VREL":
+            if d.grnod_id > 0 and d.grnod_id not in model.node_groups:
+                log.error(f"/DAMP/VREL/{d.id}: node group {d.grnod_id} not defined", "CROSS REF")
+            if d.skew_id > 0 and d.skew_id not in model.skews:
+                log.error(f"/DAMP/VREL/{d.id}: skew {d.skew_id} not defined", "CROSS REF")
+        elif getattr(d, "kind", "GLOBAL") == "FUNCT":
+            if d.grnod_id > 0 and d.grnod_id not in model.node_groups:
+                log.error(f"/DAMP/FUNCT/{d.id}: node group {d.grnod_id} not defined", "CROSS REF")
+            if d.fct_id > 0 and d.fct_id not in model.functions:
+                log.error(f"/DAMP/FUNCT/{d.id}: function {d.fct_id} not defined", "CROSS REF")
+
+    for mid, fb in getattr(model, "monvol_fvmbags", {}).items():
+        if fb.surf_id > 0 and fb.surf_id not in model.surfaces:
+            log.error(f"/MONVOL/FVMBAG1/{mid}: surface {fb.surf_id} not defined", "CROSS REF")
+        if fb.mat_id > 0 and fb.mat_id not in model.materials:
+            log.error(f"/MONVOL/FVMBAG1/{mid}: material {fb.mat_id} not defined", "CROSS REF")
+
+    for inter in getattr(model, "interfaces", []):
+        if inter.type == 19:
+            if inter.grnod_id > 0 and inter.grnod_id not in model.node_groups:
+                log.error(f"/INTER/TYPE19/{inter.id}: node group {inter.grnod_id} not defined", "CROSS REF")
+            if inter.surf_id > 0 and inter.surf_id not in model.surfaces:
+                log.error(f"/INTER/TYPE19/{inter.id}: surface {inter.surf_id} not defined", "CROSS REF")
+        elif inter.type == 21:
+            if inter.surf_id > 0 and inter.surf_id not in model.surfaces:
+                log.error(f"/INTER/TYPE21/{inter.id}: surface {inter.surf_id} not defined", "CROSS REF")
+            if inter.surf_id1 > 0 and inter.surf_id1 not in model.surfaces:
+                log.error(f"/INTER/TYPE21/{inter.id}: surface {inter.surf_id1} not defined", "CROSS REF")
+
+
 
 
 

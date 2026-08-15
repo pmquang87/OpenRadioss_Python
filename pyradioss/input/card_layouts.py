@@ -762,6 +762,54 @@ LAYOUTS: Dict[str, List[int]] = {
     "SENSOR_NIC_2": [20, 20, 20, 20, 20],
     "SENSOR_NIC_3": [10, 10, 10, 10],
     "SENSOR_NIC_4": [20, 20, 20],
+
+    # FAIL/CHANG (M108)
+    "FAIL_CHANG_1": [20, 20, 20, 20, 20],
+    "FAIL_CHANG_2": [20, 20, 10, 10],
+
+    # FAIL/TSAIWU (M108)
+    "FAIL_TSAIWU_1": [20, 20, 20, 20, 20],
+    "FAIL_TSAIWU_2": [20, 20, 20, 20, 10, 10],
+
+    # FAIL/TSAIHILL (M108)
+    "FAIL_TSAIHILL_1": [20, 20, 20, 20, 10, 10],
+    "FAIL_TSAIHILL_2": [20, 20],
+
+    # FAIL/HOFFMAN (M108)
+    "FAIL_HOFFMAN_1": [20, 20, 20, 20, 20],
+    "FAIL_HOFFMAN_2": [20, 20, 40, 10, 10],
+
+    # FAIL/MAXSTRAIN (M108)
+    "FAIL_MAXSTRAIN_1": [20, 20, 20, 20, 10, 10],
+    "FAIL_MAXSTRAIN_2": [20, 20],
+
+    # FAIL/HASHIN (M108)
+    "FAIL_HASHIN_1": [10, 10, 10, 20],
+    "FAIL_HASHIN_2": [20, 20, 20, 20, 20],
+    "FAIL_HASHIN_3": [20, 20, 20, 20, 20],
+    "FAIL_HASHIN_4": [20, 20],
+
+    # FAIL/LEMAITRE (M108)
+    "FAIL_LEMAITRE_1": [20, 20, 20, 10, 10, 20],
+
+    # FAIL/COCKCROFT (M108)
+    "FAIL_COCKCROFT_1": [20, 20, 10],
+
+    # FAIL/ENERGY (M108)
+    "FAIL_ENERGY_1": [20, 20, 10, 20, 10, 10],
+
+    # DAMP/VREL (M108)
+    "DAMP_VREL_1": [20, 20, 10, 10, 20, 20],
+    "DAMP_VREL_2": [20, 20],
+
+    # DAMP/FUNCT (M108)
+    "DAMP_FUNCT_1": [10, 10, 20],
+    "DAMP_FUNCT_2": [20, 20, 20],
+
+    # MONVOL/FVMBAG1 (M108)
+    "MONVOL_FVMBAG1_1": [10],
+    "MONVOL_FVMBAG1_2": [20, 20, 20, 20, 20],
+    "MONVOL_FVMBAG1_3": [10, 30, 20, 20],
 }
 
 

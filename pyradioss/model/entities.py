@@ -594,8 +594,8 @@ class ImposedTemperature:
 
 @dataclass
 class Damping:
-    """/DAMP (M6): Rayleigh MASS damping — force f = -alpha m v on every
-    node of the group, active in the [tstart, tstop] window.
+    """/DAMP (M6, M108): Rayleigh MASS damping or relative/function damping —
+    force f = -alpha m v on every node of the group, active in the [tstart, tstop] window.
 
     Fortran origin: ``engine/source/assembly/damping*.F``. The port
     integrates the mass-damping ODE exactly per cycle (integrating
@@ -609,6 +609,13 @@ class Damping:
     tstart: float = 0.0
     tstop: float = 1e30
     title: str = ""
+    kind: str = "GLOBAL"   # 'GLOBAL' | 'VREL' | 'FUNCT'
+    skew_id: int = 0
+    fct_id: int = 0
+    alpha_x: float = 0.0
+    alpha_y: float = 0.0
+    alpha_z: float = 0.0
+
 
 
 @dataclass
@@ -963,11 +970,16 @@ class Interface:
     xfiltr: float = 0.0
     fric_c: tuple = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     title: str = ""
-    # ---- TYPE18 (M60) / TYPE10 -------------------------------------------
+    # ---- TYPE18 (M60) / TYPE10 / TYPE19 / TYPE21 -------------------------
     ibag: int = 0
     multimp: int = 4
     idel18: int = 0
     idel10: int = 0       # type 10: segment deletion flag
+    idel: int = 0         # type 19: deletion flag
+    icurv: int = 0        # type 19: curve geometry flag
+    iadm: int = 0         # type 21: admission flag
+    gap_scale: float = 1.0 # type 19/21/25: scale factor for gap
+    gap_min: float = 0.0   # type 19: min gap
     tstart: float = 0.0   # type 10: activation time
     tstop: float = 1e30   # type 10: deactivation time
     inactiv: int = 0      # type 10: initial penetration treatment
@@ -2137,6 +2149,27 @@ class IncludeDyna:
     Fortran origin: ``starter/source/starter/includedyna.F`` / CFG ``includedyna.cfg``.
     """
     filename: str = ""
+
+
+@dataclass
+class MonvolFvmBag1:
+    """/MONVOL/FVMBAG1 (M108): Finite Volume Method Airbag model.
+
+    Fortran origin: ``starter/source/control_volume/fvmbag1.F`` / CFG ``monvol_fvmbag1.cfg``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    scale_t: float = 1.0
+    scale_p: float = 1.0
+    scale_s: float = 1.0
+    scale_a: float = 1.0
+    scale_d: float = 1.0
+    mat_id: int = 0
+    pext: float = 0.0
+    ttot: float = 0.0
+    params: Dict = field(default_factory=dict)
+
 
 
 
