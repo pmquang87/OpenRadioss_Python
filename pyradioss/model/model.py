@@ -64,6 +64,7 @@ from .entities import (
     FunctPython, FrictionModel, FrictionPartPair, RefstaNode, ErefSpec,
     NbcsBlock, NbcsNode, AleMuscl, BemModel,
     GaugePoint, SphGlo, AnalyOptions, AleCfdSph,
+    FailOrthBiquad, SlipringShell,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -130,6 +131,9 @@ class EngineControls:
     upwind_mass_eng: float = 1.0                               # /UPWIND mass & energy coeff
     upwind_wet_surf: float = 1.0                               # /UPWIND wet surface coeff
     eig_off: List[int] = field(default_factory=list)           # /EIG/OFF deactivated modes
+    stop_nstep: int = 0                                        # /STOP/NSTEP (M123)
+    stop_tstop: float = 0.0                                    # /STOP/TSTOP (M123)
+    stop_timet: float = 0.0                                    # /STOP/TIMET (M123)
 
     # ------------------------------------------------------------------
     # /IMPL implicit-static control (M8). ``implicit`` switches the run
@@ -762,6 +766,8 @@ class Model:
         self.sphglo: Optional[SphGlo] = None                # /SPHGLO (M121)
         self.analy: Optional[AnalyOptions] = None           # /ANALY (M121)
         self.alecfdsph: Optional[AleCfdSph] = None          # /ALECFDSPH (M122)
+        self.fail_orthbiquads: Dict[int, FailOrthBiquad] = {} # /FAIL/ORTHBIQUAD (M123)
+        self.slipring_shells: Dict[int, SlipringShell] = {}   # /SLIPRING/SHELL (M123)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

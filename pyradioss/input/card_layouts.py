@@ -1059,6 +1059,15 @@ LAYOUTS: Dict[str, List[int]] = {
     "ELEM_BRIC20_2": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
     "PROP_HEXA20_1": [10, 10, 20, 20, 20],
     "ALECFDSPH_1": [10, 10, 20, 20, 20, 20],
+
+    # FAIL/ORTHBIQUAD, SLIPRING/SHELL (M123)
+    "FAIL_ORTHBIQUAD_1": [20, 10, 10, 20],
+    "FAIL_ORTHBIQUAD_2": [20, 20, 20, 20, 20],
+    "FAIL_ORTHBIQUAD_3": [20, 20, 20, 10, 10, 20],
+    "FAIL_ORTHBIQUAD_4": [20, 20, 20, 20],
+    "SLIPRING_SHELL_1": [10, 10, 10, 10, 10, 20, 20],
+    "SLIPRING_SHELL_2": [10, 10, 20, 20, 20, 20],
+    "SLIPRING_SHELL_3": [10, 10, 20, 20, 20, 20],
 }
 
 

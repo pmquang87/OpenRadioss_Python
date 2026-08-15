@@ -1139,16 +1139,32 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     if v and v[0] != 0.0:
                         ec.print_cycles = abs(int(v[0]))
             elif key == "STOP":
-                # /STOP card: Emax Mmax Nmax NTH NANIM. Emax = 0.0 (blank or
-                # explicit 0, as official decks write '0 0 0 1 1') means "no
-                # user limit" in the real engine — NOT a 0% tolerance. Keep
-                # the 15% default then; only a positive Emax overrides it
-                # (M37: this zero mis-read aborted 14 official decks at
-                # their first energy check).
-                if block.cards:
-                    emax = block.cards[0].floats()[0]
-                    if emax > 0.0:
-                        ec.energy_error_stop = emax
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "NSTEP":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if v:
+                            ec.stop_nstep = int(v[0])
+                elif sub == "TSTOP":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if v:
+                            ec.stop_tstop = v[0]
+                elif sub == "TIMET":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if v:
+                            ec.stop_timet = v[0]
+                else:
+                    # /STOP card: Emax Mmax Nmax NTH NANIM.
+                    if block.cards:
+                        vals = block.cards[0].floats()
+                        if vals:
+                            emax = vals[0]
+                            if emax > 0.0:
+                                ec.energy_error_stop = emax
+                        if len(vals) > 2 and vals[2] > 0.0:
+                            ec.stop_nstep = int(vals[2])
             elif key == "DEBUG":
                 # /DEBUG or /DEBUG/<suboption> (M120): fredebug.F
                 sub = block.parts[1].upper() if len(block.parts) > 1 else ""

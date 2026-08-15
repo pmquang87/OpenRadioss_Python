@@ -52,6 +52,7 @@ from ..model.entities import (
     Retractor, Slipring, UserWindow,
     Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
     GaugePoint, SphGlo, AnalyOptions, AleCfdSph,
+    FailOrthBiquad, SlipringShell,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -1263,14 +1264,16 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "TSAIHILL"
     elif kind in ("MAX_STRAIN",):
         kind = "MAXSTRAIN"
+    elif kind in ("ORTH_BIQUAD",):
+        kind = "ORTHBIQUAD"
 
-    if kind not in ("JOHNSON", "BIQUAD", "TAB1", "SNCONNECT", "FLD", "CONNECT",
+    if kind not in ("JOHNSON", "BIQUAD", "ORTHBIQUAD", "TAB1", "SNCONNECT", "FLD", "CONNECT",
                     "TENSSTRAIN", "ORTHSTRAIN", "GURSON", "ALTER", "VISUAL", "MULLINS_OR",
                     "PUCK", "RTCL", "SAHRAEI", "SYAZWAN", "TAB2", "GENE1", "INIEVO",
                     "CHANG", "TSAIWU", "TSAIHILL", "HOFFMAN", "MAXSTRAIN", "HASHIN",
                     "LEMAITRE", "COCKCROFT", "ENERGY", "COMPOSITE", "FRACTAL", "FRACTAL_DMG"):
         log.warning(f"/FAIL/{kind} not ported — skipped "
-                    f"(supported: JOHNSON, BIQUAD, TAB1, SNCONNECT, FLD, CONNECT, "
+                    f"(supported: JOHNSON, BIQUAD, ORTHBIQUAD, TAB1, SNCONNECT, FLD, CONNECT, "
                     f"TENSSTRAIN, ORTHSTRAIN, GURSON, ALTER, VISUAL, MULLINS_OR, "
                     f"PUCK, RTCL, SAHRAEI, SYAZWAN, TAB2, GENE1, INIEVO, "
                     f"CHANG, TSAIWU, TSAIHILL, HOFFMAN, MAXSTRAIN, HASHIN, "
@@ -1353,6 +1356,74 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                   "e1": e1, "e2": e2, "e3": e3, "e4": e4}
         fail_biquad.fit(params)   # pre-compute the two parabolas
         fm = FailureModel(type="BIQUAD", ifail_sh=ifail_sh, params=params)
+    elif kind == "ORTHBIQUAD":
+        p_thickfail, m_flag, s_flag, inst_start = 1.0, 0, 0, 0.0
+        c1, c2, c3, c4, c5 = 0.0, 0.0, 0.0, 0.0, 0.0
+        eps_dot0, c_jc, rate_scale, fct_id_rate, fct_id_el, ei_ref = 0.0, 0.0, 1.0, 0, 0, 0.0
+        r1, r2, r4, r5 = 1.0, 1.0, 1.0, 1.0
+        if block.fixed:
+            if len(cards) > 0 and not cards[0].is_blank:
+                f1 = cards[0].cut("FAIL_ORTHBIQUAD_1")
+                p_thickfail = _fval(f1[0], 1.0) if len(f1) > 0 and f1[0].strip() else 1.0
+                m_flag = _ival(f1[1]) if len(f1) > 1 else 0
+                s_flag = _ival(f1[2]) if len(f1) > 2 else 0
+                inst_start = _fval(f1[3]) if len(f1) > 3 else 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = cards[1].cut("FAIL_ORTHBIQUAD_2")
+                c1 = _fval(f2[0]) if len(f2) > 0 else 0.0
+                c2 = _fval(f2[1]) if len(f2) > 1 else 0.0
+                c3 = _fval(f2[2]) if len(f2) > 2 else 0.0
+                c4 = _fval(f2[3]) if len(f2) > 3 else 0.0
+                c5 = _fval(f2[4]) if len(f2) > 4 else 0.0
+            if len(cards) > 2 and not cards[2].is_blank:
+                f3 = cards[2].cut("FAIL_ORTHBIQUAD_3")
+                eps_dot0 = _fval(f3[0]) if len(f3) > 0 else 0.0
+                c_jc = _fval(f3[1]) if len(f3) > 1 else 0.0
+                rate_scale = _fval(f3[2], 1.0) if len(f3) > 2 and f3[2].strip() else 1.0
+                fct_id_rate = _ival(f3[3]) if len(f3) > 3 else 0
+                fct_id_el = _ival(f3[4]) if len(f3) > 4 else 0
+                ei_ref = _fval(f3[5]) if len(f3) > 5 else 0.0
+            if len(cards) > 3 and not cards[3].is_blank:
+                f4 = cards[3].cut("FAIL_ORTHBIQUAD_4")
+                r1 = _fval(f4[0], 1.0) if len(f4) > 0 and f4[0].strip() else 1.0
+                r2 = _fval(f4[1], 1.0) if len(f4) > 1 and f4[1].strip() else 1.0
+                r4 = _fval(f4[2], 1.0) if len(f4) > 2 and f4[2].strip() else 1.0
+                r5 = _fval(f4[3], 1.0) if len(f4) > 3 and f4[3].strip() else 1.0
+        else:
+            if len(cards) > 0:
+                t1 = cards[0].tokens()
+                p_thickfail = float(t1[0]) if len(t1) > 0 else 1.0
+                m_flag = int(float(t1[1])) if len(t1) > 1 else 0
+                s_flag = int(float(t1[2])) if len(t1) > 2 else 0
+                inst_start = float(t1[3]) if len(t1) > 3 else 0.0
+            if len(cards) > 1:
+                t2 = cards[1].floats()
+                if len(t2) >= 5:
+                    c1, c2, c3, c4, c5 = t2[:5]
+            if len(cards) > 2:
+                t3 = cards[2].tokens()
+                eps_dot0 = float(t3[0]) if len(t3) > 0 else 0.0
+                c_jc = float(t3[1]) if len(t3) > 1 else 0.0
+                rate_scale = float(t3[2]) if len(t3) > 2 else 1.0
+                fct_id_rate = int(float(t3[3])) if len(t3) > 3 else 0
+                fct_id_el = int(float(t3[4])) if len(t3) > 4 else 0
+                ei_ref = float(t3[5]) if len(t3) > 5 else 0.0
+            if len(cards) > 3:
+                t4 = cards[3].floats()
+                if len(t4) >= 4:
+                    r1, r2, r4, r5 = t4[:4]
+        model.fail_orthbiquads[block.user_id] = FailOrthBiquad(
+            id=block.user_id, mat_id=mat_id, p_thickfail=p_thickfail,
+            m_flag=m_flag, s_flag=s_flag, c1=c1, c2=c2, c3=c3, c4=c4, c5=c5,
+            inst_start=inst_start, eps_dot0=eps_dot0, c_jc=c_jc,
+            fct_id_rate=fct_id_rate, fct_id_el=fct_id_el, ei_ref=ei_ref,
+            r1=r1, r2=r2, r4=r4, r5=r5,
+        )
+        fm = FailureModel(type="ORTHBIQUAD", ifail_sh=1, params={
+            "c1": c1, "c2": c2, "c3": c3, "c4": c4, "c5": c5,
+            "m_flag": m_flag, "s_flag": s_flag, "inst_start": inst_start,
+            "p_thickfail": p_thickfail, "r1": r1, "r2": r2, "r4": r4, "r5": r5,
+        })
     elif kind == "SNCONNECT":
         if len(cards) < 2:
             log.error(f"/FAIL/SNCONNECT/{mat_id}: requires 2 data cards", block.source)
@@ -8695,7 +8766,7 @@ def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     all_p = [p.upper() for p in block.parts]
     sub_qual = "PART" if "PART" in all_p else ("GENE" if "GENE" in all_p else ("GEN_INCR" if "GEN_INCR" in all_p else None))
 
-    if stype in ("NODE", "NODENS"):
+    if stype in ("NODE", "NODENS", "GRNOD"):
         qual = "GEN_INCR" if "GEN_INCR" in all_p else ("GENE" if "GENE" in all_p else ("NODENS" if "NODENS" in all_p else ("PART" if "PART" in all_p else ("BOX" if "BOX" in all_p else ("SURF" if "SURF" in all_p else ("GRNOD" if "GRNOD" in all_p else "NODE"))))))
         mod_block = KeywordBlock(
             keyword=f"/GRNOD/{qual}/{block.user_id}",
@@ -8707,7 +8778,7 @@ def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             blank_slots=block.blank_slots,
         )
         read_grnod(mod_block, model, log)
-    elif stype == "PART":
+    elif stype in ("PART", "GRPART"):
         mod_block = KeywordBlock(
             keyword=f"/GRPART/PART/{block.user_id}",
             parts=["GRPART", "PART", str(block.user_id)],
@@ -8718,7 +8789,7 @@ def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             blank_slots=block.blank_slots,
         )
         read_gr_elem(mod_block, model, log)
-    elif stype in ("SHELL", "SHEL"):
+    elif stype in ("SHELL", "SHEL", "GRSHEL"):
         qual = sub_qual or "SHEL"
         mod_block = KeywordBlock(
             keyword=f"/GRSHEL/{qual}/{block.user_id}",
@@ -8730,7 +8801,7 @@ def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             blank_slots=block.blank_slots,
         )
         read_gr_elem(mod_block, model, log)
-    elif stype in ("SH3N", "TRIA"):
+    elif stype in ("SH3N", "TRIA", "GRSH3N", "GRTRIA"):
         qual = sub_qual or "SH3N"
         mod_block = KeywordBlock(
             keyword=f"/GRSH3N/{qual}/{block.user_id}",
@@ -8742,7 +8813,7 @@ def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             blank_slots=block.blank_slots,
         )
         read_gr_elem(mod_block, model, log)
-    elif stype in ("BRIC", "SOLID"):
+    elif stype in ("BRIC", "SOLID", "GRBRIC", "GRBR20", "GRHEX20"):
         qual = sub_qual or "BRIC"
         mod_block = KeywordBlock(
             keyword=f"/GRBRIC/{qual}/{block.user_id}",
@@ -8754,7 +8825,7 @@ def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             blank_slots=block.blank_slots,
         )
         read_gr_elem(mod_block, model, log)
-    elif stype == "QUAD":
+    elif stype in ("QUAD", "GRQUAD"):
         qual = sub_qual or "QUAD"
         mod_block = KeywordBlock(
             keyword=f"/GRQUAD/{qual}/{block.user_id}",
@@ -8766,7 +8837,7 @@ def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             blank_slots=block.blank_slots,
         )
         read_gr_elem(mod_block, model, log)
-    elif stype in ("TRUS", "TRUSS"):
+    elif stype in ("TRUS", "TRUSS", "GRTRUS"):
         qual = sub_qual or "TRUS"
         mod_block = KeywordBlock(
             keyword=f"/GRTRUS/{qual}/{block.user_id}",
@@ -8778,7 +8849,7 @@ def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             blank_slots=block.blank_slots,
         )
         read_gr_elem(mod_block, model, log)
-    elif stype == "BEAM":
+    elif stype in ("BEAM", "GRBEAM"):
         qual = sub_qual or "BEAM"
         mod_block = KeywordBlock(
             keyword=f"/GRBEAM/{qual}/{block.user_id}",
@@ -8790,7 +8861,7 @@ def read_set(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             blank_slots=block.blank_slots,
         )
         read_gr_elem(mod_block, model, log)
-    elif stype in ("SPRI", "SPRING"):
+    elif stype in ("SPRI", "SPRING", "GRSPRI"):
         qual = sub_qual or "SPRI"
         mod_block = KeywordBlock(
             keyword=f"/GRSPRI/{qual}/{block.user_id}",
@@ -11170,6 +11241,16 @@ def read_slipring(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         xscale2=xscale2, fct_id3=fct_id3, fct_id4=fct_id4, frics=frics,
         xscale3=xscale3, yscale4=yscale4, xscale4=xscale4,
     )
+    if subtype in ("SHELL", "SH"):
+        model.slipring_shells[block.user_id] = SlipringShell(
+            id=block.user_id, title=title, el_set1=el_id1, el_set2=el_id2,
+            node_set=node_id, sens_id=sens_id, flow_flag=flow_flag,
+            a=a, ed_factor=ed_factor, fric_d=fricd, fric_s=frics,
+            fct_id1=fct_id1, fct_id2=fct_id2, fct_id3=fct_id3, fct_id4=fct_id4,
+            xscale1=xscale1, xscale2=xscale2, yscale2=yscale2,
+            xscale3=xscale3, xscale4=xscale4, yscale4=yscale4,
+        )
+
 
 
 def read_userwi(block: KeywordBlock, model: Model, log: MessageLog) -> None:

@@ -3003,6 +3003,59 @@ class AleCfdSph:
     fscale_s: float = 1.0
 
 
+@dataclass
+class FailOrthBiquad:
+    """/FAIL/ORTHBIQUAD (M123): Orthotropic Biquadratic failure model for shells."""
+    id: int
+    mat_id: int = 0
+    p_thickfail: float = 1.0
+    m_flag: int = 0
+    s_flag: int = 0
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+    c4: float = 0.0
+    c5: float = 0.0
+    inst_start: float = 0.0
+    eps_dot0: float = 0.0
+    c_jc: float = 0.0
+    fct_id_rate: int = 0
+    fct_id_el: int = 0
+    ei_ref: float = 0.0
+    r1: float = 1.0
+    r2: float = 1.0
+    r4: float = 1.0
+    r5: float = 1.0
+    title: str = ""
+
+
+@dataclass
+class SlipringShell:
+    """/SLIPRING/SHELL (M123): Shell-to-shell seatbelt slipring connector."""
+    id: int
+    el_set1: int = 0
+    el_set2: int = 0
+    node_set: int = 0
+    sens_id: int = 0
+    flow_flag: int = 0
+    a: float = 0.0
+    ed_factor: float = 0.0
+    fric_d: float = 0.0
+    fric_s: float = 0.0
+    fct_id1: int = 0
+    fct_id2: int = 0
+    fct_id3: int = 0
+    fct_id4: int = 0
+    xscale1: float = 1.0
+    xscale2: float = 1.0
+    yscale2: float = 1.0
+    xscale3: float = 1.0
+    xscale4: float = 1.0
+    yscale4: float = 1.0
+    title: str = ""
+
+
+
 
 
 
