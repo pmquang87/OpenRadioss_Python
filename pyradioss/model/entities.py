@@ -2620,6 +2620,42 @@ class LoadPressure:
 
 
 @dataclass
+class LoadGravity:
+    """/LOAD/GRAV or /LOAD/GRAVITY (M135): Gravitational field acceleration loading."""
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+    dir_vector: tuple[float, float, float] = (0.0, 0.0, -1.0)
+    funct_id: int = 0
+    scale: float = 1.0
+    sens_id: int = 0
+
+
+@dataclass
+class LoadBody:
+    """/LOAD/BODY (M135): Volumetric body force loading."""
+    id: int
+    title: str = ""
+    grpart_id: int = 0
+    dir_vector: tuple[float, float, float] = (0.0, 0.0, -1.0)
+    funct_id: int = 0
+    scale: float = 1.0
+    sens_id: int = 0
+
+
+@dataclass
+class LoadTherm:
+    """/LOAD/HEAT or /LOAD/THERM (M135): Thermal heat flux loading."""
+    id: int
+    title: str = ""
+    group_id: int = 0
+    flux: float = 0.0
+    funct_id: int = 0
+    scale: float = 1.0
+    sens_id: int = 0
+
+
+@dataclass
 class InivelAxis:
     """/INIVEL/AXIS (M112): Axisymmetric initial velocity around frame axis.
 
@@ -2766,6 +2802,31 @@ class SphBcs:
     frame_id: int = 0
     grnod_id: int = 0
     ilevel: int = 0
+
+
+@dataclass
+class EulerBcs:
+    """/EULER/BCS (M135): Eulerian domain boundary condition."""
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+    bcs_type: str = "INFLOW"
+    val1: float = 0.0
+    val2: float = 0.0
+    val3: float = 0.0
+
+
+@dataclass
+class HeatBcs:
+    """/HEAT/BCS (M135): Thermal boundary condition."""
+    id: int
+    title: str = ""
+    group_id: int = 0
+    bcs_type: str = "TEMP"
+    tval: float = 0.0
+    funct_id: int = 0
+    scale: float = 1.0
+    sens_id: int = 0
 
 
 @dataclass

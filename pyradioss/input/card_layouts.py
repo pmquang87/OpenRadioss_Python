@@ -1174,6 +1174,13 @@ LAYOUTS: Dict[str, List[int]] = {
     "TRANSFORM_PROJ_2": [20, 20, 20],
     "TRANSFORM_FRAME_1": [10, 10, 10],
     "DAMP_PART_1": [10, 20, 20, 20, 20],
+
+    # EXTENDED LOADINGS, TIME HISTORY & EULERIAN/THERMAL CONTROLS (M135)
+    "LOAD_GRAV_1": [10, 20, 20, 20, 10, 20, 10],
+    "LOAD_BODY_1": [10, 20, 20, 20, 10, 20, 10],
+    "LOAD_THERM_1": [10, 20, 10, 20, 10],
+    "EULER_BCS_1": [10, 10, 20, 20, 20],
+    "HEAT_BCS_1": [10, 10, 20, 10, 20, 10],
 }
 
 

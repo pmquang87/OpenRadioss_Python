@@ -52,7 +52,8 @@ from .entities import (
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
     DetonationWave, ElementActivation, MonvolFvmBag2, Autoposition,
-    LoadCentri, LoadPfluid, LoadPressure, InivelAxis, InivelFvm, InivelNode,
+    LoadCentri, LoadPfluid, LoadPressure, LoadGravity, LoadBody, LoadTherm,
+    EulerBcs, HeatBcs, InivelAxis, InivelFvm, InivelNode,
     ImpdispFgeo, ImpvelFgeo, RwallTherm, SphInOut,
     SphBcs, MadymoLink, MadymoExfem,
     AleGridDonea, AleGridSpring, AleGridStandard, AleGridDisp, AleGridLaplacian, AleGridVolume,
@@ -726,6 +727,11 @@ class Model:
         self.load_centris: Dict[int, LoadCentri] = {}       # /LOAD/CENTRI (M112)
         self.load_pfluids: Dict[int, LoadPfluid] = {}       # /LOAD/PFLUID (M112)
         self.load_pressures: Dict[int, LoadPressure] = {}   # /LOAD/PRESSURE (M112)
+        self.load_gravities: Dict[int, LoadGravity] = {}   # /LOAD/GRAV (M135)
+        self.load_bodies: Dict[int, LoadBody] = {}         # /LOAD/BODY (M135)
+        self.load_therms: Dict[int, LoadTherm] = {}        # /LOAD/HEAT (M135)
+        self.euler_bcs: Dict[int, EulerBcs] = {}           # /EULER/BCS (M135)
+        self.heat_bcs: Dict[int, HeatBcs] = {}             # /HEAT/BCS (M135)
         self.inivel_axes: Dict[int, InivelAxis] = {}        # /INIVEL/AXIS (M112)
         self.inivel_fvms: Dict[int, InivelFvm] = {}         # /INIVEL/FVM (M112)
         self.inivel_nodes: Dict[int, InivelNode] = {}       # /INIVEL/NODE (M112)

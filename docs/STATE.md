@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M134)
+## What is implemented (M1 → M135)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -140,6 +140,7 @@ real history is 41 milestones. One line each:
 | M132 | Add advanced geometric entities & detonation shaping (/BOX/BOX, /SURF/PLANE, /SURF/ELLIPSE, /DFS/WAVE_SHAPER, /SET/NODENS, /BOX aliases) |
 | M133 | Add extended monitored volume & airbag suite (/MONVOL/TYPE1-11, /MONVOL/AIRBAG, /MONVOL/COMMU, /MONVOL/FVMBAG, /MONVOL/PART) and fabric leakage models (/LEAK/MAT, /LEAK/PART, /LEAK/AREA) |
 | M134 | Add extended geometric entities & spatial transformations (/LINE extended types, /SURF analytical cylinders & spheres, /TRANSFORM/PROJ, /TRANSFORM/FRAME) and damping models (/DAMP/GLOBAL, /DAMP/PART) |
+| M135 | Add extended loadings, time history requests & Eulerian/thermal controls (/LOAD/GRAV, /LOAD/BODY, /LOAD/HEAT, /TH extended kinds, /EULER/BCS, /HEAT/BCS) |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

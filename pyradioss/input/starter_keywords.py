@@ -50,6 +50,7 @@ from ..model.entities import (
     MonvolPres, MonvolGas, MonvolCommu1, MonvolLFluid, LeakMat,
     MonvolAirbag, MonvolAirbagJet, MonvolAirbagVent, MonvolCommu, MonvolPart,
     DampGlobal, DampPart, TransformProjection, TransformFrame,
+    LoadGravity, LoadBody, LoadTherm, EulerBcs, HeatBcs,
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
     Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
@@ -1131,15 +1132,70 @@ def read_ale(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_euler(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/EULER/MAT/mat_ID`` — parse-only note (M37); other /EULER
-    options are not ported."""
-    _read_mat_modifier("EULER", block, model, log)
+    """``/EULER/MAT/mat_ID`` (M37); ``/EULER/BCS/bcs_ID`` (M135): Eulerian boundary conditions."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub == "MAT":
+        _read_mat_modifier("EULER", block, model, log)
+    elif sub == "BCS":
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/EULER/BCS/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("EULER_BCS_1")
+            grnod_id = _ival(f[0]) if len(f) > 0 else 0
+            bcs_type = f[1].strip() if len(f) > 1 and f[1].strip() else "INFLOW"
+            val1 = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            val2 = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            val3 = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        else:
+            t = cards[0].tokens()
+            grnod_id = int(float(t[0])) if len(t) > 0 else 0
+            bcs_type = t[1].upper() if len(t) > 1 else "INFLOW"
+            val1 = float(t[2]) if len(t) > 2 else 0.0
+            val2 = float(t[3]) if len(t) > 3 else 0.0
+            val3 = float(t[4]) if len(t) > 4 else 0.0
+        model.euler_bcs[block.user_id] = EulerBcs(
+            id=block.user_id, title=title, grnod_id=grnod_id,
+            bcs_type=bcs_type, val1=val1, val2=val2, val3=val3
+        )
+    else:
+        log.warning(f"/EULER/{sub} not ported", block.source)
 
 
 def read_heat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/HEAT/MAT/mat_ID`` — parse-only note (M37); other /HEAT options
-    are not ported."""
-    _read_mat_modifier("HEAT", block, model, log)
+    """``/HEAT/MAT/mat_ID`` (M37); ``/HEAT/BCS/bcs_ID`` (M135): Thermal boundary conditions."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub == "MAT":
+        _read_mat_modifier("HEAT", block, model, log)
+    elif sub == "BCS":
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/HEAT/BCS/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("HEAT_BCS_1")
+            group_id = _ival(f[0]) if len(f) > 0 else 0
+            bcs_type = f[1].strip() if len(f) > 1 and f[1].strip() else "TEMP"
+            tval = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            funct_id = _ival(f[3], 0) if len(f) > 3 else 0
+            scale = _fval(f[4], 1.0) if len(f) > 4 else 1.0
+            sens_id = _ival(f[5], 0) if len(f) > 5 else 0
+        else:
+            t = cards[0].tokens()
+            group_id = int(float(t[0])) if len(t) > 0 else 0
+            bcs_type = t[1].upper() if len(t) > 1 else "TEMP"
+            tval = float(t[2]) if len(t) > 2 else 0.0
+            funct_id = int(float(t[3])) if len(t) > 3 else 0
+            scale = float(t[4]) if len(t) > 4 else 1.0
+            sens_id = int(float(t[5])) if len(t) > 5 else 0
+        model.heat_bcs[block.user_id] = HeatBcs(
+            id=block.user_id, title=title, group_id=group_id,
+            bcs_type=bcs_type, tval=tval, funct_id=funct_id,
+            scale=scale, sens_id=sens_id
+        )
+    else:
+        log.warning(f"/HEAT/{sub} not ported", block.source)
 
 
 def read_fail_fractal(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -5676,7 +5732,7 @@ def read_perturb(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_load(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/LOAD/<subtype>/load_ID`` dispatcher (M93, M99, M103, M112)."""
+    """``/LOAD/<subtype>/load_ID`` dispatcher (M93, M99, M103, M112, M135)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub in ("CENTRI", "CENTRIF"):
         read_load_centri(block, model, log)
@@ -5692,8 +5748,90 @@ def read_load(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_laser(block, model, log)
     elif sub in ("PRELOAD_AXIAL", "PRELOAD"):
         read_preload_axial(block, model, log)
+    elif sub in ("GRAV", "GRAVITY"):
+        # /LOAD/GRAV (M135)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/LOAD/GRAV/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("LOAD_GRAV_1")
+            grnod_id = _ival(f[0]) if len(f) > 0 else 0
+            dx = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            dy = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            dz = _fval(f[3], -1.0) if len(f) > 3 else -1.0
+            funct_id = _ival(f[4], 0) if len(f) > 4 else 0
+            scale = _fval(f[5], 1.0) if len(f) > 5 else 1.0
+            sens_id = _ival(f[6], 0) if len(f) > 6 else 0
+        else:
+            t = cards[0].tokens()
+            grnod_id = int(float(t[0])) if len(t) > 0 else 0
+            dx = float(t[1]) if len(t) > 1 else 0.0
+            dy = float(t[2]) if len(t) > 2 else 0.0
+            dz = float(t[3]) if len(t) > 3 else -1.0
+            funct_id = int(float(t[4])) if len(t) > 4 else 0
+            scale = float(t[5]) if len(t) > 5 else 1.0
+            sens_id = int(float(t[6])) if len(t) > 6 else 0
+        model.load_gravities[block.user_id] = LoadGravity(
+            id=block.user_id, title=title, grnod_id=grnod_id,
+            dir_vector=(dx, dy, dz), funct_id=funct_id,
+            scale=scale, sens_id=sens_id
+        )
+    elif sub == "BODY":
+        # /LOAD/BODY (M135)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/LOAD/BODY/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("LOAD_BODY_1")
+            grpart_id = _ival(f[0]) if len(f) > 0 else 0
+            dx = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            dy = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            dz = _fval(f[3], -1.0) if len(f) > 3 else -1.0
+            funct_id = _ival(f[4], 0) if len(f) > 4 else 0
+            scale = _fval(f[5], 1.0) if len(f) > 5 else 1.0
+            sens_id = _ival(f[6], 0) if len(f) > 6 else 0
+        else:
+            t = cards[0].tokens()
+            grpart_id = int(float(t[0])) if len(t) > 0 else 0
+            dx = float(t[1]) if len(t) > 1 else 0.0
+            dy = float(t[2]) if len(t) > 2 else 0.0
+            dz = float(t[3]) if len(t) > 3 else -1.0
+            funct_id = int(float(t[4])) if len(t) > 4 else 0
+            scale = float(t[5]) if len(t) > 5 else 1.0
+            sens_id = int(float(t[6])) if len(t) > 6 else 0
+        model.load_bodies[block.user_id] = LoadBody(
+            id=block.user_id, title=title, grpart_id=grpart_id,
+            dir_vector=(dx, dy, dz), funct_id=funct_id,
+            scale=scale, sens_id=sens_id
+        )
+    elif sub in ("HEAT", "THERM"):
+        # /LOAD/HEAT (M135)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/LOAD/HEAT/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("LOAD_THERM_1")
+            group_id = _ival(f[0]) if len(f) > 0 else 0
+            flux = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            funct_id = _ival(f[2], 0) if len(f) > 2 else 0
+            scale = _fval(f[3], 1.0) if len(f) > 3 else 1.0
+            sens_id = _ival(f[4], 0) if len(f) > 4 else 0
+        else:
+            t = cards[0].tokens()
+            group_id = int(float(t[0])) if len(t) > 0 else 0
+            flux = float(t[1]) if len(t) > 1 else 0.0
+            funct_id = int(float(t[2])) if len(t) > 2 else 0
+            scale = float(t[3]) if len(t) > 3 else 1.0
+            sens_id = int(float(t[4])) if len(t) > 4 else 0
+        model.load_therms[block.user_id] = LoadTherm(
+            id=block.user_id, title=title, group_id=group_id,
+            flux=flux, funct_id=funct_id, scale=scale, sens_id=sens_id
+        )
     else:
-        log.warning(f"/LOAD/{sub} not ported (CENTRI, PBLAST, PCYL, PFLUID, PRESSURE, LASER, PRELOAD supported)", block.source)
+        log.warning(f"/LOAD/{sub} not ported (CENTRI, PBLAST, PCYL, PFLUID, PRESSURE, LASER, PRELOAD, GRAV, BODY, HEAT supported)", block.source)
 
 
 def read_imptemp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -8515,7 +8653,11 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "SHELL", "SOLID", "QUAD", "SURF", "LINE", "ACCEL", "BOX",
         "NSTRAND", "STRAND", "SPHCEL", "SPH", "MODE", "CYL_JO", "CYL_JOINT",
         "FXBODY", "GAUGE", "GRSHEL", "GRBRIC", "GRQUAD", "GRSH3N",
-        "GRBEAM", "GRTRUS", "GRSPRI", "SENSOR", "CLUSTER"
+        "GRBEAM", "GRTRUS", "GRSPRI", "SENSOR", "CLUSTER",
+        "MONVOL", "AIRBAG", "FVMBAG", "COMMU", "ALE", "ALEGRID", "ALECFD",
+        "SUBS", "SUBDOMAIN", "SUBMODEL", "LAGMUL", "GEAR", "RACK", "DIFF",
+        "IMPDISP", "IMPVEL", "PLOAD", "PROP", "MAT", "STACK", "PLY",
+        "WAVE_SHAPER", "DET"
     }
     kind = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
     if kind == "TITLE":
