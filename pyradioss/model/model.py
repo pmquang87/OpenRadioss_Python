@@ -68,6 +68,7 @@ from .entities import (
     EbcsNrf, FailRtcl, FailGurson,
     FailPuck, FailSahraei, FailSyazwan, FailTab2, FailGene1,
     Stack, StackPly,
+    LagmulGlobal, GearConstraint, RackConstraint, DiffConstraint,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -780,6 +781,10 @@ class Model:
         self.fail_tab2s: Dict[int, FailTab2] = {}             # /FAIL/TAB2 (M126)
         self.fail_gene1s: Dict[int, FailGene1] = {}           # /FAIL/GENE1 (M126)
         self.stacks: Dict[int, Stack] = {}                   # /STACK (M127)
+        self.lagmul_global: Optional[LagmulGlobal] = None     # /LAGMUL (M131)
+        self.gears: Dict[int, GearConstraint] = {}            # /GEAR (M131)
+        self.racks: Dict[int, RackConstraint] = {}            # /RACK (M131)
+        self.diffs: Dict[int, DiffConstraint] = {}            # /DIFF (M131)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

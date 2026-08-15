@@ -703,6 +703,10 @@ class Sensor:
     # Duration limit (M97)
     tmin: float = 0.0
     title: str = ""
+    # M131: ACCE, PYTHON
+    acc_entries: List[Tuple[int, str, float, float]] = field(default_factory=list) # (acc_id, dir, tomin, tmin)
+    script_name: str = ""
+    func_name: str = ""
 
 
 @dataclass
@@ -836,6 +840,7 @@ class RigidBody:
     #: then carries its own rotation).  0 = the global system.
     skew_id: int = 0
     skew_row: int = 0         # resolved SkewSet row (0 = global)
+    lagmul: bool = False      # /RBODY/LAGMUL: Lagrange multiplier formulation (M131)
     # Resolved by the Starter (initialize_rigid_bodies):
     master: int = -1                      # dense node index
     slaves: Optional[np.ndarray] = None   # dense node indices (no master)
@@ -1476,6 +1481,55 @@ class NodeMergeOption:
     tol: float = 0.0
     grnod_id: int = 0
     merge_type: int = 0
+
+
+@dataclass
+class LagmulGlobal:
+    """/LAGMUL, /LAGMUL/OPTION (M131): Global Lagrange multiplier solver parameters."""
+    lagmod: int = 1
+    lagopt: int = 1
+    tol: float = 1e-11
+    alpha: float = 5e-4
+    alpha_s: float = 0.0
+
+
+@dataclass
+class GearConstraint:
+    """/GEAR, /LAGMUL/GEAR (M131): Rotational gear kinematic constraint."""
+    id: int
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    ratio: float = 1.0
+    dir1: int = 1
+    dir2: int = 1
+    skew1: int = 0
+    skew2: int = 0
+
+
+@dataclass
+class RackConstraint:
+    """/RACK, /LAGMUL/RACK (M131): Rack-and-pinion kinematic constraint."""
+    id: int
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    pitch_radius: float = 1.0
+    dir1: int = 1
+    dir2: int = 1
+    skew1: int = 0
+    skew2: int = 0
+
+
+@dataclass
+class DiffConstraint:
+    """/DIFF, /LAGMUL/DIFF (M131): Differential rotational kinematic constraint."""
+    id: int
+    title: str = ""
+    node0: int = 0
+    node1: int = 0
+    node2: int = 0
+    ratio: float = 1.0
 
 
 @dataclass

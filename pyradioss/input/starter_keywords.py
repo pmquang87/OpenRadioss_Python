@@ -6064,7 +6064,7 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
     if kind == "NIC_NIJ":
         kind = "NIC"
-    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF")
+    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "PYTHON")
     if kind not in supported:
         log.warning(f"/SENSOR/{kind} not ported ({', '.join(supported)} supported)",
                     block.source)
@@ -6410,6 +6410,77 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.sensors.append(Sensor(
             id=block.user_id, kind="DIST_SURF", tdelay=tdelay, node_id1=n1, surf_id=surf_id,
             node_id2=n2, node_id3=n3, node_id4=n4, dmin=dmin, dmax=dmax, tmin=tmin, title=title))
+    elif kind in ("ACCE", "ACC", "ACCEL", "TYPE1"):
+        nacc = 1
+        if block.fixed:
+            f = cards[0].cut("SENSOR_ACCE_1")
+            tdelay = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            nacc = _ival(f[1]) if len(f) > 1 and f[1].strip() else 1
+        else:
+            toks0 = cards[0].tokens()
+            tdelay = float(toks0[0]) if len(toks0) > 0 else 0.0
+            nacc = int(float(toks0[1])) if len(toks0) > 1 else 1
+
+        acc_entries = []
+        for c in cards[1: 1 + max(1, nacc)]:
+            if c.is_blank:
+                continue
+            if block.fixed:
+                f = c.cut("SENSOR_ACCE_ITEM")
+                iacc = _ival(f[0]) if len(f) > 0 else 0
+                sdir = f[1].strip() if len(f) > 1 else ""
+                tomin = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+                tmin = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            else:
+                toks = c.tokens()
+                iacc = int(float(toks[0])) if len(toks) > 0 else 0
+                sdir = toks[1] if len(toks) > 1 else ""
+                tomin = float(toks[2]) if len(toks) > 2 else 0.0
+                tmin = float(toks[3]) if len(toks) > 3 else 0.0
+            acc_entries.append((iacc, sdir, tomin, tmin))
+
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="ACCE", tdelay=tdelay, acc_entries=acc_entries, title=title
+        ))
+    elif kind in ("SENS", "TYPE3"):
+        tdelay = 0.0
+        s1, s2 = 0, 0
+        if len(cards) >= 2:
+            toks0 = cards[0].tokens()
+            tdelay = float(toks0[0]) if toks0 else 0.0
+            if block.fixed:
+                f = cards[1].cut("SENSOR_SENS_2")
+                s1 = _ival(f[0]) if len(f) > 0 else 0
+                s2 = _ival(f[1]) if len(f) > 1 else 0
+            else:
+                toks1 = cards[1].tokens()
+                s1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+                s2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        elif len(cards) == 1:
+            toks0 = cards[0].tokens()
+            if len(toks0) >= 3:
+                tdelay = float(toks0[0])
+                s1 = int(float(toks0[1]))
+                s2 = int(float(toks0[2]))
+            elif len(toks0) == 2:
+                s1 = int(float(toks0[0]))
+                s2 = int(float(toks0[1]))
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="SENS", tdelay=tdelay, sens_id1=s1, sens_id2=s2, title=title
+        ))
+    elif kind == "PYTHON":
+        tdelay = 0.0
+        script_name, func_name = "", ""
+        if cards:
+            toks0 = cards[0].tokens()
+            tdelay = float(toks0[0]) if toks0 else 0.0
+        if len(cards) > 1:
+            toks1 = cards[1].tokens()
+            script_name = toks1[0] if len(toks1) > 0 else ""
+            func_name = toks1[1] if len(toks1) > 1 else ""
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="PYTHON", tdelay=tdelay, script_name=script_name, func_name=func_name, title=title
+        ))
 
 
 def read_gauge_point(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -6551,10 +6622,12 @@ def read_rbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             log.error(f"/RBODY/{block.user_id}: added inertia must be >= 0",
                       block.source)
             return
+        is_lagmul = len(block.parts) > 1 and block.parts[1].upper() in ("LAGMUL", "MULTIPLIER")
         model.rbodies.append(RigidBody(
             id=block.user_id, kind="RBODY", master_id=int(f[0]),
             grnod_id=_ival(f[5]), added_mass=mass, jadd=jadd, icog=icog,
-            sens_id=_ival(f[1], default=0), ispher=_ival(f[3]), title=title, skew_id=skew))
+            sens_id=_ival(f[1], default=0), ispher=_ival(f[3]), title=title, skew_id=skew,
+            lagmul=is_lagmul))
         return
     title, cards = _title_and_data(block)
     if not cards:
@@ -6572,10 +6645,11 @@ def read_rbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/RBODY/{block.user_id}: added inertia must be >= 0",
                   block.source)
         return
+    is_lagmul = len(block.parts) > 1 and block.parts[1].upper() in ("LAGMUL", "MULTIPLIER")
     model.rbodies.append(RigidBody(
         id=block.user_id, kind="RBODY", master_id=int(t[0]),
         grnod_id=int(t[1]), added_mass=mass, jadd=jadd, icog=icog,
-        title=title))
+        title=title, lagmul=is_lagmul))
 
 
 def read_rbe2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -13453,6 +13527,153 @@ def read_altdoctag(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.altdoctags.append(tag)
 
 
+def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/LAGMUL`` or ``/LAGMUL/OPTION`` (M131): Global Lagrange multiplier options.
+
+    Fortran origin: ``starter/source/tools/lagmul/hm_read_lagmul.F``.
+    """
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub == "GEAR":
+        read_gear(block, model, log)
+        return
+    elif sub == "RACK":
+        read_rack(block, model, log)
+        return
+    elif sub == "DIFF":
+        read_diff(block, model, log)
+        return
+
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    lagmod = 1
+    lagopt = 1
+    tol = 1e-11
+    alpha = 5e-4
+    alpha_s = 0.0
+
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("LAGMUL_1")
+            lagmod = _ival(f[0], 1)
+            lagopt = _ival(f[1], 1)
+            tol = _fval(f[2], 1e-11)
+            alpha = _fval(f[3], 5e-4)
+            alpha_s = _fval(f[4], 0.0)
+        else:
+            toks = cards[0].tokens()
+            lagmod = int(float(toks[0])) if len(toks) > 0 else 1
+            lagopt = int(float(toks[1])) if len(toks) > 1 else 1
+            tol = float(toks[2]) if len(toks) > 2 else 1e-11
+            alpha = float(toks[3]) if len(toks) > 3 else 5e-4
+            alpha_s = float(toks[4]) if len(toks) > 4 else 0.0
+
+    from ..model.entities import LagmulGlobal
+    model.lagmul_global = LagmulGlobal(
+        lagmod=lagmod, lagopt=lagopt, tol=tol, alpha=alpha, alpha_s=alpha_s
+    )
+
+
+def read_gear(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/GEAR/id`` or ``/LAGMUL/GEAR/id`` (M131): Rotational gear constraint.
+
+    Fortran origin: ``starter/source/tools/lagmul/ini_gear.F``.
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/GEAR/{block.user_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("GEAR_1")
+        node1 = _ival(f[0])
+        node2 = _ival(f[1])
+        ratio = _fval(f[2], 1.0)
+        dir1 = _ival(f[3], 1)
+        dir2 = _ival(f[4], 1)
+        skew1 = _ival(f[5], 0)
+        skew2 = _ival(f[6], 0)
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        ratio = float(toks[2]) if len(toks) > 2 else 1.0
+        dir1 = int(float(toks[3])) if len(toks) > 3 else 1
+        dir2 = int(float(toks[4])) if len(toks) > 4 else 1
+        skew1 = int(float(toks[5])) if len(toks) > 5 else 0
+        skew2 = int(float(toks[6])) if len(toks) > 6 else 0
+
+    from ..model.entities import GearConstraint
+    model.gears[block.user_id] = GearConstraint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        ratio=ratio, dir1=dir1, dir2=dir2, skew1=skew1, skew2=skew2
+    )
+
+
+def read_rack(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RACK/id`` or ``/LAGMUL/RACK/id`` (M131): Rack-and-pinion kinematic constraint.
+
+    Fortran origin: ``starter/source/tools/lagmul/ini_rack.F``.
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/RACK/{block.user_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("RACK_1")
+        node1 = _ival(f[0])
+        node2 = _ival(f[1])
+        pitch_radius = _fval(f[2], 1.0)
+        dir1 = _ival(f[3], 1)
+        dir2 = _ival(f[4], 1)
+        skew1 = _ival(f[5], 0)
+        skew2 = _ival(f[6], 0)
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        pitch_radius = float(toks[2]) if len(toks) > 2 else 1.0
+        dir1 = int(float(toks[3])) if len(toks) > 3 else 1
+        dir2 = int(float(toks[4])) if len(toks) > 4 else 1
+        skew1 = int(float(toks[5])) if len(toks) > 5 else 0
+        skew2 = int(float(toks[6])) if len(toks) > 6 else 0
+
+    from ..model.entities import RackConstraint
+    model.racks[block.user_id] = RackConstraint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        pitch_radius=pitch_radius, dir1=dir1, dir2=dir2, skew1=skew1, skew2=skew2
+    )
+
+
+def read_diff(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DIFF/id`` or ``/LAGMUL/DIFF/id`` (M131): Differential rotational kinematic constraint.
+
+    Fortran origin: ``starter/source/tools/lagmul/ini_diff.F``.
+    """
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/DIFF/{block.user_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        f = cards[0].cut("DIFF_1")
+        node0 = _ival(f[0])
+        node1 = _ival(f[1])
+        node2 = _ival(f[2])
+        ratio = _fval(f[3], 1.0)
+    else:
+        toks = cards[0].tokens()
+        node0 = int(float(toks[0])) if len(toks) > 0 else 0
+        node1 = int(float(toks[1])) if len(toks) > 1 else 0
+        node2 = int(float(toks[2])) if len(toks) > 2 else 0
+        ratio = float(toks[3]) if len(toks) > 3 else 1.0
+
+    from ..model.entities import DiffConstraint
+    model.diffs[block.user_id] = DiffConstraint(
+        id=block.user_id, title=title, node0=node0, node1=node1,
+        node2=node2, ratio=ratio
+    )
+
+
 def read_init(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/INIT/<subtype>/id`` dispatcher (M110)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
@@ -13652,6 +13873,10 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "GRBR20": read_gr_elem,
     "GRHEX20": read_gr_elem,
     "ALECFDSPH": read_alecfdsph,
+    "LAGMUL": read_lagmul,
+    "GEAR": read_gear,
+    "RACK": read_rack,
+    "DIFF": read_diff,
 }
 
 

@@ -1126,6 +1126,16 @@ LAYOUTS: Dict[str, List[int]] = {
     "LOAD_LASER_3": [10, 10],
     "PRELOAD_AXIAL_2": [20, 20],
     "PRELOAD_AXIAL_LEGACY": [10, 10, 10, 10, 20, 20],
+
+    # SENSORS & LAGMUL (M131)
+    "SENSOR_ACCE_1": [20, 10],
+    "SENSOR_ACCE_ITEM": [10, 10, 20, 20],
+    "SENSOR_SENS_1": [20],
+    "SENSOR_SENS_2": [10, 10],
+    "LAGMUL_1": [10, 10, 20, 20, 20],
+    "GEAR_1": [10, 10, 20, 10, 10, 10, 10],
+    "RACK_1": [10, 10, 20, 10, 10, 10, 10],
+    "DIFF_1": [10, 10, 10, 20],
 }
 
 
