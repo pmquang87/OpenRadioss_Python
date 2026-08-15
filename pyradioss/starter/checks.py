@@ -626,6 +626,33 @@ def check_model(model: Model, log: MessageLog) -> None:
             if fid > 0 and fid not in model.functions:
                 log.error(f"/SLIPRING/{sid}: function {fid} not defined", "CROSS REF")
 
+    # M107: Advanced Failure Criteria & SENSOR/NIC
+    for mat_id, fm, src in getattr(model, "raw_fails", []):
+        if fm.type == "SAHRAEI":
+            for fid_key in ("fct_ratio", "fct_elsize"):
+                fid = fm.params.get(fid_key, 0)
+                if fid > 0 and fid not in model.functions:
+                    log.error(f"/FAIL/SAHRAEI on MAT/{mat_id}: function {fid} not defined", "CROSS REF")
+        elif fm.type == "TAB2":
+            for fid_key in ("epsf_id", "fct_exp"):
+                fid = fm.params.get(fid_key, 0)
+                if fid > 0 and fid not in model.functions:
+                    log.error(f"/FAIL/TAB2 on MAT/{mat_id}: function {fid} not defined", "CROSS REF")
+        elif fm.type == "GENE1":
+            for fid_key in ("fct_idsm", "fct_idps"):
+                fid = fm.params.get(fid_key, 0)
+                if fid > 0 and fid not in model.functions:
+                    log.error(f"/FAIL/GENE1 on MAT/{mat_id}: function {fid} not defined", "CROSS REF")
+
+    spring_ids = set(model.springs.ids) if (getattr(model, "springs", None) is not None and model.springs.n > 0) else set()
+    for sens in getattr(model, "sensors", []):
+        if sens.kind == "NIC":
+            if sens.spring_id > 0 and sens.spring_id not in spring_ids:
+                log.error(f"/SENSOR/NIC/{sens.id}: spring {sens.spring_id} not defined", "CROSS REF")
+            if sens.skew_id > 0 and sens.skew_id not in model.skews:
+                log.error(f"/SENSOR/NIC/{sens.id}: skew {sens.skew_id} not defined", "CROSS REF")
+
+
 
 
 

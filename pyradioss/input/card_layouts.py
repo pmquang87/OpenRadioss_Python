@@ -725,6 +725,43 @@ LAYOUTS: Dict[str, List[int]] = {
     "PROP_SPR_BDAMP_2": [20, 20, 20, 20, 20],
     "PROP_SPR_BDAMP_3": [20, 50, 10, 20],
     "PROP_SPR_BDAMP_4": [10, 10, 20, 20, 20, 20],
+
+    # FAIL/PUCK (M107)
+    "FAIL_PUCK_1": [20, 20, 20, 20, 20],
+    "FAIL_PUCK_2": [20, 20, 20, 20, 10, 10],
+    "FAIL_PUCK_3": [20],
+
+    # FAIL/RTCL (M107)
+    "FAIL_RTCL_1": [20, 10, 20],
+
+    # FAIL/SAHRAEI (M107)
+    "FAIL_SAHRAEI_1": [10, 10, 10, 10, 20, 10, 10, 20],
+    "FAIL_SAHRAEI_2": [10, 10, 20, 20],
+
+    # FAIL/SYAZWAN (M107)
+    "FAIL_SYAZWAN_1": [10, 10, 20],
+    "FAIL_SYAZWAN_2": [20, 20, 20, 20, 20],
+
+    # FAIL/TAB2 (M107)
+    "FAIL_TAB2_1": [10, 20, 10, 10, 20],
+    "FAIL_TAB2_2": [20, 20, 10, 20],
+    "FAIL_TAB2_3": [10, 20, 20],
+
+    # FAIL/GENE1 (M107)
+    "FAIL_GENE1_1": [20, 20, 20, 20, 20],
+    "FAIL_GENE1_2": [10, 10, 20, 20, 20, 20],
+    "FAIL_GENE1_3": [10, 10, 20, 20, 20, 20],
+
+    # FAIL/INIEVO (M107)
+    "FAIL_INIEVO_1": [10, 10, 10, 40, 10, 20],
+    "FAIL_INIEVO_2": [10, 10, 10, 10],
+    "FAIL_INIEVO_3": [10, 20, 20, 20],
+
+    # SENSOR/NIC (M107)
+    "SENSOR_NIC_1": [20],
+    "SENSOR_NIC_2": [20, 20, 20, 20, 20],
+    "SENSOR_NIC_3": [10, 10, 10, 10],
+    "SENSOR_NIC_4": [20, 20, 20],
 }
 
 

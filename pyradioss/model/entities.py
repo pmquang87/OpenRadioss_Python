@@ -664,6 +664,18 @@ class Sensor:
     tempmax: float = 1e30
     tempmin: float = 0.0
     tempmean: float = 1e30
+    # NIC (M107)
+    nij_max: float = 0.0
+    fint_tens: float = 0.0
+    fint_comp: float = 0.0
+    mint_flex: float = 0.0
+    mint_ext: float = 0.0
+    spring_id: int = 0
+    skew_id: int = 0
+    ax_dir: str = ""
+    bend_dir: str = ""
+    alpha: float = 0.0
+    cfc: float = 0.0
     # Duration limit (M97)
     tmin: float = 0.0
     title: str = ""
@@ -2094,6 +2106,38 @@ class UserWindow:
     Fortran origin: ``starter/source/starter/userwi.F`` / CFG ``userwi.cfg``.
     """
     lines: List[str] = field(default_factory=list)
+
+
+@dataclass
+class Drape:
+    """/DRAPE (M107): Composite fabric draping definition.
+
+    Fortran origin: ``starter/source/properties/drape.F`` / CFG ``drape.cfg``.
+    """
+    id: int
+    title: str = ""
+    slices: List[Dict] = field(default_factory=list)
+
+
+@dataclass
+class IniBriEref:
+    """/INIBRI/EREF (M107): Initial brick element reference state.
+
+    Fortran origin: ``starter/source/elements/inibri_eref.F`` / CFG ``inibri_eref.cfg``.
+    """
+    elem_id: int = 0
+    ref_elem_id: int = 0
+    sub_objects: List[Dict] = field(default_factory=list)
+
+
+@dataclass
+class IncludeDyna:
+    """/INCLUDE_DYNA (M107): LS-DYNA include file directive.
+
+    Fortran origin: ``starter/source/starter/includedyna.F`` / CFG ``includedyna.cfg``.
+    """
+    filename: str = ""
+
 
 
 

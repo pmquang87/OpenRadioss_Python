@@ -50,6 +50,7 @@ from ..model.entities import (
     MonvolPres, MonvolGas, MonvolCommu1, MonvolLFluid, LeakMat,
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,
+    Drape, IniBriEref, IncludeDyna,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -1125,10 +1126,12 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     from ..model.entities import FailureModel
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
     if kind not in ("JOHNSON", "BIQUAD", "TAB1", "SNCONNECT", "FLD", "CONNECT",
-                    "TENSSTRAIN", "ORTHSTRAIN", "GURSON", "ALTER", "VISUAL", "MULLINS_OR"):
+                    "TENSSTRAIN", "ORTHSTRAIN", "GURSON", "ALTER", "VISUAL", "MULLINS_OR",
+                    "PUCK", "RTCL", "SAHRAEI", "SYAZWAN", "TAB2", "GENE1", "INIEVO"):
         log.warning(f"/FAIL/{kind} not ported — skipped "
                     f"(supported: JOHNSON, BIQUAD, TAB1, SNCONNECT, FLD, CONNECT, "
-                    f"TENSSTRAIN, ORTHSTRAIN, GURSON, ALTER, VISUAL, MULLINS_OR)", block.source)
+                    f"TENSSTRAIN, ORTHSTRAIN, GURSON, ALTER, VISUAL, MULLINS_OR, "
+                    f"PUCK, RTCL, SAHRAEI, SYAZWAN, TAB2, GENE1, INIEVO)", block.source)
         return
     # header /FAIL/<kind>/mat_ID[/fail_ID]: with TWO trailing ids the
     # FIRST is the material id (the lexer keeps only the last as user_id)
@@ -1572,6 +1575,173 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "coefr": coefr, "beta": beta, "coefm": coefm,
         }
         fm = FailureModel(type="MULLINS_OR", ifail_sh=1, params=params)
+    elif kind == "PUCK":
+        # Card 1: Sigma_1t, Sigma_2t, Sigma_12, Sigma_1c, Sigma_2c
+        c1 = cards[0].cut("FAIL_PUCK_1") if block.fixed else cards[0].tokens()
+        s1t = _fval(c1[0]) if len(c1) > 0 else 0.0
+        s2t = _fval(c1[1]) if len(c1) > 1 else 0.0
+        s12 = _fval(c1[2]) if len(c1) > 2 else 0.0
+        s1c = _fval(c1[3]) if len(c1) > 3 else 0.0
+        s2c = _fval(c1[4]) if len(c1) > 4 else 0.0
+
+        p12_pos, p12_neg, p22_neg, tau_max, ifail_sh, ifail_so = 0.0, 0.0, 0.0, 0.0, 1, 1
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_PUCK_2") if block.fixed else cards[1].tokens()
+            p12_pos = _fval(c2[0]) if len(c2) > 0 else 0.0
+            p12_neg = _fval(c2[1]) if len(c2) > 1 else 0.0
+            p22_neg = _fval(c2[2]) if len(c2) > 2 else 0.0
+            tau_max = _fval(c2[3]) if len(c2) > 3 else 0.0
+            ifail_sh = _ival(c2[4], 1) if len(c2) > 4 else 1
+            ifail_so = _ival(c2[5], 1) if len(c2) > 5 else 1
+
+        fcut = 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            c3 = cards[2].cut("FAIL_PUCK_3") if block.fixed else cards[2].tokens()
+            fcut = _fval(c3[0]) if len(c3) > 0 else 0.0
+
+        params = {
+            "sigma_1t": s1t, "sigma_2t": s2t, "sigma_12": s12, "sigma_1c": s1c, "sigma_2c": s2c,
+            "p12_pos": p12_pos, "p12_neg": p12_neg, "p22_neg": p22_neg, "tau_max": tau_max,
+            "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fcut": fcut,
+        }
+        fm = FailureModel(type="PUCK", ifail_sh=ifail_sh, params=params)
+    elif kind == "RTCL":
+        c1 = cards[0].cut("FAIL_RTCL_1") if block.fixed else cards[0].tokens()
+        epscal = _fval(c1[0]) if len(c1) > 0 else 0.0
+        inst = _ival(c1[1]) if len(c1) > 1 else 0
+        n = _fval(c1[2]) if len(c1) > 2 else 0.0
+        params = {"epscal": epscal, "inst": inst, "n": n}
+        fm = FailureModel(type="RTCL", ifail_sh=1, params=params)
+    elif kind == "SAHRAEI":
+        c1 = cards[0].cut("FAIL_SAHRAEI_1") if block.fixed else cards[0].tokens()
+        fct_ratio = _ival(c1[0]) if len(c1) > 0 else 0
+        num = _ival(c1[1]) if len(c1) > 1 else 0
+        den = _ival(c1[2]) if len(c1) > 2 else 0
+        ordi = _ival(c1[3]) if len(c1) > 3 else 0
+        vol_strain = _fval(c1[4]) if len(c1) > 4 else 0.0
+        fct_elsize = _ival(c1[6] if block.fixed else (c1[5] if len(c1) > 5 else 0)) if len(c1) > (6 if block.fixed else 5) else 0
+        el_ref = _fval(c1[7] if block.fixed else (c1[6] if len(c1) > 6 else 0.0)) if len(c1) > (7 if block.fixed else 6) else 0.0
+
+        comp_dir, idel, max_comp_strain, ratio = 0, 0, 0.0, 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_SAHRAEI_2") if block.fixed else cards[1].tokens()
+            comp_dir = _ival(c2[0]) if len(c2) > 0 else 0
+            idel = _ival(c2[1]) if len(c2) > 1 else 0
+            max_comp_strain = _fval(c2[2]) if len(c2) > 2 else 0.0
+            ratio = _fval(c2[3]) if len(c2) > 3 else 0.0
+
+        params = {
+            "fct_ratio": fct_ratio, "num": num, "den": den, "ordi": ordi,
+            "vol_strain": vol_strain, "fct_elsize": fct_elsize, "el_ref": el_ref,
+            "comp_dir": comp_dir, "idel": idel, "max_comp_strain": max_comp_strain,
+            "ratio": ratio,
+        }
+        fm = FailureModel(type="SAHRAEI", ifail_sh=1, params=params)
+    elif kind == "SYAZWAN":
+        c1 = cards[0].cut("FAIL_SYAZWAN_1") if block.fixed else cards[0].tokens()
+        icard = _ival(c1[1] if block.fixed else (c1[0] if len(c1) > 0 else 0)) if len(c1) > (1 if block.fixed else 0) else 0
+        epfmin = _fval(c1[2] if block.fixed else (c1[1] if len(c1) > 1 else 0.0)) if len(c1) > (2 if block.fixed else 1) else 0.0
+
+        c2_vals = []
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_SYAZWAN_2") if block.fixed else cards[1].tokens()
+            c2_vals = [_fval(v) for v in c2]
+
+        params = {"icard": icard, "epfmin": epfmin, "coeffs": c2_vals}
+        fm = FailureModel(type="SYAZWAN", ifail_sh=1, params=params)
+    elif kind == "TAB2":
+        c1 = cards[0].cut("FAIL_TAB2_1") if block.fixed else cards[0].tokens()
+        epsf_id = _ival(c1[0]) if len(c1) > 0 else 0
+        fcrit = _fval(c1[1]) if len(c1) > 1 else 0.0
+        failip = _ival(c1[3] if block.fixed else (c1[2] if len(c1) > 2 else 0)) if len(c1) > (3 if block.fixed else 2) else 0
+        pthk = _fval(c1[4] if block.fixed else (c1[3] if len(c1) > 3 else 0.0)) if len(c1) > (4 if block.fixed else 3) else 0.0
+
+        n, dcrit, inst_id, ecrit = 0.0, 0.0, 0, 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_TAB2_2") if block.fixed else cards[1].tokens()
+            n = _fval(c2[0]) if len(c2) > 0 else 0.0
+            dcrit = _fval(c2[1]) if len(c2) > 1 else 0.0
+            inst_id = _ival(c2[2]) if len(c2) > 2 else 0
+            ecrit = _fval(c2[3]) if len(c2) > 3 else 0.0
+
+        fct_exp, exp_ref, exp_val = 0, 0.0, 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            c3 = cards[2].cut("FAIL_TAB2_3") if block.fixed else cards[2].tokens()
+            fct_exp = _ival(c3[0]) if len(c3) > 0 else 0
+            exp_ref = _fval(c3[1]) if len(c3) > 1 else 0.0
+            exp_val = _fval(c3[2]) if len(c3) > 2 else 0.0
+
+        params = {
+            "epsf_id": epsf_id, "fcrit": fcrit, "failip": failip, "pthk": pthk,
+            "n": n, "dcrit": dcrit, "inst_id": inst_id, "ecrit": ecrit,
+            "fct_exp": fct_exp, "exp_ref": exp_ref, "exp": exp_val,
+        }
+        fm = FailureModel(type="TAB2", ifail_sh=1, params=params)
+    elif kind == "GENE1":
+        c1 = cards[0].cut("FAIL_GENE1_1") if block.fixed else cards[0].tokens()
+        pmin = _fval(c1[0]) if len(c1) > 0 else 0.0
+        pmax = _fval(c1[1]) if len(c1) > 1 else 0.0
+        sigp1_max = _fval(c1[2]) if len(c1) > 2 else 0.0
+        time_max = _fval(c1[3]) if len(c1) > 3 else 0.0
+        dtmin = _fval(c1[4]) if len(c1) > 4 else 0.0
+
+        fct_idsm, eps_dot_sm, sig_max, sigr, k = 0, 0.0, 0.0, 0.0, 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_GENE1_2") if block.fixed else cards[1].tokens()
+            fct_idsm = _ival(c2[0]) if len(c2) > 0 else 0
+            eps_dot_sm = _fval(c2[2] if block.fixed else (c2[1] if len(c2) > 1 else 0.0)) if len(c2) > (2 if block.fixed else 1) else 0.0
+            sig_max = _fval(c2[3] if block.fixed else (c2[2] if len(c2) > 2 else 0.0)) if len(c2) > (3 if block.fixed else 2) else 0.0
+            sigr = _fval(c2[4] if block.fixed else (c2[3] if len(c2) > 3 else 0.0)) if len(c2) > (4 if block.fixed else 3) else 0.0
+            k = _fval(c2[5] if block.fixed else (c2[4] if len(c2) > 4 else 0.0)) if len(c2) > (5 if block.fixed else 4) else 0.0
+
+        fct_idps, eps_dot_ps, eps_max, eps_eff, eps_vol = 0, 0.0, 0.0, 0.0, 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            c3 = cards[2].cut("FAIL_GENE1_3") if block.fixed else cards[2].tokens()
+            fct_idps = _ival(c3[0]) if len(c3) > 0 else 0
+            eps_dot_ps = _fval(c3[2] if block.fixed else (c3[1] if len(c3) > 1 else 0.0)) if len(c3) > (2 if block.fixed else 1) else 0.0
+            eps_max = _fval(c3[3] if block.fixed else (c3[2] if len(c3) > 2 else 0.0)) if len(c3) > (3 if block.fixed else 2) else 0.0
+            eps_eff = _fval(c3[4] if block.fixed else (c3[3] if len(c3) > 3 else 0.0)) if len(c3) > (4 if block.fixed else 3) else 0.0
+            eps_vol = _fval(c3[5] if block.fixed else (c3[4] if len(c3) > 4 else 0.0)) if len(c3) > (5 if block.fixed else 4) else 0.0
+
+        params = {
+            "pmin": pmin, "pmax": pmax, "sigp1_max": sigp1_max, "time_max": time_max, "dtmin": dtmin,
+            "fct_idsm": fct_idsm, "eps_dot_sm": eps_dot_sm, "sig_max": sig_max, "sigr": sigr, "k": k,
+            "fct_idps": fct_idps, "eps_dot_ps": eps_dot_ps, "eps_max": eps_max, "eps_eff": eps_eff, "eps_vol": eps_vol,
+        }
+        fm = FailureModel(type="GENE1", ifail_sh=1, params=params)
+    elif kind == "INIEVO":
+        c1 = cards[0].cut("FAIL_INIEVO_1") if block.fixed else cards[0].tokens()
+        ninievo = _ival(c1[0]) if len(c1) > 0 else 1
+        ishear = _ival(c1[1]) if len(c1) > 1 else 0
+        ilen = _ival(c1[2]) if len(c1) > 2 else 0
+        failip = _ival(c1[4] if block.fixed else (c1[3] if len(c1) > 3 else 0)) if len(c1) > (4 if block.fixed else 3) else 0
+        pthk = _fval(c1[5] if block.fixed else (c1[4] if len(c1) > 4 else 0.0)) if len(c1) > (5 if block.fixed else 4) else 0.0
+
+        subcards = []
+        idx = 1
+        for _ in range(ninievo):
+            if idx >= len(cards):
+                break
+            c_a = cards[idx].cut("FAIL_INIEVO_2") if block.fixed else cards[idx].tokens()
+            idx += 1
+            c_b = cards[idx].cut("FAIL_INIEVO_3") if block.fixed and idx < len(cards) else (cards[idx].tokens() if idx < len(cards) else [])
+            idx += 1
+            subcards.append({
+                "initype": _ival(c_a[0]) if len(c_a) > 0 else 0,
+                "evotype": _ival(c_a[1]) if len(c_a) > 1 else 0,
+                "evoshap": _ival(c_a[2]) if len(c_a) > 2 else 0,
+                "comptyp": _ival(c_a[3]) if len(c_a) > 3 else 0,
+                "tab_id": _ival(c_b[0]) if len(c_b) > 0 else 0,
+                "sr_ref": _fval(c_b[1]) if len(c_b) > 1 else 0.0,
+                "fscale": _fval(c_b[2]) if len(c_b) > 2 else 1.0,
+                "param": _fval(c_b[3]) if len(c_b) > 3 else 0.0,
+            })
+
+        params = {
+            "ninievo": ninievo, "ishear": ishear, "ilen": ilen, "failip": failip,
+            "pthk": pthk, "evolution_models": subcards,
+        }
+        fm = FailureModel(type="INIEVO", ifail_sh=1, params=params)
     # attachment to the material happens in the Starter resolve step
     # (initialization.resolve_materials) so deck order does not matter
     model.raw_fails.append((mat_id, fm, block.source))
@@ -3964,7 +4134,7 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         /SENSOR/TEMP:   card 1: title, card 2: Tdelay, card 3: Grnod_Id Tempmax Tempmin Tempmean Tmin
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP")
+    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC")
     if kind not in supported:
         log.warning(f"/SENSOR/{kind} not ported ({', '.join(supported)} supported)",
                     block.source)
@@ -4137,6 +4307,39 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.sensors.append(Sensor(
             id=block.user_id, kind="TEMP", tdelay=tdelay, grnod_id=grnod_id,
             tempmax=tempmax, tempmin=tempmin, tempmean=tempmean, tmin=tmin, title=title))
+    elif kind == "NIC":
+        nij_max, fint_tens, fint_comp, mint_flex, mint_ext = 0.0, 0.0, 0.0, 0.0, 0.0
+        if len(cards) > data_card_idx and not cards[data_card_idx].is_blank:
+            c2 = cards[data_card_idx].cut("SENSOR_NIC_2") if block.fixed else cards[data_card_idx].tokens()
+            nij_max = _fval(c2[0]) if len(c2) > 0 else 0.0
+            fint_tens = _fval(c2[1]) if len(c2) > 1 else 0.0
+            fint_comp = _fval(c2[2]) if len(c2) > 2 else 0.0
+            mint_flex = _fval(c2[3]) if len(c2) > 3 else 0.0
+            mint_ext = _fval(c2[4]) if len(c2) > 4 else 0.0
+
+        spring_id, skew_id, ax_dir, bend_dir = 0, 0, "", ""
+        if len(cards) > data_card_idx + 1 and not cards[data_card_idx + 1].is_blank:
+            c3 = cards[data_card_idx + 1].cut("SENSOR_NIC_3") if block.fixed else cards[data_card_idx + 1].tokens()
+            spring_id = _ival(c3[0]) if len(c3) > 0 else 0
+            skew_id = _ival(c3[1]) if len(c3) > 1 else 0
+            ax_dir = c3[2].strip() if len(c3) > 2 else ""
+            bend_dir = c3[3].strip() if len(c3) > 3 else ""
+
+        tmin, alpha, cfc = 0.0, 0.0, 0.0
+        if len(cards) > data_card_idx + 2 and not cards[data_card_idx + 2].is_blank:
+            c4 = cards[data_card_idx + 2].cut("SENSOR_NIC_4") if block.fixed else cards[data_card_idx + 2].tokens()
+            tmin = _fval(c4[0]) if len(c4) > 0 else 0.0
+            alpha = _fval(c4[1]) if len(c4) > 1 else 0.0
+            cfc = _fval(c4[2]) if len(c4) > 2 else 0.0
+
+        model.sensors.append(Sensor(
+            id=block.user_id, kind="NIC", tdelay=tdelay, nij_max=nij_max,
+            fint_tens=fint_tens, fint_comp=fint_comp, mint_flex=mint_flex,
+            mint_ext=mint_ext, spring_id=spring_id, skew_id=skew_id,
+            ax_dir=ax_dir, bend_dir=bend_dir, tmin=tmin, alpha=alpha,
+            cfc=cfc, title=title,
+        ))
+
 
 
 
@@ -7565,6 +7768,40 @@ def read_userwi(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.user_windows.append(UserWindow(lines=lines))
 
 
+def read_drape(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DRAPE/drape_ID`` (M107): Composite fabric draping definition."""
+    title = block.cards[0].raw.strip() if block.cards else ""
+    slices = []
+    for card in block.cards[1:]:
+        if card.raw.strip():
+            slices.append({"raw": card.raw.strip()})
+    model.drapes[block.user_id] = Drape(id=block.user_id, title=title, slices=slices)
+
+
+def read_inibri_eref(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INIBRI/EREF`` (M107): Initial brick reference element state."""
+    sub_objects = []
+    for card in block.cards:
+        if card.raw.strip():
+            toks = card.tokens()
+            if len(toks) >= 2:
+                try:
+                    e1, e2 = int(toks[0]), int(toks[1])
+                    sub_objects.append({"elem_id": e1, "ref_elem_id": e2})
+                except ValueError:
+                    sub_objects.append({"raw": card.raw.strip()})
+            else:
+                sub_objects.append({"raw": card.raw.strip()})
+    model.inibri_erefs.append(IniBriEref(sub_objects=sub_objects))
+
+
+def read_includedyna(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INCLUDE_DYNA``, ``/INCLUDE_LS-DYNA``, ``/INCL_DYNA`` (M107): LS-DYNA include file."""
+    fname = block.cards[0].raw.strip() if block.cards else ""
+    model.dyna_includes.append(IncludeDyna(filename=fname))
+
+
+
 
 
 def read_transform(block: KeywordBlock, model: Model,
@@ -8360,6 +8597,8 @@ def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 st.rho = val
             elif sub == "ENER":
                 st.ener = val
+    elif sub == "EREF":
+        read_inibri_eref(block, model, log)
     else:
         log.warning(f"/INIBRI/{sub} not ported — block skipped", block.source)
 
@@ -8852,6 +9091,10 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "RETRACTOR": read_retractor,
     "SLIPRING": read_slipring,
     "USERWI": read_userwi,
+    "DRAPE": read_drape,
+    "INCLUDE_DYNA": read_includedyna,
+    "INCLUDE_LS-DYNA": read_includedyna,
+    "INCL_DYNA": read_includedyna,
 }
 
 ENGINE_KEYWORDS_IGNORE = {

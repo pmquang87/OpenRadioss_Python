@@ -112,6 +112,7 @@ real history is 41 milestones. One line each:
 | M104 | Add /GAUGE, /CLUSTER, /EXTLNK, /FXBODY, /INIGRAV, /INIMAP1D, /INIMAP2D, /INISTATE suite |
 | M105 | Add /MONVOL/PRES, /MONVOL/GAS, /MONVOL/COMMU1, /MONVOL/LFLUID, /LEAK, /ALE suite |
 | M106 | Add /RETRACTOR, /SLIPRING, /INTER/TYPE8, /USERWI, /PROP/TYPE27, /PROP/TYPE51, /TH extensions |
+| M107 | Add /FAIL (PUCK, RTCL, SAHRAEI, SYAZWAN, TAB2, GENE1, INIEVO), /SENSOR/NIC, /DRAPE, /INIBRI/EREF, /INCLUDE_DYNA |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
