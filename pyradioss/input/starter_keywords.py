@@ -49,6 +49,7 @@ from ..model.entities import (
     Gauge, Cluster, ExtLink, FxBody, IniGrav, IniMap1D, IniMap2D, IniStateFile,
     MonvolPres, MonvolGas, MonvolCommu1, MonvolLFluid, LeakMat,
     AleGrid, AleLink, AleSolver, AleClose,
+    Retractor, Slipring, UserWindow,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -4751,14 +4752,42 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 gap=gap_min, lagmul=True, title=title))
             return
 
-    if kind not in ("TYPE2", "TYPE7", "TYPE10", "TYPE11", "TYPE18", "TYPE24", "TYPE25", "SUB"):
-        log.warning(f"/INTER/{kind} not ported (TYPE2, TYPE7, TYPE10, TYPE11, TYPE18, TYPE24, "
+    if kind not in ("TYPE2", "TYPE7", "TYPE8", "TYPE10", "TYPE11", "TYPE18", "TYPE24", "TYPE25", "SUB"):
+        log.warning(f"/INTER/{kind} not ported (TYPE2, TYPE7, TYPE8, TYPE10, TYPE11, TYPE18, TYPE24, "
                     f"TYPE25, SUB supported)", block.source)
         return
     title, cards = _title_and_data(block)
     if not cards:
         log.error(f"/INTER/{kind}/{block.user_id}: missing data card",
                   block.source)
+        return
+
+    if kind == "TYPE8":
+        if block.fixed:
+            f0 = cards[0].cut("INTER_TYPE8_1")
+            grnod_id = _ival(f0[0]) if len(f0) > 0 else 0
+            surf_id = _ival(f0[1]) if len(f0) > 1 else 0
+            dbead_force, tstart, tstop = 0.0, 0.0, 1.0e30
+            if len(cards) > 1 and not cards[1].is_blank:
+                f1 = cards[1].cut("INTER_TYPE8_2")
+                dbead_force = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                tstart = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+                tstop = _fval(f1[4], 1.0e30) if len(f1) > 4 else 1.0e30
+        else:
+            t0 = cards[0].tokens()
+            grnod_id = int(float(t0[0])) if len(t0) > 0 else 0
+            surf_id = int(float(t0[1])) if len(t0) > 1 else 0
+            dbead_force, tstart, tstop = 0.0, 0.0, 1.0e30
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                dbead_force = float(t1[0]) if len(t1) > 0 else 0.0
+                tstart = float(t1[1]) if len(t1) > 1 else 0.0
+                tstop = float(t1[2]) if len(t1) > 2 else 1.0e30
+
+        model.interfaces.append(Interface(
+            id=block.user_id, type=8, grnod_id=grnod_id, surf_id=surf_id,
+            stfac=dbead_force, tstart=tstart, tstop=tstop, title=title,
+        ))
         return
 
     if kind == "SUB":
@@ -5293,11 +5322,19 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     M68: expanded from NODE/PART/SECT to all entity types.
     """
     _TH_KINDS = {"NODE", "PART", "SECT", "RBODY", "SHEL", "SH3N",
-                 "SPRING", "BRIC", "RWALL", "SECTIO", "INTER"}
+                 "SPRING", "BRIC", "RWALL", "SECTIO", "INTER",
+                 "RETRACTOR", "SLIPRING", "TRIA", "TETRA4", "BEAM", "TRUSS",
+                 "SHELL", "SOLID"}
     kind = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
     # /TH/SECTIO is the Fortran spelling; normalise to SECT for the model
     if kind == "SECTIO":
         kind = "SECT"
+    elif kind == "SHELL":
+        kind = "SHEL"
+    elif kind == "SOLID":
+        kind = "BRIC"
+    elif kind == "TRIA":
+        kind = "SH3N"
     if kind not in _TH_KINDS:
         log.warning(f"/TH/{kind} not ported", block.source)
         return
@@ -7332,6 +7369,203 @@ def read_leak(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_retractor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RETRACTOR[/<subtype>]/retractor_ID`` (M106)::
+
+        card 1: title
+        card 2: EL_ID  Node_ID  Elem_size
+        card 3: Sens_ID1  Pullout  Fct_ID1  Fct_ID2  Yscale1  Xscale1
+        card 4: Sens_ID2  Tens_typ  Force  Fct_ID3  Yscale2  Xscale2
+    """
+    subtype = block.parts[1].upper() if len(block.parts) > 1 else "SPRING"
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/RETRACTOR/{block.user_id}: missing data card", block.source)
+        return
+
+    el_id, node_id = 0, 0
+    elem_size = 0.0
+    sens_id1, fct_id1, fct_id2 = 0, 0, 0
+    pullout = 0.0
+    yscale1, xscale1 = 1.0, 1.0
+    sens_id2, tens_typ, fct_id3 = 0, 0, 0
+    force = 0.0
+    yscale2, xscale2 = 1.0, 1.0
+
+    if block.fixed:
+        f1 = cards[0].cut("RETRACTOR_1")
+        el_id = _ival(f1[0]) if len(f1) > 0 else 0
+        node_id = _ival(f1[1]) if len(f1) > 1 else 0
+        elem_size = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("RETRACTOR_2")
+            sens_id1 = _ival(f2[0]) if len(f2) > 0 else 0
+            pullout = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            fct_id1 = _ival(f2[2]) if len(f2) > 2 else 0
+            fct_id2 = _ival(f2[3]) if len(f2) > 3 else 0
+            yscale1 = _fval(f2[4], 1.0) if len(f2) > 4 else 1.0
+            xscale1 = _fval(f2[5], 1.0) if len(f2) > 5 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("RETRACTOR_3")
+            sens_id2 = _ival(f3[0]) if len(f3) > 0 else 0
+            tens_typ = _ival(f3[1]) if len(f3) > 1 else 0
+            force = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+            fct_id3 = _ival(f3[3]) if len(f3) > 3 else 0
+            yscale2 = _fval(f3[4], 1.0) if len(f3) > 4 else 1.0
+            xscale2 = _fval(f3[5], 1.0) if len(f3) > 5 else 1.0
+    else:
+        t1 = cards[0].tokens()
+        el_id = int(float(t1[0])) if len(t1) > 0 else 0
+        node_id = int(float(t1[1])) if len(t1) > 1 else 0
+        elem_size = float(t1[2]) if len(t1) > 2 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            sens_id1 = int(float(t2[0])) if len(t2) > 0 else 0
+            pullout = float(t2[1]) if len(t2) > 1 else 0.0
+            fct_id1 = int(float(t2[2])) if len(t2) > 2 else 0
+            fct_id2 = int(float(t2[3])) if len(t2) > 3 else 0
+            yscale1 = float(t2[4]) if len(t2) > 4 else 1.0
+            xscale1 = float(t2[5]) if len(t2) > 5 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            sens_id2 = int(float(t3[0])) if len(t3) > 0 else 0
+            tens_typ = int(float(t3[1])) if len(t3) > 1 else 0
+            force = float(t3[2]) if len(t3) > 2 else 0.0
+            fct_id3 = int(float(t3[3])) if len(t3) > 3 else 0
+            yscale2 = float(t3[4]) if len(t3) > 4 else 1.0
+            xscale2 = float(t3[5]) if len(t3) > 5 else 1.0
+
+    model.retractors[block.user_id] = Retractor(
+        id=block.user_id, title=title, subtype=subtype, el_id=el_id,
+        node_id=node_id, elem_size=elem_size, sens_id1=sens_id1,
+        pullout=pullout, fct_id1=fct_id1, fct_id2=fct_id2,
+        yscale1=yscale1, xscale1=xscale1, sens_id2=sens_id2,
+        tens_typ=tens_typ, force=force, fct_id3=fct_id3,
+        yscale2=yscale2, xscale2=xscale2,
+    )
+
+
+def read_slipring(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SLIPRING[/<subtype>]/slipring_ID`` (M106)::
+
+        card 1: title
+        card 2: El1_ID  El2_ID  Node_ID  Node_ID2  Sens_ID  Flow_flag  A  Ed_factor
+        card 3: Fct_ID1  Fct_ID2  Fricd  Xscale1  Yscale2  Xscale2
+        card 4: Fct_ID3  Fct_ID4  Frics  Xscale3  Yscale4  Xscale4
+    """
+    subtype = block.parts[1].upper() if len(block.parts) > 1 else "SPRING"
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SLIPRING/{block.user_id}: missing data card", block.source)
+        return
+
+    el_id1, el_id2, node_id, node_id2 = 0, 0, 0, 0
+    sens_id, flow_flag = 0, 0
+    a, ed_factor = 0.0, 0.0
+    fct_id1, fct_id2 = 0, 0
+    fricd = 0.0
+    xscale1, yscale2, xscale2 = 1.0, 1.0, 1.0
+    fct_id3, fct_id4 = 0, 0
+    frics = 0.0
+    xscale3, yscale4, xscale4 = 1.0, 1.0, 1.0
+
+    if block.fixed:
+        if subtype == "SHELL":
+            f1 = cards[0].cut("SLIPRING_SHELL_1")
+            el_id1 = _ival(f1[0]) if len(f1) > 0 else 0
+            el_id2 = _ival(f1[1]) if len(f1) > 1 else 0
+            node_id = _ival(f1[2]) if len(f1) > 2 else 0
+            sens_id = _ival(f1[3]) if len(f1) > 3 else 0
+            flow_flag = _ival(f1[4]) if len(f1) > 4 else 0
+            a = _fval(f1[5], 0.0) if len(f1) > 5 else 0.0
+            ed_factor = _fval(f1[6], 0.0) if len(f1) > 6 else 0.0
+        else:
+            f1 = cards[0].cut("SLIPRING_1")
+            el_id1 = _ival(f1[0]) if len(f1) > 0 else 0
+            el_id2 = _ival(f1[1]) if len(f1) > 1 else 0
+            node_id = _ival(f1[2]) if len(f1) > 2 else 0
+            node_id2 = _ival(f1[3]) if len(f1) > 3 else 0
+            sens_id = _ival(f1[4]) if len(f1) > 4 else 0
+            flow_flag = _ival(f1[5]) if len(f1) > 5 else 0
+            a = _fval(f1[6], 0.0) if len(f1) > 6 else 0.0
+            ed_factor = _fval(f1[7], 0.0) if len(f1) > 7 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("SLIPRING_2")
+            fct_id1 = _ival(f2[0]) if len(f2) > 0 else 0
+            fct_id2 = _ival(f2[1]) if len(f2) > 1 else 0
+            fricd = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            xscale1 = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+            yscale2 = _fval(f2[4], 1.0) if len(f2) > 4 else 1.0
+            xscale2 = _fval(f2[5], 1.0) if len(f2) > 5 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("SLIPRING_3")
+            fct_id3 = _ival(f3[0]) if len(f3) > 0 else 0
+            fct_id4 = _ival(f3[1]) if len(f3) > 1 else 0
+            frics = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+            xscale3 = _fval(f3[3], 1.0) if len(f3) > 3 else 1.0
+            yscale4 = _fval(f3[4], 1.0) if len(f3) > 4 else 1.0
+            xscale4 = _fval(f3[5], 1.0) if len(f3) > 5 else 1.0
+    else:
+        t1 = cards[0].tokens()
+        if subtype == "SHELL":
+            el_id1 = int(float(t1[0])) if len(t1) > 0 else 0
+            el_id2 = int(float(t1[1])) if len(t1) > 1 else 0
+            node_id = int(float(t1[2])) if len(t1) > 2 else 0
+            sens_id = int(float(t1[3])) if len(t1) > 3 else 0
+            flow_flag = int(float(t1[4])) if len(t1) > 4 else 0
+            a = float(t1[5]) if len(t1) > 5 else 0.0
+            ed_factor = float(t1[6]) if len(t1) > 6 else 0.0
+        else:
+            el_id1 = int(float(t1[0])) if len(t1) > 0 else 0
+            el_id2 = int(float(t1[1])) if len(t1) > 1 else 0
+            node_id = int(float(t1[2])) if len(t1) > 2 else 0
+            node_id2 = int(float(t1[3])) if len(t1) > 3 else 0
+            sens_id = int(float(t1[4])) if len(t1) > 4 else 0
+            flow_flag = int(float(t1[5])) if len(t1) > 5 else 0
+            a = float(t1[6]) if len(t1) > 6 else 0.0
+            ed_factor = float(t1[7]) if len(t1) > 7 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            fct_id1 = int(float(t2[0])) if len(t2) > 0 else 0
+            fct_id2 = int(float(t2[1])) if len(t2) > 1 else 0
+            fricd = float(t2[2]) if len(t2) > 2 else 0.0
+            xscale1 = float(t2[3]) if len(t2) > 3 else 1.0
+            yscale2 = float(t2[4]) if len(t2) > 4 else 1.0
+            xscale2 = float(t2[5]) if len(t2) > 5 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            fct_id3 = int(float(t3[0])) if len(t3) > 0 else 0
+            fct_id4 = int(float(t3[1])) if len(t3) > 1 else 0
+            frics = float(t3[2]) if len(t3) > 2 else 0.0
+            xscale3 = float(t3[3]) if len(t3) > 3 else 1.0
+            yscale4 = float(t3[4]) if len(t3) > 4 else 1.0
+            xscale4 = float(t3[5]) if len(t3) > 5 else 1.0
+
+    model.sliprings[block.user_id] = Slipring(
+        id=block.user_id, title=title, subtype=subtype, el_id1=el_id1,
+        el_id2=el_id2, node_id=node_id, node_id2=node_id2, sens_id=sens_id,
+        flow_flag=flow_flag, a=a, ed_factor=ed_factor, fct_id1=fct_id1,
+        fct_id2=fct_id2, fricd=fricd, xscale1=xscale1, yscale2=yscale2,
+        xscale2=xscale2, fct_id3=fct_id3, fct_id4=fct_id4, frics=frics,
+        xscale3=xscale3, yscale4=yscale4, xscale4=xscale4,
+    )
+
+
+def read_userwi(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/USERWI`` (M106): User window card lines."""
+    lines = [c.raw.strip() for c in block.cards if c.raw.strip()]
+    model.user_windows.append(UserWindow(lines=lines))
+
+
+
 
 def read_transform(block: KeywordBlock, model: Model,
                    log: MessageLog) -> None:
@@ -8615,6 +8849,9 @@ KEYWORD_PARSERS: Dict[str, Callable] = {
     "INISTATE": read_inista,
     "LEAK": read_leak,
     "ALE": read_ale,
+    "RETRACTOR": read_retractor,
+    "SLIPRING": read_slipring,
+    "USERWI": read_userwi,
 }
 
 ENGINE_KEYWORDS_IGNORE = {

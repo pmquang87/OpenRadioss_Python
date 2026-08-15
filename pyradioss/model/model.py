@@ -49,6 +49,7 @@ from .entities import (
     Gauge, Cluster, ExtLink, FxBody, IniGrav, IniMap1D, IniMap2D, IniStateFile,
     MonvolPres, MonvolGas, MonvolCommu1, MonvolLFluid, LeakMat,
     AleGrid, AleLink, AleSolver, AleClose,
+    Retractor, Slipring, UserWindow,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -655,6 +656,9 @@ class Model:
         self.ale_links: Dict[int, AleLink] = {}        # /ALE/LINK (M105)
         self.ale_solver: Optional[AleSolver] = None    # /ALE/SOLVER (M105)
         self.ale_close: Optional[AleClose] = None      # /ALE/CLOS (M105)
+        self.retractors: Dict[int, Retractor] = {}     # /RETRACTOR (M106)
+        self.sliprings: Dict[int, Slipring] = {}       # /SLIPRING (M106)
+        self.user_windows: List[UserWindow] = []       # /USERWI (M106)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

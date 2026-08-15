@@ -699,6 +699,32 @@ LAYOUTS: Dict[str, List[int]] = {
     "ALE_LINK_1": [10, 10, 20],
     "ALE_SOLVER_1": [10, 10],
     "ALE_CLOS_1": [20, 20],
+
+    # RETRACTOR (M106)
+    "RETRACTOR_1": [10, 10, 20],
+    "RETRACTOR_2": [10, 20, 10, 10, 20, 20],
+    "RETRACTOR_3": [10, 10, 20, 10, 20, 20],
+
+    # SLIPRING (M106)
+    "SLIPRING_1": [10, 10, 10, 10, 10, 10, 20, 20],
+    "SLIPRING_2": [10, 10, 20, 20, 20, 20],
+    "SLIPRING_3": [10, 10, 20, 20, 20, 20],
+    "SLIPRING_SHELL_1": [10, 10, 10, 10, 10, 20, 20],
+
+    # INTER/TYPE8 (M106)
+    "INTER_TYPE8_1": [10, 10],
+    "INTER_TYPE8_2": [20, 20, 20, 20, 20],
+
+    # INTER/TYPE18 (M106)
+    "INTER_TYPE18_1": [10, 10, 10, 20, 10, 10, 10],
+    "INTER_TYPE18_2": [20, 20, 20, 20, 20],
+    "INTER_TYPE18_3": [40, 20, 20, 20],
+
+    # PROP/SPR_BDAMP (M106)
+    "PROP_SPR_BDAMP_1": [20, 30, 10, 10, 10, 10, 10],
+    "PROP_SPR_BDAMP_2": [20, 20, 20, 20, 20],
+    "PROP_SPR_BDAMP_3": [20, 50, 10, 20],
+    "PROP_SPR_BDAMP_4": [10, 10, 20, 20, 20, 20],
 }
 
 

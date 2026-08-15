@@ -599,6 +599,35 @@ def check_model(model: Model, log: MessageLog) -> None:
         if al.fct_id > 0 and al.fct_id not in model.functions:
             log.error(f"/ALE/LINK/{lid}: function {al.fct_id} not defined", "CROSS REF")
 
+    # Seatbelts Suite: /RETRACTOR & /SLIPRING (M106)
+    sensor_ids = {s.id for s in model.sensors}
+    for rid, ret in getattr(model, "retractors", {}).items():
+        if ret.node_id > 0 and ret.node_id not in model._id2idx:
+            log.error(f"/RETRACTOR/{rid}: node {ret.node_id} not defined", "CROSS REF")
+        if ret.sens_id1 > 0 and ret.sens_id1 not in sensor_ids:
+            log.error(f"/RETRACTOR/{rid}: sensor {ret.sens_id1} not defined", "CROSS REF")
+        if ret.sens_id2 > 0 and ret.sens_id2 not in sensor_ids:
+            log.error(f"/RETRACTOR/{rid}: sensor {ret.sens_id2} not defined", "CROSS REF")
+        for fid in (ret.fct_id1, ret.fct_id2, ret.fct_id3):
+            if fid > 0 and fid not in model.functions:
+                log.error(f"/RETRACTOR/{rid}: function {fid} not defined", "CROSS REF")
+
+    for sid, sr in getattr(model, "sliprings", {}).items():
+        if sr.subtype == "SPRING":
+            for nid in (sr.node_id, sr.node_id2):
+                if nid > 0 and nid not in model._id2idx:
+                    log.error(f"/SLIPRING/{sid}: node {nid} not defined", "CROSS REF")
+        elif sr.subtype == "SHELL":
+            if sr.node_id > 0 and sr.node_id not in model.node_groups:
+                log.error(f"/SLIPRING/{sid}: node group {sr.node_id} not defined", "CROSS REF")
+        if sr.sens_id > 0 and sr.sens_id not in sensor_ids:
+            log.error(f"/SLIPRING/{sid}: sensor {sr.sens_id} not defined", "CROSS REF")
+        for fid in (sr.fct_id1, sr.fct_id2, sr.fct_id3, sr.fct_id4):
+            if fid > 0 and fid not in model.functions:
+                log.error(f"/SLIPRING/{sid}: function {fid} not defined", "CROSS REF")
+
+
+
 
 
 

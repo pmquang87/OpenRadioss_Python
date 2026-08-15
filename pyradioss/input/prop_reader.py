@@ -49,10 +49,10 @@ PROP_TYPE_NUMBERS: Dict[str, int] = {
     "SOL_ORTH": 6, "SPR_PUL": 12, "SPR_GENE": 8, "SH_ORTH": 9, "SH_COMP": 10,
     "SH_SANDW": 11, "SPR_BEAM": 13, "SOLID": 14, "POROUS": 15, "SH_FABR": 16,
     "STACK": 17, "INT_BEAM": 18, "TSHELL": 20, "TSH_ORTH": 21, "TSH_COMP": 22,
-    "SPR_MAT": 23, "SPR_AXI": 25, "SPR_TAB": 26, "NSTRAND": 28,
+    "SPR_MAT": 23, "SPR_AXI": 25, "SPR_TAB": 26, "SPR_BDAMP": 27, "NSTRAND": 28,
     "SPR_PRE": 32, "KJOINT": 33, "SPH": 34, "STITCH": 35, "PREDIT": 36,
     "CONNECT": 43, "SPR_CRUS": 44, "KJOINT2": 45, "SPR_MUSCLE": 46,
-    "PCOMPP": 52, "FLUID": 6,
+    "PLY_STACK": 51, "TYPE51": 51, "PCOMPP": 52, "FLUID": 6,
 }
 
 #: property TYPE numbers that REQUIRE a material on their /PART — the

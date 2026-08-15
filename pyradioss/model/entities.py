@@ -2030,6 +2030,73 @@ class AleClose:
     hclose: float = 0.0
 
 
+@dataclass
+class Retractor:
+    """/RETRACTOR (M106): Seatbelt retractor mechanism.
+
+    Fortran origin: ``starter/source/seatbelts/retractor.F`` / CFG ``retractor.cfg``.
+    """
+    id: int
+    title: str = ""
+    subtype: str = "SPRING"
+    el_id: int = 0
+    node_id: int = 0
+    elem_size: float = 0.0
+    sens_id1: int = 0
+    pullout: float = 0.0
+    fct_id1: int = 0
+    fct_id2: int = 0
+    yscale1: float = 1.0
+    xscale1: float = 1.0
+    sens_id2: int = 0
+    tens_typ: int = 0
+    force: float = 0.0
+    fct_id3: int = 0
+    yscale2: float = 1.0
+    xscale2: float = 1.0
+
+
+@dataclass
+class Slipring:
+    """/SLIPRING (M106): Seatbelt slipring friction element.
+
+    Fortran origin: ``starter/source/seatbelts/slipring.F`` / CFG ``slipring.cfg``, ``slipring_shell.cfg``.
+    """
+    id: int
+    title: str = ""
+    subtype: str = "SPRING"  # SPRING or SHELL
+    el_id1: int = 0          # or EL_SET1 for SHELL
+    el_id2: int = 0          # or EL_SET2 for SHELL
+    node_id: int = 0         # or Node_SET for SHELL
+    node_id2: int = 0
+    sens_id: int = 0
+    flow_flag: int = 0
+    a: float = 0.0
+    ed_factor: float = 0.0
+    fct_id1: int = 0
+    fct_id2: int = 0
+    fricd: float = 0.0
+    xscale1: float = 1.0
+    yscale2: float = 1.0
+    xscale2: float = 1.0
+    fct_id3: int = 0
+    fct_id4: int = 0
+    frics: float = 0.0
+    xscale3: float = 1.0
+    yscale4: float = 1.0
+    xscale4: float = 1.0
+
+
+@dataclass
+class UserWindow:
+    """/USERWI (M106): User window / data card lines.
+
+    Fortran origin: ``starter/source/starter/userwi.F`` / CFG ``userwi.cfg``.
+    """
+    lines: List[str] = field(default_factory=list)
+
+
+
 
 
 
