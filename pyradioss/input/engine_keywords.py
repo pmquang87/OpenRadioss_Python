@@ -1116,6 +1116,139 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     emax = block.cards[0].floats()[0]
                     if emax > 0.0:
                         ec.energy_error_stop = emax
+            elif key == "DEBUG":
+                # /DEBUG or /DEBUG/<suboption> (M120): fredebug.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                val = 1
+                if len(block.parts) > 2:
+                    try:
+                        val = int(block.parts[2])
+                    except ValueError:
+                        val = 1
+                elif sub.isdigit():
+                    val = int(sub)
+                    sub = "CORE"
+                if not sub:
+                    sub = "CORE"
+                ec.debug_flags[sub] = val
+                if sub == "ACC" and block.cards:
+                    v = block.cards[0].floats()
+                    if v:
+                        ec.debug_acc_start = v[0]
+                    if len(v) > 1:
+                        ec.debug_acc_freq = int(v[1])
+            elif key == "BCS":
+                # /BCS/ON or /BCS/OFF (M120): frebcs.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
+                active = (sub == "ON")
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    for tok in c.tokens():
+                        try:
+                            bc_id = int(float(tok))
+                            if bc_id > 0:
+                                ec.bcs_active[bc_id] = active
+                        except ValueError:
+                            pass
+            elif key == "RBODY":
+                # /RBODY/ON or /RBODY/OFF (M120): frerbo.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
+                active = (sub == "ON")
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    for tok in c.tokens():
+                        try:
+                            rb_id = int(float(tok))
+                            if rb_id > 0:
+                                ec.rbody_active[rb_id] = active
+                        except ValueError:
+                            pass
+            elif key == "ALE":
+                # /ALE/ON or /ALE/OFF (M120): fraleonoff.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
+                active = (sub == "ON")
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    for tok in c.tokens():
+                        try:
+                            part_id = int(float(tok))
+                            if part_id > 0:
+                                ec.ale_active[part_id] = active
+                        except ValueError:
+                            pass
+            elif key == "NOIS":
+                # /NOIS or /NOIS/DT (M120): frenois.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "DT":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if len(v) > 1:
+                            ec.noise_tstart = v[0]
+                            ec.noise_dt = v[1]
+                        elif v:
+                            ec.noise_dt = v[0]
+                elif sub:
+                    ec.noise_flags[sub] = True
+                else:
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if len(v) > 1:
+                            ec.noise_tstart = v[0]
+                            ec.noise_dt = v[1]
+                        elif v:
+                            ec.noise_dt = v[0]
+            elif key == "H3D":
+                # /H3D/DT, /H3D/NODA, /H3D/ELEM, /H3D/SHELL, /H3D/SOLID (M120): redkey1_h3d.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "DT":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if len(v) > 1:
+                            ec.h3d_dt = v[1]
+                        elif v:
+                            ec.h3d_dt = v[0]
+                elif sub:
+                    channel = "/".join(block.parts[1:]).upper()
+                    if channel not in ec.h3d_requests:
+                        ec.h3d_requests.append(channel)
+            elif key == "FLOW":
+                # /FLOW/DT or /FLOW (M120): freflw.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "DT" or not sub:
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if len(v) > 1:
+                            ec.flow_dt = v[1]
+                        elif v:
+                            ec.flow_dt = v[0]
+            elif key == "UPWIND":
+                # /UPWIND (M120): freupwind.F
+                ec.upwind_active = True
+                if block.cards:
+                    v = block.cards[0].floats()
+                    if len(v) > 0 and v[0] > 0.0:
+                        ec.upwind_mom = v[0]
+                    if len(v) > 1 and v[1] > 0.0:
+                        ec.upwind_mass_eng = v[1]
+                    if len(v) > 2 and v[2] > 0.0:
+                        ec.upwind_wet_surf = v[2]
+            elif key == "EIG":
+                # /EIG/OFF (M120): freeig.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "OFF":
+                    for c in block.cards:
+                        if c.is_blank:
+                            continue
+                        for tok in c.tokens():
+                            try:
+                                m_id = int(float(tok))
+                                if m_id > 0:
+                                    ec.eig_off.append(m_id)
+                            except ValueError:
+                                pass
             else:
                 log.warning(f"engine keyword /{'/'.join(block.parts)} "
                             f"not ported — ignored", block.source)

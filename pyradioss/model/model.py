@@ -109,6 +109,25 @@ class EngineControls:
     anim_vect: List[str] = field(default_factory=lambda: ["VEL", "DIS"])
     anim_elem: List[str] = field(default_factory=lambda: ["VONM", "EPSP"])
 
+    # M120: Extended Engine control cards
+    debug_flags: Dict[str, int] = field(default_factory=dict)  # /DEBUG options
+    debug_acc_start: float = 0.0                               # /DEBUG/ACC start time
+    debug_acc_freq: int = 1                                    # /DEBUG/ACC frequency
+    bcs_active: Dict[int, bool] = field(default_factory=dict)  # /BCS/ON, /BCS/OFF
+    rbody_active: Dict[int, bool] = field(default_factory=dict)# /RBODY/ON, /RBODY/OFF
+    ale_active: Dict[int, bool] = field(default_factory=dict)  # /ALE/ON, /ALE/OFF
+    noise_dt: float = 0.0                                      # /NOIS/DT period
+    noise_tstart: float = 0.0                                  # /NOIS/DT start time
+    noise_flags: Dict[str, bool] = field(default_factory=dict) # /NOIS flags (VEL, ACC, etc.)
+    h3d_dt: float = 0.0                                        # /H3D/DT output period
+    h3d_requests: List[str] = field(default_factory=list)      # /H3D channel requests
+    flow_dt: float = 0.0                                       # /FLOW/DT output period
+    upwind_active: bool = False                                # /UPWIND present
+    upwind_mom: float = 1.0                                    # /UPWIND momentum coeff
+    upwind_mass_eng: float = 1.0                               # /UPWIND mass & energy coeff
+    upwind_wet_surf: float = 1.0                               # /UPWIND wet surface coeff
+    eig_off: List[int] = field(default_factory=list)           # /EIG/OFF deactivated modes
+
     # ------------------------------------------------------------------
     # /IMPL implicit-static control (M8). ``implicit`` switches the run
     # from the explicit leap-frog loop to the Newton–Raphson static

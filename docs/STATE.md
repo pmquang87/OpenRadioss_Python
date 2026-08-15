@@ -125,6 +125,7 @@ real history is 41 milestones. One line each:
 | M117 | Add /EIG (eigenvalue extraction / modal analysis), /SHFRA/V4 (shell local frame formulation), /INTTHICK/V5 (integration thickness flag), /STATE/STR_FILE & /STR_FILE (stress output file), /MEMORY (memory request allocation), /DEF_INTER/TYPE25 (default contact type 25), /PLOAD (pressure load alias) |
 | M118 | Add /FAIL/FRACTAL_DMG & /FAIL/FRACTAL (fractal damage failure), /TRANSFORM/POSITION & /TRANSFORM/POS (spatial positioning transform), /ALE/GRID/FLOW-TRACKING & /ALE/GRID/LAGRANGE & /ALE/ZERO (ALE grid formulation controls), /ARCH (architecture specs), /ALTDOCTAG (doc metadata tag), /EXTERN/LINK (/EXTLINK), /SUBDOMAIN, /INCLUDE_LS-DYNA (/INCLUDE_DYNA) |
 | M119 | Add /FUNCT_PYTHON (Python function definition), /FRICTION (generalized multi-part & orthotropic friction model), /REFSTA & /EREF (global & element reference states), /NBCS (non-linear boundary conditions), /ALE/MUSCL (/ALE/SOLVER/MUSCL, MUSCL advection compression factor), /BEM (boundary element method container) |
+| M120 | Add extended Engine deck control keywords (/DEBUG, /BCS/ON & /BCS/OFF, /RBODY/ON & /RBODY/OFF, /ALE/ON & /ALE/OFF, /NOIS, /H3D, /FLOW, /UPWIND, /EIG/OFF) |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

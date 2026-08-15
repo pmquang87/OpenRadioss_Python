@@ -12843,7 +12843,8 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 
 ENGINE_KEYWORDS_IGNORE = {
-    "ANIM", "DT", "H3D", "MON", "PARITH", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS"
+    "ANIM", "DT", "H3D", "MON", "PARITH", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
+    "DEBUG", "NOIS", "FLOW"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
