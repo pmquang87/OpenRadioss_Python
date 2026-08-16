@@ -162,6 +162,7 @@ real history is 41 milestones. One line each:
 | M154 | TYPE7 contact Igap=2 (scaled variable gap via Fscale_gap) and Igap=3 (mesh-size limited variable gap via %mesh_size), with segment_mesh_gap/node_mesh_gap functions and inspect_active_penetrations parity |
 | M155 | Real-deck parser & starter robustness: /INTER/TYPE11 fixed-format reader (radioss51/110/120/140+), /MAT/LAW42 Ogden net shear modulus check GS = sum(mu*alpha) > 0 matching hm_read_mat42.F, /FAIL/BIQUAD preset defaults matching hm_read_fail_biquad.F, and massless /RBODY 1e-20 floor matching inirby.F |
 | M156 | Advanced structural properties & failure models suite: /PROP/SH_ORTH (/PROP/TYPE9) orthotropic shell reader, /PROP/INT_BEAM (/PROP/TYPE18) fiber & standard section integrated beam reader, /FAIL/ORTHENERG directional energy failure model, /FAIL/FRACTAL_DMG fractal damage model, /PLY extended orientation/group reader, and /DFS/DETPOINTSET group detonation ignition |
+| M157 | Advanced contact interfaces, non-linear spring properties & draping suite: /PROP/TYPE26 (/PROP/SPR_TAB) tabular non-linear spring reader, /PROP/TYPE27 (/PROP/SPR_BDAMP) bilateral damping spring reader, /INTER/TYPE19 5-card multi-segment interface, /INTER/TYPE25 advanced surface contact, /INTER/TYPE8 drawbead interface, and /DRAPE (/TABLE/DRAPE) structured composite fabric draping reader |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

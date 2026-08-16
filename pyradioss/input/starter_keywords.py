@@ -3006,6 +3006,8 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                "TYPE21": 21, "TSH_ORTH": 21,
                "TYPE22": 22, "TSH_COMP": 22,
                "TYPE18": 18, "INT_BEAM": 18, "PROP_P18_INT_BEAM": 18, "P18_INT_BEAM": 18, "BEAM_INT": 18,
+               "TYPE26": 26, "SPR_TAB": 26, "PROP_P26_SPR_TAB": 26, "P26_SPR_TAB": 26, "PROP_SPR_TAB": 26,
+               "TYPE27": 27, "SPR_BDAMP": 27, "PROP_P27_SPR_BDAMP": 27, "P27_SPR_BDAMP": 27, "PROP_SPR_BDAMP": 27,
                "TYPE34": 34, "SPH": 34,
                "TYPE43": 43, "CONNECT": 43,
                "TYPE17": 17, "STACK": 17, "PROP_STACK": 17,
@@ -4115,8 +4117,204 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                             icard += 1
                         params["l_params"] = l1_4 + l5_6
 
-    model.properties[block.user_id] = Property(
-        id=block.user_id, type=ptype, title=title, params=params)
+    elif ptype == 26:  # SPR_TAB
+        params = {
+            "mass": 0.0, "isensor": 0, "sens_id": 0, "isflag": 0, "ileng": 0,
+            "nfunc": 0, "nraten": 0, "scale": 1.0, "stiff0": 0.0, "k": 0.0, "dmax": 0.0, "alpha1": 0.0,
+            "load_curves": [], "unload_curves": [],
+        }
+        if block.fixed:
+            if len(cards) >= 1 and not cards[0].is_blank:
+                c0 = cards[0].cut("PROP_SPR_TAB_1")
+                params["mass"] = _fval(c0[0])
+                params["isensor"] = _ival(c0[2]) if len(c0) > 2 else 0
+                params["sens_id"] = params["isensor"]
+                params["isflag"] = _ival(c0[3]) if len(c0) > 3 else 0
+                params["ileng"] = _ival(c0[4]) if len(c0) > 4 else 0
+            if len(cards) >= 2 and not cards[1].is_blank:
+                c1 = cards[1].cut("PROP_SPR_TAB_2")
+                params["nfunc"] = _ival(c1[0])
+                params["nraten"] = _ival(c1[1]) if len(c1) > 1 else 0
+                params["scale"] = _fval(c1[2], 1.0) if len(c1) > 2 else 1.0
+                params["stiff0"] = _fval(c1[3]) if len(c1) > 3 else 0.0
+                params["k"] = params["stiff0"]
+                params["alpha1"] = _fval(c1[5]) if len(c1) > 5 else 0.0
+
+            nfunc = params["nfunc"]
+            nraten = params["nraten"]
+            idx = 2
+            load_curves = []
+            for _ in range(nfunc):
+                if idx < len(cards) and not cards[idx].is_blank:
+                    cc = cards[idx].cut("PROP_SPR_TAB_CARD")
+                    load_curves.append({
+                        "fun_load": _ival(cc[0]),
+                        "scale_load": _fval(cc[1], 1.0) if len(cc) > 1 else 1.0,
+                        "strainrate_load": _fval(cc[2]) if len(cc) > 2 else 0.0,
+                    })
+                    idx += 1
+            params["load_curves"] = load_curves
+
+            unload_curves = []
+            for _ in range(nraten):
+                if idx < len(cards) and not cards[idx].is_blank:
+                    cc = cards[idx].cut("PROP_SPR_TAB_CARD")
+                    unload_curves.append({
+                        "fun_unload": _ival(cc[0]),
+                        "scale_unload": _fval(cc[1], 1.0) if len(cc) > 1 else 1.0,
+                        "strainrate_unload": _fval(cc[2]) if len(cc) > 2 else 0.0,
+                    })
+                    idx += 1
+            params["unload_curves"] = unload_curves
+        else:
+            if len(cards) >= 1 and not cards[0].is_blank:
+                t0 = cards[0].tokens()
+                params["mass"] = float(t0[0]) if len(t0) > 0 else 0.0
+                params["isensor"] = int(float(t0[1])) if len(t0) > 1 else 0
+                params["sens_id"] = params["isensor"]
+                params["isflag"] = int(float(t0[2])) if len(t0) > 2 else 0
+                params["ileng"] = int(float(t0[3])) if len(t0) > 3 else 0
+                if len(t0) >= 6:
+                    params["nfunc"] = int(float(t0[4]))
+                    params["nraten"] = int(float(t0[5]))
+            if len(cards) >= 2 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                if len(cards[0].tokens()) >= 6:
+                    params["scale"] = float(t1[0]) if len(t1) > 0 else 1.0
+                    params["stiff0"] = float(t1[1]) if len(t1) > 1 else 0.0
+                    params["k"] = params["stiff0"]
+                    params["dmax"] = float(t1[2]) if len(t1) > 2 else 0.0
+                    params["alpha1"] = float(t1[3]) if len(t1) > 3 else 0.0
+                else:
+                    params["nfunc"] = int(float(t1[0])) if len(t1) > 0 else 0
+                    params["nraten"] = int(float(t1[1])) if len(t1) > 1 else 0
+                    params["scale"] = float(t1[2]) if len(t1) > 2 else 1.0
+                    params["stiff0"] = float(t1[3]) if len(t1) > 3 else 0.0
+                    params["k"] = params["stiff0"]
+                    params["alpha1"] = float(t1[4]) if len(t1) > 4 else 0.0
+
+            nfunc = params["nfunc"]
+            nraten = params["nraten"]
+            idx = 2
+            load_curves = []
+            for _ in range(nfunc):
+                if idx < len(cards) and not cards[idx].is_blank:
+                    tc = cards[idx].tokens()
+                    load_curves.append({
+                        "fun_load": int(float(tc[0])) if len(tc) > 0 else 0,
+                        "scale_load": float(tc[1]) if len(tc) > 1 else 1.0,
+                        "strainrate_load": float(tc[2]) if len(tc) > 2 else 0.0,
+                    })
+                    idx += 1
+            params["load_curves"] = load_curves
+
+            unload_curves = []
+            for _ in range(nraten):
+                if idx < len(cards) and not cards[idx].is_blank:
+                    tc = cards[idx].tokens()
+                    unload_curves.append({
+                        "fun_unload": int(float(tc[0])) if len(tc) > 0 else 0,
+                        "scale_unload": float(tc[1]) if len(tc) > 1 else 1.0,
+                        "strainrate_unload": float(tc[2]) if len(tc) > 2 else 0.0,
+                    })
+                    idx += 1
+            params["unload_curves"] = unload_curves
+
+    elif ptype == 27:  # SPR_BDAMP
+        params = {
+            "mass": 0.0, "isensor": 0, "sens_id": 0, "isflag": 0, "ileng": 0, "itens": 0, "ifail": 0,
+            "stiff": 0.0, "k": 0.0, "damp": 0.0, "c": 0.0, "nexp": 1.0, "n": 1.0,
+            "min_rup": 0.0, "delta_min": 0.0, "max_rup": 0.0, "delta_max": 0.0,
+            "gap": 0.0, "fsmooth": 0, "fcut": 0.0,
+            "fun1": 0, "fct1": 0, "fun2": 0, "fct2": 0,
+            "ascale1": 1.0, "fscale1": 1.0, "ascale2": 1.0, "fscale2": 1.0,
+        }
+        if block.fixed:
+            if len(cards) >= 1 and not cards[0].is_blank:
+                c0 = cards[0].cut("PROP_SPR_BDAMP_1")
+                params["mass"] = _fval(c0[0])
+                params["isensor"] = _ival(c0[2]) if len(c0) > 2 else 0
+                params["sens_id"] = params["isensor"]
+                params["isflag"] = _ival(c0[3]) if len(c0) > 3 else 0
+                params["ileng"] = _ival(c0[4]) if len(c0) > 4 else 0
+                params["itens"] = _ival(c0[5]) if len(c0) > 5 else 0
+                params["ifail"] = _ival(c0[6]) if len(c0) > 6 else 0
+            if len(cards) >= 2 and not cards[1].is_blank:
+                c1 = cards[1].cut("PROP_SPR_BDAMP_2")
+                params["stiff"] = _fval(c1[0])
+                params["k"] = params["stiff"]
+                params["damp"] = _fval(c1[1])
+                params["c"] = params["damp"]
+                params["nexp"] = _fval(c1[2], 1.0) if len(c1) > 2 else 1.0
+                params["n"] = params["nexp"]
+                params["min_rup"] = _fval(c1[3]) if len(c1) > 3 else 0.0
+                params["delta_min"] = params["min_rup"]
+                params["max_rup"] = _fval(c1[4]) if len(c1) > 4 else 0.0
+                params["delta_max"] = params["max_rup"]
+            if len(cards) >= 3 and not cards[2].is_blank:
+                c2 = cards[2].cut("PROP_SPR_BDAMP_3")
+                params["gap"] = _fval(c2[0])
+                params["fsmooth"] = _ival(c2[2]) if len(c2) > 2 else 0
+                params["fcut"] = _fval(c2[3]) if len(c2) > 3 else 0.0
+            if len(cards) >= 4 and not cards[3].is_blank:
+                c3 = cards[3].cut("PROP_SPR_BDAMP_4")
+                params["fun1"] = _ival(c3[0])
+                params["fct1"] = params["fun1"]
+                params["fun2"] = _ival(c3[1]) if len(c3) > 1 else 0
+                params["fct2"] = params["fun2"]
+                params["ascale1"] = _fval(c3[2], 1.0) if len(c3) > 2 else 1.0
+                params["fscale1"] = _fval(c3[3], 1.0) if len(c3) > 3 else 1.0
+                params["ascale2"] = _fval(c3[4], 1.0) if len(c3) > 4 else 1.0
+                params["fscale2"] = _fval(c3[5], 1.0) if len(c3) > 5 else 1.0
+        else:
+            if len(cards) >= 1 and not cards[0].is_blank:
+                t0 = cards[0].tokens()
+                params["mass"] = float(t0[0]) if len(t0) > 0 else 0.0
+                params["isensor"] = int(float(t0[1])) if len(t0) > 1 else 0
+                params["sens_id"] = params["isensor"]
+                params["isflag"] = int(float(t0[2])) if len(t0) > 2 else 0
+                params["ileng"] = int(float(t0[3])) if len(t0) > 3 else 0
+                params["itens"] = int(float(t0[4])) if len(t0) > 4 else 0
+                params["ifail"] = int(float(t0[5])) if len(t0) > 5 else 0
+            if len(cards) >= 2 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                params["stiff"] = float(t1[0]) if len(t1) > 0 else 0.0
+                params["k"] = params["stiff"]
+                params["damp"] = float(t1[1]) if len(t1) > 1 else 0.0
+                params["c"] = params["damp"]
+                params["nexp"] = float(t1[2]) if len(t1) > 2 else 1.0
+                params["n"] = params["nexp"]
+                params["min_rup"] = float(t1[3]) if len(t1) > 3 else 0.0
+                params["delta_min"] = params["min_rup"]
+                params["max_rup"] = float(t1[4]) if len(t1) > 4 else 0.0
+                params["delta_max"] = params["max_rup"]
+            if len(cards) >= 3 and not cards[2].is_blank:
+                t2 = cards[2].tokens()
+                params["gap"] = float(t2[0]) if len(t2) > 0 else 0.0
+                params["fsmooth"] = int(float(t2[1])) if len(t2) > 1 else 0
+                params["fcut"] = float(t2[2]) if len(t2) > 2 else 0.0
+            if len(cards) >= 4 and not cards[3].is_blank:
+                t3 = cards[3].tokens()
+                params["fun1"] = int(float(t3[0])) if len(t3) > 0 else 0
+                params["fct1"] = params["fun1"]
+                params["fun2"] = int(float(t3[1])) if len(t3) > 1 else 0
+                params["fct2"] = params["fun2"]
+                params["ascale1"] = float(t3[2]) if len(t3) > 2 else 1.0
+                params["fscale1"] = float(t3[3]) if len(t3) > 3 else 1.0
+                params["ascale2"] = float(t3[4]) if len(t3) > 4 else 1.0
+                params["fscale2"] = float(t3[5]) if len(t3) > 5 else 1.0
+
+    if ptype in (26, 27, 51, 17, 34):
+        from .prop_reader import InactiveProperty, _universal_geo_params
+        full_params = _universal_geo_params()
+        full_params.update(params)
+        model.properties[block.user_id] = InactiveProperty(
+            id=block.user_id, type=ptype, title=title, params=full_params,
+            prop_name=f"/PROP/{block.parts[1] if len(block.parts) > 1 else 'TYPE' + str(ptype)}"
+        )
+    else:
+        model.properties[block.user_id] = Property(
+            id=block.user_id, type=ptype, title=title, params=params)
 
 
 def read_prop_rivet(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -4735,11 +4933,18 @@ def read_stack(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 def read_table(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/TABLE/dim/table_ID`` (1D, 2D, 3D tabular functions; M139)."""
+    if len(block.parts) > 1 and block.parts[1].upper() in ("DRAPE", "PLY_SLICE"):
+        read_drape(block, model, log)
+        return
     if len(block.parts) < 3:
         log.warning(f"/TABLE: missing dimension or id part", block.source)
         return
-    dim = int(block.parts[1])
-    table_id = int(block.parts[2])
+    try:
+        dim = int(block.parts[1])
+        table_id = int(block.parts[2])
+    except ValueError:
+        log.warning(f"/TABLE: invalid dimension or id in /{'/'.join(block.parts)}", block.source)
+        return
 
     if block.fixed:
         title, cards = _fixed_data(block)
@@ -8992,115 +9197,220 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     if kind == "TYPE25":
         if block.fixed:
-            f0 = cards[0].cut("INTER_TYPE25_1")
-            surf1 = _ival(f0[0])
+            f0 = cards[0].cut("INTER_TYPE25_0") if len(cards) > 0 else []
+            surf1 = _ival(f0[0]) if len(f0) > 0 else 0
             surf2 = _ival(f0[1]) if len(f0) > 1 else 0
             istf = _ival(f0[2]) if len(f0) > 2 else 0
             igap = _ival(f0[4]) if len(f0) > 4 else 0
+            idel = _ival(f0[6]) if len(f0) > 6 else 0
 
-            grnod_id = 0
-            gap_scale = 1.0
-            gap1 = 0.0
-            gap2 = 0.0
+            grnod_id, prmesh_size, gap1, gap2 = 0, 0.0, 0.0, 0.0
             if len(cards) > 1 and not cards[1].is_blank:
-                f1 = cards[1].cut("INTER_TYPE25_2")
-                grnod_id = _ival(f1[0])
-                gap_scale = _fval(f1[2]) or 1.0
-                gap1 = _fval(f1[4])
-                gap2 = _fval(f1[5])
+                f1 = cards[1].cut("INTER_TYPE25_1")
+                grnod_id = _ival(f1[0]) if len(f1) > 0 else 0
+                prmesh_size = _fval(f1[2]) if len(f1) > 2 else 0.0
+                gap1 = _fval(f1[3]) if len(f1) > 3 else 0.0
+                gap2 = _fval(f1[4]) if len(f1) > 4 else 0.0
 
-            stfac = 1.0
-            fric = 0.0
+            stmin, stmax, igap2 = 0.0, 0.0, 0
+            if len(cards) > 2 and not cards[2].is_blank:
+                f2 = cards[2].cut("INTER_TYPE25_2")
+                stmin = _fval(f2[0]) if len(f2) > 0 else 0.0
+                stmax = _fval(f2[1]) if len(f2) > 1 else 0.0
+                igap2 = _ival(f2[2]) if len(f2) > 2 else 0
+
+            stfac, fric, tstart, tstop = 1.0, 0.0, 0.0, 1.0e30
             if len(cards) > 3 and not cards[3].is_blank:
-                f3 = cards[3].cut("INTER_TYPE25_4")
-                stfac = _fval(f3[0]) or 1.0
-                fric = _fval(f3[1])
+                f3 = cards[3].cut("INTER_TYPE25_3")
+                stfac = _fval(f3[0], 1.0) if len(f3) > 0 else 1.0
+                fric = _fval(f3[1]) if len(f3) > 1 else 0.0
+                tstart = _fval(f3[3]) if len(f3) > 3 else 0.0
+                tstop = _fval(f3[4], 1.0e30) if len(f3) > 4 else 1.0e30
+
+            deact_x, deact_y, deact_z, inactiv, stiff_dc = 0, 0, 0, 0, 0.0
+            if len(cards) > 4 and not cards[4].is_blank:
+                f4 = cards[4].cut("INTER_TYPE25_4")
+                deact_x = _ival(f4[1]) if len(f4) > 1 else 0
+                deact_y = _ival(f4[2]) if len(f4) > 2 else 0
+                deact_z = _ival(f4[3]) if len(f4) > 3 else 0
+                inactiv = _ival(f4[5]) if len(f4) > 5 else 0
+                stiff_dc = _fval(f4[6]) if len(f4) > 6 else 0.0
+
+            ifric, ifiltr, xfreq, isensor, fric_id = 0, 0, 0.0, 0, 0
+            if len(cards) > 5 and not cards[5].is_blank:
+                f5 = cards[5].cut("INTER_TYPE25_5")
+                ifric = _ival(f5[0]) if len(f5) > 0 else 0
+                ifiltr = _ival(f5[1]) if len(f5) > 1 else 0
+                xfreq = _fval(f5[2]) if len(f5) > 2 else 0.0
+                isensor = _ival(f5[4]) if len(f5) > 4 else 0
+                fric_id = _ival(f5[6]) if len(f5) > 6 else 0
+
+            c1, c2, c3, c4, c5 = 0.0, 0.0, 0.0, 0.0, 0.0
+            if len(cards) > 6 and not cards[6].is_blank:
+                f6 = cards[6].cut("INTER_TYPE25_6")
+                c1 = _fval(f6[0]) if len(f6) > 0 else 0.0
+                c2 = _fval(f6[1]) if len(f6) > 1 else 0.0
+                c3 = _fval(f6[2]) if len(f6) > 2 else 0.0
+                c4 = _fval(f6[3]) if len(f6) > 3 else 0.0
+                c5 = _fval(f6[4]) if len(f6) > 4 else 0.0
         else:
-            t0 = cards[0].tokens()
+            t0 = cards[0].tokens() if len(cards) > 0 else []
             surf1 = int(float(t0[0])) if len(t0) > 0 else 0
             surf2 = int(float(t0[1])) if len(t0) > 1 else 0
             istf = int(float(t0[2])) if len(t0) > 2 else 0
             igap = int(float(t0[3])) if len(t0) > 3 else 0
+            idel = int(float(t0[4])) if len(t0) > 4 else 0
 
-            grnod_id = 0
-            gap_scale = 1.0
-            gap1 = 0.0
-            gap2 = 0.0
+            grnod_id, prmesh_size, gap1, gap2 = 0, 0.0, 0.0, 0.0
             if len(cards) > 1 and not cards[1].is_blank:
                 t1 = cards[1].tokens()
                 grnod_id = int(float(t1[0])) if len(t1) > 0 else 0
-                gap_scale = float(t1[1]) if len(t1) > 1 else 1.0
+                prmesh_size = float(t1[1]) if len(t1) > 1 else 0.0
                 gap1 = float(t1[2]) if len(t1) > 2 else 0.0
                 gap2 = float(t1[3]) if len(t1) > 3 else 0.0
 
-            stfac = 1.0
-            fric = 0.0
+            stmin, stmax, igap2 = 0.0, 0.0, 0
+            if len(cards) > 2 and not cards[2].is_blank:
+                t2 = cards[2].tokens()
+                stmin = float(t2[0]) if len(t2) > 0 else 0.0
+                stmax = float(t2[1]) if len(t2) > 1 else 0.0
+                igap2 = int(float(t2[2])) if len(t2) > 2 else 0
+
+            stfac, fric, tstart, tstop = 1.0, 0.0, 0.0, 1.0e30
             if len(cards) > 3 and not cards[3].is_blank:
                 t3 = cards[3].tokens()
                 stfac = float(t3[0]) if len(t3) > 0 else 1.0
-                fric = float(t3[1]) if len(t3) > 0 else 0.0
+                fric = float(t3[1]) if len(t3) > 1 else 0.0
+                tstart = float(t3[2]) if len(t3) > 2 else 0.0
+                tstop = float(t3[3]) if len(t3) > 3 else 1.0e30
+
+            deact_x, deact_y, deact_z, inactiv, stiff_dc = 0, 0, 0, 0, 0.0
+            if len(cards) > 4 and not cards[4].is_blank:
+                t4 = cards[4].tokens()
+                if len(t4) == 3:
+                    tok0 = t4[0]
+                    deact_x = int(tok0[0]) if len(tok0) > 0 and tok0[0].isdigit() else 0
+                    deact_y = int(tok0[1]) if len(tok0) > 1 and tok0[1].isdigit() else 0
+                    deact_z = int(tok0[2]) if len(tok0) > 2 and tok0[2].isdigit() else 0
+                    inactiv = int(float(t4[1]))
+                    stiff_dc = float(t4[2])
+                else:
+                    deact_x = int(float(t4[0])) if len(t4) > 0 else 0
+                    deact_y = int(float(t4[1])) if len(t4) > 1 else 0
+                    deact_z = int(float(t4[2])) if len(t4) > 2 else 0
+                    inactiv = int(float(t4[3])) if len(t4) > 3 else 0
+                    stiff_dc = float(t4[4]) if len(t4) > 4 else 0.0
+
+            ifric, ifiltr, xfreq, isensor, fric_id = 0, 0, 0.0, 0, 0
+            if len(cards) > 5 and not cards[5].is_blank:
+                t5 = cards[5].tokens()
+                ifric = int(float(t5[0])) if len(t5) > 0 else 0
+                ifiltr = int(float(t5[1])) if len(t5) > 1 else 0
+                xfreq = float(t5[2]) if len(t5) > 2 else 0.0
+                isensor = int(float(t5[3])) if len(t5) > 3 else 0
+                fric_id = int(float(t5[4])) if len(t5) > 4 else 0
+
+            c1, c2, c3, c4, c5 = 0.0, 0.0, 0.0, 0.0, 0.0
+            if len(cards) > 6 and not cards[6].is_blank:
+                t6 = cards[6].tokens()
+                c1 = float(t6[0]) if len(t6) > 0 else 0.0
+                c2 = float(t6[1]) if len(t6) > 1 else 0.0
+                c3 = float(t6[2]) if len(t6) > 2 else 0.0
+                c4 = float(t6[3]) if len(t6) > 3 else 0.0
+                c5 = float(t6[4]) if len(t6) > 4 else 0.0
 
         model.interfaces.append(Interface(
             id=block.user_id, type=25, surf_id=surf1, surf_id1=surf2, grnod_id=grnod_id,
-            istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap1, gap_max=gap2, title=title
+            istf=istf, igap=igap, idel=idel, stmin=stmin, stmax=stmax, stfac=stfac, fric=fric,
+            gap=gap1, gap_max=gap2, tstart=tstart, tstop=tstop,
+            inactiv=inactiv, stiff_dc=stiff_dc, ifric=ifric, ifiltr=ifiltr, xfreq=xfreq,
+            isensor=isensor, fric_id=fric_id, c1=c1, c2=c2, c3=c3, c4=c4, c5=c5,
+            title=title
         ))
         return
 
     if kind == "TYPE19":
         if block.fixed:
-            f0 = _fixed_vals(cards[0], [10, 10, 10, 10, 10, 10, 10, 10, 10])
-            grnod_id = _ival(f0[0])
-            surf_id = _ival(f0[1])
-            istf = _ival(f0[2])
-            igap = _ival(f0[4])
-            multimp = _ival(f0[5])
-            ibag = _ival(f0[6])
-            idel = _ival(f0[7])
-            icurv = _ival(f0[8])
+            f0 = cards[0].cut("INTER_TYPE19_0") if len(cards) > 0 else []
+            grnod_id = _ival(f0[0]) if len(f0) > 0 else 0
+            surf_id = _ival(f0[1]) if len(f0) > 1 else 0
+            istf = _ival(f0[2]) if len(f0) > 2 else 0
+            igap = _ival(f0[4]) if len(f0) > 4 else 0
+            iedge = _ival(f0[5]) if len(f0) > 5 else 0
+            ibag = _ival(f0[6]) if len(f0) > 6 else 0
+            idel = _ival(f0[7]) if len(f0) > 7 else 0
+            icurv = _ival(f0[8]) if len(f0) > 8 else 0
 
             gap_scale = 1.0
             gap_max = 0.0
-            gap_min = 0.0
             if len(cards) > 1 and not cards[1].is_blank:
-                f1 = _fixed_vals(cards[1], [20, 20, 20, 20, 20])
-                gap_scale = _fval(f1[0], 1.0)
-                gap_max = _fval(f1[1], 0.0)
-                gap_min = _fval(f1[2], 0.0)
+                f1 = cards[1].cut("INTER_TYPE19_1")
+                gap_scale = _fval(f1[0], 1.0) if len(f1) > 0 else 1.0
+                gap_max = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
 
-            stfac = 1.0
-            fric = 0.0
+            stmin, stmax = 0.0, 0.0
             if len(cards) > 2 and not cards[2].is_blank:
-                f2 = _fixed_vals(cards[2], [20, 20, 20, 20, 20])
-                stfac = _fval(f2[2], 1.0)
-                fric = _fval(f2[3], 0.0)
+                f2 = cards[2].cut("INTER_TYPE19_2")
+                stmin = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                stmax = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+
+            n1, n2 = 0, 0
+            if len(cards) > 3 and not cards[3].is_blank:
+                f3 = cards[3].cut("INTER_TYPE19_3")
+                n1 = _ival(f3[0]) if len(f3) > 0 else 0
+                n2 = _ival(f3[1]) if len(f3) > 1 else 0
+
+            stfac, fric, gap, tstart, tstop = 1.0, 0.0, 0.0, 0.0, 1.0e30
+            if len(cards) > 4 and not cards[4].is_blank:
+                f4 = cards[4].cut("INTER_TYPE19_4")
+                stfac = _fval(f4[0], 1.0) if len(f4) > 0 else 1.0
+                fric = _fval(f4[1], 0.0) if len(f4) > 1 else 0.0
+                gap = _fval(f4[2], 0.0) if len(f4) > 2 else 0.0
+                tstart = _fval(f4[3], 0.0) if len(f4) > 3 else 0.0
+                tstop = _fval(f4[4], 1.0e30) if len(f4) > 4 else 1.0e30
         else:
-            t0 = cards[0].tokens()
+            t0 = cards[0].tokens() if len(cards) > 0 else []
             grnod_id = int(float(t0[0])) if len(t0) > 0 else 0
             surf_id = int(float(t0[1])) if len(t0) > 1 else 0
             istf = int(float(t0[2])) if len(t0) > 2 else 0
             igap = int(float(t0[3])) if len(t0) > 3 else 0
-            multimp = int(float(t0[4])) if len(t0) > 4 else 0
+            iedge = int(float(t0[4])) if len(t0) > 4 else 0
             ibag = int(float(t0[5])) if len(t0) > 5 else 0
             idel = int(float(t0[6])) if len(t0) > 6 else 0
             icurv = int(float(t0[7])) if len(t0) > 7 else 0
 
-            gap_scale, gap_max, gap_min = 1.0, 0.0, 0.0
+            gap_scale, gap_max = 1.0, 0.0
             if len(cards) > 1 and not cards[1].is_blank:
                 t1 = cards[1].tokens()
                 gap_scale = float(t1[0]) if len(t1) > 0 else 1.0
                 gap_max = float(t1[1]) if len(t1) > 1 else 0.0
-                gap_min = float(t1[2]) if len(t1) > 2 else 0.0
 
-            stfac, fric = 1.0, 0.0
+            stmin, stmax = 0.0, 0.0
             if len(cards) > 2 and not cards[2].is_blank:
                 t2 = cards[2].tokens()
-                stfac = float(t2[2]) if len(t2) > 2 else 1.0
-                fric = float(t2[3]) if len(t2) > 3 else 0.0
+                stmin = float(t2[0]) if len(t2) > 0 else 0.0
+                stmax = float(t2[1]) if len(t2) > 1 else 0.0
+
+            n1, n2 = 0, 0
+            if len(cards) > 3 and not cards[3].is_blank:
+                t3 = cards[3].tokens()
+                n1 = int(float(t3[0])) if len(t3) > 0 else 0
+                n2 = int(float(t3[1])) if len(t3) > 1 else 0
+
+            stfac, fric, gap, tstart, tstop = 1.0, 0.0, 0.0, 0.0, 1.0e30
+            if len(cards) > 4 and not cards[4].is_blank:
+                t4 = cards[4].tokens()
+                stfac = float(t4[0]) if len(t4) > 0 else 1.0
+                fric = float(t4[1]) if len(t4) > 1 else 0.0
+                gap = float(t4[2]) if len(t4) > 2 else 0.0
+                tstart = float(t4[3]) if len(t4) > 3 else 0.0
+                tstop = float(t4[4]) if len(t4) > 4 else 1.0e30
 
         model.interfaces.append(Interface(
             id=block.user_id, type=19, grnod_id=grnod_id, surf_id=surf_id,
-            istf=istf, igap=igap, multimp=multimp, ibag=ibag, idel=idel, icurv=icurv,
-            gap_scale=gap_scale, gap_max=gap_max, gap_min=gap_min, stfac=stfac, fric=fric, title=title
+            istf=istf, igap=igap, multimp=iedge, ibag=ibag, idel=idel, icurv=icurv,
+            gap_scale=gap_scale, gap_max=gap_max, gap=gap, stmin=stmin, stmax=stmax,
+            stfac=stfac, fric=fric, tstart=tstart, tstop=tstop, title=title
         ))
         return
 
@@ -14850,13 +15160,81 @@ def read_userwi(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_drape(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/DRAPE/drape_ID`` (M107): Composite fabric draping definition."""
-    title = block.cards[0].raw.strip() if block.cards else ""
+    """``/DRAPE/drape_ID`` (M107, M157): Composite fabric draping definition."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    did = block.user_id if block.user_id is not None else 1
     slices = []
-    for card in block.cards[1:]:
-        if card.raw.strip():
-            slices.append({"raw": card.raw.strip()})
-    model.drapes[block.user_id] = Drape(id=block.user_id, title=title, slices=slices)
+    entity_keywords = {"SHELL", "SH3N", "GRSHEL", "GRSH3N", "ELEMS", "SETS", "PART", "GRPART"}
+    i = 0
+    while i < len(cards):
+        card = cards[i]
+        if not card.is_blank:
+            if block.fixed:
+                first_word = card.raw[:10].strip().upper()
+                if first_word in entity_keywords:
+                    hdr = card.cut("DRAPE_SLICE_HDR")
+                    etype = hdr[0].strip().upper() if len(hdr) > 0 else ""
+                    eid = _ival(hdr[1]) if len(hdr) > 1 else 0
+                    thinning, theta_slice, mat_id, npt_slice = 1.0, 0.0, 0, 1
+                    if len(card.raw) > 20 and card.raw[20:].strip():
+                        from .card_layouts import split_fixed
+                        row = split_fixed(card.raw[20:], [20, 20, 10, 10])
+                        thinning = _fval(row[0], 1.0) if len(row) > 0 else 1.0
+                        theta_slice = _fval(row[1]) if len(row) > 1 else 0.0
+                        mat_id = _ival(row[2]) if len(row) > 2 else 0
+                        npt_slice = _ival(row[3], 1) if len(row) > 3 else 1
+                    elif i + 1 < len(cards) and not cards[i+1].is_blank and cards[i+1].raw[:10].strip().upper() not in entity_keywords:
+                        row = cards[i+1].cut("DRAPE_SLICE_ROW")
+                        thinning = _fval(row[0], 1.0) if len(row) > 0 else 1.0
+                        theta_slice = _fval(row[1]) if len(row) > 1 else 0.0
+                        mat_id = _ival(row[2]) if len(row) > 2 else 0
+                        npt_slice = _ival(row[3], 1) if len(row) > 3 else 1
+                        i += 1
+                    slices.append({
+                        "entity_type": etype,
+                        "entity_id": eid,
+                        "thinning": thinning,
+                        "theta_slice": theta_slice,
+                        "mat_id": mat_id,
+                        "npt_slice": npt_slice,
+                        "raw": card.raw.strip(),
+                    })
+                else:
+                    slices.append({"raw": card.raw.strip()})
+            else:
+                toks = card.tokens()
+                if toks:
+                    first_tok = toks[0].upper()
+                    if first_tok in entity_keywords:
+                        etype = first_tok
+                        eid = int(float(toks[1])) if len(toks) > 1 else 0
+                        thinning, theta_slice, mat_id, npt_slice = 1.0, 0.0, 0, 1
+                        if len(toks) > 2:
+                            thinning = float(toks[2])
+                            theta_slice = float(toks[3]) if len(toks) > 3 else 0.0
+                            mat_id = int(float(toks[4])) if len(toks) > 4 else 0
+                            npt_slice = int(float(toks[5])) if len(toks) > 5 else 1
+                        elif i + 1 < len(cards) and not cards[i+1].is_blank:
+                            next_toks = cards[i+1].tokens()
+                            if next_toks and next_toks[0].upper() not in entity_keywords:
+                                thinning = float(next_toks[0]) if len(next_toks) > 0 else 1.0
+                                theta_slice = float(next_toks[1]) if len(next_toks) > 1 else 0.0
+                                mat_id = int(float(next_toks[2])) if len(next_toks) > 2 else 0
+                                npt_slice = int(float(next_toks[3])) if len(next_toks) > 3 else 1
+                                i += 1
+                        slices.append({
+                            "entity_type": etype,
+                            "entity_id": eid,
+                            "thinning": thinning,
+                            "theta_slice": theta_slice,
+                            "mat_id": mat_id,
+                            "npt_slice": npt_slice,
+                            "raw": card.raw.strip(),
+                        })
+                    else:
+                        slices.append({"raw": card.raw.strip()})
+        i += 1
+    model.drapes[did] = Drape(id=did, title=title, slices=slices)
 
 
 def read_inibri_eref(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -17738,6 +18116,15 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PROP_P9_SH_ORTH": read_prop,
     "PROP_P10_SH_COMP": read_prop,
     "PROP_P1_SHELL": read_prop,
+    "PROP_P26_SPR_TAB": read_prop,
+    "PROP_P27_SPR_BDAMP": read_prop,
+    "PROP_SPR_TAB": read_prop,
+    "PROP_SPR_BDAMP": read_prop,
+    "INTER_TYPE19": read_inter,
+    "INTER_TYPE25": read_inter,
+    "INTER_TYPE8": read_inter,
+    "DRAPE": read_drape,
+    "DRAPE_PLY_SLICE": read_drape,
     "PRELOAD_AXIAL": read_preload_axial,
 }
 

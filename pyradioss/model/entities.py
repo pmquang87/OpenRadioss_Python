@@ -1107,6 +1107,18 @@ class Interface:
     tol: float = 0.0      # type 12: tolerance
     visc: float = 0.0     # type 9: damping viscosity
     radius: float = 0.0   # type 17: contact radius
+    stmin: float = 0.0    # type 19/25: min stiffness
+    stmax: float = 0.0    # type 19/25: max stiffness
+    ifric: int = 0        # type 25: friction flag
+    ifiltr: int = 0       # type 25: filter flag
+    xfreq: float = 0.0    # type 25: filter cutoff frequency
+    isensor: int = 0      # type 25: sensor ID
+    fric_id: int = 0      # type 25: friction law ID
+    c1: float = 0.0       # type 25: friction constant 1
+    c2: float = 0.0       # type 25: friction constant 2
+    c3: float = 0.0       # type 25: friction constant 3
+    c4: float = 0.0       # type 25: friction constant 4
+    c5: float = 0.0       # type 25: friction constant 5
 
 
 @dataclass
