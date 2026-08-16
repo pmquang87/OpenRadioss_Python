@@ -148,6 +148,7 @@ real history is 41 milestones. One line each:
 | M140 | Add extended high-explosive equations of state, unified initial state dispatcher & sensor suite (/EOS/JWL, /EOS/TYPE5, /EOS/COMPACT, /INIT/VEL, /INIT/BRI, /INIT/SHE, /INIT/TRU, /INIT/BEA, /INIT/SPR, /INIT/TEMP, /HEAT/MAT, /HEAT/SOLVER, /SENSOR/RWALL_PLANE, /SENSOR/FORCE, /SENSOR/MOMENT, /SENSOR/RWALL_CYL) |
 | M141 | Add extended material sub-object modifiers, thermal-stress & viscoelastic relaxation suite (/MAT/PLAS_ZERIL, /MAT/PLAS_BODNE, /MAT/VISC_PRONY, /VISC/LPRONY, /MAT/THERM_STRESS, /THERM_STRESS, /DAMP/STIFF, /DAMP/MASS) |
 | M142 | Add airbag injector & venthole models, advanced ALE solver controls & extended element initial state tensors suite (/AIRBAG/INJECTOR, /INJECTOR, /AIRBAG/VENTHOLE, /VENTHOLE, /INIBRI/STRA_F, /INIBRI/FAIL, /INIBRI/AUX, /INIBRI/SCALE_YLD, /INISHE/STRA_F, /INISHE/EPSP_F, /INISHE/FAIL, /INISHE/AUX, /INISH3/STRA_F, /INISH3/EPSP_F) |
+| M143 | Add extended element initial references (/EREF/*), X-FEM initial cracks (/INICRACK), fastener & cohesive properties (/PROP/TYPE5, /PROP/TYPE28) and adaptive remeshing controls (/ADMESH/*) |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

@@ -1224,6 +1224,15 @@ LAYOUTS: Dict[str, List[int]] = {
     "AIRBAG_VENTHOLE_3": [10, 10, 10, 10, 20, 20, 20],
     "INIBRI_STRA_1": [10, 20, 20, 20],
     "INIBRI_STRA_2": [20, 20, 20],
+
+    # EREF, INICRACK, PROPS & ADMESH (M143)
+    "EREF_ELEM_1": [10, 10, 10, 10, 10, 10, 10, 10],
+    "INICRACK_1": [10, 10, 10],
+    "INICRACK_2": [20, 20, 20],
+    "INICRACK_3": [20, 20, 20],
+    "PROP_RIVET_1": [20, 20, 20, 20],
+    "PROP_XELEM_1": [10, 10, 20],
+    "ADMESH_PART_1": [10, 10, 20, 20],
 }
 
 

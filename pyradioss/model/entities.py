@@ -1867,13 +1867,18 @@ class IniCrackSegment:
 
 @dataclass
 class IniCrack:
-    """/INICRACK (M102): Initial crack definition for XFEM.
+    """/INICRACK (M102, M143): Initial crack geometric definition for X-FEM / cohesive elements.
 
     Fortran origin: ``starter/source/initial_conditions/inicrack/hm_read_inicrack.F``.
     """
     id: int
     title: str = ""
     segments: List[IniCrackSegment] = field(default_factory=list)
+    grsh_id: int = 0
+    p1: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    p2: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    norm: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    open_flag: int = 0
 
 
 @dataclass
@@ -3905,3 +3910,59 @@ class AirbagVenthole:
     fscale_t: float = 1.0
     fscale_p: float = 1.0
     fscale_a: float = 1.0
+
+
+@dataclass
+class ErefElement:
+    """/EREF/{SHELL|SH3N|BRICK|TETRA4} (M143): Element reference geometry.
+
+    Fortran origin: ``starter/source/initial_conditions/general/hm_read_eref.F``.
+    """
+    id: int
+    title: str = ""
+    elem_type: str = "SHELL"
+    part_id: int = 0
+    node_coords: Dict[int, List[float]] = field(default_factory=dict)
+
+
+@dataclass
+class PropRivet:
+    """/PROP/TYPE5 or /PROP/RIVET (M143): Fastener / Rivet connector property.
+
+    Fortran origin: ``starter/source/properties/rivet/hm_read_prop05.F``.
+    """
+    id: int
+    title: str = ""
+    mass: float = 0.0
+    stiffness: float = 0.0
+    fn_fail: float = 0.0
+    ft_fail: float = 0.0
+
+
+@dataclass
+class PropXelem:
+    """/PROP/TYPE28 or /PROP/XELEM (M143): X-FEM / cohesive element property.
+
+    Fortran origin: ``starter/source/properties/xelem/hm_read_prop28.F``.
+    """
+    id: int
+    title: str = ""
+    itip: int = 0
+    isurf: int = 0
+    alpha: float = 0.0
+
+
+@dataclass
+class AdmeshControl:
+    """/ADMESH/{GLOBAL|PART|STATE|BCS|SET} (M143): Adaptive mesh refinement control.
+
+    Fortran origin: ``starter/source/model/remesh/build_admesh.F``.
+    """
+    id: int
+    title: str = ""
+    subtype: str = "GLOBAL"
+    crit_level: int = 0
+    h_min: float = 0.0
+    h_max: float = 0.0
+    part_id: int = 0
+

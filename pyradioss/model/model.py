@@ -75,6 +75,7 @@ from .entities import (
     WaveShaper, DetLine, DetCirc, IniMap3D, SetGeneric,
     MaterialPlasZeril, MaterialPlasBodne, MaterialViscProny, MaterialThermStress, DampStiff,
     AirbagInjector, AirbagVenthole,
+    ErefElement, IniCrack, PropRivet, PropXelem, AdmeshControl,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -826,6 +827,11 @@ class Model:
         self.damp_stiffs: Dict[int, DampStiff] = {}        # /DAMP/STIFF (M141)
         self.airbag_injectors: Dict[int, AirbagInjector] = {} # /AIRBAG/INJECTOR (M142)
         self.airbag_ventholes: Dict[int, AirbagVenthole] = {} # /AIRBAG/VENTHOLE (M142)
+        self.eref_elements: Dict[int, ErefElement] = {}       # /EREF/* (M143)
+        self.ini_cracks: Dict[int, IniCrack] = {}             # /INICRACK (M143)
+        self.prop_rivets: Dict[int, PropRivet] = {}           # /PROP/RIVET (M143)
+        self.prop_xelems: Dict[int, PropXelem] = {}           # /PROP/XELEM (M143)
+        self.admesh_controls: Dict[int, AdmeshControl] = {}   # /ADMESH/* (M143)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

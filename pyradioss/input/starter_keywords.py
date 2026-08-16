@@ -2716,6 +2716,12 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if typename in ("VENTHOLE", "VENT", "POROUS"):
         read_airbag_venthole(block, model, log)
         return
+    if typename in ("TYPE5", "RIVET", "FASTENER"):
+        read_prop_rivet(block, model, log)
+        return
+    if typename in ("TYPE28", "XELEM", "XFEM"):
+        read_prop_xelem(block, model, log)
+        return
     aliases = {"TYPE1": 1, "SHELL": 1, "TYPE2": 2, "TRUSS": 2,
                "TYPE3": 3, "BEAM": 3,
                "TYPE4": 4, "SPRING": 4, "TYPE14": 14, "SOLID": 14,
@@ -3662,6 +3668,52 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     model.properties[block.user_id] = Property(
         id=block.user_id, type=ptype, title=title, params=params)
+
+
+def read_prop_rivet(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE5`` or ``/PROP/RIVET`` (M143): Rivet / Fastener connector property."""
+    from ..model.entities import PropRivet
+    pid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    mass, stiffness, fn_fail, ft_fail = 0.0, 0.0, 0.0, 0.0
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("PROP_RIVET_1")
+            mass = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            stiffness = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            fn_fail = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            ft_fail = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        else:
+            toks = cards[0].tokens()
+            mass = float(toks[0]) if len(toks) > 0 else 0.0
+            stiffness = float(toks[1]) if len(toks) > 1 else 0.0
+            fn_fail = float(toks[2]) if len(toks) > 2 else 0.0
+            ft_fail = float(toks[3]) if len(toks) > 3 else 0.0
+    model.prop_rivets[pid] = PropRivet(
+        id=pid, title=title, mass=mass, stiffness=stiffness, fn_fail=fn_fail, ft_fail=ft_fail
+    )
+
+
+def read_prop_xelem(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE28`` or ``/PROP/XELEM`` (M143): X-FEM / cohesive element property."""
+    from ..model.entities import PropXelem
+    pid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    itip, isurf, alpha = 0, 0, 0.0
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("PROP_XELEM_1")
+            itip = _ival(f[0]) if len(f) > 0 else 0
+            isurf = _ival(f[1]) if len(f) > 1 else 0
+            alpha = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        else:
+            toks = cards[0].tokens()
+            itip = int(float(toks[0])) if len(toks) > 0 else 0
+            isurf = int(float(toks[1])) if len(toks) > 1 else 0
+            alpha = float(toks[2]) if len(toks) > 2 else 0.0
+    model.prop_xelems[pid] = PropXelem(
+        id=pid, title=title, itip=itip, isurf=isurf, alpha=alpha
+    )
 
 
 def read_ply(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -9547,6 +9599,39 @@ def read_admesh_global(block: KeywordBlock, model: Model, log: MessageLog) -> No
     )
 
 
+def read_admesh(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ADMESH/<subtype>/id`` dispatcher (M143): Adaptive meshing controls."""
+    from ..model.entities import AdmeshControl
+    sub = block.parts[1].upper() if len(block.parts) > 1 else "GLOBAL"
+    aid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+
+    if sub in ("GLOBAL", "MESH"):
+        read_admesh_global(block, model, log)
+        return
+
+    crit_level = 0
+    h_min, h_max = 0.0, 0.0
+    part_id = 0
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("ADMESH_PART_1")
+            part_id = _ival(f[0]) if len(f) > 0 else 0
+            crit_level = _ival(f[1]) if len(f) > 1 else 0
+            h_min = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            h_max = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        else:
+            t = cards[0].tokens()
+            part_id = int(float(t[0])) if len(t) > 0 else 0
+            crit_level = int(float(t[1])) if len(t) > 1 else 0
+            h_min = float(t[2]) if len(t) > 2 else 0.0
+            h_max = float(t[3]) if len(t) > 3 else 0.0
+    model.admesh_controls[aid] = AdmeshControl(
+        id=aid, title=title, subtype=sub, crit_level=crit_level,
+        h_min=h_min, h_max=h_max, part_id=part_id
+    )
+
+
 def read_stamping(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/STAMPING`` (M113): Sheet metal forming stamping history input::
 
@@ -10717,35 +10802,64 @@ def read_merge(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_inicrack(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INICRACK/id`` (M102): initial crack definition.
+    """``/INICRACK/id`` (M102, M143): initial crack definition.
 
     Fortran origin: ``starter/source/initial_conditions/inicrack/hm_read_inicrack.F``.
     """
     from ..model.entities import IniCrack, IniCrackSegment
+    cid = block.user_id or 1
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     segments = []
+    grsh_id = 0
+    p1 = [0.0, 0.0, 0.0]
+    p2 = [0.0, 0.0, 0.0]
+    norm = [0.0, 0.0, 0.0]
+    open_flag = 0
+
     if cards:
-        start_idx = 0
-        if len(cards[0].tokens()) == 1:
-            start_idx = 1
-        for c in cards[start_idx:]:
-            if block.fixed:
-                f = c.cut("INICRACK_ITEM")
-                if len(f) >= 2 and any(f):
-                    n1 = _ival(f[0])
-                    n2 = _ival(f[1])
-                    rat = _fval(f[2]) if len(f) > 2 else 0.0
-                    segments.append(IniCrackSegment(node_id1=n1, node_id2=n2, ratio=rat))
-            else:
-                toks = c.tokens()
-                if len(toks) >= 2:
-                    n1 = int(float(toks[0]))
-                    n2 = int(float(toks[1]))
-                    rat = float(toks[2]) if len(toks) > 2 else 0.0
-                    segments.append(IniCrackSegment(node_id1=n1, node_id2=n2, ratio=rat))
-    model.inicracks[block.user_id] = IniCrack(
-        id=block.user_id, title=title, segments=segments
+        t0 = cards[0].tokens()
+        if len(t0) <= 2 and len(cards) >= 4:
+            grsh_id = int(float(t0[0])) if len(t0) > 0 else 0
+            open_flag = int(float(t0[1])) if len(t0) > 1 else 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                if len(t1) >= 3:
+                    p1 = [float(x) for x in t1[:3]]
+            if len(cards) > 2 and not cards[2].is_blank:
+                t2 = cards[2].tokens()
+                if len(t2) >= 3:
+                    p2 = [float(x) for x in t2[:3]]
+            if len(cards) > 3 and not cards[3].is_blank:
+                t3 = cards[3].tokens()
+                if len(t3) >= 3:
+                    norm = [float(x) for x in t3[:3]]
+        else:
+            start_idx = 0
+            if len(t0) == 1:
+                grsh_id = int(float(t0[0]))
+                start_idx = 1
+            for c in cards[start_idx:]:
+                if c.is_blank:
+                    continue
+                if block.fixed:
+                    f = c.cut("INICRACK_ITEM")
+                    if len(f) >= 2 and any(f):
+                        n1 = _ival(f[0])
+                        n2 = _ival(f[1])
+                        rat = _fval(f[2]) if len(f) > 2 else 0.0
+                        segments.append(IniCrackSegment(node_id1=n1, node_id2=n2, ratio=rat))
+                else:
+                    toks = c.tokens()
+                    if len(toks) >= 2:
+                        n1 = int(float(toks[0]))
+                        n2 = int(float(toks[1]))
+                        rat = float(toks[2]) if len(toks) > 2 else 0.0
+                        segments.append(IniCrackSegment(node_id1=n1, node_id2=n2, ratio=rat))
+    model.inicracks[cid] = IniCrack(
+        id=cid, title=title, segments=segments, grsh_id=grsh_id,
+        p1=p1, p2=p2, norm=norm, open_flag=open_flag
     )
+    model.ini_cracks[cid] = model.inicracks[cid]
 
 
 def read_laser(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -14932,12 +15046,28 @@ def read_refsta(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_eref(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/EREF/part_id``, ``/EREF/SHELL/part_id``, ``/EREF/SOLID/part_id`` (M119): Element reference configuration."""
+    """``/EREF/part_id``, ``/EREF/SHELL/part_id``, ``/EREF/SOLID/part_id`` (M119, M143): Element reference configuration."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    from ..model.entities import ErefSpec
+    from ..model.entities import ErefSpec, ErefElement
     pid = block.user_id if block.user_id is not None else 0
-    subtype = block.parts[1].upper() if len(block.parts) > 2 else ""
+    subtype = block.parts[1].upper() if len(block.parts) > 2 else "SHELL"
     model.eref_specs[pid] = ErefSpec(id=pid, title=title, part_id=pid, subtype=subtype)
+
+    node_coords: Dict[int, List[float]] = {}
+    for c in cards:
+        if c.is_blank:
+            continue
+        toks = c.tokens()
+        if len(toks) >= 4:
+            try:
+                nid = int(float(toks[0]))
+                xyz = [float(x) for x in toks[1:4]]
+                node_coords[nid] = xyz
+            except ValueError:
+                pass
+    model.eref_elements[pid] = ErefElement(
+        id=pid, title=title, elem_type=subtype, part_id=pid, node_coords=node_coords
+    )
 
 
 def read_nbcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -15695,6 +15825,10 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "AIRBAGVENTHOLE": read_airbag_venthole,
     "INJECTOR": read_airbag_injector,
     "VENTHOLE": read_airbag_venthole,
+    "ADMESH": read_admesh,
+    "ADGLOB": read_admesh_global,
+    "RIVET": read_prop_rivet,
+    "XELEM": read_prop_xelem,
 }
 
 
