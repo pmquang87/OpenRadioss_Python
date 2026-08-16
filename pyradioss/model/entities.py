@@ -1230,6 +1230,7 @@ class DetonatorPoint:
     z: float = 0.0
     tdet: float = 0.0
     mat_id: int = 0
+    grnod_id: int = 0
 
 
 @dataclass
@@ -1753,7 +1754,7 @@ class DiffConstraint:
 
 @dataclass
 class Ply:
-    """/PLY/ply_id (M100): Composite ply definition.
+    """/PLY/ply_id (M100, M156): Composite ply definition.
 
     Fortran origin: ``starter/source/model/laminate/leclamply.F``.
     """
@@ -1762,6 +1763,11 @@ class Ply:
     thick: float
     title: str = ""
     skew_id: int = 0
+    orientangle: float = 0.0
+    grsh4n_id: int = 0
+    grsh3n_id: int = 0
+    nip: int = 1
+    orientangle2: float = 0.0
 
 
 @dataclass

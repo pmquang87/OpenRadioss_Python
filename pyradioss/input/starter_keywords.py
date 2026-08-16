@@ -1303,6 +1303,12 @@ def read_fail_fractal(block: KeywordBlock, model: Model, log: MessageLog) -> Non
         printout=printout,
         fail_id=fail_id,
     )
+    from ..model.entities import FailureModel
+    fm = FailureModel(type="FRACTAL", ifail_sh=1, params={
+        "grsh4n_1": grsh4n_1, "grsh3n_1": grsh3n_1, "grsh4n_2": grsh4n_2, "grsh3n_2": grsh3n_2,
+        "damage": damage, "probability": probability, "seed": seed, "num_walk": num_walk, "printout": printout
+    })
+    model.raw_fails.append((mat_id, fm, block.source))
 
 
 def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -1353,14 +1359,14 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     "PUCK", "RTCL", "SAHRAEI", "SYAZWAN", "TAB2", "GENE1", "INIEVO",
                     "CHANG", "TSAIWU", "TSAIHILL", "HOFFMAN", "MAXSTRAIN", "HASHIN",
                     "LEMAITRE", "COCKCROFT", "ENERGY", "COMPOSITE", "FRACTAL", "FRACTAL_DMG",
-                    "EMC", "FABRIC", "SPALLING", "TBUTCHER", "WIERZBICKI", "WILKINS"):
+                    "ORTHENERG", "EMC", "FABRIC", "SPALLING", "TBUTCHER", "WIERZBICKI", "WILKINS"):
         log.warning(f"/FAIL/{kind} not ported — skipped "
                     f"(supported: JOHNSON, BIQUAD, ORTHBIQUAD, TAB1, SNCONNECT, FLD, CONNECT, "
                     f"TENSSTRAIN, ORTHSTRAIN, GURSON, ALTER, VISUAL, MULLINS_OR, "
                     f"PUCK, RTCL, SAHRAEI, SYAZWAN, TAB2, GENE1, INIEVO, "
                     f"CHANG, TSAIWU, TSAIHILL, HOFFMAN, MAXSTRAIN, HASHIN, "
                     f"LEMAITRE, COCKCROFT, ENERGY, COMPOSITE, FRACTAL, FRACTAL_DMG, "
-                    f"EMC, FABRIC, SPALLING, TBUTCHER, WIERZBICKI, WILKINS)", block.source)
+                    f"ORTHENERG, EMC, FABRIC, SPALLING, TBUTCHER, WIERZBICKI, WILKINS)", block.source)
         return
     # header /FAIL/<kind>/mat_ID[/fail_ID]: with TWO trailing ids the
     # FIRST is the material id (the lexer keeps only the last as user_id)
@@ -2529,6 +2535,74 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 ifail_so = int(float(t2[1])) if len(t2) > 1 else 1
         params = {"alpha": alpha, "beta": beta, "plim": plim, "df": df, "ifail_so": ifail_so}
         fm = FailureModel(type="WILKINS", ifail_sh=ifail_sh if ifail_sh else 1, params=params)
+    elif kind == "ORTHENERG":
+        # Card 0: PTHICKFAIL, blank, NMOD, FAILIP (%20lg%60s%10d%10d)
+        # Cards 1..6: SIGMA_T, G_T, ISHAP_T, SIGMA_C, G_C, ISHAP_C
+        if block.fixed:
+            c0 = cards[0].cut("FAIL_ORTHENERG_1")
+            pthickfail = _fval(c0[0]) if len(c0) > 0 else 0.0
+            nmod = _ival(c0[2]) if len(c0) > 2 else 0
+            failip = _ival(c0[3], 1) if len(c0) > 3 and c0[3].strip() else 1
+            dirs = ["11", "22", "33", "12", "23", "31"]
+            dir_params = {}
+            for i, d in enumerate(dirs):
+                if len(cards) > i + 1 and not cards[i + 1].is_blank:
+                    cd = cards[i + 1].cut("FAIL_ORTHENERG_CARD")
+                    dir_params[f"sigma_{d}t"] = _fval(cd[0]) if len(cd) > 0 else 0.0
+                    dir_params[f"g_{d}t"] = _fval(cd[1]) if len(cd) > 1 else 0.0
+                    dir_params[f"ishap_{d}t"] = _ival(cd[2]) if len(cd) > 2 else 0
+                    dir_params[f"sigma_{d}c"] = _fval(cd[3]) if len(cd) > 3 else 0.0
+                    dir_params[f"g_{d}c"] = _fval(cd[4]) if len(cd) > 4 else 0.0
+                    dir_params[f"ishap_{d}c"] = _ival(cd[5]) if len(cd) > 5 else 0
+        else:
+            t0 = cards[0].tokens()
+            pthickfail = float(t0[0]) if len(t0) > 0 else 0.0
+            nmod = int(float(t0[1])) if len(t0) > 1 else 0
+            failip = int(float(t0[2])) if len(t0) > 2 else 1
+            dirs = ["11", "22", "33", "12", "23", "31"]
+            dir_params = {}
+            for i, d in enumerate(dirs):
+                if len(cards) > i + 1:
+                    toks = cards[i + 1].tokens()
+                    dir_params[f"sigma_{d}t"] = float(toks[0]) if len(toks) > 0 else 0.0
+                    dir_params[f"g_{d}t"] = float(toks[1]) if len(toks) > 1 else 0.0
+                    dir_params[f"ishap_{d}t"] = int(float(toks[2])) if len(toks) > 2 else 0
+                    dir_params[f"sigma_{d}c"] = float(toks[3]) if len(toks) > 3 else 0.0
+                    dir_params[f"g_{d}c"] = float(toks[4]) if len(toks) > 4 else 0.0
+                    dir_params[f"ishap_{d}c"] = int(float(toks[5])) if len(toks) > 5 else 0
+        params = {"pthickfail": pthickfail, "nmod": nmod, "failip": failip, **dir_params}
+        fm = FailureModel(type="ORTHENERG", ifail_sh=failip, params=params)
+    elif kind in ("FRACTAL", "FRACTAL_DMG"):
+        # Card 0: grsh4n_1, grsh3n_1, grsh4n_2, grsh3n_2
+        # Card 1: damage, probability, seed, num_walk, printout
+        if block.fixed:
+            c0 = cards[0].cut("FAIL_FRACTAL_1")
+            g1, g2, g3, g4 = (_ival(c0[i]) if len(c0) > i else 0 for i in range(4))
+            damage, prob, seed, num_walk, printout = 0.0, 0.0, 0, 0, 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                c1 = cards[1].cut("FAIL_FRACTAL_2")
+                damage = _fval(c1[0]) if len(c1) > 0 else 0.0
+                prob = _fval(c1[1]) if len(c1) > 1 else 0.0
+                seed = _ival(c1[2]) if len(c1) > 2 else 0
+                num_walk = _ival(c1[3]) if len(c1) > 3 else 0
+                printout = _ival(c1[4]) if len(c1) > 4 else 0
+        else:
+            t0 = cards[0].tokens()
+            g1 = int(float(t0[0])) if len(t0) > 0 else 0
+            g2 = int(float(t0[1])) if len(t0) > 1 else 0
+            g3 = int(float(t0[2])) if len(t0) > 2 else 0
+            g4 = int(float(t0[3])) if len(t0) > 3 else 0
+            damage, prob, seed, num_walk, printout = 0.0, 0.0, 0, 0, 0
+            if len(cards) > 1:
+                t1 = cards[1].tokens()
+                damage = float(t1[0]) if len(t1) > 0 else 0.0
+                prob = float(t1[1]) if len(t1) > 1 else 0.0
+                seed = int(float(t1[2])) if len(t1) > 2 else 0
+                num_walk = int(float(t1[3])) if len(t1) > 3 else 0
+                printout = int(float(t1[4])) if len(t1) > 4 else 0
+        params = {"grsh4n_1": g1, "grsh3n_1": g2, "grsh4n_2": g3, "grsh3n_2": g4,
+                  "damage": damage, "probability": prob, "seed": seed, "num_walk": num_walk, "printout": printout}
+        fm = FailureModel(type="FRACTAL", ifail_sh=1, params=params)
     # attachment to the material happens in the Starter resolve step
     # (initialization.resolve_materials) so deck order does not matter
     model.raw_fails.append((mat_id, fm, block.source))
@@ -2896,7 +2970,12 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       Short form: a single data card with 'qa qb h' floats, or none at all
       (all defaults).
     """
-    typename = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if block.key0.startswith("PROP_") and len(block.key0) > 5:
+        typename = block.key0[5:].upper()
+    elif len(block.parts) > 1:
+        typename = block.parts[1].upper()
+    else:
+        typename = ""
     if typename in ("INJECTOR", "INJECT", "JET"):
         read_airbag_injector(block, model, log)
         return
@@ -2914,17 +2993,19 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     # Dedicated readers (read_prop_inject1 etc.) exist but are not yet
     # wired here because existing tests expect model.properties[id].
 
-    aliases = {"TYPE1": 1, "SHELL": 1, "TYPE2": 2, "TRUSS": 2,
+    aliases = {"TYPE1": 1, "SHELL": 1, "PROP_P1_SHELL": 1, "P1_SHELL": 1,
+               "TYPE2": 2, "TRUSS": 2,
                "TYPE3": 3, "BEAM": 3,
                "TYPE4": 4, "SPRING": 4, "TYPE14": 14, "SOLID": 14,
-               "TYPE10": 10, "SH_COMP": 10,
+               "TYPE9": 9, "SH_ORTH": 9, "PROP_P9_SH_ORTH": 9, "P9_SH_ORTH": 9, "PROP_SH_ORTH": 9,
+               "TYPE10": 10, "SH_COMP": 10, "PROP_P10_SH_COMP": 10, "P10_SH_COMP": 10,
                "TYPE11": 11, "SH_SANDW": 11,
                "TYPE16": 16, "SH_FABR": 16,
                "TYPE6": 6, "SOL_ORTH": 6,
                "TYPE20": 20, "TSHELL": 20,
                "TYPE21": 21, "TSH_ORTH": 21,
                "TYPE22": 22, "TSH_COMP": 22,
-               "TYPE18": 18, "INT_BEAM": 18,
+               "TYPE18": 18, "INT_BEAM": 18, "PROP_P18_INT_BEAM": 18, "P18_INT_BEAM": 18, "BEAM_INT": 18,
                "TYPE34": 34, "SPH": 34,
                "TYPE43": 43, "CONNECT": 43,
                "TYPE17": 17, "STACK": 17, "PROP_STACK": 17,
@@ -3638,40 +3719,6 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 })
             params["layers"] = layers
 
-    elif ptype == 18:  # INT_BEAM
-        params = {"area": 1.0, "iyy": 1.0, "izz": 1.0, "ixx": 1.0, "ishear": 0, "iform": 0, "nip": 1}
-        if block.fixed:
-            if cards and not cards[0].is_blank:
-                f = cards[0].cut("PROP_INT_BEAM_1")
-                params["ishear"] = _ival(f[0])
-                params["iform"] = _ival(f[1]) if len(f) > 1 else 0
-                params["nip"] = _ival(f[2]) if len(f) > 2 else 1
-            if len(cards) >= 2 and not cards[1].is_blank:
-                a = cards[1].cut("PROP_INT_BEAM_2")
-                params["area"] = _fval(a[0]) or 1.0
-                params["iyy"] = _fval(a[1]) or 1.0
-                params["izz"] = _fval(a[2]) or 1.0
-                params["ixx"] = _fval(a[3]) or 1.0
-            if len(cards) >= 3 and not cards[2].is_blank:
-                v = cards[2].cut("PROP_INT_BEAM_3")
-                params["vy"] = _fval(v[0])
-                params["vz"] = _fval(v[1])
-        else:
-            t0 = cards[0].tokens() if len(cards) > 0 else []
-            params["ishear"] = int(float(t0[0])) if len(t0) > 0 else 0
-            params["iform"] = int(float(t0[1])) if len(t0) > 1 else 0
-            params["nip"] = int(float(t0[2])) if len(t0) > 2 else 1
-
-            t1 = cards[1].tokens() if len(cards) > 1 else []
-            params["area"] = float(t1[0]) if len(t1) > 0 else 1.0
-            params["iyy"] = float(t1[1]) if len(t1) > 1 else 1.0
-            params["izz"] = float(t1[2]) if len(t1) > 2 else 1.0
-            params["ixx"] = float(t1[3]) if len(t1) > 3 else 1.0
-
-            t2 = cards[2].tokens() if len(cards) > 2 else []
-            params["vy"] = float(t2[0]) if len(t2) > 0 else 0.0
-            params["vz"] = float(t2[1]) if len(t2) > 1 else 0.0
-
     elif ptype == 34:  # SPH
         params = {"mass": 1.0, "h0": 1.0, "d0": 1.0, "alpha": 1.0, "beta": 1.0, "q0": 0.0, "gamma": 1.0}
         if block.fixed:
@@ -3857,6 +3904,216 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 params["p_thick_fail"] = float(t[6]) if len(t) > 6 else 0.0
                 params["fexp"] = float(t[7]) if len(t) > 7 else 0.0
                 params["ip"] = int(float(t[8])) if len(t) > 8 else 0
+
+    elif ptype == 9:  # SH_ORTH
+        params = {"ishell": 0, "ismstr": 0, "ish3n": 0, "idrill": 0, "p_thick_fail": 0.0,
+                  "hm": 0.01, "hf": 0.01, "hr": 0.01, "dm": 0.0, "dn": 0.0,
+                  "nip": 1, "istrain": 0, "thick": 1.0, "ashear": 0.833333, "skew_id": 0,
+                  "ithick": 0, "iplas": 0, "vx": 1.0, "vy": 0.0, "vz": 0.0,
+                  "mat_beta": 0.0, "phi": 0.0, "ipos": 0, "ip": 0}
+        if block.fixed:
+            if len(cards) >= 1 and not cards[0].is_blank:
+                f = cards[0].cut("PROP_SH_ORTH_FLAGS")
+                params["ishell"] = _ival(f[0])
+                params["ismstr"] = _ival(f[1]) if len(f) > 1 else 0
+                params["ish3n"] = _ival(f[2]) if len(f) > 2 else 0
+                params["idrill"] = _ival(f[3]) if len(f) > 3 else 0
+                params["p_thick_fail"] = _fval(f[5]) if len(f) > 5 else 0.0
+            if len(cards) >= 2 and not cards[1].is_blank:
+                h = cards[1].cut("F20X5")
+                params["hm"] = _fval(h[0]) or 0.01
+                params["hf"] = _fval(h[1]) or 0.01
+                params["hr"] = _fval(h[2]) or 0.01
+                params["dm"] = _fval(h[3])
+                params["dn"] = _fval(h[4])
+            if len(cards) >= 3 and not cards[2].is_blank:
+                f = cards[2].cut("PROP_SH_ORTH_N")
+                params["nip"] = _ival(f[0]) or 1
+                params["istrain"] = _ival(f[1]) if len(f) > 1 else 0
+                params["thick"] = _fval(f[2]) or 1.0
+                params["ashear"] = _fval(f[3]) or 0.833333
+                params["skew_id"] = _ival(f[4]) if len(f) > 4 else 0
+                params["ithick"] = _ival(f[5]) if len(f) > 5 else 0
+                params["iplas"] = _ival(f[6]) if len(f) > 6 else 0
+            if len(cards) >= 4 and not cards[3].is_blank:
+                v = cards[3].cut("PROP_SH_ORTH_VEC")
+                params["vx"] = _fval(v[0]) or 1.0
+                params["vy"] = _fval(v[1])
+                params["vz"] = _fval(v[2])
+                params["mat_beta"] = _fval(v[3])
+                params["phi"] = params["mat_beta"]
+                params["ipos"] = _ival(v[4]) if len(v) > 4 else 0
+                params["ip"] = _ival(v[5]) if len(v) > 5 else 0
+        else:
+            t0 = cards[0].tokens() if len(cards) > 0 else []
+            params["ishell"] = int(float(t0[0])) if len(t0) > 0 else 0
+            params["ismstr"] = int(float(t0[1])) if len(t0) > 1 else 0
+            params["ish3n"] = int(float(t0[2])) if len(t0) > 2 else 0
+            params["idrill"] = int(float(t0[3])) if len(t0) > 3 else 0
+            params["p_thick_fail"] = float(t0[4]) if len(t0) > 4 else 0.0
+
+            t1 = cards[1].tokens() if len(cards) > 1 else []
+            params["hm"] = float(t1[0]) if len(t1) > 0 else 0.01
+            params["hf"] = float(t1[1]) if len(t1) > 1 else 0.01
+            params["hr"] = float(t1[2]) if len(t1) > 2 else 0.01
+            params["dm"] = float(t1[3]) if len(t1) > 3 else 0.0
+            params["dn"] = float(t1[4]) if len(t1) > 4 else 0.0
+
+            t2 = cards[2].tokens() if len(cards) > 2 else []
+            params["nip"] = int(float(t2[0])) if len(t2) > 0 else 1
+            params["istrain"] = int(float(t2[1])) if len(t2) > 1 else 0
+            params["thick"] = float(t2[2]) if len(t2) > 2 else 1.0
+            params["ashear"] = float(t2[3]) if len(t2) > 3 else 0.833333
+            params["skew_id"] = int(float(t2[4])) if len(t2) > 4 else 0
+            params["ithick"] = int(float(t2[5])) if len(t2) > 5 else 0
+            params["iplas"] = int(float(t2[6])) if len(t2) > 6 else 0
+
+            t3 = cards[3].tokens() if len(cards) > 3 else []
+            params["vx"] = float(t3[0]) if len(t3) > 0 else 1.0
+            params["vy"] = float(t3[1]) if len(t3) > 1 else 0.0
+            params["vz"] = float(t3[2]) if len(t3) > 2 else 0.0
+            params["mat_beta"] = float(t3[3]) if len(t3) > 3 else 0.0
+            params["phi"] = params["mat_beta"]
+            params["ipos"] = int(float(t3[4])) if len(t3) > 4 else 0
+            params["ip"] = int(float(t3[5])) if len(t3) > 5 else 0
+
+    elif ptype == 18:  # INT_BEAM
+        params = {"isflag": 0, "ismstr": 0, "dm": 0.0, "df": 0.0,
+                  "nip": 1, "iref": 0, "y0": 0.0, "z0": 0.0,
+                  "fibers": [], "nitrs": 0, "l_params": [0.0] * 6,
+                  "rot_dofs": (0, 0, 0, 0, 0, 0),
+                  "area": 1.0, "iyy": 1.0, "izz": 1.0, "ixx": 1.0,
+                  "ishear": 0, "iform": 0}
+        # Check if legacy 3-card format (card 0 has 3 ints, or card 1 has 4 floats: Area Iyy Izz Ixx)
+        is_legacy = False
+        if cards:
+            toks0 = cards[0].tokens()
+            toks1 = cards[1].tokens() if len(cards) > 1 else []
+            if len(toks0) >= 3 or len(toks1) >= 4:
+                is_legacy = True
+
+        if is_legacy:
+            if block.fixed:
+                if cards and not cards[0].is_blank:
+                    f = cards[0].cut("PROP_INT_BEAM_1")
+                    params["ishear"] = _ival(f[0])
+                    params["iform"] = _ival(f[1]) if len(f) > 1 else 0
+                    params["nip"] = _ival(f[2]) if len(f) > 2 else 1
+                if len(cards) >= 2 and not cards[1].is_blank:
+                    a = cards[1].cut("PROP_INT_BEAM_2")
+                    params["area"] = _fval(a[0]) or 1.0
+                    params["iyy"] = _fval(a[1]) or 1.0
+                    params["izz"] = _fval(a[2]) or 1.0
+                    params["ixx"] = _fval(a[3]) or 1.0
+                if len(cards) >= 3 and not cards[2].is_blank:
+                    v = cards[2].cut("PROP_INT_BEAM_3")
+                    params["vy"] = _fval(v[0])
+                    params["vz"] = _fval(v[1])
+            else:
+                t0 = cards[0].tokens() if len(cards) > 0 else []
+                params["ishear"] = int(float(t0[0])) if len(t0) > 0 else 0
+                params["iform"] = int(float(t0[1])) if len(t0) > 1 else 0
+                params["nip"] = int(float(t0[2])) if len(t0) > 2 else 1
+
+                t1 = cards[1].tokens() if len(cards) > 1 else []
+                params["area"] = float(t1[0]) if len(t1) > 0 else 1.0
+                params["iyy"] = float(t1[1]) if len(t1) > 1 else 1.0
+                params["izz"] = float(t1[2]) if len(t1) > 2 else 1.0
+                params["ixx"] = float(t1[3]) if len(t1) > 3 else 1.0
+
+                t2 = cards[2].tokens() if len(cards) > 2 else []
+                params["vy"] = float(t2[0]) if len(t2) > 0 else 0.0
+                params["vz"] = float(t2[1]) if len(t2) > 1 else 0.0
+        else:
+            if block.fixed:
+                if len(cards) >= 1 and not cards[0].is_blank:
+                    f0 = cards[0].cut("PROP_INT_BEAM_FLAGS")
+                    params["isflag"] = _ival(f0[0])
+                    params["ismstr"] = _ival(f0[1]) if len(f0) > 1 else 0
+                if len(cards) >= 2 and not cards[1].is_blank:
+                    f1 = cards[1].cut("PROP_INT_BEAM_DAMP")
+                    params["dm"] = _fval(f1[0])
+                    params["df"] = _fval(f1[1])
+                if len(cards) >= 3 and not cards[2].is_blank:
+                    f2 = cards[2].cut("PROP_INT_BEAM_NIP")
+                    params["nip"] = _ival(f2[0]) or 1
+                    params["iref"] = _ival(f2[1]) if len(f2) > 1 else 0
+                    params["y0"] = _fval(f2[2]) if len(f2) > 2 else 0.0
+                    params["z0"] = _fval(f2[3]) if len(f2) > 3 else 0.0
+                icard = 3
+                if params["isflag"] == 0:
+                    fibers = []
+                    for k in range(params["nip"]):
+                        if icard < len(cards) and not cards[icard].is_blank:
+                            fib = cards[icard].cut("PROP_INT_BEAM_FIBER")
+                            y_ip = _fval(fib[0]) if len(fib) > 0 else 0.0
+                            z_ip = _fval(fib[1]) if len(fib) > 1 else 0.0
+                            a_ip = _fval(fib[2]) if len(fib) > 2 else 0.0
+                            fibers.append((y_ip, z_ip, a_ip))
+                        icard += 1
+                    params["fibers"] = fibers
+                else:
+                    if icard < len(cards) and not cards[icard].is_blank:
+                        f3 = _fixed_vals(cards[icard], [10, 10, 20, 20, 20, 20])
+                        params["nitrs"] = _ival(f3[0])
+                        l1 = _fval(f3[2]) if len(f3) > 2 else 0.0
+                        l2 = _fval(f3[3]) if len(f3) > 3 else 0.0
+                        l3 = _fval(f3[4]) if len(f3) > 4 else 0.0
+                        l4 = _fval(f3[5]) if len(f3) > 5 else 0.0
+                        icard += 1
+                        l5, l6 = 0.0, 0.0
+                        if icard < len(cards) and not cards[icard].is_blank:
+                            f4 = _fixed_vals(cards[icard], [20, 20])
+                            l5 = _fval(f4[0]) if len(f4) > 0 else 0.0
+                            l6 = _fval(f4[1]) if len(f4) > 1 else 0.0
+                            icard += 1
+                        params["l_params"] = [l1, l2, l3, l4, l5, l6]
+                if icard < len(cards) and not cards[icard].is_blank:
+                    rw = _fixed_vals(cards[icard], [3, 1, 1, 1, 1, 1, 1, 1])
+                    params["rot_dofs"] = tuple(_ival(rw[i]) for i in range(1, 7) if i < len(rw))
+            else:
+                t0 = cards[0].tokens() if len(cards) > 0 else []
+                params["isflag"] = int(float(t0[0])) if len(t0) > 0 else 0
+                params["ismstr"] = int(float(t0[1])) if len(t0) > 1 else 0
+
+                t1 = cards[1].tokens() if len(cards) > 1 else []
+                params["dm"] = float(t1[0]) if len(t1) > 0 else 0.0
+                params["df"] = float(t1[1]) if len(t1) > 1 else 0.0
+
+                t2 = cards[2].tokens() if len(cards) > 2 else []
+                params["nip"] = int(float(t2[0])) if len(t2) > 0 else 1
+                params["iref"] = int(float(t2[1])) if len(t2) > 1 else 0
+                params["y0"] = float(t2[2]) if len(t2) > 2 else 0.0
+                params["z0"] = float(t2[3]) if len(t2) > 3 else 0.0
+
+                icard = 3
+                if params["isflag"] == 0:
+                    fibers = []
+                    for k in range(params["nip"]):
+                        if icard < len(cards):
+                            toks = cards[icard].tokens()
+                            y_ip = float(toks[0]) if len(toks) > 0 else 0.0
+                            z_ip = float(toks[1]) if len(toks) > 1 else 0.0
+                            a_ip = float(toks[2]) if len(toks) > 2 else 0.0
+                            fibers.append((y_ip, z_ip, a_ip))
+                        icard += 1
+                    params["fibers"] = fibers
+                else:
+                    if icard < len(cards):
+                        toks = cards[icard].tokens()
+                        params["nitrs"] = int(float(toks[0])) if len(toks) > 0 else 0
+                        l1_4 = [float(x) for x in toks[1:5]]
+                        while len(l1_4) < 4:
+                            l1_4.append(0.0)
+                        icard += 1
+                        l5_6 = [0.0, 0.0]
+                        if icard < len(cards):
+                            toks2 = cards[icard].tokens()
+                            l5_6 = [float(x) for x in toks2[:2]]
+                            while len(l5_6) < 2:
+                                l5_6.append(0.0)
+                            icard += 1
+                        params["l_params"] = l1_4 + l5_6
 
     model.properties[block.user_id] = Property(
         id=block.user_id, type=ptype, title=title, params=params)
@@ -15225,6 +15482,21 @@ def read_dfs(block: KeywordBlock, model: Model,
                             mat_id=mat_id, nx=nx, ny=ny, nz=nz)
         model.det_planes.append(dp)
 
+    elif sub in ("DETPOINTSET", "DETPOINSET", "DETSET") or block.key0 == "DETPOINTSET":
+        # Card: %60s%20lg%10d%10d: rad_det_time, rad_det_materialid, rad_det_grnod1
+        if block.fixed:
+            f = _fixed_vals(cards[0], [60, 20, 10, 10])
+            tdet = _fval(f[1]) if len(f) > 1 else 0.0
+            mat_id = _ival(f[2]) if len(f) > 2 else 0
+            grnod_id = _ival(f[3]) if len(f) > 3 else 0
+        else:
+            toks = cards[0].tokens()
+            tdet = float(toks[0]) if len(toks) > 0 else 0.0
+            mat_id = int(float(toks[1])) if len(toks) > 1 else 0
+            grnod_id = int(float(toks[2])) if len(toks) > 2 else 0
+        dp = DetonatorPoint(id=det_id, tdet=tdet, mat_id=mat_id, grnod_id=grnod_id)
+        model.det_points.append(dp)
+
     elif sub in ("WAVE_SHAPER", "WAVESHAPER"):
         # /DFS/WAVE_SHAPER/id (M132)
         # Card 1: surf_ID, mat_ID, thick, delay
@@ -17460,6 +17732,13 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "INTER_SUB": read_subinter,
     "AMS": read_ams,
     "SEATBELT": read_seatbelt,
+    "DETPOINTSET": read_dfs,
+    "PROP_PLY": read_ply,
+    "PROP_P18_INT_BEAM": read_prop,
+    "PROP_P9_SH_ORTH": read_prop,
+    "PROP_P10_SH_COMP": read_prop,
+    "PROP_P1_SHELL": read_prop,
+    "PRELOAD_AXIAL": read_preload_axial,
 }
 
 
