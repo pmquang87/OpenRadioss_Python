@@ -1484,6 +1484,10 @@ LAYOUTS: Dict[str, List[int]] = {
     "SLIPRING_SHELL_1": [10, 10, 10, 10, 10, 20, 20],
     "SLIPRING_SHELL_2": [10, 10, 20, 20, 20, 20],
     "SLIPRING_SHELL_3": [10, 10, 20, 20, 20, 20],
+    # M165: SUBLAMINATE, SENSOR/DIST, SENSOR/NIC
+    "SUB_LAMINATE_1": [10, 10, 10],
+    "SUB_LAMINATE_PLY": [10, 20, 20, 20, 20],
+    "SENSOR_DIST_22": [10, 10, 20, 20, 20, 10],
 }
 
 

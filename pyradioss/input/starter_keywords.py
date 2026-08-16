@@ -5602,10 +5602,24 @@ def read_stack(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         ply_cards = cards[4:]
 
     plies = []
+    current_sub_id = None
+    sub_plies = []
+    from ..model.entities import SubLaminate, SubLaminatePly
+
     for c in ply_cards:
         if c.is_blank:
             continue
         if block.fixed:
+            raw_upper = c.raw.strip().upper()
+            if raw_upper.startswith("SUB"):
+                if current_sub_id is not None and sub_plies:
+                    model.sub_laminates[current_sub_id] = SubLaminate(
+                        id=current_sub_id, title=f"SubLaminate_{current_sub_id}", plies=sub_plies
+                    )
+                    sub_plies = []
+                f_hdr = c.cut("SUB_LAMINATE_1")
+                current_sub_id = _ival(f_hdr[1]) if len(f_hdr) > 1 and f_hdr[1].strip() else (block.user_id or 1)
+                continue
             f = c.cut("STACK_PLY")
             pid = _ival(f[0])
             phi = _fval(f[1], 0.0) if len(f) > 1 else 0.0
@@ -5614,12 +5628,31 @@ def read_stack(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             fw = _fval(f[4], 1.0) if len(f) > 4 else 1.0
         else:
             t = c.tokens()
+            if not t:
+                continue
+            if t[0].upper() == "SUB":
+                if current_sub_id is not None and sub_plies:
+                    model.sub_laminates[current_sub_id] = SubLaminate(
+                        id=current_sub_id, title=f"SubLaminate_{current_sub_id}", plies=sub_plies
+                    )
+                    sub_plies = []
+                current_sub_id = int(float(t[1])) if len(t) > 1 else (block.user_id or 1)
+                continue
             pid = int(float(t[0])) if len(t) > 0 else 0
             phi = float(t[1]) if len(t) > 1 else 0.0
             zi = float(t[2]) if len(t) > 2 else 0.0
             ptf = float(t[3]) if len(t) > 3 else 0.0
             fw = float(t[4]) if len(t) > 4 else 1.0
-        plies.append(StackPly(ply_id=pid, phi=phi, zi=zi, p_thick_fail=ptf, f_weight=fw))
+
+        if pid > 0:
+            plies.append(StackPly(ply_id=pid, phi=phi, zi=zi, p_thick_fail=ptf, f_weight=fw))
+            if current_sub_id is not None:
+                sub_plies.append(SubLaminatePly(ply_id=pid, phi=phi, zi=zi, p_thick_fail=ptf, f_weight=fw))
+
+    if current_sub_id is not None and sub_plies:
+        model.sub_laminates[current_sub_id] = SubLaminate(
+            id=current_sub_id, title=f"SubLaminate_{current_sub_id}", plies=sub_plies
+        )
 
     stack_id = block.user_id if block.user_id is not None else 1
     model.stacks[stack_id] = Stack(
@@ -5628,6 +5661,63 @@ def read_stack(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         iint=iint, ithick=ithick, vx=vx, vy=vy, vz=vz, skew_id=skew_id, iorth=iorth,
         ipos=ipos, ip=ip, plies=plies,
     )
+
+
+def read_sub_laminate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SUBLAMINATE/sub_ID`` or ``/STACK/SUB_LAMINATE/sub_ID`` (M165): Sub-laminate composite ply stack definition.
+
+    Fortran origin: ``LAMINATE/sub_laminate_p51.cfg`` and ``LAMINATE/stack_sub_laminate.cfg``.
+    """
+    from ..model.entities import SubLaminate, SubLaminatePly
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    sub_id = block.user_id if block.user_id is not None else 1
+    plies = []
+
+    for c in cards:
+        if c.is_blank:
+            continue
+        if block.fixed:
+            if c.raw[:3].upper() == "SUB" or len(c.raw) < 15:
+                f_hdr = c.cut("SUB_LAMINATE_1")
+                if len(f_hdr) > 1 and f_hdr[1].strip():
+                    sub_id = _ival(f_hdr[1], sub_id)
+                continue
+            f = c.cut("SUB_LAMINATE_PLY")
+            try:
+                pid = int(f[0].strip()) if f and f[0].strip() else 0
+            except ValueError:
+                title = c.raw.strip()
+                continue
+            phi = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            zi = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            ptf = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            fw = _fval(f[4], 1.0) if len(f) > 4 else 1.0
+        else:
+            t = c.tokens()
+            if not t:
+                continue
+            if t[0].upper() == "SUB":
+                if len(t) > 1:
+                    sub_id = int(float(t[1]))
+                continue
+            try:
+                pid = int(float(t[0])) if len(t) > 0 else 0
+            except ValueError:
+                title = c.raw.strip()
+                continue
+            phi = float(t[1]) if len(t) > 1 else 0.0
+            zi = float(t[2]) if len(t) > 2 else 0.0
+            ptf = float(t[3]) if len(t) > 3 else 0.0
+            fw = float(t[4]) if len(t) > 4 else 1.0
+        if pid > 0:
+            plies.append(SubLaminatePly(ply_id=pid, phi=phi, zi=zi, p_thick_fail=ptf, f_weight=fw))
+
+    model.sub_laminates[sub_id] = SubLaminate(
+        id=sub_id,
+        title=title,
+        plies=plies,
+    )
+
 
 
 
@@ -8642,13 +8732,24 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             id=block.user_id, kind=kind, tdelay=tdelay, sens_id1=sens_id1,
             sens_id2=sens_id2, title=title))
     elif kind == "DIST":
+        dflag = 0
         if block.fixed:
-            f = cards[data_card_idx].cut("SENSOR_DIST_2")
-            n1 = _ival(f[0])
-            n2 = _ival(f[1])
-            dmin = _fval(f[2], 0.0) if len(f) > 2 else 0.0
-            dmax = _fval(f[3], 0.0) if len(f) > 3 else 0.0
-            tmin = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+            raw = cards[data_card_idx].raw
+            if len(raw) > 70:
+                f = cards[data_card_idx].cut("SENSOR_DIST_22")
+                n1 = _ival(f[0])
+                n2 = _ival(f[1])
+                dmin = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+                dmax = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+                tmin = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+                dflag = _ival(f[5]) if len(f) > 5 else 0
+            else:
+                f = cards[data_card_idx].cut("SENSOR_DIST_2")
+                n1 = _ival(f[0])
+                n2 = _ival(f[1])
+                dmin = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+                dmax = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+                tmin = _fval(f[4], 0.0) if len(f) > 4 else 0.0
         else:
             if len(t) < 2:
                 log.error(f"/SENSOR/DIST/{block.user_id}: card needs 'node_ID1 node_ID2'", block.source)
@@ -8657,9 +8758,10 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             dmin = float(t[2]) if len(t) > 2 else 0.0
             dmax = float(t[3]) if len(t) > 3 else 0.0
             tmin = float(t[4]) if len(t) > 4 else 0.0
+            dflag = int(float(t[5])) if len(t) > 5 else 0
         model.sensors.append(Sensor(
             id=block.user_id, kind="DIST", tdelay=tdelay, node_id1=n1, node_id2=n2,
-            dmin=dmin, dmax=dmax, tmin=tmin, title=title))
+            dmin=dmin, dmax=dmax, tmin=tmin, dflag=dflag, title=title))
     elif kind == "ENERGY":
         if block.fixed:
             f = cards[data_card_idx].cut("SENSOR_ENERGY_2")
@@ -19614,6 +19716,10 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "FAIL_MULLINS": read_fail,
     "FAIL_SNCONNECT": read_fail,
     "FAIL_SPALLING": read_fail,
+    # M165: SUBLAMINATE
+    "SUBLAMINATE": read_sub_laminate,
+    "SUB_LAMINATE": read_sub_laminate,
+    "STACK_SUB_LAMINATE": read_sub_laminate,
 }
 
 

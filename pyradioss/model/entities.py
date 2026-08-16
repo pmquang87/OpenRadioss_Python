@@ -738,6 +738,7 @@ class Sensor:
     script_name: str = ""
     func_name: str = ""
     target_id: int = 0   # SPH, AIRBAG, MONVOL, SHELL, SOLID (M136)
+    dflag: int = 0       # DIST deactivation flag (M165)
 
 
 @dataclass
@@ -5162,4 +5163,26 @@ class SlipringShell:
             self.fric_s = self.frics
         elif self.fric_s != 0.0 and self.frics == 0.0:
             self.frics = self.fric_s
+
+
+@dataclass
+class SubLaminatePly:
+    """Ply layer within a sub-laminate stack."""
+    ply_id: int
+    phi: float = 0.0
+    zi: float = 0.0
+    p_thick_fail: float = 0.0
+    f_weight: float = 1.0
+
+
+@dataclass
+class SubLaminate:
+    """/SUBLAMINATE or /STACK/SUB_LAMINATE (M165): Sub-laminate composite ply stack definition.
+
+    Fortran origin: ``LAMINATE/sub_laminate_p51.cfg`` and ``LAMINATE/stack_sub_laminate.cfg``.
+    """
+    id: int
+    title: str = ""
+    plies: List[SubLaminatePly] = field(default_factory=list)
+
 
