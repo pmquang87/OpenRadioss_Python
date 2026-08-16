@@ -9401,7 +9401,8 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "MONVOL", "AIRBAG", "FVMBAG", "COMMU", "ALE", "ALEGRID", "ALECFD",
         "SUBS", "SUBDOMAIN", "SUBMODEL", "LAGMUL", "GEAR", "RACK", "DIFF",
         "IMPDISP", "IMPVEL", "PLOAD", "PROP", "MAT", "STACK", "PLY",
-        "WAVE_SHAPER", "DET", "GUIDED_CABLE", "KJOINT", "SUBINTER"
+        "WAVE_SHAPER", "DET", "GUIDED_CABLE", "KJOINT", "SUBINTER",
+        "EBCS", "SEATBELT"
     }
     if block.key0 == "THPART":
         kind = "PART"
@@ -10283,8 +10284,320 @@ def read_ebcs_cyclic(block: KeywordBlock, model: Model, log: MessageLog) -> None
     )
 
 
+def read_ebcs_pres(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/PRES/id`` (M150): Eulerian imposed pressure boundary condition."""
+    from ..model.entities import EbcsPres
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    ebcs_id = block.user_id if block.user_id is not None else 1
+    if not cards or cards[0].is_blank:
+        log.error(f"/EBCS/PRES/{ebcs_id}: missing data card", block.source)
+        return
+    surf_id = 0
+    c = 0.0
+    fct_pres, scale_pres = 0, 1.0
+    fct_rho, scale_rho = 0, 1.0
+    fct_en, scale_en = 0, 1.0
+    lcar, r1, r2 = 0.0, 0.0, 0.0
+
+    if block.fixed:
+        f1 = cards[0].cut("EBCS_PRES_1")
+        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("EBCS_PRES_2")
+            c = _fval(f2[0]) if len(f2) > 0 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("EBCS_PRES_3")
+            fct_pres = _ival(f3[0]) if len(f3) > 0 else 0
+            scale_pres = _fval(f3[1], 1.0) if len(f3) > 1 else 1.0
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("EBCS_PRES_4")
+            fct_rho = _ival(f4[0]) if len(f4) > 0 else 0
+            scale_rho = _fval(f4[1], 1.0) if len(f4) > 1 else 1.0
+        if len(cards) > 4 and not cards[4].is_blank:
+            f5 = cards[4].cut("EBCS_PRES_5")
+            fct_en = _ival(f5[0]) if len(f5) > 0 else 0
+            scale_en = _fval(f5[1], 1.0) if len(f5) > 1 else 1.0
+        if len(cards) > 5 and not cards[5].is_blank:
+            f6 = cards[5].cut("EBCS_PRES_6")
+            lcar = _fval(f6[0]) if len(f6) > 0 else 0.0
+            r1 = _fval(f6[1]) if len(f6) > 1 else 0.0
+            r2 = _fval(f6[2]) if len(f6) > 2 else 0.0
+    else:
+        all_tokens = []
+        for card in cards:
+            if not card.is_blank:
+                all_tokens.extend(card.tokens())
+        if len(all_tokens) >= 1:
+            surf_id = int(float(all_tokens[0]))
+        if len(all_tokens) >= 2:
+            c = float(all_tokens[1])
+        if len(all_tokens) >= 3:
+            fct_pres = int(float(all_tokens[2]))
+        if len(all_tokens) >= 4:
+            scale_pres = float(all_tokens[3])
+        if len(all_tokens) >= 5:
+            fct_rho = int(float(all_tokens[4]))
+        if len(all_tokens) >= 6:
+            scale_rho = float(all_tokens[5])
+        if len(all_tokens) >= 7:
+            fct_en = int(float(all_tokens[6]))
+        if len(all_tokens) >= 8:
+            scale_en = float(all_tokens[7])
+        if len(all_tokens) >= 9:
+            lcar = float(all_tokens[8])
+        if len(all_tokens) >= 10:
+            r1 = float(all_tokens[9])
+        if len(all_tokens) >= 11:
+            r2 = float(all_tokens[10])
+
+    model.ebcs_pres[ebcs_id] = EbcsPres(
+        id=ebcs_id, title=title, surf_id=surf_id, c=c,
+        fct_pres=fct_pres, scale_pres=scale_pres,
+        fct_rho=fct_rho, scale_rho=scale_rho,
+        fct_en=fct_en, scale_en=scale_en,
+        lcar=lcar, r1=r1, r2=r2,
+    )
+
+
+def read_ebcs_vel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/VEL/id`` (M150): Eulerian imposed velocity boundary condition."""
+    from ..model.entities import EbcsVel
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    ebcs_id = block.user_id if block.user_id is not None else 1
+    if not cards or cards[0].is_blank:
+        log.error(f"/EBCS/VEL/{ebcs_id}: missing data card", block.source)
+        return
+    surf_id = 0
+    c = 0.0
+    fct_vx, scale_vx = 0, 0.0
+    fct_vy, scale_vy = 0, 0.0
+    fct_vz, scale_vz = 0, 0.0
+    fct_rho, scale_rho = 0, 1.0
+    fct_en, scale_en = 0, 1.0
+    lcar, r1, r2 = 0.0, 0.0, 0.0
+
+    if block.fixed:
+        f1 = cards[0].cut("EBCS_VEL_1")
+        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("EBCS_VEL_2")
+            c = _fval(f2[0]) if len(f2) > 0 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("EBCS_VEL_3")
+            fct_vx = _ival(f3[0]) if len(f3) > 0 else 0
+            scale_vx = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("EBCS_VEL_4")
+            fct_vy = _ival(f4[0]) if len(f4) > 0 else 0
+            scale_vy = _fval(f4[1], 0.0) if len(f4) > 1 else 0.0
+        if len(cards) > 4 and not cards[4].is_blank:
+            f5 = cards[4].cut("EBCS_VEL_5")
+            fct_vz = _ival(f5[0]) if len(f5) > 0 else 0
+            scale_vz = _fval(f5[1], 0.0) if len(f5) > 1 else 0.0
+        if len(cards) > 5 and not cards[5].is_blank:
+            f6 = cards[5].cut("EBCS_VEL_6")
+            fct_rho = _ival(f6[0]) if len(f6) > 0 else 0
+            scale_rho = _fval(f6[1], 1.0) if len(f6) > 1 else 1.0
+        if len(cards) > 6 and not cards[6].is_blank:
+            f7 = cards[7].cut("EBCS_VEL_7") if len(cards) > 6 else []
+            fct_en = _ival(f7[0]) if len(f7) > 0 else 0
+            scale_en = _fval(f7[1], 1.0) if len(f7) > 1 else 1.0
+        if len(cards) > 7 and not cards[7].is_blank:
+            f8 = cards[7].cut("EBCS_VEL_8")
+            lcar = _fval(f8[0]) if len(f8) > 0 else 0.0
+            r1 = _fval(f8[1]) if len(f8) > 1 else 0.0
+            r2 = _fval(f8[2]) if len(f8) > 2 else 0.0
+    else:
+        all_tokens = []
+        for card in cards:
+            if not card.is_blank:
+                all_tokens.extend(card.tokens())
+        if len(all_tokens) >= 1:
+            surf_id = int(float(all_tokens[0]))
+        if len(all_tokens) >= 2:
+            c = float(all_tokens[1])
+        if len(all_tokens) >= 3:
+            fct_vx = int(float(all_tokens[2]))
+        if len(all_tokens) >= 4:
+            scale_vx = float(all_tokens[3])
+        if len(all_tokens) >= 5:
+            fct_vy = int(float(all_tokens[4]))
+        if len(all_tokens) >= 6:
+            scale_vy = float(all_tokens[5])
+        if len(all_tokens) >= 7:
+            fct_vz = int(float(all_tokens[6]))
+        if len(all_tokens) >= 8:
+            scale_vz = float(all_tokens[7])
+        if len(all_tokens) >= 9:
+            fct_rho = int(float(all_tokens[8]))
+        if len(all_tokens) >= 10:
+            scale_rho = float(all_tokens[9])
+        if len(all_tokens) >= 11:
+            fct_en = int(float(all_tokens[10]))
+        if len(all_tokens) >= 12:
+            scale_en = float(all_tokens[11])
+        if len(all_tokens) >= 13:
+            lcar = float(all_tokens[12])
+        if len(all_tokens) >= 14:
+            r1 = float(all_tokens[13])
+        if len(all_tokens) >= 15:
+            r2 = float(all_tokens[14])
+
+    model.ebcs_vel[ebcs_id] = EbcsVel(
+        id=ebcs_id, title=title, surf_id=surf_id, c=c,
+        fct_vx=fct_vx, scale_vx=scale_vx,
+        fct_vy=fct_vy, scale_vy=scale_vy,
+        fct_vz=fct_vz, scale_vz=scale_vz,
+        fct_rho=fct_rho, scale_rho=scale_rho,
+        fct_en=fct_en, scale_en=scale_en,
+        lcar=lcar, r1=r1, r2=r2,
+    )
+
+
+def read_ebcs_inlet(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/INLET/id`` (M150): Eulerian inflow boundary condition."""
+    from ..model.entities import EbcsInlet
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    ebcs_id = block.user_id if block.user_id is not None else 1
+    if not cards or cards[0].is_blank:
+        log.error(f"/EBCS/INLET/{ebcs_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("EBCS_INLET_1")
+        surf_id = _ival(f[0]) if len(f) > 0 else 0
+        rho = _fval(f[1]) if len(f) > 1 else 0.0
+        vx = _fval(f[2]) if len(f) > 2 else 0.0
+        vy = _fval(f[3]) if len(f) > 3 else 0.0
+        vz = _fval(f[4]) if len(f) > 4 else 0.0
+        en = _fval(f[5]) if len(f) > 5 else 0.0
+        fct_id = _ival(f[6]) if len(f) > 6 else 0
+    else:
+        toks = cards[0].tokens()
+        surf_id = int(float(toks[0])) if len(toks) > 0 else 0
+        rho = float(toks[1]) if len(toks) > 1 else 0.0
+        vx = float(toks[2]) if len(toks) > 2 else 0.0
+        vy = float(toks[3]) if len(toks) > 3 else 0.0
+        vz = float(toks[4]) if len(toks) > 4 else 0.0
+        en = float(toks[5]) if len(toks) > 5 else 0.0
+        fct_id = int(float(toks[6])) if len(toks) > 6 else 0
+    model.ebcs_inlets[ebcs_id] = EbcsInlet(
+        id=ebcs_id, title=title, surf_id=surf_id,
+        density=rho, vx=vx, vy=vy, vz=vz, energy=en, fct_id=fct_id
+    )
+
+
+def read_ebcs_fluxout(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/FLUXOUT/id`` (M150): Eulerian mass outflow boundary condition."""
+    from ..model.entities import EbcsFluxout
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    ebcs_id = block.user_id if block.user_id is not None else 1
+    if not cards or cards[0].is_blank:
+        log.error(f"/EBCS/FLUXOUT/{ebcs_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("EBCS_FLUXOUT_1")
+        surf_id = _ival(f[0]) if len(f) > 0 else 0
+        p_ext = _fval(f[1]) if len(f) > 1 else 0.0
+    else:
+        toks = cards[0].tokens()
+        surf_id = int(float(toks[0])) if len(toks) > 0 else 0
+        p_ext = float(toks[1]) if len(toks) > 1 else 0.0
+    model.ebcs_fluxouts[ebcs_id] = EbcsFluxout(
+        id=ebcs_id, title=title, surf_id=surf_id, p_ext=p_ext
+    )
+
+
+def read_ebcs_gradp0(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/GRADP0/id`` (M150): Eulerian zero pressure gradient boundary condition."""
+    from ..model.entities import EbcsGradp0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    ebcs_id = block.user_id if block.user_id is not None else 1
+    if not cards or cards[0].is_blank:
+        log.error(f"/EBCS/GRADP0/{ebcs_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("EBCS_GRADP0_1")
+        surf_id = _ival(f[0]) if len(f) > 0 else 0
+    else:
+        toks = cards[0].tokens()
+        surf_id = int(float(toks[0])) if len(toks) > 0 else 0
+    model.ebcs_gradp0[ebcs_id] = EbcsGradp0(
+        id=ebcs_id, title=title, surf_id=surf_id
+    )
+
+
+def read_ebcs_normv(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/NORMV/id`` (M150): Eulerian normal velocity constraint."""
+    from ..model.entities import EbcsNormv
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    ebcs_id = block.user_id if block.user_id is not None else 1
+    if not cards or cards[0].is_blank:
+        log.error(f"/EBCS/NORMV/{ebcs_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("EBCS_NORMV_1")
+        surf_id = _ival(f[0]) if len(f) > 0 else 0
+        vn = _fval(f[1]) if len(f) > 1 else 0.0
+        fct_id = _ival(f[2]) if len(f) > 2 else 0
+    else:
+        toks = cards[0].tokens()
+        surf_id = int(float(toks[0])) if len(toks) > 0 else 0
+        vn = float(toks[1]) if len(toks) > 1 else 0.0
+        fct_id = int(float(toks[2])) if len(toks) > 2 else 0
+    model.ebcs_normv[ebcs_id] = EbcsNormv(
+        id=ebcs_id, title=title, surf_id=surf_id, vn=vn, fct_id=fct_id
+    )
+
+
+def read_ebcs_valv(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/VALVIN`` or ``/EBCS/VALVOUT`` (M150): Eulerian valve boundary condition."""
+    from ..model.entities import EbcsValv
+    sub = block.parts[1].upper() if len(block.parts) > 1 else "VALVIN"
+    is_out = "OUT" in sub
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    ebcs_id = block.user_id if block.user_id is not None else 1
+    if not cards or cards[0].is_blank:
+        log.error(f"/EBCS/{sub}/{ebcs_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("EBCS_VALVIN_1")
+        surf_id = _ival(f[0]) if len(f) > 0 else 0
+        p_open = _fval(f[1]) if len(f) > 1 else 0.0
+        p_close = _fval(f[2]) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        surf_id = int(float(toks[0])) if len(toks) > 0 else 0
+        p_open = float(toks[1]) if len(toks) > 1 else 0.0
+        p_close = float(toks[2]) if len(toks) > 2 else 0.0
+    model.ebcs_valves[ebcs_id] = EbcsValv(
+        id=ebcs_id, title=title, surf_id=surf_id, is_out=is_out,
+        p_open=p_open, p_close=p_close
+    )
+
+
+def read_ebcs_monvol(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/MONVOL/id`` (M150): Eulerian monitored volume boundary connection."""
+    from ..model.entities import EbcsMonvol
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    ebcs_id = block.user_id if block.user_id is not None else 1
+    if not cards or cards[0].is_blank:
+        log.error(f"/EBCS/MONVOL/{ebcs_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("EBCS_MONVOL_1")
+        surf_id = _ival(f[0]) if len(f) > 0 else 0
+        monvol_id = _ival(f[1]) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        surf_id = int(float(toks[0])) if len(toks) > 0 else 0
+        monvol_id = int(float(toks[1])) if len(toks) > 1 else 0
+    model.ebcs_monvols[ebcs_id] = EbcsMonvol(
+        id=ebcs_id, title=title, surf_id=surf_id, monvol_id=monvol_id
+    )
+
+
 def read_ebcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/EBCS/<subtype>/id`` dispatcher (M114, M125, M138)."""
+    """``/EBCS/<subtype>/id`` dispatcher (M114, M125, M138, M150)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub == "PROPELLANT":
         read_ebcs_propellant(block, model, log)
@@ -10294,6 +10607,22 @@ def read_ebcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_ebcs_periodic(block, model, log)
     elif sub == "CYCLIC":
         read_ebcs_cyclic(block, model, log)
+    elif sub == "PRES":
+        read_ebcs_pres(block, model, log)
+    elif sub == "VEL":
+        read_ebcs_vel(block, model, log)
+    elif sub == "INLET":
+        read_ebcs_inlet(block, model, log)
+    elif sub in ("FLUXOUT", "OUTLET"):
+        read_ebcs_fluxout(block, model, log)
+    elif sub == "GRADP0":
+        read_ebcs_gradp0(block, model, log)
+    elif sub == "NORMV":
+        read_ebcs_normv(block, model, log)
+    elif sub in ("VALVIN", "VALVOUT", "VALV_IN", "VALV_OUT"):
+        read_ebcs_valv(block, model, log)
+    elif sub == "MONVOL":
+        read_ebcs_monvol(block, model, log)
     else:
         read_bcs(block, model, log)
 
@@ -10813,23 +11142,24 @@ def read_state(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_sms(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/SMS``, ``/AMS`` (M101) — Selective Mass Scaling global parameters.
+    """``/SMS``, ``/AMS`` (M101, M150) — Selective Mass Scaling / Advanced Mass Scaling.
 
     Card format:
         grpart_ID  [dt_target]
     """
-    from ..model.entities import SmsGlobal
+    from ..model.entities import SmsGlobal, AmsControl
     if block.fixed:
         cards = [c for c in block.fixed_cards() if not c.is_blank]
     else:
         cards = [c for c in block.cards if not c.is_blank]
     if not cards:
         model.sms_global = SmsGlobal()
+        model.ams_control = AmsControl()
         return
 
     c = cards[0]
     if block.fixed:
-        f = c.cut("SMS_1")
+        f = c.cut("AMS_1") if block.key0 == "AMS" else c.cut("SMS_1")
         grpart_id = _ival(f[0]) if len(f) > 0 else 0
         dt_target = _fval(f[1]) if len(f) > 1 else 0.0
     else:
@@ -10838,6 +11168,12 @@ def read_sms(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         dt_target = float(toks[1]) if len(toks) > 1 else 0.0
 
     model.sms_global = SmsGlobal(grpart_id=grpart_id, dt_target=dt_target)
+    model.ams_control = AmsControl(
+        id=block.user_id or 1, title="", grpart_id=grpart_id, dt_target=dt_target
+    )
+
+
+read_ams = read_sms
 
 
 # ============================================================================
@@ -10867,7 +11203,7 @@ def read_bcs_nrf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_bcs_wall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/BCS/WALL/id`` (M102): sliding wall boundary condition.
+    """``/BCS/WALL/id`` (M102, M150): sliding wall boundary condition.
 
     Fortran origin: ``starter/source/boundary_conditions/hm_read_bcs_wall.F90``.
     Card 1: TITLE (%-100s)
@@ -10879,7 +11215,7 @@ def read_bcs_wall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     grnod_id = 0
     sensor_id = 0
     tstart = 0.0
-    tstop = 0.0
+    tstop = 1.0e20
     if cards:
         c1 = cards[0]
         if block.fixed:
@@ -10895,13 +11231,13 @@ def read_bcs_wall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if block.fixed:
             f2 = c2.cut("BCS_WALL_2")
             tstart = _fval(f2[0]) if len(f2) > 0 else 0.0
-            tstop = _fval(f2[1]) if len(f2) > 1 else 0.0
+            tstop = _fval(f2[1], 1.0e20) if len(f2) > 1 else 1.0e20
         else:
             toks2 = c2.tokens()
             tstart = float(toks2[0]) if len(toks2) > 0 else 0.0
-            tstop = float(toks2[1]) if len(toks2) > 1 else 0.0
+            tstop = float(toks2[1]) if len(toks2) > 1 else 1.0e20
     model.bcs_walls[block.user_id] = BcsWall(
-        id=block.user_id, title=title, grnod_id=grnod_id, sensor_id=sensor_id,
+        id=block.user_id, title=title, grnod_id=grnod_id, sens_id=sensor_id,
         tstart=tstart, tstop=tstop
     )
 
@@ -13593,6 +13929,33 @@ def read_slipring(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             xscale3=xscale3, xscale4=xscale4, yscale4=yscale4,
         )
 
+
+def read_seatbelt(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SEATBELT/id`` (M150): Complete seatbelt system assembly.
+
+    Fortran origin: ``starter/source/tools/seatbelts/create_seatbelt.F``.
+    """
+    from ..model.entities import SeatbeltSystem
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    retractor_ids = []
+    slipring_ids = []
+    element_ids = []
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("SEATBELT_1")
+            vals = [_ival(x) for x in f if x.strip()]
+        else:
+            vals = [int(float(x)) for x in cards[0].tokens()]
+        if len(vals) > 0 and vals[0] > 0:
+            retractor_ids.append(vals[0])
+        if len(vals) > 1 and vals[1] > 0:
+            slipring_ids.append(vals[1])
+        if len(vals) > 2:
+            element_ids.extend([v for v in vals[2:] if v > 0])
+    model.seatbelt_systems[block.user_id] = SeatbeltSystem(
+        id=block.user_id, title=title,
+        retractor_ids=retractor_ids, slipring_ids=slipring_ids, element_ids=element_ids
+    )
 
 
 def read_userwi(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -16413,6 +16776,8 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "INTER_GUIDED_CABLE": read_guided_cable,
     "SUBINTER": read_subinter,
     "INTER_SUB": read_subinter,
+    "AMS": read_ams,
+    "SEATBELT": read_seatbelt,
 }
 
 

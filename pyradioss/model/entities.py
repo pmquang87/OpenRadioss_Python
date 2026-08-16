@@ -4088,5 +4088,178 @@ class MaterialViscPlas:
     lsdyna_sigf: float = 0.0
 
 
+@dataclass
+class EbcsPres:
+    """/EBCS/PRES/id (M150): Eulerian imposed pressure boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/ebcs/hm_read_ebcs_pres.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    c: float = 0.0
+    fct_pres: int = 0
+    scale_pres: float = 1.0
+    fct_rho: int = 0
+    scale_rho: float = 1.0
+    fct_en: int = 0
+    scale_en: float = 1.0
+    lcar: float = 0.0
+    r1: float = 0.0
+    r2: float = 0.0
+
+
+@dataclass
+class EbcsVel:
+    """/EBCS/VEL/id (M150): Eulerian imposed velocity boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/ebcs/hm_read_ebcs_vel.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    c: float = 0.0
+    fct_vx: int = 0
+    scale_vx: float = 0.0
+    fct_vy: int = 0
+    scale_vy: float = 0.0
+    fct_vz: int = 0
+    scale_vz: float = 0.0
+    fct_rho: int = 0
+    scale_rho: float = 1.0
+    fct_en: int = 0
+    scale_en: float = 1.0
+    lcar: float = 0.0
+    r1: float = 0.0
+    r2: float = 0.0
+
+
+@dataclass
+class EbcsInlet:
+    """/EBCS/INLET/id (M150): Eulerian inflow boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/ebcs/hm_read_ebcs_inlet.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    density: float = 0.0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    energy: float = 0.0
+    fct_id: int = 0
+
+
+@dataclass
+class EbcsFluxout:
+    """/EBCS/FLUXOUT/id (M150): Eulerian mass outflow boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/ebcs/hm_read_ebcs_fluxout.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    p_ext: float = 0.0
+
+
+@dataclass
+class EbcsGradp0:
+    """/EBCS/GRADP0/id (M150): Eulerian zero pressure gradient boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/ebcs/hm_read_ebcs_gradp0.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+
+
+@dataclass
+class EbcsNormv:
+    """/EBCS/NORMV/id (M150): Eulerian normal velocity constraint.
+
+    Fortran origin: ``starter/source/boundary_conditions/ebcs/hm_read_ebcs_normv.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    vn: float = 0.0
+    fct_id: int = 0
+
+
+@dataclass
+class EbcsValv:
+    """/EBCS/VALVIN or /EBCS/VALVOUT (M150): Eulerian valve boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/ebcs/hm_read_ebcs_valvin.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    is_out: bool = False
+    p_open: float = 0.0
+    p_close: float = 0.0
+
+
+@dataclass
+class EbcsMonvol:
+    """/EBCS/MONVOL/id (M150): Eulerian monitored volume boundary connection.
+
+    Fortran origin: ``starter/source/boundary_conditions/ebcs/hm_read_ebcs_monvol.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    monvol_id: int = 0
+
+
+@dataclass
+class BcsWall:
+    """/BCS/WALL/id (M150): Eulerian sliding wall boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/hm_read_bcs_wall.F90``.
+    """
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+    sens_id: int = 0
+    tstart: float = 0.0
+    tstop: float = 1.0e20
+
+    @property
+    def sensor_id(self) -> int:
+        return self.sens_id
+
+    @sensor_id.setter
+    def sensor_id(self, val: int) -> None:
+        self.sens_id = val
+
+
+@dataclass
+class SeatbeltSystem:
+    """/SEATBELT/id (M150): Complete seatbelt system assembly.
+
+    Fortran origin: ``starter/source/tools/seatbelts/create_seatbelt.F``.
+    """
+    id: int
+    title: str = ""
+    retractor_ids: list[int] = field(default_factory=list)
+    slipring_ids: list[int] = field(default_factory=list)
+    element_ids: list[int] = field(default_factory=list)
+
+
+@dataclass
+class AmsControl:
+    """/AMS (M150): Advanced Mass Scaling starter control.
+
+    Fortran origin: ``starter/source/general_controls/computation/hm_read_sms.F``.
+    """
+    id: int = 0
+    title: str = ""
+    grpart_id: int = 0
+    dt_target: float = 0.0
+    i_ams: int = 1
+
+
 
 

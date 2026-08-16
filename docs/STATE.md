@@ -155,6 +155,7 @@ real history is 41 milestones. One line each:
 | M147 | Add failure models (/FAIL/EMC, /FAIL/FABRIC, /FAIL/SPALLING, /FAIL/TBUTCHER, /FAIL/WIERZBICKI, /FAIL/WILKINS) and material damping sub-model (/MAT/VISC_PLAS, /VISC/PLAS) |
 | M148 | Add engine directives suite II (/DAMP, /MASS/RESET, /SENSOR/RESET, /VIPER, /MADYMO, /RAD2R, /FVMBAG, /PERF, /DT1TET10, /DTTSH, /REPORT, /NEGVOL) |
 | M149 | Add guided cable sliding interface (/INTER/GUIDED_CABLE, /GUIDED_CABLE), specialized element properties (/PROP/STITCH, /PROP/PREDIT, /PROP/SPR_MUSC), sub-interface force tracking (/INTER/SUB, /SUBINTER), and extended time-history output channels (/TH/GUIDED_CABLE, /TH/SUBS) |
+| M150 | Add Eulerian boundary conditions (/EBCS/PRES, /EBCS/VEL, /EBCS/INLET, /EBCS/FLUXOUT, /EBCS/GRADP0, /EBCS/NORMV, /EBCS/VALVIN, /EBCS/VALVOUT, /EBCS/MONVOL), sliding wall boundary conditions (/BCS/WALL), advanced mass scaling (/AMS), and seatbelt system assembly (/SEATBELT) suite |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

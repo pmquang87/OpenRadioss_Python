@@ -472,8 +472,8 @@ def check_model(model: Model, log: MessageLog) -> None:
     for bid, bcs in getattr(model, "bcs_walls", {}).items():
         if bcs.grnod_id > 0 and bcs.grnod_id not in model.node_groups:
             log.error(f"/BCS/WALL/{bid}: node group {bcs.grnod_id} not defined", "CROSS REF")
-        if bcs.sensor_id > 0 and bcs.sensor_id not in sensor_ids:
-            log.error(f"/BCS/WALL/{bid}: sensor {bcs.sensor_id} not defined", "CROSS REF")
+        if bcs.sens_id > 0 and bcs.sens_id not in sensor_ids:
+            log.error(f"/BCS/WALL/{bid}: sensor {bcs.sens_id} not defined", "CROSS REF")
 
     for rid, rl in getattr(model, "rlinks", {}).items():
         if rl.grnod_id > 0 and rl.grnod_id not in model.node_groups:
@@ -1020,6 +1020,64 @@ def check_model(model: Model, log: MessageLog) -> None:
     for nid in getattr(model, "refsta_nodes", {}):
         if nid > 0 and nid not in model._id2idx:
             log.error(f"/REFSTA: node {nid} not defined", "CROSS REF")
+
+    # M150: EBCS, AMS, and Seatbelt Systems
+    for pid, eb in getattr(model, "ebcs_pres", {}).items():
+        if eb.surf_id > 0 and eb.surf_id not in model.surfaces:
+            log.error(f"/EBCS/PRES/{pid}: surface {eb.surf_id} not defined", "CROSS REF")
+        for fid in (eb.fct_pres, eb.fct_rho, eb.fct_en):
+            if fid > 0 and fid not in model.functions:
+                log.error(f"/EBCS/PRES/{pid}: function {fid} not defined", "CROSS REF")
+
+    for vid, eb in getattr(model, "ebcs_vel", {}).items():
+        if eb.surf_id > 0 and eb.surf_id not in model.surfaces:
+            log.error(f"/EBCS/VEL/{vid}: surface {eb.surf_id} not defined", "CROSS REF")
+        for fid in (eb.fct_vx, eb.fct_vy, eb.fct_vz, eb.fct_rho, eb.fct_en):
+            if fid > 0 and fid not in model.functions:
+                log.error(f"/EBCS/VEL/{vid}: function {fid} not defined", "CROSS REF")
+
+    for iid, eb in getattr(model, "ebcs_inlets", {}).items():
+        if eb.surf_id > 0 and eb.surf_id not in model.surfaces:
+            log.error(f"/EBCS/INLET/{iid}: surface {eb.surf_id} not defined", "CROSS REF")
+        if eb.funct_id > 0 and eb.funct_id not in model.functions:
+            log.error(f"/EBCS/INLET/{iid}: function {eb.funct_id} not defined", "CROSS REF")
+
+    for fid, eb in getattr(model, "ebcs_fluxouts", {}).items():
+        if eb.surf_id > 0 and eb.surf_id not in model.surfaces:
+            log.error(f"/EBCS/FLUXOUT/{fid}: surface {eb.surf_id} not defined", "CROSS REF")
+
+    for gid, eb in getattr(model, "ebcs_gradp0", {}).items():
+        if eb.surf_id > 0 and eb.surf_id not in model.surfaces:
+            log.error(f"/EBCS/GRADP0/{gid}: surface {eb.surf_id} not defined", "CROSS REF")
+
+    for nid, eb in getattr(model, "ebcs_normv", {}).items():
+        if eb.surf_id > 0 and eb.surf_id not in model.surfaces:
+            log.error(f"/EBCS/NORMV/{nid}: surface {eb.surf_id} not defined", "CROSS REF")
+        if eb.funct_id > 0 and eb.funct_id not in model.functions:
+            log.error(f"/EBCS/NORMV/{nid}: function {eb.funct_id} not defined", "CROSS REF")
+
+    for vid, eb in getattr(model, "ebcs_valves", {}).items():
+        if eb.surf_id > 0 and eb.surf_id not in model.surfaces:
+            log.error(f"/EBCS/{eb.kind}/{vid}: surface {eb.surf_id} not defined", "CROSS REF")
+
+    for mid, eb in getattr(model, "ebcs_monvols", {}).items():
+        if eb.surf_id > 0 and eb.surf_id not in model.surfaces:
+            log.error(f"/EBCS/MONVOL/{mid}: surface {eb.surf_id} not defined", "CROSS REF")
+        if eb.monvol_id > 0 and eb.monvol_id not in getattr(model, "monitored_volumes", {}) and eb.monvol_id not in getattr(model, "airbags", {}):
+            log.error(f"/EBCS/MONVOL/{mid}: monvol {eb.monvol_id} not defined", "CROSS REF")
+
+    if getattr(model, "ams_control", None) is not None:
+        ams = model.ams_control
+        if ams.grpart_id > 0 and ams.grpart_id not in part_groups and ams.grpart_id not in model.parts:
+            log.error(f"/AMS: part group {ams.grpart_id} not defined", "CROSS REF")
+
+    for sbid, sb in getattr(model, "seatbelt_systems", {}).items():
+        for rid in sb.retractor_ids:
+            if rid > 0 and rid not in getattr(model, "retractors", {}):
+                log.error(f"/SEATBELT/{sbid}: retractor {rid} not defined", "CROSS REF")
+        for sid in sb.slipring_ids:
+            if sid > 0 and sid not in getattr(model, "sliprings", {}) and sid not in getattr(model, "slipring_shells", {}):
+                log.error(f"/SEATBELT/{sbid}: slipring {sid} not defined", "CROSS REF")
 
 
 

@@ -79,6 +79,8 @@ from .entities import (
     PreloadBolt, LoadHydro,
     Func2DTable, NonlocalModel, FricOrient, IniSphCel,
     MaterialViscPlas,
+    EbcsPres, EbcsVel, EbcsInlet, EbcsFluxout, EbcsGradp0, EbcsNormv, EbcsValv, EbcsMonvol,
+    BcsWall, SeatbeltSystem, AmsControl,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -887,6 +889,17 @@ class Model:
         self.ini_sphcels: Dict[int, IniSphCel] = {}           # /INISPHCEL (M145)
         self.implicit_flag: bool = False                      # /IMPLICIT (M145)
         self.visc_plas_models: Dict[int, MaterialViscPlas] = {} # /MAT/VISC_PLAS (M147)
+        self.ebcs_pres: Dict[int, EbcsPres] = {}           # /EBCS/PRES (M150)
+        self.ebcs_vel: Dict[int, EbcsVel] = {}             # /EBCS/VEL (M150)
+        self.ebcs_inlets: Dict[int, EbcsInlet] = {}        # /EBCS/INLET (M150)
+        self.ebcs_fluxouts: Dict[int, EbcsFluxout] = {}    # /EBCS/FLUXOUT (M150)
+        self.ebcs_gradp0: Dict[int, EbcsGradp0] = {}       # /EBCS/GRADP0 (M150)
+        self.ebcs_normv: Dict[int, EbcsNormv] = {}         # /EBCS/NORMV (M150)
+        self.ebcs_valves: Dict[int, EbcsValv] = {}         # /EBCS/VALVIN, /EBCS/VALVOUT (M150)
+        self.ebcs_monvols: Dict[int, EbcsMonvol] = {}      # /EBCS/MONVOL (M150)
+        self.bcs_walls: Dict[int, BcsWall] = {}            # /BCS/WALL (M150)
+        self.seatbelt_systems: Dict[int, SeatbeltSystem] = {} # /SEATBELT (M150)
+        self.ams_control: Optional[AmsControl] = None      # /AMS (M150)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

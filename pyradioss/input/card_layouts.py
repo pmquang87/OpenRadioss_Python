@@ -1283,6 +1283,31 @@ LAYOUTS: Dict[str, List[int]] = {
     "PROP_SPR_MUSCLE_2": [10, 10, 10, 10, 10, 10],
     "PROP_SPR_MUSCLE_3": [20, 10],
     "PROP_SPR_MUSCLE_4": [20, 20, 20, 20],
+
+    # Eulerian Boundary Conditions Suite & Seatbelt Systems (M150)
+    "EBCS_PRES_1": [10],
+    "EBCS_PRES_2": [20],
+    "EBCS_PRES_3": [10, 20],
+    "EBCS_PRES_4": [10, 20],
+    "EBCS_PRES_5": [10, 20],
+    "EBCS_PRES_6": [20, 20, 20],
+    "EBCS_VEL_1": [10],
+    "EBCS_VEL_2": [20],
+    "EBCS_VEL_3": [10, 20],
+    "EBCS_VEL_4": [10, 20],
+    "EBCS_VEL_5": [10, 20],
+    "EBCS_VEL_6": [10, 20],
+    "EBCS_VEL_7": [10, 20],
+    "EBCS_VEL_8": [20, 20, 20],
+    "EBCS_INLET_1": [10, 20, 20, 20, 20, 20, 10],
+    "EBCS_FLUXOUT_1": [10, 20],
+    "EBCS_GRADP0_1": [10],
+    "EBCS_NORMV_1": [10, 20, 10],
+    "EBCS_VALVIN_1": [10, 20, 20],
+    "EBCS_VALVOUT_1": [10, 20, 20],
+    "EBCS_MONVOL_1": [10, 10],
+    "AMS_1": [10, 20],
+    "SEATBELT_1": [10, 10, 10, 10, 10, 10, 10, 10],
 }
 
 
