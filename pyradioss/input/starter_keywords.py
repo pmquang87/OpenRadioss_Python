@@ -2904,6 +2904,11 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if typename in ("TYPE28", "XELEM", "XFEM"):
         read_prop_xelem(block, model, log)
         return
+    # NOTE: INJECT1/2, JOINT, TORSION, SPR_ELAS_PLAS, SPR_BEAM, SPOTWELD,
+    # BUSHING — all handled by the generic cfg-driven prop_reader below.
+    # Dedicated readers (read_prop_inject1 etc.) exist but are not yet
+    # wired here because existing tests expect model.properties[id].
+
     aliases = {"TYPE1": 1, "SHELL": 1, "TYPE2": 2, "TRUSS": 2,
                "TYPE3": 3, "BEAM": 3,
                "TYPE4": 4, "SPRING": 4, "TYPE14": 14, "SOLID": 14,
@@ -3898,6 +3903,377 @@ def read_prop_xelem(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_prop_inject1(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/INJECT1`` (M152): Gas injector property."""
+    from ..model.entities import PropInject1, PropInject1Gas
+    pid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PROP/INJECT1/{pid}: missing data card", block.source)
+        return
+    n_gases, iflow, ascale_t = 0, 0, 0.0
+    if block.fixed:
+        f = cards[0].cut("PROP_INJECT1_1")
+        n_gases = _ival(f[0]) if len(f) > 0 else 0
+        iflow = _ival(f[1]) if len(f) > 1 else 0
+        ascale_t = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        n_gases = int(float(toks[0])) if len(toks) > 0 else 0
+        iflow = int(float(toks[1])) if len(toks) > 1 else 0
+        ascale_t = float(toks[2]) if len(toks) > 2 else 0.0
+
+    gases = []
+    for i in range(1, len(cards)):
+        if cards[i].is_blank:
+            continue
+        if block.fixed:
+            f = cards[i].cut("PROP_INJECT1_2")
+            mat_id = _ival(f[0]) if len(f) > 0 else 0
+            fun_id_m = _ival(f[1]) if len(f) > 1 else 0
+            fun_id_t = _ival(f[2]) if len(f) > 2 else 0
+            fscale_m = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            fscale_t = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        else:
+            toks = cards[i].tokens()
+            mat_id = int(float(toks[0])) if len(toks) > 0 else 0
+            fun_id_m = int(float(toks[1])) if len(toks) > 1 else 0
+            fun_id_t = int(float(toks[2])) if len(toks) > 2 else 0
+            fscale_m = float(toks[3]) if len(toks) > 3 else 0.0
+            fscale_t = float(toks[4]) if len(toks) > 4 else 0.0
+        gases.append(PropInject1Gas(mat_id, fun_id_m, fun_id_t, fscale_m, fscale_t))
+
+    model.prop_inject1s[pid] = PropInject1(
+        id=pid, title=title, n_gases=n_gases, iflow=iflow, ascale_t=ascale_t, gases=gases
+    )
+
+
+def read_prop_inject2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/INJECT2`` (M152): Multi-gas mixture property."""
+    from ..model.entities import PropInject2, PropInject2Gas
+    pid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or len(cards) < 2 or cards[0].is_blank:
+        log.error(f"/PROP/INJECT2/{pid}: missing data cards", block.source)
+        return
+    n_gases, iflow = 0, 0
+    fun_id_m, fun_id_t, fscale_m, fscale_t, ascale_t = 0, 0, 0.0, 0.0, 0.0
+    if block.fixed:
+        f = cards[0].cut("PROP_INJECT2_1")
+        n_gases = _ival(f[0]) if len(f) > 0 else 0
+        iflow = _ival(f[1]) if len(f) > 1 else 0
+        f2 = cards[1].cut("PROP_INJECT2_2")
+        fun_id_m = _ival(f2[0]) if len(f2) > 0 else 0
+        fun_id_t = _ival(f2[1]) if len(f2) > 1 else 0
+        fscale_m = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+        fscale_t = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+        ascale_t = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+    else:
+        toks = cards[0].tokens()
+        n_gases = int(float(toks[0])) if len(toks) > 0 else 0
+        iflow = int(float(toks[1])) if len(toks) > 1 else 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            fun_id_m = int(float(toks2[0])) if len(toks2) > 0 else 0
+            fun_id_t = int(float(toks2[1])) if len(toks2) > 1 else 0
+            fscale_m = float(toks2[2]) if len(toks2) > 2 else 0.0
+            fscale_t = float(toks2[3]) if len(toks2) > 3 else 0.0
+            ascale_t = float(toks2[4]) if len(toks2) > 4 else 0.0
+
+    gases = []
+    for i in range(2, len(cards)):
+        if cards[i].is_blank:
+            continue
+        if block.fixed:
+            f = cards[i].cut("PROP_INJECT2_3")
+            mat_id = _ival(f[0]) if len(f) > 0 else 0
+            molar_fraction = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            fun_id_mf = _ival(f[2]) if len(f) > 2 else 0
+        else:
+            toks = cards[i].tokens()
+            mat_id = int(float(toks[0])) if len(toks) > 0 else 0
+            molar_fraction = float(toks[1]) if len(toks) > 1 else 0.0
+            fun_id_mf = int(float(toks[2])) if len(toks) > 2 else 0
+        gases.append(PropInject2Gas(mat_id, molar_fraction, fun_id_mf))
+
+    model.prop_inject2s[pid] = PropInject2(
+        id=pid, title=title, n_gases=n_gases, iflow=iflow,
+        fun_id_m=fun_id_m, fun_id_t=fun_id_t, fscale_m=fscale_m,
+        fscale_t=fscale_t, ascale_t=ascale_t, gases=gases
+    )
+
+
+def read_prop_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE33`` or ``/PROP/JOINT`` (M152): Kinematic joint property."""
+    from ..model.entities import PropJoint
+    pid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PROP/TYPE33/{pid}: missing data card", block.source)
+        return
+    joint_type, skew_id = 0, 0
+    params = {}
+    if block.fixed:
+        f = cards[0].cut("PROP_TYPE33_1")
+        joint_type = _ival(f[0]) if len(f) > 0 else 0
+        skew_id = _ival(f[1]) if len(f) > 1 else 0
+        if len(f) > 2: params["p1"] = _fval(f[2], 0.0)
+        if len(f) > 3: params["p2"] = _fval(f[3], 0.0)
+        if len(f) > 4: params["p3"] = _fval(f[4], 0.0)
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("PROP_TYPE33_2")
+            if len(f2) > 0: params["p4"] = _fval(f2[0], 0.0)
+            if len(f2) > 1: params["p5"] = _fval(f2[1], 0.0)
+            if len(f2) > 2: params["p6"] = _fval(f2[2], 0.0)
+            if len(f2) > 3: params["p7"] = _fval(f2[3], 0.0)
+            if len(f2) > 4: params["p8"] = _fval(f2[4], 0.0)
+    else:
+        toks = cards[0].tokens()
+        joint_type = int(float(toks[0])) if len(toks) > 0 else 0
+        skew_id = int(float(toks[1])) if len(toks) > 1 else 0
+        if len(toks) > 2: params["p1"] = float(toks[2])
+        if len(toks) > 3: params["p2"] = float(toks[3])
+        if len(toks) > 4: params["p3"] = float(toks[4])
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            if len(toks2) > 0: params["p4"] = float(toks2[0])
+            if len(toks2) > 1: params["p5"] = float(toks2[1])
+            if len(toks2) > 2: params["p6"] = float(toks2[2])
+            if len(toks2) > 3: params["p7"] = float(toks2[3])
+            if len(toks2) > 4: params["p8"] = float(toks2[4])
+
+    model.prop_joints[pid] = PropJoint(
+        id=pid, title=title, joint_type=joint_type, skew_id=skew_id, params=params
+    )
+
+
+def read_prop_torsion(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE35`` or ``/PROP/TORSION`` (M152): Torsion bar spring property."""
+    from ..model.entities import PropTorsion
+    pid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PROP/TYPE35/{pid}: missing data card", block.source)
+        return
+    mass, k_elas, x_lim1, x_lim2, k_post = 0.0, 0.0, 0.0, 0.0, 0.0
+    d1, d2, r_load, f_scal = 0.0, 0.0, 0.0, 0.0
+    fct_id1, fct_id2, fct_id3, fct_id4 = 0, 0, 0, 0
+    if block.fixed:
+        f = cards[0].cut("PROP_TYPE35_1")
+        mass = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        k_elas = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        x_lim1 = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        x_lim2 = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        k_post = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("PROP_TYPE35_2")
+            d1 = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            d2 = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            r_load = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            f_scal = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("PROP_TYPE35_3")
+            fct_id1 = _ival(f3[0]) if len(f3) > 0 else 0
+            fct_id2 = _ival(f3[1]) if len(f3) > 1 else 0
+            fct_id3 = _ival(f3[2]) if len(f3) > 2 else 0
+            fct_id4 = _ival(f3[3]) if len(f3) > 3 else 0
+    else:
+        toks = cards[0].tokens()
+        mass = float(toks[0]) if len(toks) > 0 else 0.0
+        k_elas = float(toks[1]) if len(toks) > 1 else 0.0
+        x_lim1 = float(toks[2]) if len(toks) > 2 else 0.0
+        x_lim2 = float(toks[3]) if len(toks) > 3 else 0.0
+        k_post = float(toks[4]) if len(toks) > 4 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            d1 = float(toks2[0]) if len(toks2) > 0 else 0.0
+            d2 = float(toks2[1]) if len(toks2) > 1 else 0.0
+            r_load = float(toks2[2]) if len(toks2) > 2 else 0.0
+            f_scal = float(toks2[3]) if len(toks2) > 3 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            toks3 = cards[2].tokens()
+            fct_id1 = int(float(toks3[0])) if len(toks3) > 0 else 0
+            fct_id2 = int(float(toks3[1])) if len(toks3) > 1 else 0
+            fct_id3 = int(float(toks3[2])) if len(toks3) > 2 else 0
+            fct_id4 = int(float(toks3[3])) if len(toks3) > 3 else 0
+
+    model.prop_torsions[pid] = PropTorsion(
+        id=pid, title=title, mass=mass, k_elas=k_elas, x_lim1=x_lim1, x_lim2=x_lim2,
+        k_post=k_post, d1=d1, d2=d2, r_load=r_load, f_scal=f_scal,
+        fct_id1=fct_id1, fct_id2=fct_id2, fct_id3=fct_id3, fct_id4=fct_id4
+    )
+
+
+def read_prop_spring_elas_plas(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE36`` (M152): Spring elastic-plastic property."""
+    from ..model.entities import PropSpringElasPlas
+    pid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PROP/TYPE36/{pid}: missing data card", block.source)
+        return
+    skew_id, i_utyp, pid1, pid2, mid1 = 0, 0, 0, 0, 0
+    k_stiff, area, ixx, iyy, izz = 0.0, 0.0, 0.0, 0.0, 0.0
+    params = {}
+    if block.fixed:
+        f = cards[0].cut("PROP_TYPE36_1")
+        skew_id = _ival(f[0]) if len(f) > 0 else 0
+        i_utyp = _ival(f[1]) if len(f) > 1 else 0
+        pid1 = _ival(f[2]) if len(f) > 2 else 0
+        pid2 = _ival(f[3]) if len(f) > 3 else 0
+        k_stiff = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("PROP_TYPE36_2")
+            mid1 = _ival(f2[0]) if len(f2) > 0 else 0
+            area = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            ixx = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            iyy = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+            izz = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+    else:
+        toks = cards[0].tokens()
+        skew_id = int(float(toks[0])) if len(toks) > 0 else 0
+        i_utyp = int(float(toks[1])) if len(toks) > 1 else 0
+        pid1 = int(float(toks[2])) if len(toks) > 2 else 0
+        pid2 = int(float(toks[3])) if len(toks) > 3 else 0
+        k_stiff = float(toks[4]) if len(toks) > 4 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            mid1 = int(float(toks2[0])) if len(toks2) > 0 else 0
+            area = float(toks2[1]) if len(toks2) > 1 else 0.0
+            ixx = float(toks2[2]) if len(toks2) > 2 else 0.0
+            iyy = float(toks2[3]) if len(toks2) > 3 else 0.0
+            izz = float(toks2[4]) if len(toks2) > 4 else 0.0
+
+    model.prop_spring_elas_plas[pid] = PropSpringElasPlas(
+        id=pid, title=title, skew_id=skew_id, i_utyp=i_utyp, pid1=pid1, pid2=pid2,
+        mid1=mid1, k_stiff=k_stiff, area=area, ixx=ixx, iyy=iyy, izz=izz, params=params
+    )
+
+
+def read_prop_spring_beam(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE44`` (M152): Spring beam property."""
+    from ..model.entities import PropSpringBeam
+    pid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PROP/TYPE44/{pid}: missing data card", block.source)
+        return
+    skew_id, idamp, nc_filter = 0, 0, 0
+    params = {}
+    if block.fixed:
+        f = cards[0].cut("PROP_TYPE44_1")
+        skew_id = _ival(f[0]) if len(f) > 0 else 0
+        idamp = _ival(f[1]) if len(f) > 1 else 0
+        nc_filter = _ival(f[2]) if len(f) > 2 else 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("PROP_TYPE44_2")
+            if len(f2) > 0: params["p1"] = _fval(f2[0], 0.0)
+            if len(f2) > 1: params["p2"] = _fval(f2[1], 0.0)
+            if len(f2) > 2: params["p3"] = _fval(f2[2], 0.0)
+            if len(f2) > 3: params["p4"] = _fval(f2[3], 0.0)
+    else:
+        toks = cards[0].tokens()
+        skew_id = int(float(toks[0])) if len(toks) > 0 else 0
+        idamp = int(float(toks[1])) if len(toks) > 1 else 0
+        nc_filter = int(float(toks[2])) if len(toks) > 2 else 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            if len(toks2) > 0: params["p1"] = float(toks2[0])
+            if len(toks2) > 1: params["p2"] = float(toks2[1])
+            if len(toks2) > 2: params["p3"] = float(toks2[2])
+            if len(toks2) > 3: params["p4"] = float(toks2[3])
+
+    model.prop_spring_beams[pid] = PropSpringBeam(
+        id=pid, title=title, skew_id=skew_id, idamp=idamp, nc_filter=nc_filter, params=params
+    )
+
+
+def read_prop_spotweld(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE45`` (M152): Spotweld property."""
+    from ..model.entities import PropSpotweld
+    pid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PROP/TYPE45/{pid}: missing data card", block.source)
+        return
+    skew_id, sensor_id = 0, 0
+    knn, cr, scf = 0.0, 0.0, 0.0
+    params = {}
+    if block.fixed:
+        f = cards[0].cut("PROP_TYPE45_1")
+        skew_id = _ival(f[0]) if len(f) > 0 else 0
+        knn = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        cr = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        scf = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        sensor_id = _ival(f[4]) if len(f) > 4 else 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("PROP_TYPE45_2")
+            if len(f2) > 0: params["p1"] = _fval(f2[0], 0.0)
+            if len(f2) > 1: params["p2"] = _fval(f2[1], 0.0)
+            if len(f2) > 2: params["p3"] = _fval(f2[2], 0.0)
+            if len(f2) > 3: params["p4"] = _fval(f2[3], 0.0)
+    else:
+        toks = cards[0].tokens()
+        skew_id = int(float(toks[0])) if len(toks) > 0 else 0
+        knn = float(toks[1]) if len(toks) > 1 else 0.0
+        cr = float(toks[2]) if len(toks) > 2 else 0.0
+        scf = float(toks[3]) if len(toks) > 3 else 0.0
+        sensor_id = int(float(toks[4])) if len(toks) > 4 else 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            if len(toks2) > 0: params["p1"] = float(toks2[0])
+            if len(toks2) > 1: params["p2"] = float(toks2[1])
+            if len(toks2) > 2: params["p3"] = float(toks2[2])
+            if len(toks2) > 3: params["p4"] = float(toks2[3])
+
+    model.prop_spotwelds[pid] = PropSpotweld(
+        id=pid, title=title, skew_id=skew_id, sensor_id=sensor_id,
+        knn=knn, cr=cr, scf=scf, params=params
+    )
+
+
+def read_prop_bushing(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE46`` (M152): Bushing property."""
+    from ..model.entities import PropBushing
+    pid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PROP/TYPE46/{pid}: missing data card", block.source)
+        return
+    mass, k_elas, x_lim1, x_lim2, k_post, damp = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    epsi, idens = 0, 0
+    params = {}
+    if block.fixed:
+        f = cards[0].cut("PROP_TYPE46_1")
+        mass = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        k_elas = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        x_lim1 = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        x_lim2 = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        k_post = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("PROP_TYPE46_2")
+            damp = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            epsi = _ival(f2[1]) if len(f2) > 1 else 0
+            idens = _ival(f2[2]) if len(f2) > 2 else 0
+    else:
+        toks = cards[0].tokens()
+        mass = float(toks[0]) if len(toks) > 0 else 0.0
+        k_elas = float(toks[1]) if len(toks) > 1 else 0.0
+        x_lim1 = float(toks[2]) if len(toks) > 2 else 0.0
+        x_lim2 = float(toks[3]) if len(toks) > 3 else 0.0
+        k_post = float(toks[4]) if len(toks) > 4 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            damp = float(toks2[0]) if len(toks2) > 0 else 0.0
+            epsi = int(float(toks2[1])) if len(toks2) > 1 else 0
+            idens = int(float(toks2[2])) if len(toks2) > 2 else 0
+
+    model.prop_bushings[pid] = PropBushing(
+        id=pid, title=title, mass=mass, k_elas=k_elas, x_lim1=x_lim1,
+        x_lim2=x_lim2, k_post=k_post, damp=damp, epsi=epsi, idens=idens, params=params
+    )
+
+
 def read_ply(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/PLY/ply_id`` (M100): Composite ply definition.
 
@@ -4295,10 +4671,18 @@ def _id_list(block: KeywordBlock, cards) -> List[int]:
 
 
 #: /GRNOD subtypes naming an ELEMENT-group family -> canonical family key
-_GR_FAMILIES = {"GRSHEL": "SHEL", "GRSH3N": "SH3N", "GRTRIA": "SH3N",
-                "GRBRIC": "BRIC", "GRBR20": "BRIC", "GRHEX20": "BRIC",
-                "GRQUAD": "QUAD", "GRTRUS": "TRUS",
-                "GRBEAM": "BEAM", "GRSPRI": "SPRI"}
+_GR_FAMILIES = {
+    "GRSHEL": "SHEL", "GRSHELL": "SHEL",
+    "GRSH3N": "SH3N", "GRTRIA": "SH3N",
+    "GRBRIC": "BRIC", "GRBRICK": "BRIC", "GRHEXA": "BRIC", "GRHEX8": "BRIC",
+    "GRBR20": "BRIC", "GRHEX20": "BRIC",
+    "GRQUAD": "QUAD",
+    "GRTRUS": "TRUS", "GRTRUSS": "TRUS",
+    "GRBEAM": "BEAM",
+    "GRSPRI": "SPRI", "GRSPRING": "SPRI",
+    "GRTETRA4": "BRIC", "GRTET4": "BRIC",
+    "GRTETRA10": "BRIC", "GRTET10": "BRIC",
+}
 
 
 def read_grnod(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -4358,7 +4742,7 @@ def read_grnod(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 def read_gr_elem(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """Element groups ``/GRSHEL|GRSH3N|GRBRIC|GRQUAD|GRTRUS|GRBEAM|
-    GRSPRI/<subtype>/id`` and part groups ``/GRPART/PART/id`` (M37, M136).
+    GRSPRI/<subtype>/id`` and part groups ``/GRPART/PART/id`` (M37, M136, M152).
 
     Fortran: hm_lecgre.F (direct lists + parts) and hm_grogro.F
     (recursive group-of-groups, same fixpoint/cycle/negative-id
@@ -4390,9 +4774,16 @@ def read_gr_elem(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     ids = _id_list(block, cards)
     # the direct element-list subtype spelling per family (SHEL, SH3N,
     # BRIC, QUAD, TRUS, BEAM, SPRI — also accepted: ELEM)
-    direct = {"SHEL": ("SHEL",), "SH3N": ("SH3N", "TRIA"),
-              "BRIC": ("BRIC",), "QUAD": ("QUAD",), "TRUS": ("TRUS",),
-              "BEAM": ("BEAM",), "SPRI": ("SPRI", "SPRING")}
+    direct = {
+        "SHEL": ("SHEL", "SHELL", "SH4N"),
+        "SH3N": ("SH3N", "TRIA", "SH3"),
+        "BRIC": ("BRIC", "BRICK", "HEXA", "HEX8", "HEXA8", "BR20", "HEX20",
+                 "TETRA4", "TET4", "TETRA10", "TET10"),
+        "QUAD": ("QUAD", "QUA4"),
+        "TRUS": ("TRUS", "TRUSS"),
+        "BEAM": ("BEAM",),
+        "SPRI": ("SPRI", "SPRING"),
+    }
     if key0 == "GRPART" and (kind in ("", "PART") or kind == str(block.user_id)):
         g.part_ids.extend(ids)                # the group IS a part list
     elif kind in direct.get(family, ()) or kind == "ELEM":
@@ -4403,7 +4794,7 @@ def read_gr_elem(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         g.box_ids.extend(ids)
     elif kind == "SURF":
         g.surf_ids.extend(ids)
-    elif kind in (key0, "SUB", "SUBSET"):     # /GRSHEL/GRSHEL/... etc.
+    elif kind in (key0, "SUB", "SUBSET", family, f"GR{family}"):     # /GRSHEL/GRSHEL/... etc.
         g.group_ids.extend(ids)
     else:
         log.warning(f"/{key0}/{kind} not ported (direct ids, PART, BOX, SURF and "
@@ -10637,6 +11028,56 @@ def read_ebcs_monvol(block: KeywordBlock, model: Model, log: MessageLog) -> None
     )
 
 
+def read_ebcs_inip(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/INIP/id`` (M152): Eulerian initial pressure boundary condition."""
+    from ..model.entities import EbcsInip
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    ebcs_id = block.user_id if block.user_id is not None else 1
+    if not cards or cards[0].is_blank:
+        log.error(f"/EBCS/INIP/{ebcs_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("EBCS_INIP_1")
+        surf_id = _ival(f[0]) if len(f) > 0 else 0
+        rho = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        c = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        lcar = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+    else:
+        toks = cards[0].tokens()
+        surf_id = int(float(toks[0])) if len(toks) > 0 else 0
+        rho = float(toks[1]) if len(toks) > 1 else 0.0
+        c = float(toks[2]) if len(toks) > 2 else 0.0
+        lcar = float(toks[3]) if len(toks) > 3 else 0.0
+    model.ebcs_inips[ebcs_id] = EbcsInip(
+        id=ebcs_id, title=title, surf_id=surf_id, rho=rho, c=c, lcar=lcar
+    )
+
+
+def read_ebcs_iniv(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EBCS/INIV/id`` (M152): Eulerian initial velocity boundary condition."""
+    from ..model.entities import EbcsIniv
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    ebcs_id = block.user_id if block.user_id is not None else 1
+    if not cards or cards[0].is_blank:
+        log.error(f"/EBCS/INIV/{ebcs_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("EBCS_INIV_1")
+        surf_id = _ival(f[0]) if len(f) > 0 else 0
+        rho = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        c = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        lcar = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+    else:
+        toks = cards[0].tokens()
+        surf_id = int(float(toks[0])) if len(toks) > 0 else 0
+        rho = float(toks[1]) if len(toks) > 1 else 0.0
+        c = float(toks[2]) if len(toks) > 2 else 0.0
+        lcar = float(toks[3]) if len(toks) > 3 else 0.0
+    model.ebcs_inivs[ebcs_id] = EbcsIniv(
+        id=ebcs_id, title=title, surf_id=surf_id, rho=rho, c=c, lcar=lcar
+    )
+
+
 def read_ebcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/EBCS/<subtype>/id`` dispatcher (M114, M125, M138, M150)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
@@ -10648,6 +11089,10 @@ def read_ebcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_ebcs_periodic(block, model, log)
     elif sub == "CYCLIC":
         read_ebcs_cyclic(block, model, log)
+    elif sub == "INIP":
+        read_ebcs_inip(block, model, log)
+    elif sub == "INIV":
+        read_ebcs_iniv(block, model, log)
     elif sub == "PRES":
         read_ebcs_pres(block, model, log)
     elif sub == "VEL":
@@ -11298,14 +11743,20 @@ def read_rlink(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     c = cards[0]
     if block.fixed:
         f = c.cut("RLINK_1")
-        dofs = (
-            _ival(f[1]) if len(f) > 1 else 1,
-            _ival(f[2]) if len(f) > 2 else 1,
-            _ival(f[3]) if len(f) > 3 else 1,
-            _ival(f[5]) if len(f) > 5 else 1,
-            _ival(f[6]) if len(f) > 6 else 1,
-            _ival(f[7]) if len(f) > 7 else 1,
-        )
+        dof_text = c.raw[:10].replace(" ", "")
+        if len(dof_text) >= 6 and dof_text[:6].isdigit():
+            dofs = tuple(int(ch) for ch in dof_text[:6])
+        else:
+            dofs = (
+                _ival(f[1], 0) if len(f) > 1 and f[1].strip() else 0,
+                _ival(f[2], 0) if len(f) > 2 and f[2].strip() else 0,
+                _ival(f[3], 0) if len(f) > 3 and f[3].strip() else 0,
+                _ival(f[5], 0) if len(f) > 5 and f[5].strip() else 0,
+                _ival(f[6], 0) if len(f) > 6 and f[6].strip() else 0,
+                _ival(f[7], 0) if len(f) > 7 and f[7].strip() else 0,
+            )
+            if all(d == 0 for d in dofs) and not c.raw[:10].strip():
+                dofs = (1, 1, 1, 1, 1, 1)
         skew_id = _ival(f[8]) if len(f) > 8 else 0
         grnod_id = _ival(f[9]) if len(f) > 9 else 0
         ipol = _ival(f[10]) if len(f) > 10 else 0
@@ -15000,6 +15451,7 @@ def read_impflux(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         scale=scale, tstart=tstart, tstop=tstop, title=title,
     )
     model.impflux_loads.append(fl)
+    model.impfluxes[block.user_id] = fl
 
 
 def read_initemp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -16768,11 +17220,14 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MOVE_FUNCT": read_move_funct,
     "GRNOD": read_grnod,
     "GRSHEL": read_gr_elem,              # element groups (M37)
+    "GRSHELL": read_gr_elem,
     "GRSH3N": read_gr_elem,
     "GRTRIA": read_gr_elem,
     "GRBRIC": read_gr_elem,
+    "GRBRICK": read_gr_elem,
     "GRQUAD": read_gr_elem,
     "GRTRUS": read_gr_elem,
+    "GRTRUSS": read_gr_elem,
     "GRBEAM": read_gr_elem,
     "GRSPRI": read_gr_elem,
     "GRPART": read_gr_elem,

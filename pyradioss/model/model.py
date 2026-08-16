@@ -83,6 +83,8 @@ from .entities import (
     EbcsPres, EbcsVel, EbcsInlet, EbcsFluxout, EbcsGradp0, EbcsNormv, EbcsValv, EbcsMonvol,
     BcsWall, SeatbeltSystem, AmsControl,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
+    EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
+    PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -701,6 +703,7 @@ class Model:
         self.convec_loads: List[ConvectionLoad] = []    # /CONVEC  (M94)
         self.radiation_loads: List[RadiationLoad] = []  # /RADIATION (M95)
         self.impflux_loads: List[ImposedFlux] = []      # /IMPFLUX (M95)
+        self.impfluxes: Dict[int, ImposedFlux] = {}     # /IMPFLUX (M95/M152)
         self.initemp: List[InitialTemperature] = []    # /INITEMP (M95)
         self.inivol: List[InitialVolume] = []          # /INIVOL  (M94)
         self.ploads: List[PressureLoad] = []           # /PLOAD   (M5)
@@ -908,6 +911,16 @@ class Model:
         self.inistas: Dict[int, Inista] = {}               # /INISTA, /INISTATE (M151)
         self.bem_controls: Dict[int, BemControl] = {}      # /BEM/FLOW, /BEM/DAA (M151)
         self.perturb_controls: Dict[int, PerturbControl] = {} # /PERTURB (M151)
+        self.ebcs_inips: Dict[int, EbcsInip] = {}          # /EBCS/INIP (M152)
+        self.ebcs_inivs: Dict[int, EbcsIniv] = {}          # /EBCS/INIV (M152)
+        self.prop_inject1s: Dict[int, PropInject1] = {}    # /PROP/INJECT1 (M152)
+        self.prop_inject2s: Dict[int, PropInject2] = {}    # /PROP/INJECT2 (M152)
+        self.prop_joints: Dict[int, PropJoint] = {}        # /PROP/TYPE33 (M152)
+        self.prop_torsions: Dict[int, PropTorsion] = {}    # /PROP/TYPE35 (M152)
+        self.prop_spring_elas_plas: Dict[int, PropSpringElasPlas] = {} # /PROP/TYPE36 (M152)
+        self.prop_spring_beams: Dict[int, PropSpringBeam] = {} # /PROP/TYPE44 (M152)
+        self.prop_spotwelds: Dict[int, PropSpotweld] = {}  # /PROP/TYPE45 (M152)
+        self.prop_bushings: Dict[int, PropBushing] = {}    # /PROP/TYPE46 (M152)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

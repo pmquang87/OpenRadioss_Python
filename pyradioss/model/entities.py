@@ -1335,7 +1335,7 @@ class RadiationLoad:
 
 @dataclass
 class ImposedFlux:
-    """/IMPFLUX (M95): imposed surface or volumetric heat flux.
+    """/IMPFLUX (M95/M152): imposed surface or volumetric heat flux.
 
     Fortran origin: ``starter/source/constraints/thermic/hm_read_impflux.F``.
     """
@@ -1349,6 +1349,49 @@ class ImposedFlux:
     tstart: float = 0.0     # TSTART
     tstop: float = 1.0e30   # TSTOP
     title: str = ""
+
+    @property
+    def fct_id(self) -> int:
+        return self.funct_id
+
+    @fct_id.setter
+    def fct_id(self, val: int) -> None:
+        self.funct_id = val
+
+    @property
+    def sensor_id(self) -> int:
+        return self.sens_id
+
+    @sensor_id.setter
+    def sensor_id(self, val: int) -> None:
+        self.sens_id = val
+
+    @property
+    def grbrick_id(self) -> int:
+        return self.grbric_id
+
+    @grbrick_id.setter
+    def grbrick_id(self, val: int) -> None:
+        self.grbric_id = val
+
+    @property
+    def scale_x(self) -> float:
+        return self.xscale
+
+    @scale_x.setter
+    def scale_x(self, val: float) -> None:
+        self.xscale = val
+
+    @property
+    def scale_y(self) -> float:
+        return self.scale
+
+    @scale_y.setter
+    def scale_y(self, val: float) -> None:
+        self.scale = val
+
+
+ImpFlux = ImposedFlux
 
 
 @dataclass
@@ -1858,7 +1901,7 @@ class BcsWall:
 
 @dataclass
 class RigidLink:
-    """/RLINK (M102): Standard rigid link definition between node group and main/skew frame.
+    """/RLINK (M102/M152): Standard rigid link definition between node group and main/skew frame.
 
     Fortran origin: ``starter/source/constraints/rigidlink/hm_read_rlink.F``.
     """
@@ -1868,6 +1911,30 @@ class RigidLink:
     skew_id: int = 0
     grnod_id: int = 0
     ipol: int = 0
+
+    @property
+    def tx(self) -> int:
+        return self.dofs[0] if len(self.dofs) > 0 else 1
+
+    @property
+    def ty(self) -> int:
+        return self.dofs[1] if len(self.dofs) > 1 else 1
+
+    @property
+    def tz(self) -> int:
+        return self.dofs[2] if len(self.dofs) > 2 else 1
+
+    @property
+    def rx(self) -> int:
+        return self.dofs[3] if len(self.dofs) > 3 else 1
+
+    @property
+    def ry(self) -> int:
+        return self.dofs[4] if len(self.dofs) > 4 else 1
+
+    @property
+    def rz(self) -> int:
+        return self.dofs[5] if len(self.dofs) > 5 else 1
 
 
 @dataclass
@@ -4371,6 +4438,191 @@ class PerturbControl:
     fct_id: int = 0
     scale: float = 0.0
     seed: int = 0
+
+
+@dataclass
+class EbcsInip:
+    """/EBCS/INIP (M152): Eulerian initial pressure boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/ebcs/hm_read_ebcs_inip.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    rho: float = 0.0
+    c: float = 0.0
+    lcar: float = 0.0
+
+
+@dataclass
+class EbcsIniv:
+    """/EBCS/INIV (M152): Eulerian initial velocity boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/ebcs/hm_read_ebcs_iniv.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    rho: float = 0.0
+    c: float = 0.0
+    lcar: float = 0.0
+
+
+@dataclass
+class PropInject1Gas:
+    """Gas component entry for /PROP/INJECT1."""
+    mat_id: int = 0
+    fun_id_m: int = 0
+    fun_id_t: int = 0
+    fscale_m: float = 1.0
+    fscale_t: float = 1.0
+
+
+@dataclass
+class PropInject1:
+    """/PROP/INJECT1 or /INJECT1 (M152): Gas injector property definition.
+
+    Fortran origin: ``starter/source/properties/injector/hm_read_inject1.F``.
+    """
+    id: int
+    title: str = ""
+    n_gases: int = 1
+    iflow: int = 0
+    ascale_t: float = 1.0
+    gases: List[PropInject1Gas] = field(default_factory=list)
+
+
+@dataclass
+class PropInject2Gas:
+    """Gas mixture molar fraction entry for /PROP/INJECT2."""
+    mat_id: int = 0
+    molar_fraction: float = 1.0
+    fun_id_mf: int = 0
+
+
+@dataclass
+class PropInject2:
+    """/PROP/INJECT2 or /INJECT2 (M152): Multi-gas mixture injector property definition.
+
+    Fortran origin: ``starter/source/properties/injector/hm_read_inject2.F``.
+    """
+    id: int
+    title: str = ""
+    n_gases: int = 1
+    iflow: int = 0
+    fun_id_m: int = 0
+    fun_id_t: int = 0
+    fscale_m: float = 1.0
+    fscale_t: float = 1.0
+    ascale_t: float = 1.0
+    gases: List[PropInject2Gas] = field(default_factory=list)
+
+
+@dataclass
+class PropJoint:
+    """/PROP/TYPE33 or /PROP/JOINT (M152): Specialized kinematic joints.
+
+    Fortran origin: ``starter/source/properties/spring/hm_read_prop33*.F``.
+    """
+    id: int
+    title: str = ""
+    joint_type: str = "SPH"
+    skew_id: int = 0
+    params: Dict = field(default_factory=dict)
+
+
+@dataclass
+class PropTorsion:
+    """/PROP/TYPE35 or /PROP/TORSION (M152): Torsion bar spring property.
+
+    Fortran origin: ``starter/source/properties/spring/hm_read_prop35.F``.
+    """
+    id: int
+    title: str = ""
+    mass: float = 0.0
+    k_elas: float = 0.0
+    x_lim1: float = 0.0
+    x_lim2: float = 0.0
+    k_post: float = 0.0
+    d1: float = 0.0
+    d2: float = 0.0
+    r_load: float = 0.0
+    f_scal: float = 1.0
+    fct_id1: int = 0
+    fct_id2: int = 0
+    fct_id3: int = 0
+    fct_id4: int = 0
+
+
+@dataclass
+class PropSpringElasPlas:
+    """/PROP/SPR_ELAS_PLAS (M152): Elastic-plastic spring with kinematic hardening.
+
+    Fortran origin: ``starter/source/properties/spring/hm_read_prop_spr_ep.F``.
+    """
+    id: int
+    title: str = ""
+    skew_id: int = 0
+    i_utyp: int = 1
+    pid1: int = 0
+    pid2: int = 0
+    mid1: int = 0
+    k_stiff: float = 0.0
+    area: float = 0.0
+    ixx: float = 0.0
+    iyy: float = 0.0
+    izz: float = 0.0
+    params: Dict = field(default_factory=dict)
+
+
+@dataclass
+class PropSpringBeam:
+    """/PROP/TYPE44 (M152): Non-linear beam-spring connector.
+
+    Fortran origin: ``starter/source/properties/spring/hm_read_prop44.F``.
+    """
+    id: int
+    title: str = ""
+    skew_id: int = 0
+    idamp: int = 0
+    nc_filter: int = 0
+    params: Dict = field(default_factory=dict)
+
+
+@dataclass
+class PropSpotweld:
+    """/PROP/TYPE45 (M152): Spotweld connector beam.
+
+    Fortran origin: ``starter/source/properties/spring/hm_read_prop45.F``.
+    """
+    id: int
+    title: str = ""
+    skew_id: int = 0
+    sensor_id: int = 0
+    knn: float = 0.0
+    cr: float = 0.0
+    scf: float = 1.0
+    params: Dict = field(default_factory=dict)
+
+
+@dataclass
+class PropBushing:
+    """/PROP/TYPE46 (M152): Bushing connector spring.
+
+    Fortran origin: ``starter/source/properties/spring/hm_read_prop46.F``.
+    """
+    id: int
+    title: str = ""
+    mass: float = 0.0
+    k_elas: float = 0.0
+    x_lim1: float = 0.0
+    x_lim2: float = 0.0
+    k_post: float = 0.0
+    damp: float = 0.0
+    epsi: int = 0
+    idens: int = 0
+    params: Dict = field(default_factory=dict)
+
 
 
 
