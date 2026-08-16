@@ -835,12 +835,12 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             log.error(f"/MAT/LAW42/{block.user_id}: all mu_p are zero",
                       block.source)
             return
-        if any(m * a <= 0.0 for m, a in used):
-            log.error(f"/MAT/LAW42/{block.user_id}: every Ogden pair must "
-                      f"satisfy mu_p * alpha_p > 0 (material stability)",
+        G0 = sum(m * a for m, a in used) / 2.0
+        if G0 <= 0.0:
+            log.error(f"/MAT/LAW42/{block.user_id}: sum(mu_p * alpha_p) must "
+                      f"be > 0 (material stability)",
                       block.source)
             return
-        G0 = sum(m * a for m, a in used) / 2.0
         params = {"E": 2.0 * G0 * (1.0 + nu), "nu": nu,
                   "mu": [m for m, _ in used], "alpha": [a for _, a in used]}
         model.materials[block.user_id] = Material(
@@ -1423,7 +1423,12 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if m_flag == 99 and len(cards) > 2:
             e1, e2, e3, e4 = _floats(cards[2], 4)
 
-        if min(c1, c2, c3, c4, c5) <= 0.0 and m_flag == 0:
+        if c1 == 0.0 and c2 == 0.0 and c4 == 0.0 and c5 == 0.0:
+            if m_flag == 0:
+                m_flag = 1
+            if c3 <= 0.0:
+                c3 = 0.6
+        elif min(c1, c2, c3, c4, c5) <= 0.0 and m_flag == 0:
             log.error(f"/FAIL/BIQUAD/{mat_id}: all five failure strains "
                       f"c1..c5 must be > 0", block.source)
             return
@@ -9437,7 +9442,47 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                         f"not ported — ignored: {'; '.join(ign)}",
                         block.source)
 
-    if kind in ("TYPE7", "TYPE11", "TYPE24") and len(cards) < 6:
+    if kind == "TYPE11" and (len(cards) >= 4 or (block.fixed and len(cards) == 3 and not (len(cards[0].ints()) >= 6 and len(cards[2].floats()) == 6))):
+        # ==== the REAL fixed-format TYPE11 layout (inter_type11.cfg) ========
+        ign: List[str] = []
+        fscale_gap, percent_mesh_size = 1.0, 0.4
+        f0 = _fixed_vals(cards[0], [10] * 8)
+        id1, id2 = _ival(f0[0]), _ival(f0[1])
+        istf, igap = _ival(f0[2]), _ival(f0[4])
+        for name, s in (("Ithe", f0[3]), ("Multimp", f0[5]), ("Idel", f0[7])):
+            if _ival(s) != 0:
+                ign.append(f"{name}={s}")
+        if len(cards) >= 4:
+            f1 = _fixed_vals(cards[1], [20, 20, 20, 20, 10, 10])
+            percent_mesh_size = _fval(f1[2], 0.4)
+            sens = _ival(f1[5])
+            for name, s in (("Stmin", f1[0]), ("Stmax", f1[1]), ("dtmin", f1[3]), ("Iform", f1[4])):
+                if s and _to_float(s) != 0.0:
+                    ign.append(f"{name}={s}")
+            f2 = _fixed_vals(cards[2], [20] * 5)
+            stfac, fric, gap = _fval(f2[0], 1.0), _fval(f2[1], 0.0), _fval(f2[2], 0.0)
+            for name, s in (("Tstart", f2[3]), ("Tstop", f2[4])):
+                if s and _to_float(s) != 0.0:
+                    ign.append(f"{name}={s}")
+            f3 = _fixed_vals(cards[3], [7, 1, 1, 1, 20, 10, 20, 20, 20])
+            for name, s in (("Inacti", f3[5]), ("VIS_S", f3[6]), ("VIS_F", f3[7]), ("Bumult", f3[8])):
+                if s and _to_float(s) != 0.0:
+                    ign.append(f"{name}={s}")
+        else:
+            sens = 0
+            f1 = _fixed_vals(cards[1], [20] * 5)
+            stfac, fric, gap = _fval(f1[0], 1.0), _fval(f1[1], 0.0), _fval(f1[2], 0.0)
+            for name, s in (("Tstart", f1[3]), ("Tstop", f1[4])):
+                if s and _to_float(s) != 0.0:
+                    ign.append(f"{name}={s}")
+        gap_max = 0.0
+        mfrot, ifq, xfreq = 0, 0, 0.0
+        fric_c = (0.0,) * 6
+        if ign:
+            log.warning(f"/INTER/TYPE11/{block.user_id}: real-format fields "
+                        f"not ported — ignored: {'; '.join(ign)}",
+                        block.source)
+    elif kind in ("TYPE7", "TYPE11", "TYPE24") and len(cards) < 6:
         # ==== the port's compact layout =====================================
         t = cards[0].ints()
         id1 = t[0]
@@ -9649,7 +9694,8 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.interfaces.append(Interface(
             id=block.user_id, type=11, line_id1=id1, line_id2=id2,
             istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap,
-            gap_max=gap_max, sens_id=sens, mfrot=mfrot, ifq=ifq,
+            gap_max=gap_max, fscale_gap=fscale_gap, percent_mesh_size=percent_mesh_size,
+            sens_id=sens, mfrot=mfrot, ifq=ifq,
             xfiltr=xfiltr, fric_c=fric_c, title=title))
 
 

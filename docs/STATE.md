@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M154)
+## What is implemented (M1 → M155)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -160,6 +160,7 @@ real history is 41 milestones. One line each:
 | M152 | Add Eulerian initial BCs (/EBCS/INIP, /EBCS/INIV), dedicated /PROP readers (INJECT1/2, JOINT, TORSION, SPR_ELAS_PLAS, SPR_BEAM, SPOTWELD, BUSHING), RLINK DOF accessors, ImposedFlux alias/accessors, element group extended aliases (/GRSHELL, /GRBRICK, /GRTRUSS, etc.) |
 | M153 | Fix checker false positives: ADMAS mass_type-aware cross-reference (types 2/3/4/6/7 skip node group check), downgrade 'model has no elements' from error to warning for decks with only unported element types |
 | M154 | TYPE7 contact Igap=2 (scaled variable gap via Fscale_gap) and Igap=3 (mesh-size limited variable gap via %mesh_size), with segment_mesh_gap/node_mesh_gap functions and inspect_active_penetrations parity |
+| M155 | Real-deck parser & starter robustness: /INTER/TYPE11 fixed-format reader (radioss51/110/120/140+), /MAT/LAW42 Ogden net shear modulus check GS = sum(mu*alpha) > 0 matching hm_read_mat42.F, /FAIL/BIQUAD preset defaults matching hm_read_fail_biquad.F, and massless /RBODY 1e-20 floor matching inirby.F |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

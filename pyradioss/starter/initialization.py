@@ -1507,10 +1507,9 @@ def initialize_rigid_bodies(model: Model, log: MessageLog) -> None:
         m_master = mm if mm < 1e29 else 0.0
         msum = float(m.sum()) + m_master
         if msum + rb.added_mass <= 0.0:
-            log.error(f"{who}: rigid body has no mass (give the slaves "
-                      f"element mass or /ADMAS, or set the Mass field)",
-                      "RBODY CHECK")
-            continue
+            log.warning(f"{who}: rigid body has no mass — floored to 1e-20 (inirby.F)",
+                        "RBODY CHECK")
+            rb.added_mass = 1e-20
         if msum > 0.0:
             xg = (m[:, None] * model.x0[rb.slaves]).sum(axis=0)
             xg = (xg + m_master * model.x0[rb.master]) / msum
