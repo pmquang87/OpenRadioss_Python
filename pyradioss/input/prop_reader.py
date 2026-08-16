@@ -364,12 +364,17 @@ def parse_spr_pre(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     params["ilock"] = 0
     head = _get(cards, 0)
     if head is not None:
-        h = _row(head, "PROP_SPR_PRE_HEAD", fixed)
-        params["mass"] = _fv(h[0])          # h[1] is the cfg's blank gap
-        params["sens_id"] = _iv(h[2])
-        params["ilock"] = _iv(h[3])
-        print("SETTING SENS_ID!", params["sens_id"])
-    
+        if fixed:
+            h = _row(head, "PROP_SPR_PRE_HEAD", fixed)
+            params["mass"] = _fv(h[0])          # h[1] is the cfg's blank gap
+            params["sens_id"] = _iv(h[2])
+            params["ilock"] = _iv(h[3])
+        else:
+            toks = head.tokens()
+            params["mass"] = float(toks[0]) if len(toks) > 0 else 0.0
+            params["sens_id"] = int(float(toks[1])) if len(toks) > 1 else 0
+            params["ilock"] = int(float(toks[2])) if len(toks) > 2 else 0
+
     stif0 = f1 = d1 = e1 = stif1 = 0.0
     stif = _get(cards, 1)
     if stif is not None:
@@ -379,17 +384,25 @@ def parse_spr_pre(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
         d1 = _fv(s[2])
         e1 = _fv(s[3])
         stif1 = _fv(s[4])
-        
+
     fct_id1 = fct_id2 = 0
     tscal = dscal = fscal = 0.0
     fct = _get(cards, 2)
     if fct is not None:
-        f = _row(fct, "PROP_SPR_PRE_FCT", fixed)
-        fct_id1 = _iv(f[0])
-        fct_id2 = _iv(f[1])
-        if len(f) > 2: tscal = _fv(f[2])
-        if len(f) > 3: dscal = _fv(f[3])
-        if len(f) > 4: fscal = _fv(f[4])
+        if fixed:
+            f = _row(fct, "PROP_SPR_PRE_FCT", fixed)
+            fct_id1 = _iv(f[0])
+            fct_id2 = _iv(f[1])
+            if len(f) > 3: tscal = _fv(f[3])
+            if len(f) > 4: dscal = _fv(f[4])
+            if len(f) > 5: fscal = _fv(f[5])
+        else:
+            toks = fct.tokens()
+            if len(toks) > 0: fct_id1 = int(float(toks[0]))
+            if len(toks) > 1: fct_id2 = int(float(toks[1]))
+            if len(toks) > 2: tscal = float(toks[2])
+            if len(toks) > 3: dscal = float(toks[3])
+            if len(toks) > 4: fscal = float(toks[4])
 
     # Default scales
     if tscal == 0.0: tscal = 1.0
@@ -437,9 +450,12 @@ def parse_spr_pre(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
     if stif1 == 0.0: stif1 = stif0
 
     params["stif0"] = stif0
+    params["stiff0"] = stif0
     params["stif1"] = stif1
+    params["stiff1"] = stif1
     params["f1"] = f1
     params["d1"] = d1
+    params["e1"] = e1
     params["ityp"] = ityp
     
     # upstream STIFM(I) = STIF0 + STIF1 (RINI32) — the spring's

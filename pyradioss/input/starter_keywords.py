@@ -2979,7 +2979,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if typename in ("INJECTOR", "INJECT", "JET"):
         read_airbag_injector(block, model, log)
         return
-    if typename in ("VENTHOLE", "VENT", "POROUS"):
+    if typename in ("VENTHOLE", "VENT", "VENT_POROUS"):
         read_airbag_venthole(block, model, log)
         return
     if typename in ("TYPE5", "RIVET", "FASTENER"):
@@ -3006,6 +3006,13 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                "TYPE21": 21, "TSH_ORTH": 21,
                "TYPE22": 22, "TSH_COMP": 22,
                "TYPE18": 18, "INT_BEAM": 18, "PROP_P18_INT_BEAM": 18, "P18_INT_BEAM": 18, "BEAM_INT": 18,
+               "TYPE8": 8, "SPR_GENE": 8, "PROP_P8_SPR_GENE": 8, "P8_SPR_GENE": 8, "PROP_SPR_GENE": 8,
+               "TYPE12": 12, "SPR_PUL": 12, "PROP_P12_SPR_PUL": 12, "P12_SPR_PUL": 12, "PROP_SPR_PUL": 12,
+               "TYPE13": 13, "SPR_BEAM": 13, "PROP_P13_SPR_BEAM": 13, "P13_SPR_BEAM": 13, "PROP_SPR_BEAM": 13,
+               "TYPE15": 15, "POROUS": 15, "PROP_P15_POROUS": 15, "P15_POROUS": 15, "PROP_POROUS": 15,
+               "TYPE23": 23, "SPR_MAT": 23, "PROP_P23_SPR_MAT": 23, "P23_SPR_MAT": 23, "PROP_SPR_MAT": 23,
+               "TYPE25": 25, "SPR_AXI": 25, "PROP_P25_SPR_AXI": 25, "P25_SPR_AXI": 25, "PROP_SPR_AXI": 25,
+               "TYPE32": 32, "SPR_PRE": 32, "PROP_P32_SPR_PRE": 32, "P32_SPR_PRE": 32, "PROP_SPR_PRE": 32,
                "TYPE26": 26, "SPR_TAB": 26, "PROP_P26_SPR_TAB": 26, "P26_SPR_TAB": 26, "PROP_SPR_TAB": 26,
                "TYPE27": 27, "SPR_BDAMP": 27, "PROP_P27_SPR_BDAMP": 27, "P27_SPR_BDAMP": 27, "PROP_SPR_BDAMP": 27,
                "TYPE34": 34, "SPH": 34,
@@ -4304,7 +4311,369 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 params["ascale2"] = float(t3[4]) if len(t3) > 4 else 1.0
                 params["fscale2"] = float(t3[5]) if len(t3) > 5 else 1.0
 
-    if ptype in (26, 27, 51, 17, 34):
+    elif ptype in (8, 13):  # SPR_GENE, SPR_BEAM
+        pname = "SPR_GENE" if ptype == 8 else "SPR_BEAM"
+        if not cards:
+            log.error(f"/PROP/{pname}/{block.user_id}: missing cards", block.source)
+            return
+        if block.fixed:
+            c0 = cards[0].cut("PROP_SPR_GENE_0")
+            params["mass"] = _fval(c0[0]) if len(c0) > 0 else 0.0
+            params["inertia"] = _fval(c0[1]) if len(c0) > 1 else 0.0
+            params["skew_id"] = _ival(c0[2]) if len(c0) > 2 else 0
+            params["isensor"] = _ival(c0[3]) if len(c0) > 3 else 0
+            params["sens_id"] = params["isensor"]
+            params["isflag"] = _ival(c0[4]) if len(c0) > 4 else 0
+            params["ifail"] = _ival(c0[5]) if len(c0) > 5 else 0
+            params["ifail2"] = _ival(c0[6]) if len(c0) > 6 else 0
+            params["iequil"] = _ival(c0[7]) if len(c0) > 7 else 0
+
+            c_idx = 1
+            for dof_i in range(1, 7):
+                k_val, c_val = 0.0, 0.0
+                if c_idx < len(cards) and not cards[c_idx].is_blank:
+                    c1 = cards[c_idx].cut("PROP_SPR_GENE_1")
+                    k_val = _fval(c1[0]) if len(c1) > 0 else 0.0
+                    c_val = _fval(c1[1]) if len(c1) > 1 else 0.0
+                    params[f"a{dof_i}"] = _fval(c1[2]) if len(c1) > 2 else 0.0
+                    params[f"b{dof_i}"] = _fval(c1[3]) if len(c1) > 3 else 0.0
+                    params[f"d{dof_i}"] = _fval(c1[4]) if len(c1) > 4 else 0.0
+                c_idx += 1
+                if c_idx < len(cards) and not cards[c_idx].is_blank:
+                    c2 = cards[c_idx].cut("PROP_SPR_GENE_2")
+                    params[f"fun_a{dof_i}"] = _ival(c2[0]) if len(c2) > 0 else 0
+                    params[f"hflag{dof_i}"] = _ival(c2[1]) if len(c2) > 1 else 0
+                    params[f"fun_b{dof_i}"] = _ival(c2[2]) if len(c2) > 2 else 0
+                    params[f"fun_c{dof_i}"] = _ival(c2[3]) if len(c2) > 3 else 0
+                    params[f"fun_d{dof_i}"] = _ival(c2[4]) if len(c2) > 4 else 0
+                    if len(c2) > 7:
+                        params[f"min_rup{dof_i}"] = _fval(c2[6])
+                        params[f"max_rup{dof_i}"] = _fval(c2[7])
+                    elif len(c2) > 5:
+                        params[f"min_rup{dof_i}"] = _fval(c2[4])
+                        params[f"max_rup{dof_i}"] = _fval(c2[5])
+                c_idx += 1
+                if c_idx < len(cards) and not cards[c_idx].is_blank:
+                    c3 = cards[c_idx].cut("PROP_SPR_GENE_3")
+                    params[f"v0_{dof_i}"] = _fval(c3[0]) if len(c3) > 0 else 0.0
+                    params[f"f0_{dof_i}"] = _fval(c3[1]) if len(c3) > 1 else 0.0
+                    params[f"scale{dof_i}"] = _fval(c3[2], 1.0) if len(c3) > 2 else 1.0
+                    params[f"hscale{dof_i}"] = _fval(c3[3], 1.0) if len(c3) > 3 else 1.0
+                c_idx += 1
+                params[f"k{dof_i}"] = k_val
+                params[f"c{dof_i}"] = c_val
+                params[f"stiff{dof_i}"] = k_val
+                params[f"damp{dof_i}"] = c_val
+        else:
+            t0 = cards[0].tokens()
+            params["mass"] = float(t0[0]) if len(t0) > 0 else 0.0
+            params["inertia"] = float(t0[1]) if len(t0) > 1 else 0.0
+            params["skew_id"] = int(float(t0[2])) if len(t0) > 2 else 0
+            params["isensor"] = int(float(t0[3])) if len(t0) > 3 else 0
+            params["sens_id"] = params["isensor"]
+            params["isflag"] = int(float(t0[4])) if len(t0) > 4 else 0
+            params["ifail"] = int(float(t0[5])) if len(t0) > 5 else 0
+            if len(t0) > 7:
+                params["ifail2"] = int(float(t0[6]))
+                params["iequil"] = int(float(t0[7]))
+            elif len(t0) > 6:
+                params["iequil"] = int(float(t0[6]))
+
+            c_idx = 1
+            for dof_i in range(1, 7):
+                k_val, c_val = 0.0, 0.0
+                if c_idx < len(cards) and not cards[c_idx].is_blank:
+                    t1 = cards[c_idx].tokens()
+                    k_val = float(t1[0]) if len(t1) > 0 else 0.0
+                    c_val = float(t1[1]) if len(t1) > 1 else 0.0
+                    params[f"a{dof_i}"] = float(t1[2]) if len(t1) > 2 else 0.0
+                    params[f"b{dof_i}"] = float(t1[3]) if len(t1) > 3 else 0.0
+                    params[f"d{dof_i}"] = float(t1[4]) if len(t1) > 4 else 0.0
+                c_idx += 1
+                if c_idx < len(cards) and not cards[c_idx].is_blank:
+                    t2 = cards[c_idx].tokens()
+                    params[f"fun_a{dof_i}"] = int(float(t2[0])) if len(t2) > 0 else 0
+                    params[f"hflag{dof_i}"] = int(float(t2[1])) if len(t2) > 1 else 0
+                    params[f"fun_b{dof_i}"] = int(float(t2[2])) if len(t2) > 2 else 0
+                    params[f"fun_c{dof_i}"] = int(float(t2[3])) if len(t2) > 3 else 0
+                    if len(t2) >= 8:
+                        params[f"fun_d{dof_i}"] = int(float(t2[4]))
+                        params[f"min_rup{dof_i}"] = float(t2[6])
+                        params[f"max_rup{dof_i}"] = float(t2[7])
+                    elif len(t2) >= 7:
+                        params[f"fun_d{dof_i}"] = int(float(t2[4]))
+                        params[f"min_rup{dof_i}"] = float(t2[5])
+                        params[f"max_rup{dof_i}"] = float(t2[6])
+                    elif len(t2) >= 6:
+                        params[f"min_rup{dof_i}"] = float(t2[4])
+                        params[f"max_rup{dof_i}"] = float(t2[5])
+                c_idx += 1
+                if c_idx < len(cards) and not cards[c_idx].is_blank:
+                    t3 = cards[c_idx].tokens()
+                    params[f"v0_{dof_i}"] = float(t3[0]) if len(t3) > 0 else 0.0
+                    params[f"f0_{dof_i}"] = float(t3[1]) if len(t3) > 1 else 0.0
+                    params[f"scale{dof_i}"] = float(t3[2]) if len(t3) > 2 else 1.0
+                    params[f"hscale{dof_i}"] = float(t3[3]) if len(t3) > 3 else 1.0
+                c_idx += 1
+                params[f"k{dof_i}"] = k_val
+                params[f"c{dof_i}"] = c_val
+                params[f"stiff{dof_i}"] = k_val
+                params[f"damp{dof_i}"] = c_val
+        params["k"] = params.get("k1", 0.0)
+        params["c"] = params.get("c1", 0.0)
+
+    elif ptype == 12:  # SPR_PUL
+        if not cards:
+            log.error(f"/PROP/SPR_PUL/{block.user_id}: missing cards", block.source)
+            return
+        if block.fixed:
+            c0 = cards[0].cut("PROP_SPR_PUL_0")
+            params["mass"] = _fval(c0[0]) if len(c0) > 0 else 0.0
+            params["isensor"] = _ival(c0[2]) if len(c0) > 2 else 0
+            params["sens_id"] = params["isensor"]
+            params["isflag"] = _ival(c0[3]) if len(c0) > 3 else 0
+            params["ileng"] = _ival(c0[4]) if len(c0) > 4 else 0
+            params["fric"] = _fval(c0[5]) if len(c0) > 5 else 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                c1 = cards[1].cut("PROP_SPR_PUL_1")
+                params["stiff"] = _fval(c1[0]) if len(c1) > 0 else 0.0
+                params["k"] = params["stiff"]
+                params["damp"] = _fval(c1[1]) if len(c1) > 1 else 0.0
+                params["c"] = params["damp"]
+                params["a"] = _fval(c1[2]) if len(c1) > 2 else 0.0
+                params["b"] = _fval(c1[3]) if len(c1) > 3 else 0.0
+                params["d"] = _fval(c1[4]) if len(c1) > 4 else 0.0
+            if len(cards) > 2 and not cards[2].is_blank:
+                c2 = cards[2].cut("PROP_SPR_PUL_2")
+                params["fun_a"] = _ival(c2[0]) if len(c2) > 0 else 0
+                params["fct_id1"] = params["fun_a"]
+                params["hflag"] = _ival(c2[1]) if len(c2) > 1 else 0
+                params["fun_b"] = _ival(c2[2]) if len(c2) > 2 else 0
+                params["fct_id2"] = params["fun_b"]
+                params["min_rup"] = _fval(c2[4]) if len(c2) > 4 else 0.0
+                params["delta_min"] = params["min_rup"]
+                params["max_rup"] = _fval(c2[5]) if len(c2) > 5 else 0.0
+                params["delta_max"] = params["max_rup"]
+            if len(cards) > 3 and not cards[3].is_blank:
+                c3 = cards[3].cut("PROP_SPR_PUL_3")
+                params["fscale"] = _fval(c3[0], 1.0) if len(c3) > 0 else 1.0
+                params["e"] = _fval(c3[1]) if len(c3) > 1 else 0.0
+                params["ascale"] = _fval(c3[2], 1.0) if len(c3) > 2 else 1.0
+        else:
+            t0 = cards[0].tokens()
+            params["mass"] = float(t0[0]) if len(t0) > 0 else 0.0
+            params["isensor"] = int(float(t0[1])) if len(t0) > 1 else 0
+            params["sens_id"] = params["isensor"]
+            params["isflag"] = int(float(t0[2])) if len(t0) > 2 else 0
+            params["ileng"] = int(float(t0[3])) if len(t0) > 3 else 0
+            params["fric"] = float(t0[4]) if len(t0) > 4 else 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                params["stiff"] = float(t1[0]) if len(t1) > 0 else 0.0
+                params["k"] = params["stiff"]
+                params["damp"] = float(t1[1]) if len(t1) > 1 else 0.0
+                params["c"] = params["damp"]
+                params["a"] = float(t1[2]) if len(t1) > 2 else 0.0
+                params["b"] = float(t1[3]) if len(t1) > 3 else 0.0
+                params["d"] = float(t1[4]) if len(t1) > 4 else 0.0
+            if len(cards) > 2 and not cards[2].is_blank:
+                t2 = cards[2].tokens()
+                params["fun_a"] = int(float(t2[0])) if len(t2) > 0 else 0
+                params["fct_id1"] = params["fun_a"]
+                params["hflag"] = int(float(t2[1])) if len(t2) > 1 else 0
+                params["fun_b"] = int(float(t2[2])) if len(t2) > 2 else 0
+                params["fct_id2"] = params["fun_b"]
+                params["min_rup"] = float(t2[3]) if len(t2) > 3 else 0.0
+                params["delta_min"] = params["min_rup"]
+                params["max_rup"] = float(t2[4]) if len(t2) > 4 else 0.0
+                params["delta_max"] = params["max_rup"]
+            if len(cards) > 3 and not cards[3].is_blank:
+                t3 = cards[3].tokens()
+                params["fscale"] = float(t3[0]) if len(t3) > 0 else 1.0
+                params["e"] = float(t3[1]) if len(t3) > 1 else 0.0
+                params["ascale"] = float(t3[2]) if len(t3) > 2 else 1.0
+
+    elif ptype == 15:  # POROUS
+        from ..common.constants import DEFAULT_HOURGLASS, DEFAULT_QA, DEFAULT_QB
+        params = {"qa": DEFAULT_QA, "qb": DEFAULT_QB, "h": DEFAULT_HOURGLASS, "por": 0.0}
+        if block.fixed:
+            c_idx = 1
+            if c_idx < len(cards) and not cards[c_idx].is_blank:
+                c1 = cards[c_idx].cut("PROP_POROUS_1")
+                params["qa"] = _fval(c1[0], DEFAULT_QA) if len(c1) > 0 else DEFAULT_QA
+                params["qb"] = _fval(c1[1], DEFAULT_QB) if len(c1) > 1 else DEFAULT_QB
+                params["h"] = _fval(c1[2], DEFAULT_HOURGLASS) if len(c1) > 2 else DEFAULT_HOURGLASS
+            c_idx += 1
+            if c_idx < len(cards) and not cards[c_idx].is_blank:
+                c2 = cards[c_idx].cut("PROP_POROUS_2")
+                params["por"] = _fval(c2[0], 0.0) if len(c2) > 0 else 0.0
+            c_idx += 1
+            if c_idx < len(cards) and not cards[c_idx].is_blank:
+                c3 = cards[c_idx].cut("PROP_POROUS_3")
+                params["pdir1"] = _fval(c3[0], 0.0) if len(c3) > 0 else 0.0
+                params["pdir2"] = _fval(c3[1], 0.0) if len(c3) > 1 else 0.0
+                params["pdir3"] = _fval(c3[2], 0.0) if len(c3) > 2 else 0.0
+            c_idx += 1
+            if c_idx < len(cards) and not cards[c_idx].is_blank:
+                c4 = cards[c_idx].cut("PROP_POROUS_4")
+                params["skew_id"] = _ival(c4[0]) if len(c4) > 0 else 0
+                params["iflag"] = _ival(c4[1]) if len(c4) > 1 else 0
+            c_idx += 1
+            if c_idx < len(cards) and not cards[c_idx].is_blank:
+                c5 = cards[c_idx].cut("PROP_POROUS_5")
+                params["i_th"] = _ival(c5[0]) if len(c5) > 0 else 0
+                params["alpha"] = _fval(c5[1], 0.0) if len(c5) > 1 else 0.0
+                params["thick"] = _fval(c5[2], 0.0) if len(c5) > 2 else 0.0
+            c_idx += 1
+            if c_idx < len(cards) and not cards[c_idx].is_blank:
+                c6 = cards[c_idx].cut("PROP_POROUS_6")
+                params["irby"] = _ival(c6[0]) if len(c6) > 0 else 0
+        else:
+            non_blank = [c for c in cards if not c.is_blank]
+            if len(non_blank) >= 1:
+                t0 = non_blank[0].tokens()
+                params["qa"] = float(t0[0]) if len(t0) > 0 else DEFAULT_QA
+                params["qb"] = float(t0[1]) if len(t0) > 1 else DEFAULT_QB
+                params["h"] = float(t0[2]) if len(t0) > 2 else DEFAULT_HOURGLASS
+            if len(non_blank) >= 2:
+                t1 = non_blank[1].tokens()
+                params["por"] = float(t1[0]) if len(t1) > 0 else 0.0
+            if len(non_blank) >= 3:
+                t2 = non_blank[2].tokens()
+                params["pdir1"] = float(t2[0]) if len(t2) > 0 else 0.0
+                params["pdir2"] = float(t2[1]) if len(t2) > 1 else 0.0
+                params["pdir3"] = float(t2[2]) if len(t2) > 2 else 0.0
+            if len(non_blank) >= 4:
+                t3 = non_blank[3].tokens()
+                params["skew_id"] = int(float(t3[0])) if len(t3) > 0 else 0
+                params["iflag"] = int(float(t3[1])) if len(t3) > 1 else 0
+            if len(non_blank) >= 5:
+                t4 = non_blank[4].tokens()
+                params["i_th"] = int(float(t4[0])) if len(t4) > 0 else 0
+                params["alpha"] = float(t4[1]) if len(t4) > 1 else 0.0
+                params["thick"] = float(t4[2]) if len(t4) > 2 else 0.0
+            if len(non_blank) >= 6:
+                t5 = non_blank[5].tokens()
+                params["irby"] = int(float(t5[0])) if len(t5) > 0 else 0
+
+    elif ptype == 23:  # SPR_MAT
+        if not cards:
+            log.error(f"/PROP/SPR_MAT/{block.user_id}: missing cards", block.source)
+            return
+        if block.fixed:
+            c0 = cards[0].cut("PROP_SPR_MAT_0")
+            params["imass"] = _ival(c0[0]) if len(c0) > 0 else 2
+            av = _fval(c0[2]) if len(c0) > 2 else 0.0
+            params["area_volume"] = av
+            params["area"] = av if params["imass"] == 1 else 1.0
+            params["volume"] = av if params["imass"] == 2 else 0.0
+            params["inertia"] = _fval(c0[3]) if len(c0) > 3 else 0.0
+            params["skew_id"] = _ival(c0[4]) if len(c0) > 4 else 0
+            params["isensor"] = _ival(c0[5]) if len(c0) > 5 else 0
+            params["sens_id"] = params["isensor"]
+            params["isflag"] = _ival(c0[6]) if len(c0) > 6 else 0
+        else:
+            t0 = cards[0].tokens()
+            params["imass"] = int(float(t0[0])) if len(t0) > 0 else 2
+            av = float(t0[1]) if len(t0) > 1 else 0.0
+            params["area_volume"] = av
+            params["area"] = av if params["imass"] == 1 else 1.0
+            params["volume"] = av if params["imass"] == 2 else 0.0
+            params["inertia"] = float(t0[2]) if len(t0) > 2 else 0.0
+            params["skew_id"] = int(float(t0[3])) if len(t0) > 3 else 0
+            params["isensor"] = int(float(t0[4])) if len(t0) > 4 else 0
+            params["sens_id"] = params["isensor"]
+            params["isflag"] = int(float(t0[5])) if len(t0) > 5 else 0
+
+    elif ptype == 25:  # SPR_AXI
+        if not cards:
+            log.error(f"/PROP/SPR_AXI/{block.user_id}: missing cards", block.source)
+            return
+        if block.fixed:
+            c0 = cards[0].cut("PROP_SPR_AXI_0")
+            params["mass"] = _fval(c0[0]) if len(c0) > 0 else 0.0
+            params["inertia"] = _fval(c0[1]) if len(c0) > 1 else 0.0
+            params["skew_id"] = _ival(c0[2]) if len(c0) > 2 else 0
+            params["isensor"] = _ival(c0[3]) if len(c0) > 3 else 0
+            params["sens_id"] = params["isensor"]
+            params["isflag"] = _ival(c0[4]) if len(c0) > 4 else 0
+            params["ifail"] = _ival(c0[5]) if len(c0) > 5 else 0
+            params["ileng"] = _ival(c0[6]) if len(c0) > 6 else 0
+            params["ifail2"] = _ival(c0[7]) if len(c0) > 7 else 0
+
+            c_idx = 1
+            for name in ("tens", "shear", "tors"):
+                stiff, damp = 0.0, 0.0
+                if c_idx < len(cards) and not cards[c_idx].is_blank:
+                    c1 = cards[c_idx].cut("PROP_SPR_AXI_1")
+                    stiff = _fval(c1[0]) if len(c1) > 0 else 0.0
+                    damp = _fval(c1[1]) if len(c1) > 1 else 0.0
+                    params[f"a_{name}"] = _fval(c1[2]) if len(c1) > 2 else 0.0
+                    params[f"b_{name}"] = _fval(c1[3]) if len(c1) > 3 else 0.0
+                    params[f"d_{name}"] = _fval(c1[4]) if len(c1) > 4 else 0.0
+                c_idx += 1
+                if c_idx < len(cards) and not cards[c_idx].is_blank:
+                    c2 = cards[c_idx].cut("PROP_SPR_AXI_2")
+                    params[f"fun_a_{name}"] = _ival(c2[0]) if len(c2) > 0 else 0
+                    params[f"hflag_{name}"] = _ival(c2[1]) if len(c2) > 1 else 0
+                    params[f"fun_b_{name}"] = _ival(c2[2]) if len(c2) > 2 else 0
+                    params[f"fun_c_{name}"] = _ival(c2[3]) if len(c2) > 3 else 0
+                    params[f"fscale_{name}"] = _fval(c2[4], 1.0) if len(c2) > 4 else 1.0
+                    params[f"min_rup_{name}"] = _fval(c2[5]) if len(c2) > 5 else 0.0
+                    params[f"max_rup_{name}"] = _fval(c2[6]) if len(c2) > 6 else 0.0
+                    params[f"scale_{name}"] = _fval(c2[7], 1.0) if len(c2) > 7 else 1.0
+                    params[f"e_{name}"] = _fval(c2[8]) if len(c2) > 8 else 0.0
+                c_idx += 1
+                params[f"stiff_{name}"] = stiff
+                params[f"damp_{name}"] = damp
+        else:
+            t0 = cards[0].tokens()
+            params["mass"] = float(t0[0]) if len(t0) > 0 else 0.0
+            params["inertia"] = float(t0[1]) if len(t0) > 1 else 0.0
+            params["skew_id"] = int(float(t0[2])) if len(t0) > 2 else 0
+            params["isensor"] = int(float(t0[3])) if len(t0) > 3 else 0
+            params["sens_id"] = params["isensor"]
+            params["isflag"] = int(float(t0[4])) if len(t0) > 4 else 0
+            params["ifail"] = int(float(t0[5])) if len(t0) > 5 else 0
+            params["ileng"] = int(float(t0[6])) if len(t0) > 6 else 0
+            params["ifail2"] = int(float(t0[7])) if len(t0) > 7 else 0
+
+            c_idx = 1
+            for name in ("tens", "shear", "tors"):
+                stiff, damp = 0.0, 0.0
+                if c_idx < len(cards) and not cards[c_idx].is_blank:
+                    t1 = cards[c_idx].tokens()
+                    stiff = float(t1[0]) if len(t1) > 0 else 0.0
+                    damp = float(t1[1]) if len(t1) > 1 else 0.0
+                    params[f"a_{name}"] = float(t1[2]) if len(t1) > 2 else 0.0
+                    params[f"b_{name}"] = float(t1[3]) if len(t1) > 3 else 0.0
+                    params[f"d_{name}"] = float(t1[4]) if len(t1) > 4 else 0.0
+                c_idx += 1
+                if c_idx < len(cards) and not cards[c_idx].is_blank:
+                    t2 = cards[c_idx].tokens()
+                    params[f"fun_a_{name}"] = int(float(t2[0])) if len(t2) > 0 else 0
+                    params[f"hflag_{name}"] = int(float(t2[1])) if len(t2) > 1 else 0
+                    params[f"fun_b_{name}"] = int(float(t2[2])) if len(t2) > 2 else 0
+                    params[f"fun_c_{name}"] = int(float(t2[3])) if len(t2) > 3 else 0
+                    params[f"fscale_{name}"] = float(t2[4]) if len(t2) > 4 else 1.0
+                    params[f"min_rup_{name}"] = float(t2[5]) if len(t2) > 5 else 0.0
+                    params[f"max_rup_{name}"] = float(t2[6]) if len(t2) > 6 else 0.0
+                    params[f"scale_{name}"] = float(t2[7]) if len(t2) > 7 else 1.0
+                    params[f"e_{name}"] = float(t2[8]) if len(t2) > 8 else 0.0
+                c_idx += 1
+                params[f"stiff_{name}"] = stiff
+                params[f"damp_{name}"] = damp
+        params["k"] = params.get("stiff_tens", 0.0)
+        params["c"] = params.get("damp_tens", 0.0)
+
+    elif ptype == 32:  # SPR_PRE
+        from . import prop_reader
+        prop = prop_reader.parse_spr_pre(block, log)
+        if prop is not None:
+            model.properties[block.user_id] = prop
+        return
+
+    if ptype in (26, 27, 51, 17, 34, 12, 15, 23, 25):
         from .prop_reader import InactiveProperty, _universal_geo_params
         full_params = _universal_geo_params()
         full_params.update(params)
@@ -18126,6 +18495,20 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "DRAPE": read_drape,
     "DRAPE_PLY_SLICE": read_drape,
     "PRELOAD_AXIAL": read_preload_axial,
+    "PROP_P8_SPR_GENE": read_prop,
+    "PROP_SPR_GENE": read_prop,
+    "PROP_P12_SPR_PUL": read_prop,
+    "PROP_SPR_PUL": read_prop,
+    "PROP_P13_SPR_BEAM": read_prop,
+    "PROP_SPR_BEAM": read_prop,
+    "PROP_P15_POROUS": read_prop,
+    "PROP_POROUS": read_prop,
+    "PROP_P23_SPR_MAT": read_prop,
+    "PROP_SPR_MAT": read_prop,
+    "PROP_P25_SPR_AXI": read_prop,
+    "PROP_SPR_AXI": read_prop,
+    "PROP_P32_SPR_PRE": read_prop,
+    "PROP_SPR_PRE": read_prop,
 }
 
 
