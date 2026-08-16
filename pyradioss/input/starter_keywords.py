@@ -760,6 +760,18 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       — time step, contact stiffness — works unchanged).
     """
     lawname = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if lawname in ("PLAS_ZERIL", "PLAS_ZERI", "ZERIL", "ZERILLI"):
+        read_mat_plas_zeril(block, model, log)
+        return
+    if lawname in ("PLAS_BODNE", "PLAS_BODN", "BODNE", "BODNER"):
+        read_mat_plas_bodne(block, model, log)
+        return
+    if lawname in ("VISC_PRONY", "VISC_LPRONY", "LPRONY", "PRONY", "VISC"):
+        read_mat_visc_prony(block, model, log)
+        return
+    if lawname in ("THERM_STRESS", "THERM", "THERMAL"):
+        read_mat_therm_stress(block, model, log)
+        return
     law_aliases = {"LAW1": 1, "ELAST": 1, "LAW2": 2, "PLAS_JOHNS": 2,
                    "LAW27": 27, "PLAS_BRIT": 27,
                    "LAW36": 36, "PLAS_TAB": 36,
@@ -6462,6 +6474,51 @@ def read_damp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if sub in ("FUNCT", "FUNCTION"):
         read_damp_funct(block, model, log)
+        return
+    if sub in ("STIFF", "STIFFNESS", "BETA"):
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/DAMP/STIFF/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("DAMP_STIFF_1")
+            grnod_id = _ival(f[0]) if len(f) > 0 else 0
+            beta = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            tstart = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            tstop = _fval(f[3], 1.0e30) if len(f) > 3 and _fval(f[3]) > 0.0 else 1.0e30
+        else:
+            t = cards[0].tokens()
+            grnod_id = int(float(t[0])) if len(t) > 0 else 0
+            beta = float(t[1]) if len(t) > 1 else 0.0
+            tstart = float(t[2]) if len(t) > 2 else 0.0
+            tstop = float(t[3]) if len(t) > 3 else 1.0e30
+        from ..model.entities import DampStiff
+        model.damp_stiffs[block.user_id] = DampStiff(
+            id=block.user_id, title=title, grnod_id=grnod_id, beta=beta,
+            tstart=tstart, tstop=tstop
+        )
+        return
+    if sub in ("MASS", "ALPHA"):
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/DAMP/MASS/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("DAMP_STIFF_1")
+            grnod_id = _ival(f[0]) if len(f) > 0 else 0
+            alpha = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            tstart = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            tstop = _fval(f[3], 1.0e30) if len(f) > 3 and _fval(f[3]) > 0.0 else 1.0e30
+        else:
+            t = cards[0].tokens()
+            grnod_id = int(float(t[0])) if len(t) > 0 else 0
+            alpha = float(t[1]) if len(t) > 1 else 0.0
+            tstart = float(t[2]) if len(t) > 2 else 0.0
+            tstop = float(t[3]) if len(t) > 3 else 1.0e30
+        model.damps.append(Damping(
+            id=block.user_id, grnod_id=grnod_id, alpha=alpha,
+            tstart=tstart, tstop=tstop, title=title
+        ))
         return
     if sub in ("GLOBAL", "GLOB"):
         # /DAMP/GLOBAL (M134)
@@ -15077,6 +15134,147 @@ def read_init(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.warning(f"/INIT/{sub} not ported", block.source)
 
 
+def read_mat_plas_zeril(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/PLAS_ZERIL/mat_ID`` or ``/PLAS_ZERIL/mat_ID`` (M141): Zerilli-Armstrong plasticity modifier."""
+    from ..model.entities import MaterialPlasZeril
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/MAT/PLAS_ZERIL/{mat_id}: missing data card", block.source)
+        return
+    c0, c1, c2, c3, c4 = 0.0, 0.0, 0.0, 0.0, 0.0
+    c5, n, fcut = 0.0, 0.0, 0.0
+    if block.fixed:
+        f1 = cards[0].cut("MAT_PLAS_ZERIL_1")
+        c0 = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        c1 = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        c2 = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        c3 = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+        c4 = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+        if len(cards) > 1:
+            f2 = cards[1].cut("MAT_PLAS_ZERIL_2")
+            c5 = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            n = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            fcut = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        c0 = float(t1[0]) if len(t1) > 0 else 0.0
+        c1 = float(t1[1]) if len(t1) > 1 else 0.0
+        c2 = float(t1[2]) if len(t1) > 2 else 0.0
+        c3 = float(t1[3]) if len(t1) > 3 else 0.0
+        c4 = float(t1[4]) if len(t1) > 4 else 0.0
+        if len(cards) > 1:
+            t2 = cards[1].tokens()
+            c5 = float(t2[0]) if len(t2) > 0 else 0.0
+            n = float(t2[1]) if len(t2) > 1 else 0.0
+            fcut = float(t2[2]) if len(t2) > 2 else 0.0
+    model.mat_plas_zerils[mat_id] = MaterialPlasZeril(
+        mat_id=mat_id, title=title, c0=c0, c1=c1, c2=c2, c3=c3, c4=c4, c5=c5, n=n, fcut=fcut
+    )
+
+
+def read_mat_plas_bodne(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/PLAS_BODNE/mat_ID`` or ``/PLAS_BODNE/mat_ID`` (M141): Bodner-Partom viscoplasticity modifier."""
+    from ..model.entities import MaterialPlasBodne
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/MAT/PLAS_BODNE/{mat_id}: missing data card", block.source)
+        return
+    z0, z1, m, n, d0 = 0.0, 0.0, 0.0, 0.0, 0.0
+    a1, a2 = 0.0, 0.0
+    if block.fixed:
+        f1 = cards[0].cut("MAT_PLAS_BODNE_1")
+        z0 = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        z1 = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        m = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        n = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+        d0 = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+        if len(cards) > 1:
+            f2 = cards[1].cut("MAT_PLAS_BODNE_2")
+            a1 = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            a2 = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        z0 = float(t1[0]) if len(t1) > 0 else 0.0
+        z1 = float(t1[1]) if len(t1) > 1 else 0.0
+        m = float(t1[2]) if len(t1) > 2 else 0.0
+        n = float(t1[3]) if len(t1) > 3 else 0.0
+        d0 = float(t1[4]) if len(t1) > 4 else 0.0
+        if len(cards) > 1:
+            t2 = cards[1].tokens()
+            a1 = float(t2[0]) if len(t2) > 0 else 0.0
+            a2 = float(t2[1]) if len(t2) > 1 else 0.0
+    model.mat_plas_bodnes[mat_id] = MaterialPlasBodne(
+        mat_id=mat_id, title=title, z0=z0, z1=z1, m=m, n=n, d0=d0, a1=a1, a2=a2
+    )
+
+
+def read_mat_visc_prony(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/VISC_PRONY/mat_ID`` or ``/VISC/LPRONY/mat_ID`` (M141): Prony relaxation series."""
+    from ..model.entities import MaterialViscProny
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/VISC/PRONY/{mat_id}: missing data card", block.source)
+        return
+    order, form, flag_visc = 0, 0, 0
+    if block.fixed:
+        f0 = cards[0].cut("MAT_VISC_PRONY_1")
+        order = _ival(f0[0]) if len(f0) > 0 else 0
+        form = _ival(f0[1]) if len(f0) > 1 else 0
+        flag_visc = _ival(f0[2]) if len(f0) > 2 else 0
+    else:
+        t0 = cards[0].tokens()
+        order = int(float(t0[0])) if len(t0) > 0 else 0
+        form = int(float(t0[1])) if len(t0) > 1 else 0
+        flag_visc = int(float(t0[2])) if len(t0) > 2 else 0
+
+    gammas, taus = [], []
+    for c in cards[1:]:
+        if c.is_blank:
+            continue
+        if block.fixed:
+            f = c.cut("MAT_VISC_PRONY_2")
+            g = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            t = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        else:
+            toks = c.tokens()
+            g = float(toks[0]) if len(toks) > 0 else 0.0
+            t = float(toks[1]) if len(toks) > 1 else 0.0
+        gammas.append(g)
+        taus.append(t)
+    model.mat_visc_pronys[mat_id] = MaterialViscProny(
+        mat_id=mat_id, title=title, order=order, form=form, flag_visc=flag_visc,
+        gammas=gammas, taus=taus
+    )
+
+
+def read_mat_therm_stress(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/THERM_STRESS/mat_ID`` or ``/THERM_STRESS/mat_ID`` (M141): Thermal stress expansion."""
+    from ..model.entities import MaterialThermStress
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/THERM_STRESS/{mat_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("MAT_THERM_STRESS_1")
+        alpha = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        t0 = _fval(f[1], 293.15) if len(f) > 1 and _fval(f[1]) > 0.0 else 293.15
+        ay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        az = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+    else:
+        t = cards[0].tokens()
+        alpha = float(t[0]) if len(t) > 0 else 0.0
+        t0 = float(t[1]) if len(t) > 1 else 293.15
+        ay = float(t[2]) if len(t) > 2 else 0.0
+        az = float(t[3]) if len(t) > 3 else 0.0
+    model.mat_therm_stresses[mat_id] = MaterialThermStress(
+        mat_id=mat_id, title=title, alpha=alpha, t0=t0, alpha_y=ay, alpha_z=az
+    )
+
+
 KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = {
     # M37: complete table of Starter keywords. All 204 law numbers
     # route to read_mat; all /PROP numbers route to read_prop.
@@ -15272,6 +15470,12 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "GEAR": read_gear,
     "RACK": read_rack,
     "DIFF": read_diff,
+    "PLAS_ZERIL": read_mat_plas_zeril,
+    "PLAS_BODNE": read_mat_plas_bodne,
+    "VISC": read_mat_visc_prony,
+    "VISC_PRONY": read_mat_visc_prony,
+    "VISC_LPRONY": read_mat_visc_prony,
+    "THERM_STRESS": read_mat_therm_stress,
 }
 
 

@@ -73,6 +73,7 @@ from .entities import (
     Stack, StackPly,
     LagmulGlobal, GearConstraint, RackConstraint, DiffConstraint,
     WaveShaper, DetLine, DetCirc, IniMap3D, SetGeneric,
+    MaterialPlasZeril, MaterialPlasBodne, MaterialViscProny, MaterialThermStress, DampStiff,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -817,6 +818,11 @@ class Model:
         self.generic_sets: Dict[str, Dict[int, SetGeneric]] = {} # /SET (M137)
         self.ebcs_periodics: Dict[int, EbcsPeriodic] = {}  # /EBCS/PERIODIC (M138)
         self.ebcs_cyclics: Dict[int, EbcsCyclic] = {}      # /EBCS/CYCLIC (M138)
+        self.mat_plas_zerils: Dict[int, MaterialPlasZeril] = {} # /MAT/PLAS_ZERIL (M141)
+        self.mat_plas_bodnes: Dict[int, MaterialPlasBodne] = {} # /MAT/PLAS_BODNE (M141)
+        self.mat_visc_pronys: Dict[int, MaterialViscProny] = {} # /MAT/VISC_PRONY (M141)
+        self.mat_therm_stresses: Dict[int, MaterialThermStress] = {} # /MAT/THERM_STRESS (M141)
+        self.damp_stiffs: Dict[int, DampStiff] = {}        # /DAMP/STIFF (M141)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

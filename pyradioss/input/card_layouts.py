@@ -1205,6 +1205,16 @@ LAYOUTS: Dict[str, List[int]] = {
     "EBCS_PERIODIC_1": [10, 10, 10, 10],
     "BCS_TRA_1": [10, 10, 10],
     "BCS_ROT_1": [10, 10, 10],
+
+    # EXTENDED MATERIAL SUBOBJECTS & DAMPING (M141)
+    "MAT_PLAS_ZERIL_1": [20, 20, 20, 20, 20],
+    "MAT_PLAS_ZERIL_2": [20, 20, 20],
+    "MAT_PLAS_BODNE_1": [20, 20, 20, 20, 20],
+    "MAT_PLAS_BODNE_2": [20, 20],
+    "MAT_VISC_PRONY_1": [10, 10, 10],
+    "MAT_VISC_PRONY_2": [20, 20],
+    "MAT_THERM_STRESS_1": [20, 20, 20, 20],
+    "DAMP_STIFF_1": [10, 20, 20, 20],
 }
 
 

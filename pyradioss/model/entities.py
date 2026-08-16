@@ -3774,25 +3774,82 @@ class SetGeneric:
     ids: List[int] = field(default_factory=list)
 
 
+@dataclass
+class MaterialPlasZeril:
+    """/MAT/PLAS_ZERIL (M141): Zerilli-Armstrong plasticity modifier.
+
+    Fortran origin: ``starter/source/materials/mat/matl2_plas_zeril.F``.
+    """
+    mat_id: int
+    title: str = ""
+    c0: float = 0.0
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+    c4: float = 0.0
+    c5: float = 0.0
+    n: float = 0.0
+    fcut: float = 0.0
 
 
+@dataclass
+class MaterialPlasBodne:
+    """/MAT/PLAS_BODNE (M141): Bodner-Partom viscoplasticity modifier.
+
+    Fortran origin: ``starter/source/materials/mat/matl2_plas_bodne.F``.
+    """
+    mat_id: int
+    title: str = ""
+    z0: float = 0.0
+    z1: float = 0.0
+    m: float = 0.0
+    n: float = 0.0
+    d0: float = 0.0
+    a1: float = 0.0
+    a2: float = 0.0
 
 
+@dataclass
+class MaterialViscProny:
+    """/MAT/VISC_PRONY or /VISC/LPRONY (M141): Viscoelastic Prony relaxation series.
+
+    Fortran origin: ``starter/source/materials/mat/mat_VISC_LPRONY.F``.
+    """
+    mat_id: int
+    title: str = ""
+    order: int = 0
+    form: int = 0
+    flag_visc: int = 0
+    gammas: List[float] = field(default_factory=list)
+    taus: List[float] = field(default_factory=list)
 
 
+@dataclass
+class MaterialThermStress:
+    """/MAT/THERM_STRESS (M141): Thermal stress expansion modifier.
+
+    Fortran origin: ``starter/source/materials/mat/mat_therm_stress.F``.
+    """
+    mat_id: int
+    title: str = ""
+    alpha: float = 0.0
+    t0: float = 293.15
+    alpha_y: float = 0.0
+    alpha_z: float = 0.0
 
 
+@dataclass
+class DampStiff:
+    """/DAMP/STIFF (M141): Stiffness proportional damping.
 
-
-
-
-
-
-
-
-
-
-
+    Fortran origin: ``starter/source/loads/damp/read_damp_stiff.F``.
+    """
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+    beta: float = 0.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
 
 
 
