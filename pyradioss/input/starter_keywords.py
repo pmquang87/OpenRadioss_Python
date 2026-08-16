@@ -9449,6 +9449,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         ifq = t[6] if len(t) > 6 else 0          # Ifiltr (M15)
         stfac, fric, gap, gap_max, xfreq = (1.0, 0.0, 0.0, 0.0, 0.0)
         gap_max_m = 0.0
+        fscale_gap, percent_mesh_size = 1.0, 0.4
         grnod_id = id1
         if kind == "TYPE24":
             id1 = 0 # surf_id1 is 0 when using node-to-surface
@@ -9471,6 +9472,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif kind == "TYPE7" and len(cards) >= 6:
         # ==== the REAL fixed-format TYPE7 layout (see docstring) ===========
         ign: List[str] = []            # non-default fields the port ignores
+        fscale_gap, percent_mesh_size = 1.0, 0.4
         f0 = _fixed_vals(cards[0], [10] * 10)
         id1, id2 = _ival(f0[0]), _ival(f0[1])
         istf, igap = _ival(f0[2]), _ival(f0[4])
@@ -9481,14 +9483,18 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         icurv = _ival(f0[8])
         f1 = _fixed_vals(cards[1], [20, 20, 20, 20, 10])
         gap_max = _fval(f1[1])
-        if f1[0] and _to_float(f1[0]) not in (0.0, 1.0):  # 0/1 = default
+        fscale_gap = _fval(f1[0], 1.0)
+        if igap < 2 and fscale_gap != 1.0:
             ign.append(f"Fscale_gap={f1[0]}")
         for name, s in (("Fpenmax", f1[2]), ("Itied", f1[4])):
             if s and _to_float(s) != 0.0:
                 ign.append(f"{name}={s}")
         f2 = _fixed_vals(cards[2], [20, 20, 20, 20, 10, 10])
+        percent_mesh_size = _fval(f2[2], 0.4)
+        if igap != 3 and percent_mesh_size != 0.4:
+            ign.append(f"%mesh_size={f2[2]}")
         for name, s in (("Stmin", f2[0]), ("Stmax", f2[1]),
-                        ("%mesh_size", f2[2]), ("dtmin", f2[3]),
+                        ("dtmin", f2[3]),
                         ("Irem_gap", f2[4]), ("Irem_i2", f2[5])):
             if s and _to_float(s) != 0.0:
                 ign.append(f"{name}={s}")
@@ -9561,9 +9567,9 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if istf not in (0, 1, 2, 3, 4, 5):
         log.error(f"/INTER/{kind}/{block.user_id}: Istf={istf} (0..5)",
                   block.source)
-    if igap not in (0, 1):
+    if igap not in (0, 1, 2, 3):
         log.error(f"/INTER/{kind}/{block.user_id}: Igap={igap} not ported "
-                  f"(0 constant, 1 variable)", block.source)
+                  f"(0 constant, 1 variable, 2 scaled, 3 mesh-size)", block.source)
     if mfrot not in (0, 1, 2, 3, 4):
         log.error(f"/INTER/{kind}/{block.user_id}: Ifric={mfrot} (0..4: "
                   f"Coulomb / generalized viscous / Darmstadt / Renard / "
@@ -9617,7 +9623,8 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.interfaces.append(Interface(
             id=block.user_id, type=7, grnod_id=id1, surf_id=id2,
             istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap,
-            gap_max=gap_max, sens_id=sens, mfrot=mfrot, ifq=ifq,
+            gap_max=gap_max, fscale_gap=fscale_gap, percent_mesh_size=percent_mesh_size,
+            sens_id=sens, mfrot=mfrot, ifq=ifq,
             xfiltr=xfiltr, fric_c=fric_c, title=title))
     elif kind == "TYPE24":
         # For TYPE24, we pass gap so compact mode can explicitly set it for tests.
