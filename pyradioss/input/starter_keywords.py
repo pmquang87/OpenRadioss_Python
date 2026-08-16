@@ -1368,6 +1368,14 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "MAXSTRAIN"
     elif kind in ("ORTH_BIQUAD",):
         kind = "ORTHBIQUAD"
+    elif kind in ("HC_DSSE", "HC-DSSE", "HCDSSE") or (kind == "HC" and len(block.parts) > 2 and block.parts[2].upper() == "DSSE"):
+        kind = "HC_DSSE"
+    elif kind in ("MULLINS", "MULLINS_OR", "MULLINS-OR"):
+        kind = "MULLINS_OR"
+    elif kind in ("SNCONNECT", "SN_CONNECT", "SN-CONNECT"):
+        kind = "SNCONNECT"
+    elif kind in ("SPALL", "SPALLING"):
+        kind = "SPALLING"
     elif kind in ("XFEM_FLD", "XFEM/FLD") or (kind == "XFEM" and len(block.parts) > 2 and block.parts[2].upper() == "FLD"):
         kind = "XFEM_FLD"
     elif kind in ("XFEM_JOHNS", "XFEM/JOHNS") or (kind == "XFEM" and len(block.parts) > 2 and block.parts[2].upper() in ("JOHNS", "JOHNSON")):
@@ -1376,12 +1384,12 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "XFEM_TBUTC"
 
     if kind not in ("JOHNSON", "BIQUAD", "ORTHBIQUAD", "TAB1", "SNCONNECT", "FLD", "CONNECT",
-                    "TENSSTRAIN", "ORTHSTRAIN", "GURSON", "ALTER", "VISUAL", "MULLINS_OR",
+                    "TENSSTRAIN", "ORTHSTRAIN", "GURSON", "ALTER", "VISUAL", "MULLINS_OR", "MULLINS",
                     "PUCK", "RTCL", "SAHRAEI", "SYAZWAN", "TAB2", "GENE1", "INIEVO",
                     "CHANG", "TSAIWU", "TSAIHILL", "HOFFMAN", "MAXSTRAIN", "HASHIN",
                     "LEMAITRE", "COCKCROFT", "ENERGY", "COMPOSITE", "FRACTAL", "FRACTAL_DMG",
-                    "ORTHENERG", "EMC", "FABRIC", "SPALLING", "TBUTCHER", "WIERZBICKI", "WILKINS",
-                    "NXT", "LAD_DAMA", "XFEM_FLD", "XFEM_JOHNS", "XFEM_TBUTC"):
+                    "ORTHENERG", "EMC", "FABRIC", "SPALLING", "SPALL", "TBUTCHER", "WIERZBICKI", "WILKINS",
+                    "NXT", "LAD_DAMA", "XFEM_FLD", "XFEM_JOHNS", "XFEM_TBUTC", "HC_DSSE"):
         log.warning(f"/FAIL/{kind} not ported — skipped "
                     f"(supported: JOHNSON, BIQUAD, ORTHBIQUAD, TAB1, SNCONNECT, FLD, CONNECT, "
                     f"TENSSTRAIN, ORTHSTRAIN, GURSON, ALTER, VISUAL, MULLINS_OR, "
@@ -1389,12 +1397,23 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     f"CHANG, TSAIWU, TSAIHILL, HOFFMAN, MAXSTRAIN, HASHIN, "
                     f"LEMAITRE, COCKCROFT, ENERGY, COMPOSITE, FRACTAL, FRACTAL_DMG, "
                     f"ORTHENERG, EMC, FABRIC, SPALLING, TBUTCHER, WIERZBICKI, WILKINS, "
-                    f"NXT, LAD_DAMA, XFEM_FLD, XFEM_JOHNS, XFEM_TBUTC)", block.source)
+                    f"NXT, LAD_DAMA, XFEM_FLD, XFEM_JOHNS, XFEM_TBUTC, HC_DSSE)", block.source)
         return
     # header /FAIL/<kind>/mat_ID[/fail_ID]: with TWO trailing ids the
     # FIRST is the material id (the lexer keeps only the last as user_id)
     mat_id = block.user_id
-    if len(block.parts) > 3:
+    if kind == "HC_DSSE" and len(block.parts) > 2 and block.parts[1].upper() == "HC" and block.parts[2].upper() == "DSSE":
+        if len(block.parts) > 4:
+            try:
+                mat_id = int(block.parts[3])
+            except ValueError:
+                pass
+        elif len(block.parts) > 3:
+            try:
+                mat_id = int(block.parts[3])
+            except ValueError:
+                pass
+    elif len(block.parts) > 3:
         try:
             mat_id = int(block.parts[2])
         except ValueError:
@@ -1542,32 +1561,51 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "p_thickfail": p_thickfail, "r1": r1, "r2": r2, "r4": r4, "r5": r5,
         })
     elif kind == "SNCONNECT":
+        from ..model.entities import FailSnconnect
         if len(cards) < 2:
             log.error(f"/FAIL/SNCONNECT/{mat_id}: requires 2 data cards", block.source)
             return
-            
+
         a2, b2, a3, b3, ifail_so, isym = _cut_floats(cards[0], "FAIL_SNCONNECT_1") \
             if block.fixed else _floats(cards[0], 6)
         ifail_so, isym = int(ifail_so), int(isym)
-        
+
         c2 = cards[1].cut("FAIL_SNCONNECT_2") if block.fixed else cards[1].tokens()
         id_0n = _ival(c2[0]) if len(c2) > 0 else 0
         id_0s = _ival(c2[1]) if len(c2) > 1 else 0
         id_fn = _ival(c2[2]) if len(c2) > 2 else 0
         id_fs = _ival(c2[3]) if len(c2) > 3 else 0
-        xscale0 = _fval(c2[4]) if len(c2) > 4 else 0.0
-        xscalef = _fval(c2[5]) if len(c2) > 5 else 0.0
-        areascale = _fval(c2[6]) if len(c2) > 6 else 0.0
+        xscale0 = _fval(c2[4]) if len(c2) > 4 and c2[4].strip() else 1.0
+        xscalef = _fval(c2[5]) if len(c2) > 5 and c2[5].strip() else 1.0
+        areascale = _fval(c2[6]) if len(c2) > 6 and c2[6].strip() else 1.0
 
         nfail = 4 if ifail_so == 2 else 1
         if b2 == 0.0: b2 = 1.0
         if b3 == 0.0: b3 = 1.0
-        
+        if xscale0 == 0.0: xscale0 = 1.0
+        if xscalef == 0.0: xscalef = 1.0
+        if areascale == 0.0: areascale = 1.0
+
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0]))
+
+        model.fail_snconnects[mat_id] = FailSnconnect(
+            mat_id=mat_id, alpha_0=a2, beta_0=b2, alpha_f=a3, beta_f=b3,
+            ifail_so=ifail_so, isym=isym, fct_idon=id_0n, fct_idos=id_0s,
+            fct_idfn=id_fn, fct_idfs=id_fs, xscale_0=xscale0, xscale_f=xscalef,
+            area_scale=areascale, fail_id=fail_id
+        )
+
         params = {
             "a2": a2, "b2": b2, "a3": a3, "b3": b3,
             "nfail": nfail, "isym": isym,
             "id_0n": id_0n, "id_0s": id_0s, "id_fn": id_fn, "id_fs": id_fs,
-            "xscale0": xscale0, "xscalef": xscalef, "areascale": areascale
+            "xscale0": xscale0, "xscalef": xscalef, "areascale": areascale,
+            "alpha_0": a2, "beta_0": b2, "alpha_f": a3, "beta_f": b3,
+            "ifail_so": ifail_so, "fct_idon": id_0n, "fct_idos": id_0s,
+            "fct_idfn": id_fn, "fct_idfs": id_fs, "xscale_0": xscale0,
+            "xscale_f": xscalef, "area_scale": areascale, "fail_id": fail_id
         }
         fm = FailureModel(type="SNCONNECT", ifail_sh=1, params=params)
     elif kind == "TAB1":
@@ -1913,14 +1951,28 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         }
         fm = FailureModel(type="VISUAL", ifail_sh=1, params=params)
     elif kind == "MULLINS_OR":
+        from ..model.entities import FailMullins
         # Card 1: COEFR, BETA, COEFM
-        c1 = _cut_floats(cards[0], "FAIL_MULLINS_OR_1") if block.fixed else _floats(cards[0], 3)
-        coefr = c1[0] if len(c1) > 0 and c1[0] else 1.0
-        beta = c1[1] if len(c1) > 1 else 0.0
-        coefm = c1[2] if len(c1) > 2 else 0.0
-
+        if block.fixed:
+            c1 = cards[0].cut("FAIL_MULLINS_1")
+            coefr = _fval(c1[0], 1.0) if len(c1) > 0 and c1[0].strip() else 1.0
+            beta = _fval(c1[1], 0.0) if len(c1) > 1 else 0.0
+            coefm = _fval(c1[2], 0.0) if len(c1) > 2 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            coefr = float(t1[0]) if len(t1) > 0 else 1.0
+            beta = float(t1[1]) if len(t1) > 1 else 0.0
+            coefm = float(t1[2]) if len(t1) > 2 else 0.0
+        if coefr == 0.0:
+            coefr = 1.0
+        fail_id = 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            fail_id = _ival(cards[1].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[1].tokens()[0]))
+        model.fail_mullins[mat_id] = FailMullins(
+            mat_id=mat_id, coefr=coefr, beta=beta, coefm=coefm, fail_id=fail_id
+        )
         params = {
-            "coefr": coefr, "beta": beta, "coefm": coefm,
+            "coefr": coefr, "beta": beta, "coefm": coefm, "fail_id": fail_id
         }
         fm = FailureModel(type="MULLINS_OR", ifail_sh=1, params=params)
     elif kind == "PUCK":
@@ -2598,8 +2650,10 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         params = {"eps_f1": eps_f1, "eps_r1": eps_r1, "eps_f2": eps_f2, "eps_r2": eps_r2, "ndir": ndir, "fct_id": fct_id}
         fm = FailureModel(type="FABRIC", ifail_sh=1, params=params)
     elif kind == "SPALLING":
+        from ..model.entities import FailSpalling
         # Card 1: D1, D2, D3, D4, D5
         # Card 2: Epsilon_Dot_0, P_min, Ifail_so
+        # Card 3: (optional) Fail_ID
         if block.fixed:
             c1 = cards[0].cut("FAIL_SPALLING_1")
             d1 = _fval(c1[0]) if len(c1) > 0 else 0.0
@@ -2607,11 +2661,11 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             d3 = _fval(c1[2]) if len(c1) > 2 else 0.0
             d4 = _fval(c1[3]) if len(c1) > 3 else 0.0
             d5 = _fval(c1[4]) if len(c1) > 4 else 0.0
-            eps_dot0, p_min, ifail_so = 1.0e-20, 0.0, 1
+            eps_dot0, p_min, ifail_so = 1.0e-20, -1.0e20, 1
             if len(cards) > 1 and not cards[1].is_blank:
                 c2 = cards[1].cut("FAIL_SPALLING_2")
                 eps_dot0 = _fval(c2[0], 1.0e-20) if len(c2) > 0 and c2[0].strip() else 1.0e-20
-                p_min = _fval(c2[1]) if len(c2) > 1 else 0.0
+                p_min = _fval(c2[1], -1.0e20) if len(c2) > 1 and c2[1].strip() else -1.0e20
                 ifail_so = _ival(c2[2], 1) if len(c2) > 2 and c2[2].strip() else 1
         else:
             t1 = cards[0].tokens()
@@ -2620,13 +2674,31 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             d3 = float(t1[2]) if len(t1) > 2 else 0.0
             d4 = float(t1[3]) if len(t1) > 3 else 0.0
             d5 = float(t1[4]) if len(t1) > 4 else 0.0
-            eps_dot0, p_min, ifail_so = 1.0e-20, 0.0, 1
+            eps_dot0, p_min, ifail_so = 1.0e-20, -1.0e20, 1
             if len(cards) > 1 and not cards[1].is_blank:
                 t2 = cards[1].tokens()
                 eps_dot0 = float(t2[0]) if len(t2) > 0 else 1.0e-20
-                p_min = float(t2[1]) if len(t2) > 1 else 0.0
+                p_min = float(t2[1]) if len(t2) > 1 else -1.0e20
                 ifail_so = int(float(t2[2])) if len(t2) > 2 else 1
-        params = {"D1": d1, "D2": d2, "D3": d3, "D4": d4, "D5": d5, "eps_dot_0": eps_dot0, "p_min": p_min, "ifail_so": ifail_so}
+        if eps_dot0 == 0.0:
+            eps_dot0 = 1.0e-20
+        if p_min != 0.0:
+            p_min = -abs(p_min)
+        else:
+            p_min = -1.0e20
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0]))
+        model.fail_spallings[mat_id] = FailSpalling(
+            mat_id=mat_id, d1=d1, d2=d2, d3=d3, d4=d4, d5=d5,
+            epsilon_dot_0=eps_dot0, p_min=p_min, ifail_so=ifail_so, fail_id=fail_id
+        )
+        params = {
+            "D1": d1, "D2": d2, "D3": d3, "D4": d4, "D5": d5,
+            "d1": d1, "d2": d2, "d3": d3, "d4": d4, "d5": d5,
+            "eps_dot_0": eps_dot0, "epsilon_dot_0": eps_dot0,
+            "p_min": p_min, "ifail_so": ifail_so, "fail_id": fail_id
+        }
         fm = FailureModel(type="SPALLING", ifail_sh=1, params=params)
     elif kind == "TBUTCHER":
         # Card 1: Lambda, K, Sigma_r, Ifail_sh, Ifail_so, Iduct, Ixfem
@@ -2791,6 +2863,51 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         params = {"grsh4n_1": g1, "grsh3n_1": g2, "grsh4n_2": g3, "grsh3n_2": g4,
                   "damage": damage, "probability": prob, "seed": seed, "num_walk": num_walk, "printout": printout}
         fm = FailureModel(type="FRACTAL", ifail_sh=1, params=params)
+    elif kind in ("HC_DSSE", "HC/DSSE"):
+        from ..model.entities import FailHcDsse
+        # Card 1: Ifail_sh, PTHKF, I_Flag
+        # Card 2: a_HC_DSSE, b_HC_DSSE, c_HC_DSSE, d_HC_DSSE, n_f
+        # Card 3: (optional) Fail_ID
+        if block.fixed:
+            c1 = cards[0].cut("FAIL_HC_DSSE_1")
+            ifail_sh = _ival(c1[0], 1) if len(c1) > 0 and c1[0].strip() else 1
+            pthkf = _fval(c1[1], 0.0) if len(c1) > 1 else 0.0
+            iflag = _ival(c1[2], 0) if len(c1) > 2 else 0
+            a_hc_dsse, b_hc_dsse, c_hc_dsse, d_hc_dsse, n_f = 0.0, 0.0, 0.0, 0.0, 1.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                c2 = cards[1].cut("FAIL_HC_DSSE_2")
+                a_hc_dsse = _fval(c2[0], 0.0) if len(c2) > 0 else 0.0
+                b_hc_dsse = _fval(c2[1], 0.0) if len(c2) > 1 else 0.0
+                c_hc_dsse = _fval(c2[2], 0.0) if len(c2) > 2 else 0.0
+                d_hc_dsse = _fval(c2[3], 0.0) if len(c2) > 3 else 0.0
+                n_f = _fval(c2[4], 1.0) if len(c2) > 4 and c2[4].strip() else 1.0
+        else:
+            t1 = cards[0].tokens()
+            ifail_sh = int(float(t1[0])) if len(t1) > 0 else 1
+            pthkf = float(t1[1]) if len(t1) > 1 else 0.0
+            iflag = int(float(t1[2])) if len(t1) > 2 else 0
+            a_hc_dsse, b_hc_dsse, c_hc_dsse, d_hc_dsse, n_f = 0.0, 0.0, 0.0, 0.0, 1.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t2 = cards[1].tokens()
+                a_hc_dsse = float(t2[0]) if len(t2) > 0 else 0.0
+                b_hc_dsse = float(t2[1]) if len(t2) > 1 else 0.0
+                c_hc_dsse = float(t2[2]) if len(t2) > 2 else 0.0
+                d_hc_dsse = float(t2[3]) if len(t2) > 3 else 0.0
+                n_f = float(t2[4]) if len(t2) > 4 else 1.0
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0]))
+        model.fail_hc_dsses[mat_id] = FailHcDsse(
+            mat_id=mat_id, ifail_sh=ifail_sh, pthkf=pthkf, iflag=iflag,
+            a_hc_dsse=a_hc_dsse, b_hc_dsse=b_hc_dsse, c_hc_dsse=c_hc_dsse,
+            d_hc_dsse=d_hc_dsse, n_f=n_f, fail_id=fail_id
+        )
+        params = {
+            "ifail_sh": ifail_sh, "pthkf": pthkf, "iflag": iflag,
+            "a_hc_dsse": a_hc_dsse, "b_hc_dsse": b_hc_dsse, "c_hc_dsse": c_hc_dsse,
+            "d_hc_dsse": d_hc_dsse, "n_f": n_f, "fail_id": fail_id
+        }
+        fm = FailureModel(type="HC_DSSE", ifail_sh=ifail_sh, params=params)
     # attachment to the material happens in the Starter resolve step
     # (initialization.resolve_materials) so deck order does not matter
     model.raw_fails.append((mat_id, fm, block.source))
@@ -19315,6 +19432,12 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_LAW124": read_mat,
     "MAT_CDPM2": read_mat,
     "CDPM2": read_mat,
+    # M162: Hosford-Coulomb/DSSE, Mullins, S-N Connector and Spalling Failure Models
+    "FAIL_HC_DSSE": read_fail,
+    "FAIL_MULLINS_OR": read_fail,
+    "FAIL_MULLINS": read_fail,
+    "FAIL_SNCONNECT": read_fail,
+    "FAIL_SPALLING": read_fail,
 }
 
 

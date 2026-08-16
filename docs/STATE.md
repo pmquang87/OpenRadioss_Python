@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M161)
+## What is implemented (M1 → M162)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -167,6 +167,7 @@ real history is 41 milestones. One line each:
 | M159 | Advanced failure models, XFEM damage models & extended time-history output channels suite: /FAIL/NXT strain-rate dependent failure model, /FAIL/LAD_DAMA Ladevèze damage failure model, /FAIL/INIEVO complete 4-card multi-criterion initiation & evolution model, /FAIL/XFEM_FLD (/FAIL/XFEM/FLD) XFEM FLD crack model, /FAIL/XFEM_JOHNS (/FAIL/XFEM/JOHNS) XFEM Johnson-Cook model, /FAIL/XFEM_TBUTC (/FAIL/XFEM/TBUTC) XFEM T-Butcher model, and /TH/RETRACTOR, /TH/SLIPRING, /TH/TRIA (plus /ATH/*, /BTH/*, /CTH/*, /DTH/* prefix aliases) output blocks |
 | M160 | Node-based detonation ignitions, Hertzian & extended Lagrange multiplier interfaces suite: /DFS/DETPOINT/NODE node-based point detonation ignition reader, /DFS/DETPLAN/NODE node-based planar detonation ignition reader, /DFS/DETLINE/NODE node-based line detonation ignition reader, /INTER/HERTZ/TYPE17 thick shell Hertzian contact interface reader, and /INTER/LAGMUL/TYPE16, /INTER/LAGMUL/TYPE17, /INTER/LAGMUL/TYPE2 Lagrange multiplier contact aliases |
 | M161 | Seatbelt, tape fabric & advanced concrete damage material models suite: /MAT/LAW114 (/MAT/SPR_SEATBELT) seatbelt spring reader, /MAT/LAW119 (/MAT/SH_SEATBELT) 2D shell seatbelt reader, /MAT/LAW120 (/MAT/TAPO) tape/woven fabric reader, /MAT/LAW121 (/MAT/PLAS_RATE) strain-rate dependent elastoplastic reader, and /MAT/LAW124 (/MAT/CDPM2) concrete damage plasticity model 2 reader |
+| M162 | Advanced Hosford-Coulomb/DSSE, Mullins damage, S-N connector & spalling failure models suite: /FAIL/HC_DSSE Hosford-Coulomb/DSSE failure reader, /FAIL/MULLINS_OR (/FAIL/MULLINS) hyperelastic Mullins damage reader, /FAIL/SNCONNECT S-N connector fatigue failure reader, and /FAIL/SPALLING (/FAIL/SPALL) hydrodynamic spalling cutoff reader |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

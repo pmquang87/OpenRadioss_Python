@@ -1461,6 +1461,14 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_LAW124_4": [20, 20, 20, 20],
     "MAT_LAW124_5": [20, 20, 20, 10, 10, 10, 10],
     "MAT_LAW124_6": [20, 20, 20, 20],
+    # M162: FAIL/HC_DSSE, FAIL/MULLINS, FAIL/SNCONNECT, FAIL/SPALLING
+    "FAIL_HC_DSSE_1": [10, 20, 10],
+    "FAIL_HC_DSSE_2": [20, 20, 20, 20, 20],
+    "FAIL_MULLINS_1": [20, 20, 20],
+    "FAIL_SNCONNECT_1": [20, 20, 20, 20, 10, 10],
+    "FAIL_SNCONNECT_2": [10, 10, 10, 10, 20, 20, 20],
+    "FAIL_SPALLING_1": [20, 20, 20, 20, 20],
+    "FAIL_SPALLING_2": [20, 20, 10],
 }
 
 

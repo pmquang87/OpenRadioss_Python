@@ -4943,3 +4943,75 @@ class MaterialCdpm2:
             "dflag": self.dflag, "dtype": self.dtype, "ireg": self.ireg,
             "wf": self.wf, "wf1": self.wf1, "ft1": self.ft1, "efc": self.efc
         }
+
+
+@dataclass
+class FailHcDsse:
+    """/FAIL/HC_DSSE (M162): Hosford-Coulomb & DSSE ductile failure and fracture model.
+
+    Fortran origin: ``starter/source/materials/fail/hc_dsse/hm_read_fail_hc_dsse.F``.
+    """
+    mat_id: int
+    ifail_sh: int = 1
+    pthkf: float = 0.0
+    iflag: int = 0
+    a_hc_dsse: float = 0.0
+    b_hc_dsse: float = 0.0
+    c_hc_dsse: float = 0.0
+    d_hc_dsse: float = 0.0
+    n_f: float = 1.0
+    fail_id: int = 0
+
+
+@dataclass
+class FailMullins:
+    """/FAIL/MULLINS_OR or /FAIL/MULLINS (M162): Mullins effect hyperelastic damage model.
+
+    Fortran origin: ``starter/source/materials/fail/mullins_or/hm_read_fail_mullins_or.F``.
+    """
+    mat_id: int
+    coefr: float = 1.0
+    beta: float = 0.0
+    coefm: float = 0.0
+    fail_id: int = 0
+
+
+@dataclass
+class FailSnconnect:
+    """/FAIL/SNCONNECT (M162): S-N curve based connector fatigue failure model.
+
+    Fortran origin: ``starter/source/materials/fail/snconnect/hm_read_fail_snconnect.F``.
+    """
+    mat_id: int
+    alpha_0: float = 0.0
+    beta_0: float = 0.0
+    alpha_f: float = 0.0
+    beta_f: float = 0.0
+    ifail_so: int = 0
+    isym: int = 0
+    fct_idon: int = 0
+    fct_idos: int = 0
+    fct_idfn: int = 0
+    fct_idfs: int = 0
+    xscale_0: float = 1.0
+    xscale_f: float = 1.0
+    area_scale: float = 1.0
+    fail_id: int = 0
+
+
+@dataclass
+class FailSpalling:
+    """/FAIL/SPALLING (M162): Spalling / hydrodynamic tensile cutoff failure model.
+
+    Fortran origin: ``starter/source/materials/fail/spalling/hm_read_fail_spalling.F90``.
+    """
+    mat_id: int
+    d1: float = 0.0
+    d2: float = 0.0
+    d3: float = 0.0
+    d4: float = 0.0
+    d5: float = 0.0
+    epsilon_dot_0: float = 1.0e-20
+    p_min: float = -1.0e20
+    ifail_so: int = 1
+    fail_id: int = 0
