@@ -632,9 +632,12 @@ class LagmulType7:
             best_d, best_pt, best_w = _narrow(x, ni, seg)
             
         loc = np.searchsorted(handler.nodes, ni)
-        if handler.itf.igap == 1:
-            gap = np.clip(handler.gap_s[loc] + handler.gap_m[srow],
-                          handler.gap_min, handler.gap_max)
+        if handler.itf.igap in (1, 2, 3):
+            gap = handler.gap_s[loc] + handler.gap_m[srow]
+            if handler.itf.igap == 3:
+                mesh_gap = handler.gap_s_l[loc] + handler.gap_m_l[srow]
+                gap = np.minimum(gap, mesh_gap)
+            gap = np.clip(gap, handler.gap_min, handler.gap_max)
         else:
             gap = np.full(len(ni), handler.gap_const)
             
