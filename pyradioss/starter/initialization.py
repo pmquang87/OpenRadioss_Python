@@ -541,6 +541,12 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
             continue
         mat.params[kind.replace("/", "_").lower() + "_note"] = params
 
+    # M147: /MAT/VISC_PLAS attachment (deck order free)
+    for mat_id, vp in model.visc_plas_models.items():
+        mat = model.materials.get(mat_id)
+        if mat is not None:
+            mat.visc_plas = vp
+
     # /FAIL/JOHNSON D5 needs the material's adiabatic temperature (M6)
     for mat in model.materials.values():
         if (mat.fail is not None and mat.fail.type == "JOHNSON"

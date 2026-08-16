@@ -1255,7 +1255,22 @@ LAYOUTS: Dict[str, List[int]] = {
     "NONLOCAL_1": [20, 20, 20, 20],
     "FRIC_ORIENT_1": [10, 10, 20, 20, 20, 20],
     "INISPHCEL_1": [20, 20, 20, 20, 20, 20],
+
+    # FAIL and VISC_PLAS (M147)
+    "FAIL_EMC_1": [20, 20, 20, 20],
+    "FAIL_EMC_2": [20, 20],
+    "FAIL_FABRIC_1": [20, 20, 20, 20, 10, 10],
+    "FAIL_SPALLING_1": [20, 20, 20, 20, 20],
+    "FAIL_SPALLING_2": [20, 20, 10],
+    "FAIL_TBUTCHER_1": [20, 20, 20, 10, 10, 10, 10],
+    "FAIL_TBUTCHER_2": [20, 20, 20],
+    "FAIL_WIERZBICKI_1": [20, 20, 20, 20, 20],
+    "FAIL_WIERZBICKI_2": [20, 10, 10, 10],
+    "FAIL_WILKINS_1": [20, 20, 20, 20],
+    "FAIL_WILKINS_2": [10, 10],
+    "VISC_PLAS_1": [20, 20],
 }
+
 
 
 def cut(raw: str, key: str) -> List[str]:

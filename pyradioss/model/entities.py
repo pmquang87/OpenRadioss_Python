@@ -4061,4 +4061,17 @@ class IniSphCel:
     vz: float = 0.0
 
 
+@dataclass
+class MaterialViscPlas:
+    """/MAT/VISC_PLAS or /VISC/PLAS (M147): Frequency independent damping model.
+
+    Fortran origin: ``starter/source/materials/visc/hm_read_visc_plas.F90``.
+    """
+    mat_id: int
+    title: str = ""
+    lsd_g: float = 0.0
+    lsdyna_sigf: float = 0.0
+
+
+
 

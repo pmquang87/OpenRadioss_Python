@@ -78,6 +78,7 @@ from .entities import (
     ErefElement, IniCrack, PropRivet, PropXelem, AdmeshControl,
     PreloadBolt, LoadHydro,
     Func2DTable, NonlocalModel, FricOrient, IniSphCel,
+    MaterialViscPlas,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -862,6 +863,7 @@ class Model:
         self.fric_orients: Dict[int, FricOrient] = {}         # /FRIC_ORIENT (M145)
         self.ini_sphcels: Dict[int, IniSphCel] = {}           # /INISPHCEL (M145)
         self.implicit_flag: bool = False                      # /IMPLICIT (M145)
+        self.visc_plas_models: Dict[int, MaterialViscPlas] = {} # /MAT/VISC_PLAS (M147)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
