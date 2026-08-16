@@ -1098,6 +1098,8 @@ class Interface:
     fscale_gap: float = 1.0 # type 23: gap scale
     idel: int = 0         # type 23: element deletion flag
     tol: float = 0.0      # type 12: tolerance
+    visc: float = 0.0     # type 9: damping viscosity
+    radius: float = 0.0   # type 17: contact radius
 
 
 @dataclass
@@ -3965,4 +3967,38 @@ class AdmeshControl:
     h_min: float = 0.0
     h_max: float = 0.0
     part_id: int = 0
+
+
+@dataclass
+class PreloadBolt:
+    """/PRELOAD/BOLT or /SECT/BOLT (M144): Bolt section pretensioning model.
+
+    Fortran origin: ``starter/source/loads/bolt/sboltini.F``.
+    """
+    id: int
+    title: str = ""
+    sect_id: int = 0
+    sens_id: int = 0
+    fct_id: int = 0
+    preload: float = 0.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+    torque: float = 0.0
+    speed: float = 0.0
+
+
+@dataclass
+class LoadHydro:
+    """/LOAD/HYDRO or /LOAD/HYDROSTATIC (M144): Hydrostatic surface pressure loading.
+
+    Fortran origin: ``starter/source/loads/general/hm_read_load.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    density: float = 0.0
+    z_free: float = 0.0
+    gravity: float = 9.81
+    sens_id: int = 0
+
 

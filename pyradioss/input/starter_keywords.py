@@ -5969,6 +5969,33 @@ def read_load(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_laser(block, model, log)
     elif sub in ("PRELOAD_AXIAL", "PRELOAD"):
         read_preload_axial(block, model, log)
+    elif sub == "BOLT":
+        read_preload_bolt(block, model, log)
+    elif sub in ("HYDRO", "HYDROSTATIC"):
+        from ..model.entities import LoadHydro
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/LOAD/HYDRO/{block.user_id}: missing data card", block.source)
+            return
+        lid = block.user_id or 1
+        if block.fixed:
+            f = cards[0].cut("LOAD_HYDRO_1")
+            surf_id = _ival(f[0]) if len(f) > 0 else 0
+            sens_id = _ival(f[1]) if len(f) > 1 else 0
+            density = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            z_free = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            gravity = _fval(f[4], 9.81) if len(f) > 4 and _fval(f[4]) > 0.0 else 9.81
+        else:
+            t = cards[0].tokens()
+            surf_id = int(float(t[0])) if len(t) > 0 else 0
+            sens_id = int(float(t[1])) if len(t) > 1 else 0
+            density = float(t[2]) if len(t) > 2 else 0.0
+            z_free = float(t[3]) if len(t) > 3 else 0.0
+            gravity = float(t[4]) if len(t) > 4 else 9.81
+        model.load_hydros[lid] = LoadHydro(
+            id=lid, title=title, surf_id=surf_id, density=density,
+            z_free=z_free, gravity=gravity, sens_id=sens_id
+        )
     elif sub in ("GRAV", "GRAVITY"):
         # /LOAD/GRAV (M135)
         title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -7965,8 +7992,8 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 lagmul=True, title=title))
             return
 
-    if kind not in ("TYPE1", "TYPE2", "TYPE3", "TYPE5", "TYPE6", "TYPE7", "TYPE8", "TYPE10", "TYPE11",
-                    "TYPE12", "TYPE14", "TYPE15", "TYPE18", "TYPE19", "TYPE20", "TYPE21", "TYPE22",
+    if kind not in ("TYPE1", "TYPE2", "TYPE3", "TYPE5", "TYPE6", "TYPE7", "TYPE8", "TYPE9", "TYPE10", "TYPE11",
+                    "TYPE12", "TYPE14", "TYPE15", "TYPE16", "TYPE17", "TYPE18", "TYPE19", "TYPE20", "TYPE21", "TYPE22",
                     "TYPE23", "TYPE24", "TYPE25", "SUB", "GUIDED_CABLE"):
         log.warning(f"/INTER/{kind} not ported", block.source)
         return
@@ -8564,6 +8591,79 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             id=block.user_id, type=23, surf_id=surf_m, surf_id1=surf_s,
             istf=istf, igap=igap, ibag=ibag, idel=idel, fscale_gap=fscale_gap,
             gap_max=gap_max, title=title
+        ))
+        return
+
+    if kind == "TYPE9":
+        if block.fixed:
+            f0 = cards[0].cut("INTER_TYPE9_1")
+            surf1 = _ival(f0[0]) if len(f0) > 0 else 0
+            surf2 = _ival(f0[1]) if len(f0) > 1 else 0
+            f1 = cards[1].cut("INTER_TYPE9_2") if len(cards) > 1 else []
+            fric = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+            gap = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+            tstart = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+            tstop = _fval(f1[3], 1.0e30) if len(f1) > 3 and _fval(f1[3]) > 0.0 else 1.0e30
+            visc = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+        else:
+            t0 = cards[0].tokens()
+            surf1 = int(float(t0[0])) if len(t0) > 0 else 0
+            surf2 = int(float(t0[1])) if len(t0) > 1 else 0
+            t1 = cards[1].tokens() if len(cards) > 1 else []
+            fric = float(t1[0]) if len(t1) > 0 else 0.0
+            gap = float(t1[1]) if len(t1) > 1 else 0.0
+            tstart = float(t1[2]) if len(t1) > 2 else 0.0
+            tstop = float(t1[3]) if len(t1) > 3 else 1.0e30
+            visc = float(t1[4]) if len(t1) > 4 else 0.0
+        model.interfaces.append(Interface(
+            id=block.user_id, type=9, surf_id=surf1, surf_id1=surf2,
+            fric=fric, gap=gap, tstart=tstart, tstop=tstop, visc=visc, title=title
+        ))
+        return
+
+    if kind == "TYPE16":
+        if block.fixed:
+            f0 = cards[0].cut("INTER_TYPE16_1")
+            surf1 = _ival(f0[0]) if len(f0) > 0 else 0
+            surf2 = _ival(f0[1]) if len(f0) > 1 else 0
+            stfac = _fval(f0[2], 1.0) if len(f0) > 2 and _fval(f0[2]) > 0.0 else 1.0
+        else:
+            t0 = cards[0].tokens()
+            surf1 = int(float(t0[0])) if len(t0) > 0 else 0
+            surf2 = int(float(t0[1])) if len(t0) > 1 else 0
+            stfac = float(t0[2]) if len(t0) > 2 else 1.0
+        model.interfaces.append(Interface(
+            id=block.user_id, type=16, surf_id=surf1, surf_id1=surf2,
+            stfac=stfac, title=title
+        ))
+        return
+
+    if kind == "TYPE17":
+        if block.fixed:
+            f0 = cards[0].cut("INTER_TYPE17_1")
+            surf1 = _ival(f0[0]) if len(f0) > 0 else 0
+            surf2 = _ival(f0[1]) if len(f0) > 1 else 0
+            stfac, fric, gap, radius = 1.0, 0.0, 0.0, 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f1 = cards[1].cut("INTER_TYPE17_2")
+                stfac = _fval(f1[0], 1.0) if len(f1) > 0 and _fval(f1[0]) > 0.0 else 1.0
+                fric = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                gap = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+                radius = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+        else:
+            t0 = cards[0].tokens()
+            surf1 = int(float(t0[0])) if len(t0) > 0 else 0
+            surf2 = int(float(t0[1])) if len(t0) > 1 else 0
+            stfac, fric, gap, radius = 1.0, 0.0, 0.0, 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                stfac = float(t1[0]) if len(t1) > 0 else 1.0
+                fric = float(t1[1]) if len(t1) > 1 else 0.0
+                gap = float(t1[2]) if len(t1) > 2 else 0.0
+                radius = float(t1[3]) if len(t1) > 3 else 0.0
+        model.interfaces.append(Interface(
+            id=block.user_id, type=17, surf_id=surf1, surf_id1=surf2,
+            stfac=stfac, fric=fric, gap=gap, radius=radius, title=title
         ))
         return
 
@@ -9323,6 +9423,28 @@ def read_def_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             'idel': _iv_from(vals, 3), 'itied': _iv_from(vals, 4), 'ishape': _iv_from(vals, 5),
             'irs': _iv_from(vals, 6), 'iedge': _iv_from(vals, 7),
             'ipen': _iv_from(vals, 8) if len(vals) > 8 else 0,
+        }
+    elif subtype == "TYPE9":
+        vals = c.cut("DEF_INTER_9") if block.fixed else c.tokens()
+        entry = {
+            'istf': _iv_from(vals, 0), 'igap': _iv_from(vals, 1), 'ibag': _iv_from(vals, 2),
+            'idel': _iv_from(vals, 3), 'inactiv': _iv_from(vals, 4),
+        }
+    elif subtype == "TYPE10":
+        vals = c.cut("DEF_INTER_10") if block.fixed else c.tokens()
+        entry = {
+            'istf': _iv_from(vals, 0), 'multimp': _iv_from(vals, 1), 'idel10': _iv_from(vals, 2),
+            'itied': _iv_from(vals, 3),
+        }
+    elif subtype == "TYPE16":
+        vals = c.cut("DEF_INTER_16") if block.fixed else c.tokens()
+        entry = {
+            'istf': _iv_from(vals, 0), 'igap': _iv_from(vals, 1),
+        }
+    elif subtype == "TYPE17":
+        vals = c.cut("DEF_INTER_17") if block.fixed else c.tokens()
+        entry = {
+            'istf': _iv_from(vals, 0), 'igap': _iv_from(vals, 1), 'iform': _iv_from(vals, 2),
         }
     else:  # TYPE25 or default
         vals = c.cut("DEF_INTER_25") if block.fixed else c.tokens()
@@ -11089,7 +11211,7 @@ def read_pfluid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_preload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/PRELOAD/preload_ID`` (M103)::
+    """``/PRELOAD/preload_ID`` (M103, M144)::
 
         card 1:  title
         card 2:  sect_ID  sens_ID  Itype  fct_ID  Preload  Tstart  Tstop
@@ -11097,6 +11219,9 @@ def read_preload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub == "AXIAL":
         read_preload_axial(block, model, log)
+        return
+    if sub in ("BOLT", "SECT_BOLT"):
+        read_preload_bolt(block, model, log)
         return
 
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -11188,6 +11313,38 @@ def read_preload_axial(block: KeywordBlock, model: Model, log: MessageLog) -> No
     model.preload_axials[block.user_id] = PreloadAxial(
         id=block.user_id, title=title, grpart_id=set_id, sens_id=sens_id,
         fct_id=fct_id, preload=preload, damp=damp,
+    )
+
+
+def read_preload_bolt(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PRELOAD/BOLT/preload_ID`` or ``/SECT/BOLT/id`` (M144): Bolt preload definition."""
+    from ..model.entities import PreloadBolt
+    bid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    sect_id, sens_id, fct_id = 0, 0, 0
+    preload, tstart, tstop, torque, speed = 0.0, 0.0, 1.0e30, 0.0, 0.0
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("PRELOAD_BOLT_1")
+            sect_id = _ival(f[0]) if len(f) > 0 else 0
+            sens_id = _ival(f[1]) if len(f) > 1 else 0
+            fct_id = _ival(f[2]) if len(f) > 2 else 0
+            preload = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            tstart = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+            tstop = _fval(f[5], 1.0e30) if len(f) > 5 and _fval(f[5]) > 0.0 else 1.0e30
+            torque = _fval(f[6], 0.0) if len(f) > 6 else 0.0
+        else:
+            toks = cards[0].tokens()
+            sect_id = int(float(toks[0])) if len(toks) > 0 else 0
+            sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+            fct_id = int(float(toks[2])) if len(toks) > 2 else 0
+            preload = float(toks[3]) if len(toks) > 3 else 0.0
+            tstart = float(toks[4]) if len(toks) > 4 else 0.0
+            tstop = float(toks[5]) if len(toks) > 5 else 1.0e30
+            torque = float(toks[6]) if len(toks) > 6 else 0.0
+    model.preload_bolts[bid] = PreloadBolt(
+        id=bid, title=title, sect_id=sect_id, sens_id=sens_id, fct_id=fct_id,
+        preload=preload, tstart=tstart, tstop=tstop, torque=torque, speed=speed
     )
 
 

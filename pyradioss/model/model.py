@@ -76,6 +76,7 @@ from .entities import (
     MaterialPlasZeril, MaterialPlasBodne, MaterialViscProny, MaterialThermStress, DampStiff,
     AirbagInjector, AirbagVenthole,
     ErefElement, IniCrack, PropRivet, PropXelem, AdmeshControl,
+    PreloadBolt, LoadHydro,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -832,6 +833,8 @@ class Model:
         self.prop_rivets: Dict[int, PropRivet] = {}           # /PROP/RIVET (M143)
         self.prop_xelems: Dict[int, PropXelem] = {}           # /PROP/XELEM (M143)
         self.admesh_controls: Dict[int, AdmeshControl] = {}   # /ADMESH/* (M143)
+        self.preload_bolts: Dict[int, PreloadBolt] = {}       # /PRELOAD/BOLT (M144)
+        self.load_hydros: Dict[int, LoadHydro] = {}           # /LOAD/HYDRO (M144)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

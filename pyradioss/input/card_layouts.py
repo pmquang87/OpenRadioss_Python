@@ -1233,6 +1233,21 @@ LAYOUTS: Dict[str, List[int]] = {
     "PROP_RIVET_1": [20, 20, 20, 20],
     "PROP_XELEM_1": [10, 10, 20],
     "ADMESH_PART_1": [10, 10, 20, 20],
+
+    # INTERFACES TYPE9/10/16/17, BOLT PRELOAD & HYDRO LOADS (M144)
+    "INTER_TYPE9_1": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+    "INTER_TYPE9_2": [20, 20, 20, 20, 20],
+    "INTER_TYPE10_1": [10, 10, 10, 10, 10, 10, 10, 10],
+    "INTER_TYPE10_2": [20, 20, 20, 20, 20],
+    "INTER_TYPE16_1": [10, 10, 10, 10, 10, 10],
+    "INTER_TYPE17_1": [10, 10, 10, 10, 10, 10],
+    "INTER_TYPE17_2": [20, 20, 20, 20],
+    "DEF_INTER_9": [10, 10, 10, 10, 10, 10],
+    "DEF_INTER_10": [10, 10, 10, 10],
+    "DEF_INTER_16": [10, 10, 10, 10],
+    "DEF_INTER_17": [10, 10, 10, 10],
+    "PRELOAD_BOLT_1": [10, 10, 10, 10, 20, 20, 20],
+    "LOAD_HYDRO_1": [10, 10, 20, 20, 20, 20],
 }
 
 
