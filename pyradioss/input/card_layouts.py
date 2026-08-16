@@ -1476,6 +1476,14 @@ LAYOUTS: Dict[str, List[int]] = {
     "LOAD_PRESSURE_3": [10, 10, 20],
     "ALE_MAT_1": [20],
     "EULER_MAT_1": [20],
+    # M164: EBCS/NRF, BCS/WALL, SLIPRING/SHELL
+    "EBCS_NRF_1": [10],
+    "EBCS_NRF_2": [20, 20],
+    "BCS_WALL_1": [10, 10],
+    "BCS_WALL_2": [20, 20],
+    "SLIPRING_SHELL_1": [10, 10, 10, 10, 10, 20, 20],
+    "SLIPRING_SHELL_2": [10, 10, 20, 20, 20, 20],
+    "SLIPRING_SHELL_3": [10, 10, 20, 20, 20, 20],
 }
 
 

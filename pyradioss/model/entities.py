@@ -5061,3 +5061,105 @@ class EulerMat:
     mat_id: int
     euler_flrd: float = 0.0
 
+
+@dataclass
+class EbcsNrf:
+    """/EBCS/NRF or /BCS/NRF (M164): Non-reflecting frontier boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/ebcs/hm_read_ebcs_nrf.F``.
+    """
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    tcar_p: float = 0.0
+    tcar_vf: float = 0.0
+
+
+@dataclass
+class BcsWall:
+    """/BCS/WALL (M164): Sliding wall boundary condition.
+
+    Fortran origin: ``starter/source/boundary_conditions/hm_read_bcs_wall.F90``.
+    """
+    id: int
+    title: str = ""
+    set_id: int = 0
+    sensor_id: int = 0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+
+    @property
+    def grnod_id(self) -> int:
+        return self.set_id
+
+    @property
+    def sens_id(self) -> int:
+        return self.sensor_id
+
+
+@dataclass
+class EbcsLoad:
+    """/EBCS/{PRES|VEL|INLET} (M164): Eulerian boundary condition loading directive.
+
+    Fortran origin: ``starter/source/boundary_conditions/ebcs/read_ebcs.F``.
+    """
+    id: int
+    kind: str = ""
+    title: str = ""
+    surf_id: int = 0
+    fct_id: int = 0
+    sens_id: int = 0
+    dir: str = ""
+    v0: float = 0.0
+    p0: float = 0.0
+    scale: float = 1.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+    imat: int = 0
+    rho: float = 0.0
+    ener: float = 0.0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+
+
+@dataclass
+class SlipringShell:
+    """/SLIPRING/SHELL (M164): 2D shell slipring seatbelt element.
+
+    Fortran origin: ``starter/source/elements/seatbelts/hm_read_slipring_shell.F``.
+    """
+    id: int
+    title: str = ""
+    el_set1: int = 0
+    el_set2: int = 0
+    node_set: int = 0
+    sens_id: int = 0
+    flow_flag: int = 0
+    a: float = 0.0
+    ed_factor: float = 0.0
+    fct_id1: int = 0
+    fct_id2: int = 0
+    fricd: float = 0.0
+    fric_d: float = 0.0
+    xscale1: float = 1.0
+    yscale2: float = 1.0
+    xscale2: float = 1.0
+    fct_id3: int = 0
+    fct_id4: int = 0
+    frics: float = 0.0
+    fric_s: float = 0.0
+    xscale3: float = 1.0
+    yscale4: float = 1.0
+    xscale4: float = 1.0
+
+    def __post_init__(self):
+        if self.fricd != 0.0 and self.fric_d == 0.0:
+            self.fric_d = self.fricd
+        elif self.fric_d != 0.0 and self.fricd == 0.0:
+            self.fricd = self.fric_d
+        if self.frics != 0.0 and self.fric_s == 0.0:
+            self.fric_s = self.frics
+        elif self.fric_s != 0.0 and self.frics == 0.0:
+            self.frics = self.fric_s
+

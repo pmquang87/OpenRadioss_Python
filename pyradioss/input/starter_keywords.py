@@ -13128,6 +13128,19 @@ def read_bcs_nrf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         toks = c.tokens()
         grnod_id = int(float(toks[0])) if len(toks) > 0 else 0
     model.bcs_nrf[block.user_id] = BcsNrf(id=block.user_id, title=title, grnod_id=grnod_id)
+    if len(cards) > 1 and not cards[1].is_blank:
+        from ..model.entities import EbcsNrf
+        if block.fixed:
+            f1 = cards[1].cut("EBCS_NRF_2")
+            tcar_p = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+            tcar_vf = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        else:
+            t1 = cards[1].tokens()
+            tcar_p = float(t1[0]) if len(t1) > 0 else 0.0
+            tcar_vf = float(t1[1]) if len(t1) > 1 else 0.0
+        model.ebcs_nrfs[block.user_id] = EbcsNrf(
+            id=block.user_id, title=title, surf_id=grnod_id, tcar_p=tcar_p, tcar_vf=tcar_vf
+        )
 
 
 def read_bcs_wall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -13165,7 +13178,7 @@ def read_bcs_wall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             tstart = float(toks2[0]) if len(toks2) > 0 else 0.0
             tstop = float(toks2[1]) if len(toks2) > 1 else 1.0e20
     model.bcs_walls[block.user_id] = BcsWall(
-        id=block.user_id, title=title, grnod_id=grnod_id, sens_id=sensor_id,
+        id=block.user_id, title=title, set_id=grnod_id, sensor_id=sensor_id,
         tstart=tstart, tstop=tstop
     )
 

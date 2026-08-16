@@ -941,6 +941,9 @@ class Model:
         self.load_pressures: Dict[int, LoadPressure] = {}          # /LOAD/PRESSURE (M163)
         self.ale_mats: Dict[int, AleMat] = {}                      # /ALE/MAT (M163)
         self.euler_mats: Dict[int, EulerMat] = {}                  # /EULER/MAT (M163)
+        self.ebcs_nrfs: Dict[int, EbcsNrf] = {}                    # /EBCS/NRF, /BCS/NRF (M164)
+        self.bcs_walls: Dict[int, BcsWall] = {}                    # /BCS/WALL (M164)
+        self.slipring_shells: Dict[int, SlipringShell] = {}        # /SLIPRING/SHELL (M164)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
