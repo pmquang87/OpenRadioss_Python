@@ -73,6 +73,7 @@ from .entities import (
     FailPuck, FailSahraei, FailSyazwan, FailTab2, FailGene1,
     FailNxt, FailLadDama, FailInievo,
     FailHcDsse, FailMullins, FailSnconnect, FailSpalling,
+    DfsDetcord, LoadPressure, AleMat, EulerMat,
     Stack, StackPly,
     LagmulGlobal, GearConstraint, RackConstraint, DiffConstraint,
     WaveShaper, DetLine, DetCirc, IniMap3D, SetGeneric,
@@ -936,6 +937,10 @@ class Model:
         self.fail_mullins: Dict[int, FailMullins] = {}              # /FAIL/MULLINS (M162)
         self.fail_snconnects: Dict[int, FailSnconnect] = {}        # /FAIL/SNCONNECT (M162)
         self.fail_spallings: Dict[int, FailSpalling] = {}          # /FAIL/SPALLING (M162)
+        self.dfs_detcords: Dict[int, DfsDetcord] = {}              # /DFS/DETCORD (M163)
+        self.load_pressures: Dict[int, LoadPressure] = {}          # /LOAD/PRESSURE (M163)
+        self.ale_mats: Dict[int, AleMat] = {}                      # /ALE/MAT (M163)
+        self.euler_mats: Dict[int, EulerMat] = {}                  # /EULER/MAT (M163)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

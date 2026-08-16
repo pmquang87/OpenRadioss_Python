@@ -1469,6 +1469,13 @@ LAYOUTS: Dict[str, List[int]] = {
     "FAIL_SNCONNECT_2": [10, 10, 10, 10, 20, 20, 20],
     "FAIL_SPALLING_1": [20, 20, 20, 20, 20],
     "FAIL_SPALLING_2": [20, 20, 10],
+    # M163: DFS/DETCORD, LOAD/PRESSURE, ALE/MAT, EULER/MAT
+    "DFS_DETCORD_1": [10, 20, 20, 10, 10],
+    "LOAD_PRESSURE_1": [10, 10, 10, 10, 10, 10],
+    "LOAD_PRESSURE_2": [10, 10, 20, 20],
+    "LOAD_PRESSURE_3": [10, 10, 20],
+    "ALE_MAT_1": [20],
+    "EULER_MAT_1": [20],
 }
 
 

@@ -2858,15 +2858,24 @@ class LoadPfluid:
 
 @dataclass
 class LoadPressure:
-    """/LOAD/PRESSURE (M112): Surface pressure loading.
+    """/LOAD/PRESSURE & /LOAD/PFLUID (M112/M163): Hydroforming / directional pressure load.
 
     Fortran origin: ``starter/source/loads/general/load_pressure/hm_read_load_pressure.F``.
     """
     id: int
     title: str = ""
     surf_id: int = 0
-    fct_id: int = 0
+    iload: int = 1
     sens_id: int = 0
+    inorm: int = 1
+    direction: str = ""
+    skew_id: int = 0
+    fct_id: int = 0
+    xscale_p: float = 1.0
+    yscale_p: float = 1.0
+    inter_ids: List[int] = field(default_factory=list)
+    gap_shifts: List[float] = field(default_factory=list)
+    # Legacy fields
     scale: float = 1.0
     tstart: float = 0.0
     tstop: float = 1.0e30
@@ -5015,3 +5024,40 @@ class FailSpalling:
     p_min: float = -1.0e20
     ifail_so: int = 1
     fail_id: int = 0
+
+
+@dataclass
+class DfsDetcord:
+    """/DFS/DETCORD (M163): Detonation cord ignition model.
+
+    Fortran origin: ``starter/source/initial_conditions/detonation/read_dfs_detcord.F``.
+    """
+    id: int
+    title: str = ""
+    grnd_id: int = 0
+    t_det: float = 0.0
+    v_cj: float = 0.0
+    iopt: int = 3
+    mat_id: int = 0
+    nodes: List[int] = field(default_factory=list)
+
+
+@dataclass
+class AleMat:
+    """/ALE/MAT (M163): ALE material volume fraction and formulation directives.
+
+    Fortran origin: ``starter/source/materials/ale/read_ale_mat.F``.
+    """
+    mat_id: int
+    ale_flrd: float = 0.0
+
+
+@dataclass
+class EulerMat:
+    """/EULER/MAT (M163): Euler material volume fraction and formulation directives.
+
+    Fortran origin: ``starter/source/materials/ale/read_euler_mat.F``.
+    """
+    mat_id: int
+    euler_flrd: float = 0.0
+

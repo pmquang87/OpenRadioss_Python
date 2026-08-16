@@ -1128,11 +1128,42 @@ def _read_mat_modifier(kind: str, block: KeywordBlock, model: Model,
     PARSE-ONLY NOTES (M37): remembered on the material, no physics.
     Other subkeywords (/ALE/GRID, /ALE/BCS ...) stay unported."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if sub != "MAT":
+    if sub not in ("MAT", "VOID", "MAT_VOID"):
         log.warning(f"/{kind}/{sub} not ported — block skipped",
                     block.source)
         return
     mat_reader.read_mat_note(f"{kind}/MAT", block, model, log)
+
+    mat_id = block.user_id if block.user_id is not None else 0
+    if len(block.parts) > 2:
+        try:
+            mat_id = int(block.parts[-1])
+        except ValueError:
+            pass
+
+    title, cards = _title_and_data(block)
+    if kind == "ALE":
+        from ..model.entities import AleMat
+        flrd = 0.0
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f = cards[0].cut("ALE_MAT_1")
+                flrd = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            else:
+                toks = cards[0].tokens()
+                flrd = float(toks[0]) if len(toks) > 0 else 0.0
+        model.ale_mats[mat_id] = AleMat(mat_id=mat_id, ale_flrd=flrd)
+    elif kind == "EULER":
+        from ..model.entities import EulerMat
+        flrd = 0.0
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f = cards[0].cut("EULER_MAT_1")
+                flrd = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            else:
+                toks = cards[0].tokens()
+                flrd = float(toks[0]) if len(toks) > 0 else 0.0
+        model.euler_mats[mat_id] = EulerMat(mat_id=mat_id, euler_flrd=flrd)
 
 
 def read_ale(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -7291,11 +7322,16 @@ def read_load_centri(block: KeywordBlock, model: Model, log: MessageLog) -> None
 
 
 def read_load_pressure(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/LOAD/PRESSURE/load_ID`` (M112): Surface pressure loading::
+    """``/LOAD/PRESSURE/load_ID`` or ``/LOAD/PFLUID/load_ID`` (M112/M163): Surface pressure loading.
 
-        card 1:  title
-        card 2:  surf_ID  fct_ID  sens_ID
-        card 3:  Scale  Tstart  Tstop
+    Fortran origin: ``starter/source/loads/general/load_pressure/hm_read_load_pressure.F``.
+    Standard card format (M163 / radioss2022):
+      Card 1:  surf_ID  Iload  sens_ID  Inorm  Direction  skew_ID
+      Card 2:  fct_ID   (blank)  xscale_p  yscale_p
+      Card 3+: Inter_ID (blank)  Gap_shift_i
+    Legacy card format (M112):
+      Card 1:  surf_ID  fct_ID  sens_ID
+      Card 2:  Scale    Tstart  Tstop
     """
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
@@ -7303,39 +7339,110 @@ def read_load_pressure(block: KeywordBlock, model: Model, log: MessageLog) -> No
         return
     from ..model.entities import LoadPressure
 
+    inter_ids: List[int] = []
+    gap_shifts: List[float] = []
+
     if block.fixed:
         f1 = cards[0].cut("LOAD_PRESSURE_1")
-        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
-        fct_id = _ival(f1[1]) if len(f1) > 1 else 0
-        sens_id = _ival(f1[2]) if len(f1) > 2 else 0
+        is_legacy = False
+        if len(cards) > 1 and not cards[1].is_blank:
+            c1_raw20 = cards[1].raw[:20].strip()
+            if "." in c1_raw20 and not f1[3].strip() and not f1[4].strip() and not f1[5].strip():
+                is_legacy = True
 
-        scale = 1.0
-        tstart = 0.0
-        tstop = 1.0e30
+        if is_legacy:
+            surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+            fct_id = _ival(f1[1]) if len(f1) > 1 else 0
+            sens_id = _ival(f1[2]) if len(f1) > 2 else 0
+            scale = _fval(cards[1].raw[:20], 1.0)
+            tstart = _fval(cards[1].raw[20:40], 0.0)
+            tstop = _fval(cards[1].raw[40:60], 1.0e30)
+            model.load_pressures[block.user_id] = LoadPressure(
+                id=block.user_id, title=title, surf_id=surf_id, fct_id=fct_id,
+                sens_id=sens_id, scale=scale, yscale_p=scale, tstart=tstart, tstop=tstop
+            )
+            return
+
+        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+        iload = _ival(f1[1], 1) if len(f1) > 1 and f1[1].strip() else 1
+        sens_id = _ival(f1[2]) if len(f1) > 2 else 0
+        inorm = _ival(f1[3], 1) if len(f1) > 3 and f1[3].strip() else 1
+        direction = f1[4].strip() if len(f1) > 4 else ""
+        skew_id = _ival(f1[5]) if len(f1) > 5 else 0
+
+        fct_id = 0
+        xscale_p = 1.0
+        yscale_p = 1.0
         if len(cards) > 1 and not cards[1].is_blank:
             f2 = cards[1].cut("LOAD_PRESSURE_2")
-            scale = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
-            tstart = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
-            tstop = _fval(f2[2], 1.0e30) if len(f2) > 2 else 1.0e30
+            fct_id = _ival(f2[0]) if len(f2) > 0 else 0
+            xscale_p = _fval(f2[2], 1.0) if len(f2) > 2 and f2[2].strip() else 1.0
+            yscale_p = _fval(f2[3], 1.0) if len(f2) > 3 and f2[3].strip() else 1.0
+
+        for c in cards[2:]:
+            if c.is_blank:
+                continue
+            f3 = c.cut("LOAD_PRESSURE_3")
+            iid = _ival(f3[0]) if len(f3) > 0 else 0
+            gshift = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+            if iid > 0:
+                inter_ids.append(iid)
+                gap_shifts.append(gshift)
     else:
         t1 = cards[0].tokens()
-        surf_id = int(float(t1[0])) if len(t1) > 0 else 0
-        fct_id = int(float(t1[1])) if len(t1) > 1 else 0
-        sens_id = int(float(t1[2])) if len(t1) > 2 else 0
-
-        scale = 1.0
-        tstart = 0.0
-        tstop = 1.0e30
-        if len(cards) > 1 and not cards[1].is_blank:
+        if len(t1) == 3 and len(cards) > 1 and len(cards[1].tokens()) == 3 and "." in cards[1].tokens()[0]:
+            surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+            fct_id = int(float(t1[1])) if len(t1) > 1 else 0
+            sens_id = int(float(t1[2])) if len(t1) > 2 else 0
             t2 = cards[1].tokens()
             scale = float(t2[0]) if len(t2) > 0 else 1.0
             tstart = float(t2[1]) if len(t2) > 1 else 0.0
             tstop = float(t2[2]) if len(t2) > 2 else 1.0e30
+            model.load_pressures[block.user_id] = LoadPressure(
+                id=block.user_id, title=title, surf_id=surf_id, fct_id=fct_id,
+                sens_id=sens_id, scale=scale, yscale_p=scale, tstart=tstart, tstop=tstop
+            )
+            return
+
+        surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+        iload = int(float(t1[1])) if len(t1) > 1 else 1
+        sens_id = int(float(t1[2])) if len(t1) > 2 else 0
+        inorm = int(float(t1[3])) if len(t1) > 3 else 1
+        direction = t1[4] if len(t1) > 4 else ""
+        skew_id = int(float(t1[5])) if len(t1) > 5 else 0
+
+        fct_id = 0
+        xscale_p = 1.0
+        yscale_p = 1.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            fct_id = int(float(t2[0])) if len(t2) > 0 else 0
+            xscale_p = float(t2[1]) if len(t2) > 1 else 1.0
+            yscale_p = float(t2[2]) if len(t2) > 2 else 1.0
+
+        for c in cards[2:]:
+            if c.is_blank:
+                continue
+            t3 = c.tokens()
+            iid = int(float(t3[0])) if len(t3) > 0 else 0
+            gshift = float(t3[1]) if len(t3) > 1 else 0.0
+            if iid > 0:
+                inter_ids.append(iid)
+                gap_shifts.append(gshift)
+
+    if xscale_p == 0.0:
+        xscale_p = 1.0
+    if yscale_p == 0.0:
+        yscale_p = 1.0
 
     model.load_pressures[block.user_id] = LoadPressure(
-        id=block.user_id, title=title, surf_id=surf_id, fct_id=fct_id,
-        sens_id=sens_id, scale=scale, tstart=tstart, tstop=tstop
+        id=block.user_id, title=title, surf_id=surf_id, iload=iload,
+        sens_id=sens_id, inorm=inorm, direction=direction, skew_id=skew_id,
+        fct_id=fct_id, xscale_p=xscale_p, yscale_p=yscale_p,
+        inter_ids=inter_ids, gap_shifts=gap_shifts,
+        scale=yscale_p
     )
+
 
 
 
@@ -8210,9 +8317,14 @@ def read_pload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     fct_IDT sens_ID <blank> Ascale_x Fscale_Y`` — the scale is column
     81-100's Fscale_Y (blank -> 1.0), Ascale_x warned when set.
     """
-    if len(block.parts) > 1 and block.parts[1].upper() == "PCYL":
-        read_pcyl(block, model, log)
-        return
+    if len(block.parts) > 1:
+        sub = block.parts[1].upper()
+        if sub == "PCYL":
+            read_pcyl(block, model, log)
+            return
+        elif sub in ("PRESSURE", "PRESS", "PFLUID"):
+            read_load_pressure(block, model, log)
+            return
 
     if block.fixed:
         title, cards = _fixed_data(block)
@@ -16501,7 +16613,7 @@ def read_dfs(block: KeywordBlock, model: Model,
         read_laser(block, model, log)
         return
     det_id = block.user_id if block.user_id is not None else 0
-    title, cards = ("", block.cards) if block.fixed else _title_and_data(block)
+    title, cards = _title_and_data(block)
 
     # Check for NODE/SET/GRNOD variants — parse NODE-based formats directly
     has_node = any(p.upper() in ("NODE",) for p in block.parts[2:]
@@ -16591,6 +16703,30 @@ def read_dfs(block: KeywordBlock, model: Model,
                     mat_id = int(float(toks3[1])) if len(toks3) > 1 else 0
             dl = DetLine(id=det_id, node1=node1, node2=node2, t0=tdet, mat_id=mat_id)
             model.det_lines[det_id] = dl
+            return
+
+        elif sub in ("DETCORD",):
+            # /DFS/DETCORD/NODE/det_id (M163): ordered list of node numbers (cards)
+            from ..model.entities import DfsDetcord
+            node_ids = []
+            for c in cards:
+                if c.is_blank:
+                    continue
+                if block.fixed:
+                    for k in range(0, min(len(c.raw), 100), 10):
+                        chunk = c.raw[k:k+10].strip()
+                        if chunk:
+                            try:
+                                node_ids.append(int(float(chunk)))
+                            except ValueError:
+                                pass
+                else:
+                    for tok in c.tokens():
+                        try:
+                            node_ids.append(int(float(tok)))
+                        except ValueError:
+                            pass
+            model.dfs_detcords[det_id] = DfsDetcord(id=det_id, title=title, nodes=node_ids)
             return
 
     if sub in ("DETPOINT", "DETPOIN"):
@@ -16723,8 +16859,35 @@ def read_dfs(block: KeywordBlock, model: Model,
             id=det_id, title=title, center=center, axis=axis, radius=r, t0=t0, dvel=dvel
         )
 
+    elif sub == "DETCORD":
+        # /DFS/DETCORD/id (M163)
+        # Card 1: grnd_ID T_det V_cj Iopt mat_ID
+        from ..model.entities import DfsDetcord
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f = cards[0].cut("DFS_DETCORD_1")
+                grnd_id = _ival(f[0]) if len(f) > 0 else 0
+                t_det = _fval(f[1]) if len(f) > 1 else 0.0
+                v_cj = _fval(f[2]) if len(f) > 2 else 0.0
+                iopt = _ival(f[3], 3) if len(f) > 3 and f[3].strip() else 3
+                mat_id = _ival(f[4]) if len(f) > 4 else 0
+            else:
+                toks = cards[0].tokens()
+                grnd_id = int(float(toks[0])) if len(toks) > 0 else 0
+                t_det = float(toks[1]) if len(toks) > 1 else 0.0
+                v_cj = float(toks[2]) if len(toks) > 2 else 0.0
+                iopt = int(float(toks[3])) if len(toks) > 3 else 3
+                mat_id = int(float(toks[4])) if len(toks) > 4 else 0
+        else:
+            grnd_id, t_det, v_cj, iopt, mat_id = 0, 0.0, 0.0, 3, 0
+        if iopt == 0:
+            iopt = 3
+        model.dfs_detcords[det_id] = DfsDetcord(
+            id=det_id, title=title, grnd_id=grnd_id, t_det=t_det, v_cj=v_cj, iopt=iopt, mat_id=mat_id
+        )
+
     else:
-        log.warning(f"/DFS/{sub} not ported (DETPOINT, DETPLAN, WAVE_SHAPER, DETLINE, DETCIRC supported)",
+        log.warning(f"/DFS/{sub} not ported (DETPOINT, DETPLAN, WAVE_SHAPER, DETLINE, DETCIRC, DETCORD supported)",
                     block.source)
 
 
