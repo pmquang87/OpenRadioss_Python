@@ -1428,6 +1428,104 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             target_dict[nid] = val
                         except ValueError:
                             pass
+            elif key == "DAMP":
+                # /DAMP, /DAMP/DT (M148): fredamp.F, lecdamp.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "DT":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if v:
+                            ec.damp_dt = v[0]
+                else:
+                    for c in block.cards:
+                        if c.is_blank:
+                            continue
+                        v = c.floats()
+                        if len(v) >= 2:
+                            if ec.damp_alpha == 0.0 and ec.damp_beta == 0.0:
+                                ec.damp_alpha = v[0]
+                                ec.damp_beta = v[1]
+                            elif ec.damp_tstart == 0.0 and ec.damp_tstop == 0.0:
+                                ec.damp_tstart = v[0]
+                                ec.damp_tstop = v[1]
+                        elif len(v) == 1 and ec.damp_grpart == 0:
+                            ec.damp_grpart = int(v[0])
+            elif key == "MASS":
+                # /MASS/RESET (M148): freform.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "RESET" or not sub:
+                    ec.mass_reset = True
+            elif key in ("SENSOR", "SENS"):
+                # /SENSOR/RESET, /SENS/RESET (M148): freform.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "RESET":
+                    if not block.cards:
+                        ec.sensor_reset.append(0)
+                    else:
+                        for c in block.cards:
+                            if c.is_blank:
+                                continue
+                            for tok in c.tokens():
+                                try:
+                                    sid = int(float(tok))
+                                    ec.sensor_reset.append(sid)
+                                except ValueError:
+                                    pass
+                        if not ec.sensor_reset:
+                            ec.sensor_reset.append(0)
+            elif key == "VIPER":
+                # /VIPER, /VIPER/ON (M148): freform.F
+                ec.viper_active = True
+            elif key == "MADYMO":
+                # /MADYMO/ON, /MADYMO/ON2, /MADYMO/MPP (M148): freform.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
+                ec.madymo_mode = sub
+            elif key in ("RAD2R", "RAD2RAD"):
+                # /RAD2R/ON, /RAD2RAD/ON (M148): freform.F
+                ec.rad2r_active = True
+            elif key == "FVMBAG":
+                # /FVMBAG/REMESH, /FVMBAG/MODIF (M148): frefvbag.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "REMESH"
+                if sub in ("REMESH", "REMES"):
+                    ec.fvbag_remesh = True
+                elif sub in ("MODIF", "MODIFY"):
+                    ec.fvbag_modif = True
+            elif key == "PERF":
+                # /PERF/SORT1, /PERF/SORT2, /PERF/SORT3 (M148): freform.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "SORT1"
+                if sub == "SORT1":
+                    ec.perf_sort = 1
+                elif sub == "SORT2":
+                    ec.perf_sort = 2
+                elif sub == "SORT3":
+                    ec.perf_sort = 0
+            elif key == "DT1TET10":
+                # /DT1TET10 (M148): freform.F
+                ec.dt1tet10 = 1
+                if block.cards:
+                    v = block.cards[0].floats()
+                    if v:
+                        ec.dt1tet10 = int(v[0])
+            elif key == "DTTSH":
+                # /DTTSH (M148): freform.F
+                ec.dttsh = True
+            elif key in ("REPORT", "REPOR"):
+                # /REPORT, /REPORT/DT (M148): freform.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "DT":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if v:
+                            ec.report_dt = v[0]
+                else:
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if v:
+                            ec.report_freq = int(v[0])
+            elif key in ("NEGVOL", "NEGVO"):
+                # /NEGVOL/STOP, /NEGVOL/DEL (M148): freform.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "STOP"
+                ec.negvol_action = sub
             else:
                 log.warning(f"engine keyword /{'/'.join(block.parts)} "
                             f"not ported — ignored", block.source)

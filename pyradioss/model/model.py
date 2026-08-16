@@ -169,6 +169,28 @@ class EngineControls:
     abf_dt_write: float = 0.0
     inivel_engine: Dict[str, Dict[int, float]] = field(default_factory=dict)         # /INIVEL (M146)
 
+    # M148: Engine Directives Suite II
+    damp_dt: float = 0.0                                                             # /DAMP/DT (M148)
+    damp_alpha: float = 0.0                                                          # /DAMP mass damping factor (M148)
+    damp_beta: float = 0.0                                                           # /DAMP stiffness damping factor (M148)
+    damp_tstart: float = 0.0                                                         # /DAMP start time (M148)
+    damp_tstop: float = 0.0                                                          # /DAMP stop time (M148)
+    damp_grpart: int = 0                                                             # /DAMP target part group (M148)
+    mass_reset: bool = False                                                         # /MASS/RESET (M148)
+    sensor_reset: List[int] = field(default_factory=list)                           # /SENSOR/RESET, /SENS/RESET (M148)
+    viper_active: bool = False                                                       # /VIPER, /VIPER/ON (M148)
+    madymo_mode: str = ""                                                            # /MADYMO/ON, /MADYMO/ON2, /MADYMO/MPP (M148)
+    rad2r_active: bool = False                                                       # /RAD2RAD/ON, /RAD2R/ON (M148)
+    fvbag_remesh: bool = False                                                       # /FVMBAG/REMESH (M148)
+    fvbag_modif: bool = False                                                        # /FVMBAG/MODIF (M148)
+    perf_sort: int = 1                                                               # /PERF/SORT1 (1), /PERF/SORT2 (2), /PERF/SORT3 (0) (M148)
+    dt1tet10: int = 0                                                                # /DT1TET10 iterative subcycling factor (M148)
+    dttsh: bool = False                                                              # /DTTSH thick shell dt flag (M148)
+    report_freq: int = 0                                                             # /REPORT listing cycles (M148)
+    report_dt: float = 0.0                                                           # /REPORT/DT output period (M148)
+    negvol_action: str = ""                                                          # /NEGVOL/STOP, /NEGVOL/DEL (M148)
+
+
 
     # ------------------------------------------------------------------
     # /IMPL implicit-static control (M8). ``implicit`` switches the run

@@ -153,6 +153,7 @@ real history is 41 milestones. One line each:
 | M145 | Add 2D bivariate function tables (/FUNC_2D, /FUNC2D), non-local damage regularization models (/NONLOCAL), anisotropic friction orientations (/FRIC_ORIENT), SPH cell initial states (/INISPHCEL), and implicit analysis mode (/IMPLICIT, /THPART) |
 | M146 | Add engine dynamic control directives & solver controls suite (/INTER, /DEL, /DLI7, /KEREL, /DYREL, /THERMAL, /HEAT, /ABF, /INIVEL) |
 | M147 | Add failure models (/FAIL/EMC, /FAIL/FABRIC, /FAIL/SPALLING, /FAIL/TBUTCHER, /FAIL/WIERZBICKI, /FAIL/WILKINS) and material damping sub-model (/MAT/VISC_PLAS, /VISC/PLAS) |
+| M148 | Add engine directives suite II (/DAMP, /MASS/RESET, /SENSOR/RESET, /VIPER, /MADYMO, /RAD2R, /FVMBAG, /PERF, /DT1TET10, /DTTSH, /REPORT, /NEGVOL) |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
