@@ -48,6 +48,7 @@ from .entities import (
     AnalyGlobal, UpwindGlobal, CaaControl,
     Gauge, Cluster, ExtLink, FxBody, IniGrav, IniMap1D, IniMap2D, IniStateFile,
     MonvolPres, MonvolGas, MonvolCommu1, MonvolLFluid, LeakMat,
+    Activ,
     MonvolAirbag, MonvolCommu, MonvolPart,
     AleGrid, AleLink, AleSolver, AleClose,
     Retractor, Slipring, UserWindow,

@@ -1211,6 +1211,10 @@ def read_heat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             bcs_type=bcs_type, tval=tval, funct_id=funct_id,
             scale=scale, sens_id=sens_id
         )
+    elif sub in ("CONVEC", "CONVECTION"):
+        read_convec(block, model, log)
+    elif sub in ("RADIATION", "RAD"):
+        read_radiation(block, model, log)
     elif sub in ("SOLVER", "GLOBAL", "INIT"):
         pass  # Global heat / thermal solver parameters parsed cleanly
     else:
@@ -4965,8 +4969,32 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_bcs_wall(block, model, log)
         return
 
-    if sub == "PROPELLANT":
-        read_ebcs_propellant(block, model, log)
+    if sub in ("FLUX", "TEMP"):
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or (block.fixed and cards[0].is_blank):
+            log.error(f"/BCS/{sub}/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f = cards[0].cut("BCS_FLUX_1")
+            grnod_id = _ival(f[0]) if len(f) > 0 else 0
+            sens_id = _ival(f[1]) if len(f) > 1 else 0
+            funct_id = _ival(f[2]) if len(f) > 2 else 0
+            scale = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        else:
+            t = cards[0].tokens()
+            grnod_id = int(float(t[0])) if len(t) > 0 else 0
+            sens_id = int(float(t[1])) if len(t) > 1 else 0
+            funct_id = int(float(t[2])) if len(t) > 2 else 0
+            scale = float(t[3]) if len(t) > 3 else 0.0
+        model.thermal_bcs[block.user_id] = ThermalBcs(
+            id=block.user_id,
+            kind=sub,
+            title=title,
+            grnod_id=grnod_id,
+            sensor_id=sens_id,
+            funct_id=funct_id,
+            scale=scale,
+        )
         return
 
     if sub == "CYCLIC":
@@ -5341,6 +5369,8 @@ def read_inivel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         else _title_and_data(block)
     if not cards:
         log.error(f"/INIVEL/{block.user_id}: missing data card", block.source)
+    if kind in ("ROTVEL", "ROT_VEL"):
+        read_inirotvel(block, model, log)
         return
     if kind == "TRA":
         if block.fixed:
@@ -5585,51 +5615,53 @@ def read_inivel_node(block: KeywordBlock, model: Model, log: MessageLog) -> None
 
 
 def read_grav(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/GRAV/grav_ID``::
+    """``/GRAV/grav_ID`` or ``/GRAV`` (M37, M151)::
 
         card 1:  title
-        card 2:  fct_ID   Dir(X|Y|Z)   grnod_ID   Fscale
+        card 2:  fct_ID   Dir(X|Y|Z)   skew_ID   sens_ID   grnod_ID   <blank>   Ascale_x   Fscale_Y
 
       acceleration a(t) = Fscale * f(t) applied along Dir to the group
       (grnod_ID = 0 → all nodes). Fscale defaults to 1.
-
-    Fixed dialect (cfg LOADS/grav.cfg radioss51; M37): ``fct_IDT DIR
-    skew_ID sens_ID grnod_ID <blank> Ascale_x Fscale_Y`` — grnod sits in
-    columns 41-50 and the scale is card-column 81-100's Fscale_Y (blank
-    -> 1.0); skew/sensor/Ascale_x are accepted + warned when set.
     """
+    gid = block.user_id if block.user_id is not None else 1
     if block.fixed:
         title, cards = _fixed_data(block)
         if not cards or cards[0].is_blank:
-            log.error(f"/GRAV/{block.user_id}: missing data card",
-                      block.source)
+            log.error(f"/GRAV/{gid}: missing data card", block.source)
             return
         f = cards[0].cut("GRAV")
         fct = _ival(f[0])
         direction = _direction(f[1])
-        grnod = _ival(f[4])
-        scale = _fval(f[7], 1.0)
-        scale = scale if scale != 0.0 else 1.0
-        _warn_ignored(log, f"/GRAV/{block.user_id}", block.source,
-                      [("skew_ID", f[2]), ("sens_ID", f[3]),
-                       ("Ascale_x", f[6] if _fval(f[6]) not in (0.0, 1.0)
-                        else "")])
+        skew_id = _ival(f[2]) if len(f) > 2 else 0
+        sens_id = _ival(f[3]) if len(f) > 3 else 0
+        grnod = _ival(f[4]) if len(f) > 4 else 0
+        scale_x = _fval(f[6], 1.0) if len(f) > 6 else 1.0
+        scale_y = _fval(f[7], 1.0) if len(f) > 7 else 1.0
+        if scale_x == 0.0:
+            scale_x = 1.0
+        if scale_y == 0.0:
+            scale_y = 1.0
         model.gravity.append(Gravity(
-            id=block.user_id, grnod_id=grnod or None, funct_id=fct,
-            direction=direction, scale=scale, title=title))
+            id=gid, grnod_id=grnod or None, funct_id=fct,
+            direction=direction, scale=scale_y, title=title,
+            skew_id=skew_id, sens_id=sens_id, scale_x=scale_x,
+        ))
         return
     title, cards = _title_and_data(block)
     if not cards:
-        log.error(f"/GRAV/{block.user_id}: missing data card", block.source)
+        log.error(f"/GRAV/{gid}: missing data card", block.source)
         return
     t = cards[0].tokens()
-    fct = int(t[0])
-    direction = _direction(t[1])
+    fct = int(t[0]) if len(t) > 0 else 0
+    direction = _direction(t[1]) if len(t) > 1 else np.array([0.0, 0.0, 1.0])
     grnod = int(t[2]) if len(t) > 2 else 0
     scale = float(t[3]) if len(t) > 3 else 1.0
+    if scale == 0.0:
+        scale = 1.0
     model.gravity.append(Gravity(
-        id=block.user_id, grnod_id=grnod or None, funct_id=fct,
-        direction=direction, scale=scale, title=title))
+        id=gid, grnod_id=grnod or None, funct_id=fct,
+        direction=direction, scale=scale, title=title,
+    ))
 
 
 def read_cload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -12410,10 +12442,11 @@ def read_fxbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_inigrav(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INIGRAV/inigrav_ID`` (M104)::
+    """``/INIGRAV/inigrav_ID`` (M104, M151)::
 
         card 1:  title
         card 2:  grpart_ID  surf_ID  grav_ID  [gap]  Pref  Bx  By  Bz
+        (or 2 cards: card 2: grpart_ID surf_ID grav_ID; card 3: Pref Bx By Bz)
     """
     inigrav_id = block.user_id if block.user_id is not None else 1
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -12421,24 +12454,54 @@ def read_inigrav(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/INIGRAV/{inigrav_id}: missing data card", block.source)
         return
 
+    grpart_id = 0
+    surf_id = 0
+    grav_id = 0
+    pref = 0.0
+    bx = 0.0
+    by = 0.0
+    bz = 0.0
+
     if block.fixed:
-        f = cards[0].cut("INIGRAV_1")
-        grpart_id = _ival(f[0]) if len(f) > 0 else 0
-        surf_id = _ival(f[1]) if len(f) > 1 else 0
-        grav_id = _ival(f[2]) if len(f) > 2 else 0
-        pref = _fval(f[4], 0.0) if len(f) > 4 else 0.0
-        bx = _fval(f[5], 0.0) if len(f) > 5 else 0.0
-        by = _fval(f[6], 0.0) if len(f) > 6 else 0.0
-        bz = _fval(f[7], 0.0) if len(f) > 7 else 0.0
+        if len(cards) >= 2:
+            f1 = cards[0].cut("INIGRAV_1_SHORT")
+            grpart_id = _ival(f1[0]) if len(f1) > 0 else 0
+            surf_id = _ival(f1[1]) if len(f1) > 1 else 0
+            grav_id = _ival(f1[2]) if len(f1) > 2 else 0
+            f2 = cards[1].cut("INIGRAV_2")
+            pref = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            bx = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            by = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            bz = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+        else:
+            f = cards[0].cut("INIGRAV_1")
+            grpart_id = _ival(f[0]) if len(f) > 0 else 0
+            surf_id = _ival(f[1]) if len(f) > 1 else 0
+            grav_id = _ival(f[2]) if len(f) > 2 else 0
+            pref = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+            bx = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+            by = _fval(f[6], 0.0) if len(f) > 6 else 0.0
+            bz = _fval(f[7], 0.0) if len(f) > 7 else 0.0
     else:
-        toks = cards[0].tokens()
-        grpart_id = int(float(toks[0])) if len(toks) > 0 else 0
-        surf_id = int(float(toks[1])) if len(toks) > 1 else 0
-        grav_id = int(float(toks[2])) if len(toks) > 2 else 0
-        pref = float(toks[3]) if len(toks) > 3 else 0.0
-        bx = float(toks[4]) if len(toks) > 4 else 0.0
-        by = float(toks[5]) if len(toks) > 5 else 0.0
-        bz = float(toks[6]) if len(toks) > 6 else 0.0
+        if len(cards) >= 2:
+            t1 = cards[0].tokens()
+            grpart_id = int(float(t1[0])) if len(t1) > 0 else 0
+            surf_id = int(float(t1[1])) if len(t1) > 1 else 0
+            grav_id = int(float(t1[2])) if len(t1) > 2 else 0
+            t2 = cards[1].tokens()
+            pref = float(t2[0]) if len(t2) > 0 else 0.0
+            bx = float(t2[1]) if len(t2) > 1 else 0.0
+            by = float(t2[2]) if len(t2) > 2 else 0.0
+            bz = float(t2[3]) if len(t2) > 3 else 0.0
+        else:
+            toks = cards[0].tokens()
+            grpart_id = int(float(toks[0])) if len(toks) > 0 else 0
+            surf_id = int(float(toks[1])) if len(toks) > 1 else 0
+            grav_id = int(float(toks[2])) if len(toks) > 2 else 0
+            pref = float(toks[3]) if len(toks) > 3 else 0.0
+            bx = float(toks[4]) if len(toks) > 4 else 0.0
+            by = float(toks[5]) if len(toks) > 5 else 0.0
+            bz = float(toks[6]) if len(toks) > 6 else 0.0
 
     model.ini_gravs[inigrav_id] = IniGrav(
         id=inigrav_id, title=title, grpart_id=grpart_id, surf_id=surf_id,

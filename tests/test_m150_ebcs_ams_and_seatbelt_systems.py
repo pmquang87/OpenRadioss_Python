@@ -315,3 +315,34 @@ def test_cross_reference_validation(tmp_path):
     resolve_node_groups(model, log)
     check_model(model, log)
     assert len(log.errors) == 0
+
+
+def test_cross_reference_missing_entities(tmp_path):
+    """Test that missing referenced surfaces/sensors/curves/etc. produce errors."""
+    deck = (
+        "/BEGIN\n"
+        "CROSS REF MISSING\n"
+        "/EBCS/PRES/1\n"
+        "EBCS Pres missing surf & funct\n"
+        "99 340.0 88 1.0 77 1.0 66 1.0 0.1 1.0 2.0\n"
+        "/BCS/WALL/1\n"
+        "Wall BCS missing grnod & sensor\n"
+        "99 88 0.0 1.0\n"
+        "/AMS\n"
+        "99\n"
+        "/SEATBELT/1\n"
+        "Missing Retractor and Slipring\n"
+        "99 88 1 2\n"
+        "/END\n"
+    )
+    model, log = _parse_starter(tmp_path, deck)
+    resolve_materials(model, log)
+    build_element_groups(model, log)
+    resolve_node_groups(model, log)
+    check_model(model, log)
+    assert len(log.errors) > 0
+    err_msgs = " ".join(log.errors)
+    assert "/EBCS/PRES/1" in err_msgs
+    assert "/BCS/WALL/1" in err_msgs
+    assert "/AMS" in err_msgs
+    assert "/SEATBELT/1" in err_msgs

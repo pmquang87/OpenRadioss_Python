@@ -469,6 +469,9 @@ class Gravity:
     direction: np.ndarray    # (3,) unit vector
     scale: float = 1.0
     title: str = ""
+    skew_id: int = 0
+    sens_id: int = 0
+    scale_x: float = 1.0
 
 
 @dataclass
@@ -1539,6 +1542,9 @@ class ElementActivation:
     iform: int = 1
     tstart: float = 0.0
     tstop: float = 1.0e30
+
+
+Activ = ElementActivation
 
 
 @dataclass

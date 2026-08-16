@@ -1079,17 +1079,10 @@ def check_model(model: Model, log: MessageLog) -> None:
             if sid > 0 and sid not in getattr(model, "sliprings", {}) and sid not in getattr(model, "slipring_shells", {}):
                 log.error(f"/SEATBELT/{sbid}: slipring {sid} not defined", "CROSS REF")
 
-
-
-
-
-
-
-
-
-
-
-
-
+    for bwid, bw in getattr(model, "bcs_walls", {}).items():
+        if bw.grnod_id > 0 and bw.grnod_id not in model.node_groups and bw.grnod_id not in getattr(model, "node_sets", {}):
+            log.error(f"/BCS/WALL/{bwid}: node group {bw.grnod_id} not defined", "CROSS REF")
+        if bw.sensor_id > 0 and bw.sensor_id not in sensor_ids:
+            log.error(f"/BCS/WALL/{bwid}: sensor {bw.sensor_id} not defined", "CROSS REF")
 
 
