@@ -1420,6 +1420,16 @@ LAYOUTS: Dict[str, List[int]] = {
     "FAIL_XFEM_JOHNS_2": [20, 10],
     "FAIL_XFEM_TBUTC_1": [20, 20, 20, 10, 10],
     "FAIL_XFEM_TBUTC_2": [20, 20],
+    # M160: DFS/DET*/NODE, INTER/HERTZ/TYPE17, INTER/TYPE1
+    "DFS_DETPOINT_NODE": [60, 20, 10, 10],
+    "DFS_DETPLAN_NODE_1": [60, 20, 10, 10],
+    "DFS_DETPLAN_NODE_2": [90, 10],
+    "DFS_DETLINE_NODE_1": [90, 10],
+    "DFS_DETLINE_NODE_2": [90, 10],
+    "DFS_DETLINE_NODE_3": [20, 10],
+    "INTER_HERTZ_17_1": [10, 10],
+    "INTER_HERTZ_17_2": [20],
+    "INTER_TYPE1_1": [10, 10],
 }
 
 

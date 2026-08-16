@@ -1050,6 +1050,7 @@ class Interface:
     istf: int = 0
     itied: int = 0        # tied option flag (16, 17)
     lagmul: bool = False  # True if /INTER/LAGMUL
+    hertz: bool = False   # True if /INTER/HERTZ
     igap: int = 0
     stfac: float = 1.0
     fric: float = 0.0
@@ -1243,6 +1244,7 @@ class DetonatorPoint:
     tdet: float = 0.0
     mat_id: int = 0
     grnod_id: int = 0
+    node_id: int = 0
 
 
 @dataclass
@@ -1261,6 +1263,8 @@ class DetonatorPlane:
     nx: float = 0.0
     ny: float = 0.0
     nz: float = 0.0
+    p_id: int = 0
+    n_id: int = 0
 
 
 @dataclass
@@ -3921,6 +3925,9 @@ class DetLine:
     p2: tuple[float, float, float] = (0.0, 0.0, 0.0)
     t0: float = 0.0
     dvel: float = 0.0
+    node1: int = 0
+    node2: int = 0
+    mat_id: int = 0
 
 
 @dataclass

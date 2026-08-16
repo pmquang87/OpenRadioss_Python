@@ -9520,6 +9520,36 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("SUB", "SUBINTER"):
         read_subinter(block, model, log)
         return
+    if kind == "HERTZ":
+        subtype = block.parts[2].upper() if len(block.parts) > 2 else ""
+        if subtype not in ("TYPE17", "17"):
+            log.warning(f"/INTER/HERTZ/{subtype} not ported", block.source)
+            return
+        title, cards = _title_and_data(block)
+        if not cards:
+            log.error(f"/INTER/HERTZ/{subtype}/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f0 = cards[0].cut("INTER_HERTZ_17_1")
+            grbric_id1 = _ival(f0[0]) if len(f0) > 0 else 0
+            grbric_id2 = _ival(f0[1]) if len(f0) > 1 else 0
+            fric = 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f1 = cards[1].cut("INTER_HERTZ_17_2")
+                fric = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        else:
+            t0 = cards[0].tokens()
+            grbric_id1 = int(float(t0[0])) if len(t0) > 0 else 0
+            grbric_id2 = int(float(t0[1])) if len(t0) > 1 else 0
+            fric = 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                fric = float(t1[0]) if len(t1) > 0 else 0.0
+        model.interfaces.append(Interface(
+            id=block.user_id, type=17, grbric_id1=grbric_id1, grbric_id2=grbric_id2,
+            fric=fric, hertz=True, title=title
+        ))
+        return
     if kind == "LAGMUL":
         subtype = block.parts[2].upper() if len(block.parts) > 2 else ""
         if subtype not in ("TYPE2", "TYPE7", "TYPE11", "TYPE16", "TYPE17", "SPOTWELD", "SURF", "PART", "TIED", "BEAM", "EDGE"):
@@ -16333,6 +16363,7 @@ def read_dfs(block: KeywordBlock, model: Model,
         card 1:  XP  YP  ZP  TDET  mat_IDDET          (%20lg*4 %10d)
         card 2:  NX  NY  NZ                            (%20lg*3)
     """
+    from ..model.entities import DetLine
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub == "LASER":
         read_laser(block, model, log)
@@ -16340,15 +16371,11 @@ def read_dfs(block: KeywordBlock, model: Model,
     det_id = block.user_id if block.user_id is not None else 0
     title, cards = ("", block.cards) if block.fixed else _title_and_data(block)
 
-    # Check for NODE/SET/GRNOD variants — warn and parse what we can
+    # Check for NODE/SET/GRNOD variants — parse NODE-based formats directly
     has_node = any(p.upper() in ("NODE",) for p in block.parts[2:]
                    if not p.lstrip("-").isdigit())
     has_set = any(p.upper() in ("SET", "GRNOD") for p in block.parts[2:]
                   if not p.lstrip("-").isdigit())
-    if has_node:
-        log.warning(f"/DFS/{sub}/NODE not fully ported — node coordinate "
-                    f"lookup deferred", block.source)
-        return
     if has_set:
         log.warning(f"/DFS/{sub}/SET not fully ported — node group "
                     f"expansion deferred", block.source)
@@ -16357,6 +16384,82 @@ def read_dfs(block: KeywordBlock, model: Model,
     if not cards:
         log.error(f"/DFS/{sub}/{det_id}: missing data card", block.source)
         return
+
+    if has_node:
+        if sub in ("DETPOINT", "DETPOIN"):
+            # /DFS/DETPOINT/NODE/det_id: %60s%20lg%10d%10d: rad_det_time, rad_det_materialid, rad_det_node1
+            if block.fixed:
+                f = cards[0].cut("DFS_DETPOINT_NODE")
+                tdet = _fval(f[1]) if len(f) > 1 else 0.0
+                mat_id = _ival(f[2]) if len(f) > 2 else 0
+                node_id1 = _ival(f[3]) if len(f) > 3 else 0
+            else:
+                toks = cards[0].tokens()
+                tdet = float(toks[0]) if len(toks) > 0 else 0.0
+                mat_id = int(float(toks[1])) if len(toks) > 1 else 0
+                node_id1 = int(float(toks[2])) if len(toks) > 2 else 0
+            dp = DetonatorPoint(id=det_id, tdet=tdet, mat_id=mat_id, node_id=node_id1)
+            model.det_points.append(dp)
+            return
+
+        elif sub in ("DETPLAN", "DETPLANE"):
+            # /DFS/DETPLAN/NODE/det_id:
+            # Card 1: %60s%20lg%10d%10d: rad_det_time, rad_det_materialid, rad_det_node1
+            # Card 2: %90s%10d: rad_det_node2
+            if block.fixed:
+                f1 = cards[0].cut("DFS_DETPLAN_NODE_1")
+                tdet = _fval(f1[1]) if len(f1) > 1 else 0.0
+                mat_id = _ival(f1[2]) if len(f1) > 2 else 0
+                p_id = _ival(f1[3]) if len(f1) > 3 else 0
+                n_id = 0
+                if len(cards) > 1 and not cards[1].is_blank:
+                    f2 = cards[1].cut("DFS_DETPLAN_NODE_2")
+                    n_id = _ival(f2[1]) if len(f2) > 1 else 0
+            else:
+                toks1 = cards[0].tokens()
+                tdet = float(toks1[0]) if len(toks1) > 0 else 0.0
+                mat_id = int(float(toks1[1])) if len(toks1) > 1 else 0
+                p_id = int(float(toks1[2])) if len(toks1) > 2 else 0
+                n_id = 0
+                if len(cards) > 1 and not cards[1].is_blank:
+                    toks2 = cards[1].tokens()
+                    n_id = int(float(toks2[0])) if len(toks2) > 0 else 0
+            dp = DetonatorPlane(id=det_id, tdet=tdet, mat_id=mat_id, p_id=p_id, n_id=n_id)
+            model.det_planes.append(dp)
+            return
+
+        elif sub in ("DETLINE",):
+            # /DFS/DETLINE/NODE/det_id:
+            # Card 1: %90s%10d: rad_det_node1
+            # Card 2: %90s%10d: rad_det_node2
+            # Card 3: %20lg%10d: rad_det_time, rad_det_materialid
+            if block.fixed:
+                f1 = cards[0].cut("DFS_DETLINE_NODE_1")
+                node1 = _ival(f1[1]) if len(f1) > 1 else 0
+                node2 = 0
+                if len(cards) > 1 and not cards[1].is_blank:
+                    f2 = cards[1].cut("DFS_DETLINE_NODE_2")
+                    node2 = _ival(f2[1]) if len(f2) > 1 else 0
+                tdet, mat_id = 0.0, 0
+                if len(cards) > 2 and not cards[2].is_blank:
+                    f3 = cards[2].cut("DFS_DETLINE_NODE_3")
+                    tdet = _fval(f3[0]) if len(f3) > 0 else 0.0
+                    mat_id = _ival(f3[1]) if len(f3) > 1 else 0
+            else:
+                toks1 = cards[0].tokens()
+                node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+                node2 = 0
+                if len(cards) > 1 and not cards[1].is_blank:
+                    toks2 = cards[1].tokens()
+                    node2 = int(float(toks2[0])) if len(toks2) > 0 else 0
+                tdet, mat_id = 0.0, 0
+                if len(cards) > 2 and not cards[2].is_blank:
+                    toks3 = cards[2].tokens()
+                    tdet = float(toks3[0]) if len(toks3) > 0 else 0.0
+                    mat_id = int(float(toks3[1])) if len(toks3) > 1 else 0
+            dl = DetLine(id=det_id, node1=node1, node2=node2, t0=tdet, mat_id=mat_id)
+            model.det_lines[det_id] = dl
+            return
 
     if sub in ("DETPOINT", "DETPOIN"):
         # Card 1: XDET YDET ZDET TDET mat_IDDET
@@ -18713,6 +18816,14 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "BTH_TRIA": read_th,
     "CTH_TRIA": read_th,
     "DTH_TRIA": read_th,
+    "INTER_HERTZ_TYPE17": read_inter,
+    "INTER_HERTZ": read_inter,
+    "INTER_LAGMUL_TYPE16": read_inter,
+    "INTER_LAGMUL_TYPE17": read_inter,
+    "INTER_LAGMUL_TYPE2": read_inter,
+    "DFS_DETPOINT_NODE": read_dfs,
+    "DFS_DETPLAN_NODE": read_dfs,
+    "DFS_DETLINE_NODE": read_dfs,
 }
 
 
