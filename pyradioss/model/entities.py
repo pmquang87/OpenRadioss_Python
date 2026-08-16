@@ -1028,6 +1028,8 @@ class Interface:
             1 = variable gap per pair from element sizes:
             g = g_s(node) + g_m(segment), floored by ``gap`` (Gap_min)
             and optionally capped by ``gap_max``.
+            2 = scaled variable gap (scaled by ``fscale_gap``).
+            3 = mesh-size limited variable gap.
     stfac : stiffness scale factor — or the stiffness itself for istf=1.
     fric  : Coulomb friction coefficient.
     gap   : constant gap / Gap_min (0 = auto from main element sizes).
@@ -1053,6 +1055,8 @@ class Interface:
     fric: float = 0.0
     gap: float = 0.0
     gap_max: float = 0.0  # igap=1 cap, 0 = no cap
+    fscale_gap: float = 1.0   # Igap 2/3: gap scale factor (Fscale_gap, default 1.0)
+    percent_mesh_size: float = 0.4  # Igap 3: mesh-size gap fraction (default 0.4)
     gap_max_m: float = 0.0 # gap_max_m for TYPE24
     dsearch: float = 0.0  # type 2: projection search distance (0 = auto)
     spotflag: int = 0     # type 2: tied rotational kinematics flag (1: tie rotations, 2: shell rotations)
