@@ -80,7 +80,8 @@ def check_model(model: Model, log: MessageLog) -> None:
     if model.numnod == 0:
         log.error("model has no nodes", "MODEL CHECK")
     if not any(True for _ in model.element_groups()):
-        log.error("model has no elements", "MODEL CHECK")
+        log.warning("model has no elements (deck may use only unported "
+                    "element types)", "MODEL CHECK")
 
     # material law vs element family compatibility (fail in the Starter
     # with a clear message instead of a NotImplementedError mid-run)
@@ -301,7 +302,10 @@ def check_model(model: Model, log: MessageLog) -> None:
                 log.error(f"{who}: unknown node 1 {sens.node_id1}", "CROSS REF")
 
     for am in model.admas:
-        need_group(am.grnod_id, f"/ADMAS/{am.id}")
+        # mass_type 0/1: grnod_id is a node group; 2: surface; 3/4: part
+        # group; 6/7: single part.  Only types 0/1 cross-ref node_groups.
+        if am.mass_type in (0, 1):
+            need_group(am.grnod_id, f"/ADMAS/{am.id}")
     for rb in model.rbodies:
         need_group(rb.grnod_id, f"/{rb.kind}/{rb.id}")
         if rb.master_id not in model._id2idx:
