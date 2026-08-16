@@ -1248,6 +1248,13 @@ LAYOUTS: Dict[str, List[int]] = {
     "DEF_INTER_17": [10, 10, 10, 10],
     "PRELOAD_BOLT_1": [10, 10, 10, 10, 20, 20, 20],
     "LOAD_HYDRO_1": [10, 10, 20, 20, 20, 20],
+
+    # FUNC_2D, NONLOCAL, FRIC_ORIENT, INISPHCEL (M145)
+    "FUNC_2D_1": [10, 10],
+    "FUNC_2D_2": [20, 20, 20],
+    "NONLOCAL_1": [20, 20, 20, 20],
+    "FRIC_ORIENT_1": [10, 10, 20, 20, 20, 20],
+    "INISPHCEL_1": [20, 20, 20, 20, 20, 20],
 }
 
 

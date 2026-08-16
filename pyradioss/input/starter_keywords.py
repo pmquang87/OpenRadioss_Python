@@ -9176,7 +9176,12 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "IMPDISP", "IMPVEL", "PLOAD", "PROP", "MAT", "STACK", "PLY",
         "WAVE_SHAPER", "DET"
     }
-    kind = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
+    if block.key0 == "THPART":
+        kind = "PART"
+    elif block.key0.startswith("TH") and len(block.key0) > 2 and block.key0 != "TH":
+        kind = block.key0[2:]
+    else:
+        kind = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
     if kind == "TITLE":
         read_th_title(block, model, log)
         return
@@ -15776,6 +15781,132 @@ def read_airbag(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_monvol_airbag(block, model, log)
 
 
+def read_func2d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FUNC_2D/id`` or ``/FUNC2D/id`` (M145): 2D bivariate function table."""
+    from ..model.entities import Func2DTable
+    fid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/FUNC_2D/{fid}: missing data card", block.source)
+        return
+    dim, npt = 1, 0
+    x_vals, y_vals, z_vals = [], [], []
+    if block.fixed:
+        f1 = cards[0].cut("FUNC_2D_1")
+        dim = _ival(f1[0], default=1) if len(f1) > 0 else 1
+        npt = _ival(f1[1], default=0) if len(f1) > 1 else 0
+        for card in cards[1:]:
+            if card.is_blank:
+                continue
+            f = card.cut("FUNC_2D_2")
+            if len(f) >= 3:
+                x_vals.append(_fval(f[0], 0.0))
+                y_vals.append(_fval(f[1], 0.0))
+                z_vals.append(_fval(f[2], 0.0))
+    else:
+        t1 = cards[0].tokens()
+        dim = int(float(t1[0])) if len(t1) > 0 else 1
+        npt = int(float(t1[1])) if len(t1) > 1 else 0
+        for card in cards[1:]:
+            if card.is_blank:
+                continue
+            t = card.tokens()
+            if len(t) >= 3:
+                x_vals.append(float(t[0]))
+                y_vals.append(float(t[1]))
+                z_vals.append(float(t[2]))
+    model.func2d_tables[fid] = Func2DTable(
+        id=fid, title=title, dim=dim, x_vals=x_vals, y_vals=y_vals, z_vals=z_vals
+    )
+
+
+def read_nonlocal(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/NONLOCAL/mat_id`` (M145): Non-local damage regularization model."""
+    from ..model.entities import NonlocalModel
+    mat_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    length, le_max, dens, damp = 0.0, 0.0, 0.0, 0.0
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("NONLOCAL_1")
+            length = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            le_max = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            dens = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            damp = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        else:
+            t = cards[0].tokens()
+            length = float(t[0]) if len(t) > 0 else 0.0
+            le_max = float(t[1]) if len(t) > 1 else 0.0
+            dens = float(t[2]) if len(t) > 2 else 0.0
+            damp = float(t[3]) if len(t) > 3 else 0.0
+    model.nonlocal_models[mat_id] = NonlocalModel(
+        mat_id=mat_id, title=title, length=length, le_max=le_max, dens=dens, damp=damp
+    )
+
+
+def read_fric_orient(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FRIC_ORIENT/id`` (M145): Friction orientation & anisotropic contact directions."""
+    from ..model.entities import FricOrient
+    fric_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    grpart_id, skew_id = 0, 0
+    phi, vx, vy, vz = 0.0, 0.0, 0.0, 0.0
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("FRIC_ORIENT_1")
+            grpart_id = _ival(f[0]) if len(f) > 0 else 0
+            skew_id = _ival(f[1]) if len(f) > 1 else 0
+            phi = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            vx = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            vy = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+            vz = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+        else:
+            t = cards[0].tokens()
+            grpart_id = int(float(t[0])) if len(t) > 0 else 0
+            skew_id = int(float(t[1])) if len(t) > 1 else 0
+            phi = float(t[2]) if len(t) > 2 else 0.0
+            vx = float(t[3]) if len(t) > 3 else 0.0
+            vy = float(t[4]) if len(t) > 4 else 0.0
+            vz = float(t[5]) if len(t) > 5 else 0.0
+    model.fric_orients[fric_id] = FricOrient(
+        id=fric_id, title=title, grpart_id=grpart_id, skew_id=skew_id,
+        phi=phi, vx=vx, vy=vy, vz=vz
+    )
+
+
+def read_inisphcel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INISPHCEL/part_id`` (M145): SPH cell initial state."""
+    from ..model.entities import IniSphCel
+    part_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    p, rho, e, vx, vy, vz = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("INISPHCEL_1")
+            p = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            rho = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            e = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            vx = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+            vy = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+            vz = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+        else:
+            t = cards[0].tokens()
+            p = float(t[0]) if len(t) > 0 else 0.0
+            rho = float(t[1]) if len(t) > 1 else 0.0
+            e = float(t[2]) if len(t) > 2 else 0.0
+            vx = float(t[3]) if len(t) > 3 else 0.0
+            vy = float(t[4]) if len(t) > 4 else 0.0
+            vz = float(t[5]) if len(t) > 5 else 0.0
+    model.ini_sphcels[part_id] = IniSphCel(
+        part_id=part_id, p=p, rho=rho, e=e, vx=vx, vy=vy, vz=vz
+    )
+
+
+def read_implicit(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/IMPLICIT`` (M145): Starter implicit analysis mode flag."""
+    model.implicit_flag = True
+
+
 KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = {
     # M37: complete table of Starter keywords. All 204 law numbers
     # route to read_mat; all /PROP numbers route to read_prop.
@@ -15986,6 +16117,13 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ADGLOB": read_admesh_global,
     "RIVET": read_prop_rivet,
     "XELEM": read_prop_xelem,
+    "FUNC_2D": read_func2d,
+    "FUNC2D": read_func2d,
+    "NONLOCAL": read_nonlocal,
+    "FRIC_ORIENT": read_fric_orient,
+    "INISPHCEL": read_inisphcel,
+    "IMPLICIT": read_implicit,
+    "THPART": read_th,
 }
 
 

@@ -4002,3 +4002,63 @@ class LoadHydro:
     sens_id: int = 0
 
 
+@dataclass
+class Func2DTable:
+    """/FUNC_2D or /FUNC2D (M145): 2D bivariate function table f(x, y).
+
+    Fortran origin: ``starter/source/tools/curve/hm_read_func2d.F``.
+    """
+    id: int
+    title: str = ""
+    dim: int = 1
+    x_vals: List[float] = field(default_factory=list)
+    y_vals: List[float] = field(default_factory=list)
+    z_vals: List[float] = field(default_factory=list)
+
+
+@dataclass
+class NonlocalModel:
+    """/NONLOCAL/mat_id (M145): Non-local damage regularization model.
+
+    Fortran origin: ``starter/source/materials/nonlocal/hm_read_nonlocal.F``.
+    """
+    mat_id: int
+    title: str = ""
+    length: float = 0.0
+    le_max: float = 0.0
+    dens: float = 0.0
+    damp: float = 0.0
+
+
+@dataclass
+class FricOrient:
+    """/FRIC_ORIENT/id (M145): Friction orientation & anisotropic contact directions.
+
+    Fortran origin: ``starter/source/interfaces/friction/reader/hm_read_friction_orientations.F``.
+    """
+    id: int
+    title: str = ""
+    grpart_id: int = 0
+    skew_id: int = 0
+    phi: float = 0.0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+
+
+@dataclass
+class IniSphCel:
+    """/INISPHCEL/part_id (M145): SPH cell initial state.
+
+    Fortran origin: ``starter/source/elements/initia/hm_read_inistate_d00.F``.
+    """
+    part_id: int
+    p: float = 0.0
+    rho: float = 0.0
+    e: float = 0.0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+
+
+

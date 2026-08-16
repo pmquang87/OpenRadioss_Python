@@ -77,6 +77,7 @@ from .entities import (
     AirbagInjector, AirbagVenthole,
     ErefElement, IniCrack, PropRivet, PropXelem, AdmeshControl,
     PreloadBolt, LoadHydro,
+    Func2DTable, NonlocalModel, FricOrient, IniSphCel,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -835,6 +836,11 @@ class Model:
         self.admesh_controls: Dict[int, AdmeshControl] = {}   # /ADMESH/* (M143)
         self.preload_bolts: Dict[int, PreloadBolt] = {}       # /PRELOAD/BOLT (M144)
         self.load_hydros: Dict[int, LoadHydro] = {}           # /LOAD/HYDRO (M144)
+        self.func2d_tables: Dict[int, Func2DTable] = {}       # /FUNC_2D (M145)
+        self.nonlocal_models: Dict[int, NonlocalModel] = {}   # /NONLOCAL (M145)
+        self.fric_orients: Dict[int, FricOrient] = {}         # /FRIC_ORIENT (M145)
+        self.ini_sphcels: Dict[int, IniSphCel] = {}           # /INISPHCEL (M145)
+        self.implicit_flag: bool = False                      # /IMPLICIT (M145)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

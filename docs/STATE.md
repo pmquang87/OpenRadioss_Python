@@ -150,6 +150,7 @@ real history is 41 milestones. One line each:
 | M142 | Add airbag injector & venthole models, advanced ALE solver controls & extended element initial state tensors suite (/AIRBAG/INJECTOR, /INJECTOR, /AIRBAG/VENTHOLE, /VENTHOLE, /INIBRI/STRA_F, /INIBRI/FAIL, /INIBRI/AUX, /INIBRI/SCALE_YLD, /INISHE/STRA_F, /INISHE/EPSP_F, /INISHE/FAIL, /INISHE/AUX, /INISH3/STRA_F, /INISH3/EPSP_F) |
 | M143 | Add extended element initial references (/EREF/*), X-FEM initial cracks (/INICRACK), fastener & cohesive properties (/PROP/TYPE5, /PROP/TYPE28) and adaptive remeshing controls (/ADMESH/*) |
 | M144 | Add extended interface formulations (/INTER/TYPE9, /INTER/TYPE10, /INTER/TYPE16, /INTER/TYPE17 & /DEF_INTER), bolt preloads (/PRELOAD/BOLT, /SECT/BOLT) and hydrostatic surface loads (/LOAD/HYDRO) |
+| M145 | Add 2D bivariate function tables (/FUNC_2D, /FUNC2D), non-local damage regularization models (/NONLOCAL), anisotropic friction orientations (/FRIC_ORIENT), SPH cell initial states (/INISPHCEL), and implicit analysis mode (/IMPLICIT, /THPART) |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
