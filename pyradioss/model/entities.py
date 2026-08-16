@@ -1335,35 +1335,44 @@ class InitialTemperature:
 
 @dataclass
 class InitialBrickState:
-    """/INIBRI (M96, M138): initial state for solid/brick elements.
+    """/INIBRI (M96, M138, M142): initial state for solid/brick elements.
 
     Fortran origin: ``starter/source/elements/initia/hm_read_inistate_d00.F``.
     """
     elem_id: int
     sigma: np.ndarray = field(default_factory=lambda: np.zeros(6))  # [sxx, syy, szz, sxy, syz, sxz]
+    eps: np.ndarray = field(default_factory=lambda: np.zeros(6))    # [exx, eyy, ezz, exy, eyz, exz] (M142)
     epsp: float = 0.0      # plastic strain
     rho: float = 0.0       # initial density
     ener: float = 0.0      # internal energy
     temp: float = 0.0      # initial temperature (M138)
     pres: float = 0.0      # initial hydrostatic pressure (M138)
     void: float = 0.0      # initial void fraction (M138)
+    fail_flag: float = 0.0 # initial failure flag (M142)
+    aux: float = 0.0       # auxiliary state variable (M142)
+    scale_yld: float = 1.0 # yield stress scale factor (M142)
 
 
 @dataclass
 class InitialShellState:
-    """/INISHE and /INISH3 (M96, M138): initial state for shell elements.
+    """/INISHE and /INISH3 (M96, M138, M142): initial state for shell elements.
 
     Fortran origin: ``starter/source/elements/initia/hm_read_inistate_d00.F``.
     """
     elem_id: int
     thick: float = 0.0     # initial thickness override
     epsp: float = 0.0      # plastic strain
+    epsp_layers: List[float] = field(default_factory=list) # per-layer plastic strain (M142)
     sigma: np.ndarray = field(default_factory=lambda: np.zeros(6))  # membrane stress
     sigma_b: np.ndarray = field(default_factory=lambda: np.zeros(6)) # bending stress
+    eps: np.ndarray = field(default_factory=lambda: np.zeros(6))    # strain tensor (M142)
     em: float = 0.0        # membrane energy
     eb: float = 0.0        # bending energy
     h_energy: np.ndarray = field(default_factory=lambda: np.zeros(3)) # H1, H2, H3
     temp: float = 0.0      # initial temperature (M138)
+    fail_flag: float = 0.0 # initial failure flag (M142)
+    aux: float = 0.0       # auxiliary state variable (M142)
+    scale_yld: float = 1.0 # yield stress scale factor (M142)
 
 
 @dataclass
@@ -3852,6 +3861,47 @@ class DampStiff:
     tstop: float = 1.0e30
 
 
+@dataclass
+class AirbagInjector:
+    """/AIRBAG/INJECTOR or /INJECTOR (M142): Airbag jetting injector.
+
+    Fortran origin: ``starter/source/airbag/hm_read_injector.F``.
+    """
+    id: int
+    title: str = ""
+    sensor_id: int = 0
+    ijet: int = 0
+    node1: int = 0
+    node2: int = 0
+    node3: int = 0
+    fct_pt: int = 0
+    fct_theta: int = 0
+    fct_delta: int = 0
+    fscale_pt: float = 1.0
+    fscale_ptheta: float = 1.0
+    fscale_pdelta: float = 1.0
 
 
+@dataclass
+class AirbagVenthole:
+    """/AIRBAG/VENTHOLE or /VENTHOLE (M142): Airbag vent hole and membrane burst model.
 
+    Fortran origin: ``starter/source/airbag/hm_read_venthole.F``.
+    """
+    id: int
+    title: str = ""
+    surf_vent: int = 0
+    iform: int = 1
+    avent: float = 0.0
+    bvent: float = 0.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+    dpdef: float = 0.0
+    dtpdef: float = 0.0
+    idtpdef: int = 0
+    fct_id_t: int = 0
+    fct_id_p: int = 0
+    fct_id_a: int = 0
+    fscale_t: float = 1.0
+    fscale_p: float = 1.0
+    fscale_a: float = 1.0

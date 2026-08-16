@@ -2710,6 +2710,12 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       (all defaults).
     """
     typename = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if typename in ("INJECTOR", "INJECT", "JET"):
+        read_airbag_injector(block, model, log)
+        return
+    if typename in ("VENTHOLE", "VENT", "POROUS"):
+        read_airbag_venthole(block, model, log)
+        return
     aliases = {"TYPE1": 1, "SHELL": 1, "TYPE2": 2, "TRUSS": 2,
                "TYPE3": 3, "BEAM": 3,
                "TYPE4": 4, "SPRING": 4, "TYPE14": 14, "SOLID": 14,
@@ -14043,21 +14049,14 @@ def read_initemp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INIBRI/{STRESS|EPSP|DENS|ENER}[/id]`` (M96)::
-
-        /INIBRI/STRESS:
-          card 1: bric_IDst  SIGMA_x   SIGMA_y   SIGMA_z
-          card 2:            SIGMA_xy  SIGMA_yz  SIGMA_xz
-        /INIBRI/EPSP, /INIBRI/DENS, /INIBRI/ENER:
-          card 1: bric_ID  value
-    """
+    """``/INIBRI/{STRESS|EPSP|DENS|ENER|STRA_F|FAIL|AUX}[/id]`` (M96, M142)::"""
     sub = block.parts[1].upper() if len(block.parts) > 1 else "STRESS"
     _, cards = _title_and_data(block)
     if not cards:
         log.error(f"/INIBRI/{sub}: missing data card", block.source)
         return
 
-    if sub == "STRESS":
+    if sub in ("STRESS", "STRS_F", "STRS_FGLO", "STRS"):
         idx = 0
         while idx < len(cards):
             c1 = cards[idx]
@@ -14099,7 +14098,49 @@ def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             st = model.ini_bricks.setdefault(elem_id, InitialBrickState(elem_id=elem_id))
             st.sigma = np.array([s1, s2, s3, s12, s23, s31], dtype=float)
 
-    elif sub in ("EPSP", "DENS", "ENER", "TEMP", "PRES", "VOID"):
+    elif sub in ("STRA_F", "STRA_FGLO", "STRA"):
+        idx = 0
+        while idx < len(cards):
+            c1 = cards[idx]
+            if block.fixed:
+                f = c1.cut("INIBRI_STRA_1")
+                elem_id = _ival(f[0])
+                e1 = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+                e2 = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+                e3 = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+                idx += 1
+                if idx < len(cards):
+                    g = cards[idx].cut("INIBRI_STRA_2")
+                    e12 = _fval(g[0], 0.0) if len(g) > 0 else 0.0
+                    e23 = _fval(g[1], 0.0) if len(g) > 1 else 0.0
+                    e31 = _fval(g[2], 0.0) if len(g) > 2 else 0.0
+                    idx += 1
+                else:
+                    e12, e23, e31 = 0.0, 0.0, 0.0
+            else:
+                t = c1.tokens()
+                elem_id = int(float(t[0]))
+                if len(t) >= 7:
+                    e1, e2, e3, e12, e23, e31 = [float(x) for x in t[1:7]]
+                    idx += 1
+                else:
+                    e1 = float(t[1]) if len(t) > 1 else 0.0
+                    e2 = float(t[2]) if len(t) > 2 else 0.0
+                    e3 = float(t[3]) if len(t) > 3 else 0.0
+                    idx += 1
+                    if idx < len(cards):
+                        t2 = cards[idx].tokens()
+                        e12 = float(t2[0]) if len(t2) > 0 else 0.0
+                        e23 = float(t2[1]) if len(t2) > 1 else 0.0
+                        e31 = float(t2[2]) if len(t2) > 2 else 0.0
+                        idx += 1
+                    else:
+                        e12, e23, e31 = 0.0, 0.0, 0.0
+
+            st = model.ini_bricks.setdefault(elem_id, InitialBrickState(elem_id=elem_id))
+            st.eps = np.array([e1, e2, e3, e12, e23, e31], dtype=float)
+
+    elif sub in ("EPSP", "DENS", "ENER", "TEMP", "PRES", "VOID", "FAIL", "AUX", "SCALE_YLD", "SCALE"):
         for c in cards:
             if block.fixed:
                 f = c.cut("INIBRI_SCALAR")
@@ -14123,6 +14164,12 @@ def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 st.pres = val
             elif sub == "VOID":
                 st.void = val
+            elif sub == "FAIL":
+                st.fail_flag = val
+            elif sub == "AUX":
+                st.aux = val
+            elif sub in ("SCALE_YLD", "SCALE"):
+                st.scale_yld = val
     elif sub == "EREF":
         read_inibri_eref(block, model, log)
     else:
@@ -14130,15 +14177,19 @@ def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INISHE/{STRS_F|EPSP|THICK}[/id]`` (M96)::
+    """``/INISHE/{STRS_F|EPSP|THICK|STRA_F|EPSP_F|FAIL|AUX}[/id]`` (M96, M142)::
 
-        /INISHE/EPSP, /INISHE/THICK:
+        /INISHE/EPSP, /INISHE/THICK, /INISHE/FAIL, /INISHE/AUX:
           card 1: shell_ID  value
         /INISHE/STRS_F:
           card 1: shell_ID  nb_integr  npg  Thick
           card 2: Em  Eb  H1  H2  H3
           card 3: sigma_1  sigma_2  sigma_12  sigma_23  sigma_31
           card 4: eps_p  sigma_b1  sigma_b2  sigma_b12
+        /INISHE/STRA_F:
+          card 1: shell_ID  eps_1  eps_2  eps_12
+        /INISHE/EPSP_F:
+          card 1: shell_ID  epsp_1  epsp_2 ... (per layer)
     """
     sub = block.parts[1].upper() if len(block.parts) > 1 else "STRS_F"
     _, cards = _title_and_data(block)
@@ -14146,7 +14197,7 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/INISHE/{sub}: missing data card", block.source)
         return
 
-    if sub in ("EPSP", "THICK", "TEMP", "ENER"):
+    if sub in ("EPSP", "THICK", "TEMP", "ENER", "FAIL", "AUX", "SCALE_YLD", "SCALE"):
         for c in cards:
             if block.fixed:
                 f = c.cut("INISHE_SCALAR")
@@ -14166,6 +14217,37 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 st.temp = val
             elif sub == "ENER":
                 st.em = val
+            elif sub == "FAIL":
+                st.fail_flag = val
+            elif sub == "AUX":
+                st.aux = val
+            elif sub in ("SCALE_YLD", "SCALE"):
+                st.scale_yld = val
+
+    elif sub in ("EPSP_F", "EPSPF"):
+        for c in cards:
+            if c.is_blank:
+                continue
+            toks = c.tokens()
+            if not toks:
+                continue
+            elem_id = int(float(toks[0]))
+            layers = [float(x) for x in toks[1:]]
+            st = model.ini_shells.setdefault(elem_id, InitialShellState(elem_id=elem_id))
+            st.epsp_layers = layers
+
+    elif sub in ("STRA_F", "STRA", "STRA_FGLO"):
+        for c in cards:
+            if c.is_blank:
+                continue
+            toks = c.tokens()
+            if len(toks) >= 4:
+                elem_id = int(float(toks[0]))
+                e1 = float(toks[1])
+                e2 = float(toks[2])
+                e12 = float(toks[3])
+                st = model.ini_shells.setdefault(elem_id, InitialShellState(elem_id=elem_id))
+                st.eps = np.array([e1, e2, 0.0, e12, 0.0, 0.0], dtype=float)
 
     elif sub in ("STRS_F", "STRS_FGLO", "STRS_F/GLOB"):
         idx = 0
@@ -15275,6 +15357,138 @@ def read_mat_therm_stress(block: KeywordBlock, model: Model, log: MessageLog) ->
     )
 
 
+def read_airbag_injector(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/AIRBAG/INJECTOR/id`` or ``/INJECTOR/id`` (M142): Airbag jetting injector."""
+    from ..model.entities import AirbagInjector
+    inject_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/AIRBAG/INJECTOR/{inject_id}: missing data card", block.source)
+        return
+    sensor_id, ijet, node1, node2, node3 = 0, 0, 0, 0, 0
+    fct_pt, fct_theta, fct_delta = 0, 0, 0
+    fscale_pt, fscale_ptheta, fscale_pdelta = 1.0, 1.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("AIRBAG_INJECTOR_1")
+        if not inject_id and len(f1) > 0 and _ival(f1[0]):
+            inject_id = _ival(f1[0])
+        sensor_id = _ival(f1[1]) if len(f1) > 1 else 0
+        ijet = _ival(f1[2]) if len(f1) > 2 else 0
+        node1 = _ival(f1[3]) if len(f1) > 3 else 0
+        node2 = _ival(f1[4]) if len(f1) > 4 else 0
+        node3 = _ival(f1[5]) if len(f1) > 5 else 0
+        if len(cards) > 1:
+            f2 = cards[1].cut("AIRBAG_INJECTOR_2")
+            fct_pt = _ival(f2[0]) if len(f2) > 0 else 0
+            fct_theta = _ival(f2[1]) if len(f2) > 1 else 0
+            fct_delta = _ival(f2[2]) if len(f2) > 2 else 0
+            fscale_pt = _fval(f2[4], 1.0) if len(f2) > 4 else 1.0
+            fscale_ptheta = _fval(f2[5], 1.0) if len(f2) > 5 else 1.0
+            fscale_pdelta = _fval(f2[6], 1.0) if len(f2) > 6 else 1.0
+    else:
+        t1 = cards[0].tokens()
+        if len(t1) >= 6 and not inject_id:
+            inject_id = int(float(t1[0]))
+            t1 = t1[1:]
+        if len(t1) >= 5:
+            sensor_id = int(float(t1[0]))
+            ijet = int(float(t1[1]))
+            node1 = int(float(t1[2]))
+            node2 = int(float(t1[3]))
+            node3 = int(float(t1[4]))
+        elif len(t1) >= 2:
+            sensor_id = int(float(t1[0]))
+            ijet = int(float(t1[1]))
+        if len(cards) > 1:
+            t2 = cards[1].tokens()
+            fct_pt = int(float(t2[0])) if len(t2) > 0 else 0
+            fct_theta = int(float(t2[1])) if len(t2) > 1 else 0
+            fct_delta = int(float(t2[2])) if len(t2) > 2 else 0
+            fscale_pt = float(t2[3]) if len(t2) > 3 else 1.0
+            fscale_ptheta = float(t2[4]) if len(t2) > 4 else 1.0
+            fscale_pdelta = float(t2[5]) if len(t2) > 5 else 1.0
+    model.airbag_injectors[inject_id] = AirbagInjector(
+        id=inject_id, title=title, sensor_id=sensor_id, ijet=ijet,
+        node1=node1, node2=node2, node3=node3,
+        fct_pt=fct_pt, fct_theta=fct_theta, fct_delta=fct_delta,
+        fscale_pt=fscale_pt, fscale_ptheta=fscale_ptheta, fscale_pdelta=fscale_pdelta
+    )
+
+
+def read_airbag_venthole(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/AIRBAG/VENTHOLE/id`` or ``/VENTHOLE/id`` (M142): Airbag vent hole model."""
+    from ..model.entities import AirbagVenthole
+    vent_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/AIRBAG/VENTHOLE/{vent_id}: missing data card", block.source)
+        return
+    surf_vent, iform, avent, bvent = 0, 1, 0.0, 0.0
+    tstart, tstop, dpdef, dtpdef, idtpdef = 0.0, 1.0e30, 0.0, 0.0, 0
+    fct_id_t, fct_id_p, fct_id_a = 0, 0, 0
+    fscale_t, fscale_p, fscale_a = 1.0, 1.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("AIRBAG_VENTHOLE_1")
+        surf_vent = _ival(f1[0]) if len(f1) > 0 else 0
+        iform = _ival(f1[1], default=1) if len(f1) > 1 else 1
+        avent = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        bvent = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+        if len(cards) > 1:
+            f2 = cards[1].cut("AIRBAG_VENTHOLE_2")
+            tstart = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            tstop = _fval(f2[1], 1.0e30) if len(f2) > 1 and _fval(f2[1]) > 0.0 else 1.0e30
+            dpdef = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            dtpdef = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+            idtpdef = _ival(f2[4]) if len(f2) > 4 else 0
+        if len(cards) > 2:
+            f3 = cards[2].cut("AIRBAG_VENTHOLE_3")
+            fct_id_t = _ival(f3[0]) if len(f3) > 0 else 0
+            fct_id_p = _ival(f3[1]) if len(f3) > 1 else 0
+            fct_id_a = _ival(f3[2]) if len(f3) > 2 else 0
+            fscale_t = _fval(f3[4], 1.0) if len(f3) > 4 else 1.0
+            fscale_p = _fval(f3[5], 1.0) if len(f3) > 5 else 1.0
+            fscale_a = _fval(f3[6], 1.0) if len(f3) > 6 else 1.0
+    else:
+        t1 = cards[0].tokens()
+        surf_vent = int(float(t1[0])) if len(t1) > 0 else 0
+        iform = int(float(t1[1])) if len(t1) > 1 else 1
+        avent = float(t1[2]) if len(t1) > 2 else 0.0
+        bvent = float(t1[3]) if len(t1) > 3 else 0.0
+        if len(cards) > 1:
+            t2 = cards[1].tokens()
+            tstart = float(t2[0]) if len(t2) > 0 else 0.0
+            tstop = float(t2[1]) if len(t2) > 1 and float(t2[1]) > 0.0 else 1.0e30
+            dpdef = float(t2[2]) if len(t2) > 2 else 0.0
+            dtpdef = float(t2[3]) if len(t2) > 3 else 0.0
+            idtpdef = int(float(t2[4])) if len(t2) > 4 else 0
+        if len(cards) > 2:
+            t3 = cards[2].tokens()
+            fct_id_t = int(float(t3[0])) if len(t3) > 0 else 0
+            fct_id_p = int(float(t3[1])) if len(t3) > 1 else 0
+            fct_id_a = int(float(t3[2])) if len(t3) > 2 else 0
+            fscale_t = float(t3[3]) if len(t3) > 3 else 1.0
+            fscale_p = float(t3[4]) if len(t3) > 4 else 1.0
+            fscale_a = float(t3[5]) if len(t3) > 5 else 1.0
+    model.airbag_ventholes[vent_id] = AirbagVenthole(
+        id=vent_id, title=title, surf_vent=surf_vent, iform=iform,
+        avent=avent, bvent=bvent, tstart=tstart, tstop=tstop,
+        dpdef=dpdef, dtpdef=dtpdef, idtpdef=idtpdef,
+        fct_id_t=fct_id_t, fct_id_p=fct_id_p, fct_id_a=fct_id_a,
+        fscale_t=fscale_t, fscale_p=fscale_p, fscale_a=fscale_a
+    )
+
+
+def read_airbag(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/AIRBAG/<subtype>/id`` dispatcher (M142)."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub in ("INJECTOR", "INJECT", "JET"):
+        read_airbag_injector(block, model, log)
+    elif sub in ("VENTHOLE", "VENT", "POROUS"):
+        read_airbag_venthole(block, model, log)
+    else:
+        read_monvol_airbag(block, model, log)
+
+
 KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = {
     # M37: complete table of Starter keywords. All 204 law numbers
     # route to read_mat; all /PROP numbers route to read_prop.
@@ -15476,6 +15690,11 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "VISC_PRONY": read_mat_visc_prony,
     "VISC_LPRONY": read_mat_visc_prony,
     "THERM_STRESS": read_mat_therm_stress,
+    "AIRBAG": read_airbag,
+    "AIRBAGINJECTOR": read_airbag_injector,
+    "AIRBAGVENTHOLE": read_airbag_venthole,
+    "INJECTOR": read_airbag_injector,
+    "VENTHOLE": read_airbag_venthole,
 }
 
 
