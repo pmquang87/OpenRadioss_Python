@@ -99,7 +99,8 @@ from ..common.fastmath import cross3, norm3, scatter_add3
 from ..model.model import Model
 from . import friction, tracking
 from .stiffness import (combine_stiffness, node_stiffness_gap,
-                        segment_stiffness_gap, _segment_areas)
+                        segment_stiffness_gap, _segment_areas,
+                        segment_mesh_gap, node_mesh_gap)
 
 _VISC = 0.05  # normal damping ratio (Radioss VIS_S default 5%)
 
@@ -240,11 +241,17 @@ class ContactType7:
         # (for Istf=1, stfac IS the stiffness and the element values are
         # only kept for the gap computation -> scale 1).
         scale = itf.stfac if itf.istf != 1 else 1.0
+        fscale = getattr(itf, "fscale_gap", 1.0) if itf.igap in (2, 3) else 1.0
         Km, gm = segment_stiffness_gap(model, self.segs, self.seg_gtype,
-                                       self.seg_elem, scale)
-        Ks_all, gs_all = node_stiffness_gap(model, scale)
+                                       self.seg_elem, scale, fscale_gap=fscale)
+        Ks_all, gs_all = node_stiffness_gap(model, scale, fscale_gap=fscale)
         self.Km = Km
         self.Ks = Ks_all[self.nodes] if len(self.nodes) else np.zeros(0)
+
+        if itf.igap == 3:
+            pmesh = getattr(itf, "percent_mesh_size", 0.4)
+            self.gap_m_l = segment_mesh_gap(model, self.segs, pmesh)
+            self.gap_s_l = node_mesh_gap(model, self.segs, self.nodes, pmesh)
 
         # --- contact gap ---------------------------------------------------
         # lc = mean segment size, the reference length for the defaults
@@ -255,7 +262,7 @@ class ContactType7:
         # otherwise (a zero gap would make contact undetectable)
         gap_floor = itf.gap if itf.gap > 0 else (
             float(gm.mean()) if len(gm) and gm.max() > 0 else 0.02 * lc)
-        if itf.igap == 1:
+        if itf.igap in (1, 2, 3):
             # variable gap: g = g_s(node) + g_m(segment), clipped
             self.gap_m = gm
             self.gap_s = gs_all[self.nodes] if len(self.nodes) else \
@@ -444,10 +451,13 @@ class ContactType7:
 
         # ---- per-pair gap (Igap) ------------------------------------------
         loc = np.searchsorted(self.nodes, ni)    # nodes is sorted (init)
-        if self.itf.igap == 1:
+        if self.itf.igap in (1, 2, 3):
             # gap_s is aligned with self.nodes; loc maps global -> local
-            gap = np.clip(self.gap_s[loc] + self.gap_m[srow],
-                          self.gap_min, self.gap_max)
+            gap = self.gap_s[loc] + self.gap_m[srow]
+            if self.itf.igap == 3:
+                mesh_gap = self.gap_s_l[loc] + self.gap_m_l[srow]
+                gap = np.minimum(gap, mesh_gap)
+            gap = np.clip(gap, self.gap_min, self.gap_max)
         else:
             gap = np.full(len(ni), self.gap_const)
 
