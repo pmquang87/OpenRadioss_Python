@@ -148,6 +148,27 @@ class EngineControls:
     stop_tstop: float = 0.0                                    # /STOP/TSTOP (M123)
     stop_timet: float = 0.0                                    # /STOP/TIMET (M123)
 
+    # M146: Engine Dynamic Controls & Solver Directives
+    inter_windows: Dict[int, tuple[int, float, float]] = field(default_factory=dict) # /INTER window (M146)
+    inter_active: Dict[int, bool] = field(default_factory=dict)                      # /INTER/ON, /INTER/OFF (M146)
+    del_elements: Dict[str, List[int]] = field(default_factory=dict)                 # /DEL/<type> (M146)
+    dli7_controls: Dict[str, Any] = field(default_factory=dict)                     # /DLI7 (M146)
+    kerel_active: bool = False                                                       # /KEREL (M146)
+    kerel_tstart: float = 0.0
+    kerel_tstop: float = 0.0
+    kerel_istatg: int = 0
+    dyrel_active: bool = False                                                       # /DYREL (M146)
+    dyrel_beta: float = 1.0
+    dyrel_period: float = 0.0
+    dyrel_istatg: int = 0
+    thermal_acc_fact: float = 1.0                                                    # /THERMAL (M146)
+    thermal_dt: float = 0.0                                                          # /THERMAL/DT, /HEAT/DT (M146)
+    thermal_tstart: float = 0.0
+    abf_dt: float = 0.0                                                              # /ABF, /ABF/DT (M146)
+    abf_dt_write: float = 0.0
+    inivel_engine: Dict[str, Dict[int, float]] = field(default_factory=dict)         # /INIVEL (M146)
+
+
     # ------------------------------------------------------------------
     # /IMPL implicit-static control (M8). ``implicit`` switches the run
     # from the explicit leap-frog loop to the Newton–Raphson static

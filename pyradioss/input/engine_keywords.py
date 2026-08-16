@@ -1300,6 +1300,134 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                                 pass
             elif key == "ALECFDSPH":
                 pass # /ALECFDSPH (M122) accepted in engine deck
+            elif key == "INTER":
+                # /INTER/ON, /INTER/OFF, /INTER/id, /INTER (M146): freint.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "ON" or sub == "OFF":
+                    active = (sub == "ON")
+                    for c in block.cards:
+                        if c.is_blank:
+                            continue
+                        for tok in c.tokens():
+                            try:
+                                i_id = int(float(tok))
+                                if i_id > 0:
+                                    ec.inter_active[i_id] = active
+                            except ValueError:
+                                pass
+                else:
+                    for c in block.cards:
+                        if c.is_blank:
+                            continue
+                        toks = c.tokens()
+                        if toks:
+                            try:
+                                in_id = int(float(toks[0]))
+                                ns_id = int(float(toks[1])) if len(toks) > 1 else 0
+                                ts = float(toks[2]) if len(toks) > 2 else 0.0
+                                tf = float(toks[3]) if len(toks) > 3 else 1.0e30
+                                ec.inter_windows[in_id] = (ns_id, ts, tf)
+                            except ValueError:
+                                pass
+            elif key == "DEL":
+                # /DEL/<type> (M146): fredli.F, rdele.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ELEM"
+                sub2 = block.parts[2].upper() if len(block.parts) > 2 else ""
+                full_kind = f"{sub}/{sub2}".strip("/") if sub2 else sub
+                del_list = ec.del_elements.setdefault(full_kind, [])
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    for tok in c.tokens():
+                        try:
+                            eid = int(float(tok))
+                            if eid > 0:
+                                del_list.append(eid)
+                        except ValueError:
+                            pass
+            elif key == "DLI7":
+                # /DLI7 (M146): fredli7.F
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    toks = c.tokens()
+                    for idx, tok in enumerate(toks):
+                        try:
+                            ec.dli7_controls[f"param_{idx}"] = float(tok)
+                        except ValueError:
+                            pass
+            elif key == "KEREL":
+                # /KEREL (M146): freform.F
+                ec.kerel_active = True
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    v = c.floats()
+                    if len(v) >= 2:
+                        ec.kerel_tstart = v[0]
+                        ec.kerel_tstop = v[1]
+                    elif len(v) == 1:
+                        if v[0].is_integer() and ec.kerel_istatg == 0:
+                            ec.kerel_istatg = int(v[0])
+                        else:
+                            ec.kerel_tstart = v[0]
+            elif key == "DYREL":
+                # /DYREL (M146): freform.F
+                ec.dyrel_active = True
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    v = c.floats()
+                    if len(v) >= 2:
+                        ec.dyrel_beta = v[0]
+                        ec.dyrel_period = v[1]
+                    elif len(v) == 1:
+                        if v[0].is_integer() and ec.dyrel_istatg == 0:
+                            ec.dyrel_istatg = int(v[0])
+                        else:
+                            ec.dyrel_beta = v[0]
+            elif key in ("THERMAL", "HEAT"):
+                # /THERMAL, /HEAT, /THERMAL/DT, /HEAT/DT (M146): frethermal.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "DT":
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if len(v) > 1:
+                            ec.thermal_tstart = v[0]
+                            ec.thermal_dt = v[1]
+                        elif v:
+                            ec.thermal_dt = v[0]
+                else:
+                    if block.cards:
+                        v = block.cards[0].floats()
+                        if v:
+                            ec.thermal_acc_fact = v[0]
+            elif key == "ABF":
+                # /ABF, /ABF/DT (M146): freabf.F
+                if block.cards:
+                    v = block.cards[0].floats()
+                    if len(v) > 1:
+                        ec.abf_dt = v[0]
+                        ec.abf_dt_write = v[1]
+                    elif v:
+                        ec.abf_dt = v[0]
+                        ec.abf_dt_write = v[0]
+            elif key == "INIVEL":
+                # /INIVEL/<TRA|ROT>/<X|Y|Z> (M146): freiniv.F
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "TRA"
+                dirn = block.parts[2].upper() if len(block.parts) > 2 else "X"
+                target_dict = ec.inivel_engine.setdefault(f"{sub}_{dirn}", {})
+                for c in block.cards:
+                    if c.is_blank:
+                        continue
+                    toks = c.tokens()
+                    if len(toks) >= 2:
+                        try:
+                            nid = int(float(toks[0]))
+                            val = float(toks[1])
+                            target_dict[nid] = val
+                        except ValueError:
+                            pass
             else:
                 log.warning(f"engine keyword /{'/'.join(block.parts)} "
                             f"not ported — ignored", block.source)
