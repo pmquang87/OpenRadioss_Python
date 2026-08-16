@@ -4702,3 +4702,244 @@ class FailInievo:
     pthk: float = 0.0
     models: List[Dict] = field(default_factory=list)
     fail_id: int = 0
+
+
+@dataclass
+class MaterialSprSeatbelt:
+    """/MAT/LAW114 or /MAT/SPR_SEATBELT (M161): Seatbelt spring material model.
+
+    Fortran origin: ``starter/source/materials/mat/hm_read_mat114.F`` / CFG ``mat114_spr_seatbelt.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho: float = 0.0
+    lmin: float = 0.0
+    k: float = 0.0
+    c: float = 0.0
+    fun_l: int = 0
+    fun_ul: int = 0
+    xscale: float = 1.0
+    fscale: float = 1.0
+    e: float = 0.0
+    i: float = 0.0
+    j: float = 0.0
+    fmax: float = 0.0
+    mmax: float = 0.0
+    as_: float = 0.0
+    r: float = 0.0
+    law: int = 114
+    rho0: float = 0.0
+    params: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if not self.rho0 and self.rho:
+            self.rho0 = self.rho
+        elif not self.rho and self.rho0:
+            self.rho = self.rho0
+        self.params = {
+            "rho": self.rho, "rho0": self.rho0, "lmin": self.lmin, "k": self.k, "stiff1": self.k,
+            "c": self.c, "damp1": self.c, "fun_l": self.fun_l, "fun_ul": self.fun_ul,
+            "xscale": self.xscale, "fscale": self.fscale, "e": self.e, "E": self.e,
+            "i": self.i, "j": self.j, "fmax": self.fmax, "mmax": self.mmax,
+            "as": self.as_, "r": self.r
+        }
+
+
+@dataclass
+class MaterialShSeatbelt:
+    """/MAT/LAW119 or /MAT/SH_SEATBELT (M161): 2D shell seatbelt fabric material model.
+
+    Fortran origin: ``starter/source/materials/mat/hm_read_mat119.F`` / CFG ``mat119_sh_seatbelt.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho: float = 0.0
+    lmin: float = 0.0
+    k: float = 0.0
+    c: float = 0.0
+    re: float = 0.0
+    fun_l: int = 0
+    fun_ul: int = 0
+    fscale1: float = 1.0
+    fscale2: float = 1.0
+    ireload: int = 0
+    e22: float = 0.0
+    nu12: float = 0.0
+    g12: float = 0.0
+    fscale22: float = 1.0
+    ecoat: float = 0.0
+    nucoat: float = 0.0
+    tcoat: float = 0.0
+    law: int = 119
+    rho0: float = 0.0
+    params: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if not self.rho0 and self.rho:
+            self.rho0 = self.rho
+        elif not self.rho and self.rho0:
+            self.rho = self.rho0
+        self.params = {
+            "rho": self.rho, "rho0": self.rho0, "lmin": self.lmin, "k": self.k, "stiff1": self.k,
+            "c": self.c, "damp1": self.c, "re": self.re, "fun_l": self.fun_l, "fun_ul": self.fun_ul,
+            "fscale1": self.fscale1, "fscale2": self.fscale2, "ireload": self.ireload,
+            "e22": self.e22, "nu12": self.nu12, "g12": self.g12, "fscale22": self.fscale22,
+            "ecoat": self.ecoat, "nucoat": self.nucoat, "tcoat": self.tcoat
+        }
+
+
+@dataclass
+class MaterialTapo:
+    """/MAT/LAW120 or /MAT/TAPO (M161): Tape/woven fabric material model with plasticity and damage.
+
+    Fortran origin: ``starter/source/materials/mat/hm_read_mat120.F`` / CFG ``mat120_tapo.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    iform: int = 1
+    itrx: int = 0
+    idam: int = 0
+    thick: float = 0.0
+    tab_id: int = 0
+    xscale: float = 1.0
+    yscale: float = 1.0
+    tau: float = 0.0
+    q: float = 0.0
+    beta: float = 1.0
+    h: float = 0.0
+    af1: float = 0.0
+    af2: float = 0.0
+    ah1: float = 0.0
+    ah2: float = 0.0
+    as_: float = 0.0
+    cc: float = 1e21
+    gam0: float = 0.0
+    gamf: float = 0.0
+    d1c: float = 0.0
+    d2c: float = 0.0
+    d1f: float = 0.0
+    d2f: float = 0.0
+    d_trx: float = 0.0
+    d_jc: float = 0.0
+    exp_n: float = 0.0
+    law: int = 120
+    rho0: float = 0.0
+    params: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if not self.rho0 and self.rho:
+            self.rho0 = self.rho
+        elif not self.rho and self.rho0:
+            self.rho = self.rho0
+        self.params = {
+            "rho": self.rho, "rho0": self.rho0, "refer_rho": self.refer_rho, "e": self.e, "E": self.e,
+            "nu": self.nu, "iform": self.iform, "itrx": self.itrx, "idam": self.idam,
+            "thick": self.thick, "tab_id": self.tab_id, "xscale": self.xscale, "yscale": self.yscale,
+            "tau": self.tau, "q": self.q, "beta": self.beta, "h": self.h,
+            "af1": self.af1, "af2": self.af2, "ah1": self.ah1, "ah2": self.ah2, "as": self.as_,
+            "cc": self.cc, "gam0": self.gam0, "gamf": self.gamf,
+            "d1c": self.d1c, "d2c": self.d2c, "d1f": self.d1f, "d2f": self.d2f,
+            "d_trx": self.d_trx, "d_jc": self.d_jc, "exp_n": self.exp_n
+        }
+
+
+@dataclass
+class MaterialPlasRate:
+    """/MAT/LAW121 or /MAT/PLAS_RATE (M161): Strain-rate dependent elastoplastic material model.
+
+    Fortran origin: ``starter/source/materials/mat/hm_read_mat121.F`` / CFG ``matl121_plasrate.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    ires: int = 0
+    ivisc: int = 0
+    fcut: float = 0.0
+    tdel: float = 0.0
+    fct_sig0: int = 0
+    xscale_sig0: float = 1.0
+    yscale_sig0: float = 1.0
+    fct_youn: int = 0
+    xscale_youn: float = 1.0
+    yscale_youn: float = 1.0
+    fct_tang: int = 0
+    xscale_tang: float = 1.0
+    tang: float = 0.0
+    fct_fail: int = 0
+    ifail: int = 0
+    xscale_fail: float = 1.0
+    yscale_fail: float = 1.0
+    law: int = 121
+    rho0: float = 0.0
+    params: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if not self.rho0 and self.rho:
+            self.rho0 = self.rho
+        elif not self.rho and self.rho0:
+            self.rho = self.rho0
+        self.params = {
+            "rho": self.rho, "rho0": self.rho0, "e": self.e, "E": self.e, "nu": self.nu,
+            "ires": self.ires, "ivisc": self.ivisc, "fcut": self.fcut, "tdel": self.tdel,
+            "fct_sig0": self.fct_sig0, "xscale_sig0": self.xscale_sig0, "yscale_sig0": self.yscale_sig0,
+            "fct_youn": self.fct_youn, "xscale_youn": self.xscale_youn, "yscale_youn": self.yscale_youn,
+            "fct_tang": self.fct_tang, "xscale_tang": self.xscale_tang, "tang": self.tang,
+            "fct_fail": self.fct_fail, "ifail": self.ifail, "xscale_fail": self.xscale_fail, "yscale_fail": self.yscale_fail
+        }
+
+
+@dataclass
+class MaterialCdpm2:
+    """/MAT/LAW124 or /MAT/CDPM2 (M161): Concrete damage plasticity model 2.
+
+    Fortran origin: ``starter/source/materials/mat/hm_read_mat124.F`` / CFG ``matl124_cdpm2.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    irate: int = 0
+    fcut: float = 0.0
+    ecc: float = 0.0
+    qh0: float = 0.0
+    ft: float = 0.0
+    fc: float = 0.0
+    hp: float = 0.0
+    ah: float = 0.0
+    bh: float = 0.0
+    ch: float = 0.0
+    dh: float = 0.0
+    as_: float = 0.0
+    bs: float = 0.0
+    df: float = 0.0
+    dflag: int = 0
+    dtype: int = 0
+    ireg: int = 0
+    wf: float = 0.0
+    wf1: float = 0.0
+    ft1: float = 0.0
+    efc: float = 0.0
+    law: int = 124
+    rho0: float = 0.0
+    params: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if not self.rho0 and self.rho:
+            self.rho0 = self.rho
+        elif not self.rho and self.rho0:
+            self.rho = self.rho0
+        self.params = {
+            "rho": self.rho, "rho0": self.rho0, "e": self.e, "E": self.e, "nu": self.nu,
+            "irate": self.irate, "fcut": self.fcut, "ecc": self.ecc, "qh0": self.qh0,
+            "ft": self.ft, "fc": self.fc, "hp": self.hp, "ah": self.ah, "bh": self.bh,
+            "ch": self.ch, "dh": self.dh, "as": self.as_, "bs": self.bs, "df": self.df,
+            "dflag": self.dflag, "dtype": self.dtype, "ireg": self.ireg,
+            "wf": self.wf, "wf1": self.wf1, "ft1": self.ft1, "efc": self.efc
+        }

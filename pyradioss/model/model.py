@@ -86,6 +86,7 @@ from .entities import (
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
+    MaterialSprSeatbelt, MaterialShSeatbelt, MaterialTapo, MaterialPlasRate, MaterialCdpm2,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -925,6 +926,11 @@ class Model:
         self.prop_spring_beams: Dict[int, PropSpringBeam] = {} # /PROP/TYPE44 (M152)
         self.prop_spotwelds: Dict[int, PropSpotweld] = {}  # /PROP/TYPE45 (M152)
         self.prop_bushings: Dict[int, PropBushing] = {}    # /PROP/TYPE46 (M152)
+        self.mat_spr_seatbelts: Dict[int, MaterialSprSeatbelt] = {} # /MAT/LAW114 (M161)
+        self.mat_sh_seatbelts: Dict[int, MaterialShSeatbelt] = {}   # /MAT/LAW119 (M161)
+        self.mat_tapos: Dict[int, MaterialTapo] = {}                # /MAT/LAW120 (M161)
+        self.mat_plas_rates: Dict[int, MaterialPlasRate] = {}       # /MAT/LAW121 (M161)
+        self.mat_cdpm2s: Dict[int, MaterialCdpm2] = {}              # /MAT/LAW124 (M161)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

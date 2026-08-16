@@ -775,6 +775,21 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("THERM_STRESS", "THERM", "THERMAL"):
         read_mat_therm_stress(block, model, log)
         return
+    if lawname in ("LAW114", "SPR_SEATBELT", "SEATBELT_SPR"):
+        read_mat_spr_seatbelt(block, model, log)
+        return
+    if lawname in ("LAW119", "SH_SEATBELT", "SEATBELT_SH"):
+        read_mat_sh_seatbelt(block, model, log)
+        return
+    if lawname in ("LAW120", "TAPO"):
+        read_mat_tapo(block, model, log)
+        return
+    if lawname in ("LAW121", "PLAS_RATE"):
+        read_mat_plas_rate(block, model, log)
+        return
+    if lawname in ("LAW124", "CDPM2"):
+        read_mat_cdpm2(block, model, log)
+        return
     law_aliases = {"LAW1": 1, "ELAST": 1, "LAW2": 2, "PLAS_JOHNS": 2,
                    "LAW27": 27, "PLAS_BRIT": 27,
                    "LAW36": 36, "PLAS_TAB": 36,
@@ -18219,6 +18234,466 @@ def read_mat_therm_stress(block: KeywordBlock, model: Model, log: MessageLog) ->
     )
 
 
+def read_mat_spr_seatbelt(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW114/mat_ID`` or ``/MAT/SPR_SEATBELT/mat_ID`` (M161): Seatbelt spring material model."""
+    from ..model.entities import MaterialSprSeatbelt
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/MAT/SPR_SEATBELT/{mat_id}: missing data card", block.source)
+        return
+    rho, lmin = 0.0, 0.0
+    k, c = 0.0, 0.0
+    fun_l, fun_ul, xscale, fscale = 0, 0, 1.0, 1.0
+    e, i, j, fmax, mmax = 0.0, 0.0, 0.0, 0.0, 0.0
+    as_, r = 0.0, 0.0
+    if block.fixed:
+        f1 = cards[0].cut("MAT_LAW114_1")
+        rho = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        lmin = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MAT_LAW114_2")
+            k = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            c = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("MAT_LAW114_3")
+            fun_l = _ival(f3[0]) if len(f3) > 0 else 0
+            fun_ul = _ival(f3[1]) if len(f3) > 1 else 0
+            xscale = _fval(f3[2], 1.0) if len(f3) > 2 and _fval(f3[2]) > 0.0 else 1.0
+            fscale = _fval(f3[3], 1.0) if len(f3) > 3 and _fval(f3[3]) > 0.0 else 1.0
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("MAT_LAW114_4")
+            e = _fval(f4[0], 0.0) if len(f4) > 0 else 0.0
+            i = _fval(f4[1], 0.0) if len(f4) > 1 else 0.0
+            j = _fval(f4[2], 0.0) if len(f4) > 2 else 0.0
+            fmax = _fval(f4[3], 0.0) if len(f4) > 3 else 0.0
+            mmax = _fval(f4[4], 0.0) if len(f4) > 4 else 0.0
+        if len(cards) > 4 and not cards[4].is_blank:
+            f5 = cards[4].cut("MAT_LAW114_5")
+            as_ = _fval(f5[0], 0.0) if len(f5) > 0 else 0.0
+            r = _fval(f5[1], 0.0) if len(f5) > 1 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        rho = float(t1[0]) if len(t1) > 0 else 0.0
+        lmin = float(t1[1]) if len(t1) > 1 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            k = float(t2[0]) if len(t2) > 0 else 0.0
+            c = float(t2[1]) if len(t2) > 1 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            fun_l = int(float(t3[0])) if len(t3) > 0 else 0
+            fun_ul = int(float(t3[1])) if len(t3) > 1 else 0
+            xscale = float(t3[2]) if len(t3) > 2 else 1.0
+            fscale = float(t3[3]) if len(t3) > 3 else 1.0
+        if len(cards) > 3 and not cards[3].is_blank:
+            t4 = cards[3].tokens()
+            e = float(t4[0]) if len(t4) > 0 else 0.0
+            i = float(t4[1]) if len(t4) > 1 else 0.0
+            j = float(t4[2]) if len(t4) > 2 else 0.0
+            fmax = float(t4[3]) if len(t4) > 3 else 0.0
+            mmax = float(t4[4]) if len(t4) > 4 else 0.0
+        if len(cards) > 4 and not cards[4].is_blank:
+            t5 = cards[4].tokens()
+            as_ = float(t5[0]) if len(t5) > 0 else 0.0
+            r = float(t5[1]) if len(t5) > 1 else 0.0
+    mat = MaterialSprSeatbelt(
+        id=mat_id, title=title, rho=rho, lmin=lmin, k=k, c=c,
+        fun_l=fun_l, fun_ul=fun_ul, xscale=xscale, fscale=fscale,
+        e=e, i=i, j=j, fmax=fmax, mmax=mmax, as_=as_, r=r
+    )
+    model.mat_spr_seatbelts[mat_id] = mat
+    model.materials[mat_id] = mat
+
+
+def read_mat_sh_seatbelt(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW119/mat_ID`` or ``/MAT/SH_SEATBELT/mat_ID`` (M161): 2D shell seatbelt fabric material model."""
+    from ..model.entities import MaterialShSeatbelt
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/MAT/SH_SEATBELT/{mat_id}: missing data card", block.source)
+        return
+    rho, lmin = 0.0, 0.0
+    k, c, re = 0.0, 0.0, 0.0
+    fun_l, fun_ul, fscale1, fscale2, ireload = 0, 0, 1.0, 1.0, 0
+    e22, nu12, g12, fscale22 = 0.0, 0.0, 0.0, 1.0
+    ecoat, nucoat, tcoat = 0.0, 0.0, 0.0
+    if block.fixed:
+        f1 = cards[0].cut("MAT_LAW119_1")
+        rho = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        lmin = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MAT_LAW119_2")
+            k = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            c = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            re = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("MAT_LAW119_3")
+            fun_l = _ival(f3[0]) if len(f3) > 0 else 0
+            fun_ul = _ival(f3[1]) if len(f3) > 1 else 0
+            fscale1 = _fval(f3[2], 1.0) if len(f3) > 2 and _fval(f3[2]) > 0.0 else 1.0
+            fscale2 = _fval(f3[3], 1.0) if len(f3) > 3 and _fval(f3[3]) > 0.0 else 1.0
+            ireload = _ival(f3[4]) if len(f3) > 4 else 0
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("MAT_LAW119_4")
+            e22 = _fval(f4[0], 0.0) if len(f4) > 0 else 0.0
+            nu12 = _fval(f4[1], 0.0) if len(f4) > 1 else 0.0
+            g12 = _fval(f4[2], 0.0) if len(f4) > 2 else 0.0
+            fscale22 = _fval(f4[3], 1.0) if len(f4) > 3 and _fval(f4[3]) > 0.0 else 1.0
+        if len(cards) > 4 and not cards[4].is_blank:
+            f5 = cards[4].cut("MAT_LAW119_5")
+            ecoat = _fval(f5[0], 0.0) if len(f5) > 0 else 0.0
+            nucoat = _fval(f5[1], 0.0) if len(f5) > 1 else 0.0
+            tcoat = _fval(f5[2], 0.0) if len(f5) > 2 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        rho = float(t1[0]) if len(t1) > 0 else 0.0
+        lmin = float(t1[1]) if len(t1) > 1 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            k = float(t2[0]) if len(t2) > 0 else 0.0
+            c = float(t2[1]) if len(t2) > 1 else 0.0
+            re = float(t2[2]) if len(t2) > 2 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            fun_l = int(float(t3[0])) if len(t3) > 0 else 0
+            fun_ul = int(float(t3[1])) if len(t3) > 1 else 0
+            fscale1 = float(t3[2]) if len(t3) > 2 else 1.0
+            fscale2 = float(t3[3]) if len(t3) > 3 else 1.0
+            ireload = int(float(t3[4])) if len(t3) > 4 else 0
+        if len(cards) > 3 and not cards[3].is_blank:
+            t4 = cards[3].tokens()
+            e22 = float(t4[0]) if len(t4) > 0 else 0.0
+            nu12 = float(t4[1]) if len(t4) > 1 else 0.0
+            g12 = float(t4[2]) if len(t4) > 2 else 0.0
+            fscale22 = float(t4[3]) if len(t4) > 3 else 1.0
+        if len(cards) > 4 and not cards[4].is_blank:
+            t5 = cards[4].tokens()
+            ecoat = float(t5[0]) if len(t5) > 0 else 0.0
+            nucoat = float(t5[1]) if len(t5) > 1 else 0.0
+            tcoat = float(t5[2]) if len(t5) > 2 else 0.0
+    mat = MaterialShSeatbelt(
+        id=mat_id, title=title, rho=rho, lmin=lmin, k=k, c=c, re=re,
+        fun_l=fun_l, fun_ul=fun_ul, fscale1=fscale1, fscale2=fscale2, ireload=ireload,
+        e22=e22, nu12=nu12, g12=g12, fscale22=fscale22, ecoat=ecoat, nucoat=nucoat, tcoat=tcoat
+    )
+    model.mat_sh_seatbelts[mat_id] = mat
+    model.materials[mat_id] = mat
+
+
+def read_mat_tapo(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW120/mat_ID`` or ``/MAT/TAPO/mat_ID`` (M161): Tape/woven fabric material model."""
+    from ..model.entities import MaterialTapo
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/MAT/TAPO/{mat_id}: missing data card", block.source)
+        return
+    rho, refer_rho = 0.0, 0.0
+    e, nu = 0.0, 0.0
+    iform, itrx, idam = 1, 0, 0
+    thick = 0.0
+    tab_id, xscale, yscale = 0, 1.0, 1.0
+    tau, q, beta, h = 0.0, 0.0, 1.0, 0.0
+    af1, af2, ah1, ah2, as_ = 0.0, 0.0, 0.0, 0.0, 0.0
+    cc, gam0, gamf = 1e21, 0.0, 0.0
+    d1c, d2c, d1f, d2f = 0.0, 0.0, 0.0, 0.0
+    d_trx, d_jc, exp_n = 0.0, 0.0, 0.0
+    if block.fixed:
+        f1 = cards[0].cut("MAT_LAW120_1")
+        rho = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        refer_rho = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MAT_LAW120_2")
+            e = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            nu = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            iform = _ival(f2[2], 1) if len(f2) > 2 else 1
+            itrx = _ival(f2[3], 0) if len(f2) > 3 else 0
+            idam = _ival(f2[4], 0) if len(f2) > 4 else 0
+            thick = _fval(f2[6], 0.0) if len(f2) > 6 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("MAT_LAW120_3")
+            tab_id = _ival(f3[0], 0) if len(f3) > 0 else 0
+            xscale = _fval(f3[1], 1.0) if len(f3) > 1 and _fval(f3[1]) > 0.0 else 1.0
+            yscale = _fval(f3[2], 1.0) if len(f3) > 2 and _fval(f3[2]) > 0.0 else 1.0
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("MAT_LAW120_4")
+            tau = _fval(f4[0], 0.0) if len(f4) > 0 else 0.0
+            q = _fval(f4[1], 0.0) if len(f4) > 0 else 0.0
+            beta = _fval(f4[2], 1.0) if len(f4) > 2 and _fval(f4[2]) > 0.0 else 1.0
+            h = _fval(f4[3], 0.0) if len(f4) > 3 else 0.0
+        if len(cards) > 4 and not cards[4].is_blank:
+            f5 = cards[4].cut("MAT_LAW120_5")
+            af1 = _fval(f5[0], 0.0) if len(f5) > 0 else 0.0
+            af2 = _fval(f5[1], 0.0) if len(f5) > 1 else 0.0
+            ah1 = _fval(f5[2], 0.0) if len(f5) > 2 else 0.0
+            ah2 = _fval(f5[3], 0.0) if len(f5) > 3 else 0.0
+            as_ = _fval(f5[4], 0.0) if len(f5) > 4 else 0.0
+        if len(cards) > 5 and not cards[5].is_blank:
+            f6 = cards[5].cut("MAT_LAW120_6")
+            cc = _fval(f6[0], 1e21) if len(f6) > 0 and _fval(f6[0]) > 0.0 else 1e21
+            gam0 = _fval(f6[1], 0.0) if len(f6) > 1 else 0.0
+            gamf = _fval(f6[2], 0.0) if len(f6) > 2 else 0.0
+        if len(cards) > 6 and not cards[6].is_blank:
+            f7 = cards[6].cut("MAT_LAW120_7")
+            d1c = _fval(f7[0], 0.0) if len(f7) > 0 else 0.0
+            d2c = _fval(f7[1], 0.0) if len(f7) > 1 else 0.0
+            d1f = _fval(f7[2], 0.0) if len(f7) > 2 else 0.0
+            d2f = _fval(f7[3], 0.0) if len(f7) > 3 else 0.0
+        if len(cards) > 7 and not cards[7].is_blank:
+            f8 = cards[7].cut("MAT_LAW120_8")
+            d_trx = _fval(f8[0], 0.0) if len(f8) > 0 else 0.0
+            d_jc = _fval(f8[1], 0.0) if len(f8) > 1 else 0.0
+            exp_n = _fval(f8[2], 0.0) if len(f8) > 2 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        rho = float(t1[0]) if len(t1) > 0 else 0.0
+        refer_rho = float(t1[1]) if len(t1) > 1 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            e = float(t2[0]) if len(t2) > 0 else 0.0
+            nu = float(t2[1]) if len(t2) > 1 else 0.0
+            iform = int(float(t2[2])) if len(t2) > 2 else 1
+            itrx = int(float(t2[3])) if len(t2) > 3 else 0
+            idam = int(float(t2[4])) if len(t2) > 4 else 0
+            thick = float(t2[5]) if len(t2) > 5 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            tab_id = int(float(t3[0])) if len(t3) > 0 else 0
+            xscale = float(t3[1]) if len(t3) > 1 else 1.0
+            yscale = float(t3[2]) if len(t3) > 2 else 1.0
+        if len(cards) > 3 and not cards[3].is_blank:
+            t4 = cards[3].tokens()
+            tau = float(t4[0]) if len(t4) > 0 else 0.0
+            q = float(t4[1]) if len(t4) > 1 else 0.0
+            beta = float(t4[2]) if len(t4) > 2 else 1.0
+            h = float(t4[3]) if len(t4) > 3 else 0.0
+        if len(cards) > 4 and not cards[4].is_blank:
+            t5 = cards[4].tokens()
+            af1 = float(t5[0]) if len(t5) > 0 else 0.0
+            af2 = float(t5[1]) if len(t5) > 1 else 0.0
+            ah1 = float(t5[2]) if len(t5) > 2 else 0.0
+            ah2 = float(t5[3]) if len(t5) > 3 else 0.0
+            as_ = float(t5[4]) if len(t5) > 4 else 0.0
+        if len(cards) > 5 and not cards[5].is_blank:
+            t6 = cards[5].tokens()
+            cc = float(t6[0]) if len(t6) > 0 else 1e21
+            gam0 = float(t6[1]) if len(t6) > 1 else 0.0
+            gamf = float(t6[2]) if len(t6) > 2 else 0.0
+        if len(cards) > 6 and not cards[6].is_blank:
+            t7 = cards[6].tokens()
+            d1c = float(t7[0]) if len(t7) > 0 else 0.0
+            d2c = float(t7[1]) if len(t7) > 1 else 0.0
+            d1f = float(t7[2]) if len(t7) > 2 else 0.0
+            d2f = float(t7[3]) if len(t7) > 3 else 0.0
+        if len(cards) > 7 and not cards[7].is_blank:
+            t8 = cards[7].tokens()
+            d_trx = float(t8[0]) if len(t8) > 0 else 0.0
+            d_jc = float(t8[1]) if len(t8) > 1 else 0.0
+            exp_n = float(t8[2]) if len(t8) > 2 else 0.0
+    mat = MaterialTapo(
+        id=mat_id, title=title, rho=rho, refer_rho=refer_rho,
+        e=e, nu=nu, iform=iform, itrx=itrx, idam=idam, thick=thick,
+        tab_id=tab_id, xscale=xscale, yscale=yscale, tau=tau, q=q,
+        beta=beta, h=h, af1=af1, af2=af2, ah1=ah1, ah2=ah2, as_=as_,
+        cc=cc, gam0=gam0, gamf=gamf, d1c=d1c, d2c=d2c, d1f=d1f,
+        d2f=d2f, d_trx=d_trx, d_jc=d_jc, exp_n=exp_n
+    )
+    model.mat_tapos[mat_id] = mat
+    model.materials[mat_id] = mat
+
+
+def read_mat_plas_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW121/mat_ID`` or ``/MAT/PLAS_RATE/mat_ID`` (M161): Strain-rate dependent elastoplastic material model."""
+    from ..model.entities import MaterialPlasRate
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/MAT/PLAS_RATE/{mat_id}: missing data card", block.source)
+        return
+    rho = 0.0
+    e, nu = 0.0, 0.0
+    ires, ivisc = 0, 0
+    fcut, tdel = 0.0, 0.0
+    fct_sig0, xscale_sig0, yscale_sig0 = 0, 1.0, 1.0
+    fct_youn, xscale_youn, yscale_youn = 0, 1.0, 1.0
+    fct_tang, xscale_tang, tang = 0, 1.0, 0.0
+    fct_fail, ifail, xscale_fail, yscale_fail = 0, 0, 1.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("MAT_LAW121_1")
+        rho = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MAT_LAW121_2")
+            e = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            nu = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            ires = _ival(f2[2], 0) if len(f2) > 2 else 0
+            ivisc = _ival(f2[3], 0) if len(f2) > 3 else 0
+            fcut = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+            tdel = _fval(f2[5], 0.0) if len(f2) > 5 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("MAT_LAW121_3")
+            fct_sig0 = _ival(f3[0], 0) if len(f3) > 0 else 0
+            xscale_sig0 = _fval(f3[2], 1.0) if len(f3) > 2 and _fval(f3[2]) > 0.0 else 1.0
+            yscale_sig0 = _fval(f3[3], 1.0) if len(f3) > 3 and _fval(f3[3]) > 0.0 else 1.0
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[2].cut("MAT_LAW121_4") if len(cards) == 4 else cards[3].cut("MAT_LAW121_4")
+            fct_youn = _ival(f4[0], 0) if len(f4) > 0 else 0
+            xscale_youn = _fval(f4[2], 1.0) if len(f4) > 2 and _fval(f4[2]) > 0.0 else 1.0
+            yscale_youn = _fval(f4[3], 1.0) if len(f4) > 3 and _fval(f4[3]) > 0.0 else 1.0
+        if len(cards) > 4 and not cards[4].is_blank:
+            f5 = cards[4].cut("MAT_LAW121_5")
+            fct_tang = _ival(f5[0], 0) if len(f5) > 0 else 0
+            xscale_tang = _fval(f5[2], 1.0) if len(f5) > 2 and _fval(f5[2]) > 0.0 else 1.0
+            tang = _fval(f5[3], 0.0) if len(f5) > 3 else 0.0
+        if len(cards) > 5 and not cards[5].is_blank:
+            f6 = cards[5].cut("MAT_LAW121_6")
+            fct_fail = _ival(f6[0], 0) if len(f6) > 0 else 0
+            ifail = _ival(f6[1], 0) if len(f6) > 1 else 0
+            xscale_fail = _fval(f6[2], 1.0) if len(f6) > 2 and _fval(f6[2]) > 0.0 else 1.0
+            yscale_fail = _fval(f6[3], 1.0) if len(f6) > 3 and _fval(f6[3]) > 0.0 else 1.0
+    else:
+        t1 = cards[0].tokens()
+        rho = float(t1[0]) if len(t1) > 0 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            e = float(t2[0]) if len(t2) > 0 else 0.0
+            nu = float(t2[1]) if len(t2) > 1 else 0.0
+            ires = int(float(t2[2])) if len(t2) > 2 else 0
+            ivisc = int(float(t2[3])) if len(t2) > 3 else 0
+            fcut = float(t2[4]) if len(t2) > 4 else 0.0
+            tdel = float(t2[5]) if len(t2) > 5 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            fct_sig0 = int(float(t3[0])) if len(t3) > 0 else 0
+            xscale_sig0 = float(t3[1]) if len(t3) > 1 else 1.0
+            yscale_sig0 = float(t3[2]) if len(t3) > 2 else 1.0
+        if len(cards) > 3 and not cards[3].is_blank:
+            t4 = cards[3].tokens()
+            fct_youn = int(float(t4[0])) if len(t4) > 0 else 0
+            xscale_youn = float(t4[1]) if len(t4) > 1 else 1.0
+            yscale_youn = float(t4[2]) if len(t4) > 2 else 1.0
+        if len(cards) > 4 and not cards[4].is_blank:
+            t5 = cards[4].tokens()
+            fct_tang = int(float(t5[0])) if len(t5) > 0 else 0
+            xscale_tang = float(t5[1]) if len(t5) > 1 else 1.0
+            tang = float(t5[2]) if len(t5) > 2 else 0.0
+        if len(cards) > 5 and not cards[5].is_blank:
+            t6 = cards[5].tokens()
+            fct_fail = int(float(t6[0])) if len(t6) > 0 else 0
+            ifail = int(float(t6[1])) if len(t6) > 1 else 0
+            xscale_fail = float(t6[2]) if len(t6) > 2 else 1.0
+            yscale_fail = float(t6[3]) if len(t6) > 3 else 1.0
+    mat = MaterialPlasRate(
+        id=mat_id, title=title, rho=rho, e=e, nu=nu, ires=ires, ivisc=ivisc,
+        fcut=fcut, tdel=tdel, fct_sig0=fct_sig0, xscale_sig0=xscale_sig0, yscale_sig0=yscale_sig0,
+        fct_youn=fct_youn, xscale_youn=xscale_youn, yscale_youn=yscale_youn,
+        fct_tang=fct_tang, xscale_tang=xscale_tang, tang=tang,
+        fct_fail=fct_fail, ifail=ifail, xscale_fail=xscale_fail, yscale_fail=yscale_fail
+    )
+    model.mat_plas_rates[mat_id] = mat
+    model.materials[mat_id] = mat
+
+
+def read_mat_cdpm2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW124/mat_ID`` or ``/MAT/CDPM2/mat_ID`` (M161): Concrete damage plasticity model 2."""
+    from ..model.entities import MaterialCdpm2
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/MAT/CDPM2/{mat_id}: missing data card", block.source)
+        return
+    rho = 0.0
+    e, nu = 0.0, 0.0
+    irate = 0
+    fcut = 0.0
+    ecc, qh0, ft, fc, hp = 0.0, 0.0, 0.0, 0.0, 0.0
+    ah, bh, ch, dh = 0.0, 0.0, 0.0, 0.0
+    as_, bs, df = 0.0, 0.0, 0.0
+    dflag, dtype, ireg = 0, 0, 0
+    wf, wf1, ft1, efc = 0.0, 0.0, 0.0, 0.0
+    if block.fixed:
+        f1 = cards[0].cut("MAT_LAW124_1")
+        rho = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MAT_LAW124_2")
+            e = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            nu = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            irate = _ival(f2[3], 0) if len(f2) > 3 else 0
+            fcut = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("MAT_LAW124_3")
+            ecc = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+            qh0 = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+            ft = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+            fc = _fval(f3[3], 0.0) if len(f3) > 3 else 0.0
+            hp = _fval(f3[4], 0.0) if len(f3) > 4 else 0.0
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("MAT_LAW124_4")
+            ah = _fval(f4[0], 0.0) if len(f4) > 0 else 0.0
+            bh = _fval(f4[1], 0.0) if len(f4) > 1 else 0.0
+            ch = _fval(f4[2], 0.0) if len(f4) > 2 else 0.0
+            dh = _fval(f4[3], 0.0) if len(f4) > 3 else 0.0
+        if len(cards) > 4 and not cards[4].is_blank:
+            f5 = cards[4].cut("MAT_LAW124_5")
+            as_ = _fval(f5[0], 0.0) if len(f5) > 0 else 0.0
+            bs = _fval(f5[1], 0.0) if len(f5) > 1 else 0.0
+            df = _fval(f5[2], 0.0) if len(f5) > 2 else 0.0
+            dflag = _ival(f5[4], 0) if len(f5) > 4 else 0
+            dtype = _ival(f5[5], 0) if len(f5) > 5 else 0
+            ireg = _ival(f5[6], 0) if len(f5) > 6 else 0
+        if len(cards) > 5 and not cards[5].is_blank:
+            f6 = cards[5].cut("MAT_LAW124_6")
+            wf = _fval(f6[0], 0.0) if len(f6) > 0 else 0.0
+            wf1 = _fval(f6[1], 0.0) if len(f6) > 1 else 0.0
+            ft1 = _fval(f6[2], 0.0) if len(f6) > 2 else 0.0
+            efc = _fval(f6[3], 0.0) if len(f6) > 3 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        rho = float(t1[0]) if len(t1) > 0 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            e = float(t2[0]) if len(t2) > 0 else 0.0
+            nu = float(t2[1]) if len(t2) > 1 else 0.0
+            irate = int(float(t2[2])) if len(t2) > 2 else 0
+            fcut = float(t2[3]) if len(t2) > 3 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            ecc = float(t3[0]) if len(t3) > 0 else 0.0
+            qh0 = float(t3[1]) if len(t3) > 1 else 0.0
+            ft = float(t3[2]) if len(t3) > 2 else 0.0
+            fc = float(t3[3]) if len(t3) > 3 else 0.0
+            hp = float(t3[4]) if len(t3) > 4 else 0.0
+        if len(cards) > 3 and not cards[3].is_blank:
+            t4 = cards[3].tokens()
+            ah = float(t4[0]) if len(t4) > 0 else 0.0
+            bh = float(t4[1]) if len(t4) > 1 else 0.0
+            ch = float(t4[2]) if len(t4) > 2 else 0.0
+            dh = float(t4[3]) if len(t4) > 3 else 0.0
+        if len(cards) > 4 and not cards[4].is_blank:
+            t5 = cards[4].tokens()
+            as_ = float(t5[0]) if len(t5) > 0 else 0.0
+            bs = float(t5[1]) if len(t5) > 1 else 0.0
+            df = float(t5[2]) if len(t5) > 2 else 0.0
+            dflag = int(float(t5[3])) if len(t5) > 3 else 0
+            dtype = int(float(t5[4])) if len(t5) > 4 else 0
+            ireg = int(float(t5[5])) if len(t5) > 5 else 0
+        if len(cards) > 5 and not cards[5].is_blank:
+            t6 = cards[5].tokens()
+            wf = float(t6[0]) if len(t6) > 0 else 0.0
+            wf1 = float(t6[1]) if len(t6) > 1 else 0.0
+            ft1 = float(t6[2]) if len(t6) > 2 else 0.0
+            efc = float(t6[3]) if len(t6) > 3 else 0.0
+    mat = MaterialCdpm2(
+        id=mat_id, title=title, rho=rho, e=e, nu=nu, irate=irate, fcut=fcut,
+        ecc=ecc, qh0=qh0, ft=ft, fc=fc, hp=hp, ah=ah, bh=bh, ch=ch, dh=dh,
+        as_=as_, bs=bs, df=df, dflag=dflag, dtype=dtype, ireg=ireg,
+        wf=wf, wf1=wf1, ft1=ft1, efc=efc
+    )
+    model.mat_cdpm2s[mat_id] = mat
+    model.materials[mat_id] = mat
+
+
 def read_airbag_injector(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/AIRBAG/INJECTOR/id`` or ``/INJECTOR/id`` (M142): Airbag jetting injector."""
     from ..model.entities import AirbagInjector
@@ -18824,6 +19299,22 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "DFS_DETPOINT_NODE": read_dfs,
     "DFS_DETPLAN_NODE": read_dfs,
     "DFS_DETLINE_NODE": read_dfs,
+    # M161: Seatbelt, Tape and Concrete Damage Material Models
+    "MAT_LAW114": read_mat,
+    "MAT_SPR_SEATBELT": read_mat,
+    "SPR_SEATBELT": read_mat,
+    "MAT_LAW119": read_mat,
+    "MAT_SH_SEATBELT": read_mat,
+    "SH_SEATBELT": read_mat,
+    "MAT_LAW120": read_mat,
+    "MAT_TAPO": read_mat,
+    "TAPO": read_mat,
+    "MAT_LAW121": read_mat,
+    "MAT_PLAS_RATE": read_mat,
+    "PLAS_RATE": read_mat,
+    "MAT_LAW124": read_mat,
+    "MAT_CDPM2": read_mat,
+    "CDPM2": read_mat,
 }
 
 
