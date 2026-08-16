@@ -1308,7 +1308,21 @@ LAYOUTS: Dict[str, List[int]] = {
     "EBCS_MONVOL_1": [10, 10],
     "AMS_1": [10, 20],
     "SEATBELT_1": [10, 10, 10, 10, 10, 10, 10, 10],
+    # M151: PBLAST, INIVOL, INIGRAV, INISTA, BEM, PERTURB
+    "PBLAST_1": [10, 10, 10, 10, 10, 10, 10],
+    "PBLAST_2": [20, 20, 20, 20, 20],
+    "PBLAST_3": [20, 20],
+    "PBLAST_4": [10, 10],
+    "INIVOL_1": [10, 10],
+    "INIVOL_2": [10, 10, 10, 10, 20],
+    "INIGRAV_1_SHORT": [10, 10, 10],
+    "INIGRAV_2": [20, 20, 20, 20],
+    "INISTA_1": [80, 10, 10, 10],
+    "BEM_FLOW_1": [10, 10, 10],
+    "BEM_DAA_1": [10, 10],
+    "PERTURB_1": [10, 10, 10, 20, 10],
 }
+
 
 
 

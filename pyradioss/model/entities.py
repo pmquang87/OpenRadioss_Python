@@ -1267,17 +1267,41 @@ class ConvectionLoad:
 
 @dataclass
 class InivolContainer:
-    """Container surface entry for /INIVOL (M94)."""
+    """Container surface entry for /INIVOL (M94/M151)."""
     surf_id: int
     ale_phase: int = 1
     fill_opt: int = 0       # 0 = along normal, 1 = against normal (reversed)
     icumu: int = 0          # 0 = erase, 1 = additive, -1 = subtractive
     fill_ratio: float = 1.0 # filling volume fraction in [0, 1]
 
+    @property
+    def submat_id(self) -> int:
+        return self.ale_phase
+
+    @submat_id.setter
+    def submat_id(self, val: int) -> None:
+        self.ale_phase = val
+
+    @property
+    def ireversed(self) -> int:
+        return self.fill_opt
+
+    @ireversed.setter
+    def ireversed(self, val: int) -> None:
+        self.fill_opt = val
+
+    @property
+    def vfrac(self) -> float:
+        return self.fill_ratio
+
+    @vfrac.setter
+    def vfrac(self, val: float) -> None:
+        self.fill_ratio = val
+
 
 @dataclass
 class InitialVolume:
-    """/INIVOL (M94): initial volume fraction for multi-material fluid / ALE.
+    """/INIVOL (M94/M151): initial volume fraction for multi-material fluid / ALE.
 
     Fortran origin: ``starter/source/initial_conditions/inivol/hm_read_inivol.F90``.
     """
@@ -1285,6 +1309,9 @@ class InitialVolume:
     part_id: int = 0
     title: str = ""
     containers: List[InivolContainer] = field(default_factory=list)
+
+
+Inivol = InitialVolume
 
 
 @dataclass
@@ -1467,7 +1494,7 @@ class SolidPartPerturbation:
 
 @dataclass
 class PBlastLoad:
-    """/LOAD/PBLAST (M99): air/ground blast pressure load.
+    """/LOAD/PBLAST (M99/M151): air/ground blast pressure load.
 
     Fortran origin: ``starter/source/model/loads/hm_read_pblast.F``.
     """
@@ -1489,6 +1516,33 @@ class PBlastLoad:
     tstop: float = 1.0e30
     surf_ground_id: int = 0
     ishape: int = 0
+
+    @property
+    def iabac(self) -> int:
+        return self.exp_data
+
+    @iabac.setter
+    def iabac(self, val: int) -> None:
+        self.exp_data = val
+
+    @property
+    def ita_shift(self) -> int:
+        return self.i_tshift
+
+    @ita_shift.setter
+    def ita_shift(self, val: int) -> None:
+        self.i_tshift = val
+
+    @property
+    def iz_update(self) -> int:
+        return self.iz
+
+    @iz_update.setter
+    def iz_update(self, val: int) -> None:
+        self.iz = val
+
+
+PblastLoad = PBlastLoad
 
 
 @dataclass
@@ -2169,7 +2223,7 @@ class FxBody:
 
 @dataclass
 class IniGrav:
-    """/INIGRAV (M104): Initial gravity equilibrium state.
+    """/INIGRAV (M104/M151): Initial gravity equilibrium state.
 
     Fortran origin: ``starter/source/initial_conditions/inigrav/hm_read_inigrav.F``.
     """
@@ -2182,6 +2236,9 @@ class IniGrav:
     bx: float = 0.0
     by: float = 0.0
     bz: float = 0.0
+
+
+InigravLoad = IniGrav
 
 
 @dataclass
@@ -4265,6 +4322,55 @@ class AmsControl:
     grpart_id: int = 0
     dt_target: float = 0.0
     i_ams: int = 1
+
+
+
+
+
+
+@dataclass
+class Inista:
+    """/INISTA or /INISTATE (M151): Initial state file input.
+
+    Fortran origin: ``starter/source/initial_conditions/inista/hm_read_inista.F``.
+    """
+    id: int = 0
+    title: str = ""
+    filename: str = ""
+    ibal: int = 1
+    ioutyy: int = 0
+    ioutynn: int = 0
+
+
+@dataclass
+class BemControl:
+    """/BEM/FLOW or /BEM/DAA (M151): Boundary element method controls.
+
+    Fortran origin: ``starter/source/loads/bem/hm_read_bem.F``.
+    """
+    id: int
+    title: str = ""
+    subtype: str = "FLOW"
+    surf_id: int = 0
+    nio: int = 0
+    grnod_aux_id: int = 0
+    freesurf: int = 1
+
+
+@dataclass
+class PerturbControl:
+    """/PERTURB/PART/SHELL, /PERTURB/PART/SOLID, /PERTURB/FAIL (M151): Perturbation controls.
+
+    Fortran origin: ``starter/source/general_controls/computation/hm_read_perturb*.F``.
+    """
+    id: int
+    title: str = ""
+    subtype: str = "SHELL"
+    grpart_id: int = 0
+    ityp: int = 1
+    fct_id: int = 0
+    scale: float = 0.0
+    seed: int = 0
 
 
 

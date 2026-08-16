@@ -1085,4 +1085,38 @@ def check_model(model: Model, log: MessageLog) -> None:
         if bw.sensor_id > 0 and bw.sensor_id not in sensor_ids:
             log.error(f"/BCS/WALL/{bwid}: sensor {bw.sensor_id} not defined", "CROSS REF")
 
+    # M151: PBLAST, INIVOL, INIGRAV, INISTA, BEM, PERTURB
+    for pbid, pb in getattr(model, "pblast_loads", {}).items():
+        if pb.surf_id > 0 and pb.surf_id not in model.surfaces:
+            log.error(f"/LOAD/PBLAST/{pbid}: surface {pb.surf_id} not defined", "CROSS REF")
+        if pb.surf_ground_id > 0 and pb.surf_ground_id not in model.surfaces:
+            log.error(f"/LOAD/PBLAST/{pbid}: ground surface {pb.surf_ground_id} not defined", "CROSS REF")
+        if pb.node_id > 0 and pb.node_id not in model._id2idx:
+            log.error(f"/LOAD/PBLAST/{pbid}: node {pb.node_id} not defined", "CROSS REF")
+
+    for ivid, iv in getattr(model, "inivols", {}).items():
+        if iv.part_id > 0 and iv.part_id not in model.parts and iv.part_id not in part_groups:
+            log.error(f"/INIVOL/{ivid}: part {iv.part_id} not defined", "CROSS REF")
+        for c in iv.containers:
+            if c.surf_id > 0 and c.surf_id not in model.surfaces:
+                log.error(f"/INIVOL/{ivid}: container surface {c.surf_id} not defined", "CROSS REF")
+
+    for igid, ig in getattr(model, "inigrav_loads", {}).items():
+        if ig.grpart_id > 0 and ig.grpart_id not in model.parts and ig.grpart_id not in part_groups:
+            log.error(f"/INIGRAV/{igid}: part group {ig.grpart_id} not defined", "CROSS REF")
+        if ig.surf_id > 0 and ig.surf_id not in model.surfaces:
+            log.error(f"/INIGRAV/{igid}: surface {ig.surf_id} not defined", "CROSS REF")
+
+    for bemid, bem in getattr(model, "bem_controls", {}).items():
+        if bem.surf_id > 0 and bem.surf_id not in model.surfaces:
+            log.error(f"/BEM/{bem.subtype}/{bemid}: surface {bem.surf_id} not defined", "CROSS REF")
+        if bem.grnod_aux_id > 0 and bem.grnod_aux_id not in model.node_groups and bem.grnod_aux_id not in getattr(model, "node_sets", {}):
+            log.error(f"/BEM/{bem.subtype}/{bemid}: node group {bem.grnod_aux_id} not defined", "CROSS REF")
+
+    for ptid, pt in getattr(model, "perturb_controls", {}).items():
+        if pt.grpart_id > 0 and pt.grpart_id not in model.parts and pt.grpart_id not in part_groups:
+            log.error(f"/PERTURB/{pt.subtype}/{ptid}: part group {pt.grpart_id} not defined", "CROSS REF")
+        if pt.fct_id > 0 and pt.fct_id not in model.functions:
+            log.error(f"/PERTURB/{pt.subtype}/{ptid}: function {pt.fct_id} not defined", "CROSS REF")
+
 

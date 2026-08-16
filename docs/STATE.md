@@ -156,6 +156,7 @@ real history is 41 milestones. One line each:
 | M148 | Add engine directives suite II (/DAMP, /MASS/RESET, /SENSOR/RESET, /VIPER, /MADYMO, /RAD2R, /FVMBAG, /PERF, /DT1TET10, /DTTSH, /REPORT, /NEGVOL) |
 | M149 | Add guided cable sliding interface (/INTER/GUIDED_CABLE, /GUIDED_CABLE), specialized element properties (/PROP/STITCH, /PROP/PREDIT, /PROP/SPR_MUSC), sub-interface force tracking (/INTER/SUB, /SUBINTER), and extended time-history output channels (/TH/GUIDED_CABLE, /TH/SUBS) |
 | M150 | Add Eulerian boundary conditions (/EBCS/PRES, /EBCS/VEL, /EBCS/INLET, /EBCS/FLUXOUT, /EBCS/GRADP0, /EBCS/NORMV, /EBCS/VALVIN, /EBCS/VALVOUT, /EBCS/MONVOL), sliding wall boundary conditions (/BCS/WALL), advanced mass scaling (/AMS), and seatbelt system assembly (/SEATBELT) suite |
+| M151 | Add extended contact interfaces (/INTER/TYPE1, /INTER/TYPE3, /INTER/TYPE5, /INTER/TYPE6, /INTER/TYPE14, /INTER/TYPE20, /INTER/TYPE21, /INTER/TYPE23), blast surface loading (/LOAD/PBLAST, /PBLAST), initial volume fraction (/INIVOL), initial gravity (/INIGRAV), initial state import (/INISTA, /INISTATE), boundary element method (/BEM/FLOW, /BEM/DAA), and perturbation controls (/PERTURB/PART/SHELL, /PERTURB/PART/SOLID, /PERTURB/FAIL) suite |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

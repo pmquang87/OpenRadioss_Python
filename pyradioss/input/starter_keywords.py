@@ -5752,9 +5752,9 @@ def read_load_centri(block: KeywordBlock, model: Model, log: MessageLog) -> None
     model.centri_loads.append(cl)
     from ..model.entities import LoadCentri
     model.load_centris[block.user_id] = LoadCentri(
-        id=block.user_id, title=title, fct_id=funct_id, dir=dir_str,
-        frame_id=frame_id, sens_id=sens_id, grnod_id=grnod_id,
-        ivar=ivar, ascalex=scale_x, fscaley=scale_y,
+        id=block.user_id, title=title, dir=dir_str,
+        fct_id=funct_id, frame_id=frame_id, sens_id=sens_id,
+        grnod_id=grnod_id, ivar=ivar, ascalex=scale_x, fscaley=scale_y,
     )
 
 
@@ -6148,17 +6148,26 @@ def read_perturb(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         grpart_id = int(float(t2[0])) if len(t2) > 0 else 0
         chvar = t2[1].strip() if len(t2) > 1 else ""
 
+    from ..model.entities import PerturbControl
     if sub2 == "SHELL":
         model.perturb_shells[block.user_id] = ShellPartPerturbation(
             id=block.user_id, title=title, f_mean=f_mean, deviation=dev,
             min_cut=min_cut, max_cut=max_cut, seed=seed, idistri=idistri,
             grpart_id=grpart_id, chvar=chvar or "THICK"
         )
+        model.perturb_controls[block.user_id] = PerturbControl(
+            id=block.user_id, title=title, subtype=f"{sub1}/{sub2}",
+            grpart_id=grpart_id, ityp=idistri, fct_id=0, scale=dev, seed=seed,
+        )
     else:
         model.perturbations[block.user_id] = SolidPartPerturbation(
             id=block.user_id, title=title, f_mean=f_mean, deviation=dev,
             min_cut=min_cut, max_cut=max_cut, seed=seed, idistri=idistri,
             grpart_id=grpart_id, var_name=chvar
+        )
+        model.perturb_controls[block.user_id] = PerturbControl(
+            id=block.user_id, title=title, subtype=f"{sub1}/{sub2}",
+            grpart_id=grpart_id, ityp=idistri, fct_id=0, scale=dev, seed=seed,
         )
 
 
@@ -12507,6 +12516,7 @@ def read_inigrav(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=inigrav_id, title=title, grpart_id=grpart_id, surf_id=surf_id,
         grav_id=grav_id, pref=pref, bx=bx, by=by, bz=bz,
     )
+    model.inigrav_loads[inigrav_id] = model.ini_gravs[inigrav_id]
 
 
 def read_inimap(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -12640,28 +12650,75 @@ def read_inimap3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_inista(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INISTATE``, ``/INISTATE/FILE`` (M104), or ``/INISTA/<elem_type>/...`` (M116)."""
+    """``/INISTA``, ``/INISTATE``, ``/INISTATE/FILE`` (M104/M151), or ``/INISTA/<elem_type>/...`` (M116)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if sub in ("FILE", ""):
-        cards = block.cards
+    if sub in ("FILE", "") or sub.isdigit():
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            cards = [c for c in block.cards if not c.is_blank]
         if not cards or cards[0].is_blank:
             log.error("/INISTATE: missing data card", block.source)
             return
 
-        filename = cards[0].raw.strip()
-        isigi = 0
-        ioutp_fmt = 0
-        if len(cards) > 1 and not cards[1].is_blank:
-            if block.fixed:
-                f = cards[1].cut("INISTATE_1")
-                isigi = _ival(f[0]) if len(f) > 0 else 0
-                ioutp_fmt = _ival(f[1]) if len(f) > 1 else 0
-            else:
-                toks = cards[1].tokens()
-                isigi = int(float(toks[0])) if len(toks) > 0 else 0
-                ioutp_fmt = int(float(toks[1])) if len(toks) > 1 else 0
+        inista_id = block.user_id if block.user_id is not None else 1
+        filename = ""
+        ibal = 1
+        ioutyy = 0
+        ioutynn = 0
 
-        model.ini_state_file = IniStateFile(filename=filename, isigi=isigi, ioutp_fmt=ioutp_fmt)
+        if block.fixed:
+            # Case A: title extracted the filename (e.g. /INISTATE/FILE without title card)
+            # and cards[0] contains the integer parameters
+            first_raw = cards[0].raw.strip()
+            first_toks = first_raw.split()
+            if title and all(tok.lstrip("+-").isdigit() for tok in first_toks):
+                filename = title
+                f = cards[0].cut("INISTATE_1") if len(cards[0].raw) <= 20 else cards[0].cut("INISTA_1")
+                ibal = _ival(f[0], 1) if len(f) > 0 else 1
+                ioutyy = _ival(f[1], 0) if len(f) > 1 else 0
+                ioutynn = _ival(f[2], 0) if len(f) > 2 else 0
+            elif len(cards[0].raw) > 80:
+                f = cards[0].cut("INISTA_1")
+                filename = f[0].strip() if len(f) > 0 else ""
+                ibal = _ival(f[1], 1) if len(f) > 1 else 1
+                ioutyy = _ival(f[2], 0) if len(f) > 2 else 0
+                ioutynn = _ival(f[3], 0) if len(f) > 3 else 0
+            elif len(cards) > 1 and not cards[1].is_blank:
+                filename = cards[0].raw.strip()
+                f = cards[1].cut("INISTATE_1")
+                ibal = _ival(f[0], 1) if len(f) > 0 else 1
+                ioutyy = _ival(f[1], 0) if len(f) > 1 else 0
+            else:
+                f = cards[0].cut("INISTA_1")
+                filename = f[0].strip() if len(f) > 0 else ""
+                ibal = _ival(f[1], 1) if len(f) > 1 else 1
+                ioutyy = _ival(f[2], 0) if len(f) > 2 else 0
+                ioutynn = _ival(f[3], 0) if len(f) > 3 else 0
+        else:
+            tokens = cards[0].tokens()
+            if len(tokens) >= 2 and not tokens[0].lstrip("+-").isdigit():
+                filename = tokens[0]
+                ibal = int(float(tokens[1])) if len(tokens) > 1 else 1
+                ioutyy = int(float(tokens[2])) if len(tokens) > 2 else 0
+                ioutynn = int(float(tokens[3])) if len(tokens) > 3 else 0
+            elif title and all(tok.lstrip("+-").isdigit() for tok in tokens):
+                filename = title
+                ibal = int(float(tokens[0])) if len(tokens) > 0 else 1
+                ioutyy = int(float(tokens[1])) if len(tokens) > 1 else 0
+                ioutynn = int(float(tokens[2])) if len(tokens) > 2 else 0
+            else:
+                filename = cards[0].raw.strip()
+                if len(cards) > 1 and not cards[1].is_blank:
+                    toks = cards[1].tokens()
+                    ibal = int(float(toks[0])) if len(toks) > 0 else 1
+                    ioutyy = int(float(toks[1])) if len(toks) > 1 else 0
+
+        from ..model.entities import IniStateFile, Inista
+        model.ini_state_file = IniStateFile(filename=filename, isigi=ibal, ioutp_fmt=ioutyy)
+        model.inistas[inista_id] = Inista(
+            id=inista_id, title=title, filename=filename,
+            ibal=ibal, ioutyy=ioutyy, ioutynn=ioutynn,
+        )
         return
 
     if sub in ("SHE", "SHEL", "SHELL"):
@@ -14786,22 +14843,33 @@ def read_convec(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_inivol(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INIVOL/[part_ID/]inivol_ID`` (M94)::
+    """``/INIVOL/[part_ID/]inivol_ID`` (M94/M151)::
 
-        card 1:  title
-        cards 2+: surf_ID  ale_phase  fill_opt  icumu  fill_ratio
+        card 1 (optional title):  title
+        card 2 (or 1): part_ID  NIP (or directly containers)
+        cards 3+: surf_ID  ale_phase  fill_opt  icumu  fill_ratio
     """
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    inivol_id = block.user_id if block.user_id is not None else 1
+    part_id = 0
     if block.unit_id is not None:
         part_id, inivol_id = block.user_id or 0, block.unit_id
-    else:
-        part_id = 0
-        inivol_id = block.user_id or 0
 
     containers: List[InivolContainer] = []
-    for c in cards:
-        if c.is_blank:
-            continue
+    non_blank = [c for c in cards if not c.is_blank] if cards else []
+    if not non_blank:
+        return
+
+    start_idx = 0
+    first_tokens = non_blank[0].tokens()
+    if len(non_blank) > 1 and len(first_tokens) <= 2:
+        try:
+            part_id = int(float(first_tokens[0]))
+            start_idx = 1
+        except ValueError:
+            pass
+
+    for c in non_blank[start_idx:]:
         if block.fixed:
             f = c.cut("INIVOL")
             surf_id = _ival(f[0])
@@ -14829,6 +14897,7 @@ def read_inivol(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     iv = InitialVolume(id=inivol_id, part_id=part_id, title=title, containers=containers)
     model.inivol.append(iv)
+    model.inivols[inivol_id] = iv
 
 
 def read_radiation(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -15958,11 +16027,49 @@ def read_ale_muscl(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_bem(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/BEM`` (M119): Boundary element method container."""
+    """``/BEM``, ``/BEM/FLOW``, or ``/BEM/DAA`` (M119, M151): Boundary element method controls.
+
+    Fortran origin: ``starter/source/loads/bem/hm_read_bem.F``.
+    """
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     bid = block.user_id if block.user_id is not None else 1
-    from ..model.entities import BemModel
-    model.bem_models[bid] = BemModel(id=bid, title=title)
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+
+    if sub in ("FLOW", "DAA"):
+        from ..model.entities import BemControl
+        surf_id = 0
+        nio = 0
+        grnod_aux_id = 0
+        freesurf = 1
+        if cards and not cards[0].is_blank:
+            if sub == "FLOW":
+                if block.fixed:
+                    c = cards[0].cut("BEM_FLOW_1")
+                    surf_id = _ival(c[0]) if len(c) > 0 else 0
+                    nio = _ival(c[1]) if len(c) > 1 else 0
+                    grnod_aux_id = _ival(c[2]) if len(c) > 2 else 0
+                else:
+                    t = cards[0].tokens()
+                    surf_id = int(float(t[0])) if len(t) > 0 else 0
+                    nio = int(float(t[1])) if len(t) > 1 else 0
+                    grnod_aux_id = int(float(t[2])) if len(t) > 2 else 0
+            elif sub == "DAA":
+                if block.fixed:
+                    c = cards[0].cut("BEM_DAA_1")
+                    surf_id = _ival(c[0]) if len(c) > 0 else 0
+                    freesurf = _ival(c[1], 1) if len(c) > 1 else 1
+                else:
+                    t = cards[0].tokens()
+                    surf_id = int(float(t[0])) if len(t) > 0 else 0
+                    freesurf = int(float(t[1])) if len(t) > 1 else 1
+
+        model.bem_controls[bid] = BemControl(
+            id=bid, title=title, subtype=sub, surf_id=surf_id,
+            nio=nio, grnod_aux_id=grnod_aux_id, freesurf=freesurf,
+        )
+    else:
+        from ..model.entities import BemModel
+        model.bem_models[bid] = BemModel(id=bid, title=title)
 
 
 def read_altdoctag(block: KeywordBlock, model: Model, log: MessageLog) -> None:

@@ -82,6 +82,7 @@ from .entities import (
     MaterialViscPlas,
     EbcsPres, EbcsVel, EbcsInlet, EbcsFluxout, EbcsGradp0, EbcsNormv, EbcsValv, EbcsMonvol,
     BcsWall, SeatbeltSystem, AmsControl,
+    PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     Subdomain, Submodel, Surface, Table, THRequest, Xref,
 )
 from ..common.tables import FunctTable
@@ -901,6 +902,12 @@ class Model:
         self.bcs_walls: Dict[int, BcsWall] = {}            # /BCS/WALL (M150)
         self.seatbelt_systems: Dict[int, SeatbeltSystem] = {} # /SEATBELT (M150)
         self.ams_control: Optional[AmsControl] = None      # /AMS (M150)
+        self.pblast_loads: Dict[int, PblastLoad] = {}      # /LOAD/PBLAST, /PBLAST (M151)
+        self.inivols: Dict[int, Inivol] = {}               # /INIVOL (M151)
+        self.inigrav_loads: Dict[int, InigravLoad] = {}    # /INIGRAV (M151)
+        self.inistas: Dict[int, Inista] = {}               # /INISTA, /INISTATE (M151)
+        self.bem_controls: Dict[int, BemControl] = {}      # /BEM/FLOW, /BEM/DAA (M151)
+        self.perturb_controls: Dict[int, PerturbControl] = {} # /PERTURB (M151)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
