@@ -9483,14 +9483,18 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         icurv = _ival(f0[8])
         f1 = _fixed_vals(cards[1], [20, 20, 20, 20, 10])
         gap_max = _fval(f1[1])
-        fscale_gap = _fval(f1[0], 1.0)
+        fscale_gap = _fval(f1[0])
+        if fscale_gap == 0.0:
+            fscale_gap = 1.0
         if igap < 2 and fscale_gap != 1.0:
             ign.append(f"Fscale_gap={f1[0]}")
         for name, s in (("Fpenmax", f1[2]), ("Itied", f1[4])):
             if s and _to_float(s) != 0.0:
                 ign.append(f"{name}={s}")
         f2 = _fixed_vals(cards[2], [20, 20, 20, 20, 10, 10])
-        percent_mesh_size = _fval(f2[2], 0.4)
+        percent_mesh_size = _fval(f2[2])
+        if percent_mesh_size == 0.0:
+            percent_mesh_size = 0.4
         if igap != 3 and percent_mesh_size != 0.4:
             ign.append(f"%mesh_size={f2[2]}")
         for name, s in (("Stmin", f2[0]), ("Stmax", f2[1]),
