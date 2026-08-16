@@ -80,7 +80,7 @@ def _segment_areas(x0: np.ndarray, segments: np.ndarray) -> np.ndarray:
 
 def segment_stiffness_gap(model: Model, segments: np.ndarray,
                           seg_gtype: np.ndarray, seg_elem: np.ndarray,
-                          stfac: float):
+                          stfac: float, fscale_gap: float = 1.0):
     """Per-segment penalty stiffness K_m and gap contribution g_m.
 
     Returns (K (nseg,), gap (nseg,)). ``seg_gtype``/``seg_elem`` is the
@@ -104,7 +104,7 @@ def segment_stiffness_gap(model: Model, segments: np.ndarray,
             E = _per_element(group, lambda m, p: m.E)[erow]
             t = group.state["thick"][erow]
             K[sel] = 0.5 * stfac * E * t
-            gap[sel] = 0.5 * t
+            gap[sel] = 0.5 * t * fscale_gap
         else:                       # 'bricks' / 'tetras'
             # K = Stfac * B * A^2 / V ;  solids contact on their real face
             B = _per_element(group, lambda m, p: m.K)[erow]
@@ -117,7 +117,7 @@ def segment_stiffness_gap(model: Model, segments: np.ndarray,
 # Secondary-node stiffness + gap  (i7sti3 secondary side)
 # ----------------------------------------------------------------------------
 
-def node_stiffness_gap(model: Model, stfac: float):
+def node_stiffness_gap(model: Model, stfac: float, fscale_gap: float = 1.0):
     """Per-node penalty stiffness K_s and gap contribution g_s for ALL
     nodes (callers index with their secondary set — cheaper than masking
     every group).
@@ -132,7 +132,7 @@ def node_stiffness_gap(model: Model, stfac: float):
         if gname in ("shells", "shells_qbat", "shells_qeph", "sh3n"):
             E = _per_element(group, lambda m, p: m.E)
             k_e = 0.5 * stfac * E * group.state["thick"]
-            g_e = 0.5 * group.state["thick"]
+            g_e = 0.5 * group.state["thick"] * fscale_gap
         elif gname in ("bricks", "tetras"):
             B = _per_element(group, lambda m, p: m.K)
             k_e = stfac * B * group.state["vol0"] ** (1.0 / 3.0)
@@ -148,6 +148,29 @@ def node_stiffness_gap(model: Model, stfac: float):
             np.maximum.at(K, group.conn[:, k], k_e)
             np.maximum.at(gap, group.conn[:, k], g_e)
     return K, gap
+
+
+# ----------------------------------------------------------------------------
+# Mesh-size gap for Igap=3
+# ----------------------------------------------------------------------------
+
+def segment_mesh_gap(model: Model, segments: np.ndarray, percent_mesh_size: float = 0.4):
+    xs = model.x0[segments]
+    d1 = np.linalg.norm(xs[:, 1] - xs[:, 0], axis=1)
+    d2 = np.linalg.norm(xs[:, 2] - xs[:, 1], axis=1)
+    d3 = np.linalg.norm(xs[:, 3] - xs[:, 2], axis=1)
+    d4 = np.linalg.norm(xs[:, 0] - xs[:, 3], axis=1)
+    d3[segments[:, 2] == segments[:, 3]] = np.inf
+    Lmin = np.min(np.column_stack((d1, d2, d3, d4)), axis=1)
+    return percent_mesh_size * Lmin
+
+
+def node_mesh_gap(model: Model, segments: np.ndarray, nodes: np.ndarray, percent_mesh_size: float = 0.4):
+    g_m_l = segment_mesh_gap(model, segments, percent_mesh_size)
+    node_gap = np.full(model.numnod, np.inf)
+    for k in range(4):
+        np.minimum.at(node_gap, segments[:, k], g_m_l)
+    return node_gap[nodes]
 
 
 # ----------------------------------------------------------------------------
