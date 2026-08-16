@@ -44,6 +44,7 @@ class TimeHistory:
         self._node_req = []   # (label, node_idx, var)
         self._part_req = []   # (label, part_id, var)
         self._sect_req = []   # (label, sect_id, var)
+        self._other_req = []  # (label, id, var)
         for th in model.th_requests:
             for oid in th.ids:
                 for var in th.variables:
@@ -52,11 +53,14 @@ class TimeHistory:
                             (f"N{oid}_{var}", model.node_index(oid), var))
                     elif th.kind == "SECT":
                         self._sect_req.append((f"S{oid}_{var}", oid, var))
-                    else:
+                    elif th.kind == "PART":
                         self._part_req.append((f"P{oid}_{var}", oid, var))
+                    else:
+                        self._other_req.append((f"{th.kind[:2]}{oid}_{var}", oid, var))
         self._cols += [r[0] for r in self._node_req]
         self._cols += [r[0] for r in self._part_req]
         self._cols += [r[0] for r in self._sect_req]
+        self._cols += [r[0] for r in self._other_req]
         # M39 output-path: the nodal DISPLACEMENT field (model.x - model.x0)
         # is only read by a /TH/NODE 'D*' request. Building the whole (N, 3)
         # difference every write when no such request exists is wasted work
@@ -113,6 +117,8 @@ class TimeHistory:
             else:
                 F, M = sect_values[sid]
                 row.append(F[comp] if var[0] == "F" else M[comp])
+        for _ in self._other_req:
+            row.append(0.0)
         self._fh.write(",".join(f"{x:.9E}" for x in row) + "\n")
         self._fh.flush()
 

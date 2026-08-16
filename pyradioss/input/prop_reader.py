@@ -92,7 +92,7 @@ def prop_type_ok(req_prop: int, prop: Property) -> bool:
         return True
     if req_prop == 1 and pt in (9, 16):
         return True
-    if req_prop == 4 and pt in (8, 12, 13, 23, 25, 26, 27, 32, 44, 45, 46):
+    if req_prop == 4 and pt in (8, 12, 13, 23, 25, 26, 27, 32, 35, 36, 44, 45, 46):
         return True
     if req_prop == 14 and pt in (20, 21, 22, 23, 43):
         return True
@@ -697,6 +697,12 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
         return parse_void(block, log)
     if typename in ("CONNECT", "TYPE43"):
         return parse_connect(block, log)
+    if typename in ("STITCH", "TYPE35"):
+        return parse_stitch(block, log)
+    if typename in ("PREDIT", "TYPE36"):
+        return parse_predit(block, log)
+    if typename in ("SPR_MUSCLE", "TYPE46"):
+        return parse_spr_muscle(block, log)
     # ---- everything else: parse-only + inactive ----------------------------
     title, _cards, _fixed = _data_cards(block)
     params = _universal_geo_params()
@@ -705,6 +711,236 @@ def parse_property(block: KeywordBlock, log: MessageLog) -> Optional[Property]:
                 f"that use it", block.source)
     return InactiveProperty(id=block.user_id, type=ptype, title=title,
                             params=params, prop_name=typename)
+
+
+def parse_stitch(block: KeywordBlock, log: MessageLog) -> Property:
+    """/PROP/STITCH (TYPE35) — Stitch connection property (M149).
+
+    Fortran origin: starter/source/properties/p35_stitch/hm_read_prop35.F
+    CFG: prop_stitch.cfg
+    """
+    title, cards, fixed = _data_cards(block)
+    params = _universal_geo_params()
+
+    k_tens = 0.0
+    k_comp = 0.0
+    k_shear = 0.0
+    f_tens = 0.0
+    f_shear = 0.0
+    skew_id = 0
+    iflag = 0
+    ipen = 0
+    ifail = 0
+    dist_max = 0.0
+    area = 1.0
+
+    if len(cards) > 0 and not cards[0].is_blank:
+        if fixed:
+            f0 = cards[0].cut("PROP_STITCH_1")
+            k_tens = _fv(f0[0]) if len(f0) > 0 else 0.0
+            k_comp = _fv(f0[1]) if len(f0) > 1 else 0.0
+            k_shear = _fv(f0[2]) if len(f0) > 2 else 0.0
+            f_tens = _fv(f0[3]) if len(f0) > 3 else 0.0
+            f_shear = _fv(f0[4]) if len(f0) > 4 else 0.0
+        else:
+            t0 = cards[0].tokens()
+            k_tens = _fv(t0[0]) if len(t0) > 0 else 0.0
+            k_comp = _fv(t0[1]) if len(t0) > 1 else 0.0
+            k_shear = _fv(t0[2]) if len(t0) > 2 else 0.0
+            f_tens = _fv(t0[3]) if len(t0) > 3 else 0.0
+            f_shear = _fv(t0[4]) if len(t0) > 4 else 0.0
+
+    if len(cards) > 1 and not cards[1].is_blank:
+        if fixed:
+            f1 = cards[1].cut("PROP_STITCH_2")
+            skew_id = _iv(f1[0]) if len(f1) > 0 else 0
+            iflag = _iv(f1[1]) if len(f1) > 1 else 0
+            ipen = _iv(f1[2]) if len(f1) > 2 else 0
+            ifail = _iv(f1[3]) if len(f1) > 3 else 0
+            dist_max = _fv(f1[4]) if len(f1) > 4 else 0.0
+            area = _fv(f1[5], 1.0) if len(f1) > 5 else 1.0
+        else:
+            t1 = cards[1].tokens()
+            skew_id = _iv(t1[0]) if len(t1) > 0 else 0
+            iflag = _iv(t1[1]) if len(t1) > 1 else 0
+            ipen = _iv(t1[2]) if len(t1) > 2 else 0
+            ifail = _iv(t1[3]) if len(t1) > 3 else 0
+            dist_max = _fv(t1[4]) if len(t1) > 4 else 0.0
+            area = _fv(t1[5], 1.0) if len(t1) > 5 else 1.0
+
+    params.update({
+        "k_tens": k_tens, "k_comp": k_comp, "k_shear": k_shear,
+        "f_tens": f_tens, "f_shear": f_shear,
+        "skew_id": skew_id, "iflag": iflag, "ipen": ipen,
+        "ifail": ifail, "dist_max": dist_max, "area": area
+    })
+    return Property(id=block.user_id, type=35, title=title, params=params)
+
+
+def parse_predit(block: KeywordBlock, log: MessageLog) -> Property:
+    """/PROP/PREDIT (TYPE36) — Progressive Damage Interface Property (M149).
+
+    Fortran origin: starter/source/properties/p36_predit/hm_read_prop36.F
+    CFG: prop_predit.cfg
+    """
+    title, cards, fixed = _data_cards(block)
+    params = _universal_geo_params()
+
+    itype = 0
+    if len(cards) > 0 and not cards[0].is_blank:
+        if fixed:
+            f0 = cards[0].cut("PROP_PREDIT_1")
+            itype = _iv(f0[0]) if len(f0) > 0 else 0
+        else:
+            t0 = cards[0].tokens()
+            itype = _iv(t0[0]) if len(t0) > 0 else 0
+
+    params["itype"] = itype
+
+    if itype == 0:
+        fct_id1, fct_id2, fct_id3 = 0, 0, 0
+        k_init = 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            if fixed:
+                f1 = cards[1].cut("PROP_PREDIT_2A")
+                fct_id1 = _iv(f1[0]) if len(f1) > 0 else 0
+                fct_id2 = _iv(f1[1]) if len(f1) > 1 else 0
+                fct_id3 = _iv(f1[2]) if len(f1) > 2 else 0
+            else:
+                t1 = cards[1].tokens()
+                fct_id1 = _iv(t1[0]) if len(t1) > 0 else 0
+                fct_id2 = _iv(t1[1]) if len(t1) > 1 else 0
+                fct_id3 = _iv(t1[2]) if len(t1) > 2 else 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            if fixed:
+                f2 = cards[2].cut("PROP_PREDIT_3A")
+                k_init = _fv(f2[0]) if len(f2) > 0 else 0.0
+            else:
+                t2 = cards[2].tokens()
+                k_init = _fv(t2[0]) if len(t2) > 0 else 0.0
+        params.update({"fct_id1": fct_id1, "fct_id2": fct_id2, "fct_id3": fct_id3, "k_init": k_init})
+    else:
+        itype_sub = 0
+        p1, p2, p3, p4, p5 = 0.0, 0.0, 0.0, 0.0, 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            if fixed:
+                f1 = cards[1].cut("PROP_PREDIT_2B")
+                itype_sub = _iv(f1[0]) if len(f1) > 0 else 0
+            else:
+                t1 = cards[1].tokens()
+                itype_sub = _iv(t1[0]) if len(t1) > 0 else 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            if fixed:
+                f2 = cards[2].cut("PROP_PREDIT_3B")
+                p1 = _fv(f2[0]) if len(f2) > 0 else 0.0
+                p2 = _fv(f2[1]) if len(f2) > 1 else 0.0
+                p3 = _fv(f2[2]) if len(f2) > 2 else 0.0
+                p4 = _fv(f2[3]) if len(f2) > 3 else 0.0
+                p5 = _fv(f2[4]) if len(f2) > 4 else 0.0
+            else:
+                t2 = cards[2].tokens()
+                p1 = _fv(t2[0]) if len(t2) > 0 else 0.0
+                p2 = _fv(t2[1]) if len(t2) > 1 else 0.0
+                p3 = _fv(t2[2]) if len(t2) > 2 else 0.0
+                p4 = _fv(t2[3]) if len(t2) > 3 else 0.0
+                p5 = _fv(t2[4]) if len(t2) > 4 else 0.0
+        params.update({"itype_sub": itype_sub, "p1": p1, "p2": p2, "p3": p3, "p4": p4, "p5": p5})
+
+    return Property(id=block.user_id, type=36, title=title, params=params)
+
+
+def parse_spr_muscle(block: KeywordBlock, log: MessageLog) -> Property:
+    """/PROP/SPR_MUSCLE (TYPE46) — Hill-type active muscle spring property (M149).
+
+    Fortran origin: starter/source/properties/p46_spr_muscle/hm_read_prop46.F
+    CFG: prop_spr_muscle.cfg
+    """
+    title, cards, fixed = _data_cards(block)
+    params = _universal_geo_params()
+
+    mass = 0.0
+    f_max = 0.0
+    l_opt = 0.0
+    v_max = 0.0
+    k_pe = 0.0
+    if len(cards) > 0 and not cards[0].is_blank:
+        if fixed:
+            f0 = cards[0].cut("PROP_SPR_MUSCLE_1")
+            mass = _fv(f0[0]) if len(f0) > 0 else 0.0
+            f_max = _fv(f0[1]) if len(f0) > 1 else 0.0
+            l_opt = _fv(f0[2]) if len(f0) > 2 else 0.0
+            v_max = _fv(f0[3]) if len(f0) > 3 else 0.0
+            k_pe = _fv(f0[4]) if len(f0) > 4 else 0.0
+        else:
+            t0 = cards[0].tokens()
+            mass = _fv(t0[0]) if len(t0) > 0 else 0.0
+            f_max = _fv(t0[1]) if len(t0) > 1 else 0.0
+            l_opt = _fv(t0[2]) if len(t0) > 2 else 0.0
+            v_max = _fv(t0[3]) if len(t0) > 3 else 0.0
+            k_pe = _fv(t0[4]) if len(t0) > 4 else 0.0
+
+    itype = 0
+    ifunc_ce = 0
+    ifunc_see = 0
+    ifunc_pe = 0
+    ifunc_de = 0
+    ifunc_act = 0
+    if len(cards) > 1 and not cards[1].is_blank:
+        if fixed:
+            f1 = cards[1].cut("PROP_SPR_MUSCLE_2")
+            itype = _iv(f1[0]) if len(f1) > 0 else 0
+            ifunc_ce = _iv(f1[1]) if len(f1) > 1 else 0
+            ifunc_see = _iv(f1[2]) if len(f1) > 2 else 0
+            ifunc_pe = _iv(f1[3]) if len(f1) > 3 else 0
+            ifunc_de = _iv(f1[4]) if len(f1) > 4 else 0
+            ifunc_act = _iv(f1[5]) if len(f1) > 5 else 0
+        else:
+            t1 = cards[1].tokens()
+            itype = _iv(t1[0]) if len(t1) > 0 else 0
+            ifunc_ce = _iv(t1[1]) if len(t1) > 1 else 0
+            ifunc_see = _iv(t1[2]) if len(t1) > 2 else 0
+            ifunc_pe = _iv(t1[3]) if len(t1) > 3 else 0
+            ifunc_de = _iv(t1[4]) if len(t1) > 4 else 0
+            ifunc_act = _iv(t1[5]) if len(t1) > 5 else 0
+
+    f_see0 = 0.0
+    iflag = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        if fixed:
+            f2 = cards[2].cut("PROP_SPR_MUSCLE_3")
+            f_see0 = _fv(f2[0]) if len(f2) > 0 else 0.0
+            iflag = _iv(f2[1]) if len(f2) > 1 else 0
+        else:
+            t2 = cards[2].tokens()
+            f_see0 = _fv(t2[0]) if len(t2) > 0 else 0.0
+            iflag = _iv(t2[1]) if len(t2) > 1 else 0
+
+    gamma_m = 0.0
+    beta_m = 0.0
+    act_init = 0.0
+    tau_act = 0.0
+    if len(cards) > 3 and not cards[3].is_blank:
+        if fixed:
+            f3 = cards[3].cut("PROP_SPR_MUSCLE_4")
+            gamma_m = _fv(f3[0]) if len(f3) > 0 else 0.0
+            beta_m = _fv(f3[1]) if len(f3) > 1 else 0.0
+            act_init = _fv(f3[2]) if len(f3) > 2 else 0.0
+            tau_act = _fv(f3[3]) if len(f3) > 3 else 0.0
+        else:
+            t3 = cards[3].tokens()
+            gamma_m = _fv(t3[0]) if len(t3) > 0 else 0.0
+            beta_m = _fv(t3[1]) if len(t3) > 1 else 0.0
+            act_init = _fv(t3[2]) if len(t3) > 2 else 0.0
+            tau_act = _fv(t3[3]) if len(t3) > 3 else 0.0
+
+    params.update({
+        "mass": mass, "f_max": f_max, "l_opt": l_opt, "v_max": v_max, "k_pe": k_pe,
+        "itype": itype, "ifunc_ce": ifunc_ce, "ifunc_see": ifunc_see,
+        "ifunc_pe": ifunc_pe, "ifunc_de": ifunc_de, "ifunc_act": ifunc_act,
+        "f_see0": f_see0, "iflag": iflag,
+        "gamma_m": gamma_m, "beta_m": beta_m, "act_init": act_init, "tau_act": tau_act
+    })
+    return Property(id=block.user_id, type=46, title=title, params=params)
 
 
 def parse_connect(block: KeywordBlock, log: MessageLog) -> Property:

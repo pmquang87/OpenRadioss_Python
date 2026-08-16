@@ -41,7 +41,7 @@ from .entities import (
     InitialBrickState, InitialShellState,
     InitialTrussState, InitialBeamState, InitialSpringState,
     CyclicBoundaryCondition, SolidPartPerturbation, PBlastLoad,
-    ShellPartPerturbation, FailurePerturbation, SphGlobal, SmsGlobal,
+    SubInterface, GuidedCable, ShellPartPerturbation, FailurePerturbation, SphGlobal, SmsGlobal,
     BcsNrf, BcsWall, RigidLink, CylJoint, GeneralJoint,
     MergeNode, MergeRbody, IniCrack, IniCrackSegment, LaserLoad,
     PcylLoad, PfluidLoad, Preload, PreloadAxial, DampInter, DampRange,
@@ -716,6 +716,7 @@ class Model:
         self.mpcs: List[Mpc] = []                      # /MPC     (M6)
         self.interfaces: List[Interface] = []
         self.sub_interfaces: List[SubInterface] = []   # /INTER/SUB (M100)
+        self.guided_cables: Dict[int, GuidedCable] = {} # /INTER/GUIDED_CABLE (M149)
         self.plies: Dict[int, Ply] = {}                # /PLY (M100)
         self.laminates: Dict[int, Laminate] = {}       # /LAMINATE (M100)
         self.bcs_nrf: Dict[int, BcsNrf] = {}           # /BCS/NRF (M102)

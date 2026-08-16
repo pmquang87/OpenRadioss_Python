@@ -425,6 +425,13 @@ def check_model(model: Model, log: MessageLog) -> None:
         if sub.main_id2 > 0 and sub.main_id2 not in model.surfaces:
             log.error(f"/INTER/SUB/{sub.id}: main entity 2 {sub.main_id2} not defined", "CROSS REF")
 
+    # Guided cables (M149)
+    for gcid, gc in getattr(model, "guided_cables", {}).items():
+        if gc.grnod_id > 0 and gc.grnod_id not in model.node_groups:
+            log.error(f"/INTER/GUIDED_CABLE/{gcid}: node group {gc.grnod_id} not defined", "CROSS REF")
+        if gc.grpart_id > 0 and gc.grpart_id not in model.egroups.get("PART", {}) and gc.grpart_id not in model.parts:
+            log.error(f"/INTER/GUIDED_CABLE/{gcid}: part group {gc.grpart_id} not defined", "CROSS REF")
+
     # Composite properties (M100)
     for prop_id, prop in model.properties.items():
         if prop.type in (10, 11, 16, 6) and hasattr(prop, "params"):
@@ -728,7 +735,7 @@ def check_model(model: Model, log: MessageLog) -> None:
         elif inter.type == 29:  # GUIDED_CABLE
             if inter.grnod_id > 0 and inter.grnod_id not in model.node_groups:
                 log.error(f"/INTER/GUIDED_CABLE/{inter.id}: node group {inter.grnod_id} not defined", "CROSS REF")
-            if inter.grpart_id > 0 and inter.grpart_id not in model.egroups.get("PART", {}):
+            if inter.grpart_id > 0 and inter.grpart_id not in model.egroups.get("PART", {}) and inter.grpart_id not in model.parts:
                 log.error(f"/INTER/GUIDED_CABLE/{inter.id}: part group {inter.grpart_id} not defined", "CROSS REF")
 
     # M109: Extended Multi-Physics Sensors & Properties

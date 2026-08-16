@@ -1269,6 +1269,20 @@ LAYOUTS: Dict[str, List[int]] = {
     "FAIL_WILKINS_1": [20, 20, 20, 20],
     "FAIL_WILKINS_2": [10, 10],
     "VISC_PLAS_1": [20, 20],
+
+    # GUIDED_CABLE and Specialized Props (M149)
+    "INTER_GUIDED_CABLE_1": [10, 10, 10, 20, 20],
+    "PROP_STITCH_1": [20, 20, 20, 20, 20],
+    "PROP_STITCH_2": [10, 10, 10, 10, 20, 20],
+    "PROP_PREDIT_1": [10],
+    "PROP_PREDIT_2A": [10, 10, 10],
+    "PROP_PREDIT_3A": [20],
+    "PROP_PREDIT_2B": [10],
+    "PROP_PREDIT_3B": [20, 20, 20, 20, 20],
+    "PROP_SPR_MUSCLE_1": [20, 20, 20, 20, 20],
+    "PROP_SPR_MUSCLE_2": [10, 10, 10, 10, 10, 10],
+    "PROP_SPR_MUSCLE_3": [20, 10],
+    "PROP_SPR_MUSCLE_4": [20, 20, 20, 20],
 }
 
 

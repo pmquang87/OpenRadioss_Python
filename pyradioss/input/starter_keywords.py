@@ -8073,6 +8073,12 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     scaling.
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if kind in ("GUIDED_CABLE", "CABLE"):
+        read_guided_cable(block, model, log)
+        return
+    if kind in ("SUB", "SUBINTER"):
+        read_subinter(block, model, log)
+        return
     if kind == "LAGMUL":
         subtype = block.parts[2].upper() if len(block.parts) > 2 else ""
         if subtype not in ("TYPE2", "TYPE7", "TYPE11", "TYPE16", "TYPE17", "SPOTWELD", "SURF", "PART", "TIED", "BEAM", "EDGE"):
@@ -8287,25 +8293,6 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             grbric_id1=grbric_id, igap=igap, ibag=ibag, idel=idel18, idel18=idel18,
             stfac=stfac, gap=gap, tstart=tstart, tstop=tstop,
             stiff_dc=stiff_dc, sort_fact=sort_fact, title=title,
-        ))
-        return
-
-    if kind == "SUB":
-        from ..model.entities import SubInterface
-        if block.fixed:
-            f = cards[0].cut("INTER_SUB_1")
-            inter_id = _ival(f[0]) if len(f) > 0 else 0
-            m1 = _ival(f[1]) if len(f) > 1 else 0
-            s = _ival(f[2]) if len(f) > 2 else 0
-            m2 = _ival(f[3]) if len(f) > 3 else 0
-        else:
-            toks = cards[0].tokens()
-            inter_id = int(float(toks[0])) if len(toks) > 0 else 0
-            m1 = int(float(toks[1])) if len(toks) > 1 else 0
-            s = int(float(toks[2])) if len(toks) > 2 else 0
-            m2 = int(float(toks[3])) if len(toks) > 3 else 0
-        model.sub_interfaces.append(SubInterface(
-            id=block.user_id, title=title, inter_id=inter_id, main_id1=m1, second_id=s, main_id2=m2
         ))
         return
 
@@ -9223,6 +9210,68 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             xfiltr=xfiltr, fric_c=fric_c, title=title))
 
 
+def read_subinter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INTER/SUB/sub_id`` or ``/SUBINTER/sub_id`` (M100/M149): Sub-interface for force/energy tracking.
+
+    Fortran origin: ``starter/source/output/subinterface/hm_read_intsub.F`` / CFG ``inter_sub.cfg``.
+    """
+    from ..model.entities import SubInterface
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/INTER/SUB/{block.user_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("INTER_SUB_1")
+        inter_id = _ival(f[0]) if len(f) > 0 else 0
+        m1 = _ival(f[1]) if len(f) > 1 else 0
+        s = _ival(f[2]) if len(f) > 2 else 0
+        m2 = _ival(f[3]) if len(f) > 3 else 0
+    else:
+        toks = cards[0].tokens()
+        inter_id = int(float(toks[0])) if len(toks) > 0 else 0
+        m1 = int(float(toks[1])) if len(toks) > 1 else 0
+        s = int(float(toks[2])) if len(toks) > 2 else 0
+        m2 = int(float(toks[3])) if len(toks) > 3 else 0
+    model.sub_interfaces.append(SubInterface(
+        id=block.user_id, title=title, inter_id=inter_id, main_id1=m1, second_id=s, main_id2=m2
+    ))
+
+
+def read_guided_cable(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INTER/GUIDED_CABLE/cable_id`` or ``/GUIDED_CABLE/cable_id`` (M149): Guided cable sliding interface.
+
+    Fortran origin: ``starter/source/tools/seatbelts/hm_read_guided_cable.F90`` / CFG ``inter_guided_cable.cfg``.
+    """
+    from ..model.entities import GuidedCable
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/INTER/GUIDED_CABLE/{block.user_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f = cards[0].cut("INTER_GUIDED_CABLE_1")
+        grnod_id = _ival(f[0]) if len(f) > 0 else 0
+        grpart_id = _ival(f[1]) if len(f) > 1 else 0
+        istiff = _ival(f[2]) if len(f) > 2 else 1
+        stfac = _fval(f[3], 1.0) if len(f) > 3 else 1.0
+        fric = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+    else:
+        toks = cards[0].tokens()
+        grnod_id = int(float(toks[0])) if len(toks) > 0 else 0
+        grpart_id = int(float(toks[1])) if len(toks) > 1 else 0
+        istiff = int(float(toks[2])) if len(toks) > 2 else 1
+        stfac = float(toks[3]) if len(toks) > 3 else 1.0
+        fric = float(toks[4]) if len(toks) > 4 else 0.0
+    gc = GuidedCable(
+        id=block.user_id, grnod_id=grnod_id, grpart_id=grpart_id,
+        istiff=istiff, stfac=stfac, fric=fric, title=title
+    )
+    model.guided_cables[block.user_id] = gc
+    model.interfaces.append(Interface(
+        id=block.user_id, type=29, grnod_id=grnod_id, grpart_id=grpart_id,
+        istf=istiff, stfac=stfac, fric=fric, title=title
+    ))
+
+
 def read_line(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/LINE/<subtype>/line_ID`` — edge sets for /INTER/TYPE11
     (Fortran: hm_read_lines.F → IGRSLIN)::
@@ -9352,7 +9401,7 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "MONVOL", "AIRBAG", "FVMBAG", "COMMU", "ALE", "ALEGRID", "ALECFD",
         "SUBS", "SUBDOMAIN", "SUBMODEL", "LAGMUL", "GEAR", "RACK", "DIFF",
         "IMPDISP", "IMPVEL", "PLOAD", "PROP", "MAT", "STACK", "PLY",
-        "WAVE_SHAPER", "DET"
+        "WAVE_SHAPER", "DET", "GUIDED_CABLE", "KJOINT", "SUBINTER"
     }
     if block.key0 == "THPART":
         kind = "PART"
@@ -9378,6 +9427,10 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "SPHCEL"
     elif kind == "CYL_JOINT":
         kind = "CYL_JO"
+    elif kind == "SUBINTER":
+        kind = "SUBS"
+    elif kind == "INTER_GUIDED_CABLE":
+        kind = "GUIDED_CABLE"
     if kind not in _TH_KINDS:
         log.warning(f"/TH/{kind} not ported", block.source)
         return
@@ -16356,6 +16409,10 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "IMPLICIT": read_implicit,
     "THPART": read_th,
     "VISC_PLAS": read_visc_plas,
+    "GUIDED_CABLE": read_guided_cable,
+    "INTER_GUIDED_CABLE": read_guided_cable,
+    "SUBINTER": read_subinter,
+    "INTER_SUB": read_subinter,
 }
 
 

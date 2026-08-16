@@ -1693,6 +1693,21 @@ class SubInterface:
 
 
 @dataclass
+class GuidedCable:
+    """/INTER/GUIDED_CABLE/cable_ID or /GUIDED_CABLE/cable_ID (M149): Guided cable sliding interface.
+
+    Fortran origin: ``starter/source/tools/seatbelts/hm_read_guided_cable.F90`` / CFG ``inter_guided_cable.cfg``.
+    """
+    id: int
+    grnod_id: int = 0
+    grpart_id: int = 0
+    istiff: int = 1
+    stfac: float = 1.0
+    fric: float = 0.0
+    title: str = ""
+
+
+@dataclass
 class ShellPartPerturbation:
     """/PERTURB/PART/SHELL/perturb_ID (M101): Shell part perturbation.
 
