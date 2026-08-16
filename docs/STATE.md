@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M165)
+## What is implemented (M1 → M166)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -171,6 +171,7 @@ real history is 41 milestones. One line each:
 | M163 | Detonation cord ignition, advanced pressure loading & ALE/Euler directives suite: /DFS/DETCORD & /DFS/DETCORD/NODE detonation cord ignition reader, /LOAD/PRESSURE & /LOAD/PFLUID hydroforming / directional pressure load reader with non-pressure interface detection, /ALE/MAT material ALE volume fraction directives, and /EULER/MAT material Euler volume fraction directives |
 | M164 | Eulerian & multifluid boundary conditions, sliding boundary walls & extended seatbelt sliprings suite: /EBCS/NRF & /BCS/NRF non-reflecting frontier boundary condition reader, /BCS/WALL sliding wall boundary condition reader for multifluid collocated schemes, /SLIPRING/SHELL 2D shell slipring seatbelt elements connecting shell element groups with normal-force and time-dependent friction laws, and Eulerian /EBCS/PRES, /EBCS/VEL, /EBCS/INLET boundary loading directives |
 | M165 | Sub-laminate ply stacks, neck injury / thermal sensor enhancements & composite draping plies suite: /SUBLAMINATE & /STACK/SUB_LAMINATE sub-laminate composite ply stack reader, /SENSOR/NIC & /SENSOR/NIC_NIJ full 4-card neck injury criterion sensor reader, /SENSOR/TEMP thermal node group sensor reader, /SENSOR/DIST deactivation flag dflag support, and /DRAPE/PLY_SLICE (/TABLE/DRAPE/PLY_SLICE) composite draping table reader |
+| M166 | Advanced equations of state (powder-burn, compaction, exponential, ideal-gas VT) & SPH gauges suite: /EOS/POWDER-BURN & /EOS/POWDERBURN 6-card high-explosive powder-burn equation of state reader, /EOS/COMPACTION & /EOS/COMPACTION2 granular/porous compaction equation of state reader, /EOS/EXPONENTIAL exponential equation of state reader, /EOS/IDEAL_GAS_VT & /EOS/IDEAL-GAS-VT ideal gas with Cp(T) polynomial reader, and /GAUGE/SPH SPH numerical pressure/energy gauge reader |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

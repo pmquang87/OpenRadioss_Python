@@ -1488,6 +1488,19 @@ LAYOUTS: Dict[str, List[int]] = {
     "SUB_LAMINATE_1": [10, 10, 10],
     "SUB_LAMINATE_PLY": [10, 20, 20, 20, 20],
     "SENSOR_DIST_22": [10, 10, 20, 20, 20, 10],
+    # M166: EOS POWDERBURN, COMPACTION, EXPONENTIAL, IDEAL-GAS-VT
+    "EOS_POWDER_1": [20, 20, 20],
+    "EOS_POWDER_2": [20, 20],
+    "EOS_POWDER_3": [20, 20, 20],
+    "EOS_POWDER_4": [20, 20],
+    "EOS_POWDER_5": [10, 20, 20],
+    "EOS_POWDER_6": [10, 20, 20],
+    "EOS_COMPACT_2": [20, 20, 20, 20],
+    "EOS_COMPACT_3": [20, 20, 20],
+    "EOS_COMPACT_4": [20, 20],
+    "EOS_EXPONENTIAL_1": [20, 20, 20],
+    "EOS_IDEAL_GAS_VT_1": [20, 20, 20, 20, 20],
+    "EOS_IDEAL_GAS_VT_2": [20, 20, 20, 20, 20],
 }
 
 

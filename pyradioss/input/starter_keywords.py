@@ -2995,13 +2995,19 @@ def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "MURN": "MURNAGHAN",
         "OSBO": "OSBORNE",
         "TYPE5": "JWL",
+        "POWDERBURN": "POWDER-BURN",
+        "POWDER_BURN": "POWDER-BURN",
+        "COMPACTION2": "COMPACTION",
+        "IDEAL_GAS_VT": "IDEAL-GAS-VT",
+        "IDEAL-GAS_VT": "IDEAL-GAS-VT",
     }
     kind = aliases.get(kind, kind)
     supported_eos = (
         "POLYNOMIAL", "IDEAL-GAS", "LINEAR", "STIFF-GAS",
         "GRUNEISEN", "PUFF", "TILLOTSON", "MURNAGHAN",
         "OSBORNE", "LSZK", "NOBLE-ABEL", "JWL", "COMPACT",
-        "SESAME", "IGNITION_GROWTH"
+        "COMPACTION", "SESAME", "IGNITION_GROWTH",
+        "POWDER-BURN", "EXPONENTIAL", "IDEAL-GAS-VT",
     )
     if kind not in supported_eos:
         log.warning(f"/EOS/{kind} not ported — skipped", block.source)
@@ -3250,6 +3256,154 @@ def read_eos(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             psh = float(t2[1]) if len(t2) > 1 else 0.0
             rho0_card = float(t2[2]) if len(t2) > 2 else 0.0
         params = {"a": a, "b": b, "r1": r1, "r2": r2, "omega": omega, "e0": e0, "psh": psh, "rho0_card": rho0_card}
+    elif kind == "POWDER-BURN":
+        if block.fixed:
+            c1 = cards[0].cut("EOS_POWDER_1") if len(cards) > 0 else []
+            bulk = _fval(c1[0]) if len(c1) > 0 else 0.0
+            p0 = _fval(c1[1]) if len(c1) > 1 else 0.0
+            psh = _fval(c1[2]) if len(c1) > 2 else 0.0
+
+            c2 = cards[1].cut("EOS_POWDER_2") if len(cards) > 1 else []
+            d = _fval(c2[0]) if len(c2) > 0 else 0.0
+            eg = _fval(c2[1]) if len(c2) > 1 else 0.0
+
+            c3 = cards[2].cut("EOS_POWDER_3") if len(cards) > 2 else []
+            gr = _fval(c3[0]) if len(c3) > 0 else 0.0
+            c_val = _fval(c3[1]) if len(c3) > 1 else 0.0
+            alpha = _fval(c3[2]) if len(c3) > 2 else 0.0
+
+            c4 = cards[3].cut("EOS_POWDER_4") if len(cards) > 3 else []
+            c1_val = _fval(c4[0]) if len(c4) > 0 else 0.0
+            c2_val = _fval(c4[1]) if len(c4) > 1 else 0.0
+
+            c5 = cards[4].cut("EOS_POWDER_5") if len(cards) > 4 else []
+            func_b = _ival(c5[0]) if len(c5) > 0 else 0
+            scale_b = _fval(c5[1], 1.0) if len(c5) > 1 else 1.0
+            scale_p = _fval(c5[2], 1.0) if len(c5) > 2 else 1.0
+
+            c6 = cards[5].cut("EOS_POWDER_6") if len(cards) > 5 else []
+            func_gam = _ival(c6[0]) if len(c6) > 0 else 0
+            scale_gam = _fval(c6[1], 1.0) if len(c6) > 1 else 1.0
+            scale_rho = _fval(c6[2], 1.0) if len(c6) > 2 else 1.0
+        else:
+            t1 = cards[0].tokens() if len(cards) > 0 else []
+            bulk = float(t1[0]) if len(t1) > 0 else 0.0
+            p0 = float(t1[1]) if len(t1) > 1 else 0.0
+            psh = float(t1[2]) if len(t1) > 2 else 0.0
+
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            d = float(t2[0]) if len(t2) > 0 else 0.0
+            eg = float(t2[1]) if len(t2) > 1 else 0.0
+
+            t3 = cards[2].tokens() if len(cards) > 2 else []
+            gr = float(t3[0]) if len(t3) > 0 else 0.0
+            c_val = float(t3[1]) if len(t3) > 1 else 0.0
+            alpha = float(t3[2]) if len(t3) > 2 else 0.0
+
+            t4 = cards[3].tokens() if len(cards) > 3 else []
+            c1_val = float(t4[0]) if len(t4) > 0 else 0.0
+            c2_val = float(t4[1]) if len(t4) > 1 else 0.0
+
+            t5 = cards[4].tokens() if len(cards) > 4 else []
+            func_b = int(float(t5[0])) if len(t5) > 0 else 0
+            scale_b = float(t5[1]) if len(t5) > 1 else 1.0
+            scale_p = float(t5[2]) if len(t5) > 2 else 1.0
+
+            t6 = cards[5].tokens() if len(cards) > 5 else []
+            func_gam = int(float(t6[0])) if len(t6) > 0 else 0
+            scale_gam = float(t6[1]) if len(t6) > 1 else 1.0
+            scale_rho = float(t6[2]) if len(t6) > 2 else 1.0
+
+        params = {
+            "bulk": bulk, "p0": p0, "psh": psh, "d": d, "eg": eg,
+            "gr": gr, "c": c_val, "alpha": alpha, "c1": c1_val, "c2": c2_val,
+            "func_b": func_b, "scale_b": scale_b, "scale_p": scale_p,
+            "func_gam": func_gam, "scale_gam": scale_gam, "scale_rho": scale_rho,
+        }
+    elif kind == "COMPACTION":
+        if block.fixed:
+            c1 = cards[0].cut("EOS_COMPACT_2") if len(cards) > 0 else []
+            c0 = _fval(c1[0]) if len(c1) > 0 else 0.0
+            c1_val = _fval(c1[1]) if len(c1) > 1 else 0.0
+            c2_val = _fval(c1[2]) if len(c1) > 2 else 0.0
+            c3_val = _fval(c1[3]) if len(c1) > 3 else 0.0
+
+            c2 = cards[1].cut("EOS_COMPACT_3") if len(cards) > 1 else []
+            mue_min = _fval(c2[0]) if len(c2) > 0 else 0.0
+            mue_max = _fval(c2[1]) if len(c2) > 1 else 0.0
+            b = _fval(c2[2]) if len(c2) > 2 else 0.0
+
+            c3 = cards[2].cut("EOS_COMPACT_4") if len(cards) > 2 else []
+            psh = _fval(c3[0]) if len(c3) > 0 else 0.0
+            rho0_card = _fval(c3[1]) if len(c3) > 1 else 0.0
+        else:
+            t1 = cards[0].tokens() if len(cards) > 0 else []
+            c0 = float(t1[0]) if len(t1) > 0 else 0.0
+            c1_val = float(t1[1]) if len(t1) > 1 else 0.0
+            c2_val = float(t1[2]) if len(t1) > 2 else 0.0
+            c3_val = float(t1[3]) if len(t1) > 3 else 0.0
+
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            mue_min = float(t2[0]) if len(t2) > 0 else 0.0
+            mue_max = float(t2[1]) if len(t2) > 1 else 0.0
+            b = float(t2[2]) if len(t2) > 2 else 0.0
+
+            t3 = cards[2].tokens() if len(cards) > 2 else []
+            psh = float(t3[0]) if len(t3) > 0 else 0.0
+            rho0_card = float(t3[1]) if len(t3) > 1 else 0.0
+
+        params = {
+            "c0": c0, "c1": c1_val, "c2": c2_val, "c3": c3_val,
+            "mue_min": mue_min, "mue_max": mue_max, "b": b,
+            "psh": psh, "rho0_card": rho0_card,
+        }
+    elif kind == "EXPONENTIAL":
+        if block.fixed:
+            c1 = cards[0].cut("EOS_EXPONENTIAL_1") if len(cards) > 0 else []
+            p0 = _fval(c1[0]) if len(c1) > 0 else 0.0
+            alpha = _fval(c1[1]) if len(c1) > 1 else 0.0
+            psh = _fval(c1[2]) if len(c1) > 2 else 0.0
+        else:
+            t1 = cards[0].tokens() if len(cards) > 0 else []
+            p0 = float(t1[0]) if len(t1) > 0 else 0.0
+            alpha = float(t1[1]) if len(t1) > 1 else 0.0
+            psh = float(t1[2]) if len(t1) > 2 else 0.0
+
+        params = {"p0": p0, "alpha": alpha, "psh": psh}
+    elif kind == "IDEAL-GAS-VT":
+        if block.fixed:
+            c1 = cards[0].cut("EOS_IDEAL_GAS_VT_1") if len(cards) > 0 else []
+            r_gas = _fval(c1[0]) if len(c1) > 0 else 0.0
+            p0 = _fval(c1[1]) if len(c1) > 1 else 0.0
+            psh = _fval(c1[2]) if len(c1) > 2 else 0.0
+            t0 = _fval(c1[3]) if len(c1) > 3 else 0.0
+            rho0_card = _fval(c1[4]) if len(c1) > 4 else 0.0
+
+            c2 = cards[1].cut("EOS_IDEAL_GAS_VT_2") if len(cards) > 1 else []
+            a0 = _fval(c2[0]) if len(c2) > 0 else 0.0
+            a1 = _fval(c2[1]) if len(c2) > 1 else 0.0
+            a2 = _fval(c2[2]) if len(c2) > 2 else 0.0
+            a3 = _fval(c2[3]) if len(c2) > 3 else 0.0
+            a4 = _fval(c2[4]) if len(c2) > 4 else 0.0
+        else:
+            t1 = cards[0].tokens() if len(cards) > 0 else []
+            r_gas = float(t1[0]) if len(t1) > 0 else 0.0
+            p0 = float(t1[1]) if len(t1) > 1 else 0.0
+            psh = float(t1[2]) if len(t1) > 2 else 0.0
+            t0 = float(t1[3]) if len(t1) > 3 else 0.0
+            rho0_card = float(t1[4]) if len(t1) > 4 else 0.0
+
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            a0 = float(t2[0]) if len(t2) > 0 else 0.0
+            a1 = float(t2[1]) if len(t2) > 1 else 0.0
+            a2 = float(t2[2]) if len(t2) > 2 else 0.0
+            a3 = float(t2[3]) if len(t2) > 3 else 0.0
+            a4 = float(t2[4]) if len(t2) > 4 else 0.0
+
+        params = {
+            "r_gas": r_gas, "p0": p0, "psh": psh, "t0": t0, "rho0_card": rho0_card,
+            "a0": a0, "a1": a1, "a2": a2, "a3": a3, "a4": a4,
+        }
     elif kind in ("COMPACT", "SESAME", "IGNITION_GROWTH"):
         if block.fixed:
             c1 = cards[0].cut("EOS_COMPACT_1")
@@ -14281,7 +14435,7 @@ def read_gauge(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if subtype == "SPH":
             f = cards[0].cut("GAUGE_SPH_1")
             node_id = _ival(f[0]) if len(f) > 0 else 0
-            fcut = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            fcut = _fval(f[1]) if len(f) > 1 and f[1].strip() else (_fval(f[2], 0.0) if len(f) > 2 else 0.0)
             elem_id = _ival(f[3]) if len(f) > 3 else 0
             dist = _fval(f[4], 0.0) if len(f) > 4 else 0.0
         else:
