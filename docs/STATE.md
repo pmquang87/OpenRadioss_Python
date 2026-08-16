@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M152)
+## What is implemented (M1 → M153)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -158,6 +158,7 @@ real history is 41 milestones. One line each:
 | M150 | Add Eulerian boundary conditions (/EBCS/PRES, /EBCS/VEL, /EBCS/INLET, /EBCS/FLUXOUT, /EBCS/GRADP0, /EBCS/NORMV, /EBCS/VALVIN, /EBCS/VALVOUT, /EBCS/MONVOL), sliding wall boundary conditions (/BCS/WALL), advanced mass scaling (/AMS), and seatbelt system assembly (/SEATBELT) suite |
 | M151 | Add extended contact interfaces (/INTER/TYPE1, /INTER/TYPE3, /INTER/TYPE5, /INTER/TYPE6, /INTER/TYPE14, /INTER/TYPE20, /INTER/TYPE21, /INTER/TYPE23), blast surface loading (/LOAD/PBLAST, /PBLAST), initial volume fraction (/INIVOL), initial gravity (/INIGRAV), initial state import (/INISTA, /INISTATE), boundary element method (/BEM/FLOW, /BEM/DAA), and perturbation controls (/PERTURB/PART/SHELL, /PERTURB/PART/SOLID, /PERTURB/FAIL) suite |
 | M152 | Add Eulerian initial BCs (/EBCS/INIP, /EBCS/INIV), dedicated /PROP readers (INJECT1/2, JOINT, TORSION, SPR_ELAS_PLAS, SPR_BEAM, SPOTWELD, BUSHING), RLINK DOF accessors, ImposedFlux alias/accessors, element group extended aliases (/GRSHELL, /GRBRICK, /GRTRUSS, etc.) |
+| M153 | Fix checker false positives: ADMAS mass_type-aware cross-reference (types 2/3/4/6/7 skip node group check), downgrade 'model has no elements' from error to warning for decks with only unported element types |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
