@@ -1353,20 +1353,28 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "MAXSTRAIN"
     elif kind in ("ORTH_BIQUAD",):
         kind = "ORTHBIQUAD"
+    elif kind in ("XFEM_FLD", "XFEM/FLD") or (kind == "XFEM" and len(block.parts) > 2 and block.parts[2].upper() == "FLD"):
+        kind = "XFEM_FLD"
+    elif kind in ("XFEM_JOHNS", "XFEM/JOHNS") or (kind == "XFEM" and len(block.parts) > 2 and block.parts[2].upper() in ("JOHNS", "JOHNSON")):
+        kind = "XFEM_JOHNS"
+    elif kind in ("XFEM_TBUTC", "XFEM/TBUTC") or (kind == "XFEM" and len(block.parts) > 2 and block.parts[2].upper() in ("TBUTC", "TBUTCHER")):
+        kind = "XFEM_TBUTC"
 
     if kind not in ("JOHNSON", "BIQUAD", "ORTHBIQUAD", "TAB1", "SNCONNECT", "FLD", "CONNECT",
                     "TENSSTRAIN", "ORTHSTRAIN", "GURSON", "ALTER", "VISUAL", "MULLINS_OR",
                     "PUCK", "RTCL", "SAHRAEI", "SYAZWAN", "TAB2", "GENE1", "INIEVO",
                     "CHANG", "TSAIWU", "TSAIHILL", "HOFFMAN", "MAXSTRAIN", "HASHIN",
                     "LEMAITRE", "COCKCROFT", "ENERGY", "COMPOSITE", "FRACTAL", "FRACTAL_DMG",
-                    "ORTHENERG", "EMC", "FABRIC", "SPALLING", "TBUTCHER", "WIERZBICKI", "WILKINS"):
+                    "ORTHENERG", "EMC", "FABRIC", "SPALLING", "TBUTCHER", "WIERZBICKI", "WILKINS",
+                    "NXT", "LAD_DAMA", "XFEM_FLD", "XFEM_JOHNS", "XFEM_TBUTC"):
         log.warning(f"/FAIL/{kind} not ported — skipped "
                     f"(supported: JOHNSON, BIQUAD, ORTHBIQUAD, TAB1, SNCONNECT, FLD, CONNECT, "
                     f"TENSSTRAIN, ORTHSTRAIN, GURSON, ALTER, VISUAL, MULLINS_OR, "
                     f"PUCK, RTCL, SAHRAEI, SYAZWAN, TAB2, GENE1, INIEVO, "
                     f"CHANG, TSAIWU, TSAIHILL, HOFFMAN, MAXSTRAIN, HASHIN, "
                     f"LEMAITRE, COCKCROFT, ENERGY, COMPOSITE, FRACTAL, FRACTAL_DMG, "
-                    f"ORTHENERG, EMC, FABRIC, SPALLING, TBUTCHER, WIERZBICKI, WILKINS)", block.source)
+                    f"ORTHENERG, EMC, FABRIC, SPALLING, TBUTCHER, WIERZBICKI, WILKINS, "
+                    f"NXT, LAD_DAMA, XFEM_FLD, XFEM_JOHNS, XFEM_TBUTC)", block.source)
         return
     # header /FAIL/<kind>/mat_ID[/fail_ID]: with TWO trailing ids the
     # FIRST is the material id (the lexer keeps only the last as user_id)
@@ -2109,6 +2117,10 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             idx += 1
             c_b = cards[idx].cut("FAIL_INIEVO_3") if block.fixed and idx < len(cards) else (cards[idx].tokens() if idx < len(cards) else [])
             idx += 1
+            c_c = cards[idx].cut("FAIL_INIEVO_4") if block.fixed and idx < len(cards) else (cards[idx].tokens() if idx < len(cards) else [])
+            idx += 1
+            c_d = cards[idx].cut("FAIL_INIEVO_5") if block.fixed and idx < len(cards) else (cards[idx].tokens() if idx < len(cards) else [])
+            idx += 1
             subcards.append({
                 "initype": _ival(c_a[0]) if len(c_a) > 0 else 0,
                 "evotype": _ival(c_a[1]) if len(c_a) > 1 else 0,
@@ -2116,15 +2128,176 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 "comptyp": _ival(c_a[3]) if len(c_a) > 3 else 0,
                 "tab_id": _ival(c_b[0]) if len(c_b) > 0 else 0,
                 "sr_ref": _fval(c_b[1]) if len(c_b) > 1 else 0.0,
-                "fscale": _fval(c_b[2]) if len(c_b) > 2 else 1.0,
+                "fscale": _fval(c_b[2], 1.0) if len(c_b) > 2 else 1.0,
                 "param": _fval(c_b[3]) if len(c_b) > 3 else 0.0,
+                "tab_el": _ival(c_c[0]) if len(c_c) > 0 else 0,
+                "el_ref": _fval(c_c[1]) if len(c_c) > 1 else 0.0,
+                "elscal": _fval(c_c[2], 1.0) if len(c_c) > 2 else 1.0,
+                "disp": _fval(c_d[0]) if len(c_d) > 0 else 0.0,
+                "alpha": _fval(c_d[1]) if len(c_d) > 1 else 0.0,
+                "ener": _fval(c_d[2]) if len(c_d) > 2 else 0.0,
             })
+        fail_id = 0
+        if idx < len(cards) and not cards[idx].is_blank:
+            fail_id = _ival(cards[idx].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[idx].tokens()[0]))
 
         params = {
             "ninievo": ninievo, "ishear": ishear, "ilen": ilen, "failip": failip,
-            "pthk": pthk, "evolution_models": subcards,
+            "pthk": pthk, "evolution_models": subcards, "fail_id": fail_id,
         }
+        from ..model.entities import FailInievo
+        model.fail_inievos[mat_id] = FailInievo(
+            mat_id=mat_id, ninievo=ninievo, ishear=ishear, ilen=ilen,
+            failip=failip, pthk=pthk, models=subcards, fail_id=fail_id,
+        )
         fm = FailureModel(type="INIEVO", ifail_sh=1, params=params)
+
+    elif kind == "NXT":
+        if block.fixed:
+            c1 = cards[0].cut("FAIL_NXT_1")
+            fct_id1 = _ival(c1[0]) if len(c1) > 0 else 0
+            fct_id2 = _ival(c1[1]) if len(c1) > 1 else 0
+            ifail_sh = _ival(c1[2], 1) if len(c1) > 2 else 1
+        else:
+            t1 = cards[0].tokens()
+            fct_id1 = int(float(t1[0])) if len(t1) > 0 else 0
+            fct_id2 = int(float(t1[1])) if len(t1) > 1 else 0
+            ifail_sh = int(float(t1[2])) if len(t1) > 2 else 1
+        fail_id = 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            fail_id = _ival(cards[1].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[1].tokens()[0]))
+        params = {
+            "fct_id1": fct_id1, "fct_id2": fct_id2, "ifail_sh": ifail_sh, "fail_id": fail_id,
+        }
+        from ..model.entities import FailNxt
+        model.fail_nxts[mat_id] = FailNxt(
+            mat_id=mat_id, fct_id1=fct_id1, fct_id2=fct_id2, ifail_sh=ifail_sh, fail_id=fail_id,
+        )
+        fm = FailureModel(type="NXT", ifail_sh=ifail_sh, params=params)
+
+    elif kind == "LAD_DAMA":
+        if block.fixed:
+            c1 = cards[0].cut("FAIL_LAD_DAMA_1")
+            k1 = _fval(c1[0]) if len(c1) > 0 else 0.0
+            k2 = _fval(c1[1]) if len(c1) > 1 else 0.0
+            k3 = _fval(c1[2]) if len(c1) > 2 else 0.0
+            gamma1 = _fval(c1[3]) if len(c1) > 3 else 0.0
+            gamma2 = _fval(c1[4]) if len(c1) > 4 else 0.0
+            c2 = cards[1].cut("FAIL_LAD_DAMA_2") if len(cards) > 1 and not cards[1].is_blank else []
+            y0 = _fval(c2[0]) if len(c2) > 0 else 0.0
+            yc = _fval(c2[1]) if len(c2) > 1 else 0.0
+            k_lad = _fval(c2[2]) if len(c2) > 2 else 0.0
+            a_dama = _fval(c2[3]) if len(c2) > 3 else 0.0
+            tau_max = _fval(c2[4]) if len(c2) > 4 else 0.0
+            c3 = cards[2].cut("FAIL_LAD_DAMA_3") if len(cards) > 2 and not cards[2].is_blank else []
+            ifail_sh = _ival(c3[0], 1) if len(c3) > 0 else 1
+            ifail_so = _ival(c3[1], 1) if len(c3) > 1 else 1
+        else:
+            t1 = cards[0].tokens()
+            k1 = float(t1[0]) if len(t1) > 0 else 0.0
+            k2 = float(t1[1]) if len(t1) > 1 else 0.0
+            k3 = float(t1[2]) if len(t1) > 2 else 0.0
+            gamma1 = float(t1[3]) if len(t1) > 3 else 0.0
+            gamma2 = float(t1[4]) if len(t1) > 4 else 0.0
+            t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+            y0 = float(t2[0]) if len(t2) > 0 else 0.0
+            yc = float(t2[1]) if len(t2) > 1 else 0.0
+            k_lad = float(t2[2]) if len(t2) > 2 else 0.0
+            a_dama = float(t2[3]) if len(t2) > 3 else 0.0
+            tau_max = float(t2[4]) if len(t2) > 4 else 0.0
+            t3 = cards[2].tokens() if len(cards) > 2 and not cards[2].is_blank else []
+            ifail_sh = int(float(t3[0])) if len(t3) > 0 else 1
+            ifail_so = int(float(t3[1])) if len(t3) > 1 else 1
+        fail_id = 0
+        if len(cards) > 3 and not cards[3].is_blank:
+            fail_id = _ival(cards[3].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[3].tokens()[0]))
+        params = {
+            "k1": k1, "k2": k2, "k3": k3, "gamma1": gamma1, "gamma2": gamma2,
+            "y0": y0, "yc": yc, "k": k_lad, "a": a_dama, "tau_max": tau_max,
+            "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+        }
+        from ..model.entities import FailLadDama
+        model.fail_laddamas[mat_id] = FailLadDama(
+            mat_id=mat_id, k1=k1, k2=k2, k3=k3, gamma1=gamma1, gamma2=gamma2,
+            y0=y0, yc=yc, k=k_lad, a=a_dama, tau_max=tau_max,
+            ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+        )
+        fm = FailureModel(type="LAD_DAMA", ifail_sh=ifail_sh, params=params)
+
+    elif kind in ("XFEM_FLD", "XFEM/FLD"):
+        if block.fixed:
+            c1 = cards[0].cut("FAIL_XFEM_FLD_1")
+            fct_id = _ival(c1[0]) if len(c1) > 0 else 0
+            ifail_sh = _ival(c1[1], 1) if len(c1) > 1 else 1
+        else:
+            t1 = cards[0].tokens()
+            fct_id = int(float(t1[0])) if len(t1) > 0 else 0
+            ifail_sh = int(float(t1[1])) if len(t1) > 1 else 1
+        fail_id = 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            fail_id = _ival(cards[1].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[1].tokens()[0]))
+        params = {"fct_id": fct_id, "ifail_sh": ifail_sh, "fail_id": fail_id}
+        fm = FailureModel(type="XFEM_FLD", ifail_sh=ifail_sh, params=params)
+
+    elif kind in ("XFEM_JOHNS", "XFEM/JOHNS"):
+        if block.fixed:
+            c1 = cards[0].cut("FAIL_XFEM_JOHNS_1")
+            d1 = _fval(c1[0]) if len(c1) > 0 else 0.0
+            d2 = _fval(c1[1]) if len(c1) > 1 else 0.0
+            d3 = _fval(c1[2]) if len(c1) > 2 else 0.0
+            d4 = _fval(c1[3]) if len(c1) > 3 else 0.0
+            d5 = _fval(c1[4]) if len(c1) > 4 else 0.0
+            c2 = cards[1].cut("FAIL_XFEM_JOHNS_2") if len(cards) > 1 and not cards[1].is_blank else []
+            eps_dot_0 = _fval(c2[0], 1.0) if len(c2) > 0 else 1.0
+            ifail_sh = _ival(c2[1], 1) if len(c2) > 1 else 1
+        else:
+            t1 = cards[0].tokens()
+            d1 = float(t1[0]) if len(t1) > 0 else 0.0
+            d2 = float(t1[1]) if len(t1) > 1 else 0.0
+            d3 = float(t1[2]) if len(t1) > 2 else 0.0
+            d4 = float(t1[3]) if len(t1) > 3 else 0.0
+            d5 = float(t1[4]) if len(t1) > 4 else 0.0
+            t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+            eps_dot_0 = float(t2[0]) if len(t2) > 0 else 1.0
+            ifail_sh = int(float(t2[1])) if len(t2) > 1 else 1
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0]))
+        params = {
+            "d1": d1, "d2": d2, "d3": d3, "d4": d4, "d5": d5,
+            "eps_dot_0": eps_dot_0, "ifail_sh": ifail_sh, "fail_id": fail_id,
+        }
+        fm = FailureModel(type="XFEM_JOHNS", ifail_sh=ifail_sh, params=params)
+
+    elif kind in ("XFEM_TBUTC", "XFEM/TBUTC"):
+        if block.fixed:
+            c1 = cards[0].cut("FAIL_XFEM_TBUTC_1")
+            lam = _fval(c1[0]) if len(c1) > 0 else 0.0
+            k = _fval(c1[1]) if len(c1) > 1 else 0.0
+            sigma_r = _fval(c1[2]) if len(c1) > 2 else 0.0
+            ifail_sh = _ival(c1[3], 0) if len(c1) > 3 else 0
+            iduct = _ival(c1[4], 0) if len(c1) > 4 else 0
+            c2 = cards[1].cut("FAIL_XFEM_TBUTC_2") if len(cards) > 1 and not cards[1].is_blank else []
+            a = _fval(c2[0]) if len(c2) > 0 else 0.0
+            b = _fval(c2[1]) if len(c2) > 1 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            lam = float(t1[0]) if len(t1) > 0 else 0.0
+            k = float(t1[1]) if len(t1) > 1 else 0.0
+            sigma_r = float(t1[2]) if len(t1) > 2 else 0.0
+            ifail_sh = int(float(t1[3])) if len(t1) > 3 else 0
+            iduct = int(float(t1[4])) if len(t1) > 4 else 0
+            t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+            a = float(t2[0]) if len(t2) > 0 else 0.0
+            b = float(t2[1]) if len(t2) > 1 else 0.0
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0]))
+        params = {
+            "lambda": lam, "k": k, "sigma_r": sigma_r, "ifail_sh": ifail_sh,
+            "iduct": iduct, "a": a, "b": b, "fail_id": fail_id,
+        }
+        fm = FailureModel(type="XFEM_TBUTC", ifail_sh=ifail_sh, params=params)
     elif kind == "CHANG":
         c1 = cards[0].cut("FAIL_CHANG_1") if block.fixed else cards[0].tokens()
         s1t = _fval(c1[0]) if len(c1) > 0 else 0.0
@@ -10831,8 +11004,10 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     }
     if block.key0 == "THPART":
         kind = "PART"
-    elif block.key0.startswith("TH") and len(block.key0) > 2 and block.key0 != "TH":
-        kind = block.key0[2:]
+    elif block.key0.startswith(("TH", "ATH", "BTH", "CTH", "DTH", "ETH", "FTH", "GTH", "HTH")) and "_" in block.key0:
+        kind = block.key0.split("_", 1)[1].upper()
+    elif block.key0 in ("TH", "ATH", "BTH", "CTH", "DTH", "ETH", "FTH", "GTH", "HTH"):
+        kind = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
     else:
         kind = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
     if kind == "TITLE":
@@ -18333,6 +18508,14 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "INTER": read_inter,
     "LINE": read_line,
     "TH": read_th,
+    "ATH": read_th,
+    "BTH": read_th,
+    "CTH": read_th,
+    "DTH": read_th,
+    "ETH": read_th,
+    "FTH": read_th,
+    "GTH": read_th,
+    "HTH": read_th,
     "TETRA10": read_tetra10,
     "TRANSFORM": read_transform,
     "SUBMODEL": read_submodel,
@@ -18509,6 +18692,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PROP_SPR_AXI": read_prop,
     "PROP_P32_SPR_PRE": read_prop,
     "PROP_SPR_PRE": read_prop,
+    "FAIL_NXT": read_fail,
+    "FAIL_LAD_DAMA": read_fail,
+    "FAIL_XFEM_FLD": read_fail,
+    "FAIL_XFEM_JOHNS": read_fail,
+    "FAIL_XFEM_TBUTC": read_fail,
+    "FAIL_INIEVO": read_fail,
+    "TH_RETRACTOR": read_th,
+    "TH_SLIPRING": read_th,
+    "TH_TRIA": read_th,
+    "ATH_RETRACTOR": read_th,
+    "BTH_RETRACTOR": read_th,
+    "CTH_RETRACTOR": read_th,
+    "DTH_RETRACTOR": read_th,
+    "ATH_SLIPRING": read_th,
+    "BTH_SLIPRING": read_th,
+    "CTH_SLIPRING": read_th,
+    "DTH_SLIPRING": read_th,
+    "ATH_TRIA": read_th,
+    "BTH_TRIA": read_th,
+    "CTH_TRIA": read_th,
+    "DTH_TRIA": read_th,
 }
 
 

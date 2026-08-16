@@ -1405,6 +1405,21 @@ LAYOUTS: Dict[str, List[int]] = {
     "PROP_POROUS_6": [10],
     "LOAD_PCYL_0": [10, 10, 10],
     "LOAD_PCYL_1": [10, 10, 20, 20, 20],
+    # M159: FAIL/NXT, FAIL/LAD_DAMA, FAIL/INIEVO, FAIL/XFEM_FLD, FAIL/XFEM_JOHNS, FAIL/XFEM_TBUTC
+    "FAIL_NXT_1": [10, 10, 10],
+    "FAIL_LAD_DAMA_1": [20, 20, 20, 20, 20],
+    "FAIL_LAD_DAMA_2": [20, 20, 20, 20, 20],
+    "FAIL_LAD_DAMA_3": [10, 10],
+    "FAIL_INIEVO_1": [10, 10, 10, 40, 10, 20],
+    "FAIL_INIEVO_2": [10, 10, 10, 10],
+    "FAIL_INIEVO_3": [10, 20, 20, 20],
+    "FAIL_INIEVO_4": [10, 20, 20],
+    "FAIL_INIEVO_5": [20, 20, 20],
+    "FAIL_XFEM_FLD_1": [10, 10],
+    "FAIL_XFEM_JOHNS_1": [20, 20, 20, 20, 20],
+    "FAIL_XFEM_JOHNS_2": [20, 10],
+    "FAIL_XFEM_TBUTC_1": [20, 20, 20, 10, 10],
+    "FAIL_XFEM_TBUTC_2": [20, 20],
 }
 
 

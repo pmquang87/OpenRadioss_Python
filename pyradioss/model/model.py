@@ -71,6 +71,7 @@ from .entities import (
     FailOrthBiquad, SlipringShell,
     EbcsNrf, EbcsPeriodic, EbcsCyclic, FailRtcl, FailGurson,
     FailPuck, FailSahraei, FailSyazwan, FailTab2, FailGene1,
+    FailNxt, FailLadDama, FailInievo,
     Stack, StackPly,
     LagmulGlobal, GearConstraint, RackConstraint, DiffConstraint,
     WaveShaper, DetLine, DetCirc, IniMap3D, SetGeneric,
@@ -861,6 +862,9 @@ class Model:
         self.fail_syazwans: Dict[int, FailSyazwan] = {}       # /FAIL/SYAZWAN (M126)
         self.fail_tab2s: Dict[int, FailTab2] = {}             # /FAIL/TAB2 (M126)
         self.fail_gene1s: Dict[int, FailGene1] = {}           # /FAIL/GENE1 (M126)
+        self.fail_nxts: Dict[int, FailNxt] = {}               # /FAIL/NXT (M159)
+        self.fail_laddamas: Dict[int, FailLadDama] = {}       # /FAIL/LAD_DAMA (M159)
+        self.fail_inievos: Dict[int, FailInievo] = {}         # /FAIL/INIEVO (M159)
         self.stacks: Dict[int, Stack] = {}                   # /STACK (M127)
         self.lagmul_global: Optional[LagmulGlobal] = None     # /LAGMUL (M131)
         self.gears: Dict[int, GearConstraint] = {}            # /GEAR (M131)

@@ -4646,6 +4646,52 @@ class PropBushing:
     params: Dict = field(default_factory=dict)
 
 
+@dataclass
+class FailNxt:
+    """/FAIL/NXT (M159): Strain-rate dependent failure model.
+
+    Fortran origin: ``starter/source/materials/fail/hm_read_fail_nxt.F`` / CFG ``fail_nxt.cfg``.
+    """
+    mat_id: int
+    fct_id1: int = 0
+    fct_id2: int = 0
+    ifail_sh: int = 1
+    fail_id: int = 0
 
 
+@dataclass
+class FailLadDama:
+    """/FAIL/LAD_DAMA (M159): Ladevèze damage failure model.
 
+    Fortran origin: ``starter/source/materials/fail/hm_read_fail_lad_dama.F`` / CFG ``fail_lad_dama.cfg``.
+    """
+    mat_id: int
+    k1: float = 0.0
+    k2: float = 0.0
+    k3: float = 0.0
+    gamma1: float = 0.0
+    gamma2: float = 0.0
+    y0: float = 0.0
+    yc: float = 0.0
+    k: float = 0.0
+    a: float = 0.0
+    tau_max: float = 0.0
+    ifail_sh: int = 1
+    ifail_so: int = 1
+    fail_id: int = 0
+
+
+@dataclass
+class FailInievo:
+    """/FAIL/INIEVO (M159): Multi-criterion damage initiation & evolution model.
+
+    Fortran origin: ``starter/source/materials/fail/hm_read_fail_inievo.F`` / CFG ``fail_inievo.cfg``.
+    """
+    mat_id: int
+    ninievo: int = 1
+    ishear: int = 0
+    ilen: int = 0
+    failip: int = 0
+    pthk: float = 0.0
+    models: List[Dict] = field(default_factory=list)
+    fail_id: int = 0

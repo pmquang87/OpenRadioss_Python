@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M155)
+## What is implemented (M1 → M159)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -164,6 +164,7 @@ real history is 41 milestones. One line each:
 | M156 | Advanced structural properties & failure models suite: /PROP/SH_ORTH (/PROP/TYPE9) orthotropic shell reader, /PROP/INT_BEAM (/PROP/TYPE18) fiber & standard section integrated beam reader, /FAIL/ORTHENERG directional energy failure model, /FAIL/FRACTAL_DMG fractal damage model, /PLY extended orientation/group reader, and /DFS/DETPOINTSET group detonation ignition |
 | M157 | Advanced contact interfaces, non-linear spring properties & draping suite: /PROP/TYPE26 (/PROP/SPR_TAB) tabular non-linear spring reader, /PROP/TYPE27 (/PROP/SPR_BDAMP) bilateral damping spring reader, /INTER/TYPE19 5-card multi-segment interface, /INTER/TYPE25 advanced surface contact, /INTER/TYPE8 drawbead interface, and /DRAPE (/TABLE/DRAPE) structured composite fabric draping reader |
 | M158 | Advanced springs, porous solids & cylindrical loads suite: /PROP/TYPE8 (/PROP/SPR_GENE) 6-DOF spring reader, /PROP/TYPE12 (/PROP/SPR_PUL) pulley spring reader, /PROP/TYPE13 (/PROP/SPR_BEAM) beam-spring reader, /PROP/TYPE15 (/PROP/POROUS) porous solid property reader, /PROP/TYPE23 (/PROP/SPR_MAT) material spring reader, /PROP/TYPE25 (/PROP/SPR_AXI) axisymmetric spring reader, /PROP/TYPE32 (/PROP/SPR_PRE) preloaded spring reader, and /LOAD/PCYL cylindrical load reader |
+| M159 | Advanced failure models, XFEM damage models & extended time-history output channels suite: /FAIL/NXT strain-rate dependent failure model, /FAIL/LAD_DAMA Ladevèze damage failure model, /FAIL/INIEVO complete 4-card multi-criterion initiation & evolution model, /FAIL/XFEM_FLD (/FAIL/XFEM/FLD) XFEM FLD crack model, /FAIL/XFEM_JOHNS (/FAIL/XFEM/JOHNS) XFEM Johnson-Cook model, /FAIL/XFEM_TBUTC (/FAIL/XFEM/TBUTC) XFEM T-Butcher model, and /TH/RETRACTOR, /TH/SLIPRING, /TH/TRIA (plus /ATH/*, /BTH/*, /CTH/*, /DTH/* prefix aliases) output blocks |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even
