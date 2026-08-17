@@ -10030,6 +10030,389 @@ class PropType31:
     title: str = ""
 
 
+# ==============================================================================
+# Milestone M191: Advanced Materials, Multi-axial & Visual Failures, Preloads & BCs
+# ==============================================================================
+
+@dataclass
+class MatLaw100:
+    """``/MAT/LAW100`` or ``/MAT/SPOTWELD``: Spotweld / structural adhesive material model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    flag_he: int = 0
+    flag_cr: int = 0
+    c10: float = 0.0
+    c01: float = 0.0
+    c20: float = 0.0
+    c11: float = 0.0
+    c02: float = 0.0
+    c30: float = 0.0
+    c21: float = 0.0
+    c12: float = 0.0
+    c03: float = 0.0
+    d1: float = 0.0
+    d2: float = 0.0
+    d3: float = 0.0
+    mue1: float = 0.0
+    d: float = 0.0
+    lambda_m: float = 0.0
+    itype: int = 0
+    fct_id_ab: int = 0
+    nu: float = 0.0
+    fct_id_sm: int = 0
+    fct_id_bm: int = 0
+    fscale_sm: float = 1.0
+    fscale_bm: float = 1.0
+    a_pl: float = 0.0
+    sigma_pl: float = 0.0
+    f_pl: float = 0.0
+    epsilon_f: float = 0.0
+    n_pl: int = 0
+    title: str = ""
+
+
+MatSpotweld = MatLaw100
+MatStructuralAdhesive = MatLaw100
+
+
+@dataclass
+class MatLaw97:
+    """``/MAT/LAW97`` or ``/MAT/EXPLOSIVE_JWLS``: High-explosive detonation equation of state with JWLS parameters."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    p0: float = 0.0
+    psh: float = 0.0
+    ibfrac: int = 0
+    d: float = 0.0
+    pcj: float = 0.0
+    e0: float = 0.0
+    omega: float = 0.0
+    c: float = 0.0
+    a1: float = 0.0
+    a2: float = 0.0
+    a3: float = 0.0
+    a4: float = 0.0
+    a5: float = 0.0
+    r1: float = 0.0
+    r2: float = 0.0
+    r3: float = 0.0
+    r4: float = 0.0
+    r5: float = 0.0
+    title: str = ""
+
+
+MatExplosiveJwls = MatLaw97
+MatJwls = MatLaw97
+
+
+@dataclass
+class MatLaw71:
+    """``/MAT/LAW71`` or ``/MAT/SUPER_ELAS``: Nitinol / Superelastic shape memory alloy model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    e_mart: float = 0.0
+    sig_sas: float = 0.0
+    sig_fas: float = 0.0
+    sig_ssa: float = 0.0
+    sig_fsa: float = 0.0
+    alpha: float = 0.0
+    epsl: float = 0.0
+    cas: float = 0.0
+    csa: float = 0.0
+    tsas: float = 0.0
+    tfas: float = 0.0
+    tssa: float = 0.0
+    tfsa: float = 0.0
+    cp: float = 0.0
+    tini: float = 0.0
+    title: str = ""
+
+
+MatSuperElas = MatLaw71
+MatNitinol = MatLaw71
+
+
+@dataclass
+class MatLaw73:
+    """``/MAT/LAW73`` or ``/MAT/THERM_HILL``: Thermal Hill orthotropic material model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    r00: float = 1.0
+    r45: float = 1.0
+    r90: float = 1.0
+    chard: float = 0.0
+    eps_max: float = 0.0
+    epst1: float = 0.0
+    epst2: float = 0.0
+    fun_a1: int = 0
+    fscale: float = 1.0
+    pscale: float = 1.0
+    t_initial: float = 0.0
+    spheat: float = 0.0
+    iyield: int = 0
+    yr_fun: int = 0
+    efib: float = 0.0
+    c: float = 0.0
+    title: str = ""
+
+
+MatThermHill = MatLaw73
+MatHillTherm = MatLaw73
+
+
+@dataclass
+class MatLaw84:
+    """``/MAT/LAW84`` or ``/MAT/SWIFT_VOCE``: Swift-Voce hardening plastic material with thermal coupling."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    fcut: float = 0.0
+    cap_end: float = 0.0
+    pc: float = 0.0
+    pr: float = 0.0
+    t0: float = 0.0
+    c2_t: float = 0.0
+    a2: float = 0.0
+    c1_c: float = 0.0
+    vol: float = 0.0
+    nut: float = 0.0
+    fscale11: float = 1.0
+    fscale22: float = 1.0
+    fscale33: float = 1.0
+    fscale12: float = 1.0
+    fscale23: float = 1.0
+    scale1: float = 0.0
+    scale2: float = 0.0
+    scale3: float = 0.0
+    scale4: float = 0.0
+    scale5: float = 0.0
+    title: str = ""
+
+
+MatSwiftVoce = MatLaw84
+MatPlasSwiftVoce = MatLaw84
+
+
+@dataclass
+class MatLaw93:
+    """``/MAT/LAW93`` or ``/MAT/ORTH_HILL``: 3D Orthotropic Hill plasticity model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e11: float = 0.0
+    e22: float = 0.0
+    e33: float = 0.0
+    g12: float = 0.0
+    nu12: float = 0.0
+    g13: float = 0.0
+    g23: float = 0.0
+    nu13: float = 0.0
+    nu23: float = 0.0
+    nl: int = 0
+    sigma_y: float = 0.0
+    qr1: float = 0.0
+    cr1: float = 0.0
+    qr2: float = 0.0
+    cr2: float = 0.0
+    r11: float = 1.0
+    r22: float = 1.0
+    r12: float = 1.0
+    r33: float = 1.0
+    r13: float = 1.0
+    r23: float = 1.0
+    fcut: float = 0.0
+    vp: int = 0
+    curves: List[Dict[str, Any]] = field(default_factory=list)
+    title: str = ""
+
+
+MatOrthHill = MatLaw93
+
+
+@dataclass
+class MatLaw133:
+    """``/MAT/LAW133`` or ``/MAT/GRANULAR``: Granular material model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    nu: float = 0.0
+    pmin: float = 0.0
+    fct_id_g: int = 0
+    fscale_g: float = 1.0
+    fct_id_y: int = 0
+    fscale_y: float = 1.0
+    title: str = ""
+
+
+MatGranular = MatLaw133
+
+
+@dataclass
+class MatLaw101:
+    """``/MAT/LAW101`` or ``/MAT/PLAS_POLY``: Polymer viscoplasticity model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e: float = 0.0
+    alpha1: float = 0.0
+    nu: float = 0.0
+    ve1: float = 0.0
+    ve2: float = 0.0
+    epsilonref: float = 0.0
+    gamma0: float = 0.0
+    alpha_p: float = 0.0
+    deltah: float = 0.0
+    vol: float = 0.0
+    m: float = 0.0
+    c3: float = 0.0
+    c4: float = 0.0
+    alphak1: float = 0.0
+    alphak2: float = 0.0
+    hard: float = 0.0
+    zeta1i: float = 0.0
+    c5: float = 0.0
+    c6: float = 0.0
+    c7: float = 0.0
+    c8: float = 0.0
+    c9: float = 0.0
+    c10: float = 0.0
+    title: str = ""
+
+
+MatPlasPoly = MatLaw101
+
+
+@dataclass
+class MatLaw43:
+    """``/MAT/LAW43`` or ``/MAT/HILL_TAB``: Tabulated Hill orthotropic material model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    yr_fun: int = 0
+    efib: float = 0.0
+    c: float = 0.0
+    r00: float = 1.0
+    r45: float = 1.0
+    r90: float = 1.0
+    chard: float = 0.0
+    iyield: int = 0
+    eps: float = 0.0
+    epst1: float = 0.0
+    epst2: float = 0.0
+    num_curves: int = 0
+    fsmooth: int = 0
+    fcut: float = 0.0
+    curves: List[Dict[str, Any]] = field(default_factory=list)
+    title: str = ""
+
+
+MatHillTab = MatLaw43
+
+
+@dataclass
+class FailLemaitre:
+    """``/FAIL/LEMAITRE``: Lemaitre continuum ductile damage failure model."""
+    mat_id: int = 0
+    eps_d: float = 0.0
+    s_d: float = 0.0
+    dc: float = 0.0
+    failip: int = 0
+    p_thickfail: float = 0.0
+    fail_id: int = 0
+    title: str = ""
+
+
+FailTabulated2 = FailTab2
+
+
+@dataclass
+class FailAlter:
+    """``/FAIL/ALTER``: Alter glass/laminate crack propagation failure model."""
+    mat_id: int = 0
+    exp_n: float = 0.0
+    v0: float = 0.0
+    vc: float = 0.0
+    ema: int = 0
+    irate: int = 0
+    iside: int = 0
+    mode: int = 0
+    cr_foil: float = 0.0
+    cr_air: float = 0.0
+    cr_core: float = 0.0
+    cr_edge: float = 0.0
+    kic: float = 0.0
+    kth: float = 0.0
+    rlen: float = 0.0
+    tdel: float = 0.0
+    kres1: float = 0.0
+    kres2: float = 0.0
+    fail_id: int = 0
+    title: str = ""
+
+
+@dataclass
+class FailVisual:
+    """``/FAIL/VISUAL``: Visual failure indicator model."""
+    mat_id: int = 0
+    vtype: int = 0
+    c_min: float = 0.0
+    c_max: float = 0.0
+    alpha_exp: float = 0.0
+    f_cutoff: float = 0.0
+    f_flag: int = 0
+    strdef: int = 0
+    fail_id: int = 0
+    title: str = ""
+
+
+@dataclass
+class FailOrthstrain:
+    """``/FAIL/ORTHSTRAIN``: Directional orthotropic strain failure criterion."""
+    mat_id: int = 0
+    pthk: float = 0.0
+    eps_dot_ref: float = 0.0
+    fcut: float = 0.0
+    fct_idel: int = 0
+    fscale_el: float = 1.0
+    ei_ref: float = 0.0
+    strdef: int = 0
+    eps_11tf: float = 0.0
+    eps_11tm: float = 0.0
+    fct_id_11t: int = 0
+    eps_11cf: float = 0.0
+    eps_11cm: float = 0.0
+    fct_id_11c: int = 0
+    eps_22tf: float = 0.0
+    eps_22tm: float = 0.0
+    fct_id_22t: int = 0
+    eps_22cf: float = 0.0
+    eps_22cm: float = 0.0
+    fct_id_22c: int = 0
+    eps_33tf: float = 0.0
+    eps_33tm: float = 0.0
+    fct_id_33t: int = 0
+    eps_33cf: float = 0.0
+    eps_33cm: float = 0.0
+    fct_id_33c: int = 0
+    eps_12tf: float = 0.0
+    eps_12tm: float = 0.0
+    fct_id_12t: int = 0
+    fail_id: int = 0
+    title: str = ""
+
+
 
 
 
