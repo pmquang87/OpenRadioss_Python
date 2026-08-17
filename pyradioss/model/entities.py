@@ -6236,6 +6236,243 @@ class MaterialLaw134:
     n2: float = 0.0
 
 
+@dataclass
+class MaterialLaw104:
+    """/MAT/LAW104 or /MAT/JOHNS_VOCE_DRUCKER (M176): Combined Drucker-Prager and Voce hardening model.
+
+    Fortran origin: ``starter/source/materials/mat/mat104/hm_read_mat104.F`` / CFG ``matl104_drucker.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    young: float = 0.0
+    nu: float = 0.0
+    ires: int = 1
+    sigma_r: float = 1e20
+    h: float = 0.0
+    qv: float = 0.0
+    bv: float = 0.0
+    cdr: float = 0.0
+    cjc: float = 0.0
+    epsp0: float = 1.0
+    fcut: float = 1e4
+    tss: float = 0.0
+    tref: float = 20.0
+    tini: float = 20.0
+    eta: float = 0.0
+    cp: float = 0.0
+    eps_iso: float = 1e20
+    eps_ad: float = 2e20
+
+
+@dataclass
+class MaterialLaw105:
+    """/MAT/LAW105 or /MAT/POWDER_BURN (M176): Powder burn propellant material model.
+
+    Fortran origin: ``starter/source/materials/mat/mat105/hm_read_mat105.F90`` / CFG ``matl105.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    bulk: float = 0.0
+    p0: float = 0.0
+    psh: float = 0.0
+    gas_d: float = 0.0
+    gas_eg: float = 0.0
+    gr: float = 0.0
+    c: float = 0.0
+    alpha: float = 0.0
+    func_b: int = 0
+    scale_b: float = 1.0
+    scale_p: float = 1.0
+    func_gam: int = 0
+    scale_gam: float = 1.0
+    scale_rho: float = 1.0
+    c1: float = 0.0
+    c2: float = 0.0
+
+
+@dataclass
+class MaterialLaw106:
+    """/MAT/LAW106 or /MAT/JCOOK_ALM (M176): Johnson-Cook additive manufacturing phase transformation model.
+
+    Fortran origin: ``starter/source/materials/mat/mat106/hm_read_mat106.F90`` / CFG ``mat_law106.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    rhor: float = 0.0
+    young: float = 0.0
+    nu: float = 0.0
+    fct_id1: int = 0
+    fct_id2: int = 0
+    fct_id3: int = 0
+    sigy: float = 0.0
+    beta: float = 0.0
+    hard_n: float = 1.0
+    ep_max: float = 1e30
+    sig_max: float = 1e30
+    fcut: float = 0.0
+    vp: int = 2
+    nmax: int = 3
+    tol: float = 1e-7
+    cjc: float = 0.0
+    deps0: float = 0.0
+    m: float = 1.0
+    tmelt: float = 1e30
+    spheat: float = 0.0
+    eta: float = 0.0
+    t0: float = 300.0
+    tr: float = 300.0
+
+
+@dataclass
+class MaterialLaw107:
+    """/MAT/LAW107 or /MAT/PAPER_LIGHT (M176): Orthotropic elastoplastic paper model.
+
+    Fortran origin: ``starter/source/materials/mat/mat107/hm_read_mat107.F`` / CFG ``matl107_paper_light.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e1: float = 0.0
+    e2: float = 0.0
+    e3: float = 0.0
+    ires: int = 0
+    itab: int = 0
+    ismooth: int = 0
+    nu21: float = 0.0
+    g12: float = 0.0
+    g23: float = 0.0
+    g13: float = 0.0
+    xi1: float = 0.0
+    xi2: float = 0.0
+    g1c: float = 0.0
+    d1: float = 0.0
+    d2: float = 0.0
+    k1: float = 0.0
+    k2: float = 0.0
+    k3: float = 0.0
+    k4: float = 0.0
+    k5: float = 0.0
+    k6: float = 0.0
+    sigy1: float = 0.0
+    cini1: float = 0.0
+    s1: float = 0.0
+    sigy2: float = 0.0
+    cini2: float = 0.0
+    s2: float = 0.0
+    sigy1c: float = 0.0
+    cini1c: float = 0.0
+    s1c: float = 0.0
+    sigy2c: float = 0.0
+    cini2c: float = 0.0
+    s2c: float = 0.0
+    sigyt: float = 0.0
+    cinit: float = 0.0
+    st: float = 0.0
+    tab_yld1: int = 0
+    xscale1: float = 1.0
+    yscale1: float = 1.0
+    tab_yld2: int = 0
+    xscale2: float = 1.0
+    yscale2: float = 1.0
+    tab_yld1c: int = 0
+    xscale1c: float = 1.0
+    yscale1c: float = 1.0
+    tab_yld2c: int = 0
+    xscale2c: float = 1.0
+    yscale2c: float = 1.0
+    tab_yldt: int = 0
+    xscale_t: float = 1.0
+    yscale_t: float = 1.0
+
+
+@dataclass
+class MaterialLaw110:
+    """/MAT/LAW110 or /MAT/VEGTER (M176): Vegter anisotropic yield locus material model.
+
+    Fortran origin: ``starter/source/materials/mat/mat110/hm_read_mat110.F`` / CFG ``matl110_vegter.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    rhor: float = 0.0
+    young: float = 0.0
+    nu: float = 0.0
+    ires: int = 0
+    icrit: int = 1
+    tab_yld: int = 0
+    xscale: float = 1.0
+    yscale: float = 1.0
+    fbi: float = 0.0
+    rhobi: float = 0.0
+    sigma_r: float = 0.0
+    dsigm: float = 0.0
+    beta: float = 0.0
+    omega: float = 0.0
+    hard_n: float = 0.0
+    eps0: float = 0.0
+    sigs: float = 0.0
+    dg0: float = 0.0
+    deps0: float = 0.0
+    m: float = 0.0
+    tini: float = 0.0
+    chard: float = 0.0
+    fcut: float = 0.0
+    vp: int = 0
+    ismooth: int = 0
+    tab_temp: int = 0
+    rm_0: float = 0.0
+    rm_45: float = 0.0
+    rm_90: float = 0.0
+    ag_0: float = 0.0
+    ag_45: float = 0.0
+    ag_90: float = 0.0
+    r_0: float = 1.0
+    r_45: float = 1.0
+    r_90: float = 1.0
+    angles_data: list = field(default_factory=list)
+
+
+@dataclass
+class MaterialLaw115:
+    """/MAT/LAW115 or /MAT/DESHPANDE_FLECK (M176): Deshpande-Fleck metallic foam model.
+
+    Fortran origin: ``starter/source/materials/mat/mat115/hm_read_mat115.F`` / CFG ``matl115_deshfleck.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    young: float = 0.0
+    nu: float = 0.0
+    ires: int = 2
+    istat: int = 0
+    alpha: float = 0.0
+    cfail: float = 0.0
+    pfail: float = 0.0
+    sigp: float = 0.0
+    gamma: float = 0.0
+    epsd: float = 0.0
+    alpha2: float = 0.0
+    beta: float = 0.0
+    rhof0: float = 0.0
+    sigp_c0: float = 0.0
+    sigp_c1: float = 0.0
+    sigp_n: float = 0.0
+    alpha2_c0: float = 0.0
+    alpha2_c1: float = 0.0
+    alpha2_n: float = 0.0
+    gamma_c0: float = 0.0
+    gamma_c1: float = 0.0
+    gamma_n: float = 0.0
+    beta_c0: float = 0.0
+    beta_c1: float = 0.0
+    beta_n: float = 0.0
+
+
+
 
 
 

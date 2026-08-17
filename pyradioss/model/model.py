@@ -84,6 +84,7 @@ from .entities import (
     MaterialLaw88, MaterialLaw92, MaterialLaw94, MaterialLaw46, MaterialLaw69,
     MaterialLaw124, MaterialLaw126, MaterialLaw125, MaterialLaw127, MaterialLaw130,
     MaterialLaw128, MaterialLaw129, MaterialLaw123, MaterialLaw132, MaterialLaw134,
+    MaterialLaw104, MaterialLaw105, MaterialLaw106, MaterialLaw107, MaterialLaw110, MaterialLaw115,
     AirbagInjector, AirbagVenthole,
     ErefElement, IniCrack, PropRivet, PropXelem, AdmeshControl,
     PreloadBolt, LoadHydro,
@@ -982,6 +983,12 @@ class Model:
         self.mat_law123s: Dict[int, MaterialLaw123] = {}           # /MAT/LAW123, /MAT/DAIMLER_PINHO (M175)
         self.mat_law132s: Dict[int, MaterialLaw132] = {}           # /MAT/LAW132, /MAT/DAIMLER_CAMANHO (M175)
         self.mat_law134s: Dict[int, MaterialLaw134] = {}           # /MAT/LAW134, /MAT/VISCOUS_FOAM (M175)
+        self.mat_law104s: Dict[int, MaterialLaw104] = {}           # /MAT/LAW104, /MAT/JOHNS_VOCE_DRUCKER (M176)
+        self.mat_law105s: Dict[int, MaterialLaw105] = {}           # /MAT/LAW105, /MAT/POWDER_BURN (M176)
+        self.mat_law106s: Dict[int, MaterialLaw106] = {}           # /MAT/LAW106, /MAT/JCOOK_ALM (M176)
+        self.mat_law107s: Dict[int, MaterialLaw107] = {}           # /MAT/LAW107, /MAT/PAPER_LIGHT (M176)
+        self.mat_law110s: Dict[int, MaterialLaw110] = {}           # /MAT/LAW110, /MAT/VEGTER (M176)
+        self.mat_law115s: Dict[int, MaterialLaw115] = {}           # /MAT/LAW115, /MAT/DESHPANDE_FLECK (M176)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
