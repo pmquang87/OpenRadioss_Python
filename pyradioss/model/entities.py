@@ -7500,6 +7500,298 @@ class PropType27:
 PropSprBdamp = PropType27
 
 
+# ============================================================================
+# M183 Materials: LAW50, LAW57, LAW87, LAW95, LAW163, LAW169
+# ============================================================================
+
+@dataclass
+class MatLaw50:
+    """/MAT/LAW50 or /MAT/VISC_HONEY (M183): Rate-dependent honeycomb material."""
+    id: int
+    rho: float = 0.0
+    refer_rho: float = 0.0
+    ea: float = 0.0
+    eb: float = 0.0
+    ec: float = 0.0
+    gab: float = 0.0
+    gbc: float = 0.0
+    gca: float = 0.0
+    asrate: float = 0.0
+    gflag: int = 0
+    eps_max11: float = 0.0
+    eps_max22: float = 0.0
+    eps_max33: float = 0.0
+    yfun11: list[int] = field(default_factory=list)
+    sfac11: list[float] = field(default_factory=list)
+    eps11: list[float] = field(default_factory=list)
+    yfun22: list[int] = field(default_factory=list)
+    sfac22: list[float] = field(default_factory=list)
+    eps22: list[float] = field(default_factory=list)
+    yfun33: list[int] = field(default_factory=list)
+    sfac33: list[float] = field(default_factory=list)
+    eps33: list[float] = field(default_factory=list)
+    vflag: int = 0
+    eps_max12: float = 0.0
+    eps_max23: float = 0.0
+    eps_max31: float = 0.0
+    yfun12: list[int] = field(default_factory=list)
+    sfac12: list[float] = field(default_factory=list)
+    eps12: list[float] = field(default_factory=list)
+    yfun23: list[int] = field(default_factory=list)
+    sfac23: list[float] = field(default_factory=list)
+    eps23: list[float] = field(default_factory=list)
+    yfun31: list[int] = field(default_factory=list)
+    sfac31: list[float] = field(default_factory=list)
+    eps31: list[float] = field(default_factory=list)
+    title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @property
+    def e11(self) -> float:
+        return self.ea
+
+    @property
+    def e22(self) -> float:
+        return self.eb
+
+    @property
+    def e33(self) -> float:
+        return self.ec
+
+    @property
+    def g12(self) -> float:
+        return self.gab
+
+    @property
+    def g23(self) -> float:
+        return self.gbc
+
+    @property
+    def g31(self) -> float:
+        return self.gca
+
+
+MatViscHoney = MatLaw50
+MatHypFoam = MatLaw50
+
+
+@dataclass
+class MatLaw57Curve:
+    fct_id: int = 0
+    fscale: float = 1.0
+    eps: float = 0.0
+
+
+@dataclass
+class MatLaw57:
+    """/MAT/LAW57 or /MAT/BARLAT3 (M183): Barlat 3-parameter anisotropic plasticity."""
+    id: int
+    rho: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    r00: float = 0.0
+    r45: float = 0.0
+    r90: float = 0.0
+    chard: float = 0.0
+    m: float = 2.0
+    epsp_max: float = 0.0
+    eps_t1: float = 0.0
+    eps_t2: float = 0.0
+    curves: list[MatLaw57Curve] = field(default_factory=list)
+    title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+
+MatBarlat3 = MatLaw57
+
+
+@dataclass
+class MatLaw87Curve:
+    fct_id: int = 0
+    fscale: float = 1.0
+    epsp: float = 0.0
+
+
+@dataclass
+class MatLaw87:
+    """/MAT/LAW87 or /MAT/BARLAT_YLD2000 (M183): Barlat Yld2000 anisotropic plasticity."""
+    id: int
+    rho: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    iflag: int = 0
+    vp: int = 0
+    strain1: float = 0.0
+    exp1: float = 0.0
+    ifit: int = 0
+    alpha: list[float] = field(default_factory=lambda: [1.0]*8)
+    sigma_00: float = 0.0
+    sigma_45: float = 0.0
+    sigma_90: float = 0.0
+    sigma_b: float = 0.0
+    r_00: float = 1.0
+    r_45: float = 1.0
+    r_90: float = 1.0
+    r_b: float = 1.0
+    chard: float = 0.0
+    ikin: int = 0
+    exp_a: float = 6.0
+    alpha_vol: float = 1.0
+    n_hard: float = 0.0
+    fcut: float = 0.0
+    fsmooth: int = 0
+    nrate: int = 0
+    curves: list[MatLaw87Curve] = field(default_factory=list)
+    # Swift-Voce parameters (iflag=1)
+    aswift: float = 0.0
+    eps0: float = 0.0
+    qvoce: float = 0.0
+    beta: float = 0.0
+    k0: float = 0.0
+    # Tabulated (iflag=3)
+    tab_id0: int = 0
+    fscale0: float = 1.0
+    epsd0: float = 0.0
+    tab_id45: int = 0
+    fscale45: float = 1.0
+    epsd45: float = 0.0
+    tab_id90: int = 0
+    fscale90: float = 1.0
+    epsd90: float = 0.0
+    title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @property
+    def alphas(self) -> list[float]:
+        return self.alpha
+
+    @property
+    def a_exp(self) -> int:
+        return int(self.exp_a)
+
+    @property
+    def a_swift(self) -> float:
+        return self.aswift
+
+    @property
+    def q_voce(self) -> float:
+        return self.qvoce
+
+    @property
+    def vflag(self) -> int:
+        return self.vp
+
+
+MatBarlatYld2000 = MatLaw87
+MatBarlat2000 = MatLaw87
+
+
+@dataclass
+class MatLaw95:
+    """/MAT/LAW95 or /MAT/BERGSTROM_BOYCE (M183): Bergstrom-Boyce hyperelastic viscoplastic polymer model."""
+    id: int
+    rho: float = 0.0
+    c10: float = 0.0
+    c01: float = 0.0
+    c20: float = 0.0
+    c11: float = 0.0
+    c02: float = 0.0
+    c30: float = 0.0
+    c21: float = 0.0
+    c12: float = 0.0
+    c03: float = 0.0
+    sb: float = 1.0
+    d1: float = 0.0
+    d2: float = 0.0
+    d3: float = 0.0
+    nu: float = 0.49
+    iform: int = 0
+    a: float = 0.0
+    c: float = 0.0
+    m: float = 1.0
+    ksi: float = 0.0
+    tau_ref: float = 0.0
+    title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+
+MatBergstromBoyce = MatLaw95
+MatHypViscPlas = MatLaw95
+MatFoamTab = MatLaw95
+
+
+@dataclass
+class MatLaw163:
+    """/MAT/LAW163 or /MAT/CRUSHABLE_FOAM (M183): Crushable foam material model."""
+    id: int
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    tsc: float = 0.0
+    damp: float = 0.0
+    ncycle: int = 0
+    tab_id: int = 0
+    epsd_ref: float = 0.0
+    fscale: float = 1.0
+    srclmt: float = 0.0
+    nrs: int = 0
+    title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+
+MatCrushableFoam = MatLaw163
+MatCrushFoam = MatLaw163
+
+
+@dataclass
+class MatLaw169:
+    """/MAT/LAW169 or /MAT/ARUP_ADHESIVE (M183): 3D cohesive adhesive material model."""
+    id: int
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    sht_sl: float = 0.0
+    tenmax: float = 0.0
+    gcten: float = 0.0
+    shrmax: float = 0.0
+    gcshr: float = 0.0
+    pwrt: int = 1
+    pwrs: int = 1
+    shrp: float = 0.0
+    title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @property
+    def pr(self) -> float:
+        return self.nu
+
+
+MatArupAdhesive = MatLaw169
+MatCohTab3D = MatLaw169
+MatCoh3D = MatLaw169
+
+
+
 
 
 

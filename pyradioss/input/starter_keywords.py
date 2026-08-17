@@ -796,9 +796,6 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW24", "CONC", "LAW24_CONC"):
         read_mat_conc(block, model, log)
         return
-    if lawname in ("LAW87", "BARLAT", "LAW87_BARLAT"):
-        read_mat_barlat(block, model, log)
-        return
     if lawname in ("LAW83", "SPR_JOU", "LAW83_SPR_JOU"):
         read_mat_law83(block, model, log)
         return
@@ -946,6 +943,25 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if lawname in ("LAW121", "PLAS_RATE", "PLAS_TAB_RATE", "LAW121_PLAS_RATE"):
         read_mat_law121(block, model, log)
+        return
+    # M183: LAW50 (VISC_HONEY), LAW57 (BARLAT3), LAW87 (BARLAT_YLD2000), LAW95 (BERGSTROM_BOYCE), LAW163 (CRUSHABLE_FOAM), LAW169 (ARUP_ADHESIVE)
+    if lawname in ("LAW50", "VISC_HONEY", "HYP_FOAM", "MAT_VISC_HONEY", "MAT_HYP_FOAM", "LAW50_VISC_HONEY"):
+        read_mat_law50(block, model, log)
+        return
+    if lawname in ("LAW57", "BARLAT3", "MAT_BARLAT3", "LAW57_BARLAT3"):
+        read_mat_law57(block, model, log)
+        return
+    if lawname in ("LAW87", "BARLAT", "BARLAT_YLD2000", "BARLAT2000", "MAT_BARLAT_YLD2000", "MAT_BARLAT2000", "LAW87_BARLAT", "MAT_BARLAT"):
+        read_mat_law87(block, model, log)
+        return
+    if lawname in ("LAW95", "BERGSTROM_BOYCE", "HYP_VISC_PLAS", "FOAM_TAB", "MAT_BERGSTROM_BOYCE", "LAW95_BERGSTROM_BOYCE"):
+        read_mat_law95(block, model, log)
+        return
+    if lawname in ("LAW163", "CRUSHABLE_FOAM", "CRUSH_FOAM", "MAT_CRUSHABLE_FOAM", "MAT_CRUSH_FOAM", "LAW163_CRUSHABLE_FOAM"):
+        read_mat_law163(block, model, log)
+        return
+    if lawname in ("LAW169", "ARUP_ADHESIVE", "COH_TAB_3D", "COH_3D", "MAT_ARUP_ADHESIVE", "MAT_COH_TAB_3D", "MAT_COH_3D", "LAW169_ARUP_ADHESIVE"):
+        read_mat_law169(block, model, log)
         return
     if lawname in ("HEAT", "HEAT_TRANSFER"):
         read_mat_heat(block, model, log)
@@ -28455,6 +28471,843 @@ def read_prop_spr_bdamp(block: KeywordBlock, model: Model, log: MessageLog) -> N
     )
 
 
+# ============================================================================
+# M183 Materials: LAW50, LAW57, LAW87, LAW95, LAW163, LAW169
+# ============================================================================
+
+def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW50/id`` or ``/MAT/VISC_HONEY/id`` or ``/MAT/HYP_FOAM/id`` (M183): Rate-dependent honeycomb."""
+    from ..model.entities import MatLaw50
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank]
+    if not valid_cards:
+        log.error(f"/MAT/LAW50/{mat_id}: missing data cards", block.source)
+        return
+
+    rho, refer_rho = 0.0, 0.0
+    ea, eb, ec = 0.0, 0.0, 0.0
+    gab, gbc, gca = 0.0, 0.0, 0.0
+    asrate = 0.0
+    gflag = 0
+    eps_max11, eps_max22, eps_max33 = 0.0, 0.0, 0.0
+    yfun11, sfac11, eps11 = [], [], []
+    yfun22, sfac22, eps22 = [], [], []
+    yfun33, sfac33, eps33 = [], [], []
+    vflag = 0
+    eps_max12, eps_max23, eps_max31 = 0.0, 0.0, 0.0
+    yfun12, sfac12, eps12 = [], [], []
+    yfun23, sfac23, eps23 = [], [], []
+    yfun31, sfac31, eps31 = [], [], []
+
+    if block.fixed:
+        f1 = valid_cards[0].cut("MAT_LAW50_1")
+        rho = _fval(f1[0]) if len(f1) > 0 else 0.0
+        refer_rho = _fval(f1[1]) if len(f1) > 1 else 0.0
+
+        if len(valid_cards) > 1:
+            f2 = valid_cards[1].cut("MAT_LAW50_2")
+            ea = _fval(f2[0]) if len(f2) > 0 else 0.0
+            eb = _fval(f2[1]) if len(f2) > 1 else 0.0
+            ec = _fval(f2[2]) if len(f2) > 2 else 0.0
+
+        if len(valid_cards) > 2:
+            f3 = valid_cards[2].cut("MAT_LAW50_3")
+            gab = _fval(f3[0]) if len(f3) > 0 else 0.0
+            gbc = _fval(f3[1]) if len(f3) > 1 else 0.0
+            gca = _fval(f3[2]) if len(f3) > 2 else 0.0
+
+        if len(valid_cards) > 3:
+            f4 = valid_cards[3].cut("MAT_LAW50_4")
+            asrate = _fval(f4[0]) if len(f4) > 0 else 0.0
+
+        if len(valid_cards) > 4:
+            f5 = valid_cards[4].cut("MAT_LAW50_5")
+            gflag = _ival(f5[0]) if len(f5) > 0 else 0
+            eps_max11 = _fval(f5[1]) if len(f5) > 1 else 0.0
+            eps_max22 = _fval(f5[2]) if len(f5) > 2 else 0.0
+            eps_max33 = _fval(f5[3]) if len(f5) > 3 else 0.0
+
+        if len(valid_cards) > 5:
+            f6 = valid_cards[5].cut("MAT_LAW50_6")
+            yfun11 = [_ival(x) for x in f6 if x.strip()]
+        if len(valid_cards) > 6:
+            f7 = valid_cards[6].cut("MAT_LAW50_7")
+            sfac11 = [_fval(x, 1.0) for x in f7 if x.strip()]
+        if len(valid_cards) > 7:
+            f8 = valid_cards[7].cut("MAT_LAW50_8")
+            eps11 = [_fval(x) for x in f8 if x.strip()]
+
+        if len(valid_cards) > 8:
+            f9 = valid_cards[8].cut("MAT_LAW50_9")
+            yfun22 = [_ival(x) for x in f9 if x.strip()]
+        if len(valid_cards) > 9:
+            f10 = valid_cards[9].cut("MAT_LAW50_10")
+            sfac22 = [_fval(x, 1.0) for x in f10 if x.strip()]
+        if len(valid_cards) > 10:
+            f11 = valid_cards[10].cut("MAT_LAW50_11")
+            eps22 = [_fval(x) for x in f11 if x.strip()]
+
+        if len(valid_cards) > 11:
+            f12 = valid_cards[11].cut("MAT_LAW50_12")
+            yfun33 = [_ival(x) for x in f12 if x.strip()]
+        if len(valid_cards) > 12:
+            f13 = valid_cards[12].cut("MAT_LAW50_13")
+            sfac33 = [_fval(x, 1.0) for x in f13 if x.strip()]
+        if len(valid_cards) > 13:
+            f14 = valid_cards[13].cut("MAT_LAW50_14")
+            eps33 = [_fval(x) for x in f14 if x.strip()]
+
+        if len(valid_cards) > 14:
+            f15 = valid_cards[14].cut("MAT_LAW50_15")
+            vflag = _ival(f15[0]) if len(f15) > 0 else 0
+            eps_max12 = _fval(f15[1]) if len(f15) > 1 else 0.0
+            eps_max23 = _fval(f15[2]) if len(f15) > 2 else 0.0
+            eps_max31 = _fval(f15[3]) if len(f15) > 3 else 0.0
+
+        if len(valid_cards) > 15:
+            f16 = valid_cards[15].cut("MAT_LAW50_16")
+            yfun12 = [_ival(x) for x in f16 if x.strip()]
+        if len(valid_cards) > 16:
+            f17 = valid_cards[16].cut("MAT_LAW50_17")
+            sfac12 = [_fval(x, 1.0) for x in f17 if x.strip()]
+        if len(valid_cards) > 17:
+            f18 = valid_cards[17].cut("MAT_LAW50_18")
+            eps12 = [_fval(x) for x in f18 if x.strip()]
+
+        if len(valid_cards) > 18:
+            f19 = valid_cards[18].cut("MAT_LAW50_19")
+            yfun23 = [_ival(x) for x in f19 if x.strip()]
+        if len(valid_cards) > 19:
+            f20 = valid_cards[19].cut("MAT_LAW50_20")
+            sfac23 = [_fval(x, 1.0) for x in f20 if x.strip()]
+        if len(valid_cards) > 20:
+            f21 = valid_cards[20].cut("MAT_LAW50_21")
+            eps23 = [_fval(x) for x in f21 if x.strip()]
+
+        if len(valid_cards) > 21:
+            f22 = valid_cards[21].cut("MAT_LAW50_22")
+            yfun31 = [_ival(x) for x in f22 if x.strip()]
+        if len(valid_cards) > 22:
+            f23 = valid_cards[22].cut("MAT_LAW50_23")
+            sfac31 = [_fval(x, 1.0) for x in f23 if x.strip()]
+        if len(valid_cards) > 23:
+            f24 = valid_cards[23].cut("MAT_LAW50_24")
+            eps31 = [_fval(x) for x in f24 if x.strip()]
+    else:
+        toks1 = valid_cards[0].tokens()
+        rho = float(toks1[0]) if len(toks1) > 0 else 0.0
+        refer_rho = float(toks1[1]) if len(toks1) > 1 else 0.0
+
+        if len(valid_cards) > 1:
+            toks2 = valid_cards[1].tokens()
+            ea = float(toks2[0]) if len(toks2) > 0 else 0.0
+            eb = float(toks2[1]) if len(toks2) > 1 else 0.0
+            ec = float(toks2[2]) if len(toks2) > 2 else 0.0
+
+        if len(valid_cards) > 2:
+            toks3 = valid_cards[2].tokens()
+            gab = float(toks3[0]) if len(toks3) > 0 else 0.0
+            gbc = float(toks3[1]) if len(toks3) > 1 else 0.0
+            gca = float(toks3[2]) if len(toks3) > 2 else 0.0
+
+        if len(valid_cards) > 3:
+            toks4 = valid_cards[3].tokens()
+            asrate = float(toks4[0]) if len(toks4) > 0 else 0.0
+
+        if len(valid_cards) > 4:
+            toks5 = valid_cards[4].tokens()
+            gflag = int(float(toks5[0])) if len(toks5) > 0 else 0
+            eps_max11 = float(toks5[1]) if len(toks5) > 1 else 0.0
+            eps_max22 = float(toks5[2]) if len(toks5) > 2 else 0.0
+            eps_max33 = float(toks5[3]) if len(toks5) > 3 else 0.0
+
+        if len(valid_cards) > 5:
+            yfun11 = [int(float(x)) for x in valid_cards[5].tokens()]
+        if len(valid_cards) > 6:
+            sfac11 = [float(x) for x in valid_cards[6].tokens()]
+        if len(valid_cards) > 7:
+            eps11 = [float(x) for x in valid_cards[7].tokens()]
+
+        if len(valid_cards) > 8:
+            yfun22 = [int(float(x)) for x in valid_cards[8].tokens()]
+        if len(valid_cards) > 9:
+            sfac22 = [float(x) for x in valid_cards[9].tokens()]
+        if len(valid_cards) > 10:
+            eps22 = [float(x) for x in valid_cards[10].tokens()]
+
+        if len(valid_cards) > 11:
+            yfun33 = [int(float(x)) for x in valid_cards[11].tokens()]
+        if len(valid_cards) > 12:
+            sfac33 = [float(x) for x in valid_cards[12].tokens()]
+        if len(valid_cards) > 13:
+            eps33 = [float(x) for x in valid_cards[13].tokens()]
+
+        if len(valid_cards) > 14:
+            toks15 = valid_cards[14].tokens()
+            vflag = int(float(toks15[0])) if len(toks15) > 0 else 0
+            eps_max12 = float(toks15[1]) if len(toks15) > 1 else 0.0
+            eps_max23 = float(toks15[2]) if len(toks15) > 2 else 0.0
+            eps_max31 = float(toks15[3]) if len(toks15) > 3 else 0.0
+
+        if len(valid_cards) > 15:
+            yfun12 = [int(float(x)) for x in valid_cards[15].tokens()]
+        if len(valid_cards) > 16:
+            sfac12 = [float(x) for x in valid_cards[16].tokens()]
+        if len(valid_cards) > 17:
+            eps12 = [float(x) for x in valid_cards[17].tokens()]
+
+        if len(valid_cards) > 18:
+            yfun23 = [int(float(x)) for x in valid_cards[18].tokens()]
+        if len(valid_cards) > 19:
+            sfac23 = [float(x) for x in valid_cards[19].tokens()]
+        if len(valid_cards) > 20:
+            eps23 = [float(x) for x in valid_cards[20].tokens()]
+
+        if len(valid_cards) > 21:
+            yfun31 = [int(float(x)) for x in valid_cards[21].tokens()]
+        if len(valid_cards) > 22:
+            sfac31 = [float(x) for x in valid_cards[22].tokens()]
+        if len(valid_cards) > 23:
+            eps31 = [float(x) for x in valid_cards[23].tokens()]
+
+    m50 = MatLaw50(
+        id=mat_id, rho=rho, refer_rho=refer_rho, ea=ea, eb=eb, ec=ec,
+        gab=gab, gbc=gbc, gca=gca, asrate=asrate, gflag=gflag,
+        eps_max11=eps_max11, eps_max22=eps_max22, eps_max33=eps_max33,
+        yfun11=yfun11, sfac11=sfac11, eps11=eps11,
+        yfun22=yfun22, sfac22=sfac22, eps22=eps22,
+        yfun33=yfun33, sfac33=sfac33, eps33=eps33,
+        vflag=vflag, eps_max12=eps_max12, eps_max23=eps_max23, eps_max31=eps_max31,
+        yfun12=yfun12, sfac12=sfac12, eps12=eps12,
+        yfun23=yfun23, sfac23=sfac23, eps23=eps23,
+        yfun31=yfun31, sfac31=sfac31, eps31=eps31,
+        title=title,
+    )
+    model.mat_law50s[mat_id] = m50
+    model.materials[mat_id] = Material(
+        id=mat_id, law=50, rho0=rho, title=title,
+        params={
+            "rho": rho, "rho0": rho, "refer_rho": refer_rho,
+            "ea": ea, "eb": eb, "ec": ec, "e11": ea, "e22": eb, "e33": ec,
+            "gab": gab, "gbc": gbc, "gca": gca, "g12": gab, "g23": gbc, "g31": gca,
+            "asrate": asrate, "gflag": gflag, "vflag": vflag,
+            "eps_max11": eps_max11, "eps_max22": eps_max22, "eps_max33": eps_max33,
+            "eps_max12": eps_max12, "eps_max23": eps_max23, "eps_max31": eps_max31,
+            "yfun11": yfun11, "sfac11": sfac11, "eps11": eps11,
+            "yfun22": yfun22, "sfac22": sfac22, "eps22": eps22,
+            "yfun33": yfun33, "sfac33": sfac33, "eps33": eps33,
+            "yfun12": yfun12, "sfac12": sfac12, "eps12": eps12,
+            "yfun23": yfun23, "sfac23": sfac23, "eps23": eps23,
+            "yfun31": yfun31, "sfac31": sfac31, "eps31": eps31,
+        }
+    )
+
+
+def read_mat_law57(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW57/id`` or ``/MAT/BARLAT3/id`` (M183): Barlat 3-parameter anisotropic plasticity."""
+    from ..model.entities import MatLaw57, MatLaw57Curve
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank]
+    if not valid_cards:
+        log.error(f"/MAT/LAW57/{mat_id}: missing data cards", block.source)
+        return
+
+    rho, refer_rho = 0.0, 0.0
+    e, nu = 0.0, 0.0
+    r00, r45, r90, chard, m = 0.0, 0.0, 0.0, 0.0, 2.0
+    epsp_max, eps_t1, eps_t2 = 0.0, 0.0, 0.0
+    curves: List[MatLaw57Curve] = []
+
+    if block.fixed:
+        f1 = valid_cards[0].cut("MAT_LAW57_1")
+        rho = _fval(f1[0]) if len(f1) > 0 else 0.0
+        refer_rho = _fval(f1[1]) if len(f1) > 1 else 0.0
+
+        if len(valid_cards) > 1:
+            f2 = valid_cards[1].cut("MAT_LAW57_2")
+            e = _fval(f2[0]) if len(f2) > 0 else 0.0
+            nu = _fval(f2[1]) if len(f2) > 1 else 0.0
+
+        if len(valid_cards) > 2:
+            f3 = valid_cards[2].cut("MAT_LAW57_3")
+            r00 = _fval(f3[0]) if len(f3) > 0 else 0.0
+            r45 = _fval(f3[1]) if len(f3) > 1 else 0.0
+            r90 = _fval(f3[2]) if len(f3) > 2 else 0.0
+            chard = _fval(f3[3]) if len(f3) > 3 else 0.0
+            m = _fval(f3[4], 2.0) if len(f3) > 4 and f3[4].strip() else 2.0
+
+        if len(valid_cards) > 3:
+            f4 = valid_cards[3].cut("MAT_LAW57_4")
+            epsp_max = _fval(f4[0]) if len(f4) > 0 else 0.0
+            eps_t1 = _fval(f4[1]) if len(f4) > 1 else 0.0
+            eps_t2 = _fval(f4[2]) if len(f4) > 2 else 0.0
+
+        for c in valid_cards[4:]:
+            fc = c.cut("MAT_LAW57_CURVE")
+            if fc and fc[0].strip():
+                fid = _ival(fc[0])
+                fsc = _fval(fc[1], 1.0) if len(fc) > 1 and fc[1].strip() else 1.0
+                eps = _fval(fc[2]) if len(fc) > 2 else 0.0
+                curves.append(MatLaw57Curve(fct_id=fid, fscale=fsc, eps=eps))
+    else:
+        toks1 = valid_cards[0].tokens()
+        rho = float(toks1[0]) if len(toks1) > 0 else 0.0
+        refer_rho = float(toks1[1]) if len(toks1) > 1 else 0.0
+
+        if len(valid_cards) > 1:
+            toks2 = valid_cards[1].tokens()
+            e = float(toks2[0]) if len(toks2) > 0 else 0.0
+            nu = float(toks2[1]) if len(toks2) > 1 else 0.0
+
+        if len(valid_cards) > 2:
+            toks3 = valid_cards[2].tokens()
+            r00 = float(toks3[0]) if len(toks3) > 0 else 0.0
+            r45 = float(toks3[1]) if len(toks3) > 1 else 0.0
+            r90 = float(toks3[2]) if len(toks3) > 2 else 0.0
+            chard = float(toks3[3]) if len(toks3) > 3 else 0.0
+            m = float(toks3[4]) if len(toks3) > 4 else 2.0
+
+        if len(valid_cards) > 3:
+            toks4 = valid_cards[3].tokens()
+            epsp_max = float(toks4[0]) if len(toks4) > 0 else 0.0
+            eps_t1 = float(toks4[1]) if len(toks4) > 1 else 0.0
+            eps_t2 = float(toks4[2]) if len(toks4) > 2 else 0.0
+
+        for c in valid_cards[4:]:
+            toksc = c.tokens()
+            if toksc:
+                fid = int(float(toksc[0]))
+                fsc = float(toksc[1]) if len(toksc) > 1 else 1.0
+                eps = float(toksc[2]) if len(toksc) > 2 else 0.0
+                curves.append(MatLaw57Curve(fct_id=fid, fscale=fsc, eps=eps))
+
+    m57 = MatLaw57(
+        id=mat_id, rho=rho, refer_rho=refer_rho, e=e, nu=nu,
+        r00=r00, r45=r45, r90=r90, chard=chard, m=m,
+        epsp_max=epsp_max, eps_t1=eps_t1, eps_t2=eps_t2,
+        curves=curves, title=title,
+    )
+    model.mat_law57s[mat_id] = m57
+    model.materials[mat_id] = Material(
+        id=mat_id, law=57, rho0=rho, title=title,
+        params={
+            "rho": rho, "rho0": rho, "refer_rho": refer_rho,
+            "e": e, "nu": nu, "E": e, "Nu": nu, "nu0": nu,
+            "r00": r00, "r45": r45, "r90": r90, "chard": chard, "m": m,
+            "epsp_max": epsp_max, "eps_t1": eps_t1, "eps_t2": eps_t2,
+            "curves": [{"fct_id": c.fct_id, "fscale": c.fscale, "eps": c.eps} for c in curves],
+        }
+    )
+
+
+def read_mat_law87(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW87/id`` or ``/MAT/BARLAT_YLD2000/id`` (M183): Barlat Yld2000 anisotropic plasticity."""
+    from ..model.entities import MatLaw87, MatLaw87Curve
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank]
+    if not valid_cards:
+        log.error(f"/MAT/LAW87/{mat_id}: missing data cards", block.source)
+        return
+
+    rho, refer_rho = 0.0, 0.0
+    e, nu = 0.0, 0.0
+    iflag, vp = 0, 0
+    strain1, exp1 = 0.0, 0.0
+    ifit = 0
+    alpha = [1.0] * 8
+    sigma_00, sigma_45, sigma_90, sigma_b = 0.0, 0.0, 0.0, 0.0
+    r_00, r_45, r_90, r_b = 1.0, 1.0, 1.0, 1.0
+    chard = 0.0
+    ikin = 0
+    exp_a, fcut = 6.0, 0.0
+    fsmooth, nrate = 0, 0
+    curves: List[MatLaw87Curve] = []
+    aswift, eps0, qvoce, beta, k0 = 0.0, 0.0, 0.0, 0.0, 0.0
+    tab_id0, fscale0, epsd0 = 0, 1.0, 0.0
+    tab_id45, fscale45, epsd45 = 0, 1.0, 0.0
+    tab_id90, fscale90, epsd90 = 0, 1.0, 0.0
+
+    alpha_vol = 1.0
+    n_hard = 0.0
+    card_idx = 0
+    if block.fixed:
+        f1 = valid_cards[0].cut("MAT_LAW87_1")
+        rho = _fval(f1[0]) if len(f1) > 0 else 0.0
+        refer_rho = _fval(f1[1]) if len(f1) > 1 else 0.0
+        card_idx = 1
+
+        if card_idx < len(valid_cards):
+            f2 = valid_cards[card_idx].cut("MAT_LAW87_2")
+            e = _fval(f2[0]) if len(f2) > 0 else 0.0
+            nu = _fval(f2[1]) if len(f2) > 1 else 0.0
+            iflag = _ival(f2[2]) if len(f2) > 2 else 0
+            vp = _ival(f2[3]) if len(f2) > 3 else 0
+            strain1 = _fval(f2[4]) if len(f2) > 4 else 0.0
+            exp1 = _fval(f2[5]) if len(f2) > 5 else 0.0
+            card_idx += 1
+
+        if card_idx < len(valid_cards):
+            line_check = valid_cards[card_idx].raw
+            if len(line_check) >= 81 and line_check[80:90].strip():
+                ifit = _ival(line_check[80:90])
+
+            if ifit == 1:
+                f3b = valid_cards[card_idx].cut("MAT_LAW87_3B")
+                sigma_00 = _fval(f3b[0]) if len(f3b) > 0 else 0.0
+                sigma_45 = _fval(f3b[1]) if len(f3b) > 1 else 0.0
+                sigma_90 = _fval(f3b[2]) if len(f3b) > 2 else 0.0
+                sigma_b = _fval(f3b[3]) if len(f3b) > 3 else 0.0
+                card_idx += 1
+                if card_idx < len(valid_cards):
+                    f4b = valid_cards[card_idx].cut("MAT_LAW87_4B")
+                    r_00 = _fval(f4b[0], 1.0) if len(f4b) > 0 and f4b[0].strip() else 1.0
+                    r_45 = _fval(f4b[1], 1.0) if len(f4b) > 1 and f4b[1].strip() else 1.0
+                    r_90 = _fval(f4b[2], 1.0) if len(f4b) > 2 and f4b[2].strip() else 1.0
+                    r_b = _fval(f4b[3], 1.0) if len(f4b) > 3 and f4b[3].strip() else 1.0
+                    card_idx += 1
+            else:
+                f3a = valid_cards[card_idx].cut("MAT_LAW87_3A")
+                alpha[0] = _fval(f3a[0], 1.0) if len(f3a) > 0 and f3a[0].strip() else 1.0
+                alpha[1] = _fval(f3a[1], 1.0) if len(f3a) > 1 and f3a[1].strip() else 1.0
+                alpha[2] = _fval(f3a[2], 1.0) if len(f3a) > 2 and f3a[2].strip() else 1.0
+                alpha[3] = _fval(f3a[3], 1.0) if len(f3a) > 3 and f3a[3].strip() else 1.0
+                card_idx += 1
+                if card_idx < len(valid_cards):
+                    f4a = valid_cards[card_idx].cut("MAT_LAW87_4A")
+                    alpha[4] = _fval(f4a[0], 1.0) if len(f4a) > 0 and f4a[0].strip() else 1.0
+                    alpha[5] = _fval(f4a[1], 1.0) if len(f4a) > 1 and f4a[1].strip() else 1.0
+                    alpha[6] = _fval(f4a[2], 1.0) if len(f4a) > 2 and f4a[2].strip() else 1.0
+                    alpha[7] = _fval(f4a[3], 1.0) if len(f4a) > 3 and f4a[3].strip() else 1.0
+                    card_idx += 1
+
+        if card_idx < len(valid_cards):
+            f5 = valid_cards[card_idx].cut("MAT_LAW87_5")
+            chard = _fval(f5[0]) if len(f5) > 0 else 0.0
+            ikin = _ival(f5[1]) if len(f5) > 1 else 0
+            card_idx += 1
+
+        if iflag == 0:
+            if card_idx < len(valid_cards):
+                f6_0 = valid_cards[card_idx].cut("MAT_LAW87_6_0")
+                exp_a = _fval(f6_0[0], 6.0) if len(f6_0) > 0 and f6_0[0].strip() else 6.0
+                alpha_vol = _fval(f6_0[1], 1.0) if len(f6_0) > 1 and f6_0[1].strip() else 1.0
+                n_hard = _fval(f6_0[2], 0.0) if len(f6_0) > 2 and f6_0[2].strip() else 0.0
+                fcut = _fval(f6_0[3]) if len(f6_0) > 3 and f6_0[3].strip() else 0.0
+                fsmooth = _ival(f6_0[4]) if len(f6_0) > 4 and f6_0[4].strip() else 0
+                nrate = _ival(f6_0[5]) if len(f6_0) > 5 and f6_0[5].strip() else 0
+                card_idx += 1
+            for c in valid_cards[card_idx:]:
+                fc = c.cut("MAT_LAW87_CURVE")
+                if fc and fc[0].strip():
+                    fid = _ival(fc[0])
+                    fsc = _fval(fc[1], 1.0) if len(fc) > 1 and fc[1].strip() else 1.0
+                    ep = _fval(fc[2]) if len(fc) > 2 else 0.0
+                    curves.append(MatLaw87Curve(fct_id=fid, fscale=fsc, epsp=ep))
+        elif iflag == 1:
+            if card_idx < len(valid_cards):
+                f6_1 = valid_cards[card_idx].cut("MAT_LAW87_6_1")
+                exp_a = _fval(f6_1[0], 6.0) if len(f6_1) > 0 and f6_1[0].strip() else 6.0
+                alpha_vol = _fval(f6_1[1], 1.0) if len(f6_1) > 1 and f6_1[1].strip() else 1.0
+                n_hard = _fval(f6_1[2], 0.0) if len(f6_1) > 2 and f6_1[2].strip() else 0.0
+                fcut = _fval(f6_1[3]) if len(f6_1) > 3 and f6_1[3].strip() else 0.0
+                fsmooth = _ival(f6_1[4]) if len(f6_1) > 4 and f6_1[4].strip() else 0
+                nrate = _ival(f6_1[5]) if len(f6_1) > 5 and f6_1[5].strip() else 0
+                card_idx += 1
+            if card_idx < len(valid_cards):
+                f7_1 = valid_cards[card_idx].cut("MAT_LAW87_7_1")
+                aswift = _fval(f7_1[0]) if len(f7_1) > 0 else 0.0
+                eps0 = _fval(f7_1[1]) if len(f7_1) > 1 else 0.0
+                qvoce = _fval(f7_1[2]) if len(f7_1) > 2 else 0.0
+                beta = _fval(f7_1[3]) if len(f7_1) > 3 else 0.0
+                k0 = _fval(f7_1[4]) if len(f7_1) > 4 else 0.0
+                card_idx += 1
+    else:
+        toks1 = valid_cards[0].tokens()
+        rho = float(toks1[0]) if len(toks1) > 0 else 0.0
+        refer_rho = float(toks1[1]) if len(toks1) > 1 else 0.0
+        card_idx = 1
+
+        if card_idx < len(valid_cards):
+            toks2 = valid_cards[card_idx].tokens()
+            e = float(toks2[0]) if len(toks2) > 0 else 0.0
+            nu = float(toks2[1]) if len(toks2) > 1 else 0.0
+            iflag = int(float(toks2[2])) if len(toks2) > 2 else 0
+            vp = int(float(toks2[3])) if len(toks2) > 3 else 0
+            strain1 = float(toks2[4]) if len(toks2) > 4 else 0.0
+            exp1 = float(toks2[5]) if len(toks2) > 5 else 0.0
+            card_idx += 1
+
+        if card_idx < len(valid_cards):
+            toks3 = valid_cards[card_idx].tokens()
+            if len(toks3) >= 5 and int(float(toks3[4])) == 1:
+                ifit = 1
+                sigma_00 = float(toks3[0])
+                sigma_45 = float(toks3[1]) if len(toks3) > 1 else 0.0
+                sigma_90 = float(toks3[2]) if len(toks3) > 2 else 0.0
+                sigma_b = float(toks3[3]) if len(toks3) > 3 else 0.0
+                card_idx += 1
+                if card_idx < len(valid_cards):
+                    toks4 = valid_cards[card_idx].tokens()
+                    r_00 = float(toks4[0]) if len(toks4) > 0 else 1.0
+                    r_45 = float(toks4[1]) if len(toks4) > 1 else 1.0
+                    r_90 = float(toks4[2]) if len(toks4) > 2 else 1.0
+                    r_b = float(toks4[3]) if len(toks4) > 3 else 1.0
+                    card_idx += 1
+            else:
+                for i in range(min(4, len(toks3))):
+                    alpha[i] = float(toks3[i])
+                card_idx += 1
+                if card_idx < len(valid_cards):
+                    toks4 = valid_cards[card_idx].tokens()
+                    for i in range(min(4, len(toks4))):
+                        alpha[4 + i] = float(toks4[i])
+                    card_idx += 1
+
+        if card_idx < len(valid_cards):
+            toks5 = valid_cards[card_idx].tokens()
+            chard = float(toks5[0]) if len(toks5) > 0 else 0.0
+            ikin = int(float(toks5[1])) if len(toks5) > 1 else 0
+            card_idx += 1
+
+        if iflag == 0:
+            if card_idx < len(valid_cards):
+                toks6 = valid_cards[card_idx].tokens()
+                if len(toks6) >= 5:
+                    exp_a = float(toks6[0])
+                    alpha_vol = float(toks6[1])
+                    n_hard = float(toks6[2])
+                    fcut = float(toks6[3])
+                    fsmooth = int(float(toks6[4]))
+                    nrate = int(float(toks6[5])) if len(toks6) > 5 else 0
+                else:
+                    exp_a = float(toks6[0]) if len(toks6) > 0 else 6.0
+                    fcut = float(toks6[1]) if len(toks6) > 1 else 0.0
+                    fsmooth = int(float(toks6[2])) if len(toks6) > 2 else 0
+                    nrate = int(float(toks6[3])) if len(toks6) > 3 else 0
+                card_idx += 1
+            for c in valid_cards[card_idx:]:
+                toksc = c.tokens()
+                if toksc:
+                    fid = int(float(toksc[0]))
+                    fsc = float(toksc[1]) if len(toksc) > 1 else 1.0
+                    ep = float(toksc[2]) if len(toksc) > 2 else 0.0
+                    curves.append(MatLaw87Curve(fct_id=fid, fscale=fsc, epsp=ep))
+        elif iflag == 1:
+            if card_idx < len(valid_cards):
+                toks6 = valid_cards[card_idx].tokens()
+                if len(toks6) >= 5:
+                    exp_a = float(toks6[0])
+                    alpha_vol = float(toks6[1])
+                    n_hard = float(toks6[2])
+                    fcut = float(toks6[3])
+                    fsmooth = int(float(toks6[4]))
+                    nrate = int(float(toks6[5])) if len(toks6) > 5 else 0
+                else:
+                    exp_a = float(toks6[0]) if len(toks6) > 0 else 6.0
+                    fcut = float(toks6[1]) if len(toks6) > 1 else 0.0
+                    fsmooth = int(float(toks6[2])) if len(toks6) > 2 else 0
+                    nrate = int(float(toks6[3])) if len(toks6) > 3 else 0
+                card_idx += 1
+            if card_idx < len(valid_cards):
+                toks7 = valid_cards[card_idx].tokens()
+                aswift = float(toks7[0]) if len(toks7) > 0 else 0.0
+                eps0 = float(toks7[1]) if len(toks7) > 1 else 0.0
+                qvoce = float(toks7[2]) if len(toks7) > 2 else 0.0
+                beta = float(toks7[3]) if len(toks7) > 3 else 0.0
+                k0 = float(toks7[4]) if len(toks7) > 4 else 0.0
+                card_idx += 1
+
+    m87 = MatLaw87(
+        id=mat_id, rho=rho, refer_rho=refer_rho, e=e, nu=nu,
+        iflag=iflag, vp=vp, strain1=strain1, exp1=exp1,
+        ifit=ifit, alpha=alpha, sigma_00=sigma_00, sigma_45=sigma_45,
+        sigma_90=sigma_90, sigma_b=sigma_b, r_00=r_00, r_45=r_45,
+        r_90=r_90, r_b=r_b, chard=chard, ikin=ikin,
+        exp_a=exp_a, alpha_vol=alpha_vol, n_hard=n_hard, fcut=fcut, fsmooth=fsmooth, nrate=nrate,
+        curves=curves, aswift=aswift, eps0=eps0, qvoce=qvoce, beta=beta, k0=k0,
+        tab_id0=tab_id0, fscale0=fscale0, epsd0=epsd0,
+        tab_id45=tab_id45, fscale45=fscale45, epsd45=epsd45,
+        tab_id90=tab_id90, fscale90=fscale90, epsd90=epsd90,
+        title=title,
+    )
+    model.mat_law87s[mat_id] = m87
+    model.mat_barlats[mat_id] = m87
+    model.materials[mat_id] = Material(
+        id=mat_id, law=87, rho0=rho, title=title,
+        params={
+            "rho": rho, "rho0": rho, "refer_rho": refer_rho,
+            "e": e, "nu": nu, "E": e, "Nu": nu,
+            "iflag": iflag, "vp": vp, "vflag": vp, "strain1": strain1, "exp1": exp1,
+            "ifit": ifit, "alpha": alpha, "alphas": alpha,
+            "sigma_00": sigma_00, "sigma_45": sigma_45, "sigma_90": sigma_90, "sigma_b": sigma_b,
+            "r_00": r_00, "r_45": r_45, "r_90": r_90, "r_b": r_b,
+            "chard": chard, "ikin": ikin, "exp_a": exp_a, "a_exp": int(exp_a),
+            "alpha_vol": alpha_vol, "n_hard": n_hard, "fcut": fcut, "fsmooth": fsmooth,
+            "aswift": aswift, "a_swift": aswift, "eps0": eps0, "qvoce": qvoce, "q_voce": qvoce, "beta": beta, "k0": k0,
+            "curves": [{"fct_id": c.fct_id, "fscale": c.fscale, "epsp": c.epsp} for c in curves],
+        }
+    )
+
+
+def read_mat_law95(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW95/id`` or ``/MAT/BERGSTROM_BOYCE/id`` (M183): Bergstrom-Boyce polymer."""
+    from ..model.entities import MatLaw95
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank]
+    if not valid_cards:
+        log.error(f"/MAT/LAW95/{mat_id}: missing data cards", block.source)
+        return
+
+    rho = 0.0
+    c10, c01, c20, c11, c02 = 0.0, 0.0, 0.0, 0.0, 0.0
+    c30, c21, c12, c03, sb = 0.0, 0.0, 0.0, 0.0, 1.0
+    d1, d2, d3 = 0.0, 0.0, 0.0
+    nu = 0.49
+    iform = 0
+    a, c, m, ksi, tau_ref = 0.0, 0.0, 1.0, 0.0, 0.0
+
+    if block.fixed:
+        f1 = valid_cards[0].cut("MAT_LAW95_1")
+        rho = _fval(f1[0]) if len(f1) > 0 else 0.0
+
+        if len(valid_cards) > 1:
+            f2 = valid_cards[1].cut("MAT_LAW95_2")
+            c10 = _fval(f2[0]) if len(f2) > 0 else 0.0
+            c01 = _fval(f2[1]) if len(f2) > 1 else 0.0
+            c20 = _fval(f2[2]) if len(f2) > 2 else 0.0
+            c11 = _fval(f2[3]) if len(f2) > 3 else 0.0
+            c02 = _fval(f2[4]) if len(f2) > 4 else 0.0
+
+        if len(valid_cards) > 2:
+            f3 = valid_cards[2].cut("MAT_LAW95_3")
+            c30 = _fval(f3[0]) if len(f3) > 0 else 0.0
+            c21 = _fval(f3[1]) if len(f3) > 1 else 0.0
+            c12 = _fval(f3[2]) if len(f3) > 2 else 0.0
+            c03 = _fval(f3[3]) if len(f3) > 3 else 0.0
+            sb = _fval(f3[4], 1.0) if len(f3) > 4 and f3[4].strip() else 1.0
+
+        if len(valid_cards) > 3:
+            f4 = valid_cards[3].cut("MAT_LAW95_4")
+            d1 = _fval(f4[0]) if len(f4) > 0 else 0.0
+            d2 = _fval(f4[1]) if len(f4) > 1 else 0.0
+            d3 = _fval(f4[2]) if len(f4) > 2 else 0.0
+            nu = _fval(f4[3], 0.49) if len(f4) > 3 and f4[3].strip() else 0.49
+            iform = _ival(f4[4]) if len(f4) > 4 else 0
+
+        if len(valid_cards) > 4:
+            f5 = valid_cards[4].cut("MAT_LAW95_5")
+            a = _fval(f5[0]) if len(f5) > 0 else 0.0
+            c = _fval(f5[1]) if len(f5) > 1 else 0.0
+            m = _fval(f5[2], 1.0) if len(f5) > 2 and f5[2].strip() else 1.0
+            ksi = _fval(f5[3]) if len(f5) > 3 else 0.0
+            tau_ref = _fval(f5[4]) if len(f5) > 4 else 0.0
+    else:
+        toks1 = valid_cards[0].tokens()
+        rho = float(toks1[0]) if len(toks1) > 0 else 0.0
+
+        if len(valid_cards) > 1:
+            toks2 = valid_cards[1].tokens()
+            c10 = float(toks2[0]) if len(toks2) > 0 else 0.0
+            c01 = float(toks2[1]) if len(toks2) > 1 else 0.0
+            c20 = float(toks2[2]) if len(toks2) > 2 else 0.0
+            c11 = float(toks2[3]) if len(toks2) > 3 else 0.0
+            c02 = float(toks2[4]) if len(toks2) > 4 else 0.0
+
+        if len(valid_cards) > 2:
+            toks3 = valid_cards[2].tokens()
+            c30 = float(toks3[0]) if len(toks3) > 0 else 0.0
+            c21 = float(toks3[1]) if len(toks3) > 1 else 0.0
+            c12 = float(toks3[2]) if len(toks3) > 2 else 0.0
+            c03 = float(toks3[3]) if len(toks3) > 3 else 0.0
+            sb = float(toks3[4]) if len(toks3) > 4 else 1.0
+
+        if len(valid_cards) > 3:
+            toks4 = valid_cards[3].tokens()
+            d1 = float(toks4[0]) if len(toks4) > 0 else 0.0
+            d2 = float(toks4[1]) if len(toks4) > 1 else 0.0
+            d3 = float(toks4[2]) if len(toks4) > 2 else 0.0
+            nu = float(toks4[3]) if len(toks4) > 3 else 0.49
+            iform = int(float(toks4[4])) if len(toks4) > 4 else 0
+
+        if len(valid_cards) > 4:
+            toks5 = valid_cards[4].tokens()
+            a = float(toks5[0]) if len(toks5) > 0 else 0.0
+            c = float(toks5[1]) if len(toks5) > 1 else 0.0
+            m = float(toks5[2]) if len(toks5) > 2 else 1.0
+            ksi = float(toks5[3]) if len(toks5) > 3 else 0.0
+            tau_ref = float(toks5[4]) if len(toks5) > 4 else 0.0
+
+    m95 = MatLaw95(
+        id=mat_id, rho=rho, c10=c10, c01=c01, c20=c20, c11=c11, c02=c02,
+        c30=c30, c21=c21, c12=c12, c03=c03, sb=sb, d1=d1, d2=d2, d3=d3,
+        nu=nu, iform=iform, a=a, c=c, m=m, ksi=ksi, tau_ref=tau_ref,
+        title=title,
+    )
+    model.mat_law95s[mat_id] = m95
+    model.materials[mat_id] = Material(
+        id=mat_id, law=95, rho0=rho, title=title,
+        params={
+            "rho": rho, "rho0": rho,
+            "c10": c10, "c01": c01, "c20": c20, "c11": c11, "c02": c02,
+            "c30": c30, "c21": c21, "c12": c12, "c03": c03, "sb": sb,
+            "d1": d1, "d2": d2, "d3": d3, "nu": nu, "iform": iform,
+            "a": a, "c": c, "m": m, "ksi": ksi, "tau_ref": tau_ref,
+        }
+    )
+
+
+def read_mat_law163(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW163/id`` or ``/MAT/CRUSHABLE_FOAM/id`` (M183): Crushable foam."""
+    from ..model.entities import MatLaw163
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank]
+    if not valid_cards:
+        log.error(f"/MAT/LAW163/{mat_id}: missing data cards", block.source)
+        return
+
+    rho = 0.0
+    e, nu, tsc, damp = 0.0, 0.0, 0.0, 0.0
+    ncycle = 0
+    tab_id = 0
+    epsd_ref = 0.0
+    fscale = 1.0
+    srclmt = 0.0
+    nrs = 0
+
+    if block.fixed:
+        f1 = valid_cards[0].cut("MAT_LAW163_1")
+        rho = _fval(f1[0]) if len(f1) > 0 else 0.0
+
+        if len(valid_cards) > 1:
+            f2 = valid_cards[1].cut("MAT_LAW163_2")
+            e = _fval(f2[0]) if len(f2) > 0 else 0.0
+            nu = _fval(f2[1]) if len(f2) > 1 else 0.0
+            tsc = _fval(f2[2]) if len(f2) > 2 else 0.0
+            damp = _fval(f2[3]) if len(f2) > 3 else 0.0
+            ncycle = _ival(f2[5]) if len(f2) > 5 else 0
+
+        if len(valid_cards) > 2:
+            f3 = valid_cards[2].cut("MAT_LAW163_3")
+            tab_id = _ival(f3[1]) if len(f3) > 1 else 0
+            epsd_ref = _fval(f3[2]) if len(f3) > 2 else 0.0
+            fscale = _fval(f3[3], 1.0) if len(f3) > 3 and f3[3].strip() else 1.0
+            srclmt = _fval(f3[4]) if len(f3) > 4 else 0.0
+            nrs = _ival(f3[6]) if len(f3) > 6 else 0
+    else:
+        toks1 = valid_cards[0].tokens()
+        rho = float(toks1[0]) if len(toks1) > 0 else 0.0
+
+        if len(valid_cards) > 1:
+            toks2 = valid_cards[1].tokens()
+            e = float(toks2[0]) if len(toks2) > 0 else 0.0
+            nu = float(toks2[1]) if len(toks2) > 1 else 0.0
+            tsc = float(toks2[2]) if len(toks2) > 2 else 0.0
+            damp = float(toks2[3]) if len(toks2) > 3 else 0.0
+            ncycle = int(float(toks2[4])) if len(toks2) > 4 else 0
+
+        if len(valid_cards) > 2:
+            toks3 = valid_cards[2].tokens()
+            tab_id = int(float(toks3[0])) if len(toks3) > 0 else 0
+            epsd_ref = float(toks3[1]) if len(toks3) > 1 else 0.0
+            fscale = float(toks3[2]) if len(toks3) > 2 else 1.0
+            srclmt = float(toks3[3]) if len(toks3) > 3 else 0.0
+            nrs = int(float(toks3[4])) if len(toks3) > 4 else 0
+
+    m163 = MatLaw163(
+        id=mat_id, rho=rho, e=e, nu=nu, tsc=tsc, damp=damp, ncycle=ncycle,
+        tab_id=tab_id, epsd_ref=epsd_ref, fscale=fscale, srclmt=srclmt,
+        nrs=nrs, title=title,
+    )
+    model.mat_law163s[mat_id] = m163
+    model.materials[mat_id] = Material(
+        id=mat_id, law=163, rho0=rho, title=title,
+        params={
+            "rho": rho, "rho0": rho, "e": e, "nu": nu, "E": e, "Nu": nu,
+            "tsc": tsc, "damp": damp, "ncycle": ncycle,
+            "tab_id": tab_id, "epsd_ref": epsd_ref, "fscale": fscale,
+            "srclmt": srclmt, "nrs": nrs,
+        }
+    )
+
+
+def read_mat_law169(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW169/id`` or ``/MAT/ARUP_ADHESIVE/id`` (M183): 3D cohesive adhesive material."""
+    from ..model.entities import MatLaw169
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank]
+    if not valid_cards:
+        log.error(f"/MAT/LAW169/{mat_id}: missing data cards", block.source)
+        return
+
+    rho = 0.0
+    e, nu = 0.0, 0.0
+    sht_sl, tenmax, gcten = 0.0, 0.0, 0.0
+    shrmax, gcshr = 0.0, 0.0
+    pwrt, pwrs = 1, 1
+    shrp = 0.0
+
+    if block.fixed:
+        f1 = valid_cards[0].cut("MAT_LAW169_1")
+        rho = _fval(f1[0]) if len(f1) > 0 else 0.0
+
+        if len(valid_cards) > 1:
+            f2 = valid_cards[1].cut("MAT_LAW169_2")
+            e = _fval(f2[0]) if len(f2) > 0 else 0.0
+            nu = _fval(f2[1]) if len(f2) > 1 else 0.0
+            sht_sl = _fval(f2[2]) if len(f2) > 2 else 0.0
+            tenmax = _fval(f2[3]) if len(f2) > 3 else 0.0
+            gcten = _fval(f2[4]) if len(f2) > 4 else 0.0
+
+        if len(valid_cards) > 2:
+            f3 = valid_cards[2].cut("MAT_LAW169_3")
+            shrmax = _fval(f3[0]) if len(f3) > 0 else 0.0
+            gcshr = _fval(f3[1]) if len(f3) > 1 else 0.0
+            pwrt = _ival(f3[2], 1) if len(f3) > 2 and f3[2].strip() else 1
+            pwrs = _ival(f3[3], 1) if len(f3) > 3 and f3[3].strip() else 1
+            shrp = _fval(f3[4]) if len(f3) > 4 else 0.0
+    else:
+        toks1 = valid_cards[0].tokens()
+        rho = float(toks1[0]) if len(toks1) > 0 else 0.0
+
+        if len(valid_cards) > 1:
+            toks2 = valid_cards[1].tokens()
+            e = float(toks2[0]) if len(toks2) > 0 else 0.0
+            nu = float(toks2[1]) if len(toks2) > 1 else 0.0
+            sht_sl = float(toks2[2]) if len(toks2) > 2 else 0.0
+            tenmax = float(toks2[3]) if len(toks2) > 3 else 0.0
+            gcten = float(toks2[4]) if len(toks2) > 4 else 0.0
+
+        if len(valid_cards) > 2:
+            toks3 = valid_cards[2].tokens()
+            shrmax = float(toks3[0]) if len(toks3) > 0 else 0.0
+            gcshr = float(toks3[1]) if len(toks3) > 1 else 0.0
+            pwrt = int(float(toks3[2])) if len(toks3) > 2 else 1
+            pwrs = int(float(toks3[3])) if len(toks3) > 3 else 1
+            shrp = float(toks3[4]) if len(toks3) > 4 else 0.0
+
+    m169 = MatLaw169(
+        id=mat_id, rho=rho, e=e, nu=nu, sht_sl=sht_sl, tenmax=tenmax,
+        gcten=gcten, shrmax=shrmax, gcshr=gcshr, pwrt=pwrt, pwrs=pwrs,
+        shrp=shrp, title=title,
+    )
+    model.mat_law169s[mat_id] = m169
+    model.materials[mat_id] = Material(
+        id=mat_id, law=169, rho0=rho, title=title,
+        params={
+            "rho": rho, "rho0": rho, "e": e, "nu": nu, "E": e, "Nu": nu, "pr": nu,
+            "sht_sl": sht_sl, "tenmax": tenmax, "gcten": gcten,
+            "shrmax": shrmax, "gcshr": gcshr, "pwrt": pwrt, "pwrs": pwrs,
+            "shrp": shrp,
+        }
+    )
+
+
 def read_airbag_injector(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/AIRBAG/INJECTOR/id`` or ``/INJECTOR/id`` (M142): Airbag jetting injector."""
     from ..model.entities import AirbagInjector
@@ -29375,6 +30228,38 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PROP_SPR_BDAMP": read_prop,
     "SPR_BDAMP": read_prop,
     "PROP_P27_SPR_BDAMP": read_prop,
+    # M183: MAT_LAW50, MAT_LAW57, MAT_LAW87, MAT_LAW95, MAT_LAW163, MAT_LAW169
+    "MAT_LAW50": read_mat,
+    "MAT_VISC_HONEY": read_mat,
+    "VISC_HONEY": read_mat,
+    "MAT_HYP_FOAM": read_mat,
+    "HYP_FOAM": read_mat,
+    "MAT_LAW57": read_mat,
+    "MAT_BARLAT3": read_mat,
+    "BARLAT3": read_mat,
+    "MAT_LAW87": read_mat,
+    "MAT_BARLAT_YLD2000": read_mat,
+    "BARLAT_YLD2000": read_mat,
+    "MAT_BARLAT2000": read_mat,
+    "BARLAT2000": read_mat,
+    "MAT_LAW95": read_mat,
+    "MAT_BERGSTROM_BOYCE": read_mat,
+    "BERGSTROM_BOYCE": read_mat,
+    "MAT_HYP_VISC_PLAS": read_mat,
+    "HYP_VISC_PLAS": read_mat,
+    "MAT_FOAM_TAB": read_mat,
+    "MAT_LAW163": read_mat,
+    "MAT_CRUSHABLE_FOAM": read_mat,
+    "CRUSHABLE_FOAM": read_mat,
+    "MAT_CRUSH_FOAM": read_mat,
+    "CRUSH_FOAM": read_mat,
+    "MAT_LAW169": read_mat,
+    "MAT_ARUP_ADHESIVE": read_mat,
+    "ARUP_ADHESIVE": read_mat,
+    "MAT_COH_TAB_3D": read_mat,
+    "COH_TAB_3D": read_mat,
+    "MAT_COH_3D": read_mat,
+    "COH_3D": read_mat,
 }
 
 
