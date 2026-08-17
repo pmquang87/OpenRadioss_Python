@@ -1965,6 +1965,18 @@ class RigidLink:
 
 
 @dataclass
+class ExternLink:
+    """/EXTERN/LINK or /EXTLNK (M167): External process coupling link.
+
+    Fortran origin: ``starter/source/coupling/rad2rad/lecextlnk.F`` and
+    ``hm_cfg_files/config/CFG/radioss2022/RAD2R/extlnk.cfg``.
+    """
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+
+
+@dataclass
 class CylJoint:
     """/CYL_JOINT (M102): Cylindrical joint constraint between independent and dependent nodes.
 
@@ -2337,36 +2349,56 @@ InigravLoad = IniGrav
 
 @dataclass
 class IniMap1D:
-    """/INIMAP1D (M104): 1D mapped field initial condition.
+    """/INIMAP1D (M104/M167): 1D mapped field initial condition.
 
     Fortran origin: ``starter/source/initial_conditions/inimap/hm_read_inimap1d.F``.
     """
     id: int
     title: str = ""
-    map_type: int = 0
+    formulation: str = "FILE"  # VP, VE, FILE
+    map_type: int = 0  # 1: Planar, 2: Cylindrical, 3: Spherical
     node_id1: int = 0
     node_id2: int = 0
     grbric_id: int = 0
     grquad_id: int = 0
     grsh3n_id: int = 0
     fscale_v: float = 1.0
+    func_vel: int = 0
+    fac_vel: float = 1.0
+    nb_mat: int = 0
+    func_alpha: List[int] = field(default_factory=list)
+    func_rho: List[int] = field(default_factory=list)
+    func_pres_ener: List[int] = field(default_factory=list)
+    fac_rho: List[float] = field(default_factory=list)
+    fac_pres_ener: List[float] = field(default_factory=list)
     filename: str = ""
 
 
 @dataclass
 class IniMap2D:
-    """/INIMAP2D (M104): 2D mapped field initial condition.
+    """/INIMAP2D (M104/M167): 2D mapped field initial condition.
 
     Fortran origin: ``starter/source/initial_conditions/inimap/hm_read_inimap2d.F``.
     """
     id: int
     title: str = ""
+    formulation: str = "FILE"  # VP, VE, FILE
     map_type: int = 0
     node_id1: int = 0
     node_id2: int = 0
     node_id3: int = 0
     grbric_id: int = 0
+    grquad_id: int = 0
+    grsh3n_id: int = 0
     fscale_v: float = 1.0
+    func_vel: int = 0
+    fac_vel: float = 1.0
+    nb_mat: int = 0
+    func_alpha: List[int] = field(default_factory=list)
+    func_rho: List[int] = field(default_factory=list)
+    func_pres_ener: List[int] = field(default_factory=list)
+    fac_rho: List[float] = field(default_factory=list)
+    fac_pres_ener: List[float] = field(default_factory=list)
     filename: str = ""
 
 

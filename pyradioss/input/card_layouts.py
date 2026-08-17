@@ -1501,6 +1501,12 @@ LAYOUTS: Dict[str, List[int]] = {
     "EOS_EXPONENTIAL_1": [20, 20, 20],
     "EOS_IDEAL_GAS_VT_1": [20, 20, 20, 20, 20],
     "EOS_IDEAL_GAS_VT_2": [20, 20, 20, 20, 20],
+    # M167: INIMAP1D/2D VP/VE, PROP USER
+    "INIMAP1D_VP_1": [10, 20],
+    "INIMAP1D_VP_2": [10],
+    "INIMAP1D_VP_3": [10, 10, 20, 10, 20],
+    "PROP_USER_SPRING_1": [10, 20, 10],
+    "PROP_USER_SOLID_1": [10, 10],
 }
 
 

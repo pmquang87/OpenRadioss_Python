@@ -3505,7 +3505,8 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                "TYPE32": 32, "SPR_PRE": 32, "PROP_P32_SPR_PRE": 32, "P32_SPR_PRE": 32, "PROP_SPR_PRE": 32,
                "TYPE26": 26, "SPR_TAB": 26, "PROP_P26_SPR_TAB": 26, "P26_SPR_TAB": 26, "PROP_SPR_TAB": 26,
                "TYPE27": 27, "SPR_BDAMP": 27, "PROP_P27_SPR_BDAMP": 27, "P27_SPR_BDAMP": 27, "PROP_SPR_BDAMP": 27,
-               "TYPE34": 34, "SPH": 34,
+               "TYPE34": 34, "SPH": 34, "USER_SOLID": 34, "PROP_USER_SOLID": 34, "PROP_P34_USER": 34,
+               "USER_SPRING": 4, "PROP_USER_SPRING": 4, "PROP_P4_USER": 4,
                "TYPE43": 43, "CONNECT": 43,
                "TYPE17": 17, "STACK": 17, "PROP_STACK": 17,
                "TYPE51": 51, "P51": 51, "LAMINATE_P51": 51,
@@ -3644,13 +3645,30 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             return
         params = {"area": a, "iyy": iyy, "izz": izz,
                   "ixx": ixx if ixx > 0 else iyy + izz}
-    elif ptype == 4:  # SPRING
-        if not cards:
-            log.error(f"/PROP/SPRING/{block.user_id}: data card missing",
-                      block.source)
-            return
-        m, k, c = _floats(cards[0], 3)
-        params = {"mass": m, "k": k, "c": c}
+    elif ptype == 4:  # SPRING or USER_SPRING
+        if typename in ("USER_SPRING", "PROP_USER_SPRING", "PROP_P4_USER"):
+            nuvar = 0
+            stif_inter = 0.0
+            skew_id = 0
+            if cards and not cards[0].is_blank:
+                if block.fixed:
+                    f = cards[0].cut("PROP_USER_SPRING_1")
+                    nuvar = _ival(f[0]) if len(f) > 0 else 0
+                    stif_inter = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+                    skew_id = _ival(f[2]) if len(f) > 2 else 0
+                else:
+                    toks = cards[0].tokens()
+                    nuvar = int(float(toks[0])) if len(toks) > 0 else 0
+                    stif_inter = float(toks[1]) if len(toks) > 1 else 0.0
+                    skew_id = int(float(toks[2])) if len(toks) > 2 else 0
+            params = {"nuvar": nuvar, "stif_inter": stif_inter, "skew_id": skew_id}
+        else:
+            if not cards:
+                log.error(f"/PROP/SPRING/{block.user_id}: data card missing",
+                          block.source)
+                return
+            m, k, c = _floats(cards[0], 3)
+            params = {"mass": m, "k": k, "c": c}
     elif ptype == 14:  # SOLID
         from ..common.constants import DEFAULT_HOURGLASS, DEFAULT_QA, DEFAULT_QB
         params = {"qa": DEFAULT_QA, "qb": DEFAULT_QB, "h": DEFAULT_HOURGLASS}
@@ -4218,31 +4236,45 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 })
             params["layers"] = layers
 
-    elif ptype == 34:  # SPH
-        params = {"mass": 1.0, "h0": 1.0, "d0": 1.0, "alpha": 1.0, "beta": 1.0, "q0": 0.0, "gamma": 1.0}
-        if block.fixed:
+    elif ptype == 34:  # SPH or USER_SOLID
+        if typename in ("USER_SOLID", "PROP_USER_SOLID", "PROP_P34_USER"):
+            nuvar = 0
+            skew_id = 0
             if cards and not cards[0].is_blank:
-                c1 = cards[0].cut("PROP_SPH_1")
-                params["mass"] = _fval(c1[0]) or 1.0
-                params["h0"] = _fval(c1[1]) or 1.0
-                params["d0"] = _fval(c1[2]) or 1.0
-            if len(cards) >= 2 and not cards[1].is_blank:
-                c2 = cards[1].cut("PROP_SPH_2")
-                params["alpha"] = _fval(c2[0]) or 1.0
-                params["beta"] = _fval(c2[1]) or 1.0
-                params["q0"] = _fval(c2[2])
-                params["gamma"] = _fval(c2[3]) or 1.0
+                if block.fixed:
+                    f = cards[0].cut("PROP_USER_SOLID_1")
+                    nuvar = _ival(f[0]) if len(f) > 0 else 0
+                    skew_id = _ival(f[1]) if len(f) > 1 else 0
+                else:
+                    toks = cards[0].tokens()
+                    nuvar = int(float(toks[0])) if len(toks) > 0 else 0
+                    skew_id = int(float(toks[1])) if len(toks) > 1 else 0
+            params = {"nuvar": nuvar, "skew_id": skew_id}
         else:
-            t0 = cards[0].tokens() if len(cards) > 0 else []
-            params["mass"] = float(t0[0]) if len(t0) > 0 else 1.0
-            params["h0"] = float(t0[1]) if len(t0) > 1 else 1.0
-            params["d0"] = float(t0[2]) if len(t0) > 2 else 1.0
+            params = {"mass": 1.0, "h0": 1.0, "d0": 1.0, "alpha": 1.0, "beta": 1.0, "q0": 0.0, "gamma": 1.0}
+            if block.fixed:
+                if cards and not cards[0].is_blank:
+                    c1 = cards[0].cut("PROP_SPH_1")
+                    params["mass"] = _fval(c1[0]) or 1.0
+                    params["h0"] = _fval(c1[1]) or 1.0
+                    params["d0"] = _fval(c1[2]) or 1.0
+                if len(cards) >= 2 and not cards[1].is_blank:
+                    c2 = cards[1].cut("PROP_SPH_2")
+                    params["alpha"] = _fval(c2[0]) or 1.0
+                    params["beta"] = _fval(c2[1]) or 1.0
+                    params["q0"] = _fval(c2[2])
+                    params["gamma"] = _fval(c2[3]) or 1.0
+            else:
+                t0 = cards[0].tokens() if len(cards) > 0 else []
+                params["mass"] = float(t0[0]) if len(t0) > 0 else 1.0
+                params["h0"] = float(t0[1]) if len(t0) > 1 else 1.0
+                params["d0"] = float(t0[2]) if len(t0) > 2 else 1.0
 
-            t1 = cards[1].tokens() if len(cards) > 1 else []
-            params["alpha"] = float(t1[0]) if len(t1) > 0 else 1.0
-            params["beta"] = float(t1[1]) if len(t1) > 1 else 1.0
-            params["q0"] = float(t1[2]) if len(t1) > 2 else 0.0
-            params["gamma"] = float(t1[3]) if len(t1) > 3 else 1.0
+                t1 = cards[1].tokens() if len(cards) > 1 else []
+                params["alpha"] = float(t1[0]) if len(t1) > 0 else 1.0
+                params["beta"] = float(t1[1]) if len(t1) > 1 else 1.0
+                params["q0"] = float(t1[2]) if len(t1) > 2 else 0.0
+                params["gamma"] = float(t1[3]) if len(t1) > 3 else 1.0
 
     elif ptype == 0:  # VOID
         from .prop_reader import _universal_geo_params
@@ -14682,7 +14714,7 @@ def read_inigrav(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_inimap(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INIMAP/1D``, ``/INIMAP/2D``, or ``/INIMAP/3D`` dispatcher (M104, M137)."""
+    """``/INIMAP/1D``, ``/INIMAP/2D``, or ``/INIMAP/3D`` dispatcher (M104, M137, M167)."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub == "1D" or "1D" in block.parts[0].upper():
         read_inimap1d(block, model, log)
@@ -14695,17 +14727,39 @@ def read_inimap(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_inimap1d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INIMAP1D/map_ID`` or ``/INIMAP/1D/map_ID`` (M104)::
+    """``/INIMAP1D[/<formulation>]/map_ID`` or ``/INIMAP/1D[/<formulation>]/map_ID`` (M104, M167)::
 
         card 1:  title
         card 2:  type  node_ID1  node_ID2  grbric_ID  grquad_ID  grsh3n_ID  Fscale_V
-        card 3:  filename
+        if FILE:
+            card 3:  filename
+        if VP or VE:
+            card 3:  FUN_IDV  FSCALEV
+            card 4:  Nb_integr
+            cards 5+: fct_Idvfi  fct_IDri  Fscalerhoi  fct_IDpei  Fscalepei
     """
     map_id = block.user_id if block.user_id is not None else 1
+    formulation = "FILE"
+    for part in block.parts:
+        p_up = part.upper()
+        if p_up in ("VP", "VE", "FILE"):
+            formulation = p_up
+            break
+
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/INIMAP1D/{map_id}: missing data card", block.source)
         return
+
+    filename = ""
+    func_vel = 0
+    fac_vel = 1.0
+    nb_mat = 0
+    func_alpha = []
+    func_rho = []
+    func_pres_ener = []
+    fac_rho = []
+    fac_pres_ener = []
 
     if block.fixed:
         f = cards[0].cut("INIMAP1D_1")
@@ -14716,6 +14770,26 @@ def read_inimap1d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         grquad = _ival(f[4]) if len(f) > 4 else 0
         grsh3n = _ival(f[5]) if len(f) > 5 else 0
         fscale_v = _fval(f[6], 1.0) if len(f) > 6 else 1.0
+
+        if formulation == "FILE" and len(cards) > 1:
+            filename = cards[1].raw.strip()
+        elif formulation in ("VP", "VE") and len(cards) > 1:
+            fv = cards[1].cut("INIMAP1D_VP_1")
+            func_vel = _ival(fv[0]) if len(fv) > 0 else 0
+            fac_vel = _fval(fv[1], 1.0) if len(fv) > 1 else 1.0
+
+            if len(cards) > 2:
+                fnb = cards[2].cut("INIMAP1D_VP_2")
+                nb_mat = _ival(fnb[0]) if len(fnb) > 0 else 0
+                for c in cards[3:3 + nb_mat]:
+                    if c.is_blank:
+                        continue
+                    fm = c.cut("INIMAP1D_VP_3")
+                    func_alpha.append(_ival(fm[0]) if len(fm) > 0 else 0)
+                    func_rho.append(_ival(fm[1]) if len(fm) > 1 else 0)
+                    fac_rho.append(_fval(fm[2], 1.0) if len(fm) > 2 else 1.0)
+                    func_pres_ener.append(_ival(fm[3]) if len(fm) > 3 else 0)
+                    fac_pres_ener.append(_fval(fm[4], 1.0) if len(fm) > 4 else 1.0)
     else:
         toks = cards[0].tokens()
         map_type = int(float(toks[0])) if len(toks) > 0 else 0
@@ -14726,27 +14800,70 @@ def read_inimap1d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         grsh3n = int(float(toks[5])) if len(toks) > 5 else 0
         fscale_v = float(toks[6]) if len(toks) > 6 else 1.0
 
-    filename = cards[1].raw.strip() if len(cards) > 1 else ""
+        if formulation == "FILE" and len(cards) > 1:
+            filename = cards[1].raw.strip()
+        elif formulation in ("VP", "VE") and len(cards) > 1:
+            tv = cards[1].tokens()
+            func_vel = int(float(tv[0])) if len(tv) > 0 else 0
+            fac_vel = float(tv[1]) if len(tv) > 1 else 1.0
+
+            if len(cards) > 2:
+                tnb = cards[2].tokens()
+                nb_mat = int(float(tnb[0])) if len(tnb) > 0 else 0
+                for c in cards[3:3 + nb_mat]:
+                    if c.is_blank:
+                        continue
+                    tm = c.tokens()
+                    func_alpha.append(int(float(tm[0])) if len(tm) > 0 else 0)
+                    func_rho.append(int(float(tm[1])) if len(tm) > 1 else 0)
+                    fac_rho.append(float(tm[2]) if len(tm) > 2 else 1.0)
+                    func_pres_ener.append(int(float(tm[3])) if len(tm) > 3 else 0)
+                    fac_pres_ener.append(float(tm[4]) if len(tm) > 4 else 1.0)
 
     model.ini_map1ds[map_id] = IniMap1D(
-        id=map_id, title=title, map_type=map_type, node_id1=n1,
-        node_id2=n2, grbric_id=grbric, grquad_id=grquad,
-        grsh3n_id=grsh3n, fscale_v=fscale_v, filename=filename,
+        id=map_id, title=title, formulation=formulation, map_type=map_type,
+        node_id1=n1, node_id2=n2, grbric_id=grbric, grquad_id=grquad,
+        grsh3n_id=grsh3n, fscale_v=fscale_v, func_vel=func_vel, fac_vel=fac_vel,
+        nb_mat=nb_mat, func_alpha=func_alpha, func_rho=func_rho,
+        func_pres_ener=func_pres_ener, fac_rho=fac_rho,
+        fac_pres_ener=fac_pres_ener, filename=filename,
     )
 
 
 def read_inimap2d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INIMAP2D/map_ID`` or ``/INIMAP/2D/map_ID`` (M104)::
+    """``/INIMAP2D[/<formulation>]/map_ID`` or ``/INIMAP/2D[/<formulation>]/map_ID`` (M104, M167)::
 
         card 1:  title
         card 2:  type  node_ID1  node_ID2  node_ID3  grbric_ID  Fscale_V
-        card 3:  filename
+        if FILE:
+            card 3:  filename
+        if VP or VE:
+            card 3:  FUN_IDV  FSCALEV
+            card 4:  Nb_integr
+            cards 5+: fct_Idvfi  fct_IDri  Fscalerhoi  fct_IDpei  Fscalepei
     """
     map_id = block.user_id if block.user_id is not None else 1
+    formulation = "FILE"
+    for part in block.parts:
+        p_up = part.upper()
+        if p_up in ("VP", "VE", "FILE"):
+            formulation = p_up
+            break
+
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/INIMAP2D/{map_id}: missing data card", block.source)
         return
+
+    filename = ""
+    func_vel = 0
+    fac_vel = 1.0
+    nb_mat = 0
+    func_alpha = []
+    func_rho = []
+    func_pres_ener = []
+    fac_rho = []
+    fac_pres_ener = []
 
     if block.fixed:
         f = cards[0].cut("INIMAP2D_1")
@@ -14756,6 +14873,26 @@ def read_inimap2d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         n3 = _ival(f[3]) if len(f) > 3 else 0
         grbric = _ival(f[4]) if len(f) > 4 else 0
         fscale_v = _fval(f[5], 1.0) if len(f) > 5 else 1.0
+
+        if formulation == "FILE" and len(cards) > 1:
+            filename = cards[1].raw.strip()
+        elif formulation in ("VP", "VE") and len(cards) > 1:
+            fv = cards[1].cut("INIMAP1D_VP_1")
+            func_vel = _ival(fv[0]) if len(fv) > 0 else 0
+            fac_vel = _fval(fv[1], 1.0) if len(fv) > 1 else 1.0
+
+            if len(cards) > 2:
+                fnb = cards[2].cut("INIMAP1D_VP_2")
+                nb_mat = _ival(fnb[0]) if len(fnb) > 0 else 0
+                for c in cards[3:3 + nb_mat]:
+                    if c.is_blank:
+                        continue
+                    fm = c.cut("INIMAP1D_VP_3")
+                    func_alpha.append(_ival(fm[0]) if len(fm) > 0 else 0)
+                    func_rho.append(_ival(fm[1]) if len(fm) > 1 else 0)
+                    fac_rho.append(_fval(fm[2], 1.0) if len(fm) > 2 else 1.0)
+                    func_pres_ener.append(_ival(fm[3]) if len(fm) > 3 else 0)
+                    fac_pres_ener.append(_fval(fm[4], 1.0) if len(fm) > 4 else 1.0)
     else:
         toks = cards[0].tokens()
         map_type = int(float(toks[0])) if len(toks) > 0 else 0
@@ -14765,12 +14902,33 @@ def read_inimap2d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         grbric = int(float(toks[4])) if len(toks) > 4 else 0
         fscale_v = float(toks[5]) if len(toks) > 5 else 1.0
 
-    filename = cards[1].raw.strip() if len(cards) > 1 else ""
+        if formulation == "FILE" and len(cards) > 1:
+            filename = cards[1].raw.strip()
+        elif formulation in ("VP", "VE") and len(cards) > 1:
+            tv = cards[1].tokens()
+            func_vel = int(float(tv[0])) if len(tv) > 0 else 0
+            fac_vel = float(tv[1]) if len(tv) > 1 else 1.0
+
+            if len(cards) > 2:
+                tnb = cards[2].tokens()
+                nb_mat = int(float(tnb[0])) if len(tnb) > 0 else 0
+                for c in cards[3:3 + nb_mat]:
+                    if c.is_blank:
+                        continue
+                    tm = c.tokens()
+                    func_alpha.append(int(float(tm[0])) if len(tm) > 0 else 0)
+                    func_rho.append(int(float(tm[1])) if len(tm) > 0 else 0)
+                    fac_rho.append(float(tm[2]) if len(tm) > 2 else 1.0)
+                    func_pres_ener.append(int(float(tm[3])) if len(tm) > 3 else 0)
+                    fac_pres_ener.append(float(tm[4]) if len(tm) > 4 else 1.0)
 
     model.ini_map2ds[map_id] = IniMap2D(
-        id=map_id, title=title, map_type=map_type, node_id1=n1,
-        node_id2=n2, node_id3=n3, grbric_id=grbric, fscale_v=fscale_v,
-        filename=filename,
+        id=map_id, title=title, formulation=formulation, map_type=map_type,
+        node_id1=n1, node_id2=n2, node_id3=n3, grbric_id=grbric,
+        fscale_v=fscale_v, func_vel=func_vel, fac_vel=fac_vel,
+        nb_mat=nb_mat, func_alpha=func_alpha, func_rho=func_rho,
+        func_pres_ener=func_pres_ener, fac_rho=fac_rho,
+        fac_pres_ener=fac_pres_ener, filename=filename,
     )
 
 
