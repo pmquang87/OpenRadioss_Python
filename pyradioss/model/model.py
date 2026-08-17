@@ -94,6 +94,7 @@ from .entities import (
     EbcsPres, EbcsVel, EbcsInlet, EbcsFluxout, EbcsGradp0, EbcsNormv, EbcsValv, EbcsMonvol,
     BcsWall, SeatbeltSystem, AmsControl,
     BcsCyclic, PcylLoad, DampVrel, MatLaw113, MatLaw79, MatViscLprony,
+    MatLaw190, MatLaw41, FailChang, PropType20, PropType21, PropType22, PropType22Layer,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -1004,6 +1005,12 @@ class Model:
         self.mat_law113s: Dict[int, MatLaw113] = {}                 # /MAT/LAW113, /MAT/SPR_BEAM (M179)
         self.mat_law79s: Dict[int, MatLaw79] = {}                   # /MAT/LAW79, /MAT/JOHN_HOLM (M179)
         self.mat_visc_lpronys: Dict[int, MatViscLprony] = {}         # /MAT/VISC_LPRONY, /VISC/LPRONY (M179)
+        self.mat_law190s: Dict[int, MatLaw190] = {}                 # /MAT/LAW190, /MAT/FOAM_DUBOIS (M180)
+        self.mat_law41s: Dict[int, MatLaw41] = {}                   # /MAT/LAW41, /MAT/LEE_T (M180)
+        self.fail_changs: Dict[int, FailChang] = {}                 # /FAIL/CHANG (M180)
+        self.prop_tshells: Dict[int, PropType20] = {}               # /PROP/TYPE20, /PROP/TSHELL (M180)
+        self.prop_tsh_orths: Dict[int, PropType21] = {}             # /PROP/TYPE21, /PROP/TSH_ORTH (M180)
+        self.prop_tsh_comps: Dict[int, PropType22] = {}             # /PROP/TYPE22, /PROP/TSH_COMP (M180)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

@@ -924,6 +924,13 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("VISC_LPRONY", "LPRONY", "VISCO_LPRONY"):
         read_mat_visc_lprony(block, model, log)
         return
+    # M180: MAT LAW190 (FOAM_DUBOIS), LAW41 (LEE_T)
+    if lawname in ("LAW190", "FOAM_DUBOIS", "DUBOIS", "LAW190_FOAM_DUBOIS"):
+        read_mat_law190(block, model, log)
+        return
+    if lawname in ("LAW41", "LEE_T", "LEETARVER", "LEE_TARVER", "LAW41_LEE_T"):
+        read_mat_law41(block, model, log)
+        return
     if lawname in ("HEAT", "HEAT_TRANSFER"):
         read_mat_heat(block, model, log)
         return
@@ -2666,9 +2673,20 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             ifail_sh = _ival(c2[2], 1) if len(c2) > 2 else 1
             failip = _ival(c2[3]) if len(c2) > 3 else 0
 
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            c3 = cards[2].cut("FAIL_CHANG_3") if block.fixed else cards[2].tokens()
+            fail_id = _ival(c3[0]) if block.fixed else int(float(c3[0]))
+
+        from ..model.entities import FailChang
+        model.fail_changs[mat_id] = FailChang(
+            id=fail_id or mat_id, mat_id=mat_id,
+            sigma_1t=s1t, sigma_2t=s2t, sigma_12=s12, sigma_1c=s1c, sigma_2c=s2c,
+            beta=beta, tau_max=tau_max, ifail_sh=ifail_sh, failip=failip, fail_id=fail_id,
+        )
         params = {
             "sigma_1t": s1t, "sigma_2t": s2t, "sigma_12": s12, "sigma_1c": s1c, "sigma_2c": s2c,
-            "beta": beta, "tau_max": tau_max, "failip": failip,
+            "beta": beta, "tau_max": tau_max, "failip": failip, "fail_id": fail_id,
         }
         fm = FailureModel(type="CHANG", ifail_sh=ifail_sh, params=params)
     elif kind == "TSAIWU":
@@ -3773,6 +3791,12 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             read_prop_inject1(block, model, log)
         elif typename in ("INJECT2", "PROP_INJECT2", "INJECTOR2", "PROP_INJECTOR2"):
             read_prop_inject2(block, model, log)
+        elif typename in ("TYPE20", "TSHELL", "PROP_TYPE20", "PROP_TSHELL", "PROP_P20_TSHELL", "P20_TSHELL"):
+            read_prop_tshell(block, model, log)
+        elif typename in ("TYPE21", "TSH_ORTH", "PROP_TYPE21", "PROP_TSH_ORTH", "PROP_P21_TSH_ORTH", "P21_TSH_ORTH"):
+            read_prop_tsh_orth(block, model, log)
+        elif typename in ("TYPE22", "TSH_COMP", "PROP_TYPE22", "PROP_TSH_COMP", "PROP_P22_TSH_COMP", "P22_TSH_COMP"):
+            read_prop_tsh_comp(block, model, log)
         from . import prop_reader
         prop = prop_reader.parse_property(block, log)
         if prop is not None:
@@ -4438,206 +4462,474 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     elif ptype == 20:  # TSHELL
         params = {"thick": 1.0, "nip": 3, "hm": 0.01, "hf": 0.01, "hr": 0.01,
-                  "itshell": 0, "ashear": 0.833333}
+                  "itshell": 0, "ashear": 0.833333, "qa": 1.1, "qb": 0.05, "h": 0.1,
+                  "deltat_min": 0.0}
+        is_cfg = False
         if block.fixed:
-            if cards and not cards[0].is_blank:
-                f = cards[0].cut("PROP_TSHELL_1")
-                params["itshell"] = _ival(f[0])
-                params["ismstr"] = _ival(f[1]) if len(f) > 1 else 0
-                params["idrill"] = _ival(f[2]) if len(f) > 2 else 0
-                params["p_thick_fail"] = _fval(f[3]) if len(f) > 3 else 0.0
-            if len(cards) >= 2 and not cards[1].is_blank:
-                h = cards[1].cut("PROP_TSHELL_2")
-                params["hm"] = _fval(h[0]) or 0.01
-                params["hf"] = _fval(h[1]) or 0.01
-                params["hr"] = _fval(h[2]) or 0.01
-                params["dm"] = _fval(h[3]) if len(h) > 3 else 0.0
-                params["dn"] = _fval(h[4]) if len(h) > 4 else 0.0
-            if len(cards) >= 3 and not cards[2].is_blank:
-                t = cards[2].cut("PROP_TSHELL_3")
-                params["nip"] = _ival(t[0]) or 3
-                params["istrain"] = _ival(t[1]) if len(t) > 1 else 0
-                params["thick"] = _fval(t[2]) or 1.0
-                params["ashear"] = _fval(t[3]) or 0.833333
-                params["ithick"] = _ival(t[4]) if len(t) > 4 else 0
-                params["iplas"] = _ival(t[5]) if len(t) > 5 else 0
+            if len(cards) >= 2 and len(cards[1].raw.rstrip()) > 60:
+                is_cfg = False
+            else:
+                is_cfg = True
         else:
-            t0 = cards[0].tokens() if len(cards) > 0 else []
-            params["itshell"] = int(float(t0[0])) if len(t0) > 0 else 0
-            params["ismstr"] = int(float(t0[1])) if len(t0) > 1 else 0
-            params["idrill"] = int(float(t0[2])) if len(t0) > 2 else 0
-            params["p_thick_fail"] = float(t0[3]) if len(t0) > 3 else 0.0
+            if len(cards) >= 2 and len(cards[1].tokens()) >= 4:
+                is_cfg = False
+            else:
+                is_cfg = True
 
-            t1 = cards[1].tokens() if len(cards) > 1 else []
-            params["hm"] = float(t1[0]) if len(t1) > 0 else 0.01
-            params["hf"] = float(t1[1]) if len(t1) > 1 else 0.01
-            params["hr"] = float(t1[2]) if len(t1) > 2 else 0.01
-            params["dm"] = float(t1[3]) if len(t1) > 3 else 0.0
-            params["dn"] = float(t1[4]) if len(t1) > 4 else 0.0
+        if is_cfg:
+            if block.fixed:
+                if cards and not cards[0].is_blank:
+                    f1 = cards[0].cut("PROP_TYPE20_1")
+                    params["itshell"] = _ival(f1[0], 15) if len(f1) > 0 and f1[0].strip() else 15
+                    params["isolid"] = params["itshell"]
+                    params["ismstr"] = _ival(f1[1]) if len(f1) > 1 else 0
+                    params["icpre"] = _ival(f1[2]) if len(f1) > 2 else 0
+                    params["icstr"] = _ival(f1[3]) if len(f1) > 3 else 0
+                    nbp = _ival(f1[4], 222) if len(f1) > 4 and f1[4].strip() else 222
+                    params["nbp"] = nbp
+                    if nbp > 200:
+                        params["inpts_r"] = nbp // 100
+                        rem = nbp % 100
+                        params["inpts_s"] = rem // 10
+                        params["inpts_t"] = rem % 10
+                    else:
+                        params["inpts_s"] = nbp
+                    params["nip"] = params.get("inpts_t", 3)
+                    params["iint"] = _ival(f1[5], 1) if len(f1) > 5 and f1[5].strip() else 1
+                    params["dn"] = _fval(f1[6]) if len(f1) > 6 else 0.0
+                if len(cards) > 1 and not cards[1].is_blank:
+                    f2 = cards[1].cut("PROP_TYPE20_2")
+                    params["qa"] = _fval(f2[0], 1.1) if len(f2) > 0 and f2[0].strip() else 1.1
+                    params["qb"] = _fval(f2[1], 0.05) if len(f2) > 1 and f2[1].strip() else 0.05
+                    params["h"] = _fval(f2[2], 0.1) if len(f2) > 2 and f2[2].strip() else 0.1
+                if len(cards) > 2 and not cards[2].is_blank:
+                    f3 = cards[2].cut("PROP_TYPE20_3")
+                    params["deltat_min"] = _fval(f3[0]) if len(f3) > 0 else 0.0
+            else:
+                t0 = cards[0].tokens() if len(cards) > 0 else []
+                params["itshell"] = int(float(t0[0])) if len(t0) > 0 else 15
+                params["isolid"] = params["itshell"]
+                params["ismstr"] = int(float(t0[1])) if len(t0) > 1 else 0
+                params["icpre"] = int(float(t0[2])) if len(t0) > 2 else 0
+                params["icstr"] = int(float(t0[3])) if len(t0) > 3 else 0
+                nbp = int(float(t0[4])) if len(t0) > 4 else 222
+                params["nbp"] = nbp
+                if nbp > 200:
+                    params["inpts_r"] = nbp // 100
+                    rem = nbp % 100
+                    params["inpts_s"] = rem // 10
+                    params["inpts_t"] = rem % 10
+                else:
+                    params["inpts_s"] = nbp
+                params["nip"] = params.get("inpts_t", 3)
+                params["iint"] = int(float(t0[5])) if len(t0) > 5 else 1
+                params["dn"] = float(t0[6]) if len(t0) > 6 else 0.0
+                if len(cards) > 1 and not cards[1].is_blank:
+                    t1 = cards[1].tokens()
+                    params["qa"] = float(t1[0]) if len(t1) > 0 else 1.1
+                    params["qb"] = float(t1[1]) if len(t1) > 1 else 0.05
+                    params["h"] = float(t1[2]) if len(t1) > 2 else 0.1
+                if len(cards) > 2 and not cards[2].is_blank:
+                    t2 = cards[2].tokens()
+                    params["deltat_min"] = float(t2[0]) if len(t2) > 0 else 0.0
+        else:
+            if block.fixed:
+                if cards and not cards[0].is_blank:
+                    f = cards[0].cut("PROP_TSHELL_1")
+                    params["itshell"] = _ival(f[0])
+                    params["ismstr"] = _ival(f[1]) if len(f) > 1 else 0
+                    params["idrill"] = _ival(f[2]) if len(f) > 2 else 0
+                    params["p_thick_fail"] = _fval(f[3]) if len(f) > 3 else 0.0
+                if len(cards) >= 2 and not cards[1].is_blank:
+                    h = cards[1].cut("PROP_TSHELL_2")
+                    params["hm"] = _fval(h[0]) or 0.01
+                    params["hf"] = _fval(h[1]) or 0.01
+                    params["hr"] = _fval(h[2]) or 0.01
+                    params["dm"] = _fval(h[3]) if len(h) > 3 else 0.0
+                    params["dn"] = _fval(h[4]) if len(h) > 4 else 0.0
+                if len(cards) >= 3 and not cards[2].is_blank:
+                    t = cards[2].cut("PROP_TSHELL_3")
+                    params["nip"] = _ival(t[0]) or 3
+                    params["istrain"] = _ival(t[1]) if len(t) > 1 else 0
+                    params["thick"] = _fval(t[2]) or 1.0
+                    params["ashear"] = _fval(t[3]) or 0.833333
+                    params["ithick"] = _ival(t[4]) if len(t) > 4 else 0
+                    params["iplas"] = _ival(t[5]) if len(t) > 5 else 0
+            else:
+                t0 = cards[0].tokens() if len(cards) > 0 else []
+                params["itshell"] = int(float(t0[0])) if len(t0) > 0 else 0
+                params["ismstr"] = int(float(t0[1])) if len(t0) > 1 else 0
+                params["idrill"] = int(float(t0[2])) if len(t0) > 2 else 0
+                params["p_thick_fail"] = float(t0[3]) if len(t0) > 3 else 0.0
 
-            t2 = cards[2].tokens() if len(cards) > 2 else []
-            params["nip"] = int(float(t2[0])) if len(t2) > 0 else 3
-            params["istrain"] = int(float(t2[1])) if len(t2) > 1 else 0
-            params["thick"] = float(t2[2]) if len(t2) > 2 else 1.0
-            params["ashear"] = float(t2[3]) if len(t2) > 3 else 0.833333
-            params["ithick"] = int(float(t2[4])) if len(t2) > 4 else 0
-            params["iplas"] = int(float(t2[5])) if len(t2) > 5 else 0
+                t1 = cards[1].tokens() if len(cards) > 1 else []
+                params["hm"] = float(t1[0]) if len(t1) > 0 else 0.01
+                params["hf"] = float(t1[1]) if len(t1) > 1 else 0.01
+                params["hr"] = float(t1[2]) if len(t1) > 2 else 0.01
+                params["dm"] = float(t1[3]) if len(t1) > 3 else 0.0
+                params["dn"] = float(t1[4]) if len(t1) > 4 else 0.0
+
+                t2 = cards[2].tokens() if len(cards) > 2 else []
+                params["nip"] = int(float(t2[0])) if len(t2) > 0 else 3
+                params["istrain"] = int(float(t2[1])) if len(t2) > 1 else 0
+                params["thick"] = float(t2[2]) if len(t2) > 2 else 1.0
+                params["ashear"] = float(t2[3]) if len(t2) > 3 else 0.833333
+                params["ithick"] = int(float(t2[4])) if len(t2) > 4 else 0
+                params["iplas"] = int(float(t2[5])) if len(t2) > 5 else 0
 
     elif ptype == 21:  # TSH_ORTH
         params = {"thick": 1.0, "nip": 3, "hm": 0.01, "hf": 0.01, "hr": 0.01,
-                  "itshell": 0, "ashear": 0.833333, "vx": 1.0, "vy": 0.0, "vz": 0.0}
+                  "itshell": 0, "ashear": 0.833333, "vx": 1.0, "vy": 0.0, "vz": 0.0,
+                  "qa": 1.1, "qb": 0.05, "h": 0.1, "phi": 0.0, "deltat_min": 0.0}
+        is_cfg = False
         if block.fixed:
-            if cards and not cards[0].is_blank:
-                f = cards[0].cut("PROP_TSHELL_1")
-                params["itshell"] = _ival(f[0])
-                params["ismstr"] = _ival(f[1]) if len(f) > 1 else 0
-                params["idrill"] = _ival(f[2]) if len(f) > 2 else 0
-                params["p_thick_fail"] = _fval(f[3]) if len(f) > 3 else 0.0
-            if len(cards) >= 2 and not cards[1].is_blank:
-                h = cards[1].cut("PROP_TSHELL_2")
-                params["hm"] = _fval(h[0]) or 0.01
-                params["hf"] = _fval(h[1]) or 0.01
-                params["hr"] = _fval(h[2]) or 0.01
-                params["dm"] = _fval(h[3]) if len(h) > 3 else 0.0
-                params["dn"] = _fval(h[4]) if len(h) > 4 else 0.0
-            if len(cards) >= 3 and not cards[2].is_blank:
-                t = cards[2].cut("PROP_TSHELL_3")
-                params["nip"] = _ival(t[0]) or 3
-                params["istrain"] = _ival(t[1]) if len(t) > 1 else 0
-                params["thick"] = _fval(t[2]) or 1.0
-                params["ashear"] = _fval(t[3]) or 0.833333
-                params["ithick"] = _ival(t[4]) if len(t) > 4 else 0
-                params["iplas"] = _ival(t[5]) if len(t) > 5 else 0
-            if len(cards) >= 4 and not cards[3].is_blank:
-                v = cards[3].cut("PROP_TSH_ORTH_1")
-                params["vx"] = _fval(v[0]) or 1.0
-                params["vy"] = _fval(v[1])
-                params["vz"] = _fval(v[2])
-                params["skew_id"] = _ival(v[3]) if len(v) > 3 else 0
-                params["iorth"] = _ival(v[4]) if len(v) > 4 else 0
-                params["ipos"] = _ival(v[5]) if len(v) > 5 else 0
-                params["ip"] = _ival(v[6]) if len(v) > 6 else 0
+            if len(cards) >= 2 and len(cards[1].raw.rstrip()) > 60:
+                is_cfg = False
+            else:
+                is_cfg = True
         else:
-            t0 = cards[0].tokens() if len(cards) > 0 else []
-            params["itshell"] = int(float(t0[0])) if len(t0) > 0 else 0
-            params["ismstr"] = int(float(t0[1])) if len(t0) > 1 else 0
-            params["idrill"] = int(float(t0[2])) if len(t0) > 2 else 0
-            params["p_thick_fail"] = float(t0[3]) if len(t0) > 3 else 0.0
+            if len(cards) >= 2 and len(cards[1].tokens()) >= 4:
+                is_cfg = False
+            else:
+                is_cfg = True
 
-            t1 = cards[1].tokens() if len(cards) > 1 else []
-            params["hm"] = float(t1[0]) if len(t1) > 0 else 0.01
-            params["hf"] = float(t1[1]) if len(t1) > 1 else 0.01
-            params["hr"] = float(t1[2]) if len(t1) > 2 else 0.01
-            params["dm"] = float(t1[3]) if len(t1) > 3 else 0.0
-            params["dn"] = float(t1[4]) if len(t1) > 4 else 0.0
+        if is_cfg:
+            if block.fixed:
+                if cards and not cards[0].is_blank:
+                    f1 = cards[0].cut("PROP_TYPE21_1")
+                    params["itshell"] = _ival(f1[0], 15) if len(f1) > 0 and f1[0].strip() else 15
+                    params["isolid"] = params["itshell"]
+                    params["ismstr"] = _ival(f1[1]) if len(f1) > 1 else 0
+                    params["icstr"] = _ival(f1[3]) if len(f1) > 3 else 0
+                    nbp = _ival(f1[4], 222) if len(f1) > 4 and f1[4].strip() else 222
+                    params["nbp"] = nbp
+                    if nbp > 200:
+                        params["inpts_r"] = nbp // 100
+                        rem = nbp % 100
+                        params["inpts_s"] = rem // 10
+                        params["inpts_t"] = rem % 10
+                    else:
+                        params["inpts_s"] = nbp
+                    params["nip"] = params.get("inpts_t", 3)
+                    params["iint"] = _ival(f1[5], 1) if len(f1) > 5 and f1[5].strip() else 1
+                    params["dn"] = _fval(f1[6]) if len(f1) > 6 else 0.0
+                if len(cards) > 1 and not cards[1].is_blank:
+                    f2 = cards[1].cut("PROP_TYPE21_2")
+                    params["qa"] = _fval(f2[0], 1.1) if len(f2) > 0 and f2[0].strip() else 1.1
+                    params["qb"] = _fval(f2[1], 0.05) if len(f2) > 1 and f2[1].strip() else 0.05
+                if len(cards) > 2 and not cards[2].is_blank:
+                    f3 = cards[2].cut("PROP_TYPE21_3")
+                    params["vx"] = _fval(f3[0], 1.0) if len(f3) > 0 and f3[0].strip() else 1.0
+                    params["vy"] = _fval(f3[1]) if len(f3) > 1 else 0.0
+                    params["vz"] = _fval(f3[2]) if len(f3) > 2 else 0.0
+                    params["skew_id"] = _ival(f3[3]) if len(f3) > 3 else 0
+                    params["iorth"] = _ival(f3[4]) if len(f3) > 4 else 0
+                if len(cards) > 3 and not cards[3].is_blank:
+                    f4 = cards[3].cut("PROP_TYPE21_4")
+                    params["phi"] = _fval(f4[0]) if len(f4) > 0 else 0.0
+                if len(cards) > 4 and not cards[4].is_blank:
+                    f5 = cards[4].cut("PROP_TYPE21_5")
+                    params["deltat_min"] = _fval(f5[0]) if len(f5) > 0 else 0.0
+            else:
+                t0 = cards[0].tokens() if len(cards) > 0 else []
+                params["itshell"] = int(float(t0[0])) if len(t0) > 0 else 15
+                params["isolid"] = params["itshell"]
+                params["ismstr"] = int(float(t0[1])) if len(t0) > 1 else 0
+                params["icstr"] = int(float(t0[3])) if len(t0) > 3 else 0
+                nbp = int(float(t0[4])) if len(t0) > 4 else 222
+                params["nbp"] = nbp
+                if nbp > 200:
+                    params["inpts_r"] = nbp // 100
+                    rem = nbp % 100
+                    params["inpts_s"] = rem // 10
+                    params["inpts_t"] = rem % 10
+                else:
+                    params["inpts_s"] = nbp
+                params["nip"] = params.get("inpts_t", 3)
+                params["iint"] = int(float(t0[5])) if len(t0) > 5 else 1
+                params["dn"] = float(t0[6]) if len(t0) > 6 else 0.0
+                if len(cards) > 1 and not cards[1].is_blank:
+                    t1 = cards[1].tokens()
+                    params["qa"] = float(t1[0]) if len(t1) > 0 else 1.1
+                    params["qb"] = float(t1[1]) if len(t1) > 1 else 0.05
+                if len(cards) > 2 and not cards[2].is_blank:
+                    t2 = cards[2].tokens()
+                    params["vx"] = float(t2[0]) if len(t2) > 0 else 1.0
+                    params["vy"] = float(t2[1]) if len(t2) > 1 else 0.0
+                    params["vz"] = float(t2[2]) if len(t2) > 2 else 0.0
+                    params["skew_id"] = int(float(t2[3])) if len(t2) > 3 else 0
+                    params["iorth"] = int(float(t2[4])) if len(t2) > 4 else 0
+                if len(cards) > 3 and not cards[3].is_blank:
+                    t3 = cards[3].tokens()
+                    params["phi"] = float(t3[0]) if len(t3) > 0 else 0.0
+                if len(cards) > 4 and not cards[4].is_blank:
+                    t4 = cards[4].tokens()
+                    params["deltat_min"] = float(t4[0]) if len(t4) > 0 else 0.0
+        else:
+            if block.fixed:
+                if cards and not cards[0].is_blank:
+                    f = cards[0].cut("PROP_TSHELL_1")
+                    params["itshell"] = _ival(f[0])
+                    params["ismstr"] = _ival(f[1]) if len(f) > 1 else 0
+                    params["idrill"] = _ival(f[2]) if len(f) > 2 else 0
+                    params["p_thick_fail"] = _fval(f[3]) if len(f) > 3 else 0.0
+                if len(cards) >= 2 and not cards[1].is_blank:
+                    h = cards[1].cut("PROP_TSHELL_2")
+                    params["hm"] = _fval(h[0]) or 0.01
+                    params["hf"] = _fval(h[1]) or 0.01
+                    params["hr"] = _fval(h[2]) or 0.01
+                    params["dm"] = _fval(h[3]) if len(h) > 3 else 0.0
+                    params["dn"] = _fval(h[4]) if len(h) > 4 else 0.0
+                if len(cards) >= 3 and not cards[2].is_blank:
+                    t = cards[2].cut("PROP_TSHELL_3")
+                    params["nip"] = _ival(t[0]) or 3
+                    params["istrain"] = _ival(t[1]) if len(t) > 1 else 0
+                    params["thick"] = _fval(t[2]) or 1.0
+                    params["ashear"] = _fval(t[3]) or 0.833333
+                    params["ithick"] = _ival(t[4]) if len(t) > 4 else 0
+                    params["iplas"] = _ival(t[5]) if len(t) > 5 else 0
+                if len(cards) >= 4 and not cards[3].is_blank:
+                    v = cards[3].cut("PROP_TSH_ORTH_1")
+                    params["vx"] = _fval(v[0]) or 1.0
+                    params["vy"] = _fval(v[1])
+                    params["vz"] = _fval(v[2])
+                    params["skew_id"] = _ival(v[3]) if len(v) > 3 else 0
+                    params["iorth"] = _ival(v[4]) if len(v) > 4 else 0
+                    params["ipos"] = _ival(v[5]) if len(v) > 5 else 0
+                    params["ip"] = _ival(v[6]) if len(v) > 6 else 0
+            else:
+                t0 = cards[0].tokens() if len(cards) > 0 else []
+                params["itshell"] = int(float(t0[0])) if len(t0) > 0 else 0
+                params["ismstr"] = int(float(t0[1])) if len(t0) > 1 else 0
+                params["idrill"] = int(float(t0[2])) if len(t0) > 2 else 0
+                params["p_thick_fail"] = float(t0[3]) if len(t0) > 3 else 0.0
 
-            t2 = cards[2].tokens() if len(cards) > 2 else []
-            params["nip"] = int(float(t2[0])) if len(t2) > 0 else 3
-            params["istrain"] = int(float(t2[1])) if len(t2) > 1 else 0
-            params["thick"] = float(t2[2]) if len(t2) > 2 else 1.0
-            params["ashear"] = float(t2[3]) if len(t2) > 3 else 0.833333
-            params["ithick"] = int(float(t2[4])) if len(t2) > 4 else 0
-            params["iplas"] = int(float(t2[5])) if len(t2) > 5 else 0
+                t1 = cards[1].tokens() if len(cards) > 1 else []
+                params["hm"] = float(t1[0]) if len(t1) > 0 else 0.01
+                params["hf"] = float(t1[1]) if len(t1) > 1 else 0.01
+                params["hr"] = float(t1[2]) if len(t1) > 2 else 0.01
+                params["dm"] = float(t1[3]) if len(t1) > 3 else 0.0
+                params["dn"] = float(t1[4]) if len(t1) > 4 else 0.0
 
-            t3 = cards[3].tokens() if len(cards) > 3 else []
-            params["vx"] = float(t3[0]) if len(t3) > 0 else 1.0
-            params["vy"] = float(t3[1]) if len(t3) > 1 else 0.0
-            params["vz"] = float(t3[2]) if len(t3) > 2 else 0.0
-            params["skew_id"] = int(float(t3[3])) if len(t3) > 3 else 0
-            params["iorth"] = int(float(t3[4])) if len(t3) > 4 else 0
-            params["ipos"] = int(float(t3[5])) if len(t3) > 5 else 0
-            params["ip"] = int(float(t3[6])) if len(t3) > 6 else 0
+                t2 = cards[2].tokens() if len(cards) > 2 else []
+                params["nip"] = int(float(t2[0])) if len(t2) > 0 else 3
+                params["istrain"] = int(float(t2[1])) if len(t2) > 1 else 0
+                params["thick"] = float(t2[2]) if len(t2) > 2 else 1.0
+                params["ashear"] = float(t2[3]) if len(t2) > 3 else 0.833333
+                params["ithick"] = int(float(t2[4])) if len(t2) > 4 else 0
+                params["iplas"] = int(float(t2[5])) if len(t2) > 5 else 0
+
+                t3 = cards[3].tokens() if len(cards) > 3 else []
+                params["vx"] = float(t3[0]) if len(t3) > 0 else 1.0
+                params["vy"] = float(t3[1]) if len(t3) > 1 else 0.0
+                params["vz"] = float(t3[2]) if len(t3) > 2 else 0.0
+                params["skew_id"] = int(float(t3[3])) if len(t3) > 3 else 0
+                params["iorth"] = int(float(t3[4])) if len(t3) > 4 else 0
+                params["ipos"] = int(float(t3[5])) if len(t3) > 5 else 0
+                params["ip"] = int(float(t3[6])) if len(t3) > 6 else 0
 
     elif ptype == 22:  # TSH_COMP
         params = {"thick": 1.0, "nip": 3, "hm": 0.01, "hf": 0.01, "hr": 0.01,
-                  "itshell": 0, "ashear": 0.833333, "vx": 1.0, "vy": 0.0, "vz": 0.0}
+                  "itshell": 0, "ashear": 0.833333, "vx": 1.0, "vy": 0.0, "vz": 0.0,
+                  "qa": 1.1, "qb": 0.05, "h": 0.1, "phi": 0.0, "deltat_min": 0.0}
+        is_cfg = False
         if block.fixed:
-            if cards and not cards[0].is_blank:
-                f = cards[0].cut("PROP_TSHELL_1")
-                params["itshell"] = _ival(f[0])
-                params["ismstr"] = _ival(f[1]) if len(f) > 1 else 0
-                params["idrill"] = _ival(f[2]) if len(f) > 2 else 0
-                params["p_thick_fail"] = _fval(f[3]) if len(f) > 3 else 0.0
-            if len(cards) >= 2 and not cards[1].is_blank:
-                h = cards[1].cut("PROP_TSHELL_2")
-                params["hm"] = _fval(h[0]) or 0.01
-                params["hf"] = _fval(h[1]) or 0.01
-                params["hr"] = _fval(h[2]) or 0.01
-                params["dm"] = _fval(h[3]) if len(h) > 3 else 0.0
-                params["dn"] = _fval(h[4]) if len(h) > 4 else 0.0
-            if len(cards) >= 3 and not cards[2].is_blank:
-                t = cards[2].cut("PROP_TSHELL_3")
-                params["nip"] = _ival(t[0]) or 3
-                params["istrain"] = _ival(t[1]) if len(t) > 1 else 0
-                params["thick"] = _fval(t[2]) or 1.0
-                params["ashear"] = _fval(t[3]) or 0.833333
-                params["ithick"] = _ival(t[4]) if len(t) > 4 else 0
-                params["iplas"] = _ival(t[5]) if len(t) > 5 else 0
-            if len(cards) >= 4 and not cards[3].is_blank:
-                v = cards[3].cut("PROP_TSH_ORTH_1")
-                params["vx"] = _fval(v[0]) or 1.0
-                params["vy"] = _fval(v[1])
-                params["vz"] = _fval(v[2])
-                params["skew_id"] = _ival(v[3]) if len(v) > 3 else 0
-                params["iorth"] = _ival(v[4]) if len(v) > 4 else 0
-                params["ipos"] = _ival(v[5]) if len(v) > 5 else 0
-                params["ip"] = _ival(v[6]) if len(v) > 6 else 0
-            layers = []
-            for c in cards[4:]:
-                if c.is_blank:
-                    continue
-                ly = c.cut("PROP_SH_SANDW_LAYER")
-                layers.append({
-                    "phi": _fval(ly[0]),
-                    "thick": _fval(ly[1]),
-                    "zi": _fval(ly[2]),
-                    "mat_id": _ival(ly[3]),
-                    "w_fi": _fval(ly[5]) if len(ly) > 5 else 1.0
-                })
-            params["layers"] = layers
+            if len(cards) >= 2 and len(cards[1].raw.rstrip()) > 60:
+                is_cfg = False
+            else:
+                is_cfg = True
         else:
-            t0 = cards[0].tokens() if len(cards) > 0 else []
-            params["itshell"] = int(float(t0[0])) if len(t0) > 0 else 0
-            params["ismstr"] = int(float(t0[1])) if len(t0) > 1 else 0
-            params["idrill"] = int(float(t0[2])) if len(t0) > 2 else 0
-            params["p_thick_fail"] = float(t0[3]) if len(t0) > 3 else 0.0
+            if len(cards) >= 2 and len(cards[1].tokens()) >= 4:
+                is_cfg = False
+            else:
+                is_cfg = True
 
-            t1 = cards[1].tokens() if len(cards) > 1 else []
-            params["hm"] = float(t1[0]) if len(t1) > 0 else 0.01
-            params["hf"] = float(t1[1]) if len(t1) > 1 else 0.01
-            params["hr"] = float(t1[2]) if len(t1) > 2 else 0.01
-            params["dm"] = float(t1[3]) if len(t1) > 3 else 0.0
-            params["dn"] = float(t1[4]) if len(t1) > 4 else 0.0
+        if is_cfg:
+            if block.fixed:
+                if cards and not cards[0].is_blank:
+                    f1 = cards[0].cut("PROP_TYPE22_1")
+                    params["itshell"] = _ival(f1[0], 15) if len(f1) > 0 and f1[0].strip() else 15
+                    params["isolid"] = params["itshell"]
+                    params["ismstr"] = _ival(f1[1]) if len(f1) > 1 else 0
+                    params["icstr"] = _ival(f1[3]) if len(f1) > 3 else 0
+                    nbp = _ival(f1[4], 222) if len(f1) > 4 and f1[4].strip() else 222
+                    params["nbp"] = nbp
+                    if nbp > 200:
+                        params["inpts_r"] = nbp // 100
+                        rem = nbp % 100
+                        params["inpts_s"] = rem // 10
+                        params["inpts_t"] = rem % 10
+                    else:
+                        params["inpts_s"] = nbp
+                    params["nip"] = params.get("inpts_t", 3)
+                    params["iint"] = _ival(f1[5], 1) if len(f1) > 5 and f1[5].strip() else 1
+                    params["dn"] = _fval(f1[6]) if len(f1) > 6 else 0.0
+                if len(cards) > 1 and not cards[1].is_blank:
+                    f2 = cards[1].cut("PROP_TYPE22_2")
+                    params["qa"] = _fval(f2[0], 1.1) if len(f2) > 0 and f2[0].strip() else 1.1
+                    params["qb"] = _fval(f2[1], 0.05) if len(f2) > 1 and f2[1].strip() else 0.05
+                if len(cards) > 2 and not cards[2].is_blank:
+                    f3 = cards[2].cut("PROP_TYPE22_3")
+                    params["vx"] = _fval(f3[0], 1.0) if len(f3) > 0 and f3[0].strip() else 1.0
+                    params["vy"] = _fval(f3[1]) if len(f3) > 1 else 0.0
+                    params["vz"] = _fval(f3[2]) if len(f3) > 2 else 0.0
+                    params["skew_id"] = _ival(f3[3]) if len(f3) > 3 else 0
+                    params["iorth"] = _ival(f3[4]) if len(f3) > 4 else 0
+                    params["ipos"] = _ival(f3[5]) if len(f3) > 5 else 0
+                if len(cards) > 3 and not cards[3].is_blank:
+                    f4 = cards[3].cut("PROP_TYPE22_4")
+                    params["ashear"] = _fval(f4[0], 0.833333) if len(f4) > 0 and f4[0].strip() else 0.833333
+                layers = []
+                for c in cards[4:-1]:
+                    if c.is_blank:
+                        continue
+                    ly = c.cut("PROP_TYPE22_LAYER")
+                    layers.append({
+                        "phi": _fval(ly[0]),
+                        "thick": _fval(ly[1]),
+                        "zi": _fval(ly[2]),
+                        "mat_id": _ival(ly[3]),
+                    })
+                if len(cards) > 4 and not cards[-1].is_blank:
+                    f_last = cards[-1].cut("PROP_TYPE22_5")
+                    params["deltat_min"] = _fval(f_last[0]) if len(f_last) > 0 else 0.0
+                params["layers"] = layers
+            else:
+                t0 = cards[0].tokens() if len(cards) > 0 else []
+                params["itshell"] = int(float(t0[0])) if len(t0) > 0 else 15
+                params["isolid"] = params["itshell"]
+                params["ismstr"] = int(float(t0[1])) if len(t0) > 1 else 0
+                params["icstr"] = int(float(t0[3])) if len(t0) > 3 else 0
+                nbp = int(float(t0[4])) if len(t0) > 4 else 222
+                params["nbp"] = nbp
+                if nbp > 200:
+                    params["inpts_r"] = nbp // 100
+                    rem = nbp % 100
+                    params["inpts_s"] = rem // 10
+                    params["inpts_t"] = rem % 10
+                else:
+                    params["inpts_s"] = nbp
+                params["nip"] = params.get("inpts_t", 3)
+                params["iint"] = int(float(t0[5])) if len(t0) > 5 else 1
+                params["dn"] = float(t0[6]) if len(t0) > 6 else 0.0
+                if len(cards) > 1 and not cards[1].is_blank:
+                    t1 = cards[1].tokens()
+                    params["qa"] = float(t1[0]) if len(t1) > 0 else 1.1
+                    params["qb"] = float(t1[1]) if len(t1) > 1 else 0.05
+                if len(cards) > 2 and not cards[2].is_blank:
+                    t2 = cards[2].tokens()
+                    params["vx"] = float(t2[0]) if len(t2) > 0 else 1.0
+                    params["vy"] = float(t2[1]) if len(t2) > 1 else 0.0
+                    params["vz"] = float(t2[2]) if len(t2) > 2 else 0.0
+                    params["skew_id"] = int(float(t2[3])) if len(t2) > 3 else 0
+                    params["iorth"] = int(float(t2[4])) if len(t2) > 4 else 0
+                    params["ipos"] = int(float(t2[5])) if len(t2) > 5 else 0
+                if len(cards) > 3 and not cards[3].is_blank:
+                    t3 = cards[3].tokens()
+                    params["ashear"] = float(t3[0]) if len(t3) > 0 else 0.833333
+                layers = []
+                for c in cards[4:-1]:
+                    toks = c.tokens()
+                    if not toks:
+                        continue
+                    layers.append({
+                        "phi": float(toks[0]) if len(toks) > 0 else 0.0,
+                        "thick": float(toks[1]) if len(toks) > 1 else 1.0,
+                        "zi": float(toks[2]) if len(toks) > 2 else 0.0,
+                        "mat_id": int(float(toks[3])) if len(toks) > 3 else 0,
+                    })
+                if len(cards) > 4 and not cards[-1].is_blank:
+                    t_last = cards[-1].tokens()
+                    params["deltat_min"] = float(t_last[0]) if len(t_last) > 0 else 0.0
+                params["layers"] = layers
+        else:
+            if block.fixed:
+                if cards and not cards[0].is_blank:
+                    f = cards[0].cut("PROP_TSHELL_1")
+                    params["itshell"] = _ival(f[0])
+                    params["ismstr"] = _ival(f[1]) if len(f) > 1 else 0
+                    params["idrill"] = _ival(f[2]) if len(f) > 2 else 0
+                    params["p_thick_fail"] = _fval(f[3]) if len(f) > 3 else 0.0
+                if len(cards) >= 2 and not cards[1].is_blank:
+                    h = cards[1].cut("PROP_TSHELL_2")
+                    params["hm"] = _fval(h[0]) or 0.01
+                    params["hf"] = _fval(h[1]) or 0.01
+                    params["hr"] = _fval(h[2]) or 0.01
+                    params["dm"] = _fval(h[3]) if len(h) > 3 else 0.0
+                    params["dn"] = _fval(h[4]) if len(h) > 4 else 0.0
+                if len(cards) >= 3 and not cards[2].is_blank:
+                    t = cards[2].cut("PROP_TSHELL_3")
+                    params["nip"] = _ival(t[0]) or 3
+                    params["istrain"] = _ival(t[1]) if len(t) > 1 else 0
+                    params["thick"] = _fval(t[2]) or 1.0
+                    params["ashear"] = _fval(t[3]) or 0.833333
+                    params["ithick"] = _ival(t[4]) if len(t) > 4 else 0
+                    params["iplas"] = _ival(t[5]) if len(t) > 5 else 0
+                if len(cards) >= 4 and not cards[3].is_blank:
+                    v = cards[3].cut("PROP_TSH_ORTH_1")
+                    params["vx"] = _fval(v[0]) or 1.0
+                    params["vy"] = _fval(v[1])
+                    params["vz"] = _fval(v[2])
+                    params["skew_id"] = _ival(v[3]) if len(v) > 3 else 0
+                    params["iorth"] = _ival(v[4]) if len(v) > 4 else 0
+                    params["ipos"] = _ival(v[5]) if len(v) > 5 else 0
+                    params["ip"] = _ival(v[6]) if len(v) > 6 else 0
+                layers = []
+                for c in cards[4:]:
+                    if c.is_blank:
+                        continue
+                    ly = c.cut("PROP_SH_SANDW_LAYER")
+                    layers.append({
+                        "phi": _fval(ly[0]),
+                        "thick": _fval(ly[1]),
+                        "zi": _fval(ly[2]),
+                        "mat_id": _ival(ly[3]),
+                        "w_fi": _fval(ly[5]) if len(ly) > 5 else 1.0
+                    })
+                params["layers"] = layers
+            else:
+                t0 = cards[0].tokens() if len(cards) > 0 else []
+                params["itshell"] = int(float(t0[0])) if len(t0) > 0 else 0
+                params["ismstr"] = int(float(t0[1])) if len(t0) > 1 else 0
+                params["idrill"] = int(float(t0[2])) if len(t0) > 2 else 0
+                params["p_thick_fail"] = float(t0[3]) if len(t0) > 3 else 0.0
 
-            t2 = cards[2].tokens() if len(cards) > 2 else []
-            params["nip"] = int(float(t2[0])) if len(t2) > 0 else 3
-            params["istrain"] = int(float(t2[1])) if len(t2) > 1 else 0
-            params["thick"] = float(t2[2]) if len(t2) > 2 else 1.0
-            params["ashear"] = float(t2[3]) if len(t2) > 3 else 0.833333
-            params["ithick"] = int(float(t2[4])) if len(t2) > 4 else 0
-            params["iplas"] = int(float(t2[5])) if len(t2) > 5 else 0
+                t1 = cards[1].tokens() if len(cards) > 1 else []
+                params["hm"] = float(t1[0]) if len(t1) > 0 else 0.01
+                params["hf"] = float(t1[1]) if len(t1) > 1 else 0.01
+                params["hr"] = float(t1[2]) if len(t1) > 2 else 0.01
+                params["dm"] = float(t1[3]) if len(t1) > 3 else 0.0
+                params["dn"] = float(t1[4]) if len(t1) > 4 else 0.0
 
-            t3 = cards[3].tokens() if len(cards) > 3 else []
-            params["vx"] = float(t3[0]) if len(t3) > 0 else 1.0
-            params["vy"] = float(t3[1]) if len(t3) > 1 else 0.0
-            params["vz"] = float(t3[2]) if len(t3) > 2 else 0.0
-            params["skew_id"] = int(float(t3[3])) if len(t3) > 3 else 0
-            params["iorth"] = int(float(t3[4])) if len(t3) > 4 else 0
-            params["ipos"] = int(float(t3[5])) if len(t3) > 5 else 0
-            params["ip"] = int(float(t3[6])) if len(t3) > 6 else 0
-            layers = []
-            for c in cards[4:]:
-                toks = c.tokens()
-                if not toks:
-                    continue
-                layers.append({
-                    "phi": float(toks[0]) if len(toks) > 0 else 0.0,
-                    "thick": float(toks[1]) if len(toks) > 1 else 1.0,
-                    "zi": float(toks[2]) if len(toks) > 2 else 0.0,
-                    "mat_id": int(float(toks[3])) if len(toks) > 3 else 0,
-                    "w_fi": float(toks[4]) if len(toks) > 4 else 1.0,
-                })
-            params["layers"] = layers
+                t2 = cards[2].tokens() if len(cards) > 2 else []
+                params["nip"] = int(float(t2[0])) if len(t2) > 0 else 3
+                params["istrain"] = int(float(t2[1])) if len(t2) > 1 else 0
+                params["thick"] = float(t2[2]) if len(t2) > 2 else 1.0
+                params["ashear"] = float(t2[3]) if len(t2) > 3 else 0.833333
+                params["ithick"] = int(float(t2[4])) if len(t2) > 4 else 0
+                params["iplas"] = int(float(t2[5])) if len(t2) > 5 else 0
+
+                t3 = cards[3].tokens() if len(cards) > 3 else []
+                params["vx"] = float(t3[0]) if len(t3) > 0 else 1.0
+                params["vy"] = float(t3[1]) if len(t3) > 1 else 0.0
+                params["vz"] = float(t3[2]) if len(t3) > 2 else 0.0
+                params["skew_id"] = int(float(t3[3])) if len(t3) > 3 else 0
+                params["iorth"] = int(float(t3[4])) if len(t3) > 4 else 0
+                params["ipos"] = int(float(t3[5])) if len(t3) > 5 else 0
+                params["ip"] = int(float(t3[6])) if len(t3) > 6 else 0
+                layers = []
+                for c in cards[4:]:
+                    toks = c.tokens()
+                    if not toks:
+                        continue
+                    layers.append({
+                        "phi": float(toks[0]) if len(toks) > 0 else 0.0,
+                        "thick": float(toks[1]) if len(toks) > 1 else 1.0,
+                        "zi": float(toks[2]) if len(toks) > 2 else 0.0,
+                        "mat_id": int(float(toks[3])) if len(toks) > 3 else 0,
+                        "w_fi": float(toks[4]) if len(toks) > 4 else 1.0,
+                    })
+                params["layers"] = layers
 
     elif ptype == 34:  # SPH or USER_SOLID
         if typename in ("USER_SOLID", "PROP_USER_SOLID", "PROP_P34_USER"):
@@ -5625,6 +5917,78 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 itip=int(params.get("itip", params.get("fun_k", 0))),
                 isurf=int(params.get("isurf", params.get("fun_c", 0))),
                 alpha=params.get("alpha", params.get("mass", 0.0)),
+            )
+        elif ptype == 20:
+            from ..model.entities import PropType20
+            model.prop_tshells[block.user_id] = PropType20(
+                id=block.user_id, isolid=int(params.get("itshell", 15)),
+                ismstr=int(params.get("ismstr", 0)),
+                icpre=int(params.get("idrill", 0)),
+                icstr=int(params.get("istrain", 0)),
+                inpts_r=int(params.get("nip", 2)),
+                inpts_s=int(params.get("nip", 2)),
+                inpts_t=int(params.get("nip", 2)),
+                iint=int(params.get("iplas", 1)),
+                dn=float(params.get("dn", 0.0)),
+                qa=float(params.get("qa", 1.1)),
+                qb=float(params.get("qb", 0.05)),
+                h=float(params.get("h", 0.1)),
+                deltat_min=float(params.get("deltat_min", 0.0)),
+                title=title,
+            )
+        elif ptype == 21:
+            from ..model.entities import PropType21
+            model.prop_tsh_orths[block.user_id] = PropType21(
+                id=block.user_id, isolid=int(params.get("itshell", 15)),
+                ismstr=int(params.get("ismstr", 0)),
+                icstr=int(params.get("istrain", 0)),
+                inpts_r=int(params.get("nip", 2)),
+                inpts_s=int(params.get("nip", 2)),
+                inpts_t=int(params.get("nip", 2)),
+                iint=int(params.get("iplas", 1)),
+                dn=float(params.get("dn", 0.0)),
+                qa=float(params.get("qa", 1.1)),
+                qb=float(params.get("qb", 0.05)),
+                vx=float(params.get("vx", 1.0)),
+                vy=float(params.get("vy", 0.0)),
+                vz=float(params.get("vz", 0.0)),
+                skew_id=int(params.get("skew_id", 0)),
+                iorth=int(params.get("iorth", 0)),
+                phi=float(params.get("phi", 0.0)),
+                deltat_min=float(params.get("deltat_min", 0.0)),
+                title=title,
+            )
+        elif ptype == 22:
+            from ..model.entities import PropType22, PropType22Layer
+            ly_objs = []
+            for ly in params.get("layers", []):
+                ly_objs.append(PropType22Layer(
+                    phi=float(ly.get("phi", 0.0)),
+                    thick=float(ly.get("thick", 0.0)),
+                    zi=float(ly.get("zi", 0.0)),
+                    mat_id=int(ly.get("mat_id", 0)),
+                ))
+            model.prop_tsh_comps[block.user_id] = PropType22(
+                id=block.user_id, isolid=int(params.get("itshell", 15)),
+                ismstr=int(params.get("ismstr", 0)),
+                icstr=int(params.get("istrain", 0)),
+                inpts_r=int(params.get("nip", 2)),
+                inpts_s=int(params.get("nip", 2)),
+                inpts_t=int(params.get("nip", 2)),
+                iint=int(params.get("iplas", 1)),
+                dn=float(params.get("dn", 0.0)),
+                qa=float(params.get("qa", 1.1)),
+                qb=float(params.get("qb", 0.05)),
+                vx=float(params.get("vx", 1.0)),
+                vy=float(params.get("vy", 0.0)),
+                vz=float(params.get("vz", 0.0)),
+                skew_id=int(params.get("skew_id", 0)),
+                iorth=int(params.get("iorth", 0)),
+                ipos=int(params.get("ipos", 0)),
+                ashear=float(params.get("ashear", 0.833333)),
+                layers=ly_objs,
+                deltat_min=float(params.get("deltat_min", 0.0)),
+                title=title,
             )
 
 
@@ -26339,10 +26703,10 @@ def read_mat_visc_lprony(block: KeywordBlock, model: Model, log: MessageLog) -> 
 
     m_order, form, flag_visc = 0, 0, 0
     if block.fixed:
-        f1 = cut(valid_cards[0].raw, "MAT_VISC_LPRONY_1")
-        m_order = _i(f1[0]) if len(f1) > 0 else 0
-        form = _i(f1[1]) if len(f1) > 1 else 0
-        flag_visc = _i(f1[2]) if len(f1) > 2 else 0
+        f1 = valid_cards[0].cut("MAT_VISC_LPRONY_1")
+        m_order = _ival(f1[0]) if len(f1) > 0 else 0
+        form = _ival(f1[1]) if len(f1) > 1 else 0
+        flag_visc = _ival(f1[2]) if len(f1) > 2 else 0
     else:
         toks1 = valid_cards[0].tokens()
         m_order = int(float(toks1[0])) if len(toks1) > 0 else 0
@@ -26353,9 +26717,9 @@ def read_mat_visc_lprony(block: KeywordBlock, model: Model, log: MessageLog) -> 
     taui = []
     for c in valid_cards[1: 1 + m_order]:
         if block.fixed:
-            fc = cut(c.raw, "MAT_VISC_LPRONY_ITEM")
-            g = _f(fc[0]) if len(fc) > 0 else 0.0
-            t = _f(fc[1]) if len(fc) > 1 else 0.0
+            fc = c.cut("MAT_VISC_LPRONY_ITEM")
+            g = _fval(fc[0]) if len(fc) > 0 else 0.0
+            t = _fval(fc[1]) if len(fc) > 1 else 0.0
         else:
             tc = c.tokens()
             g = float(tc[0]) if len(tc) > 0 else 0.0
@@ -26377,6 +26741,604 @@ def read_mat_visc_lprony(block: KeywordBlock, model: Model, log: MessageLog) -> 
 def read_dt_brick(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/DT/BRICK/...`` or ``/ENG_DT/BRICK/...`` (M179): Engine time step control for brick elements."""
     pass
+
+
+# M180: MAT_LAW190, MAT_LAW41, PROP_TYPE20, PROP_TYPE21, PROP_TYPE22
+def read_mat_law190(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW190/id`` or ``/MAT/FOAM_DUBOIS/id`` (M180): Du Bois foam model with 3D table."""
+    from ..model.entities import MatLaw190
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank]
+    if not valid_cards:
+        log.error(f"/MAT/LAW190/{mat_id}: missing data cards", block.source)
+        return
+
+    rho, e0, nu = 0.0, 0.0, 0.0
+    hu, shape = 0.0, 1.0
+    fun_1, xscale_1, scale_1 = 0, 1.0, 1.0
+
+    if block.fixed:
+        f1 = valid_cards[0].cut("MAT_LAW190_1")
+        rho = _fval(f1[0]) if len(f1) > 0 else 0.0
+
+        if len(valid_cards) > 1:
+            f2 = valid_cards[1].cut("MAT_LAW190_2")
+            e0 = _fval(f2[0]) if len(f2) > 0 else 0.0
+            nu = _fval(f2[1]) if len(f2) > 1 else 0.0
+
+        if len(valid_cards) > 2:
+            f3 = valid_cards[2].cut("MAT_LAW190_3")
+            hu = _fval(f3[0]) if len(f3) > 0 else 0.0
+            shape = _fval(f3[1], 1.0) if len(f3) > 1 and f3[1].strip() else 1.0
+
+        if len(valid_cards) > 3:
+            f4 = valid_cards[3].cut("MAT_LAW190_4")
+            fun_1 = _ival(f4[0]) if len(f4) > 0 else 0
+            xscale_1 = _fval(f4[1], 1.0) if len(f4) > 1 and f4[1].strip() else 1.0
+            scale_1 = _fval(f4[2], 1.0) if len(f4) > 2 and f4[2].strip() else 1.0
+    else:
+        toks1 = valid_cards[0].tokens()
+        rho = float(toks1[0]) if len(toks1) > 0 else 0.0
+
+        if len(valid_cards) > 1:
+            toks2 = valid_cards[1].tokens()
+            e0 = float(toks2[0]) if len(toks2) > 0 else 0.0
+            nu = float(toks2[1]) if len(toks2) > 1 else 0.0
+
+        if len(valid_cards) > 2:
+            toks3 = valid_cards[2].tokens()
+            hu = float(toks3[0]) if len(toks3) > 0 else 0.0
+            shape = float(toks3[1]) if len(toks3) > 1 else 1.0
+
+        if len(valid_cards) > 3:
+            toks4 = valid_cards[3].tokens()
+            fun_1 = int(float(toks4[0])) if len(toks4) > 0 else 0
+            xscale_1 = float(toks4[1]) if len(toks4) > 1 else 1.0
+            scale_1 = float(toks4[2]) if len(toks4) > 2 else 1.0
+
+    m190 = MatLaw190(
+        id=mat_id, rho=rho, e0=e0, nu=nu, hu=hu, shape=shape,
+        fun_1=fun_1, xscale_1=xscale_1, scale_1=scale_1, title=title,
+    )
+    model.mat_law190s[mat_id] = m190
+    from .mat_reader import GenericMaterialRecord
+    mat190 = Material(
+        id=mat_id, law=190, rho0=rho, title=title,
+        params={"E": e0, "nu": nu, "MAT_RHO": rho, "MAT_HU": hu, "MAT_SHAPE": shape, "FUN_1": fun_1}
+    )
+    mat190.record = GenericMaterialRecord(
+        law_name="LAW190", law_number=190, id=mat_id, title=title,
+        params=mat190.params, density=rho, unit_id=block.unit_id,
+    )
+    model.materials[mat_id] = mat190
+
+
+def read_mat_law41(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW41/id`` or ``/MAT/LEE_T/id`` (M180): Lee-Tarver explosive reaction kinetics and JWL EOS."""
+    from ..model.entities import MatLaw41
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank]
+    if not valid_cards:
+        log.error(f"/MAT/LAW41/{mat_id}: missing data cards", block.source)
+        return
+
+    rho, refer_rho = 0.0, 0.0
+    ireac = 0
+    a_r, b_r, r_1r, r_2r, r_3r = 0.0, 0.0, 0.0, 0.0, 0.0
+    a_p, b_p, r_1p, r_2p, r_3p = 0.0, 0.0, 0.0, 0.0, 0.0
+    c_vr, c_vp, enq = 0.0, 0.0, 0.0
+    nitrs, epsilon_0, ftol = 0, 0.0, 0.0
+    i_coeff, b_coeff, x_coeff = 0.0, 0.0, 0.0
+    g1, d_coeff, y_coeff, c_coeff = 0.0, 0.0, 0.0, 0.0
+    kn, chi, tol = 0.0, 0.0, 0.0
+    g2, e_coeff, g_coeff, z_coeff = 0.0, 0.0, 0.0, 0.0
+    ccrit, figmax, fg1max, fg2min = 0.0, 0.0, 0.0, 0.0
+    g0, t_initial = 0.0, 293.15
+
+    if block.fixed:
+        f1 = valid_cards[0].cut("MAT_LAW41_1")
+        rho = _fval(f1[0]) if len(f1) > 0 else 0.0
+        refer_rho = _fval(f1[1]) if len(f1) > 1 else 0.0
+
+        if len(valid_cards) > 1:
+            f2 = valid_cards[1].cut("MAT_LAW41_2")
+            ireac = _ival(f2[0]) if len(f2) > 0 else 0
+            a_r = _fval(f2[1]) if len(f2) > 1 else 0.0
+            b_r = _fval(f2[2]) if len(f2) > 2 else 0.0
+            r_1r = _fval(f2[3]) if len(f2) > 3 else 0.0
+            r_2r = _fval(f2[4]) if len(f2) > 4 else 0.0
+            r_3r = _fval(f2[5]) if len(f2) > 5 else 0.0
+
+        if len(valid_cards) > 2:
+            f3 = valid_cards[2].cut("MAT_LAW41_3")
+            a_p = _fval(f3[0]) if len(f3) > 0 else 0.0
+            b_p = _fval(f3[1]) if len(f3) > 1 else 0.0
+            r_1p = _fval(f3[2]) if len(f3) > 2 else 0.0
+            r_2p = _fval(f3[3]) if len(f3) > 3 else 0.0
+            r_3p = _fval(f3[4]) if len(f3) > 4 else 0.0
+
+        if len(valid_cards) > 3:
+            f4 = valid_cards[3].cut("MAT_LAW41_4")
+            c_vr = _fval(f4[0]) if len(f4) > 0 else 0.0
+            c_vp = _fval(f4[1]) if len(f4) > 1 else 0.0
+            enq = _fval(f4[2]) if len(f4) > 2 else 0.0
+
+        if len(valid_cards) > 4:
+            f5 = valid_cards[4].cut("MAT_LAW41_5")
+            nitrs = _ival(f5[0]) if len(f5) > 0 else 0
+            epsilon_0 = _fval(f5[1]) if len(f5) > 1 else 0.0
+            ftol = _fval(f5[2]) if len(f5) > 2 else 0.0
+
+        if len(valid_cards) > 5:
+            f6 = valid_cards[5].cut("MAT_LAW41_6")
+            i_coeff = _fval(f6[0]) if len(f6) > 0 else 0.0
+            b_coeff = _fval(f6[1]) if len(f6) > 1 else 0.0
+            x_coeff = _fval(f6[2]) if len(f6) > 2 else 0.0
+
+        if len(valid_cards) > 6:
+            f7 = valid_cards[6].cut("MAT_LAW41_7")
+            g1 = _fval(f7[0]) if len(f7) > 0 else 0.0
+            d_coeff = _fval(f7[1]) if len(f7) > 1 else 0.0
+            y_coeff = _fval(f7[2]) if len(f7) > 2 else 0.0
+            c_coeff = _fval(f7[3]) if len(f7) > 3 else 0.0
+
+        if len(valid_cards) > 7:
+            f8 = valid_cards[7].cut("MAT_LAW41_8")
+            kn = _fval(f8[0]) if len(f8) > 0 else 0.0
+            chi = _fval(f8[1]) if len(f8) > 1 else 0.0
+            tol = _fval(f8[2]) if len(f8) > 2 else 0.0
+
+        if len(valid_cards) > 8:
+            f9 = valid_cards[8].cut("MAT_LAW41_9")
+            g2 = _fval(f9[0]) if len(f9) > 0 else 0.0
+            e_coeff = _fval(f9[1]) if len(f9) > 1 else 0.0
+            g_coeff = _fval(f9[2]) if len(f9) > 2 else 0.0
+            z_coeff = _fval(f9[3]) if len(f9) > 3 else 0.0
+
+        if len(valid_cards) > 9:
+            f10 = valid_cards[9].cut("MAT_LAW41_10")
+            ccrit = _fval(f10[0]) if len(f10) > 0 else 0.0
+            figmax = _fval(f10[1]) if len(f10) > 1 else 0.0
+            fg1max = _fval(f10[2]) if len(f10) > 2 else 0.0
+            fg2min = _fval(f10[3]) if len(f10) > 3 else 0.0
+
+        if len(valid_cards) > 10:
+            f11 = valid_cards[10].cut("MAT_LAW41_11")
+            g0 = _fval(f11[0]) if len(f11) > 0 else 0.0
+            t_initial = _fval(f11[1], 293.15) if len(f11) > 1 and f11[1].strip() else 293.15
+    else:
+        toks1 = valid_cards[0].tokens()
+        rho = float(toks1[0]) if len(toks1) > 0 else 0.0
+        refer_rho = float(toks1[1]) if len(toks1) > 1 else 0.0
+
+        if len(valid_cards) > 1:
+            toks2 = valid_cards[1].tokens()
+            ireac = int(float(toks2[0])) if len(toks2) > 0 else 0
+            a_r = float(toks2[1]) if len(toks2) > 1 else 0.0
+            b_r = float(toks2[2]) if len(toks2) > 2 else 0.0
+            r_1r = float(toks2[3]) if len(toks2) > 3 else 0.0
+            r_2r = float(toks2[4]) if len(toks2) > 4 else 0.0
+            r_3r = float(toks2[5]) if len(toks2) > 5 else 0.0
+
+        if len(valid_cards) > 2:
+            toks3 = valid_cards[2].tokens()
+            a_p = float(toks3[0]) if len(toks3) > 0 else 0.0
+            b_p = float(toks3[1]) if len(toks3) > 1 else 0.0
+            r_1p = float(toks3[2]) if len(toks3) > 2 else 0.0
+            r_2p = float(toks3[3]) if len(toks3) > 3 else 0.0
+            r_3p = float(toks3[4]) if len(toks3) > 4 else 0.0
+
+        if len(valid_cards) > 3:
+            toks4 = valid_cards[3].tokens()
+            c_vr = float(toks4[0]) if len(toks4) > 0 else 0.0
+            c_vp = float(toks4[1]) if len(toks4) > 1 else 0.0
+            enq = float(toks4[2]) if len(toks4) > 2 else 0.0
+
+        if len(valid_cards) > 4:
+            toks5 = valid_cards[4].tokens()
+            nitrs = int(float(toks5[0])) if len(toks5) > 0 else 0
+            epsilon_0 = float(toks5[1]) if len(toks5) > 1 else 0.0
+            ftol = float(toks5[2]) if len(toks5) > 2 else 0.0
+
+        if len(valid_cards) > 5:
+            toks6 = valid_cards[5].tokens()
+            i_coeff = float(toks6[0]) if len(toks6) > 0 else 0.0
+            b_coeff = float(toks6[1]) if len(toks6) > 1 else 0.0
+            x_coeff = float(toks6[2]) if len(toks6) > 2 else 0.0
+
+        if len(valid_cards) > 6:
+            toks7 = valid_cards[6].tokens()
+            g1 = float(toks7[0]) if len(toks7) > 0 else 0.0
+            d_coeff = float(toks7[1]) if len(toks7) > 1 else 0.0
+            y_coeff = float(toks7[2]) if len(toks7) > 2 else 0.0
+            c_coeff = float(toks7[3]) if len(toks7) > 3 else 0.0
+
+        if len(valid_cards) > 7:
+            toks8 = valid_cards[7].tokens()
+            kn = float(toks8[0]) if len(toks8) > 0 else 0.0
+            chi = float(toks8[1]) if len(toks8) > 1 else 0.0
+            tol = float(toks8[2]) if len(toks8) > 2 else 0.0
+
+        if len(valid_cards) > 8:
+            toks9 = valid_cards[8].tokens()
+            g2 = float(toks9[0]) if len(toks9) > 0 else 0.0
+            e_coeff = float(toks9[1]) if len(toks9) > 1 else 0.0
+            g_coeff = float(toks9[2]) if len(toks9) > 2 else 0.0
+            z_coeff = float(toks9[3]) if len(toks9) > 3 else 0.0
+
+        if len(valid_cards) > 9:
+            toks10 = valid_cards[9].tokens()
+            ccrit = float(toks10[0]) if len(toks10) > 0 else 0.0
+            figmax = float(toks10[1]) if len(toks10) > 1 else 0.0
+            fg1max = float(toks10[2]) if len(toks10) > 2 else 0.0
+            fg2min = float(toks10[3]) if len(toks10) > 3 else 0.0
+
+        if len(valid_cards) > 10:
+            toks11 = valid_cards[10].tokens()
+            g0 = float(toks11[0]) if len(toks11) > 0 else 0.0
+            t_initial = float(toks11[1]) if len(toks11) > 1 else 293.15
+
+    m41 = MatLaw41(
+        id=mat_id, rho=rho, refer_rho=refer_rho, ireac=ireac,
+        a_r=a_r, b_r=b_r, r_1r=r_1r, r_2r=r_2r, r_3r=r_3r,
+        a_p=a_p, b_p=b_p, r_1p=r_1p, r_2p=r_2p, r_3p=r_3p,
+        c_vr=c_vr, c_vp=c_vp, enq=enq,
+        nitrs=nitrs, epsilon_0=epsilon_0, ftol=ftol,
+        i_coeff=i_coeff, b_coeff=b_coeff, x_coeff=x_coeff,
+        g1=g1, d_coeff=d_coeff, y_coeff=y_coeff, c_coeff=c_coeff,
+        kn=kn, chi=chi, tol=tol,
+        g2=g2, e_coeff=e_coeff, g_coeff=g_coeff, z_coeff=z_coeff,
+        ccrit=ccrit, figmax=figmax, fg1max=fg1max, fg2min=fg2min,
+        g0=g0, t_initial=t_initial, title=title,
+    )
+    model.mat_law41s[mat_id] = m41
+    from .mat_reader import GenericMaterialRecord
+    e_est = 2.0 * g0 * 1.3 if g0 > 0 else 1.0e5
+    mat41 = Material(
+        id=mat_id, law=41, rho0=rho, title=title,
+        params={"E": e_est, "nu": 0.3, "G0": g0, "MAT_RHO": rho, "Ireac": ireac, "enq": enq}
+    )
+    mat41.record = GenericMaterialRecord(
+        law_name="LAW41", law_number=41, id=mat_id, title=title,
+        params=mat41.params, density=rho, unit_id=block.unit_id,
+    )
+    model.materials[mat_id] = mat41
+
+
+def read_prop_tshell(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE20/id`` or ``/PROP/TSHELL/id`` (M180): Thick shell property."""
+    from ..model.entities import PropType20
+    prop_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank]
+    if not valid_cards:
+        log.error(f"/PROP/TSHELL/{prop_id}: missing data cards", block.source)
+        return
+
+    isolid = 15
+    ismstr, icpre, icstr = 0, 0, 0
+    inpts_r, inpts_s, inpts_t, iint = 2, 2, 2, 1
+    dn, qa, qb, h = 0.0, 1.1, 0.05, 0.1
+    deltat_min = 0.0
+
+    if block.fixed:
+        f1 = valid_cards[0].cut("PROP_TYPE20_1")
+        isolid = _ival(f1[0], 15) if len(f1) > 0 and f1[0].strip() else 15
+        ismstr = _ival(f1[1]) if len(f1) > 1 else 0
+        icpre = _ival(f1[2]) if len(f1) > 2 else 0
+        icstr = _ival(f1[3]) if len(f1) > 3 else 0
+        nbp = _ival(f1[4], 222) if len(f1) > 4 and f1[4].strip() else 222
+        if nbp > 200:
+            inpts_r = nbp // 100
+            rem = nbp % 100
+            inpts_s = rem // 10
+            inpts_t = rem % 10
+        else:
+            inpts_s = nbp
+        iint = _ival(f1[5], 1) if len(f1) > 5 and f1[5].strip() else 1
+        dn = _fval(f1[6]) if len(f1) > 6 else 0.0
+
+        if len(valid_cards) > 1:
+            f2 = valid_cards[1].cut("PROP_TYPE20_2")
+            qa = _fval(f2[0], 1.1) if len(f2) > 0 and f2[0].strip() else 1.1
+            qb = _fval(f2[1], 0.05) if len(f2) > 1 and f2[1].strip() else 0.05
+            h = _fval(f2[2], 0.1) if len(f2) > 2 and f2[2].strip() else 0.1
+
+        if len(valid_cards) > 2:
+            f3 = valid_cards[2].cut("PROP_TYPE20_3")
+            deltat_min = _fval(f3[0]) if len(f3) > 0 else 0.0
+    else:
+        toks1 = valid_cards[0].tokens()
+        isolid = int(float(toks1[0])) if len(toks1) > 0 else 15
+        ismstr = int(float(toks1[1])) if len(toks1) > 1 else 0
+        icpre = int(float(toks1[2])) if len(toks1) > 2 else 0
+        icstr = int(float(toks1[3])) if len(toks1) > 3 else 0
+        nbp = int(float(toks1[4])) if len(toks1) > 4 else 222
+        if nbp > 200:
+            inpts_r = nbp // 100
+            rem = nbp % 100
+            inpts_s = rem // 10
+            inpts_t = rem % 10
+        else:
+            inpts_s = nbp
+        iint = int(float(toks1[5])) if len(toks1) > 5 else 1
+        dn = float(toks1[6]) if len(toks1) > 6 else 0.0
+
+        if len(valid_cards) > 1:
+            toks2 = valid_cards[1].tokens()
+            qa = float(toks2[0]) if len(toks2) > 0 else 1.1
+            qb = float(toks2[1]) if len(toks2) > 1 else 0.05
+            h = float(toks2[2]) if len(toks2) > 2 else 0.1
+
+        if len(valid_cards) > 2:
+            toks3 = valid_cards[2].tokens()
+            deltat_min = float(toks3[0]) if len(toks3) > 0 else 0.0
+
+    p20 = PropType20(
+        id=prop_id, isolid=isolid, ismstr=ismstr, icpre=icpre, icstr=icstr,
+        inpts_r=inpts_r, inpts_s=inpts_s, inpts_t=inpts_t, iint=iint,
+        dn=dn, qa=qa, qb=qb, h=h, deltat_min=deltat_min, title=title,
+    )
+    model.prop_tshells[prop_id] = p20
+    if prop_id not in model.properties:
+        model.properties[prop_id] = Property(
+            id=prop_id, type=20, title=title,
+            params={"Isolid": isolid, "Ismstr": ismstr, "Icpre": icpre, "Icstr": icstr, "qa": qa, "qb": qb, "h": h}
+        )
+
+
+def read_prop_tsh_orth(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE21/id`` or ``/PROP/TSH_ORTH/id`` (M180): Orthotropic thick shell property."""
+    from ..model.entities import PropType21
+    prop_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank]
+    if not valid_cards:
+        log.error(f"/PROP/TSH_ORTH/{prop_id}: missing data cards", block.source)
+        return
+
+    isolid = 15
+    ismstr, icstr = 0, 0
+    inpts_r, inpts_s, inpts_t, iint = 2, 2, 2, 1
+    dn, qa, qb = 0.0, 1.1, 0.05
+    vx, vy, vz = 0.0, 0.0, 0.0
+    skew_id, iorth = 0, 0
+    phi, deltat_min = 0.0, 0.0
+
+    if block.fixed:
+        f1 = valid_cards[0].cut("PROP_TYPE21_1")
+        isolid = _ival(f1[0], 15) if len(f1) > 0 and f1[0].strip() else 15
+        ismstr = _ival(f1[1]) if len(f1) > 1 else 0
+        icstr = _ival(f1[3]) if len(f1) > 3 else 0
+        nbp = _ival(f1[4], 222) if len(f1) > 4 and f1[4].strip() else 222
+        if nbp > 200:
+            inpts_r = nbp // 100
+            rem = nbp % 100
+            inpts_s = rem // 10
+            inpts_t = rem % 10
+        else:
+            inpts_s = nbp
+        iint = _ival(f1[5], 1) if len(f1) > 5 and f1[5].strip() else 1
+        dn = _fval(f1[6]) if len(f1) > 6 else 0.0
+
+        if len(valid_cards) > 1:
+            f2 = valid_cards[1].cut("PROP_TYPE21_2")
+            qa = _fval(f2[0], 1.1) if len(f2) > 0 and f2[0].strip() else 1.1
+            qb = _fval(f2[1], 0.05) if len(f2) > 1 and f2[1].strip() else 0.05
+
+        if len(valid_cards) > 2:
+            f3 = valid_cards[2].cut("PROP_TYPE21_3")
+            vx = _fval(f3[0]) if len(f3) > 0 else 0.0
+            vy = _fval(f3[1]) if len(f3) > 1 else 0.0
+            vz = _fval(f3[2]) if len(f3) > 2 else 0.0
+            skew_id = _ival(f3[3]) if len(f3) > 3 else 0
+            iorth = _ival(f3[4]) if len(f3) > 4 else 0
+
+        if len(valid_cards) > 3:
+            f4 = valid_cards[3].cut("PROP_TYPE21_4")
+            phi = _fval(f4[0]) if len(f4) > 0 else 0.0
+
+        if len(valid_cards) > 4:
+            f5 = valid_cards[4].cut("PROP_TYPE21_5")
+            deltat_min = _fval(f5[0]) if len(f5) > 0 else 0.0
+    else:
+        toks1 = valid_cards[0].tokens()
+        isolid = int(float(toks1[0])) if len(toks1) > 0 else 15
+        ismstr = int(float(toks1[1])) if len(toks1) > 1 else 0
+        icstr = int(float(toks1[2])) if len(toks1) > 2 else 0
+        nbp = int(float(toks1[3])) if len(toks1) > 3 else 222
+        if nbp > 200:
+            inpts_r = nbp // 100
+            rem = nbp % 100
+            inpts_s = rem // 10
+            inpts_t = rem % 10
+        else:
+            inpts_s = nbp
+        iint = int(float(toks1[4])) if len(toks1) > 4 else 1
+        dn = float(toks1[5]) if len(toks1) > 5 else 0.0
+
+        if len(valid_cards) > 1:
+            toks2 = valid_cards[1].tokens()
+            qa = float(toks2[0]) if len(toks2) > 0 else 1.1
+            qb = float(toks2[1]) if len(toks2) > 1 else 0.05
+
+        if len(valid_cards) > 2:
+            toks3 = valid_cards[2].tokens()
+            vx = float(toks3[0]) if len(toks3) > 0 else 0.0
+            vy = float(toks3[1]) if len(toks3) > 1 else 0.0
+            vz = float(toks3[2]) if len(toks3) > 2 else 0.0
+            skew_id = int(float(toks3[3])) if len(toks3) > 3 else 0
+            iorth = int(float(toks3[4])) if len(toks3) > 4 else 0
+
+        if len(valid_cards) > 3:
+            toks4 = valid_cards[3].tokens()
+            phi = float(toks4[0]) if len(toks4) > 0 else 0.0
+
+        if len(valid_cards) > 4:
+            toks5 = valid_cards[4].tokens()
+            deltat_min = float(toks5[0]) if len(toks5) > 0 else 0.0
+
+    p21 = PropType21(
+        id=prop_id, isolid=isolid, ismstr=ismstr, icstr=icstr,
+        inpts_r=inpts_r, inpts_s=inpts_s, inpts_t=inpts_t, iint=iint,
+        dn=dn, qa=qa, qb=qb, vx=vx, vy=vy, vz=vz, skew_id=skew_id,
+        iorth=iorth, phi=phi, deltat_min=deltat_min, title=title,
+    )
+    model.prop_tsh_orths[prop_id] = p21
+    if prop_id not in model.properties:
+        model.properties[prop_id] = Property(
+            id=prop_id, type=21, title=title,
+            params={"Isolid": isolid, "Ismstr": ismstr, "Icstr": icstr, "qa": qa, "qb": qb, "Phi": phi, "skew_id": skew_id}
+        )
+
+
+def read_prop_tsh_comp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE22/id`` or ``/PROP/TSH_COMP/id`` (M180): Composite layered thick shell property."""
+    from ..model.entities import PropType22, PropType22Layer
+    prop_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank]
+    if not valid_cards:
+        log.error(f"/PROP/TSH_COMP/{prop_id}: missing data cards", block.source)
+        return
+
+    isolid = 15
+    ismstr, icstr = 0, 0
+    inpts_r, inpts_s, inpts_t, iint = 2, 2, 2, 1
+    dn, qa, qb = 0.0, 1.1, 0.05
+    vx, vy, vz = 0.0, 0.0, 0.0
+    skew_id, iorth, ipos = 0, 0, 0
+    ashear = 0.0
+    layers: List[PropType22Layer] = []
+    deltat_min = 0.0
+    n_layers = 1
+
+    if block.fixed:
+        f1 = valid_cards[0].cut("PROP_TYPE22_1")
+        isolid = _ival(f1[0], 15) if len(f1) > 0 and f1[0].strip() else 15
+        ismstr = _ival(f1[1]) if len(f1) > 1 else 0
+        icstr = _ival(f1[3]) if len(f1) > 3 else 0
+        nbp = _ival(f1[4], 222) if len(f1) > 4 and f1[4].strip() else 222
+        if nbp > 200:
+            inpts_r = nbp // 100
+            rem = nbp % 100
+            inpts_s = rem // 10
+            inpts_t = rem % 10
+        else:
+            inpts_s = nbp
+        iint = _ival(f1[5], 1) if len(f1) > 5 and f1[5].strip() else 1
+        dn = _fval(f1[6]) if len(f1) > 6 else 0.0
+
+        if iint > 9:
+            n_layers = iint
+        else:
+            n_layers = inpts_s
+
+        card_idx = 1
+        if card_idx < len(valid_cards):
+            f2 = valid_cards[card_idx].cut("PROP_TYPE22_2")
+            qa = _fval(f2[0], 1.1) if len(f2) > 0 and f2[0].strip() else 1.1
+            qb = _fval(f2[1], 0.05) if len(f2) > 1 and f2[1].strip() else 0.05
+            card_idx += 1
+
+        if card_idx < len(valid_cards):
+            f3 = valid_cards[card_idx].cut("PROP_TYPE22_3")
+            vx = _fval(f3[0]) if len(f3) > 0 else 0.0
+            vy = _fval(f3[1]) if len(f3) > 1 else 0.0
+            vz = _fval(f3[2]) if len(f3) > 2 else 0.0
+            skew_id = _ival(f3[3]) if len(f3) > 3 else 0
+            iorth = _ival(f3[4]) if len(f3) > 4 else 0
+            ipos = _ival(f3[5]) if len(f3) > 5 else 0
+            card_idx += 1
+
+        if card_idx < len(valid_cards):
+            f4 = valid_cards[card_idx].cut("PROP_TYPE22_4")
+            ashear = _fval(f4[0]) if len(f4) > 0 else 0.0
+            card_idx += 1
+
+        while card_idx < len(valid_cards) and len(layers) < n_layers:
+            fl = valid_cards[card_idx].cut("PROP_TYPE22_LAYER")
+            phi_l = _fval(fl[0]) if len(fl) > 0 else 0.0
+            thick_l = _fval(fl[1]) if len(fl) > 1 else 0.0
+            zi_l = _fval(fl[2]) if len(fl) > 2 else 0.0
+            mat_l = _ival(fl[3]) if len(fl) > 3 else 0
+            layers.append(PropType22Layer(phi=phi_l, thick=thick_l, zi=zi_l, mat_id=mat_l))
+            card_idx += 1
+
+        if card_idx < len(valid_cards):
+            f5 = valid_cards[card_idx].cut("PROP_TYPE22_5")
+            deltat_min = _fval(f5[0]) if len(f5) > 0 else 0.0
+    else:
+        toks1 = valid_cards[0].tokens()
+        isolid = int(float(toks1[0])) if len(toks1) > 0 else 15
+        ismstr = int(float(toks1[1])) if len(toks1) > 1 else 0
+        icstr = int(float(toks1[2])) if len(toks1) > 2 else 0
+        nbp = int(float(toks1[3])) if len(toks1) > 3 else 222
+        if nbp > 200:
+            inpts_r = nbp // 100
+            rem = nbp % 100
+            inpts_s = rem // 10
+            inpts_t = rem % 10
+        else:
+            inpts_s = nbp
+        iint = int(float(toks1[4])) if len(toks1) > 4 else 1
+        dn = float(toks1[5]) if len(toks1) > 5 else 0.0
+
+        if iint > 9:
+            n_layers = iint
+        else:
+            n_layers = inpts_s
+
+        card_idx = 1
+        if card_idx < len(valid_cards):
+            toks2 = valid_cards[card_idx].tokens()
+            qa = float(toks2[0]) if len(toks2) > 0 else 1.1
+            qb = float(toks2[1]) if len(toks2) > 1 else 0.05
+            card_idx += 1
+
+        if card_idx < len(valid_cards):
+            toks3 = valid_cards[card_idx].tokens()
+            vx = float(toks3[0]) if len(toks3) > 0 else 0.0
+            vy = float(toks3[1]) if len(toks3) > 1 else 0.0
+            vz = float(toks3[2]) if len(toks3) > 2 else 0.0
+            skew_id = int(float(toks3[3])) if len(toks3) > 3 else 0
+            iorth = int(float(toks3[4])) if len(toks3) > 4 else 0
+            ipos = int(float(toks3[5])) if len(toks3) > 5 else 0
+            card_idx += 1
+
+        if card_idx < len(valid_cards):
+            toks4 = valid_cards[card_idx].tokens()
+            ashear = float(toks4[0]) if len(toks4) > 0 else 0.0
+            card_idx += 1
+
+        while card_idx < len(valid_cards) and len(layers) < n_layers:
+            toksl = valid_cards[card_idx].tokens()
+            phi_l = float(toksl[0]) if len(toksl) > 0 else 0.0
+            thick_l = float(toksl[1]) if len(toksl) > 1 else 0.0
+            zi_l = float(toksl[2]) if len(toksl) > 2 else 0.0
+            mat_l = int(float(toksl[3])) if len(toksl) > 3 else 0
+            layers.append(PropType22Layer(phi=phi_l, thick=thick_l, zi=zi_l, mat_id=mat_l))
+            card_idx += 1
+
+        if card_idx < len(valid_cards):
+            toks5 = valid_cards[card_idx].tokens()
+            deltat_min = float(toks5[0]) if len(toks5) > 0 else 0.0
+
+    p22 = PropType22(
+        id=prop_id, isolid=isolid, ismstr=ismstr, icstr=icstr,
+        inpts_r=inpts_r, inpts_s=inpts_s, inpts_t=inpts_t, iint=iint,
+        dn=dn, qa=qa, qb=qb, vx=vx, vy=vy, vz=vz, skew_id=skew_id,
+        iorth=iorth, ipos=ipos, ashear=ashear, layers=layers,
+        deltat_min=deltat_min, title=title,
+    )
+    model.prop_tsh_comps[prop_id] = p22
+    if prop_id not in model.properties:
+        model.properties[prop_id] = Property(
+            id=prop_id, type=22, title=title,
+            params={"Isolid": isolid, "Ismstr": ismstr, "Icstr": icstr, "qa": qa, "qb": qb, "N": len(layers), "skew_id": skew_id}
+        )
 
 
 def read_airbag_injector(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -27233,6 +28195,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "VISC_LPRONY": read_mat_visc_lprony,
     "ENG_DT_BRICK": read_dt_brick,
     "DT_BRICK": read_dt_brick,
+    # M180: MAT_LAW190, MAT_LAW41, FAIL_CHANG, PROP_TYPE20, PROP_TYPE21, PROP_TYPE22
+    "MAT_LAW190": read_mat,
+    "MAT_FOAM_DUBOIS": read_mat,
+    "FOAM_DUBOIS": read_mat,
+    "MAT_LAW41": read_mat,
+    "MAT_LEE_T": read_mat,
+    "LEE_T": read_mat,
+    "FAIL_CHANG": read_fail,
+    "PROP_TYPE20": read_prop,
+    "PROP_TSHELL": read_prop,
+    "TSHELL": read_prop,
+    "PROP_P20_TSHELL": read_prop,
+    "PROP_TYPE21": read_prop,
+    "PROP_TSH_ORTH": read_prop,
+    "TSH_ORTH": read_prop,
+    "PROP_P21_TSH_ORTH": read_prop,
+    "PROP_TYPE22": read_prop,
+    "PROP_TSH_COMP": read_prop,
+    "TSH_COMP": read_prop,
+    "PROP_P22_TSH_COMP": read_prop,
 }
 
 

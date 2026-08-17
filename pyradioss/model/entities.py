@@ -6869,6 +6869,164 @@ class MatViscLprony:
     title: str = ""
 
 
+# M180: MAT_LAW190, MAT_LAW41, FAIL_CHANG, PROP_TYPE20, PROP_TYPE21, PROP_TYPE22
+@dataclass
+class MatLaw190:
+    """/MAT/LAW190 / /MAT/FOAM_DUBOIS (M180): Du Bois foam model with 3D table."""
+    id: int
+    rho: float = 0.0
+    e0: float = 0.0
+    nu: float = 0.0
+    hu: float = 0.0
+    shape: float = 1.0
+    fun_1: int = 0
+    xscale_1: float = 1.0
+    scale_1: float = 1.0
+    title: str = ""
+
+
+@dataclass
+class MatLaw41:
+    """/MAT/LAW41 / /MAT/LEE_T (M180): Lee-Tarver explosive reaction kinetics and JWL EOS."""
+    id: int
+    rho: float = 0.0
+    refer_rho: float = 0.0
+    ireac: int = 0
+    a_r: float = 0.0
+    b_r: float = 0.0
+    r_1r: float = 0.0
+    r_2r: float = 0.0
+    r_3r: float = 0.0
+    a_p: float = 0.0
+    b_p: float = 0.0
+    r_1p: float = 0.0
+    r_2p: float = 0.0
+    r_3p: float = 0.0
+    c_vr: float = 0.0
+    c_vp: float = 0.0
+    enq: float = 0.0
+    nitrs: int = 0
+    epsilon_0: float = 0.0
+    ftol: float = 0.0
+    i_coeff: float = 0.0
+    b_coeff: float = 0.0
+    x_coeff: float = 0.0
+    g1: float = 0.0
+    d_coeff: float = 0.0
+    y_coeff: float = 0.0
+    c_coeff: float = 0.0
+    kn: float = 0.0
+    chi: float = 0.0
+    tol: float = 0.0
+    g2: float = 0.0
+    e_coeff: float = 0.0
+    g_coeff: float = 0.0
+    z_coeff: float = 0.0
+    ccrit: float = 0.0
+    figmax: float = 0.0
+    fg1max: float = 0.0
+    fg2min: float = 0.0
+    g0: float = 0.0
+    t_initial: float = 293.15
+    title: str = ""
+
+
+@dataclass
+class FailChang:
+    """/FAIL/CHANG (M180): Chang-Chang composite failure model."""
+    id: int = 0
+    mat_id: int = 0
+    sigma_1t: float = 0.0
+    sigma_2t: float = 0.0
+    sigma_12: float = 0.0
+    sigma_1c: float = 0.0
+    sigma_2c: float = 0.0
+    beta: float = 0.0
+    tau_max: float = 0.0
+    ifail_sh: int = 1
+    failip: int = 0
+    fail_id: int = 0
+
+
+@dataclass
+class PropType20:
+    """/PROP/TYPE20 / /PROP/TSHELL (M180): Thick shell property."""
+    id: int
+    isolid: int = 15
+    ismstr: int = 0
+    icpre: int = 0
+    icstr: int = 0
+    inpts_r: int = 2
+    inpts_s: int = 2
+    inpts_t: int = 2
+    iint: int = 1
+    dn: float = 0.0
+    qa: float = 1.1
+    qb: float = 0.05
+    h: float = 0.1
+    deltat_min: float = 0.0
+    title: str = ""
+
+
+@dataclass
+class PropType21:
+    """/PROP/TYPE21 / /PROP/TSH_ORTH (M180): Orthotropic thick shell property."""
+    id: int
+    isolid: int = 15
+    ismstr: int = 0
+    icstr: int = 0
+    inpts_r: int = 2
+    inpts_s: int = 2
+    inpts_t: int = 2
+    iint: int = 1
+    dn: float = 0.0
+    qa: float = 1.1
+    qb: float = 0.05
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    skew_id: int = 0
+    iorth: int = 0
+    phi: float = 0.0
+    deltat_min: float = 0.0
+    title: str = ""
+
+
+@dataclass
+class PropType22Layer:
+    """Layer definition for /PROP/TYPE22 (/PROP/TSH_COMP)."""
+    phi: float = 0.0
+    thick: float = 0.0
+    zi: float = 0.0
+    mat_id: int = 0
+
+
+@dataclass
+class PropType22:
+    """/PROP/TYPE22 / /PROP/TSH_COMP (M180): Composite layered thick shell property."""
+    id: int
+    isolid: int = 15
+    ismstr: int = 0
+    icstr: int = 0
+    inpts_r: int = 2
+    inpts_s: int = 2
+    inpts_t: int = 2
+    iint: int = 1
+    dn: float = 0.0
+    qa: float = 1.1
+    qb: float = 0.05
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    skew_id: int = 0
+    iorth: int = 0
+    ipos: int = 0
+    ashear: float = 0.0
+    layers: List[PropType22Layer] = field(default_factory=list)
+    deltat_min: float = 0.0
+    title: str = ""
+
+
 
 
 
