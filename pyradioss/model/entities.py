@@ -8090,6 +8090,272 @@ PropCrushSpring = PropType44
 PropSpringCrush = PropType44
 
 
+# ============================================================================
+# M185: LAW60 (PLAS_T3), LAW63 (HANSEL), LAW48 (ZHAO), LAW26 (SESAM),
+#       PROP TYPE12 (SPR_PUL), PROP TYPE15 (POROUS), PROP TYPE28 (NSTRAND)
+# ============================================================================
+
+@dataclass
+class MatLaw60:
+    """``/MAT/LAW60`` or ``/MAT/PLAS_T3``: Tabulated temperature/rate plasticity."""
+    id: int = 0
+    rho: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    eps_p_max: float = 0.0
+    eps_t1: float = 0.0
+    eps_t2: float = 0.0
+    nfunc: int = 5
+    fsmooth: int = 0
+    chard: float = 0.0
+    fcut: float = 0.0
+    xr_fun: int = 0
+    fpscale: float = 1.0
+    fun_ids: list[int] = field(default_factory=list)
+    fscales: list[float] = field(default_factory=list)
+    eps_rates: list[float] = field(default_factory=list)
+    title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.refer_rho if self.refer_rho != 0.0 else self.rho
+
+    @property
+    def hard(self) -> float:
+        return self.chard
+
+
+MatPlasT3 = MatLaw60
+MatPlastT3 = MatLaw60
+MatMaxwell = MatLaw60
+
+
+@dataclass
+class MatLaw63:
+    """``/MAT/LAW63`` or ``/MAT/HANSEL``: Hänsel transformation plasticity."""
+    id: int = 0
+    rho: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    cp: float = 0.0
+    a: float = 0.0
+    b: float = 0.0
+    q: float = 0.0
+    c: float = 0.0
+    d: float = 0.0
+    p: float = 0.0
+    ahs: float = 0.0
+    bhs: float = 0.0
+    m: float = 0.0
+    n: float = 0.0
+    k1: float = 0.0
+    k2: float = 0.0
+    dh: float = 0.0
+    vm0: float = 0.0
+    eps0: float = 0.0
+    t0: float = 0.0
+    title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.refer_rho if self.refer_rho != 0.0 else self.rho
+
+    @property
+    def mat_t0(self) -> float:
+        return self.t0
+
+
+MatHansel = MatLaw63
+MatPlasHansel = MatLaw63
+MatTransfoPlas = MatLaw63
+
+
+@dataclass
+class MatLaw48:
+    """``/MAT/LAW48`` or ``/MAT/ZHAO``: Zhao strain-rate hardening plasticity."""
+    id: int = 0
+    rho: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    a: float = 0.0
+    b: float = 0.0
+    n: float = 0.0
+    chard: float = 0.0
+    sig_max: float = 0.0
+    c: float = 0.0
+    d: float = 0.0
+    m: float = 0.0
+    e1: float = 0.0
+    k: float = 0.0
+    eps_rate_0: float = 0.0
+    fcut: float = 0.0
+    eps_max: float = 0.0
+    eps_t1: float = 0.0
+    eps_t2: float = 0.0
+    title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.refer_rho if self.refer_rho != 0.0 else self.rho
+
+    @property
+    def sigy(self) -> float:
+        return self.a
+
+    @property
+    def hard(self) -> float:
+        return self.n
+
+
+MatZhao = MatLaw48
+MatPlasZhao = MatLaw48
+
+
+@dataclass
+class MatLaw26:
+    """``/MAT/LAW26`` or ``/MAT/SESAM``: SESAME equation of state & hydrodynamic constitutive model."""
+    id: int = 0
+    rho: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    a: float = 0.0
+    b: float = 0.0
+    n: float = 0.0
+    eps_max: float = 0.0
+    sig_max: float = 0.0
+    e0: float = 0.0
+    sesam301: str = ""
+    c: float = 0.0
+    eps0: float = 0.0
+    m: float = 0.0
+    tmelt: float = 0.0
+    tmax: float = 0.0
+    title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.refer_rho if self.refer_rho != 0.0 else self.rho
+
+    @property
+    def sigy(self) -> float:
+        return self.a
+
+    @property
+    def hard(self) -> float:
+        return self.n
+
+
+MatSesam = MatLaw26
+MatSesame = MatLaw26
+
+
+@dataclass
+class PropType12:
+    """``/PROP/TYPE12`` or ``/PROP/SPR_PUL``: Pulley spring / sliding cable property."""
+    id: int = 0
+    mass: float = 0.0
+    isensor: int = 0
+    isflag: int = 0
+    ileng: int = 0
+    fric: float = 0.0
+    stiff1: float = 0.0
+    damp1: float = 0.0
+    acoeft1: float = 1.0
+    bcoeft1: float = 0.0
+    dcoeft1: float = 1.0
+    fun_a1: int = 0
+    hflag1: int = 0
+    fun_b1: int = 0
+    min_rup1: float = -1.0e30
+    max_rup1: float = 1.0e30
+    prop_x_f: float = 1.0
+    prop_x_e: float = 0.0
+    scale1: float = 1.0
+    title: str = ""
+
+    @property
+    def k(self) -> float:
+        return self.stiff1
+
+    @property
+    def c(self) -> float:
+        return self.damp1
+
+    @property
+    def sensor_id(self) -> int:
+        return self.isensor
+
+
+PropSprPul = PropType12
+PropPulley = PropType12
+
+
+@dataclass
+class PropType15:
+    """``/PROP/TYPE15`` or ``/PROP/POROUS``: Porous solid property."""
+    id: int = 0
+    qa: float = 0.0
+    qb: float = 0.0
+    h: float = 0.1
+    poros: float = 1.0
+    r1: float = 0.0
+    r2: float = 0.0
+    r3: float = 0.0
+    skew_csid: int = 0
+    ihon: int = 0
+    itu: int = 0
+    alpha: float = 0.1
+    l_mix: float = 0.0
+    irby: int = 0
+    title: str = ""
+
+    @property
+    def porosity(self) -> float:
+        return self.poros
+
+    @property
+    def skew_id(self) -> int:
+        return self.skew_csid
+
+
+PropPorous = PropType15
+PropSolidPorous = PropType15
+
+
+@dataclass
+class PropStrandLayer:
+    """Layer definition for /PROP/TYPE28 (NSTRAND)."""
+    type_name: str = ""
+    k_id: int = 0
+    mu: float = 0.0
+
+
+@dataclass
+class PropType28:
+    """``/PROP/TYPE28`` or ``/PROP/NSTRAND``: Multi-strand cable / wire rope property."""
+    id: int = 0
+    mass: float = 0.0
+    k: float = 0.0
+    c: float = 0.0
+    fun_a1: int = 0
+    fun_b1: int = 0
+    strain1: float = -1.0e30
+    strain2: float = 1.0e30
+    mu1: float = 0.0
+    mu2: float = 0.0
+    layers: list[PropStrandLayer] = field(default_factory=list)
+    title: str = ""
+
+
+PropNstrand = PropType28
+PropStrand = PropType28
+
+
+
 
 
 

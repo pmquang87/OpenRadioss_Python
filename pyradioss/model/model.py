@@ -99,6 +99,7 @@ from .entities import (
     MatLaw114, MatLaw117, MatLaw119, MatLaw120, MatLaw121, PropType26, PropType27,
     MatLaw50, MatLaw57, MatLaw87, MatLaw95, MatLaw163, MatLaw169,
     MatLaw49, MatLaw76, PropType11, PropSandwLayer, PropType16, PropFabricLayer, PropType17, PropType44,
+    MatLaw60, MatLaw63, MatLaw48, MatLaw26, PropType12, PropType15, PropStrandLayer, PropType28,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -1042,6 +1043,13 @@ class Model:
         self.prop_type16s: Dict[int, PropType16] = {}               # /PROP/TYPE16, /PROP/SH_FABR (M184)
         self.prop_type17s: Dict[int, PropType17] = {}               # /PROP/TYPE17, /PROP/STACK (M184)
         self.prop_type44s: Dict[int, PropType44] = {}               # /PROP/TYPE44, /PROP/SPR_CRUS (M184)
+        self.mat_law60s: Dict[int, MatLaw60] = {}                   # /MAT/LAW60, /MAT/PLAS_T3 (M185)
+        self.mat_law63s: Dict[int, MatLaw63] = {}                   # /MAT/LAW63, /MAT/HANSEL (M185)
+        self.mat_law48s: Dict[int, MatLaw48] = {}                   # /MAT/LAW48, /MAT/ZHAO (M185)
+        self.mat_law26s: Dict[int, MatLaw26] = {}                   # /MAT/LAW26, /MAT/SESAM (M185)
+        self.prop_type12s: Dict[int, PropType12] = {}               # /PROP/TYPE12, /PROP/SPR_PUL (M185)
+        self.prop_type15s: Dict[int, PropType15] = {}               # /PROP/TYPE15, /PROP/POROUS (M185)
+        self.prop_type28s: Dict[int, PropType28] = {}               # /PROP/TYPE28, /PROP/NSTRAND (M185)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
