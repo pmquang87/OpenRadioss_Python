@@ -74,7 +74,7 @@ from .entities import (
     FailNxt, FailLadDama, FailInievo,
     FailHcDsse, FailMullins, FailSnconnect, FailSpalling,
     DfsDetcord, LoadPressure, AleMat, EulerMat,
-    Stack, StackPly, SubLaminate, SubLaminatePly,
+    Stack, StackPly, SubLaminate, SubLaminatePly, InertiaPart, AleGridConstraint,
     LagmulGlobal, GearConstraint, RackConstraint, DiffConstraint,
     WaveShaper, DetLine, DetCirc, IniMap3D, SetGeneric,
     MaterialPlasZeril, MaterialPlasBodne, MaterialViscProny, MaterialThermStress, DampStiff,
@@ -945,6 +945,8 @@ class Model:
         self.bcs_walls: Dict[int, BcsWall] = {}                    # /BCS/WALL (M164)
         self.slipring_shells: Dict[int, SlipringShell] = {}        # /SLIPRING/SHELL (M164)
         self.sub_laminates: Dict[int, SubLaminate] = {}            # /SUBLAMINATE (M165)
+        self.inertia_parts: Dict[int, InertiaPart] = {}            # /INERTIA/PART (M169)
+        self.ale_grid_constraints: Dict[int, AleGridConstraint] = {}  # /ALE/GRID/DISP, /ALE/GRID/VEL (M169)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

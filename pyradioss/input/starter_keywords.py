@@ -3498,6 +3498,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                "TYPE21": 21, "TSH_ORTH": 21,
                "TYPE22": 22, "TSH_COMP": 22,
                "TYPE18": 18, "INT_BEAM": 18, "PROP_P18_INT_BEAM": 18, "P18_INT_BEAM": 18, "BEAM_INT": 18,
+               "TYPE19": 19, "SPR_TORS": 19, "PROP_SPR_TORS": 19, "PROP_P19_SPR_TORS": 19, "P19_SPR_TORS": 19,
                "TYPE8": 8, "SPR_GENE": 8, "PROP_P8_SPR_GENE": 8, "P8_SPR_GENE": 8, "PROP_SPR_GENE": 8,
                "TYPE12": 12, "SPR_PUL": 12, "PROP_P12_SPR_PUL": 12, "P12_SPR_PUL": 12, "PROP_SPR_PUL": 12,
                "TYPE13": 13, "SPR_BEAM": 13, "PROP_P13_SPR_BEAM": 13, "P13_SPR_BEAM": 13, "PROP_SPR_BEAM": 13,
@@ -3780,6 +3781,42 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "fun_k": fun_k, "fun_c": fun_c, "fscale_y": fscale_y,
             "fscale_x": fscale_x, "nip": nip, "mu1": mu1, "mu2": mu2,
             "itip": itip, "isurf": isurf, "alpha": alpha,
+        }
+    elif ptype == 19:  # SPR_TORS
+        mass = 0.0
+        k_tors = 0.0
+        c_tors = 0.0
+        fct_id_k = 0
+        fct_id_c = 0
+        fscale_k = 1.0
+        fscale_c = 1.0
+        if block.fixed:
+            if cards and not cards[0].is_blank:
+                f1 = cards[0].cut("PROP_SPR_TORS_1")
+                mass = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+                k_tors = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                c_tors = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = cards[1].cut("PROP_SPR_TORS_2")
+                fct_id_k = _ival(f2[0]) if len(f2) > 0 else 0
+                fct_id_c = _ival(f2[1]) if len(f2) > 1 else 0
+                fscale_k = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+                fscale_c = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+        else:
+            t1 = cards[0].tokens() if len(cards) > 0 else []
+            mass = float(t1[0]) if len(t1) > 0 else 0.0
+            k_tors = float(t1[1]) if len(t1) > 1 else 0.0
+            c_tors = float(t1[2]) if len(t1) > 2 else 0.0
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            fct_id_k = int(float(t2[0])) if len(t2) > 0 else 0
+            fct_id_c = int(float(t2[1])) if len(t2) > 1 else 0
+            fscale_k = float(t2[2]) if len(t2) > 2 else 1.0
+            fscale_c = float(t2[3]) if len(t2) > 3 else 1.0
+        params = {
+            "mass": mass, "k_tors": k_tors, "c_tors": c_tors,
+            "fct_id_k": fct_id_k, "fct_id_c": fct_id_c,
+            "fscale_k": fscale_k, "fscale_c": fscale_c,
+            "k": k_tors, "c": c_tors,
         }
     elif ptype == 14:  # SOLID
         from ..common.constants import DEFAULT_HOURGLASS, DEFAULT_QA, DEFAULT_QB
@@ -5483,6 +5520,72 @@ def read_prop_inject2(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     )
 
 
+def read_inertia_part(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INERTIA/PART/inertia_ID`` (M169): Part inertia modifier."""
+    from ..model.entities import InertiaPart
+    pid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/INERTIA/PART/{pid}: missing data card", block.source)
+        return
+
+    part_id = 0
+    skew_id = 0
+    iflag = 0
+    mass = 0.0
+    xg, yg, zg = 0.0, 0.0, 0.0
+    ixx, iyy, izz, ixy, iyz, izx = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+
+    if block.fixed:
+        f1 = cards[0].cut("INERTIA_PART_1")
+        part_id = _ival(f1[0]) if len(f1) > 0 else 0
+        skew_id = _ival(f1[1]) if len(f1) > 1 else 0
+        iflag = _ival(f1[2]) if len(f1) > 2 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("INERTIA_PART_2")
+            mass = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            xg = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            yg = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            zg = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("INERTIA_PART_3")
+            ixx = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+            iyy = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+            izz = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+            ixy = _fval(f3[3], 0.0) if len(f3) > 3 else 0.0
+            iyz = _fval(f3[4], 0.0) if len(f3) > 4 else 0.0
+            izx = _fval(f3[5], 0.0) if len(f3) > 5 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        part_id = int(float(t1[0])) if len(t1) > 0 else 0
+        skew_id = int(float(t1[1])) if len(t1) > 1 else 0
+        iflag = int(float(t1[2])) if len(t1) > 2 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            mass = float(t2[0]) if len(t2) > 0 else 0.0
+            xg = float(t2[1]) if len(t2) > 1 else 0.0
+            yg = float(t2[2]) if len(t2) > 2 else 0.0
+            zg = float(t2[3]) if len(t2) > 3 else 0.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            ixx = float(t3[0]) if len(t3) > 0 else 0.0
+            iyy = float(t3[1]) if len(t3) > 1 else 0.0
+            izz = float(t3[2]) if len(t3) > 2 else 0.0
+            ixy = float(t3[3]) if len(t3) > 3 else 0.0
+            iyz = float(t3[4]) if len(t3) > 4 else 0.0
+            izx = float(t3[5]) if len(t3) > 5 else 0.0
+
+    model.inertia_parts[pid] = InertiaPart(
+        id=pid, title=title, part_id=part_id, skew_id=skew_id, iflag=iflag,
+        mass=mass, xg=xg, yg=yg, zg=zg,
+        ixx=ixx, iyy=iyy, izz=izz, ixy=ixy, iyz=iyz, izx=izx,
+    )
+
+
 def read_prop_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/PROP/TYPE33`` or ``/PROP/JOINT`` (M152): Kinematic joint property."""
     from ..model.entities import PropJoint
@@ -7092,6 +7195,7 @@ def read_ale_grid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     grid_sub = block.parts[2].upper() if len(block.parts) > 2 else (block.parts[1].upper() if len(block.parts) > 1 else "STANDARD")
     gid = block.user_id if block.user_id is not None else 1
     cards = [c for c in (block.fixed_cards() if block.fixed else block.cards) if not c.is_blank]
+    title = ""
     dt_min, gamma, damp, nu_g = 0.0, 0.0, 0.0, 0.0
     from ..model.entities import (
         AleGridDonea, AleGridSpring, AleGridStandard, AleGridDisp,
@@ -7146,22 +7250,60 @@ def read_ale_grid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     t2 = cards[1].tokens()
                     vmin = float(t2[0]) if len(t2) > 0 else -1e30
         model.ale_grid_spring = AleGridSpring(dt=dt, gamma=gamma, damp=damp, nu=nu, v_min=vmin)
-    elif grid_sub == "DISP":
-        umax, vmin = -1e30, -1e30
-        if cards:
-            if block.fixed:
-                f1 = cards[0].cut("ALE_GRID_DISP_1")
-                umax = _fval(f1[0], -1e30) if len(f1) > 0 else -1e30
-                if len(cards) > 1:
-                    f2 = cards[1].cut("ALE_GRID_DISP_2")
-                    vmin = _fval(f2[0], -1e30) if len(f2) > 0 else -1e30
-            else:
-                t1 = cards[0].tokens()
-                umax = float(t1[0]) if len(t1) > 0 else -1e30
-                if len(cards) > 1:
+    elif grid_sub in ("DISP", "VEL"):
+        from ..model.entities import AleGridConstraint
+        grnod_id, fun_id, skew_id = 0, 0, 0
+        tra_code = ""
+        scale, tstart, tstop = 1.0, 0.0, 1.0e30
+        is_nodal_constraint = False
+        if block.fixed:
+            if cards and not cards[0].is_blank:
+                f1 = cards[0].cut("ALE_GRID_1")
+                if len(f1) >= 3 and _ival(f1[0]) > 0:
+                    is_nodal_constraint = True
+                    grnod_id = _ival(f1[0])
+                    fun_id = _ival(f1[1])
+                    skew_id = _ival(f1[2])
+                    tra_code = f1[3].strip() if len(f1) > 3 else ""
+                    if len(cards) > 1 and not cards[1].is_blank:
+                        f2 = cards[1].cut("ALE_GRID_2")
+                        scale = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+                        tstart = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                        tstop = _fval(f2[2], 1.0e30) if len(f2) > 2 and _fval(f2[2]) > 0.0 else 1.0e30
+        else:
+            t1 = cards[0].tokens() if cards else []
+            if len(t1) >= 3:
+                is_nodal_constraint = True
+                grnod_id = int(float(t1[0]))
+                fun_id = int(float(t1[1]))
+                skew_id = int(float(t1[2]))
+                tra_code = str(t1[3]) if len(t1) > 3 else ""
+                if len(cards) > 1 and not cards[1].is_blank:
                     t2 = cards[1].tokens()
-                    vmin = float(t2[0]) if len(t2) > 0 else -1e30
-        model.ale_grid_disp = AleGridDisp(u_max=umax, v_min=vmin)
+                    scale = float(t2[0]) if len(t2) > 0 else 1.0
+                    tstart = float(t2[1]) if len(t2) > 1 else 0.0
+                    tstop = float(t2[2]) if len(t2) > 2 and float(t2[2]) > 0.0 else 1.0e30
+        if is_nodal_constraint:
+            model.ale_grid_constraints[gid] = AleGridConstraint(
+                id=gid, kind=grid_sub, title="", grnod_id=grnod_id, fun_id=fun_id,
+                skew_id=skew_id, tra_code=tra_code, scale=scale, tstart=tstart, tstop=tstop,
+            )
+        else:
+            umax, vmin = -1e30, -1e30
+            if cards:
+                if block.fixed:
+                    f1 = cards[0].cut("ALE_GRID_DISP_1")
+                    umax = _fval(f1[0], -1e30) if len(f1) > 0 else -1e30
+                    if len(cards) > 1:
+                        f2 = cards[1].cut("ALE_GRID_DISP_2")
+                        vmin = _fval(f2[0], -1e30) if len(f2) > 0 else -1e30
+                else:
+                    t1 = cards[0].tokens()
+                    umax = float(t1[0]) if len(t1) > 0 else -1e30
+                    if len(cards) > 1:
+                        t2 = cards[1].tokens()
+                        vmin = float(t2[0]) if len(t2) > 0 else -1e30
+            model.ale_grid_disp = AleGridDisp(u_max=umax, v_min=vmin)
     elif grid_sub == "LAPLACIAN":
         alpha, gamma, damp = 0.0, 0.0, 0.5
         if cards:
@@ -9154,20 +9296,42 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             fmin=fmin, fmax=fmax, tmin=tmin, fcut=fcut, title=title))
     elif kind == "RBODY":
         if block.fixed:
-            f = cards[data_card_idx].cut("SENSOR_RBODY_2")
-            rb_id = _ival(f[0])
-            sdir = f[1].strip() if len(f) > 1 else ""
-            fmin = _fval(f[2], 0.0) if len(f) > 2 else 0.0
-            fmax = _fval(f[3], 0.0) if len(f) > 3 else 0.0
-            tmin = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+            if data_card_idx + 1 < len(cards) and not cards[data_card_idx + 1].is_blank:
+                f1 = cards[data_card_idx].cut("SENSOR_RBODY_1")
+                node_id = _ival(f1[0]) if len(f1) > 0 else 0
+                rb_id = _ival(f1[1]) if len(f1) > 1 else 0
+                sdir = f1[3].strip() if len(f1) > 3 else ""
+
+                f2 = cards[data_card_idx + 1].cut("SENSOR_RBODY_VAL")
+                fmin = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                fmax = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                tmin = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            else:
+                f = cards[data_card_idx].cut("SENSOR_RBODY_2")
+                rb_id = _ival(f[0]) if len(f) > 0 else 0
+                sdir = f[1].strip() if len(f) > 1 else ""
+                fmin = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+                fmax = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+                tmin = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+                node_id = 0
         else:
-            rb_id = int(t[0]) if len(t) > 0 else 0
-            sdir = t[1] if len(t) > 1 else ""
-            fmin = float(t[2]) if len(t) > 2 else 0.0
-            fmax = float(t[3]) if len(t) > 3 else 0.0
-            tmin = float(t[4]) if len(t) > 4 else 0.0
+            if data_card_idx + 1 < len(cards) and not cards[data_card_idx + 1].is_blank:
+                node_id = int(float(t[0])) if len(t) > 0 else 0
+                rb_id = int(float(t[1])) if len(t) > 1 else 0
+                sdir = str(t[3]) if len(t) > 3 else ""
+                t2 = cards[data_card_idx + 1].tokens()
+                fmin = float(t2[0]) if len(t2) > 0 else 0.0
+                fmax = float(t2[1]) if len(t2) > 1 else 0.0
+                tmin = float(t2[2]) if len(t2) > 2 else 0.0
+            else:
+                rb_id = int(t[0]) if len(t) > 0 else 0
+                sdir = t[1] if len(t) > 1 else ""
+                fmin = float(t[2]) if len(t) > 2 else 0.0
+                fmax = float(t[3]) if len(t) > 3 else 0.0
+                tmin = float(t[4]) if len(t) > 4 else 0.0
+                node_id = 0
         model.sensors.append(Sensor(
-            id=block.user_id, kind="RBODY", tdelay=tdelay, rbody_id=rb_id, dir=sdir,
+            id=block.user_id, kind="RBODY", tdelay=tdelay, node_id=node_id, rbody_id=rb_id, dir=sdir,
             fmin=fmin, fmax=fmax, tmin=tmin, title=title))
     elif kind == "TEMP":
         if block.fixed:
@@ -10331,7 +10495,8 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             model.interfaces.append(Interface(
                 id=block.user_id, type=11, line_id1=line_id1, line_id2=line_id2,
                 lagmul=True, title=title))
-            return
+    if kind in ("SUB_SURF", "SUB-SURF", "SUBSURF"):
+        kind = "TYPE21"
 
     if kind not in ("TYPE1", "TYPE2", "TYPE3", "TYPE5", "TYPE6", "TYPE7", "TYPE8", "TYPE9", "TYPE10", "TYPE11",
                     "TYPE12", "TYPE14", "TYPE15", "TYPE16", "TYPE17", "TYPE18", "TYPE19", "TYPE20", "TYPE21", "TYPE22",
@@ -20131,7 +20296,13 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PROP_P27_SPR_BDAMP": read_prop,
     "PROP_SPR_TAB": read_prop,
     "PROP_SPR_BDAMP": read_prop,
+    "PROP_SPR_TORS": read_prop,
+    "PROP_P19_SPR_TORS": read_prop,
     "INTER_TYPE19": read_inter,
+    "INTER_TYPE21": read_inter,
+    "INTER_SUB_SURF": read_inter,
+    "INTER_SUB-SURF": read_inter,
+    "INTER_SUBSURF": read_inter,
     "INTER_TYPE25": read_inter,
     "INTER_TYPE8": read_inter,
     "DRAPE": read_drape,
@@ -20206,6 +20377,9 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SUBLAMINATE": read_sub_laminate,
     "SUB_LAMINATE": read_sub_laminate,
     "STACK_SUB_LAMINATE": read_sub_laminate,
+    # M169: INERTIA PART
+    "INERTIA": read_inertia_part,
+    "INERTIA_PART": read_inertia_part,
 }
 
 

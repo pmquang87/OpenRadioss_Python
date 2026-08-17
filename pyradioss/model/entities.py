@@ -5218,3 +5218,45 @@ class SubLaminate:
     plies: List[SubLaminatePly] = field(default_factory=list)
 
 
+@dataclass
+class InertiaPart:
+    """/INERTIA/PART (M169): Part inertia modifier definition.
+
+    Fortran origin: ``starter/source/nodes_elements/inertia/hm_read_inertia.F``.
+    """
+    id: int
+    title: str = ""
+    part_id: int = 0
+    skew_id: int = 0
+    iflag: int = 0
+    mass: float = 0.0
+    xg: float = 0.0
+    yg: float = 0.0
+    zg: float = 0.0
+    ixx: float = 0.0
+    iyy: float = 0.0
+    izz: float = 0.0
+    ixy: float = 0.0
+    iyz: float = 0.0
+    izx: float = 0.0
+
+
+@dataclass
+class AleGridConstraint:
+    """/ALE/GRID/DISP or /ALE/GRID/VEL (M169): ALE grid nodal boundary constraint.
+
+    Fortran origin: ``starter/source/constraints/ale/hm_read_ale_grid.F``.
+    """
+    id: int
+    kind: str = "DISP"  # 'DISP' | 'VEL'
+    title: str = ""
+    grnod_id: int = 0
+    fun_id: int = 0
+    skew_id: int = 0
+    tra_code: str = ""
+    scale: float = 1.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+
+
+

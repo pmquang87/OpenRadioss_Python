@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M168)
+## What is implemented (M1 → M169)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -174,6 +174,7 @@ real history is 41 milestones. One line each:
 | M166 | Advanced equations of state (powder-burn, compaction, exponential, ideal-gas VT) & SPH gauges suite: /EOS/POWDER-BURN & /EOS/POWDERBURN 6-card high-explosive powder-burn equation of state reader, /EOS/COMPACTION & /EOS/COMPACTION2 granular/porous compaction equation of state reader, /EOS/EXPONENTIAL exponential equation of state reader, /EOS/IDEAL_GAS_VT & /EOS/IDEAL-GAS-VT ideal gas with Cp(T) polynomial reader, and /GAUGE/SPH SPH numerical pressure/energy gauge reader |
 | M167 | External coupling links, multi-fluid mapping formulations (VP/VE/FILE) & user-defined element properties suite: /EXTERN/LINK & /EXTLNK external coupling link reader, /INIMAP1D & /INIMAP/1D extended multi-card mapped field reader supporting VP/VE velocity/multi-material curves, /INIMAP2D & /INIMAP/2D extended multi-card 2D mapped field reader, /PROP/TYPE4 (/PROP/USER_SPRING) user spring reader, and /PROP/TYPE34 (/PROP/USER_SOLID) user solid property reader |
 | M168 | Gas injector properties, rivet & X-element non-linear springs, frequency damping & gradient velocity fields suite: /PROP/TYPE5 & /PROP/RIVET 2-card rivet property reader, /PROP/TYPE28 & /PROP/XELEM multi-point non-linear spring/damper element property reader, /PROP/INJECT1 & /PROP/INJECT2 multi-gas chemical injector property readers, /DAMP/FREQ frequency-range Rayleigh damping reader with part filtering, and /INIVEL/T+G initial velocity with velocity gradient reader |
+| M169 | Part inertia modifiers, torsion springs, sub-surface contacts, rigid body sensors & ALE grid directives suite: /INERTIA/PART part inertia modifier reader, /PROP/TYPE19 & /PROP/SPR_TORS torsion spring property reader, /INTER/SUB_SURF & /INTER/SUB-SURF sub-surface contact interface reader, /SENSOR/RBODY rigid body sensor reader with 2-card format, and /ALE/GRID/DISP & /ALE/GRID/VEL nodal boundary constraint readers |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

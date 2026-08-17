@@ -1523,6 +1523,16 @@ LAYOUTS: Dict[str, List[int]] = {
     "INIVEL_TG_1": [20, 20, 20, 10, 10],
     "INIVEL_TG_2": [20, 20, 20, 20, 20, 20],
     "INIVEL_TG_3": [20, 20, 20],
+    # M169: INERTIA PART, PROP SPR_TORS, SENSOR RBODY, ALE GRID
+    "INERTIA_PART_1": [10, 10, 10],
+    "INERTIA_PART_2": [20, 20, 20, 20],
+    "INERTIA_PART_3": [20, 20, 20, 20, 20, 20],
+    "PROP_SPR_TORS_1": [20, 20, 20],
+    "PROP_SPR_TORS_2": [10, 10, 20, 20],
+    "SENSOR_RBODY_1": [10, 10, 10, 10],
+    "SENSOR_RBODY_VAL": [20, 20, 20, 20],
+    "ALE_GRID_1": [10, 10, 10, 10],
+    "ALE_GRID_2": [20, 20, 20],
 }
 
 
