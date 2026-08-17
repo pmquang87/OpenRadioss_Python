@@ -826,6 +826,22 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW44", "COWPER_SYMONDS", "PLAS_COWPER", "LAW44_COWPER_SYMONDS"):
         read_mat_law44(block, model, log)
         return
+    # M173: MAT LAW88 (HYPER_ELAS), LAW92 (ARRUDA_BOYCE), LAW94 (YEOH), LAW46 (HYD_VISC), LAW69 (HYP_EXT_COMP)
+    if lawname in ("LAW88", "HYPER_ELAS", "LAW88_HYPER_ELAS", "TABULATED_HYPERELASTIC", "TABULATED_HYP"):
+        read_mat_law88(block, model, log)
+        return
+    if lawname in ("LAW92", "ARRUDA_BOYCE", "ARRUDA-BOYCE", "LAW92_ARRUDA_BOYCE"):
+        read_mat_law92(block, model, log)
+        return
+    if lawname in ("LAW94", "YEOH", "LAW94_YEOH"):
+        read_mat_law94(block, model, log)
+        return
+    if lawname in ("LAW46", "HYD_VISC", "LES_FLUID", "LAW46_HYD_VISC"):
+        read_mat_law46(block, model, log)
+        return
+    if lawname in ("LAW69", "HYP_EXT_COMP", "HYPER_EXT_COMP", "LAW69_HYP_EXT_COMP"):
+        read_mat_law69(block, model, log)
+        return
     if lawname in ("HEAT", "HEAT_TRANSFER"):
         read_mat_heat(block, model, log)
         return
@@ -21441,6 +21457,548 @@ def read_mat_law44(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW88/id`` or ``/MAT/HYPER_ELAS/id`` (M173): Tabulated hyperelastic Ogden model."""
+    from ..model.entities import MaterialLaw88, Material
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+
+    rho0 = 0.0
+    refer_rho = 0.0
+    nu = 0.495
+    bulk = 0.0
+    fcut = 0.0
+    fsmooth = 0
+    nl = 0
+    ifunc_unload = 0
+    fscale_unload = 1.0
+    hys = 0.0
+    shape = 1.0
+    tension = 0
+    rtype = 0
+    func_load_list: list[int] = []
+    fscale_load_list: list[float] = []
+    rate_load_list: list[float] = []
+    lamfit_list: list[float] = []
+    sgl = 0.0
+    sw = 0.0
+    st = 0.0
+    g = 0.0
+    sigf = 0.0
+    kfail = 0.0
+    gam1 = 0.0
+    gam2 = 0.0
+    eh = 0.0
+    failip = 0
+
+    if block.fixed:
+        if len(cards) > 0 and not cards[0].is_blank:
+            f1 = cut(cards[0].raw, "MAT_LAW88_1")
+            rho0 = _f(f1[0])
+            refer_rho = _f(f1[1]) if len(f1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cut(cards[1].raw, "MAT_LAW88_2")
+            nu = _f(f2[0])
+            bulk = _f(f2[1]) if len(f2) > 1 else 0.0
+            fcut = _f(f2[2]) if len(f2) > 2 else 0.0
+            fsmooth = _i(f2[3]) if len(f2) > 3 else 0
+            nl = _i(f2[4]) if len(f2) > 4 else 0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cut(cards[2].raw, "MAT_LAW88_3")
+            ifunc_unload = _i(f3[0])
+            fscale_unload = _f(f3[2]) if len(f3) > 2 and f3[2].strip() else 1.0
+            hys = _f(f3[3]) if len(f3) > 3 else 0.0
+            shape = _f(f3[4]) if len(f3) > 4 and f3[4].strip() else 1.0
+            tension = _i(f3[5]) if len(f3) > 5 else 0
+            rtype = _i(f3[6]) if len(f3) > 6 else 0
+
+        idx = 3
+        for _ in range(nl):
+            if idx < len(cards) and not cards[idx].is_blank:
+                fr = cut(cards[idx].raw, "MAT_LAW88_4_ROW")
+                fid = _i(fr[0])
+                fsc = _f(fr[2]) if len(fr) > 2 and fr[2].strip() else 1.0
+                frate = _f(fr[3]) if len(fr) > 3 else 0.0
+                flam = _f(fr[4]) if len(fr) > 4 else 0.0
+                func_load_list.append(fid)
+                fscale_load_list.append(fsc)
+                rate_load_list.append(frate)
+                lamfit_list.append(flam)
+            idx += 1
+
+        if idx < len(cards) and not cards[idx].is_blank:
+            f5 = cut(cards[idx].raw, "MAT_LAW88_5")
+            sgl = _f(f5[0])
+            sw = _f(f5[1]) if len(f5) > 1 else 0.0
+            st = _f(f5[2]) if len(f5) > 2 else 0.0
+            g = _f(f5[3]) if len(f5) > 3 else 0.0
+            sigf = _f(f5[4]) if len(f5) > 4 else 0.0
+            idx += 1
+
+        if idx < len(cards) and not cards[idx].is_blank:
+            f6 = cut(cards[idx].raw, "MAT_LAW88_6")
+            kfail = _f(f6[0])
+            gam1 = _f(f6[1]) if len(f6) > 1 else 0.0
+            gam2 = _f(f6[2]) if len(f6) > 2 else 0.0
+            eh = _f(f6[3]) if len(f6) > 3 else 0.0
+            failip = _i(f6[5]) if len(f6) > 5 else 0
+    else:
+        if len(cards) > 0 and not cards[0].is_blank:
+            t1 = cards[0].tokens()
+            rho0 = float(t1[0]) if len(t1) > 0 else 0.0
+            refer_rho = float(t1[1]) if len(t1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            nu = float(t2[0]) if len(t2) > 0 else 0.495
+            bulk = float(t2[1]) if len(t2) > 1 else 0.0
+            fcut = float(t2[2]) if len(t2) > 2 else 0.0
+            fsmooth = int(float(t2[3])) if len(t2) > 3 else 0
+            nl = int(float(t2[4])) if len(t2) > 4 else 0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            ifunc_unload = int(float(t3[0])) if len(t3) > 0 else 0
+            fscale_unload = float(t3[1]) if len(t3) > 1 else 1.0
+            hys = float(t3[2]) if len(t3) > 2 else 0.0
+            shape = float(t3[3]) if len(t3) > 3 else 1.0
+            tension = int(float(t3[4])) if len(t3) > 4 else 0
+            rtype = int(float(t3[5])) if len(t3) > 5 else 0
+
+        idx = 3
+        for _ in range(nl):
+            if idx < len(cards) and not cards[idx].is_blank:
+                tr = cards[idx].tokens()
+                fid = int(float(tr[0])) if len(tr) > 0 else 0
+                fsc = float(tr[1]) if len(tr) > 1 else 1.0
+                frate = float(tr[2]) if len(tr) > 2 else 0.0
+                flam = float(tr[3]) if len(tr) > 3 else 0.0
+                func_load_list.append(fid)
+                fscale_load_list.append(fsc)
+                rate_load_list.append(frate)
+                lamfit_list.append(flam)
+            idx += 1
+
+        if idx < len(cards) and not cards[idx].is_blank:
+            t5 = cards[idx].tokens()
+            sgl = float(t5[0]) if len(t5) > 0 else 0.0
+            sw = float(t5[1]) if len(t5) > 1 else 0.0
+            st = float(t5[2]) if len(t5) > 2 else 0.0
+            g = float(t5[3]) if len(t5) > 3 else 0.0
+            sigf = float(t5[4]) if len(t5) > 4 else 0.0
+            idx += 1
+
+        if idx < len(cards) and not cards[idx].is_blank:
+            t6 = cards[idx].tokens()
+            kfail = float(t6[0]) if len(t6) > 0 else 0.0
+            gam1 = float(t6[1]) if len(t6) > 1 else 0.0
+            gam2 = float(t6[2]) if len(t6) > 2 else 0.0
+            eh = float(t6[3]) if len(t6) > 3 else 0.0
+            failip = int(float(t6[4])) if len(t6) > 4 else 0
+
+    if nu <= 0.0:
+        nu = 0.495
+    if shape == 0.0:
+        shape = 1.0
+    if fscale_unload == 0.0:
+        fscale_unload = 1.0
+
+    m88 = MaterialLaw88(
+        id=mat_id, title=title, rho0=rho0, ref_rho=refer_rho,
+        nu=nu, bulk=bulk, fcut=fcut, fsmooth=fsmooth, nl=nl,
+        ifunc_unload=ifunc_unload, fscale_unload=fscale_unload,
+        hys=hys, shape=shape, tension=tension, rtype=rtype,
+        func_load_list=func_load_list, fscale_load_list=fscale_load_list,
+        rate_load_list=rate_load_list, lamfit_list=lamfit_list,
+        sgl=sgl, sw=sw, st=st, g=g, sigf=sigf,
+        kfail=kfail, gam1=gam1, gam2=gam2, eh=eh, failip=failip,
+    )
+    model.mat_law88s[mat_id] = m88
+    e_equiv = 3.0 * bulk * (1.0 - 2.0 * nu) if bulk > 0.0 else 0.0
+    if e_equiv <= 0.0 and g > 0.0:
+        e_equiv = 2.0 * g * (1.0 + nu)
+    from .mat_reader import GenericMaterialRecord
+    mat88 = Material(
+        id=mat_id, law=88, rho0=rho0, title=title,
+        params={
+            "E": e_equiv if e_equiv > 0.0 else 1.0, "nu": nu,
+            "LAW88_Nu": nu, "LAW88_K": bulk, "LAW88_Fcut": fcut,
+            "LAW88_Fsmooth": fsmooth, "LAW88_NL": nl,
+            "LAW88_fct_IDunL": ifunc_unload, "LAW88_FscaleunL": fscale_unload,
+            "LAW88_Hys": hys, "LAW88_Shape": shape, "LAW88_Tension": tension,
+            "LAW88_RTYPE": rtype, "LAW88_arr1": func_load_list,
+            "LAW88_arr2": fscale_load_list, "LAW88_arr3": rate_load_list,
+            "LAW88_LAMFIT": lamfit_list,
+            "LAW88_SGL": sgl, "LAW88_SW": sw, "LAW88_ST": st,
+            "LAW88_G": g, "LAW88_SIGF": sigf, "LAW88_KFAIL": kfail,
+            "LAW88_GAM1": gam1, "LAW88_GAM2": gam2, "LAW88_EH": eh,
+            "LAW88_FAILIP": failip,
+            "bulk": bulk, "K": bulk, "fcut": fcut, "fsmooth": fsmooth,
+            "nl": nl, "ifunc_unload": ifunc_unload, "fscale_unload": fscale_unload,
+            "hys": hys, "shape": shape, "tension": tension, "rtype": rtype,
+            "func_load_list": func_load_list, "fscale_load_list": fscale_load_list,
+            "rate_load_list": rate_load_list, "lamfit_list": lamfit_list,
+            "sgl": sgl, "sw": sw, "st": st, "g": g, "sigf": sigf,
+            "kfail": kfail, "gam1": gam1, "gam2": gam2, "eh": eh, "failip": failip,
+        }
+    )
+    mat88.record = GenericMaterialRecord(
+        law_name="LAW88", law_number=88, id=mat_id, title=title,
+        params=mat88.params, density=rho0, unit_id=block.unit_id,
+    )
+    model.materials[mat_id] = mat88
+
+
+def read_mat_law92(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW92/id`` or ``/MAT/ARRUDA_BOYCE/id`` (M173): Arruda-Boyce 8-chain model."""
+    from ..model.entities import MaterialLaw92, Material
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+
+    rho0 = 0.0
+    refer_rho = 0.0
+    mu = 0.0
+    d = 0.0
+    lam = 7.0
+    itype = 1
+    fct_id = 0
+    nu = 0.0
+    fscale = 1.0
+
+    if block.fixed:
+        if len(cards) > 0 and not cards[0].is_blank:
+            f1 = cut(cards[0].raw, "MAT_LAW92_1")
+            rho0 = _f(f1[0])
+            refer_rho = _f(f1[1]) if len(f1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cut(cards[1].raw, "MAT_LAW92_2")
+            mu = _f(f2[0])
+            d = _f(f2[1]) if len(f2) > 1 else 0.0
+            lam = _f(f2[2]) if len(f2) > 2 else 7.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cut(cards[2].raw, "MAT_LAW92_3")
+            itype = _i(f3[0])
+            fct_id = _i(f3[1]) if len(f3) > 1 else 0
+            nu = _f(f3[2]) if len(f3) > 2 else 0.0
+            fscale = _f(f3[3]) if len(f3) > 3 and f3[3].strip() else 1.0
+    else:
+        if len(cards) > 0 and not cards[0].is_blank:
+            t1 = cards[0].tokens()
+            rho0 = float(t1[0]) if len(t1) > 0 else 0.0
+            refer_rho = float(t1[1]) if len(t1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            mu = float(t2[0]) if len(t2) > 0 else 0.0
+            d = float(t2[1]) if len(t2) > 1 else 0.0
+            lam = float(t2[2]) if len(t2) > 2 else 7.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            itype = int(float(t3[0])) if len(t3) > 0 else 1
+            fct_id = int(float(t3[1])) if len(t3) > 1 else 0
+            nu = float(t3[2]) if len(t3) > 2 else 0.0
+            fscale = float(t3[3]) if len(t3) > 3 else 1.0
+
+    if itype == 0:
+        itype = 1
+    if lam == 0.0:
+        lam = 7.0
+    if fscale == 0.0:
+        fscale = 1.0
+
+    m92 = MaterialLaw92(
+        id=mat_id, title=title, rho0=rho0, ref_rho=refer_rho,
+        mu=mu, d=d, lam=lam, itype=itype, fct_id=fct_id, nu=nu, fscale=fscale,
+    )
+    model.mat_law92s[mat_id] = m92
+    e_equiv = 2.0 * mu * (1.0 + nu) if mu > 0.0 else 0.0
+    from .mat_reader import GenericMaterialRecord
+    mat92 = Material(
+        id=mat_id, law=92, rho0=rho0, title=title,
+        params={
+            "E": e_equiv if e_equiv > 0.0 else 1.0, "nu": nu if nu > 0.0 else 0.495,
+            "MAT_MUE1": mu, "MAT_D": d, "MAT_Lamda": lam,
+            "Itype": itype, "MAT_FCT_IDI": fct_id, "MAT_NU": nu,
+            "MAT_FScale": fscale,
+            "mu": mu, "d": d, "lam": lam, "itype": itype,
+            "fct_id": fct_id, "fscale": fscale,
+        }
+    )
+    mat92.record = GenericMaterialRecord(
+        law_name="LAW92", law_number=92, id=mat_id, title=title,
+        params=mat92.params, density=rho0, unit_id=block.unit_id,
+    )
+    model.materials[mat_id] = mat92
+
+
+def read_mat_law94(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW94/id`` or ``/MAT/YEOH/id`` (M173): Yeoh hyperelastic model."""
+    from ..model.entities import MaterialLaw94, Material
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+
+    rho0 = 0.0
+    refer_rho = 0.0
+    c10 = 0.0
+    c20 = 0.0
+    c30 = 0.0
+    d1 = 0.0
+    d2 = 0.0
+    d3 = 0.0
+
+    valid_cards = [c for c in cards if not c.is_blank]
+
+    if block.fixed:
+        if len(valid_cards) > 0:
+            f1 = cut(valid_cards[0].raw, "MAT_LAW94_1")
+            rho0 = _f(f1[0])
+            refer_rho = _f(f1[1]) if len(f1) > 1 else 0.0
+
+        val_idx = 1
+        if len(valid_cards) > val_idx:
+            tokens = valid_cards[val_idx].tokens()
+            if len(tokens) >= 3:
+                f2 = cut(valid_cards[val_idx].raw, "MAT_LAW94_2")
+                c10 = _f(f2[0])
+                c20 = _f(f2[1]) if len(f2) > 1 else 0.0
+                c30 = _f(f2[2]) if len(f2) > 2 else 0.0
+                val_idx += 1
+            elif len(valid_cards) > val_idx + 1:
+                val_idx += 1
+                f2 = cut(valid_cards[val_idx].raw, "MAT_LAW94_2")
+                c10 = _f(f2[0])
+                c20 = _f(f2[1]) if len(f2) > 1 else 0.0
+                c30 = _f(f2[2]) if len(f2) > 2 else 0.0
+                val_idx += 1
+
+        if len(valid_cards) > val_idx:
+            f3 = cut(valid_cards[val_idx].raw, "MAT_LAW94_3")
+            d1 = _f(f3[0])
+            d2 = _f(f3[1]) if len(f3) > 1 else 0.0
+            d3 = _f(f3[2]) if len(f3) > 2 else 0.0
+    else:
+        if len(valid_cards) > 0:
+            t1 = valid_cards[0].tokens()
+            rho0 = float(t1[0]) if len(t1) > 0 else 0.0
+            refer_rho = float(t1[1]) if len(t1) > 1 else 0.0
+
+        val_idx = 1
+        if len(valid_cards) > val_idx:
+            t2 = valid_cards[val_idx].tokens()
+            if len(t2) >= 3:
+                c10 = float(t2[0]) if len(t2) > 0 else 0.0
+                c20 = float(t2[1]) if len(t2) > 1 else 0.0
+                c30 = float(t2[2]) if len(t2) > 2 else 0.0
+                val_idx += 1
+            elif len(valid_cards) > val_idx + 1:
+                val_idx += 1
+                t2 = valid_cards[val_idx].tokens()
+                c10 = float(t2[0]) if len(t2) > 0 else 0.0
+                c20 = float(t2[1]) if len(t2) > 1 else 0.0
+                c30 = float(t2[2]) if len(t2) > 2 else 0.0
+                val_idx += 1
+
+        if len(valid_cards) > val_idx:
+            t3 = valid_cards[val_idx].tokens()
+            d1 = float(t3[0]) if len(t3) > 0 else 0.0
+            d2 = float(t3[1]) if len(t3) > 1 else 0.0
+            d3 = float(t3[2]) if len(t3) > 2 else 0.0
+
+    m94 = MaterialLaw94(
+        id=mat_id, title=title, rho0=rho0, ref_rho=refer_rho,
+        c10=c10, c20=c20, c30=c30, d1=d1, d2=d2, d3=d3,
+    )
+    model.mat_law94s[mat_id] = m94
+    g0 = 2.0 * c10 if c10 > 0.0 else 0.0
+    nu_val = 0.495
+    e_equiv = 2.0 * g0 * (1.0 + nu_val) if g0 > 0.0 else 0.0
+    from .mat_reader import GenericMaterialRecord
+    mat94 = Material(
+        id=mat_id, law=94, rho0=rho0, title=title,
+        params={
+            "E": e_equiv if e_equiv > 0.0 else 1.0, "nu": nu_val,
+            "LAW94_C01": c10, "LAW94_C02": c20, "LAW94_C03": c30,
+            "LAW94_D1": d1, "LAW94_D2": d2, "LAW94_D3": d3,
+            "C10": c10, "C20": c20, "C30": c30, "D1": d1, "D2": d2, "D3": d3,
+            "c10": c10, "c20": c20, "c30": c30, "d1": d1, "d2": d2, "d3": d3,
+        }
+    )
+    mat94.record = GenericMaterialRecord(
+        law_name="LAW94", law_number=94, id=mat_id, title=title,
+        params=mat94.params, density=rho0, unit_id=block.unit_id,
+    )
+    model.materials[mat_id] = mat94
+
+
+def read_mat_law46(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW46/id`` or ``/MAT/HYD_VISC/id`` or ``/MAT/LES_FLUID/id`` (M173): Hydrodynamic viscous model."""
+    from ..model.entities import MaterialLaw46, Material
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+
+    rho0 = 0.0
+    refer_rho = 0.0
+    c = 0.0
+    nu = 0.0
+    istf = 1
+    smag = 1.0
+    cps = 0.0
+
+    if block.fixed:
+        if len(cards) > 0 and not cards[0].is_blank:
+            f1 = cut(cards[0].raw, "MAT_LAW46_1")
+            rho0 = _f(f1[0])
+            refer_rho = _f(f1[1]) if len(f1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cut(cards[1].raw, "MAT_LAW46_2")
+            c = _f(f2[0])
+            nu = _f(f2[1]) if len(f2) > 1 else 0.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cut(cards[2].raw, "MAT_LAW46_3")
+            istf = _i(f3[0])
+            smag = _f(f3[1]) if len(f3) > 1 and f3[1].strip() else 1.0
+            cps = _f(f3[2]) if len(f3) > 2 else 0.0
+    else:
+        if len(cards) > 0 and not cards[0].is_blank:
+            t1 = cards[0].tokens()
+            rho0 = float(t1[0]) if len(t1) > 0 else 0.0
+            refer_rho = float(t1[1]) if len(t1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            c = float(t2[0]) if len(t2) > 0 else 0.0
+            nu = float(t2[1]) if len(t2) > 1 else 0.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            istf = int(float(t3[0])) if len(t3) > 0 else 1
+            smag = float(t3[1]) if len(t3) > 1 else 1.0
+            cps = float(t3[2]) if len(t3) > 2 else 0.0
+
+    if istf == 0:
+        istf = 1
+    if smag == 0.0:
+        smag = 1.0
+
+    m46 = MaterialLaw46(
+        id=mat_id, title=title, rho0=rho0, ref_rho=refer_rho,
+        c=c, nu=nu, istf=istf, smag=smag, cps=cps,
+    )
+    model.mat_law46s[mat_id] = m46
+    k_bulk = rho0 * (c ** 2) if (rho0 > 0.0 and c > 0.0) else 1.0
+    e_equiv = 3.0 * k_bulk * (1.0 - 2.0 * 0.495)
+    from .mat_reader import GenericMaterialRecord
+    mat46 = Material(
+        id=mat_id, law=46, rho0=rho0, title=title,
+        params={
+            "E": e_equiv if e_equiv > 0.0 else 1.0, "nu": 0.495,
+            "MAT_C": c, "MAT_NU": nu, "Istf": istf,
+            "MAT_C5": smag, "MAT_CO1": cps,
+            "c": c, "nu": nu, "istf": istf, "smag": smag, "cps": cps,
+        }
+    )
+    mat46.record = GenericMaterialRecord(
+        law_name="LAW46", law_number=46, id=mat_id, title=title,
+        params=mat46.params, density=rho0, unit_id=block.unit_id,
+    )
+    model.materials[mat_id] = mat46
+
+
+def read_mat_law69(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW69/id`` or ``/MAT/HYP_EXT_COMP/id`` (M173): Hyperelastic extended to compression."""
+    from ..model.entities import MaterialLaw69, Material
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+
+    rho0 = 0.0
+    refer_rho = 0.0
+    iflag = 1
+    fct_id_bulk = 0
+    nu = 0.495
+    fscale = 1.0
+    nip = 2
+    icheck = -3
+    fct_id_data = 0
+
+    if block.fixed:
+        if len(cards) > 0 and not cards[0].is_blank:
+            f1 = cut(cards[0].raw, "MAT_LAW69_1")
+            rho0 = _f(f1[0])
+            refer_rho = _f(f1[1]) if len(f1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cut(cards[1].raw, "MAT_LAW69_2")
+            iflag = _i(f2[0])
+            fct_id_bulk = _i(f2[1]) if len(f2) > 1 else 0
+            nu = _f(f2[2]) if len(f2) > 2 and f2[2].strip() else 0.495
+            fscale = _f(f2[3]) if len(f2) > 3 and f2[3].strip() else 1.0
+            nip = _i(f2[4]) if len(f2) > 4 and f2[4].strip() else 2
+            icheck = _i(f2[5]) if len(f2) > 5 and f2[5].strip() else -3
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cut(cards[2].raw, "MAT_LAW69_3")
+            fct_id_data = _i(f3[0])
+    else:
+        if len(cards) > 0 and not cards[0].is_blank:
+            t1 = cards[0].tokens()
+            rho0 = float(t1[0]) if len(t1) > 0 else 0.0
+            refer_rho = float(t1[1]) if len(t1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            iflag = int(float(t2[0])) if len(t2) > 0 else 1
+            fct_id_bulk = int(float(t2[1])) if len(t2) > 1 else 0
+            nu = float(t2[2]) if len(t2) > 2 else 0.495
+            fscale = float(t2[3]) if len(t2) > 3 else 1.0
+            nip = int(float(t2[4])) if len(t2) > 4 else 2
+            icheck = int(float(t2[5])) if len(t2) > 5 else -3
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            fct_id_data = int(float(t3[0])) if len(t3) > 0 else 0
+
+    if iflag == 0:
+        iflag = 1
+    if icheck == 0:
+        icheck = -3
+    if nip == 0:
+        nip = 2
+    if fscale == 0.0:
+        fscale = 1.0
+    if nu <= 0.0:
+        nu = 0.495
+
+    m69 = MaterialLaw69(
+        id=mat_id, title=title, rho0=rho0, ref_rho=refer_rho,
+        iflag=iflag, fct_id_bulk=fct_id_bulk, nu=nu, fscale=fscale,
+        nip=nip, icheck=icheck, fct_id_data=fct_id_data,
+    )
+    model.mat_law69s[mat_id] = m69
+    from .mat_reader import GenericMaterialRecord
+    mat69 = Material(
+        id=mat_id, law=69, rho0=rho0, title=title,
+        params={
+            "E": 1.0, "nu": nu,
+            "MAT_Iflag": iflag, "FUN_A1": fct_id_bulk, "MAT_NU": nu,
+            "MAT_FScale": fscale, "NIP": nip, "Gflag": icheck,
+            "FUN_B1": fct_id_data,
+            "iflag": iflag, "fct_id_bulk": fct_id_bulk, "nu": nu,
+            "fscale": fscale, "nip": nip, "gflag": icheck, "icheck": icheck,
+            "fct_id_data": fct_id_data,
+        }
+    )
+    mat69.record = GenericMaterialRecord(
+        law_name="LAW69", law_number=69, id=mat_id, title=title,
+        params=mat69.params, density=rho0, unit_id=block.unit_id,
+    )
+    model.materials[mat_id] = mat69
 
 
 def read_airbag_injector(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -22125,6 +22683,29 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_COWPER_SYMONDS": read_mat,
     "COWPER_SYMONDS": read_mat,
     "PLAS_COWPER": read_mat,
+    # M173: MAT LAW88 (HYPER_ELAS), LAW92 (ARRUDA_BOYCE), LAW94 (YEOH), LAW46 (HYD_VISC), LAW69 (HYP_EXT_COMP)
+    "MAT_LAW88": read_mat,
+    "MAT_HYPER_ELAS": read_mat,
+    "HYPER_ELAS": read_mat,
+    "MAT_TABULATED_HYPERELASTIC": read_mat,
+    "TABULATED_HYPERELASTIC": read_mat,
+    "TABULATED_HYP": read_mat,
+    "MAT_LAW92": read_mat,
+    "MAT_ARRUDA_BOYCE": read_mat,
+    "ARRUDA_BOYCE": read_mat,
+    "ARRUDA-BOYCE": read_mat,
+    "MAT_LAW94": read_mat,
+    "MAT_YEOH": read_mat,
+    "YEOH": read_mat,
+    "MAT_LAW46": read_mat,
+    "MAT_HYD_VISC": read_mat,
+    "HYD_VISC": read_mat,
+    "MAT_LES_FLUID": read_mat,
+    "LES_FLUID": read_mat,
+    "MAT_LAW69": read_mat,
+    "MAT_HYP_EXT_COMP": read_mat,
+    "HYP_EXT_COMP": read_mat,
+    "HYPER_EXT_COMP": read_mat,
 }
 
 

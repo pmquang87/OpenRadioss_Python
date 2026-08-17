@@ -81,6 +81,7 @@ from .entities import (
     MaterialConc, MaterialBarlat, MaterialLaw83, MaterialLaw80,
     MaterialLaw117, MaterialLaw90, MaterialLaw33, MatHeatModifier, MatNonlocalModifier,
     MaterialLaw66, MaterialLaw35, MaterialLaw62, MaterialLaw28, MaterialLaw44,
+    MaterialLaw88, MaterialLaw92, MaterialLaw94, MaterialLaw46, MaterialLaw69,
     AirbagInjector, AirbagVenthole,
     ErefElement, IniCrack, PropRivet, PropXelem, AdmeshControl,
     PreloadBolt, LoadHydro,
@@ -964,6 +965,11 @@ class Model:
         self.mat_law62s: Dict[int, MaterialLaw62] = {}             # /MAT/LAW62, /MAT/VISC_HYP (M172)
         self.mat_law28s: Dict[int, MaterialLaw28] = {}             # /MAT/LAW28, /MAT/HONEYCOMB (M172)
         self.mat_law44s: Dict[int, MaterialLaw44] = {}             # /MAT/LAW44, /MAT/COWPER_SYMONDS (M172)
+        self.mat_law88s: Dict[int, MaterialLaw88] = {}             # /MAT/LAW88, /MAT/HYPER_ELAS (M173)
+        self.mat_law92s: Dict[int, MaterialLaw92] = {}             # /MAT/LAW92, /MAT/ARRUDA_BOYCE (M173)
+        self.mat_law94s: Dict[int, MaterialLaw94] = {}             # /MAT/LAW94, /MAT/YEOH (M173)
+        self.mat_law46s: Dict[int, MaterialLaw46] = {}             # /MAT/LAW46, /MAT/HYD_VISC (M173)
+        self.mat_law69s: Dict[int, MaterialLaw69] = {}             # /MAT/LAW69, /MAT/HYP_EXT_COMP (M173)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

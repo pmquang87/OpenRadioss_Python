@@ -5662,6 +5662,118 @@ class MaterialLaw44:
     yld_scale: float = 1.0
 
 
+@dataclass
+class MaterialLaw88:
+    """/MAT/LAW88 or /MAT/HYPER_ELAS or /MAT/TABULATED_HYPERELASTIC (M173):
+    Tabulated hyperelastic Ogden material model with strain-rate unloading and damage.
+
+    Fortran origin: ``starter/source/materials/mat/mat088/hm_read_mat88.F90``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    ref_rho: float = 0.0
+    nu: float = 0.495
+    bulk: float = 0.0
+    fcut: float = 0.0
+    fsmooth: int = 0
+    nl: int = 0
+    ifunc_unload: int = 0
+    fscale_unload: float = 1.0
+    hys: float = 0.0
+    shape: float = 1.0
+    tension: int = 0
+    rtype: int = 0
+    func_load_list: list = field(default_factory=list)
+    fscale_load_list: list = field(default_factory=list)
+    rate_load_list: list = field(default_factory=list)
+    lamfit_list: list = field(default_factory=list)
+    sgl: float = 0.0
+    sw: float = 0.0
+    st: float = 0.0
+    g: float = 0.0
+    sigf: float = 0.0
+    kfail: float = 0.0
+    gam1: float = 0.0
+    gam2: float = 0.0
+    eh: float = 0.0
+    failip: int = 0
+
+
+@dataclass
+class MaterialLaw92:
+    """/MAT/LAW92 or /MAT/ARRUDA_BOYCE (M173): Arruda-Boyce 8-chain hyperelastic polymer model.
+
+    Fortran origin: ``starter/source/materials/mat/mat092/hm_read_mat92.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    ref_rho: float = 0.0
+    mu: float = 0.0
+    d: float = 0.0
+    lam: float = 7.0
+    itype: int = 1
+    fct_id: int = 0
+    nu: float = 0.0
+    fscale: float = 1.0
+
+
+@dataclass
+class MaterialLaw94:
+    """/MAT/LAW94 or /MAT/YEOH (M173): Yeoh 3rd-order polynomial hyperelastic model.
+
+    Fortran origin: ``starter/source/materials/mat/mat094/hm_read_mat94.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    ref_rho: float = 0.0
+    c10: float = 0.0
+    c20: float = 0.0
+    c30: float = 0.0
+    d1: float = 0.0
+    d2: float = 0.0
+    d3: float = 0.0
+
+
+@dataclass
+class MaterialLaw46:
+    """/MAT/LAW46 or /MAT/HYD_VISC or /MAT/LES_FLUID (M173): Hydrodynamic viscous fluid model with Smagorinsky turbulence.
+
+    Fortran origin: ``starter/source/materials/mat/mat046/hm_read_mat46.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    ref_rho: float = 0.0
+    c: float = 0.0
+    nu: float = 0.0
+    istf: int = 1
+    smag: float = 1.0
+    cps: float = 0.0
+
+
+@dataclass
+class MaterialLaw69:
+    """/MAT/LAW69 or /MAT/HYP_EXT_COMP (M173): Hyperelastic material model extended to compression.
+
+    Fortran origin: ``starter/source/materials/mat/mat069/hm_read_mat69.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    ref_rho: float = 0.0
+    iflag: int = 1
+    fct_id_bulk: int = 0
+    nu: float = 0.495
+    fscale: float = 1.0
+    nip: int = 2
+    icheck: int = -3
+    fct_id_data: int = 0
+
+
+
 
 
 

@@ -512,7 +512,8 @@ def _parse_deck(text, tmp_path, name="SNIP"):
 #: need the cfg-named params, so without the cfg tree they are skipped)
 ACTIVE_FAMILIES = {"VOID", "GAS", "KELVINMAX", "LAW70",       # pack 1
                    "CONC", "FABRI", "LAW62", "LAW81",         # pack 2
-                   "LAW83", "HYD_VISC", "LAW66"}
+                   "LAW83", "HYD_VISC", "LAW66",
+                   "LAW88", "LAW92", "LAW94", "LAW46", "LAW69"}
 
 
 @pytest.mark.parametrize("family", sorted(MAT_SNIPPETS))
