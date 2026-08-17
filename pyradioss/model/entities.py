@@ -5388,5 +5388,112 @@ class MaterialLaw80:
     alpha2: float = 0.0
 
 
+@dataclass
+class MaterialLaw117:
+    """/MAT/LAW117 or /MAT/COH_MC (M171): Cohesive element material model.
+
+    Fortran origin: ``starter/source/materials/mat117/hm_read_mat117.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    refer_rho: float = 0.0
+    e_elas_n: float = 0.0
+    e_elas_s: float = 0.0
+    imass: int = 0
+    idel: int = 0
+    irupt: int = 0
+    fct_tn: int = 0
+    fct_tt: int = 0
+    tmax_n: float = 0.0
+    tmax_s: float = 0.0
+    fscale_x: float = 1.0
+    gic: float = 0.0
+    giic: float = 0.0
+    exp_g: float = 1.0
+    exp_bk: float = 1.0
+    gamma: float = 0.0
+
+
+@dataclass
+class MaterialLaw90:
+    """/MAT/LAW90 or /MAT/PLAS_TAB (M171): Strain-rate dependent tabular foam/plasticity material model.
+
+    Fortran origin: ``starter/source/materials/mat90/hm_read_mat90.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    refer_rho: float = 0.0
+    e0: float = 0.0
+    nu: float = 0.0
+    nl: int = 0
+    ismooth: int = 0
+    fcut: float = 0.0
+    shape: float = 0.0
+    hys: float = 0.0
+    fct_ids: List[int] = field(default_factory=list)
+    eps_dots: List[float] = field(default_factory=list)
+    fscales: List[float] = field(default_factory=list)
+
+
+@dataclass
+class MaterialLaw33:
+    """/MAT/LAW33 or /MAT/FOAM_PLAS (M171): Crushable foam plasticity material model.
+
+    Fortran origin: ``starter/source/materials/mat33/hm_read_mat33.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    itype: int = 0
+    fun_a1: int = 0
+    ifscale: float = 1.0
+    p0: float = 0.0
+    phi: float = 0.0
+    gama0: float = 0.0
+    a0: float = 0.0
+    a1: float = 0.0
+    a2: float = 0.0
+    e1: float = 0.0
+    e2: float = 0.0
+    etan: float = 0.0
+    eta1: float = 0.0
+    eta2: float = 0.0
+
+
+@dataclass
+class MatHeatModifier:
+    """/MAT/HEAT or /HEAT/MAT (M171): Material thermal property modifier.
+
+    Fortran origin: ``starter/source/materials/heat/hm_read_heat.F``.
+    """
+    id: int
+    mat_id: int = 0
+    t0: float = 0.0
+    rho0_cp: float = 0.0
+    as_solid: float = 0.0
+    bs_solid: float = 0.0
+    t1: float = 1.0e30
+    al_liquid: float = 0.0
+    bl_liquid: float = 0.0
+    efrac: float = 1.0
+
+
+@dataclass
+class MatNonlocalModifier:
+    """/MAT/NONLOCAL or /NONLOCAL/MAT (M171): Non-local regularized damage material modifier.
+
+    Fortran origin: ``starter/source/materials/nonlocal/hm_read_nonlocal.F``.
+    """
+    id: int
+    mat_id: int = 0
+    length: float = 0.0
+    le_max: float = 0.0
+
+
+
 
 

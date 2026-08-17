@@ -802,6 +802,21 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW80", "TRANSFO", "LAW80_TRANSFO"):
         read_mat_law80(block, model, log)
         return
+    if lawname in ("LAW117", "COH_MC", "COHESIVE", "LAW117_COH_MC"):
+        read_mat_law117(block, model, log)
+        return
+    if lawname in ("LAW90", "TAB_FOAM", "TABULAR_FOAM", "LAW90_TAB_FOAM"):
+        read_mat_law90(block, model, log)
+        return
+    if lawname in ("LAW33", "FOAM_PLAS", "LAW33_FOAM_PLAS"):
+        read_mat_law33(block, model, log)
+        return
+    if lawname in ("HEAT", "HEAT_TRANSFER"):
+        read_mat_heat(block, model, log)
+        return
+    if lawname in ("NONLOCAL", "NON_LOCAL"):
+        read_mat_nonlocal(block, model, log)
+        return
     law_aliases = {"LAW1": 1, "ELAST": 1, "LAW2": 2, "PLAS_JOHNS": 2,
                    "LAW27": 27, "PLAS_BRIT": 27,
                    "LAW36": 36, "PLAS_TAB": 36,
@@ -1239,10 +1254,10 @@ def read_euler(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_heat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/HEAT/MAT/mat_ID`` (M37); ``/HEAT/BCS/bcs_ID`` (M135): Thermal boundary conditions."""
+    """``/HEAT/MAT/mat_ID`` (M37, M171); ``/HEAT/BCS/bcs_ID`` (M135): Thermal boundary conditions."""
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if sub == "MAT":
-        _read_mat_modifier("HEAT", block, model, log)
+    if sub in ("MAT", "MATERIAL"):
+        read_mat_heat(block, model, log)
     elif sub == "BCS":
         title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
         if not cards or cards[0].is_blank:
@@ -20319,6 +20334,370 @@ def read_mat_law80(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_mat_law117(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW117`` or ``/MAT/COH_MC`` (M171): Cohesive element material model."""
+    from ..model.entities import MaterialLaw117, Material
+    mat_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MAT/LAW117/{mat_id}: missing data card", block.source)
+        return
+
+    rho0, refer_rho = 0.0, 0.0
+    e_elas_n, e_elas_s = 0.0, 0.0
+    imass, idel, irupt = 0, 0, 0
+    fct_tn, fct_tt = 0, 0
+    tmax_n, tmax_s = 0.0, 0.0
+    fscale_x = 1.0
+    gic, giic = 0.0, 0.0
+    exp_g, exp_bk = 1.0, 1.0
+    gamma = 0.0
+
+    if block.fixed:
+        f1 = cards[0].cut("MAT_LAW117_1")
+        rho0 = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        refer_rho = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MAT_LAW117_2")
+            e_elas_n = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            e_elas_s = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            imass = _ival(f2[2]) if len(f2) > 2 else 0
+            idel = _ival(f2[3]) if len(f2) > 3 else 0
+            irupt = _ival(f2[4]) if len(f2) > 4 else 0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("MAT_LAW117_3")
+            fct_tn = _ival(f3[0]) if len(f3) > 0 else 0
+            fct_tt = _ival(f3[1]) if len(f3) > 1 else 0
+            tmax_n = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+            tmax_s = _fval(f3[3], 0.0) if len(f3) > 3 else 0.0
+            fscale_x = _fval(f3[4], 1.0) if len(f3) > 4 else 1.0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[2].cut("MAT_LAW117_4") if len(cards) == 4 and cards[2].raw.count(" ") < 20 else cards[3].cut("MAT_LAW117_4")
+            gic = _fval(f4[0], 0.0) if len(f4) > 0 else 0.0
+            giic = _fval(f4[1], 0.0) if len(f4) > 1 else 0.0
+            exp_g = _fval(f4[2], 1.0) if len(f4) > 2 else 1.0
+            exp_bk = _fval(f4[3], 1.0) if len(f4) > 3 else 1.0
+            gamma = _fval(f4[4], 0.0) if len(f4) > 4 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        rho0 = float(t1[0]) if len(t1) > 0 else 0.0
+        refer_rho = float(t1[1]) if len(t1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            e_elas_n = float(t2[0]) if len(t2) > 0 else 0.0
+            e_elas_s = float(t2[1]) if len(t2) > 1 else 0.0
+            imass = int(float(t2[2])) if len(t2) > 2 else 0
+            idel = int(float(t2[3])) if len(t2) > 3 else 0
+            irupt = int(float(t2[4])) if len(t2) > 4 else 0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            fct_tn = int(float(t3[0])) if len(t3) > 0 else 0
+            fct_tt = int(float(t3[1])) if len(t3) > 1 else 0
+            tmax_n = float(t3[2]) if len(t3) > 2 else 0.0
+            tmax_s = float(t3[3]) if len(t3) > 3 else 0.0
+            fscale_x = float(t3[4]) if len(t3) > 4 else 1.0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            t4 = cards[3].tokens()
+            gic = float(t4[0]) if len(t4) > 0 else 0.0
+            giic = float(t4[1]) if len(t4) > 1 else 0.0
+            exp_g = float(t4[2]) if len(t4) > 2 else 1.0
+            exp_bk = float(t4[3]) if len(t4) > 3 else 1.0
+            gamma = float(t4[4]) if len(t4) > 4 else 0.0
+
+    m117 = MaterialLaw117(
+        id=mat_id, title=title, rho0=rho0, refer_rho=refer_rho,
+        e_elas_n=e_elas_n, e_elas_s=e_elas_s, imass=imass, idel=idel,
+        irupt=irupt, fct_tn=fct_tn, fct_tt=fct_tt, tmax_n=tmax_n,
+        tmax_s=tmax_s, fscale_x=fscale_x, gic=gic, giic=giic,
+        exp_g=exp_g, exp_bk=exp_bk, gamma=gamma,
+    )
+    model.mat_law117s[mat_id] = m117
+    model.materials[mat_id] = Material(
+        id=mat_id, law=117, rho0=rho0, title=title,
+        params={
+            "E_elas_n": e_elas_n, "e_elas_n": e_elas_n,
+            "E_elas_s": e_elas_s, "e_elas_s": e_elas_s,
+            "imass": imass, "idel": idel, "irupt": irupt,
+            "fct_tn": fct_tn, "fct_tt": fct_tt,
+            "TMAX_N": tmax_n, "tmax_n": tmax_n,
+            "TMAX_S": tmax_s, "tmax_s": tmax_s,
+            "fscale_x": fscale_x,
+            "GIC": gic, "gic": gic,
+            "GIIC": giic, "giic": giic,
+            "exp_g": exp_g, "exp_bk": exp_bk, "gamma": gamma,
+        }
+    )
+
+
+def read_mat_law90(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW90`` or ``/MAT/TAB_FOAM`` (M171): Tabular strain-rate foam/plasticity material model."""
+    from ..model.entities import MaterialLaw90, Material
+    mat_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MAT/LAW90/{mat_id}: missing data card", block.source)
+        return
+
+    rho0, refer_rho = 0.0, 0.0
+    e0, nu = 0.0, 0.0
+    nl, ismooth = 0, 0
+    fcut = 0.0
+    shape, hys = 0.0, 0.0
+    fct_ids: List[int] = []
+    eps_dots: List[float] = []
+    fscales: List[float] = []
+
+    if block.fixed:
+        f1 = cards[0].cut("MAT_LAW90_1")
+        rho0 = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        refer_rho = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MAT_LAW90_2")
+            e0 = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            nu = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("MAT_LAW90_3")
+            nl = _ival(f3[0]) if len(f3) > 0 else 0
+            ismooth = _ival(f3[1]) if len(f3) > 1 else 0
+            fcut = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+            shape = _fval(f3[3], 0.0) if len(f3) > 3 else 0.0
+            hys = _fval(f3[4], 0.0) if len(f3) > 4 else 0.0
+
+        for c in cards[3:3 + nl]:
+            if c.is_blank:
+                continue
+            ff = c.cut("MAT_LAW90_FUNC")
+            fct_ids.append(_ival(ff[0]) if len(ff) > 0 else 0)
+            eps_dots.append(_fval(ff[1], 0.0) if len(ff) > 1 else 0.0)
+            fscales.append(_fval(ff[2], 1.0) if len(ff) > 2 else 1.0)
+    else:
+        t1 = cards[0].tokens()
+        rho0 = float(t1[0]) if len(t1) > 0 else 0.0
+        refer_rho = float(t1[1]) if len(t1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            e0 = float(t2[0]) if len(t2) > 0 else 0.0
+            nu = float(t2[1]) if len(t2) > 1 else 0.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            nl = int(float(t3[0])) if len(t3) > 0 else 0
+            ismooth = int(float(t3[1])) if len(t3) > 1 else 0
+            fcut = float(t3[2]) if len(t3) > 2 else 0.0
+            shape = float(t3[3]) if len(t3) > 3 else 0.0
+            hys = float(t3[4]) if len(t3) > 4 else 0.0
+
+        for c in cards[3:3 + nl]:
+            if c.is_blank:
+                continue
+            toks = c.tokens()
+            fct_ids.append(int(float(toks[0])) if len(toks) > 0 else 0)
+            eps_dots.append(float(toks[1]) if len(toks) > 1 else 0.0)
+            fscales.append(float(toks[2]) if len(toks) > 2 else 1.0)
+
+    m90 = MaterialLaw90(
+        id=mat_id, title=title, rho0=rho0, refer_rho=refer_rho,
+        e0=e0, nu=nu, nl=nl, ismooth=ismooth, fcut=fcut, shape=shape,
+        hys=hys, fct_ids=fct_ids, eps_dots=eps_dots, fscales=fscales,
+    )
+    model.mat_law90s[mat_id] = m90
+    model.materials[mat_id] = Material(
+        id=mat_id, law=90, rho0=rho0, title=title,
+        params={
+            "E": e0, "E0": e0, "nu": nu, "NL": nl, "Ismooth": ismooth, "Fcut": fcut,
+            "shape": shape, "hys": hys, "fct_ids": fct_ids,
+            "eps_dots": eps_dots, "fscales": fscales,
+        }
+    )
+
+
+def read_mat_law33(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW33`` or ``/MAT/FOAM_PLAS`` (M171): Crushable foam plasticity material model."""
+    from ..model.entities import MaterialLaw33, Material
+    mat_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MAT/LAW33/{mat_id}: missing data card", block.source)
+        return
+
+    rho0, refer_rho = 0.0, 0.0
+    e = 0.0
+    itype = 0
+    fun_a1 = 0
+    ifscale = 1.0
+    p0, phi, gama0 = 0.0, 0.0, 0.0
+    a0, a1, a2 = 0.0, 0.0, 0.0
+    e1, e2, etan, eta1, eta2 = 0.0, 0.0, 0.0, 0.0, 0.0
+
+    if block.fixed:
+        f1 = cards[0].cut("MAT_LAW33_1")
+        rho0 = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        refer_rho = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MAT_LAW33_2")
+            e = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            itype = _ival(f2[1]) if len(f2) > 1 else 0
+            fun_a1 = _ival(f2[2]) if len(f2) > 2 else 0
+            ifscale = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("MAT_LAW33_3")
+            p0 = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+            phi = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+            gama0 = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("MAT_LAW33_4")
+            a0 = _fval(f4[0], 0.0) if len(f4) > 0 else 0.0
+            a1 = _fval(f4[1], 0.0) if len(f4) > 1 else 0.0
+            a2 = _fval(f4[2], 0.0) if len(f4) > 2 else 0.0
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            f5 = cards[4].cut("MAT_LAW33_5")
+            e1 = _fval(f5[0], 0.0) if len(f5) > 0 else 0.0
+            e2 = _fval(f5[1], 0.0) if len(f5) > 1 else 0.0
+            etan = _fval(f5[2], 0.0) if len(f5) > 2 else 0.0
+            eta1 = _fval(f5[3], 0.0) if len(f5) > 3 else 0.0
+            eta2 = _fval(f5[4], 0.0) if len(f5) > 4 else 0.0
+    else:
+        t1 = cards[0].tokens()
+        rho0 = float(t1[0]) if len(t1) > 0 else 0.0
+        refer_rho = float(t1[1]) if len(t1) > 1 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2 = cards[1].tokens()
+            e = float(t2[0]) if len(t2) > 0 else 0.0
+            itype = int(float(t2[1])) if len(t2) > 1 else 0
+            fun_a1 = int(float(t2[2])) if len(t2) > 2 else 0
+            ifscale = float(t2[3]) if len(t2) > 3 else 1.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            p0 = float(t3[0]) if len(t3) > 0 else 0.0
+            phi = float(t3[1]) if len(t3) > 1 else 0.0
+            gama0 = float(t3[2]) if len(t3) > 2 else 0.0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            t4 = cards[3].tokens()
+            a0 = float(t4[0]) if len(t4) > 0 else 0.0
+            a1 = float(t4[1]) if len(t4) > 1 else 0.0
+            a2 = float(t4[2]) if len(t4) > 2 else 0.0
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            t5 = cards[4].tokens()
+            e1 = float(t5[0]) if len(t5) > 0 else 0.0
+            e2 = float(t5[1]) if len(t5) > 1 else 0.0
+            etan = float(t5[2]) if len(t5) > 2 else 0.0
+            eta1 = float(t5[3]) if len(t5) > 3 else 0.0
+            eta2 = float(t5[4]) if len(t5) > 4 else 0.0
+
+    m33 = MaterialLaw33(
+        id=mat_id, title=title, rho0=rho0, refer_rho=refer_rho,
+        e=e, itype=itype, fun_a1=fun_a1, ifscale=ifscale,
+        p0=p0, phi=phi, gama0=gama0, a0=a0, a1=a1, a2=a2,
+        e1=e1, e2=e2, etan=etan, eta1=eta1, eta2=eta2,
+    )
+    model.mat_law33s[mat_id] = m33
+    model.materials[mat_id] = Material(
+        id=mat_id, law=33, rho0=rho0, title=title,
+        params={
+            "E": e, "Itype": itype, "fun_a1": fun_a1, "ifscale": ifscale,
+            "p0": p0, "phi": phi, "gama0": gama0, "a0": a0, "a1": a1, "a2": a2,
+            "e1": e1, "e2": e2, "etan": etan, "eta1": eta1, "eta2": eta2,
+        }
+    )
+
+
+def read_mat_heat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/HEAT`` or ``/HEAT/MAT`` (M171): Material thermal property modifier."""
+    from ..model.entities import MatHeatModifier
+    obj_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MAT/HEAT/{obj_id}: missing data card", block.source)
+        return
+
+    t0, rho0_cp, as_solid, bs_solid = 0.0, 0.0, 0.0, 0.0
+    t1, al_liquid, bl_liquid, efrac = 1.0e30, 0.0, 0.0, 1.0
+
+    if block.fixed:
+        f1 = cards[0].cut("MAT_HEAT_MOD_1")
+        t0 = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        rho0_cp = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        as_solid = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        bs_solid = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MAT_HEAT_MOD_2")
+            t1 = _fval(f2[0], 1.0e30) if len(f2) > 0 else 1.0e30
+            al_liquid = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            bl_liquid = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            efrac = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+    else:
+        t1_tok = cards[0].tokens()
+        t0 = float(t1_tok[0]) if len(t1_tok) > 0 else 0.0
+        rho0_cp = float(t1_tok[1]) if len(t1_tok) > 1 else 0.0
+        as_solid = float(t1_tok[2]) if len(t1_tok) > 2 else 0.0
+        bs_solid = float(t1_tok[3]) if len(t1_tok) > 3 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            t2_tok = cards[1].tokens()
+            t1 = float(t2_tok[0]) if len(t2_tok) > 0 else 1.0e30
+            al_liquid = float(t2_tok[1]) if len(t2_tok) > 1 else 0.0
+            bl_liquid = float(t2_tok[2]) if len(t2_tok) > 2 else 0.0
+            efrac = float(t2_tok[3]) if len(t2_tok) > 3 else 1.0
+
+    hm = MatHeatModifier(
+        id=obj_id, mat_id=obj_id, t0=t0, rho0_cp=rho0_cp,
+        as_solid=as_solid, bs_solid=bs_solid, t1=t1,
+        al_liquid=al_liquid, bl_liquid=bl_liquid, efrac=efrac,
+    )
+    model.mat_heat_modifiers[obj_id] = hm
+    if not hasattr(model, "raw_mat_notes"):
+        model.raw_mat_notes = []
+    model.raw_mat_notes.append((
+        "HEAT/MAT", obj_id, {
+            "HEAT_T0": t0, "HEAT_RHocp": rho0_cp, "HEAT_AS": as_solid,
+            "HEAT_BS": bs_solid, "HEAT_T1": t1, "HEAT_AL": al_liquid,
+            "HEAT_BL": bl_liquid, "HEAT_EFRAC": efrac,
+        }, block.source
+    ))
+
+
+def read_mat_nonlocal(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/NONLOCAL`` or ``/NONLOCAL/MAT`` (M171): Non-local regularized damage modifier."""
+    from ..model.entities import MatNonlocalModifier
+    obj_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MAT/NONLOCAL/{obj_id}: missing data card", block.source)
+        return
+
+    length, le_max = 0.0, 0.0
+    if block.fixed:
+        f1 = cards[0].cut("MAT_NONLOCAL_MOD_1")
+        length = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        le_max = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+    else:
+        toks = cards[0].tokens()
+        length = float(toks[0]) if len(toks) > 0 else 0.0
+        le_max = float(toks[1]) if len(toks) > 1 else 0.0
+
+    nl_mod = MatNonlocalModifier(id=obj_id, mat_id=obj_id, length=length, le_max=le_max)
+    model.mat_nonlocal_modifiers[obj_id] = nl_mod
+
+
+
 def read_airbag_injector(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/AIRBAG/INJECTOR/id`` or ``/INJECTOR/id`` (M142): Airbag jetting injector."""
     from ..model.entities import AirbagInjector
@@ -20972,6 +21351,19 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_LAW80": read_mat,
     "MAT_TRANSFO": read_mat,
     "TRANSFO": read_mat,
+    # M171: MAT LAW117 (COH_MC), LAW90 (TAB_FOAM), LAW33 (FOAM_PLAS), HEAT, NONLOCAL
+    "MAT_LAW117": read_mat,
+    "MAT_COH_MC": read_mat,
+    "COH_MC": read_mat,
+    "COHESIVE": read_mat,
+    "MAT_LAW90": read_mat,
+    "MAT_TAB_FOAM": read_mat,
+    "TAB_FOAM": read_mat,
+    "MAT_LAW33": read_mat,
+    "MAT_FOAM_PLAS": read_mat,
+    "FOAM_PLAS": read_mat,
+    "HEAT": read_heat,
+    "HEAT_TRANSFER": read_heat,
 }
 
 

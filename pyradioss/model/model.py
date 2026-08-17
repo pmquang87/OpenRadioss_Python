@@ -79,6 +79,7 @@ from .entities import (
     WaveShaper, DetLine, DetCirc, IniMap3D, SetGeneric,
     MaterialPlasZeril, MaterialPlasBodne, MaterialViscProny, MaterialThermStress, DampStiff,
     MaterialConc, MaterialBarlat, MaterialLaw83, MaterialLaw80,
+    MaterialLaw117, MaterialLaw90, MaterialLaw33, MatHeatModifier, MatNonlocalModifier,
     AirbagInjector, AirbagVenthole,
     ErefElement, IniCrack, PropRivet, PropXelem, AdmeshControl,
     PreloadBolt, LoadHydro,
@@ -952,6 +953,11 @@ class Model:
         self.mat_barlats: Dict[int, MaterialBarlat] = {}           # /MAT/LAW87, /MAT/BARLAT (M170)
         self.mat_law83s: Dict[int, MaterialLaw83] = {}             # /MAT/LAW83, /MAT/SPR_JOU (M170)
         self.mat_law80s: Dict[int, MaterialLaw80] = {}             # /MAT/LAW80, /MAT/TRANSFO (M170)
+        self.mat_law117s: Dict[int, MaterialLaw117] = {}           # /MAT/LAW117, /MAT/COH_MC (M171)
+        self.mat_law90s: Dict[int, MaterialLaw90] = {}             # /MAT/LAW90, /MAT/PLAS_TAB (M171)
+        self.mat_law33s: Dict[int, MaterialLaw33] = {}             # /MAT/LAW33, /MAT/FOAM_PLAS (M171)
+        self.mat_heat_modifiers: Dict[int, MatHeatModifier] = {}   # /MAT/HEAT, /HEAT/MAT (M171)
+        self.mat_nonlocal_modifiers: Dict[int, MatNonlocalModifier] = {}  # /MAT/NONLOCAL, /NONLOCAL/MAT (M171)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

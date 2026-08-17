@@ -1565,6 +1565,23 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_LAW80_6": [20, 20, 20, 20, 20],
     "MAT_LAW80_7": [20, 20, 20, 20],
     "MAT_LAW80_8": [20, 20],
+    # M171: MAT LAW117 (COH_MC), LAW90 (PLAS_TAB), LAW33 (FOAM_PLAS), HEAT, NONLOCAL
+    "MAT_LAW117_1": [20, 20],
+    "MAT_LAW117_2": [20, 20, 10, 10, 10],
+    "MAT_LAW117_3": [10, 10, 20, 20, 20],
+    "MAT_LAW117_4": [20, 20, 20, 20, 20],
+    "MAT_LAW90_1": [20, 20],
+    "MAT_LAW90_2": [20, 20],
+    "MAT_LAW90_3": [10, 10, 20, 20, 20],
+    "MAT_LAW90_FUNC": [10, 20, 20],
+    "MAT_LAW33_1": [20, 20],
+    "MAT_LAW33_2": [20, 10, 10, 20],
+    "MAT_LAW33_3": [20, 20, 20],
+    "MAT_LAW33_4": [20, 20, 20],
+    "MAT_LAW33_5": [20, 20, 20, 20, 20],
+    "MAT_HEAT_MOD_1": [20, 20, 20, 20],
+    "MAT_HEAT_MOD_2": [20, 20, 20, 20],
+    "MAT_NONLOCAL_MOD_1": [20, 20],
 }
 
 
