@@ -8355,6 +8355,277 @@ PropNstrand = PropType28
 PropStrand = PropType28
 
 
+# --- M186: Hydrodynamic Fluid, Boundary Layer, Foam-Air, Multi-Material, Barlat 3D, KJoint, Muscle, Stitch ---
+
+@dataclass
+class MatLaw6:
+    """``/MAT/LAW6`` or ``/MAT/VISC_FLUID`` / ``/MAT/HYDRO`` / ``/MAT/K-EPS``: Hydrodynamic fluid with EOS & turbulence."""
+    id: int = 0
+    rho: float = 0.0
+    rho_ref: float = 0.0
+    nu: float = 0.0
+    c0: float = 0.0
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+    pmin: float = 0.0
+    psh: float = 0.0
+    c4: float = 0.0
+    c5: float = 0.0
+    e0: float = 0.0
+    r0k0: float = 0.0
+    ssl: float = 0.0
+    c_mu: float = 0.0
+    sig_k: float = 0.0
+    sig_eps: float = 0.0
+    bulk_ratio: float = 0.0
+    c1_e: float = 0.0
+    c2_e: float = 0.0
+    c3_e: float = 0.0
+    kappa: float = 0.0
+    e_wall: float = 0.0
+    alpha: float = 0.0
+    gsi_t: float = 0.0
+    title: str = ""
+
+
+MatViscFluid = MatLaw6
+MatHydro = MatLaw6
+MatHydroVisc = MatLaw6
+
+
+@dataclass
+class MatLaw11:
+    """``/MAT/LAW11`` or ``/MAT/BOUND`` / ``/MAT/B-K-EPS``: Boundary fluid & k-epsilon turbulence model."""
+    id: int = 0
+    rho: float = 0.0
+    rho_ref: float = 0.0
+    itype: int = 1
+    psh: float = 0.0
+    scale: float = 1.0
+    node1: int = 0
+    gamma: float = 1.4
+    k_cdi: float = 0.0
+    h: float = 0.0
+    c1: float = 0.0
+    fun_a1: int = 0
+    fun_a2: int = 0
+    pscale: float = 1.0
+    fun_a6: int = 0
+    e0: float = 0.0
+    xt_fun: int = 0
+    yt_fun: int = 0
+    title: str = ""
+
+
+MatBound = MatLaw11
+MatBkEps = MatLaw11
+
+
+@dataclass
+class MatLaw77Curve:
+    """Loading/unloading curve entry for /MAT/LAW77 (FOAM_AIR)."""
+    fct_id: int = 0
+    strain_rate: float = 0.0
+    scale: float = 1.0
+
+
+@dataclass
+class MatLaw77:
+    """``/MAT/LAW77`` or ``/MAT/FOAM_AIR`` / ``/MAT/FOAM_HYST``: Foam with gas cavity and hysteresis unloading."""
+    id: int = 0
+    rho: float = 0.0
+    rho_ref: float = 0.0
+    e0: float = 0.0
+    nu: float = 0.0
+    emax: float = 0.0
+    epsmax: float = 0.0
+    fcut: float = 0.0
+    fsmooth: int = 0
+    nload: int = 0
+    nunload: int = 0
+    iflag: int = 0
+    shape: float = 0.0
+    hyst: float = 0.0
+    load_curves: list[MatLaw77Curve] = field(default_factory=list)
+    unload_curves: list[MatLaw77Curve] = field(default_factory=list)
+    rho_gas: float = 0.0
+    p0: float = 0.0
+    gamma: float = 1.4
+    poros: float = 1.0
+    rho_ext: float = 0.0
+    pext: float = 0.0
+    iclos: int = 0
+    inc_gas: int = 0
+    title: str = ""
+
+
+MatFoamAir = MatLaw77
+MatFoamHyst = MatLaw77
+
+
+@dataclass
+class MatMultiFluidFraction:
+    """Sub-material fraction entry for /MAT/LAW151 (MULTIFLUID)."""
+    mat_id: int = 0
+    vol_frac: float = 0.0
+
+
+@dataclass
+class MatLaw151:
+    """``/MAT/LAW151`` or ``/MAT/MULTIFLUID`` / ``/MAT/MULTI_MAT``: Multi-material mixture law."""
+    id: int = 0
+    fractions: list[MatMultiFluidFraction] = field(default_factory=list)
+    title: str = ""
+
+
+MatMultiMat = MatLaw151
+MatMultifluidMat = MatLaw151
+
+
+@dataclass
+class MatLaw187Rate:
+    """Rate-dependent yield function entry for /MAT/LAW187 (BARLAT20003D)."""
+    fct_id: int = 0
+    scale: float = 1.0
+    strain_rate: float = 0.0
+
+
+@dataclass
+class MatLaw187:
+    """``/MAT/LAW187`` or ``/MAT/BARLAT20003D`` / ``/MAT/BARLAT_3D``: Barlat 2000 3D anisotropic plasticity."""
+    id: int = 0
+    rho: float = 0.0
+    rho_ref: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    iflag: int = 0
+    vp: int = 0
+    c: float = 0.0
+    p_exp: float = 0.0
+    alpha1: float = 1.0
+    alpha2: float = 1.0
+    alpha3: float = 1.0
+    alpha4: float = 1.0
+    alpha5: float = 1.0
+    alpha6: float = 1.0
+    alpha7: float = 1.0
+    alpha8: float = 1.0
+    alpha9: float = 1.0
+    alpha10: float = 1.0
+    alpha11: float = 1.0
+    alpha12: float = 1.0
+    a_exp: int = 8
+    alpha_xy: float = 1.0
+    n_exp: float = 0.0
+    fcut: float = 0.0
+    fsmooth: int = 0
+    nrate: int = 0
+    a_hard: float = 0.0
+    eps0: float = 0.0
+    q: float = 0.0
+    b_hard: float = 0.0
+    k0: float = 0.0
+    rates: list[MatLaw187Rate] = field(default_factory=list)
+    title: str = ""
+
+
+MatBarlat20003D = MatLaw187
+MatBarlat3D = MatLaw187
+MatPlasBarlat3D = MatLaw187
+
+
+@dataclass
+class PropType33:
+    """``/PROP/TYPE33`` or ``/PROP/KJOINT`` / ``/PROP/KINEMATIC_JOINT``: 6-DOF kinematic joint property."""
+    id: int = 0
+    joint_type: int = 1
+    skew_flag: int = 0
+    id_sk1: int = 0
+    id_sk2: int = 0
+    xk: float = 0.0
+    cr: float = 0.0
+    kn: float = 0.0
+    krx: float = 0.0
+    kry: float = 0.0
+    krz: float = 0.0
+    ktx: float = 0.0
+    kty: float = 0.0
+    ktz: float = 0.0
+    xr_fun: int = 0
+    yr_fun: int = 0
+    zr_fun: int = 0
+    xt_fun: int = 0
+    yt_fun: int = 0
+    zt_fun: int = 0
+    crx: float = 0.0
+    cry: float = 0.0
+    crz: float = 0.0
+    ctx: float = 0.0
+    cty: float = 0.0
+    ctz: float = 0.0
+    crx_fun: int = 0
+    cry_fun: int = 0
+    crz_fun: int = 0
+    ctx_fun: int = 0
+    cty_fun: int = 0
+    ctz_fun: int = 0
+    title: str = ""
+
+
+PropKjoint = PropType33
+PropKinematicJoint = PropType33
+
+
+@dataclass
+class PropType46:
+    """``/PROP/TYPE46`` or ``/PROP/SPR_MUSCLE`` / ``/PROP/MUSCLE``: Hill-type muscle spring property."""
+    id: int = 0
+    mass: float = 0.0
+    stiff0: float = 0.0
+    vel_max: float = 0.0
+    nforce: float = 0.0
+    stiff1: float = 0.0
+    fun_a1: int = 0
+    fun_b1: int = 0
+    fun_c1: int = 0
+    fun_d1: int = 0
+    mat_imass: int = 0
+    damp1: float = 0.0
+    epsi: int = 0
+    fscale11: float = 1.0
+    fscale22: float = 1.0
+    fscale21: float = 1.0
+    fscale12: float = 1.0
+    title: str = ""
+
+
+PropSprMuscle = PropType46
+PropMuscle = PropType46
+
+
+@dataclass
+class PropType35:
+    """``/PROP/TYPE35`` or ``/PROP/STITCH`` / ``/PROP/SEW``: Stitch seam fastener property."""
+    id: int = 0
+    amas: float = 0.0
+    elastif: float = 0.0
+    xlim1: float = 0.0
+    xk: float = 0.0
+    fun_a1: int = 0
+    fun_b1: int = 0
+    fun_c1: int = 0
+    fun_d1: int = 0
+    damg: float = 0.0
+    fdelay: float = 0.0
+    title: str = ""
+
+
+PropStitch = PropType35
+PropSew = PropType35
+
+
+
 
 
 

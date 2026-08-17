@@ -100,6 +100,7 @@ from .entities import (
     MatLaw50, MatLaw57, MatLaw87, MatLaw95, MatLaw163, MatLaw169,
     MatLaw49, MatLaw76, PropType11, PropSandwLayer, PropType16, PropFabricLayer, PropType17, PropType44,
     MatLaw60, MatLaw63, MatLaw48, MatLaw26, PropType12, PropType15, PropStrandLayer, PropType28,
+    MatLaw6, MatLaw11, MatLaw77, MatLaw77Curve, MatLaw151, MatMultiFluidFraction, MatLaw187, MatLaw187Rate, PropType33, PropType46, PropType35,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -1050,6 +1051,14 @@ class Model:
         self.prop_type12s: Dict[int, PropType12] = {}               # /PROP/TYPE12, /PROP/SPR_PUL (M185)
         self.prop_type15s: Dict[int, PropType15] = {}               # /PROP/TYPE15, /PROP/POROUS (M185)
         self.prop_type28s: Dict[int, PropType28] = {}               # /PROP/TYPE28, /PROP/NSTRAND (M185)
+        self.mat_law6s: Dict[int, MatLaw6] = {}                     # /MAT/LAW6, /MAT/VISC_FLUID (M186)
+        self.mat_law11s: Dict[int, MatLaw11] = {}                   # /MAT/LAW11, /MAT/BOUND (M186)
+        self.mat_law77s: Dict[int, MatLaw77] = {}                   # /MAT/LAW77, /MAT/FOAM_AIR (M186)
+        self.mat_law151s: Dict[int, MatLaw151] = {}                 # /MAT/LAW151, /MAT/MULTIFLUID (M186)
+        self.mat_law187s: Dict[int, MatLaw187] = {}                 # /MAT/LAW187, /MAT/BARLAT20003D (M186)
+        self.prop_type33s: Dict[int, PropType33] = {}               # /PROP/TYPE33, /PROP/KJOINT (M186)
+        self.prop_type46s: Dict[int, PropType46] = {}               # /PROP/TYPE46, /PROP/SPR_MUSCLE (M186)
+        self.prop_type35s: Dict[int, PropType35] = {}               # /PROP/TYPE35, /PROP/STITCH (M186)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
