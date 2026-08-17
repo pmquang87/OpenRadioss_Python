@@ -85,6 +85,7 @@ from .entities import (
     MaterialLaw124, MaterialLaw126, MaterialLaw125, MaterialLaw127, MaterialLaw130,
     MaterialLaw128, MaterialLaw129, MaterialLaw123, MaterialLaw132, MaterialLaw134,
     MaterialLaw104, MaterialLaw105, MaterialLaw106, MaterialLaw107, MaterialLaw110, MaterialLaw115,
+    MaterialLaw109, MaterialLaw111, MaterialLaw112, MaterialLaw116, MaterialLaw122, MaterialLaw158,
     AirbagInjector, AirbagVenthole,
     ErefElement, IniCrack, PropRivet, PropXelem, AdmeshControl,
     PreloadBolt, LoadHydro,
@@ -989,6 +990,12 @@ class Model:
         self.mat_law107s: Dict[int, MaterialLaw107] = {}           # /MAT/LAW107, /MAT/PAPER_LIGHT (M176)
         self.mat_law110s: Dict[int, MaterialLaw110] = {}           # /MAT/LAW110, /MAT/VEGTER (M176)
         self.mat_law115s: Dict[int, MaterialLaw115] = {}           # /MAT/LAW115, /MAT/DESHPANDE_FLECK (M176)
+        self.mat_law109s: Dict[int, MaterialLaw109] = {}           # /MAT/LAW109, /MAT/LAW109 (M177)
+        self.mat_law111s: Dict[int, MaterialLaw111] = {}           # /MAT/LAW111, /MAT/MARLOW (M177)
+        self.mat_law112s: Dict[int, MaterialLaw112] = {}           # /MAT/LAW112, /MAT/PAPER (M177)
+        self.mat_law116s: Dict[int, MaterialLaw116] = {}           # /MAT/LAW116, /MAT/COH_HYST (M177)
+        self.mat_law122s: Dict[int, MaterialLaw122] = {}           # /MAT/LAW122, /MAT/MODIFIED_LADEVEZE (M177)
+        self.mat_law158s: Dict[int, MaterialLaw158] = {}           # /MAT/LAW158, /MAT/FABR_NL (M177)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

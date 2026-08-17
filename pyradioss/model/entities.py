@@ -6472,6 +6472,236 @@ class MaterialLaw115:
     beta_n: float = 0.0
 
 
+# M177 Material Dataclasses: LAW109, LAW111, LAW112, LAW116, LAW122, LAW158
+@dataclass
+class MaterialLaw109:
+    """/MAT/LAW109: Thermo-viscoplastic with tabular yield, temperature, and Taylor-Quinney conversion."""
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    young: float = 0.0
+    nu: float = 0.0
+    cp: float = 0.0
+    eta: float = 1.0
+    tref: float = 293.0
+    tini: float = 293.0
+    tab_yld: int = 0
+    tab_temp: int = 0
+    xscale_h: float = 1.0
+    yscale_h: float = 1.0
+    ismooth: int = 1
+    tab_eta: int = 0
+    xscale_eta: float = 1.0
+
+
+@dataclass
+class MaterialLaw111:
+    """/MAT/LAW111 & /MAT/MARLOW: Marlow hyperelastic model constructed from test data."""
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    itype: int = 1
+    fct_id: int = 0
+    fscale: float = 1.0
+    nu: float = 0.495
+
+
+@dataclass
+class MaterialLaw112:
+    """/MAT/LAW112 & /MAT/PAPER / /MAT/PLAS_PAPER: Comprehensive 3D orthotropic paper plasticity model."""
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e1: float = 0.0
+    e2: float = 0.0
+    e3: float = 0.0
+    ires: int = 0
+    itab: int = 0
+    ismooth: int = 0
+    nu21: float = 0.0
+    g12: float = 0.0
+    g23: float = 0.0
+    g13: float = 0.0
+    k: float = 0.0
+    e3c: float = 0.0
+    cc: float = 0.0
+    nu1p: float = 0.0
+    nu2p: float = 0.0
+    nu4p: float = 0.0
+    nu5p: float = 0.0
+    # Analytic (itab = 0)
+    s01: float = 0.0
+    a01: float = 0.0
+    b01: float = 0.0
+    c01: float = 0.0
+    s02: float = 0.0
+    a02: float = 0.0
+    b02: float = 0.0
+    c02: float = 0.0
+    s03: float = 0.0
+    a03: float = 0.0
+    b03: float = 0.0
+    c03: float = 0.0
+    s04: float = 0.0
+    a04: float = 0.0
+    b04: float = 0.0
+    c04: float = 0.0
+    s05: float = 0.0
+    a05: float = 0.0
+    b05: float = 0.0
+    c05: float = 0.0
+    asig: float = 0.0
+    bsig: float = 0.0
+    csig: float = 0.0
+    tau0: float = 0.0
+    atau: float = 0.0
+    btau: float = 0.0
+    # Tabulated (itab = 1)
+    tab_yld1: int = 0
+    xscale1: float = 1.0
+    yscale1: float = 1.0
+    tab_yld2: int = 0
+    xscale2: float = 1.0
+    yscale2: float = 1.0
+    tab_yld3: int = 0
+    xscale3: float = 1.0
+    yscale3: float = 1.0
+    tab_yld4: int = 0
+    xscale4: float = 1.0
+    yscale4: float = 1.0
+    tab_yld5: int = 0
+    xscale5: float = 1.0
+    yscale5: float = 1.0
+    tab_yldc: int = 0
+    xscalec: float = 1.0
+    yscalec: float = 1.0
+    tab_ylds: int = 0
+    xscales: float = 1.0
+    yscales: float = 1.0
+
+
+@dataclass
+class MaterialLaw116:
+    """/MAT/LAW116 & /MAT/COH_HYST / /MAT/COHESIVE_HYSTERETIC: Cohesive zone hysteretic damage model."""
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    young: float = 0.0
+    g: float = 0.0
+    thick: float = 0.0
+    imass: int = 1
+    idel: int = 1
+    icrit: int = 1
+    gc1_ini: float = 0.0
+    gc1_inf: float = 0.0
+    sratg1: float = 0.0
+    fg1: float = 0.0
+    gc2_ini: float = 0.0
+    gc2_inf: float = 0.0
+    sratg2: float = 0.0
+    fg2: float = 0.0
+    siga1: float = 0.0
+    sigb1: float = 0.0
+    srate1: float = 0.0
+    order1: int = 1
+    fail1: int = 1
+    siga2: float = 0.0
+    sigb2: float = 0.0
+    srate2: float = 0.0
+    order2: int = 1
+    fail2: int = 1
+
+
+@dataclass
+class MaterialLaw122:
+    """/MAT/LAW122 & /MAT/MODIFIED_LADEVEZE / /MAT/LADEVEZE_DELAM: Modified Ladevèze Delamination & Composite Damage Model."""
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    e1: float = 0.0
+    e2: float = 0.0
+    e3: float = 0.0
+    g12: float = 0.0
+    g23: float = 0.0
+    g31: float = 0.0
+    nu12: float = 0.0
+    nu23: float = 0.0
+    nu31: float = 0.0
+    e1c: float = 0.0
+    gamma: float = 0.0
+    ish: int = 0
+    itr: int = 0
+    ires: int = 0
+    sigy0: float = 0.0
+    beta: float = 0.0
+    hard_m: float = 0.0
+    hard_a: float = 0.0
+    eps_fti: float = 0.0
+    eps_ftu: float = 0.0
+    dftu: float = 0.0
+    eps_fci: float = 0.0
+    eps_fcu: float = 0.0
+    dfcu: float = 0.0
+    ibuck: int = 0
+    ifuncd1: int = 0
+    dsat1: float = 0.0
+    y0: float = 0.0
+    yc: float = 0.0
+    b: float = 0.0
+    dmax: float = 0.0
+    yr: float = 0.0
+    ysp: float = 0.0
+    ifuncd2: int = 0
+    dsat2: float = 0.0
+    y0p: float = 0.0
+    ycp: float = 0.0
+    ifuncd2c: int = 0
+    dsat2c: float = 0.0
+    y0pc: float = 0.0
+    ycpc: float = 0.0
+    epsd11: float = 0.0
+    d11: float = 0.0
+    n11: float = 0.0
+    d11u: float = 0.0
+    n11u: float = 0.0
+    epsd12: float = 0.0
+    d22: float = 0.0
+    n22: float = 0.0
+    d12: float = 0.0
+    n12: float = 0.0
+    epsdr0: float = 0.0
+    dr0: float = 0.0
+    nr0: float = 0.0
+    ltype11: int = 0
+    ltype12: int = 0
+    ltyper0: int = 0
+    fcut: float = 0.0
+
+
+@dataclass
+class MaterialLaw158:
+    """/MAT/LAW158 & /MAT/FABR_NL / /MAT/FABRIC_NL: Nonlinear Anisotropic Fabric Material."""
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    s1: float = 0.1
+    s2: float = 0.1
+    flex: float = 0.0
+    flex1: float = 0.0
+    flex2: float = 0.0
+    zerostress: float = 0.0
+    sensor_id: int = 0
+    fun_a1: int = 0
+    c1: float = 1.0
+    fun_a2: int = 0
+    c2: float = 1.0
+    fun_a3: int = 0
+    c3: float = 1.0
+    fun_a4: int = 0
+    fun_a5: int = 0
+
+
 
 
 
