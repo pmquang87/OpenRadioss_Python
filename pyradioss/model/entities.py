@@ -7177,6 +7177,217 @@ class LoadPload:
     title: str = ""
 
 
+# M182: MAT_LAW114, MAT_LAW117, MAT_LAW119, MAT_LAW120, MAT_LAW121, PROP_TYPE26, PROP_TYPE27
+
+@dataclass
+class MatLaw114:
+    """/MAT/LAW114 or /MAT/SPR_SEATBELT (M182): 1D seatbelt spring material."""
+    id: int
+    rho: float = 0.0
+    lmin: float = 0.0
+    stiff1: float = 0.0
+    damp1: float = 0.0
+    fun_l: int = 0
+    fun_ul: int = 0
+    xcoeft1: float = 1.0
+    fcoeft1: float = 1.0
+    young: float = 0.0
+    ibend: float = 0.0
+    itors: float = 0.0
+    fmax: float = 0.0
+    mmax: float = 0.0
+    shear_area: float = 0.0
+    rfac: float = 0.0
+    title: str = ""
+
+
+MatSprSeatbelt = MatLaw114
+
+
+@dataclass
+class MatLaw117:
+    """/MAT/LAW117 or /MAT/COH_TAB (M182): Tabulated cohesive zone material."""
+    id: int
+    rho: float = 0.0
+    en: float = 0.0
+    es: float = 0.0
+    imass: int = 0
+    idel: int = 0
+    irupt: int = 0
+    fct_tn: int = 0
+    fct_tt: int = 0
+    tn: float = 0.0
+    ts: float = 0.0
+    fscale_x: float = 1.0
+    gic: float = 0.0
+    giic: float = 0.0
+    exp_g: float = 0.0
+    exp_bk: float = 0.0
+    gamma: float = 0.0
+    title: str = ""
+
+
+MatCohTab = MatLaw117
+
+
+@dataclass
+class MatLaw119:
+    """/MAT/LAW119 or /MAT/SH_SEATBELT (M182): 2D shell seatbelt material."""
+    id: int
+    rho: float = 0.0
+    lmin: float = 0.0
+    stiff1: float = 0.0
+    damp1: float = 0.0
+    re: float = 0.0
+    fun_l: int = 0
+    fun_ul: int = 0
+    fcoeft1: float = 1.0
+    fcoeft2: float = 1.0
+    ireload: int = 0
+    e22: float = 0.0
+    nu12: float = 0.0
+    g12: float = 0.0
+    fcoeft22: float = 1.0
+    ecoat: float = 0.0
+    nucoat: float = 0.0
+    tcoat: float = 0.0
+    title: str = ""
+
+
+MatShSeatbelt = MatLaw119
+
+
+@dataclass
+class MatLaw120:
+    """/MAT/LAW120 or /MAT/TAPO (M182): Tabulated orthotropic Pont-Pack material."""
+    id: int
+    rho: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    iform: int = 0
+    itrx: int = 0
+    idam: int = 0
+    thick: float = 0.0
+    tab_id: int = 0
+    xscale: float = 1.0
+    yscale: float = 1.0
+    tau0: float = 0.0
+    q: float = 0.0
+    beta: float = 0.0
+    h: float = 0.0
+    af1: float = 0.0
+    af2: float = 0.0
+    ah1: float = 0.0
+    ah2: float = 0.0
+    as_: float = 0.0
+    cc: float = 0.0
+    gam0: float = 0.0
+    gamf: float = 0.0
+    d1c: float = 0.0
+    d2c: float = 0.0
+    d1f: float = 0.0
+    d2f: float = 0.0
+    dtrx: float = 0.0
+    djc: float = 0.0
+    exp_n: float = 0.0
+    title: str = ""
+
+
+MatTapo = MatLaw120
+
+
+@dataclass
+class MatLaw121:
+    """/MAT/LAW121 or /MAT/PLAS_RATE (M182): Tabulated rate-dependent elastoplastic material."""
+    id: int
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    ires: int = 2
+    ivisc: int = 0
+    fcut: float = 0.0
+    dtmin: float = 0.0
+    fct_sig0: int = 0
+    xscale_sig0: float = 1.0
+    yscale_sig0: float = 1.0
+    fct_youn: int = 0
+    xscale_youn: float = 1.0
+    yscale_youn: float = 1.0
+    fct_tang: int = 0
+    xscale_tang: float = 1.0
+    tang: float = 0.0
+    fct_fail: int = 0
+    ifail: int = 0
+    xscale_fail: float = 1.0
+    yscale_fail: float = 1.0
+    title: str = ""
+
+
+MatPlasRate = MatLaw121
+
+
+@dataclass
+class PropType26Curve:
+    fct_id: int = 0
+    fscale: float = 1.0
+    strain_rate: float = 0.0
+
+
+@dataclass
+class PropType26:
+    """/PROP/TYPE26 or /PROP/SPR_TAB (M182): Tabulated nonlinear spring property."""
+    id: int
+    mass: float = 0.0
+    sens_id: int = 0
+    isflag: int = 0
+    ileng: int = 0
+    dmin: float = 0.0
+    nfunc: int = 1
+    nfund: int = 1
+    lscale: float = 1.0
+    kmax: float = 1.0
+    dmax: float = 0.0
+    alpha: float = 1.0
+    loading_curves: list[PropType26Curve] = field(default_factory=list)
+    unloading_curves: list[PropType26Curve] = field(default_factory=list)
+    title: str = ""
+
+
+PropSprTab = PropType26
+
+
+@dataclass
+class PropType27:
+    """/PROP/TYPE27 or /PROP/SPR_BDAMP (M182): Spring with bilinear/barycentric damping."""
+    id: int
+    mass: float = 0.0
+    sens_id: int = 0
+    isflag: int = 0
+    ileng: int = 0
+    itens: int = 0
+    ifail: int = 0
+    stiff: float = 0.0
+    damp: float = 0.0
+    nexp: float = 1.0
+    delta_min: float = 0.0
+    delta_max: float = 0.0
+    gap: float = 0.0
+    fsmooth: int = 0
+    fcut: float = 0.0
+    fct_id1: int = 0
+    fct_id2: int = 0
+    ascale1: float = 1.0
+    fscale1: float = 1.0
+    ascale2: float = 1.0
+    fscale2: float = 1.0
+    title: str = ""
+
+
+PropSprBdamp = PropType27
+
+
+
 
 
 

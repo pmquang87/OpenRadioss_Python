@@ -96,6 +96,7 @@ from .entities import (
     BcsCyclic, PcylLoad, DampVrel, MatLaw113, MatLaw79, MatViscLprony,
     MatLaw190, MatLaw41, FailChang, PropType20, PropType21, PropType22, PropType22Layer,
     FailFabric, FailHoffman, FailMaxStrain, FailTsaiHill, FailTsaiWu, PropType6, LoadCload, LoadPload,
+    MatLaw114, MatLaw117, MatLaw119, MatLaw120, MatLaw121, PropType26, PropType27,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -1020,6 +1021,13 @@ class Model:
         self.prop_sol_orths: Dict[int, PropType6] = {}              # /PROP/TYPE6, /PROP/SOL_ORTH (M181)
         self.load_cloads: Dict[int, LoadCload] = {}                 # /LOAD/CLOAD, /CLOAD (M181)
         self.load_ploads: Dict[int, LoadPload] = {}                 # /LOAD/PLOAD, /PLOAD (M181)
+        self.mat_law114s: Dict[int, MatLaw114] = {}                 # /MAT/LAW114, /MAT/SPR_SEATBELT (M182)
+        self.mat_law117s: Dict[int, MatLaw117] = {}                 # /MAT/LAW117, /MAT/COH_TAB (M182)
+        self.mat_law119s: Dict[int, MatLaw119] = {}                 # /MAT/LAW119, /MAT/SH_SEATBELT (M182)
+        self.mat_law120s: Dict[int, MatLaw120] = {}                 # /MAT/LAW120, /MAT/TAPO (M182)
+        self.mat_law121s: Dict[int, MatLaw121] = {}                 # /MAT/LAW121, /MAT/PLAS_RATE (M182)
+        self.prop_spr_tabs: Dict[int, PropType26] = {}              # /PROP/TYPE26, /PROP/SPR_TAB (M182)
+        self.prop_spr_bdamps: Dict[int, PropType27] = {}            # /PROP/TYPE27, /PROP/SPR_BDAMP (M182)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
