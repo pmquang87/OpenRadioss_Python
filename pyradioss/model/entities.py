@@ -5773,6 +5773,270 @@ class MaterialLaw69:
     fct_id_data: int = 0
 
 
+@dataclass
+class MaterialLaw124:
+    """/MAT/LAW124 or /MAT/CDPM2 (M174): Concrete Damage Plastic Model 2 (CDPM2).
+
+    Fortran origin: ``starter/source/materials/mat/mat124/hm_read_mat124.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    irate: int = 0
+    fcut: float = 0.0
+    ecc: float = 0.0
+    qh0: float = 0.0
+    ft: float = 0.0
+    fc: float = 0.0
+    hp: float = 0.0
+    ah: float = 0.0
+    bh: float = 0.0
+    ch: float = 0.0
+    dh: float = 0.0
+    as_: float = 0.0
+    bs: float = 0.0
+    df: float = 0.0
+    dflag: int = 0
+    dtype: int = 0
+    ireg: int = 0
+    wf: float = 0.0
+    wf1: float = 0.0
+    ft1: float = 0.0
+    efc: float = 0.0
+
+
+@dataclass
+class MaterialLaw126:
+    """/MAT/LAW126 or /MAT/JOHNSON_HOLMQUIST_CONCRETE (M174): Johnson-Holmquist concrete damage model.
+
+    Fortran origin: ``starter/source/materials/mat/mat126/hm_read_mat126.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    g: float = 0.0
+    a: float = 0.0
+    b: float = 0.0
+    n: float = 0.0
+    fc: float = 0.0
+    t0: float = 0.0
+    c: float = 0.0
+    eps0: float = 0.0
+    fcut: float = 0.0
+    sfmax: float = 0.0
+    efmin: float = 0.0
+    pc: float = 0.0
+    muc: float = 0.0
+    pl: float = 0.0
+    mul: float = 0.0
+    k1: float = 0.0
+    k2: float = 0.0
+    k3: float = 0.0
+    d1: float = 0.0
+    d2: float = 0.0
+    idel: int = 0
+    eps_max: float = 0.0
+    ifailso: int = 0
+    ct: float = 0.0
+    powt: float = 0.0
+    cc: float = 0.0
+    powc: float = 0.0
+
+
+@dataclass
+class MaterialLaw125:
+    """/MAT/LAW125 or /MAT/LAMINATED_COMPOSITE (M174): Multi-layered laminated composite model.
+
+    Fortran origin: ``starter/source/materials/mat/mat125/hm_read_mat125.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    ea: float = 0.0
+    eb: float = 0.0
+    ec: float = 0.0
+    ifail: int = 0
+    gab: float = 0.0
+    gca: float = 0.0
+    gbc: float = 0.0
+    prba: float = 0.0
+    prca: float = 0.0
+    prcb: float = 0.0
+    lce11t: int = 0
+    e11t: float = 0.0
+    fct_t11: int = 0
+    t11: float = 0.0
+    slimt11: float = 0.0
+    lce11c: int = 0
+    e11c: float = 0.0
+    fct_c11: int = 0
+    c11: float = 0.0
+    slimc11: float = 0.0
+    lce22t: int = 0
+    e22t: float = 0.0
+    fct_t22: int = 0
+    t22: float = 0.0
+    slimt22: float = 0.0
+    lce22c: int = 0
+    e22c: float = 0.0
+    fct_c22: int = 0
+    c22: float = 0.0
+    slimc22: float = 0.0
+    lce33t: int = 0
+    e33t: float = 0.0
+    fct_t33: int = 0
+    t33: float = 0.0
+    slimt33: float = 0.0
+    lce33c: int = 0
+    e33c: float = 0.0
+    fct_c33: int = 0
+    c33: float = 0.0
+    slimc33: float = 0.0
+    g12a: float = 0.0
+    t12a: float = 0.0
+    g12b: float = 0.0
+    t12b: float = 0.0
+    slims12: float = 0.0
+    fct_g12a: int = 0
+    fct_t12a: int = 0
+    fct_g12b: int = 0
+    fct_t12b: int = 0
+    g31a: float = 0.0
+    t31a: float = 0.0
+    g31b: float = 0.0
+    t31b: float = 0.0
+    slims31: float = 0.0
+    fct_g31a: int = 0
+    fct_t31a: int = 0
+    fct_g31b: int = 0
+    fct_t31b: int = 0
+    g23a: float = 0.0
+    t23a: float = 0.0
+    g23b: float = 0.0
+    t23b: float = 0.0
+    slims23: float = 0.0
+    fct_g23a: int = 0
+    fct_t23a: int = 0
+    fct_g23b: int = 0
+    fct_t23b: int = 0
+    epsf: float = 0.0
+    epsr: float = 0.0
+    dmax: float = 0.0
+    fct_fail: int = 0
+    fail: float = 0.0
+    fcut: float = 0.0
+
+
+@dataclass
+class MaterialLaw127:
+    """/MAT/LAW127 or /MAT/ENHANCED_COMPOSITE (M174): Enhanced orthotropic composite model.
+
+    Fortran origin: ``starter/source/materials/mat/mat127/hm_read_mat127.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    ea: float = 0.0
+    eb: float = 0.0
+    ec: float = 0.0
+    gab: float = 0.0
+    gca: float = 0.0
+    gbc: float = 0.0
+    prba: float = 0.0
+    prca: float = 0.0
+    prcb: float = 0.0
+    xt: float = 0.0
+    slimt1: float = 0.0
+    lcxt: int = 0
+    scalcxt: float = 1.0
+    yt: float = 0.0
+    slimt2: float = 0.0
+    lcyt: int = 0
+    scalcyt: float = 1.0
+    sc: float = 0.0
+    slimsc: float = 0.0
+    lcsc: int = 0
+    scalcsc: float = 1.0
+    xc: float = 0.0
+    slimc1: float = 0.0
+    lcxc: int = 0
+    scalcxc: float = 1.0
+    yc: float = 0.0
+    slimc2: float = 0.0
+    lcyc: int = 0
+    scalcyc: float = 1.0
+    fcut: float = 0.0
+    alph: float = 0.0
+    beta: float = 0.0
+    two_way: int = 0
+    ti: int = 0
+    dfailt: float = 0.0
+    dfailc: float = 0.0
+    dfails: float = 0.0
+    dfailm: float = 0.0
+    ratio: float = 0.0
+    ncyred: int = 0
+    tfail: float = 0.0
+    fbrt: float = 0.0
+    ycfac: float = 0.0
+    efs: float = 0.0
+    epsf: float = 0.0
+    epsr: float = 0.0
+    tsmd: float = 0.0
+
+
+@dataclass
+class MaterialLaw130:
+    """/MAT/LAW130 or /MAT/MODIFIED_HONEYCOMB (M174): Modified crushable honeycomb material model.
+
+    Fortran origin: ``starter/source/materials/mat/mat130/hm_read_mat130.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    sigy: float = 0.0
+    vf: float = 0.0
+    mu: float = 0.0
+    iform: int = 0
+    shdflg: int = 0
+    lca: int = 0
+    lcb: int = 0
+    lcc: int = 0
+    lcs: int = 0
+    lcab: int = 0
+    lcbc: int = 0
+    lcca: int = 0
+    lcsr: int = 0
+    eaau: float = 0.0
+    ebbu: float = 0.0
+    eccu: float = 0.0
+    gabu: float = 0.0
+    gbcu: float = 0.0
+    gcau: float = 0.0
+    rfac: float = 0.0
+    tsef: float = 0.0
+    ssef: float = 0.0
+    pru: int = 0
+    lcsra: int = 0
+    lcsrb: int = 0
+    lcsrc: int = 0
+    lcsrab: int = 0
+    lcsrbc: int = 0
+    lcsrca: int = 0
+    pruab: float = 0.0
+    pruac: float = 0.0
+    prubc: float = 0.0
+    pruba: float = 0.0
+    pruca: float = 0.0
+    prucb: float = 0.0
+
+
+
 
 
 

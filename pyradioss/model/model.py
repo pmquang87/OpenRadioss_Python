@@ -82,6 +82,7 @@ from .entities import (
     MaterialLaw117, MaterialLaw90, MaterialLaw33, MatHeatModifier, MatNonlocalModifier,
     MaterialLaw66, MaterialLaw35, MaterialLaw62, MaterialLaw28, MaterialLaw44,
     MaterialLaw88, MaterialLaw92, MaterialLaw94, MaterialLaw46, MaterialLaw69,
+    MaterialLaw124, MaterialLaw126, MaterialLaw125, MaterialLaw127, MaterialLaw130,
     AirbagInjector, AirbagVenthole,
     ErefElement, IniCrack, PropRivet, PropXelem, AdmeshControl,
     PreloadBolt, LoadHydro,
@@ -970,6 +971,11 @@ class Model:
         self.mat_law94s: Dict[int, MaterialLaw94] = {}             # /MAT/LAW94, /MAT/YEOH (M173)
         self.mat_law46s: Dict[int, MaterialLaw46] = {}             # /MAT/LAW46, /MAT/HYD_VISC (M173)
         self.mat_law69s: Dict[int, MaterialLaw69] = {}             # /MAT/LAW69, /MAT/HYP_EXT_COMP (M173)
+        self.mat_law124s: Dict[int, MaterialLaw124] = {}           # /MAT/LAW124, /MAT/CDPM2 (M174)
+        self.mat_law126s: Dict[int, MaterialLaw126] = {}           # /MAT/LAW126, /MAT/JOHNSON_HOLMQUIST_CONCRETE (M174)
+        self.mat_law125s: Dict[int, MaterialLaw125] = {}           # /MAT/LAW125, /MAT/LAMINATED_COMPOSITE (M174)
+        self.mat_law127s: Dict[int, MaterialLaw127] = {}           # /MAT/LAW127, /MAT/ENHANCED_COMPOSITE (M174)
+        self.mat_law130s: Dict[int, MaterialLaw130] = {}           # /MAT/LAW130, /MAT/MODIFIED_HONEYCOMB (M174)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
