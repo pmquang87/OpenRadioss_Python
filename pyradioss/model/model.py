@@ -101,6 +101,7 @@ from .entities import (
     MatLaw49, MatLaw76, PropType11, PropSandwLayer, PropType16, PropFabricLayer, PropType17, PropType44,
     MatLaw60, MatLaw63, MatLaw48, MatLaw26, PropType12, PropType15, PropStrandLayer, PropType28,
     MatLaw6, MatLaw11, MatLaw77, MatLaw77Curve, MatLaw151, MatMultiFluidFraction, MatLaw187, MatLaw187Rate, PropType33, PropType46, PropType35,
+    MatLaw3, MatLaw4, MatLaw5, MatLaw10, MatLaw14, MatLaw21, MatLaw32, MatLaw37, PropType45, PropType36,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -1059,6 +1060,16 @@ class Model:
         self.prop_type33s: Dict[int, PropType33] = {}               # /PROP/TYPE33, /PROP/KJOINT (M186)
         self.prop_type46s: Dict[int, PropType46] = {}               # /PROP/TYPE46, /PROP/SPR_MUSCLE (M186)
         self.prop_type35s: Dict[int, PropType35] = {}               # /PROP/TYPE35, /PROP/STITCH (M186)
+        self.mat_law3s: Dict[int, MatLaw3] = {}                     # /MAT/LAW3, /MAT/PLAS_BOST (M187)
+        self.mat_law4s: Dict[int, MatLaw4] = {}                     # /MAT/LAW4, /MAT/HYD_JCOOK (M187)
+        self.mat_law5s: Dict[int, MatLaw5] = {}                     # /MAT/LAW5, /MAT/JCOOK_TAB (M187)
+        self.mat_law10s: Dict[int, MatLaw10] = {}                   # /MAT/LAW10, /MAT/SOIL (M187)
+        self.mat_law14s: Dict[int, MatLaw14] = {}                   # /MAT/LAW14, /MAT/CAM_CLAY (M187)
+        self.mat_law21s: Dict[int, MatLaw21] = {}                   # /MAT/LAW21, /MAT/DUCKHUB (M187)
+        self.mat_law32s: Dict[int, MatLaw32] = {}                   # /MAT/LAW32, /MAT/HILL_TAB (M187)
+        self.mat_law37s: Dict[int, MatLaw37] = {}                   # /MAT/LAW37, /MAT/BIQUAD (M187)
+        self.prop_type45s: Dict[int, PropType45] = {}               # /PROP/TYPE45, /PROP/KJOINT2 (M187)
+        self.prop_type36s: Dict[int, PropType36] = {}               # /PROP/TYPE36, /PROP/PREDIT (M187)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

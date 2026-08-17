@@ -8625,6 +8625,253 @@ PropStitch = PropType35
 PropSew = PropType35
 
 
+# M187: Geotechnical, Hydrodynamic, Tabulated Plasticity & Advanced Joint/Interface Suite
+
+@dataclass
+class MatLaw3:
+    """``/MAT/LAW3`` or ``/MAT/PLAS_BOST``: Elastoplastic material with Cowper-Symonds rate hardening."""
+    id: int = 0
+    rho0: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    sig_y: float = 0.0
+    e_t: float = 0.0
+    c: float = 0.0
+    p: float = 0.0
+    title: str = ""
+
+
+MatPlasBost = MatLaw3
+
+
+@dataclass
+class MatLaw4:
+    """``/MAT/LAW4`` or ``/MAT/HYD_JCOOK``: Hydrodynamic Johnson-Cook elastoplasticity with EOS."""
+    id: int = 0
+    rho_i: float = 0.0
+    c0_eos: float = 0.0
+    s_eos: float = 0.0
+    gamma0: float = 0.0
+    a_eos: float = 0.0
+    a: float = 0.0
+    b: float = 0.0
+    n: float = 0.0
+    c: float = 0.0
+    eps_max: float = 0.0
+    sig_max: float = 0.0
+    t0: float = 0.0
+    tm: float = 0.0
+    m: float = 0.0
+    cp: float = 0.0
+    pmin: float = 0.0
+    c0: float = 0.0
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+    c4: float = 0.0
+    c5: float = 0.0
+    title: str = ""
+
+
+MatHydJcook = MatLaw4
+
+
+@dataclass
+class MatLaw5:
+    """``/MAT/LAW5`` or ``/MAT/JCOOK_TAB``: Tabulated Johnson-Cook plasticity with scale functions."""
+    id: int = 0
+    rho0: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    a: float = 0.0
+    b: float = 0.0
+    n: float = 0.0
+    c: float = 0.0
+    sig_max: float = 0.0
+    fct_id1: int = 0
+    fct_id2: int = 0
+    fct_id3: int = 0
+    fct_id4: int = 0
+    fct_id5: int = 0
+    title: str = ""
+
+
+MatJcookTab = MatLaw5
+
+
+@dataclass
+class MatLaw10:
+    """``/MAT/LAW10`` or ``/MAT/SOIL`` / ``/MAT/SOIL_CONC``: Soil and crushable concrete model."""
+    id: int = 0
+    rho0: float = 0.0
+    g: float = 0.0
+    k: float = 0.0
+    a0: float = 0.0
+    a1: float = 0.0
+    a2: float = 0.0
+    p_cut: float = 0.0
+    p_min: float = 0.0
+    fct_id_p: int = 0
+    title: str = ""
+
+
+MatSoil = MatLaw10
+MatSoilConc = MatLaw10
+
+
+@dataclass
+class MatLaw14:
+    """``/MAT/LAW14`` or ``/MAT/CAM_CLAY``: Modified Cam-Clay critical state geotechnical model."""
+    id: int = 0
+    rho0: float = 0.0
+    g: float = 0.0
+    nu: float = 0.0
+    m: float = 0.0
+    lamda: float = 0.0
+    kappa: float = 0.0
+    e0: float = 0.0
+    pc0: float = 0.0
+    title: str = ""
+
+
+MatCamClay = MatLaw14
+
+
+@dataclass
+class MatLaw21:
+    """``/MAT/LAW21`` or ``/MAT/DUCKHUB``: Drucker-Prager / Cap geological plasticity model."""
+    id: int = 0
+    rho0: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    a0: float = 0.0
+    a1: float = 0.0
+    a2: float = 0.0
+    w: float = 0.0
+    d: float = 0.0
+    x0: float = 0.0
+    title: str = ""
+
+
+MatDuckhub = MatLaw21
+
+
+@dataclass
+class MatLaw32:
+    """``/MAT/LAW32`` or ``/MAT/HILL_TAB``: Tabulated Hill orthotropic plasticity model."""
+    id: int = 0
+    rho0: float = 0.0
+    e1: float = 0.0
+    e2: float = 0.0
+    e3: float = 0.0
+    nu12: float = 0.0
+    nu23: float = 0.0
+    nu31: float = 0.0
+    g12: float = 0.0
+    g23: float = 0.0
+    g31: float = 0.0
+    fct_id11: int = 0
+    fct_id22: int = 0
+    fct_id33: int = 0
+    fct_id12: int = 0
+    fct_id23: int = 0
+    fct_id31: int = 0
+    title: str = ""
+
+
+MatHillTab = MatLaw32
+
+
+@dataclass
+class MatLaw37:
+    """``/MAT/LAW37`` or ``/MAT/BIQUAD``: Biquadratic anisotropic yield criterion."""
+    id: int = 0
+    rho0: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    a: float = 0.0
+    b: float = 0.0
+    n: float = 0.0
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+    c4: float = 0.0
+    c5: float = 0.0
+    c6: float = 0.0
+    c7: float = 0.0
+    c8: float = 0.0
+    p: float = 0.0
+    q: float = 0.0
+    title: str = ""
+
+
+MatBiquad = MatLaw37
+
+
+@dataclass
+class PropType45:
+    """``/PROP/TYPE45`` or ``/PROP/KJOINT2`` / ``/PROP/KINEMATIC_JOINT2``: 6-DOF Kinematic Joint Type 2."""
+    id: int = 0
+    joint_type: int = 1
+    kn: float = 0.0
+    scale: float = 1.0
+    cr: float = 0.0
+    isensor: int = 0
+    skew1: int = 0
+    skew2: int = 0
+    ktx: float = 0.0
+    kty: float = 0.0
+    ktz: float = 0.0
+    xt_fun: int = 0
+    yt_fun: int = 0
+    zt_fun: int = 0
+    xn: float = 0.0
+    yn: float = 0.0
+    zn: float = 0.0
+    xc: float = 0.0
+    yc: float = 0.0
+    zc: float = 0.0
+    ctx: float = 0.0
+    cty: float = 0.0
+    ctz: float = 0.0
+    ctx_fun: int = 0
+    cty_fun: int = 0
+    ctz_fun: int = 0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    fx: float = 0.0
+    fy: float = 0.0
+    fz: float = 0.0
+    title: str = ""
+
+
+PropKjoint2 = PropType45
+PropKinematicJoint2 = PropType45
+
+
+@dataclass
+class PropType36:
+    """``/PROP/TYPE36`` or ``/PROP/PREDIT``: Progressive delamination interface property."""
+    id: int = 0
+    lutype: int = 0
+    skew_csid: int = 0
+    prop_id1: int = 0
+    prop_id2: int = 0
+    xk: float = 0.0
+    mat_id: int = 0
+    area: float = 0.0
+    ixx: float = 0.0
+    iyy: float = 0.0
+    izz: float = 0.0
+    ray: float = 0.0
+    title: str = ""
+
+
+PropPredit = PropType36
+
+
+
 
 
 
