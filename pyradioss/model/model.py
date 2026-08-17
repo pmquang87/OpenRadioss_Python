@@ -93,7 +93,7 @@ from .entities import (
     MaterialViscPlas,
     EbcsPres, EbcsVel, EbcsInlet, EbcsFluxout, EbcsGradp0, EbcsNormv, EbcsValv, EbcsMonvol,
     BcsWall, SeatbeltSystem, AmsControl,
-    BcsCyclic, PcylLoad,
+    BcsCyclic, PcylLoad, DampVrel, MatLaw113, MatLaw79, MatViscLprony,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -999,6 +999,11 @@ class Model:
         self.mat_law158s: Dict[int, MaterialLaw158] = {}           # /MAT/LAW158, /MAT/FABR_NL (M177)
         self.bcs_cyclics: Dict[int, BcsCyclic] = {}                 # /BCS/CYCLIC (M178)
         self.pcyl_loads: Dict[int, PcylLoad] = {}                   # /LOAD/PCYL (M178)
+        self.damp_vrels: Dict[int, DampVrel] = {}                   # /DAMP/VREL (M179)
+        self.fail_syazwans: Dict[int, FailSyazwan] = {}             # /FAIL/SYAZWAN (M179)
+        self.mat_law113s: Dict[int, MatLaw113] = {}                 # /MAT/LAW113, /MAT/SPR_BEAM (M179)
+        self.mat_law79s: Dict[int, MatLaw79] = {}                   # /MAT/LAW79, /MAT/JOHN_HOLM (M179)
+        self.mat_visc_lpronys: Dict[int, MatViscLprony] = {}         # /MAT/VISC_LPRONY, /VISC/LPRONY (M179)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

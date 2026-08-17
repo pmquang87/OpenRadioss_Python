@@ -6742,6 +6742,133 @@ class EbcsMonvol:
     title: str = ""
 
 
+@dataclass
+class DampVrel:
+    """/DAMP/VREL (M179): Relative velocity damping in skew coordinate system."""
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+    skew_id: int = 0
+    alpha_x: float = 0.0
+    alpha_y: float = 0.0
+    alpha_z: float = 0.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+
+
+@dataclass
+class FailSyazwan:
+    """/FAIL/SYAZWAN (M179): Syazwan ductile fracture criterion for metals."""
+    id: int = 0
+    mat_id: int = 0
+    icard: int = 1
+    epfmin: float = 0.0
+    failip: int = 0
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+    c4: float = 0.0
+    c5: float = 0.0
+    c6: float = 0.0
+    epf_comp: float = 0.0
+    epf_shear: float = 0.0
+    epf_tens: float = 0.0
+    epf_plstrn: float = 0.0
+    epf_biax: float = 0.0
+    dinit: int = 0
+    dam_sf: float = 1.0
+    max_dam: float = 1.0
+    inst: int = 0
+    iform: int = 0
+    n_val: float = 0.0
+    softexp: float = 0.0
+    reg_func: int = 0
+    ref_len: float = 0.0
+    reg_scale: float = 1.0
+    coeffs: List[float] = field(default_factory=list)
+    fail_id: int = 0
+
+
+@dataclass
+class MatLaw113Dof:
+    """DOF parameters for /MAT/LAW113 (M179)."""
+    stiff: float = 0.0
+    damp: float = 0.0
+    acoeft: float = 1.0
+    bcoeft: float = 1.0
+    dcoeft: float = 1.0
+    fun_a: int = 0
+    hflag: int = 0
+    fun_b: int = 0
+    fun_c: int = 0
+    fun_d: int = 0
+    min_rup: float = -1.0e30
+    max_rup: float = 1.0e30
+    prop_f: float = 0.0
+    prop_e: float = 0.0
+    scale: float = 1.0
+    prop_h: float = 1.0
+    fun_k: int = 0
+
+
+@dataclass
+class MatLaw113:
+    """/MAT/LAW113 / /MAT/SPR_BEAM (M179): Nonlinear spring-beam material model."""
+    id: int
+    rho: float = 0.0
+    ifail: int = 0
+    ileng: int = 0
+    ifail2: int = 0
+    dofs: List[MatLaw113Dof] = field(default_factory=list)
+    trans_vel0: float = 1.0
+    rot_vel0: float = 1.0
+    asrate: float = 1.0e30
+    israte: int = 0
+    dir_fails: List[List[float]] = field(default_factory=list)
+    title: str = ""
+
+
+@dataclass
+class MatLaw79:
+    """/MAT/LAW79 / /MAT/JOHN_HOLM (M179): Johnson-Holmquist ceramic material model."""
+    id: int
+    rho: float = 0.0
+    refer_rho: float = 0.0
+    g: float = 0.0
+    a: float = 0.0
+    b: float = 0.0
+    m: float = 1.0
+    n: float = 1.0
+    c: float = 0.0
+    eps0: float = 1.0
+    sigma_fmax: float = 1.0e30
+    fcut: float = 0.0
+    t0: float = 0.0
+    hel: float = 0.0
+    phel: float = 0.0
+    d1: float = 0.0
+    d2: float = 0.0
+    idel: int = 0
+    epsmax: float = 0.0
+    k1: float = 0.0
+    k2: float = 0.0
+    k3: float = 0.0
+    beta: float = 0.0
+    title: str = ""
+
+
+@dataclass
+class MatViscLprony:
+    """/MAT/VISC_LPRONY / /VISC/LPRONY (M179): Viscoelastic large Prony series model."""
+    id: int
+    m: int = 0
+    form: int = 0
+    flag_visc: int = 0
+    gamai: List[float] = field(default_factory=list)
+    taui: List[float] = field(default_factory=list)
+    title: str = ""
+
+
 
 
 
