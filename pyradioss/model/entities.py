@@ -3869,27 +3869,50 @@ class FailTab2:
 
 @dataclass
 class FailGene1:
-    """/FAIL/GENE1 (M126): General multi-criteria failure model.
+    """/FAIL/GENE1 (M126/M193): General multi-criteria failure model.
 
     Fortran origin: ``starter/source/materials/fail/fail_gene1.F`` / CFG ``fail_gene1.cfg``.
     """
-    mat_id: int
+    mat_id: int = 0
     pmin: float = 0.0
     pmax: float = 0.0
     sigp1_max: float = 0.0
+    tmax: float = 0.0
     time_max: float = 0.0
     dtmin: float = 0.0
     fct_idsm: int = 0
     eps_dot_sm: float = 0.0
     sig_max: float = 0.0
     sigr: float = 0.0
+    kf: float = 0.0
     k: float = 0.0
     fct_idps: int = 0
     eps_dot_ps: float = 0.0
     eps_max: float = 0.0
     eps_eff: float = 0.0
     eps_vol: float = 0.0
+    eps_min: float = 0.0
+    eps_sh: float = 0.0
+    fct_idg12: int = 0
+    fct_idg13: int = 0
+    fct_ide1c: int = 0
+    tab_idfld: int = 0
+    itab: int = 0
+    eps_dot_fld: float = 0.0
+    nstep: int = 0
+    ismooth: int = 0
+    istrain: int = 0
+    thinning: float = 0.0
+    volfrac: float = 0.0
+    pthk: float = 0.0
+    ncs: int = 0
+    temp_max: float = 0.0
+    failip: int = 0
+    fct_idel: int = 0
+    fscale_el: float = 1.0
+    el_ref: float = 0.0
     fail_id: int = 0
+    title: str = ""
 
 
 @dataclass
@@ -10411,6 +10434,273 @@ class FailOrthstrain:
     fct_id_12t: int = 0
     fail_id: int = 0
     title: str = ""
+
+
+# ============================================================================
+# M193 Dataclasses: Extended Failure, Materials, Properties & State Directives
+# ============================================================================
+
+@dataclass
+class FailEMC:
+    """``/FAIL/EMC``: Extended Mohr-Coulomb ductile fracture model."""
+    mat_id: int = 0
+    a_emc: float = 0.0
+    n_emc: float = 0.0
+    b0: float = 0.0
+    c: float = 0.0
+    gamma: float = 0.0
+    epsilon_dot_0: float = 0.0
+    fail_id: int = 0
+    title: str = ""
+
+
+@dataclass
+class FailNXT:
+    """``/FAIL/NXT``: NXT ductile fracture model."""
+    mat_id: int = 0
+    fct_id1: int = 0
+    fct_id2: int = 0
+    ifail_sh: int = 0
+    fail_id: int = 0
+    title: str = ""
+
+
+@dataclass
+class FailTButcher:
+    """``/FAIL/TBUTCHER``: Tuler-Butcher cumulative damage dynamic fracture."""
+    mat_id: int = 0
+    lam: float = 0.0
+    k: float = 0.0
+    sigma_r: float = 0.0
+    ifail_sh: int = 0
+    ifail_so: int = 0
+    iduct: int = 0
+    ixfem: int = 0
+    a: float = 0.0
+    b: float = 0.0
+    dadv: float = 0.0
+    fail_id: int = 0
+    title: str = ""
+
+
+@dataclass
+class FailMullins:
+    """``/FAIL/MULLINS`` & ``/FAIL/MULLINS_OR``: Mullins effect elastomer damage."""
+    mat_id: int = 0
+    coefr: float = 1.0
+    beta: float = 0.0
+    coefm: float = 0.0
+    fail_id: int = 0
+    title: str = ""
+
+
+@dataclass
+class FailCockcroft:
+    """``/FAIL/COCKCROFT``: Cockcroft-Latham ductile failure model."""
+    mat_id: int = 0
+    c0: float = 0.0
+    alpha: float = 1.0
+    failip: int = 0
+    fail_id: int = 0
+    title: str = ""
+
+
+@dataclass
+class MatLaw53:
+    """``/MAT/LAW53`` & ``/MAT/TSAI_TAB``: Tsai-Wu tabulated orthotropic plasticity."""
+    id: int = 0
+    rho: float = 0.0
+    ref_rho: float = 0.0
+    e1: float = 0.0
+    e2: float = 0.0
+    gab: float = 0.0
+    gbc: float = 0.0
+    fun_a1: int = 0
+    fun_b1: int = 0
+    fun_a3: int = 0
+    fun_a5: int = 0
+    fun_a6: int = 0
+    sfac11: float = 1.0
+    sfac22: float = 1.0
+    sfac12: float = 1.0
+    sfac23: float = 1.0
+    sfac45: float = 1.0
+    title: str = ""
+
+
+@dataclass
+class MatLaw54:
+    """``/MAT/LAW54`` & ``/MAT/PREDIT``: Specialized progressive damage plasticity."""
+    id: int = 0
+    rho: float = 0.0
+    ref_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    ifunc: int = 0
+    a: float = 0.0
+    b: float = 0.0
+    n: float = 0.0
+    sfac: float = 1.0
+    ay: float = 0.0
+    az: float = 0.0
+    by: float = 0.0
+    bz: float = 0.0
+    cx: float = 0.0
+    dc: float = 0.0
+    rc: float = 0.0
+    eps_max: float = 0.0
+    title: str = ""
+
+
+@dataclass
+class MatLaw74:
+    """``/MAT/LAW74`` & ``/MAT/HILL_THERM``: Thermal Hill orthotropic plasticity."""
+    id: int = 0
+    rho: float = 0.0
+    ref_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    eps_p_max: float = 0.0
+    eps_t: float = 0.0
+    eps_m: float = 0.0
+    fsmooth: int = 0
+    c_hard: float = 0.0
+    fcut: float = 0.0
+    sig11y: float = 0.0
+    sig22y: float = 0.0
+    sig33y: float = 0.0
+    sig12y: float = 0.0
+    sig23y: float = 0.0
+    sig31y: float = 0.0
+    tab_id: int = 0
+    sigma_scale: float = 1.0
+    epspt_scale: float = 1.0
+    ti: float = 0.0
+    rho0_cp: float = 0.0
+    title: str = ""
+
+
+@dataclass
+class MatLaw82:
+    """``/MAT/LAW82`` & ``/MAT/OGDEN``: Ogden hyperelastic material."""
+    id: int = 0
+    rho: float = 0.0
+    ref_rho: float = 0.0
+    order: int = 0
+    nu: float = 0.475
+    mu_arr: List[float] = field(default_factory=list)
+    alpha_arr: List[float] = field(default_factory=list)
+    gamma_arr: List[float] = field(default_factory=list)
+    title: str = ""
+
+
+@dataclass
+class PropIntBeamIP:
+    y: float = 0.0
+    z: float = 0.0
+    area: float = 0.0
+
+
+@dataclass
+class PropType18:
+    """``/PROP/TYPE18`` & ``/PROP/INT_BEAM``: Integrated beam property."""
+    id: int = 0
+    isflag: int = 0
+    ismstr: int = 0
+    dm: float = 0.0
+    df: float = 0.0
+    nip: int = 0
+    iref: int = 0
+    y0: float = 0.0
+    z0: float = 0.0
+    ips: List[PropIntBeamIP] = field(default_factory=list)
+    nitrs: int = 0
+    l1: float = 0.0
+    l2: float = 0.0
+    l3: float = 0.0
+    l4: float = 0.0
+    l5: float = 0.0
+    l6: float = 0.0
+    wx1: int = 0
+    wy1: int = 0
+    wz1: int = 0
+    wx2: int = 0
+    wy2: int = 0
+    wz2: int = 0
+    title: str = ""
+
+
+@dataclass
+class DefInterType11:
+    """``/DEF_INTER/TYPE11``: Default parameters for interface TYPE11."""
+    istf: int = 5
+    igap: int = 1000
+    ikrem: int = 1
+    noddel11: int = 1000
+    iform: int = 1
+    inactiv: int = 1000
+
+
+@dataclass
+class DefInterType19:
+    """``/DEF_INTER/TYPE19``: Default parameters for interface TYPE19."""
+    istf: int = 1000
+    igap: int = 1000
+    iedge: int = 2
+    ibag: int = 2
+    idel7: int = 1000
+    icurv: int = 0
+    inactiv: int = 1000
+    iform: int = 1
+
+
+@dataclass
+class DefInterType25:
+    """``/DEF_INTER/TYPE25``: Default parameters for interface TYPE25."""
+    istf: int = 0
+    igap: int = 0
+    irem_i2: int = 0
+    idel: int = 0
+    itied: int = 0
+    ishape: int = 0
+    irs: int = 1000
+
+
+@dataclass
+class StateDirective:
+    """``/STATE/...``: Element state initialization / restart directives."""
+    kind: str = ""
+    subtype: str = ""
+    option: int = 0
+    val: float = 0.0
+
+
+@dataclass
+class FailXFEM:
+    """``/FAIL/XFEM/...``: Extended FEM fracture criteria."""
+    mat_id: int = 0
+    model_name: str = ""
+    fct_id: int = 0
+    scale: float = 1.0
+    eps: float = 0.0
+    sigma: float = 0.0
+    sig0: float = 0.0
+    lam: float = 0.0
+    d1: float = 0.0
+    d2: float = 0.0
+    d3: float = 0.0
+    d4: float = 0.0
+    d5: float = 0.0
+    eps_dot_0: float = 1.0
+    k: float = 0.0
+    sigma_r: float = 0.0
+    ifail_sh: int = 1
+    iduct: int = 0
+    a: float = 0.0
+    b: float = 0.0
+    fail_id: int = 0
+    params: dict = field(default_factory=dict)
+
 
 
 

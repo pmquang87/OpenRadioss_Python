@@ -111,6 +111,9 @@ from .entities import (
     MatLaw100, MatLaw97, MatLaw71, MatLaw73, MatLaw84, MatLaw93, MatLaw133, MatLaw101, MatLaw43,
     FailLemaitre, FailComposite, FailTab2, FailAlter, FailVisual, FailOrthstrain,
     EbcsPropellant, EbcsCyclic, Preload,
+    FailEMC, FailNXT, FailTButcher, FailMullins, FailCockcroft, FailGene1, FailXFEM,
+    MatLaw53, MatLaw54, MatLaw74, MatLaw82, PropIntBeamIP, PropType18,
+    DefInterType11, DefInterType19, DefInterType25, StateDirective,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -1194,6 +1197,28 @@ class Model:
         self.fail_orthstrains: Dict[int, FailOrthstrain] = {}       # /FAIL/ORTHSTRAIN (M191)
         self.ebcs_propellants: Dict[int, EbcsPropellant] = {}       # /EBCS/PROPELLANT (M191)
         self.ebcs_cyclics: Dict[int, EbcsCyclic] = {}               # /EBCS/CYCLIC (M191)
+        self.fail_emcs: Dict[int, FailEMC] = {}                     # /FAIL/EMC (M193)
+        self.fail_nxts: Dict[int, FailNXT] = {}                     # /FAIL/NXT (M193)
+        self.fail_tbutchers: Dict[int, FailTButcher] = {}           # /FAIL/TBUTCHER (M193)
+        self.fail_mullins: Dict[int, FailMullins] = {}              # /FAIL/MULLINS, /FAIL/MULLINS_OR (M193)
+        self.fail_mullins_ors = self.fail_mullins
+        self.fail_cockcrofts: Dict[int, FailCockcroft] = {}         # /FAIL/COCKCROFT (M193)
+        self.fail_gene1s: Dict[int, FailGene1] = {}                 # /FAIL/GENE1 (M193)
+        self.fail_xfems: Dict[int, FailXFEM] = {}                   # /FAIL/XFEM/... (M193)
+        self.mat_law53s: Dict[int, MatLaw53] = {}                   # /MAT/LAW53, /MAT/TSAI_TAB (M193)
+        self.mat_tsai_tabs = self.mat_law53s
+        self.mat_law54s: Dict[int, MatLaw54] = {}                   # /MAT/LAW54, /MAT/PREDIT (M193)
+        self.mat_predits = self.mat_law54s
+        self.mat_law74s: Dict[int, MatLaw74] = {}                   # /MAT/LAW74, /MAT/HILL_THERM (M193)
+        self.mat_hill_therms = self.mat_law74s
+        self.mat_law82s: Dict[int, MatLaw82] = {}                   # /MAT/LAW82, /MAT/OGDEN (M193)
+        self.mat_ogdens = self.mat_law82s
+        self.prop_int_beams: Dict[int, PropType18] = {}             # /PROP/TYPE18, /PROP/INT_BEAM (M193)
+        self.prop_type18s = self.prop_int_beams
+        self.def_inter_type11: Optional[DefInterType11] = None      # /DEF_INTER/TYPE11 (M193)
+        self.def_inter_type19: Optional[DefInterType19] = None      # /DEF_INTER/TYPE19 (M193)
+        self.def_inter_type25: Optional[DefInterType25] = None      # /DEF_INTER/TYPE25 (M193)
+        self.state_directives: List[StateDirective] = []            # /STATE/... (M193)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

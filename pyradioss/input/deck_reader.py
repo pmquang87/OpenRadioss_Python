@@ -128,17 +128,19 @@ class Card:
 
 def _to_float(tok: str) -> float:
     """Parse a Fortran-flavoured real: allows D exponents ('1.5D-3')."""
+    s = tok.strip().rstrip(",")
     try:
-        return float(tok)
+        return float(s)
     except ValueError:
-        return float(tok.replace("D", "E").replace("d", "e"))
+        return float(s.replace("D", "E").replace("d", "e"))
 
 def _to_int(tok: str) -> int:
     """Parse an integer: allows float strings by truncating them (e.g., '500.0' -> 500)."""
+    s = tok.strip().rstrip(",")
     try:
-        return int(tok)
+        return int(s)
     except ValueError:
-        return int(float(tok))
+        return int(float(s.replace("D", "E").replace("d", "e")))
 
 
 @dataclass
