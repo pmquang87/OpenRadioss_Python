@@ -3472,10 +3472,10 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if typename in ("VENTHOLE", "VENT", "VENT_POROUS"):
         read_airbag_venthole(block, model, log)
         return
-    if typename in ("TYPE5", "RIVET", "FASTENER"):
+    if typename in ("FASTENER",):
         read_prop_rivet(block, model, log)
         return
-    if typename in ("TYPE28", "XELEM", "XFEM"):
+    if typename in ("XFEM",):
         read_prop_xelem(block, model, log)
         return
     # NOTE: INJECT1/2, JOINT, TORSION, SPR_ELAS_PLAS, SPR_BEAM, SPOTWELD,
@@ -3487,6 +3487,8 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                "TYPE2": 2, "TRUSS": 2,
                "TYPE3": 3, "BEAM": 3,
                "TYPE4": 4, "SPRING": 4, "TYPE14": 14, "SOLID": 14,
+               "TYPE5": 5, "RIVET": 5, "PROP_RIVET": 5, "PROP_P5_RIVET": 5,
+               "TYPE28": 28, "XELEM": 28, "PROP_XELEM": 28, "PROP_P28_XELEM": 28,
                "TYPE9": 9, "SH_ORTH": 9, "PROP_P9_SH_ORTH": 9, "P9_SH_ORTH": 9, "PROP_SH_ORTH": 9,
                "TYPE10": 10, "SH_COMP": 10, "PROP_P10_SH_COMP": 10, "P10_SH_COMP": 10,
                "TYPE11": 11, "SH_SANDW": 11,
@@ -3512,9 +3514,10 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                "TYPE51": 51, "P51": 51, "LAMINATE_P51": 51,
                "TYPE0": 0, "VOID": 0}
     if typename not in aliases:
-        # M38: SH_ORTH/SPR_GENE/SPR_BEAM/VOID (ported physics) + every
-        # other spelling (InactiveProperty the Engine refuses) — delegated
-        # to the /PROP reader that mirrors the generic /MAT reader.
+        if typename in ("INJECT1", "PROP_INJECT1", "INJECTOR1", "PROP_INJECTOR1"):
+            read_prop_inject1(block, model, log)
+        elif typename in ("INJECT2", "PROP_INJECT2", "INJECTOR2", "PROP_INJECTOR2"):
+            read_prop_inject2(block, model, log)
         from . import prop_reader
         prop = prop_reader.parse_property(block, log)
         if prop is not None:
@@ -3669,6 +3672,115 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 return
             m, k, c = _floats(cards[0], 3)
             params = {"mass": m, "k": k, "c": c}
+    elif ptype == 5:  # RIVET
+        wflag = 0
+        imod = 1
+        fn = 0.0
+        ft = 0.0
+        dx = 0.0
+        mass = 0.0
+        stiffness = 0.0
+        fn_fail = 0.0
+        ft_fail = 0.0
+        if len(cards) == 1 and len(cards[0].tokens()) >= 4:
+            t = cards[0].tokens()
+            mass = float(t[0])
+            stiffness = float(t[1])
+            fn_fail = float(t[2])
+            ft_fail = float(t[3])
+            fn = fn_fail
+            ft = ft_fail
+        elif block.fixed:
+            if cards and not cards[0].is_blank:
+                f1 = cards[0].cut("PROP_RIVET_1")
+                wflag = _ival(f1[0]) if len(f1) > 0 else 0
+                imod = _ival(f1[1], 1) if len(f1) > 1 else 1
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = cards[1].cut("PROP_RIVET_2")
+                fn = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                ft = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                dx = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+                fn_fail = fn
+                ft_fail = ft
+        else:
+            t1 = cards[0].tokens() if len(cards) > 0 else []
+            wflag = int(float(t1[0])) if len(t1) > 0 else 0
+            imod = int(float(t1[1])) if len(t1) > 1 else 1
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            fn = float(t2[0]) if len(t2) > 0 else 0.0
+            ft = float(t2[1]) if len(t2) > 1 else 0.0
+            dx = float(t2[2]) if len(t2) > 2 else 0.0
+            fn_fail = fn
+            ft_fail = ft
+        params = {
+            "wflag": wflag, "imod": imod, "fn": fn, "ft": ft, "dx": dx,
+            "mass": mass, "stiffness": stiffness, "fn_fail": fn_fail, "ft_fail": ft_fail,
+        }
+    elif ptype == 28:  # XELEM
+        mass = 0.0
+        k = 0.0
+        c = 0.0
+        dmin = -1.0e30
+        dmax = 1.0e30
+        fun_k = 0
+        fun_c = 0
+        fscale_y = 1.0
+        fscale_x = 1.0
+        nip = 0
+        mu1 = 0.0
+        mu2 = 0.0
+        itip = 0
+        isurf = 0
+        alpha = 0.0
+        if len(cards) == 1 and len(cards[0].tokens()) == 3:
+            t = cards[0].tokens()
+            itip = int(float(t[0]))
+            isurf = int(float(t[1]))
+            alpha = float(t[2])
+            fun_k = itip
+            fun_c = isurf
+            mu1 = alpha
+        elif block.fixed:
+            if cards and not cards[0].is_blank:
+                f1 = cards[0].cut("PROP_XELEM_1")
+                mass = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+                k = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                c = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+                dmin = _fval(f1[3], -1.0e30) if len(f1) > 3 else -1.0e30
+                dmax = _fval(f1[4], 1.0e30) if len(f1) > 4 else 1.0e30
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = cards[1].cut("PROP_XELEM_2")
+                fun_k = _ival(f2[0]) if len(f2) > 0 else 0
+                fun_c = _ival(f2[1]) if len(f2) > 1 else 0
+                fscale_y = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+                fscale_x = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+            if len(cards) > 2 and not cards[2].is_blank:
+                f3 = cards[2].cut("PROP_XELEM_3")
+                nip = _ival(f3[0]) if len(f3) > 0 else 0
+                mu1 = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+                mu2 = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+        else:
+            t1 = cards[0].tokens() if len(cards) > 0 else []
+            mass = float(t1[0]) if len(t1) > 0 else 0.0
+            k = float(t1[1]) if len(t1) > 1 else 0.0
+            c = float(t1[2]) if len(t1) > 2 else 0.0
+            dmin = float(t1[3]) if len(t1) > 3 else -1.0e30
+            dmax = float(t1[4]) if len(t1) > 4 else 1.0e30
+            t2 = cards[1].tokens() if len(cards) > 1 else []
+            fun_k = int(float(t2[0])) if len(t2) > 0 else 0
+            fun_c = int(float(t2[1])) if len(t2) > 1 else 0
+            fscale_y = float(t2[2]) if len(t2) > 2 else 1.0
+            fscale_x = float(t2[3]) if len(t2) > 3 else 1.0
+            t3 = cards[2].tokens() if len(cards) > 2 else []
+            nip = int(float(t3[0])) if len(t3) > 0 else 0
+            mu1 = float(t3[1]) if len(t3) > 1 else 0.0
+            mu2 = float(t3[2]) if len(t3) > 2 else 0.0
+        params = {
+            "mass": mass, "k": k, "c": c, "dmin": dmin, "dmax": dmax,
+            "fun_k": fun_k, "fun_c": fun_c, "fscale_y": fscale_y,
+            "fscale_x": fscale_x, "nip": nip, "mu1": mu1, "mu2": mu2,
+            "itip": itip, "isurf": isurf, "alpha": alpha,
+        }
     elif ptype == 14:  # SOLID
         from ..common.constants import DEFAULT_HOURGLASS, DEFAULT_QA, DEFAULT_QB
         params = {"qa": DEFAULT_QA, "qb": DEFAULT_QB, "h": DEFAULT_HOURGLASS}
@@ -5206,6 +5318,23 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     else:
         model.properties[block.user_id] = Property(
             id=block.user_id, type=ptype, title=title, params=params)
+        if ptype == 5:
+            from ..model.entities import PropRivet
+            model.prop_rivets[block.user_id] = PropRivet(
+                id=block.user_id, title=title,
+                mass=params.get("mass", 0.0),
+                stiffness=params.get("stiffness", params.get("fn", 0.0)),
+                fn_fail=params.get("fn_fail", params.get("fn", 0.0)),
+                ft_fail=params.get("ft_fail", params.get("ft", 0.0)),
+            )
+        elif ptype == 28:
+            from ..model.entities import PropXelem
+            model.prop_xelems[block.user_id] = PropXelem(
+                id=block.user_id, title=title,
+                itip=int(params.get("itip", params.get("fun_k", 0))),
+                isurf=int(params.get("isurf", params.get("fun_c", 0))),
+                alpha=params.get("alpha", params.get("mass", 0.0)),
+            )
 
 
 def read_prop_rivet(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -7277,6 +7406,31 @@ def read_inivel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_inivel_fvm(block, model, log)
     elif kind == "NODE":
         read_inivel_node(block, model, log)
+    elif kind in ("T+G", "TG", "GRAD", "GRADIENT"):
+        # /INIVEL/T+G (M168)
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or cards[0].is_blank:
+            log.error(f"/INIVEL/T+G/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f1 = cards[0].cut("INIVEL_TG_1")
+            vx = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+            vy = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+            vz = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+            grnod_id = _ival(f1[3]) if len(f1) > 3 else 0
+            skew_id = _ival(f1[4]) if len(f1) > 4 else 0
+        else:
+            t1 = cards[0].tokens()
+            vx = float(t1[0]) if len(t1) > 0 else 0.0
+            vy = float(t1[1]) if len(t1) > 1 else 0.0
+            vz = float(t1[2]) if len(t1) > 2 else 0.0
+            grnod_id = int(float(t1[3])) if len(t1) > 3 else 0
+            skew_id = int(float(t1[4])) if len(t1) > 4 else 0
+
+        model.inivel.append(InitialVelocity(
+            id=block.user_id, grnod_id=grnod_id, v=np.array([vx, vy, vz]),
+            title=title, kind="TG", frame_id=skew_id,
+        ))
     elif kind == "PART":
         # /INIVEL/PART (M137)
         title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -8693,7 +8847,7 @@ def read_damp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if sub == "VREL":
         read_damp_vrel(block, model, log)
         return
-    if sub in ("RANGE", "FREQUENCY_RANGE", "FREQ_RANGE"):
+    if sub in ("RANGE", "FREQUENCY_RANGE", "FREQ_RANGE", "FREQ", "FREQUENCY"):
         read_damp_range(block, model, log)
         return
     if sub in ("FUNCT", "FUNCTION"):
@@ -14229,7 +14383,27 @@ def read_damp_range(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     freq_low = 0.0
     freq_high = 0.0
 
-    if block.fixed:
+    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if sub in ("FREQ", "FREQUENCY") and len(cards) >= 2 and len(cards[0].tokens()) <= 1:
+        if block.fixed:
+            f1 = cards[0].cut("DAMP_FREQ_1")
+            grpart_id = _ival(f1[0]) if len(f1) > 0 else 0
+            f2 = cards[1].cut("DAMP_FREQ_2")
+            cdamp = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            tstart = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            tstop = _fval(f2[2], 1.0e30) if len(f2) > 2 and _fval(f2[2]) > 0.0 else 1.0e30
+            freq_low = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+            freq_high = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            grpart_id = int(float(t1[0])) if len(t1) > 0 else 0
+            t2 = cards[1].tokens()
+            cdamp = float(t2[0]) if len(t2) > 0 else 0.0
+            tstart = float(t2[1]) if len(t2) > 1 else 0.0
+            tstop = float(t2[2]) if len(t2) > 2 and float(t2[2]) > 0.0 else 1.0e30
+            freq_low = float(t2[3]) if len(t2) > 3 else 0.0
+            freq_high = float(t2[4]) if len(t2) > 4 else 0.0
+    elif block.fixed:
         f1 = cards[0].cut("DAMP_RANGE_1")
         cdamp = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
         grpart_id = _ival(f1[3]) if len(f1) > 3 else 0
@@ -14239,7 +14413,7 @@ def read_damp_range(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if len(cards) > 1 and not cards[1].is_blank:
             f2 = cards[1].cut("DAMP_RANGE_2")
             freq_low = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
-            freq_high = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            freq_high = _fval(f2[1], 0.0) if len(f2) > 0 else 0.0
     else:
         t1 = cards[0].tokens()
         cdamp = float(t1[0]) if len(t1) > 0 else 0.0

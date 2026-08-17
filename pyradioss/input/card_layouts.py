@@ -1507,6 +1507,22 @@ LAYOUTS: Dict[str, List[int]] = {
     "INIMAP1D_VP_3": [10, 10, 20, 10, 20],
     "PROP_USER_SPRING_1": [10, 20, 10],
     "PROP_USER_SOLID_1": [10, 10],
+    # M168: PROP RIVET/XELEM/INJECT, DAMP FREQ, INIVEL T+G
+    "PROP_RIVET_1": [10, 10],
+    "PROP_RIVET_2": [20, 20, 20],
+    "PROP_XELEM_1": [20, 20, 20, 20, 20],
+    "PROP_XELEM_2": [10, 10, 20, 20],
+    "PROP_XELEM_3": [10, 20, 20],
+    "PROP_INJECT1_1": [10, 10, 20],
+    "PROP_INJECT1_GAS": [10, 10, 10, 20, 20],
+    "PROP_INJECT2_1": [10, 10],
+    "PROP_INJECT2_2": [10, 10, 20, 20, 20],
+    "PROP_INJECT2_GAS": [10, 10, 20],
+    "DAMP_FREQ_1": [10],
+    "DAMP_FREQ_2": [20, 20, 20, 20, 20],
+    "INIVEL_TG_1": [20, 20, 20, 10, 10],
+    "INIVEL_TG_2": [20, 20, 20, 20, 20, 20],
+    "INIVEL_TG_3": [20, 20, 20],
 }
 
 
