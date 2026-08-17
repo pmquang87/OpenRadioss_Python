@@ -7200,6 +7200,46 @@ class MatLaw114:
     rfac: float = 0.0
     title: str = ""
 
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @property
+    def k(self) -> float:
+        return self.stiff1
+
+    @property
+    def c(self) -> float:
+        return self.damp1
+
+    @property
+    def xscale(self) -> float:
+        return self.xcoeft1
+
+    @property
+    def fscale(self) -> float:
+        return self.fcoeft1
+
+    @property
+    def e(self) -> float:
+        return self.young
+
+    @property
+    def i(self) -> float:
+        return self.ibend
+
+    @property
+    def j(self) -> float:
+        return self.itors
+
+    @property
+    def as_(self) -> float:
+        return self.shear_area
+
+    @property
+    def r(self) -> float:
+        return self.rfac
+
 
 MatSprSeatbelt = MatLaw114
 
@@ -7209,6 +7249,7 @@ class MatLaw117:
     """/MAT/LAW117 or /MAT/COH_TAB (M182): Tabulated cohesive zone material."""
     id: int
     rho: float = 0.0
+    refer_rho: float = 0.0
     en: float = 0.0
     es: float = 0.0
     imass: int = 0
@@ -7225,6 +7266,30 @@ class MatLaw117:
     exp_bk: float = 0.0
     gamma: float = 0.0
     title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @property
+    def e_elas_n(self) -> float:
+        return self.en
+
+    @property
+    def e_elas_s(self) -> float:
+        return self.es
+
+    @property
+    def e(self) -> float:
+        return self.en
+
+    @property
+    def tmax_n(self) -> float:
+        return self.tn
+
+    @property
+    def tmax_s(self) -> float:
+        return self.ts
 
 
 MatCohTab = MatLaw117
@@ -7252,6 +7317,30 @@ class MatLaw119:
     nucoat: float = 0.0
     tcoat: float = 0.0
     title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @property
+    def k(self) -> float:
+        return self.stiff1
+
+    @property
+    def c(self) -> float:
+        return self.damp1
+
+    @property
+    def fscale1(self) -> float:
+        return self.fcoeft1
+
+    @property
+    def fscale2(self) -> float:
+        return self.fcoeft2
+
+    @property
+    def fscale22(self) -> float:
+        return self.fcoeft22
 
 
 MatShSeatbelt = MatLaw119
@@ -7293,6 +7382,22 @@ class MatLaw120:
     exp_n: float = 0.0
     title: str = ""
 
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @property
+    def tau(self) -> float:
+        return self.tau0
+
+    @property
+    def d_trx(self) -> float:
+        return self.dtrx
+
+    @property
+    def d_jc(self) -> float:
+        return self.djc
+
 
 MatTapo = MatLaw120
 
@@ -7322,6 +7427,14 @@ class MatLaw121:
     xscale_fail: float = 1.0
     yscale_fail: float = 1.0
     title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @property
+    def tdel(self) -> float:
+        return self.dtmin
 
 
 MatPlasRate = MatLaw121

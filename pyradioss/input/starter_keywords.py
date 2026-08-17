@@ -27676,9 +27676,22 @@ def read_mat_law114(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.mat_law114s[mat_id] = m114
     model.mat_spr_seatbelts[mat_id] = m114
     from .mat_reader import GenericMaterialRecord
+    params_114 = {
+        "MAT_RHO": rho, "rho": rho, "rho0": rho,
+        "LMIN": lmin, "lmin": lmin,
+        "STIFF1": stiff1, "k": stiff1, "stiff1": stiff1,
+        "DAMP1": damp1, "c": damp1, "damp1": damp1,
+        "FUN_L": fun_l, "fun_l": fun_l,
+        "FUN_UL": fun_ul, "fun_ul": fun_ul,
+        "E": young, "e": young, "young": young,
+        "xscale": xcoeft1, "Xscale": xcoeft1, "xcoeft1": xcoeft1,
+        "fscale": fcoeft1, "Fscale": fcoeft1, "fcoeft1": fcoeft1,
+        "i": ibend, "j": itors, "fmax": fmax, "mmax": mmax,
+        "as": shear_area, "as_": shear_area, "r": rfac,
+    }
     mat114 = Material(
         id=mat_id, law=114, rho0=rho, title=title,
-        params={"MAT_RHO": rho, "LMIN": lmin, "STIFF1": stiff1, "DAMP1": damp1, "FUN_L": fun_l, "FUN_UL": fun_ul, "E": young}
+        params=params_114
     )
     mat114.record = GenericMaterialRecord(
         law_name="LAW114", law_number=114, id=mat_id, title=title,
@@ -27697,7 +27710,7 @@ def read_mat_law117(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/MAT/LAW117/{mat_id}: missing data cards", block.source)
         return
 
-    rho = 0.0
+    rho, refer_rho = 0.0, 0.0
     en, es = 0.0, 0.0
     imass, idel, irupt = 0, 0, 0
     fct_tn, fct_tt = 0, 0
@@ -27707,11 +27720,12 @@ def read_mat_law117(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if block.fixed:
         f1 = valid_cards[0].cut("MAT_LAW117_1")
         rho = _fval(f1[0]) if len(f1) > 0 else 0.0
+        refer_rho = _fval(f1[1]) if len(f1) > 1 and f1[1].strip() else rho
 
         if len(valid_cards) > 1:
             f2 = valid_cards[1].cut("MAT_LAW117_2")
             en = _fval(f2[0]) if len(f2) > 0 else 0.0
-            es = _fval(f2[1]) if len(f2) > 0 else 0.0
+            es = _fval(f2[1]) if len(f2) > 1 else 0.0
             imass = _ival(f2[2]) if len(f2) > 2 else 0
             idel = _ival(f2[3]) if len(f2) > 3 else 0
             irupt = _ival(f2[4]) if len(f2) > 4 else 0
@@ -27734,6 +27748,7 @@ def read_mat_law117(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     else:
         toks1 = valid_cards[0].tokens()
         rho = float(toks1[0]) if len(toks1) > 0 else 0.0
+        refer_rho = float(toks1[1]) if len(toks1) > 1 else rho
 
         if len(valid_cards) > 1:
             toks2 = valid_cards[1].tokens()
@@ -27760,15 +27775,25 @@ def read_mat_law117(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             gamma = float(toks4[4]) if len(toks4) > 4 else 0.0
 
     m117 = MatLaw117(
-        id=mat_id, rho=rho, en=en, es=es, imass=imass, idel=idel, irupt=irupt,
+        id=mat_id, rho=rho, refer_rho=refer_rho, en=en, es=es, imass=imass, idel=idel, irupt=irupt,
         fct_tn=fct_tn, fct_tt=fct_tt, tn=tn, ts=ts, fscale_x=fscale_x,
         gic=gic, giic=giic, exp_g=exp_g, exp_bk=exp_bk, gamma=gamma, title=title,
     )
     model.mat_law117s[mat_id] = m117
     from .mat_reader import GenericMaterialRecord
+    params_117 = {
+        "MAT_RHO": rho, "rho": rho, "rho0": rho, "refer_rho": refer_rho,
+        "EN": en, "en": en, "e_elas_n": en, "E_elas_n": en, "E": en, "e": en,
+        "ES": es, "es": es, "e_elas_s": es, "E_elas_s": es,
+        "TN": tn, "tn": tn, "TS": ts, "ts": ts, "tmax_n": tn, "tmax_s": ts,
+        "GIC": gic, "gic": gic, "GIIC": giic, "giic": giic,
+        "imass": imass, "idel": idel, "irupt": irupt,
+        "fct_tn": fct_tn, "fct_tt": fct_tt, "fscale_x": fscale_x,
+        "exp_g": exp_g, "exp_bk": exp_bk, "gamma": gamma,
+    }
     mat117 = Material(
         id=mat_id, law=117, rho0=rho, title=title,
-        params={"MAT_RHO": rho, "EN": en, "ES": es, "TN": tn, "TS": ts, "GIC": gic, "GIIC": giic}
+        params=params_117
     )
     mat117.record = GenericMaterialRecord(
         law_name="LAW117", law_number=117, id=mat_id, title=title,
@@ -27867,9 +27892,19 @@ def read_mat_law119(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.mat_law119s[mat_id] = m119
     model.mat_sh_seatbelts[mat_id] = m119
     from .mat_reader import GenericMaterialRecord
+    params_119 = {
+        "MAT_RHO": rho, "rho": rho, "rho0": rho,
+        "LMIN": lmin, "lmin": lmin,
+        "STIFF1": stiff1, "k": stiff1, "stiff1": stiff1,
+        "DAMP1": damp1, "c": damp1, "damp1": damp1,
+        "re": re, "FUN_L": fun_l, "fun_l": fun_l, "FUN_UL": fun_ul, "fun_ul": fun_ul,
+        "E22": e22, "e22": e22, "NU12": nu12, "nu12": nu12, "G12": g12, "g12": g12,
+        "fscale1": fcoeft1, "fscale2": fcoeft2, "fscale22": fcoeft22,
+        "ireload": ireload, "ecoat": ecoat, "nucoat": nucoat, "tcoat": tcoat,
+    }
     mat119 = Material(
         id=mat_id, law=119, rho0=rho, title=title,
-        params={"MAT_RHO": rho, "LMIN": lmin, "STIFF1": stiff1, "DAMP1": damp1, "FUN_L": fun_l, "E22": e22, "NU12": nu12}
+        params=params_119
     )
     mat119.record = GenericMaterialRecord(
         law_name="LAW119", law_number=119, id=mat_id, title=title,
@@ -27929,7 +27964,7 @@ def read_mat_law120(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if len(valid_cards) > 4:
             f5 = valid_cards[4].cut("MAT_LAW120_5")
             af1 = _fval(f5[0]) if len(f5) > 0 else 0.0
-            af2 = _fval(f5[1]) if len(f5) > 1 else 0.0
+            af2 = _fval(f5[1]) if len(f5) > 0 else 0.0
             ah1 = _fval(f5[2]) if len(f5) > 2 else 0.0
             ah2 = _fval(f5[3]) if len(f5) > 3 else 0.0
             as_ = _fval(f5[4]) if len(f5) > 4 else 0.0
@@ -27982,7 +28017,7 @@ def read_mat_law120(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if len(valid_cards) > 4:
             toks5 = valid_cards[4].tokens()
             af1 = float(toks5[0]) if len(toks5) > 0 else 0.0
-            af2 = float(toks5[1]) if len(toks5) > 1 else 0.0
+            af2 = float(toks5[1]) if len(toks5) > 0 else 0.0
             ah1 = float(toks5[2]) if len(toks5) > 2 else 0.0
             ah2 = float(toks5[3]) if len(toks5) > 3 else 0.0
             as_ = float(toks5[4]) if len(toks5) > 4 else 0.0
@@ -28017,9 +28052,20 @@ def read_mat_law120(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.mat_law120s[mat_id] = m120
     model.mat_tapos[mat_id] = m120
     from .mat_reader import GenericMaterialRecord
+    params_120 = {
+        "MAT_RHO": rho, "rho": rho, "rho0": rho, "refer_rho": refer_rho,
+        "E": e, "e": e, "NU": nu, "nu": nu,
+        "TAB_ID": tab_id, "tab_id": tab_id, "THICK": thick, "thick": thick,
+        "TAU0": tau0, "tau0": tau0, "tau": tau0, "iform": iform, "itrx": itrx, "idam": idam,
+        "xscale": xscale, "yscale": yscale, "q": q, "beta": beta, "h": h,
+        "af1": af1, "af2": af2, "ah1": ah1, "ah2": ah2,
+        "as": as_, "as_": as_, "cc": cc, "gam0": gam0, "gamf": gamf,
+        "d1c": d1c, "d2c": d2c, "d1f": d1f, "d2f": d2f,
+        "dtrx": dtrx, "djc": djc, "exp_n": exp_n,
+    }
     mat120 = Material(
         id=mat_id, law=120, rho0=rho, title=title,
-        params={"MAT_RHO": rho, "E": e, "NU": nu, "TAB_ID": tab_id, "THICK": thick, "TAU0": tau0}
+        params=params_120
     )
     mat120.record = GenericMaterialRecord(
         law_name="LAW120", law_number=120, id=mat_id, title=title,
@@ -28133,9 +28179,20 @@ def read_mat_law121(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.mat_law121s[mat_id] = m121
     model.mat_plas_rates[mat_id] = m121
     from .mat_reader import GenericMaterialRecord
+    params_121 = {
+        "MAT_RHO": rho, "rho": rho, "rho0": rho,
+        "E": e, "e": e, "NU": nu, "nu": nu,
+        "FCT_SIG0": fct_sig0, "fct_sig0": fct_sig0,
+        "TANG": tang, "tang": tang, "ires": ires, "ivisc": ivisc,
+        "fcut": fcut, "dtmin": dtmin, "tdel": dtmin,
+        "xscale_sig0": xscale_sig0, "yscale_sig0": yscale_sig0,
+        "fct_youn": fct_youn, "xscale_youn": xscale_youn, "yscale_youn": yscale_youn,
+        "fct_tang": fct_tang, "xscale_tang": xscale_tang,
+        "fct_fail": fct_fail, "ifail": ifail, "xscale_fail": xscale_fail, "yscale_fail": yscale_fail,
+    }
     mat121 = Material(
         id=mat_id, law=121, rho0=rho, title=title,
-        params={"MAT_RHO": rho, "E": e, "NU": nu, "FCT_SIG0": fct_sig0, "TANG": tang}
+        params=params_121
     )
     mat121.record = GenericMaterialRecord(
         law_name="LAW121", law_number=121, id=mat_id, title=title,
@@ -28147,6 +28204,7 @@ def read_mat_law121(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 def read_prop_spr_tab(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/PROP/TYPE26/id`` or ``/PROP/SPR_TAB/id`` (M182): Tabulated nonlinear spring property."""
     from ..model.entities import PropType26, PropType26Curve
+    from .prop_reader import InactiveProperty
     prop_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank]
@@ -28195,7 +28253,7 @@ def read_prop_spr_tab(block: KeywordBlock, model: Model, log: MessageLog) -> Non
             if card_idx < len(valid_cards):
                 ful = valid_cards[card_idx].cut("PROP_TYPE26_UNLOAD")
                 fid = _ival(ful[0]) if len(ful) > 0 else 0
-                fsc = _fval(ful[1], 1.0) if len(ful) > 1 and ful[1].strip() else 1.0
+                fsc = _fval(ful[1], 1.0) if len(ful) > 1 and fl[1].strip() else 1.0
                 sr = _fval(ful[2]) if len(ful) > 2 else 0.0
                 unloading_curves.append(PropType26Curve(fct_id=fid, fscale=fsc, strain_rate=sr))
                 card_idx += 1
@@ -28205,18 +28263,37 @@ def read_prop_spr_tab(block: KeywordBlock, model: Model, log: MessageLog) -> Non
         sens_id = int(float(toks1[1])) if len(toks1) > 1 else 0
         isflag = int(float(toks1[2])) if len(toks1) > 2 else 0
         ileng = int(float(toks1[3])) if len(toks1) > 3 else 0
-        dmin = float(toks1[4]) if len(toks1) > 4 else 0.0
+        dmin = 0.0
         card_idx = 1
+        if len(toks1) >= 6:
+            nfunc = int(float(toks1[4]))
+            nfund = int(float(toks1[5]))
+        elif len(toks1) == 5:
+            dmin = float(toks1[4])
 
         if card_idx < len(valid_cards):
             toks2 = valid_cards[card_idx].tokens()
-            nfunc = int(float(toks2[0])) if len(toks2) > 0 else 1
-            nfund = int(float(toks2[1])) if len(toks2) > 1 else 1
-            lscale = float(toks2[2]) if len(toks2) > 2 else 1.0
-            kmax = float(toks2[3]) if len(toks2) > 3 else 1.0
-            dmax = float(toks2[4]) if len(toks2) > 4 else 0.0
-            alpha = float(toks2[5]) if len(toks2) > 5 else 1.0
-            card_idx += 1
+            if len(toks2) == 4:
+                lscale = float(toks2[0]) if len(toks2) > 0 else 1.0
+                kmax = float(toks2[1]) if len(toks2) > 1 else 1.0
+                dmax = float(toks2[2]) if len(toks2) > 2 else 0.0
+                alpha = float(toks2[3]) if len(toks2) > 3 else 1.0
+                card_idx += 1
+            elif len(toks2) == 5:
+                nfunc = int(float(toks2[0])) if len(toks2) > 0 else 1
+                nfund = int(float(toks2[1])) if len(toks2) > 1 else 1
+                lscale = float(toks2[2]) if len(toks2) > 2 else 1.0
+                kmax = float(toks2[3]) if len(toks2) > 3 else 1.0
+                alpha = float(toks2[4]) if len(toks2) > 4 else 1.0
+                card_idx += 1
+            elif len(toks2) >= 6:
+                nfunc = int(float(toks2[0])) if len(toks2) > 0 else 1
+                nfund = int(float(toks2[1])) if len(toks2) > 1 else 1
+                lscale = float(toks2[2]) if len(toks2) > 2 else 1.0
+                kmax = float(toks2[3]) if len(toks2) > 3 else 1.0
+                dmax = float(toks2[4]) if len(toks2) > 4 else 0.0
+                alpha = float(toks2[5]) if len(toks2) > 5 else 1.0
+                card_idx += 1
 
         for _ in range(nfunc):
             if card_idx < len(valid_cards):
@@ -28243,16 +28320,32 @@ def read_prop_spr_tab(block: KeywordBlock, model: Model, log: MessageLog) -> Non
         unloading_curves=unloading_curves, title=title,
     )
     model.prop_spr_tabs[prop_id] = p26
-    if prop_id not in model.properties:
-        model.properties[prop_id] = Property(
-            id=prop_id, type=26, title=title,
-            params={"Mass": mass, "Kmax": kmax, "Dmax": dmax, "Nfunc": nfunc, "Nfund": nfund}
-        )
+    from .prop_reader import _universal_geo_params
+    p26_params = _universal_geo_params()
+    p26_params.update({
+        "mass": mass, "Mass": mass,
+        "sens_id": sens_id, "isensor": sens_id,
+        "isflag": isflag, "ileng": ileng,
+        "dmin": dmin, "Dmin": dmin,
+        "nfunc": nfunc, "Nfunc": nfunc,
+        "nfund": nfund, "Nfund": nfund, "nraten": nfund, "Nraten": nfund,
+        "scale": lscale, "lscale": lscale,
+        "stiff0": kmax, "k": kmax, "kmax": kmax, "Kmax": kmax,
+        "dmax": dmax, "Dmax": dmax,
+        "alpha1": alpha, "alpha": alpha, "Alpha": alpha,
+        "load_curves": [{"fun_load": c.fct_id, "scale_load": c.fscale, "strainrate_load": c.strain_rate} for c in loading_curves],
+        "unload_curves": [{"fun_unload": c.fct_id, "scale_unload": c.fscale, "strainrate_unload": c.strain_rate} for c in unloading_curves],
+    })
+    model.properties[prop_id] = InactiveProperty(
+        id=prop_id, type=26, title=title, prop_name="TYPE26",
+        params=p26_params,
+    )
 
 
 def read_prop_spr_bdamp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/PROP/TYPE27/id`` or ``/PROP/SPR_BDAMP/id`` (M182): Spring with bilinear/barycentric damping."""
     from ..model.entities import PropType27
+    from .prop_reader import InactiveProperty, _universal_geo_params
     prop_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank]
@@ -28325,7 +28418,7 @@ def read_prop_spr_bdamp(block: KeywordBlock, model: Model, log: MessageLog) -> N
         if len(valid_cards) > 3:
             toks4 = valid_cards[3].tokens()
             fct_id1 = int(float(toks4[0])) if len(toks4) > 0 else 0
-            fct_id2 = int(float(toks4[1])) if len(toks4) > 1 else 0
+            fct_id2 = int(float(toks4[1])) if len(toks4) > 0 else 0
             ascale1 = float(toks4[2]) if len(toks4) > 2 else 1.0
             fscale1 = float(toks4[3]) if len(toks4) > 3 else 1.0
             ascale2 = float(toks4[4]) if len(toks4) > 4 else 1.0
@@ -28339,11 +28432,27 @@ def read_prop_spr_bdamp(block: KeywordBlock, model: Model, log: MessageLog) -> N
         fscale1=fscale1, ascale2=ascale2, fscale2=fscale2, title=title,
     )
     model.prop_spr_bdamps[prop_id] = p27
-    if prop_id not in model.properties:
-        model.properties[prop_id] = Property(
-            id=prop_id, type=27, title=title,
-            params={"Mass": mass, "K": stiff, "C": damp, "Delta_min": delta_min, "Delta_max": delta_max}
-        )
+    p27_params = _universal_geo_params()
+    p27_params.update({
+        "mass": mass, "Mass": mass,
+        "sens_id": sens_id, "isensor": sens_id,
+        "isflag": isflag, "ileng": ileng,
+        "itens": itens, "ifail": ifail,
+        "stiff": stiff, "k": stiff, "K": stiff,
+        "damp": damp, "c": damp, "C": damp,
+        "nexp": nexp, "n": nexp,
+        "delta_min": delta_min, "min_rup": delta_min, "Delta_min": delta_min,
+        "delta_max": delta_max, "max_rup": delta_max, "Delta_max": delta_max,
+        "gap": gap, "fsmooth": fsmooth, "fcut": fcut,
+        "fun1": fct_id1, "fct1": fct_id1, "fct_id1": fct_id1,
+        "fun2": fct_id2, "fct2": fct_id2, "fct_id2": fct_id2,
+        "ascale1": ascale1, "fscale1": fscale1,
+        "ascale2": ascale2, "fscale2": fscale2,
+    })
+    model.properties[prop_id] = InactiveProperty(
+        id=prop_id, type=27, title=title, prop_name="TYPE27",
+        params=p27_params,
+    )
 
 
 def read_airbag_injector(block: KeywordBlock, model: Model, log: MessageLog) -> None:
