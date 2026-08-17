@@ -78,6 +78,7 @@ from .entities import (
     LagmulGlobal, GearConstraint, RackConstraint, DiffConstraint,
     WaveShaper, DetLine, DetCirc, IniMap3D, SetGeneric,
     MaterialPlasZeril, MaterialPlasBodne, MaterialViscProny, MaterialThermStress, DampStiff,
+    MaterialConc, MaterialBarlat, MaterialLaw83, MaterialLaw80,
     AirbagInjector, AirbagVenthole,
     ErefElement, IniCrack, PropRivet, PropXelem, AdmeshControl,
     PreloadBolt, LoadHydro,
@@ -947,6 +948,10 @@ class Model:
         self.sub_laminates: Dict[int, SubLaminate] = {}            # /SUBLAMINATE (M165)
         self.inertia_parts: Dict[int, InertiaPart] = {}            # /INERTIA/PART (M169)
         self.ale_grid_constraints: Dict[int, AleGridConstraint] = {}  # /ALE/GRID/DISP, /ALE/GRID/VEL (M169)
+        self.mat_concs: Dict[int, MaterialConc] = {}               # /MAT/LAW24, /MAT/CONC (M170)
+        self.mat_barlats: Dict[int, MaterialBarlat] = {}           # /MAT/LAW87, /MAT/BARLAT (M170)
+        self.mat_law83s: Dict[int, MaterialLaw83] = {}             # /MAT/LAW83, /MAT/SPR_JOU (M170)
+        self.mat_law80s: Dict[int, MaterialLaw80] = {}             # /MAT/LAW80, /MAT/TRANSFO (M170)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

@@ -5259,4 +5259,134 @@ class AleGridConstraint:
     tstop: float = 1.0e30
 
 
+@dataclass
+class MaterialConc:
+    """/MAT/LAW24 or /MAT/CONC (M170): Concrete material model.
+
+    Fortran origin: ``starter/source/materials/mat24/hm_read_mat24.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    refer_rho: float = 0.0
+    e_c: float = 0.0
+    nu: float = 0.0
+    f_c: float = 0.0
+    ft_on_fc: float = 0.0
+    fb_on_fc: float = 0.0
+    f2_on_fc: float = 0.0
+    s0_on_fc: float = 0.0
+    h_t: float = 0.0
+    d_sup: float = 0.0
+    eps_max: float = 0.0
+    k_y: float = 0.0
+    r_t: float = 0.0
+    r_c: float = 0.0
+    h_bp: float = 0.0
+    alpha_y: float = 0.0
+    alpha_f: float = 0.0
+    v_max: float = 0.0
+    f_k: float = 0.0
+    f0: float = 0.0
+    h_v0: float = 0.0
+    e2: float = 0.0
+    ssig: float = 0.0
+    setan: float = 0.0
+    alpha1: float = 0.0
+    alpha2: float = 0.0
+    alpha3: float = 0.0
+
+
+@dataclass
+class MaterialBarlat:
+    """/MAT/LAW87 or /MAT/BARLAT (M170): Barlat 2000 anisotropic plasticity model.
+
+    Fortran origin: ``starter/source/materials/mat87/hm_read_mat87.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    iflag: int = 0
+    vflag: int = 0
+    strain1: float = 0.0
+    exp1: float = 0.0
+    ifit: int = 0
+    alphas: List[float] = field(default_factory=lambda: [1.0] * 8)
+    sigma_00: float = 0.0
+    sigma_45: float = 0.0
+    sigma_90: float = 0.0
+    sigma_b: float = 0.0
+    r_00: float = 0.0
+    r_45: float = 0.0
+    r_90: float = 0.0
+    r_b: float = 0.0
+    a_exp: int = 6
+    alpha_vol: float = 1.0
+    n_hard: float = 0.0
+    fcut: float = 0.0
+    fsmooth: int = 0
+    a_swift: float = 0.0
+    eps0: float = 0.0
+    q_voce: float = 0.0
+    beta: float = 0.0
+    k0: float = 0.0
+
+
+@dataclass
+class MaterialLaw83:
+    """/MAT/LAW83 or /MAT/SPR_JOU (M170): Non-linear spring/joint material model.
+
+    Fortran origin: ``starter/source/materials/mat83/hm_read_mat83.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    imass: int = 0
+    fun_a1: int = 0
+    fscale11: float = 1.0
+    fscale22: float = 1.0
+    alpha: float = 0.0
+    beta: float = 0.0
+    rn: float = 0.0
+    rs: float = 0.0
+    fsmooth: int = 0
+    fcut: float = 0.0
+    fun_a2: int = 0
+    fun_a3: int = 0
+    fscale33: float = 1.0
+
+
+@dataclass
+class MaterialLaw80:
+    """/MAT/LAW80 or /MAT/TRANSFO (M170): Metallurgical phase transformation steel model.
+
+    Fortran origin: ``starter/source/materials/mat80/hm_read_mat80.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    fct_ide: int = 0
+    scale_e: float = 1.0
+    time_unit: float = 3600.0
+    fsmooth: int = 0
+    fcut: float = 0.0
+    ceps: float = 0.0
+    peps: float = 0.0
+    fun_a: List[int] = field(default_factory=lambda: [0] * 5)
+    fscale_y: List[float] = field(default_factory=lambda: [1.0] * 5)
+    scale_x: List[float] = field(default_factory=lambda: [1.0] * 5)
+    theta: List[float] = field(default_factory=lambda: [0.0] * 4)
+    alpha1: float = 0.0
+    alpha2: float = 0.0
+
+
+
 

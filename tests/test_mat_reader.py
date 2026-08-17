@@ -674,13 +674,13 @@ def test_law82_cell_arrays(tmp_path):
 
 
 def test_mat_id_with_unit_id(tmp_path):
-    """/MAT/LAW83/5/2 (id 5, unit 2) and /MAT/JWL/2/123: the FIRST
+    """/MAT/LAW92/1/1 (id 1, unit 1) and /MAT/JWL/2/123: the FIRST
     trailing integer is the material id — the unit id must not steal
     it."""
-    model, log = _parse_deck(MAT_SNIPPETS["LAW83"], tmp_path)
+    model, log = _parse_deck(MAT_SNIPPETS["LAW92"], tmp_path)
     assert not log.errors
-    assert 5 in model.materials
-    assert model.materials[5].record.unit_id == 2
+    assert 1 in model.materials
+    assert model.materials[1].record.unit_id == 1
     model, log = _parse_deck(MAT_SNIPPETS["JWL"], tmp_path)
     assert 2 in model.materials
     assert model.materials[2].record.unit_id == 123
