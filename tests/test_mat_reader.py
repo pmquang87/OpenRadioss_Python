@@ -528,7 +528,8 @@ ACTIVE_FAMILIES = {"VOID", "GAS", "KELVINMAX", "LAW70",       # pack 1
                    "LAW100", "SPOTWELD", "LAW97", "EXPLOSIVE_JWLS", "JWLS",
                    "LAW71", "SUPER_ELAS", "NITINOL", "LAW73", "THERM_HILL", "HILL_THERM",
                    "LAW84", "SWIFT_VOCE", "PLAS_SWIFT_VOCE", "LAW93", "ORTH_HILL",
-                   "LAW133", "GRANULAR", "LAW101", "PLAS_POLY", "LAW43", "HILL_TAB"}
+                   "LAW133", "GRANULAR", "LAW101", "PLAS_POLY", "LAW43", "HILL_TAB",
+                   "LAW41", "LEE_T", "LEE_TARVER", "LAW79", "LAW190"}
 
 
 @pytest.mark.parametrize("family", sorted(MAT_SNIPPETS))

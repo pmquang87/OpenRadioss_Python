@@ -4195,12 +4195,6 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             read_prop_inject1(block, model, log)
         elif typename in ("INJECT2", "PROP_INJECT2", "INJECTOR2", "PROP_INJECTOR2"):
             read_prop_inject2(block, model, log)
-        elif typename in ("TYPE20", "TSHELL", "PROP_TYPE20", "PROP_TSHELL", "PROP_P20_TSHELL", "P20_TSHELL"):
-            read_prop_tshell(block, model, log)
-        elif typename in ("TYPE21", "TSH_ORTH", "PROP_TYPE21", "PROP_TSH_ORTH", "PROP_P21_TSH_ORTH", "P21_TSH_ORTH"):
-            read_prop_tsh_orth(block, model, log)
-        elif typename in ("TYPE22", "TSH_COMP", "PROP_TYPE22", "PROP_TSH_COMP", "PROP_P22_TSH_COMP", "P22_TSH_COMP"):
-            read_prop_tsh_comp(block, model, log)
         from . import prop_reader
         prop = prop_reader.parse_property(block, log)
         if prop is not None:
@@ -5081,8 +5075,9 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     params["itshell"] = _ival(f1[0], 15) if len(f1) > 0 and f1[0].strip() else 15
                     params["isolid"] = params["itshell"]
                     params["ismstr"] = _ival(f1[1]) if len(f1) > 1 else 0
-                    params["icstr"] = _ival(f1[3]) if len(f1) > 3 else 0
-                    nbp = _ival(f1[4], 222) if len(f1) > 4 and f1[4].strip() else 222
+                    params["icpre"] = _ival(f1[3]) if len(f1) > 3 else 0
+                    params["icstr"] = _ival(f1[4]) if len(f1) > 4 else 0
+                    nbp = _ival(f1[5], 222) if len(f1) > 5 and f1[5].strip() else 222
                     params["nbp"] = nbp
                     if nbp > 200:
                         params["inpts_r"] = nbp // 100
@@ -5092,8 +5087,8 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     else:
                         params["inpts_s"] = nbp
                     params["nip"] = params.get("inpts_t", 3)
-                    params["iint"] = _ival(f1[5], 1) if len(f1) > 5 and f1[5].strip() else 1
-                    params["dn"] = _fval(f1[6]) if len(f1) > 6 else 0.0
+                    params["iint"] = _ival(f1[6], 1) if len(f1) > 6 and f1[6].strip() else 1
+                    params["dn"] = _fval(f1[8]) if len(f1) > 8 else 0.0
                 if len(cards) > 1 and not cards[1].is_blank:
                     f2 = cards[1].cut("PROP_TYPE21_2")
                     params["qa"] = _fval(f2[0], 1.1) if len(f2) > 0 and f2[0].strip() else 1.1
@@ -5244,7 +5239,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                         params["inpts_s"] = nbp
                     params["nip"] = params.get("inpts_t", 3)
                     params["iint"] = _ival(f1[5], 1) if len(f1) > 5 and f1[5].strip() else 1
-                    params["dn"] = _fval(f1[6]) if len(f1) > 6 else 0.0
+                    params["dn"] = _fval(f1[7]) if len(f1) > 7 else 0.0
                 if len(cards) > 1 and not cards[1].is_blank:
                     f2 = cards[1].cut("PROP_TYPE22_2")
                     params["qa"] = _fval(f2[0], 1.1) if len(f2) > 0 and f2[0].strip() else 1.1
@@ -6484,11 +6479,11 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             model.prop_tsh_orths[block.user_id] = PropType21(
                 id=block.user_id, isolid=int(params.get("itshell", 15)),
                 ismstr=int(params.get("ismstr", 0)),
-                icstr=int(params.get("istrain", 0)),
-                inpts_r=int(params.get("nip", 2)),
-                inpts_s=int(params.get("nip", 2)),
-                inpts_t=int(params.get("nip", 2)),
-                iint=int(params.get("iplas", 1)),
+                icstr=int(params.get("icstr", params.get("istrain", 0))),
+                inpts_r=int(params.get("inpts_r", params.get("nip", 2))),
+                inpts_s=int(params.get("inpts_s", params.get("nip", 2))),
+                inpts_t=int(params.get("inpts_t", params.get("nip", 2))),
+                iint=int(params.get("iint", params.get("iplas", 1))),
                 dn=float(params.get("dn", 0.0)),
                 qa=float(params.get("qa", 1.1)),
                 qb=float(params.get("qb", 0.05)),
@@ -6514,11 +6509,11 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             model.prop_tsh_comps[block.user_id] = PropType22(
                 id=block.user_id, isolid=int(params.get("itshell", 15)),
                 ismstr=int(params.get("ismstr", 0)),
-                icstr=int(params.get("istrain", 0)),
-                inpts_r=int(params.get("nip", 2)),
-                inpts_s=int(params.get("nip", 2)),
-                inpts_t=int(params.get("nip", 2)),
-                iint=int(params.get("iplas", 1)),
+                icstr=int(params.get("icstr", params.get("istrain", 0))),
+                inpts_r=int(params.get("inpts_r", params.get("nip", 2))),
+                inpts_s=int(params.get("inpts_s", params.get("nip", 2))),
+                inpts_t=int(params.get("inpts_t", params.get("nip", 2))),
+                iint=int(params.get("iint", params.get("iplas", 1))),
                 dn=float(params.get("dn", 0.0)),
                 qa=float(params.get("qa", 1.1)),
                 qb=float(params.get("qb", 0.05)),
@@ -12169,8 +12164,15 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             surf1 = int(float(t0[0])) if len(t0) > 0 else 0
             surf2 = int(float(t0[1])) if len(t0) > 1 else 0
             istf = int(float(t0[2])) if len(t0) > 2 else 0
-            igap = int(float(t0[3])) if len(t0) > 3 else 0
-            idel = int(float(t0[4])) if len(t0) > 4 else 0
+            if len(t0) >= 6:
+                igap = int(float(t0[4]))
+                idel = int(float(t0[5]))
+            elif len(t0) == 5:
+                igap = int(float(t0[3]))
+                idel = int(float(t0[4]))
+            else:
+                igap = int(float(t0[3])) if len(t0) > 3 else 0
+                idel = int(float(t0[4])) if len(t0) > 4 else 0
 
             grnod_id, prmesh_size, gap1, gap2 = 0, 0.0, 0.0, 0.0
             if len(cards) > 1 and not cards[1].is_blank:
@@ -12369,8 +12371,8 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             stfac, fric = 1.0, 0.0
             if len(cards) > 2 and not cards[2].is_blank:
                 t2 = cards[2].tokens()
-                stfac = float(t2[2]) if len(t2) > 2 else 1.0
-                fric = float(t2[3]) if len(t2) > 3 else 0.0
+                stfac = float(t2[2] if len(t2) > 2 else t2[0]) if len(t2) > 0 else 1.0
+                fric = float(t2[3] if len(t2) > 3 else (t2[1] if len(t2) > 1 else 0.0)) if len(t2) > 1 else 0.0
 
         model.interfaces.append(Interface(
             id=block.user_id, type=21, surf_id=surf_id1, surf_id1=surf_id2,
@@ -39221,6 +39223,25 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "VISUAL": read_fail,
     "FAIL_ORTHSTRAIN": read_fail,
     "ORTHSTRAIN": read_fail,
+    # M192: Materials, Failures, Thick Shell Properties, Interfaces
+    "MAT_LEE_TARVER": read_mat,
+    "LEE_TARVER": read_mat,
+    "HOFFMAN": read_fail,
+    "FAIL_TSAI_HILL": read_fail,
+    "TSAI_HILL": read_fail,
+    "TSAIHILL": read_fail,
+    "FAIL_TSAI_WU": read_fail,
+    "TSAI_WU": read_fail,
+    "TSAIWU": read_fail,
+    "FAIL_MAX_STRAIN": read_fail,
+    "MAX_STRAIN": read_fail,
+    "MAXSTRAIN": read_fail,
+    "FABRIC": read_fail,
+    "FABR": read_fail,
+    "CHANG": read_fail,
+    "INTER_TYPE20": read_inter,
+    "INTER_TYPE23": read_inter,
+    "INTER_TYPE24": read_inter,
 }
 
 
