@@ -93,6 +93,7 @@ from .entities import (
     MaterialViscPlas,
     EbcsPres, EbcsVel, EbcsInlet, EbcsFluxout, EbcsGradp0, EbcsNormv, EbcsValv, EbcsMonvol,
     BcsWall, SeatbeltSystem, AmsControl,
+    BcsCyclic, PcylLoad,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -996,6 +997,8 @@ class Model:
         self.mat_law116s: Dict[int, MaterialLaw116] = {}           # /MAT/LAW116, /MAT/COH_HYST (M177)
         self.mat_law122s: Dict[int, MaterialLaw122] = {}           # /MAT/LAW122, /MAT/MODIFIED_LADEVEZE (M177)
         self.mat_law158s: Dict[int, MaterialLaw158] = {}           # /MAT/LAW158, /MAT/FABR_NL (M177)
+        self.bcs_cyclics: Dict[int, BcsCyclic] = {}                 # /BCS/CYCLIC (M178)
+        self.pcyl_loads: Dict[int, PcylLoad] = {}                   # /LOAD/PCYL (M178)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

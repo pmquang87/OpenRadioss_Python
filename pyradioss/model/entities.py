@@ -1467,6 +1467,7 @@ class InitialShellState:
     eb: float = 0.0        # bending energy
     h_energy: np.ndarray = field(default_factory=lambda: np.zeros(3)) # H1, H2, H3
     temp: float = 0.0      # initial temperature (M138)
+    rho: float = 0.0       # initial density (M178)
     fail_flag: float = 0.0 # initial failure flag (M142)
     aux: float = 0.0       # auxiliary state variable (M142)
     scale_yld: float = 1.0 # yield stress scale factor (M142)
@@ -6700,6 +6701,46 @@ class MaterialLaw158:
     c3: float = 1.0
     fun_a4: int = 0
     fun_a5: int = 0
+
+
+# ============================================================================
+# M178: BCS_CYCLIC, LOAD_PCYL, EBCS_MONVOL
+# ============================================================================
+
+@dataclass
+class BcsCyclic:
+    """/BCS/CYCLIC (M178): Cyclic symmetry boundary condition coupling two node groups in a skew coordinate system."""
+    id: int
+    skew_id: int = 0
+    grnd_id1: int = 0
+    grnd_id2: int = 0
+    title: str = ""
+
+
+@dataclass
+class PcylLoad:
+    """/LOAD/PCYL (M178): Pressure load in cylindrical coordinates with radius-time table."""
+    id: int
+    surf_id: int = 0
+    sens_id: int = 0
+    frame_id: int = 0
+    table_id: int = 0
+    xscale_r: float = 1.0
+    xscale_t: float = 1.0
+    yscale_p: float = 1.0
+    title: str = ""
+
+
+@dataclass
+class EbcsMonvol:
+    """/EBCS/MONVOL (M178): Monitored volume Eulerian boundary condition linking surface fluxes to monitored gas bags."""
+    id: int
+    surf_id: int = 0
+    sens_id: int = 0
+    monvol_id: int = 0
+    fscale: float = 1.0
+    title: str = ""
+
 
 
 

@@ -6273,9 +6273,102 @@ def read_sub_laminate(block: KeywordBlock, model: Model, log: MessageLog) -> Non
 
 def read_table(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/TABLE/dim/table_ID`` (1D, 2D, 3D tabular functions; M139)."""
-    if len(block.parts) > 1 and block.parts[1].upper() in ("DRAPE", "PLY_SLICE"):
-        read_drape(block, model, log)
-        return
+    if len(block.parts) > 1:
+        p1 = block.parts[1].upper()
+        if p1 in ("DRAPE", "PLY_SLICE"):
+            read_drape(block, model, log)
+            return
+        if p1 == "INIBRI":
+            b = KeywordBlock(
+                keyword="/".join(["INIBRI"] + block.parts[2:]),
+                parts=["INIBRI"] + block.parts[2:],
+                user_id=block.user_id,
+                cards=block.cards,
+                source=block.source,
+                blank_slots=block.blank_slots,
+                fixed=block.fixed,
+                unit_id=block.unit_id,
+            )
+            read_inibri(b, model, log)
+            return
+        if p1 == "INISHE":
+            b = KeywordBlock(
+                keyword="/".join(["INISHE"] + block.parts[2:]),
+                parts=["INISHE"] + block.parts[2:],
+                user_id=block.user_id,
+                cards=block.cards,
+                source=block.source,
+                blank_slots=block.blank_slots,
+                fixed=block.fixed,
+                unit_id=block.unit_id,
+            )
+            read_inishe(b, model, log)
+            return
+        if p1 == "INISH3":
+            b = KeywordBlock(
+                keyword="/".join(["INISH3"] + block.parts[2:]),
+                parts=["INISH3"] + block.parts[2:],
+                user_id=block.user_id,
+                cards=block.cards,
+                source=block.source,
+                blank_slots=block.blank_slots,
+                fixed=block.fixed,
+                unit_id=block.unit_id,
+            )
+            read_inish3(b, model, log)
+            return
+        if p1 in ("INIBEA", "INIBEAM"):
+            b = KeywordBlock(
+                keyword="/".join(["INIBEAM"] + block.parts[2:]),
+                parts=["INIBEAM"] + block.parts[2:],
+                user_id=block.user_id,
+                cards=block.cards,
+                source=block.source,
+                blank_slots=block.blank_slots,
+                fixed=block.fixed,
+                unit_id=block.unit_id,
+            )
+            read_inibea(b, model, log)
+            return
+        if p1 in ("INITRU", "INITRUSS"):
+            b = KeywordBlock(
+                keyword="/".join(["INITRUSS"] + block.parts[2:]),
+                parts=["INITRUSS"] + block.parts[2:],
+                user_id=block.user_id,
+                cards=block.cards,
+                source=block.source,
+                blank_slots=block.blank_slots,
+                fixed=block.fixed,
+                unit_id=block.unit_id,
+            )
+            read_initru(b, model, log)
+            return
+        if p1 in ("INISPR", "INISPRI"):
+            b = KeywordBlock(
+                keyword="/".join(["INISPR"] + block.parts[2:]),
+                parts=["INISPR"] + block.parts[2:],
+                user_id=block.user_id,
+                cards=block.cards,
+                source=block.source,
+                blank_slots=block.blank_slots,
+                fixed=block.fixed,
+                unit_id=block.unit_id,
+            )
+            read_inispr(b, model, log)
+            return
+        if p1 in ("INIQUA", "INIQUAD"):
+            b = KeywordBlock(
+                keyword="/".join(["INIQUA"] + block.parts[2:]),
+                parts=["INIQUA"] + block.parts[2:],
+                user_id=block.user_id,
+                cards=block.cards,
+                source=block.source,
+                blank_slots=block.blank_slots,
+                fixed=block.fixed,
+                unit_id=block.unit_id,
+            )
+            read_iniqua(b, model, log)
+            return
     if len(block.parts) < 3:
         log.warning(f"/TABLE: missing dimension or id part", block.source)
         return
@@ -7210,8 +7303,12 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             skew = int(float(t[0])) if len(t) > 0 else 0
             grnd1 = int(float(t[1])) if len(t) > 1 else 0
             grnd2 = int(float(t[2])) if len(t) > 2 else 0
+        from ..model.entities import BcsCyclic
         model.cyclic_bcs[block.user_id] = CyclicBoundaryCondition(
             id=block.user_id, title=title, skew_id=skew, grnod1_id=grnd1, grnod2_id=grnd2
+        )
+        model.bcs_cyclics[block.user_id] = BcsCyclic(
+            id=block.user_id, title=title, skew_id=skew, grnd_id1=grnd1, grnd_id2=grnd2
         )
         return
 
@@ -8224,6 +8321,52 @@ def read_pblast(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         i_tshift=i_tshift, ndt=ndt, iz=iz, imodel=imodel, node_id=node_id,
         xdet=xdet, ydet=ydet, zdet=zdet, tdet=tdet, wtnt=wtnt, pmin=pmin,
         tstop=tstop, surf_ground_id=surf_ground_id, ishape=ishape,
+    )
+
+
+def read_load_pcyl(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/LOAD/PCYL/id`` or ``/PCYL/id`` (M178): Pressure load in cylindrical coordinates.
+
+    Fortran origin: ``starter/source/loads/load_pcyl.cfg``.
+    Card 1: TITLE (%-100s)
+    Card 2: surf_ID, sens_ID, frame_ID (%10d%10d%10d)
+    Card 3: table_ID, blank(10), xscale_r, xscale_t, yscale_p (%10d%10s%20lg%20lg%20lg)
+    """
+    from ..model.entities import PcylLoad
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    surf_id, sens_id, frame_id = 0, 0, 0
+    table_id = 0
+    xscale_r, xscale_t, yscale_p = 1.0, 1.0, 1.0
+    if cards:
+        c1 = cards[0]
+        if block.fixed:
+            f1 = c1.cut("LOAD_PCYL_1")
+            surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+            sens_id = _ival(f1[1]) if len(f1) > 1 else 0
+            frame_id = _ival(f1[2]) if len(f1) > 2 else 0
+        else:
+            toks1 = c1.tokens()
+            surf_id = int(float(toks1[0])) if len(toks1) > 0 else 0
+            sens_id = int(float(toks1[1])) if len(toks1) > 1 else 0
+            frame_id = int(float(toks1[2])) if len(toks1) > 2 else 0
+    if len(cards) > 1:
+        c2 = cards[1]
+        if block.fixed:
+            f2 = c2.cut("LOAD_PCYL_2")
+            table_id = _ival(f2[0]) if len(f2) > 0 else 0
+            xscale_r = _fval(f2[2], 1.0) if len(f2) > 2 and f2[2].strip() else 1.0
+            xscale_t = _fval(f2[3], 1.0) if len(f2) > 3 and f2[3].strip() else 1.0
+            yscale_p = _fval(f2[4], 1.0) if len(f2) > 4 and f2[4].strip() else 1.0
+        else:
+            toks2 = c2.tokens()
+            table_id = int(float(toks2[0])) if len(toks2) > 0 else 0
+            xscale_r = float(toks2[1]) if len(toks2) > 1 else 1.0
+            xscale_t = float(toks2[2]) if len(toks2) > 2 else 1.0
+            yscale_p = float(toks2[3]) if len(toks2) > 3 else 1.0
+    model.pcyl_loads[block.user_id] = PcylLoad(
+        id=block.user_id, surf_id=surf_id, sens_id=sens_id, frame_id=frame_id,
+        table_id=table_id, xscale_r=xscale_r, xscale_t=xscale_t, yscale_p=yscale_p,
+        title=title
     )
 
 
@@ -9270,7 +9413,17 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
     if kind == "NIC_NIJ":
         kind = "NIC"
-    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT")
+    elif kind == "TYPE10":
+        kind = "GAUGE"
+    elif kind == "TYPE12":
+        kind = "XSECTION"
+    elif kind == "TYPE13":
+        kind = "WORK"
+    elif kind == "TYPE16":
+        kind = "HIC"
+    elif kind == "TYPE17":
+        kind = "DIST_SURF"
+    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT")
     if kind not in supported:
         log.warning(f"/SENSOR/{kind} not ported ({', '.join(supported)} supported)",
                     block.source)
@@ -9636,11 +9789,18 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 dmax = _fval(g[1], 0.0) if len(g) > 1 else 0.0
                 tmin = _fval(g[3], 0.0) if len(g) > 3 else 0.0
         else:
-            n1 = int(t[0]) if len(t) > 0 else 0
-            surf_id = int(t[1]) if len(t) > 1 else 0
-            n2 = int(t[2]) if len(t) > 2 else 0
-            n3 = int(t[3]) if len(t) > 3 else 0
-            n4 = int(t[4]) if len(t) > 4 else 0
+            if len(t) == 4:
+                n1 = int(float(t[0]))
+                surf_id = 0
+                n2 = int(float(t[1]))
+                n3 = int(float(t[2]))
+                n4 = int(float(t[3]))
+            else:
+                n1 = int(float(t[0])) if len(t) > 0 else 0
+                surf_id = int(float(t[1])) if len(t) > 1 else 0
+                n2 = int(float(t[2])) if len(t) > 2 else 0
+                n3 = int(float(t[3])) if len(t) > 3 else 0
+                n4 = int(float(t[4])) if len(t) > 4 else 0
             dmin, dmax, tmin = 0.0, 0.0, 0.0
             if data_card_idx + 1 < len(cards):
                 g = cards[data_card_idx + 1].tokens()
@@ -9648,7 +9808,7 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 dmax = float(g[1]) if len(g) > 1 else 0.0
                 tmin = float(g[2]) if len(g) > 2 else 0.0
         model.sensors.append(Sensor(
-            id=block.user_id, kind="DIST_SURF", tdelay=tdelay, node_id1=n1, surf_id=surf_id,
+            id=block.user_id, kind="DIST_SURF", tdelay=tdelay, node_id=n1, node_id1=n1, surf_id=surf_id,
             node_id2=n2, node_id3=n3, node_id4=n4, dmin=dmin, dmax=dmax, tmin=tmin, title=title))
     elif kind in ("ACCE", "ACC", "ACCEL", "TYPE1"):
         nacc = 1
@@ -13184,23 +13344,37 @@ def read_ebcs_valv(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_ebcs_monvol(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/EBCS/MONVOL/id`` (M150): Eulerian monitored volume boundary connection."""
+    """``/EBCS/MONVOL/id`` or ``/MONVOL/id`` (M150, M178): Eulerian monitored volume boundary connection."""
     from ..model.entities import EbcsMonvol
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     ebcs_id = block.user_id if block.user_id is not None else 1
     if not cards or cards[0].is_blank:
         log.error(f"/EBCS/MONVOL/{ebcs_id}: missing data card", block.source)
         return
+    surf_id = 0
+    sens_id = 0
+    monvol_id = 0
+    fscale = 1.0
     if block.fixed:
         f = cards[0].cut("EBCS_MONVOL_1")
         surf_id = _ival(f[0]) if len(f) > 0 else 0
-        monvol_id = _ival(f[1]) if len(f) > 1 else 0
+        if len(f) > 2 and f[2].strip():
+            sens_id = _ival(f[1]) if len(f) > 1 else 0
+            monvol_id = _ival(f[2]) if len(f) > 2 else 0
+            fscale = _fval(f[3], 1.0) if len(f) > 3 and f[3].strip() else 1.0
+        else:
+            monvol_id = _ival(f[1]) if len(f) > 1 else 0
     else:
         toks = cards[0].tokens()
         surf_id = int(float(toks[0])) if len(toks) > 0 else 0
-        monvol_id = int(float(toks[1])) if len(toks) > 1 else 0
+        if len(toks) >= 3:
+            sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+            monvol_id = int(float(toks[2])) if len(toks) > 2 else 0
+            fscale = float(toks[3]) if len(toks) > 3 else 1.0
+        else:
+            monvol_id = int(float(toks[1])) if len(toks) > 1 else 0
     model.ebcs_monvols[ebcs_id] = EbcsMonvol(
-        id=ebcs_id, title=title, surf_id=surf_id, monvol_id=monvol_id
+        id=ebcs_id, title=title, surf_id=surf_id, sens_id=sens_id, monvol_id=monvol_id, fscale=fscale
     )
 
 
@@ -13914,6 +14088,37 @@ def read_bcs_wall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.bcs_walls[block.user_id] = BcsWall(
         id=block.user_id, title=title, set_id=grnod_id, sensor_id=sensor_id,
         tstart=tstart, tstop=tstop
+    )
+
+
+def read_bcs_cyclic(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/BCS/CYCLIC/id`` or ``/CYCLIC/id`` (M178): cyclic symmetry boundary condition.
+
+    Fortran origin: ``starter/source/loads/bcs_cyclic.cfg`` / ``hm_read_bcs.F``.
+    Card 1: TITLE (%-100s)
+    Card 2: skew_ID, grnd_ID1, grnd_ID2 (%10d%10d%10d)
+    """
+    from ..model.entities import BcsCyclic
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    skew_id, grnd_id1, grnd_id2 = 0, 0, 0
+    if cards:
+        c1 = cards[0]
+        if block.fixed:
+            f1 = c1.cut("BCS_CYCLIC")
+            skew_id = _ival(f1[0]) if len(f1) > 0 else 0
+            grnd_id1 = _ival(f1[1]) if len(f1) > 1 else 0
+            grnd_id2 = _ival(f1[2]) if len(f1) > 2 else 0
+        else:
+            toks1 = c1.tokens()
+            skew_id = int(float(toks1[0])) if len(toks1) > 0 else 0
+            grnd_id1 = int(float(toks1[1])) if len(toks1) > 1 else 0
+            grnd_id2 = int(float(toks1[2])) if len(toks1) > 2 else 0
+    model.bcs_cyclics[block.user_id] = BcsCyclic(
+        id=block.user_id, skew_id=skew_id, grnd_id1=grnd_id1, grnd_id2=grnd_id2, title=title
+    )
+    from ..model.entities import CyclicBoundaryCondition
+    model.cyclic_bcs[block.user_id] = CyclicBoundaryCondition(
+        id=block.user_id, title=title, skew_id=skew_id, grnod1_id=grnd_id1, grnod2_id=grnd_id2
     )
 
 
@@ -15948,6 +16153,9 @@ def read_monvol(block: KeywordBlock, model: Model, log: MessageLog):
     ... (vent lines)
     """
     vol_type = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if vol_type.isdigit() or vol_type == "":
+        read_ebcs_monvol(block, model, log)
+        return
     if vol_type in ("PRES", "TYPE2"):
         read_monvol_pres(block, model, log)
         return
@@ -18193,7 +18401,7 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/INISHE/{sub}: missing data card", block.source)
         return
 
-    if sub in ("EPSP", "THICK", "TEMP", "ENER", "FAIL", "AUX", "SCALE_YLD", "SCALE"):
+    if sub in ("EPSP", "THICK", "TEMP", "ENER", "FAIL", "AUX", "SCALE_YLD", "SCALE", "DENS"):
         for c in cards:
             if block.fixed:
                 f = c.cut("INISHE_SCALAR")
@@ -18211,6 +18419,8 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 st.thick = val
             elif sub == "TEMP":
                 st.temp = val
+            elif sub == "DENS":
+                st.rho = val
             elif sub == "ENER":
                 st.em = val
             elif sub == "FAIL":
@@ -26528,6 +26738,13 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "FABRIC_NL": read_mat,
     "MAT_FABRIC_NONLIN": read_mat,
     "FABRIC_NONLIN": read_mat,
+    # M178: BCS_CYCLIC, LOAD_PCYL, EBCS_MONVOL
+    "BCS_CYCLIC": read_bcs_cyclic,
+    "CYCLIC": read_bcs_cyclic,
+    "LOAD_PCYL": read_load_pcyl,
+    "PCYL": read_load_pcyl,
+    "EBCS_MONVOL": read_ebcs_monvol,
+    "MONVOL": read_monvol,
 }
 
 

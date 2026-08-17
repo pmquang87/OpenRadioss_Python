@@ -1827,6 +1827,10 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_LAW158_3": [20, 10, 10],
     "MAT_LAW158_4": [10, 10, 20],
     "MAT_LAW158_5": [10, 10],
+    # M178: LOAD_PCYL, EBCS_MONVOL
+    "LOAD_PCYL_1": [10, 10, 10],
+    "LOAD_PCYL_2": [10, 10, 20, 20, 20],
+    "EBCS_MONVOL_1": [10, 10, 10, 20],
 }
 
 
