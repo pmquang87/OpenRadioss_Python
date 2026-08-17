@@ -98,6 +98,7 @@ from .entities import (
     FailFabric, FailHoffman, FailMaxStrain, FailTsaiHill, FailTsaiWu, PropType6, LoadCload, LoadPload,
     MatLaw114, MatLaw117, MatLaw119, MatLaw120, MatLaw121, PropType26, PropType27,
     MatLaw50, MatLaw57, MatLaw87, MatLaw95, MatLaw163, MatLaw169,
+    MatLaw49, MatLaw76, PropType11, PropSandwLayer, PropType16, PropFabricLayer, PropType17, PropType44,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -1035,6 +1036,12 @@ class Model:
         self.mat_law95s: Dict[int, MatLaw95] = {}                   # /MAT/LAW95, /MAT/BERGSTROM_BOYCE (M183)
         self.mat_law163s: Dict[int, MatLaw163] = {}                 # /MAT/LAW163, /MAT/CRUSHABLE_FOAM (M183)
         self.mat_law169s: Dict[int, MatLaw169] = {}                 # /MAT/LAW169, /MAT/ARUP_ADHESIVE (M183)
+        self.mat_law49s: Dict[int, MatLaw49] = {}                   # /MAT/LAW49, /MAT/STEINB (M184)
+        self.mat_law76s: Dict[int, MatLaw76] = {}                   # /MAT/LAW76, /MAT/SAMP (M184)
+        self.prop_type11s: Dict[int, PropType11] = {}               # /PROP/TYPE11, /PROP/SH_SANDW (M184)
+        self.prop_type16s: Dict[int, PropType16] = {}               # /PROP/TYPE16, /PROP/SH_FABR (M184)
+        self.prop_type17s: Dict[int, PropType17] = {}               # /PROP/TYPE17, /PROP/STACK (M184)
+        self.prop_type44s: Dict[int, PropType44] = {}               # /PROP/TYPE44, /PROP/SPR_CRUS (M184)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

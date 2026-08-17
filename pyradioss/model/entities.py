@@ -7791,6 +7791,305 @@ MatCohTab3D = MatLaw169
 MatCoh3D = MatLaw169
 
 
+# =========================================================================
+# M184: Steinberg-Guinan Plasticity, SAMP Plasticity, Sandwich Shell,
+#       Fabric Shell, Composite Stack & Crushing Spring Suite
+# =========================================================================
+
+@dataclass
+class MatLaw49:
+    """/MAT/LAW49 or /MAT/STEINB (M184): Steinberg-Guinan high-pressure plasticity model."""
+    id: int
+    rho: float = 0.0
+    refer_rho: float = 0.0
+    e0: float = 0.0
+    nu: float = 0.0
+    sigy: float = 0.0
+    beta: float = 0.0
+    n: float = 0.0
+    eps_max: float = 0.0
+    sigma_max: float = 0.0
+    t0: float = 0.0
+    tmelt: float = 0.0
+    rhoc_p: float = 0.0
+    pmin: float = 0.0
+    b1: float = 0.0
+    b2: float = 0.0
+    h: float = 0.0
+    f: float = 0.0
+    title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @property
+    def e(self) -> float:
+        return self.e0
+
+    @property
+    def sigma_0(self) -> float:
+        return self.sigy
+
+    @property
+    def hard(self) -> float:
+        return self.n
+
+
+MatSteinb = MatLaw49
+MatSteinberg = MatLaw49
+MatSteinbergGuinan = MatLaw49
+
+
+@dataclass
+class MatLaw76:
+    """/MAT/LAW76 or /MAT/SAMP (M184): Semi-Analytical Model for Plastics (SAMP)."""
+    id: int
+    rho: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    fun_d1: int = 0
+    fun_d2: int = 0
+    fun_d3: int = 0
+    fun_d4: int = 0
+    fscale11: float = 1.0
+    fscale22: float = 1.0
+    fscale33: float = 1.0
+    fscale12: float = 1.0
+    facx: float = 1.0
+    mat_nut: float = 0.0
+    fun_b5: int = 0
+    mat_pscale: float = 1.0
+    israte: int = 0
+    asrate: float = 0.0
+    epsilon_f: float = 0.0
+    epsilon_0: float = 0.0
+    dc: float = 0.0
+    fun_a1: int = 0
+    fun_a2: int = 0
+    fun_a3: int = 0
+    scale: float = 1.0
+    iform: int = 0
+    iflag: int = 0
+    gflag: int = 0
+    title: str = ""
+
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @property
+    def nu_p(self) -> float:
+        return self.mat_nut
+
+
+MatSamp = MatLaw76
+MatPlasSamp = MatLaw76
+MatSampPlas = MatLaw76
+
+
+@dataclass
+class PropSandwLayer:
+    """Layer definition for /PROP/TYPE11 (SH_SANDW)."""
+    phi: float = 0.0
+    thick: float = 0.0
+    z: float = 0.0
+    mat_id: int = 0
+    f_weight: float = 0.0
+
+
+@dataclass
+class PropType11:
+    """/PROP/TYPE11 or /PROP/SH_SANDW (M184): Sandwich shell property."""
+    id: int
+    ishell: int = 0
+    ismstr: int = 0
+    ish3n: int = 0
+    idrill: int = 0
+    p_thick_fail: float = 0.0
+    hm: float = 0.0
+    hf: float = 0.0
+    hr: float = 0.0
+    dm: float = 0.0
+    dn: float = 0.0
+    nip: int = 0
+    istrain: int = 0
+    thick: float = 0.0
+    ashear: float = 0.0
+    ithick: int = 0
+    iplas: int = 0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    skew_csid: int = 0
+    iorth: int = 0
+    ipos: int = 0
+    ip: int = 0
+    layers: list[PropSandwLayer] = field(default_factory=list)
+    title: str = ""
+
+
+PropShSandw = PropType11
+PropSandwich = PropType11
+
+
+@dataclass
+class PropFabricLayer:
+    """Layer definition for /PROP/TYPE16 (SH_FABR)."""
+    phi: float = 0.0
+    alpha: float = 0.0
+    thick: float = 0.0
+    z: float = 0.0
+    mat_id: int = 0
+
+
+@dataclass
+class PropType16:
+    """/PROP/TYPE16 or /PROP/SH_FABR (M184): Fabric shell property."""
+    id: int
+    ishell: int = 0
+    ismstr: int = 0
+    ish3n: int = 0
+    p_thick_fail: float = 0.0
+    hm: float = 0.0
+    hf: float = 0.0
+    hr: float = 0.0
+    dm: float = 0.0
+    dn: float = 0.0
+    nip: int = 0
+    istrain: int = 0
+    thick: float = 0.0
+    ashear: float = 0.0
+    ithick: int = 0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    skew_id: int = 0
+    ipos: int = 0
+    ip: int = 0
+    layers: list[PropFabricLayer] = field(default_factory=list)
+    title: str = ""
+
+
+PropShFabr = PropType16
+PropFabricShell = PropType16
+PropFabric = PropType16
+
+
+@dataclass
+class PropType17:
+    """/PROP/TYPE17 or /PROP/STACK (M184): Composite ply stack property."""
+    id: int
+    ishell: int = 0
+    ismstr: int = 0
+    ish3n: int = 0
+    idrill: int = 0
+    plyxfem: int = 0
+    z0: float = 0.0
+    vinterply: float = 0.0
+    hm: float = 0.0
+    hf: float = 0.0
+    hr: float = 0.0
+    dm: float = 0.0
+    dn: float = 0.0
+    thick: float = 0.0
+    ashear: float = 0.0
+    ithick: int = 0
+    iplas: int = 0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    skew_id: int = 0
+    iorth: int = 0
+    ipos: int = 0
+    refplane: int = 0
+    title: str = ""
+
+
+PropStack = PropType17
+PropCompStack = PropType17
+
+
+@dataclass
+class PropType44:
+    """/PROP/TYPE44 or /PROP/SPR_CRUS (M184): Crushing frame spring property."""
+    id: int
+    mass: float = 0.0
+    inertia: float = 0.0
+    stiff1: float = 0.0
+    skew_csid: int = 0
+    icoupling: int = 0
+    ifiltr: int = 0
+    k11: float = 0.0
+    k44: float = 0.0
+    k55: float = 0.0
+    k66: float = 0.0
+    idamp: int = 0
+    k5b: float = 0.0
+    k6c: float = 0.0
+    fun_a1: int = 0
+    fun_b1: int = 0
+    fun_a2: int = 0
+    fscale11: float = 1.0
+    fun_b2: int = 0
+    fun_a3: int = 0
+    fun_b3: int = 0
+    fun_a4: int = 0
+    fscale22: float = 1.0
+    fun_b4: int = 0
+    fun_a5: int = 0
+    fun_b5: int = 0
+    fun_a6: int = 0
+    fscale33: float = 1.0
+    fun_b6: int = 0
+    fun_c1: int = 0
+    fun_c2: int = 0
+    fun_c3: int = 0
+    fscale12: float = 1.0
+    fun_c4: int = 0
+    fun_c5: int = 0
+    fun_c6: int = 0
+    fun_d1: int = 0
+    fscale23: float = 1.0
+    fun_d2: int = 0
+    fun_d3: int = 0
+    fun_d4: int = 0
+    fun_d5: int = 0
+    fscale13: float = 1.0
+    strain1: float = 0.0
+    strain2: float = 0.0
+    strain3: float = 0.0
+    strain4: float = 0.0
+    strain5: float = 0.0
+    strain6: float = 0.0
+    strain7: float = 0.0
+    fct_d_x: int = 0
+    dscale_x: float = 0.0
+    f_x: float = 0.0
+    fct_d_y: int = 0
+    dscale_y: float = 0.0
+    f_y: float = 0.0
+    fct_d_z: int = 0
+    dscale_z: float = 0.0
+    f_z: float = 0.0
+    fct_d_xx: int = 0
+    dscale_xx: float = 0.0
+    f_xx: float = 0.0
+    fct_d_yy: int = 0
+    dscale_yy: float = 0.0
+    f_yy: float = 0.0
+    fct_d_zz: int = 0
+    dscale_zz: float = 0.0
+    f_zz: float = 0.0
+    title: str = ""
+
+
+PropSprCrus = PropType44
+PropCrushSpring = PropType44
+PropSpringCrush = PropType44
+
+
 
 
 
