@@ -7027,6 +7027,157 @@ class PropType22:
     title: str = ""
 
 
+@dataclass
+class FailFabric:
+    """/FAIL/FABRIC or /FAIL/FABR (M181): Fabric failure criterion."""
+    id: int = 0
+    mat_id: int = 0
+    epsilon_f1: float = 0.0
+    epsilon_r1: float = 0.0
+    epsilon_f2: float = 0.0
+    epsilon_r2: float = 0.0
+    ndir: int = 0
+    fct_id: int = 0
+    fail_id: int = 0
+
+
+@dataclass
+class FailHoffman:
+    """/FAIL/HOFFMAN (M181): Hoffman 3D orthotropic failure criterion."""
+    id: int = 0
+    mat_id: int = 0
+    sigma_1t: float = 0.0
+    sigma_2t: float = 0.0
+    sigma_1c: float = 0.0
+    sigma_2c: float = 0.0
+    sigma_12: float = 0.0
+    tau_max: float = 0.0
+    fcut: float = 0.0
+    ifail_sh: int = 1
+    ifail_so: int = 0
+    fail_id: int = 0
+
+
+@dataclass
+class FailMaxStrain:
+    """/FAIL/MAX_STRAIN or /FAIL/MAXSTRAIN (M181): Maximum strain failure model."""
+    id: int = 0
+    mat_id: int = 0
+    eps1_max: float = 0.0
+    eps2_max: float = 0.0
+    gam12_max: float = 0.0
+    tau_max: float = 0.0
+    fcut: float = 0.0
+    ifail_sh: int = 1
+    ifail_so: int = 0
+    fail_id: int = 0
+
+
+@dataclass
+class FailTsaiHill:
+    """/FAIL/TSAI_HILL or /FAIL/TSAIHILL (M181): Tsai-Hill composite failure criterion."""
+    id: int = 0
+    mat_id: int = 0
+    x11: float = 0.0
+    x22: float = 0.0
+    s12: float = 0.0
+    tau_max: float = 0.0
+    fcut: float = 0.0
+    ifail_sh: int = 1
+    ifail_so: int = 0
+    fail_id: int = 0
+
+
+@dataclass
+class FailTsaiWu:
+    """/FAIL/TSAI_WU or /FAIL/TSAIWU (M181): Tsai-Wu quadratic composite failure criterion."""
+    id: int = 0
+    mat_id: int = 0
+    sigma_1t: float = 0.0
+    sigma_2t: float = 0.0
+    sigma_1c: float = 0.0
+    sigma_2c: float = 0.0
+    sigma_12: float = 0.0
+    alpha: float = 0.0
+    tau_max: float = 0.0
+    fcut: float = 0.0
+    ifail_sh: int = 1
+    ifail_so: int = 0
+    fail_id: int = 0
+
+
+@dataclass
+class PropType6:
+    """/PROP/TYPE6 or /PROP/SOL_ORTH (M181): Solid orthotropic property."""
+    id: int
+    isolid: int = 14
+    ismstr: int = 0
+    icpre: int = 0
+    itetra10: int = 0
+    inpts_r: int = 1
+    inpts_s: int = 1
+    inpts_t: int = 1
+    itetra4: int = 0
+    iframe: int = 0
+    dn: float = 0.0
+    qa: float = 1.1
+    qb: float = 0.05
+    h: float = 0.1
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    skew_id: int = 0
+    refplane: int = 0
+    orthtrop: int = 0
+    mat_beta: float = 0.0
+    px: float = 0.0
+    py: float = 0.0
+    pz: float = 0.0
+    deltat_min: float = 0.0
+    vdef_min: float = 0.0
+    vdef_max: float = 0.0
+    asp_max: float = 0.0
+    col_min: float = 0.0
+    ndir: int = 0
+    sphpart_id: int = 0
+    istrain: int = 0
+    ihkt: int = 0
+    title: str = ""
+
+
+PropSolOrth = PropType6
+
+
+@dataclass
+class LoadCload:
+    """/LOAD/CLOAD or /CLOAD (M181): Concentrated nodal load."""
+    id: int
+    curve_id: int = 0
+    dir: str = "X"
+    skew_id: int = 0
+    sens_id: int = 0
+    grnod_id: int = 0
+    xscale: float = 1.0
+    magnitude: float = 1.0
+    title: str = ""
+
+
+@dataclass
+class LoadPload:
+    """/LOAD/PLOAD or /PLOAD (M181): Surface pressure load."""
+    id: int
+    surf_id: int = 0
+    curve_id: int = 0
+    sens_id: int = 0
+    ipinch: int = 0
+    idel: int = 1
+    functype: int = 1
+    xscale: float = 1.0
+    magnitude: float = 1.0
+    title: str = ""
+
+
+
 
 
 

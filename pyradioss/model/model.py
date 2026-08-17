@@ -95,6 +95,7 @@ from .entities import (
     BcsWall, SeatbeltSystem, AmsControl,
     BcsCyclic, PcylLoad, DampVrel, MatLaw113, MatLaw79, MatViscLprony,
     MatLaw190, MatLaw41, FailChang, PropType20, PropType21, PropType22, PropType22Layer,
+    FailFabric, FailHoffman, FailMaxStrain, FailTsaiHill, FailTsaiWu, PropType6, LoadCload, LoadPload,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -1011,6 +1012,14 @@ class Model:
         self.prop_tshells: Dict[int, PropType20] = {}               # /PROP/TYPE20, /PROP/TSHELL (M180)
         self.prop_tsh_orths: Dict[int, PropType21] = {}             # /PROP/TYPE21, /PROP/TSH_ORTH (M180)
         self.prop_tsh_comps: Dict[int, PropType22] = {}             # /PROP/TYPE22, /PROP/TSH_COMP (M180)
+        self.fail_fabrics: Dict[int, FailFabric] = {}               # /FAIL/FABRIC (M181)
+        self.fail_hoffmans: Dict[int, FailHoffman] = {}             # /FAIL/HOFFMAN (M181)
+        self.fail_maxstrains: Dict[int, FailMaxStrain] = {}         # /FAIL/MAX_STRAIN (M181)
+        self.fail_tsaihills: Dict[int, FailTsaiHill] = {}           # /FAIL/TSAI_HILL (M181)
+        self.fail_tsaiwus: Dict[int, FailTsaiWu] = {}               # /FAIL/TSAI_WU (M181)
+        self.prop_sol_orths: Dict[int, PropType6] = {}              # /PROP/TYPE6, /PROP/SOL_ORTH (M181)
+        self.load_cloads: Dict[int, LoadCload] = {}                 # /LOAD/CLOAD, /CLOAD (M181)
+        self.load_ploads: Dict[int, LoadPload] = {}                 # /LOAD/PLOAD, /PLOAD (M181)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

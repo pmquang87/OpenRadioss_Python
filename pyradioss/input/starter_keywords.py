@@ -2706,9 +2706,22 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             ifail_sh = _ival(c2[4] if block.fixed else (c2[3] if len(c2) > 3 else 1), 1) if len(c2) > (4 if block.fixed else 3) else 1
             ifail_so = _ival(c2[5] if block.fixed else (c2[4] if len(c2) > 4 else 0)) if len(c2) > (5 if block.fixed else 4) else 0
 
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            c3 = cards[2].cut("FAIL_TSAIWU_3") if block.fixed else cards[2].tokens()
+            fail_id = _ival(c3[0]) if block.fixed else int(float(c3[0]))
+
+        from ..model.entities import FailTsaiWu
+        model.fail_tsaiwus[mat_id] = FailTsaiWu(
+            id=fail_id or mat_id, mat_id=mat_id,
+            sigma_1t=s1t, sigma_2t=s2t, sigma_1c=s1c, sigma_2c=s2c, sigma_12=s12,
+            alpha=alpha, tau_max=tau_max, fcut=fcut,
+            ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+        )
         params = {
             "sigma_1t": s1t, "sigma_2t": s2t, "sigma_1c": s1c, "sigma_2c": s2c, "sigma_12": s12,
             "alpha": alpha, "tau_max": tau_max, "fcut": fcut, "ifail_so": ifail_so,
+            "fail_id": fail_id,
         }
         fm = FailureModel(type="TSAIWU", ifail_sh=ifail_sh, params=params)
     elif kind == "TSAIHILL":
@@ -2725,9 +2738,21 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             tau_max = _fval(c2[0]) if len(c2) > 0 else 0.0
             fcut = _fval(c2[1]) if len(c2) > 1 else 0.0
 
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            c3 = cards[2].cut("FAIL_TSAIHILL_3") if block.fixed else cards[2].tokens()
+            fail_id = _ival(c3[0]) if block.fixed else int(float(c3[0]))
+
+        from ..model.entities import FailTsaiHill
+        model.fail_tsaihills[mat_id] = FailTsaiHill(
+            id=fail_id or mat_id, mat_id=mat_id,
+            x11=x11, x22=x22, s12=s12,
+            tau_max=tau_max, fcut=fcut,
+            ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+        )
         params = {
             "x11": x11, "x22": x22, "s12": s12, "ifail_so": ifail_so,
-            "tau_max": tau_max, "fcut": fcut,
+            "tau_max": tau_max, "fcut": fcut, "fail_id": fail_id,
         }
         fm = FailureModel(type="TSAIHILL", ifail_sh=ifail_sh, params=params)
     elif kind == "HOFFMAN":
@@ -2746,9 +2771,21 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             ifail_sh = _ival(c2[3] if block.fixed else (c2[2] if len(c2) > 2 else 1), 1) if len(c2) > (3 if block.fixed else 2) else 1
             ifail_so = _ival(c2[4] if block.fixed else (c2[3] if len(c2) > 3 else 0)) if len(c2) > (4 if block.fixed else 3) else 0
 
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            c3 = cards[2].cut("FAIL_HOFFMAN_3") if block.fixed else cards[2].tokens()
+            fail_id = _ival(c3[0]) if block.fixed else int(float(c3[0]))
+
+        from ..model.entities import FailHoffman
+        model.fail_hoffmans[mat_id] = FailHoffman(
+            id=fail_id or mat_id, mat_id=mat_id,
+            sigma_1t=s1t, sigma_2t=s2t, sigma_1c=s1c, sigma_2c=s2c, sigma_12=s12,
+            tau_max=tau_max, fcut=fcut,
+            ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+        )
         params = {
             "sigma_1t": s1t, "sigma_2t": s2t, "sigma_1c": s1c, "sigma_2c": s2c, "sigma_12": s12,
-            "tau_max": tau_max, "fcut": fcut, "ifail_so": ifail_so,
+            "tau_max": tau_max, "fcut": fcut, "ifail_so": ifail_so, "fail_id": fail_id,
         }
         fm = FailureModel(type="HOFFMAN", ifail_sh=ifail_sh, params=params)
     elif kind == "MAXSTRAIN":
@@ -2765,9 +2802,21 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             tau_max = _fval(c2[0]) if len(c2) > 0 else 0.0
             fcut = _fval(c2[1]) if len(c2) > 1 else 0.0
 
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            c3 = cards[2].cut("FAIL_MAXSTRAIN_3") if block.fixed else cards[2].tokens()
+            fail_id = _ival(c3[0]) if block.fixed else int(float(c3[0]))
+
+        from ..model.entities import FailMaxStrain
+        model.fail_maxstrains[mat_id] = FailMaxStrain(
+            id=fail_id or mat_id, mat_id=mat_id,
+            eps1_max=e1, eps2_max=e2, gam12_max=g12,
+            tau_max=tau_max, fcut=fcut,
+            ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+        )
         params = {
             "eps1_max": e1, "eps2_max": e2, "gam12_max": g12, "ifail_so": ifail_so,
-            "tau_max": tau_max, "fcut": fcut,
+            "tau_max": tau_max, "fcut": fcut, "fail_id": fail_id,
         }
         fm = FailureModel(type="MAXSTRAIN", ifail_sh=ifail_sh, params=params)
     elif kind == "HASHIN":
@@ -2932,25 +2981,36 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 eps_dot0 = float(t2[1]) if len(t2) > 1 else 1.0e-20
         params = {"a_emc": a_emc, "n_emc": n_emc, "b0": b0, "c": c_val, "gamma": gamma, "eps_dot_0": eps_dot0}
         fm = FailureModel(type="EMC", ifail_sh=1, params=params)
-    elif kind == "FABRIC":
-        # Card 1: Epsilon_f1, Epsilon_r1, Epsilon_f2, Epsilon_r2, NDIR, fct_ID
-        if block.fixed:
-            c1 = cards[0].cut("FAIL_FABRIC_1")
-            eps_f1 = _fval(c1[0]) if len(c1) > 0 else 0.0
-            eps_r1 = _fval(c1[1]) if len(c1) > 1 else 0.0
-            eps_f2 = _fval(c1[2]) if len(c1) > 2 else 0.0
-            eps_r2 = _fval(c1[3]) if len(c1) > 3 else 0.0
-            ndir = _ival(c1[4]) if len(c1) > 4 else 0
-            fct_id = _ival(c1[5]) if len(c1) > 5 else 0
-        else:
-            t1 = cards[0].tokens()
-            eps_f1 = float(t1[0]) if len(t1) > 0 else 0.0
-            eps_r1 = float(t1[1]) if len(t1) > 1 else 0.0
-            eps_f2 = float(t1[2]) if len(t1) > 2 else 0.0
-            eps_r2 = float(t1[3]) if len(t1) > 3 else 0.0
-            ndir = int(float(t1[4])) if len(t1) > 4 else 0
-            fct_id = int(float(t1[5])) if len(t1) > 5 else 0
-        params = {"eps_f1": eps_f1, "eps_r1": eps_r1, "eps_f2": eps_f2, "eps_r2": eps_r2, "ndir": ndir, "fct_id": fct_id}
+    elif kind in ("FABRIC", "FABR"):
+        c1 = cards[0].cut("FAIL_FABRIC_1") if block.fixed else cards[0].tokens()
+        eps_f1 = _fval(c1[0]) if len(c1) > 0 else 0.0
+        eps_r1 = _fval(c1[1]) if len(c1) > 1 else 0.0
+        eps_f2 = _fval(c1[2]) if len(c1) > 2 else 0.0
+        eps_r2 = _fval(c1[3]) if len(c1) > 3 else 0.0
+        ndir = _ival(c1[5] if block.fixed else (c1[4] if len(c1) > 4 else 0)) if len(c1) > (5 if block.fixed else 4) else 0
+
+        fct_id = 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_FABRIC_2") if block.fixed else cards[1].tokens()
+            fct_id = _ival(c2[0]) if block.fixed else int(float(c2[0]))
+        elif not block.fixed and len(c1) > 5:
+            fct_id = int(float(c1[5]))
+
+        fail_id = 0
+        if len(cards) > 2 and not cards[2].is_blank:
+            c3 = cards[2].cut("FAIL_FABRIC_3") if block.fixed else cards[2].tokens()
+            fail_id = _ival(c3[0]) if block.fixed else int(float(c3[0]))
+
+        from ..model.entities import FailFabric
+        model.fail_fabrics[mat_id] = FailFabric(
+            id=fail_id or mat_id, mat_id=mat_id,
+            epsilon_f1=eps_f1, epsilon_r1=eps_r1, epsilon_f2=eps_f2, epsilon_r2=eps_r2,
+            ndir=ndir, fct_id=fct_id, fail_id=fail_id,
+        )
+        params = {
+            "eps_f1": eps_f1, "eps_r1": eps_r1, "eps_f2": eps_f2, "eps_r2": eps_r2,
+            "ndir": ndir, "fct_id": fct_id, "fail_id": fail_id,
+        }
         fm = FailureModel(type="FABRIC", ifail_sh=1, params=params)
     elif kind == "SPALLING":
         from ..model.entities import FailSpalling
@@ -4385,80 +4445,131 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             params["ip"] = int(float(t3[5])) if len(t3) > 5 else 0
 
     elif ptype == 6:  # SOL_ORTH
-        params = {"isolid": 0, "ismstr": 0, "icpre": 0, "itetra10": 0, "nbp": 0, "itetra4": 0, "iframe": 0, "dn": 0.0,
+        params = {"isolid": 14, "ismstr": 0, "icpre": 0, "itetra10": 0, "nbp": 0,
+                  "inpts_r": 1, "inpts_s": 1, "inpts_t": 1, "itetra4": 0, "iframe": 0, "dn": 0.0,
                   "qa": 1.1, "qb": 0.05, "h": 0.1,
-                  "vx": 1.0, "vy": 0.0, "vz": 0.0, "skew_id": 0, "ip": 0, "iorth": 0,
+                  "vx": 0.0, "vy": 0.0, "vz": 0.0, "skew_id": 0, "ip": 0, "iorth": 0,
                   "phi": 0.0, "px": 0.0, "py": 0.0, "pz": 0.0,
-                  "deltat_min": 0.0, "istrain": 0, "ihkt": 0}
+                  "deltat_min": 0.0, "vdef_min": 0.0, "vdef_max": 0.0, "asp_max": 0.0, "col_min": 0.0,
+                  "ndir": 0, "sphpart_id": 0, "istrain": 0, "ihkt": 0}
         if block.fixed:
             if len(cards) >= 1 and not cards[0].is_blank:
                 f = cards[0].cut("PROP_SOL_ORTH_1")
-                params["isolid"] = _ival(f[0])
+                params["isolid"] = _ival(f[0], 14) if len(f) > 0 and f[0].strip() else 14
                 params["ismstr"] = _ival(f[1]) if len(f) > 1 else 0
                 params["icpre"] = _ival(f[3]) if len(f) > 3 else 0
                 params["itetra10"] = _ival(f[4]) if len(f) > 4 else 0
-                params["nbp"] = _ival(f[5]) if len(f) > 5 else 0
+                nbp = _ival(f[5]) if len(f) > 5 else 0
+                params["nbp"] = nbp
+                if nbp > 200:
+                    params["inpts_r"] = nbp // 100
+                    rem = nbp % 100
+                    params["inpts_s"] = rem // 10
+                    params["inpts_t"] = rem % 10
+                elif nbp > 0:
+                    params["inpts_r"] = nbp
+                    params["inpts_s"] = nbp
+                    params["inpts_t"] = nbp
                 params["itetra4"] = _ival(f[6]) if len(f) > 6 else 0
                 params["iframe"] = _ival(f[7]) if len(f) > 7 else 0
                 params["dn"] = _fval(f[8]) if len(f) > 8 else 0.0
             if len(cards) >= 2 and not cards[1].is_blank:
-                h = cards[1].cut("PROP_SOLID_Q")
-                params["qa"] = _fval(h[0]) or 1.1
-                params["qb"] = _fval(h[1]) or 0.05
-                params["h"] = _fval(h[2]) or 0.1
+                h = cards[1].cut("PROP_SOL_ORTH_2")
+                params["qa"] = _fval(h[0], 1.1) if len(h) > 0 and h[0].strip() else 1.1
+                params["qb"] = _fval(h[1], 0.05) if len(h) > 1 and h[1].strip() else 0.05
+                params["h"] = _fval(h[2], 0.1) if len(h) > 2 and h[2].strip() else 0.1
             if len(cards) >= 3 and not cards[2].is_blank:
-                v = cards[2].cut("PROP_SOL_ORTH_VEC")
-                params["vx"] = _fval(v[0]) or 1.0
-                params["vy"] = _fval(v[1])
-                params["vz"] = _fval(v[2])
+                v = cards[2].cut("PROP_SOL_ORTH_3")
+                params["vx"] = _fval(v[0]) if len(v) > 0 else 0.0
+                params["vy"] = _fval(v[1]) if len(v) > 1 else 0.0
+                params["vz"] = _fval(v[2]) if len(v) > 2 else 0.0
                 params["skew_id"] = _ival(v[3]) if len(v) > 3 else 0
                 params["ip"] = _ival(v[4]) if len(v) > 4 else 0
                 params["iorth"] = _ival(v[5]) if len(v) > 5 else 0
             if len(cards) >= 4 and not cards[3].is_blank:
-                ang = cards[3].cut("PROP_SOL_ORTH_ANG")
-                params["phi"] = _fval(ang[0])
+                ang = cards[3].cut("PROP_SOL_ORTH_4")
+                params["phi"] = _fval(ang[0]) if len(ang) > 0 else 0.0
                 params["px"] = _fval(ang[1]) if len(ang) > 1 else 0.0
                 params["py"] = _fval(ang[2]) if len(ang) > 2 else 0.0
                 params["pz"] = _fval(ang[3]) if len(ang) > 3 else 0.0
             if len(cards) >= 5 and not cards[4].is_blank:
-                dt = cards[4].cut("PROP_SOL_ORTH_DT")
-                params["deltat_min"] = _fval(dt[0])
-                params["istrain"] = _ival(dt[1]) if len(dt) > 1 else 0
-                params["ihkt"] = _ival(dt[2]) if len(dt) > 2 else 0
+                toks5 = cards[4].tokens()
+                if len(toks5) <= 3 and len(cards[4].raw.rstrip()) <= 50:
+                    dt = cards[4].cut("PROP_SOL_ORTH_DT")
+                    params["deltat_min"] = _fval(dt[0]) if len(dt) > 0 else 0.0
+                    params["istrain"] = _ival(dt[1]) if len(dt) > 1 else 0
+                    params["ihkt"] = _ival(dt[2]) if len(dt) > 2 else 0
+                else:
+                    dt = cards[4].cut("PROP_SOL_ORTH_5")
+                    params["deltat_min"] = _fval(dt[0]) if len(dt) > 0 else 0.0
+                    params["vdef_min"] = _fval(dt[1]) if len(dt) > 1 else 0.0
+                    params["vdef_max"] = _fval(dt[2]) if len(dt) > 2 else 0.0
+                    params["asp_max"] = _fval(dt[3]) if len(dt) > 3 else 0.0
+                    params["col_min"] = _fval(dt[4]) if len(dt) > 4 else 0.0
+            if len(cards) >= 6 and not cards[5].is_blank:
+                f6 = cards[5].cut("PROP_SOL_ORTH_6")
+                params["ndir"] = _ival(f6[0]) if len(f6) > 0 else 0
+                params["sphpart_id"] = _ival(f6[1]) if len(f6) > 1 else 0
         else:
             t0 = cards[0].tokens() if len(cards) > 0 else []
-            params["isolid"] = int(float(t0[0])) if len(t0) > 0 else 0
+            params["isolid"] = int(float(t0[0])) if len(t0) > 0 else 14
             params["ismstr"] = int(float(t0[1])) if len(t0) > 1 else 0
             params["icpre"] = int(float(t0[2])) if len(t0) > 2 else 0
             params["itetra10"] = int(float(t0[3])) if len(t0) > 3 else 0
-            params["nbp"] = int(float(t0[4])) if len(t0) > 4 else 0
+            nbp = int(float(t0[4])) if len(t0) > 4 else 0
+            params["nbp"] = nbp
+            if nbp > 200:
+                params["inpts_r"] = nbp // 100
+                rem = nbp % 100
+                params["inpts_s"] = rem // 10
+                params["inpts_t"] = rem % 10
+            elif nbp > 0:
+                params["inpts_r"] = nbp
+                params["inpts_s"] = nbp
+                params["inpts_t"] = nbp
             params["itetra4"] = int(float(t0[5])) if len(t0) > 5 else 0
             params["iframe"] = int(float(t0[6])) if len(t0) > 6 else 0
             params["dn"] = float(t0[7]) if len(t0) > 7 else 0.0
 
-            t1 = cards[1].tokens() if len(cards) > 1 else []
-            params["qa"] = float(t1[0]) if len(t1) > 0 else 1.1
-            params["qb"] = float(t1[1]) if len(t1) > 1 else 0.05
-            params["h"] = float(t1[2]) if len(t1) > 2 else 0.1
+            if len(cards) > 1 and not cards[1].is_blank:
+                t1 = cards[1].tokens()
+                params["qa"] = float(t1[0]) if len(t1) > 0 else 1.1
+                params["qb"] = float(t1[1]) if len(t1) > 1 else 0.05
+                params["h"] = float(t1[2]) if len(t1) > 2 else 0.1
 
-            t2 = cards[2].tokens() if len(cards) > 2 else []
-            params["vx"] = float(t2[0]) if len(t2) > 0 else 1.0
-            params["vy"] = float(t2[1]) if len(t2) > 1 else 0.0
-            params["vz"] = float(t2[2]) if len(t2) > 2 else 0.0
-            params["skew_id"] = int(float(t2[3])) if len(t2) > 3 else 0
-            params["ip"] = int(float(t2[4])) if len(t2) > 4 else 0
-            params["iorth"] = int(float(t2[5])) if len(t2) > 5 else 0
+            if len(cards) > 2 and not cards[2].is_blank:
+                t2 = cards[2].tokens()
+                params["vx"] = float(t2[0]) if len(t2) > 0 else 0.0
+                params["vy"] = float(t2[1]) if len(t2) > 1 else 0.0
+                params["vz"] = float(t2[2]) if len(t2) > 2 else 0.0
+                params["skew_id"] = int(float(t2[3])) if len(t2) > 3 else 0
+                params["ip"] = int(float(t2[4])) if len(t2) > 4 else 0
+                params["iorth"] = int(float(t2[5])) if len(t2) > 5 else 0
 
-            t3 = cards[3].tokens() if len(cards) > 3 else []
-            params["phi"] = float(t3[0]) if len(t3) > 0 else 0.0
-            params["px"] = float(t3[1]) if len(t3) > 1 else 0.0
-            params["py"] = float(t3[2]) if len(t3) > 2 else 0.0
-            params["pz"] = float(t3[3]) if len(t3) > 3 else 0.0
+            if len(cards) > 3 and not cards[3].is_blank:
+                t3 = cards[3].tokens()
+                params["phi"] = float(t3[0]) if len(t3) > 0 else 0.0
+                params["px"] = float(t3[1]) if len(t3) > 1 else 0.0
+                params["py"] = float(t3[2]) if len(t3) > 2 else 0.0
+                params["pz"] = float(t3[3]) if len(t3) > 3 else 0.0
 
-            t4 = cards[4].tokens() if len(cards) > 4 else []
-            params["deltat_min"] = float(t4[0]) if len(t4) > 0 else 0.0
-            params["istrain"] = int(float(t4[1])) if len(t4) > 1 else 0
-            params["ihkt"] = int(float(t4[2])) if len(t4) > 2 else 0
+            if len(cards) > 4 and not cards[4].is_blank:
+                t4 = cards[4].tokens()
+                if len(t4) <= 3:
+                    params["deltat_min"] = float(t4[0]) if len(t4) > 0 else 0.0
+                    params["istrain"] = int(float(t4[1])) if len(t4) > 1 else 0
+                    params["ihkt"] = int(float(t4[2])) if len(t4) > 2 else 0
+                else:
+                    params["deltat_min"] = float(t4[0]) if len(t4) > 0 else 0.0
+                    params["vdef_min"] = float(t4[1]) if len(t4) > 1 else 0.0
+                    params["vdef_max"] = float(t4[2]) if len(t4) > 2 else 0.0
+                    params["asp_max"] = float(t4[3]) if len(t4) > 3 else 0.0
+                    params["col_min"] = float(t4[4]) if len(t4) > 4 else 0.0
+
+            if len(cards) > 5 and not cards[5].is_blank:
+                t5 = cards[5].tokens()
+                params["ndir"] = int(float(t5[0])) if len(t5) > 0 else 0
+                params["sphpart_id"] = int(float(t5[1])) if len(t5) > 1 else 0
 
     elif ptype == 20:  # TSHELL
         params = {"thick": 1.0, "nip": 3, "hm": 0.01, "hf": 0.01, "hr": 0.01,
@@ -5988,6 +6099,44 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 ashear=float(params.get("ashear", 0.833333)),
                 layers=ly_objs,
                 deltat_min=float(params.get("deltat_min", 0.0)),
+                title=title,
+            )
+        elif ptype == 6:
+            from ..model.entities import PropType6
+            model.prop_sol_orths[block.user_id] = PropType6(
+                id=block.user_id,
+                isolid=int(params.get("isolid", 14)),
+                ismstr=int(params.get("ismstr", 0)),
+                icpre=int(params.get("icpre", 0)),
+                itetra10=int(params.get("itetra10", 0)),
+                inpts_r=int(params.get("inpts_r", 1)),
+                inpts_s=int(params.get("inpts_s", 1)),
+                inpts_t=int(params.get("inpts_t", 1)),
+                itetra4=int(params.get("itetra4", 0)),
+                iframe=int(params.get("iframe", 0)),
+                dn=float(params.get("dn", 0.0)),
+                qa=float(params.get("qa", 1.1)),
+                qb=float(params.get("qb", 0.05)),
+                h=float(params.get("h", 0.1)),
+                vx=float(params.get("vx", 0.0)),
+                vy=float(params.get("vy", 0.0)),
+                vz=float(params.get("vz", 0.0)),
+                skew_id=int(params.get("skew_id", 0)),
+                refplane=int(params.get("ip", 0)),
+                orthtrop=int(params.get("iorth", 0)),
+                mat_beta=float(params.get("phi", 0.0)),
+                px=float(params.get("px", 0.0)),
+                py=float(params.get("py", 0.0)),
+                pz=float(params.get("pz", 0.0)),
+                deltat_min=float(params.get("deltat_min", 0.0)),
+                vdef_min=float(params.get("vdef_min", 0.0)),
+                vdef_max=float(params.get("vdef_max", 0.0)),
+                asp_max=float(params.get("asp_max", 0.0)),
+                col_min=float(params.get("col_min", 0.0)),
+                ndir=int(params.get("ndir", 0)),
+                sphpart_id=int(params.get("sphpart_id", 0)),
+                istrain=int(params.get("istrain", 0)),
+                ihkt=int(params.get("ihkt", 0)),
                 title=title,
             )
 
@@ -8546,6 +8695,18 @@ def read_cload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             scale=scale if scale != 0.0 else 1.0,
             time_scale=_fval(f[6], 1.0),
             sens_id=_ival(f[3]), title=title))
+        from ..model.entities import LoadCload
+        model.load_cloads[block.user_id] = LoadCload(
+            id=block.user_id,
+            curve_id=_ival(f[0]),
+            dir=f[1].strip() or "X",
+            skew_id=_ival(f[2]),
+            sens_id=_ival(f[3]),
+            grnod_id=_ival(f[4]),
+            xscale=_fval(f[6], 1.0) if _fval(f[6], 1.0) != 0.0 else 1.0,
+            magnitude=scale if scale != 0.0 else 1.0,
+            title=title,
+        )
         return
     title, cards = _title_and_data(block)
     if not cards:
@@ -8556,6 +8717,16 @@ def read_cload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=block.user_id, funct_id=int(t[0]), direction=_direction(t[1]),
         grnod_id=int(t[2]), scale=float(t[3]) if len(t) > 3 else 1.0,
         sens_id=int(float(t[4])) if len(t) > 4 else 0, title=title))
+    from ..model.entities import LoadCload
+    model.load_cloads[block.user_id] = LoadCload(
+        id=block.user_id,
+        curve_id=int(t[0]) if len(t) > 0 else 0,
+        dir=t[1].strip() if len(t) > 1 else "X",
+        grnod_id=int(t[2]) if len(t) > 2 else 0,
+        magnitude=float(t[3]) if len(t) > 3 else 1.0,
+        sens_id=int(float(t[4])) if len(t) > 4 else 0,
+        title=title,
+    )
 
 
 def read_load_centri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -9148,6 +9319,10 @@ def read_load(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
     if sub in ("CENTRI", "CENTRIF"):
         read_load_centri(block, model, log)
+    elif sub == "CLOAD":
+        read_cload(block, model, log)
+    elif sub == "PLOAD":
+        read_pload(block, model, log)
     elif sub == "PBLAST":
         read_pblast(block, model, log)
     elif sub == "PCYL":
@@ -9665,25 +9840,76 @@ def read_pload(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             log.error(f"/PLOAD/{block.user_id}: missing data card",
                       block.source)
             return
-        f = cards[0].cut("PLOAD")
-        scale = _fval(f[5], 1.0)
+        raw = cards[0].raw
+        if len(cards[0].tokens()) >= 6 or (len(raw) >= 60 and raw[30:60].strip()):
+            f = cards[0].cut("LOAD_PLOAD_2023")
+            surf_id = _ival(f[0]) if len(f) > 0 else 0
+            funct_id = _ival(f[1]) if len(f) > 1 else 0
+            sens_id = _ival(f[2]) if len(f) > 2 else 0
+            ipinch = _ival(f[3]) if len(f) > 3 else 0
+            idel = _ival(f[4], 1) if len(f) > 4 and f[4].strip() else 1
+            functype = _ival(f[5], 1) if len(f) > 5 and f[5].strip() else 1
+            xscale = _fval(f[6], 1.0) if len(f) > 6 and f[6].strip() else 1.0
+            magnitude = _fval(f[7], 1.0) if len(f) > 7 and f[7].strip() else 1.0
+        else:
+            f = cards[0].cut("PLOAD")
+            surf_id = _ival(f[0]) if len(f) > 0 else 0
+            funct_id = _ival(f[1]) if len(f) > 1 else 0
+            sens_id = _ival(f[2]) if len(f) > 2 else 0
+            ipinch = 0
+            idel = 1
+            functype = 1
+            xscale = _fval(f[4], 1.0) if len(f) > 4 and f[4].strip() else 1.0
+            magnitude = _fval(f[5], 1.0) if len(f) > 5 and f[5].strip() else 1.0
+        scale = magnitude if magnitude != 0.0 else 1.0
         _warn_ignored(log, f"/PLOAD/{block.user_id}", block.source,
-                      [("Ascale_x", f[4] if _fval(f[4]) not in (0.0, 1.0)
+                      [("Ascale_x", str(xscale) if xscale not in (0.0, 1.0)
                         else "")])
         model.ploads.append(PressureLoad(
-            id=block.user_id, surf_id=_ival(f[0]), funct_id=_ival(f[1]),
-            scale=scale if scale != 0.0 else 1.0,
-            sens_id=_ival(f[2]), title=title))
+            id=block.user_id, surf_id=surf_id, funct_id=funct_id,
+            scale=scale, sens_id=sens_id, title=title))
+        from ..model.entities import LoadPload
+        model.load_ploads[block.user_id] = LoadPload(
+            id=block.user_id, surf_id=surf_id, curve_id=funct_id,
+            sens_id=sens_id, ipinch=ipinch, idel=idel, functype=functype,
+            xscale=xscale if xscale != 0.0 else 1.0,
+            magnitude=scale, title=title,
+        )
         return
     title, cards = _title_and_data(block)
     if not cards:
         log.error(f"/PLOAD/{block.user_id}: missing data card", block.source)
         return
     t = cards[0].tokens()
+    if len(t) >= 6:
+        surf_id = int(float(t[0])) if len(t) > 0 else 0
+        funct_id = int(float(t[1])) if len(t) > 1 else 0
+        sens_id = int(float(t[2])) if len(t) > 2 else 0
+        ipinch = int(float(t[3])) if len(t) > 3 else 0
+        idel = int(float(t[4])) if len(t) > 4 else 1
+        functype = int(float(t[5])) if len(t) > 5 else 1
+        xscale = float(t[6]) if len(t) > 6 else 1.0
+        magnitude = float(t[7]) if len(t) > 7 else 1.0
+    else:
+        surf_id = int(float(t[0])) if len(t) > 0 else 0
+        funct_id = int(float(t[1])) if len(t) > 1 else 0
+        magnitude = float(t[2]) if len(t) > 2 else 1.0
+        sens_id = int(float(t[3])) if len(t) > 3 else 0
+        ipinch = 0
+        idel = 1
+        functype = 1
+        xscale = 1.0
+    scale = magnitude if magnitude != 0.0 else 1.0
     model.ploads.append(PressureLoad(
-        id=block.user_id, surf_id=int(t[0]), funct_id=int(t[1]),
-        scale=float(t[2]) if len(t) > 2 else 1.0,
-        sens_id=int(float(t[3])) if len(t) > 3 else 0, title=title))
+        id=block.user_id, surf_id=surf_id, funct_id=funct_id,
+        scale=scale, sens_id=sens_id, title=title))
+    from ..model.entities import LoadPload
+    model.load_ploads[block.user_id] = LoadPload(
+        id=block.user_id, surf_id=surf_id, curve_id=funct_id,
+        sens_id=sens_id, ipinch=ipinch, idel=idel, functype=functype,
+        xscale=xscale if xscale != 0.0 else 1.0,
+        magnitude=scale, title=title,
+    )
 
 
 def read_admas(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -28215,6 +28441,22 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PROP_TSH_COMP": read_prop,
     "TSH_COMP": read_prop,
     "PROP_P22_TSH_COMP": read_prop,
+    # M181: FAIL_FABRIC, FAIL_HOFFMAN, FAIL_MAXSTRAIN, FAIL_TSAIHILL, FAIL_TSAIWU, PROP_TYPE6, PROP_SOL_ORTH, LOAD_CLOAD, LOAD_PLOAD
+    "FAIL_FABRIC": read_fail,
+    "FAIL_FABR": read_fail,
+    "FAIL_HOFFMAN": read_fail,
+    "FAIL_MAX_STRAIN": read_fail,
+    "FAIL_MAXSTRAIN": read_fail,
+    "FAIL_TSAI_HILL": read_fail,
+    "FAIL_TSAIHILL": read_fail,
+    "FAIL_TSAI_WU": read_fail,
+    "FAIL_TSAIWU": read_fail,
+    "PROP_TYPE6": read_prop,
+    "PROP_SOL_ORTH": read_prop,
+    "SOL_ORTH": read_prop,
+    "PROP_P6_SOL_ORTH": read_prop,
+    "LOAD_CLOAD": read_cload,
+    "LOAD_PLOAD": read_pload,
 }
 
 

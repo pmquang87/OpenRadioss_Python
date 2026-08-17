@@ -1892,6 +1892,28 @@ LAYOUTS: Dict[str, List[int]] = {
     "PROP_TYPE22_4": [20],
     "PROP_TYPE22_LAYER": [20, 20, 20, 10],
     "PROP_TYPE22_5": [20],
+    # M181: FAIL_FABRIC, FAIL_HOFFMAN, FAIL_MAXSTRAIN, FAIL_TSAIHILL, FAIL_TSAIWU, PROP_TYPE6, PROP_SOL_ORTH, LOAD_CLOAD, LOAD_PLOAD
+    "FAIL_FABRIC_1": [20, 20, 20, 20, 10, 10],
+    "FAIL_FABRIC_2": [20],
+    "FAIL_FABRIC_3": [10],
+    "FAIL_HOFFMAN_3": [10],
+    "FAIL_MAXSTRAIN_3": [10],
+    "FAIL_TSAIHILL_3": [10],
+    "FAIL_TSAIWU_3": [10],
+    "PROP_TYPE6_1": [10, 10, 10, 10, 10, 10, 10, 10, 20],
+    "PROP_TYPE6_2": [20, 20, 20],
+    "PROP_TYPE6_3": [20, 20, 20, 10, 10, 10],
+    "PROP_TYPE6_4": [20, 20, 20, 20],
+    "PROP_TYPE6_5": [20, 20, 20, 20, 20],
+    "PROP_TYPE6_6": [10, 10],
+    "PROP_SOL_ORTH_1": [10, 10, 10, 10, 10, 10, 10, 10, 20],
+    "PROP_SOL_ORTH_2": [20, 20, 20],
+    "PROP_SOL_ORTH_3": [20, 20, 20, 10, 10, 10],
+    "PROP_SOL_ORTH_4": [20, 20, 20, 20],
+    "PROP_SOL_ORTH_5": [20, 20, 20, 20, 20],
+    "PROP_SOL_ORTH_6": [10, 10],
+    "LOAD_CLOAD_1": [10, 10, 10, 10, 10, 10, 20, 20],
+    "LOAD_PLOAD_2023": [10, 10, 10, 10, 10, 10, 20, 20],
 }
 
 
