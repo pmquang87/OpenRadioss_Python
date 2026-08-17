@@ -6036,6 +6036,206 @@ class MaterialLaw130:
     prucb: float = 0.0
 
 
+@dataclass
+class MaterialLaw128:
+    """/MAT/LAW128 or /MAT/HILL_VISC_PLAST (M175): Hill anisotropic viscoplastic material model.
+
+    Fortran origin: ``starter/source/materials/mat/mat128/hm_read_mat128.F90`` / CFG ``Law128_hill_visc_plast.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    sigy: float = 0.0
+    kin: float = 0.0
+    tab_id: int = 0
+    facy: float = 0.0
+    facx: float = 0.0
+    qr1: float = 0.0
+    cr1: float = 0.0
+    qr2: float = 0.0
+    cr2: float = 0.0
+    qx1: float = 0.0
+    cx1: float = 0.0
+    qx2: float = 0.0
+    cx2: float = 0.0
+    epsp0: float = 0.0
+    cp: float = 0.0
+    r00: float = 1.0
+    r45: float = 1.0
+    r90: float = 1.0
+    f: float = 0.0
+    g: float = 0.0
+    h: float = 0.0
+    l: float = 0.0
+    m: float = 0.0
+    n: float = 0.0
+
+
+@dataclass
+class MaterialLaw129:
+    """/MAT/LAW129 or /MAT/THERM_CREEP (M175): Thermo-elasto-viscoplastic creep material model.
+
+    Fortran origin: ``starter/source/materials/mat/mat129/hm_read_mat129.F90`` / CFG ``Law129_therm_creep.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    sigy: float = 0.0
+    alpha: float = 0.0
+    tref: float = 0.0
+    f_young: int = 0
+    f_nu: int = 0
+    f_yld: int = 0
+    f_alpha: int = 0
+    isensor: int = 0
+    itab: int = 0
+    facy: float = 0.0
+    qr1: float = 0.0
+    cr1: float = 0.0
+    qr2: float = 0.0
+    cr2: float = 0.0
+    f_qr: int = 0
+    f_cr: int = 0
+    qx1: float = 0.0
+    cx1: float = 0.0
+    qx2: float = 0.0
+    cx2: float = 0.0
+    f_qx: int = 0
+    f_cx: int = 0
+    epsp0: float = 0.0
+    cp: float = 0.0
+    f_cc: int = 0
+    f_cp: int = 0
+    crpa: float = 0.0
+    crpn: float = 0.0
+    crpm: float = 0.0
+    f_a: int = 0
+    f_n: int = 0
+    f_m: int = 0
+    crp_law: int = 0
+    crsig: float = 0.0
+    crt: float = 0.0
+    crpq: float = 0.0
+    eps0: float = 0.0
+    f_q: int = 0
+    f_sig: int = 0
+
+
+@dataclass
+class MaterialLaw123:
+    """/MAT/LAW123 or /MAT/DAIMLER_PINHO (M175): Daimler-Pinho 3D composite damage model.
+
+    Fortran origin: ``starter/source/materials/mat/mat123/hm_read_mat123.F90`` / CFG ``matl123_daimler_pinho.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    ea: float = 0.0
+    eb: float = 0.0
+    ec: float = 0.0
+    gab: float = 0.0
+    gca: float = 0.0
+    gbc: float = 0.0
+    prba: float = 0.0
+    prca: float = 0.0
+    prcb: float = 0.0
+    enkink: float = 0.0
+    ena: float = 0.0
+    enb: float = 0.0
+    ent: float = 0.0
+    enl: float = 0.0
+    xc: float = 0.0
+    xt: float = 0.0
+    yc: float = 0.0
+    yt: float = 0.0
+    sl: float = 0.0
+    fio: float = 53.0
+    sigy: float = 0.0
+    lcss: int = 0
+    beta: float = 0.0
+    efs: float = 0.0
+    ratio: float = 0.0
+    fcut: float = 0.0
+
+
+@dataclass
+class MaterialLaw132:
+    """/MAT/LAW132 or /MAT/DAIMLER_CAMANHO (M175): Daimler-Camanho composite failure model.
+
+    Fortran origin: ``starter/source/materials/mat/mat132/hm_read_mat132.F90`` / CFG ``matl132_daimler_camanho.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    ea: float = 0.0
+    eb: float = 0.0
+    ec: float = 0.0
+    gab: float = 0.0
+    gca: float = 0.0
+    gbc: float = 0.0
+    prba: float = 0.0
+    prca: float = 0.0
+    prcb: float = 0.0
+    gxc: float = 0.0
+    gxt: float = 0.0
+    gyc: float = 0.0
+    gyt: float = 0.0
+    gsl: float = 0.0
+    xc: float = 0.0
+    xt: float = 0.0
+    yc: float = 0.0
+    yt: float = 0.0
+    sl: float = 0.0
+    gxc0: float = 0.0
+    gxt0: float = 0.0
+    xc0: float = 0.0
+    xt0: float = 0.0
+    fio: float = 53.0
+    sigy: float = 0.0
+    etan: float = 0.0
+    beta: float = 0.0
+    lcss: int = 0
+    epsf23: float = 0.0
+    epsr23: float = 0.0
+    tsmd23: float = 0.0
+    epsf31: float = 0.0
+    epsr31: float = 0.0
+    tsmd31: float = 0.0
+    ef11t: float = 0.0
+    ef11c: float = 0.0
+    ef22t: float = 0.0
+    ef22c: float = 0.0
+    ef12: float = 0.0
+    ef23: float = 0.0
+    ef31: float = 0.0
+    cf12: float = 0.0
+    cf23: float = 0.0
+    cf31: float = 0.0
+    ratio: float = 0.0
+    fcut: float = 0.0
+
+
+@dataclass
+class MaterialLaw134:
+    """/MAT/LAW134 or /MAT/VISCOUS_FOAM (M175): Viscous foam material model.
+
+    Fortran origin: ``starter/source/materials/mat/mat134/hm_read_mat134.F90`` / CFG ``matl134_viscous_foam.cfg``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    e1: float = 0.0
+    n1: float = 0.0
+    nu: float = 0.0
+    e2: float = 0.0
+    v2: float = 0.0
+    n2: float = 0.0
+
+
 
 
 

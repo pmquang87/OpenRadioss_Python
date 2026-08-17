@@ -83,6 +83,7 @@ from .entities import (
     MaterialLaw66, MaterialLaw35, MaterialLaw62, MaterialLaw28, MaterialLaw44,
     MaterialLaw88, MaterialLaw92, MaterialLaw94, MaterialLaw46, MaterialLaw69,
     MaterialLaw124, MaterialLaw126, MaterialLaw125, MaterialLaw127, MaterialLaw130,
+    MaterialLaw128, MaterialLaw129, MaterialLaw123, MaterialLaw132, MaterialLaw134,
     AirbagInjector, AirbagVenthole,
     ErefElement, IniCrack, PropRivet, PropXelem, AdmeshControl,
     PreloadBolt, LoadHydro,
@@ -976,6 +977,11 @@ class Model:
         self.mat_law125s: Dict[int, MaterialLaw125] = {}           # /MAT/LAW125, /MAT/LAMINATED_COMPOSITE (M174)
         self.mat_law127s: Dict[int, MaterialLaw127] = {}           # /MAT/LAW127, /MAT/ENHANCED_COMPOSITE (M174)
         self.mat_law130s: Dict[int, MaterialLaw130] = {}           # /MAT/LAW130, /MAT/MODIFIED_HONEYCOMB (M174)
+        self.mat_law128s: Dict[int, MaterialLaw128] = {}           # /MAT/LAW128, /MAT/HILL_VISC_PLAST (M175)
+        self.mat_law129s: Dict[int, MaterialLaw129] = {}           # /MAT/LAW129, /MAT/THERM_CREEP (M175)
+        self.mat_law123s: Dict[int, MaterialLaw123] = {}           # /MAT/LAW123, /MAT/DAIMLER_PINHO (M175)
+        self.mat_law132s: Dict[int, MaterialLaw132] = {}           # /MAT/LAW132, /MAT/DAIMLER_CAMANHO (M175)
+        self.mat_law134s: Dict[int, MaterialLaw134] = {}           # /MAT/LAW134, /MAT/VISCOUS_FOAM (M175)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
