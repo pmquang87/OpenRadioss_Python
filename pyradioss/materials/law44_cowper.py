@@ -131,7 +131,7 @@ def resolve(mat: Material, model, log) -> None:
         log.warning(f"/MAT/LAW44/{mat.id}: kinematic hardening "
                     f"(C_hard={p['fisokin']:g}) is not ported — running "
                     f"isotropic", "MAT CHECK")
-    if p["yld_fct"]:
+    if p.get("yld_fct"):
         fct = model.functions.get(p["yld_fct"])
         if fct is None:
             log.error(f"/MAT/LAW44/{mat.id}: yield function "

@@ -5494,6 +5494,175 @@ class MatNonlocalModifier:
     le_max: float = 0.0
 
 
+# ----------------------------------------------------------------------------
+# Advanced Tabular Foam, Viscoelastic Foam, Visco-Hyperelastic, Honeycomb & Cowper-Symonds Material Models (M172)
+# ----------------------------------------------------------------------------
+
+@dataclass
+class MaterialLaw66:
+    """/MAT/LAW66 or /MAT/FOAM_TAB (M172): Tabular foam material model.
+
+    Fortran origin: ``starter/source/materials/mat/mat066/hm_read_mat66.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    ref_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    c_hard: float = 0.0
+    f_cut: float = 0.0
+    fsmooth: int = 0
+    israte: int = 0
+    p_c: float = 0.0
+    p_t: float = 0.0
+    ec: float = 0.0
+    rpct: float = 0.0
+    funct_idc: int = 0
+    funct_idt: int = 0
+    fscalec: float = 1.0
+    fscalet: float = 1.0
+    epsilon_0: float = 0.0
+    c: float = 0.0
+    sigma_y0: float = 0.0
+    vp: int = 0
+    fnyrt_idc: int = 0
+    fnyrt_idt: int = 0
+    yrate_fscalec: float = 1.0
+    yrate_fscalet: float = 1.0
+    nfunc: int = 0
+    tfunc: int = 0
+    func_c_list: List[int] = field(default_factory=list)
+    eps_c_list: List[float] = field(default_factory=list)
+    fscale_c_list: List[float] = field(default_factory=list)
+    func_t_list: List[int] = field(default_factory=list)
+    eps_t_list: List[float] = field(default_factory=list)
+    fscale_t_list: List[float] = field(default_factory=list)
+
+
+@dataclass
+class MaterialLaw35:
+    """/MAT/LAW35 or /MAT/FOAM_VISC (M172): Viscoelastic foam material model.
+
+    Fortran origin: ``starter/source/materials/mat/mat035/hm_read_mat35.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    ref_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    e1: float = 0.0
+    e2: float = 0.0
+    n: float = 0.0
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+    itype: int = 0
+    pmin: float = 0.0
+    func_idf: int = 0
+    fscalepres: float = 1.0
+    fsmooth: int = 0
+    fcut: float = 0.0
+    et: float = 0.0
+    nu_t: float = 0.0
+    eta_0: float = 0.0
+    lamda: float = 0.0
+    p0: float = 0.0
+    phi: float = 0.0
+    gama0: float = 0.0
+
+
+@dataclass
+class MaterialLaw62:
+    """/MAT/LAW62 or /MAT/VISC_HYP (M172): Viscoelastic hyperelastic Ogden material model.
+
+    Fortran origin: ``starter/source/materials/mat/mat062/hm_read_mat62.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    ref_rho: float = 0.0
+    nu: float = 0.0
+    order_n: int = 0
+    order_m: int = 0
+    mu_max: float = 0.0
+    mu_arr: List[float] = field(default_factory=list)
+    alpha_arr: List[float] = field(default_factory=list)
+    gamma_arr: List[float] = field(default_factory=list)
+    tau_arr: List[float] = field(default_factory=list)
+
+
+@dataclass
+class MaterialLaw28:
+    """/MAT/LAW28 or /MAT/HONEYCOMB (M172): Orthotropic honeycomb crushable material model.
+
+    Fortran origin: ``starter/source/materials/mat/mat028/hm_read_mat28.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    ref_rho: float = 0.0
+    e11: float = 0.0
+    e22: float = 0.0
+    e33: float = 0.0
+    g12: float = 0.0
+    g23: float = 0.0
+    g31: float = 0.0
+    fun_a1: int = 0
+    fun_b1: int = 0
+    fun_a2: int = 0
+    gflag: int = 0
+    fscale11: float = 1.0
+    fscale22: float = 1.0
+    fscale33: float = 1.0
+    epsr1: float = 0.0
+    epsr2: float = 0.0
+    epsr3: float = 0.0
+    fun_a3: int = 0
+    fun_b3: int = 0
+    fun_a4: int = 0
+    vflag: int = 0
+    fscale12: float = 1.0
+    fscale23: float = 1.0
+    fscale13: float = 1.0
+    epsr4: float = 0.0
+    epsr5: float = 0.0
+    epsr6: float = 0.0
+
+
+@dataclass
+class MaterialLaw44:
+    """/MAT/LAW44 or /MAT/COWPER_SYMONDS (M172): Cowper-Symonds strain-rate dependent elastoplastic material model.
+
+    Fortran origin: ``starter/source/materials/mat/mat044/hm_read_mat44.F``.
+    """
+    id: int
+    title: str = ""
+    rho0: float = 0.0
+    ref_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    iflag: int = 0
+    a: float = 0.0
+    b: float = 0.0
+    n: float = 0.0
+    hard: float = 0.0
+    sig_max: float = 0.0
+    src: float = 0.0
+    sre: float = 0.0
+    strflag: int = 0
+    fsmooth: int = 0
+    fcut: float = 0.0
+    vflag: int = 0
+    eps_max: float = 0.0
+    eta1: float = 0.0
+    eta2: float = 0.0
+    yld_func: int = 0
+    yld_scale: float = 1.0
+
+
+
 
 
 

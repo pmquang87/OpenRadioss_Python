@@ -80,6 +80,7 @@ from .entities import (
     MaterialPlasZeril, MaterialPlasBodne, MaterialViscProny, MaterialThermStress, DampStiff,
     MaterialConc, MaterialBarlat, MaterialLaw83, MaterialLaw80,
     MaterialLaw117, MaterialLaw90, MaterialLaw33, MatHeatModifier, MatNonlocalModifier,
+    MaterialLaw66, MaterialLaw35, MaterialLaw62, MaterialLaw28, MaterialLaw44,
     AirbagInjector, AirbagVenthole,
     ErefElement, IniCrack, PropRivet, PropXelem, AdmeshControl,
     PreloadBolt, LoadHydro,
@@ -958,6 +959,11 @@ class Model:
         self.mat_law33s: Dict[int, MaterialLaw33] = {}             # /MAT/LAW33, /MAT/FOAM_PLAS (M171)
         self.mat_heat_modifiers: Dict[int, MatHeatModifier] = {}   # /MAT/HEAT, /HEAT/MAT (M171)
         self.mat_nonlocal_modifiers: Dict[int, MatNonlocalModifier] = {}  # /MAT/NONLOCAL, /NONLOCAL/MAT (M171)
+        self.mat_law66s: Dict[int, MaterialLaw66] = {}             # /MAT/LAW66, /MAT/FOAM_TAB (M172)
+        self.mat_law35s: Dict[int, MaterialLaw35] = {}             # /MAT/LAW35, /MAT/FOAM_VISC (M172)
+        self.mat_law62s: Dict[int, MaterialLaw62] = {}             # /MAT/LAW62, /MAT/VISC_HYP (M172)
+        self.mat_law28s: Dict[int, MaterialLaw28] = {}             # /MAT/LAW28, /MAT/HONEYCOMB (M172)
+        self.mat_law44s: Dict[int, MaterialLaw44] = {}             # /MAT/LAW44, /MAT/COWPER_SYMONDS (M172)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

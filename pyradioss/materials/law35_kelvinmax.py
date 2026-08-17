@@ -126,7 +126,7 @@ def resolve(mat: Material, model, log) -> None:
     """Pull the optional pressure curve fct_ID into plain arrays
     (deck order between /MAT and /FUNCT is free)."""
     p = mat.params
-    if p["fct_id"]:
+    if p.get("fct_id"):
         fct = model.functions.get(p["fct_id"])
         if fct is None:
             log.error(f"/MAT/LAW35/{mat.id}: function {p['fct_id']} not "
