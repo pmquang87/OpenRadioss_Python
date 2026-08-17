@@ -6951,7 +6951,7 @@ class FailChang:
 @dataclass
 class PropType20:
     """/PROP/TYPE20 / /PROP/TSHELL (M180): Thick shell property."""
-    id: int
+    id: int = 0
     isolid: int = 15
     ismstr: int = 0
     icpre: int = 0
@@ -6965,7 +6965,12 @@ class PropType20:
     qb: float = 0.05
     h: float = 0.1
     deltat_min: float = 0.0
+    nbp: int = 0
     title: str = ""
+
+
+PropTshell = PropType20
+PropThickShell = PropType20
 
 
 @dataclass
@@ -7109,7 +7114,7 @@ class FailTsaiWu:
 @dataclass
 class PropType6:
     """/PROP/TYPE6 or /PROP/SOL_ORTH (M181): Solid orthotropic property."""
-    id: int
+    id: int = 0
     isolid: int = 14
     ismstr: int = 0
     icpre: int = 0
@@ -7127,6 +7132,7 @@ class PropType6:
     vy: float = 0.0
     vz: float = 0.0
     skew_id: int = 0
+    skew_csid: int = 0
     refplane: int = 0
     orthtrop: int = 0
     mat_beta: float = 0.0
@@ -7142,10 +7148,12 @@ class PropType6:
     sphpart_id: int = 0
     istrain: int = 0
     ihkt: int = 0
+    nbp: int = 0
     title: str = ""
 
 
 PropSolOrth = PropType6
+PropSolidOrth = PropType6
 
 
 @dataclass
@@ -8869,6 +8877,427 @@ class PropType36:
 
 
 PropPredit = PropType36
+
+
+# ----------------------------------------------------------------------------
+# M188: Composite, Honeycomb, Concrete Damage & Advanced Shell/Solid Props
+# ----------------------------------------------------------------------------
+
+@dataclass
+class MatLaw12:
+    """``/MAT/LAW12`` or ``/MAT/3PARBI`` / ``/MAT/3D_COMP`` / ``/MAT/RAGAB``: 3-parameter Drucker-Prager / 3D composite."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e11: float = 0.0
+    e22: float = 0.0
+    e33: float = 0.0
+    nu12: float = 0.0
+    nu23: float = 0.0
+    nu31: float = 0.0
+    g12: float = 0.0
+    g23: float = 0.0
+    g31: float = 0.0
+    sig_t1: float = 0.0
+    sig_t2: float = 0.0
+    sig_t3: float = 0.0
+    delta: float = 0.0
+    b: float = 0.0
+    n: float = 0.0
+    fmax: float = 0.0
+    sig_1yt: float = 0.0
+    sig_2yt: float = 0.0
+    sig_1yc: float = 0.0
+    sig_2yc: float = 0.0
+    sig_12yt: float = 0.0
+    sig_12yc: float = 0.0
+    sig_23yt: float = 0.0
+    sig_23yc: float = 0.0
+    sig_3yt: float = 0.0
+    sig_3yc: float = 0.0
+    sig_13yt: float = 0.0
+    sig_13yc: float = 0.0
+    alpha: float = 0.0
+    efib: float = 0.0
+    c: float = 0.0
+    eps0: float = 0.0
+    icc: int = 0
+    title: str = ""
+
+
+Mat3parbi = MatLaw12
+Mat3dComp = MatLaw12
+MatRagab = MatLaw12
+
+
+@dataclass
+class MatLaw13:
+    """``/MAT/LAW13`` or ``/MAT/HONEYCOMB`` / ``/MAT/RIGID``: Honeycomb crush / rigid material model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    title: str = ""
+
+
+MatHoneycomb = MatLaw13
+
+
+@dataclass
+class MatLaw15:
+    """``/MAT/LAW15`` or ``/MAT/CHANG`` / ``/MAT/CHANG_CHANG``: Chang-Chang composite failure model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e11: float = 0.0
+    e22: float = 0.0
+    nu12: float = 0.0
+    g12: float = 0.0
+    g23: float = 0.0
+    g31: float = 0.0
+    b: float = 0.0
+    n: float = 0.0
+    fmax: float = 0.0
+    wpmax: float = 0.0
+    wpref: float = 0.0
+    ioff: int = 0
+    sig_1yt: float = 0.0
+    sig_2yt: float = 0.0
+    sig_1yc: float = 0.0
+    sig_2yc: float = 0.0
+    alpha: float = 0.0
+    sig_12yc: float = 0.0
+    sig_12yt: float = 0.0
+    c: float = 0.0
+    eps_dot_0: float = 0.0
+    icc: int = 0
+    beta: float = 0.0
+    tmax: float = 0.0
+    s1: float = 0.0
+    s2: float = 0.0
+    s12: float = 0.0
+    fsmooth: int = 0
+    fcut: float = 0.0
+    c1: float = 0.0
+    c2: float = 0.0
+    title: str = ""
+
+
+MatChang = MatLaw15
+MatChangChang = MatLaw15
+
+
+@dataclass
+class MatLaw18:
+    """``/MAT/LAW18`` or ``/MAT/CONCR_DRA`` / ``/MAT/DRAGON`` / ``/MAT/THERM``: Concrete damage / thermal model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    spheat: float = 0.0
+    a: float = 0.0
+    b: float = 0.0
+    fct_idt: int = 0
+    t0: float = 0.0
+    scale: float = 0.0
+    fct_idsph: int = 0
+    fct_idas: int = 0
+    fscalesph: float = 0.0
+    fscalee: float = 0.0
+    fscalek: float = 0.0
+    title: str = ""
+
+
+MatConcrDra = MatLaw18
+MatDragon = MatLaw18
+MatTherm = MatLaw18
+
+
+@dataclass
+class MatLaw22:
+    """``/MAT/LAW22`` or ``/MAT/TSAI_WU`` / ``/MAT/DAMA``: Tsai-Wu anisotropic composite damage model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    sigy: float = 0.0
+    beta: float = 0.0
+    n: float = 0.0
+    eps_max: float = 0.0
+    sig_max: float = 0.0
+    c: float = 0.0
+    eps_dot_0: float = 0.0
+    icc: int = 0
+    eps_dam: float = 0.0
+    e_t: float = 0.0
+    title: str = ""
+
+
+MatTsaiWu = MatLaw22
+MatDama = MatLaw22
+
+
+@dataclass
+class MatLaw25:
+    """``/MAT/LAW25`` or ``/MAT/COMP_PLAS`` / ``/MAT/COMPSH``: Composite anisotropic plasticity model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e11: float = 0.0
+    e22: float = 0.0
+    nu12: float = 0.0
+    iform: int = 0
+    e33: float = 0.0
+    g12: float = 0.0
+    g23: float = 0.0
+    g31: float = 0.0
+    eps_f1: float = 0.0
+    eps_f2: float = 0.0
+    eps_t1: float = 0.0
+    eps_m1: float = 0.0
+    eps_t2: float = 0.0
+    eps_m2: float = 0.0
+    dmax: float = 0.0
+    wpmax: float = 0.0
+    wpref: float = 0.0
+    ioff: int = 0
+    b: float = 0.0
+    n: float = 0.0
+    fmax: float = 0.0
+    sig_1yt: float = 0.0
+    sig_2yt: float = 0.0
+    sig_1yc: float = 0.0
+    sig_2yc: float = 0.0
+    alpha: float = 0.0
+    sig_12yc: float = 0.0
+    sig_12yt: float = 0.0
+    c: float = 0.0
+    eps_rate_0: float = 0.0
+    icc: int = 0
+    title: str = ""
+
+
+MatCompPlas = MatLaw25
+MatCompsh = MatLaw25
+
+
+@dataclass
+class MatLaw28:
+    """``/MAT/LAW28`` or ``/MAT/HONEYCOMB_SOL``: Solid honeycomb crush material model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e11: float = 0.0
+    e22: float = 0.0
+    e33: float = 0.0
+    g12: float = 0.0
+    g23: float = 0.0
+    g31: float = 0.0
+    fun_id11: int = 0
+    fun_id22: int = 0
+    fun_id33: int = 0
+    iflag1: int = 0
+    fscale11: float = 0.0
+    fscale22: float = 0.0
+    fscale33: float = 0.0
+    eps_max11: float = 0.0
+    eps_max22: float = 0.0
+    eps_max33: float = 0.0
+    fun_id12: int = 0
+    fun_id23: int = 0
+    fun_id31: int = 0
+    iflag2: int = 0
+    fscale12: float = 0.0
+    fscale23: float = 0.0
+    fscale31: float = 0.0
+    eps_max12: float = 0.0
+    eps_max23: float = 0.0
+    eps_max31: float = 0.0
+    title: str = ""
+
+    @property
+    def fun_a1(self) -> int:
+        return self.fun_id11
+
+    @property
+    def fun_b1(self) -> int:
+        return self.fun_id22
+
+    @property
+    def fun_a2(self) -> int:
+        return self.fun_id33
+
+    @property
+    def gflag(self) -> int:
+        return self.iflag1
+
+    @property
+    def epsr1(self) -> float:
+        return self.eps_max11
+
+    @property
+    def epsr2(self) -> float:
+        return self.eps_max22
+
+    @property
+    def epsr3(self) -> float:
+        return self.eps_max33
+
+    @property
+    def fun_a3(self) -> int:
+        return self.fun_id12
+
+    @property
+    def fun_b3(self) -> int:
+        return self.fun_id23
+
+    @property
+    def fun_a4(self) -> int:
+        return self.fun_id31
+
+    @property
+    def vflag(self) -> int:
+        return self.iflag2
+
+    @property
+    def fscale13(self) -> float:
+        return self.fscale31
+
+    @property
+    def epsr4(self) -> float:
+        return self.eps_max12
+
+    @property
+    def epsr5(self) -> float:
+        return self.eps_max23
+
+    @property
+    def epsr6(self) -> float:
+        return self.eps_max31
+
+
+MatHoneycombSol = MatLaw28
+
+
+@dataclass
+class PropType9:
+    """``/PROP/TYPE9`` or ``/PROP/SH_ORTH``: Orthotropic shell property."""
+    id: int = 0
+    ishell: int = 0
+    ismstr: int = 0
+    ish3n: int = 0
+    idrill: int = 0
+    hm: float = 0.0
+    hf: float = 0.0
+    hr: float = 0.0
+    dm: float = 0.0
+    dn: float = 0.0
+    nip: int = 1
+    istrain: int = 0
+    thick: float = 0.0
+    ashear: float = 0.833333
+    ithick: int = 0
+    iplas: int = 0
+    vx: float = 1.0
+    vy: float = 0.0
+    vz: float = 0.0
+    phi: float = 0.0
+    title: str = ""
+
+
+PropShOrth = PropType9
+PropShellOrth = PropType9
+
+
+@dataclass
+class PropType10:
+    """``/PROP/TYPE10`` or ``/PROP/SH_COMP``: Multi-layer composite shell property."""
+    id: int = 0
+    ishell: int = 0
+    ismstr: int = 0
+    ish3n: int = 0
+    idrill: int = 0
+    hm: float = 0.0
+    hf: float = 0.0
+    hr: float = 0.0
+    dm: float = 0.0
+    dn: float = 0.0
+    nip: int = 1
+    istrain: int = 0
+    thick: float = 0.0
+    ashear: float = 0.833333
+    ithick: int = 0
+    iplas: int = 0
+    vx: float = 1.0
+    vy: float = 0.0
+    vz: float = 0.0
+    phis: list[float] = field(default_factory=list)
+    title: str = ""
+
+
+PropShComp = PropType10
+PropShellComp = PropType10
+
+
+@dataclass
+class PropType51:
+    """``/PROP/TYPE51`` or ``/PROP/SH_COH``: Cohesive shell / composite stack property."""
+    id: int = 0
+    ishell: int = 0
+    ismstr: int = 0
+    ish3n: int = 0
+    idrill: int = 0
+    pthk: float = 0.0
+    zshift: float = 0.0
+    hm: float = 0.0
+    hf: float = 0.0
+    hr: float = 0.0
+    dm: float = 0.0
+    dn: float = 0.0
+    ashear: float = 0.833333
+    iint: int = 0
+    ithick: int = 0
+    failexp: float = 0.0
+    vx: float = 1.0
+    vy: float = 0.0
+    vz: float = 0.0
+    idsk: int = 0
+    iorth: int = 0
+    ipos: int = 0
+    irp: int = 0
+    title: str = ""
+
+
+PropShCoh = PropType51
+PropShellCoh = PropType51
+
+
+@dataclass
+class PropType5:
+    """``/PROP/TYPE5`` or ``/PROP/RIVET``: Rivet connection property."""
+    id: int = 0
+    mass: float = 0.0
+    stiffness: float = 0.0
+    fn_fail: float = 0.0
+    ft_fail: float = 0.0
+    nforce: float = 0.0
+    tforce: float = 0.0
+    length: float = 0.0
+    wflag: int = 0
+    imod: int = 1
+    title: str = ""
+
+    @property
+    def fn(self) -> float:
+        return self.nforce or self.fn_fail
+
+    @property
+    def ft(self) -> float:
+        return self.tforce or self.ft_fail
+
+
+PropRivet = PropType5
 
 
 

@@ -102,6 +102,7 @@ from .entities import (
     MatLaw60, MatLaw63, MatLaw48, MatLaw26, PropType12, PropType15, PropStrandLayer, PropType28,
     MatLaw6, MatLaw11, MatLaw77, MatLaw77Curve, MatLaw151, MatMultiFluidFraction, MatLaw187, MatLaw187Rate, PropType33, PropType46, PropType35,
     MatLaw3, MatLaw4, MatLaw5, MatLaw10, MatLaw14, MatLaw21, MatLaw32, MatLaw37, PropType45, PropType36,
+    MatLaw12, MatLaw13, MatLaw15, MatLaw18, MatLaw22, MatLaw25, MatLaw28, PropType9, PropType10, PropType51, PropType5, PropType6, PropType20,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -1070,6 +1071,25 @@ class Model:
         self.mat_law37s: Dict[int, MatLaw37] = {}                   # /MAT/LAW37, /MAT/BIQUAD (M187)
         self.prop_type45s: Dict[int, PropType45] = {}               # /PROP/TYPE45, /PROP/KJOINT2 (M187)
         self.prop_type36s: Dict[int, PropType36] = {}               # /PROP/TYPE36, /PROP/PREDIT (M187)
+        self.mat_law12s: Dict[int, MatLaw12] = {}                   # /MAT/LAW12, /MAT/3PARBI (M188)
+        self.mat_law13s: Dict[int, MatLaw13] = {}                   # /MAT/LAW13, /MAT/HONEYCOMB (M188)
+        self.mat_law15s: Dict[int, MatLaw15] = {}                   # /MAT/LAW15, /MAT/CHANG (M188)
+        self.mat_law18s: Dict[int, MatLaw18] = {}                   # /MAT/LAW18, /MAT/CONCR_DRA (M188)
+        self.mat_law22s: Dict[int, MatLaw22] = {}                   # /MAT/LAW22, /MAT/TSAI_WU (M188)
+        self.mat_law25s: Dict[int, MatLaw25] = {}                   # /MAT/LAW25, /MAT/COMP_PLAS (M188)
+        self.mat_law28s: Dict[int, MatLaw28] = {}                   # /MAT/LAW28, /MAT/HONEYCOMB_SOL (M188)
+        self.prop_type9s: Dict[int, PropType9] = {}                 # /PROP/TYPE9, /PROP/SH_ORTH (M188)
+        self.prop_sh_orths = self.prop_type9s
+        self.prop_type10s: Dict[int, PropType10] = {}               # /PROP/TYPE10, /PROP/SH_COMP (M188)
+        self.prop_sh_comps = self.prop_type10s
+        self.prop_type51s: Dict[int, PropType51] = {}               # /PROP/TYPE51, /PROP/SH_COH (M188)
+        self.prop_sh_cohs = self.prop_type51s
+        self.prop_type5s: Dict[int, PropType5] = {}                 # /PROP/TYPE5, /PROP/RIVET (M188)
+        self.prop_rivets = self.prop_type5s
+        self.prop_type6s: Dict[int, PropType6] = {}                 # /PROP/TYPE6, /PROP/SOL_ORTH (M188)
+        self.prop_sol_orths = self.prop_type6s
+        self.prop_type20s: Dict[int, PropType20] = {}               # /PROP/TYPE20, /PROP/TSHELL (M188)
+        self.prop_tshells = self.prop_type20s
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
