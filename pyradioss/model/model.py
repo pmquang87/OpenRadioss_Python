@@ -103,6 +103,8 @@ from .entities import (
     MatLaw6, MatLaw11, MatLaw77, MatLaw77Curve, MatLaw151, MatMultiFluidFraction, MatLaw187, MatLaw187Rate, PropType33, PropType46, PropType35,
     MatLaw3, MatLaw4, MatLaw5, MatLaw10, MatLaw14, MatLaw21, MatLaw32, MatLaw37, PropType45, PropType36,
     MatLaw12, MatLaw13, MatLaw15, MatLaw18, MatLaw22, MatLaw25, MatLaw28, PropType9, PropType10, PropType51, PropType5, PropType6, PropType20,
+    MatLaw52, MatLaw16, MatLaw14, MatLaw59, MatLaw64, FailLadDama, FailPuck, FailWierzbicki, FailWilkins, FailSpalling,
+    PropType14, PropType8, PropType25, PropType32, PropType43,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -1090,6 +1092,35 @@ class Model:
         self.prop_sol_orths = self.prop_type6s
         self.prop_type20s: Dict[int, PropType20] = {}               # /PROP/TYPE20, /PROP/TSHELL (M188)
         self.prop_tshells = self.prop_type20s
+        # M189 containers and aliases
+        self.mat_law52s: Dict[int, MatLaw52] = {}                   # /MAT/LAW52, /MAT/GURSON (M189)
+        self.mat_gursons = self.mat_law52s
+        self.mat_law16s: Dict[int, MatLaw16] = {}                   # /MAT/LAW16, /MAT/GRAY (M189)
+        self.mat_grays = self.mat_law16s
+        self.mat_camclays = self.mat_law14s
+        self.mat_compsos = self.mat_law14s
+        self.mat_law59s: Dict[int, MatLaw59] = {}                   # /MAT/LAW59, /MAT/CONNECT (M189)
+        self.mat_connects = self.mat_law59s
+        self.mat_law64s: Dict[int, MatLaw64] = {}                   # /MAT/LAW64, /MAT/TRANSFO_MART (M189)
+        self.mat_transfo_marts = self.mat_law64s
+        self.fail_lad_damas = self.fail_laddamas
+        self.fail_ladevezes = self.fail_laddamas
+        self.fail_wierzbickis: Dict[int, FailWierzbicki] = {}       # /FAIL/WIERZBICKI, /FAIL/MMC (M189)
+        self.fail_mmcs = self.fail_wierzbickis
+        self.fail_wilkinss: Dict[int, FailWilkins] = {}             # /FAIL/WILKINS (M189)
+        self.fail_spallings: Dict[int, FailSpalling] = {}           # /FAIL/SPALLING, /FAIL/SPALL (M189)
+        self.fail_spalls = self.fail_spallings
+        self.prop_type14s: Dict[int, PropType14] = {}               # /PROP/TYPE14, /PROP/SOLID (M189)
+        self.prop_solids = self.prop_type14s
+        self.prop_sol_genes = self.prop_type14s
+        self.prop_type8s: Dict[int, PropType8] = {}                 # /PROP/TYPE8, /PROP/SPR_GENE (M189)
+        self.prop_spr_genes = self.prop_type8s
+        self.prop_type25s: Dict[int, PropType25] = {}               # /PROP/TYPE25, /PROP/SPR_AXI (M189)
+        self.prop_spr_axis = self.prop_type25s
+        self.prop_type32s: Dict[int, PropType32] = {}               # /PROP/TYPE32, /PROP/SPR_PRE (M189)
+        self.prop_spr_pres = self.prop_type32s
+        self.prop_type43s: Dict[int, PropType43] = {}               # /PROP/TYPE43, /PROP/CONNECT (M189)
+        self.prop_connects = self.prop_type43s
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

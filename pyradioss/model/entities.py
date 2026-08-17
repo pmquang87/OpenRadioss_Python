@@ -3790,11 +3790,12 @@ class FailGurson:
 
 @dataclass
 class FailPuck:
-    """/FAIL/PUCK (M126): Puck composite failure model.
+    """/FAIL/PUCK (M126/M189): Puck composite failure model.
 
     Fortran origin: ``starter/source/materials/fail/fail_puck.F`` / CFG ``fail_puck.cfg``.
     """
-    mat_id: int
+    id: int = 0
+    mat_id: int = 0
     sigma_1t: float = 0.0
     sigma_2t: float = 0.0
     sigma_12: float = 0.0
@@ -3808,6 +3809,7 @@ class FailPuck:
     ifail_so: int = 1
     fcut: float = 0.0
     fail_id: int = 0
+    title: str = ""
 
 
 @dataclass
@@ -4711,11 +4713,12 @@ class FailNxt:
 
 @dataclass
 class FailLadDama:
-    """/FAIL/LAD_DAMA (M159): Ladevèze damage failure model.
+    """/FAIL/LAD_DAMA (M159/M189): Ladevèze damage failure model.
 
     Fortran origin: ``starter/source/materials/fail/hm_read_fail_lad_dama.F`` / CFG ``fail_lad_dama.cfg``.
     """
-    mat_id: int
+    id: int = 0
+    mat_id: int = 0
     k1: float = 0.0
     k2: float = 0.0
     k3: float = 0.0
@@ -4724,11 +4727,17 @@ class FailLadDama:
     y0: float = 0.0
     yc: float = 0.0
     k: float = 0.0
+    k_lad: float = 0.0
     a: float = 0.0
+    a_dama: float = 0.0
     tau_max: float = 0.0
     ifail_sh: int = 1
     ifail_so: int = 1
     fail_id: int = 0
+    title: str = ""
+
+
+FailLadeveze = FailLadDama
 
 
 @dataclass
@@ -5044,20 +5053,26 @@ class FailSnconnect:
 
 @dataclass
 class FailSpalling:
-    """/FAIL/SPALLING (M162): Spalling / hydrodynamic tensile cutoff failure model.
+    """/FAIL/SPALLING (M162/M189): Spalling / hydrodynamic tensile cutoff failure model.
 
     Fortran origin: ``starter/source/materials/fail/spalling/hm_read_fail_spalling.F90``.
     """
-    mat_id: int
+    id: int = 0
+    mat_id: int = 0
     d1: float = 0.0
     d2: float = 0.0
     d3: float = 0.0
     d4: float = 0.0
     d5: float = 0.0
+    eps_dot_0: float = 1.0e-20
     epsilon_dot_0: float = 1.0e-20
     p_min: float = -1.0e20
     ifail_so: int = 1
     fail_id: int = 0
+    title: str = ""
+
+
+FailSpall = FailSpalling
 
 
 @dataclass
@@ -8729,9 +8744,11 @@ MatSoilConc = MatLaw10
 
 @dataclass
 class MatLaw14:
-    """``/MAT/LAW14`` or ``/MAT/CAM_CLAY``: Modified Cam-Clay critical state geotechnical model."""
+    """``/MAT/LAW14``, ``/MAT/CAM_CLAY`` (M187), or ``/MAT/COMPSO`` (M189)."""
     id: int = 0
     rho0: float = 0.0
+    rhor: float = 0.0
+    # Cam-Clay fields (M187)
     g: float = 0.0
     nu: float = 0.0
     m: float = 0.0
@@ -8739,10 +8756,43 @@ class MatLaw14:
     kappa: float = 0.0
     e0: float = 0.0
     pc0: float = 0.0
+    # Composite Solid fields (M189)
+    ea: float = 0.0
+    eb: float = 0.0
+    ec: float = 0.0
+    prab: float = 0.0
+    prbc: float = 0.0
+    prca: float = 0.0
+    gab: float = 0.0
+    gbc: float = 0.0
+    gca: float = 0.0
+    sigt1: float = 0.0
+    sigt2: float = 0.0
+    sigt3: float = 0.0
+    damage: float = 0.0
+    beta: float = 0.0
+    hard: float = 0.0
+    sig_max: float = 0.0
+    sigyt1: float = 0.0
+    sigyt2: float = 0.0
+    sigyc1: float = 0.0
+    sigyc2: float = 0.0
+    sigt12: float = 0.0
+    sigt23: float = 0.0
+    sigc12: float = 0.0
+    sigc23: float = 0.0
+    alpha_fib: float = 0.0
+    e_fib: float = 0.0
+    src: float = 0.0
+    srp: float = 0.0
+    strflag: int = 0
     title: str = ""
 
 
 MatCamClay = MatLaw14
+MatCamclay = MatLaw14
+MatCompso = MatLaw14
+MatCompSol = MatLaw14
 
 
 @dataclass
@@ -9298,6 +9348,258 @@ class PropType5:
 
 
 PropRivet = PropType5
+
+
+# -------------------------------------------------------------------------
+# M189: Gurson, Gray Cast Iron, Composite Solid, Connector, Martensite Materials,
+# Advanced Failure Criteria & Generalized Spring/Solid Properties
+# -------------------------------------------------------------------------
+
+
+@dataclass
+class MatLaw52:
+    """``/MAT/LAW52`` or ``/MAT/GURSON``: Gurson-Tvergaard-Needleman porous metal plasticity."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    iflag: int = 0
+    fsmooth: int = 0
+    fcut: float = 0.0
+    a: float = 0.0
+    b: float = 0.0
+    n: float = 0.0
+    c: float = 0.0
+    pc: float = 0.0
+    q1: float = 0.0
+    q2: float = 0.0
+    q3: float = 0.0
+    s_n: float = 0.0
+    eps_n: float = 0.0
+    f_i: float = 0.0
+    f_n: float = 0.0
+    f_c: float = 0.0
+    f_f: float = 0.0
+    title: str = ""
+
+
+MatGurson = MatLaw52
+MatPlasGurs = MatLaw52
+
+
+@dataclass
+class MatLaw16:
+    """``/MAT/LAW16`` or ``/MAT/GRAY``: Gray cast iron EOS and asymmetric plasticity model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    p0: float = 0.0
+    c: float = 0.0
+    s: float = 0.0
+    gamma0: float = 0.0
+    a: float = 0.0
+    e0: float = 0.0
+    v0: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    sig_y: float = 0.0
+    beta: float = 0.0
+    hard: float = 0.0
+    sig_max: float = 0.0
+    eps_max: float = 0.0
+    title: str = ""
+
+
+MatGray = MatLaw16
+MatCastIron = MatLaw16
+
+
+@dataclass
+class MatLaw59:
+    """``/MAT/LAW59`` or ``/MAT/CONNECT``: Connector / fastener material model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e: float = 0.0
+    g0: float = 0.0
+    fsmooth: int = 0
+    fcut: float = 0.0
+    iflag: int = 0
+    functions: List[Dict[str, Any]] = field(default_factory=list)
+    title: str = ""
+
+
+MatConnect = MatLaw59
+MatConnector = MatLaw59
+
+
+@dataclass
+class MatLaw64:
+    """``/MAT/LAW64``: Martensitic transformation plasticity model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    cp: float = 0.0
+    d: float = 0.0
+    n: float = 0.0
+    md: float = 0.0
+    v0: float = 0.0
+    vmc: float = 0.0
+    funct_id_0: int = 0
+    funct_id_1: int = 0
+    scale_0: float = 1.0
+    scale_1: float = 1.0
+    t_ini: float = 0.0
+    title: str = ""
+
+
+MatTransfoMart = MatLaw64
+MatMartensite = MatLaw64
+
+
+@dataclass
+class FailWierzbicki:
+    """``/FAIL/WIERZBICKI`` or ``/FAIL/MMC``: Modified Mohr-Coulomb ductile fracture model."""
+    id: int = 0
+    mat_id: int = 0
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+    c4: float = 0.0
+    m: float = 0.0
+    n: float = 0.0
+    ifail_sh: int = 0
+    ifail_so: int = 0
+    imoy: int = 0
+    title: str = ""
+
+
+FailMmc = FailWierzbicki
+
+
+@dataclass
+class FailWilkins:
+    """``/FAIL/WILKINS``: Wilkins cumulative damage fracture model."""
+    id: int = 0
+    mat_id: int = 0
+    alpha: float = 0.0
+    beta: float = 0.0
+    plim: float = 0.0
+    df: float = 0.0
+    ifail_sh: int = 0
+    ifail_so: int = 0
+    title: str = ""
+
+
+@dataclass
+class PropType14:
+    """``/PROP/TYPE14`` or ``/PROP/SOLID``: Generalized 3D solid property."""
+    id: int = 0
+    isolid: int = 14
+    ismstr: int = 0
+    icpre: int = 0
+    inpts_r: int = 1
+    inpts_s: int = 1
+    inpts_t: int = 1
+    i_rot: int = 0
+    iframe: int = 0
+    dn: float = 0.0
+    qa: float = 1.1
+    qb: float = 0.05
+    h: float = 0.1
+    deltat_min: float = 0.0
+    istrain: int = 0
+    qa_l: float = 0.0
+    qb_l: float = 0.0
+    h_l: float = 0.0
+    iplas: int = 0
+    icstr: int = 0
+    title: str = ""
+
+
+PropSolGene = PropType14
+PropSolid = PropType14
+
+
+@dataclass
+class PropType8:
+    """``/PROP/TYPE8`` or ``/PROP/SPR_GENE``: Generalized 6-DOF nonlinear spring property."""
+    id: int = 0
+    mass: float = 0.0
+    inertia: float = 0.0
+    skew_id: int = 0
+    sensor_id: int = 0
+    isflag: int = 0
+    ifail: int = 0
+    iequil: int = 0
+    dofs: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    title: str = ""
+
+
+PropSprGene = PropType8
+PropSpringGene = PropType8
+
+
+@dataclass
+class PropType25:
+    """``/PROP/TYPE25`` or ``/PROP/SPR_AXI``: Axisymmetric nonlinear spring property."""
+    id: int = 0
+    mass: float = 0.0
+    inertia: float = 0.0
+    skew_id: int = 0
+    sensor_id: int = 0
+    isflag: int = 0
+    ifail: int = 0
+    ileng: int = 0
+    ifail2: int = 0
+    tension: Dict[str, Any] = field(default_factory=dict)
+    shear: Dict[str, Any] = field(default_factory=dict)
+    title: str = ""
+
+
+PropSprAxi = PropType25
+PropSpringAxi = PropType25
+
+
+@dataclass
+class PropType32:
+    """``/PROP/TYPE32`` or ``/PROP/SPR_PRE``: Preloaded spring property."""
+    id: int = 0
+    mass: float = 0.0
+    sensor_id: int = 0
+    ilock: int = 0
+    stiff0: float = 0.0
+    f1: float = 0.0
+    d1: float = 0.0
+    e1: float = 0.0
+    stiff1: float = 0.0
+    fun_a1: int = 0
+    fun_b1: int = 0
+    scale_t: float = 1.0
+    scale_d: float = 1.0
+    scale_f: float = 1.0
+    title: str = ""
+
+
+PropSprPre = PropType32
+PropSpringPre = PropType32
+
+
+@dataclass
+class PropType43:
+    """``/PROP/TYPE43`` or ``/PROP/CONNECT``: Connector element property."""
+    id: int = 0
+    ismstr: int = 1
+    thick: float = 0.0
+    title: str = ""
+
+
+PropConnect = PropType43
+PropPropConnect = PropType43
+
 
 
 
