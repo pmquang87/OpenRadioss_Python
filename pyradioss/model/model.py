@@ -105,6 +105,9 @@ from .entities import (
     MatLaw12, MatLaw13, MatLaw15, MatLaw18, MatLaw22, MatLaw25, MatLaw28, PropType9, PropType10, PropType51, PropType5, PropType6, PropType20,
     MatLaw52, MatLaw16, MatLaw14, MatLaw59, MatLaw64, FailLadDama, FailPuck, FailWierzbicki, FailWilkins, FailSpalling,
     PropType14, PropType8, PropType25, PropType32, PropType43,
+    MatLaw68, MatLaw72, MatLaw65, MatLaw58, MatLaw20, MatLaw38, MatLaw29, MatLaw34, MatLaw23, MatLaw78,
+    FailHashin, FailTensstrain, FailEnergy, FailUser,
+    PropType34, PropType29, PropType30, PropType31,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -1121,6 +1124,40 @@ class Model:
         self.prop_spr_pres = self.prop_type32s
         self.prop_type43s: Dict[int, PropType43] = {}               # /PROP/TYPE43, /PROP/CONNECT (M189)
         self.prop_connects = self.prop_type43s
+        # M190 containers and aliases
+        self.mat_law68s: Dict[int, MatLaw68] = {}                   # /MAT/LAW68, /MAT/COSSER (M190)
+        self.mat_cossers = self.mat_law68s
+        self.mat_cosserats = self.mat_law68s
+        self.mat_law72s: Dict[int, MatLaw72] = {}                   # /MAT/LAW72, /MAT/HILL_MMC (M190)
+        self.mat_hill_mmcs = self.mat_law72s
+        self.mat_law65s: Dict[int, MatLaw65] = {}                   # /MAT/LAW65, /MAT/ELASTOMER (M190)
+        self.mat_elastomers = self.mat_law65s
+        self.mat_law58s: Dict[int, MatLaw58] = {}                   # /MAT/LAW58, /MAT/FABR_A (M190)
+        self.mat_fabr_as = self.mat_law58s
+        self.mat_law20s: Dict[int, MatLaw20] = {}                   # /MAT/LAW20, /MAT/BIMAT (M190)
+        self.mat_bimats = self.mat_law20s
+        self.mat_law38s: Dict[int, MatLaw38] = {}                   # /MAT/LAW38, /MAT/VISC_TAB (M190)
+        self.mat_visc_tabs = self.mat_law38s
+        self.mat_law29s: Dict[int, MatLaw29] = {}                   # /MAT/LAW29, /MAT/FEM (M190)
+        self.mat_fems = self.mat_law29s
+        self.mat29_fems = self.mat_law29s
+        self.mat_law34s: Dict[int, MatLaw34] = {}                   # /MAT/LAW34, /MAT/BOLTZMAN (M190)
+        self.mat_boltzmans = self.mat_law34s
+        self.mat_boltzmanns = self.mat_law34s
+        self.mat_law23s: Dict[int, MatLaw23] = {}                   # /MAT/LAW23, /MAT/PLAS_DAMA (M190)
+        self.mat_plas_damas = self.mat_law23s
+        self.mat_law78s: Dict[int, MatLaw78] = {}                   # /MAT/LAW78 (M190)
+        self.fail_hashins: Dict[int, FailHashin] = {}               # /FAIL/HASHIN (M190)
+        self.fail_tensstrains: Dict[int, FailTensstrain] = {}       # /FAIL/TENSSTRAIN (M190)
+        self.fail_tenstrains = self.fail_tensstrains
+        self.fail_energys: Dict[int, FailEnergy] = {}               # /FAIL/ENERGY (M190)
+        self.fail_users: Dict[int, FailUser] = {}                   # /FAIL/USER (M190)
+        self.prop_type34s: Dict[int, PropType34] = {}               # /PROP/TYPE34, /PROP/SPH (M190)
+        self.prop_sphs = self.prop_type34s
+        self.prop_prop_sphs = self.prop_type34s
+        self.prop_type29s: Dict[int, PropType29] = {}               # /PROP/TYPE29 (M190)
+        self.prop_type30s: Dict[int, PropType30] = {}               # /PROP/TYPE30 (M190)
+        self.prop_type31s: Dict[int, PropType31] = {}               # /PROP/TYPE31 (M190)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

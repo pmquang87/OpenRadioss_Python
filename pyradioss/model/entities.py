@@ -9601,6 +9601,436 @@ PropConnect = PropType43
 PropPropConnect = PropType43
 
 
+@dataclass
+class MatLaw68:
+    """``/MAT/LAW68`` or ``/MAT/COSSER``: 3D Cosserat continuum material model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e_11: float = 0.0
+    e_22: float = 0.0
+    e_33: float = 0.0
+    g_12: float = 0.0
+    g_23: float = 0.0
+    g_31: float = 0.0
+    fun_id11i: int = 0
+    fun_id22i: int = 0
+    fun_id33i: int = 0
+    iflag1: int = 0
+    fscale11i: float = 1.0
+    fscale22i: float = 1.0
+    fscale33i: float = 1.0
+    eps_max11i: float = 0.0
+    eps_max22i: float = 0.0
+    eps_max33i: float = 0.0
+    fun_id12i: int = 0
+    fun_id23i: int = 0
+    fun_id31i: int = 0
+    iflag2: int = 0
+    fscale12i: float = 1.0
+    fscale23i: float = 1.0
+    fscale31i: float = 1.0
+    eps_max12i: float = 0.0
+    eps_max23i: float = 0.0
+    eps_max31i: float = 0.0
+    fun_id21i: int = 0
+    fun_id32i: int = 0
+    fun_id13i: int = 0
+    fscale21i: float = 1.0
+    fscale32i: float = 1.0
+    fscale13i: float = 1.0
+    fun_id11r: int = 0
+    fun_id22r: int = 0
+    fun_id33r: int = 0
+    fscale11r: float = 1.0
+    fscale22r: float = 1.0
+    fscale33r: float = 1.0
+    eps_trans11r: float = 0.0
+    eps_trans22r: float = 0.0
+    eps_trans33r: float = 0.0
+    fun_id12r: int = 0
+    fun_id23r: int = 0
+    fun_id31r: int = 0
+    fscale12r: float = 1.0
+    fscale23r: float = 1.0
+    fscale31r: float = 1.0
+    eps_trans12r: float = 0.0
+    eps_trans23r: float = 0.0
+    eps_trans31r: float = 0.0
+    fun_id21r: int = 0
+    fun_id32r: int = 0
+    fun_id13r: int = 0
+    fscale21r: float = 1.0
+    fscale32r: float = 1.0
+    fscale13r: float = 1.0
+    title: str = ""
+
+
+MatCosser = MatLaw68
+MatCosserat = MatLaw68
+
+
+@dataclass
+class MatLaw72:
+    """``/MAT/LAW72`` or ``/MAT/HILL_MMC``: Hill orthotropic plasticity with MMC ductile fracture."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    sig0: float = 0.0
+    eps0: float = 0.0
+    n: float = 0.0
+    f: float = 0.0
+    g: float = 0.0
+    h: float = 0.0
+    big_n: float = 0.0
+    l: float = 0.0
+    m: float = 0.0
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+    mmc_m: float = 0.0
+    dc: float = 0.0
+    title: str = ""
+
+
+MatHillMmc = MatLaw72
+
+
+@dataclass
+class MatLaw65:
+    """``/MAT/LAW65`` or ``/MAT/ELASTOMER``: 3D Elastomer hyperelastic material model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e0: float = 0.0
+    nu: float = 0.0
+    eps_max: float = 0.0
+    nrate: int = 0
+    fsmooth: int = 0
+    fcut: float = 0.0
+    rates: List[Dict[str, Any]] = field(default_factory=list)
+    title: str = ""
+
+
+MatElastomer = MatLaw65
+
+
+@dataclass
+class MatLaw58:
+    """``/MAT/LAW58`` or ``/MAT/FABR_A``: Anisotropic fabric material model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e1: float = 0.0
+    b1: float = 0.0
+    e2: float = 0.0
+    b2: float = 0.0
+    flex: float = 0.0
+    g0: float = 0.0
+    gt: float = 0.0
+    alphat: float = 0.0
+    sensor_id: int = 0
+    df: float = 0.0
+    ds: float = 0.0
+    gfrot: float = 0.0
+    zero_stress: float = 0.0
+    n1: int = 0
+    n2: int = 0
+    s1: float = 0.0
+    s2: float = 0.0
+    title: str = ""
+
+
+MatFabrA = MatLaw58
+
+
+@dataclass
+class MatLaw20:
+    """``/MAT/LAW20`` or ``/MAT/BIMAT``: Bi-material mixture / layered material model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    mat_id1: int = 0
+    mat_id2: int = 0
+    alpha1: float = 0.0
+    alpha2: float = 0.0
+    title: str = ""
+
+
+MatBimat = MatLaw20
+
+
+@dataclass
+class MatLaw38:
+    """``/MAT/LAW38`` or ``/MAT/VISC_TAB``: Tabulated viscoelastic polymer/foam model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e: float = 0.0
+    nu_t: float = 0.0
+    nu_c: float = 0.0
+    rv: float = 0.0
+    iflag: int = 0
+    itotal: int = 0
+    beta: float = 0.0
+    h: float = 0.0
+    r_d: float = 0.0
+    k_r: int = 0
+    k_d: int = 0
+    instant_mod_upd: float = 0.0
+    kair: int = 0
+    np: int = 0
+    pscale: float = 0.0
+    p0: float = 0.0
+    rp: float = 0.0
+    pmax: float = 0.0
+    phi: float = 0.0
+    ful: int = 0
+    alpha_unload: float = 0.0
+    eps_unload: float = 0.0
+    a: float = 0.0
+    b: float = 0.0
+    m_func: int = 0
+    cutoff: float = 0.0
+    iinsta: int = 0
+    e_final: float = 0.0
+    epsi_final: float = 0.0
+    lamb: float = 0.0
+    visc: float = 0.0
+    tol: float = 0.0
+    title: str = ""
+
+
+MatViscTab = MatLaw38
+
+
+@dataclass
+class MatLaw29:
+    """``/MAT/LAW29`` or ``/MAT/FEM``: User/FEM material model interface."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    version: str = ""
+    frelim: float = 0.0
+    dtmin: float = 0.0
+    nf: int = 0
+    velsc: float = 0.0
+    rstrat: float = 0.0
+    rtemp: float = 0.0
+    encrypt: int = 0
+    param_1: int = 0
+    el_young: float = 0.0
+    el_poiss: float = 0.0
+    el_bulkm: float = 0.0
+    el_shear: float = 0.0
+    el_ortho: int = 0
+    el_shrco: float = 0.0
+    param_2: int = 0
+    param_3: int = 0
+    pl_harde: int = 0
+    pl_ortho: int = 0
+    pl_iskin: int = 0
+    pl_asymm: int = 0
+    pl_waist: int = 0
+    pl_biaxf: int = 0
+    pl_compr: int = 0
+    pl_damag: int = 0
+    nf_curve: int = 0
+    nf_ortho: int = 0
+    nf_depen: int = 0
+    sf_curve: int = 0
+    sf_param: int = 0
+    sf_postc: int = 0
+    param_4: int = 0
+    param_5: int = 0
+    cr_harde: int = 0
+    cr_ortho: int = 0
+    cr_iskin: int = 0
+    cr_postc: int = 0
+    cr_param: int = 0
+    cr_check: int = 0
+    param_6: int = 0
+    mf_init: int = 0
+    title: str = ""
+
+
+MatFem = MatLaw29
+Mat29Fem = MatLaw29
+
+
+@dataclass
+class MatLaw34:
+    """``/MAT/LAW34`` or ``/MAT/BOLTZMAN``: Boltzmann linear viscoelastic relaxation model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    k: float = 0.0
+    g0: float = 0.0
+    gl: float = 0.0
+    beta: float = 0.0
+    p0: float = 0.0
+    phi: float = 0.0
+    gamma0: float = 0.0
+    title: str = ""
+
+
+MatBoltzman = MatLaw34
+MatBoltzmann = MatLaw34
+
+
+@dataclass
+class MatLaw23:
+    """``/MAT/LAW23`` or ``/MAT/PLAS_DAMA``: Lemaitre ductile damage elastoplastic model."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    a: float = 0.0
+    b: float = 0.0
+    n: float = 0.0
+    eps_max: float = 0.0
+    sig_max: float = 0.0
+    c: float = 0.0
+    eps_0: float = 0.0
+    icc: int = 0
+    eps_dam: float = 0.0
+    e_t: float = 0.0
+    title: str = ""
+
+
+MatPlasDama = MatLaw23
+
+
+@dataclass
+class MatLaw78:
+    """``/MAT/LAW78``: Rate-dependent elastoplastic constitutive law 78."""
+    id: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    eps_max: float = 0.0
+    sig_max: float = 0.0
+    y: float = 0.0
+    b: float = 0.0
+    c: float = 0.0
+    h: float = 0.0
+    b0: float = 0.0
+    m: float = 0.0
+    rsat: float = 0.0
+    ea: float = 0.0
+    ce: float = 0.0
+    title: str = ""
+
+
+@dataclass
+class FailHashin:
+    """``/FAIL/HASHIN``: Hashin 3D composite failure model."""
+    mat_id: int = 0
+    iform: int = 0
+    ifail_sh: int = 0
+    ifail_so: int = 0
+    sigma_1t: float = 0.0
+    sigma_2t: float = 0.0
+    sigma_3t: float = 0.0
+    sigma_1c: float = 0.0
+    sigma_2c: float = 0.0
+    sigma_c: float = 0.0
+    sigma_12f: float = 0.0
+    sigma_12m: float = 0.0
+    sigma_23m: float = 0.0
+    sigma_13m: float = 0.0
+    phi: float = 0.0
+    sdel: float = 0.0
+    tau_max: float = 0.0
+    title: str = ""
+
+
+@dataclass
+class FailTensstrain:
+    """``/FAIL/TENSSTRAIN`` or ``/FAIL/TENSTRAIN``: Tensile strain failure model."""
+    mat_id: int = 0
+    eps_t1: float = 0.0
+    eps_t2: float = 0.0
+    eps_m1: float = 0.0
+    fct_id: int = 0
+    fscale: float = 1.0
+    ifail_sh: int = 1
+    ifail_so: int = 1
+    d_adv: float = 0.0
+    p_thickfail: float = 0.0
+    title: str = ""
+
+
+FailTenstrain = FailTensstrain
+
+
+@dataclass
+class FailEnergy:
+    """``/FAIL/ENERGY``: Specific internal energy failure criterion."""
+    mat_id: int = 0
+    e1: float = 0.0
+    e2: float = 0.0
+    fct_id: int = 0
+    title: str = ""
+
+
+@dataclass
+class FailUser:
+    """``/FAIL/USER``: User-defined material failure model."""
+    mat_id: int = 0
+    user_type: str = ""
+    cards: List[str] = field(default_factory=list)
+    title: str = ""
+
+
+@dataclass
+class PropType34:
+    """``/PROP/TYPE34`` or ``/PROP/SPH``: SPH particle property."""
+    id: int = 0
+    mass: float = 0.0
+    h0: float = 0.0
+    d0: float = 0.0
+    qa: float = 2.0
+    qb: float = 1.0
+    alpha1: float = 0.0
+    order: int = 0
+    h: float = 0.0
+    title: str = ""
+
+
+PropSph = PropType34
+PropPropSph = PropType34
+
+
+@dataclass
+class PropType29:
+    """``/PROP/TYPE29``: User-defined property Type 29."""
+    id: int = 0
+    cards: List[str] = field(default_factory=list)
+    title: str = ""
+
+
+@dataclass
+class PropType30:
+    """``/PROP/TYPE30``: User-defined property Type 30."""
+    id: int = 0
+    cards: List[str] = field(default_factory=list)
+    title: str = ""
+
+
+@dataclass
+class PropType31:
+    """``/PROP/TYPE31``: User-defined property Type 31."""
+    id: int = 0
+    cards: List[str] = field(default_factory=list)
+    title: str = ""
+
+
+
 
 
 
