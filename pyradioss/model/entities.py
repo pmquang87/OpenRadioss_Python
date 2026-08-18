@@ -13,7 +13,7 @@ exactly like the Fortran ``USR2SYS`` machinery.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 
 import numpy as np
 
@@ -1239,6 +1239,7 @@ class Xref:
     nitrs: int = 100          # steps from reference to initial state
     node_ids: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.int32))
     coords: np.ndarray = field(default_factory=lambda: np.zeros((0, 3)))
+    dtype: Any = None
 
 
 @dataclass
@@ -1706,6 +1707,18 @@ class PreloadAxial:
     fun_id: int = 0
     preload: float = 1.0
     damp: float = 0.0
+    grpart_id: int = 0
+    fct_id: int = 0
+
+    def __post_init__(self):
+        if not self.set_id and self.grpart_id:
+            self.set_id = self.grpart_id
+        elif not self.grpart_id and self.set_id:
+            self.grpart_id = self.set_id
+        if not self.fun_id and self.fct_id:
+            self.fun_id = self.fct_id
+        elif not self.fct_id and self.fun_id:
+            self.fct_id = self.fun_id
 
 
 @dataclass
@@ -1724,6 +1737,12 @@ class LaserLoad:
     ks: float = 0.0
     np: int = 0
     params: Dict[str, Any] = field(default_factory=dict)
+    magnitude: float = 0.0
+    curve_id: int = 0
+    s_target: float = 0.0
+    fct_id_target: int = 0
+    nc: int = 0
+    plasma_elements: List[Any] = field(default_factory=list)
 
 
 @dataclass
@@ -1966,6 +1985,13 @@ class BcsWall:
     sensor_id: int = 0
     tstart: float = 0.0
     tstop: float = 0.0
+    set_id: int = 0
+
+    def __post_init__(self):
+        if not self.grnod_id and self.set_id:
+            self.grnod_id = self.set_id
+        elif not self.set_id and self.grnod_id:
+            self.set_id = self.grnod_id
 
 
 @dataclass
@@ -2108,33 +2134,6 @@ class IniCrack:
     norm: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
     open_flag: int = 0
 
-
-@dataclass
-class LaserLoad:
-    """/LASER or /DFS/LASER (M102): Laser beam impact load.
-
-    Fortran origin: ``starter/source/loads/laser/leclas.F``.
-    """
-    id: int
-    title: str = ""
-    magnitude: float = 0.0
-    curve_id: int = 0
-    s_target: float = 0.0
-    fct_id_target: int = 0
-    hn: float = 0.0
-    vcp: float = 0.0
-    k0: float = 0.0
-    rd: float = 0.0
-    ks: float = 0.0
-    np: int = 0
-    nc: int = 0
-    plasma_elements: List[int] = field(default_factory=list)
-
-
-# ----------------------------------------------------------------------------
-# Specialized loads, preload, extended damping & solver modes (M103)
-# ----------------------------------------------------------------------------
-
 @dataclass
 class PcylLoad:
     """/LOAD/PCYL (M103): Cylindrical pressure load.
@@ -2192,22 +2191,6 @@ class Preload:
     preload: float = 0.0
     tstart: float = 0.0
     tstop: float = 0.0
-
-
-@dataclass
-class PreloadAxial:
-    """/PRELOAD/AXIAL (M103): Axial preload on 1D/solid part groups.
-
-    Fortran origin: ``starter/source/loads/general/preload/hm_read_preload_axial.F90``.
-    """
-    id: int
-    title: str = ""
-    grpart_id: int = 0
-    sens_id: int = 0
-    fct_id: int = 0
-    preload: float = 0.0
-    damp: float = 0.0
-
 
 @dataclass
 class DampInter:
@@ -4019,6 +4002,29 @@ class FailSyazwan:
     epfmin: float = 0.0
     coeffs: List[float] = field(default_factory=list)
     fail_id: int = 0
+    id: int = 0
+    failip: int = 0
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+    c4: float = 0.0
+    c5: float = 0.0
+    c6: float = 0.0
+    epf_comp: float = 0.0
+    epf_shear: float = 0.0
+    epf_tens: float = 0.0
+    epf_plstrn: float = 0.0
+    epf_biax: float = 0.0
+    dinit: float = 0.0
+    dam_sf: float = 0.0
+    max_dam: float = 0.0
+    inst: int = 0
+    iform: int = 0
+    n_val: float = 0.0
+    softexp: float = 0.0
+    reg_func: int = 0
+    ref_len: float = 0.0
+    reg_scale: float = 0.0
 
 
 @dataclass
@@ -4614,29 +4620,8 @@ class EbcsMonvol:
     title: str = ""
     surf_id: int = 0
     monvol_id: int = 0
-
-
-@dataclass
-class BcsWall:
-    """/BCS/WALL/id (M150): Eulerian sliding wall boundary condition.
-
-    Fortran origin: ``starter/source/boundary_conditions/hm_read_bcs_wall.F90``.
-    """
-    id: int
-    title: str = ""
-    grnod_id: int = 0
     sens_id: int = 0
-    tstart: float = 0.0
-    tstop: float = 1.0e20
-
-    @property
-    def sensor_id(self) -> int:
-        return self.sens_id
-
-    @sensor_id.setter
-    def sensor_id(self, val: int) -> None:
-        self.sens_id = val
-
+    fscale: float = 0.0
 
 @dataclass
 class SeatbeltSystem:
@@ -5225,6 +5210,7 @@ class FailMullins:
     beta: float = 0.0
     coefm: float = 0.0
     fail_id: int = 0
+    title: str = ""
 
 
 @dataclass
@@ -5309,42 +5295,6 @@ class EulerMat:
     mat_id: int
     euler_flrd: float = 0.0
 
-
-@dataclass
-class EbcsNrf:
-    """/EBCS/NRF or /BCS/NRF (M164): Non-reflecting frontier boundary condition.
-
-    Fortran origin: ``starter/source/boundary_conditions/ebcs/hm_read_ebcs_nrf.F``.
-    """
-    id: int
-    title: str = ""
-    surf_id: int = 0
-    tcar_p: float = 0.0
-    tcar_vf: float = 0.0
-
-
-@dataclass
-class BcsWall:
-    """/BCS/WALL (M164): Sliding wall boundary condition.
-
-    Fortran origin: ``starter/source/boundary_conditions/hm_read_bcs_wall.F90``.
-    """
-    id: int
-    title: str = ""
-    set_id: int = 0
-    sensor_id: int = 0
-    tstart: float = 0.0
-    tstop: float = 1.0e30
-
-    @property
-    def grnod_id(self) -> int:
-        return self.set_id
-
-    @property
-    def sens_id(self) -> int:
-        return self.sensor_id
-
-
 @dataclass
 class EbcsLoad:
     """/EBCS/{PRES|VEL|INLET} (M164): Eulerian boundary condition loading directive.
@@ -5369,48 +5319,6 @@ class EbcsLoad:
     vx: float = 0.0
     vy: float = 0.0
     vz: float = 0.0
-
-
-@dataclass
-class SlipringShell:
-    """/SLIPRING/SHELL (M164): 2D shell slipring seatbelt element.
-
-    Fortran origin: ``starter/source/elements/seatbelts/hm_read_slipring_shell.F``.
-    """
-    id: int
-    title: str = ""
-    el_set1: int = 0
-    el_set2: int = 0
-    node_set: int = 0
-    sens_id: int = 0
-    flow_flag: int = 0
-    a: float = 0.0
-    ed_factor: float = 0.0
-    fct_id1: int = 0
-    fct_id2: int = 0
-    fricd: float = 0.0
-    fric_d: float = 0.0
-    xscale1: float = 1.0
-    yscale2: float = 1.0
-    xscale2: float = 1.0
-    fct_id3: int = 0
-    fct_id4: int = 0
-    frics: float = 0.0
-    fric_s: float = 0.0
-    xscale3: float = 1.0
-    yscale4: float = 1.0
-    xscale4: float = 1.0
-
-    def __post_init__(self):
-        if self.fricd != 0.0 and self.fric_d == 0.0:
-            self.fric_d = self.fricd
-        elif self.fric_d != 0.0 and self.fricd == 0.0:
-            self.fricd = self.fric_d
-        if self.frics != 0.0 and self.fric_s == 0.0:
-            self.fric_s = self.frics
-        elif self.fric_s != 0.0 and self.frics == 0.0:
-            self.frics = self.fric_s
-
 
 @dataclass
 class SubLaminatePly:
@@ -6930,32 +6838,6 @@ class BcsCyclic:
     grnd_id2: int = 0
     title: str = ""
 
-
-@dataclass
-class PcylLoad:
-    """/LOAD/PCYL (M178): Pressure load in cylindrical coordinates with radius-time table."""
-    id: int
-    surf_id: int = 0
-    sens_id: int = 0
-    frame_id: int = 0
-    table_id: int = 0
-    xscale_r: float = 1.0
-    xscale_t: float = 1.0
-    yscale_p: float = 1.0
-    title: str = ""
-
-
-@dataclass
-class EbcsMonvol:
-    """/EBCS/MONVOL (M178): Monitored volume Eulerian boundary condition linking surface fluxes to monitored gas bags."""
-    id: int
-    surf_id: int = 0
-    sens_id: int = 0
-    monvol_id: int = 0
-    fscale: float = 1.0
-    title: str = ""
-
-
 @dataclass
 class DampVrel:
     """/DAMP/VREL (M179): Relative velocity damping in skew coordinate system."""
@@ -6968,40 +6850,6 @@ class DampVrel:
     alpha_z: float = 0.0
     tstart: float = 0.0
     tstop: float = 1.0e30
-
-
-@dataclass
-class FailSyazwan:
-    """/FAIL/SYAZWAN (M179): Syazwan ductile fracture criterion for metals."""
-    id: int = 0
-    mat_id: int = 0
-    icard: int = 1
-    epfmin: float = 0.0
-    failip: int = 0
-    c1: float = 0.0
-    c2: float = 0.0
-    c3: float = 0.0
-    c4: float = 0.0
-    c5: float = 0.0
-    c6: float = 0.0
-    epf_comp: float = 0.0
-    epf_shear: float = 0.0
-    epf_tens: float = 0.0
-    epf_plstrn: float = 0.0
-    epf_biax: float = 0.0
-    dinit: int = 0
-    dam_sf: float = 1.0
-    max_dam: float = 1.0
-    inst: int = 0
-    iform: int = 0
-    n_val: float = 0.0
-    softexp: float = 0.0
-    reg_func: int = 0
-    ref_len: float = 0.0
-    reg_scale: float = 1.0
-    coeffs: List[float] = field(default_factory=list)
-    fail_id: int = 0
-
 
 @dataclass
 class MatLaw113Dof:
@@ -9553,7 +9401,7 @@ class PropType5:
         return self.tforce or self.ft_fail
 
 
-PropRivet = PropType5
+
 
 
 # -------------------------------------------------------------------------
@@ -10665,18 +10513,6 @@ class FailTButcher:
     fail_id: int = 0
     title: str = ""
 
-
-@dataclass
-class FailMullins:
-    """``/FAIL/MULLINS`` & ``/FAIL/MULLINS_OR``: Mullins effect elastomer damage."""
-    mat_id: int = 0
-    coefr: float = 1.0
-    beta: float = 0.0
-    coefm: float = 0.0
-    fail_id: int = 0
-    title: str = ""
-
-
 @dataclass
 class FailCockcroft:
     """``/FAIL/COCKCROFT``: Cockcroft-Latham ductile failure model."""
@@ -11293,49 +11129,6 @@ class MatLaw88:
     nu: float = 0.0
     params: dict = field(default_factory=dict)
 
-
-@dataclass
-class MatLaw93:
-    """``/MAT/LAW93`` or ``/MAT/ORTH_HILL`` (M197): Orthotropic Hill material."""
-    id: int = 0
-    title: str = ""
-    rho0: float = 0.0
-    rhor: float = 0.0
-    e11: float = 0.0
-    e22: float = 0.0
-    e33: float = 0.0
-    g12: float = 0.0
-    nu12: float = 0.0
-    g13: float = 0.0
-    g23: float = 0.0
-    nu13: float = 0.0
-    nu23: float = 0.0
-    nl: int = 0
-    sigma_y: float = 0.0
-    qr1: float = 0.0
-    cr1: float = 0.0
-    qr2: float = 0.0
-    cr2: float = 0.0
-    r11: float = 1.0
-    r22: float = 1.0
-    r12: float = 1.0
-    r33: float = 1.0
-    r13: float = 1.0
-    r23: float = 1.0
-    fcut: float = 0.0
-    vp: int = 0
-    curves: list = field(default_factory=list)
-    rho: float = 0.0
-    e: float = 0.0
-    nu: float = 0.0
-    params: dict = field(default_factory=dict)
-
-
-MatViscElas = MatLaw62
-MatHoneycomb = MatLaw88
-MatOrthHill = MatLaw93
-
-
 @dataclass
 class CNode:
     """``/CNODE`` (M198): Commented coordinate node definition.
@@ -11786,6 +11579,7 @@ class Spcnd:
     f_sens: float = 0.0
     tstart: float = 0.0
     tstop: float = 1.0e30
+    val: float = 0.0
 
 
 @dataclass
@@ -11803,6 +11597,12 @@ class Ddw:
     fx: float = 0.0
     fy: float = 0.0
     fz: float = 0.0
+    surf1_id: int = 0
+    surf2_id: int = 0
+    f_hold: float = 0.0
+    f_draw: float = 0.0
+    iform: int = 0
+    points: List[Any] = field(default_factory=list)
 
 
 @dataclass
@@ -11943,7 +11743,7 @@ class TransformPos:
 
 
 PosTransform = TransformPos
-TransformPosition = TransformPos
+
 
 
 @dataclass
@@ -12265,7 +12065,7 @@ class PropSpringBend:
 
 
 PropType19 = PropSpringTors
-PropType20 = PropSpringBend
+
 
 
 @dataclass
@@ -12452,31 +12252,6 @@ class SliderJoint:
     axis_dir: int = 1        # 1: X, 2: Y, 3: Z
     skew_id: int = 0
     tol: float = 1e-6
-
-
-@dataclass
-class CylJoint:
-    """``/LAGMUL/CYL_JOINT`` or ``/CYL_JOINT/id`` (M209): Cylindrical kinematic joint."""
-    id: int = 1
-    title: str = ""
-    node1: int = 0
-    node2: int = 0
-    axis_dir: int = 1        # 1: X, 2: Y, 3: Z
-    skew_id: int = 0
-    tol: float = 1e-6
-
-
-@dataclass
-class DampPart:
-    """``/DAMP/PART/damp_ID`` (M209): Part-level Rayleigh mass and stiffness damping."""
-    id: int = 1
-    title: str = ""
-    part_id: int = 0
-    alpha: float = 0.0
-    beta: float = 0.0
-    tstart: float = 0.0
-    tstop: float = 1.0e30
-
 
 @dataclass
 class PlanarJoint:
@@ -13308,20 +13083,6 @@ class SensorSpringEnergy:
     spring_id: int = 0       # spring element ID to monitor
     e_max: float = 1e30      # maximum internal energy threshold
     t_delay: float = 0.0     # activation delay time
-
-
-@dataclass
-class FailGurson:
-    """``/FAIL/GURSON/mat_ID`` (M235): Gurson porous metal failure model."""
-    mat_id: int = 0
-    title: str = ""
-    f_0: float = 0.0         # initial void volume fraction
-    f_c: float = 0.15        # critical void volume fraction
-    f_u: float = 0.25        # ultimate failure void volume fraction
-    eps_n: float = 0.3       # mean strain for void nucleation
-    s_n: float = 0.1         # standard deviation of nucleation strain
-    f_n: float = 0.04        # void volume fraction of nucleating particles
-    ifail_sh: int = 1        # shell element deletion flag
 
 
 @dataclass

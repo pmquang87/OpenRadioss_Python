@@ -476,8 +476,8 @@ def check_model(model: Model, log: MessageLog) -> None:
     for bid, bcs in getattr(model, "bcs_walls", {}).items():
         if bcs.grnod_id > 0 and bcs.grnod_id not in model.node_groups:
             log.error(f"/BCS/WALL/{bid}: node group {bcs.grnod_id} not defined", "CROSS REF")
-        if bcs.sens_id > 0 and bcs.sens_id not in sensor_ids:
-            log.error(f"/BCS/WALL/{bid}: sensor {bcs.sens_id} not defined", "CROSS REF")
+        if bcs.sensor_id > 0 and bcs.sensor_id not in sensor_ids:
+            log.error(f"/BCS/WALL/{bid}: sensor {bcs.sensor_id} not defined", "CROSS REF")
 
     for rid, rl in getattr(model, "rlinks", {}).items():
         if rl.grnod_id > 0 and rl.grnod_id not in model.node_groups:
@@ -551,12 +551,12 @@ def check_model(model: Model, log: MessageLog) -> None:
             log.error(f"/PRELOAD/{pid}: function {pr.fct_id} not defined", "CROSS REF")
 
     for pid, pra in getattr(model, "preload_axials", {}).items():
-        if pra.grpart_id > 0 and pra.grpart_id not in part_groups and pra.grpart_id not in model.parts:
-            log.error(f"/PRELOAD/AXIAL/{pid}: part group/part {pra.grpart_id} not defined", "CROSS REF")
+        if pra.set_id > 0 and pra.set_id not in part_groups and pra.set_id not in model.parts:
+            log.error(f"/PRELOAD/AXIAL/{pid}: part group/part {pra.set_id} not defined", "CROSS REF")
         if pra.sens_id > 0 and pra.sens_id not in sensor_ids:
             log.error(f"/PRELOAD/AXIAL/{pid}: sensor {pra.sens_id} not defined", "CROSS REF")
-        if pra.fct_id > 0 and pra.fct_id not in model.functions:
-            log.error(f"/PRELOAD/AXIAL/{pid}: function {pra.fct_id} not defined", "CROSS REF")
+        if pra.fun_id > 0 and pra.fun_id not in model.functions:
+            log.error(f"/PRELOAD/AXIAL/{pid}: function {pra.fun_id} not defined", "CROSS REF")
 
     for did, di in getattr(model, "damp_inters", {}).items():
         if di.grnod_id > 0 and di.grnod_id not in model.node_groups:
@@ -813,10 +813,10 @@ def check_model(model: Model, log: MessageLog) -> None:
             log.error(f"/LOAD/PFLUID/{lpid}: surface {lp.surf_id} not defined", "CROSS REF")
         if lp.sens_id > 0 and lp.sens_id not in sensor_ids:
             log.error(f"/LOAD/PFLUID/{lpid}: sensor {lp.sens_id} not defined", "CROSS REF")
-        for fid in (lp.fct_hsp, lp.fct_pc, lp.fct_vel):
+        for fid in (lp.fct_id_t, lp.fct_id_pc, lp.fct_id_vel):
             if fid > 0 and fid not in model.functions:
                 log.error(f"/LOAD/PFLUID/{lpid}: function {fid} not defined", "CROSS REF")
-        for fid in (lp.frame_hsp, lp.frame_vel):
+        for fid in (lp.frame_id, lp.frame_id_vel):
             if fid > 0 and fid not in model.skews:
                 log.error(f"/LOAD/PFLUID/{lpid}: skew {fid} not defined", "CROSS REF")
 

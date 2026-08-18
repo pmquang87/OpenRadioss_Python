@@ -1833,7 +1833,7 @@ def read_flux(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.heat_fluxes[fid] = hf
 
 
-def read_convec(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+def read_convec_heat_m202(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/HEAT/CONVEC/id``, ``/HEAT/CONVECTION/id`` or ``/CONVEC/id`` (M202): Thermal surface convection."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     cid = block.user_id if block.user_id is not None else len(model.heat_convecs) + 1
@@ -1907,7 +1907,7 @@ def read_convec(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.convec_loads.append(cl)
 
 
-def read_radiation(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+def read_radiation_heat_m202(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/HEAT/RADIATION/id``, ``/HEAT/RAD/id`` or ``/RADIATION/id`` (M202): Thermal surface radiation."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     rid = block.user_id if block.user_id is not None else len(model.heat_radiations) + 1
@@ -2178,7 +2178,43 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     "CHANG", "TSAIWU", "TSAIHILL", "HOFFMAN", "MAXSTRAIN", "HASHIN",
                     "LEMAITRE", "COCKCROFT", "ENERGY", "COMPOSITE", "FRACTAL", "FRACTAL_DMG",
                     "ORTHENERG", "EMC", "FABRIC", "SPALLING", "SPALL", "TBUTCHER", "WIERZBICKI", "WILKINS",
-                    "NXT", "LAD_DAMA", "XFEM_FLD", "XFEM_JOHNS", "XFEM_TBUTC", "HC_DSSE", "USER"):
+                    "NXT", "LAD_DAMA", "XFEM_FLD", "XFEM_JOHNS", "XFEM_TBUTC", "HC_DSSE", "USER",
+                    # M210-M244 failure criteria:
+                    "TBID", "TABLE", "FAIL_TBID",
+                    "SN_CURVE", "SNCURVE", "SN", "WOHLER", "FATIGUE_SN",
+                    "HOOP", "HOOP_STRESS", "PIPE_HOOP",
+                    "SPALLING_CUT", "SPALL_CUT", "HYDRO_CUT",
+                    "VOIDS", "VOID", "POROSITY",
+                    "HC", "HOSFORD_COULOMB", "HOSFORD",
+                    "LAD_EVR", "LADEVEZE_EVR", "LAD_EVR_COMP",
+                    "ORTHO", "ORTHOTROPIC", "LAMINA",
+                    "COHESIVE", "COH", "INTERFACE",
+                    "MAX_STRESS", "MAXSTRESS", "MAX_TENS",
+                    "SNOW", "BRITTLE_SNOW",
+                    "VISCO", "VISCO_PLASTIC", "VISCOUS",
+                    "BAMMAN", "BCJ", "BAMMAN_CHIESA_JOHNSON",
+                    "WEIBULL", "WEIBULL_BRITTLE",
+                    "PU", "POLYURETHANE",
+                    "GRIFFITH", "GRIF",
+                    "DRUCKER", "DRUCKER_PRAGER", "DP",
+                    "WOOD", "TIMBER", "ORTH_WOOD",
+                    "HILL", "HILL_PLASTIC", "HILL48",
+                    "NORTON", "CREEP", "NORTON_CREEP",
+                    "MOHR", "MOHR_COULOMB", "MC",
+                    "LUSAS", "COMPOSITE_LUSAS", "LUSAS_COMPOSITE",
+                    "GTN", "GURSON_TVERGAARD", "GURSON_POROUS",
+                    "TAB3", "TABULATED3", "TAB_3D",
+                    "CHABOCHE", "LEMAITRE_CHABOCHE", "CHABOCHE_DAMAGE",
+                    "GURSON_MODEL", "GURSON_DAMAGE",
+                    "TVERGAARD", "TVERGAARD_NEEDLEMAN", "TN",
+                    "HENCKY", "HENCKY_STRAIN", "LOG_STRAIN",
+                    "ENERGY_DENSITY", "SED", "STRAIN_ENERGY_DENSITY",
+                    "ENERGY_RATIO", "ERATIO", "SPECIFIC_ENERGY",
+                    "RICE_TRACEY", "RT", "VOID_GROWTH",
+                    "BAO_WIERZBICKI", "BW", "BAO_WIEZBICKI", "BAO",
+                    "LOU_HUHN", "LH", "LOU_HUHN_MODEL", "LOU",
+                    "HOLLOMON", "HOLLOMON_DAMAGE", "POWER_LAW", "HOLLOMON_LAW",
+                    "SWIFT", "SWIFT_LAW", "SWIFT_DAMAGE", "SWIFT_MODEL"):
         log.warning(f"/FAIL/{kind} not ported — skipped "
                     f"(supported: JOHNSON, BIQUAD, ORTHBIQUAD, TAB1, SNCONNECT, FLD, CONNECT, "
                     f"TENSSTRAIN, ORTHSTRAIN, GURSON, ALTER, VISUAL, MULLINS_OR, "
@@ -2186,8 +2222,10 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     f"CHANG, TSAIWU, TSAIHILL, HOFFMAN, MAXSTRAIN, HASHIN, "
                     f"LEMAITRE, COCKCROFT, ENERGY, COMPOSITE, FRACTAL, FRACTAL_DMG, "
                     f"ORTHENERG, EMC, FABRIC, SPALLING, TBUTCHER, WIERZBICKI, WILKINS, "
-                    f"NXT, LAD_DAMA, XFEM_FLD, XFEM_JOHNS, XFEM_TBUTC, HC_DSSE, USER)", block.source)
+                    f"NXT, LAD_DAMA, XFEM_FLD, XFEM_JOHNS, XFEM_TBUTC, HC_DSSE, USER, "
+                    f"plus M210-M244 criteria)", block.source)
         return
+
     # header /FAIL/<kind>/mat_ID[/fail_ID]: with TWO trailing ids the
     # FIRST is the material id (the lexer keeps only the last as user_id)
     mat_id = block.user_id
@@ -2289,9 +2327,6 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("CHABOCHE", "LEMAITRE_CHABOCHE", "CHABOCHE_DAMAGE"):
         read_fail_chaboche(block, model, log)
-        return
-    if kind in ("GURSON", "GURSON_MODEL", "GURSON_DAMAGE"):
-        read_fail_gurson(block, model, log)
         return
     if kind in ("TVERGAARD", "TVERGAARD_NEEDLEMAN", "TN"):
         read_fail_tvergaard(block, model, log)
@@ -2738,7 +2773,7 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         T_max, N_soft, area_scale = 0.0, 0.0, 1.0
         if len(cards) > 3 and not cards[3].is_blank:
             if block.fixed:
-                c4 = _cut_floats(cards[3], "FAIL_CONNECT_4")
+                c4 = _cut_floats(cards[3], "FAIL_CONNECT_4_M235")
             else:
                 c4 = _floats(cards[3], 3)
             T_max = c4[0] if len(c4) > 0 else 0.0
@@ -4920,47 +4955,6 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if typename in ("TYPE6", "SOL_ORTH", "SOLID_ORTH", "PROP_TYPE6", "PROP_SOL_ORTH", "PROP_SOLID_ORTH", "P6_SOL_ORTH", "PROP_P6_SOL_ORTH"):
         read_prop_type6(block, model, log)
         return
-    if typename in ("TYPE20", "TSHELL", "THICK_SHELL", "PROP_TYPE20", "PROP_TSHELL", "PROP_THICK_SHELL", "P20_TSHELL", "PROP_P20_TSHELL"):
-        read_prop_type20(block, model, log)
-        return
-    if typename in ("TYPE19", "SPR_TORS", "SPRING_TORS", "PROP_TYPE19", "PROP_SPR_TORS", "P19_SPR_TORS"):
-        read_prop_type19(block, model, log)
-        return
-    if typename in ("SPR_BEND", "SPRING_BEND", "PROP_SPR_BEND", "P20_SPR_BEND"):
-        read_prop_spr_bend(block, model, log)
-        return
-    if typename in ("TYPE21", "TSH_ORTH", "THICK_SHELL_ORTH", "PROP_TYPE21", "PROP_TSH_ORTH", "P21_TSH_ORTH"):
-        read_prop_type21(block, model, log)
-        return
-    if typename in ("TYPE22", "TSH_COMP", "THICK_SHELL_COMP", "PROP_TYPE22", "PROP_TSH_COMP", "P22_TSH_COMP"):
-        read_prop_type22(block, model, log)
-        return
-    if typename in ("TYPE47", "SPR_PULL", "SPRING_PULL", "PROP_TYPE47", "PROP_SPR_PULL", "P47_SPR_PULL"):
-        read_prop_type47(block, model, log)
-        return
-    if typename in ("TYPE48", "SPR_PUSH", "SPRING_PUSH", "PROP_TYPE48", "PROP_SPR_PUSH", "P48_SPR_PUSH"):
-        read_prop_type48(block, model, log)
-        return
-    if typename in ("TYPE54", "TSH_P54", "PROP_TYPE54", "PROP_TSH_P54", "P54_TSH"):
-        read_prop_type54(block, model, log)
-        return
-    # M189: PROP_TYPE43 (CONNECT)
-    if typename in ("TYPE43", "CONNECT", "PROP_CONNECT", "PROP_TYPE43", "P43_CONNECT", "PROP_P43_CONNECT"):
-        read_prop_type43(block, model, log)
-        return
-    # M190: PROP_TYPE34 (SPH), PROP_TYPE29, PROP_TYPE30, PROP_TYPE31
-    if typename in ("TYPE34", "SPH", "PROP_SPH", "PROP_TYPE34", "PROP_P34_SPH", "P34_SPH"):
-        read_prop_type34(block, model, log)
-        return
-    if typename in ("TYPE29", "PROP_TYPE29", "PROP_P29", "P29"):
-        read_prop_type29(block, model, log)
-        return
-    if typename in ("TYPE30", "PROP_TYPE30", "PROP_P30", "P30"):
-        read_prop_type30(block, model, log)
-        return
-    if typename in ("TYPE31", "PROP_TYPE31", "PROP_P31", "P31"):
-        read_prop_type31(block, model, log)
-        return
     # NOTE: INJECT1/2, JOINT, TORSION, SPR_ELAS_PLAS, SPR_BEAM, SPOTWELD,
     # BUSHING — all handled by the generic cfg-driven prop_reader below.
     # Dedicated readers (read_prop_inject1 etc.) exist but are not yet
@@ -5004,12 +4998,6 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_prop_p51(block, model, log)
         return
     if typename not in aliases:
-        if typename in ("INJECT1", "PROP_INJECT1", "INJECTOR1", "PROP_INJECTOR1"):
-            read_prop_inject1(block, model, log)
-            return
-        elif typename in ("INJECT2", "PROP_INJECT2", "INJECTOR2", "PROP_INJECTOR2"):
-            read_prop_inject2(block, model, log)
-            return
         from . import prop_reader
         prop = prop_reader.parse_property(block, log)
         if prop is not None:
@@ -8408,7 +8396,7 @@ def read_table(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.warning(f"/TABLE/{dim}/{table_id} not ported (only dim=1, 2, 3 supported)", block.source)
 
 
-def read_random(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+def read_random_stochastic_m37(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/RANDOM/random_ID``: stochastic fields."""
     if block.fixed:
         title, cards = _fixed_data(block)
@@ -9482,7 +9470,7 @@ def read_ddw(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
-def read_stamping(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+def read_stamping_params_m58(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/STAMPING/stamp_ID`` — Stamping simulation parameters."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or (block.fixed and cards[0].is_blank):
@@ -11750,7 +11738,7 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("WORK_RATIO", "WRATIO"):
         read_sensor_work_ratio(block, model, log)
         return
-    if kind in ("SPRING", "SPRING_FORCE", "SPRING_MOMENT"):
+    if kind in ("SPRING", "SPRING_FORCE"):
         read_sensor_spring(block, model, log)
         return
     if kind in ("SHELL_STRAIN", "STRAIN_SHELL", "EPS_SHELL"):
@@ -12867,7 +12855,7 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     kind = block.parts[1].upper() if len(block.parts) > 1 else "PLANE"
     if kind in ("SPHERE", "SPHER"):
         kind = "SPHER"
-    elif kind in ("PARALLELEPIPED", "PARAL", "CUBOID"):
+    elif kind in ("PARALLELEPIPED", "CUBOID"):
         kind = "BOX"
     elif kind in ("TRUNC_CONE", "TRUNCATED_CONE", "TCONE"):
         kind = "CONE"
@@ -17922,8 +17910,8 @@ def read_preload_axial(block: KeywordBlock, model: Model, log: MessageLog) -> No
         preload = 1.0
 
     model.preload_axials[block.user_id] = PreloadAxial(
-        id=block.user_id, title=title, grpart_id=set_id, sens_id=sens_id,
-        fct_id=fct_id, preload=preload, damp=damp,
+        id=block.user_id, title=title, set_id=set_id, sens_id=sens_id,
+        fun_id=fct_id, preload=preload, damp=damp,
     )
 
 
@@ -23249,7 +23237,7 @@ def read_slider_joint(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     )
 
 
-def read_cyl_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+def read_cyl_joint_m209(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CYL_JOINT/id`` or ``/LAGMUL/CYL_JOINT/id`` (M209): Cylindrical kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
@@ -31366,7 +31354,7 @@ def read_mat_law114(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.materials[mat_id] = mat114
 
 
-def read_mat_law117(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+def read_mat_law117_m182(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/MAT/LAW117/id`` or ``/MAT/COH_TAB/id`` (M182): Tabulated cohesive zone material."""
     from ..model.entities import MatLaw117
     mat_id = block.user_id or 0
@@ -37141,7 +37129,7 @@ def read_mat_law25(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
-def read_mat_law28(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+def read_mat_law28_m188(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/MAT/LAW28`` or ``/MAT/HONEYCOMB_SOL`` (M188): Solid honeycomb crush model."""
     from ..model.entities import MatLaw28
     from .mat_reader import InactiveMaterial
@@ -38004,7 +37992,7 @@ def read_prop_spr_bend(block: KeywordBlock, model: Model, log: MessageLog) -> No
     mass, k, c, fcut = 0.0, 0.0, 0.0, 0.0
     if valid_cards:
         if block.fixed:
-            f = valid_cards[0].cut("PROP_TYPE20_1")
+            f = valid_cards[0].cut("PROP_SPR_BEND_1")
             mass = _fval(f[0], 0.0) if len(f) > 0 else 0.0
             k = _fval(f[1], 0.0) if len(f) > 1 else 0.0
             c = _fval(f[2], 0.0) if len(f) > 2 else 0.0
@@ -42251,12 +42239,12 @@ def read_fail_gurson(block: KeywordBlock, model: Model, log: MessageLog) -> None
     f_0, f_c, f_u = 0.0, 0.15, 0.25
     eps_n, s_n, f_n, ifail_sh = 0.3, 0.1, 0.04, 1
     if block.fixed:
-        f1 = cards[0].cut("FAIL_GURSON_1")
+        f1 = cards[0].cut("FAIL_GURSON_POROUS_1")
         f_0 = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
         f_c = _fval(f1[1], 0.15) if len(f1) > 1 else 0.15
         f_u = _fval(f1[2], 0.25) if len(f1) > 2 else 0.25
         if len(cards) > 1 and not cards[1].is_blank:
-            f2 = cards[1].cut("FAIL_GURSON_2")
+            f2 = cards[1].cut("FAIL_GURSON_POROUS_2")
             eps_n = _fval(f2[0], 0.3) if len(f2) > 0 else 0.3
             s_n = _fval(f2[1], 0.1) if len(f2) > 1 else 0.1
             f_n = _fval(f2[2], 0.04) if len(f2) > 2 else 0.04
@@ -46036,8 +46024,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PBLAST": read_pblast,
     "DEF_INTER": read_def_inter,
     "DEFAULT": read_def_inter,
-    "DEF_SHELL": read_def_shell,
-    "DEF_SOLID": read_def_solid,
     "SPHGLO": read_sphglo,
     "SMS": read_sms,
     "AMS": read_sms,
@@ -46051,7 +46037,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "INICRACK": read_inicrack,
     "LASER": read_laser,
     "PRELOAD": read_preload,
-    "ANALY": read_analy,
     "UPWIND": read_upwind,
     "CAA": read_caa,
     "GAUGE": read_gauge,
@@ -46067,7 +46052,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "INIMAP3D": read_inimap3d,
     "INISTATE": read_inista,
     "LEAK": read_leak,
-    "ALE": read_ale,
     "RETRACTOR": read_retractor,
     "SLIPRING": read_slipring,
     "USERWI": read_userwi,
@@ -46115,7 +46099,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "INT_THICK": read_intthick,
     "STR_FILE": read_str_file,
     "MEMORY": read_memory,
-    "PLOAD": read_pload,
     "ARCH": read_arch,
     "ALTDOCTAG": read_altdoctag,
     "FUNCT_PYTHON": read_funct_python,
@@ -46135,17 +46118,12 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "DIFF": read_diff,
     "PLAS_ZERIL": read_mat_plas_zeril,
     "PLAS_BODNE": read_mat_plas_bodne,
-    "VISC": read_visc,
-    "VISC_PRONY": read_mat_visc_prony,
-    "VISC_LPRONY": read_mat_visc_prony,
     "THERM_STRESS": read_mat_therm_stress,
     "AIRBAG": read_airbag,
     "AIRBAGINJECTOR": read_airbag_injector,
     "AIRBAGVENTHOLE": read_airbag_venthole,
     "INJECTOR": read_airbag_injector,
     "VENTHOLE": read_airbag_venthole,
-    "ADMESH": read_admesh,
-    "ADGLOB": read_admesh_global,
     "RIVET": read_prop_rivet,
     "XELEM": read_prop_xelem,
     "FUNC_2D": read_func2d,
@@ -46160,7 +46138,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "INTER_GUIDED_CABLE": read_guided_cable,
     "SUBINTER": read_subinter,
     "INTER_SUB": read_subinter,
-    "AMS": read_ams,
     "SEATBELT": read_seatbelt,
     "DETPOINTSET": read_dfs,
     "PROP_PLY": read_ply,
@@ -46181,7 +46158,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "INTER_SUBSURF": read_inter,
     "INTER_TYPE25": read_inter,
     "INTER_TYPE8": read_inter,
-    "DRAPE": read_drape,
     "DRAPE_PLY_SLICE": read_drape,
     "PRELOAD_AXIAL": read_preload_axial,
     "PROP_P8_SPR_GENE": read_prop,
@@ -46279,7 +46255,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "TAB_FOAM": read_mat,
     "MAT_LAW33": read_mat,
     "MAT_FOAM_PLAS": read_mat,
-    "HEAT": read_heat,
     "HEAT_TRANSFER": read_heat,
     # M172: MAT LAW66 (FOAM_TAB), LAW35 (FOAM_VISC), LAW62 (VISC_HYP), LAW28 (HONEYCOMB), LAW44 (COWPER_SYMONDS)
     "MAT_LAW66": read_mat,
@@ -46322,9 +46297,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "HYP_EXT_COMP": read_mat,
     "HYPER_EXT_COMP": read_mat,
     # M174: MAT LAW124 (CDPM2), LAW126 (JOHNSON_HOLMQUIST_CONCRETE), LAW125 (LAMINATED_COMPOSITE), LAW127 (ENHANCED_COMPOSITE), LAW130 (MODIFIED_HONEYCOMB)
-    "MAT_LAW124": read_mat,
-    "MAT_CDPM2": read_mat,
-    "CDPM2": read_mat,
     "MAT_LAW126": read_mat,
     "MAT_JOHNSON_HOLMQUIST_CONCRETE": read_mat,
     "JOHNSON_HOLMQUIST_CONCRETE": read_mat,
@@ -46455,7 +46427,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "LOAD_PCYL": read_load_pcyl,
     "PCYL": read_load_pcyl,
     "EBCS_MONVOL": read_ebcs_monvol,
-    "MONVOL": read_monvol,
     # M179: DAMP_VREL, FAIL_SYAZWAN, MAT_LAW113, MAT_LAW79, MAT_VISC_LPRONY, ENG_DT_BRICK
     "DAMP_VREL": read_damp_vrel,
     "FAIL_SYAZWAN": read_fail,
@@ -46466,7 +46437,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_JOHN_HOLM": read_mat,
     "JOHN_HOLM": read_mat,
     "MAT_VISC_LPRONY": read_mat_visc_lprony,
-    "VISC_LPRONY": read_mat_visc_lprony,
     "ENG_DT_BRICK": read_dt_brick,
     "DT_BRICK": read_dt_brick,
     # M180: MAT_LAW190, MAT_LAW41, FAIL_CHANG, PROP_TYPE20, PROP_TYPE21, PROP_TYPE22
@@ -46506,35 +46476,18 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "LOAD_CLOAD": read_cload,
     "LOAD_PLOAD": read_pload,
     # M182: MAT_LAW114, MAT_LAW117, MAT_LAW119, MAT_LAW120, MAT_LAW121, PROP_TYPE26, PROP_TYPE27
-    "MAT_LAW114": read_mat,
-    "MAT_SPR_SEATBELT": read_mat,
-    "SPR_SEATBELT": read_mat,
-    "MAT_LAW117": read_mat,
     "MAT_COH_TAB": read_mat,
     "COH_TAB": read_mat,
     "MAT_COHESIVE_TABULATED": read_mat,
     "COHESIVE_TABULATED": read_mat,
-    "MAT_LAW119": read_mat,
-    "MAT_SH_SEATBELT": read_mat,
-    "SH_SEATBELT": read_mat,
-    "MAT_LAW120": read_mat,
-    "MAT_TAPO": read_mat,
-    "TAPO": read_mat,
     "MAT_TAB_PONT_ORTH": read_mat,
     "TAB_PONT_ORTH": read_mat,
-    "MAT_LAW121": read_mat,
-    "MAT_PLAS_RATE": read_mat,
-    "PLAS_RATE": read_mat,
     "MAT_PLAS_TAB_RATE": read_mat,
     "PLAS_TAB_RATE": read_mat,
     "PROP_TYPE26": read_prop,
-    "PROP_SPR_TAB": read_prop,
     "SPR_TAB": read_prop,
-    "PROP_P26_SPR_TAB": read_prop,
     "PROP_TYPE27": read_prop,
-    "PROP_SPR_BDAMP": read_prop,
     "SPR_BDAMP": read_prop,
-    "PROP_P27_SPR_BDAMP": read_prop,
     # M183: MAT_LAW50, MAT_LAW57, MAT_LAW87, MAT_LAW95, MAT_LAW163, MAT_LAW169
     "MAT_LAW50": read_mat,
     "MAT_VISC_HONEY": read_mat,
@@ -46544,7 +46497,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_LAW57": read_mat,
     "MAT_BARLAT3": read_mat,
     "BARLAT3": read_mat,
-    "MAT_LAW87": read_mat,
     "MAT_BARLAT_YLD2000": read_mat,
     "BARLAT_YLD2000": read_mat,
     "MAT_BARLAT2000": read_mat,
@@ -46554,7 +46506,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "BERGSTROM_BOYCE": read_mat,
     "MAT_HYP_VISC_PLAS": read_mat,
     "HYP_VISC_PLAS": read_mat,
-    "MAT_FOAM_TAB": read_mat,
     "MAT_LAW163": read_mat,
     "MAT_CRUSHABLE_FOAM": read_mat,
     "CRUSHABLE_FOAM": read_mat,
@@ -46624,15 +46575,11 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SESAM": read_mat,
     "SESAME": read_mat,
     "PROP_TYPE12": read_prop,
-    "PROP_SPR_PUL": read_prop,
     "SPR_PUL": read_prop,
     "PULLEY": read_prop,
-    "PROP_P12_SPR_PUL": read_prop,
     "PROP_TYPE15": read_prop,
-    "PROP_POROUS": read_prop,
     "POROUS": read_prop,
     "SOLID_POROUS": read_prop,
-    "PROP_P15_POROUS": read_prop,
     "PROP_TYPE28": read_prop,
     "PROP_NSTRAND": read_prop,
     "NSTRAND": read_prop,
@@ -46643,12 +46590,10 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_VISC_FLUID": read_mat,
     "MAT_HYDRO": read_mat,
     "MAT_HYDRO_VISC": read_mat,
-    "MAT_HYD_VISC": read_mat,
     "MAT_K-EPS": read_mat,
     "VISC_FLUID": read_mat,
     "HYDRO": read_mat,
     "HYDRO_VISC": read_mat,
-    "HYD_VISC": read_mat,
     "K-EPS": read_mat,
     "MAT_LAW11": read_mat,
     "MAT_BOUND": read_mat,
@@ -46716,7 +46661,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "CAMCLAY": read_mat,
     "MAT_LAW21": read_mat,
     "MAT_DUCKHUB": read_mat,
-    "MAT_DRUCKER_PRAGER": read_mat,
     "DUCKHUB": read_mat,
     "MAT_LAW32": read_mat,
     "MAT_HILL_TAB": read_mat,
@@ -46748,9 +46692,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "3D_COMP": read_mat,
     "RAGAB": read_mat,
     "MAT_LAW13": read_mat,
-    "MAT_HONEYCOMB": read_mat,
     "MAT_RIGID": read_mat,
-    "HONEYCOMB": read_mat,
     "RIGID": read_mat,
     "MAT_LAW15": read_mat,
     "MAT_CHANG": read_mat,
@@ -46778,7 +46720,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "COMP_PLAS": read_mat,
     "COMPOSITE_PLAS": read_mat,
     "COMPSH": read_mat,
-    "MAT_LAW28": read_mat,
     "MAT_HONEYCOMB_SOL": read_mat,
     "MAT_HONEY_SOL": read_mat,
     "HONEYCOMB_SOL": read_mat,
@@ -46788,37 +46729,25 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PROP_SHELL_ORTH": read_prop,
     "SH_ORTH": read_prop,
     "SHELL_ORTH": read_prop,
-    "PROP_P9_SH_ORTH": read_prop,
     "PROP_TYPE10": read_prop,
     "PROP_SH_COMP": read_prop,
     "PROP_SHELL_COMP": read_prop,
     "SH_COMP": read_prop,
     "SHELL_COMP": read_prop,
-    "PROP_P10_SH_COMP": read_prop,
     "PROP_TYPE51": read_prop,
     "PROP_SH_COH": read_prop,
     "PROP_SHELL_COH": read_prop,
     "PROP_COHESIVE": read_prop,
     "SH_COH": read_prop,
     "SHELL_COH": read_prop,
-    "COHESIVE": read_prop,
     "PROP_P51_SH_COH": read_prop,
     "PROP_TYPE5": read_prop,
     "PROP_RIVET": read_prop,
-    "RIVET": read_prop,
     "PROP_P5_RIVET": read_prop,
-    "PROP_TYPE6": read_prop,
-    "PROP_SOL_ORTH": read_prop,
     "PROP_SOLID_ORTH": read_prop,
-    "SOL_ORTH": read_prop,
     "SOLID_ORTH": read_prop,
-    "PROP_P6_SOL_ORTH": read_prop,
-    "PROP_TYPE20": read_prop,
-    "PROP_TSHELL": read_prop,
     "PROP_THICK_SHELL": read_prop,
-    "TSHELL": read_prop,
     "THICK_SHELL": read_prop,
-    "PROP_P20_TSHELL": read_prop,
     # --- M189: Gurson, Cast Iron, Composite Solid, Connector & Martensite Materials, Advanced Failure & Generalized Props ---
     "MAT_LAW52": read_mat,
     "MAT_GURSON": read_mat,
@@ -46830,7 +46759,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_CAST_IRON": read_mat,
     "GRAY": read_mat,
     "CAST_IRON": read_mat,
-    "MAT_LAW14": read_mat,
     "MAT_COMPSO": read_mat,
     "MAT_COMP_SOL": read_mat,
     "COMPSO": read_mat,
@@ -46845,10 +46773,8 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_MARTENSITE": read_mat,
     "TRANSFO_MART": read_mat,
     "MARTENSITE": read_mat,
-    "FAIL_LAD_DAMA": read_fail,
     "FAIL_LADEVEZE": read_fail,
     "LAD_DAMA": read_fail,
-    "LADEVEZE": read_fail,
     "FAIL_PUCK": read_fail,
     "PUCK": read_fail,
     "FAIL_WIERZBICKI": read_fail,
@@ -46857,7 +46783,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MMC": read_fail,
     "FAIL_WILKINS": read_fail,
     "WILKINS": read_fail,
-    "FAIL_SPALLING": read_fail,
     "FAIL_SPALL": read_fail,
     "SPALLING": read_fail,
     "SPALL": read_fail,
@@ -46868,23 +46793,17 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SOL_GENE": read_prop,
     "PROP_P14_SOLID": read_prop,
     "PROP_TYPE8": read_prop,
-    "PROP_SPR_GENE": read_prop,
     "PROP_SPRING_GENE": read_prop,
     "SPR_GENE": read_prop,
     "SPRING_GENE": read_prop,
-    "PROP_P8_SPR_GENE": read_prop,
     "PROP_TYPE25": read_prop,
-    "PROP_SPR_AXI": read_prop,
     "PROP_SPRING_AXI": read_prop,
     "SPR_AXI": read_prop,
     "SPRING_AXI": read_prop,
-    "PROP_P25_SPR_AXI": read_prop,
     "PROP_TYPE32": read_prop,
-    "PROP_SPR_PRE": read_prop,
     "PROP_SPRING_PRE": read_prop,
     "SPR_PRE": read_prop,
     "SPRING_PRE": read_prop,
-    "PROP_P32_SPR_PRE": read_prop,
     "PROP_TYPE43": read_prop,
     "PROP_CONNECT": read_prop,
     "PROP_PROP_CONNECT": read_prop,
@@ -46990,8 +46909,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PLAS_POLY": read_mat,
     "LAW101": read_mat,
     "MAT_LAW43": read_mat,
-    "MAT_HILL_TAB": read_mat,
-    "HILL_TAB": read_mat,
     "LAW43": read_mat,
     "FAIL_LEMAITRE": read_fail,
     "LEMAITRE": read_fail,
@@ -47011,18 +46928,11 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_LEE_TARVER": read_mat,
     "LEE_TARVER": read_mat,
     "HOFFMAN": read_fail,
-    "FAIL_TSAI_HILL": read_fail,
     "TSAI_HILL": read_fail,
     "TSAIHILL": read_fail,
-    "FAIL_TSAI_WU": read_fail,
-    "TSAI_WU": read_fail,
-    "TSAIWU": read_fail,
-    "FAIL_MAX_STRAIN": read_fail,
     "MAX_STRAIN": read_fail,
     "MAXSTRAIN": read_fail,
-    "FABRIC": read_fail,
     "FABR": read_fail,
-    "CHANG": read_fail,
     "INTER_TYPE20": read_inter,
     "INTER_TYPE23": read_inter,
     "INTER_TYPE24": read_inter,
@@ -47041,7 +46951,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "LAW53": read_mat,
     "MAT_LAW54": read_mat,
     "MAT_PREDIT": read_mat,
-    "PREDIT": read_mat,
     "LAW54": read_mat,
     "MAT_LAW74": read_mat,
     "LAW74": read_mat,
@@ -47051,14 +46960,11 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "LAW82": read_mat,
     "PROP_TYPE18": read_prop,
     "PROP_INT_BEAM": read_prop,
-    "PROP_P18_INT_BEAM": read_prop,
     "INT_BEAM": read_prop,
-    "DEF_INTER": read_def_inter,
     "DEFAULT_INTER": read_def_inter,
     "DEF_INTER_TYPE11": read_def_inter,
     "DEF_INTER_TYPE19": read_def_inter,
     "DEF_INTER_TYPE25": read_def_inter,
-    "STATE": read_state,
     "STATE_BEAM": read_state,
     "STATE_BRICK": read_state,
     "STATE_NODE": read_state,
@@ -47068,7 +46974,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "STATE_DT": read_state,
     "SHELL3N": read_sh3n,
     "SOLIDE": read_brick,
-    "SOLID": read_brick,
     "TETRA": read_tetra,
     "SPHCEL": read_sphcel,
     "SPHCELL": read_sphcel,
@@ -47086,92 +46991,50 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ITH_SPH_FLOW": read_th,
     "TH_SPH_FLOW": read_th,
     # --- M196: Spring Beam, Sewing, Zhao, Steinberg, Foam, Geotechnical, Damping, Frames & Tables ---
-    "MAT_LAW113": read_mat,
-    "MAT_SPR_BEAM": read_mat,
-    "SPR_BEAM": read_mat,
     "LAW113": read_mat,
-    "MAT_LAW95": read_mat,
     "MAT_SEW": read_mat,
     "MAT_SEWING": read_mat,
-    "SEW": read_mat,
     "SEWING": read_mat,
     "LAW95": read_mat,
-    "MAT_LAW48": read_mat,
-    "MAT_ZHAO": read_mat,
-    "ZHAO": read_mat,
     "LAW48": read_mat,
-    "MAT_LAW49": read_mat,
-    "MAT_STEINB": read_mat,
-    "MAT_STEINBERG": read_mat,
-    "STEINB": read_mat,
-    "STEINBERG": read_mat,
     "LAW49": read_mat,
-    "MAT_LAW106": read_mat,
     "MAT_P_FOAM": read_mat,
     "MAT_POLY_FOAM": read_mat,
     "P_FOAM": read_mat,
     "POLY_FOAM": read_mat,
     "LAW106": read_mat,
-    "MAT_LAW77": read_mat,
     "MAT_OGDEN_HYPO": read_mat,
     "MAT_HYPO_VISCO": read_mat,
     "OGDEN_HYPO": read_mat,
     "HYPO_VISCO": read_mat,
     "LAW77": read_mat,
-    "MAT_LAW63": read_mat,
     "MAT_SOIL_DISC": read_mat,
-    "MAT_HANSEL": read_mat,
     "SOIL_DISC": read_mat,
-    "HANSEL": read_mat,
     "LAW63": read_mat,
-    "MAT_LAW92": read_mat,
     "MAT_HILL_ORTH": read_mat,
     "HILL_ORTH": read_mat,
     "LAW92": read_mat,
-    "PROP_TYPE26": read_prop,
-    "PROP_SPR_TAB": read_prop,
-    "PROP_P26_SPR_TAB": read_prop,
-    "SPR_TAB": read_prop,
     "FRAME_NOD": read_frame_nod,
     "FRAME_NODE": read_frame_nod,
-    "INISPR": read_inispr,
-    "INISPRI": read_inispr,
     "TABLE_0": read_table,
     "TABLE_1": read_table,
-    "MERGE_RBODY": read_merge_rbody,
+    "MERGE_RBODY": read_merge,
     "ALE_CFDSPH": read_alecfdsph,
-    "ALECFDSPH": read_alecfdsph,
     "ALE_MUSCL": read_ale,
     "ALE_SOLVER": read_ale,
     # --- M197: Advanced Materials & Safety/Kinematic Systems ---
-    "MAT_LAW34": read_mat,
     "MAT_BOLT": read_mat,
     "BOLT": read_mat,
     "LAW34": read_mat,
-    "MAT_LAW60": read_mat,
     "MAT_FABRIC": read_mat,
-    "FABRIC": read_mat,
     "LAW60": read_mat,
-    "MAT_LAW62": read_mat,
     "MAT_VISC_ELAS": read_mat,
     "VISC_ELAS": read_mat,
     "LAW62": read_mat,
-    "MAT_LAW79": read_mat,
     "MAT_TRANS_ISO": read_mat,
     "TRANS_ISO": read_mat,
     "LAW79": read_mat,
-    "MAT_LAW82": read_mat,
-    "MAT_OGDEN": read_mat,
-    "OGDEN": read_mat,
-    "LAW82": read_mat,
-    "MAT_LAW88": read_mat,
-    "MAT_HONEYCOMB": read_mat,
-    "HONEYCOMB": read_mat,
     "LAW88": read_mat,
-    "MAT_LAW93": read_mat,
-    "MAT_ORTH_HILL": read_mat,
-    "ORTH_HILL": read_mat,
-    "LAW93": read_mat,
     "PRETENSIONER": read_pretensioner,
     "SEATBELT_PRETENSIONER": read_pretensioner,
     "FRAME_MOVE": read_frame,
@@ -47207,21 +47070,13 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SYMET": read_transform,
     "MATRIX": read_transform,
     "MATR": read_transform,
-    "AUTOPOSITION": read_transform,
-    "AUTOPOS": read_transform,
     "MAT_LAW51": read_mat,
     "MAT_BRITTLE": read_mat,
     "BRITTLE": read_mat,
-    "DRUCKER_PRAGER": read_mat,
-    "MAT_DRUCKER_PRAGER": read_mat,
     "LAW51": read_mat,
     "MULTIMAT": read_mat,
-    "MULTI_MAT": read_mat,
     "MAT_MULTIMAT": read_mat,
     # --- M200: Non-Reflecting BCS, EBCS Cyclic/Propellant, Detpoint Node/Set, DTIX, Parith & TH Title Suite ---
-    "BCS_NRF": read_bcs_nrf,
-    "EBCS_CYCLIC": read_ebcs,
-    "EBCS_PROPELLANT": read_ebcs,
     "DETPOINT_NODE": read_dfs,
     "DETPOINT_SET": read_dfs,
     "DETPOINT_GRNOD": read_dfs,
@@ -47262,28 +47117,18 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "FLUX": read_flux,
     "HEAT_CONVEC": read_convec,
     "HEAT_CONVECTION": read_convec,
-    "CONVEC": read_convec,
     "HEAT_RADIATION": read_radiation,
     "HEAT_RAD": read_radiation,
-    "RADIATION": read_radiation,
-    "MAT_LAW4": read_mat,
-    "MAT_HYD_JCOOK": read_mat,
-    "HYD_JCOOK": read_mat,
     "LAW4": read_mat,
     "SENSOR_WORK": read_sensor,
     "SPCND": read_spcnd,
     "DDW": read_ddw,
-    "SURF_SURF": read_surf_surf,
     "BCS_LAGMUL": read_bcs,
     # --- M203: Kinematic Gear/Rack/Diff Constraints, Guided Cable Type 26, and Python Sensor Suite ---
     "LAGMUL_GEAR": read_gear,
-    "GEAR": read_gear,
     "LAGMUL_RACK": read_rack,
-    "RACK": read_rack,
     "LAGMUL_DIFF": read_diff,
-    "DIFF": read_diff,
     "INTER_TYPE26": read_guided_cable,
-    "INTER_GUIDED_CABLE": read_guided_cable,
     "SENSOR_PYTHON": read_sensor,
     "POS": read_transform,
     "POSITION": read_transform,
@@ -47313,9 +47158,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SHELL": read_sensor,
     "SENSOR_SOLID": read_sensor,
     "SENSOR_SPH": read_sensor,
-    "INITEMP": read_initemp,
-    "IMPTEMP": read_imptemp,
-    "INICRACK": read_inicrack,
     # --- M205: Flow Boundaries, Cavity Radiation, Torsional/Bending Springs & Load Suite ---
     "FLOW": read_flow,
     "FLOW_INFLOW": read_flow,
@@ -47325,7 +47167,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "HEAT_CAV": read_heat_rad_cav,
     "RAD_CAV": read_heat_rad_cav,
     "PROP_TYPE19": read_prop_type19,
-    "PROP_SPR_TORS": read_prop_type19,
     "PROP_SPR_BEND": read_prop_spr_bend,
     "SPR_TORS": read_prop_type19,
     "SPR_BEND": read_prop_spr_bend,
@@ -47333,11 +47174,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "LOAD_PFLUID": read_pfluid,
     "LOAD_LASER": read_laser,
     # --- M206: Orthotropic and Composite Thick Shells, Sensors & Inter Type25 ---
-    "PROP_TYPE21": read_prop_type21,
-    "PROP_TSH_ORTH": read_prop_type21,
-    "PROP_TYPE22": read_prop_type22,
-    "PROP_TSH_COMP": read_prop_type22,
-    "INTER_TYPE25": read_inter,
     "INTER_TIED_BREAK": read_inter,
     "SENSOR_GEOM": read_sensor,
     "SENSOR_REL": read_sensor,
@@ -47370,13 +47206,11 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PROP_TSH_P54": read_prop_type54,
     "TSH_P54": read_prop_type54,
     "ENG_DAMP": read_eng_damp,
-    "DAMP": read_eng_damp,
     # --- M209: Slider/Cylindrical Kinematic Joints, Part Rayleigh Damping, and Engine Sub-cycling Directives Suite ---
     "LAGMUL_SLIDER": read_slider_joint,
     "SLIDER": read_slider_joint,
     "LAGMUL_CYL_JOINT": read_cyl_joint,
     "LAGMUL_CYL": read_cyl_joint,
-    "CYL_JOINT": read_cyl_joint,
     "CYLINDER_JOINT": read_cyl_joint,
     "DAMP_PART": read_damp_part,
     "ENG_SUB_CYCLE": read_eng_sub_cycle,
@@ -47490,7 +47324,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "FAIL_LAMINA": read_fail_ortho,
     "FXFREQ": read_eng_fxfreq,
     "ENG_FXFREQ": read_eng_fxfreq,
-    "SENSOR_ENERGY_RATIO": read_sensor_energy_ratio,
     "SENSOR_ENG_RATIO": read_sensor_energy_ratio,
     # --- M218: Cohesive Failure Criterion, Engine Trajectory Tracking, Spherical Joint Aliases, and Cross-Section Sensor Suite ---
     "LAGMUL_SPHERICAL": read_ball_joint,
@@ -47530,8 +47363,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_TRUNC": read_eng_trunc,
     "LAGMUL_UNIVERSAL": read_cardan_joint,
     "LAGMUL_UNIVERSAL_JOINT": read_cardan_joint,
-    "UNIVERSAL_JOINT": read_cardan_joint,
-    "UNIVERSAL": read_cardan_joint,
     "SENSOR_SHEAR": read_sensor_shear,
     "SENSOR_SHEAR_STRESS": read_sensor_shear,
     "SENSOR_TAU": read_sensor_shear,
@@ -47556,10 +47387,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENERGY": read_eng_energy,
     "ENG_ENERGY": read_eng_energy,
     "ENG_ENERGY_BALANCE": read_eng_energy,
-    "LAGMUL_PLANAR": read_planar_joint,
     "LAGMUL_PLANAR_JOINT": read_planar_joint,
-    "PLANAR_JOINT": read_planar_joint,
-    "PLANAR": read_planar_joint,
     "SENSOR_MASS": read_sensor_mass_ratio,
     "SENSOR_MASS_RATIO": read_sensor_mass_ratio,
     "SENSOR_DMASS": read_sensor_mass_ratio,
@@ -47579,7 +47407,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     # --- M224: Polyurethane Failure Criterion, Engine State Variable Directive, Prismatic Joint Aliases, and Work Ratio Sensor Suite ---
     "FAIL_PU": read_fail_pu,
     "FAIL_POLYURETHANE": read_fail_pu,
-    "STATE": read_eng_state,
     "ENG_STATE": read_eng_state,
     "ENG_STATE_VAR": read_eng_state,
     "LAGMUL_PRISMATIC": read_slider_joint,
@@ -47591,7 +47418,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     # --- M225: Griffith Brittle Fracture Criterion, Engine Contact Surface Directive, Homokinetic/Cylinder Joint Aliases, and Spring Sensor Suite ---
     "FAIL_GRIFFITH": read_fail_griffith,
     "FAIL_GRIF": read_fail_griffith,
-    "SURF": read_eng_surf,
     "ENG_SURF": read_eng_surf,
     "ENG_SURFACE": read_eng_surf,
     "LAGMUL_HOMOKINETIC": read_cv_joint,
@@ -47718,7 +47544,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "FAIL_CHABOCHE": read_fail_chaboche,
     "FAIL_LEMAITRE_CHABOCHE": read_fail_chaboche,
     "FAIL_CHABOCHE_DAMAGE": read_fail_chaboche,
-    "ACCEL": read_eng_accel,
     "ENG_ACCEL": read_eng_accel,
     "ENG_ACCELERATION": read_eng_accel,
     "LAGMUL_UNIVERSAL_AXIS": read_cardan_joint,
@@ -47729,14 +47554,12 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_ENERGY_SPRING": read_sensor_spring_energy,
     "SENSOR_SPRING_ENER": read_sensor_spring_energy,
     # --- M235: Gurson Porous Metal Failure Criterion, Engine Displacement Output Directive, Distance/Rod Joint Aliases, and Spring Deflection Sensor Suite ---
-    "FAIL_GURSON": read_fail_gurson,
-    "FAIL_GURSON_MODEL": read_fail_gurson,
-    "FAIL_GURSON_DAMAGE": read_fail_gurson,
+    "FAIL_GURSON": read_fail,
+    "FAIL_GURSON_MODEL": read_fail,
+    "FAIL_GURSON_DAMAGE": read_fail,
     "DISP": read_eng_disp,
     "ENG_DISP": read_eng_disp,
     "ENG_DISPLACEMENT": read_eng_disp,
-    "LAGMUL_DISTANCE_JOINT": read_distance_joint,
-    "DISTANCE_JOINT": read_distance_joint,
     "LAGMUL_ROD_JOINT": read_distance_joint,
     "ROD_JOINT": read_distance_joint,
     "LAGMUL_ROD": read_distance_joint,
@@ -47841,7 +47664,6 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_BEND": read_sensor_spring_bend,
     "SENSOR_SPRING_BENDING": read_sensor_spring_bend,
     "SENSOR_BEND_SPRING": read_sensor_spring_bend,
-    "SENSOR_SPRING_MOMENT": read_sensor_spring_bend,
     # --- M242: Lou-Huhn Failure Criterion, Engine Internal Energy Output Directive, Constant Velocity Joint Aliases, and Spring Torsional Moment Sensor Suite ---
     "FAIL_LOU_HUHN": read_fail_lou_huhn,
     "FAIL_LH": read_fail_lou_huhn,
@@ -47900,8 +47722,10 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 
 ENGINE_KEYWORDS_IGNORE = {
-    "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP", "ROTC", "ROTV", "ROTA", "FORCE", "VOLUME", "DENSITY", "INTERNAL_ENERGY", "KINETIC_ENERGY", "TOTAL_ENERGY"
+    # Engine-only keywords that should be silently skipped in the Starter.
+    # Keys already in KEYWORD_PARSERS are handled by their own parser and
+    # are NOT listed here (KEYWORD_PARSERS is checked first in dispatch).
+    "ANIM", "DEBUG", "DT", "DTIX", "MON",
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
