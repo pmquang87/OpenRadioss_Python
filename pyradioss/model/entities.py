@@ -13495,6 +13495,38 @@ class SensorSpringShear:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailBaoWierzbicki:
+    """``/FAIL/BAO_WIERZBICKI/mat_ID`` (M241): Bao-Wierzbicki fracture locus failure model."""
+    mat_id: int = 0
+    title: str = ""
+    c1: float = 0.0          # fracture locus parameter C1
+    c2: float = 0.0          # fracture locus parameter C2
+    c3: float = 0.0          # fracture locus parameter C3
+    eta0: float = 0.333      # transition triaxiality eta_0 (default 1/3)
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngDensity:
+    """``/DENSITY`` or ``/ENG/DENSITY`` (M241): Engine material density output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_dens: float = 0.0     # time frequency for mass density output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSpringBend:
+    """``/SENSOR/SPRING_BEND`` or ``/SENSOR/BEND_SPRING`` (M241): Spring element bending moment threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    mbend_max: float = 1e30  # maximum bending moment threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

@@ -2308,6 +2308,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("RICE_TRACEY", "RT", "VOID_GROWTH"):
         read_fail_rice_tracey(block, model, log)
         return
+    if kind in ("BAO_WIERZBICKI", "BW", "BAO_WIEZBICKI", "BAO"):
+        read_fail_bao_wierzbicki(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11785,6 +11788,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("SPRING_SHEAR", "SPRING_SHEAR_FORCE", "SHEAR_SPRING", "SPRING_TRANSVERSE_FORCE"):
         read_sensor_spring_shear(block, model, log)
+        return
+    if kind in ("SPRING_BEND", "SPRING_BENDING", "BEND_SPRING", "SPRING_MOMENT"):
+        read_sensor_spring_bend(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -42406,6 +42412,37 @@ def read_fail_rice_tracey(block: KeywordBlock, model: Model, log: MessageLog) ->
     )
 
 
+def read_fail_bao_wierzbicki(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/BAO_WIERZBICKI/mat_ID`` (M241): Bao-Wierzbicki fracture locus failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/BAO_WIERZBICKI/{block.user_id}: missing data card", block.source)
+        return
+
+    c1, c2, c3, eta0, ifail_sh = 0.0, 0.0, 0.0, 0.333, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_BAO_WIERZBICKI_1")
+        c1 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        c2 = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        c3 = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        eta0 = _fval(f[3], 0.333) if len(f) > 3 else 0.333
+        ifail_sh = _ival(f[4], 1) if len(f) > 4 else 1
+    else:
+        toks = cards[0].tokens()
+        c1 = float(toks[0]) if len(toks) > 0 else 0.0
+        c2 = float(toks[1]) if len(toks) > 1 else 0.0
+        c3 = float(toks[2]) if len(toks) > 2 else 0.0
+        eta0 = float(toks[3]) if len(toks) > 3 else 0.333
+        ifail_sh = int(float(toks[4])) if len(toks) > 4 else 1
+
+    from ..model.entities import FailBaoWierzbicki
+    model.fail_bao_wierzbickis[block.user_id] = FailBaoWierzbicki(
+        mat_id=block.user_id, title=title, c1=c1, c2=c2,
+        c3=c3, eta0=eta0, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -45036,6 +45073,61 @@ def read_sensor_spring_shear(block: KeywordBlock, model: Model, log: MessageLog)
     ))
 
 
+def read_eng_density(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DENSITY`` or ``/ENG/DENSITY`` (M241): Engine material density output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/DENSITY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_dens, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_DENSITY_1")
+        dt_dens = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_dens = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngDensity
+    r_id = block.user_id or (len(model.eng_densities) + 1)
+    model.eng_densities[r_id] = EngDensity(
+        id=r_id, title=title, dt_dens=dt_dens, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_bend(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_BEND`` or ``/SENSOR/BEND_SPRING`` (M241): Spring element bending moment threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_BEND/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, mbend_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_BEND_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        mbend_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        mbend_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringBend, Sensor
+    ssb = SensorSpringBend(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        mbend_max=mbend_max, t_delay=t_delay
+    )
+    model.sensor_spring_bends[ssb.id] = ssb
+    model.sensors.append(Sensor(
+        id=ssb.id, kind="SPRING_BEND", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -47457,6 +47549,23 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_SHEAR_FORCE": read_sensor_spring_shear,
     "SENSOR_SHEAR_SPRING": read_sensor_spring_shear,
     "SENSOR_SPRING_TRANSVERSE_FORCE": read_sensor_spring_shear,
+    # --- M241: Bao-Wierzbicki Failure Criterion, Engine Density Output Directive, Hooke Joint Aliases, and Spring Bending Moment Sensor Suite ---
+    "FAIL_BAO_WIERZBICKI": read_fail_bao_wierzbicki,
+    "FAIL_BW": read_fail_bao_wierzbicki,
+    "FAIL_BAO_WIEZBICKI": read_fail_bao_wierzbicki,
+    "FAIL_BAO": read_fail_bao_wierzbicki,
+    "DENSITY": read_eng_density,
+    "ENG_DENSITY": read_eng_density,
+    "ENG_MAT_DENSITY": read_eng_density,
+    "ENG_MASS_DENSITY": read_eng_density,
+    "LAGMUL_HOOKE_JOINT": read_cardan_joint,
+    "HOOKE_JOINT": read_cardan_joint,
+    "LAGMUL_HOOKE_AXIS": read_cardan_joint,
+    "HOOKE_AXIS": read_cardan_joint,
+    "SENSOR_SPRING_BEND": read_sensor_spring_bend,
+    "SENSOR_SPRING_BENDING": read_sensor_spring_bend,
+    "SENSOR_BEND_SPRING": read_sensor_spring_bend,
+    "SENSOR_SPRING_MOMENT": read_sensor_spring_bend,
 }
 
 
@@ -47465,7 +47574,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP", "ROTC", "ROTV", "ROTA", "FORCE", "VOLUME"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP", "ROTC", "ROTV", "ROTA", "FORCE", "VOLUME", "DENSITY"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

@@ -1645,6 +1645,12 @@ class Model:
         self.eng_volumes: Dict[int, Any] = {}                        # /VOLUME, /ENG/VOLUME (M240)
         self.sensor_spring_shears: Dict[int, Any] = {}               # /SENSOR/SPRING_SHEAR (M240)
 
+        # M241 Entities
+        self.fail_bao_wierzbickis: Dict[int, Any] = {}               # /FAIL/BAO_WIERZBICKI (M241)
+        self.eng_densities: Dict[int, Any] = {}                      # /DENSITY, /ENG/DENSITY (M241)
+        self.sensor_spring_bends: Dict[int, Any] = {}                # /SENSOR/SPRING_BEND (M241)
+
+
 
 
 
