@@ -58,6 +58,7 @@ from ..model.entities import (
     Drape, IniBriEref, IncludeDyna, MonvolFvmBag1,
     GaugePoint, SphGlo, AnalyOptions, AleCfdSph,
     FailOrthBiquad, SlipringShell,
+    Upbeam, RelaxSystem, MonvolComm,
 )
 from ..model.model import Model
 from ..model.skew import SkewFrame
@@ -302,6 +303,14 @@ def read_title(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.title = block.cards[0].raw.strip()
 
 
+def read_subtitle(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SUBTITLE`` (M198): Subtitle model metadata header."""
+    if block.cards:
+        sub_text = block.cards[0].raw.strip()
+        model.subtitles.append(sub_text)
+        model.subtitle = sub_text
+
+
 def read_end(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/END``: nothing to do — the reading loop stops naturally."""
 
@@ -359,6 +368,33 @@ def read_node(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             xyz.append([float(v) for v in card.floats()[1:4]])
     if ids:
         model.add_nodes(np.array(ids), np.array(xyz))
+
+
+def read_cnode(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CNODE`` (M198): Commented coordinate nodes with metadata."""
+    from ..model.entities import CNode
+    ids, xyz = [], []
+    for card in block.cards:
+        if card.is_blank or card.raw.strip().startswith("#"):
+            continue
+        if block.fixed:
+            f = card.cut("NODE")
+            if not f[0]:
+                continue
+            nid = int(f[0])
+            coords = [_fval(s) for s in f[1:4]]
+        else:
+            t = card.tokens()
+            if len(t) < 4:
+                continue
+            nid = int(t[0])
+            coords = [float(v) for v in card.floats()[1:4]]
+        ids.append(nid)
+        xyz.append(coords)
+        model.cnodes[nid] = CNode(id=nid, x=coords[0], y=coords[1], z=coords[2])
+    if ids:
+        model.add_nodes(np.array(ids), np.array(xyz))
+
 
 
 def _read_elems(block: KeywordBlock, model: Model, log: MessageLog,
@@ -17926,6 +17962,9 @@ def read_monvol(block: KeywordBlock, model: Model, log: MessageLog):
         return
     elif vol_type in ("COMMU1", "TYPE9"):
         read_monvol_commu(block, model, log)
+        return
+    elif vol_type in ("COMM", "COMMUNICATION"):
+        read_monvol_comm(block, model, log)
         return
     elif vol_type in ("COMMU", "TYPE5"):
         read_monvol_commu_type5(block, model, log)
@@ -39475,6 +39514,172 @@ def read_merge_rbody(block: KeywordBlock, model: Model, log: MessageLog) -> None
 
 
 
+def read_dttsh(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DTTSH`` or ``/DT/TSH`` (M198): Thick shell time step scaling control."""
+    model.dttsh = True
+
+
+def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/H3D`` (M198): HyperView H3D file output format request."""
+    # Stored for output configuration
+    pass
+
+
+def read_upbeam(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/UPBEAM`` or ``/UPBEAM/INT_BEAM/id`` (M198): Integrated beam cross-section update."""
+    upbeam_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/UPBEAM/{upbeam_id}: missing data card", block.source)
+        return
+    grnd_id, i_updt, eps_max, npt_int = 0, 0, 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("UPBEAM_1")
+        grnd_id = _ival(f[0]) if len(f) > 0 else 0
+        i_updt = _ival(f[1]) if len(f) > 1 else 0
+        eps_max = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        npt_int = _ival(f[4]) if len(f) > 4 else 0
+    else:
+        toks = cards[0].tokens()
+        if len(toks) > 0:
+            grnd_id = _safe_int(toks[0])
+        if len(toks) > 1:
+            i_updt = _safe_int(toks[1])
+        if len(toks) > 2:
+            eps_max = _safe_float(toks[2])
+        if len(toks) > 3:
+            npt_int = _safe_int(toks[3])
+    up = Upbeam(id=upbeam_id, title=title, grnd_id=grnd_id, i_updt=i_updt, eps_max=eps_max, npt_int=npt_int)
+    model.upbeams[upbeam_id] = up
+
+
+def read_relax(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RELAX`` or ``/RELAX/SYSTEM/id`` or ``/RELAX/DYNA/id`` (M198): Quasi-static dynamic relaxation."""
+    model.relax = True
+    relax_id = block.user_id or (len(model.relax_systems) + 1)
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        return
+    t_start, t_stop, damp_coeff, i_damp, v_lim, eps_tol = 0.0, 0.0, 0.0, 0, 0.0, 0.0
+    if block.fixed:
+        f = cards[0].cut("RELAX_1")
+        t_start = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        t_stop = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        damp_coeff = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        i_damp = _ival(f[3]) if len(f) > 3 else 0
+        v_lim = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        eps_tol = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+    else:
+        toks = cards[0].tokens()
+        if len(toks) > 0:
+            t_start = _safe_float(toks[0])
+        if len(toks) > 1:
+            t_stop = _safe_float(toks[1])
+        if len(toks) > 2:
+            damp_coeff = _safe_float(toks[2])
+        if len(toks) > 3:
+            i_damp = _safe_int(toks[3])
+        if len(toks) > 4:
+            v_lim = _safe_float(toks[4])
+        if len(toks) > 5:
+            eps_tol = _safe_float(toks[5])
+    rel = RelaxSystem(id=relax_id, title=title, t_start=t_start, t_stop=t_stop,
+                      damp_coeff=damp_coeff, i_damp=i_damp, v_lim=v_lim, eps_tol=eps_tol)
+    model.relax_systems[relax_id] = rel
+
+
+def read_centri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CENTRI/id`` (M198): Centrifugal loading field."""
+    centri_id = block.user_id or (len(model.centris) + 1)
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/CENTRI/{centri_id}: missing data card", block.source)
+        return
+    grnd_id, sens_id, fct_id, node_orig, node_axis = 0, 0, 0, 0, 0
+    omega = 0.0
+    scale_x, scale_y, scale_z = 1.0, 1.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("CENTRI_1")
+        grnd_id = _ival(f1[0]) if len(f1) > 0 else 0
+        sens_id = _ival(f1[1]) if len(f1) > 1 else 0
+        fct_id = _ival(f1[2]) if len(f1) > 2 else 0
+        node_orig = _ival(f1[3]) if len(f1) > 3 else 0
+        node_axis = _ival(f1[4]) if len(f1) > 4 else 0
+        omega = _fval(f1[5], 0.0) if len(f1) > 5 else 0.0
+        if len(cards) > 1:
+            f2 = cards[1].cut("CENTRI_2")
+            scale_x = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+            scale_y = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
+            scale_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        t1 = cards[0].tokens()
+        if len(t1) > 0:
+            grnd_id = _safe_int(t1[0])
+        if len(t1) > 1:
+            sens_id = _safe_int(t1[1])
+        if len(t1) > 2:
+            fct_id = _safe_int(t1[2])
+        if len(t1) > 3:
+            node_orig = _safe_int(t1[3])
+        if len(t1) > 4:
+            node_axis = _safe_int(t1[4])
+        if len(t1) > 5:
+            omega = _safe_float(t1[5])
+        if len(cards) > 1:
+            t2 = cards[1].tokens()
+            if len(t2) > 0:
+                scale_x = _safe_float(t2[0])
+            if len(t2) > 1:
+                scale_y = _safe_float(t2[1])
+            if len(t2) > 2:
+                scale_z = _safe_float(t2[2])
+    c = CentrifugalLoad(id=centri_id, title=title, grnd_id=grnd_id, sens_id=sens_id,
+                        fct_id=fct_id, node_orig=node_orig, node_axis=node_axis,
+                        omega=omega, scale_x=scale_x, scale_y=scale_y, scale_z=scale_z)
+    model.centris[centri_id] = c
+
+
+def read_monvol_comm(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MONVOL/COMM/id`` or ``/MONVOL/COMMUNICATION/id`` (M198): Inter-chamber communication between monitored volumes."""
+    comm_id = block.user_id or (len(model.monvol_comms) + 1)
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/MONVOL/COMM/{comm_id}: missing data card", block.source)
+        return
+    monvol1_id, monvol2_id, surface_id = 0, 0, 0
+    cd, a_vent = 0.0, 0.0
+    fct_id, sens_id = 0, 0
+    if block.fixed:
+        f = cards[0].cut("MONVOL_COMM_1")
+        monvol1_id = _ival(f[0]) if len(f) > 0 else 0
+        monvol2_id = _ival(f[1]) if len(f) > 1 else 0
+        surface_id = _ival(f[2]) if len(f) > 2 else 0
+        cd = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        a_vent = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        fct_id = _ival(f[5]) if len(f) > 5 else 0
+        sens_id = _ival(f[6]) if len(f) > 6 else 0
+    else:
+        toks = cards[0].tokens()
+        if len(toks) > 0:
+            monvol1_id = _safe_int(toks[0])
+        if len(toks) > 1:
+            monvol2_id = _safe_int(toks[1])
+        if len(toks) > 2:
+            surface_id = _safe_int(toks[2])
+        if len(toks) > 3:
+            cd = _safe_float(toks[3])
+        if len(toks) > 4:
+            a_vent = _safe_float(toks[4])
+        if len(toks) > 5:
+            fct_id = _safe_int(toks[5])
+        if len(toks) > 6:
+            sens_id = _safe_int(toks[6])
+    mc = MonvolComm(id=comm_id, title=title, monvol1_id=monvol1_id, monvol2_id=monvol2_id,
+                    surface_id=surface_id, cd=cd, a_vent=a_vent, fct_id=fct_id, sens_id=sens_id)
+    model.monvol_comms[comm_id] = mc
+
+
+
 def read_airbag_injector(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/AIRBAG/INJECTOR/id`` or ``/INJECTOR/id`` (M142): Airbag jetting injector."""
     from ..model.entities import AirbagInjector
@@ -41047,6 +41252,20 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "FRAME_FIX": read_frame,
     "ALE_GRID": read_ale,
     "ALE_ZERO_VEL": read_ale,
+    # --- M198: Subtitles, Beam Updates, Monvol Communication, Dynamic Relaxation & Centrifugal Loading Suite ---
+    "SUBTITLE": read_subtitle,
+    "CNODE": read_cnode,
+    "UPBEAM": read_upbeam,
+    "UPBEAM_INT_BEAM": read_upbeam,
+    "RELAX": read_relax,
+    "RELAX_SYSTEM": read_relax,
+    "RELAX_DYNA": read_relax,
+    "CENTRI": read_centri,
+    "DTTSH": read_dttsh,
+    "DT_TSH": read_dttsh,
+    "H3D": read_h3d,
+    "MONVOL_COMM": read_monvol_comm,
+    "MONVOL_COMMUNICATION": read_monvol_comm,
 }
 
 

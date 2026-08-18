@@ -154,6 +154,12 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                             ec.anim_tens.append(f"ELEM/{sub2}")
                     elif sub2 not in ec.anim_elem:
                         ec.anim_elem.append(sub2)
+                elif sub == "NODA" and sub2 in ("VEL", "DIS", "DISP", "ACC", "CONT"):
+                    if sub2 not in ec.anim_vect:
+                        ec.anim_vect.append(sub2)
+                    chan = f"{sub}/{sub2}"
+                    if chan not in ec.anim_elem:
+                        ec.anim_elem.append(chan)
                 elif sub in ("BRICK", "BRI", "SHELL", "SH3N", "SHE", "QUAD", "QUA", "TETRA10", "TETRA4", "SOLID"):
                     chan = f"{sub}/{sub2}" if sub2 else sub
                     if sub2 == "TENS" or "TENS" in chan:

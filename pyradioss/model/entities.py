@@ -593,12 +593,12 @@ class PressureLoad:
 
 @dataclass
 class CentrifugalLoad:
-    """/LOAD/CENTRI (M93): centrifugal rotational load on a node group.
+    """/LOAD/CENTRI (M93) and /CENTRI (M198): Centrifugal rotational load / field.
 
     Fortran origin: ``starter/source/loads/general/load_centri/hm_read_load_centri.F``.
     """
     id: int
-    funct_id: int
+    funct_id: int = 0
     dir: str = "XX"         # rotation axis: X, Y, Z, XX, YY, ZZ
     frame_id: int = 0       # reference frame
     sens_id: int = 0        # /SENSOR gating
@@ -607,6 +607,12 @@ class CentrifugalLoad:
     scale_x: float = 1.0    # Ascalex (time scale)
     scale_y: float = 1.0    # Fscaley (rotational velocity scale)
     title: str = ""
+    grnd_id: int = 0
+    fct_id: int = 0
+    node_orig: int = 0
+    node_axis: int = 0
+    omega: float = 0.0
+    scale_z: float = 1.0
 
 
 @dataclass
@@ -11190,5 +11196,60 @@ class MatLaw93:
 MatViscElas = MatLaw62
 MatHoneycomb = MatLaw88
 MatOrthHill = MatLaw93
+
+
+@dataclass
+class CNode:
+    """``/CNODE`` (M198): Commented coordinate node definition.
+
+    Fortran origin: ``starter/source/elements/reader/hm_read_node.F`` / CFG ``cnode.cfg``.
+    """
+    id: int
+    x: float = 0.0
+    y: float = 0.0
+    z: float = 0.0
+    comments: List[str] = field(default_factory=list)
+
+
+@dataclass
+class Upbeam:
+    """``/UPBEAM`` or ``/UPBEAM/INT_BEAM`` (M198): Integrated beam cross-section update."""
+    id: int
+    title: str = ""
+    grnd_id: int = 0
+    i_updt: int = 0
+    eps_max: float = 0.0
+    npt_int: int = 0
+
+
+@dataclass
+class RelaxSystem:
+    """``/RELAX`` or ``/RELAX/SYSTEM`` or ``/RELAX/DYNA`` (M198): Quasi-static dynamic relaxation."""
+    id: int
+    title: str = ""
+    t_start: float = 0.0
+    t_stop: float = 0.0
+    damp_coeff: float = 0.0
+    i_damp: int = 0
+    v_lim: float = 0.0
+    eps_tol: float = 0.0
+
+
+
+
+@dataclass
+class MonvolComm:
+    """``/MONVOL/COMM`` or ``/MONVOL/COMMUNICATION`` (M198): Direct inter-chamber communication between monitored volumes."""
+    id: int
+    title: str = ""
+    monvol1_id: int = 0
+    monvol2_id: int = 0
+    surface_id: int = 0
+    cd: float = 0.0
+    a_vent: float = 0.0
+    fct_id: int = 0
+    sens_id: int = 0
+
+
 
 

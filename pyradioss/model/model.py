@@ -1288,6 +1288,17 @@ class Model:
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"
+        self.subtitles: List[str] = []                              # /SUBTITLE (M198)
+        self.subtitle: str = ""                                     # /SUBTITLE (M198)
+        self.cnodes: Dict[int, Any] = {}                            # /CNODE (M198)
+        self.upbeams: Dict[int, Any] = {}                           # /UPBEAM, /UPBEAM/INT_BEAM (M198)
+        self.relax: bool = False                                    # /RELAX (M198)
+        self.relax_systems: Dict[int, Any] = {}                     # /RELAX, /RELAX/SYSTEM, /RELAX/DYNA (M198)
+        self.centris: Dict[int, Any] = {}                           # /CENTRI (M198)
+        self.monvol_comms: Dict[int, Any] = {}                      # /MONVOL/COMM, /MONVOL/COMMUNICATION (M198)
+        self.dttsh: bool = False                                    # /DTTSH, /DT/TSH (M198)
+
+
 
     # ----------------------------------------------------------------------
     # Node handling

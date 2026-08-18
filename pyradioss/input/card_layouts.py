@@ -2906,6 +2906,12 @@ LAYOUTS: Dict[str, List[int]] = {
     "DEF_INTER_TYPE25_1": [20, 10, 10, 10, 10, 10],
     "DEF_INTER_TYPE25_2": [40, 10, 10],
     "DEF_INTER_TYPE25_3": [30, 10],
+    # M198: UPBEAM, RELAX, CENTRI, MONVOL_COMM
+    "UPBEAM_1": [10, 10, 20, 20, 10],
+    "RELAX_1": [10, 10, 10, 10, 10, 10],
+    "CENTRI_1": [10, 10, 10, 10, 10, 10],
+    "CENTRI_2": [10, 10, 10],
+    "MONVOL_COMM_1": [10, 10, 10, 10, 10, 10, 10],
 }
 
 

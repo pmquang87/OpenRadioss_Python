@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M196)
+## What is implemented (M1 → M198)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -203,6 +203,7 @@ real history is 41 milestones. One line each:
 | M195 | Hensel-Spittel hot-forming, 6-DOF generalized spring, predefined plasticity & Drucker-Prager 2nd materials, spring material property, smoothed curve function, oriented friction, frequency & function damping, initial state tables, checksums & engine output directives suite: /MAT/LAW103 (/MAT/HENSEL_SPITTEL / /MAT/HEN), /MAT/LAW108 (/MAT/SPR_GENE), /MAT/PLAS_PREDEF, /MAT/DPRAG2, /PROP/TYPE23 (/PROP/SPR_MAT), /FUNCT_SMOOTH, /FRIC_ORIENT, /DAMP/FREQ_RANGE, /DAMP/FUNCT, /INIBRI/STRS_FGLO, /INISPHCEL (/INICEL/SPH), /INISH3/FAIL, /INISHE/FAIL, /INISHE/STRA_F_GLOB, /CHECKSUM/START, /CHECKSUM/END, /ANIM/SPRING/FORC, /ANIM/BRICK/TENS, /ENG/STATE/DT, /ENG/DYNAIN/DT |
 | M196 | Spring-beam 6-DOF, sew/stitch seam & Zhao hardening material models, ALE coupling & cylindrical coordinate frame suite: /MAT/LAW113 (/MAT/SPR_BEAM / /MAT/BEAM_SPRING), /PROP/TYPE35 (/PROP/STITCH / /PROP/SEW), /MAT/LAW48 (/MAT/ZHAO / /MAT/PLAS_ZHAO), /INTER/TYPE18, /FRAME/NOD (/FRAME/NODE), /TABLE/INIBRI/STRA_F, /TABLE/INIBRI/ENER, /TABLE/INISHE/STRA_F, /TABLE/INISH3/STRA_F, /TABLE/INISPH, /DAMP/INTER |
 | M197 | Advanced materials, seatbelt pretensioners, sliprings, retractors, moving frames & ALE grid directives suite: /MAT/LAW34 (/MAT/BOLT / /MAT/BOLTZMAN), /MAT/LAW60 (/MAT/FABRIC / /MAT/PLAS_T3), /MAT/LAW62 (/MAT/VISC_ELAS / /MAT/VISC_HYP), /MAT/LAW79 (/MAT/TRANS_ISO / /MAT/JOHN_HOLM), /MAT/LAW82 (/MAT/OGDEN), /MAT/LAW88 (/MAT/HONEYCOMB / /MAT/HYPER_ELAS), /MAT/LAW93 (/MAT/ORTH_HILL), /PRETENSIONER (/SEATBELT/PRETENSIONER), /SEATBELT/SLIPRING, /SEATBELT/RETRACTOR, /FRAME/MOV, /ALE/GRID, /ALE/ZERO_VEL |
+| M198 | Subtitles, beam updates, monitored volume communication, dynamic relaxation, centrifugal loading & commented nodes suite: /SUBTITLE, /CNODE, /UPBEAM (/UPBEAM/INT_BEAM), /RELAX (/RELAX/SYSTEM / /RELAX/DYNA), /CENTRI, /DTTSH (/DT/TSH), /H3D, /MONVOL/COMM (/MONVOL/COMMUNICATION), /ANIM/NODA/ACC, /ANIM/NODA/VEL |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
