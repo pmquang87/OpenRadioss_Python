@@ -12197,4 +12197,76 @@ SensorSph = SensorSubsystem
 HeatGlobal = HeatSolver
 
 
+@dataclass
+class FlowBoundary:
+    """``/FLOW[/<subtype>]/id`` or ``/ALE/FLOW/id`` (M205): ALE flow boundary condition."""
+    id: int = 1
+    title: str = ""
+    subtype: str = "INFLOW"
+    surf_id: int = 0
+    flow_type: int = 0
+    rho: float = 0.0
+    pres: float = 0.0
+    temp: float = 0.0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    sens_id: int = 0
+
+
+@dataclass
+class HeatRadCav:
+    """``/HEAT/RAD_CAV/id`` (M205): Cavity radiation surface-to-surface coupling."""
+    id: int = 1
+    title: str = ""
+    surf_id1: int = 0
+    surf_id2: int = 0
+    emissivity1: float = 1.0
+    emissivity2: float = 1.0
+    view_factor: float = 1.0
+
+
+@dataclass
+class PropSpringTors:
+    """``/PROP/TYPE19`` or ``/PROP/SPR_TORS/id`` (M205): Torsional spring property."""
+    id: int = 1
+    title: str = ""
+    mass: float = 0.0
+    stiffness_k: float = 0.0
+    damping_c: float = 0.0
+    fcut: float = 0.0
+
+    @property
+    def k(self) -> float:
+        return self.stiffness_k
+
+    @property
+    def c(self) -> float:
+        return self.damping_c
+
+
+@dataclass
+class PropSpringBend:
+    """``/PROP/TYPE20`` or ``/PROP/SPR_BEND/id`` (M205): Bending spring property."""
+    id: int = 1
+    title: str = ""
+    mass: float = 0.0
+    stiffness_k: float = 0.0
+    damping_c: float = 0.0
+    fcut: float = 0.0
+
+    @property
+    def k(self) -> float:
+        return self.stiffness_k
+
+    @property
+    def c(self) -> float:
+        return self.damping_c
+
+
+PropType19 = PropSpringTors
+PropType20 = PropSpringBend
+
+
+
 

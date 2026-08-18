@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M204)
+## What is implemented (M1 → M205)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -210,6 +210,7 @@ real history is 41 milestones. One line each:
 | M202 | Thermal Surface Loads & Convection/Radiation, Hydrodynamic Johnson-Cook Material Law 4, Plastic Work Threshold Sensor, and Engine /HEAT /TFILE Pipeline Suite: /HEAT/FLUX (/FLUX) thermal surface heat flux boundary condition, /HEAT/CONVEC (/HEAT/CONVECTION, /CONVEC) surface convection boundary condition, /HEAT/RADIATION (/HEAT/RAD, /RADIATION) surface radiation boundary condition, /MAT/LAW4 (/MAT/HYD_JCOOK, /LAW4, /HYD_JCOOK) hydrodynamic Johnson-Cook elastoplasticity with Mie-Gruneisen EOS, /SENSOR/WORK (/SENSOR/TYPE13) internal/plastic work threshold sensor, and engine directives /HEAT, /TFILE, /H3D/DT |
 | M203 | Kinematic Gear/Rack/Diff Constraints, Guided Cable Type 26, Python Sensor, Failure Criteria, Adaptive Meshing Set, SPH Gauge, Checksum Directives and Transform Position Suite: /LAGMUL/GEAR (/GEAR) rotational gear constraint, /LAGMUL/RACK (/RACK) rack-and-pinion kinematic constraint, /LAGMUL/DIFF (/DIFF) differential rotational kinematic constraint, /INTER/TYPE26 (/INTER/GUIDED_CABLE, /TYPE26) guided cable sliding interface, /SENSOR/PYTHON Python-scripted sensor function, /FAIL/JOHNSON (/FAIL/JOHN_COOK), /FAIL/BIQUAD, /FAIL/FLD, /FAIL/CONNECT, /FAIL/FRACTAL_DMG, /FAIL/ORTHENERG failure criteria, /ADMESH/SET adaptive meshing on element/node set, /GAUGE/SPH SPH gauge point measurement, /CHECKSUM/START, /CHECKSUM/END checksum calculation directives, /TRANSFORM/POS (/POS, /POSITION) 6-point 3D alignment transformation, and /PROP/INJECT1, /PROP/INJECT2 gas injector properties |
 | M204 | Thermal Transient Solvers, Heat Generation, X-FEM Fracture, Subsystem Sensors, and Initial/Boundary Directives Suite: /HEAT/SOLVER & /HEAT/GLOBAL thermal transient solver controls, /LOAD/HEAT (/LOAD/THERM, /HEAT/LOAD) volumetric heat generation source, /HEAT/MAT (/HEAT/MATERIAL) material thermal properties modifier, /XFEM (/XFEM/SHELL, /XFEM/SOLID) extended finite element enrichment controls, /INICRACK coordinate plane and segment crack definitions, /SENSOR/AIRBAG, /SENSOR/MONVOL, /SENSOR/SHELL, /SENSOR/SOLID, /SENSOR/SPH subsystem threshold sensors, and /INITEMP, /IMPTEMP dictionary mapping and thermal time-history channels |
+| M205 | ALE Inflow/Outflow Boundaries, Cavity Enclosure Radiation, Torsional/Bending Springs, and Blast/Fluid Hydrostatic Load Directives Suite: /FLOW, /FLOW/INFLOW, /FLOW/OUTFLOW, /ALE/FLOW Eulerian/ALE flow boundary condition on surface with velocity, density, pressure, temperature and sensor gating, /HEAT/RAD_CAV (/HEAT/CAV, /RAD_CAV) surface enclosure radiation coupling with emissivity and view factor, /PROP/TYPE19 (/PROP/SPR_TORS) torsional spring property, /PROP/TYPE20 (/PROP/SPR_BEND) bending spring property, and /LOAD_PBLAST, /LOAD_PFLUID, /LOAD_LASER model dictionary aliases |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read

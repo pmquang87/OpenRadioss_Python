@@ -3022,6 +3022,12 @@ LAYOUTS: Dict[str, List[int]] = {
     # M204: HEAT SOLVER, XFEM
     "HEAT_SOLVER_1": [10, 10, 20, 20, 20],
     "XFEM_1": [10, 10, 10, 10],
+    # M205: FLOW, HEAT_RAD_CAV, PROP_TYPE19, PROP_TYPE20
+    "FLOW_1": [10, 10, 10, 10, 10],
+    "FLOW_2": [20, 20, 20, 20, 20],
+    "HEAT_RAD_CAV_1": [10, 10, 20, 20, 20],
+    "PROP_TYPE19_1": [20, 20, 20],
+    "PROP_TYPE20_1": [20, 20, 20],
 }
 
 CARD_LAYOUTS = LAYOUTS

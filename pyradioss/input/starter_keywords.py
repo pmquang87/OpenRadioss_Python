@@ -1642,6 +1642,8 @@ def read_ale(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.ale_zero = True
     elif sub == "MUSCL" or (len(block.parts) > 2 and block.parts[2].upper() == "MUSCL"):
         read_ale_muscl(block, model, log)
+    elif sub == "FLOW" or (len(block.parts) > 2 and block.parts[1].upper() == "FLOW"):
+        read_flow(block, model, log)
     else:
         log.warning(f"/ALE/{sub} not ported — block skipped", block.source)
 
@@ -1742,6 +1744,8 @@ def read_heat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             id=hid, title=title, isolv=isolv, itype=itype,
             ttol=ttol, dttmax=dttmax, dttmin=dttmin
         )
+    elif sub in ("RAD_CAV", "CAV", "CAVITY", "RADCAV") or (len(block.parts) > 2 and block.parts[1].upper() in ("RAD_CAV", "CAV", "RADCAV", "RAD")):
+        read_heat_rad_cav(block, model, log)
     else:
         log.warning(f"/HEAT/{sub} not ported", block.source)
 
@@ -1964,6 +1968,36 @@ def read_radiation(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         ascale=ascale, fscale=fscale, tstart=tstart, tstop=tstop, emissivity=emiss, emiss=emiss
     )
     model.heat_radiations[rid] = hr
+
+
+def read_heat_rad_cav(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/HEAT/RAD_CAV/id`` or ``/HEAT/CAV/id`` (M205): Cavity radiation surface coupling."""
+    from ..model.entities import HeatRadCav
+    hid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    surf_id1, surf_id2 = 0, 0
+    emissivity1, emissivity2, view_factor = 1.0, 1.0, 1.0
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("HEAT_RAD_CAV_1")
+            surf_id1 = _ival(f[0]) if len(f) > 0 else 0
+            surf_id2 = _ival(f[1]) if len(f) > 1 else 0
+            emissivity1 = _fval(f[2], 1.0) if len(f) > 2 and f[2].strip() else 1.0
+            emissivity2 = _fval(f[3], 1.0) if len(f) > 3 and f[3].strip() else 1.0
+            view_factor = _fval(f[4], 1.0) if len(f) > 4 and f[4].strip() else 1.0
+        else:
+            t = cards[0].tokens()
+            surf_id1 = int(float(t[0])) if len(t) > 0 else 0
+            surf_id2 = int(float(t[1])) if len(t) > 1 else 0
+            emissivity1 = float(t[2]) if len(t) > 2 else 1.0
+            emissivity2 = float(t[3]) if len(t) > 3 else 1.0
+            view_factor = float(t[4]) if len(t) > 4 else 1.0
+    hrc = HeatRadCav(
+        id=hid, title=title, surf_id1=surf_id1, surf_id2=surf_id2,
+        emissivity1=emissivity1, emissivity2=emissivity2, view_factor=view_factor
+    )
+    model.heat_rad_cavs[hid] = hrc
+
 
 
 
@@ -4778,6 +4812,12 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if typename in ("TYPE20", "TSHELL", "THICK_SHELL", "PROP_TYPE20", "PROP_TSHELL", "PROP_THICK_SHELL", "P20_TSHELL", "PROP_P20_TSHELL"):
         read_prop_type20(block, model, log)
+        return
+    if typename in ("TYPE19", "SPR_TORS", "SPRING_TORS", "PROP_TYPE19", "PROP_SPR_TORS", "P19_SPR_TORS"):
+        read_prop_type19(block, model, log)
+        return
+    if typename in ("SPR_BEND", "SPRING_BEND", "PROP_SPR_BEND", "P20_SPR_BEND"):
+        read_prop_spr_bend(block, model, log)
         return
     # M189: PROP_TYPE43 (CONNECT)
     if typename in ("TYPE43", "CONNECT", "PROP_CONNECT", "PROP_TYPE43", "P43_CONNECT", "PROP_P43_CONNECT"):
@@ -9668,6 +9708,50 @@ def read_ale_close(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         hclose = float(toks[1]) if len(toks) > 1 else 0.0
 
     model.ale_close = AleClose(htest=htest, hclose=hclose)
+
+
+def read_flow(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FLOW[/<subtype>]/id`` or ``/ALE/FLOW/id`` (M205): Flow boundary condition."""
+    from ..model.entities import FlowBoundary
+    sub = block.parts[1].upper() if len(block.parts) > 1 else "INFLOW"
+    fid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    surf_id, flow_type, sens_id = 0, 0, 0
+    rho, pres, temp = 0.0, 0.0, 0.0
+    vx, vy, vz = 0.0, 0.0, 0.0
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f1 = cards[0].cut("FLOW_1")
+            surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+            flow_type = _ival(f1[1]) if len(f1) > 1 else 0
+            sens_id = _ival(f1[2]) if len(f1) > 2 else 0
+        else:
+            t1 = cards[0].tokens()
+            surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+            flow_type = int(float(t1[1])) if len(t1) > 1 else 0
+            sens_id = int(float(t1[2])) if len(t1) > 2 else 0
+    if len(cards) > 1 and not cards[1].is_blank:
+        if block.fixed:
+            f2 = cards[1].cut("FLOW_2")
+            rho = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            pres = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            temp = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            vx = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+            vy = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+        else:
+            t2 = cards[1].tokens()
+            rho = float(t2[0]) if len(t2) > 0 else 0.0
+            pres = float(t2[1]) if len(t2) > 1 else 0.0
+            temp = float(t2[2]) if len(t2) > 2 else 0.0
+            vx = float(t2[3]) if len(t2) > 3 else 0.0
+            vy = float(t2[4]) if len(t2) > 4 else 0.0
+    fb = FlowBoundary(
+        id=fid, title=title, subtype=sub, surf_id=surf_id,
+        flow_type=flow_type, rho=rho, pres=pres, temp=temp,
+        vx=vx, vy=vy, vz=vz, sens_id=sens_id
+    )
+    model.flow_boundaries[fid] = fb
+
 
 
 
@@ -37008,6 +37092,59 @@ def read_prop_type20(block: KeywordBlock, model: Model, log: MessageLog) -> None
     )
 
 
+def read_prop_type19(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE19`` or ``/PROP/SPR_TORS/prop_ID`` (M205): Torsional spring property."""
+    from ..model.entities import PropSpringTors, Property
+    prop_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    mass, k, c, fcut = 0.0, 0.0, 0.0, 0.0
+    if valid_cards:
+        if block.fixed:
+            f = valid_cards[0].cut("PROP_TYPE19_1")
+            mass = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            k = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            c = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        else:
+            t = valid_cards[0].tokens()
+            mass = float(t[0]) if len(t) > 0 else 0.0
+            k = float(t[1]) if len(t) > 1 else 0.0
+            c = float(t[2]) if len(t) > 2 else 0.0
+    prop = PropSpringTors(id=prop_id, title=title, mass=mass, stiffness_k=k, damping_c=c, fcut=fcut)
+    model.props_type19[prop_id] = prop
+    model.properties[prop_id] = Property(
+        id=prop_id, type=19, title=title,
+        params={"mass": mass, "stiffness_k": k, "damping_c": c, "fcut": fcut}
+    )
+
+
+def read_prop_spr_bend(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/SPR_BEND/prop_ID`` (M205): Bending spring property."""
+    from ..model.entities import PropSpringBend, Property
+    prop_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    mass, k, c, fcut = 0.0, 0.0, 0.0, 0.0
+    if valid_cards:
+        if block.fixed:
+            f = valid_cards[0].cut("PROP_TYPE20_1")
+            mass = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            k = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            c = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        else:
+            t = valid_cards[0].tokens()
+            mass = float(t[0]) if len(t) > 0 else 0.0
+            k = float(t[1]) if len(t) > 1 else 0.0
+            c = float(t[2]) if len(t) > 2 else 0.0
+    prop = PropSpringBend(id=prop_id, title=title, mass=mass, stiffness_k=k, damping_c=c, fcut=fcut)
+    model.props_type20[prop_id] = prop
+    model.properties[prop_id] = Property(
+        id=prop_id, type=20, title=title,
+        params={"mass": mass, "stiffness_k": k, "damping_c": c, "fcut": fcut}
+    )
+
+
+
 # ----------------------------------------------------------------------
 # M189: Gurson, Gray Cast Iron, Composite Solid, Connector, Martensite Materials,
 # Advanced Failure Criteria & Generalized Spring/Solid Properties
@@ -42952,6 +43089,22 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "INITEMP": read_initemp,
     "IMPTEMP": read_imptemp,
     "INICRACK": read_inicrack,
+    # --- M205: Flow Boundaries, Cavity Radiation, Torsional/Bending Springs & Load Suite ---
+    "FLOW": read_flow,
+    "FLOW_INFLOW": read_flow,
+    "FLOW_OUTFLOW": read_flow,
+    "ALE_FLOW": read_flow,
+    "HEAT_RAD_CAV": read_heat_rad_cav,
+    "HEAT_CAV": read_heat_rad_cav,
+    "RAD_CAV": read_heat_rad_cav,
+    "PROP_TYPE19": read_prop_type19,
+    "PROP_SPR_TORS": read_prop_type19,
+    "PROP_SPR_BEND": read_prop_spr_bend,
+    "SPR_TORS": read_prop_type19,
+    "SPR_BEND": read_prop_spr_bend,
+    "LOAD_PBLAST": read_pblast,
+    "LOAD_PFLUID": read_pfluid,
+    "LOAD_LASER": read_laser,
 }
 
 
@@ -42960,7 +43113,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FLOW"
+    "DEBUG", "NOIS"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

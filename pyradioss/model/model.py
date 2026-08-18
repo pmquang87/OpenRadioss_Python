@@ -1412,6 +1412,22 @@ class Model:
         self.heat_loads = self.load_therms
         self.heat_mats = self.mat_heat_modifiers
 
+        # M205 Entities
+        self.flow_boundaries: Dict[int, Any] = {}                    # /FLOW, /ALE/FLOW (M205)
+        self.flows = self.flow_boundaries
+        self.heat_rad_cavs: Dict[int, Any] = {}                      # /HEAT/RAD_CAV (M205)
+        self.props_type19: Dict[int, Any] = {}                       # /PROP/TYPE19, /PROP/SPR_TORS (M205)
+        self.props_spr_tors = self.props_type19
+        self.props_type20: Dict[int, Any] = {}                       # /PROP/TYPE20, /PROP/SPR_BEND (M205)
+        self.props_spr_bend = self.props_type20
+        self.pblasts = self.pblast_loads
+        self.load_pblasts = self.pblast_loads
+        self.pfluids = self.pfluid_loads
+        self.load_pfluids = self.pfluid_loads
+        self.lasers = self.laser_loads
+        self.load_lasers = self.laser_loads
+
+
 
 
 
