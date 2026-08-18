@@ -1847,6 +1847,18 @@ class GuidedCable:
     fric: float = 0.0
     title: str = ""
 
+    @property
+    def grnod_main(self) -> int:
+        return self.grnod_id
+
+    @property
+    def grnod_sub(self) -> int:
+        return self.grpart_id
+
+    @property
+    def frad(self) -> float:
+        return self.stfac
+
 
 @dataclass
 class ShellPartPerturbation:
@@ -11937,4 +11949,202 @@ class ChecksumDirective:
     action: str = "START"  # "START" or "END"
     val1: int = 0
     val2: int = 0
+
+
+BoxRect = Box
+BoxCyl = Box
+BoxSphere = Box
+BoxCylin = Box
+BoxSpher = Box
+
+
+@dataclass
+class FailJohnson:
+    """``/FAIL/JOHNSON/mat_id`` or ``/FAIL/JOHN_COOK/mat_id`` (M203): Johnson-Cook failure model."""
+    id: int = 0
+    mat_id: int = 0
+    d1: float = 0.0
+    d2: float = 0.0
+    d3: float = 0.0
+    d4: float = 0.0
+    d5: float = 0.0
+    eps_dot_0: float = 1.0
+    ifail_sh: int = 1
+    ifail_so: int = 1
+    epsf_min: float = 0.0
+    dadv: float = 0.0
+    ixfem: int = 0
+    failip: int = 0
+    fail_id: int = 0
+    title: str = ""
+
+
+@dataclass
+class FailBiquad:
+    """``/FAIL/BIQUAD/mat_id`` (M203): Biquadratic failure criterion."""
+    id: int = 0
+    mat_id: int = 0
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+    c4: float = 0.0
+    c5: float = 0.0
+    p_thickfail: float = 0.0
+    m_flag: int = 0
+    s_flag: int = 2
+    inst_start: float = 0.0
+    ireg: int = 0
+    fct_idel: int = 0
+    ei_ref: float = 0.0
+    r1: float = 0.0
+    r2: float = 0.0
+    r4: float = 0.0
+    r5: float = 0.0
+    icoup: int = 0
+    dcrit: float = 0.0
+    exp: float = 0.0
+    failip: int = 0
+    fail_id: int = 0
+    title: str = ""
+
+
+@dataclass
+class FailFld:
+    """``/FAIL/FLD/mat_id`` (M203): Forming Limit Diagram failure criterion."""
+    id: int = 0
+    mat_id: int = 0
+    fct_id: int = 0
+    ifail_sh: int = 1
+    i_marg: int = 0
+    fct_idadv: int = 0
+    rani: float = 0.0
+    dadv: float = 0.0
+    istrain: int = 0
+    ixfem: int = 0
+    factor_marginal: float = 0.0
+    factor_loosemetal: float = 0.0
+    fcut: float = 0.0
+    alpha: float = 0.0
+    fail_id: int = 0
+    title: str = ""
+
+
+@dataclass
+class FailConnect:
+    """``/FAIL/CONNECT/mat_id`` (M203): Connector failure criterion."""
+    id: int = 0
+    mat_id: int = 0
+    epsilon_maxn: float = 0.0
+    exponent_n: float = 1.0
+    alpha_n: float = 1.0
+    r_fct_id_n: int = 0
+    ifail: int = 0
+    ifail_so: int = 0
+    isym: int = 0
+    epsilon_maxt: float = 0.0
+    exponent_t: float = 1.0
+    alpha_t: float = 1.0
+    r_fct_id_t: int = 0
+    ei_max: float = 0.0
+    en_max: float = 0.0
+    et_max: float = 0.0
+    n_n: float = 0.0
+    n_t: float = 0.0
+    t_max: float = 0.0
+    n_soft: float = 0.0
+    area_scale: float = 1.0
+    fail_id: int = 0
+    title: str = ""
+
+
+@dataclass
+class FailFractalDmg:
+    """``/FAIL/FRACTAL_DMG/mat_id`` (M203): Fractal damage percolation failure criterion."""
+    id: int = 0
+    mat_id: int = 0
+    grsh4n_1: int = 0
+    grsh3n_1: int = 0
+    grsh4n_2: int = 0
+    grsh3n_2: int = 0
+    damage: float = 0.0
+    probability: float = 0.0
+    seed: int = 0
+    num_walk: int = 0
+    printout: int = 0
+    fail_id: int = 0
+    title: str = ""
+
+
+@dataclass
+class FailOrthenerg:
+    """``/FAIL/ORTHENERG/mat_id`` (M203): Orthotropic energy failure criterion."""
+    id: int = 0
+    mat_id: int = 0
+    pthickfail: float = 0.0
+    nmod: int = 0
+    failip: int = 0
+    sigma_11t: float = 0.0
+    g_11t: float = 0.0
+    ishap11t: int = 0
+    sigma_11c: float = 0.0
+    g_11c: float = 0.0
+    ishap11c: int = 0
+    sigma_22t: float = 0.0
+    g_22t: float = 0.0
+    ishap22t: int = 0
+    sigma_22c: float = 0.0
+    g_22c: float = 0.0
+    ishap22c: int = 0
+    sigma_33t: float = 0.0
+    g_33t: float = 0.0
+    ishap33t: int = 0
+    sigma_33c: float = 0.0
+    g_33c: float = 0.0
+    ishap33c: int = 0
+    sigma_12t: float = 0.0
+    g_12t: float = 0.0
+    ishap12t: int = 0
+    sigma_12c: float = 0.0
+    g_12c: float = 0.0
+    ishap12c: int = 0
+    sigma_23t: float = 0.0
+    g_23t: float = 0.0
+    ishap23t: int = 0
+    sigma_23c: float = 0.0
+    g_23c: float = 0.0
+    ishap23c: int = 0
+    sigma_31t: float = 0.0
+    g_31t: float = 0.0
+    ishap31t: int = 0
+    sigma_31c: float = 0.0
+    g_31c: float = 0.0
+    ishap31c: int = 0
+    fail_id: int = 0
+    title: str = ""
+
+
+@dataclass
+class AdmeshSet:
+    """``/ADMESH/SET/id`` (M203): Adaptive meshing on element/node set."""
+    id: int = 0
+    title: str = ""
+    angle_criteria: float = 0.0
+    inilev: int = 0
+    thkerr: float = 0.0
+    part_ids: List[int] = field(default_factory=list)
+    grnd_id: int = 0
+    level: int = 0
+    tdelay: float = 0.0
+
+
+@dataclass
+class GaugeSph:
+    """``/GAUGE/SPH/id`` (M203): SPH gauge point measurement."""
+    id: int = 0
+    title: str = ""
+    node_id: int = 0
+    fcut: float = 0.0
+    shell_id: int = 0
+    dist: float = 0.0
+
 

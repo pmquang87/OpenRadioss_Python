@@ -64,6 +64,7 @@ from ..model.entities import (
 from ..model.model import Model
 from ..model.skew import SkewFrame
 from . import mat_reader
+from .card_layouts import CARD_LAYOUTS
 from .deck_reader import Card, KeywordBlock, _to_float
 
 
@@ -1858,12 +1859,18 @@ def read_convec(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 elif len(t2) == 1:
                     h = float(t2[0])
 
-    from ..model.entities import HeatConvec
+    from ..model.entities import HeatConvec, ConvectionLoad
     hc = HeatConvec(
         id=cid, title=title, surf_id=surf_id, funct_id=funct_id, sensor_id=sensor_id,
         ascale=ascale, fscale=fscale, tstart=tstart, tstop=tstop, h=h
     )
     model.heat_convecs[cid] = hc
+    cl = ConvectionLoad(
+        id=cid, surf_id=surf_id, funct_id=funct_id,
+        sens_id=sensor_id, xscale=ascale, scale=fscale,
+        tstart=tstart, tstop=tstop, h=h, title=title,
+    )
+    model.convec_loads.append(cl)
 
 
 def read_radiation(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -1946,7 +1953,7 @@ def read_fail_fractal(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     if not cards:
         log.error(f"/FAIL/FRACTAL_DMG/{block.user_id}: missing data card", block.source)
         return
-    from ..model.entities import FailFractal
+    from ..model.entities import FailFractal, FailFractalDmg
 
     mat_id = block.user_id
     if len(block.parts) > 2:
@@ -2017,6 +2024,21 @@ def read_fail_fractal(block: KeywordBlock, model: Model, log: MessageLog) -> Non
         printout=printout,
         fail_id=fail_id,
     )
+    model.fails_fractal_dmg[mat_id] = FailFractalDmg(
+        id=fail_id or mat_id,
+        mat_id=mat_id,
+        grsh4n_1=grsh4n_1,
+        grsh3n_1=grsh3n_1,
+        grsh4n_2=grsh4n_2,
+        grsh3n_2=grsh3n_2,
+        damage=damage,
+        probability=probability,
+        seed=seed,
+        num_walk=num_walk,
+        printout=printout,
+        fail_id=fail_id,
+        title="",
+    )
     from ..model.entities import FailureModel
     fm = FailureModel(type="FRACTAL", ifail_sh=1, params={
         "grsh4n_1": grsh4n_1, "grsh3n_1": grsh3n_1, "grsh4n_2": grsh4n_2, "grsh3n_2": grsh3n_2,
@@ -2028,11 +2050,6 @@ def read_fail_fractal(block: KeywordBlock, model: Model, log: MessageLog) -> Non
 def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/JOHNSON/mat_ID`` and ``/FAIL/BIQUAD/mat_ID``: attach a
     failure criterion to a material (the trailing id IS the material id —
-    Radioss convention; there is no title card).
-
-    JOHNSON — Fortran starter/source/materials/fail/johnson_cook::
-
-        card 1:  D1   D2   D3   D4   [D5]
         card 2:  eps_dot_0   Ifail_sh        (optional; defaults 1.0, 1)
 
       eps_f = (D1 + D2*exp(D3*sigma*)) * (1 + D4*ln(rate/eps_dot_0))
@@ -2134,26 +2151,51 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("FRACTAL", "FRACTAL_DMG"):
         read_fail_fractal(block, model, log)
         return
-    if kind == "JOHNSON":
-        # card 1: D1..D5 "%20lg"*5 (fail_johnson.cfg radioss51); card 2:
-        # "%20lg%10d%10d" EPSILON_DOT_0 ISHELL ISOLID — column-cut for
-        # fixed decks (abutting/blank fields)
-        D1, D2, D3, D4, D5 = _cut_floats(cards[0], "LAW2_A") \
-            if block.fixed else _floats(cards[0], 5)
-        eps0, ifail_sh = 1.0, 1
+    if kind in ("JOHNSON", "JOHN_COOK"):
+        from ..model.entities import FailJohnson
+        D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
+            if block.fixed and "FAIL_JOHNSON_1" in CARD_LAYOUTS else (_cut_floats(cards[0], "LAW2_A") if block.fixed else _floats(cards[0], 5))
+        eps0, ifail_sh, ifail_so, epsf_min, dadv, ixfem, failip, fail_id = 1.0, 1, 1, 0.0, 0.0, 0, 0, 0
         if len(cards) > 1 and not cards[1].is_blank:
-            v = [_fval(s) for s in cards[1].cut("FAIL_JOHNSON_2")[:2]] \
-                if block.fixed else _floats(cards[1], 2, defaults=[1.0, 1])
-            eps0 = v[0] if v[0] > 0 else 1.0
-            ifail_sh = int(v[1]) if v[1] in (1, 2) else 1
-        fm = FailureModel(type="JOHNSON", ifail_sh=ifail_sh,
-                          params={"D1": D1, "D2": D2, "D3": D3, "D4": D4,
-                                  "D5": D5, "eps_dot_0": eps0})
+            if block.fixed:
+                f2 = cards[1].cut("FAIL_JOHNSON_EXT") if "FAIL_JOHNSON_EXT" in CARD_LAYOUTS and len(cards[1].raw.rstrip()) > 40 else cards[1].cut("FAIL_JOHNSON_2")
+                eps0 = _fval(f2[0], 1.0) if len(f2) > 0 and f2[0].strip() else 1.0
+                ifail_sh = _ival(f2[1], 1) if len(f2) > 1 and f2[1].strip() else 1
+                if len(f2) > 2 and f2[2].strip(): ifail_so = _ival(f2[2], 1)
+                if len(f2) > 3 and f2[3].strip(): epsf_min = _fval(f2[3], 0.0)
+                if len(f2) > 4 and f2[4].strip(): dadv = _fval(f2[4], 0.0)
+                if len(f2) > 5 and f2[5].strip(): ixfem = _ival(f2[5], 0)
+                if len(f2) > 6 and f2[6].strip(): failip = _ival(f2[6], 0)
+            else:
+                toks = cards[1].tokens()
+                eps0 = float(toks[0]) if len(toks) > 0 and float(toks[0]) > 0 else 1.0
+                ifail_sh = int(float(toks[1])) if len(toks) > 1 and int(float(toks[1])) in (1, 2) else 1
+                if len(toks) > 2: ifail_so = int(float(toks[2]))
+                if len(toks) > 3: epsf_min = float(toks[3])
+                if len(toks) > 4: dadv = float(toks[4])
+                if len(toks) > 5: ixfem = int(float(toks[5]))
+                if len(toks) > 6: failip = int(float(toks[6]))
+        if len(cards) > 2 and not cards[2].is_blank:
+            fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0]))
+
+        model.fails_johnson[mat_id] = FailJohnson(
+            id=mat_id, mat_id=mat_id,
+            d1=D1, d2=D2, d3=D3, d4=D4, d5=D5,
+            eps_dot_0=eps0, ifail_sh=ifail_sh, ifail_so=ifail_so,
+            epsf_min=epsf_min, dadv=dadv, ixfem=ixfem, failip=failip, fail_id=fail_id,
+            title=title,
+        )
         if D1 <= 0.0 and D2 <= 0.0:
             log.error(f"/FAIL/JOHNSON/{mat_id}: D1 and D2 both <= 0 gives "
                       f"a zero failure strain", block.source)
             return
+        fm = FailureModel(type="JOHNSON", ifail_sh=ifail_sh,
+                          params={"D1": D1, "D2": D2, "D3": D3, "D4": D4,
+                                  "D5": D5, "eps_dot_0": eps0, "ifail_so": ifail_so,
+                                  "epsf_min": epsf_min, "dadv": dadv, "ixfem": ixfem,
+                                  "failip": failip, "fail_id": fail_id})
     elif kind == "BIQUAD":
+        from ..model.entities import FailBiquad
         c1, c2, c3, c4, c5 = _cut_floats(cards[0], "LAW2_A") \
             if block.fixed else _floats(cards[0], 5)
         ifail_sh = 1
@@ -2200,6 +2242,12 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                   "p_thickfail": p_thickfail,
                   "e1": e1, "e2": e2, "e3": e3, "e4": e4}
         fail_biquad.fit(params)   # pre-compute the two parabolas
+        model.fails_biquad[mat_id] = FailBiquad(
+            id=mat_id, mat_id=mat_id,
+            c1=c1, c2=c2, c3=c3, c4=c4, c5=c5,
+            p_thickfail=p_thickfail, m_flag=m_flag, s_flag=s_flag,
+            inst_start=inst_start, title=title,
+        )
         fm = FailureModel(type="BIQUAD", ifail_sh=ifail_sh, params=params)
     elif kind == "ORTHBIQUAD":
         p_thickfail, m_flag, s_flag, inst_start = 1.0, 0, 0, 0.0
@@ -2395,10 +2443,12 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.fail_tab1s[mat_id] = tab1_obj
         fm = FailureModel(type="TAB1", ifail_sh=ifail_sh, params=params)
     elif kind == "FLD":
+        from ..model.entities import FailFld
         if block.fixed:
             c1 = cards[0].cut("FAIL_FLD_1")
             fct_id = _ival(c1[0]) if len(c1) > 0 else 0
-            ifail_sh = _ival(c1[1], default=1) if len(c1) > 1 else 1
+            ifail_sh = _ival(c1[1], default=1) if len(c1) > 1 and c1[1].strip() else 1
+            i_marg = _ival(c1[2]) if len(c1) > 2 else 0
             fct_idadv = _ival(c1[3]) if len(c1) > 3 else 0
             rani = _fval(c1[4]) if len(c1) > 4 else 0.0
             dadv = _fval(c1[5]) if len(c1) > 5 else 0.0
@@ -2408,21 +2458,62 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             t = cards[0].tokens()
             fct_id = int(float(t[0])) if len(t) > 0 else 0
             ifail_sh = int(float(t[1])) if len(t) > 1 and int(float(t[1])) != 0 else 1
-            fct_idadv = int(float(t[2])) if len(t) > 2 else 0
-            rani = float(t[3]) if len(t) > 3 else 0.0
-            dadv = float(t[4]) if len(t) > 4 else 0.0
-            istrain = int(float(t[5])) if len(t) > 5 else 0
-            ixfem = int(float(t[6])) if len(t) > 6 else 0
+            i_marg = int(float(t[2])) if len(t) > 2 else 0
+            fct_idadv = int(float(t[3])) if len(t) > 3 else 0
+            rani = float(t[4]) if len(t) > 4 else 0.0
+            dadv = float(t[5]) if len(t) > 5 else 0.0
+            istrain = int(float(t[6])) if len(t) > 6 else 0
+            ixfem = int(float(t[7])) if len(t) > 7 else 0
         if ifail_sh not in (1, 2, 3, 4):
             ifail_sh = 1
+        factor_marginal, factor_loosemetal = 0.0, 0.0
+        fcut, alpha = 0.0, 0.0
+        fail_id = 0
+        card_idx = 1
+        if i_marg in (2, 3) and card_idx < len(cards) and not cards[card_idx].is_blank:
+            if block.fixed:
+                c2 = cards[card_idx].cut("FAIL_FLD_2")
+                factor_marginal = _fval(c2[0]) if len(c2) > 0 else 0.0
+                factor_loosemetal = _fval(c2[1]) if len(c2) > 1 else 0.0
+            else:
+                t2 = cards[card_idx].floats()
+                factor_marginal = t2[0] if len(t2) > 0 else 0.0
+                factor_loosemetal = t2[1] if len(t2) > 1 else 0.0
+            card_idx += 1
+        if istrain == 2 and card_idx < len(cards) and not cards[card_idx].is_blank:
+            if block.fixed:
+                c3 = cards[card_idx].cut("FAIL_FLD_3")
+                fcut = _fval(c3[0]) if len(c3) > 0 else 0.0
+                alpha = _fval(c3[1]) if len(c3) > 1 else 0.0
+            else:
+                t3 = cards[card_idx].floats()
+                fcut = t3[0] if len(t3) > 0 else 0.0
+                alpha = t3[1] if len(t3) > 1 else 0.0
+            card_idx += 1
+        if card_idx < len(cards) and not cards[card_idx].is_blank:
+            fail_id = _ival(cards[card_idx].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[card_idx].tokens()[0]))
+
+        model.fails_fld[mat_id] = FailFld(
+            id=fail_id or mat_id, mat_id=mat_id, fct_id=fct_id, ifail_sh=ifail_sh,
+            i_marg=i_marg, fct_idadv=fct_idadv, rani=rani, dadv=dadv,
+            istrain=istrain, ixfem=ixfem, factor_marginal=factor_marginal,
+            factor_loosemetal=factor_loosemetal, fcut=fcut, alpha=alpha,
+            fail_id=fail_id, title=title,
+        )
         params = {
             "fct_id": fct_id,
             "ifail_sh": ifail_sh,
+            "i_marg": i_marg,
             "fct_idadv": fct_idadv,
             "rani": rani,
             "dadv": dadv,
             "istrain": istrain,
             "ixfem": ixfem,
+            "factor_marginal": factor_marginal,
+            "factor_loosemetal": factor_loosemetal,
+            "fcut": fcut,
+            "alpha": alpha,
+            "fail_id": fail_id,
         }
         fm = FailureModel(type="FLD", ifail_sh=ifail_sh, params=params)
     elif kind == "CONNECT":
@@ -2474,15 +2565,31 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             N_n = c3[3] if len(c3) > 3 else 0.0
             N_t = c3[4] if len(c3) > 4 else 0.0
 
-        # Card 4: T_max, N_soft
-        T_max, N_soft = 0.0, 0.0
+        # Card 4: T_max, N_soft, Area_scale
+        T_max, N_soft, area_scale = 0.0, 0.0, 1.0
         if len(cards) > 3 and not cards[3].is_blank:
             if block.fixed:
                 c4 = _cut_floats(cards[3], "FAIL_CONNECT_4")
             else:
-                c4 = _floats(cards[3], 2)
+                c4 = _floats(cards[3], 3)
             T_max = c4[0] if len(c4) > 0 else 0.0
             N_soft = c4[1] if len(c4) > 1 else 0.0
+            area_scale = c4[2] if len(c4) > 2 and c4[2] else 1.0
+
+        fail_id = 0
+        if len(cards) > 4 and not cards[4].is_blank:
+            fail_id = _ival(cards[4].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[4].tokens()[0]))
+
+        from ..model.entities import FailConnect
+        model.fails_connect[mat_id] = FailConnect(
+            id=fail_id or mat_id, mat_id=mat_id,
+            epsilon_maxn=epsilon_maxN, exponent_n=exponent_N, alpha_n=alpha_N,
+            r_fct_id_n=r_fct_id_n, ifail=ifail, ifail_so=ifail_so, isym=isym,
+            epsilon_maxt=epsilon_maxT, exponent_t=exponent_T, alpha_t=alpha_T,
+            r_fct_id_t=r_fct_id_t, ei_max=EI_max, en_max=EN_max, et_max=ET_max,
+            n_n=N_n, n_t=N_t, t_max=T_max, n_soft=N_soft, area_scale=area_scale,
+            fail_id=fail_id, title=title,
+        )
 
         params = {
             "epsilon_maxN": epsilon_maxN, "exponent_N": exponent_N,
@@ -2493,6 +2600,8 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "EI_max": EI_max, "EN_max": EN_max, "ET_max": ET_max,
             "N_n": N_n, "N_t": N_t,
             "T_max": T_max, "N_soft": N_soft,
+            "area_scale": area_scale,
+            "fail_id": fail_id,
         }
         fm = FailureModel(type="CONNECT", ifail_sh=1, params=params)
     elif kind == "TENSSTRAIN":
@@ -3661,6 +3770,51 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     dir_params[f"g_{d}c"] = float(toks[4]) if len(toks) > 4 else 0.0
                     dir_params[f"ishap_{d}c"] = int(float(toks[5])) if len(toks) > 5 else 0
         params = {"pthickfail": pthickfail, "nmod": nmod, "failip": failip, **dir_params}
+        fail_id = 0
+        if len(cards) > 7 and not cards[7].is_blank:
+            fail_id = _ival(cards[7].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[7].tokens()[0]))
+        from ..model.entities import FailOrthenerg
+        model.fails_orthenerg[mat_id] = FailOrthenerg(
+            id=fail_id or mat_id, mat_id=mat_id,
+            pthickfail=pthickfail, nmod=nmod, failip=failip,
+            sigma_11t=dir_params.get("sigma_11t", 0.0),
+            g_11t=dir_params.get("g_11t", 0.0),
+            ishap11t=dir_params.get("ishap_11t", 0),
+            sigma_11c=dir_params.get("sigma_11c", 0.0),
+            g_11c=dir_params.get("g_11c", 0.0),
+            ishap11c=dir_params.get("ishap_11c", 0),
+            sigma_22t=dir_params.get("sigma_22t", 0.0),
+            g_22t=dir_params.get("g_22t", 0.0),
+            ishap22t=dir_params.get("ishap_22t", 0),
+            sigma_22c=dir_params.get("sigma_22c", 0.0),
+            g_22c=dir_params.get("g_22c", 0.0),
+            ishap22c=dir_params.get("ishap_22c", 0),
+            sigma_33t=dir_params.get("sigma_33t", 0.0),
+            g_33t=dir_params.get("g_33t", 0.0),
+            ishap33t=dir_params.get("ishap_33t", 0),
+            sigma_33c=dir_params.get("sigma_33c", 0.0),
+            g_33c=dir_params.get("g_33c", 0.0),
+            ishap33c=dir_params.get("ishap_33c", 0),
+            sigma_12t=dir_params.get("sigma_12t", 0.0),
+            g_12t=dir_params.get("g_12t", 0.0),
+            ishap12t=dir_params.get("ishap_12t", 0),
+            sigma_12c=dir_params.get("sigma_12c", 0.0),
+            g_12c=dir_params.get("g_12c", 0.0),
+            ishap12c=dir_params.get("ishap_12c", 0),
+            sigma_23t=dir_params.get("sigma_23t", 0.0),
+            g_23t=dir_params.get("g_23t", 0.0),
+            ishap23t=dir_params.get("ishap_23t", 0),
+            sigma_23c=dir_params.get("sigma_23c", 0.0),
+            g_23c=dir_params.get("g_23c", 0.0),
+            ishap23c=dir_params.get("ishap_23c", 0),
+            sigma_31t=dir_params.get("sigma_31t", 0.0),
+            g_31t=dir_params.get("g_31t", 0.0),
+            ishap31t=dir_params.get("ishap_31t", 0),
+            sigma_31c=dir_params.get("sigma_31c", 0.0),
+            g_31c=dir_params.get("g_31c", 0.0),
+            ishap31c=dir_params.get("ishap_31c", 0),
+            fail_id=fail_id, title=title,
+        )
         fm = FailureModel(type="ORTHENERG", ifail_sh=failip, params=params)
     elif kind in ("FRACTAL", "FRACTAL_DMG"):
         # Card 0: grsh4n_1, grsh3n_1, grsh4n_2, grsh3n_2
@@ -4662,8 +4816,10 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if typename not in aliases:
         if typename in ("INJECT1", "PROP_INJECT1", "INJECTOR1", "PROP_INJECTOR1"):
             read_prop_inject1(block, model, log)
+            return
         elif typename in ("INJECT2", "PROP_INJECT2", "INJECTOR2", "PROP_INJECTOR2"):
             read_prop_inject2(block, model, log)
+            return
         from . import prop_reader
         prop = prop_reader.parse_property(block, log)
         if prop is not None:
@@ -12604,7 +12760,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     scaling.
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if kind in ("GUIDED_CABLE", "CABLE"):
+    if kind in ("GUIDED_CABLE", "CABLE", "TYPE26", "26"):
         read_guided_cable(block, model, log)
         return
     if kind in ("SUB", "SUBINTER"):
@@ -15086,6 +15242,43 @@ def read_admesh(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_admesh_global(block, model, log)
         return
 
+    if sub == "SET":
+        from ..model.entities import AdmeshSet
+        angle_crit, inilev, thkerr = 0.0, 0, 0.0
+        grnd_id, level, tdelay = 0, 0, 0.0
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f = cards[0].cut("ADMESH_SET_1")
+                angle_crit = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+                inilev = _ival(f[1], 0) if len(f) > 1 else 0
+                thkerr = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            else:
+                t = cards[0].tokens()
+                angle_crit = float(t[0]) if len(t) > 0 else 0.0
+                inilev = int(float(t[1])) if len(t) > 1 else 0
+                thkerr = float(t[2]) if len(t) > 2 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            if block.fixed:
+                f2 = cards[1].cut("ADMESH_SET_1")
+                grnd_id = _ival(f2[0], 0) if len(f2) > 0 else 0
+                level = _ival(f2[1], 0) if len(f2) > 1 else 0
+                tdelay = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            else:
+                t2 = cards[1].tokens()
+                grnd_id = int(float(t2[0])) if len(t2) > 0 else 0
+                level = int(float(t2[1])) if len(t2) > 1 else 0
+                tdelay = float(t2[2]) if len(t2) > 2 else 0.0
+        adm_set = AdmeshSet(
+            id=aid, title=title, angle_criteria=angle_crit, inilev=inilev,
+            thkerr=thkerr, grnd_id=grnd_id, level=level, tdelay=tdelay
+        )
+        model.admesh_sets[aid] = adm_set
+        model.admesh_controls[aid] = AdmeshControl(
+            id=aid, title=title, subtype=sub, crit_level=inilev,
+            h_min=thkerr, h_max=angle_crit, part_id=grnd_id
+        )
+        return
+
     crit_level = 0
     h_min, h_max = 0.0, 0.0
     part_id = 0
@@ -16095,17 +16288,22 @@ def read_checksum(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     val1, val2 = 0, 0
     if cards and not cards[0].is_blank:
-        toks = cards[0].tokens()
-        if toks:
-            try:
-                val1 = int(float(toks[0]))
-            except (ValueError, TypeError):
-                val1 = 0
-            if len(toks) > 1:
+        if block.fixed:
+            f = cards[0].cut("CHECKSUM_START_1")
+            val1 = _ival(f[0]) if len(f) > 0 else 0
+            val2 = _ival(f[1]) if len(f) > 1 else 0
+        else:
+            toks = cards[0].tokens()
+            if toks:
                 try:
-                    val2 = int(float(toks[1]))
+                    val1 = int(float(toks[0]))
                 except (ValueError, TypeError):
-                    val2 = 0
+                    val1 = 0
+                if len(toks) > 1:
+                    try:
+                        val2 = int(float(toks[1]))
+                    except (ValueError, TypeError):
+                        val2 = 0
     from ..model.entities import ChecksumDirective
     cd = ChecksumDirective(id=block.user_id, title=title, action=sub, val1=val1, val2=val2)
     model.checksums.append(cd)
@@ -17712,6 +17910,12 @@ def read_gauge(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=block.user_id, subtype=subtype, title=title, node_id=node_id,
         elem_id=elem_id, dist=dist, fcut=fcut,
     )
+    if subtype == "SPH":
+        from ..model.entities import GaugeSph
+        model.gauge_sphs[block.user_id] = GaugeSph(
+            id=block.user_id, title=title, node_id=node_id,
+            fcut=fcut, shell_id=elem_id, dist=dist,
+        )
 
 
 def read_cluster(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -19860,6 +20064,8 @@ def read_transform(block: KeywordBlock, model: Model,
         sub = "SYM"
     elif block.key0 in ("MATRIX", "MATR"):
         sub = "MATRIX"
+    elif block.key0 in ("POS", "POSITION"):
+        sub = "POS"
     elif len(block.parts) > 1:
         sub = block.parts[1].upper()
     else:
@@ -42646,6 +42852,19 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "INTER_TYPE26": read_guided_cable,
     "INTER_GUIDED_CABLE": read_guided_cable,
     "SENSOR_PYTHON": read_sensor,
+    "POS": read_transform,
+    "POSITION": read_transform,
+    "CHECKSUM_START": read_checksum,
+    "CHECKSUM_END": read_checksum,
+    "PROP_INJECT1": read_prop,
+    "PROP_INJECT2": read_prop,
+    "PROP_INJECTOR1": read_prop,
+    "PROP_INJECTOR2": read_prop,
+    "INJECT1": read_prop_inject1,
+    "INJECT2": read_prop_inject2,
+    "INJECTOR1": read_prop_inject1,
+    "INJECTOR2": read_prop_inject2,
+    "TYPE26": read_guided_cable,
 }
 
 

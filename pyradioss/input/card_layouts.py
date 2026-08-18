@@ -2996,6 +2996,7 @@ LAYOUTS: Dict[str, List[int]] = {
     "SENSOR_PYTHON_1": [20, 20, 20, 20],
     "TRANSFORM_POS_1": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
     "TRANSFORM_POS_2": [10, 20, 20, 20],
+    "TRANSFORM_POS_PT": [10, 20, 20, 20],
     "POS_1": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
     "POS_2": [10, 20, 20, 20],
     "PROP_INJECT1_1": [10, 10, 20],
@@ -3005,11 +3006,22 @@ LAYOUTS: Dict[str, List[int]] = {
     "PROP_INJECT2_3": [10, 20, 10],
     "CHECKSUM_START_1": [10, 10],
     "CHECKSUM_END_1": [10, 10],
+    "FAIL_JOHNSON_1": [20, 20, 20, 20, 20],
+    "FAIL_JOHNSON_EXT": [20, 10, 10, 20, 20, 10, 10],
+    "FAIL_FLD_1": [10, 10, 10, 10, 20, 20, 10, 10],
+    "FAIL_FLD_2": [20, 20],
+    "FAIL_FLD_3": [20, 20],
+    "FAIL_CONNECT_1": [20, 20, 20, 10, 10, 10, 10],
+    "FAIL_CONNECT_2": [20, 20, 20, 10],
+    "FAIL_CONNECT_3": [20, 20, 20, 20, 20],
+    "FAIL_CONNECT_4": [20, 20, 20],
+    "FAIL_FRACTAL_DMG_1": [10, 10, 10, 10],
+    "FAIL_FRACTAL_DMG_2": [20, 20, 10, 10, 10],
+    "ADMESH_SET_1": [20, 10, 20],
+    "GAUGE_SPH_1": [10, 20, 20, 10, 20],
 }
 
-
-
-
+CARD_LAYOUTS = LAYOUTS
 
 def cut(raw: str, key: str) -> List[str]:
     """Cut a raw card line at the widths of ``LAYOUTS[key]``."""

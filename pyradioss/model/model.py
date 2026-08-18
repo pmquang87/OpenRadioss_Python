@@ -1370,13 +1370,32 @@ class Model:
         self.lagmul_diffs = self.diffs
         self.inter_type26s = self.guided_cables
         self.sensors_python: Dict[int, Any] = {}                     # /SENSOR/PYTHON (M203)
-        self.transforms_pos: Dict[int, Any] = {}                     # /TRANSFORM/POS, /POS (M203)
-        self.pos_transforms = self.transforms_pos
+        self.transforms_pos = self.transform_positions               # /TRANSFORM/POS, /POS (M203)
+        self.pos_transforms = self.transform_positions
         self.props_inject1 = self.prop_inject1s
         self.props_type15 = self.prop_inject1s
         self.props_inject2 = self.prop_inject2s
         self.props_type16 = self.prop_inject2s
         self.checksums: List[Any] = []                               # /CHECKSUM/START, /CHECKSUM/END (M203)
+        self.fails_johnson: Dict[int, Any] = {}                      # /FAIL/JOHNSON (M203)
+        self.fail_johnsons = self.fails_johnson
+        self.fails_biquad: Dict[int, Any] = {}                       # /FAIL/BIQUAD (M203)
+        self.fail_biquads = self.fails_biquad
+        self.fails_fld: Dict[int, Any] = {}                          # /FAIL/FLD (M203)
+        self.fail_flds = self.fails_fld
+        self.fails_connect: Dict[int, Any] = {}                      # /FAIL/CONNECT (M203)
+        self.fail_connects = self.fails_connect
+        self.fails_fractal_dmg: Dict[int, Any] = {}                  # /FAIL/FRACTAL_DMG (M203)
+        self.fail_fractal_dmgs = self.fails_fractal_dmg
+        self.fails_orthenerg: Dict[int, Any] = {}                    # /FAIL/ORTHENERG (M203)
+        self.fail_orthenergs = self.fails_orthenerg
+        self.admesh_sets: Dict[int, Any] = {}                        # /ADMESH/SET (M203)
+        self.gauge_sphs: Dict[int, Any] = {}                         # /GAUGE/SPH (M203)
+        self.boxes_cyl = self.boxes
+        self.boxes_rect = self.boxes
+        self.boxes_sphere = self.boxes
+        self.pressure_loads = self.load_pressures
+
 
 
 
