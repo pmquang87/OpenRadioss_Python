@@ -4436,6 +4436,12 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                "TYPE17": 17, "STACK": 17, "PROP_STACK": 17,
                "TYPE51": 51, "P51": 51, "LAMINATE_P51": 51,
                "TYPE0": 0, "VOID": 0}
+    if typename in ("PCOMPP", "PROP_PCOMPP", "PCOMP_P", "PROP_PCOMP_P"):
+        read_prop_pcompp(block, model, log)
+        return
+    if typename in ("TYPE51", "P51", "PROP_P51", "PROP_TYPE51", "TSH_P51", "PROP_TSH_P51", "LAMINATE_P51"):
+        read_prop_p51(block, model, log)
+        return
     if typename not in aliases:
         if typename in ("INJECT1", "PROP_INJECT1", "INJECTOR1", "PROP_INJECTOR1"):
             read_prop_inject1(block, model, log)
@@ -10956,7 +10962,7 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "HIC"
     elif kind == "TYPE17":
         kind = "DIST_SURF"
-    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT")
+    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT")
     if kind not in supported:
         log.warning(f"/SENSOR/{kind} not ported ({', '.join(supported)} supported)",
                     block.source)
@@ -11016,16 +11022,25 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.sensors.append(Sensor(
             id=block.user_id, kind="NOT", tdelay=tdelay, sens_id1=sens_id1,
             title=title))
-    elif kind in ("AND", "OR"):
+    elif kind in ("AND", "OR", "SENS_AND_OR", "SENS"):
         if len(t) < 2:
             log.error(f"/SENSOR/{kind}/{block.user_id}: card needs "
                       f"'sens_ID1 sens_ID2'", block.source)
             return
         sens_id1 = int(t[0])
         sens_id2 = int(t[1])
-        model.sensors.append(Sensor(
-            id=block.user_id, kind=kind, tdelay=tdelay, sens_id1=sens_id1,
-            sens_id2=sens_id2, title=title))
+        s_kind = "AND" if "AND" in kind else "OR" if "OR" in kind else kind
+        s_obj = Sensor(
+            id=block.user_id, kind=s_kind, tdelay=tdelay, sens_id1=sens_id1,
+            sens_id2=sens_id2, title=title)
+        model.sensors.append(s_obj)
+        from ..model.entities import SensorSensAndOr
+        model.sensors_sens_and_or[block.user_id] = SensorSensAndOr(
+            id=block.user_id, title=title, logic_type=s_kind,
+            sensor_id1=sens_id1, sensor_id2=sens_id2,
+            sens_id1=sens_id1, sens_id2=sens_id2,
+            t_delay=tdelay, tdelay=tdelay
+        )
     elif kind == "DIST":
         dflag = 0
         if block.fixed:
@@ -11339,10 +11354,19 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 g = cards[data_card_idx + 1].tokens()
                 dmin = float(g[0]) if len(g) > 0 else 0.0
                 dmax = float(g[1]) if len(g) > 1 else 0.0
-                tmin = float(g[2]) if len(g) > 2 else 0.0
+                if len(g) >= 4:
+                    tmin = float(g[3])
+                elif len(g) >= 3:
+                    tmin = float(g[2])
         model.sensors.append(Sensor(
             id=block.user_id, kind="DIST_SURF", tdelay=tdelay, node_id=n1, node_id1=n1, surf_id=surf_id,
             node_id2=n2, node_id3=n3, node_id4=n4, dmin=dmin, dmax=dmax, tmin=tmin, title=title))
+        from ..model.entities import SensorDistSurf
+        model.sensors_dist_surf[block.user_id] = SensorDistSurf(
+            id=block.user_id, title=title, tdelay=tdelay, surf_id=surf_id,
+            node_id=n1, surf_target_id=0, node_id1=n2, node_id2=n3, node_id3=n4,
+            dist_min=dmin, dist_max=dmax, tmin=tmin
+        )
     elif kind in ("ACCE", "ACC", "ACCEL", "TYPE1"):
         nacc = 1
         if block.fixed:
@@ -11401,6 +11425,12 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.sensors.append(Sensor(
             id=block.user_id, kind="SENS", tdelay=tdelay, sens_id1=s1, sens_id2=s2, title=title
         ))
+        from ..model.entities import SensorSensAndOr
+        model.sensors_sens_and_or[block.user_id] = SensorSensAndOr(
+            id=block.user_id, title=title, logic_type="AND",
+            sensor_id1=s1, sensor_id2=s2, sens_id1=s1, sens_id2=s2,
+            t_delay=tdelay, tdelay=tdelay
+        )
     elif kind == "PYTHON":
         tdelay = 0.0
         script_name, func_name = "", ""
@@ -13806,7 +13836,10 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "WAVE_SHAPER", "DET", "GUIDED_CABLE", "KJOINT", "SUBINTER",
         "EBCS", "SEATBELT", "SPH_FLOW"
     }
-    if block.key0 == "THPART":
+    if block.key0.startswith("THPART_") or (block.key0 == "THPART" and len(block.parts) > 1 and block.parts[1].upper().startswith("GR")):
+        read_thpart_group(block, model, log)
+        return
+    elif block.key0 == "THPART":
         kind = "PART"
     elif block.key0.startswith(("TH", "ATH", "BTH", "CTH", "DTH", "ETH", "FTH", "GTH", "HTH", "ITH")) and "_" in block.key0:
         kind = block.key0.split("_", 1)[1].upper()
@@ -13881,7 +13914,7 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "RWALL":  ["FN", "FT"],
             "INTER":  ["FN", "FT"],
         }
-        defaults = _TH_DEFAULTS.get(kind, [])
+        defaults = _TH_DEFAULTS.get(kind, ["DEF"])
         rest = [v for v in variables if v != "DEF"]
         variables = defaults + [v for v in rest if v not in defaults]
 
@@ -13927,6 +13960,49 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.th_requests.append(THRequest(
         id=block.user_id, kind=kind, ids=ids, variables=variables,
         title=title))
+
+    if kind in ("SUBS", "SUBDOMAIN", "SUBMODEL"):
+        from ..model.entities import ThSubs
+        prefix = block.key0.split("_")[0].upper() if "_" in block.key0 else (block.parts[0].upper() if block.parts else "TH")
+        subs_ids_int: List[int] = []
+        for x in ids:
+            try:
+                subs_ids_int.append(int(x))
+            except (ValueError, TypeError):
+                pass
+        model.th_subs[block.user_id] = ThSubs(
+            id=block.user_id, title=title, prefix=prefix,
+            vars=variables, subs_ids=subs_ids_int
+        )
+
+
+def read_thpart_group(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/THPART/GR.../id`` (M201): Group-based Time History part output block."""
+    from ..model.entities import ThPartGroup, THRequest
+    elem_type = "SHEL"
+    for cand in ("BEAM", "BRIC", "QUAD", "SH3N", "SHEL", "SPRI", "TRUS"):
+        if cand in block.key0.upper() or any(cand in p.upper() for p in block.parts):
+            elem_type = cand
+            break
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    grelem_id = 0
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("THPART_GR_1")
+            grelem_id = _ival(f[0]) if len(f) > 0 else 0
+        else:
+            toks = cards[0].tokens()
+            grelem_id = int(float(toks[0])) if toks else 0
+    thp = ThPartGroup(id=block.user_id, title=title, elem_type=elem_type, grelem_id=grelem_id)
+    model.th_part_groups[block.user_id] = thp
+    model.th_requests.append(THRequest(
+        id=block.user_id, kind=f"GR{elem_type}", ids=[grelem_id], variables=["DEF"], title=title
+    ))
+
+
+def read_th_subs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TH/SUBS/id`` (M201): Substructure Time History output block."""
+    read_th(block, model, log)
 
 
 # ============================================================================
@@ -19853,6 +19929,10 @@ def read_dfs(block: KeywordBlock, model: Model,
         sub = "DETLINE"
         has_node = any(p.upper() in ("NODE",) for p in block.parts[1:] if not p.lstrip("-").isdigit())
         has_set = any(p.upper() in ("SET", "GRNOD") for p in block.parts[1:] if not p.lstrip("-").isdigit())
+    elif p0 in ("WAVE", "DFS_WAV_SHA", "DFS_WAVSHA"):
+        sub = "WAV_SHA"
+        has_node = False
+        has_set = False
     else:
         sub = block.parts[1].upper() if len(block.parts) > 1 else ""
         if sub == "LASER":
@@ -20101,9 +20181,35 @@ def read_dfs(block: KeywordBlock, model: Model,
         dp = DetonatorPoint(id=det_id, tdet=tdet, mat_id=mat_id, grnod_id=grnod_id)
         model.det_points.append(dp)
 
+    elif sub in ("WAV_SHA", "WAVSHA", "WAVE"):
+        # /DFS/WAV_SHA/id or /WAVE/id (M201)
+        # Card 1: XDET, YDET, ZDET, TDET, mat_ID, grnod_ID (%20lg%20lg%20lg%20lg%10d%10d)
+        from ..model.entities import DfsWavSha
+        xdet, ydet, zdet, tdet = 0.0, 0.0, 0.0, 0.0
+        mat_id, grnod_id = 0, 0
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f6 = cards[0].cut("DFS_WAV_SHA_1")
+                xdet = _fval(f6[0], 0.0) if len(f6) > 0 else 0.0
+                ydet = _fval(f6[1], 0.0) if len(f6) > 1 else 0.0
+                zdet = _fval(f6[2], 0.0) if len(f6) > 2 else 0.0
+                tdet = _fval(f6[3], 0.0) if len(f6) > 3 else 0.0
+                mat_id = _ival(f6[4]) if len(f6) > 4 else 0
+                grnod_id = _ival(f6[5]) if len(f6) > 5 else 0
+            else:
+                toks = cards[0].tokens()
+                xdet = float(toks[0]) if len(toks) > 0 else 0.0
+                ydet = float(toks[1]) if len(toks) > 1 else 0.0
+                zdet = float(toks[2]) if len(toks) > 2 else 0.0
+                tdet = float(toks[3]) if len(toks) > 3 else 0.0
+                mat_id = int(float(toks[4])) if len(toks) > 4 else 0
+                grnod_id = int(float(toks[5])) if len(toks) > 5 else 0
+        ws_obj = DfsWavSha(id=det_id, title=title, xdet=xdet, ydet=ydet, zdet=zdet, tdet=tdet, mat_id=mat_id, grnod_id=grnod_id)
+        model.dfs_wav_shas[det_id] = ws_obj
+        model.det_points.append(DetonatorPoint(id=det_id, tdet=tdet, mat_id=mat_id, grnod_id=grnod_id))
+
     elif sub in ("WAVE_SHAPER", "WAVESHAPER"):
         # /DFS/WAVE_SHAPER/id (M132)
-        # Card 1: surf_ID, mat_ID, thick, delay
         from ..model.entities import WaveShaper
         surf_id, mat_id, thick, delay = 0, 0, 0.0, 0.0
         if cards and not cards[0].is_blank:
@@ -35704,9 +35810,14 @@ def read_prop_type51(block: KeywordBlock, model: Model, log: MessageLog) -> None
             dn = _safe_float(t1[4]) if len(t1) > 4 else 0.0
         if len(valid_cards) > 2:
             t2 = valid_cards[2].tokens()
-            if len(t2) >= 3 and _safe_float(t2[1]) > 0:
-                ashear = _safe_float(t2[1])
+            if len(t2) >= 4:
+                ashear = _safe_float(t2[0])
+                iint = _safe_int(t2[1])
+                ithick = _safe_int(t2[2])
+                failexp = _safe_float(t2[3])
+            elif len(t2) >= 3 and _safe_float(t2[1]) < 1.0 and _safe_int(t2[0]) > 0:
                 iint = _safe_int(t2[0])
+                ashear = _safe_float(t2[1])
                 ithick = _safe_int(t2[2])
             else:
                 ashear = _safe_float(t2[0]) if len(t2) > 0 else 0.833333
@@ -35736,6 +35847,7 @@ def read_prop_type51(block: KeywordBlock, model: Model, log: MessageLog) -> None
         title=title
     )
     model.prop_type51s[prop_id] = p51
+    model.props_type51[prop_id] = p51
     model.properties[prop_id] = Property(
         id=prop_id, type=51, title=title,
         params={
@@ -35747,6 +35859,28 @@ def read_prop_type51(block: KeywordBlock, model: Model, log: MessageLog) -> None
             "vx": vx, "vy": vy, "vz": vz, "idsk": idsk, "iorth": iorth, "ipos": ipos, "irp": irp
         }
     )
+
+
+read_prop_p51 = read_prop_type51
+
+
+def read_prop_pcompp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/PCOMPP/id`` (M201): Ply-based composite property."""
+    from ..model.entities import PropPcompp, Property
+    prop_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    laminate_id = 0
+    valid_cards = [c for c in cards if not c.is_blank]
+    if valid_cards:
+        if block.fixed:
+            f = valid_cards[0].cut("PROP_PCOMPP_1")
+            laminate_id = _ival(f[0]) if len(f) > 0 else 0
+        else:
+            toks = valid_cards[0].tokens()
+            laminate_id = _safe_int(toks[0]) if toks else 0
+    p = PropPcompp(id=prop_id, title=title, laminate_id=laminate_id)
+    model.props_pcompp[prop_id] = p
+    model.properties[prop_id] = Property(id=prop_id, type=51, title=title, params={"laminate_id": laminate_id})
 
 
 def read_prop_type5(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -41925,6 +42059,46 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MULTIMAT": read_mat,
     "MULTI_MAT": read_mat,
     "MAT_MULTIMAT": read_mat,
+    # --- M200: Non-Reflecting BCS, EBCS Cyclic/Propellant, Detpoint Node/Set, DTIX, Parith & TH Title Suite ---
+    "BCS_NRF": read_bcs_nrf,
+    "EBCS_CYCLIC": read_ebcs,
+    "EBCS_PROPELLANT": read_ebcs,
+    "DETPOINT_NODE": read_dfs,
+    "DETPOINT_SET": read_dfs,
+    "DETPOINT_GRNOD": read_dfs,
+    "TH_TITLE": read_th_title,
+    # --- M201: Substructure TH, Group TH Part, Wave Shaper DFS, Sensors & Composite Properties Suite ---
+    "TH_SUBS": read_th_subs,
+    "ATH_SUBS": read_th_subs,
+    "BTH_SUBS": read_th_subs,
+    "CTH_SUBS": read_th_subs,
+    "DTH_SUBS": read_th_subs,
+    "ETH_SUBS": read_th_subs,
+    "FTH_SUBS": read_th_subs,
+    "GTH_SUBS": read_th_subs,
+    "HTH_SUBS": read_th_subs,
+    "ITH_SUBS": read_th_subs,
+    "THPART_GRBEAM": read_thpart_group,
+    "THPART_GRBRIC": read_thpart_group,
+    "THPART_GRQUAD": read_thpart_group,
+    "THPART_GRSH3N": read_thpart_group,
+    "THPART_GRSHEL": read_thpart_group,
+    "THPART_GRSPRI": read_thpart_group,
+    "THPART_GRTRUS": read_thpart_group,
+    "DFS_WAV_SHA": read_dfs,
+    "DFS_WAVSHA": read_dfs,
+    "WAVE": read_dfs,
+    "SENSOR_DIST_SURF": read_sensor,
+    "SENSOR_SENS_AND_OR": read_sensor,
+    "PROP_PCOMPP": read_prop,
+    "PCOMPP": read_prop,
+    "PROP_PCOMP_P": read_prop,
+    "PCOMP_P": read_prop,
+    "PROP_P51": read_prop,
+    "P51": read_prop,
+    "PROP_TSH_P51": read_prop,
+    "TSH_P51": read_prop,
+    "LAMINATE_P51": read_prop,
 }
 
 
@@ -41932,7 +42106,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 
 ENGINE_KEYWORDS_IGNORE = {
-    "ANIM", "DT", "H3D", "MON", "PARITH", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
+    "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
     "DEBUG", "NOIS", "FLOW"
 }
 

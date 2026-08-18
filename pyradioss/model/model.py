@@ -1331,6 +1331,16 @@ class Model:
         self.dynain_shell_stres: str = ""                           # /DYNAIN/SHELL/STRES/FULL (M200)
         self.dynain_shell_strain: str = ""                          # /DYNAIN/SHELL/STRAIN/FULL (M200)
 
+        # M201 Entities
+        self.th_subs: Dict[int, Any] = {}                            # /TH/SUBS (M201)
+        self.th_part_groups: Dict[int, Any] = {}                     # /THPART/GR... (M201)
+        self.dfs_wav_shas: Dict[int, Any] = {}                       # /DFS/WAV_SHA, /WAVE (M201)
+        self.sensors_dist_surf: Dict[int, Any] = {}                  # /SENSOR/DIST_SURF (M201)
+        self.sensors_sens_and_or: Dict[int, Any] = {}                # /SENSOR/SENS_AND_OR (M201)
+        self.props_pcompp: Dict[int, Any] = {}                       # /PROP/PCOMPP (M201)
+        self.props_type51: Dict[int, Any] = {}                       # /PROP/TYPE51, /PROP/P51 (M201)
+        self.props_p51 = self.props_type51
+
 
 
 

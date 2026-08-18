@@ -2945,6 +2945,16 @@ LAYOUTS: Dict[str, List[int]] = {
     "DETPOINT_SET_1": [10, 10, 10, 20, 10, 20, 10, 10],
     "DFS_DETPOINT_SET": [10, 10, 10, 20, 10, 20, 10, 10],
     "DTIX_1": [20, 20],
+    # M201: TH_SUBS, THPART, WAV_SHA, SENSORS, PCOMPP, TYPE51
+    "DFS_WAV_SHA_1": [20, 20, 20, 20, 10, 10],
+    "SENSOR_DIST_SURF_1": [10, 10, 10, 20, 20, 20],
+    "SENSOR_SENS_AND_OR_1": [10, 10, 10, 20],
+    "PROP_PCOMPP_1": [10],
+    "PROP_P51_1": [10, 10, 10, 10, 20, 20],
+    "PROP_P51_2": [20, 20, 20, 20, 20],
+    "PROP_P51_3": [10, 10, 20, 10, 10, 20],
+    "PROP_P51_4": [20, 20, 20, 10, 10, 10, 10],
+    "THPART_GR_1": [10],
 }
 
 

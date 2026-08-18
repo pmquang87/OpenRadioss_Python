@@ -9455,7 +9455,7 @@ PropShellComp = PropType10
 
 @dataclass
 class PropType51:
-    """``/PROP/TYPE51`` or ``/PROP/SH_COH``: Cohesive shell / composite stack property."""
+    """``/PROP/TYPE51``, ``/PROP/P51`` or ``/PROP/SH_COH``: Cohesive shell / composite stack property."""
     id: int = 0
     ishell: int = 0
     ismstr: int = 0
@@ -9463,22 +9463,29 @@ class PropType51:
     idrill: int = 0
     pthk: float = 0.0
     zshift: float = 0.0
+    p_thick_fail: float = 0.0
+    z0: float = 0.0
     hm: float = 0.0
     hf: float = 0.0
     hr: float = 0.0
     dm: float = 0.0
     dn: float = 0.0
+    istrain: int = 0
     ashear: float = 0.833333
     iint: int = 0
     ithick: int = 0
     failexp: float = 0.0
+    fexp: float = 0.0
     vx: float = 1.0
     vy: float = 0.0
     vz: float = 0.0
     idsk: int = 0
+    skew_id: int = 0
     iorth: int = 0
     ipos: int = 0
     irp: int = 0
+    refplane: int = 0
+    layers: List[Any] = field(default_factory=list)
     title: str = ""
 
 
@@ -11586,6 +11593,90 @@ class DtixControl:
             self.t_max = self.tmax
         elif not self.tmax and self.t_max:
             self.tmax = self.t_max
+
+
+# ============================================================================
+# M201 Entities: TH_SUBS, THPART, WAV_SHA, SENSORS, PCOMPP, TYPE51
+# ============================================================================
+
+@dataclass
+class ThSubs:
+    """``/TH/SUBS/id`` (M201): Substructure Time History output block."""
+    id: int = 0
+    title: str = ""
+    prefix: str = "TH"
+    vars: List[str] = field(default_factory=list)
+    subs_ids: List[int] = field(default_factory=list)
+
+
+@dataclass
+class ThPartGroup:
+    """``/THPART/GR.../id`` (M201): Group-based Time History part output block."""
+    id: int = 0
+    title: str = ""
+    elem_type: str = "SHEL"  # 'BEAM', 'BRIC', 'QUAD', 'SH3N', 'SHEL', 'SPRI', 'TRUS'
+    grelem_id: int = 0
+
+
+@dataclass
+class DfsWavSha:
+    """``/DFS/WAV_SHA/id`` or ``/WAVE/id`` (M201): Wave shaper / spherical ignition modifier."""
+    id: int = 0
+    title: str = ""
+    xdet: float = 0.0
+    ydet: float = 0.0
+    zdet: float = 0.0
+    tdet: float = 0.0
+    mat_id: int = 0
+    grnod_id: int = 0
+
+
+@dataclass
+class SensorDistSurf:
+    """``/SENSOR/DIST_SURF/id`` (M201): Surface distance threshold sensor."""
+    id: int = 0
+    title: str = ""
+    surf_id: int = 0
+    node_id: int = 0
+    surf_target_id: int = 0
+    dist_min: float = 0.0
+    dist_max: float = 0.0
+    t_delay: float = 0.0
+    tdelay: float = 0.0
+    node_id1: int = 0
+    node_id2: int = 0
+    node_id3: int = 0
+    tmin: float = 0.0
+    dmin: float = 0.0
+    dmax: float = 0.0
+
+
+@dataclass
+class SensorSensAndOr:
+    """``/SENSOR/SENS_AND_OR/id`` (M201): Compound Boolean logical combination sensor."""
+    id: int = 0
+    title: str = ""
+    logic_type: str = "AND"  # 'AND' | 'OR' | 'NAND' | 'NOR'
+    sensor_id1: int = 0
+    sensor_id2: int = 0
+    sens_id1: int = 0
+    sens_id2: int = 0
+    t_delay: float = 0.0
+    tdelay: float = 0.0
+
+
+@dataclass
+class PropPcompp:
+    """``/PROP/PCOMPP/id`` (M201): Ply-based composite shell property."""
+    id: int = 0
+    title: str = ""
+    laminate_id: int = 0
+
+
+PropP51 = PropType51
+PropTshP51 = PropType51
+WaveShaperDfs = DfsWavSha
+
 
 
 
