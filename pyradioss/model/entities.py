@@ -13209,6 +13209,43 @@ class SensorSolidForce:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailGtn:
+    """``/FAIL/GTN/mat_ID`` (M232): Gurson-Tvergaard-Needleman porous metal failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    q1: float = 1.5          # Tvergaard parameter 1
+    q2: float = 1.0          # Tvergaard parameter 2
+    eps_n: float = 0.0       # mean strain for void nucleation
+    s_n: float = 0.1         # standard deviation of nucleation strain
+    f_n: float = 0.04        # void volume fraction of nucleating particles
+    f_c: float = 0.15        # critical void volume fraction for coalescence
+    f_f: float = 0.25        # failure void volume fraction
+    f_0: float = 0.0         # initial void volume fraction
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngPlastic:
+    """``/PLASTIC`` or ``/ENG/PLASTIC`` (M232): Engine plastic strain output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_plastic: float = 0.0  # time frequency for plastic strain output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorBeamForce:
+    """``/SENSOR/BEAM_FORCE`` or ``/SENSOR/FORCE_BEAM`` (M232): Beam element force/moment threshold sensor."""
+    id: int = 1
+    title: str = ""
+    beam_id: int = 0         # beam element ID to monitor
+    f_max: float = 1e30      # maximum resultant force threshold
+    m_max: float = 1e30      # maximum resultant moment threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

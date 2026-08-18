@@ -1600,6 +1600,12 @@ class Model:
         self.eng_strains: Dict[int, Any] = {}                        # /STRAIN, /ENG/STRAIN (M231)
         self.sensor_solid_forces: Dict[int, Any] = {}                # /SENSOR/SOLID_FORCE (M231)
 
+        # M232 Entities
+        self.fail_gtns: Dict[int, Any] = {}                          # /FAIL/GTN (M232)
+        self.eng_plastics: Dict[int, Any] = {}                       # /PLASTIC, /ENG/PLASTIC (M232)
+        self.sensor_beam_forces: Dict[int, Any] = {}                 # /SENSOR/BEAM_FORCE (M232)
+
+
 
 
 

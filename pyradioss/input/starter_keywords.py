@@ -2281,6 +2281,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("LUSAS", "COMPOSITE_LUSAS", "LUSAS_COMPOSITE"):
         read_fail_lusas(block, model, log)
         return
+    if kind in ("GTN", "GURSON_TVERGAARD", "GURSON_POROUS"):
+        read_fail_gtn(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11731,6 +11734,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("SOLID_FORCE", "FORCE_SOLID"):
         read_sensor_solid_force(block, model, log)
+        return
+    if kind in ("BEAM_FORCE", "FORCE_BEAM"):
+        read_sensor_beam_force(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -42043,6 +42049,50 @@ def read_fail_lusas(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_gtn(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/GTN/mat_ID`` (M232): Gurson-Tvergaard-Needleman porous metal failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/GTN/{block.user_id}: missing data card", block.source)
+        return
+
+    q1, q2, eps_n, s_n = 1.5, 1.0, 0.0, 0.1
+    f_n, f_c, f_f, f_0, ifail_sh = 0.04, 0.15, 0.25, 0.0, 1
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_GTN_1")
+        q1 = _fval(f1[0], 1.5) if len(f1) > 0 else 1.5
+        q2 = _fval(f1[1], 1.0) if len(f1) > 1 else 1.0
+        eps_n = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        s_n = _fval(f1[3], 0.1) if len(f1) > 3 else 0.1
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_GTN_2")
+            f_n = _fval(f2[0], 0.04) if len(f2) > 0 else 0.04
+            f_c = _fval(f2[1], 0.15) if len(f2) > 1 else 0.15
+            f_f = _fval(f2[2], 0.25) if len(f2) > 2 else 0.25
+            f_0 = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+            ifail_sh = _ival(f2[4], 1) if len(f2) > 4 else 1
+    else:
+        toks1 = cards[0].tokens()
+        q1 = float(toks1[0]) if len(toks1) > 0 else 1.5
+        q2 = float(toks1[1]) if len(toks1) > 1 else 1.0
+        eps_n = float(toks1[2]) if len(toks1) > 2 else 0.0
+        s_n = float(toks1[3]) if len(toks1) > 3 else 0.1
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            f_n = float(toks2[0]) if len(toks2) > 0 else 0.04
+            f_c = float(toks2[1]) if len(toks2) > 0.15 else 0.15
+            f_f = float(toks2[2]) if len(toks2) > 2 else 0.25
+            f_0 = float(toks2[3]) if len(toks2) > 3 else 0.0
+            ifail_sh = int(float(toks2[4])) if len(toks2) > 4 else 1
+
+    from ..model.entities import FailGtn
+    model.fail_gtns[block.user_id] = FailGtn(
+        mat_id=block.user_id, title=title, q1=q1, q2=q2, eps_n=eps_n,
+        s_n=s_n, f_n=f_n, f_c=f_c, f_f=f_f, f_0=f_0, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -44174,6 +44224,63 @@ def read_sensor_solid_force(block: KeywordBlock, model: Model, log: MessageLog) 
     model.sensors.append(Sensor(
         id=ssf.id, kind="SOLID_FORCE", tdelay=t_delay
     ))
+
+
+def read_eng_plastic(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PLASTIC`` or ``/ENG/PLASTIC`` (M232): Engine plastic strain output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PLASTIC/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_plastic, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_PLASTIC_1")
+        dt_plastic = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_plastic = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngPlastic
+    p_id = block.user_id or (len(model.eng_plastics) + 1)
+    model.eng_plastics[p_id] = EngPlastic(
+        id=p_id, title=title, dt_plastic=dt_plastic, sens_id=sens_id
+    )
+
+
+def read_sensor_beam_force(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/BEAM_FORCE`` or ``/SENSOR/FORCE_BEAM`` (M232): Beam element force/moment threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/BEAM_FORCE/{block.user_id}: missing data card", block.source)
+        return
+
+    beam_id, f_max, m_max, t_delay = 0, 1e30, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_BEAM_FORCE_1")
+        beam_id = _ival(f[0], 0) if len(f) > 0 else 0
+        f_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        m_max = _fval(f[2], 1e30) if len(f) > 2 else 1e30
+        t_delay = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+    else:
+        toks = cards[0].tokens()
+        beam_id = int(float(toks[0])) if len(toks) > 0 else 0
+        f_max = float(toks[1]) if len(toks) > 1 else 1e30
+        m_max = float(toks[2]) if len(toks) > 2 else 1e30
+        t_delay = float(toks[3]) if len(toks) > 3 else 0.0
+
+    from ..model.entities import SensorBeamForce, Sensor
+    sbf = SensorBeamForce(
+        id=block.user_id or 1, title=title, beam_id=beam_id,
+        f_max=f_max, m_max=m_max, t_delay=t_delay
+    )
+    model.sensor_beam_forces[sbf.id] = sbf
+    model.sensors.append(Sensor(
+        id=sbf.id, kind="BEAM_FORCE", tdelay=t_delay
+    ))
+
 
 
 
@@ -46451,6 +46558,19 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PARALLEL_AXIS": read_parallel_joint,
     "SENSOR_SOLID_FORCE": read_sensor_solid_force,
     "SENSOR_FORCE_SOLID": read_sensor_solid_force,
+    # --- M232: GTN Porous Metal Failure Criterion, Engine Plastic Strain Output Directive, Perpendicular/Normal Axis Joint Aliases, and Beam Force Sensor Suite ---
+    "FAIL_GTN": read_fail_gtn,
+    "FAIL_GURSON_TVERGAARD": read_fail_gtn,
+    "FAIL_GURSON_POROUS": read_fail_gtn,
+    "PLASTIC": read_eng_plastic,
+    "ENG_PLASTIC": read_eng_plastic,
+    "ENG_PLASTIC_STRAIN": read_eng_plastic,
+    "LAGMUL_PERPENDICULAR_AXIS": read_perpendicular_joint,
+    "PERPENDICULAR_AXIS": read_perpendicular_joint,
+    "LAGMUL_NORMAL_AXIS": read_perpendicular_joint,
+    "NORMAL_AXIS": read_perpendicular_joint,
+    "SENSOR_BEAM_FORCE": read_sensor_beam_force,
+    "SENSOR_FORCE_BEAM": read_sensor_beam_force,
 }
 
 
@@ -46459,7 +46579,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

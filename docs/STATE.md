@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M231)
+## What is implemented (M1 → M232)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -237,6 +237,7 @@ real history is 41 milestones. One line each:
 | M229 | Norton Creep Rupture Failure Criterion, Engine Tensor Tracking Directive, Cylinder/Slider Axis Joint Aliases, and Truss Strain Sensor Suite: /FAIL/NORTON (/FAIL/CREEP, /FAIL/NORTON_CREEP) Norton creep rupture failure model, /TENS (/ENG/TENS, /ENG/TENSOR) engine stress/strain tensor history tracking directive, /LAGMUL/CYLINDER_AXIS (/CYLINDER_AXIS) and /LAGMUL/SLIDER_AXIS (/SLIDER_AXIS) kinematic joint aliases, and /SENSOR/TRUSS_STRAIN (/SENSOR/STRAIN_TRUSS, /SENSOR/EPS_TRUSS) truss element strain threshold sensor |
 | M230 | Mohr-Coulomb Failure Criterion, Engine Stress Output Directive, Screw/Helical Axis Joint Aliases, and Shell Force Sensor Suite: /FAIL/MOHR (/FAIL/MOHR_COULOMB, /FAIL/MC) Mohr-Coulomb shear failure model, /STRESS (/ENG/STRESS, /ENG/STRESS_OUTPUT) engine stress tensor history tracking directive, /LAGMUL/SCREW_AXIS (/SCREW_AXIS) and /LAGMUL/HELICAL_AXIS (/HELICAL_AXIS) kinematic joint aliases, and /SENSOR/SHELL_FORCE (/SENSOR/FORCE_SHELL) shell element resultant force/moment threshold sensor |
 | M231 | Lusas Composite Failure Criterion, Engine Strain Output Directive, Inline/Parallel Axis Joint Aliases, and Solid Force Sensor Suite: /FAIL/LUSAS (/FAIL/COMPOSITE_LUSAS, /FAIL/LUSAS_COMPOSITE) Lusas 3D composite failure model, /STRAIN (/ENG/STRAIN, /ENG/STRAIN_OUTPUT) engine strain tensor history tracking directive, /LAGMUL/INLINE_AXIS (/INLINE_AXIS) and /LAGMUL/PARALLEL_AXIS (/PARALLEL_AXIS) kinematic joint aliases, and /SENSOR/SOLID_FORCE (/SENSOR/FORCE_SOLID) solid element resultant force threshold sensor |
+| M232 | GTN Porous Metal Failure Criterion, Engine Plastic Strain Output Directive, Perpendicular/Normal Axis Joint Aliases, and Beam Force Sensor Suite: /FAIL/GTN (/FAIL/GURSON_TVERGAARD, /FAIL/GURSON_POROUS) GTN void nucleation and growth failure model, /PLASTIC (/ENG/PLASTIC, /ENG/PLASTIC_STRAIN) engine plastic strain tensor history tracking directive, /LAGMUL/PERPENDICULAR_AXIS (/PERPENDICULAR_AXIS) and /LAGMUL/NORMAL_AXIS (/NORMAL_AXIS) kinematic joint aliases, and /SENSOR/BEAM_FORCE (/SENSOR/FORCE_BEAM) beam element resultant force/moment threshold sensor |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
