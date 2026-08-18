@@ -2361,6 +2361,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("VOCE", "VOCE_LAW", "VOCE_DAMAGE", "VOCE_MODEL"):
         read_fail_voce(block, model, log)
         return
+    if kind in ("GHOSH", "GHOSH_LAW", "GHOSH_DAMAGE", "GHOSH_MODEL"):
+        read_fail_ghosh(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -42749,6 +42752,38 @@ def read_fail_voce(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_ghosh(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/GHOSH/mat_ID`` (M247): Ghosh power-law strain hardening fracture criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/GHOSH/{block.user_id}: missing data card", block.source)
+        return
+
+    sigma0, k_coeff, eps0, n_exp, eps_max, ifail_sh = 0.0, 0.0, 0.0, 0.2, 1e30, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_GHOSH_1")
+        sigma0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        k_coeff = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        eps0 = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        n_exp = _fval(f[3], 0.2) if len(f) > 3 else 0.2
+        eps_max = _fval(f[4], 1e30) if len(f) > 4 else 1e30
+        ifail_sh = _ival(f[5], 1) if len(f) > 5 else 1
+    else:
+        toks = cards[0].tokens()
+        sigma0 = float(toks[0]) if len(toks) > 0 else 0.0
+        k_coeff = float(toks[1]) if len(toks) > 1 else 0.0
+        eps0 = float(toks[2]) if len(toks) > 2 else 0.0
+        n_exp = float(toks[3]) if len(toks) > 3 else 0.2
+        eps_max = float(toks[4]) if len(toks) > 4 else 1e30
+        ifail_sh = int(float(toks[5])) if len(toks) > 5 else 1
+
+    from ..model.entities import FailGhosh
+    model.fail_ghoshs[block.user_id] = FailGhosh(
+        mat_id=block.user_id, title=title, sigma0=sigma0, k_coeff=k_coeff,
+        eps0=eps0, n_exp=n_exp, eps_max=eps_max, ifail_sh=ifail_sh
+    )
+
+
 
 
 
@@ -45707,6 +45742,60 @@ def read_sensor_spring_contact_energy(block: KeywordBlock, model: Model, log: Me
     ))
 
 
+def read_eng_numerical_dissipation(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/NUMERICAL_DISSIPATION`` or ``/ENG/NUMERICAL_DISSIPATION`` (M247): Engine numerical dissipation energy output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/NUMERICAL_DISSIPATION/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_num, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_NUMERICAL_DISSIPATION_1")
+        dt_num = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_num = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngNumericalDissipation
+    r_id = block.user_id or (len(model.eng_numerical_dissipations) + 1)
+    model.eng_numerical_dissipations[r_id] = EngNumericalDissipation(
+        id=r_id, title=title, dt_num=dt_num, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_numerical_dissipation(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_NUMERICAL_DISSIPATION`` or ``/SENSOR/SPRING_NUM_DISS`` (M247): Spring element numerical dissipation energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_NUMERICAL_DISSIPATION/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, enum_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_NUMERICAL_DISSIPATION_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        enum_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        enum_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringNumericalDissipation, Sensor
+    ssnd = SensorSpringNumericalDissipation(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        enum_max=enum_max, t_delay=t_delay
+    )
+    model.sensor_spring_numerical_dissipations[ssnd.id] = ssnd
+    model.sensors.append(Sensor(
+        id=ssnd.id, kind="SPRING_NUMERICAL_DISSIPATION", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -48072,6 +48161,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_CE": read_sensor_spring_contact_energy,
     "SENSOR_CONTACT_ENERGY_SPRING": read_sensor_spring_contact_energy,
     "SENSOR_SPRING_CONTACT": read_sensor_spring_contact_energy,
+    # --- M247: Ghosh Failure Criterion, Engine Numerical Dissipation Output Directive, Pin Axis Joint Aliases, and Spring Numerical Dissipation Sensor Suite ---
+    "FAIL_GHOSH": read_fail_ghosh,
+    "FAIL_GHOSH_DAMAGE": read_fail_ghosh,
+    "FAIL_GHOSH_LAW": read_fail_ghosh,
+    "FAIL_GHOSH_MODEL": read_fail_ghosh,
+    "NUMERICAL_DISSIPATION": read_eng_numerical_dissipation,
+    "ENG_NUMERICAL_DISSIPATION": read_eng_numerical_dissipation,
+    "ENG_NUM_DISS": read_eng_numerical_dissipation,
+    "ENG_NUM_ENERGY": read_eng_numerical_dissipation,
+    "ENG_NUMERICAL_ENERGY": read_eng_numerical_dissipation,
+    "ENG_DISSIPATION": read_eng_numerical_dissipation,
+    "LAGMUL_PIN_AXIS": read_pin_joint,
+    "PIN_AXIS": read_pin_joint,
+    "LAGMUL_REVOLUTE_PIN_AXIS": read_pin_joint,
+    "REVOLUTE_PIN_AXIS": read_pin_joint,
+    "PIN_JOINT_AXIS": read_pin_joint,
+    "SENSOR_SPRING_NUMERICAL_DISSIPATION": read_sensor_spring_numerical_dissipation,
+    "SENSOR_SPRING_NUM_DISS": read_sensor_spring_numerical_dissipation,
+    "SENSOR_NUM_DISS_SPRING": read_sensor_spring_numerical_dissipation,
+    "SENSOR_SPRING_DISSIPATION": read_sensor_spring_numerical_dissipation,
 }
 
 

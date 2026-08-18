@@ -13559,6 +13559,38 @@ class SensorSpringContactEnergy:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailGhosh:
+    """``/FAIL/GHOSH/mat_ID`` (M247): Ghosh power-law strain hardening fracture criterion."""
+    mat_id: int = 0
+    title: str = ""
+    sigma0: float = 0.0      # reference yield stress sigma_0
+    k_coeff: float = 0.0     # strength coefficient K
+    eps0: float = 0.0        # pre-strain offset epsilon_0
+    n_exp: float = 0.2       # strain hardening exponent n
+    eps_max: float = 1e30    # maximum failure strain epsilon_max
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngNumericalDissipation:
+    """``/NUMERICAL_DISSIPATION`` or ``/ENG/NUMERICAL_DISSIPATION`` (M247): Engine numerical dissipation energy output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_num: float = 0.0      # time frequency for numerical dissipation output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSpringNumericalDissipation:
+    """``/SENSOR/SPRING_NUMERICAL_DISSIPATION`` or ``/SENSOR/SPRING_NUM_DISS`` (M247): Spring element numerical dissipation energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    enum_max: float = 1e30   # maximum numerical dissipation energy threshold
+    t_delay: float = 0.0     # activation delay time
+
+
 
 
 

@@ -1675,6 +1675,11 @@ class Model:
         self.eng_contact_energies: Dict[int, Any] = {}               # /CONTACT_ENERGY, /ENG/CONTACT_ENERGY (M246)
         self.sensor_spring_contact_energies: Dict[int, Any] = {}     # /SENSOR/SPRING_CONTACT_ENERGY (M246)
 
+        # M247 Entities
+        self.fail_ghoshs: Dict[int, Any] = {}                        # /FAIL/GHOSH (M247)
+        self.eng_numerical_dissipations: Dict[int, Any] = {}         # /NUMERICAL_DISSIPATION, /ENG/NUMERICAL_DISSIPATION (M247)
+        self.sensor_spring_numerical_dissipations: Dict[int, Any] = {} # /SENSOR/SPRING_NUMERICAL_DISSIPATION (M247)
+
 
 
 
