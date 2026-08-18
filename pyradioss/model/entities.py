@@ -10702,20 +10702,150 @@ class FailXFEM:
     params: dict = field(default_factory=dict)
 
 
+@dataclass
+class SphFlow:
+    """``/SPH_FLOW/id`` or ``/SPH/FLOW/id`` (M194): SPH flow boundary condition."""
+    id: int
+    title: str = ""
+    surf_id: int = 0
+    part_id: int = 0
+    fct_id: int = 0
+    params: dict = field(default_factory=dict)
 
 
+@dataclass
+class MidDirective:
+    """``/MID/id`` (M194): Material ID assignment / mapping card."""
+    id: int
+    mat_id: int
+    title: str = ""
 
 
+@dataclass
+class PidDirective:
+    """``/PID/id`` (M194): Part/Property ID assignment / mapping card."""
+    id: int
+    prop_id: int
+    title: str = ""
 
 
+@dataclass
+class SphParticle:
+    """SPH particle element (M194)."""
+    id: int
+    part_id: int = 0
+    node_id: int = 0
 
 
+@dataclass
+class FailTab1:
+    """``/FAIL/TAB1`` (M194): Tabulated failure model Version 1."""
+    mat_id: int = 0
+    ifail_sh: int = 1
+    ifail_so: int = 1
+    p_thickfail: float = 0.0
+    p_thinfail: float = 0.0
+    ixfem: int = 0
+    dcrit: float = 1.0
+    d: float = 0.0
+    n: float = 1.0
+    dadv: float = 0.0
+    fct_idd: int = 0
+    table1_id: int = 0
+    xscale1: float = 1.0
+    xscale2: float = 1.0
+    table2_id: int = 0
+    xscale3: float = 1.0
+    xscale4: float = 1.0
+    fct_id_el: int = 0
+    fscale_el: float = 1.0
+    el_ref: float = 1.0
+    inst_start: float = 0.0
+    fad_exp: float = 1.0
+    ch_i_f: float = 0.0
+    fct_id_t: int = 0
+    fscale_t: float = 1.0
+    ifunc: int = 0
+    eps_max: float = 0.0
+    scale: float = 1.0
+    fail_id: int = 0
+    params: dict = field(default_factory=dict)
 
 
+@dataclass
+class MatLaw40:
+    """``/MAT/LAW40`` or ``/MAT/CONCR_SUB`` (M194): Concrete subgrade model."""
+    id: int
+    title: str = ""
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    params: dict = field(default_factory=dict)
 
 
+@dataclass
+class MatLaw80:
+    """``/MAT/LAW80`` or ``/MAT/BARLAT3`` (M194): Barlat 3-parameter plasticity."""
+    id: int
+    title: str = ""
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    params: dict = field(default_factory=dict)
 
 
+@dataclass
+class MatLaw102:
+    """``/MAT/LAW102`` or ``/MAT/HILL_48`` (M194): Hill 1948 anisotropic plasticity."""
+    id: int
+    title: str = ""
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    params: dict = field(default_factory=dict)
 
 
+@dataclass
+class MatNLocal:
+    """``/MAT/NLOCAL`` (M194): Nonlocal plastic strain regularisation."""
+    id: int
+    title: str = ""
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class PropType13:
+    """``/PROP/TYPE13`` or ``/PROP/SPR_PULL`` (M194): Pulling spring property."""
+    id: int
+    title: str = ""
+    stiff: float = 0.0
+    f_max: float = 0.0
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class DefInterType2:
+    """``/DEF_INTER/TYPE2`` (M194): Default Type 2 interface parameters."""
+    istf: int = 0
+    igap: int = 0
+    iref: int = 0
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class EngineTHRecord:
+    """Engine /TH time history request record (M194)."""
+    th_type: str
+    id: int = 0
+    title: str = ""
+    vars: list = field(default_factory=list)
+    ids: list = field(default_factory=list)
+
+
+MatConcrSub = MatLaw40
+MatHill48 = MatLaw102
+PropSprPull = PropType13
 

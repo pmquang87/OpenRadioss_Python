@@ -114,6 +114,9 @@ from .entities import (
     FailEMC, FailNXT, FailTButcher, FailMullins, FailCockcroft, FailGene1, FailXFEM,
     MatLaw53, MatLaw54, MatLaw74, MatLaw82, PropIntBeamIP, PropType18,
     DefInterType11, DefInterType19, DefInterType25, StateDirective,
+    SphFlow, MidDirective, PidDirective, SphParticle, FailTab1,
+    MatLaw40, MatLaw80, MatLaw102, MatNLocal, PropType12, PropType13,
+    DefInterType2, EngineTHRecord,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -228,6 +231,8 @@ class EngineControls:
     report_freq: int = 0                                                             # /REPORT listing cycles (M148)
     report_dt: float = 0.0                                                           # /REPORT/DT output period (M148)
     negvol_action: str = ""                                                          # /NEGVOL/STOP, /NEGVOL/DEL (M148)
+    th_records: List[EngineTHRecord] = field(default_factory=list)                    # /TH engine time-history records (M194)
+    python_functions: Dict[int, Any] = field(default_factory=dict)                   # /FUNCT_PYTHON, /PYTHON_FUNCT (M194)
 
 
 
@@ -631,7 +636,7 @@ class Model:
         # converted to ElementGroups in Starter finalization:
         self.raw_elems: Dict[str, list] = {
             "BRICK": [], "QUAD": [], "TETRA4": [], "TETRA10": [], "SHELL": [], "SH3N": [],
-            "TRUSS": [], "SPRING": [], "BEAM": [], "SHEL16": [], "BRIC20": [], "HEXA20": []}
+            "TRUSS": [], "SPRING": [], "BEAM": [], "SHEL16": [], "BRIC20": [], "HEXA20": [], "SPH": []}
 
         # ------------------------------------------------------------------
         # Definitions keyed by user id
@@ -1219,6 +1224,21 @@ class Model:
         self.def_inter_type19: Optional[DefInterType19] = None      # /DEF_INTER/TYPE19 (M193)
         self.def_inter_type25: Optional[DefInterType25] = None      # /DEF_INTER/TYPE25 (M193)
         self.state_directives: List[StateDirective] = []            # /STATE/... (M193)
+        self.sph_flows: Dict[int, SphFlow] = {}                     # /SPH_FLOW (M194)
+        self.mid_directives: Dict[int, MidDirective] = {}           # /MID (M194)
+        self.pid_directives: Dict[int, PidDirective] = {}           # /PID (M194)
+        self.sphs: Dict[int, SphParticle] = {}                      # /SPHCEL, /SPHCELL (M194)
+        self.fail_tab1s: Dict[int, FailTab1] = {}                   # /FAIL/TAB1 (M194)
+        self.mat_law40s: Dict[int, MatLaw40] = {}                   # /MAT/LAW40 (M194)
+        self.mat_concr_subs = self.mat_law40s
+        self.mat_law80s: Dict[int, MatLaw80] = {}                   # /MAT/LAW80 (M194)
+        self.mat_barlat3s = self.mat_law80s
+        self.mat_law102s: Dict[int, MatLaw102] = {}                 # /MAT/LAW102 (M194)
+        self.mat_hill_48s = self.mat_law102s
+        self.mat_nlocals: Dict[int, MatNLocal] = {}                 # /MAT/NLOCAL (M194)
+        self.prop_spr_pulls: Dict[int, PropType13] = {}             # /PROP/TYPE13, /PROP/SPR_PULL (M194)
+        self.prop_type13s = self.prop_spr_pulls
+        self.def_inter_type2: Optional[DefInterType2] = None        # /DEF_INTER/TYPE2 (M194)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

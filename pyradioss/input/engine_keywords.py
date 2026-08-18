@@ -1526,6 +1526,36 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 # /NEGVOL/STOP, /NEGVOL/DEL (M148): freform.F
                 sub = block.parts[1].upper() if len(block.parts) > 1 else "STOP"
                 ec.negvol_action = sub
+            elif key in ("TH", "ITH") or key.startswith("TH_") or key.startswith("ITH_"):
+                # /TH or /ITH time-history requests in engine deck (M194)
+                from ..model.entities import EngineTHRecord
+                if key in ("TH", "ITH"):
+                    sub = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
+                elif key.startswith("ITH_"):
+                    sub = key[4:]
+                else:
+                    sub = key[3:]
+                th_id = block.user_id if block.user_id is not None else 0
+                title = block.cards[0].raw.strip() if block.cards else ""
+                ids = []
+                vars_list = []
+                for c in block.cards[1:]:
+                    if not c.is_blank and not c.raw.strip().startswith("#"):
+                        # Extract non-numeric tokens as vars, numeric as ids
+                        for tok in c.tokens():
+                            try:
+                                ids.append(int(float(tok)))
+                            except ValueError:
+                                vars_list.append(tok.upper())
+                ec.th_records.append(EngineTHRecord(th_type=sub, id=th_id, title=title, vars=vars_list, ids=ids))
+            elif key in ("FUNCT_PYTHON", "PYTHON_FUNCT"):
+                # /FUNCT_PYTHON or /PYTHON_FUNCT in engine deck (M194)
+                fid = block.user_id if block.user_id is not None else 0
+                title = block.cards[0].raw.strip() if block.cards else ""
+                expr = "\n".join(c.raw for c in block.cards[1:]) if len(block.cards) > 1 else ""
+                ec.python_functions[fid] = (title, expr)
+            elif key == "END":
+                pass
             else:
                 log.warning(f"engine keyword /{'/'.join(block.parts)} "
                             f"not ported — ignored", block.source)

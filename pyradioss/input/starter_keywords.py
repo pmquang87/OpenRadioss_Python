@@ -1137,6 +1137,16 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW82", "MAT_LAW82", "LAW82_OGDEN", "OGDEN_82", "MAT_OGDEN_82"):
         read_mat_law82(block, model, log)
         return
+    # M194: LAW40 (CONCR_SUB), LAW102 (HILL_48), NLOCAL
+    if lawname in ("LAW40", "CONCR_SUB", "MAT_CONCR_SUB", "LAW40_CONCR_SUB"):
+        read_mat_law40(block, model, log)
+        return
+    if lawname in ("LAW102", "HILL_48", "MAT_HILL_48", "LAW102_HILL_48"):
+        read_mat_law102(block, model, log)
+        return
+    if lawname in ("NLOCAL", "NONLOCAL_PLAS", "MAT_NLOCAL"):
+        read_mat_nlocal(block, model, log)
+        return
     if lawname in ("HEAT", "HEAT_TRANSFER"):
         read_mat_heat(block, model, log)
         return
@@ -2003,17 +2013,26 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         }
         fm = FailureModel(type="SNCONNECT", ifail_sh=1, params=params)
     elif kind == "TAB1":
-        if len(cards) < 4:
-            log.error(f"/FAIL/TAB1/{mat_id}: requires at least 4 data cards", block.source)
+        if not cards or cards[0].is_blank:
+            log.error(f"/FAIL/TAB1/{mat_id}: missing data cards", block.source)
             return
 
+        from ..model.entities import FailTab1
+        fail_id = 0
         # Card 1: Ifail_sh  Ifail_so  P_thickfail  P_thinfail  Ixfem
-        c1 = _cut_floats(cards[0], "FAIL_TAB1_1") if block.fixed else _floats(cards[0], 6)
+        c1 = _cut_floats(cards[0], "FAIL_TAB1_1") if block.fixed and "FAIL_TAB1_1" in CARD_LAYOUTS else _floats(cards[0], 6)
         ifail_sh = int(c1[0]) if len(c1) > 0 and c1[0] else 1
-        
-        # Card 2: Dcrit  D  n  Dadv  fct_IDd
-        c2 = _cut_floats(cards[1], "FAIL_TAB1_2") if block.fixed else _floats(cards[1], 5)
+        ifail_so = int(c1[1]) if len(c1) > 1 and c1[1] else 1
+        p_thickfail = c1[2] if len(c1) > 2 else 0.0
+        p_thinfail = c1[3] if len(c1) > 3 else 0.0
+        ixfem = int(c1[4]) if len(c1) > 4 and c1[4] else 0
+        ifunc = int(c1[0]) if len(c1) > 0 and c1[0] else 0
+
+        # Card 2: Dcrit  D  n  Dadv  fct_IDd (or eps_max, scale)
+        c2 = _cut_floats(cards[1], "FAIL_TAB1_2") if len(cards) > 1 and block.fixed and "FAIL_TAB1_2" in CARD_LAYOUTS else (_floats(cards[1], 5) if len(cards) > 1 else [])
         dcrit = c2[0] if len(c2) > 0 and c2[0] else 1.0
+        eps_max = c2[0] if len(c2) > 0 else 0.0
+        scale = c2[1] if len(c2) > 1 else 1.0
         d_val = c2[1] if len(c2) > 1 and c2[1] else 0.0
         n_val = c2[2] if len(c2) > 2 and c2[2] else 1.0
         dadv = c2[3] if len(c2) > 3 and c2[3] else 0.0
@@ -2022,7 +2041,7 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             d_val = 0.999
 
         # Card 3: Table1_ID  Xscale1  Xscale2  Table2_ID  Xscale3  Xscale4
-        c3 = _cut_floats(cards[2], "FAIL_TAB1_3") if block.fixed else _floats(cards[2], 6)
+        c3 = _cut_floats(cards[2], "FAIL_TAB1_3") if len(cards) > 2 and block.fixed and "FAIL_TAB1_3" in CARD_LAYOUTS else (_floats(cards[2], 6) if len(cards) > 2 else [])
         table1_id = int(c3[0]) if len(c3) > 0 and c3[0] else 0
         xscale1 = c3[1] if len(c3) > 1 and c3[1] else 1.0
         xscale2 = c3[2] if len(c3) > 2 and c3[2] else 1.0
@@ -2031,7 +2050,7 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         xscale4 = c3[5] if len(c3) > 5 and c3[5] else 1.0
 
         # Card 4: Fct_ID_EL  Fscale_EL  EI_ref  Inst_start  Fad_exp  Ch_i_f
-        c4 = _cut_floats(cards[3], "FAIL_TAB1_4") if block.fixed else _floats(cards[3], 6)
+        c4 = _cut_floats(cards[3], "FAIL_TAB1_4") if len(cards) > 3 and block.fixed and "FAIL_TAB1_4" in CARD_LAYOUTS else (_floats(cards[3], 6) if len(cards) > 3 else [])
         fct_id_el = int(c4[0]) if len(c4) > 0 and c4[0] else 0
         fscale_el = c4[1] if len(c4) > 1 and c4[1] else 1.0
         el_ref = c4[2] if len(c4) > 2 and c4[2] else 1.0
@@ -2041,7 +2060,7 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
         # Card 5: FCT_ID_T  FSCALE_T
         if len(cards) > 4:
-            c5 = _cut_floats(cards[4], "FAIL_TAB1_5") if block.fixed else _floats(cards[4], 2)
+            c5 = _cut_floats(cards[4], "FAIL_TAB1_5") if block.fixed and "FAIL_TAB1_5" in CARD_LAYOUTS else _floats(cards[4], 2)
             fct_id_t = int(c5[0]) if len(c5) > 0 and c5[0] else 0
             fscale_t = c5[1] if len(c5) > 1 and c5[1] else 1.0
         else:
@@ -2055,7 +2074,20 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "fct_id_el": fct_id_el, "fscale_el": fscale_el, "el_ref": el_ref,
             "inst_start": inst_start, "fad_exp": fad_exp, "ch_i_f": ch_i_f,
             "fct_id_t": fct_id_t, "fscale_t": fscale_t,
+            "ifunc": ifunc, "eps_max": eps_max, "scale": scale,
         }
+        tab1_obj = FailTab1(
+            mat_id=mat_id, ifail_sh=ifail_sh, ifail_so=ifail_so,
+            p_thickfail=p_thickfail, p_thinfail=p_thinfail, ixfem=ixfem,
+            dcrit=dcrit, d=d_val, n=n_val, dadv=dadv, fct_idd=fct_idd,
+            table1_id=table1_id, xscale1=xscale1, xscale2=xscale2,
+            table2_id=table2_id, xscale3=xscale3, xscale4=xscale4,
+            fct_id_el=fct_id_el, fscale_el=fscale_el, el_ref=el_ref,
+            inst_start=inst_start, fad_exp=fad_exp, ch_i_f=ch_i_f,
+            fct_id_t=fct_id_t, fscale_t=fscale_t,
+            ifunc=ifunc, eps_max=eps_max, scale=scale, fail_id=fail_id, params=params
+        )
+        model.fail_tab1s[mat_id] = tab1_obj
         fm = FailureModel(type="TAB1", ifail_sh=ifail_sh, params=params)
     elif kind == "FLD":
         if block.fixed:
@@ -4214,6 +4246,9 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     # M185: PROP_TYPE12 (SPR_PUL), PROP_TYPE15 (POROUS), PROP_TYPE28 (NSTRAND)
     if typename in ("TYPE12", "SPR_PUL", "PULLEY", "PROP_TYPE12", "PROP_SPR_PUL", "P12_SPR_PUL"):
         read_prop_type12(block, model, log)
+        return
+    if typename in ("TYPE13", "SPR_PULL", "PROP_TYPE13", "PROP_SPR_PULL", "P13_SPR_PULL"):
+        read_prop_type13(block, model, log)
         return
     if typename in ("TYPE15", "POROUS", "SOLID_POROUS", "PROP_TYPE15", "PROP_POROUS", "P15_POROUS"):
         read_prop_type15(block, model, log)
@@ -13519,13 +13554,13 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "SUBS", "SUBDOMAIN", "SUBMODEL", "LAGMUL", "GEAR", "RACK", "DIFF",
         "IMPDISP", "IMPVEL", "PLOAD", "PROP", "MAT", "STACK", "PLY",
         "WAVE_SHAPER", "DET", "GUIDED_CABLE", "KJOINT", "SUBINTER",
-        "EBCS", "SEATBELT"
+        "EBCS", "SEATBELT", "SPH_FLOW"
     }
     if block.key0 == "THPART":
         kind = "PART"
-    elif block.key0.startswith(("TH", "ATH", "BTH", "CTH", "DTH", "ETH", "FTH", "GTH", "HTH")) and "_" in block.key0:
+    elif block.key0.startswith(("TH", "ATH", "BTH", "CTH", "DTH", "ETH", "FTH", "GTH", "HTH", "ITH")) and "_" in block.key0:
         kind = block.key0.split("_", 1)[1].upper()
-    elif block.key0 in ("TH", "ATH", "BTH", "CTH", "DTH", "ETH", "FTH", "GTH", "HTH"):
+    elif block.key0 in ("TH", "ATH", "BTH", "CTH", "DTH", "ETH", "FTH", "GTH", "HTH", "ITH"):
         kind = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
     else:
         kind = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
@@ -13860,6 +13895,14 @@ def read_def_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             idel7=entry.get('idel7', 1000), icurv=entry.get('icurv', 0),
             inactiv=entry.get('inactiv', 1000), iform=entry.get('iform', 1),
         )
+    elif subtype == "TYPE2":
+        from ..model.entities import DefInterType2
+        model.def_inter_type2 = DefInterType2(
+            istf=entry.get('istf', _iv_from(vals, 0)),
+            igap=entry.get('igap', _iv_from(vals, 1)),
+            iref=entry.get('iref', _iv_from(vals, 2)),
+            params=entry,
+        )
     elif subtype == "TYPE25":
         from ..model.entities import DefInterType25
         model.def_inter_type25 = DefInterType25(
@@ -14041,6 +14084,88 @@ def read_sphbcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=block.user_id, bcs_type=bcs_type, title=title, dir=dir_str,
         frame_id=frame_id, grnod_id=grnod_id, ilevel=ilevel
     )
+
+
+def read_sph_flow(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SPH_FLOW/id`` or ``/SPH/FLOW/id`` (M194): SPH flow boundary condition."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    from ..model.entities import SphFlow
+    surf_id, part_id, fct_id = 0, 0, 0
+    params = {}
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("SPH_INOUT_1")
+            surf_id = _ival(f[0]) if len(f) > 0 else 0
+            part_id = _ival(f[1]) if len(f) > 1 else 0
+            fct_id = _ival(f[2]) if len(f) > 2 else 0
+        else:
+            t = cards[0].tokens()
+            surf_id = int(float(t[0])) if len(t) > 0 else 0
+            part_id = int(float(t[1])) if len(t) > 1 else 0
+            fct_id = int(float(t[2])) if len(t) > 2 else 0
+    if len(cards) > 1 and not cards[1].is_blank:
+        if block.fixed:
+            f2 = cards[1].cut("SPH_INOUT_2")
+            params["rho"] = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            params["p"] = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            params["e"] = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+        else:
+            t2 = cards[1].tokens()
+            params["rho"] = float(t2[0]) if len(t2) > 0 else 0.0
+            params["p"] = float(t2[1]) if len(t2) > 1 else 0.0
+            params["e"] = float(t2[2]) if len(t2) > 2 else 0.0
+    sf = SphFlow(id=block.user_id, title=title, surf_id=surf_id, part_id=part_id, fct_id=fct_id, params=params)
+    model.sph_flows[block.user_id] = sf
+
+
+def read_mid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MID/id`` (M194): Material ID assignment / mapping card."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    from ..model.entities import MidDirective
+    mid = block.user_id if block.user_id is not None else 0
+    mat_id = mid
+    if cards and not cards[0].is_blank:
+        toks = cards[0].tokens()
+        if toks:
+            try:
+                mat_id = int(float(toks[0]))
+            except ValueError:
+                mat_id = mid
+    model.mid_directives[mid] = MidDirective(id=mid, mat_id=mat_id, title=title)
+
+
+def read_pid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PID/id`` (M194): Part/Property ID assignment / mapping card."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    from ..model.entities import PidDirective
+    pid = block.user_id if block.user_id is not None else 0
+    prop_id = pid
+    if cards and not cards[0].is_blank:
+        toks = cards[0].tokens()
+        if toks:
+            try:
+                prop_id = int(float(toks[0]))
+            except ValueError:
+                prop_id = pid
+    model.pid_directives[pid] = PidDirective(id=pid, prop_id=prop_id, title=title)
+
+
+def read_sphcel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SPHCEL/part_ID`` or ``/SPHCELL/part_ID`` (M194): SPH particles."""
+    _read_elems(block, model, log, "SPH", 1)
+
+
+def read_tetra(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TETRA/part_ID`` (M194): 4-node or 10-node tetrahedral solids."""
+    for card in block.cards:
+        if not card.is_blank and not card.raw.strip().startswith("#"):
+            t = card.ints()
+            if len(t) >= 11:
+                read_tetra10(block, model, log)
+                return
+            break
+    read_tetra4(block, model, log)
+
 
 
 def read_madymo(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -38475,6 +38600,93 @@ def read_mat_law82(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_mat_law40(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW40`` or ``/MAT/CONCR_SUB`` (M194): Concrete subgrade model."""
+    from ..model.entities import MatLaw40, Material
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    rho, e, nu = 0.0, 0.0, 0.0
+    params = {}
+    if len(valid_cards) > 0:
+        c0 = valid_cards[0].tokens()
+        rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
+        e = _safe_float(c0[1]) if len(c0) > 1 else 0.0
+        nu = _safe_float(c0[2]) if len(c0) > 2 else 0.0
+    if len(valid_cards) > 1:
+        c1 = valid_cards[1].tokens()
+        for idx, val in enumerate(c1):
+            params[f"param_{idx}"] = _safe_float(val)
+    mat = MatLaw40(id=mat_id, title=title, rho=rho, e=e, nu=nu, params=params)
+    model.mat_law40s[mat_id] = mat
+    model.materials[mat_id] = Material(id=mat_id, law=40, rho0=rho, title=title, params={"rho": rho, "e": e, "nu": nu, **params})
+
+
+
+
+def read_mat_law102(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW102`` or ``/MAT/HILL_48`` (M194): Hill 1948 anisotropic plasticity."""
+    from ..model.entities import MatLaw102, Material
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    rho, e, nu = 0.0, 0.0, 0.0
+    params = {}
+    if len(valid_cards) > 0:
+        c0 = valid_cards[0].tokens()
+        rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
+        e = _safe_float(c0[1]) if len(c0) > 1 else 0.0
+        nu = _safe_float(c0[2]) if len(c0) > 2 else 0.0
+    if len(valid_cards) > 1:
+        c1 = valid_cards[1].tokens()
+        for idx, val in enumerate(c1):
+            params[f"param_{idx}"] = _safe_float(val)
+    mat = MatLaw102(id=mat_id, title=title, rho=rho, e=e, nu=nu, params=params)
+    model.mat_law102s[mat_id] = mat
+    model.materials[mat_id] = Material(id=mat_id, law=102, rho0=rho, title=title, params={"rho": rho, "e": e, "nu": nu, **params})
+
+
+def read_mat_nlocal(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/NLOCAL`` (M194): Nonlocal plastic strain regularisation."""
+    from ..model.entities import MatNLocal, Material
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    rho, e, nu = 0.0, 0.0, 0.0
+    params = {}
+    if len(valid_cards) > 0:
+        c0 = valid_cards[0].tokens()
+        rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
+        e = _safe_float(c0[1]) if len(c0) > 1 else 0.0
+        nu = _safe_float(c0[2]) if len(c0) > 2 else 0.0
+    if len(valid_cards) > 1:
+        c1 = valid_cards[1].tokens()
+        for idx, val in enumerate(c1):
+            params[f"param_{idx}"] = _safe_float(val)
+    mat = MatNLocal(id=mat_id, title=title, rho=rho, e=e, nu=nu, params=params)
+    model.mat_nlocals[mat_id] = mat
+    model.materials[mat_id] = Material(id=mat_id, law=0, rho0=rho, title=title, params={"rho": rho, "e": e, "nu": nu, **params})
+
+
+def read_prop_type13(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE13`` or ``/PROP/SPR_PULL`` (M194): Pulling spring property."""
+    from ..model.entities import PropType13, Property
+    prop_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    stiff, f_max = 0.0, 0.0
+    params = {}
+    if len(valid_cards) > 0:
+        c0 = valid_cards[0].tokens()
+        stiff = _safe_float(c0[0]) if len(c0) > 0 else 0.0
+        f_max = _safe_float(c0[1]) if len(c0) > 1 else 0.0
+        for idx, val in enumerate(c0[2:], start=2):
+            params[f"p_{idx}"] = _safe_float(val)
+    prop = PropType13(id=prop_id, title=title, stiff=stiff, f_max=f_max, params=params)
+    model.prop_spr_pulls[prop_id] = prop
+    model.properties[prop_id] = Property(id=prop_id, type=13, title=title, params={"stiff": stiff, "f_max": f_max, **params})
+
+
 def read_airbag_injector(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/AIRBAG/INJECTOR/id`` or ``/INJECTOR/id`` (M142): Airbag jetting injector."""
     from ..model.entities import AirbagInjector
@@ -39926,6 +40138,25 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "STATE_SPRING": read_state,
     "STATE_TRUSS": read_state,
     "STATE_DT": read_state,
+    "SHELL3N": read_sh3n,
+    "SOLIDE": read_brick,
+    "SOLID": read_brick,
+    "TETRA": read_tetra,
+    "SPHCEL": read_sphcel,
+    "SPHCELL": read_sphcel,
+    "SPH_FLOW": read_sph_flow,
+    "MID": read_mid,
+    "PID": read_pid,
+    "NLOCAL": read_mat,
+    "PYTHON_FUNCT": read_funct_python,
+    "TIED": read_inter,
+    "TYPE2": read_inter,
+    "ITH": read_th,
+    "ITH_CLUSTER": read_th,
+    "ITH_SH3N": read_th,
+    "ITH_SHEL": read_th,
+    "ITH_SPH_FLOW": read_th,
+    "TH_SPH_FLOW": read_th,
 }
 
 
@@ -39969,7 +40200,7 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
             "INIQUA", "INIQUAD", "INISTA", "INISTATE", "SPH_RESERVE", "MOVE_FUNCT",
             "EIG", "SHFRA", "SHFRA_V4", "INTTHICK", "INT_THICK", "STR_FILE", "MEMORY", "PLOAD",
             "ARCH", "ALTDOCTAG", "EXTERN", "EXTLNK", "SUBDOMAIN",
-            "FUNCT_PYTHON", "FRICTION", "REFSTA", "EREF", "NBCS", "BEM"
+            "FUNCT_PYTHON", "PYTHON_FUNCT", "SPH_FLOW", "MID", "PID", "FRICTION", "REFSTA", "EREF", "NBCS", "BEM"
         ):
             # /FAIL's second trailing id is its OWN option id in the
             # legacy dialect (read_fail handles it), and /ADMAS headers
