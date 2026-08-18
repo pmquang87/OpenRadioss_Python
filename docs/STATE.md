@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M245)
+## What is implemented (M1 → M246)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -251,6 +251,7 @@ real history is 41 milestones. One line each:
 | M243 | Hollomon Failure Criterion, Engine Kinetic Energy Output Directive, Spherical Axis Joint Aliases, and Spring Strain Energy Sensor Suite: /FAIL/HOLLOMON (/FAIL/HOLLOMON_DAMAGE, /FAIL/POWER_LAW, /FAIL/HOLLOMON_LAW) Hollomon power-law strain hardening fracture criterion, /KINETIC_ENERGY (/ENG/KINETIC_ENERGY, /ENG/KIN_ENERGY, /ENG/KE) engine kinetic energy history tracking directive, /LAGMUL/SPHERICAL_AXIS (/SPHERICAL_AXIS, /LAGMUL/BALL_AXIS, /BALL_AXIS) kinematic joint aliases, and /SENSOR/SPRING_STRAIN_ENERGY (/SENSOR/SPRING_SE, /SENSOR/STRAIN_ENERGY_SPRING, /SENSOR/SPRING_INTERNAL_ENERGY) spring element strain energy threshold sensor |
 | M244 | Swift Failure Criterion, Engine Total Energy Output Directive, Differential Joint Aliases, and Spring Kinetic Energy Sensor Suite: /FAIL/SWIFT (/FAIL/SWIFT_LAW, /FAIL/SWIFT_DAMAGE, /FAIL/SWIFT_MODEL) Swift power-law strain hardening fracture criterion, /TOTAL_ENERGY (/ENG/TOTAL_ENERGY, /ENG/TOT_ENERGY, /ENG/TE) engine total energy history tracking directive, /LAGMUL/DIFF_JOINT (/DIFF_JOINT, /LAGMUL/DIFF_AXIS, /DIFF_AXIS) kinematic joint aliases, and /SENSOR/SPRING_KINETIC_ENERGY (/SENSOR/SPRING_KE, /SENSOR/KINETIC_ENERGY_SPRING, /SENSOR/SPRING_KIN_ENERGY) spring element kinetic energy threshold sensor |
 | M245 | Ludwik Failure Criterion, Engine Hourglass Energy Output Directive, Screw/Helical Axis Joint Aliases, and Spring Hourglass Energy Sensor Suite: /FAIL/LUDWIK (/FAIL/LUDWIK_LAW, /FAIL/LUDWIK_DAMAGE, /FAIL/LUDWIK_MODEL) Ludwik power-law strain hardening fracture criterion, /HOURGLASS_ENERGY (/ENG/HOURGLASS_ENERGY, /ENG/HG_ENERGY, /ENG/HE, /ENG/HOURGLASS) engine hourglass energy history tracking directive, /LAGMUL/SCREW_AXIS (/SCREW_AXIS, /LAGMUL/HELICAL_AXIS, /HELICAL_AXIS, /LAGMUL/HELICAL_JOINT, /HELICAL_JOINT) kinematic joint aliases, and /SENSOR/SPRING_HOURGLASS_ENERGY (/SENSOR/SPRING_HE, /SENSOR/HOURGLASS_ENERGY_SPRING, /SENSOR/SPRING_HOURGLASS) spring element hourglass energy threshold sensor |
+| M246 | Voce Failure Criterion, Engine Contact Energy Output Directive, Slot Axis Joint Aliases, and Spring Contact Energy Sensor Suite: /FAIL/VOCE (/FAIL/VOCE_LAW, /FAIL/VOCE_DAMAGE, /FAIL/VOCE_MODEL) Voce isotropic saturation hardening fracture criterion, /CONTACT_ENERGY (/ENG/CONTACT_ENERGY, /ENG/CONT_ENERGY, /ENG/CE, /ENG/CONTACT) engine contact energy history tracking directive, /LAGMUL/SLOT_AXIS (/SLOT_AXIS, /LAGMUL/SLOT_LINE_AXIS, /SLOT_LINE_AXIS) kinematic joint aliases, and /SENSOR/SPRING_CONTACT_ENERGY (/SENSOR/SPRING_CE, /SENSOR/CONTACT_ENERGY_SPRING, /SENSOR/SPRING_CONTACT) spring element contact energy threshold sensor |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read

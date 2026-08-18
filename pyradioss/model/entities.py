@@ -13528,6 +13528,37 @@ class SensorSpringHourglassEnergy:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailVoce:
+    """``/FAIL/VOCE/mat_ID`` (M246): Voce isotropic saturation hardening fracture criterion."""
+    mat_id: int = 0
+    title: str = ""
+    sigma0: float = 0.0      # initial yield stress sigma_0
+    sigma_inf: float = 0.0   # saturation stress sigma_inf
+    beta: float = 1.0        # saturation rate beta
+    eps_max: float = 1e30    # maximum failure strain epsilon_max
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngContactEnergy:
+    """``/CONTACT_ENERGY`` or ``/ENG/CONTACT_ENERGY`` (M246): Engine contact energy output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_ce: float = 0.0       # time frequency for contact energy output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSpringContactEnergy:
+    """``/SENSOR/SPRING_CONTACT_ENERGY`` or ``/SENSOR/CONTACT_ENERGY_SPRING`` (M246): Spring element contact energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    ece_max: float = 1e30    # maximum contact energy threshold
+    t_delay: float = 0.0     # activation delay time
+
+
 
 
 

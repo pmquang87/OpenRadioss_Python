@@ -2358,6 +2358,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("LUDWIK", "LUDWIK_LAW", "LUDWIK_DAMAGE", "LUDWIK_MODEL"):
         read_fail_ludwik(block, model, log)
         return
+    if kind in ("VOCE", "VOCE_LAW", "VOCE_DAMAGE", "VOCE_MODEL"):
+        read_fail_voce(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -42716,6 +42719,36 @@ def read_fail_ludwik(block: KeywordBlock, model: Model, log: MessageLog) -> None
     )
 
 
+def read_fail_voce(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/VOCE/mat_ID`` (M246): Voce isotropic saturation hardening fracture criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/VOCE/{block.user_id}: missing data card", block.source)
+        return
+
+    sigma0, sigma_inf, beta, eps_max, ifail_sh = 0.0, 0.0, 1.0, 1e30, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_VOCE_1")
+        sigma0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sigma_inf = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        beta = _fval(f[2], 1.0) if len(f) > 2 else 1.0
+        eps_max = _fval(f[3], 1e30) if len(f) > 3 else 1e30
+        ifail_sh = _ival(f[4], 1) if len(f) > 4 else 1
+    else:
+        toks = cards[0].tokens()
+        sigma0 = float(toks[0]) if len(toks) > 0 else 0.0
+        sigma_inf = float(toks[1]) if len(toks) > 1 else 0.0
+        beta = float(toks[2]) if len(toks) > 2 else 1.0
+        eps_max = float(toks[3]) if len(toks) > 3 else 1e30
+        ifail_sh = int(float(toks[4])) if len(toks) > 4 else 1
+
+    from ..model.entities import FailVoce
+    model.fail_voces[block.user_id] = FailVoce(
+        mat_id=block.user_id, title=title, sigma0=sigma0, sigma_inf=sigma_inf,
+        beta=beta, eps_max=eps_max, ifail_sh=ifail_sh
+    )
+
+
 
 
 
@@ -45620,6 +45653,60 @@ def read_sensor_spring_hourglass_energy(block: KeywordBlock, model: Model, log: 
     ))
 
 
+def read_eng_contact_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CONTACT_ENERGY`` or ``/ENG/CONTACT_ENERGY`` (M246): Engine contact energy output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/CONTACT_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_ce, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_CONTACT_ENERGY_1")
+        dt_ce = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_ce = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngContactEnergy
+    r_id = block.user_id or (len(model.eng_contact_energies) + 1)
+    model.eng_contact_energies[r_id] = EngContactEnergy(
+        id=r_id, title=title, dt_ce=dt_ce, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_contact_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_CONTACT_ENERGY`` or ``/SENSOR/CONTACT_ENERGY_SPRING`` (M246): Spring element contact energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_CONTACT_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, ece_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_CONTACT_ENERGY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        ece_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        ece_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringContactEnergy, Sensor
+    ssce = SensorSpringContactEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        ece_max=ece_max, t_delay=t_delay
+    )
+    model.sensor_spring_contact_energies[ssce.id] = ssce
+    model.sensors.append(Sensor(
+        id=ssce.id, kind="SPRING_CONTACT_ENERGY", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -47967,6 +48054,24 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_HE": read_sensor_spring_hourglass_energy,
     "SENSOR_HOURGLASS_ENERGY_SPRING": read_sensor_spring_hourglass_energy,
     "SENSOR_SPRING_HOURGLASS": read_sensor_spring_hourglass_energy,
+    # --- M246: Voce Failure Criterion, Engine Contact Energy Output Directive, Slot Axis Joint Aliases, and Spring Contact Energy Sensor Suite ---
+    "FAIL_VOCE": read_fail_voce,
+    "FAIL_VOCE_DAMAGE": read_fail_voce,
+    "FAIL_VOCE_LAW": read_fail_voce,
+    "FAIL_VOCE_MODEL": read_fail_voce,
+    "CONTACT_ENERGY": read_eng_contact_energy,
+    "ENG_CONTACT_ENERGY": read_eng_contact_energy,
+    "ENG_CONT_ENERGY": read_eng_contact_energy,
+    "ENG_CE": read_eng_contact_energy,
+    "ENG_CONTACT": read_eng_contact_energy,
+    "LAGMUL_SLOT_AXIS": read_slot_joint,
+    "SLOT_AXIS": read_slot_joint,
+    "LAGMUL_SLOT_LINE_AXIS": read_slot_joint,
+    "SLOT_LINE_AXIS": read_slot_joint,
+    "SENSOR_SPRING_CONTACT_ENERGY": read_sensor_spring_contact_energy,
+    "SENSOR_SPRING_CE": read_sensor_spring_contact_energy,
+    "SENSOR_CONTACT_ENERGY_SPRING": read_sensor_spring_contact_energy,
+    "SENSOR_SPRING_CONTACT": read_sensor_spring_contact_energy,
 }
 
 

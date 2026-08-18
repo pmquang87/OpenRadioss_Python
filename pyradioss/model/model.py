@@ -1670,6 +1670,11 @@ class Model:
         self.eng_hourglass_energies: Dict[int, Any] = {}             # /HOURGLASS_ENERGY, /ENG/HOURGLASS_ENERGY (M245)
         self.sensor_spring_hourglass_energies: Dict[int, Any] = {}   # /SENSOR/SPRING_HOURGLASS_ENERGY (M245)
 
+        # M246 Entities
+        self.fail_voces: Dict[int, Any] = {}                         # /FAIL/VOCE (M246)
+        self.eng_contact_energies: Dict[int, Any] = {}               # /CONTACT_ENERGY, /ENG/CONTACT_ENERGY (M246)
+        self.sensor_spring_contact_energies: Dict[int, Any] = {}     # /SENSOR/SPRING_CONTACT_ENERGY (M246)
+
 
 
 
