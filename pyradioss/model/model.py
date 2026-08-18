@@ -1595,6 +1595,12 @@ class Model:
         self.eng_stresses: Dict[int, Any] = {}                       # /STRESS, /ENG/STRESS (M230)
         self.sensor_shell_forces: Dict[int, Any] = {}                # /SENSOR/SHELL_FORCE (M230)
 
+        # M231 Entities
+        self.fail_lusases: Dict[int, Any] = {}                       # /FAIL/LUSAS (M231)
+        self.eng_strains: Dict[int, Any] = {}                        # /STRAIN, /ENG/STRAIN (M231)
+        self.sensor_solid_forces: Dict[int, Any] = {}                # /SENSOR/SOLID_FORCE (M231)
+
+
 
 
 

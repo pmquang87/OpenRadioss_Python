@@ -13175,6 +13175,41 @@ class SensorShellForce:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailLusas:
+    """``/FAIL/LUSAS/mat_ID`` (M231): Lusas 3D composite failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    xt: float = 1e30         # longitudinal tensile strength
+    xc: float = 1e30         # longitudinal compressive strength
+    yt: float = 1e30         # transverse tensile strength
+    yc: float = 1e30         # transverse compressive strength
+    s12: float = 1e30        # in-plane shear strength (1-2)
+    s23: float = 1e30        # transverse shear strength (2-3)
+    s31: float = 1e30        # transverse shear strength (3-1)
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngStrain:
+    """``/STRAIN`` or ``/ENG/STRAIN`` (M231): Engine strain output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_strain: float = 0.0   # time frequency for strain output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSolidForce:
+    """``/SENSOR/SOLID_FORCE`` or ``/SENSOR/FORCE_SOLID`` (M231): Solid element force threshold sensor."""
+    id: int = 1
+    title: str = ""
+    solid_id: int = 0        # solid element ID to monitor
+    f_max: float = 1e30      # maximum resultant force threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M230)
+## What is implemented (M1 → M231)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -236,6 +236,7 @@ real history is 41 milestones. One line each:
 | M228 | Hill Anisotropic Failure Criterion, Engine Geometry Update Directive, Pin-Slot/Revolute Axis Joint Aliases, and Beam Strain Sensor Suite: /FAIL/HILL (/FAIL/HILL_PLASTIC, /FAIL/HILL48) Hill anisotropic plasticity failure model, /GEO (/ENG/GEO, /ENG/GEOMETRY) engine nodal coordinate geometry update directive, /LAGMUL/PIN_SLOT (/PIN_SLOT, /PIN_SLOT_JOINT) and /LAGMUL/REVOLUTE_AXIS (/REVOLUTE_AXIS) kinematic joint aliases, and /SENSOR/BEAM_STRAIN (/SENSOR/STRAIN_BEAM, /SENSOR/EPS_BEAM) beam element strain threshold sensor |
 | M229 | Norton Creep Rupture Failure Criterion, Engine Tensor Tracking Directive, Cylinder/Slider Axis Joint Aliases, and Truss Strain Sensor Suite: /FAIL/NORTON (/FAIL/CREEP, /FAIL/NORTON_CREEP) Norton creep rupture failure model, /TENS (/ENG/TENS, /ENG/TENSOR) engine stress/strain tensor history tracking directive, /LAGMUL/CYLINDER_AXIS (/CYLINDER_AXIS) and /LAGMUL/SLIDER_AXIS (/SLIDER_AXIS) kinematic joint aliases, and /SENSOR/TRUSS_STRAIN (/SENSOR/STRAIN_TRUSS, /SENSOR/EPS_TRUSS) truss element strain threshold sensor |
 | M230 | Mohr-Coulomb Failure Criterion, Engine Stress Output Directive, Screw/Helical Axis Joint Aliases, and Shell Force Sensor Suite: /FAIL/MOHR (/FAIL/MOHR_COULOMB, /FAIL/MC) Mohr-Coulomb shear failure model, /STRESS (/ENG/STRESS, /ENG/STRESS_OUTPUT) engine stress tensor history tracking directive, /LAGMUL/SCREW_AXIS (/SCREW_AXIS) and /LAGMUL/HELICAL_AXIS (/HELICAL_AXIS) kinematic joint aliases, and /SENSOR/SHELL_FORCE (/SENSOR/FORCE_SHELL) shell element resultant force/moment threshold sensor |
+| M231 | Lusas Composite Failure Criterion, Engine Strain Output Directive, Inline/Parallel Axis Joint Aliases, and Solid Force Sensor Suite: /FAIL/LUSAS (/FAIL/COMPOSITE_LUSAS, /FAIL/LUSAS_COMPOSITE) Lusas 3D composite failure model, /STRAIN (/ENG/STRAIN, /ENG/STRAIN_OUTPUT) engine strain tensor history tracking directive, /LAGMUL/INLINE_AXIS (/INLINE_AXIS) and /LAGMUL/PARALLEL_AXIS (/PARALLEL_AXIS) kinematic joint aliases, and /SENSOR/SOLID_FORCE (/SENSOR/FORCE_SOLID) solid element resultant force threshold sensor |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
