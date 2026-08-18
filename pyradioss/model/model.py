@@ -1296,7 +1296,14 @@ class Model:
         self.relax_systems: Dict[int, Any] = {}                     # /RELAX, /RELAX/SYSTEM, /RELAX/DYNA (M198)
         self.centris: Dict[int, Any] = {}                           # /CENTRI (M198)
         self.monvol_comms: Dict[int, Any] = {}                      # /MONVOL/COMM, /MONVOL/COMMUNICATION (M198)
+        self.monvol_communications = self.monvol_comms
         self.dttsh: bool = False                                    # /DTTSH, /DT/TSH (M198)
+        self.transform_matrices: Dict[int, Any] = {}                # /TRANSFORM/MATRIX, /MATRIX (M199)
+        self.inter_type10s: Dict[int, Any] = {}                     # /INTER/TYPE10 (M199)
+        self.inter_type12s: Dict[int, Any] = {}                     # /INTER/TYPE12 (M199)
+        self.mat_law51s: Dict[int, Any] = {}                        # /MAT/LAW51, /MAT/DRUCKER_PRAGER, /MAT/MULTIFLUID (M199)
+        self.mat_multifluids = self.mat_law51s
+        self.mat_drucker_pragers = self.mat_law51s
 
 
 

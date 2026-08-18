@@ -344,6 +344,11 @@ LAYOUTS: Dict[str, List[int]] = {
     "INISHE_STRS_3": [20, 20, 20, 20, 20],
     # INISHE/strs_f.cfg: eps_p sigma_b1 sigma_b2 sigma_b12
     "INISHE_STRS_4": [20, 20, 20, 20],
+    # INISHE/orth_loc.cfg: shell_ID nb_lay npg ndir Iunit
+    "INISHE_ORTH_LOC_1": [10, 10, 10, 10, 10],
+    # INISHE/orth_loc.cfg: phi_i alpha_i
+    "INISHE_ORTH_LOC_2": [20, 20],
+
     # INITRU (M97)
     # INITRU/epsp.cfg, force.cfg, tens.cfg: truss_ID value
     "INITRU_SCALAR": [10, 20],
@@ -903,6 +908,9 @@ LAYOUTS: Dict[str, List[int]] = {
     "INTER_TYPE6_2": [20, 20, 20, 20, 20],
     "INTER_TYPE12_1": [10, 10, 10],
     "INTER_TYPE12_2": [30, 20, 20, 20],
+    "INTER_TYPE12_3": [20, 20, 20, 20],
+    "INTER_TYPE12_4": [20, 20, 20],
+    "INTER_TYPE12_5": [20, 20, 20],
     "INTER_TYPE14_1": [10, 10, 10, 10, 10, 10],
     "INTER_TYPE14_2": [20, 20, 20, 20],
     "INTER_TYPE15_1": [10, 10],
@@ -2912,7 +2920,25 @@ LAYOUTS: Dict[str, List[int]] = {
     "CENTRI_1": [10, 10, 10, 10, 10, 10],
     "CENTRI_2": [10, 10, 10],
     "MONVOL_COMM_1": [10, 10, 10, 10, 10, 10, 10],
+    # M199: TRANSFORM_MATRIX, INISH3_ORTH_LOC
+    "TRANSFORM_MATRIX_1": [10, 20, 20, 20, 20, 10],
+    "TRANSFORM_MATRIX_2": [10, 20, 20, 20, 20],
+    "TRANSFORM_MATRIX_3": [10, 20, 20, 20, 20],
+    "INISH3_ORTH_LOC_1": [10, 10, 10, 10, 10],
+    "INISH3_ORTH_LOC_2": [20, 20],
+    "MAT_LAW51_IFORM": [10, 10],
+    "MAT_LAW51_GEN": [20, 20, 20],
+    "MAT_LAW51_PHASE_1": [20, 20, 20, 20, 20],
+    "MAT_LAW51_PHASE_2": [20, 20, 20, 20, 20],
+    "MAT_LAW51_PHASE_3": [20, 20, 20, 20],
+    "MAT_LAW51_PHASE_4": [20, 20],
+    "MAT_LAW51_PHASE_5": [20, 20, 20, 20, 20],
+    "MAT_LAW51_PHASE_6": [20, 20, 20, 20],
+    "MAT_LAW51_DP_1": [20, 20, 20, 20, 20, 20, 20, 20, 20, 20],
+    "MAT_LAW51_DP_2": [20, 20, 20, 20, 10, 10, 10, 20, 20, 20],
+    "MAT_LAW51_DP_3": [20, 20, 20, 20, 20],
 }
+
 
 
 

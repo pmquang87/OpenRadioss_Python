@@ -1477,6 +1477,10 @@ class InitialShellState:
     fail_flag: float = 0.0 # initial failure flag (M142)
     aux: float = 0.0       # auxiliary state variable (M142)
     scale_yld: float = 1.0 # yield stress scale factor (M142)
+    orth_angles: List[Tuple[float, float]] = field(default_factory=list) # orthotropy angles per layer (M199)
+    orth_phi: List[float] = field(default_factory=list) # phi_i angles per layer (M199)
+    orth_alpha: List[float] = field(default_factory=list) # alpha_i angles per layer (M199)
+
 
 
 @dataclass
@@ -11249,6 +11253,174 @@ class MonvolComm:
     a_vent: float = 0.0
     fct_id: int = 0
     sens_id: int = 0
+
+
+@dataclass
+class TransformMatrix:
+    """``/TRANSFORM/MATRIX`` or ``/MATRIX`` (M199): Affine 3D matrix transformation."""
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+    matrix: tuple = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    translation: tuple = (0.0, 0.0, 0.0)
+    sub_id: int = 0
+    submodel: int = 0
+
+    @property
+    def m11(self) -> float:
+        return self.matrix[0][0]
+
+    @property
+    def m12(self) -> float:
+        return self.matrix[0][1]
+
+    @property
+    def m13(self) -> float:
+        return self.matrix[0][2]
+
+    @property
+    def m21(self) -> float:
+        return self.matrix[1][0]
+
+    @property
+    def m22(self) -> float:
+        return self.matrix[1][1]
+
+    @property
+    def m23(self) -> float:
+        return self.matrix[1][2]
+
+    @property
+    def m31(self) -> float:
+        return self.matrix[2][0]
+
+    @property
+    def m32(self) -> float:
+        return self.matrix[2][1]
+
+    @property
+    def m33(self) -> float:
+        return self.matrix[2][2]
+
+    @property
+    def tx(self) -> float:
+        return self.translation[0]
+
+    @property
+    def ty(self) -> float:
+        return self.translation[1]
+
+    @property
+    def tz(self) -> float:
+        return self.translation[2]
+
+
+@dataclass
+class InterType10:
+    """``/INTER/TYPE10`` (M199): Secondary node group to main surface contact interface."""
+    id: int
+    title: str = ""
+    grnod_id: int = 0
+    surf_id: int = 0
+    multimp: int = 0
+    idel: int = 0
+    stfac: float = 1.0
+    gap: float = 0.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+    itied: int = 0
+    inactiv: int = 0
+    stiff_dc: float = 0.0
+    sort_fact: float = 0.2
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class InterType12:
+    """``/INTER/TYPE12`` (M199): General sliding/tied surface-to-surface interface with interpolation."""
+    id: int
+    title: str = ""
+    surf_ids: int = 0
+    surf_idm: int = 0
+    interpol: int = 0
+    tol: float = 0.02
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+    itied: int = 0
+    bcopt: int = 0
+    skew_id: int = 0
+    node_c: int = 0
+    xc: float = 0.0
+    yc: float = 0.0
+    zc: float = 0.0
+    theta: float = 0.0
+    xn: float = 0.0
+    yn: float = 0.0
+    zn: float = 0.0
+    xt: float = 0.0
+    yt: float = 0.0
+    zt: float = 0.0
+    params: dict = field(default_factory=dict)
+
+    @property
+    def center(self) -> tuple[float, float, float]:
+        return (self.xc, self.yc, self.zc)
+
+    @property
+    def normal(self) -> tuple[float, float, float]:
+        return (self.xn, self.yn, self.zn)
+
+    @property
+    def tangent(self) -> tuple[float, float, float]:
+        return (self.xt, self.yt, self.zt)
+
+
+
+@dataclass
+class MatLaw51:
+    """``/MAT/LAW51`` or ``/MAT/DRUCKER_PRAGER`` or ``/MAT/MULTIFLUID`` (M199): Multi-material / Drucker-Prager brittle model."""
+    id: int = 0
+    title: str = ""
+    rho0: float = 0.0
+    rhor: float = 0.0
+    iform: int = 0
+    pext: float = 0.0
+    nu: float = 0.0
+    lamda: float = 0.0
+    scale: float = 1.0
+    rho: float = 0.0
+    e: float = 0.0
+    a0: float = 0.0
+    a1: float = 0.0
+    a2: float = 0.0
+    fc: float = 0.0
+    ft: float = 0.0
+    fmax: float = 0.0
+    fres: float = 0.0
+    eps_c: float = 0.0
+    eps_t: float = 0.0
+    eps_res: float = 0.0
+    b: float = 0.0
+    iflag: int = 0
+    icomp: int = 0
+    itot: int = 0
+    pc: float = 0.0
+    gamma: float = 0.0
+    pt: float = 0.0
+    psi: float = 0.0
+    p0: float = 0.0
+    beta: float = 0.0
+    epsp_max: float = 0.0
+    fac_e: float = 1.0
+    params: dict = field(default_factory=dict)
+
+
+MatMultiFluid = MatLaw51
+MatDruckerPrager = MatLaw51
+MatBrittle = MatLaw51
+MatMultimat = MatLaw51
+
+
 
 
 

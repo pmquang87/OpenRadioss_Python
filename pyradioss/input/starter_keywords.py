@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Starter keyword parsers: /KEYWORD blocks → Model.
 
@@ -796,7 +797,14 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       follow from nu (stored in params so the generic elastic machinery
       — time step, contact stiffness — works unchanged).
     """
-    lawname = block.parts[1].upper() if len(block.parts) > 1 else ""
+    if block.key0 not in ("MAT",):
+        lawname = block.key0.upper()
+    elif len(block.parts) > 1:
+        lawname = block.parts[1].upper()
+    else:
+        lawname = ""
+    if lawname.startswith("MAT_"):
+        lawname = lawname[4:]
     if lawname in ("PLAS_ZERIL", "PLAS_ZERI", "ZERIL", "ZERILLI"):
         read_mat_plas_zeril(block, model, log)
         return
@@ -912,7 +920,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_mat_law134(block, model, log)
         return
     # M176: MAT LAW104 (JOHNS_VOCE_DRUCKER), LAW105 (POWDER_BURN), LAW106 (JCOOK_ALM), LAW107 (PAPER_LIGHT), LAW110 (VEGTER), LAW115 (DESHPANDE_FLECK)
-    if lawname in ("LAW104", "JOHNS_VOCE_DRUCKER", "DRUCKER", "DRUCKER_PRAGER", "PLAS_DRUCKER", "LAW104_JOHNS_VOCE_DRUCKER"):
+    if lawname in ("LAW104", "JOHNS_VOCE_DRUCKER", "PLAS_DRUCKER", "LAW104_JOHNS_VOCE_DRUCKER"):
         read_mat_law104(block, model, log)
         return
     if lawname in ("LAW105", "POWDER_BURN", "POWDERBURN", "LAW105_POWDER_BURN"):
@@ -1051,7 +1059,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("CAM_CLAY", "CAMCLAY", "MAT_CAM_CLAY", "MAT_CAMCLAY", "LAW14_CAM_CLAY"):
         read_mat_cam_clay(block, model, log)
         return
-    if lawname in ("LAW21", "DUCKHUB", "DRUCKER_PRAGER", "MAT_DUCKHUB", "MAT_DRUCKER_PRAGER", "LAW21_DUCKHUB"):
+    if lawname in ("LAW21", "DUCKHUB", "MAT_DUCKHUB", "LAW21_DUCKHUB"):
         read_mat_law21(block, model, log)
         return
     if lawname in ("LAW32", "HILL_TAB", "HILL_PLAS_TAB", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "LAW32_HILL_TAB"):
@@ -1226,6 +1234,12 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if lawname in ("NONLOCAL", "NON_LOCAL"):
         read_mat_nonlocal(block, model, log)
+        return
+    # M199: DRUCKER_PRAGER / BRITTLE
+    subaction = block.parts[2].upper() if len(block.parts) > 2 else ""
+    if (lawname in ("DRUCKER_PRAGER", "BRITTLE", "DRUCKER", "MAT_DRUCKER_PRAGER", "MAT_BRITTLE", "LAW51_DRUCKER_PRAGER", "LAW51_BRITTLE")
+            or subaction in ("DRUCKER_PRAGER", "BRITTLE", "DRUCKER")):
+        read_mat_law51(block, model, log)
         return
     law_aliases = {"LAW1": 1, "ELAST": 1, "LAW2": 2, "PLAS_JOHNS": 2,
                    "LAW27": 27, "PLAS_BRIT": 27,
@@ -1559,7 +1573,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 def _read_mat_modifier(kind: str, block: KeywordBlock, model: Model,
                        log: MessageLog) -> None:
     """Shared /ALE, /EULER, /HEAT dispatch: only the ``MAT`` subkeyword
-    is handled (``/ALE/MAT/mat_ID`` — the ALE formulation flag of a
+    is handled (``/ALE/MAT/mat_ID`` -- the ALE formulation flag of a
     material, ``/EULER/MAT/mat_ID``, ``/HEAT/MAT/mat_ID`` thermal data).
     They are parsed via their cfg card layouts and stored as
     PARSE-ONLY NOTES (M37): remembered on the material, no physics.
@@ -12418,6 +12432,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             params={"grnod_id": grnod_id, "surf_id": surf_id, "grbric_id": grbric_id, "igap": igap, "ibag": ibag, "idel18": idel18, "iauto": iauto, "stfac": stfac, "vref": vref, "gap": gap, "tstart": tstart, "tstop": tstop, "stiff_dc": stiff_dc, "sort_fact": sort_fact}
         )
         model.inter_type18s[block.user_id] = inter18
+        model.inter_type18s[block.user_id] = inter18
         model.interfaces.append(Interface(
             id=block.user_id, type=18, grnod_id=grnod_id, surf_id=surf_id,
             grbric_id1=grbric_id, igap=igap, ibag=ibag, idel=idel18, idel18=idel18,
@@ -12427,6 +12442,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
 
     if kind == "TYPE25":
+
         if block.fixed:
             f0 = cards[0].cut("INTER_TYPE25_0") if len(cards) > 0 else []
             surf1 = _ival(f0[0]) if len(f0) > 0 else 0
@@ -12840,22 +12856,103 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             f0 = cards[0].cut("INTER_TYPE12_1")
             surf1 = _ival(f0[0]) if len(f0) > 0 else 0
             surf2 = _ival(f0[1]) if len(f0) > 1 else 0
+            interpol = _ival(f0[2]) if len(f0) > 2 else 0
+            itied = _ival(f0[3]) if len(f0) > 3 else 0
+            bcopt = _ival(f0[4]) if len(f0) > 4 else 0
+            skew_id = _ival(f0[5]) if len(f0) > 5 else 0
+            node_c = _ival(f0[6]) if len(f0) > 6 else 0
+
             tol, tstart, tstop = 0.0, 0.0, 1.0e30
             if len(cards) > 1 and not cards[1].is_blank:
                 f1 = cards[1].cut("INTER_TYPE12_2")
-                tol = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
-                tstart = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
-                tstop = _fval(f1[3], 1.0e30) if len(f1) > 3 else 1.0e30
+                if len(f1) >= 4:
+                    tol = _fval(f1[1], 0.0)
+                    tstart = _fval(f1[2], 0.0)
+                    tstop = _fval(f1[3], 1.0e30)
+                elif len(f1) == 3:
+                    tol = _fval(f1[0], 0.0)
+                    tstart = _fval(f1[1], 0.0)
+                    tstop = _fval(f1[2], 1.0e30)
+
+            xc, yc, zc, theta = 0.0, 0.0, 0.0, 0.0
+            if len(cards) > 2 and not cards[2].is_blank:
+                f2 = cards[2].cut("INTER_TYPE12_3")
+                xc = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                yc = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                zc = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+                theta = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+
+            xn, yn, zn = 0.0, 0.0, 0.0
+            if len(cards) > 3 and not cards[3].is_blank:
+                f3 = cards[3].cut("INTER_TYPE12_4")
+                xn = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+                yn = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+                zn = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+
+            xt, yt, zt = 0.0, 0.0, 0.0
+            if len(cards) > 4 and not cards[4].is_blank:
+                f4 = cards[4].cut("INTER_TYPE12_5")
+                xt = _fval(f4[0], 0.0) if len(f4) > 0 else 0.0
+                yt = _fval(f4[1], 0.0) if len(f4) > 1 else 0.0
+                zt = _fval(f4[2], 0.0) if len(f4) > 2 else 0.0
         else:
             t0 = cards[0].tokens()
             surf1 = int(float(t0[0])) if len(t0) > 0 else 0
             surf2 = int(float(t0[1])) if len(t0) > 1 else 0
-            tol, tstart, tstop = 0.0, 0.0, 1.0e30
-            if len(cards) > 1 and not cards[1].is_blank:
-                t1 = cards[1].tokens()
-                tol = float(t1[0]) if len(t1) > 0 else 0.0
-                tstart = float(t1[1]) if len(t1) > 1 else 0.0
-                tstop = float(t1[2]) if len(t1) > 2 else 1.0e30
+            interpol = int(float(t0[2])) if len(t0) > 2 else 0
+            if len(t0) >= 6:
+                tol = float(t0[3])
+                tstart = float(t0[4])
+                tstop = float(t0[5])
+                itied = int(float(t0[6])) if len(t0) > 6 else 0
+                bcopt = int(float(t0[7])) if len(t0) > 7 else 0
+                skew_id = int(float(t0[8])) if len(t0) > 8 else 0
+                node_c = int(float(t0[9])) if len(t0) > 9 else 0
+                card_idx = 1
+            else:
+                itied = int(float(t0[3])) if len(t0) > 3 else 0
+                bcopt = int(float(t0[4])) if len(t0) > 4 else 0
+                skew_id = int(float(t0[5])) if len(t0) > 5 else 0
+                node_c = int(float(t0[6])) if len(t0) > 6 else 0
+                tol, tstart, tstop = 0.0, 0.0, 1.0e30
+                if len(cards) > 1 and not cards[1].is_blank:
+                    t1 = cards[1].tokens()
+                    tol = float(t1[0]) if len(t1) > 0 else 0.0
+                    tstart = float(t1[1]) if len(t1) > 1 else 0.0
+                    tstop = float(t1[2]) if len(t1) > 2 else 1.0e30
+                card_idx = 2
+
+            xc, yc, zc, theta = 0.0, 0.0, 0.0, 0.0
+            if len(cards) > card_idx and not cards[card_idx].is_blank:
+                t1 = cards[card_idx].tokens()
+                xc = float(t1[0]) if len(t1) > 0 else 0.0
+                yc = float(t1[1]) if len(t1) > 1 else 0.0
+                zc = float(t1[2]) if len(t1) > 2 else 0.0
+                theta = float(t1[3]) if len(t1) > 3 else 0.0
+
+            xn, yn, zn = 0.0, 0.0, 0.0
+            if len(cards) > card_idx + 1 and not cards[card_idx + 1].is_blank:
+                t2 = cards[card_idx + 1].tokens()
+                xn = float(t2[0]) if len(t2) > 0 else 0.0
+                yn = float(t2[1]) if len(t2) > 1 else 0.0
+                zn = float(t2[2]) if len(t2) > 2 else 0.0
+
+            xt, yt, zt = 0.0, 0.0, 0.0
+            if len(cards) > card_idx + 2 and not cards[card_idx + 2].is_blank:
+                t3 = cards[card_idx + 2].tokens()
+                xt = float(t3[0]) if len(t3) > 0 else 0.0
+                yt = float(t3[1]) if len(t3) > 1 else 0.0
+                zt = float(t3[2]) if len(t3) > 2 else 0.0
+        from ..model.entities import InterType12
+        inter12 = InterType12(
+            id=block.user_id, title=title, surf_ids=surf1, surf_idm=surf2,
+            interpol=interpol, tol=tol, tstart=tstart, tstop=tstop,
+            itied=itied, bcopt=bcopt, skew_id=skew_id, node_c=node_c,
+            xc=xc, yc=yc, zc=zc, theta=theta,
+            xn=xn, yn=yn, zn=zn, xt=xt, yt=yt, zt=zt,
+            params={"surf_ids": surf1, "surf_idm": surf2, "interpol": interpol, "tol": tol}
+        )
+        model.inter_type12s[block.user_id] = inter12
         model.interfaces.append(Interface(
             id=block.user_id, type=12, surf_id=surf1, surf_id1=surf2,
             tol=tol, tstart=tstart, tstop=tstop, title=title
@@ -13113,7 +13210,15 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             inactiv = int(t2[1]) if len(t2) > 1 else 0
             stiff_dc = float(t2[2]) if len(t2) > 2 else 0.0
             sort_fact = float(t2[3]) if len(t2) > 3 else 0.2
-            
+        from ..model.entities import InterType10
+        inter10 = InterType10(
+            id=block.user_id, title=title, grnod_id=grnod_id, surf_id=surf_id,
+            multimp=multimp, idel=idel10, stfac=stfac, gap=gap, tstart=tstart,
+            tstop=tstop, itied=itied, inactiv=inactiv, stiff_dc=stiff_dc,
+            sort_fact=sort_fact,
+            params={"grnod_id": grnod_id, "surf_id": surf_id, "stfac": stfac, "gap": gap, "itied": itied}
+        )
+        model.inter_type10s[block.user_id] = inter10
         model.interfaces.append(Interface(
             id=block.user_id, type=10, grnod_id=grnod_id, surf_id=surf_id,
             multimp=multimp, idel10=idel10, stfac=stfac, gap=gap, tstart=tstart,
@@ -19097,12 +19202,22 @@ def read_transform(block: KeywordBlock, model: Model,
     """
     if block.key0 in ("AUTOPOSITION", "AUTOPOS"):
         sub = "AUTOPOSITION"
+    elif block.key0 in ("ROT", "ROTATE", "ROTATION"):
+        sub = "ROT"
+    elif block.key0 in ("TRA", "TRANSL", "TRANSLATION"):
+        sub = "TRA"
+    elif block.key0 in ("SCA", "SCALE"):
+        sub = "SCA"
+    elif block.key0 in ("SYM", "SYMET", "MIRROR", "PLANE"):
+        sub = "SYM"
+    elif block.key0 in ("MATRIX", "MATR"):
+        sub = "MATRIX"
     elif len(block.parts) > 1:
         sub = block.parts[1].upper()
     else:
         sub = ""
 
-    # Normalization of aliases (M138)
+    # Normalization of aliases (M138, M199)
     if sub in ("SYMET", "MIRROR", "PLANE"):
         sub = "SYM"
     elif sub in ("SCALE",):
@@ -19111,11 +19226,14 @@ def read_transform(block: KeywordBlock, model: Model,
         sub = "TRA"
     elif sub in ("ROTATE", "ROTATION"):
         sub = "ROT"
+    elif sub in ("MATR",):
+        sub = "MATRIX"
 
-    if sub not in ("TRA", "ROT", "SYM", "SCA", "POS", "POSITION", "AUTOPOSITION", "AUTOPOS", "PROJ", "PROJECTION", "FRAME"):
+    if sub not in ("TRA", "ROT", "SYM", "SCA", "POS", "POSITION", "AUTOPOSITION", "AUTOPOS", "PROJ", "PROJECTION", "FRAME", "MATRIX"):
         log.warning(f"/TRANSFORM/{sub} not ported — block skipped "
-                    f"(supported: TRA, ROT, SYM, SCA, POS, AUTOPOSITION, PROJ, FRAME)", block.source)
+                    f"(supported: TRA, ROT, SYM, SCA, POS, AUTOPOSITION, PROJ, FRAME, MATRIX)", block.source)
         return
+
 
     if block.fixed:
         title, cards = _fixed_data(block)
@@ -19411,6 +19529,73 @@ def read_transform(block: KeywordBlock, model: Model,
         )
         model.transforms.append((block.user_id, "POS", grnod, (n1, n2, n3, n4, n5, n6),
                                  pts, sub_id))
+
+    elif sub == "MATRIX":
+        from ..model.entities import TransformMatrix
+        m11, m12, m13, tx = 1.0, 0.0, 0.0, 0.0
+        m21, m22, m23, ty = 0.0, 1.0, 0.0, 0.0
+        m31, m32, m33, tz = 0.0, 0.0, 1.0, 0.0
+        grnod = 0
+        sub_id = 0
+        if block.fixed:
+            f1 = cards[0].cut("TRANSFORM_MATRIX_1")
+            grnod = _ival(f1[0]) if len(f1) > 0 else 0
+            m11 = _fval(f1[1], 1.0) if len(f1) > 1 else 1.0
+            m12 = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+            m13 = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+            tx = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+            sub_id = _ival(f1[5]) if len(f1) > 5 else 0
+
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = cards[1].cut("TRANSFORM_MATRIX_2")
+                m21 = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                m22 = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+                m23 = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+                ty = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+
+            if len(cards) > 2 and not cards[2].is_blank:
+                f3 = cards[2].cut("TRANSFORM_MATRIX_3")
+                m31 = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+                m32 = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+                m33 = _fval(f3[3], 1.0) if len(f3) > 3 else 1.0
+                tz = _fval(f3[4], 0.0) if len(f3) > 4 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            grnod = int(float(t1[0])) if len(t1) > 0 else 0
+            m11 = float(t1[1]) if len(t1) > 1 else 1.0
+            m12 = float(t1[2]) if len(t1) > 2 else 0.0
+            m13 = float(t1[3]) if len(t1) > 3 else 0.0
+            tx = float(t1[4]) if len(t1) > 4 else 0.0
+            sub_id = int(float(t1[5])) if len(t1) > 5 else 0
+
+            if len(cards) > 1 and not cards[1].is_blank:
+                t2 = cards[1].tokens()
+                m21 = float(t2[0]) if len(t2) > 0 else 0.0
+                m22 = float(t2[1]) if len(t2) > 1 else 1.0
+                m23 = float(t2[2]) if len(t2) > 2 else 0.0
+                ty = float(t2[3]) if len(t2) > 3 else 0.0
+
+            if len(cards) > 2 and not cards[2].is_blank:
+                t3 = cards[2].tokens()
+                m31 = float(t3[0]) if len(t3) > 0 else 0.0
+                m32 = float(t3[1]) if len(t3) > 1 else 0.0
+                m33 = float(t3[2]) if len(t3) > 2 else 1.0
+                tz = float(t3[3]) if len(t3) > 3 else 0.0
+
+        mat_3x3 = ((m11, m12, m13), (m21, m22, m23), (m31, m32, m33))
+        trans_vec = (tx, ty, tz)
+        tm = TransformMatrix(
+            id=block.user_id or 1,
+            title=title,
+            grnod_id=grnod,
+            matrix=mat_3x3,
+            translation=trans_vec,
+            sub_id=sub_id,
+            submodel=sub_id,
+        )
+        model.transform_matrices[block.user_id or 1] = tm
+        model.transforms.append((block.user_id or 1, "MATRIX", grnod, mat_3x3, trans_vec, sub_id))
+
 
 
 
@@ -20411,7 +20596,7 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             else:
                 t0 = c0.tokens()
                 elem_id = int(float(t0[0]))
-                thick = float(t0[3]) if len(t0) > 3 else 0.0
+                thick = float(t0[3]) if len(t0) > 3 else (float(t0[2]) if len(t0) > 2 else 0.0)
                 idx += 1
 
                 t1 = cards[idx].tokens() if idx < len(cards) else []
@@ -20450,8 +20635,68 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 "SIG_XX": s1, "SIG_YY": s2, "SIG_XY": s12, "SIG_YZ": s23, "SIG_ZX": s31,
                 "THICK": thick, "EPSP": epsp
             })
+
+    elif sub in ("ORTH_LOC", "ORTH_LOC_F", "ORTH"):
+        idx = 0
+        while idx < len(cards):
+            c0 = cards[idx]
+            if c0.is_blank:
+                idx += 1
+                continue
+            if block.fixed:
+                f0 = c0.cut("INISHE_ORTH_LOC_1")
+                elem_id = _ival(f0[0])
+                nb_lay = _ival(f0[1]) if len(f0) > 1 else 1
+                npg = _ival(f0[2]) if len(f0) > 2 else 1
+                ndir = _ival(f0[3]) if len(f0) > 3 else 1
+                iunit = _ival(f0[4]) if len(f0) > 4 else 0
+            else:
+                t0 = c0.tokens()
+                elem_id = int(float(t0[0]))
+                nb_lay = int(float(t0[1])) if len(t0) > 1 else 1
+                npg = int(float(t0[2])) if len(t0) > 2 else 1
+                ndir = int(float(t0[3])) if len(t0) > 3 else 1
+                iunit = int(float(t0[4])) if len(t0) > 4 else 0
+            idx += 1
+
+            phi_list = []
+            alpha_list = []
+            angles_list = []
+            for _ in range(nb_lay):
+                if idx >= len(cards):
+                    break
+                clay = cards[idx]
+                idx += 1
+                if clay.is_blank:
+                    continue
+                if block.fixed:
+                    fl = clay.cut("INISHE_ORTH_LOC_2")
+                    phi = _fval(fl[0], 0.0) if len(fl) > 0 else 0.0
+                    alpha = _fval(fl[1], 0.0) if len(fl) > 1 else 0.0
+                else:
+                    tl = clay.tokens()
+                    phi = float(tl[0]) if len(tl) > 0 else 0.0
+                    alpha = float(tl[1]) if len(tl) > 1 else 0.0
+                phi_list.append(phi)
+                alpha_list.append(alpha)
+                angles_list.append((phi, alpha))
+
+            st = model.ini_shells.setdefault(elem_id, InitialShellState(elem_id=elem_id))
+            st.orth_angles = angles_list
+            st.orth_phi = phi_list
+            st.orth_alpha = alpha_list
+            rows.append({
+                "ELEM_ID": elem_id,
+                "NB_LAY": nb_lay,
+                "NPG": npg,
+                "NDIR": ndir,
+                "IUNIT": iunit,
+                "PHI": phi_list,
+                "ALPHA": alpha_list,
+            })
     else:
         log.warning(f"/INISHE/{sub} not ported — block skipped", block.source)
+
 
     if rows:
         from ..model.entities import IniStateTable
@@ -24061,8 +24306,247 @@ def read_mat_law94(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
     model.materials[mat_id] = mat94
 
+def read_mat_law51(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW51`` or ``/MAT/MULTIMAT`` or ``/MAT/DRUCKER_PRAGER`` (M199): Multi-material / Drucker-Prager brittle model."""
+    from ..model.entities import MatLaw51, Material
+    mat_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/MAT/LAW51/{mat_id}: missing data card", block.source)
+        return
+
+    # Check if cards match Drucker-Prager brittle format (3 cards with 10, 10, 5 entries)
+    # or Eulerian multi-material phase format
+    is_dp = False
+    c0 = cards[0]
+    toks0 = c0.tokens() if not block.fixed else [x for x in cut(c0.raw, "MAT_LAW51_DP_1") if x.strip()]
+    if len(toks0) >= 3:
+        try:
+            if float(toks0[0]) > 0.0:
+                is_dp = True
+        except ValueError:
+            pass
+
+    if is_dp:
+        if block.fixed:
+            f0 = cut(cards[0].raw, "MAT_LAW51_DP_1")
+            rho = _fval(f0[0], 0.0) if len(f0) > 0 else 0.0
+            e = _fval(f0[1], 0.0) if len(f0) > 1 else 0.0
+            nu = _fval(f0[2], 0.0) if len(f0) > 2 else 0.0
+            a0 = _fval(f0[3], 0.0) if len(f0) > 3 else 0.0
+            a1 = _fval(f0[4], 0.0) if len(f0) > 4 else 0.0
+            a2 = _fval(f0[5], 0.0) if len(f0) > 5 else 0.0
+            fc = _fval(f0[6], 0.0) if len(f0) > 6 else 0.0
+            ft = _fval(f0[7], 0.0) if len(f0) > 7 else 0.0
+            fmax = _fval(f0[8], 0.0) if len(f0) > 8 else 0.0
+            fres = _fval(f0[9], 0.0) if len(f0) > 9 else 0.0
+
+            f1 = cut(cards[1].raw, "MAT_LAW51_DP_2") if len(cards) > 1 else []
+            eps_c = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+            eps_t = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+            eps_res = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+            b = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+            iflag = _ival(f1[4], 0) if len(f1) > 4 else 0
+            icomp = _ival(f1[5], 0) if len(f1) > 5 else 0
+            itot = _ival(f1[6], 0) if len(f1) > 6 else 0
+            pc = _fval(f1[7], 0.0) if len(f1) > 7 else 0.0
+            gamma = _fval(f1[8], 0.0) if len(f1) > 8 else 0.0
+            pt = _fval(f1[9], 0.0) if len(f1) > 9 else 0.0
+
+            f2 = cut(cards[2].raw, "MAT_LAW51_DP_3") if len(cards) > 2 else []
+            psi = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            p0 = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            beta = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            epsp_max = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+            fac_e = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+        else:
+            t0 = cards[0].tokens()
+            rho = float(t0[0]) if len(t0) > 0 else 0.0
+            e = float(t0[1]) if len(t0) > 1 else 0.0
+            nu = float(t0[2]) if len(t0) > 2 else 0.0
+            a0 = float(t0[3]) if len(t0) > 3 else 0.0
+            a1 = float(t0[4]) if len(t0) > 4 else 0.0
+            a2 = float(t0[5]) if len(t0) > 5 else 0.0
+            fc = float(t0[6]) if len(t0) > 6 else 0.0
+            ft = float(t0[7]) if len(t0) > 7 else 0.0
+            fmax = float(t0[8]) if len(t0) > 8 else 0.0
+            fres = float(t0[9]) if len(t0) > 9 else 0.0
+
+            t1 = cards[1].tokens() if len(cards) > 1 else []
+            eps_c = float(t1[0]) if len(t1) > 0 else 0.0
+            eps_t = float(t1[1]) if len(t1) > 1 else 0.0
+            eps_res = float(t1[2]) if len(t1) > 2 else 0.0
+            b = float(t1[3]) if len(t1) > 3 else 0.0
+            iflag = int(float(t1[4])) if len(t1) > 4 else 0
+            icomp = int(float(t1[5])) if len(t1) > 5 else 0
+            itot = int(float(t1[6])) if len(t1) > 6 else 0
+            pc = float(t1[7]) if len(t1) > 7 else 0.0
+            gamma = float(t1[8]) if len(t1) > 8 else 0.0
+            pt = float(t1[9]) if len(t1) > 9 else 0.0
+
+            t2 = cards[2].tokens() if len(cards) > 2 else []
+            psi = float(t2[0]) if len(t2) > 0 else 0.0
+            p0 = float(t2[1]) if len(t2) > 1 else 0.0
+            beta = float(t2[2]) if len(t2) > 2 else 0.0
+            epsp_max = float(t2[3]) if len(t2) > 3 else 0.0
+            fac_e = float(t2[4]) if len(t2) > 4 else 0.0
+
+        mat = MatLaw51(
+            id=mat_id, title=title, rho0=rho, rhor=rho, rho=rho, e=e, nu=nu,
+            a0=a0, a1=a1, a2=a2, fc=fc, ft=ft, fmax=fmax, fres=fres,
+            eps_c=eps_c, eps_t=eps_t, eps_res=eps_res, b=b,
+            iflag=iflag, icomp=icomp, itot=itot, pc=pc, gamma=gamma, pt=pt,
+            psi=psi, p0=p0, beta=beta, epsp_max=epsp_max, fac_e=fac_e,
+            params={
+                "rho": rho, "E": e, "nu": nu, "a0": a0, "a1": a1, "a2": a2,
+                "fc": fc, "ft": ft, "fmax": fmax, "fres": fres,
+                "eps_c": eps_c, "eps_t": eps_t, "eps_res": eps_res, "b": b,
+                "iflag": iflag, "icomp": icomp, "itot": itot, "pc": pc, "gamma": gamma, "pt": pt,
+                "psi": psi, "p0": p0, "beta": beta, "epsp_max": epsp_max, "fac_e": fac_e
+            }
+        )
+        model.mat_law51s[mat_id] = mat
+        model.materials[mat_id] = Material(
+            id=mat_id, law=51, rho0=rho, title=title,
+            params={"E": e, "nu": nu, "law51": mat}
+        )
+        return
+
+    # Eulerian multi-material formulation
+    rho0 = 0.0
+    refer_rho = 0.0
+    iform = 0
+    iopt = 0
+    pext = 0.0
+    nu = 0.0
+    lamda = 0.0
+    phases = []
+
+    idx = 0
+    c0 = cards[idx]
+    idx += 1
+    if block.fixed:
+        f0 = cut(c0.raw, "MAT_LAW51_IFORM")
+        val0 = _ival(f0[0])
+        if len(c0.raw.rstrip()) <= 20 and val0 in (0, 1, 2, 3, 4, 5, 10):
+            iform = val0
+            iopt = _ival(f0[1]) if len(f0) > 1 else 0
+        else:
+            f_rho = cut(c0.raw, "MAT_LAW51_GEN")
+            rho0 = _fval(f_rho[0], 0.0) if len(f_rho) > 0 else 0.0
+            refer_rho = _fval(f_rho[1], 0.0) if len(f_rho) > 1 else 0.0
+            if idx < len(cards):
+                c1 = cards[idx]
+                idx += 1
+                f1 = cut(c1.raw, "MAT_LAW51_IFORM")
+                iform = _ival(f1[0]) if len(f1) > 0 else 0
+                iopt = _ival(f1[1]) if len(f1) > 1 else 0
+    else:
+        toks = c0.tokens()
+        if len(toks) > 0:
+            try:
+                val = int(float(toks[0]))
+                if len(toks) <= 2 and val in (0, 1, 2, 3, 4, 5, 10):
+                    iform = val
+                    iopt = int(float(toks[1])) if len(toks) > 1 else 0
+                else:
+                    rho0 = float(toks[0])
+                    refer_rho = float(toks[1]) if len(toks) > 1 else 0.0
+                    if idx < len(cards):
+                        t1 = cards[idx].tokens()
+                        idx += 1
+                        iform = int(float(t1[0])) if len(t1) > 0 else 0
+                        iopt = int(float(t1[1])) if len(t1) > 1 else 0
+            except ValueError:
+                pass
+
+    if iform in (0, 1) and idx < len(cards):
+        c_gen = cards[idx]
+        idx += 1
+        if block.fixed:
+            fg = cut(c_gen.raw, "MAT_LAW51_GEN")
+            pext = _fval(fg[0], 0.0) if len(fg) > 0 else 0.0
+            nu = _fval(fg[1], 0.0) if len(fg) > 1 else 0.0
+            lamda = _fval(fg[2], 0.0) if len(fg) > 2 else 0.0
+        else:
+            tg = c_gen.tokens()
+            pext = float(tg[0]) if len(tg) > 0 else 0.0
+            nu = float(tg[1]) if len(tg) > 1 else 0.0
+            lamda = float(tg[2]) if len(tg) > 2 else 0.0
+
+    while idx < len(cards):
+        c_p1 = cards[idx]
+        idx += 1
+        if c_p1.is_blank:
+            continue
+        if block.fixed:
+            fp1 = cut(c_p1.raw, "MAT_LAW51_PHASE_1")
+            alpha0 = _fval(fp1[0], 0.0) if len(fp1) > 0 else 0.0
+            rho_p = _fval(fp1[1], 0.0) if len(fp1) > 1 else 0.0
+            e0 = _fval(fp1[2], 0.0) if len(fp1) > 2 else 0.0
+            pmin = _fval(fp1[3], 0.0) if len(fp1) > 3 else 0.0
+            c0_p = _fval(fp1[4], 0.0) if len(fp1) > 4 else 0.0
+        else:
+            tp1 = c_p1.tokens()
+            alpha0 = float(tp1[0]) if len(tp1) > 0 else 0.0
+            rho_p = float(tp1[1]) if len(tp1) > 1 else 0.0
+            e0 = float(tp1[2]) if len(tp1) > 2 else 0.0
+            pmin = float(tp1[3]) if len(tp1) > 3 else 0.0
+            c0_p = float(tp1[4]) if len(tp1) > 4 else 0.0
+
+        c_coeffs = []
+        if iform in (0, 1) and idx < len(cards):
+            c_p2 = cards[idx]
+            idx += 1
+            if block.fixed:
+                fp2 = cut(c_p2.raw, "MAT_LAW51_PHASE_2")
+                c_coeffs = [_fval(x, 0.0) for x in fp2]
+            else:
+                tp2 = c_p2.tokens()
+                c_coeffs = [float(x) for x in tp2]
+
+        g1, a, b, n = 0.0, 0.0, 0.0, 0.0
+        if iform in (0, 1) and idx < len(cards):
+            c_p3 = cards[idx]
+            idx += 1
+            if block.fixed:
+                fp3 = cut(c_p3.raw, "MAT_LAW51_PHASE_3")
+                g1 = _fval(fp3[0], 0.0) if len(fp3) > 0 else 0.0
+                a = _fval(fp3[1], 0.0) if len(fp3) > 1 else 0.0
+                b = _fval(fp3[2], 0.0) if len(fp3) > 2 else 0.0
+                n = _fval(fp3[3], 0.0) if len(fp3) > 3 else 0.0
+            else:
+                tp3 = c_p3.tokens()
+                g1 = float(tp3[0]) if len(tp3) > 0 else 0.0
+                a = float(tp3[1]) if len(tp3) > 1 else 0.0
+                b = float(tp3[2]) if len(tp3) > 2 else 0.0
+                n = float(tp3[3]) if len(tp3) > 3 else 0.0
+
+        phase_dict = {
+            "alpha0": alpha0, "rho0": rho_p, "e0": e0, "pmin": pmin, "c0": c0_p,
+            "c_coeffs": c_coeffs, "g1": g1, "a": a, "b": b, "n": n
+        }
+        phases.append(phase_dict)
+        if len(phases) >= 3:
+            break
+
+    mat = MatLaw51(
+        id=mat_id, title=title, rho0=rho0 if rho0 > 0.0 else (phases[0]["rho0"] if phases else 0.0),
+        rhor=refer_rho, iform=iform, pext=pext, nu=nu, lamda=lamda,
+        rho=rho0 if rho0 > 0.0 else (phases[0]["rho0"] if phases else 0.0),
+        e=phases[0]["e0"] if phases else 0.0,
+        params={"iform": iform, "iopt": iopt, "pext": pext, "nu": nu, "lamda": lamda, "phases": phases}
+    )
+    model.mat_law51s[mat_id] = mat
+    model.materials[mat_id] = Material(
+        id=mat_id, law=51, rho0=mat.rho0, title=title,
+        params={"E": mat.e, "nu": mat.nu, "law51": mat, "iform": iform, "phases": phases}
+    )
+
+
 
 def read_mat_law46(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+
     """``/MAT/LAW46/id`` or ``/MAT/HYD_VISC/id`` or ``/MAT/LES_FLUID/id`` (M173): Hydrodynamic viscous model."""
     from ..model.entities import MaterialLaw46, Material
     mat_id = block.user_id or 0
@@ -41266,7 +41750,33 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "H3D": read_h3d,
     "MONVOL_COMM": read_monvol_comm,
     "MONVOL_COMMUNICATION": read_monvol_comm,
+    # --- M199: Matrix Transformations, Standalone Transforms, Interfaces Type 10 & 12, Initial State Tables & Drucker-Prager Brittle Material Suite ---
+    "ROT": read_transform,
+    "ROTATE": read_transform,
+    "ROTATION": read_transform,
+    "TRA": read_transform,
+    "TRANSL": read_transform,
+    "TRANSLATION": read_transform,
+    "SCA": read_transform,
+    "SCALE": read_transform,
+    "SYM": read_transform,
+    "SYMET": read_transform,
+    "MATRIX": read_transform,
+    "MATR": read_transform,
+    "AUTOPOSITION": read_transform,
+    "AUTOPOS": read_transform,
+    "MAT_LAW51": read_mat,
+    "MAT_BRITTLE": read_mat,
+    "BRITTLE": read_mat,
+    "DRUCKER_PRAGER": read_mat,
+    "MAT_DRUCKER_PRAGER": read_mat,
+    "LAW51": read_mat,
+    "MULTIMAT": read_mat,
+    "MULTI_MAT": read_mat,
+    "MAT_MULTIMAT": read_mat,
 }
+
+
 
 
 
