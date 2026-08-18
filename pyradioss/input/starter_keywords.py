@@ -1712,10 +1712,151 @@ def read_heat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_convec(block, model, log)
     elif sub in ("RADIATION", "RAD"):
         read_radiation(block, model, log)
+    elif sub in ("FLUX",):
+        read_flux(block, model, log)
     elif sub in ("SOLVER", "GLOBAL", "INIT"):
         pass  # Global heat / thermal solver parameters parsed cleanly
     else:
         log.warning(f"/HEAT/{sub} not ported", block.source)
+
+
+def read_flux(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/HEAT/FLUX/id`` or ``/FLUX/id`` (M202): Thermal surface heat flux."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    fid = block.user_id if block.user_id is not None else len(model.heat_fluxes) + 1
+    surf_id = 0
+    funct_id = 0
+    sensor_id = 0
+    ascale = 1.0
+    fscale = 1.0
+    tstart = 0.0
+    tstop = 1.0e30
+    q = 0.0
+    if cards:
+        if block.fixed:
+            f1 = cards[0].cut("HEAT_FLUX_1") if "HEAT_FLUX_1" in CARD_LAYOUTS else cards[0].cut("FLUX_1") if "FLUX_1" in CARD_LAYOUTS else _fixed_vals(cards[0], [10, 10, 10, 20, 20])
+            surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+            funct_id = _ival(f1[1]) if len(f1) > 1 else 0
+            sensor_id = _ival(f1[2]) if len(f1) > 2 else 0
+            ascale = _fval(f1[3], 1.0) if len(f1) > 3 else 1.0
+            fscale = _fval(f1[4], 1.0) if len(f1) > 4 else 1.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = cards[1].cut("HEAT_FLUX_2") if "HEAT_FLUX_2" in CARD_LAYOUTS else cards[1].cut("FLUX_2") if "FLUX_2" in CARD_LAYOUTS else _fixed_vals(cards[1], [20, 20, 20])
+                tstart = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                tstop = _fval(f2[1], 1.0e30) if len(f2) > 1 else 1.0e30
+                q = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+            funct_id = int(float(t1[1])) if len(t1) > 1 else 0
+            sensor_id = int(float(t1[2])) if len(t1) > 2 else 0
+            ascale = float(t1[3]) if len(t1) > 3 else 1.0
+            fscale = float(t1[4]) if len(t1) > 4 else 1.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t2 = cards[1].tokens()
+                tstart = float(t2[0]) if len(t2) > 0 else 0.0
+                tstop = float(t2[1]) if len(t2) > 1 else 1.0e30
+                q = float(t2[2]) if len(t2) > 2 else 0.0
+
+    from ..model.entities import HeatFlux
+    hf = HeatFlux(
+        id=fid, title=title, surf_id=surf_id, funct_id=funct_id, sensor_id=sensor_id,
+        ascale=ascale, fscale=fscale, tstart=tstart, tstop=tstop, q=q
+    )
+    model.heat_fluxes[fid] = hf
+
+
+def read_convec(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/HEAT/CONVEC/id``, ``/HEAT/CONVECTION/id`` or ``/CONVEC/id`` (M202): Thermal surface convection."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    cid = block.user_id if block.user_id is not None else len(model.heat_convecs) + 1
+    surf_id = 0
+    funct_id = 0
+    sensor_id = 0
+    ascale = 1.0
+    fscale = 1.0
+    tstart = 0.0
+    tstop = 1.0e30
+    h = 0.0
+    if cards:
+        if block.fixed:
+            f1 = cards[0].cut("CONVEC_1") if "CONVEC_1" in CARD_LAYOUTS else _fixed_vals(cards[0], [10, 10, 10, 20, 20])
+            surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+            funct_id = _ival(f1[1]) if len(f1) > 1 else 0
+            sensor_id = _ival(f1[2]) if len(f1) > 2 else 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = cards[1].cut("CONVEC_2") if "CONVEC_2" in CARD_LAYOUTS else _fixed_vals(cards[1], [20, 20, 20, 20, 20])
+                ascale = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+                fscale = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
+                tstart = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+                tstop = _fval(f2[3], 1.0e30) if len(f2) > 3 else 1.0e30
+                h = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+            funct_id = int(float(t1[1])) if len(t1) > 1 else 0
+            sensor_id = int(float(t1[2])) if len(t1) > 2 else 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t2 = cards[1].tokens()
+                ascale = float(t2[0]) if len(t2) > 0 else 1.0
+                fscale = float(t2[1]) if len(t2) > 1 else 1.0
+                tstart = float(t2[2]) if len(t2) > 2 else 0.0
+                tstop = float(t2[3]) if len(t2) > 3 else 1.0e30
+                h = float(t2[4]) if len(t2) > 4 else 0.0
+
+    from ..model.entities import HeatConvec
+    hc = HeatConvec(
+        id=cid, title=title, surf_id=surf_id, funct_id=funct_id, sensor_id=sensor_id,
+        ascale=ascale, fscale=fscale, tstart=tstart, tstop=tstop, h=h
+    )
+    model.heat_convecs[cid] = hc
+
+
+def read_radiation(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/HEAT/RADIATION/id``, ``/HEAT/RAD/id`` or ``/RADIATION/id`` (M202): Thermal surface radiation."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    rid = block.user_id if block.user_id is not None else len(model.heat_radiations) + 1
+    surf_id = 0
+    funct_id = 0
+    sensor_id = 0
+    ascale = 1.0
+    fscale = 1.0
+    tstart = 0.0
+    tstop = 1.0e30
+    emiss = 0.0
+    if cards:
+        if block.fixed:
+            f1 = cards[0].cut("RADIATION_1") if "RADIATION_1" in CARD_LAYOUTS else _fixed_vals(cards[0], [10, 10, 10, 20, 20])
+            surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+            funct_id = _ival(f1[1]) if len(f1) > 1 else 0
+            sensor_id = _ival(f1[2]) if len(f1) > 2 else 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = cards[1].cut("RADIATION_2") if "RADIATION_2" in CARD_LAYOUTS else _fixed_vals(cards[1], [20, 20, 20, 20, 20])
+                ascale = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
+                fscale = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
+                tstart = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+                tstop = _fval(f2[3], 1.0e30) if len(f2) > 3 else 1.0e30
+                emiss = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+        else:
+            t1 = cards[0].tokens()
+            surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+            funct_id = int(float(t1[1])) if len(t1) > 1 else 0
+            sensor_id = int(float(t1[2])) if len(t1) > 2 else 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t2 = cards[1].tokens()
+                ascale = float(t2[0]) if len(t2) > 0 else 1.0
+                fscale = float(t2[1]) if len(t2) > 1 else 1.0
+                tstart = float(t2[2]) if len(t2) > 2 else 0.0
+                tstop = float(t2[3]) if len(t2) > 3 else 1.0e30
+                emiss = float(t2[4]) if len(t2) > 4 else 0.0
+
+    from ..model.entities import HeatRadiation
+    hr = HeatRadiation(
+        id=rid, title=title, surf_id=surf_id, funct_id=funct_id, sensor_id=sensor_id,
+        ascale=ascale, fscale=fscale, tstart=tstart, tstop=tstop, emissivity=emiss
+    )
+    model.heat_radiations[rid] = hr
+
 
 
 def read_fail_fractal(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -11288,6 +11429,11 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             id=block.user_id, kind="WORK", tdelay=tdelay, node_id1=n1, node_id2=n2,
             work_max=wmax, tmin=tmin, sect_id=sect_id, int_id=int_id, rbody_id=rb_id,
             rwall_id=rw_id, title=title))
+        from ..model.entities import SensorWork
+        model.sensors_work[block.user_id] = SensorWork(
+            id=block.user_id, title=title, object_id=n1, sens_type=n2,
+            t_delay=tdelay, w_max=wmax
+        )
     elif kind == "RWALL":
         if block.fixed:
             f = cards[data_card_idx].cut("SENSOR_RWALL_2")
@@ -14279,11 +14425,9 @@ def read_sphglo(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_sph_inout(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/SPH/INOUT/id`` or ``/SPH/IO/id`` (M112): SPH particle inlet/outlet boundary condition::
+    """``/SPH/INOUT/id``, ``/SPHIO/id``, ``/SPH/INLET/id``, ``/SPH/OUTLET/id`` (M112/M202): SPH particle inlet/outlet condition.
 
-        card 1:  title
-        card 2:  surf_ID  part_ID  fct_ID
-        card 3:  rho_in  p_in  e_in
+    Fortran origin: ``starter/source/loads/sph/hm_read_sphio.F`` / CFG ``sph_inout.cfg``.
     """
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
@@ -14291,34 +14435,137 @@ def read_sph_inout(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     from ..model.entities import SphInOut
 
-    if block.fixed:
-        f1 = cards[0].cut("SPH_INOUT_1")
-        surf_id = _ival(f1[0]) if len(f1) > 0 else 0
-        part_id = _ival(f1[1]) if len(f1) > 1 else 0
-        fct_id = _ival(f1[2]) if len(f1) > 2 else 0
+    cid = block.user_id if block.user_id is not None else len(model.sph_inouts) + 1
+    ityp = 1
+    surf_id = 0
+    part_id = 0
+    dist = 0.0
+    node_id1 = node_id2 = node_id3 = 0
+    fcut = 0.0
+    coords = []
+    fct_id_r = 0
+    fscale_r = 1.0
+    fct_id_e = 0
+    fscale_e = 1.0
+    fct_id_vn = 0
+    fct_id_p = 0
+    fscale_p = 1.0
+    lc = 0.0
+    rho_in = p_in = e_in = fct_id = 0.0
 
-        rho_in, p_in, e_in = 0.0, 0.0, 0.0
-        if len(cards) > 1 and not cards[1].is_blank:
-            f2 = cards[1].cut("SPH_INOUT_2")
-            rho_in = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
-            p_in = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
-            e_in = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+    if block.fixed:
+        raw_card1 = cards[0].raw
+        # Check if 3-field legacy format or full 8-field format
+        if len(raw_card1) <= 30:
+            f1 = cards[0].cut("SPH_INOUT_1")
+            surf_id = _ival(f1[0]) if len(f1) > 0 else 0
+            part_id = _ival(f1[1]) if len(f1) > 1 else 0
+            fct_id = _ival(f1[2]) if len(f1) > 2 else 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = cards[1].cut("SPH_INOUT_2")
+                rho_in = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                p_in = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                e_in = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+        else:
+            f1 = cards[0].cut("SPH_INOUT_EXT_1")
+            ityp = _ival(f1[0]) if len(f1) > 0 else 1
+            part_id = _ival(f1[1]) if len(f1) > 1 else 0
+            surf_id = _ival(f1[2]) if len(f1) > 2 else 0
+            dist = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+            node_id1 = _ival(f1[4]) if len(f1) > 4 else 0
+            node_id2 = _ival(f1[5]) if len(f1) > 5 else 0
+            node_id3 = _ival(f1[6]) if len(f1) > 6 else 0
+            fcut = _fval(f1[7], 0.0) if len(f1) > 7 else 0.0
+
+            idx = 1
+            if ityp != 1 and (node_id1 == 0 and node_id2 == 0 and node_id3 == 0) and surf_id == 0:
+                # Read 3 coordinate cards
+                for _ in range(3):
+                    if idx < len(cards) and not cards[idx].is_blank:
+                        fc = cards[idx].cut("SPH_INOUT_2")
+                        coords.append((_fval(fc[0], 0.0), _fval(fc[1], 0.0), _fval(fc[2], 0.0)))
+                        idx += 1
+
+            if ityp == 1 and idx < len(cards) and not cards[idx].is_blank:
+                fin1 = cards[idx].cut("SPH_INOUT_INLET_1")
+                fct_id_r = _ival(fin1[0]) if len(fin1) > 0 else 0
+                fscale_r = _fval(fin1[1], 1.0) if len(fin1) > 1 else 1.0
+                fct_id_e = _ival(fin1[3]) if len(fin1) > 3 else 0
+                fscale_e = _fval(fin1[4], 1.0) if len(fin1) > 4 else 1.0
+                idx += 1
+                if idx < len(cards) and not cards[idx].is_blank:
+                    fin2 = cards[idx].cut("SPH_INOUT_INLET_2")
+                    fct_id_vn = _ival(fin2[0]) if len(fin2) > 0 else 0
+                    idx += 1
+            elif ityp == 2 and idx < len(cards) and not cards[idx].is_blank:
+                fout = cards[idx].cut("SPH_INOUT_OUTLET_1")
+                fct_id_p = _ival(fout[1]) if len(fout) > 1 else 0
+                fscale_p = _fval(fout[2], 1.0) if len(fout) > 2 else 1.0
+                idx += 1
+            elif ityp == 3 and idx < len(cards) and not cards[idx].is_blank:
+                fnrf = cards[idx].cut("SPH_INOUT_NRF_1")
+                fct_id_p = _ival(fnrf[1]) if len(fnrf) > 1 else 0
+                fscale_p = _fval(fnrf[2], 1.0) if len(fnrf) > 2 else 1.0
+                lc = _fval(fnrf[3], 0.0) if len(fnrf) > 3 else 0.0
+                idx += 1
     else:
         t1 = cards[0].tokens()
-        surf_id = int(float(t1[0])) if len(t1) > 0 else 0
-        part_id = int(float(t1[1])) if len(t1) > 1 else 0
-        fct_id = int(float(t1[2])) if len(t1) > 2 else 0
+        if len(t1) <= 3:
+            surf_id = int(float(t1[0])) if len(t1) > 0 else 0
+            part_id = int(float(t1[1])) if len(t1) > 1 else 0
+            fct_id = int(float(t1[2])) if len(t1) > 2 else 0
+            if len(cards) > 1 and not cards[1].is_blank:
+                t2 = cards[1].tokens()
+                rho_in = float(t2[0]) if len(t2) > 0 else 0.0
+                p_in = float(t2[1]) if len(t2) > 1 else 0.0
+                e_in = float(t2[2]) if len(t2) > 2 else 0.0
+        else:
+            ityp = int(float(t1[0])) if len(t1) > 0 else 1
+            part_id = int(float(t1[1])) if len(t1) > 1 else 0
+            surf_id = int(float(t1[2])) if len(t1) > 2 else 0
+            dist = float(t1[3]) if len(t1) > 3 else 0.0
+            node_id1 = int(float(t1[4])) if len(t1) > 4 else 0
+            node_id2 = int(float(t1[5])) if len(t1) > 5 else 0
+            node_id3 = int(float(t1[6])) if len(t1) > 6 else 0
+            fcut = float(t1[7]) if len(t1) > 7 else 0.0
 
-        rho_in, p_in, e_in = 0.0, 0.0, 0.0
-        if len(cards) > 1 and not cards[1].is_blank:
-            t2 = cards[1].tokens()
-            rho_in = float(t2[0]) if len(t2) > 0 else 0.0
-            p_in = float(t2[1]) if len(t2) > 1 else 0.0
-            e_in = float(t2[2]) if len(t2) > 2 else 0.0
+            idx = 1
+            if ityp != 1 and (node_id1 == 0 and node_id2 == 0 and node_id3 == 0) and surf_id == 0:
+                for _ in range(3):
+                    if idx < len(cards) and not cards[idx].is_blank:
+                        tc = cards[idx].tokens()
+                        coords.append((float(tc[0]), float(tc[1]), float(tc[2])))
+                        idx += 1
 
-    model.sph_inouts[block.user_id] = SphInOut(
-        id=block.user_id, title=title, surf_id=surf_id, part_id=part_id,
-        fct_id=fct_id, rho_in=rho_in, p_in=p_in, e_in=e_in
+            if ityp == 1 and idx < len(cards) and not cards[idx].is_blank:
+                tin1 = cards[idx].tokens()
+                fct_id_r = int(float(tin1[0])) if len(tin1) > 0 else 0
+                fscale_r = float(tin1[1]) if len(tin1) > 1 else 1.0
+                fct_id_e = int(float(tin1[2])) if len(tin1) > 2 else 0
+                fscale_e = float(tin1[3]) if len(tin1) > 3 else 1.0
+                idx += 1
+                if idx < len(cards) and not cards[idx].is_blank:
+                    tin2 = cards[idx].tokens()
+                    fct_id_vn = int(float(tin2[0])) if len(tin2) > 0 else 0
+                    idx += 1
+            elif ityp == 2 and idx < len(cards) and not cards[idx].is_blank:
+                tout = cards[idx].tokens()
+                fct_id_p = int(float(tout[0])) if len(tout) > 0 else 0
+                fscale_p = float(tout[1]) if len(tout) > 1 else 1.0
+                idx += 1
+            elif ityp == 3 and idx < len(cards) and not cards[idx].is_blank:
+                tnrf = cards[idx].tokens()
+                fct_id_p = int(float(tnrf[0])) if len(tnrf) > 0 else 0
+                fscale_p = float(tnrf[1]) if len(tnrf) > 1 else 1.0
+                lc = float(tnrf[2]) if len(tnrf) > 2 else 0.0
+                idx += 1
+
+    model.sph_inouts[cid] = SphInOut(
+        id=cid, title=title, ityp=ityp, surf_id=surf_id, part_id=part_id, pid=part_id,
+        dist=dist, node_id1=node_id1, node_id2=node_id2, node_id3=node_id3, fcut=fcut,
+        coords=coords, fct_id_r=fct_id_r, fscale_r=fscale_r, fct_id_e=fct_id_e,
+        fscale_e=fscale_e, fct_id_vn=fct_id_vn, fct_id_p=fct_id_p, fscale_p=fscale_p,
+        lc=lc, fct_id=fct_id, rho_in=rho_in, p_in=p_in, e_in=e_in
     )
 
 

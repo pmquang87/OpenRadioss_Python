@@ -2947,7 +2947,6 @@ LAYOUTS: Dict[str, List[int]] = {
     "DTIX_1": [20, 20],
     # M201: TH_SUBS, THPART, WAV_SHA, SENSORS, PCOMPP, TYPE51
     "DFS_WAV_SHA_1": [20, 20, 20, 20, 10, 10],
-    "SENSOR_DIST_SURF_1": [10, 10, 10, 20, 20, 20],
     "SENSOR_SENS_AND_OR_1": [10, 10, 10, 20],
     "PROP_PCOMPP_1": [10],
     "PROP_P51_1": [10, 10, 10, 10, 20, 20],
@@ -2955,6 +2954,21 @@ LAYOUTS: Dict[str, List[int]] = {
     "PROP_P51_3": [10, 10, 20, 10, 10, 20],
     "PROP_P51_4": [20, 20, 20, 10, 10, 10, 10],
     "THPART_GR_1": [10],
+    # M202: CONVEC, RADIATION, SPH_INOUT extended, BCS_LAGMUL, SPCND, SURFSURF, DDW
+    "CONVEC_1": [10, 10, 10],
+    "CONVEC_2": [20, 20, 20, 20, 20],
+    "RADIATION_1": [10, 10, 10],
+    "RADIATION_2": [20, 20, 20, 20, 20],
+    "BCS_LAGMUL_1": [10, 10, 10],
+    "SPCND_1": [10, 10, 20, 20, 20],
+    "SURFSURF_1": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+    "DDW_1": [10, 10, 10, 10, 20, 20, 20, 20, 20, 20],
+    "DDW_POINT_1": [10, 10, 10, 20],
+    "SPH_INOUT_EXT_1": [10, 10, 10, 20, 10, 10, 10, 20],
+    "SPH_INOUT_INLET_1": [10, 20, 30, 10, 20],
+    "SPH_INOUT_INLET_2": [10],
+    "SPH_INOUT_OUTLET_1": [30, 10, 20],
+    "SPH_INOUT_NRF_1": [30, 10, 20, 20],
 }
 
 

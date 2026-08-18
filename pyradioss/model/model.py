@@ -1341,6 +1341,19 @@ class Model:
         self.props_type51: Dict[int, Any] = {}                       # /PROP/TYPE51, /PROP/P51 (M201)
         self.props_p51 = self.props_type51
 
+        # M202 Entities
+        self.heat_fluxes: Dict[int, Any] = {}                        # /HEAT/FLUX, /FLUX (M202)
+        self.heat_convecs: Dict[int, Any] = {}                       # /HEAT/CONVEC, /CONVEC (M202)
+        self.heat_radiations: Dict[int, Any] = {}                    # /HEAT/RADIATION, /RADIATION (M202)
+        self.surfs_surf: Dict[int, Any] = {}                         # /SURF/SURF, /SURFSURF (M202)
+        self.bcs_lagmuls: Dict[int, Any] = {}                        # /BCS/LAGMUL (M202)
+        self.spcnds: Dict[int, Any] = {}                             # /SPCND (M202)
+        self.ddws: Dict[int, Any] = {}                               # /DDW (M202)
+        self.ddw_points: Dict[int, Any] = {}                         # /DDW/POINT (M202)
+        self.stampings: List[Any] = []                               # /STAMPING, /STAMP (M202)
+        self.sensors_work: Dict[int, Any] = {}                       # /SENSOR/WORK (M201/M202)
+
+
 
 
 

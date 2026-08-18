@@ -3133,14 +3133,33 @@ class RwallTherm:
 
 @dataclass
 class SphInOut:
-    """/SPH/INOUT or /SPH/IO (M112): SPH particle inlet/outlet boundary condition.
+    """/SPH/INOUT or /SPH/IO (M112/M202): SPH particle inlet/outlet boundary condition.
 
     Fortran origin: ``starter/source/loads/sph/hm_read_sphio.F``.
     """
     id: int
     title: str = ""
+    ityp: int = 1  # 1: Inlet, 2: Outlet, 3: NRF, 4: Control section
     surf_id: int = 0
     part_id: int = 0
+    pid: int = 0
+    dist: float = 0.0
+    node_id1: int = 0
+    node_id2: int = 0
+    node_id3: int = 0
+    fcut: float = 0.0
+    coords: list[tuple[float, float, float]] = field(default_factory=list)
+    # Inlet fields (ityp=1)
+    fct_id_r: int = 0
+    fscale_r: float = 1.0
+    fct_id_e: int = 0
+    fscale_e: float = 1.0
+    fct_id_vn: int = 0
+    # Outlet fields (ityp=2) & NRF (ityp=3)
+    fct_id_p: int = 0
+    fscale_p: float = 1.0
+    lc: float = 0.0
+    # Legacy fields
     fct_id: int = 0
     rho_in: float = 0.0
     p_in: float = 0.0
@@ -11676,6 +11695,168 @@ class PropPcompp:
 PropP51 = PropType51
 PropTshP51 = PropType51
 WaveShaperDfs = DfsWavSha
+
+
+@dataclass
+class HeatConvec:
+    """``/HEAT/CONVEC/id`` or ``/CONVEC/id`` (M202): Thermal surface convection boundary condition."""
+    id: int = 0
+    title: str = ""
+    surf_id: int = 0
+    funct_id: int = 0
+    sensor_id: int = 0
+    ascale: float = 1.0
+    fscale: float = 1.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+    h: float = 0.0
+
+
+@dataclass
+class HeatRadiation:
+    """``/HEAT/RADIATION/id`` or ``/RADIATION/id`` (M202): Thermal surface radiation boundary condition."""
+    id: int = 0
+    title: str = ""
+    surf_id: int = 0
+    funct_id: int = 0
+    sensor_id: int = 0
+    ascale: float = 1.0
+    fscale: float = 1.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+    emiss: float = 0.0
+
+
+@dataclass
+class SurfSurf:
+    """``/SURF/SURF/id`` or ``/SURFSURF/id`` (M202): Surface composed of other surfaces."""
+    id: int = 0
+    title: str = ""
+    surf_ids: list[int] = field(default_factory=list)
+
+
+@dataclass
+class BcsLagmul:
+    """``/BCS/LAGMUL/id`` (M202): Lagrange multiplier constraint on node group."""
+    id: int = 0
+    title: str = ""
+    tra: str = "111"
+    rot: str = "111"
+    skew_id: int = 0
+    grnod_id: int = 0
+
+
+@dataclass
+class Spcnd:
+    """``/SPCND/id`` (M202): Single point constraint on node."""
+    id: int = 0
+    title: str = ""
+    node_id: int = 0
+    dof: str = "111111"
+    f_sens: float = 0.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+
+
+@dataclass
+class Ddw:
+    """``/DDW/id`` (M202): Deep draw wall stamping tool."""
+    id: int = 0
+    title: str = ""
+    tool_type: int = 1
+    surf_id: int = 0
+    grnod_id: int = 0
+    fct_id: int = 0
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    fx: float = 0.0
+    fy: float = 0.0
+    fz: float = 0.0
+
+
+@dataclass
+class DdwPoint:
+    """``/DDW/POINT/id`` (M202): Point-based deep draw wall."""
+    id: int = 0
+    title: str = ""
+    node_id: int = 0
+    fct_id: int = 0
+    dir: str = "Z"
+    scale: float = 1.0
+
+
+@dataclass
+class Stamping:
+    """``/STAMPING`` or ``/STAMP`` (M202): Stamping simulation controls."""
+    hf_timescale: float = 1.0
+    datalines: list[str] = field(default_factory=list)
+
+
+@dataclass
+class WindowUser:
+    """``/WINDOW/USER/id`` or ``/USERWI/id`` (M202): User-defined analysis window."""
+    id: int = 0
+    title: str = ""
+    lines: list[str] = field(default_factory=list)
+
+
+@dataclass
+class HeatFlux:
+    """``/HEAT/FLUX/id`` or ``/FLUX/id`` (M202): Thermal heat flux boundary condition."""
+    id: int = 0
+    title: str = ""
+    surf_id: int = 0
+    funct_id: int = 0
+    sensor_id: int = 0
+    ascale: float = 1.0
+    fscale: float = 1.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+    q: float = 0.0
+
+
+@dataclass
+class HeatConvec:
+    """``/HEAT/CONVEC/id``, ``/HEAT/CONVECTION/id`` or ``/CONVEC/id`` (M202): Thermal surface convection."""
+    id: int = 0
+    title: str = ""
+    surf_id: int = 0
+    funct_id: int = 0
+    sensor_id: int = 0
+    ascale: float = 1.0
+    fscale: float = 1.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+    h: float = 0.0
+
+
+@dataclass
+class HeatRadiation:
+    """``/HEAT/RADIATION/id``, ``/HEAT/RAD/id`` or ``/RADIATION/id`` (M202): Thermal surface radiation."""
+    id: int = 0
+    title: str = ""
+    surf_id: int = 0
+    funct_id: int = 0
+    sensor_id: int = 0
+    ascale: float = 1.0
+    fscale: float = 1.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+    emissivity: float = 0.0
+
+
+@dataclass
+class SensorWork:
+    """``/SENSOR/WORK/id`` (M202): Internal/plastic work threshold sensor."""
+    id: int = 0
+    title: str = ""
+    object_id: int = 0
+    sens_type: int = 1
+    t_delay: float = 0.0
+    w_max: float = 0.0
+
+
 
 
 
