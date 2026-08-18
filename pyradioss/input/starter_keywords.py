@@ -2258,6 +2258,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("PU", "POLYURETHANE"):
         read_fail_pu(block, model, log)
         return
+    if kind in ("GRIFFITH", "GRIF"):
+        read_fail_griffith(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11687,6 +11690,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("WORK_RATIO", "WRATIO"):
         read_sensor_work_ratio(block, model, log)
+        return
+    if kind in ("SPRING", "SPRING_FORCE", "SPRING_MOMENT"):
+        read_sensor_spring(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -41761,6 +41767,35 @@ def read_fail_pu(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_griffith(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/GRIFFITH/mat_ID`` (M225): Griffith brittle fracture criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/GRIFFITH/{block.user_id}: missing data card", block.source)
+        return
+
+    sigma_0, sigma_c, tau_max, ifail_sh = 0.0, 0.0, 0.0, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_GRIFFITH_1")
+        sigma_0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sigma_c = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        tau_max = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        ifail_sh = _ival(f[3], 1) if len(f) > 3 else 1
+    else:
+        toks = cards[0].tokens()
+        sigma_0 = float(toks[0]) if len(toks) > 0 else 0.0
+        sigma_c = float(toks[1]) if len(toks) > 1 else 0.0
+        tau_max = float(toks[2]) if len(toks) > 2 else 0.0
+        ifail_sh = int(float(toks[3])) if len(toks) > 3 else 1
+
+    from ..model.entities import FailGriffith
+    model.fail_griffiths[block.user_id] = FailGriffith(
+        mat_id=block.user_id, title=title, sigma_0=sigma_0,
+        sigma_c=sigma_c, tau_max=tau_max, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -43497,6 +43532,63 @@ def read_sensor_work_ratio(block: KeywordBlock, model: Model, log: MessageLog) -
     model.sensors.append(Sensor(
         id=swr.id, kind="WORK_RATIO", tdelay=t_delay
     ))
+
+
+def read_eng_surf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SURF`` or ``/ENG/SURF`` (M225): Engine contact surface force tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SURF/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_surf, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_SURF_1")
+        dt_surf = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_surf = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngSurf
+    s_id = block.user_id or (len(model.eng_surfs) + 1)
+    model.eng_surfs[s_id] = EngSurf(
+        id=s_id, title=title, dt_surf=dt_surf, sens_id=sens_id
+    )
+
+
+def read_sensor_spring(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING`` or ``/SENSOR/SPRING_FORCE`` (M225): Spring force/moment threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, f_max, m_max, t_delay = 0, 1e30, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        f_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        m_max = _fval(f[2], 1e30) if len(f) > 2 else 1e30
+        t_delay = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        f_max = float(toks[1]) if len(toks) > 1 else 1e30
+        m_max = float(toks[2]) if len(toks) > 2 else 1e30
+        t_delay = float(toks[3]) if len(toks) > 3 else 0.0
+
+    from ..model.entities import SensorSpring, Sensor
+    ss = SensorSpring(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        f_max=f_max, m_max=m_max, t_delay=t_delay
+    )
+    model.sensor_springs[ss.id] = ss
+    model.sensors.append(Sensor(
+        id=ss.id, kind="SPRING", tdelay=t_delay
+    ))
+
 
 
 
@@ -45667,6 +45759,21 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PRISMATIC": read_slider_joint,
     "SENSOR_WORK_RATIO": read_sensor_work_ratio,
     "SENSOR_WRATIO": read_sensor_work_ratio,
+    # --- M225: Griffith Brittle Fracture Criterion, Engine Contact Surface Directive, Homokinetic/Cylinder Joint Aliases, and Spring Sensor Suite ---
+    "FAIL_GRIFFITH": read_fail_griffith,
+    "FAIL_GRIF": read_fail_griffith,
+    "SURF": read_eng_surf,
+    "ENG_SURF": read_eng_surf,
+    "ENG_SURFACE": read_eng_surf,
+    "LAGMUL_HOMOKINETIC": read_cv_joint,
+    "LAGMUL_HOMOKINETIC_JOINT": read_cv_joint,
+    "HOMOKINETIC_JOINT": read_cv_joint,
+    "HOMOKINETIC": read_cv_joint,
+    "LAGMUL_CYLINDER": read_cyl_joint,
+    "CYLINDER": read_cyl_joint,
+    "SENSOR_SPRING": read_sensor_spring,
+    "SENSOR_SPRING_FORCE": read_sensor_spring,
+    "SENSOR_SPRING_MOMENT": read_sensor_spring,
 }
 
 
@@ -45675,7 +45782,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

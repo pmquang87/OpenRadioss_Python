@@ -1565,6 +1565,12 @@ class Model:
         self.eng_states: Dict[int, Any] = {}                         # /STATE, /ENG/STATE (M224)
         self.sensor_work_ratios: Dict[int, Any] = {}                 # /SENSOR/WORK_RATIO (M224)
 
+        # M225 Entities
+        self.fail_griffiths: Dict[int, Any] = {}                     # /FAIL/GRIFFITH (M225)
+        self.eng_surfs: Dict[int, Any] = {}                          # /SURF, /ENG/SURF (M225)
+        self.sensor_springs: Dict[int, Any] = {}                     # /SENSOR/SPRING (M225)
+
+
 
 
 

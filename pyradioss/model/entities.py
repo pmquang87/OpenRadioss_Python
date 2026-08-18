@@ -12982,6 +12982,38 @@ class SensorWorkRatio:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailGriffith:
+    """``/FAIL/GRIFFITH/mat_ID`` (M225): Griffith brittle fracture criterion."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_0: float = 0.0     # uniaxial tensile strength cutoff
+    sigma_c: float = 0.0     # compressive crushing cutoff
+    tau_max: float = 0.0     # maximum shear limit
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngSurf:
+    """``/SURF`` or ``/ENG/SURF`` (M225): Engine contact surface force tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_surf: float = 0.0     # time frequency for surface output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSpring:
+    """``/SENSOR/SPRING`` or ``/SENSOR/SPRING_FORCE`` (M225): Spring force/moment threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    f_max: float = 1e30      # maximum axial spring force limit
+    m_max: float = 1e30      # maximum torsional spring moment limit
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 
