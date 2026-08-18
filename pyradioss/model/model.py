@@ -1575,6 +1575,12 @@ class Model:
         self.eng_ales: Dict[int, Any] = {}                           # /ALE, /ENG/ALE (M226)
         self.sensor_shell_strains: Dict[int, Any] = {}               # /SENSOR/SHELL_STRAIN (M226)
 
+        # M227 Entities
+        self.fail_woods: Dict[int, Any] = {}                         # /FAIL/WOOD (M227)
+        self.eng_sh_thicks: Dict[int, Any] = {}                      # /SH_THICK, /ENG/SH_THICK (M227)
+        self.sensor_solid_strains: Dict[int, Any] = {}               # /SENSOR/SOLID_STRAIN (M227)
+
+
 
 
 

@@ -13044,6 +13044,40 @@ class SensorShellStrain:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailWood:
+    """``/FAIL/WOOD/mat_ID`` (M227): Wood orthotropic failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_t11: float = 0.0   # longitudinal tensile strength
+    sigma_t22: float = 0.0   # transverse tensile strength
+    sigma_c11: float = 0.0   # longitudinal compressive strength
+    sigma_c22: float = 0.0   # transverse compressive strength
+    tau_12: float = 0.0      # in-plane shear strength
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngShThick:
+    """``/SH_THICK`` or ``/ENG/SH_THICK`` (M227): Engine shell thickness update directive."""
+    id: int = 1
+    title: str = ""
+    dt_thick: float = 0.0    # time frequency for shell thickness output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSolidStrain:
+    """``/SENSOR/SOLID_STRAIN`` or ``/SENSOR/STRAIN_SOLID`` (M227): Solid element strain threshold sensor."""
+    id: int = 1
+    title: str = ""
+    solid_id: int = 0        # solid element ID to monitor
+    eps_max: float = 1e30    # maximum strain threshold
+    ip: int = 1              # integration point number
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

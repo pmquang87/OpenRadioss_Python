@@ -2266,6 +2266,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("DRUCKER", "DRUCKER_PRAGER", "DP"):
         read_fail_drucker(block, model, log)
         return
+    if kind in ("WOOD", "TIMBER", "ORTH_WOOD"):
+        read_fail_wood(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11701,6 +11704,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("SHELL_STRAIN", "STRAIN_SHELL", "EPS_SHELL"):
         read_sensor_shell_strain(block, model, log)
+        return
+    if kind in ("SOLID_STRAIN", "STRAIN_SOLID", "EPS_SOLID"):
+        read_sensor_solid_strain(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -41831,6 +41837,44 @@ def read_fail_drucker(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     )
 
 
+def read_fail_wood(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/WOOD/mat_ID`` (M227): Wood orthotropic failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/WOOD/{block.user_id}: missing data card", block.source)
+        return
+
+    sigma_t11, sigma_t22, sigma_c11, sigma_c22, tau_12, ifail_sh = 0.0, 0.0, 0.0, 0.0, 0.0, 1
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_WOOD_1")
+        sigma_t11 = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        sigma_t22 = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        sigma_c11 = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        sigma_c22 = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_WOOD_2")
+            tau_12 = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            ifail_sh = _ival(f2[1], 1) if len(f2) > 1 else 1
+    else:
+        toks1 = cards[0].tokens()
+        sigma_t11 = float(toks1[0]) if len(toks1) > 0 else 0.0
+        sigma_t22 = float(toks1[1]) if len(toks1) > 1 else 0.0
+        sigma_c11 = float(toks1[2]) if len(toks1) > 2 else 0.0
+        sigma_c22 = float(toks1[3]) if len(toks1) > 3 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            tau_12 = float(toks2[0]) if len(toks2) > 0 else 0.0
+            ifail_sh = int(float(toks2[1])) if len(toks2) > 1 else 1
+
+    from ..model.entities import FailWood
+    model.fail_woods[block.user_id] = FailWood(
+        mat_id=block.user_id, title=title, sigma_t11=sigma_t11,
+        sigma_t22=sigma_t22, sigma_c11=sigma_c11, sigma_c22=sigma_c22,
+        tau_12=tau_12, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -43681,6 +43725,63 @@ def read_sensor_shell_strain(block: KeywordBlock, model: Model, log: MessageLog)
     model.sensors.append(Sensor(
         id=sss.id, kind="SHELL_STRAIN", tdelay=t_delay
     ))
+
+
+def read_eng_sh_thick(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SH_THICK`` or ``/ENG/SH_THICK`` (M227): Engine shell thickness update directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SH_THICK/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_thick, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_SH_THICK_1")
+        dt_thick = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_thick = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngShThick
+    t_id = block.user_id or (len(model.eng_sh_thicks) + 1)
+    model.eng_sh_thicks[t_id] = EngShThick(
+        id=t_id, title=title, dt_thick=dt_thick, sens_id=sens_id
+    )
+
+
+def read_sensor_solid_strain(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SOLID_STRAIN`` or ``/SENSOR/STRAIN_SOLID`` (M227): Solid element strain threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SOLID_STRAIN/{block.user_id}: missing data card", block.source)
+        return
+
+    solid_id, eps_max, ip, t_delay = 0, 1e30, 1, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SOLID_STRAIN_1")
+        solid_id = _ival(f[0], 0) if len(f) > 0 else 0
+        eps_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        ip = _ival(f[2], 1) if len(f) > 2 else 1
+        t_delay = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+    else:
+        toks = cards[0].tokens()
+        solid_id = int(float(toks[0])) if len(toks) > 0 else 0
+        eps_max = float(toks[1]) if len(toks) > 1 else 1e30
+        ip = int(float(toks[2])) if len(toks) > 2 else 1
+        t_delay = float(toks[3]) if len(toks) > 3 else 0.0
+
+    from ..model.entities import SensorSolidStrain, Sensor
+    sss = SensorSolidStrain(
+        id=block.user_id or 1, title=title, solid_id=solid_id,
+        eps_max=eps_max, ip=ip, t_delay=t_delay
+    )
+    model.sensor_solid_strains[sss.id] = sss
+    model.sensors.append(Sensor(
+        id=sss.id, kind="SOLID_STRAIN", tdelay=t_delay
+    ))
+
 
 
 
@@ -45881,6 +45982,22 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SHELL_STRAIN": read_sensor_shell_strain,
     "SENSOR_STRAIN_SHELL": read_sensor_shell_strain,
     "SENSOR_EPS_SHELL": read_sensor_shell_strain,
+    # --- M227: Wood Orthotropic Failure Criterion, Engine Shell Thickness Directive, Slider Line/Cardan Joint Aliases, and Solid Strain Sensor Suite ---
+    "FAIL_WOOD": read_fail_wood,
+    "FAIL_TIMBER": read_fail_wood,
+    "FAIL_ORTH_WOOD": read_fail_wood,
+    "SH_THICK": read_eng_sh_thick,
+    "ENG_SH_THICK": read_eng_sh_thick,
+    "ENG_SHELL_THICK": read_eng_sh_thick,
+    "LAGMUL_SLIDER_LINE": read_slider_joint,
+    "LAGMUL_SLIDER_LINE_JOINT": read_slider_joint,
+    "SLIDER_LINE_JOINT": read_slider_joint,
+    "SLIDER_LINE": read_slider_joint,
+    "LAGMUL_CARDAN_JOINT": read_cardan_joint,
+    "CARDAN_JOINT": read_cardan_joint,
+    "SENSOR_SOLID_STRAIN": read_sensor_solid_strain,
+    "SENSOR_STRAIN_SOLID": read_sensor_solid_strain,
+    "SENSOR_EPS_SOLID": read_sensor_solid_strain,
 }
 
 
@@ -45889,7 +46006,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
