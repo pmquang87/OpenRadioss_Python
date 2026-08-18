@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M227)
+## What is implemented (M1 → M228)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -233,6 +233,7 @@ real history is 41 milestones. One line each:
 | M225 | Griffith Brittle Fracture Criterion, Engine Surface Force Directive, Homokinetic/Cylinder Joint Aliases, and Spring Force Sensor Suite: /FAIL/GRIFFITH (/FAIL/GRIF) multi-axial brittle tensile/compressive fracture model, /SURF (/ENG/SURF, /ENG/SURFACE) engine contact surface force tracking directive, /LAGMUL/HOMOKINETIC (/HOMOKINETIC) and /LAGMUL/CYLINDER (/CYLINDER) kinematic joint aliases, and /SENSOR/SPRING (/SENSOR/SPRING_FORCE, /SENSOR/SPRING_MOMENT) spring element force/moment threshold sensor |
 | M226 | Drucker-Prager Failure Criterion, Engine ALE Grid Smoothing Directive, Slot Line Joint Aliases, and Shell Strain Sensor Suite: /FAIL/DRUCKER (/FAIL/DRUCKER_PRAGER, /FAIL/DP) geomaterial failure model, /ALE (/ENG/ALE, /ENG/ALE_GRID) engine ALE grid smoothing and advection directive, /LAGMUL/SLOT_LINE (/SLOT_LINE, /SLOT_LINE_JOINT) kinematic joint aliases, and /SENSOR/SHELL_STRAIN (/SENSOR/STRAIN_SHELL, /SENSOR/EPS_SHELL) shell element plastic strain threshold sensor |
 | M227 | Wood Orthotropic Failure Criterion, Engine Shell Thickness Directive, Slider Line/Cardan Joint Aliases, and Solid Strain Sensor Suite: /FAIL/WOOD (/FAIL/TIMBER, /FAIL/ORTH_WOOD) orthotropic wood failure model, /SH_THICK (/ENG/SH_THICK, /ENG/SHELL_THICK) engine shell thickness update directive, /LAGMUL/SLIDER_LINE (/SLIDER_LINE, /SLIDER_LINE_JOINT) and /LAGMUL/CARDAN_JOINT (/CARDAN_JOINT) kinematic joint aliases, and /SENSOR/SOLID_STRAIN (/SENSOR/STRAIN_SOLID, /SENSOR/EPS_SOLID) solid element plastic strain threshold sensor |
+| M228 | Hill Anisotropic Failure Criterion, Engine Geometry Update Directive, Pin-Slot/Revolute Axis Joint Aliases, and Beam Strain Sensor Suite: /FAIL/HILL (/FAIL/HILL_PLASTIC, /FAIL/HILL48) Hill anisotropic plasticity failure model, /GEO (/ENG/GEO, /ENG/GEOMETRY) engine nodal coordinate geometry update directive, /LAGMUL/PIN_SLOT (/PIN_SLOT, /PIN_SLOT_JOINT) and /LAGMUL/REVOLUTE_AXIS (/REVOLUTE_AXIS) kinematic joint aliases, and /SENSOR/BEAM_STRAIN (/SENSOR/STRAIN_BEAM, /SENSOR/EPS_BEAM) beam element strain threshold sensor |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read

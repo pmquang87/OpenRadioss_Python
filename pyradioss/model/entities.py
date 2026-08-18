@@ -13077,6 +13077,42 @@ class SensorSolidStrain:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailHill:
+    """``/FAIL/HILL/mat_ID`` (M228): Hill anisotropic plasticity failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    F: float = 0.5           # Hill's F parameter
+    G: float = 0.5           # Hill's G parameter
+    H: float = 0.5           # Hill's H parameter
+    L: float = 1.5           # Hill's L parameter
+    M: float = 1.5           # Hill's M parameter
+    N: float = 1.5           # Hill's N parameter
+    sigma_fail: float = 1e30 # failure stress threshold
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngGeo:
+    """``/GEO`` or ``/ENG/GEO`` (M228): Engine nodal coordinate geometry update directive."""
+    id: int = 1
+    title: str = ""
+    dt_geo: float = 0.0      # time frequency for geometry update
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorBeamStrain:
+    """``/SENSOR/BEAM_STRAIN`` or ``/SENSOR/STRAIN_BEAM`` (M228): Beam element strain threshold sensor."""
+    id: int = 1
+    title: str = ""
+    beam_id: int = 0         # beam element ID to monitor
+    eps_max: float = 1e30    # maximum strain threshold
+    ip: int = 1              # integration point number
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

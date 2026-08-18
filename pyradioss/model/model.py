@@ -1580,6 +1580,12 @@ class Model:
         self.eng_sh_thicks: Dict[int, Any] = {}                      # /SH_THICK, /ENG/SH_THICK (M227)
         self.sensor_solid_strains: Dict[int, Any] = {}               # /SENSOR/SOLID_STRAIN (M227)
 
+        # M228 Entities
+        self.fail_hills: Dict[int, Any] = {}                         # /FAIL/HILL (M228)
+        self.eng_geos: Dict[int, Any] = {}                           # /GEO, /ENG/GEO (M228)
+        self.sensor_beam_strains: Dict[int, Any] = {}                # /SENSOR/BEAM_STRAIN (M228)
+
+
 
 
 
