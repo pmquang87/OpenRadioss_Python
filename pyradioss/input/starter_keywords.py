@@ -2302,6 +2302,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("ENERGY_DENSITY", "SED", "STRAIN_ENERGY_DENSITY"):
         read_fail_energy_density(block, model, log)
         return
+    if kind in ("ENERGY_RATIO", "ERATIO", "SPECIFIC_ENERGY"):
+        read_fail_energy_ratio(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11773,6 +11776,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("SPRING_ROTA", "SPRING_ANGACC", "ROTA_SPRING", "ANGACC_SPRING"):
         read_sensor_spring_rota(block, model, log)
+        return
+    if kind in ("SPRING_AXIAL", "SPRING_AXIAL_FORCE", "AXIAL_SPRING", "SPRING_TENSION"):
+        read_sensor_spring_axial(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -42340,6 +42346,33 @@ def read_fail_energy_density(block: KeywordBlock, model: Model, log: MessageLog)
     )
 
 
+def read_fail_energy_ratio(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/ENERGY_RATIO/mat_ID`` (M239): Energy ratio failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/ENERGY_RATIO/{block.user_id}: missing data card", block.source)
+        return
+
+    eratio_max, eint_min, ifail_sh = 1e30, 0.0, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_ENERGY_RATIO_1")
+        eratio_max = _fval(f[0], 1e30) if len(f) > 0 else 1e30
+        eint_min = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        ifail_sh = _ival(f[2], 1) if len(f) > 2 else 1
+    else:
+        toks = cards[0].tokens()
+        eratio_max = float(toks[0]) if len(toks) > 0 else 1e30
+        eint_min = float(toks[1]) if len(toks) > 1 else 0.0
+        ifail_sh = int(float(toks[2])) if len(toks) > 2 else 1
+
+    from ..model.entities import FailEnergyRatio
+    model.fail_energy_ratios[block.user_id] = FailEnergyRatio(
+        mat_id=block.user_id, title=title, eratio_max=eratio_max,
+        eint_min=eint_min, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -44860,6 +44893,61 @@ def read_sensor_spring_rota(block: KeywordBlock, model: Model, log: MessageLog) 
     ))
 
 
+def read_eng_force(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FORCE`` or ``/ENG/FORCE`` (M239): Engine nodal resultant force output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FORCE/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_force, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_FORCE_1")
+        dt_force = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_force = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngForce
+    r_id = block.user_id or (len(model.eng_forces) + 1)
+    model.eng_forces[r_id] = EngForce(
+        id=r_id, title=title, dt_force=dt_force, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_axial(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_AXIAL`` or ``/SENSOR/AXIAL_SPRING`` (M239): Spring element axial force threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_AXIAL/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, fax_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_AXIAL_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        fax_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        fax_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringAxial, Sensor
+    ssa = SensorSpringAxial(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        fax_max=fax_max, t_delay=t_delay
+    )
+    model.sensor_spring_axials[ssa.id] = ssa
+    model.sensors.append(Sensor(
+        id=ssa.id, kind="SPRING_AXIAL", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -47247,6 +47335,22 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_ANGACC": read_sensor_spring_rota,
     "SENSOR_ROTA_SPRING": read_sensor_spring_rota,
     "SENSOR_ANGACC_SPRING": read_sensor_spring_rota,
+    # --- M239: Energy Ratio Failure Criterion, Engine Force Output Directive, Ball Socket Joint Aliases, and Spring Axial Force Sensor Suite ---
+    "FAIL_ENERGY_RATIO": read_fail_energy_ratio,
+    "FAIL_ERATIO": read_fail_energy_ratio,
+    "FAIL_SPECIFIC_ENERGY": read_fail_energy_ratio,
+    "FORCE": read_eng_force,
+    "ENG_FORCE": read_eng_force,
+    "ENG_NODAL_FORCE": read_eng_force,
+    "ENG_RESULTANT_FORCE": read_eng_force,
+    "LAGMUL_BALL_SOCKET": read_ball_joint,
+    "BALL_SOCKET": read_ball_joint,
+    "LAGMUL_BALL_AND_SOCKET": read_ball_joint,
+    "BALL_AND_SOCKET": read_ball_joint,
+    "SENSOR_SPRING_AXIAL": read_sensor_spring_axial,
+    "SENSOR_SPRING_AXIAL_FORCE": read_sensor_spring_axial,
+    "SENSOR_AXIAL_SPRING": read_sensor_spring_axial,
+    "SENSOR_SPRING_TENSION": read_sensor_spring_axial,
 }
 
 
@@ -47255,7 +47359,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP", "ROTC", "ROTV", "ROTA"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP", "ROTC", "ROTV", "ROTA", "FORCE"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

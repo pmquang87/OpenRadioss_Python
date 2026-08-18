@@ -13436,6 +13436,36 @@ class SensorSpringRota:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailEnergyRatio:
+    """``/FAIL/ENERGY_RATIO/mat_ID`` (M239): Energy ratio failure model."""
+    mat_id: int = 0
+    title: str = ""
+    eratio_max: float = 1e30  # maximum energy ratio threshold
+    eint_min: float = 0.0     # minimum internal energy threshold for activation
+    ifail_sh: int = 1         # shell element deletion flag
+
+
+@dataclass
+class EngForce:
+    """``/FORCE`` or ``/ENG/FORCE`` (M239): Engine nodal resultant force output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_force: float = 0.0     # time frequency for resultant force output
+    sens_id: int = 0          # sensor activation ID
+
+
+@dataclass
+class SensorSpringAxial:
+    """``/SENSOR/SPRING_AXIAL`` or ``/SENSOR/AXIAL_SPRING`` (M239): Spring element axial force threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0        # spring element ID to monitor
+    fax_max: float = 1e30     # maximum axial force threshold
+    t_delay: float = 0.0      # activation delay time
+
+
+
 
 
 
