@@ -1540,6 +1540,12 @@ class Model:
         self.eng_helms: Dict[int, Any] = {}                          # /HELM, /ENG/HELM (M219)
         self.sensor_ruptures: Dict[int, Any] = {}                    # /SENSOR/RUPT, /SENSOR/SHELL_FAIL (M219)
 
+        # M220 Entities
+        self.fail_snows: Dict[int, Any] = {}                         # /FAIL/SNOW (M220)
+        self.eng_truncs: Dict[int, Any] = {}                         # /TRUNC, /ENG/TRUNC (M220)
+        self.sensor_shears: Dict[int, Any] = {}                      # /SENSOR/SHEAR, /SENSOR/SHEAR_STRESS (M220)
+
+
 
 
 

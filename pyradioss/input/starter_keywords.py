@@ -2243,6 +2243,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("MAX_STRESS", "MAXSTRESS", "MAX_TENS"):
         read_fail_maxstress(block, model, log)
         return
+    if kind in ("SNOW", "BRITTLE_SNOW"):
+        read_fail_snow(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11657,6 +11660,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("RUPT", "RUPTURE", "SHELL_FAIL", "SOLID_FAIL", "ELEM_FAIL"):
         read_sensor_rupture(block, model, log)
+        return
+    if kind in ("SHEAR", "SHEAR_STRESS", "TAU"):
+        read_sensor_shear(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -41587,6 +41593,35 @@ def read_fail_maxstress(block: KeywordBlock, model: Model, log: MessageLog) -> N
     )
 
 
+def read_fail_snow(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/SNOW/mat_ID`` (M220): Snow/ice brittle crush failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/SNOW/{block.user_id}: missing data card", block.source)
+        return
+
+    p_tens, eps_comp, sig_shear, ifail_sh = 0.0, 0.0, 0.0, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_SNOW_1")
+        p_tens = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        eps_comp = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        sig_shear = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        ifail_sh = _ival(f[3], 1) if len(f) > 3 else 1
+    else:
+        toks = cards[0].tokens()
+        p_tens = float(toks[0]) if len(toks) > 0 else 0.0
+        eps_comp = float(toks[1]) if len(toks) > 1 else 0.0
+        sig_shear = float(toks[2]) if len(toks) > 2 else 0.0
+        ifail_sh = int(float(toks[3])) if len(toks) > 3 else 1
+
+    from ..model.entities import FailSnow
+    model.fail_snows[block.user_id] = FailSnow(
+        mat_id=block.user_id, title=title, p_tens=p_tens,
+        eps_comp=eps_comp, sig_shear=sig_shear, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -43049,6 +43084,64 @@ def read_sensor_rupture(block: KeywordBlock, model: Model, log: MessageLog) -> N
     model.sensors.append(Sensor(
         id=sr.id, kind="RUPT", tdelay=t_delay
     ))
+
+
+def read_eng_trunc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TRUNC`` or ``/ENG/TRUNC`` (M220): Engine cycle truncation and tolerance directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/TRUNC/{block.user_id}: missing data card", block.source)
+        return
+
+    tol_trunc, dt_min, n_cycle = 0.0, 0.0, 1
+    if block.fixed:
+        f = cards[0].cut("ENG_TRUNC_1")
+        tol_trunc = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        dt_min = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        n_cycle = _ival(f[2], 1) if len(f) > 2 else 1
+    else:
+        toks = cards[0].tokens()
+        tol_trunc = float(toks[0]) if len(toks) > 0 else 0.0
+        dt_min = float(toks[1]) if len(toks) > 1 else 0.0
+        n_cycle = int(float(toks[2])) if len(toks) > 2 else 1
+
+    from ..model.entities import EngTrunc
+    t_id = block.user_id or (len(model.eng_truncs) + 1)
+    model.eng_truncs[t_id] = EngTrunc(
+        id=t_id, title=title, tol_trunc=tol_trunc,
+        dt_min=dt_min, n_cycle=n_cycle
+    )
+
+
+def read_sensor_shear(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SHEAR`` or ``/SENSOR/SHEAR_STRESS`` (M220): Shear stress threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SHEAR/{block.user_id}: missing data card", block.source)
+        return
+
+    elem_id, tau_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SHEAR_1")
+        elem_id = _ival(f[0], 0) if len(f) > 0 else 0
+        tau_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        elem_id = int(float(toks[0])) if len(toks) > 0 else 0
+        tau_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorShearStress, Sensor
+    sss = SensorShearStress(
+        id=block.user_id or 1, title=title, elem_id=elem_id,
+        tau_max=tau_max, t_delay=t_delay
+    )
+    model.sensor_shears[sss.id] = sss
+    model.sensors.append(Sensor(
+        id=sss.id, kind="SHEAR_STRESS", tdelay=t_delay
+    ))
+
 
 
 
@@ -45149,6 +45242,18 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SHELL_FAIL": read_sensor_rupture,
     "SENSOR_SOLID_FAIL": read_sensor_rupture,
     "SENSOR_ELEM_FAIL": read_sensor_rupture,
+    # --- M220: Snow Failure Criterion, Engine Truncation Directive, Universal Joint Aliases, and Shear Stress Sensor Suite ---
+    "FAIL_SNOW": read_fail_snow,
+    "FAIL_BRITTLE_SNOW": read_fail_snow,
+    "TRUNC": read_eng_trunc,
+    "ENG_TRUNC": read_eng_trunc,
+    "LAGMUL_UNIVERSAL": read_cardan_joint,
+    "LAGMUL_UNIVERSAL_JOINT": read_cardan_joint,
+    "UNIVERSAL_JOINT": read_cardan_joint,
+    "UNIVERSAL": read_cardan_joint,
+    "SENSOR_SHEAR": read_sensor_shear,
+    "SENSOR_SHEAR_STRESS": read_sensor_shear,
+    "SENSOR_TAU": read_sensor_shear,
 }
 
 
@@ -45157,7 +45262,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

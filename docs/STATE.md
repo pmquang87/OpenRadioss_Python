@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M219)
+## What is implemented (M1 → M220)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -225,6 +225,7 @@ real history is 41 milestones. One line each:
 | M217 | Slot Kinematic Joint, Orthotropic Failure Criterion, Engine FFT Frequency Spectrum, and Energy Ratio Sensor Suite: /LAGMUL/SLOT (/SLOT, /SLOT_JOINT) slot line kinematic joint constraint with axis direction and displacement limits, /FAIL/ORTHO (/FAIL/ORTHOTROPIC, /FAIL/LAMINA) orthotropic lamina directional failure criterion, /FXFREQ (/ENG/FXFREQ) Fast Fourier Transform frequency spectrum output directive, and /SENSOR/ENERGY_RATIO (/SENSOR/ENG_RATIO) total energy ratio threshold sensor |
 | M218 | Cohesive Failure Criterion, Engine Trajectory Tracking, Spherical Joint Aliases, and Cross-Section Sensor Suite: /FAIL/COHESIVE (/FAIL/COH) interface delamination failure criterion with Mode I/II energy release rates and peak tractions, /TRACK (/ENG/TRACK) nodal trajectory tracking and history output directive, /LAGMUL/SPHERICAL (/SPHERICAL, /SPHERICAL_JOINT) spherical kinematic joint constraint aliases, and /SENSOR/CROSSSECTION (/SENSOR/SEC_FORCE, /SENSOR/SECT) section force/moment limit trigger sensor |
 | M219 | Maximum Stress Failure Criterion, Helmholtz Acoustic Directive, Kinematic Joint Aliases, and Element Rupture Sensor Suite: /FAIL/MAX_STRESS (/FAIL/MAXSTRESS, /FAIL/MAX_TENS) directional maximum stress failure criterion, /HELM (/ENG/HELM) Helmholtz acoustic frequency response calculation directive, /LAGMUL/HINGE (/HINGE, /HINGE_JOINT) and /LAGMUL/TRANSLATIONAL (/TRANSLATIONAL) kinematic joint aliases, and /SENSOR/RUPT (/SENSOR/SHELL_FAIL, /SENSOR/SOLID_FAIL) element rupture / erosion trigger sensor |
+| M220 | Snow Failure Criterion, Engine Truncation Directive, Universal Joint Aliases, and Shear Stress Sensor Suite: /FAIL/SNOW (/FAIL/BRITTLE_SNOW) brittle crush/compaction failure model, /TRUNC (/ENG/TRUNC) engine cycle truncation and tolerance directive, /LAGMUL/UNIVERSAL (/UNIVERSAL, /UNIVERSAL_JOINT) kinematic joint aliases, and /SENSOR/SHEAR (/SENSOR/SHEAR_STRESS, /SENSOR/TAU) element shear stress threshold sensor |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read

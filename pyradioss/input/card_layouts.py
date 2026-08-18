@@ -3101,6 +3101,10 @@ LAYOUTS: Dict[str, List[int]] = {
     "FAIL_MAX_STRESS_1": [20, 20, 20, 20, 20, 10],
     "ENG_HELM_1": [20, 20, 10],
     "SENSOR_RUPT_1": [10, 10, 20],
+    # M220: FAIL_SNOW, ENG_TRUNC, SENSOR_SHEAR
+    "FAIL_SNOW_1": [20, 20, 20, 10],
+    "ENG_TRUNC_1": [20, 20, 10],
+    "SENSOR_SHEAR_1": [10, 20, 20],
 }
 
 CARD_LAYOUTS = LAYOUTS

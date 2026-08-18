@@ -12830,6 +12830,38 @@ class SensorRupture:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailSnow:
+    """``/FAIL/SNOW/mat_ID`` (M220): Snow/ice brittle crush failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    p_tens: float = 0.0      # tensile hydrostatic pressure limit
+    eps_comp: float = 0.0    # compressive compaction limit strain
+    sig_shear: float = 0.0   # shear yield limit
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngTrunc:
+    """``/TRUNC`` or ``/ENG/TRUNC`` (M220): Engine cycle truncation and tolerance directive."""
+    id: int = 1
+    title: str = ""
+    tol_trunc: float = 0.0   # truncation tolerance
+    dt_min: float = 0.0      # minimum time step
+    n_cycle: int = 1         # check cycle interval
+
+
+@dataclass
+class SensorShearStress:
+    """``/SENSOR/SHEAR`` or ``/SENSOR/SHEAR_STRESS`` (M220): Shear stress threshold sensor."""
+    id: int = 1
+    title: str = ""
+    elem_id: int = 0         # target element ID
+    tau_max: float = 1e30    # maximum shear stress threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 
