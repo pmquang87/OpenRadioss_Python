@@ -1914,13 +1914,27 @@ class SmsGlobal:
 
 @dataclass
 class BcsNrf:
-    """/BCS/NRF (M102): Non-reflecting boundary condition.
+    """/BCS/NRF (M102, M200): Non-reflecting boundary condition.
 
     Fortran origin: ``starter/source/boundary_conditions/hm_read_bcs_nrf.F90``.
     """
     id: int
     title: str = ""
     grnod_id: int = 0
+    set_id: int = 0
+    iskep: int = 0
+    frame_id: int = 0
+    isurf: int = 0
+    ivel: int = 0
+    isub: int = 0
+    ityp: int = 0
+    factor: float = 0.0
+
+    def __post_init__(self):
+        if not self.grnod_id and self.set_id:
+            self.grnod_id = self.set_id
+        elif not self.set_id and self.grnod_id:
+            self.set_id = self.grnod_id
 
 
 @dataclass
@@ -3316,29 +3330,87 @@ class FailComposite:
 
 @dataclass
 class EbcsPropellant:
-    """/EBCS/PROPELLANT or /BCS/PROPELLANT (M114): Solid propellant combustion boundary condition.
+    """/EBCS/PROPELLANT or /BCS/PROPELLANT (M114, M200): Solid propellant combustion boundary condition.
 
-    Fortran origin: ``starter/source/loads/ebcs/hm_read_ebcs_propellant.F``.
+    Fortran origin: ``starter/source/loads/ebcs/hm_read_ebcs_propellant.F90``.
     """
     id: int
     title: str = ""
     surf_id: int = 0
     sens_id: int = 0
+    sensor_id: int = 0
     submat_id: int = 1
     ienthalpy: int = 1
     rho0s: float = 0.0
     tburn: float = 300.0
+    param_t: float = 300.0
     param_a: float = 0.0
     param_n: float = 0.0
     f_func_id: int = 0
+    ffunc_id: int = 0
     f_scale_x: float = 1.0
+    fscale_x: float = 1.0
     f_scale_y: float = 1.0
+    fscale_y: float = 1.0
     g_func_id: int = 0
+    gfunc_id: int = 0
     g_scale_x: float = 1.0
+    gscale_x: float = 1.0
     g_scale_y: float = 1.0
+    gscale_y: float = 1.0
     h_func_id: int = 0
+    hfunc_id: int = 0
     h_scale_x: float = 1.0
+    hscale_x: float = 1.0
     h_scale_y: float = 1.0
+    hscale_y: float = 1.0
+
+    def __post_init__(self):
+        if not self.sensor_id and self.sens_id:
+            self.sensor_id = self.sens_id
+        elif not self.sens_id and self.sensor_id:
+            self.sens_id = self.sensor_id
+        if self.tburn != 300.0 and self.param_t == 300.0:
+            self.param_t = self.tburn
+        elif self.param_t != 300.0 and self.tburn == 300.0:
+            self.tburn = self.param_t
+        if not self.ffunc_id and self.f_func_id:
+            self.ffunc_id = self.f_func_id
+        elif not self.f_func_id and self.ffunc_id:
+            self.f_func_id = self.ffunc_id
+        if not self.gfunc_id and self.g_func_id:
+            self.gfunc_id = self.g_func_id
+        elif not self.g_func_id and self.gfunc_id:
+            self.g_func_id = self.gfunc_id
+        if not self.hfunc_id and self.h_func_id:
+            self.hfunc_id = self.h_func_id
+        elif not self.h_func_id and self.hfunc_id:
+            self.h_func_id = self.hfunc_id
+        if self.f_scale_x != 1.0 and self.fscale_x == 1.0:
+            self.fscale_x = self.f_scale_x
+        elif self.fscale_x != 1.0 and self.f_scale_x == 1.0:
+            self.f_scale_x = self.fscale_x
+        if self.f_scale_y != 1.0 and self.fscale_y == 1.0:
+            self.fscale_y = self.f_scale_y
+        elif self.fscale_y != 1.0 and self.f_scale_y == 1.0:
+            self.f_scale_y = self.fscale_y
+        if self.g_scale_x != 1.0 and self.gscale_x == 1.0:
+            self.gscale_x = self.g_scale_x
+        elif self.gscale_x != 1.0 and self.g_scale_x == 1.0:
+            self.g_scale_x = self.gscale_x
+        if self.g_scale_y != 1.0 and self.gscale_y == 1.0:
+            self.gscale_y = self.g_scale_y
+        elif self.gscale_y != 1.0 and self.g_scale_y == 1.0:
+            self.g_scale_y = self.gscale_y
+        if self.h_scale_x != 1.0 and self.hscale_x == 1.0:
+            self.hscale_x = self.h_scale_x
+        elif self.hscale_x != 1.0 and self.h_scale_x == 1.0:
+            self.h_scale_x = self.hscale_x
+        if self.h_scale_y != 1.0 and self.hscale_y == 1.0:
+            self.hscale_y = self.h_scale_y
+        elif self.hscale_y != 1.0 and self.h_scale_y == 1.0:
+            self.h_scale_y = self.hscale_y
+
 
 
 @dataclass
@@ -3789,9 +3861,9 @@ class EbcsPeriodic:
 
 @dataclass
 class EbcsCyclic:
-    """/EBCS/CYCLIC (M138): Eulerian cyclic boundary condition.
+    """/EBCS/CYCLIC (M138, M200): Eulerian cyclic boundary condition.
 
-    Fortran origin: ``starter/source/loads/ebcs/hm_read_ebcs_cyclic.F``.
+    Fortran origin: ``starter/source/loads/ebcs/hm_read_ebcs_cyclic.F90``.
     """
     id: int
     title: str = ""
@@ -3799,6 +3871,25 @@ class EbcsCyclic:
     surf2_id: int = 0
     skew_id: int = 0
     grpart_id: int = 0
+    surf_id1: int = 0
+    node_id1: int = 0
+    node_id2: int = 0
+    node_id3: int = 0
+    surf_id2: int = 0
+    node_id4: int = 0
+    node_id5: int = 0
+    node_id6: int = 0
+
+    def __post_init__(self):
+        if not self.surf_id1 and self.surf1_id:
+            self.surf_id1 = self.surf1_id
+        elif not self.surf1_id and self.surf_id1:
+            self.surf1_id = self.surf_id1
+        if not self.surf_id2 and self.surf2_id:
+            self.surf_id2 = self.surf2_id
+        elif not self.surf2_id and self.surf_id2:
+            self.surf2_id = self.surf_id2
+
 
 
 @dataclass
@@ -11419,6 +11510,84 @@ MatMultiFluid = MatLaw51
 MatDruckerPrager = MatLaw51
 MatBrittle = MatLaw51
 MatMultimat = MatLaw51
+
+
+# ============================================================================
+# M200 Entities: DETPOINT, DTIX
+# ============================================================================
+
+@dataclass
+class DetPointNode:
+    """``/DFS/DETPOINT/NODE`` or ``/DETPOINT/NODE`` (M200): Detonation point at node."""
+    id: int = 0
+    ishadow: int = 0
+    iframe1: int = 0
+    iframe2: int = 0
+    r0_shadow: float = 0.0
+    radius: float = 0.0
+    tdet: float = 0.0
+    mat_id: int = 0
+    node_id1: int = 0
+    node_id: int = 0
+    title: str = ""
+
+    def __post_init__(self):
+        if not self.r0_shadow and self.radius:
+            self.r0_shadow = self.radius
+        elif not self.radius and self.r0_shadow:
+            self.radius = self.r0_shadow
+        if not self.node_id1 and self.node_id:
+            self.node_id1 = self.node_id
+        elif not self.node_id and self.node_id1:
+            self.node_id = self.node_id1
+
+
+@dataclass
+class DetPointSet:
+    """``/DFS/DETPOINT/SET`` or ``/DETPOINT/SET`` / ``/DETPOINT/GRNOD`` (M200): Detonation point on node group."""
+    id: int = 0
+    ishadow: int = 0
+    iframe1: int = 0
+    iframe2: int = 0
+    r0_shadow: float = 0.0
+    radius: float = 0.0
+    tdet: float = 0.0
+    mat_id: int = 0
+    grnod_id1: int = 0
+    grnod_id: int = 0
+    title: str = ""
+
+    def __post_init__(self):
+        if not self.r0_shadow and self.radius:
+            self.r0_shadow = self.radius
+        elif not self.radius and self.r0_shadow:
+            self.radius = self.r0_shadow
+        if not self.grnod_id1 and self.grnod_id:
+            self.grnod_id1 = self.grnod_id
+        elif not self.grnod_id and self.grnod_id1:
+            self.grnod_id = self.grnod_id1
+
+
+@dataclass
+class DtixControl:
+    """``/DTIX`` or ``/ENG/DTIX`` (M200): Initial and maximum explicit time step control."""
+    id: int = 1
+    t_ini: float = 0.0
+    t_max: float = 0.0
+    tini: float = 0.0
+    tmax: float = 0.0
+
+    def __post_init__(self):
+        if not self.t_ini and self.tini:
+            self.t_ini = self.tini
+        elif not self.tini and self.t_ini:
+            self.tini = self.t_ini
+        if not self.t_max and self.tmax:
+            self.t_max = self.tmax
+        elif not self.tmax and self.t_max:
+            self.tmax = self.t_max
+
+
 
 
 

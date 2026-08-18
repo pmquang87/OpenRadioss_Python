@@ -9850,6 +9850,9 @@ def read_det(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     or ``/DET_POINT``, ``/DET_LINE``, ``/DET_PLAN``, ``/DET_CORD`` (M110):
     High-explosive detonation wavefront initialization.
     """
+    if any(p.upper() in ("NODE", "SET", "GRNOD") for p in block.parts[1:] if not p.lstrip("-").isdigit()):
+        read_dfs(block, model, log)
+        return
     from ..model.entities import DetonationWave
     key0 = block.key0
     sub = ""
@@ -14807,28 +14810,60 @@ def read_ebcs_periodic(block: KeywordBlock, model: Model, log: MessageLog) -> No
 
 
 def read_ebcs_cyclic(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/EBCS/CYCLIC/id`` (M138): Eulerian cyclic boundary condition."""
+    """``/EBCS/CYCLIC/id`` (M138, M200): Eulerian cyclic boundary condition."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     ebcs_id = block.user_id if block.user_id is not None else 1
     if not cards or cards[0].is_blank:
         log.error(f"/EBCS/CYCLIC/{ebcs_id}: missing data card", block.source)
         return
     from ..model.entities import EbcsCyclic
-    if block.fixed:
-        f = cards[0].cut("EBCS_PERIODIC_1")
-        surf1 = _ival(f[0]) if len(f) > 0 else 0
-        surf2 = _ival(f[1]) if len(f) > 1 else 0
-        skew = _ival(f[2]) if len(f) > 2 else 0
-        grpart = _ival(f[3]) if len(f) > 3 else 0
+
+    if len(cards) >= 2 and not cards[1].is_blank:
+        if block.fixed:
+            f1 = cards[0].cut("EBCS_CYCLIC_1") if "EBCS_CYCLIC_1" in CARD_LAYOUTS else cards[0].cut("EBCS_PERIODIC_1")
+            f2 = cards[1].cut("EBCS_CYCLIC_2") if "EBCS_CYCLIC_2" in CARD_LAYOUTS else cards[1].cut("EBCS_PERIODIC_1")
+            surf1 = _ival(f1[0]) if len(f1) > 0 else 0
+            n1 = _ival(f1[1]) if len(f1) > 1 else 0
+            n2 = _ival(f1[2]) if len(f1) > 2 else 0
+            n3 = _ival(f1[3]) if len(f1) > 3 else 0
+            surf2 = _ival(f2[0]) if len(f2) > 0 else 0
+            n4 = _ival(f2[1]) if len(f2) > 1 else 0
+            n5 = _ival(f2[2]) if len(f2) > 2 else 0
+            n6 = _ival(f2[3]) if len(f2) > 3 else 0
+        else:
+            t1 = cards[0].tokens()
+            t2 = cards[1].tokens()
+            surf1 = int(float(t1[0])) if len(t1) > 0 else 0
+            n1 = int(float(t1[1])) if len(t1) > 1 else 0
+            n2 = int(float(t1[2])) if len(t1) > 2 else 0
+            n3 = int(float(t1[3])) if len(t1) > 3 else 0
+            surf2 = int(float(t2[0])) if len(t2) > 0 else 0
+            n4 = int(float(t2[1])) if len(t2) > 1 else 0
+            n5 = int(float(t2[2])) if len(t2) > 2 else 0
+            n6 = int(float(t2[3])) if len(t2) > 3 else 0
+        model.ebcs_cyclics[ebcs_id] = EbcsCyclic(
+            id=ebcs_id, title=title, surf1_id=surf1, surf_id1=surf1,
+            node_id1=n1, node_id2=n2, node_id3=n3,
+            surf2_id=surf2, surf_id2=surf2,
+            node_id4=n4, node_id5=n5, node_id6=n6
+        )
     else:
-        toks = cards[0].tokens()
-        surf1 = int(float(toks[0])) if len(toks) > 0 else 0
-        surf2 = int(float(toks[1])) if len(toks) > 1 else 0
-        skew = int(float(toks[2])) if len(toks) > 2 else 0
-        grpart = int(float(toks[3])) if len(toks) > 3 else 0
-    model.ebcs_cyclics[ebcs_id] = EbcsCyclic(
-        id=ebcs_id, title=title, surf1_id=surf1, surf2_id=surf2, skew_id=skew, grpart_id=grpart
-    )
+        if block.fixed:
+            f = cards[0].cut("EBCS_PERIODIC_1")
+            surf1 = _ival(f[0]) if len(f) > 0 else 0
+            surf2 = _ival(f[1]) if len(f) > 1 else 0
+            skew = _ival(f[2]) if len(f) > 2 else 0
+            grpart = _ival(f[3]) if len(f) > 3 else 0
+        else:
+            toks = cards[0].tokens()
+            surf1 = int(float(toks[0])) if len(toks) > 0 else 0
+            surf2 = int(float(toks[1])) if len(toks) > 1 else 0
+            skew = int(float(toks[2])) if len(toks) > 2 else 0
+            grpart = int(float(toks[3])) if len(toks) > 3 else 0
+        model.ebcs_cyclics[ebcs_id] = EbcsCyclic(
+            id=ebcs_id, title=title, surf1_id=surf1, surf2_id=surf2, skew_id=skew, grpart_id=grpart
+        )
+
 
 
 def read_ebcs_pres(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -15815,25 +15850,53 @@ read_ams = read_sms
 # ============================================================================
 
 def read_bcs_nrf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/BCS/NRF/id`` (M102): non-reflecting boundary condition.
+    """``/BCS/NRF/id`` or ``/BCS_NRF/id`` (M102, M200): non-reflecting boundary condition.
 
-    Fortran origin: ``starter/source/boundary_conditions/hm_read_bcs_nrf.F90``.
+    Fortran origin: ``starter/source/boundary_conditions/hm_read_bcs_nrf.F90`` and ``bcs_nrf.cfg``.
     Card 1: TITLE (%-100s)
-    Card 2: grnod_ID (%10d)
+    Card 2: grnod_ID, Iskep, frame_ID, Isurf, Ivel, Isub, Ityp, factor
+            (%10d%10d%10d%10d%10d%10d%10d%20f)
     """
-    from ..model.entities import BcsNrf
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    if not cards:
-        model.bcs_nrf[block.user_id] = BcsNrf(id=block.user_id, title=title)
-        return
-    c = cards[0]
-    if block.fixed:
-        f = c.cut("IDS10")
-        grnod_id = _ival(f[0]) if len(f) > 0 else 0
-    else:
-        toks = c.tokens()
-        grnod_id = int(float(toks[0])) if len(toks) > 0 else 0
-    model.bcs_nrf[block.user_id] = BcsNrf(id=block.user_id, title=title, grnod_id=grnod_id)
+    grnod_id, iskep, frame_id, isurf, ivel, isub, ityp = 0, 0, 0, 0, 0, 0, 0
+    factor = 0.0
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("BCS_NRF_1")
+            grnod_id = _ival(f[0]) if len(f) > 0 else 0
+            iskep = _ival(f[1]) if len(f) > 1 else 0
+            frame_id = _ival(f[2]) if len(f) > 2 else 0
+            isurf = _ival(f[3]) if len(f) > 3 else 0
+            ivel = _ival(f[4]) if len(f) > 4 else 0
+            isub = _ival(f[5]) if len(f) > 5 else 0
+            ityp = _ival(f[6]) if len(f) > 6 else 0
+            factor = _fval(f[7], 0.0) if len(f) > 7 else 0.0
+        else:
+            toks = cards[0].tokens()
+            grnod_id = _ival(toks[0]) if len(toks) > 0 else 0
+            iskep = _ival(toks[1]) if len(toks) > 1 else 0
+            frame_id = _ival(toks[2]) if len(toks) > 2 else 0
+            isurf = _ival(toks[3]) if len(toks) > 3 else 0
+            ivel = _ival(toks[4]) if len(toks) > 4 else 0
+            isub = _ival(toks[5]) if len(toks) > 5 else 0
+            ityp = _ival(toks[6]) if len(toks) > 6 else 0
+            factor = _fval(toks[7], 0.0) if len(toks) > 7 else 0.0
+    bcs_obj = BcsNrf(
+        id=block.user_id,
+        title=title,
+        grnod_id=grnod_id,
+        set_id=grnod_id,
+        iskep=iskep,
+        frame_id=frame_id,
+        isurf=isurf,
+        ivel=ivel,
+        isub=isub,
+        ityp=ityp,
+        factor=factor,
+    )
+    model.bcs_nrfs[block.user_id] = bcs_obj
+    if hasattr(model, "bcs_nrf"):
+        model.bcs_nrf[block.user_id] = bcs_obj
     if len(cards) > 1 and not cards[1].is_blank:
         from ..model.entities import EbcsNrf
         if block.fixed:
@@ -15842,8 +15905,8 @@ def read_bcs_nrf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             tcar_vf = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
         else:
             t1 = cards[1].tokens()
-            tcar_p = float(t1[0]) if len(t1) > 0 else 0.0
-            tcar_vf = float(t1[1]) if len(t1) > 1 else 0.0
+            tcar_p = _fval(t1[0], 0.0) if len(t1) > 0 else 0.0
+            tcar_vf = _fval(t1[1], 0.0) if len(t1) > 1 else 0.0
         model.ebcs_nrfs[block.user_id] = EbcsNrf(
             id=block.user_id, title=title, surf_id=grnod_id, tcar_p=tcar_p, tcar_vf=tcar_vf
         )
@@ -19776,23 +19839,30 @@ def read_dfs(block: KeywordBlock, model: Model,
         card 1:  XP  YP  ZP  TDET  mat_IDDET          (%20lg*4 %10d)
         card 2:  NX  NY  NZ                            (%20lg*3)
     """
-    from ..model.entities import DetLine
-    sub = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if sub == "LASER":
-        read_laser(block, model, log)
-        return
+    from ..model.entities import DetLine, DetPointNode, DetPointSet
+    p0 = block.parts[0].upper()
+    if p0 in ("DETPOINT", "DET_POINT", "DETPOIN"):
+        sub = "DETPOINT"
+        has_node = any(p.upper() in ("NODE",) for p in block.parts[1:] if not p.lstrip("-").isdigit())
+        has_set = any(p.upper() in ("SET", "GRNOD") for p in block.parts[1:] if not p.lstrip("-").isdigit())
+    elif p0 in ("DETPLAN", "DET_PLAN", "DETPLANE"):
+        sub = "DETPLAN"
+        has_node = any(p.upper() in ("NODE",) for p in block.parts[1:] if not p.lstrip("-").isdigit())
+        has_set = any(p.upper() in ("SET", "GRNOD") for p in block.parts[1:] if not p.lstrip("-").isdigit())
+    elif p0 in ("DETLINE", "DET_LINE"):
+        sub = "DETLINE"
+        has_node = any(p.upper() in ("NODE",) for p in block.parts[1:] if not p.lstrip("-").isdigit())
+        has_set = any(p.upper() in ("SET", "GRNOD") for p in block.parts[1:] if not p.lstrip("-").isdigit())
+    else:
+        sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+        if sub == "LASER":
+            read_laser(block, model, log)
+            return
+        has_node = any(p.upper() in ("NODE",) for p in block.parts[2:] if not p.lstrip("-").isdigit())
+        has_set = any(p.upper() in ("SET", "GRNOD") for p in block.parts[2:] if not p.lstrip("-").isdigit())
+
     det_id = block.user_id if block.user_id is not None else 0
     title, cards = _title_and_data(block)
-
-    # Check for NODE/SET/GRNOD variants — parse NODE-based formats directly
-    has_node = any(p.upper() in ("NODE",) for p in block.parts[2:]
-                   if not p.lstrip("-").isdigit())
-    has_set = any(p.upper() in ("SET", "GRNOD") for p in block.parts[2:]
-                  if not p.lstrip("-").isdigit())
-    if has_set:
-        log.warning(f"/DFS/{sub}/SET not fully ported — node group "
-                    f"expansion deferred", block.source)
-        return
 
     if not cards:
         log.error(f"/DFS/{sub}/{det_id}: missing data card", block.source)
@@ -19800,21 +19870,48 @@ def read_dfs(block: KeywordBlock, model: Model,
 
     if has_node:
         if sub in ("DETPOINT", "DETPOIN"):
-            # /DFS/DETPOINT/NODE/det_id: %60s%20lg%10d%10d: rad_det_time, rad_det_materialid, rad_det_node1
+            # /DFS/DETPOINT/NODE/det_id or /DETPOINT/NODE:
+            # Card 1: ishadow, iframe1, iframe2, R0_shadow, [blank], TDET, mat_ID, node_ID1
+            ishadow, iframe1, iframe2 = 0, 0, 0
+            r0_shadow, tdet = 0.0, 0.0
+            mat_id, node_id1 = 0, 0
             if block.fixed:
                 f = cards[0].cut("DFS_DETPOINT_NODE")
-                tdet = _fval(f[1]) if len(f) > 1 else 0.0
-                mat_id = _ival(f[2]) if len(f) > 2 else 0
-                node_id1 = _ival(f[3]) if len(f) > 3 else 0
+                if len(f) >= 8:
+                    ishadow = _ival(f[0])
+                    iframe1 = _ival(f[1])
+                    iframe2 = _ival(f[2])
+                    r0_shadow = _fval(f[3], 0.0)
+                    tdet = _fval(f[5], 0.0)
+                    mat_id = _ival(f[6])
+                    node_id1 = _ival(f[7])
+                elif len(f) >= 4:
+                    tdet = _fval(f[1], 0.0)
+                    mat_id = _ival(f[2])
+                    node_id1 = _ival(f[3])
             else:
                 toks = cards[0].tokens()
-                tdet = float(toks[0]) if len(toks) > 0 else 0.0
-                mat_id = int(float(toks[1])) if len(toks) > 1 else 0
-                node_id1 = int(float(toks[2])) if len(toks) > 2 else 0
+                if len(toks) >= 7:
+                    ishadow = int(float(toks[0]))
+                    iframe1 = int(float(toks[1]))
+                    iframe2 = int(float(toks[2]))
+                    r0_shadow = float(toks[3])
+                    tdet = float(toks[4])
+                    mat_id = int(float(toks[5]))
+                    node_id1 = int(float(toks[6]))
+                elif len(toks) >= 3:
+                    tdet = float(toks[0])
+                    mat_id = int(float(toks[1]))
+                    node_id1 = int(float(toks[2]))
             dp = DetonatorPoint(id=det_id, tdet=tdet, mat_id=mat_id, node_id=node_id1)
             model.det_points.append(dp)
+            dp_node = DetPointNode(
+                id=det_id, title=title, ishadow=ishadow, iframe1=iframe1, iframe2=iframe2,
+                r0_shadow=r0_shadow, radius=r0_shadow, tdet=tdet, mat_id=mat_id,
+                node_id1=node_id1, node_id=node_id1
+            )
+            model.detpoint_nodes[det_id] = dp_node
             return
-
         elif sub in ("DETPLAN", "DETPLANE"):
             # /DFS/DETPLAN/NODE/det_id:
             # Card 1: %60s%20lg%10d%10d: rad_det_time, rad_det_materialid, rad_det_node1
@@ -19840,7 +19937,6 @@ def read_dfs(block: KeywordBlock, model: Model,
             dp = DetonatorPlane(id=det_id, tdet=tdet, mat_id=mat_id, p_id=p_id, n_id=n_id)
             model.det_planes.append(dp)
             return
-
         elif sub in ("DETLINE",):
             # /DFS/DETLINE/NODE/det_id:
             # Card 1: %90s%10d: rad_det_node1
@@ -19873,7 +19969,6 @@ def read_dfs(block: KeywordBlock, model: Model,
             dl = DetLine(id=det_id, node1=node1, node2=node2, t0=tdet, mat_id=mat_id)
             model.det_lines[det_id] = dl
             return
-
         elif sub in ("DETCORD",):
             # /DFS/DETCORD/NODE/det_id (M163): ordered list of node numbers (cards)
             from ..model.entities import DfsDetcord
@@ -19896,6 +19991,53 @@ def read_dfs(block: KeywordBlock, model: Model,
                         except ValueError:
                             pass
             model.dfs_detcords[det_id] = DfsDetcord(id=det_id, title=title, nodes=node_ids)
+            return
+
+    if has_set:
+        if sub in ("DETPOINT", "DETPOIN"):
+            # /DFS/DETPOINT/SET/det_id or /DETPOINT/SET or /DETPOINT/GRNOD:
+            # Card 1: ishadow, iframe1, iframe2, R0_shadow, [blank], TDET, mat_ID, grnod_ID1
+            ishadow, iframe1, iframe2 = 0, 0, 0
+            r0_shadow, tdet = 0.0, 0.0
+            mat_id, grnod_id1 = 0, 0
+            if block.fixed:
+                f = cards[0].cut("DFS_DETPOINT_SET") if "DFS_DETPOINT_SET" in CARD_LAYOUTS else cards[0].cut("DFS_DETPOINT_NODE")
+                if len(f) >= 8:
+                    ishadow = _ival(f[0])
+                    iframe1 = _ival(f[1])
+                    iframe2 = _ival(f[2])
+                    r0_shadow = _fval(f[3], 0.0)
+                    tdet = _fval(f[5], 0.0)
+                    mat_id = _ival(f[6])
+                    grnod_id1 = _ival(f[7])
+                elif len(f) >= 4:
+                    tdet = _fval(f[1], 0.0)
+                    mat_id = _ival(f[2])
+                    grnod_id1 = _ival(f[3])
+            else:
+                toks = cards[0].tokens()
+                if len(toks) >= 7:
+                    ishadow = int(float(toks[0]))
+                    iframe1 = int(float(toks[1]))
+                    iframe2 = int(float(toks[2]))
+                    r0_shadow = float(toks[3])
+                    tdet = float(toks[4])
+                    mat_id = int(float(toks[5]))
+                    grnod_id1 = int(float(toks[6]))
+                elif len(toks) >= 3:
+                    tdet = float(toks[0])
+                    mat_id = int(float(toks[1]))
+                    grnod_id1 = int(float(toks[2]))
+            dp_set = DetPointSet(
+                id=det_id, title=title, ishadow=ishadow, iframe1=iframe1, iframe2=iframe2,
+                r0_shadow=r0_shadow, radius=r0_shadow, tdet=tdet, mat_id=mat_id,
+                grnod_id1=grnod_id1, grnod_id=grnod_id1
+            )
+            model.detpoint_sets[det_id] = dp_set
+            return
+        else:
+            log.warning(f"/DFS/{sub}/SET not fully ported — node group "
+                        f"expansion deferred", block.source)
             return
 
     if sub in ("DETPOINT", "DETPOIN"):
@@ -40646,6 +40788,11 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "DET_PLAN": read_det,
     "DET_CORD": read_det,
     "DET": read_det,
+    "DETPOINT": read_det,
+    "DETPOIN": read_det,
+    "DETLINE": read_det,
+    "DETPLAN": read_det,
+    "DETCORD": read_det,
     "ACTIV": read_activ,
     "AUTOPOSITION": read_transform,
     "AUTOPOS": read_transform,
@@ -41008,6 +41155,10 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     # M178: BCS_CYCLIC, LOAD_PCYL, EBCS_MONVOL
     "BCS_CYCLIC": read_bcs_cyclic,
     "CYCLIC": read_bcs_cyclic,
+    "BCS_NRF": read_bcs_nrf,
+    "EBCS_NRF": read_ebcs_nrf,
+    "EBCS_CYCLIC": read_ebcs_cyclic,
+    "EBCS_PROPELLANT": read_ebcs_propellant,
     "LOAD_PCYL": read_load_pcyl,
     "PCYL": read_load_pcyl,
     "EBCS_MONVOL": read_ebcs_monvol,

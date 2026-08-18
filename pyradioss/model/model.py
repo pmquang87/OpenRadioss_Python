@@ -238,6 +238,18 @@ class EngineControls:
     checksum_mode: str = ""                                                          # /CHECKSUM/START, /CHECKSUM/END (M195)
     dynain_dt: float = 0.0                                                           # /DYNAIN/DT, /ENG/DYNAIN/DT (M195)
     dynain_tstart: float = 0.0                                                       # /DYNAIN/DT start time (M195)
+    dtix_tini: float = 0.0                                                           # /DTIX, /ENG/DTIX initial dt (M200)
+    dtix_tmax: float = 0.0                                                           # /DTIX, /ENG/DTIX max dt (M200)
+    parith: str = "ON"                                                               # /PARITH/ON, /PARITH/OFF (M200)
+    th_title: bool = False                                                           # /TH/TITLE (M200)
+
+    @property
+    def dtix(self):
+        if self.dtix_tini != 0.0 or self.dtix_tmax != 0.0:
+            from .entities import DtixControl
+            return DtixControl(id=1, t_ini=self.dtix_tini, t_max=self.dtix_tmax)
+        return None
+
 
 
 
@@ -1304,6 +1316,21 @@ class Model:
         self.mat_law51s: Dict[int, Any] = {}                        # /MAT/LAW51, /MAT/DRUCKER_PRAGER, /MAT/MULTIFLUID (M199)
         self.mat_multifluids = self.mat_law51s
         self.mat_drucker_pragers = self.mat_law51s
+        # M200 attributes
+        self.bcs_nrfs: Dict[int, Any] = self.bcs_nrf                # /BCS/NRF (M200)
+        self.ebcs_cyclics: Dict[int, Any] = {}                      # /EBCS/CYCLIC (M200)
+        self.ebcs_propellants: Dict[int, Any] = {}                  # /EBCS/PROPELLANT (M200)
+        self.detpoint_nodes: Dict[int, Any] = {}                    # /DFS/DETPOINT/NODE, /DETPOINT/NODE (M200)
+        self.detpoint_sets: Dict[int, Any] = {}                     # /DFS/DETPOINT/SET, /DETPOINT/SET (M200)
+        self.detpoints = self.detpoint_nodes
+        self.dtix: Optional[Any] = None                             # /DTIX, /ENG/DTIX (M200)
+        self.th_title: bool = False                                 # /TH/TITLE (M200)
+        self.th_title_enabled: bool = False                         # /TH/TITLE (M200)
+        self.parith: str = "ON"                                     # /PARITH (M200)
+        self.dynain_shell_aux: str = ""                             # /DYNAIN/SHELL/AUX/FULL (M200)
+        self.dynain_shell_stres: str = ""                           # /DYNAIN/SHELL/STRES/FULL (M200)
+        self.dynain_shell_strain: str = ""                          # /DYNAIN/SHELL/STRAIN/FULL (M200)
+
 
 
 

@@ -1544,7 +1544,7 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 sub = block.parts[1].upper() if len(block.parts) > 1 else "STOP"
                 ec.negvol_action = sub
             elif key in ("TH", "ITH") or key.startswith("TH_") or key.startswith("ITH_"):
-                # /TH or /ITH time-history requests in engine deck (M194)
+                # /TH or /ITH time-history requests in engine deck (M194, M200)
                 from ..model.entities import EngineTHRecord
                 if key in ("TH", "ITH"):
                     sub = block.parts[1].upper() if len(block.parts) > 1 else "NODE"
@@ -1552,19 +1552,22 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     sub = key[4:]
                 else:
                     sub = key[3:]
-                th_id = block.user_id if block.user_id is not None else 0
-                title = block.cards[0].raw.strip() if block.cards else ""
-                ids = []
-                vars_list = []
-                for c in block.cards[1:]:
-                    if not c.is_blank and not c.raw.strip().startswith("#"):
-                        # Extract non-numeric tokens as vars, numeric as ids
-                        for tok in c.tokens():
-                            try:
-                                ids.append(int(float(tok)))
-                            except ValueError:
-                                vars_list.append(tok.upper())
-                ec.th_records.append(EngineTHRecord(th_type=sub, id=th_id, title=title, vars=vars_list, ids=ids))
+                if sub == "TITLE":
+                    ec.th_title = True
+                else:
+                    th_id = block.user_id if block.user_id is not None else 0
+                    title = block.cards[0].raw.strip() if block.cards else ""
+                    ids = []
+                    vars_list = []
+                    for c in block.cards[1:]:
+                        if not c.is_blank and not c.raw.strip().startswith("#"):
+                            # Extract non-numeric tokens as vars, numeric as ids
+                            for tok in c.tokens():
+                                try:
+                                    ids.append(int(float(tok)))
+                                except ValueError:
+                                    vars_list.append(tok.upper())
+                    ec.th_records.append(EngineTHRecord(th_type=sub, id=th_id, title=title, vars=vars_list, ids=ids))
             elif key in ("FUNCT_PYTHON", "PYTHON_FUNCT"):
                 # /FUNCT_PYTHON or /PYTHON_FUNCT in engine deck (M194)
                 fid = block.user_id if block.user_id is not None else 0
@@ -1582,6 +1585,21 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                     vals = block.cards[0].floats()
                     ec.dynain_tstart = vals[0] if vals else 0.0
                     ec.dynain_dt = vals[1] if len(vals) > 1 else (vals[0] if vals else 0.0)
+            elif key == "DTIX":
+                # /DTIX or /ENG/DTIX (M200)
+                if block.cards:
+                    vals = block.cards[0].floats()
+                    ec.dtix_tini = vals[0] if vals else 0.0
+                    ec.dtix_tmax = vals[1] if len(vals) > 1 else (vals[0] if vals else 0.0)
+            elif key == "PARITH":
+                # /PARITH/ON, /PARITH/OFF (M200)
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
+                ec.parith = sub
+            elif key == "TH":
+                # /TH/TITLE (M200)
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "TITLE":
+                    ec.th_title = True
             elif key == "END":
                 pass
             else:
