@@ -12952,6 +12952,37 @@ class SensorEnergyError:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailPU:
+    """``/FAIL/PU/mat_ID`` (M224): Polyurethane foam failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    eps_t: float = 1e30      # tensile strain threshold
+    eps_c: float = -1e30     # compressive strain threshold
+    sigma_t: float = 1e30    # tensile cutoff stress
+    sigma_c: float = -1e30   # compressive cutoff stress
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngState:
+    """``/STATE`` or ``/ENG/STATE`` (M224): Engine state variable tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_state: float = 0.0    # time frequency for state variable output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorWorkRatio:
+    """``/SENSOR/WORK_RATIO`` or ``/SENSOR/WRATIO`` (M224): Work ratio threshold sensor."""
+    id: int = 1
+    title: str = ""
+    w_ratio_max: float = 1e30 # maximum work ratio threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

@@ -2255,6 +2255,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("WEIBULL", "WEIBULL_BRITTLE"):
         read_fail_weibull(block, model, log)
         return
+    if kind in ("PU", "POLYURETHANE"):
+        read_fail_pu(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11681,6 +11684,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("ENERGY_ERROR", "ENG_ERROR", "EERROR"):
         read_sensor_energy_error(block, model, log)
+        return
+    if kind in ("WORK_RATIO", "WRATIO"):
+        read_sensor_work_ratio(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -41725,6 +41731,37 @@ def read_fail_weibull(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     )
 
 
+def read_fail_pu(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/PU/mat_ID`` (M224): Polyurethane foam failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/PU/{block.user_id}: missing data card", block.source)
+        return
+
+    eps_t, eps_c, sigma_t, sigma_c, ifail_sh = 1e30, -1e30, 1e30, -1e30, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_PU_1")
+        eps_t = _fval(f[0], 1e30) if len(f) > 0 else 1e30
+        eps_c = _fval(f[1], -1e30) if len(f) > 1 else -1e30
+        sigma_t = _fval(f[2], 1e30) if len(f) > 2 else 1e30
+        sigma_c = _fval(f[3], -1e30) if len(f) > 3 else -1e30
+        ifail_sh = _ival(f[4], 1) if len(f) > 4 else 1
+    else:
+        toks = cards[0].tokens()
+        eps_t = float(toks[0]) if len(toks) > 0 else 1e30
+        eps_c = float(toks[1]) if len(toks) > 1 else -1e30
+        sigma_t = float(toks[2]) if len(toks) > 2 else 1e30
+        sigma_c = float(toks[3]) if len(toks) > 3 else -1e30
+        ifail_sh = int(float(toks[4])) if len(toks) > 4 else 1
+
+    from ..model.entities import FailPU
+    model.fail_pus[block.user_id] = FailPU(
+        mat_id=block.user_id, title=title, eps_t=eps_t,
+        eps_c=eps_c, sigma_t=sigma_t, sigma_c=sigma_c, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -43409,6 +43446,58 @@ def read_sensor_energy_error(block: KeywordBlock, model: Model, log: MessageLog)
     model.sensors.append(Sensor(
         id=see.id, kind="ENERGY_ERROR", tdelay=t_delay
     ))
+
+
+def read_eng_state(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/STATE`` or ``/ENG/STATE`` (M224): Engine state variable tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/STATE/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_state, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_STATE_1")
+        dt_state = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_state = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngState
+    s_id = block.user_id or (len(model.eng_states) + 1)
+    model.eng_states[s_id] = EngState(
+        id=s_id, title=title, dt_state=dt_state, sens_id=sens_id
+    )
+
+
+def read_sensor_work_ratio(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/WORK_RATIO`` or ``/SENSOR/WRATIO`` (M224): Work ratio threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/WORK_RATIO/{block.user_id}: missing data card", block.source)
+        return
+
+    w_ratio_max, t_delay = 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_WORK_RATIO_1")
+        w_ratio_max = _fval(f[0], 1e30) if len(f) > 0 else 1e30
+        t_delay = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+    else:
+        toks = cards[0].tokens()
+        w_ratio_max = float(toks[0]) if len(toks) > 0 else 1e30
+        t_delay = float(toks[1]) if len(toks) > 1 else 0.0
+
+    from ..model.entities import SensorWorkRatio, Sensor
+    swr = SensorWorkRatio(
+        id=block.user_id or 1, title=title, w_ratio_max=w_ratio_max, t_delay=t_delay
+    )
+    model.sensor_work_ratios[swr.id] = swr
+    model.sensors.append(Sensor(
+        id=swr.id, kind="WORK_RATIO", tdelay=t_delay
+    ))
+
 
 
 
@@ -45566,6 +45655,18 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_ENERGY_ERROR": read_sensor_energy_error,
     "SENSOR_ENG_ERROR": read_sensor_energy_error,
     "SENSOR_EERROR": read_sensor_energy_error,
+    # --- M224: Polyurethane Failure Criterion, Engine State Variable Directive, Prismatic Joint Aliases, and Work Ratio Sensor Suite ---
+    "FAIL_PU": read_fail_pu,
+    "FAIL_POLYURETHANE": read_fail_pu,
+    "STATE": read_eng_state,
+    "ENG_STATE": read_eng_state,
+    "ENG_STATE_VAR": read_eng_state,
+    "LAGMUL_PRISMATIC": read_slider_joint,
+    "LAGMUL_PRISMATIC_JOINT": read_slider_joint,
+    "PRISMATIC_JOINT": read_slider_joint,
+    "PRISMATIC": read_slider_joint,
+    "SENSOR_WORK_RATIO": read_sensor_work_ratio,
+    "SENSOR_WRATIO": read_sensor_work_ratio,
 }
 
 
@@ -45574,7 +45675,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
