@@ -1585,6 +1585,12 @@ class Model:
         self.eng_geos: Dict[int, Any] = {}                           # /GEO, /ENG/GEO (M228)
         self.sensor_beam_strains: Dict[int, Any] = {}                # /SENSOR/BEAM_STRAIN (M228)
 
+        # M229 Entities
+        self.fail_nortons: Dict[int, Any] = {}                       # /FAIL/NORTON (M229)
+        self.eng_tenses: Dict[int, Any] = {}                         # /TENS, /ENG/TENS (M229)
+        self.sensor_truss_strains: Dict[int, Any] = {}               # /SENSOR/TRUSS_STRAIN (M229)
+
+
 
 
 

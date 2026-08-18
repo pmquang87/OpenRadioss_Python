@@ -13112,6 +13112,39 @@ class SensorBeamStrain:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailNorton:
+    """``/FAIL/NORTON/mat_ID`` (M229): Norton creep rupture failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    A: float = 0.0           # Norton creep multiplier
+    n: float = 1.0           # stress exponent
+    m: float = 0.0           # time exponent
+    eps_rupt: float = 1e30   # creep rupture strain threshold
+    t_rupt: float = 1e30     # creep rupture time threshold
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngTens:
+    """``/TENS`` or ``/ENG/TENS`` (M229): Engine tensor output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_tens: float = 0.0     # time frequency for tensor output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorTrussStrain:
+    """``/SENSOR/TRUSS_STRAIN`` or ``/SENSOR/STRAIN_TRUSS`` (M229): Truss element strain threshold sensor."""
+    id: int = 1
+    title: str = ""
+    truss_id: int = 0        # truss element ID to monitor
+    eps_max: float = 1e30    # maximum strain threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

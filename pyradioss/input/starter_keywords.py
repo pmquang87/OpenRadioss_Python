@@ -2272,6 +2272,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("HILL", "HILL_PLASTIC", "HILL48"):
         read_fail_hill(block, model, log)
         return
+    if kind in ("NORTON", "CREEP", "NORTON_CREEP"):
+        read_fail_norton(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11713,6 +11716,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("BEAM_STRAIN", "STRAIN_BEAM", "EPS_BEAM"):
         read_sensor_beam_strain(block, model, log)
+        return
+    if kind in ("TRUSS_STRAIN", "STRAIN_TRUSS", "EPS_TRUSS"):
+        read_sensor_truss_strain(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -41920,6 +41926,43 @@ def read_fail_hill(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_norton(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/NORTON/mat_ID`` (M229): Norton creep rupture failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/NORTON/{block.user_id}: missing data card", block.source)
+        return
+
+    A, n, m, eps_rupt, t_rupt, ifail_sh = 0.0, 1.0, 0.0, 1e30, 1e30, 1
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_NORTON_1")
+        A = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        n = _fval(f1[1], 1.0) if len(f1) > 1 else 1.0
+        m = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        eps_rupt = _fval(f1[3], 1e30) if len(f1) > 3 else 1e30
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_NORTON_2")
+            t_rupt = _fval(f2[0], 1e30) if len(f2) > 0 else 1e30
+            ifail_sh = _ival(f2[1], 1) if len(f2) > 1 else 1
+    else:
+        toks1 = cards[0].tokens()
+        A = float(toks1[0]) if len(toks1) > 0 else 0.0
+        n = float(toks1[1]) if len(toks1) > 1 else 1.0
+        m = float(toks1[2]) if len(toks1) > 2 else 0.0
+        eps_rupt = float(toks1[3]) if len(toks1) > 3 else 1e30
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            t_rupt = float(toks2[0]) if len(toks2) > 0 else 1e30
+            ifail_sh = int(float(toks2[1])) if len(toks2) > 1 else 1
+
+    from ..model.entities import FailNorton
+    model.fail_nortons[block.user_id] = FailNorton(
+        mat_id=block.user_id, title=title, A=A, n=n, m=m,
+        eps_rupt=eps_rupt, t_rupt=t_rupt, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -43884,6 +43927,61 @@ def read_sensor_beam_strain(block: KeywordBlock, model: Model, log: MessageLog) 
     model.sensors.append(Sensor(
         id=sbs.id, kind="BEAM_STRAIN", tdelay=t_delay
     ))
+
+
+def read_eng_tens(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TENS`` or ``/ENG/TENS`` (M229): Engine tensor output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/TENS/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_tens, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_TENS_1")
+        dt_tens = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_tens = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngTens
+    t_id = block.user_id or (len(model.eng_tenses) + 1)
+    model.eng_tenses[t_id] = EngTens(
+        id=t_id, title=title, dt_tens=dt_tens, sens_id=sens_id
+    )
+
+
+def read_sensor_truss_strain(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/TRUSS_STRAIN`` or ``/SENSOR/STRAIN_TRUSS`` (M229): Truss element strain threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/TRUSS_STRAIN/{block.user_id}: missing data card", block.source)
+        return
+
+    truss_id, eps_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_TRUSS_STRAIN_1")
+        truss_id = _ival(f[0], 0) if len(f) > 0 else 0
+        eps_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        truss_id = int(float(toks[0])) if len(toks) > 0 else 0
+        eps_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorTrussStrain, Sensor
+    sts = SensorTrussStrain(
+        id=block.user_id or 1, title=title, truss_id=truss_id,
+        eps_max=eps_max, t_delay=t_delay
+    )
+    model.sensor_truss_strains[sts.id] = sts
+    model.sensors.append(Sensor(
+        id=sts.id, kind="TRUSS_STRAIN", tdelay=t_delay
+    ))
+
 
 
 
@@ -46118,6 +46216,20 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_BEAM_STRAIN": read_sensor_beam_strain,
     "SENSOR_STRAIN_BEAM": read_sensor_beam_strain,
     "SENSOR_EPS_BEAM": read_sensor_beam_strain,
+    # --- M229: Norton Creep Rupture Failure Criterion, Engine Tensor Tracking Directive, Cylinder/Slider Axis Joint Aliases, and Truss Strain Sensor Suite ---
+    "FAIL_NORTON": read_fail_norton,
+    "FAIL_CREEP": read_fail_norton,
+    "FAIL_NORTON_CREEP": read_fail_norton,
+    "TENS": read_eng_tens,
+    "ENG_TENS": read_eng_tens,
+    "ENG_TENSOR": read_eng_tens,
+    "LAGMUL_CYLINDER_AXIS": read_cyl_joint,
+    "CYLINDER_AXIS": read_cyl_joint,
+    "LAGMUL_SLIDER_AXIS": read_slider_joint,
+    "SLIDER_AXIS": read_slider_joint,
+    "SENSOR_TRUSS_STRAIN": read_sensor_truss_strain,
+    "SENSOR_STRAIN_TRUSS": read_sensor_truss_strain,
+    "SENSOR_EPS_TRUSS": read_sensor_truss_strain,
 }
 
 
@@ -46126,7 +46238,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
