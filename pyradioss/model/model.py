@@ -1630,6 +1630,12 @@ class Model:
         self.eng_rotvs: Dict[int, Any] = {}                          # /ROTV, /ENG/ROTV (M237)
         self.sensor_spring_rotvs: Dict[int, Any] = {}                # /SENSOR/SPRING_ROTV (M237)
 
+        # M238 Entities
+        self.fail_energy_densitys: Dict[int, Any] = {}               # /FAIL/ENERGY_DENSITY (M238)
+        self.eng_rotas: Dict[int, Any] = {}                          # /ROTA, /ENG/ROTA (M238)
+        self.sensor_spring_rotas: Dict[int, Any] = {}                # /SENSOR/SPRING_ROTA (M238)
+
+
 
 
 

@@ -2299,6 +2299,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("HENCKY", "HENCKY_STRAIN", "LOG_STRAIN"):
         read_fail_hencky(block, model, log)
         return
+    if kind in ("ENERGY_DENSITY", "SED", "STRAIN_ENERGY_DENSITY"):
+        read_fail_energy_density(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11767,6 +11770,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("SPRING_ROTV", "SPRING_ANGVEL", "ROTV_SPRING", "ANGVEL_SPRING"):
         read_sensor_spring_rotv(block, model, log)
+        return
+    if kind in ("SPRING_ROTA", "SPRING_ANGACC", "ROTA_SPRING", "ANGACC_SPRING"):
+        read_sensor_spring_rota(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -42308,6 +42314,33 @@ def read_fail_hencky(block: KeywordBlock, model: Model, log: MessageLog) -> None
     )
 
 
+def read_fail_energy_density(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/ENERGY_DENSITY/mat_ID`` (M238): Critical strain energy density failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/ENERGY_DENSITY/{block.user_id}: missing data card", block.source)
+        return
+
+    w_crit, w_rupt, ifail_sh = 1e30, 1e30, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_ENERGY_DENSITY_1")
+        w_crit = _fval(f[0], 1e30) if len(f) > 0 else 1e30
+        w_rupt = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        ifail_sh = _ival(f[2], 1) if len(f) > 2 else 1
+    else:
+        toks = cards[0].tokens()
+        w_crit = float(toks[0]) if len(toks) > 0 else 1e30
+        w_rupt = float(toks[1]) if len(toks) > 1 else 1e30
+        ifail_sh = int(float(toks[2])) if len(toks) > 2 else 1
+
+    from ..model.entities import FailEnergyDensity
+    model.fail_energy_densitys[block.user_id] = FailEnergyDensity(
+        mat_id=block.user_id, title=title, w_crit=w_crit,
+        w_rupt=w_rupt, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -44773,6 +44806,61 @@ def read_sensor_spring_rotv(block: KeywordBlock, model: Model, log: MessageLog) 
     ))
 
 
+def read_eng_rota(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ROTA`` or ``/ENG/ROTA`` (M238): Engine rotational/angular acceleration output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ROTA/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_rota, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_ROTA_1")
+        dt_rota = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_rota = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngRota
+    r_id = block.user_id or (len(model.eng_rotas) + 1)
+    model.eng_rotas[r_id] = EngRota(
+        id=r_id, title=title, dt_rota=dt_rota, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_rota(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_ROTA`` or ``/SENSOR/ROTA_SPRING`` (M238): Spring element rotational acceleration threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_ROTA/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, rota_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_ROTA_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        rota_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        rota_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringRota, Sensor
+    ssra = SensorSpringRota(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        rota_max=rota_max, t_delay=t_delay
+    )
+    model.sensor_spring_rotas[ssra.id] = ssra
+    model.sensors.append(Sensor(
+        id=ssra.id, kind="SPRING_ROTA", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -47143,6 +47231,22 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_ANGVEL": read_sensor_spring_rotv,
     "SENSOR_ROTV_SPRING": read_sensor_spring_rotv,
     "SENSOR_ANGVEL_SPRING": read_sensor_spring_rotv,
+    # --- M238: Strain Energy Density Failure Criterion, Engine Rotational Acceleration Output Directive, Planar/Plane Axis Joint Aliases, and Spring Rotational Acceleration Sensor Suite ---
+    "FAIL_ENERGY_DENSITY": read_fail_energy_density,
+    "FAIL_SED": read_fail_energy_density,
+    "FAIL_STRAIN_ENERGY_DENSITY": read_fail_energy_density,
+    "ROTA": read_eng_rota,
+    "ENG_ROTA": read_eng_rota,
+    "ENG_ANGULAR_ACCEL": read_eng_rota,
+    "ENG_ROTATIONAL_ACCELERATION": read_eng_rota,
+    "LAGMUL_PLANE_JOINT": read_planar_joint,
+    "PLANE_JOINT": read_planar_joint,
+    "LAGMUL_PLANAR_AXIS": read_planar_joint,
+    "PLANAR_AXIS": read_planar_joint,
+    "SENSOR_SPRING_ROTA": read_sensor_spring_rota,
+    "SENSOR_SPRING_ANGACC": read_sensor_spring_rota,
+    "SENSOR_ROTA_SPRING": read_sensor_spring_rota,
+    "SENSOR_ANGACC_SPRING": read_sensor_spring_rota,
 }
 
 
@@ -47151,7 +47255,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP", "ROTC", "ROTV"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP", "ROTC", "ROTV", "ROTA"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

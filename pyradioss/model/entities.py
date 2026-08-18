@@ -13407,6 +13407,36 @@ class SensorSpringRotv:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailEnergyDensity:
+    """``/FAIL/ENERGY_DENSITY/mat_ID`` (M238): Critical strain energy density failure model."""
+    mat_id: int = 0
+    title: str = ""
+    w_crit: float = 1e30     # critical strain energy density threshold
+    w_rupt: float = 1e30     # rupture strain energy density threshold
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngRota:
+    """``/ROTA`` or ``/ENG/ROTA`` (M238): Engine rotational/angular acceleration output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_rota: float = 0.0     # time frequency for rotational acceleration output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSpringRota:
+    """``/SENSOR/SPRING_ROTA`` or ``/SENSOR/ROTA_SPRING`` (M238): Spring element rotational acceleration threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    rota_max: float = 1e30   # maximum rotational acceleration threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 
