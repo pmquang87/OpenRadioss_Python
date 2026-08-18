@@ -1680,6 +1680,11 @@ class Model:
         self.eng_numerical_dissipations: Dict[int, Any] = {}         # /NUMERICAL_DISSIPATION, /ENG/NUMERICAL_DISSIPATION (M247)
         self.sensor_spring_numerical_dissipations: Dict[int, Any] = {} # /SENSOR/SPRING_NUMERICAL_DISSIPATION (M247)
 
+        # M248 Entities
+        self.fail_swift_voces: Dict[int, Any] = {}                   # /FAIL/SWIFT_VOCE (M248)
+        self.eng_ext_works: Dict[int, Any] = {}                      # /EXT_WORK, /ENG/EXT_WORK (M248)
+        self.sensor_spring_ext_works: Dict[int, Any] = {}            # /SENSOR/SPRING_EXT_WORK (M248)
+
 
 
 

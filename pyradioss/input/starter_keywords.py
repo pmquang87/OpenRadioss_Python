@@ -2364,6 +2364,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("GHOSH", "GHOSH_LAW", "GHOSH_DAMAGE", "GHOSH_MODEL"):
         read_fail_ghosh(block, model, log)
         return
+    if kind in ("SWIFT_VOCE", "SWIFT_VOCE_LAW", "SWIFT_VOCE_DAMAGE", "SWIFT_VOCE_MODEL", "SV"):
+        read_fail_swift_voce(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -42784,6 +42787,51 @@ def read_fail_ghosh(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_swift_voce(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/SWIFT_VOCE/mat_ID`` (M248): Combined Swift-Voce power-law & saturation hardening fracture criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/SWIFT_VOCE/{block.user_id}: missing data card", block.source)
+        return
+
+    alpha, k_coeff, eps0, n_exp = 0.5, 0.0, 0.0, 0.2
+    sigma0, sigma_inf, beta, eps_max, ifail_sh = 0.0, 0.0, 1.0, 1e30, 1
+
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_SWIFT_VOCE_1")
+        alpha = _fval(f1[0], 0.5) if len(f1) > 0 else 0.5
+        k_coeff = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        eps0 = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        n_exp = _fval(f1[3], 0.2) if len(f1) > 3 else 0.2
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_SWIFT_VOCE_2")
+            sigma0 = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            sigma_inf = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            beta = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            eps_max = _fval(f2[3], 1e30) if len(f2) > 3 else 1e30
+            ifail_sh = _ival(f2[4], 1) if len(f2) > 4 else 1
+    else:
+        toks1 = cards[0].tokens()
+        alpha = float(toks1[0]) if len(toks1) > 0 else 0.5
+        k_coeff = float(toks1[1]) if len(toks1) > 1 else 0.0
+        eps0 = float(toks1[2]) if len(toks1) > 2 else 0.0
+        n_exp = float(toks1[3]) if len(toks1) > 3 else 0.2
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            sigma0 = float(toks2[0]) if len(toks2) > 0 else 0.0
+            sigma_inf = float(toks2[1]) if len(toks2) > 1 else 0.0
+            beta = float(toks2[2]) if len(toks2) > 2 else 1.0
+            eps_max = float(toks2[3]) if len(toks2) > 3 else 1e30
+            ifail_sh = int(float(toks2[4])) if len(toks2) > 4 else 1
+
+    from ..model.entities import FailSwiftVoce
+    model.fail_swift_voces[block.user_id] = FailSwiftVoce(
+        mat_id=block.user_id, title=title, alpha=alpha, k_coeff=k_coeff,
+        eps0=eps0, n_exp=n_exp, sigma0=sigma0, sigma_inf=sigma_inf,
+        beta=beta, eps_max=eps_max, ifail_sh=ifail_sh
+    )
+
+
 
 
 
@@ -45796,6 +45844,60 @@ def read_sensor_spring_numerical_dissipation(block: KeywordBlock, model: Model, 
     ))
 
 
+def read_eng_ext_work(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EXT_WORK`` or ``/ENG/EXT_WORK`` (M248): Engine external work output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/EXT_WORK/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_wext, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_EXT_WORK_1")
+        dt_wext = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_wext = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngExtWork
+    r_id = block.user_id or (len(model.eng_ext_works) + 1)
+    model.eng_ext_works[r_id] = EngExtWork(
+        id=r_id, title=title, dt_wext=dt_wext, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_ext_work(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_EXT_WORK`` or ``/SENSOR/SPRING_EXTERNAL_WORK`` (M248): Spring element external work threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_EXT_WORK/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, ewext_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_EXT_WORK_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        ewext_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        ewext_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringExtWork, Sensor
+    ssew = SensorSpringExtWork(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        ewext_max=ewext_max, t_delay=t_delay
+    )
+    model.sensor_spring_ext_works[ssew.id] = ssew
+    model.sensors.append(Sensor(
+        id=ssew.id, kind="SPRING_EXT_WORK", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -48181,6 +48283,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_NUM_DISS": read_sensor_spring_numerical_dissipation,
     "SENSOR_NUM_DISS_SPRING": read_sensor_spring_numerical_dissipation,
     "SENSOR_SPRING_DISSIPATION": read_sensor_spring_numerical_dissipation,
+    # --- M248: Swift-Voce Combined Failure Criterion, Engine External Work Output Directive, Prismatic Slider Axis Joint Aliases, and Spring External Work Sensor Suite ---
+    "FAIL_SWIFT_VOCE": read_fail_swift_voce,
+    "FAIL_SWIFT_VOCE_DAMAGE": read_fail_swift_voce,
+    "FAIL_SWIFT_VOCE_LAW": read_fail_swift_voce,
+    "FAIL_SWIFT_VOCE_MODEL": read_fail_swift_voce,
+    "FAIL_SV": read_fail_swift_voce,
+    "EXT_WORK": read_eng_ext_work,
+    "ENG_EXT_WORK": read_eng_ext_work,
+    "ENG_EXTERNAL_WORK": read_eng_ext_work,
+    "ENG_EXTWORK": read_eng_ext_work,
+    "ENG_WEXT": read_eng_ext_work,
+    "LAGMUL_PRISMATIC_SLIDER_AXIS": read_slider_joint,
+    "PRISMATIC_SLIDER_AXIS": read_slider_joint,
+    "LAGMUL_SLIDER_JOINT_AXIS": read_slider_joint,
+    "SLIDER_JOINT_AXIS": read_slider_joint,
+    "LAGMUL_TRANSLATIONAL_SLIDER_AXIS": read_slider_joint,
+    "TRANSLATIONAL_SLIDER_AXIS": read_slider_joint,
+    "SENSOR_SPRING_EXT_WORK": read_sensor_spring_ext_work,
+    "SENSOR_SPRING_EXTERNAL_WORK": read_sensor_spring_ext_work,
+    "SENSOR_EXT_WORK_SPRING": read_sensor_spring_ext_work,
+    "SENSOR_SPRING_WEXT": read_sensor_spring_ext_work,
 }
 
 

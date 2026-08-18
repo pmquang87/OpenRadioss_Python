@@ -13591,6 +13591,41 @@ class SensorSpringNumericalDissipation:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailSwiftVoce:
+    """``/FAIL/SWIFT_VOCE/mat_ID`` (M248): Combined Swift-Voce power-law & saturation hardening fracture criterion."""
+    mat_id: int = 0
+    title: str = ""
+    alpha: float = 0.5       # Swift weighting factor alpha in [0, 1]
+    k_coeff: float = 0.0     # Swift strength coefficient K
+    eps0: float = 0.0        # Swift pre-strain offset epsilon_0
+    n_exp: float = 0.2       # Swift strain hardening exponent n
+    sigma0: float = 0.0      # Voce initial yield stress sigma_0
+    sigma_inf: float = 0.0   # Voce saturation stress sigma_inf
+    beta: float = 1.0        # Voce saturation rate beta
+    eps_max: float = 1e30    # maximum failure strain epsilon_max
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngExtWork:
+    """``/EXT_WORK`` or ``/ENG/EXT_WORK`` (M248): Engine external work output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_wext: float = 0.0     # time frequency for external work output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSpringExtWork:
+    """``/SENSOR/SPRING_EXT_WORK`` or ``/SENSOR/SPRING_EXTERNAL_WORK`` (M248): Spring element external work threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    ewext_max: float = 1e30  # maximum external work threshold
+    t_delay: float = 0.0     # activation delay time
+
+
 
 
 
