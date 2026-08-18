@@ -4286,6 +4286,7 @@ class FricOrient:
     vx: float = 0.0
     vy: float = 0.0
     vz: float = 0.0
+    ifric: int = 0
 
 
 @dataclass
@@ -10796,12 +10797,17 @@ class MatLaw80:
 
 @dataclass
 class MatLaw102:
-    """``/MAT/LAW102`` or ``/MAT/HILL_48`` (M194): Hill 1948 anisotropic plasticity."""
+    """``/MAT/LAW102``, ``/MAT/HILL_48`` (M194), or ``/MAT/DPRAG2`` (M195)."""
     id: int
     title: str = ""
     rho: float = 0.0
     e: float = 0.0
     nu: float = 0.0
+    a0: float = 0.0
+    a1: float = 0.0
+    b0: float = 0.0
+    b1: float = 0.0
+    icrit: int = 1
     params: dict = field(default_factory=dict)
 
 
@@ -10848,4 +10854,187 @@ class EngineTHRecord:
 MatConcrSub = MatLaw40
 MatHill48 = MatLaw102
 PropSprPull = PropType13
+
+
+@dataclass
+class MatLaw103:
+    """``/MAT/LAW103`` or ``/MAT/HENSEL_SPITTEL`` (M195): Hensel-Spittel hot-forming material law."""
+    id: int
+    title: str = ""
+    rho: float = 0.0
+    refer_rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    a0: float = 0.0
+    m1: float = 0.0
+    m2: float = 0.0
+    m3: float = 0.0
+    m4: float = 0.0
+    m5: float = 0.0
+    m7: float = 0.0
+    fsmooth: int = 0
+    fcut: float = 0.0
+    eps_0: float = 0.0
+    pmin: float = -1.0e30
+    rhocp: float = 0.0
+    t0: float = 0.0
+    eta: float = 0.0
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class MatLaw108:
+    """``/MAT/LAW108`` or ``/MAT/SPR_GENE`` (M195): Generalized 6-DOF nonlinear spring material."""
+    id: int
+    title: str = ""
+    rho: float = 0.0
+    ifail: int = 0
+    iequil: int = 0
+    ifail2: int = 0
+    k: list[float] = field(default_factory=lambda: [0.0]*6)
+    c: list[float] = field(default_factory=lambda: [0.0]*6)
+    a: list[float] = field(default_factory=lambda: [0.0]*6)
+    b: list[float] = field(default_factory=lambda: [0.0]*6)
+    d: list[float] = field(default_factory=lambda: [0.0]*6)
+    fct_id1: list[int] = field(default_factory=lambda: [0]*6)
+    h: list[float] = field(default_factory=lambda: [0.0]*6)
+    fct_id2: list[int] = field(default_factory=lambda: [0]*6)
+    fct_id3: list[int] = field(default_factory=lambda: [0]*6)
+    fct_id4: list[int] = field(default_factory=lambda: [0]*6)
+    delta_min: list[float] = field(default_factory=lambda: [0.0]*6)
+    delta_max: list[float] = field(default_factory=lambda: [0.0]*6)
+    f_val: list[float] = field(default_factory=lambda: [0.0]*6)
+    e_val: list[float] = field(default_factory=lambda: [0.0]*6)
+    ascale: list[float] = field(default_factory=lambda: [1.0]*6)
+    hscale: list[float] = field(default_factory=lambda: [1.0]*6)
+    fsmooth: int = 0
+    fcut: float = 0.0
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class MatPlasPredef:
+    """``/MAT/PLAS_PREDEF`` (M195): Predefined plasticity material model."""
+    id: int
+    title: str = ""
+    mat_name: str = ""
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    sigy: float = 0.0
+    uts: float = 0.0
+    e_uts: float = 0.0
+    epsp_f: float = 0.0
+    vp: float = 0.0
+    c: float = 0.0
+    p: float = 0.0
+    n: int = 0
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class MatDPrag2:
+    """``/MAT/DPRAG2`` (M195): Drucker-Prager 2nd formulation material."""
+    id: int
+    title: str = ""
+    rho: float = 0.0
+    iform: int = 1
+    e: float = 0.0
+    nu: float = 0.0
+    c: float = 0.0
+    phi: float = 0.0
+    amax: float = 1.0e30
+    pmin: float = -1.0e30
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class PropType23:
+    """``/PROP/TYPE23`` or ``/PROP/SPR_MAT`` (M195): Spring material property."""
+    id: int
+    title: str = ""
+    mass: float = 0.0
+    skew_id: int = 0
+    isens: int = 0
+    iflag: int = 0
+    imass: int = 2
+    area_or_volume: float = 0.0
+    inertia: float = 0.0
+    sensor_id: int = 0
+    isflag: int = 0
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class FunctSmooth:
+    """``/FUNCT_SMOOTH`` (M195): Smoothed curve function."""
+    id: int
+    title: str = ""
+    smooth_type: int = 0
+    order: int = 3
+    x: list[float] = field(default_factory=list)
+    y: list[float] = field(default_factory=list)
+    params: dict = field(default_factory=dict)
+
+    def evaluate(self, x_val: float) -> float:
+        """Evaluate function at x_val using linear/interpolated curve."""
+        if not self.x:
+            return 0.0
+        if len(self.x) == 1:
+            return float(self.y[0])
+        return float(np.interp(x_val, self.x, self.y))
+
+
+@dataclass
+class DampFreqRange:
+    """``/DAMP/FREQUENCY_RANGE`` or ``/DAMP/FREQ_RANGE`` (M195): Frequency-range damping."""
+    id: int = 0
+    title: str = ""
+    fmin: float = 0.0
+    fmax: float = 0.0
+    damp: float = 0.0
+    itype: int = 0
+    cdamp: float = 0.0
+    grpart_id: int = 0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+    freq_low: float = 0.0
+    freq_high: float = 0.0
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class DampFunct:
+    """``/DAMP/FUNCT`` (M195): Function-dependent mass damping."""
+    id: int = 0
+    title: str = ""
+    fct_id: int = 0
+    damp_scale: float = 1.0
+    itype: int = 0
+    func_id: int = 0
+    grnod_id: int = 0
+    alpha: float = 0.0
+    alpha_x: float = 0.0
+    alpha_y: float = 0.0
+    alpha_z: float = 0.0
+    alpha_xx: float = 0.0
+    alpha_yy: float = 0.0
+    alpha_zz: float = 0.0
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class IniStateTable:
+    """Generic initial state table record for /INI* keywords (M195)."""
+    keyword: str = ""
+    id: int = 0
+    title: str = ""
+    rows: List[dict] = field(default_factory=list)
+
+
+MatHenselSpittel = MatLaw103
+MatSprGene = MatLaw108
+PropSprMat = PropType23
+DampFrequencyRange = DampFreqRange
+
 

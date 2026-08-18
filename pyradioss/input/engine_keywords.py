@@ -112,6 +112,17 @@ def parse_engine_deck(blocks: List[KeywordBlock],
     ec = EngineControls()
     for block in blocks:
         key = block.key0
+        if key == "ENG" and len(block.parts) > 1:
+            # Unwrap /ENG/STATE/DT -> /STATE/DT, /ENG/DYNAIN/DT -> /DYNAIN/DT, etc.
+            block = KeywordBlock(
+                keyword="/" + "/".join(block.parts[1:]),
+                parts=block.parts[1:],
+                cards=block.cards,
+                source=block.source,
+                user_id=block.user_id,
+                fixed=block.fixed,
+            )
+            key = block.key0
         try:
             if key == "RUN":
                 # /RUN/RunName/run_number — the run name defines output file
@@ -1554,6 +1565,17 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                 title = block.cards[0].raw.strip() if block.cards else ""
                 expr = "\n".join(c.raw for c in block.cards[1:]) if len(block.cards) > 1 else ""
                 ec.python_functions[fid] = (title, expr)
+            elif key == "CHECKSUM":
+                # /CHECKSUM/START, /CHECKSUM/END (M195)
+                sub = block.parts[1].upper() if len(block.parts) > 1 else "ON"
+                ec.checksum_mode = sub
+            elif key == "DYNAIN":
+                # /DYNAIN/DT (M195)
+                sub = block.parts[1].upper() if len(block.parts) > 1 else ""
+                if sub == "DT" and block.cards:
+                    vals = block.cards[0].floats()
+                    ec.dynain_tstart = vals[0] if vals else 0.0
+                    ec.dynain_dt = vals[1] if len(vals) > 1 else (vals[0] if vals else 0.0)
             elif key == "END":
                 pass
             else:

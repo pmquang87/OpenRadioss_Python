@@ -117,6 +117,8 @@ from .entities import (
     SphFlow, MidDirective, PidDirective, SphParticle, FailTab1,
     MatLaw40, MatLaw80, MatLaw102, MatNLocal, PropType12, PropType13,
     DefInterType2, EngineTHRecord,
+    MatLaw103, MatLaw108, MatPlasPredef, MatDPrag2, PropType23,
+    DampFreqRange, DampFunct, FunctSmooth, IniStateTable,
     PblastLoad, Inivol, InigravLoad, Inista, BemControl, PerturbControl,
     EbcsInip, EbcsIniv, PropInject1, PropInject2, PropJoint, PropTorsion,
     PropSpringElasPlas, PropSpringBeam, PropSpotweld, PropBushing,
@@ -233,6 +235,9 @@ class EngineControls:
     negvol_action: str = ""                                                          # /NEGVOL/STOP, /NEGVOL/DEL (M148)
     th_records: List[EngineTHRecord] = field(default_factory=list)                    # /TH engine time-history records (M194)
     python_functions: Dict[int, Any] = field(default_factory=dict)                   # /FUNCT_PYTHON, /PYTHON_FUNCT (M194)
+    checksum_mode: str = ""                                                          # /CHECKSUM/START, /CHECKSUM/END (M195)
+    dynain_dt: float = 0.0                                                           # /DYNAIN/DT, /ENG/DYNAIN/DT (M195)
+    dynain_tstart: float = 0.0                                                       # /DYNAIN/DT start time (M195)
 
 
 
@@ -1231,14 +1236,27 @@ class Model:
         self.fail_tab1s: Dict[int, FailTab1] = {}                   # /FAIL/TAB1 (M194)
         self.mat_law40s: Dict[int, MatLaw40] = {}                   # /MAT/LAW40 (M194)
         self.mat_concr_subs = self.mat_law40s
-        self.mat_law80s: Dict[int, MatLaw80] = {}                   # /MAT/LAW80 (M194)
-        self.mat_barlat3s = self.mat_law80s
+        self.mat_law80s: Dict[int, MaterialLaw80] = {}              # /MAT/LAW80, /MAT/TRANSFO (M170/M194)
         self.mat_law102s: Dict[int, MatLaw102] = {}                 # /MAT/LAW102 (M194)
         self.mat_hill_48s = self.mat_law102s
         self.mat_nlocals: Dict[int, MatNLocal] = {}                 # /MAT/NLOCAL (M194)
         self.prop_spr_pulls: Dict[int, PropType13] = {}             # /PROP/TYPE13, /PROP/SPR_PULL (M194)
         self.prop_type13s = self.prop_spr_pulls
         self.def_inter_type2: Optional[DefInterType2] = None        # /DEF_INTER/TYPE2 (M194)
+        self.mat_law103s: Dict[int, MatLaw103] = {}                 # /MAT/LAW103, /MAT/HENSEL_SPITTEL (M195)
+        self.mat_hensel_spittels = self.mat_law103s
+        self.mat_law108s: Dict[int, MatLaw108] = {}                 # /MAT/LAW108, /MAT/SPR_GENE (M195)
+        self.mat_spr_genes = self.mat_law108s
+        self.mat_plas_predefs: Dict[int, MatPlasPredef] = {}         # /MAT/PLAS_PREDEF (M195)
+        self.mat_dprag2s: Dict[int, MatDPrag2] = {}                 # /MAT/DPRAG2 (M195)
+        self.prop_type23s: Dict[int, PropType23] = {}               # /PROP/TYPE23, /PROP/SPR_MAT (M195)
+        self.prop_spr_mats = self.prop_type23s
+        self.damp_freq_ranges: Dict[int, DampFreqRange] = {}        # /DAMP/FREQUENCY_RANGE (M195)
+        self.damp_frequency_ranges = self.damp_freq_ranges
+        self.damp_functs: Dict[int, DampFunct] = {}                 # /DAMP/FUNCT (M195)
+        self.funct_smooths: Dict[int, FunctSmooth] = {}             # /FUNCT_SMOOTH (M195)
+        self.ini_state_tables: Dict[str, IniStateTable] = {}        # /INI... state tables (M195)
+        self.checksum_directives: List[str] = []                    # /CHECKSUM directives (M195)
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

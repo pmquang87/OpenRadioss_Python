@@ -1147,6 +1147,19 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("NLOCAL", "NONLOCAL_PLAS", "MAT_NLOCAL"):
         read_mat_nlocal(block, model, log)
         return
+    # M195: LAW103 (HENSEL_SPITTEL), LAW108 (SPR_GENE), PLAS_PREDEF, DPRAG2
+    if lawname in ("LAW103", "HENSEL_SPITTEL", "HENSEL-SPITTEL", "HEN", "MAT_HENSEL_SPITTEL", "LAW103_HENSEL_SPITTEL"):
+        read_mat_law103(block, model, log)
+        return
+    if lawname in ("LAW108", "SPR_GENE", "MAT_SPR_GENE", "LAW108_SPR_GENE"):
+        read_mat_law108(block, model, log)
+        return
+    if lawname in ("PLAS_PREDEF", "PREDEF", "PREDEF_PLAS", "MAT_PLAS_PREDEF"):
+        read_mat_plas_predef(block, model, log)
+        return
+    if lawname in ("DPRAG2", "DRUCKER_PRAGER_2", "MAT_DPRAG2"):
+        read_mat_dprag2(block, model, log)
+        return
     if lawname in ("HEAT", "HEAT_TRANSFER"):
         read_mat_heat(block, model, log)
         return
@@ -4250,6 +4263,9 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if typename in ("TYPE13", "SPR_PULL", "PROP_TYPE13", "PROP_SPR_PULL", "P13_SPR_PULL"):
         read_prop_type13(block, model, log)
         return
+    if typename in ("TYPE23", "SPR_MAT", "PROP_TYPE23", "PROP_SPR_MAT", "P23_SPR_MAT"):
+        read_prop_type23(block, model, log)
+        return
     if typename in ("TYPE15", "POROUS", "SOLID_POROUS", "PROP_TYPE15", "PROP_POROUS", "P15_POROUS"):
         read_prop_type15(block, model, log)
         return
@@ -6462,8 +6478,19 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             params["inertia"] = float(t0[2]) if len(t0) > 2 else 0.0
             params["skew_id"] = int(float(t0[3])) if len(t0) > 3 else 0
             params["isensor"] = int(float(t0[4])) if len(t0) > 4 else 0
-            params["sens_id"] = params["isensor"]
             params["isflag"] = int(float(t0[5])) if len(t0) > 5 else 0
+        from ..model.entities import PropType23
+        model.prop_type23s[block.user_id] = PropType23(
+            id=block.user_id,
+            title=title,
+            imass=params.get("imass", 2),
+            area_or_volume=params.get("area_volume", 0.0),
+            inertia=params.get("inertia", 0.0),
+            skew_id=params.get("skew_id", 0),
+            sensor_id=params.get("sensor_id", params.get("isensor", 0)),
+            isflag=params.get("isflag", 0),
+            params=params,
+        )
 
     elif ptype == 25:  # SPR_AXI
         if not cards:
@@ -7824,18 +7851,23 @@ def read_funct_smooth(block: KeywordBlock, model: Model,
     # card 2 is the scale/shift card — ALWAYS present in the fixed
     # dialect (a blank card = all defaults); in the free-format port
     # dialect it is identified by its 4 tokens (points carry 2)
-    xsc, ysc, xsh, ysh = 0.0, 0.0, 0.0, 0.0
-    if block.fixed or len(cards[0].tokens()) == 4:
-        if not cards[0].is_blank:
-            vals = _cut_floats(cards[0], "FSMOOTH_SCALE") if block.fixed \
-                else _floats(cards[0], 4)
+    xsc, ysc, xsh, ysh = 1.0, 1.0, 0.0, 0.0
+    smooth_type, order = 1, 3
+    if cards and not cards[0].is_blank:
+        toks = cards[0].tokens()
+        if len(toks) == 4:
+            vals = _cut_floats(cards[0], "FSMOOTH_SCALE") if block.fixed else _floats(cards[0], 4)
             xsc, ysc, xsh, ysh = vals[:4]
-        cards = cards[1:]
+            cards = cards[1:]
+        elif len(toks) == 2 and len(cards) >= 3 and toks[0].isdigit() and toks[1].isdigit():
+            smooth_type = int(toks[0])
+            order = int(toks[1])
+            cards = cards[1:]
     xsc = xsc if xsc != 0.0 else 1.0        # reference: 0 -> 1
     ysc = ysc if ysc != 0.0 else 1.0
     pts = []
     for c in cards:
-        if c.is_blank:
+        if c.is_blank or c.raw.strip().startswith("#"):
             continue
         if block.fixed:
             f = c.cut("FUNCT_PT")
@@ -7854,6 +7886,11 @@ def read_funct_smooth(block: KeywordBlock, model: Model,
     x, y = zip(*pts)
     model.functions[block.user_id] = SmoothFunctTable(
         block.user_id, x, y, title)
+    from ..model.entities import FunctSmooth
+    model.funct_smooths[block.user_id] = FunctSmooth(
+        id=block.user_id, title=title, smooth_type=smooth_type, order=order,
+        x=list(x), y=list(y)
+    )
 
 
 def _id_list(block: KeywordBlock, cards) -> List[int]:
@@ -16413,7 +16450,7 @@ def read_damp_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_damp_range(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/DAMP/RANGE/damp_ID`` (M103)::
+    """``/DAMP/RANGE/damp_ID`` (M103/M195)::
 
         card 1:  title
         card 2:  Cdamp  [gap]  grpart_ID  [gap]  Tstart  Tstop
@@ -16430,38 +16467,50 @@ def read_damp_range(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     tstop = 1.0e30
     freq_low = 0.0
     freq_high = 0.0
+    fmin = 0.0
+    fmax = 0.0
+    damp_val = 0.0
+    itype = 0
 
     sub = block.parts[1].upper() if len(block.parts) > 1 else ""
-    if sub in ("FREQ", "FREQUENCY") and len(cards) >= 2 and len(cards[0].tokens()) <= 1:
-        if block.fixed:
-            f1 = cards[0].cut("DAMP_FREQ_1")
-            grpart_id = _ival(f1[0]) if len(f1) > 0 else 0
-            f2 = cards[1].cut("DAMP_FREQ_2")
-            cdamp = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
-            tstart = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
-            tstop = _fval(f2[2], 1.0e30) if len(f2) > 2 and _fval(f2[2]) > 0.0 else 1.0e30
-            freq_low = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
-            freq_high = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
-        else:
-            t1 = cards[0].tokens()
-            grpart_id = int(float(t1[0])) if len(t1) > 0 else 0
-            t2 = cards[1].tokens()
-            cdamp = float(t2[0]) if len(t2) > 0 else 0.0
-            tstart = float(t2[1]) if len(t2) > 1 else 0.0
-            tstop = float(t2[2]) if len(t2) > 2 and float(t2[2]) > 0.0 else 1.0e30
-            freq_low = float(t2[3]) if len(t2) > 3 else 0.0
-            freq_high = float(t2[4]) if len(t2) > 4 else 0.0
+    if sub in ("FREQ", "FREQUENCY", "FREQ_RANGE", "FREQUENCY_RANGE") and len(cards) >= 1:
+        t = cards[0].tokens()
+        if len(t) >= 3 and len(cards) == 1:
+            fmin = float(t[0])
+            fmax = float(t[1])
+            damp_val = float(t[2])
+            itype = int(float(t[3])) if len(t) > 3 else 0
+            freq_low, freq_high, cdamp = fmin, fmax, damp_val
+        elif len(cards) >= 2 and len(cards[0].tokens()) <= 1:
+            if block.fixed:
+                f1 = cards[0].cut("DAMP_FREQ_1")
+                grpart_id = _ival(f1[0]) if len(f1) > 0 else 0
+                f2 = cards[1].cut("DAMP_FREQ_2")
+                cdamp = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                tstart = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                tstop = _fval(f2[2], 1.0e30) if len(f2) > 2 and _fval(f2[2]) > 0.0 else 1.0e30
+                freq_low = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+                freq_high = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+            else:
+                t1 = cards[0].tokens()
+                grpart_id = int(float(t1[0])) if len(t1) > 0 else 0
+                t2 = cards[1].tokens()
+                cdamp = float(t2[0]) if len(t2) > 0 else 0.0
+                tstart = float(t2[1]) if len(t2) > 1 else 0.0
+                tstop = float(t2[2]) if len(t2) > 2 and float(t2[2]) > 0.0 else 1.0e30
+                freq_low = float(t2[3]) if len(t2) > 3 else 0.0
+                freq_high = float(t2[4]) if len(t2) > 4 else 0.0
+            fmin, fmax, damp_val = freq_low, freq_high, cdamp
     elif block.fixed:
         f1 = cards[0].cut("DAMP_RANGE_1")
         cdamp = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
         grpart_id = _ival(f1[3]) if len(f1) > 3 else 0
         tstart = _fval(f1[5], 0.0) if len(f1) > 5 else 0.0
-        tstop = _fval(f1[6], 1.0e30) if len(f1) > 6 else 1.0e30
-
         if len(cards) > 1 and not cards[1].is_blank:
             f2 = cards[1].cut("DAMP_RANGE_2")
             freq_low = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
-            freq_high = _fval(f2[1], 0.0) if len(f2) > 0 else 0.0
+            freq_high = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+        fmin, fmax, damp_val = freq_low, freq_high, cdamp
     else:
         t1 = cards[0].tokens()
         cdamp = float(t1[0]) if len(t1) > 0 else 0.0
@@ -16473,10 +16522,18 @@ def read_damp_range(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             t2 = cards[1].tokens()
             freq_low = float(t2[0]) if len(t2) > 0 else 0.0
             freq_high = float(t2[1]) if len(t2) > 1 else 0.0
+        fmin, fmax, damp_val = freq_low, freq_high, cdamp
 
-    model.damp_ranges[block.user_id] = DampRange(
-        id=block.user_id, title=title, cdamp=cdamp, grpart_id=grpart_id,
+    damp_id = block.user_id or 1
+    model.damp_ranges[damp_id] = DampRange(
+        id=damp_id, title=title, cdamp=cdamp, grpart_id=grpart_id,
         tstart=tstart, tstop=tstop, freq_low=freq_low, freq_high=freq_high,
+    )
+    from ..model.entities import DampFreqRange
+    model.damp_freq_ranges[damp_id] = DampFreqRange(
+        id=damp_id, title=title, cdamp=cdamp, grpart_id=grpart_id,
+        tstart=tstart, tstop=tstop, freq_low=freq_low, freq_high=freq_high,
+        fmin=fmin, fmax=fmax, damp=damp_val, itype=itype,
     )
 
 
@@ -16555,11 +16612,12 @@ def read_damp_vrel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_damp_funct(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/DAMP/FUNCT/damp_ID`` (M108)::
+    """``/DAMP/FUNCT/damp_ID`` (M108/M195)::
 
         card 1:  title
         card 2:  Fct_ID  grnod_ID  Alpha
         card 3:  Alpha_x  Alpha_y  Alpha_z
+        card 4:  Alpha_xx Alpha_yy Alpha_zz
     """
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
@@ -16568,7 +16626,10 @@ def read_damp_funct(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     fct_id, grnod_id = 0, 0
     alpha = 0.0
+    damp_scale = 1.0
+    itype = 0
     alpha_x, alpha_y, alpha_z = 0.0, 0.0, 0.0
+    alpha_xx, alpha_yy, alpha_zz = 0.0, 0.0, 0.0
 
     if block.fixed:
         f1 = cards[0].cut("DAMP_FUNCT_1")
@@ -16581,23 +16642,43 @@ def read_damp_funct(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             alpha_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
             alpha_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
             alpha_z = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("DAMP_FUNCT_3")
+            alpha_xx = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+            alpha_yy = _fval(f3[1], 0.0) if len(f3) > 1 else 0.0
+            alpha_zz = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
     else:
         t1 = cards[0].tokens()
         fct_id = int(float(t1[0])) if len(t1) > 0 else 0
-        grnod_id = int(float(t1[1])) if len(t1) > 1 else 0
-        alpha = float(t1[2]) if len(t1) > 2 else 0.0
-
+        if len(t1) >= 2:
+            damp_scale = float(t1[1])
+            alpha = damp_scale
+        if len(t1) >= 3:
+            itype = int(float(t1[2]))
         if len(cards) > 1 and not cards[1].is_blank:
             t2 = cards[1].tokens()
             alpha_x = float(t2[0]) if len(t2) > 0 else 0.0
             alpha_y = float(t2[1]) if len(t2) > 1 else 0.0
             alpha_z = float(t2[2]) if len(t2) > 2 else 0.0
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            alpha_xx = float(t3[0]) if len(t3) > 0 else 0.0
+            alpha_yy = float(t3[1]) if len(t3) > 1 else 0.0
+            alpha_zz = float(t3[2]) if len(t3) > 2 else 0.0
 
+    damp_id = block.user_id or 1
     model.damps.append(Damping(
-        id=block.user_id, grnod_id=grnod_id, alpha=alpha,
+        id=damp_id, grnod_id=grnod_id, alpha=alpha,
         title=title, kind="FUNCT", fct_id=fct_id,
         alpha_x=alpha_x, alpha_y=alpha_y, alpha_z=alpha_z
     ))
+    from ..model.entities import DampFunct
+    model.damp_functs[damp_id] = DampFunct(
+        id=damp_id, title=title, func_id=fct_id, fct_id=fct_id, grnod_id=grnod_id,
+        alpha=alpha, damp_scale=damp_scale, itype=itype,
+        alpha_x=alpha_x, alpha_y=alpha_y, alpha_z=alpha_z,
+        alpha_xx=alpha_xx, alpha_yy=alpha_yy, alpha_zz=alpha_zz
+    )
 
 
 def read_analy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -19830,12 +19911,15 @@ def read_initemp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INIBRI/{STRESS|EPSP|DENS|ENER|STRA_F|FAIL|AUX}[/id]`` (M96, M142)::"""
+    """``/INIBRI/{STRESS|EPSP|DENS|ENER|STRA_F|FAIL|AUX}[/id]`` (M96, M142, M195)::"""
     sub = block.parts[1].upper() if len(block.parts) > 1 else "STRESS"
     _, cards = _title_and_data(block)
     if not cards:
         log.error(f"/INIBRI/{sub}: missing data card", block.source)
         return
+
+    table_key = f"INIBRI_{sub}_{block.user_id or 1}"
+    rows = []
 
     if sub in ("STRESS", "STRS_F", "STRS_FGLO", "STRS"):
         idx = 0
@@ -19878,6 +19962,11 @@ def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
             st = model.ini_bricks.setdefault(elem_id, InitialBrickState(elem_id=elem_id))
             st.sigma = np.array([s1, s2, s3, s12, s23, s31], dtype=float)
+            rows.append({
+                "ELEM_ID": elem_id,
+                "SIG_XX": s1, "SIG_YY": s2, "SIG_ZZ": s3,
+                "SIG_XY": s12, "SIG_YZ": s23, "SIG_ZX": s31
+            })
 
     elif sub in ("STRA_F", "STRA_FGLO", "STRA"):
         idx = 0
@@ -19920,6 +20009,11 @@ def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
             st = model.ini_bricks.setdefault(elem_id, InitialBrickState(elem_id=elem_id))
             st.eps = np.array([e1, e2, e3, e12, e23, e31], dtype=float)
+            rows.append({
+                "ELEM_ID": elem_id,
+                "EPS_XX": e1, "EPS_YY": e2, "EPS_ZZ": e3,
+                "EPS_XY": e12, "EPS_YZ": e23, "EPS_ZX": e31
+            })
 
     elif sub in ("EPSP", "DENS", "ENER", "TEMP", "PRES", "VOID", "FAIL", "AUX", "SCALE_YLD", "SCALE"):
         for c in cards:
@@ -19951,14 +20045,21 @@ def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 st.aux = val
             elif sub in ("SCALE_YLD", "SCALE"):
                 st.scale_yld = val
+            rows.append({"ELEM_ID": elem_id, "VAL": val})
     elif sub == "EREF":
         read_inibri_eref(block, model, log)
     else:
         log.warning(f"/INIBRI/{sub} not ported — block skipped", block.source)
 
+    if rows:
+        from ..model.entities import IniStateTable
+        model.ini_state_tables[table_key] = IniStateTable(
+            keyword=f"/INIBRI/{sub}", id=block.user_id or 1, rows=rows
+        )
+
 
 def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INISHE/{STRS_F|EPSP|THICK|STRA_F|EPSP_F|FAIL|AUX}[/id]`` (M96, M142)::
+    """``/INISHE/{STRS_F|EPSP|THICK|STRA_F|EPSP_F|FAIL|AUX}[/id]`` (M96, M142, M195)::
 
         /INISHE/EPSP, /INISHE/THICK, /INISHE/FAIL, /INISHE/AUX:
           card 1: shell_ID  value
@@ -19977,6 +20078,9 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if not cards:
         log.error(f"/INISHE/{sub}: missing data card", block.source)
         return
+
+    table_key = f"INISHE_{sub}_{block.user_id or 1}"
+    rows = []
 
     if sub in ("EPSP", "THICK", "TEMP", "ENER", "FAIL", "AUX", "SCALE_YLD", "SCALE", "DENS"):
         for c in cards:
@@ -20007,6 +20111,12 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             elif sub in ("SCALE_YLD", "SCALE"):
                 st.scale_yld = val
 
+            row_dict = {"ELEM_ID": elem_id, "VAL": val}
+            if not block.fixed and len(c.tokens()) >= 3:
+                row_dict["IFAIL"] = int(float(c.tokens()[1]))
+                row_dict["VAL"] = float(c.tokens()[2])
+            rows.append(row_dict)
+
     elif sub in ("EPSP_F", "EPSPF"):
         for c in cards:
             if c.is_blank:
@@ -20018,8 +20128,9 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             layers = [float(x) for x in toks[1:]]
             st = model.ini_shells.setdefault(elem_id, InitialShellState(elem_id=elem_id))
             st.epsp_layers = layers
+            rows.append({"ELEM_ID": elem_id, "LAYERS": layers})
 
-    elif sub in ("STRA_F", "STRA", "STRA_FGLO"):
+    elif sub in ("STRA_F", "STRA", "STRA_FGLO", "STRA_F_GLOB", "STRA_F_GLO"):
         for c in cards:
             if c.is_blank:
                 continue
@@ -20031,8 +20142,16 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 e12 = float(toks[3])
                 st = model.ini_shells.setdefault(elem_id, InitialShellState(elem_id=elem_id))
                 st.eps = np.array([e1, e2, 0.0, e12, 0.0, 0.0], dtype=float)
+                row_dict = {
+                    "ELEM_ID": elem_id,
+                    "EPS_XX": e1, "EPS_YY": e2, "EPS_ZZ": float(toks[3]) if len(toks) >= 7 else 0.0,
+                    "EPS_XY": float(toks[4]) if len(toks) >= 7 else e12,
+                    "EPS_YZ": float(toks[5]) if len(toks) >= 7 else 0.0,
+                    "EPS_ZX": float(toks[6]) if len(toks) >= 7 else 0.0,
+                }
+                rows.append(row_dict)
 
-    elif sub in ("STRS_F", "STRS_FGLO", "STRS_F/GLOB"):
+    elif sub in ("STRS_F", "STRS_FGLO", "STRS_F/GLOB", "STRS_F_GLOB"):
         idx = 0
         while idx < len(cards):
             c0 = cards[idx]
@@ -20101,13 +20220,29 @@ def read_inishe(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             st.sigma = np.array([s1, s2, 0.0, s12, s23, s31], dtype=float)
             st.sigma_b = np.array([sb1, sb2, 0.0, sb12, 0.0, 0.0], dtype=float)
             st.epsp = epsp
+            rows.append({
+                "ELEM_ID": elem_id,
+                "SIG_XX": s1, "SIG_YY": s2, "SIG_XY": s12, "SIG_YZ": s23, "SIG_ZX": s31,
+                "THICK": thick, "EPSP": epsp
+            })
     else:
         log.warning(f"/INISHE/{sub} not ported — block skipped", block.source)
 
+    if rows:
+        from ..model.entities import IniStateTable
+        model.ini_state_tables[table_key] = IniStateTable(
+            keyword=f"/INISHE/{sub}", id=block.user_id or 1, rows=rows
+        )
+
 
 def read_inish3(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INISH3/{STRS_F|EPSP|THICK}[/id]`` (M96):: initial state for 3-node shells."""
+    """``/INISH3/{STRS_F|EPSP|THICK|FAIL}[/id]`` (M96, M195):: initial state for 3-node shells."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else "STRS_F"
+    table_key = f"INISH3_{sub}_{block.user_id or 1}"
     read_inishe(block, model, log)
+    she_key = f"INISHE_{sub}_{block.user_id or 1}"
+    if she_key in model.ini_state_tables:
+        model.ini_state_tables[table_key] = model.ini_state_tables[she_key]
 
 
 def read_initru(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -38687,6 +38822,377 @@ def read_prop_type13(block: KeywordBlock, model: Model, log: MessageLog) -> None
     model.properties[prop_id] = Property(id=prop_id, type=13, title=title, params={"stiff": stiff, "f_max": f_max, **params})
 
 
+def read_prop_type23(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE23`` or ``/PROP/SPR_MAT`` (M158/M195): Spring material property."""
+    from ..model.entities import PropType23, Property
+    prop_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    imass = 0
+    area_or_volume = 0.0
+    mass = 0.0
+    inertia = 0.0
+    skew_id = 0
+    sens_id = 0
+    isflag = 0
+    params = {}
+    if valid_cards:
+        c0 = valid_cards[0]
+        if block.fixed:
+            raw = c0.raw if hasattr(c0, "raw") else str(c0)
+            f0 = raw[0:10].strip()
+            f1 = raw[10:30].strip()
+            f2 = raw[30:50].strip()
+            f3 = raw[50:60].strip()
+            f4 = raw[60:70].strip()
+            f5 = raw[70:80].strip() if len(raw) > 70 else ""
+            if len(f0) > 0 and "." not in f0 and (len(f1) > 0 or len(f2) > 0):
+                imass = _safe_int(f0)
+                area_or_volume = _safe_float(f1)
+                mass = area_or_volume
+                inertia = _safe_float(f2)
+                skew_id = _safe_int(f3)
+                sens_id = _safe_int(f4)
+                isflag = _safe_int(f5)
+            else:
+                f_20 = raw[0:20].strip()
+                f_skew = raw[20:30].strip()
+                f_isens = raw[30:40].strip()
+                f_iflag = raw[40:50].strip()
+                mass = _safe_float(f_20)
+                area_or_volume = mass
+                skew_id = _safe_int(f_skew)
+                sens_id = _safe_int(f_isens)
+                isflag = _safe_int(f_iflag)
+                imass = 1
+        else:
+            toks = c0.tokens()
+            if len(toks) >= 6:
+                imass = _safe_int(toks[0])
+                area_or_volume = _safe_float(toks[1])
+                mass = area_or_volume
+                inertia = _safe_float(toks[2])
+                skew_id = _safe_int(toks[3])
+                sens_id = _safe_int(toks[4])
+                isflag = _safe_int(toks[5])
+            elif len(toks) == 4:
+                mass = _safe_float(toks[0])
+                area_or_volume = mass
+                skew_id = _safe_int(toks[1])
+                sens_id = _safe_int(toks[2])
+                isflag = _safe_int(toks[3])
+                imass = 1
+            else:
+                imass = _safe_int(toks[0]) if len(toks) > 0 else 0
+                area_or_volume = _safe_float(toks[1]) if len(toks) > 1 else (_safe_float(toks[0]) if len(toks) > 0 else 0.0)
+                mass = area_or_volume
+                inertia = _safe_float(toks[2]) if len(toks) > 2 else 0.0
+                skew_id = _safe_int(toks[3]) if len(toks) > 3 else 0
+                sens_id = _safe_int(toks[4]) if len(toks) > 4 else 0
+                isflag = _safe_int(toks[5]) if len(toks) > 5 else 0
+
+    params = {
+        "imass": imass,
+        "area_or_volume": area_or_volume,
+        "mass": mass,
+        "inertia": inertia,
+        "skew_id": skew_id,
+        "sens_id": sens_id,
+        "sensor_id": sens_id,
+        "isens": sens_id,
+        "isflag": isflag,
+        "iflag": isflag,
+    }
+    if imass == 1:
+        params["area"] = area_or_volume
+    elif imass == 2:
+        params["volume"] = area_or_volume
+
+    prop = PropType23(
+        id=prop_id, title=title, mass=mass, skew_id=skew_id,
+        isens=sens_id, iflag=isflag, imass=imass, area_or_volume=area_or_volume,
+        inertia=inertia, sensor_id=sens_id, isflag=isflag, params=params
+    )
+    model.prop_type23s[prop_id] = prop
+    model.properties[prop_id] = Property(id=prop_id, type=23, title=title, params=params)
+
+
+def read_mat_law103(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW103`` or ``/MAT/HENSEL_SPITTEL`` (M195): Hensel-Spittel hot-forming material law."""
+    from ..model.entities import MatLaw103, Material
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    rho, refer_rho, e, nu = 0.0, 0.0, 0.0, 0.0
+    a0, m1, m2, m3, m4 = 0.0, 0.0, 0.0, 0.0, 0.0
+    m5, m7 = 0.0, 0.0
+    fsmooth, fcut, eps_0, pmin = 0, 0.0, 0.0, -1.0e30
+    rhocp, t0, eta = 0.0, 0.0, 0.0
+    params = {}
+
+    if len(valid_cards) > 0:
+        c0 = valid_cards[0].tokens()
+        rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
+        refer_rho = _safe_float(c0[1]) if len(c0) > 1 else rho
+    if len(valid_cards) > 1:
+        c1 = valid_cards[1].tokens()
+        e = _safe_float(c1[0]) if len(c1) > 0 else 0.0
+        nu = _safe_float(c1[1]) if len(c1) > 1 else 0.0
+    if len(valid_cards) > 2:
+        c2 = valid_cards[2].tokens()
+        a0 = _safe_float(c2[0]) if len(c2) > 0 else 0.0
+        m1 = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+        m2 = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+        m3 = _safe_float(c2[3]) if len(c2) > 3 else 0.0
+        m4 = _safe_float(c2[4]) if len(c2) > 4 else 0.0
+    if len(valid_cards) > 3:
+        c3 = valid_cards[3].tokens()
+        m5 = _safe_float(c3[0]) if len(c3) > 0 else 0.0
+        m7 = _safe_float(c3[1]) if len(c3) > 1 else 0.0
+    if len(valid_cards) > 4:
+        c4 = valid_cards[4].tokens()
+        fsmooth = _safe_int(c4[0]) if len(c4) > 0 else 0
+        fcut = _safe_float(c4[1]) if len(c4) > 1 else 0.0
+        eps_0 = _safe_float(c4[2]) if len(c4) > 2 else 0.0
+        pmin = _safe_float(c4[3]) if len(c4) > 3 else -1.0e30
+    if len(valid_cards) > 5:
+        c5 = valid_cards[5].tokens()
+        rhocp = _safe_float(c5[0]) if len(c5) > 0 else 0.0
+        t0 = _safe_float(c5[1]) if len(c5) > 1 else 0.0
+        eta = _safe_float(c5[2]) if len(c5) > 2 else 0.0
+
+    params.update({
+        "rho": rho, "refer_rho": refer_rho, "e": e, "nu": nu,
+        "a0": a0, "m1": m1, "m2": m2, "m3": m3, "m4": m4, "m5": m5, "m7": m7,
+        "fsmooth": fsmooth, "fcut": fcut, "eps_0": eps_0, "pmin": pmin,
+        "rhocp": rhocp, "t0": t0, "eta": eta
+    })
+    mat = MatLaw103(
+        id=mat_id, title=title, rho=rho, refer_rho=refer_rho, e=e, nu=nu,
+        a0=a0, m1=m1, m2=m2, m3=m3, m4=m4, m5=m5, m7=m7,
+        fsmooth=fsmooth, fcut=fcut, eps_0=eps_0, pmin=pmin,
+        rhocp=rhocp, t0=t0, eta=eta, params=params
+    )
+    model.mat_law103s[mat_id] = mat
+    model.materials[mat_id] = Material(id=mat_id, law=103, rho0=rho, title=title, params=params)
+
+
+def read_mat_law108(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/LAW108`` or ``/MAT/SPR_GENE`` (M195): Generalized 6-DOF nonlinear spring material."""
+    from ..model.entities import MatLaw108, Material
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    rho = 0.0
+    ifail, iequil, ifail2 = 0, 0, 0
+    k = [0.0] * 6
+    c = [0.0] * 6
+    a = [0.0] * 6
+    b = [0.0] * 6
+    d = [0.0] * 6
+    fct_id1 = [0] * 6
+    h = [0.0] * 6
+    fct_id2 = [0] * 6
+    fct_id3 = [0] * 6
+    fct_id4 = [0] * 6
+    delta_min = [0.0] * 6
+    delta_max = [0.0] * 6
+    f_val = [0.0] * 6
+    e_val = [0.0] * 6
+    ascale = [1.0] * 6
+    hscale = [1.0] * 6
+    fsmooth = 0
+    fcut = 0.0
+    params = {}
+
+    card_idx = 0
+    if card_idx < len(valid_cards):
+        c0 = valid_cards[card_idx].tokens()
+        rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
+        card_idx += 1
+    if card_idx < len(valid_cards):
+        c1 = valid_cards[card_idx].tokens()
+        ifail = _safe_int(c1[0]) if len(c1) > 0 else 0
+        iequil = _safe_int(c1[1]) if len(c1) > 1 else 0
+        ifail2 = _safe_int(c1[2]) if len(c1) > 2 else 0
+        card_idx += 1
+
+    for dof in range(6):
+        if card_idx < len(valid_cards):
+            cd1 = valid_cards[card_idx].tokens()
+            k[dof] = _safe_float(cd1[0]) if len(cd1) > 0 else 0.0
+            c[dof] = _safe_float(cd1[1]) if len(cd1) > 1 else 0.0
+            a[dof] = _safe_float(cd1[2]) if len(cd1) > 2 else 0.0
+            b[dof] = _safe_float(cd1[3]) if len(cd1) > 3 else 0.0
+            d[dof] = _safe_float(cd1[4]) if len(cd1) > 4 else 0.0
+            card_idx += 1
+        if card_idx < len(valid_cards):
+            cd2 = valid_cards[card_idx].tokens()
+            fct_id1[dof] = _safe_int(cd2[0]) if len(cd2) > 0 else 0
+            h[dof] = _safe_float(cd2[1]) if len(cd2) > 1 else 0.0
+            fct_id2[dof] = _safe_int(cd2[2]) if len(cd2) > 2 else 0
+            fct_id3[dof] = _safe_int(cd2[3]) if len(cd2) > 3 else 0
+            fct_id4[dof] = _safe_int(cd2[4]) if len(cd2) > 4 else 0
+            delta_min[dof] = _safe_float(cd2[5]) if len(cd2) > 5 else 0.0
+            delta_max[dof] = _safe_float(cd2[6]) if len(cd2) > 6 else 0.0
+            card_idx += 1
+        if card_idx < len(valid_cards):
+            cd3 = valid_cards[card_idx].tokens()
+            f_val[dof] = _safe_float(cd3[0]) if len(cd3) > 0 else 0.0
+            e_val[dof] = _safe_float(cd3[1]) if len(cd3) > 1 else 0.0
+            ascale[dof] = _safe_float(cd3[2]) if len(cd3) > 2 else 1.0
+            hscale[dof] = _safe_float(cd3[3]) if len(cd3) > 3 else 1.0
+            card_idx += 1
+
+    if card_idx < len(valid_cards):
+        clast = valid_cards[card_idx].tokens()
+        fsmooth = _safe_int(clast[0]) if len(clast) > 0 else 0
+        fcut = _safe_float(clast[1]) if len(clast) > 1 else 0.0
+
+    params.update({
+        "rho": rho, "ifail": ifail, "iequil": iequil, "ifail2": ifail2,
+        "k": k, "c": c, "a": a, "b": b, "d": d,
+        "fct_id1": fct_id1, "h": h, "fct_id2": fct_id2, "fct_id3": fct_id3, "fct_id4": fct_id4,
+        "delta_min": delta_min, "delta_max": delta_max,
+        "f_val": f_val, "e_val": e_val, "ascale": ascale, "hscale": hscale,
+        "fsmooth": fsmooth, "fcut": fcut
+    })
+    mat = MatLaw108(
+        id=mat_id, title=title, rho=rho, ifail=ifail, iequil=iequil, ifail2=ifail2,
+        k=k, c=c, a=a, b=b, d=d,
+        fct_id1=fct_id1, h=h, fct_id2=fct_id2, fct_id3=fct_id3, fct_id4=fct_id4,
+        delta_min=delta_min, delta_max=delta_max, f_val=f_val, e_val=e_val, ascale=ascale, hscale=hscale,
+        fsmooth=fsmooth, fcut=fcut, params=params
+    )
+    model.mat_law108s[mat_id] = mat
+    model.materials[mat_id] = Material(id=mat_id, law=108, rho0=rho, title=title, params=params)
+
+
+def read_mat_plas_predef(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/PLAS_PREDEF`` (M195): Predefined plasticity material model."""
+    from ..model.entities import MatPlasPredef
+    from .mat_reader import InactiveMaterial
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    mat_name = ""
+    rho, e, nu, sigy, uts, e_uts = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    epsp_f, vp, c_val, p_val, n_val = 0.0, 0.0, 0.0, 0.0, 0
+    params = {}
+
+    PREDEFINED_MATS = {
+        "STEEL": (7.8e-6, 210.0, 0.3, 0.160, 0.380, 0.24),
+        "HSS": (7.8e-6, 210.0, 0.3, 0.300, 0.510, 0.23),
+        "UHSS": (7.8e-6, 210.0, 0.3, 0.500, 1.500, 0.045),
+        "AA5182": (2.7e-6, 70.0, 0.33, 0.150, 0.300, 0.25),
+        "AA6082-T6": (2.7e-6, 70.0, 0.33, 0.300, 0.360, 0.08),
+        "PA6GF30": (1.3e-6, 7.0, 0.35, 0.050, 0.100, 0.02),
+        "PPT40": (1.2e-6, 4.0, 0.3, 0.020, 0.030, 0.06),
+    }
+
+    if len(valid_cards) > 0:
+        c0 = valid_cards[0].tokens()
+        if len(c0) > 0:
+            token0 = c0[0].strip().upper()
+            if token0 in PREDEFINED_MATS:
+                mat_name = token0
+                rho, e, nu, sigy, uts, e_uts = PREDEFINED_MATS[token0]
+            else:
+                rho = _safe_float(c0[0])
+                if len(c0) > 1:
+                    e = _safe_float(c0[1])
+                if len(c0) > 2:
+                    nu = _safe_float(c0[2])
+
+    if len(valid_cards) > 1 and not mat_name:
+        c1 = valid_cards[1].tokens()
+        sigy = _safe_float(c1[0]) if len(c1) > 0 else 0.0
+        uts = _safe_float(c1[1]) if len(c1) > 1 else 0.0
+        e_uts = _safe_float(c1[2]) if len(c1) > 2 else 0.0
+        epsp_f = _safe_float(c1[3]) if len(c1) > 3 else 0.0
+        vp = _safe_float(c1[4]) if len(c1) > 4 else 0.0
+        c_val = _safe_float(c1[5]) if len(c1) > 5 else 0.0
+        p_val = _safe_float(c1[6]) if len(c1) > 6 else 0.0
+        n_val = _safe_int(c1[7]) if len(c1) > 7 else 0
+
+    params.update({
+        "mat_name": mat_name, "Material_Name_Str": mat_name, "rho": rho, "e": e, "nu": nu,
+        "E": e, "Nu": nu,
+        "sigy": sigy, "uts": uts, "e_uts": e_uts, "epsp_f": epsp_f,
+        "vp": vp, "c": c_val, "p": p_val, "n": n_val
+    })
+    mat = MatPlasPredef(
+        id=mat_id, title=title, mat_name=mat_name, rho=rho, e=e, nu=nu,
+        sigy=sigy, uts=uts, e_uts=e_uts, epsp_f=epsp_f, vp=vp, c=c_val, p=p_val, n=n_val, params=params
+    )
+    model.mat_plas_predefs[mat_id] = mat
+    model.materials[mat_id] = InactiveMaterial(
+        id=mat_id, law=3, rho0=rho, title=title,
+        law_name="PLAS_PREDEF",
+        params=params,
+    )
+
+
+def read_mat_dprag2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAT/DPRAG2`` or ``/MAT/LAW102`` (M195): Drucker-Prager 2nd formulation material."""
+    from ..model.entities import MatDPrag2, MatLaw102, Material
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    rho = 0.0
+    iform = 1
+    e, nu = 0.0, 0.0
+    a0, a1, b0, b1 = 0.0, 0.0, 0.0, 0.0
+    icrit = 1
+    c, phi, amax = 0.0, 0.0, 1.0e30
+    pmin = -1.0e30
+    params = {}
+
+    if len(valid_cards) > 0:
+        c0 = valid_cards[0].tokens()
+        rho = _safe_float(c0[0]) if len(c0) > 0 else 0.0
+        if len(c0) > 1:
+            e = _safe_float(c0[1])
+        if len(c0) > 2:
+            nu = _safe_float(c0[2])
+
+    if len(valid_cards) > 1:
+        c1 = valid_cards[1].tokens()
+        if len(c1) >= 4:
+            a0 = _safe_float(c1[0])
+            a1 = _safe_float(c1[1])
+            b0 = _safe_float(c1[2]) if len(c1) > 2 else 0.0
+            b1 = _safe_float(c1[3]) if len(c1) > 3 else 0.0
+            icrit = _safe_int(c1[4], 1) if len(c1) > 4 else 1
+            iform = icrit
+        elif len(c1) == 1:
+            iform = _safe_int(c1[0], 1)
+        elif len(c1) == 2 and e == 0.0:
+            e = _safe_float(c1[0])
+            nu = _safe_float(c1[1])
+
+    if len(valid_cards) > 2 and e == 0.0:
+        c2 = valid_cards[2].tokens()
+        e = _safe_float(c2[0]) if len(c2) > 0 else 0.0
+        nu = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+    if len(valid_cards) > 3:
+        c3 = valid_cards[3].tokens()
+        c = _safe_float(c3[0]) if len(c3) > 0 else 0.0
+        phi = _safe_float(c3[1]) if len(c3) > 1 else 0.0
+        amax = _safe_float(c3[2], 1.0e30) if len(c3) > 2 else 1.0e30
+    if len(valid_cards) > 4:
+        c4 = valid_cards[4].tokens()
+        pmin = _safe_float(c4[0], -1.0e30) if len(c4) > 0 else -1.0e30
+
+    params.update({"rho": rho, "iform": iform, "e": e, "nu": nu, "a0": a0, "a1": a1, "b0": b0, "b1": b1, "icrit": icrit, "c": c, "phi": phi, "amax": amax, "pmin": pmin})
+    mat = MatDPrag2(id=mat_id, title=title, rho=rho, iform=iform, e=e, nu=nu, c=c, phi=phi, amax=amax, pmin=pmin, params=params)
+    model.mat_dprag2s[mat_id] = mat
+    mat_law = MatLaw102(id=mat_id, title=title, rho=rho, e=e, nu=nu, a0=a0, a1=a1, b0=b0, b1=b1, icrit=icrit, params=params)
+    model.mat_law102s[mat_id] = mat_law
+    model.materials[mat_id] = Material(id=mat_id, law=102, rho0=rho, title=title, params=params)
+
+
+
 def read_airbag_injector(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/AIRBAG/INJECTOR/id`` or ``/INJECTOR/id`` (M142): Airbag jetting injector."""
     from ..model.entities import AirbagInjector
@@ -38889,6 +39395,7 @@ def read_fric_orient(block: KeywordBlock, model: Model, log: MessageLog) -> None
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     grpart_id, skew_id = 0, 0
     phi, vx, vy, vz = 0.0, 0.0, 0.0, 0.0
+    ifric = 0
     if cards and not cards[0].is_blank:
         if block.fixed:
             f = cards[0].cut("FRIC_ORIENT_1")
@@ -38898,6 +39405,7 @@ def read_fric_orient(block: KeywordBlock, model: Model, log: MessageLog) -> None
             vx = _fval(f[3], 0.0) if len(f) > 3 else 0.0
             vy = _fval(f[4], 0.0) if len(f) > 4 else 0.0
             vz = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+            ifric = _ival(f[6]) if len(f) > 6 else 0
         else:
             t = cards[0].tokens()
             grpart_id = int(float(t[0])) if len(t) > 0 else 0
@@ -38906,15 +39414,16 @@ def read_fric_orient(block: KeywordBlock, model: Model, log: MessageLog) -> None
             vx = float(t[3]) if len(t) > 3 else 0.0
             vy = float(t[4]) if len(t) > 4 else 0.0
             vz = float(t[5]) if len(t) > 5 else 0.0
+            ifric = int(float(t[6])) if len(t) > 6 else 0
     model.fric_orients[fric_id] = FricOrient(
         id=fric_id, title=title, grpart_id=grpart_id, skew_id=skew_id,
-        phi=phi, vx=vx, vy=vy, vz=vz
+        phi=phi, vx=vx, vy=vy, vz=vz, ifric=ifric
     )
 
 
 def read_inisphcel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INISPHCEL/part_id`` (M145): SPH cell initial state."""
-    from ..model.entities import IniSphCel
+    """``/INISPHCEL/part_id`` (M145/M195): SPH cell initial state."""
+    from ..model.entities import IniSphCel, IniStateTable
     part_id = block.user_id or 1
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     p, rho, e, vx, vy, vz = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
@@ -38937,6 +39446,10 @@ def read_inisphcel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             vz = float(t[5]) if len(t) > 5 else 0.0
     model.ini_sphcels[part_id] = IniSphCel(
         part_id=part_id, p=p, rho=rho, e=e, vx=vx, vy=vy, vz=vz
+    )
+    model.ini_state_tables[f"INISPHCEL_{part_id}"] = IniStateTable(
+        keyword="/INISPHCEL", id=part_id, title=title,
+        rows=[{"P": p, "RHO": rho, "E": e, "VX": vx, "VY": vy, "VZ": vz}]
     )
 
 
