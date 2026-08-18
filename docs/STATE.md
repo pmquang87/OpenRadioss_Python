@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M215)
+## What is implemented (M1 → M216)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -221,6 +221,7 @@ real history is 41 milestones. One line each:
 | M213 | Parallel & Perpendicular Kinematic Joints, Spalling Hydrostatic Cutoff Failure Criterion, and Engine Restart File Directives Suite: /LAGMUL/PARALLEL (/PARALLEL, /PARALLEL_JOINT) parallel axes kinematic joint constraint with axis direction and skew frame, /LAGMUL/PERPENDICULAR (/PERPENDICULAR, /PERPENDICULAR_JOINT, /ORTHOGONAL_JOINT) perpendicular axes kinematic joint constraint with dual axis directions and skew frames, /FAIL/SPALLING_CUT (/FAIL/SPALL_CUT, /FAIL/HYDRO_CUT) spalling hydrostatic tensile cutoff failure criterion, and /RFILE (/ENG/RFILE) engine restart dump file frequency and sensor gating |
 | M214 | Gimbal & Constant Distance Kinematic Joints, Void Coalescence Porosity Failure Criterion, and Engine Print Directives Suite: /LAGMUL/GIMBAL (/GIMBAL, /GIMBAL_JOINT) 2-DOF universal/gimbal kinematic joint constraint with dual axis directions and skew frames, /LAGMUL/DISTANCE (/DISTANCE, /DISTANCE_JOINT, /CONST_DIST) constant distance kinematic joint constraint, /FAIL/VOIDS (/FAIL/VOID, /FAIL/POROSITY) ductile void nucleation/growth/coalescence porosity failure model, and /PRINT (/ENG/PRINT) engine terminal cycle print frequency, time interval, and sensor gating |
 | M215 | Hosford-Coulomb Failure Criterion, Engine Parallel Arithmetic, Engine Version Compatibility, and Rigid Body Sensor Stop Action Suite: /FAIL/HC (/FAIL/HOSFORD_COULOMB, /FAIL/HOSFORD) Hosford-Coulomb stress-state dependent ductile fracture model, /PARITH (/ENG/PARITH, /PARITH/ON, /PARITH/OFF) parallel deterministic arithmetic reproducibility toggle, /VERS (/ENG/VERS) target OpenRadioss engine version and syntax compatibility level, and /RBODY/STOP (/ENG/RBODY/STOP) sensor-triggered rigid body deactivation and velocity freeze |
+| M216 | Ladevèze EVR Failure Criterion, Engine Console Monitor, Engine Noise Filter, and Distance Gap Sensor Suite: /FAIL/LAD_EVR (/FAIL/LADEVEZE_EVR) Ladevèze elementary volume representative composite failure model, /MONITOR (/ENG/MONITOR) engine runtime console nodal state monitor directive, /NOIS (/ENG/NOIS) engine high-frequency noise filter control, and /SENSOR/TIME_GAP (/SENSOR/GAP) relative distance gap threshold trigger sensor |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read

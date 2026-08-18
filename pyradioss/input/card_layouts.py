@@ -3083,6 +3083,11 @@ LAYOUTS: Dict[str, List[int]] = {
     "ENG_PARITH_1": [10],
     "ENG_VERS_1": [20],
     "RBODY_STOP_1": [10, 10, 10],
+    # M216: FAIL_LAD_EVR, ENG_MONITOR, ENG_NOIS, SENSOR_GAP
+    "FAIL_LAD_EVR_1": [20, 20, 20, 20, 10, 20],
+    "ENG_MONITOR_1": [10, 10, 20],
+    "ENG_NOIS_1": [20, 10],
+    "SENSOR_GAP_1": [10, 10, 20, 20, 10],
 }
 
 CARD_LAYOUTS = LAYOUTS

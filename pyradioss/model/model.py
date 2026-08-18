@@ -1517,6 +1517,14 @@ class Model:
         self.eng_version: float = 0.0                                # /VERS, /ENG/VERS (M215)
         self.rbody_stops: Dict[int, Any] = {}                        # /RBODY/STOP, /ENG/RBODY/STOP (M215)
 
+        # M216 Entities
+        self.fail_lad_evrs: Dict[int, Any] = {}                      # /FAIL/LAD_EVR, /FAIL/LADEVEZE_EVR (M216)
+        self.monitors: Dict[int, Any] = {}                           # /MONITOR, /ENG/MONITOR (M216)
+        self.nois_freq: float = 0.0                                  # /NOIS, /ENG/NOIS (M216)
+        self.nois_type: int = 0
+        self.sensor_gaps: Dict[int, Any] = {}                        # /SENSOR/TIME_GAP, /SENSOR/GAP (M216)
+
+
 
 
 

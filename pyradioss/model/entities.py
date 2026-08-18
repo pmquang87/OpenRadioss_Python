@@ -12682,6 +12682,42 @@ class RBodyStop:
     istop_opt: int = 0       # 0: freeze velocity, 1: deactivate constraint
 
 
+@dataclass
+class FailLadEvr:
+    """``/FAIL/LAD_EVR/mat_ID`` or ``/FAIL/LADEVEZE_EVR/mat_ID`` (M216): Ladevèze elementary volume representative composite failure."""
+    mat_id: int = 0
+    title: str = ""
+    yo: float = 0.0          # initial micro-damage energy threshold
+    yc: float = 0.0          # critical damage energy threshold
+    ymax: float = 0.0        # maximum damage energy threshold
+    d_max: float = 1.0       # maximum damage
+    ifail_sh: int = 1        # 1: delete on 1 layer, 2: delete on all layers
+    gam: float = 0.0         # shear damage coupling coefficient gamma
+
+
+@dataclass
+class EngMonitor:
+    """``/MONITOR`` or ``/ENG/MONITOR`` (M216): Periodic terminal monitor of nodal variables."""
+    id: int = 1
+    title: str = ""
+    node_id: int = 0
+    ivar_type: int = 1       # 1: DX, 2: DY, 3: DZ, 4: VX, 5: VY, 6: VZ, 7: AX, 8: AY, 9: AZ
+    dt_print: float = 0.0    # console print time interval
+
+
+@dataclass
+class SensorGap:
+    """``/SENSOR/TIME_GAP`` or ``/SENSOR/GAP`` (M216): Distance threshold trigger sensor."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    d_gap: float = 0.0       # distance gap threshold
+    t_delay: float = 0.0     # activation delay time
+    isens_mode: int = 0      # 0: trig when dist < d_gap, 1: trig when dist > d_gap
+
+
+
 
 
 

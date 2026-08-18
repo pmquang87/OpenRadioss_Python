@@ -2231,6 +2231,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
+    if kind in ("LAD_EVR", "LADEVEZE_EVR", "LAD_EVR_COMP"):
+        read_fail_lad_evr(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11634,7 +11637,10 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "HIC"
     elif kind == "TYPE17":
         kind = "DIST_SURF"
-    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK")
+    if kind in ("GAP", "TIME_GAP"):
+        read_sensor_gap(block, model, log)
+        return
+    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
         log.warning(f"/SENSOR/{kind} not ported ({', '.join(supported)} supported)",
                     block.source)
@@ -41401,6 +41407,39 @@ def read_fail_hc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_lad_evr(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_EVR/mat_ID`` or ``/FAIL/LADEVEZE_EVR/mat_ID`` (M216): Ladevèze elementary volume representative composite failure."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_EVR/{block.user_id}: missing data card", block.source)
+        return
+
+    yo, yc, ymax, d_max, ifail_sh, gam = 0.0, 0.0, 0.0, 1.0, 1, 0.0
+    if block.fixed:
+        f = cards[0].cut("FAIL_LAD_EVR_1")
+        yo = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        yc = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        ymax = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        d_max = _fval(f[3], 1.0) if len(f) > 3 else 1.0
+        ifail_sh = _ival(f[4], 1) if len(f) > 4 else 1
+        gam = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+    else:
+        toks = cards[0].tokens()
+        yo = float(toks[0]) if len(toks) > 0 else 0.0
+        yc = float(toks[1]) if len(toks) > 1 else 0.0
+        ymax = float(toks[2]) if len(toks) > 2 else 0.0
+        d_max = float(toks[3]) if len(toks) > 3 else 1.0
+        ifail_sh = int(float(toks[4])) if len(toks) > 4 else 1
+        gam = float(toks[5]) if len(toks) > 5 else 0.0
+
+    from ..model.entities import FailLadEvr
+    model.fail_lad_evrs[block.user_id] = FailLadEvr(
+        mat_id=block.user_id, title=title, yo=yo, yc=yc,
+        ymax=ymax, d_max=d_max, ifail_sh=ifail_sh, gam=gam
+    )
+
+
+
 
 
 
@@ -42608,6 +42647,83 @@ def read_rbody_stop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=block.user_id, title=title, rbody_id=rbody_id,
         sens_id=sens_id, istop_opt=istop_opt
     )
+
+
+def read_eng_monitor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MONITOR`` or ``/ENG/MONITOR`` (M216): Engine runtime console monitor directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MONITOR/{block.user_id}: missing data card", block.source)
+        return
+
+    node_id, ivar_type, dt_print = 0, 1, 0.0
+    if block.fixed:
+        f = cards[0].cut("ENG_MONITOR_1")
+        node_id = _ival(f[0], 0) if len(f) > 0 else 0
+        ivar_type = _ival(f[1], 1) if len(f) > 1 else 1
+        dt_print = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        node_id = int(float(toks[0])) if len(toks) > 0 else 0
+        ivar_type = int(float(toks[1])) if len(toks) > 1 else 1
+        dt_print = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import EngMonitor
+    mon_id = block.user_id or (len(model.monitors) + 1)
+    model.monitors[mon_id] = EngMonitor(
+        id=mon_id, title=title, node_id=node_id,
+        ivar_type=ivar_type, dt_print=dt_print
+    )
+
+
+def read_eng_nois(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/NOIS`` or ``/ENG/NOIS`` (M216): Engine high frequency noise filter control."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("ENG_NOIS_1")
+            model.nois_freq = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            model.nois_type = _ival(f[1], 0) if len(f) > 1 else 0
+        else:
+            toks = cards[0].tokens()
+            model.nois_freq = float(toks[0]) if len(toks) > 0 else 0.0
+            if len(toks) > 1:
+                model.nois_type = int(float(toks[1]))
+
+
+def read_sensor_gap(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/TIME_GAP`` or ``/SENSOR/GAP`` (M216): Relative distance gap trigger sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/TIME_GAP/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, d_gap, t_delay, isens_mode = 0, 0, 0.0, 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_GAP_1")
+        node1 = _ival(f[0], 0) if len(f) > 0 else 0
+        node2 = _ival(f[1], 0) if len(f) > 1 else 0
+        d_gap = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        t_delay = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        isens_mode = _ival(f[4], 0) if len(f) > 4 else 0
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        d_gap = float(toks[2]) if len(toks) > 2 else 0.0
+        t_delay = float(toks[3]) if len(toks) > 3 else 0.0
+        isens_mode = int(float(toks[4])) if len(toks) > 4 else 0
+
+    from ..model.entities import SensorGap, Sensor
+    sg = SensorGap(
+        id=block.user_id or 1, title=title, node1=node1,
+        node2=node2, d_gap=d_gap, t_delay=t_delay, isens_mode=isens_mode
+    )
+    model.sensor_gaps[sg.id] = sg
+    model.sensors.append(Sensor(
+        id=sg.id, kind="GAP", tdelay=t_delay
+    ))
+
 
 
 
@@ -44651,6 +44767,16 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_VERS": read_eng_vers,
     "RBODY_STOP": read_rbody_stop,
     "ENG_RBODY_STOP": read_rbody_stop,
+    # --- M216: Ladevèze EVR Failure Criterion, Engine Console Monitor, Engine Noise Filter, and Distance Gap Sensor Suite ---
+    "FAIL_LAD_EVR": read_fail_lad_evr,
+    "FAIL_LADEVEZE_EVR": read_fail_lad_evr,
+    "FAIL_LAD_EVR_COMP": read_fail_lad_evr,
+    "MONITOR": read_eng_monitor,
+    "ENG_MONITOR": read_eng_monitor,
+    "NOIS": read_eng_nois,
+    "ENG_NOIS": read_eng_nois,
+    "SENSOR_GAP": read_sensor_gap,
+    "SENSOR_TIME_GAP": read_sensor_gap,
 }
 
 
