@@ -13245,6 +13245,40 @@ class SensorBeamForce:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailTab3:
+    """``/FAIL/TAB3/mat_ID`` (M233): 3D Tabulated failure model."""
+    mat_id: int = 0
+    title: str = ""
+    table_id: int = 0        # 3D table ID
+    scale_x: float = 1.0     # scale factor on X axis
+    scale_y: float = 1.0     # scale factor on Y axis
+    scale_z: float = 1.0     # scale factor on Z axis
+    eps_max: float = 1e30    # maximum strain to failure
+    d_adv: float = 0.0       # damage advancement rate
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngVelocity:
+    """``/VELOCITY`` or ``/ENG/VELOCITY`` (M233): Engine velocity output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_vel: float = 0.0      # time frequency for velocity output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorTrussForce:
+    """``/SENSOR/TRUSS_FORCE`` or ``/SENSOR/FORCE_TRUSS`` (M233): Truss element axial force threshold sensor."""
+    id: int = 1
+    title: str = ""
+    truss_id: int = 0        # truss element ID to monitor
+    f_max: float = 1e30      # maximum resultant force threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

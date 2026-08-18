@@ -2284,6 +2284,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("GTN", "GURSON_TVERGAARD", "GURSON_POROUS"):
         read_fail_gtn(block, model, log)
         return
+    if kind in ("TAB3", "TABULATED3", "TAB_3D"):
+        read_fail_tab3(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11737,6 +11740,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("BEAM_FORCE", "FORCE_BEAM"):
         read_sensor_beam_force(block, model, log)
+        return
+    if kind in ("TRUSS_FORCE", "FORCE_TRUSS"):
+        read_sensor_truss_force(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -42092,6 +42098,47 @@ def read_fail_gtn(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_tab3(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/TAB3/mat_ID`` (M233): 3D Tabulated failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/TAB3/{block.user_id}: missing data card", block.source)
+        return
+
+    table_id, scale_x, scale_y, scale_z = 0, 1.0, 1.0, 1.0
+    eps_max, d_adv, ifail_sh = 1e30, 0.0, 1
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_TAB3_1")
+        table_id = _ival(f1[0], 0) if len(f1) > 0 else 0
+        scale_x = _fval(f1[1], 1.0) if len(f1) > 1 else 1.0
+        scale_y = _fval(f1[2], 1.0) if len(f1) > 2 else 1.0
+        scale_z = _fval(f1[3], 1.0) if len(f1) > 3 else 1.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_TAB3_2")
+            eps_max = _fval(f2[0], 1e30) if len(f2) > 0 else 1e30
+            d_adv = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            ifail_sh = _ival(f2[2], 1) if len(f2) > 2 else 1
+    else:
+        toks1 = cards[0].tokens()
+        table_id = int(float(toks1[0])) if len(toks1) > 0 else 0
+        scale_x = float(toks1[1]) if len(toks1) > 1 else 1.0
+        scale_y = float(toks1[2]) if len(toks1) > 2 else 1.0
+        scale_z = float(toks1[3]) if len(toks1) > 3 else 1.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            eps_max = float(toks2[0]) if len(toks2) > 0 else 1e30
+            d_adv = float(toks2[1]) if len(toks2) > 1 else 0.0
+            ifail_sh = int(float(toks2[2])) if len(toks2) > 2 else 1
+
+    from ..model.entities import FailTab3
+    model.fail_tab3s[block.user_id] = FailTab3(
+        mat_id=block.user_id, title=title, table_id=table_id,
+        scale_x=scale_x, scale_y=scale_y, scale_z=scale_z,
+        eps_max=eps_max, d_adv=d_adv, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -44280,6 +44327,61 @@ def read_sensor_beam_force(block: KeywordBlock, model: Model, log: MessageLog) -
     model.sensors.append(Sensor(
         id=sbf.id, kind="BEAM_FORCE", tdelay=t_delay
     ))
+
+
+def read_eng_velocity(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/VELOCITY`` or ``/ENG/VELOCITY`` (M233): Engine velocity output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/VELOCITY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_vel, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_VELOCITY_1")
+        dt_vel = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_vel = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngVelocity
+    v_id = block.user_id or (len(model.eng_velocities) + 1)
+    model.eng_velocities[v_id] = EngVelocity(
+        id=v_id, title=title, dt_vel=dt_vel, sens_id=sens_id
+    )
+
+
+def read_sensor_truss_force(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/TRUSS_FORCE`` or ``/SENSOR/FORCE_TRUSS`` (M233): Truss element force threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/TRUSS_FORCE/{block.user_id}: missing data card", block.source)
+        return
+
+    truss_id, f_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_TRUSS_FORCE_1")
+        truss_id = _ival(f[0], 0) if len(f) > 0 else 0
+        f_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        truss_id = int(float(toks[0])) if len(toks) > 0 else 0
+        f_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorTrussForce, Sensor
+    stf = SensorTrussForce(
+        id=block.user_id or 1, title=title, truss_id=truss_id,
+        f_max=f_max, t_delay=t_delay
+    )
+    model.sensor_truss_forces[stf.id] = stf
+    model.sensors.append(Sensor(
+        id=stf.id, kind="TRUSS_FORCE", tdelay=t_delay
+    ))
+
 
 
 
@@ -46571,6 +46673,19 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "NORMAL_AXIS": read_perpendicular_joint,
     "SENSOR_BEAM_FORCE": read_sensor_beam_force,
     "SENSOR_FORCE_BEAM": read_sensor_beam_force,
+    # --- M233: Tabulated 3D Failure Criterion, Engine Velocity Output Directive, Gimbal Axis/Universal Joint Aliases, and Truss Force Sensor Suite ---
+    "FAIL_TAB3": read_fail_tab3,
+    "FAIL_TABULATED3": read_fail_tab3,
+    "FAIL_TAB_3D": read_fail_tab3,
+    "VELOCITY": read_eng_velocity,
+    "ENG_VELOCITY": read_eng_velocity,
+    "ENG_VEL": read_eng_velocity,
+    "LAGMUL_GIMBAL_AXIS": read_gimbal_joint,
+    "GIMBAL_AXIS": read_gimbal_joint,
+    "LAGMUL_UNIVERSAL_GIMBAL": read_gimbal_joint,
+    "UNIVERSAL_GIMBAL": read_gimbal_joint,
+    "SENSOR_TRUSS_FORCE": read_sensor_truss_force,
+    "SENSOR_FORCE_TRUSS": read_sensor_truss_force,
 }
 
 
@@ -46579,7 +46694,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
