@@ -12659,6 +12659,30 @@ class FailVoids:
     d_max: float = 1.0       # maximum damage
 
 
+@dataclass
+class FailHC:
+    """``/FAIL/HC/mat_ID`` or ``/FAIL/HOSFORD_COULOMB/mat_ID`` (M215): Hosford-Coulomb fracture initiation model."""
+    mat_id: int = 0
+    title: str = ""
+    a: float = 0.0           # HC parameter a
+    b: float = 0.0           # HC parameter b
+    c: float = 0.0           # HC parameter c
+    n_hc: float = 1.0        # Hosford exponent n
+    ifail_sh: int = 1        # 1: delete on 1 layer, 2: delete on all layers
+    d_max: float = 1.0       # maximum damage
+
+
+@dataclass
+class RBodyStop:
+    """``/RBODY/STOP`` or ``/ENG/RBODY/STOP`` (M215): Rigid body sensor stop / activation control."""
+    id: int = 1
+    title: str = ""
+    rbody_id: int = 0
+    sens_id: int = 0
+    istop_opt: int = 0       # 0: freeze velocity, 1: deactivate constraint
+
+
+
 
 
 

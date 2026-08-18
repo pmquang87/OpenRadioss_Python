@@ -1511,6 +1511,13 @@ class Model:
         self.print_dt: float = 0.0
         self.print_sens_id: int = 0
 
+        # M215 Entities
+        self.fail_hcs: Dict[int, Any] = {}                           # /FAIL/HC, /FAIL/HOSFORD_COULOMB (M215)
+        self.parith_enabled: bool = False                            # /PARITH, /ENG/PARITH (M215)
+        self.eng_version: float = 0.0                                # /VERS, /ENG/VERS (M215)
+        self.rbody_stops: Dict[int, Any] = {}                        # /RBODY/STOP, /ENG/RBODY/STOP (M215)
+
+
 
 
 

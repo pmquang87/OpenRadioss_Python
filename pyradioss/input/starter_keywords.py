@@ -2228,6 +2228,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("VOIDS", "VOID", "POROSITY"):
         read_fail_voids(block, model, log)
         return
+    if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
+        read_fail_hc(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -12387,6 +12390,11 @@ def read_rbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       M36 writer emits for its dual-encoding, which is why ignoring it was
       harmless until real decks — RD-E-1601's dummy — put a real one there).
     """
+    upper_parts = [p.upper() for p in block.parts]
+    if "STOP" in upper_parts:
+        read_rbody_stop(block, model, log)
+        return
+
     if block.fixed:
         title, cards = _fixed_data(block)
         if not cards or cards[0].is_blank:
@@ -41361,6 +41369,39 @@ def read_fail_voids(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_hc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/HC/mat_ID`` or ``/FAIL/HOSFORD_COULOMB/mat_ID`` (M215): Hosford-Coulomb fracture initiation model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/HC/{block.user_id}: missing data card", block.source)
+        return
+
+    a, b, c, n_hc, ifail_sh, d_max = 0.0, 0.0, 0.0, 1.0, 1, 1.0
+    if block.fixed:
+        f = cards[0].cut("FAIL_HC_1")
+        a = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        b = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        c = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        n_hc = _fval(f[3], 1.0) if len(f) > 3 else 1.0
+        ifail_sh = _ival(f[4], 1) if len(f) > 4 else 1
+        d_max = _fval(f[5], 1.0) if len(f) > 5 else 1.0
+    else:
+        toks = cards[0].tokens()
+        a = float(toks[0]) if len(toks) > 0 else 0.0
+        b = float(toks[1]) if len(toks) > 1 else 0.0
+        c = float(toks[2]) if len(toks) > 2 else 0.0
+        n_hc = float(toks[3]) if len(toks) > 3 else 1.0
+        ifail_sh = int(float(toks[4])) if len(toks) > 4 else 1
+        d_max = float(toks[5]) if len(toks) > 5 else 1.0
+
+    from ..model.entities import FailHC
+    model.fail_hcs[block.user_id] = FailHC(
+        mat_id=block.user_id, title=title, a=a, b=b, c=c,
+        n_hc=n_hc, ifail_sh=ifail_sh, d_max=d_max
+    )
+
+
+
 
 
 
@@ -42509,6 +42550,65 @@ def read_eng_print(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 model.print_dt = float(toks[1])
             if len(toks) > 2:
                 model.print_sens_id = int(float(toks[2]))
+
+
+def read_eng_parith(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PARITH``, ``/ENG/PARITH``, ``/PARITH/ON``, ``/PARITH/OFF`` (M215): Parallel arithmetic reproducibility toggle."""
+    upper_parts = [p.upper() for p in block.parts]
+    if "OFF" in upper_parts:
+        model.parith_enabled = False
+        return
+    elif "ON" in upper_parts:
+        model.parith_enabled = True
+
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("ENG_PARITH_1")
+            val = _ival(f[0], 1) if len(f) > 0 else 1
+            model.parith_enabled = bool(val)
+        else:
+            toks = cards[0].tokens()
+            model.parith_enabled = bool(int(float(toks[0]))) if len(toks) > 0 else True
+
+
+def read_eng_vers(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/VERS`` or ``/ENG/VERS`` (M215): Target OpenRadioss version and keyword syntax level."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("ENG_VERS_1")
+            model.eng_version = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        else:
+            toks = cards[0].tokens()
+            model.eng_version = float(toks[0]) if len(toks) > 0 else 0.0
+
+
+def read_rbody_stop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RBODY/STOP`` or ``/ENG/RBODY/STOP`` (M215): Rigid body sensor stop / activation control."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/RBODY/STOP/{block.user_id}: missing data card", block.source)
+        return
+
+    rbody_id, sens_id, istop_opt = 0, 0, 0
+    if block.fixed:
+        f = cards[0].cut("RBODY_STOP_1")
+        rbody_id = _ival(f[0], 0) if len(f) > 0 else 0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+        istop_opt = _ival(f[2], 0) if len(f) > 2 else 0
+    else:
+        toks = cards[0].tokens()
+        rbody_id = int(float(toks[0])) if len(toks) > 0 else 0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+        istop_opt = int(float(toks[2])) if len(toks) > 2 else 0
+
+    from ..model.entities import RBodyStop
+    model.rbody_stops[block.user_id] = RBodyStop(
+        id=block.user_id, title=title, rbody_id=rbody_id,
+        sens_id=sens_id, istop_opt=istop_opt
+    )
+
 
 
 
@@ -44539,6 +44639,18 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "FAIL_POROSITY": read_fail_voids,
     "PRINT": read_eng_print,
     "ENG_PRINT": read_eng_print,
+    # --- M215: Hosford-Coulomb Failure Criterion, Engine Parallel Arithmetic, Engine Version Compatibility, and Rigid Body Stop Suite ---
+    "FAIL_HC": read_fail_hc,
+    "FAIL_HOSFORD_COULOMB": read_fail_hc,
+    "FAIL_HOSFORD": read_fail_hc,
+    "PARITH": read_eng_parith,
+    "ENG_PARITH": read_eng_parith,
+    "PARITH_ON": read_eng_parith,
+    "PARITH_OFF": read_eng_parith,
+    "VERS": read_eng_vers,
+    "ENG_VERS": read_eng_vers,
+    "RBODY_STOP": read_rbody_stop,
+    "ENG_RBODY_STOP": read_rbody_stop,
 }
 
 
