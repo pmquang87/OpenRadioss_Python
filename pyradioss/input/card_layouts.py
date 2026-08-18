@@ -3019,6 +3019,9 @@ LAYOUTS: Dict[str, List[int]] = {
     "FAIL_FRACTAL_DMG_2": [20, 20, 10, 10, 10],
     "ADMESH_SET_1": [20, 10, 20],
     "GAUGE_SPH_1": [10, 20, 20, 10, 20],
+    # M204: HEAT SOLVER, XFEM
+    "HEAT_SOLVER_1": [10, 10, 20, 20, 20],
+    "XFEM_1": [10, 10, 10, 10],
 }
 
 CARD_LAYOUTS = LAYOUTS

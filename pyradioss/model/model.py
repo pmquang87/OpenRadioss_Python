@@ -1396,6 +1396,23 @@ class Model:
         self.boxes_sphere = self.boxes
         self.pressure_loads = self.load_pressures
 
+        # M204 Entities
+        self.heat_solvers: Dict[int, Any] = {}                       # /HEAT/SOLVER, /HEAT/GLOBAL (M204)
+        self.heat_globals = self.heat_solvers
+        self.xfem_controls: Dict[int, Any] = {}                      # /XFEM (M204)
+        self.sensors_airbag: Dict[int, Any] = {}                     # /SENSOR/AIRBAG, /SENSOR/MONVOL (M204)
+        self.sensors_shell: Dict[int, Any] = {}                      # /SENSOR/SHELL (M204)
+        self.sensors_solid: Dict[int, Any] = {}                      # /SENSOR/SOLID (M204)
+        self.sensors_sph: Dict[int, Any] = {}                        # /SENSOR/SPH (M204)
+        self.initemps: Dict[int, Any] = {}                           # /INITEMP dict map (M204)
+        self.imptemps: Dict[int, Any] = {}                           # /IMPTEMP dict map (M204)
+        self.initial_temperatures = self.initemps
+        self.imposed_temperatures = self.imptemps
+        self.load_heats = self.load_therms
+        self.heat_loads = self.load_therms
+        self.heat_mats = self.mat_heat_modifiers
+
+
 
 
 

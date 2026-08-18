@@ -1716,7 +1716,32 @@ def read_heat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub in ("FLUX",):
         read_flux(block, model, log)
     elif sub in ("SOLVER", "GLOBAL", "INIT"):
-        pass  # Global heat / thermal solver parameters parsed cleanly
+        from ..model.entities import HeatSolver
+        hid = block.user_id or 1
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        isolv, itype = 1, 1
+        ttol = 1e-3
+        dttmax = 1.0
+        dttmin = 1e-6
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f = cards[0].cut("HEAT_SOLVER_1")
+                isolv = _ival(f[0], 1)
+                itype = _ival(f[1], 1)
+                ttol = _fval(f[2], 1e-3)
+                dttmax = _fval(f[3], 1.0)
+                dttmin = _fval(f[4], 1e-6)
+            else:
+                toks = cards[0].tokens()
+                isolv = int(float(toks[0])) if len(toks) > 0 else 1
+                itype = int(float(toks[1])) if len(toks) > 1 else 1
+                ttol = float(toks[2]) if len(toks) > 2 else 1e-3
+                dttmax = float(toks[3]) if len(toks) > 3 else 1.0
+                dttmin = float(toks[4]) if len(toks) > 4 else 1e-6
+        model.heat_solvers[hid] = HeatSolver(
+            id=hid, title=title, isolv=isolv, itype=itype,
+            ttol=ttol, dttmax=dttmax, dttmin=dttmin
+        )
     else:
         log.warning(f"/HEAT/{sub} not ported", block.source)
 
@@ -10840,6 +10865,7 @@ def read_imptemp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         tstart=tstart, tstop=tstop, title=title,
     )
     model.imptemp.append(it)
+    model.imptemps[block.user_id] = it
 
 
 #: directions of the /IMPVEL & /IMPDISP cards, mapped to the 6-DOF index
@@ -11991,7 +12017,7 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             id=block.user_id, kind="PYTHON", tdelay=tdelay, script_name=script_name, func_name=func_name, title=title
         ))
     elif kind in ("SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID"):
-        # M136 subsystem sensors
+        # M136, M204 subsystem sensors
         target_id = int(float(t[0])) if len(t) > 0 and t[0].strip() else 0
         v1 = float(t[1]) if len(t) > 1 and t[1].strip() else 0.0
         v2 = float(t[2]) if len(t) > 2 and t[2].strip() else 0.0
@@ -12000,6 +12026,19 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             id=block.user_id, kind=kind, tdelay=tdelay, target_id=target_id,
             dmin=v1, dmax=v2, tmin=tmin, title=title
         ))
+        from ..model.entities import SensorSubsystem
+        ss = SensorSubsystem(
+            id=block.user_id, title=title, kind=kind,
+            target_id=target_id, v1=v1, v2=v2, tmin=tmin, tdelay=tdelay
+        )
+        if kind in ("AIRBAG", "MONVOL"):
+            model.sensors_airbag[block.user_id] = ss
+        elif kind == "SHELL":
+            model.sensors_shell[block.user_id] = ss
+        elif kind == "SOLID":
+            model.sensors_solid[block.user_id] = ss
+        elif kind == "SPH":
+            model.sensors_sph[block.user_id] = ss
     elif kind in ("FORCE", "MOMENT", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX"):
         target_id = int(float(t[0])) if len(t) > 0 and t[0].strip() else 0
         v1 = float(t[1]) if len(t) > 1 and t[1].strip() else 0.0
@@ -14380,7 +14419,8 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         "SUBS", "SUBDOMAIN", "SUBMODEL", "LAGMUL", "GEAR", "RACK", "DIFF",
         "IMPDISP", "IMPVEL", "PLOAD", "PROP", "MAT", "STACK", "PLY",
         "WAVE_SHAPER", "DET", "GUIDED_CABLE", "KJOINT", "SUBINTER",
-        "EBCS", "SEATBELT", "SPH_FLOW"
+        "EBCS", "SEATBELT", "SPH_FLOW", "HEAT", "TEMPER", "THERM",
+        "INITEMP", "IMPTEMP", "INICRACK", "XFEM"
     }
     if block.key0.startswith("THPART_") or (block.key0 == "THPART" and len(block.parts) > 1 and block.parts[1].upper().startswith("GR")):
         read_thpart_group(block, model, log)
@@ -17097,6 +17137,34 @@ def read_inicrack(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         p1=p1, p2=p2, norm=norm, open_flag=open_flag
     )
     model.ini_cracks[cid] = model.inicracks[cid]
+
+
+def read_xfem(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/XFEM[/<subtype>]/id`` (M204): X-FEM extended finite element enrichment control."""
+    from ..model.entities import XfemControl
+    sub = block.parts[1].upper() if len(block.parts) > 1 else "SHELL"
+    xid = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    grpart_id, crack_id, ifail, i_enrich = 0, 0, 0, 1
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("XFEM_1")
+            grpart_id = _ival(f[0]) if len(f) > 0 else 0
+            crack_id = _ival(f[1]) if len(f) > 1 else 0
+            ifail = _ival(f[2]) if len(f) > 2 else 0
+            i_enrich = _ival(f[3], 1) if len(f) > 3 and f[3].strip() else 1
+        else:
+            toks = cards[0].tokens()
+            grpart_id = int(float(toks[0])) if len(toks) > 0 else 0
+            crack_id = int(float(toks[1])) if len(toks) > 1 else 0
+            ifail = int(float(toks[2])) if len(toks) > 2 else 0
+            i_enrich = int(float(toks[3])) if len(toks) > 3 else 1
+    xc = XfemControl(
+        id=xid, title=title, subtype=sub, grpart_id=grpart_id,
+        crack_id=crack_id, ifail=ifail, i_enrich=i_enrich
+    )
+    model.xfem_controls[xid] = xc
+
 
 
 def read_laser(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -21292,6 +21360,7 @@ def read_initemp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         fld_type=fld_type, nodal_temps=nodal_temps, title=title,
     )
     model.initemp.append(it)
+    model.initemps[block.user_id] = it
 
 
 def read_inibri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -42865,6 +42934,24 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "INJECTOR1": read_prop_inject1,
     "INJECTOR2": read_prop_inject2,
     "TYPE26": read_guided_cable,
+    # --- M204: Thermal Solvers, Heat Generation, X-FEM Fracture & Subsystem Sensors Suite ---
+    "HEAT_SOLVER": read_heat,
+    "HEAT_GLOBAL": read_heat,
+    "HEAT_BCS": read_heat,
+    "LOAD_HEAT": read_load,
+    "LOAD_THERM": read_load,
+    "HEAT_LOAD": read_load,
+    "XFEM": read_xfem,
+    "XFEM_SHELL": read_xfem,
+    "XFEM_SOLID": read_xfem,
+    "SENSOR_AIRBAG": read_sensor,
+    "SENSOR_MONVOL": read_sensor,
+    "SENSOR_SHELL": read_sensor,
+    "SENSOR_SOLID": read_sensor,
+    "SENSOR_SPH": read_sensor,
+    "INITEMP": read_initemp,
+    "IMPTEMP": read_imptemp,
+    "INICRACK": read_inicrack,
 }
 
 

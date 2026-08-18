@@ -1141,6 +1141,11 @@ class THRequest:
     variables: List[str] = field(default_factory=list)  # e.g. DX, VX, IE
     title: str = ""
 
+    @property
+    def obj_ids(self) -> List[Union[int, str]]:
+        return self.ids
+
+
 @dataclass
 class MonitoredVolume:
     """A /MONVOL monitored volume (e.g., AIRBAG1)."""
@@ -12146,5 +12151,50 @@ class GaugeSph:
     fcut: float = 0.0
     shell_id: int = 0
     dist: float = 0.0
+
+
+@dataclass
+class HeatSolver:
+    """``/HEAT/SOLVER/id``, ``/HEAT/GLOBAL/id`` (M204): Thermal transient solver controls."""
+    id: int = 1
+    title: str = ""
+    isolv: int = 1
+    itype: int = 1
+    ttol: float = 1e-3
+    dttmax: float = 1.0
+    dttmin: float = 1e-6
+
+
+@dataclass
+class XfemControl:
+    """``/XFEM[/<subtype>]/id`` (M204): X-FEM extended finite element enrichment control."""
+    id: int = 0
+    title: str = ""
+    subtype: str = "SHELL"
+    grpart_id: int = 0
+    crack_id: int = 0
+    ifail: int = 0
+    i_enrich: int = 1
+
+
+@dataclass
+class SensorSubsystem:
+    """``/SENSOR/{AIRBAG|MONVOL|SHELL|SOLID|SPH}/sens_ID`` (M204): Subsystem threshold sensor."""
+    id: int = 0
+    title: str = ""
+    kind: str = "SHELL"
+    target_id: int = 0
+    v1: float = 0.0
+    v2: float = 0.0
+    tmin: float = 0.0
+    tdelay: float = 0.0
+
+
+SensorAirbag = SensorSubsystem
+SensorShell = SensorSubsystem
+SensorSolid = SensorSubsystem
+SensorSph = SensorSubsystem
+HeatGlobal = HeatSolver
+
 
 
