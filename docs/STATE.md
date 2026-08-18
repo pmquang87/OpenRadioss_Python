@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M225)
+## What is implemented (M1 → M226)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -231,6 +231,7 @@ real history is 41 milestones. One line each:
 | M223 | Weibull Failure Criterion, Engine Momentum Tracking Directive, Revolute Joint Aliases, and Energy Error Sensor Suite: /FAIL/WEIBULL (/FAIL/WEIBULL_BRITTLE) statistical brittle fracture model, /MOMENT (/ENG/MOMENT, /ENG/MOMENTUM) engine momentum tracking directive, /LAGMUL/REVOLUTE (/REVOLUTE, /REVOLUTE_JOINT) kinematic joint aliases, and /SENSOR/ENERGY_ERROR (/SENSOR/ENG_ERROR, /SENSOR/EERROR) total energy error percentage threshold sensor |
 | M224 | Polyurethane Foam Failure Criterion, Engine State Variable Tracking Directive, Prismatic Joint Aliases, and Work Ratio Sensor Suite: /FAIL/PU (/FAIL/POLYURETHANE) polyurethane brittle tensile and shear tear failure model, /STATE (/ENG/STATE, /ENG/STATE_VAR) engine state variable history tracking directive, /LAGMUL/PRISMATIC (/PRISMATIC, /PRISMATIC_JOINT) kinematic joint aliases, and /SENSOR/WORK_RATIO (/SENSOR/WRATIO) work ratio threshold sensor |
 | M225 | Griffith Brittle Fracture Criterion, Engine Surface Force Directive, Homokinetic/Cylinder Joint Aliases, and Spring Force Sensor Suite: /FAIL/GRIFFITH (/FAIL/GRIF) multi-axial brittle tensile/compressive fracture model, /SURF (/ENG/SURF, /ENG/SURFACE) engine contact surface force tracking directive, /LAGMUL/HOMOKINETIC (/HOMOKINETIC) and /LAGMUL/CYLINDER (/CYLINDER) kinematic joint aliases, and /SENSOR/SPRING (/SENSOR/SPRING_FORCE, /SENSOR/SPRING_MOMENT) spring element force/moment threshold sensor |
+| M226 | Drucker-Prager Failure Criterion, Engine ALE Grid Smoothing Directive, Slot Line Joint Aliases, and Shell Strain Sensor Suite: /FAIL/DRUCKER (/FAIL/DRUCKER_PRAGER, /FAIL/DP) geomaterial failure model, /ALE (/ENG/ALE, /ENG/ALE_GRID) engine ALE grid smoothing and advection directive, /LAGMUL/SLOT_LINE (/SLOT_LINE, /SLOT_LINE_JOINT) kinematic joint aliases, and /SENSOR/SHELL_STRAIN (/SENSOR/STRAIN_SHELL, /SENSOR/EPS_SHELL) shell element plastic strain threshold sensor |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read

@@ -1647,6 +1647,8 @@ def read_ale(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_ale_muscl(block, model, log)
     elif sub == "FLOW" or (len(block.parts) > 2 and block.parts[1].upper() == "FLOW"):
         read_flow(block, model, log)
+    elif sub in ("", "ENG", "CONTROL", "UPDATE"):
+        read_eng_ale(block, model, log)
     else:
         log.warning(f"/ALE/{sub} not ported — block skipped", block.source)
 
@@ -2260,6 +2262,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("GRIFFITH", "GRIF"):
         read_fail_griffith(block, model, log)
+        return
+    if kind in ("DRUCKER", "DRUCKER_PRAGER", "DP"):
+        read_fail_drucker(block, model, log)
         return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
@@ -11693,6 +11698,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("SPRING", "SPRING_FORCE", "SPRING_MOMENT"):
         read_sensor_spring(block, model, log)
+        return
+    if kind in ("SHELL_STRAIN", "STRAIN_SHELL", "EPS_SHELL"):
+        read_sensor_shell_strain(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -41795,6 +41803,35 @@ def read_fail_griffith(block: KeywordBlock, model: Model, log: MessageLog) -> No
     )
 
 
+def read_fail_drucker(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/DRUCKER/mat_ID`` (M226): Drucker-Prager failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/DRUCKER/{block.user_id}: missing data card", block.source)
+        return
+
+    alpha, k, sigma_t, ifail_sh = 0.0, 0.0, 1e30, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_DRUCKER_1")
+        alpha = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        k = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        sigma_t = _fval(f[2], 1e30) if len(f) > 2 else 1e30
+        ifail_sh = _ival(f[3], 1) if len(f) > 3 else 1
+    else:
+        toks = cards[0].tokens()
+        alpha = float(toks[0]) if len(toks) > 0 else 0.0
+        k = float(toks[1]) if len(toks) > 1 else 0.0
+        sigma_t = float(toks[2]) if len(toks) > 2 else 1e30
+        ifail_sh = int(float(toks[3])) if len(toks) > 3 else 1
+
+    from ..model.entities import FailDrucker
+    model.fail_druckers[block.user_id] = FailDrucker(
+        mat_id=block.user_id, title=title, alpha=alpha,
+        k=k, sigma_t=sigma_t, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -43588,6 +43625,63 @@ def read_sensor_spring(block: KeywordBlock, model: Model, log: MessageLog) -> No
     model.sensors.append(Sensor(
         id=ss.id, kind="SPRING", tdelay=t_delay
     ))
+
+
+def read_eng_ale(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ALE`` or ``/ENG/ALE`` (M226): Engine ALE smoothing and advection directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ALE/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_ale, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_ALE_1")
+        dt_ale = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_ale = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngAle
+    a_id = block.user_id or (len(model.eng_ales) + 1)
+    model.eng_ales[a_id] = EngAle(
+        id=a_id, title=title, dt_ale=dt_ale, sens_id=sens_id
+    )
+
+
+def read_sensor_shell_strain(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SHELL_STRAIN`` or ``/SENSOR/STRAIN_SHELL`` (M226): Shell element strain threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SHELL_STRAIN/{block.user_id}: missing data card", block.source)
+        return
+
+    shell_id, eps_max, ip, t_delay = 0, 1e30, 1, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SHELL_STRAIN_1")
+        shell_id = _ival(f[0], 0) if len(f) > 0 else 0
+        eps_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        ip = _ival(f[2], 1) if len(f) > 2 else 1
+        t_delay = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+    else:
+        toks = cards[0].tokens()
+        shell_id = int(float(toks[0])) if len(toks) > 0 else 0
+        eps_max = float(toks[1]) if len(toks) > 1 else 1e30
+        ip = int(float(toks[2])) if len(toks) > 2 else 1
+        t_delay = float(toks[3]) if len(toks) > 3 else 0.0
+
+    from ..model.entities import SensorShellStrain, Sensor
+    sss = SensorShellStrain(
+        id=block.user_id or 1, title=title, shell_id=shell_id,
+        eps_max=eps_max, ip=ip, t_delay=t_delay
+    )
+    model.sensor_shell_strains[sss.id] = sss
+    model.sensors.append(Sensor(
+        id=sss.id, kind="SHELL_STRAIN", tdelay=t_delay
+    ))
+
 
 
 
@@ -45774,6 +45868,19 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING": read_sensor_spring,
     "SENSOR_SPRING_FORCE": read_sensor_spring,
     "SENSOR_SPRING_MOMENT": read_sensor_spring,
+    # --- M226: Drucker-Prager Failure Criterion, Engine ALE Smoothing Directive, Slot Line Joint Aliases, and Shell Strain Sensor Suite ---
+    "FAIL_DRUCKER": read_fail_drucker,
+    "FAIL_DRUCKER_PRAGER": read_fail_drucker,
+    "FAIL_DP": read_fail_drucker,
+    "ENG_ALE": read_eng_ale,
+    "ENG_ALE_GRID": read_eng_ale,
+    "LAGMUL_SLOT_LINE": read_slot_joint,
+    "LAGMUL_SLOT_LINE_JOINT": read_slot_joint,
+    "SLOT_LINE_JOINT": read_slot_joint,
+    "SLOT_LINE": read_slot_joint,
+    "SENSOR_SHELL_STRAIN": read_sensor_shell_strain,
+    "SENSOR_STRAIN_SHELL": read_sensor_shell_strain,
+    "SENSOR_EPS_SHELL": read_sensor_shell_strain,
 }
 
 
@@ -45782,7 +45889,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

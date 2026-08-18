@@ -1570,6 +1570,12 @@ class Model:
         self.eng_surfs: Dict[int, Any] = {}                          # /SURF, /ENG/SURF (M225)
         self.sensor_springs: Dict[int, Any] = {}                     # /SENSOR/SPRING (M225)
 
+        # M226 Entities
+        self.fail_druckers: Dict[int, Any] = {}                      # /FAIL/DRUCKER (M226)
+        self.eng_ales: Dict[int, Any] = {}                           # /ALE, /ENG/ALE (M226)
+        self.sensor_shell_strains: Dict[int, Any] = {}               # /SENSOR/SHELL_STRAIN (M226)
+
+
 
 
 

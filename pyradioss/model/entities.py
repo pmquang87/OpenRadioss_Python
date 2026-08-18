@@ -13013,6 +13013,38 @@ class SensorSpring:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailDrucker:
+    """``/FAIL/DRUCKER/mat_ID`` (M226): Drucker-Prager failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    alpha: float = 0.0       # pressure sensitivity coefficient
+    k: float = 0.0           # cohesion limit
+    sigma_t: float = 1e30    # tensile cutoff limit
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngAle:
+    """``/ALE`` or ``/ENG/ALE`` (M226): Engine ALE smoothing and advection directive."""
+    id: int = 1
+    title: str = ""
+    dt_ale: float = 0.0      # time frequency for ALE smoothing/advection
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorShellStrain:
+    """``/SENSOR/SHELL_STRAIN`` or ``/SENSOR/STRAIN_SHELL`` (M226): Shell element strain threshold sensor."""
+    id: int = 1
+    title: str = ""
+    shell_id: int = 0        # shell element ID to monitor
+    eps_max: float = 1e30    # maximum strain threshold
+    ip: int = 1              # integration point number
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 
