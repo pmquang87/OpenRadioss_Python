@@ -2249,6 +2249,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("VISCO", "VISCO_PLASTIC", "VISCOUS"):
         read_fail_visco(block, model, log)
         return
+    if kind in ("BAMMAN", "BCJ", "BAMMAN_CHIESA_JOHNSON"):
+        read_fail_bamman(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11669,6 +11672,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("PRESSURE", "PRESS", "P"):
         read_sensor_pressure(block, model, log)
+        return
+    if kind in ("MASS", "MASS_RATIO", "DMASS"):
+        read_sensor_mass_ratio(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -41655,6 +41661,37 @@ def read_fail_visco(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_bamman(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/BAMMAN/mat_ID`` (M222): Bammann-Chiesa-Johnson void damage failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/BAMMAN/{block.user_id}: missing data card", block.source)
+        return
+
+    v0, an, bn, cn, ifail_sh = 0.0, 0.0, 0.0, 0.0, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_BAMMAN_1")
+        v0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        an = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        bn = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        cn = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        ifail_sh = _ival(f[4], 1) if len(f) > 4 else 1
+    else:
+        toks = cards[0].tokens()
+        v0 = float(toks[0]) if len(toks) > 0 else 0.0
+        an = float(toks[1]) if len(toks) > 1 else 0.0
+        bn = float(toks[2]) if len(toks) > 2 else 0.0
+        cn = float(toks[3]) if len(toks) > 3 else 0.0
+        ifail_sh = int(float(toks[4])) if len(toks) > 4 else 1
+
+    from ..model.entities import FailBamman
+    model.fail_bammans[block.user_id] = FailBamman(
+        mat_id=block.user_id, title=title, v0=v0, an=an,
+        bn=bn, cn=cn, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -43232,6 +43269,61 @@ def read_sensor_pressure(block: KeywordBlock, model: Model, log: MessageLog) -> 
     model.sensors.append(Sensor(
         id=sp.id, kind="PRESSURE", tdelay=t_delay
     ))
+
+
+def read_eng_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENERGY`` or ``/ENG/ENERGY`` (M222): Engine energy balance tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_energy, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_ENERGY_1")
+        dt_energy = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_energy = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngEnergy
+    e_id = block.user_id or (len(model.eng_energies) + 1)
+    model.eng_energies[e_id] = EngEnergy(
+        id=e_id, title=title, dt_energy=dt_energy, sens_id=sens_id
+    )
+
+
+def read_sensor_mass_ratio(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/MASS`` or ``/SENSOR/MASS_RATIO`` (M222): Added mass ratio threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/MASS/{block.user_id}: missing data card", block.source)
+        return
+
+    part_id, dmass_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_MASS_1")
+        part_id = _ival(f[0], 0) if len(f) > 0 else 0
+        dmass_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        part_id = int(float(toks[0])) if len(toks) > 0 else 0
+        dmass_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorMassRatio, Sensor
+    sm = SensorMassRatio(
+        id=block.user_id or 1, title=title, part_id=part_id,
+        dmass_max=dmass_max, t_delay=t_delay
+    )
+    model.sensor_mass_ratios[sm.id] = sm
+    model.sensors.append(Sensor(
+        id=sm.id, kind="MASS_RATIO", tdelay=t_delay
+    ))
+
 
 
 
@@ -45360,6 +45452,20 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_PRESSURE": read_sensor_pressure,
     "SENSOR_PRESS": read_sensor_pressure,
     "SENSOR_P": read_sensor_pressure,
+    # --- M222: Bammann Failure Criterion, Engine Energy Balance Directive, Planar Joint Aliases, and Added Mass Sensor Suite ---
+    "FAIL_BAMMAN": read_fail_bamman,
+    "FAIL_BCJ": read_fail_bamman,
+    "FAIL_BAMMAN_CHIESA_JOHNSON": read_fail_bamman,
+    "ENERGY": read_eng_energy,
+    "ENG_ENERGY": read_eng_energy,
+    "ENG_ENERGY_BALANCE": read_eng_energy,
+    "LAGMUL_PLANAR": read_planar_joint,
+    "LAGMUL_PLANAR_JOINT": read_planar_joint,
+    "PLANAR_JOINT": read_planar_joint,
+    "PLANAR": read_planar_joint,
+    "SENSOR_MASS": read_sensor_mass_ratio,
+    "SENSOR_MASS_RATIO": read_sensor_mass_ratio,
+    "SENSOR_DMASS": read_sensor_mass_ratio,
 }
 
 
@@ -45368,7 +45474,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

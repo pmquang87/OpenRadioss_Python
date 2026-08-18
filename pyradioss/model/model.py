@@ -1550,6 +1550,12 @@ class Model:
         self.eng_masses: Dict[int, Any] = {}                         # /MASS, /ENG/MASS (M221)
         self.sensor_pressures: Dict[int, Any] = {}                   # /SENSOR/PRESSURE, /SENSOR/PRESS (M221)
 
+        # M222 Entities
+        self.fail_bammans: Dict[int, Any] = {}                       # /FAIL/BAMMAN (M222)
+        self.eng_energies: Dict[int, Any] = {}                       # /ENERGY, /ENG/ENERGY (M222)
+        self.sensor_mass_ratios: Dict[int, Any] = {}                 # /SENSOR/MASS, /SENSOR/MASS_RATIO (M222)
+
+
 
 
 

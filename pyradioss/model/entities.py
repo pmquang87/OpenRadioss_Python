@@ -12892,6 +12892,38 @@ class SensorPressure:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailBamman:
+    """``/FAIL/BAMMAN/mat_ID`` (M222): Bammann-Chiesa-Johnson void damage failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    v0: float = 0.0          # initial void volume fraction
+    an: float = 0.0          # void nucleation parameter
+    bn: float = 0.0          # void growth parameter
+    cn: float = 0.0          # void coalescence exponent
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngEnergy:
+    """``/ENERGY`` or ``/ENG/ENERGY`` (M222): Engine energy balance tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_energy: float = 0.0   # time frequency for energy balance
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorMassRatio:
+    """``/SENSOR/MASS`` or ``/SENSOR/MASS_RATIO`` (M222): Added mass ratio threshold sensor."""
+    id: int = 1
+    title: str = ""
+    part_id: int = 0         # target part ID (0 for global)
+    dmass_max: float = 1e30  # maximum added mass ratio threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 
