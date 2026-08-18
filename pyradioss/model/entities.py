@@ -12478,6 +12478,43 @@ class DampPart:
     tstop: float = 1.0e30
 
 
+@dataclass
+class PlanarJoint:
+    """``/LAGMUL/PLANAR`` or ``/PLANAR/id`` (M210): Planar kinematic joint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    axis_dir: int = 3        # normal axis: 1: X, 2: Y, 3: Z
+    skew_id: int = 0
+    tol: float = 1e-6
+
+
+@dataclass
+class CardanJoint:
+    """``/LAGMUL/CARDAN`` or ``/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    axis_dir: int = 1        # primary axis: 1: X, 2: Y, 3: Z
+    skew_id: int = 0
+    tol: float = 1e-6
+
+
+@dataclass
+class FailTbid:
+    """``/FAIL/TBID/mat_ID`` (M210): Tabular failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    fct_id: int = 0          # function ID or table ID (triaxiality -> failure plastic strain)
+    ifail_sh: int = 1        # 1: delete on 1 layer, 2: delete on all layers
+    eps_dot_0: float = 1.0   # reference strain rate
+    d_max: float = 1.0       # maximum damage
+    f_smooth: float = 0.0    # smoothing factor
+
+
+
 
 
 

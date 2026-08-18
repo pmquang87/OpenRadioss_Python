@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M209)
+## What is implemented (M1 → M210)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -215,6 +215,7 @@ real history is 41 milestones. One line each:
 | M207 | Pull/Push Directional Springs, Energy Ratio & Shear Lock Sensors, Parallelepiped/Truncated Cone Rigid Walls, and Interface Time Step Control Directives Suite: /PROP/TYPE47 (/PROP/SPR_PULL) tension-only pulling spring property, /PROP/TYPE48 (/PROP/SPR_PUSH) compression-only pushing spring property, /SENSOR/RATIO (/SENSOR/ENERGY_RATIO) energy ratio threshold sensor, /SENSOR/SHEAR_LOCK shear locking and hourglass threshold sensor, /RWALL/PARALLELEPIPED (/RWALL/PARAL) and /RWALL/TRUNC_CONE (/RWALL/TRUNCATED_CONE) rigid wall geometry aliases, and /DT/INTER/DEL and /DT/NODA/CFL time-step controls |
 | M208 | Ball/Pin Kinematic Joints, Type 54 Layered Thick Shell Properties, and Engine Rayleigh Damping Directives Suite: /LAGMUL/BALL_JOINT (/BALL_JOINT) spherical kinematic joint constraint, /LAGMUL/PIN_JOINT (/PIN_JOINT) revolute pin joint constraint with axis direction and skew frame, /PROP/TYPE54 (/PROP/TSH_P54) layered composite thick shell property with shear factors, integration points and ply definitions, and /ENG/DAMP (/DAMP) global Rayleigh damping controls |
 | M209 | Slider/Cylindrical Kinematic Joints, Part Rayleigh Damping, and Engine Sub-cycling Directives Suite: /LAGMUL/SLIDER (/SLIDER) prismatic slider kinematic joint constraint, /LAGMUL/CYL_JOINT (/CYL_JOINT) cylindrical kinematic joint constraint with axis direction and skew frame, /DAMP/PART part-level Rayleigh mass and stiffness damping factors, and /ENG/SUB_CYCLE (/SUB_CYCLE) engine element and interface sub-cycling controls |
+| M210 | Planar/Cardan Kinematic Joints, Tabular Failure Criterion, and Engine Animation Directives Suite: /LAGMUL/PLANAR (/PLANAR) planar kinematic joint constraint, /LAGMUL/CARDAN (/CARDAN) universal kinematic joint constraint with axis direction and skew frame, /FAIL/TBID (/FAIL/TABLE) tabular failure criterion with triaxiality plastic strain table ID, and /ANIM/DT (/ENG/ANIM/DT) engine animation output frequency and sensor gating |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read

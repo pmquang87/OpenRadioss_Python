@@ -2213,6 +2213,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("FRACTAL", "FRACTAL_DMG"):
         read_fail_fractal(block, model, log)
         return
+    if kind in ("TBID", "TABLE", "FAIL_TBID"):
+        read_fail_tbid(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -22800,6 +22803,12 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub in ("CYL_JOINT", "CYLINDER_JOINT", "CYL", "CYLINDER"):
         read_cyl_joint(block, model, log)
         return
+    elif sub in ("PLANAR", "PLANAR_JOINT", "PLANE"):
+        read_planar_joint(block, model, log)
+        return
+    elif sub in ("CARDAN", "UNIVERSAL", "UNIVERSAL_JOINT", "CARDAN_JOINT"):
+        read_cardan_joint(block, model, log)
+        return
 
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     lagmod = 1
@@ -23045,6 +23054,67 @@ def read_cyl_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=block.user_id, title=title, node1=node1, node2=node2,
         axis_dir=axis_dir, skew_id=skew_id, tol=tol
     )
+
+
+def read_planar_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PLANAR/id`` or ``/LAGMUL/PLANAR/id`` (M210): Planar kinematic joint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PLANAR/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, axis_dir, skew_id, tol = 0, 0, 3, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("PLANAR_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        axis_dir = _ival(f[2], 3) if len(f) > 2 else 3
+        skew_id = _ival(f[3], 0) if len(f) > 3 else 0
+        tol = _fval(f[4], 1e-6) if len(f) > 4 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        axis_dir = int(float(toks[2])) if len(toks) > 2 else 3
+        skew_id = int(float(toks[3])) if len(toks) > 3 else 0
+        tol = float(toks[4]) if len(toks) > 4 else 1e-6
+
+    from ..model.entities import PlanarJoint
+    model.planar_joints[block.user_id] = PlanarJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis_dir=axis_dir, skew_id=skew_id, tol=tol
+    )
+
+
+def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/CARDAN/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, axis_dir, skew_id, tol = 0, 0, 1, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("CARDAN_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        axis_dir = _ival(f[2], 1) if len(f) > 2 else 1
+        skew_id = _ival(f[3], 0) if len(f) > 3 else 0
+        tol = _fval(f[4], 1e-6) if len(f) > 4 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        axis_dir = int(float(toks[2])) if len(toks) > 2 else 1
+        skew_id = int(float(toks[3])) if len(toks) > 3 else 0
+        tol = float(toks[4]) if len(toks) > 4 else 1e-6
+
+    from ..model.entities import CardanJoint
+    model.cardan_joints[block.user_id] = CardanJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis_dir=axis_dir, skew_id=skew_id, tol=tol
+    )
+
 
 
 
@@ -40860,6 +40930,37 @@ def read_fail_tab2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     read_fail(block, model, log)
 
 
+def read_fail_tbid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/TBID/mat_ID`` (M210): Tabular failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/TBID/{block.user_id}: missing data card", block.source)
+        return
+
+    fct_id, ifail_sh, eps_dot_0, d_max, f_smooth = 0, 1, 1.0, 1.0, 0.0
+    if block.fixed:
+        f = cards[0].cut("FAIL_TBID_1")
+        fct_id = _ival(f[0]) if len(f) > 0 else 0
+        ifail_sh = _ival(f[1], 1) if len(f) > 1 else 1
+        eps_dot_0 = _fval(f[2], 1.0) if len(f) > 2 else 1.0
+        d_max = _fval(f[3], 1.0) if len(f) > 3 else 1.0
+        f_smooth = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+    else:
+        toks = cards[0].tokens()
+        fct_id = int(float(toks[0])) if len(toks) > 0 else 0
+        ifail_sh = int(float(toks[1])) if len(toks) > 1 else 1
+        eps_dot_0 = float(toks[2]) if len(toks) > 2 else 1.0
+        d_max = float(toks[3]) if len(toks) > 3 else 1.0
+        f_smooth = float(toks[4]) if len(toks) > 4 else 0.0
+
+    from ..model.entities import FailTbid
+    model.fail_tbids[block.user_id] = FailTbid(
+        mat_id=block.user_id, title=title, fct_id=fct_id,
+        ifail_sh=ifail_sh, eps_dot_0=eps_dot_0, d_max=d_max, f_smooth=f_smooth
+    )
+
+
+
 def read_fail_alter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/ALTER`` (M191): Alter glass/laminate crack propagation failure model."""
     read_fail(block, model, log)
@@ -41901,6 +42002,24 @@ def read_eng_sub_cycle(block: KeywordBlock, model: Model, log: MessageLog) -> No
             model.sub_cycle_ratio = int(float(toks[0])) if len(toks) > 0 else 1
             if len(toks) > 2:
                 model.sub_cycle_inter = bool(int(float(toks[2])))
+
+
+def read_anim_dt(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ANIM/DT`` or ``/ENG/ANIM/DT`` (M210): Animation output frequency and sensor gating."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("ENG_ANIM_DT_1")
+            model.anim_tstart = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            model.anim_dt = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            model.anim_sens_id = _ival(f[2], 0) if len(f) > 2 else 0
+        else:
+            toks = cards[0].tokens()
+            model.anim_tstart = float(toks[0]) if len(toks) > 0 else 0.0
+            model.anim_dt = float(toks[1]) if len(toks) > 1 else 0.0
+            if len(toks) > 2:
+                model.anim_sens_id = int(float(toks[2]))
+
 
 
 
@@ -43849,6 +43968,18 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "DAMP_PART": read_damp_part,
     "ENG_SUB_CYCLE": read_eng_sub_cycle,
     "SUB_CYCLE": read_eng_sub_cycle,
+    # --- M210: Planar/Cardan Kinematic Joints, Tabular Failure Criterion, and Engine Animation Directives Suite ---
+    "LAGMUL_PLANAR": read_planar_joint,
+    "PLANAR": read_planar_joint,
+    "PLANAR_JOINT": read_planar_joint,
+    "LAGMUL_CARDAN": read_cardan_joint,
+    "CARDAN": read_cardan_joint,
+    "UNIVERSAL": read_cardan_joint,
+    "UNIVERSAL_JOINT": read_cardan_joint,
+    "FAIL_TBID": read_fail_tbid,
+    "FAIL_TABLE": read_fail_tbid,
+    "ANIM_DT": read_anim_dt,
+    "ENG_ANIM_DT": read_anim_dt,
 }
 
 

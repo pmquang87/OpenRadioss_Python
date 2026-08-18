@@ -1469,6 +1469,15 @@ class Model:
         self.sub_cycle_ratio: int = 1
         self.sub_cycle_inter: bool = False
 
+        # M210 Entities
+        self.planar_joints: Dict[int, Any] = {}                      # /LAGMUL/PLANAR, /PLANAR (M210)
+        self.cardan_joints: Dict[int, Any] = {}                      # /LAGMUL/CARDAN, /CARDAN (M210)
+        self.fail_tbids: Dict[int, Any] = {}                         # /FAIL/TBID (M210)
+        self.anim_dt: float = 0.0                                    # /ANIM/DT, /ENG/ANIM/DT (M210)
+        self.anim_tstart: float = 0.0
+        self.anim_sens_id: int = 0
+
+
 
 
 
