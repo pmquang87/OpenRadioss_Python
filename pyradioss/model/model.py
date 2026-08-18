@@ -1257,6 +1257,33 @@ class Model:
         self.funct_smooths: Dict[int, FunctSmooth] = {}             # /FUNCT_SMOOTH (M195)
         self.ini_state_tables: Dict[str, IniStateTable] = {}        # /INI... state tables (M195)
         self.checksum_directives: List[str] = []                    # /CHECKSUM directives (M195)
+
+        # M196 additions
+        self.mat_law113s: Dict[int, Any] = {}                       # /MAT/LAW113, /MAT/SPR_BEAM (M196)
+        self.mat_spr_beams = self.mat_law113s
+        self.mat_law95s: Dict[int, Any] = {}                        # /MAT/LAW95, /MAT/SEW (M196)
+        self.mat_sews = self.mat_law95s
+        self.mat_law48s: Dict[int, Any] = {}                        # /MAT/LAW48, /MAT/ZHAO (M196)
+        self.mat_zhaos = self.mat_law48s
+        self.mat_law49s: Dict[int, Any] = {}                        # /MAT/LAW49, /MAT/STEINB (M196)
+        self.mat_steinbergs = self.mat_law49s
+        self.mat_law106s: Dict[int, Any] = {}                       # /MAT/LAW106, /MAT/P_FOAM (M196)
+        self.mat_poly_foams = self.mat_law106s
+        self.mat_law77s: Dict[int, Any] = {}                        # /MAT/LAW77, /MAT/OGDEN_HYPO (M196)
+        self.mat_ogden_hypos = self.mat_law77s
+        self.mat_law63s: Dict[int, Any] = {}                        # /MAT/LAW63, /MAT/SOIL_DISC (M196)
+        self.mat_soil_discs = self.mat_law63s
+        self.mat_law92s: Dict[int, Any] = {}                        # /MAT/LAW92, /MAT/HILL_ORTH (M196)
+        self.mat_hill_orths = self.mat_law92s
+        self.prop_type26s: Dict[int, Any] = {}                      # /PROP/TYPE26, /PROP/SPR_TAB (M196)
+        self.prop_spr_tabs = self.prop_type26s
+        self.damp_inters: Dict[int, Any] = {}                       # /DAMP/INTER (M196)
+        self.inter_type18s: Dict[int, Any] = {}                     # /INTER/TYPE18 (M196)
+        self.frame_nods: Dict[int, Any] = {}                        # /FRAME/NOD, /FRAME/NODE (M196)
+        self.ini_spr_tables: Dict[int, Any] = {}                    # /INISPR, /INISPRI (M196)
+        self.table_blocks: Dict[int, Any] = {}                      # /TABLE, /TABLE/0, /TABLE/1 (M196)
+        self.merge_rbodies: Dict[int, Any] = {}                     # /MERGE/RBODY (M196)
+
         self.th_requests: List[THRequest] = []
 
         self.title: str = "pyradioss model"

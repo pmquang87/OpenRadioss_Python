@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M195)
+## What is implemented (M1 → M196)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -201,6 +201,7 @@ real history is 41 milestones. One line each:
 | M193 | Extended Mohr-Coulomb, NXT, Tuler-Butcher, Mullins, Cockcroft-Latham & Gene1 failure criteria, Law 53/54/74 & Ogden hyperelastic materials, integrated beam property, default interface & element state directives suite: /FAIL/EMC, /FAIL/NXT, /FAIL/TBUTCHER, /FAIL/MULLINS (/FAIL/MULLINS_OR), /FAIL/COCKCROFT, /FAIL/GENE1, /FAIL/XFEM_FLD, /FAIL/XFEM_JOHNS, /FAIL/XFEM_TBUTC, /MAT/LAW53 (/MAT/TSAI_TAB), /MAT/LAW54 (/MAT/PREDIT), /MAT/LAW74 (/MAT/HILL_THERM), /MAT/LAW82 (/MAT/OGDEN), /PROP/TYPE18 & /PROP/INT_BEAM (integrated beam), /DEF_INTER/TYPE11, /DEF_INTER/TYPE19, /DEF_INTER/TYPE25, /STATE/BEAM, /STATE/BRICK, /STATE/NODE, /STATE/SHELL, /STATE/SPRING, /STATE/TRUSS |
 | M194 | Tabulated failure criteria, concrete subgrade, Hill-48 & nonlocal materials, pulling spring property, default tied interface, element aliases, SPH flow, MID/PID directives, Engine TH & Python function suite: /FAIL/TAB1, /MAT/LAW40 (/MAT/CONCR_SUB), /MAT/LAW102 (/MAT/HILL_48), /MAT/NLOCAL, /PROP/TYPE13 (/PROP/SPR_PULL), /DEF_INTER/TYPE2, /SENSOR/INTER, /ACTIV, /SPH_FLOW, /MID, /PID, /SHELL3N, /SOLIDE, /SOLID, /TETRA, /SPHCEL, /SPHCELL, /TH/CLUSTER, /TH/SH3N, /TH/SHEL, /TH/SPH_FLOW, /FUNCT_PYTHON |
 | M195 | Hensel-Spittel hot-forming, 6-DOF generalized spring, predefined plasticity & Drucker-Prager 2nd materials, spring material property, smoothed curve function, oriented friction, frequency & function damping, initial state tables, checksums & engine output directives suite: /MAT/LAW103 (/MAT/HENSEL_SPITTEL / /MAT/HEN), /MAT/LAW108 (/MAT/SPR_GENE), /MAT/PLAS_PREDEF, /MAT/DPRAG2, /PROP/TYPE23 (/PROP/SPR_MAT), /FUNCT_SMOOTH, /FRIC_ORIENT, /DAMP/FREQ_RANGE, /DAMP/FUNCT, /INIBRI/STRS_FGLO, /INISPHCEL (/INICEL/SPH), /INISH3/FAIL, /INISHE/FAIL, /INISHE/STRA_F_GLOB, /CHECKSUM/START, /CHECKSUM/END, /ANIM/SPRING/FORC, /ANIM/BRICK/TENS, /ENG/STATE/DT, /ENG/DYNAIN/DT |
+| M196 | Spring-beam 6-DOF, sew/stitch seam & Zhao hardening material models, ALE coupling & cylindrical coordinate frame suite: /MAT/LAW113 (/MAT/SPR_BEAM / /MAT/BEAM_SPRING), /PROP/TYPE35 (/PROP/STITCH / /PROP/SEW), /MAT/LAW48 (/MAT/ZHAO / /MAT/PLAS_ZHAO), /INTER/TYPE18, /FRAME/NOD (/FRAME/NODE), /TABLE/INIBRI/STRA_F, /TABLE/INIBRI/ENER, /TABLE/INISHE/STRA_F, /TABLE/INISH3/STRA_F, /TABLE/INISPH, /DAMP/INTER |
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
 that entry only. Feature-matrix tables: §4 (rows current through M41 even

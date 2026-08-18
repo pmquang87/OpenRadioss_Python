@@ -1160,6 +1160,31 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("DPRAG2", "DRUCKER_PRAGER_2", "MAT_DPRAG2"):
         read_mat_dprag2(block, model, log)
         return
+    # M196: LAW113 (SPR_BEAM), LAW95 (SEW), LAW48 (ZHAO), LAW49 (STEINB), LAW106 (P_FOAM), LAW77 (OGDEN_HYPO), LAW63 (SOIL_DISC), LAW92 (HILL_ORTH)
+    if lawname in ("LAW113", "SPR_BEAM", "MAT_SPR_BEAM", "LAW113_SPR_BEAM"):
+        read_mat_law113(block, model, log)
+        return
+    if lawname in ("LAW95", "SEW", "SEWING", "MAT_SEW", "MAT_SEWING", "LAW95_SEW"):
+        read_mat_law95(block, model, log)
+        return
+    if lawname in ("LAW48", "ZHAO", "MAT_ZHAO", "LAW48_ZHAO"):
+        read_mat_law48(block, model, log)
+        return
+    if lawname in ("LAW49", "STEINB", "STEINBERG", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+        read_mat_law49(block, model, log)
+        return
+    if lawname in ("LAW106", "P_FOAM", "POLY_FOAM", "MAT_P_FOAM", "MAT_POLY_FOAM", "LAW106_P_FOAM"):
+        read_mat_law106(block, model, log)
+        return
+    if lawname in ("LAW77", "OGDEN_HYPO", "HYPO_VISCO", "MAT_OGDEN_HYPO", "MAT_HYPO_VISCO", "LAW77_OGDEN_HYPO"):
+        read_mat_law77(block, model, log)
+        return
+    if lawname in ("LAW63", "SOIL_DISC", "HANSEL", "MAT_SOIL_DISC", "MAT_HANSEL", "LAW63_SOIL_DISC"):
+        read_mat_law63(block, model, log)
+        return
+    if lawname in ("LAW92", "HILL_ORTH", "MAT_HILL_ORTH", "LAW92_HILL_ORTH"):
+        read_mat_law92(block, model, log)
+        return
     if lawname in ("HEAT", "HEAT_TRANSFER"):
         read_mat_heat(block, model, log)
         return
@@ -7699,6 +7724,9 @@ def read_table(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             read_iniqua(b, model, log)
             return
     if len(block.parts) < 3:
+        if len(block.parts) == 2 and (block.user_id or block.parts[1].isdigit()):
+            read_table_block(block, model, log)
+            return
         log.warning(f"/TABLE: missing dimension or id part", block.source)
         return
     try:
@@ -8491,11 +8519,26 @@ def _read_reference_system(block: KeywordBlock, model: Model,
         # ---- vector-defined (origin + Y' + Z') ---------------------------
         if sub == "NOD":
             # /FRAME/NOD, 1 node + 2 vectors: node card, then Y', Z'
-            sf.n1 = _ival(cards[0].cut("SKEW_MOV2")[0])
+            if block.fixed:
+                f0 = cards[0].cut("SKEW_MOV2")
+                sf.n1 = _ival(f0[0]) if len(f0) > 0 else 0
+                sf.n2 = _ival(f0[1]) if len(f0) > 1 else 0
+                sf.n3 = _ival(f0[2]) if len(f0) > 2 else 0
+            else:
+                toks0 = cards[0].tokens()
+                sf.n1 = int(float(toks0[0])) if len(toks0) > 0 else 0
+                sf.n2 = int(float(toks0[1])) if len(toks0) > 1 else 0
+                sf.n3 = int(float(toks0[2])) if len(toks0) > 2 else 0
             vecs = cards[1:3]
             sf.origin_card = None
         elif len(cards) >= 3:
-            sf.origin_card = np.array(_cut_floats(cards[0], "SKEW_V3")[:3])
+            if block.fixed:
+                sf.origin_card = np.array(_cut_floats(cards[0], "SKEW_V3")[:3])
+            else:
+                o_toks = cards[0].tokens()
+                sf.origin_card = np.array([float(o_toks[0]) if len(o_toks) > 0 else 0.0,
+                                           float(o_toks[1]) if len(o_toks) > 1 else 0.0,
+                                           float(o_toks[2]) if len(o_toks) > 2 else 0.0])
             vecs = cards[1:3]
         else:
             sf.origin_card = np.zeros(3)          # radioss51: no origin card
@@ -8505,8 +8548,18 @@ def _read_reference_system(block: KeywordBlock, model: Model,
                       f"(Y' then Z'){' after the origin card' if len(cards) >= 3 else ''}",
                       block.source)
             return
-        sf.yaxis = np.array(_cut_floats(vecs[0], "SKEW_V3")[:3])
-        sf.zaxis = np.array(_cut_floats(vecs[1], "SKEW_V3")[:3])
+        if block.fixed:
+            sf.yaxis = np.array(_cut_floats(vecs[0], "SKEW_V3")[:3])
+            sf.zaxis = np.array(_cut_floats(vecs[1], "SKEW_V3")[:3])
+        else:
+            y_toks = vecs[0].tokens()
+            z_toks = vecs[1].tokens()
+            sf.yaxis = np.array([float(y_toks[0]) if len(y_toks) > 0 else 0.0,
+                                 float(y_toks[1]) if len(y_toks) > 1 else 0.0,
+                                 float(y_toks[2]) if len(y_toks) > 2 else 0.0])
+            sf.zaxis = np.array([float(z_toks[0]) if len(z_toks) > 0 else 0.0,
+                                 float(z_toks[1]) if len(z_toks) > 1 else 0.0,
+                                 float(z_toks[2]) if len(z_toks) > 2 else 0.0])
         sf.imov = 0
     else:
         # ---- node-defined (MOV / MOV2 / 3-node NOD) ----------------------
@@ -8538,6 +8591,17 @@ def _read_reference_system(block: KeywordBlock, model: Model,
                       f"(got N1={sf.n1} N2={sf.n2} N3={sf.n3})", block.source)
             return
     model.skews.add(sf)
+    if kind == "FRAME" and sub in ("NOD", "NODE"):
+        from ..model.entities import FrameNod
+        fnod = FrameNod(
+            id=block.user_id, title=title, originnodeid=sf.n1, axisnodeid=sf.n2, planenodeid=sf.n3,
+            globalyaxis=list(sf.yaxis) if sf.yaxis is not None else [0.0, 0.0, 0.0],
+            globalzaxis=list(sf.zaxis) if sf.zaxis is not None else [0.0, 0.0, 0.0],
+            params={"originnodeid": sf.n1, "axisnodeid": sf.n2, "planenodeid": sf.n3,
+                    "globalyaxis": list(sf.yaxis) if sf.yaxis is not None else [0.0, 0.0, 0.0],
+                    "globalzaxis": list(sf.zaxis) if sf.zaxis is not None else [0.0, 0.0, 0.0]}
+        )
+        model.frame_nods[block.user_id] = fnod
 
 
 def read_skew(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -12253,6 +12317,8 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         gap = 0.0
         tstart = 0.0
         tstop = 1.0e30
+        istf = 0
+        multimp = 4
         stiff_dc = 0.0
         sort_fact = 0.2
 
@@ -12262,28 +12328,22 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 grnod_id = _ival(raw0[:10])
                 surf_id = _ival(raw0[10:20])
                 grbric_id = _ival(raw0[20:30])
-                if len(raw0) > 80:
-                    f0 = cards[0].cut("INTER_TYPE18_1")
-                    igap = _ival(f0[4]) if len(f0) > 4 else 0
-                    ibag = _ival(f0[6]) if len(f0) > 6 else 0
-                    idel18 = _ival(f0[7]) if len(f0) > 7 else 0
-                    iauto = _ival(f0[9]) if len(f0) > 9 else 0
-                else:
-                    ibag = _ival(raw0[60:70])
+                istf = grbric_id
+                if len(raw0) > 30:
+                    igap = _ival(raw0[30:50])
+                if len(raw0) > 50:
+                    ibag = _ival(raw0[50:70])
+                if len(raw0) > 70:
                     idel18 = _ival(raw0[70:80])
+                if len(raw0) > 80:
+                    iauto = _ival(raw0[80:100])
             if len(cards) >= 2 and not cards[1].is_blank:
                 raw1 = cards[1].raw
                 stfac = _fval(raw1[:20], 1.0)
-                if len(raw1) > 80:
-                    f1 = cards[1].cut("INTER_TYPE18_2")
-                    vref = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
-                    gap = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
-                    tstart = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
-                    tstop = _fval(f1[4], 1.0e30) if len(f1) > 4 else 1.0e30
-                else:
-                    gap = _fval(raw1[40:60], 0.0) if len(raw1) > 40 else 0.0
-                    tstart = _fval(raw1[60:80], 0.0) if len(raw1) > 60 else 0.0
-                    tstop = _fval(raw1[80:100], 1.0e30) if len(raw1) > 80 else 1.0e30
+                vref = _fval(raw1[20:40], 0.0) if len(raw1) > 20 else 0.0
+                gap = _fval(raw1[40:60], 0.0) if len(raw1) > 40 else 0.0
+                tstart = _fval(raw1[60:80], 0.0) if len(raw1) > 60 else 0.0
+                tstop = _fval(raw1[80:100], 1.0e30) if len(raw1) > 80 else 1.0e30
             if len(cards) >= 3 and not cards[2].is_blank:
                 raw2 = cards[2].raw
                 stiff_dc = _fval(raw2[40:60], 0.0) if len(raw2) > 40 else 0.0
@@ -12297,6 +12357,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 grnod_id = int(float(t0[0])) if len(t0) > 0 else 0
                 surf_id = int(float(t0[1])) if len(t0) > 1 else 0
                 grbric_id = int(float(t0[2])) if len(t0) > 2 else 0
+                istf = grbric_id
                 igap = int(float(t0[3])) if len(t0) > 3 else 0
                 ibag = int(float(t0[4])) if len(t0) > 4 else 0
                 idel18 = int(float(t0[5])) if len(t0) > 5 else 0
@@ -12313,6 +12374,14 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 stiff_dc = float(t2[0]) if len(t2) > 0 else 0.0
                 sort_fact = float(t2[1]) if len(t2) > 1 else 0.2
 
+        from ..model.entities import InterType18
+        inter18 = InterType18(
+            id=block.user_id, title=title, grnod_id=grnod_id, surf_id=surf_id, grbric_id=grbric_id,
+            istf=istf, igap=igap, multimp=multimp, ibag=ibag, idel18=idel18, iauto=iauto,
+            stfac=stfac, vref=vref, gap=gap, tstart=tstart, tstop=tstop, stiff_dc=stiff_dc, sort_fact=sort_fact,
+            params={"grnod_id": grnod_id, "surf_id": surf_id, "grbric_id": grbric_id, "igap": igap, "ibag": ibag, "idel18": idel18, "iauto": iauto, "stfac": stfac, "vref": vref, "gap": gap, "tstart": tstart, "tstop": tstop, "stiff_dc": stiff_dc, "sort_fact": sort_fact}
+        )
+        model.inter_type18s[block.user_id] = inter18
         model.interfaces.append(Interface(
             id=block.user_id, type=18, grnod_id=grnod_id, surf_id=surf_id,
             grbric_id1=grbric_id, igap=igap, ibag=ibag, idel=idel18, idel18=idel18,
@@ -15940,11 +16009,14 @@ def read_merge(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         )
     else:
         items = []
+        rbody_master_id = 0
+        rbody_slave_ids = []
         if cards:
             start_idx = 0
             first_toks = cards[0].tokens()
             if len(first_toks) == 1:
                 start_idx = 1
+            all_toks = []
             for c in cards[start_idx:]:
                 if block.fixed:
                     f = c.cut("MERGE_RBODY_ITEM")
@@ -15955,8 +16027,12 @@ def read_merge(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                         s_t = _ival(f[3]) or 1
                         ifl = _ival(f[4]) or 2
                         items.append((m_id, m_t, s_id, s_t, ifl))
+                        if rbody_master_id == 0:
+                            rbody_master_id = m_id
+                        rbody_slave_ids.append(s_id)
                 else:
                     toks = c.tokens()
+                    all_toks.extend([int(float(t)) for t in toks if t.strip()])
                     if len(toks) >= 2:
                         m_id = int(float(toks[0]))
                         m_t = int(float(toks[1])) if len(toks) > 1 else 1
@@ -15964,9 +16040,15 @@ def read_merge(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                         s_t = int(float(toks[3])) if len(toks) > 3 else 1
                         ifl = int(float(toks[4])) if len(toks) > 4 else 2
                         items.append((m_id, m_t, s_id, s_t, ifl))
-        model.rbody_merges[block.user_id] = MergeRbody(
-            id=block.user_id, title=title, items=items
+            if not block.fixed and all_toks and rbody_master_id == 0:
+                rbody_master_id = all_toks[0]
+                rbody_slave_ids = all_toks[1:]
+        mb = MergeRbody(
+            id=block.user_id, title=title, items=items,
+            rbody_master_id=rbody_master_id, rbody_slave_ids=rbody_slave_ids
         )
+        model.rbody_merges[block.user_id] = mb
+        model.merge_rbodies[block.user_id] = mb
 
 
 def read_inicrack(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -16415,6 +16497,11 @@ def read_damp_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     tstart = 0.0
     tstop = 1.0e30
 
+    alpha_yy = 0.0
+    beta_yy = 0.0
+    alpha_zz = 0.0
+    beta_zz = 0.0
+
     if block.fixed:
         f1 = cards[0].cut("DAMP_INTER_1")
         nb_time_step = _ival(f1[0]) if len(f1) > 0 else 0
@@ -16428,6 +16515,14 @@ def read_damp_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             skew_id = _ival(f2[3]) if len(f2) > 3 else 0
             tstart = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
             tstop = _fval(f2[5], 1.0e30) if len(f2) > 5 else 1.0e30
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].tokens()
+            alpha_yy = _safe_float(f3[0]) if len(f3) > 0 else 0.0
+            beta_yy = _safe_float(f3[1]) if len(f3) > 1 else 0.0
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].tokens()
+            alpha_zz = _safe_float(f4[0]) if len(f4) > 0 else 0.0
+            beta_zz = _safe_float(f4[1]) if len(f4) > 1 else 0.0
     else:
         t1 = cards[0].tokens()
         nb_time_step = int(float(t1[0])) if len(t1) > 0 else 0
@@ -16441,11 +16536,20 @@ def read_damp_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             skew_id = int(float(t2[3])) if len(t2) > 3 else 0
             tstart = float(t2[4]) if len(t2) > 4 else 0.0
             tstop = float(t2[5]) if len(t2) > 5 else 1.0e30
+        if len(cards) > 2 and not cards[2].is_blank:
+            t3 = cards[2].tokens()
+            alpha_yy = _safe_float(t3[0]) if len(t3) > 0 else 0.0
+            beta_yy = _safe_float(t3[1]) if len(t3) > 1 else 0.0
+        if len(cards) > 3 and not cards[3].is_blank:
+            t4 = cards[3].tokens()
+            alpha_zz = _safe_float(t4[0]) if len(t4) > 0 else 0.0
+            beta_zz = _safe_float(t4[1]) if len(t4) > 1 else 0.0
 
     model.damp_inters[block.user_id] = DampInter(
         id=block.user_id, title=title, nb_time_step=nb_time_step,
         damp_range=damp_range, alpha=alpha, beta=beta,
         grnod_id=grnod_id, skew_id=skew_id, tstart=tstart, tstop=tstop,
+        alpha_yy=alpha_yy, beta_yy=beta_yy, alpha_zz=alpha_zz, beta_zz=beta_zz,
     )
 
 
@@ -20422,6 +20526,8 @@ def read_inispr(block: KeywordBlock, model: Model, log: MessageLog) -> None:
           card 3: L_X  EI
     """
     sub = block.parts[1].upper() if len(block.parts) > 1 else "FULL"
+    if sub.isdigit():
+        sub = "FULL"
     cards = [c for c in block.cards if not c.is_blank]
     if not cards:
         log.error(f"/INISPR/{sub}: missing data card", block.source)
@@ -39193,6 +39299,96 @@ def read_mat_dprag2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 
+def read_frame_nod(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FRAME/NOD`` or ``/FRAME/NODE`` (M196): Nodal reference frame."""
+    from ..model.entities import FrameNod
+    frame_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    originnodeid, axisnodeid, planenodeid = 0, 0, 0
+    displayaxis, displayplane = 0, 0
+    globalyaxis = [0.0, 0.0, 0.0]
+    globalzaxis = [0.0, 0.0, 0.0]
+    params = {}
+
+    if len(valid_cards) > 0:
+        c0 = valid_cards[0].tokens()
+        originnodeid = _safe_int(c0[0]) if len(c0) > 0 else 0
+        axisnodeid = _safe_int(c0[1]) if len(c0) > 1 else 0
+        planenodeid = _safe_int(c0[2]) if len(c0) > 2 else 0
+    if len(valid_cards) > 1:
+        c1 = valid_cards[1].tokens()
+        for i in range(min(3, len(c1))):
+            globalyaxis[i] = _safe_float(c1[i])
+    if len(valid_cards) > 2:
+        c2 = valid_cards[2].tokens()
+        for i in range(min(3, len(c2))):
+            globalzaxis[i] = _safe_float(c2[i])
+
+    params.update({
+        "originnodeid": originnodeid, "axisnodeid": axisnodeid, "planenodeid": planenodeid,
+        "globalyaxis": globalyaxis, "globalzaxis": globalzaxis, "displayaxis": displayaxis, "displayplane": displayplane
+    })
+    fnod = FrameNod(
+        id=frame_id, title=title, originnodeid=originnodeid, axisnodeid=axisnodeid, planenodeid=planenodeid,
+        globalyaxis=globalyaxis, globalzaxis=globalzaxis, displayaxis=displayaxis, displayplane=displayplane, params=params
+    )
+    model.frame_nods[frame_id] = fnod
+    _read_reference_system(block, model, log, "FRAME")
+
+
+def read_table_block(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TABLE``, ``/TABLE/0``, ``/TABLE/1`` (M196): Multi-dimensional lookup tables."""
+    from ..model.entities import TableBlock
+    table_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    dim = 1
+    ref_id = 0
+    x_values = []
+    y_values = []
+    curves = []
+    if len(valid_cards) > 0:
+        c0 = valid_cards[0].tokens()
+        dim = _safe_int(c0[0], 1) if len(c0) > 0 else 1
+        ref_id = _safe_int(c0[1]) if len(c0) > 1 else 0
+    for c in valid_cards[1:]:
+        toks = c.tokens()
+        if len(toks) >= 2:
+            x_values.append(_safe_float(toks[0]))
+            y_values.append(_safe_float(toks[1]))
+            if len(toks) > 2:
+                curves.append(_safe_int(toks[2]))
+        elif len(toks) == 1:
+            x_values.append(_safe_float(toks[0]))
+
+    tb = TableBlock(id=table_id, title=title, dim=dim, ref_id=ref_id, x_values=x_values, y_values=y_values, curves=curves, params={"dim": dim, "ref_id": ref_id})
+    model.table_blocks[table_id] = tb
+
+
+def read_merge_rbody(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MERGE/RBODY`` (M196): Merge rigid bodies directive."""
+    from ..model.entities import MergeRbody
+    merge_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    rbody_master_id = 0
+    rbody_slave_ids = []
+    if len(valid_cards) > 0:
+        c0 = valid_cards[0].tokens()
+        rbody_master_id = _safe_int(c0[0]) if len(c0) > 0 else 0
+        for t in c0[1:]:
+            rbody_slave_ids.append(_safe_int(t))
+    for c in valid_cards[1:]:
+        toks = c.tokens()
+        for t in toks:
+            rbody_slave_ids.append(_safe_int(t))
+
+    mb = MergeRbody(id=merge_id, title=title, rbody_master_id=rbody_master_id, rbody_slave_ids=rbody_slave_ids, params={"master": rbody_master_id, "slaves": rbody_slave_ids})
+    model.merge_rbodies[merge_id] = mb
+
+
+
 def read_airbag_injector(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/AIRBAG/INJECTOR/id`` or ``/INJECTOR/id`` (M142): Airbag jetting injector."""
     from ..model.entities import AirbagInjector
@@ -40670,6 +40866,64 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ITH_SHEL": read_th,
     "ITH_SPH_FLOW": read_th,
     "TH_SPH_FLOW": read_th,
+    # --- M196: Spring Beam, Sewing, Zhao, Steinberg, Foam, Geotechnical, Damping, Frames & Tables ---
+    "MAT_LAW113": read_mat,
+    "MAT_SPR_BEAM": read_mat,
+    "SPR_BEAM": read_mat,
+    "LAW113": read_mat,
+    "MAT_LAW95": read_mat,
+    "MAT_SEW": read_mat,
+    "MAT_SEWING": read_mat,
+    "SEW": read_mat,
+    "SEWING": read_mat,
+    "LAW95": read_mat,
+    "MAT_LAW48": read_mat,
+    "MAT_ZHAO": read_mat,
+    "ZHAO": read_mat,
+    "LAW48": read_mat,
+    "MAT_LAW49": read_mat,
+    "MAT_STEINB": read_mat,
+    "MAT_STEINBERG": read_mat,
+    "STEINB": read_mat,
+    "STEINBERG": read_mat,
+    "LAW49": read_mat,
+    "MAT_LAW106": read_mat,
+    "MAT_P_FOAM": read_mat,
+    "MAT_POLY_FOAM": read_mat,
+    "P_FOAM": read_mat,
+    "POLY_FOAM": read_mat,
+    "LAW106": read_mat,
+    "MAT_LAW77": read_mat,
+    "MAT_OGDEN_HYPO": read_mat,
+    "MAT_HYPO_VISCO": read_mat,
+    "OGDEN_HYPO": read_mat,
+    "HYPO_VISCO": read_mat,
+    "LAW77": read_mat,
+    "MAT_LAW63": read_mat,
+    "MAT_SOIL_DISC": read_mat,
+    "MAT_HANSEL": read_mat,
+    "SOIL_DISC": read_mat,
+    "HANSEL": read_mat,
+    "LAW63": read_mat,
+    "MAT_LAW92": read_mat,
+    "MAT_HILL_ORTH": read_mat,
+    "HILL_ORTH": read_mat,
+    "LAW92": read_mat,
+    "PROP_TYPE26": read_prop,
+    "PROP_SPR_TAB": read_prop,
+    "PROP_P26_SPR_TAB": read_prop,
+    "SPR_TAB": read_prop,
+    "FRAME_NOD": read_frame_nod,
+    "FRAME_NODE": read_frame_nod,
+    "INISPR": read_inispr,
+    "INISPRI": read_inispr,
+    "TABLE_0": read_table,
+    "TABLE_1": read_table,
+    "MERGE_RBODY": read_merge_rbody,
+    "ALE_CFDSPH": read_alecfdsph,
+    "ALECFDSPH": read_alecfdsph,
+    "ALE_MUSCL": read_ale,
+    "ALE_SOLVER": read_ale,
 }
 
 

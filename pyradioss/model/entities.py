@@ -2032,13 +2032,16 @@ class MergeNode:
 
 @dataclass
 class MergeRbody:
-    """/MERGE/RBODY (M102): Merge rigid bodies.
+    """/MERGE/RBODY (M102, M196): Merge rigid bodies.
 
     Fortran origin: ``starter/source/constraints/general/merge/hm_read_merge.F``.
     """
     id: int
     title: str = ""
     items: List[Tuple[int, int, int, int, int]] = field(default_factory=list)  # (main_id, m_type, secon_id, s_type, iflag)
+    rbody_master_id: int = 0
+    rbody_slave_ids: List[int] = field(default_factory=list)
+    params: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -2167,11 +2170,11 @@ class PreloadAxial:
 
 @dataclass
 class DampInter:
-    """/DAMP/INTER (M103): Interface / relative velocity damping.
+    """/DAMP/INTER (M103/M196): Interface / relative velocity damping.
 
     Fortran origin: ``starter/source/general_controls/damping/hm_read_damp.F``.
     """
-    id: int
+    id: int = 0
     title: str = ""
     nb_time_step: int = 0
     damp_range: int = 0
@@ -2180,7 +2183,20 @@ class DampInter:
     grnod_id: int = 0
     skew_id: int = 0
     tstart: float = 0.0
-    tstop: float = 0.0
+    tstop: float = 1.0e30
+    alpha_yy: float = 0.0
+    beta_yy: float = 0.0
+    alpha_zz: float = 0.0
+    beta_zz: float = 0.0
+    params: dict = field(default_factory=dict)
+
+    @property
+    def range_val(self) -> int:
+        return self.damp_range
+
+    @range_val.setter
+    def range_val(self, v: int) -> None:
+        self.damp_range = v
 
 
 @dataclass
@@ -11036,5 +11052,57 @@ MatHenselSpittel = MatLaw103
 MatSprGene = MatLaw108
 PropSprMat = PropType23
 DampFrequencyRange = DampFreqRange
+
+
+@dataclass
+class FrameNod:
+    """``/FRAME/NOD`` or ``/FRAME/NODE`` (M196): Nodal coordinate reference frame."""
+    id: int = 0
+    title: str = ""
+    originnodeid: int = 0
+    axisnodeid: int = 0
+    planenodeid: int = 0
+    globalyaxis: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    globalzaxis: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    displayaxis: int = 0
+    displayplane: int = 0
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class InterType18:
+    """``/INTER/TYPE18``: Fluid-structure Lagrangian-Eulerian/ALE coupling contact interface."""
+    id: int = 0
+    title: str = ""
+    grnod_id: int = 0
+    surf_id: int = 0
+    grbric_id: int = 0
+    istf: int = 0
+    igap: int = 0
+    multimp: int = 4
+    ibag: int = 0
+    idel18: int = 0
+    iauto: int = 0
+    stfac: float = 1.0
+    vref: float = 0.0
+    gap: float = 0.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+    stiff_dc: float = 0.0
+    sort_fact: float = 0.2
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class TableBlock:
+    """``/TABLE``, ``/TABLE/0``, ``/TABLE/1``: Multi-dimensional lookup tables."""
+    id: int = 0
+    title: str = ""
+    dim: int = 1
+    ref_id: int = 0
+    x_values: List[float] = field(default_factory=list)
+    y_values: List[float] = field(default_factory=list)
+    curves: List[int] = field(default_factory=list)
+    params: dict = field(default_factory=dict)
 
 
