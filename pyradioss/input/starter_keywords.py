@@ -2355,6 +2355,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("SWIFT", "SWIFT_LAW", "SWIFT_DAMAGE", "SWIFT_MODEL"):
         read_fail_swift(block, model, log)
         return
+    if kind in ("LUDWIK", "LUDWIK_LAW", "LUDWIK_DAMAGE", "LUDWIK_MODEL"):
+        read_fail_ludwik(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -42683,6 +42686,36 @@ def read_fail_swift(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_ludwik(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LUDWIK/mat_ID`` (M245): Ludwik power-law strain hardening fracture criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LUDWIK/{block.user_id}: missing data card", block.source)
+        return
+
+    sigma0, k_coeff, n_exp, eps_max, ifail_sh = 0.0, 0.0, 0.2, 1e30, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_LUDWIK_1")
+        sigma0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        k_coeff = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        n_exp = _fval(f[2], 0.2) if len(f) > 2 else 0.2
+        eps_max = _fval(f[3], 1e30) if len(f) > 3 else 1e30
+        ifail_sh = _ival(f[4], 1) if len(f) > 4 else 1
+    else:
+        toks = cards[0].tokens()
+        sigma0 = float(toks[0]) if len(toks) > 0 else 0.0
+        k_coeff = float(toks[1]) if len(toks) > 1 else 0.0
+        n_exp = float(toks[2]) if len(toks) > 2 else 0.2
+        eps_max = float(toks[3]) if len(toks) > 3 else 1e30
+        ifail_sh = int(float(toks[4])) if len(toks) > 4 else 1
+
+    from ..model.entities import FailLudwik
+    model.fail_ludwiks[block.user_id] = FailLudwik(
+        mat_id=block.user_id, title=title, sigma0=sigma0, k_coeff=k_coeff,
+        n_exp=n_exp, eps_max=eps_max, ifail_sh=ifail_sh
+    )
+
+
 
 
 
@@ -45533,6 +45566,60 @@ def read_sensor_spring_kinetic_energy(block: KeywordBlock, model: Model, log: Me
     ))
 
 
+def read_eng_hourglass_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/HOURGLASS_ENERGY`` or ``/ENG/HOURGLASS_ENERGY`` (M245): Engine hourglass energy output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/HOURGLASS_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_he, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_HOURGLASS_ENERGY_1")
+        dt_he = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_he = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngHourglassEnergy
+    r_id = block.user_id or (len(model.eng_hourglass_energies) + 1)
+    model.eng_hourglass_energies[r_id] = EngHourglassEnergy(
+        id=r_id, title=title, dt_he=dt_he, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_hourglass_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_HOURGLASS_ENERGY`` or ``/SENSOR/HOURGLASS_ENERGY_SPRING`` (M245): Spring element hourglass energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_HOURGLASS_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, ehe_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_HOURGLASS_ENERGY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        ehe_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        ehe_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringHourglassEnergy, Sensor
+    sshe = SensorSpringHourglassEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        ehe_max=ehe_max, t_delay=t_delay
+    )
+    model.sensor_spring_hourglass_energies[sshe.id] = sshe
+    model.sensors.append(Sensor(
+        id=sshe.id, kind="SPRING_HOURGLASS_ENERGY", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -47860,6 +47947,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_KE": read_sensor_spring_kinetic_energy,
     "SENSOR_KINETIC_ENERGY_SPRING": read_sensor_spring_kinetic_energy,
     "SENSOR_SPRING_KIN_ENERGY": read_sensor_spring_kinetic_energy,
+    # --- M245: Ludwik Failure Criterion, Engine Hourglass Energy Output Directive, Screw/Helical Axis Joint Aliases, and Spring Hourglass Energy Sensor Suite ---
+    "FAIL_LUDWIK": read_fail_ludwik,
+    "FAIL_LUDWIK_DAMAGE": read_fail_ludwik,
+    "FAIL_LUDWIK_LAW": read_fail_ludwik,
+    "FAIL_LUDWIK_MODEL": read_fail_ludwik,
+    "HOURGLASS_ENERGY": read_eng_hourglass_energy,
+    "ENG_HOURGLASS_ENERGY": read_eng_hourglass_energy,
+    "ENG_HG_ENERGY": read_eng_hourglass_energy,
+    "ENG_HE": read_eng_hourglass_energy,
+    "ENG_HOURGLASS": read_eng_hourglass_energy,
+    "LAGMUL_SCREW_AXIS": read_screw_joint,
+    "SCREW_AXIS": read_screw_joint,
+    "LAGMUL_HELICAL_AXIS": read_screw_joint,
+    "HELICAL_AXIS": read_screw_joint,
+    "LAGMUL_HELICAL_JOINT": read_screw_joint,
+    "HELICAL_JOINT": read_screw_joint,
+    "SENSOR_SPRING_HOURGLASS_ENERGY": read_sensor_spring_hourglass_energy,
+    "SENSOR_SPRING_HE": read_sensor_spring_hourglass_energy,
+    "SENSOR_HOURGLASS_ENERGY_SPRING": read_sensor_spring_hourglass_energy,
+    "SENSOR_SPRING_HOURGLASS": read_sensor_spring_hourglass_energy,
 }
 
 

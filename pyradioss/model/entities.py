@@ -13497,10 +13497,35 @@ class SensorSpringKineticEnergy:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailLudwik:
+    """``/FAIL/LUDWIK/mat_ID`` (M245): Ludwik power-law strain hardening fracture criterion."""
+    mat_id: int = 0
+    title: str = ""
+    sigma0: float = 0.0      # reference yield stress sigma_0
+    k_coeff: float = 0.0     # strength coefficient K
+    n_exp: float = 0.2       # strain hardening exponent n
+    eps_max: float = 1e30    # maximum failure strain epsilon_max
+    ifail_sh: int = 1        # shell element deletion flag
 
 
+@dataclass
+class EngHourglassEnergy:
+    """``/HOURGLASS_ENERGY`` or ``/ENG/HOURGLASS_ENERGY`` (M245): Engine hourglass energy output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_he: float = 0.0       # time frequency for hourglass energy output
+    sens_id: int = 0         # sensor activation ID
 
 
+@dataclass
+class SensorSpringHourglassEnergy:
+    """``/SENSOR/SPRING_HOURGLASS_ENERGY`` or ``/SENSOR/HOURGLASS_ENERGY_SPRING`` (M245): Spring element hourglass energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    ehe_max: float = 1e30    # maximum hourglass energy threshold
+    t_delay: float = 0.0     # activation delay time
 
 
 

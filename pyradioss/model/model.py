@@ -1665,6 +1665,11 @@ class Model:
         self.eng_total_energies: Dict[int, Any] = {}                 # /TOTAL_ENERGY, /ENG/TOTAL_ENERGY (M244)
         self.sensor_spring_kinetic_energies: Dict[int, Any] = {}     # /SENSOR/SPRING_KINETIC_ENERGY (M244)
 
+        # M245 Entities
+        self.fail_ludwiks: Dict[int, Any] = {}                       # /FAIL/LUDWIK (M245)
+        self.eng_hourglass_energies: Dict[int, Any] = {}             # /HOURGLASS_ENERGY, /ENG/HOURGLASS_ENERGY (M245)
+        self.sensor_spring_hourglass_energies: Dict[int, Any] = {}   # /SENSOR/SPRING_HOURGLASS_ENERGY (M245)
+
 
 
 
