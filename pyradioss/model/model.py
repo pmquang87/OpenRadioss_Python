@@ -1615,6 +1615,12 @@ class Model:
         self.eng_accels: Dict[int, Any] = {}                         # /ACCEL, /ENG/ACCEL (M234)
         self.sensor_spring_energies: Dict[int, Any] = {}             # /SENSOR/SPRING_ENERGY (M234)
 
+        # M235 Entities
+        self.fail_gursons: Dict[int, Any] = {}                       # /FAIL/GURSON (M235)
+        self.eng_disps: Dict[int, Any] = {}                          # /DISP, /ENG/DISP (M235)
+        self.sensor_spring_defls: Dict[int, Any] = {}                # /SENSOR/SPRING_DEFL (M235)
+
+
 
 
 

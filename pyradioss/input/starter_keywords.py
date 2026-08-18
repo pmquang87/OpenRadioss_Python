@@ -2290,6 +2290,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("CHABOCHE", "LEMAITRE_CHABOCHE", "CHABOCHE_DAMAGE"):
         read_fail_chaboche(block, model, log)
         return
+    if kind in ("GURSON", "GURSON_MODEL", "GURSON_DAMAGE"):
+        read_fail_gurson(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11749,6 +11752,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("SPRING_ENERGY", "ENERGY_SPRING", "SPRING_ENER"):
         read_sensor_spring_energy(block, model, log)
+        return
+    if kind in ("SPRING_DEFL", "SPRING_DEF", "DEF_SPRING", "DEFL_SPRING"):
+        read_sensor_spring_defl(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -42181,6 +42187,46 @@ def read_fail_chaboche(block: KeywordBlock, model: Model, log: MessageLog) -> No
     )
 
 
+def read_fail_gurson(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/GURSON/mat_ID`` (M235): Gurson porous metal failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/GURSON/{block.user_id}: missing data card", block.source)
+        return
+
+    f_0, f_c, f_u = 0.0, 0.15, 0.25
+    eps_n, s_n, f_n, ifail_sh = 0.3, 0.1, 0.04, 1
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_GURSON_1")
+        f_0 = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        f_c = _fval(f1[1], 0.15) if len(f1) > 1 else 0.15
+        f_u = _fval(f1[2], 0.25) if len(f1) > 2 else 0.25
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_GURSON_2")
+            eps_n = _fval(f2[0], 0.3) if len(f2) > 0 else 0.3
+            s_n = _fval(f2[1], 0.1) if len(f2) > 1 else 0.1
+            f_n = _fval(f2[2], 0.04) if len(f2) > 2 else 0.04
+            ifail_sh = _ival(f2[3], 1) if len(f2) > 3 else 1
+    else:
+        toks1 = cards[0].tokens()
+        f_0 = float(toks1[0]) if len(toks1) > 0 else 0.0
+        f_c = float(toks1[1]) if len(toks1) > 1 else 0.15
+        f_u = float(toks1[2]) if len(toks1) > 2 else 0.25
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            eps_n = float(toks2[0]) if len(toks2) > 0 else 0.3
+            s_n = float(toks2[1]) if len(toks2) > 1 else 0.1
+            f_n = float(toks2[2]) if len(toks2) > 2 else 0.04
+            ifail_sh = int(float(toks2[3])) if len(toks2) > 3 else 1
+
+    from ..model.entities import FailGurson
+    model.fail_gursons[block.user_id] = FailGurson(
+        mat_id=block.user_id, title=title, f_0=f_0, f_c=f_c, f_u=f_u,
+        eps_n=eps_n, s_n=s_n, f_n=f_n, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -44479,6 +44525,61 @@ def read_sensor_spring_energy(block: KeywordBlock, model: Model, log: MessageLog
     model.sensors.append(Sensor(
         id=sse.id, kind="SPRING_ENERGY", tdelay=t_delay
     ))
+
+
+def read_eng_disp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DISP`` or ``/ENG/DISP`` (M235): Engine displacement output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/DISP/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_disp, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_DISP_1")
+        dt_disp = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_disp = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngDisp
+    d_id = block.user_id or (len(model.eng_disps) + 1)
+    model.eng_disps[d_id] = EngDisp(
+        id=d_id, title=title, dt_disp=dt_disp, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_defl(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_DEFL`` or ``/SENSOR/DEF_SPRING`` (M235): Spring element deflection threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_DEFL/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, defl_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_DEFL_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        defl_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        defl_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringDefl, Sensor
+    ssd = SensorSpringDefl(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        defl_max=defl_max, t_delay=t_delay
+    )
+    model.sensor_spring_defls[ssd.id] = ssd
+    model.sensors.append(Sensor(
+        id=ssd.id, kind="SPRING_DEFL", tdelay=t_delay
+    ))
+
 
 
 
@@ -46799,6 +46900,23 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_ENERGY": read_sensor_spring_energy,
     "SENSOR_ENERGY_SPRING": read_sensor_spring_energy,
     "SENSOR_SPRING_ENER": read_sensor_spring_energy,
+    # --- M235: Gurson Porous Metal Failure Criterion, Engine Displacement Output Directive, Distance/Rod Joint Aliases, and Spring Deflection Sensor Suite ---
+    "FAIL_GURSON": read_fail_gurson,
+    "FAIL_GURSON_MODEL": read_fail_gurson,
+    "FAIL_GURSON_DAMAGE": read_fail_gurson,
+    "DISP": read_eng_disp,
+    "ENG_DISP": read_eng_disp,
+    "ENG_DISPLACEMENT": read_eng_disp,
+    "LAGMUL_DISTANCE_JOINT": read_distance_joint,
+    "DISTANCE_JOINT": read_distance_joint,
+    "LAGMUL_ROD_JOINT": read_distance_joint,
+    "ROD_JOINT": read_distance_joint,
+    "LAGMUL_ROD": read_distance_joint,
+    "ROD": read_distance_joint,
+    "SENSOR_SPRING_DEFL": read_sensor_spring_defl,
+    "SENSOR_SPRING_DEF": read_sensor_spring_defl,
+    "SENSOR_DEF_SPRING": read_sensor_spring_defl,
+    "SENSOR_DEFL_SPRING": read_sensor_spring_defl,
 }
 
 
@@ -46807,7 +46925,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

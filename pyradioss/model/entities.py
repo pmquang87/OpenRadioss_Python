@@ -13310,6 +13310,40 @@ class SensorSpringEnergy:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailGurson:
+    """``/FAIL/GURSON/mat_ID`` (M235): Gurson porous metal failure model."""
+    mat_id: int = 0
+    title: str = ""
+    f_0: float = 0.0         # initial void volume fraction
+    f_c: float = 0.15        # critical void volume fraction
+    f_u: float = 0.25        # ultimate failure void volume fraction
+    eps_n: float = 0.3       # mean strain for void nucleation
+    s_n: float = 0.1         # standard deviation of nucleation strain
+    f_n: float = 0.04        # void volume fraction of nucleating particles
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngDisp:
+    """``/DISP`` or ``/ENG/DISP`` (M235): Engine displacement output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_disp: float = 0.0     # time frequency for displacement output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSpringDefl:
+    """``/SENSOR/SPRING_DEFL`` or ``/SENSOR/DEF_SPRING`` (M235): Spring element elongation/deflection threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    defl_max: float = 1e30   # maximum deflection/elongation threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 
