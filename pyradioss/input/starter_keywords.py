@@ -2216,6 +2216,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("TBID", "TABLE", "FAIL_TBID"):
         read_fail_tbid(block, model, log)
         return
+    if kind in ("SN_CURVE", "SNCURVE", "SN", "WOHLER", "FATIGUE_SN"):
+        read_fail_sn_curve(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -22809,6 +22812,12 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub in ("CARDAN", "UNIVERSAL", "UNIVERSAL_JOINT", "CARDAN_JOINT"):
         read_cardan_joint(block, model, log)
         return
+    elif sub in ("RIGID", "RIGID_JOINT", "RIGID_LINK"):
+        read_rigid_joint(block, model, log)
+        return
+    elif sub in ("SCREW", "SCREW_JOINT", "HELICAL", "HELICAL_JOINT"):
+        read_screw_joint(block, model, log)
+        return
 
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     lagmod = 1
@@ -23114,6 +23123,64 @@ def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> Non
         id=block.user_id, title=title, node1=node1, node2=node2,
         axis_dir=axis_dir, skew_id=skew_id, tol=tol
     )
+
+
+def read_rigid_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RIGID_JOINT/id`` or ``/LAGMUL/RIGID/id`` (M211): Rigid link kinematic joint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/RIGID_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, tol = 0, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("RIGID_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        tol = _fval(f[2], 1e-6) if len(f) > 2 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        tol = float(toks[2]) if len(toks) > 2 else 1e-6
+
+    from ..model.entities import RigidJoint
+    model.rigid_joints[block.user_id] = RigidJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, tol=tol
+    )
+
+
+def read_screw_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SCREW/id`` or ``/LAGMUL/SCREW/id`` (M211): Helical screw kinematic joint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SCREW/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, axis_dir, skew_id, pitch, tol = 0, 0, 1, 0, 1.0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("SCREW_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        axis_dir = _ival(f[2], 1) if len(f) > 2 else 1
+        skew_id = _ival(f[3], 0) if len(f) > 3 else 0
+        pitch = _fval(f[4], 1.0) if len(f) > 4 else 1.0
+        tol = _fval(f[5], 1e-6) if len(f) > 5 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        axis_dir = int(float(toks[2])) if len(toks) > 2 else 1
+        skew_id = int(float(toks[3])) if len(toks) > 3 else 0
+        pitch = float(toks[4]) if len(toks) > 4 else 1.0
+        tol = float(toks[5]) if len(toks) > 5 else 1e-6
+
+    from ..model.entities import ScrewJoint
+    model.screw_joints[block.user_id] = ScrewJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis_dir=axis_dir, skew_id=skew_id, pitch=pitch, tol=tol
+    )
+
 
 
 
@@ -40960,6 +41027,37 @@ def read_fail_tbid(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_sn_curve(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/SN_CURVE/mat_ID`` (M211): Stress-life (S-N curve) fatigue failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/SN_CURVE/{block.user_id}: missing data card", block.source)
+        return
+
+    fct_id, ifail_sh, s_mean_corr, d_crit, n_cutoff = 0, 1, 0, 1.0, 1.0e7
+    if block.fixed:
+        f = cards[0].cut("FAIL_SN_1")
+        fct_id = _ival(f[0]) if len(f) > 0 else 0
+        ifail_sh = _ival(f[1], 1) if len(f) > 1 else 1
+        s_mean_corr = _ival(f[2], 0) if len(f) > 2 else 0
+        d_crit = _fval(f[3], 1.0) if len(f) > 3 else 1.0
+        n_cutoff = _fval(f[4], 1.0e7) if len(f) > 4 else 1.0e7
+    else:
+        toks = cards[0].tokens()
+        fct_id = int(float(toks[0])) if len(toks) > 0 else 0
+        ifail_sh = int(float(toks[1])) if len(toks) > 1 else 1
+        s_mean_corr = int(float(toks[2])) if len(toks) > 2 else 0
+        d_crit = float(toks[3]) if len(toks) > 3 else 1.0
+        n_cutoff = float(toks[4]) if len(toks) > 4 else 1.0e7
+
+    from ..model.entities import FailSnCurve
+    model.fail_sn_curves[block.user_id] = FailSnCurve(
+        mat_id=block.user_id, title=title, fct_id=fct_id,
+        ifail_sh=ifail_sh, s_mean_corr=s_mean_corr, d_crit=d_crit, n_cutoff=n_cutoff
+    )
+
+
+
 
 def read_fail_alter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/ALTER`` (M191): Alter glass/laminate crack propagation failure model."""
@@ -42019,6 +42117,23 @@ def read_anim_dt(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             model.anim_dt = float(toks[1]) if len(toks) > 1 else 0.0
             if len(toks) > 2:
                 model.anim_sens_id = int(float(toks[2]))
+
+
+def read_eng_run(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RUN`` or ``/ENG/RUN`` (M211): Engine execution run title, stop time, and cycle controls."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    model.run_title = title
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("ENG_RUN_1")
+            model.run_tstop = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            model.run_cycle_max = _ival(f[1], 0) if len(f) > 1 else 0
+        else:
+            toks = cards[0].tokens()
+            model.run_tstop = float(toks[0]) if len(toks) > 0 else 0.0
+            if len(toks) > 1:
+                model.run_cycle_max = int(float(toks[1]))
+
 
 
 
@@ -43980,6 +44095,21 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "FAIL_TABLE": read_fail_tbid,
     "ANIM_DT": read_anim_dt,
     "ENG_ANIM_DT": read_anim_dt,
+    # --- M211: Rigid Link & Screw Kinematic Joints, S-N Fatigue Failure Criterion, and Engine Run Directives Suite ---
+    "LAGMUL_RIGID": read_rigid_joint,
+    "RIGID_JOINT": read_rigid_joint,
+    "RIGID_LINK": read_rigid_joint,
+    "LAGMUL_SCREW": read_screw_joint,
+    "SCREW": read_screw_joint,
+    "SCREW_JOINT": read_screw_joint,
+    "HELICAL": read_screw_joint,
+    "HELICAL_JOINT": read_screw_joint,
+    "FAIL_SN_CURVE": read_fail_sn_curve,
+    "FAIL_SNCURVE": read_fail_sn_curve,
+    "FAIL_SN": read_fail_sn_curve,
+    "FAIL_WOHLER": read_fail_sn_curve,
+    "RUN": read_eng_run,
+    "ENG_RUN": read_eng_run,
 }
 
 

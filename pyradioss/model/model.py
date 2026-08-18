@@ -1477,6 +1477,15 @@ class Model:
         self.anim_tstart: float = 0.0
         self.anim_sens_id: int = 0
 
+        # M211 Entities
+        self.rigid_joints: Dict[int, Any] = {}                       # /LAGMUL/RIGID, /RIGID_JOINT (M211)
+        self.screw_joints: Dict[int, Any] = {}                       # /LAGMUL/SCREW, /SCREW (M211)
+        self.fail_sn_curves: Dict[int, Any] = {}                     # /FAIL/SN_CURVE (M211)
+        self.run_tstop: float = 0.0                                  # /RUN, /ENG/RUN (M211)
+        self.run_title: str = ""
+        self.run_cycle_max: int = 0
+
+
 
 
 

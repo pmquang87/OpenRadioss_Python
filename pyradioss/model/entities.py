@@ -12514,6 +12514,42 @@ class FailTbid:
     f_smooth: float = 0.0    # smoothing factor
 
 
+@dataclass
+class RigidJoint:
+    """``/LAGMUL/RIGID`` or ``/RIGID_JOINT/id`` (M211): Rigid link kinematic joint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    tol: float = 1e-6
+
+
+@dataclass
+class ScrewJoint:
+    """``/LAGMUL/SCREW`` or ``/SCREW/id`` (M211): Helical screw kinematic joint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    axis_dir: int = 1        # helical axis: 1: X, 2: Y, 3: Z
+    skew_id: int = 0
+    pitch: float = 1.0       # helical pitch ratio
+    tol: float = 1e-6
+
+
+@dataclass
+class FailSnCurve:
+    """``/FAIL/SN_CURVE/mat_ID`` (M211): Stress-life (S-N curve) fatigue failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    fct_id: int = 0          # function ID (log(S) -> log(N))
+    ifail_sh: int = 1        # 1: delete on 1 layer, 2: delete on all layers
+    s_mean_corr: int = 0     # mean stress correction: 0: none, 1: Goodman, 2: Soderberg, 3: Gerber
+    d_crit: float = 1.0      # critical fatigue damage threshold
+    n_cutoff: float = 1.0e7  # fatigue endurance limit cutoff cycles
+
+
+
 
 
 
