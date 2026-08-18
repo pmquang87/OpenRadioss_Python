@@ -3062,6 +3062,12 @@ LAYOUTS: Dict[str, List[int]] = {
     "SCREW_JOINT_1": [10, 10, 10, 10, 20, 20],
     "FAIL_SN_1": [10, 10, 20, 20, 20],
     "ENG_RUN_1": [20, 10],
+    # M212: CV_JOINT, INLINE_JOINT, FAIL_HOOP, ENG_STOP, ENG_TFILE
+    "CV_JOINT_1": [10, 10, 10, 10, 20],
+    "INLINE_JOINT_1": [10, 10, 10, 10, 20],
+    "FAIL_HOOP_1": [20, 10, 20, 20],
+    "ENG_STOP_1": [10, 10, 20],
+    "ENG_TFILE_1": [20, 10],
 }
 
 CARD_LAYOUTS = LAYOUTS

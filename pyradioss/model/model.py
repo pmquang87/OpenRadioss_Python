@@ -1485,6 +1485,17 @@ class Model:
         self.run_title: str = ""
         self.run_cycle_max: int = 0
 
+        # M212 Entities
+        self.cv_joints: Dict[int, Any] = {}                          # /LAGMUL/CV_JOINT, /CV_JOINT (M212)
+        self.inline_joints: Dict[int, Any] = {}                      # /LAGMUL/INLINE, /INLINE (M212)
+        self.fail_hoops: Dict[int, Any] = {}                         # /FAIL/HOOP (M212)
+        self.stop_sens_id: int = 0                                   # /STOP, /ENG/STOP (M212)
+        self.stop_cycle_max: int = 0
+        self.stop_time_max: float = 0.0
+        self.tfile_dt: float = 0.0                                   # /TFILE, /ENG/TFILE (M212)
+        self.tfile_sens_id: int = 0
+
+
 
 
 

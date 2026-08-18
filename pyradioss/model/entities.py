@@ -12549,6 +12549,42 @@ class FailSnCurve:
     n_cutoff: float = 1.0e7  # fatigue endurance limit cutoff cycles
 
 
+@dataclass
+class CvJoint:
+    """``/LAGMUL/CV_JOINT`` or ``/CV_JOINT/id`` (M212): Constant velocity / homokinetic kinematic joint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    axis_dir: int = 1        # primary axis: 1: X, 2: Y, 3: Z
+    skew_id: int = 0
+    tol: float = 1e-6
+
+
+@dataclass
+class InlineJoint:
+    """``/LAGMUL/INLINE`` or ``/INLINE/id`` (M212): In-line kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    axis_dir: int = 1        # line axis: 1: X, 2: Y, 3: Z
+    skew_id: int = 0
+    tol: float = 1e-6
+
+
+@dataclass
+class FailHoop:
+    """``/FAIL/HOOP/mat_ID`` (M212): Critical hoop stress bursting failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_hoop_max: float = 0.0  # critical tensile hoop stress
+    ifail_sh: int = 1            # 1: delete on 1 layer, 2: delete on all layers
+    eps_p_max: float = 0.0       # plastic strain at failure
+    d_max: float = 1.0           # maximum damage
+
+
+
 
 
 

@@ -2219,6 +2219,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("SN_CURVE", "SNCURVE", "SN", "WOHLER", "FATIGUE_SN"):
         read_fail_sn_curve(block, model, log)
         return
+    if kind in ("HOOP", "HOOP_STRESS", "PIPE_HOOP"):
+        read_fail_hoop(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -22818,6 +22821,12 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub in ("SCREW", "SCREW_JOINT", "HELICAL", "HELICAL_JOINT"):
         read_screw_joint(block, model, log)
         return
+    elif sub in ("CV_JOINT", "CONSTANT_VELOCITY", "CV", "HOMOKINETIC"):
+        read_cv_joint(block, model, log)
+        return
+    elif sub in ("INLINE", "INLINE_JOINT", "LINE"):
+        read_inline_joint(block, model, log)
+        return
 
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     lagmod = 1
@@ -23180,6 +23189,67 @@ def read_screw_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None
         id=block.user_id, title=title, node1=node1, node2=node2,
         axis_dir=axis_dir, skew_id=skew_id, pitch=pitch, tol=tol
     )
+
+
+def read_cv_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CV_JOINT/id`` or ``/LAGMUL/CV_JOINT/id`` (M212): Constant velocity / homokinetic joint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/CV_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, axis_dir, skew_id, tol = 0, 0, 1, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("CV_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        axis_dir = _ival(f[2], 1) if len(f) > 2 else 1
+        skew_id = _ival(f[3], 0) if len(f) > 3 else 0
+        tol = _fval(f[4], 1e-6) if len(f) > 4 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        axis_dir = int(float(toks[2])) if len(toks) > 2 else 1
+        skew_id = int(float(toks[3])) if len(toks) > 3 else 0
+        tol = float(toks[4]) if len(toks) > 4 else 1e-6
+
+    from ..model.entities import CvJoint
+    model.cv_joints[block.user_id] = CvJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis_dir=axis_dir, skew_id=skew_id, tol=tol
+    )
+
+
+def read_inline_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INLINE/id`` or ``/LAGMUL/INLINE/id`` (M212): In-line kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/INLINE/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, axis_dir, skew_id, tol = 0, 0, 1, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("INLINE_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        axis_dir = _ival(f[2], 1) if len(f) > 2 else 1
+        skew_id = _ival(f[3], 0) if len(f) > 3 else 0
+        tol = _fval(f[4], 1e-6) if len(f) > 4 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        axis_dir = int(float(toks[2])) if len(toks) > 2 else 1
+        skew_id = int(float(toks[3])) if len(toks) > 3 else 0
+        tol = float(toks[4]) if len(toks) > 4 else 1e-6
+
+    from ..model.entities import InlineJoint
+    model.inline_joints[block.user_id] = InlineJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis_dir=axis_dir, skew_id=skew_id, tol=tol
+    )
+
 
 
 
@@ -41057,6 +41127,35 @@ def read_fail_sn_curve(block: KeywordBlock, model: Model, log: MessageLog) -> No
     )
 
 
+def read_fail_hoop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/HOOP/mat_ID`` (M212): Critical hoop stress bursting failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/HOOP/{block.user_id}: missing data card", block.source)
+        return
+
+    sigma_hoop_max, ifail_sh, eps_p_max, d_max = 0.0, 1, 0.0, 1.0
+    if block.fixed:
+        f = cards[0].cut("FAIL_HOOP_1")
+        sigma_hoop_max = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        ifail_sh = _ival(f[1], 1) if len(f) > 1 else 1
+        eps_p_max = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        d_max = _fval(f[3], 1.0) if len(f) > 3 else 1.0
+    else:
+        toks = cards[0].tokens()
+        sigma_hoop_max = float(toks[0]) if len(toks) > 0 else 0.0
+        ifail_sh = int(float(toks[1])) if len(toks) > 1 else 1
+        eps_p_max = float(toks[2]) if len(toks) > 2 else 0.0
+        d_max = float(toks[3]) if len(toks) > 3 else 1.0
+
+    from ..model.entities import FailHoop
+    model.fail_hoops[block.user_id] = FailHoop(
+        mat_id=block.user_id, title=title, sigma_hoop_max=sigma_hoop_max,
+        ifail_sh=ifail_sh, eps_p_max=eps_p_max, d_max=d_max
+    )
+
+
+
 
 
 def read_fail_alter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -42133,6 +42232,40 @@ def read_eng_run(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             model.run_tstop = float(toks[0]) if len(toks) > 0 else 0.0
             if len(toks) > 1:
                 model.run_cycle_max = int(float(toks[1]))
+
+
+def read_eng_stop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/STOP`` or ``/ENG/STOP`` (M212): Engine simulation sensor termination and cycle limit."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("ENG_STOP_1")
+            model.stop_sens_id = _ival(f[0], 0) if len(f) > 0 else 0
+            model.stop_cycle_max = _ival(f[1], 0) if len(f) > 1 else 0
+            model.stop_time_max = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        else:
+            toks = cards[0].tokens()
+            model.stop_sens_id = int(float(toks[0])) if len(toks) > 0 else 0
+            if len(toks) > 1:
+                model.stop_cycle_max = int(float(toks[1]))
+            if len(toks) > 2:
+                model.stop_time_max = float(toks[2])
+
+
+def read_eng_tfile(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TFILE`` or ``/ENG/TFILE`` (M212): Time-history output frequency and sensor gating."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("ENG_TFILE_1")
+            model.tfile_dt = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            model.tfile_sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+        else:
+            toks = cards[0].tokens()
+            model.tfile_dt = float(toks[0]) if len(toks) > 0 else 0.0
+            if len(toks) > 1:
+                model.tfile_sens_id = int(float(toks[1]))
+
 
 
 
@@ -44110,6 +44243,24 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "FAIL_WOHLER": read_fail_sn_curve,
     "RUN": read_eng_run,
     "ENG_RUN": read_eng_run,
+    # --- M212: Constant Velocity & In-Line Kinematic Joints, Hoop Stress Failure Criterion, and Engine Stop/TFILE Directives Suite ---
+    "LAGMUL_CV_JOINT": read_cv_joint,
+    "LAGMUL_CV": read_cv_joint,
+    "CV_JOINT": read_cv_joint,
+    "CV": read_cv_joint,
+    "CONSTANT_VELOCITY": read_cv_joint,
+    "LAGMUL_CONSTANT_VELOCITY": read_cv_joint,
+    "LAGMUL_INLINE": read_inline_joint,
+    "LAGMUL_INLINE_JOINT": read_inline_joint,
+    "INLINE_JOINT": read_inline_joint,
+    "INLINE": read_inline_joint,
+    "FAIL_HOOP": read_fail_hoop,
+    "FAIL_HOOP_STRESS": read_fail_hoop,
+    "FAIL_PIPE_HOOP": read_fail_hoop,
+    "STOP": read_eng_stop,
+    "ENG_STOP": read_eng_stop,
+    "TFILE": read_eng_tfile,
+    "ENG_TFILE": read_eng_tfile,
 }
 
 
