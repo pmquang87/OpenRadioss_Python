@@ -13557,6 +13557,38 @@ class SensorSpringTorsion:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailHollomon:
+    """``/FAIL/HOLLOMON/mat_ID`` (M243): Hollomon power-law strain hardening fracture criterion."""
+    mat_id: int = 0
+    title: str = ""
+    eps0: float = 0.0        # reference plastic strain epsilon_0
+    n_exp: float = 0.2       # strain hardening exponent n
+    k_coeff: float = 0.0     # strength coefficient K
+    eps_max: float = 1e30    # maximum failure strain epsilon_max
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngKineticEnergy:
+    """``/KINETIC_ENERGY`` or ``/ENG/KINETIC_ENERGY`` (M243): Engine kinetic energy output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_ke: float = 0.0       # time frequency for kinetic energy output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSpringStrainEnergy:
+    """``/SENSOR/SPRING_STRAIN_ENERGY`` or ``/SENSOR/STRAIN_ENERGY_SPRING`` (M243): Spring element strain energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    estrain_max: float = 1e30 # maximum strain energy threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

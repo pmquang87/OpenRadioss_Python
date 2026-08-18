@@ -1655,6 +1655,12 @@ class Model:
         self.eng_internal_energies: Dict[int, Any] = {}              # /INTERNAL_ENERGY, /ENG/INTERNAL_ENERGY (M242)
         self.sensor_spring_torsions: Dict[int, Any] = {}             # /SENSOR/SPRING_TORSION (M242)
 
+        # M243 Entities
+        self.fail_hollomons: Dict[int, Any] = {}                     # /FAIL/HOLLOMON (M243)
+        self.eng_kinetic_energies: Dict[int, Any] = {}               # /KINETIC_ENERGY, /ENG/KINETIC_ENERGY (M243)
+        self.sensor_spring_strain_energies: Dict[int, Any] = {}      # /SENSOR/SPRING_STRAIN_ENERGY (M243)
+
+
 
 
 
