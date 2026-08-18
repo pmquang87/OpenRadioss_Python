@@ -13376,6 +13376,38 @@ class SensorSpringRot:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailHencky:
+    """``/FAIL/HENCKY/mat_ID`` (M237): Hencky logarithmic principal strain failure model."""
+    mat_id: int = 0
+    title: str = ""
+    eps_1_max: float = 1e30  # maximum principal strain 1
+    eps_2_max: float = 1e30  # maximum principal strain 2
+    eps_3_max: float = 1e30  # maximum principal strain 3
+    eps_eff_max: float = 1e30 # maximum equivalent effective strain
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngRotv:
+    """``/ROTV`` or ``/ENG/ROTV`` (M237): Engine rotational/angular velocity output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_rotv: float = 0.0     # time frequency for rotational velocity output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSpringRotv:
+    """``/SENSOR/SPRING_ROTV`` or ``/SENSOR/ROTV_SPRING`` (M237): Spring element rotational velocity threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    rotv_max: float = 1e30   # maximum rotational velocity/spin rate threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 
