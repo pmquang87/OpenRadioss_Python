@@ -51,7 +51,7 @@ from .entities import (
     Activ,
     MonvolAirbag, MonvolCommu, MonvolPart,
     AleGrid, AleLink, AleSolver, AleClose,
-    Retractor, Slipring, UserWindow,
+    Retractor, Slipring, Pretensioner, UserWindow,
     DetonationWave, ElementActivation, MonvolFvmBag2, Autoposition,
     LoadCentri, LoadPfluid, LoadPressure, LoadGravity, LoadBody, LoadTherm,
     EulerBcs, HeatBcs, InivelAxis, InivelFvm, InivelNode, InivelPart, InivelSph,
@@ -811,6 +811,7 @@ class Model:
         self.ale_close: Optional[AleClose] = None      # /ALE/CLOS (M105)
         self.retractors: Dict[int, Retractor] = {}     # /RETRACTOR (M106)
         self.sliprings: Dict[int, Slipring] = {}       # /SLIPRING (M106)
+        self.pretensioners: Dict[int, Pretensioner] = {} # /PRETENSIONER (M197)
         self.user_windows: List[UserWindow] = []       # /USERWI (M106)
         self.drapes: Dict[int, Drape] = {}             # /DRAPE (M107)
         self.inibri_erefs: List[IniBriEref] = []       # /INIBRI/EREF (M107)
@@ -1326,4 +1327,9 @@ class Model:
             g = getattr(self, name)
             if g is not None and g.n:
                 yield name, g
+
+    @property
+    def frames(self) -> dict:
+        return {sf.id: sf for sf in self.skews.entries if sf.kind == "FRAME"}
+
 

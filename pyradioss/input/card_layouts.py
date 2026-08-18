@@ -727,6 +727,10 @@ LAYOUTS: Dict[str, List[int]] = {
     "SLIPRING_3": [10, 10, 20, 20, 20, 20],
     "SLIPRING_SHELL_1": [10, 10, 10, 10, 10, 20, 20],
 
+    # PRETENSIONER (M197)
+    "PRETENSIONER_1": [10, 10, 20, 20, 20, 20, 20, 10],
+    "PRETENSIONER_2": [10, 10, 10, 10, 10, 10, 10, 10],
+
     # INTER/TYPE8 (M106)
     "INTER_TYPE8_1": [10, 10],
     "INTER_TYPE8_2": [20, 20, 20, 20, 20],

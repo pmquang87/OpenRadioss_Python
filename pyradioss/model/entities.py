@@ -2763,6 +2763,28 @@ class Slipring:
 
 
 @dataclass
+class Pretensioner:
+    """``/PRETENSIONER`` or ``/SEATBELT/PRETENSIONER`` (M197): Seatbelt pretensioner element.
+
+    Fortran origin: ``starter/source/seatbelts/pretensioner.F`` / CFG ``pretensioner.cfg``.
+    """
+    id: int
+    title: str = ""
+    sens_id: int = 0
+    fct_id: int = 0
+    fscale: float = 1.0
+    tstart: float = 0.0
+    vmax: float = 0.0
+    amax: float = 0.0
+    reinf: float = 0.0
+    i_type: int = 0
+    retractor_id: int = 0
+    slipring_id: int = 0
+    element_ids: List[int] = field(default_factory=list)
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
 class UserWindow:
     """/USERWI (M106): User window / data card lines.
 
@@ -11104,5 +11126,69 @@ class TableBlock:
     y_values: List[float] = field(default_factory=list)
     curves: List[int] = field(default_factory=list)
     params: dict = field(default_factory=dict)
+
+
+@dataclass
+class MatLaw62:
+    """``/MAT/LAW62`` or ``/MAT/VISC_ELAS`` (M197): Viscoelastic material."""
+    id: int = 0
+    title: str = ""
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class MatLaw88:
+    """``/MAT/LAW88`` or ``/MAT/HONEYCOMB`` (M197): Honeycomb material."""
+    id: int = 0
+    title: str = ""
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    params: dict = field(default_factory=dict)
+
+
+@dataclass
+class MatLaw93:
+    """``/MAT/LAW93`` or ``/MAT/ORTH_HILL`` (M197): Orthotropic Hill material."""
+    id: int = 0
+    title: str = ""
+    rho0: float = 0.0
+    rhor: float = 0.0
+    e11: float = 0.0
+    e22: float = 0.0
+    e33: float = 0.0
+    g12: float = 0.0
+    nu12: float = 0.0
+    g13: float = 0.0
+    g23: float = 0.0
+    nu13: float = 0.0
+    nu23: float = 0.0
+    nl: int = 0
+    sigma_y: float = 0.0
+    qr1: float = 0.0
+    cr1: float = 0.0
+    qr2: float = 0.0
+    cr2: float = 0.0
+    r11: float = 1.0
+    r22: float = 1.0
+    r12: float = 1.0
+    r33: float = 1.0
+    r13: float = 1.0
+    r23: float = 1.0
+    fcut: float = 0.0
+    vp: int = 0
+    curves: list = field(default_factory=list)
+    rho: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    params: dict = field(default_factory=dict)
+
+
+MatViscElas = MatLaw62
+MatHoneycomb = MatLaw88
+MatOrthHill = MatLaw93
 
 

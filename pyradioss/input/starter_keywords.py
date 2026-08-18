@@ -1587,7 +1587,7 @@ def read_ale(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_ale_solver(block, model, log)
     elif sub in ("CLOS", "CLOSE"):
         read_ale_close(block, model, log)
-    elif sub == "ZERO":
+    elif sub in ("ZERO", "ZERO_VEL", "ZERO_VELOCITY"):
         model.ale_zero = True
     elif sub == "MUSCL" or (len(block.parts) > 2 and block.parts[2].upper() == "MUSCL"):
         read_ale_muscl(block, model, log)
@@ -18807,10 +18807,21 @@ def read_slipring(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_seatbelt(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/SEATBELT/id`` (M150): Complete seatbelt system assembly.
+    """``/SEATBELT/id`` (M150, M197): Complete seatbelt system assembly.
 
     Fortran origin: ``starter/source/tools/seatbelts/create_seatbelt.F``.
     """
+    if len(block.parts) > 1:
+        sub = block.parts[1].upper()
+        if sub in ("PRETENSIONER", "PRETEN", "PRETENSION"):
+            read_pretensioner(block, model, log)
+            return
+        elif sub in ("RETRACTOR", "RETRACT"):
+            read_retractor(block, model, log)
+            return
+        elif sub in ("SLIPRING", "SLIP"):
+            read_slipring(block, model, log)
+            return
     from ..model.entities import SeatbeltSystem
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     retractor_ids = []
@@ -18832,6 +18843,77 @@ def read_seatbelt(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=block.user_id, title=title,
         retractor_ids=retractor_ids, slipring_ids=slipring_ids, element_ids=element_ids
     )
+
+
+def read_pretensioner(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PRETENSIONER[/<subtype>]/id`` or ``/SEATBELT/PRETENSIONER/id`` (M197): Seatbelt pretensioner."""
+    from ..model.entities import Pretensioner
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank]
+    if not valid_cards:
+        log.error(f"/PRETENSIONER/{block.user_id}: missing data card", block.source)
+        return
+
+    sens_id, fct_id = 0, 0
+    fscale = 1.0
+    tstart = 0.0
+    vmax, amax, reinf = 0.0, 0.0, 0.0
+    i_type = 0
+    retractor_id, slipring_id = 0, 0
+    element_ids = []
+
+    if block.fixed:
+        f1 = valid_cards[0].cut("PRETENSIONER_1")
+        sens_id = _ival(f1[0]) if len(f1) > 0 else 0
+        fct_id = _ival(f1[1]) if len(f1) > 1 else 0
+        fscale = _fval(f1[2], 1.0) if len(f1) > 2 else 1.0
+        tstart = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+        vmax = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+        amax = _fval(f1[5], 0.0) if len(f1) > 5 else 0.0
+        reinf = _fval(f1[6], 0.0) if len(f1) > 6 else 0.0
+        i_type = _ival(f1[7]) if len(f1) > 7 else 0
+
+        if len(valid_cards) > 1:
+            f2 = valid_cards[1].cut("PRETENSIONER_2")
+            vals = [_ival(x) for x in f2 if x.strip()]
+            if len(vals) > 0:
+                retractor_id = vals[0]
+            if len(vals) > 1:
+                slipring_id = vals[1]
+            if len(vals) > 2:
+                element_ids.extend([v for v in vals[2:] if v > 0])
+    else:
+        t1 = valid_cards[0].tokens()
+        sens_id = int(float(t1[0])) if len(t1) > 0 else 0
+        fct_id = int(float(t1[1])) if len(t1) > 1 else 0
+        fscale = float(t1[2]) if len(t1) > 2 else 1.0
+        tstart = float(t1[3]) if len(t1) > 3 else 0.0
+        vmax = float(t1[4]) if len(t1) > 4 else 0.0
+        amax = float(t1[5]) if len(t1) > 5 else 0.0
+        reinf = float(t1[6]) if len(t1) > 6 else 0.0
+        i_type = int(float(t1[7])) if len(t1) > 7 else 0
+
+        if len(valid_cards) > 1:
+            vals = [int(float(x)) for x in valid_cards[1].tokens()]
+            if len(vals) > 0:
+                retractor_id = vals[0]
+            if len(vals) > 1:
+                slipring_id = vals[1]
+            if len(vals) > 2:
+                element_ids.extend([v for v in vals[2:] if v > 0])
+
+    pret = Pretensioner(
+        id=block.user_id or 0, title=title, sens_id=sens_id, fct_id=fct_id,
+        fscale=fscale, tstart=tstart, vmax=vmax, amax=amax, reinf=reinf,
+        i_type=i_type, retractor_id=retractor_id, slipring_id=slipring_id,
+        element_ids=element_ids,
+        params={
+            "sens_id": sens_id, "fct_id": fct_id, "fscale": fscale, "tstart": tstart,
+            "vmax": vmax, "amax": amax, "reinf": reinf, "i_type": i_type,
+            "retractor_id": retractor_id, "slipring_id": slipring_id, "element_ids": element_ids
+        }
+    )
+    model.pretensioners[block.user_id or 0] = pret
 
 
 def read_userwi(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -20363,7 +20445,7 @@ def read_initru(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/INITRU/{sub}: missing data card", block.source)
         return
 
-    if sub in ("EPSP", "FORCE", "TENS", "TEMP"):
+    if sub in ("EPSP", "FORCE", "TENS", "TEMP", "STRA", "STRA_F"):
         for c in cards:
             if block.fixed:
                 f = c.cut("INITRU_SCALAR")
@@ -20381,6 +20463,8 @@ def read_initru(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 st.force = val
             elif sub == "TEMP":
                 st.temp = val
+            elif sub.startswith("STRA"):
+                st.epsp = val
     elif sub in ("FULL", "TRUSS"):
         for c in cards:
             if block.fixed:
@@ -20405,15 +20489,15 @@ def read_initru(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             st.eint = eint
             st.force = force
             st.area = area
-            st.epsp = epsp
+            st.epsp = epssp if 'epssp' in locals() else epsp
     else:
         log.warning(f"/INITRU/{sub} not ported — block skipped", block.source)
 
 
 def read_inibea(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/INIBEA/{FULL|FORCE|MOMENT|EPSP}[/id]`` (M97)::
+    """``/INIBEA/{FULL|FORCE|MOMENT|EPSP|STRA|STRA_F}[/id]`` (M97, M197)::
 
-        /INIBEA/FORCE, /INIBEA/MOMENT, /INIBEA/EPSP:
+        /INIBEA/FORCE, /INIBEA/MOMENT, /INIBEA/EPSP, /INIBEA/STRA_F:
           card 1: beam_ID  value
         /INIBEA/FULL:
           card 1: beam_ID  nb_integr  prop_type
@@ -20426,7 +20510,7 @@ def read_inibea(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/INIBEA/{sub}: missing data card", block.source)
         return
 
-    if sub in ("FORCE", "MOMENT", "EPSP", "TEMP"):
+    if sub in ("FORCE", "MOMENT", "EPSP", "TEMP", "STRA", "STRA_F"):
         for c in cards:
             if block.fixed:
                 f = c.cut("INIBEA_SCALAR")
@@ -20446,6 +20530,8 @@ def read_inibea(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 st.epsp = val
             elif sub == "TEMP":
                 st.temp = val
+            elif sub.startswith("STRA"):
+                st.epsp = val
     elif sub in ("FULL", "BEAM"):
         idx = 0
         while idx < len(cards):
@@ -40924,6 +41010,43 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ALECFDSPH": read_alecfdsph,
     "ALE_MUSCL": read_ale,
     "ALE_SOLVER": read_ale,
+    # --- M197: Advanced Materials & Safety/Kinematic Systems ---
+    "MAT_LAW34": read_mat,
+    "MAT_BOLT": read_mat,
+    "BOLT": read_mat,
+    "LAW34": read_mat,
+    "MAT_LAW60": read_mat,
+    "MAT_FABRIC": read_mat,
+    "FABRIC": read_mat,
+    "LAW60": read_mat,
+    "MAT_LAW62": read_mat,
+    "MAT_VISC_ELAS": read_mat,
+    "VISC_ELAS": read_mat,
+    "LAW62": read_mat,
+    "MAT_LAW79": read_mat,
+    "MAT_TRANS_ISO": read_mat,
+    "TRANS_ISO": read_mat,
+    "LAW79": read_mat,
+    "MAT_LAW82": read_mat,
+    "MAT_OGDEN": read_mat,
+    "OGDEN": read_mat,
+    "LAW82": read_mat,
+    "MAT_LAW88": read_mat,
+    "MAT_HONEYCOMB": read_mat,
+    "HONEYCOMB": read_mat,
+    "LAW88": read_mat,
+    "MAT_LAW93": read_mat,
+    "MAT_ORTH_HILL": read_mat,
+    "ORTH_HILL": read_mat,
+    "LAW93": read_mat,
+    "PRETENSIONER": read_pretensioner,
+    "SEATBELT_PRETENSIONER": read_pretensioner,
+    "FRAME_MOVE": read_frame,
+    "FRAME_MOV": read_frame,
+    "FRAME_MOV2": read_frame,
+    "FRAME_FIX": read_frame,
+    "ALE_GRID": read_ale,
+    "ALE_ZERO_VEL": read_ale,
 }
 
 
