@@ -2240,6 +2240,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("COHESIVE", "COH", "INTERFACE"):
         read_fail_cohesive(block, model, log)
         return
+    if kind in ("MAX_STRESS", "MAXSTRESS", "MAX_TENS"):
+        read_fail_maxstress(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11651,6 +11654,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("CROSSSECTION", "SEC_FORCE", "SECT_FORCE", "SECT"):
         read_sensor_cross_section(block, model, log)
+        return
+    if kind in ("RUPT", "RUPTURE", "SHELL_FAIL", "SOLID_FAIL", "ELEM_FAIL"):
+        read_sensor_rupture(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -22832,10 +22838,10 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub in ("BALL_JOINT", "BALL", "SPHERICAL", "SPHERICAL_JOINT"):
         read_ball_joint(block, model, log)
         return
-    elif sub in ("PIN_JOINT", "PIN", "REVOLUTE"):
+    elif sub in ("PIN_JOINT", "PIN", "REVOLUTE", "HINGE", "HINGE_JOINT"):
         read_pin_joint(block, model, log)
         return
-    elif sub in ("SLIDER", "SLIDE", "PRISMATIC"):
+    elif sub in ("SLIDER", "SLIDE", "PRISMATIC", "TRANSLATIONAL", "TRANSLATIONAL_JOINT"):
         read_slider_joint(block, model, log)
         return
     elif sub in ("CYL_JOINT", "CYLINDER_JOINT", "CYL", "CYLINDER"):
@@ -41549,6 +41555,39 @@ def read_fail_cohesive(block: KeywordBlock, model: Model, log: MessageLog) -> No
     )
 
 
+def read_fail_maxstress(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/MAX_STRESS/mat_ID`` or ``/FAIL/MAXSTRESS/mat_ID`` (M219): Maximum directional stress failure."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/MAX_STRESS/{block.user_id}: missing data card", block.source)
+        return
+
+    sig_t1, sig_c1, sig_t2, sig_c2, tau_12, ifail_sh = 0.0, 0.0, 0.0, 0.0, 0.0, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_MAX_STRESS_1")
+        sig_t1 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sig_c1 = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        sig_t2 = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        sig_c2 = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        tau_12 = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        ifail_sh = _ival(f[5], 1) if len(f) > 5 else 1
+    else:
+        toks = cards[0].tokens()
+        sig_t1 = float(toks[0]) if len(toks) > 0 else 0.0
+        sig_c1 = float(toks[1]) if len(toks) > 1 else 0.0
+        sig_t2 = float(toks[2]) if len(toks) > 2 else 0.0
+        sig_c2 = float(toks[3]) if len(toks) > 3 else 0.0
+        tau_12 = float(toks[4]) if len(toks) > 4 else 0.0
+        ifail_sh = int(float(toks[5])) if len(toks) > 5 else 1
+
+    from ..model.entities import FailMaxStress
+    model.fail_maxstresses[block.user_id] = FailMaxStress(
+        mat_id=block.user_id, title=title, sig_t1=sig_t1, sig_c1=sig_c1,
+        sig_t2=sig_t2, sig_c2=sig_c2, tau_12=tau_12, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -42953,6 +42992,64 @@ def read_sensor_cross_section(block: KeywordBlock, model: Model, log: MessageLog
     model.sensors.append(Sensor(
         id=scs.id, kind="CROSSSECTION", tdelay=t_delay
     ))
+
+
+def read_eng_helm(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/HELM`` or ``/ENG/HELM`` (M219): Helmholtz acoustic frequency response directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/HELM/{block.user_id}: missing data card", block.source)
+        return
+
+    freq_start, freq_end, n_step = 0.0, 0.0, 10
+    if block.fixed:
+        f = cards[0].cut("ENG_HELM_1")
+        freq_start = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        freq_end = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        n_step = _ival(f[2], 10) if len(f) > 2 else 10
+    else:
+        toks = cards[0].tokens()
+        freq_start = float(toks[0]) if len(toks) > 0 else 0.0
+        freq_end = float(toks[1]) if len(toks) > 1 else 0.0
+        n_step = int(float(toks[2])) if len(toks) > 2 else 10
+
+    from ..model.entities import EngHelm
+    h_id = block.user_id or (len(model.eng_helms) + 1)
+    model.eng_helms[h_id] = EngHelm(
+        id=h_id, title=title, freq_start=freq_start,
+        freq_end=freq_end, n_step=n_step
+    )
+
+
+def read_sensor_rupture(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/RUPT`` or ``/SENSOR/SHELL_FAIL`` (M219): Element failure / erosion trigger sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/RUPT/{block.user_id}: missing data card", block.source)
+        return
+
+    elem_id, itype, t_delay = 0, 1, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_RUPT_1")
+        elem_id = _ival(f[0], 0) if len(f) > 0 else 0
+        itype = _ival(f[1], 1) if len(f) > 1 else 1
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        elem_id = int(float(toks[0])) if len(toks) > 0 else 0
+        itype = int(float(toks[1])) if len(toks) > 1 else 1
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorRupture, Sensor
+    sr = SensorRupture(
+        id=block.user_id or 1, title=title, elem_id=elem_id,
+        itype=itype, t_delay=t_delay
+    )
+    model.sensor_ruptures[sr.id] = sr
+    model.sensors.append(Sensor(
+        id=sr.id, kind="RUPT", tdelay=t_delay
+    ))
+
 
 
 
@@ -45033,6 +45130,25 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_CROSSSECTION": read_sensor_cross_section,
     "SENSOR_SEC_FORCE": read_sensor_cross_section,
     "SENSOR_SECT": read_sensor_cross_section,
+    # --- M219: Maximum Stress Failure Criterion, Helmholtz Acoustic Directive, Kinematic Joint Aliases, and Element Rupture Sensor Suite ---
+    "LAGMUL_HINGE": read_pin_joint,
+    "LAGMUL_HINGE_JOINT": read_pin_joint,
+    "HINGE_JOINT": read_pin_joint,
+    "HINGE": read_pin_joint,
+    "LAGMUL_TRANSLATIONAL": read_slider_joint,
+    "LAGMUL_TRANSLATIONAL_JOINT": read_slider_joint,
+    "TRANSLATIONAL_JOINT": read_slider_joint,
+    "TRANSLATIONAL": read_slider_joint,
+    "FAIL_MAX_STRESS": read_fail_maxstress,
+    "FAIL_MAXSTRESS": read_fail_maxstress,
+    "FAIL_MAX_TENS": read_fail_maxstress,
+    "HELM": read_eng_helm,
+    "ENG_HELM": read_eng_helm,
+    "SENSOR_RUPT": read_sensor_rupture,
+    "SENSOR_RUPTURE": read_sensor_rupture,
+    "SENSOR_SHELL_FAIL": read_sensor_rupture,
+    "SENSOR_SOLID_FAIL": read_sensor_rupture,
+    "SENSOR_ELEM_FAIL": read_sensor_rupture,
 }
 
 
@@ -45041,7 +45157,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

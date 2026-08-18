@@ -12797,6 +12797,40 @@ class SensorCrossSection:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailMaxStress:
+    """``/FAIL/MAX_STRESS/mat_ID`` or ``/FAIL/MAXSTRESS/mat_ID`` (M219): Maximum directional stress failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    sig_t1: float = 0.0      # tensile strength limit in direction 1
+    sig_c1: float = 0.0      # compressive strength limit in direction 1
+    sig_t2: float = 0.0      # tensile strength limit in direction 2
+    sig_c2: float = 0.0      # compressive strength limit in direction 2
+    tau_12: float = 0.0      # shear strength limit in 1-2 plane
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngHelm:
+    """``/HELM`` or ``/ENG/HELM`` (M219): Helmholtz acoustic frequency response directive."""
+    id: int = 1
+    title: str = ""
+    freq_start: float = 0.0  # start frequency
+    freq_end: float = 0.0    # end frequency
+    n_step: int = 10         # number of frequency steps
+
+
+@dataclass
+class SensorRupture:
+    """``/SENSOR/RUPT`` or ``/SENSOR/SHELL_FAIL`` (M219): Element failure / erosion trigger sensor."""
+    id: int = 1
+    title: str = ""
+    elem_id: int = 0         # target element ID
+    itype: int = 1           # element type (1=shell, 2=solid)
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

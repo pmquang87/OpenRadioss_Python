@@ -1535,6 +1535,12 @@ class Model:
         self.eng_tracks: Dict[int, Any] = {}                         # /TRACK, /ENG/TRACK (M218)
         self.sensor_cross_sections: Dict[int, Any] = {}              # /SENSOR/CROSSSECTION, /SENSOR/SEC_FORCE (M218)
 
+        # M219 Entities
+        self.fail_maxstresses: Dict[int, Any] = {}                   # /FAIL/MAX_STRESS, /FAIL/MAXSTRESS (M219)
+        self.eng_helms: Dict[int, Any] = {}                          # /HELM, /ENG/HELM (M219)
+        self.sensor_ruptures: Dict[int, Any] = {}                    # /SENSOR/RUPT, /SENSOR/SHELL_FAIL (M219)
+
+
 
 
 
