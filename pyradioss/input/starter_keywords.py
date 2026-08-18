@@ -2305,6 +2305,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("ENERGY_RATIO", "ERATIO", "SPECIFIC_ENERGY"):
         read_fail_energy_ratio(block, model, log)
         return
+    if kind in ("RICE_TRACEY", "RT", "VOID_GROWTH"):
+        read_fail_rice_tracey(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11779,6 +11782,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("SPRING_AXIAL", "SPRING_AXIAL_FORCE", "AXIAL_SPRING", "SPRING_TENSION"):
         read_sensor_spring_axial(block, model, log)
+        return
+    if kind in ("SPRING_SHEAR", "SPRING_SHEAR_FORCE", "SHEAR_SPRING", "SPRING_TRANSVERSE_FORCE"):
+        read_sensor_spring_shear(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -42372,6 +42378,35 @@ def read_fail_energy_ratio(block: KeywordBlock, model: Model, log: MessageLog) -
     )
 
 
+def read_fail_rice_tracey(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/RICE_TRACEY/mat_ID`` (M240): Rice-Tracey void growth failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/RICE_TRACEY/{block.user_id}: missing data card", block.source)
+        return
+
+    r0, rc_r0, alpha_rt, ifail_sh = 0.0, 1.0, 0.283, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_RICE_TRACEY_1")
+        r0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        rc_r0 = _fval(f[1], 1.0) if len(f) > 1 else 1.0
+        alpha_rt = _fval(f[2], 0.283) if len(f) > 2 else 0.283
+        ifail_sh = _ival(f[3], 1) if len(f) > 3 else 1
+    else:
+        toks = cards[0].tokens()
+        r0 = float(toks[0]) if len(toks) > 0 else 0.0
+        rc_r0 = float(toks[1]) if len(toks) > 1 else 1.0
+        alpha_rt = float(toks[2]) if len(toks) > 2 else 0.283
+        ifail_sh = int(float(toks[3])) if len(toks) > 3 else 1
+
+    from ..model.entities import FailRiceTracey
+    model.fail_rice_traceys[block.user_id] = FailRiceTracey(
+        mat_id=block.user_id, title=title, r0=r0,
+        rc_r0=rc_r0, alpha_rt=alpha_rt, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -44947,6 +44982,61 @@ def read_sensor_spring_axial(block: KeywordBlock, model: Model, log: MessageLog)
     ))
 
 
+def read_eng_volume(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/VOLUME`` or ``/ENG/VOLUME`` (M240): Engine element volume output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/VOLUME/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_vol, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_VOLUME_1")
+        dt_vol = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_vol = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngVolume
+    r_id = block.user_id or (len(model.eng_volumes) + 1)
+    model.eng_volumes[r_id] = EngVolume(
+        id=r_id, title=title, dt_vol=dt_vol, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_shear(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_SHEAR`` or ``/SENSOR/SHEAR_SPRING`` (M240): Spring element shear force threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_SHEAR/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, fsh_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_SHEAR_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        fsh_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        fsh_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringShear, Sensor
+    sss = SensorSpringShear(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        fsh_max=fsh_max, t_delay=t_delay
+    )
+    model.sensor_spring_shears[sss.id] = sss
+    model.sensors.append(Sensor(
+        id=sss.id, kind="SPRING_SHEAR", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -47351,6 +47441,22 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_AXIAL_FORCE": read_sensor_spring_axial,
     "SENSOR_AXIAL_SPRING": read_sensor_spring_axial,
     "SENSOR_SPRING_TENSION": read_sensor_spring_axial,
+    # --- M240: Rice-Tracey Failure Criterion, Engine Volume Output Directive, Threaded Joint Aliases, and Spring Shear Force Sensor Suite ---
+    "FAIL_RICE_TRACEY": read_fail_rice_tracey,
+    "FAIL_RT": read_fail_rice_tracey,
+    "FAIL_VOID_GROWTH": read_fail_rice_tracey,
+    "VOLUME": read_eng_volume,
+    "ENG_VOLUME": read_eng_volume,
+    "ENG_ELEM_VOLUME": read_eng_volume,
+    "ENG_VOL": read_eng_volume,
+    "LAGMUL_THREADED_JOINT": read_screw_joint,
+    "THREADED_JOINT": read_screw_joint,
+    "LAGMUL_THREADED_AXIS": read_screw_joint,
+    "THREADED_AXIS": read_screw_joint,
+    "SENSOR_SPRING_SHEAR": read_sensor_spring_shear,
+    "SENSOR_SPRING_SHEAR_FORCE": read_sensor_spring_shear,
+    "SENSOR_SHEAR_SPRING": read_sensor_spring_shear,
+    "SENSOR_SPRING_TRANSVERSE_FORCE": read_sensor_spring_shear,
 }
 
 
@@ -47359,7 +47465,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP", "ROTC", "ROTV", "ROTA", "FORCE"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP", "ROTC", "ROTV", "ROTA", "FORCE", "VOLUME"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

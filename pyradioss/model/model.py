@@ -1640,6 +1640,12 @@ class Model:
         self.eng_forces: Dict[int, Any] = {}                         # /FORCE, /ENG/FORCE (M239)
         self.sensor_spring_axials: Dict[int, Any] = {}               # /SENSOR/SPRING_AXIAL (M239)
 
+        # M240 Entities
+        self.fail_rice_traceys: Dict[int, Any] = {}                  # /FAIL/RICE_TRACEY (M240)
+        self.eng_volumes: Dict[int, Any] = {}                        # /VOLUME, /ENG/VOLUME (M240)
+        self.sensor_spring_shears: Dict[int, Any] = {}               # /SENSOR/SPRING_SHEAR (M240)
+
+
 
 
 

@@ -13465,6 +13465,37 @@ class SensorSpringAxial:
     t_delay: float = 0.0      # activation delay time
 
 
+@dataclass
+class FailRiceTracey:
+    """``/FAIL/RICE_TRACEY/mat_ID`` (M240): Rice-Tracey void growth failure model."""
+    mat_id: int = 0
+    title: str = ""
+    r0: float = 0.0          # initial void radius
+    rc_r0: float = 1.0       # critical void radius expansion ratio (R/R0)_c
+    alpha_rt: float = 0.283  # void growth rate parameter alpha
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngVolume:
+    """``/VOLUME`` or ``/ENG/VOLUME`` (M240): Engine element volume output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_vol: float = 0.0      # time frequency for element volume output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSpringShear:
+    """``/SENSOR/SPRING_SHEAR`` or ``/SENSOR/SHEAR_SPRING`` (M240): Spring element shear force threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    fsh_max: float = 1e30    # maximum shear force threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

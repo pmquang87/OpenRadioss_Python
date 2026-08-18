@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M239)
+## What is implemented (M1 → M240)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -245,6 +245,7 @@ real history is 41 milestones. One line each:
 | M237 | Hencky Principal Strain Failure Criterion, Engine Rotational Velocity Output Directive, Prismatic/Translational Axis Joint Aliases, and Spring Rotational Velocity Sensor Suite: /FAIL/HENCKY (/FAIL/HENCKY_STRAIN, /FAIL/LOG_STRAIN) Hencky logarithmic principal strain tensor failure model, /ROTV (/ENG/ROTV, /ENG/ANGULAR_VEL, /ENG/ROTATIONAL_VELOCITY) engine nodal rotational velocity vector history tracking directive, /LAGMUL/PRISMATIC_AXIS (/PRISMATIC_AXIS) and /LAGMUL/TRANSLATIONAL_AXIS (/TRANSLATIONAL_AXIS) kinematic joint aliases, and /SENSOR/SPRING_ROTV (/SENSOR/SPRING_ANGVEL, /SENSOR/ROTV_SPRING, /SENSOR/ANGVEL_SPRING) spring element rotational velocity/spin rate threshold sensor |
 | M238 | Strain Energy Density Failure Criterion, Engine Rotational Acceleration Output Directive, Planar/Plane Axis Joint Aliases, and Spring Rotational Acceleration Sensor Suite: /FAIL/ENERGY_DENSITY (/FAIL/SED, /FAIL/STRAIN_ENERGY_DENSITY) strain energy density failure model, /ROTA (/ENG/ROTA, /ENG/ANGULAR_ACCEL, /ENG/ROTATIONAL_ACCELERATION) engine nodal rotational acceleration vector history tracking directive, /LAGMUL/PLANE_JOINT (/PLANE_JOINT, /LAGMUL/PLANAR_AXIS, /PLANAR_AXIS) kinematic joint aliases, and /SENSOR/SPRING_ROTA (/SENSOR/SPRING_ANGACC, /SENSOR/ROTA_SPRING, /SENSOR/ANGACC_SPRING) spring element rotational acceleration threshold sensor |
 | M239 | Energy Ratio Failure Criterion, Engine Force Output Directive, Ball Socket Joint Aliases, and Spring Axial Force Sensor Suite: /FAIL/ENERGY_RATIO (/FAIL/ERATIO, /FAIL/SPECIFIC_ENERGY) energy ratio failure model, /FORCE (/ENG/FORCE, /ENG/NODAL_FORCE, /ENG/RESULTANT_FORCE) engine nodal resultant force vector history tracking directive, /LAGMUL/BALL_SOCKET (/BALL_SOCKET, /LAGMUL/BALL_AND_SOCKET, /BALL_AND_SOCKET) kinematic joint aliases, and /SENSOR/SPRING_AXIAL (/SENSOR/SPRING_AXIAL_FORCE, /SENSOR/AXIAL_SPRING, /SENSOR/SPRING_TENSION) spring element axial force threshold sensor |
+| M240 | Rice-Tracey Failure Criterion, Engine Volume Output Directive, Threaded Joint Aliases, and Spring Shear Force Sensor Suite: /FAIL/RICE_TRACEY (/FAIL/RT, /FAIL/VOID_GROWTH) Rice-Tracey void growth ductile fracture failure model, /VOLUME (/ENG/VOLUME, /ENG/ELEM_VOLUME, /ENG/VOL) engine element volume history tracking directive, /LAGMUL/THREADED_JOINT (/THREADED_JOINT, /LAGMUL/THREADED_AXIS, /THREADED_AXIS) kinematic joint aliases, and /SENSOR/SPRING_SHEAR (/SENSOR/SPRING_SHEAR_FORCE, /SENSOR/SHEAR_SPRING, /SENSOR/SPRING_TRANSVERSE_FORCE) spring element shear force threshold sensor |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
