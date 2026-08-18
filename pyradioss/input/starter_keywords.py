@@ -2317,6 +2317,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("HOLLOMON", "HOLLOMON_DAMAGE", "POWER_LAW", "HOLLOMON_LAW"):
         read_fail_hollomon(block, model, log)
         return
+    if kind in ("SWIFT", "SWIFT_LAW", "SWIFT_DAMAGE", "SWIFT_MODEL"):
+        read_fail_swift(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11803,6 +11806,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("SPRING_STRAIN_ENERGY", "SPRING_SE", "STRAIN_ENERGY_SPRING", "SPRING_INTERNAL_ENERGY"):
         read_sensor_spring_strain_energy(block, model, log)
+        return
+    if kind in ("SPRING_KINETIC_ENERGY", "SPRING_KE", "KINETIC_ENERGY_SPRING", "SPRING_KIN_ENERGY"):
+        read_sensor_spring_kinetic_energy(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -42514,6 +42520,37 @@ def read_fail_hollomon(block: KeywordBlock, model: Model, log: MessageLog) -> No
     )
 
 
+def read_fail_swift(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/SWIFT/mat_ID`` (M244): Swift power-law strain hardening fracture criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/SWIFT/{block.user_id}: missing data card", block.source)
+        return
+
+    eps0, n_exp, k_coeff, eps_max, ifail_sh = 0.0, 0.2, 0.0, 1e30, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_SWIFT_1")
+        eps0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        n_exp = _fval(f[1], 0.2) if len(f) > 1 else 0.2
+        k_coeff = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        eps_max = _fval(f[3], 1e30) if len(f) > 3 else 1e30
+        ifail_sh = _ival(f[4], 1) if len(f) > 4 else 1
+    else:
+        toks = cards[0].tokens()
+        eps0 = float(toks[0]) if len(toks) > 0 else 0.0
+        n_exp = float(toks[1]) if len(toks) > 1 else 0.2
+        k_coeff = float(toks[2]) if len(toks) > 2 else 0.0
+        eps_max = float(toks[3]) if len(toks) > 3 else 1e30
+        ifail_sh = int(float(toks[4])) if len(toks) > 4 else 1
+
+    from ..model.entities import FailSwift
+    model.fail_swifts[block.user_id] = FailSwift(
+        mat_id=block.user_id, title=title, eps0=eps0, n_exp=n_exp,
+        k_coeff=k_coeff, eps_max=eps_max, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -45309,6 +45346,61 @@ def read_sensor_spring_strain_energy(block: KeywordBlock, model: Model, log: Mes
     ))
 
 
+def read_eng_total_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TOTAL_ENERGY`` or ``/ENG/TOTAL_ENERGY`` (M244): Engine total energy output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/TOTAL_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_te, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_TOTAL_ENERGY_1")
+        dt_te = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_te = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngTotalEnergy
+    r_id = block.user_id or (len(model.eng_total_energies) + 1)
+    model.eng_total_energies[r_id] = EngTotalEnergy(
+        id=r_id, title=title, dt_te=dt_te, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_kinetic_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_KINETIC_ENERGY`` or ``/SENSOR/KINETIC_ENERGY_SPRING`` (M244): Spring element kinetic energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_KINETIC_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, ekin_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_KINETIC_ENERGY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        ekin_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        ekin_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringKineticEnergy, Sensor
+    sske = SensorSpringKineticEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        ekin_max=ekin_max, t_delay=t_delay
+    )
+    model.sensor_spring_kinetic_energies[sske.id] = sske
+    model.sensors.append(Sensor(
+        id=sske.id, kind="SPRING_KINETIC_ENERGY", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -47784,6 +47876,23 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_SE": read_sensor_spring_strain_energy,
     "SENSOR_STRAIN_ENERGY_SPRING": read_sensor_spring_strain_energy,
     "SENSOR_SPRING_INTERNAL_ENERGY": read_sensor_spring_strain_energy,
+    # --- M244: Swift Failure Criterion, Engine Total Energy Output Directive, Differential Joint Aliases, and Spring Kinetic Energy Sensor Suite ---
+    "FAIL_SWIFT": read_fail_swift,
+    "FAIL_SWIFT_DAMAGE": read_fail_swift,
+    "FAIL_SWIFT_LAW": read_fail_swift,
+    "FAIL_SWIFT_MODEL": read_fail_swift,
+    "TOTAL_ENERGY": read_eng_total_energy,
+    "ENG_TOTAL_ENERGY": read_eng_total_energy,
+    "ENG_TOT_ENERGY": read_eng_total_energy,
+    "ENG_TE": read_eng_total_energy,
+    "LAGMUL_DIFF_JOINT": read_diff,
+    "DIFF_JOINT": read_diff,
+    "LAGMUL_DIFF_AXIS": read_diff,
+    "DIFF_AXIS": read_diff,
+    "SENSOR_SPRING_KINETIC_ENERGY": read_sensor_spring_kinetic_energy,
+    "SENSOR_SPRING_KE": read_sensor_spring_kinetic_energy,
+    "SENSOR_KINETIC_ENERGY_SPRING": read_sensor_spring_kinetic_energy,
+    "SENSOR_SPRING_KIN_ENERGY": read_sensor_spring_kinetic_energy,
 }
 
 
@@ -47792,7 +47901,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP", "ROTC", "ROTV", "ROTA", "FORCE", "VOLUME", "DENSITY", "INTERNAL_ENERGY", "KINETIC_ENERGY"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP", "ROTC", "ROTV", "ROTA", "FORCE", "VOLUME", "DENSITY", "INTERNAL_ENERGY", "KINETIC_ENERGY", "TOTAL_ENERGY"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

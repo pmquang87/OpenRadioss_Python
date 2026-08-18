@@ -1660,6 +1660,12 @@ class Model:
         self.eng_kinetic_energies: Dict[int, Any] = {}               # /KINETIC_ENERGY, /ENG/KINETIC_ENERGY (M243)
         self.sensor_spring_strain_energies: Dict[int, Any] = {}      # /SENSOR/SPRING_STRAIN_ENERGY (M243)
 
+        # M244 Entities
+        self.fail_swifts: Dict[int, Any] = {}                        # /FAIL/SWIFT (M244)
+        self.eng_total_energies: Dict[int, Any] = {}                 # /TOTAL_ENERGY, /ENG/TOTAL_ENERGY (M244)
+        self.sensor_spring_kinetic_energies: Dict[int, Any] = {}     # /SENSOR/SPRING_KINETIC_ENERGY (M244)
+
+
 
 
 
