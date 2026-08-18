@@ -12764,6 +12764,40 @@ class SensorEnergyRatio:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailCohesive:
+    """``/FAIL/COHESIVE/mat_ID`` or ``/FAIL/COH/mat_ID`` (M218): Cohesive interface delamination failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    g1c: float = 0.0         # Mode I critical energy release rate
+    g2c: float = 0.0         # Mode II critical energy release rate
+    t1: float = 0.0          # normal peak traction
+    t2: float = 0.0          # shear peak traction
+    alpha: float = 1.0       # mixed-mode power law parameter
+
+
+@dataclass
+class EngTrack:
+    """``/TRACK`` or ``/ENG/TRACK`` (M218): Nodal trajectory tracking output."""
+    id: int = 1
+    title: str = ""
+    node_id: int = 0         # node ID to track
+    skew_id: int = 0         # reference frame
+    dt_track: float = 0.0    # recording time interval
+
+
+@dataclass
+class SensorCrossSection:
+    """``/SENSOR/CROSSSECTION`` or ``/SENSOR/SEC_FORCE`` (M218): Cross-section force/moment limit trigger sensor."""
+    id: int = 1
+    title: str = ""
+    sec_id: int = 0          # cross-section ID
+    f_cut: float = 1e30      # cutoff force magnitude threshold
+    m_cut: float = 1e30      # cutoff moment magnitude threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

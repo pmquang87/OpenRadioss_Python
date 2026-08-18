@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M217)
+## What is implemented (M1 → M218)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -223,6 +223,7 @@ real history is 41 milestones. One line each:
 | M215 | Hosford-Coulomb Failure Criterion, Engine Parallel Arithmetic, Engine Version Compatibility, and Rigid Body Sensor Stop Action Suite: /FAIL/HC (/FAIL/HOSFORD_COULOMB, /FAIL/HOSFORD) Hosford-Coulomb stress-state dependent ductile fracture model, /PARITH (/ENG/PARITH, /PARITH/ON, /PARITH/OFF) parallel deterministic arithmetic reproducibility toggle, /VERS (/ENG/VERS) target OpenRadioss engine version and syntax compatibility level, and /RBODY/STOP (/ENG/RBODY/STOP) sensor-triggered rigid body deactivation and velocity freeze |
 | M216 | Ladevèze EVR Failure Criterion, Engine Console Monitor, Engine Noise Filter, and Distance Gap Sensor Suite: /FAIL/LAD_EVR (/FAIL/LADEVEZE_EVR) Ladevèze elementary volume representative composite failure model, /MONITOR (/ENG/MONITOR) engine runtime console nodal state monitor directive, /NOIS (/ENG/NOIS) engine high-frequency noise filter control, and /SENSOR/TIME_GAP (/SENSOR/GAP) relative distance gap threshold trigger sensor |
 | M217 | Slot Kinematic Joint, Orthotropic Failure Criterion, Engine FFT Frequency Spectrum, and Energy Ratio Sensor Suite: /LAGMUL/SLOT (/SLOT, /SLOT_JOINT) slot line kinematic joint constraint with axis direction and displacement limits, /FAIL/ORTHO (/FAIL/ORTHOTROPIC, /FAIL/LAMINA) orthotropic lamina directional failure criterion, /FXFREQ (/ENG/FXFREQ) Fast Fourier Transform frequency spectrum output directive, and /SENSOR/ENERGY_RATIO (/SENSOR/ENG_RATIO) total energy ratio threshold sensor |
+| M218 | Cohesive Failure Criterion, Engine Trajectory Tracking, Spherical Joint Aliases, and Cross-Section Sensor Suite: /FAIL/COHESIVE (/FAIL/COH) interface delamination failure criterion with Mode I/II energy release rates and peak tractions, /TRACK (/ENG/TRACK) nodal trajectory tracking and history output directive, /LAGMUL/SPHERICAL (/SPHERICAL, /SPHERICAL_JOINT) spherical kinematic joint constraint aliases, and /SENSOR/CROSSSECTION (/SENSOR/SEC_FORCE, /SENSOR/SECT) section force/moment limit trigger sensor |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read

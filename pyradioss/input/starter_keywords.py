@@ -2237,6 +2237,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("ORTHO", "ORTHOTROPIC", "LAMINA"):
         read_fail_ortho(block, model, log)
         return
+    if kind in ("COHESIVE", "COH", "INTERFACE"):
+        read_fail_cohesive(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11645,6 +11648,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("ENERGY_RATIO", "ENG_RATIO", "RATIO_E"):
         read_sensor_energy_ratio(block, model, log)
+        return
+    if kind in ("CROSSSECTION", "SEC_FORCE", "SECT_FORCE", "SECT"):
+        read_sensor_cross_section(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -22823,7 +22829,7 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub == "DIFF":
         read_diff(block, model, log)
         return
-    elif sub in ("BALL_JOINT", "BALL"):
+    elif sub in ("BALL_JOINT", "BALL", "SPHERICAL", "SPHERICAL_JOINT"):
         read_ball_joint(block, model, log)
         return
     elif sub in ("PIN_JOINT", "PIN", "REVOLUTE"):
@@ -41513,6 +41519,37 @@ def read_fail_ortho(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_cohesive(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/COHESIVE/mat_ID`` or ``/FAIL/COH/mat_ID`` (M218): Cohesive interface delamination failure."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/COHESIVE/{block.user_id}: missing data card", block.source)
+        return
+
+    g1c, g2c, t1, t2, alpha = 0.0, 0.0, 0.0, 0.0, 1.0
+    if block.fixed:
+        f = cards[0].cut("FAIL_COHESIVE_1")
+        g1c = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        g2c = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        t1 = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        t2 = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        alpha = _fval(f[4], 1.0) if len(f) > 4 else 1.0
+    else:
+        toks = cards[0].tokens()
+        g1c = float(toks[0]) if len(toks) > 0 else 0.0
+        g2c = float(toks[1]) if len(toks) > 1 else 0.0
+        t1 = float(toks[2]) if len(toks) > 2 else 0.0
+        t2 = float(toks[3]) if len(toks) > 3 else 0.0
+        alpha = float(toks[4]) if len(toks) > 4 else 1.0
+
+    from ..model.entities import FailCohesive
+    model.fail_cohesives[block.user_id] = FailCohesive(
+        mat_id=block.user_id, title=title, g1c=g1c, g2c=g2c,
+        t1=t1, t2=t2, alpha=alpha
+    )
+
+
+
 
 
 
@@ -42857,6 +42894,66 @@ def read_sensor_energy_ratio(block: KeywordBlock, model: Model, log: MessageLog)
     model.sensors.append(Sensor(
         id=ser.id, kind="ENERGY_RATIO", tdelay=t_delay
     ))
+
+
+def read_eng_track(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TRACK`` or ``/ENG/TRACK`` (M218): Nodal trajectory tracking output."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/TRACK/{block.user_id}: missing data card", block.source)
+        return
+
+    node_id, skew_id, dt_track = 0, 0, 0.0
+    if block.fixed:
+        f = cards[0].cut("ENG_TRACK_1")
+        node_id = _ival(f[0], 0) if len(f) > 0 else 0
+        skew_id = _ival(f[1], 0) if len(f) > 1 else 0
+        dt_track = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        node_id = int(float(toks[0])) if len(toks) > 0 else 0
+        skew_id = int(float(toks[1])) if len(toks) > 1 else 0
+        dt_track = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import EngTrack
+    tr_id = block.user_id or (len(model.eng_tracks) + 1)
+    model.eng_tracks[tr_id] = EngTrack(
+        id=tr_id, title=title, node_id=node_id,
+        skew_id=skew_id, dt_track=dt_track
+    )
+
+
+def read_sensor_cross_section(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/CROSSSECTION`` or ``/SENSOR/SEC_FORCE`` (M218): Cross-section force/moment trigger sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/CROSSSECTION/{block.user_id}: missing data card", block.source)
+        return
+
+    sec_id, f_cut, m_cut, t_delay = 0, 1e30, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_CROSSSECTION_1")
+        sec_id = _ival(f[0], 0) if len(f) > 0 else 0
+        f_cut = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        m_cut = _fval(f[2], 1e30) if len(f) > 2 else 1e30
+        t_delay = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+    else:
+        toks = cards[0].tokens()
+        sec_id = int(float(toks[0])) if len(toks) > 0 else 0
+        f_cut = float(toks[1]) if len(toks) > 1 else 1e30
+        m_cut = float(toks[2]) if len(toks) > 2 else 1e30
+        t_delay = float(toks[3]) if len(toks) > 3 else 0.0
+
+    from ..model.entities import SensorCrossSection, Sensor
+    scs = SensorCrossSection(
+        id=block.user_id or 1, title=title, sec_id=sec_id,
+        f_cut=f_cut, m_cut=m_cut, t_delay=t_delay
+    )
+    model.sensor_cross_sections[scs.id] = scs
+    model.sensors.append(Sensor(
+        id=scs.id, kind="CROSSSECTION", tdelay=t_delay
+    ))
+
 
 
 
@@ -44924,6 +45021,18 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_FXFREQ": read_eng_fxfreq,
     "SENSOR_ENERGY_RATIO": read_sensor_energy_ratio,
     "SENSOR_ENG_RATIO": read_sensor_energy_ratio,
+    # --- M218: Cohesive Failure Criterion, Engine Trajectory Tracking, Spherical Joint Aliases, and Cross-Section Sensor Suite ---
+    "LAGMUL_SPHERICAL": read_ball_joint,
+    "LAGMUL_SPHERICAL_JOINT": read_ball_joint,
+    "SPHERICAL_JOINT": read_ball_joint,
+    "SPHERICAL": read_ball_joint,
+    "FAIL_COHESIVE": read_fail_cohesive,
+    "FAIL_COH": read_fail_cohesive,
+    "TRACK": read_eng_track,
+    "ENG_TRACK": read_eng_track,
+    "SENSOR_CROSSSECTION": read_sensor_cross_section,
+    "SENSOR_SEC_FORCE": read_sensor_cross_section,
+    "SENSOR_SECT": read_sensor_cross_section,
 }
 
 
@@ -44932,7 +45041,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

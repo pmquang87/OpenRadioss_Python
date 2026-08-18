@@ -1530,6 +1530,12 @@ class Model:
         self.eng_fxfreqs: Dict[int, Any] = {}                        # /FXFREQ, /ENG/FXFREQ (M217)
         self.sensor_energy_ratios: Dict[int, Any] = {}               # /SENSOR/ENERGY_RATIO, /SENSOR/ENG_RATIO (M217)
 
+        # M218 Entities
+        self.fail_cohesives: Dict[int, Any] = {}                     # /FAIL/COHESIVE, /FAIL/COH (M218)
+        self.eng_tracks: Dict[int, Any] = {}                         # /TRACK, /ENG/TRACK (M218)
+        self.sensor_cross_sections: Dict[int, Any] = {}              # /SENSOR/CROSSSECTION, /SENSOR/SEC_FORCE (M218)
+
+
 
 
 
