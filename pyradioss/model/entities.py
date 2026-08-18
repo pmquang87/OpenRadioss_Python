@@ -13144,6 +13144,38 @@ class SensorTrussStrain:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailMohr:
+    """``/FAIL/MOHR/mat_ID`` (M230): Mohr-Coulomb shear failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    c: float = 0.0           # cohesion
+    phi: float = 0.0         # friction angle (deg)
+    sigma_t: float = 1e30    # tensile cutoff stress
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngStress:
+    """``/STRESS`` or ``/ENG/STRESS`` (M230): Engine stress output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_stress: float = 0.0   # time frequency for stress output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorShellForce:
+    """``/SENSOR/SHELL_FORCE`` or ``/SENSOR/FORCE_SHELL`` (M230): Shell element force/moment threshold sensor."""
+    id: int = 1
+    title: str = ""
+    shell_id: int = 0        # shell element ID to monitor
+    f_max: float = 1e30      # maximum resultant force threshold
+    m_max: float = 1e30      # maximum resultant moment threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

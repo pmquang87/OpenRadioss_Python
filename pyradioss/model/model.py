@@ -1590,6 +1590,12 @@ class Model:
         self.eng_tenses: Dict[int, Any] = {}                         # /TENS, /ENG/TENS (M229)
         self.sensor_truss_strains: Dict[int, Any] = {}               # /SENSOR/TRUSS_STRAIN (M229)
 
+        # M230 Entities
+        self.fail_mohrs: Dict[int, Any] = {}                         # /FAIL/MOHR (M230)
+        self.eng_stresses: Dict[int, Any] = {}                       # /STRESS, /ENG/STRESS (M230)
+        self.sensor_shell_forces: Dict[int, Any] = {}                # /SENSOR/SHELL_FORCE (M230)
+
+
 
 
 

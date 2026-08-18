@@ -2275,6 +2275,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("NORTON", "CREEP", "NORTON_CREEP"):
         read_fail_norton(block, model, log)
         return
+    if kind in ("MOHR", "MOHR_COULOMB", "MC"):
+        read_fail_mohr(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11719,6 +11722,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("TRUSS_STRAIN", "STRAIN_TRUSS", "EPS_TRUSS"):
         read_sensor_truss_strain(block, model, log)
+        return
+    if kind in ("SHELL_FORCE", "FORCE_SHELL"):
+        read_sensor_shell_force(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -41962,6 +41968,35 @@ def read_fail_norton(block: KeywordBlock, model: Model, log: MessageLog) -> None
     )
 
 
+def read_fail_mohr(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/MOHR/mat_ID`` (M230): Mohr-Coulomb shear failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/MOHR/{block.user_id}: missing data card", block.source)
+        return
+
+    c, phi, sigma_t, ifail_sh = 0.0, 0.0, 1e30, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_MOHR_1")
+        c = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        phi = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        sigma_t = _fval(f[2], 1e30) if len(f) > 2 else 1e30
+        ifail_sh = _ival(f[3], 1) if len(f) > 3 else 1
+    else:
+        toks = cards[0].tokens()
+        c = float(toks[0]) if len(toks) > 0 else 0.0
+        phi = float(toks[1]) if len(toks) > 1 else 0.0
+        sigma_t = float(toks[2]) if len(toks) > 2 else 1e30
+        ifail_sh = int(float(toks[3])) if len(toks) > 3 else 1
+
+    from ..model.entities import FailMohr
+    model.fail_mohrs[block.user_id] = FailMohr(
+        mat_id=block.user_id, title=title, c=c, phi=phi,
+        sigma_t=sigma_t, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -43981,6 +44016,63 @@ def read_sensor_truss_strain(block: KeywordBlock, model: Model, log: MessageLog)
     model.sensors.append(Sensor(
         id=sts.id, kind="TRUSS_STRAIN", tdelay=t_delay
     ))
+
+
+def read_eng_stress(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/STRESS`` or ``/ENG/STRESS`` (M230): Engine stress output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/STRESS/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_stress, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_STRESS_1")
+        dt_stress = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_stress = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngStress
+    s_id = block.user_id or (len(model.eng_stresses) + 1)
+    model.eng_stresses[s_id] = EngStress(
+        id=s_id, title=title, dt_stress=dt_stress, sens_id=sens_id
+    )
+
+
+def read_sensor_shell_force(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SHELL_FORCE`` or ``/SENSOR/FORCE_SHELL`` (M230): Shell element force/moment threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SHELL_FORCE/{block.user_id}: missing data card", block.source)
+        return
+
+    shell_id, f_max, m_max, t_delay = 0, 1e30, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SHELL_FORCE_1")
+        shell_id = _ival(f[0], 0) if len(f) > 0 else 0
+        f_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        m_max = _fval(f[2], 1e30) if len(f) > 2 else 1e30
+        t_delay = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+    else:
+        toks = cards[0].tokens()
+        shell_id = int(float(toks[0])) if len(toks) > 0 else 0
+        f_max = float(toks[1]) if len(toks) > 1 else 1e30
+        m_max = float(toks[2]) if len(toks) > 2 else 1e30
+        t_delay = float(toks[3]) if len(toks) > 3 else 0.0
+
+    from ..model.entities import SensorShellForce, Sensor
+    ssf = SensorShellForce(
+        id=block.user_id or 1, title=title, shell_id=shell_id,
+        f_max=f_max, m_max=m_max, t_delay=t_delay
+    )
+    model.sensor_shell_forces[ssf.id] = ssf
+    model.sensors.append(Sensor(
+        id=ssf.id, kind="SHELL_FORCE", tdelay=t_delay
+    ))
+
 
 
 
@@ -46230,6 +46322,19 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_TRUSS_STRAIN": read_sensor_truss_strain,
     "SENSOR_STRAIN_TRUSS": read_sensor_truss_strain,
     "SENSOR_EPS_TRUSS": read_sensor_truss_strain,
+    # --- M230: Mohr-Coulomb Failure Criterion, Engine Stress Output Directive, Screw/Helical Axis Joint Aliases, and Shell Force Sensor Suite ---
+    "FAIL_MOHR": read_fail_mohr,
+    "FAIL_MOHR_COULOMB": read_fail_mohr,
+    "FAIL_MC": read_fail_mohr,
+    "STRESS": read_eng_stress,
+    "ENG_STRESS": read_eng_stress,
+    "ENG_STRESS_OUTPUT": read_eng_stress,
+    "LAGMUL_SCREW_AXIS": read_screw_joint,
+    "SCREW_AXIS": read_screw_joint,
+    "LAGMUL_HELICAL_AXIS": read_screw_joint,
+    "HELICAL_AXIS": read_screw_joint,
+    "SENSOR_SHELL_FORCE": read_sensor_shell_force,
+    "SENSOR_FORCE_SHELL": read_sensor_shell_force,
 }
 
 
@@ -46238,7 +46343,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
