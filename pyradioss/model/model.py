@@ -1555,6 +1555,12 @@ class Model:
         self.eng_energies: Dict[int, Any] = {}                       # /ENERGY, /ENG/ENERGY (M222)
         self.sensor_mass_ratios: Dict[int, Any] = {}                 # /SENSOR/MASS, /SENSOR/MASS_RATIO (M222)
 
+        # M223 Entities
+        self.fail_weibulls: Dict[int, Any] = {}                      # /FAIL/WEIBULL (M223)
+        self.eng_moments: Dict[int, Any] = {}                        # /MOMENT, /ENG/MOMENT (M223)
+        self.sensor_energy_errors: Dict[int, Any] = {}               # /SENSOR/ENERGY_ERROR (M223)
+
+
 
 
 

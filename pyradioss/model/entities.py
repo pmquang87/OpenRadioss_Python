@@ -12923,6 +12923,36 @@ class SensorMassRatio:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailWeibull:
+    """``/FAIL/WEIBULL/mat_ID`` (M223): Weibull statistical brittle failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_0: float = 0.0     # Weibull characteristic strength
+    m_mod: float = 0.0       # Weibull modulus (shape parameter)
+    v_0: float = 1.0         # reference volume
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngMoment:
+    """``/MOMENT`` or ``/ENG/MOMENT`` (M223): Engine momentum tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_mom: float = 0.0      # time frequency for momentum output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorEnergyError:
+    """``/SENSOR/ENERGY_ERROR`` or ``/SENSOR/ENG_ERROR`` (M223): Total energy error percentage sensor."""
+    id: int = 1
+    title: str = ""
+    err_max: float = 1e30    # maximum energy error percentage threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

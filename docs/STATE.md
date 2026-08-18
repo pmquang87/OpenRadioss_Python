@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M222)
+## What is implemented (M1 → M223)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -228,6 +228,7 @@ real history is 41 milestones. One line each:
 | M220 | Snow Failure Criterion, Engine Truncation Directive, Universal Joint Aliases, and Shear Stress Sensor Suite: /FAIL/SNOW (/FAIL/BRITTLE_SNOW) brittle crush/compaction failure model, /TRUNC (/ENG/TRUNC) engine cycle truncation and tolerance directive, /LAGMUL/UNIVERSAL (/UNIVERSAL, /UNIVERSAL_JOINT) kinematic joint aliases, and /SENSOR/SHEAR (/SENSOR/SHEAR_STRESS, /SENSOR/TAU) element shear stress threshold sensor |
 | M221 | Viscoplastic Failure Criterion, Engine Mass Summary Directive, Cylindrical Joint Aliases, and Pressure Sensor Suite: /FAIL/VISCO (/FAIL/VISCO_PLASTIC, /FAIL/VISCOUS) strain-rate sensitive ductile fracture model, /MASS (/ENG/MASS, /ENG/MASS_SUMMARY) engine mass balance summary output directive, /LAGMUL/CYLINDRICAL (/CYLINDRICAL, /CYLINDRICAL_JOINT) kinematic joint aliases, and /SENSOR/PRESSURE (/SENSOR/PRESS, /SENSOR/P) element hydrostatic pressure threshold sensor |
 | M222 | Bammann Failure Criterion, Engine Energy Balance Directive, Planar Joint Aliases, and Added Mass Sensor Suite: /FAIL/BAMMAN (/FAIL/BCJ, /FAIL/BAMMAN_CHIESA_JOHNSON) internal state variable void damage model, /ENERGY (/ENG/ENERGY, /ENG/ENERGY_BALANCE) engine energy balance tracking directive, /LAGMUL/PLANAR (/PLANAR, /PLANAR_JOINT) kinematic joint aliases, and /SENSOR/MASS (/SENSOR/MASS_RATIO, /SENSOR/DMASS) added mass ratio threshold sensor |
+| M223 | Weibull Failure Criterion, Engine Momentum Tracking Directive, Revolute Joint Aliases, and Energy Error Sensor Suite: /FAIL/WEIBULL (/FAIL/WEIBULL_BRITTLE) statistical brittle fracture model, /MOMENT (/ENG/MOMENT, /ENG/MOMENTUM) engine momentum tracking directive, /LAGMUL/REVOLUTE (/REVOLUTE, /REVOLUTE_JOINT) kinematic joint aliases, and /SENSOR/ENERGY_ERROR (/SENSOR/ENG_ERROR, /SENSOR/EERROR) total energy error percentage threshold sensor |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read

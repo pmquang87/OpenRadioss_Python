@@ -2252,6 +2252,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("BAMMAN", "BCJ", "BAMMAN_CHIESA_JOHNSON"):
         read_fail_bamman(block, model, log)
         return
+    if kind in ("WEIBULL", "WEIBULL_BRITTLE"):
+        read_fail_weibull(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11675,6 +11678,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("MASS", "MASS_RATIO", "DMASS"):
         read_sensor_mass_ratio(block, model, log)
+        return
+    if kind in ("ENERGY_ERROR", "ENG_ERROR", "EERROR"):
+        read_sensor_energy_error(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -41691,6 +41697,35 @@ def read_fail_bamman(block: KeywordBlock, model: Model, log: MessageLog) -> None
     )
 
 
+def read_fail_weibull(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/WEIBULL/mat_ID`` (M223): Weibull statistical brittle failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/WEIBULL/{block.user_id}: missing data card", block.source)
+        return
+
+    sigma_0, m_mod, v_0, ifail_sh = 0.0, 0.0, 1.0, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_WEIBULL_1")
+        sigma_0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        m_mod = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        v_0 = _fval(f[2], 1.0) if len(f) > 2 else 1.0
+        ifail_sh = _ival(f[3], 1) if len(f) > 3 else 1
+    else:
+        toks = cards[0].tokens()
+        sigma_0 = float(toks[0]) if len(toks) > 0 else 0.0
+        m_mod = float(toks[1]) if len(toks) > 1 else 0.0
+        v_0 = float(toks[2]) if len(toks) > 2 else 1.0
+        ifail_sh = int(float(toks[3])) if len(toks) > 3 else 1
+
+    from ..model.entities import FailWeibull
+    model.fail_weibulls[block.user_id] = FailWeibull(
+        mat_id=block.user_id, title=title, sigma_0=sigma_0,
+        m_mod=m_mod, v_0=v_0, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -43323,6 +43358,58 @@ def read_sensor_mass_ratio(block: KeywordBlock, model: Model, log: MessageLog) -
     model.sensors.append(Sensor(
         id=sm.id, kind="MASS_RATIO", tdelay=t_delay
     ))
+
+
+def read_eng_moment(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MOMENT`` or ``/ENG/MOMENT`` (M223): Engine momentum tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MOMENT/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_mom, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_MOMENT_1")
+        dt_mom = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_mom = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngMoment
+    m_id = block.user_id or (len(model.eng_moments) + 1)
+    model.eng_moments[m_id] = EngMoment(
+        id=m_id, title=title, dt_mom=dt_mom, sens_id=sens_id
+    )
+
+
+def read_sensor_energy_error(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/ENERGY_ERROR`` or ``/SENSOR/ENG_ERROR`` (M223): Total energy error percentage sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/ENERGY_ERROR/{block.user_id}: missing data card", block.source)
+        return
+
+    err_max, t_delay = 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_ENERGY_ERROR_1")
+        err_max = _fval(f[0], 1e30) if len(f) > 0 else 1e30
+        t_delay = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+    else:
+        toks = cards[0].tokens()
+        err_max = float(toks[0]) if len(toks) > 0 else 1e30
+        t_delay = float(toks[1]) if len(toks) > 1 else 0.0
+
+    from ..model.entities import SensorEnergyError, Sensor
+    see = SensorEnergyError(
+        id=block.user_id or 1, title=title, err_max=err_max, t_delay=t_delay
+    )
+    model.sensor_energy_errors[see.id] = see
+    model.sensors.append(Sensor(
+        id=see.id, kind="ENERGY_ERROR", tdelay=t_delay
+    ))
+
 
 
 
@@ -45466,6 +45553,19 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_MASS": read_sensor_mass_ratio,
     "SENSOR_MASS_RATIO": read_sensor_mass_ratio,
     "SENSOR_DMASS": read_sensor_mass_ratio,
+    # --- M223: Weibull Failure Criterion, Engine Momentum Tracking Directive, Revolute Joint Aliases, and Energy Error Sensor Suite ---
+    "FAIL_WEIBULL": read_fail_weibull,
+    "FAIL_WEIBULL_BRITTLE": read_fail_weibull,
+    "MOMENT": read_eng_moment,
+    "ENG_MOMENT": read_eng_moment,
+    "ENG_MOMENTUM": read_eng_moment,
+    "LAGMUL_REVOLUTE": read_pin_joint,
+    "LAGMUL_REVOLUTE_JOINT": read_pin_joint,
+    "REVOLUTE_JOINT": read_pin_joint,
+    "REVOLUTE": read_pin_joint,
+    "SENSOR_ENERGY_ERROR": read_sensor_energy_error,
+    "SENSOR_ENG_ERROR": read_sensor_energy_error,
+    "SENSOR_EERROR": read_sensor_energy_error,
 }
 
 
@@ -45474,7 +45574,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
