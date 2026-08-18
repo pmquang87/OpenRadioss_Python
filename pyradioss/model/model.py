@@ -1650,6 +1650,12 @@ class Model:
         self.eng_densities: Dict[int, Any] = {}                      # /DENSITY, /ENG/DENSITY (M241)
         self.sensor_spring_bends: Dict[int, Any] = {}                # /SENSOR/SPRING_BEND (M241)
 
+        # M242 Entities
+        self.fail_lou_huhns: Dict[int, Any] = {}                     # /FAIL/LOU_HUHN (M242)
+        self.eng_internal_energies: Dict[int, Any] = {}              # /INTERNAL_ENERGY, /ENG/INTERNAL_ENERGY (M242)
+        self.sensor_spring_torsions: Dict[int, Any] = {}             # /SENSOR/SPRING_TORSION (M242)
+
+
 
 
 

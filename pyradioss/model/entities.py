@@ -13526,6 +13526,38 @@ class SensorSpringBend:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailLouHuhn:
+    """``/FAIL/LOU_HUHN/mat_ID`` (M242): Lou-Huhn shear ductile fracture failure model."""
+    mat_id: int = 0
+    title: str = ""
+    c1: float = 0.0          # material parameter C1
+    c2: float = 0.0          # material parameter C2
+    l_param: float = 1.0     # characteristic parameter L
+    eta0: float = 0.333      # cutoff / reference triaxiality eta_0
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngInternalEnergy:
+    """``/INTERNAL_ENERGY`` or ``/ENG/INTERNAL_ENERGY`` (M242): Engine internal energy output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_ie: float = 0.0       # time frequency for internal energy output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSpringTorsion:
+    """``/SENSOR/SPRING_TORSION`` or ``/SENSOR/TORSION_SPRING`` (M242): Spring element torsional moment threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    mtor_max: float = 1e30   # maximum torsional moment threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

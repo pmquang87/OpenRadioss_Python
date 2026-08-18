@@ -2311,6 +2311,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("BAO_WIERZBICKI", "BW", "BAO_WIEZBICKI", "BAO"):
         read_fail_bao_wierzbicki(block, model, log)
         return
+    if kind in ("LOU_HUHN", "LH", "LOU_HUHN_MODEL", "LOU"):
+        read_fail_lou_huhn(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11791,6 +11794,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("SPRING_BEND", "SPRING_BENDING", "BEND_SPRING", "SPRING_MOMENT"):
         read_sensor_spring_bend(block, model, log)
+        return
+    if kind in ("SPRING_TORSION", "SPRING_TORSIONAL", "TORSION_SPRING", "SPRING_TORQUE"):
+        read_sensor_spring_torsion(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -42442,6 +42448,37 @@ def read_fail_bao_wierzbicki(block: KeywordBlock, model: Model, log: MessageLog)
     )
 
 
+def read_fail_lou_huhn(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LOU_HUHN/mat_ID`` (M242): Lou-Huhn shear ductile fracture failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LOU_HUHN/{block.user_id}: missing data card", block.source)
+        return
+
+    c1, c2, l_param, eta0, ifail_sh = 0.0, 0.0, 1.0, 0.333, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_LOU_HUHN_1")
+        c1 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        c2 = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        l_param = _fval(f[2], 1.0) if len(f) > 2 else 1.0
+        eta0 = _fval(f[3], 0.333) if len(f) > 3 else 0.333
+        ifail_sh = _ival(f[4], 1) if len(f) > 4 else 1
+    else:
+        toks = cards[0].tokens()
+        c1 = float(toks[0]) if len(toks) > 0 else 0.0
+        c2 = float(toks[1]) if len(toks) > 1 else 0.0
+        l_param = float(toks[2]) if len(toks) > 2 else 1.0
+        eta0 = float(toks[3]) if len(toks) > 3 else 0.333
+        ifail_sh = int(float(toks[4])) if len(toks) > 4 else 1
+
+    from ..model.entities import FailLouHuhn
+    model.fail_lou_huhns[block.user_id] = FailLouHuhn(
+        mat_id=block.user_id, title=title, c1=c1, c2=c2,
+        l_param=l_param, eta0=eta0, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -45127,6 +45164,61 @@ def read_sensor_spring_bend(block: KeywordBlock, model: Model, log: MessageLog) 
     ))
 
 
+def read_eng_internal_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/INTERNAL_ENERGY`` or ``/ENG/INTERNAL_ENERGY`` (M242): Engine internal energy output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/INTERNAL_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_ie, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_INTERNAL_ENERGY_1")
+        dt_ie = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_ie = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngInternalEnergy
+    r_id = block.user_id or (len(model.eng_internal_energies) + 1)
+    model.eng_internal_energies[r_id] = EngInternalEnergy(
+        id=r_id, title=title, dt_ie=dt_ie, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_torsion(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TORSION`` or ``/SENSOR/TORSION_SPRING`` (M242): Spring element torsional moment threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TORSION/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, mtor_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_TORSION_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        mtor_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        mtor_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTorsion, Sensor
+    sst = SensorSpringTorsion(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        mtor_max=mtor_max, t_delay=t_delay
+    )
+    model.sensor_spring_torsions[sst.id] = sst
+    model.sensors.append(Sensor(
+        id=sst.id, kind="SPRING_TORSION", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -47566,6 +47658,23 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_BENDING": read_sensor_spring_bend,
     "SENSOR_BEND_SPRING": read_sensor_spring_bend,
     "SENSOR_SPRING_MOMENT": read_sensor_spring_bend,
+    # --- M242: Lou-Huhn Failure Criterion, Engine Internal Energy Output Directive, Constant Velocity Joint Aliases, and Spring Torsional Moment Sensor Suite ---
+    "FAIL_LOU_HUHN": read_fail_lou_huhn,
+    "FAIL_LH": read_fail_lou_huhn,
+    "FAIL_LOU_HUHN_MODEL": read_fail_lou_huhn,
+    "FAIL_LOU": read_fail_lou_huhn,
+    "INTERNAL_ENERGY": read_eng_internal_energy,
+    "ENG_INTERNAL_ENERGY": read_eng_internal_energy,
+    "ENG_INT_ENERGY": read_eng_internal_energy,
+    "ENG_IE": read_eng_internal_energy,
+    "LAGMUL_CONSTANT_VELOCITY_JOINT": read_cv_joint,
+    "CONSTANT_VELOCITY_JOINT": read_cv_joint,
+    "LAGMUL_CONSTANT_VELOCITY_AXIS": read_cv_joint,
+    "CONSTANT_VELOCITY_AXIS": read_cv_joint,
+    "SENSOR_SPRING_TORSION": read_sensor_spring_torsion,
+    "SENSOR_SPRING_TORSIONAL": read_sensor_spring_torsion,
+    "SENSOR_TORSION_SPRING": read_sensor_spring_torsion,
+    "SENSOR_SPRING_TORQUE": read_sensor_spring_torsion,
 }
 
 
@@ -47574,7 +47683,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP", "ROTC", "ROTV", "ROTA", "FORCE", "VOLUME", "DENSITY"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP", "ROTC", "ROTV", "ROTA", "FORCE", "VOLUME", "DENSITY", "INTERNAL_ENERGY"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

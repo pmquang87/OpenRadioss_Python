@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M241)
+## What is implemented (M1 → M242)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -247,6 +247,7 @@ real history is 41 milestones. One line each:
 | M239 | Energy Ratio Failure Criterion, Engine Force Output Directive, Ball Socket Joint Aliases, and Spring Axial Force Sensor Suite: /FAIL/ENERGY_RATIO (/FAIL/ERATIO, /FAIL/SPECIFIC_ENERGY) energy ratio failure model, /FORCE (/ENG/FORCE, /ENG/NODAL_FORCE, /ENG/RESULTANT_FORCE) engine nodal resultant force vector history tracking directive, /LAGMUL/BALL_SOCKET (/BALL_SOCKET, /LAGMUL/BALL_AND_SOCKET, /BALL_AND_SOCKET) kinematic joint aliases, and /SENSOR/SPRING_AXIAL (/SENSOR/SPRING_AXIAL_FORCE, /SENSOR/AXIAL_SPRING, /SENSOR/SPRING_TENSION) spring element axial force threshold sensor |
 | M240 | Rice-Tracey Failure Criterion, Engine Volume Output Directive, Threaded Joint Aliases, and Spring Shear Force Sensor Suite: /FAIL/RICE_TRACEY (/FAIL/RT, /FAIL/VOID_GROWTH) Rice-Tracey void growth ductile fracture failure model, /VOLUME (/ENG/VOLUME, /ENG/ELEM_VOLUME, /ENG/VOL) engine element volume history tracking directive, /LAGMUL/THREADED_JOINT (/THREADED_JOINT, /LAGMUL/THREADED_AXIS, /THREADED_AXIS) kinematic joint aliases, and /SENSOR/SPRING_SHEAR (/SENSOR/SPRING_SHEAR_FORCE, /SENSOR/SHEAR_SPRING, /SENSOR/SPRING_TRANSVERSE_FORCE) spring element shear force threshold sensor |
 | M241 | Bao-Wierzbicki Failure Criterion, Engine Density Output Directive, Hooke Joint Aliases, and Spring Bending Moment Sensor Suite: /FAIL/BAO_WIERZBICKI (/FAIL/BW, /FAIL/BAO_WIEZBICKI, /FAIL/BAO) Bao-Wierzbicki fracture locus failure model, /DENSITY (/ENG/DENSITY, /ENG/MAT_DENSITY, /ENG/MASS_DENSITY) engine material mass density history tracking directive, /LAGMUL/HOOKE_JOINT (/HOOKE_JOINT, /LAGMUL/HOOKE_AXIS, /HOOKE_AXIS) kinematic joint aliases, and /SENSOR/SPRING_BEND (/SENSOR/SPRING_BENDING, /SENSOR/BEND_SPRING, /SENSOR/SPRING_MOMENT) spring element bending moment threshold sensor |
+| M242 | Lou-Huhn Failure Criterion, Engine Internal Energy Output Directive, Constant Velocity Joint Aliases, and Spring Torsional Moment Sensor Suite: /FAIL/LOU_HUHN (/FAIL/LH, /FAIL/LOU_HUHN_MODEL, /FAIL/LOU) Lou-Huhn shear ductile fracture failure model, /INTERNAL_ENERGY (/ENG/INTERNAL_ENERGY, /ENG/INT_ENERGY, /ENG/IE) engine internal energy history tracking directive, /LAGMUL/CONSTANT_VELOCITY_JOINT (/CONSTANT_VELOCITY_JOINT, /LAGMUL/CONSTANT_VELOCITY_AXIS, /CONSTANT_VELOCITY_AXIS) kinematic joint aliases, and /SENSOR/SPRING_TORSION (/SENSOR/SPRING_TORSIONAL, /SENSOR/TORSION_SPRING, /SENSOR/SPRING_TORQUE) spring element torsional moment threshold sensor |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
