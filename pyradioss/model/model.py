@@ -1439,6 +1439,19 @@ class Model:
         self.inter_type25s: Dict[int, Any] = {}                      # /INTER/TYPE25, /INTER/TIED_BREAK (M206)
         self.inter_tied_breaks = self.inter_type25s
 
+        # M207 Entities
+        self.props_type47: Dict[int, Any] = {}                       # /PROP/TYPE47, /PROP/SPR_PULL (M207)
+        self.props_spr_pull = self.props_type47
+        self.props_type48: Dict[int, Any] = {}                       # /PROP/TYPE48, /PROP/SPR_PUSH (M207)
+        self.props_spr_push = self.props_type48
+        self.sensors_ratio: Dict[int, Any] = {}                      # /SENSOR/RATIO, /SENSOR/ENERGY_RATIO (M207)
+        self.sensors_energy_ratio = self.sensors_ratio
+        self.sensors_shear_lock: Dict[int, Any] = {}                  # /SENSOR/SHEAR_LOCK (M207)
+        self.dt_inter_del: bool = False                              # /DT/INTER/DEL (M207)
+        self.dt_inter_del_val: float = 0.0
+        self.dt_noda_cfl: float = 0.9                                # /DT/NODA/CFL (M207)
+
+
 
 
 

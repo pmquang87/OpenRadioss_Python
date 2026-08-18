@@ -12315,6 +12315,74 @@ class InterType25:
     fric: float = 0.0
 
 
+@dataclass
+class PropSpringPull:
+    """``/PROP/TYPE47`` or ``/PROP/SPR_PULL/id`` (M207): Tension-only pulling spring property."""
+    id: int = 1
+    title: str = ""
+    mass: float = 0.0
+    stiffness_k: float = 0.0
+    damping_c: float = 0.0
+    fmax: float = 0.0
+    fcut: float = 0.0
+
+    @property
+    def k(self) -> float:
+        return self.stiffness_k
+
+    @property
+    def c(self) -> float:
+        return self.damping_c
+
+
+@dataclass
+class PropSpringPush:
+    """``/PROP/TYPE48`` or ``/PROP/SPR_PUSH/id`` (M207): Compression-only pushing spring property."""
+    id: int = 1
+    title: str = ""
+    mass: float = 0.0
+    stiffness_k: float = 0.0
+    damping_c: float = 0.0
+    fmax: float = 0.0
+    fcut: float = 0.0
+
+    @property
+    def k(self) -> float:
+        return self.stiffness_k
+
+    @property
+    def c(self) -> float:
+        return self.damping_c
+
+
+PropType47 = PropSpringPull
+PropType48 = PropSpringPush
+
+
+@dataclass
+class SensorRatio:
+    """``/SENSOR/RATIO`` or ``/SENSOR/ENERGY_RATIO/sens_ID`` (M207): Energy ratio threshold sensor."""
+    id: int = 1
+    title: str = ""
+    ratio_type: int = 1      # 1: Hourglass/Internal, 2: Sliding/Internal, 3: Contact/Internal
+    val_min: float = 0.0
+    val_max: float = 0.0
+    tmin: float = 0.0
+    tdelay: float = 0.0
+
+
+@dataclass
+class SensorShearLock:
+    """``/SENSOR/SHEAR_LOCK/sens_ID`` (M207): Shear locking / hourglass sensor."""
+    id: int = 1
+    title: str = ""
+    part_id: int = 0
+    val_max: float = 0.0
+    tmin: float = 0.0
+    tdelay: float = 0.0
+
+
+
 
 
 

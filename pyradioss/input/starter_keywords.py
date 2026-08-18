@@ -4828,6 +4828,12 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if typename in ("TYPE22", "TSH_COMP", "THICK_SHELL_COMP", "PROP_TYPE22", "PROP_TSH_COMP", "P22_TSH_COMP"):
         read_prop_type22(block, model, log)
         return
+    if typename in ("TYPE47", "SPR_PULL", "SPRING_PULL", "PROP_TYPE47", "PROP_SPR_PULL", "P47_SPR_PULL"):
+        read_prop_type47(block, model, log)
+        return
+    if typename in ("TYPE48", "SPR_PUSH", "SPRING_PUSH", "PROP_TYPE48", "PROP_SPR_PUSH", "P48_SPR_PUSH"):
+        read_prop_type48(block, model, log)
+        return
     # M189: PROP_TYPE43 (CONNECT)
     if typename in ("TYPE43", "CONNECT", "PROP_CONNECT", "PROP_TYPE43", "P43_CONNECT", "PROP_P43_CONNECT"):
         read_prop_type43(block, model, log)
@@ -11604,7 +11610,7 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "HIC"
     elif kind == "TYPE17":
         kind = "DIST_SURF"
-    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL")
+    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK")
     if kind not in supported:
         log.warning(f"/SENSOR/{kind} not ported ({', '.join(supported)} supported)",
                     block.source)
@@ -12209,6 +12215,51 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                        val_min=vmin, val_max=vmax, tmin=tmin, tdelay=tdelay)
         model.sensors_rel[block.user_id] = sr
         model.sensors.append(Sensor(id=block.user_id, kind="REL", tdelay=tdelay, tmin=tmin, title=title))
+    elif kind in ("RATIO", "ENERGY_RATIO"):
+        ratio_type, vmin, vmax = 1, 0.0, 0.0
+        tmin, tdelay = 0.0, 0.0
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f1 = cards[0].cut("SENSOR_RATIO_1")
+                ratio_type = _ival(f1[0], 1) if len(f1) > 0 else 1
+                vmin = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                vmax = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+                tmin = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+                tdelay = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+            else:
+                t1 = cards[0].tokens()
+                ratio_type = int(float(t1[0])) if len(t1) > 0 else 1
+                vmin = float(t1[1]) if len(t1) > 1 else 0.0
+                vmax = float(t1[2]) if len(t1) > 2 else 0.0
+                tmin = float(t1[3]) if len(t1) > 3 else 0.0
+                tdelay = float(t1[4]) if len(t1) > 4 else 0.0
+        from ..model.entities import SensorRatio
+        s_rat = SensorRatio(id=block.user_id, title=title, ratio_type=ratio_type,
+                            val_min=vmin, val_max=vmax, tmin=tmin, tdelay=tdelay)
+        model.sensors_ratio[block.user_id] = s_rat
+        model.sensors.append(Sensor(id=block.user_id, kind="RATIO", tdelay=tdelay, tmin=tmin, title=title))
+    elif kind == "SHEAR_LOCK":
+        part_id = 0
+        vmax, tmin, tdelay = 0.0, 0.0, 0.0
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f1 = cards[0].cut("SENSOR_SHEAR_LOCK_1")
+                part_id = _ival(f1[0]) if len(f1) > 0 else 0
+                vmax = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+                tmin = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+                tdelay = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+            else:
+                t1 = cards[0].tokens()
+                part_id = int(float(t1[0])) if len(t1) > 0 else 0
+                vmax = float(t1[1]) if len(t1) > 1 else 0.0
+                tmin = float(t1[2]) if len(t1) > 2 else 0.0
+                tdelay = float(t1[3]) if len(t1) > 3 else 0.0
+        from ..model.entities import SensorShearLock
+        s_sl = SensorShearLock(id=block.user_id, title=title, part_id=part_id,
+                               val_max=vmax, tmin=tmin, tdelay=tdelay)
+        model.sensors_shear_lock[block.user_id] = s_sl
+        model.sensors.append(Sensor(id=block.user_id, kind="SHEAR_LOCK", tdelay=tdelay, tmin=tmin, title=title))
+
 
 
 
@@ -12609,8 +12660,12 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       friction-filter ffac/ifq are warned when set.
     """
     kind = block.parts[1].upper() if len(block.parts) > 1 else "PLANE"
-    if kind == "SPHERE":
+    if kind in ("SPHERE", "SPHER"):
         kind = "SPHER"
+    elif kind in ("PARALLELEPIPED", "PARAL", "CUBOID"):
+        kind = "BOX"
+    elif kind in ("TRUNC_CONE", "TRUNCATED_CONE", "TCONE"):
+        kind = "CONE"
     if kind == "THERM":
         read_rwall_therm(block, model, log)
         return
@@ -37408,6 +37463,63 @@ def read_prop_type22(block: KeywordBlock, model: Model, log: MessageLog) -> None
     model.properties[prop_id] = Property(id=prop_id, type=22, title=title)
 
 
+def read_prop_type47(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE47`` or ``/PROP/SPR_PULL/prop_ID`` (M207): Tension-only pulling spring property."""
+    from ..model.entities import PropSpringPull, Property
+    prop_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    mass, k, c, fmax, fcut = 0.0, 0.0, 0.0, 0.0, 0.0
+    if valid_cards:
+        if block.fixed:
+            f = valid_cards[0].cut("PROP_TYPE47_1")
+            mass = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            k = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            c = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            fmax = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        else:
+            t = valid_cards[0].tokens()
+            mass = float(t[0]) if len(t) > 0 else 0.0
+            k = float(t[1]) if len(t) > 1 else 0.0
+            c = float(t[2]) if len(t) > 2 else 0.0
+            fmax = float(t[3]) if len(t) > 3 else 0.0
+    prop = PropSpringPull(id=prop_id, title=title, mass=mass, stiffness_k=k, damping_c=c, fmax=fmax, fcut=fcut)
+    model.props_type47[prop_id] = prop
+    model.properties[prop_id] = Property(
+        id=prop_id, type=47, title=title,
+        params={"mass": mass, "stiffness_k": k, "damping_c": c, "fmax": fmax, "fcut": fcut}
+    )
+
+
+def read_prop_type48(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE48`` or ``/PROP/SPR_PUSH/prop_ID`` (M207): Compression-only pushing spring property."""
+    from ..model.entities import PropSpringPush, Property
+    prop_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    mass, k, c, fmax, fcut = 0.0, 0.0, 0.0, 0.0, 0.0
+    if valid_cards:
+        if block.fixed:
+            f = valid_cards[0].cut("PROP_TYPE48_1")
+            mass = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            k = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            c = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            fmax = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        else:
+            t = valid_cards[0].tokens()
+            mass = float(t[0]) if len(t) > 0 else 0.0
+            k = float(t[1]) if len(t) > 1 else 0.0
+            c = float(t[2]) if len(t) > 2 else 0.0
+            fmax = float(t[3]) if len(t) > 3 else 0.0
+    prop = PropSpringPush(id=prop_id, title=title, mass=mass, stiffness_k=k, damping_c=c, fmax=fmax, fcut=fcut)
+    model.props_type48[prop_id] = prop
+    model.properties[prop_id] = Property(
+        id=prop_id, type=48, title=title,
+        params={"mass": mass, "stiffness_k": k, "damping_c": c, "fmax": fmax, "fcut": fcut}
+    )
+
+
+
 
 
 # ----------------------------------------------------------------------
@@ -41476,6 +41588,26 @@ def read_dttsh(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.dttsh = True
 
 
+def read_dt_inter_del(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DT/INTER/DEL`` (M207): Contact interface element deletion time step threshold."""
+    model.dt_inter_del = True
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if cards and not cards[0].is_blank:
+        toks = cards[0].tokens()
+        if toks:
+            model.dt_inter_del_val = _safe_float(toks[0])
+
+
+def read_dt_noda_cfl(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DT/NODA/CFL`` (M207): Nodal CFL time step control factor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if cards and not cards[0].is_blank:
+        toks = cards[0].tokens()
+        if toks:
+            model.dt_noda_cfl = _safe_float(toks[0])
+
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -43379,6 +43511,22 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "INTER_TIED_BREAK": read_inter,
     "SENSOR_GEOM": read_sensor,
     "SENSOR_REL": read_sensor,
+    # --- M207: Pull/Push Directional Springs, Energy Ratio & Shear Lock Sensors, Parallelepiped/Truncated Cone Walls, and DT Inter Controls ---
+    "PROP_TYPE47": read_prop_type47,
+    "PROP_SPR_PULL": read_prop_type47,
+    "SPR_PULL": read_prop_type47,
+    "PROP_TYPE48": read_prop_type48,
+    "PROP_SPR_PUSH": read_prop_type48,
+    "SPR_PUSH": read_prop_type48,
+    "SENSOR_RATIO": read_sensor,
+    "SENSOR_ENERGY_RATIO": read_sensor,
+    "SENSOR_SHEAR_LOCK": read_sensor,
+    "RWALL_PARALLELEPIPED": read_rwall,
+    "RWALL_PARAL": read_rwall,
+    "RWALL_TRUNC_CONE": read_rwall,
+    "RWALL_TCONE": read_rwall,
+    "DT_INTER_DEL": read_dt_inter_del,
+    "DT_NODA_CFL": read_dt_noda_cfl,
 }
 
 
@@ -43401,7 +43549,13 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
     all /UNIT blocks are read (deck order between a block and the /UNIT
     it references is free, like every other cross-reference)."""
     for block in blocks:
-        parser = KEYWORD_PARSERS.get(block.key0)
+        joined_key = "_".join(block.parts).upper() if block.parts else block.key0
+        parser = KEYWORD_PARSERS.get(joined_key)
+        if parser is None and len(block.parts) > 1:
+            joined_key2 = "_".join(block.parts[:2]).upper()
+            parser = KEYWORD_PARSERS.get(joined_key2)
+        if parser is None:
+            parser = KEYWORD_PARSERS.get(block.key0)
         if parser is None:
             if block.key0 in ENGINE_KEYWORDS_IGNORE:
                 # Silently bypass engine output requests and control flags
