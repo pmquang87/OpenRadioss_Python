@@ -1427,6 +1427,19 @@ class Model:
         self.lasers = self.laser_loads
         self.load_lasers = self.laser_loads
 
+        # M206 Entities
+        self.props_type21: Dict[int, Any] = {}                       # /PROP/TYPE21, /PROP/TSH_ORTH (M206)
+        self.props_tsh_orth = self.props_type21
+        self.props_type22: Dict[int, Any] = {}                       # /PROP/TYPE22, /PROP/TSH_COMP (M206)
+        self.props_tsh_comp = self.props_type22
+        self.sensors_geom: Dict[int, Any] = {}                       # /SENSOR/GEOM (M206)
+        self.sensors_rel: Dict[int, Any] = {}                        # /SENSOR/REL (M206)
+        self.ale_zero_pressure: bool = False                         # /ALE/ZERO_PRESSURE (M206)
+        self.ale_zero_vel: bool = False                              # /ALE/ZERO_VEL (M206)
+        self.inter_type25s: Dict[int, Any] = {}                      # /INTER/TYPE25, /INTER/TIED_BREAK (M206)
+        self.inter_tied_breaks = self.inter_type25s
+
+
 
 
 

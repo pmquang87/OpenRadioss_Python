@@ -12268,5 +12268,53 @@ PropType19 = PropSpringTors
 PropType20 = PropSpringBend
 
 
+@dataclass
+class SensorGeom:
+    """``/SENSOR/GEOM/sens_ID`` (M206): Geometric distance/angle sensor."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    node3: int = 0
+    itype: int = 1          # 1: distance (N1-N2), 2: angle (N1-N2-N3)
+    val_min: float = 0.0
+    val_max: float = 0.0
+    tmin: float = 0.0
+    tdelay: float = 0.0
+
+
+@dataclass
+class SensorRel:
+    """``/SENSOR/REL/sens_ID`` (M206): Relative displacement/rotation sensor between 2 nodes."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    idir: int = 1           # 1: DX, 2: DY, 3: DZ, 4: RX, 5: RY, 6: RZ, 7: dist
+    skew_id: int = 0
+    val_min: float = 0.0
+    val_max: float = 0.0
+    tmin: float = 0.0
+    tdelay: float = 0.0
+
+
+@dataclass
+class InterType25:
+    """``/INTER/TYPE25`` or ``/INTER/TIED_BREAK/id`` (M206): Tied breakable contact interface."""
+    id: int = 1
+    title: str = ""
+    grnd_id: int = 0
+    surf_id: int = 0
+    fn_max: float = 0.0
+    ft_max: float = 0.0
+    wn: float = 0.0
+    wt: float = 0.0
+    gap: float = 0.0
+    stiff: float = 0.0
+    ifric: int = 0
+    fric: float = 0.0
+
+
+
 
 

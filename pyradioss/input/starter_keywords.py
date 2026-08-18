@@ -1640,6 +1640,9 @@ def read_ale(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_ale_close(block, model, log)
     elif sub in ("ZERO", "ZERO_VEL", "ZERO_VELOCITY"):
         model.ale_zero = True
+        model.ale_zero_vel = True
+    elif sub in ("ZERO_PRESSURE", "ZERO_PRES", "ZERO_P"):
+        model.ale_zero_pressure = True
     elif sub == "MUSCL" or (len(block.parts) > 2 and block.parts[2].upper() == "MUSCL"):
         read_ale_muscl(block, model, log)
     elif sub == "FLOW" or (len(block.parts) > 2 and block.parts[1].upper() == "FLOW"):
@@ -4818,6 +4821,12 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if typename in ("SPR_BEND", "SPRING_BEND", "PROP_SPR_BEND", "P20_SPR_BEND"):
         read_prop_spr_bend(block, model, log)
+        return
+    if typename in ("TYPE21", "TSH_ORTH", "THICK_SHELL_ORTH", "PROP_TYPE21", "PROP_TSH_ORTH", "P21_TSH_ORTH"):
+        read_prop_type21(block, model, log)
+        return
+    if typename in ("TYPE22", "TSH_COMP", "THICK_SHELL_COMP", "PROP_TYPE22", "PROP_TSH_COMP", "P22_TSH_COMP"):
+        read_prop_type22(block, model, log)
         return
     # M189: PROP_TYPE43 (CONNECT)
     if typename in ("TYPE43", "CONNECT", "PROP_CONNECT", "PROP_TYPE43", "P43_CONNECT", "PROP_P43_CONNECT"):
@@ -11595,7 +11604,7 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "HIC"
     elif kind == "TYPE17":
         kind = "DIST_SURF"
-    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT")
+    supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL")
     if kind not in supported:
         log.warning(f"/SENSOR/{kind} not ported ({', '.join(supported)} supported)",
                     block.source)
@@ -12132,6 +12141,75 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             id=block.user_id, kind=kind, tdelay=tdelay, target_id=target_id,
             dmin=v1, dmax=v2, tmin=tmin, title=title
         ))
+    elif kind == "GEOM":
+        itype, n1, n2, n3 = 1, 0, 0, 0
+        vmin, vmax, tmin = 0.0, 0.0, 0.0
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f1 = cards[0].cut("SENSOR_GEOM_1")
+                itype = _ival(f1[0], 1) if len(f1) > 0 else 1
+                n1 = _ival(f1[1]) if len(f1) > 1 else 0
+                n2 = _ival(f1[2]) if len(f1) > 2 else 0
+                n3 = _ival(f1[3]) if len(f1) > 3 else 0
+                vmin = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+                vmax = _fval(f1[5], 0.0) if len(f1) > 5 else 0.0
+            else:
+                t1 = cards[0].tokens()
+                itype = int(float(t1[0])) if len(t1) > 0 else 1
+                n1 = int(float(t1[1])) if len(t1) > 1 else 0
+                n2 = int(float(t1[2])) if len(t1) > 2 else 0
+                n3 = int(float(t1[3])) if len(t1) > 3 else 0
+                vmin = float(t1[4]) if len(t1) > 4 else 0.0
+                vmax = float(t1[5]) if len(t1) > 5 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            if block.fixed:
+                f2 = cards[1].cut("SENSOR_GEOM_2")
+                tmin = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                tdelay = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            else:
+                t2 = cards[1].tokens()
+                tmin = float(t2[0]) if len(t2) > 0 else 0.0
+                tdelay = float(t2[1]) if len(t2) > 1 else 0.0
+        from ..model.entities import SensorGeom
+        sg = SensorGeom(id=block.user_id, title=title, itype=itype, node1=n1, node2=n2, node3=n3,
+                        val_min=vmin, val_max=vmax, tmin=tmin, tdelay=tdelay)
+        model.sensors_geom[block.user_id] = sg
+        model.sensors.append(Sensor(id=block.user_id, kind="GEOM", tdelay=tdelay, tmin=tmin, title=title))
+    elif kind == "REL":
+        n1, n2, idir, skew_id = 0, 0, 1, 0
+        vmin, vmax, tmin = 0.0, 0.0, 0.0
+        if cards and not cards[0].is_blank:
+            if block.fixed:
+                f1 = cards[0].cut("SENSOR_REL_1")
+                n1 = _ival(f1[0]) if len(f1) > 0 else 0
+                n2 = _ival(f1[1]) if len(f1) > 1 else 0
+                idir = _ival(f1[2], 1) if len(f1) > 2 else 1
+                skew_id = _ival(f1[3]) if len(f1) > 3 else 0
+                vmin = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+                vmax = _fval(f1[5], 0.0) if len(f1) > 5 else 0.0
+            else:
+                t1 = cards[0].tokens()
+                n1 = int(float(t1[0])) if len(t1) > 0 else 0
+                n2 = int(float(t1[1])) if len(t1) > 1 else 0
+                idir = int(float(t1[2])) if len(t1) > 2 else 1
+                skew_id = int(float(t1[3])) if len(t1) > 3 else 0
+                vmin = float(t1[4]) if len(t1) > 4 else 0.0
+                vmax = float(t1[5]) if len(t1) > 5 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            if block.fixed:
+                f2 = cards[1].cut("SENSOR_REL_2")
+                tmin = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                tdelay = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            else:
+                t2 = cards[1].tokens()
+                tmin = float(t2[0]) if len(t2) > 0 else 0.0
+                tdelay = float(t2[1]) if len(t2) > 1 else 0.0
+        from ..model.entities import SensorRel
+        sr = SensorRel(id=block.user_id, title=title, node1=n1, node2=n2, idir=idir, skew_id=skew_id,
+                       val_min=vmin, val_max=vmax, tmin=tmin, tdelay=tdelay)
+        model.sensors_rel[block.user_id] = sr
+        model.sensors.append(Sensor(id=block.user_id, kind="REL", tdelay=tdelay, tmin=tmin, title=title))
+
 
 
 def read_gauge_point(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -13283,6 +13361,12 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             isensor=isensor, fric_id=fric_id, c1=c1, c2=c2, c3=c3, c4=c4, c5=c5,
             title=title
         ))
+        from ..model.entities import InterType25
+        model.inter_type25s[block.user_id] = InterType25(
+            id=block.user_id, title=title, grnd_id=grnod_id, surf_id=surf1,
+            fn_max=stmax, ft_max=stmin, wn=0.0, wt=0.0, gap=gap1, stiff=stfac,
+            ifric=ifric, fric=fric
+        )
         return
 
     if kind == "TYPE19":
@@ -37144,6 +37228,187 @@ def read_prop_spr_bend(block: KeywordBlock, model: Model, log: MessageLog) -> No
     )
 
 
+def read_prop_type21(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE21`` or ``/PROP/TSH_ORTH`` (M206): Orthotropic thick shell property."""
+    from ..model.entities import PropType21, Property
+    prop_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    isolid, ismstr, icstr = 15, 0, 0
+    inpts_r, inpts_s, inpts_t = 2, 2, 2
+    iint = 1
+    dn = 0.0
+    qa, qb = 1.1, 0.05
+    vx, vy, vz = 0.0, 0.0, 0.0
+    skew_id, iorth = 0, 0
+    phi, deltat_min = 0.0, 0.0
+
+    if block.fixed:
+        if len(valid_cards) > 0:
+            c0 = valid_cards[0].cut("PROP_TYPE21_1")
+            isolid = _safe_int(c0[0]) if len(c0) > 0 and c0[0].strip() else 15
+            ismstr = _safe_int(c0[1]) if len(c0) > 1 else 0
+            icstr = _safe_int(c0[2]) if len(c0) > 2 else 0
+            inpts_r = _safe_int(c0[3]) if len(c0) > 3 and c0[3].strip() else 2
+            inpts_s = _safe_int(c0[4]) if len(c0) > 4 and c0[4].strip() else 2
+            inpts_t = _safe_int(c0[5]) if len(c0) > 5 and c0[5].strip() else 2
+            iint = _safe_int(c0[6]) if len(c0) > 6 and c0[6].strip() else 1
+            dn = _safe_float(c0[7]) if len(c0) > 7 and c0[7].strip() else 0.0
+        if len(valid_cards) > 1:
+            c1 = valid_cards[1].cut("PROP_TYPE21_2")
+            qa = _safe_float(c1[0]) if len(c1) > 0 and c1[0].strip() else 1.1
+            qb = _safe_float(c1[1]) if len(c1) > 1 and c1[1].strip() else 0.05
+        if len(valid_cards) > 2:
+            c2 = valid_cards[2].cut("PROP_TYPE21_3")
+            vx = _safe_float(c2[0]) if len(c2) > 0 and c2[0].strip() else 0.0
+            vy = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+            vz = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+            skew_id = _safe_int(c2[3]) if len(c2) > 3 else 0
+            iorth = _safe_int(c2[4]) if len(c2) > 4 else 0
+        if len(valid_cards) > 3:
+            c3 = valid_cards[3].cut("PROP_TYPE21_4")
+            phi = _safe_float(c3[0]) if len(c3) > 0 and c3[0].strip() else 0.0
+        if len(valid_cards) > 4:
+            c4 = valid_cards[4].cut("PROP_TYPE21_5")
+            deltat_min = _safe_float(c4[0]) if len(c4) > 0 and c4[0].strip() else 0.0
+    else:
+        if len(valid_cards) > 0:
+            t0 = valid_cards[0].tokens()
+            isolid = _safe_int(t0[0]) if len(t0) > 0 else 15
+            ismstr = _safe_int(t0[1]) if len(t0) > 1 else 0
+            icstr = _safe_int(t0[2]) if len(t0) > 2 else 0
+            inpts_r = _safe_int(t0[3]) if len(t0) > 3 else 2
+            inpts_s = _safe_int(t0[4]) if len(t0) > 4 else 2
+            inpts_t = _safe_int(t0[5]) if len(t0) > 5 else 2
+            iint = _safe_int(t0[6]) if len(t0) > 6 else 1
+            dn = _safe_float(t0[7]) if len(t0) > 7 else 0.0
+        if len(valid_cards) > 1:
+            t1 = valid_cards[1].tokens()
+            qa = _safe_float(t1[0]) if len(t1) > 0 else 1.1
+            qb = _safe_float(t1[1]) if len(t1) > 1 else 0.05
+        if len(valid_cards) > 2:
+            t2 = valid_cards[2].tokens()
+            vx = _safe_float(t2[0]) if len(t2) > 0 else 0.0
+            vy = _safe_float(t2[1]) if len(t2) > 1 else 0.0
+            vz = _safe_float(t2[2]) if len(t2) > 2 else 0.0
+            skew_id = _safe_int(t2[3]) if len(t2) > 3 else 0
+            iorth = _safe_int(t2[4]) if len(t2) > 4 else 0
+        if len(valid_cards) > 3:
+            t3 = valid_cards[3].tokens()
+            phi = _safe_float(t3[0]) if len(t3) > 0 else 0.0
+        if len(valid_cards) > 4:
+            t4 = valid_cards[4].tokens()
+            deltat_min = _safe_float(t4[0]) if len(t4) > 0 else 0.0
+
+    p21 = PropType21(
+        id=prop_id, isolid=isolid, ismstr=ismstr, icstr=icstr,
+        inpts_r=inpts_r, inpts_s=inpts_s, inpts_t=inpts_t, iint=iint,
+        dn=dn, qa=qa, qb=qb, vx=vx, vy=vy, vz=vz, skew_id=skew_id,
+        iorth=iorth, phi=phi, deltat_min=deltat_min, title=title
+    )
+    model.props_type21[prop_id] = p21
+    model.properties[prop_id] = Property(id=prop_id, type=21, title=title)
+
+
+def read_prop_type22(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE22`` or ``/PROP/TSH_COMP`` (M206): Composite layered thick shell property."""
+    from ..model.entities import PropType22, PropType22Layer, Property
+    prop_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    isolid, ismstr, icstr = 15, 0, 0
+    inpts_r, inpts_s, inpts_t = 2, 2, 2
+    iint = 1
+    dn = 0.0
+    qa, qb = 1.1, 0.05
+    vx, vy, vz = 0.0, 0.0, 0.0
+    skew_id, iorth = 0, 0
+    ipos, ashear, deltat_min = 0, 0.0, 0.0
+    layers: List[PropType22Layer] = []
+
+    if block.fixed:
+        if len(valid_cards) > 0:
+            c0 = valid_cards[0].cut("PROP_TYPE22_1")
+            isolid = _safe_int(c0[0]) if len(c0) > 0 and c0[0].strip() else 15
+            ismstr = _safe_int(c0[1]) if len(c0) > 1 else 0
+            icstr = _safe_int(c0[2]) if len(c0) > 2 else 0
+            inpts_r = _safe_int(c0[3]) if len(c0) > 3 and c0[3].strip() else 2
+            inpts_s = _safe_int(c0[4]) if len(c0) > 4 and c0[4].strip() else 2
+            inpts_t = _safe_int(c0[5]) if len(c0) > 5 and c0[5].strip() else 2
+            iint = _safe_int(c0[6]) if len(c0) > 6 and c0[6].strip() else 1
+            dn = _safe_float(c0[7]) if len(c0) > 7 and c0[7].strip() else 0.0
+        if len(valid_cards) > 1:
+            c1 = valid_cards[1].cut("PROP_TYPE22_2")
+            qa = _safe_float(c1[0]) if len(c1) > 0 and c1[0].strip() else 1.1
+            qb = _safe_float(c1[1]) if len(c1) > 1 and c1[1].strip() else 0.05
+        if len(valid_cards) > 2:
+            c2 = valid_cards[2].cut("PROP_TYPE22_3")
+            vx = _safe_float(c2[0]) if len(c2) > 0 and c2[0].strip() else 0.0
+            vy = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+            vz = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+            skew_id = _safe_int(c2[3]) if len(c2) > 3 else 0
+            iorth = _safe_int(c2[4]) if len(c2) > 4 else 0
+            ipos = _safe_int(c2[5]) if len(c2) > 5 else 0
+        if len(valid_cards) > 3:
+            c3 = valid_cards[3].cut("PROP_TYPE22_4")
+            ashear = _safe_float(c3[0]) if len(c3) > 0 and c3[0].strip() else 0.0
+        for card in valid_cards[4:]:
+            f = card.cut("PROP_TYPE22_LAYER")
+            if len(f) >= 4 and any(x.strip() for x in f):
+                layers.append(PropType22Layer(
+                    phi=_safe_float(f[0]),
+                    thick=_safe_float(f[1]),
+                    zi=_safe_float(f[2]),
+                    mat_id=_safe_int(f[3])
+                ))
+    else:
+        if len(valid_cards) > 0:
+            t0 = valid_cards[0].tokens()
+            isolid = _safe_int(t0[0]) if len(t0) > 0 else 15
+            ismstr = _safe_int(t0[1]) if len(t0) > 1 else 0
+            icstr = _safe_int(t0[2]) if len(t0) > 2 else 0
+            inpts_r = _safe_int(t0[3]) if len(t0) > 3 else 2
+            inpts_s = _safe_int(t0[4]) if len(t0) > 4 else 2
+            inpts_t = _safe_int(t0[5]) if len(t0) > 5 else 2
+            iint = _safe_int(t0[6]) if len(t0) > 6 else 1
+            dn = _safe_float(t0[7]) if len(t0) > 7 else 0.0
+        if len(valid_cards) > 1:
+            t1 = valid_cards[1].tokens()
+            qa = _safe_float(t1[0]) if len(t1) > 0 else 1.1
+            qb = _safe_float(t1[1]) if len(t1) > 1 else 0.05
+        if len(valid_cards) > 2:
+            t2 = valid_cards[2].tokens()
+            vx = _safe_float(t2[0]) if len(t2) > 0 else 0.0
+            vy = _safe_float(t2[1]) if len(t2) > 1 else 0.0
+            vz = _safe_float(t2[2]) if len(t2) > 2 else 0.0
+            skew_id = _safe_int(t2[3]) if len(t2) > 3 else 0
+            iorth = _safe_int(t2[4]) if len(t2) > 4 else 0
+            ipos = _safe_int(t2[5]) if len(t2) > 5 else 0
+        if len(valid_cards) > 3:
+            t3 = valid_cards[3].tokens()
+            ashear = _safe_float(t3[0]) if len(t3) > 0 else 0.0
+        for card in valid_cards[4:]:
+            toks = card.tokens()
+            if len(toks) >= 4:
+                layers.append(PropType22Layer(
+                    phi=float(toks[0]),
+                    thick=float(toks[1]),
+                    zi=float(toks[2]),
+                    mat_id=int(float(toks[3]))
+                ))
+
+    p22 = PropType22(
+        id=prop_id, isolid=isolid, ismstr=ismstr, icstr=icstr,
+        inpts_r=inpts_r, inpts_s=inpts_s, inpts_t=inpts_t, iint=iint,
+        dn=dn, qa=qa, qb=qb, vx=vx, vy=vy, vz=vz, skew_id=skew_id,
+        iorth=iorth, ipos=ipos, ashear=ashear, layers=layers,
+        deltat_min=deltat_min, title=title
+    )
+    model.props_type22[prop_id] = p22
+    model.properties[prop_id] = Property(id=prop_id, type=22, title=title)
+
+
+
 
 # ----------------------------------------------------------------------
 # M189: Gurson, Gray Cast Iron, Composite Solid, Connector, Martensite Materials,
@@ -43105,6 +43370,15 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "LOAD_PBLAST": read_pblast,
     "LOAD_PFLUID": read_pfluid,
     "LOAD_LASER": read_laser,
+    # --- M206: Orthotropic and Composite Thick Shells, Sensors & Inter Type25 ---
+    "PROP_TYPE21": read_prop_type21,
+    "PROP_TSH_ORTH": read_prop_type21,
+    "PROP_TYPE22": read_prop_type22,
+    "PROP_TSH_COMP": read_prop_type22,
+    "INTER_TYPE25": read_inter,
+    "INTER_TIED_BREAK": read_inter,
+    "SENSOR_GEOM": read_sensor,
+    "SENSOR_REL": read_sensor,
 }
 
 

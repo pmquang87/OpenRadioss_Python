@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M205)
+## What is implemented (M1 → M206)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -211,6 +211,7 @@ real history is 41 milestones. One line each:
 | M203 | Kinematic Gear/Rack/Diff Constraints, Guided Cable Type 26, Python Sensor, Failure Criteria, Adaptive Meshing Set, SPH Gauge, Checksum Directives and Transform Position Suite: /LAGMUL/GEAR (/GEAR) rotational gear constraint, /LAGMUL/RACK (/RACK) rack-and-pinion kinematic constraint, /LAGMUL/DIFF (/DIFF) differential rotational kinematic constraint, /INTER/TYPE26 (/INTER/GUIDED_CABLE, /TYPE26) guided cable sliding interface, /SENSOR/PYTHON Python-scripted sensor function, /FAIL/JOHNSON (/FAIL/JOHN_COOK), /FAIL/BIQUAD, /FAIL/FLD, /FAIL/CONNECT, /FAIL/FRACTAL_DMG, /FAIL/ORTHENERG failure criteria, /ADMESH/SET adaptive meshing on element/node set, /GAUGE/SPH SPH gauge point measurement, /CHECKSUM/START, /CHECKSUM/END checksum calculation directives, /TRANSFORM/POS (/POS, /POSITION) 6-point 3D alignment transformation, and /PROP/INJECT1, /PROP/INJECT2 gas injector properties |
 | M204 | Thermal Transient Solvers, Heat Generation, X-FEM Fracture, Subsystem Sensors, and Initial/Boundary Directives Suite: /HEAT/SOLVER & /HEAT/GLOBAL thermal transient solver controls, /LOAD/HEAT (/LOAD/THERM, /HEAT/LOAD) volumetric heat generation source, /HEAT/MAT (/HEAT/MATERIAL) material thermal properties modifier, /XFEM (/XFEM/SHELL, /XFEM/SOLID) extended finite element enrichment controls, /INICRACK coordinate plane and segment crack definitions, /SENSOR/AIRBAG, /SENSOR/MONVOL, /SENSOR/SHELL, /SENSOR/SOLID, /SENSOR/SPH subsystem threshold sensors, and /INITEMP, /IMPTEMP dictionary mapping and thermal time-history channels |
 | M205 | ALE Inflow/Outflow Boundaries, Cavity Enclosure Radiation, Torsional/Bending Springs, and Blast/Fluid Hydrostatic Load Directives Suite: /FLOW, /FLOW/INFLOW, /FLOW/OUTFLOW, /ALE/FLOW Eulerian/ALE flow boundary condition on surface with velocity, density, pressure, temperature and sensor gating, /HEAT/RAD_CAV (/HEAT/CAV, /RAD_CAV) surface enclosure radiation coupling with emissivity and view factor, /PROP/TYPE19 (/PROP/SPR_TORS) torsional spring property, /PROP/TYPE20 (/PROP/SPR_BEND) bending spring property, and /LOAD_PBLAST, /LOAD_PFLUID, /LOAD_LASER model dictionary aliases |
+| M206 | Orthotropic & Composite Layered Thick Shell Properties, Relative/Geometric Sensors, ALE Zero Directives, and Tied Rupture Contact Suite: /PROP/TYPE21 (/PROP/TSH_ORTH) orthotropic thick shell property, /PROP/TYPE22 (/PROP/TSH_COMP) composite layered thick shell property with ply angle, thickness, z-coordinate, and material ID, /SENSOR/GEOM 3-node geometric distance and angle threshold sensor, /SENSOR/REL 2-node relative displacement and rotation sensor, /ALE/ZERO_PRESSURE (/ALE/ZERO_PRES) and /ALE/ZERO_VEL zero boundary directives, and /INTER/TYPE25 (/INTER/TIED_BREAK) breakable tied contact interface |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read
