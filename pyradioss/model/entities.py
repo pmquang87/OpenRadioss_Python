@@ -12717,6 +12717,54 @@ class SensorGap:
     isens_mode: int = 0      # 0: trig when dist < d_gap, 1: trig when dist > d_gap
 
 
+@dataclass
+class SlotJoint:
+    """``/LAGMUL/SLOT/joint_ID`` or ``/SLOT/joint_ID`` (M217): Multibody slot kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    skew_id: int = 0
+    axis_dir: int = 1        # 1: X, 2: Y, 3: Z along the slot line
+    d_min: float = 0.0       # minimum slot limit
+    d_max: float = 0.0       # maximum slot limit
+
+
+@dataclass
+class FailOrtho:
+    """``/FAIL/ORTHO/mat_ID`` or ``/FAIL/ORTHOTROPIC/mat_ID`` (M217): Orthotropic lamina strength failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    xt: float = 0.0          # longitudinal tensile strength
+    xc: float = 0.0          # longitudinal compressive strength
+    yt: float = 0.0          # transverse tensile strength
+    yc: float = 0.0          # transverse compressive strength
+    s: float = 0.0           # shear strength
+    ifail_sh: int = 1        # 1: delete on 1 layer, 2: delete on all layers
+
+
+@dataclass
+class EngFxfreq:
+    """``/FXFREQ`` or ``/ENG/FXFREQ`` (M217): Fast Fourier Transform frequency spectrum output."""
+    id: int = 1
+    title: str = ""
+    f_max: float = 0.0       # maximum frequency evaluated
+    n_freq: int = 100        # number of frequency points
+    t_start: float = 0.0     # window start time
+    t_end: float = 0.0       # window end time
+
+
+@dataclass
+class SensorEnergyRatio:
+    """``/SENSOR/ENERGY_RATIO`` or ``/SENSOR/ENG_RATIO`` (M217): Energy ratio limit trigger sensor."""
+    id: int = 1
+    title: str = ""
+    ratio_max: float = 1e30  # upper energy ratio limit
+    ratio_min: float = 0.0   # lower energy ratio limit
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

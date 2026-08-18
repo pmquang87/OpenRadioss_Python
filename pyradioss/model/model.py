@@ -1524,6 +1524,13 @@ class Model:
         self.nois_type: int = 0
         self.sensor_gaps: Dict[int, Any] = {}                        # /SENSOR/TIME_GAP, /SENSOR/GAP (M216)
 
+        # M217 Entities
+        self.slot_joints: Dict[int, Any] = {}                        # /LAGMUL/SLOT, /SLOT (M217)
+        self.fail_orthos: Dict[int, Any] = {}                        # /FAIL/ORTHO, /FAIL/ORTHOTROPIC (M217)
+        self.eng_fxfreqs: Dict[int, Any] = {}                        # /FXFREQ, /ENG/FXFREQ (M217)
+        self.sensor_energy_ratios: Dict[int, Any] = {}               # /SENSOR/ENERGY_RATIO, /SENSOR/ENG_RATIO (M217)
+
+
 
 
 

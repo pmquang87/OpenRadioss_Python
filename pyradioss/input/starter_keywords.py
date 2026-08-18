@@ -2234,6 +2234,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("LAD_EVR", "LADEVEZE_EVR", "LAD_EVR_COMP"):
         read_fail_lad_evr(block, model, log)
         return
+    if kind in ("ORTHO", "ORTHOTROPIC", "LAMINA"):
+        read_fail_ortho(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11639,6 +11642,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "DIST_SURF"
     if kind in ("GAP", "TIME_GAP"):
         read_sensor_gap(block, model, log)
+        return
+    if kind in ("ENERGY_RATIO", "ENG_RATIO", "RATIO_E"):
+        read_sensor_energy_ratio(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -22859,6 +22865,9 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub in ("DISTANCE", "DISTANCE_JOINT", "CONST_DIST", "CONST_DISTANCE"):
         read_distance_joint(block, model, log)
         return
+    elif sub in ("SLOT", "SLOT_JOINT"):
+        read_slot_joint(block, model, log)
+        return
 
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     lagmod = 1
@@ -23407,6 +23416,39 @@ def read_distance_joint(block: KeywordBlock, model: Model, log: MessageLog) -> N
         id=block.user_id, title=title, node1=node1, node2=node2,
         dist=dist, tol=tol
     )
+
+
+def read_slot_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SLOT/id`` or ``/LAGMUL/SLOT/id`` (M217): Slot kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SLOT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, skew_id, axis_dir, d_min, d_max = 0, 0, 0, 1, 0.0, 0.0
+    if block.fixed:
+        f = cards[0].cut("SLOT_JOINT_1")
+        node1 = _ival(f[0], 0) if len(f) > 0 else 0
+        node2 = _ival(f[1], 0) if len(f) > 1 else 0
+        skew_id = _ival(f[2], 0) if len(f) > 2 else 0
+        axis_dir = _ival(f[3], 1) if len(f) > 3 else 1
+        d_min = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        d_max = _fval(f[5], 0.0) if len(f) > 5 else 0.0
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        skew_id = int(float(toks[2])) if len(toks) > 2 else 0
+        axis_dir = int(float(toks[3])) if len(toks) > 3 else 1
+        d_min = float(toks[4]) if len(toks) > 4 else 0.0
+        d_max = float(toks[5]) if len(toks) > 5 else 0.0
+
+    from ..model.entities import SlotJoint
+    model.slot_joints[block.user_id] = SlotJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        skew_id=skew_id, axis_dir=axis_dir, d_min=d_min, d_max=d_max
+    )
+
 
 
 
@@ -41439,6 +41481,39 @@ def read_fail_lad_evr(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     )
 
 
+def read_fail_ortho(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/ORTHO/mat_ID`` or ``/FAIL/ORTHOTROPIC/mat_ID`` (M217): Orthotropic lamina strength failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/ORTHO/{block.user_id}: missing data card", block.source)
+        return
+
+    xt, xc, yt, yc, s, ifail_sh = 0.0, 0.0, 0.0, 0.0, 0.0, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_ORTHO_1")
+        xt = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        xc = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        yt = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        yc = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        s = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        ifail_sh = _ival(f[5], 1) if len(f) > 5 else 1
+    else:
+        toks = cards[0].tokens()
+        xt = float(toks[0]) if len(toks) > 0 else 0.0
+        xc = float(toks[1]) if len(toks) > 1 else 0.0
+        yt = float(toks[2]) if len(toks) > 2 else 0.0
+        yc = float(toks[3]) if len(toks) > 3 else 0.0
+        s = float(toks[4]) if len(toks) > 4 else 0.0
+        ifail_sh = int(float(toks[5])) if len(toks) > 5 else 1
+
+    from ..model.entities import FailOrtho
+    model.fail_orthos[block.user_id] = FailOrtho(
+        mat_id=block.user_id, title=title, xt=xt, xc=xc,
+        yt=yt, yc=yc, s=s, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -42723,6 +42798,66 @@ def read_sensor_gap(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.sensors.append(Sensor(
         id=sg.id, kind="GAP", tdelay=t_delay
     ))
+
+
+def read_eng_fxfreq(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FXFREQ`` or ``/ENG/FXFREQ`` (M217): Fast Fourier Transform frequency spectrum output."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FXFREQ/{block.user_id}: missing data card", block.source)
+        return
+
+    f_max, n_freq, t_start, t_end = 0.0, 100, 0.0, 0.0
+    if block.fixed:
+        f = cards[0].cut("ENG_FXFREQ_1")
+        f_max = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        n_freq = _ival(f[1], 100) if len(f) > 1 else 100
+        t_start = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        t_end = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+    else:
+        toks = cards[0].tokens()
+        f_max = float(toks[0]) if len(toks) > 0 else 0.0
+        n_freq = int(float(toks[1])) if len(toks) > 1 else 100
+        t_start = float(toks[2]) if len(toks) > 2 else 0.0
+        t_end = float(toks[3]) if len(toks) > 3 else 0.0
+
+    from ..model.entities import EngFxfreq
+    fxf_id = block.user_id or (len(model.eng_fxfreqs) + 1)
+    model.eng_fxfreqs[fxf_id] = EngFxfreq(
+        id=fxf_id, title=title, f_max=f_max,
+        n_freq=n_freq, t_start=t_start, t_end=t_end
+    )
+
+
+def read_sensor_energy_ratio(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/ENERGY_RATIO`` or ``/SENSOR/ENG_RATIO`` (M217): Energy ratio limit trigger sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/ENERGY_RATIO/{block.user_id}: missing data card", block.source)
+        return
+
+    ratio_max, ratio_min, t_delay = 1e30, 0.0, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_ENERGY_RATIO_1")
+        ratio_max = _fval(f[0], 1e30) if len(f) > 0 else 1e30
+        ratio_min = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        ratio_max = float(toks[0]) if len(toks) > 0 else 1e30
+        ratio_min = float(toks[1]) if len(toks) > 1 else 0.0
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorEnergyRatio, Sensor
+    ser = SensorEnergyRatio(
+        id=block.user_id or 1, title=title,
+        ratio_max=ratio_max, ratio_min=ratio_min, t_delay=t_delay
+    )
+    model.sensor_energy_ratios[ser.id] = ser
+    model.sensors.append(Sensor(
+        id=ser.id, kind="ENERGY_RATIO", tdelay=t_delay
+    ))
+
 
 
 
@@ -44777,6 +44912,18 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_NOIS": read_eng_nois,
     "SENSOR_GAP": read_sensor_gap,
     "SENSOR_TIME_GAP": read_sensor_gap,
+    # --- M217: Slot Kinematic Joint, Orthotropic Failure Criterion, Engine FFT Frequency Spectrum, and Energy Ratio Sensor Suite ---
+    "LAGMUL_SLOT": read_slot_joint,
+    "LAGMUL_SLOT_JOINT": read_slot_joint,
+    "SLOT_JOINT": read_slot_joint,
+    "SLOT": read_slot_joint,
+    "FAIL_ORTHO": read_fail_ortho,
+    "FAIL_ORTHOTROPIC": read_fail_ortho,
+    "FAIL_LAMINA": read_fail_ortho,
+    "FXFREQ": read_eng_fxfreq,
+    "ENG_FXFREQ": read_eng_fxfreq,
+    "SENSOR_ENERGY_RATIO": read_sensor_energy_ratio,
+    "SENSOR_ENG_RATIO": read_sensor_energy_ratio,
 }
 
 
