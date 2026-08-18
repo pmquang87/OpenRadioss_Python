@@ -1993,6 +1993,14 @@ class BcsWall:
         elif not self.set_id and self.grnod_id:
             self.set_id = self.grnod_id
 
+    @property
+    def sens_id(self) -> int:
+        return self.sensor_id
+
+    @sens_id.setter
+    def sens_id(self, val: int) -> None:
+        self.sensor_id = val
+
 
 @dataclass
 class RigidLink:
@@ -2046,15 +2054,27 @@ class ExternLink:
 
 @dataclass
 class CylJoint:
-    """/CYL_JOINT (M102): Cylindrical joint constraint between independent and dependent nodes.
-
-    Fortran origin: ``starter/source/constraints/general/cyl_joint/hm_read_cyljoint.F``.
-    """
+    """/CYL_JOINT (M102, M209): Cylindrical joint constraint between independent and dependent nodes."""
     id: int
     title: str = ""
     node_id1: int = 0
     node_id2: int = 0
     grnod_id: int = 0
+    node1: int = 0
+    node2: int = 0
+    axis_dir: int = 1
+    skew_id: int = 0
+    tol: float = 1e-6
+
+    def __post_init__(self):
+        if not self.node1 and self.node_id1:
+            self.node1 = self.node_id1
+        elif not self.node_id1 and self.node1:
+            self.node_id1 = self.node1
+        if not self.node2 and self.node_id2:
+            self.node2 = self.node_id2
+        elif not self.node_id2 and self.node2:
+            self.node_id2 = self.node2
 
 
 @dataclass
@@ -3850,6 +3870,30 @@ class SlipringShell:
     yscale4: float = 1.0
     title: str = ""
 
+    @property
+    def fricd(self) -> float:
+        return self.fric_d
+
+    @fricd.setter
+    def fricd(self, val: float) -> None:
+        self.fric_d = val
+
+    @property
+    def frics(self) -> float:
+        return self.fric_s
+
+    @frics.setter
+    def frics(self, val: float) -> None:
+        self.fric_s = val
+
+    @property
+    def sensor_id(self) -> int:
+        return self.sens_id
+
+    @sensor_id.setter
+    def sensor_id(self, val: int) -> None:
+        self.sens_id = val
+
 
 @dataclass
 class EbcsNrf:
@@ -3944,6 +3988,11 @@ class FailGurson:
     h_chi: float = 0.0
     le_max: float = 0.0
     fail_id: int = 0
+    f_u: float = 0.0
+    s_n: float = 0.0
+    f_n: float = 0.0
+    ifail_sh: int = 1
+    title: str = ""
 
 
 @dataclass
@@ -5537,6 +5586,26 @@ class MaterialLaw117:
     exp_bk: float = 1.0
     gamma: float = 0.0
 
+    @property
+    def rho(self) -> float:
+        return self.rho0
+
+    @property
+    def en(self) -> float:
+        return self.e_elas_n
+
+    @property
+    def es(self) -> float:
+        return self.e_elas_s
+
+    @property
+    def tn(self) -> float:
+        return self.tmax_n
+
+    @property
+    def ts(self) -> float:
+        return self.tmax_s
+
 
 @dataclass
 class MaterialLaw90:
@@ -5752,6 +5821,54 @@ class MaterialLaw28:
     epsr4: float = 0.0
     epsr5: float = 0.0
     epsr6: float = 0.0
+
+    @property
+    def fun_id11(self) -> int:
+        return self.fun_a1
+
+    @property
+    def fun_id22(self) -> int:
+        return self.fun_b1
+
+    @property
+    def fun_id33(self) -> int:
+        return self.fun_a2
+
+    @property
+    def eps_max11(self) -> float:
+        return self.epsr1
+
+    @property
+    def eps_max22(self) -> float:
+        return self.epsr2
+
+    @property
+    def eps_max33(self) -> float:
+        return self.epsr3
+
+    @property
+    def fun_id12(self) -> int:
+        return self.fun_a3
+
+    @property
+    def fun_id23(self) -> int:
+        return self.fun_b3
+
+    @property
+    def fun_id31(self) -> int:
+        return self.fun_a4
+
+    @property
+    def eps_max12(self) -> float:
+        return self.epsr4
+
+    @property
+    def eps_max23(self) -> float:
+        return self.epsr5
+
+    @property
+    def eps_max31(self) -> float:
+        return self.epsr6
 
 
 @dataclass

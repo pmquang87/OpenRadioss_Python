@@ -926,7 +926,7 @@ LAYOUTS: Dict[str, List[int]] = {
     "AUTOPOSITION_2": [20, 20, 20, 10, 10, 10],
 
     # PROP/CONNECT / PROP/TYPE43 (M111)
-    "PROP_CONNECT_1": [10],
+    "PROP_CONNECT_1": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
 
     # MAT/LAW59 / MAT/CONNECT (M111)
     "MAT_CONNECT_1": [20, 20],

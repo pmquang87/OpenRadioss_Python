@@ -2902,42 +2902,79 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             fail_id=0, title=""
         )
         fm = FailureModel(type="ORTHSTRAIN", ifail_sh=1, params=params)
-    elif kind == "GURSON":
-        # Card 1: q1, q2, (blank 50), i_loc
-        if block.fixed:
-            c1 = _cut_floats(cards[0], "FAIL_GURSON_1")
-            q1 = c1[0] if len(c1) > 0 and c1[0] else 1.5
-            q2 = c1[1] if len(c1) > 1 and c1[1] else 1.0
-            iloc = int(c1[3]) if len(c1) > 3 and c1[3] else 1
+    elif kind in ("GURSON", "GURSON_MODEL", "GURSON_DAMAGE"):
+        title = ""
+        g_cards = cards
+        if g_cards and not g_cards[0].is_blank:
+            toks0 = g_cards[0].tokens()
+            if toks0:
+                try:
+                    float(toks0[0])
+                except ValueError:
+                    title = g_cards[0].raw.strip()
+                    g_cards = g_cards[1:]
+
+        if len(g_cards) <= 2:
+            # M235: 2-card porous metal layout (f_0, f_c, f_u / eps_n, s_n, f_n, ifail_sh)
+            if block.fixed:
+                f1 = g_cards[0].cut("FAIL_GURSON_POROUS_1") if len(g_cards) > 0 and not g_cards[0].is_blank else []
+                f_0 = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+                f_c = _fval(f1[1], 0.15) if len(f1) > 1 else 0.15
+                f_u = _fval(f1[2], 0.25) if len(f1) > 2 else 0.25
+                eps_n, s_n, f_n, ifail_sh = 0.3, 0.1, 0.04, 1
+                if len(g_cards) > 1 and not g_cards[1].is_blank:
+                    f2 = g_cards[1].cut("FAIL_GURSON_POROUS_2")
+                    eps_n = _fval(f2[0], 0.3) if len(f2) > 0 else 0.3
+                    s_n = _fval(f2[1], 0.1) if len(f2) > 1 else 0.1
+                    f_n = _fval(f2[2], 0.04) if len(f2) > 2 else 0.04
+                    ifail_sh = _ival(f2[3], 1) if len(f2) > 3 else 1
+            else:
+                toks1 = g_cards[0].tokens() if len(g_cards) > 0 and not g_cards[0].is_blank else []
+                f_0 = float(toks1[0]) if len(toks1) > 0 else 0.0
+                f_c = float(toks1[1]) if len(toks1) > 1 else 0.15
+                f_u = float(toks1[2]) if len(toks1) > 2 else 0.25
+                eps_n, s_n, f_n, ifail_sh = 0.3, 0.1, 0.04, 1
+                if len(g_cards) > 1 and not g_cards[1].is_blank:
+                    toks2 = g_cards[1].tokens()
+                    eps_n = float(toks2[0]) if len(toks2) > 0 else 0.3
+                    s_n = float(toks2[1]) if len(toks2) > 1 else 0.1
+                    f_n = float(toks2[2]) if len(toks2) > 2 else 0.04
+                    ifail_sh = int(float(toks2[3])) if len(toks2) > 3 else 1
+            q1, q2, iloc = 1.5, 1.0, 1
+            a_s, k_w, f_r = s_n, f_n, f_u
+            r_len, h_chi, le_max, fail_id = 0.0, 0.0, 0.0, 0
         else:
-            t1 = cards[0].tokens()
-            q1 = float(t1[0]) if len(t1) > 0 else 1.5
-            q2 = float(t1[1]) if len(t1) > 1 else 1.0
-            iloc = int(float(t1[2])) if len(t1) > 2 else 1
+            # M98/M125: Standard Radioss 4/5-card GTN layout
+            if block.fixed:
+                c1 = _cut_floats(g_cards[0], "FAIL_GURSON_1")
+                q1 = c1[0] if len(c1) > 0 and c1[0] else 1.5
+                q2 = c1[1] if len(c1) > 1 and c1[1] else 1.0
+                iloc = int(c1[3]) if len(c1) > 3 and c1[3] else 1
+            else:
+                t1 = g_cards[0].tokens()
+                q1 = float(t1[0]) if len(t1) > 0 else 1.5
+                q2 = float(t1[1]) if len(t1) > 1 else 1.0
+                iloc = int(float(t1[2])) if len(t1) > 2 else 1
 
-        # Card 2: eps_n, a_s, k_w
-        c2 = _cut_floats(cards[1], "FAIL_GURSON_2") if block.fixed and len(cards) > 1 else (_floats(cards[1], 3) if len(cards) > 1 else [0.0, 0.0, 0.0])
-        eps_n = c2[0] if len(c2) > 0 and c2[0] else 0.0
-        a_s = c2[1] if len(c2) > 1 and c2[1] else 0.0
-        k_w = c2[2] if len(c2) > 2 and c2[2] else 0.0
+            c2 = _cut_floats(g_cards[1], "FAIL_GURSON_2") if block.fixed and len(g_cards) > 1 else (_floats(g_cards[1], 3) if len(g_cards) > 1 else [0.0, 0.0, 0.0])
+            eps_n = c2[0] if len(c2) > 0 and c2[0] else 0.0
+            a_s = c2[1] if len(c2) > 1 and c2[1] else 0.0
+            k_w = c2[2] if len(c2) > 2 and c2[2] else 0.0
 
-        # Card 3: f_c, f_r, f_0
-        c3 = _cut_floats(cards[2], "FAIL_GURSON_3") if block.fixed and len(cards) > 2 else (_floats(cards[2], 3) if len(cards) > 2 else [0.0, 0.0, 0.0])
-        f_c = c3[0] if len(c3) > 0 and c3[0] else 0.0
-        f_r = c3[1] if len(c3) > 1 and c3[1] else 0.0
-        f_0 = c3[2] if len(c3) > 2 and c3[2] else 0.0
+            c3 = _cut_floats(g_cards[2], "FAIL_GURSON_3") if block.fixed and len(g_cards) > 2 else (_floats(g_cards[2], 3) if len(g_cards) > 2 else [0.0, 0.0, 0.0])
+            f_c = c3[0] if len(c3) > 0 and c3[0] else 0.0
+            f_r = c3[1] if len(c3) > 1 and c3[1] else 0.0
+            f_0 = c3[2] if len(c3) > 2 and c3[2] else 0.0
 
-        # Card 4: r_len, h_chi, le_max
-        c4 = _cut_floats(cards[3], "FAIL_GURSON_4") if block.fixed and len(cards) > 3 else (_floats(cards[3], 3) if len(cards) > 3 else [0.0, 0.0, 0.0])
-        r_len = c4[0] if len(c4) > 0 and c4[0] else 0.0
-        h_chi = c4[1] if len(c4) > 1 and c4[1] else 0.0
+            c4 = _cut_floats(g_cards[3], "FAIL_GURSON_4") if block.fixed and len(g_cards) > 3 else (_floats(g_cards[3], 3) if len(g_cards) > 3 else [0.0, 0.0, 0.0])
+            r_len = c4[0] if len(c4) > 0 and c4[0] else 0.0
+            h_chi = c4[1] if len(c4) > 1 and c4[1] else 0.0
+            le_max = c4[2] if len(c4) > 2 and c4[2] else 0.0
 
-        le_max = 0.0
-        if len(c4) > 2:
-            le_max = c4[2] if c4[2] else 0.0
-        fail_id = 0
-        if len(cards) > 4 and not cards[4].is_blank:
-            fail_id = _ival(cards[4].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[4].tokens()[0]))
+            fail_id = 0
+            if len(g_cards) > 4 and not g_cards[4].is_blank:
+                fail_id = _ival(g_cards[4].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(g_cards[4].tokens()[0]))
+            f_u, s_n, f_n, ifail_sh = f_r, a_s, k_w, 1
 
         params = {
             "q1": q1, "q2": q2, "iloc": iloc,
@@ -2945,14 +2982,16 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "f_c": f_c, "f_r": f_r, "f_0": f_0,
             "r_len": r_len, "h_chi": h_chi, "le_max": le_max,
             "fail_id": fail_id,
+            "f_u": f_u, "s_n": s_n, "f_n": f_n, "ifail_sh": ifail_sh,
         }
         from ..model.entities import FailGurson
         model.fail_gursons[mat_id] = FailGurson(
             mat_id=mat_id, q1=q1, q2=q2, iloc=iloc,
             eps_n=eps_n, a_s=a_s, k_w=k_w, f_c=f_c, f_r=f_r, f_0=f_0,
             r_len=r_len, h_chi=h_chi, le_max=le_max, fail_id=fail_id,
+            f_u=f_u, s_n=s_n, f_n=f_n, ifail_sh=ifail_sh, title=title,
         )
-        fm = FailureModel(type="GURSON", ifail_sh=1, params=params)
+        fm = FailureModel(type="GURSON", ifail_sh=ifail_sh, params=params)
     elif kind == "ALTER":
         # Card 1: Exp_n, V0, Vc, EMA, Irate, Iside, mode
         if block.fixed:
@@ -4977,7 +5016,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                "TYPE18": 18, "INT_BEAM": 18, "PROP_P18_INT_BEAM": 18, "P18_INT_BEAM": 18, "BEAM_INT": 18,
                "TYPE19": 19, "SPR_TORS": 19, "PROP_SPR_TORS": 19, "PROP_P19_SPR_TORS": 19, "P19_SPR_TORS": 19,
                "TYPE8": 8, "SPR_GENE": 8, "SPRING_GENE": 8, "PROP_P8_SPR_GENE": 8, "P8_SPR_GENE": 8, "PROP_SPR_GENE": 8, "PROP_SPRING_GENE": 8,
-               "TYPE12": 12, "SPR_PUL": 12, "PROP_P12_SPR_PUL": 12, "P12_SPR_PUL": 12, "PROP_SPR_PUL": 12,
+               "TYPE12": 12, "SPR_PUL": 12, "PROP_P12_SPR_PUL": 12, "P12_SPR_PUL": 12, "PROP_SPR_PUL": 12, "SPR_PULL": 13, "PROP_SPR_PULL": 13,
                "TYPE13": 13, "SPR_BEAM": 13, "PROP_P13_SPR_BEAM": 13, "P13_SPR_BEAM": 13, "PROP_SPR_BEAM": 13,
                "TYPE15": 15, "POROUS": 15, "PROP_P15_POROUS": 15, "P15_POROUS": 15, "PROP_POROUS": 15,
                "TYPE23": 23, "SPR_MAT": 23, "PROP_P23_SPR_MAT": 23, "P23_SPR_MAT": 23, "PROP_SPR_MAT": 23,
@@ -4985,9 +5024,9 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                "TYPE32": 32, "SPR_PRE": 32, "SPRING_PRE": 32, "PROP_P32_SPR_PRE": 32, "P32_SPR_PRE": 32, "PROP_SPR_PRE": 32, "PROP_SPRING_PRE": 32,
                "TYPE26": 26, "SPR_TAB": 26, "PROP_P26_SPR_TAB": 26, "P26_SPR_TAB": 26, "PROP_SPR_TAB": 26,
                "TYPE27": 27, "SPR_BDAMP": 27, "PROP_P27_SPR_BDAMP": 27, "P27_SPR_BDAMP": 27, "PROP_SPR_BDAMP": 27,
-               "TYPE34": 34, "SPH": 34, "USER_SOLID": 34, "PROP_USER_SOLID": 34, "PROP_P34_USER": 34,
+               "TYPE34": 34, "SPH": 34, "USER_SOLID": 34, "PROP_USER_SOLID": 34, "PROP_P34_USER": 34, "PROP_SPH": 34,
                "USER_SPRING": 4, "PROP_USER_SPRING": 4, "PROP_P4_USER": 4,
-               "TYPE43": 43, "CONNECT": 43,
+               "TYPE43": 43, "CONNECT": 43, "PROP_CONNECT": 43, "PROP_TYPE43": 43, "PROP_P43_CONNECT": 43, "P43_CONNECT": 43,
                "TYPE17": 17, "STACK": 17, "PROP_STACK": 17,
                "TYPE51": 51, "P51": 51, "LAMINATE_P51": 51,
                "TYPE0": 0, "VOID": 0}
@@ -4998,6 +5037,39 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_prop_p51(block, model, log)
         return
     if typename not in aliases:
+        if typename in ("INJECT1", "PROP_INJECT1", "INJECTOR1", "PROP_INJECTOR1"):
+            read_prop_inject1(block, model, log)
+            return
+        elif typename in ("INJECT2", "PROP_INJECT2", "INJECTOR2", "PROP_INJECT2"):
+            read_prop_inject2(block, model, log)
+            return
+        elif typename in ("TYPE29", "PROP_TYPE29"):
+            from ..model.entities import PropType29
+            pid = block.user_id or 1
+            title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+            card_lines = [c.raw for c in cards if not c.is_blank]
+            model.prop_type29s[pid] = PropType29(id=pid, cards=card_lines, title=title)
+            from . import prop_reader
+            model.properties[pid] = prop_reader.InactiveProperty(id=pid, type=29, title=title, prop_name="TYPE29")
+            return
+        elif typename in ("TYPE30", "PROP_TYPE30"):
+            from ..model.entities import PropType30
+            pid = block.user_id or 1
+            title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+            card_lines = [c.raw for c in cards if not c.is_blank]
+            model.prop_type30s[pid] = PropType30(id=pid, cards=card_lines, title=title)
+            from . import prop_reader
+            model.properties[pid] = prop_reader.InactiveProperty(id=pid, type=30, title=title, prop_name="TYPE30")
+            return
+        elif typename in ("TYPE31", "PROP_TYPE31"):
+            from ..model.entities import PropType31
+            pid = block.user_id or 1
+            title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+            card_lines = [c.raw for c in cards if not c.is_blank]
+            model.prop_type31s[pid] = PropType31(id=pid, cards=card_lines, title=title)
+            from . import prop_reader
+            model.properties[pid] = prop_reader.InactiveProperty(id=pid, type=31, title=title, prop_name="TYPE31")
+            return
         from . import prop_reader
         prop = prop_reader.parse_property(block, log)
         if prop is not None:
@@ -6059,7 +6131,9 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     f4 = cards[3].cut("PROP_TYPE22_4")
                     params["ashear"] = _fval(f4[0], 0.833333) if len(f4) > 0 and f4[0].strip() else 0.833333
                 layers = []
-                for c in cards[4:-1]:
+                last_is_deltat = len(cards) > 4 and len(cards[-1].tokens()) < 4
+                layer_cards = cards[4:-1] if last_is_deltat else cards[4:]
+                for c in layer_cards:
                     if c.is_blank:
                         continue
                     ly = c.cut("PROP_TYPE22_LAYER")
@@ -6069,7 +6143,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                         "zi": _fval(ly[2]),
                         "mat_id": _ival(ly[3]),
                     })
-                if len(cards) > 4 and not cards[-1].is_blank:
+                if last_is_deltat and not cards[-1].is_blank:
                     f_last = cards[-1].cut("PROP_TYPE22_5")
                     params["deltat_min"] = _fval(f_last[0]) if len(f_last) > 0 else 0.0
                 params["layers"] = layers
@@ -6107,7 +6181,9 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                     t3 = cards[3].tokens()
                     params["ashear"] = float(t3[0]) if len(t3) > 0 else 0.833333
                 layers = []
-                for c in cards[4:-1]:
+                last_is_deltat = len(cards) > 4 and len(cards[-1].tokens()) < 4
+                layer_cards = cards[4:-1] if last_is_deltat else cards[4:]
+                for c in layer_cards:
                     toks = c.tokens()
                     if not toks:
                         continue
@@ -6117,7 +6193,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                         "zi": float(toks[2]) if len(toks) > 2 else 0.0,
                         "mat_id": int(float(toks[3])) if len(toks) > 3 else 0,
                     })
-                if len(cards) > 4 and not cards[-1].is_blank:
+                if last_is_deltat and not cards[-1].is_blank:
                     t_last = cards[-1].tokens()
                     params["deltat_min"] = float(t_last[0]) if len(t_last) > 0 else 0.0
                 params["layers"] = layers
@@ -6268,7 +6344,7 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             if block.fixed:
                 f = cards[0].cut("PROP_CONNECT_1")
                 ismstr = _ival(f[0]) if len(f) > 0 else 0
-                thick = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+                thick = next((_fval(x) for x in reversed(f[1:]) if _fval(x) != 0.0), 0.0)
             else:
                 toks = cards[0].tokens()
                 ismstr = int(float(toks[0])) if len(toks) > 0 else 0
@@ -7278,188 +7354,224 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 shear=shear,
                 title=title,
             )
-    else:
-        model.properties[block.user_id] = Property(
-            id=block.user_id, type=ptype, title=title, params=params)
-        if ptype == 5:
-            from ..model.entities import PropRivet
-            model.prop_rivets[block.user_id] = PropRivet(
-                id=block.user_id, title=title,
-                mass=params.get("mass", 0.0),
-                stiffness=params.get("stiffness", params.get("fn", 0.0)),
-                fn_fail=params.get("fn_fail", params.get("fn", 0.0)),
-                ft_fail=params.get("ft_fail", params.get("ft", 0.0)),
-            )
-        elif ptype == 28:
-            from ..model.entities import PropXelem
-            model.prop_xelems[block.user_id] = PropXelem(
-                id=block.user_id, title=title,
-                itip=int(params.get("itip", params.get("fun_k", 0))),
-                isurf=int(params.get("isurf", params.get("fun_c", 0))),
-                alpha=params.get("alpha", params.get("mass", 0.0)),
-            )
-        elif ptype == 20:
-            from ..model.entities import PropType20
-            model.prop_tshells[block.user_id] = PropType20(
-                id=block.user_id, isolid=int(params.get("itshell", 15)),
-                ismstr=int(params.get("ismstr", 0)),
-                icpre=int(params.get("idrill", 0)),
-                icstr=int(params.get("istrain", 0)),
-                inpts_r=int(params.get("nip", 2)),
-                inpts_s=int(params.get("nip", 2)),
-                inpts_t=int(params.get("nip", 2)),
-                iint=int(params.get("iplas", 1)),
-                dn=float(params.get("dn", 0.0)),
-                qa=float(params.get("qa", 1.1)),
-                qb=float(params.get("qb", 0.05)),
-                h=float(params.get("h", 0.1)),
-                deltat_min=float(params.get("deltat_min", 0.0)),
-                title=title,
-            )
-        elif ptype == 21:
-            from ..model.entities import PropType21
-            model.prop_tsh_orths[block.user_id] = PropType21(
-                id=block.user_id, isolid=int(params.get("itshell", 15)),
-                ismstr=int(params.get("ismstr", 0)),
-                icstr=int(params.get("icstr", params.get("istrain", 0))),
-                inpts_r=int(params.get("inpts_r", params.get("nip", 2))),
-                inpts_s=int(params.get("inpts_s", params.get("nip", 2))),
-                inpts_t=int(params.get("inpts_t", params.get("nip", 2))),
-                iint=int(params.get("iint", params.get("iplas", 1))),
-                dn=float(params.get("dn", 0.0)),
-                qa=float(params.get("qa", 1.1)),
-                qb=float(params.get("qb", 0.05)),
-                vx=float(params.get("vx", 1.0)),
-                vy=float(params.get("vy", 0.0)),
-                vz=float(params.get("vz", 0.0)),
-                skew_id=int(params.get("skew_id", 0)),
-                iorth=int(params.get("iorth", 0)),
-                phi=float(params.get("phi", 0.0)),
-                deltat_min=float(params.get("deltat_min", 0.0)),
-                title=title,
-            )
-        elif ptype == 22:
-            from ..model.entities import PropType22, PropType22Layer
-            ly_objs = []
-            for ly in params.get("layers", []):
-                ly_objs.append(PropType22Layer(
-                    phi=float(ly.get("phi", 0.0)),
-                    thick=float(ly.get("thick", 0.0)),
-                    zi=float(ly.get("zi", 0.0)),
-                    mat_id=int(ly.get("mat_id", 0)),
-                ))
-            model.prop_tsh_comps[block.user_id] = PropType22(
-                id=block.user_id, isolid=int(params.get("itshell", 15)),
-                ismstr=int(params.get("ismstr", 0)),
-                icstr=int(params.get("icstr", params.get("istrain", 0))),
-                inpts_r=int(params.get("inpts_r", params.get("nip", 2))),
-                inpts_s=int(params.get("inpts_s", params.get("nip", 2))),
-                inpts_t=int(params.get("inpts_t", params.get("nip", 2))),
-                iint=int(params.get("iint", params.get("iplas", 1))),
-                dn=float(params.get("dn", 0.0)),
-                qa=float(params.get("qa", 1.1)),
-                qb=float(params.get("qb", 0.05)),
-                vx=float(params.get("vx", 1.0)),
-                vy=float(params.get("vy", 0.0)),
-                vz=float(params.get("vz", 0.0)),
-                skew_id=int(params.get("skew_id", 0)),
-                iorth=int(params.get("iorth", 0)),
-                ipos=int(params.get("ipos", 0)),
-                ashear=float(params.get("ashear", 0.833333)),
-                layers=ly_objs,
-                deltat_min=float(params.get("deltat_min", 0.0)),
-                title=title,
-            )
-        elif ptype == 6:
-            from ..model.entities import PropType6
-            model.prop_sol_orths[block.user_id] = PropType6(
-                id=block.user_id,
-                isolid=int(params.get("isolid", 14)),
-                ismstr=int(params.get("ismstr", 0)),
-                icpre=int(params.get("icpre", 0)),
-                itetra10=int(params.get("itetra10", 0)),
-                inpts_r=int(params.get("inpts_r", 1)),
-                inpts_s=int(params.get("inpts_s", 1)),
-                inpts_t=int(params.get("inpts_t", 1)),
-                itetra4=int(params.get("itetra4", 0)),
-                iframe=int(params.get("iframe", 0)),
-                dn=float(params.get("dn", 0.0)),
-                qa=float(params.get("qa", 1.1)),
-                qb=float(params.get("qb", 0.05)),
-                h=float(params.get("h", 0.1)),
-                vx=float(params.get("vx", 0.0)),
-                vy=float(params.get("vy", 0.0)),
-                vz=float(params.get("vz", 0.0)),
-                skew_id=int(params.get("skew_id", 0)),
-                refplane=int(params.get("ip", 0)),
-                orthtrop=int(params.get("iorth", 0)),
-                mat_beta=float(params.get("phi", 0.0)),
-                px=float(params.get("px", 0.0)),
-                py=float(params.get("py", 0.0)),
-                pz=float(params.get("pz", 0.0)),
-                deltat_min=float(params.get("deltat_min", 0.0)),
-                vdef_min=float(params.get("vdef_min", 0.0)),
-                vdef_max=float(params.get("vdef_max", 0.0)),
-                asp_max=float(params.get("asp_max", 0.0)),
-                col_min=float(params.get("col_min", 0.0)),
-                ndir=int(params.get("ndir", 0)),
-                sphpart_id=int(params.get("sphpart_id", 0)),
-                istrain=int(params.get("istrain", 0)),
-                ihkt=int(params.get("ihkt", 0)),
-                title=title,
-            )
-        elif ptype == 14:
-            from ..model.entities import PropType14
-            model.prop_type14s[block.user_id] = PropType14(
-                id=block.user_id, isolid=int(params.get("isolid", 14)),
-                ismstr=int(params.get("ismstr", 0)),
-                icpre=int(params.get("icpre", 0)),
-                inpts_r=int(params.get("inpts_r", 1)),
-                inpts_s=int(params.get("inpts_s", 1)),
-                inpts_t=int(params.get("inpts_t", 1)),
-                i_rot=int(params.get("i_rot", 0)),
-                iframe=int(params.get("iframe", 0)),
-                dn=float(params.get("dn", 0.0)),
-                qa=float(params.get("qa", 1.1)),
-                qb=float(params.get("qb", 0.05)),
-                h=float(params.get("h", 0.1)),
-                deltat_min=float(params.get("deltat_min", 0.0)),
-                istrain=int(params.get("istrain", 0)),
-                qa_l=float(params.get("qa_l", 0.0)),
-                qb_l=float(params.get("qb_l", 0.0)),
-                h_l=float(params.get("h_l", 0.0)),
-                iplas=int(params.get("iplas", 0)),
-                icstr=int(params.get("icstr", 0)),
-                title=title,
-            )
-        elif ptype in (8, 13):
-            from ..model.entities import PropType8
-            dofs = {}
-            for i, name in enumerate(["tx", "ty", "tz", "rx", "ry", "rz"], 1):
-                dofs[name] = {
-                    "stiff": float(params.get(f"k{i}", params.get(f"stiff{i}", 0.0))),
-                    "damp": float(params.get(f"c{i}", params.get(f"damp{i}", 0.0))),
-                    "a": float(params.get(f"a{i}", 0.0)),
-                    "b": float(params.get(f"b{i}", 0.0)),
-                    "d": float(params.get(f"d{i}", 0.0)),
-                    "fun_a": int(params.get(f"fun_a{i}", 0)),
-                    "hflag": int(params.get(f"hflag{i}", 0)),
-                    "fun_b": int(params.get(f"fun_b{i}", 0)),
-                    "fun_c": int(params.get(f"fun_c{i}", 0)),
-                    "min_rup": float(params.get(f"min_rup{i}", 0.0)),
-                    "max_rup": float(params.get(f"max_rup{i}", 0.0)),
-                }
-            model.prop_type8s[block.user_id] = PropType8(
-                id=block.user_id, mass=float(params.get("mass", 0.0)),
-                inertia=float(params.get("inertia", 0.0)),
-                skew_id=int(params.get("skew_id", 0)),
-                sensor_id=int(params.get("sensor_id", params.get("sens_id", 0))),
-                isflag=int(params.get("isflag", 0)),
-                ifail=int(params.get("ifail", 0)),
-                iequil=int(params.get("iequil", 0)),
-                dofs=dofs,
-                title=title,
-            )
+    model.properties[block.user_id] = Property(
+        id=block.user_id, type=ptype, title=title, params=params)
+    if ptype == 5:
+        from ..model.entities import PropRivet
+        model.prop_rivets[block.user_id] = PropRivet(
+            id=block.user_id, title=title,
+            mass=params.get("mass", 0.0),
+            stiffness=params.get("stiffness", params.get("fn", 0.0)),
+            fn_fail=params.get("fn_fail", params.get("fn", 0.0)),
+            ft_fail=params.get("ft_fail", params.get("ft", 0.0)),
+        )
+    elif ptype == 28:
+        from ..model.entities import PropXelem
+        model.prop_xelems[block.user_id] = PropXelem(
+            id=block.user_id, title=title,
+            itip=int(params.get("itip", params.get("fun_k", 0))),
+            isurf=int(params.get("isurf", params.get("fun_c", 0))),
+            alpha=params.get("alpha", params.get("mass", 0.0)),
+        )
+    elif ptype == 20:
+        from ..model.entities import PropType20
+        p20 = PropType20(
+            id=block.user_id, isolid=int(params.get("itshell", params.get("isolid", 15))),
+            ismstr=int(params.get("ismstr", 0)),
+            icpre=int(params.get("icpre", params.get("idrill", 0))),
+            icstr=int(params.get("icstr", params.get("istrain", 0))),
+            inpts_r=int(params.get("inpts_r", params.get("nip", 2))),
+            inpts_s=int(params.get("inpts_s", params.get("nip", 2))),
+            inpts_t=int(params.get("inpts_t", params.get("nip", 2))),
+            iint=int(params.get("iint", params.get("iplas", 1))),
+            dn=float(params.get("dn", 0.0)),
+            qa=float(params.get("qa", 1.1)),
+            qb=float(params.get("qb", 0.05)),
+            h=float(params.get("h", 0.1)),
+            deltat_min=float(params.get("deltat_min", 0.0)),
+            nbp=int(params.get("nbp", 0)),
+            title=title,
+        )
+        model.prop_tshells[block.user_id] = p20
+        model.prop_type20s[block.user_id] = p20
+        model.props_type20[block.user_id] = p20
+    elif ptype == 21:
+        from ..model.entities import PropType21
+        p21 = PropType21(
+            id=block.user_id, isolid=int(params.get("itshell", 15)),
+            ismstr=int(params.get("ismstr", 0)),
+            icstr=int(params.get("icstr", params.get("istrain", 0))),
+            inpts_r=int(params.get("inpts_r", params.get("nip", 2))),
+            inpts_s=int(params.get("inpts_s", params.get("nip", 2))),
+            inpts_t=int(params.get("inpts_t", params.get("nip", 2))),
+            iint=int(params.get("iint", params.get("iplas", 1))),
+            dn=float(params.get("dn", 0.0)),
+            qa=float(params.get("qa", 1.1)),
+            qb=float(params.get("qb", 0.05)),
+            vx=float(params.get("vx", 1.0)),
+            vy=float(params.get("vy", 0.0)),
+            vz=float(params.get("vz", 0.0)),
+            skew_id=int(params.get("skew_id", 0)),
+            iorth=int(params.get("iorth", 0)),
+            phi=float(params.get("phi", 0.0)),
+            deltat_min=float(params.get("deltat_min", 0.0)),
+            title=title,
+        )
+        model.prop_tsh_orths[block.user_id] = p21
+        model.props_type21[block.user_id] = p21
+    elif ptype == 22:
+        from ..model.entities import PropType22, PropType22Layer
+        ly_objs = []
+        for ly in params.get("layers", []):
+            ly_objs.append(PropType22Layer(
+                phi=float(ly.get("phi", 0.0)),
+                thick=float(ly.get("thick", 0.0)),
+                zi=float(ly.get("zi", 0.0)),
+                mat_id=int(ly.get("mat_id", 0)),
+            ))
+        p22 = PropType22(
+            id=block.user_id, isolid=int(params.get("itshell", 15)),
+            ismstr=int(params.get("ismstr", 0)),
+            icstr=int(params.get("icstr", params.get("istrain", 0))),
+            inpts_r=int(params.get("inpts_r", params.get("nip", 2))),
+            inpts_s=int(params.get("inpts_s", params.get("nip", 2))),
+            inpts_t=int(params.get("inpts_t", params.get("nip", 2))),
+            iint=int(params.get("iint", params.get("iplas", 1))),
+            dn=float(params.get("dn", 0.0)),
+            qa=float(params.get("qa", 1.1)),
+            qb=float(params.get("qb", 0.05)),
+            vx=float(params.get("vx", 1.0)),
+            vy=float(params.get("vy", 0.0)),
+            vz=float(params.get("vz", 0.0)),
+            skew_id=int(params.get("skew_id", 0)),
+            iorth=int(params.get("iorth", 0)),
+            ipos=int(params.get("ipos", 0)),
+            ashear=float(params.get("ashear", 0.833333)),
+            layers=ly_objs,
+            deltat_min=float(params.get("deltat_min", 0.0)),
+            title=title,
+        )
+        model.prop_tsh_comps[block.user_id] = p22
+        model.props_type22[block.user_id] = p22
+    elif ptype == 6:
+        from ..model.entities import PropType6
+        model.prop_sol_orths[block.user_id] = PropType6(
+            id=block.user_id,
+            isolid=int(params.get("isolid", 14)),
+            ismstr=int(params.get("ismstr", 0)),
+            icpre=int(params.get("icpre", 0)),
+            itetra10=int(params.get("itetra10", 0)),
+            inpts_r=int(params.get("inpts_r", 1)),
+            inpts_s=int(params.get("inpts_s", 1)),
+            inpts_t=int(params.get("inpts_t", 1)),
+            itetra4=int(params.get("itetra4", 0)),
+            iframe=int(params.get("iframe", 0)),
+            dn=float(params.get("dn", 0.0)),
+            qa=float(params.get("qa", 1.1)),
+            qb=float(params.get("qb", 0.05)),
+            h=float(params.get("h", 0.1)),
+            vx=float(params.get("vx", 0.0)),
+            vy=float(params.get("vy", 0.0)),
+            vz=float(params.get("vz", 0.0)),
+            skew_id=int(params.get("skew_id", 0)),
+            refplane=int(params.get("ip", 0)),
+            orthtrop=int(params.get("iorth", 0)),
+            mat_beta=float(params.get("phi", 0.0)),
+            px=float(params.get("px", 0.0)),
+            py=float(params.get("py", 0.0)),
+            pz=float(params.get("pz", 0.0)),
+            deltat_min=float(params.get("deltat_min", 0.0)),
+            vdef_min=float(params.get("vdef_min", 0.0)),
+            vdef_max=float(params.get("vdef_max", 0.0)),
+            asp_max=float(params.get("asp_max", 0.0)),
+            col_min=float(params.get("col_min", 0.0)),
+            ndir=int(params.get("ndir", 0)),
+            sphpart_id=int(params.get("sphpart_id", 0)),
+            istrain=int(params.get("istrain", 0)),
+            ihkt=int(params.get("ihkt", 0)),
+            title=title,
+        )
+    elif ptype == 14:
+        from ..model.entities import PropType14
+        model.prop_type14s[block.user_id] = PropType14(
+            id=block.user_id, isolid=int(params.get("isolid", 14)),
+            ismstr=int(params.get("ismstr", 0)),
+            icpre=int(params.get("icpre", 0)),
+            inpts_r=int(params.get("inpts_r", 1)),
+            inpts_s=int(params.get("inpts_s", 1)),
+            inpts_t=int(params.get("inpts_t", 1)),
+            i_rot=int(params.get("i_rot", 0)),
+            iframe=int(params.get("iframe", 0)),
+            dn=float(params.get("dn", 0.0)),
+            qa=float(params.get("qa", 1.1)),
+            qb=float(params.get("qb", 0.05)),
+            h=float(params.get("h", 0.1)),
+            deltat_min=float(params.get("deltat_min", 0.0)),
+            istrain=int(params.get("istrain", 0)),
+            qa_l=float(params.get("qa_l", 0.0)),
+            qb_l=float(params.get("qb_l", 0.0)),
+            h_l=float(params.get("h_l", 0.0)),
+            iplas=int(params.get("iplas", 0)),
+            icstr=int(params.get("icstr", 0)),
+            title=title,
+        )
+    elif ptype == 43:
+        from ..model.entities import PropType43
+        p43 = PropType43(
+            id=block.user_id, title=title,
+            ismstr=int(params.get("ismstr", 0)),
+            thick=float(params.get("thick", 0.0)),
+        )
+        model.prop_type43s[block.user_id] = p43
+        model.prop_connects[block.user_id] = p43
+    elif ptype == 34:
+        from ..model.entities import PropType34
+        qa = float(params.get("qa", params.get("alpha", 1.0)))
+        qb = float(params.get("qb", params.get("beta", 1.0)))
+        alpha1 = float(params.get("alpha1", params.get("q0", 0.0)))
+        order = int(params.get("order", params.get("gamma", 1)))
+        h0 = float(params.get("h0", params.get("h", 0.0)))
+        p34 = PropType34(
+            id=block.user_id, mass=float(params.get("mass", 0.0)),
+            h0=h0, d0=float(params.get("d0", 0.0)),
+            qa=qa, qb=qb, alpha1=alpha1, order=order,
+            h=h0, title=title
+        )
+        model.prop_type34s[block.user_id] = p34
+        model.prop_sphs[block.user_id] = p34
+        model.prop_prop_sphs[block.user_id] = p34
+    elif ptype in (8, 12, 13):
+        from ..model.entities import PropType8, PropType13
+        dofs = {}
+        for i, name in enumerate(["tx", "ty", "tz", "rx", "ry", "rz"], 1):
+            dofs[name] = {
+                "stiff": float(params.get(f"k{i}", params.get(f"stiff{i}", 0.0))),
+                "damp": float(params.get(f"c{i}", params.get(f"damp{i}", 0.0))),
+                "a": float(params.get(f"a{i}", 0.0)),
+                "b": float(params.get(f"b{i}", 0.0)),
+                "d": float(params.get(f"d{i}", 0.0)),
+                "fun_a": int(params.get(f"fun_a{i}", 0)),
+                "hflag": int(params.get(f"hflag{i}", 0)),
+                "fun_b": int(params.get(f"fun_b{i}", 0)),
+                "fun_c": int(params.get(f"fun_c{i}", 0)),
+                "min_rup": float(params.get(f"min_rup{i}", 0.0)),
+                "max_rup": float(params.get(f"max_rup{i}", 0.0)),
+            }
+        model.prop_type8s[block.user_id] = PropType8(
+            id=block.user_id, mass=float(params.get("mass", 0.0)),
+            inertia=float(params.get("inertia", 0.0)),
+            skew_id=int(params.get("skew_id", 0)),
+            sensor_id=int(params.get("sensor_id", params.get("sens_id", 0))),
+            isflag=int(params.get("isflag", 0)),
+            ifail=int(params.get("ifail", 0)),
+            iequil=int(params.get("iequil", 0)),
+            dofs=dofs,
+            title=title,
+        )
+        stiff = float(params.get("stiff", params.get("k", params.get("k1", 0.0))))
+        f_max = float(params.get("f_max", params.get("fn", params.get("fn_fail", 0.0))))
+        p13 = PropType13(id=block.user_id, title=title, stiff=stiff, f_max=f_max, params=params)
+        model.prop_spr_pulls[block.user_id] = p13
 
 
 def read_prop_rivet(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -7551,6 +7663,11 @@ def read_prop_inject1(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     model.prop_inject1s[pid] = PropInject1(
         id=pid, title=title, n_gases=n_gases, iflow=iflow, ascale_t=ascale_t, gases=gases
     )
+    from . import prop_reader
+    model.properties[pid] = prop_reader.InactiveProperty(
+        id=pid, type=0, title=title, prop_name="INJECT1",
+        params={"thick": 1.0, "area": 1.0, "vol": 1.0}
+    )
 
 
 def read_prop_inject2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -7605,6 +7722,11 @@ def read_prop_inject2(block: KeywordBlock, model: Model, log: MessageLog) -> Non
         id=pid, title=title, n_gases=n_gases, iflow=iflow,
         fun_id_m=fun_id_m, fun_id_t=fun_id_t, fscale_m=fscale_m,
         fscale_t=fscale_t, ascale_t=ascale_t, gases=gases
+    )
+    from . import prop_reader
+    model.properties[pid] = prop_reader.InactiveProperty(
+        id=pid, type=0, title=title, prop_name="INJECT2",
+        params={"thick": 1.0, "area": 1.0, "vol": 1.0}
     )
 
 
@@ -17282,11 +17404,11 @@ def read_rlink(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_cyl_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/CYL_JOINT/id`` (M102): cylindrical joint definition.
+    """``/CYL_JOINT/id`` (M102, M209): cylindrical joint definition.
 
     Fortran origin: ``starter/source/constraints/general/cyl_joint/hm_read_cyljoint.F``.
     Card 1: TITLE (%-100s)
-    Card 2: node_id1, node_id2, grnod_id (%10d%10d%10d)
+    Card 2: node_id1, node_id2, grnod_id (%10d%10d%10d) or node1, node2, axis_dir, skew_id, tol
     """
     from ..model.entities import CylJoint
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -17294,18 +17416,28 @@ def read_cyl_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.cyl_joints[block.user_id] = CylJoint(id=block.user_id, title=title)
         return
     c = cards[0]
+    axis_dir = 1
+    skew_id = 0
+    tol = 1e-6
     if block.fixed:
         f = c.cut("CYL_JOINT_1")
         n1 = _ival(f[0]) if len(f) > 0 else 0
         n2 = _ival(f[1]) if len(f) > 1 else 0
         gr = _ival(f[2]) if len(f) > 2 else 0
+        axis_dir = _ival(f[2], 1) if len(f) > 2 else 1
+        skew_id = _ival(f[3], 0) if len(f) > 3 else 0
+        tol = _fval(f[4], 1e-6) if len(f) > 4 else 1e-6
     else:
         toks = c.tokens()
         n1 = int(float(toks[0])) if len(toks) > 0 else 0
         n2 = int(float(toks[1])) if len(toks) > 1 else 0
         gr = int(float(toks[2])) if len(toks) > 2 else 0
+        axis_dir = int(float(toks[2])) if len(toks) > 2 else 1
+        skew_id = int(float(toks[3])) if len(toks) > 3 else 0
+        tol = float(toks[4]) if len(toks) > 4 else 1e-6
     model.cyl_joints[block.user_id] = CylJoint(
-        id=block.user_id, title=title, node_id1=n1, node_id2=n2, grnod_id=gr
+        id=block.user_id, title=title, node_id1=n1, node_id2=n2, grnod_id=gr,
+        node1=n1, node2=n2, axis_dir=axis_dir, skew_id=skew_id, tol=tol
     )
 
 
@@ -37979,7 +38111,8 @@ def read_prop_type19(block: KeywordBlock, model: Model, log: MessageLog) -> None
     model.props_type19[prop_id] = prop
     model.properties[prop_id] = Property(
         id=prop_id, type=19, title=title,
-        params={"mass": mass, "stiffness_k": k, "damping_c": c, "fcut": fcut}
+        params={"mass": mass, "stiffness_k": k, "damping_c": c, "fcut": fcut,
+                "k_tors": k, "c_tors": c, "k": k, "c": c}
     )
 
 
@@ -38191,7 +38324,7 @@ def read_prop_type22(block: KeywordBlock, model: Model, log: MessageLog) -> None
 
 def read_prop_type47(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/PROP/TYPE47`` or ``/PROP/SPR_PULL/prop_ID`` (M207): Tension-only pulling spring property."""
-    from ..model.entities import PropSpringPull, Property
+    from ..model.entities import PropSpringPull, PropType13, Property
     prop_id = block.user_id or 1
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
@@ -38205,15 +38338,24 @@ def read_prop_type47(block: KeywordBlock, model: Model, log: MessageLog) -> None
             fmax = _fval(f[3], 0.0) if len(f) > 3 else 0.0
         else:
             t = valid_cards[0].tokens()
-            mass = float(t[0]) if len(t) > 0 else 0.0
-            k = float(t[1]) if len(t) > 1 else 0.0
-            c = float(t[2]) if len(t) > 2 else 0.0
-            fmax = float(t[3]) if len(t) > 3 else 0.0
+            if len(t) == 2:
+                k = float(t[0])
+                fmax = float(t[1])
+            else:
+                mass = float(t[0]) if len(t) > 0 else 0.0
+                k = float(t[1]) if len(t) > 1 else 0.0
+                c = float(t[2]) if len(t) > 2 else 0.0
+                fmax = float(t[3]) if len(t) > 3 else 0.0
+    stiff = k if (k != 0.0 and fmax != 0.0) else (mass if mass != 0.0 else k)
+    f_max = fmax if fmax != 0.0 else (k if (mass != 0.0 and k != 0.0) else fmax)
     prop = PropSpringPull(id=prop_id, title=title, mass=mass, stiffness_k=k, damping_c=c, fmax=fmax, fcut=fcut)
+    p13 = PropType13(id=prop_id, title=title, stiff=stiff, f_max=f_max, params={})
     model.props_type47[prop_id] = prop
+    model.props_spr_pull[prop_id] = prop
+    model.prop_spr_pulls[prop_id] = p13
     model.properties[prop_id] = Property(
         id=prop_id, type=47, title=title,
-        params={"mass": mass, "stiffness_k": k, "damping_c": c, "fmax": fmax, "fcut": fcut}
+        params={"mass": mass, "stiffness_k": k, "damping_c": c, "fmax": fmax, "fcut": fcut, "stiff": stiff, "f_max": f_max}
     )
 
 
@@ -41571,6 +41713,9 @@ def read_fail_voids(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 def read_fail_hc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/HC/mat_ID`` or ``/FAIL/HOSFORD_COULOMB/mat_ID`` (M215): Hosford-Coulomb fracture initiation model."""
+    if len(block.parts) > 2 and block.parts[2].upper() in ("DSSE", "FAIL_HC_DSSE"):
+        read_fail(block, model, log)
+        return
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/FAIL/HC/{block.user_id}: missing data card", block.source)
@@ -46078,7 +46223,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PRESSURE": read_load_pressure,
     "MADYMO": read_madymo,
     "ADGLOB": read_admesh_global,
-    "ADMESH": read_admesh_global,
+    "ADMESH": read_admesh,
     "STAMPING": read_stamping,
     "ACCEL": read_accel,
     "SUBSET": read_subset,
@@ -46789,7 +46934,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PROP_TYPE14": read_prop,
     "PROP_SOLID": read_prop,
     "PROP_SOL_GENE": read_prop,
-    "SOLID": read_prop,
+    "SOLID": read_brick,
     "SOL_GENE": read_prop,
     "PROP_P14_SOLID": read_prop,
     "PROP_TYPE8": read_prop,
