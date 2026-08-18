@@ -13343,6 +13343,40 @@ class SensorSpringDefl:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailTvergaard:
+    """``/FAIL/TVERGAARD/mat_ID`` (M236): Tvergaard-Needleman void shear coalescence failure model."""
+    mat_id: int = 0
+    title: str = ""
+    q1: float = 1.5          # void interaction parameter 1
+    q2: float = 1.0          # void interaction parameter 2
+    q3: float = 2.25         # void interaction parameter 3 (typically q1^2)
+    kw: float = 0.0          # shear coalescence coefficient
+    f_c: float = 0.15        # critical void volume fraction
+    f_f: float = 0.25        # void volume fraction at failure
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngRotc:
+    """``/ROTC`` or ``/ENG/ROTC`` (M236): Engine rotational displacement output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_rotc: float = 0.0     # time frequency for rotational displacement output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSpringRot:
+    """``/SENSOR/SPRING_ROT`` or ``/SENSOR/ROT_SPRING`` (M236): Spring element rotation/twist threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    rot_max: float = 1e30    # maximum rotation/twist angle threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

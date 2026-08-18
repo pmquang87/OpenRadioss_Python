@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M235)
+## What is implemented (M1 → M236)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -241,6 +241,7 @@ real history is 41 milestones. One line each:
 | M233 | Tabulated 3D Failure Criterion, Engine Velocity Output Directive, Gimbal Axis/Universal Joint Aliases, and Truss Force Sensor Suite: /FAIL/TAB3 (/FAIL/TABULATED3, /FAIL/TAB_3D) 3D tabulated triaxiality-dependent failure model, /VELOCITY (/ENG/VELOCITY, /ENG/VEL) engine nodal velocity vector history tracking directive, /LAGMUL/GIMBAL_AXIS (/GIMBAL_AXIS) and /LAGMUL/UNIVERSAL_GIMBAL (/UNIVERSAL_GIMBAL) kinematic joint aliases, and /SENSOR/TRUSS_FORCE (/SENSOR/FORCE_TRUSS) truss element axial force threshold sensor |
 | M234 | Lemaitre-Chaboche Failure Criterion, Engine Acceleration Output Directive, Universal/Cardan Axis Joint Aliases, and Spring Energy Sensor Suite: /FAIL/CHABOCHE (/FAIL/LEMAITRE_CHABOCHE, /FAIL/CHABOCHE_DAMAGE) Lemaitre-Chaboche continuum ductile damage failure model, /ACCEL (/ENG/ACCEL, /ENG/ACCELERATION) engine nodal acceleration vector history tracking directive, /LAGMUL/UNIVERSAL_AXIS (/UNIVERSAL_AXIS) and /LAGMUL/CARDAN_AXIS (/CARDAN_AXIS) kinematic joint aliases, and /SENSOR/SPRING_ENERGY (/SENSOR/ENERGY_SPRING, /SENSOR/SPRING_ENER) spring element internal energy threshold sensor |
 | M235 | Gurson Porous Metal Failure Criterion, Engine Displacement Output Directive, Distance/Rod Joint Aliases, and Spring Deflection Sensor Suite: /FAIL/GURSON (/FAIL/GURSON_MODEL, /FAIL/GURSON_DAMAGE) Gurson porous metal failure model, /DISP (/ENG/DISP, /ENG/DISPLACEMENT) engine nodal displacement vector history tracking directive, /LAGMUL/DISTANCE_JOINT (/DISTANCE_JOINT, /LAGMUL/ROD, /ROD) kinematic joint aliases, and /SENSOR/SPRING_DEFL (/SENSOR/SPRING_DEF, /SENSOR/DEF_SPRING, /SENSOR/DEFL_SPRING) spring element deflection threshold sensor |
+| M236 | Tvergaard-Needleman Failure Criterion, Engine Rotational Displacement Output Directive, CV/Homokinetic Axis Joint Aliases, and Spring Rotation Sensor Suite: /FAIL/TVERGAARD (/FAIL/TVERGAARD_NEEDLEMAN, /FAIL/TN) Tvergaard-Needleman void shear coalescence failure model, /ROTC (/ENG/ROTC, /ENG/ROTATION, /ENG/ROTATIONAL_DISP) engine nodal rotational displacement history tracking directive, /LAGMUL/CV_AXIS (/CV_AXIS) and /LAGMUL/HOMOKINETIC_AXIS (/HOMOKINETIC_AXIS) kinematic joint aliases, and /SENSOR/SPRING_ROT (/SENSOR/SPRING_ROTATION, /SENSOR/ROT_SPRING, /SENSOR/ROTATION_SPRING) spring element rotation/twist threshold sensor |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read

@@ -2293,6 +2293,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("GURSON", "GURSON_MODEL", "GURSON_DAMAGE"):
         read_fail_gurson(block, model, log)
         return
+    if kind in ("TVERGAARD", "TVERGAARD_NEEDLEMAN", "TN"):
+        read_fail_tvergaard(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11755,6 +11758,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("SPRING_DEFL", "SPRING_DEF", "DEF_SPRING", "DEFL_SPRING"):
         read_sensor_spring_defl(block, model, log)
+        return
+    if kind in ("SPRING_ROT", "SPRING_ROTATION", "ROT_SPRING", "ROTATION_SPRING"):
+        read_sensor_spring_rot(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -42226,6 +42232,46 @@ def read_fail_gurson(block: KeywordBlock, model: Model, log: MessageLog) -> None
     )
 
 
+def read_fail_tvergaard(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/TVERGAARD/mat_ID`` (M236): Tvergaard-Needleman void shear coalescence failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/TVERGAARD/{block.user_id}: missing data card", block.source)
+        return
+
+    q1, q2, q3 = 1.5, 1.0, 2.25
+    kw, f_c, f_f, ifail_sh = 0.0, 0.15, 0.25, 1
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_TVERGAARD_1")
+        q1 = _fval(f1[0], 1.5) if len(f1) > 0 else 1.5
+        q2 = _fval(f1[1], 1.0) if len(f1) > 1 else 1.0
+        q3 = _fval(f1[2], 2.25) if len(f1) > 2 else 2.25
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_TVERGAARD_2")
+            kw = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            f_c = _fval(f2[1], 0.15) if len(f2) > 1 else 0.15
+            f_f = _fval(f2[2], 0.25) if len(f2) > 2 else 0.25
+            ifail_sh = _ival(f2[3], 1) if len(f2) > 3 else 1
+    else:
+        toks1 = cards[0].tokens()
+        q1 = float(toks1[0]) if len(toks1) > 0 else 1.5
+        q2 = float(toks1[1]) if len(toks1) > 1 else 1.0
+        q3 = float(toks1[2]) if len(toks1) > 2 else 2.25
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            kw = float(toks2[0]) if len(toks2) > 0 else 0.0
+            f_c = float(toks2[1]) if len(toks2) > 1 else 0.15
+            f_f = float(toks2[2]) if len(toks2) > 2 else 0.25
+            ifail_sh = int(float(toks2[3])) if len(toks2) > 3 else 1
+
+    from ..model.entities import FailTvergaard
+    model.fail_tvergaards[block.user_id] = FailTvergaard(
+        mat_id=block.user_id, title=title, q1=q1, q2=q2, q3=q3,
+        kw=kw, f_c=f_c, f_f=f_f, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -44581,6 +44627,61 @@ def read_sensor_spring_defl(block: KeywordBlock, model: Model, log: MessageLog) 
     ))
 
 
+def read_eng_rotc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ROTC`` or ``/ENG/ROTC`` (M236): Engine rotational displacement output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ROTC/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_rotc, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_ROTC_1")
+        dt_rotc = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_rotc = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngRotc
+    r_id = block.user_id or (len(model.eng_rotcs) + 1)
+    model.eng_rotcs[r_id] = EngRotc(
+        id=r_id, title=title, dt_rotc=dt_rotc, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_rot(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_ROT`` or ``/SENSOR/ROT_SPRING`` (M236): Spring element rotation/twist threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_ROT/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, rot_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_ROT_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        rot_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        rot_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringRot, Sensor
+    ssr = SensorSpringRot(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        rot_max=rot_max, t_delay=t_delay
+    )
+    model.sensor_spring_rots[ssr.id] = ssr
+    model.sensors.append(Sensor(
+        id=ssr.id, kind="SPRING_ROT", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -46917,6 +47018,22 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_DEF": read_sensor_spring_defl,
     "SENSOR_DEF_SPRING": read_sensor_spring_defl,
     "SENSOR_DEFL_SPRING": read_sensor_spring_defl,
+    # --- M236: Tvergaard-Needleman Failure Criterion, Engine Rotational Displacement Output Directive, CV/Homokinetic Axis Joint Aliases, and Spring Rotation Sensor Suite ---
+    "FAIL_TVERGAARD": read_fail_tvergaard,
+    "FAIL_TVERGAARD_NEEDLEMAN": read_fail_tvergaard,
+    "FAIL_TN": read_fail_tvergaard,
+    "ROTC": read_eng_rotc,
+    "ENG_ROTC": read_eng_rotc,
+    "ENG_ROTATION": read_eng_rotc,
+    "ENG_ROTATIONAL_DISP": read_eng_rotc,
+    "LAGMUL_CV_AXIS": read_cv_joint,
+    "CV_AXIS": read_cv_joint,
+    "LAGMUL_HOMOKINETIC_AXIS": read_cv_joint,
+    "HOMOKINETIC_AXIS": read_cv_joint,
+    "SENSOR_SPRING_ROT": read_sensor_spring_rot,
+    "SENSOR_SPRING_ROTATION": read_sensor_spring_rot,
+    "SENSOR_ROT_SPRING": read_sensor_spring_rot,
+    "SENSOR_ROTATION_SPRING": read_sensor_spring_rot,
 }
 
 
@@ -46925,7 +47042,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL", "DISP", "ROTC"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,

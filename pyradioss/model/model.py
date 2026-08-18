@@ -1620,6 +1620,12 @@ class Model:
         self.eng_disps: Dict[int, Any] = {}                          # /DISP, /ENG/DISP (M235)
         self.sensor_spring_defls: Dict[int, Any] = {}                # /SENSOR/SPRING_DEFL (M235)
 
+        # M236 Entities
+        self.fail_tvergaards: Dict[int, Any] = {}                    # /FAIL/TVERGAARD (M236)
+        self.eng_rotcs: Dict[int, Any] = {}                          # /ROTC, /ENG/ROTC (M236)
+        self.sensor_spring_rots: Dict[int, Any] = {}                 # /SENSOR/SPRING_ROT (M236)
+
+
 
 
 
