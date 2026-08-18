@@ -11699,7 +11699,7 @@ WaveShaperDfs = DfsWavSha
 
 @dataclass
 class HeatConvec:
-    """``/HEAT/CONVEC/id`` or ``/CONVEC/id`` (M202): Thermal surface convection boundary condition."""
+    """``/HEAT/CONVEC/id``, ``/HEAT/CONVECTION/id`` or ``/CONVEC/id`` (M202): Thermal surface convection boundary condition."""
     id: int = 0
     title: str = ""
     surf_id: int = 0
@@ -11714,7 +11714,7 @@ class HeatConvec:
 
 @dataclass
 class HeatRadiation:
-    """``/HEAT/RADIATION/id`` or ``/RADIATION/id`` (M202): Thermal surface radiation boundary condition."""
+    """``/HEAT/RADIATION/id``, ``/HEAT/RAD/id`` or ``/RADIATION/id`` (M202): Thermal surface radiation boundary condition."""
     id: int = 0
     title: str = ""
     surf_id: int = 0
@@ -11724,7 +11724,14 @@ class HeatRadiation:
     fscale: float = 1.0
     tstart: float = 0.0
     tstop: float = 1.0e30
+    emissivity: float = 0.0
     emiss: float = 0.0
+
+    def __post_init__(self):
+        if self.emissivity != 0.0 and self.emiss == 0.0:
+            self.emiss = self.emissivity
+        elif self.emiss != 0.0 and self.emissivity == 0.0:
+            self.emissivity = self.emiss
 
 
 @dataclass
@@ -11815,35 +11822,6 @@ class HeatFlux:
     tstop: float = 1.0e30
     q: float = 0.0
 
-
-@dataclass
-class HeatConvec:
-    """``/HEAT/CONVEC/id``, ``/HEAT/CONVECTION/id`` or ``/CONVEC/id`` (M202): Thermal surface convection."""
-    id: int = 0
-    title: str = ""
-    surf_id: int = 0
-    funct_id: int = 0
-    sensor_id: int = 0
-    ascale: float = 1.0
-    fscale: float = 1.0
-    tstart: float = 0.0
-    tstop: float = 1.0e30
-    h: float = 0.0
-
-
-@dataclass
-class HeatRadiation:
-    """``/HEAT/RADIATION/id``, ``/HEAT/RAD/id`` or ``/RADIATION/id`` (M202): Thermal surface radiation."""
-    id: int = 0
-    title: str = ""
-    surf_id: int = 0
-    funct_id: int = 0
-    sensor_id: int = 0
-    ascale: float = 1.0
-    fscale: float = 1.0
-    tstart: float = 0.0
-    tstop: float = 1.0e30
-    emissivity: float = 0.0
 
 
 @dataclass

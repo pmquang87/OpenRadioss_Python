@@ -1738,25 +1738,35 @@ def read_flux(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             surf_id = _ival(f1[0]) if len(f1) > 0 else 0
             funct_id = _ival(f1[1]) if len(f1) > 1 else 0
             sensor_id = _ival(f1[2]) if len(f1) > 2 else 0
-            ascale = _fval(f1[3], 1.0) if len(f1) > 3 else 1.0
-            fscale = _fval(f1[4], 1.0) if len(f1) > 4 else 1.0
+            if len(f1) > 3 and f1[3].strip():
+                ascale = _fval(f1[3], 1.0)
+            if len(f1) > 4 and f1[4].strip():
+                fscale = _fval(f1[4], 1.0)
             if len(cards) > 1 and not cards[1].is_blank:
                 f2 = cards[1].cut("HEAT_FLUX_2") if "HEAT_FLUX_2" in CARD_LAYOUTS else cards[1].cut("FLUX_2") if "FLUX_2" in CARD_LAYOUTS else _fixed_vals(cards[1], [20, 20, 20])
-                tstart = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
-                tstop = _fval(f2[1], 1.0e30) if len(f2) > 1 else 1.0e30
-                q = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+                if len(f2) >= 3:
+                    tstart = _fval(f2[0], 0.0) if len(f2) > 0 and f2[0].strip() else 0.0
+                    tstop = _fval(f2[1], 1.0e30) if len(f2) > 1 and f2[1].strip() else 1.0e30
+                    q = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+                elif len(f2) == 1:
+                    q = _fval(f2[0], 0.0) if f2[0].strip() else 0.0
         else:
             t1 = cards[0].tokens()
             surf_id = int(float(t1[0])) if len(t1) > 0 else 0
             funct_id = int(float(t1[1])) if len(t1) > 1 else 0
             sensor_id = int(float(t1[2])) if len(t1) > 2 else 0
-            ascale = float(t1[3]) if len(t1) > 3 else 1.0
-            fscale = float(t1[4]) if len(t1) > 4 else 1.0
+            if len(t1) > 3:
+                ascale = float(t1[3])
+            if len(t1) > 4:
+                fscale = float(t1[4])
             if len(cards) > 1 and not cards[1].is_blank:
                 t2 = cards[1].tokens()
-                tstart = float(t2[0]) if len(t2) > 0 else 0.0
-                tstop = float(t2[1]) if len(t2) > 1 else 1.0e30
-                q = float(t2[2]) if len(t2) > 2 else 0.0
+                if len(t2) >= 3:
+                    tstart = float(t2[0])
+                    tstop = float(t2[1])
+                    q = float(t2[2])
+                elif len(t2) == 1:
+                    q = float(t2[0])
 
     from ..model.entities import HeatFlux
     hf = HeatFlux(
@@ -1780,29 +1790,51 @@ def read_convec(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     h = 0.0
     if cards:
         if block.fixed:
-            f1 = cards[0].cut("CONVEC_1") if "CONVEC_1" in CARD_LAYOUTS else _fixed_vals(cards[0], [10, 10, 10, 20, 20])
+            f1 = cards[0].cut("HEAT_CONVEC_1") if "HEAT_CONVEC_1" in CARD_LAYOUTS else cards[0].cut("CONVEC_1") if "CONVEC_1" in CARD_LAYOUTS else _fixed_vals(cards[0], [10, 10, 10, 20, 20])
             surf_id = _ival(f1[0]) if len(f1) > 0 else 0
             funct_id = _ival(f1[1]) if len(f1) > 1 else 0
             sensor_id = _ival(f1[2]) if len(f1) > 2 else 0
+            if len(f1) > 3 and f1[3].strip():
+                ascale = _fval(f1[3], 1.0)
+            if len(f1) > 4 and f1[4].strip():
+                fscale = _fval(f1[4], 1.0)
             if len(cards) > 1 and not cards[1].is_blank:
-                f2 = cards[1].cut("CONVEC_2") if "CONVEC_2" in CARD_LAYOUTS else _fixed_vals(cards[1], [20, 20, 20, 20, 20])
-                ascale = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
-                fscale = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
-                tstart = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
-                tstop = _fval(f2[3], 1.0e30) if len(f2) > 3 else 1.0e30
-                h = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+                f2 = cards[1].cut("HEAT_CONVEC_2") if "HEAT_CONVEC_2" in CARD_LAYOUTS else cards[1].cut("CONVEC_2") if "CONVEC_2" in CARD_LAYOUTS else _fixed_vals(cards[1], [20, 20, 20, 20, 20])
+                if len(f2) >= 5:
+                    ascale = _fval(f2[0], 1.0)
+                    fscale = _fval(f2[1], 1.0)
+                    tstart = _fval(f2[2], 0.0)
+                    tstop = _fval(f2[3], 1.0e30)
+                    h = _fval(f2[4], 0.0)
+                elif len(f2) == 3:
+                    tstart = _fval(f2[0], 0.0)
+                    tstop = _fval(f2[1], 1.0e30)
+                    h = _fval(f2[2], 0.0)
+                elif len(f2) == 1:
+                    h = _fval(f2[0], 0.0)
         else:
             t1 = cards[0].tokens()
             surf_id = int(float(t1[0])) if len(t1) > 0 else 0
             funct_id = int(float(t1[1])) if len(t1) > 1 else 0
             sensor_id = int(float(t1[2])) if len(t1) > 2 else 0
+            if len(t1) > 3:
+                ascale = float(t1[3])
+            if len(t1) > 4:
+                fscale = float(t1[4])
             if len(cards) > 1 and not cards[1].is_blank:
                 t2 = cards[1].tokens()
-                ascale = float(t2[0]) if len(t2) > 0 else 1.0
-                fscale = float(t2[1]) if len(t2) > 1 else 1.0
-                tstart = float(t2[2]) if len(t2) > 2 else 0.0
-                tstop = float(t2[3]) if len(t2) > 3 else 1.0e30
-                h = float(t2[4]) if len(t2) > 4 else 0.0
+                if len(t2) >= 5:
+                    ascale = float(t2[0])
+                    fscale = float(t2[1])
+                    tstart = float(t2[2])
+                    tstop = float(t2[3])
+                    h = float(t2[4])
+                elif len(t2) == 3:
+                    tstart = float(t2[0])
+                    tstop = float(t2[1])
+                    h = float(t2[2])
+                elif len(t2) == 1:
+                    h = float(t2[0])
 
     from ..model.entities import HeatConvec
     hc = HeatConvec(
@@ -1826,34 +1858,56 @@ def read_radiation(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     emiss = 0.0
     if cards:
         if block.fixed:
-            f1 = cards[0].cut("RADIATION_1") if "RADIATION_1" in CARD_LAYOUTS else _fixed_vals(cards[0], [10, 10, 10, 20, 20])
+            f1 = cards[0].cut("HEAT_RADIATION_1") if "HEAT_RADIATION_1" in CARD_LAYOUTS else cards[0].cut("RADIATION_1") if "RADIATION_1" in CARD_LAYOUTS else _fixed_vals(cards[0], [10, 10, 10, 20, 20])
             surf_id = _ival(f1[0]) if len(f1) > 0 else 0
             funct_id = _ival(f1[1]) if len(f1) > 1 else 0
             sensor_id = _ival(f1[2]) if len(f1) > 2 else 0
+            if len(f1) > 3 and f1[3].strip():
+                ascale = _fval(f1[3], 1.0)
+            if len(f1) > 4 and f1[4].strip():
+                fscale = _fval(f1[4], 1.0)
             if len(cards) > 1 and not cards[1].is_blank:
-                f2 = cards[1].cut("RADIATION_2") if "RADIATION_2" in CARD_LAYOUTS else _fixed_vals(cards[1], [20, 20, 20, 20, 20])
-                ascale = _fval(f2[0], 1.0) if len(f2) > 0 else 1.0
-                fscale = _fval(f2[1], 1.0) if len(f2) > 1 else 1.0
-                tstart = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
-                tstop = _fval(f2[3], 1.0e30) if len(f2) > 3 else 1.0e30
-                emiss = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+                f2 = cards[1].cut("HEAT_RADIATION_2") if "HEAT_RADIATION_2" in CARD_LAYOUTS else cards[1].cut("RADIATION_2") if "RADIATION_2" in CARD_LAYOUTS else _fixed_vals(cards[1], [20, 20, 20, 20, 20])
+                if len(f2) >= 5:
+                    ascale = _fval(f2[0], 1.0)
+                    fscale = _fval(f2[1], 1.0)
+                    tstart = _fval(f2[2], 0.0)
+                    tstop = _fval(f2[3], 1.0e30)
+                    emiss = _fval(f2[4], 0.0)
+                elif len(f2) == 3:
+                    tstart = _fval(f2[0], 0.0)
+                    tstop = _fval(f2[1], 1.0e30)
+                    emiss = _fval(f2[2], 0.0)
+                elif len(f2) == 1:
+                    emiss = _fval(f2[0], 0.0)
         else:
             t1 = cards[0].tokens()
             surf_id = int(float(t1[0])) if len(t1) > 0 else 0
             funct_id = int(float(t1[1])) if len(t1) > 1 else 0
             sensor_id = int(float(t1[2])) if len(t1) > 2 else 0
+            if len(t1) > 3:
+                ascale = float(t1[3])
+            if len(t1) > 4:
+                fscale = float(t1[4])
             if len(cards) > 1 and not cards[1].is_blank:
                 t2 = cards[1].tokens()
-                ascale = float(t2[0]) if len(t2) > 0 else 1.0
-                fscale = float(t2[1]) if len(t2) > 1 else 1.0
-                tstart = float(t2[2]) if len(t2) > 2 else 0.0
-                tstop = float(t2[3]) if len(t2) > 3 else 1.0e30
-                emiss = float(t2[4]) if len(t2) > 4 else 0.0
+                if len(t2) >= 5:
+                    ascale = float(t2[0])
+                    fscale = float(t2[1])
+                    tstart = float(t2[2])
+                    tstop = float(t2[3])
+                    emiss = float(t2[4])
+                elif len(t2) == 3:
+                    tstart = float(t2[0])
+                    tstop = float(t2[1])
+                    emiss = float(t2[2])
+                elif len(t2) == 1:
+                    emiss = float(t2[0])
 
     from ..model.entities import HeatRadiation
     hr = HeatRadiation(
         id=rid, title=title, surf_id=surf_id, funct_id=funct_id, sensor_id=sensor_id,
-        ascale=ascale, fscale=fscale, tstart=tstart, tstop=tstop, emissivity=emiss
+        ascale=ascale, fscale=fscale, tstart=tstart, tstop=tstop, emissivity=emiss, emiss=emiss
     )
     model.heat_radiations[rid] = hr
 
@@ -8860,6 +8914,29 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_bcs_wall(block, model, log)
         return
 
+    if sub in ("LAGMUL", "LAG"):
+        title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+        if not cards or (block.fixed and cards[0].is_blank):
+            log.error(f"/BCS/LAGMUL/{block.user_id}: missing data card", block.source)
+            return
+        if block.fixed:
+            f1 = cards[0].cut("BCS_LAGMUL_1") if "BCS_LAGMUL_1" in CARD_LAYOUTS else _fixed_vals(cards[0], [10, 10, 10, 10])
+            tra = f1[0].strip() if len(f1) > 0 else "111"
+            rot = f1[1].strip() if len(f1) > 1 else "111"
+            skew = _ival(f1[2]) if len(f1) > 2 else 0
+            grnod = _ival(f1[3]) if len(f1) > 3 else 0
+        else:
+            t = cards[0].tokens()
+            tra = t[0] if len(t) > 0 else "111"
+            rot = t[1] if len(t) > 1 else "111"
+            skew = int(float(t[2])) if len(t) > 2 else 0
+            grnod = int(float(t[3])) if len(t) > 3 else 0
+        from ..model.entities import BcsLagmul
+        model.bcs_lagmuls[block.user_id] = BcsLagmul(
+            id=block.user_id, title=title, tra=tra, rot=rot, skew_id=skew, grnod_id=grnod
+        )
+        return
+
     if sub in ("FLUX", "TEMP"):
         title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
         if not cards or (block.fixed and cards[0].is_blank):
@@ -8968,6 +9045,133 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.bcs.append(BoundaryCondition(
         id=block.user_id, grnod_id=grnod, fix_tra=fix_tra, fix_rot=fix_rot,
         title=title, skew_id=skew))
+
+
+def read_spcnd(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SPCND/spc_ID`` — Single point constraint on node."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or (block.fixed and cards[0].is_blank):
+        log.error(f"/SPCND/{block.user_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f1 = cards[0].cut("SPCND_1") if "SPCND_1" in CARD_LAYOUTS else _fixed_vals(cards[0], [10, 10])
+        node_id = _ival(f1[0]) if len(f1) > 0 else 0
+        dof = f1[1].strip() if len(f1) > 1 else ""
+        tstart, tstop, val = 0.0, 0.0, 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("SPCND_2") if "SPCND_2" in CARD_LAYOUTS else _fixed_vals(cards[1], [20, 20, 20])
+            tstart = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            tstop = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            val = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+    else:
+        t = cards[0].tokens()
+        node_id = int(float(t[0])) if len(t) > 0 else 0
+        dof = t[1] if len(t) > 1 else ""
+        tstart, tstop, val = 0.0, 0.0, 0.0
+        if len(cards) > 1:
+            t2 = cards[1].tokens()
+            tstart = float(t2[0]) if len(t2) > 0 else 0.0
+            tstop = float(t2[1]) if len(t2) > 1 else 0.0
+            val = float(t2[2]) if len(t2) > 2 else 0.0
+    from ..model.entities import Spcnd
+    model.spcnds[block.user_id] = Spcnd(
+        id=block.user_id, title=title, node_id=node_id, dof=dof,
+        tstart=tstart, tstop=tstop, val=val
+    )
+
+
+def read_ddw(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DDW/ddw_ID`` — Drawbead definition."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or (block.fixed and cards[0].is_blank):
+        log.error(f"/DDW/{block.user_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f1 = cards[0].cut("DDW_1") if "DDW_1" in CARD_LAYOUTS else _fixed_vals(cards[0], [10, 10, 20, 20, 10])
+        surf1 = _ival(f1[0]) if len(f1) > 0 else 0
+        surf2 = _ival(f1[1]) if len(f1) > 1 else 0
+        f_hold = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        f_draw = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+        iform = _ival(f1[4]) if len(f1) > 4 else 0
+    else:
+        t = cards[0].tokens()
+        surf1 = int(float(t[0])) if len(t) > 0 else 0
+        surf2 = int(float(t[1])) if len(t) > 1 else 0
+        f_hold = float(t[2]) if len(t) > 2 else 0.0
+        f_draw = float(t[3]) if len(t) > 3 else 0.0
+        iform = int(float(t[4])) if len(t) > 4 else 0
+    points = []
+    for card in cards[1:]:
+        if card.is_blank:
+            continue
+        pt_toks = card.tokens()
+        if pt_toks:
+            points.append(pt_toks)
+    from ..model.entities import Ddw
+    model.ddws[block.user_id] = Ddw(
+        id=block.user_id, title=title, surf1_id=surf1, surf2_id=surf2,
+        f_hold=f_hold, f_draw=f_draw, iform=iform, points=points
+    )
+
+
+def read_stamping(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/STAMPING/stamp_ID`` — Stamping simulation parameters."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or (block.fixed and cards[0].is_blank):
+        log.error(f"/STAMPING/{block.user_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f1 = cards[0].cut("STAMPING_1") if "STAMPING_1" in CARD_LAYOUTS else _fixed_vals(cards[0], [10, 10, 20, 20, 20])
+        part_id = _ival(f1[0]) if len(f1) > 0 else 0
+        tool_id = _ival(f1[1]) if len(f1) > 1 else 0
+        gap = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        fric = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+        vel = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+    else:
+        t = cards[0].tokens()
+        part_id = int(float(t[0])) if len(t) > 0 else 0
+        tool_id = int(float(t[1])) if len(t) > 1 else 0
+        gap = float(t[2]) if len(t) > 2 else 0.0
+        fric = float(t[3]) if len(t) > 3 else 0.0
+        vel = float(t[4]) if len(t) > 4 else 0.0
+    from ..model.entities import Stamping
+    model.stampings[block.user_id] = Stamping(
+        id=block.user_id, title=title, part_id=part_id, tool_id=tool_id,
+        gap=gap, fric=fric, vel=vel
+    )
+
+
+def read_surf_surf(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SURF_SURF/ID`` — Surface-to-surface interaction."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or (block.fixed and cards[0].is_blank):
+        log.error(f"/SURF_SURF/{block.user_id}: missing data card", block.source)
+        return
+    if block.fixed:
+        f1 = cards[0].cut("SURF_SURF_1") if "SURF_SURF_1" in CARD_LAYOUTS else _fixed_vals(cards[0], [10, 10, 10])
+        surf1 = _ival(f1[0]) if len(f1) > 0 else 0
+        surf2 = _ival(f1[1]) if len(f1) > 1 else 0
+        iflag = _ival(f1[2]) if len(f1) > 2 else 0
+        gap, fric = 0.0, 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("SURF_SURF_2") if "SURF_SURF_2" in CARD_LAYOUTS else _fixed_vals(cards[1], [20, 20])
+            gap = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            fric = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+    else:
+        t = cards[0].tokens()
+        surf1 = int(float(t[0])) if len(t) > 0 else 0
+        surf2 = int(float(t[1])) if len(t) > 1 else 0
+        iflag = int(float(t[2])) if len(t) > 2 else 0
+        gap, fric = 0.0, 0.0
+        if len(cards) > 1:
+            t2 = cards[1].tokens()
+            gap = float(t2[0]) if len(t2) > 0 else 0.0
+            fric = float(t2[1]) if len(t2) > 1 else 0.0
+    from ..model.entities import SurfSurf
+    model.surf_surfs[block.user_id] = SurfSurf(
+        id=block.user_id, title=title, surf1_id=surf1, surf2_id=surf2,
+        iflag=iflag, gap=gap, fric=fric
+    )
 
 
 def read_ale_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -20604,6 +20808,11 @@ def read_convec(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         tstart=tstart, tstop=tstop, h=h, title=title,
     )
     model.convec_loads.append(cl)
+    from ..model.entities import HeatConvec
+    model.heat_convecs[block.user_id] = HeatConvec(
+        id=block.user_id, title=title, surf_id=surf_id, funct_id=funct_id,
+        sensor_id=sens_id, ascale=xscale, fscale=scale, tstart=tstart, tstop=tstop, h=h
+    )
 
 
 def read_inivol(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -20713,6 +20922,12 @@ def read_radiation(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         tstart=tstart, tstop=tstop, emissivity=emissivity, title=title,
     )
     model.radiation_loads.append(rl)
+    from ..model.entities import HeatRadiation
+    model.heat_radiations[block.user_id] = HeatRadiation(
+        id=block.user_id, title=title, surf_id=surf_id, funct_id=funct_id,
+        sensor_id=sens_id, ascale=xscale, fscale=scale, tstart=tstart, tstop=tstop,
+        emissivity=emissivity, emiss=emissivity
+    )
 
 
 def read_impflux(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -42344,8 +42559,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PROP_P51": read_prop,
     "P51": read_prop,
     "PROP_TSH_P51": read_prop,
-    "TSH_P51": read_prop,
     "LAMINATE_P51": read_prop,
+    # --- M202: Thermal Surface Loads, Convec, Radiation, Mat Law4, Sensor Work, and Engine Pipeline Suite ---
+    "HEAT_FLUX": read_flux,
+    "FLUX": read_flux,
+    "HEAT_CONVEC": read_convec,
+    "HEAT_CONVECTION": read_convec,
+    "CONVEC": read_convec,
+    "HEAT_RADIATION": read_radiation,
+    "HEAT_RAD": read_radiation,
+    "RADIATION": read_radiation,
+    "MAT_LAW4": read_mat,
+    "MAT_HYD_JCOOK": read_mat,
+    "HYD_JCOOK": read_mat,
+    "LAW4": read_mat,
+    "SENSOR_WORK": read_sensor,
+    "SPCND": read_spcnd,
+    "DDW": read_ddw,
+    "SURF_SURF": read_surf_surf,
+    "SURFSURF": read_surf_surf,
+    "BCS_LAGMUL": read_bcs,
 }
 
 

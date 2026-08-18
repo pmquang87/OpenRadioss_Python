@@ -241,7 +241,16 @@ class EngineControls:
     dtix_tini: float = 0.0                                                           # /DTIX, /ENG/DTIX initial dt (M200)
     dtix_tmax: float = 0.0                                                           # /DTIX, /ENG/DTIX max dt (M200)
     parith: str = "ON"                                                               # /PARITH/ON, /PARITH/OFF (M200)
-    th_title: bool = False                                                           # /TH/TITLE (M200)
+    heat_active: bool = False                                                        # /HEAT (M202)
+    heat_flag: bool = False
+
+    @property
+    def tfile_dt(self) -> float:
+        return self.th_dt
+
+    @tfile_dt.setter
+    def tfile_dt(self, val: float) -> None:
+        self.th_dt = val
 
     @property
     def dtix(self):

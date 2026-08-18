@@ -1404,7 +1404,9 @@ def parse_engine_deck(blocks: List[KeywordBlock],
                         else:
                             ec.dyrel_beta = v[0]
             elif key in ("THERMAL", "HEAT"):
-                # /THERMAL, /HEAT, /THERMAL/DT, /HEAT/DT (M146): frethermal.F
+                # /THERMAL, /HEAT, /THERMAL/DT, /HEAT/DT (M146/M202): frethermal.F
+                ec.heat_active = True
+                ec.heat_flag = True
                 sub = block.parts[1].upper() if len(block.parts) > 1 else ""
                 if sub == "DT":
                     if block.cards:
