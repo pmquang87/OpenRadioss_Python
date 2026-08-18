@@ -1355,12 +1355,23 @@ class Model:
         self.heat_convecs: Dict[int, Any] = {}                       # /HEAT/CONVEC, /CONVEC (M202)
         self.heat_radiations: Dict[int, Any] = {}                    # /HEAT/RADIATION, /RADIATION (M202)
         self.surfs_surf: Dict[int, Any] = {}                         # /SURF/SURF, /SURFSURF (M202)
+        self.surf_surfs = self.surfs_surf
         self.bcs_lagmuls: Dict[int, Any] = {}                        # /BCS/LAGMUL (M202)
         self.spcnds: Dict[int, Any] = {}                             # /SPCND (M202)
         self.ddws: Dict[int, Any] = {}                               # /DDW (M202)
         self.ddw_points: Dict[int, Any] = {}                         # /DDW/POINT (M202)
         self.stampings: List[Any] = []                               # /STAMPING, /STAMP (M202)
         self.sensors_work: Dict[int, Any] = {}                       # /SENSOR/WORK (M201/M202)
+
+        # M203 Entities
+        self.lagmul_gears: Dict[int, Any] = {}                       # /LAGMUL/GEAR, /GEAR (M203)
+        self.lagmul_racks: Dict[int, Any] = {}                       # /LAGMUL/RACK, /RACK (M203)
+        self.lagmul_diffs: Dict[int, Any] = {}                       # /LAGMUL/DIFF, /DIFF (M203)
+        self.inter_type26s: Dict[int, Any] = {}                      # /INTER/TYPE26, /INTER/GUIDED_CABLE (M203)
+        self.props_type15: Dict[int, Any] = {}                       # /PROP/TYPE15, /PROP/INJECT1 (M203)
+        self.props_type16: Dict[int, Any] = {}                       # /PROP/TYPE16, /PROP/INJECT2 (M203)
+        self.sensors_python: Dict[int, Any] = {}                     # /SENSOR/PYTHON (M203)
+        self.transforms_pos: Dict[int, Any] = {}                     # /TRANSFORM/POS, /POS (M203)
 
 
 

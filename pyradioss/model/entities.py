@@ -11736,10 +11736,16 @@ class HeatRadiation:
 
 @dataclass
 class SurfSurf:
-    """``/SURF/SURF/id`` or ``/SURFSURF/id`` (M202): Surface composed of other surfaces."""
+    """``/SURF/SURF/id`` or ``/SURFSURF/id`` (M202): Surface composed of other surfaces or surface-to-surface interaction."""
     id: int = 0
     title: str = ""
     surf_ids: list[int] = field(default_factory=list)
+    surf1_id: int = 0
+    surf2_id: int = 0
+    iflag: int = 0
+    gap: float = 0.0
+    fric: float = 0.0
+
 
 
 @dataclass
@@ -11833,6 +11839,70 @@ class SensorWork:
     sens_type: int = 1
     t_delay: float = 0.0
     w_max: float = 0.0
+
+
+@dataclass
+class LagmulGear:
+    """``/LAGMUL/GEAR/id`` or ``/GEAR/id`` (M203): Kinematic gear constraint."""
+    id: int = 0
+    title: str = ""
+    node0: int = 0
+    node1: int = 0
+    node2: int = 0
+    r1: float = 1.0
+    r2: float = 1.0
+
+
+@dataclass
+class LagmulRack:
+    """``/LAGMUL/RACK/id`` or ``/RACK/id`` (M203): Kinematic rack and pinion constraint."""
+    id: int = 0
+    title: str = ""
+    node0: int = 0
+    node1: int = 0
+    node2: int = 0
+    radius: float = 1.0
+
+
+@dataclass
+class LagmulDiff:
+    """``/LAGMUL/DIFF/id`` or ``/DIFF/id`` (M203): Kinematic differential gear constraint."""
+    id: int = 0
+    title: str = ""
+    node0: int = 0
+    node1: int = 0
+    node2: int = 0
+    node3: int = 0
+    r1: float = 1.0
+    r2: float = 1.0
+    r3: float = 1.0
+
+
+@dataclass
+class InterType26:
+    """``/INTER/TYPE26/id`` or ``/INTER/GUIDED_CABLE/id`` (M203): Guided cable interface."""
+    id: int = 0
+    title: str = ""
+    grnod_id: int = 0
+    grpart_id: int = 0
+    istiff: int = 0
+    stfac: float = 1.0
+    fric: float = 0.0
+
+InterGuidedCable = InterType26
+
+
+@dataclass
+class SensorPython:
+    """``/SENSOR/PYTHON/id`` (M203): Python-scripted sensor function."""
+    id: int = 0
+    title: str = ""
+    script_name: str = ""
+    func_name: str = ""
+    t_delay: float = 0.0
+    t_act: float = 0.0
+
+
 
 
 

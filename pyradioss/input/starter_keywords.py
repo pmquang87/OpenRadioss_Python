@@ -11782,6 +11782,7 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             t_delay=tdelay, tdelay=tdelay
         )
     elif kind == "PYTHON":
+        from ..model.entities import SensorPython
         tdelay = 0.0
         script_name, func_name = "", ""
         if cards:
@@ -11791,6 +11792,10 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             toks1 = cards[1].tokens()
             script_name = toks1[0] if len(toks1) > 0 else ""
             func_name = toks1[1] if len(toks1) > 1 else ""
+        sp = SensorPython(
+            id=block.user_id, title=title, script_name=script_name, func_name=func_name, t_delay=tdelay
+        )
+        model.sensors_python[block.user_id] = sp
         model.sensors.append(Sensor(
             id=block.user_id, kind="PYTHON", tdelay=tdelay, script_name=script_name, func_name=func_name, title=title
         ))
