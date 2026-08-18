@@ -3047,6 +3047,11 @@ LAYOUTS: Dict[str, List[int]] = {
     "PROP_TYPE54_4": [20],
     "PROP_TYPE54_LAYER": [20, 20, 20, 10],
     "ENG_DAMP_1": [20, 20, 20, 20],
+    # M209: SLIDER, CYL_JOINT, DAMP_PART, ENG_SUB_CYCLE
+    "SLIDER_1": [10, 10, 10, 10, 20],
+    "CYL_JOINT_1": [10, 10, 10, 10, 20],
+    "DAMP_PART_1": [10, 20, 20, 20, 20],
+    "ENG_SUB_CYCLE_1": [10, 20, 10],
 }
 
 CARD_LAYOUTS = LAYOUTS

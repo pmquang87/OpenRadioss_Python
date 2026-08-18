@@ -11455,6 +11455,9 @@ def read_damp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if sub in ("FUNCT", "FUNCTION"):
         read_damp_funct(block, model, log)
         return
+    if sub in ("PART", "PARTS"):
+        read_damp_part(block, model, log)
+        return
     if sub in ("STIFF", "STIFFNESS", "BETA"):
         title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
         if not cards or cards[0].is_blank:
@@ -17757,6 +17760,36 @@ def read_preload_bolt(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     )
 
 
+def read_damp_part(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DAMP/PART/damp_ID`` (M209): Part-level Rayleigh damping."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/DAMP/PART/{block.user_id}: missing data card", block.source)
+        return
+
+    part_id, alpha, beta, tstart, tstop = 0, 0.0, 0.0, 0.0, 1.0e30
+    if block.fixed:
+        f = cards[0].cut("DAMP_PART_1")
+        part_id = _ival(f[0]) if len(f) > 0 else 0
+        alpha = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        beta = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        tstart = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        tstop = _fval(f[4], 1.0e30) if len(f) > 4 and _fval(f[4]) > 0.0 else 1.0e30
+    else:
+        toks = cards[0].tokens()
+        part_id = int(float(toks[0])) if len(toks) > 0 else 0
+        alpha = float(toks[1]) if len(toks) > 1 else 0.0
+        beta = float(toks[2]) if len(toks) > 2 else 0.0
+        tstart = float(toks[3]) if len(toks) > 3 else 0.0
+        tstop = float(toks[4]) if len(toks) > 4 else 1.0e30
+
+    from ..model.entities import DampPart
+    model.damp_parts[block.user_id] = DampPart(
+        id=block.user_id, title=title, part_id=part_id,
+        alpha=alpha, beta=beta, tstart=tstart, tstop=tstop
+    )
+
+
 def read_damp_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/DAMP/INTER/damp_ID`` (M103)::
 
@@ -22761,6 +22794,12 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub in ("PIN_JOINT", "PIN", "REVOLUTE"):
         read_pin_joint(block, model, log)
         return
+    elif sub in ("SLIDER", "SLIDE", "PRISMATIC"):
+        read_slider_joint(block, model, log)
+        return
+    elif sub in ("CYL_JOINT", "CYLINDER_JOINT", "CYL", "CYLINDER"):
+        read_cyl_joint(block, model, log)
+        return
 
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     lagmod = 1
@@ -22946,6 +22985,67 @@ def read_pin_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=block.user_id, title=title, node1=node1, node2=node2,
         axis_dir=axis_dir, skew_id=skew_id, tol=tol
     )
+
+
+def read_slider_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SLIDER/id`` or ``/LAGMUL/SLIDER/id`` (M209): Prismatic slider kinematic joint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SLIDER/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, axis_dir, skew_id, tol = 0, 0, 1, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("SLIDER_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        axis_dir = _ival(f[2], 1) if len(f) > 2 else 1
+        skew_id = _ival(f[3], 0) if len(f) > 3 else 0
+        tol = _fval(f[4], 1e-6) if len(f) > 4 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        axis_dir = int(float(toks[2])) if len(toks) > 2 else 1
+        skew_id = int(float(toks[3])) if len(toks) > 3 else 0
+        tol = float(toks[4]) if len(toks) > 4 else 1e-6
+
+    from ..model.entities import SliderJoint
+    model.slider_joints[block.user_id] = SliderJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis_dir=axis_dir, skew_id=skew_id, tol=tol
+    )
+
+
+def read_cyl_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CYL_JOINT/id`` or ``/LAGMUL/CYL_JOINT/id`` (M209): Cylindrical kinematic joint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/CYL_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, axis_dir, skew_id, tol = 0, 0, 1, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("CYL_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        axis_dir = _ival(f[2], 1) if len(f) > 2 else 1
+        skew_id = _ival(f[3], 0) if len(f) > 3 else 0
+        tol = _fval(f[4], 1e-6) if len(f) > 4 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        axis_dir = int(float(toks[2])) if len(toks) > 2 else 1
+        skew_id = int(float(toks[3])) if len(toks) > 3 else 0
+        tol = float(toks[4]) if len(toks) > 4 else 1e-6
+
+    from ..model.entities import CylJoint
+    model.cyl_joints[block.user_id] = CylJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis_dir=axis_dir, skew_id=skew_id, tol=tol
+    )
+
 
 
 
@@ -41787,6 +41887,23 @@ def read_eng_damp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             model.damp_tstop = float(toks[3]) if len(toks) > 3 else 1.0e30
 
 
+def read_eng_sub_cycle(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/SUB_CYCLE`` or ``/SUB_CYCLE`` (M209): Element and contact time step sub-cycling controls."""
+    model.sub_cycle_enabled = True
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("ENG_SUB_CYCLE_1")
+            model.sub_cycle_ratio = _ival(f[0], 1) if len(f) > 0 else 1
+            model.sub_cycle_inter = bool(_ival(f[2], 0)) if len(f) > 2 else False
+        else:
+            toks = cards[0].tokens()
+            model.sub_cycle_ratio = int(float(toks[0])) if len(toks) > 0 else 1
+            if len(toks) > 2:
+                model.sub_cycle_inter = bool(int(float(toks[2])))
+
+
+
 
 
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -43722,6 +43839,16 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "TSH_P54": read_prop_type54,
     "ENG_DAMP": read_eng_damp,
     "DAMP": read_eng_damp,
+    # --- M209: Slider/Cylindrical Kinematic Joints, Part Rayleigh Damping, and Engine Sub-cycling Directives Suite ---
+    "LAGMUL_SLIDER": read_slider_joint,
+    "SLIDER": read_slider_joint,
+    "LAGMUL_CYL_JOINT": read_cyl_joint,
+    "LAGMUL_CYL": read_cyl_joint,
+    "CYL_JOINT": read_cyl_joint,
+    "CYLINDER_JOINT": read_cyl_joint,
+    "DAMP_PART": read_damp_part,
+    "ENG_SUB_CYCLE": read_eng_sub_cycle,
+    "SUB_CYCLE": read_eng_sub_cycle,
 }
 
 

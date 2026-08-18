@@ -1461,6 +1461,15 @@ class Model:
         self.damp_tstart: float = 0.0
         self.damp_tstop: float = 1.0e30
 
+        # M209 Entities
+        self.slider_joints: Dict[int, Any] = {}                      # /LAGMUL/SLIDER, /SLIDER (M209)
+        self.cyl_joints: Dict[int, Any] = {}                         # /LAGMUL/CYL_JOINT, /CYL_JOINT (M209)
+        self.damp_parts: Dict[int, Any] = {}                         # /DAMP/PART (M209)
+        self.sub_cycle_enabled: bool = False                         # /ENG/SUB_CYCLE, /SUB_CYCLE (M209)
+        self.sub_cycle_ratio: int = 1
+        self.sub_cycle_inter: bool = False
+
+
 
 
 

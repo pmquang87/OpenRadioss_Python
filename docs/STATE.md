@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M208)
+## What is implemented (M1 → M209)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -214,6 +214,7 @@ real history is 41 milestones. One line each:
 | M206 | Orthotropic & Composite Layered Thick Shell Properties, Relative/Geometric Sensors, ALE Zero Directives, and Tied Rupture Contact Suite: /PROP/TYPE21 (/PROP/TSH_ORTH) orthotropic thick shell property, /PROP/TYPE22 (/PROP/TSH_COMP) composite layered thick shell property with ply angle, thickness, z-coordinate, and material ID, /SENSOR/GEOM 3-node geometric distance and angle threshold sensor, /SENSOR/REL 2-node relative displacement and rotation sensor, /ALE/ZERO_PRESSURE (/ALE/ZERO_PRES) and /ALE/ZERO_VEL zero boundary directives, and /INTER/TYPE25 (/INTER/TIED_BREAK) breakable tied contact interface |
 | M207 | Pull/Push Directional Springs, Energy Ratio & Shear Lock Sensors, Parallelepiped/Truncated Cone Rigid Walls, and Interface Time Step Control Directives Suite: /PROP/TYPE47 (/PROP/SPR_PULL) tension-only pulling spring property, /PROP/TYPE48 (/PROP/SPR_PUSH) compression-only pushing spring property, /SENSOR/RATIO (/SENSOR/ENERGY_RATIO) energy ratio threshold sensor, /SENSOR/SHEAR_LOCK shear locking and hourglass threshold sensor, /RWALL/PARALLELEPIPED (/RWALL/PARAL) and /RWALL/TRUNC_CONE (/RWALL/TRUNCATED_CONE) rigid wall geometry aliases, and /DT/INTER/DEL and /DT/NODA/CFL time-step controls |
 | M208 | Ball/Pin Kinematic Joints, Type 54 Layered Thick Shell Properties, and Engine Rayleigh Damping Directives Suite: /LAGMUL/BALL_JOINT (/BALL_JOINT) spherical kinematic joint constraint, /LAGMUL/PIN_JOINT (/PIN_JOINT) revolute pin joint constraint with axis direction and skew frame, /PROP/TYPE54 (/PROP/TSH_P54) layered composite thick shell property with shear factors, integration points and ply definitions, and /ENG/DAMP (/DAMP) global Rayleigh damping controls |
+| M209 | Slider/Cylindrical Kinematic Joints, Part Rayleigh Damping, and Engine Sub-cycling Directives Suite: /LAGMUL/SLIDER (/SLIDER) prismatic slider kinematic joint constraint, /LAGMUL/CYL_JOINT (/CYL_JOINT) cylindrical kinematic joint constraint with axis direction and skew frame, /DAMP/PART part-level Rayleigh mass and stiffness damping factors, and /ENG/SUB_CYCLE (/SUB_CYCLE) engine element and interface sub-cycling controls |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read

@@ -12442,6 +12442,43 @@ class PropType54:
 PropTshP54 = PropType54
 
 
+@dataclass
+class SliderJoint:
+    """``/LAGMUL/SLIDER`` or ``/SLIDER/id`` (M209): Prismatic slider kinematic joint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    axis_dir: int = 1        # 1: X, 2: Y, 3: Z
+    skew_id: int = 0
+    tol: float = 1e-6
+
+
+@dataclass
+class CylJoint:
+    """``/LAGMUL/CYL_JOINT`` or ``/CYL_JOINT/id`` (M209): Cylindrical kinematic joint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    axis_dir: int = 1        # 1: X, 2: Y, 3: Z
+    skew_id: int = 0
+    tol: float = 1e-6
+
+
+@dataclass
+class DampPart:
+    """``/DAMP/PART/damp_ID`` (M209): Part-level Rayleigh mass and stiffness damping."""
+    id: int = 1
+    title: str = ""
+    part_id: int = 0
+    alpha: float = 0.0
+    beta: float = 0.0
+    tstart: float = 0.0
+    tstop: float = 1.0e30
+
+
+
 
 
 
