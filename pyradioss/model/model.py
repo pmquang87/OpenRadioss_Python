@@ -1545,6 +1545,12 @@ class Model:
         self.eng_truncs: Dict[int, Any] = {}                         # /TRUNC, /ENG/TRUNC (M220)
         self.sensor_shears: Dict[int, Any] = {}                      # /SENSOR/SHEAR, /SENSOR/SHEAR_STRESS (M220)
 
+        # M221 Entities
+        self.fail_viscos: Dict[int, Any] = {}                        # /FAIL/VISCO (M221)
+        self.eng_masses: Dict[int, Any] = {}                         # /MASS, /ENG/MASS (M221)
+        self.sensor_pressures: Dict[int, Any] = {}                   # /SENSOR/PRESSURE, /SENSOR/PRESS (M221)
+
+
 
 
 

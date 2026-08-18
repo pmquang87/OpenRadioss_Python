@@ -12861,6 +12861,38 @@ class SensorShearStress:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailVisco:
+    """``/FAIL/VISCO/mat_ID`` (M221): Viscoplastic strain rate-dependent failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    eps_f0: float = 0.0      # base fracture strain
+    eps_rate0: float = 1.0   # reference strain rate
+    m_rate: float = 0.0      # strain rate sensitivity exponent
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngMass:
+    """``/MASS`` or ``/ENG/MASS`` (M221): Engine mass summary output directive."""
+    id: int = 1
+    title: str = ""
+    dt_mass: float = 0.0     # time frequency for mass summary
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorPressure:
+    """``/SENSOR/PRESSURE`` or ``/SENSOR/PRESS`` (M221): Pressure threshold trigger sensor."""
+    id: int = 1
+    title: str = ""
+    elem_id: int = 0         # target element ID
+    p_min: float = -1e30     # minimum pressure threshold
+    p_max: float = 1e30      # maximum pressure threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

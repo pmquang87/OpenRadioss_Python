@@ -2246,6 +2246,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("SNOW", "BRITTLE_SNOW"):
         read_fail_snow(block, model, log)
         return
+    if kind in ("VISCO", "VISCO_PLASTIC", "VISCOUS"):
+        read_fail_visco(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11663,6 +11666,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("SHEAR", "SHEAR_STRESS", "TAU"):
         read_sensor_shear(block, model, log)
+        return
+    if kind in ("PRESSURE", "PRESS", "P"):
+        read_sensor_pressure(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -22850,7 +22856,7 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub in ("SLIDER", "SLIDE", "PRISMATIC", "TRANSLATIONAL", "TRANSLATIONAL_JOINT"):
         read_slider_joint(block, model, log)
         return
-    elif sub in ("CYL_JOINT", "CYLINDER_JOINT", "CYL", "CYLINDER"):
+    elif sub in ("CYL_JOINT", "CYLINDER_JOINT", "CYL", "CYLINDER", "CYLINDRICAL", "CYLINDRICAL_JOINT"):
         read_cyl_joint(block, model, log)
         return
     elif sub in ("PLANAR", "PLANAR_JOINT", "PLANE"):
@@ -41621,6 +41627,35 @@ def read_fail_snow(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_visco(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/VISCO/mat_ID`` (M221): Viscoplastic strain rate-dependent failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/VISCO/{block.user_id}: missing data card", block.source)
+        return
+
+    eps_f0, eps_rate0, m_rate, ifail_sh = 0.0, 1.0, 0.0, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_VISCO_1")
+        eps_f0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        eps_rate0 = _fval(f[1], 1.0) if len(f) > 1 else 1.0
+        m_rate = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        ifail_sh = _ival(f[3], 1) if len(f) > 3 else 1
+    else:
+        toks = cards[0].tokens()
+        eps_f0 = float(toks[0]) if len(toks) > 0 else 0.0
+        eps_rate0 = float(toks[1]) if len(toks) > 1 else 1.0
+        m_rate = float(toks[2]) if len(toks) > 2 else 0.0
+        ifail_sh = int(float(toks[3])) if len(toks) > 3 else 1
+
+    from ..model.entities import FailVisco
+    model.fail_viscos[block.user_id] = FailVisco(
+        mat_id=block.user_id, title=title, eps_f0=eps_f0,
+        eps_rate0=eps_rate0, m_rate=m_rate, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -43141,6 +43176,63 @@ def read_sensor_shear(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     model.sensors.append(Sensor(
         id=sss.id, kind="SHEAR_STRESS", tdelay=t_delay
     ))
+
+
+def read_eng_mass(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MASS`` or ``/ENG/MASS`` (M221): Engine mass summary output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MASS/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_mass, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_MASS_1")
+        dt_mass = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_mass = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngMass
+    m_id = block.user_id or (len(model.eng_masses) + 1)
+    model.eng_masses[m_id] = EngMass(
+        id=m_id, title=title, dt_mass=dt_mass, sens_id=sens_id
+    )
+
+
+def read_sensor_pressure(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/PRESSURE`` or ``/SENSOR/PRESS`` (M221): Pressure threshold trigger sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/PRESSURE/{block.user_id}: missing data card", block.source)
+        return
+
+    elem_id, p_min, p_max, t_delay = 0, -1e30, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_PRESSURE_1")
+        elem_id = _ival(f[0], 0) if len(f) > 0 else 0
+        p_min = _fval(f[1], -1e30) if len(f) > 1 else -1e30
+        p_max = _fval(f[2], 1e30) if len(f) > 2 else 1e30
+        t_delay = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+    else:
+        toks = cards[0].tokens()
+        elem_id = int(float(toks[0])) if len(toks) > 0 else 0
+        p_min = float(toks[1]) if len(toks) > 1 else -1e30
+        p_max = float(toks[2]) if len(toks) > 2 else 1e30
+        t_delay = float(toks[3]) if len(toks) > 3 else 0.0
+
+    from ..model.entities import SensorPressure, Sensor
+    sp = SensorPressure(
+        id=block.user_id or 1, title=title, elem_id=elem_id,
+        p_min=p_min, p_max=p_max, t_delay=t_delay
+    )
+    model.sensor_pressures[sp.id] = sp
+    model.sensors.append(Sensor(
+        id=sp.id, kind="PRESSURE", tdelay=t_delay
+    ))
+
 
 
 
@@ -45254,6 +45346,20 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SHEAR": read_sensor_shear,
     "SENSOR_SHEAR_STRESS": read_sensor_shear,
     "SENSOR_TAU": read_sensor_shear,
+    # --- M221: Viscoplastic Failure Criterion, Engine Mass Summary Directive, Cylindrical Joint Aliases, and Pressure Sensor Suite ---
+    "FAIL_VISCO": read_fail_visco,
+    "FAIL_VISCO_PLASTIC": read_fail_visco,
+    "FAIL_VISCOUS": read_fail_visco,
+    "MASS": read_eng_mass,
+    "ENG_MASS": read_eng_mass,
+    "ENG_MASS_SUMMARY": read_eng_mass,
+    "LAGMUL_CYLINDRICAL": read_cyl_joint,
+    "LAGMUL_CYLINDRICAL_JOINT": read_cyl_joint,
+    "CYLINDRICAL_JOINT": read_cyl_joint,
+    "CYLINDRICAL": read_cyl_joint,
+    "SENSOR_PRESSURE": read_sensor_pressure,
+    "SENSOR_PRESS": read_sensor_pressure,
+    "SENSOR_P": read_sensor_pressure,
 }
 
 
@@ -45262,7 +45368,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
