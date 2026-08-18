@@ -1451,6 +1451,17 @@ class Model:
         self.dt_inter_del_val: float = 0.0
         self.dt_noda_cfl: float = 0.9                                # /DT/NODA/CFL (M207)
 
+        # M208 Entities
+        self.ball_joints: Dict[int, Any] = {}                        # /LAGMUL/BALL_JOINT, /BALL_JOINT (M208)
+        self.pin_joints: Dict[int, Any] = {}                         # /LAGMUL/PIN_JOINT, /PIN_JOINT (M208)
+        self.props_type54: Dict[int, Any] = {}                       # /PROP/TYPE54, /PROP/TSH_P54 (M208)
+        self.props_tsh_p54 = self.props_type54
+        self.damp_alpha: float = 0.0                                 # /ENG/DAMP, /DAMP (M208)
+        self.damp_beta: float = 0.0
+        self.damp_tstart: float = 0.0
+        self.damp_tstop: float = 1.0e30
+
+
 
 
 

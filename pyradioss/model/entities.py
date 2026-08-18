@@ -12382,6 +12382,67 @@ class SensorShearLock:
     tdelay: float = 0.0
 
 
+@dataclass
+class BallJoint:
+    """``/LAGMUL/BALL_JOINT`` or ``/BALL_JOINT/id`` (M208): Spherical kinematic joint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    tol: float = 1e-6
+
+
+@dataclass
+class PinJoint:
+    """``/LAGMUL/PIN_JOINT`` or ``/PIN_JOINT/id`` (M208): Revolute pin kinematic joint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    axis_dir: int = 1        # 1: X, 2: Y, 3: Z
+    skew_id: int = 0
+    tol: float = 1e-6
+
+
+@dataclass
+class PropType54Layer:
+    """Layer definition for ``/PROP/TYPE54`` (M208)."""
+    phi: float = 0.0
+    thick: float = 0.0
+    zi: float = 0.0
+    mat_id: int = 0
+
+
+@dataclass
+class PropType54:
+    """``/PROP/TYPE54`` or ``/PROP/TSH_P54/prop_ID`` (M208): Layered composite thick shell property."""
+    id: int = 1
+    isolid: int = 15
+    ismstr: int = 0
+    icstr: int = 0
+    inpts_r: int = 2
+    inpts_s: int = 2
+    inpts_t: int = 2
+    iint: int = 1
+    dn: float = 0.0
+    qa: float = 1.1
+    qb: float = 0.05
+    vx: float = 0.0
+    vy: float = 0.0
+    vz: float = 0.0
+    skew_id: int = 0
+    iorth: int = 0
+    ipos: int = 0
+    ashear: float = 5.0 / 6.0
+    layers: List[PropType54Layer] = field(default_factory=list)
+    deltat_min: float = 0.0
+    title: str = ""
+
+
+PropTshP54 = PropType54
+
+
+
 
 
 

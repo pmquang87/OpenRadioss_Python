@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M207)
+## What is implemented (M1 → M208)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -213,6 +213,7 @@ real history is 41 milestones. One line each:
 | M205 | ALE Inflow/Outflow Boundaries, Cavity Enclosure Radiation, Torsional/Bending Springs, and Blast/Fluid Hydrostatic Load Directives Suite: /FLOW, /FLOW/INFLOW, /FLOW/OUTFLOW, /ALE/FLOW Eulerian/ALE flow boundary condition on surface with velocity, density, pressure, temperature and sensor gating, /HEAT/RAD_CAV (/HEAT/CAV, /RAD_CAV) surface enclosure radiation coupling with emissivity and view factor, /PROP/TYPE19 (/PROP/SPR_TORS) torsional spring property, /PROP/TYPE20 (/PROP/SPR_BEND) bending spring property, and /LOAD_PBLAST, /LOAD_PFLUID, /LOAD_LASER model dictionary aliases |
 | M206 | Orthotropic & Composite Layered Thick Shell Properties, Relative/Geometric Sensors, ALE Zero Directives, and Tied Rupture Contact Suite: /PROP/TYPE21 (/PROP/TSH_ORTH) orthotropic thick shell property, /PROP/TYPE22 (/PROP/TSH_COMP) composite layered thick shell property with ply angle, thickness, z-coordinate, and material ID, /SENSOR/GEOM 3-node geometric distance and angle threshold sensor, /SENSOR/REL 2-node relative displacement and rotation sensor, /ALE/ZERO_PRESSURE (/ALE/ZERO_PRES) and /ALE/ZERO_VEL zero boundary directives, and /INTER/TYPE25 (/INTER/TIED_BREAK) breakable tied contact interface |
 | M207 | Pull/Push Directional Springs, Energy Ratio & Shear Lock Sensors, Parallelepiped/Truncated Cone Rigid Walls, and Interface Time Step Control Directives Suite: /PROP/TYPE47 (/PROP/SPR_PULL) tension-only pulling spring property, /PROP/TYPE48 (/PROP/SPR_PUSH) compression-only pushing spring property, /SENSOR/RATIO (/SENSOR/ENERGY_RATIO) energy ratio threshold sensor, /SENSOR/SHEAR_LOCK shear locking and hourglass threshold sensor, /RWALL/PARALLELEPIPED (/RWALL/PARAL) and /RWALL/TRUNC_CONE (/RWALL/TRUNCATED_CONE) rigid wall geometry aliases, and /DT/INTER/DEL and /DT/NODA/CFL time-step controls |
+| M208 | Ball/Pin Kinematic Joints, Type 54 Layered Thick Shell Properties, and Engine Rayleigh Damping Directives Suite: /LAGMUL/BALL_JOINT (/BALL_JOINT) spherical kinematic joint constraint, /LAGMUL/PIN_JOINT (/PIN_JOINT) revolute pin joint constraint with axis direction and skew frame, /PROP/TYPE54 (/PROP/TSH_P54) layered composite thick shell property with shear factors, integration points and ply definitions, and /ENG/DAMP (/DAMP) global Rayleigh damping controls |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read

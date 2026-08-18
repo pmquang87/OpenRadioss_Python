@@ -3038,6 +3038,15 @@ LAYOUTS: Dict[str, List[int]] = {
     "PROP_TYPE48_1": [20, 20, 20, 20],
     "SENSOR_RATIO_1": [10, 20, 20, 20, 20],
     "SENSOR_SHEAR_LOCK_1": [10, 20, 20, 20],
+    # M208: BALL_JOINT, PIN_JOINT, PROP_TYPE54, ENG_DAMP
+    "BALL_JOINT_1": [10, 10, 20],
+    "PIN_JOINT_1": [10, 10, 10, 10, 20],
+    "PROP_TYPE54_1": [10, 10, 10, 10, 10, 10, 10, 20],
+    "PROP_TYPE54_2": [20, 20],
+    "PROP_TYPE54_3": [20, 20, 20, 10, 10, 10],
+    "PROP_TYPE54_4": [20],
+    "PROP_TYPE54_LAYER": [20, 20, 20, 10],
+    "ENG_DAMP_1": [20, 20, 20, 20],
 }
 
 CARD_LAYOUTS = LAYOUTS

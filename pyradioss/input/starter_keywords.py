@@ -4834,6 +4834,9 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if typename in ("TYPE48", "SPR_PUSH", "SPRING_PUSH", "PROP_TYPE48", "PROP_SPR_PUSH", "P48_SPR_PUSH"):
         read_prop_type48(block, model, log)
         return
+    if typename in ("TYPE54", "TSH_P54", "PROP_TYPE54", "PROP_TSH_P54", "P54_TSH"):
+        read_prop_type54(block, model, log)
+        return
     # M189: PROP_TYPE43 (CONNECT)
     if typename in ("TYPE43", "CONNECT", "PROP_CONNECT", "PROP_TYPE43", "P43_CONNECT", "PROP_P43_CONNECT"):
         read_prop_type43(block, model, log)
@@ -22752,6 +22755,12 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub == "DIFF":
         read_diff(block, model, log)
         return
+    elif sub in ("BALL_JOINT", "BALL"):
+        read_ball_joint(block, model, log)
+        return
+    elif sub in ("PIN_JOINT", "PIN", "REVOLUTE"):
+        read_pin_joint(block, model, log)
+        return
 
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     lagmod = 1
@@ -22882,6 +22891,62 @@ def read_diff(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=block.user_id, title=title, node0=node0, node1=node1,
         node2=node2, ratio=ratio
     )
+
+
+def read_ball_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/BALL_JOINT/id`` or ``/LAGMUL/BALL_JOINT/id`` (M208): Spherical kinematic joint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/BALL_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, tol = 0, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("BALL_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        tol = _fval(f[2], 1e-6) if len(f) > 2 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        tol = float(toks[2]) if len(toks) > 2 else 1e-6
+
+    from ..model.entities import BallJoint
+    model.ball_joints[block.user_id] = BallJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, tol=tol
+    )
+
+
+def read_pin_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PIN_JOINT/id`` or ``/LAGMUL/PIN_JOINT/id`` (M208): Revolute pin kinematic joint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PIN_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, axis_dir, skew_id, tol = 0, 0, 1, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("PIN_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        axis_dir = _ival(f[2], 1) if len(f) > 2 else 1
+        skew_id = _ival(f[3], 0) if len(f) > 3 else 0
+        tol = _fval(f[4], 1e-6) if len(f) > 4 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        axis_dir = int(float(toks[2])) if len(toks) > 2 else 1
+        skew_id = int(float(toks[3])) if len(toks) > 3 else 0
+        tol = float(toks[4]) if len(toks) > 4 else 1e-6
+
+    from ..model.entities import PinJoint
+    model.pin_joints[block.user_id] = PinJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis_dir=axis_dir, skew_id=skew_id, tol=tol
+    )
+
 
 
 def read_init(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -37519,6 +37584,103 @@ def read_prop_type48(block: KeywordBlock, model: Model, log: MessageLog) -> None
     )
 
 
+def read_prop_type54(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PROP/TYPE54`` or ``/PROP/TSH_P54/prop_ID`` (M208): Layered composite thick shell property."""
+    from ..model.entities import PropType54, PropType54Layer, Property
+    prop_id = block.user_id or 1
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    if not valid_cards:
+        log.error(f"/PROP/TYPE54/{prop_id}: missing data card", block.source)
+        return
+
+    isolid, ismstr, icstr, inpts_r, inpts_s, inpts_t, iint = 15, 0, 0, 2, 2, 2, 1
+    dn, qa, qb, vx, vy, vz, skew_id, iorth, ipos, ashear, deltat_min = 0.0, 1.1, 0.05, 0.0, 0.0, 0.0, 0, 0, 0, 5.0/6.0, 0.0
+    layers: List[PropType54Layer] = []
+
+    if block.fixed:
+        if len(valid_cards) > 0:
+            c0 = valid_cards[0].cut("PROP_TYPE54_1")
+            isolid = _safe_int(c0[0]) if len(c0) > 0 and c0[0].strip() else 15
+            ismstr = _safe_int(c0[1]) if len(c0) > 1 else 0
+            icstr = _safe_int(c0[2]) if len(c0) > 2 else 0
+            inpts_r = _safe_int(c0[3]) if len(c0) > 3 and c0[3].strip() else 2
+            inpts_s = _safe_int(c0[4]) if len(c0) > 4 and c0[4].strip() else 2
+            inpts_t = _safe_int(c0[5]) if len(c0) > 5 and c0[5].strip() else 2
+            iint = _safe_int(c0[6]) if len(c0) > 6 and c0[6].strip() else 1
+            dn = _safe_float(c0[7]) if len(c0) > 7 else 0.0
+        if len(valid_cards) > 1:
+            c1 = valid_cards[1].cut("PROP_TYPE54_2")
+            qa = _safe_float(c1[0]) if len(c1) > 0 and c1[0].strip() else 1.1
+            qb = _safe_float(c1[1]) if len(c1) > 1 and c1[1].strip() else 0.05
+        if len(valid_cards) > 2:
+            c2 = valid_cards[2].cut("PROP_TYPE54_3")
+            vx = _safe_float(c2[0]) if len(c2) > 0 and c2[0].strip() else 0.0
+            vy = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+            vz = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+            skew_id = _safe_int(c2[3]) if len(c2) > 3 else 0
+            iorth = _safe_int(c2[4]) if len(c2) > 4 else 0
+            ipos = _safe_int(c2[5]) if len(c2) > 5 else 0
+        if len(valid_cards) > 3:
+            c3 = valid_cards[3].cut("PROP_TYPE54_4")
+            ashear = _safe_float(c3[0]) if len(c3) > 0 and c3[0].strip() else 5.0/6.0
+        for card in valid_cards[4:]:
+            f = card.cut("PROP_TYPE54_LAYER")
+            if len(f) >= 4 and any(x.strip() for x in f):
+                layers.append(PropType54Layer(
+                    phi=_safe_float(f[0]),
+                    thick=_safe_float(f[1]),
+                    zi=_safe_float(f[2]),
+                    mat_id=_safe_int(f[3])
+                ))
+    else:
+        if len(valid_cards) > 0:
+            t0 = valid_cards[0].tokens()
+            isolid = _safe_int(t0[0]) if len(t0) > 0 else 15
+            ismstr = _safe_int(t0[1]) if len(t0) > 1 else 0
+            icstr = _safe_int(t0[2]) if len(t0) > 2 else 0
+            inpts_r = _safe_int(t0[3]) if len(t0) > 3 else 2
+            inpts_s = _safe_int(t0[4]) if len(t0) > 4 else 2
+            inpts_t = _safe_int(t0[5]) if len(t0) > 5 else 2
+            iint = _safe_int(t0[6]) if len(t0) > 6 else 1
+            dn = _safe_float(t0[7]) if len(t0) > 7 else 0.0
+        if len(valid_cards) > 1:
+            t1 = valid_cards[1].tokens()
+            qa = _safe_float(t1[0]) if len(t1) > 0 else 1.1
+            qb = _safe_float(t1[1]) if len(t1) > 1 else 0.05
+        if len(valid_cards) > 2:
+            t2 = valid_cards[2].tokens()
+            vx = _safe_float(t2[0]) if len(t2) > 0 else 0.0
+            vy = _safe_float(t2[1]) if len(t2) > 1 else 0.0
+            vz = _safe_float(t2[2]) if len(t2) > 2 else 0.0
+            skew_id = _safe_int(t2[3]) if len(t2) > 3 else 0
+            iorth = _safe_int(t2[4]) if len(t2) > 4 else 0
+            ipos = _safe_int(t2[5]) if len(t2) > 5 else 0
+        if len(valid_cards) > 3:
+            t3 = valid_cards[3].tokens()
+            ashear = _safe_float(t3[0]) if len(t3) > 0 else 5.0/6.0
+        for card in valid_cards[4:]:
+            toks = card.tokens()
+            if len(toks) >= 4:
+                layers.append(PropType54Layer(
+                    phi=float(toks[0]),
+                    thick=float(toks[1]),
+                    zi=float(toks[2]),
+                    mat_id=int(float(toks[3]))
+                ))
+
+    p54 = PropType54(
+        id=prop_id, isolid=isolid, ismstr=ismstr, icstr=icstr,
+        inpts_r=inpts_r, inpts_s=inpts_s, inpts_t=inpts_t, iint=iint,
+        dn=dn, qa=qa, qb=qb, vx=vx, vy=vy, vz=vz, skew_id=skew_id,
+        iorth=iorth, ipos=ipos, ashear=ashear, layers=layers,
+        deltat_min=deltat_min, title=title
+    )
+    model.props_type54[prop_id] = p54
+    model.properties[prop_id] = Property(id=prop_id, type=54, title=title)
+
+
+
 
 
 
@@ -41607,6 +41769,25 @@ def read_dt_noda_cfl(block: KeywordBlock, model: Model, log: MessageLog) -> None
             model.dt_noda_cfl = _safe_float(toks[0])
 
 
+def read_eng_damp(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/DAMP`` or ``/DAMP`` (M208): Global Rayleigh damping controls."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("ENG_DAMP_1")
+            model.damp_alpha = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            model.damp_beta = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            model.damp_tstart = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+            model.damp_tstop = _fval(f[3], 1.0e30) if len(f) > 3 else 1.0e30
+        else:
+            toks = cards[0].tokens()
+            model.damp_alpha = float(toks[0]) if len(toks) > 0 else 0.0
+            model.damp_beta = float(toks[1]) if len(toks) > 1 else 0.0
+            model.damp_tstart = float(toks[2]) if len(toks) > 2 else 0.0
+            model.damp_tstop = float(toks[3]) if len(toks) > 3 else 1.0e30
+
+
+
 
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
@@ -43527,6 +43708,20 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "RWALL_TCONE": read_rwall,
     "DT_INTER_DEL": read_dt_inter_del,
     "DT_NODA_CFL": read_dt_noda_cfl,
+    # --- M208: Ball/Pin Kinematic Joints, Type 54 Layered Thick Shell Properties, and Engine Rayleigh Damping Directives Suite ---
+    "LAGMUL_BALL_JOINT": read_ball_joint,
+    "LAGMUL_BALL": read_ball_joint,
+    "BALL_JOINT": read_ball_joint,
+    "BALL": read_ball_joint,
+    "LAGMUL_PIN_JOINT": read_pin_joint,
+    "LAGMUL_PIN": read_pin_joint,
+    "PIN_JOINT": read_pin_joint,
+    "PIN": read_pin_joint,
+    "PROP_TYPE54": read_prop_type54,
+    "PROP_TSH_P54": read_prop_type54,
+    "TSH_P54": read_prop_type54,
+    "ENG_DAMP": read_eng_damp,
+    "DAMP": read_eng_damp,
 }
 
 
