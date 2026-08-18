@@ -1610,6 +1610,12 @@ class Model:
         self.eng_velocities: Dict[int, Any] = {}                     # /VELOCITY, /ENG/VELOCITY (M233)
         self.sensor_truss_forces: Dict[int, Any] = {}                # /SENSOR/TRUSS_FORCE (M233)
 
+        # M234 Entities
+        self.fail_chaboches: Dict[int, Any] = {}                     # /FAIL/CHABOCHE (M234)
+        self.eng_accels: Dict[int, Any] = {}                         # /ACCEL, /ENG/ACCEL (M234)
+        self.sensor_spring_energies: Dict[int, Any] = {}             # /SENSOR/SPRING_ENERGY (M234)
+
+
 
 
 

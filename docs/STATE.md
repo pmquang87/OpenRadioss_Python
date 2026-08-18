@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M233)
+## What is implemented (M1 → M234)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -239,6 +239,7 @@ real history is 41 milestones. One line each:
 | M231 | Lusas Composite Failure Criterion, Engine Strain Output Directive, Inline/Parallel Axis Joint Aliases, and Solid Force Sensor Suite: /FAIL/LUSAS (/FAIL/COMPOSITE_LUSAS, /FAIL/LUSAS_COMPOSITE) Lusas 3D composite failure model, /STRAIN (/ENG/STRAIN, /ENG/STRAIN_OUTPUT) engine strain tensor history tracking directive, /LAGMUL/INLINE_AXIS (/INLINE_AXIS) and /LAGMUL/PARALLEL_AXIS (/PARALLEL_AXIS) kinematic joint aliases, and /SENSOR/SOLID_FORCE (/SENSOR/FORCE_SOLID) solid element resultant force threshold sensor |
 | M232 | GTN Porous Metal Failure Criterion, Engine Plastic Strain Output Directive, Perpendicular/Normal Axis Joint Aliases, and Beam Force Sensor Suite: /FAIL/GTN (/FAIL/GURSON_TVERGAARD, /FAIL/GURSON_POROUS) GTN void nucleation and growth failure model, /PLASTIC (/ENG/PLASTIC, /ENG/PLASTIC_STRAIN) engine plastic strain tensor history tracking directive, /LAGMUL/PERPENDICULAR_AXIS (/PERPENDICULAR_AXIS) and /LAGMUL/NORMAL_AXIS (/NORMAL_AXIS) kinematic joint aliases, and /SENSOR/BEAM_FORCE (/SENSOR/FORCE_BEAM) beam element resultant force/moment threshold sensor |
 | M233 | Tabulated 3D Failure Criterion, Engine Velocity Output Directive, Gimbal Axis/Universal Joint Aliases, and Truss Force Sensor Suite: /FAIL/TAB3 (/FAIL/TABULATED3, /FAIL/TAB_3D) 3D tabulated triaxiality-dependent failure model, /VELOCITY (/ENG/VELOCITY, /ENG/VEL) engine nodal velocity vector history tracking directive, /LAGMUL/GIMBAL_AXIS (/GIMBAL_AXIS) and /LAGMUL/UNIVERSAL_GIMBAL (/UNIVERSAL_GIMBAL) kinematic joint aliases, and /SENSOR/TRUSS_FORCE (/SENSOR/FORCE_TRUSS) truss element axial force threshold sensor |
+| M234 | Lemaitre-Chaboche Failure Criterion, Engine Acceleration Output Directive, Universal/Cardan Axis Joint Aliases, and Spring Energy Sensor Suite: /FAIL/CHABOCHE (/FAIL/LEMAITRE_CHABOCHE, /FAIL/CHABOCHE_DAMAGE) Lemaitre-Chaboche continuum ductile damage failure model, /ACCEL (/ENG/ACCEL, /ENG/ACCELERATION) engine nodal acceleration vector history tracking directive, /LAGMUL/UNIVERSAL_AXIS (/UNIVERSAL_AXIS) and /LAGMUL/CARDAN_AXIS (/CARDAN_AXIS) kinematic joint aliases, and /SENSOR/SPRING_ENERGY (/SENSOR/ENERGY_SPRING, /SENSOR/SPRING_ENER) spring element internal energy threshold sensor |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read

@@ -13278,6 +13278,39 @@ class SensorTrussForce:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailChaboche:
+    """``/FAIL/CHABOCHE/mat_ID`` (M234): Lemaitre-Chaboche ductile damage failure model."""
+    mat_id: int = 0
+    title: str = ""
+    s_0: float = 0.0         # initial damage threshold stress/strain
+    s_1: float = 1.0         # damage rate coefficient
+    beta: float = 1.0        # damage exponent
+    d_crit: float = 0.99     # critical damage threshold
+    eps_crit: float = 1e30   # critical plastic strain
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngAccel:
+    """``/ACCEL`` or ``/ENG/ACCEL`` (M234): Engine acceleration output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_acc: float = 0.0      # time frequency for acceleration output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSpringEnergy:
+    """``/SENSOR/SPRING_ENERGY`` or ``/SENSOR/ENERGY_SPRING`` (M234): Spring element internal energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    e_max: float = 1e30      # maximum internal energy threshold
+    t_delay: float = 0.0     # activation delay time
+
+
+
 
 
 

@@ -2287,6 +2287,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("TAB3", "TABULATED3", "TAB_3D"):
         read_fail_tab3(block, model, log)
         return
+    if kind in ("CHABOCHE", "LEMAITRE_CHABOCHE", "CHABOCHE_DAMAGE"):
+        read_fail_chaboche(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -11743,6 +11746,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
     if kind in ("TRUSS_FORCE", "FORCE_TRUSS"):
         read_sensor_truss_force(block, model, log)
+        return
+    if kind in ("SPRING_ENERGY", "ENERGY_SPRING", "SPRING_ENER"):
+        read_sensor_spring_energy(block, model, log)
         return
     supported = ("TIME", "DISP", "VEL", "NOT", "AND", "OR", "SENS_AND_OR", "LOGIC", "DIST", "ENERGY", "INTER", "RBODY", "TEMP", "NIC", "NIC_NIJ", "GAUGE", "HIC", "WORK", "RWALL", "XSECTION", "CROSSSECTION", "SECT", "DIST_SURF", "ACCE", "ACC", "ACCEL", "TYPE1", "SENS", "TYPE3", "TYPE10", "TYPE12", "TYPE13", "TYPE16", "TYPE17", "PYTHON", "SPH", "AIRBAG", "MONVOL", "SHELL", "SOLID", "RWALL_CYL", "RWALL_PLANE", "PLANE", "BOX", "FORCE", "MOMENT", "GEOM", "REL", "RATIO", "ENERGY_RATIO", "SHEAR_LOCK", "GAP", "TIME_GAP")
     if kind not in supported:
@@ -42138,6 +42144,44 @@ def read_fail_tab3(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_chaboche(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/CHABOCHE/mat_ID`` (M234): Lemaitre-Chaboche ductile damage failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/CHABOCHE/{block.user_id}: missing data card", block.source)
+        return
+
+    s_0, s_1, beta = 0.0, 1.0, 1.0
+    d_crit, eps_crit, ifail_sh = 0.99, 1e30, 1
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_CHABOCHE_1")
+        s_0 = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        s_1 = _fval(f1[1], 1.0) if len(f1) > 1 else 1.0
+        beta = _fval(f1[2], 1.0) if len(f1) > 2 else 1.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_CHABOCHE_2")
+            d_crit = _fval(f2[0], 0.99) if len(f2) > 0 else 0.99
+            eps_crit = _fval(f2[1], 1e30) if len(f2) > 1 else 1e30
+            ifail_sh = _ival(f2[2], 1) if len(f2) > 2 else 1
+    else:
+        toks1 = cards[0].tokens()
+        s_0 = float(toks1[0]) if len(toks1) > 0 else 0.0
+        s_1 = float(toks1[1]) if len(toks1) > 1 else 1.0
+        beta = float(toks1[2]) if len(toks1) > 2 else 1.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            d_crit = float(toks2[0]) if len(toks2) > 0 else 0.99
+            eps_crit = float(toks2[1]) if len(toks2) > 1 else 1e30
+            ifail_sh = int(float(toks2[2])) if len(toks2) > 2 else 1
+
+    from ..model.entities import FailChaboche
+    model.fail_chaboches[block.user_id] = FailChaboche(
+        mat_id=block.user_id, title=title, s_0=s_0, s_1=s_1, beta=beta,
+        d_crit=d_crit, eps_crit=eps_crit, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -44381,6 +44425,61 @@ def read_sensor_truss_force(block: KeywordBlock, model: Model, log: MessageLog) 
     model.sensors.append(Sensor(
         id=stf.id, kind="TRUSS_FORCE", tdelay=t_delay
     ))
+
+
+def read_eng_accel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ACCEL`` or ``/ENG/ACCEL`` (M234): Engine acceleration output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ACCEL/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_acc, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_ACCEL_1")
+        dt_acc = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_acc = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngAccel
+    a_id = block.user_id or (len(model.eng_accels) + 1)
+    model.eng_accels[a_id] = EngAccel(
+        id=a_id, title=title, dt_acc=dt_acc, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_ENERGY`` or ``/SENSOR/ENERGY_SPRING`` (M234): Spring element internal energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, e_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_ENERGY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        e_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        e_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringEnergy, Sensor
+    sse = SensorSpringEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        e_max=e_max, t_delay=t_delay
+    )
+    model.sensor_spring_energies[sse.id] = sse
+    model.sensors.append(Sensor(
+        id=sse.id, kind="SPRING_ENERGY", tdelay=t_delay
+    ))
+
 
 
 
@@ -46686,6 +46785,20 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "UNIVERSAL_GIMBAL": read_gimbal_joint,
     "SENSOR_TRUSS_FORCE": read_sensor_truss_force,
     "SENSOR_FORCE_TRUSS": read_sensor_truss_force,
+    # --- M234: Lemaitre-Chaboche Failure Criterion, Engine Acceleration Output Directive, Universal/Cardan Axis Joint Aliases, and Spring Energy Sensor Suite ---
+    "FAIL_CHABOCHE": read_fail_chaboche,
+    "FAIL_LEMAITRE_CHABOCHE": read_fail_chaboche,
+    "FAIL_CHABOCHE_DAMAGE": read_fail_chaboche,
+    "ACCEL": read_eng_accel,
+    "ENG_ACCEL": read_eng_accel,
+    "ENG_ACCELERATION": read_eng_accel,
+    "LAGMUL_UNIVERSAL_AXIS": read_cardan_joint,
+    "UNIVERSAL_AXIS": read_cardan_joint,
+    "LAGMUL_CARDAN_AXIS": read_cardan_joint,
+    "CARDAN_AXIS": read_cardan_joint,
+    "SENSOR_SPRING_ENERGY": read_sensor_spring_energy,
+    "SENSOR_ENERGY_SPRING": read_sensor_spring_energy,
+    "SENSOR_SPRING_ENER": read_sensor_spring_energy,
 }
 
 
@@ -46694,7 +46807,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
 
 ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DT", "DTIX", "H3D", "MON", "PARITH", "PARITH_ON", "PARITH_OFF", "PRINT", "RFILE", "RUN", "STOP", "TFILE", "VERS",
-    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY"
+    "DEBUG", "NOIS", "FXFREQ", "TRACK", "HELM", "TRUNC", "MASS", "ENERGY", "MOMENT", "STATE", "SURF", "ALE", "SH_THICK", "GEO", "TENS", "STRESS", "STRAIN", "PLASTIC", "VELOCITY", "ACCEL"
 }
 
 def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
