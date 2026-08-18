@@ -2222,6 +2222,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("HOOP", "HOOP_STRESS", "PIPE_HOOP"):
         read_fail_hoop(block, model, log)
         return
+    if kind in ("SPALLING_CUT", "SPALL_CUT", "HYDRO_CUT"):
+        read_fail_spalling_cut(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -22827,6 +22830,12 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub in ("INLINE", "INLINE_JOINT", "LINE"):
         read_inline_joint(block, model, log)
         return
+    elif sub in ("PARALLEL", "PARALLEL_JOINT"):
+        read_parallel_joint(block, model, log)
+        return
+    elif sub in ("PERPENDICULAR", "PERPENDICULAR_JOINT", "ORTHOGONAL_JOINT", "PERP"):
+        read_perpendicular_joint(block, model, log)
+        return
 
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     lagmod = 1
@@ -23249,6 +23258,71 @@ def read_inline_joint(block: KeywordBlock, model: Model, log: MessageLog) -> Non
         id=block.user_id, title=title, node1=node1, node2=node2,
         axis_dir=axis_dir, skew_id=skew_id, tol=tol
     )
+
+
+def read_parallel_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PARALLEL/id`` or ``/LAGMUL/PARALLEL/id`` (M213): Parallel axes kinematic joint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PARALLEL/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, axis_dir, skew_id, tol = 0, 0, 1, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("PARALLEL_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        axis_dir = _ival(f[2], 1) if len(f) > 2 else 1
+        skew_id = _ival(f[3], 0) if len(f) > 3 else 0
+        tol = _fval(f[4], 1e-6) if len(f) > 4 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        axis_dir = int(float(toks[2])) if len(toks) > 2 else 1
+        skew_id = int(float(toks[3])) if len(toks) > 3 else 0
+        tol = float(toks[4]) if len(toks) > 4 else 1e-6
+
+    from ..model.entities import ParallelJoint
+    model.parallel_joints[block.user_id] = ParallelJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis_dir=axis_dir, skew_id=skew_id, tol=tol
+    )
+
+
+def read_perpendicular_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PERPENDICULAR/id`` or ``/LAGMUL/PERPENDICULAR/id`` (M213): Perpendicular axes kinematic joint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PERPENDICULAR/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, axis1_dir, axis2_dir, skew1_id, skew2_id, tol = 0, 0, 1, 2, 0, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("PERPENDICULAR_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        axis1_dir = _ival(f[2], 1) if len(f) > 2 else 1
+        axis2_dir = _ival(f[3], 2) if len(f) > 3 else 2
+        skew1_id = _ival(f[4], 0) if len(f) > 4 else 0
+        skew2_id = _ival(f[5], 0) if len(f) > 5 else 0
+        tol = _fval(f[6], 1e-6) if len(f) > 6 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        axis1_dir = int(float(toks[2])) if len(toks) > 2 else 1
+        axis2_dir = int(float(toks[3])) if len(toks) > 3 else 2
+        skew1_id = int(float(toks[4])) if len(toks) > 4 else 0
+        skew2_id = int(float(toks[5])) if len(toks) > 5 else 0
+        tol = float(toks[6]) if len(toks) > 6 else 1e-6
+
+    from ..model.entities import PerpendicularJoint
+    model.perpendicular_joints[block.user_id] = PerpendicularJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis1_dir=axis1_dir, axis2_dir=axis2_dir, skew1_id=skew1_id, skew2_id=skew2_id, tol=tol
+    )
+
 
 
 
@@ -41155,6 +41229,35 @@ def read_fail_hoop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_spalling_cut(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/SPALLING_CUT/mat_ID`` (M213): Spalling hydrostatic tensile cutoff failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/SPALLING_CUT/{block.user_id}: missing data card", block.source)
+        return
+
+    p_min, ifail_sh, eps_v_max, d_max = 0.0, 1, 0.0, 1.0
+    if block.fixed:
+        f = cards[0].cut("FAIL_SPALLING_CUT_1")
+        p_min = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        ifail_sh = _ival(f[1], 1) if len(f) > 1 else 1
+        eps_v_max = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        d_max = _fval(f[3], 1.0) if len(f) > 3 else 1.0
+    else:
+        toks = cards[0].tokens()
+        p_min = float(toks[0]) if len(toks) > 0 else 0.0
+        ifail_sh = int(float(toks[1])) if len(toks) > 1 else 1
+        eps_v_max = float(toks[2]) if len(toks) > 2 else 0.0
+        d_max = float(toks[3]) if len(toks) > 3 else 1.0
+
+    from ..model.entities import FailSpallingCut
+    model.fail_spalling_cuts[block.user_id] = FailSpallingCut(
+        mat_id=block.user_id, title=title, p_min=p_min,
+        ifail_sh=ifail_sh, eps_v_max=eps_v_max, d_max=d_max
+    )
+
+
+
 
 
 
@@ -42265,6 +42368,25 @@ def read_eng_tfile(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             model.tfile_dt = float(toks[0]) if len(toks) > 0 else 0.0
             if len(toks) > 1:
                 model.tfile_sens_id = int(float(toks[1]))
+
+
+def read_eng_rfile(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RFILE`` or ``/ENG/RFILE`` (M213): Restart file output frequency and sensor gating."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("ENG_RFILE_1")
+            model.rfile_dt = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+            model.rfile_ncycle = _ival(f[1], 0) if len(f) > 1 else 0
+            model.rfile_sens_id = _ival(f[2], 0) if len(f) > 2 else 0
+        else:
+            toks = cards[0].tokens()
+            model.rfile_dt = float(toks[0]) if len(toks) > 0 else 0.0
+            if len(toks) > 1:
+                model.rfile_ncycle = int(float(toks[1]))
+            if len(toks) > 2:
+                model.rfile_sens_id = int(float(toks[2]))
+
 
 
 
@@ -44261,6 +44383,22 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_STOP": read_eng_stop,
     "TFILE": read_eng_tfile,
     "ENG_TFILE": read_eng_tfile,
+    # --- M213: Parallel & Perpendicular Kinematic Joints, Spalling Hydrostatic Cutoff Failure Criterion, and Engine Restart File Directives Suite ---
+    "LAGMUL_PARALLEL": read_parallel_joint,
+    "LAGMUL_PARALLEL_JOINT": read_parallel_joint,
+    "PARALLEL_JOINT": read_parallel_joint,
+    "PARALLEL": read_parallel_joint,
+    "LAGMUL_PERPENDICULAR": read_perpendicular_joint,
+    "LAGMUL_PERPENDICULAR_JOINT": read_perpendicular_joint,
+    "PERPENDICULAR_JOINT": read_perpendicular_joint,
+    "PERPENDICULAR": read_perpendicular_joint,
+    "ORTHOGONAL_JOINT": read_perpendicular_joint,
+    "LAGMUL_ORTHOGONAL": read_perpendicular_joint,
+    "FAIL_SPALLING_CUT": read_fail_spalling_cut,
+    "FAIL_SPALL_CUT": read_fail_spalling_cut,
+    "FAIL_HYDRO_CUT": read_fail_spalling_cut,
+    "RFILE": read_eng_rfile,
+    "ENG_RFILE": read_eng_rfile,
 }
 
 

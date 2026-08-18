@@ -12584,6 +12584,44 @@ class FailHoop:
     d_max: float = 1.0           # maximum damage
 
 
+@dataclass
+class ParallelJoint:
+    """``/LAGMUL/PARALLEL`` or ``/PARALLEL/id`` (M213): Parallel axes kinematic joint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    axis_dir: int = 1        # parallel axis: 1: X, 2: Y, 3: Z
+    skew_id: int = 0
+    tol: float = 1e-6
+
+
+@dataclass
+class PerpendicularJoint:
+    """``/LAGMUL/PERPENDICULAR`` or ``/PERPENDICULAR/id`` (M213): Perpendicular axes kinematic joint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    axis1_dir: int = 1       # primary axis 1: 1: X, 2: Y, 3: Z
+    axis2_dir: int = 2       # primary axis 2: 1: X, 2: Y, 3: Z
+    skew1_id: int = 0
+    skew2_id: int = 0
+    tol: float = 1e-6
+
+
+@dataclass
+class FailSpallingCut:
+    """``/FAIL/SPALLING_CUT/mat_ID`` (M213): Spalling hydrostatic tensile cutoff failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    p_min: float = 0.0           # minimum tensile hydrostatic pressure cutoff
+    ifail_sh: int = 1            # 1: delete on 1 layer, 2: delete on all layers
+    eps_v_max: float = 0.0       # maximum volumetric tensile strain
+    d_max: float = 1.0           # maximum damage
+
+
+
 
 
 

@@ -40,7 +40,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M212)
+## What is implemented (M1 → M213)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
 real history is 41 milestones. One line each:
@@ -218,6 +218,7 @@ real history is 41 milestones. One line each:
 | M210 | Planar/Cardan Kinematic Joints, Tabular Failure Criterion, and Engine Animation Directives Suite: /LAGMUL/PLANAR (/PLANAR) planar kinematic joint constraint, /LAGMUL/CARDAN (/CARDAN) universal kinematic joint constraint with axis direction and skew frame, /FAIL/TBID (/FAIL/TABLE) tabular failure criterion with triaxiality plastic strain table ID, and /ANIM/DT (/ENG/ANIM/DT) engine animation output frequency and sensor gating |
 | M211 | Rigid Link & Screw Kinematic Joints, S-N Fatigue Failure Criterion, and Engine Run Directives Suite: /LAGMUL/RIGID (/RIGID_JOINT) fully fixed rigid kinematic joint constraint, /LAGMUL/SCREW (/SCREW) helical screw kinematic joint constraint with pitch and skew frame, /FAIL/SN_CURVE (/FAIL/SNCURVE) S-N curve cyclic fatigue failure criterion, and /RUN (/ENG/RUN) engine execution run title, stop time, and cycle controls |
 | M212 | Constant Velocity & In-Line Kinematic Joints, Hoop Stress Failure Criterion, and Engine Stop/TFILE Directives Suite: /LAGMUL/CV_JOINT (/CV_JOINT, /CONSTANT_VELOCITY) homokinetic constant velocity kinematic joint constraint with axis direction and skew frame, /LAGMUL/INLINE (/INLINE) in-line kinematic joint constraint with line axis and skew frame, /FAIL/HOOP (/FAIL/HOOP_STRESS) critical hoop stress bursting failure criterion, /STOP (/ENG/STOP) engine sensor termination and cycle limit stop directive, and /TFILE (/ENG/TFILE) engine time-history file frequency and sensor gating |
+| M213 | Parallel & Perpendicular Kinematic Joints, Spalling Hydrostatic Cutoff Failure Criterion, and Engine Restart File Directives Suite: /LAGMUL/PARALLEL (/PARALLEL, /PARALLEL_JOINT) parallel axes kinematic joint constraint with axis direction and skew frame, /LAGMUL/PERPENDICULAR (/PERPENDICULAR, /PERPENDICULAR_JOINT, /ORTHOGONAL_JOINT) perpendicular axes kinematic joint constraint with dual axis directions and skew frames, /FAIL/SPALLING_CUT (/FAIL/SPALL_CUT, /FAIL/HYDRO_CUT) spalling hydrostatic tensile cutoff failure criterion, and /RFILE (/ENG/RFILE) engine restart dump file frequency and sensor gating |
 
 
 Full detail per milestone: grep `PORTING_GUIDE.md` §5 for `M<NN>` and read

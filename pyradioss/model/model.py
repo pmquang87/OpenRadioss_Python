@@ -1495,6 +1495,15 @@ class Model:
         self.tfile_dt: float = 0.0                                   # /TFILE, /ENG/TFILE (M212)
         self.tfile_sens_id: int = 0
 
+        # M213 Entities
+        self.parallel_joints: Dict[int, Any] = {}                   # /LAGMUL/PARALLEL, /PARALLEL (M213)
+        self.perpendicular_joints: Dict[int, Any] = {}               # /LAGMUL/PERPENDICULAR, /PERPENDICULAR (M213)
+        self.fail_spalling_cuts: Dict[int, Any] = {}                 # /FAIL/SPALLING_CUT (M213)
+        self.rfile_dt: float = 0.0                                   # /RFILE, /ENG/RFILE (M213)
+        self.rfile_ncycle: int = 0
+        self.rfile_sens_id: int = 0
+
+
 
 
 
