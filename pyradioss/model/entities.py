@@ -11835,61 +11835,41 @@ class SensorWork:
     """``/SENSOR/WORK/id`` (M202): Internal/plastic work threshold sensor."""
     id: int = 0
     title: str = ""
+    node_id1: int = 0
+    node_id2: int = 0
     object_id: int = 0
     sens_type: int = 1
     t_delay: float = 0.0
+    tdelay: float = 0.0
     w_max: float = 0.0
+    work_max: float = 0.0
+    tmin: float = 0.0
+    sect_id: int = 0
+    int_id: int = 0
+    rbody_id: int = 0
+    rwall_id: int = 0
+
+    def __post_init__(self):
+        if self.t_delay != 0.0 and self.tdelay == 0.0:
+            self.tdelay = self.t_delay
+        elif self.tdelay != 0.0 and self.t_delay == 0.0:
+            self.t_delay = self.tdelay
+        if self.w_max != 0.0 and self.work_max == 0.0:
+            self.work_max = self.w_max
+        elif self.work_max != 0.0 and self.w_max == 0.0:
+            self.w_max = self.work_max
+        if self.object_id != 0 and self.node_id1 == 0:
+            self.node_id1 = self.object_id
+        elif self.node_id1 != 0 and self.object_id == 0:
+            self.object_id = self.node_id1
 
 
-@dataclass
-class LagmulGear:
-    """``/LAGMUL/GEAR/id`` or ``/GEAR/id`` (M203): Kinematic gear constraint."""
-    id: int = 0
-    title: str = ""
-    node0: int = 0
-    node1: int = 0
-    node2: int = 0
-    r1: float = 1.0
-    r2: float = 1.0
 
-
-@dataclass
-class LagmulRack:
-    """``/LAGMUL/RACK/id`` or ``/RACK/id`` (M203): Kinematic rack and pinion constraint."""
-    id: int = 0
-    title: str = ""
-    node0: int = 0
-    node1: int = 0
-    node2: int = 0
-    radius: float = 1.0
-
-
-@dataclass
-class LagmulDiff:
-    """``/LAGMUL/DIFF/id`` or ``/DIFF/id`` (M203): Kinematic differential gear constraint."""
-    id: int = 0
-    title: str = ""
-    node0: int = 0
-    node1: int = 0
-    node2: int = 0
-    node3: int = 0
-    r1: float = 1.0
-    r2: float = 1.0
-    r3: float = 1.0
-
-
-@dataclass
-class InterType26:
-    """``/INTER/TYPE26/id`` or ``/INTER/GUIDED_CABLE/id`` (M203): Guided cable interface."""
-    id: int = 0
-    title: str = ""
-    grnod_id: int = 0
-    grpart_id: int = 0
-    istiff: int = 0
-    stfac: float = 1.0
-    fric: float = 0.0
-
-InterGuidedCable = InterType26
+LagmulGear = GearConstraint
+LagmulRack = RackConstraint
+LagmulDiff = DiffConstraint
+InterType26 = GuidedCable
+InterGuidedCable = GuidedCable
 
 
 @dataclass
@@ -11899,18 +11879,62 @@ class SensorPython:
     title: str = ""
     script_name: str = ""
     func_name: str = ""
+    code: str = ""
     t_delay: float = 0.0
+    tdelay: float = 0.0
     t_act: float = 0.0
+    sensor_type: str = "PYTHON"
+
+    def __post_init__(self):
+        if self.t_delay != 0.0 and self.tdelay == 0.0:
+            self.tdelay = self.t_delay
+        elif self.tdelay != 0.0 and self.t_delay == 0.0:
+            self.t_delay = self.tdelay
 
 
+@dataclass
+class TransformPos:
+    """``/TRANSFORM/POS/id``, ``/TRANSFORM/POSITION/id``, ``/POS/id`` (M203): 6-point 3D alignment transformation."""
+    id: int = 0
+    title: str = ""
+    grnod_id: int = 0
+    node1: int = 0
+    node2: int = 0
+    node3: int = 0
+    node4: int = 0
+    node5: int = 0
+    node6: int = 0
+    node_ids: tuple[int, ...] = (0, 0, 0, 0, 0, 0)
+    submodel_id: int = 0
+    submodel: int = 0
+    points: List[Tuple[float, float, float]] = field(default_factory=list)
+
+    def __post_init__(self):
+        if not any(self.node_ids) and any((self.node1, self.node2, self.node3, self.node4, self.node5, self.node6)):
+            self.node_ids = (self.node1, self.node2, self.node3, self.node4, self.node5, self.node6)
+        elif any(self.node_ids) and not any((self.node1, self.node2, self.node3, self.node4, self.node5, self.node6)):
+            self.node1 = self.node_ids[0] if len(self.node_ids) > 0 else 0
+            self.node2 = self.node_ids[1] if len(self.node_ids) > 1 else 0
+            self.node3 = self.node_ids[2] if len(self.node_ids) > 2 else 0
+            self.node4 = self.node_ids[3] if len(self.node_ids) > 3 else 0
+            self.node5 = self.node_ids[4] if len(self.node_ids) > 4 else 0
+            self.node6 = self.node_ids[5] if len(self.node_ids) > 5 else 0
+        if self.submodel_id != 0 and self.submodel == 0:
+            self.submodel = self.submodel_id
+        elif self.submodel != 0 and self.submodel_id == 0:
+            self.submodel_id = self.submodel
 
 
+PosTransform = TransformPos
+TransformPosition = TransformPos
 
 
-
-
-
-
-
-
+@dataclass
+class ChecksumDirective:
+    """``/CHECKSUM/START``, ``/CHECKSUM/END`` (M203): Checksum calculation block directive."""
+    id: int = 0
+    title: str = ""
+    action: str = "START"  # "START" or "END"
+    val1: int = 0
+    val2: int = 0
 

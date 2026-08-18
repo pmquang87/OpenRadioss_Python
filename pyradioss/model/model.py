@@ -1106,6 +1106,7 @@ class Model:
         self.prop_type35s: Dict[int, PropType35] = {}               # /PROP/TYPE35, /PROP/STITCH (M186)
         self.mat_law3s: Dict[int, MatLaw3] = {}                     # /MAT/LAW3, /MAT/PLAS_BOST (M187)
         self.mat_law4s: Dict[int, MatLaw4] = {}                     # /MAT/LAW4, /MAT/HYD_JCOOK (M187)
+        self.mat_hyd_jcooks = self.mat_law4s
         self.mat_law5s: Dict[int, MatLaw5] = {}                     # /MAT/LAW5, /MAT/JCOOK_TAB (M187)
         self.mat_law10s: Dict[int, MatLaw10] = {}                   # /MAT/LAW10, /MAT/SOIL (M187)
         self.mat_law14s: Dict[int, MatLaw14] = {}                   # /MAT/LAW14, /MAT/CAM_CLAY (M187)
@@ -1364,14 +1365,19 @@ class Model:
         self.sensors_work: Dict[int, Any] = {}                       # /SENSOR/WORK (M201/M202)
 
         # M203 Entities
-        self.lagmul_gears: Dict[int, Any] = {}                       # /LAGMUL/GEAR, /GEAR (M203)
-        self.lagmul_racks: Dict[int, Any] = {}                       # /LAGMUL/RACK, /RACK (M203)
-        self.lagmul_diffs: Dict[int, Any] = {}                       # /LAGMUL/DIFF, /DIFF (M203)
-        self.inter_type26s: Dict[int, Any] = {}                      # /INTER/TYPE26, /INTER/GUIDED_CABLE (M203)
-        self.props_type15: Dict[int, Any] = {}                       # /PROP/TYPE15, /PROP/INJECT1 (M203)
-        self.props_type16: Dict[int, Any] = {}                       # /PROP/TYPE16, /PROP/INJECT2 (M203)
+        self.lagmul_gears = self.gears
+        self.lagmul_racks = self.racks
+        self.lagmul_diffs = self.diffs
+        self.inter_type26s = self.guided_cables
         self.sensors_python: Dict[int, Any] = {}                     # /SENSOR/PYTHON (M203)
         self.transforms_pos: Dict[int, Any] = {}                     # /TRANSFORM/POS, /POS (M203)
+        self.pos_transforms = self.transforms_pos
+        self.props_inject1 = self.prop_inject1s
+        self.props_type15 = self.prop_inject1s
+        self.props_inject2 = self.prop_inject2s
+        self.props_type16 = self.prop_inject2s
+        self.checksums: List[Any] = []                               # /CHECKSUM/START, /CHECKSUM/END (M203)
+
 
 
 

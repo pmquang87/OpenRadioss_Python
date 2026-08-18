@@ -1743,8 +1743,19 @@ def read_flux(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             if len(f1) > 4 and f1[4].strip():
                 fscale = _fval(f1[4], 1.0)
             if len(cards) > 1 and not cards[1].is_blank:
-                f2 = cards[1].cut("HEAT_FLUX_2") if "HEAT_FLUX_2" in CARD_LAYOUTS else cards[1].cut("FLUX_2") if "FLUX_2" in CARD_LAYOUTS else _fixed_vals(cards[1], [20, 20, 20])
-                if len(f2) >= 3:
+                f2 = cards[1].cut("HEAT_FLUX_2") if "HEAT_FLUX_2" in CARD_LAYOUTS else cards[1].cut("FLUX_2") if "FLUX_2" in CARD_LAYOUTS else _fixed_vals(cards[1], [20, 20, 20, 20, 20])
+                if len(f2) >= 5:
+                    ascale = _fval(f2[0], 1.0)
+                    fscale = _fval(f2[1], 1.0)
+                    tstart = _fval(f2[2], 0.0)
+                    tstop = _fval(f2[3], 1.0e30)
+                    q = _fval(f2[4], 0.0)
+                elif len(f2) == 4:
+                    ascale = _fval(f2[0], 1.0)
+                    fscale = _fval(f2[1], 1.0)
+                    tstart = _fval(f2[2], 0.0)
+                    tstop = _fval(f2[3], 1.0e30)
+                elif len(f2) >= 3:
                     tstart = _fval(f2[0], 0.0) if len(f2) > 0 and f2[0].strip() else 0.0
                     tstop = _fval(f2[1], 1.0e30) if len(f2) > 1 and f2[1].strip() else 1.0e30
                     q = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
@@ -1761,7 +1772,18 @@ def read_flux(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 fscale = float(t1[4])
             if len(cards) > 1 and not cards[1].is_blank:
                 t2 = cards[1].tokens()
-                if len(t2) >= 3:
+                if len(t2) >= 5:
+                    ascale = float(t2[0])
+                    fscale = float(t2[1])
+                    tstart = float(t2[2])
+                    tstop = float(t2[3])
+                    q = float(t2[4])
+                elif len(t2) == 4:
+                    ascale = float(t2[0])
+                    fscale = float(t2[1])
+                    tstart = float(t2[2])
+                    tstop = float(t2[3])
+                elif len(t2) >= 3:
                     tstart = float(t2[0])
                     tstop = float(t2[1])
                     q = float(t2[2])
@@ -11636,7 +11658,9 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         from ..model.entities import SensorWork
         model.sensors_work[block.user_id] = SensorWork(
             id=block.user_id, title=title, object_id=n1, sens_type=n2,
-            t_delay=tdelay, w_max=wmax
+            t_delay=tdelay, w_max=wmax, tmin=tmin, sect_id=sect_id,
+            int_id=int_id, rbody_id=rb_id, rwall_id=rw_id,
+            node_id1=n1, node_id2=n2
         )
     elif kind == "RWALL":
         if block.fixed:
@@ -11785,15 +11809,26 @@ def read_sensor(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         from ..model.entities import SensorPython
         tdelay = 0.0
         script_name, func_name = "", ""
+        code_lines = []
         if cards:
+            for c in cards:
+                if not c.is_blank:
+                    code_lines.append(c.raw.rstrip())
             toks0 = cards[0].tokens()
-            tdelay = float(toks0[0]) if toks0 else 0.0
+            if toks0 and not any(k in toks0[0] for k in ("def", "return", "import", "=")):
+                try:
+                    tdelay = float(toks0[0])
+                except (ValueError, TypeError):
+                    tdelay = 0.0
         if len(cards) > 1:
             toks1 = cards[1].tokens()
-            script_name = toks1[0] if len(toks1) > 0 else ""
-            func_name = toks1[1] if len(toks1) > 1 else ""
+            if toks1 and not any(k in toks1[0] for k in ("def", "return", "import", "=")):
+                script_name = toks1[0] if len(toks1) > 0 else ""
+                func_name = toks1[1] if len(toks1) > 1 else ""
+        code_str = "\n".join(code_lines)
         sp = SensorPython(
-            id=block.user_id, title=title, script_name=script_name, func_name=func_name, t_delay=tdelay
+            id=block.user_id, title=title, script_name=script_name, func_name=func_name,
+            code=code_str, t_delay=tdelay, tdelay=tdelay, sensor_type="PYTHON"
         )
         model.sensors_python[block.user_id] = sp
         model.sensors.append(Sensor(
@@ -16055,8 +16090,26 @@ def read_sect_paral(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_checksum(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/CHECKSUM``, ``/CHECKSUM/START``, ``/CHECKSUM/END`` (M114)."""
-    pass
+    """``/CHECKSUM``, ``/CHECKSUM/START``, ``/CHECKSUM/END`` (M114, M203)."""
+    sub = block.parts[1].upper() if len(block.parts) > 1 else "START"
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    val1, val2 = 0, 0
+    if cards and not cards[0].is_blank:
+        toks = cards[0].tokens()
+        if toks:
+            try:
+                val1 = int(float(toks[0]))
+            except (ValueError, TypeError):
+                val1 = 0
+            if len(toks) > 1:
+                try:
+                    val2 = int(float(toks[1]))
+                except (ValueError, TypeError):
+                    val2 = 0
+    from ..model.entities import ChecksumDirective
+    cd = ChecksumDirective(id=block.user_id, title=title, action=sub, val1=val1, val2=val2)
+    model.checksums.append(cd)
+
 
 
 def read_dynain(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -42582,8 +42635,17 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SPCND": read_spcnd,
     "DDW": read_ddw,
     "SURF_SURF": read_surf_surf,
-    "SURFSURF": read_surf_surf,
     "BCS_LAGMUL": read_bcs,
+    # --- M203: Kinematic Gear/Rack/Diff Constraints, Guided Cable Type 26, and Python Sensor Suite ---
+    "LAGMUL_GEAR": read_gear,
+    "GEAR": read_gear,
+    "LAGMUL_RACK": read_rack,
+    "RACK": read_rack,
+    "LAGMUL_DIFF": read_diff,
+    "DIFF": read_diff,
+    "INTER_TYPE26": read_guided_cable,
+    "INTER_GUIDED_CABLE": read_guided_cable,
+    "SENSOR_PYTHON": read_sensor,
 }
 
 
