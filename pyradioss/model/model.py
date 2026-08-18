@@ -1503,6 +1503,15 @@ class Model:
         self.rfile_ncycle: int = 0
         self.rfile_sens_id: int = 0
 
+        # M214 Entities
+        self.gimbal_joints: Dict[int, Any] = {}                      # /LAGMUL/GIMBAL, /GIMBAL (M214)
+        self.distance_joints: Dict[int, Any] = {}                    # /LAGMUL/DISTANCE, /DISTANCE (M214)
+        self.fail_voids: Dict[int, Any] = {}                         # /FAIL/VOIDS (M214)
+        self.print_ncycle: int = 0                                   # /PRINT, /ENG/PRINT (M214)
+        self.print_dt: float = 0.0
+        self.print_sens_id: int = 0
+
+
 
 
 

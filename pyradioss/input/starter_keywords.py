@@ -2225,6 +2225,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("SPALLING_CUT", "SPALL_CUT", "HYDRO_CUT"):
         read_fail_spalling_cut(block, model, log)
         return
+    if kind in ("VOIDS", "VOID", "POROSITY"):
+        read_fail_voids(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -22836,6 +22839,12 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub in ("PERPENDICULAR", "PERPENDICULAR_JOINT", "ORTHOGONAL_JOINT", "PERP"):
         read_perpendicular_joint(block, model, log)
         return
+    elif sub in ("GIMBAL", "GIMBAL_JOINT", "UNIVERSAL_GIMBAL"):
+        read_gimbal_joint(block, model, log)
+        return
+    elif sub in ("DISTANCE", "DISTANCE_JOINT", "CONST_DIST", "CONST_DISTANCE"):
+        read_distance_joint(block, model, log)
+        return
 
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     lagmod = 1
@@ -23322,6 +23331,69 @@ def read_perpendicular_joint(block: KeywordBlock, model: Model, log: MessageLog)
         id=block.user_id, title=title, node1=node1, node2=node2,
         axis1_dir=axis1_dir, axis2_dir=axis2_dir, skew1_id=skew1_id, skew2_id=skew2_id, tol=tol
     )
+
+
+def read_gimbal_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/GIMBAL/id`` or ``/LAGMUL/GIMBAL/id`` (M214): Gimbal 2-DOF universal kinematic joint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/GIMBAL/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, axis1_dir, axis2_dir, skew1_id, skew2_id, tol = 0, 0, 1, 2, 0, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("GIMBAL_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        axis1_dir = _ival(f[2], 1) if len(f) > 2 else 1
+        axis2_dir = _ival(f[3], 2) if len(f) > 3 else 2
+        skew1_id = _ival(f[4], 0) if len(f) > 4 else 0
+        skew2_id = _ival(f[5], 0) if len(f) > 5 else 0
+        tol = _fval(f[6], 1e-6) if len(f) > 6 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        axis1_dir = int(float(toks[2])) if len(toks) > 2 else 1
+        axis2_dir = int(float(toks[3])) if len(toks) > 3 else 2
+        skew1_id = int(float(toks[4])) if len(toks) > 4 else 0
+        skew2_id = int(float(toks[5])) if len(toks) > 5 else 0
+        tol = float(toks[6]) if len(toks) > 6 else 1e-6
+
+    from ..model.entities import GimbalJoint
+    model.gimbal_joints[block.user_id] = GimbalJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis1_dir=axis1_dir, axis2_dir=axis2_dir, skew1_id=skew1_id, skew2_id=skew2_id, tol=tol
+    )
+
+
+def read_distance_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DISTANCE/id`` or ``/LAGMUL/DISTANCE/id`` (M214): Constant distance kinematic joint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/DISTANCE/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, dist, tol = 0, 0, 0.0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("DISTANCE_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        dist = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        tol = _fval(f[3], 1e-6) if len(f) > 3 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        dist = float(toks[2]) if len(toks) > 2 else 0.0
+        tol = float(toks[3]) if len(toks) > 3 else 1e-6
+
+    from ..model.entities import DistanceJoint
+    model.distance_joints[block.user_id] = DistanceJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        dist=dist, tol=tol
+    )
+
 
 
 
@@ -41257,6 +41329,39 @@ def read_fail_spalling_cut(block: KeywordBlock, model: Model, log: MessageLog) -
     )
 
 
+def read_fail_voids(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/VOIDS/mat_ID`` (M214): Void nucleation and coalescence porosity failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/VOIDS/{block.user_id}: missing data card", block.source)
+        return
+
+    f_0, f_c, ifail_sh, q1, q2, d_max = 0.0, 0.15, 1, 1.5, 1.0, 1.0
+    if block.fixed:
+        f = cards[0].cut("FAIL_VOIDS_1")
+        f_0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        f_c = _fval(f[1], 0.15) if len(f) > 1 else 0.15
+        ifail_sh = _ival(f[2], 1) if len(f) > 2 else 1
+        q1 = _fval(f[3], 1.5) if len(f) > 3 else 1.5
+        q2 = _fval(f[4], 1.0) if len(f) > 4 else 1.0
+        d_max = _fval(f[5], 1.0) if len(f) > 5 else 1.0
+    else:
+        toks = cards[0].tokens()
+        f_0 = float(toks[0]) if len(toks) > 0 else 0.0
+        f_c = float(toks[1]) if len(toks) > 1 else 0.15
+        ifail_sh = int(float(toks[2])) if len(toks) > 2 else 1
+        q1 = float(toks[3]) if len(toks) > 3 else 1.5
+        q2 = float(toks[4]) if len(toks) > 4 else 1.0
+        d_max = float(toks[5]) if len(toks) > 5 else 1.0
+
+    from ..model.entities import FailVoids
+    model.fail_voids[block.user_id] = FailVoids(
+        mat_id=block.user_id, title=title, f_0=f_0, f_c=f_c,
+        ifail_sh=ifail_sh, q1=q1, q2=q2, d_max=d_max
+    )
+
+
+
 
 
 
@@ -42386,6 +42491,25 @@ def read_eng_rfile(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 model.rfile_ncycle = int(float(toks[1]))
             if len(toks) > 2:
                 model.rfile_sens_id = int(float(toks[2]))
+
+
+def read_eng_print(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PRINT`` or ``/ENG/PRINT`` (M214): Engine terminal cycle output print frequency and sensor gating."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if cards and not cards[0].is_blank:
+        if block.fixed:
+            f = cards[0].cut("ENG_PRINT_1")
+            model.print_ncycle = _ival(f[0], 0) if len(f) > 0 else 0
+            model.print_dt = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+            model.print_sens_id = _ival(f[2], 0) if len(f) > 2 else 0
+        else:
+            toks = cards[0].tokens()
+            model.print_ncycle = int(float(toks[0])) if len(toks) > 0 else 0
+            if len(toks) > 1:
+                model.print_dt = float(toks[1])
+            if len(toks) > 2:
+                model.print_sens_id = int(float(toks[2]))
+
 
 
 
@@ -44399,6 +44523,22 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "FAIL_HYDRO_CUT": read_fail_spalling_cut,
     "RFILE": read_eng_rfile,
     "ENG_RFILE": read_eng_rfile,
+    # --- M214: Gimbal & Constant Distance Kinematic Joints, Void Coalescence Porosity Failure Criterion, and Engine Print Directives Suite ---
+    "LAGMUL_GIMBAL": read_gimbal_joint,
+    "LAGMUL_GIMBAL_JOINT": read_gimbal_joint,
+    "GIMBAL_JOINT": read_gimbal_joint,
+    "GIMBAL": read_gimbal_joint,
+    "LAGMUL_DISTANCE": read_distance_joint,
+    "LAGMUL_DISTANCE_JOINT": read_distance_joint,
+    "DISTANCE_JOINT": read_distance_joint,
+    "DISTANCE": read_distance_joint,
+    "LAGMUL_CONST_DIST": read_distance_joint,
+    "CONST_DIST": read_distance_joint,
+    "FAIL_VOIDS": read_fail_voids,
+    "FAIL_VOID": read_fail_voids,
+    "FAIL_POROSITY": read_fail_voids,
+    "PRINT": read_eng_print,
+    "ENG_PRINT": read_eng_print,
 }
 
 

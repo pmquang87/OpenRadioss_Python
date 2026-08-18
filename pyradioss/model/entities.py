@@ -12621,6 +12621,45 @@ class FailSpallingCut:
     d_max: float = 1.0           # maximum damage
 
 
+@dataclass
+class GimbalJoint:
+    """``/LAGMUL/GIMBAL`` or ``/GIMBAL/id`` (M214): Gimbal / 2-DOF universal kinematic joint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    axis1_dir: int = 1       # free rotation axis 1: 1: X, 2: Y, 3: Z
+    axis2_dir: int = 2       # free rotation axis 2: 1: X, 2: Y, 3: Z
+    skew1_id: int = 0
+    skew2_id: int = 0
+    tol: float = 1e-6
+
+
+@dataclass
+class DistanceJoint:
+    """``/LAGMUL/DISTANCE`` or ``/DISTANCE/id`` (M214): Constant distance kinematic joint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0
+    node2: int = 0
+    dist: float = 0.0        # fixed distance (<= 0 implies computed from initial coordinates)
+    tol: float = 1e-6
+
+
+@dataclass
+class FailVoids:
+    """``/FAIL/VOIDS/mat_ID`` (M214): Void nucleation and coalescence porosity failure model."""
+    mat_id: int = 0
+    title: str = ""
+    f_0: float = 0.0         # initial void volume fraction
+    f_c: float = 0.15        # critical void volume fraction at coalescence
+    ifail_sh: int = 1        # 1: delete on 1 layer, 2: delete on all layers
+    q1: float = 1.5          # Gurson parameter q1
+    q2: float = 1.0          # Gurson parameter q2
+    d_max: float = 1.0       # maximum damage
+
+
+
 
 
 
