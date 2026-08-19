@@ -2388,6 +2388,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("BAI_WIERZBICKI", "BAI_WIERZBICKI_MODEL", "BAI_WIERZBICKI_LAW", "BAI_WIERZBICKI_DAMAGE", "BW", "BAI"):
         read_fail_bai_wierzbicki(block, model, log)
         return
+    if kind in ("JH2", "JH2_MODEL", "JH2_LAW", "JH2_DAMAGE", "JOHNSON_HOLMQUIST", "JH"):
+        read_fail_jh2(block, model, log)
+        return
     if kind in ("CHABOCHE", "CHABOCHE_LAW", "CHABOCHE_DAMAGE", "CHABOCHE_MODEL", "LEMAITRE_CHABOCHE"):
         read_fail_chaboche(block, model, log)
         return
@@ -23179,6 +23182,9 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub in ("WORM_GEAR", "WORM_GEAR_JOINT", "WORM"):
         read_worm_gear_joint(block, model, log)
         return
+    elif sub in ("HYPOID_GEAR", "HYPOID_GEAR_JOINT", "HYPOID"):
+        read_hypoid_gear_joint(block, model, log)
+        return
     elif sub in ("INLINE", "INLINE_JOINT", "LINE"):
         read_inline_joint(block, model, log)
         return
@@ -23666,6 +23672,40 @@ def read_worm_gear_joint(block: KeywordBlock, model: Model, log: MessageLog) -> 
     model.worm_gear_joints[block.user_id] = WormGearJoint(
         id=block.user_id, title=title, node1=node1, node2=node2,
         ratio=ratio, skew1_id=skew1_id, skew2_id=skew2_id, tol=tol
+    )
+
+
+def read_hypoid_gear_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/HYPOID_GEAR/id`` or ``/LAGMUL/HYPOID_GEAR/id`` (M256): Hypoid gear kinematic joint constraint with spatial shaft offset."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/HYPOID_GEAR/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, ratio, offset, skew1_id, skew2_id, tol = 0, 0, 1.0, 0.0, 0, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("HYPOID_GEAR_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        ratio = _fval(f[2], 1.0) if len(f) > 2 else 1.0
+        offset = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        skew1_id = _ival(f[4], 0) if len(f) > 4 else 0
+        skew2_id = _ival(f[5], 0) if len(f) > 5 else 0
+        tol = _fval(f[6], 1e-6) if len(f) > 6 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        ratio = float(toks[2]) if len(toks) > 2 else 1.0
+        offset = float(toks[3]) if len(toks) > 3 else 0.0
+        skew1_id = int(float(toks[4])) if len(toks) > 4 else 0
+        skew2_id = int(float(toks[5])) if len(toks) > 5 else 0
+        tol = float(toks[6]) if len(toks) > 6 else 1e-6
+
+    from ..model.entities import HypoidGearJoint
+    model.hypoid_gear_joints[block.user_id] = HypoidGearJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        ratio=ratio, offset=offset, skew1_id=skew1_id, skew2_id=skew2_id, tol=tol
     )
 
 
@@ -43286,6 +43326,39 @@ def read_fail_bai_wierzbicki(block: KeywordBlock, model: Model, log: MessageLog)
     )
 
 
+def read_fail_jh2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/JH2/mat_ID`` (M256): Johnson-Holmquist ceramic/brittle damage failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/JH2/{block.user_id}: missing data card", block.source)
+        return
+
+    d1, d2, c_rate, t_star, eps0_dot, ifail_sh = 0.045, 1.0, 0.0, 0.0, 1.0, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_JH2_1")
+        d1 = _fval(f[0], 0.045) if len(f) > 0 else 0.045
+        d2 = _fval(f[1], 1.0) if len(f) > 1 else 1.0
+        c_rate = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        t_star = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        eps0_dot = _fval(f[4], 1.0) if len(f) > 4 else 1.0
+        ifail_sh = _ival(f[5], 1) if len(f) > 5 else 1
+    else:
+        toks = cards[0].tokens()
+        d1 = float(toks[0]) if len(toks) > 0 else 0.045
+        d2 = float(toks[1]) if len(toks) > 1 else 1.0
+        c_rate = float(toks[2]) if len(toks) > 2 else 0.0
+        t_star = float(toks[3]) if len(toks) > 3 else 0.0
+        eps0_dot = float(toks[4]) if len(toks) > 4 else 1.0
+        ifail_sh = int(float(toks[5])) if len(toks) > 5 else 1
+
+    from ..model.entities import FailJh2
+    model.fail_jh2s[block.user_id] = FailJh2(
+        mat_id=block.user_id, title=title, d1=d1, d2=d2,
+        c_rate=c_rate, t_star=t_star, eps0_dot=eps0_dot,
+        ifail_sh=ifail_sh
+    )
+
+
 
 
 
@@ -46730,6 +46803,60 @@ def read_sensor_spring_density(block: KeywordBlock, model: Model, log: MessageLo
     ))
 
 
+def read_eng_entropy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/ENTROPY`` or ``/ENG/THERMAL_ENTROPY`` (M256): Engine thermal entropy output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/ENTROPY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_entr, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_ENTROPY_1")
+        dt_entr = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_entr = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngEntropy
+    r_id = block.user_id or (len(model.eng_entropies) + 1)
+    model.eng_entropies[r_id] = EngEntropy(
+        id=r_id, title=title, dt_entr=dt_entr, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_entropy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_ENTROPY`` or ``/SENSOR/SPRING_ENTR`` (M256): Spring element thermal entropy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_ENTROPY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, entr_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_ENTROPY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        entr_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        entr_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringEntropy, Sensor
+    sse = SensorSpringEntropy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        entr_max=entr_max, t_delay=t_delay
+    )
+    model.sensor_spring_entropies[sse.id] = sse
+    model.sensors.append(Sensor(
+        id=sse.id, kind="SPRING_ENTROPY", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -49289,6 +49416,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_DENS": read_sensor_spring_density,
     "SENSOR_DENSITY_SPRING": read_sensor_spring_density,
     "SENSOR_SPRING_RHO": read_sensor_spring_density,
+    # --- M256: Johnson-Holmquist Ceramic/Brittle Failure Model, Engine Entropy Output Directive, Hypoid Gear Joint Suite, and Spring Entropy Sensor ---
+    "FAIL_JH2": read_fail_jh2,
+    "FAIL_JH2_MODEL": read_fail_jh2,
+    "FAIL_JH2_LAW": read_fail_jh2,
+    "FAIL_JH2_DAMAGE": read_fail_jh2,
+    "FAIL_JOHNSON_HOLMQUIST": read_fail_jh2,
+    "FAIL_JH": read_fail_jh2,
+    "ENG_ENTROPY": read_eng_entropy,
+    "ENG_THERMAL_ENTROPY": read_eng_entropy,
+    "ENTROPY": read_eng_entropy,
+    "LAGMUL_HYPOID_GEAR": read_hypoid_gear_joint,
+    "HYPOID_GEAR": read_hypoid_gear_joint,
+    "LAGMUL_HYPOID_GEAR_JOINT": read_hypoid_gear_joint,
+    "HYPOID_GEAR_JOINT": read_hypoid_gear_joint,
+    "LAGMUL_HYPOID": read_hypoid_gear_joint,
+    "HYPOID": read_hypoid_gear_joint,
+    "SENSOR_SPRING_ENTROPY": read_sensor_spring_entropy,
+    "SENSOR_SPRING_ENTR": read_sensor_spring_entropy,
+    "SENSOR_ENTROPY_SPRING": read_sensor_spring_entropy,
+    "SENSOR_SPRING_THERMAL_ENTROPY": read_sensor_spring_entropy,
 }
 
 

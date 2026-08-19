@@ -13930,6 +13930,52 @@ class SensorSpringDensity:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailJh2:
+    """``/FAIL/JH2/mat_ID`` (M256): Johnson-Holmquist ceramic/brittle damage failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    d1: float = 0.045            # damage coefficient D1
+    d2: float = 1.0              # damage exponent D2
+    c_rate: float = 0.0          # strain rate sensitivity coefficient C
+    t_star: float = 0.0          # normalized tensile strength T*
+    eps0_dot: float = 1.0        # reference strain rate eps0_dot
+    ifail_sh: int = 1            # shell element deletion flag
+
+
+@dataclass
+class EngEntropy:
+    """``/ENG/ENTROPY`` or ``/ENG/THERMAL_ENTROPY`` (M256): Engine thermal entropy output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_entr: float = 0.0         # time frequency for entropy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class HypoidGearJoint:
+    """``/HYPOID_GEAR/id`` or ``/LAGMUL/HYPOID_GEAR/id`` (M256): Hypoid gear kinematic joint constraint with shaft offset."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # pinion shaft node
+    node2: int = 0               # ring gear node
+    ratio: float = 1.0           # velocity ratio gamma = omega2 / omega1
+    offset: float = 0.0          # shaft hypoid offset distance E
+    skew1_id: int = 0            # pinion reference skew ID
+    skew2_id: int = 0            # ring gear reference skew ID
+    tol: float = 1e-6            # kinematic constraint tolerance
+
+
+@dataclass
+class SensorSpringEntropy:
+    """``/SENSOR/SPRING_ENTROPY`` or ``/SENSOR/SPRING_ENTR`` (M256): Spring element thermal entropy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    entr_max: float = 1e30       # maximum entropy threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

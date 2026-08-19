@@ -1726,6 +1726,12 @@ class Model:
         self.worm_gear_joints: Dict[int, Any] = {}                   # /WORM_GEAR, /LAGMUL/WORM_GEAR (M255)
         self.sensor_spring_densities: Dict[int, Any] = {}            # /SENSOR/SPRING_DENSITY (M255)
 
+        # M256 Entities
+        self.fail_jh2s: Dict[int, Any] = {}                          # /FAIL/JH2 (M256)
+        self.eng_entropies: Dict[int, Any] = {}                      # /ENG/ENTROPY (M256)
+        self.hypoid_gear_joints: Dict[int, Any] = {}                 # /HYPOID_GEAR, /LAGMUL/HYPOID_GEAR (M256)
+        self.sensor_spring_entropies: Dict[int, Any] = {}            # /SENSOR/SPRING_ENTROPY (M256)
+
 
 
 
