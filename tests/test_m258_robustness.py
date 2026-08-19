@@ -167,3 +167,26 @@ class TestIncludeFileNotFound:
         assert any("include" in e.lower() or "not found" in e.lower()
                     for e in log.errors), \
             f"Expected include-not-found error, got: {log.errors}"
+
+
+class TestMaterialElasticConstantsFallback:
+    """Material E, nu, G, K should deduce elastic constants gracefully."""
+
+    def test_deduce_from_shear_and_nu(self):
+        from pyradioss.model.entities import Material
+        mat = Material(id=1, law=82, rho0=1.0e-9, title="rubber",
+                       params={"mu": 1.5, "nu": 0.49})
+        assert mat.G == pytest.approx(1.5)
+        assert mat.nu == pytest.approx(0.49)
+        assert mat.E == pytest.approx(2.0 * 1.5 * 1.49)
+        assert mat.K > 0.0
+        assert mat.sound_speed_solid() > 0.0
+
+    def test_default_fallback_without_params(self):
+        from pyradioss.model.entities import Material
+        mat = Material(id=2, law=0, rho0=1000.0, title="generic", params={})
+        assert mat.nu == 0.3
+        assert mat.E == 0.0
+        assert mat.G == 0.0
+        assert mat.K == 0.0
+

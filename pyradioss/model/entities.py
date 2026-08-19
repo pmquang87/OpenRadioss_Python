@@ -97,21 +97,57 @@ class Material:
     # they drive the sound speed / time step and contact stiffness).
     @property
     def E(self) -> float:
-        return self.params["E"]
+        if "E" in self.params:
+            return self.params["E"]
+        if "Young" in self.params:
+            return self.params["Young"]
+        if "E0" in self.params:
+            return self.params["E0"]
+        g = self.G
+        if g > 0.0:
+            return 2.0 * g * (1.0 + self.nu)
+        return 0.0
 
     @property
     def nu(self) -> float:
-        return self.params["nu"]
+        if "nu" in self.params:
+            return self.params["nu"]
+        if "Nu" in self.params:
+            return self.params["Nu"]
+        if "MAT_NU" in self.params:
+            return self.params["MAT_NU"]
+        return 0.3
 
     @property
     def G(self) -> float:
         """Shear modulus G = E / 2(1+nu)."""
-        return self.E / (2.0 * (1.0 + self.nu))
+        if "G" in self.params:
+            return self.params["G"]
+        if "mu" in self.params:
+            return self.params["mu"]
+        if "Mu" in self.params:
+            return self.params["Mu"]
+        if "c10" in self.params:
+            return 2.0 * self.params["c10"]
+        if "E" in self.params:
+            return self.params["E"] / (2.0 * (1.0 + self.nu))
+        return 0.0
 
     @property
     def K(self) -> float:
         """Bulk modulus K = E / 3(1-2nu)."""
-        return self.E / (3.0 * (1.0 - 2.0 * self.nu))
+        if "K" in self.params:
+            return self.params["K"]
+        if "bulk" in self.params:
+            return self.params["bulk"]
+        if "Bulk" in self.params:
+            return self.params["Bulk"]
+        if "d" in self.params and self.params["d"] > 0:
+            return 2.0 / self.params["d"]
+        denom = 3.0 * (1.0 - 2.0 * self.nu)
+        if abs(denom) < 1e-12:
+            denom = 1e-6
+        return self.E / denom
 
     def sound_speed_solid(self) -> float:
         """3-D dilatational wave speed c = sqrt((K + 4G/3)/rho).
