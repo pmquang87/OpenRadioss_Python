@@ -1708,6 +1708,12 @@ class Model:
         self.oldham_joints: Dict[int, Any] = {}                      # /OLDHAM, /LAGMUL/OLDHAM (M252)
         self.sensor_spring_pressures: Dict[int, Any] = {}            # /SENSOR/SPRING_PRESSURE (M252)
 
+        # M253 Entities
+        self.fail_hockett_sherbys: Dict[int, Any] = {}               # /FAIL/HOCKETT_SHERBY (M253)
+        self.eng_temperatures: Dict[int, Any] = {}                   # /ENG/TEMPERATURE, /ENG/TEMP (M253)
+        self.tripod_joints: Dict[int, Any] = {}                      # /TRIPOD, /LAGMUL/TRIPOD (M253)
+        self.sensor_spring_temperatures: Dict[int, Any] = {}         # /SENSOR/SPRING_TEMPERATURE (M253)
+
 
 
 

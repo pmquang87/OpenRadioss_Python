@@ -13793,6 +13793,51 @@ class SensorSpringPressure:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailHockettSherby:
+    """``/FAIL/HOCKETT_SHERBY/mat_ID`` (M253): Hockett-Sherby saturation hardening fracture criterion."""
+    mat_id: int = 0
+    title: str = ""
+    sigma0: float = 0.0      # initial yield stress sigma0
+    sigma_s: float = 0.0     # saturation stress sigma_s
+    m_exp: float = 1.0       # saturation rate coefficient m
+    n_exp: float = 1.0       # hardening exponent n
+    eps_max: float = 1e30    # maximum plastic strain to failure
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngTemperature:
+    """``/ENG/TEMPERATURE`` or ``/ENG/TEMP`` (M253): Engine material temperature output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_temp: float = 0.0     # time frequency for temperature output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class TripodJoint:
+    """``/TRIPOD/id`` or ``/LAGMUL/TRIPOD/id`` (M253): Tripod plunging CV kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0           # driver tripod housing node
+    node2: int = 0           # driven tripod tulip shaft node
+    axis_dir: int = 1        # shaft rotation and plunge axis (1=X, 2=Y, 3=Z)
+    skew_id: int = 0         # reference skew ID
+    plunge_limit: float = 0.0 # maximum allowable axial plunge travel
+    tol: float = 1e-6        # kinematic constraint tolerance
+
+
+@dataclass
+class SensorSpringTemperature:
+    """``/SENSOR/SPRING_TEMPERATURE`` or ``/SENSOR/SPRING_TEMP`` (M253): Spring element temperature threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    temp_max: float = 1e30   # maximum temperature threshold
+    t_delay: float = 0.0     # activation delay time
+
+
 
 
 

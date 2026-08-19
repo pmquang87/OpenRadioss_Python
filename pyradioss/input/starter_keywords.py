@@ -2379,6 +2379,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("ROUSSELIER", "ROUSSELIER_MODEL", "ROUSSELIER_LAW", "ROUSSELIER_DAMAGE", "ROUSS"):
         read_fail_rousselier(block, model, log)
         return
+    if kind in ("HOCKETT_SHERBY", "HOCKETT_SHERBY_MODEL", "HOCKETT_SHERBY_LAW", "HOCKETT_SHERBY_DAMAGE", "HS", "HOCKETT"):
+        read_fail_hockett_sherby(block, model, log)
+        return
     if kind in ("CHABOCHE", "CHABOCHE_LAW", "CHABOCHE_DAMAGE", "CHABOCHE_MODEL", "LEMAITRE_CHABOCHE"):
         read_fail_chaboche(block, model, log)
         return
@@ -23161,6 +23164,9 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub in ("CV_JOINT", "CONSTANT_VELOCITY", "CV", "HOMOKINETIC"):
         read_cv_joint(block, model, log)
         return
+    elif sub in ("TRIPOD", "TRIPOD_JOINT", "PLUNGING_CV"):
+        read_tripod_joint(block, model, log)
+        return
     elif sub in ("INLINE", "INLINE_JOINT", "LINE"):
         read_inline_joint(block, model, log)
         return
@@ -23552,6 +23558,38 @@ def read_oldham_joint(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     model.oldham_joints[block.user_id] = OldhamJoint(
         id=block.user_id, title=title, node1=node1, node2=node2,
         axis_dir=axis_dir, skew_id=skew_id, tol=tol
+    )
+
+
+def read_tripod_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TRIPOD/id`` or ``/LAGMUL/TRIPOD/id`` (M253): Tripod plunging CV kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/TRIPOD/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, axis_dir, skew_id, plunge_limit, tol = 0, 0, 1, 0, 0.0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("TRIPOD_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        axis_dir = _ival(f[2], 1) if len(f) > 2 else 1
+        skew_id = _ival(f[3], 0) if len(f) > 3 else 0
+        plunge_limit = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        tol = _fval(f[5], 1e-6) if len(f) > 5 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        axis_dir = int(float(toks[2])) if len(toks) > 2 else 1
+        skew_id = int(float(toks[3])) if len(toks) > 3 else 0
+        plunge_limit = float(toks[4]) if len(toks) > 4 else 0.0
+        tol = float(toks[5]) if len(toks) > 5 else 1e-6
+
+    from ..model.entities import TripodJoint
+    model.tripod_joints[block.user_id] = TripodJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis_dir=axis_dir, skew_id=skew_id, plunge_limit=plunge_limit, tol=tol
     )
 
 
@@ -43072,6 +43110,38 @@ def read_fail_rousselier(block: KeywordBlock, model: Model, log: MessageLog) -> 
     )
 
 
+def read_fail_hockett_sherby(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/HOCKETT_SHERBY/mat_ID`` (M253): Hockett-Sherby saturation hardening fracture criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/HOCKETT_SHERBY/{block.user_id}: missing data card", block.source)
+        return
+
+    sigma0, sigma_s, m_exp, n_exp, eps_max, ifail_sh = 0.0, 0.0, 1.0, 1.0, 1e30, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_HOCKETT_SHERBY_1")
+        sigma0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sigma_s = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        m_exp = _fval(f[2], 1.0) if len(f) > 2 else 1.0
+        n_exp = _fval(f[3], 1.0) if len(f) > 3 else 1.0
+        eps_max = _fval(f[4], 1e30) if len(f) > 4 else 1e30
+        ifail_sh = _ival(f[5], 1) if len(f) > 5 else 1
+    else:
+        toks = cards[0].tokens()
+        sigma0 = float(toks[0]) if len(toks) > 0 else 0.0
+        sigma_s = float(toks[1]) if len(toks) > 1 else 0.0
+        m_exp = float(toks[2]) if len(toks) > 2 else 1.0
+        n_exp = float(toks[3]) if len(toks) > 3 else 1.0
+        eps_max = float(toks[4]) if len(toks) > 4 else 1e30
+        ifail_sh = int(float(toks[5])) if len(toks) > 5 else 1
+
+    from ..model.entities import FailHockettSherby
+    model.fail_hockett_sherbys[block.user_id] = FailHockettSherby(
+        mat_id=block.user_id, title=title, sigma0=sigma0, sigma_s=sigma_s,
+        m_exp=m_exp, n_exp=n_exp, eps_max=eps_max, ifail_sh=ifail_sh
+    )
+
+
 
 
 
@@ -46354,6 +46424,60 @@ def read_sensor_spring_pressure(block: KeywordBlock, model: Model, log: MessageL
     ))
 
 
+def read_eng_temperature(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/TEMPERATURE`` or ``/ENG/TEMP`` (M253): Engine material temperature output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/TEMPERATURE/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_temp, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_TEMPERATURE_1")
+        dt_temp = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_temp = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngTemperature
+    r_id = block.user_id or (len(model.eng_temperatures) + 1)
+    model.eng_temperatures[r_id] = EngTemperature(
+        id=r_id, title=title, dt_temp=dt_temp, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_temperature(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TEMPERATURE`` or ``/SENSOR/SPRING_TEMP`` (M253): Spring element temperature threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TEMPERATURE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, temp_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_TEMPERATURE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        temp_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        temp_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTemperature, Sensor
+    sst = SensorSpringTemperature(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        temp_max=temp_max, t_delay=t_delay
+    )
+    model.sensor_spring_temperatures[sst.id] = sst
+    model.sensors.append(Sensor(
+        id=sst.id, kind="SPRING_TEMPERATURE", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -48850,6 +48974,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_PRESS": read_sensor_spring_pressure,
     "SENSOR_PRESSURE_SPRING": read_sensor_spring_pressure,
     "SENSOR_SPRING_HYDROSTATIC_PRESSURE": read_sensor_spring_pressure,
+    # --- M253: Hockett-Sherby Failure Model, Engine Temperature Output Directive, Tripod Plunging CV Joint Suite, and Spring Temperature Sensor ---
+    "FAIL_HOCKETT_SHERBY": read_fail_hockett_sherby,
+    "FAIL_HOCKETT_SHERBY_MODEL": read_fail_hockett_sherby,
+    "FAIL_HOCKETT_SHERBY_LAW": read_fail_hockett_sherby,
+    "FAIL_HOCKETT_SHERBY_DAMAGE": read_fail_hockett_sherby,
+    "FAIL_HS": read_fail_hockett_sherby,
+    "FAIL_HOCKETT": read_fail_hockett_sherby,
+    "ENG_TEMPERATURE": read_eng_temperature,
+    "ENG_TEMP": read_eng_temperature,
+    "ENG_THERMAL_TEMPERATURE": read_eng_temperature,
+    "TEMPERATURE": read_eng_temperature,
+    "LAGMUL_TRIPOD": read_tripod_joint,
+    "TRIPOD": read_tripod_joint,
+    "LAGMUL_TRIPOD_JOINT": read_tripod_joint,
+    "TRIPOD_JOINT": read_tripod_joint,
+    "LAGMUL_PLUNGING_CV": read_tripod_joint,
+    "PLUNGING_CV": read_tripod_joint,
+    "SENSOR_SPRING_TEMPERATURE": read_sensor_spring_temperature,
+    "SENSOR_SPRING_TEMP": read_sensor_spring_temperature,
+    "SENSOR_TEMPERATURE_SPRING": read_sensor_spring_temperature,
+    "SENSOR_SPRING_THERMAL_TEMP": read_sensor_spring_temperature,
 }
 
 
