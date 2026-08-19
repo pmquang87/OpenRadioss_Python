@@ -206,7 +206,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     
     # Time step
     Q = np.where(compressing, 0.06 * c + 1.5 * lc * np.abs(trD), 0.0)
-    dt_crit = st["dtfac"] * lc / (Q + np.sqrt(Q * Q + c * c))
+    denom = Q + np.sqrt(Q * Q + c * c)
+    dt_crit = np.where(denom > 0.0, st["dtfac"] * lc / denom, EP30)
     
     alive = st["off"] > 0.0
     return np.where(alive, dt_crit, EP30)

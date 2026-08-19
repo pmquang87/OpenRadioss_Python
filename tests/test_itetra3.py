@@ -114,7 +114,7 @@ def test_itetra3_sfem_smoothing():
     def mock_solid_update(mat, sig, deps, epsp, dt, extra):
         deps_passed.append(deps.copy())
         sig[:, :] = 1.0
-        return sig, epsp, np.zeros(len(sig))
+        return sig, epsp, None
     
     import pyradioss.materials as materials
     

@@ -522,7 +522,8 @@ def forces(group, x, v, vr, dt, fint, mint):
 
     # ---- critical time step --------------------------------------------------
     Q = np.where(compressing, qb * c + qa * lc * np.abs(trD), 0.0)
-    dt_crit = st["dtfac"] * lc / (Q + np.sqrt(Q * Q + c * c))
+    denom = Q + np.sqrt(Q * Q + c * c)
+    dt_crit = np.where(denom > 0.0, st["dtfac"] * lc / denom, EP30)
     # deleted elements no longer constrain the global step
     return np.where(alive, dt_crit, EP30)
 

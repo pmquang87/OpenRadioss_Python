@@ -246,7 +246,12 @@ def s16deri3(xx, dnidr, dnids, dnidt):
     )
     
     if det <= 0.0:
-        pass # Fortran handles det <= 0 as MSGERROR
+        # Fortran s16deri3.F calls ARRET(2) — fatal error for non-positive
+        # Jacobian determinant.  Inside @njit we cannot raise a Python
+        # exception, so clamp to EM20 to prevent inf/nan propagation.
+        # The element will still produce garbage forces, but those are
+        # masked by the alive/off flag downstream.
+        det = 1.0e-20
         
     d = 1.0 / det
     

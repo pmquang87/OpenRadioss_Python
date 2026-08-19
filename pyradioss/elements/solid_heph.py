@@ -448,7 +448,8 @@ def _post(xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
 
     # ---- critical time step (sdlen3 + material) ----------------------------
     Q = np.where(compressing, qb * c + qa * lc * np.abs(trD), 0.0)
-    dt_crit = dtfac * lc / (Q + np.sqrt(Q * Q + c * c))
+    denom = Q + np.sqrt(Q * Q + c * c)
+    dt_crit = np.where(denom > 0.0, dtfac * lc / denom, EP30)
     
     # dt cap for physical hourglass
     gnorm = np.einsum("nai,nai->n", gamma, gamma)

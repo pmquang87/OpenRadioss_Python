@@ -234,7 +234,8 @@ def _post(xe, dndx, vol, vol_tot, lc, rho, trD, deps, sig, sig_old,
     # ---- critical time step --------------------------------------------
     trD_min = trD.min(axis=1)
     Q = np.where(trD_min < 0.0, qb * c + qa * lc * np.abs(trD_min), 0.0)
-    dt_crit = dtfac * lc / (Q + np.sqrt(Q * Q + c * c))
+    denom = Q + np.sqrt(Q * Q + c * c)
+    dt_crit = np.where(denom > 0.0, dtfac * lc / denom, EP30)
     dt_crit = np.where(alive, dt_crit, EP30)
 
     return fe, dt_crit, w_visc, qvw_new, deint0

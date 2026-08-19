@@ -469,7 +469,7 @@ def _warp_geometry(g, rr, v13, v24, vhi):
     t1_12 = np.stack([x21 * sl, y21 * sl, -z1 * sl], axis=1)
     sz24 = z2 * l24
     sz2 = a4 - gama1
-    sln = 1.0 / np.sqrt(sz24 + sz2 ** 2)
+    sln = 1.0 / np.sqrt(np.maximum(sz24 + sz2 ** 2, EM20))
     n1 = np.stack([-z1 * y24 * sln, z1 * x24 * sln, sz2 * sln], axis=1)
     vqn[:, 0, 0:3] = t1_12
     vqn[:, 0, 6:9] = n1
@@ -478,7 +478,7 @@ def _warp_geometry(g, rr, v13, v24, vhi):
     sl = 1.0 / np.maximum(l34, EM20)
     t1_34 = np.stack([x34 * sl, y34 * sl, z1 * sl], axis=1)
     sz2 = a4 + gama1
-    sln = 1.0 / np.sqrt(sz24 + sz2 ** 2)
+    sln = 1.0 / np.sqrt(np.maximum(sz24 + sz2 ** 2, EM20))
     n3 = np.stack([z1 * y24 * sln, -z1 * x24 * sln, sz2 * sln], axis=1)
     vqn[:, 2, 0:3] = t1_34
     vqn[:, 2, 6:9] = n3
@@ -486,14 +486,14 @@ def _warp_geometry(g, rr, v13, v24, vhi):
 
     sz13 = z2 * l13
     sz2 = a4 + gama2
-    sln = 1.0 / np.sqrt(sz13 + sz2 ** 2)
+    sln = 1.0 / np.sqrt(np.maximum(sz13 + sz2 ** 2, EM20))
     n2 = np.stack([-z1 * y13 * sln, z1 * x13 * sln, sz2 * sln], axis=1)
     vqn[:, 1, 0:3] = t1_12
     vqn[:, 1, 6:9] = n2
     vqn[:, 1, 3:6] = _t2(n2, t1_12)
 
     sz2 = a4 - gama2
-    sln = 1.0 / np.sqrt(sz13 + sz2 ** 2)
+    sln = 1.0 / np.sqrt(np.maximum(sz13 + sz2 ** 2, EM20))
     n4 = np.stack([z1 * y13 * sln, -z1 * x13 * sln, sz2 * sln], axis=1)
     vqn[:, 3, 0:3] = t1_34
     vqn[:, 3, 6:9] = n4

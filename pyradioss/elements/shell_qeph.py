@@ -304,21 +304,21 @@ def _kinematics(G, ve, vre, dt, npt1):
         # nodal normals VQN (czcorp5 96-130); node order (1,3) then (2,4)
         sz1 = mx13 * y24 - my13 * x24
         sz = z2 * G["l24"]
-        sl = 1.0 / np.sqrt(sz + (a_4 + sz1) ** 2)
+        sl = 1.0 / np.sqrt(np.maximum(sz + (a_4 + sz1) ** 2, EM20))
         vqn[:, 0, 0] = -z1 * y24 * sl
         vqn[:, 0, 1] = z1 * x24 * sl
         vqn[:, 0, 2] = (a_4 + sz1) * sl
-        sl = 1.0 / np.sqrt(sz + (a_4 - sz1) ** 2)
+        sl = 1.0 / np.sqrt(np.maximum(sz + (a_4 - sz1) ** 2, EM20))
         vqn[:, 2, 0] = z1 * y24 * sl
         vqn[:, 2, 1] = -z1 * x24 * sl
         vqn[:, 2, 2] = (a_4 - sz1) * sl
         sz1 = mx13 * y13 - my13 * x13
         sz = z2 * G["l13"]
-        sl = 1.0 / np.sqrt(sz + (a_4 + sz1) ** 2)
+        sl = 1.0 / np.sqrt(np.maximum(sz + (a_4 + sz1) ** 2, EM20))
         vqn[:, 1, 0] = -z1 * y13 * sl
         vqn[:, 1, 1] = z1 * x13 * sl
         vqn[:, 1, 2] = (a_4 + sz1) * sl
-        sl = 1.0 / np.sqrt(sz + (a_4 - sz1) ** 2)
+        sl = 1.0 / np.sqrt(np.maximum(sz + (a_4 - sz1) ** 2, EM20))
         vqn[:, 3, 0] = z1 * y13 * sl
         vqn[:, 3, 1] = -z1 * x13 * sl
         vqn[:, 3, 2] = (a_4 - sz1) * sl
