@@ -14246,6 +14246,65 @@ class SensorSpringForceRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M262 Suite: Puck failure, EngStressTri, ScrewJoint, SensorSpringForceImpulse
+# ============================================================================
+
+@dataclass
+class FailPuck:
+    """``/FAIL/PUCK/mat_ID`` (M262): Puck composite 3D action plane failure criterion."""
+    mat_id: int = 1
+    title: str = ""
+    sigma_1t: float = 1e20       # longitudinal tensile strength
+    sigma_2t: float = 1e20       # transverse tensile strength
+    sigma_12: float = 1e20       # in-plane shear strength
+    sigma_1c: float = 1e20       # longitudinal compressive strength
+    sigma_2c: float = 1e20       # transverse compressive strength
+    p12_pos: float = 0.0         # failure envelope factor 12 (+)
+    p12_neg: float = 0.0         # failure envelope factor 12 (-)
+    p22_neg: float = 0.0         # failure envelope factor 22 (-)
+    tau_max: float = 1e20        # dynamic time relaxation
+    ifail_sh: int = 1            # flag for shell failure model (1=layer, 2=all layers)
+    ifail_so: int = 1            # flag for solid failure model (1=integration pt)
+    fcut: float = 0.0            # cutoff frequency for stress tensor
+
+
+@dataclass
+class EngStressTri:
+    """``/ENG/STRESS_TRI`` or ``/ENG/TRIAXIALITY`` (M262): Engine stress triaxiality history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_triax: float = 0.0        # time frequency for stress triaxiality output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulScrewJoint:
+    """``/SCREW_JOINT/id`` or ``/LAGMUL/SCREW_JOINT/id`` (M262): Screw and leadscrew transmission kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # rotating screw node
+    node2: int = 0               # translating nut node
+    lead_pitch: float = 5.0      # screw lead pitch L (linear displacement per 2*pi revolution)
+    stiff: float = 1e6           # kinematic thread contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # screw rotational / translation axis vector X
+    axis_y: float = 0.0          # screw rotational / translation axis vector Y
+    axis_z: float = 1.0          # screw rotational / translation axis vector Z
+
+
+@dataclass
+class SensorSpringForceImpulse:
+    """``/SENSOR/SPRING_FORCE_IMPULSE`` or ``/SENSOR/SPRING_IMPULSE`` (M262): Spring element linear force impulse threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    j_max: float = 1e30          # maximum linear force impulse threshold int|F|dt
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

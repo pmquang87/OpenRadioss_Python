@@ -1756,6 +1756,13 @@ class Model:
         self.lagmul_rack_pinions: Dict[int, Any] = {}                # /RACK_AND_PINION, /LAGMUL/RACK_AND_PINION (M261)
         self.sensor_spring_force_rates: Dict[int, Any] = {}          # /SENSOR/SPRING_FORCE_RATE (M261)
 
+        # M262 Entities
+        self.fail_pucks: Dict[int, Any] = {}                         # /FAIL/PUCK (M262)
+        self.eng_stress_tris: Dict[int, Any] = {}                    # /ENG/STRESS_TRI (M262)
+        self.lagmul_screw_joints: Dict[int, Any] = {}                # /SCREW_JOINT, /LAGMUL/SCREW_JOINT (M262)
+        self.sensor_spring_force_impulses: Dict[int, Any] = {}       # /SENSOR/SPRING_FORCE_IMPULSE (M262)
+
+
 
 
 

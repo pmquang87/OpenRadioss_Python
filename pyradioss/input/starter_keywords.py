@@ -23899,6 +23899,52 @@ def read_lagmul_rack_pinion(block: KeywordBlock, model: Model, log: MessageLog) 
     )
 
 
+def read_lagmul_screw_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SCREW_JOINT/id`` or ``/LAGMUL/SCREW_JOINT/id`` (M262): Screw and leadscrew transmission kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SCREW_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, lead_pitch, stiff, skew_id, tol = 0, 0, 5.0, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("SCREW_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        lead_pitch = _fval(f1[2], 5.0) if len(f1) > 2 and f1[2].strip() else 5.0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("SCREW_JOINT_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        lead_pitch = float(toks1[2]) if len(toks1) > 2 else 5.0
+        stiff = float(toks1[3]) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4])) if len(toks1) > 4 else 0
+        tol = float(toks1[5]) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulScrewJoint
+    model.lagmul_screw_joints[block.user_id] = LagmulScrewJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        lead_pitch=lead_pitch, stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+
+
 def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -43834,6 +43880,87 @@ def read_fail_syazwan(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     )
 
 
+def read_fail_puck(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/PUCK/mat_ID`` (M262): Puck composite 3D action plane failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/PUCK/{block.user_id}: missing data card", block.source)
+        return
+
+    sigma_1t, sigma_2t, sigma_12, sigma_1c, sigma_2c = 1e20, 1e20, 1e20, 1e20, 1e20
+    p12_pos, p12_neg, p22_neg, tau_max = 0.0, 0.0, 0.0, 1e20
+    ifail_sh, ifail_so = 1, 1
+    fcut = 0.0
+
+    if block.fixed:
+        # Card 1: SIGMA_1T, SIGMA_2T, SIGMA_12, SIGMA_1C, SIGMA_2C
+        f1 = cards[0].cut("FAIL_PUCK_1")
+        sigma_1t = _fval(f1[0], 1e20) if len(f1) > 0 and f1[0].strip() else 1e20
+        sigma_2t = _fval(f1[1], 1e20) if len(f1) > 1 and f1[1].strip() else 1e20
+        sigma_12 = _fval(f1[2], 1e20) if len(f1) > 2 and f1[2].strip() else 1e20
+        sigma_1c = _fval(f1[3], 1e20) if len(f1) > 3 and f1[3].strip() else 1e20
+        sigma_2c = _fval(f1[4], 1e20) if len(f1) > 4 and f1[4].strip() else 1e20
+
+        # Card 2: P12_POSITIVE, P12_NEGATIVE, P22_NEGATIVE, TAU_MAX, IFAIL_SH, IFAIL_SO
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_PUCK_2")
+            p12_pos = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            p12_neg = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            p22_neg = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            tau_max = _fval(f2[3], 1e20) if len(f2) > 3 and f2[3].strip() else 1e20
+            ifail_sh = _ival(f2[4], 1) if len(f2) > 4 and f2[4].strip() else 1
+            ifail_so = _ival(f2[5], 1) if len(f2) > 5 and f2[5].strip() else 1
+
+        # Card 3: FCUT
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("FAIL_PUCK_3")
+            fcut = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        sigma_1t = float(toks1[0]) if len(toks1) > 0 else 1e20
+        sigma_2t = float(toks1[1]) if len(toks1) > 1 else 1e20
+        sigma_12 = float(toks1[2]) if len(toks1) > 2 else 1e20
+        sigma_1c = float(toks1[3]) if len(toks1) > 3 else 1e20
+        sigma_2c = float(toks1[4]) if len(toks1) > 4 else 1e20
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            p12_pos = float(toks2[0]) if len(toks2) > 0 else 0.0
+            p12_neg = float(toks2[1]) if len(toks2) > 1 else 0.0
+            p22_neg = float(toks2[2]) if len(toks2) > 2 else 0.0
+            tau_max = float(toks2[3]) if len(toks2) > 3 else 1e20
+            ifail_sh = int(float(toks2[4])) if len(toks2) > 4 else 1
+            ifail_so = int(float(toks2[5])) if len(toks2) > 5 else 1
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            toks3 = cards[2].tokens()
+            fcut = float(toks3[0]) if len(toks3) > 0 else 0.0
+
+    if sigma_1t == 0.0:
+        sigma_1t = 1e20
+    if sigma_2t == 0.0:
+        sigma_2t = 1e20
+    if sigma_12 == 0.0:
+        sigma_12 = 1e20
+    if sigma_1c == 0.0:
+        sigma_1c = 1e20
+    if sigma_2c == 0.0:
+        sigma_2c = 1e20
+    if tau_max == 0.0:
+        tau_max = 1e20
+
+    from ..model.entities import FailPuck
+    model.fail_pucks[block.user_id] = FailPuck(
+        mat_id=block.user_id, title=title,
+        sigma_1t=sigma_1t, sigma_2t=sigma_2t, sigma_12=sigma_12,
+        sigma_1c=sigma_1c, sigma_2c=sigma_2c,
+        p12_pos=p12_pos, p12_neg=p12_neg, p22_neg=p22_neg,
+        tau_max=tau_max, ifail_sh=ifail_sh, ifail_so=ifail_so,
+        fcut=fcut
+    )
+
+
+
 
 
 
@@ -47550,6 +47677,61 @@ def read_sensor_spring_force_rate(block: KeywordBlock, model: Model, log: Messag
     ))
 
 
+def read_eng_stress_tri(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/STRESS_TRI`` or ``/ENG/TRIAXIALITY`` (M262): Engine stress triaxiality history tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/STRESS_TRI/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_triax, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_STRESS_TRI_1")
+        dt_triax = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_triax = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngStressTri
+    r_id = block.user_id or (len(model.eng_stress_tris) + 1)
+    model.eng_stress_tris[r_id] = EngStressTri(
+        id=r_id, title=title, dt_triax=dt_triax, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_force_impulse(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_FORCE_IMPULSE`` or ``/SENSOR/SPRING_IMPULSE`` (M262): Spring element linear force impulse threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_FORCE_IMPULSE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, j_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_FORCE_IMPULSE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        j_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        j_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringForceImpulse, Sensor
+    ssfi = SensorSpringForceImpulse(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        j_max=j_max, t_delay=t_delay
+    )
+    model.sensor_spring_force_impulses[ssfi.id] = ssfi
+    model.sensors.append(Sensor(
+        id=ssfi.id, kind="SPRING_FORCE_IMPULSE", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -50203,6 +50385,24 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_DF": read_sensor_spring_force_rate,
     "SENSOR_SPRING_FORCERATE": read_sensor_spring_force_rate,
     "SENSOR_DF_SPRING": read_sensor_spring_force_rate,
+    # --- M262: Puck Composite Action Plane Failure Model, Engine Stress Triaxiality Output Directive, Screw Joint Suite, and Spring Force Impulse Sensor ---
+    "FAIL_PUCK": read_fail_puck,
+    "FAIL_PUCK_MODEL": read_fail_puck,
+    "FAIL_PUCK_LAW": read_fail_puck,
+    "FAIL_PUCK_CRITERION": read_fail_puck,
+    "ENG_STRESS_TRI": read_eng_stress_tri,
+    "ENG_TRIAXIALITY": read_eng_stress_tri,
+    "ENG_ETA": read_eng_stress_tri,
+    "ENG_STRESS_TRIAXIALITY": read_eng_stress_tri,
+    "LAGMUL_SCREW_JOINT": read_lagmul_screw_joint,
+    "SCREW_JOINT": read_lagmul_screw_joint,
+    "LAGMUL_LEADSCREW": read_lagmul_screw_joint,
+    "LEADSCREW": read_lagmul_screw_joint,
+    "SCREW": read_lagmul_screw_joint,
+    "SENSOR_SPRING_FORCE_IMPULSE": read_sensor_spring_force_impulse,
+    "SENSOR_SPRING_IMPULSE": read_sensor_spring_force_impulse,
+    "SENSOR_SPRING_J": read_sensor_spring_force_impulse,
+    "SENSOR_IMPULSE_SPRING": read_sensor_spring_force_impulse,
 }
 
 
