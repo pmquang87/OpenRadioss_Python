@@ -2391,6 +2391,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("JH2", "JH2_MODEL", "JH2_LAW", "JH2_DAMAGE", "JOHNSON_HOLMQUIST", "JH"):
         read_fail_jh2(block, model, log)
         return
+    if kind in ("RHT", "RHT_MODEL", "RHT_LAW", "RHT_DAMAGE", "RIEDEL_HIERMAIER_THOMA"):
+        read_fail_rht(block, model, log)
+        return
     if kind in ("CHABOCHE", "CHABOCHE_LAW", "CHABOCHE_DAMAGE", "CHABOCHE_MODEL", "LEMAITRE_CHABOCHE"):
         read_fail_chaboche(block, model, log)
         return
@@ -23709,6 +23712,43 @@ def read_hypoid_gear_joint(block: KeywordBlock, model: Model, log: MessageLog) -
     )
 
 
+def read_epicyclic_gear_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EPICYCLIC_GEAR/id`` or ``/LAGMUL/EPICYCLIC_GEAR/id`` (M257): Epicyclic planetary gear kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/EPICYCLIC_GEAR/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, ratio_sun, ratio_ring, axis_dir, skew_id, tol = 0, 0, 0, 1.0, 1.0, 1, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("EPICYCLIC_GEAR_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        node3 = _ival(f[2]) if len(f) > 2 else 0
+        ratio_sun = _fval(f[3], 1.0) if len(f) > 3 else 1.0
+        ratio_ring = _fval(f[4], 1.0) if len(f) > 4 else 1.0
+        axis_dir = _ival(f[5], 1) if len(f) > 5 else 1
+        skew_id = _ival(f[6], 0) if len(f) > 6 else 0
+        tol = _fval(f[7], 1e-6) if len(f) > 7 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        node3 = int(float(toks[2])) if len(toks) > 2 else 0
+        ratio_sun = float(toks[3]) if len(toks) > 3 else 1.0
+        ratio_ring = float(toks[4]) if len(toks) > 4 else 1.0
+        axis_dir = int(float(toks[5])) if len(toks) > 5 else 1
+        skew_id = int(float(toks[6])) if len(toks) > 6 else 0
+        tol = float(toks[7]) if len(toks) > 7 else 1e-6
+
+    from ..model.entities import EpicyclicGearJoint
+    model.epicyclic_gear_joints[block.user_id] = EpicyclicGearJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        ratio_sun=ratio_sun, ratio_ring=ratio_ring, axis_dir=axis_dir,
+        skew_id=skew_id, tol=tol
+    )
+
+
 def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -43359,6 +43399,37 @@ def read_fail_jh2(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_rht(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/RHT/mat_ID`` (M257): Riedel-Hiermaier-Thoma concrete/rock damage failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/RHT/{block.user_id}: missing data card", block.source)
+        return
+
+    d1, d2, p_spall, eps_min, ifail_sh = 0.04, 1.0, 0.0, 0.0, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_RHT_1")
+        d1 = _fval(f[0], 0.04) if len(f) > 0 else 0.04
+        d2 = _fval(f[1], 1.0) if len(f) > 1 else 1.0
+        p_spall = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        eps_min = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        ifail_sh = _ival(f[4], 1) if len(f) > 4 else 1
+    else:
+        toks = cards[0].tokens()
+        d1 = float(toks[0]) if len(toks) > 0 else 0.04
+        d2 = float(toks[1]) if len(toks) > 1 else 1.0
+        p_spall = float(toks[2]) if len(toks) > 2 else 0.0
+        eps_min = float(toks[3]) if len(toks) > 3 else 0.0
+        ifail_sh = int(float(toks[4])) if len(toks) > 4 else 1
+
+    from ..model.entities import FailRht
+    model.fail_rhts[block.user_id] = FailRht(
+        mat_id=block.user_id, title=title, d1=d1, d2=d2,
+        p_spall=p_spall, eps_min=eps_min,
+        ifail_sh=ifail_sh
+    )
+
+
 
 
 
@@ -46857,6 +46928,60 @@ def read_sensor_spring_entropy(block: KeywordBlock, model: Model, log: MessageLo
     ))
 
 
+def read_eng_sound_speed(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/SOUND_SPEED`` or ``/ENG/C_SOUND`` (M257): Engine material sound speed output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/SOUND_SPEED/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_sound, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_SOUND_SPEED_1")
+        dt_sound = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_sound = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngSoundSpeed
+    r_id = block.user_id or (len(model.eng_sound_speeds) + 1)
+    model.eng_sound_speeds[r_id] = EngSoundSpeed(
+        id=r_id, title=title, dt_sound=dt_sound, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_sound_speed(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_SOUND_SPEED`` or ``/SENSOR/SPRING_SS`` (M257): Spring element acoustic sound speed threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_SOUND_SPEED/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, sound_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_SOUND_SPEED_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        sound_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        sound_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringSoundSpeed, Sensor
+    ssss = SensorSpringSoundSpeed(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        sound_max=sound_max, t_delay=t_delay
+    )
+    model.sensor_spring_sound_speeds[ssss.id] = ssss
+    model.sensors.append(Sensor(
+        id=ssss.id, kind="SPRING_SOUND_SPEED", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -49436,6 +49561,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_ENTR": read_sensor_spring_entropy,
     "SENSOR_ENTROPY_SPRING": read_sensor_spring_entropy,
     "SENSOR_SPRING_THERMAL_ENTROPY": read_sensor_spring_entropy,
+    # --- M257: Riedel-Hiermaier-Thoma Concrete Damage Model, Engine Sound Speed Output Directive, Epicyclic Planetary Gear Joint Suite, and Spring Sound Speed Sensor ---
+    "FAIL_RHT": read_fail_rht,
+    "FAIL_RHT_MODEL": read_fail_rht,
+    "FAIL_RHT_LAW": read_fail_rht,
+    "FAIL_RHT_DAMAGE": read_fail_rht,
+    "FAIL_RIEDEL_HIERMAIER_THOMA": read_fail_rht,
+    "ENG_SOUND_SPEED": read_eng_sound_speed,
+    "ENG_C_SOUND": read_eng_sound_speed,
+    "ENG_C_SPEED": read_eng_sound_speed,
+    "SOUND_SPEED": read_eng_sound_speed,
+    "LAGMUL_EPICYCLIC_GEAR": read_epicyclic_gear_joint,
+    "EPICYCLIC_GEAR": read_epicyclic_gear_joint,
+    "LAGMUL_PLANETARY_GEAR": read_epicyclic_gear_joint,
+    "PLANETARY_GEAR": read_epicyclic_gear_joint,
+    "LAGMUL_EPICYCLIC": read_epicyclic_gear_joint,
+    "EPICYCLIC": read_epicyclic_gear_joint,
+    "SENSOR_SPRING_SOUND_SPEED": read_sensor_spring_sound_speed,
+    "SENSOR_SPRING_SS": read_sensor_spring_sound_speed,
+    "SENSOR_SOUND_SPEED_SPRING": read_sensor_spring_sound_speed,
+    "SENSOR_SPRING_C_SOUND": read_sensor_spring_sound_speed,
 }
 
 

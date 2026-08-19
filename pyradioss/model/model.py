@@ -1732,6 +1732,12 @@ class Model:
         self.hypoid_gear_joints: Dict[int, Any] = {}                 # /HYPOID_GEAR, /LAGMUL/HYPOID_GEAR (M256)
         self.sensor_spring_entropies: Dict[int, Any] = {}            # /SENSOR/SPRING_ENTROPY (M256)
 
+        # M257 Entities
+        self.fail_rhts: Dict[int, Any] = {}                          # /FAIL/RHT (M257)
+        self.eng_sound_speeds: Dict[int, Any] = {}                   # /ENG/SOUND_SPEED (M257)
+        self.epicyclic_gear_joints: Dict[int, Any] = {}              # /EPICYCLIC_GEAR, /LAGMUL/EPICYCLIC_GEAR (M257)
+        self.sensor_spring_sound_speeds: Dict[int, Any] = {}         # /SENSOR/SPRING_SOUND_SPEED (M257)
+
 
 
 

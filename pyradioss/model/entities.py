@@ -13976,6 +13976,52 @@ class SensorSpringEntropy:
     t_delay: float = 0.0         # activation delay time
 
 
+@dataclass
+class FailRht:
+    """``/FAIL/RHT/mat_ID`` (M257): Riedel-Hiermaier-Thoma concrete/rock damage failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    d1: float = 0.04             # damage parameter D1
+    d2: float = 1.0              # damage exponent D2
+    p_spall: float = 0.0         # normalized spall tensile pressure P_spall*
+    eps_min: float = 0.0         # minimum failure strain threshold eps_p_min
+    ifail_sh: int = 1            # shell element deletion flag
+
+
+@dataclass
+class EngSoundSpeed:
+    """``/ENG/SOUND_SPEED`` or ``/ENG/C_SOUND`` (M257): Engine material sound speed output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_sound: float = 0.0        # time frequency for sound speed output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class EpicyclicGearJoint:
+    """``/EPICYCLIC_GEAR/id`` or ``/LAGMUL/EPICYCLIC_GEAR/id`` (M257): Epicyclic planetary gear kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # sun gear node
+    node2: int = 0               # planet carrier node
+    node3: int = 0               # ring gear node
+    ratio_sun: float = 1.0       # sun gear ratio / tooth count N_s
+    ratio_ring: float = 1.0      # ring gear ratio / tooth count N_r
+    axis_dir: int = 1            # rotation axis direction (1=X, 2=Y, 3=Z)
+    skew_id: int = 0             # reference skew ID
+    tol: float = 1e-6            # kinematic constraint tolerance
+
+
+@dataclass
+class SensorSpringSoundSpeed:
+    """``/SENSOR/SPRING_SOUND_SPEED`` or ``/SENSOR/SPRING_SS`` (M257): Spring element acoustic sound speed threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    sound_max: float = 1e30      # maximum sound speed threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
