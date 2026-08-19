@@ -2367,6 +2367,12 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("SWIFT_VOCE", "SWIFT_VOCE_LAW", "SWIFT_VOCE_DAMAGE", "SWIFT_VOCE_MODEL", "SV"):
         read_fail_swift_voce(block, model, log)
         return
+    if kind in ("BONORA", "BONORA_DAMAGE", "BONORA_MODEL", "BONORA_LAW"):
+        read_fail_bonora(block, model, log)
+        return
+    if kind in ("CHABOCHE", "CHABOCHE_LAW", "CHABOCHE_DAMAGE", "CHABOCHE_MODEL", "LEMAITRE_CHABOCHE"):
+        read_fail_chaboche(block, model, log)
+        return
     if kind in ("JOHNSON", "JOHN_COOK"):
         from ..model.entities import FailJohnson
         D1, D2, D3, D4, D5 = _cut_floats(cards[0], "FAIL_JOHNSON_1") \
@@ -42832,6 +42838,38 @@ def read_fail_swift_voce(block: KeywordBlock, model: Model, log: MessageLog) -> 
     )
 
 
+def read_fail_bonora(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/BONORA/mat_ID`` (M249): Bonora non-linear continuous ductile damage failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/BONORA/{block.user_id}: missing data card", block.source)
+        return
+
+    p_th, p_cr, d_cr, d_0, alpha, ifail_sh = 0.0, 1.0, 0.85, 0.0, 0.5, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_BONORA_1")
+        p_th = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        p_cr = _fval(f[1], 1.0) if len(f) > 1 else 1.0
+        d_cr = _fval(f[2], 0.85) if len(f) > 2 else 0.85
+        d_0 = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        alpha = _fval(f[4], 0.5) if len(f) > 4 else 0.5
+        ifail_sh = _ival(f[5], 1) if len(f) > 5 else 1
+    else:
+        toks = cards[0].tokens()
+        p_th = float(toks[0]) if len(toks) > 0 else 0.0
+        p_cr = float(toks[1]) if len(toks) > 1 else 1.0
+        d_cr = float(toks[2]) if len(toks) > 2 else 0.85
+        d_0 = float(toks[3]) if len(toks) > 3 else 0.0
+        alpha = float(toks[4]) if len(toks) > 4 else 0.5
+        ifail_sh = int(float(toks[5])) if len(toks) > 5 else 1
+
+    from ..model.entities import FailBonora
+    model.fail_bonoras[block.user_id] = FailBonora(
+        mat_id=block.user_id, title=title, p_th=p_th, p_cr=p_cr,
+        d_cr=d_cr, d_0=d_0, alpha=alpha, ifail_sh=ifail_sh
+    )
+
+
 
 
 
@@ -45898,6 +45936,60 @@ def read_sensor_spring_ext_work(block: KeywordBlock, model: Model, log: MessageL
     ))
 
 
+def read_eng_tot_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TOT_ENERGY`` or ``/ENG/TOT_ENERGY`` (M249): Engine total system energy output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/TOT_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_etot, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_TOT_ENERGY_1")
+        dt_etot = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_etot = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngTotEnergy
+    r_id = block.user_id or (len(model.eng_tot_energies) + 1)
+    model.eng_tot_energies[r_id] = EngTotEnergy(
+        id=r_id, title=title, dt_etot=dt_etot, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_tot_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TOT_ENERGY`` or ``/SENSOR/SPRING_TOTAL_ENERGY`` (M249): Spring element total energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TOT_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, etot_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_TOT_ENERGY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        etot_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        etot_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTotEnergy, Sensor
+    sste = SensorSpringTotEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        etot_max=etot_max, t_delay=t_delay
+    )
+    model.sensor_spring_tot_energies[sste.id] = sste
+    model.sensors.append(Sensor(
+        id=sste.id, kind="SPRING_TOT_ENERGY", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -48304,6 +48396,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_EXTERNAL_WORK": read_sensor_spring_ext_work,
     "SENSOR_EXT_WORK_SPRING": read_sensor_spring_ext_work,
     "SENSOR_SPRING_WEXT": read_sensor_spring_ext_work,
+    # --- M249: Bonora Failure Criterion, Engine Total System Energy Output Directive, Cylindrical Axis Joint Aliases, and Spring Total Energy Sensor Suite ---
+    "FAIL_BONORA": read_fail_bonora,
+    "FAIL_BONORA_DAMAGE": read_fail_bonora,
+    "FAIL_BONORA_LAW": read_fail_bonora,
+    "FAIL_BONORA_MODEL": read_fail_bonora,
+    "TOT_ENERGY": read_eng_tot_energy,
+    "ENG_TOT_ENERGY": read_eng_tot_energy,
+    "ENG_ENERGY_TOTAL": read_eng_tot_energy,
+    "ENG_TOTAL_SYSTEM_ENERGY": read_eng_tot_energy,
+    "ENG_ETOT": read_eng_tot_energy,
+    "LAGMUL_CYLINDRICAL_AXIS": read_cyl_joint_m209,
+    "CYLINDRICAL_AXIS": read_cyl_joint_m209,
+    "LAGMUL_CYL_JOINT_AXIS": read_cyl_joint_m209,
+    "CYL_JOINT_AXIS": read_cyl_joint_m209,
+    "LAGMUL_CYL_AXIS": read_cyl_joint_m209,
+    "CYL_AXIS": read_cyl_joint_m209,
+    "SENSOR_SPRING_TOT_ENERGY": read_sensor_spring_tot_energy,
+    "SENSOR_SPRING_TOTAL_ENERGY": read_sensor_spring_tot_energy,
+    "SENSOR_TOT_ENERGY_SPRING": read_sensor_spring_tot_energy,
+    "SENSOR_SPRING_ETOT": read_sensor_spring_tot_energy,
 }
 
 

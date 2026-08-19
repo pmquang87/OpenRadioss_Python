@@ -1685,6 +1685,11 @@ class Model:
         self.eng_ext_works: Dict[int, Any] = {}                      # /EXT_WORK, /ENG/EXT_WORK (M248)
         self.sensor_spring_ext_works: Dict[int, Any] = {}            # /SENSOR/SPRING_EXT_WORK (M248)
 
+        # M249 Entities
+        self.fail_bonoras: Dict[int, Any] = {}                       # /FAIL/BONORA (M249)
+        self.eng_tot_energies: Dict[int, Any] = {}                   # /TOT_ENERGY, /ENG/TOT_ENERGY (M249)
+        self.sensor_spring_tot_energies: Dict[int, Any] = {}         # /SENSOR/SPRING_TOT_ENERGY (M249)
+
 
 
 

@@ -13626,6 +13626,38 @@ class SensorSpringExtWork:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailBonora:
+    """``/FAIL/BONORA/mat_ID`` (M249): Bonora non-linear continuous ductile damage failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    p_th: float = 0.0        # threshold plastic strain for damage initiation
+    p_cr: float = 1.0        # critical plastic strain at failure
+    d_cr: float = 0.85       # critical damage threshold
+    d_0: float = 0.0         # initial damage
+    alpha: float = 0.5       # damage non-linear exponent
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngTotEnergy:
+    """``/TOT_ENERGY`` or ``/ENG/TOT_ENERGY`` (M249): Engine total system energy output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_etot: float = 0.0     # time frequency for total energy output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class SensorSpringTotEnergy:
+    """``/SENSOR/SPRING_TOT_ENERGY`` or ``/SENSOR/SPRING_TOTAL_ENERGY`` (M249): Spring element total energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    etot_max: float = 1e30   # maximum total energy threshold
+    t_delay: float = 0.0     # activation delay time
+
+
 
 
 
