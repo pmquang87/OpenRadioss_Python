@@ -25140,7 +25140,8 @@ def read_mat_law83(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     model.materials[mat_id] = Material(
         id=mat_id, law=83, rho0=rho0, title=title,
         params={
-            "E": e, "imass": imass, "fun_a1": fun_a1,
+            "E": e, "nu": 0.3,  # nu not native to LAW83 but needed for dt
+            "imass": imass, "fun_a1": fun_a1,
             "fscale11": fscale11, "fscale22": fscale22, "alpha": alpha,
             "beta": beta, "rn": rn, "rs": rs, "fsmooth": fsmooth,
             "fcut": fcut, "fun_a2": fun_a2, "fun_a3": fun_a3,
@@ -26371,6 +26372,18 @@ def read_mat_law44(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             "ETA1": eta1, "ETA2": eta2, "YLD_FUNC": yld_func, "YLD_SCALE": yld_scale,
         }
     )
+
+
+# ---- hyperelastic material reader helpers (M258) -------------------------
+# The LAW88/92/69/46/51_DP fixed-format readers use these shorthands.
+# ``cut`` mirrors ``Card.cut`` on a raw string: split_fixed at the
+# column widths of a named card_layouts entry.
+from .card_layouts import split_fixed as _split_fixed, LAYOUTS as _LAYOUTS
+def cut(raw: str, key: str) -> List[str]:
+    """Fixed-format column cut on a raw card line."""
+    return _split_fixed(raw, _LAYOUTS[key])
+_f = _fval   # float with blank-as-zero
+_i = _ival   # int   with blank-as-zero
 
 
 def read_mat_law88(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -49605,6 +49618,11 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
     all /UNIT blocks are read (deck order between a block and the /UNIT
     it references is free, like every other cross-reference)."""
     for block in blocks:
+        # M258: handle missing #include files (FileNotFoundError → error, not crash)
+        if block.keyword == "__INCLUDE_ERROR__":
+            inc_path = getattr(block, "_include_path", "?")
+            log.error(f"#include file not found: {inc_path}", block.source)
+            continue
         joined_key = "_".join(block.parts).upper() if block.parts else block.key0
         parser = KEYWORD_PARSERS.get(joined_key)
         if parser is None and len(block.parts) > 1:

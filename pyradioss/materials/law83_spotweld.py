@@ -58,9 +58,9 @@ def resolve(mat, model, log):
         mat.params[f"{prefix}_y"] = fct.y.copy()
         mat.params[f"{prefix}_s"] = fct.slope.copy()
         
-    _resolve_one(mat.params["ifun_n"], "curve_n")
-    _resolve_one(mat.params["ifun_t"], "curve_t")
-    _resolve_one(mat.params["id_yield"], "curve_y")
+    _resolve_one(mat.params.get("ifun_n", 0), "curve_n")
+    _resolve_one(mat.params.get("ifun_t", 0), "curve_t")
+    _resolve_one(mat.params.get("id_yield", 0), "curve_y")
 
 def _curve_eval(cx: np.ndarray, cy: np.ndarray, cs: np.ndarray, e: np.ndarray):
     i = np.minimum(np.maximum(np.searchsorted(cx, e, side="right") - 1, 0), len(cx) - 2)

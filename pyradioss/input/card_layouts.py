@@ -150,6 +150,46 @@ LAYOUTS: Dict[str, List[int]] = {
     # Eps_dot CELL_LISTs — all cfg "%20lg" lists pack 5 per card)
     "F20X5": [20] * 5,
 
+    # ---- hyperelastic material layouts (M258 — from hm_cfg_files) --------
+    # matl92_92.cfg (radioss2020): Arruda-Boyce
+    #   CARD("%20lg", MAT_RHO)
+    "MAT_LAW92_1": [20, 20],
+    #   CARD("%20lg%20lg%20lg", MU, D, LAM)
+    "MAT_LAW92_2": [20, 20, 20],
+    #   CARD("%10d%10d%20lg%20lg", Itype, FCT_IDI, NU, FScale)
+    "MAT_LAW92_3": [10, 10, 20, 20],
+
+    # matl88_hyper_elas.cfg: Tabulated hyperelastic (Ogden)
+    #   CARD("%20lg%20lg", RHO, RHOR) — same as density card
+    "MAT_LAW88_1": [20, 20],
+    #   CARD("%20lg%20lg%20lg%10d%10d", NU, BULK, FCUT, FSMOOTH, NL)
+    "MAT_LAW88_2": [20, 20, 20, 10, 10],
+    #   CARD("%10d%10s%20lg%20lg%20lg%10d%10d", FCT_UNLOAD, _, FSCALE_UNLOAD, HYS, SHAPE, TENSION, RTYPE)
+    "MAT_LAW88_3": [10, 10, 20, 20, 20, 10, 10],
+    #   CARD("%10d%20lg%20lg%20lg", FCT_LOAD, FSCALE_LOAD, RATE_LOAD, LAMFIT) — load table row
+    "MAT_LAW88_4_ROW": [10, 20, 20, 20],
+    #   CARD("%20lg%20lg%20lg", SGL, SW, ST) — failure params
+    "MAT_LAW88_5": [20, 20, 20],
+    #   CARD("%20lg%10d", SIGF, FAILIP) — more failure
+    "MAT_LAW88_6": [20, 10],
+
+    # matl51_dp.cfg: Drucker-Prager (single point LAW51 variant)
+    "MAT_LAW51_DP_1": [20, 20],
+    "MAT_LAW51_DP_2": [20, 20, 20, 20, 20],
+    "MAT_LAW51_DP_3": [10, 10, 20, 20, 20],
+
+    # matl46_donea.cfg: Donea viscoelastic
+    "MAT_LAW46_1": [20, 20],
+    "MAT_LAW46_2": [20, 20, 20, 20, 20],
+    "MAT_LAW46_3": [10, 10, 20, 20],
+
+    # matl69_hyp_ext_comp.cfg: Hyperelastic extended to compression (Ogden)
+    "MAT_LAW69_1": [20, 20],
+    #   CARD("%10d%10d%20lg%20lg%10d%10d", IFLAG, FCT_BULK, NU, FSCALE, NIP, ICHECK)
+    "MAT_LAW69_2": [10, 10, 20, 20, 10, 10],
+    #   CARD("%10d%20lg", FCT_DATA, _)
+    "MAT_LAW69_3": [10, 20],
+
     # ---- properties ---------------------------------------------------------
     # PROP/prop_p1_shell.cfg (radioss2020) flags card:
     # CARD("%10d%10d%10d%10d%10d          %20lg",

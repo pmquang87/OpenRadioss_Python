@@ -259,7 +259,23 @@ def read_deck(path: str, _depth: int = 0) -> List[KeywordBlock]:
                 if current is not None:
                     blocks.append(current)
                     current = None
-                blocks.extend(read_deck(inc_path, _depth + 1))
+                try:
+                    blocks.extend(read_deck(inc_path, _depth + 1))
+                except FileNotFoundError:
+                    # Record a synthetic error block so the caller sees the
+                    # failure (the Fortran starter also flags missing includes
+                    # and continues).  We append a block with keyword
+                    # "__INCLUDE_ERROR__" so read_all_blocks can log it.
+                    err_block = KeywordBlock(
+                        keyword="__INCLUDE_ERROR__",
+                        parts=["__INCLUDE_ERROR__"],
+                        user_id=0,
+                        cards=[],
+                        source=f"{path}:{lineno}",
+                        fixed=False,
+                    )
+                    err_block._include_path = inc_path
+                    blocks.append(err_block)
                 continue
 
             if _is_comment(stripped):
