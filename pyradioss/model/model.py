@@ -1702,6 +1702,12 @@ class Model:
         self.belt_pulley_joints: Dict[int, Any] = {}                 # /BELT_PULLEY, /LAGMUL/BELT_PULLEY (M251)
         self.sensor_spring_mass_changes: Dict[int, Any] = {}         # /SENSOR/SPRING_MASS_CHANGE (M251)
 
+        # M252 Entities
+        self.fail_rousseliers: Dict[int, Any] = {}                   # /FAIL/ROUSSELIER (M252)
+        self.eng_pressures: Dict[int, Any] = {}                      # /PRESSURE, /ENG/PRESSURE (M252)
+        self.oldham_joints: Dict[int, Any] = {}                      # /OLDHAM, /LAGMUL/OLDHAM (M252)
+        self.sensor_spring_pressures: Dict[int, Any] = {}            # /SENSOR/SPRING_PRESSURE (M252)
+
 
 
 

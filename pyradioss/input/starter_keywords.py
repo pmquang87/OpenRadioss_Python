@@ -2376,6 +2376,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("GOLOGANU", "GLD", "GOLOGANU_LEBLOND_DEVAUX", "GOLOGANU_MODEL", "GOLOGANU_LAW", "GOLOGANU_DAMAGE"):
         read_fail_gologanu(block, model, log)
         return
+    if kind in ("ROUSSELIER", "ROUSSELIER_MODEL", "ROUSSELIER_LAW", "ROUSSELIER_DAMAGE", "ROUSS"):
+        read_fail_rousselier(block, model, log)
+        return
     if kind in ("CHABOCHE", "CHABOCHE_LAW", "CHABOCHE_DAMAGE", "CHABOCHE_MODEL", "LEMAITRE_CHABOCHE"):
         read_fail_chaboche(block, model, log)
         return
@@ -23522,6 +23525,36 @@ def read_belt_pulley_joint(block: KeywordBlock, model: Model, log: MessageLog) -
     )
 
 
+def read_oldham_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/OLDHAM/id`` or ``/LAGMUL/OLDHAM/id`` (M252): Oldham parallel offset coupling kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/OLDHAM/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, axis_dir, skew_id, tol = 0, 0, 1, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("OLDHAM_JOINT_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        axis_dir = _ival(f[2], 1) if len(f) > 2 else 1
+        skew_id = _ival(f[3], 0) if len(f) > 3 else 0
+        tol = _fval(f[4], 1e-6) if len(f) > 4 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        axis_dir = int(float(toks[2])) if len(toks) > 2 else 1
+        skew_id = int(float(toks[3])) if len(toks) > 3 else 0
+        tol = float(toks[4]) if len(toks) > 4 else 1e-6
+
+    from ..model.entities import OldhamJoint
+    model.oldham_joints[block.user_id] = OldhamJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis_dir=axis_dir, skew_id=skew_id, tol=tol
+    )
+
+
 def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -43007,6 +43040,38 @@ def read_fail_gologanu(block: KeywordBlock, model: Model, log: MessageLog) -> No
     )
 
 
+def read_fail_rousselier(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/ROUSSELIER/mat_ID`` (M252): Rousselier ductile damage and void growth fracture criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/ROUSSELIER/{block.user_id}: missing data card", block.source)
+        return
+
+    d0, sigma1, d_crit, eps_init, eps_max, ifail_sh = 0.0001, 500.0, 1.0, 0.0, 1e30, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_ROUSSELIER_1")
+        d0 = _fval(f[0], 0.0001) if len(f) > 0 else 0.0001
+        sigma1 = _fval(f[1], 500.0) if len(f) > 1 else 500.0
+        d_crit = _fval(f[2], 1.0) if len(f) > 2 else 1.0
+        eps_init = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        eps_max = _fval(f[4], 1e30) if len(f) > 4 else 1e30
+        ifail_sh = _ival(f[5], 1) if len(f) > 5 else 1
+    else:
+        toks = cards[0].tokens()
+        d0 = float(toks[0]) if len(toks) > 0 else 0.0001
+        sigma1 = float(toks[1]) if len(toks) > 1 else 500.0
+        d_crit = float(toks[2]) if len(toks) > 2 else 1.0
+        eps_init = float(toks[3]) if len(toks) > 3 else 0.0
+        eps_max = float(toks[4]) if len(toks) > 4 else 1e30
+        ifail_sh = int(float(toks[5])) if len(toks) > 5 else 1
+
+    from ..model.entities import FailRousselier
+    model.fail_rousseliers[block.user_id] = FailRousselier(
+        mat_id=block.user_id, title=title, d0=d0, sigma1=sigma1,
+        d_crit=d_crit, eps_init=eps_init, eps_max=eps_max, ifail_sh=ifail_sh
+    )
+
+
 
 
 
@@ -46235,6 +46300,60 @@ def read_sensor_spring_mass_change(block: KeywordBlock, model: Model, log: Messa
     ))
 
 
+def read_eng_pressure(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PRESSURE`` or ``/ENG/PRESSURE`` (M252): Engine hydrostatic pressure output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/PRESSURE/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_press, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_PRESSURE_1")
+        dt_press = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_press = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngPressure
+    r_id = block.user_id or (len(model.eng_pressures) + 1)
+    model.eng_pressures[r_id] = EngPressure(
+        id=r_id, title=title, dt_press=dt_press, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_pressure(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_PRESSURE`` or ``/SENSOR/SPRING_PRESS`` (M252): Spring element hydrostatic pressure threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_PRESSURE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, press_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_PRESSURE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        press_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        press_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringPressure, Sensor
+    ssp = SensorSpringPressure(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        press_max=press_max, t_delay=t_delay
+    )
+    model.sensor_spring_pressures[ssp.id] = ssp
+    model.sensors.append(Sensor(
+        id=ssp.id, kind="SPRING_PRESSURE", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -48711,6 +48830,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_DMASS": read_sensor_spring_mass_change,
     "SENSOR_SPRING_DELTA_MASS": read_sensor_spring_mass_change,
     "SENSOR_MASS_CHANGE_SPRING": read_sensor_spring_mass_change,
+    # --- M252: Rousselier Ductile Fracture Model, Engine Pressure Output Directive, Oldham Coupling Joint Suite, and Spring Pressure Sensor ---
+    "FAIL_ROUSSELIER": read_fail_rousselier,
+    "FAIL_ROUSSELIER_MODEL": read_fail_rousselier,
+    "FAIL_ROUSSELIER_LAW": read_fail_rousselier,
+    "FAIL_ROUSSELIER_DAMAGE": read_fail_rousselier,
+    "FAIL_ROUSS": read_fail_rousselier,
+    "ENG_PRESSURE": read_eng_pressure,
+    "ENG_PRESS": read_eng_pressure,
+    "ENG_HYDROSTATIC_PRESSURE": read_eng_pressure,
+    "HYDROSTATIC_PRESSURE": read_eng_pressure,
+    "LAGMUL_OLDHAM": read_oldham_joint,
+    "OLDHAM": read_oldham_joint,
+    "LAGMUL_OLDHAM_JOINT": read_oldham_joint,
+    "OLDHAM_JOINT": read_oldham_joint,
+    "LAGMUL_OLDHAM_COUPLING": read_oldham_joint,
+    "OLDHAM_COUPLING": read_oldham_joint,
+    "SENSOR_SPRING_PRESSURE": read_sensor_spring_pressure,
+    "SENSOR_SPRING_PRESS": read_sensor_spring_pressure,
+    "SENSOR_PRESSURE_SPRING": read_sensor_spring_pressure,
+    "SENSOR_SPRING_HYDROSTATIC_PRESSURE": read_sensor_spring_pressure,
 }
 
 

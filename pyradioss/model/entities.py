@@ -13749,6 +13749,50 @@ class SensorSpringMassChange:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailRousselier:
+    """``/FAIL/ROUSSELIER/mat_ID`` (M252): Rousselier ductile damage and void growth fracture criterion."""
+    mat_id: int = 0
+    title: str = ""
+    d0: float = 0.0001       # initial damage parameter / void volume fraction D0
+    sigma1: float = 500.0    # characteristic stress sigma1
+    d_crit: float = 1.0      # critical damage threshold Dc
+    eps_init: float = 0.0    # plastic strain threshold for damage onset
+    eps_max: float = 1e30    # maximum plastic strain to failure
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngPressure:
+    """``/PRESSURE`` or ``/ENG/PRESSURE`` (M252): Engine hydrostatic pressure output history tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_press: float = 0.0    # time frequency for pressure output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class OldhamJoint:
+    """``/OLDHAM/id`` or ``/LAGMUL/OLDHAM/id`` (M252): Oldham parallel offset coupling kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0           # driver shaft node
+    node2: int = 0           # driven shaft node
+    axis_dir: int = 1        # shaft rotation axis (1=X, 2=Y, 3=Z)
+    skew_id: int = 0         # reference skew ID
+    tol: float = 1e-6        # kinematic constraint tolerance
+
+
+@dataclass
+class SensorSpringPressure:
+    """``/SENSOR/SPRING_PRESSURE`` or ``/SENSOR/SPRING_PRESS`` (M252): Spring element hydrostatic pressure / normal force threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    press_max: float = 1e30  # maximum pressure / normal force threshold
+    t_delay: float = 0.0     # activation delay time
+
+
 
 
 
