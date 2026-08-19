@@ -1720,6 +1720,12 @@ class Model:
         self.bevel_gear_joints: Dict[int, Any] = {}                  # /BEVEL_GEAR, /LAGMUL/BEVEL_GEAR (M254)
         self.sensor_spring_volumes: Dict[int, Any] = {}              # /SENSOR/SPRING_VOLUME (M254)
 
+        # M255 Entities
+        self.fail_bai_wierzbickis: Dict[int, Any] = {}               # /FAIL/BAI_WIERZBICKI (M255)
+        self.eng_densities: Dict[int, Any] = {}                      # /ENG/DENSITY, /ENG/RHO (M255)
+        self.worm_gear_joints: Dict[int, Any] = {}                   # /WORM_GEAR, /LAGMUL/WORM_GEAR (M255)
+        self.sensor_spring_densities: Dict[int, Any] = {}            # /SENSOR/SPRING_DENSITY (M255)
+
 
 
 

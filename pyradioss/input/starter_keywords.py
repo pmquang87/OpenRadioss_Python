@@ -2385,6 +2385,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("KIM_BAEK", "KIM_BAEK_MODEL", "KIM_BAEK_LAW", "KIM_BAEK_DAMAGE", "KB", "KIM"):
         read_fail_kim_baek(block, model, log)
         return
+    if kind in ("BAI_WIERZBICKI", "BAI_WIERZBICKI_MODEL", "BAI_WIERZBICKI_LAW", "BAI_WIERZBICKI_DAMAGE", "BW", "BAI"):
+        read_fail_bai_wierzbicki(block, model, log)
+        return
     if kind in ("CHABOCHE", "CHABOCHE_LAW", "CHABOCHE_DAMAGE", "CHABOCHE_MODEL", "LEMAITRE_CHABOCHE"):
         read_fail_chaboche(block, model, log)
         return
@@ -23173,6 +23176,9 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub in ("BEVEL_GEAR", "BEVEL_GEAR_JOINT", "BEVEL"):
         read_bevel_gear_joint(block, model, log)
         return
+    elif sub in ("WORM_GEAR", "WORM_GEAR_JOINT", "WORM"):
+        read_worm_gear_joint(block, model, log)
+        return
     elif sub in ("INLINE", "INLINE_JOINT", "LINE"):
         read_inline_joint(block, model, log)
         return
@@ -23626,6 +23632,38 @@ def read_bevel_gear_joint(block: KeywordBlock, model: Model, log: MessageLog) ->
 
     from ..model.entities import BevelGearJoint
     model.bevel_gear_joints[block.user_id] = BevelGearJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        ratio=ratio, skew1_id=skew1_id, skew2_id=skew2_id, tol=tol
+    )
+
+
+def read_worm_gear_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/WORM_GEAR/id`` or ``/LAGMUL/WORM_GEAR/id`` (M255): Worm and worm gear kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/WORM_GEAR/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, ratio, skew1_id, skew2_id, tol = 0, 0, 1.0, 0, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("WORM_GEAR_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        ratio = _fval(f[2], 1.0) if len(f) > 2 else 1.0
+        skew1_id = _ival(f[3], 0) if len(f) > 3 else 0
+        skew2_id = _ival(f[4], 0) if len(f) > 4 else 0
+        tol = _fval(f[5], 1e-6) if len(f) > 5 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        ratio = float(toks[2]) if len(toks) > 2 else 1.0
+        skew1_id = int(float(toks[3])) if len(toks) > 3 else 0
+        skew2_id = int(float(toks[4])) if len(toks) > 4 else 0
+        tol = float(toks[5]) if len(toks) > 5 else 1e-6
+
+    from ..model.entities import WormGearJoint
+    model.worm_gear_joints[block.user_id] = WormGearJoint(
         id=block.user_id, title=title, node1=node1, node2=node2,
         ratio=ratio, skew1_id=skew1_id, skew2_id=skew2_id, tol=tol
     )
@@ -43214,6 +43252,40 @@ def read_fail_kim_baek(block: KeywordBlock, model: Model, log: MessageLog) -> No
     )
 
 
+def read_fail_bai_wierzbicki(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/BAI_WIERZBICKI/mat_ID`` (M255): Bai-Wierzbicki stress triaxiality and Lode angle dependent fracture criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/BAI_WIERZBICKI/{block.user_id}: missing data card", block.source)
+        return
+
+    c1, c2, c3, c4, c_theta, eps_max, ifail_sh = 0.0, 0.0, 0.0, 0.0, 0.0, 1e30, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_BAI_WIERZBICKI_1")
+        c1 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        c2 = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        c3 = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        c4 = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        c_theta = _fval(f[4], 0.0) if len(f) > 4 else 0.0
+        eps_max = _fval(f[5], 1e30) if len(f) > 5 else 1e30
+        ifail_sh = _ival(f[6], 1) if len(f) > 6 else 1
+    else:
+        toks = cards[0].tokens()
+        c1 = float(toks[0]) if len(toks) > 0 else 0.0
+        c2 = float(toks[1]) if len(toks) > 1 else 0.0
+        c3 = float(toks[2]) if len(toks) > 2 else 0.0
+        c4 = float(toks[3]) if len(toks) > 3 else 0.0
+        c_theta = float(toks[4]) if len(toks) > 4 else 0.0
+        eps_max = float(toks[5]) if len(toks) > 5 else 1e30
+        ifail_sh = int(float(toks[6])) if len(toks) > 6 else 1
+
+    from ..model.entities import FailBaiWierzbicki
+    model.fail_bai_wierzbickis[block.user_id] = FailBaiWierzbicki(
+        mat_id=block.user_id, title=title, c1=c1, c2=c2,
+        c3=c3, c4=c4, c_theta=c_theta, eps_max=eps_max, ifail_sh=ifail_sh
+    )
+
+
 
 
 
@@ -46604,6 +46676,60 @@ def read_sensor_spring_volume(block: KeywordBlock, model: Model, log: MessageLog
     ))
 
 
+def read_eng_density(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/DENSITY`` or ``/ENG/RHO`` (M255): Engine material density output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/DENSITY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_dens, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_DENSITY_1")
+        dt_dens = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_dens = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngDensity
+    r_id = block.user_id or (len(model.eng_densities) + 1)
+    model.eng_densities[r_id] = EngDensity(
+        id=r_id, title=title, dt_dens=dt_dens, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_density(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_DENSITY`` or ``/SENSOR/SPRING_DENS`` (M255): Spring element material density threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_DENSITY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, dens_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_DENSITY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        dens_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        dens_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringDensity, Sensor
+    ssd = SensorSpringDensity(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        dens_max=dens_max, t_delay=t_delay
+    )
+    model.sensor_spring_densities[ssd.id] = ssd
+    model.sensors.append(Sensor(
+        id=ssd.id, kind="SPRING_DENSITY", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -49142,6 +49268,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_VOL": read_sensor_spring_volume,
     "SENSOR_VOLUME_SPRING": read_sensor_spring_volume,
     "SENSOR_SPRING_VOL_CHANGE": read_sensor_spring_volume,
+    # --- M255: Bai-Wierzbicki Asymmetric Fracture Model, Engine Density Output Directive, Worm Gear Joint Suite, and Spring Density Sensor ---
+    "FAIL_BAI_WIERZBICKI": read_fail_bai_wierzbicki,
+    "FAIL_BAI_WIERZBICKI_MODEL": read_fail_bai_wierzbicki,
+    "FAIL_BAI_WIERZBICKI_LAW": read_fail_bai_wierzbicki,
+    "FAIL_BAI_WIERZBICKI_DAMAGE": read_fail_bai_wierzbicki,
+    "FAIL_BW": read_fail_bai_wierzbicki,
+    "FAIL_BAI": read_fail_bai_wierzbicki,
+    "ENG_DENSITY": read_eng_density,
+    "ENG_RHO": read_eng_density,
+    "ENG_DENS": read_eng_density,
+    "DENSITY": read_eng_density,
+    "LAGMUL_WORM_GEAR": read_worm_gear_joint,
+    "WORM_GEAR": read_worm_gear_joint,
+    "LAGMUL_WORM_GEAR_JOINT": read_worm_gear_joint,
+    "WORM_GEAR_JOINT": read_worm_gear_joint,
+    "LAGMUL_WORM": read_worm_gear_joint,
+    "WORM": read_worm_gear_joint,
+    "SENSOR_SPRING_DENSITY": read_sensor_spring_density,
+    "SENSOR_SPRING_DENS": read_sensor_spring_density,
+    "SENSOR_DENSITY_SPRING": read_sensor_spring_density,
+    "SENSOR_SPRING_RHO": read_sensor_spring_density,
 }
 
 

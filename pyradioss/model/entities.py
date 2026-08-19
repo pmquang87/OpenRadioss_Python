@@ -13884,6 +13884,52 @@ class SensorSpringVolume:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailBaiWierzbicki:
+    """``/FAIL/BAI_WIERZBICKI/mat_ID`` (M255): Bai-Wierzbicki stress triaxiality and Lode angle dependent asymmetric fracture criterion."""
+    mat_id: int = 0
+    title: str = ""
+    c1: float = 0.0          # triaxiality parameter c1
+    c2: float = 0.0          # triaxiality parameter c2
+    c3: float = 0.0          # triaxiality parameter c3
+    c4: float = 0.0          # triaxiality parameter c4
+    c_theta: float = 0.0     # Lode angle sensitivity parameter c_theta
+    eps_max: float = 1e30    # maximum equivalent plastic strain
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngDensity:
+    """``/ENG/DENSITY`` or ``/ENG/RHO`` (M255): Engine material density output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_dens: float = 0.0     # time frequency for density output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class WormGearJoint:
+    """``/WORM_GEAR/id`` or ``/LAGMUL/WORM_GEAR/id`` (M255): Worm and worm gear kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0           # worm screw shaft node
+    node2: int = 0           # worm wheel gear node
+    ratio: float = 1.0       # speed reduction ratio gamma = Nteeth / Nthreads
+    skew1_id: int = 0        # worm shaft reference skew ID
+    skew2_id: int = 0        # worm wheel reference skew ID
+    tol: float = 1e-6        # kinematic constraint tolerance
+
+
+@dataclass
+class SensorSpringDensity:
+    """``/SENSOR/SPRING_DENSITY`` or ``/SENSOR/SPRING_DENS`` (M255): Spring element material density threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    dens_max: float = 1e30   # maximum density threshold
+    t_delay: float = 0.0     # activation delay time
+
+
 
 
 
