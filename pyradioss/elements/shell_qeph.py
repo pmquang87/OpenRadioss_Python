@@ -936,7 +936,7 @@ def _post(G, thick, Nres, Mres, qres, st, vhg, dt, alive, plat, vqn, di, db):
     import numpy as np
     visc = np.sqrt(1.0 + st["amu"] ** 2) - st["amu"]
     dt_e = np.where(st["cspd"] > 0.0,
-                    visc * G["ll"] / np.maximum(st["cspd"], 1e-20), 1e30)
+                    visc * G["ll"] / np.maximum(st["cspd"], EM20), EP30)
     return fg, mg, dt_e
 
 def forces(group, x, v, vr, dt, fint, mint):

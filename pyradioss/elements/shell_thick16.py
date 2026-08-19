@@ -598,8 +598,8 @@ def init_group(group, model, log):
     fill = np.ones(n)
     rho = np.zeros(n)
     vol = np.ones(n) # placeholder for actual volume calculation via Gauss loop
-    dtx = np.full(n, 1e20)
-    dtelem = np.full(n, 1e20)
+    dtx = np.full(n, EP30)
+    dtelem = np.full(n, EP30)
     deltax2 = np.ones(n)
     
     nip_max = 1
@@ -788,4 +788,4 @@ def forces(group, x, v, vr, dt, fint, mint):
     fint_e_flat = fint_e.reshape(-1, 3)
     valid = conn_flat >= 0
     scatter_add3(fint, conn_flat[valid], fint_e_flat[valid], st.get('color_indices'), st.get('color_offsets'))
-    return np.full(group.n, 1e20)  # dt_crit placeholder
+    return np.full(group.n, EP30)  # dt_crit placeholder

@@ -1,6 +1,6 @@
 import logging
 import numpy as np
-from ..common.constants import EM20
+from ..common.constants import EM20, EP30
 from .shell_bt4 import _init_material_state, _layer_extra
 from .shell_tri3 import _local_geometry, _char_length, _exact_dt_factor
 
@@ -47,6 +47,7 @@ def init_group(group, model, log):
         mass=mass,
         eint=np.zeros(n),
         ehour=np.zeros(n),
+        off=np.ones(n),              # 1 alive / 0 deleted
         zw=zw,
         dtfac=_exact_dt_factor(B1, B2, area, _char_length(xl, area),
                                thick, group.state["slices"]),
@@ -227,7 +228,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     
     viscdt = np.sqrt(1.0 + st["amu"]**2) - st["amu"]
     dt_e = st["dtfac"] * aldt * viscdt / np.maximum(st["ssp0"], EM20)
-    return dt_e
+    alive = st["off"] > 0.0
+    return np.where(alive, dt_e, EP30)
 
 def consistent_mass(group):
     """Consistent mass matrix for implicit assembly (NOT IMPLEMENTED for DKT18)."""

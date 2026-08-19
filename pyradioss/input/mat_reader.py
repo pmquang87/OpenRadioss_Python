@@ -1326,7 +1326,9 @@ def read_mat_note(kind: str, block: KeywordBlock, model,
         try:
             interp.run()
         except Exception:
-            pass
+            log.warning(f"     /{kind}/{mat_id}: CFG interpreter failed, "
+                        f"partial params may be incomplete",
+                        block.source)
         params = {k: v for k, v in interp.v.items()
                   if k not in _NOISE_ATTRS}
     else:

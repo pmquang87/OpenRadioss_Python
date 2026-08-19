@@ -61,6 +61,7 @@ def init_group(group, model, log):
         sig=np.zeros((n, 6)),        # Cauchy stress, Voigt
         epsp=np.zeros(n),            # equivalent plastic strain
         eint=np.zeros(n),
+        ehour=np.zeros(n),           # hourglass energy (none for quad, but needed by ledger)
         vol0=vol.copy(),
         mass=mass,
         n2d=np.full(n, n2d, dtype=int), # Save n2d in state
