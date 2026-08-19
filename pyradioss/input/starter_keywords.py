@@ -2370,6 +2370,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("BONORA", "BONORA_DAMAGE", "BONORA_MODEL", "BONORA_LAW"):
         read_fail_bonora(block, model, log)
         return
+    if kind in ("RITCHIE", "RITCHIE_KNOTT_RICE", "RKR", "RKR_MODEL", "RKR_LAW", "RKR_DAMAGE"):
+        read_fail_ritchie(block, model, log)
+        return
     if kind in ("CHABOCHE", "CHABOCHE_LAW", "CHABOCHE_DAMAGE", "CHABOCHE_MODEL", "LEMAITRE_CHABOCHE"):
         read_fail_chaboche(block, model, log)
         return
@@ -23447,6 +23450,38 @@ def read_planar_joint(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     )
 
 
+def read_rack_pinion_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RACK_PINION/id`` or ``/LAGMUL/RACK_PINION/id`` (M250): Rack and pinion kinematic joint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/RACK_PINION/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, pitch_radius, axis_dir, skew_id, tol = 0, 0, 1.0, 1, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("RACK_PINION_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        pitch_radius = _fval(f[2], 1.0) if len(f) > 2 else 1.0
+        axis_dir = _ival(f[3], 1) if len(f) > 3 else 1
+        skew_id = _ival(f[4], 0) if len(f) > 4 else 0
+        tol = _fval(f[5], 1e-6) if len(f) > 5 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        pitch_radius = float(toks[2]) if len(toks) > 2 else 1.0
+        axis_dir = int(float(toks[3])) if len(toks) > 3 else 1
+        skew_id = int(float(toks[4])) if len(toks) > 4 else 0
+        tol = float(toks[5]) if len(toks) > 5 else 1e-6
+
+    from ..model.entities import RackPinionJoint
+    model.rack_pinion_joints[block.user_id] = RackPinionJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        pitch_radius=pitch_radius, axis_dir=axis_dir, skew_id=skew_id, tol=tol
+    )
+
+
 def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -42870,6 +42905,38 @@ def read_fail_bonora(block: KeywordBlock, model: Model, log: MessageLog) -> None
     )
 
 
+def read_fail_ritchie(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/RITCHIE_KNOTT_RICE/mat_ID`` (M250): Ritchie-Knott-Rice cleavage fracture criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/RITCHIE_KNOTT_RICE/{block.user_id}: missing data card", block.source)
+        return
+
+    sigma_c, l_star, eps_init, d_crit, eps_max, ifail_sh = 0.0, 0.0, 0.0, 0.99, 1e30, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_RITCHIE_1")
+        sigma_c = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        l_star = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        eps_init = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        d_crit = _fval(f[3], 0.99) if len(f) > 3 else 0.99
+        eps_max = _fval(f[4], 1e30) if len(f) > 4 else 1e30
+        ifail_sh = _ival(f[5], 1) if len(f) > 5 else 1
+    else:
+        toks = cards[0].tokens()
+        sigma_c = float(toks[0]) if len(toks) > 0 else 0.0
+        l_star = float(toks[1]) if len(toks) > 1 else 0.0
+        eps_init = float(toks[2]) if len(toks) > 2 else 0.0
+        d_crit = float(toks[3]) if len(toks) > 3 else 0.99
+        eps_max = float(toks[4]) if len(toks) > 4 else 1e30
+        ifail_sh = int(float(toks[5])) if len(toks) > 5 else 1
+
+    from ..model.entities import FailRitchie
+    model.fail_ritchies[block.user_id] = FailRitchie(
+        mat_id=block.user_id, title=title, sigma_c=sigma_c, l_star=l_star,
+        eps_init=eps_init, d_crit=d_crit, eps_max=eps_max, ifail_sh=ifail_sh
+    )
+
+
 
 
 
@@ -45990,6 +46057,60 @@ def read_sensor_spring_tot_energy(block: KeywordBlock, model: Model, log: Messag
     ))
 
 
+def read_eng_mass_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MASS_ENERGY`` or ``/ENG/MASS_ENERGY`` (M250): Engine added mass kinetic energy output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MASS_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_emass, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_MASS_ENERGY_1")
+        dt_emass = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_emass = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngMassEnergy
+    r_id = block.user_id or (len(model.eng_mass_energies) + 1)
+    model.eng_mass_energies[r_id] = EngMassEnergy(
+        id=r_id, title=title, dt_emass=dt_emass, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_mass_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_MASS_ENERGY`` or ``/SENSOR/SPRING_MASS_ENER`` (M250): Spring element added mass energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_MASS_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, emass_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_MASS_ENERGY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        emass_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        emass_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringMassEnergy, Sensor
+    ssme = SensorSpringMassEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        emass_max=emass_max, t_delay=t_delay
+    )
+    model.sensor_spring_mass_energies[ssme.id] = ssme
+    model.sensors.append(Sensor(
+        id=ssme.id, kind="SPRING_MASS_ENERGY", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -48416,6 +48537,32 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_TOTAL_ENERGY": read_sensor_spring_tot_energy,
     "SENSOR_TOT_ENERGY_SPRING": read_sensor_spring_tot_energy,
     "SENSOR_SPRING_ETOT": read_sensor_spring_tot_energy,
+    # --- M250: Ritchie-Knott-Rice Cleavage Fracture Criterion, Engine Added Mass Energy Output Directive, Rack and Pinion Joint Suite, and Spring Mass Energy Sensor ---
+    "FAIL_RITCHIE_KNOTT_RICE": read_fail_ritchie,
+    "FAIL_RKR": read_fail_ritchie,
+    "FAIL_RKR_MODEL": read_fail_ritchie,
+    "FAIL_RKR_LAW": read_fail_ritchie,
+    "FAIL_RKR_DAMAGE": read_fail_ritchie,
+    "FAIL_RITCHIE": read_fail_ritchie,
+    "MASS_ENERGY": read_eng_mass_energy,
+    "ENG_MASS_ENERGY": read_eng_mass_energy,
+    "ENG_MASS_ENER": read_eng_mass_energy,
+    "ENG_EMASS": read_eng_mass_energy,
+    "ENG_MASS_CORRECTION_ENERGY": read_eng_mass_energy,
+    "LAGMUL_RACK_PINION": read_rack_pinion_joint,
+    "RACK_PINION": read_rack_pinion_joint,
+    "LAGMUL_RACK_PINION_JOINT": read_rack_pinion_joint,
+    "RACK_PINION_JOINT": read_rack_pinion_joint,
+    "LAGMUL_RACK_PINION_AXIS": read_rack_pinion_joint,
+    "RACK_PINION_AXIS": read_rack_pinion_joint,
+    "LAGMUL_RACK_JOINT": read_rack_pinion_joint,
+    "RACK_JOINT": read_rack_pinion_joint,
+    "LAGMUL_PINION_JOINT": read_rack_pinion_joint,
+    "PINION_JOINT": read_rack_pinion_joint,
+    "SENSOR_SPRING_MASS_ENERGY": read_sensor_spring_mass_energy,
+    "SENSOR_SPRING_MASS_ENER": read_sensor_spring_mass_energy,
+    "SENSOR_SPRING_EMASS": read_sensor_spring_mass_energy,
+    "SENSOR_MASS_ENERGY_SPRING": read_sensor_spring_mass_energy,
 }
 
 

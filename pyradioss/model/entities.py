@@ -13658,6 +13658,51 @@ class SensorSpringTotEnergy:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailRitchie:
+    """``/FAIL/RITCHIE_KNOTT_RICE/mat_ID`` (M250): Ritchie-Knott-Rice cleavage fracture criterion."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_c: float = 0.0     # critical cleavage fracture stress sigma_c
+    l_star: float = 0.0      # characteristic microstructural distance l*
+    eps_init: float = 0.0    # initial plastic strain threshold eps_init
+    d_crit: float = 0.99     # critical damage threshold D_c
+    eps_max: float = 1e30    # maximum equivalent plastic strain to failure
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngMassEnergy:
+    """``/MASS_ENERGY`` or ``/ENG/MASS_ENERGY`` (M250): Engine added mass kinetic energy output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_emass: float = 0.0    # time frequency for mass energy output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class RackPinionJoint:
+    """``/RACK_PINION/id`` or ``/LAGMUL/RACK_PINION/id`` (M250): Rack and pinion kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0           # rack node (translational)
+    node2: int = 0           # pinion node (rotational)
+    pitch_radius: float = 1.0 # pitch radius R
+    axis_dir: int = 1        # motion axis direction (1=X, 2=Y, 3=Z)
+    skew_id: int = 0         # reference skew ID
+    tol: float = 1e-6        # kinematic constraint tolerance
+
+
+@dataclass
+class SensorSpringMassEnergy:
+    """``/SENSOR/SPRING_MASS_ENERGY`` or ``/SENSOR/SPRING_MASS_ENER`` (M250): Spring element added mass energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    emass_max: float = 1e30  # maximum mass energy threshold
+    t_delay: float = 0.0     # activation delay time
+
+
 
 
 

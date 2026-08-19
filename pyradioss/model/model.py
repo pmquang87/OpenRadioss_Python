@@ -1690,6 +1690,12 @@ class Model:
         self.eng_tot_energies: Dict[int, Any] = {}                   # /TOT_ENERGY, /ENG/TOT_ENERGY (M249)
         self.sensor_spring_tot_energies: Dict[int, Any] = {}         # /SENSOR/SPRING_TOT_ENERGY (M249)
 
+        # M250 Entities
+        self.fail_ritchies: Dict[int, Any] = {}                      # /FAIL/RITCHIE_KNOTT_RICE (M250)
+        self.eng_mass_energies: Dict[int, Any] = {}                  # /MASS_ENERGY, /ENG/MASS_ENERGY (M250)
+        self.rack_pinion_joints: Dict[int, Any] = {}                 # /RACK_PINION, /LAGMUL/RACK_PINION (M250)
+        self.sensor_spring_mass_energies: Dict[int, Any] = {}        # /SENSOR/SPRING_MASS_ENERGY (M250)
+
 
 
 
