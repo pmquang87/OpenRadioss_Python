@@ -1696,6 +1696,12 @@ class Model:
         self.rack_pinion_joints: Dict[int, Any] = {}                 # /RACK_PINION, /LAGMUL/RACK_PINION (M250)
         self.sensor_spring_mass_energies: Dict[int, Any] = {}        # /SENSOR/SPRING_MASS_ENERGY (M250)
 
+        # M251 Entities
+        self.fail_gologanus: Dict[int, Any] = {}                     # /FAIL/GOLOGANU (M251)
+        self.eng_mass_changes: Dict[int, Any] = {}                   # /MASS_CHANGE, /ENG/MASS_CHANGE (M251)
+        self.belt_pulley_joints: Dict[int, Any] = {}                 # /BELT_PULLEY, /LAGMUL/BELT_PULLEY (M251)
+        self.sensor_spring_mass_changes: Dict[int, Any] = {}         # /SENSOR/SPRING_MASS_CHANGE (M251)
+
 
 
 

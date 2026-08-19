@@ -2373,6 +2373,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("RITCHIE", "RITCHIE_KNOTT_RICE", "RKR", "RKR_MODEL", "RKR_LAW", "RKR_DAMAGE"):
         read_fail_ritchie(block, model, log)
         return
+    if kind in ("GOLOGANU", "GLD", "GOLOGANU_LEBLOND_DEVAUX", "GOLOGANU_MODEL", "GOLOGANU_LAW", "GOLOGANU_DAMAGE"):
+        read_fail_gologanu(block, model, log)
+        return
     if kind in ("CHABOCHE", "CHABOCHE_LAW", "CHABOCHE_DAMAGE", "CHABOCHE_MODEL", "LEMAITRE_CHABOCHE"):
         read_fail_chaboche(block, model, log)
         return
@@ -23482,6 +23485,43 @@ def read_rack_pinion_joint(block: KeywordBlock, model: Model, log: MessageLog) -
     )
 
 
+def read_belt_pulley_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/BELT_PULLEY/id`` or ``/LAGMUL/BELT_PULLEY/id`` (M251): Belt and pulley kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/BELT_PULLEY/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, radius1, radius2, axis1_dir, axis2_dir, skew_id, tol = 0, 0, 1.0, 1.0, 1, 1, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("BELT_PULLEY_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        radius1 = _fval(f[2], 1.0) if len(f) > 2 else 1.0
+        radius2 = _fval(f[3], 1.0) if len(f) > 3 else 1.0
+        axis1_dir = _ival(f[4], 1) if len(f) > 4 else 1
+        axis2_dir = _ival(f[5], 1) if len(f) > 5 else 1
+        skew_id = _ival(f[6], 0) if len(f) > 6 else 0
+        tol = _fval(f[7], 1e-6) if len(f) > 7 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        radius1 = float(toks[2]) if len(toks) > 2 else 1.0
+        radius2 = float(toks[3]) if len(toks) > 3 else 1.0
+        axis1_dir = int(float(toks[4])) if len(toks) > 4 else 1
+        axis2_dir = int(float(toks[5])) if len(toks) > 5 else 1
+        skew_id = int(float(toks[6])) if len(toks) > 6 else 0
+        tol = float(toks[7]) if len(toks) > 7 else 1e-6
+
+    from ..model.entities import BeltPulleyJoint
+    model.belt_pulley_joints[block.user_id] = BeltPulleyJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        radius1=radius1, radius2=radius2, axis1_dir=axis1_dir,
+        axis2_dir=axis2_dir, skew_id=skew_id, tol=tol
+    )
+
+
 def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -42937,6 +42977,36 @@ def read_fail_ritchie(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     )
 
 
+def read_fail_gologanu(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/GOLOGANU/mat_ID`` (M251): Gologanu-Leblond-Devaux void shape evolution failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/GOLOGANU/{block.user_id}: missing data card", block.source)
+        return
+
+    f0, s0, fc, ff, ifail_sh = 0.001, 1.0, 0.15, 0.25, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_GOLOGANU_1")
+        f0 = _fval(f[0], 0.001) if len(f) > 0 else 0.001
+        s0 = _fval(f[1], 1.0) if len(f) > 1 else 1.0
+        fc = _fval(f[2], 0.15) if len(f) > 2 else 0.15
+        ff = _fval(f[3], 0.25) if len(f) > 3 else 0.25
+        ifail_sh = _ival(f[4], 1) if len(f) > 4 else 1
+    else:
+        toks = cards[0].tokens()
+        f0 = float(toks[0]) if len(toks) > 0 else 0.001
+        s0 = float(toks[1]) if len(toks) > 1 else 1.0
+        fc = float(toks[2]) if len(toks) > 2 else 0.15
+        ff = float(toks[3]) if len(toks) > 3 else 0.25
+        ifail_sh = int(float(toks[4])) if len(toks) > 4 else 1
+
+    from ..model.entities import FailGologanu
+    model.fail_gologanus[block.user_id] = FailGologanu(
+        mat_id=block.user_id, title=title, f0=f0, s0=s0,
+        fc=fc, ff=ff, ifail_sh=ifail_sh
+    )
+
+
 
 
 
@@ -46111,6 +46181,60 @@ def read_sensor_spring_mass_energy(block: KeywordBlock, model: Model, log: Messa
     ))
 
 
+def read_eng_mass_change(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MASS_CHANGE`` or ``/ENG/MASS_CHANGE`` (M251): Engine added/eroded mass delta variation output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MASS_CHANGE/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_dmass, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_MASS_CHANGE_1")
+        dt_dmass = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_dmass = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngMassChange
+    r_id = block.user_id or (len(model.eng_mass_changes) + 1)
+    model.eng_mass_changes[r_id] = EngMassChange(
+        id=r_id, title=title, dt_dmass=dt_dmass, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_mass_change(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_MASS_CHANGE`` or ``/SENSOR/SPRING_DMASS`` (M251): Spring element mass variation threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_MASS_CHANGE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, dmass_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_MASS_CHANGE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        dmass_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        dmass_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringMassChange, Sensor
+    ssmc = SensorSpringMassChange(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        dmass_max=dmass_max, t_delay=t_delay
+    )
+    model.sensor_spring_mass_changes[ssmc.id] = ssmc
+    model.sensors.append(Sensor(
+        id=ssmc.id, kind="SPRING_MASS_CHANGE", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -48563,6 +48687,30 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_MASS_ENER": read_sensor_spring_mass_energy,
     "SENSOR_SPRING_EMASS": read_sensor_spring_mass_energy,
     "SENSOR_MASS_ENERGY_SPRING": read_sensor_spring_mass_energy,
+    # --- M251: Gologanu Void Shape Evolution Failure Model, Engine Mass Change Output Directive, Belt Pulley Joint Suite, and Spring Mass Variation Sensor ---
+    "FAIL_GOLOGANU": read_fail_gologanu,
+    "FAIL_GLD": read_fail_gologanu,
+    "FAIL_GOLOGANU_LEBLOND_DEVAUX": read_fail_gologanu,
+    "FAIL_GOLOGANU_MODEL": read_fail_gologanu,
+    "FAIL_GOLOGANU_LAW": read_fail_gologanu,
+    "FAIL_GOLOGANU_DAMAGE": read_fail_gologanu,
+    "MASS_CHANGE": read_eng_mass_change,
+    "ENG_MASS_CHANGE": read_eng_mass_change,
+    "ENG_DMASS": read_eng_mass_change,
+    "ENG_DELTA_MASS": read_eng_mass_change,
+    "ENG_MASS_VARIATION": read_eng_mass_change,
+    "LAGMUL_BELT_PULLEY": read_belt_pulley_joint,
+    "BELT_PULLEY": read_belt_pulley_joint,
+    "LAGMUL_PULLEY_JOINT": read_belt_pulley_joint,
+    "PULLEY_JOINT": read_belt_pulley_joint,
+    "LAGMUL_BELT_JOINT": read_belt_pulley_joint,
+    "BELT_JOINT": read_belt_pulley_joint,
+    "LAGMUL_PULLEY": read_belt_pulley_joint,
+    "PULLEY": read_belt_pulley_joint,
+    "SENSOR_SPRING_MASS_CHANGE": read_sensor_spring_mass_change,
+    "SENSOR_SPRING_DMASS": read_sensor_spring_mass_change,
+    "SENSOR_SPRING_DELTA_MASS": read_sensor_spring_mass_change,
+    "SENSOR_MASS_CHANGE_SPRING": read_sensor_spring_mass_change,
 }
 
 

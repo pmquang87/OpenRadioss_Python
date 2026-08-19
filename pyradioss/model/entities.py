@@ -13703,6 +13703,52 @@ class SensorSpringMassEnergy:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailGologanu:
+    """``/FAIL/GOLOGANU/mat_ID`` (M251): Gologanu-Leblond-Devaux void shape evolution failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    f0: float = 0.001        # initial void volume fraction
+    s0: float = 1.0          # initial void aspect ratio S = ln(a/b)
+    fc: float = 0.15         # critical void volume fraction for coalescence
+    ff: float = 0.25         # void volume fraction at fracture
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngMassChange:
+    """``/MASS_CHANGE`` or ``/ENG/MASS_CHANGE`` (M251): Engine added/eroded mass delta variation output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_dmass: float = 0.0    # time frequency for mass change output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class BeltPulleyJoint:
+    """``/BELT_PULLEY/id`` or ``/LAGMUL/BELT_PULLEY/id`` (M251): Belt and pulley kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0           # driver pulley shaft node
+    node2: int = 0           # driven pulley shaft node
+    radius1: float = 1.0     # driver pulley pitch radius R1
+    radius2: float = 1.0     # driven pulley pitch radius R2
+    axis1_dir: int = 1       # driver pulley axis (1=X, 2=Y, 3=Z)
+    axis2_dir: int = 1       # driven pulley axis (1=X, 2=Y, 3=Z)
+    skew_id: int = 0         # reference skew ID
+    tol: float = 1e-6        # kinematic constraint tolerance
+
+
+@dataclass
+class SensorSpringMassChange:
+    """``/SENSOR/SPRING_MASS_CHANGE`` or ``/SENSOR/SPRING_DMASS`` (M251): Spring element mass variation threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    dmass_max: float = 1e30  # maximum mass variation threshold
+    t_delay: float = 0.0     # activation delay time
+
+
 
 
 
