@@ -1750,6 +1750,13 @@ class Model:
         self.lagmul_cycloidal_drives: Dict[int, Any] = {}            # /CYCLOIDAL_DRIVE, /LAGMUL/CYCLOIDAL_DRIVE (M260)
         self.sensor_spring_plastic_works: Dict[int, Any] = {}        # /SENSOR/SPRING_PLASTIC_WORK (M260)
 
+        # M261 Entities
+        self.fail_syazwans: Dict[int, Any] = {}                      # /FAIL/SYAZWAN (M261)
+        self.eng_temperatures: Dict[int, Any] = {}                   # /ENG/TEMPERATURE (M261)
+        self.lagmul_rack_pinions: Dict[int, Any] = {}                # /RACK_AND_PINION, /LAGMUL/RACK_AND_PINION (M261)
+        self.sensor_spring_force_rates: Dict[int, Any] = {}          # /SENSOR/SPRING_FORCE_RATE (M261)
+
+
 
 
 

@@ -23845,6 +23845,60 @@ def read_lagmul_cycloidal_drive(block: KeywordBlock, model: Model, log: MessageL
     )
 
 
+def read_lagmul_rack_pinion(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/RACK_AND_PINION/id`` or ``/LAGMUL/RACK_AND_PINION/id`` (M261): Rack and pinion transmission kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/RACK_AND_PINION/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, pitch_radius, stiff, skew_id, tol = 0, 0, 10.0, 1e6, 0, 1e-6
+    axis_rot_x, axis_rot_y, axis_rot_z = 0.0, 0.0, 1.0
+    axis_tra_x, axis_tra_y, axis_tra_z = 1.0, 0.0, 0.0
+    if block.fixed:
+        f1 = cards[0].cut("RACK_PINION_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        pitch_radius = _fval(f1[2], 10.0) if len(f1) > 2 and f1[2].strip() else 10.0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("RACK_PINION_2")
+            axis_rot_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_rot_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_rot_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            axis_tra_x = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+            axis_tra_y = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+            axis_tra_z = _fval(f2[5], 0.0) if len(f2) > 5 else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        pitch_radius = float(toks1[2]) if len(toks1) > 2 else 10.0
+        stiff = float(toks1[3]) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4])) if len(toks1) > 4 else 0
+        tol = float(toks1[5]) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_rot_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+            axis_rot_y = float(toks2[1]) if len(toks2) > 1 else 0.0
+            axis_rot_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+            axis_tra_x = float(toks2[3]) if len(toks2) > 3 else 1.0
+            axis_tra_y = float(toks2[4]) if len(toks2) > 4 else 0.0
+            axis_tra_z = float(toks2[5]) if len(toks2) > 5 else 0.0
+
+    from ..model.entities import LagmulRackPinion
+    model.lagmul_rack_pinions[block.user_id] = LagmulRackPinion(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        pitch_radius=pitch_radius, stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_rot_x=axis_rot_x, axis_rot_y=axis_rot_y, axis_rot_z=axis_rot_z,
+        axis_tra_x=axis_tra_x, axis_tra_y=axis_tra_y, axis_tra_z=axis_tra_z
+    )
+
+
 def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -43635,6 +43689,152 @@ def read_fail_sahraei(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     )
 
 
+def read_fail_syazwan(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/SYAZWAN/mat_ID`` (M261): Syazwan Hosford-Coulomb 3D ductile/brittle failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/SYAZWAN/{block.user_id}: missing data card", block.source)
+        return
+
+    icard, epfmin = 1, 0.0
+    c1, c2, c3, c4, c5, c6 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    epf_comp, epf_shear, epf_tens, epf_plstrn, epf_biax = 0.0, 0.0, 0.0, 0.0, 0.0
+    dinit, dam_sf, max_dam = 0, 0.0, 1.0
+    inst, iform, n_val, softexp = 0, 0, 0.0, 0.0
+    reg_func, ref_len, reg_scale = 0, 0.0, 1.0
+    ifail_sh = 1
+
+    idx = 0
+    if block.fixed:
+        # Card 1: _BLANK_, ICARD, EPFMIN
+        f1 = cards[0].cut("FAIL_SYAZWAN_1")
+        icard = _ival(f1[1], 1) if len(f1) > 1 and f1[1].strip() else 1
+        epfmin = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        idx = 1
+
+        if icard == 2:
+            if len(cards) > idx and not cards[idx].is_blank:
+                f2 = cards[idx].cut("FAIL_SYAZWAN_2A")
+                epf_comp = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                epf_shear = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                epf_tens = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+                epf_plstrn = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+                epf_biax = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+                idx += 1
+        else:
+            if len(cards) > idx and not cards[idx].is_blank:
+                f2 = cards[idx].cut("FAIL_SYAZWAN_2B")
+                c1 = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                c2 = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                c3 = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+                c4 = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+                c5 = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+                idx += 1
+            if len(cards) > idx and not cards[idx].is_blank:
+                f2c = cards[idx].cut("FAIL_SYAZWAN_2C")
+                c6 = _fval(f2c[0], 0.0) if len(f2c) > 0 else 0.0
+                idx += 1
+
+        # Card 3: DAM_INIT, DAM_SF, DAM_MAX
+        if len(cards) > idx and not cards[idx].is_blank:
+            f3 = cards[idx].cut("FAIL_SYAZWAN_3")
+            dinit = _ival(f3[1], 0) if len(f3) > 1 and f3[1].strip() else 0
+            dam_sf = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+            max_dam = _fval(f3[3], 1.0) if len(f3) > 3 and f3[3].strip() else 1.0
+            idx += 1
+
+        # Card 4: INST, IFORM, N_VAL, SOFTEXP
+        if len(cards) > idx and not cards[idx].is_blank:
+            f4 = cards[idx].cut("FAIL_SYAZWAN_4")
+            inst = _ival(f4[0], 0) if len(f4) > 0 else 0
+            iform = _ival(f4[1], 0) if len(f4) > 1 else 0
+            n_val = _fval(f4[2], 0.0) if len(f4) > 2 else 0.0
+            softexp = _fval(f4[3], 0.0) if len(f4) > 3 else 0.0
+            idx += 1
+
+        # Card 5: FCT_EL, EL_REF, ELSCAL
+        if len(cards) > idx and not cards[idx].is_blank:
+            f5 = cards[idx].cut("FAIL_SYAZWAN_5")
+            reg_func = _ival(f5[1], 0) if len(f5) > 1 and f5[1].strip() else 0
+            ref_len = _fval(f5[2], 0.0) if len(f5) > 2 else 0.0
+            reg_scale = _fval(f5[3], 1.0) if len(f5) > 3 and f5[3].strip() else 1.0
+            idx += 1
+    else:
+        toks1 = cards[0].tokens()
+        icard = int(float(toks1[0])) if len(toks1) > 0 else 1
+        epfmin = float(toks1[1]) if len(toks1) > 1 else 0.0
+        idx = 1
+
+        if icard == 2:
+            if len(cards) > idx and not cards[idx].is_blank:
+                toks2 = cards[idx].tokens()
+                epf_comp = float(toks2[0]) if len(toks2) > 0 else 0.0
+                epf_shear = float(toks2[1]) if len(toks2) > 1 else 0.0
+                epf_tens = float(toks2[2]) if len(toks2) > 2 else 0.0
+                epf_plstrn = float(toks2[3]) if len(toks2) > 3 else 0.0
+                epf_biax = float(toks2[4]) if len(toks2) > 4 else 0.0
+                idx += 1
+        else:
+            if len(cards) > idx and not cards[idx].is_blank:
+                toks2 = cards[idx].tokens()
+                c1 = float(toks2[0]) if len(toks2) > 0 else 0.0
+                c2 = float(toks2[1]) if len(toks2) > 1 else 0.0
+                c3 = float(toks2[2]) if len(toks2) > 2 else 0.0
+                c4 = float(toks2[3]) if len(toks2) > 3 else 0.0
+                c5 = float(toks2[4]) if len(toks2) > 4 else 0.0
+                if len(toks2) > 5:
+                    c6 = float(toks2[5])
+                    idx += 1
+                else:
+                    idx += 1
+                    if len(cards) > idx and not cards[idx].is_blank and len(cards[idx].tokens()) == 1:
+                        toks2c = cards[idx].tokens()
+                        c6 = float(toks2c[0]) if len(toks2c) > 0 else 0.0
+                        idx += 1
+
+        if len(cards) > idx and not cards[idx].is_blank:
+            toks3 = cards[idx].tokens()
+            dinit = int(float(toks3[0])) if len(toks3) > 0 else 0
+            dam_sf = float(toks3[1]) if len(toks3) > 1 else 0.0
+            max_dam = float(toks3[2]) if len(toks3) > 2 else 1.0
+            idx += 1
+
+        if len(cards) > idx and not cards[idx].is_blank:
+            toks4 = cards[idx].tokens()
+            inst = int(float(toks4[0])) if len(toks4) > 0 else 0
+            iform = int(float(toks4[1])) if len(toks4) > 1 else 0
+            n_val = float(toks4[2]) if len(toks4) > 2 else 0.0
+            softexp = float(toks4[3]) if len(toks4) > 3 else 0.0
+            idx += 1
+
+        if len(cards) > idx and not cards[idx].is_blank:
+            toks5 = cards[idx].tokens()
+            reg_func = int(float(toks5[0])) if len(toks5) > 0 else 0
+            ref_len = float(toks5[1]) if len(toks5) > 1 else 0.0
+            reg_scale = float(toks5[2]) if len(toks5) > 2 else 1.0
+            idx += 1
+
+    if icard <= 0:
+        icard = 1
+    if max_dam == 0.0:
+        max_dam = 1.0
+    if reg_scale == 0.0:
+        reg_scale = 1.0
+
+    from ..model.entities import FailSyazwan
+    model.fail_syazwans[block.user_id] = FailSyazwan(
+        mat_id=block.user_id, title=title, icard=icard, epfmin=epfmin,
+        c1=c1, c2=c2, c3=c3, c4=c4, c5=c5, c6=c6,
+        epf_comp=epf_comp, epf_shear=epf_shear, epf_tens=epf_tens,
+        epf_plstrn=epf_plstrn, epf_biax=epf_biax,
+        dinit=dinit, dam_sf=dam_sf, max_dam=max_dam,
+        inst=inst, iform=iform, n_val=n_val, softexp=softexp,
+        reg_func=reg_func, ref_len=ref_len, reg_scale=reg_scale,
+        ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -47296,6 +47496,61 @@ def read_sensor_spring_plastic_work(block: KeywordBlock, model: Model, log: Mess
     ))
 
 
+def read_eng_temperature(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/TEMPERATURE`` or ``/ENG/TEMP`` (M261): Engine temperature field history tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/TEMPERATURE/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_temp, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_TEMPERATURE_1")
+        dt_temp = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_temp = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngTemperature
+    r_id = block.user_id or (len(model.eng_temperatures) + 1)
+    model.eng_temperatures[r_id] = EngTemperature(
+        id=r_id, title=title, dt_temp=dt_temp, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_force_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_FORCE_RATE`` or ``/SENSOR/SPRING_DF`` (M261): Spring element force time-rate threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_FORCE_RATE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, df_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_FORCE_RATE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        df_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        df_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringForceRate, Sensor
+    ssfr = SensorSpringForceRate(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        df_max=df_max, t_delay=t_delay
+    )
+    model.sensor_spring_force_rates[ssfr.id] = ssfr
+    model.sensors.append(Sensor(
+        id=ssfr.id, kind="SPRING_FORCE_RATE", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -49930,6 +50185,24 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_WPLAS": read_sensor_spring_plastic_work,
     "SENSOR_SPRING_PW": read_sensor_spring_plastic_work,
     "SENSOR_WPLAS_SPRING": read_sensor_spring_plastic_work,
+    # --- M261: Syazwan Hosford-Coulomb Failure Model, Engine Temperature Output Directive, Rack and Pinion Joint Suite, and Spring Force-Rate Sensor ---
+    "FAIL_SYAZWAN": read_fail_syazwan,
+    "FAIL_SYAZWAN_MODEL": read_fail_syazwan,
+    "FAIL_SYAZWAN_LAW": read_fail_syazwan,
+    "FAIL_HOSFORD_COULOMB": read_fail_syazwan,
+    "ENG_TEMPERATURE": read_eng_temperature,
+    "ENG_TEMP": read_eng_temperature,
+    "ENG_THERMAL_TEMP": read_eng_temperature,
+    "ENG_NODE_TEMP": read_eng_temperature,
+    "LAGMUL_RACK_AND_PINION": read_lagmul_rack_pinion,
+    "RACK_AND_PINION": read_lagmul_rack_pinion,
+    "LAGMUL_RACK_PINION": read_lagmul_rack_pinion,
+    "RACK_PINION_GEAR": read_lagmul_rack_pinion,
+    "RACK_PINION": read_lagmul_rack_pinion,
+    "SENSOR_SPRING_FORCE_RATE": read_sensor_spring_force_rate,
+    "SENSOR_SPRING_DF": read_sensor_spring_force_rate,
+    "SENSOR_SPRING_FORCERATE": read_sensor_spring_force_rate,
+    "SENSOR_DF_SPRING": read_sensor_spring_force_rate,
 }
 
 

@@ -14168,6 +14168,85 @@ class SensorSpringPlasticWork:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M261 Suite: Syazwan failure, EngTemperature, RackPinion, SensorSpringForceRate
+# ============================================================================
+
+@dataclass
+class FailSyazwan:
+    """``/FAIL/SYAZWAN/mat_ID`` (M261): Syazwan Hosford-Coulomb 3D ductile/brittle failure model."""
+    mat_id: int = 1
+    title: str = ""
+    icard: int = 1               # input parameter format flag (1=C1..C6, 2=EPF strain points)
+    epfmin: float = 0.0          # minimal plastic strain at failure
+    # Card 2b: direct constants
+    c1: float = 0.0
+    c2: float = 0.0
+    c3: float = 0.0
+    c4: float = 0.0
+    c5: float = 0.0
+    c6: float = 0.0
+    # Card 2a: strain calibration points
+    epf_comp: float = 0.0        # compression failure plastic strain
+    epf_shear: float = 0.0       # shear failure plastic strain
+    epf_tens: float = 0.0        # tension failure plastic strain
+    epf_plstrn: float = 0.0      # plane strain failure plastic strain
+    epf_biax: float = 0.0        # biaxial tension failure plastic strain
+    # Card 3: Damage initialization
+    dinit: int = 0               # initial damage estimate flag
+    dam_sf: float = 0.0          # damage initialization scale factor
+    max_dam: float = 1.0         # maximal damage value
+    # Card 4: Instability and softening
+    inst: int = 0                # instability flag
+    iform: int = 0               # formulation flag
+    n_val: float = 0.0           # hardening exponent (Hollomon)
+    softexp: float = 0.0         # stress softening exponent
+    # Card 5: Element size regularization
+    reg_func: int = 0            # element size dependency function ID
+    ref_len: float = 0.0         # reference element size
+    reg_scale: float = 1.0       # regularization function scale factor
+    ifail_sh: int = 1            # shell deletion flag
+
+
+@dataclass
+class EngTemperature:
+    """``/ENG/TEMPERATURE`` or ``/ENG/TEMP`` (M261): Engine temperature field history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_temp: float = 0.0         # time frequency for temperature output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulRackPinion:
+    """``/RACK_AND_PINION/id`` or ``/LAGMUL/RACK_AND_PINION/id`` (M261): Rack and pinion transmission kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # pinion rotation node
+    node2: int = 0               # rack translation node
+    pitch_radius: float = 10.0   # pinion pitch circle radius R
+    stiff: float = 1e6           # kinematic transmission contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_rot_x: float = 0.0      # pinion rotation axis vector X
+    axis_rot_y: float = 0.0      # pinion rotation axis vector Y
+    axis_rot_z: float = 1.0      # pinion rotation axis vector Z
+    axis_tra_x: float = 1.0      # rack translation axis vector X
+    axis_tra_y: float = 0.0      # rack translation axis vector Y
+    axis_tra_z: float = 0.0      # rack translation axis vector Z
+
+
+@dataclass
+class SensorSpringForceRate:
+    """``/SENSOR/SPRING_FORCE_RATE`` or ``/SENSOR/SPRING_DF`` (M261): Spring element force time-rate threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    df_max: float = 1e30         # maximum force rate threshold |dF/dt|
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 
