@@ -1714,6 +1714,12 @@ class Model:
         self.tripod_joints: Dict[int, Any] = {}                      # /TRIPOD, /LAGMUL/TRIPOD (M253)
         self.sensor_spring_temperatures: Dict[int, Any] = {}         # /SENSOR/SPRING_TEMPERATURE (M253)
 
+        # M254 Entities
+        self.fail_kim_baeks: Dict[int, Any] = {}                     # /FAIL/KIM_BAEK (M254)
+        self.eng_volumes: Dict[int, Any] = {}                        # /ENG/VOLUME, /ENG/VOL (M254)
+        self.bevel_gear_joints: Dict[int, Any] = {}                  # /BEVEL_GEAR, /LAGMUL/BEVEL_GEAR (M254)
+        self.sensor_spring_volumes: Dict[int, Any] = {}              # /SENSOR/SPRING_VOLUME (M254)
+
 
 
 

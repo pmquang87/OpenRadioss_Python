@@ -13838,6 +13838,52 @@ class SensorSpringTemperature:
     t_delay: float = 0.0     # activation delay time
 
 
+@dataclass
+class FailKimBaek:
+    """``/FAIL/KIM_BAEK/mat_ID`` (M254): Kim-Baek ductile damage and rate-dependent fracture criterion."""
+    mat_id: int = 0
+    title: str = ""
+    sigma0: float = 0.0      # reference yield stress sigma0
+    k_coeff: float = 0.0     # hardening strength coefficient K
+    n_exp: float = 0.2       # strain hardening exponent n
+    c_rate: float = 0.0      # strain rate sensitivity coefficient C
+    eps0_dot: float = 1.0    # reference strain rate eps0_dot
+    eps_max: float = 1e30    # maximum equivalent plastic strain
+    ifail_sh: int = 1        # shell element deletion flag
+
+
+@dataclass
+class EngVolume:
+    """``/ENG/VOLUME`` or ``/ENG/VOL`` (M254): Engine element volume output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_vol: float = 0.0      # time frequency for volume output
+    sens_id: int = 0         # sensor activation ID
+
+
+@dataclass
+class BevelGearJoint:
+    """``/BEVEL_GEAR/id`` or ``/LAGMUL/BEVEL_GEAR/id`` (M254): Bevel gear kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0           # driver shaft node
+    node2: int = 0           # driven shaft node
+    ratio: float = 1.0       # gear velocity ratio gamma = omega2 / omega1
+    skew1_id: int = 0        # driver shaft reference skew ID
+    skew2_id: int = 0        # driven shaft reference skew ID
+    tol: float = 1e-6        # kinematic constraint tolerance
+
+
+@dataclass
+class SensorSpringVolume:
+    """``/SENSOR/SPRING_VOLUME`` or ``/SENSOR/SPRING_VOL`` (M254): Spring element volume threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0       # spring element ID to monitor
+    vol_max: float = 1e30    # maximum volume / elongation threshold
+    t_delay: float = 0.0     # activation delay time
+
+
 
 
 

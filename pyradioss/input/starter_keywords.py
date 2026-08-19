@@ -2382,6 +2382,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("HOCKETT_SHERBY", "HOCKETT_SHERBY_MODEL", "HOCKETT_SHERBY_LAW", "HOCKETT_SHERBY_DAMAGE", "HS", "HOCKETT"):
         read_fail_hockett_sherby(block, model, log)
         return
+    if kind in ("KIM_BAEK", "KIM_BAEK_MODEL", "KIM_BAEK_LAW", "KIM_BAEK_DAMAGE", "KB", "KIM"):
+        read_fail_kim_baek(block, model, log)
+        return
     if kind in ("CHABOCHE", "CHABOCHE_LAW", "CHABOCHE_DAMAGE", "CHABOCHE_MODEL", "LEMAITRE_CHABOCHE"):
         read_fail_chaboche(block, model, log)
         return
@@ -23167,6 +23170,9 @@ def read_lagmul(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     elif sub in ("TRIPOD", "TRIPOD_JOINT", "PLUNGING_CV"):
         read_tripod_joint(block, model, log)
         return
+    elif sub in ("BEVEL_GEAR", "BEVEL_GEAR_JOINT", "BEVEL"):
+        read_bevel_gear_joint(block, model, log)
+        return
     elif sub in ("INLINE", "INLINE_JOINT", "LINE"):
         read_inline_joint(block, model, log)
         return
@@ -23590,6 +23596,38 @@ def read_tripod_joint(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     model.tripod_joints[block.user_id] = TripodJoint(
         id=block.user_id, title=title, node1=node1, node2=node2,
         axis_dir=axis_dir, skew_id=skew_id, plunge_limit=plunge_limit, tol=tol
+    )
+
+
+def read_bevel_gear_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/BEVEL_GEAR/id`` or ``/LAGMUL/BEVEL_GEAR/id`` (M254): Bevel gear kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/BEVEL_GEAR/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, ratio, skew1_id, skew2_id, tol = 0, 0, 1.0, 0, 0, 1e-6
+    if block.fixed:
+        f = cards[0].cut("BEVEL_GEAR_1")
+        node1 = _ival(f[0]) if len(f) > 0 else 0
+        node2 = _ival(f[1]) if len(f) > 1 else 0
+        ratio = _fval(f[2], 1.0) if len(f) > 2 else 1.0
+        skew1_id = _ival(f[3], 0) if len(f) > 3 else 0
+        skew2_id = _ival(f[4], 0) if len(f) > 4 else 0
+        tol = _fval(f[5], 1e-6) if len(f) > 5 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0])) if len(toks) > 0 else 0
+        node2 = int(float(toks[1])) if len(toks) > 1 else 0
+        ratio = float(toks[2]) if len(toks) > 2 else 1.0
+        skew1_id = int(float(toks[3])) if len(toks) > 3 else 0
+        skew2_id = int(float(toks[4])) if len(toks) > 4 else 0
+        tol = float(toks[5]) if len(toks) > 5 else 1e-6
+
+    from ..model.entities import BevelGearJoint
+    model.bevel_gear_joints[block.user_id] = BevelGearJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        ratio=ratio, skew1_id=skew1_id, skew2_id=skew2_id, tol=tol
     )
 
 
@@ -43142,6 +43180,40 @@ def read_fail_hockett_sherby(block: KeywordBlock, model: Model, log: MessageLog)
     )
 
 
+def read_fail_kim_baek(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/KIM_BAEK/mat_ID`` (M254): Kim-Baek ductile damage and rate-dependent fracture criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/KIM_BAEK/{block.user_id}: missing data card", block.source)
+        return
+
+    sigma0, k_coeff, n_exp, c_rate, eps0_dot, eps_max, ifail_sh = 0.0, 0.0, 0.2, 0.0, 1.0, 1e30, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_KIM_BAEK_1")
+        sigma0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        k_coeff = _fval(f[1], 0.0) if len(f) > 1 else 0.0
+        n_exp = _fval(f[2], 0.2) if len(f) > 2 else 0.2
+        c_rate = _fval(f[3], 0.0) if len(f) > 3 else 0.0
+        eps0_dot = _fval(f[4], 1.0) if len(f) > 4 else 1.0
+        eps_max = _fval(f[5], 1e30) if len(f) > 5 else 1e30
+        ifail_sh = _ival(f[6], 1) if len(f) > 6 else 1
+    else:
+        toks = cards[0].tokens()
+        sigma0 = float(toks[0]) if len(toks) > 0 else 0.0
+        k_coeff = float(toks[1]) if len(toks) > 1 else 0.0
+        n_exp = float(toks[2]) if len(toks) > 2 else 0.2
+        c_rate = float(toks[3]) if len(toks) > 3 else 0.0
+        eps0_dot = float(toks[4]) if len(toks) > 4 else 1.0
+        eps_max = float(toks[5]) if len(toks) > 5 else 1e30
+        ifail_sh = int(float(toks[6])) if len(toks) > 6 else 1
+
+    from ..model.entities import FailKimBaek
+    model.fail_kim_baeks[block.user_id] = FailKimBaek(
+        mat_id=block.user_id, title=title, sigma0=sigma0, k_coeff=k_coeff,
+        n_exp=n_exp, c_rate=c_rate, eps0_dot=eps0_dot, eps_max=eps_max, ifail_sh=ifail_sh
+    )
+
+
 
 
 
@@ -46478,6 +46550,60 @@ def read_sensor_spring_temperature(block: KeywordBlock, model: Model, log: Messa
     ))
 
 
+def read_eng_volume(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/VOLUME`` or ``/ENG/VOL`` (M254): Engine element volume output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/VOLUME/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_vol, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_VOLUME_1")
+        dt_vol = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_vol = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngVolume
+    r_id = block.user_id or (len(model.eng_volumes) + 1)
+    model.eng_volumes[r_id] = EngVolume(
+        id=r_id, title=title, dt_vol=dt_vol, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_volume(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_VOLUME`` or ``/SENSOR/SPRING_VOL`` (M254): Spring element volume threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_VOLUME/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, vol_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_VOLUME_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        vol_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        vol_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringVolume, Sensor
+    ssv = SensorSpringVolume(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        vol_max=vol_max, t_delay=t_delay
+    )
+    model.sensor_spring_volumes[ssv.id] = ssv
+    model.sensors.append(Sensor(
+        id=ssv.id, kind="SPRING_VOLUME", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -48995,6 +49121,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_TEMP": read_sensor_spring_temperature,
     "SENSOR_TEMPERATURE_SPRING": read_sensor_spring_temperature,
     "SENSOR_SPRING_THERMAL_TEMP": read_sensor_spring_temperature,
+    # --- M254: Kim-Baek Ductile Fracture Model, Engine Volume Output Directive, Bevel Gear Joint Suite, and Spring Volume Sensor ---
+    "FAIL_KIM_BAEK": read_fail_kim_baek,
+    "FAIL_KIM_BAEK_MODEL": read_fail_kim_baek,
+    "FAIL_KIM_BAEK_LAW": read_fail_kim_baek,
+    "FAIL_KIM_BAEK_DAMAGE": read_fail_kim_baek,
+    "FAIL_KB": read_fail_kim_baek,
+    "FAIL_KIM": read_fail_kim_baek,
+    "ENG_VOLUME": read_eng_volume,
+    "ENG_VOL": read_eng_volume,
+    "ENG_VOLUME_CHANGE": read_eng_volume,
+    "VOLUME": read_eng_volume,
+    "LAGMUL_BEVEL_GEAR": read_bevel_gear_joint,
+    "BEVEL_GEAR": read_bevel_gear_joint,
+    "LAGMUL_BEVEL_GEAR_JOINT": read_bevel_gear_joint,
+    "BEVEL_GEAR_JOINT": read_bevel_gear_joint,
+    "LAGMUL_BEVEL": read_bevel_gear_joint,
+    "BEVEL": read_bevel_gear_joint,
+    "SENSOR_SPRING_VOLUME": read_sensor_spring_volume,
+    "SENSOR_SPRING_VOL": read_sensor_spring_volume,
+    "SENSOR_VOLUME_SPRING": read_sensor_spring_volume,
+    "SENSOR_SPRING_VOL_CHANGE": read_sensor_spring_volume,
 }
 
 
