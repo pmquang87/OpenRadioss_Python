@@ -23797,6 +23797,54 @@ def read_lagmul_harmonic_drive(block: KeywordBlock, model: Model, log: MessageLo
     )
 
 
+def read_lagmul_cycloidal_drive(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CYCLOIDAL_DRIVE/id`` or ``/LAGMUL/CYCLOIDAL_DRIVE/id`` (M260): Cycloidal speed reducer kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/CYCLOIDAL_DRIVE/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, ratio, stiff, skew_id, tol = 0, 0, 0, 29.0, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("CYCLOIDAL_DRIVE_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        ratio = _fval(f1[3], 29.0) if len(f1) > 3 and f1[3].strip() else 29.0
+        stiff = _fval(f1[4], 1e6) if len(f1) > 4 and f1[4].strip() else 1e6
+        skew_id = _ival(f1[5], 0) if len(f1) > 5 else 0
+        tol = _fval(f1[6], 1e-6) if len(f1) > 6 and f1[6].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("CYCLOIDAL_DRIVE_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2])) if len(toks1) > 2 else 0
+        ratio = float(toks1[3]) if len(toks1) > 3 else 29.0
+        stiff = float(toks1[4]) if len(toks1) > 4 else 1e6
+        skew_id = int(float(toks1[5])) if len(toks1) > 5 else 0
+        tol = float(toks1[6]) if len(toks1) > 6 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulCycloidalDrive
+    model.lagmul_cycloidal_drives[block.user_id] = LagmulCycloidalDrive(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        ratio=ratio, stiff=stiff, axis_x=axis_x, axis_y=axis_y, axis_z=axis_z,
+        skew_id=skew_id, tol=tol
+    )
+
+
 def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -43522,6 +43570,72 @@ def read_fail_rtcl(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_sahraei(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/SAHRAEI/mat_ID`` (M260): Sahraei battery cell and separator failure criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/SAHRAEI/{block.user_id}: missing data card", block.source)
+        return
+
+    fct_ratio, num, den, ordi = 0, 1, 1, 1
+    vol_strain, fct_elsize, el_ref = 0.0, 0, 0.0
+    comp_dir, idel = 0, 0
+    max_comp_strain, ratio, ifail_sh = 1e30, 1.0, 1
+
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_SAHRAEI_1")
+        fct_ratio = _ival(f1[0], 0) if len(f1) > 0 else 0
+        num = _ival(f1[1], 1) if len(f1) > 1 and f1[1].strip() else 1
+        den = _ival(f1[2], 1) if len(f1) > 2 and f1[2].strip() else 1
+        ordi = _ival(f1[3], 1) if len(f1) > 3 and f1[3].strip() else 1
+        vol_strain = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+        fct_elsize = _ival(f1[6], 0) if len(f1) > 6 else 0
+        el_ref = _fval(f1[7], 0.0) if len(f1) > 7 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_SAHRAEI_2")
+            comp_dir = _ival(f2[0], 0) if len(f2) > 0 else 0
+            idel = _ival(f2[1], 0) if len(f2) > 1 else 0
+            max_comp_strain = _fval(f2[2], 1e30) if len(f2) > 2 and f2[2].strip() else 1e30
+            ratio = _fval(f2[3], 1.0) if len(f2) > 3 and f2[3].strip() else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        fct_ratio = int(float(toks1[0])) if len(toks1) > 0 else 0
+        num = int(float(toks1[1])) if len(toks1) > 1 else 1
+        den = int(float(toks1[2])) if len(toks1) > 2 else 1
+        ordi = int(float(toks1[3])) if len(toks1) > 3 else 1
+        vol_strain = float(toks1[4]) if len(toks1) > 4 else 0.0
+        fct_elsize = int(float(toks1[5])) if len(toks1) > 5 else 0
+        el_ref = float(toks1[6]) if len(toks1) > 6 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            comp_dir = int(float(toks2[0])) if len(toks2) > 0 else 0
+            idel = int(float(toks2[1])) if len(toks2) > 1 else 0
+            max_comp_strain = float(toks2[2]) if len(toks2) > 2 else 1e30
+            ratio = float(toks2[3]) if len(toks2) > 3 else 1.0
+
+    if num == 0:
+        num = 1
+    if den == 0:
+        den = 1
+    if ordi == 0:
+        ordi = 1
+    if max_comp_strain == 0.0:
+        max_comp_strain = 1e30
+    if ratio == 0.0:
+        ratio = 1.0
+
+    from ..model.entities import FailSahraei
+    model.fail_sahraeis[block.user_id] = FailSahraei(
+        mat_id=block.user_id, title=title, fct_ratio=fct_ratio, num=num,
+        den=den, ordi=ordi, vol_strain=vol_strain, fct_elsize=fct_elsize,
+        el_ref=el_ref, comp_dir=comp_dir, idel=idel,
+        max_comp_strain=max_comp_strain, ratio=ratio, ifail_sh=ifail_sh
+    )
+
+
+
 
 
 
@@ -47128,6 +47242,61 @@ def read_sensor_spring_yield_stress(block: KeywordBlock, model: Model, log: Mess
     ))
 
 
+def read_eng_plastic_work(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/PLASTIC_WORK`` or ``/ENG/WPLAS`` (M260): Engine plastic work dissipation output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/PLASTIC_WORK/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_wplas, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_PLASTIC_WORK_1")
+        dt_wplas = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_wplas = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngPlasticWork
+    r_id = block.user_id or (len(model.eng_plastic_works) + 1)
+    model.eng_plastic_works[r_id] = EngPlasticWork(
+        id=r_id, title=title, dt_wplas=dt_wplas, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_plastic_work(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_PLASTIC_WORK`` or ``/SENSOR/SPRING_WPLAS`` (M260): Spring element plastic work threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_PLASTIC_WORK/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, wplas_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_PLASTIC_WORK_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        wplas_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        wplas_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringPlasticWork, Sensor
+    sspw = SensorSpringPlasticWork(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        wplas_max=wplas_max, t_delay=t_delay
+    )
+    model.sensor_spring_plastic_works[sspw.id] = sspw
+    model.sensors.append(Sensor(
+        id=sspw.id, kind="SPRING_PLASTIC_WORK", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -49744,6 +49913,23 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_YIELD": read_sensor_spring_yield_stress,
     "SENSOR_SPRING_SIGY": read_sensor_spring_yield_stress,
     "SENSOR_YIELD_SPRING": read_sensor_spring_yield_stress,
+    # --- M260: Sahraei Battery Failure Model, Engine Plastic Work Output Directive, Cycloidal Drive Joint Suite, and Spring Plastic Work Sensor ---
+    "FAIL_SAHRAEI": read_fail_sahraei,
+    "FAIL_SAHRAEI_MODEL": read_fail_sahraei,
+    "FAIL_SAHRAEI_LAW": read_fail_sahraei,
+    "FAIL_BATTERY_SEPARATOR": read_fail_sahraei,
+    "ENG_PLASTIC_WORK": read_eng_plastic_work,
+    "ENG_WPLAS": read_eng_plastic_work,
+    "ENG_PLAS_WORK": read_eng_plastic_work,
+    "PLASTIC_WORK": read_eng_plastic_work,
+    "LAGMUL_CYCLOIDAL_DRIVE": read_lagmul_cycloidal_drive,
+    "CYCLOIDAL_DRIVE": read_lagmul_cycloidal_drive,
+    "LAGMUL_CYCLO_DRIVE": read_lagmul_cycloidal_drive,
+    "CYCLO_GEAR": read_lagmul_cycloidal_drive,
+    "SENSOR_SPRING_PLASTIC_WORK": read_sensor_spring_plastic_work,
+    "SENSOR_SPRING_WPLAS": read_sensor_spring_plastic_work,
+    "SENSOR_SPRING_PW": read_sensor_spring_plastic_work,
+    "SENSOR_WPLAS_SPRING": read_sensor_spring_plastic_work,
 }
 
 

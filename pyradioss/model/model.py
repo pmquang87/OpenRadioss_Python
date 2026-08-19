@@ -1744,6 +1744,13 @@ class Model:
         self.lagmul_harmonic_drives: Dict[int, Any] = {}             # /HARMONIC_DRIVE, /LAGMUL/HARMONIC_DRIVE (M259)
         self.sensor_spring_yield_stresses: Dict[int, Any] = {}       # /SENSOR/SPRING_YIELD_STRESS (M259)
 
+        # M260 Entities
+        self.fail_sahraeis: Dict[int, Any] = {}                      # /FAIL/SAHRAEI (M260)
+        self.eng_plastic_works: Dict[int, Any] = {}                  # /ENG/PLASTIC_WORK (M260)
+        self.lagmul_cycloidal_drives: Dict[int, Any] = {}            # /CYCLOIDAL_DRIVE, /LAGMUL/CYCLOIDAL_DRIVE (M260)
+        self.sensor_spring_plastic_works: Dict[int, Any] = {}        # /SENSOR/SPRING_PLASTIC_WORK (M260)
+
+
 
 
 

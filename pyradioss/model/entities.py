@@ -14109,6 +14109,66 @@ class SensorSpringYieldStress:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M260 Suite: Sahraei failure, EngPlasticWork, CycloidalDrive, SensorSpringPlasticWork
+# ============================================================================
+
+@dataclass
+class FailSahraei:
+    """``/FAIL/SAHRAEI/mat_ID`` (M260): Sahraei battery cell and separator failure criterion."""
+    mat_id: int = 1
+    title: str = ""
+    fct_ratio: int = 0           # strain ratio function ID
+    num: int = 1                 # numerator strain component flag (1=Eps_xx, ..., 6=Eps_3)
+    den: int = 1                 # denominator strain component flag (1=2D e1, ..., 6=Eps_3)
+    ordi: int = 1                # failure ordinate component flag (1=MAX(Eps_xx,yy,zz), ..., 8)
+    vol_strain: float = 0.0      # volumetric strain failure limit
+    fct_elsize: int = 0          # element size regularization function ID
+    el_ref: float = 0.0          # reference element size
+    comp_dir: int = 0            # in-plane compression normal direction (0=off, 1=X, 2=Y, 3=Z)
+    idel: int = 0                # compression damage element deletion flag (0=damage only, 1=delete)
+    max_comp_strain: float = 1e30 # in-plane compression failure strain
+    ratio: float = 1.0           # ratio of the other two failure strains
+    ifail_sh: int = 1            # shell element deletion flag
+
+
+@dataclass
+class EngPlasticWork:
+    """``/ENG/PLASTIC_WORK`` or ``/ENG/WPLAS`` (M260): Engine plastic work dissipation output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_wplas: float = 0.0        # time frequency for plastic work output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulCycloidalDrive:
+    """``/CYCLOIDAL_DRIVE/id`` or ``/LAGMUL/CYCLOIDAL_DRIVE/id`` (M260): Cycloidal speed reducer kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # eccentric shaft input node
+    node2: int = 0               # cycloidal disc output node
+    node3: int = 0               # ring pin housing ground node
+    ratio: float = 29.0          # reduction gear ratio R = (P - 1)
+    stiff: float = 1e6           # torsional contact stiffness
+    axis_x: float = 0.0          # rotation axis vector X
+    axis_y: float = 0.0          # rotation axis vector Y
+    axis_z: float = 1.0          # rotation axis vector Z
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+
+
+@dataclass
+class SensorSpringPlasticWork:
+    """``/SENSOR/SPRING_PLASTIC_WORK`` or ``/SENSOR/SPRING_WPLAS`` (M260): Spring element plastic work threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    wplas_max: float = 1e30      # maximum accumulated plastic work threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 
