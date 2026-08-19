@@ -1738,6 +1738,13 @@ class Model:
         self.epicyclic_gear_joints: Dict[int, Any] = {}              # /EPICYCLIC_GEAR, /LAGMUL/EPICYCLIC_GEAR (M257)
         self.sensor_spring_sound_speeds: Dict[int, Any] = {}         # /SENSOR/SPRING_SOUND_SPEED (M257)
 
+        # M259 Entities
+        self.fail_rtcls: Dict[int, Any] = {}                         # /FAIL/RTCL (M259)
+        self.eng_yield_stresses: Dict[int, Any] = {}                 # /ENG/YIELD_STRESS (M259)
+        self.lagmul_harmonic_drives: Dict[int, Any] = {}             # /HARMONIC_DRIVE, /LAGMUL/HARMONIC_DRIVE (M259)
+        self.sensor_spring_yield_stresses: Dict[int, Any] = {}       # /SENSOR/SPRING_YIELD_STRESS (M259)
+
+
 
 
 

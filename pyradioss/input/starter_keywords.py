@@ -23749,6 +23749,54 @@ def read_epicyclic_gear_joint(block: KeywordBlock, model: Model, log: MessageLog
     )
 
 
+def read_lagmul_harmonic_drive(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/HARMONIC_DRIVE/id`` or ``/LAGMUL/HARMONIC_DRIVE/id`` (M259): Harmonic drive strain wave gear kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/HARMONIC_DRIVE/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, ratio, stiff, skew_id, tol = 0, 0, 0, 100.0, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("HARMONIC_DRIVE_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        ratio = _fval(f1[3], 100.0) if len(f1) > 3 and f1[3].strip() else 100.0
+        stiff = _fval(f1[4], 1e6) if len(f1) > 4 and f1[4].strip() else 1e6
+        skew_id = _ival(f1[5], 0) if len(f1) > 5 else 0
+        tol = _fval(f1[6], 1e-6) if len(f1) > 6 and f1[6].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("HARMONIC_DRIVE_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2])) if len(toks1) > 2 else 0
+        ratio = float(toks1[3]) if len(toks1) > 3 else 100.0
+        stiff = float(toks1[4]) if len(toks1) > 4 else 1e6
+        skew_id = int(float(toks1[5])) if len(toks1) > 5 else 0
+        tol = float(toks1[6]) if len(toks1) > 6 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulHarmonicDrive
+    model.lagmul_harmonic_drives[block.user_id] = LagmulHarmonicDrive(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        ratio=ratio, stiff=stiff, axis_x=axis_x, axis_y=axis_y, axis_z=axis_z,
+        skew_id=skew_id, tol=tol
+    )
+
+
 def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -43443,6 +43491,37 @@ def read_fail_rht(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_rtcl(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/RTCL/mat_ID`` (M259): Rice-Tracey & Cockcroft-Latham combined ductile fracture criterion."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/RTCL/{block.user_id}: missing data card", block.source)
+        return
+
+    epscal, inst, n_exp, ifail_sh = 0.3, 2, 0.0, 1
+    if block.fixed:
+        f = cards[0].cut("FAIL_RTCL_1")
+        epscal = _fval(f[0], 0.3) if len(f) > 0 and f[0].strip() else 0.3
+        inst = _ival(f[1], 2) if len(f) > 1 and f[1].strip() else 2
+        n_exp = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        epscal = float(toks[0]) if len(toks) > 0 else 0.3
+        inst = int(float(toks[1])) if len(toks) > 1 else 2
+        n_exp = float(toks[2]) if len(toks) > 2 else 0.0
+
+    if epscal == 0.0:
+        epscal = 0.3
+    if inst == 0:
+        inst = 2
+
+    from ..model.entities import FailRtcl
+    model.fail_rtcls[block.user_id] = FailRtcl(
+        mat_id=block.user_id, title=title, epscal=epscal, inst=inst,
+        n_exp=n_exp, ifail_sh=ifail_sh
+    )
+
+
 
 
 
@@ -46995,6 +47074,61 @@ def read_sensor_spring_sound_speed(block: KeywordBlock, model: Model, log: Messa
     ))
 
 
+def read_eng_yield_stress(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/YIELD_STRESS`` or ``/ENG/YIELD`` (M259): Engine material yield stress output tracking directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/YIELD_STRESS/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_yield, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_YIELD_STRESS_1")
+        dt_yield = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_yield = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngYieldStress
+    r_id = block.user_id or (len(model.eng_yield_stresses) + 1)
+    model.eng_yield_stresses[r_id] = EngYieldStress(
+        id=r_id, title=title, dt_yield=dt_yield, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_yield_stress(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_YIELD_STRESS`` or ``/SENSOR/SPRING_YIELD`` (M259): Spring element yield stress threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_YIELD_STRESS/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, sigy_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_YIELD_STRESS_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        sigy_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        sigy_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringYieldStress, Sensor
+    ssys = SensorSpringYieldStress(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        sigy_max=sigy_max, t_delay=t_delay
+    )
+    model.sensor_spring_yield_stresses[ssys.id] = ssys
+    model.sensors.append(Sensor(
+        id=ssys.id, kind="SPRING_YIELD_STRESS", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -49594,6 +49728,22 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_SS": read_sensor_spring_sound_speed,
     "SENSOR_SOUND_SPEED_SPRING": read_sensor_spring_sound_speed,
     "SENSOR_SPRING_C_SOUND": read_sensor_spring_sound_speed,
+    # --- M259: Rice-Tracey & Cockcroft-Latham Combined Failure Model, Engine Yield Stress Output Directive, Harmonic Drive Joint Suite, and Spring Yield Stress Sensor ---
+    "FAIL_RTCL": read_fail_rtcl,
+    "FAIL_RTCL_MODEL": read_fail_rtcl,
+    "FAIL_RTCL_LAW": read_fail_rtcl,
+    "ENG_YIELD_STRESS": read_eng_yield_stress,
+    "ENG_YIELD": read_eng_yield_stress,
+    "ENG_SIGY": read_eng_yield_stress,
+    "YIELD_STRESS": read_eng_yield_stress,
+    "LAGMUL_HARMONIC_DRIVE": read_lagmul_harmonic_drive,
+    "HARMONIC_DRIVE": read_lagmul_harmonic_drive,
+    "LAGMUL_STRAIN_WAVE": read_lagmul_harmonic_drive,
+    "STRAIN_WAVE_GEAR": read_lagmul_harmonic_drive,
+    "SENSOR_SPRING_YIELD_STRESS": read_sensor_spring_yield_stress,
+    "SENSOR_SPRING_YIELD": read_sensor_spring_yield_stress,
+    "SENSOR_SPRING_SIGY": read_sensor_spring_yield_stress,
+    "SENSOR_YIELD_SPRING": read_sensor_spring_yield_stress,
 }
 
 

@@ -14058,6 +14058,58 @@ class SensorSpringSoundSpeed:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M259 Suite: RTCL failure, EngYieldStress, HarmonicDrive, SensorSpringYield
+# ============================================================================
+
+@dataclass
+class FailRtcl:
+    """``/FAIL/RTCL/mat_ID`` (M259): Rice-Tracey & Cockcroft-Latham combined ductile fracture criterion."""
+    mat_id: int = 1
+    title: str = ""
+    epscal: float = 0.3          # Simple tension failure strain calibrated at reference size
+    inst: int = 2                # Flag for taking into account mesh sensitivity on necking for shells
+    n_exp: float = 0.0           # Hardening exponent N
+    ifail_sh: int = 1            # Shell element deletion flag
+
+
+@dataclass
+class EngYieldStress:
+    """``/ENG/YIELD_STRESS`` or ``/ENG/YIELD`` (M259): Engine material yield stress output tracking directive."""
+    id: int = 1
+    title: str = ""
+    dt_yield: float = 0.0        # time frequency for yield stress output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulHarmonicDrive:
+    """``/HARMONIC_DRIVE/id`` or ``/LAGMUL/HARMONIC_DRIVE/id`` (M259): Harmonic drive strain wave gear kinematic constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # wave generator input node
+    node2: int = 0               # flexspline output node
+    node3: int = 0               # circular spline ground node
+    ratio: float = 100.0         # gear reduction ratio R
+    stiff: float = 1e6           # torsional stiffness
+    axis_x: float = 0.0          # rotation axis vector X
+    axis_y: float = 0.0          # rotation axis vector Y
+    axis_z: float = 1.0          # rotation axis vector Z
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+
+
+@dataclass
+class SensorSpringYieldStress:
+    """``/SENSOR/SPRING_YIELD_STRESS`` or ``/SENSOR/SPRING_YIELD`` (M259): Spring element current yield stress threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    sigy_max: float = 1e30       # maximum yield stress threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 
