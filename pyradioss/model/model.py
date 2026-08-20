@@ -1905,6 +1905,12 @@ class Model:
         self.lagmul_scissor_mechanism_joints: Dict[int, Any] = {}    # /SCISSOR_MECHANISM_JOINT, /LAGMUL/SCISSOR_MECHANISM_JOINT (M287)
         self.sensor_spring_torsional_rates: Dict[int, Any] = {}      # /SENSOR/SPRING_TORSIONAL_RATE (M287)
 
+        # M288 Entities
+        self.fail_ladinters: Dict[int, Any] = {}                     # /FAIL/LAD_INTER (M288)
+        self.eng_maxwell_stress_energies: Dict[int, Any] = {}        # /ENG/MAXWELL_STRESS_ENERGY (M288)
+        self.lagmul_parallelogram_joints: Dict[int, Any] = {}        # /PARALLELOGRAM_JOINT, /LAGMUL/PARALLELOGRAM_JOINT (M288)
+        self.sensor_spring_normal_accelerations: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_ACCELERATION (M288)
+
 
 
 

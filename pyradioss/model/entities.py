@@ -15502,6 +15502,60 @@ class SensorSpringTorsionalRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M288 Suite: LadInter failure, EngMaxwellStressEnergy, ParallelogramJoint, SensorSpringNormalAcceleration
+# ============================================================================
+
+@dataclass
+class FailLadInter:
+    """``/FAIL/LAD_INTER`` or ``/FAIL/LADEVEZE_INTER`` (M288): Ladevèze interfacial delamination and inter-ply debonding failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    k_n: float = 0.0             # initial normal interfacial stiffness
+    k_s: float = 0.0             # initial shear interfacial stiffness
+    y0_inter: float = 0.0        # initial interfacial damage energy threshold
+    yc_inter: float = 0.0        # critical interfacial fracture energy threshold
+    eta_inter: float = 0.0       # mixed-mode damage coupling interaction exponent
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngMaxwellStressEnergy:
+    """``/ENG/MAXWELL_STRESS_ENERGY`` or ``/ENG/MAXWELL_WORK`` (M288): Engine Maxwell stress tensor mechanical work and electromagnetic field deformation energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_maxwell: float = 0.0      # time frequency for Maxwell stress energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulParallelogramJoint:
+    """``/PARALLELOGRAM_JOINT/id`` or ``/LAGMUL/PARALLELOGRAM_JOINT/id`` (M288): 4-bar parallelogram kinematic linkage joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # first driving crank link node
+    node2: int = 0               # second driven parallel follower link node
+    node3: int = 0               # fixed frame ground reference node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_length: float = 0.0     # primary link arm length
+    link_width: float = 0.0      # coupler spacing link width
+    axis_z: float = 1.0          # mechanism planar rotation normal axis vector Z
+
+
+@dataclass
+class SensorSpringNormalAcceleration:
+    """``/SENSOR/SPRING_NORMAL_ACCELERATION`` or ``/SENSOR/SPRING_NORM_ACC`` (M288): Spring element relative normal / axial acceleration threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    accn_max: float = 1e30       # maximum axial acceleration magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

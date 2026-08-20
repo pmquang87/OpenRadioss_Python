@@ -2322,6 +2322,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("LAD_VISC", "FAIL_LAD_VISC", "LADEVEZE_VISCOUS", "LAD_VISCOUS", "LAD_VISC_MODEL", "LAD_VISC_LAW", "LADEVEZE_VISCOPLASTIC"):
         read_fail_lad_visc(block, model, log)
         return
+    if kind in ("LAD_INTER", "FAIL_LAD_INTER", "LADEVEZE_INTER", "LAD_INTERFACIAL", "LAD_INTER_MODEL", "LAD_INTER_LAW", "LADEVEZE_INTERFACIAL_DAMAGE"):
+        read_fail_lad_inter(block, model, log)
+        return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
@@ -52248,6 +52251,154 @@ def read_sensor_spring_torsional_rate(block: KeywordBlock, model: Model, log: Me
     ))
 
 
+# ============================================================================
+# M288 Suite: LadInter failure, EngMaxwellStressEnergy, ParallelogramJoint, SensorSpringNormalAcceleration
+# ============================================================================
+
+def read_fail_lad_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_INTER/mat_ID`` or ``/FAIL/LADEVEZE_INTER`` (M288): Ladevèze interfacial delamination and inter-ply debonding failure criterion."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_INTER/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_INTER_1")
+        k_n = _fval(c1[0]) if len(c1) > 0 else 0.0
+        k_s = _fval(c1[1]) if len(c1) > 1 else 0.0
+        y0_inter = _fval(c1[2]) if len(c1) > 2 else 0.0
+        yc_inter = _fval(c1[3]) if len(c1) > 3 else 0.0
+        eta_inter = _fval(c1[4]) if len(c1) > 4 else 0.0
+        c2 = cards[1].cut("FAIL_LAD_INTER_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        k_n = float(t1[0].rstrip(',')) if len(t1) > 0 else 0.0
+        k_s = float(t1[1].rstrip(',')) if len(t1) > 1 else 0.0
+        y0_inter = float(t1[2].rstrip(',')) if len(t1) > 2 else 0.0
+        yc_inter = float(t1[3].rstrip(',')) if len(t1) > 3 else 0.0
+        eta_inter = float(t1[4].rstrip(',')) if len(t1) > 4 else 0.0
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "k_n": k_n, "k_s": k_s, "y0_inter": y0_inter, "yc_inter": yc_inter, "eta_inter": eta_inter,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadInter, FailureModel
+    model.fail_ladinters[mat_id] = FailLadInter(
+        mat_id=mat_id, title=title, k_n=k_n, k_s=k_s, y0_inter=y0_inter, yc_inter=yc_inter, eta_inter=eta_inter,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_INTER", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_maxwell_stress_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/MAXWELL_STRESS_ENERGY`` or ``/ENG/MAXWELL_WORK`` (M288): Engine Maxwell stress tensor mechanical work and electromagnetic field deformation energy tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/MAXWELL_STRESS_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_maxwell, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_MAXWELL_STRESS_ENERGY_1")
+        dt_maxwell = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_maxwell = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngMaxwellStressEnergy
+    r_id = block.user_id or (len(model.eng_maxwell_stress_energies) + 1)
+    model.eng_maxwell_stress_energies[r_id] = EngMaxwellStressEnergy(
+        id=r_id, title=title, dt_maxwell=dt_maxwell, sens_id=sens_id
+    )
+
+
+def read_lagmul_parallelogram_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PARALLELOGRAM_JOINT/id`` or ``/LAGMUL/PARALLELOGRAM_JOINT/id`` (M288): 4-bar parallelogram kinematic linkage joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PARALLELOGRAM_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    link_length, link_width, axis_z = 0.0, 0.0, 1.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("PARALLELOGRAM_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("PARALLELOGRAM_JOINT_2")
+            link_length = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            link_width = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 and f2[2].strip() else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            link_length = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            link_width = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulParallelogramJoint
+    model.lagmul_parallelogram_joints[block.user_id] = LagmulParallelogramJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        link_length=link_length, link_width=link_width, axis_z=axis_z
+    )
+
+
+def read_sensor_spring_normal_acceleration(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_NORMAL_ACCELERATION`` or ``/SENSOR/SPRING_NORM_ACC`` (M288): Spring element relative normal / axial acceleration threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_NORMAL_ACCELERATION/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, accn_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_NORMAL_ACCELERATION_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        accn_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        accn_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringNormalAcceleration, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_normal_accelerations) + 1)
+    ssna = SensorSpringNormalAcceleration(
+        id=s_id, title=title, spring_id=spring_id,
+        accn_max=accn_max, t_delay=t_delay
+    )
+    model.sensor_spring_normal_accelerations[s_id] = ssna
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_NORMAL_ACCELERATION", tdelay=t_delay
+    ))
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -55391,6 +55542,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_TORS_RATE": read_sensor_spring_torsional_rate,
     "SENSOR_SPRING_MDOT": read_sensor_spring_torsional_rate,
     "SENSOR_TORSIONAL_RATE_SPRING": read_sensor_spring_torsional_rate,
+    # --- M288: LadInter Failure Model, Engine Maxwell Stress Energy Output Directive, Parallelogram Joint Suite, and Spring Normal Acceleration Sensor ---
+    "FAIL_LAD_INTER": read_fail_lad_inter,
+    "FAIL_LADEVEZE_INTER": read_fail_lad_inter,
+    "FAIL_LAD_INTERFACIAL": read_fail_lad_inter,
+    "FAIL_LAD_INTER_MODEL": read_fail_lad_inter,
+    "FAIL_LAD_INTER_LAW": read_fail_lad_inter,
+    "FAIL_LADEVEZE_INTERFACIAL_DAMAGE": read_fail_lad_inter,
+    "ENG_MAXWELL_STRESS_ENERGY": read_eng_maxwell_stress_energy,
+    "ENG_MAXWELL_WORK": read_eng_maxwell_stress_energy,
+    "ENG_EMAXWELL": read_eng_maxwell_stress_energy,
+    "ENG_MAXWELL_STRESS_TENSOR_WORK": read_eng_maxwell_stress_energy,
+    "ENG_EM_MAXWELL_ENERGY": read_eng_maxwell_stress_energy,
+    "LAGMUL_PARALLELOGRAM_JOINT": read_lagmul_parallelogram_joint,
+    "PARALLELOGRAM_JOINT": read_lagmul_parallelogram_joint,
+    "LAGMUL_PARALLELOGRAM_LINKAGE": read_lagmul_parallelogram_joint,
+    "PARALLELOGRAM_LINKAGE": read_lagmul_parallelogram_joint,
+    "PARALLELOGRAM_MECHANISM": read_lagmul_parallelogram_joint,
+    "SENSOR_SPRING_NORMAL_ACCELERATION": read_sensor_spring_normal_acceleration,
+    "SENSOR_SPRING_NORM_ACC": read_sensor_spring_normal_acceleration,
+    "SENSOR_SPRING_ACC_NORMAL": read_sensor_spring_normal_acceleration,
+    "SENSOR_NORMAL_ACCELERATION_SPRING": read_sensor_spring_normal_acceleration,
 }
 
 
