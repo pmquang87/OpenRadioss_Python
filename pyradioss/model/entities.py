@@ -14422,6 +14422,60 @@ class SensorSpringMomentImpulse:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M265 Suite: Cockcroft-Latham failure, EngEffectiveStress, TorqueSplitGear, SensorSpringTorsionalEnergy
+# ============================================================================
+
+@dataclass
+class FailCockcroftLatham:
+    """``/FAIL/COCKCROFT_LATHAM/mat_ID`` (M265): Cockcroft-Latham ductile fracture failure model."""
+    mat_id: int = 1
+    title: str = ""
+    w_crit: float = 0.0          # critical tensile plastic work per unit volume
+    c_rate: float = 0.0          # strain rate sensitivity exponent C
+    eps_dot_0: float = 1.0       # reference quasi-static strain rate
+    ifail_sh: int = 1            # shell deletion flag (1=one layer fails, 2=all layers fail)
+    ifail_so: int = 1            # solid element deletion flag
+    d_max: float = 1.0           # maximum accumulated damage threshold
+
+
+@dataclass
+class EngEffectiveStress:
+    """``/ENG/EFFECTIVE_STRESS`` or ``/ENG/SIG_EFF`` (M265): Engine von Mises equivalent / effective stress history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_sigeff: float = 0.0       # time frequency for effective stress output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulTorqueSplitGear:
+    """``/TORQUE_SPLIT_GEAR/id`` or ``/LAGMUL/TORQUE_SPLIT_GEAR/id`` (M265): Dual-output torque splitter / PTO kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # driving input shaft node
+    node2: int = 0               # primary output shaft node
+    node3: int = 0               # secondary output shaft node
+    split_ratio: float = 0.5     # secondary output torque distribution fraction
+    stiff: float = 1e6           # kinematic splitter contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # torque splitter rotation axis vector X
+    axis_y: float = 0.0          # torque splitter rotation axis vector Y
+    axis_z: float = 1.0          # torque splitter rotation axis vector Z
+
+
+@dataclass
+class SensorSpringTorsionalEnergy:
+    """``/SENSOR/SPRING_TORSIONAL_ENERGY`` or ``/SENSOR/SPRING_TOR_ENERGY`` (M265): Spring element torsional elastic deformation energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    e_tor_max: float = 1e30      # maximum torsional energy threshold (1/2*K_theta*theta^2)
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

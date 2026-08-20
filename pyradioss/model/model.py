@@ -1774,6 +1774,13 @@ class Model:
         self.lagmul_transfer_cases: Dict[int, Any] = {}              # /TRANSFER_CASE, /LAGMUL/TRANSFER_CASE (M264)
         self.sensor_spring_moment_impulses: Dict[int, Any] = {}      # /SENSOR/SPRING_MOMENT_IMPULSE (M264)
 
+        # M265 Entities
+        self.fail_cockcroft_lathams: Dict[int, Any] = {}             # /FAIL/COCKCROFT_LATHAM (M265)
+        self.eng_effective_stresses: Dict[int, Any] = {}             # /ENG/EFFECTIVE_STRESS (M265)
+        self.lagmul_torque_split_gears: Dict[int, Any] = {}          # /TORQUE_SPLIT_GEAR, /LAGMUL/TORQUE_SPLIT_GEAR (M265)
+        self.sensor_spring_torsional_energies: Dict[int, Any] = {}   # /SENSOR/SPRING_TORSIONAL_ENERGY (M265)
+
+
 
 
 

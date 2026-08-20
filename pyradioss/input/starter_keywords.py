@@ -24047,6 +24047,57 @@ def read_lagmul_transfer_case(block: KeywordBlock, model: Model, log: MessageLog
     )
 
 
+def read_lagmul_torque_split_gear(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TORQUE_SPLIT_GEAR/id`` or ``/LAGMUL/TORQUE_SPLIT_GEAR/id`` (M265): Dual-output torque splitter / PTO kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/TORQUE_SPLIT_GEAR/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, split_ratio, stiff, skew_id, tol = 0, 0, 0, 0.5, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("TORQUE_SPLIT_GEAR_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        split_ratio = _fval(f1[3], 0.5) if len(f1) > 3 and f1[3].strip() else 0.5
+        stiff = _fval(f1[4], 1e6) if len(f1) > 4 and f1[4].strip() else 1e6
+        skew_id = _ival(f1[5], 0) if len(f1) > 5 else 0
+        tol = _fval(f1[6], 1e-6) if len(f1) > 6 and f1[6].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("TORQUE_SPLIT_GEAR_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2])) if len(toks1) > 2 else 0
+        split_ratio = float(toks1[3]) if len(toks1) > 3 else 0.5
+        stiff = float(toks1[4]) if len(toks1) > 4 else 1e6
+        skew_id = int(float(toks1[5])) if len(toks1) > 5 else 0
+        tol = float(toks1[6]) if len(toks1) > 6 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    if split_ratio == 0.0:
+        split_ratio = 0.5
+
+    from ..model.entities import LagmulTorqueSplitGear
+    model.lagmul_torque_split_gears[block.user_id] = LagmulTorqueSplitGear(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        split_ratio=split_ratio, stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+
+
 def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -44212,6 +44263,59 @@ def read_fail_johnson_cook(block: KeywordBlock, model: Model, log: MessageLog) -
     )
 
 
+def read_fail_cockcroft_latham(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/COCKCROFT_LATHAM/mat_ID`` (M265): Cockcroft-Latham ductile fracture failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/COCKCROFT_LATHAM/{block.user_id}: missing data card", block.source)
+        return
+
+    w_crit, c_rate, eps_dot_0 = 0.0, 0.0, 1.0
+    ifail_sh, ifail_so, d_max = 1, 1, 1.0
+
+    if block.fixed:
+        # Card 1: W_CRIT, C_RATE, EPS_DOT_0
+        f1 = cards[0].cut("FAIL_COCKCROFT_LATHAM_1")
+        w_crit = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        c_rate = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        eps_dot_0 = _fval(f1[2], 1.0) if len(f1) > 2 and f1[2].strip() else 1.0
+
+        # Card 2: IFAIL_SH, IFAIL_SO, D_MAX
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_COCKCROFT_LATHAM_2")
+            ifail_sh = _ival(f2[0], 1) if len(f2) > 0 and f2[0].strip() else 1
+            ifail_so = _ival(f2[1], 1) if len(f2) > 1 and f2[1].strip() else 1
+            d_max = _fval(f2[2], 1.0) if len(f2) > 2 and f2[2].strip() else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        w_crit = float(toks1[0]) if len(toks1) > 0 else 0.0
+        c_rate = float(toks1[1]) if len(toks1) > 1 else 0.0
+        eps_dot_0 = float(toks1[2]) if len(toks1) > 2 else 1.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            ifail_sh = int(float(toks2[0])) if len(toks2) > 0 else 1
+            ifail_so = int(float(toks2[1])) if len(toks2) > 1 else 1
+            d_max = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    if eps_dot_0 == 0.0:
+        eps_dot_0 = 1.0
+    if ifail_sh == 0:
+        ifail_sh = 1
+    if ifail_so == 0:
+        ifail_so = 1
+    if d_max == 0.0:
+        d_max = 1.0
+
+    from ..model.entities import FailCockcroftLatham
+    model.fail_cockcroft_lathams[block.user_id] = FailCockcroftLatham(
+        mat_id=block.user_id, title=title,
+        w_crit=w_crit, c_rate=c_rate, eps_dot_0=eps_dot_0,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, d_max=d_max
+    )
+
+
+
 
 
 
@@ -48093,6 +48197,61 @@ def read_sensor_spring_moment_impulse(block: KeywordBlock, model: Model, log: Me
     ))
 
 
+def read_eng_effective_stress(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/EFFECTIVE_STRESS`` or ``/ENG/SIG_EFF`` (M265): Engine von Mises equivalent / effective stress history tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/EFFECTIVE_STRESS/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_sigeff, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_EFFECTIVE_STRESS_1")
+        dt_sigeff = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_sigeff = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngEffectiveStress
+    r_id = block.user_id or (len(model.eng_effective_stresses) + 1)
+    model.eng_effective_stresses[r_id] = EngEffectiveStress(
+        id=r_id, title=title, dt_sigeff=dt_sigeff, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_torsional_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TORSIONAL_ENERGY`` or ``/SENSOR/SPRING_TOR_ENERGY`` (M265): Spring element torsional elastic deformation energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TORSIONAL_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, e_tor_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_TORSIONAL_ENERGY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        e_tor_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        e_tor_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTorsionalEnergy, Sensor
+    sste = SensorSpringTorsionalEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        e_tor_max=e_tor_max, t_delay=t_delay
+    )
+    model.sensor_spring_torsional_energies[sste.id] = sste
+    model.sensors.append(Sensor(
+        id=sste.id, kind="SPRING_TORSIONAL_ENERGY", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -50806,6 +50965,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_MOM_IMPULSE": read_sensor_spring_moment_impulse,
     "SENSOR_SPRING_ANGULAR_IMPULSE": read_sensor_spring_moment_impulse,
     "SENSOR_ANGULAR_IMPULSE_SPRING": read_sensor_spring_moment_impulse,
+    # --- M265: Cockcroft-Latham Ductile Failure Model, Engine Effective Stress Output Directive, Torque Split Gear Joint Suite, and Spring Torsional Energy Sensor ---
+    "FAIL_COCKCROFT_LATHAM": read_fail_cockcroft_latham,
+    "FAIL_COCKCROFT_LATHAM_MODEL": read_fail_cockcroft_latham,
+    "FAIL_COCKCROFT_LATHAM_LAW": read_fail_cockcroft_latham,
+    "FAIL_CL": read_fail_cockcroft_latham,
+    "FAIL_CL_DAMAGE": read_fail_cockcroft_latham,
+    "ENG_EFFECTIVE_STRESS": read_eng_effective_stress,
+    "ENG_SIG_EFF": read_eng_effective_stress,
+    "ENG_VON_MISES": read_eng_effective_stress,
+    "ENG_SIGVM": read_eng_effective_stress,
+    "ENG_EFF_STRESS": read_eng_effective_stress,
+    "LAGMUL_TORQUE_SPLIT_GEAR": read_lagmul_torque_split_gear,
+    "TORQUE_SPLIT_GEAR": read_lagmul_torque_split_gear,
+    "LAGMUL_SPLIT_GEAR": read_lagmul_torque_split_gear,
+    "SPLIT_GEAR": read_lagmul_torque_split_gear,
+    "TORQUE_SPLITTER": read_lagmul_torque_split_gear,
+    "SENSOR_SPRING_TORSIONAL_ENERGY": read_sensor_spring_torsional_energy,
+    "SENSOR_SPRING_TOR_ENERGY": read_sensor_spring_torsional_energy,
+    "SENSOR_SPRING_TORSION_ENERGY": read_sensor_spring_torsional_energy,
+    "SENSOR_TORSION_ENERGY_SPRING": read_sensor_spring_torsional_energy,
 }
 
 
