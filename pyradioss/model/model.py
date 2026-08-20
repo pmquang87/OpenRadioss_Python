@@ -1792,6 +1792,13 @@ class Model:
         self.lagmul_scotch_yokes: Dict[int, Any] = {}                # /SCOTCH_YOKE, /LAGMUL/SCOTCH_YOKE (M267)
         self.sensor_spring_total_strain_energies: Dict[int, Any] = {}# /SENSOR/SPRING_TOTAL_STRAIN_ENERGY (M267)
 
+        # M268 Entities
+        self.fail_mohr_coulombs: Dict[int, Any] = {}                 # /FAIL/MOHR_COULOMB (M268)
+        self.eng_deviatoric_energies: Dict[int, Any] = {}            # /ENG/DEVIATORIC_ENERGY (M268)
+        self.lagmul_oldham_couplings: Dict[int, Any] = {}            # /OLDHAM_COUPLING, /LAGMUL/OLDHAM_COUPLING (M268)
+        self.sensor_spring_volumetric_energies: Dict[int, Any] = {}  # /SENSOR/SPRING_VOLUMETRIC_ENERGY (M268)
+
+
 
 
 

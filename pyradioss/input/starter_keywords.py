@@ -24204,6 +24204,52 @@ def read_lagmul_scotch_yoke(block: KeywordBlock, model: Model, log: MessageLog) 
     )
 
 
+def read_lagmul_oldham_coupling(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/OLDHAM_COUPLING/id`` or ``/LAGMUL/OLDHAM_COUPLING/id`` (M268): Oldham coupling parallel offset shaft kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/OLDHAM_COUPLING/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("OLDHAM_COUPLING_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("OLDHAM_COUPLING_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2])) if len(toks1) > 2 else 0
+        stiff = float(toks1[3]) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4])) if len(toks1) > 4 else 0
+        tol = float(toks1[5]) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulOldhamCoupling
+    model.lagmul_oldham_couplings[block.user_id] = LagmulOldhamCoupling(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+
+
 def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -44516,6 +44562,59 @@ def read_fail_tabulated_plasticity(block: KeywordBlock, model: Model, log: Messa
     )
 
 
+def read_fail_mohr_coulomb(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/MOHR_COULOMB/mat_ID`` (M268): Mohr-Coulomb pressure-dependent shear failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/MOHR_COULOMB/{block.user_id}: missing data card", block.source)
+        return
+
+    cohesion, phi, tens_limit, dilatancy = 0.0, 0.0, 1e30, 0.0
+    ifail_sh, ifail_so, d_max = 1, 1, 1.0
+
+    if block.fixed:
+        # Card 1: COHESION, PHI, TENS_LIMIT, DILATANCY
+        f1 = cards[0].cut("FAIL_MOHR_COULOMB_1")
+        cohesion = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        phi = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        tens_limit = _fval(f1[2], 1e30) if len(f1) > 2 and f1[2].strip() else 1e30
+        dilatancy = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+
+        # Card 2: IFAIL_SH, IFAIL_SO, D_MAX
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_MOHR_COULOMB_2")
+            ifail_sh = _ival(f2[0], 1) if len(f2) > 0 and f2[0].strip() else 1
+            ifail_so = _ival(f2[1], 1) if len(f2) > 1 and f2[1].strip() else 1
+            d_max = _fval(f2[2], 1.0) if len(f2) > 2 and f2[2].strip() else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        cohesion = float(toks1[0]) if len(toks1) > 0 else 0.0
+        phi = float(toks1[1]) if len(toks1) > 1 else 0.0
+        tens_limit = float(toks1[2]) if len(toks1) > 2 else 1e30
+        dilatancy = float(toks1[3]) if len(toks1) > 3 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            ifail_sh = int(float(toks2[0])) if len(toks2) > 0 else 1
+            ifail_so = int(float(toks2[1])) if len(toks2) > 1 else 1
+            d_max = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    if ifail_sh == 0:
+        ifail_sh = 1
+    if ifail_so == 0:
+        ifail_so = 1
+    if d_max == 0.0:
+        d_max = 1.0
+
+    from ..model.entities import FailMohrCoulomb
+    model.fail_mohr_coulombs[block.user_id] = FailMohrCoulomb(
+        mat_id=block.user_id, title=title,
+        cohesion=cohesion, phi=phi, tens_limit=tens_limit, dilatancy=dilatancy,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, d_max=d_max
+    )
+
+
+
 
 
 
@@ -48562,6 +48661,61 @@ def read_sensor_spring_total_strain_energy(block: KeywordBlock, model: Model, lo
     ))
 
 
+def read_eng_deviatoric_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/DEVIATORIC_ENERGY`` or ``/ENG/DEV_ENERGY`` (M268): Engine deviatoric strain energy history tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/DEVIATORIC_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_wdev, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_DEVIATORIC_ENERGY_1")
+        dt_wdev = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_wdev = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngDeviatoricEnergy
+    r_id = block.user_id or (len(model.eng_deviatoric_energies) + 1)
+    model.eng_deviatoric_energies[r_id] = EngDeviatoricEnergy(
+        id=r_id, title=title, dt_wdev=dt_wdev, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_volumetric_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_VOLUMETRIC_ENERGY`` or ``/SENSOR/SPRING_VOL_ENERGY`` (M268): Spring element volumetric/hydrostatic elastic deformation energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_VOLUMETRIC_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, u_vol_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_VOLUMETRIC_ENERGY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        u_vol_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        u_vol_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringVolumetricEnergy, Sensor
+    ssve = SensorSpringVolumetricEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        u_vol_max=u_vol_max, t_delay=t_delay
+    )
+    model.sensor_spring_volumetric_energies[ssve.id] = ssve
+    model.sensors.append(Sensor(
+        id=ssve.id, kind="SPRING_VOLUMETRIC_ENERGY", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -51338,6 +51492,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_STRAIN_ENERGY": read_sensor_spring_total_strain_energy,
     "SENSOR_SPRING_TOTAL_ENERGY": read_sensor_spring_total_strain_energy,
     "SENSOR_STRAIN_ENERGY_SPRING": read_sensor_spring_total_strain_energy,
+    # --- M268: Mohr-Coulomb Pressure-Dependent Failure Model, Engine Deviatoric Strain Energy Output Directive, Oldham Coupling Joint Suite, and Spring Volumetric Energy Sensor ---
+    "FAIL_MOHR_COULOMB": read_fail_mohr_coulomb,
+    "FAIL_MOHR_COULOMB_MODEL": read_fail_mohr_coulomb,
+    "FAIL_MC_DAMAGE": read_fail_mohr_coulomb,
+    "FAIL_MC_FAILURE": read_fail_mohr_coulomb,
+    "FAIL_MOHR_COULOMB_LAW": read_fail_mohr_coulomb,
+    "ENG_DEVIATORIC_ENERGY": read_eng_deviatoric_energy,
+    "ENG_DEV_ENERGY": read_eng_deviatoric_energy,
+    "ENG_W_DEV": read_eng_deviatoric_energy,
+    "ENG_DEVIATORIC_WORK": read_eng_deviatoric_energy,
+    "ENG_EDEV": read_eng_deviatoric_energy,
+    "LAGMUL_OLDHAM_COUPLING": read_lagmul_oldham_coupling,
+    "OLDHAM_COUPLING": read_lagmul_oldham_coupling,
+    "LAGMUL_OLDHAM_JOINT": read_lagmul_oldham_coupling,
+    "OLDHAM_JOINT": read_lagmul_oldham_coupling,
+    "OLDHAM_MECHANISM": read_lagmul_oldham_coupling,
+    "SENSOR_SPRING_VOLUMETRIC_ENERGY": read_sensor_spring_volumetric_energy,
+    "SENSOR_SPRING_VOL_ENERGY": read_sensor_spring_volumetric_energy,
+    "SENSOR_SPRING_HYDRO_ENERGY": read_sensor_spring_volumetric_energy,
+    "SENSOR_VOLUMETRIC_ENERGY_SPRING": read_sensor_spring_volumetric_energy,
 }
 
 

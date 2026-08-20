@@ -14582,6 +14582,60 @@ class SensorSpringTotalStrainEnergy:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M268 Suite: MohrCoulomb failure, EngDeviatoricEnergy, OldhamCoupling, SensorSpringVolumetricEnergy
+# ============================================================================
+
+@dataclass
+class FailMohrCoulomb:
+    """``/FAIL/MOHR_COULOMB/mat_ID`` (M268): Mohr-Coulomb pressure-dependent shear failure model."""
+    mat_id: int = 1
+    title: str = ""
+    cohesion: float = 0.0        # material cohesion strength c
+    phi: float = 0.0             # internal friction angle in degrees
+    tens_limit: float = 1e30     # tensile cutoff limit
+    dilatancy: float = 0.0       # dilatancy angle in degrees
+    ifail_sh: int = 1            # shell deletion flag (1=one layer fails, 2=all layers fail)
+    ifail_so: int = 1            # solid element deletion flag
+    d_max: float = 1.0           # maximum accumulated damage threshold
+
+
+@dataclass
+class EngDeviatoricEnergy:
+    """``/ENG/DEVIATORIC_ENERGY`` or ``/ENG/DEV_ENERGY`` (M268): Engine deviatoric strain energy history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_wdev: float = 0.0         # time frequency for deviatoric strain energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulOldhamCoupling:
+    """``/OLDHAM_COUPLING/id`` or ``/LAGMUL/OLDHAM_COUPLING/id`` (M268): Oldham coupling parallel offset shaft kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # driving input shaft node
+    node2: int = 0               # driven output shaft node
+    node3: int = 0               # floating central slider disc node
+    stiff: float = 1e6           # kinematic slot guide contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # shaft rotation axis vector X
+    axis_y: float = 0.0          # shaft rotation axis vector Y
+    axis_z: float = 1.0          # shaft rotation axis vector Z
+
+
+@dataclass
+class SensorSpringVolumetricEnergy:
+    """``/SENSOR/SPRING_VOLUMETRIC_ENERGY`` or ``/SENSOR/SPRING_VOL_ENERGY`` (M268): Spring element volumetric/hydrostatic elastic deformation energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    u_vol_max: float = 1e30      # maximum volumetric energy threshold (1/2*K_v*eps_vol^2)
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 
