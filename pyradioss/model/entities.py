@@ -15107,6 +15107,45 @@ class SensorSpringTotalWork:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M279 Suite: TButcher failure, EngAleEnergy, PinInSlotJoint, SensorSpringRotationalWork
+# ============================================================================
+
+@dataclass
+class EngAleEnergy:
+    """``/ENG/ALE_ENERGY`` or ``/ENG/ALE_WORK`` (M279): Engine ALE fluid-structure grid work / advection energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ale: float = 0.0          # time frequency for ALE energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulPinInSlotJoint:
+    """``/PIN_IN_SLOT_JOINT/id`` or ``/LAGMUL/PIN_IN_SLOT_JOINT/id`` (M279): Pin-in-slot planar mechanism kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # driving slotted link node
+    node2: int = 0               # driven pin follower node
+    node3: int = 0               # slot curve reference node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # slot normal / guide axis vector X
+    axis_y: float = 0.0          # slot normal / guide axis vector Y
+    axis_z: float = 1.0          # slot normal / guide axis vector Z
+
+
+@dataclass
+class SensorSpringRotationalWork:
+    """``/SENSOR/SPRING_ROTATIONAL_WORK`` or ``/SENSOR/SPRING_ROT_WORK`` (M279): Spring element rotational work energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    w_rot_max: float = 1e30      # maximum cumulative rotational work energy threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

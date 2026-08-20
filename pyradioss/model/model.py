@@ -1857,6 +1857,11 @@ class Model:
         self.lagmul_clevis_joints: Dict[int, Any] = {}               # /CLEVIS_JOINT, /LAGMUL/CLEVIS_JOINT (M278)
         self.sensor_spring_total_works: Dict[int, Any] = {}          # /SENSOR/SPRING_TOTAL_WORK (M278)
 
+        # M279 Entities
+        self.eng_ale_energies: Dict[int, Any] = {}                   # /ENG/ALE_ENERGY, /ENG/ALE_WORK (M279)
+        self.lagmul_pin_in_slot_joints: Dict[int, Any] = {}          # /PIN_IN_SLOT_JOINT, /LAGMUL/PIN_IN_SLOT_JOINT (M279)
+        self.sensor_spring_rotational_works: Dict[int, Any] = {}     # /SENSOR/SPRING_ROTATIONAL_WORK (M279)
+
 
 
 

@@ -2289,6 +2289,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("TAB1", "FAIL_TAB1", "TABULATED1", "TAB_1D", "TAB1_MODEL", "TAB1_LAW"):
         read_fail_tab1(block, model, log)
         return
+    if kind in ("TBUTCHER", "FAIL_TBUTCHER", "TULER_BUTCHER_CRITERION", "TBUTCHER_MODEL", "TBUTCHER_LAW", "TULER_BUTCHER_DAMAGE"):
+        read_fail_tbutcher(block, model, log)
+        return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
@@ -50732,6 +50735,181 @@ def read_sensor_spring_total_work(block: KeywordBlock, model: Model, log: Messag
 
 
 
+# ============================================================================
+# M279 Suite: TButcher failure, EngAleEnergy, PinInSlotJoint, SensorSpringRotationalWork
+# ============================================================================
+
+def read_fail_tbutcher(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/TBUTCHER`` (M279): Tuler-Butcher cumulative damage dynamic fracture."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    mat_id = block.user_id
+    if not cards or cards[0].is_blank:
+        from ..model.entities import FailTButcher, FailureModel
+        model.fail_tbutchers[mat_id] = FailTButcher(mat_id=mat_id, title=title)
+        fm = FailureModel(type="TBUTCHER", ifail_sh=0, params={})
+        model.raw_fails.append((mat_id, fm, block.source))
+        return
+
+    lam, k, sigma_r = 0.0, 0.0, 0.0
+    ifail_sh, ifail_so, iduct, ixfem = 0, 0, 0, 0
+    a, b, dadv = 0.0, 0.0, 0.0
+    fail_id = 0
+
+    if block.fixed and "," not in cards[0].raw:
+        c1 = cards[0].cut("FAIL_TBUTCHER_1") if "FAIL_TBUTCHER_1" in CARD_LAYOUTS else cards[0].tokens()
+        lam = _fval(c1[0]) if len(c1) > 0 else 0.0
+        k = _fval(c1[1]) if len(c1) > 1 else 0.0
+        sigma_r = _fval(c1[2]) if len(c1) > 2 else 0.0
+        ifail_sh = _ival(c1[3], 0) if len(c1) > 3 else 0
+        ifail_so = _ival(c1[4], 0) if len(c1) > 4 else 0
+        iduct = _ival(c1[5], 0) if len(c1) > 5 else 0
+        ixfem = _ival(c1[6], 0) if len(c1) > 6 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_TBUTCHER_2") if "FAIL_TBUTCHER_2" in CARD_LAYOUTS else cards[1].tokens()
+            a = _fval(c2[0]) if len(c2) > 0 else 0.0
+            b = _fval(c2[1]) if len(c2) > 1 else 0.0
+            dadv = _fval(c2[2]) if len(c2) > 2 else 0.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            c3 = cards[2].cut("FAIL_TBUTCHER_3") if "FAIL_TBUTCHER_3" in CARD_LAYOUTS else cards[2].tokens()
+            fail_id = _ival(c3[0]) if len(c3) > 0 else 0
+    else:
+        toks1 = cards[0].tokens()
+        lam = float(toks1[0].rstrip(',')) if len(toks1) > 0 else 0.0
+        k = float(toks1[1].rstrip(',')) if len(toks1) > 1 else 0.0
+        sigma_r = float(toks1[2].rstrip(',')) if len(toks1) > 2 else 0.0
+        ifail_sh = int(float(toks1[3].rstrip(','))) if len(toks1) > 3 else 0
+        ifail_so = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        iduct = int(float(toks1[5].rstrip(','))) if len(toks1) > 5 else 0
+        ixfem = int(float(toks1[6].rstrip(','))) if len(toks1) > 6 else 0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            a = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            b = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            dadv = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            toks3 = cards[2].tokens()
+            fail_id = int(float(toks3[0].rstrip(','))) if len(toks3) > 0 else 0
+
+    from ..model.entities import FailTButcher, FailureModel
+    model.fail_tbutchers[mat_id] = FailTButcher(
+        mat_id=mat_id, lam=lam, k=k, sigma_r=sigma_r,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, iduct=iduct, ixfem=ixfem,
+        a=a, b=b, dadv=dadv, fail_id=fail_id, title=title,
+    )
+    params = {
+        "lambda": lam, "k": k, "sigma_r": sigma_r, "ifail_sh": ifail_sh,
+        "ifail_so": ifail_so, "iduct": iduct, "ixfem": ixfem, "a": a, "b": b,
+        "dadv": dadv, "fail_id": fail_id,
+    }
+    fm = FailureModel(type="TBUTCHER", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_ale_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/ALE_ENERGY`` or ``/ENG/ALE_WORK`` (M279): Engine ALE grid work/advection energy tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/ALE_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_ale, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_ALE_ENERGY_1")
+        dt_ale = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_ale = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngAleEnergy
+    r_id = block.user_id or (len(model.eng_ale_energies) + 1)
+    model.eng_ale_energies[r_id] = EngAleEnergy(
+        id=r_id, title=title, dt_ale=dt_ale, sens_id=sens_id
+    )
+
+
+def read_lagmul_pin_in_slot_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/PIN_IN_SLOT_JOINT/id`` or ``/LAGMUL/PIN_IN_SLOT_JOINT/id`` (M279): Pin-in-slot planar mechanism kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/PIN_IN_SLOT_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("PIN_IN_SLOT_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("PIN_IN_SLOT_JOINT_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1].rstrip(',')) if len(toks2) > 0 else 0.0
+            axis_z = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulPinInSlotJoint
+    model.lagmul_pin_in_slot_joints[block.user_id] = LagmulPinInSlotJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+
+
+def read_sensor_spring_rotational_work(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_ROTATIONAL_WORK`` or ``/SENSOR/SPRING_ROT_WORK`` (M279): Spring element rotational work energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_ROTATIONAL_WORK/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, w_rot_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_ROTATIONAL_WORK_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        w_rot_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        w_rot_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringRotationalWork, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_rotational_works) + 1)
+    ssrw = SensorSpringRotationalWork(
+        id=s_id, title=title, spring_id=spring_id,
+        w_rot_max=w_rot_max, t_delay=t_delay
+    )
+    model.sensor_spring_rotational_works[s_id] = ssrw
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_ROTATIONAL_WORK", tdelay=t_delay
+    ))
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -53681,6 +53859,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_TOT_WORK": read_sensor_spring_total_work,
     "SENSOR_SPRING_WORK_TOTAL": read_sensor_spring_total_work,
     "SENSOR_TOTAL_WORK_SPRING": read_sensor_spring_total_work,
+    # --- M279: TButcher Failure Model, Engine ALE Energy Output Directive, Pin-In-Slot Joint Suite, and Spring Rotational Work Sensor ---
+    "FAIL_TBUTCHER": read_fail_tbutcher,
+    "FAIL_TULER_BUTCHER_CRITERION": read_fail_tbutcher,
+    "FAIL_TBUTCHER_MODEL": read_fail_tbutcher,
+    "FAIL_TBUTCHER_LAW": read_fail_tbutcher,
+    "FAIL_TULER_BUTCHER_DAMAGE": read_fail_tbutcher,
+    "ENG_ALE_ENERGY": read_eng_ale_energy,
+    "ENG_ALE_WORK": read_eng_ale_energy,
+    "ENG_EALE": read_eng_ale_energy,
+    "ENG_ALE_ENER": read_eng_ale_energy,
+    "ENG_ALE_INTERNAL_ENERGY": read_eng_ale_energy,
+    "LAGMUL_PIN_IN_SLOT_JOINT": read_lagmul_pin_in_slot_joint,
+    "PIN_IN_SLOT_JOINT": read_lagmul_pin_in_slot_joint,
+    "LAGMUL_PIN_IN_SLOT": read_lagmul_pin_in_slot_joint,
+    "PIN_IN_SLOT": read_lagmul_pin_in_slot_joint,
+    "PIN_IN_SLOT_MECHANISM": read_lagmul_pin_in_slot_joint,
+    "SENSOR_SPRING_ROTATIONAL_WORK": read_sensor_spring_rotational_work,
+    "SENSOR_SPRING_ROT_WORK": read_sensor_spring_rotational_work,
+    "SENSOR_SPRING_WORK_ROT": read_sensor_spring_rotational_work,
+    "SENSOR_ROTATIONAL_WORK_SPRING": read_sensor_spring_rotational_work,
 }
 
 
