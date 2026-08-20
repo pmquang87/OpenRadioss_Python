@@ -2319,6 +2319,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("LAD_STR", "FAIL_LAD_STR", "LADEVEZE_STRESS", "LAD_STR_MODEL", "LAD_STR_LAW", "LADEVEZE_STRESS_DAMAGE"):
         read_fail_lad_str(block, model, log)
         return
+    if kind in ("LAD_VISC", "FAIL_LAD_VISC", "LADEVEZE_VISCOUS", "LAD_VISCOUS", "LAD_VISC_MODEL", "LAD_VISC_LAW", "LADEVEZE_VISCOPLASTIC"):
+        read_fail_lad_visc(block, model, log)
+        return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
@@ -52097,6 +52100,154 @@ def read_sensor_spring_angular_acceleration(block: KeywordBlock, model: Model, l
     ))
 
 
+# ============================================================================
+# M287 Suite: LadVisc failure, EngPoyntingEnergy, ScissorMechanismJoint, SensorSpringTorsionalRate
+# ============================================================================
+
+def read_fail_lad_visc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_VISC/mat_ID`` or ``/FAIL/LADEVEZE_VISCOUS`` (M287): Ladevèze rate-dependent viscoplastic composite damage and ply failure criterion."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_VISC/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_VISC_1")
+        y0 = _fval(c1[0]) if len(c1) > 0 else 0.0
+        yc = _fval(c1[1]) if len(c1) > 1 else 0.0
+        a_lad = _fval(c1[2]) if len(c1) > 2 else 0.0
+        p_visc = _fval(c1[3]) if len(c1) > 3 else 0.0
+        m_visc = _fval(c1[4]) if len(c1) > 4 else 0.0
+        c2 = cards[1].cut("FAIL_LAD_VISC_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        y0 = float(t1[0].rstrip(',')) if len(t1) > 0 else 0.0
+        yc = float(t1[1].rstrip(',')) if len(t1) > 1 else 0.0
+        a_lad = float(t1[2].rstrip(',')) if len(t1) > 2 else 0.0
+        p_visc = float(t1[3].rstrip(',')) if len(t1) > 3 else 0.0
+        m_visc = float(t1[4].rstrip(',')) if len(t1) > 4 else 0.0
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 0 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "y0": y0, "yc": yc, "a_lad": a_lad, "p_visc": p_visc, "m_visc": m_visc,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadVisc, FailureModel
+    model.fail_ladviscs[mat_id] = FailLadVisc(
+        mat_id=mat_id, title=title, y0=y0, yc=yc, a_lad=a_lad, p_visc=p_visc, m_visc=m_visc,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_VISC", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_poynting_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/POYNTING_ENERGY`` or ``/ENG/POYNTING_WORK`` (M287): Engine electromagnetic Poynting flux vector and radiated energy tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/POYNTING_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_poynting, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_POYNTING_ENERGY_1")
+        dt_poynting = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_poynting = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngPoyntingEnergy
+    r_id = block.user_id or (len(model.eng_poynting_energies) + 1)
+    model.eng_poynting_energies[r_id] = EngPoyntingEnergy(
+        id=r_id, title=title, dt_poynting=dt_poynting, sens_id=sens_id
+    )
+
+
+def read_lagmul_scissor_mechanism_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SCISSOR_MECHANISM_JOINT/id`` or ``/LAGMUL/SCISSOR_MECHANISM_JOINT/id`` (M287): Pantograph / scissor lift planar crossing linkage kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SCISSOR_MECHANISM_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    arm_length, initial_angle, axis_z = 0.0, 45.0, 1.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("SCISSOR_MECHANISM_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("SCISSOR_MECHANISM_JOINT_2")
+            arm_length = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            initial_angle = _fval(f2[1], 45.0) if len(f2) > 1 and f2[1].strip() else 45.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 and f2[2].strip() else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            arm_length = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            initial_angle = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 45.0
+            axis_z = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulScissorMechanismJoint
+    model.lagmul_scissor_mechanism_joints[block.user_id] = LagmulScissorMechanismJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        arm_length=arm_length, initial_angle=initial_angle, axis_z=axis_z
+    )
+
+
+def read_sensor_spring_torsional_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TORSIONAL_RATE`` or ``/SENSOR/SPRING_TORS_RATE`` (M287): Spring element torque rate-of-change / torsional loading rate threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TORSIONAL_RATE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, mdot_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_TORSIONAL_RATE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        mdot_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        mdot_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTorsionalRate, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_torsional_rates) + 1)
+    sstr = SensorSpringTorsionalRate(
+        id=s_id, title=title, spring_id=spring_id,
+        mdot_max=mdot_max, t_delay=t_delay
+    )
+    model.sensor_spring_torsional_rates[s_id] = sstr
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_TORSIONAL_RATE", tdelay=t_delay
+    ))
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -55219,6 +55370,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_ANG_ACC": read_sensor_spring_angular_acceleration,
     "SENSOR_SPRING_ALPHA": read_sensor_spring_angular_acceleration,
     "SENSOR_ANGULAR_ACCELERATION_SPRING": read_sensor_spring_angular_acceleration,
+    # --- M287: LadVisc Failure Model, Engine Poynting Energy Output Directive, Scissor Mechanism Joint Suite, and Spring Torsional Rate Sensor ---
+    "FAIL_LAD_VISC": read_fail_lad_visc,
+    "FAIL_LADEVEZE_VISCOUS": read_fail_lad_visc,
+    "FAIL_LAD_VISCOUS": read_fail_lad_visc,
+    "FAIL_LAD_VISC_MODEL": read_fail_lad_visc,
+    "FAIL_LAD_VISC_LAW": read_fail_lad_visc,
+    "FAIL_LADEVEZE_VISCOPLASTIC": read_fail_lad_visc,
+    "ENG_POYNTING_ENERGY": read_eng_poynting_energy,
+    "ENG_POYNTING_WORK": read_eng_poynting_energy,
+    "ENG_EPOYNTING": read_eng_poynting_energy,
+    "ENG_POYNTING_VECTOR": read_eng_poynting_energy,
+    "ENG_EM_POYNTING_ENERGY": read_eng_poynting_energy,
+    "LAGMUL_SCISSOR_MECHANISM_JOINT": read_lagmul_scissor_mechanism_joint,
+    "SCISSOR_MECHANISM_JOINT": read_lagmul_scissor_mechanism_joint,
+    "LAGMUL_SCISSOR_MECHANISM": read_lagmul_scissor_mechanism_joint,
+    "SCISSOR_MECHANISM": read_lagmul_scissor_mechanism_joint,
+    "SCISSOR_JOINT": read_lagmul_scissor_mechanism_joint,
+    "SENSOR_SPRING_TORSIONAL_RATE": read_sensor_spring_torsional_rate,
+    "SENSOR_SPRING_TORS_RATE": read_sensor_spring_torsional_rate,
+    "SENSOR_SPRING_MDOT": read_sensor_spring_torsional_rate,
+    "SENSOR_TORSIONAL_RATE_SPRING": read_sensor_spring_torsional_rate,
 }
 
 

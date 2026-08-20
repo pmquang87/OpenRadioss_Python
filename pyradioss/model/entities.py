@@ -15448,6 +15448,60 @@ class SensorSpringAngularAcceleration:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M287 Suite: LadVisc failure, EngPoyntingEnergy, ScissorMechanismJoint, SensorSpringTorsionalRate
+# ============================================================================
+
+@dataclass
+class FailLadVisc:
+    """``/FAIL/LAD_VISC`` or ``/FAIL/LADEVEZE_VISCOUS`` (M287): Ladevèze rate-dependent viscoplastic composite damage and ply failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    y0: float = 0.0              # initial thermodynamic damage force threshold
+    yc: float = 0.0              # critical thermodynamic damage force threshold
+    a_lad: float = 0.0           # damage kinematic hardening coefficient
+    p_visc: float = 0.0          # viscoplastic relaxation power exponent
+    m_visc: float = 0.0          # viscosity rate sensitivity exponent
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngPoyntingEnergy:
+    """``/ENG/POYNTING_ENERGY`` or ``/ENG/POYNTING_WORK`` (M287): Engine electromagnetic Poynting flux vector and radiated energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_poynting: float = 0.0     # time frequency for Poynting energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulScissorMechanismJoint:
+    """``/SCISSOR_MECHANISM_JOINT/id`` or ``/LAGMUL/SCISSOR_MECHANISM_JOINT/id`` (M287): Pantograph / scissor lift planar crossing linkage kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # first scissor arm crossing node
+    node2: int = 0               # second scissor arm crossing node
+    node3: int = 0               # central scissor pivot hinge pin node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    arm_length: float = 0.0      # total scissor link arm length
+    initial_angle: float = 45.0  # nominal scissor opening scissor angle (degrees)
+    axis_z: float = 1.0          # scissor mechanism normal plane vector Z
+
+
+@dataclass
+class SensorSpringTorsionalRate:
+    """``/SENSOR/SPRING_TORSIONAL_RATE`` or ``/SENSOR/SPRING_TORS_RATE`` (M287): Spring element torque rate-of-change / torsional loading rate threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    mdot_max: float = 1e30       # maximum torque rate-of-change magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

@@ -1899,6 +1899,12 @@ class Model:
         self.lagmul_swash_plate_joints: Dict[int, Any] = {}          # /SWASH_PLATE_JOINT, /LAGMUL/SWASH_PLATE_JOINT (M286)
         self.sensor_spring_angular_accelerations: Dict[int, Any] = {} # /SENSOR/SPRING_ANGULAR_ACCELERATION (M286)
 
+        # M287 Entities
+        self.fail_ladviscs: Dict[int, Any] = {}                      # /FAIL/LAD_VISC (M287)
+        self.eng_poynting_energies: Dict[int, Any] = {}              # /ENG/POYNTING_ENERGY (M287)
+        self.lagmul_scissor_mechanism_joints: Dict[int, Any] = {}    # /SCISSOR_MECHANISM_JOINT, /LAGMUL/SCISSOR_MECHANISM_JOINT (M287)
+        self.sensor_spring_torsional_rates: Dict[int, Any] = {}      # /SENSOR/SPRING_TORSIONAL_RATE (M287)
+
 
 
 
