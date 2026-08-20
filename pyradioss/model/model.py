@@ -1780,6 +1780,13 @@ class Model:
         self.lagmul_torque_split_gears: Dict[int, Any] = {}          # /TORQUE_SPLIT_GEAR, /LAGMUL/TORQUE_SPLIT_GEAR (M265)
         self.sensor_spring_torsional_energies: Dict[int, Any] = {}   # /SENSOR/SPRING_TORSIONAL_ENERGY (M265)
 
+        # M266 Entities
+        self.fail_lemaitre_damages: Dict[int, Any] = {}              # /FAIL/LEMAITRE_DAMAGE (M266)
+        self.eng_hydrostatic_pressures: Dict[int, Any] = {}          # /ENG/HYDROSTATIC_PRESSURE (M266)
+        self.lagmul_geneva_drives: Dict[int, Any] = {}               # /GENEVA_DRIVE, /LAGMUL/GENEVA_DRIVE (M266)
+        self.sensor_spring_bending_energies: Dict[int, Any] = {}     # /SENSOR/SPRING_BENDING_ENERGY (M266)
+
+
 
 
 

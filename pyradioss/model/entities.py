@@ -14475,6 +14475,59 @@ class SensorSpringTorsionalEnergy:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M266 Suite: Lemaitre damage, EngHydrostaticPressure, GenevaDrive, SensorSpringBendingEnergy
+# ============================================================================
+
+@dataclass
+class FailLemaitreDamage:
+    """``/FAIL/LEMAITRE_DAMAGE/mat_ID`` (M266): Lemaitre continuum ductile damage failure model."""
+    mat_id: int = 1
+    title: str = ""
+    s_coeff: float = 0.0         # damage strength coefficient S
+    s_exp: float = 1.0           # damage exponent s
+    eps_d: float = 0.0           # threshold plastic strain for damage initiation
+    d_c: float = 1.0             # critical damage threshold at rupture
+    ifail_sh: int = 1            # shell deletion flag (1=one layer fails, 2=all layers fail)
+    ifail_so: int = 1            # solid element deletion flag
+
+
+@dataclass
+class EngHydrostaticPressure:
+    """``/ENG/HYDROSTATIC_PRESSURE`` or ``/ENG/HYDRO_PRES`` (M266): Engine hydrostatic pressure history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_phyd: float = 0.0         # time frequency for hydrostatic pressure output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulGenevaDrive:
+    """``/GENEVA_DRIVE/id`` or ``/LAGMUL/GENEVA_DRIVE/id`` (M266): Geneva drive intermittent rotary indexing kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # continuous driving crank pin node
+    node2: int = 0               # intermittent driven Geneva wheel node
+    num_slots: int = 4           # number of radial indexing slots (n >= 3)
+    stiff: float = 1e6           # kinematic pin-slot contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # Geneva drive rotation axis vector X
+    axis_y: float = 0.0          # Geneva drive rotation axis vector Y
+    axis_z: float = 1.0          # Geneva drive rotation axis vector Z
+
+
+@dataclass
+class SensorSpringBendingEnergy:
+    """``/SENSOR/SPRING_BENDING_ENERGY`` or ``/SENSOR/SPRING_BEND_ENERGY`` (M266): Spring element bending/flexural elastic deformation energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    e_bend_max: float = 1e30     # maximum bending energy threshold (1/2*K_b*theta_b^2)
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

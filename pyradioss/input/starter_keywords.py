@@ -24098,6 +24098,55 @@ def read_lagmul_torque_split_gear(block: KeywordBlock, model: Model, log: Messag
     )
 
 
+def read_lagmul_geneva_drive(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/GENEVA_DRIVE/id`` or ``/LAGMUL/GENEVA_DRIVE/id`` (M266): Geneva drive intermittent rotary indexing kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/GENEVA_DRIVE/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, num_slots, stiff, skew_id, tol = 0, 0, 4, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("GENEVA_DRIVE_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        num_slots = _ival(f1[2], 4) if len(f1) > 2 and f1[2].strip() else 4
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("GENEVA_DRIVE_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        num_slots = int(float(toks1[2])) if len(toks1) > 2 else 4
+        stiff = float(toks1[3]) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4])) if len(toks1) > 4 else 0
+        tol = float(toks1[5]) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    if num_slots < 3:
+        num_slots = 4
+
+    from ..model.entities import LagmulGenevaDrive
+    model.lagmul_geneva_drives[block.user_id] = LagmulGenevaDrive(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        num_slots=num_slots, stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+
+
 def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -44315,6 +44364,59 @@ def read_fail_cockcroft_latham(block: KeywordBlock, model: Model, log: MessageLo
     )
 
 
+def read_fail_lemaitre_damage(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LEMAITRE_DAMAGE/mat_ID`` (M266): Lemaitre continuum ductile damage failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LEMAITRE_DAMAGE/{block.user_id}: missing data card", block.source)
+        return
+
+    s_coeff, s_exp, eps_d, d_c = 0.0, 1.0, 0.0, 1.0
+    ifail_sh, ifail_so = 1, 1
+
+    if block.fixed:
+        # Card 1: S_COEFF, S_EXP, EPS_D, D_C
+        f1 = cards[0].cut("FAIL_LEMAITRE_DAMAGE_1")
+        s_coeff = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        s_exp = _fval(f1[1], 1.0) if len(f1) > 1 and f1[1].strip() else 1.0
+        eps_d = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        d_c = _fval(f1[3], 1.0) if len(f1) > 3 and f1[3].strip() else 1.0
+
+        # Card 2: IFAIL_SH, IFAIL_SO
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_LEMAITRE_DAMAGE_2")
+            ifail_sh = _ival(f2[0], 1) if len(f2) > 0 and f2[0].strip() else 1
+            ifail_so = _ival(f2[1], 1) if len(f2) > 1 and f2[1].strip() else 1
+    else:
+        toks1 = cards[0].tokens()
+        s_coeff = float(toks1[0]) if len(toks1) > 0 else 0.0
+        s_exp = float(toks1[1]) if len(toks1) > 1 else 1.0
+        eps_d = float(toks1[2]) if len(toks1) > 2 else 0.0
+        d_c = float(toks1[3]) if len(toks1) > 3 else 1.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            ifail_sh = int(float(toks2[0])) if len(toks2) > 0 else 1
+            ifail_so = int(float(toks2[1])) if len(toks2) > 1 else 1
+
+    if s_exp == 0.0:
+        s_exp = 1.0
+    if d_c == 0.0:
+        d_c = 1.0
+    if ifail_sh == 0:
+        ifail_sh = 1
+    if ifail_so == 0:
+        ifail_so = 1
+
+    from ..model.entities import FailLemaitreDamage
+    model.fail_lemaitre_damages[block.user_id] = FailLemaitreDamage(
+        mat_id=block.user_id, title=title,
+        s_coeff=s_coeff, s_exp=s_exp, eps_d=eps_d, d_c=d_c,
+        ifail_sh=ifail_sh, ifail_so=ifail_so
+    )
+
+
+
 
 
 
@@ -48251,6 +48353,61 @@ def read_sensor_spring_torsional_energy(block: KeywordBlock, model: Model, log: 
     ))
 
 
+def read_eng_hydrostatic_pressure(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/HYDROSTATIC_PRESSURE`` or ``/ENG/HYDRO_PRES`` (M266): Engine hydrostatic pressure history tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/HYDROSTATIC_PRESSURE/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_phyd, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_HYDROSTATIC_PRESSURE_1")
+        dt_phyd = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_phyd = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngHydrostaticPressure
+    r_id = block.user_id or (len(model.eng_hydrostatic_pressures) + 1)
+    model.eng_hydrostatic_pressures[r_id] = EngHydrostaticPressure(
+        id=r_id, title=title, dt_phyd=dt_phyd, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_bending_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_BENDING_ENERGY`` or ``/SENSOR/SPRING_BEND_ENERGY`` (M266): Spring element bending/flexural elastic deformation energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_BENDING_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, e_bend_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_BENDING_ENERGY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        e_bend_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        e_bend_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringBendingEnergy, Sensor
+    ssbe = SensorSpringBendingEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        e_bend_max=e_bend_max, t_delay=t_delay
+    )
+    model.sensor_spring_bending_energies[ssbe.id] = ssbe
+    model.sensors.append(Sensor(
+        id=ssbe.id, kind="SPRING_BENDING_ENERGY", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -50985,6 +51142,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_TOR_ENERGY": read_sensor_spring_torsional_energy,
     "SENSOR_SPRING_TORSION_ENERGY": read_sensor_spring_torsional_energy,
     "SENSOR_TORSION_ENERGY_SPRING": read_sensor_spring_torsional_energy,
+    # --- M266: Lemaitre Continuum Ductile Damage Model, Engine Hydrostatic Pressure Output Directive, Geneva Drive Joint Suite, and Spring Bending Energy Sensor ---
+    "FAIL_LEMAITRE_DAMAGE": read_fail_lemaitre_damage,
+    "FAIL_LEMAITRE_MODEL": read_fail_lemaitre_damage,
+    "FAIL_LEM_DAMAGE": read_fail_lemaitre_damage,
+    "FAIL_LEM_MODEL": read_fail_lemaitre_damage,
+    "FAIL_LEMAITRE_LAW": read_fail_lemaitre_damage,
+    "ENG_HYDROSTATIC_PRESSURE": read_eng_hydrostatic_pressure,
+    "ENG_HYDRO_PRES": read_eng_hydrostatic_pressure,
+    "ENG_P_HYDRO": read_eng_hydrostatic_pressure,
+    "ENG_PRESSURE_HYDRO": read_eng_hydrostatic_pressure,
+    "ENG_HYD_PRES": read_eng_hydrostatic_pressure,
+    "LAGMUL_GENEVA_DRIVE": read_lagmul_geneva_drive,
+    "GENEVA_DRIVE": read_lagmul_geneva_drive,
+    "LAGMUL_GENEVA_MECHANISM": read_lagmul_geneva_drive,
+    "GENEVA_MECHANISM": read_lagmul_geneva_drive,
+    "GENEVA_WHEEL": read_lagmul_geneva_drive,
+    "SENSOR_SPRING_BENDING_ENERGY": read_sensor_spring_bending_energy,
+    "SENSOR_SPRING_BEND_ENERGY": read_sensor_spring_bending_energy,
+    "SENSOR_SPRING_FLEX_ENERGY": read_sensor_spring_bending_energy,
+    "SENSOR_BENDING_ENERGY_SPRING": read_sensor_spring_bending_energy,
 }
 
 
