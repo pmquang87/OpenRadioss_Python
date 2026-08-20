@@ -2304,6 +2304,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("GENE1", "FAIL_GENE1", "GENERIC1", "GENE1_MODEL", "GENE1_LAW", "GENERIC_FAILURE_1"):
         read_fail_gene1(block, model, log)
         return
+    if kind in ("INIEVO", "FAIL_INIEVO", "INI_EVO", "INIEVO_MODEL", "INIEVO_LAW", "DAMAGE_INIEVO"):
+        read_fail_inievo(block, model, log)
+        return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
@@ -51463,6 +51466,173 @@ def read_sensor_spring_normal_work(block: KeywordBlock, model: Model, log: Messa
     ))
 
 
+# ============================================================================
+# M283 Suite: Inievo failure, EngEntropyProduction, ScrewNutJoint, SensorSpringTotalForce
+# ============================================================================
+
+def read_fail_inievo(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/INIEVO`` (M159/M283): Multi-criterion damage initiation & evolution model."""
+    from ..model.entities import FailInievo, FailureModel
+    mat_id = block.user_id or 0
+    title, cards = _title_and_data(block)
+    cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    if not cards:
+        log.error(f"/FAIL/INIEVO/{mat_id}: missing data card", block.source)
+        return
+
+    c1 = cards[0].cut("FAIL_INIEVO_1") if block.fixed else cards[0].tokens()
+    ninievo = _ival(c1[0]) if len(c1) > 0 else 1
+    ishear = _ival(c1[1]) if len(c1) > 1 else 0
+    ilen = _ival(c1[2]) if len(c1) > 2 else 0
+    failip = _ival(c1[4] if block.fixed else (c1[3] if len(c1) > 3 else 0)) if len(c1) > (4 if block.fixed else 3) else 0
+    pthk = _fval(c1[5] if block.fixed else (c1[4] if len(c1) > 4 else 0.0)) if len(c1) > (5 if block.fixed else 4) else 0.0
+
+    subcards = []
+    idx = 1
+    for _ in range(ninievo):
+        if idx >= len(cards):
+            break
+        c_a = cards[idx].cut("FAIL_INIEVO_2") if block.fixed else cards[idx].tokens()
+        idx += 1
+        c_b = cards[idx].cut("FAIL_INIEVO_3") if block.fixed and idx < len(cards) else (cards[idx].tokens() if idx < len(cards) else [])
+        idx += 1
+        c_c = cards[idx].cut("FAIL_INIEVO_4") if block.fixed and idx < len(cards) else (cards[idx].tokens() if idx < len(cards) else [])
+        idx += 1
+        c_d = cards[idx].cut("FAIL_INIEVO_5") if block.fixed and idx < len(cards) else (cards[idx].tokens() if idx < len(cards) else [])
+        idx += 1
+        subcards.append({
+            "initype": _ival(c_a[0]) if len(c_a) > 0 else 0,
+            "evotype": _ival(c_a[1]) if len(c_a) > 1 else 0,
+            "evoshap": _ival(c_a[2]) if len(c_a) > 2 else 0,
+            "comptyp": _ival(c_a[3]) if len(c_a) > 3 else 0,
+            "tab_id": _ival(c_b[0]) if len(c_b) > 0 else 0,
+            "sr_ref": _fval(c_b[1]) if len(c_b) > 1 else 0.0,
+            "fscale": _fval(c_b[2], 1.0) if len(c_b) > 2 else 1.0,
+            "param": _fval(c_b[3]) if len(c_b) > 3 else 0.0,
+            "tab_el": _ival(c_c[0]) if len(c_c) > 0 else 0,
+            "el_ref": _fval(c_c[1]) if len(c_c) > 1 else 0.0,
+            "elscal": _fval(c_c[2], 1.0) if len(c_c) > 2 else 1.0,
+            "disp": _fval(c_d[0]) if len(c_d) > 0 else 0.0,
+            "alpha": _fval(c_d[1]) if len(c_d) > 1 else 0.0,
+            "ener": _fval(c_d[2]) if len(c_d) > 2 else 0.0,
+        })
+    fail_id = 0
+    if idx < len(cards) and not cards[idx].is_blank:
+        fail_id = _ival(cards[idx].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[idx].tokens()[0]))
+
+    params = {
+        "ninievo": ninievo, "ishear": ishear, "ilen": ilen, "failip": failip,
+        "pthk": pthk, "evolution_models": subcards, "fail_id": fail_id,
+    }
+    model.fail_inievos[mat_id] = FailInievo(
+        mat_id=mat_id, ninievo=ninievo, ishear=ishear, ilen=ilen,
+        failip=failip, pthk=pthk, models=subcards, fail_id=fail_id,
+    )
+    fm = FailureModel(type="INIEVO", ifail_sh=1, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_entropy_production(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/ENTROPY_PRODUCTION`` or ``/ENG/ENTROPY_PROD`` (M283): Engine irreversible entropy generation and dissipation tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/ENTROPY_PRODUCTION/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_entropy, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_ENTROPY_PRODUCTION_1")
+        dt_entropy = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_entropy = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngEntropyProduction
+    r_id = block.user_id or (len(model.eng_entropy_productions) + 1)
+    model.eng_entropy_productions[r_id] = EngEntropyProduction(
+        id=r_id, title=title, dt_entropy=dt_entropy, sens_id=sens_id
+    )
+
+
+def read_lagmul_screw_nut_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SCREW_NUT_JOINT/id`` or ``/LAGMUL/SCREW_NUT_JOINT/id`` (M283): Lead screw and nut helical rotary-to-linear conversion kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SCREW_NUT_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    pitch, lead, axis_z = 0.0, 0.0, 1.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("SCREW_NUT_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("SCREW_NUT_JOINT_2")
+            pitch = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            lead = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            pitch = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            lead = float(toks2[1].rstrip(',')) if len(toks2) > 0 else 0.0
+            axis_z = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulScrewNutJoint
+    model.lagmul_screw_nut_joints[block.user_id] = LagmulScrewNutJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        pitch=pitch, lead=lead, axis_z=axis_z
+    )
+
+
+def read_sensor_spring_total_force(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TOTAL_FORCE`` or ``/SENSOR/SPRING_TOT_FORCE`` (M283): Spring element resultant force magnitude threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TOTAL_FORCE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, f_tot_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_TOTAL_FORCE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        f_tot_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        f_tot_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTotalForce, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_total_forces) + 1)
+    sstf = SensorSpringTotalForce(
+        id=s_id, title=title, spring_id=spring_id,
+        f_tot_max=f_tot_max, t_delay=t_delay
+    )
+    model.sensor_spring_total_forces[s_id] = sstf
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_TOTAL_FORCE", tdelay=t_delay
+    ))
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -54504,6 +54674,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_NORM_WORK": read_sensor_spring_normal_work,
     "SENSOR_SPRING_WORK_NORMAL": read_sensor_spring_normal_work,
     "SENSOR_NORMAL_WORK_SPRING": read_sensor_spring_normal_work,
+    # --- M283: Inievo Failure Model, Engine Entropy Production Output Directive, Screw Nut Joint Suite, and Spring Total Force Sensor ---
+    "FAIL_INIEVO": read_fail_inievo,
+    "FAIL_INI_EVO": read_fail_inievo,
+    "FAIL_INIEVO_MODEL": read_fail_inievo,
+    "FAIL_INIEVO_LAW": read_fail_inievo,
+    "FAIL_DAMAGE_INIEVO": read_fail_inievo,
+    "ENG_ENTROPY_PRODUCTION": read_eng_entropy_production,
+    "ENG_ENTROPY_PROD": read_eng_entropy_production,
+    "ENG_EENTROPY": read_eng_entropy_production,
+    "ENG_ENTROPY_RATE": read_eng_entropy_production,
+    "ENG_THERMAL_ENTROPY": read_eng_entropy_production,
+    "LAGMUL_SCREW_NUT_JOINT": read_lagmul_screw_nut_joint,
+    "SCREW_NUT_JOINT": read_lagmul_screw_nut_joint,
+    "LAGMUL_SCREW_NUT": read_lagmul_screw_nut_joint,
+    "SCREW_NUT": read_lagmul_screw_nut_joint,
+    "SCREW_NUT_MECHANISM": read_lagmul_screw_nut_joint,
+    "SENSOR_SPRING_TOTAL_FORCE": read_sensor_spring_total_force,
+    "SENSOR_SPRING_TOT_FORCE": read_sensor_spring_total_force,
+    "SENSOR_SPRING_FORCE_TOTAL": read_sensor_spring_total_force,
+    "SENSOR_TOTAL_FORCE_SPRING": read_sensor_spring_total_force,
 }
 
 

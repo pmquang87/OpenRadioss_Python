@@ -1877,6 +1877,11 @@ class Model:
         self.lagmul_cam_follower_joints: Dict[int, Any] = {}         # /CAM_FOLLOWER_JOINT, /LAGMUL/CAM_FOLLOWER_JOINT (M282)
         self.sensor_spring_normal_works: Dict[int, Any] = {}         # /SENSOR/SPRING_NORMAL_WORK (M282)
 
+        # M283 Entities
+        self.eng_entropy_productions: Dict[int, Any] = {}            # /ENG/ENTROPY_PRODUCTION, /ENG/ENTROPY_PROD (M283)
+        self.lagmul_screw_nut_joints: Dict[int, Any] = {}            # /SCREW_NUT_JOINT, /LAGMUL/SCREW_NUT_JOINT (M283)
+        self.sensor_spring_total_forces: Dict[int, Any] = {}         # /SENSOR/SPRING_TOTAL_FORCE (M283)
+
 
 
 

@@ -15263,6 +15263,45 @@ class SensorSpringNormalWork:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M283 Suite: Inievo failure, EngEntropyProduction, ScrewNutJoint, SensorSpringTotalForce
+# ============================================================================
+
+@dataclass
+class EngEntropyProduction:
+    """``/ENG/ENTROPY_PRODUCTION`` or ``/ENG/ENTROPY_PROD`` (M283): Engine irreversible entropy generation and dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_entropy: float = 0.0      # time frequency for entropy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulScrewNutJoint:
+    """``/SCREW_NUT_JOINT/id`` or ``/LAGMUL/SCREW_NUT_JOINT/id`` (M283): Lead screw and nut helical rotary-to-linear conversion kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # lead screw spindle drive node
+    node2: int = 0               # translating nut contact node
+    node3: int = 0               # guide base / support frame node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    pitch: float = 0.0           # thread pitch (axial advance per thread)
+    lead: float = 0.0            # screw lead (axial advance per full turn)
+    axis_z: float = 1.0          # screw helical rotation / translation axis vector Z
+
+
+@dataclass
+class SensorSpringTotalForce:
+    """``/SENSOR/SPRING_TOTAL_FORCE`` or ``/SENSOR/SPRING_TOT_FORCE`` (M283): Spring element resultant force magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    f_tot_max: float = 1e30      # maximum resultant force magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
