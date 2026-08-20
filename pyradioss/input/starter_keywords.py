@@ -2295,7 +2295,10 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("MULLINS", "FAIL_MULLINS", "MULLINS_OR", "MULLINS_MODEL", "MULLINS_LAW", "MULLINS_DAMAGE", "ELASTOMER_DAMAGE"):
         read_fail_mullins(block, model, log)
         return
-    if kind in ("COCKCROFT", "FAIL_COCKCROFT", "COCKCROFT_LATHAM", "COCKCROFT_MODEL", "COCKCROFT_LAW", "COCKCROFT_DAMAGE", "CL_DUCTILE"):
+    if kind in ("COCKCROFT_LATHAM", "FAIL_COCKCROFT_LATHAM", "COCKCROFT_LATHAM_MODEL", "COCKCROFT_LATHAM_LAW", "CL", "FAIL_CL", "CL_DAMAGE", "FAIL_CL_DAMAGE"):
+        read_fail_cockcroft_latham(block, model, log)
+        return
+    if kind in ("COCKCROFT", "FAIL_COCKCROFT", "COCKCROFT_MODEL", "COCKCROFT_LAW", "COCKCROFT_DAMAGE", "CL_DUCTILE"):
         read_fail_cockcroft(block, model, log)
         return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
@@ -54212,11 +54215,15 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_TRANSLATIONAL_WORK_SPRING": read_sensor_spring_translational_work,
     # --- M281: Cockcroft Failure Model, Engine XFEM Energy Output Directive, Parallel-Axis Joint Suite, and Spring Shear Work Sensor ---
     "FAIL_COCKCROFT": read_fail_cockcroft,
-    "FAIL_COCKCROFT_LATHAM": read_fail_cockcroft,
     "FAIL_COCKCROFT_MODEL": read_fail_cockcroft,
     "FAIL_COCKCROFT_LAW": read_fail_cockcroft,
     "FAIL_COCKCROFT_DAMAGE": read_fail_cockcroft,
     "FAIL_CL_DUCTILE": read_fail_cockcroft,
+    "FAIL_COCKCROFT_LATHAM": read_fail_cockcroft_latham,
+    "FAIL_COCKCROFT_LATHAM_MODEL": read_fail_cockcroft_latham,
+    "FAIL_COCKCROFT_LATHAM_LAW": read_fail_cockcroft_latham,
+    "FAIL_CL": read_fail_cockcroft_latham,
+    "FAIL_CL_DAMAGE": read_fail_cockcroft_latham,
     "ENG_XFEM_ENERGY": read_eng_xfem_energy,
     "ENG_XFEM_WORK": read_eng_xfem_energy,
     "ENG_EXFEM": read_eng_xfem_energy,
@@ -54224,9 +54231,13 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_XFEM_INTERNAL_ENERGY": read_eng_xfem_energy,
     "LAGMUL_PARALLEL_AXIS_JOINT": read_lagmul_parallel_axis_joint,
     "PARALLEL_AXIS_JOINT": read_lagmul_parallel_axis_joint,
-    "LAGMUL_PARALLEL_AXIS": read_lagmul_parallel_axis_joint,
-    "PARALLEL_AXIS": read_lagmul_parallel_axis_joint,
     "PARALLEL_AXIS_MECHANISM": read_lagmul_parallel_axis_joint,
+    "OLDHAM_JOINT": read_lagmul_parallel_axis_joint,
+    "OLDHAM_COUPLING": read_lagmul_parallel_axis_joint,
+    "LAGMUL_OLDHAM": read_lagmul_parallel_axis_joint,
+    "OLDHAM": read_lagmul_parallel_axis_joint,
+    "LAGMUL_PARALLEL_AXIS": read_parallel_joint,
+    "PARALLEL_AXIS": read_parallel_joint,
     "SENSOR_SPRING_SHEAR_WORK": read_sensor_spring_shear_work,
     "SENSOR_SPRING_SHR_WORK": read_sensor_spring_shear_work,
     "SENSOR_SPRING_WORK_SHEAR": read_sensor_spring_shear_work,
