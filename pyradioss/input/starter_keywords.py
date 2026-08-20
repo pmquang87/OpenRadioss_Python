@@ -130,8 +130,11 @@ def _is_numeric_card(card: Card) -> bool:
     if not toks:
         return False
     for t in toks:
+        s = t.strip().rstrip(",")
+        if not s:
+            continue
         try:
-            float(t.replace("D", "E").replace("d", "e"))
+            float(s.replace("D", "E").replace("d", "e"))
         except ValueError:
             return False
     return True
@@ -44023,7 +44026,7 @@ def read_fail_rht(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 def read_fail_rtcl(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/RTCL/mat_ID`` (M259): Rice-Tracey & Cockcroft-Latham combined ductile fracture criterion."""
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    title, cards = _title_and_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/FAIL/RTCL/{block.user_id}: missing data card", block.source)
         return
@@ -44040,28 +44043,31 @@ def read_fail_rtcl(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             fail_id = _ival(f2[0], 0) if len(f2) > 0 else 0
     else:
         toks = cards[0].tokens()
-        epscal = float(toks[0]) if len(toks) > 0 else 0.3
-        inst = int(float(toks[1])) if len(toks) > 1 else 2
-        n_exp = float(toks[2]) if len(toks) > 2 else 0.0
+        epscal = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.3
+        inst = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 2
+        n_exp = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
         if len(cards) > 1 and not cards[1].is_blank:
             toks2 = cards[1].tokens()
-            fail_id = int(float(toks2[0])) if len(toks2) > 0 else 0
+            fail_id = int(float(toks2[0].rstrip(','))) if len(toks2) > 0 else 0
 
     if epscal == 0.0:
         epscal = 0.3
     if inst == 0:
         inst = 2
 
-    from ..model.entities import FailRtcl
+    from ..model.entities import FailRtcl, FailureModel
     model.fail_rtcls[block.user_id] = FailRtcl(
         mat_id=block.user_id, title=title, epscal=epscal, inst=inst,
         n=n_exp, ifail_sh=ifail_sh, fail_id=fail_id
     )
+    params = {"epscal": epscal, "inst": inst, "n": n_exp, "ifail_sh": ifail_sh, "fail_id": fail_id}
+    fm = FailureModel(type="RTCL", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((block.user_id, fm, block.source))
 
 
 def read_fail_sahraei(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/SAHRAEI/mat_ID`` (M260): Sahraei battery cell and separator failure criterion."""
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    title, cards = _title_and_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/FAIL/SAHRAEI/{block.user_id}: missing data card", block.source)
         return
@@ -44089,20 +44095,20 @@ def read_fail_sahraei(block: KeywordBlock, model: Model, log: MessageLog) -> Non
             ratio = _fval(f2[3], 1.0) if len(f2) > 3 and f2[3].strip() else 1.0
     else:
         toks1 = cards[0].tokens()
-        fct_ratio = int(float(toks1[0])) if len(toks1) > 0 else 0
-        num = int(float(toks1[1])) if len(toks1) > 1 else 1
-        den = int(float(toks1[2])) if len(toks1) > 2 else 1
-        ordi = int(float(toks1[3])) if len(toks1) > 3 else 1
-        vol_strain = float(toks1[4]) if len(toks1) > 4 else 0.0
-        fct_elsize = int(float(toks1[5])) if len(toks1) > 5 else 0
-        el_ref = float(toks1[6]) if len(toks1) > 6 else 0.0
+        fct_ratio = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        num = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 1
+        den = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 1
+        ordi = int(float(toks1[3].rstrip(','))) if len(toks1) > 3 else 1
+        vol_strain = float(toks1[4].rstrip(',')) if len(toks1) > 4 else 0.0
+        fct_elsize = int(float(toks1[5].rstrip(','))) if len(toks1) > 5 else 0
+        el_ref = float(toks1[6].rstrip(',')) if len(toks1) > 6 else 0.0
 
         if len(cards) > 1 and not cards[1].is_blank:
             toks2 = cards[1].tokens()
-            comp_dir = int(float(toks2[0])) if len(toks2) > 0 else 0
-            idel = int(float(toks2[1])) if len(toks2) > 1 else 0
-            max_comp_strain = float(toks2[2]) if len(toks2) > 2 else 1e30
-            ratio = float(toks2[3]) if len(toks2) > 3 else 1.0
+            comp_dir = int(float(toks2[0].rstrip(','))) if len(toks2) > 0 else 0
+            idel = int(float(toks2[1].rstrip(','))) if len(toks2) > 1 else 0
+            max_comp_strain = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 1e30
+            ratio = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 1.0
 
     if num == 0:
         num = 1
@@ -44115,7 +44121,6 @@ def read_fail_sahraei(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     if ratio == 0.0:
         ratio = 1.0
 
-    # Card 3: optional fail_id (M126 backward compatibility)
     fail_id = 0
     if len(cards) > 2 and not cards[2].is_blank:
         if block.fixed:
@@ -44123,9 +44128,9 @@ def read_fail_sahraei(block: KeywordBlock, model: Model, log: MessageLog) -> Non
             fail_id = _ival(f3[0], 0) if len(f3) > 0 else 0
         else:
             toks3 = cards[2].tokens()
-            fail_id = int(float(toks3[0])) if len(toks3) > 0 else 0
+            fail_id = int(float(toks3[0].rstrip(','))) if len(toks3) > 0 else 0
 
-    from ..model.entities import FailSahraei
+    from ..model.entities import FailSahraei, FailureModel
     model.fail_sahraeis[block.user_id] = FailSahraei(
         mat_id=block.user_id, title=title, fct_ratio=fct_ratio, num=num,
         den=den, ordi=ordi, vol_strain=vol_strain, fct_elsize=fct_elsize,
@@ -44133,13 +44138,23 @@ def read_fail_sahraei(block: KeywordBlock, model: Model, log: MessageLog) -> Non
         max_comp_strain=max_comp_strain, ratio=ratio, ifail_sh=ifail_sh,
         fail_id=fail_id
     )
+    params = {
+        "fct_ratio": fct_ratio, "num": num, "den": den, "ordi": ordi,
+        "vol_strain": vol_strain, "fct_elsize": fct_elsize, "el_ref": el_ref,
+        "comp_dir": comp_dir, "idel": idel, "max_comp_strain": max_comp_strain,
+        "ratio": ratio, "fail_id": fail_id
+    }
+    fm = FailureModel(type="SAHRAEI", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((block.user_id, fm, block.source))
 
 
 def read_fail_syazwan(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/SYAZWAN/mat_ID`` (M261): Syazwan Hosford-Coulomb 3D ductile/brittle failure model."""
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    title, cards = _title_and_data(block)
+    mat_id = int(block.parts[2]) if len(block.parts) > 2 and block.parts[2].isdigit() else block.user_id
+    fail_id = int(block.parts[3]) if len(block.parts) > 3 and block.parts[3].isdigit() else 0
     if not cards or cards[0].is_blank:
-        log.error(f"/FAIL/SYAZWAN/{block.user_id}: missing data card", block.source)
+        log.error(f"/FAIL/SYAZWAN/{mat_id}: missing data card", block.source)
         return
 
     icard, epfmin = 1, 0.0
@@ -44151,11 +44166,21 @@ def read_fail_syazwan(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     ifail_sh = 1
 
     idx = 0
+    failip = 0
     if block.fixed:
-        # Card 1: _BLANK_, ICARD, EPFMIN
-        f1 = cards[0].cut("FAIL_SYAZWAN_1")
-        icard = _ival(f1[1], 1) if len(f1) > 1 and f1[1].strip() else 1
-        epfmin = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        toks1 = cards[0].tokens()
+        if len(toks1) >= 3:
+            icard = int(float(toks1[0].rstrip(',')))
+            epfmin = float(toks1[1].rstrip(','))
+            failip = int(float(toks1[2].rstrip(',')))
+        elif len(toks1) == 2:
+            icard = int(float(toks1[0].rstrip(',')))
+            epfmin = float(toks1[1].rstrip(','))
+        else:
+            f1 = cards[0].cut("FAIL_SYAZWAN_1")
+            icard = _ival(f1[1], 1) if len(f1) > 1 and f1[1].strip() else 1
+            epfmin = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+            failip = _ival(f1[3], 0) if len(f1) > 3 and f1[3].strip() else 0
         idx = 1
 
         if icard == 2:
@@ -44181,7 +44206,6 @@ def read_fail_syazwan(block: KeywordBlock, model: Model, log: MessageLog) -> Non
                 c6 = _fval(f2c[0], 0.0) if len(f2c) > 0 else 0.0
                 idx += 1
 
-        # Card 3: DAM_INIT, DAM_SF, DAM_MAX
         if len(cards) > idx and not cards[idx].is_blank:
             f3 = cards[idx].cut("FAIL_SYAZWAN_3")
             dinit = _ival(f3[1], 0) if len(f3) > 1 and f3[1].strip() else 0
@@ -44189,7 +44213,6 @@ def read_fail_syazwan(block: KeywordBlock, model: Model, log: MessageLog) -> Non
             max_dam = _fval(f3[3], 1.0) if len(f3) > 3 and f3[3].strip() else 1.0
             idx += 1
 
-        # Card 4: INST, IFORM, N_VAL, SOFTEXP
         if len(cards) > idx and not cards[idx].is_blank:
             f4 = cards[idx].cut("FAIL_SYAZWAN_4")
             inst = _ival(f4[0], 0) if len(f4) > 0 else 0
@@ -44198,66 +44221,80 @@ def read_fail_syazwan(block: KeywordBlock, model: Model, log: MessageLog) -> Non
             softexp = _fval(f4[3], 0.0) if len(f4) > 3 else 0.0
             idx += 1
 
-        # Card 5: FCT_EL, EL_REF, ELSCAL
         if len(cards) > idx and not cards[idx].is_blank:
             f5 = cards[idx].cut("FAIL_SYAZWAN_5")
             reg_func = _ival(f5[1], 0) if len(f5) > 1 and f5[1].strip() else 0
             ref_len = _fval(f5[2], 0.0) if len(f5) > 2 else 0.0
             reg_scale = _fval(f5[3], 1.0) if len(f5) > 3 and f5[3].strip() else 1.0
             idx += 1
+
+        if len(cards) > idx and not cards[idx].is_blank:
+            f6 = cards[idx].cut("FAIL_RTCL_2")
+            fail_id = _ival(f6[0], fail_id) if len(f6) > 0 else fail_id
     else:
         toks1 = cards[0].tokens()
-        icard = int(float(toks1[0])) if len(toks1) > 0 else 1
-        epfmin = float(toks1[1]) if len(toks1) > 1 else 0.0
+        icard = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 1
+        epfmin = float(toks1[1].rstrip(',')) if len(toks1) > 1 else 0.0
+        if len(toks1) > 2:
+            failip = int(float(toks1[2].rstrip(',')))
         idx = 1
 
         if icard == 2:
             if len(cards) > idx and not cards[idx].is_blank:
                 toks2 = cards[idx].tokens()
-                epf_comp = float(toks2[0]) if len(toks2) > 0 else 0.0
-                epf_shear = float(toks2[1]) if len(toks2) > 1 else 0.0
-                epf_tens = float(toks2[2]) if len(toks2) > 2 else 0.0
-                epf_plstrn = float(toks2[3]) if len(toks2) > 3 else 0.0
-                epf_biax = float(toks2[4]) if len(toks2) > 4 else 0.0
+                epf_comp = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+                epf_shear = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+                epf_tens = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+                epf_plstrn = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+                epf_biax = float(toks2[4].rstrip(',')) if len(toks2) > 4 else 0.0
                 idx += 1
         else:
             if len(cards) > idx and not cards[idx].is_blank:
                 toks2 = cards[idx].tokens()
-                c1 = float(toks2[0]) if len(toks2) > 0 else 0.0
-                c2 = float(toks2[1]) if len(toks2) > 1 else 0.0
-                c3 = float(toks2[2]) if len(toks2) > 2 else 0.0
-                c4 = float(toks2[3]) if len(toks2) > 3 else 0.0
-                c5 = float(toks2[4]) if len(toks2) > 4 else 0.0
+                c1 = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+                c2 = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+                c3 = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+                c4 = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+                c5 = float(toks2[4].rstrip(',')) if len(toks2) > 4 else 0.0
                 if len(toks2) > 5:
-                    c6 = float(toks2[5])
+                    c6 = float(toks2[5].rstrip(','))
                     idx += 1
                 else:
                     idx += 1
                     if len(cards) > idx and not cards[idx].is_blank and len(cards[idx].tokens()) == 1:
                         toks2c = cards[idx].tokens()
-                        c6 = float(toks2c[0]) if len(toks2c) > 0 else 0.0
+                        c6 = float(toks2c[0].rstrip(',')) if len(toks2c) > 0 else 0.0
                         idx += 1
 
         if len(cards) > idx and not cards[idx].is_blank:
             toks3 = cards[idx].tokens()
-            dinit = int(float(toks3[0])) if len(toks3) > 0 else 0
-            dam_sf = float(toks3[1]) if len(toks3) > 1 else 0.0
-            max_dam = float(toks3[2]) if len(toks3) > 2 else 1.0
-            idx += 1
+            if len(toks3) == 1:
+                fail_id = int(float(toks3[0].rstrip(',')))
+                idx += 1
+            else:
+                dinit = int(float(toks3[0].rstrip(','))) if len(toks3) > 0 else 0
+                dam_sf = float(toks3[1].rstrip(',')) if len(toks3) > 1 else 0.0
+                max_dam = float(toks3[2].rstrip(',')) if len(toks3) > 2 else 1.0
+                idx += 1
 
         if len(cards) > idx and not cards[idx].is_blank:
             toks4 = cards[idx].tokens()
-            inst = int(float(toks4[0])) if len(toks4) > 0 else 0
-            iform = int(float(toks4[1])) if len(toks4) > 1 else 0
-            n_val = float(toks4[2]) if len(toks4) > 2 else 0.0
-            softexp = float(toks4[3]) if len(toks4) > 3 else 0.0
+            inst = int(float(toks4[0].rstrip(','))) if len(toks4) > 0 else 0
+            iform = int(float(toks4[1].rstrip(','))) if len(toks4) > 1 else 0
+            n_val = float(toks4[2].rstrip(',')) if len(toks4) > 2 else 0.0
+            softexp = float(toks4[3].rstrip(',')) if len(toks4) > 3 else 0.0
             idx += 1
 
         if len(cards) > idx and not cards[idx].is_blank:
             toks5 = cards[idx].tokens()
-            reg_func = int(float(toks5[0])) if len(toks5) > 0 else 0
-            ref_len = float(toks5[1]) if len(toks5) > 1 else 0.0
-            reg_scale = float(toks5[2]) if len(toks5) > 2 else 1.0
+            reg_func = int(float(toks5[0].rstrip(','))) if len(toks5) > 0 else 0
+            ref_len = float(toks5[1].rstrip(',')) if len(toks5) > 1 else 0.0
+            reg_scale = float(toks5[2].rstrip(',')) if len(toks5) > 2 else 1.0
+            idx += 1
+
+        if len(cards) > idx and not cards[idx].is_blank:
+            toks6 = cards[idx].tokens()
+            fail_id = int(float(toks6[0].rstrip(','))) if len(toks6) > 0 else fail_id
             idx += 1
 
     if icard <= 0:
@@ -44267,9 +44304,12 @@ def read_fail_syazwan(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     if reg_scale == 0.0:
         reg_scale = 1.0
 
-    from ..model.entities import FailSyazwan
-    model.fail_syazwans[block.user_id] = FailSyazwan(
-        mat_id=block.user_id, title=title, icard=icard, epfmin=epfmin,
+    coeffs = [c1, c2, c3, c4, c5, c6] if icard == 1 else [epf_comp, epf_shear, epf_tens, epf_plstrn, epf_biax]
+
+    from ..model.entities import FailSyazwan, FailureModel
+    model.fail_syazwans[mat_id] = FailSyazwan(
+        id=fail_id or mat_id, mat_id=mat_id, title=title, icard=icard, epfmin=epfmin,
+        coeffs=coeffs, fail_id=fail_id, failip=failip,
         c1=c1, c2=c2, c3=c3, c4=c4, c5=c5, c6=c6,
         epf_comp=epf_comp, epf_shear=epf_shear, epf_tens=epf_tens,
         epf_plstrn=epf_plstrn, epf_biax=epf_biax,
@@ -44278,11 +44318,20 @@ def read_fail_syazwan(block: KeywordBlock, model: Model, log: MessageLog) -> Non
         reg_func=reg_func, ref_len=ref_len, reg_scale=reg_scale,
         ifail_sh=ifail_sh
     )
+    params = {
+        "icard": icard, "epfmin": epfmin, "coeffs": coeffs,
+        "dinit": dinit, "dam_sf": dam_sf, "max_dam": max_dam,
+        "inst": inst, "iform": iform, "n_val": n_val, "softexp": softexp,
+        "reg_func": reg_func, "ref_len": ref_len, "reg_scale": reg_scale,
+        "ifail_sh": ifail_sh, "fail_id": fail_id,
+    }
+    fm = FailureModel(type="SYAZWAN", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
 
 
 def read_fail_puck(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/PUCK/mat_ID`` (M262): Puck composite 3D action plane failure criterion."""
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    title, cards = _title_and_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/FAIL/PUCK/{block.user_id}: missing data card", block.source)
         return
@@ -44291,9 +44340,9 @@ def read_fail_puck(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     p12_pos, p12_neg, p22_neg, tau_max = 0.0, 0.0, 0.0, 1e20
     ifail_sh, ifail_so = 1, 1
     fcut = 0.0
+    fail_id = 0
 
     if block.fixed:
-        # Card 1: SIGMA_1T, SIGMA_2T, SIGMA_12, SIGMA_1C, SIGMA_2C
         f1 = cards[0].cut("FAIL_PUCK_1")
         sigma_1t = _fval(f1[0], 1e20) if len(f1) > 0 and f1[0].strip() else 1e20
         sigma_2t = _fval(f1[1], 1e20) if len(f1) > 1 and f1[1].strip() else 1e20
@@ -44301,7 +44350,6 @@ def read_fail_puck(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         sigma_1c = _fval(f1[3], 1e20) if len(f1) > 3 and f1[3].strip() else 1e20
         sigma_2c = _fval(f1[4], 1e20) if len(f1) > 4 and f1[4].strip() else 1e20
 
-        # Card 2: P12_POSITIVE, P12_NEGATIVE, P22_NEGATIVE, TAU_MAX, IFAIL_SH, IFAIL_SO
         if len(cards) > 1 and not cards[1].is_blank:
             f2 = cards[1].cut("FAIL_PUCK_2")
             p12_pos = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
@@ -44311,30 +44359,37 @@ def read_fail_puck(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             ifail_sh = _ival(f2[4], 1) if len(f2) > 4 and f2[4].strip() else 1
             ifail_so = _ival(f2[5], 1) if len(f2) > 5 and f2[5].strip() else 1
 
-        # Card 3: FCUT
         if len(cards) > 2 and not cards[2].is_blank:
             f3 = cards[2].cut("FAIL_PUCK_3")
             fcut = _fval(f3[0], 0.0) if len(f3) > 0 else 0.0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("FAIL_RTCL_2")
+            fail_id = _ival(f4[0], 0) if len(f4) > 0 else 0
     else:
         toks1 = cards[0].tokens()
-        sigma_1t = float(toks1[0]) if len(toks1) > 0 else 1e20
-        sigma_2t = float(toks1[1]) if len(toks1) > 1 else 1e20
-        sigma_12 = float(toks1[2]) if len(toks1) > 2 else 1e20
-        sigma_1c = float(toks1[3]) if len(toks1) > 3 else 1e20
-        sigma_2c = float(toks1[4]) if len(toks1) > 4 else 1e20
+        sigma_1t = float(toks1[0].rstrip(',')) if len(toks1) > 0 else 1e20
+        sigma_2t = float(toks1[1].rstrip(',')) if len(toks1) > 1 else 1e20
+        sigma_12 = float(toks1[2].rstrip(',')) if len(toks1) > 2 else 1e20
+        sigma_1c = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e20
+        sigma_2c = float(toks1[4].rstrip(',')) if len(toks1) > 4 else 1e20
 
         if len(cards) > 1 and not cards[1].is_blank:
             toks2 = cards[1].tokens()
-            p12_pos = float(toks2[0]) if len(toks2) > 0 else 0.0
-            p12_neg = float(toks2[1]) if len(toks2) > 1 else 0.0
-            p22_neg = float(toks2[2]) if len(toks2) > 2 else 0.0
-            tau_max = float(toks2[3]) if len(toks2) > 3 else 1e20
-            ifail_sh = int(float(toks2[4])) if len(toks2) > 4 else 1
-            ifail_so = int(float(toks2[5])) if len(toks2) > 5 else 1
+            p12_pos = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            p12_neg = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            p22_neg = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            tau_max = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 1e20
+            ifail_sh = int(float(toks2[4].rstrip(','))) if len(toks2) > 4 else 1
+            ifail_so = int(float(toks2[5].rstrip(','))) if len(toks2) > 5 else 1
 
         if len(cards) > 2 and not cards[2].is_blank:
             toks3 = cards[2].tokens()
-            fcut = float(toks3[0]) if len(toks3) > 0 else 0.0
+            fcut = float(toks3[0].rstrip(',')) if len(toks3) > 0 else 0.0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            toks4 = cards[3].tokens()
+            fail_id = int(float(toks4[0].rstrip(','))) if len(toks4) > 0 else 0
 
     if sigma_1t == 0.0:
         sigma_1t = 1e20
@@ -44349,15 +44404,24 @@ def read_fail_puck(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if tau_max == 0.0:
         tau_max = 1e20
 
-    from ..model.entities import FailPuck
+    from ..model.entities import FailPuck, FailureModel
     model.fail_pucks[block.user_id] = FailPuck(
         mat_id=block.user_id, title=title,
         sigma_1t=sigma_1t, sigma_2t=sigma_2t, sigma_12=sigma_12,
         sigma_1c=sigma_1c, sigma_2c=sigma_2c,
         p12_pos=p12_pos, p12_neg=p12_neg, p22_neg=p22_neg,
         tau_max=tau_max, ifail_sh=ifail_sh, ifail_so=ifail_so,
-        fcut=fcut
+        fcut=fcut, fail_id=fail_id
     )
+    params = {
+        "sigma_1t": sigma_1t, "sigma_2t": sigma_2t, "sigma_12": sigma_12,
+        "sigma_1c": sigma_1c, "sigma_2c": sigma_2c,
+        "p12_pos": p12_pos, "p12_neg": p12_neg, "p22_neg": p22_neg,
+        "tau_max": tau_max, "ifail_sh": ifail_sh, "ifail_so": ifail_so,
+        "fcut": fcut, "fail_id": fail_id
+    }
+    fm = FailureModel(type="PUCK", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((block.user_id, fm, block.source))
 
 
 def read_fail_gurson(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -49551,41 +49615,64 @@ def read_eng_spring_energy(block: KeywordBlock, model: Model, log: MessageLog) -
 
 def read_lagmul_hooke_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/HOOKE_JOINT/id`` or ``/LAGMUL/HOOKE_JOINT/id`` (M273): Hooke (universal/Cardan) joint constraint."""
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    title, cards = _title_and_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/HOOKE_JOINT/{block.user_id}: missing data card", block.source)
         return
 
     node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
     axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
-    if block.fixed:
-        f1 = cards[0].cut("HOOKE_JOINT_1")
-        node1 = _ival(f1[0]) if len(f1) > 0 else 0
-        node2 = _ival(f1[1]) if len(f1) > 1 else 0
-        node3 = _ival(f1[2]) if len(f1) > 2 else 0
-        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
-        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
-        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+    if len(cards) == 1 and not block.fixed:
+        toks1 = cards[0].tokens()
+        if len(toks1) == 5:
+            node1 = int(float(toks1[0].rstrip(',')))
+            node2 = int(float(toks1[1].rstrip(',')))
+            node3 = int(float(toks1[2].rstrip(',')))
+            skew_id = int(float(toks1[3].rstrip(',')))
+            tol = float(toks1[4].rstrip(','))
+        else:
+            node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+            node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+            node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+            stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+            skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+            tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+    elif block.fixed:
+        if len(cards) == 1:
+            f1 = cards[0].cut("CARDAN_1") if "CARDAN_1" in LAYOUTS else cards[0].fields(10, 5)
+            node1 = _ival(f1[0]) if len(f1) > 0 else 0
+            node2 = _ival(f1[1]) if len(f1) > 1 else 0
+            node3 = _ival(f1[2]) if len(f1) > 2 else 0
+            skew_id = _ival(f1[3]) if len(f1) > 3 else 0
+            tol = _fval(f1[4], 1e-6) if len(f1) > 4 and f1[4].strip() else 1e-6
+        else:
+            f1 = cards[0].cut("HOOKE_JOINT_1")
+            node1 = _ival(f1[0]) if len(f1) > 0 else 0
+            node2 = _ival(f1[1]) if len(f1) > 1 else 0
+            node3 = _ival(f1[2]) if len(f1) > 2 else 0
+            stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+            skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+            tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            f2 = cards[1].cut("HOOKE_JOINT_2")
-            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
-            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
-            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                f2 = cards[1].cut("HOOKE_JOINT_2")
+                axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
     else:
         toks1 = cards[0].tokens()
-        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
-        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
-        node3 = int(float(toks1[2])) if len(toks1) > 2 else 0
-        stiff = float(toks1[3]) if len(toks1) > 3 else 1e6
-        skew_id = int(float(toks1[4])) if len(toks1) > 4 else 0
-        tol = float(toks1[5]) if len(toks1) > 5 else 1e-6
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
 
         if len(cards) > 1 and not cards[1].is_blank:
             toks2 = cards[1].tokens()
-            axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
-            axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
-            axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+            axis_x = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 1.0
 
     from ..model.entities import LagmulHookeJoint, CardanJoint
     model.lagmul_hooke_joints[block.user_id] = LagmulHookeJoint(
@@ -50096,19 +50183,25 @@ def read_sensor_spring_friction_energy(block: KeywordBlock, model: Model, log: M
 
 def read_fail_alter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/ALTER/mat_ID`` (M277): Alter subcritical crack growth failure model for glass / brittle materials."""
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    title, cards = _title_and_data(block)
+    mat_id = block.user_id
     if not cards or cards[0].is_blank:
-        from ..model.entities import FailAlter
-        model.fail_alters[block.user_id] = FailAlter(
-            mat_id=block.user_id, title=title
+        from ..model.entities import FailAlter, FailureModel
+        model.fail_alters[mat_id] = FailAlter(
+            mat_id=mat_id, title=title
         )
+        fm = FailureModel(type="ALTER", ifail_sh=1, params={})
+        model.raw_fails.append((mat_id, fm, block.source))
         return
 
     exp_n, v0, vc = 1.0, 0.0, 1e30
     ema, irate, iside, mode = 0, 0, 0, 0
     cr_foil, cr_air, cr_core, cr_edge = 0.0, 0.0, 0.0, 0.0
+    grsh4n, grsh3n = 0, 0
     kic, kth, rlen, tdel = 1e30, 0.0, 0.0, 0.0
+    kres1, kres2 = 0.0, 0.0
     ifail_sh, ifail_so, d_max = 1, 1, 1.0
+    fail_id = 0
 
     if block.fixed:
         f1 = cards[0].cut("FAIL_ALTER_1")
@@ -50126,6 +50219,10 @@ def read_fail_alter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             cr_air = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
             cr_core = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
             cr_edge = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+            if len(f2) > 4:
+                grsh4n = _ival(f2[4], 0)
+            if len(f2) > 5:
+                grsh3n = _ival(f2[5], 0)
 
         if len(cards) > 2 and not cards[2].is_blank:
             f3 = cards[2].cut("FAIL_ALTER_3")
@@ -50136,38 +50233,49 @@ def read_fail_alter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
         if len(cards) > 3 and not cards[3].is_blank:
             f4 = cards[3].cut("FAIL_ALTER_4")
-            ifail_sh = _ival(f4[0], 1) if len(f4) > 0 and f4[0].strip() else 1
-            ifail_so = _ival(f4[1], 1) if len(f4) > 1 and f4[1].strip() else 1
-            d_max = _fval(f4[2], 1.0) if len(f4) > 2 and f4[2].strip() else 1.0
+            kres1 = _fval(f4[0], 0.0) if len(f4) > 0 else 0.0
+            kres2 = _fval(f4[1], 0.0) if len(f4) > 1 else 0.0
+            if len(f4) > 2 and f4[2].strip():
+                ifail_sh = _ival(f4[0], 1) if f4[0].strip() else 1
+                ifail_so = _ival(f4[1], 1) if f4[1].strip() else 1
+                d_max = _fval(f4[2], 1.0)
     else:
         toks1 = cards[0].tokens()
-        exp_n = float(toks1[0]) if len(toks1) > 0 else 1.0
-        v0 = float(toks1[1]) if len(toks1) > 1 else 0.0
-        vc = float(toks1[2]) if len(toks1) > 2 else 1e30
-        ema = int(float(toks1[3])) if len(toks1) > 3 else 0
-        irate = int(float(toks1[4])) if len(toks1) > 4 else 0
-        iside = int(float(toks1[5])) if len(toks1) > 5 else 0
-        mode = int(float(toks1[6])) if len(toks1) > 6 else 0
+        exp_n = float(toks1[0].rstrip(',')) if len(toks1) > 0 else 1.0
+        v0 = float(toks1[1].rstrip(',')) if len(toks1) > 1 else 0.0
+        vc = float(toks1[2].rstrip(',')) if len(toks1) > 2 else 1e30
+        ema = int(float(toks1[3].rstrip(','))) if len(toks1) > 3 else 0
+        irate = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        iside = int(float(toks1[5].rstrip(','))) if len(toks1) > 5 else 0
+        mode = int(float(toks1[6].rstrip(','))) if len(toks1) > 6 else 0
 
         if len(cards) > 1 and not cards[1].is_blank:
             toks2 = cards[1].tokens()
-            cr_foil = float(toks2[0]) if len(toks2) > 0 else 0.0
-            cr_air = float(toks2[1]) if len(toks2) > 1 else 0.0
-            cr_core = float(toks2[2]) if len(toks2) > 2 else 0.0
-            cr_edge = float(toks2[3]) if len(toks2) > 3 else 0.0
+            cr_foil = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            cr_air = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            cr_core = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            cr_edge = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+            if len(toks2) > 4:
+                grsh4n = int(float(toks2[4].rstrip(',')))
+            if len(toks2) > 5:
+                grsh3n = int(float(toks2[5].rstrip(',')))
 
         if len(cards) > 2 and not cards[2].is_blank:
             toks3 = cards[2].tokens()
-            kic = float(toks3[0]) if len(toks3) > 0 else 1e30
-            kth = float(toks3[1]) if len(toks3) > 1 else 0.0
-            rlen = float(toks3[2]) if len(toks3) > 2 else 0.0
-            tdel = float(toks3[3]) if len(toks3) > 3 else 0.0
+            kic = float(toks3[0].rstrip(',')) if len(toks3) > 0 else 1e30
+            kth = float(toks3[1].rstrip(',')) if len(toks3) > 1 else 0.0
+            rlen = float(toks3[2].rstrip(',')) if len(toks3) > 2 else 0.0
+            tdel = float(toks3[3].rstrip(',')) if len(toks3) > 3 else 0.0
 
         if len(cards) > 3 and not cards[3].is_blank:
             toks4 = cards[3].tokens()
-            ifail_sh = int(float(toks4[0])) if len(toks4) > 0 else 1
-            ifail_so = int(float(toks4[1])) if len(toks4) > 1 else 1
-            d_max = float(toks4[2]) if len(toks4) > 2 else 1.0
+            kres1 = float(toks4[0].rstrip(',')) if len(toks4) > 0 else 0.0
+            if len(toks4) > 1:
+                kres2 = float(toks4[1].rstrip(','))
+            if len(toks4) > 2:
+                ifail_sh = int(float(toks4[0].rstrip(','))) if len(toks4) > 0 else 1
+                ifail_so = int(float(toks4[1].rstrip(','))) if len(toks4) > 1 else 1
+                d_max = float(toks4[2].rstrip(','))
 
     if ifail_sh == 0:
         ifail_sh = 1
@@ -50176,15 +50284,27 @@ def read_fail_alter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if d_max == 0.0:
         d_max = 1.0
 
-    from ..model.entities import FailAlter
-    model.fail_alters[block.user_id] = FailAlter(
-        mat_id=block.user_id, title=title,
+    from ..model.entities import FailAlter, FailureModel
+    model.fail_alters[mat_id] = FailAlter(
+        mat_id=mat_id, title=title,
         exp_n=exp_n, v0=v0, vc=vc,
         ema=ema, irate=irate, iside=iside, mode=mode,
         cr_foil=cr_foil, cr_air=cr_air, cr_core=cr_core, cr_edge=cr_edge,
+        grsh4n=grsh4n, grsh3n=grsh3n,
         kic=kic, kth=kth, rlen=rlen, tdel=tdel,
-        ifail_sh=ifail_sh, ifail_so=ifail_so, d_max=d_max
+        kres1=kres1, kres2=kres2,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, d_max=d_max, fail_id=fail_id
     )
+
+    params = {
+        "exp_n": exp_n, "v0": v0, "vc": vc, "ema": ema, "irate": irate, "iside": iside, "mode": mode,
+        "cr_foil": cr_foil, "cr_air": cr_air, "cr_core": cr_core, "cr_edge": cr_edge,
+        "grsh4n": grsh4n, "grsh3n": grsh3n,
+        "kic": kic, "kth": kth, "rlen": rlen, "tdel": tdel,
+        "kres1": kres1, "kres2": kres2,
+    }
+    fm = FailureModel(type="ALTER", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
 
 
 def read_eng_heat_exchange(block: KeywordBlock, model: Model, log: MessageLog) -> None:

@@ -15019,10 +15019,15 @@ class FailAlter:
     cr_air: float = 0.0          # crack depth at air surface
     cr_core: float = 0.0         # crack depth in core integration points
     cr_edge: float = 0.0         # crack depth exposed surface
+    grsh4n: int = 0              # shell 4N group ID
+    grsh3n: int = 0              # shell 3N group ID
     kic: float = 1e30            # fracture toughness
     kth: float = 0.0             # fatigue threshold
     rlen: float = 0.0            # reference length
     tdel: float = 0.0            # time delay of stress relaxation
+    kres1: float = 0.0           # residual stress scale factor 1
+    kres2: float = 0.0           # residual stress scale factor 2
+    fail_id: int = 0             # user failure ID
     ifail_sh: int = 1            # shell element deletion flag
     ifail_so: int = 1            # solid element deletion flag
     d_max: float = 1.0           # maximum damage threshold
