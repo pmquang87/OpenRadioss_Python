@@ -50744,9 +50744,10 @@ def read_sensor_spring_total_work(block: KeywordBlock, model: Model, log: Messag
 
 def read_fail_tbutcher(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/TBUTCHER`` (M279): Tuler-Butcher cumulative damage dynamic fracture."""
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    title, cards = _title_and_data(block)
     mat_id = block.user_id
-    if not cards or cards[0].is_blank:
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    if not valid_cards:
         from ..model.entities import FailTButcher, FailureModel
         model.fail_tbutchers[mat_id] = FailTButcher(mat_id=mat_id, title=title)
         fm = FailureModel(type="TBUTCHER", ifail_sh=0, params={})
@@ -50758,8 +50759,8 @@ def read_fail_tbutcher(block: KeywordBlock, model: Model, log: MessageLog) -> No
     a, b, dadv = 0.0, 0.0, 0.0
     fail_id = 0
 
-    if block.fixed and "," not in cards[0].raw:
-        c1 = cards[0].cut("FAIL_TBUTCHER_1") if "FAIL_TBUTCHER_1" in CARD_LAYOUTS else cards[0].tokens()
+    if block.fixed and "," not in valid_cards[0].raw:
+        c1 = valid_cards[0].cut("FAIL_TBUTCHER_1") if "FAIL_TBUTCHER_1" in CARD_LAYOUTS else valid_cards[0].tokens()
         lam = _fval(c1[0]) if len(c1) > 0 else 0.0
         k = _fval(c1[1]) if len(c1) > 1 else 0.0
         sigma_r = _fval(c1[2]) if len(c1) > 2 else 0.0
@@ -50768,17 +50769,17 @@ def read_fail_tbutcher(block: KeywordBlock, model: Model, log: MessageLog) -> No
         iduct = _ival(c1[5], 0) if len(c1) > 5 else 0
         ixfem = _ival(c1[6], 0) if len(c1) > 6 else 0
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            c2 = cards[1].cut("FAIL_TBUTCHER_2") if "FAIL_TBUTCHER_2" in CARD_LAYOUTS else cards[1].tokens()
+        if len(valid_cards) > 1:
+            c2 = valid_cards[1].cut("FAIL_TBUTCHER_2") if "FAIL_TBUTCHER_2" in CARD_LAYOUTS else valid_cards[1].tokens()
             a = _fval(c2[0]) if len(c2) > 0 else 0.0
             b = _fval(c2[1]) if len(c2) > 1 else 0.0
             dadv = _fval(c2[2]) if len(c2) > 2 else 0.0
 
-        if len(cards) > 2 and not cards[2].is_blank:
-            c3 = cards[2].cut("FAIL_TBUTCHER_3") if "FAIL_TBUTCHER_3" in CARD_LAYOUTS else cards[2].tokens()
+        if len(valid_cards) > 2:
+            c3 = valid_cards[2].cut("FAIL_TBUTCHER_3") if "FAIL_TBUTCHER_3" in CARD_LAYOUTS else valid_cards[2].tokens()
             fail_id = _ival(c3[0]) if len(c3) > 0 else 0
     else:
-        toks1 = cards[0].tokens()
+        toks1 = valid_cards[0].tokens()
         lam = float(toks1[0].rstrip(',')) if len(toks1) > 0 else 0.0
         k = float(toks1[1].rstrip(',')) if len(toks1) > 1 else 0.0
         sigma_r = float(toks1[2].rstrip(',')) if len(toks1) > 2 else 0.0
@@ -50787,14 +50788,14 @@ def read_fail_tbutcher(block: KeywordBlock, model: Model, log: MessageLog) -> No
         iduct = int(float(toks1[5].rstrip(','))) if len(toks1) > 5 else 0
         ixfem = int(float(toks1[6].rstrip(','))) if len(toks1) > 6 else 0
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            toks2 = cards[1].tokens()
+        if len(valid_cards) > 1:
+            toks2 = valid_cards[1].tokens()
             a = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
             b = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
             dadv = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
 
-        if len(cards) > 2 and not cards[2].is_blank:
-            toks3 = cards[2].tokens()
+        if len(valid_cards) > 2:
+            toks3 = valid_cards[2].tokens()
             fail_id = int(float(toks3[0].rstrip(','))) if len(toks3) > 0 else 0
 
     from ..model.entities import FailTButcher, FailureModel
@@ -50919,35 +50920,37 @@ def read_sensor_spring_rotational_work(block: KeywordBlock, model: Model, log: M
 
 def read_fail_mullins(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/MULLINS`` or ``/FAIL/MULLINS_OR`` (M280): Mullins effect elastomer softening/damage model."""
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    title, cards = _title_and_data(block)
     mat_id = block.user_id
-    if not cards or cards[0].is_blank:
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    if not valid_cards:
         from ..model.entities import FailMullins, FailureModel
+        type_str = "MULLINS_OR" if "MULLINS_OR" in block.keyword.upper() else "MULLINS"
         model.fail_mullins[mat_id] = FailMullins(mat_id=mat_id, title=title)
-        fm = FailureModel(type="MULLINS", ifail_sh=1, params={})
+        fm = FailureModel(type=type_str, ifail_sh=1, params={})
         model.raw_fails.append((mat_id, fm, block.source))
         return
 
     coefr, beta, coefm = 1.0, 0.0, 0.0
     fail_id = 0
 
-    if block.fixed and "," not in cards[0].raw:
-        c1 = cards[0].cut("FAIL_MULLINS_1") if "FAIL_MULLINS_1" in CARD_LAYOUTS else cards[0].tokens()
+    if block.fixed and "," not in valid_cards[0].raw:
+        c1 = valid_cards[0].cut("FAIL_MULLINS_1") if "FAIL_MULLINS_1" in CARD_LAYOUTS else valid_cards[0].tokens()
         coefr = _fval(c1[0], 1.0) if len(c1) > 0 and c1[0].strip() else 1.0
         beta = _fval(c1[1], 0.0) if len(c1) > 1 else 0.0
         coefm = _fval(c1[2], 0.0) if len(c1) > 2 else 0.0
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            c2 = cards[1].cut("FAIL_MULLINS_2") if "FAIL_MULLINS_2" in CARD_LAYOUTS else cards[1].tokens()
+        if len(valid_cards) > 1:
+            c2 = valid_cards[1].cut("FAIL_MULLINS_2") if "FAIL_MULLINS_2" in CARD_LAYOUTS else valid_cards[1].tokens()
             fail_id = _ival(c2[0], 0) if len(c2) > 0 else 0
     else:
-        toks1 = cards[0].tokens()
+        toks1 = valid_cards[0].tokens()
         coefr = float(toks1[0].rstrip(',')) if len(toks1) > 0 else 1.0
         beta = float(toks1[1].rstrip(',')) if len(toks1) > 1 else 0.0
         coefm = float(toks1[2].rstrip(',')) if len(toks1) > 2 else 0.0
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            toks2 = cards[1].tokens()
+        if len(valid_cards) > 1:
+            toks2 = valid_cards[1].tokens()
             fail_id = int(float(toks2[0].rstrip(','))) if len(toks2) > 0 else 0
 
     from ..model.entities import FailMullins, FailureModel
@@ -50956,7 +50959,8 @@ def read_fail_mullins(block: KeywordBlock, model: Model, log: MessageLog) -> Non
         fail_id=fail_id, title=title,
     )
     params = {"coefr": coefr, "r": coefr, "beta": beta, "coefm": coefm, "m": coefm, "fail_id": fail_id}
-    fm = FailureModel(type="MULLINS", ifail_sh=1, params=params)
+    type_str = "MULLINS_OR" if "MULLINS_OR" in block.keyword.upper() else "MULLINS"
+    fm = FailureModel(type=type_str, ifail_sh=1, params=params)
     model.raw_fails.append((mat_id, fm, block.source))
 
 
