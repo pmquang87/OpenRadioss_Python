@@ -49179,6 +49179,160 @@ def read_sensor_spring_damping_energy(block: KeywordBlock, model: Model, log: Me
     ))
 
 
+# ============================================================================
+# M272 Suite: WilkinsCumulative failure, EngContactEnergy, TripodJoint, SensorSpringCouplingEnergy
+# ============================================================================
+
+def read_fail_wilkins_cumulative(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/WILKINS_CUMULATIVE/mat_ID`` (M272): Wilkins cumulative damage failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/WILKINS_CUMULATIVE/{block.user_id}: missing data card", block.source)
+        return
+
+    d_crit, a_wk, b_wk, p_min = 1.0, 0.0, 0.0, 0.0
+    ifail_sh, ifail_so, d_max = 1, 1, 1.0
+
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_WILKINS_CUMULATIVE_1")
+        d_crit = _fval(f1[0], 1.0) if len(f1) > 0 and f1[0].strip() else 1.0
+        a_wk = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        b_wk = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        p_min = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_WILKINS_CUMULATIVE_2")
+            ifail_sh = _ival(f2[0], 1) if len(f2) > 0 and f2[0].strip() else 1
+            ifail_so = _ival(f2[1], 1) if len(f2) > 1 and f2[1].strip() else 1
+            d_max = _fval(f2[2], 1.0) if len(f2) > 2 and f2[2].strip() else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        d_crit = float(toks1[0]) if len(toks1) > 0 else 1.0
+        a_wk = float(toks1[1]) if len(toks1) > 1 else 0.0
+        b_wk = float(toks1[2]) if len(toks1) > 2 else 0.0
+        p_min = float(toks1[3]) if len(toks1) > 3 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            ifail_sh = int(float(toks2[0])) if len(toks2) > 0 else 1
+            ifail_so = int(float(toks2[1])) if len(toks2) > 1 else 1
+            d_max = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    if ifail_sh == 0:
+        ifail_sh = 1
+    if ifail_so == 0:
+        ifail_so = 1
+    if d_max == 0.0:
+        d_max = 1.0
+
+    from ..model.entities import FailWilkinsCumulative
+    model.fail_wilkins_cumulatives[block.user_id] = FailWilkinsCumulative(
+        mat_id=block.user_id, title=title,
+        d_crit=d_crit, a_wk=a_wk, b_wk=b_wk, p_min=p_min,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, d_max=d_max
+    )
+
+
+def read_eng_contact_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/CONTACT_ENERGY`` or ``/ENG/CNT_ENERGY`` (M272): Engine contact energy history tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/CONTACT_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_contact, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_CONTACT_ENERGY_1")
+        dt_contact = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_contact = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngContactEnergy
+    r_id = block.user_id or (len(model.eng_contact_energies) + 1)
+    model.eng_contact_energies[r_id] = EngContactEnergy(
+        id=r_id, title=title, dt_contact=dt_contact, sens_id=sens_id
+    )
+
+
+def read_lagmul_tripod_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TRIPOD_JOINT/id`` or ``/LAGMUL/TRIPOD_JOINT/id`` (M272): Tripod (tulip/spider) joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/TRIPOD_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("TRIPOD_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("TRIPOD_JOINT_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2])) if len(toks1) > 2 else 0
+        stiff = float(toks1[3]) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4])) if len(toks1) > 4 else 0
+        tol = float(toks1[5]) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulTripodJoint
+    model.lagmul_tripod_joints[block.user_id] = LagmulTripodJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+
+
+def read_sensor_spring_coupling_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_COUPLING_ENERGY`` or ``/SENSOR/SPRING_COUP_ENERGY`` (M272): Spring element coupling energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_COUPLING_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, u_coup_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_COUPLING_ENERGY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        u_coup_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        u_coup_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringCouplingEnergy, Sensor
+    ssce = SensorSpringCouplingEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        u_coup_max=u_coup_max, t_delay=t_delay
+    )
+    model.sensor_spring_coupling_energies[ssce.id] = ssce
+    model.sensors.append(Sensor(
+        id=ssce.id, kind="SPRING_COUPLING_ENERGY", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -52036,6 +52190,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_DAMP_ENERGY": read_sensor_spring_damping_energy,
     "SENSOR_SPRING_DISSIPATION": read_sensor_spring_damping_energy,
     "SENSOR_DAMPING_ENERGY_SPRING": read_sensor_spring_damping_energy,
+    # --- M272: Wilkins Cumulative Damage Failure Model, Engine Contact Energy Output Directive, Tripod Joint Suite, and Spring Coupling Energy Sensor ---
+    "FAIL_WILKINS_CUMULATIVE": read_fail_wilkins_cumulative,
+    "FAIL_WILKINS_CUMUL": read_fail_wilkins_cumulative,
+    "FAIL_WILKINS_DAMAGE": read_fail_wilkins_cumulative,
+    "FAIL_WK_CUMULATIVE": read_fail_wilkins_cumulative,
+    "FAIL_WILKINS_CUM_LAW": read_fail_wilkins_cumulative,
+    "ENG_CONTACT_ENERGY": read_eng_contact_energy,
+    "ENG_CNT_ENERGY": read_eng_contact_energy,
+    "ENG_CONTACT_WORK": read_eng_contact_energy,
+    "ENG_ECNT": read_eng_contact_energy,
+    "ENG_INTERFACE_ENERGY": read_eng_contact_energy,
+    "LAGMUL_TRIPOD_JOINT": read_lagmul_tripod_joint,
+    "TRIPOD_JOINT": read_lagmul_tripod_joint,
+    "LAGMUL_TRIPOD_COUPLING": read_lagmul_tripod_joint,
+    "TRIPOD_COUPLING": read_lagmul_tripod_joint,
+    "TRIPOD_MECHANISM": read_lagmul_tripod_joint,
+    "SENSOR_SPRING_COUPLING_ENERGY": read_sensor_spring_coupling_energy,
+    "SENSOR_SPRING_COUP_ENERGY": read_sensor_spring_coupling_energy,
+    "SENSOR_SPRING_COUPLE_ENERGY": read_sensor_spring_coupling_energy,
+    "SENSOR_COUPLING_ENERGY_SPRING": read_sensor_spring_coupling_energy,
 }
 
 

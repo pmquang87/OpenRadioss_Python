@@ -1816,6 +1816,12 @@ class Model:
         self.lagmul_birfield_joints: Dict[int, Any] = {}             # /BIRFIELD_JOINT, /LAGMUL/BIRFIELD_JOINT (M271)
         self.sensor_spring_damping_energies: Dict[int, Any] = {}     # /SENSOR/SPRING_DAMPING_ENERGY (M271)
 
+        # M272 Entities
+        self.fail_wilkins_cumulatives: Dict[int, Any] = {}           # /FAIL/WILKINS_CUMULATIVE (M272)
+        self.eng_contact_energies: Dict[int, Any] = {}               # /ENG/CONTACT_ENERGY (M272)
+        self.lagmul_tripod_joints: Dict[int, Any] = {}               # /TRIPOD_JOINT, /LAGMUL/TRIPOD_JOINT (M272)
+        self.sensor_spring_coupling_energies: Dict[int, Any] = {}    # /SENSOR/SPRING_COUPLING_ENERGY (M272)
+
 
 
 

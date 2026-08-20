@@ -14794,6 +14794,59 @@ class SensorSpringDampingEnergy:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M272 Suite: WilkinsCumulative failure, EngContactEnergy, TripodJoint, SensorSpringCouplingEnergy
+# ============================================================================
+
+@dataclass
+class FailWilkinsCumulative:
+    """``/FAIL/WILKINS_CUMULATIVE/mat_ID`` (M272): Wilkins cumulative damage failure model."""
+    mat_id: int = 1
+    title: str = ""
+    d_crit: float = 1.0          # critical cumulative damage threshold
+    a_wk: float = 0.0            # Wilkins damage exponent a
+    b_wk: float = 0.0            # Wilkins pressure weighting coefficient b
+    p_min: float = 0.0           # minimum hydrostatic pressure cutoff
+    ifail_sh: int = 1            # shell deletion flag (1=one layer fails, 2=all layers fail)
+    ifail_so: int = 1            # solid element deletion flag
+    d_max: float = 1.0           # maximum accumulated damage threshold
+
+
+@dataclass
+class EngContactEnergy:
+    """``/ENG/CONTACT_ENERGY`` or ``/ENG/CNT_ENERGY`` (M272): Engine contact energy history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_contact: float = 0.0     # time frequency for contact energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulTripodJoint:
+    """``/TRIPOD_JOINT/id`` or ``/LAGMUL/TRIPOD_JOINT/id`` (M272): Tripod (tulip/spider) joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # driving tulip hub node
+    node2: int = 0               # driven spider shaft node
+    node3: int = 0               # roller trunnion center node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # shaft rotation axis vector X
+    axis_y: float = 0.0          # shaft rotation axis vector Y
+    axis_z: float = 1.0          # shaft rotation axis vector Z
+
+
+@dataclass
+class SensorSpringCouplingEnergy:
+    """``/SENSOR/SPRING_COUPLING_ENERGY`` or ``/SENSOR/SPRING_COUP_ENERGY`` (M272): Spring element coupling energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    u_coup_max: float = 1e30     # maximum coupling energy threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
