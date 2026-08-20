@@ -164,28 +164,28 @@ Helmholtz Energy Aliases Test
     assert pytest.approx(model.eng_helmholtz_energies[14].dt_helm) == 0.004
 
 
-def test_m282_cardan_joint(tmp_path: Path):
+def test_m282_cam_follower_joint(tmp_path: Path):
     c1 = f"{131:>10d}{132:>10d}{133:>10d}{4.5e6:>20.4f}{6:>10d}{3.0e-6:>20.6e}"
     c2 = f"{0.0:>20.4f}{0.0:>20.4f}{1.0:>20.4f}"
     deck = f"""# RADIOSS STARTER DECK
 /BEGIN
-Cardan Joint Fixed and Free Format Test
+Cam Follower Joint Fixed and Free Format Test
 2022 0
-/LAGMUL/CARDAN_JOINT/1
-Fixed Cardan Joint
+/LAGMUL/CAM_FOLLOWER_JOINT/1
+Fixed Cam Follower Joint
 {c1}
 {c2}
-/LAGMUL/CARDAN_JOINT/2
-Free Cardan Joint
+/LAGMUL/CAM_FOLLOWER_JOINT/2
+Free Cam Follower Joint
 231, 232, 233, 3.8e6, 7, 4.5e-6
 1.0, 0.0, 0.0
 /END
 """
     model, log = _parse_starter(tmp_path, deck)
     assert len(log.errors) == 0
-    assert 1 in model.lagmul_cardan_joints
-    assert 2 in model.lagmul_cardan_joints
-    cj1 = model.lagmul_cardan_joints[1]
+    assert 1 in model.lagmul_cam_follower_joints
+    assert 2 in model.lagmul_cam_follower_joints
+    cj1 = model.lagmul_cam_follower_joints[1]
     assert cj1.node1 == 131
     assert cj1.node2 == 132
     assert cj1.node3 == 133
@@ -196,7 +196,7 @@ Free Cardan Joint
     assert pytest.approx(cj1.axis_y) == 0.0
     assert pytest.approx(cj1.axis_z) == 1.0
 
-    cj2 = model.lagmul_cardan_joints[2]
+    cj2 = model.lagmul_cam_follower_joints[2]
     assert cj2.node1 == 231
     assert cj2.node2 == 232
     assert cj2.node3 == 233
@@ -208,34 +208,34 @@ Free Cardan Joint
     assert pytest.approx(cj2.axis_z) == 0.0
 
 
-def test_m282_cardan_joint_aliases(tmp_path: Path):
+def test_m282_cam_follower_joint_aliases(tmp_path: Path):
     deck = """# RADIOSS ALIAS DECK
 /BEGIN
-Cardan Joint Aliases Test
-/CARDAN_JOINT/51
+Cam Follower Joint Aliases Test
+/CAM_FOLLOWER_JOINT/51
 501, 502, 503, 1.0e6, 0, 1.0e-6
 0.0, 1.0, 0.0
-/LAGMUL/CARDAN/52
+/LAGMUL/CAM_FOLLOWER/52
 504, 505, 506, 1.0e6, 0, 1.0e-6
 0.0, 0.0, 1.0
-/CARDAN/53
+/CAM_FOLLOWER/53
 507, 508, 509, 1.0e6, 0, 1.0e-6
 1.0, 0.0, 0.0
-/CARDAN_MECHANISM/54
+/CAM_FOLLOWER_MECHANISM/54
 510, 511, 512, 1.0e6, 0, 1.0e-6
 0.0, 1.0, 0.0
 /END
 """
     model, log = _parse_starter(tmp_path, deck)
     assert len(log.errors) == 0
-    assert 51 in model.lagmul_cardan_joints
-    assert 52 in model.lagmul_cardan_joints
-    assert 53 in model.lagmul_cardan_joints
-    assert 54 in model.lagmul_cardan_joints
-    assert model.lagmul_cardan_joints[51].node1 == 501
-    assert model.lagmul_cardan_joints[52].node1 == 504
-    assert model.lagmul_cardan_joints[53].node1 == 507
-    assert model.lagmul_cardan_joints[54].node1 == 510
+    assert 51 in model.lagmul_cam_follower_joints
+    assert 52 in model.lagmul_cam_follower_joints
+    assert 53 in model.lagmul_cam_follower_joints
+    assert 54 in model.lagmul_cam_follower_joints
+    assert model.lagmul_cam_follower_joints[51].node1 == 501
+    assert model.lagmul_cam_follower_joints[52].node1 == 504
+    assert model.lagmul_cam_follower_joints[53].node1 == 507
+    assert model.lagmul_cam_follower_joints[54].node1 == 510
 
 
 def test_m282_sensor_spring_normal_work(tmp_path: Path):

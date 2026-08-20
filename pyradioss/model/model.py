@@ -1874,7 +1874,7 @@ class Model:
 
         # M282 Entities
         self.eng_helmholtz_energies: Dict[int, Any] = {}             # /ENG/HELMHOLTZ_ENERGY, /ENG/HELMHOLTZ_WORK (M282)
-        self.lagmul_cardan_joints: Dict[int, Any] = {}               # /CARDAN_JOINT, /LAGMUL/CARDAN_JOINT (M282)
+        self.lagmul_cam_follower_joints: Dict[int, Any] = {}         # /CAM_FOLLOWER_JOINT, /LAGMUL/CAM_FOLLOWER_JOINT (M282)
         self.sensor_spring_normal_works: Dict[int, Any] = {}         # /SENSOR/SPRING_NORMAL_WORK (M282)
 
 

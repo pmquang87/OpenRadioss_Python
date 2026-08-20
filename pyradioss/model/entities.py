@@ -15238,19 +15238,19 @@ class EngHelmholtzEnergy:
 
 
 @dataclass
-class LagmulCardanJoint:
-    """``/CARDAN_JOINT/id`` or ``/LAGMUL/CARDAN_JOINT/id`` (M282): Cardan / universal joint angular transmission kinematic joint constraint."""
+class LagmulCamFollowerJoint:
+    """``/CAM_FOLLOWER_JOINT/id`` or ``/LAGMUL/CAM_FOLLOWER_JOINT/id`` (M282): Cam and follower profile kinematic mechanism joint constraint."""
     id: int = 1
     title: str = ""
-    node1: int = 0               # input shaft yoke fork node
-    node2: int = 0               # output shaft yoke fork node
-    node3: int = 0               # intermediate gimbal cross / spider node
+    node1: int = 0               # cam drive shaft / pivot center node
+    node2: int = 0               # follower roller / slider contact tip node
+    node3: int = 0               # base frame / guide track reference node
     stiff: float = 1e6           # kinematic constraint contact stiffness
     skew_id: int = 0             # reference coordinate frame ID
     tol: float = 1e-6            # constraint numerical tolerance
-    axis_x: float = 0.0          # universal joint pivot axis vector X
-    axis_y: float = 0.0          # universal joint pivot axis vector Y
-    axis_z: float = 1.0          # universal joint pivot axis vector Z
+    axis_x: float = 0.0          # cam rotation / follower stroke normal vector X
+    axis_y: float = 0.0          # cam rotation / follower stroke normal vector Y
+    axis_z: float = 1.0          # cam rotation / follower stroke normal vector Z
 
 
 @dataclass

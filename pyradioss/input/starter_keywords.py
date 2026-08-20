@@ -44890,7 +44890,7 @@ def read_fail_gene1(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/GENE1`` (M193/M282): Generalized multi-criterion failure model 1."""
     from ..model.entities import FailGene1, FailureModel
     mat_id = block.user_id or 0
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    title, cards = _title_and_data(block)
     cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
     if not cards:
         log.error(f"/FAIL/GENE1/{mat_id}: missing data card", block.source)
@@ -51386,17 +51386,17 @@ def read_eng_helmholtz_energy(block: KeywordBlock, model: Model, log: MessageLog
     )
 
 
-def read_lagmul_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/CARDAN_JOINT/id`` or ``/LAGMUL/CARDAN_JOINT/id`` (M282): Cardan / universal joint angular transmission kinematic joint constraint."""
+def read_lagmul_cam_follower_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CAM_FOLLOWER_JOINT/id`` or ``/LAGMUL/CAM_FOLLOWER_JOINT/id`` (M282): Cam and follower profile kinematic mechanism joint constraint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
-        log.error(f"/CARDAN_JOINT/{block.user_id}: missing data card", block.source)
+        log.error(f"/CAM_FOLLOWER_JOINT/{block.user_id}: missing data card", block.source)
         return
 
     node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
     axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
     if block.fixed and "," not in cards[0].raw:
-        f1 = cards[0].cut("CARDAN_JOINT_1")
+        f1 = cards[0].cut("CAM_FOLLOWER_JOINT_1")
         node1 = _ival(f1[0]) if len(f1) > 0 else 0
         node2 = _ival(f1[1]) if len(f1) > 1 else 0
         node3 = _ival(f1[2]) if len(f1) > 2 else 0
@@ -51405,7 +51405,7 @@ def read_lagmul_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog)
         tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
 
         if len(cards) > 1 and not cards[1].is_blank:
-            f2 = cards[1].cut("CARDAN_JOINT_2")
+            f2 = cards[1].cut("CAM_FOLLOWER_JOINT_2")
             axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
             axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
             axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
@@ -51424,8 +51424,8 @@ def read_lagmul_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog)
             axis_y = float(toks2[1].rstrip(',')) if len(toks2) > 0 else 0.0
             axis_z = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 1.0
 
-    from ..model.entities import LagmulCardanJoint
-    model.lagmul_cardan_joints[block.user_id] = LagmulCardanJoint(
+    from ..model.entities import LagmulCamFollowerJoint
+    model.lagmul_cam_follower_joints[block.user_id] = LagmulCamFollowerJoint(
         id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
         stiff=stiff, skew_id=skew_id, tol=tol,
         axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
@@ -54491,11 +54491,15 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_EHELM": read_eng_helmholtz_energy,
     "ENG_HELM_ENERGY": read_eng_helmholtz_energy,
     "ENG_FREE_ENERGY": read_eng_helmholtz_energy,
-    "LAGMUL_CARDAN_JOINT": read_lagmul_cardan_joint,
-    "CARDAN_JOINT": read_lagmul_cardan_joint,
-    "LAGMUL_CARDAN": read_lagmul_cardan_joint,
-    "CARDAN": read_lagmul_cardan_joint,
-    "CARDAN_MECHANISM": read_lagmul_cardan_joint,
+    "LAGMUL_CARDAN_JOINT": read_cardan_joint,
+    "CARDAN_JOINT": read_cardan_joint,
+    "LAGMUL_CARDAN": read_cardan_joint,
+    "CARDAN": read_cardan_joint,
+    "LAGMUL_CAM_FOLLOWER_JOINT": read_lagmul_cam_follower_joint,
+    "CAM_FOLLOWER_JOINT": read_lagmul_cam_follower_joint,
+    "LAGMUL_CAM_FOLLOWER": read_lagmul_cam_follower_joint,
+    "CAM_FOLLOWER": read_lagmul_cam_follower_joint,
+    "CAM_FOLLOWER_MECHANISM": read_lagmul_cam_follower_joint,
     "SENSOR_SPRING_NORMAL_WORK": read_sensor_spring_normal_work,
     "SENSOR_SPRING_NORM_WORK": read_sensor_spring_normal_work,
     "SENSOR_SPRING_WORK_NORMAL": read_sensor_spring_normal_work,
