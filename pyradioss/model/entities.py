@@ -14900,6 +14900,59 @@ class SensorSpringTorsionalEnergy:
     t_delay: float = 0.0        # activation delay time
 
 
+# ============================================================================
+# M274 Suite: ExtendedMohr failure, EngJointEnergy, TractaJoint, SensorSpringBendingEnergy
+# ============================================================================
+
+@dataclass
+class FailExtendedMohr:
+    """``/FAIL/EXTENDED_MOHR/mat_ID`` (M274): Extended Mohr-Coulomb failure model."""
+    mat_id: int = 1
+    title: str = ""
+    c_0: float = 0.0            # cohesion parameter c0
+    c_1: float = 0.0            # friction parameter c1 (Lode angle)
+    c_2: float = 0.0            # pressure dependence parameter c2
+    c_theta: float = 0.0        # Lode-angle sensitivity parameter
+    ifail_sh: int = 1           # shell deletion flag (1=one layer, 2=all layers)
+    ifail_so: int = 1           # solid element deletion flag
+    d_max: float = 1.0          # maximum accumulated damage threshold
+
+
+@dataclass
+class EngJointEnergy:
+    """``/ENG/JOINT_ENERGY`` or ``/ENG/JNT_ENERGY`` (M274): Engine joint energy history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_joint: float = 0.0      # time frequency for joint energy output
+    sens_id: int = 0            # sensor activation ID
+
+
+@dataclass
+class LagmulTractaJoint:
+    """``/TRACTA_JOINT/id`` or ``/LAGMUL/TRACTA_JOINT/id`` (M274): Tracta (sliding-yoke) joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0              # driving yoke node
+    node2: int = 0              # driven yoke node
+    node3: int = 0              # sliding center node
+    stiff: float = 1e6          # kinematic constraint contact stiffness
+    skew_id: int = 0            # reference coordinate frame ID
+    tol: float = 1e-6           # constraint numerical tolerance
+    axis_x: float = 0.0         # shaft rotation axis vector X
+    axis_y: float = 0.0         # shaft rotation axis vector Y
+    axis_z: float = 1.0         # shaft rotation axis vector Z
+
+
+@dataclass
+class SensorSpringBendingEnergy:
+    """``/SENSOR/SPRING_BENDING_ENERGY`` or ``/SENSOR/SPRING_BEND_ENERGY`` (M274): Spring element bending energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0          # spring element ID to monitor
+    u_bend_max: float = 1e30    # maximum bending energy threshold
+    t_delay: float = 0.0        # activation delay time
+
+
 
 
 
