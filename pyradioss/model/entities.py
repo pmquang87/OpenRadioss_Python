@@ -4085,23 +4085,25 @@ class FailPuck:
 
 @dataclass
 class FailSahraei:
-    """/FAIL/SAHRAEI (M126): Sahraei failure model.
+    """/FAIL/SAHRAEI: Sahraei battery cell and separator failure criterion.
 
     Fortran origin: ``starter/source/materials/fail/fail_sahraei.F`` / CFG ``fail_sahraei.cfg``.
     """
-    mat_id: int
+    mat_id: int = 0
+    title: str = ""
     fct_ratio: int = 0
-    num: int = 0
-    den: int = 0
-    ordi: int = 0
+    num: int = 1                 # numerator strain component flag
+    den: int = 1                 # denominator strain component flag
+    ordi: int = 1                # failure ordinate component flag
     vol_strain: float = 0.0
     fct_elsize: int = 0
     el_ref: float = 0.0
     comp_dir: int = 0
     idel: int = 0
-    max_comp_strain: float = 0.0
-    ratio: float = 0.0
-    fail_id: int = 0
+    max_comp_strain: float = 1e30
+    ratio: float = 1.0
+    fail_id: int = 0             # M126 backward-compat field
+    ifail_sh: int = 1            # shell element deletion flag
 
 
 @dataclass
@@ -13582,15 +13584,13 @@ class EngHourglassEnergy:
     title: str = ""
     dt_he: float = 0.0       # time frequency for hourglass energy output
     sens_id: int = 0         # sensor activation ID
+    dt_hg: float = 0.0       # M271 alias
 
-    @property
-    def dt_hg(self) -> float:
-        """Alias: hourglass energy output time frequency (M271 name)."""
-        return self.dt_he
-
-    @dt_hg.setter
-    def dt_hg(self, value: float) -> None:
-        self.dt_he = value
+    def __post_init__(self):
+        if self.dt_hg != 0.0 and self.dt_he == 0.0:
+            self.dt_he = self.dt_hg
+        elif self.dt_he != 0.0 and self.dt_hg == 0.0:
+            self.dt_hg = self.dt_he
 
 
 @dataclass
@@ -13622,15 +13622,13 @@ class EngContactEnergy:
     title: str = ""
     dt_ce: float = 0.0       # time frequency for contact energy output
     sens_id: int = 0         # sensor activation ID
+    dt_contact: float = 0.0  # M272 alias
 
-    @property
-    def dt_contact(self) -> float:
-        """Alias: contact energy output time frequency (M272 name)."""
-        return self.dt_ce
-
-    @dt_contact.setter
-    def dt_contact(self, value: float) -> None:
-        self.dt_ce = value
+    def __post_init__(self):
+        if self.dt_contact != 0.0 and self.dt_ce == 0.0:
+            self.dt_ce = self.dt_contact
+        elif self.dt_ce != 0.0 and self.dt_contact == 0.0:
+            self.dt_contact = self.dt_ce
 
 
 @dataclass
@@ -13936,13 +13934,6 @@ class FailKimBaek:
     ifail_sh: int = 1        # shell element deletion flag
 
 
-@dataclass
-class EngVolume:
-    """``/ENG/VOLUME`` or ``/ENG/VOL`` (M254): Engine element volume output tracking directive."""
-    id: int = 1
-    title: str = ""
-    dt_vol: float = 0.0      # time frequency for volume output
-    sens_id: int = 0         # sensor activation ID
 
 
 @dataclass
@@ -13982,13 +13973,7 @@ class FailBaiWierzbicki:
     ifail_sh: int = 1        # shell element deletion flag
 
 
-@dataclass
-class EngDensity:
-    """``/ENG/DENSITY`` or ``/ENG/RHO`` (M255): Engine material density output tracking directive."""
-    id: int = 1
-    title: str = ""
-    dt_dens: float = 0.0     # time frequency for density output
-    sens_id: int = 0         # sensor activation ID
+
 
 
 @dataclass
@@ -14154,23 +14139,7 @@ class SensorSpringYieldStress:
 # M260 Suite: Sahraei failure, EngPlasticWork, CycloidalDrive, SensorSpringPlasticWork
 # ============================================================================
 
-@dataclass
-class FailSahraei:
-    """``/FAIL/SAHRAEI/mat_ID`` (M260): Sahraei battery cell and separator failure criterion."""
-    mat_id: int = 1
-    title: str = ""
-    fct_ratio: int = 0           # strain ratio function ID
-    num: int = 1                 # numerator strain component flag (1=Eps_xx, ..., 6=Eps_3)
-    den: int = 1                 # denominator strain component flag (1=2D e1, ..., 6=Eps_3)
-    ordi: int = 1                # failure ordinate component flag (1=MAX(Eps_xx,yy,zz), ..., 8)
-    vol_strain: float = 0.0      # volumetric strain failure limit
-    fct_elsize: int = 0          # element size regularization function ID
-    el_ref: float = 0.0          # reference element size
-    comp_dir: int = 0            # in-plane compression normal direction (0=off, 1=X, 2=Y, 3=Z)
-    idel: int = 0                # compression damage element deletion flag (0=damage only, 1=delete)
-    max_comp_strain: float = 1e30 # in-plane compression failure strain
-    ratio: float = 1.0           # ratio of the other two failure strains
-    ifail_sh: int = 1            # shell element deletion flag
+
 
 
 @dataclass
@@ -14217,13 +14186,6 @@ class SensorSpringPlasticWork:
 
 
 
-@dataclass
-class EngTemperature:
-    """``/ENG/TEMPERATURE`` or ``/ENG/TEMP`` (M261): Engine temperature field history tracking output directive."""
-    id: int = 1
-    title: str = ""
-    dt_temp: float = 0.0         # time frequency for temperature output
-    sens_id: int = 0             # sensor activation ID
 
 
 @dataclass
@@ -14452,15 +14414,13 @@ class SensorSpringTorsionalEnergy:
     spring_id: int = 0           # spring element ID to monitor
     e_tor_max: float = 1e30      # maximum torsional energy threshold (1/2*K_theta*theta^2)
     t_delay: float = 0.0         # activation delay time
+    u_tors_max: float = 1e30     # M273 alias
 
-    @property
-    def u_tors_max(self) -> float:
-        """Alias: torsional energy threshold (M273 name)."""
-        return self.e_tor_max
-
-    @u_tors_max.setter
-    def u_tors_max(self, value: float) -> None:
-        self.e_tor_max = value
+    def __post_init__(self):
+        if self.u_tors_max != 1e30 and self.e_tor_max == 1e30:
+            self.e_tor_max = self.u_tors_max
+        elif self.e_tor_max != 1e30 and self.u_tors_max == 1e30:
+            self.u_tors_max = self.e_tor_max
 
 
 # ============================================================================
@@ -14472,17 +14432,25 @@ class FailLemaitreDamage:
     """``/FAIL/LEMAITRE_DAMAGE/mat_ID`` (M266): Lemaitre continuum ductile damage failure model."""
     mat_id: int = 1
     title: str = ""
-    s_coeff: float = 0.0         # damage strength coefficient S
+    s_coeff: float = 10.0        # damage strength coefficient S
     s_exp: float = 1.0           # damage exponent s
-    eps_d: float = 0.0           # threshold plastic strain for damage initiation
-    d_c: float = 1.0             # critical damage threshold at rupture
-    ifail_sh: int = 1            # shell deletion flag (1=one layer fails, 2=all layers fail)
+    eps_d: float = 0.0           # damage initiation plastic strain threshold eps_D
+    d_c: float = 1.0             # critical damage at fracture D_c (default 1.0)
+    ifail_sh: int = 1            # shell element deletion flag
     ifail_so: int = 1            # solid element deletion flag
+
+    @property
+    def d_crit(self) -> float:
+        return self.d_c
+
+    @d_crit.setter
+    def d_crit(self, val: float) -> None:
+        self.d_c = val
 
 
 @dataclass
 class EngHydrostaticPressure:
-    """``/ENG/HYDROSTATIC_PRESSURE`` or ``/ENG/HYDRO_PRES`` (M266): Engine hydrostatic pressure history tracking output directive."""
+    """``/ENG/HYDROSTATIC_PRESSURE`` or ``/ENG/PHYD`` (M266): Engine hydrostatic pressure field history tracking output directive."""
     id: int = 1
     title: str = ""
     dt_phyd: float = 0.0         # time frequency for hydrostatic pressure output
@@ -14513,15 +14481,13 @@ class SensorSpringBendingEnergy:
     spring_id: int = 0           # spring element ID to monitor
     e_bend_max: float = 1e30     # maximum bending energy threshold (1/2*K_b*theta_b^2)
     t_delay: float = 0.0         # activation delay time
+    u_bend_max: float = 1e30     # M274 alias
 
-    @property
-    def u_bend_max(self) -> float:
-        """Alias: bending energy threshold (M274 name)."""
-        return self.e_bend_max
-
-    @u_bend_max.setter
-    def u_bend_max(self, value: float) -> None:
-        self.e_bend_max = value
+    def __post_init__(self):
+        if self.u_bend_max != 1e30 and self.e_bend_max == 1e30:
+            self.e_bend_max = self.u_bend_max
+        elif self.e_bend_max != 1e30 and self.u_bend_max == 1e30:
+            self.u_bend_max = self.e_bend_max
 
 
 # ============================================================================

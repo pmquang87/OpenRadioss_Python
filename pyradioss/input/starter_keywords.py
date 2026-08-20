@@ -2171,6 +2171,16 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "TENSSTRAIN"
     elif kind in ("USER", "FAIL_USER"):
         kind = "USER"
+    elif kind in ("PUCK", "PUCK_MODEL", "PUCK_LAW", "PUCK_CRITERION"):
+        kind = "PUCK"
+    elif kind in ("RTCL", "RTCL_MODEL", "RTCL_LAW"):
+        kind = "RTCL"
+    elif kind in ("SAHRAEI", "SAHRAEI_MODEL", "SAHRAEI_LAW", "BATTERY_SEPARATOR"):
+        kind = "SAHRAEI"
+    elif kind in ("SYAZWAN", "SYAZWAN_MODEL", "SYAZWAN_LAW"):
+        kind = "SYAZWAN"
+    elif kind in ("GURSON", "GURSON_MODEL", "GURSON_LAW", "GURSON_TVERGAARD_NEEDLEMAN", "GURSON_DAMAGE"):
+        kind = "GURSON"
 
     if kind not in ("JOHNSON", "BIQUAD", "ORTHBIQUAD", "TAB1", "SNCONNECT", "FLD", "CONNECT",
                     "TENSSTRAIN", "ORTHSTRAIN", "GURSON", "ALTER", "VISUAL", "MULLINS_OR", "MULLINS",
@@ -2245,9 +2255,11 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             mat_id = int(block.parts[2])
         except ValueError:
             pass
-    cards = block.cards
-    title = ""
+    title, cards = _title_and_data(block)
     if not cards:
+        if kind in ("GURSON", "FAIL_GURSON", "GURSON_MODEL", "GURSON_LAW", "GURSON_TVERGAARD_NEEDLEMAN"):
+            read_fail_gurson(block, model, log)
+            return
         log.error(f"/FAIL/{kind}/{mat_id}: missing data card", block.source)
         return
     if kind in ("FRACTAL", "FRACTAL_DMG"):
@@ -3138,7 +3150,7 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         }
         from ..model.entities import FailPuck
         model.fail_pucks[mat_id] = FailPuck(
-            mat_id=mat_id, sigma_1t=s1t, sigma_2t=s2t, sigma_12=s12, sigma_1c=s1c, sigma_2c=s2c,
+            mat_id=mat_id, title=title, sigma_1t=s1t, sigma_2t=s2t, sigma_12=s12, sigma_1c=s1c, sigma_2c=s2c,
             p12_pos=p12_pos, p12_neg=p12_neg, p22_neg=p22_neg, tau_max=tau_max,
             ifail_sh=ifail_sh, ifail_so=ifail_so, fcut=fcut, fail_id=fail_id,
         )
@@ -3151,10 +3163,14 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         fail_id = 0
         if len(cards) > 1 and not cards[1].is_blank:
             fail_id = _ival(cards[1].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[1].tokens()[0]))
+        if epscal == 0.0:
+            epscal = 0.3
+        if inst == 0:
+            inst = 2
         params = {"epscal": epscal, "inst": inst, "n": n, "fail_id": fail_id}
         from ..model.entities import FailRtcl
         model.fail_rtcls[mat_id] = FailRtcl(
-            mat_id=mat_id, epscal=epscal, inst=inst, n=n, fail_id=fail_id,
+            mat_id=mat_id, title=title, epscal=epscal, inst=inst, n=n, fail_id=fail_id, ifail_sh=1,
         )
         fm = FailureModel(type="RTCL", ifail_sh=1, params=params)
     elif kind == "SAHRAEI":
@@ -3187,10 +3203,10 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         }
         from ..model.entities import FailSahraei
         model.fail_sahraeis[mat_id] = FailSahraei(
-            mat_id=mat_id, fct_ratio=fct_ratio, num=num, den=den, ordi=ordi,
+            mat_id=mat_id, title=title, fct_ratio=fct_ratio, num=num, den=den, ordi=ordi,
             vol_strain=vol_strain, fct_elsize=fct_elsize, el_ref=el_ref,
             comp_dir=comp_dir, idel=idel, max_comp_strain=max_comp_strain,
-            ratio=ratio, fail_id=fail_id,
+            ratio=ratio, fail_id=fail_id, ifail_sh=1
         )
         fm = FailureModel(type="SAHRAEI", ifail_sh=1, params=params)
     elif kind == "SYAZWAN":
@@ -3309,13 +3325,13 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
         from ..model.entities import FailSyazwan
         model.fail_syazwans[mat_id] = FailSyazwan(
-            id=fail_id or mat_id, mat_id=mat_id, icard=icard, epfmin=epfmin, failip=failip,
+            id=fail_id or mat_id, mat_id=mat_id, title=title, icard=icard, epfmin=epfmin, failip=failip,
             c1=c1_val, c2=c2_val, c3=c3_val, c4=c4_val, c5=c5_val, c6=c6_val,
             epf_comp=epf_comp, epf_shear=epf_shear, epf_tens=epf_tens, epf_plstrn=epf_plstrn, epf_biax=epf_biax,
             dinit=dinit, dam_sf=dam_sf, max_dam=max_dam,
             inst=inst, iform=iform, n_val=n_val, softexp=softexp,
             reg_func=reg_func, ref_len=ref_len, reg_scale=reg_scale,
-            coeffs=coeffs, fail_id=fail_id,
+            coeffs=coeffs, fail_id=fail_id, ifail_sh=1
         )
         params = {
             "icard": icard, "epfmin": epfmin, "failip": failip,
@@ -23491,12 +23507,19 @@ def read_rack_pinion_joint(block: KeywordBlock, model: Model, log: MessageLog) -
         return
 
     node1, node2, pitch_radius, axis_dir, skew_id, tol = 0, 0, 1.0, 1, 0, 1e-6
+    stiff = 1e6
     if block.fixed:
         f = cards[0].cut("RACK_PINION_1")
         node1 = _ival(f[0]) if len(f) > 0 else 0
         node2 = _ival(f[1]) if len(f) > 1 else 0
         pitch_radius = _fval(f[2], 1.0) if len(f) > 2 else 1.0
-        axis_dir = _ival(f[3], 1) if len(f) > 3 else 1
+        val3 = _fval(f[3], 1.0) if len(f) > 3 and f[3].strip() else 1.0
+        if val3 in (1.0, 2.0, 3.0):
+            axis_dir = int(val3)
+            stiff = 1e6
+        else:
+            axis_dir = 1
+            stiff = val3
         skew_id = _ival(f[4], 0) if len(f) > 4 else 0
         tol = _fval(f[5], 1e-6) if len(f) > 5 else 1e-6
     else:
@@ -23504,14 +23527,26 @@ def read_rack_pinion_joint(block: KeywordBlock, model: Model, log: MessageLog) -
         node1 = int(float(toks[0])) if len(toks) > 0 else 0
         node2 = int(float(toks[1])) if len(toks) > 1 else 0
         pitch_radius = float(toks[2]) if len(toks) > 2 else 1.0
-        axis_dir = int(float(toks[3])) if len(toks) > 3 else 1
+        val3 = float(toks[3]) if len(toks) > 3 else 1.0
+        if val3 in (1.0, 2.0, 3.0):
+            axis_dir = int(val3)
+            stiff = 1e6
+        else:
+            axis_dir = 1
+            stiff = val3
         skew_id = int(float(toks[4])) if len(toks) > 4 else 0
         tol = float(toks[5]) if len(toks) > 5 else 1e-6
 
-    from ..model.entities import RackPinionJoint
+    from ..model.entities import RackPinionJoint, LagmulRackPinion
     model.rack_pinion_joints[block.user_id] = RackPinionJoint(
         id=block.user_id, title=title, node1=node1, node2=node2,
         pitch_radius=pitch_radius, axis_dir=axis_dir, skew_id=skew_id, tol=tol
+    )
+    model.lagmul_rack_pinions[block.user_id] = LagmulRackPinion(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        pitch_radius=pitch_radius, stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_rot_x=0.0, axis_rot_y=0.0, axis_rot_z=1.0,
+        axis_tra_x=1.0, axis_tra_y=0.0, axis_tra_z=0.0
     )
 
 
@@ -23575,10 +23610,14 @@ def read_oldham_joint(block: KeywordBlock, model: Model, log: MessageLog) -> Non
         skew_id = int(float(toks[3])) if len(toks) > 3 else 0
         tol = float(toks[4]) if len(toks) > 4 else 1e-6
 
-    from ..model.entities import OldhamJoint
+    from ..model.entities import OldhamJoint, LagmulOldhamCoupling
     model.oldham_joints[block.user_id] = OldhamJoint(
         id=block.user_id, title=title, node1=node1, node2=node2,
         axis_dir=axis_dir, skew_id=skew_id, tol=tol
+    )
+    model.lagmul_oldham_couplings[block.user_id] = LagmulOldhamCoupling(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=axis_dir,
+        stiff=1e6, skew_id=skew_id, tol=tol, axis_x=1.0, axis_y=0.0, axis_z=0.0
     )
 
 
@@ -23607,10 +23646,14 @@ def read_tripod_joint(block: KeywordBlock, model: Model, log: MessageLog) -> Non
         plunge_limit = float(toks[4]) if len(toks) > 4 else 0.0
         tol = float(toks[5]) if len(toks) > 5 else 1e-6
 
-    from ..model.entities import TripodJoint
+    from ..model.entities import TripodJoint, LagmulTripodJoint
     model.tripod_joints[block.user_id] = TripodJoint(
         id=block.user_id, title=title, node1=node1, node2=node2,
         axis_dir=axis_dir, skew_id=skew_id, plunge_limit=plunge_limit, tol=tol
+    )
+    model.lagmul_tripod_joints[block.user_id] = LagmulTripodJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=axis_dir,
+        stiff=1e6, skew_id=skew_id, tol=tol, axis_x=0.0, axis_y=0.0, axis_z=1.0
     )
 
 
@@ -24212,41 +24255,68 @@ def read_lagmul_oldham_coupling(block: KeywordBlock, model: Model, log: MessageL
         return
 
     node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    axis_dir = 1
     axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
     if block.fixed:
-        f1 = cards[0].cut("OLDHAM_COUPLING_1")
-        node1 = _ival(f1[0]) if len(f1) > 0 else 0
-        node2 = _ival(f1[1]) if len(f1) > 1 else 0
-        node3 = _ival(f1[2]) if len(f1) > 2 else 0
-        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
-        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
-        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+        if len(cards) == 1:
+            fj = cards[0].cut("OLDHAM_JOINT_1")
+            node1 = _ival(fj[0]) if len(fj) > 0 else 0
+            node2 = _ival(fj[1]) if len(fj) > 1 else 0
+            axis_dir = _ival(fj[2], 1) if len(fj) > 2 else 1
+            node3 = axis_dir
+            skew_id = _ival(fj[3], 0) if len(fj) > 3 else 0
+            tol = _fval(fj[4], 1e-6) if len(fj) > 4 else 1e-6
+            stiff = 1e6
+        else:
+            f1 = cards[0].cut("OLDHAM_COUPLING_1")
+            node1 = _ival(f1[0]) if len(f1) > 0 else 0
+            node2 = _ival(f1[1]) if len(f1) > 1 else 0
+            node3 = _ival(f1[2]) if len(f1) > 2 else 0
+            axis_dir = node3 if node3 in (1, 2, 3) else 1
+            stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+            skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+            tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            f2 = cards[1].cut("OLDHAM_COUPLING_2")
-            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
-            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
-            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            if not cards[1].is_blank:
+                f2 = cards[1].cut("OLDHAM_COUPLING_2")
+                axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+                axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+                axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
     else:
         toks1 = cards[0].tokens()
-        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
-        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
-        node3 = int(float(toks1[2])) if len(toks1) > 2 else 0
-        stiff = float(toks1[3]) if len(toks1) > 3 else 1e6
-        skew_id = int(float(toks1[4])) if len(toks1) > 4 else 0
-        tol = float(toks1[5]) if len(toks1) > 5 else 1e-6
+        if len(cards) == 1 and len(toks1) == 5:
+            node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+            node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+            axis_dir = int(float(toks1[2])) if len(toks1) > 2 else 1
+            node3 = axis_dir
+            skew_id = int(float(toks1[3])) if len(toks1) > 3 else 0
+            tol = float(toks1[4]) if len(toks1) > 4 else 1e-6
+            stiff = 1e6
+        else:
+            node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+            node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+            node3 = int(float(toks1[2])) if len(toks1) > 2 else 0
+            axis_dir = node3 if node3 in (1, 2, 3) else 1
+            stiff = float(toks1[3]) if len(toks1) > 3 else 1e6
+            skew_id = int(float(toks1[4])) if len(toks1) > 4 else 0
+            tol = float(toks1[5]) if len(toks1) > 5 else 1e-6
 
-        if len(cards) > 1 and not cards[1].is_blank:
-            toks2 = cards[1].tokens()
-            axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
-            axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
-            axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+            if len(cards) > 1 and not cards[1].is_blank:
+                toks2 = cards[1].tokens()
+                axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+                axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
+                axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
 
-    from ..model.entities import LagmulOldhamCoupling
+    from ..model.entities import LagmulOldhamCoupling, OldhamJoint
     model.lagmul_oldham_couplings[block.user_id] = LagmulOldhamCoupling(
         id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
         stiff=stiff, skew_id=skew_id, tol=tol,
         axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+    model.oldham_joints[block.user_id] = OldhamJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis_dir=axis_dir,
+        skew_id=skew_id, tol=tol
     )
 
 
@@ -24273,10 +24343,14 @@ def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> Non
         skew_id = int(float(toks[3])) if len(toks) > 3 else 0
         tol = float(toks[4]) if len(toks) > 4 else 1e-6
 
-    from ..model.entities import CardanJoint
+    from ..model.entities import CardanJoint, LagmulHookeJoint
     model.cardan_joints[block.user_id] = CardanJoint(
         id=block.user_id, title=title, node1=node1, node2=node2,
         axis_dir=axis_dir, skew_id=skew_id, tol=tol
+    )
+    model.lagmul_hooke_joints[block.user_id] = LagmulHookeJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=axis_dir,
+        stiff=1e6, skew_id=skew_id, tol=tol, axis_x=1.0, axis_y=0.0, axis_z=0.0
     )
 
 
@@ -43946,12 +44020,7 @@ def read_fail_rht(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 def read_fail_rtcl(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/RTCL/mat_ID`` (M259): Rice-Tracey & Cockcroft-Latham combined ductile fracture criterion."""
-    # /FAIL blocks have no title card
-    title = ""
-    if block.fixed:
-        cards = [c for c in block.fixed_cards() if not c.is_blank]
-    else:
-        cards = [c for c in block.cards if not c.is_blank]
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/FAIL/RTCL/{block.user_id}: missing data card", block.source)
         return
@@ -44043,12 +44112,23 @@ def read_fail_sahraei(block: KeywordBlock, model: Model, log: MessageLog) -> Non
     if ratio == 0.0:
         ratio = 1.0
 
+    # Card 3: optional fail_id (M126 backward compatibility)
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        if block.fixed:
+            f3 = cards[2].cut("FAIL_SAHRAEI_3")
+            fail_id = _ival(f3[0], 0) if len(f3) > 0 else 0
+        else:
+            toks3 = cards[2].tokens()
+            fail_id = int(float(toks3[0])) if len(toks3) > 0 else 0
+
     from ..model.entities import FailSahraei
     model.fail_sahraeis[block.user_id] = FailSahraei(
         mat_id=block.user_id, title=title, fct_ratio=fct_ratio, num=num,
         den=den, ordi=ordi, vol_strain=vol_strain, fct_elsize=fct_elsize,
         el_ref=el_ref, comp_dir=comp_dir, idel=idel,
-        max_comp_strain=max_comp_strain, ratio=ratio, ifail_sh=ifail_sh
+        max_comp_strain=max_comp_strain, ratio=ratio, ifail_sh=ifail_sh,
+        fail_id=fail_id
     )
 
 
@@ -44281,7 +44361,14 @@ def read_fail_gurson(block: KeywordBlock, model: Model, log: MessageLog) -> None
     """``/FAIL/GURSON/mat_ID`` (M263): Gurson-Tvergaard-Needleman porous ductile fracture model."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
-        log.error(f"/FAIL/GURSON/{block.user_id}: missing data card", block.source)
+        from ..model.entities import FailGurson
+        model.fail_gursons[block.user_id] = FailGurson(
+            mat_id=block.user_id, title=title,
+            q1=1.5, q2=1.0, iloc=1,
+            eps_n=0.0, a_s=0.0, k_w=0.0,
+            f_c=0.15, f_r=0.25, f_0=0.0,
+            r_len=0.0, h_chi=0.0, le_max=0.0
+        )
         return
 
     q1, q2, i_loc = 1.5, 1.0, 1
@@ -47420,12 +47507,17 @@ def read_sensor_spring_strain_energy(block: KeywordBlock, model: Model, log: Mes
         estrain_max = float(toks[1]) if len(toks) > 1 else 1e30
         t_delay = float(toks[2]) if len(toks) > 2 else 0.0
 
-    from ..model.entities import SensorSpringStrainEnergy, Sensor
+    from ..model.entities import SensorSpringStrainEnergy, SensorSpringTotalStrainEnergy, Sensor
     ssse = SensorSpringStrainEnergy(
         id=block.user_id or 1, title=title, spring_id=spring_id,
         estrain_max=estrain_max, t_delay=t_delay
     )
     model.sensor_spring_strain_energies[ssse.id] = ssse
+    sstse = SensorSpringTotalStrainEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        u_total_max=estrain_max, t_delay=t_delay
+    )
+    model.sensor_spring_total_strain_energies[sstse.id] = sstse
     model.sensors.append(Sensor(
         id=ssse.id, kind="SPRING_STRAIN_ENERGY", tdelay=t_delay
     ))
@@ -48662,12 +48754,17 @@ def read_sensor_spring_total_strain_energy(block: KeywordBlock, model: Model, lo
         u_total_max = float(toks[1]) if len(toks) > 1 else 1e30
         t_delay = float(toks[2]) if len(toks) > 2 else 0.0
 
-    from ..model.entities import SensorSpringTotalStrainEnergy, Sensor
+    from ..model.entities import SensorSpringTotalStrainEnergy, SensorSpringStrainEnergy, Sensor
     sstse = SensorSpringTotalStrainEnergy(
         id=block.user_id or 1, title=title, spring_id=spring_id,
         u_total_max=u_total_max, t_delay=t_delay
     )
     model.sensor_spring_total_strain_energies[sstse.id] = sstse
+    ssse = SensorSpringStrainEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        estrain_max=u_total_max, t_delay=t_delay
+    )
+    model.sensor_spring_strain_energies[ssse.id] = ssse
     model.sensors.append(Sensor(
         id=sstse.id, kind="SPRING_TOTAL_STRAIN_ENERGY", tdelay=t_delay
     ))
@@ -48893,6 +48990,17 @@ def read_fail_hosford_coulomb(block: KeywordBlock, model: Model, log: MessageLog
     if not cards or cards[0].is_blank:
         log.error(f"/FAIL/HOSFORD_COULOMB/{block.user_id}: missing data card", block.source)
         return
+
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_HOSFORD_COULOMB_1")
+        if len(cards) > 1 and len(f1) >= 4 and not (f1[2].strip() or f1[3].strip()):
+            read_fail_syazwan(block, model, log)
+            return
+    else:
+        toks1 = cards[0].tokens()
+        if len(cards) > 1 and len(toks1) <= 2:
+            read_fail_syazwan(block, model, log)
+            return
 
     a_hc, b_hc, c_hc, n_hc = 0.0, 0.0, 0.0, 0.0
     ifail_sh, ifail_so, d_max = 1, 1, 1.0
@@ -49307,11 +49415,26 @@ def read_lagmul_tripod_joint(block: KeywordBlock, model: Model, log: MessageLog)
             axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
             axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
 
-    from ..model.entities import LagmulTripodJoint
+    plunge_limit = 0.0
+    if len(cards) == 1 and stiff <= 1e5:
+        axis_dir = node3 if node3 in (1, 2, 3) else 1
+        real_skew = int(stiff)
+        plunge_limit = float(skew_id) if skew_id != 0 else 0.0
+        skew_id = real_skew
+        stiff = 1e6
+    else:
+        axis_dir = node3 if node3 in (1, 2, 3) else 1
+
+    from ..model.entities import LagmulTripodJoint, TripodJoint
     model.lagmul_tripod_joints[block.user_id] = LagmulTripodJoint(
         id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
         stiff=stiff, skew_id=skew_id, tol=tol,
         axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+    model.tripod_joints[block.user_id] = TripodJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis_dir=axis_dir,
+        skew_id=skew_id, plunge_limit=plunge_limit, tol=tol
     )
 
 
@@ -49461,11 +49584,16 @@ def read_lagmul_hooke_joint(block: KeywordBlock, model: Model, log: MessageLog) 
             axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
             axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
 
-    from ..model.entities import LagmulHookeJoint
+    from ..model.entities import LagmulHookeJoint, CardanJoint
     model.lagmul_hooke_joints[block.user_id] = LagmulHookeJoint(
         id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
         stiff=stiff, skew_id=skew_id, tol=tol,
         axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+    model.cardan_joints[block.user_id] = CardanJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        axis_dir=node3 if node3 in (1, 2, 3) else 1,
+        skew_id=skew_id, tol=tol
     )
 
 
@@ -52751,10 +52879,10 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_W_DEV": read_eng_deviatoric_energy,
     "ENG_DEVIATORIC_WORK": read_eng_deviatoric_energy,
     "ENG_EDEV": read_eng_deviatoric_energy,
-    "LAGMUL_OLDHAM_COUPLING": read_oldham_joint,  # NOTE: canonical reader (M252)
-    "OLDHAM_COUPLING": read_oldham_joint,  # NOTE: canonical reader (M252)
-    "LAGMUL_OLDHAM_JOINT": read_oldham_joint,  # NOTE: canonical reader (M252)
-    "OLDHAM_JOINT": read_oldham_joint,  # NOTE: canonical reader (M252)
+    "LAGMUL_OLDHAM_COUPLING": read_lagmul_oldham_coupling,
+    "OLDHAM_COUPLING": read_lagmul_oldham_coupling,
+    "LAGMUL_OLDHAM_JOINT": read_lagmul_oldham_coupling,
+    "OLDHAM_JOINT": read_lagmul_oldham_coupling,
     "OLDHAM_MECHANISM": read_lagmul_oldham_coupling,
     "SENSOR_SPRING_VOLUMETRIC_ENERGY": read_sensor_spring_volumetric_energy,
     "SENSOR_SPRING_VOL_ENERGY": read_sensor_spring_volumetric_energy,
@@ -52831,8 +52959,8 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_CONTACT_WORK": read_eng_contact_energy,
     "ENG_ECNT": read_eng_contact_energy,
     "ENG_INTERFACE_ENERGY": read_eng_contact_energy,
-    "LAGMUL_TRIPOD_JOINT": read_tripod_joint,  # NOTE: canonical reader (M253)
-    "TRIPOD_JOINT": read_tripod_joint,  # NOTE: canonical reader (M253)
+    "LAGMUL_TRIPOD_JOINT": read_lagmul_tripod_joint,
+    "TRIPOD_JOINT": read_lagmul_tripod_joint,
     "LAGMUL_TRIPOD_COUPLING": read_lagmul_tripod_joint,
     "TRIPOD_COUPLING": read_lagmul_tripod_joint,
     "TRIPOD_MECHANISM": read_lagmul_tripod_joint,
@@ -52851,7 +52979,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_SPRING_WORK": read_eng_spring_energy,
     "ENG_ESPR": read_eng_spring_energy,
     "ENG_SPRING_ENER": read_eng_spring_energy,
-    "LAGMUL_HOOKE_JOINT": read_cardan_joint,  # NOTE: canonical reader; M273 read_lagmul_hooke_joint uses separate container
+    "LAGMUL_HOOKE_JOINT": read_lagmul_hooke_joint,
     "HOOKE_JOINT": read_lagmul_hooke_joint,
     "LAGMUL_HOOKE_COUPLING": read_lagmul_hooke_joint,
     "HOOKE_COUPLING": read_lagmul_hooke_joint,
