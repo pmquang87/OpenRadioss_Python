@@ -14527,6 +14527,62 @@ class SensorSpringBendingEnergy:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M267 Suite: TabulatedPlasticity failure, EngOctahedralShear, ScotchYoke, SensorSpringTotalStrainEnergy
+# ============================================================================
+
+@dataclass
+class FailTabulatedPlasticity:
+    """``/FAIL/TABULATED_PLASTICITY/mat_ID`` (M267): Tabulated multi-axial plasticity fracture failure model."""
+    mat_id: int = 1
+    title: str = ""
+    fct_id_triax: int = 0        # curve function ID for failure strain vs triaxiality eta
+    fct_id_lode: int = 0         # curve function ID for failure strain vs Lode parameter theta
+    fct_id_rate: int = 0         # curve function ID for dynamic strain rate scale factor
+    ifail_sh: int = 1            # shell deletion flag (1=one layer fails, 2=all layers fail)
+    ifail_so: int = 1            # solid element deletion flag
+    d_max: float = 1.0           # maximum accumulated damage threshold
+
+
+@dataclass
+class EngOctahedralShear:
+    """``/ENG/OCTAHEDRAL_SHEAR`` or ``/ENG/OCT_SHEAR`` (M267): Engine octahedral shear stress history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_toct: float = 0.0         # time frequency for octahedral shear stress output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulScotchYoke:
+    """``/SCOTCH_YOKE/id`` or ``/LAGMUL/SCOTCH_YOKE/id`` (M267): Scotch yoke pure harmonic rotary-to-linear conversion kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # rotating crank node
+    node2: int = 0               # reciprocating slider node
+    crank_radius: float = 1.0    # crank pin radius R
+    stiff: float = 1e6           # kinematic slider slot contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    rot_x: float = 0.0           # crank rotation axis vector X
+    rot_y: float = 0.0           # crank rotation axis vector Y
+    rot_z: float = 1.0           # crank rotation axis vector Z
+    trans_x: float = 1.0         # slider translation axis vector X
+    trans_y: float = 0.0         # slider translation axis vector Y
+    trans_z: float = 0.0         # slider translation axis vector Z
+
+
+@dataclass
+class SensorSpringTotalStrainEnergy:
+    """``/SENSOR/SPRING_TOTAL_STRAIN_ENERGY`` or ``/SENSOR/SPRING_STRAIN_ENERGY`` (M267): Spring element total elastic strain energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    u_total_max: float = 1e30    # maximum total strain energy threshold (U_ax + U_sh + U_tor + U_bend)
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

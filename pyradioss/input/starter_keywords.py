@@ -24147,6 +24147,63 @@ def read_lagmul_geneva_drive(block: KeywordBlock, model: Model, log: MessageLog)
     )
 
 
+def read_lagmul_scotch_yoke(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SCOTCH_YOKE/id`` or ``/LAGMUL/SCOTCH_YOKE/id`` (M267): Scotch yoke pure harmonic rotary-to-linear conversion kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SCOTCH_YOKE/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, crank_radius, stiff, skew_id, tol = 0, 0, 1.0, 1e6, 0, 1e-6
+    rot_x, rot_y, rot_z = 0.0, 0.0, 1.0
+    trans_x, trans_y, trans_z = 1.0, 0.0, 0.0
+    if block.fixed:
+        f1 = cards[0].cut("SCOTCH_YOKE_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        crank_radius = _fval(f1[2], 1.0) if len(f1) > 2 and f1[2].strip() else 1.0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("SCOTCH_YOKE_2")
+            rot_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            rot_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            rot_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+            trans_x = _fval(f2[3], 1.0) if len(f2) > 3 else 1.0
+            trans_y = _fval(f2[4], 0.0) if len(f2) > 4 else 0.0
+            trans_z = _fval(f2[5], 0.0) if len(f2) > 5 else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        crank_radius = float(toks1[2]) if len(toks1) > 2 else 1.0
+        stiff = float(toks1[3]) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4])) if len(toks1) > 4 else 0
+        tol = float(toks1[5]) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            rot_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+            rot_y = float(toks2[1]) if len(toks2) > 1 else 0.0
+            rot_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+            trans_x = float(toks2[3]) if len(toks2) > 3 else 1.0
+            trans_y = float(toks2[4]) if len(toks2) > 4 else 0.0
+            trans_z = float(toks2[5]) if len(toks2) > 5 else 0.0
+
+    if crank_radius == 0.0:
+        crank_radius = 1.0
+
+    from ..model.entities import LagmulScotchYoke
+    model.lagmul_scotch_yokes[block.user_id] = LagmulScotchYoke(
+        id=block.user_id, title=title, node1=node1, node2=node2,
+        crank_radius=crank_radius, stiff=stiff, skew_id=skew_id, tol=tol,
+        rot_x=rot_x, rot_y=rot_y, rot_z=rot_z,
+        trans_x=trans_x, trans_y=trans_y, trans_z=trans_z
+    )
+
+
 def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -44416,6 +44473,50 @@ def read_fail_lemaitre_damage(block: KeywordBlock, model: Model, log: MessageLog
     )
 
 
+def read_fail_tabulated_plasticity(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/TABULATED_PLASTICITY/mat_ID`` (M267): Tabulated multi-axial plasticity fracture failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/TABULATED_PLASTICITY/{block.user_id}: missing data card", block.source)
+        return
+
+    fct_id_triax, fct_id_lode, fct_id_rate = 0, 0, 0
+    ifail_sh, ifail_so, d_max = 1, 1, 1.0
+
+    if block.fixed:
+        # Card 1: FCT_ID_TRIAX, FCT_ID_LODE, FCT_ID_RATE, IFAIL_SH, IFAIL_SO, D_MAX
+        f1 = cards[0].cut("FAIL_TABULATED_PLASTICITY_1")
+        fct_id_triax = _ival(f1[0], 0) if len(f1) > 0 else 0
+        fct_id_lode = _ival(f1[1], 0) if len(f1) > 1 else 0
+        fct_id_rate = _ival(f1[2], 0) if len(f1) > 2 else 0
+        ifail_sh = _ival(f1[3], 1) if len(f1) > 3 and f1[3].strip() else 1
+        ifail_so = _ival(f1[4], 1) if len(f1) > 4 and f1[4].strip() else 1
+        d_max = _fval(f1[5], 1.0) if len(f1) > 5 and f1[5].strip() else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        fct_id_triax = int(float(toks1[0])) if len(toks1) > 0 else 0
+        fct_id_lode = int(float(toks1[1])) if len(toks1) > 1 else 0
+        fct_id_rate = int(float(toks1[2])) if len(toks1) > 2 else 0
+        ifail_sh = int(float(toks1[3])) if len(toks1) > 3 else 1
+        ifail_so = int(float(toks1[4])) if len(toks1) > 4 else 1
+        d_max = float(toks1[5]) if len(toks1) > 5 else 1.0
+
+    if ifail_sh == 0:
+        ifail_sh = 1
+    if ifail_so == 0:
+        ifail_so = 1
+    if d_max == 0.0:
+        d_max = 1.0
+
+    from ..model.entities import FailTabulatedPlasticity
+    model.fail_tabulated_plasticities[block.user_id] = FailTabulatedPlasticity(
+        mat_id=block.user_id, title=title,
+        fct_id_triax=fct_id_triax, fct_id_lode=fct_id_lode, fct_id_rate=fct_id_rate,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, d_max=d_max
+    )
+
+
+
 
 
 
@@ -48407,6 +48508,61 @@ def read_sensor_spring_bending_energy(block: KeywordBlock, model: Model, log: Me
     ))
 
 
+def read_eng_octahedral_shear(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/OCTAHEDRAL_SHEAR`` or ``/ENG/OCT_SHEAR`` (M267): Engine octahedral shear stress history tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/OCTAHEDRAL_SHEAR/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_toct, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_OCTAHEDRAL_SHEAR_1")
+        dt_toct = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_toct = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngOctahedralShear
+    r_id = block.user_id or (len(model.eng_octahedral_shears) + 1)
+    model.eng_octahedral_shears[r_id] = EngOctahedralShear(
+        id=r_id, title=title, dt_toct=dt_toct, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_total_strain_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TOTAL_STRAIN_ENERGY`` or ``/SENSOR/SPRING_STRAIN_ENERGY`` (M267): Spring element total elastic strain energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TOTAL_STRAIN_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, u_total_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_TOTAL_STRAIN_ENERGY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        u_total_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        u_total_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTotalStrainEnergy, Sensor
+    sstse = SensorSpringTotalStrainEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        u_total_max=u_total_max, t_delay=t_delay
+    )
+    model.sensor_spring_total_strain_energies[sstse.id] = sstse
+    model.sensors.append(Sensor(
+        id=sstse.id, kind="SPRING_TOTAL_STRAIN_ENERGY", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -51162,6 +51318,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_BEND_ENERGY": read_sensor_spring_bending_energy,
     "SENSOR_SPRING_FLEX_ENERGY": read_sensor_spring_bending_energy,
     "SENSOR_BENDING_ENERGY_SPRING": read_sensor_spring_bending_energy,
+    # --- M267: Tabulated Multi-Axial Plasticity Failure Model, Engine Octahedral Shear Stress Output Directive, Scotch Yoke Joint Suite, and Spring Total Strain Energy Sensor ---
+    "FAIL_TABULATED_PLASTICITY": read_fail_tabulated_plasticity,
+    "FAIL_TAB_PLAS": read_fail_tabulated_plasticity,
+    "FAIL_TAB_DAMAGE": read_fail_tabulated_plasticity,
+    "FAIL_TABULATED_DAMAGE": read_fail_tabulated_plasticity,
+    "FAIL_TAB_FAILURE": read_fail_tabulated_plasticity,
+    "ENG_OCTAHEDRAL_SHEAR": read_eng_octahedral_shear,
+    "ENG_OCT_SHEAR": read_eng_octahedral_shear,
+    "ENG_TAU_OCT": read_eng_octahedral_shear,
+    "ENG_OCTAHEDRAL_STRESS": read_eng_octahedral_shear,
+    "ENG_OCT_TAU": read_eng_octahedral_shear,
+    "LAGMUL_SCOTCH_YOKE": read_lagmul_scotch_yoke,
+    "SCOTCH_YOKE": read_lagmul_scotch_yoke,
+    "LAGMUL_SCOTCH_YOKE_MECHANISM": read_lagmul_scotch_yoke,
+    "SCOTCH_YOKE_MECHANISM": read_lagmul_scotch_yoke,
+    "SCOTCH_YOKE_JOINT": read_lagmul_scotch_yoke,
+    "SENSOR_SPRING_TOTAL_STRAIN_ENERGY": read_sensor_spring_total_strain_energy,
+    "SENSOR_SPRING_STRAIN_ENERGY": read_sensor_spring_total_strain_energy,
+    "SENSOR_SPRING_TOTAL_ENERGY": read_sensor_spring_total_strain_energy,
+    "SENSOR_STRAIN_ENERGY_SPRING": read_sensor_spring_total_strain_energy,
 }
 
 

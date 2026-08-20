@@ -1786,6 +1786,13 @@ class Model:
         self.lagmul_geneva_drives: Dict[int, Any] = {}               # /GENEVA_DRIVE, /LAGMUL/GENEVA_DRIVE (M266)
         self.sensor_spring_bending_energies: Dict[int, Any] = {}     # /SENSOR/SPRING_BENDING_ENERGY (M266)
 
+        # M267 Entities
+        self.fail_tabulated_plasticities: Dict[int, Any] = {}        # /FAIL/TABULATED_PLASTICITY (M267)
+        self.eng_octahedral_shears: Dict[int, Any] = {}              # /ENG/OCTAHEDRAL_SHEAR (M267)
+        self.lagmul_scotch_yokes: Dict[int, Any] = {}                # /SCOTCH_YOKE, /LAGMUL/SCOTCH_YOKE (M267)
+        self.sensor_spring_total_strain_energies: Dict[int, Any] = {}# /SENSOR/SPRING_TOTAL_STRAIN_ENERGY (M267)
+
+
 
 
 
