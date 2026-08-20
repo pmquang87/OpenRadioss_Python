@@ -49333,6 +49333,160 @@ def read_sensor_spring_coupling_energy(block: KeywordBlock, model: Model, log: M
     ))
 
 
+# ============================================================================
+# M273 Suite: TulerButcher failure, EngSpringEnergy, HookeJoint, SensorSpringTorsionalEnergy
+# ============================================================================
+
+def read_fail_tuler_butcher(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/TULER_BUTCHER/mat_ID`` (M273): Tuler-Butcher spall failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/TULER_BUTCHER/{block.user_id}: missing data card", block.source)
+        return
+
+    sigma_spall, k_tb, lambda_tb, d_crit = 1e30, 0.0, 2.0, 1.0
+    ifail_sh, ifail_so, d_max = 1, 1, 1.0
+
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_TULER_BUTCHER_1")
+        sigma_spall = _fval(f1[0], 1e30) if len(f1) > 0 and f1[0].strip() else 1e30
+        k_tb = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        lambda_tb = _fval(f1[2], 2.0) if len(f1) > 2 and f1[2].strip() else 2.0
+        d_crit = _fval(f1[3], 1.0) if len(f1) > 3 and f1[3].strip() else 1.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_TULER_BUTCHER_2")
+            ifail_sh = _ival(f2[0], 1) if len(f2) > 0 and f2[0].strip() else 1
+            ifail_so = _ival(f2[1], 1) if len(f2) > 1 and f2[1].strip() else 1
+            d_max = _fval(f2[2], 1.0) if len(f2) > 2 and f2[2].strip() else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        sigma_spall = float(toks1[0]) if len(toks1) > 0 else 1e30
+        k_tb = float(toks1[1]) if len(toks1) > 1 else 0.0
+        lambda_tb = float(toks1[2]) if len(toks1) > 2 else 2.0
+        d_crit = float(toks1[3]) if len(toks1) > 3 else 1.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            ifail_sh = int(float(toks2[0])) if len(toks2) > 0 else 1
+            ifail_so = int(float(toks2[1])) if len(toks2) > 1 else 1
+            d_max = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    if ifail_sh == 0:
+        ifail_sh = 1
+    if ifail_so == 0:
+        ifail_so = 1
+    if d_max == 0.0:
+        d_max = 1.0
+
+    from ..model.entities import FailTulerButcher
+    model.fail_tuler_butchers[block.user_id] = FailTulerButcher(
+        mat_id=block.user_id, title=title,
+        sigma_spall=sigma_spall, k_tb=k_tb, lambda_tb=lambda_tb, d_crit=d_crit,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, d_max=d_max
+    )
+
+
+def read_eng_spring_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/SPRING_ENERGY`` or ``/ENG/SPR_ENERGY`` (M273): Engine spring energy history tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/SPRING_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_spring, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_SPRING_ENERGY_1")
+        dt_spring = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_spring = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngSpringEnergy
+    r_id = block.user_id or (len(model.eng_spring_energies) + 1)
+    model.eng_spring_energies[r_id] = EngSpringEnergy(
+        id=r_id, title=title, dt_spring=dt_spring, sens_id=sens_id
+    )
+
+
+def read_lagmul_hooke_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/HOOKE_JOINT/id`` or ``/LAGMUL/HOOKE_JOINT/id`` (M273): Hooke (universal/Cardan) joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/HOOKE_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("HOOKE_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("HOOKE_JOINT_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2])) if len(toks1) > 2 else 0
+        stiff = float(toks1[3]) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4])) if len(toks1) > 4 else 0
+        tol = float(toks1[5]) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulHookeJoint
+    model.lagmul_hooke_joints[block.user_id] = LagmulHookeJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+
+
+def read_sensor_spring_torsional_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TORSIONAL_ENERGY`` or ``/SENSOR/SPRING_TORS_ENERGY`` (M273): Spring element torsional energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TORSIONAL_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, u_tors_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_TORSIONAL_ENERGY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        u_tors_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        u_tors_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTorsionalEnergy, Sensor
+    sste = SensorSpringTorsionalEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        u_tors_max=u_tors_max, t_delay=t_delay
+    )
+    model.sensor_spring_torsional_energies[sste.id] = sste
+    model.sensors.append(Sensor(
+        id=sste.id, kind="SPRING_TORSIONAL_ENERGY", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -52210,6 +52364,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_COUP_ENERGY": read_sensor_spring_coupling_energy,
     "SENSOR_SPRING_COUPLE_ENERGY": read_sensor_spring_coupling_energy,
     "SENSOR_COUPLING_ENERGY_SPRING": read_sensor_spring_coupling_energy,
+    # --- M273: Tuler-Butcher Spall Failure Model, Engine Spring Energy Output Directive, Hooke Joint Suite, and Spring Torsional Energy Sensor ---
+    "FAIL_TULER_BUTCHER": read_fail_tuler_butcher,
+    "FAIL_TULER_BUTCHER_SPALL": read_fail_tuler_butcher,
+    "FAIL_TB_SPALL": read_fail_tuler_butcher,
+    "FAIL_TULER_SPALL": read_fail_tuler_butcher,
+    "FAIL_BUTCHER_SPALL": read_fail_tuler_butcher,
+    "ENG_SPRING_ENERGY": read_eng_spring_energy,
+    "ENG_SPR_ENERGY": read_eng_spring_energy,
+    "ENG_SPRING_WORK": read_eng_spring_energy,
+    "ENG_ESPR": read_eng_spring_energy,
+    "ENG_SPRING_ENER": read_eng_spring_energy,
+    "LAGMUL_HOOKE_JOINT": read_lagmul_hooke_joint,
+    "HOOKE_JOINT": read_lagmul_hooke_joint,
+    "LAGMUL_HOOKE_COUPLING": read_lagmul_hooke_joint,
+    "HOOKE_COUPLING": read_lagmul_hooke_joint,
+    "HOOKE_MECHANISM": read_lagmul_hooke_joint,
+    "SENSOR_SPRING_TORSIONAL_ENERGY": read_sensor_spring_torsional_energy,
+    "SENSOR_SPRING_TORS_ENERGY": read_sensor_spring_torsional_energy,
+    "SENSOR_SPRING_TWIST_ENERGY": read_sensor_spring_torsional_energy,
+    "SENSOR_TORSIONAL_ENERGY_SPRING": read_sensor_spring_torsional_energy,
 }
 
 

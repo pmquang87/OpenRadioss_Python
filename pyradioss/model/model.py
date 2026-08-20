@@ -1822,6 +1822,12 @@ class Model:
         self.lagmul_tripod_joints: Dict[int, Any] = {}               # /TRIPOD_JOINT, /LAGMUL/TRIPOD_JOINT (M272)
         self.sensor_spring_coupling_energies: Dict[int, Any] = {}    # /SENSOR/SPRING_COUPLING_ENERGY (M272)
 
+        # M273 Entities
+        self.fail_tuler_butchers: Dict[int, Any] = {}                # /FAIL/TULER_BUTCHER (M273)
+        self.eng_spring_energies: Dict[int, Any] = {}                # /ENG/SPRING_ENERGY (M273)
+        self.lagmul_hooke_joints: Dict[int, Any] = {}                # /HOOKE_JOINT, /LAGMUL/HOOKE_JOINT (M273)
+        self.sensor_spring_torsional_energies: Dict[int, Any] = {}   # /SENSOR/SPRING_TORSIONAL_ENERGY (M273)
+
 
 
 

@@ -14847,6 +14847,59 @@ class SensorSpringCouplingEnergy:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M273 Suite: TulerButcher failure, EngSpringEnergy, HookeJoint, SensorSpringTorsionalEnergy
+# ============================================================================
+
+@dataclass
+class FailTulerButcher:
+    """``/FAIL/TULER_BUTCHER/mat_ID`` (M273): Tuler-Butcher spall failure model."""
+    mat_id: int = 1
+    title: str = ""
+    sigma_spall: float = 1e30   # spall stress threshold
+    k_tb: float = 0.0           # Tuler-Butcher damage coefficient K
+    lambda_tb: float = 2.0      # Tuler-Butcher stress exponent lambda
+    d_crit: float = 1.0         # critical cumulative damage for element deletion
+    ifail_sh: int = 1           # shell deletion flag (1=one layer, 2=all layers)
+    ifail_so: int = 1           # solid element deletion flag
+    d_max: float = 1.0          # maximum accumulated damage threshold
+
+
+@dataclass
+class EngSpringEnergy:
+    """``/ENG/SPRING_ENERGY`` or ``/ENG/SPR_ENERGY`` (M273): Engine spring energy history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_spring: float = 0.0     # time frequency for spring energy output
+    sens_id: int = 0            # sensor activation ID
+
+
+@dataclass
+class LagmulHookeJoint:
+    """``/HOOKE_JOINT/id`` or ``/LAGMUL/HOOKE_JOINT/id`` (M273): Hooke (universal/Cardan) joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0              # driving cross pin node
+    node2: int = 0              # driven cross pin node
+    node3: int = 0              # spider/cross center node
+    stiff: float = 1e6          # kinematic constraint contact stiffness
+    skew_id: int = 0            # reference coordinate frame ID
+    tol: float = 1e-6           # constraint numerical tolerance
+    axis_x: float = 0.0         # shaft rotation axis vector X
+    axis_y: float = 0.0         # shaft rotation axis vector Y
+    axis_z: float = 1.0         # shaft rotation axis vector Z
+
+
+@dataclass
+class SensorSpringTorsionalEnergy:
+    """``/SENSOR/SPRING_TORSIONAL_ENERGY`` or ``/SENSOR/SPRING_TORS_ENERGY`` (M273): Spring element torsional energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0          # spring element ID to monitor
+    u_tors_max: float = 1e30    # maximum torsional energy threshold
+    t_delay: float = 0.0        # activation delay time
+
+
 
 
 
