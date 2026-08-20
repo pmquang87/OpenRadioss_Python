@@ -1840,6 +1840,12 @@ class Model:
         self.lagmul_thompson_couplings: Dict[int, Any] = {}          # /THOMPSON_COUPLING, /LAGMUL/THOMPSON_COUPLING (M275)
         self.sensor_spring_pinching_energies: Dict[int, Any] = {}    # /SENSOR/SPRING_PINCHING_ENERGY (M275)
 
+        # M276 Entities
+        self.fail_freudenthals: Dict[int, Any] = {}                  # /FAIL/FREUDENTHAL (M276)
+        self.eng_surf_energies: Dict[int, Any] = {}                  # /ENG/SURF_ENERGY (M276)
+        self.lagmul_weiss_joints: Dict[int, Any] = {}                # /WEISS_JOINT, /LAGMUL/WEISS_JOINT (M276)
+        self.sensor_spring_friction_energies: Dict[int, Any] = {}    # /SENSOR/SPRING_FRICTION_ENERGY (M276)
+
 
 
 

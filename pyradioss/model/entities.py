@@ -15006,6 +15006,58 @@ class SensorSpringPinchingEnergy:
     t_delay: float = 0.0        # activation delay time
 
 
+# ============================================================================
+# M276 Suite: Freudenthal failure, EngSurfEnergy, WeissJoint, SensorSpringFrictionEnergy
+# ============================================================================
+
+@dataclass
+class FailFreudenthal:
+    """``/FAIL/FREUDENTHAL/mat_ID`` (M276): Freudenthal critical plastic work ductile failure model."""
+    mat_id: int = 1
+    title: str = ""
+    w_crit: float = 1e30        # critical plastic work density threshold
+    sigma_cut: float = 1e30     # tensile cutoff stress limit
+    eps_p_min: float = 0.0      # minimum plastic strain threshold to accumulate work
+    ifail_sh: int = 1           # shell deletion flag (1=one layer, 2=all layers)
+    ifail_so: int = 1           # solid element deletion flag
+    d_max: float = 1.0          # maximum accumulated damage threshold
+
+
+@dataclass
+class EngSurfEnergy:
+    """``/ENG/SURF_ENERGY`` or ``/ENG/SURF_WORK`` (M276): Engine surface boundary pressure / traction work tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_surf: float = 0.0       # time frequency for surface energy output
+    sens_id: int = 0            # sensor activation ID
+
+
+@dataclass
+class LagmulWeissJoint:
+    """``/WEISS_JOINT/id`` or ``/LAGMUL/WEISS_JOINT/id`` (M276): Weiss constant-velocity ball-and-groove joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0              # driving yoke node
+    node2: int = 0              # driven yoke node
+    node3: int = 0              # ball groove center node
+    stiff: float = 1e6          # kinematic constraint contact stiffness
+    skew_id: int = 0            # reference coordinate frame ID
+    tol: float = 1e-6           # constraint numerical tolerance
+    axis_x: float = 0.0         # shaft rotation axis vector X
+    axis_y: float = 0.0         # shaft rotation axis vector Y
+    axis_z: float = 1.0         # shaft rotation axis vector Z
+
+
+@dataclass
+class SensorSpringFrictionEnergy:
+    """``/SENSOR/SPRING_FRICTION_ENERGY`` or ``/SENSOR/SPRING_FRICT_ENERGY`` (M276): Spring element frictional sliding dissipation energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0          # spring element ID to monitor
+    u_frict_max: float = 1e30   # maximum friction dissipation energy threshold
+    t_delay: float = 0.0        # activation delay time
+
+
 
 
 
