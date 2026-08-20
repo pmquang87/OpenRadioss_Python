@@ -1867,6 +1867,11 @@ class Model:
         self.lagmul_slider_slot_joints: Dict[int, Any] = {}          # /SLIDER_SLOT_JOINT, /LAGMUL/SLIDER_SLOT_JOINT (M280)
         self.sensor_spring_translational_works: Dict[int, Any] = {}  # /SENSOR/SPRING_TRANSLATIONAL_WORK (M280)
 
+        # M281 Entities
+        self.eng_xfem_energies: Dict[int, Any] = {}                  # /ENG/XFEM_ENERGY, /ENG/XFEM_WORK (M281)
+        self.lagmul_parallel_axis_joints: Dict[int, Any] = {}        # /PARALLEL_AXIS_JOINT, /LAGMUL/PARALLEL_AXIS_JOINT (M281)
+        self.sensor_spring_shear_works: Dict[int, Any] = {}          # /SENSOR/SPRING_SHEAR_WORK (M281)
+
 
 
 

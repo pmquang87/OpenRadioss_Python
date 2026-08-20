@@ -15185,6 +15185,45 @@ class SensorSpringTranslationalWork:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M281 Suite: Cockcroft failure, EngXfemEnergy, ParallelAxisJoint, SensorSpringShearWork
+# ============================================================================
+
+@dataclass
+class EngXfemEnergy:
+    """``/ENG/XFEM_ENERGY`` or ``/ENG/XFEM_WORK`` (M281): Engine XFEM crack propagation and cohesive zone work tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_xfem: float = 0.0         # time frequency for XFEM energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulParallelAxisJoint:
+    """``/PARALLEL_AXIS_JOINT/id`` or ``/LAGMUL/PARALLEL_AXIS_JOINT/id`` (M281): Parallel-axis slider / Oldham coupling kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # driving axis hub node
+    node2: int = 0               # driven parallel axis hub node
+    node3: int = 0               # intermediate floating slider disc node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # parallel shaft alignment axis vector X
+    axis_y: float = 0.0          # parallel shaft alignment axis vector Y
+    axis_z: float = 1.0          # parallel shaft alignment axis vector Z
+
+
+@dataclass
+class SensorSpringShearWork:
+    """``/SENSOR/SPRING_SHEAR_WORK`` or ``/SENSOR/SPRING_SHR_WORK`` (M281): Spring element transverse shear work energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    w_shear_max: float = 1e30    # maximum cumulative transverse shear work energy threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
