@@ -14688,6 +14688,59 @@ class SensorSpringShearEnergy:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M270 Suite: HosfordCoulomb failure, EngBulkViscosity, RzeppaJoint, SensorSpringAxialEnergy
+# ============================================================================
+
+@dataclass
+class FailHosfordCoulomb:
+    """``/FAIL/HOSFORD_COULOMB/mat_ID`` (M270): Hosford-Coulomb ductile fracture failure model."""
+    mat_id: int = 1
+    title: str = ""
+    a_hc: float = 0.0            # Hosford exponent (a >= 1)
+    b_hc: float = 0.0            # friction coefficient b
+    c_hc: float = 0.0            # cohesion strength c
+    n_hc: float = 0.0            # damage exponent n
+    ifail_sh: int = 1            # shell deletion flag (1=one layer fails, 2=all layers fail)
+    ifail_so: int = 1            # solid element deletion flag
+    d_max: float = 1.0           # maximum accumulated damage threshold
+
+
+@dataclass
+class EngBulkViscosity:
+    """``/ENG/BULK_VISCOSITY`` or ``/ENG/Q_VISC`` (M270): Engine bulk viscosity energy history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_qvisc: float = 0.0       # time frequency for bulk viscosity energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulRzeppaJoint:
+    """``/RZEPPA_JOINT/id`` or ``/LAGMUL/RZEPPA_JOINT/id`` (M270): Rzeppa constant-velocity ball joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # driving input shaft node
+    node2: int = 0               # driven output shaft node
+    node3: int = 0               # ball cage center node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # shaft rotation axis vector X
+    axis_y: float = 0.0          # shaft rotation axis vector Y
+    axis_z: float = 1.0          # shaft rotation axis vector Z
+
+
+@dataclass
+class SensorSpringAxialEnergy:
+    """``/SENSOR/SPRING_AXIAL_ENERGY`` or ``/SENSOR/SPRING_AX_ENERGY`` (M270): Spring element axial elastic deformation energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    u_axial_max: float = 1e30    # maximum axial energy threshold (1/2*K_a*eps_a^2)
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

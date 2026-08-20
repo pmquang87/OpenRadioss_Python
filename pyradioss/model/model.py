@@ -1804,6 +1804,12 @@ class Model:
         self.lagmul_schmidt_couplings: Dict[int, Any] = {}           # /SCHMIDT_COUPLING, /LAGMUL/SCHMIDT_COUPLING (M269)
         self.sensor_spring_shear_energies: Dict[int, Any] = {}       # /SENSOR/SPRING_SHEAR_ENERGY (M269)
 
+        # M270 Entities
+        self.fail_hosford_coulombs: Dict[int, Any] = {}              # /FAIL/HOSFORD_COULOMB (M270)
+        self.eng_bulk_viscosities: Dict[int, Any] = {}               # /ENG/BULK_VISCOSITY (M270)
+        self.lagmul_rzeppa_joints: Dict[int, Any] = {}               # /RZEPPA_JOINT, /LAGMUL/RZEPPA_JOINT (M270)
+        self.sensor_spring_axial_energies: Dict[int, Any] = {}       # /SENSOR/SPRING_AXIAL_ENERGY (M270)
+
 
 
 
