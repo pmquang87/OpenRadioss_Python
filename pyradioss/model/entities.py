@@ -14635,6 +14635,59 @@ class SensorSpringVolumetricEnergy:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M269 Suite: DruckerPrager failure, EngStrainRate, SchmidtCoupling, SensorSpringShearEnergy
+# ============================================================================
+
+@dataclass
+class FailDruckerPrager:
+    """``/FAIL/DRUCKER_PRAGER/mat_ID`` (M269): Drucker-Prager pressure-dependent yield failure model."""
+    mat_id: int = 1
+    title: str = ""
+    alpha: float = 0.0           # pressure sensitivity coefficient
+    k_dp: float = 0.0            # initial yield threshold in sqrt(J2) space
+    tens_limit: float = 1e30     # tensile meridian cutoff stress
+    comp_limit: float = 1e30     # compressive meridian cutoff stress
+    ifail_sh: int = 1            # shell deletion flag (1=one layer fails, 2=all layers fail)
+    ifail_so: int = 1            # solid element deletion flag
+    d_max: float = 1.0           # maximum accumulated damage threshold
+
+
+@dataclass
+class EngStrainRate:
+    """``/ENG/STRAIN_RATE`` or ``/ENG/EPSDOT`` (M269): Engine strain rate history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_epsdot: float = 0.0      # time frequency for strain rate output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulSchmidtCoupling:
+    """``/SCHMIDT_COUPLING/id`` or ``/LAGMUL/SCHMIDT_COUPLING/id`` (M269): Schmidt (double-Cardan) coupling constant-velocity shaft joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # driving input shaft node
+    node2: int = 0               # driven output shaft node
+    node3: int = 0               # intermediate linkage center node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # shaft rotation axis vector X
+    axis_y: float = 0.0          # shaft rotation axis vector Y
+    axis_z: float = 1.0          # shaft rotation axis vector Z
+
+
+@dataclass
+class SensorSpringShearEnergy:
+    """``/SENSOR/SPRING_SHEAR_ENERGY`` or ``/SENSOR/SPRING_SH_ENERGY`` (M269): Spring element shear elastic deformation energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    u_shear_max: float = 1e30    # maximum shear energy threshold (1/2*K_s*gamma^2)
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

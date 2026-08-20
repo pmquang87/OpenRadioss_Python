@@ -1798,6 +1798,12 @@ class Model:
         self.lagmul_oldham_couplings: Dict[int, Any] = {}            # /OLDHAM_COUPLING, /LAGMUL/OLDHAM_COUPLING (M268)
         self.sensor_spring_volumetric_energies: Dict[int, Any] = {}  # /SENSOR/SPRING_VOLUMETRIC_ENERGY (M268)
 
+        # M269 Entities
+        self.fail_drucker_pragers: Dict[int, Any] = {}               # /FAIL/DRUCKER_PRAGER (M269)
+        self.eng_strain_rates: Dict[int, Any] = {}                   # /ENG/STRAIN_RATE (M269)
+        self.lagmul_schmidt_couplings: Dict[int, Any] = {}           # /SCHMIDT_COUPLING, /LAGMUL/SCHMIDT_COUPLING (M269)
+        self.sensor_spring_shear_energies: Dict[int, Any] = {}       # /SENSOR/SPRING_SHEAR_ENERGY (M269)
+
 
 
 
