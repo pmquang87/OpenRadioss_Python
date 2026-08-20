@@ -15394,6 +15394,60 @@ class SensorSpringAngularVelocity:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M286 Suite: LadStr failure, EngMagneticEnergy, SwashPlateJoint, SensorSpringAngularAcceleration
+# ============================================================================
+
+@dataclass
+class FailLadStr:
+    """``/FAIL/LAD_STR`` or ``/FAIL/LADEVEZE_STRESS`` (M286): Ladevèze stress-based composite damage and ply failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    r0_1: float = 0.0            # initial damage threshold in fiber direction
+    r0_2: float = 0.0            # initial damage threshold in transverse direction
+    rc_1: float = 0.0            # critical damage threshold in fiber direction
+    rc_2: float = 0.0            # critical damage threshold in transverse direction
+    b_lad: float = 0.0           # shear coupling parameter
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngMagneticEnergy:
+    """``/ENG/MAGNETIC_ENERGY`` or ``/ENG/MAGNETIC_WORK`` (M286): Engine electromagnetic magnetic field energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_mag: float = 0.0          # time frequency for magnetic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulSwashPlateJoint:
+    """``/SWASH_PLATE_JOINT/id`` or ``/LAGMUL/SWASH_PLATE_JOINT/id`` (M286): Swash plate cyclic tilting and rotating kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # rotating swash plate ring node
+    node2: int = 0               # non-rotating stationary swash plate ring node
+    node3: int = 0               # mast / drive shaft frame support node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    plate_radius: float = 0.0    # swash plate pitch radius
+    tilt_angle: float = 0.0      # nominal cyclic pitch tilt angle (degrees)
+    axis_z: float = 1.0          # rotor mast rotation axis vector Z
+
+
+@dataclass
+class SensorSpringAngularAcceleration:
+    """``/SENSOR/SPRING_ANGULAR_ACCELERATION`` or ``/SENSOR/SPRING_ANG_ACC`` (M286): Spring element relative angular acceleration threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    alpha_max: float = 1e30      # maximum angular acceleration magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

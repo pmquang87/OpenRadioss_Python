@@ -1893,6 +1893,12 @@ class Model:
         self.lagmul_cable_pulley_joints: Dict[int, Any] = {}         # /CABLE_PULLEY_JOINT, /LAGMUL/CABLE_PULLEY_JOINT (M285)
         self.sensor_spring_angular_velocities: Dict[int, Any] = {}   # /SENSOR/SPRING_ANGULAR_VELOCITY (M285)
 
+        # M286 Entities
+        self.fail_ladstrs: Dict[int, Any] = {}                       # /FAIL/LAD_STR (M286)
+        self.eng_magnetic_energies: Dict[int, Any] = {}              # /ENG/MAGNETIC_ENERGY (M286)
+        self.lagmul_swash_plate_joints: Dict[int, Any] = {}          # /SWASH_PLATE_JOINT, /LAGMUL/SWASH_PLATE_JOINT (M286)
+        self.sensor_spring_angular_accelerations: Dict[int, Any] = {} # /SENSOR/SPRING_ANGULAR_ACCELERATION (M286)
+
 
 
 

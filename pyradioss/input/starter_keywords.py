@@ -2316,6 +2316,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("LOU_HUO", "FAIL_LOU_HUO", "LOU_HUO_YANG", "LOUHUO", "LOU_HUO_MODEL", "LOU_HUO_LAW"):
         read_fail_lou_huo(block, model, log)
         return
+    if kind in ("LAD_STR", "FAIL_LAD_STR", "LADEVEZE_STRESS", "LAD_STR_MODEL", "LAD_STR_LAW", "LADEVEZE_STRESS_DAMAGE"):
+        read_fail_lad_str(block, model, log)
+        return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
@@ -51946,6 +51949,154 @@ def read_sensor_spring_angular_velocity(block: KeywordBlock, model: Model, log: 
     ))
 
 
+# ============================================================================
+# M286 Suite: LadStr failure, EngMagneticEnergy, SwashPlateJoint, SensorSpringAngularAcceleration
+# ============================================================================
+
+def read_fail_lad_str(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_STR/mat_ID`` or ``/FAIL/LADEVEZE_STRESS`` (M286): Ladevèze stress-based composite damage and ply failure criterion."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_STR/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_STR_1")
+        r0_1 = _fval(c1[0]) if len(c1) > 0 else 0.0
+        r0_2 = _fval(c1[1]) if len(c1) > 1 else 0.0
+        rc_1 = _fval(c1[2]) if len(c1) > 2 else 0.0
+        rc_2 = _fval(c1[3]) if len(c1) > 3 else 0.0
+        b_lad = _fval(c1[4]) if len(c1) > 4 else 0.0
+        c2 = cards[1].cut("FAIL_LAD_STR_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        r0_1 = float(t1[0].rstrip(',')) if len(t1) > 0 else 0.0
+        r0_2 = float(t1[1].rstrip(',')) if len(t1) > 1 else 0.0
+        rc_1 = float(t1[2].rstrip(',')) if len(t1) > 2 else 0.0
+        rc_2 = float(t1[3].rstrip(',')) if len(t1) > 3 else 0.0
+        b_lad = float(t1[4].rstrip(',')) if len(t1) > 4 else 0.0
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "r0_1": r0_1, "r0_2": r0_2, "rc_1": rc_1, "rc_2": rc_2, "b_lad": b_lad,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadStr, FailureModel
+    model.fail_ladstrs[mat_id] = FailLadStr(
+        mat_id=mat_id, title=title, r0_1=r0_1, r0_2=r0_2, rc_1=rc_1, rc_2=rc_2, b_lad=b_lad,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_STR", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_magnetic_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/MAGNETIC_ENERGY`` or ``/ENG/MAGNETIC_WORK`` (M286): Engine electromagnetic magnetic field energy tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/MAGNETIC_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_mag, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_MAGNETIC_ENERGY_1")
+        dt_mag = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_mag = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngMagneticEnergy
+    r_id = block.user_id or (len(model.eng_magnetic_energies) + 1)
+    model.eng_magnetic_energies[r_id] = EngMagneticEnergy(
+        id=r_id, title=title, dt_mag=dt_mag, sens_id=sens_id
+    )
+
+
+def read_lagmul_swash_plate_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SWASH_PLATE_JOINT/id`` or ``/LAGMUL/SWASH_PLATE_JOINT/id`` (M286): Swash plate cyclic tilting and rotating kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SWASH_PLATE_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    plate_radius, tilt_angle, axis_z = 0.0, 0.0, 1.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("SWASH_PLATE_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("SWASH_PLATE_JOINT_2")
+            plate_radius = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            tilt_angle = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 and f2[2].strip() else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            plate_radius = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            tilt_angle = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulSwashPlateJoint
+    model.lagmul_swash_plate_joints[block.user_id] = LagmulSwashPlateJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        plate_radius=plate_radius, tilt_angle=tilt_angle, axis_z=axis_z
+    )
+
+
+def read_sensor_spring_angular_acceleration(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_ANGULAR_ACCELERATION`` or ``/SENSOR/SPRING_ANG_ACC`` (M286): Spring element relative angular acceleration threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_ANGULAR_ACCELERATION/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, alpha_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_ANGULAR_ACCELERATION_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        alpha_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        alpha_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringAngularAcceleration, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_angular_accelerations) + 1)
+    ssaa = SensorSpringAngularAcceleration(
+        id=s_id, title=title, spring_id=spring_id,
+        alpha_max=alpha_max, t_delay=t_delay
+    )
+    model.sensor_spring_angular_accelerations[s_id] = ssaa
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_ANGULAR_ACCELERATION", tdelay=t_delay
+    ))
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -55048,6 +55199,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_ANG_VEL": read_sensor_spring_angular_velocity,
     "SENSOR_SPRING_OMEGA": read_sensor_spring_angular_velocity,
     "SENSOR_ANGULAR_VELOCITY_SPRING": read_sensor_spring_angular_velocity,
+    # --- M286: LadStr Failure Model, Engine Magnetic Energy Output Directive, Swash Plate Joint Suite, and Spring Angular Acceleration Sensor ---
+    "FAIL_LAD_STR": read_fail_lad_str,
+    "FAIL_LADEVEZE_STRESS": read_fail_lad_str,
+    "FAIL_LAD_STR_MODEL": read_fail_lad_str,
+    "FAIL_LAD_STR_LAW": read_fail_lad_str,
+    "FAIL_LADEVEZE_STRESS_DAMAGE": read_fail_lad_str,
+    "ENG_MAGNETIC_ENERGY": read_eng_magnetic_energy,
+    "ENG_MAGNETIC_WORK": read_eng_magnetic_energy,
+    "ENG_EMAGNETIC": read_eng_magnetic_energy,
+    "ENG_MAG_ENERGY": read_eng_magnetic_energy,
+    "ENG_ELECTROMAGNETIC_ENERGY": read_eng_magnetic_energy,
+    "LAGMUL_SWASH_PLATE_JOINT": read_lagmul_swash_plate_joint,
+    "SWASH_PLATE_JOINT": read_lagmul_swash_plate_joint,
+    "LAGMUL_SWASH_PLATE": read_lagmul_swash_plate_joint,
+    "SWASH_PLATE": read_lagmul_swash_plate_joint,
+    "SWASH_PLATE_MECHANISM": read_lagmul_swash_plate_joint,
+    "SENSOR_SPRING_ANGULAR_ACCELERATION": read_sensor_spring_angular_acceleration,
+    "SENSOR_SPRING_ANG_ACC": read_sensor_spring_angular_acceleration,
+    "SENSOR_SPRING_ALPHA": read_sensor_spring_angular_acceleration,
+    "SENSOR_ANGULAR_ACCELERATION_SPRING": read_sensor_spring_angular_acceleration,
 }
 
 
