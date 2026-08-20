@@ -1846,6 +1846,12 @@ class Model:
         self.lagmul_weiss_joints: Dict[int, Any] = {}                # /WEISS_JOINT, /LAGMUL/WEISS_JOINT (M276)
         self.sensor_spring_friction_energies: Dict[int, Any] = {}    # /SENSOR/SPRING_FRICTION_ENERGY (M276)
 
+        # M277 Entities
+        self.fail_alters: Dict[int, Any] = {}                        # /FAIL/ALTER (M277)
+        self.eng_heat_exchanges: Dict[int, Any] = {}                 # /ENG/HEAT_EXCHANGE (M277)
+        self.lagmul_tripod_ball_joints: Dict[int, Any] = {}          # /TRIPOD_BALL_JOINT, /LAGMUL/TRIPOD_BALL_JOINT (M277)
+        self.sensor_spring_thermal_dissipations: Dict[int, Any] = {} # /SENSOR/SPRING_THERMAL_DISSIPATION (M277)
+
 
 
 

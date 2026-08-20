@@ -14999,6 +14999,70 @@ class SensorSpringFrictionEnergy:
     t_delay: float = 0.0        # activation delay time
 
 
+# ============================================================================
+# M277 Suite: Alter failure, EngHeatExchange, TripodBallJoint, SensorSpringThermalDissipation
+# ============================================================================
+
+@dataclass
+class FailAlter:
+    """``/FAIL/ALTER/mat_ID`` (M277): Alter subcritical crack growth failure model for glass / brittle materials."""
+    mat_id: int = 1
+    title: str = ""
+    exp_n: float = 1.0           # crack growth exponent for subcritical crack growth
+    v0: float = 0.0              # crack growth velocity at KIC
+    vc: float = 1e30             # maximum crack propagation velocity
+    ema: int = 0                 # stress filtering period in cycles (NCYCLES)
+    irate: int = 0               # stress filtering method
+    iside: int = 0               # strain rate dependency flag on air/foil side
+    mode: int = 0                # failure propagation model switch flag
+    cr_foil: float = 0.0         # crack depth at PVB / foil surface
+    cr_air: float = 0.0          # crack depth at air surface
+    cr_core: float = 0.0         # crack depth in core integration points
+    cr_edge: float = 0.0         # crack depth exposed surface
+    kic: float = 1e30            # fracture toughness
+    kth: float = 0.0             # fatigue threshold
+    rlen: float = 0.0            # reference length
+    tdel: float = 0.0            # time delay of stress relaxation
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    d_max: float = 1.0           # maximum damage threshold
+
+
+@dataclass
+class EngHeatExchange:
+    """``/ENG/HEAT_EXCHANGE`` or ``/ENG/HEAT_ENERGY`` (M277): Engine heat exchange / thermal dissipation energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_heat: float = 0.0         # time frequency for heat exchange energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulTripodBallJoint:
+    """``/TRIPOD_BALL_JOINT/id`` or ``/LAGMUL/TRIPOD_BALL_JOINT/id`` (M277): Tripod-ball kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # driving tulip hub node
+    node2: int = 0               # driven tripod spider node
+    node3: int = 0               # ball sphere center node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # shaft rotation axis vector X
+    axis_y: float = 0.0          # shaft rotation axis vector Y
+    axis_z: float = 1.0          # shaft rotation axis vector Z
+
+
+@dataclass
+class SensorSpringThermalDissipation:
+    """``/SENSOR/SPRING_THERMAL_DISSIPATION`` or ``/SENSOR/SPRING_THERM_DISS`` (M277): Spring element thermal dissipation / heat energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    u_therm_max: float = 1e30    # maximum thermal dissipation energy threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
