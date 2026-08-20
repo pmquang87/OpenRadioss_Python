@@ -14953,6 +14953,61 @@ class SensorSpringBendingEnergy:
     t_delay: float = 0.0        # activation delay time
 
 
+# ============================================================================
+# M275 Suite: Oyane failure, EngRwallEnergy, ThompsonCoupling, SensorSpringPinchingEnergy
+# ============================================================================
+
+@dataclass
+class FailOyane:
+    """``/FAIL/OYANE/mat_ID`` (M275): Oyane porous ductile fracture failure model."""
+    mat_id: int = 1
+    title: str = ""
+    c_oyane: float = 0.0        # critical fracture parameter C
+    b_oyane: float = 0.0        # stress triaxiality scale factor B
+    sigma_cut: float = 1e30     # tensile cutoff stress limit
+    eps_p_min: float = 0.0      # minimum plastic strain threshold to accumulate damage
+    ifail_sh: int = 1           # shell deletion flag (1=one layer, 2=all layers)
+    ifail_so: int = 1           # solid element deletion flag
+    d_max: float = 1.0          # maximum accumulated damage threshold
+
+
+@dataclass
+class EngRwallEnergy:
+    """``/ENG/RWALL_ENERGY`` or ``/ENG/RWALL_WORK`` (M275): Engine rigid wall energy history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_rwall: float = 0.0      # time frequency for rigid wall energy output
+    sens_id: int = 0            # sensor activation ID
+
+
+@dataclass
+class LagmulThompsonCoupling:
+    """``/THOMPSON_COUPLING/id`` or ``/LAGMUL/THOMPSON_COUPLING/id`` (M275): Thompson constant-velocity joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0              # driving shaft node
+    node2: int = 0              # driven shaft node
+    node3: int = 0              # spherical linkage / pantograph center node
+    stiff: float = 1e6          # kinematic constraint contact stiffness
+    skew_id: int = 0            # reference coordinate frame ID
+    tol: float = 1e-6           # constraint numerical tolerance
+    axis_x: float = 0.0         # shaft rotation axis vector X
+    axis_y: float = 0.0         # shaft rotation axis vector Y
+    axis_z: float = 1.0         # shaft rotation axis vector Z
+
+
+@dataclass
+class SensorSpringPinchingEnergy:
+    """``/SENSOR/SPRING_PINCHING_ENERGY`` or ``/SENSOR/SPRING_PINCH_ENERGY`` (M275): Spring element transverse pinching / squeeze energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0          # spring element ID to monitor
+    u_pinch_max: float = 1e30   # maximum pinching energy threshold
+    t_delay: float = 0.0        # activation delay time
+
+
+
+
 
 
 

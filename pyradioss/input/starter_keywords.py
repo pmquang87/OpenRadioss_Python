@@ -49641,6 +49641,162 @@ def read_sensor_spring_bending_energy(block: KeywordBlock, model: Model, log: Me
     ))
 
 
+# ============================================================================
+# M275 Suite: Oyane failure, EngRwallEnergy, ThompsonCoupling, SensorSpringPinchingEnergy
+# ============================================================================
+
+def read_fail_oyane(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/OYANE/mat_ID`` (M275): Oyane porous ductile fracture failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/OYANE/{block.user_id}: missing data card", block.source)
+        return
+
+    c_oyane, b_oyane, sigma_cut, eps_p_min = 0.0, 0.0, 1e30, 0.0
+    ifail_sh, ifail_so, d_max = 1, 1, 1.0
+
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_OYANE_1")
+        c_oyane = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        b_oyane = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        sigma_cut = _fval(f1[2], 1e30) if len(f1) > 2 and f1[2].strip() else 1e30
+        eps_p_min = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_OYANE_2")
+            ifail_sh = _ival(f2[0], 1) if len(f2) > 0 and f2[0].strip() else 1
+            ifail_so = _ival(f2[1], 1) if len(f2) > 1 and f2[1].strip() else 1
+            d_max = _fval(f2[2], 1.0) if len(f2) > 2 and f2[2].strip() else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        c_oyane = float(toks1[0]) if len(toks1) > 0 else 0.0
+        b_oyane = float(toks1[1]) if len(toks1) > 1 else 0.0
+        sigma_cut = float(toks1[2]) if len(toks1) > 2 else 1e30
+        eps_p_min = float(toks1[3]) if len(toks1) > 3 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            ifail_sh = int(float(toks2[0])) if len(toks2) > 0 else 1
+            ifail_so = int(float(toks2[1])) if len(toks2) > 1 else 1
+            d_max = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    if ifail_sh == 0:
+        ifail_sh = 1
+    if ifail_so == 0:
+        ifail_so = 1
+    if d_max == 0.0:
+        d_max = 1.0
+
+    from ..model.entities import FailOyane
+    model.fail_oyanes[block.user_id] = FailOyane(
+        mat_id=block.user_id, title=title,
+        c_oyane=c_oyane, b_oyane=b_oyane, sigma_cut=sigma_cut, eps_p_min=eps_p_min,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, d_max=d_max
+    )
+
+
+def read_eng_rwall_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/RWALL_ENERGY`` or ``/ENG/RWALL_WORK`` (M275): Engine rigid wall energy history tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/RWALL_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_rwall, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_RWALL_ENERGY_1")
+        dt_rwall = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_rwall = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngRwallEnergy
+    r_id = block.user_id or (len(model.eng_rwall_energies) + 1)
+    model.eng_rwall_energies[r_id] = EngRwallEnergy(
+        id=r_id, title=title, dt_rwall=dt_rwall, sens_id=sens_id
+    )
+
+
+def read_lagmul_thompson_coupling(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/THOMPSON_COUPLING/id`` or ``/LAGMUL/THOMPSON_COUPLING/id`` (M275): Thompson constant-velocity joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/THOMPSON_COUPLING/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("THOMPSON_COUPLING_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("THOMPSON_COUPLING_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2])) if len(toks1) > 2 else 0
+        stiff = float(toks1[3]) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4])) if len(toks1) > 4 else 0
+        tol = float(toks1[5]) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1]) if len(toks2) > 0 else 0.0
+            axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulThompsonCoupling
+    model.lagmul_thompson_couplings[block.user_id] = LagmulThompsonCoupling(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+
+
+def read_sensor_spring_pinching_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_PINCHING_ENERGY`` or ``/SENSOR/SPRING_PINCH_ENERGY`` (M275): Spring element transverse pinching / squeeze energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_PINCHING_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, u_pinch_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_PINCHING_ENERGY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        u_pinch_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        u_pinch_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringPinchingEnergy, Sensor
+    sspe = SensorSpringPinchingEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        u_pinch_max=u_pinch_max, t_delay=t_delay
+    )
+    model.sensor_spring_pinching_energies[sspe.id] = sspe
+    model.sensors.append(Sensor(
+        id=sspe.id, kind="SPRING_PINCHING_ENERGY", tdelay=t_delay
+    ))
+
+
+
+
 
 
 
@@ -52558,6 +52714,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_BEND_ENERGY": read_sensor_spring_bending_energy,
     "SENSOR_SPRING_FLEX_ENERGY": read_sensor_spring_bending_energy,
     "SENSOR_BENDING_ENERGY_SPRING": read_sensor_spring_bending_energy,
+    # --- M275: Oyane Porous Ductile Fracture Failure Model, Engine Rigid Wall Energy Output Directive, Thompson CV Coupling Joint Suite, and Spring Pinching Energy Sensor ---
+    "FAIL_OYANE": read_fail_oyane,
+    "FAIL_OYANE_MODEL": read_fail_oyane,
+    "FAIL_OYANE_DUCTILE": read_fail_oyane,
+    "FAIL_OYANE_FRACTURE": read_fail_oyane,
+    "FAIL_OYANE_LAW": read_fail_oyane,
+    "ENG_RWALL_ENERGY": read_eng_rwall_energy,
+    "ENG_RWALL_WORK": read_eng_rwall_energy,
+    "ENG_ERWALL": read_eng_rwall_energy,
+    "ENG_RWALL_ENER": read_eng_rwall_energy,
+    "ENG_RWALL_ENG": read_eng_rwall_energy,
+    "LAGMUL_THOMPSON_COUPLING": read_lagmul_thompson_coupling,
+    "THOMPSON_COUPLING": read_lagmul_thompson_coupling,
+    "LAGMUL_THOMPSON_JOINT": read_lagmul_thompson_coupling,
+    "THOMPSON_JOINT": read_lagmul_thompson_coupling,
+    "THOMPSON_MECHANISM": read_lagmul_thompson_coupling,
+    "SENSOR_SPRING_PINCHING_ENERGY": read_sensor_spring_pinching_energy,
+    "SENSOR_SPRING_PINCH_ENERGY": read_sensor_spring_pinching_energy,
+    "SENSOR_SPRING_SQUEEZE_ENERGY": read_sensor_spring_pinching_energy,
+    "SENSOR_PINCHING_ENERGY_SPRING": read_sensor_spring_pinching_energy,
 }
 
 

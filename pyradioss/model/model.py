@@ -1834,6 +1834,12 @@ class Model:
         self.lagmul_tracta_joints: Dict[int, Any] = {}               # /TRACTA_JOINT, /LAGMUL/TRACTA_JOINT (M274)
         self.sensor_spring_bending_energies: Dict[int, Any] = {}     # /SENSOR/SPRING_BENDING_ENERGY (M274)
 
+        # M275 Entities
+        self.fail_oyanes: Dict[int, Any] = {}                        # /FAIL/OYANE (M275)
+        self.eng_rwall_energies: Dict[int, Any] = {}                 # /ENG/RWALL_ENERGY (M275)
+        self.lagmul_thompson_couplings: Dict[int, Any] = {}          # /THOMPSON_COUPLING, /LAGMUL/THOMPSON_COUPLING (M275)
+        self.sensor_spring_pinching_energies: Dict[int, Any] = {}    # /SENSOR/SPRING_PINCHING_ENERGY (M275)
+
 
 
 
