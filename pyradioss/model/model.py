@@ -1762,6 +1762,13 @@ class Model:
         self.lagmul_screw_joints: Dict[int, Any] = {}                # /SCREW_JOINT, /LAGMUL/SCREW_JOINT (M262)
         self.sensor_spring_force_impulses: Dict[int, Any] = {}       # /SENSOR/SPRING_FORCE_IMPULSE (M262)
 
+        # M263 Entities
+        self.fail_gursons: Dict[int, Any] = {}                       # /FAIL/GURSON (M263)
+        self.eng_lode_angles: Dict[int, Any] = {}                    # /ENG/LODE_ANGLE (M263)
+        self.lagmul_differential_gears: Dict[int, Any] = {}          # /DIFFERENTIAL_GEAR, /LAGMUL/DIFFERENTIAL_GEAR (M263)
+        self.sensor_spring_moment_rates: Dict[int, Any] = {}         # /SENSOR/SPRING_MOMENT_RATE (M263)
+
+
 
 
 

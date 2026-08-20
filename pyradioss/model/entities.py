@@ -14304,6 +14304,66 @@ class SensorSpringForceImpulse:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M263 Suite: Gurson failure, EngLodeAngle, DifferentialGear, SensorSpringMomentRate
+# ============================================================================
+
+@dataclass
+class FailGurson:
+    """``/FAIL/GURSON/mat_ID`` (M263): Gurson-Tvergaard-Needleman porous ductile fracture model."""
+    mat_id: int = 1
+    title: str = ""
+    q1: float = 1.5              # first Gurson yield surface damage coefficient
+    q2: float = 1.0              # second Gurson yield surface damage coefficient
+    i_loc: int = 1               # damage formulation flag (1=local, 2=micromorphic, 3=peerlings)
+    eps_n: float = 0.0           # equivalent plastic strain at void nucleation
+    a_s: float = 0.0             # linear void nucleation slope
+    k_w: float = 0.0             # shear damage growth coefficient
+    f_c: float = 0.15            # critical void volume fraction at void coalescence
+    f_r: float = 0.25            # void volume fraction at ductile rupture
+    f_0: float = 0.0             # initial void volume fraction
+    r_len: float = 0.0           # radius of non-local variable influence
+    h_chi: float = 0.0           # non-local penalty parameter
+    le_max: float = 0.0          # maximal element length target for convergence
+
+
+@dataclass
+class EngLodeAngle:
+    """``/ENG/LODE_ANGLE`` or ``/ENG/LODE`` (M263): Engine normalized Lode angle parameter history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_lode: float = 0.0         # time frequency for Lode angle parameter output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulDifferentialGear:
+    """``/DIFFERENTIAL_GEAR/id`` or ``/LAGMUL/DIFFERENTIAL_GEAR/id`` (M263): Differential gear train kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # carrier / pinion input node
+    node2: int = 0               # left axle output node
+    node3: int = 0               # right axle output node
+    ratio: float = 1.0           # final drive differential gear reduction ratio
+    stiff: float = 1e6           # kinematic bevel contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # differential rotation axis vector X
+    axis_y: float = 0.0          # differential rotation axis vector Y
+    axis_z: float = 1.0          # differential rotation axis vector Z
+
+
+@dataclass
+class SensorSpringMomentRate:
+    """``/SENSOR/SPRING_MOMENT_RATE`` or ``/SENSOR/SPRING_DM`` (M263): Spring element moment / torque time-rate threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    dm_max: float = 1e30         # maximum moment rate threshold |dM/dt|
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

@@ -23945,6 +23945,57 @@ def read_lagmul_screw_joint(block: KeywordBlock, model: Model, log: MessageLog) 
     )
 
 
+def read_lagmul_differential_gear(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DIFFERENTIAL_GEAR/id`` or ``/LAGMUL/DIFFERENTIAL_GEAR/id`` (M263): Differential gear train kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/DIFFERENTIAL_GEAR/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, ratio, stiff, skew_id, tol = 0, 0, 0, 1.0, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("DIFFERENTIAL_GEAR_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        ratio = _fval(f1[3], 1.0) if len(f1) > 3 and f1[3].strip() else 1.0
+        stiff = _fval(f1[4], 1e6) if len(f1) > 4 and f1[4].strip() else 1e6
+        skew_id = _ival(f1[5], 0) if len(f1) > 5 else 0
+        tol = _fval(f1[6], 1e-6) if len(f1) > 6 and f1[6].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("DIFFERENTIAL_GEAR_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2])) if len(toks1) > 2 else 0
+        ratio = float(toks1[3]) if len(toks1) > 3 else 1.0
+        stiff = float(toks1[4]) if len(toks1) > 4 else 1e6
+        skew_id = int(float(toks1[5])) if len(toks1) > 5 else 0
+        tol = float(toks1[6]) if len(toks1) > 6 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    if ratio == 0.0:
+        ratio = 1.0
+
+    from ..model.entities import LagmulDifferentialGear
+    model.lagmul_differential_gears[block.user_id] = LagmulDifferentialGear(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        ratio=ratio, stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+
+
 def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -43960,6 +44011,91 @@ def read_fail_puck(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
 
 
+def read_fail_gurson(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/GURSON/mat_ID`` (M263): Gurson-Tvergaard-Needleman porous ductile fracture model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/GURSON/{block.user_id}: missing data card", block.source)
+        return
+
+    q1, q2, i_loc = 1.5, 1.0, 1
+    eps_n, a_s, k_w = 0.0, 0.0, 0.0
+    f_c, f_r, f_0 = 0.15, 0.25, 0.0
+    r_len, h_chi, le_max = 0.0, 0.0, 0.0
+
+    if block.fixed:
+        # Card 1: Q1, Q2, _BLANK_, ILOC
+        f1 = cards[0].cut("FAIL_GURSON_1")
+        q1 = _fval(f1[0], 1.5) if len(f1) > 0 and f1[0].strip() else 1.5
+        q2 = _fval(f1[1], 1.0) if len(f1) > 1 and f1[1].strip() else 1.0
+        i_loc = _ival(f1[3], 1) if len(f1) > 3 and f1[3].strip() else 1
+
+        # Card 2: EPS_N, A_S, K_W
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_GURSON_2")
+            eps_n = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            a_s = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            k_w = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+
+        # Card 3: F_C, F_R, F_0
+        if len(cards) > 2 and not cards[2].is_blank:
+            f3 = cards[2].cut("FAIL_GURSON_3")
+            f_c = _fval(f3[0], 0.15) if len(f3) > 0 and f3[0].strip() else 0.15
+            f_r = _fval(f3[1], 0.25) if len(f3) > 1 and f3[1].strip() else 0.25
+            f_0 = _fval(f3[2], 0.0) if len(f3) > 2 else 0.0
+
+        # Card 4: R_LEN, H_CHI, LE_MAX
+        if len(cards) > 3 and not cards[3].is_blank:
+            f4 = cards[3].cut("FAIL_GURSON_4")
+            r_len = _fval(f4[0], 0.0) if len(f4) > 0 else 0.0
+            h_chi = _fval(f4[1], 0.0) if len(f4) > 1 else 0.0
+            le_max = _fval(f4[2], 0.0) if len(f4) > 2 else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        q1 = float(toks1[0]) if len(toks1) > 0 else 1.5
+        q2 = float(toks1[1]) if len(toks1) > 1 else 1.0
+        i_loc = int(float(toks1[2])) if len(toks1) > 2 else 1
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            eps_n = float(toks2[0]) if len(toks2) > 0 else 0.0
+            a_s = float(toks2[1]) if len(toks2) > 1 else 0.0
+            k_w = float(toks2[2]) if len(toks2) > 2 else 0.0
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            toks3 = cards[2].tokens()
+            f_c = float(toks3[0]) if len(toks3) > 0 else 0.15
+            f_r = float(toks3[1]) if len(toks3) > 1 else 0.25
+            f_0 = float(toks3[2]) if len(toks3) > 2 else 0.0
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            toks4 = cards[3].tokens()
+            r_len = float(toks4[0]) if len(toks4) > 0 else 0.0
+            h_chi = float(toks4[1]) if len(toks4) > 1 else 0.0
+            le_max = float(toks4[2]) if len(toks4) > 2 else 0.0
+
+    if q1 == 0.0:
+        q1 = 1.5
+    if q2 == 0.0:
+        q2 = 1.0
+    if i_loc == 0:
+        i_loc = 1
+    if f_c == 0.0:
+        f_c = 0.15
+    if f_r == 0.0:
+        f_r = 0.25
+
+    from ..model.entities import FailGurson
+    model.fail_gursons[block.user_id] = FailGurson(
+        mat_id=block.user_id, title=title,
+        q1=q1, q2=q2, i_loc=i_loc,
+        eps_n=eps_n, a_s=a_s, k_w=k_w,
+        f_c=f_c, f_r=f_r, f_0=f_0,
+        r_len=r_len, h_chi=h_chi, le_max=le_max
+    )
+
+
+
 
 
 
@@ -47731,6 +47867,61 @@ def read_sensor_spring_force_impulse(block: KeywordBlock, model: Model, log: Mes
     ))
 
 
+def read_eng_lode_angle(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/LODE_ANGLE`` or ``/ENG/LODE`` (M263): Engine normalized Lode angle parameter history tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/LODE_ANGLE/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_lode, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_LODE_ANGLE_1")
+        dt_lode = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_lode = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngLodeAngle
+    r_id = block.user_id or (len(model.eng_lode_angles) + 1)
+    model.eng_lode_angles[r_id] = EngLodeAngle(
+        id=r_id, title=title, dt_lode=dt_lode, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_moment_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_MOMENT_RATE`` or ``/SENSOR/SPRING_DM`` (M263): Spring element moment / torque time-rate threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_MOMENT_RATE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, dm_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_MOMENT_RATE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        dm_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        dm_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringMomentRate, Sensor
+    ssmr = SensorSpringMomentRate(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        dm_max=dm_max, t_delay=t_delay
+    )
+    model.sensor_spring_moment_rates[ssmr.id] = ssmr
+    model.sensors.append(Sensor(
+        id=ssmr.id, kind="SPRING_MOMENT_RATE", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -50403,6 +50594,25 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_IMPULSE": read_sensor_spring_force_impulse,
     "SENSOR_SPRING_J": read_sensor_spring_force_impulse,
     "SENSOR_IMPULSE_SPRING": read_sensor_spring_force_impulse,
+    # --- M263: Gurson Porous Plasticity Failure Model, Engine Lode Angle Output Directive, Differential Gear Joint Suite, and Spring Moment-Rate Sensor ---
+    "FAIL_GURSON": read_fail_gurson,
+    "FAIL_GURSON_MODEL": read_fail_gurson,
+    "FAIL_GURSON_LAW": read_fail_gurson,
+    "FAIL_GTN": read_fail_gurson,
+    "FAIL_GURSON_TVERGAARD_NEEDLEMAN": read_fail_gurson,
+    "ENG_LODE_ANGLE": read_eng_lode_angle,
+    "ENG_LODE": read_eng_lode_angle,
+    "ENG_LODE_PARAM": read_eng_lode_angle,
+    "ENG_LODE_ANGLE_PARAM": read_eng_lode_angle,
+    "LAGMUL_DIFFERENTIAL_GEAR": read_lagmul_differential_gear,
+    "DIFFERENTIAL_GEAR": read_lagmul_differential_gear,
+    "LAGMUL_DIFF_GEAR": read_lagmul_differential_gear,
+    "DIFF_GEAR": read_lagmul_differential_gear,
+    "LAGMUL_DIFFERENTIAL": read_lagmul_differential_gear,
+    "SENSOR_SPRING_MOMENT_RATE": read_sensor_spring_moment_rate,
+    "SENSOR_SPRING_DM": read_sensor_spring_moment_rate,
+    "SENSOR_SPRING_MOMENTRATE": read_sensor_spring_moment_rate,
+    "SENSOR_DM_SPRING": read_sensor_spring_moment_rate,
 }
 
 
