@@ -1882,6 +1882,11 @@ class Model:
         self.lagmul_screw_nut_joints: Dict[int, Any] = {}            # /SCREW_NUT_JOINT, /LAGMUL/SCREW_NUT_JOINT (M283)
         self.sensor_spring_total_forces: Dict[int, Any] = {}         # /SENSOR/SPRING_TOTAL_FORCE (M283)
 
+        # M284 Entities
+        self.eng_internal_pressures: Dict[int, Any] = {}             # /ENG/INTERNAL_PRESSURE, /ENG/INT_PRESSURE (M284)
+        self.lagmul_geneva_joints: Dict[int, Any] = {}               # /GENEVA_JOINT, /LAGMUL/GENEVA_JOINT (M284)
+        self.sensor_spring_total_moments: Dict[int, Any] = {}        # /SENSOR/SPRING_TOTAL_MOMENT (M284)
+
 
 
 

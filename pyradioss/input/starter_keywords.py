@@ -2307,6 +2307,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("INIEVO", "FAIL_INIEVO", "INI_EVO", "INIEVO_MODEL", "INIEVO_LAW", "DAMAGE_INIEVO"):
         read_fail_inievo(block, model, log)
         return
+    if kind in ("LAD_DAMA", "FAIL_LAD_DAMA", "LADEVEZE_DAMAGE", "LAD_DAMA_MODEL", "LAD_DAMA_LAW", "LADEVEZE_DELAMINATION", "LADEVEZE"):
+        read_fail_lad_dama(block, model, log)
+        return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
@@ -40321,9 +40324,6 @@ def read_prop_type43(block: KeywordBlock, model: Model, log: MessageLog) -> None
     model.properties[prop_id] = Property(id=prop_id, type=43, title=title, params=params)
 
 
-def read_fail_lad_dama(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/FAIL/LAD_DAMA`` or ``/FAIL/LADEVEZE`` (M189): Ladevèze damage failure model."""
-    read_fail(block, model, log)
 
 
 def read_fail_puck(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -51633,6 +51633,170 @@ def read_sensor_spring_total_force(block: KeywordBlock, model: Model, log: Messa
     ))
 
 
+# ============================================================================
+# M284 Suite: LadDama failure, EngInternalPressure, GenevaJoint, SensorSpringTotalMoment
+# ============================================================================
+
+def read_fail_lad_dama(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_DAMA`` or ``/FAIL/LADEVEZE`` (M189/M284): Ladevèze damage failure model."""
+    from ..model.entities import FailLadDama, FailureModel
+    mat_id = block.user_id or 0
+    title, cards = _title_and_data(block)
+    cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    if not cards:
+        log.error(f"/FAIL/LAD_DAMA/{mat_id}: missing data card", block.source)
+        return
+
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_DAMA_1")
+        k1 = _fval(c1[0]) if len(c1) > 0 else 0.0
+        k2 = _fval(c1[1]) if len(c1) > 1 else 0.0
+        k3 = _fval(c1[2]) if len(c1) > 2 else 0.0
+        gamma1 = _fval(c1[3]) if len(c1) > 3 else 0.0
+        gamma2 = _fval(c1[4]) if len(c1) > 4 else 0.0
+        c2 = cards[1].cut("FAIL_LAD_DAMA_2") if len(cards) > 1 and not cards[1].is_blank else []
+        y0 = _fval(c2[0]) if len(c2) > 0 else 0.0
+        yc = _fval(c2[1]) if len(c2) > 1 else 0.0
+        k_lad = _fval(c2[2]) if len(c2) > 2 else 0.0
+        a_dama = _fval(c2[3]) if len(c2) > 3 else 0.0
+        tau_max = _fval(c2[4]) if len(c2) > 4 else 0.0
+        c3 = cards[2].cut("FAIL_LAD_DAMA_3") if len(cards) > 2 and not cards[2].is_blank else []
+        ifail_sh = _ival(c3[0], 1) if len(c3) > 0 else 1
+        ifail_so = _ival(c3[1], 1) if len(c3) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        k1 = float(t1[0].rstrip(',')) if len(t1) > 0 else 0.0
+        k2 = float(t1[1].rstrip(',')) if len(t1) > 1 else 0.0
+        k3 = float(t1[2].rstrip(',')) if len(t1) > 2 else 0.0
+        gamma1 = float(t1[3].rstrip(',')) if len(t1) > 3 else 0.0
+        gamma2 = float(t1[4].rstrip(',')) if len(t1) > 4 else 0.0
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        y0 = float(t2[0].rstrip(',')) if len(t2) > 0 else 0.0
+        yc = float(t2[1].rstrip(',')) if len(t2) > 1 else 0.0
+        k_lad = float(t2[2].rstrip(',')) if len(t2) > 2 else 0.0
+        a_dama = float(t2[3].rstrip(',')) if len(t2) > 3 else 0.0
+        tau_max = float(t2[4].rstrip(',')) if len(t2) > 4 else 0.0
+        t3 = cards[2].tokens() if len(cards) > 2 and not cards[2].is_blank else []
+        ifail_sh = int(float(t3[0].rstrip(','))) if len(t3) > 0 else 1
+        ifail_so = int(float(t3[1].rstrip(','))) if len(t3) > 1 else 1
+    fail_id = 0
+    if len(cards) > 3 and not cards[3].is_blank:
+        fail_id = _ival(cards[3].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[3].tokens()[0].rstrip(',')))
+    params = {
+        "k1": k1, "k2": k2, "k3": k3, "gamma1": gamma1, "gamma2": gamma2,
+        "y0": y0, "yc": yc, "k": k_lad, "a": a_dama, "tau_max": tau_max,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    model.fail_laddamas[mat_id] = FailLadDama(
+        id=fail_id or mat_id, mat_id=mat_id, k1=k1, k2=k2, k3=k3, gamma1=gamma1, gamma2=gamma2,
+        y0=y0, yc=yc, k=k_lad, k_lad=k_lad, a=a_dama, a_dama=a_dama, tau_max=tau_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id
+    )
+    fm = FailureModel(type="LAD_DAMA", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_internal_pressure(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/INTERNAL_PRESSURE`` or ``/ENG/INT_PRESSURE`` (M284): Engine cavity internal pressure tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/INTERNAL_PRESSURE/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_pres, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_INTERNAL_PRESSURE_1")
+        dt_pres = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_pres = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngInternalPressure
+    r_id = block.user_id or (len(model.eng_internal_pressures) + 1)
+    model.eng_internal_pressures[r_id] = EngInternalPressure(
+        id=r_id, title=title, dt_pres=dt_pres, sens_id=sens_id
+    )
+
+
+def read_lagmul_geneva_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/GENEVA_JOINT/id`` or ``/LAGMUL/GENEVA_JOINT/id`` (M284): Geneva wheel / Maltese cross intermittent rotary indexing kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/GENEVA_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    num_slots, crank_radius, axis_z = 4, 0.0, 1.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("GENEVA_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("GENEVA_JOINT_2")
+            num_slots = _ival(f2[0], 4) if len(f2) > 0 else 4
+            crank_radius = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            num_slots = int(float(toks2[0].rstrip(','))) if len(toks2) > 0 else 4
+            crank_radius = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulGenevaJoint
+    model.lagmul_geneva_joints[block.user_id] = LagmulGenevaJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        num_slots=num_slots, crank_radius=crank_radius, axis_z=axis_z
+    )
+
+
+def read_sensor_spring_total_moment(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TOTAL_MOMENT`` or ``/SENSOR/SPRING_TOT_MOMENT`` (M284): Spring element resultant torque/moment magnitude threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TOTAL_MOMENT/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, m_tot_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_TOTAL_MOMENT_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        m_tot_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        m_tot_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTotalMoment, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_total_moments) + 1)
+    sstm = SensorSpringTotalMoment(
+        id=s_id, title=title, spring_id=spring_id,
+        m_tot_max=m_tot_max, t_delay=t_delay
+    )
+    model.sensor_spring_total_moments[s_id] = sstm
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_TOTAL_MOMENT", tdelay=t_delay
+    ))
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -54694,6 +54858,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_TOT_FORCE": read_sensor_spring_total_force,
     "SENSOR_SPRING_FORCE_TOTAL": read_sensor_spring_total_force,
     "SENSOR_TOTAL_FORCE_SPRING": read_sensor_spring_total_force,
+    # --- M284: LadDama Failure Model, Engine Internal Pressure Output Directive, Geneva Joint Suite, and Spring Total Moment Sensor ---
+    "FAIL_LAD_DAMA": read_fail_lad_dama,
+    "FAIL_LADEVEZE": read_fail_lad_dama,
+    "FAIL_LADEVEZE_DAMAGE": read_fail_lad_dama,
+    "FAIL_LAD_DAMA_MODEL": read_fail_lad_dama,
+    "FAIL_LAD_DAMA_LAW": read_fail_lad_dama,
+    "FAIL_LADEVEZE_DELAMINATION": read_fail_lad_dama,
+    "ENG_INTERNAL_PRESSURE": read_eng_internal_pressure,
+    "ENG_INT_PRESSURE": read_eng_internal_pressure,
+    "ENG_EINT_PRES": read_eng_internal_pressure,
+    "ENG_INTERNAL_PRES": read_eng_internal_pressure,
+    "ENG_HYDROSTATIC_INT_PRESSURE": read_eng_internal_pressure,
+    "LAGMUL_GENEVA_JOINT": read_lagmul_geneva_joint,
+    "GENEVA_JOINT": read_lagmul_geneva_joint,
+    "LAGMUL_GENEVA_INDEXING": read_lagmul_geneva_joint,
+    "GENEVA_INDEXING": read_lagmul_geneva_joint,
+    "GENEVA_INDEXING_MECHANISM": read_lagmul_geneva_joint,
+    "SENSOR_SPRING_TOTAL_MOMENT": read_sensor_spring_total_moment,
+    "SENSOR_SPRING_TOT_MOMENT": read_sensor_spring_total_moment,
+    "SENSOR_SPRING_MOMENT_TOTAL": read_sensor_spring_total_moment,
+    "SENSOR_TOTAL_MOMENT_SPRING": read_sensor_spring_total_moment,
 }
 
 

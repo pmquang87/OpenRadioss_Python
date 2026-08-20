@@ -15302,6 +15302,45 @@ class SensorSpringTotalForce:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M284 Suite: LadDama failure, EngInternalPressure, GenevaJoint, SensorSpringTotalMoment
+# ============================================================================
+
+@dataclass
+class EngInternalPressure:
+    """``/ENG/INTERNAL_PRESSURE`` or ``/ENG/INT_PRESSURE`` (M284): Engine cavity internal gas/fluid pressure tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_pres: float = 0.0         # time frequency for internal pressure output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulGenevaJoint:
+    """``/GENEVA_JOINT/id`` or ``/LAGMUL/GENEVA_JOINT/id`` (M284): Geneva wheel / Maltese cross intermittent rotary indexing kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # drive wheel / pin crank spindle node
+    node2: int = 0               # driven Geneva cross slotted wheel node
+    node3: int = 0               # support chassis / housing frame node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    num_slots: int = 4           # number of radial slots in Geneva wheel
+    crank_radius: float = 0.0    # driving crank pin radius
+    axis_z: float = 1.0          # indexing rotational axis vector Z
+
+
+@dataclass
+class SensorSpringTotalMoment:
+    """``/SENSOR/SPRING_TOTAL_MOMENT`` or ``/SENSOR/SPRING_TOT_MOMENT`` (M284): Spring element resultant total torque/moment magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    m_tot_max: float = 1e30      # maximum resultant torque/moment magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
