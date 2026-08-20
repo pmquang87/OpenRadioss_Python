@@ -122,15 +122,23 @@ class Material:
     def G(self) -> float:
         """Shear modulus G = E / 2(1+nu)."""
         if "G" in self.params:
-            return self.params["G"]
+            return float(self.params["G"])
         if "mu" in self.params:
-            return self.params["mu"]
+            mu = self.params["mu"]
+            if isinstance(mu, (int, float)):
+                return float(mu)
+            # LAW42 Ogden: mu is a list of Ogden coefficients —
+            # net shear modulus G0 = sum(mu_p * alpha_p) / 2
+            if isinstance(mu, (list, tuple)) and "alpha" in self.params:
+                return float(sum(m * a for m, a in
+                                 zip(mu, self.params["alpha"])) / 2.0)
+            # fall through to E-based computation
         if "Mu" in self.params:
-            return self.params["Mu"]
+            return float(self.params["Mu"])
         if "c10" in self.params:
-            return 2.0 * self.params["c10"]
+            return 2.0 * float(self.params["c10"])
         if "E" in self.params:
-            return self.params["E"] / (2.0 * (1.0 + self.nu))
+            return float(self.params["E"]) / (2.0 * (1.0 + self.nu))
         return 0.0
 
     @property
@@ -3993,24 +4001,35 @@ class EbcsCyclic:
 
 @dataclass
 class FailRtcl:
-    """/FAIL/RTCL (M125): RTCL ductile failure model.
+    """/FAIL/RTCL: RTCL ductile failure model.
 
     Fortran origin: ``starter/source/materials/fail/fail_rtcl.F`` / CFG ``fail_rtcl.cfg``.
     """
-    mat_id: int
+    mat_id: int = 0
+    title: str = ""
     epscal: float = 0.0
     inst: int = 0
     n: float = 0.0
     fail_id: int = 0
+    ifail_sh: int = 1            # Shell element deletion flag
+
+    @property
+    def n_exp(self) -> float:
+        """Alias: hardening exponent N (M259 name)."""
+        return self.n
+
+    @n_exp.setter
+    def n_exp(self, value: float) -> None:
+        self.n = value
 
 
 @dataclass
 class FailGurson:
-    """/FAIL/GURSON (M125): Gurson-Tvergaard-Needleman porous plasticity failure model.
+    """/FAIL/GURSON: Gurson-Tvergaard-Needleman porous plasticity failure model.
 
     Fortran origin: ``starter/source/materials/fail/fail_gurson.F`` / CFG ``fail_gurson.cfg``.
     """
-    mat_id: int
+    mat_id: int = 0
     q1: float = 0.0
     q2: float = 0.0
     iloc: int = 1
@@ -4029,6 +4048,15 @@ class FailGurson:
     f_n: float = 0.0
     ifail_sh: int = 1
     title: str = ""
+
+    @property
+    def i_loc(self) -> int:
+        """Alias: damage formulation flag (M263 name)."""
+        return self.iloc
+
+    @i_loc.setter
+    def i_loc(self, value: int) -> None:
+        self.iloc = value
 
 
 @dataclass
@@ -4078,11 +4106,12 @@ class FailSahraei:
 
 @dataclass
 class FailSyazwan:
-    """/FAIL/SYAZWAN (M126): Syazwan fracture and damage failure model.
+    """/FAIL/SYAZWAN: Syazwan fracture and damage failure model.
 
     Fortran origin: ``starter/source/materials/fail/fail_syazwan.F`` / CFG ``fail_syazwan.cfg``.
     """
-    mat_id: int
+    mat_id: int = 0
+    title: str = ""
     icard: int = 0
     epfmin: float = 0.0
     coeffs: List[float] = field(default_factory=list)
@@ -4100,16 +4129,17 @@ class FailSyazwan:
     epf_tens: float = 0.0
     epf_plstrn: float = 0.0
     epf_biax: float = 0.0
-    dinit: float = 0.0
+    dinit: int = 0
     dam_sf: float = 0.0
-    max_dam: float = 0.0
+    max_dam: float = 1.0
     inst: int = 0
     iform: int = 0
     n_val: float = 0.0
     softexp: float = 0.0
     reg_func: int = 0
     ref_len: float = 0.0
-    reg_scale: float = 0.0
+    reg_scale: float = 1.0
+    ifail_sh: int = 1
 
 
 @dataclass
@@ -13547,11 +13577,20 @@ class FailLudwik:
 
 @dataclass
 class EngHourglassEnergy:
-    """``/HOURGLASS_ENERGY`` or ``/ENG/HOURGLASS_ENERGY`` (M245): Engine hourglass energy output tracking directive."""
+    """``/HOURGLASS_ENERGY`` or ``/ENG/HOURGLASS_ENERGY``: Engine hourglass energy output tracking directive."""
     id: int = 1
     title: str = ""
     dt_he: float = 0.0       # time frequency for hourglass energy output
     sens_id: int = 0         # sensor activation ID
+
+    @property
+    def dt_hg(self) -> float:
+        """Alias: hourglass energy output time frequency (M271 name)."""
+        return self.dt_he
+
+    @dt_hg.setter
+    def dt_hg(self, value: float) -> None:
+        self.dt_he = value
 
 
 @dataclass
@@ -13578,11 +13617,20 @@ class FailVoce:
 
 @dataclass
 class EngContactEnergy:
-    """``/CONTACT_ENERGY`` or ``/ENG/CONTACT_ENERGY`` (M246): Engine contact energy output tracking directive."""
+    """``/CONTACT_ENERGY`` or ``/ENG/CONTACT_ENERGY``: Engine contact energy output tracking directive."""
     id: int = 1
     title: str = ""
     dt_ce: float = 0.0       # time frequency for contact energy output
     sens_id: int = 0         # sensor activation ID
+
+    @property
+    def dt_contact(self) -> float:
+        """Alias: contact energy output time frequency (M272 name)."""
+        return self.dt_ce
+
+    @dt_contact.setter
+    def dt_contact(self, value: float) -> None:
+        self.dt_ce = value
 
 
 @dataclass
@@ -14062,15 +14110,8 @@ class SensorSpringSoundSpeed:
 # M259 Suite: RTCL failure, EngYieldStress, HarmonicDrive, SensorSpringYield
 # ============================================================================
 
-@dataclass
-class FailRtcl:
-    """``/FAIL/RTCL/mat_ID`` (M259): Rice-Tracey & Cockcroft-Latham combined ductile fracture criterion."""
-    mat_id: int = 1
-    title: str = ""
-    epscal: float = 0.3          # Simple tension failure strain calibrated at reference size
-    inst: int = 2                # Flag for taking into account mesh sensitivity on necking for shells
-    n_exp: float = 0.0           # Hardening exponent N
-    ifail_sh: int = 1            # Shell element deletion flag
+# FailRtcl: canonical definition is above (M125 section) with M259 fields merged in.
+
 
 
 @dataclass
@@ -14172,40 +14213,8 @@ class SensorSpringPlasticWork:
 # M261 Suite: Syazwan failure, EngTemperature, RackPinion, SensorSpringForceRate
 # ============================================================================
 
-@dataclass
-class FailSyazwan:
-    """``/FAIL/SYAZWAN/mat_ID`` (M261): Syazwan Hosford-Coulomb 3D ductile/brittle failure model."""
-    mat_id: int = 1
-    title: str = ""
-    icard: int = 1               # input parameter format flag (1=C1..C6, 2=EPF strain points)
-    epfmin: float = 0.0          # minimal plastic strain at failure
-    # Card 2b: direct constants
-    c1: float = 0.0
-    c2: float = 0.0
-    c3: float = 0.0
-    c4: float = 0.0
-    c5: float = 0.0
-    c6: float = 0.0
-    # Card 2a: strain calibration points
-    epf_comp: float = 0.0        # compression failure plastic strain
-    epf_shear: float = 0.0       # shear failure plastic strain
-    epf_tens: float = 0.0        # tension failure plastic strain
-    epf_plstrn: float = 0.0      # plane strain failure plastic strain
-    epf_biax: float = 0.0        # biaxial tension failure plastic strain
-    # Card 3: Damage initialization
-    dinit: int = 0               # initial damage estimate flag
-    dam_sf: float = 0.0          # damage initialization scale factor
-    max_dam: float = 1.0         # maximal damage value
-    # Card 4: Instability and softening
-    inst: int = 0                # instability flag
-    iform: int = 0               # formulation flag
-    n_val: float = 0.0           # hardening exponent (Hollomon)
-    softexp: float = 0.0         # stress softening exponent
-    # Card 5: Element size regularization
-    reg_func: int = 0            # element size dependency function ID
-    ref_len: float = 0.0         # reference element size
-    reg_scale: float = 1.0       # regularization function scale factor
-    ifail_sh: int = 1            # shell deletion flag
+# FailSyazwan: canonical definition is above (M126 section) with M261 fields merged in.
+
 
 
 @dataclass
@@ -14250,23 +14259,8 @@ class SensorSpringForceRate:
 # M262 Suite: Puck failure, EngStressTri, ScrewJoint, SensorSpringForceImpulse
 # ============================================================================
 
-@dataclass
-class FailPuck:
-    """``/FAIL/PUCK/mat_ID`` (M262): Puck composite 3D action plane failure criterion."""
-    mat_id: int = 1
-    title: str = ""
-    sigma_1t: float = 1e20       # longitudinal tensile strength
-    sigma_2t: float = 1e20       # transverse tensile strength
-    sigma_12: float = 1e20       # in-plane shear strength
-    sigma_1c: float = 1e20       # longitudinal compressive strength
-    sigma_2c: float = 1e20       # transverse compressive strength
-    p12_pos: float = 0.0         # failure envelope factor 12 (+)
-    p12_neg: float = 0.0         # failure envelope factor 12 (-)
-    p22_neg: float = 0.0         # failure envelope factor 22 (-)
-    tau_max: float = 1e20        # dynamic time relaxation
-    ifail_sh: int = 1            # flag for shell failure model (1=layer, 2=all layers)
-    ifail_so: int = 1            # flag for solid failure model (1=integration pt)
-    fcut: float = 0.0            # cutoff frequency for stress tensor
+# FailPuck: canonical definition is above (M126 section).
+
 
 
 @dataclass
@@ -14308,23 +14302,8 @@ class SensorSpringForceImpulse:
 # M263 Suite: Gurson failure, EngLodeAngle, DifferentialGear, SensorSpringMomentRate
 # ============================================================================
 
-@dataclass
-class FailGurson:
-    """``/FAIL/GURSON/mat_ID`` (M263): Gurson-Tvergaard-Needleman porous ductile fracture model."""
-    mat_id: int = 1
-    title: str = ""
-    q1: float = 1.5              # first Gurson yield surface damage coefficient
-    q2: float = 1.0              # second Gurson yield surface damage coefficient
-    i_loc: int = 1               # damage formulation flag (1=local, 2=micromorphic, 3=peerlings)
-    eps_n: float = 0.0           # equivalent plastic strain at void nucleation
-    a_s: float = 0.0             # linear void nucleation slope
-    k_w: float = 0.0             # shear damage growth coefficient
-    f_c: float = 0.15            # critical void volume fraction at void coalescence
-    f_r: float = 0.25            # void volume fraction at ductile rupture
-    f_0: float = 0.0             # initial void volume fraction
-    r_len: float = 0.0           # radius of non-local variable influence
-    h_chi: float = 0.0           # non-local penalty parameter
-    le_max: float = 0.0          # maximal element length target for convergence
+# FailGurson: canonical definition is above (M125 section) with M263 i_loc alias merged in.
+
 
 
 @dataclass
@@ -14467,12 +14446,21 @@ class LagmulTorqueSplitGear:
 
 @dataclass
 class SensorSpringTorsionalEnergy:
-    """``/SENSOR/SPRING_TORSIONAL_ENERGY`` or ``/SENSOR/SPRING_TOR_ENERGY`` (M265): Spring element torsional elastic deformation energy threshold sensor."""
+    """``/SENSOR/SPRING_TORSIONAL_ENERGY``: Spring element torsional elastic deformation energy threshold sensor."""
     id: int = 1
     title: str = ""
     spring_id: int = 0           # spring element ID to monitor
     e_tor_max: float = 1e30      # maximum torsional energy threshold (1/2*K_theta*theta^2)
     t_delay: float = 0.0         # activation delay time
+
+    @property
+    def u_tors_max(self) -> float:
+        """Alias: torsional energy threshold (M273 name)."""
+        return self.e_tor_max
+
+    @u_tors_max.setter
+    def u_tors_max(self, value: float) -> None:
+        self.e_tor_max = value
 
 
 # ============================================================================
@@ -14519,12 +14507,21 @@ class LagmulGenevaDrive:
 
 @dataclass
 class SensorSpringBendingEnergy:
-    """``/SENSOR/SPRING_BENDING_ENERGY`` or ``/SENSOR/SPRING_BEND_ENERGY`` (M266): Spring element bending/flexural elastic deformation energy threshold sensor."""
+    """``/SENSOR/SPRING_BENDING_ENERGY``: Spring element bending/flexural elastic deformation energy threshold sensor."""
     id: int = 1
     title: str = ""
     spring_id: int = 0           # spring element ID to monitor
     e_bend_max: float = 1e30     # maximum bending energy threshold (1/2*K_b*theta_b^2)
     t_delay: float = 0.0         # activation delay time
+
+    @property
+    def u_bend_max(self) -> float:
+        """Alias: bending energy threshold (M274 name)."""
+        return self.e_bend_max
+
+    @u_bend_max.setter
+    def u_bend_max(self, value: float) -> None:
+        self.e_bend_max = value
 
 
 # ============================================================================
@@ -14759,13 +14756,8 @@ class FailBiquadAniso:
     d_max: float = 1.0           # maximum accumulated damage threshold
 
 
-@dataclass
-class EngHourglassEnergy:
-    """``/ENG/HOURGLASS_ENERGY`` or ``/ENG/HG_ENERGY`` (M271): Engine hourglass energy history tracking output directive."""
-    id: int = 1
-    title: str = ""
-    dt_hg: float = 0.0          # time frequency for hourglass energy output
-    sens_id: int = 0             # sensor activation ID
+# EngHourglassEnergy: canonical definition is above (M245 section) with dt_hg alias.
+
 
 
 @dataclass
@@ -14812,13 +14804,8 @@ class FailWilkinsCumulative:
     d_max: float = 1.0           # maximum accumulated damage threshold
 
 
-@dataclass
-class EngContactEnergy:
-    """``/ENG/CONTACT_ENERGY`` or ``/ENG/CNT_ENERGY`` (M272): Engine contact energy history tracking output directive."""
-    id: int = 1
-    title: str = ""
-    dt_contact: float = 0.0     # time frequency for contact energy output
-    sens_id: int = 0             # sensor activation ID
+# EngContactEnergy: canonical definition is above (M246 section) with dt_contact alias.
+
 
 
 @dataclass
@@ -14890,14 +14877,8 @@ class LagmulHookeJoint:
     axis_z: float = 1.0         # shaft rotation axis vector Z
 
 
-@dataclass
-class SensorSpringTorsionalEnergy:
-    """``/SENSOR/SPRING_TORSIONAL_ENERGY`` or ``/SENSOR/SPRING_TORS_ENERGY`` (M273): Spring element torsional energy threshold sensor."""
-    id: int = 1
-    title: str = ""
-    spring_id: int = 0          # spring element ID to monitor
-    u_tors_max: float = 1e30    # maximum torsional energy threshold
-    t_delay: float = 0.0        # activation delay time
+# SensorSpringTorsionalEnergy: canonical definition is above (M265 section) with u_tors_max alias.
+
 
 
 # ============================================================================
@@ -14943,14 +14924,8 @@ class LagmulTractaJoint:
     axis_z: float = 1.0         # shaft rotation axis vector Z
 
 
-@dataclass
-class SensorSpringBendingEnergy:
-    """``/SENSOR/SPRING_BENDING_ENERGY`` or ``/SENSOR/SPRING_BEND_ENERGY`` (M274): Spring element bending energy threshold sensor."""
-    id: int = 1
-    title: str = ""
-    spring_id: int = 0          # spring element ID to monitor
-    u_bend_max: float = 1e30    # maximum bending energy threshold
-    t_delay: float = 0.0        # activation delay time
+# SensorSpringBendingEnergy: canonical definition is above (M266 section) with u_bend_max alias.
+
 
 
 # ============================================================================

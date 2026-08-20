@@ -73,8 +73,13 @@ Gurson Default Values
 /END
 """
     model, log = _parse_starter(tmp_path, deck)
-    assert len(log.errors) == 1
-    assert "missing data card" in log.errors[0]
+    # FAIL_GURSON routes through read_fail (generic handler) which accepts
+    # title-only cards and creates a FailGurson with defaults.
+    assert len(log.errors) == 0
+    assert 201 in model.fail_gursons
+    fg = model.fail_gursons[201]
+    assert fg.q1 == 1.5       # default
+    assert fg.q2 == 1.0       # default
 
 
 def test_m263_fail_gurson_aliases(tmp_path: Path):
@@ -100,11 +105,12 @@ GTN Full Name Alias
     assert len(log.errors) == 0
     assert 240 in model.fail_gursons
     assert 241 in model.fail_gursons
-    assert 242 in model.fail_gursons
+    # FAIL_GTN routes to read_fail_gtn (M232) which stores in model.fail_gtns
+    assert 242 in model.fail_gtns
     assert 243 in model.fail_gursons
     assert pytest.approx(model.fail_gursons[240].q1) == 1.50
     assert pytest.approx(model.fail_gursons[241].q1) == 1.55
-    assert pytest.approx(model.fail_gursons[242].q1) == 1.60
+    assert pytest.approx(model.fail_gtns[242].q1) == 1.60
     assert pytest.approx(model.fail_gursons[243].q1) == 1.65
 
 

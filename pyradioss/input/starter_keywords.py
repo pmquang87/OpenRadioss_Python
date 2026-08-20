@@ -43946,22 +43946,34 @@ def read_fail_rht(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 def read_fail_rtcl(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/RTCL/mat_ID`` (M259): Rice-Tracey & Cockcroft-Latham combined ductile fracture criterion."""
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    # /FAIL blocks have no title card
+    title = ""
+    if block.fixed:
+        cards = [c for c in block.fixed_cards() if not c.is_blank]
+    else:
+        cards = [c for c in block.cards if not c.is_blank]
     if not cards or cards[0].is_blank:
         log.error(f"/FAIL/RTCL/{block.user_id}: missing data card", block.source)
         return
 
     epscal, inst, n_exp, ifail_sh = 0.3, 2, 0.0, 1
+    fail_id = 0
     if block.fixed:
         f = cards[0].cut("FAIL_RTCL_1")
         epscal = _fval(f[0], 0.3) if len(f) > 0 and f[0].strip() else 0.3
         inst = _ival(f[1], 2) if len(f) > 1 and f[1].strip() else 2
         n_exp = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_RTCL_2")
+            fail_id = _ival(f2[0], 0) if len(f2) > 0 else 0
     else:
         toks = cards[0].tokens()
         epscal = float(toks[0]) if len(toks) > 0 else 0.3
         inst = int(float(toks[1])) if len(toks) > 1 else 2
         n_exp = float(toks[2]) if len(toks) > 2 else 0.0
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            fail_id = int(float(toks2[0])) if len(toks2) > 0 else 0
 
     if epscal == 0.0:
         epscal = 0.3
@@ -43971,7 +43983,7 @@ def read_fail_rtcl(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     from ..model.entities import FailRtcl
     model.fail_rtcls[block.user_id] = FailRtcl(
         mat_id=block.user_id, title=title, epscal=epscal, inst=inst,
-        n_exp=n_exp, ifail_sh=ifail_sh
+        n=n_exp, ifail_sh=ifail_sh, fail_id=fail_id
     )
 
 
@@ -44342,7 +44354,7 @@ def read_fail_gurson(block: KeywordBlock, model: Model, log: MessageLog) -> None
     from ..model.entities import FailGurson
     model.fail_gursons[block.user_id] = FailGurson(
         mat_id=block.user_id, title=title,
-        q1=q1, q2=q2, i_loc=i_loc,
+        q1=q1, q2=q2, iloc=i_loc,
         eps_n=eps_n, a_s=a_s, k_w=k_w,
         f_c=f_c, f_r=f_r, f_0=f_0,
         r_len=r_len, h_chi=h_chi, le_max=le_max
@@ -52604,15 +52616,15 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_NODE_TEMP": read_eng_temperature,
     "LAGMUL_RACK_AND_PINION": read_lagmul_rack_pinion,
     "RACK_AND_PINION": read_lagmul_rack_pinion,
-    "LAGMUL_RACK_PINION": read_lagmul_rack_pinion,
+    "LAGMUL_RACK_PINION": read_rack_pinion_joint,  # NOTE: canonical reader (M250)
     "RACK_PINION_GEAR": read_lagmul_rack_pinion,
-    "RACK_PINION": read_lagmul_rack_pinion,
+    "RACK_PINION": read_rack_pinion_joint,  # NOTE: canonical reader (M250)
     "SENSOR_SPRING_FORCE_RATE": read_sensor_spring_force_rate,
     "SENSOR_SPRING_DF": read_sensor_spring_force_rate,
     "SENSOR_SPRING_FORCERATE": read_sensor_spring_force_rate,
     "SENSOR_DF_SPRING": read_sensor_spring_force_rate,
     # --- M262: Puck Composite Action Plane Failure Model, Engine Stress Triaxiality Output Directive, Screw Joint Suite, and Spring Force Impulse Sensor ---
-    "FAIL_PUCK": read_fail_puck,
+    # NOTE: "FAIL_PUCK" maps to read_fail (M98); do not re-map here
     "FAIL_PUCK_MODEL": read_fail_puck,
     "FAIL_PUCK_LAW": read_fail_puck,
     "FAIL_PUCK_CRITERION": read_fail_puck,
@@ -52630,10 +52642,10 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_J": read_sensor_spring_force_impulse,
     "SENSOR_IMPULSE_SPRING": read_sensor_spring_force_impulse,
     # --- M263: Gurson Porous Plasticity Failure Model, Engine Lode Angle Output Directive, Differential Gear Joint Suite, and Spring Moment-Rate Sensor ---
-    "FAIL_GURSON": read_fail_gurson,
+    # NOTE: "FAIL_GURSON" maps to read_fail (M235/M98); do not re-map here
     "FAIL_GURSON_MODEL": read_fail_gurson,
     "FAIL_GURSON_LAW": read_fail_gurson,
-    "FAIL_GTN": read_fail_gurson,
+    # NOTE: "FAIL_GTN" maps to read_fail_gtn (M232); do not re-map here
     "FAIL_GURSON_TVERGAARD_NEEDLEMAN": read_fail_gurson,
     "ENG_LODE_ANGLE": read_eng_lode_angle,
     "ENG_LODE": read_eng_lode_angle,
@@ -52725,7 +52737,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SCOTCH_YOKE_MECHANISM": read_lagmul_scotch_yoke,
     "SCOTCH_YOKE_JOINT": read_lagmul_scotch_yoke,
     "SENSOR_SPRING_TOTAL_STRAIN_ENERGY": read_sensor_spring_total_strain_energy,
-    "SENSOR_SPRING_STRAIN_ENERGY": read_sensor_spring_total_strain_energy,
+    # NOTE: "SENSOR_SPRING_STRAIN_ENERGY" maps to read_sensor_spring_strain_energy (M243); do not re-map here
     "SENSOR_SPRING_TOTAL_ENERGY": read_sensor_spring_total_strain_energy,
     "SENSOR_STRAIN_ENERGY_SPRING": read_sensor_spring_total_strain_energy,
     # --- M268: Mohr-Coulomb Pressure-Dependent Failure Model, Engine Deviatoric Strain Energy Output Directive, Oldham Coupling Joint Suite, and Spring Volumetric Energy Sensor ---
@@ -52739,10 +52751,10 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_W_DEV": read_eng_deviatoric_energy,
     "ENG_DEVIATORIC_WORK": read_eng_deviatoric_energy,
     "ENG_EDEV": read_eng_deviatoric_energy,
-    "LAGMUL_OLDHAM_COUPLING": read_lagmul_oldham_coupling,
-    "OLDHAM_COUPLING": read_lagmul_oldham_coupling,
-    "LAGMUL_OLDHAM_JOINT": read_lagmul_oldham_coupling,
-    "OLDHAM_JOINT": read_lagmul_oldham_coupling,
+    "LAGMUL_OLDHAM_COUPLING": read_oldham_joint,  # NOTE: canonical reader (M252)
+    "OLDHAM_COUPLING": read_oldham_joint,  # NOTE: canonical reader (M252)
+    "LAGMUL_OLDHAM_JOINT": read_oldham_joint,  # NOTE: canonical reader (M252)
+    "OLDHAM_JOINT": read_oldham_joint,  # NOTE: canonical reader (M252)
     "OLDHAM_MECHANISM": read_lagmul_oldham_coupling,
     "SENSOR_SPRING_VOLUMETRIC_ENERGY": read_sensor_spring_volumetric_energy,
     "SENSOR_SPRING_VOL_ENERGY": read_sensor_spring_volumetric_energy,
@@ -52819,8 +52831,8 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_CONTACT_WORK": read_eng_contact_energy,
     "ENG_ECNT": read_eng_contact_energy,
     "ENG_INTERFACE_ENERGY": read_eng_contact_energy,
-    "LAGMUL_TRIPOD_JOINT": read_lagmul_tripod_joint,
-    "TRIPOD_JOINT": read_lagmul_tripod_joint,
+    "LAGMUL_TRIPOD_JOINT": read_tripod_joint,  # NOTE: canonical reader (M253)
+    "TRIPOD_JOINT": read_tripod_joint,  # NOTE: canonical reader (M253)
     "LAGMUL_TRIPOD_COUPLING": read_lagmul_tripod_joint,
     "TRIPOD_COUPLING": read_lagmul_tripod_joint,
     "TRIPOD_MECHANISM": read_lagmul_tripod_joint,
@@ -52839,7 +52851,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_SPRING_WORK": read_eng_spring_energy,
     "ENG_ESPR": read_eng_spring_energy,
     "ENG_SPRING_ENER": read_eng_spring_energy,
-    "LAGMUL_HOOKE_JOINT": read_lagmul_hooke_joint,
+    "LAGMUL_HOOKE_JOINT": read_cardan_joint,  # NOTE: canonical reader; M273 read_lagmul_hooke_joint uses separate container
     "HOOKE_JOINT": read_lagmul_hooke_joint,
     "LAGMUL_HOOKE_COUPLING": read_lagmul_hooke_joint,
     "HOOKE_COUPLING": read_lagmul_hooke_joint,
