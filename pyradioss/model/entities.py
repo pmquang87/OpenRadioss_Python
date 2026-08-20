@@ -15224,6 +15224,45 @@ class SensorSpringShearWork:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M282 Suite: Gene1 failure, EngHelmholtzEnergy, CardanJoint, SensorSpringNormalWork
+# ============================================================================
+
+@dataclass
+class EngHelmholtzEnergy:
+    """``/ENG/HELMHOLTZ_ENERGY`` or ``/ENG/HELMHOLTZ_WORK`` (M282): Engine Helmholtz free energy and thermodynamic potential tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_helm: float = 0.0         # time frequency for Helmholtz energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulCardanJoint:
+    """``/CARDAN_JOINT/id`` or ``/LAGMUL/CARDAN_JOINT/id`` (M282): Cardan / universal joint angular transmission kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # input shaft yoke fork node
+    node2: int = 0               # output shaft yoke fork node
+    node3: int = 0               # intermediate gimbal cross / spider node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # universal joint pivot axis vector X
+    axis_y: float = 0.0          # universal joint pivot axis vector Y
+    axis_z: float = 1.0          # universal joint pivot axis vector Z
+
+
+@dataclass
+class SensorSpringNormalWork:
+    """``/SENSOR/SPRING_NORMAL_WORK`` or ``/SENSOR/SPRING_NORM_WORK`` (M282): Spring element normal/axial work energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    w_norm_max: float = 1e30     # maximum cumulative normal/axial work energy threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

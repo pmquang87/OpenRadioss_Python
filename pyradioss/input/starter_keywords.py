@@ -2301,6 +2301,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("COCKCROFT", "FAIL_COCKCROFT", "COCKCROFT_MODEL", "COCKCROFT_LAW", "COCKCROFT_DAMAGE", "CL_DUCTILE"):
         read_fail_cockcroft(block, model, log)
         return
+    if kind in ("GENE1", "FAIL_GENE1", "GENERIC1", "GENE1_MODEL", "GENE1_LAW", "GENERIC_FAILURE_1"):
+        read_fail_gene1(block, model, log)
+        return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
@@ -44884,8 +44887,140 @@ def read_fail_cockcroft(block: KeywordBlock, model: Model, log: MessageLog) -> N
 
 
 def read_fail_gene1(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/FAIL/GENE1`` (M193): Generalized multi-criterion failure model 1."""
-    read_fail(block, model, log)
+    """``/FAIL/GENE1`` (M193/M282): Generalized multi-criterion failure model 1."""
+    from ..model.entities import FailGene1, FailureModel
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    if not cards:
+        log.error(f"/FAIL/GENE1/{mat_id}: missing data card", block.source)
+        return
+
+    c1 = cards[0].cut("FAIL_GENE1_1") if block.fixed else cards[0].tokens()
+    pmin = _fval(c1[0]) if len(c1) > 0 else 0.0
+    pmax = _fval(c1[1]) if len(c1) > 1 else 0.0
+    sigp1_max = _fval(c1[2]) if len(c1) > 2 else 0.0
+    tmax = _fval(c1[3]) if len(c1) > 3 else 0.0
+    dtmin = _fval(c1[4]) if len(c1) > 4 else 0.0
+
+    fct_idsm, eps_dot_sm, sig_max, sigr, kf = 0, 0.0, 0.0, 0.0, 0.0
+    if len(cards) > 1 and not cards[1].is_blank:
+        c2 = cards[1].cut("FAIL_GENE1_2") if block.fixed else cards[1].tokens()
+        if block.fixed:
+            fct_idsm = _ival(c2[0]) if len(c2) > 0 else 0
+            eps_dot_sm = _fval(c2[2]) if len(c2) > 2 else 0.0
+            sig_max = _fval(c2[3]) if len(c2) > 3 else 0.0
+            sigr = _fval(c2[4]) if len(c2) > 4 else 0.0
+            kf = _fval(c2[5]) if len(c2) > 5 else 0.0
+        else:
+            fct_idsm = _ival(c2[0]) if len(c2) > 0 else 0
+            eps_dot_sm = _fval(c2[1]) if len(c2) > 1 else 0.0
+            sig_max = _fval(c2[2]) if len(c2) > 2 else 0.0
+            sigr = _fval(c2[3]) if len(c2) > 3 else 0.0
+            kf = _fval(c2[4]) if len(c2) > 4 else 0.0
+
+    fct_idps, eps_dot_ps, eps_max, eps_eff, eps_vol = 0, 0.0, 0.0, 0.0, 0.0
+    if len(cards) > 2 and not cards[2].is_blank:
+        c3 = cards[2].cut("FAIL_GENE1_3") if block.fixed else cards[2].tokens()
+        if block.fixed:
+            fct_idps = _ival(c3[0]) if len(c3) > 0 else 0
+            eps_dot_ps = _fval(c3[2]) if len(c3) > 2 else 0.0
+            eps_max = _fval(c3[3]) if len(c3) > 3 else 0.0
+            eps_eff = _fval(c3[4]) if len(c3) > 4 else 0.0
+            eps_vol = _fval(c3[5]) if len(c3) > 5 else 0.0
+        else:
+            fct_idps = _ival(c3[0]) if len(c3) > 0 else 0
+            eps_dot_ps = _fval(c3[1]) if len(c3) > 1 else 0.0
+            eps_max = _fval(c3[2]) if len(c3) > 2 else 0.0
+            eps_eff = _fval(c3[3]) if len(c3) > 3 else 0.0
+            eps_vol = _fval(c3[4]) if len(c3) > 4 else 0.0
+
+    eps_min, eps_sh, fct_idg12, fct_idg13, fct_ide1c = 0.0, 0.0, 0, 0, 0
+    fail_id = 0
+    is_legacy_4card = len(cards) == 4 and len(cards[3].tokens()) == 1
+    if is_legacy_4card:
+        fail_id = _ival(cards[3].tokens()[0])
+    elif len(cards) > 3 and not cards[3].is_blank:
+        c4 = cards[3].cut("FAIL_GENE1_4") if block.fixed else cards[3].tokens()
+        eps_min = _fval(c4[0]) if len(c4) > 0 else 0.0
+        eps_sh = _fval(c4[1]) if len(c4) > 1 else 0.0
+        fct_idg12 = _ival(c4[2]) if len(c4) > 2 else 0
+        fct_idg13 = _ival(c4[3]) if len(c4) > 3 else 0
+        fct_ide1c = _ival(c4[4]) if len(c4) > 4 else 0
+
+    tab_idfld, itab, eps_dot_fld, nstep, ismooth, istrain, thinning = 0, 0, 0.0, 0, 0, 0, 0.0
+    if not is_legacy_4card and len(cards) > 4 and not cards[4].is_blank:
+        c5 = cards[4].cut("FAIL_GENE1_5") if block.fixed else cards[4].tokens()
+        if block.fixed:
+            tab_idfld = _ival(c5[0]) if len(c5) > 0 else 0
+            itab = _ival(c5[1]) if len(c5) > 1 else 0
+            eps_dot_fld = _fval(c5[2]) if len(c5) > 2 else 0.0
+            nstep = _ival(c5[3]) if len(c5) > 3 else 0
+            ismooth = _ival(c5[4]) if len(c5) > 4 else 0
+            istrain = _ival(c5[5]) if len(c5) > 5 else 0
+            thinning = _fval(c5[7]) if len(c5) > 7 else 0.0
+        else:
+            tab_idfld = _ival(c5[0]) if len(c5) > 0 else 0
+            itab = _ival(c5[1]) if len(c5) > 1 else 0
+            eps_dot_fld = _fval(c5[2]) if len(c5) > 2 else 0.0
+            nstep = _ival(c5[3]) if len(c5) > 3 else 0
+            ismooth = _ival(c5[4]) if len(c5) > 4 else 0
+            istrain = _ival(c5[5]) if len(c5) > 5 else 0
+            thinning = _fval(c5[6]) if len(c5) > 6 else 0.0
+
+    volfrac, pthk, ncs, temp_max, failip = 0.0, 0.0, 0, 0.0, 0
+    if not is_legacy_4card and len(cards) > 5 and not cards[5].is_blank:
+        c6 = cards[5].cut("FAIL_GENE1_6") if block.fixed else cards[5].tokens()
+        if block.fixed:
+            volfrac = _fval(c6[0]) if len(c6) > 0 else 0.0
+            pthk = _fval(c6[1]) if len(c6) > 1 else 0.0
+            ncs = _ival(c6[2]) if len(c6) > 2 else 0
+            temp_max = _fval(c6[4]) if len(c6) > 4 else 0.0
+            failip = _ival(c6[5]) if len(c6) > 5 else 0
+        else:
+            volfrac = _fval(c6[0]) if len(c6) > 0 else 0.0
+            pthk = _fval(c6[1]) if len(c6) > 1 else 0.0
+            ncs = _ival(c6[2]) if len(c6) > 2 else 0
+            temp_max = _fval(c6[3]) if len(c6) > 3 else 0.0
+            failip = _ival(c6[4]) if len(c6) > 4 else 0
+
+    fct_idel, fscale_el, el_ref = 0, 1.0, 0.0
+    if not is_legacy_4card and len(cards) > 6 and not cards[6].is_blank:
+        c7 = cards[6].cut("FAIL_GENE1_7") if block.fixed else cards[6].tokens()
+        if block.fixed:
+            fct_idel = _ival(c7[0]) if len(c7) > 0 else 0
+            fscale_el = _fval(c7[2], 1.0) if len(c7) > 2 and c7[2].strip() else 1.0
+            el_ref = _fval(c7[3]) if len(c7) > 3 else 0.0
+        else:
+            fct_idel = _ival(c7[0]) if len(c7) > 0 else 0
+            fscale_el = _fval(c7[1]) if len(c7) > 1 else 1.0
+            el_ref = _fval(c7[2]) if len(c7) > 2 else 0.0
+
+    if not is_legacy_4card and len(cards) > 7 and not cards[7].is_blank:
+        c8 = cards[7].cut("FAIL_GENE1_8") if block.fixed else cards[7].tokens()
+        if c8:
+            fail_id = _ival(c8[0])
+
+    model.fail_gene1s[mat_id] = FailGene1(
+        mat_id=mat_id, pmin=pmin, pmax=pmax, sigp1_max=sigp1_max, tmax=tmax, time_max=tmax, dtmin=dtmin,
+        fct_idsm=fct_idsm, eps_dot_sm=eps_dot_sm, sig_max=sig_max, sigr=sigr, k=kf, kf=kf,
+        fct_idps=fct_idps, eps_dot_ps=eps_dot_ps, eps_max=eps_max, eps_eff=eps_eff, eps_vol=eps_vol,
+        eps_min=eps_min, eps_sh=eps_sh, fct_idg12=fct_idg12, fct_idg13=fct_idg13, fct_ide1c=fct_ide1c,
+        tab_idfld=tab_idfld, itab=itab, eps_dot_fld=eps_dot_fld, nstep=nstep, ismooth=ismooth, istrain=istrain,
+        thinning=thinning, volfrac=volfrac, pthk=pthk, ncs=ncs, temp_max=temp_max, failip=failip,
+        fct_idel=fct_idel, fscale_el=fscale_el, el_ref=el_ref, fail_id=fail_id, title=title,
+    )
+    params = {
+        "pmin": pmin, "pmax": pmax, "sigp1_max": sigp1_max, "tmax": tmax, "time_max": tmax, "dtmin": dtmin,
+        "fct_idsm": fct_idsm, "eps_dot_sm": eps_dot_sm, "sig_max": sig_max, "sigr": sigr, "k": kf, "kf": kf,
+        "fct_idps": fct_idps, "eps_dot_ps": eps_dot_ps, "eps_max": eps_max, "eps_eff": eps_eff, "eps_vol": eps_vol,
+        "eps_min": eps_min, "eps_sh": eps_sh, "fct_idg12": fct_idg12, "fct_idg13": fct_idg13, "fct_ide1c": fct_ide1c,
+        "tab_idfld": tab_idfld, "itab": itab, "eps_dot_fld": eps_dot_fld, "nstep": nstep, "ismooth": ismooth, "istrain": istrain,
+        "thinning": thinning, "volfrac": volfrac, "pthk": pthk, "ncs": ncs, "temp_max": temp_max, "failip": failip,
+        "fct_idel": fct_idel, "fscale_el": fscale_el, "el_ref": el_ref, "fail_id": fail_id,
+    }
+    fm = FailureModel(type="GENE1", ifail_sh=1, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
 
 
 def read_mat_law53(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -51223,6 +51358,111 @@ def read_sensor_spring_shear_work(block: KeywordBlock, model: Model, log: Messag
     ))
 
 
+# ============================================================================
+# M282 Suite: Gene1 failure, EngHelmholtzEnergy, CardanJoint, SensorSpringNormalWork
+# ============================================================================
+
+def read_eng_helmholtz_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/HELMHOLTZ_ENERGY`` or ``/ENG/HELMHOLTZ_WORK`` (M282): Engine Helmholtz free energy and thermodynamic potential tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/HELMHOLTZ_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_helm, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_HELMHOLTZ_ENERGY_1")
+        dt_helm = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_helm = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngHelmholtzEnergy
+    r_id = block.user_id or (len(model.eng_helmholtz_energies) + 1)
+    model.eng_helmholtz_energies[r_id] = EngHelmholtzEnergy(
+        id=r_id, title=title, dt_helm=dt_helm, sens_id=sens_id
+    )
+
+
+def read_lagmul_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CARDAN_JOINT/id`` or ``/LAGMUL/CARDAN_JOINT/id`` (M282): Cardan / universal joint angular transmission kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/CARDAN_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("CARDAN_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("CARDAN_JOINT_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1].rstrip(',')) if len(toks2) > 0 else 0.0
+            axis_z = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulCardanJoint
+    model.lagmul_cardan_joints[block.user_id] = LagmulCardanJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+
+
+def read_sensor_spring_normal_work(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_NORMAL_WORK`` or ``/SENSOR/SPRING_NORM_WORK`` (M282): Spring element normal/axial work energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_NORMAL_WORK/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, w_norm_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_NORMAL_WORK_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        w_norm_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        w_norm_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringNormalWork, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_normal_works) + 1)
+    ssnw = SensorSpringNormalWork(
+        id=s_id, title=title, spring_id=spring_id,
+        w_norm_max=w_norm_max, t_delay=t_delay
+    )
+    model.sensor_spring_normal_works[s_id] = ssnw
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_NORMAL_WORK", tdelay=t_delay
+    ))
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -54240,6 +54480,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_SHR_WORK": read_sensor_spring_shear_work,
     "SENSOR_SPRING_WORK_SHEAR": read_sensor_spring_shear_work,
     "SENSOR_SHEAR_WORK_SPRING": read_sensor_spring_shear_work,
+    # --- M282: Gene1 Failure Model, Engine Helmholtz Energy Output Directive, Cardan Joint Suite, and Spring Normal Work Sensor ---
+    "FAIL_GENE1": read_fail_gene1,
+    "FAIL_GENERIC1": read_fail_gene1,
+    "FAIL_GENE1_MODEL": read_fail_gene1,
+    "FAIL_GENE1_LAW": read_fail_gene1,
+    "FAIL_GENERIC_FAILURE_1": read_fail_gene1,
+    "ENG_HELMHOLTZ_ENERGY": read_eng_helmholtz_energy,
+    "ENG_HELMHOLTZ_WORK": read_eng_helmholtz_energy,
+    "ENG_EHELM": read_eng_helmholtz_energy,
+    "ENG_HELM_ENERGY": read_eng_helmholtz_energy,
+    "ENG_FREE_ENERGY": read_eng_helmholtz_energy,
+    "LAGMUL_CARDAN_JOINT": read_lagmul_cardan_joint,
+    "CARDAN_JOINT": read_lagmul_cardan_joint,
+    "LAGMUL_CARDAN": read_lagmul_cardan_joint,
+    "CARDAN": read_lagmul_cardan_joint,
+    "CARDAN_MECHANISM": read_lagmul_cardan_joint,
+    "SENSOR_SPRING_NORMAL_WORK": read_sensor_spring_normal_work,
+    "SENSOR_SPRING_NORM_WORK": read_sensor_spring_normal_work,
+    "SENSOR_SPRING_WORK_NORMAL": read_sensor_spring_normal_work,
+    "SENSOR_NORMAL_WORK_SPRING": read_sensor_spring_normal_work,
 }
 
 
