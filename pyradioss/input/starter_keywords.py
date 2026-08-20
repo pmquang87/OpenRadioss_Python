@@ -2292,6 +2292,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("TBUTCHER", "FAIL_TBUTCHER", "TULER_BUTCHER_CRITERION", "TBUTCHER_MODEL", "TBUTCHER_LAW", "TULER_BUTCHER_DAMAGE"):
         read_fail_tbutcher(block, model, log)
         return
+    if kind in ("MULLINS", "FAIL_MULLINS", "MULLINS_OR", "MULLINS_MODEL", "MULLINS_LAW", "MULLINS_DAMAGE", "ELASTOMER_DAMAGE"):
+        read_fail_mullins(block, model, log)
+        return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
@@ -50910,6 +50913,154 @@ def read_sensor_spring_rotational_work(block: KeywordBlock, model: Model, log: M
     ))
 
 
+# ============================================================================
+# M280 Suite: Mullins failure, EngFsiEnergy, SliderSlotJoint, SensorSpringTranslationalWork
+# ============================================================================
+
+def read_fail_mullins(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/MULLINS`` or ``/FAIL/MULLINS_OR`` (M280): Mullins effect elastomer softening/damage model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    mat_id = block.user_id
+    if not cards or cards[0].is_blank:
+        from ..model.entities import FailMullins, FailureModel
+        model.fail_mullins[mat_id] = FailMullins(mat_id=mat_id, title=title)
+        fm = FailureModel(type="MULLINS", ifail_sh=1, params={})
+        model.raw_fails.append((mat_id, fm, block.source))
+        return
+
+    coefr, beta, coefm = 1.0, 0.0, 0.0
+    fail_id = 0
+
+    if block.fixed and "," not in cards[0].raw:
+        c1 = cards[0].cut("FAIL_MULLINS_1") if "FAIL_MULLINS_1" in CARD_LAYOUTS else cards[0].tokens()
+        coefr = _fval(c1[0], 1.0) if len(c1) > 0 and c1[0].strip() else 1.0
+        beta = _fval(c1[1], 0.0) if len(c1) > 1 else 0.0
+        coefm = _fval(c1[2], 0.0) if len(c1) > 2 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_MULLINS_2") if "FAIL_MULLINS_2" in CARD_LAYOUTS else cards[1].tokens()
+            fail_id = _ival(c2[0], 0) if len(c2) > 0 else 0
+    else:
+        toks1 = cards[0].tokens()
+        coefr = float(toks1[0].rstrip(',')) if len(toks1) > 0 else 1.0
+        beta = float(toks1[1].rstrip(',')) if len(toks1) > 1 else 0.0
+        coefm = float(toks1[2].rstrip(',')) if len(toks1) > 2 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            fail_id = int(float(toks2[0].rstrip(','))) if len(toks2) > 0 else 0
+
+    from ..model.entities import FailMullins, FailureModel
+    model.fail_mullins[mat_id] = FailMullins(
+        mat_id=mat_id, coefr=coefr, beta=beta, coefm=coefm,
+        fail_id=fail_id, title=title,
+    )
+    params = {"coefr": coefr, "r": coefr, "beta": beta, "coefm": coefm, "m": coefm, "fail_id": fail_id}
+    fm = FailureModel(type="MULLINS", ifail_sh=1, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_fsi_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/FSI_ENERGY`` or ``/ENG/FSI_WORK`` (M280): Engine FSI interface work and energy transfer tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/FSI_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_fsi, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_FSI_ENERGY_1")
+        dt_fsi = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_fsi = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngFsiEnergy
+    r_id = block.user_id or (len(model.eng_fsi_energies) + 1)
+    model.eng_fsi_energies[r_id] = EngFsiEnergy(
+        id=r_id, title=title, dt_fsi=dt_fsi, sens_id=sens_id
+    )
+
+
+def read_lagmul_slider_slot_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SLIDER_SLOT_JOINT/id`` or ``/LAGMUL/SLIDER_SLOT_JOINT/id`` (M280): Slider-slot planar mechanism kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SLIDER_SLOT_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("SLIDER_SLOT_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("SLIDER_SLOT_JOINT_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1].rstrip(',')) if len(toks2) > 0 else 0.0
+            axis_z = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulSliderSlotJoint
+    model.lagmul_slider_slot_joints[block.user_id] = LagmulSliderSlotJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+
+
+def read_sensor_spring_translational_work(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TRANSLATIONAL_WORK`` or ``/SENSOR/SPRING_TRANS_WORK`` (M280): Spring element translational work energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TRANSLATIONAL_WORK/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, w_trans_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_TRANSLATIONAL_WORK_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        w_trans_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        w_trans_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTranslationalWork, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_translational_works) + 1)
+    sstw = SensorSpringTranslationalWork(
+        id=s_id, title=title, spring_id=spring_id,
+        w_trans_max=w_trans_max, t_delay=t_delay
+    )
+    model.sensor_spring_translational_works[s_id] = sstw
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_TRANSLATIONAL_WORK", tdelay=t_delay
+    ))
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -53879,6 +54030,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_ROT_WORK": read_sensor_spring_rotational_work,
     "SENSOR_SPRING_WORK_ROT": read_sensor_spring_rotational_work,
     "SENSOR_ROTATIONAL_WORK_SPRING": read_sensor_spring_rotational_work,
+    # --- M280: Mullins Failure Model, Engine FSI Energy Output Directive, Slider-Slot Joint Suite, and Spring Translational Work Sensor ---
+    "FAIL_MULLINS": read_fail_mullins,
+    "FAIL_MULLINS_OR": read_fail_mullins,
+    "FAIL_MULLINS_MODEL": read_fail_mullins,
+    "FAIL_MULLINS_LAW": read_fail_mullins,
+    "FAIL_MULLINS_DAMAGE": read_fail_mullins,
+    "FAIL_ELASTOMER_DAMAGE": read_fail_mullins,
+    "ENG_FSI_ENERGY": read_eng_fsi_energy,
+    "ENG_FSI_WORK": read_eng_fsi_energy,
+    "ENG_EFSI": read_eng_fsi_energy,
+    "ENG_FSI_ENER": read_eng_fsi_energy,
+    "ENG_FSI_INTERNAL_ENERGY": read_eng_fsi_energy,
+    "LAGMUL_SLIDER_SLOT_JOINT": read_lagmul_slider_slot_joint,
+    "SLIDER_SLOT_JOINT": read_lagmul_slider_slot_joint,
+    "LAGMUL_SLIDER_SLOT": read_lagmul_slider_slot_joint,
+    "SLIDER_SLOT": read_lagmul_slider_slot_joint,
+    "SLIDER_SLOT_MECHANISM": read_lagmul_slider_slot_joint,
+    "SENSOR_SPRING_TRANSLATIONAL_WORK": read_sensor_spring_translational_work,
+    "SENSOR_SPRING_TRANS_WORK": read_sensor_spring_translational_work,
+    "SENSOR_SPRING_WORK_TRANS": read_sensor_spring_translational_work,
+    "SENSOR_TRANSLATIONAL_WORK_SPRING": read_sensor_spring_translational_work,
 }
 
 

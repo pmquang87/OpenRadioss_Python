@@ -15146,6 +15146,45 @@ class SensorSpringRotationalWork:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M280 Suite: Mullins failure, EngFsiEnergy, SliderSlotJoint, SensorSpringTranslationalWork
+# ============================================================================
+
+@dataclass
+class EngFsiEnergy:
+    """``/ENG/FSI_ENERGY`` or ``/ENG/FSI_WORK`` (M280): Engine FSI interface work and energy transfer tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fsi: float = 0.0          # time frequency for FSI energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulSliderSlotJoint:
+    """``/SLIDER_SLOT_JOINT/id`` or ``/LAGMUL/SLIDER_SLOT_JOINT/id`` (M280): Slider-slot planar mechanism kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # driving slotted guide node
+    node2: int = 0               # driven slider block node
+    node3: int = 0               # slot track reference node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # slot orientation / guide axis vector X
+    axis_y: float = 0.0          # slot orientation / guide axis vector Y
+    axis_z: float = 1.0          # slot orientation / guide axis vector Z
+
+
+@dataclass
+class SensorSpringTranslationalWork:
+    """``/SENSOR/SPRING_TRANSLATIONAL_WORK`` or ``/SENSOR/SPRING_TRANS_WORK`` (M280): Spring element translational work energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    w_trans_max: float = 1e30    # maximum cumulative translational work energy threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

@@ -1862,6 +1862,11 @@ class Model:
         self.lagmul_pin_in_slot_joints: Dict[int, Any] = {}          # /PIN_IN_SLOT_JOINT, /LAGMUL/PIN_IN_SLOT_JOINT (M279)
         self.sensor_spring_rotational_works: Dict[int, Any] = {}     # /SENSOR/SPRING_ROTATIONAL_WORK (M279)
 
+        # M280 Entities
+        self.eng_fsi_energies: Dict[int, Any] = {}                   # /ENG/FSI_ENERGY, /ENG/FSI_WORK (M280)
+        self.lagmul_slider_slot_joints: Dict[int, Any] = {}          # /SLIDER_SLOT_JOINT, /LAGMUL/SLIDER_SLOT_JOINT (M280)
+        self.sensor_spring_translational_works: Dict[int, Any] = {}  # /SENSOR/SPRING_TRANSLATIONAL_WORK (M280)
+
 
 
 
