@@ -15068,6 +15068,45 @@ class SensorSpringThermalDissipation:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M278 Suite: Tab1 failure, EngSphEnergy, ClevisJoint, SensorSpringTotalWork
+# ============================================================================
+
+@dataclass
+class EngSphEnergy:
+    """``/ENG/SPH_ENERGY`` or ``/ENG/SPH_WORK`` (M278): Engine SPH particle internal/work energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_sph: float = 0.0          # time frequency for SPH energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulClevisJoint:
+    """``/CLEVIS_JOINT/id`` or ``/LAGMUL/CLEVIS_JOINT/id`` (M278): Clevis pin / fork-and-tang kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # driving fork node
+    node2: int = 0               # driven tang node
+    node3: int = 0               # clevis pin center node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # pin pivot rotation axis vector X
+    axis_y: float = 0.0          # pin pivot rotation axis vector Y
+    axis_z: float = 1.0          # pin pivot rotation axis vector Z
+
+
+@dataclass
+class SensorSpringTotalWork:
+    """``/SENSOR/SPRING_TOTAL_WORK`` or ``/SENSOR/SPRING_TOT_WORK`` (M278): Spring element total work energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    w_tot_max: float = 1e30      # maximum cumulative total work energy threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

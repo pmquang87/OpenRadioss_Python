@@ -2286,6 +2286,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("ALTER", "FAIL_ALTER", "ALTER_MODEL", "ALTER_GLASS", "ALTER_FRACTURE", "ALTER_LAW"):
         read_fail_alter(block, model, log)
         return
+    if kind in ("TAB1", "FAIL_TAB1", "TABULATED1", "TAB_1D", "TAB1_MODEL", "TAB1_LAW"):
+        read_fail_tab1(block, model, log)
+        return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
@@ -50407,6 +50410,276 @@ def read_sensor_spring_thermal_dissipation(block: KeywordBlock, model: Model, lo
     ))
 
 
+# ============================================================================
+# M278 Suite: Tab1 failure, EngSphEnergy, ClevisJoint, SensorSpringTotalWork
+# ============================================================================
+
+def read_fail_tab1(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/TAB1/mat_ID`` (M278): Tabulated failure model Version 1."""
+    title, cards = _title_and_data(block)
+    mat_id = block.user_id
+    if not cards or cards[0].is_blank:
+        from ..model.entities import FailTab1, FailureModel
+        model.fail_tab1s[mat_id] = FailTab1(mat_id=mat_id)
+        fm = FailureModel(type="TAB1", ifail_sh=1, params={})
+        model.raw_fails.append((mat_id, fm, block.source))
+        return
+
+    ifail_sh, ifail_so = 1, 1
+    p_thickfail, p_thinfail, ixfem = 0.0, 0.0, 0
+    dcrit, d, n, dadv, fct_idd = 1.0, 0.0, 1.0, 0.0, 0
+    table1_id, xscale1, xscale2, table2_id, xscale3, xscale4 = 0, 1.0, 1.0, 0, 1.0, 1.0
+    fct_id_el, fscale_el, el_ref, inst_start, fad_exp, ch_i_f = 0, 1.0, 1.0, 0.0, 1.0, 0.0
+    fct_id_t, fscale_t, ifunc, eps_max, scale = 0, 1.0, 0, 0.0, 1.0
+    fail_id = 0
+
+    if len(cards) <= 2:
+        toks1 = cards[0].tokens()
+        ifunc = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            eps_max = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            scale = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        if len(toks1) >= 5:
+            ifail_sh = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 1
+            ifail_so = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 1
+            p_thickfail = float(toks1[2].rstrip(',')) if len(toks1) > 2 else 0.0
+            p_thinfail = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 0.0
+            ixfem = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        elif len(toks1) == 1:
+            ifunc = int(float(toks1[0].rstrip(',')))
+        elif len(toks1) >= 2:
+            ifunc = int(float(toks1[0].rstrip(',')))
+            eps_max = float(toks1[1].rstrip(','))
+            if len(toks1) > 2:
+                scale = float(toks1[2].rstrip(','))
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            if len(toks2) >= 4:
+                dcrit = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 1.0
+                d = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+                n = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 1.0
+                dadv = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+                if len(toks2) > 4:
+                    fct_idd = int(float(toks2[4].rstrip(',')))
+            elif len(toks2) >= 1:
+                eps_max = float(toks2[0].rstrip(','))
+                if len(toks2) > 1:
+                    scale = float(toks2[1].rstrip(','))
+
+        if len(cards) > 2 and not cards[2].is_blank:
+            toks3 = cards[2].tokens()
+            if len(toks3) >= 6:
+                table1_id = int(float(toks3[0].rstrip(',')))
+                xscale1 = float(toks3[1].rstrip(','))
+                xscale2 = float(toks3[2].rstrip(','))
+                table2_id = int(float(toks3[3].rstrip(',')))
+                xscale3 = float(toks3[4].rstrip(','))
+                xscale4 = float(toks3[5].rstrip(','))
+            elif len(toks3) >= 3:
+                table1_id = int(float(toks3[0].rstrip(',')))
+                xscale1 = float(toks3[1].rstrip(','))
+                xscale2 = float(toks3[2].rstrip(','))
+
+        if len(cards) > 3 and not cards[3].is_blank:
+            toks4 = cards[3].tokens()
+            if len(toks4) >= 6:
+                fct_id_el = int(float(toks4[0].rstrip(',')))
+                fscale_el = float(toks4[1].rstrip(','))
+                el_ref = float(toks4[2].rstrip(','))
+                inst_start = float(toks4[3].rstrip(','))
+                fad_exp = float(toks4[4].rstrip(','))
+                ch_i_f = float(toks4[5].rstrip(','))
+            elif len(toks4) >= 5:
+                fct_id_el = int(float(toks4[0].rstrip(',')))
+                fscale_el = float(toks4[1].rstrip(','))
+                el_ref = float(toks4[2].rstrip(','))
+                inst_start = float(toks4[3].rstrip(','))
+                fad_exp = float(toks4[4].rstrip(','))
+            elif len(toks4) >= 3:
+                fct_id_el = int(float(toks4[0].rstrip(',')))
+                fscale_el = float(toks4[1].rstrip(','))
+                el_ref = float(toks4[2].rstrip(','))
+
+        if len(cards) > 4 and not cards[4].is_blank:
+            toks5 = cards[4].tokens()
+            if len(toks5) >= 5:
+                fct_id_t = int(float(toks5[0].rstrip(',')))
+                fscale_t = float(toks5[1].rstrip(','))
+                ifunc = int(float(toks5[2].rstrip(',')))
+                eps_max = float(toks5[3].rstrip(','))
+                scale = float(toks5[4].rstrip(','))
+            elif len(toks5) >= 4:
+                fct_id_t = int(float(toks5[0].rstrip(',')))
+                fscale_t = float(toks5[1].rstrip(','))
+                eps_max = float(toks5[2].rstrip(','))
+                scale = float(toks5[3].rstrip(','))
+            elif len(toks5) == 2:
+                fct_id_t = int(float(toks5[0].rstrip(',')))
+                fscale_t = float(toks5[1].rstrip(','))
+
+        if len(cards) > 5 and not cards[5].is_blank:
+            toks6 = cards[5].tokens()
+            fail_id = int(float(toks6[0].rstrip(','))) if len(toks6) > 0 else 0
+
+    if ifail_sh == 0:
+        ifail_sh = 1
+    if ifail_so == 0:
+        ifail_so = 1
+    if dcrit == 0.0:
+        dcrit = 1.0
+    if n == 0.0:
+        n = 1.0
+    if xscale1 == 0.0:
+        xscale1 = 1.0
+    if xscale2 == 0.0:
+        xscale2 = 1.0
+    if xscale3 == 0.0:
+        xscale3 = 1.0
+    if xscale4 == 0.0:
+        xscale4 = 1.0
+    if fscale_el == 0.0:
+        fscale_el = 1.0
+    if el_ref == 0.0:
+        el_ref = 1.0
+    if fad_exp == 0.0:
+        fad_exp = 1.0
+    if fscale_t == 0.0:
+        fscale_t = 1.0
+    if scale == 0.0:
+        scale = 1.0
+
+    params = {
+        "dcrit": dcrit, "d": d, "n": n, "dadv": dadv, "fct_idd": fct_idd,
+        "table1_id": table1_id, "xscale1": xscale1, "xscale2": xscale2,
+        "table2_id": table2_id, "xscale3": xscale3, "xscale4": xscale4,
+        "fct_id_el": fct_id_el, "fscale_el": fscale_el, "el_ref": el_ref,
+        "inst_start": inst_start, "fad_exp": fad_exp, "ch_i_f": ch_i_f,
+        "fct_id_t": fct_id_t, "fscale_t": fscale_t,
+        "ifunc": ifunc, "eps_max": eps_max, "scale": scale,
+    }
+    from ..model.entities import FailTab1, FailureModel
+    tab1_obj = FailTab1(
+        mat_id=mat_id, ifail_sh=ifail_sh, ifail_so=ifail_so,
+        p_thickfail=p_thickfail, p_thinfail=p_thinfail, ixfem=ixfem,
+        dcrit=dcrit, d=d, n=n, dadv=dadv, fct_idd=fct_idd,
+        table1_id=table1_id, xscale1=xscale1, xscale2=xscale2,
+        table2_id=table2_id, xscale3=xscale3, xscale4=xscale4,
+        fct_id_el=fct_id_el, fscale_el=fscale_el, el_ref=el_ref,
+        inst_start=inst_start, fad_exp=fad_exp, ch_i_f=ch_i_f,
+        fct_id_t=fct_id_t, fscale_t=fscale_t,
+        ifunc=ifunc, eps_max=eps_max, scale=scale, fail_id=fail_id,
+        params=params,
+    )
+    model.fail_tab1s[mat_id] = tab1_obj
+    fm = FailureModel(type="TAB1", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_sph_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/SPH_ENERGY`` or ``/ENG/SPH_WORK`` (M278): Engine SPH particle internal/work energy tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/SPH_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_sph, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_SPH_ENERGY_1")
+        dt_sph = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_sph = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngSphEnergy
+    r_id = block.user_id or (len(model.eng_sph_energies) + 1)
+    model.eng_sph_energies[r_id] = EngSphEnergy(
+        id=r_id, title=title, dt_sph=dt_sph, sens_id=sens_id
+    )
+
+
+def read_lagmul_clevis_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CLEVIS_JOINT/id`` or ``/LAGMUL/CLEVIS_JOINT/id`` (M278): Clevis pin / fork-and-tang kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/CLEVIS_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("CLEVIS_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("CLEVIS_JOINT_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulClevisJoint
+    model.lagmul_clevis_joints[block.user_id] = LagmulClevisJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+
+
+def read_sensor_spring_total_work(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TOTAL_WORK`` or ``/SENSOR/SPRING_TOT_WORK`` (M278): Spring element total work energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TOTAL_WORK/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, w_tot_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_TOTAL_WORK_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        w_tot_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        w_tot_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTotalWork, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_total_works) + 1)
+    sstw = SensorSpringTotalWork(
+        id=s_id, title=title, spring_id=spring_id,
+        w_tot_max=w_tot_max, t_delay=t_delay
+    )
+    model.sensor_spring_total_works[s_id] = sstw
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_TOTAL_WORK", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -53388,6 +53661,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_THERM_DISS": read_sensor_spring_thermal_dissipation,
     "SENSOR_SPRING_HEAT_ENERGY": read_sensor_spring_thermal_dissipation,
     "SENSOR_THERMAL_DISSIPATION_SPRING": read_sensor_spring_thermal_dissipation,
+    # --- M278: Tab1 Failure Model, Engine SPH Energy Output Directive, Clevis Joint Suite, and Spring Total Work Sensor ---
+    "FAIL_TAB1": read_fail_tab1,
+    "FAIL_TABULATED1": read_fail_tab1,
+    "FAIL_TAB_1D": read_fail_tab1,
+    "FAIL_TAB1_MODEL": read_fail_tab1,
+    "FAIL_TAB1_LAW": read_fail_tab1,
+    "ENG_SPH_ENERGY": read_eng_sph_energy,
+    "ENG_SPH_WORK": read_eng_sph_energy,
+    "ENG_ESPH": read_eng_sph_energy,
+    "ENG_SPH_ENER": read_eng_sph_energy,
+    "ENG_SPH_INTERNAL_ENERGY": read_eng_sph_energy,
+    "LAGMUL_CLEVIS_JOINT": read_lagmul_clevis_joint,
+    "CLEVIS_JOINT": read_lagmul_clevis_joint,
+    "LAGMUL_CLEVIS_PIN": read_lagmul_clevis_joint,
+    "CLEVIS_PIN": read_lagmul_clevis_joint,
+    "CLEVIS_MECHANISM": read_lagmul_clevis_joint,
+    "SENSOR_SPRING_TOTAL_WORK": read_sensor_spring_total_work,
+    "SENSOR_SPRING_TOT_WORK": read_sensor_spring_total_work,
+    "SENSOR_SPRING_WORK_TOTAL": read_sensor_spring_total_work,
+    "SENSOR_TOTAL_WORK_SPRING": read_sensor_spring_total_work,
 }
 
 

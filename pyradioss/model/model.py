@@ -1852,6 +1852,11 @@ class Model:
         self.lagmul_tripod_ball_joints: Dict[int, Any] = {}          # /TRIPOD_BALL_JOINT, /LAGMUL/TRIPOD_BALL_JOINT (M277)
         self.sensor_spring_thermal_dissipations: Dict[int, Any] = {} # /SENSOR/SPRING_THERMAL_DISSIPATION (M277)
 
+        # M278 Entities
+        self.eng_sph_energies: Dict[int, Any] = {}                   # /ENG/SPH_ENERGY, /ENG/SPH_WORK (M278)
+        self.lagmul_clevis_joints: Dict[int, Any] = {}               # /CLEVIS_JOINT, /LAGMUL/CLEVIS_JOINT (M278)
+        self.sensor_spring_total_works: Dict[int, Any] = {}          # /SENSOR/SPRING_TOTAL_WORK (M278)
+
 
 
 
