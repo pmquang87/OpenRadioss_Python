@@ -1810,6 +1810,12 @@ class Model:
         self.lagmul_rzeppa_joints: Dict[int, Any] = {}               # /RZEPPA_JOINT, /LAGMUL/RZEPPA_JOINT (M270)
         self.sensor_spring_axial_energies: Dict[int, Any] = {}       # /SENSOR/SPRING_AXIAL_ENERGY (M270)
 
+        # M271 Entities
+        self.fail_biquad_anisos: Dict[int, Any] = {}                 # /FAIL/BIQUAD_ANISO (M271)
+        self.eng_hourglass_energies: Dict[int, Any] = {}             # /ENG/HOURGLASS_ENERGY (M271)
+        self.lagmul_birfield_joints: Dict[int, Any] = {}             # /BIRFIELD_JOINT, /LAGMUL/BIRFIELD_JOINT (M271)
+        self.sensor_spring_damping_energies: Dict[int, Any] = {}     # /SENSOR/SPRING_DAMPING_ENERGY (M271)
+
 
 
 

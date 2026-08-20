@@ -14741,6 +14741,59 @@ class SensorSpringAxialEnergy:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M271 Suite: BiquadAniso failure, EngHourglassEnergy, BirfieldJoint, SensorSpringDampingEnergy
+# ============================================================================
+
+@dataclass
+class FailBiquadAniso:
+    """``/FAIL/BIQUAD_ANISO/mat_ID`` (M271): Biquadratic anisotropic yield failure model."""
+    mat_id: int = 1
+    title: str = ""
+    sigma_1t: float = 1e30      # tensile strength direction 1
+    sigma_1c: float = 1e30      # compressive strength direction 1
+    sigma_2t: float = 1e30      # tensile strength direction 2
+    sigma_2c: float = 1e30      # compressive strength direction 2
+    ifail_sh: int = 1            # shell deletion flag (1=one layer fails, 2=all layers fail)
+    ifail_so: int = 1            # solid element deletion flag
+    d_max: float = 1.0           # maximum accumulated damage threshold
+
+
+@dataclass
+class EngHourglassEnergy:
+    """``/ENG/HOURGLASS_ENERGY`` or ``/ENG/HG_ENERGY`` (M271): Engine hourglass energy history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_hg: float = 0.0          # time frequency for hourglass energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulBirfieldJoint:
+    """``/BIRFIELD_JOINT/id`` or ``/LAGMUL/BIRFIELD_JOINT/id`` (M271): Birfield (plunging CV) joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # driving input shaft node
+    node2: int = 0               # driven output shaft node
+    node3: int = 0               # plunging sleeve center node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # shaft rotation axis vector X
+    axis_y: float = 0.0          # shaft rotation axis vector Y
+    axis_z: float = 1.0          # shaft rotation axis vector Z
+
+
+@dataclass
+class SensorSpringDampingEnergy:
+    """``/SENSOR/SPRING_DAMPING_ENERGY`` or ``/SENSOR/SPRING_DAMP_ENERGY`` (M271): Spring element damping dissipation energy threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    u_damp_max: float = 1e30     # maximum damping energy threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

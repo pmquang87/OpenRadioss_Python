@@ -49025,6 +49025,160 @@ def read_sensor_spring_axial_energy(block: KeywordBlock, model: Model, log: Mess
     ))
 
 
+# ============================================================================
+# M271 Suite: BiquadAniso failure, EngHourglassEnergy, BirfieldJoint, SensorSpringDampingEnergy
+# ============================================================================
+
+def read_fail_biquad_aniso(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/BIQUAD_ANISO/mat_ID`` (M271): Biquadratic anisotropic yield failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/BIQUAD_ANISO/{block.user_id}: missing data card", block.source)
+        return
+
+    sigma_1t, sigma_1c, sigma_2t, sigma_2c = 1e30, 1e30, 1e30, 1e30
+    ifail_sh, ifail_so, d_max = 1, 1, 1.0
+
+    if block.fixed:
+        f1 = cards[0].cut("FAIL_BIQUAD_ANISO_1")
+        sigma_1t = _fval(f1[0], 1e30) if len(f1) > 0 and f1[0].strip() else 1e30
+        sigma_1c = _fval(f1[1], 1e30) if len(f1) > 1 and f1[1].strip() else 1e30
+        sigma_2t = _fval(f1[2], 1e30) if len(f1) > 2 and f1[2].strip() else 1e30
+        sigma_2c = _fval(f1[3], 1e30) if len(f1) > 3 and f1[3].strip() else 1e30
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_BIQUAD_ANISO_2")
+            ifail_sh = _ival(f2[0], 1) if len(f2) > 0 and f2[0].strip() else 1
+            ifail_so = _ival(f2[1], 1) if len(f2) > 1 and f2[1].strip() else 1
+            d_max = _fval(f2[2], 1.0) if len(f2) > 2 and f2[2].strip() else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        sigma_1t = float(toks1[0]) if len(toks1) > 0 else 1e30
+        sigma_1c = float(toks1[1]) if len(toks1) > 1 else 1e30
+        sigma_2t = float(toks1[2]) if len(toks1) > 2 else 1e30
+        sigma_2c = float(toks1[3]) if len(toks1) > 3 else 1e30
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            ifail_sh = int(float(toks2[0])) if len(toks2) > 0 else 1
+            ifail_so = int(float(toks2[1])) if len(toks2) > 1 else 1
+            d_max = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    if ifail_sh == 0:
+        ifail_sh = 1
+    if ifail_so == 0:
+        ifail_so = 1
+    if d_max == 0.0:
+        d_max = 1.0
+
+    from ..model.entities import FailBiquadAniso
+    model.fail_biquad_anisos[block.user_id] = FailBiquadAniso(
+        mat_id=block.user_id, title=title,
+        sigma_1t=sigma_1t, sigma_1c=sigma_1c, sigma_2t=sigma_2t, sigma_2c=sigma_2c,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, d_max=d_max
+    )
+
+
+def read_eng_hourglass_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/HOURGLASS_ENERGY`` or ``/ENG/HG_ENERGY`` (M271): Engine hourglass energy history tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/HOURGLASS_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_hg, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_HOURGLASS_ENERGY_1")
+        dt_hg = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_hg = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngHourglassEnergy
+    r_id = block.user_id or (len(model.eng_hourglass_energies) + 1)
+    model.eng_hourglass_energies[r_id] = EngHourglassEnergy(
+        id=r_id, title=title, dt_hg=dt_hg, sens_id=sens_id
+    )
+
+
+def read_lagmul_birfield_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/BIRFIELD_JOINT/id`` or ``/LAGMUL/BIRFIELD_JOINT/id`` (M271): Birfield (plunging CV) joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/BIRFIELD_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("BIRFIELD_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("BIRFIELD_JOINT_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2])) if len(toks1) > 2 else 0
+        stiff = float(toks1[3]) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4])) if len(toks1) > 4 else 0
+        tol = float(toks1[5]) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    from ..model.entities import LagmulBirfieldJoint
+    model.lagmul_birfield_joints[block.user_id] = LagmulBirfieldJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+
+
+def read_sensor_spring_damping_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_DAMPING_ENERGY`` or ``/SENSOR/SPRING_DAMP_ENERGY`` (M271): Spring element damping dissipation energy threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_DAMPING_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, u_damp_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_DAMPING_ENERGY_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        u_damp_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        u_damp_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringDampingEnergy, Sensor
+    ssde = SensorSpringDampingEnergy(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        u_damp_max=u_damp_max, t_delay=t_delay
+    )
+    model.sensor_spring_damping_energies[ssde.id] = ssde
+    model.sensors.append(Sensor(
+        id=ssde.id, kind="SPRING_DAMPING_ENERGY", tdelay=t_delay
+    ))
+
+
 
 
 
@@ -51862,6 +52016,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_AX_ENERGY": read_sensor_spring_axial_energy,
     "SENSOR_SPRING_AXIAL_DEFORM": read_sensor_spring_axial_energy,
     "SENSOR_AXIAL_ENERGY_SPRING": read_sensor_spring_axial_energy,
+    # --- M271: Biquadratic Anisotropic Yield Failure Model, Engine Hourglass Energy Output Directive, Birfield Joint Suite, and Spring Damping Energy Sensor ---
+    "FAIL_BIQUAD_ANISO": read_fail_biquad_aniso,
+    "FAIL_BIQUAD_ANISO_MODEL": read_fail_biquad_aniso,
+    "FAIL_BQ_ANISO": read_fail_biquad_aniso,
+    "FAIL_BIQUADRATIC_ANISO": read_fail_biquad_aniso,
+    "FAIL_BIQUAD_ANISOTROPIC": read_fail_biquad_aniso,
+    "ENG_HOURGLASS_ENERGY": read_eng_hourglass_energy,
+    "ENG_HG_ENERGY": read_eng_hourglass_energy,
+    "ENG_HOURG_ENERGY": read_eng_hourglass_energy,
+    "ENG_HOURGLASS": read_eng_hourglass_energy,
+    "ENG_EHG": read_eng_hourglass_energy,
+    "LAGMUL_BIRFIELD_JOINT": read_lagmul_birfield_joint,
+    "BIRFIELD_JOINT": read_lagmul_birfield_joint,
+    "LAGMUL_BIRFIELD_COUPLING": read_lagmul_birfield_joint,
+    "BIRFIELD_COUPLING": read_lagmul_birfield_joint,
+    "BIRFIELD_MECHANISM": read_lagmul_birfield_joint,
+    "SENSOR_SPRING_DAMPING_ENERGY": read_sensor_spring_damping_energy,
+    "SENSOR_SPRING_DAMP_ENERGY": read_sensor_spring_damping_energy,
+    "SENSOR_SPRING_DISSIPATION": read_sensor_spring_damping_energy,
+    "SENSOR_DAMPING_ENERGY_SPRING": read_sensor_spring_damping_energy,
 }
 
 
