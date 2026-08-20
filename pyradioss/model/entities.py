@@ -15341,6 +15341,59 @@ class SensorSpringTotalMoment:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M285 Suite: LouHuo failure, EngCoriolisEnergy, CablePulleyJoint, SensorSpringAngularVelocity
+# ============================================================================
+
+@dataclass
+class FailLouHuo:
+    """``/FAIL/LOU_HUO`` or ``/FAIL/LOU_HUO_YANG`` (M285): Lou-Huo-Yang shear ductile fracture criterion."""
+    mat_id: int = 0
+    title: str = ""
+    c1: float = 0.0              # shear stress sensitivity coefficient
+    c2: float = 0.0              # stress triaxiality weighting factor
+    c3: float = 0.0              # equivalent plastic strain exponent
+    l_param: float = 1.0         # non-proportional loading factor (L)
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngCoriolisEnergy:
+    """``/ENG/CORIOLIS_ENERGY`` or ``/ENG/CORIOLIS_WORK`` (M285): Engine rotating frame Coriolis inertial force work tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_coriolis: float = 0.0     # time frequency for Coriolis energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulCablePulleyJoint:
+    """``/CABLE_PULLEY_JOINT/id`` or ``/LAGMUL/CABLE_PULLEY_JOINT/id`` (M285): Flexible cable and pulley wrapping transmission kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # cable entry tangency node
+    node2: int = 0               # cable exit tangency node
+    node3: int = 0               # pulley hub / center axle frame node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    pulley_radius: float = 0.0   # pulley pitch radius
+    wrap_angle: float = 180.0    # cable wrapping contact angle (degrees)
+    axis_z: float = 1.0          # pulley rotational axle vector Z
+
+
+@dataclass
+class SensorSpringAngularVelocity:
+    """``/SENSOR/SPRING_ANGULAR_VELOCITY`` or ``/SENSOR/SPRING_ANG_VEL`` (M285): Spring element relative rotational velocity / angular rate threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    omega_max: float = 1e30      # maximum angular velocity magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

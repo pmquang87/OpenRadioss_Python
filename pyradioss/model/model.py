@@ -1887,6 +1887,12 @@ class Model:
         self.lagmul_geneva_joints: Dict[int, Any] = {}               # /GENEVA_JOINT, /LAGMUL/GENEVA_JOINT (M284)
         self.sensor_spring_total_moments: Dict[int, Any] = {}        # /SENSOR/SPRING_TOTAL_MOMENT (M284)
 
+        # M285 Entities
+        self.fail_louhuos: Dict[int, Any] = {}                       # /FAIL/LOU_HUO (M285)
+        self.eng_coriolis_energies: Dict[int, Any] = {}              # /ENG/CORIOLIS_ENERGY (M285)
+        self.lagmul_cable_pulley_joints: Dict[int, Any] = {}         # /CABLE_PULLEY_JOINT, /LAGMUL/CABLE_PULLEY_JOINT (M285)
+        self.sensor_spring_angular_velocities: Dict[int, Any] = {}   # /SENSOR/SPRING_ANGULAR_VELOCITY (M285)
+
 
 
 
