@@ -1768,6 +1768,14 @@ class Model:
         self.lagmul_differential_gears: Dict[int, Any] = {}          # /DIFFERENTIAL_GEAR, /LAGMUL/DIFFERENTIAL_GEAR (M263)
         self.sensor_spring_moment_rates: Dict[int, Any] = {}         # /SENSOR/SPRING_MOMENT_RATE (M263)
 
+        # M264 Entities
+        self.fail_johnson_cooks: Dict[int, Any] = {}                 # /FAIL/JOHNSON_COOK (M264)
+        self.eng_max_shears: Dict[int, Any] = {}                     # /ENG/MAX_SHEAR (M264)
+        self.lagmul_transfer_cases: Dict[int, Any] = {}              # /TRANSFER_CASE, /LAGMUL/TRANSFER_CASE (M264)
+        self.sensor_spring_moment_impulses: Dict[int, Any] = {}      # /SENSOR/SPRING_MOMENT_IMPULSE (M264)
+
+
+
 
 
 

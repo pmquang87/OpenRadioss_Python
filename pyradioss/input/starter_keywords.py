@@ -23996,6 +23996,57 @@ def read_lagmul_differential_gear(block: KeywordBlock, model: Model, log: Messag
     )
 
 
+def read_lagmul_transfer_case(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TRANSFER_CASE/id`` or ``/LAGMUL/TRANSFER_CASE/id`` (M264): 4WD/AWD Transfer case transmission kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/TRANSFER_CASE/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, front_split, stiff, skew_id, tol = 0, 0, 0, 0.5, 1e6, 0, 1e-6
+    axis_x, axis_y, axis_z = 0.0, 0.0, 1.0
+    if block.fixed:
+        f1 = cards[0].cut("TRANSFER_CASE_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        front_split = _fval(f1[3], 0.5) if len(f1) > 3 and f1[3].strip() else 0.5
+        stiff = _fval(f1[4], 1e6) if len(f1) > 4 and f1[4].strip() else 1e6
+        skew_id = _ival(f1[5], 0) if len(f1) > 5 else 0
+        tol = _fval(f1[6], 1e-6) if len(f1) > 6 and f1[6].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("TRANSFER_CASE_2")
+            axis_x = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            axis_y = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            axis_z = _fval(f2[2], 1.0) if len(f2) > 2 else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0])) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1])) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2])) if len(toks1) > 2 else 0
+        front_split = float(toks1[3]) if len(toks1) > 3 else 0.5
+        stiff = float(toks1[4]) if len(toks1) > 4 else 1e6
+        skew_id = int(float(toks1[5])) if len(toks1) > 5 else 0
+        tol = float(toks1[6]) if len(toks1) > 6 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            axis_x = float(toks2[0]) if len(toks2) > 0 else 0.0
+            axis_y = float(toks2[1]) if len(toks2) > 1 else 0.0
+            axis_z = float(toks2[2]) if len(toks2) > 2 else 1.0
+
+    if front_split == 0.0:
+        front_split = 0.5
+
+    from ..model.entities import LagmulTransferCase
+    model.lagmul_transfer_cases[block.user_id] = LagmulTransferCase(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        front_split=front_split, stiff=stiff, skew_id=skew_id, tol=tol,
+        axis_x=axis_x, axis_y=axis_y, axis_z=axis_z
+    )
+
+
 def read_cardan_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/CARDAN/id`` or ``/LAGMUL/CARDAN/id`` (M210): Cardan/Universal kinematic joint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -44095,6 +44146,73 @@ def read_fail_gurson(block: KeywordBlock, model: Model, log: MessageLog) -> None
     )
 
 
+def read_fail_johnson_cook(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/JOHNSON_COOK/mat_ID`` (M264): Johnson-Cook 3D dynamic ductile damage failure model."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/JOHNSON_COOK/{block.user_id}: missing data card", block.source)
+        return
+
+    d1, d2, d3, d4, d5 = 0.0, 0.0, 0.0, 0.0, 0.0
+    eps_dot_0, t_room, t_melt, m_exp = 1.0, 293.15, 1793.15, 1.0
+    ifail_sh, d_max = 1, 1.0
+
+    if block.fixed:
+        # Card 1: D1, D2, D3, D4, D5
+        f1 = cards[0].cut("FAIL_JOHNSON_COOK_1")
+        d1 = _fval(f1[0], 0.0) if len(f1) > 0 else 0.0
+        d2 = _fval(f1[1], 0.0) if len(f1) > 1 else 0.0
+        d3 = _fval(f1[2], 0.0) if len(f1) > 2 else 0.0
+        d4 = _fval(f1[3], 0.0) if len(f1) > 3 else 0.0
+        d5 = _fval(f1[4], 0.0) if len(f1) > 4 else 0.0
+
+        # Card 2: EPS_DOT_0, T_ROOM, T_MELT, M_EXP, IFAIL_SH, D_MAX
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FAIL_JOHNSON_COOK_2")
+            eps_dot_0 = _fval(f2[0], 1.0) if len(f2) > 0 and f2[0].strip() else 1.0
+            t_room = _fval(f2[1], 293.15) if len(f2) > 1 and f2[1].strip() else 293.15
+            t_melt = _fval(f2[2], 1793.15) if len(f2) > 2 and f2[2].strip() else 1793.15
+            m_exp = _fval(f2[3], 1.0) if len(f2) > 3 and f2[3].strip() else 1.0
+            ifail_sh = _ival(f2[4], 1) if len(f2) > 4 and f2[4].strip() else 1
+            d_max = _fval(f2[5], 1.0) if len(f2) > 5 and f2[5].strip() else 1.0
+    else:
+        toks1 = cards[0].tokens()
+        d1 = float(toks1[0]) if len(toks1) > 0 else 0.0
+        d2 = float(toks1[1]) if len(toks1) > 1 else 0.0
+        d3 = float(toks1[2]) if len(toks1) > 2 else 0.0
+        d4 = float(toks1[3]) if len(toks1) > 3 else 0.0
+        d5 = float(toks1[4]) if len(toks1) > 4 else 0.0
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            eps_dot_0 = float(toks2[0]) if len(toks2) > 0 else 1.0
+            t_room = float(toks2[1]) if len(toks2) > 1 else 293.15
+            t_melt = float(toks2[2]) if len(toks2) > 2 else 1793.15
+            m_exp = float(toks2[3]) if len(toks2) > 3 else 1.0
+            ifail_sh = int(float(toks2[4])) if len(toks2) > 4 else 1
+            d_max = float(toks2[5]) if len(toks2) > 5 else 1.0
+
+    if eps_dot_0 == 0.0:
+        eps_dot_0 = 1.0
+    if t_melt == 0.0:
+        t_melt = 1793.15
+    if m_exp == 0.0:
+        m_exp = 1.0
+    if ifail_sh == 0:
+        ifail_sh = 1
+    if d_max == 0.0:
+        d_max = 1.0
+
+    from ..model.entities import FailJohnsonCook
+    model.fail_johnson_cooks[block.user_id] = FailJohnsonCook(
+        mat_id=block.user_id, title=title,
+        d1=d1, d2=d2, d3=d3, d4=d4, d5=d5,
+        eps_dot_0=eps_dot_0, t_room=t_room, t_melt=t_melt, m_exp=m_exp,
+        ifail_sh=ifail_sh, d_max=d_max
+    )
+
+
+
 
 
 
@@ -47921,6 +48039,61 @@ def read_sensor_spring_moment_rate(block: KeywordBlock, model: Model, log: Messa
     ))
 
 
+def read_eng_max_shear(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/MAX_SHEAR`` or ``/ENG/TMAX`` (M264): Engine maximum shear stress history tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/MAX_SHEAR/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_tmax, sens_id = 0.0, 0
+    if block.fixed:
+        f = cards[0].cut("ENG_MAX_SHEAR_1")
+        dt_tmax = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_tmax = float(toks[0]) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1])) if len(toks) > 1 else 0
+
+    from ..model.entities import EngMaxShear
+    r_id = block.user_id or (len(model.eng_max_shears) + 1)
+    model.eng_max_shears[r_id] = EngMaxShear(
+        id=r_id, title=title, dt_tmax=dt_tmax, sens_id=sens_id
+    )
+
+
+def read_sensor_spring_moment_impulse(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_MOMENT_IMPULSE`` or ``/SENSOR/SPRING_MOM_IMPULSE`` (M264): Spring element angular/moment impulse threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_MOMENT_IMPULSE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, h_max, t_delay = 0, 1e30, 0.0
+    if block.fixed:
+        f = cards[0].cut("SENSOR_SPRING_MOMENT_IMPULSE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        h_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0])) if len(toks) > 0 else 0
+        h_max = float(toks[1]) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2]) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringMomentImpulse, Sensor
+    ssmi = SensorSpringMomentImpulse(
+        id=block.user_id or 1, title=title, spring_id=spring_id,
+        h_max=h_max, t_delay=t_delay
+    )
+    model.sensor_spring_moment_impulses[ssmi.id] = ssmi
+    model.sensors.append(Sensor(
+        id=ssmi.id, kind="SPRING_MOMENT_IMPULSE", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -50613,6 +50786,26 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_DM": read_sensor_spring_moment_rate,
     "SENSOR_SPRING_MOMENTRATE": read_sensor_spring_moment_rate,
     "SENSOR_DM_SPRING": read_sensor_spring_moment_rate,
+    # --- M264: Alter Windshield Glass Failure Model, Engine Maximum Shear Stress Output Directive, Transfer Case Joint Suite, and Spring Moment Impulse Sensor ---
+    # --- M264: Johnson-Cook Dynamic Failure Model, Engine Maximum Shear Stress Output Directive, Transfer Case Joint Suite, and Spring Moment Impulse Sensor ---
+    "FAIL_JOHNSON_COOK": read_fail_johnson_cook,
+    "FAIL_JOHNSON_COOK_MODEL": read_fail_johnson_cook,
+    "FAIL_JOHNSON_COOK_LAW": read_fail_johnson_cook,
+    "FAIL_JC": read_fail_johnson_cook,
+    "FAIL_JC_DAMAGE": read_fail_johnson_cook,
+    "ENG_MAX_SHEAR": read_eng_max_shear,
+    "ENG_TMAX": read_eng_max_shear,
+    "ENG_MAX_SHEAR_STRESS": read_eng_max_shear,
+    "ENG_TAUMAX": read_eng_max_shear,
+    "LAGMUL_TRANSFER_CASE": read_lagmul_transfer_case,
+    "TRANSFER_CASE": read_lagmul_transfer_case,
+    "LAGMUL_TCASE": read_lagmul_transfer_case,
+    "TCASE": read_lagmul_transfer_case,
+    "TRANSFER_GEAR": read_lagmul_transfer_case,
+    "SENSOR_SPRING_MOMENT_IMPULSE": read_sensor_spring_moment_impulse,
+    "SENSOR_SPRING_MOM_IMPULSE": read_sensor_spring_moment_impulse,
+    "SENSOR_SPRING_ANGULAR_IMPULSE": read_sensor_spring_moment_impulse,
+    "SENSOR_ANGULAR_IMPULSE_SPRING": read_sensor_spring_moment_impulse,
 }
 
 

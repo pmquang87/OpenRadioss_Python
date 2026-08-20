@@ -14363,6 +14363,66 @@ class SensorSpringMomentRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M264 Suite: Johnson-Cook failure, EngMaxShear, TransferCase, SensorSpringMomentImpulse
+# ============================================================================
+
+@dataclass
+class FailJohnsonCook:
+    """``/FAIL/JOHNSON_COOK/mat_ID`` (M264): Johnson-Cook 3D dynamic ductile damage failure model."""
+    mat_id: int = 1
+    title: str = ""
+    d1: float = 0.0              # initial fracture strain coefficient D1
+    d2: float = 0.0              # exponential triaxiality coefficient D2
+    d3: float = 0.0              # triaxiality exponent D3
+    d4: float = 0.0              # strain rate sensitivity coefficient D4
+    d5: float = 0.0              # temperature softening coefficient D5
+    eps_dot_0: float = 1.0       # reference quasi-static strain rate
+    t_room: float = 293.15       # reference room temperature
+    t_melt: float = 1793.15      # material melting temperature
+    m_exp: float = 1.0           # thermal softening exponent m
+    ifail_sh: int = 1            # shell deletion flag (1=one layer fails, 2=all layers fail)
+    d_max: float = 1.0           # maximum accumulated damage threshold
+
+
+
+@dataclass
+class EngMaxShear:
+    """``/ENG/MAX_SHEAR`` or ``/ENG/TMAX`` (M264): Engine maximum shear stress history tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_tmax: float = 0.0         # time frequency for max shear stress output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulTransferCase:
+    """``/TRANSFER_CASE/id`` or ``/LAGMUL/TRANSFER_CASE/id`` (M264): 4WD/AWD Transfer case transmission kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # transmission drive input node
+    node2: int = 0               # front axle output node
+    node3: int = 0               # rear axle output node
+    front_split: float = 0.5     # front axle nominal torque split fraction
+    stiff: float = 1e6           # kinematic center differential contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    axis_x: float = 0.0          # transfer case shaft axis vector X
+    axis_y: float = 0.0          # transfer case shaft axis vector Y
+    axis_z: float = 1.0          # transfer case shaft axis vector Z
+
+
+@dataclass
+class SensorSpringMomentImpulse:
+    """``/SENSOR/SPRING_MOMENT_IMPULSE`` or ``/SENSOR/SPRING_MOM_IMPULSE`` (M264): Spring element angular / moment impulse threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    h_max: float = 1e30          # maximum angular/moment impulse threshold int|M|dt
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 
