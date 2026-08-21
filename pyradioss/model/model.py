@@ -1941,6 +1941,12 @@ class Model:
         self.lagmul_chebyshev_linkage_joints: Dict[int, Any] = {}    # /CHEBYSHEV_LINKAGE_JOINT, /LAGMUL/CHEBYSHEV_LINKAGE_JOINT (M293)
         self.sensor_spring_total_angular_accelerations: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_ACCELERATION (M293)
 
+        # M294 Entities
+        self.fail_ladtransisotropics: Dict[int, Any] = {}            # /FAIL/LAD_TRANS_ISOTROPIC (M294)
+        self.eng_magnetostriction_energies: Dict[int, Any] = {}      # /ENG/MAGNETOSTRICTION_ENERGY (M294)
+        self.lagmul_roberts_linkage_joints: Dict[int, Any] = {}      # /ROBERTS_LINKAGE_JOINT, /LAGMUL/ROBERTS_LINKAGE_JOINT (M294)
+        self.sensor_spring_normal_jerks: Dict[int, Any] = {}         # /SENSOR/SPRING_NORMAL_JERK (M294)
+
 
 
 

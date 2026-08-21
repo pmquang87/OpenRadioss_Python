@@ -2340,6 +2340,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("LAD_CREEP", "FAIL_LAD_CREEP", "LADEVEZE_CREEP", "LAD_CREEP_DAMAGE", "LAD_CREEP_MODEL", "LAD_CREEP_LAW", "LADEVEZE_TERTIARY_CREEP"):
         read_fail_lad_creep(block, model, log)
         return
+    if kind in ("LAD_TRANS_ISOTROPIC", "FAIL_LAD_TRANS_ISOTROPIC", "LADEVEZE_TRANSVERSE_ISOTROPIC", "LAD_TI", "LAD_TI_MODEL", "LAD_TI_LAW", "LADEVEZE_TRANS_ISOTROPIC_DAMAGE"):
+        read_fail_lad_trans_isotropic(block, model, log)
+        return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
@@ -53154,6 +53157,154 @@ def read_sensor_spring_total_angular_acceleration(block: KeywordBlock, model: Mo
     ))
 
 
+# ============================================================================
+# M294 Suite: LadTransIsotropic failure, EngMagnetostrictionEnergy, RobertsLinkageJoint, SensorSpringNormalJerk
+# ============================================================================
+
+def read_fail_lad_trans_isotropic(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_TRANS_ISOTROPIC/mat_ID`` or ``/FAIL/LADEVEZE_TRANSVERSE_ISOTROPIC`` (M294): Ladevèze transversely isotropic fiber-reinforced composite damage evolution model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_TRANS_ISOTROPIC/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_TRANS_ISOTROPIC_1")
+        d1_max = _fval(c1[0], 0.999) if len(c1) > 0 and c1[0].strip() else 0.999
+        d2_max = _fval(c1[1], 0.999) if len(c1) > 1 and c1[1].strip() else 0.999
+        d3_max = _fval(c1[2], 0.999) if len(c1) > 2 and c1[2].strip() else 0.999
+        y1_crit = _fval(c1[3], 0.0) if len(c1) > 3 and c1[3].strip() else 0.0
+        y2_crit = _fval(c1[4], 0.0) if len(c1) > 4 and c1[4].strip() else 0.0
+        c2 = cards[1].cut("FAIL_LAD_TRANS_ISOTROPIC_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        d1_max = float(t1[0].rstrip(',')) if len(t1) > 0 and t1[0].rstrip(',') else 0.999
+        d2_max = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 0.999
+        d3_max = float(t1[2].rstrip(',')) if len(t1) > 2 and t1[2].rstrip(',') else 0.999
+        y1_crit = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 0.0
+        y2_crit = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.0
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "d1_max": d1_max, "d2_max": d2_max, "d3_max": d3_max, "y1_crit": y1_crit, "y2_crit": y2_crit,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadTransIsotropic, FailureModel
+    model.fail_ladtransisotropics[mat_id] = FailLadTransIsotropic(
+        mat_id=mat_id, title=title, d1_max=d1_max, d2_max=d2_max, d3_max=d3_max, y1_crit=y1_crit, y2_crit=y2_crit,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_TRANS_ISOTROPIC", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_magnetostriction_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/MAGNETOSTRICTION_ENERGY`` or ``/ENG/MAG_STRICT_WORK`` (M294): Engine magnetostrictive strain deformation energy and magnetic-mechanical coupling work output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/MAGNETOSTRICTION_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_magnetostriction, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_MAGNETOSTRICTION_ENERGY_1")
+        dt_magnetostriction = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_magnetostriction = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngMagnetostrictionEnergy
+    r_id = block.user_id or (len(model.eng_magnetostriction_energies) + 1)
+    model.eng_magnetostriction_energies[r_id] = EngMagnetostrictionEnergy(
+        id=r_id, title=title, dt_magnetostriction=dt_magnetostriction, sens_id=sens_id
+    )
+
+
+def read_lagmul_roberts_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ROBERTS_LINKAGE_JOINT/id`` or ``/LAGMUL/ROBERTS_LINKAGE_JOINT/id`` (M294): Roberts 4-bar straight-line symmetrical linkage planar kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ROBERTS_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    base_len, arm_len, coupler_height = 0.0, 0.0, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("ROBERTS_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("ROBERTS_LINKAGE_JOINT_2")
+            base_len = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            arm_len = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            coupler_height = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 0 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            base_len = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            arm_len = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            coupler_height = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+
+    from ..model.entities import LagmulRobertsLinkageJoint
+    model.lagmul_roberts_linkage_joints[block.user_id] = LagmulRobertsLinkageJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        base_len=base_len, arm_len=arm_len, coupler_height=coupler_height
+    )
+
+
+def read_sensor_spring_normal_jerk(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_NORMAL_JERK`` or ``/SENSOR/SPRING_NORM_JERK`` (M294): Spring element relative normal / axial jerk (rate of change of linear acceleration) threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_NORMAL_JERK/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, jn_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_NORMAL_JERK_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        jn_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        jn_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringNormalJerk, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_normal_jerks) + 1)
+    ssnj = SensorSpringNormalJerk(
+        id=s_id, title=title, spring_id=spring_id,
+        jn_max=jn_max, t_delay=t_delay
+    )
+    model.sensor_spring_normal_jerks[s_id] = ssnj
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_NORMAL_JERK", tdelay=t_delay
+    ))
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -56423,6 +56574,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_TOT_ANG_ACC": read_sensor_spring_total_angular_acceleration,
     "SENSOR_SPRING_ACC_ANG_TOT": read_sensor_spring_total_angular_acceleration,
     "SENSOR_TOTAL_ANGULAR_ACCELERATION_SPRING": read_sensor_spring_total_angular_acceleration,
+    # --- M294: LadTransIsotropic Failure Model, Engine Magnetostriction Energy Output Directive, Roberts Linkage Joint Suite, and Spring Normal Jerk Sensor ---
+    "FAIL_LAD_TRANS_ISOTROPIC": read_fail_lad_trans_isotropic,
+    "FAIL_LADEVEZE_TRANSVERSE_ISOTROPIC": read_fail_lad_trans_isotropic,
+    "FAIL_LAD_TI": read_fail_lad_trans_isotropic,
+    "FAIL_LAD_TI_MODEL": read_fail_lad_trans_isotropic,
+    "FAIL_LAD_TI_LAW": read_fail_lad_trans_isotropic,
+    "FAIL_LADEVEZE_TRANS_ISOTROPIC_DAMAGE": read_fail_lad_trans_isotropic,
+    "ENG_MAGNETOSTRICTION_ENERGY": read_eng_magnetostriction_energy,
+    "ENG_MAG_STRICT_WORK": read_eng_magnetostriction_energy,
+    "ENG_EMAGSTRICT": read_eng_magnetostriction_energy,
+    "ENG_MAGNETOSTRICTIVE_ENERGY": read_eng_magnetostriction_energy,
+    "ENG_EM_MAGNETOSTRICTION": read_eng_magnetostriction_energy,
+    "LAGMUL_ROBERTS_LINKAGE_JOINT": read_lagmul_roberts_linkage_joint,
+    "ROBERTS_LINKAGE_JOINT": read_lagmul_roberts_linkage_joint,
+    "LAGMUL_ROBERTS_LINKAGE": read_lagmul_roberts_linkage_joint,
+    "ROBERTS_LINKAGE": read_lagmul_roberts_linkage_joint,
+    "ROBERTS_STRAIGHT_LINE_MECHANISM": read_lagmul_roberts_linkage_joint,
+    "SENSOR_SPRING_NORMAL_JERK": read_sensor_spring_normal_jerk,
+    "SENSOR_SPRING_NORM_JERK": read_sensor_spring_normal_jerk,
+    "SENSOR_SPRING_JERK_NORMAL": read_sensor_spring_normal_jerk,
+    "SENSOR_NORMAL_JERK_SPRING": read_sensor_spring_normal_jerk,
 }
 
 

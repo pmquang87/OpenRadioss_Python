@@ -15826,6 +15826,60 @@ class SensorSpringTotalAngularAcceleration:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M294 Suite: LadTransIsotropic failure, EngMagnetostrictionEnergy, RobertsLinkageJoint, SensorSpringNormalJerk
+# ============================================================================
+
+@dataclass
+class FailLadTransIsotropic:
+    """``/FAIL/LAD_TRANS_ISOTROPIC`` or ``/FAIL/LADEVEZE_TRANSVERSE_ISOTROPIC`` (M294): Ladevèze transversely isotropic fiber-reinforced composite damage evolution model."""
+    mat_id: int = 0
+    title: str = ""
+    d1_max: float = 0.999        # maximum longitudinal fiber direction damage
+    d2_max: float = 0.999        # maximum transverse in-plane matrix damage
+    d3_max: float = 0.999        # maximum out-of-plane through-thickness damage
+    y1_crit: float = 0.0         # critical thermodynamic force threshold in direction 1
+    y2_crit: float = 0.0         # critical thermodynamic force threshold in direction 2
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngMagnetostrictionEnergy:
+    """``/ENG/MAGNETOSTRICTION_ENERGY`` or ``/ENG/MAG_STRICT_WORK`` (M294): Engine magnetostrictive strain deformation energy and magnetic-mechanical coupling work output directive."""
+    id: int = 1
+    title: str = ""
+    dt_magnetostriction: float = 0.0 # time frequency for magnetostriction energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulRobertsLinkageJoint:
+    """``/ROBERTS_LINKAGE_JOINT/id`` or ``/LAGMUL/ROBERTS_LINKAGE_JOINT/id`` (M294): Roberts 4-bar straight-line symmetrical linkage planar kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # left grounded pivot base node
+    node2: int = 0               # apex straight-line tracing coupler node
+    node3: int = 0               # right grounded pivot base node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    base_len: float = 0.0        # fixed ground frame base distance
+    arm_len: float = 0.0         # symmetrical grounded arm link length
+    coupler_height: float = 0.0  # triangular coupler apex height
+
+
+@dataclass
+class SensorSpringNormalJerk:
+    """``/SENSOR/SPRING_NORMAL_JERK`` or ``/SENSOR/SPRING_NORM_JERK`` (M294): Spring element relative normal / axial jerk (rate of change of linear acceleration) threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jn_max: float = 1e30         # maximum normal jerk magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
