@@ -16264,6 +16264,61 @@ class SensorSpringNormalAccelerationRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M302 Suite: LadFracture failure, EngThermophotonicEnergy, HoekenLinkageJoint, SensorSpringTransverseAccelerationRate
+# ============================================================================
+
+@dataclass
+class FailLadFracture:
+    """``/FAIL/LAD_FRACTURE`` or ``/FAIL/LADEVEZE_DYNAMIC_FRACTURE`` (M302): Ladevèze dynamic microcrack coalescence and cohesive zone fracture transition failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_frac: float = 0.0         # dynamic fracture microcrack activation threshold energy
+    yc_frac: float = 0.0         # critical cohesive fracture rupture energy
+    gamma_cohes: float = 0.0     # cohesive softening transition exponent
+    l_char: float = 0.0          # characteristic cohesive fracture process zone length
+    d_frac_max: float = 0.999    # maximum allowable fracture damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngThermophotonicEnergy:
+    """``/ENG/THERMOPHOTONIC_ENERGY`` or ``/ENG/TP_WORK`` (M302): Engine thermophotonic luminescence radiation and radiative thermal-to-electric photon conversion energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_thermophotonic: float = 0.0 # time frequency for thermophotonic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulHoekenLinkageJoint:
+    """``/HOEKEN_LINKAGE_JOINT/id`` or ``/LAGMUL/HOEKEN_LINKAGE_JOINT/id`` (M302): Hoecken 4-bar approximate straight-line and constant-velocity kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed frame base pivot node
+    node2: int = 0               # straight-line output coupler node
+    node3: int = 0               # crank driving pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    crank_len: float = 0.0       # length of driving crank link
+    coupler_len: float = 0.0     # length of coupler link
+    rocker_len: float = 0.0      # length of oscillating rocker link
+    travel_span: float = 0.0     # linear travel stroke span
+
+
+@dataclass
+class SensorSpringTransverseAccelerationRate:
+    """``/SENSOR/SPRING_TRANSVERSE_ACCELERATION_RATE`` or ``/SENSOR/SPRING_TRANS_ACC_RATE`` (M302): Spring element relative transverse / shear acceleration rate-of-change (shear jerk) threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtrans_rate_max: float = 1e30 # maximum transverse acceleration rate-of-change magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
