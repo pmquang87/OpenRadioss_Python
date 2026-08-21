@@ -16319,6 +16319,61 @@ class SensorSpringTransverseAccelerationRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M303 Suite: LadFiberMatrixDebonding failure, EngElectrostrictiveEnergy, SylvesterKempeLinkageJoint, SensorSpringTorsionalAccelerationRate
+# ============================================================================
+
+@dataclass
+class FailLadFiberMatrixDebonding:
+    """``/FAIL/LAD_FIBER_MATRIX_DEBONDING`` or ``/FAIL/LADEVEZE_FIBER_MATRIX_DEBOND`` (M303): Ladevèze micromechanical fiber-matrix interface debonding and interfacial shear slip failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_fmd: float = 0.0          # interface debonding activation threshold energy
+    yc_fmd: float = 0.0          # critical interfacial debonding rupture energy
+    tau_fmd_crit: float = 0.0    # critical interfacial shear stress limit
+    mu_fmd_fric: float = 0.0     # interfacial post-debonding sliding friction coefficient
+    d_fmd_max: float = 0.999     # maximum allowable debonding damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngElectrostrictiveEnergy:
+    """``/ENG/ELECTROSTRICTIVE_ENERGY`` or ``/ENG/ES_WORK`` (M303): Engine electrostrictive non-linear quadratic electric polarization strain work and electrostrictive deformation energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_electrostrictive: float = 0.0 # time frequency for electrostrictive energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulSylvesterKempeLinkageJoint:
+    """``/SYLVESTER_KEMPE_LINKAGE_JOINT/id`` or ``/LAGMUL/SYLVESTER_KEMPE_LINKAGE_JOINT/id`` (M303): Sylvester-Kempe 8-bar quad-inversor exact straight-line and circular-arc kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed frame base pivot node
+    node2: int = 0               # tracing trajectory output node
+    node3: int = 0               # crank driving pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    arm_len_a: float = 0.0       # primary quad-inversor arm link length
+    arm_len_b: float = 0.0       # secondary quad-inversor arm link length
+    base_dist: float = 0.0       # distance between fixed base pivot anchors
+    angular_multiplier: float = 1.0 # kinematic angular gear ratio / motion multiplier
+
+
+@dataclass
+class SensorSpringTorsionalAccelerationRate:
+    """``/SENSOR/SPRING_TORSIONAL_ACCELERATION_RATE`` or ``/SENSOR/SPRING_TORS_ACC_RATE`` (M303): Spring element relative torsional angular acceleration rate-of-change (torsional angular jerk) threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtors_rate_max: float = 1e30 # maximum torsional angular acceleration rate-of-change magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

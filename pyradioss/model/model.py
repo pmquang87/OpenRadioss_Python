@@ -1995,6 +1995,12 @@ class Model:
         self.lagmul_kempe_linkage_joints: Dict[int, Any] = {}        # /KEMPE_LINKAGE_JOINT, /LAGMUL/KEMPE_LINKAGE_JOINT (M302)
         self.sensor_spring_transverse_acceleration_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_ACCELERATION_RATE (M302)
 
+        # M303 Entities
+        self.fail_ladfibermatrixdebondings: Dict[int, Any] = {}      # /FAIL/LAD_FIBER_MATRIX_DEBONDING (M303)
+        self.eng_electrostrictive_energies: Dict[int, Any] = {}      # /ENG/ELECTROSTRICTIVE_ENERGY (M303)
+        self.lagmul_sylvester_kempe_linkage_joints: Dict[int, Any] = {} # /SYLVESTER_KEMPE_LINKAGE_JOINT, /LAGMUL/SYLVESTER_KEMPE_LINKAGE_JOINT (M303)
+        self.sensor_spring_torsional_acceleration_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_ACCELERATION_RATE (M303)
+
 
 
 
