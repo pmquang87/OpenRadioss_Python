@@ -15940,7 +15940,7 @@ class SensorSpringShearJerk:
 
 @dataclass
 class FailLadDelam:
-    """``/FAIL/LAD_DELAM`` or ``/FAIL/LADEVEZE_DELAMINATION`` (M296): Ladevèze interlaminar delamination and interface fracture criterion."""
+    """``/FAIL/LAD_DELAM`` or ``/FAIL/LADEVEZE_INTERLAMINAR_DELAMINATION`` (M296): Ladevèze interlaminar delamination and interface fracture criterion."""
     mat_id: int = 0
     title: str = ""
     g_1c: float = 0.0            # Mode I critical fracture energy release rate (J/m^2)

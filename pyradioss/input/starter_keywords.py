@@ -53461,7 +53461,7 @@ def read_sensor_spring_shear_jerk(block: KeywordBlock, model: Model, log: Messag
 # ============================================================================
 
 def read_fail_lad_delam(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/FAIL/LAD_DELAM/mat_ID`` or ``/FAIL/LADEVEZE_DELAMINATION`` (M296): Ladevèze interlaminar delamination and interface fracture criterion."""
+    """``/FAIL/LAD_DELAM/mat_ID`` or ``/FAIL/LADEVEZE_INTERLAMINAR_DELAMINATION`` (M296): Ladevèze interlaminar delamination and interface fracture criterion."""
     title, cards = _title_and_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/FAIL/LAD_DELAM/{block.user_id}: missing data card", block.source)
@@ -56920,7 +56920,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SHEAR_JERK_SPRING": read_sensor_spring_shear_jerk,
     # --- M296: LadDelam Failure Model, Engine Magnetocaloric Energy Output Directive, Watt Linkage Joint Suite, and Spring Resultant Jerk Sensor ---
     "FAIL_LAD_DELAM": read_fail_lad_delam,
-    "FAIL_LADEVEZE_DELAMINATION": read_fail_lad_delam,
+    "FAIL_LADEVEZE_INTERLAMINAR_FRACTURE": read_fail_lad_delam,
     "FAIL_LAD_DELAMINATION": read_fail_lad_delam,
     "FAIL_LAD_DELAM_MODEL": read_fail_lad_delam,
     "FAIL_LAD_DELAM_LAW": read_fail_lad_delam,

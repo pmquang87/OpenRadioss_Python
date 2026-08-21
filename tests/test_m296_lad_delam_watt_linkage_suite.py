@@ -75,7 +75,7 @@ def test_m296_fail_lad_delam_aliases(tmp_path: Path):
     deck = """# RADIOSS ALIAS DECK
 /BEGIN
 Ladeveze Delamination Aliases Test
-/FAIL/LADEVEZE_DELAMINATION/1057
+/FAIL/LADEVEZE_INTERLAMINAR_FRACTURE/1057
 250.0, 600.0, 750.0, 1.5, 0.98
 1, 1
 /FAIL/LAD_DELAMINATION/1058
