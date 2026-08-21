@@ -15880,6 +15880,60 @@ class SensorSpringNormalJerk:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M295 Suite: LadViscoDamage failure, EngElectrocaloricEnergy, EvansLinkageJoint, SensorSpringShearJerk
+# ============================================================================
+
+@dataclass
+class FailLadViscoDamage:
+    """``/FAIL/LAD_VISCO_DAMAGE`` or ``/FAIL/LADEVEZE_VISCO_DAMAGE`` (M295): Ladevèze rate-dependent micro-damage kinetics and delayed damage evolution model."""
+    mat_id: int = 0
+    title: str = ""
+    tau_c: float = 0.0           # characteristic damage relaxation delay time constant (s)
+    a_vd: float = 0.0            # rate-dependent damage kinetic multiplier
+    n_vd: float = 1.0            # rate-dependent damage power-law exponent
+    d_vd_crit: float = 0.0       # critical micro-damage threshold for accelerated evolution
+    d_vd_max: float = 0.999      # maximum allowable damage parameter
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngElectrocaloricEnergy:
+    """``/ENG/ELECTROCALORIC_ENERGY`` or ``/ENG/EC_WORK`` (M295): Engine electrocaloric reversible adiabatic thermal entropy change and polarization coupling energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_electrocaloric: float = 0.0 # time frequency for electrocaloric energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulEvansLinkageJoint:
+    """``/EVANS_LINKAGE_JOINT/id`` or ``/LAGMUL/EVANS_LINKAGE_JOINT/id`` (M295): Evans (Grasshopper) 4-bar approximate straight-line linkage planar kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed base crank anchor pivot node
+    node2: int = 0               # straight-line tracing long arm tip node
+    node3: int = 0               # long arm oscillating guide pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    ground_len: float = 0.0      # fixed base frame separation distance
+    crank_len: float = 0.0       # short guiding crank link length
+    arm_len: float = 0.0         # long straight-line tracing carrier arm length
+
+
+@dataclass
+class SensorSpringShearJerk:
+    """``/SENSOR/SPRING_SHEAR_JERK`` or ``/SENSOR/SPRING_SHR_JERK`` (M295): Spring element relative transverse shear jerk (rate of change of transverse linear acceleration) threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    js_max: float = 1e30         # maximum transverse shear jerk magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

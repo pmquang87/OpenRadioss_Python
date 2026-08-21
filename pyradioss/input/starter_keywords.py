@@ -2343,6 +2343,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("LAD_TRANS_ISOTROPIC", "FAIL_LAD_TRANS_ISOTROPIC", "LADEVEZE_TRANSVERSE_ISOTROPIC", "LAD_TI", "LAD_TI_MODEL", "LAD_TI_LAW", "LADEVEZE_TRANS_ISOTROPIC_DAMAGE"):
         read_fail_lad_trans_isotropic(block, model, log)
         return
+    if kind in ("LAD_VISCO_DAMAGE", "FAIL_LAD_VISCO_DAMAGE", "LADEVEZE_VISCO_DAMAGE", "LAD_VD", "LAD_VD_MODEL", "LAD_VD_LAW", "LADEVEZE_RATE_DEPENDENT_MICRODAMAGE"):
+        read_fail_lad_visco_damage(block, model, log)
+        return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
@@ -53305,6 +53308,154 @@ def read_sensor_spring_normal_jerk(block: KeywordBlock, model: Model, log: Messa
     ))
 
 
+# ============================================================================
+# M295 Suite: LadViscoDamage failure, EngElectrocaloricEnergy, EvansLinkageJoint, SensorSpringShearJerk
+# ============================================================================
+
+def read_fail_lad_visco_damage(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_VISCO_DAMAGE/mat_ID`` or ``/FAIL/LADEVEZE_VISCO_DAMAGE`` (M295): Ladevèze rate-dependent micro-damage kinetics and delayed damage evolution model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_VISCO_DAMAGE/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_VISCO_DAMAGE_1")
+        tau_c = _fval(c1[0], 0.0) if len(c1) > 0 and c1[0].strip() else 0.0
+        a_vd = _fval(c1[1], 0.0) if len(c1) > 1 and c1[1].strip() else 0.0
+        n_vd = _fval(c1[2], 1.0) if len(c1) > 2 and c1[2].strip() else 1.0
+        d_vd_crit = _fval(c1[3], 0.0) if len(c1) > 3 and c1[3].strip() else 0.0
+        d_vd_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        c2 = cards[1].cut("FAIL_LAD_VISCO_DAMAGE_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        tau_c = float(t1[0].rstrip(',')) if len(t1) > 0 and t1[0].rstrip(',') else 0.0
+        a_vd = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 0.0
+        n_vd = float(t1[2].rstrip(',')) if len(t1) > 2 and t1[2].rstrip(',') else 1.0
+        d_vd_crit = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 0.0
+        d_vd_max = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.999
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "tau_c": tau_c, "a_vd": a_vd, "n_vd": n_vd, "d_vd_crit": d_vd_crit, "d_vd_max": d_vd_max,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadViscoDamage, FailureModel
+    model.fail_ladviscodamages[mat_id] = FailLadViscoDamage(
+        mat_id=mat_id, title=title, tau_c=tau_c, a_vd=a_vd, n_vd=n_vd, d_vd_crit=d_vd_crit, d_vd_max=d_vd_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_VISCO_DAMAGE", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_electrocaloric_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/ELECTROCALORIC_ENERGY`` or ``/ENG/EC_WORK`` (M295): Engine electrocaloric reversible adiabatic thermal entropy change and polarization coupling energy tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/ELECTROCALORIC_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_electrocaloric, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_ELECTROCALORIC_ENERGY_1")
+        dt_electrocaloric = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_electrocaloric = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngElectrocaloricEnergy
+    r_id = block.user_id or (len(model.eng_electrocaloric_energies) + 1)
+    model.eng_electrocaloric_energies[r_id] = EngElectrocaloricEnergy(
+        id=r_id, title=title, dt_electrocaloric=dt_electrocaloric, sens_id=sens_id
+    )
+
+
+def read_lagmul_evans_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/EVANS_LINKAGE_JOINT/id`` or ``/LAGMUL/EVANS_LINKAGE_JOINT/id`` (M295): Evans (Grasshopper) 4-bar approximate straight-line linkage planar kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/EVANS_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    ground_len, crank_len, arm_len = 0.0, 0.0, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("EVANS_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("EVANS_LINKAGE_JOINT_2")
+            ground_len = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            crank_len = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            arm_len = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 0 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            ground_len = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            crank_len = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            arm_len = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+
+    from ..model.entities import LagmulEvansLinkageJoint
+    model.lagmul_evans_linkage_joints[block.user_id] = LagmulEvansLinkageJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        ground_len=ground_len, crank_len=crank_len, arm_len=arm_len
+    )
+
+
+def read_sensor_spring_shear_jerk(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_SHEAR_JERK`` or ``/SENSOR/SPRING_SHR_JERK`` (M295): Spring element relative transverse shear jerk (rate of change of transverse linear acceleration) threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_SHEAR_JERK/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, js_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_SHEAR_JERK_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        js_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        js_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringShearJerk, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_shear_jerks) + 1)
+    sssj = SensorSpringShearJerk(
+        id=s_id, title=title, spring_id=spring_id,
+        js_max=js_max, t_delay=t_delay
+    )
+    model.sensor_spring_shear_jerks[s_id] = sssj
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_SHEAR_JERK", tdelay=t_delay
+    ))
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -56595,6 +56746,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_NORM_JERK": read_sensor_spring_normal_jerk,
     "SENSOR_SPRING_JERK_NORMAL": read_sensor_spring_normal_jerk,
     "SENSOR_NORMAL_JERK_SPRING": read_sensor_spring_normal_jerk,
+    # --- M295: LadViscoDamage Failure Model, Engine Electrocaloric Energy Output Directive, Evans Linkage Joint Suite, and Spring Shear Jerk Sensor ---
+    "FAIL_LAD_VISCO_DAMAGE": read_fail_lad_visco_damage,
+    "FAIL_LADEVEZE_VISCO_DAMAGE": read_fail_lad_visco_damage,
+    "FAIL_LAD_VD": read_fail_lad_visco_damage,
+    "FAIL_LAD_VD_MODEL": read_fail_lad_visco_damage,
+    "FAIL_LAD_VD_LAW": read_fail_lad_visco_damage,
+    "FAIL_LADEVEZE_RATE_DEPENDENT_MICRODAMAGE": read_fail_lad_visco_damage,
+    "ENG_ELECTROCALORIC_ENERGY": read_eng_electrocaloric_energy,
+    "ENG_EC_WORK": read_eng_electrocaloric_energy,
+    "ENG_EELECTROCALORIC": read_eng_electrocaloric_energy,
+    "ENG_ELECTROCALORIC_DISSIPATION": read_eng_electrocaloric_energy,
+    "ENG_EM_ELECTROCALORIC": read_eng_electrocaloric_energy,
+    "LAGMUL_EVANS_LINKAGE_JOINT": read_lagmul_evans_linkage_joint,
+    "EVANS_LINKAGE_JOINT": read_lagmul_evans_linkage_joint,
+    "LAGMUL_EVANS_LINKAGE": read_lagmul_evans_linkage_joint,
+    "EVANS_LINKAGE": read_lagmul_evans_linkage_joint,
+    "EVANS_STRAIGHT_LINE_MECHANISM": read_lagmul_evans_linkage_joint,
+    "SENSOR_SPRING_SHEAR_JERK": read_sensor_spring_shear_jerk,
+    "SENSOR_SPRING_SHR_JERK": read_sensor_spring_shear_jerk,
+    "SENSOR_SPRING_JERK_SHEAR": read_sensor_spring_shear_jerk,
+    "SENSOR_SHEAR_JERK_SPRING": read_sensor_spring_shear_jerk,
 }
 
 
