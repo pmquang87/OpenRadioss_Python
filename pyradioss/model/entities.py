@@ -16154,6 +16154,61 @@ class SensorSpringTotalAngularJerk:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M300 Suite: LadViscoFatigue failure, EngThermogalvanicEnergy, KlannLinkageJoint, SensorSpringTotalAccelerationRate
+# ============================================================================
+
+@dataclass
+class FailLadViscoFatigue:
+    """``/FAIL/LAD_VISCO_FATIGUE`` or ``/FAIL/LADEVEZE_VISCO_FATIGUE`` (M300): Ladevèze strain-rate sensitive visco-fatigue micro-damage and frequency-dependent cyclic degradation failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_vf: float = 0.0           # visco-fatigue micro-damage activation threshold energy
+    yc_vf: float = 0.0           # critical visco-fatigue rupture energy
+    beta_vf: float = 0.0         # cyclic damage accumulation exponent
+    tau_relax: float = 0.0       # viscous micro-damage characteristic relaxation time
+    d_vf_max: float = 0.999      # maximum allowable visco-fatigue damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngThermogalvanicEnergy:
+    """``/ENG/THERMOGALVANIC_ENERGY`` or ``/ENG/TG_WORK`` (M300): Engine thermogalvanic electrochemical non-isothermal cell and temperature-induced redox reaction energy conversion tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_thermogalvanic: float = 0.0 # time frequency for thermogalvanic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulKlannLinkageJoint:
+    """``/KLANN_LINKAGE_JOINT/id`` or ``/LAGMUL/KLANN_LINKAGE_JOINT/id`` (M300): Klann 6-bar mechanical walking linkage planar kinematic leg mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed frame base pivot node
+    node2: int = 0               # foot step output node
+    node3: int = 0               # crank driving pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    crank_len: float = 0.0       # length of driving crank link
+    rocker_len: float = 0.0      # length of oscillating rocker link
+    leg_upper_len: float = 0.0   # length of upper leg coupler link
+    leg_lower_len: float = 0.0   # length of lower leg ground-contact link
+
+
+@dataclass
+class SensorSpringTotalAccelerationRate:
+    """``/SENSOR/SPRING_TOTAL_ACCELERATION_RATE`` or ``/SENSOR/SPRING_TOT_ACC_RATE`` (M300): Spring element relative 3D resultant total acceleration rate-of-change (generalized resultant 6-DOF dynamic jerk) threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jrate_max: float = 1e30      # maximum total acceleration rate-of-change magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

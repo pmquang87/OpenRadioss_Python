@@ -1977,6 +1977,12 @@ class Model:
         self.lagmul_sarrus_linkage_joints: Dict[int, Any] = {}       # /SARRUS_LINKAGE_JOINT, /LAGMUL/SARRUS_LINKAGE_JOINT (M299)
         self.sensor_spring_total_angular_jerks: Dict[int, Any] = {}  # /SENSOR/SPRING_TOTAL_ANGULAR_JERK (M299)
 
+        # M300 Entities
+        self.fail_ladviscofatigues: Dict[int, Any] = {}              # /FAIL/LAD_VISCO_FATIGUE (M300)
+        self.eng_thermogalvanic_energies: Dict[int, Any] = {}        # /ENG/THERMOGALVANIC_ENERGY (M300)
+        self.lagmul_klann_linkage_joints: Dict[int, Any] = {}        # /KLANN_LINKAGE_JOINT, /LAGMUL/KLANN_LINKAGE_JOINT (M300)
+        self.sensor_spring_total_acceleration_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ACCELERATION_RATE (M300)
+
 
 
 

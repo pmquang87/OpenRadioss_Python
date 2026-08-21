@@ -54058,6 +54058,158 @@ def read_sensor_spring_total_angular_jerk(block: KeywordBlock, model: Model, log
     ))
 
 
+# ============================================================================
+# M300 Suite: LadViscoFatigue failure, EngThermogalvanicEnergy, KlannLinkageJoint, SensorSpringTotalAccelerationRate
+# ============================================================================
+
+def read_fail_lad_visco_fatigue(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_VISCO_FATIGUE/mat_ID`` or ``/FAIL/LADEVEZE_VISCO_FATIGUE`` (M300): Ladevèze strain-rate sensitive visco-fatigue micro-damage and frequency-dependent cyclic degradation failure model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_VISCO_FATIGUE/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_VISCO_FATIGUE_1")
+        y0_vf = _fval(c1[0], 0.0) if len(c1) > 0 and c1[0].strip() else 0.0
+        yc_vf = _fval(c1[1], 0.0) if len(c1) > 1 and c1[1].strip() else 0.0
+        beta_vf = _fval(c1[2], 0.0) if len(c1) > 2 and c1[2].strip() else 0.0
+        tau_relax = _fval(c1[3], 0.0) if len(c1) > 3 and c1[3].strip() else 0.0
+        d_vf_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        c2 = cards[1].cut("FAIL_LAD_VISCO_FATIGUE_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        y0_vf = float(t1[0].rstrip(',')) if len(t1) > 0 and t1[0].rstrip(',') else 0.0
+        yc_vf = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 0.0
+        beta_vf = float(t1[2].rstrip(',')) if len(t1) > 2 and t1[2].rstrip(',') else 0.0
+        tau_relax = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 0.0
+        d_vf_max = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.999
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "y0_vf": y0_vf, "yc_vf": yc_vf, "beta_vf": beta_vf,
+        "tau_relax": tau_relax, "d_vf_max": d_vf_max,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadViscoFatigue, FailureModel
+    model.fail_ladviscofatigues[mat_id] = FailLadViscoFatigue(
+        mat_id=mat_id, title=title, y0_vf=y0_vf, yc_vf=yc_vf,
+        beta_vf=beta_vf, tau_relax=tau_relax, d_vf_max=d_vf_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_VISCO_FATIGUE", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_thermogalvanic_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/THERMOGALVANIC_ENERGY`` or ``/ENG/TG_WORK`` (M300): Engine thermogalvanic electrochemical non-isothermal cell and temperature-induced redox reaction energy conversion tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/THERMOGALVANIC_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_thermogalvanic, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_THERMOGALVANIC_ENERGY_1")
+        dt_thermogalvanic = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_thermogalvanic = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngThermogalvanicEnergy
+    r_id = block.user_id or (len(model.eng_thermogalvanic_energies) + 1)
+    model.eng_thermogalvanic_energies[r_id] = EngThermogalvanicEnergy(
+        id=r_id, title=title, dt_thermogalvanic=dt_thermogalvanic, sens_id=sens_id
+    )
+
+
+def read_lagmul_klann_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/KLANN_LINKAGE_JOINT/id`` or ``/LAGMUL/KLANN_LINKAGE_JOINT/id`` (M300): Klann 6-bar mechanical walking linkage planar kinematic leg mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/KLANN_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    crank_len, rocker_len, leg_upper_len, leg_lower_len = 0.0, 0.0, 0.0, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("KLANN_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("KLANN_LINKAGE_JOINT_2")
+            crank_len = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            rocker_len = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            leg_upper_len = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+            leg_lower_len = _fval(f2[3], 0.0) if len(f2) > 3 and f2[3].strip() else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            crank_len = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            rocker_len = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            leg_upper_len = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            leg_lower_len = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+
+    from ..model.entities import LagmulKlannLinkageJoint
+    model.lagmul_klann_linkage_joints[block.user_id] = LagmulKlannLinkageJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        crank_len=crank_len, rocker_len=rocker_len, leg_upper_len=leg_upper_len, leg_lower_len=leg_lower_len
+    )
+
+
+def read_sensor_spring_total_acceleration_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TOTAL_ACCELERATION_RATE`` or ``/SENSOR/SPRING_TOT_ACC_RATE`` (M300): Spring element relative 3D resultant total acceleration rate-of-change (generalized resultant 6-DOF dynamic jerk) threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TOTAL_ACCELERATION_RATE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, jrate_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_TOTAL_ACCELERATION_RATE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        jrate_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        jrate_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTotalAccelerationRate, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_total_acceleration_rates) + 1)
+    sstarr = SensorSpringTotalAccelerationRate(
+        id=s_id, title=title, spring_id=spring_id,
+        jrate_max=jrate_max, t_delay=t_delay
+    )
+    model.sensor_spring_total_acceleration_rates[s_id] = sstarr
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_TOTAL_ACCELERATION_RATE", tdelay=t_delay
+    ))
+
+
 
 
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -57455,6 +57607,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_TOT_ANG_JERK": read_sensor_spring_total_angular_jerk,
     "SENSOR_SPRING_JERK_ANG_TOT": read_sensor_spring_total_angular_jerk,
     "SENSOR_TOTAL_ANGULAR_JERK_SPRING": read_sensor_spring_total_angular_jerk,
+    # --- M300: LadViscoFatigue Failure Model, EngThermogalvanicEnergy, KlannLinkageJoint, and Spring Total Acceleration Rate Sensor ---
+    "FAIL_LAD_VISCO_FATIGUE": read_fail_lad_visco_fatigue,
+    "FAIL_LADEVEZE_VISCO_FATIGUE": read_fail_lad_visco_fatigue,
+    "FAIL_LAD_VF": read_fail_lad_visco_fatigue,
+    "FAIL_LAD_VISCO_FATIGUE_MODEL": read_fail_lad_visco_fatigue,
+    "FAIL_LAD_VISCO_FATIGUE_LAW": read_fail_lad_visco_fatigue,
+    "FAIL_LADEVEZE_RATE_DEPENDENT_FATIGUE": read_fail_lad_visco_fatigue,
+    "ENG_THERMOGALVANIC_ENERGY": read_eng_thermogalvanic_energy,
+    "ENG_TG_WORK": read_eng_thermogalvanic_energy,
+    "ENG_ETHERMOGALVANIC": read_eng_thermogalvanic_energy,
+    "ENG_THERMOGALVANIC_DISSIPATION": read_eng_thermogalvanic_energy,
+    "ENG_EM_THERMOGALVANIC": read_eng_thermogalvanic_energy,
+    "LAGMUL_KLANN_LINKAGE_JOINT": read_lagmul_klann_linkage_joint,
+    "KLANN_LINKAGE_JOINT": read_lagmul_klann_linkage_joint,
+    "LAGMUL_KLANN_LINKAGE": read_lagmul_klann_linkage_joint,
+    "KLANN_LINKAGE": read_lagmul_klann_linkage_joint,
+    "KLANN_WALKING_MECHANISM": read_lagmul_klann_linkage_joint,
+    "SENSOR_SPRING_TOTAL_ACCELERATION_RATE": read_sensor_spring_total_acceleration_rate,
+    "SENSOR_SPRING_TOT_ACC_RATE": read_sensor_spring_total_acceleration_rate,
+    "SENSOR_SPRING_RATE_ACC_TOT": read_sensor_spring_total_acceleration_rate,
+    "SENSOR_TOTAL_ACCELERATION_RATE_SPRING": read_sensor_spring_total_acceleration_rate,
 }
 
 
