@@ -1983,6 +1983,12 @@ class Model:
         self.lagmul_klann_linkage_joints: Dict[int, Any] = {}        # /KLANN_LINKAGE_JOINT, /LAGMUL/KLANN_LINKAGE_JOINT (M300)
         self.sensor_spring_total_acceleration_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ACCELERATION_RATE (M300)
 
+        # M301 Entities
+        self.fail_ladcoupledamages: Dict[int, Any] = {}              # /FAIL/LAD_COUPLE_DAMAGE (M301)
+        self.eng_thermionic_energies: Dict[int, Any] = {}            # /ENG/THERMIONIC_ENERGY (M301)
+        self.lagmul_jansen_linkage_joints: Dict[int, Any] = {}       # /JANSEN_LINKAGE_JOINT, /LAGMUL/JANSEN_LINKAGE_JOINT (M301)
+        self.sensor_spring_normal_acceleration_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_ACCELERATION_RATE (M301)
+
 
 
 

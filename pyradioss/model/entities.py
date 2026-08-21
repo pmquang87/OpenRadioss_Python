@@ -16209,6 +16209,61 @@ class SensorSpringTotalAccelerationRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M301 Suite: LadCoupleDamage failure, EngThermionicEnergy, JansenLinkageJoint, SensorSpringNormalAccelerationRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleDamage:
+    """``/FAIL/LAD_COUPLE_DAMAGE`` or ``/FAIL/LADEVEZE_COUPLED_DAMAGE`` (M301): Ladevèze fully coupled thermo-elasto-damage model with non-isothermal microcracking kinetics."""
+    mat_id: int = 0
+    title: str = ""
+    y0_cd: float = 0.0           # coupled damage activation threshold energy
+    yc_cd: float = 0.0           # critical coupled damage rupture energy
+    gamma_temp: float = 0.0      # temperature coupling expansion coefficient
+    eta_entropy: float = 0.0     # entropy production weighting factor
+    d_cd_max: float = 0.999      # maximum allowable coupled damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngThermionicEnergy:
+    """``/ENG/THERMIONIC_ENERGY`` or ``/ENG/TI_WORK`` (M301): Engine thermionic emission electron thermal-field work and thermal-to-electric conversion energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_thermionic: float = 0.0   # time frequency for thermionic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulJansenLinkageJoint:
+    """``/JANSEN_LINKAGE_JOINT/id`` or ``/LAGMUL/JANSEN_LINKAGE_JOINT/id`` (M301): Jansen 8-bar / 11-bar kinematic walking linkage (Theo Jansen Strandbeest leg mechanism) joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed frame base pivot node
+    node2: int = 0               # foot step output node
+    node3: int = 0               # crank driving pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    crank_len: float = 0.0       # length of driving crank link
+    base_horizontal: float = 0.0 # horizontal distance between frame base pivots
+    base_vertical: float = 0.0   # vertical distance between frame base pivots
+    leg_ratio: float = 0.0       # leg triangular coupler proportion ratio
+
+
+@dataclass
+class SensorSpringNormalAccelerationRate:
+    """``/SENSOR/SPRING_NORMAL_ACCELERATION_RATE`` or ``/SENSOR/SPRING_NORM_ACC_RATE`` (M301): Spring element relative normal / axial acceleration rate-of-change (axial jerk) threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_rate_max: float = 1e30 # maximum normal acceleration rate-of-change magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
