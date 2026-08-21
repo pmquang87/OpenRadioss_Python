@@ -1953,6 +1953,12 @@ class Model:
         self.lagmul_evans_linkage_joints: Dict[int, Any] = {}        # /EVANS_LINKAGE_JOINT, /LAGMUL/EVANS_LINKAGE_JOINT (M295)
         self.sensor_spring_shear_jerks: Dict[int, Any] = {}          # /SENSOR/SPRING_SHEAR_JERK (M295)
 
+        # M296 Entities
+        self.fail_laddelams: Dict[int, Any] = {}                     # /FAIL/LAD_DELAM (M296)
+        self.eng_magnetocaloric_energies: Dict[int, Any] = {}        # /ENG/MAGNETOCALORIC_ENERGY (M296)
+        self.lagmul_watt_linkage_joints: Dict[int, Any] = {}         # /WATT_LINKAGE_JOINT, /LAGMUL/WATT_LINKAGE_JOINT (M296)
+        self.sensor_spring_resultant_jerks: Dict[int, Any] = {}      # /SENSOR/SPRING_RESULTANT_JERK (M296)
+
 
 
 

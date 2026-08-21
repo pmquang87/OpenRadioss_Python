@@ -15934,6 +15934,62 @@ class SensorSpringShearJerk:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M296 Suite: LadDelam failure, EngMagnetocaloricEnergy, WattLinkageJoint, SensorSpringResultantJerk
+# ============================================================================
+
+@dataclass
+class FailLadDelam:
+    """``/FAIL/LAD_DELAM`` or ``/FAIL/LADEVEZE_DELAMINATION`` (M296): Ladevèze interlaminar delamination and interface fracture criterion."""
+    mat_id: int = 0
+    title: str = ""
+    g_1c: float = 0.0            # Mode I critical fracture energy release rate (J/m^2)
+    g_2c: float = 0.0            # Mode II critical fracture energy release rate (J/m^2)
+    g_3c: float = 0.0            # Mode III critical fracture energy release rate (J/m^2)
+    gamma_delam: float = 1.0     # mixed-mode Benzeggagh-Kenane interaction exponent
+    d_delam_max: float = 0.999   # maximum allowable delamination damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngMagnetocaloricEnergy:
+    """``/ENG/MAGNETOCALORIC_ENERGY`` or ``/ENG/MC_WORK`` (M296): Engine magnetocaloric reversible adiabatic temperature/magnetic entropy coupling energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_magnetocaloric: float = 0.0 # time frequency for magnetocaloric energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulWattLinkageJoint:
+    """``/WATT_LINKAGE_JOINT/id`` or ``/LAGMUL/WATT_LINKAGE_JOINT/id`` (M296): Watt 4-bar approximate straight-line linkage planar kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed pivot node of first rocker arm
+    node2: int = 0               # straight-line tracing coupler midpoint node
+    node3: int = 0               # fixed pivot node of second rocker arm
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    ground_len: float = 0.0      # fixed base pivot distance
+    link1_len: float = 0.0       # first oscillating rocker arm link length
+    link2_len: float = 0.0       # second oscillating rocker arm link length
+    coupler_len: float = 0.0     # connecting floating coupler link length
+
+
+@dataclass
+class SensorSpringResultantJerk:
+    """``/SENSOR/SPRING_RESULTANT_JERK`` or ``/SENSOR/SPRING_RES_JERK`` (M296): Spring element relative 3D resultant linear jerk (rate of change of linear acceleration) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jres_max: float = 1e30       # maximum resultant linear jerk magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

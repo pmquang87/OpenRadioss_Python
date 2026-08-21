@@ -53456,6 +53456,157 @@ def read_sensor_spring_shear_jerk(block: KeywordBlock, model: Model, log: Messag
     ))
 
 
+# ============================================================================
+# M296 Suite: LadDelam failure, EngMagnetocaloricEnergy, WattLinkageJoint, SensorSpringResultantJerk
+# ============================================================================
+
+def read_fail_lad_delam(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_DELAM/mat_ID`` or ``/FAIL/LADEVEZE_DELAMINATION`` (M296): Ladevèze interlaminar delamination and interface fracture criterion."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_DELAM/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_DELAM_1")
+        g_1c = _fval(c1[0], 0.0) if len(c1) > 0 and c1[0].strip() else 0.0
+        g_2c = _fval(c1[1], 0.0) if len(c1) > 1 and c1[1].strip() else 0.0
+        g_3c = _fval(c1[2], 0.0) if len(c1) > 2 and c1[2].strip() else 0.0
+        gamma_delam = _fval(c1[3], 1.0) if len(c1) > 3 and c1[3].strip() else 1.0
+        d_delam_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        c2 = cards[1].cut("FAIL_LAD_DELAM_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        g_1c = float(t1[0].rstrip(',')) if len(t1) > 0 and t1[0].rstrip(',') else 0.0
+        g_2c = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 0.0
+        g_3c = float(t1[2].rstrip(',')) if len(t1) > 2 and t1[2].rstrip(',') else 0.0
+        gamma_delam = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 1.0
+        d_delam_max = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.999
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "g_1c": g_1c, "g_2c": g_2c, "g_3c": g_3c, "gamma_delam": gamma_delam, "d_delam_max": d_delam_max,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadDelam, FailureModel
+    model.fail_laddelams[mat_id] = FailLadDelam(
+        mat_id=mat_id, title=title, g_1c=g_1c, g_2c=g_2c, g_3c=g_3c, gamma_delam=gamma_delam, d_delam_max=d_delam_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_DELAM", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_magnetocaloric_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/MAGNETOCALORIC_ENERGY`` or ``/ENG/MC_WORK`` (M296): Engine magnetocaloric reversible adiabatic temperature/magnetic entropy coupling energy tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/MAGNETOCALORIC_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_magnetocaloric, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_MAGNETOCALORIC_ENERGY_1")
+        dt_magnetocaloric = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_magnetocaloric = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngMagnetocaloricEnergy
+    r_id = block.user_id or (len(model.eng_magnetocaloric_energies) + 1)
+    model.eng_magnetocaloric_energies[r_id] = EngMagnetocaloricEnergy(
+        id=r_id, title=title, dt_magnetocaloric=dt_magnetocaloric, sens_id=sens_id
+    )
+
+
+def read_lagmul_watt_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/WATT_LINKAGE_JOINT/id`` or ``/LAGMUL/WATT_LINKAGE_JOINT/id`` (M296): Watt 4-bar approximate straight-line linkage planar kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/WATT_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    ground_len, link1_len, link2_len, coupler_len = 0.0, 0.0, 0.0, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("WATT_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("WATT_LINKAGE_JOINT_2")
+            ground_len = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            link1_len = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            link2_len = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+            coupler_len = _fval(f2[3], 0.0) if len(f2) > 3 and f2[3].strip() else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 0 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            ground_len = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            link1_len = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            link2_len = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            coupler_len = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+
+    from ..model.entities import LagmulWattLinkageJoint
+    model.lagmul_watt_linkage_joints[block.user_id] = LagmulWattLinkageJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        ground_len=ground_len, link1_len=link1_len, link2_len=link2_len, coupler_len=coupler_len
+    )
+
+
+def read_sensor_spring_resultant_jerk(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_RESULTANT_JERK`` or ``/SENSOR/SPRING_RES_JERK`` (M296): Spring element relative 3D resultant linear jerk (rate of change of linear acceleration) magnitude threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_RESULTANT_JERK/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, jres_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_RESULTANT_JERK_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        jres_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        jres_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringResultantJerk, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_resultant_jerks) + 1)
+    ssrj = SensorSpringResultantJerk(
+        id=s_id, title=title, spring_id=spring_id,
+        jres_max=jres_max, t_delay=t_delay
+    )
+    model.sensor_spring_resultant_jerks[s_id] = ssrj
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_RESULTANT_JERK", tdelay=t_delay
+    ))
+
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -56767,6 +56918,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_SHR_JERK": read_sensor_spring_shear_jerk,
     "SENSOR_SPRING_JERK_SHEAR": read_sensor_spring_shear_jerk,
     "SENSOR_SHEAR_JERK_SPRING": read_sensor_spring_shear_jerk,
+    # --- M296: LadDelam Failure Model, Engine Magnetocaloric Energy Output Directive, Watt Linkage Joint Suite, and Spring Resultant Jerk Sensor ---
+    "FAIL_LAD_DELAM": read_fail_lad_delam,
+    "FAIL_LADEVEZE_DELAMINATION": read_fail_lad_delam,
+    "FAIL_LAD_DELAMINATION": read_fail_lad_delam,
+    "FAIL_LAD_DELAM_MODEL": read_fail_lad_delam,
+    "FAIL_LAD_DELAM_LAW": read_fail_lad_delam,
+    "FAIL_LADEVEZE_INTERLAMINAR_DELAMINATION": read_fail_lad_delam,
+    "ENG_MAGNETOCALORIC_ENERGY": read_eng_magnetocaloric_energy,
+    "ENG_MC_WORK": read_eng_magnetocaloric_energy,
+    "ENG_EMAGNETOCALORIC": read_eng_magnetocaloric_energy,
+    "ENG_MAGNETOCALORIC_DISSIPATION": read_eng_magnetocaloric_energy,
+    "ENG_EM_MAGNETOCALORIC": read_eng_magnetocaloric_energy,
+    "LAGMUL_WATT_LINKAGE_JOINT": read_lagmul_watt_linkage_joint,
+    "WATT_LINKAGE_JOINT": read_lagmul_watt_linkage_joint,
+    "LAGMUL_WATT_LINKAGE": read_lagmul_watt_linkage_joint,
+    "WATT_LINKAGE": read_lagmul_watt_linkage_joint,
+    "WATT_STRAIGHT_LINE_MECHANISM": read_lagmul_watt_linkage_joint,
+    "SENSOR_SPRING_RESULTANT_JERK": read_sensor_spring_resultant_jerk,
+    "SENSOR_SPRING_RES_JERK": read_sensor_spring_resultant_jerk,
+    "SENSOR_SPRING_JERK_RES": read_sensor_spring_resultant_jerk,
+    "SENSOR_RESULTANT_JERK_SPRING": read_sensor_spring_resultant_jerk,
 }
 
 
