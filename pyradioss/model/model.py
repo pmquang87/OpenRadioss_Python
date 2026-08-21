@@ -1992,7 +1992,7 @@ class Model:
         # M302 Entities
         self.fail_ladfractures: Dict[int, Any] = {}                  # /FAIL/LAD_FRACTURE (M302)
         self.eng_thermophotonic_energies: Dict[int, Any] = {}        # /ENG/THERMOPHOTONIC_ENERGY (M302)
-        self.lagmul_hoeken_linkage_joints: Dict[int, Any] = {}       # /HOEKEN_LINKAGE_JOINT, /LAGMUL/HOEKEN_LINKAGE_JOINT (M302)
+        self.lagmul_kempe_linkage_joints: Dict[int, Any] = {}        # /KEMPE_LINKAGE_JOINT, /LAGMUL/KEMPE_LINKAGE_JOINT (M302)
         self.sensor_spring_transverse_acceleration_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_ACCELERATION_RATE (M302)
 
 

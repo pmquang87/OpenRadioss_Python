@@ -1,4 +1,4 @@
-"""Tests for Milestone M302: LadFracture Failure Model, EngThermophotonicEnergy, HoekenLinkageJoint, and SensorSpringTransverseAccelerationRate."""
+"""Tests for Milestone M302: LadFracture Failure Model, EngThermophotonicEnergy, KempeLinkageJoint, and SensorSpringTransverseAccelerationRate."""
 
 from pathlib import Path
 import pytest
@@ -154,80 +154,80 @@ Thermophotonic Energy Aliases Test
     assert pytest.approx(model.eng_thermophotonic_energies[74].dt_thermophotonic) == 0.004
 
 
-def test_m302_hoeken_linkage_joint(tmp_path: Path):
+def test_m302_kempe_linkage_joint(tmp_path: Path):
     c1 = f"{891:>10d}{892:>10d}{893:>10d}{8.4e6:>20.4f}{1:>10d}{1.0e-6:>20.6e}"
     c2 = f"{25.0:>20.4f}{62.5:>20.4f}{62.5:>20.4f}{105.0:>20.4f}"
     deck = f"""# RADIOSS STARTER DECK
 /BEGIN
-Hoecken Linkage Joint Fixed and Free Format Test
+Kempe Linkage Joint Fixed and Free Format Test
 2022 0
-/LAGMUL/HOEKEN_LINKAGE_JOINT/1
-Fixed Hoecken Linkage Joint
+/LAGMUL/KEMPE_LINKAGE_JOINT/1
+Fixed Kempe Linkage Joint
 {c1}
 {c2}
-/LAGMUL/HOEKEN_LINKAGE_JOINT/2
-Free Hoecken Linkage Joint
+/LAGMUL/KEMPE_LINKAGE_JOINT/2
+Free Kempe Linkage Joint
 991, 992, 993, 9.1e6, 2, 1.3e-6
 30.0, 75.0, 75.0, 126.0
 /END
 """
     model, log = _parse_starter(tmp_path, deck)
     assert len(log.errors) == 0
-    assert 1 in model.lagmul_hoeken_linkage_joints
-    assert 2 in model.lagmul_hoeken_linkage_joints
-    hj1 = model.lagmul_hoeken_linkage_joints[1]
-    assert hj1.node1 == 891
-    assert hj1.node2 == 892
-    assert hj1.node3 == 893
-    assert pytest.approx(hj1.stiff) == 8.4e6
-    assert hj1.skew_id == 1
-    assert pytest.approx(hj1.tol) == 1.0e-6
-    assert pytest.approx(hj1.crank_len) == 25.0
-    assert pytest.approx(hj1.coupler_len) == 62.5
-    assert pytest.approx(hj1.rocker_len) == 62.5
-    assert pytest.approx(hj1.travel_span) == 105.0
+    assert 1 in model.lagmul_kempe_linkage_joints
+    assert 2 in model.lagmul_kempe_linkage_joints
+    kj1 = model.lagmul_kempe_linkage_joints[1]
+    assert kj1.node1 == 891
+    assert kj1.node2 == 892
+    assert kj1.node3 == 893
+    assert pytest.approx(kj1.stiff) == 8.4e6
+    assert kj1.skew_id == 1
+    assert pytest.approx(kj1.tol) == 1.0e-6
+    assert pytest.approx(kj1.arm_len1) == 25.0
+    assert pytest.approx(kj1.arm_len2) == 62.5
+    assert pytest.approx(kj1.cross_len) == 62.5
+    assert pytest.approx(kj1.travel_span) == 105.0
 
-    hj2 = model.lagmul_hoeken_linkage_joints[2]
-    assert hj2.node1 == 991
-    assert hj2.node2 == 992
-    assert hj2.node3 == 993
-    assert pytest.approx(hj2.stiff) == 9.1e6
-    assert hj2.skew_id == 2
-    assert pytest.approx(hj2.tol) == 1.3e-6
-    assert pytest.approx(hj2.crank_len) == 30.0
-    assert pytest.approx(hj2.coupler_len) == 75.0
-    assert pytest.approx(hj2.rocker_len) == 75.0
-    assert pytest.approx(hj2.travel_span) == 126.0
+    kj2 = model.lagmul_kempe_linkage_joints[2]
+    assert kj2.node1 == 991
+    assert kj2.node2 == 992
+    assert kj2.node3 == 993
+    assert pytest.approx(kj2.stiff) == 9.1e6
+    assert kj2.skew_id == 2
+    assert pytest.approx(kj2.tol) == 1.3e-6
+    assert pytest.approx(kj2.arm_len1) == 30.0
+    assert pytest.approx(kj2.arm_len2) == 75.0
+    assert pytest.approx(kj2.cross_len) == 75.0
+    assert pytest.approx(kj2.travel_span) == 126.0
 
 
-def test_m302_hoeken_linkage_joint_aliases(tmp_path: Path):
+def test_m302_kempe_linkage_joint_aliases(tmp_path: Path):
     deck = """# RADIOSS ALIAS DECK
 /BEGIN
-Hoecken Linkage Joint Aliases Test
-/HOEKEN_LINKAGE_JOINT/81
+Kempe Linkage Joint Aliases Test
+/KEMPE_LINKAGE_JOINT/81
 1011, 1012, 1013, 5.5e6, 0, 1.0e-6
 20.0, 50.0, 50.0, 84.0
-/LAGMUL/HOEKEN_LINKAGE/82
+/LAGMUL/KEMPE_LINKAGE/82
 1014, 1015, 1016, 5.5e6, 0, 1.0e-6
 20.0, 50.0, 50.0, 84.0
-/HOEKEN_LINKAGE/83
+/KEMPE_LINKAGE/83
 1017, 1018, 1019, 5.5e6, 0, 1.0e-6
 20.0, 50.0, 50.0, 84.0
-/HOEKEN_STRAIGHT_LINE_MECHANISM/84
+/KEMPE_UNIVERSAL_MECHANISM/84
 1020, 1021, 1022, 5.5e6, 0, 1.0e-6
 20.0, 50.0, 50.0, 84.0
 /END
 """
     model, log = _parse_starter(tmp_path, deck)
     assert len(log.errors) == 0
-    assert 81 in model.lagmul_hoeken_linkage_joints
-    assert 82 in model.lagmul_hoeken_linkage_joints
-    assert 83 in model.lagmul_hoeken_linkage_joints
-    assert 84 in model.lagmul_hoeken_linkage_joints
-    assert model.lagmul_hoeken_linkage_joints[81].node1 == 1011
-    assert model.lagmul_hoeken_linkage_joints[82].node1 == 1014
-    assert model.lagmul_hoeken_linkage_joints[83].node1 == 1017
-    assert model.lagmul_hoeken_linkage_joints[84].node1 == 1020
+    assert 81 in model.lagmul_kempe_linkage_joints
+    assert 82 in model.lagmul_kempe_linkage_joints
+    assert 83 in model.lagmul_kempe_linkage_joints
+    assert 84 in model.lagmul_kempe_linkage_joints
+    assert model.lagmul_kempe_linkage_joints[81].node1 == 1011
+    assert model.lagmul_kempe_linkage_joints[82].node1 == 1014
+    assert model.lagmul_kempe_linkage_joints[83].node1 == 1017
+    assert model.lagmul_kempe_linkage_joints[84].node1 == 1020
 
 
 def test_m302_sensor_spring_transverse_acceleration_rate(tmp_path: Path):

@@ -54436,17 +54436,17 @@ def read_eng_thermophotonic_energy(block: KeywordBlock, model: Model, log: Messa
     )
 
 
-def read_lagmul_hoeken_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/HOEKEN_LINKAGE_JOINT/id`` or ``/LAGMUL/HOEKEN_LINKAGE_JOINT/id`` (M302): Hoecken 4-bar approximate straight-line and constant-velocity kinematic mechanism joint constraint."""
+def read_lagmul_kempe_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/KEMPE_LINKAGE_JOINT/id`` or ``/LAGMUL/KEMPE_LINKAGE_JOINT/id`` (M302): Kempe multi-bar kinematic linkage joint constraint (Kempe's exact straight-line and angle-multiplier mechanism)."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
-        log.error(f"/HOEKEN_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
+        log.error(f"/KEMPE_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
         return
 
     node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
-    crank_len, coupler_len, rocker_len, travel_span = 0.0, 0.0, 0.0, 0.0
+    arm_len1, arm_len2, cross_len, travel_span = 0.0, 0.0, 0.0, 0.0
     if block.fixed and "," not in cards[0].raw:
-        f1 = cards[0].cut("HOEKEN_LINKAGE_JOINT_1")
+        f1 = cards[0].cut("KEMPE_LINKAGE_JOINT_1")
         node1 = _ival(f1[0]) if len(f1) > 0 else 0
         node2 = _ival(f1[1]) if len(f1) > 1 else 0
         node3 = _ival(f1[2]) if len(f1) > 2 else 0
@@ -54455,10 +54455,10 @@ def read_lagmul_hoeken_linkage_joint(block: KeywordBlock, model: Model, log: Mes
         tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
 
         if len(cards) > 1 and not cards[1].is_blank:
-            f2 = cards[1].cut("HOEKEN_LINKAGE_JOINT_2")
-            crank_len = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
-            coupler_len = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
-            rocker_len = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+            f2 = cards[1].cut("KEMPE_LINKAGE_JOINT_2")
+            arm_len1 = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            arm_len2 = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            cross_len = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
             travel_span = _fval(f2[3], 0.0) if len(f2) > 3 and f2[3].strip() else 0.0
     else:
         toks1 = cards[0].tokens()
@@ -54471,17 +54471,17 @@ def read_lagmul_hoeken_linkage_joint(block: KeywordBlock, model: Model, log: Mes
 
         if len(cards) > 1 and not cards[1].is_blank:
             toks2 = cards[1].tokens()
-            crank_len = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
-            coupler_len = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
-            rocker_len = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            arm_len1 = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            arm_len2 = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            cross_len = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
             travel_span = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
 
-    from ..model.entities import LagmulHoekenLinkageJoint
-    model.lagmul_hoeken_linkage_joints[block.user_id] = LagmulHoekenLinkageJoint(
+    from ..model.entities import LagmulKempeLinkageJoint
+    model.lagmul_kempe_linkage_joints[block.user_id] = LagmulKempeLinkageJoint(
         id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
         stiff=stiff, skew_id=skew_id, tol=tol,
-        crank_len=crank_len, coupler_len=coupler_len,
-        rocker_len=rocker_len, travel_span=travel_span
+        arm_len1=arm_len1, arm_len2=arm_len2,
+        cross_len=cross_len, travel_span=travel_span
     )
 
 
@@ -57955,7 +57955,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_NORM_ACC_RATE": read_sensor_spring_normal_acceleration_rate,
     "SENSOR_SPRING_RATE_ACC_NORM": read_sensor_spring_normal_acceleration_rate,
     "SENSOR_NORMAL_ACCELERATION_RATE_SPRING": read_sensor_spring_normal_acceleration_rate,
-    # --- M302: LadFracture Failure Model, EngThermophotonicEnergy, HoekenLinkageJoint, and Spring Transverse Acceleration Rate Sensor ---
+    # --- M302: LadFracture Failure Model, EngThermophotonicEnergy, KempeLinkageJoint, and Spring Transverse Acceleration Rate Sensor ---
     "FAIL_LAD_FRACTURE": read_fail_lad_fracture,
     "FAIL_LADEVEZE_DYNAMIC_FRACTURE": read_fail_lad_fracture,
     "FAIL_LAD_FRAC": read_fail_lad_fracture,
@@ -57967,11 +57967,11 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_ETHERMOPHOTONIC": read_eng_thermophotonic_energy,
     "ENG_THERMOPHOTONIC_DISSIPATION": read_eng_thermophotonic_energy,
     "ENG_EM_THERMOPHOTONIC": read_eng_thermophotonic_energy,
-    "LAGMUL_HOEKEN_LINKAGE_JOINT": read_lagmul_hoeken_linkage_joint,
-    "HOEKEN_LINKAGE_JOINT": read_lagmul_hoeken_linkage_joint,
-    "LAGMUL_HOEKEN_LINKAGE": read_lagmul_hoeken_linkage_joint,
-    "HOEKEN_LINKAGE": read_lagmul_hoeken_linkage_joint,
-    "HOEKEN_STRAIGHT_LINE_MECHANISM": read_lagmul_hoeken_linkage_joint,
+    "LAGMUL_KEMPE_LINKAGE_JOINT": read_lagmul_kempe_linkage_joint,
+    "KEMPE_LINKAGE_JOINT": read_lagmul_kempe_linkage_joint,
+    "LAGMUL_KEMPE_LINKAGE": read_lagmul_kempe_linkage_joint,
+    "KEMPE_LINKAGE": read_lagmul_kempe_linkage_joint,
+    "KEMPE_UNIVERSAL_MECHANISM": read_lagmul_kempe_linkage_joint,
     "SENSOR_SPRING_TRANSVERSE_ACCELERATION_RATE": read_sensor_spring_transverse_acceleration_rate,
     "SENSOR_SPRING_TRANS_ACC_RATE": read_sensor_spring_transverse_acceleration_rate,
     "SENSOR_SPRING_RATE_ACC_TRANS": read_sensor_spring_transverse_acceleration_rate,

@@ -16293,8 +16293,8 @@ class EngThermophotonicEnergy:
 
 
 @dataclass
-class LagmulHoekenLinkageJoint:
-    """``/HOEKEN_LINKAGE_JOINT/id`` or ``/LAGMUL/HOEKEN_LINKAGE_JOINT/id`` (M302): Hoecken 4-bar approximate straight-line and constant-velocity kinematic mechanism joint constraint."""
+class LagmulKempeLinkageJoint:
+    """``/KEMPE_LINKAGE_JOINT/id`` or ``/LAGMUL/KEMPE_LINKAGE_JOINT/id`` (M302): Kempe multi-bar kinematic linkage joint constraint (Kempe's exact straight-line and angle-multiplier mechanism)."""
     id: int = 1
     title: str = ""
     node1: int = 0               # fixed frame base pivot node
@@ -16303,9 +16303,9 @@ class LagmulHoekenLinkageJoint:
     stiff: float = 1e6           # kinematic constraint contact stiffness
     skew_id: int = 0             # reference coordinate frame ID
     tol: float = 1e-6            # constraint numerical tolerance
-    crank_len: float = 0.0       # length of driving crank link
-    coupler_len: float = 0.0     # length of coupler link
-    rocker_len: float = 0.0      # length of oscillating rocker link
+    arm_len1: float = 0.0        # primary linkage arm length
+    arm_len2: float = 0.0        # secondary linkage arm length
+    cross_len: float = 0.0       # diagonal crossing link length
     travel_span: float = 0.0     # linear travel stroke span
 
 
