@@ -2325,6 +2325,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("LAD_INTER", "FAIL_LAD_INTER", "LADEVEZE_INTER", "LAD_INTERFACIAL", "LAD_INTER_MODEL", "LAD_INTER_LAW", "LADEVEZE_INTERFACIAL_DAMAGE"):
         read_fail_lad_inter(block, model, log)
         return
+    if kind in ("LAD_FIB", "FAIL_LAD_FIB", "LADEVEZE_FIBER", "LAD_FIBER", "LAD_FIB_MODEL", "LAD_FIB_LAW", "LADEVEZE_FIBER_BRITTLE"):
+        read_fail_lad_fib(block, model, log)
+        return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
@@ -52399,6 +52402,154 @@ def read_sensor_spring_normal_acceleration(block: KeywordBlock, model: Model, lo
     ))
 
 
+# ============================================================================
+# M289 Suite: LadFib failure, EngJouleHeatEnergy, DeltaRobotJoint, SensorSpringShearAcceleration
+# ============================================================================
+
+def read_fail_lad_fib(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_FIB/mat_ID`` or ``/FAIL/LADEVEZE_FIBER`` (M289): Ladevèze longitudinal fiber brittle rupture and microbuckling failure criterion."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_FIB/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_FIB_1")
+        eps_ft = _fval(c1[0]) if len(c1) > 0 else 0.0
+        eps_fc = _fval(c1[1]) if len(c1) > 1 else 0.0
+        sigma_ft = _fval(c1[2]) if len(c1) > 2 else 0.0
+        sigma_fc = _fval(c1[3]) if len(c1) > 3 else 0.0
+        gamma_fib = _fval(c1[4]) if len(c1) > 4 else 0.0
+        c2 = cards[1].cut("FAIL_LAD_FIB_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        eps_ft = float(t1[0].rstrip(',')) if len(t1) > 0 else 0.0
+        eps_fc = float(t1[1].rstrip(',')) if len(t1) > 1 else 0.0
+        sigma_ft = float(t1[2].rstrip(',')) if len(t1) > 2 else 0.0
+        sigma_fc = float(t1[3].rstrip(',')) if len(t1) > 3 else 0.0
+        gamma_fib = float(t1[4].rstrip(',')) if len(t1) > 4 else 0.0
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "eps_ft": eps_ft, "eps_fc": eps_fc, "sigma_ft": sigma_ft, "sigma_fc": sigma_fc, "gamma_fib": gamma_fib,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadFib, FailureModel
+    model.fail_ladfibs[mat_id] = FailLadFib(
+        mat_id=mat_id, title=title, eps_ft=eps_ft, eps_fc=eps_fc, sigma_ft=sigma_ft, sigma_fc=sigma_fc, gamma_fib=gamma_fib,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_FIB", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_joule_heat_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/JOULE_HEAT_ENERGY`` or ``/ENG/JOULE_HEAT_WORK`` (M289): Engine electromagnetic resistive Joule heating dissipation energy tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/JOULE_HEAT_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_joule, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_JOULE_HEAT_ENERGY_1")
+        dt_joule = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_joule = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngJouleHeatEnergy
+    r_id = block.user_id or (len(model.eng_joule_heat_energies) + 1)
+    model.eng_joule_heat_energies[r_id] = EngJouleHeatEnergy(
+        id=r_id, title=title, dt_joule=dt_joule, sens_id=sens_id
+    )
+
+
+def read_lagmul_delta_robot_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DELTA_ROBOT_JOINT/id`` or ``/LAGMUL/DELTA_ROBOT_JOINT/id`` (M289): 3-DOF parallel delta robot spatial linkage kinematic joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/DELTA_ROBOT_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    upper_arm_len, forearm_len, base_radius = 0.0, 0.0, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("DELTA_ROBOT_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("DELTA_ROBOT_JOINT_2")
+            upper_arm_len = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            forearm_len = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            base_radius = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 0 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            upper_arm_len = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            forearm_len = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            base_radius = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+
+    from ..model.entities import LagmulDeltaRobotJoint
+    model.lagmul_delta_robot_joints[block.user_id] = LagmulDeltaRobotJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        upper_arm_len=upper_arm_len, forearm_len=forearm_len, base_radius=base_radius
+    )
+
+
+def read_sensor_spring_shear_acceleration(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_SHEAR_ACCELERATION`` or ``/SENSOR/SPRING_SHEAR_ACC`` (M289): Spring element relative transverse shear acceleration threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_SHEAR_ACCELERATION/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, accs_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_SHEAR_ACCELERATION_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        accs_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        accs_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringShearAcceleration, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_shear_accelerations) + 1)
+    sssa = SensorSpringShearAcceleration(
+        id=s_id, title=title, spring_id=spring_id,
+        accs_max=accs_max, t_delay=t_delay
+    )
+    model.sensor_spring_shear_accelerations[s_id] = sssa
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_SHEAR_ACCELERATION", tdelay=t_delay
+    ))
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -55563,6 +55714,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_NORM_ACC": read_sensor_spring_normal_acceleration,
     "SENSOR_SPRING_ACC_NORMAL": read_sensor_spring_normal_acceleration,
     "SENSOR_NORMAL_ACCELERATION_SPRING": read_sensor_spring_normal_acceleration,
+    # --- M289: LadFib Failure Model, Engine Joule Heat Energy Output Directive, Delta Robot Joint Suite, and Spring Shear Acceleration Sensor ---
+    "FAIL_LAD_FIB": read_fail_lad_fib,
+    "FAIL_LADEVEZE_FIBER": read_fail_lad_fib,
+    "FAIL_LAD_FIBER": read_fail_lad_fib,
+    "FAIL_LAD_FIB_MODEL": read_fail_lad_fib,
+    "FAIL_LAD_FIB_LAW": read_fail_lad_fib,
+    "FAIL_LADEVEZE_FIBER_BRITTLE": read_fail_lad_fib,
+    "ENG_JOULE_HEAT_ENERGY": read_eng_joule_heat_energy,
+    "ENG_JOULE_HEAT_WORK": read_eng_joule_heat_energy,
+    "ENG_EJOULE": read_eng_joule_heat_energy,
+    "ENG_JOULE_HEATING_ENERGY": read_eng_joule_heat_energy,
+    "ENG_EM_JOULE_HEAT": read_eng_joule_heat_energy,
+    "LAGMUL_DELTA_ROBOT_JOINT": read_lagmul_delta_robot_joint,
+    "DELTA_ROBOT_JOINT": read_lagmul_delta_robot_joint,
+    "LAGMUL_DELTA_ROBOT": read_lagmul_delta_robot_joint,
+    "DELTA_ROBOT": read_lagmul_delta_robot_joint,
+    "DELTA_PARALLEL_ROBOT": read_lagmul_delta_robot_joint,
+    "SENSOR_SPRING_SHEAR_ACCELERATION": read_sensor_spring_shear_acceleration,
+    "SENSOR_SPRING_SHEAR_ACC": read_sensor_spring_shear_acceleration,
+    "SENSOR_SPRING_ACC_SHEAR": read_sensor_spring_shear_acceleration,
+    "SENSOR_SHEAR_ACCELERATION_SPRING": read_sensor_spring_shear_acceleration,
 }
 
 

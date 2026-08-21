@@ -1911,6 +1911,12 @@ class Model:
         self.lagmul_parallelogram_joints: Dict[int, Any] = {}        # /PARALLELOGRAM_JOINT, /LAGMUL/PARALLELOGRAM_JOINT (M288)
         self.sensor_spring_normal_accelerations: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_ACCELERATION (M288)
 
+        # M289 Entities
+        self.fail_ladfibs: Dict[int, Any] = {}                       # /FAIL/LAD_FIB (M289)
+        self.eng_joule_heat_energies: Dict[int, Any] = {}            # /ENG/JOULE_HEAT_ENERGY (M289)
+        self.lagmul_delta_robot_joints: Dict[int, Any] = {}          # /DELTA_ROBOT_JOINT, /LAGMUL/DELTA_ROBOT_JOINT (M289)
+        self.sensor_spring_shear_accelerations: Dict[int, Any] = {}  # /SENSOR/SPRING_SHEAR_ACCELERATION (M289)
+
 
 
 

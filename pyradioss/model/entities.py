@@ -15556,6 +15556,60 @@ class SensorSpringNormalAcceleration:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M289 Suite: LadFib failure, EngJouleHeatEnergy, DeltaRobotJoint, SensorSpringShearAcceleration
+# ============================================================================
+
+@dataclass
+class FailLadFib:
+    """``/FAIL/LAD_FIB`` or ``/FAIL/LADEVEZE_FIBER`` (M289): Ladevèze longitudinal fiber brittle rupture and microbuckling failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    eps_ft: float = 0.0          # longitudinal tensile failure strain
+    eps_fc: float = 0.0          # longitudinal compressive microbuckling strain
+    sigma_ft: float = 0.0        # longitudinal tensile failure stress
+    sigma_fc: float = 0.0        # longitudinal compressive microbuckling stress
+    gamma_fib: float = 0.0       # fiber shear coupling damage coefficient
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngJouleHeatEnergy:
+    """``/ENG/JOULE_HEAT_ENERGY`` or ``/ENG/JOULE_HEAT_WORK`` (M289): Engine electromagnetic resistive Joule heating dissipation energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_joule: float = 0.0        # time frequency for Joule heating output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulDeltaRobotJoint:
+    """``/DELTA_ROBOT_JOINT/id`` or ``/LAGMUL/DELTA_ROBOT_JOINT/id`` (M289): 3-DOF parallel delta robot spatial linkage kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base actuated arm shoulder hinge node
+    node2: int = 0               # moving end-effector travelling platform node
+    node3: int = 0               # base frame central reference anchor node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    upper_arm_len: float = 0.0   # actuated upper arm bicep link length
+    forearm_len: float = 0.0     # parallel parallelogram forearm rod length
+    base_radius: float = 0.0     # fixed top base triangular mounting radius
+
+
+@dataclass
+class SensorSpringShearAcceleration:
+    """``/SENSOR/SPRING_SHEAR_ACCELERATION`` or ``/SENSOR/SPRING_SHEAR_ACC`` (M289): Spring element relative transverse shear acceleration threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    accs_max: float = 1e30       # maximum shear acceleration magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
