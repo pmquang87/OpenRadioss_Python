@@ -1965,6 +1965,12 @@ class Model:
         self.lagmul_hart_linkage_joints: Dict[int, Any] = {}         # /HART_LINKAGE_JOINT, /LAGMUL/HART_LINKAGE_JOINT (M297)
         self.sensor_spring_torsional_jerks: Dict[int, Any] = {}      # /SENSOR/SPRING_TORSIONAL_JERK (M297)
 
+        # M298 Entities
+        self.fail_ladanisos: Dict[int, Any] = {}                     # /FAIL/LAD_ANISO (M298)
+        self.eng_pyroelectric_energies: Dict[int, Any] = {}          # /ENG/PYROELECTRIC_ENERGY (M298)
+        self.lagmul_peaucellier_linkage_joints: Dict[int, Any] = {}  # /PEAUCELLIER_LINKAGE_JOINT, /LAGMUL/PEAUCELLIER_LINKAGE_JOINT (M298)
+        self.sensor_spring_bending_jerks: Dict[int, Any] = {}        # /SENSOR/SPRING_BENDING_JERK (M298)
+
 
 
 

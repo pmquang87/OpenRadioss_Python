@@ -16044,6 +16044,61 @@ class SensorSpringTorsionalJerk:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M298 Suite: LadAniso failure, EngPyroelectricEnergy, PeaucellierLinkageJoint, SensorSpringBendingJerk
+# ============================================================================
+
+@dataclass
+class FailLadAniso:
+    """``/FAIL/LAD_ANISO`` or ``/FAIL/LADEVEZE_ANISOTROPIC_DAMAGE`` (M298): Ladevèze 3D anisotropic continuum damage mechanics and multi-axial micro-cracking evolution failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_1: float = 0.0            # axial initial micro-damage energy threshold
+    yc_1: float = 0.0            # axial critical damage rupture energy
+    y0_2: float = 0.0            # transverse initial micro-damage energy threshold
+    yc_2: float = 0.0            # transverse critical damage rupture energy
+    d_aniso_max: float = 0.999   # maximum allowable anisotropic damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngPyroelectricEnergy:
+    """``/ENG/PYROELECTRIC_ENERGY`` or ``/ENG/PYRO_WORK`` (M298): Engine pyroelectric thermal-polarization coupling and reversible temperature-induced electric energy conversion tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_pyroelectric: float = 0.0 # time frequency for pyroelectric energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulPeaucellierLinkageJoint:
+    """``/PEAUCELLIER_LINKAGE_JOINT/id`` or ``/LAGMUL/PEAUCELLIER_LINKAGE_JOINT/id`` (M298): Peaucellier–Lipkin 8-bar exact straight-line linkage planar kinematic inversor mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed base anchor pivot node
+    node2: int = 0               # straight-line motion output node
+    node3: int = 0               # auxiliary pivot / center oscillating link node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    base_len: float = 0.0        # fixed base distance between anchor pivots
+    rhombus_len: float = 0.0     # length of the 4 equal rhombus diamond links
+    long_link_len: float = 0.0   # length of the 2 equal long radial links
+    inversor_k: float = 0.0      # geometric inversor power / coupling parameter
+
+
+@dataclass
+class SensorSpringBendingJerk:
+    """``/SENSOR/SPRING_BENDING_JERK`` or ``/SENSOR/SPRING_BEND_JERK`` (M298): Spring element relative transverse bending angular jerk (rate of change of bending angular acceleration) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jbend_max: float = 1e30      # maximum bending angular jerk magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
