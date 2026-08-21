@@ -16704,6 +16704,61 @@ class SensorSpringTorsionalJerkRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M310 Suite: LadInplaneShear failure, EngBarocaloricEnergy, StephensonLinkageJoint, SensorSpringBendingJerkRate
+# ============================================================================
+
+@dataclass
+class FailLadInplaneShear:
+    """``/FAIL/LAD_INPLANE_SHEAR`` or ``/FAIL/LADEVEZE_INPLANE_SHEAR`` (M310): Ladevèze in-plane shear microcracking and irreversible plastic shear slip damage failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_ips: float = 0.0          # in-plane shear damage initiation threshold energy
+    yc_ips: float = 0.0          # critical in-plane shear microcracking fracture energy
+    gamma_plastic_0: float = 0.0 # initial plastic shear strain threshold
+    alpha_ips_slip: float = 0.0  # plastic shear slip hardening rate
+    d_ips_max: float = 0.999     # maximum allowable in-plane shear damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngBarocaloricEnergy:
+    """``/ENG/BAROCALORIC_ENERGY`` or ``/ENG/BCE_WORK`` (M310): Engine barocaloric pressure-induced thermal entropy change and reversible solid-state elastocaloric/barocaloric phase transformation energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_bce: float = 0.0          # time frequency for barocaloric energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulStephensonLinkageJoint:
+    """``/STEPHENSON_LINKAGE_JOINT/id`` or ``/LAGMUL/STEPHENSON_LINKAGE_JOINT/id`` (M310): Stephenson 6-bar kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # ground pivot node 1
+    node2: int = 0               # tracing coupler output node
+    node3: int = 0               # ground pivot node 2
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # crank link length a
+    link_len_b: float = 0.0      # coupler link length b
+    link_len_c: float = 0.0      # rocker link length c
+    link_len_d: float = 0.0      # ternary link length d
+
+
+@dataclass
+class SensorSpringBendingJerkRate:
+    """``/SENSOR/SPRING_BENDING_JERK_RATE`` or ``/SENSOR/SPRING_BEND_JERK_RATE`` (M310): Spring element relative transverse bending angular jerk rate-of-change (bending angular snap/jounce) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jbend_snap_max: float = 1e30 # maximum bending angular jerk rate-of-change (snap) magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

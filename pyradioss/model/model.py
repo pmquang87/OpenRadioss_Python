@@ -2037,6 +2037,12 @@ class Model:
         self.lagmul_watt_beam_engine_joints: Dict[int, Any] = {}    # /WATT_BEAM_ENGINE_JOINT, /LAGMUL/WATT_BEAM_ENGINE_JOINT (M309)
         self.sensor_spring_torsional_jerk_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_JERK_RATE (M309)
 
+        # M310 Entities
+        self.fail_ladinplaneshears: Dict[int, Any] = {}             # /FAIL/LAD_INPLANE_SHEAR (M310)
+        self.eng_barocaloric_energies: Dict[int, Any] = {}          # /ENG/BAROCALORIC_ENERGY (M310)
+        self.lagmul_stephenson_linkage_joints: Dict[int, Any] = {}  # /STEPHENSON_LINKAGE_JOINT, /LAGMUL/STEPHENSON_LINKAGE_JOINT (M310)
+        self.sensor_spring_bending_jerk_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_BENDING_JERK_RATE (M310)
+
 
 
 
