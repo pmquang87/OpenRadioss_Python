@@ -2334,6 +2334,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("LAD_COUPLE", "FAIL_LAD_COUPLE", "LADEVEZE_COUPLED", "LAD_COUPLED", "LAD_COUPLE_MODEL", "LAD_COUPLE_LAW", "LADEVEZE_THERMO_COUPLED"):
         read_fail_lad_couple(block, model, log)
         return
+    if kind in ("LAD_VISCO_PLAST", "FAIL_LAD_VISCO_PLAST", "LADEVEZE_VISCO_PLASTIC", "LAD_VP", "LAD_VP_MODEL", "LAD_VP_LAW", "LADEVEZE_RATE_SENSITIVE_DAMAGE"):
+        read_fail_lad_visco_plast(block, model, log)
+        return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
@@ -52852,6 +52855,154 @@ def read_sensor_spring_torsional_acceleration(block: KeywordBlock, model: Model,
     ))
 
 
+# ============================================================================
+# M292 Suite: LadViscoPlast failure, EngDielectricLossEnergy, HoekenLinkageJoint, SensorSpringBendingAcceleration
+# ============================================================================
+
+def read_fail_lad_visco_plast(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_VISCO_PLAST/mat_ID`` or ``/FAIL/LADEVEZE_VISCO_PLASTIC`` (M292): Ladevèze strain rate-dependent viscoplastic micro-damage and dynamic hardening failure criterion."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_VISCO_PLAST/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_VISCO_PLAST_1")
+        gamma_vp = _fval(c1[0]) if len(c1) > 0 else 0.0
+        m_vp = _fval(c1[1], 1.0) if len(c1) > 1 and c1[1].strip() else 1.0
+        a_vp = _fval(c1[2]) if len(c1) > 2 else 0.0
+        p_vp = _fval(c1[3], 1.0) if len(c1) > 3 and c1[3].strip() else 1.0
+        d_max_vp = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        c2 = cards[1].cut("FAIL_LAD_VISCO_PLAST_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        gamma_vp = float(t1[0].rstrip(',')) if len(t1) > 0 else 0.0
+        m_vp = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 1.0
+        a_vp = float(t1[2].rstrip(',')) if len(t1) > 2 else 0.0
+        p_vp = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 1.0
+        d_max_vp = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.999
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "gamma_vp": gamma_vp, "m_vp": m_vp, "a_vp": a_vp, "p_vp": p_vp, "d_max_vp": d_max_vp,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadViscoPlast, FailureModel
+    model.fail_ladviscoplasts[mat_id] = FailLadViscoPlast(
+        mat_id=mat_id, title=title, gamma_vp=gamma_vp, m_vp=m_vp, a_vp=a_vp, p_vp=p_vp, d_max_vp=d_max_vp,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_VISCO_PLAST", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_dielectric_loss_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/DIELECTRIC_LOSS_ENERGY`` or ``/ENG/DIELECTRIC_WORK`` (M292): Engine high-frequency dielectric permittivity loss and polarization dissipation energy tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/DIELECTRIC_LOSS_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_dielectric, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_DIELECTRIC_LOSS_ENERGY_1")
+        dt_dielectric = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_dielectric = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngDielectricLossEnergy
+    r_id = block.user_id or (len(model.eng_dielectric_loss_energies) + 1)
+    model.eng_dielectric_loss_energies[r_id] = EngDielectricLossEnergy(
+        id=r_id, title=title, dt_dielectric=dt_dielectric, sens_id=sens_id
+    )
+
+
+def read_lagmul_hoeken_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/HOEKEN_LINKAGE_JOINT/id`` or ``/LAGMUL/HOEKEN_LINKAGE_JOINT/id`` (M292): Hoecken 4-bar straight-line approximate planar kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/HOEKEN_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    crank_len, rocker_len, coupler_len = 0.0, 0.0, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("HOEKEN_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("HOEKEN_LINKAGE_JOINT_2")
+            crank_len = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            rocker_len = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            coupler_len = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 0 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            crank_len = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            rocker_len = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            coupler_len = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+
+    from ..model.entities import LagmulHoekenLinkageJoint
+    model.lagmul_hoeken_linkage_joints[block.user_id] = LagmulHoekenLinkageJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        crank_len=crank_len, rocker_len=rocker_len, coupler_len=coupler_len
+    )
+
+
+def read_sensor_spring_bending_acceleration(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_BENDING_ACCELERATION`` or ``/SENSOR/SPRING_BEND_ACC`` (M292): Spring element relative transverse bending angular acceleration threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_BENDING_ACCELERATION/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, alphab_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_BENDING_ACCELERATION_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        alphab_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        alphab_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringBendingAcceleration, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_bending_accelerations) + 1)
+    ssba = SensorSpringBendingAcceleration(
+        id=s_id, title=title, spring_id=spring_id,
+        alphab_max=alphab_max, t_delay=t_delay
+    )
+    model.sensor_spring_bending_accelerations[s_id] = ssba
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_BENDING_ACCELERATION", tdelay=t_delay
+    ))
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -56079,6 +56230,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_TORS_ACC": read_sensor_spring_torsional_acceleration,
     "SENSOR_SPRING_ACC_TORS": read_sensor_spring_torsional_acceleration,
     "SENSOR_TORSIONAL_ACCELERATION_SPRING": read_sensor_spring_torsional_acceleration,
+    # --- M292: LadViscoPlast Failure Model, Engine Dielectric Loss Energy Output Directive, Hoeken Linkage Joint Suite, and Spring Bending Acceleration Sensor ---
+    "FAIL_LAD_VISCO_PLAST": read_fail_lad_visco_plast,
+    "FAIL_LADEVEZE_VISCO_PLASTIC": read_fail_lad_visco_plast,
+    "FAIL_LAD_VP": read_fail_lad_visco_plast,
+    "FAIL_LAD_VP_MODEL": read_fail_lad_visco_plast,
+    "FAIL_LAD_VP_LAW": read_fail_lad_visco_plast,
+    "FAIL_LADEVEZE_RATE_SENSITIVE_DAMAGE": read_fail_lad_visco_plast,
+    "ENG_DIELECTRIC_LOSS_ENERGY": read_eng_dielectric_loss_energy,
+    "ENG_DIELECTRIC_WORK": read_eng_dielectric_loss_energy,
+    "ENG_EDIELECTRIC": read_eng_dielectric_loss_energy,
+    "ENG_DIELECTRIC_DISSIPATION": read_eng_dielectric_loss_energy,
+    "ENG_EM_DIELECTRIC_LOSS": read_eng_dielectric_loss_energy,
+    "LAGMUL_HOEKEN_LINKAGE_JOINT": read_lagmul_hoeken_linkage_joint,
+    "HOEKEN_LINKAGE_JOINT": read_lagmul_hoeken_linkage_joint,
+    "LAGMUL_HOEKEN_LINKAGE": read_lagmul_hoeken_linkage_joint,
+    "HOEKEN_LINKAGE": read_lagmul_hoeken_linkage_joint,
+    "HOEKEN_STRAIGHT_LINE_MECHANISM": read_lagmul_hoeken_linkage_joint,
+    "SENSOR_SPRING_BENDING_ACCELERATION": read_sensor_spring_bending_acceleration,
+    "SENSOR_SPRING_BEND_ACC": read_sensor_spring_bending_acceleration,
+    "SENSOR_SPRING_ACC_BEND": read_sensor_spring_bending_acceleration,
+    "SENSOR_BENDING_ACCELERATION_SPRING": read_sensor_spring_bending_acceleration,
 }
 
 

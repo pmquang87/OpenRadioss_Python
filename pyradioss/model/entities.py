@@ -15718,6 +15718,60 @@ class SensorSpringTorsionalAcceleration:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M292 Suite: LadViscoPlast failure, EngDielectricLossEnergy, HoekenLinkageJoint, SensorSpringBendingAcceleration
+# ============================================================================
+
+@dataclass
+class FailLadViscoPlast:
+    """``/FAIL/LAD_VISCO_PLAST`` or ``/FAIL/LADEVEZE_VISCO_PLASTIC`` (M292): Ladevèze strain rate-dependent viscoplastic micro-damage and dynamic hardening failure criterion."""
+    mat_id: int = 0
+    title: str = ""
+    gamma_vp: float = 0.0        # viscoplastic rate sensitivity coefficient
+    m_vp: float = 1.0            # viscoplastic power-law rate exponent
+    a_vp: float = 0.0            # isotropic dynamic hardening modulus
+    p_vp: float = 1.0            # dynamic hardening power exponent
+    d_max_vp: float = 0.999      # maximum rate-coupled damage limit
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngDielectricLossEnergy:
+    """``/ENG/DIELECTRIC_LOSS_ENERGY`` or ``/ENG/DIELECTRIC_WORK`` (M292): Engine high-frequency dielectric permittivity loss and polarization dissipation energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_dielectric: float = 0.0   # time frequency for dielectric loss energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulHoekenLinkageJoint:
+    """``/HOEKEN_LINKAGE_JOINT/id`` or ``/LAGMUL/HOEKEN_LINKAGE_JOINT/id`` (M292): Hoecken 4-bar straight-line approximate planar kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # driving rotating crank pivot node
+    node2: int = 0               # straight-line tracing coupler endpoint node
+    node3: int = 0               # oscillating rocker arm anchor pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    crank_len: float = 0.0       # input driving crank link length
+    rocker_len: float = 0.0      # oscillating rocker link length
+    coupler_len: float = 0.0     # intermediate coupler link length
+
+
+@dataclass
+class SensorSpringBendingAcceleration:
+    """``/SENSOR/SPRING_BENDING_ACCELERATION`` or ``/SENSOR/SPRING_BEND_ACC`` (M292): Spring element relative transverse bending angular acceleration threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    alphab_max: float = 1e30     # maximum bending angular acceleration magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

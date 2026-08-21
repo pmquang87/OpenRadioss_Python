@@ -1929,6 +1929,12 @@ class Model:
         self.lagmul_lead_screw_joints: Dict[int, Any] = {}           # /LEAD_SCREW_JOINT, /LAGMUL/LEAD_SCREW_JOINT (M291)
         self.sensor_spring_torsional_accelerations: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_ACCELERATION (M291)
 
+        # M292 Entities
+        self.fail_ladviscoplasts: Dict[int, Any] = {}                # /FAIL/LAD_VISCO_PLAST (M292)
+        self.eng_dielectric_loss_energies: Dict[int, Any] = {}       # /ENG/DIELECTRIC_LOSS_ENERGY (M292)
+        self.lagmul_hoeken_linkage_joints: Dict[int, Any] = {}       # /HOEKEN_LINKAGE_JOINT, /LAGMUL/HOEKEN_LINKAGE_JOINT (M292)
+        self.sensor_spring_bending_accelerations: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_ACCELERATION (M292)
+
 
 
 
