@@ -2031,6 +2031,12 @@ class Model:
         self.lagmul_scott_russell_linkage_joints: Dict[int, Any] = {} # /SCOTT_RUSSELL_LINKAGE_JOINT, /LAGMUL/SCOTT_RUSSELL_LINKAGE_JOINT (M308)
         self.sensor_spring_transverse_acceleration_jerks: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_ACCELERATION_JERK (M308)
 
+        # M309 Entities
+        self.fail_ladtransversecompressions: Dict[int, Any] = {}    # /FAIL/LAD_TRANSVERSE_COMPRESSION (M309)
+        self.eng_piezomagnetic_energies: Dict[int, Any] = {}        # /ENG/PIEZOMAGNETIC_ENERGY (M309)
+        self.lagmul_watt_beam_engine_joints: Dict[int, Any] = {}    # /WATT_BEAM_ENGINE_JOINT, /LAGMUL/WATT_BEAM_ENGINE_JOINT (M309)
+        self.sensor_spring_torsional_jerk_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_JERK_RATE (M309)
+
 
 
 

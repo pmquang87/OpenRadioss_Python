@@ -16649,6 +16649,61 @@ class SensorSpringTransverseAccelerationJerk:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M309 Suite: LadTransverseCompression failure, EngPiezomagneticEnergy, WattBeamEngineJoint, SensorSpringTorsionalJerkRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseCompression:
+    """``/FAIL/LAD_TRANSVERSE_COMPRESSION`` or ``/FAIL/LADEVEZE_TRANSVERSE_COMPRESSION`` (M309): Ladevèze transverse compressive matrix microcracking and friction-induced crushing damage failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_tc: float = 0.0           # transverse compressive damage activation threshold energy
+    yc_tc: float = 0.0           # critical transverse compressive fracture energy
+    mu_fric_tc: float = 0.0      # internal microcrack Coulomb friction coefficient
+    sigma_tc_max: float = 0.0    # ultimate transverse compressive crushing stress limit
+    d_tc_max: float = 0.999      # maximum allowable transverse compressive damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngPiezomagneticEnergy:
+    """``/ENG/PIEZOMAGNETIC_ENERGY`` or ``/ENG/PZM_WORK`` (M309): Engine linear piezomagnetic magneto-mechanical coupled strain work and piezomagnetic polarization energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_pzm: float = 0.0          # time frequency for piezomagnetic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulWattBeamEngineJoint:
+    """``/WATT_BEAM_ENGINE_JOINT/id`` or ``/LAGMUL/WATT_BEAM_ENGINE_JOINT/id`` (M309): Watt rocking walking-beam engine kinematic linkage joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed center pivot trunnion node
+    node2: int = 0               # piston crosshead vertical guided node
+    node3: int = 0               # flywheel crank pin node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    beam_half_length_a: float = 0.0 # piston-side beam half length
+    beam_half_length_b: float = 0.0 # crank-side beam half length
+    stroke_travel: float = 0.0   # piston vertical stroke travel span
+    beam_tilt_max: float = 0.0   # maximum beam rocking tilt angle (radians)
+
+
+@dataclass
+class SensorSpringTorsionalJerkRate:
+    """``/SENSOR/SPRING_TORSIONAL_JERK_RATE`` or ``/SENSOR/SPRING_TORS_JERK_RATE`` (M309): Spring element relative torsional angular jerk rate-of-change (torsional angular snap/jounce) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtors_snap_max: float = 1e30 # maximum torsional angular jerk rate-of-change (snap) magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
