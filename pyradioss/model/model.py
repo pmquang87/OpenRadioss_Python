@@ -1917,6 +1917,12 @@ class Model:
         self.lagmul_delta_robot_joints: Dict[int, Any] = {}          # /DELTA_ROBOT_JOINT, /LAGMUL/DELTA_ROBOT_JOINT (M289)
         self.sensor_spring_shear_accelerations: Dict[int, Any] = {}  # /SENSOR/SPRING_SHEAR_ACCELERATION (M289)
 
+        # M290 Entities
+        self.fail_ladmicros: Dict[int, Any] = {}                     # /FAIL/LAD_MICRO (M290)
+        self.eng_lorentz_force_energies: Dict[int, Any] = {}         # /ENG/LORENTZ_FORCE_ENERGY (M290)
+        self.lagmul_spherical_wrist_joints: Dict[int, Any] = {}      # /SPHERICAL_WRIST_JOINT, /LAGMUL/SPHERICAL_WRIST_JOINT (M290)
+        self.sensor_spring_resultant_accelerations: Dict[int, Any] = {} # /SENSOR/SPRING_RESULTANT_ACCELERATION (M290)
+
 
 
 

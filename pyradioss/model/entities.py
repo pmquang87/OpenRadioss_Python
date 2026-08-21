@@ -15610,6 +15610,60 @@ class SensorSpringShearAcceleration:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M290 Suite: LadMicro failure, EngLorentzForceEnergy, SphericalWristJoint, SensorSpringResultantAcceleration
+# ============================================================================
+
+@dataclass
+class FailLadMicro:
+    """``/FAIL/LAD_MICRO`` or ``/FAIL/LADEVEZE_MICRO`` (M290): Ladevèze micromechanical damage evolution failure model."""
+    mat_id: int = 0
+    title: str = ""
+    d0_micro: float = 0.0        # initial microcrack damage threshold
+    dc_micro: float = 0.0        # critical microcrack coalescence damage threshold
+    alpha_micro: float = 0.0     # micro-debonding kinetic exponent
+    beta_micro: float = 0.0      # matrix microcracking growth exponent
+    s_micro: float = 0.0         # microcrack characteristic damage scale factor
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngLorentzForceEnergy:
+    """``/ENG/LORENTZ_FORCE_ENERGY`` or ``/ENG/LORENTZ_WORK`` (M290): Engine electromagnetic Lorentz force mechanical work and volume force energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_lorentz: float = 0.0      # time frequency for Lorentz force energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulSphericalWristJoint:
+    """``/SPHERICAL_WRIST_JOINT/id`` or ``/LAGMUL/SPHERICAL_WRIST_JOINT/id`` (M290): 3-DOF robotic intersecting-axes spherical wrist kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # robotic forearm roll axis input node
+    node2: int = 0               # gripper end-effector yaw axis output node
+    node3: int = 0               # intermediate pitch gimbal intersection pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    roll_limit: float = 0.0      # maximum allowable relative roll angle limit (deg)
+    pitch_limit: float = 0.0     # maximum allowable relative pitch angle limit (deg)
+    yaw_limit: float = 0.0       # maximum allowable relative yaw angle limit (deg)
+
+
+@dataclass
+class SensorSpringResultantAcceleration:
+    """``/SENSOR/SPRING_RESULTANT_ACCELERATION`` or ``/SENSOR/SPRING_RES_ACC`` (M290): Spring element relative 3D vector resultant translational acceleration magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    accr_max: float = 1e30       # maximum resultant acceleration magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
