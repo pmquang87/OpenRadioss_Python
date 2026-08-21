@@ -15989,6 +15989,62 @@ class SensorSpringResultantJerk:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M297 Suite: LadTcAsymmetry failure, EngThermoelectricEnergy, HartLinkageJoint, SensorSpringTorsionalJerk
+# ============================================================================
+
+@dataclass
+class FailLadTcAsymmetry:
+    """``/FAIL/LAD_TC_ASYMMETRY`` or ``/FAIL/LADEVEZE_TENSION_COMPRESSION_ASYMMETRY`` (M297): Ladevèze tension-compression asymmetry and bimodal damage evolution model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_t: float = 0.0            # tensile initial micro-damage energy threshold
+    yc_t: float = 0.0            # tensile critical damage rupture energy
+    y0_c: float = 0.0            # compressive initial micro-damage energy threshold
+    yc_c: float = 0.0            # compressive critical damage rupture energy
+    d_tc_max: float = 0.999      # maximum allowable tension-compression damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngThermoelectricEnergy:
+    """``/ENG/THERMOELECTRIC_ENERGY`` or ``/ENG/TE_WORK`` (M297): Engine thermoelectric Seebeck/Peltier reversible thermal-electric energy conversion tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_thermoelectric: float = 0.0 # time frequency for thermoelectric energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulHartLinkageJoint:
+    """``/HART_LINKAGE_JOINT/id`` or ``/LAGMUL/HART_LINKAGE_JOINT/id`` (M297): Hart 5-bar / 6-bar exact straight-line linkage planar kinematic inversor mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed base pivot node
+    node2: int = 0               # straight-line motion output node
+    node3: int = 0               # auxiliary guide / oscillating rocker node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    base_len: float = 0.0        # fixed base anchor distance
+    short_link_len: float = 0.0  # short link length of the Hart inversor antiparallelogram
+    long_link_len: float = 0.0   # long link length of the Hart inversor antiparallelogram
+    coupler_ratio: float = 0.0   # geometric proportionality ratio along coupler bars
+
+
+@dataclass
+class SensorSpringTorsionalJerk:
+    """``/SENSOR/SPRING_TORSIONAL_JERK`` or ``/SENSOR/SPRING_TORS_JERK`` (M297): Spring element relative torsional jerk (rate of change of angular acceleration) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtors_max: float = 1e30      # maximum torsional angular jerk magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

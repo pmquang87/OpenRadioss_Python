@@ -1959,6 +1959,12 @@ class Model:
         self.lagmul_watt_linkage_joints: Dict[int, Any] = {}         # /WATT_LINKAGE_JOINT, /LAGMUL/WATT_LINKAGE_JOINT (M296)
         self.sensor_spring_resultant_jerks: Dict[int, Any] = {}      # /SENSOR/SPRING_RESULTANT_JERK (M296)
 
+        # M297 Entities
+        self.fail_ladtcasymmetries: Dict[int, Any] = {}              # /FAIL/LAD_TC_ASYMMETRY (M297)
+        self.eng_thermoelectric_energies: Dict[int, Any] = {}        # /ENG/THERMOELECTRIC_ENERGY (M297)
+        self.lagmul_hart_linkage_joints: Dict[int, Any] = {}         # /HART_LINKAGE_JOINT, /LAGMUL/HART_LINKAGE_JOINT (M297)
+        self.sensor_spring_torsional_jerks: Dict[int, Any] = {}      # /SENSOR/SPRING_TORSIONAL_JERK (M297)
+
 
 
 
