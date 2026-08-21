@@ -2013,6 +2013,12 @@ class Model:
         self.lagmul_hypocyclic_linkage_joints: Dict[int, Any] = {}   # /HYPOCYCLIC_LINKAGE_JOINT, /LAGMUL/HYPOCYCLIC_LINKAGE_JOINT (M305)
         self.sensor_spring_total_angular_acceleration_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_ACCELERATION_RATE (M305)
 
+        # M306 Entities
+        self.fail_ladinterlaminarshears: Dict[int, Any] = {}         # /FAIL/LAD_INTERLAMINAR_SHEAR (M306)
+        self.eng_phonon_polariton_energies: Dict[int, Any] = {}      # /ENG/PHONON_POLARITON_ENERGY (M306)
+        self.lagmul_pantograph_linkage_joints: Dict[int, Any] = {}   # /PANTOGRAPH_LINKAGE_JOINT, /LAGMUL/PANTOGRAPH_LINKAGE_JOINT (M306)
+        self.sensor_spring_total_acceleration_jerks: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ACCELERATION_JERK (M306)
+
 
 
 

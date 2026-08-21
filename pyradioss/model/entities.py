@@ -16484,6 +16484,61 @@ class SensorSpringTotalAngularAccelerationRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M306 Suite: LadInterlaminarShear failure, EngPhononPolaritonEnergy, PantographLinkageJoint, SensorSpringTotalAccelerationJerk
+# ============================================================================
+
+@dataclass
+class FailLadInterlaminarShear:
+    """``/FAIL/LAD_INTERLAMINAR_SHEAR`` or ``/FAIL/LADEVEZE_INTERLAMINAR_SHEAR`` (M306): Ladevèze interlaminar shear microcracking and irreversible shear slip degradation failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_ils: float = 0.0          # interlaminar shear damage activation threshold energy
+    yc_ils: float = 0.0          # critical interlaminar shear fracture energy
+    gamma_ils_p: float = 0.0     # plastic shear slip hardening modulus parameter
+    tau_ils_max: float = 0.0     # ultimate interlaminar shear stress capacity limit
+    d_ils_max: float = 0.999     # maximum allowable interlaminar shear damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngPhononPolaritonEnergy:
+    """``/ENG/PHONON_POLARITON_ENERGY`` or ``/ENG/PP_WORK`` (M306): Engine surface phonon-polariton coupled infrared vibrational-electromagnetic resonance energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_pp: float = 0.0           # time frequency for phonon-polariton energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulPantographLinkageJoint:
+    """``/PANTOGRAPH_LINKAGE_JOINT/id`` or ``/LAGMUL/PANTOGRAPH_LINKAGE_JOINT/id`` (M306): Pantograph parallelogram 4-bar / 5-bar kinematic motion scaling and copy joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed anchor base pivot node
+    node2: int = 0               # input tracer probe guide node
+    node3: int = 0               # output scaled motion reproduction node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    scale_factor: float = 2.0    # geometric magnification scale factor
+    arm_length_a: float = 0.0    # primary parallelogram arm link length
+    arm_length_b: float = 0.0    # secondary parallelogram arm link length
+    cross_angle_0: float = 0.0   # initial opening cross angle (radians)
+
+
+@dataclass
+class SensorSpringTotalAccelerationJerk:
+    """``/SENSOR/SPRING_TOTAL_ACCELERATION_JERK`` or ``/SENSOR/SPRING_TOT_ACC_JERK`` (M306): Spring element relative 3D resultant total linear and angular combined acceleration rate-of-change (generalized resultant 6-DOF jerk) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_comb_max: float = 1e30  # maximum combined 6-DOF acceleration jerk magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
