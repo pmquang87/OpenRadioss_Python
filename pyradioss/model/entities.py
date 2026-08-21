@@ -16429,6 +16429,61 @@ class SensorSpringBendingAccelerationRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M305 Suite: LadDiffuseDamage failure, EngThermophotonicEmissionEnergy, HypocyclicLinkageJoint, SensorSpringTotalAngularAccelerationRate
+# ============================================================================
+
+@dataclass
+class FailLadDiffuseDamage:
+    """``/FAIL/LAD_DIFFUSE_DAMAGE`` or ``/FAIL/LADEVEZE_DIFFUSE_DAMAGE`` (M305): Ladevèze nonlocal gradient-enhanced diffuse micro-damage and matrix microcrack regularization failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_diff: float = 0.0         # diffuse damage initiation energy threshold
+    yc_diff: float = 0.0         # critical diffuse microcracking rupture energy
+    c_reg_diff: float = 0.0      # viscous gradient regularization coefficient
+    l_nonlocal: float = 0.0      # nonlocal internal characteristic length
+    d_diff_max: float = 0.999    # maximum allowable diffuse damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngThermophotonicEmissionEnergy:
+    """``/ENG/THERMOPHOTONIC_EMISSION_ENERGY`` or ``/ENG/TPE_WORK`` (M305): Engine thermophotonic non-equilibrium electroluminescent photon emission and optical extraction energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_tpe: float = 0.0          # time frequency for thermophotonic emission energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulHypocyclicLinkageJoint:
+    """``/HYPOCYCLIC_LINKAGE_JOINT/id`` or ``/LAGMUL/HYPOCYCLIC_LINKAGE_JOINT/id`` (M305): Hypocyclic / Tusi couple 2-gear straight-line kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed outer ring base node
+    node2: int = 0               # inner rolling planet gear node
+    node3: int = 0               # straight-line tracing rim point node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    radius_outer: float = 0.0    # outer ring pitch circle radius
+    radius_inner: float = 0.0    # inner rolling pitch circle radius
+    stroke_travel: float = 0.0   # linear diametral stroke travel span
+    phase_angle: float = 0.0     # initial rolling angular phase
+
+
+@dataclass
+class SensorSpringTotalAngularAccelerationRate:
+    """``/SENSOR/SPRING_TOTAL_ANGULAR_ACCELERATION_RATE`` or ``/SENSOR/SPRING_TOT_ANG_ACC_RATE`` (M305): Spring element relative 3D resultant total angular acceleration rate-of-change (total angular jerk) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_ang_rate_max: float = 1e30 # maximum total angular acceleration rate-of-change magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

@@ -2007,6 +2007,12 @@ class Model:
         self.lagmul_wobble_yoke_joints: Dict[int, Any] = {}          # /WOBBLE_YOKE_JOINT, /LAGMUL/WOBBLE_YOKE_JOINT (M304)
         self.sensor_spring_bending_acceleration_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_ACCELERATION_RATE (M304)
 
+        # M305 Entities
+        self.fail_laddiffusedamages: Dict[int, Any] = {}             # /FAIL/LAD_DIFFUSE_DAMAGE (M305)
+        self.eng_thermophotonic_emission_energies: Dict[int, Any] = {} # /ENG/THERMOPHOTONIC_EMISSION_ENERGY (M305)
+        self.lagmul_hypocyclic_linkage_joints: Dict[int, Any] = {}   # /HYPOCYCLIC_LINKAGE_JOINT, /LAGMUL/HYPOCYCLIC_LINKAGE_JOINT (M305)
+        self.sensor_spring_total_angular_acceleration_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_ACCELERATION_RATE (M305)
+
 
 
 
