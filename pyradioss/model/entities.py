@@ -16374,6 +16374,61 @@ class SensorSpringTorsionalAccelerationRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M304 Suite: LadFiberKinking failure, EngPhotomagneticEnergy, WobbleYokeJoint, SensorSpringBendingAccelerationRate
+# ============================================================================
+
+@dataclass
+class FailLadFiberKinking:
+    """``/FAIL/LAD_FIBER_KINKING`` or ``/FAIL/LADEVEZE_FIBER_KINK`` (M304): Ladevèze compressive fiber kinking and localized shear band microbuckling failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_kink_crit: float = 0.0 # critical compressive fiber kinking stress
+    phi_kink_0: float = 0.0      # initial fiber misalignment angle (radians)
+    gamma_kink: float = 0.0      # nonlinear shear band softening parameter
+    l_kink_band: float = 0.0     # characteristic kink-band process zone width
+    d_kink_max: float = 0.999    # maximum allowable kinking damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngPhotomagneticEnergy:
+    """``/ENG/PHOTOMAGNETIC_ENERGY`` or ``/ENG/PM_WORK`` (M304): Engine photomagnetic magneto-optical resonant absorption and photon-spin polarization energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_photomagnetic: float = 0.0 # time frequency for photomagnetic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulWobbleYokeJoint:
+    """``/WOBBLE_YOKE_JOINT/id`` or ``/LAGMUL/WOBBLE_YOKE_JOINT/id`` (M304): Wobble yoke / nutating spatial kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # input rotating shaft pivot node
+    node2: int = 0               # oscillating nutating yoke output node
+    node3: int = 0               # fixed frame base pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    nutation_angle: float = 0.0  # nutation tilt cone angle
+    yoke_radius: float = 0.0     # radial arm radius of yoke
+    stroke_travel: float = 0.0   # axial stroke displacement span
+    phase_offset: float = 0.0    # cyclic angular phase offset
+
+
+@dataclass
+class SensorSpringBendingAccelerationRate:
+    """``/SENSOR/SPRING_BENDING_ACCELERATION_RATE`` or ``/SENSOR/SPRING_BEND_ACC_RATE`` (M304): Spring element relative transverse bending angular acceleration rate-of-change (bending angular jerk) threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jbend_rate_max: float = 1e30 # maximum bending angular acceleration rate-of-change magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

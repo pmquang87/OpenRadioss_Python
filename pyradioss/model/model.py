@@ -2001,6 +2001,12 @@ class Model:
         self.lagmul_sylvester_kempe_linkage_joints: Dict[int, Any] = {} # /SYLVESTER_KEMPE_LINKAGE_JOINT, /LAGMUL/SYLVESTER_KEMPE_LINKAGE_JOINT (M303)
         self.sensor_spring_torsional_acceleration_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_ACCELERATION_RATE (M303)
 
+        # M304 Entities
+        self.fail_ladfiberkinkings: Dict[int, Any] = {}              # /FAIL/LAD_FIBER_KINKING (M304)
+        self.eng_photomagnetic_energies: Dict[int, Any] = {}         # /ENG/PHOTOMAGNETIC_ENERGY (M304)
+        self.lagmul_wobble_yoke_joints: Dict[int, Any] = {}          # /WOBBLE_YOKE_JOINT, /LAGMUL/WOBBLE_YOKE_JOINT (M304)
+        self.sensor_spring_bending_acceleration_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_ACCELERATION_RATE (M304)
+
 
 
 
