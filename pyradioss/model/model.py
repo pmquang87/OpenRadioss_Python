@@ -2019,6 +2019,12 @@ class Model:
         self.lagmul_pantograph_linkage_joints: Dict[int, Any] = {}   # /PANTOGRAPH_LINKAGE_JOINT, /LAGMUL/PANTOGRAPH_LINKAGE_JOINT (M306)
         self.sensor_spring_total_acceleration_jerks: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ACCELERATION_JERK (M306)
 
+        # M307 Entities
+        self.fail_ladfibermatrixinteractions: Dict[int, Any] = {}    # /FAIL/LAD_FIBER_MATRIX_INTERACTION (M307)
+        self.eng_exciton_polariton_energies: Dict[int, Any] = {}     # /ENG/EXCITON_POLARITON_ENERGY (M307)
+        self.lagmul_watt_parallel_motion_joints: Dict[int, Any] = {} # /WATT_PARALLEL_MOTION_JOINT, /LAGMUL/WATT_PARALLEL_MOTION_JOINT (M307)
+        self.sensor_spring_normal_acceleration_jerks: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_ACCELERATION_JERK (M307)
+
 
 
 

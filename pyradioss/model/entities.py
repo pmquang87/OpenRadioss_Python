@@ -16539,6 +16539,61 @@ class SensorSpringTotalAccelerationJerk:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M307 Suite: LadFiberMatrixInteraction failure, EngExcitonPolaritonEnergy, WattParallelMotionJoint, SensorSpringNormalAccelerationJerk
+# ============================================================================
+
+@dataclass
+class FailLadFiberMatrixInteraction:
+    """``/FAIL/LAD_FIBER_MATRIX_INTERACTION`` or ``/FAIL/LADEVEZE_FIBER_MATRIX_INTERACTION`` (M307): Ladevèze combined longitudinal tension/compression and transverse matrix microcracking multi-axial interaction failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_fmi: float = 0.0          # multiaxial interaction damage threshold energy
+    yc_fmi: float = 0.0          # critical multiaxial interaction fracture energy
+    alpha_fmi_trans: float = 1.0 # transverse matrix microcracking coupling factor
+    beta_fmi_shear: float = 1.0  # shear microcracking coupling factor
+    d_fmi_max: float = 0.999     # maximum allowable interaction damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngExcitonPolaritonEnergy:
+    """``/ENG/EXCITON_POLARITON_ENERGY`` or ``/ENG/EP_WORK`` (M307): Engine quantum exciton-polariton cavity coupled light-matter hybridization and condensation energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ep: float = 0.0           # time frequency for exciton-polariton energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulWattParallelMotionJoint:
+    """``/WATT_PARALLEL_MOTION_JOINT/id`` or ``/LAGMUL/WATT_PARALLEL_MOTION_JOINT/id`` (M307): Watt double-parallelogram parallel motion kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed anchor pivot base node
+    node2: int = 0               # tracing motion guide output node
+    node3: int = 0               # intermediate beam pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    arm_length_main: float = 0.0 # main beam arm length
+    arm_length_sub: float = 0.0  # sub-parallelogram link length
+    stroke_travel: float = 0.0   # linear parallel stroke displacement span
+    offset_dist: float = 0.0     # transverse offset distance
+
+
+@dataclass
+class SensorSpringNormalAccelerationJerk:
+    """``/SENSOR/SPRING_NORMAL_ACCELERATION_JERK`` or ``/SENSOR/SPRING_NORM_ACC_JERK`` (M307): Spring element relative normal / axial acceleration rate-of-change (axial jerk) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_rate_max: float = 1e30 # maximum normal/axial acceleration rate-of-change magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
