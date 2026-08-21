@@ -1935,6 +1935,12 @@ class Model:
         self.lagmul_hoeken_linkage_joints: Dict[int, Any] = {}       # /HOEKEN_LINKAGE_JOINT, /LAGMUL/HOEKEN_LINKAGE_JOINT (M292)
         self.sensor_spring_bending_accelerations: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_ACCELERATION (M292)
 
+        # M293 Entities
+        self.fail_ladcreeps: Dict[int, Any] = {}                     # /FAIL/LAD_CREEP (M293)
+        self.eng_magnetic_hysteresis_energies: Dict[int, Any] = {}   # /ENG/MAGNETIC_HYSTERESIS_ENERGY (M293)
+        self.lagmul_chebyshev_linkage_joints: Dict[int, Any] = {}    # /CHEBYSHEV_LINKAGE_JOINT, /LAGMUL/CHEBYSHEV_LINKAGE_JOINT (M293)
+        self.sensor_spring_total_angular_accelerations: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_ACCELERATION (M293)
+
 
 
 

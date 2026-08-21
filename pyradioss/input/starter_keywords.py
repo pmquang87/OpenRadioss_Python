@@ -2337,6 +2337,9 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if kind in ("LAD_VISCO_PLAST", "FAIL_LAD_VISCO_PLAST", "LADEVEZE_VISCO_PLASTIC", "LAD_VP", "LAD_VP_MODEL", "LAD_VP_LAW", "LADEVEZE_RATE_SENSITIVE_DAMAGE"):
         read_fail_lad_visco_plast(block, model, log)
         return
+    if kind in ("LAD_CREEP", "FAIL_LAD_CREEP", "LADEVEZE_CREEP", "LAD_CREEP_DAMAGE", "LAD_CREEP_MODEL", "LAD_CREEP_LAW", "LADEVEZE_TERTIARY_CREEP"):
+        read_fail_lad_creep(block, model, log)
+        return
     if kind in ("HC", "HOSFORD_COULOMB", "HOSFORD"):
         read_fail_hc(block, model, log)
         return
@@ -53003,6 +53006,154 @@ def read_sensor_spring_bending_acceleration(block: KeywordBlock, model: Model, l
     ))
 
 
+# ============================================================================
+# M293 Suite: LadCreep failure, EngMagneticHysteresisEnergy, ChebyshevLinkageJoint, SensorSpringTotalAngularAcceleration
+# ============================================================================
+
+def read_fail_lad_creep(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_CREEP/mat_ID`` or ``/FAIL/LADEVEZE_CREEP`` (M293): Ladevèze high-temperature tertiary creep rupture and time-dependent damage evolution model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_CREEP/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_CREEP_1")
+        a_creep = _fval(c1[0]) if len(c1) > 0 else 0.0
+        n_creep = _fval(c1[1], 1.0) if len(c1) > 1 and c1[1].strip() else 1.0
+        q_creep = _fval(c1[2]) if len(c1) > 2 else 0.0
+        t_creep_ref = _fval(c1[3], 293.15) if len(c1) > 3 and c1[3].strip() else 293.15
+        d_creep_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        c2 = cards[1].cut("FAIL_LAD_CREEP_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        a_creep = float(t1[0].rstrip(',')) if len(t1) > 0 else 0.0
+        n_creep = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 1.0
+        q_creep = float(t1[2].rstrip(',')) if len(t1) > 2 else 0.0
+        t_creep_ref = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 293.15
+        d_creep_max = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.999
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "a_creep": a_creep, "n_creep": n_creep, "q_creep": q_creep, "t_creep_ref": t_creep_ref, "d_creep_max": d_creep_max,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadCreep, FailureModel
+    model.fail_ladcreeps[mat_id] = FailLadCreep(
+        mat_id=mat_id, title=title, a_creep=a_creep, n_creep=n_creep, q_creep=q_creep, t_creep_ref=t_creep_ref, d_creep_max=d_creep_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_CREEP", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_magnetic_hysteresis_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/MAGNETIC_HYSTERESIS_ENERGY`` or ``/ENG/MAG_HYST_WORK`` (M293): Engine ferromagnetic / magnetic hysteresis dissipation and core loss energy tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/MAGNETIC_HYSTERESIS_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_hysteresis, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_MAGNETIC_HYSTERESIS_ENERGY_1")
+        dt_hysteresis = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_hysteresis = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngMagneticHysteresisEnergy
+    r_id = block.user_id or (len(model.eng_magnetic_hysteresis_energies) + 1)
+    model.eng_magnetic_hysteresis_energies[r_id] = EngMagneticHysteresisEnergy(
+        id=r_id, title=title, dt_hysteresis=dt_hysteresis, sens_id=sens_id
+    )
+
+
+def read_lagmul_chebyshev_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/CHEBYSHEV_LINKAGE_JOINT/id`` or ``/LAGMUL/CHEBYSHEV_LINKAGE_JOINT/id`` (M293): Chebyshev 4-bar straight-line crossing linkage planar kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/CHEBYSHEV_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    base_len, crank_len, coupler_len = 0.0, 0.0, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("CHEBYSHEV_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("CHEBYSHEV_LINKAGE_JOINT_2")
+            base_len = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            crank_len = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            coupler_len = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 0 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            base_len = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            crank_len = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            coupler_len = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+
+    from ..model.entities import LagmulChebyshevLinkageJoint
+    model.lagmul_chebyshev_linkage_joints[block.user_id] = LagmulChebyshevLinkageJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        base_len=base_len, crank_len=crank_len, coupler_len=coupler_len
+    )
+
+
+def read_sensor_spring_total_angular_acceleration(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TOTAL_ANGULAR_ACCELERATION`` or ``/SENSOR/SPRING_TOT_ANG_ACC`` (M293): Spring element relative 3D resultant total angular acceleration magnitude threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TOTAL_ANGULAR_ACCELERATION/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, alpha_tot_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_TOTAL_ANGULAR_ACCELERATION_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        alpha_tot_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        alpha_tot_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTotalAngularAcceleration, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_total_angular_accelerations) + 1)
+    sstaa = SensorSpringTotalAngularAcceleration(
+        id=s_id, title=title, spring_id=spring_id,
+        alpha_tot_max=alpha_tot_max, t_delay=t_delay
+    )
+    model.sensor_spring_total_angular_accelerations[s_id] = sstaa
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_TOTAL_ANGULAR_ACCELERATION", tdelay=t_delay
+    ))
+
+
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/H3D`` (M198): HyperView H3D file output format request."""
     # Stored for output configuration
@@ -56251,6 +56402,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_BEND_ACC": read_sensor_spring_bending_acceleration,
     "SENSOR_SPRING_ACC_BEND": read_sensor_spring_bending_acceleration,
     "SENSOR_BENDING_ACCELERATION_SPRING": read_sensor_spring_bending_acceleration,
+    # --- M293: LadCreep Failure Model, Engine Magnetic Hysteresis Energy Output Directive, Chebyshev Linkage Joint Suite, and Spring Total Angular Acceleration Sensor ---
+    "FAIL_LAD_CREEP": read_fail_lad_creep,
+    "FAIL_LADEVEZE_CREEP": read_fail_lad_creep,
+    "FAIL_LAD_CREEP_DAMAGE": read_fail_lad_creep,
+    "FAIL_LAD_CREEP_MODEL": read_fail_lad_creep,
+    "FAIL_LAD_CREEP_LAW": read_fail_lad_creep,
+    "FAIL_LADEVEZE_TERTIARY_CREEP": read_fail_lad_creep,
+    "ENG_MAGNETIC_HYSTERESIS_ENERGY": read_eng_magnetic_hysteresis_energy,
+    "ENG_MAG_HYST_WORK": read_eng_magnetic_hysteresis_energy,
+    "ENG_EMAGHYST": read_eng_magnetic_hysteresis_energy,
+    "ENG_HYSTERESIS_LOSS_ENERGY": read_eng_magnetic_hysteresis_energy,
+    "ENG_EM_HYSTERESIS_LOSS": read_eng_magnetic_hysteresis_energy,
+    "LAGMUL_CHEBYSHEV_LINKAGE_JOINT": read_lagmul_chebyshev_linkage_joint,
+    "CHEBYSHEV_LINKAGE_JOINT": read_lagmul_chebyshev_linkage_joint,
+    "LAGMUL_CHEBYSHEV_LINKAGE": read_lagmul_chebyshev_linkage_joint,
+    "CHEBYSHEV_LINKAGE": read_lagmul_chebyshev_linkage_joint,
+    "CHEBYSHEV_STRAIGHT_LINE_MECHANISM": read_lagmul_chebyshev_linkage_joint,
+    "SENSOR_SPRING_TOTAL_ANGULAR_ACCELERATION": read_sensor_spring_total_angular_acceleration,
+    "SENSOR_SPRING_TOT_ANG_ACC": read_sensor_spring_total_angular_acceleration,
+    "SENSOR_SPRING_ACC_ANG_TOT": read_sensor_spring_total_angular_acceleration,
+    "SENSOR_TOTAL_ANGULAR_ACCELERATION_SPRING": read_sensor_spring_total_angular_acceleration,
 }
 
 

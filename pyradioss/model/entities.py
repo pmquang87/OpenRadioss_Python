@@ -15772,6 +15772,60 @@ class SensorSpringBendingAcceleration:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M293 Suite: LadCreep failure, EngMagneticHysteresisEnergy, ChebyshevLinkageJoint, SensorSpringTotalAngularAcceleration
+# ============================================================================
+
+@dataclass
+class FailLadCreep:
+    """``/FAIL/LAD_CREEP`` or ``/FAIL/LADEVEZE_CREEP`` (M293): Ladevèze high-temperature tertiary creep rupture and time-dependent damage evolution model."""
+    mat_id: int = 0
+    title: str = ""
+    a_creep: float = 0.0         # creep damage rate coefficient
+    n_creep: float = 1.0         # Norton power-law stress exponent
+    q_creep: float = 0.0         # creep thermal activation energy (J/mol)
+    t_creep_ref: float = 293.15  # creep reference temperature (K)
+    d_creep_max: float = 0.999   # maximum allowable tertiary creep damage
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngMagneticHysteresisEnergy:
+    """``/ENG/MAGNETIC_HYSTERESIS_ENERGY`` or ``/ENG/MAG_HYST_WORK`` (M293): Engine ferromagnetic / magnetic hysteresis dissipation and core loss energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_hysteresis: float = 0.0   # time frequency for magnetic hysteresis energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulChebyshevLinkageJoint:
+    """``/CHEBYSHEV_LINKAGE_JOINT/id`` or ``/LAGMUL/CHEBYSHEV_LINKAGE_JOINT/id`` (M293): Chebyshev 4-bar straight-line crossing linkage planar kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # driving rotating crank pivot node
+    node2: int = 0               # straight-line tracing coupler midpoint node
+    node3: int = 0               # driven oscillating rocker pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    base_len: float = 0.0        # fixed ground frame base distance
+    crank_len: float = 0.0       # input driving crank link length
+    coupler_len: float = 0.0     # intermediate coupler link length
+
+
+@dataclass
+class SensorSpringTotalAngularAcceleration:
+    """``/SENSOR/SPRING_TOTAL_ANGULAR_ACCELERATION`` or ``/SENSOR/SPRING_TOT_ANG_ACC`` (M293): Spring element relative 3D resultant total angular acceleration magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    alpha_tot_max: float = 1e30  # maximum resultant total angular acceleration magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
