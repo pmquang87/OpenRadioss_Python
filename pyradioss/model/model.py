@@ -1923,6 +1923,12 @@ class Model:
         self.lagmul_spherical_wrist_joints: Dict[int, Any] = {}      # /SPHERICAL_WRIST_JOINT, /LAGMUL/SPHERICAL_WRIST_JOINT (M290)
         self.sensor_spring_resultant_accelerations: Dict[int, Any] = {} # /SENSOR/SPRING_RESULTANT_ACCELERATION (M290)
 
+        # M291 Entities
+        self.fail_ladcouples: Dict[int, Any] = {}                    # /FAIL/LAD_COUPLE (M291)
+        self.eng_plasmonic_energies: Dict[int, Any] = {}             # /ENG/PLASMONIC_ENERGY (M291)
+        self.lagmul_lead_screw_joints: Dict[int, Any] = {}           # /LEAD_SCREW_JOINT, /LAGMUL/LEAD_SCREW_JOINT (M291)
+        self.sensor_spring_torsional_accelerations: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_ACCELERATION (M291)
+
 
 
 

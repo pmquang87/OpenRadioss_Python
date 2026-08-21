@@ -15664,6 +15664,60 @@ class SensorSpringResultantAcceleration:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M291 Suite: LadCouple failure, EngPlasmonicEnergy, LeadScrewJoint, SensorSpringTorsionalAcceleration
+# ============================================================================
+
+@dataclass
+class FailLadCouple:
+    """``/FAIL/LAD_COUPLE`` or ``/FAIL/LADEVEZE_COUPLED`` (M291): Ladevèze thermo-mechanically coupled damage and ply degradation failure model."""
+    mat_id: int = 0
+    title: str = ""
+    t_ref: float = 293.15        # reference temperature (K)
+    beta_th: float = 0.0         # thermal softening coefficient
+    c_th: float = 0.0            # thermo-mechanical damage coupling parameter
+    d_th_max: float = 0.999      # maximum thermo-coupled damage limit
+    gamma_th: float = 0.0        # thermal expansion damage rate exponent
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngPlasmonicEnergy:
+    """``/ENG/PLASMONIC_ENERGY`` or ``/ENG/PLASMONIC_WORK`` (M291): Engine surface plasmon polariton and resonant optical coupling dissipation energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_plasmon: float = 0.0      # time frequency for plasmonic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulLeadScrewJoint:
+    """``/LEAD_SCREW_JOINT/id`` or ``/LAGMUL/LEAD_SCREW_JOINT/id`` (M291): Helical lead screw and ball screw coupled linear-rotational kinematic joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # rotating screw shaft node
+    node2: int = 0               # translating nut slider node
+    node3: int = 0               # screw axis support reference anchor node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    pitch_lead: float = 0.0      # screw linear advance lead per turn (mm or m)
+    thread_angle: float = 0.0    # thread helix flank angle (deg)
+    helix_efficiency: float = 1.0 # forward mechanical drive efficiency
+
+
+@dataclass
+class SensorSpringTorsionalAcceleration:
+    """``/SENSOR/SPRING_TORSIONAL_ACCELERATION`` or ``/SENSOR/SPRING_TORS_ACC`` (M291): Spring element relative torsional angular acceleration threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    alphat_max: float = 1e30     # maximum torsional angular acceleration magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
