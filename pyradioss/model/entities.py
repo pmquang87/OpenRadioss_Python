@@ -16759,6 +16759,61 @@ class SensorSpringBendingJerkRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M311 Suite: LadInterfacialDelamination failure, EngThermomagnetoelectricEnergy, WobblePlateMechanismJoint, SensorSpringTotalJerkRate
+# ============================================================================
+
+@dataclass
+class FailLadInterfacialDelamination:
+    """``/FAIL/LAD_INTERFACIAL_DELAMINATION`` or ``/FAIL/LADEVEZE_INTERFACIAL_DELAMINATION`` (M311): Ladevèze mixed-mode interlaminar interfacial debonding and cohesive delamination failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_ifd: float = 0.0          # interfacial damage activation threshold energy
+    yc_ifd: float = 0.0          # critical mixed-mode interfacial fracture toughness
+    b_ifd_mix: float = 1.0       # mixed-mode BK parameter exponent
+    k_ifd_penalty: float = 1e6   # interfacial penalty penalty stiffness
+    d_ifd_max: float = 0.999     # maximum allowable interfacial damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngThermomagnetoelectricEnergy:
+    """``/ENG/THERMOMAGNETOELECTRIC_ENERGY`` or ``/ENG/TME_WORK`` (M311): Engine coupled thermomagnetoelectric multiferroic resonant energy conversion tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_tme: float = 0.0          # time frequency for thermomagnetoelectric energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulWobblePlateMechanismJoint:
+    """``/WOBBLE_PLATE_MECHANISM_JOINT/id`` or ``/LAGMUL/WOBBLE_PLATE_MECHANISM_JOINT/id`` (M311): Wobble plate / nutating axial kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed shaft centerline node
+    node2: int = 0               # swashplate wobble center node
+    node3: int = 0               # axial reciprocating piston rod node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    plate_radius: float = 0.0    # wobble plate pitch circle radius
+    nutation_angle: float = 0.0  # swashplate tilt nutation angle (radians)
+    stroke_travel: float = 0.0   # axial piston displacement travel span
+    piston_count: int = 1        # number of circumferential pistons
+
+
+@dataclass
+class SensorSpringTotalJerkRate:
+    """``/SENSOR/SPRING_TOTAL_JERK_RATE`` or ``/SENSOR/SPRING_TOT_JERK_RATE`` (M311): Spring element relative 3D resultant total linear and angular combined jerk rate-of-change (generalized resultant 6-DOF snap/jounce) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_snap_max: float = 1e30  # maximum combined 6-DOF jerk rate-of-change (snap) magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

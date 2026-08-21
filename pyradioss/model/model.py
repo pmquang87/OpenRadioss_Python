@@ -2043,6 +2043,12 @@ class Model:
         self.lagmul_stephenson_linkage_joints: Dict[int, Any] = {}  # /STEPHENSON_LINKAGE_JOINT, /LAGMUL/STEPHENSON_LINKAGE_JOINT (M310)
         self.sensor_spring_bending_jerk_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_BENDING_JERK_RATE (M310)
 
+        # M311 Entities
+        self.fail_ladinterfacialdelaminations: Dict[int, Any] = {} # /FAIL/LAD_INTERFACIAL_DELAMINATION (M311)
+        self.eng_thermomagnetoelectric_energies: Dict[int, Any] = {} # /ENG/THERMOMAGNETOELECTRIC_ENERGY (M311)
+        self.lagmul_wobble_plate_mechanism_joints: Dict[int, Any] = {} # /WOBBLE_PLATE_MECHANISM_JOINT, /LAGMUL/WOBBLE_PLATE_MECHANISM_JOINT (M311)
+        self.sensor_spring_total_jerk_rates: Dict[int, Any] = {}    # /SENSOR/SPRING_TOTAL_JERK_RATE (M311)
+
 
 
 
