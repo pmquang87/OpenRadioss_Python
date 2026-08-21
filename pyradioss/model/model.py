@@ -1971,6 +1971,12 @@ class Model:
         self.lagmul_peaucellier_linkage_joints: Dict[int, Any] = {}  # /PEAUCELLIER_LINKAGE_JOINT, /LAGMUL/PEAUCELLIER_LINKAGE_JOINT (M298)
         self.sensor_spring_bending_jerks: Dict[int, Any] = {}        # /SENSOR/SPRING_BENDING_JERK (M298)
 
+        # M299 Entities
+        self.fail_ladfatigues: Dict[int, Any] = {}                   # /FAIL/LAD_FATIGUE (M299)
+        self.eng_thermomagnetic_energies: Dict[int, Any] = {}        # /ENG/THERMOMAGNETIC_ENERGY (M299)
+        self.lagmul_sarrus_linkage_joints: Dict[int, Any] = {}       # /SARRUS_LINKAGE_JOINT, /LAGMUL/SARRUS_LINKAGE_JOINT (M299)
+        self.sensor_spring_total_angular_jerks: Dict[int, Any] = {}  # /SENSOR/SPRING_TOTAL_ANGULAR_JERK (M299)
+
 
 
 

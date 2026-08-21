@@ -16099,6 +16099,61 @@ class SensorSpringBendingJerk:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M299 Suite: LadFatigue failure, EngThermomagneticEnergy, SarrusLinkageJoint, SensorSpringTotalAngularJerk
+# ============================================================================
+
+@dataclass
+class FailLadFatigue:
+    """``/FAIL/LAD_FATIGUE`` or ``/FAIL/LADEVEZE_HIGH_CYCLE_FATIGUE`` (M299): Ladevèze cyclic micro-damage accumulation and high-cycle fatigue failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_fatigue: float = 0.0      # fatigue micro-damage activation threshold energy
+    yc_fatigue: float = 0.0      # critical fatigue rupture energy
+    beta_fatigue: float = 0.0    # cyclic damage accumulation exponent
+    alpha_fatigue: float = 0.0   # stress triaxiality sensitivity coefficient
+    d_fat_max: float = 0.999     # maximum allowable fatigue damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngThermomagneticEnergy:
+    """``/ENG/THERMOMAGNETIC_ENERGY`` or ``/ENG/TM_WORK`` (M299): Engine thermomagnetic Nernst/Ettingshausen reversible thermal-magnetic energy conversion tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_thermomagnetic: float = 0.0 # time frequency for thermomagnetic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulSarrusLinkageJoint:
+    """``/SARRUS_LINKAGE_JOINT/id`` or ``/LAGMUL/SARRUS_LINKAGE_JOINT/id`` (M299): Sarrus 6-bar spatial exact straight-line kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed base anchor pivot node
+    node2: int = 0               # straight-line guided output node
+    node3: int = 0               # intermediate hinged plate pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    plate_len1: float = 0.0      # length of first hinged plate link
+    plate_len2: float = 0.0      # length of second hinged plate link
+    hinge_angle: float = 90.0    # dihedral orientation angle between perpendicular hinge plates (degrees)
+    guide_travel: float = 0.0    # maximum linear travel distance
+
+
+@dataclass
+class SensorSpringTotalAngularJerk:
+    """``/SENSOR/SPRING_TOTAL_ANGULAR_JERK`` or ``/SENSOR/SPRING_TOT_ANG_JERK`` (M299): Spring element relative 3D resultant total angular jerk (rate of change of total angular acceleration) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtota_max: float = 1e30      # maximum total angular jerk magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
