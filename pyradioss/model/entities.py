@@ -16594,6 +16594,61 @@ class SensorSpringNormalAccelerationJerk:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M308 Suite: LadTransverseTension failure, EngMagnonPolaritonEnergy, ScottRussellLinkageJoint, SensorSpringTransverseAccelerationJerk
+# ============================================================================
+
+@dataclass
+class FailLadTransverseTension:
+    """``/FAIL/LAD_TRANSVERSE_TENSION`` or ``/FAIL/LADEVEZE_TRANSVERSE_TENSION`` (M308): Ladevèze transverse tensile matrix microcracking and irreversible opening damage failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_tt: float = 0.0           # transverse tensile damage initiation threshold energy
+    yc_tt: float = 0.0           # critical transverse tensile microcracking fracture energy
+    eta_tt: float = 1.0          # damage growth non-linear exponent
+    sigma_tt_max: float = 0.0    # ultimate transverse tensile stress capacity limit
+    d_tt_max: float = 0.999      # maximum allowable transverse tensile damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngMagnonPolaritonEnergy:
+    """``/ENG/MAGNON_POLARITON_ENERGY`` or ``/ENG/MP_WORK`` (M308): Engine quantum magnon-polariton coupled magnetic spin-wave electromagnetic cavity hybridization energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_mp: float = 0.0           # time frequency for magnon-polariton energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulScottRussellLinkageJoint:
+    """``/SCOTT_RUSSELL_LINKAGE_JOINT/id`` or ``/LAGMUL/SCOTT_RUSSELL_LINKAGE_JOINT/id`` (M308): Scott Russell exact straight-line rolling circle kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed linear slider guide node
+    node2: int = 0               # linear straight-line tracing pointer node
+    node3: int = 0               # intermediate hinged crank pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    crank_len: float = 0.0       # ground pivoted crank link length
+    coupler_len: float = 0.0     # equal-split coupler link length
+    stroke_travel: float = 0.0   # linear vertical exact straight-line travel stroke
+    slider_friction: float = 0.0 # linear guide friction coefficient
+
+
+@dataclass
+class SensorSpringTransverseAccelerationJerk:
+    """``/SENSOR/SPRING_TRANSVERSE_ACCELERATION_JERK`` or ``/SENSOR/SPRING_TRANS_ACC_JERK`` (M308): Spring element relative transverse / shear acceleration rate-of-change (shear jerk) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtrans_rate_max: float = 1e30 # maximum transverse/shear acceleration rate-of-change magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

@@ -2025,6 +2025,12 @@ class Model:
         self.lagmul_watt_parallel_motion_joints: Dict[int, Any] = {} # /WATT_PARALLEL_MOTION_JOINT, /LAGMUL/WATT_PARALLEL_MOTION_JOINT (M307)
         self.sensor_spring_normal_acceleration_jerks: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_ACCELERATION_JERK (M307)
 
+        # M308 Entities
+        self.fail_ladtransversetensions: Dict[int, Any] = {}         # /FAIL/LAD_TRANSVERSE_TENSION (M308)
+        self.eng_magnon_polariton_energies: Dict[int, Any] = {}      # /ENG/MAGNON_POLARITON_ENERGY (M308)
+        self.lagmul_scott_russell_linkage_joints: Dict[int, Any] = {} # /SCOTT_RUSSELL_LINKAGE_JOINT, /LAGMUL/SCOTT_RUSSELL_LINKAGE_JOINT (M308)
+        self.sensor_spring_transverse_acceleration_jerks: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_ACCELERATION_JERK (M308)
+
 
 
 
