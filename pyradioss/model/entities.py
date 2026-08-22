@@ -17804,6 +17804,61 @@ class SensorSpringBendingPopRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M330 Suite: LadCoupleDamageViscoelasticity failure, EngElectromagnetomechanicalResonanceEnergy, SarrusLinkageJoint, SensorSpringTotalAngularPopRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleDamageViscoelasticity:
+    """``/FAIL/LAD_COUPLE_DAMAGE_VISCOELASTICITY`` or ``/FAIL/LADEVEZE_COUPLED_DAMAGE_VISCOELASTICITY`` (M330): Ladevèze coupled continuum damage and spectral viscoelastic relaxation failure model."""
+    mat_id: int = 0
+    title: str = ""
+    g_inf: float = 0.0           # long-term relaxed shear modulus ratio G_inf / G_0
+    tau_ve: float = 1.0          # characteristic viscoelastic relaxation time tau_ve
+    beta_ve: float = 1.0         # viscoelastic spectral stretch exponent beta_ve
+    gamma_ve: float = 0.0        # viscoelastic-damage coupling acceleration parameter gamma_ve
+    d_cdve_max: float = 0.999    # maximum allowable coupled damage-viscoelastic index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngElectromagnetomechanicalResonanceEnergy:
+    """``/ENG/ELECTROMAGNETOMECHANICAL_RESONANCE_ENERGY`` or ``/ENG/EMM_RES_WORK`` (M330): Engine multi-field coupled electromagnetomechanical acoustic resonance energy and high-frequency wave-matter polarization dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_emmr: float = 0.0         # time frequency for electromagnetomechanical resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulSarrusLinkageJoint:
+    """``/SARRUS_LINKAGE_JOINT/id`` or ``/LAGMUL/SARRUS_LINKAGE_JOINT/id`` (M330): Sarrus spatial rectilinear overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    angle_theta: float = 0.0     # hinged plate orientation angle theta (deg)
+    offset_distance_h: float = 0.0 # rectilinear stroke offset distance h
+
+
+@dataclass
+class SensorSpringTotalAngularPopRate:
+    """``/SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE`` or ``/SENSOR/SPRING_TOT_ANG_POP_RATE`` (M330): Spring element relative 3D resultant total angular acceleration 3rd rate-of-change (resultant total angular pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_ang_pop_max: float = 1e30 # maximum resultant total angular pop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

@@ -2157,6 +2157,12 @@ class Model:
         self.lagmul_altmann_linkage_joints: Dict[int, Any] = {}      # /ALTMANN_LINKAGE_JOINT, /LAGMUL/ALTMANN_LINKAGE_JOINT (M329)
         self.sensor_spring_bending_pop_rates: Dict[int, Any] = {}    # /SENSOR/SPRING_BENDING_POP_RATE (M329)
 
+        # M330 Entities
+        self.fail_ladcoupledamageviscoelasticitys: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_DAMAGE_VISCOELASTICITY (M330)
+        self.eng_electromagnetomechanical_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROMAGNETOMECHANICAL_RESONANCE_ENERGY (M330)
+        self.lagmul_sarrus_linkage_joints: Dict[int, Any] = {}       # /SARRUS_LINKAGE_JOINT, /LAGMUL/SARRUS_LINKAGE_JOINT (M330)
+        self.sensor_spring_total_angular_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE (M330)
+
 
 
 
