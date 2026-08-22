@@ -2127,6 +2127,12 @@ class Model:
         self.lagmul_goldberg_linkage_joints: Dict[int, Any] = {}     # /GOLDBERG_LINKAGE_JOINT, /LAGMUL/GOLDBERG_LINKAGE_JOINT (M324)
         self.sensor_spring_total_angular_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_CRACKLE_RATE (M324)
 
+        # M325 Entities
+        self.fail_ladhygrothermals: Dict[int, Any] = {}              # /FAIL/LAD_HYGROTHERMAL (M325)
+        self.eng_thermoflexoelectric_energies: Dict[int, Any] = {}   # /ENG/THERMOFLEXOELECTRIC_ENERGY (M325)
+        self.lagmul_waldron_linkage_joints: Dict[int, Any] = {}      # /WALDRON_LINKAGE_JOINT, /LAGMUL/WALDRON_LINKAGE_JOINT (M325)
+        self.sensor_spring_normal_pop_rates: Dict[int, Any] = {}     # /SENSOR/SPRING_NORMAL_POP_RATE (M325)
+
 
 
 

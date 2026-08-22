@@ -17529,6 +17529,61 @@ class SensorSpringTotalAngularCrackleRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M325 Suite: LadHygrothermal failure, EngThermoflexoelectricEnergy, WaldronLinkageJoint, SensorSpringNormalPopRate
+# ============================================================================
+
+@dataclass
+class FailLadHygrothermal:
+    """``/FAIL/LAD_HYGROTHERMAL`` or ``/FAIL/LADEVEZE_HYGROTHERMAL`` (M325): Ladevèze coupled hygrothermal environmental moisture-temperature degradation and accelerated composite micro-damage evolution model."""
+    mat_id: int = 0
+    title: str = ""
+    c_moist: float = 0.0         # reference moisture concentration C_m
+    beta_exp: float = 0.0        # hygrothermal swelling coefficient beta_h
+    t_glass: float = 0.0         # glass transition temperature T_g
+    d_ht_rate: float = 0.0       # moisture-accelerated damage degradation rate k_ht
+    d_ht_max: float = 0.999      # maximum allowable hygrothermal damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngThermoflexoelectricEnergy:
+    """``/ENG/THERMOFLEXOELECTRIC_ENERGY`` or ``/ENG/THERMOFLEXO_WORK`` (M325): Engine coupled temperature-gradient and strain-gradient induced electric polarization and nanoscale coupled thermal-flexoelectric energy conversion tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_tfe: float = 0.0          # time frequency for thermoflexoelectric energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulWaldronLinkageJoint:
+    """``/WALDRON_LINKAGE_JOINT/id`` or ``/LAGMUL/WALDRON_LINKAGE_JOINT/id`` (M325): Waldron 6R / hybrid spatial overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance S
+
+
+@dataclass
+class SensorSpringNormalPopRate:
+    """``/SENSOR/SPRING_NORMAL_POP_RATE`` or ``/SENSOR/SPRING_NORM_POP_RATE`` (M325): Spring element relative normal / axial acceleration 3rd rate-of-change (axial pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_pop_max: float = 1e30  # maximum normal acceleration pop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
