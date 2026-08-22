@@ -2061,6 +2061,12 @@ class Model:
         self.lagmul_chebyshev_lambda_linkage_joints: Dict[int, Any] = {} # /CHEBYSHEV_LAMBDA_LINKAGE_JOINT, /LAGMUL/CHEBYSHEV_LAMBDA_LINKAGE_JOINT (M313)
         self.sensor_spring_transverse_jerk_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_JERK_RATE (M313)
 
+        # M314 Entities
+        self.fail_ladinplaneshearrates: Dict[int, Any] = {}         # /FAIL/LAD_INPLANE_SHEAR_RATE (M314)
+        self.eng_elastocaloric_energies: Dict[int, Any] = {}        # /ENG/ELASTOCALORIC_ENERGY (M314)
+        self.lagmul_four_bar_crank_rocker_joints: Dict[int, Any] = {} # /FOUR_BAR_CRANK_ROCKER_JOINT, /LAGMUL/FOUR_BAR_CRANK_ROCKER_JOINT (M314)
+        self.sensor_spring_torsional_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_SNAP_RATE (M314)
+
 
 
 

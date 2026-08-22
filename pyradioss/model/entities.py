@@ -16924,6 +16924,61 @@ class SensorSpringTransverseJerkRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M314 Suite: LadInplaneShearRate failure, EngElastocaloricEnergy, FourBarCrankRockerJoint, SensorSpringTorsionalSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadInplaneShearRate:
+    """``/FAIL/LAD_INPLANE_SHEAR_RATE`` or ``/FAIL/LADEVEZE_INPLANE_SHEAR_RATE`` (M314): Ladevèze rate-dependent in-plane shear microcracking and viscous plastic shear flow damage failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_ipsr: float = 0.0         # dynamic shear damage initiation threshold energy
+    yc_ipsr: float = 0.0         # critical dynamic shear fracture energy
+    gamma_rate_ipsr: float = 0.0 # viscous shear strain rate sensitivity parameter
+    n_rate_ipsr: float = 1.0     # shear strain rate power law exponent
+    d_ipsr_max: float = 0.999    # maximum allowable shear damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngElastocaloricEnergy:
+    """``/ENG/ELASTOCALORIC_ENERGY`` or ``/ENG/ELC_WORK`` (M314): Engine elastocaloric stress-induced martensitic entropy change and reversible solid-state superelastic heating/cooling energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_elc: float = 0.0          # time frequency for elastocaloric energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulFourBarCrankRockerJoint:
+    """``/FOUR_BAR_CRANK_ROCKER_JOINT/id`` or ``/LAGMUL/FOUR_BAR_CRANK_ROCKER_JOINT/id`` (M314): Grashof 4-bar crank-rocker kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed ground frame crank pivot node
+    node2: int = 0               # oscillating rocker arm output node
+    node3: int = 0               # fixed ground frame rocker pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    crank_len: float = 0.0       # input crank length s
+    coupler_len: float = 0.0     # coupler link length p
+    rocker_len: float = 0.0      # output rocker length q
+    ground_len: float = 0.0      # fixed ground distance l
+
+
+@dataclass
+class SensorSpringTorsionalSnapRate:
+    """``/SENSOR/SPRING_TORSIONAL_SNAP_RATE`` or ``/SENSOR/SPRING_TORS_SNAP_RATE`` (M314): Spring element relative torsional angular acceleration 2nd rate-of-change (torsional angular snap/crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtors_crackle_max: float = 1e30 # maximum torsional angular acceleration crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
