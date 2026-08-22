@@ -2133,6 +2133,12 @@ class Model:
         self.lagmul_waldron_linkage_joints: Dict[int, Any] = {}      # /WALDRON_LINKAGE_JOINT, /LAGMUL/WALDRON_LINKAGE_JOINT (M325)
         self.sensor_spring_normal_pop_rates: Dict[int, Any] = {}     # /SENSOR/SPRING_NORMAL_POP_RATE (M325)
 
+        # M326 Entities
+        self.fail_ladcoupleplasticitys: Dict[int, Any] = {}          # /FAIL/LAD_COUPLE_PLASTICITY (M326)
+        self.eng_flexomagnetic_energies: Dict[int, Any] = {}         # /ENG/FLEXOMAGNETIC_ENERGY (M326)
+        self.lagmul_dietmaier_linkage_joints: Dict[int, Any] = {}    # /DIETMAIER_LINKAGE_JOINT, /LAGMUL/DIETMAIER_LINKAGE_JOINT (M326)
+        self.sensor_spring_transverse_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_POP_RATE (M326)
+
 
 
 

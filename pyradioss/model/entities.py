@@ -17584,6 +17584,61 @@ class SensorSpringNormalPopRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M326 Suite: LadCouplePlasticity failure, EngFlexomagneticEnergy, DietmaierLinkageJoint, SensorSpringTransversePopRate
+# ============================================================================
+
+@dataclass
+class FailLadCouplePlasticity:
+    """``/FAIL/LAD_COUPLE_PLASTICITY`` or ``/FAIL/LADEVEZE_COUPLED_PLASTICITY`` (M326): Ladevèze coupled continuum damage and plasticity hardening failure model."""
+    mat_id: int = 0
+    title: str = ""
+    r_p0: float = 0.0            # initial plastic hardening threshold R_0
+    k_p: float = 0.0             # plastic hardening modulus K_p
+    m_p: float = 1.0             # plastic hardening exponent m_p
+    gamma_d: float = 0.0         # kinematic backstress damage coupling parameter gamma_d
+    d_cp_max: float = 0.999      # maximum allowable coupled damage-plasticity index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagneticEnergy:
+    """``/ENG/FLEXOMAGNETIC_ENERGY`` or ``/ENG/FLEXOMAG_WORK`` (M326): Engine flexomagnetic strain gradient-induced magnetic polarization and nanoscale coupled mechanical-magnetic energy conversion tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fm: float = 0.0           # time frequency for flexomagnetic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulDietmaierLinkageJoint:
+    """``/DIETMAIER_LINKAGE_JOINT/id`` or ``/LAGMUL/DIETMAIER_LINKAGE_JOINT/id`` (M326): Dietmaier 6R spatial overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    link_angle_theta: float = 0.0 # spatial link angular orientation theta (deg)
+
+
+@dataclass
+class SensorSpringTransversePopRate:
+    """``/SENSOR/SPRING_TRANSVERSE_POP_RATE`` or ``/SENSOR/SPRING_TRANS_POP_RATE`` (M326): Spring element relative transverse / shear acceleration 3rd rate-of-change (shear pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtrans_pop_max: float = 1e30 # maximum transverse acceleration pop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
