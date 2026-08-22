@@ -2115,6 +2115,13 @@ class Model:
         self.lagmul_bricard_linkage_joints: Dict[int, Any] = {}      # /BRICARD_LINKAGE_JOINT, /LAGMUL/BRICARD_LINKAGE_JOINT (M322)
         self.sensor_spring_torsional_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_CRACKLE_RATE (M322)
 
+        # M323 Entities
+        self.fail_ladfibertensionrates: Dict[int, Any] = {}          # /FAIL/LAD_FIBER_TENSION_RATE (M323)
+        self.eng_pyromagnetic_energies: Dict[int, Any] = {}          # /ENG/PYROMAGNETIC_ENERGY (M323)
+        self.lagmul_myard_linkage_joints: Dict[int, Any] = {}        # /MYARD_LINKAGE_JOINT, /LAGMUL/MYARD_LINKAGE_JOINT (M323)
+        self.sensor_spring_bending_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_CRACKLE_RATE (M323)
+
+
 
 
 

@@ -17419,6 +17419,62 @@ class SensorSpringTorsionalCrackleRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M323 Suite: LadFiberTensionRate failure, EngPyromagneticEnergy, MyardLinkageJoint, SensorSpringBendingCrackleRate
+# ============================================================================
+
+@dataclass
+class FailLadFiberTensionRate:
+    """``/FAIL/LAD_FIBER_TENSION_RATE`` or ``/FAIL/LADEVEZE_FIBER_TENSION_RATE`` (M323): Ladevèze rate-dependent longitudinal tensile fiber breakage, dynamic fiber splitting, and brittle-to-ductile transition damage failure model."""
+    mat_id: int = 0
+    title: str = ""
+    eps_ft0: float = 0.0         # static fiber tensile rupture strain
+    eps_ft_rate: float = 0.0     # dynamic strain rate coefficient C_ft
+    eps_dot0: float = 1.0        # reference strain rate eps_dot_0
+    w_ft_frac: float = 0.0       # critical fracture energy per unit area G_ft
+    d_ft_max: float = 0.999      # maximum allowable longitudinal damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngPyromagneticEnergy:
+    """``/ENG/PYROMAGNETIC_ENERGY`` or ``/ENG/PYROMAG_WORK`` (M323): Engine pyromagnetic temperature-dependent magnetization change, thermomagnetic entropy flux, and magnetic pyroelectric energy conversion tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_pmg: float = 0.0          # time frequency for pyromagnetic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulMyardLinkageJoint:
+    """``/MYARD_LINKAGE_JOINT/id`` or ``/LAGMUL/MYARD_LINKAGE_JOINT/id`` (M323): Myard's 5R spatial plane-symmetric overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node
+    node2: int = 0               # intermediate spatial link node
+    node3: int = 0               # driven spatial link pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of base link a
+    link_len_b: float = 0.0      # length of symmetric arm b
+    twist_angle: float = 0.0     # spatial twist angle alpha (deg)
+    fold_angle: float = 0.0      # spatial folding angle beta (deg)
+
+
+@dataclass
+class SensorSpringBendingCrackleRate:
+    """``/SENSOR/SPRING_BENDING_CRACKLE_RATE`` or ``/SENSOR/SPRING_BEND_CRACKLE_RATE`` (M323): Spring element relative bending angular acceleration 3rd rate-of-change (bending crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jbend_pop_max: float = 1e30  # maximum bending angular acceleration crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 
