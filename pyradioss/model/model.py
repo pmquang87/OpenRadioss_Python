@@ -2073,6 +2073,12 @@ class Model:
         self.lagmul_four_bar_double_crank_joints: Dict[int, Any] = {} # /FOUR_BAR_DOUBLE_CRANK_JOINT, /LAGMUL/FOUR_BAR_DOUBLE_CRANK_JOINT (M315)
         self.sensor_spring_bending_snap_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_BENDING_SNAP_RATE (M315)
 
+        # M316 Entities
+        self.fail_ladtransversetensionrates: Dict[int, Any] = {}    # /FAIL/LAD_TRANSVERSE_TENSION_RATE (M316)
+        self.eng_thermoplasmonic_energies: Dict[int, Any] = {}      # /ENG/THERMOPLASMONIC_ENERGY (M316)
+        self.lagmul_four_bar_double_rocker_joints: Dict[int, Any] = {} # /FOUR_BAR_DOUBLE_ROCKER_JOINT, /LAGMUL/FOUR_BAR_DOUBLE_ROCKER_JOINT (M316)
+        self.sensor_spring_normal_snap_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_NORMAL_SNAP_RATE (M316)
+
 
 
 

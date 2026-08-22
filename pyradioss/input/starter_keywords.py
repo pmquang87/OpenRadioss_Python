@@ -56505,6 +56505,159 @@ def read_sensor_spring_bending_snap_rate(block: KeywordBlock, model: Model, log:
     ))
 
 
+# ============================================================================
+# M316 Suite: LadTransverseTensionRate failure, EngThermoplasmonicEnergy, FourBarDoubleRockerJoint, SensorSpringNormalSnapRate
+# ============================================================================
+
+def read_fail_lad_transverse_tension_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_TRANSVERSE_TENSION_RATE/mat_ID`` or ``/FAIL/LADEVEZE_TRANSVERSE_TENSION_RATE`` (M316): Ladevèze rate-dependent transverse tensile matrix microcracking and dynamic cleavage damage failure model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_TRANSVERSE_TENSION_RATE/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_TRANSVERSE_TENSION_RATE_1")
+        y0_ttr = _fval(c1[0], 0.0) if len(c1) > 0 and c1[0].strip() else 0.0
+        yc_ttr = _fval(c1[1], 0.0) if len(c1) > 1 and c1[1].strip() else 0.0
+        c_rate_ttr = _fval(c1[2], 0.0) if len(c1) > 2 and c1[2].strip() else 0.0
+        p_rate_ttr = _fval(c1[3], 1.0) if len(c1) > 3 and c1[3].strip() else 1.0
+        d_ttr_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        c2 = cards[1].cut("FAIL_LAD_TRANSVERSE_TENSION_RATE_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        y0_ttr = float(t1[0].rstrip(',')) if len(t1) > 0 and t1[0].rstrip(',') else 0.0
+        yc_ttr = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 0.0
+        c_rate_ttr = float(t1[2].rstrip(',')) if len(t1) > 2 and t1[2].rstrip(',') else 0.0
+        p_rate_ttr = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 1.0
+        d_ttr_max = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.999
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "y0_ttr": y0_ttr, "yc_ttr": yc_ttr, "c_rate_ttr": c_rate_ttr,
+        "p_rate_ttr": p_rate_ttr, "d_ttr_max": d_ttr_max,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadTransverseTensionRate, FailureModel
+    model.fail_ladtransversetensionrates[mat_id] = FailLadTransverseTensionRate(
+        mat_id=mat_id, title=title, y0_ttr=y0_ttr, yc_ttr=yc_ttr,
+        c_rate_ttr=c_rate_ttr, p_rate_ttr=p_rate_ttr, d_ttr_max=d_ttr_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_TRANSVERSE_TENSION_RATE", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_thermoplasmonic_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/THERMOPLASMONIC_ENERGY`` or ``/ENG/TPL_WORK`` (M316): Engine thermoplasmonic resonant metallic nanoparticle Joule dissipation and photothermal conversion energy tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/THERMOPLASMONIC_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_tpl, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_THERMOPLASMONIC_ENERGY_1")
+        dt_tpl = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_tpl = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngThermoplasmonicEnergy
+    r_id = block.user_id or (len(model.eng_thermoplasmonic_energies) + 1)
+    model.eng_thermoplasmonic_energies[r_id] = EngThermoplasmonicEnergy(
+        id=r_id, title=title, dt_tpl=dt_tpl, sens_id=sens_id
+    )
+
+
+def read_lagmul_four_bar_double_rocker_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FOUR_BAR_DOUBLE_ROCKER_JOINT/id`` or ``/LAGMUL/FOUR_BAR_DOUBLE_ROCKER_JOINT/id`` (M316): Grashof / Non-Grashof 4-bar double-rocker (dual oscillating arm) kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FOUR_BAR_DOUBLE_ROCKER_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    input_rocker_len, coupler_len, output_rocker_len, ground_len = 0.0, 0.0, 0.0, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("FOUR_BAR_DOUBLE_ROCKER_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("FOUR_BAR_DOUBLE_ROCKER_JOINT_2")
+            input_rocker_len = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            coupler_len = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            output_rocker_len = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+            ground_len = _fval(f2[3], 0.0) if len(f2) > 3 and f2[3].strip() else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            input_rocker_len = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            coupler_len = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            output_rocker_len = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            ground_len = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+
+    from ..model.entities import LagmulFourBarDoubleRockerJoint
+    model.lagmul_four_bar_double_rocker_joints[block.user_id] = LagmulFourBarDoubleRockerJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        input_rocker_len=input_rocker_len, coupler_len=coupler_len,
+        output_rocker_len=output_rocker_len, ground_len=ground_len
+    )
+
+
+def read_sensor_spring_normal_snap_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_NORMAL_SNAP_RATE`` or ``/SENSOR/SPRING_NORM_SNAP_RATE`` (M316): Spring element relative normal / axial acceleration 2nd rate-of-change (axial snap/crackle rate) magnitude threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_NORMAL_SNAP_RATE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, jnorm_crackle_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_NORMAL_SNAP_RATE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        jnorm_crackle_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        jnorm_crackle_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringNormalSnapRate, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_normal_snap_rates) + 1)
+    ssnsr = SensorSpringNormalSnapRate(
+        id=s_id, title=title, spring_id=spring_id,
+        jnorm_crackle_max=jnorm_crackle_max, t_delay=t_delay
+    )
+    model.sensor_spring_normal_snap_rates[s_id] = ssnsr
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_NORMAL_SNAP_RATE", tdelay=t_delay
+    ))
+
+
 
 
 def read_h3d(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -60238,6 +60391,27 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_BEND_SNAP_RATE": read_sensor_spring_bending_snap_rate,
     "SENSOR_SPRING_RATE_SNAP_BEND": read_sensor_spring_bending_snap_rate,
     "SENSOR_BENDING_SNAP_RATE_SPRING": read_sensor_spring_bending_snap_rate,
+    # --- M316: LadTransverseTensionRate Failure Model, EngThermoplasmonicEnergy, FourBarDoubleRockerJoint, and Spring Normal Snap Rate Sensor ---
+    "FAIL_LAD_TRANSVERSE_TENSION_RATE": read_fail_lad_transverse_tension_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_TENSION_RATE": read_fail_lad_transverse_tension_rate,
+    "FAIL_LAD_TTR": read_fail_lad_transverse_tension_rate,
+    "FAIL_LAD_TTR_MODEL": read_fail_lad_transverse_tension_rate,
+    "FAIL_LAD_TTR_LAW": read_fail_lad_transverse_tension_rate,
+    "FAIL_LADEVEZE_RATE_DEPENDENT_MICROCRACKING": read_fail_lad_transverse_tension_rate,
+    "ENG_THERMOPLASMONIC_ENERGY": read_eng_thermoplasmonic_energy,
+    "ENG_TPL_WORK": read_eng_thermoplasmonic_energy,
+    "ENG_ETHERMOPLASMONIC": read_eng_thermoplasmonic_energy,
+    "ENG_THERMOPLASMONIC_DISSIPATION": read_eng_thermoplasmonic_energy,
+    "ENG_EM_THERMOPLASMONIC": read_eng_thermoplasmonic_energy,
+    "LAGMUL_FOUR_BAR_DOUBLE_ROCKER_JOINT": read_lagmul_four_bar_double_rocker_joint,
+    "FOUR_BAR_DOUBLE_ROCKER_JOINT": read_lagmul_four_bar_double_rocker_joint,
+    "LAGMUL_FOUR_BAR_DOUBLE_ROCKER": read_lagmul_four_bar_double_rocker_joint,
+    "FOUR_BAR_DOUBLE_ROCKER": read_lagmul_four_bar_double_rocker_joint,
+    "DOUBLE_ROCKER_MECHANISM": read_lagmul_four_bar_double_rocker_joint,
+    "SENSOR_SPRING_NORMAL_SNAP_RATE": read_sensor_spring_normal_snap_rate,
+    "SENSOR_SPRING_NORM_SNAP_RATE": read_sensor_spring_normal_snap_rate,
+    "SENSOR_SPRING_RATE_SNAP_NORM": read_sensor_spring_normal_snap_rate,
+    "SENSOR_NORMAL_SNAP_RATE_SPRING": read_sensor_spring_normal_snap_rate,
 }
 
 

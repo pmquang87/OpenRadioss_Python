@@ -17034,6 +17034,61 @@ class SensorSpringBendingSnapRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M316 Suite: LadTransverseTensionRate failure, EngThermoplasmonicEnergy, FourBarDoubleRockerJoint, SensorSpringNormalSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseTensionRate:
+    """``/FAIL/LAD_TRANSVERSE_TENSION_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_TENSION_RATE`` (M316): Ladevèze rate-dependent transverse tensile matrix microcracking and dynamic cleavage damage failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_ttr: float = 0.0          # dynamic transverse tensile microcracking initiation threshold energy
+    yc_ttr: float = 0.0          # critical dynamic transverse tensile fracture energy
+    c_rate_ttr: float = 0.0      # transverse tensile strain rate sensitivity constant
+    p_rate_ttr: float = 1.0      # strain rate power law exponent
+    d_ttr_max: float = 0.999     # maximum allowable transverse tensile damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngThermoplasmonicEnergy:
+    """``/ENG/THERMOPLASMONIC_ENERGY`` or ``/ENG/TPL_WORK`` (M316): Engine thermoplasmonic resonant metallic nanoparticle Joule dissipation and photothermal conversion energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_tpl: float = 0.0          # time frequency for thermoplasmonic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulFourBarDoubleRockerJoint:
+    """``/FOUR_BAR_DOUBLE_ROCKER_JOINT/id`` or ``/LAGMUL/FOUR_BAR_DOUBLE_ROCKER_JOINT/id`` (M316): Grashof / Non-Grashof 4-bar double-rocker (dual oscillating arm) kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed ground frame input rocker pivot node
+    node2: int = 0               # output rocker pivot/rocking node
+    node3: int = 0               # fixed ground frame output rocker pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    input_rocker_len: float = 0.0 # input rocker length s
+    coupler_len: float = 0.0     # coupler link length p
+    output_rocker_len: float = 0.0 # output rocker length q
+    ground_len: float = 0.0      # fixed ground distance l
+
+
+@dataclass
+class SensorSpringNormalSnapRate:
+    """``/SENSOR/SPRING_NORMAL_SNAP_RATE`` or ``/SENSOR/SPRING_NORM_SNAP_RATE`` (M316): Spring element relative normal / axial acceleration 2nd rate-of-change (axial snap/crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_crackle_max: float = 1e30 # maximum normal acceleration crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
