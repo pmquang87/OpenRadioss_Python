@@ -2055,6 +2055,12 @@ class Model:
         self.lagmul_whitworth_quick_return_joints: Dict[int, Any] = {} # /WHITWORTH_QUICK_RETURN_JOINT, /LAGMUL/WHITWORTH_QUICK_RETURN_JOINT (M312)
         self.sensor_spring_normal_jerk_rates: Dict[int, Any] = {}     # /SENSOR/SPRING_NORMAL_JERK_RATE (M312)
 
+        # M313 Entities
+        self.fail_ladfibermatrixdebondrates: Dict[int, Any] = {}    # /FAIL/LAD_FIBER_MATRIX_DEBOND_RATE (M313)
+        self.eng_magnetogalvanic_energies: Dict[int, Any] = {}      # /ENG/MAGNETOGALVANIC_ENERGY (M313)
+        self.lagmul_chebyshev_lambda_linkage_joints: Dict[int, Any] = {} # /CHEBYSHEV_LAMBDA_LINKAGE_JOINT, /LAGMUL/CHEBYSHEV_LAMBDA_LINKAGE_JOINT (M313)
+        self.sensor_spring_transverse_jerk_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_JERK_RATE (M313)
+
 
 
 

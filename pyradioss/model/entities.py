@@ -16869,6 +16869,61 @@ class SensorSpringNormalJerkRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M313 Suite: LadFiberMatrixDebondRate failure, EngMagnetogalvanicEnergy, ChebyshevLambdaLinkageJoint, SensorSpringTransverseJerkRate
+# ============================================================================
+
+@dataclass
+class FailLadFiberMatrixDebondRate:
+    """``/FAIL/LAD_FIBER_MATRIX_DEBOND_RATE`` or ``/FAIL/LADEVEZE_FIBER_MATRIX_DEBOND_RATE`` (M313): Ladevèze rate-dependent fiber-matrix interfacial debonding microcrack damage failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_fmdr: float = 0.0         # dynamic debonding damage initiation threshold energy
+    yc_fmdr: float = 0.0         # critical dynamic debonding fracture energy
+    c_rate_fmdr: float = 0.0     # viscous strain rate sensitivity constant
+    p_rate_fmdr: float = 1.0     # strain rate power law exponent
+    d_fmdr_max: float = 0.999    # maximum allowable debonding damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngMagnetogalvanicEnergy:
+    """``/ENG/MAGNETOGALVANIC_ENERGY`` or ``/ENG/MGE_WORK`` (M313): Engine magnetogalvanic electromagnetic induction and lorentz force charge separation energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_mge: float = 0.0          # time frequency for magnetogalvanic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulChebyshevLambdaLinkageJoint:
+    """``/CHEBYSHEV_LAMBDA_LINKAGE_JOINT/id`` or ``/LAGMUL/CHEBYSHEV_LAMBDA_LINKAGE_JOINT/id`` (M313): Chebyshev lambda / walking mechanism 4-bar straight-line kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed ground pivot node 1
+    node2: int = 0               # tracing lambda coupler foot node
+    node3: int = 0               # fixed ground pivot node 2
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    ground_dist: float = 0.0     # ground pivot distance d
+    crank_len: float = 0.0       # input crank length a
+    coupler_len: float = 0.0     # coupler link length b
+    rocker_len: float = 0.0      # rocker link length c
+
+
+@dataclass
+class SensorSpringTransverseJerkRate:
+    """``/SENSOR/SPRING_TRANSVERSE_JERK_RATE`` or ``/SENSOR/SPRING_TRANS_JERK_RATE`` (M313): Spring element relative transverse / shear acceleration rate-of-change rate (shear snap/jounce) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtrans_snap_max: float = 1e30 # maximum shear acceleration rate-of-change rate (snap) magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
