@@ -16979,6 +16979,61 @@ class SensorSpringTorsionalSnapRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M315 Suite: LadTransverseCompressionRate failure, EngThermophononicEnergy, FourBarDoubleCrankJoint, SensorSpringBendingSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseCompressionRate:
+    """``/FAIL/LAD_TRANSVERSE_COMPRESSION_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_COMPRESSION_RATE`` (M315): Ladevèze rate-dependent transverse compressive matrix crushing and dynamic friction damage failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_tcr: float = 0.0          # dynamic compressive crushing initiation threshold energy
+    yc_tcr: float = 0.0          # critical dynamic crushing fracture energy
+    c_rate_tcr: float = 0.0      # compressive crushing strain rate sensitivity constant
+    p_rate_tcr: float = 1.0      # compressive strain rate power law exponent
+    d_tcr_max: float = 0.999     # maximum allowable crushing damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngThermophononicEnergy:
+    """``/ENG/THERMOPHONONIC_ENERGY`` or ``/ENG/TPH_WORK`` (M315): Engine thermophononic lattice vibrational heat transport and phonon-scattering thermoelectric energy conversion tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_tph: float = 0.0          # time frequency for thermophononic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulFourBarDoubleCrankJoint:
+    """``/FOUR_BAR_DOUBLE_CRANK_JOINT/id`` or ``/LAGMUL/FOUR_BAR_DOUBLE_CRANK_JOINT/id`` (M315): Grashof 4-bar double-crank (drag-link) kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed ground frame driving crank pivot node
+    node2: int = 0               # driven output crank revolving node
+    node3: int = 0               # fixed ground frame driven crank pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    driving_crank_len: float = 0.0 # driving crank length s
+    coupler_len: float = 0.0     # coupler link length p
+    driven_crank_len: float = 0.0 # driven crank length q
+    ground_len: float = 0.0      # fixed ground distance l
+
+
+@dataclass
+class SensorSpringBendingSnapRate:
+    """``/SENSOR/SPRING_BENDING_SNAP_RATE`` or ``/SENSOR/SPRING_BEND_SNAP_RATE`` (M315): Spring element relative transverse bending angular acceleration 2nd rate-of-change (bending angular snap/crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jbend_crackle_max: float = 1e30 # maximum bending angular acceleration crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
