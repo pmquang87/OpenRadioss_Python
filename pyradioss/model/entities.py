@@ -17364,6 +17364,62 @@ class SensorSpringTotalCrackleRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M322 Suite: LadFiberKinkingRate failure, EngFlexoelectricEnergy, BricardLinkageJoint, SensorSpringTorsionalCrackleRate
+# ============================================================================
+
+@dataclass
+class FailLadFiberKinkingRate:
+    """``/FAIL/LAD_FIBER_KINKING_RATE`` or ``/FAIL/LADEVEZE_FIBER_KINKING_RATE`` (M322): Ladevèze rate-dependent fiber kinking, longitudinal compressive micro-buckling damage, and dynamic shear localization failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_kink: float = 0.0      # fiber kinking threshold stress
+    phi_kink0: float = 0.0       # initial fiber misalignment angle in degrees
+    gamma_kink: float = 0.0      # rate sensitivity exponent for fiber kinking
+    c_kink: float = 0.0          # dynamic compressive shear resistance modulus
+    d_kink_max: float = 0.999    # maximum allowable kinking damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexoelectricEnergy:
+    """``/ENG/FLEXOELECTRIC_ENERGY`` or ``/ENG/FLEXO_WORK`` (M322): Engine flexoelectric strain-gradient induced electric polarization and nanoscale electromechanical energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_flx: float = 0.0          # time frequency for flexoelectric energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulBricardLinkageJoint:
+    """``/BRICARD_LINKAGE_JOINT/id`` or ``/LAGMUL/BRICARD_LINKAGE_JOINT/id`` (M322): Bricard's 6R spatial line-symmetric/plane-symmetric overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node
+    node2: int = 0               # intermediate spatial link node
+    node3: int = 0               # driven spatial link pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len: float = 0.0        # link length L_0
+    twist_angle: float = 0.0     # spatial twist angle alpha (deg)
+    offset_dist: float = 0.0     # joint axis axial offset distance d_0
+    sym_angle: float = 0.0       # symmetry plane articulation angle phi_sym (deg)
+
+
+@dataclass
+class SensorSpringTorsionalCrackleRate:
+    """``/SENSOR/SPRING_TORSIONAL_CRACKLE_RATE`` or ``/SENSOR/SPRING_TORS_CRACKLE_RATE`` (M322): Spring element relative torsional angular acceleration 3rd rate-of-change (torsional crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtors_pop_max: float = 1e30  # maximum torsional angular acceleration crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

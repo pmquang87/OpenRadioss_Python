@@ -2109,6 +2109,13 @@ class Model:
         self.lagmul_bennett_linkage_joints: Dict[int, Any] = {}       # /BENNETT_LINKAGE_JOINT, /LAGMUL/BENNETT_LINKAGE_JOINT (M321)
         self.sensor_spring_total_crackle_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_TOTAL_CRACKLE_RATE (M321)
 
+        # M322 Entities
+        self.fail_ladfiberkinkingrates: Dict[int, Any] = {}          # /FAIL/LAD_FIBER_KINKING_RATE (M322)
+        self.eng_flexoelectric_energies: Dict[int, Any] = {}         # /ENG/FLEXOELECTRIC_ENERGY (M322)
+        self.lagmul_bricard_linkage_joints: Dict[int, Any] = {}      # /BRICARD_LINKAGE_JOINT, /LAGMUL/BRICARD_LINKAGE_JOINT (M322)
+        self.sensor_spring_torsional_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_CRACKLE_RATE (M322)
+
+
 
 
 
