@@ -17254,6 +17254,62 @@ class SensorSpringNormalCrackleRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M320 Suite: LadAnisotropicPlasticity failure, EngThermoacousticEnergy, DoubleCardanJoint, SensorSpringTransverseCrackleRate
+# ============================================================================
+
+@dataclass
+class FailLadAnisotropicPlasticity:
+    """``/FAIL/LAD_ANISOTROPIC_PLASTICITY`` or ``/FAIL/LADEVEZE_ANISOTROPIC_PLASTICITY`` (M320): Ladevèze coupled anisotropic continuum damage mechanics and non-associated kinematic/isotropic hardening plasticity failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_aniso: float = 0.0        # anisotropic damage initiation threshold energy
+    yc_aniso: float = 0.0        # critical anisotropic fracture energy
+    r0_hard: float = 0.0         # initial plastic yield threshold
+    beta_hard: float = 0.0       # isotropic hardening modulus parameter
+    d_aniso_max: float = 0.999   # maximum allowable anisotropic damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngThermoacousticEnergy:
+    """``/ENG/THERMOACOUSTIC_ENERGY`` or ``/ENG/TA_WORK`` (M320): Engine thermoacoustic coupled acoustic wave resonance and oscillating thermal gradient heat pumping energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ta: float = 0.0           # time frequency for thermoacoustic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulDoubleCardanJoint:
+    """``/DOUBLE_CARDAN_JOINT/id`` or ``/LAGMUL/DOUBLE_CARDAN_JOINT/id`` (M320): Double Cardan / constant-velocity dual-universal kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # input driving shaft yoke node
+    node2: int = 0               # intermediate floating cross-yoke coupling node
+    node3: int = 0               # output driven shaft yoke node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    center_yoke_len: float = 0.0 # intermediate center yoke length L_c
+    max_bend_angle: float = 0.0  # maximum allowable angular articulation angle theta_max
+    phase_offset: float = 0.0    # relative rotational phase offset angle phi_0
+    friction_coeff: float = 0.0  # trunnion bearing friction coefficient mu
+
+
+@dataclass
+class SensorSpringTransverseCrackleRate:
+    """``/SENSOR/SPRING_TRANSVERSE_CRACKLE_RATE`` or ``/SENSOR/SPRING_TRANS_CRACKLE_RATE`` (M320): Spring element relative transverse / shear acceleration 3rd rate-of-change (shear crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtrans_pop_max: float = 1e30 # maximum shear acceleration crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

@@ -2097,6 +2097,12 @@ class Model:
         self.lagmul_geneva_drive_mechanism_joints: Dict[int, Any] = {} # /GENEVA_DRIVE_MECHANISM_JOINT, /LAGMUL/GENEVA_DRIVE_MECHANISM_JOINT (M319)
         self.sensor_spring_normal_crackle_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_NORMAL_CRACKLE_RATE (M319)
 
+        # M320 Entities
+        self.fail_ladanisotropicplasticities: Dict[int, Any] = {}      # /FAIL/LAD_ANISOTROPIC_PLASTICITY (M320)
+        self.eng_thermoacoustic_energies: Dict[int, Any] = {}          # /ENG/THERMOACOUSTIC_ENERGY (M320)
+        self.lagmul_double_cardan_joints: Dict[int, Any] = {}          # /DOUBLE_CARDAN_JOINT, /LAGMUL/DOUBLE_CARDAN_JOINT (M320)
+        self.sensor_spring_transverse_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_CRACKLE_RATE (M320)
+
 
 
 
