@@ -2151,6 +2151,12 @@ class Model:
         self.lagmul_wohlhart_linkage_joints: Dict[int, Any] = {}     # /WOHLHART_LINKAGE_JOINT, /LAGMUL/WOHLHART_LINKAGE_JOINT (M328)
         self.sensor_spring_torsional_pop_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_TORSIONAL_POP_RATE (M328)
 
+        # M329 Entities
+        self.fail_ladmicrodelaminationrates: Dict[int, Any] = {}     # /FAIL/LAD_MICRO_DELAMINATION_RATE (M329)
+        self.eng_flexothermal_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMAL_RESONANCE_ENERGY (M329)
+        self.lagmul_altmann_linkage_joints: Dict[int, Any] = {}      # /ALTMANN_LINKAGE_JOINT, /LAGMUL/ALTMANN_LINKAGE_JOINT (M329)
+        self.sensor_spring_bending_pop_rates: Dict[int, Any] = {}    # /SENSOR/SPRING_BENDING_POP_RATE (M329)
+
 
 
 

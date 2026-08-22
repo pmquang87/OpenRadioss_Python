@@ -17749,6 +17749,61 @@ class SensorSpringTorsionalPopRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M329 Suite: LadMicroDelaminationRate failure, EngFlexothermalResonanceEnergy, AltmannLinkageJoint, SensorSpringBendingPopRate
+# ============================================================================
+
+@dataclass
+class FailLadMicroDelaminationRate:
+    """``/FAIL/LAD_MICRO_DELAMINATION_RATE`` or ``/FAIL/LADEVEZE_MICRO_DELAMINATION_RATE`` (M329): Ladevèze rate-dependent micro-delamination and interlaminar dynamic interfacial shear decohesion failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y_del0: float = 0.0          # initial micro-delamination thermodynamic force threshold Y_del,0
+    y_delc: float = 1.0          # critical micro-delamination thermodynamic force Y_del,c
+    gamma_del: float = 0.0       # micro-delamination rate sensitivity coefficient gamma_del
+    p_del: float = 1.0           # dynamic delamination rate exponent p_del
+    d_mdr_max: float = 0.999     # maximum allowable micro-delamination damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermalResonanceEnergy:
+    """``/ENG/FLEXOTHERMAL_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_RES_WORK`` (M329): Engine flexothermal acoustic resonance energy and nanoscale strain-gradient coupled thermoelastic resonance dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftr: float = 0.0          # time frequency for flexothermal resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulAltmannLinkageJoint:
+    """``/ALTMANN_LINKAGE_JOINT/id`` or ``/LAGMUL/ALTMANN_LINKAGE_JOINT/id`` (M329): Altmann spatial 6R line-symmetric overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_d: float = 0.0 # axial joint offset distance d
+
+
+@dataclass
+class SensorSpringBendingPopRate:
+    """``/SENSOR/SPRING_BENDING_POP_RATE`` or ``/SENSOR/SPRING_BEND_POP_RATE`` (M329): Spring element relative bending angular acceleration 3rd rate-of-change (bending pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jbend_pop_max: float = 1e30  # maximum bending pop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
