@@ -2163,6 +2163,12 @@ class Model:
         self.lagmul_wunderlich_linkage_joints: Dict[int, Any] = {}   # /WUNDERLICH_LINKAGE_JOINT, /LAGMUL/WUNDERLICH_LINKAGE_JOINT (M330)
         self.sensor_spring_total_angular_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE (M330)
 
+        # M331 Entities
+        self.fail_laddynamiccrushrates: Dict[int, Any] = {}          # /FAIL/LAD_DYNAMIC_CRUSH_RATE (M331)
+        self.eng_flexomagnetoelectric_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOELECTRIC_RESONANCE_ENERGY (M331)
+        self.lagmul_delassus_linkage_joints: Dict[int, Any] = {}     # /DELASSUS_LINKAGE_JOINT, /LAGMUL/DELASSUS_LINKAGE_JOINT (M331)
+        self.sensor_spring_normal_lock_rates: Dict[int, Any] = {}    # /SENSOR/SPRING_NORMAL_LOCK_RATE (M331)
+
 
 
 

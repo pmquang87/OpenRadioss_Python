@@ -17859,6 +17859,61 @@ class SensorSpringTotalAngularPopRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M331 Suite: LadDynamicCrushRate failure, EngFlexomagnetoelectricResonanceEnergy, DelassusLinkageJoint, SensorSpringNormalLockRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicCrushRate:
+    """``/FAIL/LAD_DYNAMIC_CRUSH_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_CRUSH_RATE`` (M331): Ladevèze dynamic progressive transverse crush and multi-axial dynamic compressive crushing failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cr0: float = 0.0       # initial compressive crush threshold stress sigma_cr,0
+    sigma_crc: float = 1.0       # critical ultimate compressive crush stress sigma_cr,c
+    gamma_cr: float = 0.0        # dynamic crush rate sensitivity factor gamma_cr
+    p_cr: float = 1.0            # dynamic crush rate exponent p_cr
+    d_dcr_max: float = 0.999     # maximum allowable dynamic crush damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetoelectricResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOELECTRIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAG_ELEC_RES_WORK`` (M331): Engine coupled flexomagnetic-flexoelectric acoustic resonance energy and nanoscale strain-gradient electromagnetic conversion dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmer: float = 0.0         # time frequency for flexomagnetoelectric resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulDelassusLinkageJoint:
+    """``/DELASSUS_LINKAGE_JOINT/id`` or ``/LAGMUL/DELASSUS_LINKAGE_JOINT/id`` (M331): Delassus spatial 6R overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_f: float = 0.0 # axial joint offset distance f
+
+
+@dataclass
+class SensorSpringNormalLockRate:
+    """``/SENSOR/SPRING_NORMAL_LOCK_RATE`` or ``/SENSOR/SPRING_NORM_LOCK_RATE`` (M331): Spring element relative normal/axial acceleration 4th rate-of-change (axial lock rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_lock_max: float = 1e30 # maximum normal lock rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
