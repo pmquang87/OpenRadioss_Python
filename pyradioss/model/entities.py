@@ -17474,6 +17474,62 @@ class SensorSpringBendingCrackleRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M324 Suite: LadFiberCompressionRate failure, EngPiezothermalEnergy, GoldbergLinkageJoint, SensorSpringTotalAngularCrackleRate
+# ============================================================================
+
+@dataclass
+class FailLadFiberCompressionRate:
+    """``/FAIL/LAD_FIBER_COMPRESSION_RATE`` or ``/FAIL/LADEVEZE_FIBER_COMPRESSION_RATE`` (M324): Ladevèze rate-dependent longitudinal compressive fiber crushing, microbuckling, and dynamic compressive failure model."""
+    mat_id: int = 0
+    title: str = ""
+    eps_fc0: float = 0.0         # static fiber compressive rupture strain
+    eps_fc_rate: float = 0.0     # dynamic strain rate coefficient C_fc
+    eps_dot0: float = 1.0        # reference strain rate eps_dot_0
+    w_fc_frac: float = 0.0       # critical compressive fracture energy per unit area G_fc
+    d_fc_max: float = 0.999      # maximum allowable longitudinal compressive damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngPiezothermalEnergy:
+    """``/ENG/PIEZOTHERMAL_ENERGY`` or ``/ENG/PIEZO_THERM_WORK`` (M324): Engine piezothermal coupled stress-temperature pyro-piezoelectric energy conversion and thermomechanical dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_pzt: float = 0.0          # time frequency for piezothermal energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulGoldbergLinkageJoint:
+    """``/GOLDBERG_LINKAGE_JOINT/id`` or ``/LAGMUL/GOLDBERG_LINKAGE_JOINT/id`` (M324): Goldberg 5R / 6R spatial overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link pivot node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary link a
+    link_len_b: float = 0.0      # length of secondary link b
+    skew_angle_alpha: float = 0.0 # spatial skew angle alpha (deg)
+    offset_angle_beta: float = 0.0 # spatial offset angle beta (deg)
+
+
+@dataclass
+class SensorSpringTotalAngularCrackleRate:
+    """``/SENSOR/SPRING_TOTAL_ANGULAR_CRACKLE_RATE`` or ``/SENSOR/SPRING_TOT_ANG_CRACKLE_RATE`` (M324): Spring element relative 3D resultant total angular acceleration 3rd rate-of-change (total angular crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jang_pop_max: float = 1e30   # maximum total angular acceleration crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

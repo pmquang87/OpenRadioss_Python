@@ -2121,6 +2121,13 @@ class Model:
         self.lagmul_myard_linkage_joints: Dict[int, Any] = {}        # /MYARD_LINKAGE_JOINT, /LAGMUL/MYARD_LINKAGE_JOINT (M323)
         self.sensor_spring_bending_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_CRACKLE_RATE (M323)
 
+        # M324 Entities
+        self.fail_ladfibercompressionrates: Dict[int, Any] = {}      # /FAIL/LAD_FIBER_COMPRESSION_RATE (M324)
+        self.eng_piezothermal_energies: Dict[int, Any] = {}          # /ENG/PIEZOTHERMAL_ENERGY (M324)
+        self.lagmul_goldberg_linkage_joints: Dict[int, Any] = {}     # /GOLDBERG_LINKAGE_JOINT, /LAGMUL/GOLDBERG_LINKAGE_JOINT (M324)
+        self.sensor_spring_total_angular_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_CRACKLE_RATE (M324)
+
+
 
 
 
