@@ -2103,6 +2103,13 @@ class Model:
         self.lagmul_double_cardan_joints: Dict[int, Any] = {}          # /DOUBLE_CARDAN_JOINT, /LAGMUL/DOUBLE_CARDAN_JOINT (M320)
         self.sensor_spring_transverse_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_CRACKLE_RATE (M320)
 
+        # M321 Entities
+        self.fail_ladnonlocalgradientrates: Dict[int, Any] = {}       # /FAIL/LAD_NONLOCAL_GRADIENT_RATE (M321)
+        self.eng_ferroelectric_energies: Dict[int, Any] = {}          # /ENG/FERROELECTRIC_ENERGY (M321)
+        self.lagmul_bennett_linkage_joints: Dict[int, Any] = {}       # /BENNETT_LINKAGE_JOINT, /LAGMUL/BENNETT_LINKAGE_JOINT (M321)
+        self.sensor_spring_total_crackle_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_TOTAL_CRACKLE_RATE (M321)
+
+
 
 
 

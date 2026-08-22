@@ -57270,6 +57270,160 @@ def read_sensor_spring_transverse_crackle_rate(block: KeywordBlock, model: Model
     ))
 
 
+# ============================================================================
+# M321 Suite: LadNonlocalGradientRate failure, EngFerroelectricEnergy, BennettLinkageJoint, SensorSpringTotalCrackleRate
+# ============================================================================
+
+def read_fail_lad_nonlocal_gradient_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_NONLOCAL_GRADIENT_RATE/mat_ID`` or ``/FAIL/LADEVEZE_NONLOCAL_GRADIENT_RATE`` (M321): Ladevèze rate-dependent nonlocal gradient-enhanced damage evolution and dynamic viscous regularization failure model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_NONLOCAL_GRADIENT_RATE/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_NONLOCAL_GRADIENT_RATE_1")
+        y0_nlgr = _fval(c1[0], 0.0) if len(c1) > 0 and c1[0].strip() else 0.0
+        yc_nlgr = _fval(c1[1], 0.0) if len(c1) > 1 and c1[1].strip() else 0.0
+        lc_char = _fval(c1[2], 0.0) if len(c1) > 2 and c1[2].strip() else 0.0
+        tau_nlgr = _fval(c1[3], 0.0) if len(c1) > 3 and c1[3].strip() else 0.0
+        d_nlgr_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        c2 = cards[1].cut("FAIL_LAD_NONLOCAL_GRADIENT_RATE_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        y0_nlgr = float(t1[0].rstrip(',')) if len(t1) > 0 and t1[0].rstrip(',') else 0.0
+        yc_nlgr = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 0.0
+        lc_char = float(t1[2].rstrip(',')) if len(t1) > 2 and t1[2].rstrip(',') else 0.0
+        tau_nlgr = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 0.0
+        d_nlgr_max = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.999
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "y0_nlgr": y0_nlgr, "yc_nlgr": yc_nlgr, "lc_char": lc_char,
+        "tau_nlgr": tau_nlgr, "d_nlgr_max": d_nlgr_max,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadNonlocalGradientRate, FailureModel
+    model.fail_ladnonlocalgradientrates[mat_id] = FailLadNonlocalGradientRate(
+        mat_id=mat_id, title=title, y0_nlgr=y0_nlgr, yc_nlgr=yc_nlgr,
+        lc_char=lc_char, tau_nlgr=tau_nlgr, d_nlgr_max=d_nlgr_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_NONLOCAL_GRADIENT_RATE", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_ferroelectric_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/FERROELECTRIC_ENERGY`` or ``/ENG/FE_WORK`` (M321): Engine ferroelectric polarization switching, domain wall motion hysteresis, and electromechanical coupling dissipation energy tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/FERROELECTRIC_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_fe, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_FERROELECTRIC_ENERGY_1")
+        dt_fe = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_fe = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngFerroelectricEnergy
+    r_id = block.user_id or (len(model.eng_ferroelectric_energies) + 1)
+    model.eng_ferroelectric_energies[r_id] = EngFerroelectricEnergy(
+        id=r_id, title=title, dt_fe=dt_fe, sens_id=sens_id
+    )
+
+
+def read_lagmul_bennett_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/BENNETT_LINKAGE_JOINT/id`` or ``/LAGMUL/BENNETT_LINKAGE_JOINT/id`` (M321): Bennett's 4R spatial skewed-axis overconstrained kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/BENNETT_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    link_len_a, link_len_b, twist_angle_alpha, twist_angle_beta = 0.0, 0.0, 0.0, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("BENNETT_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("BENNETT_LINKAGE_JOINT_2")
+            link_len_a = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            link_len_b = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            twist_angle_alpha = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+            twist_angle_beta = _fval(f2[3], 0.0) if len(f2) > 3 and f2[3].strip() else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            link_len_a = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            link_len_b = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            twist_angle_alpha = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            twist_angle_beta = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+
+    from ..model.entities import LagmulBennettLinkageJoint
+    model.lagmul_bennett_linkage_joints[block.user_id] = LagmulBennettLinkageJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        link_len_a=link_len_a, link_len_b=link_len_b,
+        twist_angle_alpha=twist_angle_alpha, twist_angle_beta=twist_angle_beta
+    )
+
+
+def read_sensor_spring_total_crackle_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TOTAL_CRACKLE_RATE`` or ``/SENSOR/SPRING_TOT_CRACKLE_RATE`` (M321): Spring element relative 3D resultant total linear and angular combined acceleration 3rd rate-of-change (generalized resultant 6-DOF crackle rate) magnitude threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TOTAL_CRACKLE_RATE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, jtot_pop_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_TOTAL_CRACKLE_RATE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        jtot_pop_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        jtot_pop_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTotalCrackleRate, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_total_crackle_rates) + 1)
+    sstcr = SensorSpringTotalCrackleRate(
+        id=s_id, title=title, spring_id=spring_id,
+        jtot_pop_max=jtot_pop_max, t_delay=t_delay
+    )
+    model.sensor_spring_total_crackle_rates[s_id] = sstcr
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_TOTAL_CRACKLE_RATE", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -61117,6 +61271,28 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_TRANS_CRACKLE_RATE": read_sensor_spring_transverse_crackle_rate,
     "SENSOR_SPRING_RATE_CRACKLE_TRANS": read_sensor_spring_transverse_crackle_rate,
     "SENSOR_TRANSVERSE_CRACKLE_RATE_SPRING": read_sensor_spring_transverse_crackle_rate,
+    # --- M321: LadNonlocalGradientRate Failure Model, EngFerroelectricEnergy, BennettLinkageJoint, and Spring Total Crackle Rate Sensor ---
+    "FAIL_LAD_NONLOCAL_GRADIENT_RATE": read_fail_lad_nonlocal_gradient_rate,
+    "FAIL_LADEVEZE_NONLOCAL_GRADIENT_RATE": read_fail_lad_nonlocal_gradient_rate,
+    "FAIL_LAD_NLGR": read_fail_lad_nonlocal_gradient_rate,
+    "FAIL_LAD_NLGR_MODEL": read_fail_lad_nonlocal_gradient_rate,
+    "FAIL_LAD_NLGR_LAW": read_fail_lad_nonlocal_gradient_rate,
+    "FAIL_LADEVEZE_RATE_DEPENDENT_GRADIENT": read_fail_lad_nonlocal_gradient_rate,
+    "ENG_FERROELECTRIC_ENERGY": read_eng_ferroelectric_energy,
+    "ENG_FE_WORK": read_eng_ferroelectric_energy,
+    "ENG_EFERROELECTRIC": read_eng_ferroelectric_energy,
+    "ENG_FERROELECTRIC_DISSIPATION": read_eng_ferroelectric_energy,
+    "ENG_EM_FERROELECTRIC": read_eng_ferroelectric_energy,
+    "LAGMUL_BENNETT_LINKAGE_JOINT": read_lagmul_bennett_linkage_joint,
+    "BENNETT_LINKAGE_JOINT": read_lagmul_bennett_linkage_joint,
+    "LAGMUL_BENNETT_LINKAGE": read_lagmul_bennett_linkage_joint,
+    "BENNETT_LINKAGE": read_lagmul_bennett_linkage_joint,
+    "BENNETT_SPATIAL_MECHANISM": read_lagmul_bennett_linkage_joint,
+    "BENNETT_4R_MECHANISM": read_lagmul_bennett_linkage_joint,
+    "SENSOR_SPRING_TOTAL_CRACKLE_RATE": read_sensor_spring_total_crackle_rate,
+    "SENSOR_SPRING_TOT_CRACKLE_RATE": read_sensor_spring_total_crackle_rate,
+    "SENSOR_SPRING_RATE_CRACKLE_TOT": read_sensor_spring_total_crackle_rate,
+    "SENSOR_TOTAL_CRACKLE_RATE_SPRING": read_sensor_spring_total_crackle_rate,
 }
 
 
