@@ -17833,8 +17833,8 @@ class EngElectromagnetomechanicalResonanceEnergy:
 
 
 @dataclass
-class LagmulSarrusLinkageJoint:
-    """``/SARRUS_LINKAGE_JOINT/id`` or ``/LAGMUL/SARRUS_LINKAGE_JOINT/id`` (M330): Sarrus spatial rectilinear overconstrained kinematic mechanism joint constraint."""
+class LagmulWunderlichLinkageJoint:
+    """``/WUNDERLICH_LINKAGE_JOINT/id`` or ``/LAGMUL/WUNDERLICH_LINKAGE_JOINT/id`` (M330): Wunderlich spatial 6R overconstrained kinematic mechanism joint constraint."""
     id: int = 1
     title: str = ""
     node1: int = 0               # base pivot node 1
@@ -17845,8 +17845,8 @@ class LagmulSarrusLinkageJoint:
     tol: float = 1e-6            # constraint numerical tolerance
     link_len_a: float = 0.0      # length of primary spatial link a
     link_len_b: float = 0.0      # length of secondary spatial link b
-    angle_theta: float = 0.0     # hinged plate orientation angle theta (deg)
-    offset_distance_h: float = 0.0 # rectilinear stroke offset distance h
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_e: float = 0.0 # axial joint offset distance e
 
 
 @dataclass

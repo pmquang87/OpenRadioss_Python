@@ -1,4 +1,4 @@
-"""Tests for Milestone M330: LadCoupleDamageViscoelasticity Failure Model, EngElectromagnetomechanicalResonanceEnergy, SarrusLinkageJoint, and SensorSpringTotalAngularPopRate."""
+"""Tests for Milestone M330: LadCoupleDamageViscoelasticity Failure Model, EngElectromagnetomechanicalResonanceEnergy, WunderlichLinkageJoint, and SensorSpringTotalAngularPopRate."""
 
 from pathlib import Path
 import pytest
@@ -172,23 +172,23 @@ Missing Card Test
     assert len(log.errors) > 0
 
 
-def test_m330_lagmul_sarrus_linkage_joint_fixed(tmp_path: Path):
+def test_m330_lagmul_wunderlich_linkage_joint_fixed(tmp_path: Path):
     c1 = f"{161:>10d}{162:>10d}{163:>10d}{1.15e7:>20.1f}{35:>10d}{2.8e-5:>20.6e}"
     c2 = f"{82.0:>20.4f}{76.5:>20.4f}{68.0:>20.4f}{26.0:>20.4f}"
     deck = f"""# RADIOSS STARTER DECK
 /BEGIN
-Sarrus Linkage Joint Fixed Format Test
+Wunderlich Linkage Joint Fixed Format Test
 2022 0
-/SARRUS_LINKAGE_JOINT/125
-Sarrus Linkage Kinematic Joint
+/WUNDERLICH_LINKAGE_JOINT/125
+Wunderlich Linkage Kinematic Joint
 {c1}
 {c2}
 /END
 """
     model, log = _parse_starter(tmp_path, deck)
     assert len(log.errors) == 0
-    assert 125 in model.lagmul_sarrus_linkage_joints
-    joint = model.lagmul_sarrus_linkage_joints[125]
+    assert 125 in model.lagmul_wunderlich_linkage_joints
+    joint = model.lagmul_wunderlich_linkage_joints[125]
     assert joint.node1 == 161
     assert joint.node2 == 162
     assert joint.node3 == 163
@@ -197,23 +197,23 @@ Sarrus Linkage Kinematic Joint
     assert pytest.approx(joint.tol) == 2.8e-5
     assert pytest.approx(joint.link_len_a) == 82.0
     assert pytest.approx(joint.link_len_b) == 76.5
-    assert pytest.approx(joint.angle_theta) == 68.0
-    assert pytest.approx(joint.offset_distance_h) == 26.0
+    assert pytest.approx(joint.twist_angle_alpha) == 68.0
+    assert pytest.approx(joint.offset_distance_e) == 26.0
 
 
-def test_m330_lagmul_sarrus_linkage_joint_free(tmp_path: Path):
+def test_m330_lagmul_wunderlich_linkage_joint_free(tmp_path: Path):
     deck = """# RADIOSS FREE DECK
 /BEGIN
-Sarrus Linkage Joint Free Format Test
-/LAGMUL/SARRUS_LINKAGE_JOINT/126
+Wunderlich Linkage Joint Free Format Test
+/LAGMUL/WUNDERLICH_LINKAGE_JOINT/126
 261, 262, 263, 8.2e6, 55, 4.2e-5
 86.0, 80.0, 72.0, 28.0
 /END
 """
     model, log = _parse_starter(tmp_path, deck)
     assert len(log.errors) == 0
-    assert 126 in model.lagmul_sarrus_linkage_joints
-    joint = model.lagmul_sarrus_linkage_joints[126]
+    assert 126 in model.lagmul_wunderlich_linkage_joints
+    joint = model.lagmul_wunderlich_linkage_joints[126]
     assert joint.node1 == 261
     assert joint.node2 == 262
     assert joint.node3 == 263
@@ -222,41 +222,41 @@ Sarrus Linkage Joint Free Format Test
     assert pytest.approx(joint.tol) == 4.2e-5
     assert pytest.approx(joint.link_len_a) == 86.0
     assert pytest.approx(joint.link_len_b) == 80.0
-    assert pytest.approx(joint.angle_theta) == 72.0
-    assert pytest.approx(joint.offset_distance_h) == 28.0
+    assert pytest.approx(joint.twist_angle_alpha) == 72.0
+    assert pytest.approx(joint.offset_distance_e) == 28.0
 
 
-def test_m330_lagmul_sarrus_linkage_joint_aliases(tmp_path: Path):
+def test_m330_lagmul_wunderlich_linkage_joint_aliases(tmp_path: Path):
     deck = """# RADIOSS ALIAS DECK
 /BEGIN
-Sarrus Linkage Joint Aliases Test
-/LAGMUL/SARRUS_LINKAGE/127
+Wunderlich Linkage Joint Aliases Test
+/LAGMUL/WUNDERLICH_LINKAGE/127
 1, 2, 3, 1e6, 0, 1e-6
 10.0, 10.0, 30.0, 5.0
-/SARRUS_LINKAGE/128
+/WUNDERLICH_LINKAGE/128
 1, 2, 3, 1e6, 0, 1e-6
 10.0, 10.0, 30.0, 5.0
-/SARRUS_SPATIAL_MECHANISM/129
+/WUNDERLICH_SPATIAL_MECHANISM/129
 1, 2, 3, 1e6, 0, 1e-6
 10.0, 10.0, 30.0, 5.0
-/SARRUS_6R_MECHANISM/130
+/WUNDERLICH_6R_MECHANISM/130
 1, 2, 3, 1e6, 0, 1e-6
 10.0, 10.0, 30.0, 5.0
 /END
 """
     model, log = _parse_starter(tmp_path, deck)
     assert len(log.errors) == 0
-    assert 127 in model.lagmul_sarrus_linkage_joints
-    assert 128 in model.lagmul_sarrus_linkage_joints
-    assert 129 in model.lagmul_sarrus_linkage_joints
-    assert 130 in model.lagmul_sarrus_linkage_joints
+    assert 127 in model.lagmul_wunderlich_linkage_joints
+    assert 128 in model.lagmul_wunderlich_linkage_joints
+    assert 129 in model.lagmul_wunderlich_linkage_joints
+    assert 130 in model.lagmul_wunderlich_linkage_joints
 
 
-def test_m330_lagmul_sarrus_linkage_joint_missing_card(tmp_path: Path):
+def test_m330_lagmul_wunderlich_linkage_joint_missing_card(tmp_path: Path):
     deck = """# RADIOSS EMPTY CARD DECK
 /BEGIN
 Missing Card Test
-/SARRUS_LINKAGE_JOINT/131
+/WUNDERLICH_LINKAGE_JOINT/131
 /END
 """
     model, log = _parse_starter(tmp_path, deck)

@@ -58720,17 +58720,17 @@ def read_eng_electromagnetomechanical_resonance_energy(block: KeywordBlock, mode
     )
 
 
-def read_lagmul_sarrus_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/SARRUS_LINKAGE_JOINT/id`` or ``/LAGMUL/SARRUS_LINKAGE_JOINT/id`` (M330): Sarrus spatial rectilinear overconstrained kinematic mechanism joint constraint."""
+def read_lagmul_wunderlich_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/WUNDERLICH_LINKAGE_JOINT/id`` or ``/LAGMUL/WUNDERLICH_LINKAGE_JOINT/id`` (M330): Wunderlich spatial 6R overconstrained kinematic mechanism joint constraint."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
-        log.error(f"/SARRUS_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
+        log.error(f"/WUNDERLICH_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
         return
 
     node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
-    link_len_a, link_len_b, angle_theta, offset_distance_h = 0.0, 0.0, 0.0, 0.0
+    link_len_a, link_len_b, twist_angle_alpha, offset_distance_e = 0.0, 0.0, 0.0, 0.0
     if block.fixed and "," not in cards[0].raw:
-        f1 = cards[0].cut("SARRUS_LINKAGE_JOINT_1")
+        f1 = cards[0].cut("WUNDERLICH_LINKAGE_JOINT_1")
         node1 = _ival(f1[0]) if len(f1) > 0 else 0
         node2 = _ival(f1[1]) if len(f1) > 1 else 0
         node3 = _ival(f1[2]) if len(f1) > 2 else 0
@@ -58739,11 +58739,11 @@ def read_lagmul_sarrus_linkage_joint(block: KeywordBlock, model: Model, log: Mes
         tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
 
         if len(cards) > 1 and not cards[1].is_blank:
-            f2 = cards[1].cut("SARRUS_LINKAGE_JOINT_2")
+            f2 = cards[1].cut("WUNDERLICH_LINKAGE_JOINT_2")
             link_len_a = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
             link_len_b = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
-            angle_theta = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
-            offset_distance_h = _fval(f2[3], 0.0) if len(f2) > 3 and f2[3].strip() else 0.0
+            twist_angle_alpha = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+            offset_distance_e = _fval(f2[3], 0.0) if len(f2) > 3 and f2[3].strip() else 0.0
     else:
         toks1 = cards[0].tokens()
         node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
@@ -58757,15 +58757,15 @@ def read_lagmul_sarrus_linkage_joint(block: KeywordBlock, model: Model, log: Mes
             toks2 = cards[1].tokens()
             link_len_a = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
             link_len_b = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
-            angle_theta = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
-            offset_distance_h = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+            twist_angle_alpha = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            offset_distance_e = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
 
-    from ..model.entities import LagmulSarrusLinkageJoint
-    model.lagmul_sarrus_linkage_joints[block.user_id] = LagmulSarrusLinkageJoint(
+    from ..model.entities import LagmulWunderlichLinkageJoint
+    model.lagmul_wunderlich_linkage_joints[block.user_id] = LagmulWunderlichLinkageJoint(
         id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
         stiff=stiff, skew_id=skew_id, tol=tol,
         link_len_a=link_len_a, link_len_b=link_len_b,
-        angle_theta=angle_theta, offset_distance_h=offset_distance_h
+        twist_angle_alpha=twist_angle_alpha, offset_distance_e=offset_distance_e
     )
 
 
@@ -62862,12 +62862,12 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ENG_EEMMRESONANCE": read_eng_electromagnetomechanical_resonance_energy,
     "ENG_EMM_RESONANCE_DISSIPATION": read_eng_electromagnetomechanical_resonance_energy,
     "ENG_EM_ELECTROMAGNETOMECHANICAL_RESONANCE": read_eng_electromagnetomechanical_resonance_energy,
-    "LAGMUL_SARRUS_LINKAGE_JOINT": read_lagmul_sarrus_linkage_joint,
-    "SARRUS_LINKAGE_JOINT": read_lagmul_sarrus_linkage_joint,
-    "LAGMUL_SARRUS_LINKAGE": read_lagmul_sarrus_linkage_joint,
-    "SARRUS_LINKAGE": read_lagmul_sarrus_linkage_joint,
-    "SARRUS_SPATIAL_MECHANISM": read_lagmul_sarrus_linkage_joint,
-    "SARRUS_6R_MECHANISM": read_lagmul_sarrus_linkage_joint,
+    "LAGMUL_WUNDERLICH_LINKAGE_JOINT": read_lagmul_wunderlich_linkage_joint,
+    "WUNDERLICH_LINKAGE_JOINT": read_lagmul_wunderlich_linkage_joint,
+    "LAGMUL_WUNDERLICH_LINKAGE": read_lagmul_wunderlich_linkage_joint,
+    "WUNDERLICH_LINKAGE": read_lagmul_wunderlich_linkage_joint,
+    "WUNDERLICH_SPATIAL_MECHANISM": read_lagmul_wunderlich_linkage_joint,
+    "WUNDERLICH_6R_MECHANISM": read_lagmul_wunderlich_linkage_joint,
     "SENSOR_SPRING_TOTAL_ANGULAR_POP_RATE": read_sensor_spring_total_angular_pop_rate,
     "SENSOR_SPRING_TOT_ANG_POP_RATE": read_sensor_spring_total_angular_pop_rate,
     "SENSOR_SPRING_POP_ANG_TOT": read_sensor_spring_total_angular_pop_rate,
