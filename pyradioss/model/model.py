@@ -2049,6 +2049,12 @@ class Model:
         self.lagmul_wobble_plate_mechanism_joints: Dict[int, Any] = {} # /WOBBLE_PLATE_MECHANISM_JOINT, /LAGMUL/WOBBLE_PLATE_MECHANISM_JOINT (M311)
         self.sensor_spring_total_jerk_rates: Dict[int, Any] = {}    # /SENSOR/SPRING_TOTAL_JERK_RATE (M311)
 
+        # M312 Entities
+        self.fail_ladtransverseshearinteractions: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_SHEAR_INTERACTION (M312)
+        self.eng_electrohydrodynamic_energies: Dict[int, Any] = {}    # /ENG/ELECTROHYDRODYNAMIC_ENERGY (M312)
+        self.lagmul_whitworth_quick_return_joints: Dict[int, Any] = {} # /WHITWORTH_QUICK_RETURN_JOINT, /LAGMUL/WHITWORTH_QUICK_RETURN_JOINT (M312)
+        self.sensor_spring_normal_jerk_rates: Dict[int, Any] = {}     # /SENSOR/SPRING_NORMAL_JERK_RATE (M312)
+
 
 
 

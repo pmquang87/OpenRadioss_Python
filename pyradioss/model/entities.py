@@ -16814,6 +16814,61 @@ class SensorSpringTotalJerkRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M312 Suite: LadTransverseShearInteraction failure, EngElectrohydrodynamicEnergy, WhitworthQuickReturnJoint, SensorSpringNormalJerkRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseShearInteraction:
+    """``/FAIL/LAD_TRANSVERSE_SHEAR_INTERACTION`` or ``/FAIL/LADEVEZE_TRANSVERSE_SHEAR_INTERACTION`` (M312): Ladevèze combined transverse tension/compression and in-plane shear microcracking coupling failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_tsi: float = 0.0          # coupled damage initiation threshold energy
+    yc_tsi: float = 0.0          # critical coupling fracture energy
+    gamma_coupling_exp: float = 1.0 # transverse-shear interaction coupling exponent
+    sigma_tsi_max: float = 0.0   # multi-axial interaction strength capacity limit
+    d_tsi_max: float = 0.999     # maximum allowable coupled damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngElectrohydrodynamicEnergy:
+    """``/ENG/ELECTROHYDRODYNAMIC_ENERGY`` or ``/ENG/EHD_WORK`` (M312): Engine electrohydrodynamic dielectric fluid pumping and space-charge coulombic body force transport energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ehd: float = 0.0          # time frequency for electrohydrodynamic energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulWhitworthQuickReturnJoint:
+    """``/WHITWORTH_QUICK_RETURN_JOINT/id`` or ``/LAGMUL/WHITWORTH_QUICK_RETURN_JOINT/id`` (M312): Whitworth quick-return slotted crank kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed driving crank shaft center node
+    node2: int = 0               # sliding ram reciprocating tool output node
+    node3: int = 0               # slotted crank slider pin node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    driving_crank_len: float = 0.0 # driving crank radius R
+    pivot_offset: float = 0.0    # fixed pivot offset distance d
+    slotted_arm_len: float = 0.0 # slotted oscillating lever arm length L
+    connecting_rod_len: float = 0.0 # ram connecting rod length
+
+
+@dataclass
+class SensorSpringNormalJerkRate:
+    """``/SENSOR/SPRING_NORMAL_JERK_RATE`` or ``/SENSOR/SPRING_NORM_JERK_RATE`` (M312): Spring element relative normal / axial acceleration rate-of-change rate (axial snap/jounce) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_snap_max: float = 1e30 # maximum axial acceleration rate-of-change rate (snap) magnitude threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
