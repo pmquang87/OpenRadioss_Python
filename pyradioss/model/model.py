@@ -2145,6 +2145,12 @@ class Model:
         self.lagmul_baker_linkage_joints: Dict[int, Any] = {}        # /BAKER_LINKAGE_JOINT, /LAGMUL/BAKER_LINKAGE_JOINT (M327)
         self.sensor_spring_total_pop_rates: Dict[int, Any] = {}      # /SENSOR/SPRING_TOTAL_POP_RATE (M327)
 
+        # M328 Entities
+        self.fail_ladcoupleviscoplasticitys: Dict[int, Any] = {}     # /FAIL/LAD_COUPLE_VISCOPLASTICITY (M328)
+        self.eng_thermomagnetic_resonance_energies: Dict[int, Any] = {} # /ENG/THERMOMAGNETIC_RESONANCE_ENERGY (M328)
+        self.lagmul_wohlhart_linkage_joints: Dict[int, Any] = {}     # /WOHLHART_LINKAGE_JOINT, /LAGMUL/WOHLHART_LINKAGE_JOINT (M328)
+        self.sensor_spring_torsional_pop_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_TORSIONAL_POP_RATE (M328)
+
 
 
 

@@ -17694,6 +17694,61 @@ class SensorSpringTotalPopRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M328 Suite: LadCoupleViscoplasticity failure, EngThermomagneticResonanceEnergy, WohlhartLinkageJoint, SensorSpringTorsionalPopRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleViscoplasticity:
+    """``/FAIL/LAD_COUPLE_VISCOPLASTICITY`` or ``/FAIL/LADEVEZE_COUPLED_VISCOPLASTICITY`` (M328): Ladevèze coupled continuum damage and viscoplastic flow failure model."""
+    mat_id: int = 0
+    title: str = ""
+    k_vp: float = 0.0            # viscoplastic viscosity modulus K_vp
+    n_vp: float = 1.0            # viscoplastic rate sensitivity exponent n_vp
+    r_vp0: float = 0.0           # initial viscoplastic hardening threshold R_vp,0
+    gamma_vp: float = 0.0        # viscoplastic-damage coupling acceleration parameter gamma_vp
+    d_cvp_max: float = 0.999     # maximum allowable coupled damage-viscoplastic index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngThermomagneticResonanceEnergy:
+    """``/ENG/THERMOMAGNETIC_RESONANCE_ENERGY`` or ``/ENG/THERMOMAG_RES_WORK`` (M328): Engine thermomagnetic acoustic resonance energy and high-frequency coupled magneto-caloric oscillation dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_tmr: float = 0.0          # time frequency for thermomagnetic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulWohlhartLinkageJoint:
+    """``/WOHLHART_LINKAGE_JOINT/id`` or ``/LAGMUL/WOHLHART_LINKAGE_JOINT/id`` (M328): Wohlhart spatial overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTorsionalPopRate:
+    """``/SENSOR/SPRING_TORSIONAL_POP_RATE`` or ``/SENSOR/SPRING_TORS_POP_RATE`` (M328): Spring element relative torsional angular acceleration 3rd rate-of-change (torsional pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtors_pop_max: float = 1e30  # maximum torsional pop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
