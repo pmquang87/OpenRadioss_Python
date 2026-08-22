@@ -56964,6 +56964,160 @@ def read_sensor_spring_total_snap_rate(block: KeywordBlock, model: Model, log: M
     ))
 
 
+# ============================================================================
+# M319 Suite: LadNonlocalGradient failure, EngElectrorheologicalEnergy, GenevaDriveMechanismJoint, SensorSpringNormalCrackleRate
+# ============================================================================
+
+def read_fail_lad_nonlocal_gradient(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_NONLOCAL_GRADIENT/mat_ID`` or ``/FAIL/LADEVEZE_NONLOCAL_GRADIENT`` (M319): Ladevèze nonlocal gradient-enhanced damage evolution and characteristic length microcrack regularization failure model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_NONLOCAL_GRADIENT/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_NONLOCAL_GRADIENT_1")
+        y0_nlg = _fval(c1[0], 0.0) if len(c1) > 0 and c1[0].strip() else 0.0
+        yc_nlg = _fval(c1[1], 0.0) if len(c1) > 1 and c1[1].strip() else 0.0
+        lc_char = _fval(c1[2], 0.0) if len(c1) > 2 and c1[2].strip() else 0.0
+        p_nlg = _fval(c1[3], 1.0) if len(c1) > 3 and c1[3].strip() else 1.0
+        d_nlg_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        c2 = cards[1].cut("FAIL_LAD_NONLOCAL_GRADIENT_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        y0_nlg = float(t1[0].rstrip(',')) if len(t1) > 0 and t1[0].rstrip(',') else 0.0
+        yc_nlg = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 0.0
+        lc_char = float(t1[2].rstrip(',')) if len(t1) > 2 and t1[2].rstrip(',') else 0.0
+        p_nlg = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 1.0
+        d_nlg_max = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.999
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "y0_nlg": y0_nlg, "yc_nlg": yc_nlg, "lc_char": lc_char,
+        "p_nlg": p_nlg, "d_nlg_max": d_nlg_max,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadNonlocalGradient, FailureModel
+    model.fail_ladnonlocalgradients[mat_id] = FailLadNonlocalGradient(
+        mat_id=mat_id, title=title, y0_nlg=y0_nlg, yc_nlg=yc_nlg,
+        lc_char=lc_char, p_nlg=p_nlg, d_nlg_max=d_nlg_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_NONLOCAL_GRADIENT", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_electrorheological_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/ELECTRORHEOLOGICAL_ENERGY`` or ``/ENG/ER_WORK`` (M319): Engine electrorheological fluid electric-field induced fibrillated chain polarization and controllable shear yield dissipation energy tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/ELECTRORHEOLOGICAL_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_er, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_ELECTRORHEOLOGICAL_ENERGY_1")
+        dt_er = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_er = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngElectrorheologicalEnergy
+    r_id = block.user_id or (len(model.eng_electrorheological_energies) + 1)
+    model.eng_electrorheological_energies[r_id] = EngElectrorheologicalEnergy(
+        id=r_id, title=title, dt_er=dt_er, sens_id=sens_id
+    )
+
+
+def read_lagmul_geneva_drive_mechanism_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/GENEVA_DRIVE_MECHANISM_JOINT/id`` or ``/LAGMUL/GENEVA_DRIVE_MECHANISM_JOINT/id`` (M319): Geneva drive / Maltese cross intermittent rotary indexing kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/GENEVA_DRIVE_MECHANISM_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    drive_radius, wheel_radius, num_slots, center_dist = 0.0, 0.0, 4, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("GENEVA_DRIVE_MECHANISM_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("GENEVA_DRIVE_MECHANISM_JOINT_2")
+            drive_radius = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            wheel_radius = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            num_slots = _ival(f2[2], 4) if len(f2) > 2 and f2[2].strip() else 4
+            center_dist = _fval(f2[3], 0.0) if len(f2) > 3 and f2[3].strip() else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            drive_radius = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            wheel_radius = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            num_slots = int(float(toks2[2].rstrip(','))) if len(toks2) > 2 else 4
+            center_dist = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+
+    from ..model.entities import LagmulGenevaDriveMechanismJoint
+    model.lagmul_geneva_drive_mechanism_joints[block.user_id] = LagmulGenevaDriveMechanismJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        drive_radius=drive_radius, wheel_radius=wheel_radius,
+        num_slots=num_slots, center_dist=center_dist
+    )
+
+
+def read_sensor_spring_normal_crackle_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_NORMAL_CRACKLE_RATE`` or ``/SENSOR/SPRING_NORM_CRACKLE_RATE`` (M319): Spring element relative normal / axial acceleration 3rd rate-of-change (axial crackle rate) magnitude threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_NORMAL_CRACKLE_RATE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, jnorm_pop_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_NORMAL_CRACKLE_RATE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        jnorm_pop_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        jnorm_pop_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringNormalCrackleRate, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_normal_crackle_rates) + 1)
+    ssncr = SensorSpringNormalCrackleRate(
+        id=s_id, title=title, spring_id=spring_id,
+        jnorm_pop_max=jnorm_pop_max, t_delay=t_delay
+    )
+    model.sensor_spring_normal_crackle_rates[s_id] = ssncr
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_NORMAL_CRACKLE_RATE", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -60763,6 +60917,30 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_TOT_SNAP_RATE": read_sensor_spring_total_snap_rate,
     "SENSOR_SPRING_RATE_SNAP_TOT": read_sensor_spring_total_snap_rate,
     "SENSOR_TOTAL_SNAP_RATE_SPRING": read_sensor_spring_total_snap_rate,
+    # --- M319: LadNonlocalGradient Failure Model, EngElectrorheologicalEnergy, GenevaDriveMechanismJoint, and Spring Normal Crackle Rate Sensor ---
+    "FAIL_LAD_NONLOCAL_GRADIENT": read_fail_lad_nonlocal_gradient,
+    "FAIL_LADEVEZE_NONLOCAL_GRADIENT": read_fail_lad_nonlocal_gradient,
+    "FAIL_LAD_NLG": read_fail_lad_nonlocal_gradient,
+    "FAIL_LAD_NLG_MODEL": read_fail_lad_nonlocal_gradient,
+    "FAIL_LAD_NLG_LAW": read_fail_lad_nonlocal_gradient,
+    "FAIL_LADEVEZE_GRADIENT_DAMAGE": read_fail_lad_nonlocal_gradient,
+    "ENG_ELECTRORHEOLOGICAL_ENERGY": read_eng_electrorheological_energy,
+    "ENG_ER_WORK": read_eng_electrorheological_energy,
+    "ENG_EELECTRORHEOLOGICAL": read_eng_electrorheological_energy,
+    "ENG_ELECTRORHEOLOGICAL_DISSIPATION": read_eng_electrorheological_energy,
+    "ENG_EM_ELECTRORHEOLOGICAL": read_eng_electrorheological_energy,
+    "LAGMUL_GENEVA_DRIVE_MECHANISM_JOINT": read_lagmul_geneva_drive_mechanism_joint,
+    "GENEVA_DRIVE_MECHANISM_JOINT": read_lagmul_geneva_drive_mechanism_joint,
+    "LAGMUL_GENEVA_DRIVE_MECHANISM": read_lagmul_geneva_drive_mechanism_joint,
+    "GENEVA_DRIVE_MECHANISM": read_lagmul_geneva_drive_mechanism_joint,
+    "LAGMUL_MALTESE_CROSS_MECHANISM": read_lagmul_geneva_drive_mechanism_joint,
+    "MALTESE_CROSS_MECHANISM": read_lagmul_geneva_drive_mechanism_joint,
+    "LAGMUL_GENEVA_INDEXING_JOINT": read_lagmul_geneva_drive_mechanism_joint,
+    "GENEVA_INDEXING_JOINT": read_lagmul_geneva_drive_mechanism_joint,
+    "SENSOR_SPRING_NORMAL_CRACKLE_RATE": read_sensor_spring_normal_crackle_rate,
+    "SENSOR_SPRING_NORM_CRACKLE_RATE": read_sensor_spring_normal_crackle_rate,
+    "SENSOR_SPRING_RATE_CRACKLE_NORM": read_sensor_spring_normal_crackle_rate,
+    "SENSOR_NORMAL_CRACKLE_RATE_SPRING": read_sensor_spring_normal_crackle_rate,
 }
 
 

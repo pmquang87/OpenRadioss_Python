@@ -2091,6 +2091,12 @@ class Model:
         self.lagmul_scotch_yoke_mechanism_joints: Dict[int, Any] = {} # /SCOTCH_YOKE_MECHANISM_JOINT, /LAGMUL/SCOTCH_YOKE_MECHANISM_JOINT (M318)
         self.sensor_spring_total_snap_rates: Dict[int, Any] = {}      # /SENSOR/SPRING_TOTAL_SNAP_RATE (M318)
 
+        # M319 Entities
+        self.fail_ladnonlocalgradients: Dict[int, Any] = {}          # /FAIL/LAD_NONLOCAL_GRADIENT (M319)
+        self.eng_electrorheological_energies: Dict[int, Any] = {}    # /ENG/ELECTRORHEOLOGICAL_ENERGY (M319)
+        self.lagmul_geneva_drive_mechanism_joints: Dict[int, Any] = {} # /GENEVA_DRIVE_MECHANISM_JOINT, /LAGMUL/GENEVA_DRIVE_MECHANISM_JOINT (M319)
+        self.sensor_spring_normal_crackle_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_NORMAL_CRACKLE_RATE (M319)
+
 
 
 

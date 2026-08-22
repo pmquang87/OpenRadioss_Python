@@ -17199,6 +17199,62 @@ class SensorSpringTotalSnapRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M319 Suite: LadNonlocalGradient failure, EngElectrorheologicalEnergy, GenevaDriveMechanismJoint, SensorSpringNormalCrackleRate
+# ============================================================================
+
+@dataclass
+class FailLadNonlocalGradient:
+    """``/FAIL/LAD_NONLOCAL_GRADIENT`` or ``/FAIL/LADEVEZE_NONLOCAL_GRADIENT`` (M319): Ladevèze nonlocal gradient-enhanced damage evolution and characteristic length microcrack regularization failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_nlg: float = 0.0          # nonlocal damage initiation threshold energy
+    yc_nlg: float = 0.0          # critical nonlocal fracture energy
+    lc_char: float = 0.0         # characteristic nonlocal internal length parameter
+    p_nlg: float = 1.0           # nonlocal gradient power law exponent
+    d_nlg_max: float = 0.999     # maximum allowable nonlocal damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngElectrorheologicalEnergy:
+    """``/ENG/ELECTRORHEOLOGICAL_ENERGY`` or ``/ENG/ER_WORK`` (M319): Engine electrorheological fluid electric-field induced fibrillated chain polarization and controllable shear yield dissipation energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_er: float = 0.0           # time frequency for electrorheological energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulGenevaDriveMechanismJoint:
+    """``/GENEVA_DRIVE_MECHANISM_JOINT/id`` or ``/LAGMUL/GENEVA_DRIVE_MECHANISM_JOINT/id`` (M319): Geneva drive / Maltese cross intermittent rotary indexing kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # drive wheel center pivot node
+    node2: int = 0               # drive pin revolving node
+    node3: int = 0               # slotted Geneva driven wheel center pivot node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    drive_radius: float = 0.0    # drive wheel pin radius R_d
+    wheel_radius: float = 0.0    # Geneva slotted wheel outer radius R_g
+    num_slots: int = 4           # number of indexing slots n
+    center_dist: float = 0.0     # wheel shaft center-to-center distance D
+
+
+@dataclass
+class SensorSpringNormalCrackleRate:
+    """``/SENSOR/SPRING_NORMAL_CRACKLE_RATE`` or ``/SENSOR/SPRING_NORM_CRACKLE_RATE`` (M319): Spring element relative normal / axial acceleration 3rd rate-of-change (axial crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_pop_max: float = 1e30  # maximum normal acceleration crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 
