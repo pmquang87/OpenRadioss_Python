@@ -2139,6 +2139,12 @@ class Model:
         self.lagmul_dietmaier_linkage_joints: Dict[int, Any] = {}    # /DIETMAIER_LINKAGE_JOINT, /LAGMUL/DIETMAIER_LINKAGE_JOINT (M326)
         self.sensor_spring_transverse_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_POP_RATE (M326)
 
+        # M327 Entities
+        self.fail_ladcouplecreeps: Dict[int, Any] = {}               # /FAIL/LAD_COUPLE_CREEP (M327)
+        self.eng_pyroelectric_resonance_energies: Dict[int, Any] = {} # /ENG/PYROELECTRIC_RESONANCE_ENERGY (M327)
+        self.lagmul_baker_linkage_joints: Dict[int, Any] = {}        # /BAKER_LINKAGE_JOINT, /LAGMUL/BAKER_LINKAGE_JOINT (M327)
+        self.sensor_spring_total_pop_rates: Dict[int, Any] = {}      # /SENSOR/SPRING_TOTAL_POP_RATE (M327)
+
 
 
 
