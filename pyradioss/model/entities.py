@@ -17089,6 +17089,61 @@ class SensorSpringNormalSnapRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M317 Suite: LadInterfacialDelaminationRate failure, EngThermomagneticGeneratorEnergy, SliderRockerInversionJoint, SensorSpringTransverseSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadInterfacialDelaminationRate:
+    """``/FAIL/LAD_INTERFACIAL_DELAMINATION_RATE`` or ``/FAIL/LADEVEZE_INTERFACIAL_DELAMINATION_RATE`` (M317): Ladevèze rate-dependent mixed-mode interlaminar interfacial debonding and dynamic cohesive delamination failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_ifdr: float = 0.0         # dynamic delamination damage initiation threshold energy
+    yc_ifdr: float = 0.0         # critical dynamic delamination fracture energy
+    c_rate_ifdr: float = 0.0     # interfacial dynamic strain rate sensitivity constant
+    p_rate_ifdr: float = 1.0     # strain rate power law exponent
+    d_ifdr_max: float = 0.999    # maximum allowable delamination damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngThermomagneticGeneratorEnergy:
+    """``/ENG/THERMOMAGNETIC_GENERATOR_ENERGY`` or ``/ENG/TMG_WORK`` (M317): Engine thermomagnetic generator Curie-temperature phase-transition magnetization energy conversion tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_tmg: float = 0.0          # time frequency for thermomagnetic generator energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulSliderRockerInversionJoint:
+    """``/SLIDER_ROCKER_INVERSION_JOINT/id`` or ``/LAGMUL/SLIDER_ROCKER_INVERSION_JOINT/id`` (M317): Slider-rocker inverted kinematic mechanism (oscillating cylinder / swing engine) joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed base trunnion pivot node
+    node2: int = 0               # oscillating slider piston pin node
+    node3: int = 0               # revolving crank pin node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    crank_len: float = 0.0       # revolving crank length R
+    frame_dist: float = 0.0      # fixed base trunnion to crank center distance D
+    piston_offset: float = 0.0   # cylinder lateral offset e
+    stroke_limit: float = 0.0    # maximum piston slide stroke limit
+
+
+@dataclass
+class SensorSpringTransverseSnapRate:
+    """``/SENSOR/SPRING_TRANSVERSE_SNAP_RATE`` or ``/SENSOR/SPRING_TRANS_SNAP_RATE`` (M317): Spring element relative transverse / shear acceleration 2nd rate-of-change (shear snap/crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtrans_crackle_max: float = 1e30 # maximum shear acceleration crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
