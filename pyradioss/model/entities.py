@@ -17144,6 +17144,62 @@ class SensorSpringTransverseSnapRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M318 Suite: LadTransverseShearInteractionRate failure, EngMagnetorheologicalEnergy, ScotchYokeMechanismJoint, SensorSpringTotalSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseShearInteractionRate:
+    """``/FAIL/LAD_TRANSVERSE_SHEAR_INTERACTION_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_SHEAR_INTERACTION_RATE`` (M318): Ladevèze rate-dependent combined transverse tension/compression and in-plane shear microcracking coupling failure model."""
+    mat_id: int = 0
+    title: str = ""
+    y0_tsir: float = 0.0          # dynamic coupling damage initiation threshold energy
+    yc_tsir: float = 0.0          # critical dynamic coupling fracture energy
+    gamma_rate_tsir: float = 0.0 # viscous shear-transverse coupling rate sensitivity parameter
+    p_rate_tsir: float = 1.0     # coupling strain rate power law exponent
+    d_tsir_max: float = 0.999    # maximum allowable coupled damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngMagnetorheologicalEnergy:
+    """``/ENG/MAGNETORHEOLOGICAL_ENERGY`` or ``/ENG/MR_WORK`` (M318): Engine magnetorheological fluid yield stress activation and magnetic field controllable shear dissipation energy tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_mr: float = 0.0           # time frequency for magnetorheological energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulScotchYokeMechanismJoint:
+    """``/SCOTCH_YOKE_MECHANISM_JOINT/id`` or ``/LAGMUL/SCOTCH_YOKE_MECHANISM_JOINT/id`` (M318): Scotch yoke / slotted link reciprocating-to-rotary planar kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # fixed center crank pivot node
+    node2: int = 0               # crank revolving pin node
+    node3: int = 0               # reciprocating slotted yoke follower node
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    crank_radius: float = 0.0    # rotating crank pin radius R
+    slot_width: float = 0.0      # slotted yoke channel guide width W
+    stroke_limit: float = 0.0    # maximum reciprocating slider travel stroke limit
+    yoke_angle: float = 0.0      # nominal yoke slot inclination angle alpha
+
+
+@dataclass
+class SensorSpringTotalSnapRate:
+    """``/SENSOR/SPRING_TOTAL_SNAP_RATE`` or ``/SENSOR/SPRING_TOT_SNAP_RATE`` (M318): Spring element relative 3D resultant total linear and angular combined acceleration 2nd rate-of-change (generalized resultant 6-DOF snap/crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_crackle_max: float = 1e30 # maximum total combined acceleration crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

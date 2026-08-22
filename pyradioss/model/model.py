@@ -2085,6 +2085,12 @@ class Model:
         self.lagmul_slider_rocker_inversion_joints: Dict[int, Any] = {} # /SLIDER_ROCKER_INVERSION_JOINT, /LAGMUL/SLIDER_ROCKER_INVERSION_JOINT (M317)
         self.sensor_spring_transverse_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_SNAP_RATE (M317)
 
+        # M318 Entities
+        self.fail_ladtransverseshearinteractionrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_SHEAR_INTERACTION_RATE (M318)
+        self.eng_magnetorheological_energies: Dict[int, Any] = {}     # /ENG/MAGNETORHEOLOGICAL_ENERGY (M318)
+        self.lagmul_scotch_yoke_mechanism_joints: Dict[int, Any] = {} # /SCOTCH_YOKE_MECHANISM_JOINT, /LAGMUL/SCOTCH_YOKE_MECHANISM_JOINT (M318)
+        self.sensor_spring_total_snap_rates: Dict[int, Any] = {}      # /SENSOR/SPRING_TOTAL_SNAP_RATE (M318)
+
 
 
 
