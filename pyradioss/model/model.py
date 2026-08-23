@@ -2217,6 +2217,13 @@ class Model:
         self.lagmul_baker_line_linkage_joints: Dict[int, Any] = {}   # /BAKER_LINE_LINKAGE_JOINT, /LAGMUL/BAKER_LINE_LINKAGE_JOINT (M339)
         self.sensor_spring_total_drop_rates: Dict[int, Any] = {}     # /SENSOR/SPRING_TOTAL_DROP_RATE (M339)
 
+        # M340 Entities
+        self.fail_ladcouplemicrobucklingrates: Dict[int, Any] = {}   # /FAIL/LAD_COUPLE_MICROBUCKLING_RATE (M340)
+        self.eng_flexothermomagnetoacoustic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOMAGNETOACOUSTIC_RESONANCE_ENERGY (M340)
+        self.lagmul_baker_plane_linkage_joints: Dict[int, Any] = {}  # /BAKER_PLANE_LINKAGE_JOINT, /LAGMUL/BAKER_PLANE_LINKAGE_JOINT (M340)
+        self.sensor_spring_torsional_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_DROP_RATE (M340)
+
+
 
 
 
