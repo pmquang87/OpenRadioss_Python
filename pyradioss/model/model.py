@@ -2193,6 +2193,13 @@ class Model:
         self.lagmul_borel_linkage_joints: Dict[int, Any] = {}        # /BOREL_LINKAGE_JOINT, /LAGMUL/BOREL_LINKAGE_JOINT (M335)
         self.sensor_spring_bending_lock_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_BENDING_LOCK_RATE (M335)
 
+        # M336 Entities
+        self.fail_ladtransversedelaminationrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_DELAMINATION_RATE (M336)
+        self.eng_flexoelectroacoustic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOELECTROACOUSTIC_RESONANCE_ENERGY (M336)
+        self.lagmul_herve_linkage_joints: Dict[int, Any] = {}        # /HERVE_LINKAGE_JOINT, /LAGMUL/HERVE_LINKAGE_JOINT (M336)
+        self.sensor_spring_total_angular_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_LOCK_RATE (M336)
+
+
 
 
 

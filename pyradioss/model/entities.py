@@ -18134,6 +18134,62 @@ class SensorSpringBendingLockRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M336 Suite: LadTransverseDelaminationRate failure, EngFlexoelectroacousticResonanceEnergy, HerveLinkageJoint, SensorSpringTotalAngularLockRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseDelaminationRate:
+    """``/FAIL/LAD_TRANSVERSE_DELAMINATION_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_DELAMINATION_RATE`` (M336): Ladevèze rate-dependent transverse delamination and dynamic interlaminar matrix cracking failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tdr0: float = 0.0      # initial transverse delamination threshold stress sigma_tdr,0
+    sigma_tdrc: float = 1.0      # critical ultimate transverse delamination stress sigma_tdr,c
+    gamma_tdr: float = 0.0       # transverse delamination rate sensitivity factor gamma_tdr
+    p_tdr: float = 1.0           # transverse delamination rate exponent p_tdr
+    d_tdr_max: float = 0.999     # maximum allowable transverse delamination damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexoelectroacousticResonanceEnergy:
+    """``/ENG/FLEXOELECTROACOUSTIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOELEC_AC_RES_WORK`` (M336): Engine coupled flexoelectric-flexoacoustic acoustic resonance energy and nanoscale strain-gradient electroacoustic conversion dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fear: float = 0.0         # time frequency for flexoelectroacoustic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulHerveLinkageJoint:
+    """``/HERVE_LINKAGE_JOINT/id`` or ``/LAGMUL/HERVE_LINKAGE_JOINT/id`` (M336): Hervé spatial 6R isocline overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_f: float = 0.0 # axial joint offset distance f
+
+
+@dataclass
+class SensorSpringTotalAngularLockRate:
+    """``/SENSOR/SPRING_TOTAL_ANGULAR_LOCK_RATE`` or ``/SENSOR/SPRING_TOT_ANG_LOCK_RATE`` (M336): Spring element relative 3D resultant total angular acceleration 4th rate-of-change (resultant total angular lock rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_ang_lock_max: float = 1e30 # maximum total angular lock rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 
