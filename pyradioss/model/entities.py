@@ -18299,6 +18299,62 @@ class SensorSpringTransverseDropRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M339 Suite: LadTransverseMicrobucklingRate failure, EngFlexothermoelectroacousticResonanceEnergy, BakerLineLinkageJoint, SensorSpringTotalDropRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseMicrobucklingRate:
+    """``/FAIL/LAD_TRANSVERSE_MICROBUCKLING_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_MICROBUCKLING_RATE`` (M339): Ladevèze rate-dependent transverse microbuckling, matrix-supported fiber kinking, and compressive transverse shear localization failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tmbr0: float = 0.0     # initial transverse microbuckling threshold stress sigma_tmbr,0
+    sigma_tmbrc: float = 1.0     # critical ultimate transverse microbuckling stress sigma_tmbr,c
+    gamma_tmbr: float = 0.0      # transverse microbuckling rate sensitivity factor gamma_tmbr
+    p_tmbr: float = 1.0          # transverse microbuckling rate exponent p_tmbr
+    d_tmbr_max: float = 0.999    # maximum allowable transverse microbuckling damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoelectroacousticResonanceEnergy:
+    """``/ENG/FLEXOTHERMOELECTROACOUSTIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_EA_RES_WORK`` (M339): Engine coupled flexothermal-flexoelectroacoustic full thermo-electro-acoustic resonance energy and nanoscale strain-gradient thermo-electroacoustic conversion dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftear: float = 0.0        # time frequency for flexothermoelectroacoustic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulBakerLineLinkageJoint:
+    """``/BAKER_LINE_LINKAGE_JOINT/id`` or ``/LAGMUL/BAKER_LINE_LINKAGE_JOINT/id`` (M339): Baker spatial 6R line-symmetric overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_f: float = 0.0 # axial joint offset distance f
+
+
+@dataclass
+class SensorSpringTotalDropRate:
+    """``/SENSOR/SPRING_TOTAL_DROP_RATE`` or ``/SENSOR/SPRING_TOT_DROP_RATE`` (M339): Spring element relative 3D resultant total linear acceleration 5th rate-of-change (resultant total linear drop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_drop_max: float = 1e30  # maximum total drop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

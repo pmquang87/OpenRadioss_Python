@@ -2211,6 +2211,13 @@ class Model:
         self.lagmul_hunt_linkage_joints: Dict[int, Any] = {}         # /HUNT_LINKAGE_JOINT, /LAGMUL/HUNT_LINKAGE_JOINT (M338)
         self.sensor_spring_transverse_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_DROP_RATE (M338)
 
+        # M339 Entities
+        self.fail_ladtransversemicrobucklingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_MICROBUCKLING_RATE (M339)
+        self.eng_flexothermoelectroacoustic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOELECTROACOUSTIC_RESONANCE_ENERGY (M339)
+        self.lagmul_baker_line_linkage_joints: Dict[int, Any] = {}   # /BAKER_LINE_LINKAGE_JOINT, /LAGMUL/BAKER_LINE_LINKAGE_JOINT (M339)
+        self.sensor_spring_total_drop_rates: Dict[int, Any] = {}     # /SENSOR/SPRING_TOTAL_DROP_RATE (M339)
+
+
 
 
 
