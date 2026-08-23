@@ -18079,6 +18079,61 @@ class SensorSpringTorsionalLockRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M335 Suite: LadDynamicDelaminationRate failure, EngFlexoelectromagneticResonanceEnergy, BorelLinkageJoint, SensorSpringBendingLockRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicDelaminationRate:
+    """``/FAIL/LAD_DYNAMIC_DELAMINATION_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_DELAMINATION_RATE`` (M335): Ladevèze rate-dependent dynamic delamination and progressive interlaminar shear fracture failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_ddr0: float = 0.0      # initial dynamic delamination threshold stress sigma_ddr,0
+    sigma_ddrc: float = 1.0      # critical ultimate dynamic delamination stress sigma_ddr,c
+    gamma_ddr: float = 0.0       # dynamic delamination rate sensitivity factor gamma_ddr
+    p_ddr: float = 1.0           # dynamic delamination rate exponent p_ddr
+    d_ddr_max: float = 0.999     # maximum allowable dynamic delamination damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexoelectromagneticResonanceEnergy:
+    """``/ENG/FLEXOELECTROMAGNETIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOELEC_MAG_RES_WORK`` (M335): Engine coupled flexoelectric-flexomagnetic full electromagnetic acoustic resonance energy and nanoscale strain-gradient electromagnetic conversion dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_femr: float = 0.0         # time frequency for flexoelectromagnetic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulBorelLinkageJoint:
+    """``/BOREL_LINKAGE_JOINT/id`` or ``/LAGMUL/BOREL_LINKAGE_JOINT/id`` (M335): Borel spatial 6R spherical-bivector overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_f: float = 0.0 # axial joint offset distance f
+
+
+@dataclass
+class SensorSpringBendingLockRate:
+    """``/SENSOR/SPRING_BENDING_LOCK_RATE`` or ``/SENSOR/SPRING_BEND_LOCK_RATE`` (M335): Spring element relative transverse bending angular acceleration 4th rate-of-change (bending angular lock rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jbend_lock_max: float = 1e30 # maximum bending lock rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

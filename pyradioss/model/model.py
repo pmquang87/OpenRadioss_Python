@@ -2187,6 +2187,12 @@ class Model:
         self.lagmul_krames_linkage_joints: Dict[int, Any] = {}       # /KRAMES_LINKAGE_JOINT, /LAGMUL/KRAMES_LINKAGE_JOINT (M334)
         self.sensor_spring_torsional_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_LOCK_RATE (M334)
 
+        # M335 Entities
+        self.fail_laddynamicdelaminationrates: Dict[int, Any] = {}   # /FAIL/LAD_DYNAMIC_DELAMINATION_RATE (M335)
+        self.eng_flexoelectromagnetic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOELECTROMAGNETIC_RESONANCE_ENERGY (M335)
+        self.lagmul_borel_linkage_joints: Dict[int, Any] = {}        # /BOREL_LINKAGE_JOINT, /LAGMUL/BOREL_LINKAGE_JOINT (M335)
+        self.sensor_spring_bending_lock_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_BENDING_LOCK_RATE (M335)
+
 
 
 
