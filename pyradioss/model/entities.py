@@ -18244,6 +18244,62 @@ class SensorSpringNormalDropRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M338 Suite: LadDynamicMicrobucklingRate failure, EngFlexothermoelectromagneticResonanceEnergy, HuntLinkageJoint, SensorSpringTransverseDropRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicMicrobucklingRate:
+    """``/FAIL/LAD_DYNAMIC_MICROBUCKLING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_MICROBUCKLING_RATE`` (M338): Ladevèze rate-dependent dynamic microbuckling, fiber kinking, and compressive shear localization failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dmbr0: float = 0.0     # initial dynamic microbuckling threshold stress sigma_dmbr,0
+    sigma_dmbrc: float = 1.0     # critical ultimate dynamic microbuckling stress sigma_dmbr,c
+    gamma_dmbr: float = 0.0      # dynamic microbuckling rate sensitivity factor gamma_dmbr
+    p_dmbr: float = 1.0          # dynamic microbuckling rate exponent p_dmbr
+    d_dmbr_max: float = 0.999    # maximum allowable dynamic microbuckling damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoelectromagneticResonanceEnergy:
+    """``/ENG/FLEXOTHERMOELECTROMAGNETIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_EM_RES_WORK`` (M338): Engine coupled flexothermal-flexoelectromagnetic full multi-field acoustic resonance energy and nanoscale strain-gradient thermo-electromagnetic conversion dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftemr: float = 0.0        # time frequency for flexothermoelectromagnetic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulHuntLinkageJoint:
+    """``/HUNT_LINKAGE_JOINT/id`` or ``/LAGMUL/HUNT_LINKAGE_JOINT/id`` (M338): Hunt spatial 6R screw-symmetric / line-symmetric overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_f: float = 0.0 # axial joint offset distance f
+
+
+@dataclass
+class SensorSpringTransverseDropRate:
+    """``/SENSOR/SPRING_TRANSVERSE_DROP_RATE`` or ``/SENSOR/SPRING_TRANS_DROP_RATE`` (M338): Spring element relative transverse / shear acceleration 5th rate-of-change (shear drop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtrans_drop_max: float = 1e30 # maximum transverse drop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

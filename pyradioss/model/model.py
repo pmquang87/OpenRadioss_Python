@@ -2205,6 +2205,13 @@ class Model:
         self.lagmul_kong_linkage_joints: Dict[int, Any] = {}         # /KONG_LINKAGE_JOINT, /LAGMUL/KONG_LINKAGE_JOINT (M337)
         self.sensor_spring_normal_drop_rates: Dict[int, Any] = {}    # /SENSOR/SPRING_NORMAL_DROP_RATE (M337)
 
+        # M338 Entities
+        self.fail_laddynamicmicrobucklingrates: Dict[int, Any] = {}  # /FAIL/LAD_DYNAMIC_MICROBUCKLING_RATE (M338)
+        self.eng_flexothermoelectromagnetic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOELECTROMAGNETIC_RESONANCE_ENERGY (M338)
+        self.lagmul_hunt_linkage_joints: Dict[int, Any] = {}         # /HUNT_LINKAGE_JOINT, /LAGMUL/HUNT_LINKAGE_JOINT (M338)
+        self.sensor_spring_transverse_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_DROP_RATE (M338)
+
+
 
 
 
