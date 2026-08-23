@@ -2169,6 +2169,12 @@ class Model:
         self.lagmul_delassus_linkage_joints: Dict[int, Any] = {}     # /DELASSUS_LINKAGE_JOINT, /LAGMUL/DELASSUS_LINKAGE_JOINT (M331)
         self.sensor_spring_normal_lock_rates: Dict[int, Any] = {}    # /SENSOR/SPRING_NORMAL_LOCK_RATE (M331)
 
+        # M332 Entities
+        self.fail_ladtransversecrushrates: Dict[int, Any] = {}       # /FAIL/LAD_TRANSVERSE_CRUSH_RATE (M332)
+        self.eng_flexothermomagnetic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOMAGNETIC_RESONANCE_ENERGY (M332)
+        self.lagmul_schatz_linkage_joints: Dict[int, Any] = {}       # /SCHATZ_LINKAGE_JOINT, /LAGMUL/SCHATZ_LINKAGE_JOINT (M332)
+        self.sensor_spring_transverse_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_LOCK_RATE (M332)
+
 
 
 

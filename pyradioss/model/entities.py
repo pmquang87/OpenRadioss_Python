@@ -17914,6 +17914,61 @@ class SensorSpringNormalLockRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M332 Suite: LadTransverseCrushRate failure, EngFlexothermomagneticResonanceEnergy, SchatzLinkageJoint, SensorSpringTransverseLockRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseCrushRate:
+    """``/FAIL/LAD_TRANSVERSE_CRUSH_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_CRUSH_RATE`` (M332): Ladevèze dynamic progressive transverse crush and multi-axial dynamic rate-dependent transverse micro-crushing failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tcr0: float = 0.0      # initial transverse crush threshold stress sigma_tcr,0
+    sigma_tcrc: float = 1.0      # critical ultimate transverse crush stress sigma_tcr,c
+    gamma_tcr: float = 0.0       # transverse crush rate sensitivity factor gamma_tcr
+    p_tcr: float = 1.0           # transverse crush rate exponent p_tcr
+    d_tcr_max: float = 0.999     # maximum allowable transverse crush damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermomagneticResonanceEnergy:
+    """``/ENG/FLEXOTHERMOMAGNETIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_MAG_RES_WORK`` (M332): Engine coupled flexomagnetic-flexothermal acoustic resonance energy and nanoscale strain-gradient magneto-caloric conversion dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftmr: float = 0.0         # time frequency for flexothermomagnetic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulSchatzLinkageJoint:
+    """``/SCHATZ_LINKAGE_JOINT/id`` or ``/LAGMUL/SCHATZ_LINKAGE_JOINT/id`` (M332): Schatz spatial 6R / turbula inversor overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_f: float = 0.0 # axial joint offset distance f
+
+
+@dataclass
+class SensorSpringTransverseLockRate:
+    """``/SENSOR/SPRING_TRANSVERSE_LOCK_RATE`` or ``/SENSOR/SPRING_TRANS_LOCK_RATE`` (M332): Spring element relative transverse/shear acceleration 4th rate-of-change (shear lock rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtrans_lock_max: float = 1e30 # maximum transverse lock rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
