@@ -18189,6 +18189,62 @@ class SensorSpringTotalAngularLockRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M337 Suite: LadCoupleDelaminationRate failure, EngFlexomagnetoacousticResonanceEnergy, KongLinkageJoint, SensorSpringNormalDropRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleDelaminationRate:
+    """``/FAIL/LAD_COUPLE_DELAMINATION_RATE`` or ``/FAIL/LADEVEZE_COUPLED_DELAMINATION_RATE`` (M337): Ladevèze rate-dependent coupled interlaminar delamination and matrix micro-cracking failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cdel0: float = 0.0     # initial coupled delamination threshold stress sigma_cdel,0
+    sigma_cdelc: float = 1.0     # critical ultimate coupled delamination stress sigma_cdel,c
+    gamma_cdel: float = 0.0      # coupled delamination rate sensitivity factor gamma_cdel
+    p_cdel: float = 1.0          # coupled delamination rate exponent p_cdel
+    d_cdel_max: float = 0.999    # maximum allowable coupled delamination damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetoacousticResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOACOUSTIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAG_AC_RES_WORK`` (M337): Engine coupled flexomagnetic-flexoacoustic acoustic resonance energy and nanoscale strain-gradient magneto-acoustic conversion dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmar: float = 0.0         # time frequency for flexomagnetoacoustic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulKongLinkageJoint:
+    """``/KONG_LINKAGE_JOINT/id`` or ``/LAGMUL/KONG_LINKAGE_JOINT/id`` (M337): Kong spatial 6R multi-loop / line-symmetric overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_f: float = 0.0 # axial joint offset distance f
+
+
+@dataclass
+class SensorSpringNormalDropRate:
+    """``/SENSOR/SPRING_NORMAL_DROP_RATE`` or ``/SENSOR/SPRING_NORM_DROP_RATE`` (M337): Spring element relative normal / axial acceleration 5th rate-of-change (axial drop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_drop_max: float = 1e30 # maximum normal drop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 
