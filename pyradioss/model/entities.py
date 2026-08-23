@@ -17969,6 +17969,61 @@ class SensorSpringTransverseLockRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M333 Suite: LadCoupleDynamicCrush failure, EngFlexothermoelectricResonanceEnergy, FrankeLinkageJoint, SensorSpringTotalLockRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleDynamicCrush:
+    """``/FAIL/LAD_COUPLE_DYNAMIC_CRUSH`` or ``/FAIL/LADEVEZE_COUPLED_DYNAMIC_CRUSH`` (M333): Ladevèze dynamic progressive coupled crush and rate-dependent multi-axial micro-damage failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cdc0: float = 0.0      # initial coupled crush threshold stress sigma_cdc,0
+    sigma_cdcc: float = 1.0      # critical ultimate coupled crush stress sigma_cdc,c
+    gamma_cdc: float = 0.0       # coupled crush rate sensitivity factor gamma_cdc
+    p_cdc: float = 1.0           # coupled crush rate exponent p_cdc
+    d_cdc_max: float = 0.999     # maximum allowable coupled crush damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoelectricResonanceEnergy:
+    """``/ENG/FLEXOTHERMOELECTRIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_ELEC_RES_WORK`` (M333): Engine coupled flexoelectric-flexothermal acoustic resonance energy and nanoscale strain-gradient thermoelectric conversion dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fter: float = 0.0         # time frequency for flexothermoelectric resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulFrankeLinkageJoint:
+    """``/FRANKE_LINKAGE_JOINT/id`` or ``/LAGMUL/FRANKE_LINKAGE_JOINT/id`` (M333): Franke spatial 6R overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_f: float = 0.0 # axial joint offset distance f
+
+
+@dataclass
+class SensorSpringTotalLockRate:
+    """``/SENSOR/SPRING_TOTAL_LOCK_RATE`` or ``/SENSOR/SPRING_TOT_LOCK_RATE`` (M333): Spring element relative 3D resultant total linear acceleration 4th rate-of-change (resultant total linear lock rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_lock_max: float = 1e30  # maximum total lock rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
