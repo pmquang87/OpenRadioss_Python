@@ -18519,6 +18519,61 @@ class SensorSpringTotalAngularDropRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M343 Suite: LadCoupleFiberSplittingRate failure, EngFlexothermoplasmonicResonanceEnergy, BakerSymmetricLinkageJoint, SensorSpringNormalDriftRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleFiberSplittingRate:
+    """``/FAIL/LAD_COUPLE_FIBER_SPLITTING_RATE`` or ``/FAIL/LADEVEZE_COUPLED_FIBER_SPLITTING_RATE`` (M343): Ladevèze rate-dependent coupled longitudinal/transverse fiber splitting, matrix cleavage, and multi-axial tensile fragmentation failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cfsr0: float = 0.0     # initial coupled fiber splitting threshold stress sigma_cfsr,0
+    sigma_cfsrc: float = 1.0     # critical coupled fiber splitting stress sigma_cfsr,c
+    gamma_cfsr: float = 0.0      # coupled fiber splitting rate sensitivity factor gamma_cfsr
+    p_cfsr: float = 1.0          # coupled fiber splitting rate exponent p_cfsr
+    d_cfsr_max: float = 0.999    # maximum allowable coupled fiber splitting damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoplasmonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOPLASMONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PLASMON_RES_WORK`` (M343): Engine coupled flexothermal-flexoplasmonic nanoscale surface-plasmon polariton resonance energy and strain-gradient photothermal dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftplr: float = 0.0        # time frequency for flexothermoplasmonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulBakerSymmetricLinkageJoint:
+    """``/BAKER_SYMMETRIC_LINKAGE_JOINT/id`` or ``/LAGMUL/BAKER_SYMMETRIC_LINKAGE_JOINT/id`` (M343): Baker spatial 6R fully-symmetric overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_r: float = 0.0 # axial joint offset distance r
+
+
+@dataclass
+class SensorSpringNormalDriftRate:
+    """``/SENSOR/SPRING_NORMAL_DRIFT_RATE`` or ``/SENSOR/SPRING_NORM_DRIFT_RATE`` (M343): Spring element relative normal / axial acceleration 6th rate-of-change (axial drift rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_drift_max: float = 1e30 # maximum normal drift rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

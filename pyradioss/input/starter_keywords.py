@@ -60636,6 +60636,160 @@ def read_sensor_spring_total_angular_drop_rate(block: KeywordBlock, model: Model
     ))
 
 
+# ============================================================================
+# M343 Suite: LadCoupleFiberSplittingRate failure, EngFlexothermoplasmonicResonanceEnergy, BakerSymmetricLinkageJoint, SensorSpringNormalDriftRate
+# ============================================================================
+
+def read_fail_lad_couple_fiber_splitting_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_COUPLE_FIBER_SPLITTING_RATE/mat_ID`` or ``/FAIL/LADEVEZE_COUPLED_FIBER_SPLITTING_RATE`` (M343): Ladevèze rate-dependent coupled longitudinal/transverse fiber splitting, matrix cleavage, and multi-axial tensile fragmentation failure model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_COUPLE_FIBER_SPLITTING_RATE/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_COUPLE_FIBER_SPLITTING_RATE_1")
+        sigma_cfsr0 = _fval(c1[0], 0.0) if len(c1) > 0 and c1[0].strip() else 0.0
+        sigma_cfsrc = _fval(c1[1], 1.0) if len(c1) > 1 and c1[1].strip() else 1.0
+        gamma_cfsr = _fval(c1[2], 0.0) if len(c1) > 2 and c1[2].strip() else 0.0
+        p_cfsr = _fval(c1[3], 1.0) if len(c1) > 3 and c1[3].strip() else 1.0
+        d_cfsr_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        c2 = cards[1].cut("FAIL_LAD_COUPLE_FIBER_SPLITTING_RATE_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        sigma_cfsr0 = float(t1[0].rstrip(',')) if len(t1) > 0 and t1[0].rstrip(',') else 0.0
+        sigma_cfsrc = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 1.0
+        gamma_cfsr = float(t1[2].rstrip(',')) if len(t1) > 2 and t1[2].rstrip(',') else 0.0
+        p_cfsr = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 1.0
+        d_cfsr_max = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.999
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "sigma_cfsr0": sigma_cfsr0, "sigma_cfsrc": sigma_cfsrc, "gamma_cfsr": gamma_cfsr,
+        "p_cfsr": p_cfsr, "d_cfsr_max": d_cfsr_max,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadCoupleFiberSplittingRate, FailureModel
+    model.fail_ladcouplefibersplittingrates[mat_id] = FailLadCoupleFiberSplittingRate(
+        mat_id=mat_id, title=title, sigma_cfsr0=sigma_cfsr0, sigma_cfsrc=sigma_cfsrc,
+        gamma_cfsr=gamma_cfsr, p_cfsr=p_cfsr, d_cfsr_max=d_cfsr_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_COUPLE_FIBER_SPLITTING_RATE", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_flexothermoplasmonic_resonance_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/FLEXOTHERMOPLASMONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PLASMON_RES_WORK`` (M343): Engine coupled flexothermal-flexoplasmonic nanoscale surface-plasmon polariton resonance energy and strain-gradient photothermal dissipation tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/FLEXOTHERMOPLASMONIC_RESONANCE_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_ftplr, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_FLEXOTHERMOPLASMONIC_RESONANCE_ENERGY_1")
+        dt_ftplr = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_ftplr = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngFlexothermoplasmonicResonanceEnergy
+    r_id = block.user_id or (len(model.eng_flexothermoplasmonic_resonance_energies) + 1)
+    model.eng_flexothermoplasmonic_resonance_energies[r_id] = EngFlexothermoplasmonicResonanceEnergy(
+        id=r_id, title=title, dt_ftplr=dt_ftplr, sens_id=sens_id
+    )
+
+
+def read_lagmul_baker_symmetric_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/BAKER_SYMMETRIC_LINKAGE_JOINT/id`` or ``/LAGMUL/BAKER_SYMMETRIC_LINKAGE_JOINT/id`` (M343): Baker spatial 6R fully-symmetric overconstrained kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/BAKER_SYMMETRIC_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    link_len_a, link_len_b, twist_angle_alpha, offset_distance_r = 0.0, 0.0, 0.0, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("BAKER_SYMMETRIC_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("BAKER_SYMMETRIC_LINKAGE_JOINT_2")
+            link_len_a = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            link_len_b = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            twist_angle_alpha = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+            offset_distance_r = _fval(f2[3], 0.0) if len(f2) > 3 and f2[3].strip() else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            link_len_a = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            link_len_b = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            twist_angle_alpha = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            offset_distance_r = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+
+    from ..model.entities import LagmulBakerSymmetricLinkageJoint
+    model.lagmul_baker_symmetric_linkage_joints[block.user_id] = LagmulBakerSymmetricLinkageJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        link_len_a=link_len_a, link_len_b=link_len_b,
+        twist_angle_alpha=twist_angle_alpha, offset_distance_r=offset_distance_r
+    )
+
+
+def read_sensor_spring_normal_drift_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_NORMAL_DRIFT_RATE`` or ``/SENSOR/SPRING_NORM_DRIFT_RATE`` (M343): Spring element relative normal / axial acceleration 6th rate-of-change (axial drift rate) magnitude threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_NORMAL_DRIFT_RATE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, jnorm_drift_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_NORMAL_DRIFT_RATE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        jnorm_drift_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        jnorm_drift_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringNormalDriftRate, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_normal_drift_rates) + 1)
+    ssndr = SensorSpringNormalDriftRate(
+        id=s_id, title=title, spring_id=spring_id,
+        jnorm_drift_max=jnorm_drift_max, t_delay=t_delay
+    )
+    model.sensor_spring_normal_drift_rates[s_id] = ssndr
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_NORMAL_DRIFT_RATE", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -64998,6 +65152,30 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_RATE_DROP_ANG_TOT": read_sensor_spring_total_angular_drop_rate,
     "SENSOR_TOTAL_ANGULAR_DROP_RATE_SPRING": read_sensor_spring_total_angular_drop_rate,
     "SENSOR_SPRING_DROP_ANG_TOT": read_sensor_spring_total_angular_drop_rate,
+    # --- M343: LadCoupleFiberSplittingRate Failure Model, EngFlexothermoplasmonicResonanceEnergy, BakerSymmetricLinkageJoint, and Spring Normal Drift Rate Sensor ---
+    "FAIL_LAD_COUPLE_FIBER_SPLITTING_RATE": read_fail_lad_couple_fiber_splitting_rate,
+    "FAIL_LADEVEZE_COUPLED_FIBER_SPLITTING_RATE": read_fail_lad_couple_fiber_splitting_rate,
+    "FAIL_LAD_CFSR": read_fail_lad_couple_fiber_splitting_rate,
+    "FAIL_LAD_CFSR_MODEL": read_fail_lad_couple_fiber_splitting_rate,
+    "FAIL_LAD_CFSR_LAW": read_fail_lad_couple_fiber_splitting_rate,
+    "FAIL_LADEVEZE_RATE_DEPENDENT_COUPLED_FIBER_SPLITTING": read_fail_lad_couple_fiber_splitting_rate,
+    "ENG_FLEXOTHERMOPLASMONIC_RESONANCE_ENERGY": read_eng_flexothermoplasmonic_resonance_energy,
+    "ENG_FLEXOTHERM_PLASMON_RES_WORK": read_eng_flexothermoplasmonic_resonance_energy,
+    "ENG_EFLEXOTHERMOPLASMONICRESONANCE": read_eng_flexothermoplasmonic_resonance_energy,
+    "ENG_FLEXOTHERMOPLASMONIC_RESONANCE_DISSIPATION": read_eng_flexothermoplasmonic_resonance_energy,
+    "ENG_EM_FLEXOTHERMOPLASMONIC_RESONANCE": read_eng_flexothermoplasmonic_resonance_energy,
+    "LAGMUL_BAKER_SYMMETRIC_LINKAGE_JOINT": read_lagmul_baker_symmetric_linkage_joint,
+    "BAKER_SYMMETRIC_LINKAGE_JOINT": read_lagmul_baker_symmetric_linkage_joint,
+    "LAGMUL_BAKER_SYMMETRIC_LINKAGE": read_lagmul_baker_symmetric_linkage_joint,
+    "BAKER_SYMMETRIC_LINKAGE": read_lagmul_baker_symmetric_linkage_joint,
+    "BAKER_SYMMETRIC_MECHANISM": read_lagmul_baker_symmetric_linkage_joint,
+    "BAKER_SYMMETRIC_6R_MECHANISM": read_lagmul_baker_symmetric_linkage_joint,
+    "BAKER_SYMMETRIC_OVERCONSTRAINED_MECHANISM": read_lagmul_baker_symmetric_linkage_joint,
+    "SENSOR_SPRING_NORMAL_DRIFT_RATE": read_sensor_spring_normal_drift_rate,
+    "SENSOR_SPRING_NORM_DRIFT_RATE": read_sensor_spring_normal_drift_rate,
+    "SENSOR_SPRING_RATE_DRIFT_NORM": read_sensor_spring_normal_drift_rate,
+    "SENSOR_NORMAL_DRIFT_RATE_SPRING": read_sensor_spring_normal_drift_rate,
+    "SENSOR_SPRING_DRIFT_NORM": read_sensor_spring_normal_drift_rate,
 }
 
 

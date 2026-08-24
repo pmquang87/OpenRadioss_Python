@@ -2235,6 +2235,12 @@ class Model:
         self.lagmul_chen_linkage_joints: Dict[int, Any] = {}         # /CHEN_LINKAGE_JOINT, /LAGMUL/CHEN_LINKAGE_JOINT (M342)
         self.sensor_spring_total_angular_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_DROP_RATE (M342)
 
+        # M343 Entities
+        self.fail_ladcouplefibersplittingrates: Dict[int, Any] = {}   # /FAIL/LAD_COUPLE_FIBER_SPLITTING_RATE (M343)
+        self.eng_flexothermoplasmonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONIC_RESONANCE_ENERGY (M343)
+        self.lagmul_baker_symmetric_linkage_joints: Dict[int, Any] = {} # /BAKER_SYMMETRIC_LINKAGE_JOINT, /LAGMUL/BAKER_SYMMETRIC_LINKAGE_JOINT (M343)
+        self.sensor_spring_normal_drift_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_NORMAL_DRIFT_RATE (M343)
+
 
 
 
