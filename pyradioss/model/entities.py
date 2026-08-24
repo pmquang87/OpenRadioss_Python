@@ -18684,6 +18684,61 @@ class SensorSpringTotalDriftRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M346 Suite: LadCoupleFiberCrushingRate failure, EngFlexothermomagnonpolaritonicResonanceEnergy, WohlhartSpatialLinkageJoint, SensorSpringTorsionalDriftRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleFiberCrushingRate:
+    """``/FAIL/LAD_COUPLE_FIBER_CRUSHING_RATE`` or ``/FAIL/LADEVEZE_COUPLED_FIBER_CRUSHING_RATE`` (M346): Ladevèze rate-dependent coupled longitudinal/transverse fiber crushing, matrix pulverization, and multi-axial compressive crushing failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cfcr0: float = 0.0     # initial coupled fiber crushing threshold stress sigma_cfcr,0
+    sigma_cfcrc: float = 1.0     # critical coupled fiber crushing stress sigma_cfcr,c
+    gamma_cfcr: float = 0.0      # coupled fiber crushing rate sensitivity factor gamma_cfcr
+    p_cfcr: float = 1.0          # coupled fiber crushing rate exponent p_cfcr
+    d_cfcr_max: float = 0.999    # maximum allowable coupled fiber crushing damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermomagnonpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOMAGNONPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_MAGNON_POLARITON_RES_WORK`` (M346): Engine coupled flexothermal-flexomagnonic-flexophotonic nanoscale magnon-polariton hybrid resonance energy and strain-gradient spintronic-photonic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftmpr: float = 0.0        # time frequency for flexothermomagnonpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulWohlhartSpatialLinkageJoint:
+    """``/WOHLHART_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/WOHLHART_SPATIAL_LINKAGE_JOINT/id`` (M346): Wohlhart spatial 6R skew-symmetric multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_u: float = 0.0 # axial joint offset distance u
+
+
+@dataclass
+class SensorSpringTorsionalDriftRate:
+    """``/SENSOR/SPRING_TORSIONAL_DRIFT_RATE`` or ``/SENSOR/SPRING_TORS_DRIFT_RATE`` (M346): Spring element relative torsional angular acceleration 6th rate-of-change (torsional angular drift rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtors_drift_max: float = 1e30 # maximum torsional drift rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
