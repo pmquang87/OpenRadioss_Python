@@ -18739,6 +18739,61 @@ class SensorSpringTorsionalDriftRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M347 Suite: LadDynamicInterlaminarShearRate failure, EngFlexothermoplasmonpolaritonicResonanceEnergy, HuntSpatialLinkageJoint, SensorSpringBendingDriftRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicInterlaminarShearRate:
+    """``/FAIL/LAD_DYNAMIC_INTERLAMINAR_SHEAR_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_INTERLAMINAR_SHEAR_RATE`` (M347): Ladevèze rate-dependent dynamic interlaminar shear delamination, interface micro-cracking, and mode-II interlaminar fracture failure model."""
+    mat_id: int = 0
+    title: str = ""
+    tau_disr0: float = 0.0       # initial interlaminar shear threshold stress tau_disr,0
+    tau_disrc: float = 1.0       # critical interlaminar shear stress tau_disr,c
+    gamma_disr: float = 0.0      # interlaminar shear rate sensitivity factor gamma_disr
+    p_disr: float = 1.0          # interlaminar shear rate exponent p_disr
+    d_disr_max: float = 0.999    # maximum allowable interlaminar shear damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoplasmonpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOPLASMONPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PLASMON_POLARITON_RES_WORK`` (M347): Engine coupled flexothermal-flexoplasmonic-flexophotonic nanoscale surface plasmon polariton resonance energy and strain-gradient electromagnetic-photothermal dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftppr: float = 0.0        # time frequency for flexothermoplasmonpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulHuntSpatialLinkageJoint:
+    """``/HUNT_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/HUNT_SPATIAL_LINKAGE_JOINT/id`` (M347): Hunt spatial 6R variable screw axis overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_v: float = 0.0 # axial joint offset distance v
+
+
+@dataclass
+class SensorSpringBendingDriftRate:
+    """``/SENSOR/SPRING_BENDING_DRIFT_RATE`` or ``/SENSOR/SPRING_BEND_DRIFT_RATE`` (M347): Spring element relative transverse bending angular acceleration 6th rate-of-change (bending angular drift rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jbend_drift_max: float = 1e30 # maximum bending drift rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

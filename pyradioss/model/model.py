@@ -2259,6 +2259,12 @@ class Model:
         self.lagmul_wohlhart_spatial_linkage_joints: Dict[int, Any] = {} # /WOHLHART_SPATIAL_LINKAGE_JOINT, /LAGMUL/WOHLHART_SPATIAL_LINKAGE_JOINT (M346)
         self.sensor_spring_torsional_drift_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_DRIFT_RATE (M346)
 
+        # M347 Entities
+        self.fail_laddynamicinterlaminarshearrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_INTERLAMINAR_SHEAR_RATE (M347)
+        self.eng_flexothermoplasmonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONPOLARITONIC_RESONANCE_ENERGY (M347)
+        self.lagmul_hunt_spatial_linkage_joints: Dict[int, Any] = {} # /HUNT_SPATIAL_LINKAGE_JOINT, /LAGMUL/HUNT_SPATIAL_LINKAGE_JOINT (M347)
+        self.sensor_spring_bending_drift_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_BENDING_DRIFT_RATE (M347)
+
 
 
 
