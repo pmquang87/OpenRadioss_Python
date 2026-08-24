@@ -2241,6 +2241,12 @@ class Model:
         self.lagmul_baker_symmetric_linkage_joints: Dict[int, Any] = {} # /BAKER_SYMMETRIC_LINKAGE_JOINT, /LAGMUL/BAKER_SYMMETRIC_LINKAGE_JOINT (M343)
         self.sensor_spring_normal_drift_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_NORMAL_DRIFT_RATE (M343)
 
+        # M344 Entities
+        self.fail_laddynamicfibercrushingrates: Dict[int, Any] = {}  # /FAIL/LAD_DYNAMIC_FIBER_CRUSHING_RATE (M344)
+        self.eng_flexothermoexcitonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOEXCITONIC_RESONANCE_ENERGY (M344)
+        self.lagmul_altmann_spatial_linkage_joints: Dict[int, Any] = {} # /ALTMANN_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALTMANN_SPATIAL_LINKAGE_JOINT (M344)
+        self.sensor_spring_transverse_drift_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_DRIFT_RATE (M344)
+
 
 
 

@@ -18574,6 +18574,61 @@ class SensorSpringNormalDriftRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M344 Suite: LadDynamicFiberCrushingRate failure, EngFlexothermoexcitonicResonanceEnergy, AltmannSpatialLinkageJoint, SensorSpringTransverseDriftRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicFiberCrushingRate:
+    """``/FAIL/LAD_DYNAMIC_FIBER_CRUSHING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_FIBER_CRUSHING_RATE`` (M344): Ladevèze rate-dependent dynamic longitudinal fiber crushing, matrix pulverization, and compressive dynamic crushing failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dfcr0: float = 0.0     # initial dynamic fiber crushing threshold stress sigma_dfcr,0
+    sigma_dfcrc: float = 1.0     # critical dynamic fiber crushing stress sigma_dfcr,c
+    gamma_dfcr: float = 0.0      # dynamic fiber crushing rate sensitivity factor gamma_dfcr
+    p_dfcr: float = 1.0          # dynamic fiber crushing rate exponent p_dfcr
+    d_dfcr_max: float = 0.999    # maximum allowable dynamic fiber crushing damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoexcitonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOEXCITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_EXCITON_RES_WORK`` (M344): Engine coupled flexothermal-flexoexcitonic nanoscale exciton-polariton resonance energy and strain-gradient optoelectronic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftexr: float = 0.0        # time frequency for flexothermoexcitonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulAltmannSpatialLinkageJoint:
+    """``/ALTMANN_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/ALTMANN_SPATIAL_LINKAGE_JOINT/id`` (M344): Altmann spatial 6R non-spherical multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTransverseDriftRate:
+    """``/SENSOR/SPRING_TRANSVERSE_DRIFT_RATE`` or ``/SENSOR/SPRING_TRANS_DRIFT_RATE`` (M344): Spring element relative transverse / shear acceleration 6th rate-of-change (shear drift rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtrans_drift_max: float = 1e30 # maximum transverse drift rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
