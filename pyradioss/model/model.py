@@ -2229,6 +2229,12 @@ class Model:
         self.lagmul_wohlhart_hybrid_linkage_joints: Dict[int, Any] = {} # /WOHLHART_HYBRID_LINKAGE_JOINT, /LAGMUL/WOHLHART_HYBRID_LINKAGE_JOINT (M341)
         self.sensor_spring_bending_drop_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_BENDING_DROP_RATE (M341)
 
+        # M342 Entities
+        self.fail_ladtransversefibersplittingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_SPLITTING_RATE (M342)
+        self.eng_flexothermophotonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPHOTONIC_RESONANCE_ENERGY (M342)
+        self.lagmul_chen_linkage_joints: Dict[int, Any] = {}         # /CHEN_LINKAGE_JOINT, /LAGMUL/CHEN_LINKAGE_JOINT (M342)
+        self.sensor_spring_total_angular_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_DROP_RATE (M342)
+
 
 
 

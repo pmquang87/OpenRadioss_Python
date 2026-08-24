@@ -18464,6 +18464,61 @@ class SensorSpringBendingDropRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M342 Suite: LadTransverseFiberSplittingRate failure, EngFlexothermophotonicResonanceEnergy, ChenLinkageJoint, SensorSpringTotalAngularDropRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseFiberSplittingRate:
+    """``/FAIL/LAD_TRANSVERSE_FIBER_SPLITTING_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_FIBER_SPLITTING_RATE`` (M342): Ladevèze rate-dependent transverse fiber splitting, dynamic transverse micro-cleavage, and matrix cleavage failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tfsr0: float = 0.0     # initial transverse fiber splitting threshold stress sigma_tfsr,0
+    sigma_tfsrc: float = 1.0     # critical transverse fiber splitting stress sigma_tfsr,c
+    gamma_tfsr: float = 0.0      # transverse fiber splitting rate sensitivity factor gamma_tfsr
+    p_tfsr: float = 1.0          # transverse fiber splitting rate exponent p_tfsr
+    d_tfsr_max: float = 0.999    # maximum allowable transverse fiber splitting damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermophotonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOPHOTONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PHOTON_RES_WORK`` (M342): Engine coupled flexothermal-flexophotonic high-frequency nanoscale optical resonance energy and strain-gradient photon-polariton dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftpr: float = 0.0         # time frequency for flexothermophotonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulChenLinkageJoint:
+    """``/CHEN_LINKAGE_JOINT/id`` or ``/LAGMUL/CHEN_LINKAGE_JOINT/id`` (M342): Chen's 6R spatial large-displacement overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_e: float = 0.0 # axial joint offset distance e
+
+
+@dataclass
+class SensorSpringTotalAngularDropRate:
+    """``/SENSOR/SPRING_TOTAL_ANGULAR_DROP_RATE`` or ``/SENSOR/SPRING_TOT_ANG_DROP_RATE`` (M342): Spring element relative 3D resultant total angular acceleration 5th rate-of-change (resultant total angular drop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_ang_drop_max: float = 1e30 # maximum total angular drop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
