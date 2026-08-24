@@ -2247,6 +2247,12 @@ class Model:
         self.lagmul_altmann_spatial_linkage_joints: Dict[int, Any] = {} # /ALTMANN_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALTMANN_SPATIAL_LINKAGE_JOINT (M344)
         self.sensor_spring_transverse_drift_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_DRIFT_RATE (M344)
 
+        # M345 Entities
+        self.fail_ladtransversefibercrushingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_CRUSHING_RATE (M345)
+        self.eng_flexothermomagnonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOMAGNONIC_RESONANCE_ENERGY (M345)
+        self.lagmul_dietmaier_spatial_linkage_joints: Dict[int, Any] = {} # /DIETMAIER_SPATIAL_LINKAGE_JOINT, /LAGMUL/DIETMAIER_SPATIAL_LINKAGE_JOINT (M345)
+        self.sensor_spring_total_drift_rates: Dict[int, Any] = {}    # /SENSOR/SPRING_TOTAL_DRIFT_RATE (M345)
+
 
 
 

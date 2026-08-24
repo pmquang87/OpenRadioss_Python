@@ -18629,6 +18629,61 @@ class SensorSpringTransverseDriftRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M345 Suite: LadTransverseFiberCrushingRate failure, EngFlexothermomagnonicResonanceEnergy, DietmaierSpatialLinkageJoint, SensorSpringTotalDriftRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseFiberCrushingRate:
+    """``/FAIL/LAD_TRANSVERSE_FIBER_CRUSHING_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_FIBER_CRUSHING_RATE`` (M345): Ladevèze rate-dependent transverse fiber crushing, dynamic matrix pulverization, and transverse compressive crushing failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tfcr0: float = 0.0     # initial transverse fiber crushing threshold stress sigma_tfcr,0
+    sigma_tfcrc: float = 1.0     # critical transverse fiber crushing stress sigma_tfcr,c
+    gamma_tfcr: float = 0.0      # transverse fiber crushing rate sensitivity factor gamma_tfcr
+    p_tfcr: float = 1.0          # transverse fiber crushing rate exponent p_tfcr
+    d_tfcr_max: float = 0.999    # maximum allowable transverse fiber crushing damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermomagnonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOMAGNONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_MAGNON_RES_WORK`` (M345): Engine coupled flexothermal-flexomagnonic nanoscale spin-wave magnon polariton resonance energy and strain-gradient spintronic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftmr: float = 0.0         # time frequency for flexothermomagnonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulDietmaierSpatialLinkageJoint:
+    """``/DIETMAIER_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/DIETMAIER_SPATIAL_LINKAGE_JOINT/id`` (M345): Dietmaier spatial 6R variable-geometry overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_t: float = 0.0 # axial joint offset distance t
+
+
+@dataclass
+class SensorSpringTotalDriftRate:
+    """``/SENSOR/SPRING_TOTAL_DRIFT_RATE`` or ``/SENSOR/SPRING_TOT_DRIFT_RATE`` (M345): Spring element relative 3D resultant total linear acceleration 6th rate-of-change (resultant total linear drift rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_drift_max: float = 1e30 # maximum total drift rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
