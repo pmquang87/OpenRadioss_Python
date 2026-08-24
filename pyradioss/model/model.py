@@ -2295,6 +2295,13 @@ class Model:
         self.lagmul_bennett_spatial_linkage_joints: Dict[int, Any] = {} # /BENNETT_SPATIAL_LINKAGE_JOINT, /LAGMUL/BENNETT_SPATIAL_LINKAGE_JOINT (M352)
         self.sensor_spring_torsional_surge_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_SURGE_RATE (M352)
 
+        # M353 Entities
+        self.fail_laddynamicmatrixmicrocrackingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_MATRIX_MICROCRACKING_RATE (M353)
+        self.eng_flexothermoexcitonphononpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOEXCITONPHONONPOLARITONIC_RESONANCE_ENERGY (M353)
+        self.lagmul_myard_spatial_linkage_joints: Dict[int, Any] = {} # /MYARD_SPATIAL_LINKAGE_JOINT, /LAGMUL/MYARD_SPATIAL_LINKAGE_JOINT (M353)
+        self.sensor_spring_bending_surge_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_BENDING_SURGE_RATE (M353)
+
+
 
 
 
