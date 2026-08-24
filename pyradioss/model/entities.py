@@ -18409,6 +18409,61 @@ class SensorSpringTorsionalDropRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M341 Suite: LadDynamicFiberSplittingRate failure, EngFlexothermoelectromagnetoacousticResonanceEnergy, WohlhartHybridLinkageJoint, SensorSpringBendingDropRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicFiberSplittingRate:
+    """``/FAIL/LAD_DYNAMIC_FIBER_SPLITTING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_FIBER_SPLITTING_RATE`` (M341): Ladevèze rate-dependent dynamic longitudinal fiber splitting, matrix cleavage, and dynamic tensile fragmentation failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dfsr0: float = 0.0     # initial dynamic fiber splitting threshold stress sigma_dfsr,0
+    sigma_dfsrc: float = 1.0     # critical dynamic fiber splitting stress sigma_dfsr,c
+    gamma_dfsr: float = 0.0      # dynamic fiber splitting rate sensitivity factor gamma_dfsr
+    p_dfsr: float = 1.0          # dynamic fiber splitting rate exponent p_dfsr
+    d_dfsr_max: float = 0.999    # maximum allowable dynamic fiber splitting damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoelectromagnetoacousticResonanceEnergy:
+    """``/ENG/FLEXOTHERMOELECTROMAGNETOACOUSTIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_EMA_RES_WORK`` (M341): Engine coupled flexothermal-flexoelectro-flexomagneto-flexoacoustic full multi-field acoustic resonance energy and nanoscale strain-gradient thermo-electromagnetic-acoustic conversion dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftemmar: float = 0.0      # time frequency for flexothermoelectromagnetoacoustic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulWohlhartHybridLinkageJoint:
+    """``/WOHLHART_HYBRID_LINKAGE_JOINT/id`` or ``/LAGMUL/WOHLHART_HYBRID_LINKAGE_JOINT/id`` (M341): Wohlhart 6R spatial hybrid / line-plane overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_h: float = 0.0 # axial joint offset distance h
+
+
+@dataclass
+class SensorSpringBendingDropRate:
+    """``/SENSOR/SPRING_BENDING_DROP_RATE`` or ``/SENSOR/SPRING_BEND_DROP_RATE`` (M341): Spring element relative transverse bending angular acceleration 5th rate-of-change (bending angular drop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jbend_drop_max: float = 1e30 # maximum bending drop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 

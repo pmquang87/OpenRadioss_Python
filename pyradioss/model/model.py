@@ -2223,6 +2223,12 @@ class Model:
         self.lagmul_baker_plane_linkage_joints: Dict[int, Any] = {}  # /BAKER_PLANE_LINKAGE_JOINT, /LAGMUL/BAKER_PLANE_LINKAGE_JOINT (M340)
         self.sensor_spring_torsional_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_DROP_RATE (M340)
 
+        # M341 Entities
+        self.fail_laddynamicfibersplittingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_SPLITTING_RATE (M341)
+        self.eng_flexothermoelectromagnetoacoustic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOELECTROMAGNETOACOUSTIC_RESONANCE_ENERGY (M341)
+        self.lagmul_wohlhart_hybrid_linkage_joints: Dict[int, Any] = {} # /WOHLHART_HYBRID_LINKAGE_JOINT, /LAGMUL/WOHLHART_HYBRID_LINKAGE_JOINT (M341)
+        self.sensor_spring_bending_drop_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_BENDING_DROP_RATE (M341)
+
 
 
 
