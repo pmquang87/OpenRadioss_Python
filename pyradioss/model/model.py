@@ -2271,6 +2271,12 @@ class Model:
         self.lagmul_chen_spatial_linkage_joints: Dict[int, Any] = {} # /CHEN_SPATIAL_LINKAGE_JOINT, /LAGMUL/CHEN_SPATIAL_LINKAGE_JOINT (M348)
         self.sensor_spring_total_angular_drift_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_DRIFT_RATE (M348)
 
+        # M349 Entities
+        self.fail_ladcoupleinterlaminarshearrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_INTERLAMINAR_SHEAR_RATE (M349)
+        self.eng_flexothermophononpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPHONONPOLARITONIC_RESONANCE_ENERGY (M349)
+        self.lagmul_baker_spatial_linkage_joints: Dict[int, Any] = {} # /BAKER_SPATIAL_LINKAGE_JOINT, /LAGMUL/BAKER_SPATIAL_LINKAGE_JOINT (M349)
+        self.sensor_spring_normal_surge_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_NORMAL_SURGE_RATE (M349)
+
 
 
 

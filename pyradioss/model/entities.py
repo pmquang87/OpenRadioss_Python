@@ -18849,6 +18849,61 @@ class SensorSpringTotalAngularDriftRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M349 Suite: LadCoupleInterlaminarShearRate failure, EngFlexothermophononpolaritonicResonanceEnergy, BakerSpatialLinkageJoint, SensorSpringNormalSurgeRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleInterlaminarShearRate:
+    """``/FAIL/LAD_COUPLE_INTERLAMINAR_SHEAR_RATE`` or ``/FAIL/LADEVEZE_COUPLED_INTERLAMINAR_SHEAR_RATE`` (M349): Ladevèze rate-dependent coupled mode-II/mode-III interlaminar shear delamination, mixed-mode interface micro-cracking, and multi-axial interlaminar shear fracture failure model."""
+    mat_id: int = 0
+    title: str = ""
+    tau_cisr0: float = 0.0       # initial coupled interlaminar shear threshold stress tau_cisr,0
+    tau_cisrc: float = 1.0       # critical coupled interlaminar shear stress tau_cisr,c
+    gamma_cisr: float = 0.0      # coupled interlaminar shear rate sensitivity factor gamma_cisr
+    p_cisr: float = 1.0          # coupled interlaminar shear rate exponent p_cisr
+    d_cisr_max: float = 0.999    # maximum allowable coupled interlaminar shear damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermophononpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOPHONONPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PHONON_POLARITON_RES_WORK`` (M349): Engine coupled flexothermal-flexophononic-flexophotonic nanoscale lattice phonon-polariton hybrid resonance energy and strain-gradient elastodynamic-photothermal dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftphpr: float = 0.0       # time frequency for flexothermophononpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulBakerSpatialLinkageJoint:
+    """``/BAKER_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/BAKER_SPATIAL_LINKAGE_JOINT/id`` (M349): Baker spatial 6R variable-geometry multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_r: float = 0.0 # axial joint offset distance r
+
+
+@dataclass
+class SensorSpringNormalSurgeRate:
+    """``/SENSOR/SPRING_NORMAL_SURGE_RATE`` or ``/SENSOR/SPRING_NORM_SURGE_RATE`` (M349): Spring element relative normal / axial acceleration 7th rate-of-change (axial surge rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_surge_max: float = 1e30 # maximum normal surge rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
