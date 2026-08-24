@@ -19014,6 +19014,62 @@ class SensorSpringTotalSurgeRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M352 Suite: LadCoupleInterlaminarTensionRate failure, EngFlexothermoplasmonmagnonpolaritonicResonanceEnergy, BennettSpatialLinkageJoint, SensorSpringTorsionalSurgeRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleInterlaminarTensionRate:
+    """``/FAIL/LAD_COUPLE_INTERLAMINAR_TENSION_RATE`` or ``/FAIL/LADEVEZE_COUPLED_INTERLAMINAR_TENSION_RATE`` (M352): Ladevèze rate-dependent coupled mode-I/mode-II/mode-III interlaminar normal tension and mixed-mode delamination, interface micro-cracking, and multi-axial interlaminar opening fracture failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_citr0: float = 0.0     # initial coupled interlaminar normal tension threshold stress sigma_citr,0
+    sigma_citrc: float = 1.0     # critical coupled interlaminar normal tension stress sigma_citr,c
+    gamma_citr: float = 0.0      # coupled interlaminar tension rate sensitivity factor gamma_citr
+    p_citr: float = 1.0          # coupled interlaminar tension rate exponent p_citr
+    d_citr_max: float = 0.999    # maximum allowable coupled interlaminar normal tension damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoplasmonmagnonpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOPLASMONMAGNONPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PLASMON_MAGNON_POLARITON_RES_WORK`` (M352): Engine coupled flexothermal-flexoplasmonic-flexomagnonic nanoscale surface plasmon magnon-polariton hybrid resonance energy and strain-gradient electromagnetic-spintronic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftpmpr: float = 0.0       # time frequency for flexothermoplasmonmagnonpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulBennettSpatialLinkageJoint:
+    """``/BENNETT_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/BENNETT_SPATIAL_LINKAGE_JOINT/id`` (M352): Bennett spatial skew-symmetric multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTorsionalSurgeRate:
+    """``/SENSOR/SPRING_TORSIONAL_SURGE_RATE`` or ``/SENSOR/SPRING_TORS_SURGE_RATE`` (M352): Spring element relative torsional angular acceleration 7th rate-of-change (torsional angular surge rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jrot_surge_max: float = 1e30 # maximum torsional surge rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

@@ -2289,6 +2289,13 @@ class Model:
         self.lagmul_bricard_spatial_linkage_joints: Dict[int, Any] = {} # /BRICARD_SPATIAL_LINKAGE_JOINT, /LAGMUL/BRICARD_SPATIAL_LINKAGE_JOINT (M351)
         self.sensor_spring_total_surge_rates: Dict[int, Any] = {}     # /SENSOR/SPRING_TOTAL_SURGE_RATE (M351)
 
+        # M352 Entities
+        self.fail_ladcoupleinterlaminartensionrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_INTERLAMINAR_TENSION_RATE (M352)
+        self.eng_flexothermoplasmonmagnonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONMAGNONPOLARITONIC_RESONANCE_ENERGY (M352)
+        self.lagmul_bennett_spatial_linkage_joints: Dict[int, Any] = {} # /BENNETT_SPATIAL_LINKAGE_JOINT, /LAGMUL/BENNETT_SPATIAL_LINKAGE_JOINT (M352)
+        self.sensor_spring_torsional_surge_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_SURGE_RATE (M352)
+
+
 
 
 
