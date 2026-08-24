@@ -2283,6 +2283,13 @@ class Model:
         self.lagmul_waldron_spatial_linkage_joints: Dict[int, Any] = {} # /WALDRON_SPATIAL_LINKAGE_JOINT, /LAGMUL/WALDRON_SPATIAL_LINKAGE_JOINT (M350)
         self.sensor_spring_transverse_surge_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_SURGE_RATE (M350)
 
+        # M351 Entities
+        self.fail_ladtransverseinterlaminartensionrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_INTERLAMINAR_TENSION_RATE (M351)
+        self.eng_flexothermoplasmonexcitonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONEXCITONPOLARITONIC_RESONANCE_ENERGY (M351)
+        self.lagmul_bricard_spatial_linkage_joints: Dict[int, Any] = {} # /BRICARD_SPATIAL_LINKAGE_JOINT, /LAGMUL/BRICARD_SPATIAL_LINKAGE_JOINT (M351)
+        self.sensor_spring_total_surge_rates: Dict[int, Any] = {}     # /SENSOR/SPRING_TOTAL_SURGE_RATE (M351)
+
+
 
 
 

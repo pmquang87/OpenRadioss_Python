@@ -18959,6 +18959,62 @@ class SensorSpringTransverseSurgeRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M351 Suite: LadTransverseInterlaminarTensionRate failure, EngFlexothermoplasmonexcitonpolaritonicResonanceEnergy, BricardSpatialLinkageJoint, SensorSpringTotalSurgeRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseInterlaminarTensionRate:
+    """``/FAIL/LAD_TRANSVERSE_INTERLAMINAR_TENSION_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_INTERLAMINAR_TENSION_RATE`` (M351): Ladevèze rate-dependent transverse interlaminar normal tension delamination, transverse interface micro-cracking, and mode-I interlaminar opening fracture failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_titr0: float = 0.0     # initial transverse interlaminar normal tension threshold stress sigma_titr,0
+    sigma_titrc: float = 1.0     # critical transverse interlaminar normal tension stress sigma_titr,c
+    gamma_titr: float = 0.0      # transverse interlaminar tension rate sensitivity factor gamma_titr
+    p_titr: float = 1.0          # transverse interlaminar tension rate exponent p_titr
+    d_titr_max: float = 0.999    # maximum allowable transverse interlaminar normal tension damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoplasmonexcitonpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOPLASMONEXCITONPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PLASMON_EXCITON_POLARITON_RES_WORK`` (M351): Engine coupled flexothermal-flexoplasmonic-flexoexcitonic nanoscale surface plasmon exciton-polariton hybrid resonance energy and strain-gradient electromagnetic-optoelectronic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftpepr: float = 0.0       # time frequency for flexothermoplasmonexcitonpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulBricardSpatialLinkageJoint:
+    """``/BRICARD_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/BRICARD_SPATIAL_LINKAGE_JOINT/id`` (M351): Bricard spatial 6R triaxial multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTotalSurgeRate:
+    """``/SENSOR/SPRING_TOTAL_SURGE_RATE`` or ``/SENSOR/SPRING_TOT_SURGE_RATE`` (M351): Spring element relative 3D resultant total linear acceleration 7th rate-of-change (resultant total linear surge rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_surge_max: float = 1e30 # maximum total surge rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

@@ -61860,6 +61860,160 @@ def read_sensor_spring_transverse_surge_rate(block: KeywordBlock, model: Model, 
     ))
 
 
+# ============================================================================
+# M351 Suite: LadTransverseInterlaminarTensionRate failure, EngFlexothermoplasmonexcitonpolaritonicResonanceEnergy, BricardSpatialLinkageJoint, SensorSpringTotalSurgeRate
+# ============================================================================
+
+def read_fail_lad_transverse_interlaminar_tension_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_TRANSVERSE_INTERLAMINAR_TENSION_RATE/mat_ID`` or ``/FAIL/LADEVEZE_TRANSVERSE_INTERLAMINAR_TENSION_RATE`` (M351): Ladevèze rate-dependent transverse interlaminar normal tension delamination, transverse interface micro-cracking, and mode-I interlaminar opening fracture failure model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_TRANSVERSE_INTERLAMINAR_TENSION_RATE/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_TRANSVERSE_INTERLAMINAR_TENSION_RATE_1")
+        sigma_titr0 = _fval(c1[0], 0.0) if len(c1) > 0 and c1[0].strip() else 0.0
+        sigma_titrc = _fval(c1[1], 1.0) if len(c1) > 1 and c1[1].strip() else 1.0
+        gamma_titr = _fval(c1[2], 0.0) if len(c1) > 2 and c1[2].strip() else 0.0
+        p_titr = _fval(c1[3], 1.0) if len(c1) > 3 and c1[3].strip() else 1.0
+        d_titr_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        c2 = cards[1].cut("FAIL_LAD_TRANSVERSE_INTERLAMINAR_TENSION_RATE_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        sigma_titr0 = float(t1[0].rstrip(',')) if len(t1) > 0 and t1[0].rstrip(',') else 0.0
+        sigma_titrc = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 1.0
+        gamma_titr = float(t1[2].rstrip(',')) if len(t1) > 2 and t1[2].rstrip(',') else 0.0
+        p_titr = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 1.0
+        d_titr_max = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.999
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "sigma_titr0": sigma_titr0, "sigma_titrc": sigma_titrc, "gamma_titr": gamma_titr,
+        "p_titr": p_titr, "d_titr_max": d_titr_max,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadTransverseInterlaminarTensionRate, FailureModel
+    model.fail_ladtransverseinterlaminartensionrates[mat_id] = FailLadTransverseInterlaminarTensionRate(
+        mat_id=mat_id, title=title, sigma_titr0=sigma_titr0, sigma_titrc=sigma_titrc,
+        gamma_titr=gamma_titr, p_titr=p_titr, d_titr_max=d_titr_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_TRANSVERSE_INTERLAMINAR_TENSION_RATE", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_flexothermoplasmonexcitonpolaritonic_resonance_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/FLEXOTHERMOPLASMONEXCITONPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PLASMON_EXCITON_POLARITON_RES_WORK`` (M351): Engine coupled flexothermal-flexoplasmonic-flexoexcitonic nanoscale surface plasmon exciton-polariton hybrid resonance energy and strain-gradient electromagnetic-optoelectronic dissipation tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/FLEXOTHERMOPLASMONEXCITONPOLARITONIC_RESONANCE_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_ftpepr, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_FLEXOTHERMOPLASMONEXCITONPOLARITONIC_RESONANCE_ENERGY_1")
+        dt_ftpepr = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_ftpepr = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngFlexothermoplasmonexcitonpolaritonicResonanceEnergy
+    r_id = block.user_id or (len(model.eng_flexothermoplasmonexcitonpolaritonic_resonance_energies) + 1)
+    model.eng_flexothermoplasmonexcitonpolaritonic_resonance_energies[r_id] = EngFlexothermoplasmonexcitonpolaritonicResonanceEnergy(
+        id=r_id, title=title, dt_ftpepr=dt_ftpepr, sens_id=sens_id
+    )
+
+
+def read_lagmul_bricard_spatial_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/BRICARD_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/BRICARD_SPATIAL_LINKAGE_JOINT/id`` (M351): Bricard spatial 6R triaxial multi-loop overconstrained kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/BRICARD_SPATIAL_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    link_len_a, link_len_b, twist_angle_alpha, offset_distance_s = 0.0, 0.0, 0.0, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("BRICARD_SPATIAL_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("BRICARD_SPATIAL_LINKAGE_JOINT_2")
+            link_len_a = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            link_len_b = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            twist_angle_alpha = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+            offset_distance_s = _fval(f2[3], 0.0) if len(f2) > 3 and f2[3].strip() else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            link_len_a = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            link_len_b = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            twist_angle_alpha = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            offset_distance_s = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+
+    from ..model.entities import LagmulBricardSpatialLinkageJoint
+    model.lagmul_bricard_spatial_linkage_joints[block.user_id] = LagmulBricardSpatialLinkageJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        link_len_a=link_len_a, link_len_b=link_len_b,
+        twist_angle_alpha=twist_angle_alpha, offset_distance_s=offset_distance_s
+    )
+
+
+def read_sensor_spring_total_surge_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TOTAL_SURGE_RATE`` or ``/SENSOR/SPRING_TOT_SURGE_RATE`` (M351): Spring element relative 3D resultant total linear acceleration 7th rate-of-change (resultant total linear surge rate) magnitude threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TOTAL_SURGE_RATE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, jtot_surge_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_TOTAL_SURGE_RATE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        jtot_surge_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        jtot_surge_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTotalSurgeRate, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_total_surge_rates) + 1)
+    sstsr = SensorSpringTotalSurgeRate(
+        id=s_id, title=title, spring_id=spring_id,
+        jtot_surge_max=jtot_surge_max, t_delay=t_delay
+    )
+    model.sensor_spring_total_surge_rates[s_id] = sstsr
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_TOTAL_SURGE_RATE", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -66429,6 +66583,31 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_RATE_SURGE_TRANS": read_sensor_spring_transverse_surge_rate,
     "SENSOR_TRANSVERSE_SURGE_RATE_SPRING": read_sensor_spring_transverse_surge_rate,
     "SENSOR_SPRING_SURGE_TRANS": read_sensor_spring_transverse_surge_rate,
+    # --- M351: LadTransverseInterlaminarTensionRate Failure Model, EngFlexothermoplasmonexcitonpolaritonicResonanceEnergy, BricardSpatialLinkageJoint, and Spring Total Surge Rate Sensor ---
+    "FAIL_LAD_TRANSVERSE_INTERLAMINAR_TENSION_RATE": read_fail_lad_transverse_interlaminar_tension_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_INTERLAMINAR_TENSION_RATE": read_fail_lad_transverse_interlaminar_tension_rate,
+    "FAIL_LAD_TITR": read_fail_lad_transverse_interlaminar_tension_rate,
+    "FAIL_LAD_TITR_MODEL": read_fail_lad_transverse_interlaminar_tension_rate,
+    "FAIL_LAD_TITR_LAW": read_fail_lad_transverse_interlaminar_tension_rate,
+    "FAIL_LADEVEZE_RATE_DEPENDENT_TRANSVERSE_INTERLAMINAR_TENSION": read_fail_lad_transverse_interlaminar_tension_rate,
+    "ENG_FLEXOTHERMOPLASMONEXCITONPOLARITONIC_RESONANCE_ENERGY": read_eng_flexothermoplasmonexcitonpolaritonic_resonance_energy,
+    "ENG_FLEXOTHERM_PLASMON_EXCITON_POLARITON_RES_WORK": read_eng_flexothermoplasmonexcitonpolaritonic_resonance_energy,
+    "ENG_EFLEXOTHERMOPLASMONEXCITONPOLARITONICRESONANCE": read_eng_flexothermoplasmonexcitonpolaritonic_resonance_energy,
+    "ENG_FLEXOTHERMOPLASMONEXCITONPOLARITONIC_RESONANCE_DISSIPATION": read_eng_flexothermoplasmonexcitonpolaritonic_resonance_energy,
+    "ENG_EM_FLEXOTHERMOPLASMONEXCITONPOLARITONIC_RESONANCE": read_eng_flexothermoplasmonexcitonpolaritonic_resonance_energy,
+    "LAGMUL_BRICARD_SPATIAL_LINKAGE_JOINT": read_lagmul_bricard_spatial_linkage_joint,
+    "BRICARD_SPATIAL_LINKAGE_JOINT": read_lagmul_bricard_spatial_linkage_joint,
+    "LAGMUL_BRICARD_SPATIAL_LINKAGE": read_lagmul_bricard_spatial_linkage_joint,
+    "BRICARD_SPATIAL_LINKAGE": read_lagmul_bricard_spatial_linkage_joint,
+    "BRICARD_SPATIAL_MULTI_LOOP_MECHANISM": read_lagmul_bricard_spatial_linkage_joint,
+    "BRICARD_SPATIAL_TRIAXIAL_MECHANISM": read_lagmul_bricard_spatial_linkage_joint,
+    "BRICARD_SPATIAL_6R_MECHANISM": read_lagmul_bricard_spatial_linkage_joint,
+    "BRICARD_SPATIAL_OVERCONSTRAINED_MECHANISM": read_lagmul_bricard_spatial_linkage_joint,
+    "SENSOR_SPRING_TOTAL_SURGE_RATE": read_sensor_spring_total_surge_rate,
+    "SENSOR_SPRING_TOT_SURGE_RATE": read_sensor_spring_total_surge_rate,
+    "SENSOR_SPRING_RATE_SURGE_TOT": read_sensor_spring_total_surge_rate,
+    "SENSOR_TOTAL_SURGE_RATE_SPRING": read_sensor_spring_total_surge_rate,
+    "SENSOR_SPRING_SURGE_TOT": read_sensor_spring_total_surge_rate,
 }
 
 
