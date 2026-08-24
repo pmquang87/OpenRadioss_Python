@@ -18794,6 +18794,61 @@ class SensorSpringBendingDriftRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M348 Suite: LadTransverseInterlaminarShearRate failure, EngFlexothermoexcitonpolaritonicResonanceEnergy, ChenSpatialLinkageJoint, SensorSpringTotalAngularDriftRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseInterlaminarShearRate:
+    """``/FAIL/LAD_TRANSVERSE_INTERLAMINAR_SHEAR_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_INTERLAMINAR_SHEAR_RATE`` (M348): Ladevèze rate-dependent transverse interlaminar shear delamination, transverse interface micro-cracking, and mode-III interlaminar fracture failure model."""
+    mat_id: int = 0
+    title: str = ""
+    tau_tisr0: float = 0.0       # initial transverse interlaminar shear threshold stress tau_tisr,0
+    tau_tisrc: float = 1.0       # critical transverse interlaminar shear stress tau_tisr,c
+    gamma_tisr: float = 0.0      # transverse interlaminar shear rate sensitivity factor gamma_tisr
+    p_tisr: float = 1.0          # transverse interlaminar shear rate exponent p_tisr
+    d_tisr_max: float = 0.999    # maximum allowable transverse interlaminar shear damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoexcitonpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOEXCITONPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_EXCITON_POLARITON_RES_WORK`` (M348): Engine coupled flexothermal-flexoexcitonic-flexophotonic nanoscale exciton-polariton hybrid resonance energy and strain-gradient optoelectronic-photothermal dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftepr: float = 0.0        # time frequency for flexothermoexcitonpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulChenSpatialLinkageJoint:
+    """``/CHEN_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/CHEN_SPATIAL_LINKAGE_JOINT/id`` (M348): Chen spatial 6R large-displacement multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_w: float = 0.0 # axial joint offset distance w
+
+
+@dataclass
+class SensorSpringTotalAngularDriftRate:
+    """``/SENSOR/SPRING_TOTAL_ANGULAR_DRIFT_RATE`` or ``/SENSOR/SPRING_TOT_ANG_DRIFT_RATE`` (M348): Spring element relative 3D resultant total angular acceleration 6th rate-of-change (resultant total angular drift rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_ang_drift_max: float = 1e30 # maximum total angular drift rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
 
 
 
