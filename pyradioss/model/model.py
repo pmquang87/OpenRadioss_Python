@@ -2397,6 +2397,13 @@ class Model:
         self.lagmul_baker_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /BAKER_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/BAKER_HYBRID_SPATIAL_LINKAGE_JOINT (M369)
         self.sensor_spring_total_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_SNAP_RATE (M369)
 
+        # M370 Entities
+        self.fail_ladcouplefibercompressioncrushingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FIBER_COMPRESSION_CRUSHING_RATE (M370)
+        self.eng_flexomagnetophononicmagnonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICMAGNONIC_RESONANCE_ENERGY (M370)
+        self.lagmul_waldron_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /WALDRON_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/WALDRON_HYBRID_SPATIAL_LINKAGE_JOINT (M370)
+        self.sensor_spring_torsional_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_SNAP_RATE (M370)
+
+
 
 
 

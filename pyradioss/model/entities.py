@@ -16978,6 +16978,14 @@ class SensorSpringTorsionalSnapRate:
     jtors_crackle_max: float = 1e30 # maximum torsional angular acceleration crackle rate threshold
     t_delay: float = 0.0         # activation delay time
 
+    @property
+    def jtors_snp_max(self) -> float:
+        return self.jtors_crackle_max
+
+    @jtors_snp_max.setter
+    def jtors_snp_max(self, val: float) -> None:
+        self.jtors_crackle_max = val
+
 
 # ============================================================================
 # M315 Suite: LadTransverseCompressionRate failure, EngThermophononicEnergy, FourBarDoubleCrankJoint, SensorSpringBendingSnapRate
@@ -17032,6 +17040,15 @@ class SensorSpringBendingSnapRate:
     spring_id: int = 0           # spring element ID to monitor
     jbend_crackle_max: float = 1e30 # maximum bending angular acceleration crackle rate threshold
     t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jbend_snp_max(self) -> float:
+        return self.jbend_crackle_max
+
+    @jbend_snp_max.setter
+    def jbend_snp_max(self, val: float) -> None:
+        self.jbend_crackle_max = val
+
 
 
 # ============================================================================
@@ -20137,6 +20154,70 @@ class SensorSpringTotalSnapRate:
     @jtot_crackle_max.setter
     def jtot_crackle_max(self, val: float) -> None:
         self.jtot_snp_max = val
+
+
+# ============================================================================
+# M370 Suite: LadCoupleFiberCompressionCrushingRate failure, EngFlexomagnetophononicmagnonicResonanceEnergy, WaldronHybridSpatialLinkageJoint, SensorSpringTorsionalSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleFiberCompressionCrushingRate:
+    """``/FAIL/LAD_COUPLE_FIBER_COMPRESSION_CRUSHING_RATE`` or ``/FAIL/LADEVEZE_COUPLED_FIBER_COMPRESSION_CRUSHING_RATE`` (M370): Ladevèze rate-dependent coupled multi-axial fiber compressive damage accumulation, dynamic microbuckling band propagation, and coupled fiber crushing failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cfccr0: float = 0.0    # initial coupled dynamic fiber crushing threshold stress sigma_cfccr,0
+    sigma_cfccrc: float = 1.0    # critical dynamic coupled fiber crushing stress sigma_cfccr,c
+    gamma_cfccr: float = 0.0     # coupled dynamic fiber crushing rate sensitivity factor gamma_cfccr
+    p_cfccr: float = 1.0         # coupled dynamic fiber crushing rate exponent p_cfccr
+    d_cfccr_max: float = 0.999   # maximum allowable coupled fiber compressive damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetophononicmagnonicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOPHONONICMAGNONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_PHONON_MAGNON_RES_WORK`` (M370): Engine coupled flexomagnetic-flexophononic-flexomagnonic nanoscale acoustic phonon magnon-polariton hybrid resonance energy and strain-gradient elastomagnetic-magnetoelastic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmpmr: float = 0.0        # time frequency for flexomagnetophononicmagnonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulWaldronHybridSpatialLinkageJoint:
+    """``/WALDRON_HYBRID_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/WALDRON_HYBRID_SPATIAL_LINKAGE_JOINT/id`` (M370): Waldron hybrid spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTorsionalSnapRate:
+    """``/SENSOR/SPRING_TORSIONAL_SNAP_RATE`` or ``/SENSOR/SPRING_TORS_SNAP_RATE`` (M370): Spring element relative torsional angular acceleration 10th rate-of-change (torsional angular snap rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtors_snp_max: float = 1e30  # maximum torsional angular snap rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jtors_crackle_max(self) -> float:
+        return self.jtors_snp_max
+
+    @jtors_crackle_max.setter
+    def jtors_crackle_max(self, val: float) -> None:
+        self.jtors_snp_max = val
+
 
 
 
