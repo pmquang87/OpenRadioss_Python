@@ -17088,6 +17088,14 @@ class SensorSpringNormalSnapRate:
     jnorm_crackle_max: float = 1e30 # maximum normal acceleration crackle rate threshold
     t_delay: float = 0.0         # activation delay time
 
+    @property
+    def jnorm_snp_max(self) -> float:
+        return self.jnorm_crackle_max
+
+    @jnorm_snp_max.setter
+    def jnorm_snp_max(self, val: float) -> None:
+        self.jnorm_crackle_max = val
+
 
 # ============================================================================
 # M317 Suite: LadInterfacialDelaminationRate failure, EngThermomagneticGeneratorEnergy, SliderRockerInversionJoint, SensorSpringTransverseSnapRate
@@ -17143,6 +17151,14 @@ class SensorSpringTransverseSnapRate:
     jtrans_crackle_max: float = 1e30 # maximum shear acceleration crackle rate threshold
     t_delay: float = 0.0         # activation delay time
 
+    @property
+    def jtrans_snp_max(self) -> float:
+        return self.jtrans_crackle_max
+
+    @jtrans_snp_max.setter
+    def jtrans_snp_max(self, val: float) -> None:
+        self.jtrans_crackle_max = val
+
 
 # ============================================================================
 # M318 Suite: LadTransverseShearInteractionRate failure, EngMagnetorheologicalEnergy, ScotchYokeMechanismJoint, SensorSpringTotalSnapRate
@@ -17197,6 +17213,15 @@ class SensorSpringTotalSnapRate:
     spring_id: int = 0           # spring element ID to monitor
     jtot_crackle_max: float = 1e30 # maximum total combined acceleration crackle rate threshold
     t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jtot_snp_max(self) -> float:
+        return self.jtot_crackle_max
+
+    @jtot_snp_max.setter
+    def jtot_snp_max(self, val: float) -> None:
+        self.jtot_crackle_max = val
+
 
 
 # ============================================================================
@@ -19979,6 +20004,14 @@ class SensorSpringNormalSnapRate:
     jnorm_snp_max: float = 1e30  # maximum normal snap rate threshold
     t_delay: float = 0.0         # activation delay time
 
+    @property
+    def jnorm_crackle_max(self) -> float:
+        return self.jnorm_snp_max
+
+    @jnorm_crackle_max.setter
+    def jnorm_crackle_max(self, val: float) -> None:
+        self.jnorm_snp_max = val
+
 
 # ============================================================================
 # M368 Suite: LadDynamicFiberCompressionCrushingRate failure, EngFlexomagnetoplasmonicpolaritonicResonanceEnergy, StevensSpatialLinkageJoint, SensorSpringTransverseSnapRate
@@ -20034,6 +20067,14 @@ class SensorSpringTransverseSnapRate:
     jtrans_snp_max: float = 1e30 # maximum transverse snap rate threshold
     t_delay: float = 0.0         # activation delay time
 
+    @property
+    def jtrans_crackle_max(self) -> float:
+        return self.jtrans_snp_max
+
+    @jtrans_crackle_max.setter
+    def jtrans_crackle_max(self, val: float) -> None:
+        self.jtrans_snp_max = val
+
 
 # ============================================================================
 # M369 Suite: LadTransverseFiberCompressionCrushingRate failure, EngFlexomagnetophononicexcitonicResonanceEnergy, BakerHybridSpatialLinkageJoint, SensorSpringTotalSnapRate
@@ -20088,6 +20129,15 @@ class SensorSpringTotalSnapRate:
     spring_id: int = 0           # spring element ID to monitor
     jtot_snp_max: float = 1e30   # maximum resultant total linear snap rate threshold
     t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jtot_crackle_max(self) -> float:
+        return self.jtot_snp_max
+
+    @jtot_crackle_max.setter
+    def jtot_crackle_max(self, val: float) -> None:
+        self.jtot_snp_max = val
+
 
 
 
