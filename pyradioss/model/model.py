@@ -2349,6 +2349,13 @@ class Model:
         self.lagmul_waldron_spatial_linkage_joints: Dict[int, Any] = {} # /WALDRON_SPATIAL_LINKAGE_JOINT, /LAGMUL/WALDRON_SPATIAL_LINKAGE_JOINT (M361)
         self.sensor_spring_normal_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_CRACKLE_RATE (M361)
 
+        # M362 Entities
+        self.fail_laddynamicmatrixsheardegradationrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_MATRIX_SHEAR_DEGRADATION_RATE (M362)
+        self.eng_flexomagnetophononic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONIC_RESONANCE_ENERGY (M362)
+        self.lagmul_hunt_spatial_linkage_joints: Dict[int, Any] = {} # /HUNT_SPATIAL_LINKAGE_JOINT, /LAGMUL/HUNT_SPATIAL_LINKAGE_JOINT (M362)
+        self.sensor_spring_transverse_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_CRACKLE_RATE (M362)
+
+
 
 
 

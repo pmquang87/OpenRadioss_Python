@@ -19564,6 +19564,62 @@ class SensorSpringNormalCrackleRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M362 Suite: LadDynamicMatrixShearDegradationRate failure, EngFlexomagnetophononicResonanceEnergy, HuntSpatialLinkageJoint, SensorSpringTransverseCrackleRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicMatrixShearDegradationRate:
+    """``/FAIL/LAD_DYNAMIC_MATRIX_SHEAR_DEGRADATION_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_MATRIX_SHEAR_DEGRADATION_RATE`` (M362): Ladevèze rate-dependent dynamic in-plane matrix shear damage evolution, nonlinear inelastic shear strain accumulation, and shear degradation failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dmsdr0: float = 0.0    # initial matrix shear degradation threshold stress sigma_dmsdr,0
+    sigma_dmsdrc: float = 1.0    # critical dynamic shear degradation stress sigma_dmsdr,c
+    gamma_dmsdr: float = 0.0     # dynamic matrix shear degradation rate sensitivity factor gamma_dmsdr
+    p_dmsdr: float = 1.0         # dynamic matrix shear degradation rate exponent p_dmsdr
+    d_dmsdr_max: float = 0.999   # maximum allowable in-plane shear damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetophononicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOPHONONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_PHONON_RES_WORK`` (M362): Engine coupled flexomagnetic-flexophononic nanoscale acoustic phonon-magnon polariton resonance energy and strain-gradient magnetoelastic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmpr: float = 0.0         # time frequency for flexomagnetophononic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulHuntSpatialLinkageJoint:
+    """``/HUNT_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/HUNT_SPATIAL_LINKAGE_JOINT/id`` (M362): Hunt spatial 6R special-symmetric multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTransverseCrackleRate:
+    """``/SENSOR/SPRING_TRANSVERSE_CRACKLE_RATE`` or ``/SENSOR/SPRING_TRANS_CRACKLE_RATE`` (M362): Spring element relative transverse / shear acceleration 9th rate-of-change (shear crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtrans_crk_max: float = 1e30 # maximum transverse crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 
