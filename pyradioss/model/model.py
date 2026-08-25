@@ -2379,6 +2379,13 @@ class Model:
         self.lagmul_pfurner_spatial_linkage_joints: Dict[int, Any] = {} # /PFURNER_SPATIAL_LINKAGE_JOINT, /LAGMUL/PFURNER_SPATIAL_LINKAGE_JOINT (M366)
         self.sensor_spring_total_angular_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_CRACKLE_RATE (M366)
 
+        # M367 Entities
+        self.fail_ladcouplefibertensionrupturerates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FIBER_TENSION_RUPTURE_RATE (M367)
+        self.eng_flexomagnetoplasmonicmagnon_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICMAGNON_RESONANCE_ENERGY (M367)
+        self.lagmul_phillips_spatial_linkage_joints: Dict[int, Any] = {} # /PHILLIPS_SPATIAL_LINKAGE_JOINT, /LAGMUL/PHILLIPS_SPATIAL_LINKAGE_JOINT (M367)
+        self.sensor_spring_normal_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_SNAP_RATE (M367)
+
+
 
 
 
