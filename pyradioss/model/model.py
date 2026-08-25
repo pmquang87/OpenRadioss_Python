@@ -2367,6 +2367,13 @@ class Model:
         self.lagmul_wunderlich_spatial_linkage_joints: Dict[int, Any] = {} # /WUNDERLICH_SPATIAL_LINKAGE_JOINT, /LAGMUL/WUNDERLICH_SPATIAL_LINKAGE_JOINT (M364)
         self.sensor_spring_torsional_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_CRACKLE_RATE (M364)
 
+        # M365 Entities
+        self.fail_laddynamicfibertensionrupturerates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_TENSION_RUPTURE_RATE (M365)
+        self.eng_flexomagnetoplasmonicphonon_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICPHONON_RESONANCE_ENERGY (M365)
+        self.lagmul_konnok_spatial_linkage_joints: Dict[int, Any] = {} # /KONNOK_SPATIAL_LINKAGE_JOINT, /LAGMUL/KONNOK_SPATIAL_LINKAGE_JOINT (M365)
+        self.sensor_spring_bending_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_CRACKLE_RATE (M365)
+
+
 
 
 
