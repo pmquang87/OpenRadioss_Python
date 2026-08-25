@@ -19332,6 +19332,13 @@ class LagmulWohlhartSpatialLinkageJoint:
     link_len_b: float = 0.0      # length of secondary spatial link b
     twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
     offset_distance_s: float = 0.0 # axial joint offset distance s
+    offset_distance_u: float = 0.0 # compatibility alias
+
+    def __post_init__(self):
+        if self.offset_distance_u != 0.0 and self.offset_distance_s == 0.0:
+            self.offset_distance_s = self.offset_distance_u
+        elif self.offset_distance_s != 0.0 and self.offset_distance_u == 0.0:
+            self.offset_distance_u = self.offset_distance_s
 
 
 @dataclass
@@ -19442,6 +19449,13 @@ class LagmulBakerSpatialLinkageJoint:
     link_len_b: float = 0.0      # length of secondary spatial link b
     twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
     offset_distance_s: float = 0.0 # axial joint offset distance s
+    offset_distance_r: float = 0.0 # compatibility alias
+
+    def __post_init__(self):
+        if self.offset_distance_r != 0.0 and self.offset_distance_s == 0.0:
+            self.offset_distance_s = self.offset_distance_r
+        elif self.offset_distance_s != 0.0 and self.offset_distance_r == 0.0:
+            self.offset_distance_r = self.offset_distance_s
 
 
 @dataclass
@@ -19497,6 +19511,14 @@ class LagmulDietmaierSpatialLinkageJoint:
     link_len_b: float = 0.0      # length of secondary spatial link b
     twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
     offset_distance_s: float = 0.0 # axial joint offset distance s
+    offset_distance_t: float = 0.0 # compatibility alias
+
+    def __post_init__(self):
+        if self.offset_distance_t != 0.0 and self.offset_distance_s == 0.0:
+            self.offset_distance_s = self.offset_distance_t
+        elif self.offset_distance_s != 0.0 and self.offset_distance_t == 0.0:
+            self.offset_distance_t = self.offset_distance_s
+
 
 
 @dataclass
@@ -19562,6 +19584,13 @@ class SensorSpringNormalCrackleRate:
     spring_id: int = 0           # spring element ID to monitor
     jnorm_crk_max: float = 1e30  # maximum normal crackle rate threshold
     t_delay: float = 0.0         # activation delay time
+    jnorm_pop_max: float = 1e30  # compatibility alias
+
+    def __post_init__(self):
+        if self.jnorm_pop_max != 1e30 and self.jnorm_crk_max == 1e30:
+            self.jnorm_crk_max = self.jnorm_pop_max
+        elif self.jnorm_crk_max != 1e30 and self.jnorm_pop_max == 1e30:
+            self.jnorm_pop_max = self.jnorm_crk_max
 
 
 # ============================================================================
@@ -19607,6 +19636,13 @@ class LagmulHuntSpatialLinkageJoint:
     link_len_b: float = 0.0      # length of secondary spatial link b
     twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
     offset_distance_s: float = 0.0 # axial joint offset distance s
+    offset_distance_v: float = 0.0 # compatibility alias
+
+    def __post_init__(self):
+        if self.offset_distance_v != 0.0 and self.offset_distance_s == 0.0:
+            self.offset_distance_s = self.offset_distance_v
+        elif self.offset_distance_s != 0.0 and self.offset_distance_v == 0.0:
+            self.offset_distance_v = self.offset_distance_s
 
 
 @dataclass
@@ -19617,6 +19653,13 @@ class SensorSpringTransverseCrackleRate:
     spring_id: int = 0           # spring element ID to monitor
     jtrans_crk_max: float = 1e30 # maximum transverse crackle rate threshold
     t_delay: float = 0.0         # activation delay time
+    jtrans_pop_max: float = 1e30 # compatibility alias
+
+    def __post_init__(self):
+        if self.jtrans_pop_max != 1e30 and self.jtrans_crk_max == 1e30:
+            self.jtrans_crk_max = self.jtrans_pop_max
+        elif self.jtrans_crk_max != 1e30 and self.jtrans_pop_max == 1e30:
+            self.jtrans_pop_max = self.jtrans_crk_max
 
 
 # ============================================================================
@@ -19662,6 +19705,13 @@ class LagmulChenSpatialLinkageJoint:
     link_len_b: float = 0.0      # length of secondary spatial link b
     twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
     offset_distance_s: float = 0.0 # axial joint offset distance s
+    offset_distance_w: float = 0.0 # compatibility alias
+
+    def __post_init__(self):
+        if self.offset_distance_w != 0.0 and self.offset_distance_s == 0.0:
+            self.offset_distance_s = self.offset_distance_w
+        elif self.offset_distance_s != 0.0 and self.offset_distance_w == 0.0:
+            self.offset_distance_w = self.offset_distance_s
 
 
 @dataclass
@@ -19672,6 +19722,13 @@ class SensorSpringTotalCrackleRate:
     spring_id: int = 0           # spring element ID to monitor
     jtot_crk_max: float = 1e30   # maximum resultant total linear crackle rate threshold
     t_delay: float = 0.0         # activation delay time
+    jtot_pop_max: float = 1e30   # compatibility alias
+
+    def __post_init__(self):
+        if self.jtot_pop_max != 1e30 and self.jtot_crk_max == 1e30:
+            self.jtot_crk_max = self.jtot_pop_max
+        elif self.jtot_crk_max != 1e30 and self.jtot_pop_max == 1e30:
+            self.jtot_pop_max = self.jtot_crk_max
 
 
 # ============================================================================
@@ -19727,6 +19784,13 @@ class SensorSpringTorsionalCrackleRate:
     spring_id: int = 0           # spring element ID to monitor
     jtors_crk_max: float = 1e30  # maximum torsional crackle rate threshold
     t_delay: float = 0.0         # activation delay time
+    jtors_pop_max: float = 1e30  # compatibility alias
+
+    def __post_init__(self):
+        if self.jtors_pop_max != 1e30 and self.jtors_crk_max == 1e30:
+            self.jtors_crk_max = self.jtors_pop_max
+        elif self.jtors_crk_max != 1e30 and self.jtors_pop_max == 1e30:
+            self.jtors_pop_max = self.jtors_crk_max
 
 
 # ============================================================================
@@ -19782,6 +19846,13 @@ class SensorSpringBendingCrackleRate:
     spring_id: int = 0           # spring element ID to monitor
     jbend_crk_max: float = 1e30  # maximum bending crackle rate threshold
     t_delay: float = 0.0         # activation delay time
+    jbend_pop_max: float = 1e30  # compatibility alias
+
+    def __post_init__(self):
+        if self.jbend_pop_max != 1e30 and self.jbend_crk_max == 1e30:
+            self.jbend_crk_max = self.jbend_pop_max
+        elif self.jbend_crk_max != 1e30 and self.jbend_pop_max == 1e30:
+            self.jbend_pop_max = self.jbend_crk_max
 
 
 # ============================================================================
@@ -19837,6 +19908,22 @@ class SensorSpringTotalAngularCrackleRate:
     spring_id: int = 0           # spring element ID to monitor
     jtot_ang_crk_max: float = 1e30 # maximum resultant total angular crackle rate threshold
     t_delay: float = 0.0         # activation delay time
+    jtot_ang_pop_max: float = 1e30 # compatibility alias
+    jang_pop_max: float = 1e30   # compatibility alias
+
+    def __post_init__(self):
+        val = 1e30
+        for candidate in (self.jtot_ang_pop_max, self.jang_pop_max):
+            if candidate != 1e30:
+                val = candidate
+                break
+        if val != 1e30 and self.jtot_ang_crk_max == 1e30:
+            self.jtot_ang_crk_max = val
+        elif self.jtot_ang_crk_max != 1e30:
+            val = self.jtot_ang_crk_max
+        self.jtot_ang_pop_max = val
+        self.jang_pop_max = val
+
 
 
 
