@@ -2373,6 +2373,13 @@ class Model:
         self.lagmul_konnok_spatial_linkage_joints: Dict[int, Any] = {} # /KONNOK_SPATIAL_LINKAGE_JOINT, /LAGMUL/KONNOK_SPATIAL_LINKAGE_JOINT (M365)
         self.sensor_spring_bending_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_CRACKLE_RATE (M365)
 
+        # M366 Entities
+        self.fail_ladtransversefibertensionrupturerates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_TENSION_RUPTURE_RATE (M366)
+        self.eng_flexomagnetoplasmonicexciton_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICEXCITON_RESONANCE_ENERGY (M366)
+        self.lagmul_pfurner_spatial_linkage_joints: Dict[int, Any] = {} # /PFURNER_SPATIAL_LINKAGE_JOINT, /LAGMUL/PFURNER_SPATIAL_LINKAGE_JOINT (M366)
+        self.sensor_spring_total_angular_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_CRACKLE_RATE (M366)
+
+
 
 
 
