@@ -2307,6 +2307,13 @@ class Model:
         self.lagmul_goldberg_spatial_linkage_joints: Dict[int, Any] = {} # /GOLDBERG_SPATIAL_LINKAGE_JOINT, /LAGMUL/GOLDBERG_SPATIAL_LINKAGE_JOINT (M354)
         self.sensor_spring_total_angular_surge_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_SURGE_RATE (M354)
 
+        # M355 Entities
+        self.fail_ladcouplematrixmicrocrackingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_MATRIX_MICROCRACKING_RATE (M355)
+        self.eng_flexothermophononmagnonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPHONONMAGNONPOLARITONIC_RESONANCE_ENERGY (M355)
+        self.lagmul_sarrus_spatial_linkage_joints: Dict[int, Any] = {} # /SARRUS_SPATIAL_LINKAGE_JOINT, /LAGMUL/SARRUS_SPATIAL_LINKAGE_JOINT (M355)
+        self.sensor_spring_normal_pop_rates: Dict[int, Any] = {}     # /SENSOR/SPRING_NORMAL_POP_RATE (M355)
+
+
 
 
 

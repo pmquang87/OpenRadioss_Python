@@ -19179,6 +19179,62 @@ class SensorSpringTotalAngularSurgeRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M355 Suite: LadCoupleMatrixMicrocrackingRate failure, EngFlexothermophononmagnonpolaritonicResonanceEnergy, SarrusSpatialLinkageJoint, SensorSpringNormalPopRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleMatrixMicrocrackingRate:
+    """``/FAIL/LAD_COUPLE_MATRIX_MICROCRACKING_RATE`` or ``/FAIL/LADEVEZE_COUPLED_MATRIX_MICROCRACKING_RATE`` (M355): Ladevèze rate-dependent coupled transverse matrix micro-cracking, multi-axial diffuse damage accumulation, and combined matrix-ply degradation failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cmmr0: float = 0.0     # initial transverse matrix microcracking threshold stress sigma_cmmr,0
+    sigma_cmmrc: float = 1.0     # critical transverse matrix microcracking stress sigma_cmmr,c
+    gamma_cmmr: float = 0.0      # matrix microcracking rate sensitivity factor gamma_cmmr
+    p_cmmr: float = 1.0          # matrix microcracking rate exponent p_cmmr
+    d_cmmr_max: float = 0.999    # maximum allowable transverse matrix damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermophononmagnonpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOPHONONMAGNONPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PHONON_MAGNON_POLARITON_RES_WORK`` (M355): Engine coupled flexothermal-flexophononic-flexomagnonic nanoscale lattice phonon magnon-polariton hybrid resonance energy and strain-gradient elastodynamic-spintronic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftpmpr: float = 0.0       # time frequency for flexothermophononmagnonpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulSarrusSpatialLinkageJoint:
+    """``/SARRUS_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/SARRUS_SPATIAL_LINKAGE_JOINT/id`` (M355): Sarrus spatial 6R rectilinear multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringNormalPopRate:
+    """``/SENSOR/SPRING_NORMAL_POP_RATE`` or ``/SENSOR/SPRING_NORM_POP_RATE`` (M355): Spring element relative normal / axial acceleration 8th rate-of-change (axial pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_pop_max: float = 1e30  # maximum axial pop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 
