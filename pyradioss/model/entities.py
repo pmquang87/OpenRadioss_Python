@@ -19674,6 +19674,62 @@ class SensorSpringTotalCrackleRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M364 Suite: LadCoupleMatrixShearDegradationRate failure, EngFlexomagnetopolaritonicResonanceEnergy, WunderlichSpatialLinkageJoint, SensorSpringTorsionalCrackleRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleMatrixShearDegradationRate:
+    """``/FAIL/LAD_COUPLE_MATRIX_SHEAR_DEGRADATION_RATE`` or ``/FAIL/LADEVEZE_COUPLED_MATRIX_SHEAR_DEGRADATION_RATE`` (M364): Ladevèze rate-dependent coupled multi-axial matrix shear degradation, coupled in-plane/transverse shear damage accumulation, and progressive shear failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cmsdr0: float = 0.0    # initial coupled shear degradation threshold stress sigma_cmsdr,0
+    sigma_cmsdrc: float = 1.0    # critical coupled shear degradation stress sigma_cmsdr,c
+    gamma_cmsdr: float = 0.0     # coupled matrix shear degradation rate sensitivity factor gamma_cmsdr
+    p_cmsdr: float = 1.0         # coupled matrix shear degradation rate exponent p_cmsdr
+    d_cmsdr_max: float = 0.999   # maximum allowable coupled shear damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetopolaritonicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_POLARITON_RES_WORK`` (M364): Engine coupled flexomagnetic-flexopolaritonic nanoscale multi-mode magnon-polariton resonance energy and strain-gradient electromagnetic-magnetodynamic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmpor: float = 0.0        # time frequency for flexomagnetopolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulWunderlichSpatialLinkageJoint:
+    """``/WUNDERLICH_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/WUNDERLICH_SPATIAL_LINKAGE_JOINT/id`` (M364): Wunderlich spatial 6R bistable multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTorsionalCrackleRate:
+    """``/SENSOR/SPRING_TORSIONAL_CRACKLE_RATE`` or ``/SENSOR/SPRING_TORS_CRACKLE_RATE`` (M364): Spring element relative torsional angular acceleration 9th rate-of-change (torsional angular crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtors_crk_max: float = 1e30  # maximum torsional crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

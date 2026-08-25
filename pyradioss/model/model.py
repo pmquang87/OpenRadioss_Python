@@ -2361,6 +2361,13 @@ class Model:
         self.lagmul_chen_spatial_linkage_joints: Dict[int, Any] = {} # /CHEN_SPATIAL_LINKAGE_JOINT, /LAGMUL/CHEN_SPATIAL_LINKAGE_JOINT (M363)
         self.sensor_spring_total_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_CRACKLE_RATE (M363)
 
+        # M364 Entities
+        self.fail_ladcouplematrixsheardegradationrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_MATRIX_SHEAR_DEGRADATION_RATE (M364)
+        self.eng_flexomagnetopolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPOLARITONIC_RESONANCE_ENERGY (M364)
+        self.lagmul_wunderlich_spatial_linkage_joints: Dict[int, Any] = {} # /WUNDERLICH_SPATIAL_LINKAGE_JOINT, /LAGMUL/WUNDERLICH_SPATIAL_LINKAGE_JOINT (M364)
+        self.sensor_spring_torsional_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_CRACKLE_RATE (M364)
+
+
 
 
 
