@@ -2355,6 +2355,13 @@ class Model:
         self.lagmul_hunt_spatial_linkage_joints: Dict[int, Any] = {} # /HUNT_SPATIAL_LINKAGE_JOINT, /LAGMUL/HUNT_SPATIAL_LINKAGE_JOINT (M362)
         self.sensor_spring_transverse_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_CRACKLE_RATE (M362)
 
+        # M363 Entities
+        self.fail_ladtransversematrixsheardegradationrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_MATRIX_SHEAR_DEGRADATION_RATE (M363)
+        self.eng_flexomagnetoexcitonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOEXCITONIC_RESONANCE_ENERGY (M363)
+        self.lagmul_chen_spatial_linkage_joints: Dict[int, Any] = {} # /CHEN_SPATIAL_LINKAGE_JOINT, /LAGMUL/CHEN_SPATIAL_LINKAGE_JOINT (M363)
+        self.sensor_spring_total_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_CRACKLE_RATE (M363)
+
+
 
 
 

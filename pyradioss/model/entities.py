@@ -19619,6 +19619,62 @@ class SensorSpringTransverseCrackleRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M363 Suite: LadTransverseMatrixShearDegradationRate failure, EngFlexomagnetoexcitonicResonanceEnergy, ChenSpatialLinkageJoint, SensorSpringTotalCrackleRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseMatrixShearDegradationRate:
+    """``/FAIL/LAD_TRANSVERSE_MATRIX_SHEAR_DEGRADATION_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_MATRIX_SHEAR_DEGRADATION_RATE`` (M363): Ladevèze rate-dependent transverse out-of-plane matrix shear degradation, transverse interlaminar shear damage evolution, and transverse shear degradation failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tmsdr0: float = 0.0    # initial transverse shear degradation threshold stress sigma_tmsdr,0
+    sigma_tmsdrc: float = 1.0    # critical transverse shear degradation stress sigma_tmsdr,c
+    gamma_tmsdr: float = 0.0     # transverse matrix shear degradation rate sensitivity factor gamma_tmsdr
+    p_tmsdr: float = 1.0         # transverse matrix shear degradation rate exponent p_tmsdr
+    d_tmsdr_max: float = 0.999   # maximum allowable transverse shear damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetoexcitonicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOEXCITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_EXCITON_RES_WORK`` (M363): Engine coupled flexomagnetic-flexoexcitonic nanoscale exciton-magnon polariton resonance energy and strain-gradient optomagnetic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmer: float = 0.0         # time frequency for flexomagnetoexcitonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulChenSpatialLinkageJoint:
+    """``/CHEN_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/CHEN_SPATIAL_LINKAGE_JOINT/id`` (M363): Chen spatial 6R symmetric multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTotalCrackleRate:
+    """``/SENSOR/SPRING_TOTAL_CRACKLE_RATE`` or ``/SENSOR/SPRING_TOT_CRACKLE_RATE`` (M363): Spring element relative 3D resultant total linear acceleration 9th rate-of-change (resultant total linear crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_crk_max: float = 1e30   # maximum resultant total linear crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 
