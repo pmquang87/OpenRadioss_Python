@@ -19980,6 +19980,62 @@ class SensorSpringNormalSnapRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M368 Suite: LadDynamicFiberCompressionCrushingRate failure, EngFlexomagnetoplasmonicpolaritonicResonanceEnergy, StevensSpatialLinkageJoint, SensorSpringTransverseSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicFiberCompressionCrushingRate:
+    """``/FAIL/LAD_DYNAMIC_FIBER_COMPRESSION_CRUSHING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_FIBER_COMPRESSION_CRUSHING_RATE`` (M368): Ladevèze rate-dependent dynamic longitudinal fiber compressive damage accumulation, high-rate microbuckling band propagation, and fiber crushing failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dfccr0: float = 0.0    # initial dynamic fiber crushing threshold stress sigma_dfccr,0
+    sigma_dfccrc: float = 1.0    # critical dynamic fiber crushing stress sigma_dfccr,c
+    gamma_dfccr: float = 0.0     # dynamic fiber crushing rate sensitivity factor gamma_dfccr
+    p_dfccr: float = 1.0         # dynamic fiber crushing rate exponent p_dfccr
+    d_dfccr_max: float = 0.999   # maximum allowable fiber compressive damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetoplasmonicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOPLASMONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_PLASMON_POLARITON_RES_WORK`` (M368): Engine coupled flexomagnetic-flexoplasmonic-flexopolaritonic nanoscale surface magnetoplasmon-polariton hybrid resonance energy and strain-gradient electromagnetic-magnetodynamic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmppor: float = 0.0       # time frequency for flexomagnetoplasmonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulStevensSpatialLinkageJoint:
+    """``/STEVENS_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/STEVENS_SPATIAL_LINKAGE_JOINT/id`` (M368): Stevens spatial 6R symmetric multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTransverseSnapRate:
+    """``/SENSOR/SPRING_TRANSVERSE_SNAP_RATE`` or ``/SENSOR/SPRING_TRANS_SNAP_RATE`` (M368): Spring element relative transverse / shear acceleration 10th rate-of-change (shear snap rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtrans_snp_max: float = 1e30 # maximum transverse snap rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

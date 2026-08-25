@@ -2385,6 +2385,13 @@ class Model:
         self.lagmul_phillips_spatial_linkage_joints: Dict[int, Any] = {} # /PHILLIPS_SPATIAL_LINKAGE_JOINT, /LAGMUL/PHILLIPS_SPATIAL_LINKAGE_JOINT (M367)
         self.sensor_spring_normal_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_SNAP_RATE (M367)
 
+        # M368 Entities
+        self.fail_laddynamicfibercompressioncrushingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_COMPRESSION_CRUSHING_RATE (M368)
+        self.eng_flexomagnetoplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICPOLARITONIC_RESONANCE_ENERGY (M368)
+        self.lagmul_stevens_spatial_linkage_joints: Dict[int, Any] = {} # /STEVENS_SPATIAL_LINKAGE_JOINT, /LAGMUL/STEVENS_SPATIAL_LINKAGE_JOINT (M368)
+        self.sensor_spring_transverse_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_SNAP_RATE (M368)
+
+
 
 
 
