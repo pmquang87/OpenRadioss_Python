@@ -20035,6 +20035,62 @@ class SensorSpringTransverseSnapRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M369 Suite: LadTransverseFiberCompressionCrushingRate failure, EngFlexomagnetophononicexcitonicResonanceEnergy, BakerHybridSpatialLinkageJoint, SensorSpringTotalSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseFiberCompressionCrushingRate:
+    """``/FAIL/LAD_TRANSVERSE_FIBER_COMPRESSION_CRUSHING_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_FIBER_COMPRESSION_CRUSHING_RATE`` (M369): Ladevèze rate-dependent transverse out-of-plane fiber compressive damage accumulation, transverse microbuckling band propagation, and transverse fiber crushing failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tfccr0: float = 0.0    # initial transverse dynamic fiber crushing threshold stress sigma_tfccr,0
+    sigma_tfccrc: float = 1.0    # critical dynamic transverse fiber crushing stress sigma_tfccr,c
+    gamma_tfccr: float = 0.0     # transverse dynamic fiber crushing rate sensitivity factor gamma_tfccr
+    p_tfccr: float = 1.0         # transverse dynamic fiber crushing rate exponent p_tfccr
+    d_tfccr_max: float = 0.999   # maximum allowable transverse fiber compressive damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetophononicexcitonicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOPHONONICEXCITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_PHONON_EXCITON_RES_WORK`` (M369): Engine coupled flexomagnetic-flexophononic-flexoexcitonic nanoscale acoustic phonon exciton-magnon polariton hybrid resonance energy and strain-gradient optoacoustic-magnetoelastic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmper: float = 0.0        # time frequency for flexomagnetophononicexcitonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulBakerHybridSpatialLinkageJoint:
+    """``/BAKER_HYBRID_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/BAKER_HYBRID_SPATIAL_LINKAGE_JOINT/id`` (M369): Baker hybrid spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTotalSnapRate:
+    """``/SENSOR/SPRING_TOTAL_SNAP_RATE`` or ``/SENSOR/SPRING_TOT_SNAP_RATE`` (M369): Spring element relative 3D resultant total linear acceleration 10th rate-of-change (resultant total linear snap rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_snp_max: float = 1e30   # maximum resultant total linear snap rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 
