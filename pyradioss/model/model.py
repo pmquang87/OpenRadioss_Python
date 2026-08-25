@@ -2319,6 +2319,13 @@ class Model:
         self.lagmul_delassus_spatial_linkage_joints: Dict[int, Any] = {} # /DELASSUS_SPATIAL_LINKAGE_JOINT, /LAGMUL/DELASSUS_SPATIAL_LINKAGE_JOINT (M356)
         self.sensor_spring_transverse_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_POP_RATE (M356)
 
+        # M357 Entities
+        self.fail_ladtransversefibercompressionkinkingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_COMPRESSION_KINKING_RATE (M357)
+        self.eng_flexothermoplasmonexcitonmagnonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONEXCITONMAGNONPOLARITONIC_RESONANCE_ENERGY (M357)
+        self.lagmul_wohlhart_spatial_linkage_joints: Dict[int, Any] = {} # /WOHLHART_SPATIAL_LINKAGE_JOINT, /LAGMUL/WOHLHART_SPATIAL_LINKAGE_JOINT (M357)
+        self.sensor_spring_total_pop_rates: Dict[int, Any] = {}      # /SENSOR/SPRING_TOTAL_POP_RATE (M357)
+
+
 
 
 

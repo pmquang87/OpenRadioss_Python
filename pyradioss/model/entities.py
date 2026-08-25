@@ -19289,6 +19289,62 @@ class SensorSpringTransversePopRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M357 Suite: LadTransverseFiberCompressionKinkingRate failure, EngFlexothermoplasmonexcitonmagnonpolaritonicResonanceEnergy, WohlhartSpatialLinkageJoint, SensorSpringTotalPopRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseFiberCompressionKinkingRate:
+    """``/FAIL/LAD_TRANSVERSE_FIBER_COMPRESSION_KINKING_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_FIBER_COMPRESSION_KINKING_RATE`` (M357): Ladevèze rate-dependent transverse fiber compressive kinking, out-of-plane plastic micro-buckling band, and transverse compressive fiber failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tfckr0: float = 0.0    # initial transverse fiber kinking threshold stress sigma_tfckr,0
+    sigma_tfckrc: float = 1.0    # critical transverse fiber kinking stress sigma_tfckr,c
+    gamma_tfckr: float = 0.0     # transverse fiber kinking rate sensitivity factor gamma_tfckr
+    p_tfckr: float = 1.0         # transverse fiber kinking rate exponent p_tfckr
+    d_tfckr_max: float = 0.999   # maximum allowable transverse fiber damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoplasmonexcitonmagnonpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOPLASMONEXCITONMAGNONPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PLASMON_EXCITON_MAGNON_POLARITON_RES_WORK`` (M357): Engine coupled flexothermal-flexoplasmonic-flexoexcitonic-flexomagnonic nanoscale surface plasmon exciton-magnon polariton multi-mode resonance energy and strain-gradient electromagnetic-optoelectronic-spintronic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftpempr: float = 0.0      # time frequency for flexothermoplasmonexcitonmagnonpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulWohlhartSpatialLinkageJoint:
+    """``/WOHLHART_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/WOHLHART_SPATIAL_LINKAGE_JOINT/id`` (M357): Wohlhart spatial 6R hybrid-symmetry multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTotalPopRate:
+    """``/SENSOR/SPRING_TOTAL_POP_RATE`` or ``/SENSOR/SPRING_TOT_POP_RATE`` (M357): Spring element relative 3D resultant total linear acceleration 8th rate-of-change (resultant total linear pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_pop_max: float = 1e30   # maximum resultant total linear pop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 
