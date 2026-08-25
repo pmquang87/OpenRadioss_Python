@@ -2403,6 +2403,13 @@ class Model:
         self.lagmul_waldron_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /WALDRON_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/WALDRON_HYBRID_SPATIAL_LINKAGE_JOINT (M370)
         self.sensor_spring_torsional_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_SNAP_RATE (M370)
 
+        # M371 Entities
+        self.fail_laddynamicinterlaminarsheardelaminationrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_INTERLAMINAR_SHEAR_DELAMINATION_RATE (M371)
+        self.eng_flexomagnetophononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICPOLARITONIC_RESONANCE_ENERGY (M371)
+        self.lagmul_chen_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /CHEN_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/CHEN_HYBRID_SPATIAL_LINKAGE_JOINT (M371)
+        self.sensor_spring_bending_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_SNAP_RATE (M371)
+
+
 
 
 
