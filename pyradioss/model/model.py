@@ -2343,6 +2343,13 @@ class Model:
         self.lagmul_dietmaier_spatial_linkage_joints: Dict[int, Any] = {} # /DIETMAIER_SPATIAL_LINKAGE_JOINT, /LAGMUL/DIETMAIER_SPATIAL_LINKAGE_JOINT (M360)
         self.sensor_spring_total_angular_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE (M360)
 
+        # M361 Entities
+        self.fail_ladcoupledelaminationmicrodebondingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_DELAMINATION_MICRODEBONDING_RATE (M361)
+        self.eng_flexomagnetoplasmonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONIC_RESONANCE_ENERGY (M361)
+        self.lagmul_waldron_spatial_linkage_joints: Dict[int, Any] = {} # /WALDRON_SPATIAL_LINKAGE_JOINT, /LAGMUL/WALDRON_SPATIAL_LINKAGE_JOINT (M361)
+        self.sensor_spring_normal_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_CRACKLE_RATE (M361)
+
+
 
 
 
