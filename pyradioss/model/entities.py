@@ -19399,6 +19399,62 @@ class SensorSpringTorsionalPopRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M359 Suite: LadDynamicDelaminationMicrodebondingRate failure, EngFlexothermoexcitonphononmagnonpolaritonicResonanceEnergy, BakerSpatialLinkageJoint, SensorSpringBendingPopRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicDelaminationMicrodebondingRate:
+    """``/FAIL/LAD_DYNAMIC_DELAMINATION_MICRODEBONDING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_DELAMINATION_MICRODEBONDING_RATE`` (M359): Ladevèze rate-dependent dynamic interlaminar micro-debonding, high-rate cohesive interface separation, and dynamic interlaminar delamination failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_ddmr0: float = 0.0     # initial interlaminar micro-debonding threshold stress sigma_ddmr,0
+    sigma_ddmrc: float = 1.0     # critical dynamic micro-debonding separation stress sigma_ddmr,c
+    gamma_ddmr: float = 0.0      # dynamic micro-debonding rate sensitivity factor gamma_ddmr
+    p_ddmr: float = 1.0          # dynamic micro-debonding rate exponent p_ddmr
+    d_ddmr_max: float = 0.999    # maximum allowable interlaminar damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoexcitonphononmagnonpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOEXCITONPHONONMAGNONPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_EXCITON_PHONON_MAGNON_POLARITON_RES_WORK`` (M359): Engine coupled flexothermal-flexoexcitonic-flexophononic-flexomagnonic nanoscale exciton phonon-magnon polariton multi-mode resonance energy and strain-gradient optoelectronic-elastodynamic-spintronic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftepmpr: float = 0.0      # time frequency for flexothermoexcitonphononmagnonpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulBakerSpatialLinkageJoint:
+    """``/BAKER_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/BAKER_SPATIAL_LINKAGE_JOINT/id`` (M359): Baker spatial 6R symmetric multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringBendingPopRate:
+    """``/SENSOR/SPRING_BENDING_POP_RATE`` or ``/SENSOR/SPRING_BEND_POP_RATE`` (M359): Spring element relative transverse bending angular acceleration 8th rate-of-change (bending angular pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jbend_pop_max: float = 1e30  # maximum bending angular pop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

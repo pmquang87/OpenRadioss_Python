@@ -2331,6 +2331,13 @@ class Model:
         self.lagmul_altmann_spatial_linkage_joints: Dict[int, Any] = {} # /ALTMANN_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALTMANN_SPATIAL_LINKAGE_JOINT (M358)
         self.sensor_spring_torsional_pop_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_TORSIONAL_POP_RATE (M358)
 
+        # M359 Entities
+        self.fail_laddynamicdelaminationmicrodebondingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_DELAMINATION_MICRODEBONDING_RATE (M359)
+        self.eng_flexothermoexcitonphononmagnonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOEXCITONPHONONMAGNONPOLARITONIC_RESONANCE_ENERGY (M359)
+        self.lagmul_baker_spatial_linkage_joints: Dict[int, Any] = {} # /BAKER_SPATIAL_LINKAGE_JOINT, /LAGMUL/BAKER_SPATIAL_LINKAGE_JOINT (M359)
+        self.sensor_spring_bending_pop_rates: Dict[int, Any] = {}    # /SENSOR/SPRING_BENDING_POP_RATE (M359)
+
+
 
 
 
