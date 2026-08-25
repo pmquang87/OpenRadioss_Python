@@ -19344,6 +19344,62 @@ class SensorSpringTotalPopRate:
     t_delay: float = 0.0         # activation delay time
 
 
+# ============================================================================
+# M358 Suite: LadCoupleFiberCompressionKinkingRate failure, EngFlexothermoplasmonphononmagnonpolaritonicResonanceEnergy, AltmannSpatialLinkageJoint, SensorSpringTorsionalPopRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleFiberCompressionKinkingRate:
+    """``/FAIL/LAD_COUPLE_FIBER_COMPRESSION_KINKING_RATE`` or ``/FAIL/LADEVEZE_COUPLED_FIBER_COMPRESSION_KINKING_RATE`` (M358): Ladevèze rate-dependent coupled multi-axial fiber compressive kinking, 3D micro-buckling band propagation, and progressive fiber crushing failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cfckr0: float = 0.0    # initial coupled fiber kinking threshold stress sigma_cfckr,0
+    sigma_cfckrc: float = 1.0    # critical coupled fiber kinking stress sigma_cfckr,c
+    gamma_cfckr: float = 0.0     # coupled fiber kinking rate sensitivity factor gamma_cfckr
+    p_cfckr: float = 1.0         # coupled fiber kinking rate exponent p_cfckr
+    d_cfckr_max: float = 0.999   # maximum allowable coupled fiber damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoplasmonphononmagnonpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOPLASMONPHONONMAGNONPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PLASMON_PHONON_MAGNON_POLARITON_RES_WORK`` (M358): Engine coupled flexothermal-flexoplasmonic-flexophononic-flexomagnonic nanoscale surface plasmon phonon-magnon polariton multi-mode resonance energy and strain-gradient electromagnetic-elastodynamic-spintronic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftppmpr: float = 0.0      # time frequency for flexothermoplasmonphononmagnonpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulAltmannSpatialLinkageJoint:
+    """``/ALTMANN_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/ALTMANN_SPATIAL_LINKAGE_JOINT/id`` (M358): Altmann spatial 6R line-symmetric multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTorsionalPopRate:
+    """``/SENSOR/SPRING_TORSIONAL_POP_RATE`` or ``/SENSOR/SPRING_TORS_POP_RATE`` (M358): Spring element relative torsional angular acceleration 8th rate-of-change (torsional angular pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtors_pop_max: float = 1e30  # maximum torsional angular pop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+
+
 
 
 

@@ -2325,6 +2325,13 @@ class Model:
         self.lagmul_wohlhart_spatial_linkage_joints: Dict[int, Any] = {} # /WOHLHART_SPATIAL_LINKAGE_JOINT, /LAGMUL/WOHLHART_SPATIAL_LINKAGE_JOINT (M357)
         self.sensor_spring_total_pop_rates: Dict[int, Any] = {}      # /SENSOR/SPRING_TOTAL_POP_RATE (M357)
 
+        # M358 Entities
+        self.fail_ladcouplefibercompressionkinkingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FIBER_COMPRESSION_KINKING_RATE (M358)
+        self.eng_flexothermoplasmonphononmagnonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONPHONONMAGNONPOLARITONIC_RESONANCE_ENERGY (M358)
+        self.lagmul_altmann_spatial_linkage_joints: Dict[int, Any] = {} # /ALTMANN_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALTMANN_SPATIAL_LINKAGE_JOINT (M358)
+        self.sensor_spring_torsional_pop_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_TORSIONAL_POP_RATE (M358)
+
+
 
 
 
