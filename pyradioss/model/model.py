@@ -2409,6 +2409,13 @@ class Model:
         self.lagmul_chen_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /CHEN_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/CHEN_HYBRID_SPATIAL_LINKAGE_JOINT (M371)
         self.sensor_spring_bending_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_SNAP_RATE (M371)
 
+        # M372 Entities
+        self.fail_ladtransverseinterlaminarsheardelaminationrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_INTERLAMINAR_SHEAR_DELAMINATION_RATE (M372)
+        self.eng_flexomagnetoexcitonicmagnonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOEXCITONICMAGNONIC_RESONANCE_ENERGY (M372)
+        self.lagmul_wohlhart_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /WOHLHART_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/WOHLHART_HYBRID_SPATIAL_LINKAGE_JOINT (M372)
+        self.sensor_spring_total_angular_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_SNAP_RATE (M372)
+
+
 
 
 
