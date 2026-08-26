@@ -2487,6 +2487,12 @@ class Model:
         self.lagmul_dietmeier_spatial_linkage_joints: Dict[int, Any] = {} # /DIETMEIER_SPATIAL_LINKAGE_JOINT, /LAGMUL/DIETMEIER_SPATIAL_LINKAGE_JOINT (M384)
         self.sensor_spring_total_angular_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_LOCK_RATE (M384)
 
+        # M385 Entities
+        self.fail_ladcouplematrixmicrofissuringrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_MATRIX_MICRO_FISSURING_RATE (M385)
+        self.eng_flexomagnetoplasmonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M385)
+        self.lagmul_hunt_spatial_linkage_joints: Dict[int, Any] = {} # /HUNT_SPATIAL_LINKAGE_JOINT, /LAGMUL/HUNT_SPATIAL_LINKAGE_JOINT (M385)
+        self.sensor_spring_normal_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_DROP_RATE (M385)
+
 
 
 

@@ -21270,6 +21270,101 @@ class SensorSpringTotalAngularLockRate:
         self.jtot_ang_lock_max = val
 
 
+# ============================================================================
+# M385 Suite: LadCoupleMatrixMicroFissuringRate failure, EngFlexomagnetoplasmonicmagnonicpolaritonicResonanceEnergy, HuntSpatialLinkageJoint, SensorSpringNormalDropRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleMatrixMicroFissuringRate:
+    """``/FAIL/LAD_COUPLE_MATRIX_MICRO_FISSURING_RATE`` or ``/FAIL/LADEVEZE_COUPLED_MATRIX_MICRO_FISSURING_RATE`` (M385): Ladevèze rate-dependent coupled multi-axial matrix micro-fissuring damage accumulation, transverse/shear micro-flaw coalescing, and stiffness reduction failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cmmfr0: float = 0.0    # initial coupled matrix micro-fissuring threshold stress sigma_cmmfr,0
+    sigma_cmmfrc: float = 1.0    # critical coupled matrix micro-fissuring saturation stress sigma_cmmfr,c
+    gamma_cmmfr: float = 0.0     # coupled matrix micro-fissuring rate sensitivity factor gamma_cmmfr
+    p_cmmfr: float = 1.0         # coupled matrix micro-fissuring rate exponent p_cmmfr
+    d_cmmfr_max: float = 0.999   # maximum allowable coupled matrix micro-fissuring damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetoplasmonicmagnonicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_PLASMON_MAGNON_POLARITON_RES_WORK`` (M385): Engine coupled flexomagnetic-flexoplasmonic-flexomagnonic-flexopolaritonic nanoscale surface plasmon-magnon-polariton hybrid resonance energy and strain-gradient electromagnetic-magnetophotonic-polaritonic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmpmpr: float = 0.0       # time frequency for flexomagnetoplasmonicmagnonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulHuntSpatialLinkageJoint:
+    """``/HUNT_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/HUNT_SPATIAL_LINKAGE_JOINT/id`` (M385): Hunt spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringNormalDropRate:
+    """``/SENSOR/SPRING_NORMAL_DROP_RATE`` or ``/SENSOR/SPRING_NORM_DROP_RATE`` (M385): Spring element relative normal / axial acceleration 13th rate-of-change (axial drop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_drop_max: float = 1e30 # maximum normal drop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jnorm_lock_max(self) -> float:
+        return self.jnorm_drop_max
+
+    @jnorm_lock_max.setter
+    def jnorm_lock_max(self, val: float) -> None:
+        self.jnorm_drop_max = val
+
+    @property
+    def jnorm_pop_max(self) -> float:
+        return self.jnorm_drop_max
+
+    @jnorm_pop_max.setter
+    def jnorm_pop_max(self, val: float) -> None:
+        self.jnorm_drop_max = val
+
+    @property
+    def jnorm_snp_max(self) -> float:
+        return self.jnorm_drop_max
+
+    @jnorm_snp_max.setter
+    def jnorm_snp_max(self, val: float) -> None:
+        self.jnorm_drop_max = val
+
+    @property
+    def jnorm_crackle_max(self) -> float:
+        return self.jnorm_drop_max
+
+    @jnorm_crackle_max.setter
+    def jnorm_crackle_max(self, val: float) -> None:
+        self.jnorm_drop_max = val
+
+
 
 
 
