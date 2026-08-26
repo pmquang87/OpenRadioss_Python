@@ -2451,6 +2451,13 @@ class Model:
         self.lagmul_altmann_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /ALTMANN_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALTMANN_HYBRID_SPATIAL_LINKAGE_JOINT (M378)
         self.sensor_spring_total_angular_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE (M378)
 
+        # M379 Entities
+        self.fail_ladcouplefibermatrixdebondingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FIBER_MATRIX_DEBONDING_RATE (M379)
+        self.eng_flexomagnetophononicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M379)
+        self.lagmul_kirkpatrick_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /KIRKPATRICK_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/KIRKPATRICK_HYBRID_SPATIAL_LINKAGE_JOINT (M379)
+        self.sensor_spring_normal_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_LOCK_RATE (M379)
+
+
 
 
 
