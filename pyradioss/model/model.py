@@ -2421,6 +2421,13 @@ class Model:
         self.lagmul_maverick_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT (M373)
         self.sensor_spring_normal_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_POP_RATE (M373)
 
+        # M374 Entities
+        self.fail_laddynamicinterlaminarnormalpeelingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_INTERLAMINAR_NORMAL_PEELING_RATE (M374)
+        self.eng_flexomagnetoplasmonicexcitonicmagnonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICEXCITONICMAGNONIC_RESONANCE_ENERGY (M374)
+        self.lagmul_krause_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /KRAUSE_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/KRAUSE_HYBRID_SPATIAL_LINKAGE_JOINT (M374)
+        self.sensor_spring_transverse_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_POP_RATE (M374)
+
+
 
 
 
