@@ -20858,6 +20858,86 @@ class SensorSpringNormalLockRate:
         self.jnorm_lock_max = val
 
 
+# ============================================================================
+# M380 Suite: LadDynamicPlyMicroCrackingRate failure, EngFlexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy, AlexanderHybridSpatialLinkageJoint, SensorSpringTransverseLockRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicPlyMicroCrackingRate:
+    """``/FAIL/LAD_DYNAMIC_PLY_MICRO_CRACKING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_PLY_MICRO_CRACKING_RATE`` (M380): Ladevèze rate-dependent dynamic ply transverse and shear micro-cracking damage accumulation, diffuse cracking growth, and lamina degradation failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dpmcr0: float = 0.0    # initial ply micro-cracking threshold stress sigma_dpmcr,0
+    sigma_dpmcrc: float = 1.0    # critical ply micro-cracking saturation stress sigma_dpmcr,c
+    gamma_dpmcr: float = 0.0     # ply micro-cracking rate sensitivity factor gamma_dpmcr
+    p_dpmcr: float = 1.0         # ply micro-cracking rate exponent p_dpmcr
+    d_dpmcr_max: float = 0.999   # maximum allowable ply micro-cracking damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOPLASMONICEXCITONICMAGNONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_PLASMON_EXCITON_MAGNON_POLARITON_RES_WORK`` (M380): Engine coupled flexomagnetic-flexoplasmonic-flexoexcitonic-flexomagnonic-flexopolaritonic nanoscale surface plasmon exciton-magnon-polariton hybrid resonance energy and strain-gradient electromagnetic-optoelectronic-magnetophotonic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmpempr: float = 0.0      # time frequency for flexomagnetoplasmonicexcitonicmagnonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulAlexanderHybridSpatialLinkageJoint:
+    """``/ALEXANDER_HYBRID_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/ALEXANDER_HYBRID_SPATIAL_LINKAGE_JOINT/id`` (M380): Alexander hybrid spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTransverseLockRate:
+    """``/SENSOR/SPRING_TRANSVERSE_LOCK_RATE`` or ``/SENSOR/SPRING_TRANS_LOCK_RATE`` (M380): Spring element relative transverse / shear acceleration 12th rate-of-change (shear lock rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtrans_lock_max: float = 1e30 # maximum transverse lock rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jtrans_pop_max(self) -> float:
+        return self.jtrans_lock_max
+
+    @jtrans_pop_max.setter
+    def jtrans_pop_max(self, val: float) -> None:
+        self.jtrans_lock_max = val
+
+    @property
+    def jtrans_snp_max(self) -> float:
+        return self.jtrans_lock_max
+
+    @jtrans_snp_max.setter
+    def jtrans_snp_max(self, val: float) -> None:
+        self.jtrans_lock_max = val
+
+    @property
+    def jtrans_crackle_max(self) -> float:
+        return self.jtrans_lock_max
+
+    @jtrans_crackle_max.setter
+    def jtrans_crackle_max(self, val: float) -> None:
+        self.jtrans_lock_max = val
+
+
+
 
 
 
