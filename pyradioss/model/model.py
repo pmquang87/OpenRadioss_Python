@@ -2463,6 +2463,13 @@ class Model:
         self.lagmul_alexander_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /ALEXANDER_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALEXANDER_HYBRID_SPATIAL_LINKAGE_JOINT (M380)
         self.sensor_spring_transverse_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_LOCK_RATE (M380)
 
+        # M381 Entities
+        self.fail_ladtransverseplymicrocrackingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_PLY_MICRO_CRACKING_RATE (M381)
+        self.eng_flexomagnetophononicplasmonicmagnonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICPLASMONICMAGNONIC_RESONANCE_ENERGY (M381)
+        self.lagmul_chung_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /CHUNG_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/CHUNG_HYBRID_SPATIAL_LINKAGE_JOINT (M381)
+        self.sensor_spring_total_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_LOCK_RATE (M381)
+
+
 
 
 
