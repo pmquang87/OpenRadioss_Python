@@ -21016,6 +21016,86 @@ class SensorSpringTotalLockRate:
         self.jtot_lock_max = val
 
 
+# ============================================================================
+# M382 Suite: LadCouplePlyMicroCrackingRate failure, EngFlexomagnetophononicplasmonicpolaritonicResonanceEnergy, StevensHybridSpatialLinkageJoint, SensorSpringTorsionalLockRate
+# ============================================================================
+
+@dataclass
+class FailLadCouplePlyMicroCrackingRate:
+    """``/FAIL/LAD_COUPLE_PLY_MICRO_CRACKING_RATE`` or ``/FAIL/LADEVEZE_COUPLED_PLY_MICRO_CRACKING_RATE`` (M382): Ladevèze rate-dependent coupled multi-axial ply micro-cracking damage accumulation, transverse/shear micro-flaw interaction, and lamina degradation failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cpmcr0: float = 0.0    # initial coupled ply micro-cracking threshold stress sigma_cpmcr,0
+    sigma_cpmcrc: float = 1.0    # critical coupled ply micro-cracking saturation stress sigma_cpmcr,c
+    gamma_cpmcr: float = 0.0     # coupled ply micro-cracking rate sensitivity factor gamma_cpmcr
+    p_cpmcr: float = 1.0         # coupled ply micro-cracking rate exponent p_cpmcr
+    d_cpmcr_max: float = 0.999   # maximum allowable coupled ply micro-cracking damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetophononicplasmonicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOPHONONICPLASMONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_PHONON_PLASMON_POLARITON_RES_WORK`` (M382): Engine coupled flexomagnetic-flexophononic-flexoplasmonic-flexopolaritonic nanoscale acoustic phonon surface plasmon-polariton hybrid resonance energy and strain-gradient optoacoustic-electromagnetic-polaritonic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmpopr: float = 0.0       # time frequency for flexomagnetophononicplasmonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulStevensHybridSpatialLinkageJoint:
+    """``/STEVENS_HYBRID_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/STEVENS_HYBRID_SPATIAL_LINKAGE_JOINT/id`` (M382): Stevens hybrid spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTorsionalLockRate:
+    """``/SENSOR/SPRING_TORSIONAL_LOCK_RATE`` or ``/SENSOR/SPRING_TORS_LOCK_RATE`` (M382): Spring element relative torsional angular acceleration 12th rate-of-change (torsional lock rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtors_lock_max: float = 1e30 # maximum torsional lock rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jtors_pop_max(self) -> float:
+        return self.jtors_lock_max
+
+    @jtors_pop_max.setter
+    def jtors_pop_max(self, val: float) -> None:
+        self.jtors_lock_max = val
+
+    @property
+    def jtors_snp_max(self) -> float:
+        return self.jtors_lock_max
+
+    @jtors_snp_max.setter
+    def jtors_snp_max(self, val: float) -> None:
+        self.jtors_lock_max = val
+
+    @property
+    def jtors_crackle_max(self) -> float:
+        return self.jtors_lock_max
+
+    @jtors_crackle_max.setter
+    def jtors_crackle_max(self, val: float) -> None:
+        self.jtors_lock_max = val
+
+
+
 
 
 
