@@ -2439,6 +2439,13 @@ class Model:
         self.lagmul_bevan_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /BEVAN_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/BEVAN_HYBRID_SPATIAL_LINKAGE_JOINT (M376)
         self.sensor_spring_torsional_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_POP_RATE (M376)
 
+        # M377 Entities
+        self.fail_laddynamicfibermatrixdebondingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_MATRIX_DEBONDING_RATE (M377)
+        self.eng_flexomagnetophononicexcitonicmagnonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICEXCITONICMAGNONIC_RESONANCE_ENERGY (M377)
+        self.lagmul_heinrichs_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /HEINRICHS_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/HEINRICHS_HYBRID_SPATIAL_LINKAGE_JOINT (M377)
+        self.sensor_spring_bending_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_POP_RATE (M377)
+
+
 
 
 
