@@ -20487,6 +20487,78 @@ class SensorSpringTransversePopRate:
         self.jtrans_pop_max = val
 
 
+# ============================================================================
+# M375 Suite: LadTransverseInterlaminarNormalPeelingRate failure, EngFlexomagnetoplasmonicexcitonicpolaritonicResonanceEnergy, SturgessHybridSpatialLinkageJoint, SensorSpringTotalPopRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseInterlaminarNormalPeelingRate:
+    """``/FAIL/LAD_TRANSVERSE_INTERLAMINAR_NORMAL_PEELING_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_INTERLAMINAR_NORMAL_PEELING_RATE`` (M375): Ladevèze rate-dependent transverse interlaminar normal peeling stress debonding, transverse crack propagation, and delamination failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tinpr0: float = 0.0    # initial transverse interlaminar normal peeling threshold stress sigma_tinpr,0
+    sigma_tinprc: float = 1.0    # critical transverse interlaminar normal peeling fracture stress sigma_tinpr,c
+    gamma_tinpr: float = 0.0     # transverse interlaminar normal peeling rate sensitivity factor gamma_tinpr
+    p_tinpr: float = 1.0         # transverse interlaminar normal peeling rate exponent p_tinpr
+    d_tinpr_max: float = 0.999   # maximum allowable transverse interlaminar normal peeling damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetoplasmonicexcitonicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOPLASMONICEXCITONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_PLASMON_EXCITON_POLARITON_RES_WORK`` (M375): Engine coupled flexomagnetic-flexoplasmonic-flexoexcitonic-flexopolaritonic nanoscale surface plasmon-exciton-polariton hybrid resonance energy and strain-gradient electromagnetic-optoelectronic-photonic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmpepr: float = 0.0       # time frequency for flexomagnetoplasmonicexcitonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulSturgessHybridSpatialLinkageJoint:
+    """``/STURGESS_HYBRID_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/STURGESS_HYBRID_SPATIAL_LINKAGE_JOINT/id`` (M375): Sturgess hybrid spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTotalPopRate:
+    """``/SENSOR/SPRING_TOTAL_POP_RATE`` or ``/SENSOR/SPRING_TOT_POP_RATE`` (M375): Spring element relative 3D resultant total linear acceleration 11th rate-of-change (resultant total linear pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_pop_max: float = 1e30   # maximum resultant total linear pop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jtot_snp_max(self) -> float:
+        return self.jtot_pop_max
+
+    @jtot_snp_max.setter
+    def jtot_snp_max(self, val: float) -> None:
+        self.jtot_pop_max = val
+
+    @property
+    def jtot_crackle_max(self) -> float:
+        return self.jtot_pop_max
+
+    @jtot_crackle_max.setter
+    def jtot_crackle_max(self, val: float) -> None:
+        self.jtot_pop_max = val
+
+
+
 
 
 

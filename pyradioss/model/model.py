@@ -2427,6 +2427,13 @@ class Model:
         self.lagmul_krause_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /KRAUSE_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/KRAUSE_HYBRID_SPATIAL_LINKAGE_JOINT (M374)
         self.sensor_spring_transverse_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_POP_RATE (M374)
 
+        # M375 Entities
+        self.fail_ladtransverseinterlaminarnormalpeelingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_INTERLAMINAR_NORMAL_PEELING_RATE (M375)
+        self.eng_flexomagnetoplasmonicexcitonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICEXCITONICPOLARITONIC_RESONANCE_ENERGY (M375)
+        self.lagmul_sturgess_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /STURGESS_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/STURGESS_HYBRID_SPATIAL_LINKAGE_JOINT (M375)
+        self.sensor_spring_total_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_POP_RATE (M375)
+
+
 
 
 
