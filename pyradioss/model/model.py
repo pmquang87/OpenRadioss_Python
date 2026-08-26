@@ -2433,6 +2433,13 @@ class Model:
         self.lagmul_sturgess_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /STURGESS_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/STURGESS_HYBRID_SPATIAL_LINKAGE_JOINT (M375)
         self.sensor_spring_total_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_POP_RATE (M375)
 
+        # M376 Entities
+        self.fail_ladcoupleinterlaminarnormalpeelingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_INTERLAMINAR_NORMAL_PEELING_RATE (M376)
+        self.eng_flexomagnetoplasmonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M376)
+        self.lagmul_bevan_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /BEVAN_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/BEVAN_HYBRID_SPATIAL_LINKAGE_JOINT (M376)
+        self.sensor_spring_torsional_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_POP_RATE (M376)
+
+
 
 
 

@@ -20558,6 +20558,78 @@ class SensorSpringTotalPopRate:
         self.jtot_pop_max = val
 
 
+# ============================================================================
+# M376 Suite: LadCoupleInterlaminarNormalPeelingRate failure, EngFlexomagnetoplasmonicmagnonicpolaritonicResonanceEnergy, BevanHybridSpatialLinkageJoint, SensorSpringTorsionalPopRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleInterlaminarNormalPeelingRate:
+    """``/FAIL/LAD_COUPLE_INTERLAMINAR_NORMAL_PEELING_RATE`` or ``/FAIL/LADEVEZE_COUPLED_INTERLAMINAR_NORMAL_PEELING_RATE`` (M376): Ladevèze rate-dependent coupled multi-axial interlaminar normal peeling damage accumulation, progressive mixed-mode debonding, and coupled delamination failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cinpr0: float = 0.0    # initial coupled interlaminar normal peeling threshold stress sigma_cinpr,0
+    sigma_cinprc: float = 1.0    # critical coupled interlaminar normal peeling fracture stress sigma_cinpr,c
+    gamma_cinpr: float = 0.0     # coupled interlaminar normal peeling rate sensitivity factor gamma_cinpr
+    p_cinpr: float = 1.0         # coupled interlaminar normal peeling rate exponent p_cinpr
+    d_cinpr_max: float = 0.999   # maximum allowable coupled interlaminar normal peeling damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetoplasmonicmagnonicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_PLASMON_MAGNON_POLARITON_RES_WORK`` (M376): Engine coupled flexomagnetic-flexoplasmonic-flexomagnonic-flexopolaritonic nanoscale surface plasmon-magnon-polariton hybrid resonance energy and strain-gradient electromagnetic-magnetophotonic-polaritonic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmpmpr: float = 0.0       # time frequency for flexomagnetoplasmonicmagnonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulBevanHybridSpatialLinkageJoint:
+    """``/BEVAN_HYBRID_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/BEVAN_HYBRID_SPATIAL_LINKAGE_JOINT/id`` (M376): Bevan hybrid spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTorsionalPopRate:
+    """``/SENSOR/SPRING_TORSIONAL_POP_RATE`` or ``/SENSOR/SPRING_TORS_POP_RATE`` (M376): Spring element relative torsional angular acceleration 11th rate-of-change (torsional pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtors_pop_max: float = 1e30  # maximum torsional pop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jtors_snp_max(self) -> float:
+        return self.jtors_pop_max
+
+    @jtors_snp_max.setter
+    def jtors_snp_max(self, val: float) -> None:
+        self.jtors_pop_max = val
+
+    @property
+    def jtors_crackle_max(self) -> float:
+        return self.jtors_pop_max
+
+    @jtors_crackle_max.setter
+    def jtors_crackle_max(self, val: float) -> None:
+        self.jtors_pop_max = val
+
+
+
 
 
 
