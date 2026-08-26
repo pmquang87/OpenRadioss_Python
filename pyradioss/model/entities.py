@@ -20700,6 +20700,87 @@ class SensorSpringBendingPopRate:
         self.jbend_pop_max = val
 
 
+# ============================================================================
+# M378 Suite: LadTransverseFiberMatrixDebondingRate failure, EngFlexomagnetophononicexcitonicpolaritonicResonanceEnergy, AltmannHybridSpatialLinkageJoint, SensorSpringTotalAngularPopRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseFiberMatrixDebondingRate:
+    """``/FAIL/LAD_TRANSVERSE_FIBER_MATRIX_DEBONDING_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_FIBER_MATRIX_DEBONDING_RATE`` (M378): Ladevèze rate-dependent transverse fiber-matrix interfacial shear debonding, progressive matrix micro-cracking, and interfacial failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tfmdr0: float = 0.0    # initial transverse fiber-matrix debonding threshold stress sigma_tfmdr,0
+    sigma_tfmdrc: float = 1.0    # critical transverse fiber-matrix debonding fracture stress sigma_tfmdr,c
+    gamma_tfmdr: float = 0.0     # transverse fiber-matrix debonding rate sensitivity factor gamma_tfmdr
+    p_tfmdr: float = 1.0         # transverse fiber-matrix debonding rate exponent p_tfmdr
+    d_tfmdr_max: float = 0.999   # maximum allowable transverse fiber-matrix debonding damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetophononicexcitonicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOPHONONICEXCITONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_PHONON_EXCITON_POLARITON_RES_WORK`` (M378): Engine coupled flexomagnetic-flexophononic-flexoexcitonic-flexopolaritonic nanoscale acoustic phonon exciton-polariton hybrid resonance energy and strain-gradient optoacoustic-polaritonic-electromagnetic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmpepr: float = 0.0       # time frequency for flexomagnetophononicexcitonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulAltmannHybridSpatialLinkageJoint:
+    """``/ALTMANN_HYBRID_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/ALTMANN_HYBRID_SPATIAL_LINKAGE_JOINT/id`` (M378): Altmann hybrid spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringTotalAngularPopRate:
+    """``/SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE`` or ``/SENSOR/SPRING_TOT_ANG_POP_RATE`` (M378): Spring element relative 3D resultant total angular acceleration 11th rate-of-change (resultant total angular pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtang_pop_max: float = 1e30  # maximum resultant total angular pop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jtang_snp_max(self) -> float:
+        return self.jtang_pop_max
+
+    @jtang_snp_max.setter
+    def jtang_snp_max(self, val: float) -> None:
+        self.jtang_pop_max = val
+
+    @property
+    def jtang_crackle_max(self) -> float:
+        return self.jtang_pop_max
+
+    @jtang_crackle_max.setter
+    def jtang_crackle_max(self, val: float) -> None:
+        self.jtang_pop_max = val
+
+    @property
+    def jtot_ang_pop_max(self) -> float:
+        return self.jtang_pop_max
+
+    @jtot_ang_pop_max.setter
+    def jtot_ang_pop_max(self, val: float) -> None:
+        self.jtang_pop_max = val
+
+
+
+
 
 
 

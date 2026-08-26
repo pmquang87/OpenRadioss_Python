@@ -2445,6 +2445,13 @@ class Model:
         self.lagmul_heinrichs_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /HEINRICHS_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/HEINRICHS_HYBRID_SPATIAL_LINKAGE_JOINT (M377)
         self.sensor_spring_bending_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_POP_RATE (M377)
 
+        # M378 Entities
+        self.fail_ladtransversefibermatrixdebondingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_MATRIX_DEBONDING_RATE (M378)
+        self.eng_flexomagnetophononicexcitonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICEXCITONICPOLARITONIC_RESONANCE_ENERGY (M378)
+        self.lagmul_altmann_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /ALTMANN_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALTMANN_HYBRID_SPATIAL_LINKAGE_JOINT (M378)
+        self.sensor_spring_total_angular_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE (M378)
+
+
 
 
 
