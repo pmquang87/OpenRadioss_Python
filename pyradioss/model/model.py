@@ -2499,6 +2499,12 @@ class Model:
         self.lagmul_pfurner_spatial_linkage_joints: Dict[int, Any] = {} # /PFURNER_SPATIAL_LINKAGE_JOINT, /LAGMUL/PFURNER_SPATIAL_LINKAGE_JOINT (M386)
         self.sensor_spring_transverse_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_DROP_RATE (M386)
 
+        # M387 Entities
+        self.fail_ladtransversematrixmicrocrushingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_MATRIX_MICRO_CRUSHING_RATE (M387)
+        self.eng_flexomagnetophononicplasmonicexcitonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICPLASMONICEXCITONIC_RESONANCE_ENERGY (M387)
+        self.lagmul_phillips_spatial_linkage_joints: Dict[int, Any] = {} # /PHILLIPS_SPATIAL_LINKAGE_JOINT, /LAGMUL/PHILLIPS_SPATIAL_LINKAGE_JOINT (M387)
+        self.sensor_spring_total_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_DROP_RATE (M387)
+
 
 
 
