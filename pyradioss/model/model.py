@@ -2493,6 +2493,12 @@ class Model:
         self.lagmul_hunt_spatial_linkage_joints: Dict[int, Any] = {} # /HUNT_SPATIAL_LINKAGE_JOINT, /LAGMUL/HUNT_SPATIAL_LINKAGE_JOINT (M385)
         self.sensor_spring_normal_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_DROP_RATE (M385)
 
+        # M386 Entities
+        self.fail_laddynamicmatrixmicrocrushingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_MATRIX_MICRO_CRUSHING_RATE (M386)
+        self.eng_flexomagnetophononicexcitonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICEXCITONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M386)
+        self.lagmul_pfurner_spatial_linkage_joints: Dict[int, Any] = {} # /PFURNER_SPATIAL_LINKAGE_JOINT, /LAGMUL/PFURNER_SPATIAL_LINKAGE_JOINT (M386)
+        self.sensor_spring_transverse_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_DROP_RATE (M386)
+
 
 
 
