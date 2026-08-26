@@ -21139,6 +21139,15 @@ class LagmulBakerSpatialLinkageJoint:
     twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
     offset_distance_s: float = 0.0 # axial joint offset distance s
 
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
 
 @dataclass
 class SensorSpringBendingLockRate:
