@@ -20345,6 +20345,78 @@ class SensorSpringTotalAngularSnapRate:
         self.jtot_ang_snp_max = val
 
 
+# ============================================================================
+# M373 Suite: LadCoupleInterlaminarShearDelaminationRate failure, EngFlexomagnetoexcitonicpolaritonicResonanceEnergy, MaverickHybridSpatialLinkageJoint, SensorSpringNormalPopRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleInterlaminarShearDelaminationRate:
+    """``/FAIL/LAD_COUPLE_INTERLAMINAR_SHEAR_DELAMINATION_RATE`` or ``/FAIL/LADEVEZE_COUPLED_INTERLAMINAR_SHEAR_DELAMINATION_RATE`` (M373): Ladevèze rate-dependent coupled mixed-mode interlaminar shear debonding, mixed-mode crack propagation, and delamination failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cisdr0: float = 0.0    # initial coupled interlaminar shear debonding threshold stress sigma_cisdr,0
+    sigma_cisdrc: float = 1.0    # critical coupled interlaminar shear fracture stress sigma_cisdr,c
+    gamma_cisdr: float = 0.0     # coupled interlaminar shear rate sensitivity factor gamma_cisdr
+    p_cisdr: float = 1.0         # coupled interlaminar shear rate exponent p_cisdr
+    d_cisdr_max: float = 0.999   # maximum allowable coupled interlaminar shear damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetoexcitonicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOEXCITONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_EXCITON_POLARITON_RES_WORK`` (M373): Engine coupled flexomagnetic-flexoexcitonic-flexopolaritonic nanoscale exciton polariton-magnon hybrid resonance energy and strain-gradient electromagnetic-optoelectronic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmepor: float = 0.0       # time frequency for flexomagnetoexcitonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulMaverickHybridSpatialLinkageJoint:
+    """``/MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT/id`` (M373): Maverick hybrid spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringNormalPopRate:
+    """``/SENSOR/SPRING_NORMAL_POP_RATE`` or ``/SENSOR/SPRING_NORM_POP_RATE`` (M373): Spring element relative normal / axial acceleration 11th rate-of-change (axial pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_pop_max: float = 1e30  # maximum normal / axial pop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jnorm_snp_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @jnorm_snp_max.setter
+    def jnorm_snp_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def jnorm_crackle_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @jnorm_crackle_max.setter
+    def jnorm_crackle_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+
+
 
 
 

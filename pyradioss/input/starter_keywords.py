@@ -65286,6 +65286,170 @@ def read_sensor_spring_total_angular_snap_rate(block: KeywordBlock, model: Model
     ))
 
 
+# ============================================================================
+# M373: FAIL/LAD_COUPLE_INTERLAMINAR_SHEAR_DELAMINATION_RATE, ENG/FLEXOMAGNETOEXCITONICPOLARITONIC_RESONANCE_ENERGY, LAGMUL/MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT, SENSOR/SPRING_NORMAL_POP_RATE
+# ============================================================================
+
+def read_fail_lad_couple_interlaminar_shear_delamination_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_COUPLE_INTERLAMINAR_SHEAR_DELAMINATION_RATE`` or ``/FAIL/LADEVEZE_COUPLED_INTERLAMINAR_SHEAR_DELAMINATION_RATE`` (M373): Ladevèze rate-dependent coupled mixed-mode interlaminar shear debonding, mixed-mode crack propagation, and delamination failure model."""
+    mat_id = block.user_id or 0
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards:
+        log.error(f"/FAIL/LAD_COUPLE_INTERLAMINAR_SHEAR_DELAMINATION_RATE/{mat_id}: missing data card", block.source)
+        return
+
+    sigma_cisdr0, sigma_cisdrc, gamma_cisdr, p_cisdr, d_cisdr_max = 0.0, 1.0, 0.0, 1.0, 0.999
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("FAIL_LAD_COUPLE_INTERLAMINAR_SHEAR_DELAMINATION_RATE_1")
+        sigma_cisdr0 = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sigma_cisdrc = _fval(f[1], 1.0) if len(f) > 1 and f[1].strip() else 1.0
+        gamma_cisdr = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+        p_cisdr = _fval(f[3], 1.0) if len(f) > 3 and f[3].strip() else 1.0
+        d_cisdr_max = _fval(f[4], 0.999) if len(f) > 4 and f[4].strip() else 0.999
+    else:
+        toks = cards[0].tokens()
+        sigma_cisdr0 = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sigma_cisdrc = float(toks[1].rstrip(',')) if len(toks) > 1 else 1.0
+        gamma_cisdr = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+        p_cisdr = float(toks[3].rstrip(',')) if len(toks) > 3 else 1.0
+        d_cisdr_max = float(toks[4].rstrip(',')) if len(toks) > 4 else 0.999
+
+    ifail_sh, ifail_so = 1, 1
+    if len(cards) > 1 and not cards[1].is_blank:
+        if block.fixed and "," not in cards[1].raw:
+            f2 = cards[1].cut("FAIL_LAD_COUPLE_INTERLAMINAR_SHEAR_DELAMINATION_RATE_2")
+            ifail_sh = _ival(f2[0], 1) if len(f2) > 0 and f2[0].strip() else 1
+            ifail_so = _ival(f2[1], 1) if len(f2) > 1 and f2[1].strip() else 1
+        else:
+            toks2 = cards[1].tokens()
+            ifail_sh = int(float(toks2[0].rstrip(','))) if len(toks2) > 0 else 1
+            ifail_so = int(float(toks2[1].rstrip(','))) if len(toks2) > 1 else 1
+
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].raw[:10], 0) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+
+    from ..model.entities import FailLadCoupleInterlaminarShearDelaminationRate, FailureModel
+    model.fail_ladcoupleinterlaminarsheardelaminationrates[mat_id] = FailLadCoupleInterlaminarShearDelaminationRate(
+        mat_id=mat_id, title=title,
+        sigma_cisdr0=sigma_cisdr0, sigma_cisdrc=sigma_cisdrc,
+        gamma_cisdr=gamma_cisdr, p_cisdr=p_cisdr, d_cisdr_max=d_cisdr_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    params = dict(
+        sigma_cisdr0=sigma_cisdr0, sigma_cisdrc=sigma_cisdrc,
+        gamma_cisdr=gamma_cisdr, p_cisdr=p_cisdr, d_cisdr_max=d_cisdr_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_COUPLE_INTERLAMINAR_SHEAR_DELAMINATION_RATE", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_flexomagnetoexcitonicpolaritonic_resonance_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/FLEXOMAGNETOEXCITONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_EXCITON_POLARITON_RES_WORK`` (M373): Engine coupled flexomagnetic-flexoexcitonic-flexopolaritonic nanoscale exciton polariton-magnon hybrid resonance energy and strain-gradient electromagnetic-optoelectronic dissipation tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/FLEXOMAGNETOEXCITONICPOLARITONIC_RESONANCE_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_fmepor, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_FLEXOMAGNETOEXCITONICPOLARITONIC_RESONANCE_ENERGY_1")
+        dt_fmepor = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_fmepor = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngFlexomagnetoexcitonicpolaritonicResonanceEnergy
+    r_id = block.user_id or (len(model.eng_flexomagnetoexcitonicpolaritonic_resonance_energies) + 1)
+    model.eng_flexomagnetoexcitonicpolaritonic_resonance_energies[r_id] = EngFlexomagnetoexcitonicpolaritonicResonanceEnergy(
+        id=r_id, title=title, dt_fmepor=dt_fmepor, sens_id=sens_id
+    )
+
+
+def read_lagmul_maverick_hybrid_spatial_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT/id`` (M373): Maverick hybrid spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    link_len_a, link_len_b, twist_angle_alpha, offset_distance_s = 0.0, 0.0, 0.0, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT_2")
+            link_len_a = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            link_len_b = _fval(f2[1], 0.0) if len(f2) > 1 and f2[1].strip() else 0.0
+            twist_angle_alpha = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+            offset_distance_s = _fval(f2[3], 0.0) if len(f2) > 3 and f2[3].strip() else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            link_len_a = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            link_len_b = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            twist_angle_alpha = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            offset_distance_s = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+
+    from ..model.entities import LagmulMaverickHybridSpatialLinkageJoint
+    model.lagmul_maverick_hybrid_spatial_linkage_joints[block.user_id] = LagmulMaverickHybridSpatialLinkageJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        link_len_a=link_len_a, link_len_b=link_len_b,
+        twist_angle_alpha=twist_angle_alpha, offset_distance_s=offset_distance_s
+    )
+
+
+def read_sensor_spring_normal_pop_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_NORMAL_POP_RATE`` or ``/SENSOR/SPRING_NORM_POP_RATE`` (M373): Spring element relative normal / axial acceleration 11th rate-of-change (axial pop rate) magnitude threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_NORMAL_POP_RATE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, jnorm_pop_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_NORMAL_POP_RATE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        jnorm_pop_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        jnorm_pop_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringNormalPopRate, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_normal_pop_rates) + 1)
+    ssnpr = SensorSpringNormalPopRate(
+        id=s_id, title=title, spring_id=spring_id,
+        jnorm_pop_max=jnorm_pop_max, t_delay=t_delay
+    )
+    model.sensor_spring_normal_pop_rates[s_id] = ssnpr
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_NORMAL_POP_RATE", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -70427,6 +70591,31 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_RATE_SNAP_ANG_TOT": read_sensor_spring_total_angular_snap_rate,
     "SENSOR_TOTAL_ANGULAR_SNAP_RATE_SPRING": read_sensor_spring_total_angular_snap_rate,
     "SENSOR_SPRING_SNAP_ANG_TOT": read_sensor_spring_total_angular_snap_rate,
+    # M373: FAIL_LAD_COUPLE_INTERLAMINAR_SHEAR_DELAMINATION_RATE, ENG_FLEXOMAGNETOEXCITONICPOLARITONIC_RESONANCE_ENERGY, MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT, SENSOR_SPRING_NORMAL_POP_RATE
+    "FAIL_LAD_COUPLE_INTERLAMINAR_SHEAR_DELAMINATION_RATE": read_fail_lad_couple_interlaminar_shear_delamination_rate,
+    "FAIL_LADEVEZE_COUPLED_INTERLAMINAR_SHEAR_DELAMINATION_RATE": read_fail_lad_couple_interlaminar_shear_delamination_rate,
+    "FAIL_LAD_CISDR": read_fail_lad_couple_interlaminar_shear_delamination_rate,
+    "FAIL_LAD_CISDR_MODEL": read_fail_lad_couple_interlaminar_shear_delamination_rate,
+    "FAIL_LAD_CISDR_LAW": read_fail_lad_couple_interlaminar_shear_delamination_rate,
+    "FAIL_LADEVEZE_RATE_DEPENDENT_COUPLED_INTERLAMINAR_SHEAR_DELAMINATION": read_fail_lad_couple_interlaminar_shear_delamination_rate,
+    "ENG_FLEXOMAGNETOEXCITONICPOLARITONIC_RESONANCE_ENERGY": read_eng_flexomagnetoexcitonicpolaritonic_resonance_energy,
+    "ENG_FLEXOMAGNETO_EXCITON_POLARITON_RES_WORK": read_eng_flexomagnetoexcitonicpolaritonic_resonance_energy,
+    "ENG_EFLEXOMAGNETOEXCITONICPOLARITONICRESONANCE": read_eng_flexomagnetoexcitonicpolaritonic_resonance_energy,
+    "ENG_FLEXOMAGNETOEXCITONICPOLARITONIC_RESONANCE_DISSIPATION": read_eng_flexomagnetoexcitonicpolaritonic_resonance_energy,
+    "ENG_EM_FLEXOMAGNETOEXCITONICPOLARITONIC_RESONANCE": read_eng_flexomagnetoexcitonicpolaritonic_resonance_energy,
+    "LAGMUL_MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT": read_lagmul_maverick_hybrid_spatial_linkage_joint,
+    "MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT": read_lagmul_maverick_hybrid_spatial_linkage_joint,
+    "LAGMUL_MAVERICK_HYBRID_SPATIAL_LINKAGE": read_lagmul_maverick_hybrid_spatial_linkage_joint,
+    "MAVERICK_HYBRID_SPATIAL_LINKAGE": read_lagmul_maverick_hybrid_spatial_linkage_joint,
+    "MAVERICK_HYBRID_SPATIAL_MULTI_LOOP_MECHANISM": read_lagmul_maverick_hybrid_spatial_linkage_joint,
+    "MAVERICK_HYBRID_SPATIAL_SYMMETRIC_MECHANISM": read_lagmul_maverick_hybrid_spatial_linkage_joint,
+    "MAVERICK_HYBRID_SPATIAL_6R_MECHANISM": read_lagmul_maverick_hybrid_spatial_linkage_joint,
+    "MAVERICK_HYBRID_SPATIAL_OVERCONSTRAINED_MECHANISM": read_lagmul_maverick_hybrid_spatial_linkage_joint,
+    "SENSOR_SPRING_NORMAL_POP_RATE": read_sensor_spring_normal_pop_rate,
+    "SENSOR_SPRING_NORM_POP_RATE": read_sensor_spring_normal_pop_rate,
+    "SENSOR_SPRING_RATE_POP_NORM": read_sensor_spring_normal_pop_rate,
+    "SENSOR_NORMAL_POP_RATE_SPRING": read_sensor_spring_normal_pop_rate,
+    "SENSOR_SPRING_POP_NORM": read_sensor_spring_normal_pop_rate,
 }
 
 
