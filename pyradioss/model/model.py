@@ -2475,6 +2475,13 @@ class Model:
         self.lagmul_stevens_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /STEVENS_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/STEVENS_HYBRID_SPATIAL_LINKAGE_JOINT (M382)
         self.sensor_spring_torsional_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_LOCK_RATE (M382)
 
+        # M383 Entities
+        self.fail_laddynamicmatrixmicrofissuringrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_MATRIX_MICRO_FISSURING_RATE (M383)
+        self.eng_flexomagnetoplasmonicexcitonicmagnonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICEXCITONICMAGNONIC_RESONANCE_ENERGY (M383)
+        self.lagmul_baker_spatial_linkage_joints: Dict[int, Any] = {} # /BAKER_SPATIAL_LINKAGE_JOINT, /LAGMUL/BAKER_SPATIAL_LINKAGE_JOINT (M383)
+        self.sensor_spring_bending_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_LOCK_RATE (M383)
+
+
 
 
 

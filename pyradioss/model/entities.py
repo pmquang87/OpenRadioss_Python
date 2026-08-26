@@ -21095,6 +21095,86 @@ class SensorSpringTorsionalLockRate:
         self.jtors_lock_max = val
 
 
+# ============================================================================
+# M383 Suite: LadDynamicMatrixMicroFissuringRate failure, EngFlexomagnetoplasmonicexcitonicmagnonicResonanceEnergy, BakerSpatialLinkageJoint, SensorSpringBendingLockRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicMatrixMicroFissuringRate:
+    """``/FAIL/LAD_DYNAMIC_MATRIX_MICRO_FISSURING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_MATRIX_MICRO_FISSURING_RATE`` (M383): Ladevèze rate-dependent dynamic matrix micro-fissuring damage accumulation, micro-void coalescing, and stiffness reduction failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dmmfr0: float = 0.0    # initial dynamic matrix micro-fissuring threshold stress sigma_dmmfr,0
+    sigma_dmmfrc: float = 1.0    # critical dynamic matrix micro-fissuring saturation stress sigma_dmmfr,c
+    gamma_dmmfr: float = 0.0     # dynamic matrix micro-fissuring rate sensitivity factor gamma_dmmfr
+    p_dmmfr: float = 1.0         # dynamic matrix micro-fissuring rate exponent p_dmmfr
+    d_dmmfr_max: float = 0.999   # maximum allowable dynamic matrix micro-fissuring damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetoplasmonicexcitonicmagnonicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOPLASMONICEXCITONICMAGNONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_PLASMON_EXCITON_MAGNON_RES_WORK`` (M383): Engine coupled flexomagnetic-flexoplasmonic-flexoexcitonic-flexomagnonic nanoscale surface plasmon exciton-magnon hybrid resonance energy and strain-gradient electromagnetic-optoelectronic-magnetoelastic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmpemr: float = 0.0       # time frequency for flexomagnetoplasmonicexcitonicmagnonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulBakerSpatialLinkageJoint:
+    """``/BAKER_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/BAKER_SPATIAL_LINKAGE_JOINT/id`` (M383): Baker spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+
+@dataclass
+class SensorSpringBendingLockRate:
+    """``/SENSOR/SPRING_BENDING_LOCK_RATE`` or ``/SENSOR/SPRING_BEND_LOCK_RATE`` (M383): Spring element relative transverse bending angular acceleration 12th rate-of-change (bending angular lock rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jbend_lock_max: float = 1e30 # maximum bending angular lock rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jbend_pop_max(self) -> float:
+        return self.jbend_lock_max
+
+    @jbend_pop_max.setter
+    def jbend_pop_max(self, val: float) -> None:
+        self.jbend_lock_max = val
+
+    @property
+    def jbend_snp_max(self) -> float:
+        return self.jbend_lock_max
+
+    @jbend_snp_max.setter
+    def jbend_snp_max(self, val: float) -> None:
+        self.jbend_lock_max = val
+
+    @property
+    def jbend_crackle_max(self) -> float:
+        return self.jbend_lock_max
+
+    @jbend_crackle_max.setter
+    def jbend_crackle_max(self, val: float) -> None:
+        self.jbend_lock_max = val
+
+
+
 
 
 
