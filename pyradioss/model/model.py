@@ -2481,6 +2481,12 @@ class Model:
         self.lagmul_baker_spatial_linkage_joints: Dict[int, Any] = {} # /BAKER_SPATIAL_LINKAGE_JOINT, /LAGMUL/BAKER_SPATIAL_LINKAGE_JOINT (M383)
         self.sensor_spring_bending_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_LOCK_RATE (M383)
 
+        # M384 Entities
+        self.fail_ladtransversematrixmicrofissuringrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_MATRIX_MICRO_FISSURING_RATE (M384)
+        self.eng_flexomagnetoplasmonicexcitonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICEXCITONICPOLARITONIC_RESONANCE_ENERGY (M384)
+        self.lagmul_dietmeier_spatial_linkage_joints: Dict[int, Any] = {} # /DIETMEIER_SPATIAL_LINKAGE_JOINT, /LAGMUL/DIETMEIER_SPATIAL_LINKAGE_JOINT (M384)
+        self.sensor_spring_total_angular_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_LOCK_RATE (M384)
+
 
 
 
