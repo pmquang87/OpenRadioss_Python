@@ -68822,6 +68822,160 @@ def read_sensor_spring_torsional_shot_rate(block: KeywordBlock, model: Model, lo
     ))
 
 
+# ============================================================================
+# M395 Suite: FailLadDynamicDelaminationRate, EngFlexothermoplasmonicmagnonicpolaritonicResonanceEnergy, LagmulKirsonSpatialLinkageJoint, SensorSpringBendingShotRate
+# ============================================================================
+
+def read_fail_lad_dynamic_delamination_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_DYNAMIC_DELAMINATION_RATE/mat_ID`` or ``/FAIL/LADEVEZE_DYNAMIC_DELAMINATION_RATE`` (M395): Ladevèze rate-dependent dynamic interlaminar delamination damage accumulation, mode I/II/III mixed-mode decohesion, and interlaminar interface separation failure model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_DYNAMIC_DELAMINATION_RATE/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_DYNAMIC_DELAMINATION_RATE_1")
+        sigma_ddlr0 = _fval(c1[0], 0.0) if len(c1) > 0 and c1[0].strip() else 0.0
+        sigma_ddlrc = _fval(c1[1], 1.0) if len(c1) > 1 and c1[1].strip() else 1.0
+        gamma_ddlr = _fval(c1[2], 0.0) if len(c1) > 2 and c1[2].strip() else 0.0
+        p_ddlr = _fval(c1[3], 1.0) if len(c1) > 3 and c1[3].strip() else 1.0
+        d_ddlr_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        c2 = cards[1].cut("FAIL_LAD_DYNAMIC_DELAMINATION_RATE_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        sigma_ddlr0 = float(t1[0].rstrip(',')) if len(t1) > 0 and t1[0].rstrip(',') else 0.0
+        sigma_ddlrc = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 1.0
+        gamma_ddlr = float(t1[2].rstrip(',')) if len(t1) > 2 and t1[2].rstrip(',') else 0.0
+        p_ddlr = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 1.0
+        d_ddlr_max = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.999
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "sigma_ddlr0": sigma_ddlr0, "sigma_ddlrc": sigma_ddlrc, "gamma_ddlr": gamma_ddlr,
+        "p_ddlr": p_ddlr, "d_ddlr_max": d_ddlr_max,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadDynamicDelaminationRate, FailureModel
+    model.fail_laddynamicdelaminationrates[mat_id] = FailLadDynamicDelaminationRate(
+        mat_id=mat_id, title=title, sigma_ddlr0=sigma_ddlr0, sigma_ddlrc=sigma_ddlrc,
+        gamma_ddlr=gamma_ddlr, p_ddlr=p_ddlr, d_ddlr_max=d_ddlr_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm = FailureModel(type="LAD_DYNAMIC_DELAMINATION_RATE", ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_flexothermoplasmonicmagnonicpolaritonic_resonance_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/FLEXOTHERMOPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PLASMON_MAGNON_POLARITON_RES_WORK`` (M395): Engine coupled flexothermal-flexoplasmonic-flexomagnonic-flexopolaritonic nanoscale surface plasmon-magnon-polariton hybrid resonance energy and thermal-gradient optomagnetic-polaritonic dissipation tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/FLEXOTHERMOPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_ftpmp, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_FLEXOTHERMOPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY_1")
+        dt_ftpmp = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_ftpmp = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngFlexothermoplasmonicmagnonicpolaritonicResonanceEnergy
+    r_id = block.user_id or (len(model.eng_flexothermoplasmonicmagnonicpolaritonic_resonance_energies) + 1)
+    model.eng_flexothermoplasmonicmagnonicpolaritonic_resonance_energies[r_id] = EngFlexothermoplasmonicmagnonicpolaritonicResonanceEnergy(
+        id=r_id, title=title, dt_ftpmp=dt_ftpmp, sens_id=sens_id
+    )
+
+
+def read_lagmul_kirson_spatial_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/KIRSON_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/KIRSON_SPATIAL_LINKAGE_JOINT/id`` (M395): Kirson spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/KIRSON_SPATIAL_LINKAGE_JOINT/{block.user_id}: missing data card", block.source)
+        return
+
+    node1, node2, node3, stiff, skew_id, tol = 0, 0, 0, 1e6, 0, 1e-6
+    link_len_a, link_len_b, twist_angle_alpha, offset_distance_s = 0.0, 0.0, 0.0, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("KIRSON_SPATIAL_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0]) if len(f1) > 0 else 0
+        node2 = _ival(f1[1]) if len(f1) > 1 else 0
+        node3 = _ival(f1[2]) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 and f1[3].strip() else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 and f1[5].strip() else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            f2 = cards[1].cut("KIRSON_SPATIAL_LINKAGE_JOINT_2")
+            link_len_a = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            link_len_b = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            twist_angle_alpha = _fval(f2[2], 0.0) if len(f2) > 2 and f2[2].strip() else 0.0
+            offset_distance_s = _fval(f2[3], 0.0) if len(f2) > 3 and f2[3].strip() else 0.0
+    else:
+        toks1 = cards[0].tokens()
+        node1 = int(float(toks1[0].rstrip(','))) if len(toks1) > 0 else 0
+        node2 = int(float(toks1[1].rstrip(','))) if len(toks1) > 1 else 0
+        node3 = int(float(toks1[2].rstrip(','))) if len(toks1) > 2 else 0
+        stiff = float(toks1[3].rstrip(',')) if len(toks1) > 3 else 1e6
+        skew_id = int(float(toks1[4].rstrip(','))) if len(toks1) > 4 else 0
+        tol = float(toks1[5].rstrip(',')) if len(toks1) > 5 else 1e-6
+
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            link_len_a = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            link_len_b = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            twist_angle_alpha = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            offset_distance_s = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+
+    from ..model.entities import LagmulKirsonSpatialLinkageJoint
+    model.lagmul_kirson_spatial_linkage_joints[block.user_id] = LagmulKirsonSpatialLinkageJoint(
+        id=block.user_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        link_len_a=link_len_a, link_len_b=link_len_b,
+        twist_angle_alpha=twist_angle_alpha, offset_distance_s=offset_distance_s
+    )
+
+
+def read_sensor_spring_bending_shot_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_BENDING_SHOT_RATE`` or ``/SENSOR/SPRING_BEND_SHOT_RATE`` (M395): Spring element relative transverse bending angular acceleration 14th rate-of-change (bending shot rate) magnitude threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_BENDING_SHOT_RATE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, jbend_shot_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_BENDING_SHOT_RATE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        jbend_shot_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        jbend_shot_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringBendingShotRate, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_bending_shot_rates) + 1)
+    ssnsr = SensorSpringBendingShotRate(
+        id=s_id, title=title, spring_id=spring_id,
+        jbend_shot_max=jbend_shot_max, t_delay=t_delay
+    )
+    model.sensor_spring_bending_shot_rates[s_id] = ssnsr
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_BENDING_SHOT_RATE", tdelay=t_delay
+    ))
+
+
+
 
 
 
@@ -74529,6 +74683,31 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_RATE_SHOT_TORS": read_sensor_spring_torsional_shot_rate,
     "SENSOR_TORSIONAL_SHOT_RATE_SPRING": read_sensor_spring_torsional_shot_rate,
     "SENSOR_SPRING_SHOT_TORS": read_sensor_spring_torsional_shot_rate,
+    # M395: FAIL_LAD_DYNAMIC_DELAMINATION_RATE, ENG_FLEXOTHERMOPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY, KIRSON_SPATIAL_LINKAGE_JOINT, SENSOR_SPRING_BENDING_SHOT_RATE
+    "FAIL_LAD_DYNAMIC_DELAMINATION_RATE": read_fail_lad_dynamic_delamination_rate,
+    "FAIL_LADEVEZE_DYNAMIC_DELAMINATION_RATE": read_fail_lad_dynamic_delamination_rate,
+    "FAIL_LAD_DDLR": read_fail_lad_dynamic_delamination_rate,
+    "FAIL_LAD_DDLR_MODEL": read_fail_lad_dynamic_delamination_rate,
+    "FAIL_LAD_DDLR_LAW": read_fail_lad_dynamic_delamination_rate,
+    "FAIL_LADEVEZE_RATE_DEPENDENT_DYNAMIC_DELAMINATION": read_fail_lad_dynamic_delamination_rate,
+    "ENG_FLEXOTHERMOPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY": read_eng_flexothermoplasmonicmagnonicpolaritonic_resonance_energy,
+    "ENG_FLEXOTHERM_PLASMON_MAGNON_POLARITON_RES_WORK": read_eng_flexothermoplasmonicmagnonicpolaritonic_resonance_energy,
+    "ENG_EFLEXOTHERMOPLASMONICMAGNONICPOLARITONICRESONANCE": read_eng_flexothermoplasmonicmagnonicpolaritonic_resonance_energy,
+    "ENG_FLEXOTHERMOPLASMONICMAGNONICPOLARITONIC_RESONANCE_DISSIPATION": read_eng_flexothermoplasmonicmagnonicpolaritonic_resonance_energy,
+    "ENG_ET_FLEXOTHERMOPLASMONICMAGNONICPOLARITONIC_RESONANCE": read_eng_flexothermoplasmonicmagnonicpolaritonic_resonance_energy,
+    "LAGMUL_KIRSON_SPATIAL_LINKAGE_JOINT": read_lagmul_kirson_spatial_linkage_joint,
+    "KIRSON_SPATIAL_LINKAGE_JOINT": read_lagmul_kirson_spatial_linkage_joint,
+    "LAGMUL_KIRSON_SPATIAL_LINKAGE": read_lagmul_kirson_spatial_linkage_joint,
+    "KIRSON_SPATIAL_LINKAGE": read_lagmul_kirson_spatial_linkage_joint,
+    "KIRSON_SPATIAL_MULTI_LOOP_MECHANISM": read_lagmul_kirson_spatial_linkage_joint,
+    "KIRSON_SPATIAL_SYMMETRIC_MECHANISM": read_lagmul_kirson_spatial_linkage_joint,
+    "KIRSON_SPATIAL_6R_MECHANISM": read_lagmul_kirson_spatial_linkage_joint,
+    "KIRSON_SPATIAL_OVERCONSTRAINED_MECHANISM": read_lagmul_kirson_spatial_linkage_joint,
+    "SENSOR_SPRING_BENDING_SHOT_RATE": read_sensor_spring_bending_shot_rate,
+    "SENSOR_SPRING_BEND_SHOT_RATE": read_sensor_spring_bending_shot_rate,
+    "SENSOR_SPRING_RATE_SHOT_BEND": read_sensor_spring_bending_shot_rate,
+    "SENSOR_BENDING_SHOT_RATE_SPRING": read_sensor_spring_bending_shot_rate,
+    "SENSOR_SPRING_SHOT_BEND": read_sensor_spring_bending_shot_rate,
 }
 
 

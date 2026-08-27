@@ -2547,6 +2547,13 @@ class Model:
         self.lagmul_albrecht_spatial_linkage_joints: Dict[int, Any] = {} # /ALBRECHT_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALBRECHT_SPATIAL_LINKAGE_JOINT (M394)
         self.sensor_spring_torsional_shot_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_SHOT_RATE (M394)
 
+        # M395 Entities
+        self.fail_laddynamicdelaminationrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_DELAMINATION_RATE (M395)
+        self.eng_flexothermoplasmonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M395)
+        self.lagmul_kirson_spatial_linkage_joints: Dict[int, Any] = {} # /KIRSON_SPATIAL_LINKAGE_JOINT, /LAGMUL/KIRSON_SPATIAL_LINKAGE_JOINT (M395)
+        self.sensor_spring_bending_shot_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_SHOT_RATE (M395)
+
+
 
 
 
