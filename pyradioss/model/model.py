@@ -2511,6 +2511,12 @@ class Model:
         self.lagmul_konnok_spatial_linkage_joints: Dict[int, Any] = {} # /KONNOK_SPATIAL_LINKAGE_JOINT, /LAGMUL/KONNOK_SPATIAL_LINKAGE_JOINT (M388)
         self.sensor_spring_torsional_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_DROP_RATE (M388)
 
+        # M389 Entities
+        self.fail_laddynamicfibermicrobucklingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_MICRO_BUCKLING_RATE (M389)
+        self.eng_flexomagnetophononicplasmonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M389)
+        self.lagmul_wohlhart_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /WOHLHART_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/WOHLHART_HYBRID_SPATIAL_LINKAGE_JOINT (M389)
+        self.sensor_spring_bending_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_DROP_RATE (M389)
+
 
 
 

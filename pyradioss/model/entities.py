@@ -21682,6 +21682,125 @@ class SensorSpringTorsionalDropRate:
         self.jtors_drop_max = val
 
 
+# ============================================================================
+# M389 Suite: LadDynamicFiberMicroBucklingRate failure, EngFlexomagnetophononicplasmonicmagnonicpolaritonicResonanceEnergy, WohlhartHybridSpatialLinkageJoint, SensorSpringBendingDropRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicFiberMicroBucklingRate:
+    """``/FAIL/LAD_DYNAMIC_FIBER_MICRO_BUCKLING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_FIBER_MICRO_BUCKLING_RATE`` (M389): Ladevèze rate-dependent dynamic fiber micro-buckling damage accumulation, compressive kinking, and fiber shear instability failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dfmbr0: float = 0.0    # initial dynamic fiber micro-buckling threshold stress sigma_dfmbr,0
+    sigma_dfmbrc: float = 1.0    # critical dynamic fiber micro-buckling saturation stress sigma_dfmbr,c
+    gamma_dfmbr: float = 0.0     # dynamic fiber micro-buckling rate sensitivity factor gamma_dfmbr
+    p_dfmbr: float = 1.0         # dynamic fiber micro-buckling rate exponent p_dfmbr
+    d_dfmbr_max: float = 0.999   # maximum allowable dynamic fiber micro-buckling damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexomagnetophononicplasmonicmagnonicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOMAGNETOPHONONICPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOMAGNETO_PHONON_PLASMON_MAGNON_POLARITON_RES_WORK`` (M389): Engine coupled flexomagnetic-flexophononic-flexoplasmonic-flexomagnonic-flexopolaritonic nanoscale acoustic phonon surface plasmon-magnon-polariton hybrid resonance energy and strain-gradient optoacoustic-magnetophotonic-electromagnetic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_fmppmpr: float = 0.0      # time frequency for flexomagnetophononicplasmonicmagnonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulWohlhartHybridSpatialLinkageJoint:
+    """``/WOHLHART_HYBRID_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/WOHLHART_HYBRID_SPATIAL_LINKAGE_JOINT/id`` (M389): Wohlhart hybrid spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringBendingDropRate:
+    """``/SENSOR/SPRING_BENDING_DROP_RATE`` or ``/SENSOR/SPRING_BEND_DROP_RATE`` (M389): Spring element relative transverse bending angular acceleration 13th rate-of-change (bending drop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jbend_drop_max: float = 1e30 # maximum bending drop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jbend_lock_max(self) -> float:
+        return self.jbend_drop_max
+
+    @jbend_lock_max.setter
+    def jbend_lock_max(self, val: float) -> None:
+        self.jbend_drop_max = val
+
+    @property
+    def jbend_pop_max(self) -> float:
+        return self.jbend_drop_max
+
+    @jbend_pop_max.setter
+    def jbend_pop_max(self, val: float) -> None:
+        self.jbend_drop_max = val
+
+    @property
+    def jbend_snp_max(self) -> float:
+        return self.jbend_drop_max
+
+    @jbend_snp_max.setter
+    def jbend_snp_max(self, val: float) -> None:
+        self.jbend_drop_max = val
+
+    @property
+    def jbend_crackle_max(self) -> float:
+        return self.jbend_drop_max
+
+    @jbend_crackle_max.setter
+    def jbend_crackle_max(self, val: float) -> None:
+        self.jbend_drop_max = val
+
+
 
 
 
