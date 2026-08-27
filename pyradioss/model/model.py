@@ -2535,6 +2535,13 @@ class Model:
         self.lagmul_sturgess_spatial_linkage_joints: Dict[int, Any] = {} # /STURGESS_SPATIAL_LINKAGE_JOINT, /LAGMUL/STURGESS_SPATIAL_LINKAGE_JOINT (M392)
         self.sensor_spring_transverse_shot_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_SHOT_RATE (M392)
 
+        # M393 Entities
+        self.fail_ladtransversefibersplittingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_SPLITTING_RATE (M393)
+        self.eng_flexothermoplasmonicexcitonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONICEXCITONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M393)
+        self.lagmul_hunt_special_spatial_linkage_joints: Dict[int, Any] = {} # /HUNT_SPECIAL_SPATIAL_LINKAGE_JOINT, /LAGMUL/HUNT_SPECIAL_SPATIAL_LINKAGE_JOINT (M393)
+        self.sensor_spring_total_shot_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_SHOT_RATE (M393)
+
+
 
 
 

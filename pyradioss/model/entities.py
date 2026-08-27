@@ -22191,6 +22191,134 @@ class SensorSpringTransverseShotRate:
         self.jtrans_shot_max = val
 
 
+# ============================================================================
+# M393 Suite: FailLadTransverseFiberSplittingRate, EngFlexothermoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy, LagmulHuntSpecialSpatialLinkageJoint, SensorSpringTotalShotRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseFiberSplittingRate:
+    """``/FAIL/LAD_TRANSVERSE_FIBER_SPLITTING_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_FIBER_SPLITTING_RATE`` (M393): Ladevèze rate-dependent transverse fiber splitting damage accumulation, transverse splitting crack opening, and fiber tensile decohesion failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tfsr0: float = 0.0     # initial transverse fiber splitting threshold stress sigma_tfsr,0
+    sigma_tfsrc: float = 1.0     # critical transverse fiber splitting saturation stress sigma_tfsr,c
+    gamma_tfsr: float = 0.0      # transverse fiber splitting rate sensitivity factor gamma_tfsr
+    p_tfsr: float = 1.0          # transverse fiber splitting rate exponent p_tfsr
+    d_tfsr_max: float = 0.999    # maximum allowable transverse fiber splitting damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOPLASMONICEXCITONICMAGNONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PLASMON_EXCITON_MAGNON_POLARITON_RES_WORK`` (M393): Engine coupled flexothermal-flexoplasmonic-flexoexcitonic-flexomagnonic-flexopolaritonic nanoscale plasmon-exciton-magnon-polariton hybrid resonance energy and thermal-strain gradient optomagnetic-photonic-polaritonic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftpempr: float = 0.0      # time frequency for flexothermoplasmonicexcitonicmagnonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulHuntSpecialSpatialLinkageJoint:
+    """``/HUNT_SPECIAL_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/HUNT_SPECIAL_SPATIAL_LINKAGE_JOINT/id`` (M393): Hunt special spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringTotalShotRate:
+    """``/SENSOR/SPRING_TOTAL_SHOT_RATE`` or ``/SENSOR/SPRING_TOT_SHOT_RATE`` (M393): Spring element relative 3D resultant total linear acceleration 14th rate-of-change (resultant total shot rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_shot_max: float = 1e30  # maximum total resultant shot rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jtot_drop_max(self) -> float:
+        return self.jtot_shot_max
+
+    @jtot_drop_max.setter
+    def jtot_drop_max(self, val: float) -> None:
+        self.jtot_shot_max = val
+
+    @property
+    def jtot_lock_max(self) -> float:
+        return self.jtot_shot_max
+
+    @jtot_lock_max.setter
+    def jtot_lock_max(self, val: float) -> None:
+        self.jtot_shot_max = val
+
+    @property
+    def jtot_pop_max(self) -> float:
+        return self.jtot_shot_max
+
+    @jtot_pop_max.setter
+    def jtot_pop_max(self, val: float) -> None:
+        self.jtot_shot_max = val
+
+    @property
+    def jtot_snp_max(self) -> float:
+        return self.jtot_shot_max
+
+    @jtot_snp_max.setter
+    def jtot_snp_max(self, val: float) -> None:
+        self.jtot_shot_max = val
+
+    @property
+    def jtot_crackle_max(self) -> float:
+        return self.jtot_shot_max
+
+    @jtot_crackle_max.setter
+    def jtot_crackle_max(self, val: float) -> None:
+        self.jtot_shot_max = val
+
+
+
 
 
 
