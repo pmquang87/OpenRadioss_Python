@@ -2541,6 +2541,13 @@ class Model:
         self.lagmul_hunt_special_spatial_linkage_joints: Dict[int, Any] = {} # /HUNT_SPECIAL_SPATIAL_LINKAGE_JOINT, /LAGMUL/HUNT_SPECIAL_SPATIAL_LINKAGE_JOINT (M393)
         self.sensor_spring_total_shot_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_SHOT_RATE (M393)
 
+        # M394 Entities
+        self.fail_ladcouplefibersplittingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FIBER_SPLITTING_RATE (M394)
+        self.eng_flexothermophononicexcitonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPHONONICEXCITONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M394)
+        self.lagmul_albrecht_spatial_linkage_joints: Dict[int, Any] = {} # /ALBRECHT_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALBRECHT_SPATIAL_LINKAGE_JOINT (M394)
+        self.sensor_spring_torsional_shot_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_SHOT_RATE (M394)
+
+
 
 
 
