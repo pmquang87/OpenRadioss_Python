@@ -2529,6 +2529,13 @@ class Model:
         self.lagmul_krause_spatial_linkage_joints: Dict[int, Any] = {} # /KRAUSE_SPATIAL_LINKAGE_JOINT, /LAGMUL/KRAUSE_SPATIAL_LINKAGE_JOINT (M391)
         self.sensor_spring_normal_shot_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_SHOT_RATE (M391)
 
+        # M392 Entities
+        self.fail_laddynamicfibersplittingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_SPLITTING_RATE (M392)
+        self.eng_flexothermophononicplasmonicexcitonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPHONONICPLASMONICEXCITONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M392)
+        self.lagmul_sturgess_spatial_linkage_joints: Dict[int, Any] = {} # /STURGESS_SPATIAL_LINKAGE_JOINT, /LAGMUL/STURGESS_SPATIAL_LINKAGE_JOINT (M392)
+        self.sensor_spring_transverse_shot_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_SHOT_RATE (M392)
+
+
 
 
 
