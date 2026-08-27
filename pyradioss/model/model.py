@@ -2517,6 +2517,13 @@ class Model:
         self.lagmul_wohlhart_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /WOHLHART_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/WOHLHART_HYBRID_SPATIAL_LINKAGE_JOINT (M389)
         self.sensor_spring_bending_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_DROP_RATE (M389)
 
+        # M390 Entities
+        self.fail_ladtransversefibermicrobucklingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_MICRO_BUCKLING_RATE (M390)
+        self.eng_flexomagnetophononicplasmonicexcitonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICPLASMONICEXCITONICPOLARITONIC_RESONANCE_ENERGY (M390)
+        self.lagmul_maverick_spatial_linkage_joints: Dict[int, Any] = {} # /MAVERICK_SPATIAL_LINKAGE_JOINT, /LAGMUL/MAVERICK_SPATIAL_LINKAGE_JOINT (M390)
+        self.sensor_spring_total_angular_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_DROP_RATE (M390)
+
+
 
 
 
