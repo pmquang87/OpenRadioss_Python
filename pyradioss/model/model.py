@@ -2553,6 +2553,13 @@ class Model:
         self.lagmul_kirson_spatial_linkage_joints: Dict[int, Any] = {} # /KIRSON_SPATIAL_LINKAGE_JOINT, /LAGMUL/KIRSON_SPATIAL_LINKAGE_JOINT (M395)
         self.sensor_spring_bending_shot_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_SHOT_RATE (M395)
 
+        # M396 Entities
+        self.fail_ladtransversedelaminationrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_DELAMINATION_RATE (M396)
+        self.eng_flexothermoplasmonicexcitonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONICEXCITONICPOLARITONIC_RESONANCE_ENERGY (M396)
+        self.lagmul_diesel_spatial_linkage_joints: Dict[int, Any] = {} # /DIESEL_SPATIAL_LINKAGE_JOINT, /LAGMUL/DIESEL_SPATIAL_LINKAGE_JOINT (M396)
+        self.sensor_spring_total_angular_shot_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_SHOT_RATE (M396)
+
+
 
 
 
