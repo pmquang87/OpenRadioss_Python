@@ -2523,6 +2523,13 @@ class Model:
         self.lagmul_maverick_spatial_linkage_joints: Dict[int, Any] = {} # /MAVERICK_SPATIAL_LINKAGE_JOINT, /LAGMUL/MAVERICK_SPATIAL_LINKAGE_JOINT (M390)
         self.sensor_spring_total_angular_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_DROP_RATE (M390)
 
+        # M391 Entities
+        self.fail_ladcouplefibermicrobucklingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FIBER_MICRO_BUCKLING_RATE (M391)
+        self.eng_flexomagnetophononicplasmonicexcitonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICPLASMONICEXCITONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M391)
+        self.lagmul_krause_spatial_linkage_joints: Dict[int, Any] = {} # /KRAUSE_SPATIAL_LINKAGE_JOINT, /LAGMUL/KRAUSE_SPATIAL_LINKAGE_JOINT (M391)
+        self.sensor_spring_normal_shot_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_SHOT_RATE (M391)
+
+
 
 
 
