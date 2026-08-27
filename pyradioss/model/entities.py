@@ -21606,6 +21606,15 @@ class EngFlexomagnetophononicplasmonicpolaritonicResonanceEnergy:
     dt_fmpppr: float = 0.0       # time frequency for flexomagnetophononicplasmonicpolaritonic resonance energy output
     sens_id: int = 0             # sensor activation ID
 
+    @property
+    def dt_fmpopr(self) -> float:
+        return self.dt_fmpppr
+
+    @dt_fmpopr.setter
+    def dt_fmpopr(self, val: float) -> None:
+        self.dt_fmpppr = val
+
+
 
 @dataclass
 class LagmulKonnokSpatialLinkageJoint:
@@ -21918,6 +21927,15 @@ class SensorSpringTotalAngularDropRate:
     @jang_crackle_max.setter
     def jang_crackle_max(self, val: float) -> None:
         self.jang_drop_max = val
+
+    @property
+    def jtot_ang_drop_max(self) -> float:
+        return self.jang_drop_max
+
+    @jtot_ang_drop_max.setter
+    def jtot_ang_drop_max(self, val: float) -> None:
+        self.jang_drop_max = val
+
 
 
 
