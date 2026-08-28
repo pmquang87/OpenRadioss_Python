@@ -2655,6 +2655,13 @@ class Model:
         self.lagmul_poisson_spatial_linkage_joints: Dict[int, Any] = {} # /POISSON_SPATIAL_LINKAGE_JOINT, /LAGMUL/POISSON_SPATIAL_LINKAGE_JOINT (M412)
         self.sensor_spring_torsional_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_POP_RATE (M412)
 
+        # M413 Entities
+        self.fail_laddynamiccorecrackingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_CORE_CRACKING_RATE (M413)
+        self.eng_electrothermoflexoplasmonicmagnonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOPLASMONICMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M413)
+        self.lagmul_bessel_spatial_linkage_joints: Dict[int, Any] = {} # /BESSEL_SPATIAL_LINKAGE_JOINT, /LAGMUL/BESSEL_SPATIAL_LINKAGE_JOINT (M413)
+        self.sensor_spring_bending_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_POP_RATE (M413)
+
+
 
 
 

@@ -24918,6 +24918,142 @@ class SensorSpringTorsionalPopRate:
         self.jtor_pop_max = val
 
 
+# ============================================================================
+# M413 Suite: FailLadDynamicCoreCrackingRate, EngElectrothermoflexoplasmonicmagnonicphononicpolaritonicResonanceEnergy, LagmulBesselSpatialLinkageJoint, SensorSpringBendingPopRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicCoreCrackingRate:
+    """``/FAIL/LAD_DYNAMIC_CORE_CRACKING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_CORE_CRACKING_RATE`` (M413): Ladevèze rate-dependent dynamic sandwich core cell-wall fracture, transverse core cracking, and dynamic cell rupture damage model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dcc0: float = 0.0      # initial dynamic core cracking threshold stress sigma_dcc,0
+    sigma_dccc: float = 1.0      # critical dynamic core cracking saturation stress sigma_dcc,c
+    gamma_dcc: float = 0.0       # dynamic core cracking rate sensitivity factor gamma_dcc
+    p_dcc: float = 1.0           # dynamic core cracking rate exponent p_dcc
+    d_dcc_max: float = 0.999     # maximum allowable dynamic core cracking damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngElectrothermoflexoplasmonicmagnonicphononicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOPLASMONICMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_PLASMON_MAGNON_PHONON_POLARITON_RES_WORK`` (M413): Engine coupled electrothermal-flexoplasmonic-flexomagnonic-flexophononic-flexopolaritonic nanoscale plasmon-magnon-phonon-polariton hybrid resonance energy and spintronic-plasmonic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfpmpp: float = 0.0      # time frequency for electrothermoflexoplasmonicmagnonicphononicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulBesselSpatialLinkageJoint:
+    """``/BESSEL_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/BESSEL_SPATIAL_LINKAGE_JOINT/id`` (M413): Bessel spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringBendingPopRate:
+    """``/SENSOR/SPRING_BENDING_POP_RATE`` or ``/SENSOR/SPRING_BEND_POP_RATE`` (M413): Spring element relative transverse bending angular acceleration 16th rate-of-change (bending pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jbend_pop_max: float = 1e30  # maximum bending angular pop rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jbend_snp_max(self) -> float:
+        return self.jbend_pop_max
+
+    @jbend_snp_max.setter
+    def jbend_snp_max(self, val: float) -> None:
+        self.jbend_pop_max = val
+
+    @property
+    def jbend_crackle_max(self) -> float:
+        return self.jbend_pop_max
+
+    @jbend_crackle_max.setter
+    def jbend_crackle_max(self, val: float) -> None:
+        self.jbend_pop_max = val
+
+    @property
+    def jbend_shot_max(self) -> float:
+        return self.jbend_pop_max
+
+    @jbend_shot_max.setter
+    def jbend_shot_max(self, val: float) -> None:
+        self.jbend_pop_max = val
+
+    @property
+    def jbend_drop_max(self) -> float:
+        return self.jbend_pop_max
+
+    @jbend_drop_max.setter
+    def jbend_drop_max(self, val: float) -> None:
+        self.jbend_pop_max = val
+
+    @property
+    def jbend_lock_max(self) -> float:
+        return self.jbend_pop_max
+
+    @jbend_lock_max.setter
+    def jbend_lock_max(self, val: float) -> None:
+        self.jbend_pop_max = val
+
+    @property
+    def jbend_crk_max(self) -> float:
+        return self.jbend_pop_max
+
+    @jbend_crk_max.setter
+    def jbend_crk_max(self, val: float) -> None:
+        self.jbend_pop_max = val
+
+
+
 
 
 
