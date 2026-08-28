@@ -2595,6 +2595,13 @@ class Model:
         self.lagmul_fermat_spatial_linkage_joints: Dict[int, Any] = {} # /FERMAT_SPATIAL_LINKAGE_JOINT, /LAGMUL/FERMAT_SPATIAL_LINKAGE_JOINT (M402)
         self.sensor_spring_total_angular_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_SNAP_RATE (M402)
 
+        # M403 Entities
+        self.fail_ladcouplefiberkinkingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FIBER_KINKING_RATE (M403)
+        self.eng_flexothermoexcitonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOEXCITONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M403)
+        self.lagmul_pascal_spatial_linkage_joints: Dict[int, Any] = {} # /PASCAL_SPATIAL_LINKAGE_JOINT, /LAGMUL/PASCAL_SPATIAL_LINKAGE_JOINT (M403)
+        self.sensor_spring_normal_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_CRACKLE_RATE (M403)
+
+
 
 
 

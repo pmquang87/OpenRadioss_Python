@@ -23461,6 +23461,134 @@ class SensorSpringTotalAngularSnapRate:
         self.jtot_ang_snp_max = val
 
 
+# ============================================================================
+# M403 Suite: FailLadCoupleFiberKinkingRate, EngFlexothermoexcitonicphononicpolaritonicResonanceEnergy, LagmulPascalSpatialLinkageJoint, SensorSpringNormalCrackleRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleFiberKinkingRate:
+    """``/FAIL/LAD_COUPLE_FIBER_KINKING_RATE`` or ``/FAIL/LADEVEZE_COUPLED_FIBER_KINKING_RATE`` (M403): Ladevèze rate-dependent coupled multi-axial fiber micro-buckling and kinking damage accumulation, longitudinal/transverse compressive shear interaction, and multi-scale kink band formation failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cfkr0: float = 0.0     # initial coupled fiber kinking threshold stress sigma_cfkr,0
+    sigma_cfkrc: float = 1.0     # critical coupled fiber kinking saturation stress sigma_cfkr,c
+    gamma_cfkr: float = 0.0      # coupled fiber kinking rate sensitivity factor gamma_cfkr
+    p_cfkr: float = 1.0          # coupled fiber kinking rate exponent p_cfkr
+    d_cfkr_max: float = 0.999    # maximum allowable coupled fiber kinking damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoexcitonicphononicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOEXCITONICPHONONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_EXCITON_PHONON_POLARITON_RES_WORK`` (M403): Engine coupled flexothermal-flexoexcitonic-flexophononic-flexopolaritonic nanoscale exciton-phonon-polariton hybrid resonance energy and thermal-gradient optomechanical dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftepp: float = 0.0        # time frequency for flexothermoexcitonicphononicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulPascalSpatialLinkageJoint:
+    """``/PASCAL_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/PASCAL_SPATIAL_LINKAGE_JOINT/id`` (M403): Pascal spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringNormalCrackleRate:
+    """``/SENSOR/SPRING_NORMAL_CRACKLE_RATE`` or ``/SENSOR/SPRING_NORM_CRACKLE_RATE`` (M403): Spring element relative normal / axial acceleration 15th rate-of-change (axial crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_crk_max: float = 1e30  # maximum normal crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jnorm_shot_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jnorm_shot_max.setter
+    def jnorm_shot_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jnorm_drop_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jnorm_drop_max.setter
+    def jnorm_drop_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jnorm_lock_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jnorm_lock_max.setter
+    def jnorm_lock_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jnorm_pop_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jnorm_pop_max.setter
+    def jnorm_pop_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jnorm_snp_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jnorm_snp_max.setter
+    def jnorm_snp_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+
+
 
 
 
