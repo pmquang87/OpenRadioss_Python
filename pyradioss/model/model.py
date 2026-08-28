@@ -2661,6 +2661,13 @@ class Model:
         self.lagmul_bessel_spatial_linkage_joints: Dict[int, Any] = {} # /BESSEL_SPATIAL_LINKAGE_JOINT, /LAGMUL/BESSEL_SPATIAL_LINKAGE_JOINT (M413)
         self.sensor_spring_bending_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_POP_RATE (M413)
 
+        # M414 Entities
+        self.fail_ladtransversecorecrackingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_CORE_CRACKING_RATE (M414)
+        self.eng_electrothermoflexoplasmonicexcitonicmagnonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOPLASMONICEXCITONICMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M414)
+        self.lagmul_riemann_spatial_linkage_joints: Dict[int, Any] = {} # /RIEMANN_SPATIAL_LINKAGE_JOINT, /LAGMUL/RIEMANN_SPATIAL_LINKAGE_JOINT (M414)
+        self.sensor_spring_total_angular_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE (M414)
+
+
 
 
 
