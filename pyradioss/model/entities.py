@@ -25323,6 +25323,142 @@ class SensorSpringNormalLockRate:
         self.jnorm_lock_max = val
 
 
+# ============================================================================
+# M416 Suite: FailLadDynamicFacesheetCoreShearingRate, EngElectrothermoflexomagnetoexcitonicphononicpolaritonicResonanceEnergy, LagmulBanachSpatialLinkageJoint, SensorSpringTransverseLockRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicFacesheetCoreShearingRate:
+    """``/FAIL/LAD_DYNAMIC_FACESHEET_CORE_SHEARING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_FACESHEET_CORE_SHEARING_RATE`` (M416): Ladevèze rate-dependent dynamic sandwich facesheet-core shear slip, skin-core adhesive shearing, and interfacial core shear damage model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dfcs0: float = 0.0     # initial facesheet-core shearing threshold stress sigma_dfcs,0
+    sigma_dfcsc: float = 1.0     # critical facesheet-core shearing saturation stress sigma_dfcs,c
+    gamma_dfcs: float = 0.0      # facesheet-core shearing rate sensitivity factor gamma_dfcs
+    p_dfcs: float = 1.0          # facesheet-core shearing rate exponent p_dfcs
+    d_dfcs_max: float = 0.999    # maximum allowable facesheet-core shearing damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngElectrothermoflexomagnetoexcitonicphononicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOEXCITONICPHONONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_EXCITON_PHONON_POLARITON_RES_WORK`` (M416): Engine coupled electrothermal-flexomagnetic-flexoexcitonic-flexophononic-flexopolaritonic nanoscale exciton-phonon-polariton hybrid resonance energy and multi-field opto-spintronic-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfmeppp: float = 0.0     # time frequency for electrothermoflexomagnetoexcitonicphononicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulBanachSpatialLinkageJoint:
+    """``/BANACH_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/BANACH_SPATIAL_LINKAGE_JOINT/id`` (M416): Banach spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringTransverseLockRate:
+    """``/SENSOR/SPRING_TRANSVERSE_LOCK_RATE`` or ``/SENSOR/SPRING_TRANS_LOCK_RATE`` (M416): Spring element relative transverse / shear acceleration 17th rate-of-change (shear lock rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtrans_lock_max: float = 1e30 # maximum shear lock rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jtrans_snp_max(self) -> float:
+        return self.jtrans_lock_max
+
+    @jtrans_snp_max.setter
+    def jtrans_snp_max(self, val: float) -> None:
+        self.jtrans_lock_max = val
+
+    @property
+    def jtrans_crackle_max(self) -> float:
+        return self.jtrans_lock_max
+
+    @jtrans_crackle_max.setter
+    def jtrans_crackle_max(self, val: float) -> None:
+        self.jtrans_lock_max = val
+
+    @property
+    def jtrans_shot_max(self) -> float:
+        return self.jtrans_lock_max
+
+    @jtrans_shot_max.setter
+    def jtrans_shot_max(self, val: float) -> None:
+        self.jtrans_lock_max = val
+
+    @property
+    def jtrans_drop_max(self) -> float:
+        return self.jtrans_lock_max
+
+    @jtrans_drop_max.setter
+    def jtrans_drop_max(self, val: float) -> None:
+        self.jtrans_lock_max = val
+
+    @property
+    def jtrans_pop_max(self) -> float:
+        return self.jtrans_lock_max
+
+    @jtrans_pop_max.setter
+    def jtrans_pop_max(self, val: float) -> None:
+        self.jtrans_lock_max = val
+
+    @property
+    def jtrans_crk_max(self) -> float:
+        return self.jtrans_lock_max
+
+    @jtrans_crk_max.setter
+    def jtrans_crk_max(self, val: float) -> None:
+        self.jtrans_lock_max = val
+
+
+
 
 
 

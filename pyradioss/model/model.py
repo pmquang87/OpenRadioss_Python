@@ -2673,6 +2673,13 @@ class Model:
         self.lagmul_hilbert_spatial_linkage_joints: Dict[int, Any] = {} # /HILBERT_SPATIAL_LINKAGE_JOINT, /LAGMUL/HILBERT_SPATIAL_LINKAGE_JOINT (M415)
         self.sensor_spring_normal_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_LOCK_RATE (M415)
 
+        # M416 Entities
+        self.fail_laddynamicfacesheetcoreshearingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FACESHEET_CORE_SHEARING_RATE (M416)
+        self.eng_electrothermoflexomagnetoexcitonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOEXCITONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M416)
+        self.lagmul_banach_spatial_linkage_joints: Dict[int, Any] = {} # /BANACH_SPATIAL_LINKAGE_JOINT, /LAGMUL/BANACH_SPATIAL_LINKAGE_JOINT (M416)
+        self.sensor_spring_transverse_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_LOCK_RATE (M416)
+
+
 
 
 
