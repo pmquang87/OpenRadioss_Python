@@ -2625,6 +2625,13 @@ class Model:
         self.lagmul_gauss_spatial_linkage_joints: Dict[int, Any] = {} # /GAUSS_SPATIAL_LINKAGE_JOINT, /LAGMUL/GAUSS_SPATIAL_LINKAGE_JOINT (M407)
         self.sensor_spring_bending_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_CRACKLE_RATE (M407)
 
+        # M408 Entities
+        self.fail_ladtransversecoreshearingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_CORE_SHEARING_RATE (M408)
+        self.eng_flexothermoplasmonicexcitonicmagnonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONICEXCITONICMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M408)
+        self.lagmul_euler_spatial_linkage_joints: Dict[int, Any] = {} # /EULER_SPATIAL_LINKAGE_JOINT, /LAGMUL/EULER_SPATIAL_LINKAGE_JOINT (M408)
+        self.sensor_spring_total_angular_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_CRACKLE_RATE (M408)
+
+
 
 
 
