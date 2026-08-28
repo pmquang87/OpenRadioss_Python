@@ -24306,6 +24306,38 @@ class SensorSpringTotalAngularCrackleRate:
     t_delay: float = 0.0         # activation delay time
 
     @property
+    def jtot_ang_crk_max(self) -> float:
+        return self.jtota_crk_max
+
+    @jtot_ang_crk_max.setter
+    def jtot_ang_crk_max(self, val: float) -> None:
+        self.jtota_crk_max = val
+
+    @property
+    def jtot_ang_pop_max(self) -> float:
+        return self.jtota_crk_max
+
+    @jtot_ang_pop_max.setter
+    def jtot_ang_pop_max(self, val: float) -> None:
+        self.jtota_crk_max = val
+
+    @property
+    def jang_pop_max(self) -> float:
+        return self.jtota_crk_max
+
+    @jang_pop_max.setter
+    def jang_pop_max(self, val: float) -> None:
+        self.jtota_crk_max = val
+
+    @property
+    def jang_crk_max(self) -> float:
+        return self.jtota_crk_max
+
+    @jang_crk_max.setter
+    def jang_crk_max(self, val: float) -> None:
+        self.jtota_crk_max = val
+
+    @property
     def jtota_shot_max(self) -> float:
         return self.jtota_crk_max
 
