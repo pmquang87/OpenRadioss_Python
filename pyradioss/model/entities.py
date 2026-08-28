@@ -22826,6 +22826,134 @@ class SensorSpringNormalSnapRate:
         self.jnorm_snp_max = val
 
 
+# ============================================================================
+# M398 Suite: FailLadDynamicMatrixCrackingRate, EngFlexothermoplasmonicpolaritonicResonanceEnergy, LagmulSylvesterSpatialLinkageJoint, SensorSpringTransverseSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicMatrixCrackingRate:
+    """``/FAIL/LAD_DYNAMIC_MATRIX_CRACKING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_MATRIX_CRACKING_RATE`` (M398): Ladevèze rate-dependent dynamic transverse matrix cracking and intralaminar shear micro-cracking damage accumulation, mode I transverse tension / mode II shear decohesion, and matrix degradation failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dmcr0: float = 0.0     # initial dynamic matrix cracking threshold stress sigma_dmcr,0
+    sigma_dmcrc: float = 1.0     # critical dynamic matrix cracking saturation stress sigma_dmcr,c
+    gamma_dmcr: float = 0.0      # dynamic matrix cracking rate sensitivity factor gamma_dmcr
+    p_dmcr: float = 1.0          # dynamic matrix cracking rate exponent p_dmcr
+    d_dmcr_max: float = 0.999    # maximum allowable dynamic matrix cracking damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoplasmonicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOPLASMONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PLASMON_POLARITON_RES_WORK`` (M398): Engine coupled flexothermal-flexoplasmonic-flexopolaritonic nanoscale surface plasmon-polariton hybrid resonance energy and thermal-gradient optophotonic-polaritonic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftpp: float = 0.0         # time frequency for flexothermoplasmonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulSylvesterSpatialLinkageJoint:
+    """``/SYLVESTER_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/SYLVESTER_SPATIAL_LINKAGE_JOINT/id`` (M398): Sylvester spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringTransverseSnapRate:
+    """``/SENSOR/SPRING_TRANSVERSE_SNAP_RATE`` or ``/SENSOR/SPRING_TRANS_SNAP_RATE`` (M398): Spring element relative transverse / shear acceleration 14th rate-of-change (shear snap rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtrans_snp_max: float = 1e30 # maximum transverse snap rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jtrans_shot_max(self) -> float:
+        return self.jtrans_snp_max
+
+    @jtrans_shot_max.setter
+    def jtrans_shot_max(self, val: float) -> None:
+        self.jtrans_snp_max = val
+
+    @property
+    def jtrans_drop_max(self) -> float:
+        return self.jtrans_snp_max
+
+    @jtrans_drop_max.setter
+    def jtrans_drop_max(self, val: float) -> None:
+        self.jtrans_snp_max = val
+
+    @property
+    def jtrans_lock_max(self) -> float:
+        return self.jtrans_snp_max
+
+    @jtrans_lock_max.setter
+    def jtrans_lock_max(self, val: float) -> None:
+        self.jtrans_snp_max = val
+
+    @property
+    def jtrans_pop_max(self) -> float:
+        return self.jtrans_snp_max
+
+    @jtrans_pop_max.setter
+    def jtrans_pop_max(self, val: float) -> None:
+        self.jtrans_snp_max = val
+
+    @property
+    def jtrans_crackle_max(self) -> float:
+        return self.jtrans_snp_max
+
+    @jtrans_crackle_max.setter
+    def jtrans_crackle_max(self, val: float) -> None:
+        self.jtrans_snp_max = val
+
+
+
 
 
 
