@@ -2637,6 +2637,13 @@ class Model:
         self.lagmul_lagrange_spatial_linkage_joints: Dict[int, Any] = {} # /LAGRANGE_SPATIAL_LINKAGE_JOINT, /LAGMUL/LAGRANGE_SPATIAL_LINKAGE_JOINT (M409)
         self.sensor_spring_normal_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_POP_RATE (M409)
 
+        # M410 Entities
+        self.fail_laddynamiccoredebondingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_CORE_DEBONDING_RATE (M410)
+        self.eng_electrothermoflexoexcitonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOEXCITONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M410)
+        self.lagmul_laplace_spatial_linkage_joints: Dict[int, Any] = {} # /LAPLACE_SPATIAL_LINKAGE_JOINT, /LAGMUL/LAPLACE_SPATIAL_LINKAGE_JOINT (M410)
+        self.sensor_spring_transverse_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_POP_RATE (M410)
+
+
 
 
 
