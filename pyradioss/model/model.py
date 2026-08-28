@@ -2601,6 +2601,13 @@ class Model:
         self.lagmul_pascal_spatial_linkage_joints: Dict[int, Any] = {} # /PASCAL_SPATIAL_LINKAGE_JOINT, /LAGMUL/PASCAL_SPATIAL_LINKAGE_JOINT (M403)
         self.sensor_spring_normal_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_CRACKLE_RATE (M403)
 
+        # M404 Entities
+        self.fail_laddynamiccorecrushingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_CORE_CRUSHING_RATE (M404)
+        self.eng_flexothermomagnonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M404)
+        self.lagmul_descartes_spatial_linkage_joints: Dict[int, Any] = {} # /DESCARTES_SPATIAL_LINKAGE_JOINT, /LAGMUL/DESCARTES_SPATIAL_LINKAGE_JOINT (M404)
+        self.sensor_spring_transverse_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_CRACKLE_RATE (M404)
+
+
 
 
 
