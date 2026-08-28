@@ -2577,6 +2577,13 @@ class Model:
         self.lagmul_cauchy_spatial_linkage_joints: Dict[int, Any] = {} # /CAUCHY_SPATIAL_LINKAGE_JOINT, /LAGMUL/CAUCHY_SPATIAL_LINKAGE_JOINT (M399)
         self.sensor_spring_total_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_SNAP_RATE (M399)
 
+        # M400 Entities
+        self.fail_ladcouplematrixcrackingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_MATRIX_CRACKING_RATE (M400)
+        self.eng_flexothermoexcitonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOEXCITONICPOLARITONIC_RESONANCE_ENERGY (M400)
+        self.lagmul_cayley_spatial_linkage_joints: Dict[int, Any] = {} # /CAYLEY_SPATIAL_LINKAGE_JOINT, /LAGMUL/CAYLEY_SPATIAL_LINKAGE_JOINT (M400)
+        self.sensor_spring_torsional_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_SNAP_RATE (M400)
+
+
 
 
 

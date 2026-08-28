@@ -23080,6 +23080,134 @@ class SensorSpringTotalSnapRate:
         self.jtot_snp_max = val
 
 
+# ============================================================================
+# M400 Suite: FailLadCoupleMatrixCrackingRate, EngFlexothermoexcitonicpolaritonicResonanceEnergy, LagmulCayleySpatialLinkageJoint, SensorSpringTorsionalSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleMatrixCrackingRate:
+    """``/FAIL/LAD_COUPLE_MATRIX_CRACKING_RATE`` or ``/FAIL/LADEVEZE_COUPLED_MATRIX_CRACKING_RATE`` (M400): Ladevèze rate-dependent coupled multi-axial matrix cracking and intralaminar shear-tension interaction damage accumulation, mode I transverse tension / mode II-III shear mixed-mode decohesion, and matrix failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cmcr0: float = 0.0     # initial coupled matrix cracking threshold stress sigma_cmcr,0
+    sigma_cmcrc: float = 1.0     # critical coupled matrix cracking saturation stress sigma_cmcr,c
+    gamma_cmcr: float = 0.0      # coupled matrix cracking rate sensitivity factor gamma_cmcr
+    p_cmcr: float = 1.0          # coupled matrix cracking rate exponent p_cmcr
+    d_cmcr_max: float = 0.999    # maximum allowable coupled matrix cracking damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoexcitonicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOEXCITONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_EXCITON_POLARITON_RES_WORK`` (M400): Engine coupled flexothermal-flexoexcitonic-flexopolaritonic nanoscale exciton-polariton hybrid resonance energy and thermal-gradient photonic-polaritonic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftep: float = 0.0         # time frequency for flexothermoexcitonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulCayleySpatialLinkageJoint:
+    """``/CAYLEY_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/CAYLEY_SPATIAL_LINKAGE_JOINT/id`` (M400): Cayley spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringTorsionalSnapRate:
+    """``/SENSOR/SPRING_TORSIONAL_SNAP_RATE`` or ``/SENSOR/SPRING_TORS_SNAP_RATE`` (M400): Spring element relative torsional angular acceleration 14th rate-of-change (torsional snap rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtors_snp_max: float = 1e30  # maximum torsional snap rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jtors_shot_max(self) -> float:
+        return self.jtors_snp_max
+
+    @jtors_shot_max.setter
+    def jtors_shot_max(self, val: float) -> None:
+        self.jtors_snp_max = val
+
+    @property
+    def jtors_drop_max(self) -> float:
+        return self.jtors_snp_max
+
+    @jtors_drop_max.setter
+    def jtors_drop_max(self, val: float) -> None:
+        self.jtors_snp_max = val
+
+    @property
+    def jtors_lock_max(self) -> float:
+        return self.jtors_snp_max
+
+    @jtors_lock_max.setter
+    def jtors_lock_max(self, val: float) -> None:
+        self.jtors_snp_max = val
+
+    @property
+    def jtors_pop_max(self) -> float:
+        return self.jtors_snp_max
+
+    @jtors_pop_max.setter
+    def jtors_pop_max(self, val: float) -> None:
+        self.jtors_snp_max = val
+
+    @property
+    def jtors_crackle_max(self) -> float:
+        return self.jtors_snp_max
+
+    @jtors_crackle_max.setter
+    def jtors_crackle_max(self, val: float) -> None:
+        self.jtors_snp_max = val
+
+
+
 
 
 
