@@ -151,7 +151,7 @@ def test_m395_eng_flexothermoplasmonicmagnonicpolaritonic_resonance_energy_alias
     deck = """# RADIOSS ALIAS DECK
 /BEGIN
 Engine Flexothermoplasmonicmagnonicpolaritonic Resonance Energy Aliases Test
-/ENG/FLEXOTHERM_PLASMON_MAGNON_POLARITON_RES_WORK/297
+/ENG/FLEXOTHERM_PLASMONIC_MAGNONIC_POLARITON_RES_WORK/297
 0.0195, 397
 /ENG/EFLEXOTHERMOPLASMONICMAGNONICPOLARITONICRESONANCE/298
 0.0205, 398

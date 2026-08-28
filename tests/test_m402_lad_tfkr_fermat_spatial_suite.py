@@ -151,7 +151,7 @@ def test_m402_eng_flexothermoplasmonicphononicpolaritonic_resonance_energy_alias
     deck = """# RADIOSS ALIAS DECK
 /BEGIN
 Engine Flexothermoplasmonicphononicpolaritonic Resonance Energy Aliases Test
-/ENG/FLEXOTHERM_PLASMON_PHONON_POLARITON_RES_WORK/367
+/ENG/FLEXOTHERM_PLASMONIC_PHONONIC_POLARITON_RES_WORK/367
 0.0265, 467
 /ENG/EFLEXOTHERMOPLASMONICPHONONICPOLARITONICRESONANCE/368
 0.0275, 468

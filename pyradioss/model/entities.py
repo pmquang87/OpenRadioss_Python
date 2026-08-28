@@ -22463,6 +22463,47 @@ class FailLadDynamicDelaminationRate:
     ifail_so: int = 1            # solid element deletion flag
     fail_id: int = 0             # failure model ID reference
 
+    @property
+    def sigma_ddr0(self) -> float:
+        return self.sigma_ddlr0
+
+    @sigma_ddr0.setter
+    def sigma_ddr0(self, val: float) -> None:
+        self.sigma_ddlr0 = val
+
+    @property
+    def sigma_ddrc(self) -> float:
+        return self.sigma_ddlrc
+
+    @sigma_ddrc.setter
+    def sigma_ddrc(self, val: float) -> None:
+        self.sigma_ddlrc = val
+
+    @property
+    def gamma_ddr(self) -> float:
+        return self.gamma_ddlr
+
+    @gamma_ddr.setter
+    def gamma_ddr(self, val: float) -> None:
+        self.gamma_ddlr = val
+
+    @property
+    def p_ddr(self) -> float:
+        return self.p_ddlr
+
+    @p_ddr.setter
+    def p_ddr(self, val: float) -> None:
+        self.p_ddlr = val
+
+    @property
+    def d_ddr_max(self) -> float:
+        return self.d_ddlr_max
+
+    @d_ddr_max.setter
+    def d_ddr_max(self, val: float) -> None:
+        self.d_ddlr_max = val
+
+
 
 @dataclass
 class EngFlexothermoplasmonicmagnonicpolaritonicResonanceEnergy:
@@ -22590,6 +22631,47 @@ class FailLadTransverseDelaminationRate:
     ifail_so: int = 1            # solid element deletion flag
     fail_id: int = 0             # failure model ID reference
 
+    @property
+    def sigma_tdr0(self) -> float:
+        return self.sigma_tdlr0
+
+    @sigma_tdr0.setter
+    def sigma_tdr0(self, val: float) -> None:
+        self.sigma_tdlr0 = val
+
+    @property
+    def sigma_tdrc(self) -> float:
+        return self.sigma_tdlrc
+
+    @sigma_tdrc.setter
+    def sigma_tdrc(self, val: float) -> None:
+        self.sigma_tdlrc = val
+
+    @property
+    def gamma_tdr(self) -> float:
+        return self.gamma_tdlr
+
+    @gamma_tdr.setter
+    def gamma_tdr(self, val: float) -> None:
+        self.gamma_tdlr = val
+
+    @property
+    def p_tdr(self) -> float:
+        return self.p_tdlr
+
+    @p_tdr.setter
+    def p_tdr(self, val: float) -> None:
+        self.p_tdlr = val
+
+    @property
+    def d_tdr_max(self) -> float:
+        return self.d_tdlr_max
+
+    @d_tdr_max.setter
+    def d_tdr_max(self, val: float) -> None:
+        self.d_tdlr_max = val
+
+
 
 @dataclass
 class EngFlexothermoplasmonicexcitonicpolaritonicResonanceEnergy:
@@ -22716,6 +22798,47 @@ class FailLadCoupleDelaminationRate:
     ifail_sh: int = 1            # shell element deletion flag
     ifail_so: int = 1            # solid element deletion flag
     fail_id: int = 0             # failure model ID reference
+
+    @property
+    def sigma_cdel0(self) -> float:
+        return self.sigma_cdlr0
+
+    @sigma_cdel0.setter
+    def sigma_cdel0(self, val: float) -> None:
+        self.sigma_cdlr0 = val
+
+    @property
+    def sigma_cdelc(self) -> float:
+        return self.sigma_cdlrc
+
+    @sigma_cdelc.setter
+    def sigma_cdelc(self, val: float) -> None:
+        self.sigma_cdlrc = val
+
+    @property
+    def gamma_cdel(self) -> float:
+        return self.gamma_cdlr
+
+    @gamma_cdel.setter
+    def gamma_cdel(self, val: float) -> None:
+        self.gamma_cdlr = val
+
+    @property
+    def p_cdel(self) -> float:
+        return self.p_cdlr
+
+    @p_cdel.setter
+    def p_cdel(self, val: float) -> None:
+        self.p_cdlr = val
+
+    @property
+    def d_cdel_max(self) -> float:
+        return self.d_cdlr_max
+
+    @d_cdel_max.setter
+    def d_cdel_max(self, val: float) -> None:
+        self.d_cdlr_max = val
+
 
 
 @dataclass

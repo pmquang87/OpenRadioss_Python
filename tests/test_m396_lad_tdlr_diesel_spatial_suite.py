@@ -151,7 +151,7 @@ def test_m396_eng_flexothermoplasmonicexcitonicpolaritonic_resonance_energy_alia
     deck = """# RADIOSS ALIAS DECK
 /BEGIN
 Engine Flexothermoplasmonicexcitonicpolaritonic Resonance Energy Aliases Test
-/ENG/FLEXOTHERM_PLASMON_EXCITON_POLARITON_RES_WORK/307
+/ENG/FLEXOTHERM_PLASMONIC_EXCITONIC_POLARITON_RES_WORK/307
 0.0205, 407
 /ENG/EFLEXOTHERMOPLASMONICEXCITONICPOLARITONICRESONANCE/308
 0.0215, 408
