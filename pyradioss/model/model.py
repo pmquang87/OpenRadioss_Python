@@ -2613,6 +2613,13 @@ class Model:
         self.lagmul_leibniz_spatial_linkage_joints: Dict[int, Any] = {} # /LEIBNIZ_SPATIAL_LINKAGE_JOINT, /LAGMUL/LEIBNIZ_SPATIAL_LINKAGE_JOINT (M405)
         self.sensor_spring_total_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_CRACKLE_RATE (M405)
 
+        # M406 Entities
+        self.fail_ladcouplecorecrushingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_CORE_CRUSHING_RATE (M406)
+        self.eng_flexothermoplasmonicmagnonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONICMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M406)
+        self.lagmul_newton_spatial_linkage_joints: Dict[int, Any] = {} # /NEWTON_SPATIAL_LINKAGE_JOINT, /LAGMUL/NEWTON_SPATIAL_LINKAGE_JOINT (M406)
+        self.sensor_spring_torsional_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_CRACKLE_RATE (M406)
+
+
 
 
 
