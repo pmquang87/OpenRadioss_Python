@@ -23334,6 +23334,134 @@ class SensorSpringBendingSnapRate:
         self.jbend_snp_max = val
 
 
+# ============================================================================
+# M402 Suite: FailLadTransverseFiberKinkingRate, EngFlexothermoplasmonicphononicpolaritonicResonanceEnergy, LagmulFermatSpatialLinkageJoint, SensorSpringTotalAngularSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseFiberKinkingRate:
+    """``/FAIL/LAD_TRANSVERSE_FIBER_KINKING_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_FIBER_KINKING_RATE`` (M402): Ladevèze rate-dependent transverse fiber micro-buckling and kinking damage accumulation, off-axis compressive shear failure, and transverse kink band propagation model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tfkr0: float = 0.0     # initial transverse fiber kinking threshold stress sigma_tfkr,0
+    sigma_tfkrc: float = 1.0     # critical transverse fiber kinking saturation stress sigma_tfkr,c
+    gamma_tfkr: float = 0.0      # transverse fiber kinking rate sensitivity factor gamma_tfkr
+    p_tfkr: float = 1.0          # transverse fiber kinking rate exponent p_tfkr
+    d_tfkr_max: float = 0.999    # maximum allowable transverse fiber kinking damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermoplasmonicphononicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOPLASMONICPHONONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PLASMON_PHONON_POLARITON_RES_WORK`` (M402): Engine coupled flexothermal-flexoplasmonic-flexophononic-flexopolaritonic nanoscale surface plasmon-phonon-polariton hybrid resonance energy and thermal-gradient optoelectronic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftppp: float = 0.0        # time frequency for flexothermoplasmonicphononicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulFermatSpatialLinkageJoint:
+    """``/FERMAT_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/FERMAT_SPATIAL_LINKAGE_JOINT/id`` (M402): Fermat spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringTotalAngularSnapRate:
+    """``/SENSOR/SPRING_TOTAL_ANGULAR_SNAP_RATE`` or ``/SENSOR/SPRING_TOT_ANG_SNAP_RATE`` (M402): Spring element relative 3D resultant total angular acceleration 14th rate-of-change (resultant total angular snap rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_ang_snp_max: float = 1e30 # maximum total angular snap rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jtot_ang_shot_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_shot_max.setter
+    def jtot_ang_shot_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtot_ang_drop_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_drop_max.setter
+    def jtot_ang_drop_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtot_ang_lock_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_lock_max.setter
+    def jtot_ang_lock_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtot_ang_pop_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_pop_max.setter
+    def jtot_ang_pop_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtot_ang_crackle_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_crackle_max.setter
+    def jtot_ang_crackle_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+
+
 
 
 
