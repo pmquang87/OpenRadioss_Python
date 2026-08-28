@@ -2583,6 +2583,13 @@ class Model:
         self.lagmul_cayley_spatial_linkage_joints: Dict[int, Any] = {} # /CAYLEY_SPATIAL_LINKAGE_JOINT, /LAGMUL/CAYLEY_SPATIAL_LINKAGE_JOINT (M400)
         self.sensor_spring_torsional_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_SNAP_RATE (M400)
 
+        # M401 Entities
+        self.fail_laddynamicfiberkinkingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_KINKING_RATE (M401)
+        self.eng_flexothermomagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOMAGNONICPOLARITONIC_RESONANCE_ENERGY (M401)
+        self.lagmul_euclid_spatial_linkage_joints: Dict[int, Any] = {} # /EUCLID_SPATIAL_LINKAGE_JOINT, /LAGMUL/EUCLID_SPATIAL_LINKAGE_JOINT (M401)
+        self.sensor_spring_bending_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_SNAP_RATE (M401)
+
+
 
 
 
