@@ -2571,6 +2571,13 @@ class Model:
         self.lagmul_sylvester_spatial_linkage_joints: Dict[int, Any] = {} # /SYLVESTER_SPATIAL_LINKAGE_JOINT, /LAGMUL/SYLVESTER_SPATIAL_LINKAGE_JOINT (M398)
         self.sensor_spring_transverse_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_SNAP_RATE (M398)
 
+        # M399 Entities
+        self.fail_ladtransversematrixcrackingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_MATRIX_CRACKING_RATE (M399)
+        self.eng_flexothermophononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPHONONICPOLARITONIC_RESONANCE_ENERGY (M399)
+        self.lagmul_cauchy_spatial_linkage_joints: Dict[int, Any] = {} # /CAUCHY_SPATIAL_LINKAGE_JOINT, /LAGMUL/CAUCHY_SPATIAL_LINKAGE_JOINT (M399)
+        self.sensor_spring_total_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_SNAP_RATE (M399)
+
+
 
 
 
