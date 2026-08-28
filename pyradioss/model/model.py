@@ -2607,6 +2607,13 @@ class Model:
         self.lagmul_descartes_spatial_linkage_joints: Dict[int, Any] = {} # /DESCARTES_SPATIAL_LINKAGE_JOINT, /LAGMUL/DESCARTES_SPATIAL_LINKAGE_JOINT (M404)
         self.sensor_spring_transverse_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_CRACKLE_RATE (M404)
 
+        # M405 Entities
+        self.fail_ladtransversecorecrushingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_CORE_CRUSHING_RATE (M405)
+        self.eng_flexothermoplasmonicexcitonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONICEXCITONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M405)
+        self.lagmul_leibniz_spatial_linkage_joints: Dict[int, Any] = {} # /LEIBNIZ_SPATIAL_LINKAGE_JOINT, /LAGMUL/LEIBNIZ_SPATIAL_LINKAGE_JOINT (M405)
+        self.sensor_spring_total_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_CRACKLE_RATE (M405)
+
+
 
 
 
