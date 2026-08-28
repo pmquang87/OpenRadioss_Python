@@ -2631,6 +2631,13 @@ class Model:
         self.lagmul_euler_spatial_linkage_joints: Dict[int, Any] = {} # /EULER_SPATIAL_LINKAGE_JOINT, /LAGMUL/EULER_SPATIAL_LINKAGE_JOINT (M408)
         self.sensor_spring_total_angular_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_CRACKLE_RATE (M408)
 
+        # M409 Entities
+        self.fail_ladcouplecoreshearingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_CORE_SHEARING_RATE (M409)
+        self.eng_electrothermoflexoplasmonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOPLASMONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M409)
+        self.lagmul_lagrange_spatial_linkage_joints: Dict[int, Any] = {} # /LAGRANGE_SPATIAL_LINKAGE_JOINT, /LAGMUL/LAGRANGE_SPATIAL_LINKAGE_JOINT (M409)
+        self.sensor_spring_normal_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_POP_RATE (M409)
+
+
 
 
 
