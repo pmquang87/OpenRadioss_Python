@@ -22699,6 +22699,134 @@ class SensorSpringTotalAngularShotRate:
         self.jtot_ang_shot_max = val
 
 
+# ============================================================================
+# M397 Suite: FailLadCoupleDelaminationRate, EngFlexothermophononicmagnonicpolaritonicResonanceEnergy, LagmulTchebychevSpatialLinkageJoint, SensorSpringNormalSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleDelaminationRate:
+    """``/FAIL/LAD_COUPLE_DELAMINATION_RATE`` or ``/FAIL/LADEVEZE_COUPLED_DELAMINATION_RATE`` (M397): Ladevèze rate-dependent coupled multi-axial interlaminar delamination damage accumulation, mode I normal opening / mode II-III shear mixed-mode interaction, and interlaminar interface separation failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cdlr0: float = 0.0     # initial coupled delamination threshold stress sigma_cdlr,0
+    sigma_cdlrc: float = 1.0     # critical coupled delamination saturation stress sigma_cdlr,c
+    gamma_cdlr: float = 0.0      # coupled delamination rate sensitivity factor gamma_cdlr
+    p_cdlr: float = 1.0          # coupled delamination rate exponent p_cdlr
+    d_cdlr_max: float = 0.999    # maximum allowable coupled delamination damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngFlexothermophononicmagnonicpolaritonicResonanceEnergy:
+    """``/ENG/FLEXOTHERMOPHONONICMAGNONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/FLEXOTHERM_PHONON_MAGNON_POLARITON_RES_WORK`` (M397): Engine coupled flexothermal-flexophononic-flexomagnonic-flexopolaritonic nanoscale phonon-magnon-polariton hybrid resonance energy and thermal-gradient optomagnetic-polaritonic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_ftpmp: float = 0.0        # time frequency for flexothermophononicmagnonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulTchebychevSpatialLinkageJoint:
+    """``/TCHEBYCHEV_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/TCHEBYCHEV_SPATIAL_LINKAGE_JOINT/id`` (M397): Chebyshev / Tchebychev spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringNormalSnapRate:
+    """``/SENSOR/SPRING_NORMAL_SNAP_RATE`` or ``/SENSOR/SPRING_NORM_SNAP_RATE`` (M397): Spring element relative normal / axial acceleration 14th rate-of-change (axial snap rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jnorm_snp_max: float = 1e30  # maximum normal snap rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jnorm_shot_max(self) -> float:
+        return self.jnorm_snp_max
+
+    @jnorm_shot_max.setter
+    def jnorm_shot_max(self, val: float) -> None:
+        self.jnorm_snp_max = val
+
+    @property
+    def jnorm_drop_max(self) -> float:
+        return self.jnorm_snp_max
+
+    @jnorm_drop_max.setter
+    def jnorm_drop_max(self, val: float) -> None:
+        self.jnorm_snp_max = val
+
+    @property
+    def jnorm_lock_max(self) -> float:
+        return self.jnorm_snp_max
+
+    @jnorm_lock_max.setter
+    def jnorm_lock_max(self, val: float) -> None:
+        self.jnorm_snp_max = val
+
+    @property
+    def jnorm_pop_max(self) -> float:
+        return self.jnorm_snp_max
+
+    @jnorm_pop_max.setter
+    def jnorm_pop_max(self, val: float) -> None:
+        self.jnorm_snp_max = val
+
+    @property
+    def jnorm_crackle_max(self) -> float:
+        return self.jnorm_snp_max
+
+    @jnorm_crackle_max.setter
+    def jnorm_crackle_max(self, val: float) -> None:
+        self.jnorm_snp_max = val
+
+
+
 
 
 

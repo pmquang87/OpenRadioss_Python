@@ -2559,6 +2559,13 @@ class Model:
         self.lagmul_diesel_spatial_linkage_joints: Dict[int, Any] = {} # /DIESEL_SPATIAL_LINKAGE_JOINT, /LAGMUL/DIESEL_SPATIAL_LINKAGE_JOINT (M396)
         self.sensor_spring_total_angular_shot_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_SHOT_RATE (M396)
 
+        # M397 Entities
+        self.fail_ladcoupledelaminationrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_DELAMINATION_RATE (M397)
+        self.eng_flexothermophononicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPHONONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M397)
+        self.lagmul_tchebychev_spatial_linkage_joints: Dict[int, Any] = {} # /TCHEBYCHEV_SPATIAL_LINKAGE_JOINT, /LAGMUL/TCHEBYCHEV_SPATIAL_LINKAGE_JOINT (M397)
+        self.sensor_spring_normal_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_SNAP_RATE (M397)
+
+
 
 
 
