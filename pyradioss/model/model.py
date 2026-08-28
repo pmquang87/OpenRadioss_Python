@@ -2667,6 +2667,13 @@ class Model:
         self.lagmul_riemann_spatial_linkage_joints: Dict[int, Any] = {} # /RIEMANN_SPATIAL_LINKAGE_JOINT, /LAGMUL/RIEMANN_SPATIAL_LINKAGE_JOINT (M414)
         self.sensor_spring_total_angular_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE (M414)
 
+        # M415 Entities
+        self.fail_ladcouplecorecrackingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_CORE_CRACKING_RATE (M415)
+        self.eng_electrothermoflexomagnetoplasmonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M415)
+        self.lagmul_hilbert_spatial_linkage_joints: Dict[int, Any] = {} # /HILBERT_SPATIAL_LINKAGE_JOINT, /LAGMUL/HILBERT_SPATIAL_LINKAGE_JOINT (M415)
+        self.sensor_spring_normal_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_LOCK_RATE (M415)
+
+
 
 
 
