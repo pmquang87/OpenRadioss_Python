@@ -2643,6 +2643,13 @@ class Model:
         self.lagmul_laplace_spatial_linkage_joints: Dict[int, Any] = {} # /LAPLACE_SPATIAL_LINKAGE_JOINT, /LAGMUL/LAPLACE_SPATIAL_LINKAGE_JOINT (M410)
         self.sensor_spring_transverse_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_POP_RATE (M410)
 
+        # M411 Entities
+        self.fail_ladtransversecoredebondingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_CORE_DEBONDING_RATE (M411)
+        self.eng_electrothermoflexomagnonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M411)
+        self.lagmul_fourier_spatial_linkage_joints: Dict[int, Any] = {} # /FOURIER_SPATIAL_LINKAGE_JOINT, /LAGMUL/FOURIER_SPATIAL_LINKAGE_JOINT (M411)
+        self.sensor_spring_total_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_POP_RATE (M411)
+
+
 
 
 
