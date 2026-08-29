@@ -2691,6 +2691,13 @@ class Model:
         self.lagmul_frechet_spatial_linkage_joints: Dict[int, Any] = {} # /FRECHET_SPATIAL_LINKAGE_JOINT, /LAGMUL/FRECHET_SPATIAL_LINKAGE_JOINT (M418)
         self.sensor_spring_torsional_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_LOCK_RATE (M418)
 
+        # M419 Entities
+        self.fail_laddynamicfacesheetcoredebondingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FACESHEET_CORE_DEBONDING_RATE (M419)
+        self.eng_electrothermoflexomagnetoplasmonicexcitonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICEXCITONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M419)
+        self.lagmul_hausdorff_spatial_linkage_joints: Dict[int, Any] = {} # /HAUSDORFF_SPATIAL_LINKAGE_JOINT, /LAGMUL/HAUSDORFF_SPATIAL_LINKAGE_JOINT (M419)
+        self.sensor_spring_bending_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_LOCK_RATE (M419)
+
+
 
 
 
