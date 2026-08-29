@@ -25593,6 +25593,142 @@ class SensorSpringTotalLockRate:
         self.jtot_lock_max = val
 
 
+# ============================================================================
+# M418 Suite: FailLadCoupleFacesheetCoreShearingRate, EngElectrothermoflexomagnetoexcitonicmagnonicphononicpolaritonicResonanceEnergy, LagmulFrechetSpatialLinkageJoint, SensorSpringTorsionalLockRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupleFacesheetCoreShearingRate:
+    """``/FAIL/LAD_COUPLE_FACESHEET_CORE_SHEARING_RATE`` or ``/FAIL/LADEVEZE_COUPLED_FACESHEET_CORE_SHEARING_RATE`` (M418): Ladevèze rate-dependent coupled sandwich facesheet-core shear slip, mixed-mode peel-shear adhesive shearing, and interfacial core shear damage model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cfcs0: float = 0.0     # initial coupled facesheet-core shearing threshold stress sigma_cfcs,0
+    sigma_cfcsc: float = 1.0     # critical coupled facesheet-core shearing saturation stress sigma_cfcs,c
+    gamma_cfcs: float = 0.0      # coupled facesheet-core shearing rate sensitivity factor gamma_cfcs
+    p_cfcs: float = 1.0          # coupled facesheet-core shearing rate exponent p_cfcs
+    d_cfcs_max: float = 0.999    # maximum allowable coupled facesheet-core shearing damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngElectrothermoflexomagnetoexcitonicmagnonicphononicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOEXCITONICMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_EXCITON_MAGNON_PHONON_POLARITON_RES_WORK`` (M418): Engine coupled electrothermal-flexomagnetic-flexoexcitonic-flexomagnonic-flexophononic-flexopolaritonic nanoscale exciton-magnon-phonon-polariton hybrid resonance energy and multi-field opto-spintronic-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfmemppp: float = 0.0    # time frequency for electrothermoflexomagnetoexcitonicmagnonicphononicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulFrechetSpatialLinkageJoint:
+    """``/FRECHET_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/FRECHET_SPATIAL_LINKAGE_JOINT/id`` (M418): Fréchet spatial 6R multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringTorsionalLockRate:
+    """``/SENSOR/SPRING_TORSIONAL_LOCK_RATE`` or ``/SENSOR/SPRING_TORS_LOCK_RATE`` (M418): Spring element relative torsional angular acceleration 17th rate-of-change (torsional angular lock rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtors_lock_max: float = 1e30 # maximum torsional angular lock rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jtors_snp_max(self) -> float:
+        return self.jtors_lock_max
+
+    @jtors_snp_max.setter
+    def jtors_snp_max(self, val: float) -> None:
+        self.jtors_lock_max = val
+
+    @property
+    def jtors_crackle_max(self) -> float:
+        return self.jtors_lock_max
+
+    @jtors_crackle_max.setter
+    def jtors_crackle_max(self, val: float) -> None:
+        self.jtors_lock_max = val
+
+    @property
+    def jtors_shot_max(self) -> float:
+        return self.jtors_lock_max
+
+    @jtors_shot_max.setter
+    def jtors_shot_max(self, val: float) -> None:
+        self.jtors_lock_max = val
+
+    @property
+    def jtors_drop_max(self) -> float:
+        return self.jtors_lock_max
+
+    @jtors_drop_max.setter
+    def jtors_drop_max(self, val: float) -> None:
+        self.jtors_lock_max = val
+
+    @property
+    def jtors_pop_max(self) -> float:
+        return self.jtors_lock_max
+
+    @jtors_pop_max.setter
+    def jtors_pop_max(self, val: float) -> None:
+        self.jtors_lock_max = val
+
+    @property
+    def jtors_crk_max(self) -> float:
+        return self.jtors_lock_max
+
+    @jtors_crk_max.setter
+    def jtors_crk_max(self, val: float) -> None:
+        self.jtors_lock_max = val
+
+
+
 
 
 

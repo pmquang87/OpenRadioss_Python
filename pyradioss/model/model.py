@@ -2685,6 +2685,13 @@ class Model:
         self.lagmul_sobolev_spatial_linkage_joints: Dict[int, Any] = {} # /SOBOLEV_SPATIAL_LINKAGE_JOINT, /LAGMUL/SOBOLEV_SPATIAL_LINKAGE_JOINT (M417)
         self.sensor_spring_total_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_LOCK_RATE (M417)
 
+        # M418 Entities
+        self.fail_ladcouplefacesheetcoreshearingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FACESHEET_CORE_SHEARING_RATE (M418)
+        self.eng_electrothermoflexomagnetoexcitonicmagnonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOEXCITONICMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M418)
+        self.lagmul_frechet_spatial_linkage_joints: Dict[int, Any] = {} # /FRECHET_SPATIAL_LINKAGE_JOINT, /LAGMUL/FRECHET_SPATIAL_LINKAGE_JOINT (M418)
+        self.sensor_spring_torsional_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_LOCK_RATE (M418)
+
+
 
 
 
