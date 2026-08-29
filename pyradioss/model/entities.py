@@ -27168,6 +27168,174 @@ class SensorSpringTorsionalRateOfChange:
         self.jtors_roc_max = val
 
 
+# ============================================================================
+# M428 Suite: FailLadDynamicFacesheetCoreDebondingRate, EngElectrothermoflexomagnetoexcitonicphononicmagnonpolaritonicResonanceEnergy, LagmulConformalSpatialLinkageJoint, SensorSpringBendingRateOfChange
+# ============================================================================
+
+@dataclass
+class FailLadDynamicFacesheetCoreDebondingRate:
+    """``/FAIL/LAD_DYNAMIC_FACESHEET_CORE_DEBONDING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_FACESHEET_CORE_DEBONDING_RATE`` (M428): Ladevèze rate-dependent dynamic sandwich facesheet-core interfacial debonding, dynamic peel/shear adhesive fracture, and progressive core delamination damage model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dfcd0: float = 0.0     # initial dynamic facesheet-core debonding threshold stress sigma_dfcd,0
+    sigma_dfcdc: float = 1.0     # critical dynamic facesheet-core debonding saturation stress sigma_dfcd,c
+    gamma_dfcd: float = 0.0      # dynamic facesheet-core debonding rate sensitivity factor gamma_dfcd
+    p_dfcd: float = 1.0          # dynamic facesheet-core debonding rate exponent p_dfcd
+    d_dfcd_max: float = 0.999    # maximum allowable dynamic facesheet-core debonding damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngElectrothermoflexomagnetoexcitonicphononicmagnonpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOEXCITONICPHONONICMAGNONPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_EXCITON_PHONON_MAGNON_POLARITON_RES_WORK`` (M428): Engine coupled electrothermal-flexomagnetic-flexoexcitonic-flexophononic-flexomagnonic-flexopolaritonic nanoscale exciton-phonon-magnon-polariton hybrid resonance energy and multi-field opto-spintronic-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfmexpmpp: float = 0.0   # time frequency for electrothermoflexomagnetoexcitonicphononicmagnonpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulConformalSpatialLinkageJoint:
+    """``/CONFORMAL_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/CONFORMAL_SPATIAL_LINKAGE_JOINT/id`` (M428): Conformal spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringBendingRateOfChange:
+    """``/SENSOR/SPRING_BENDING_RATE_OF_CHANGE`` or ``/SENSOR/SPRING_BEND_RATE_OF_CHANGE`` (M428): Spring element relative transverse bending angular acceleration 19th rate-of-change (bending angular rate of change) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jbend_roc_max: float = 1e30  # maximum bending rate of change threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jbend_lock_max(self) -> float:
+        return self.jbend_roc_max
+
+    @jbend_lock_max.setter
+    def jbend_lock_max(self, val: float) -> None:
+        self.jbend_roc_max = val
+
+    @property
+    def jbend_snp_max(self) -> float:
+        return self.jbend_roc_max
+
+    @jbend_snp_max.setter
+    def jbend_snp_max(self, val: float) -> None:
+        self.jbend_roc_max = val
+
+    @property
+    def jbend_crackle_max(self) -> float:
+        return self.jbend_roc_max
+
+    @jbend_crackle_max.setter
+    def jbend_crackle_max(self, val: float) -> None:
+        self.jbend_roc_max = val
+
+    @property
+    def jbend_shot_max(self) -> float:
+        return self.jbend_roc_max
+
+    @jbend_shot_max.setter
+    def jbend_shot_max(self, val: float) -> None:
+        self.jbend_roc_max = val
+
+    @property
+    def jbend_pop_max(self) -> float:
+        return self.jbend_roc_max
+
+    @jbend_pop_max.setter
+    def jbend_pop_max(self, val: float) -> None:
+        self.jbend_roc_max = val
+
+    @property
+    def jbend_crk_max(self) -> float:
+        return self.jbend_roc_max
+
+    @jbend_crk_max.setter
+    def jbend_crk_max(self, val: float) -> None:
+        self.jbend_roc_max = val
+
+    @property
+    def jbend_drop_rate_max(self) -> float:
+        return self.jbend_roc_max
+
+    @jbend_drop_rate_max.setter
+    def jbend_drop_rate_max(self, val: float) -> None:
+        self.jbend_roc_max = val
+
+    @property
+    def jbend_rate_max(self) -> float:
+        return self.jbend_roc_max
+
+    @jbend_rate_max.setter
+    def jbend_rate_max(self, val: float) -> None:
+        self.jbend_roc_max = val
+
+    @property
+    def jbend_roc_rate_max(self) -> float:
+        return self.jbend_roc_max
+
+    @jbend_roc_rate_max.setter
+    def jbend_roc_rate_max(self, val: float) -> None:
+        self.jbend_roc_max = val
+
+
+
 
 
 

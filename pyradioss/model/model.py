@@ -2745,6 +2745,12 @@ class Model:
         self.lagmul_clifford_spatial_linkage_joints: Dict[int, Any] = {} # /CLIFFORD_SPATIAL_LINKAGE_JOINT, /LAGMUL/CLIFFORD_SPATIAL_LINKAGE_JOINT (M427)
         self.sensor_spring_torsional_rate_of_changes: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_RATE_OF_CHANGE (M427)
 
+        # M428 Entities
+        self.fail_laddynamicfacesheetcoredebondingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FACESHEET_CORE_DEBONDING_RATE (M428)
+        self.eng_electrothermoflexomagnetoexcitonicphononicmagnonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOEXCITONICPHONONICMAGNONPOLARITONIC_RESONANCE_ENERGY (M428)
+        self.lagmul_conformal_spatial_linkage_joints: Dict[int, Any] = {} # /CONFORMAL_SPATIAL_LINKAGE_JOINT, /LAGMUL/CONFORMAL_SPATIAL_LINKAGE_JOINT (M428)
+        self.sensor_spring_bending_rate_of_changes: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_RATE_OF_CHANGE (M428)
+
 
 
 
