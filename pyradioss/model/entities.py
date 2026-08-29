@@ -24917,6 +24917,64 @@ class SensorSpringTorsionalPopRate:
     def jtor_crk_max(self, val: float) -> None:
         self.jtor_pop_max = val
 
+    @property
+    def jtors_pop_max(self) -> float:
+        return self.jtor_pop_max
+
+    @jtors_pop_max.setter
+    def jtors_pop_max(self, val: float) -> None:
+        self.jtor_pop_max = val
+
+    @property
+    def jtors_snp_max(self) -> float:
+        return self.jtor_pop_max
+
+    @jtors_snp_max.setter
+    def jtors_snp_max(self, val: float) -> None:
+        self.jtor_pop_max = val
+
+    @property
+    def jtors_crackle_max(self) -> float:
+        return self.jtor_pop_max
+
+    @jtors_crackle_max.setter
+    def jtors_crackle_max(self, val: float) -> None:
+        self.jtor_pop_max = val
+
+    @property
+    def jtors_shot_max(self) -> float:
+        return self.jtor_pop_max
+
+    @jtors_shot_max.setter
+    def jtors_shot_max(self, val: float) -> None:
+        self.jtor_pop_max = val
+
+    @property
+    def jtors_drop_max(self) -> float:
+        return self.jtor_pop_max
+
+    @jtors_drop_max.setter
+    def jtors_drop_max(self, val: float) -> None:
+        self.jtor_pop_max = val
+
+    @property
+    def jtors_lock_max(self) -> float:
+        return self.jtor_pop_max
+
+    @jtors_lock_max.setter
+    def jtors_lock_max(self, val: float) -> None:
+        self.jtor_pop_max = val
+
+    @property
+    def jtors_crk_max(self) -> float:
+        return self.jtor_pop_max
+
+    @jtors_crk_max.setter
+    def jtors_crk_max(self, val: float) -> None:
+        self.jtor_pop_max = val
+
+
+
 
 # ============================================================================
 # M413 Suite: FailLadDynamicCoreCrackingRate, EngElectrothermoflexoplasmonicmagnonicphononicpolaritonicResonanceEnergy, LagmulBesselSpatialLinkageJoint, SensorSpringBendingPopRate
@@ -25186,6 +25244,64 @@ class SensorSpringTotalAngularPopRate:
     @jtot_ang_crk_max.setter
     def jtot_ang_crk_max(self, val: float) -> None:
         self.jtot_ang_pop_max = val
+
+    @property
+    def jtang_pop_max(self) -> float:
+        return self.jtot_ang_pop_max
+
+    @jtang_pop_max.setter
+    def jtang_pop_max(self, val: float) -> None:
+        self.jtot_ang_pop_max = val
+
+    @property
+    def jtang_snp_max(self) -> float:
+        return self.jtot_ang_pop_max
+
+    @jtang_snp_max.setter
+    def jtang_snp_max(self, val: float) -> None:
+        self.jtot_ang_pop_max = val
+
+    @property
+    def jtang_crackle_max(self) -> float:
+        return self.jtot_ang_pop_max
+
+    @jtang_crackle_max.setter
+    def jtang_crackle_max(self, val: float) -> None:
+        self.jtot_ang_pop_max = val
+
+    @property
+    def jtang_shot_max(self) -> float:
+        return self.jtot_ang_pop_max
+
+    @jtang_shot_max.setter
+    def jtang_shot_max(self, val: float) -> None:
+        self.jtot_ang_pop_max = val
+
+    @property
+    def jtang_drop_max(self) -> float:
+        return self.jtot_ang_pop_max
+
+    @jtang_drop_max.setter
+    def jtang_drop_max(self, val: float) -> None:
+        self.jtot_ang_pop_max = val
+
+    @property
+    def jtang_lock_max(self) -> float:
+        return self.jtot_ang_pop_max
+
+    @jtang_lock_max.setter
+    def jtang_lock_max(self, val: float) -> None:
+        self.jtot_ang_pop_max = val
+
+    @property
+    def jtang_crk_max(self) -> float:
+        return self.jtot_ang_pop_max
+
+    @jtang_crk_max.setter
+    def jtang_crk_max(self, val: float) -> None:
+        self.jtot_ang_pop_max = val
+
+
 
 
 # ============================================================================
