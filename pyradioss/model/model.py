@@ -2703,6 +2703,13 @@ class Model:
         self.lagmul_cartan_spatial_linkage_joints: Dict[int, Any] = {} # /CARTAN_SPATIAL_LINKAGE_JOINT, /LAGMUL/CARTAN_SPATIAL_LINKAGE_JOINT (M420)
         self.sensor_spring_total_angular_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_LOCK_RATE (M420)
 
+        # M421 Entities
+        self.fail_ladcouplefacesheetcoredebondingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FACESHEET_CORE_DEBONDING_RATE (M421)
+        self.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICEXCITONICMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M421)
+        self.lagmul_clifford_spatial_linkage_joints: Dict[int, Any] = {} # /CLIFFORD_SPATIAL_LINKAGE_JOINT, /LAGMUL/CLIFFORD_SPATIAL_LINKAGE_JOINT (M421)
+        self.sensor_spring_normal_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_DROP_RATE (M421)
+
+
 
 
 
