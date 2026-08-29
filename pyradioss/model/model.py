@@ -2697,6 +2697,13 @@ class Model:
         self.lagmul_hausdorff_spatial_linkage_joints: Dict[int, Any] = {} # /HAUSDORFF_SPATIAL_LINKAGE_JOINT, /LAGMUL/HAUSDORFF_SPATIAL_LINKAGE_JOINT (M419)
         self.sensor_spring_bending_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_LOCK_RATE (M419)
 
+        # M420 Entities
+        self.fail_ladtransversefacesheetcoredebondingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FACESHEET_CORE_DEBONDING_RATE (M420)
+        self.eng_electrothermoflexomagnetoplasmonicmagnonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M420)
+        self.lagmul_cartan_spatial_linkage_joints: Dict[int, Any] = {} # /CARTAN_SPATIAL_LINKAGE_JOINT, /LAGMUL/CARTAN_SPATIAL_LINKAGE_JOINT (M420)
+        self.sensor_spring_total_angular_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_LOCK_RATE (M420)
+
+
 
 
 
