@@ -2727,6 +2727,12 @@ class Model:
         self.lagmul_lobachevsky_spatial_linkage_joints: Dict[int, Any] = {} # /LOBACHEVSKY_SPATIAL_LINKAGE_JOINT, /LAGMUL/LOBACHEVSKY_SPATIAL_LINKAGE_JOINT (M424)
         self.sensor_spring_torsional_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_DROP_RATE (M424)
 
+        # M425 Entities
+        self.fail_laddynamichoneycombcoreshearingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_HONEYCOMB_CORE_SHEARING_RATE (M425)
+        self.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICEXCITONICMAGNONPOLARITONIC_RESONANCE_ENERGY (M425)
+        self.lagmul_poincare_spatial_linkage_joints: Dict[int, Any] = {} # /POINCARE_SPATIAL_LINKAGE_JOINT, /LAGMUL/POINCARE_SPATIAL_LINKAGE_JOINT (M425)
+        self.sensor_spring_bending_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_DROP_RATE (M425)
+
 
 
 
