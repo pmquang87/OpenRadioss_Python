@@ -2751,6 +2751,12 @@ class Model:
         self.lagmul_conformal_spatial_linkage_joints: Dict[int, Any] = {} # /CONFORMAL_SPATIAL_LINKAGE_JOINT, /LAGMUL/CONFORMAL_SPATIAL_LINKAGE_JOINT (M428)
         self.sensor_spring_bending_rate_of_changes: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_RATE_OF_CHANGE (M428)
 
+        # M429 Entities
+        self.fail_ladtransversefacesheetcoredebondingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FACESHEET_CORE_DEBONDING_RATE (M429)
+        self.eng_electrothermoflexomagnetoplasmonicexcitonicphononicmagnonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICEXCITONICPHONONICMAGNONPOLARITONIC_RESONANCE_ENERGY (M429)
+        self.lagmul_projective_spatial_linkage_joints: Dict[int, Any] = {} # /PROJECTIVE_SPATIAL_LINKAGE_JOINT, /LAGMUL/PROJECTIVE_SPATIAL_LINKAGE_JOINT (M429)
+        self.sensor_spring_total_angular_rate_of_changes: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_RATE_OF_CHANGE (M429)
+
 
 
 
