@@ -26000,11 +26000,18 @@ class FailLadTransverseFacesheetCoreDebondingRate:
 
 @dataclass
 class EngElectrothermoflexomagnetoplasmonicmagnonicphononicpolaritonicResonanceEnergy:
-    """``/ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_PLASMON_MAGNON_PHONON_POLARITON_RES_WORK`` (M420): Engine coupled electrothermal-flexomagnetic-flexoplasmonic-flexomagnonic-flexophononic-flexopolaritonic nanoscale plasmon-magnon-phonon-polariton hybrid resonance energy and multi-field opto-spintronic-thermo-acoustic dissipation tracking output directive."""
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_PLASMON_MAGNON_PHONON_POLARITON_RES_WORK`` (M420/M426): Engine coupled electrothermal-flexomagnetic-flexoplasmonic-flexomagnonic-flexophononic-flexopolaritonic nanoscale plasmon-magnon-phonon-polariton hybrid resonance energy and multi-field opto-spintronic-thermo-acoustic dissipation tracking output directive."""
     id: int = 1
     title: str = ""
     dt_etfmpmppp: float = 0.0    # time frequency for electrothermoflexomagnetoplasmonicmagnonicphononicpolaritonic resonance energy output
     sens_id: int = 0             # sensor activation ID
+    dt_etfmpxmpp: float = 0.0
+
+    def __post_init__(self):
+        if self.dt_etfmpxmpp != 0.0 and self.dt_etfmpmppp == 0.0:
+            self.dt_etfmpmppp = self.dt_etfmpxmpp
+        elif self.dt_etfmpmppp != 0.0 and self.dt_etfmpxmpp == 0.0:
+            self.dt_etfmpxmpp = self.dt_etfmpmppp
 
 
 @dataclass
@@ -26835,6 +26842,164 @@ class SensorSpringBendingDropRate:
     @jbend_rate_max.setter
     def jbend_rate_max(self, val: float) -> None:
         self.jbend_drop_max = val
+
+
+# ============================================================================
+# M426 Suite: FailLadTransverseHoneycombCoreShearingRate, EngElectrothermoflexomagnetoplasmonicmagnonicphononicpolaritonicResonanceEnergy, LagmulBeltramiSpatialLinkageJoint, SensorSpringTotalAngularDropRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseHoneycombCoreShearingRate:
+    """``/FAIL/LAD_TRANSVERSE_HONEYCOMB_CORE_SHEARING_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_HONEYCOMB_CORE_SHEARING_RATE`` (M426): Ladevèze rate-dependent transverse sandwich honeycomb core shear cracking, off-axis cell-wall shear buckling, and transverse shear damage accumulation model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_thcs0: float = 0.0     # initial transverse honeycomb core shearing threshold stress sigma_thcs,0
+    sigma_thcsc: float = 1.0     # critical transverse honeycomb core shearing saturation stress sigma_thcs,c
+    gamma_thcs: float = 0.0      # transverse honeycomb core shearing rate sensitivity factor gamma_thcs
+    p_thcs: float = 1.0          # transverse honeycomb core shearing rate exponent p_thcs
+    d_thcs_max: float = 0.999    # maximum allowable transverse honeycomb core shearing damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class LagmulBeltramiSpatialLinkageJoint:
+    """``/BELTRAMI_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/BELTRAMI_SPATIAL_LINKAGE_JOINT/id`` (M426): Beltrami spatial 6R hyperbolic multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringTotalAngularDropRate:
+    """``/SENSOR/SPRING_TOTAL_ANGULAR_DROP_RATE`` or ``/SENSOR/SPRING_TOT_ANG_DROP_RATE`` (M426): Spring element relative 3D resultant total angular acceleration 18th rate-of-change (resultant total angular drop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jtot_ang_drop_max: float = 1e30 # maximum resultant total angular drop rate threshold
+    t_delay: float = 0.0         # activation delay time
+    jang_drop_max: float = 1e30
+
+    def __post_init__(self):
+        if self.jang_drop_max != 1e30 and self.jtot_ang_drop_max == 1e30:
+            self.jtot_ang_drop_max = self.jang_drop_max
+        elif self.jtot_ang_drop_max != 1e30 and self.jang_drop_max == 1e30:
+            self.jang_drop_max = self.jtot_ang_drop_max
+
+    @property
+    def jtot_ang_lock_max(self) -> float:
+        return self.jtot_ang_drop_max
+
+    @jtot_ang_lock_max.setter
+    def jtot_ang_lock_max(self, val: float) -> None:
+        self.jtot_ang_drop_max = val
+
+    @property
+    def jtot_ang_snp_max(self) -> float:
+        return self.jtot_ang_drop_max
+
+    @jtot_ang_snp_max.setter
+    def jtot_ang_snp_max(self, val: float) -> None:
+        self.jtot_ang_drop_max = val
+
+    @property
+    def jtot_ang_crackle_max(self) -> float:
+        return self.jtot_ang_drop_max
+
+    @jtot_ang_crackle_max.setter
+    def jtot_ang_crackle_max(self, val: float) -> None:
+        self.jtot_ang_drop_max = val
+
+    @property
+    def jtot_ang_shot_max(self) -> float:
+        return self.jtot_ang_drop_max
+
+    @jtot_ang_shot_max.setter
+    def jtot_ang_shot_max(self, val: float) -> None:
+        self.jtot_ang_drop_max = val
+
+    @property
+    def jtot_ang_pop_max(self) -> float:
+        return self.jtot_ang_drop_max
+
+    @jtot_ang_pop_max.setter
+    def jtot_ang_pop_max(self, val: float) -> None:
+        self.jtot_ang_drop_max = val
+
+    @property
+    def jtot_ang_crk_max(self) -> float:
+        return self.jtot_ang_drop_max
+
+    @jtot_ang_crk_max.setter
+    def jtot_ang_crk_max(self, val: float) -> None:
+        self.jtot_ang_drop_max = val
+
+    @property
+    def jtot_ang_drop_rate_max(self) -> float:
+        return self.jtot_ang_drop_max
+
+    @jtot_ang_drop_rate_max.setter
+    def jtot_ang_drop_rate_max(self, val: float) -> None:
+        self.jtot_ang_drop_max = val
+
+    @property
+    def jtot_ang_rate_max(self) -> float:
+        return self.jtot_ang_drop_max
+
+    @jtot_ang_rate_max.setter
+    def jtot_ang_rate_max(self, val: float) -> None:
+        self.jtot_ang_drop_max = val
+
 
 
 
