@@ -18561,6 +18561,38 @@ class SensorSpringTotalAngularDropRate:
     t_delay: float = 0.0         # activation delay time
 
 
+    @property
+    def jang_lock_max(self) -> float:
+        return self.jang_drop_max
+
+    @jang_lock_max.setter
+    def jang_lock_max(self, val: float) -> None:
+        self.jang_drop_max = val
+
+    @property
+    def jang_pop_max(self) -> float:
+        return self.jang_drop_max
+
+    @jang_pop_max.setter
+    def jang_pop_max(self, val: float) -> None:
+        self.jang_drop_max = val
+
+    @property
+    def jang_snp_max(self) -> float:
+        return self.jang_drop_max
+
+    @jang_snp_max.setter
+    def jang_snp_max(self, val: float) -> None:
+        self.jang_drop_max = val
+
+    @property
+    def jang_crackle_max(self) -> float:
+        return self.jang_drop_max
+
+    @jang_crackle_max.setter
+    def jang_crackle_max(self, val: float) -> None:
+        self.jang_drop_max = val
+
 # ============================================================================
 # M343 Suite: LadCoupleFiberSplittingRate failure, EngFlexothermoplasmonicResonanceEnergy, BakerSymmetricLinkageJoint, SensorSpringNormalDriftRate
 # ============================================================================
@@ -21546,6 +21578,7 @@ class SensorSpringTotalDropRate:
     jtot_drop_max: float = 1e30  # maximum total drop rate threshold
     t_delay: float = 0.0         # activation delay time
 
+
     @property
     def jtot_lock_max(self) -> float:
         return self.jtot_drop_max
@@ -21657,6 +21690,7 @@ class SensorSpringTorsionalDropRate:
     spring_id: int = 0           # spring element ID to monitor
     jtors_drop_max: float = 1e30 # maximum torsional drop rate threshold
     t_delay: float = 0.0         # activation delay time
+
 
     @property
     def jtors_lock_max(self) -> float:
@@ -22285,6 +22319,7 @@ class SensorSpringTotalShotRate:
     def jtot_drop_max(self, val: float) -> None:
         self.jtot_shot_max = val
 
+
     @property
     def jtot_lock_max(self) -> float:
         return self.jtot_shot_max
@@ -22411,6 +22446,7 @@ class SensorSpringTorsionalShotRate:
     @jtors_drop_max.setter
     def jtors_drop_max(self, val: float) -> None:
         self.jtors_shot_max = val
+
 
     @property
     def jtors_lock_max(self) -> float:
@@ -23178,6 +23214,7 @@ class SensorSpringTotalSnapRate:
     def jtot_drop_max(self, val: float) -> None:
         self.jtot_snp_max = val
 
+
     @property
     def jtot_lock_max(self) -> float:
         return self.jtot_snp_max
@@ -23304,6 +23341,7 @@ class SensorSpringTorsionalSnapRate:
     @jtors_drop_max.setter
     def jtors_drop_max(self, val: float) -> None:
         self.jtors_snp_max = val
+
 
     @property
     def jtors_lock_max(self) -> float:
@@ -23940,6 +23978,7 @@ class SensorSpringTotalCrackleRate:
     def jtot_drop_max(self, val: float) -> None:
         self.jtot_crk_max = val
 
+
     @property
     def jtot_lock_max(self) -> float:
         return self.jtot_crk_max
@@ -24066,6 +24105,7 @@ class SensorSpringTorsionalCrackleRate:
     @jtors_drop_max.setter
     def jtors_drop_max(self, val: float) -> None:
         self.jtors_crk_max = val
+
 
     @property
     def jtors_lock_max(self) -> float:
@@ -24766,6 +24806,7 @@ class SensorSpringTotalPopRate:
     def jtot_drop_max(self, val: float) -> None:
         self.jtot_pop_max = val
 
+
     @property
     def jtot_lock_max(self) -> float:
         return self.jtot_pop_max
@@ -24956,6 +24997,7 @@ class SensorSpringTorsionalPopRate:
     @jtors_drop_max.setter
     def jtors_drop_max(self, val: float) -> None:
         self.jtor_pop_max = val
+
 
     @property
     def jtors_lock_max(self) -> float:
@@ -26477,6 +26519,7 @@ class SensorSpringTotalDropRate:
     jtot_drop_max: float = 1e30  # maximum resultant total linear drop rate threshold
     t_delay: float = 0.0         # activation delay time
 
+
     @property
     def jtot_lock_max(self) -> float:
         return self.jtot_drop_max
@@ -26619,6 +26662,7 @@ class SensorSpringTorsionalDropRate:
     spring_id: int = 0           # spring element ID to monitor
     jtors_drop_max: float = 1e30 # maximum torsional angular drop rate threshold
     t_delay: float = 0.0         # activation delay time
+
 
     @property
     def jtors_lock_max(self) -> float:
@@ -27001,6 +27045,38 @@ class SensorSpringTotalAngularDropRate:
         self.jtot_ang_drop_max = val
 
 
+    @property
+    def jang_lock_max(self) -> float:
+        return self.jtot_ang_drop_max
+
+    @jang_lock_max.setter
+    def jang_lock_max(self, val: float) -> None:
+        self.jtot_ang_drop_max = val
+
+    @property
+    def jang_pop_max(self) -> float:
+        return self.jtot_ang_drop_max
+
+    @jang_pop_max.setter
+    def jang_pop_max(self, val: float) -> None:
+        self.jtot_ang_drop_max = val
+
+    @property
+    def jang_snp_max(self) -> float:
+        return self.jtot_ang_drop_max
+
+    @jang_snp_max.setter
+    def jang_snp_max(self, val: float) -> None:
+        self.jtot_ang_drop_max = val
+
+    @property
+    def jang_crackle_max(self) -> float:
+        return self.jtot_ang_drop_max
+
+    @jang_crackle_max.setter
+    def jang_crackle_max(self, val: float) -> None:
+        self.jtot_ang_drop_max = val
+
 # ============================================================================
 # M427 Suite: FailLadCoupleHoneycombCoreShearingRate, EngElectrothermoflexomagnetoplasmonicphononicmagnonpolaritonicResonanceEnergy, LagmulCliffordSpatialLinkageJoint, SensorSpringTorsionalRateOfChange
 # ============================================================================
@@ -27094,6 +27170,7 @@ class SensorSpringTorsionalRateOfChange:
     spring_id: int = 0           # spring element ID to monitor
     jtors_roc_max: float = 1e30  # maximum torsional rate of change threshold
     t_delay: float = 0.0         # activation delay time
+
 
     @property
     def jtors_lock_max(self) -> float:
@@ -27838,6 +27915,105 @@ class SensorSpringTransverseSnapRate:
     def jtr_snap_rate_max(self) -> float:
         return self.jtr_snp_max
 
+    @property
+    def jtrans_shot_max(self) -> float:
+        return self.jtr_snp_max
+
+    @jtrans_shot_max.setter
+    def jtrans_shot_max(self, val: float) -> None:
+        self.jtr_snp_max = val
+        self.jtrans_snp_max = val
+
+    @property
+    def jtrans_lock_max(self) -> float:
+        return self.jtr_snp_max
+
+    @jtrans_lock_max.setter
+    def jtrans_lock_max(self, val: float) -> None:
+        self.jtr_snp_max = val
+        self.jtrans_snp_max = val
+
+    @property
+    def jtrans_pop_max(self) -> float:
+        return self.jtr_snp_max
+
+    @jtrans_pop_max.setter
+    def jtrans_pop_max(self, val: float) -> None:
+        self.jtr_snp_max = val
+        self.jtrans_snp_max = val
+
+    @property
+    def jtrans_crackle_max(self) -> float:
+        return self.jtr_snp_max
+
+    @jtrans_crackle_max.setter
+    def jtrans_crackle_max(self, val: float) -> None:
+        self.jtr_snp_max = val
+        self.jtrans_snp_max = val
+
+    @property
+    def jtrans_crk_max(self) -> float:
+        return self.jtr_snp_max
+
+    @jtrans_crk_max.setter
+    def jtrans_crk_max(self, val: float) -> None:
+        self.jtr_snp_max = val
+        self.jtrans_snp_max = val
+
+    @property
+    def jtrans_drop_rate_max(self) -> float:
+        return self.jtr_snp_max
+
+    @jtrans_drop_rate_max.setter
+    def jtrans_drop_rate_max(self, val: float) -> None:
+        self.jtr_snp_max = val
+        self.jtrans_snp_max = val
+
+    @property
+    def jtrans_rate_max(self) -> float:
+        return self.jtr_snp_max
+
+    @jtrans_rate_max.setter
+    def jtrans_rate_max(self, val: float) -> None:
+        self.jtr_snp_max = val
+        self.jtrans_snp_max = val
+
+    @property
+    def jtrans_roc_rate_max(self) -> float:
+        return self.jtr_snp_max
+
+    @jtrans_roc_rate_max.setter
+    def jtrans_roc_rate_max(self, val: float) -> None:
+        self.jtr_snp_max = val
+        self.jtrans_snp_max = val
+
+    @property
+    def jtrans_snap_rate_max(self) -> float:
+        return self.jtr_snp_max
+
+    @jtrans_snap_rate_max.setter
+    def jtrans_snap_rate_max(self, val: float) -> None:
+        self.jtr_snp_max = val
+        self.jtrans_snp_max = val
+
+    @property
+    def jtrans_snp_rate_max(self) -> float:
+        return self.jtr_snp_max
+
+    @jtrans_snp_rate_max.setter
+    def jtrans_snp_rate_max(self, val: float) -> None:
+        self.jtr_snp_max = val
+        self.jtrans_snp_max = val
+
+    @property
+    def jtrans_drop_max(self) -> float:
+        return self.jtr_snp_max
+
+    @jtrans_drop_max.setter
+    def jtrans_drop_max(self, val: float) -> None:
+        self.jtr_snp_max = val
+        self.jtrans_snp_max = val
+
 # ============================================================================
 # M432 Suite: FailLadCoupleCoreDelaminationRate, EngElectrothermoflexomagnetophononicmagnonicpolaritonicResonanceEnergy, LagmulAlgebraicSpatialLinkageJoint, SensorSpringTotalSnapRate
 # ============================================================================
@@ -27939,6 +28115,7 @@ class SensorSpringTotalSnapRate:
         elif self.jtot_snp_max != 1e30 and self.jtotal_snp_max == 1e30:
             self.jtotal_snp_max = self.jtot_snp_max
 
+
     @property
     def jtot_lock_max(self) -> float:
         return self.jtot_snp_max
@@ -28020,6 +28197,15 @@ class SensorSpringTotalSnapRate:
         self.jtot_snp_max = val
         self.jtotal_snp_max = val
 
+
+    @property
+    def jtot_drop_max(self) -> float:
+        return self.jtot_snp_max
+
+    @jtot_drop_max.setter
+    def jtot_drop_max(self, val: float) -> None:
+        self.jtot_snp_max = val
+        self.jtotal_snp_max = val
 
 # ============================================================================
 # M433 Suite: FailLadDynamicCoreTearingRate, EngElectrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy, LagmulDifferentialSpatialLinkageJoint, SensorSpringTorsionalSnapRate
@@ -28121,6 +28307,7 @@ class SensorSpringTorsionalSnapRate:
             self.jtors_snp_max = self.jtorsional_snp_max
         elif self.jtors_snp_max != 1e30 and self.jtorsional_snp_max == 1e30:
             self.jtorsional_snp_max = self.jtors_snp_max
+
 
     @property
     def jtors_lock_max(self) -> float:
@@ -28369,3 +28556,12 @@ class SensorSpringTorsionalSnapRate:
 
 
 
+
+    @property
+    def jtors_drop_max(self) -> float:
+        return self.jtors_snp_max
+
+    @jtors_drop_max.setter
+    def jtors_drop_max(self, val: float) -> None:
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val

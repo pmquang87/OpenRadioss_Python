@@ -151,7 +151,7 @@ def test_m430_eng_electrothermoflexomagnetoexcitonicmagnonicpolaritonic_resonanc
     deck = """# RADIOSS ALIAS DECK
 /BEGIN
 Engine Electrothermoflexomagnetoexcitonicmagnonicpolaritonic Resonance Energy Aliases Test
-/ENG/ELECTRO_THERM_FLEXO_MAG_EXCITON_MAGNON_POLARITON_RES_WORK/757
+/ENG/ELECTRO_THERM_FLEXO_MAG_EXCITON_MAGNONIC_POLARITON_RES_WORK/757
 0.0865, 857
 /ENG/EELECTROTHERMOFLEXOMAGNETOEXCITONICMAGNONICPOLARITONICRESONANCE/758
 0.0875, 858
