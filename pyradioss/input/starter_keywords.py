@@ -15128,7 +15128,36 @@ def read_th(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
 
     # -- variable cards: every leading card starting with a non-number ------
+    # Variable cards use FREE_CELL_LIST("%-10s", VAR, 100) — left-justified
+    # 10-char text cells (e.g. "DEF       EPSD      THIC      ").
+    # ID cards use CARD("%10d ...") — right-justified integer in cols 1-10,
+    # optionally followed by skew/name fields (e.g. "         1         0Name").
+    # In fixed format, whitespace tokenisation mis-classifies ID cards when the
+    # element name text happens to be the first whitespace token (the %10d ID
+    # field is blank or zero-padded and the %-80s name dominates).  The fix:
+    # in fixed format, check cols 1-10 as an integer field.
     def _is_var_card(card: Card) -> bool:
+        if block.fixed:
+            # Fixed format: first 10 chars = the %10d ID field.
+            field0 = card.raw[:10].strip()
+            if not field0:
+                # Blank first field: could be a variable card with nothing in
+                # the first cell, or a blank ID.  Check if rest of the card
+                # has NON-numeric text (variable names) vs mostly blanks.
+                rest = card.raw[10:].strip()
+                if not rest:
+                    return False          # fully blank → end of variables
+                try:
+                    int(rest.split()[0])
+                    return False          # next field is numeric → ID card
+                except (ValueError, IndexError):
+                    return True           # text follows → variable card
+            try:
+                int(field0)
+                return False              # numeric first 10 chars → ID card
+            except ValueError:
+                return True               # text first 10 chars → variable card
+        # Free format: original logic
         toks = card.tokens()
         if not toks:
             return False
