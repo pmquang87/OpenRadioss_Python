@@ -28585,6 +28585,46 @@ class FailLadDynamicCoreDelaminationCrackingRate:
     ifail_so: int = 1              # solid element deletion flag
     fail_id: int = 0               # failure model ID reference
 
+    @property
+    def sigma_dctr0(self) -> float:
+        return self.sigma_dcdlcr0
+
+    @sigma_dctr0.setter
+    def sigma_dctr0(self, val: float) -> None:
+        self.sigma_dcdlcr0 = val
+
+    @property
+    def sigma_dctrc(self) -> float:
+        return self.sigma_dcdlcrc
+
+    @sigma_dctrc.setter
+    def sigma_dctrc(self, val: float) -> None:
+        self.sigma_dcdlcrc = val
+
+    @property
+    def gamma_dctr(self) -> float:
+        return self.gamma_dcdlcr
+
+    @gamma_dctr.setter
+    def gamma_dctr(self, val: float) -> None:
+        self.gamma_dcdlcr = val
+
+    @property
+    def p_dctr(self) -> float:
+        return self.p_dcdlcr
+
+    @p_dctr.setter
+    def p_dctr(self, val: float) -> None:
+        self.p_dcdlcr = val
+
+    @property
+    def d_dctr_max(self) -> float:
+        return self.d_dcdlcr_max
+
+    @d_dctr_max.setter
+    def d_dctr_max(self, val: float) -> None:
+        self.d_dcdlcr_max = val
+
 
 @dataclass
 class EngElectrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy:
@@ -28778,6 +28818,360 @@ class SensorSpringTorsionalSnapRate:
 # M434 Suite: FailLadTransverseCoreDelaminationCrackingRate, EngElectrothermoflexomagnetoplasmonicphononicpolaritonicResonanceEnergy, LagmulHomologicalSpatialLinkageJoint, SensorSpringBendingSnapRate
 # ============================================================================
 
+
+    @property
+    def jtors_shot_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtors_shot_max.setter
+    def jtors_shot_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtors_lock_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtors_lock_max.setter
+    def jtors_lock_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtors_pop_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtors_pop_max.setter
+    def jtors_pop_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtors_crackle_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtors_crackle_max.setter
+    def jtors_crackle_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtors_crk_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtors_crk_max.setter
+    def jtors_crk_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtors_drop_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtors_drop_rate_max.setter
+    def jtors_drop_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtors_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtors_rate_max.setter
+    def jtors_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtors_roc_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtors_roc_rate_max.setter
+    def jtors_roc_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtors_snap_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtors_snap_rate_max.setter
+    def jtors_snap_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtors_snp_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtors_snp_rate_max.setter
+    def jtors_snp_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtorsional_shot_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtorsional_shot_max.setter
+    def jtorsional_shot_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtorsional_lock_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtorsional_lock_max.setter
+    def jtorsional_lock_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtorsional_pop_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtorsional_pop_max.setter
+    def jtorsional_pop_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtorsional_crackle_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtorsional_crackle_max.setter
+    def jtorsional_crackle_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtorsional_crk_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtorsional_crk_max.setter
+    def jtorsional_crk_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtorsional_drop_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtorsional_drop_rate_max.setter
+    def jtorsional_drop_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtorsional_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtorsional_rate_max.setter
+    def jtorsional_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtorsional_roc_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtorsional_roc_rate_max.setter
+    def jtorsional_roc_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtorsional_snap_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtorsional_snap_rate_max.setter
+    def jtorsional_snap_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtorsional_snp_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtorsional_snp_rate_max.setter
+    def jtorsional_snp_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+
+
+    @property
+    def jtang_snap_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtang_snap_rate_max.setter
+    def jtang_snap_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtang_snp_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtang_snp_rate_max.setter
+    def jtang_snp_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtang_shot_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtang_shot_max.setter
+    def jtang_shot_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtang_lock_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtang_lock_max.setter
+    def jtang_lock_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtang_pop_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtang_pop_max.setter
+    def jtang_pop_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtang_crackle_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtang_crackle_max.setter
+    def jtang_crackle_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtang_crk_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtang_crk_max.setter
+    def jtang_crk_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtang_drop_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtang_drop_rate_max.setter
+    def jtang_drop_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtang_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtang_rate_max.setter
+    def jtang_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtang_roc_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtang_roc_rate_max.setter
+    def jtang_roc_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtang_snp_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtang_snp_max.setter
+    def jtang_snp_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtang_drop_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtang_drop_max.setter
+    def jtang_drop_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtors_drop_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtors_drop_max.setter
+    def jtors_drop_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtorsional_drop_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtorsional_drop_max.setter
+    def jtorsional_drop_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtor_drop_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtor_drop_max.setter
+    def jtor_drop_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+
 @dataclass
 class FailLadTransverseCoreDelaminationCrackingRate:
     """``/FAIL/LAD_TRANSVERSE_CORE_DELAMINATION_CRACKING_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_CORE_DELAMINATION_CRACKING_RATE`` (M434): Ladevèze rate-dependent transverse sandwich core delamination cracking, transverse cell-wall fracture/tearing, and progressive core delamination-cracking damage model."""
@@ -28791,6 +29185,46 @@ class FailLadTransverseCoreDelaminationCrackingRate:
     ifail_sh: int = 1              # shell element deletion flag
     ifail_so: int = 1              # solid element deletion flag
     fail_id: int = 0               # failure model ID reference
+
+    @property
+    def sigma_tctr0(self) -> float:
+        return self.sigma_tcdlcr0
+
+    @sigma_tctr0.setter
+    def sigma_tctr0(self, val: float) -> None:
+        self.sigma_tcdlcr0 = val
+
+    @property
+    def sigma_tctrc(self) -> float:
+        return self.sigma_tcdlcrc
+
+    @sigma_tctrc.setter
+    def sigma_tctrc(self, val: float) -> None:
+        self.sigma_tcdlcrc = val
+
+    @property
+    def gamma_tctr(self) -> float:
+        return self.gamma_tcdlcr
+
+    @gamma_tctr.setter
+    def gamma_tctr(self, val: float) -> None:
+        self.gamma_tcdlcr = val
+
+    @property
+    def p_tctr(self) -> float:
+        return self.p_tcdlcr
+
+    @p_tctr.setter
+    def p_tctr(self, val: float) -> None:
+        self.p_tcdlcr = val
+
+    @property
+    def d_tctr_max(self) -> float:
+        return self.d_tcdlcr_max
+
+    @d_tctr_max.setter
+    def d_tctr_max(self, val: float) -> None:
+        self.d_tcdlcr_max = val
 
 
 @dataclass
@@ -28986,3 +29420,234 @@ class SensorSpringBendingSnapRate:
         self.jbnd_snp_max = val
         self.jbend_snp_max = val
         self.jbending_snp_max = val
+
+    @property
+    def jbend_shot_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbend_shot_max.setter
+    def jbend_shot_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbend_lock_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbend_lock_max.setter
+    def jbend_lock_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbend_pop_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbend_pop_max.setter
+    def jbend_pop_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbend_crackle_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbend_crackle_max.setter
+    def jbend_crackle_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbend_crk_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbend_crk_max.setter
+    def jbend_crk_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbend_drop_rate_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbend_drop_rate_max.setter
+    def jbend_drop_rate_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbend_rate_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbend_rate_max.setter
+    def jbend_rate_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbend_roc_rate_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbend_roc_rate_max.setter
+    def jbend_roc_rate_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbend_snap_rate_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbend_snap_rate_max.setter
+    def jbend_snap_rate_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbend_snp_rate_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbend_snp_rate_max.setter
+    def jbend_snp_rate_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbending_shot_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbending_shot_max.setter
+    def jbending_shot_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbending_lock_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbending_lock_max.setter
+    def jbending_lock_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbending_pop_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbending_pop_max.setter
+    def jbending_pop_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbending_crackle_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbending_crackle_max.setter
+    def jbending_crackle_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbending_crk_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbending_crk_max.setter
+    def jbending_crk_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbending_drop_rate_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbending_drop_rate_max.setter
+    def jbending_drop_rate_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbending_rate_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbending_rate_max.setter
+    def jbending_rate_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbending_roc_rate_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbending_roc_rate_max.setter
+    def jbending_roc_rate_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbending_snap_rate_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbending_snap_rate_max.setter
+    def jbending_snap_rate_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbending_snp_rate_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbending_snp_rate_max.setter
+    def jbending_snp_rate_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbend_drop_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbend_drop_max.setter
+    def jbend_drop_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbending_drop_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbending_drop_max.setter
+    def jbending_drop_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbnd_drop_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbnd_drop_max.setter
+    def jbnd_drop_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+

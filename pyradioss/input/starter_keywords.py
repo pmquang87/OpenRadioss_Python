@@ -57028,9 +57028,12 @@ def read_eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_reso
 
     from ..model.entities import EngElectrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy
     r_id = block.user_id or (len(model.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energies) + 1)
-    model.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energies[r_id] = EngElectrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy(
+    eng_obj = EngElectrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy(
         id=r_id, title=title, dt_etfplexmmnp=dt_etfplexmmnp, sens_id=sens_id
     )
+    model.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energies[r_id] = eng_obj
+    if hasattr(model, 'eng_electrothermoflexomagnetoplasmonicexcitonicmagnonpolaritonic_resonance_energies'):
+        model.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonpolaritonic_resonance_energies[r_id] = eng_obj
 
 
 def read_lagmul_differential_spatial_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -61402,7 +61405,8 @@ def read_fail_lad_transverse_core_delamination_cracking_rate(block: KeywordBlock
         gamma_tcdlcr=gamma_tcdlcr, p_tcdlcr=p_tcdlcr, d_tcdlcr_max=d_tcdlcr_max,
         ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
     )
-    fm = FailureModel(type="LAD_TRANSVERSE_CORE_DELAMINATION_CRACKING_RATE", ifail_sh=ifail_sh, params=params)
+    fm_type = "LAD_TRANSVERSE_CORE_TEARING_RATE" if "TEAR" in block.keyword.upper() else "LAD_TRANSVERSE_CORE_DELAMINATION_CRACKING_RATE"
+    fm = FailureModel(type=fm_type, ifail_sh=ifail_sh, params=params)
     model.raw_fails.append((mat_id, fm, block.source))
 
 
@@ -61551,7 +61555,8 @@ def read_fail_lad_dynamic_core_delamination_cracking_rate(block: KeywordBlock, m
         gamma_dcdlcr=gamma_dcdlcr, p_dcdlcr=p_dcdlcr, d_dcdlcr_max=d_dcdlcr_max,
         ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
     )
-    fm = FailureModel(type="LAD_DYNAMIC_CORE_DELAMINATION_CRACKING_RATE", ifail_sh=ifail_sh, params=params)
+    fm_type = "LAD_DYNAMIC_CORE_TEARING_RATE" if "TEAR" in block.keyword.upper() else "LAD_DYNAMIC_CORE_DELAMINATION_CRACKING_RATE"
+    fm = FailureModel(type=fm_type, ifail_sh=ifail_sh, params=params)
     model.raw_fails.append((mat_id, fm, block.source))
 
 
@@ -61574,9 +61579,12 @@ def read_eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_reso
 
     from ..model.entities import EngElectrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy
     r_id = block.user_id or (len(model.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energies) + 1)
-    model.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energies[r_id] = EngElectrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy(
+    eng_obj = EngElectrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy(
         id=r_id, title=title, dt_etfplexmmnp=dt_etfplexmmnp, sens_id=sens_id
     )
+    model.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energies[r_id] = eng_obj
+    if hasattr(model, 'eng_electrothermoflexomagnetoplasmonicexcitonicmagnonpolaritonic_resonance_energies'):
+        model.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonpolaritonic_resonance_energies[r_id] = eng_obj
 
 
 def read_lagmul_topological_spatial_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -61872,9 +61880,12 @@ def read_eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_reso
 
     from ..model.entities import EngElectrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy
     r_id = block.user_id or (len(model.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energies) + 1)
-    model.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energies[r_id] = EngElectrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy(
+    eng_obj = EngElectrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy(
         id=r_id, title=title, dt_etfplexmmnp=dt_etfplexmmnp, sens_id=sens_id
     )
+    model.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energies[r_id] = eng_obj
+    if hasattr(model, 'eng_electrothermoflexomagnetoplasmonicexcitonicmagnonpolaritonic_resonance_energies'):
+        model.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonpolaritonic_resonance_energies[r_id] = eng_obj
 
 
 def read_lagmul_differential_spatial_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -82126,6 +82137,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "FAIL_LAD_DYNAMIC_CORE_TEARING_RATE": read_fail_lad_dynamic_core_delamination_cracking_rate,
     "FAIL_LADEVEZE_DYNAMIC_CORE_TEARING_RATE": read_fail_lad_dynamic_core_delamination_cracking_rate,
     "ENG_ELECTROTHERMOFLEXOMAGNETOPLASMONICEXCITONICMAGNONICPOLARITONIC_RESONANCE_ENERGY": read_eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energy,
+    "ENG_ELECTRO_THERM_FLEXO_MAG_PLASMON_EXCITON_MAGNONIC_POLARITON_RES_WORK": read_eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energy,
     "ENG_ELECTRO_THERM_FLEXO_MAG_PLASMON_EXCITON_MAGNON_POLARITON_RES_WORK": read_eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energy,
     "ENG_EELECTROTHERMOFLEXOMAGNETOPLASMONICEXCITONICMAGNONICPOLARITONICRESONANCE": read_eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energy,
     "ENG_ELECTROTHERMOFLEXOMAGNETOPLASMONICEXCITONICMAGNONICPOLARITONIC_RESONANCE_DISSIPATION": read_eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energy,
