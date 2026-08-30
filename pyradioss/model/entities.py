@@ -23900,6 +23900,346 @@ class SensorSpringNormalCrackleRate:
     def jnorm_snp_max(self, val: float) -> None:
         self.jnorm_crk_max = val
 
+    @property
+    def jax_crk_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jax_crk_max.setter
+    def jax_crk_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def j_crk_ax_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @j_crk_ax_max.setter
+    def j_crk_ax_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def j_crackle_ax_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @j_crackle_ax_max.setter
+    def j_crackle_ax_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def j_ax_crk_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @j_ax_crk_max.setter
+    def j_ax_crk_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def j_crk_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @j_crk_max.setter
+    def j_crk_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jax_crackle_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jax_crackle_max.setter
+    def jax_crackle_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def j_crk_axial_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @j_crk_axial_max.setter
+    def j_crk_axial_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def j_crackle_axial_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @j_crackle_axial_max.setter
+    def j_crackle_axial_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jax_shot_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jax_shot_max.setter
+    def jax_shot_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jax_drop_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jax_drop_max.setter
+    def jax_drop_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jax_lock_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jax_lock_max.setter
+    def jax_lock_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jax_pop_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jax_pop_max.setter
+    def jax_pop_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jax_snp_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jax_snp_max.setter
+    def jax_snp_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jax_snap_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jax_snap_max.setter
+    def jax_snap_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jax_rate_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jax_rate_max.setter
+    def jax_rate_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jax_roc_rate_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jax_roc_rate_max.setter
+    def jax_roc_rate_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jax_drop_rate_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jax_drop_rate_max.setter
+    def jax_drop_rate_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+    @property
+    def jax_crk_rate_max(self) -> float:
+        return self.jnorm_crk_max
+
+    @jax_crk_rate_max.setter
+    def jax_crk_rate_max(self, val: float) -> None:
+        self.jnorm_crk_max = val
+
+
+@dataclass
+class SensorSpringAxialCrackleRate:
+    """``/SENSOR/SPRING_AXIAL_CRACKLE_RATE`` or ``/SENSOR/SPRING_AXIAL_CRK_RATE`` (M436): Spring element relative normal / axial acceleration 21st rate-of-change (axial crackle rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jax_crk_max: float = 1e30    # maximum axial crackle rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jnorm_crk_max(self) -> float:
+        return self.jax_crk_max
+
+    @jnorm_crk_max.setter
+    def jnorm_crk_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def j_crk_ax_max(self) -> float:
+        return self.jax_crk_max
+
+    @j_crk_ax_max.setter
+    def j_crk_ax_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def j_crackle_ax_max(self) -> float:
+        return self.jax_crk_max
+
+    @j_crackle_ax_max.setter
+    def j_crackle_ax_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def j_ax_crk_max(self) -> float:
+        return self.jax_crk_max
+
+    @j_ax_crk_max.setter
+    def j_ax_crk_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def j_crk_max(self) -> float:
+        return self.jax_crk_max
+
+    @j_crk_max.setter
+    def j_crk_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jax_crackle_max(self) -> float:
+        return self.jax_crk_max
+
+    @jax_crackle_max.setter
+    def jax_crackle_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def j_crk_axial_max(self) -> float:
+        return self.jax_crk_max
+
+    @j_crk_axial_max.setter
+    def j_crk_axial_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def j_crackle_axial_max(self) -> float:
+        return self.jax_crk_max
+
+    @j_crackle_axial_max.setter
+    def j_crackle_axial_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jnorm_shot_max(self) -> float:
+        return self.jax_crk_max
+
+    @jnorm_shot_max.setter
+    def jnorm_shot_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jnorm_drop_max(self) -> float:
+        return self.jax_crk_max
+
+    @jnorm_drop_max.setter
+    def jnorm_drop_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jnorm_lock_max(self) -> float:
+        return self.jax_crk_max
+
+    @jnorm_lock_max.setter
+    def jnorm_lock_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jnorm_pop_max(self) -> float:
+        return self.jax_crk_max
+
+    @jnorm_pop_max.setter
+    def jnorm_pop_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jnorm_snp_max(self) -> float:
+        return self.jax_crk_max
+
+    @jnorm_snp_max.setter
+    def jnorm_snp_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jax_shot_max(self) -> float:
+        return self.jax_crk_max
+
+    @jax_shot_max.setter
+    def jax_shot_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jax_drop_max(self) -> float:
+        return self.jax_crk_max
+
+    @jax_drop_max.setter
+    def jax_drop_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jax_lock_max(self) -> float:
+        return self.jax_crk_max
+
+    @jax_lock_max.setter
+    def jax_lock_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jax_pop_max(self) -> float:
+        return self.jax_crk_max
+
+    @jax_pop_max.setter
+    def jax_pop_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jax_snp_max(self) -> float:
+        return self.jax_crk_max
+
+    @jax_snp_max.setter
+    def jax_snp_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jax_snap_max(self) -> float:
+        return self.jax_crk_max
+
+    @jax_snap_max.setter
+    def jax_snap_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jax_rate_max(self) -> float:
+        return self.jax_crk_max
+
+    @jax_rate_max.setter
+    def jax_rate_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jax_roc_rate_max(self) -> float:
+        return self.jax_crk_max
+
+    @jax_roc_rate_max.setter
+    def jax_roc_rate_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jax_drop_rate_max(self) -> float:
+        return self.jax_crk_max
+
+    @jax_drop_rate_max.setter
+    def jax_drop_rate_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+    @property
+    def jax_crk_rate_max(self) -> float:
+        return self.jax_crk_max
+
+    @jax_crk_rate_max.setter
+    def jax_crk_rate_max(self, val: float) -> None:
+        self.jax_crk_max = val
+
+
+
 
 # ============================================================================
 # M404 Suite: FailLadDynamicCoreCrushingRate, EngFlexothermomagnonicphononicpolaritonicResonanceEnergy, LagmulDescartesSpatialLinkageJoint, SensorSpringTransverseCrackleRate
@@ -29937,5 +30277,141 @@ class LagmulCohomologicalSpatialLinkageJoint:
     @offset_distance_f.setter
     def offset_distance_f(self, val: float) -> None:
         self.offset_distance_s = val
+
+
+# ============================================================================
+# M436 Suite: FailLadDynamicCoreMicrocrackingRate, EngElectrothermoflexomagnetophononicpolaritonicResonanceEnergy, LagmulSpinorialSpatialLinkageJoint
+# ============================================================================
+
+@dataclass
+class FailLadDynamicCoreMicrocrackingRate:
+    """``/FAIL/LAD_DYNAMIC_CORE_MICROCRACKING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_CORE_MICROCRACKING_RATE`` (M436): Ladevèze rate-dependent dynamic sandwich core microcracking, microdamage kinetics and multi-axial core failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dcmcr0: float = 0.0      # initial dynamic core microcracking threshold stress sigma_dcmcr,0
+    sigma_dcmcrc: float = 1.0      # critical dynamic core microcracking saturation stress sigma_dcmcr,c
+    gamma_dcmcr: float = 0.0       # dynamic core microcracking rate sensitivity factor gamma_dcmcr
+    p_dcmcr: float = 1.0           # dynamic core microcracking rate exponent p_dcmcr
+    d_dcmcr_max: float = 0.999     # maximum allowable dynamic core microcracking damage index
+    ifail_sh: int = 1              # shell element deletion flag
+    ifail_so: int = 1              # solid element deletion flag
+    fail_id: int = 0               # failure model ID reference
+
+    @property
+    def sigma_dcmd0(self) -> float:
+        return self.sigma_dcmcr0
+
+    @sigma_dcmd0.setter
+    def sigma_dcmd0(self, val: float) -> None:
+        self.sigma_dcmcr0 = val
+
+    @property
+    def sigma_dcmdc(self) -> float:
+        return self.sigma_dcmcrc
+
+    @sigma_dcmdc.setter
+    def sigma_dcmdc(self, val: float) -> None:
+        self.sigma_dcmcrc = val
+
+    @property
+    def gamma_dcmd(self) -> float:
+        return self.gamma_dcmcr
+
+    @gamma_dcmd.setter
+    def gamma_dcmd(self, val: float) -> None:
+        self.gamma_dcmcr = val
+
+    @property
+    def p_dcmd(self) -> float:
+        return self.p_dcmcr
+
+    @p_dcmd.setter
+    def p_dcmd(self, val: float) -> None:
+        self.p_dcmcr = val
+
+    @property
+    def d_dcmd_max(self) -> float:
+        return self.d_dcmcr_max
+
+    @d_dcmd_max.setter
+    def d_dcmd_max(self, val: float) -> None:
+        self.d_dcmcr_max = val
+
+
+FailLadDynamicCoreMicrocrackRate = FailLadDynamicCoreMicrocrackingRate
+
+
+@dataclass
+class EngElectrothermoflexomagnetophononicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOPHONONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_PHONON_POLARITON_RES_WORK`` (M436): Engine coupled electrothermal-flexomagnetic-flexophononic-flexopolaritonic nanoscale phonon-polariton hybrid resonance energy and opto-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfphmnp: float = 0.0       # time frequency for electrothermoflexomagnetophononicpolaritonic resonance energy output
+    sens_id: int = 0               # sensor activation ID
+    dt_etfphp: float = 0.0         # alias field for compatibility
+
+    def __post_init__(self):
+        if self.dt_etfphp != 0.0 and self.dt_etfphmnp == 0.0:
+            self.dt_etfphmnp = self.dt_etfphp
+        elif self.dt_etfphmnp != 0.0 and self.dt_etfphp == 0.0:
+            self.dt_etfphp = self.dt_etfphmnp
+
+
+@dataclass
+class LagmulSpinorialSpatialLinkageJoint:
+    """``/SPINORIAL_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/SPINORIAL_SPATIAL_LINKAGE_JOINT/id`` (M436): Spinorial spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0                 # base pivot node 1
+    node2: int = 0                 # intermediate spatial link node 2
+    node3: int = 0                 # driven spatial link node 3
+    stiff: float = 1e6             # kinematic constraint spinorial stiffness
+    skew_id: int = 0               # reference coordinate frame ID
+    tol: float = 1e-6              # constraint numerical tolerance
+    link_len_a: float = 0.0        # length of primary spatial link a
+    link_len_b: float = 0.0        # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
 
 
