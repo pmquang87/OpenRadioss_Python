@@ -25,7 +25,7 @@ each carrying:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -737,7 +737,6 @@ class Model:
         self.submodels: Dict[int, Submodel] = {}
 
         # SUBDOMAIN domain partitions (M88 — Rad2Rad coupling)
-        self.subdomains: Dict[int, Subdomain] = {}
 
         # XREF reference geometry (M89)
         self.xrefs: Dict[int, Xref] = {}
@@ -771,7 +770,6 @@ class Model:
         self.initemp: List[InitialTemperature] = []    # /INITEMP (M95)
         self.inivol: List[InitialVolume] = []          # /INIVOL  (M94)
         self.ploads: List[PressureLoad] = []           # /PLOAD   (M5)
-        self.pblast_loads: Dict[int, PBlastLoad] = {}  # /LOAD/PBLAST (M99)
         self.def_inter: Dict[str, Any] = {}            # /DEF_INTER (M99/M101)
         self.perturb_shells: Dict[int, ShellPartPerturbation] = {} # /PERTURB/PART/SHELL (M101)
         self.perturb_fails: Dict[int, FailurePerturbation] = {}    # /PERTURB/FAIL (M101)
@@ -791,19 +789,15 @@ class Model:
         self.plies: Dict[int, Ply] = {}                # /PLY (M100)
         self.laminates: Dict[int, Laminate] = {}       # /LAMINATE (M100)
         self.bcs_nrf: Dict[int, BcsNrf] = {}           # /BCS/NRF (M102)
-        self.bcs_walls: Dict[int, BcsWall] = {}        # /BCS/WALL (M102)
         self.rlinks: Dict[int, RigidLink] = {}         # /RLINK (M102)
-        self.cyl_joints: Dict[int, CylJoint] = {}      # /CYL_JOINT (M102)
         self.gjoints: Dict[int, GeneralJoint] = {}     # /GJOINT (M102)
         self.node_merges: Dict[int, MergeNode] = {}    # /MERGE/NODE (M102)
         self.rbody_merges: Dict[int, MergeRbody] = {}  # /MERGE/RBODY (M102)
         self.inicracks: Dict[int, IniCrack] = {}       # /INICRACK (M102)
         self.laser_loads: Dict[int, LaserLoad] = {}    # /LASER (M102)
-        self.pcyl_loads: Dict[int, PcylLoad] = {}      # /LOAD/PCYL (M103)
         self.pfluid_loads: Dict[int, PfluidLoad] = {}  # /LOAD/PFLUID (M103)
         self.preloads: Dict[int, Preload] = {}         # /PRELOAD (M103)
         self.preload_axials: Dict[int, PreloadAxial] = {} # /PRELOAD/AXIAL (M103)
-        self.damp_inters: Dict[int, DampInter] = {}    # /DAMP/INTER (M103)
         self.damp_ranges: Dict[int, DampRange] = {}    # /DAMP/RANGE (M103)
         self.analy_global: Optional[AnalyGlobal] = None # /ANALY (M103)
         self.upwind_global: Optional[UpwindGlobal] = None # /UPWIND (M103)
@@ -845,10 +839,8 @@ class Model:
         self.transform_projections: List[TransformProjection] = [] # /TRANSFORM/PROJ (M134)
         self.transform_frames: List[TransformFrame] = [] # /TRANSFORM/FRAME (M134)
         self.damp_globals: List[DampGlobal] = []       # /DAMP/GLOBAL (M134)
-        self.damp_parts: Dict[int, DampPart] = {}      # /DAMP/PART (M134)
         self.load_centris: Dict[int, LoadCentri] = {}       # /LOAD/CENTRI (M112)
         self.load_pfluids: Dict[int, LoadPfluid] = {}       # /LOAD/PFLUID (M112)
-        self.load_pressures: Dict[int, LoadPressure] = {}   # /LOAD/PRESSURE (M112)
         self.load_gravities: Dict[int, LoadGravity] = {}   # /LOAD/GRAV (M135)
         self.load_bodies: Dict[int, LoadBody] = {}         # /LOAD/BODY (M135)
         self.load_therms: Dict[int, LoadTherm] = {}        # /LOAD/HEAT (M135)
@@ -881,8 +873,6 @@ class Model:
         self.random_noises: List[RandomNoise] = []          # /RANDOM (M113)
         self.accelerometers: Dict[int, Accelerometer] = {}  # /ACCEL (M113)
         self.subsets: Dict[int, Subset] = {}                # /SUBSET (M113)
-        self.fail_composites: Dict[int, FailComposite] = {} # /FAIL/COMPOSITE (M114)
-        self.ebcs_propellants: Dict[int, EbcsPropellant] = {} # /EBCS/PROPELLANT (M114)
         self.admas_non_uniforms: Dict[int, AdmasNonUniform] = {} # /ADMAS/NON_UNIFORM (M114)
         self.sect_circles: Dict[int, SectCircle] = {}       # /SECT/CIRCLE (M114)
         self.sect_parals: Dict[int, SectParal] = {}         # /SECT/PARAL (M114)
@@ -917,16 +907,6 @@ class Model:
         self.analy: Optional[AnalyOptions] = None           # /ANALY (M121)
         self.alecfdsph: Optional[AleCfdSph] = None          # /ALECFDSPH (M122)
         self.fail_orthbiquads: Dict[int, FailOrthBiquad] = {} # /FAIL/ORTHBIQUAD (M123)
-        self.slipring_shells: Dict[int, SlipringShell] = {}   # /SLIPRING/SHELL (M123)
-        self.ebcs_nrfs: Dict[int, EbcsNrf] = {}               # /EBCS/NRF (M125)
-        self.fail_rtcls: Dict[int, FailRtcl] = {}             # /FAIL/RTCL (M125)
-        self.fail_gursons: Dict[int, FailGurson] = {}         # /FAIL/GURSON (M125)
-        self.fail_pucks: Dict[int, FailPuck] = {}             # /FAIL/PUCK (M126)
-        self.fail_sahraeis: Dict[int, FailSahraei] = {}       # /FAIL/SAHRAEI (M126)
-        self.fail_syazwans: Dict[int, FailSyazwan] = {}       # /FAIL/SYAZWAN (M126)
-        self.fail_tab2s: Dict[int, FailTab2] = {}             # /FAIL/TAB2 (M126)
-        self.fail_gene1s: Dict[int, FailGene1] = {}           # /FAIL/GENE1 (M126)
-        self.fail_nxts: Dict[int, FailNxt] = {}               # /FAIL/NXT (M159)
         self.fail_laddamas: Dict[int, FailLadDama] = {}       # /FAIL/LAD_DAMA (M159)
         self.fail_inievos: Dict[int, FailInievo] = {}         # /FAIL/INIEVO (M159)
         self.stacks: Dict[int, Stack] = {}                   # /STACK (M127)
@@ -941,7 +921,6 @@ class Model:
         self.ini_map3ds: Dict[int, IniMap3D] = {}          # /INIMAP/3D (M137)
         self.generic_sets: Dict[str, Dict[int, SetGeneric]] = {} # /SET (M137)
         self.ebcs_periodics: Dict[int, EbcsPeriodic] = {}  # /EBCS/PERIODIC (M138)
-        self.ebcs_cyclics: Dict[int, EbcsCyclic] = {}      # /EBCS/CYCLIC (M138)
         self.mat_plas_zerils: Dict[int, MaterialPlasZeril] = {} # /MAT/PLAS_ZERIL (M141)
         self.mat_plas_bodnes: Dict[int, MaterialPlasBodne] = {} # /MAT/PLAS_BODNE (M141)
         self.mat_visc_pronys: Dict[int, MaterialViscProny] = {} # /MAT/VISC_PRONY (M141)
@@ -970,7 +949,6 @@ class Model:
         self.ebcs_normv: Dict[int, EbcsNormv] = {}         # /EBCS/NORMV (M150)
         self.ebcs_valves: Dict[int, EbcsValv] = {}         # /EBCS/VALVIN, /EBCS/VALVOUT (M150)
         self.ebcs_monvols: Dict[int, EbcsMonvol] = {}      # /EBCS/MONVOL (M150)
-        self.bcs_walls: Dict[int, BcsWall] = {}            # /BCS/WALL (M150)
         self.seatbelt_systems: Dict[int, SeatbeltSystem] = {} # /SEATBELT (M150)
         self.ams_control: Optional[AmsControl] = None      # /AMS (M150)
         self.pblast_loads: Dict[int, PblastLoad] = {}      # /LOAD/PBLAST, /PBLAST (M151)
@@ -995,9 +973,7 @@ class Model:
         self.mat_plas_rates: Dict[int, MaterialPlasRate] = {}       # /MAT/LAW121 (M161)
         self.mat_cdpm2s: Dict[int, MaterialCdpm2] = {}              # /MAT/LAW124 (M161)
         self.fail_hc_dsses: Dict[int, FailHcDsse] = {}              # /FAIL/HC_DSSE (M162)
-        self.fail_mullins: Dict[int, FailMullins] = {}              # /FAIL/MULLINS (M162)
         self.fail_snconnects: Dict[int, FailSnconnect] = {}        # /FAIL/SNCONNECT (M162)
-        self.fail_spallings: Dict[int, FailSpalling] = {}          # /FAIL/SPALLING (M162)
         self.dfs_detcords: Dict[int, DfsDetcord] = {}              # /DFS/DETCORD (M163)
         self.load_pressures: Dict[int, LoadPressure] = {}          # /LOAD/PRESSURE (M163)
         self.ale_mats: Dict[int, AleMat] = {}                      # /ALE/MAT (M163)
@@ -1011,8 +987,6 @@ class Model:
         self.mat_concs: Dict[int, MaterialConc] = {}               # /MAT/LAW24, /MAT/CONC (M170)
         self.mat_barlats: Dict[int, MaterialBarlat] = {}           # /MAT/LAW87, /MAT/BARLAT (M170)
         self.mat_law83s: Dict[int, MaterialLaw83] = {}             # /MAT/LAW83, /MAT/SPR_JOU (M170)
-        self.mat_law80s: Dict[int, MaterialLaw80] = {}             # /MAT/LAW80, /MAT/TRANSFO (M170)
-        self.mat_law117s: Dict[int, MaterialLaw117] = {}           # /MAT/LAW117, /MAT/COH_MC (M171)
         self.mat_law90s: Dict[int, MaterialLaw90] = {}             # /MAT/LAW90, /MAT/PLAS_TAB (M171)
         self.mat_law33s: Dict[int, MaterialLaw33] = {}             # /MAT/LAW33, /MAT/FOAM_PLAS (M171)
         self.mat_heat_modifiers: Dict[int, MatHeatModifier] = {}   # /MAT/HEAT, /HEAT/MAT (M171)
@@ -1020,10 +994,8 @@ class Model:
         self.mat_law66s: Dict[int, MaterialLaw66] = {}             # /MAT/LAW66, /MAT/FOAM_TAB (M172)
         self.mat_law35s: Dict[int, MaterialLaw35] = {}             # /MAT/LAW35, /MAT/FOAM_VISC (M172)
         self.mat_law62s: Dict[int, MaterialLaw62] = {}             # /MAT/LAW62, /MAT/VISC_HYP (M172)
-        self.mat_law28s: Dict[int, MaterialLaw28] = {}             # /MAT/LAW28, /MAT/HONEYCOMB (M172)
         self.mat_law44s: Dict[int, MaterialLaw44] = {}             # /MAT/LAW44, /MAT/COWPER_SYMONDS (M172)
         self.mat_law88s: Dict[int, MaterialLaw88] = {}             # /MAT/LAW88, /MAT/HYPER_ELAS (M173)
-        self.mat_law92s: Dict[int, MaterialLaw92] = {}             # /MAT/LAW92, /MAT/ARRUDA_BOYCE (M173)
         self.mat_law94s: Dict[int, MaterialLaw94] = {}             # /MAT/LAW94, /MAT/YEOH (M173)
         self.mat_law46s: Dict[int, MaterialLaw46] = {}             # /MAT/LAW46, /MAT/HYD_VISC (M173)
         self.mat_law69s: Dict[int, MaterialLaw69] = {}             # /MAT/LAW69, /MAT/HYP_EXT_COMP (M173)
@@ -1039,7 +1011,6 @@ class Model:
         self.mat_law134s: Dict[int, MaterialLaw134] = {}           # /MAT/LAW134, /MAT/VISCOUS_FOAM (M175)
         self.mat_law104s: Dict[int, MaterialLaw104] = {}           # /MAT/LAW104, /MAT/JOHNS_VOCE_DRUCKER (M176)
         self.mat_law105s: Dict[int, MaterialLaw105] = {}           # /MAT/LAW105, /MAT/POWDER_BURN (M176)
-        self.mat_law106s: Dict[int, MaterialLaw106] = {}           # /MAT/LAW106, /MAT/JCOOK_ALM (M176)
         self.mat_law107s: Dict[int, MaterialLaw107] = {}           # /MAT/LAW107, /MAT/PAPER_LIGHT (M176)
         self.mat_law110s: Dict[int, MaterialLaw110] = {}           # /MAT/LAW110, /MAT/VEGTER (M176)
         self.mat_law115s: Dict[int, MaterialLaw115] = {}           # /MAT/LAW115, /MAT/DESHPANDE_FLECK (M176)
@@ -1052,8 +1023,6 @@ class Model:
         self.bcs_cyclics: Dict[int, BcsCyclic] = {}                 # /BCS/CYCLIC (M178)
         self.pcyl_loads: Dict[int, PcylLoad] = {}                   # /LOAD/PCYL (M178)
         self.damp_vrels: Dict[int, DampVrel] = {}                   # /DAMP/VREL (M179)
-        self.fail_syazwans: Dict[int, FailSyazwan] = {}             # /FAIL/SYAZWAN (M179)
-        self.mat_law113s: Dict[int, MatLaw113] = {}                 # /MAT/LAW113, /MAT/SPR_BEAM (M179)
         self.mat_law79s: Dict[int, MatLaw79] = {}                   # /MAT/LAW79, /MAT/JOHN_HOLM (M179)
         self.mat_visc_lpronys: Dict[int, MatViscLprony] = {}         # /MAT/VISC_LPRONY, /VISC/LPRONY (M179)
         self.mat_law190s: Dict[int, MatLaw190] = {}                 # /MAT/LAW190, /MAT/FOAM_DUBOIS (M180)
@@ -1080,25 +1049,20 @@ class Model:
         self.mat_law50s: Dict[int, MatLaw50] = {}                   # /MAT/LAW50, /MAT/VISC_HONEY (M183)
         self.mat_law57s: Dict[int, MatLaw57] = {}                   # /MAT/LAW57, /MAT/BARLAT3 (M183)
         self.mat_law87s: Dict[int, MatLaw87] = {}                   # /MAT/LAW87, /MAT/BARLAT_YLD2000 (M183)
-        self.mat_law95s: Dict[int, MatLaw95] = {}                   # /MAT/LAW95, /MAT/BERGSTROM_BOYCE (M183)
         self.mat_law163s: Dict[int, MatLaw163] = {}                 # /MAT/LAW163, /MAT/CRUSHABLE_FOAM (M183)
         self.mat_law169s: Dict[int, MatLaw169] = {}                 # /MAT/LAW169, /MAT/ARUP_ADHESIVE (M183)
-        self.mat_law49s: Dict[int, MatLaw49] = {}                   # /MAT/LAW49, /MAT/STEINB (M184)
         self.mat_law76s: Dict[int, MatLaw76] = {}                   # /MAT/LAW76, /MAT/SAMP (M184)
         self.prop_type11s: Dict[int, PropType11] = {}               # /PROP/TYPE11, /PROP/SH_SANDW (M184)
         self.prop_type16s: Dict[int, PropType16] = {}               # /PROP/TYPE16, /PROP/SH_FABR (M184)
         self.prop_type17s: Dict[int, PropType17] = {}               # /PROP/TYPE17, /PROP/STACK (M184)
         self.prop_type44s: Dict[int, PropType44] = {}               # /PROP/TYPE44, /PROP/SPR_CRUS (M184)
         self.mat_law60s: Dict[int, MatLaw60] = {}                   # /MAT/LAW60, /MAT/PLAS_T3 (M185)
-        self.mat_law63s: Dict[int, MatLaw63] = {}                   # /MAT/LAW63, /MAT/HANSEL (M185)
-        self.mat_law48s: Dict[int, MatLaw48] = {}                   # /MAT/LAW48, /MAT/ZHAO (M185)
         self.mat_law26s: Dict[int, MatLaw26] = {}                   # /MAT/LAW26, /MAT/SESAM (M185)
         self.prop_type12s: Dict[int, PropType12] = {}               # /PROP/TYPE12, /PROP/SPR_PUL (M185)
         self.prop_type15s: Dict[int, PropType15] = {}               # /PROP/TYPE15, /PROP/POROUS (M185)
         self.prop_type28s: Dict[int, PropType28] = {}               # /PROP/TYPE28, /PROP/NSTRAND (M185)
         self.mat_law6s: Dict[int, MatLaw6] = {}                     # /MAT/LAW6, /MAT/VISC_FLUID (M186)
         self.mat_law11s: Dict[int, MatLaw11] = {}                   # /MAT/LAW11, /MAT/BOUND (M186)
-        self.mat_law77s: Dict[int, MatLaw77] = {}                   # /MAT/LAW77, /MAT/FOAM_AIR (M186)
         self.mat_law151s: Dict[int, MatLaw151] = {}                 # /MAT/LAW151, /MAT/MULTIFLUID (M186)
         self.mat_law187s: Dict[int, MatLaw187] = {}                 # /MAT/LAW187, /MAT/BARLAT20003D (M186)
         self.prop_type33s: Dict[int, PropType33] = {}               # /PROP/TYPE33, /PROP/KJOINT (M186)
@@ -1225,11 +1189,8 @@ class Model:
         self.fail_composites: Dict[int, FailComposite] = {}         # /FAIL/COMPOSITE (M191)
         self.fail_tab2s: Dict[int, FailTab2] = {}                   # /FAIL/TAB2, /FAIL/TABULATED2 (M191)
         self.fail_tabulated2s = self.fail_tab2s
-        self.fail_alters: Dict[int, FailAlter] = {}                 # /FAIL/ALTER (M191)
         self.fail_visuals: Dict[int, FailVisual] = {}               # /FAIL/VISUAL (M191)
         self.fail_orthstrains: Dict[int, FailOrthstrain] = {}       # /FAIL/ORTHSTRAIN (M191)
-        self.ebcs_propellants: Dict[int, EbcsPropellant] = {}       # /EBCS/PROPELLANT (M191)
-        self.ebcs_cyclics: Dict[int, EbcsCyclic] = {}               # /EBCS/CYCLIC (M191)
         self.fail_emcs: Dict[int, FailEMC] = {}                     # /FAIL/EMC (M193)
         self.fail_nxts: Dict[int, FailNXT] = {}                     # /FAIL/NXT (M193)
         self.fail_tbutchers: Dict[int, FailTButcher] = {}           # /FAIL/TBUTCHER (M193)
@@ -1373,9 +1334,9 @@ class Model:
         self.transforms_pos = self.transform_positions               # /TRANSFORM/POS, /POS (M203)
         self.pos_transforms = self.transform_positions
         self.props_inject1 = self.prop_inject1s
-        self.props_type15 = self.prop_inject1s
+        self.props_type15 = self.prop_type15s
         self.props_inject2 = self.prop_inject2s
-        self.props_type16 = self.prop_inject2s
+        self.props_type16 = self.prop_type16s
         self.checksums: List[Any] = []                               # /CHECKSUM/START, /CHECKSUM/END (M203)
         self.fails_johnson: Dict[int, Any] = {}                      # /FAIL/JOHNSON (M203)
         self.fail_johnsons = self.fails_johnson
@@ -1616,7 +1577,6 @@ class Model:
         self.sensor_spring_energies: Dict[int, Any] = {}             # /SENSOR/SPRING_ENERGY (M234)
 
         # M235 Entities
-        self.fail_gursons: Dict[int, Any] = {}                       # /FAIL/GURSON (M235)
         self.eng_disps: Dict[int, Any] = {}                          # /DISP, /ENG/DISP (M235)
         self.sensor_spring_defls: Dict[int, Any] = {}                # /SENSOR/SPRING_DEFL (M235)
 
@@ -1642,12 +1602,10 @@ class Model:
 
         # M240 Entities
         self.fail_rice_traceys: Dict[int, Any] = {}                  # /FAIL/RICE_TRACEY (M240)
-        self.eng_volumes: Dict[int, Any] = {}                        # /VOLUME, /ENG/VOLUME (M240)
         self.sensor_spring_shears: Dict[int, Any] = {}               # /SENSOR/SPRING_SHEAR (M240)
 
         # M241 Entities
         self.fail_bao_wierzbickis: Dict[int, Any] = {}               # /FAIL/BAO_WIERZBICKI (M241)
-        self.eng_densities: Dict[int, Any] = {}                      # /DENSITY, /ENG/DENSITY (M241)
         self.sensor_spring_bends: Dict[int, Any] = {}                # /SENSOR/SPRING_BEND (M241)
 
         # M242 Entities
@@ -1667,12 +1625,10 @@ class Model:
 
         # M245 Entities
         self.fail_ludwiks: Dict[int, Any] = {}                       # /FAIL/LUDWIK (M245)
-        self.eng_hourglass_energies: Dict[int, Any] = {}             # /HOURGLASS_ENERGY, /ENG/HOURGLASS_ENERGY (M245)
         self.sensor_spring_hourglass_energies: Dict[int, Any] = {}   # /SENSOR/SPRING_HOURGLASS_ENERGY (M245)
 
         # M246 Entities
         self.fail_voces: Dict[int, Any] = {}                         # /FAIL/VOCE (M246)
-        self.eng_contact_energies: Dict[int, Any] = {}               # /CONTACT_ENERGY, /ENG/CONTACT_ENERGY (M246)
         self.sensor_spring_contact_energies: Dict[int, Any] = {}     # /SENSOR/SPRING_CONTACT_ENERGY (M246)
 
         # M247 Entities
@@ -1710,7 +1666,6 @@ class Model:
 
         # M253 Entities
         self.fail_hockett_sherbys: Dict[int, Any] = {}               # /FAIL/HOCKETT_SHERBY (M253)
-        self.eng_temperatures: Dict[int, Any] = {}                   # /ENG/TEMPERATURE, /ENG/TEMP (M253)
         self.tripod_joints: Dict[int, Any] = {}                      # /TRIPOD, /LAGMUL/TRIPOD (M253)
         self.sensor_spring_temperatures: Dict[int, Any] = {}         # /SENSOR/SPRING_TEMPERATURE (M253)
 
@@ -1778,13 +1733,11 @@ class Model:
         self.fail_cockcroft_lathams: Dict[int, Any] = {}             # /FAIL/COCKCROFT_LATHAM (M265)
         self.eng_effective_stresses: Dict[int, Any] = {}             # /ENG/EFFECTIVE_STRESS (M265)
         self.lagmul_torque_split_gears: Dict[int, Any] = {}          # /TORQUE_SPLIT_GEAR, /LAGMUL/TORQUE_SPLIT_GEAR (M265)
-        self.sensor_spring_torsional_energies: Dict[int, Any] = {}   # /SENSOR/SPRING_TORSIONAL_ENERGY (M265)
 
         # M266 Entities
         self.fail_lemaitre_damages: Dict[int, Any] = {}              # /FAIL/LEMAITRE_DAMAGE (M266)
         self.eng_hydrostatic_pressures: Dict[int, Any] = {}          # /ENG/HYDROSTATIC_PRESSURE (M266)
         self.lagmul_geneva_drives: Dict[int, Any] = {}               # /GENEVA_DRIVE, /LAGMUL/GENEVA_DRIVE (M266)
-        self.sensor_spring_bending_energies: Dict[int, Any] = {}     # /SENSOR/SPRING_BENDING_ENERGY (M266)
 
         # M267 Entities
         self.fail_tabulated_plasticities: Dict[int, Any] = {}        # /FAIL/TABULATED_PLASTICITY (M267)
@@ -2065,178 +2018,143 @@ class Model:
         self.fail_ladinplaneshearrates: Dict[int, Any] = {}         # /FAIL/LAD_INPLANE_SHEAR_RATE (M314)
         self.eng_elastocaloric_energies: Dict[int, Any] = {}        # /ENG/ELASTOCALORIC_ENERGY (M314)
         self.lagmul_four_bar_crank_rocker_joints: Dict[int, Any] = {} # /FOUR_BAR_CRANK_ROCKER_JOINT, /LAGMUL/FOUR_BAR_CRANK_ROCKER_JOINT (M314)
-        self.sensor_spring_torsional_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_SNAP_RATE (M314)
 
         # M315 Entities
         self.fail_ladtransversecompressionrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_COMPRESSION_RATE (M315)
         self.eng_thermophononic_energies: Dict[int, Any] = {}       # /ENG/THERMOPHONONIC_ENERGY (M315)
         self.lagmul_four_bar_double_crank_joints: Dict[int, Any] = {} # /FOUR_BAR_DOUBLE_CRANK_JOINT, /LAGMUL/FOUR_BAR_DOUBLE_CRANK_JOINT (M315)
-        self.sensor_spring_bending_snap_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_BENDING_SNAP_RATE (M315)
 
         # M316 Entities
         self.fail_ladtransversetensionrates: Dict[int, Any] = {}    # /FAIL/LAD_TRANSVERSE_TENSION_RATE (M316)
         self.eng_thermoplasmonic_energies: Dict[int, Any] = {}      # /ENG/THERMOPLASMONIC_ENERGY (M316)
         self.lagmul_four_bar_double_rocker_joints: Dict[int, Any] = {} # /FOUR_BAR_DOUBLE_ROCKER_JOINT, /LAGMUL/FOUR_BAR_DOUBLE_ROCKER_JOINT (M316)
-        self.sensor_spring_normal_snap_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_NORMAL_SNAP_RATE (M316)
 
         # M317 Entities
         self.fail_ladinterfacialdelaminationrates: Dict[int, Any] = {} # /FAIL/LAD_INTERFACIAL_DELAMINATION_RATE (M317)
         self.eng_thermomagnetic_generator_energies: Dict[int, Any] = {} # /ENG/THERMOMAGNETIC_GENERATOR_ENERGY (M317)
         self.lagmul_slider_rocker_inversion_joints: Dict[int, Any] = {} # /SLIDER_ROCKER_INVERSION_JOINT, /LAGMUL/SLIDER_ROCKER_INVERSION_JOINT (M317)
-        self.sensor_spring_transverse_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_SNAP_RATE (M317)
 
         # M318 Entities
         self.fail_ladtransverseshearinteractionrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_SHEAR_INTERACTION_RATE (M318)
         self.eng_magnetorheological_energies: Dict[int, Any] = {}     # /ENG/MAGNETORHEOLOGICAL_ENERGY (M318)
         self.lagmul_scotch_yoke_mechanism_joints: Dict[int, Any] = {} # /SCOTCH_YOKE_MECHANISM_JOINT, /LAGMUL/SCOTCH_YOKE_MECHANISM_JOINT (M318)
-        self.sensor_spring_total_snap_rates: Dict[int, Any] = {}      # /SENSOR/SPRING_TOTAL_SNAP_RATE (M318)
 
         # M319 Entities
         self.fail_ladnonlocalgradients: Dict[int, Any] = {}          # /FAIL/LAD_NONLOCAL_GRADIENT (M319)
         self.eng_electrorheological_energies: Dict[int, Any] = {}    # /ENG/ELECTRORHEOLOGICAL_ENERGY (M319)
         self.lagmul_geneva_drive_mechanism_joints: Dict[int, Any] = {} # /GENEVA_DRIVE_MECHANISM_JOINT, /LAGMUL/GENEVA_DRIVE_MECHANISM_JOINT (M319)
-        self.sensor_spring_normal_crackle_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_NORMAL_CRACKLE_RATE (M319)
 
         # M320 Entities
         self.fail_ladanisotropicplasticities: Dict[int, Any] = {}      # /FAIL/LAD_ANISOTROPIC_PLASTICITY (M320)
         self.eng_thermoacoustic_energies: Dict[int, Any] = {}          # /ENG/THERMOACOUSTIC_ENERGY (M320)
         self.lagmul_double_cardan_joints: Dict[int, Any] = {}          # /DOUBLE_CARDAN_JOINT, /LAGMUL/DOUBLE_CARDAN_JOINT (M320)
-        self.sensor_spring_transverse_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_CRACKLE_RATE (M320)
 
         # M321 Entities
         self.fail_ladnonlocalgradientrates: Dict[int, Any] = {}       # /FAIL/LAD_NONLOCAL_GRADIENT_RATE (M321)
         self.eng_ferroelectric_energies: Dict[int, Any] = {}          # /ENG/FERROELECTRIC_ENERGY (M321)
         self.lagmul_bennett_linkage_joints: Dict[int, Any] = {}       # /BENNETT_LINKAGE_JOINT, /LAGMUL/BENNETT_LINKAGE_JOINT (M321)
-        self.sensor_spring_total_crackle_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_TOTAL_CRACKLE_RATE (M321)
 
         # M322 Entities
         self.fail_ladfiberkinkingrates: Dict[int, Any] = {}          # /FAIL/LAD_FIBER_KINKING_RATE (M322)
         self.eng_flexoelectric_energies: Dict[int, Any] = {}         # /ENG/FLEXOELECTRIC_ENERGY (M322)
         self.lagmul_bricard_linkage_joints: Dict[int, Any] = {}      # /BRICARD_LINKAGE_JOINT, /LAGMUL/BRICARD_LINKAGE_JOINT (M322)
-        self.sensor_spring_torsional_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_CRACKLE_RATE (M322)
 
         # M323 Entities
         self.fail_ladfibertensionrates: Dict[int, Any] = {}          # /FAIL/LAD_FIBER_TENSION_RATE (M323)
         self.eng_pyromagnetic_energies: Dict[int, Any] = {}          # /ENG/PYROMAGNETIC_ENERGY (M323)
         self.lagmul_myard_linkage_joints: Dict[int, Any] = {}        # /MYARD_LINKAGE_JOINT, /LAGMUL/MYARD_LINKAGE_JOINT (M323)
-        self.sensor_spring_bending_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_CRACKLE_RATE (M323)
 
         # M324 Entities
         self.fail_ladfibercompressionrates: Dict[int, Any] = {}      # /FAIL/LAD_FIBER_COMPRESSION_RATE (M324)
         self.eng_piezothermal_energies: Dict[int, Any] = {}          # /ENG/PIEZOTHERMAL_ENERGY (M324)
         self.lagmul_goldberg_linkage_joints: Dict[int, Any] = {}     # /GOLDBERG_LINKAGE_JOINT, /LAGMUL/GOLDBERG_LINKAGE_JOINT (M324)
-        self.sensor_spring_total_angular_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_CRACKLE_RATE (M324)
 
         # M325 Entities
         self.fail_ladhygrothermals: Dict[int, Any] = {}              # /FAIL/LAD_HYGROTHERMAL (M325)
         self.eng_thermoflexoelectric_energies: Dict[int, Any] = {}   # /ENG/THERMOFLEXOELECTRIC_ENERGY (M325)
         self.lagmul_waldron_linkage_joints: Dict[int, Any] = {}      # /WALDRON_LINKAGE_JOINT, /LAGMUL/WALDRON_LINKAGE_JOINT (M325)
-        self.sensor_spring_normal_pop_rates: Dict[int, Any] = {}     # /SENSOR/SPRING_NORMAL_POP_RATE (M325)
 
         # M326 Entities
         self.fail_ladcoupleplasticitys: Dict[int, Any] = {}          # /FAIL/LAD_COUPLE_PLASTICITY (M326)
         self.eng_flexomagnetic_energies: Dict[int, Any] = {}         # /ENG/FLEXOMAGNETIC_ENERGY (M326)
         self.lagmul_dietmaier_linkage_joints: Dict[int, Any] = {}    # /DIETMAIER_LINKAGE_JOINT, /LAGMUL/DIETMAIER_LINKAGE_JOINT (M326)
-        self.sensor_spring_transverse_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_POP_RATE (M326)
 
         # M327 Entities
         self.fail_ladcouplecreeps: Dict[int, Any] = {}               # /FAIL/LAD_COUPLE_CREEP (M327)
         self.eng_pyroelectric_resonance_energies: Dict[int, Any] = {} # /ENG/PYROELECTRIC_RESONANCE_ENERGY (M327)
         self.lagmul_baker_linkage_joints: Dict[int, Any] = {}        # /BAKER_LINKAGE_JOINT, /LAGMUL/BAKER_LINKAGE_JOINT (M327)
-        self.sensor_spring_total_pop_rates: Dict[int, Any] = {}      # /SENSOR/SPRING_TOTAL_POP_RATE (M327)
 
         # M328 Entities
         self.fail_ladcoupleviscoplasticitys: Dict[int, Any] = {}     # /FAIL/LAD_COUPLE_VISCOPLASTICITY (M328)
         self.eng_thermomagnetic_resonance_energies: Dict[int, Any] = {} # /ENG/THERMOMAGNETIC_RESONANCE_ENERGY (M328)
         self.lagmul_wohlhart_linkage_joints: Dict[int, Any] = {}     # /WOHLHART_LINKAGE_JOINT, /LAGMUL/WOHLHART_LINKAGE_JOINT (M328)
-        self.sensor_spring_torsional_pop_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_TORSIONAL_POP_RATE (M328)
 
         # M329 Entities
         self.fail_ladmicrodelaminationrates: Dict[int, Any] = {}     # /FAIL/LAD_MICRO_DELAMINATION_RATE (M329)
         self.eng_flexothermal_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMAL_RESONANCE_ENERGY (M329)
         self.lagmul_altmann_linkage_joints: Dict[int, Any] = {}      # /ALTMANN_LINKAGE_JOINT, /LAGMUL/ALTMANN_LINKAGE_JOINT (M329)
-        self.sensor_spring_bending_pop_rates: Dict[int, Any] = {}    # /SENSOR/SPRING_BENDING_POP_RATE (M329)
 
         # M330 Entities
         self.fail_ladcoupledamageviscoelasticitys: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_DAMAGE_VISCOELASTICITY (M330)
         self.eng_electromagnetomechanical_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROMAGNETOMECHANICAL_RESONANCE_ENERGY (M330)
         self.lagmul_wunderlich_linkage_joints: Dict[int, Any] = {}   # /WUNDERLICH_LINKAGE_JOINT, /LAGMUL/WUNDERLICH_LINKAGE_JOINT (M330)
-        self.sensor_spring_total_angular_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE (M330)
 
         # M331 Entities
         self.fail_laddynamiccrushrates: Dict[int, Any] = {}          # /FAIL/LAD_DYNAMIC_CRUSH_RATE (M331)
         self.eng_flexomagnetoelectric_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOELECTRIC_RESONANCE_ENERGY (M331)
         self.lagmul_delassus_linkage_joints: Dict[int, Any] = {}     # /DELASSUS_LINKAGE_JOINT, /LAGMUL/DELASSUS_LINKAGE_JOINT (M331)
-        self.sensor_spring_normal_lock_rates: Dict[int, Any] = {}    # /SENSOR/SPRING_NORMAL_LOCK_RATE (M331)
 
         # M332 Entities
         self.fail_ladtransversecrushrates: Dict[int, Any] = {}       # /FAIL/LAD_TRANSVERSE_CRUSH_RATE (M332)
         self.eng_flexothermomagnetic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOMAGNETIC_RESONANCE_ENERGY (M332)
         self.lagmul_schatz_linkage_joints: Dict[int, Any] = {}       # /SCHATZ_LINKAGE_JOINT, /LAGMUL/SCHATZ_LINKAGE_JOINT (M332)
-        self.sensor_spring_transverse_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_LOCK_RATE (M332)
 
         # M333 Entities
         self.fail_ladcoupledynamiccrushs: Dict[int, Any] = {}        # /FAIL/LAD_COUPLE_DYNAMIC_CRUSH (M333)
         self.eng_flexothermoelectric_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOELECTRIC_RESONANCE_ENERGY (M333)
         self.lagmul_franke_linkage_joints: Dict[int, Any] = {}       # /FRANKE_LINKAGE_JOINT, /LAGMUL/FRANKE_LINKAGE_JOINT (M333)
-        self.sensor_spring_total_lock_rates: Dict[int, Any] = {}     # /SENSOR/SPRING_TOTAL_LOCK_RATE (M333)
 
         # M334 Entities
         self.fail_ladcouplecrushrates: Dict[int, Any] = {}           # /FAIL/LAD_COUPLE_CRUSH_RATE (M334)
         self.eng_flexothermoacoustic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOACOUSTIC_RESONANCE_ENERGY (M334)
         self.lagmul_krames_linkage_joints: Dict[int, Any] = {}       # /KRAMES_LINKAGE_JOINT, /LAGMUL/KRAMES_LINKAGE_JOINT (M334)
-        self.sensor_spring_torsional_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_LOCK_RATE (M334)
 
         # M335 Entities
-        self.fail_laddynamicdelaminationrates: Dict[int, Any] = {}   # /FAIL/LAD_DYNAMIC_DELAMINATION_RATE (M335)
         self.eng_flexoelectromagnetic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOELECTROMAGNETIC_RESONANCE_ENERGY (M335)
         self.lagmul_borel_linkage_joints: Dict[int, Any] = {}        # /BOREL_LINKAGE_JOINT, /LAGMUL/BOREL_LINKAGE_JOINT (M335)
-        self.sensor_spring_bending_lock_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_BENDING_LOCK_RATE (M335)
 
         # M336 Entities
-        self.fail_ladtransversedelaminationrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_DELAMINATION_RATE (M336)
         self.eng_flexoelectroacoustic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOELECTROACOUSTIC_RESONANCE_ENERGY (M336)
         self.lagmul_herve_linkage_joints: Dict[int, Any] = {}        # /HERVE_LINKAGE_JOINT, /LAGMUL/HERVE_LINKAGE_JOINT (M336)
-        self.sensor_spring_total_angular_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_LOCK_RATE (M336)
 
         # M337 Entities
-        self.fail_ladcoupledelaminationrates: Dict[int, Any] = {}    # /FAIL/LAD_COUPLE_DELAMINATION_RATE (M337)
         self.eng_flexomagnetoacoustic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOACOUSTIC_RESONANCE_ENERGY (M337)
         self.lagmul_kong_linkage_joints: Dict[int, Any] = {}         # /KONG_LINKAGE_JOINT, /LAGMUL/KONG_LINKAGE_JOINT (M337)
-        self.sensor_spring_normal_drop_rates: Dict[int, Any] = {}    # /SENSOR/SPRING_NORMAL_DROP_RATE (M337)
 
         # M338 Entities
         self.fail_laddynamicmicrobucklingrates: Dict[int, Any] = {}  # /FAIL/LAD_DYNAMIC_MICROBUCKLING_RATE (M338)
         self.eng_flexothermoelectromagnetic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOELECTROMAGNETIC_RESONANCE_ENERGY (M338)
         self.lagmul_hunt_linkage_joints: Dict[int, Any] = {}         # /HUNT_LINKAGE_JOINT, /LAGMUL/HUNT_LINKAGE_JOINT (M338)
-        self.sensor_spring_transverse_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_DROP_RATE (M338)
 
         # M339 Entities
         self.fail_ladtransversemicrobucklingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_MICROBUCKLING_RATE (M339)
         self.eng_flexothermoelectroacoustic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOELECTROACOUSTIC_RESONANCE_ENERGY (M339)
         self.lagmul_baker_line_linkage_joints: Dict[int, Any] = {}   # /BAKER_LINE_LINKAGE_JOINT, /LAGMUL/BAKER_LINE_LINKAGE_JOINT (M339)
-        self.sensor_spring_total_drop_rates: Dict[int, Any] = {}     # /SENSOR/SPRING_TOTAL_DROP_RATE (M339)
 
         # M340 Entities
         self.fail_ladcouplemicrobucklingrates: Dict[int, Any] = {}   # /FAIL/LAD_COUPLE_MICROBUCKLING_RATE (M340)
         self.eng_flexothermomagnetoacoustic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOMAGNETOACOUSTIC_RESONANCE_ENERGY (M340)
         self.lagmul_baker_plane_linkage_joints: Dict[int, Any] = {}  # /BAKER_PLANE_LINKAGE_JOINT, /LAGMUL/BAKER_PLANE_LINKAGE_JOINT (M340)
-        self.sensor_spring_torsional_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_DROP_RATE (M340)
 
         # M341 Entities
-        self.fail_laddynamicfibersplittingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_SPLITTING_RATE (M341)
         self.eng_flexothermoelectromagnetoacoustic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOELECTROMAGNETOACOUSTIC_RESONANCE_ENERGY (M341)
         self.lagmul_wohlhart_hybrid_linkage_joints: Dict[int, Any] = {} # /WOHLHART_HYBRID_LINKAGE_JOINT, /LAGMUL/WOHLHART_HYBRID_LINKAGE_JOINT (M341)
-        self.sensor_spring_bending_drop_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_BENDING_DROP_RATE (M341)
 
         # M342 Entities
-        self.fail_ladtransversefibersplittingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_SPLITTING_RATE (M342)
         self.eng_flexothermophotonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPHOTONIC_RESONANCE_ENERGY (M342)
         self.lagmul_chen_linkage_joints: Dict[int, Any] = {}         # /CHEN_LINKAGE_JOINT, /LAGMUL/CHEN_LINKAGE_JOINT (M342)
-        self.sensor_spring_total_angular_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_DROP_RATE (M342)
 
         # M343 Entities
-        self.fail_ladcouplefibersplittingrates: Dict[int, Any] = {}   # /FAIL/LAD_COUPLE_FIBER_SPLITTING_RATE (M343)
         self.eng_flexothermoplasmonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONIC_RESONANCE_ENERGY (M343)
         self.lagmul_baker_symmetric_linkage_joints: Dict[int, Any] = {} # /BAKER_SYMMETRIC_LINKAGE_JOINT, /LAGMUL/BAKER_SYMMETRIC_LINKAGE_JOINT (M343)
         self.sensor_spring_normal_drift_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_NORMAL_DRIFT_RATE (M343)
@@ -2244,43 +2162,36 @@ class Model:
         # M344 Entities
         self.fail_laddynamicfibercrushingrates: Dict[int, Any] = {}  # /FAIL/LAD_DYNAMIC_FIBER_CRUSHING_RATE (M344)
         self.eng_flexothermoexcitonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOEXCITONIC_RESONANCE_ENERGY (M344)
-        self.lagmul_altmann_spatial_linkage_joints: Dict[int, Any] = {} # /ALTMANN_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALTMANN_SPATIAL_LINKAGE_JOINT (M344)
         self.sensor_spring_transverse_drift_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_DRIFT_RATE (M344)
 
         # M345 Entities
         self.fail_ladtransversefibercrushingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_CRUSHING_RATE (M345)
         self.eng_flexothermomagnonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOMAGNONIC_RESONANCE_ENERGY (M345)
-        self.lagmul_dietmaier_spatial_linkage_joints: Dict[int, Any] = {} # /DIETMAIER_SPATIAL_LINKAGE_JOINT, /LAGMUL/DIETMAIER_SPATIAL_LINKAGE_JOINT (M345)
         self.sensor_spring_total_drift_rates: Dict[int, Any] = {}    # /SENSOR/SPRING_TOTAL_DRIFT_RATE (M345)
 
         # M346 Entities
         self.fail_ladcouplefibercrushingrates: Dict[int, Any] = {}   # /FAIL/LAD_COUPLE_FIBER_CRUSHING_RATE (M346)
         self.eng_flexothermomagnonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOMAGNONPOLARITONIC_RESONANCE_ENERGY (M346)
-        self.lagmul_wohlhart_spatial_linkage_joints: Dict[int, Any] = {} # /WOHLHART_SPATIAL_LINKAGE_JOINT, /LAGMUL/WOHLHART_SPATIAL_LINKAGE_JOINT (M346)
         self.sensor_spring_torsional_drift_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_DRIFT_RATE (M346)
 
         # M347 Entities
         self.fail_laddynamicinterlaminarshearrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_INTERLAMINAR_SHEAR_RATE (M347)
         self.eng_flexothermoplasmonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONPOLARITONIC_RESONANCE_ENERGY (M347)
-        self.lagmul_hunt_spatial_linkage_joints: Dict[int, Any] = {} # /HUNT_SPATIAL_LINKAGE_JOINT, /LAGMUL/HUNT_SPATIAL_LINKAGE_JOINT (M347)
         self.sensor_spring_bending_drift_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_BENDING_DRIFT_RATE (M347)
 
         # M348 Entities
         self.fail_ladtransverseinterlaminarshearrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_INTERLAMINAR_SHEAR_RATE (M348)
         self.eng_flexothermoexcitonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOEXCITONPOLARITONIC_RESONANCE_ENERGY (M348)
-        self.lagmul_chen_spatial_linkage_joints: Dict[int, Any] = {} # /CHEN_SPATIAL_LINKAGE_JOINT, /LAGMUL/CHEN_SPATIAL_LINKAGE_JOINT (M348)
         self.sensor_spring_total_angular_drift_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_DRIFT_RATE (M348)
 
         # M349 Entities
         self.fail_ladcoupleinterlaminarshearrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_INTERLAMINAR_SHEAR_RATE (M349)
         self.eng_flexothermophononpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPHONONPOLARITONIC_RESONANCE_ENERGY (M349)
-        self.lagmul_baker_spatial_linkage_joints: Dict[int, Any] = {} # /BAKER_SPATIAL_LINKAGE_JOINT, /LAGMUL/BAKER_SPATIAL_LINKAGE_JOINT (M349)
         self.sensor_spring_normal_surge_rates: Dict[int, Any] = {}   # /SENSOR/SPRING_NORMAL_SURGE_RATE (M349)
 
         # M350 Entities
         self.fail_laddynamicinterlaminartensionrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_INTERLAMINAR_TENSION_RATE (M350)
         self.eng_flexothermoplasmonphononpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONPHONONPOLARITONIC_RESONANCE_ENERGY (M350)
-        self.lagmul_waldron_spatial_linkage_joints: Dict[int, Any] = {} # /WALDRON_SPATIAL_LINKAGE_JOINT, /LAGMUL/WALDRON_SPATIAL_LINKAGE_JOINT (M350)
         self.sensor_spring_transverse_surge_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_SURGE_RATE (M350)
 
         # M351 Entities
@@ -2311,217 +2222,171 @@ class Model:
         self.fail_ladcouplematrixmicrocrackingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_MATRIX_MICROCRACKING_RATE (M355)
         self.eng_flexothermophononmagnonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPHONONMAGNONPOLARITONIC_RESONANCE_ENERGY (M355)
         self.lagmul_sarrus_spatial_linkage_joints: Dict[int, Any] = {} # /SARRUS_SPATIAL_LINKAGE_JOINT, /LAGMUL/SARRUS_SPATIAL_LINKAGE_JOINT (M355)
-        self.sensor_spring_normal_pop_rates: Dict[int, Any] = {}     # /SENSOR/SPRING_NORMAL_POP_RATE (M355)
 
         # M356 Entities
         self.fail_laddynamicfibercompressionkinkingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_COMPRESSION_KINKING_RATE (M356)
         self.eng_flexothermoplasmonexcitonphononpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONEXCITONPHONONPOLARITONIC_RESONANCE_ENERGY (M356)
         self.lagmul_delassus_spatial_linkage_joints: Dict[int, Any] = {} # /DELASSUS_SPATIAL_LINKAGE_JOINT, /LAGMUL/DELASSUS_SPATIAL_LINKAGE_JOINT (M356)
-        self.sensor_spring_transverse_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_POP_RATE (M356)
 
         # M357 Entities
         self.fail_ladtransversefibercompressionkinkingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_COMPRESSION_KINKING_RATE (M357)
         self.eng_flexothermoplasmonexcitonmagnonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONEXCITONMAGNONPOLARITONIC_RESONANCE_ENERGY (M357)
         self.lagmul_wohlhart_spatial_linkage_joints: Dict[int, Any] = {} # /WOHLHART_SPATIAL_LINKAGE_JOINT, /LAGMUL/WOHLHART_SPATIAL_LINKAGE_JOINT (M357)
-        self.sensor_spring_total_pop_rates: Dict[int, Any] = {}      # /SENSOR/SPRING_TOTAL_POP_RATE (M357)
 
         # M358 Entities
         self.fail_ladcouplefibercompressionkinkingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FIBER_COMPRESSION_KINKING_RATE (M358)
         self.eng_flexothermoplasmonphononmagnonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONPHONONMAGNONPOLARITONIC_RESONANCE_ENERGY (M358)
         self.lagmul_altmann_spatial_linkage_joints: Dict[int, Any] = {} # /ALTMANN_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALTMANN_SPATIAL_LINKAGE_JOINT (M358)
-        self.sensor_spring_torsional_pop_rates: Dict[int, Any] = {}  # /SENSOR/SPRING_TORSIONAL_POP_RATE (M358)
 
         # M359 Entities
         self.fail_laddynamicdelaminationmicrodebondingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_DELAMINATION_MICRODEBONDING_RATE (M359)
         self.eng_flexothermoexcitonphononmagnonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOEXCITONPHONONMAGNONPOLARITONIC_RESONANCE_ENERGY (M359)
-        self.lagmul_baker_spatial_linkage_joints: Dict[int, Any] = {} # /BAKER_SPATIAL_LINKAGE_JOINT, /LAGMUL/BAKER_SPATIAL_LINKAGE_JOINT (M359)
-        self.sensor_spring_bending_pop_rates: Dict[int, Any] = {}    # /SENSOR/SPRING_BENDING_POP_RATE (M359)
 
         # M360 Entities
         self.fail_ladtransversedelaminationmicrodebondingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_DELAMINATION_MICRODEBONDING_RATE (M360)
         self.eng_flexothermoplasmonexcitonphononmagnonpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONEXCITONPHONONMAGNONPOLARITONIC_RESONANCE_ENERGY (M360)
         self.lagmul_dietmaier_spatial_linkage_joints: Dict[int, Any] = {} # /DIETMAIER_SPATIAL_LINKAGE_JOINT, /LAGMUL/DIETMAIER_SPATIAL_LINKAGE_JOINT (M360)
-        self.sensor_spring_total_angular_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE (M360)
 
         # M361 Entities
         self.fail_ladcoupledelaminationmicrodebondingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_DELAMINATION_MICRODEBONDING_RATE (M361)
         self.eng_flexomagnetoplasmonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONIC_RESONANCE_ENERGY (M361)
         self.lagmul_waldron_spatial_linkage_joints: Dict[int, Any] = {} # /WALDRON_SPATIAL_LINKAGE_JOINT, /LAGMUL/WALDRON_SPATIAL_LINKAGE_JOINT (M361)
-        self.sensor_spring_normal_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_CRACKLE_RATE (M361)
 
         # M362 Entities
         self.fail_laddynamicmatrixsheardegradationrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_MATRIX_SHEAR_DEGRADATION_RATE (M362)
         self.eng_flexomagnetophononic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONIC_RESONANCE_ENERGY (M362)
-        self.lagmul_hunt_spatial_linkage_joints: Dict[int, Any] = {} # /HUNT_SPATIAL_LINKAGE_JOINT, /LAGMUL/HUNT_SPATIAL_LINKAGE_JOINT (M362)
-        self.sensor_spring_transverse_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_CRACKLE_RATE (M362)
 
         # M363 Entities
         self.fail_ladtransversematrixsheardegradationrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_MATRIX_SHEAR_DEGRADATION_RATE (M363)
         self.eng_flexomagnetoexcitonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOEXCITONIC_RESONANCE_ENERGY (M363)
         self.lagmul_chen_spatial_linkage_joints: Dict[int, Any] = {} # /CHEN_SPATIAL_LINKAGE_JOINT, /LAGMUL/CHEN_SPATIAL_LINKAGE_JOINT (M363)
-        self.sensor_spring_total_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_CRACKLE_RATE (M363)
 
         # M364 Entities
         self.fail_ladcouplematrixsheardegradationrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_MATRIX_SHEAR_DEGRADATION_RATE (M364)
         self.eng_flexomagnetopolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPOLARITONIC_RESONANCE_ENERGY (M364)
         self.lagmul_wunderlich_spatial_linkage_joints: Dict[int, Any] = {} # /WUNDERLICH_SPATIAL_LINKAGE_JOINT, /LAGMUL/WUNDERLICH_SPATIAL_LINKAGE_JOINT (M364)
-        self.sensor_spring_torsional_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_CRACKLE_RATE (M364)
 
         # M365 Entities
         self.fail_laddynamicfibertensionrupturerates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_TENSION_RUPTURE_RATE (M365)
         self.eng_flexomagnetoplasmonicphonon_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICPHONON_RESONANCE_ENERGY (M365)
-        self.lagmul_konnok_spatial_linkage_joints: Dict[int, Any] = {} # /KONNOK_SPATIAL_LINKAGE_JOINT, /LAGMUL/KONNOK_SPATIAL_LINKAGE_JOINT (M365)
-        self.sensor_spring_bending_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_CRACKLE_RATE (M365)
 
         # M366 Entities
         self.fail_ladtransversefibertensionrupturerates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_TENSION_RUPTURE_RATE (M366)
         self.eng_flexomagnetoplasmonicexciton_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICEXCITON_RESONANCE_ENERGY (M366)
-        self.lagmul_pfurner_spatial_linkage_joints: Dict[int, Any] = {} # /PFURNER_SPATIAL_LINKAGE_JOINT, /LAGMUL/PFURNER_SPATIAL_LINKAGE_JOINT (M366)
-        self.sensor_spring_total_angular_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_CRACKLE_RATE (M366)
 
         # M367 Entities
         self.fail_ladcouplefibertensionrupturerates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FIBER_TENSION_RUPTURE_RATE (M367)
         self.eng_flexomagnetoplasmonicmagnon_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICMAGNON_RESONANCE_ENERGY (M367)
-        self.lagmul_phillips_spatial_linkage_joints: Dict[int, Any] = {} # /PHILLIPS_SPATIAL_LINKAGE_JOINT, /LAGMUL/PHILLIPS_SPATIAL_LINKAGE_JOINT (M367)
-        self.sensor_spring_normal_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_SNAP_RATE (M367)
 
         # M368 Entities
         self.fail_laddynamicfibercompressioncrushingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_COMPRESSION_CRUSHING_RATE (M368)
         self.eng_flexomagnetoplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICPOLARITONIC_RESONANCE_ENERGY (M368)
         self.lagmul_stevens_spatial_linkage_joints: Dict[int, Any] = {} # /STEVENS_SPATIAL_LINKAGE_JOINT, /LAGMUL/STEVENS_SPATIAL_LINKAGE_JOINT (M368)
-        self.sensor_spring_transverse_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_SNAP_RATE (M368)
 
         # M369 Entities
         self.fail_ladtransversefibercompressioncrushingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_COMPRESSION_CRUSHING_RATE (M369)
         self.eng_flexomagnetophononicexcitonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICEXCITONIC_RESONANCE_ENERGY (M369)
         self.lagmul_baker_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /BAKER_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/BAKER_HYBRID_SPATIAL_LINKAGE_JOINT (M369)
-        self.sensor_spring_total_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_SNAP_RATE (M369)
 
         # M370 Entities
         self.fail_ladcouplefibercompressioncrushingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FIBER_COMPRESSION_CRUSHING_RATE (M370)
         self.eng_flexomagnetophononicmagnonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICMAGNONIC_RESONANCE_ENERGY (M370)
         self.lagmul_waldron_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /WALDRON_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/WALDRON_HYBRID_SPATIAL_LINKAGE_JOINT (M370)
-        self.sensor_spring_torsional_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_SNAP_RATE (M370)
 
         # M371 Entities
         self.fail_laddynamicinterlaminarsheardelaminationrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_INTERLAMINAR_SHEAR_DELAMINATION_RATE (M371)
         self.eng_flexomagnetophononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICPOLARITONIC_RESONANCE_ENERGY (M371)
         self.lagmul_chen_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /CHEN_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/CHEN_HYBRID_SPATIAL_LINKAGE_JOINT (M371)
-        self.sensor_spring_bending_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_SNAP_RATE (M371)
 
         # M372 Entities
         self.fail_ladtransverseinterlaminarsheardelaminationrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_INTERLAMINAR_SHEAR_DELAMINATION_RATE (M372)
         self.eng_flexomagnetoexcitonicmagnonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOEXCITONICMAGNONIC_RESONANCE_ENERGY (M372)
-        self.lagmul_wohlhart_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /WOHLHART_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/WOHLHART_HYBRID_SPATIAL_LINKAGE_JOINT (M372)
-        self.sensor_spring_total_angular_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_SNAP_RATE (M372)
 
         # M373 Entities
         self.fail_ladcoupleinterlaminarsheardelaminationrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_INTERLAMINAR_SHEAR_DELAMINATION_RATE (M373)
         self.eng_flexomagnetoexcitonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOEXCITONICPOLARITONIC_RESONANCE_ENERGY (M373)
         self.lagmul_maverick_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/MAVERICK_HYBRID_SPATIAL_LINKAGE_JOINT (M373)
-        self.sensor_spring_normal_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_POP_RATE (M373)
 
         # M374 Entities
         self.fail_laddynamicinterlaminarnormalpeelingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_INTERLAMINAR_NORMAL_PEELING_RATE (M374)
-        self.eng_flexomagnetoplasmonicexcitonicmagnonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICEXCITONICMAGNONIC_RESONANCE_ENERGY (M374)
         self.lagmul_krause_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /KRAUSE_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/KRAUSE_HYBRID_SPATIAL_LINKAGE_JOINT (M374)
-        self.sensor_spring_transverse_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_POP_RATE (M374)
 
         # M375 Entities
         self.fail_ladtransverseinterlaminarnormalpeelingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_INTERLAMINAR_NORMAL_PEELING_RATE (M375)
-        self.eng_flexomagnetoplasmonicexcitonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICEXCITONICPOLARITONIC_RESONANCE_ENERGY (M375)
         self.lagmul_sturgess_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /STURGESS_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/STURGESS_HYBRID_SPATIAL_LINKAGE_JOINT (M375)
-        self.sensor_spring_total_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_POP_RATE (M375)
 
         # M376 Entities
         self.fail_ladcoupleinterlaminarnormalpeelingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_INTERLAMINAR_NORMAL_PEELING_RATE (M376)
-        self.eng_flexomagnetoplasmonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M376)
         self.lagmul_bevan_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /BEVAN_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/BEVAN_HYBRID_SPATIAL_LINKAGE_JOINT (M376)
-        self.sensor_spring_torsional_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_POP_RATE (M376)
 
         # M377 Entities
         self.fail_laddynamicfibermatrixdebondingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_MATRIX_DEBONDING_RATE (M377)
         self.eng_flexomagnetophononicexcitonicmagnonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICEXCITONICMAGNONIC_RESONANCE_ENERGY (M377)
         self.lagmul_heinrichs_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /HEINRICHS_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/HEINRICHS_HYBRID_SPATIAL_LINKAGE_JOINT (M377)
-        self.sensor_spring_bending_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_POP_RATE (M377)
 
         # M378 Entities
         self.fail_ladtransversefibermatrixdebondingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_MATRIX_DEBONDING_RATE (M378)
         self.eng_flexomagnetophononicexcitonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICEXCITONICPOLARITONIC_RESONANCE_ENERGY (M378)
         self.lagmul_altmann_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /ALTMANN_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALTMANN_HYBRID_SPATIAL_LINKAGE_JOINT (M378)
-        self.sensor_spring_total_angular_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE (M378)
 
         # M379 Entities
         self.fail_ladcouplefibermatrixdebondingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FIBER_MATRIX_DEBONDING_RATE (M379)
         self.eng_flexomagnetophononicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M379)
         self.lagmul_kirkpatrick_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /KIRKPATRICK_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/KIRKPATRICK_HYBRID_SPATIAL_LINKAGE_JOINT (M379)
-        self.sensor_spring_normal_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_LOCK_RATE (M379)
 
         # M380 Entities
         self.fail_laddynamicplymicrocrackingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_PLY_MICRO_CRACKING_RATE (M380)
         self.eng_flexomagnetoplasmonicexcitonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICEXCITONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M380)
         self.lagmul_alexander_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /ALEXANDER_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALEXANDER_HYBRID_SPATIAL_LINKAGE_JOINT (M380)
-        self.sensor_spring_transverse_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_LOCK_RATE (M380)
 
         # M381 Entities
         self.fail_ladtransverseplymicrocrackingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_PLY_MICRO_CRACKING_RATE (M381)
         self.eng_flexomagnetophononicplasmonicmagnonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICPLASMONICMAGNONIC_RESONANCE_ENERGY (M381)
         self.lagmul_chung_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /CHUNG_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/CHUNG_HYBRID_SPATIAL_LINKAGE_JOINT (M381)
-        self.sensor_spring_total_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_LOCK_RATE (M381)
 
         # M382 Entities
         self.fail_ladcoupleplymicrocrackingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_PLY_MICRO_CRACKING_RATE (M382)
-        self.eng_flexomagnetophononicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M382)
         self.lagmul_stevens_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /STEVENS_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/STEVENS_HYBRID_SPATIAL_LINKAGE_JOINT (M382)
-        self.sensor_spring_torsional_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_LOCK_RATE (M382)
 
         # M383 Entities
         self.fail_laddynamicmatrixmicrofissuringrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_MATRIX_MICRO_FISSURING_RATE (M383)
         self.eng_flexomagnetoplasmonicexcitonicmagnonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICEXCITONICMAGNONIC_RESONANCE_ENERGY (M383)
         self.lagmul_baker_spatial_linkage_joints: Dict[int, Any] = {} # /BAKER_SPATIAL_LINKAGE_JOINT, /LAGMUL/BAKER_SPATIAL_LINKAGE_JOINT (M383)
-        self.sensor_spring_bending_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_LOCK_RATE (M383)
 
         # M384 Entities
         self.fail_ladtransversematrixmicrofissuringrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_MATRIX_MICRO_FISSURING_RATE (M384)
         self.eng_flexomagnetoplasmonicexcitonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICEXCITONICPOLARITONIC_RESONANCE_ENERGY (M384)
         self.lagmul_dietmeier_spatial_linkage_joints: Dict[int, Any] = {} # /DIETMEIER_SPATIAL_LINKAGE_JOINT, /LAGMUL/DIETMEIER_SPATIAL_LINKAGE_JOINT (M384)
-        self.sensor_spring_total_angular_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_LOCK_RATE (M384)
 
         # M385 Entities
         self.fail_ladcouplematrixmicrofissuringrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_MATRIX_MICRO_FISSURING_RATE (M385)
         self.eng_flexomagnetoplasmonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M385)
         self.lagmul_hunt_spatial_linkage_joints: Dict[int, Any] = {} # /HUNT_SPATIAL_LINKAGE_JOINT, /LAGMUL/HUNT_SPATIAL_LINKAGE_JOINT (M385)
-        self.sensor_spring_normal_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_DROP_RATE (M385)
 
         # M386 Entities
         self.fail_laddynamicmatrixmicrocrushingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_MATRIX_MICRO_CRUSHING_RATE (M386)
         self.eng_flexomagnetophononicexcitonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICEXCITONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M386)
         self.lagmul_pfurner_spatial_linkage_joints: Dict[int, Any] = {} # /PFURNER_SPATIAL_LINKAGE_JOINT, /LAGMUL/PFURNER_SPATIAL_LINKAGE_JOINT (M386)
-        self.sensor_spring_transverse_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_DROP_RATE (M386)
 
         # M387 Entities
         self.fail_ladtransversematrixmicrocrushingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_MATRIX_MICRO_CRUSHING_RATE (M387)
         self.eng_flexomagnetophononicplasmonicexcitonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICPLASMONICEXCITONIC_RESONANCE_ENERGY (M387)
         self.lagmul_phillips_spatial_linkage_joints: Dict[int, Any] = {} # /PHILLIPS_SPATIAL_LINKAGE_JOINT, /LAGMUL/PHILLIPS_SPATIAL_LINKAGE_JOINT (M387)
-        self.sensor_spring_total_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_DROP_RATE (M387)
 
         # M388 Entities
         self.fail_ladcouplematrixmicrocrushingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_MATRIX_MICRO_CRUSHING_RATE (M388)
         self.eng_flexomagnetophononicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M388)
         self.lagmul_konnok_spatial_linkage_joints: Dict[int, Any] = {} # /KONNOK_SPATIAL_LINKAGE_JOINT, /LAGMUL/KONNOK_SPATIAL_LINKAGE_JOINT (M388)
-        self.sensor_spring_torsional_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_DROP_RATE (M388)
 
         # M389 Entities
         self.fail_laddynamicfibermicrobucklingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_MICRO_BUCKLING_RATE (M389)
         self.eng_flexomagnetophononicplasmonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M389)
         self.lagmul_wohlhart_hybrid_spatial_linkage_joints: Dict[int, Any] = {} # /WOHLHART_HYBRID_SPATIAL_LINKAGE_JOINT, /LAGMUL/WOHLHART_HYBRID_SPATIAL_LINKAGE_JOINT (M389)
-        self.sensor_spring_bending_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_DROP_RATE (M389)
 
         # M390 Entities
         self.fail_ladtransversefibermicrobucklingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_MICRO_BUCKLING_RATE (M390)
         self.eng_flexomagnetophononicplasmonicexcitonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOMAGNETOPHONONICPLASMONICEXCITONICPOLARITONIC_RESONANCE_ENERGY (M390)
         self.lagmul_maverick_spatial_linkage_joints: Dict[int, Any] = {} # /MAVERICK_SPATIAL_LINKAGE_JOINT, /LAGMUL/MAVERICK_SPATIAL_LINKAGE_JOINT (M390)
-        self.sensor_spring_total_angular_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_DROP_RATE (M390)
 
         # M391 Entities
         self.fail_ladcouplefibermicrobucklingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FIBER_MICRO_BUCKLING_RATE (M391)
@@ -2569,25 +2434,21 @@ class Model:
         self.fail_laddynamicmatrixcrackingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_MATRIX_CRACKING_RATE (M398)
         self.eng_flexothermoplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPLASMONICPOLARITONIC_RESONANCE_ENERGY (M398)
         self.lagmul_sylvester_spatial_linkage_joints: Dict[int, Any] = {} # /SYLVESTER_SPATIAL_LINKAGE_JOINT, /LAGMUL/SYLVESTER_SPATIAL_LINKAGE_JOINT (M398)
-        self.sensor_spring_transverse_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TRANSVERSE_SNAP_RATE (M398)
 
         # M399 Entities
         self.fail_ladtransversematrixcrackingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_MATRIX_CRACKING_RATE (M399)
         self.eng_flexothermophononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOPHONONICPOLARITONIC_RESONANCE_ENERGY (M399)
         self.lagmul_cauchy_spatial_linkage_joints: Dict[int, Any] = {} # /CAUCHY_SPATIAL_LINKAGE_JOINT, /LAGMUL/CAUCHY_SPATIAL_LINKAGE_JOINT (M399)
-        self.sensor_spring_total_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_SNAP_RATE (M399)
 
         # M400 Entities
         self.fail_ladcouplematrixcrackingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_MATRIX_CRACKING_RATE (M400)
         self.eng_flexothermoexcitonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOEXCITONICPOLARITONIC_RESONANCE_ENERGY (M400)
         self.lagmul_cayley_spatial_linkage_joints: Dict[int, Any] = {} # /CAYLEY_SPATIAL_LINKAGE_JOINT, /LAGMUL/CAYLEY_SPATIAL_LINKAGE_JOINT (M400)
-        self.sensor_spring_torsional_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_SNAP_RATE (M400)
 
         # M401 Entities
         self.fail_laddynamicfiberkinkingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_KINKING_RATE (M401)
         self.eng_flexothermomagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/FLEXOTHERMOMAGNONICPOLARITONIC_RESONANCE_ENERGY (M401)
         self.lagmul_euclid_spatial_linkage_joints: Dict[int, Any] = {} # /EUCLID_SPATIAL_LINKAGE_JOINT, /LAGMUL/EUCLID_SPATIAL_LINKAGE_JOINT (M401)
-        self.sensor_spring_bending_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_SNAP_RATE (M401)
 
         # M402 Entities
         self.fail_ladtransversefiberkinkingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_KINKING_RATE (M402)
@@ -2669,7 +2530,6 @@ class Model:
 
         # M415 Entities
         self.fail_ladcouplecorecrackingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_CORE_CRACKING_RATE (M415)
-        self.eng_electrothermoflexomagnetoplasmonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M415)
         self.lagmul_hilbert_spatial_linkage_joints: Dict[int, Any] = {} # /HILBERT_SPATIAL_LINKAGE_JOINT, /LAGMUL/HILBERT_SPATIAL_LINKAGE_JOINT (M415)
         self.sensor_spring_normal_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_LOCK_RATE (M415)
 
@@ -2692,21 +2552,17 @@ class Model:
         self.sensor_spring_torsional_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_LOCK_RATE (M418)
 
         # M419 Entities
-        self.fail_laddynamicfacesheetcoredebondingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FACESHEET_CORE_DEBONDING_RATE (M419)
         self.eng_electrothermoflexomagnetoplasmonicexcitonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICEXCITONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M419)
         self.lagmul_hausdorff_spatial_linkage_joints: Dict[int, Any] = {} # /HAUSDORFF_SPATIAL_LINKAGE_JOINT, /LAGMUL/HAUSDORFF_SPATIAL_LINKAGE_JOINT (M419)
         self.sensor_spring_bending_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_LOCK_RATE (M419)
 
         # M420 Entities
-        self.fail_ladtransversefacesheetcoredebondingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FACESHEET_CORE_DEBONDING_RATE (M420)
-        self.eng_electrothermoflexomagnetoplasmonicmagnonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M420)
         self.lagmul_cartan_spatial_linkage_joints: Dict[int, Any] = {} # /CARTAN_SPATIAL_LINKAGE_JOINT, /LAGMUL/CARTAN_SPATIAL_LINKAGE_JOINT (M420)
         self.sensor_spring_total_angular_lock_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_LOCK_RATE (M420)
 
         # M421 Entities
         self.fail_ladcouplefacesheetcoredebondingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLE_FACESHEET_CORE_DEBONDING_RATE (M421)
         self.eng_electrothermoflexomagnetoplasmonicexcitonicmagnonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICEXCITONICMAGNONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M421)
-        self.lagmul_clifford_spatial_linkage_joints: Dict[int, Any] = {} # /CLIFFORD_SPATIAL_LINKAGE_JOINT, /LAGMUL/CLIFFORD_SPATIAL_LINKAGE_JOINT (M421)
         self.sensor_spring_normal_drop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_DROP_RATE (M421)
 
         # M422 Entities

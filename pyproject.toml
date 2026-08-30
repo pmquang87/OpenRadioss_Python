@@ -55,7 +55,6 @@ include = ["pyradioss*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-n 12"
 markers = [
     "slow: long-running test (>=60 s serial); deselect the slow tier with -m \"not slow\"",
 ]
