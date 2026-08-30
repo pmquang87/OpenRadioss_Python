@@ -23574,12 +23574,19 @@ class LagmulFermatSpatialLinkageJoint:
 
 @dataclass
 class SensorSpringTotalAngularSnapRate:
-    """``/SENSOR/SPRING_TOTAL_ANGULAR_SNAP_RATE`` or ``/SENSOR/SPRING_TOT_ANG_SNAP_RATE`` (M402): Spring element relative 3D resultant total angular acceleration 14th rate-of-change (resultant total angular snap rate) magnitude threshold sensor."""
+    """``/SENSOR/SPRING_TOTAL_ANGULAR_SNAP_RATE`` or ``/SENSOR/SPRING_TOT_ANG_SNAP_RATE`` (M402, M435): Spring element relative 3D resultant total angular acceleration 14th/20th rate-of-change (resultant total angular snap rate) magnitude threshold sensor."""
     id: int = 1
     title: str = ""
     spring_id: int = 0           # spring element ID to monitor
     jtot_ang_snp_max: float = 1e30 # maximum total angular snap rate threshold
     t_delay: float = 0.0         # activation delay time
+    jtang_snp_max: float = 1e30  # alias field for compatibility
+
+    def __post_init__(self):
+        if self.jtang_snp_max != 1e30 and self.jtot_ang_snp_max == 1e30:
+            self.jtot_ang_snp_max = self.jtang_snp_max
+        elif self.jtot_ang_snp_max != 1e30 and self.jtang_snp_max == 1e30:
+            self.jtang_snp_max = self.jtot_ang_snp_max
 
     @property
     def jtot_ang_shot_max(self) -> float:
@@ -23620,6 +23627,151 @@ class SensorSpringTotalAngularSnapRate:
     @jtot_ang_crackle_max.setter
     def jtot_ang_crackle_max(self, val: float) -> None:
         self.jtot_ang_snp_max = val
+
+    @property
+    def jtot_ang_crk_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_crk_max.setter
+    def jtot_ang_crk_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtot_ang_drop_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_drop_rate_max.setter
+    def jtot_ang_drop_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtot_ang_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_rate_max.setter
+    def jtot_ang_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtot_ang_roc_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_roc_rate_max.setter
+    def jtot_ang_roc_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtot_ang_snap_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_snap_rate_max.setter
+    def jtot_ang_snap_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtot_ang_snp_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_snp_rate_max.setter
+    def jtot_ang_snp_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtang_shot_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtang_shot_max.setter
+    def jtang_shot_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtang_drop_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtang_drop_max.setter
+    def jtang_drop_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtang_lock_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtang_lock_max.setter
+    def jtang_lock_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtang_pop_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtang_pop_max.setter
+    def jtang_pop_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtang_crackle_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtang_crackle_max.setter
+    def jtang_crackle_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtang_crk_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtang_crk_max.setter
+    def jtang_crk_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtang_drop_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtang_drop_rate_max.setter
+    def jtang_drop_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtang_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtang_rate_max.setter
+    def jtang_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtang_roc_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtang_roc_rate_max.setter
+    def jtang_roc_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtang_snap_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtang_snap_rate_max.setter
+    def jtang_snap_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtang_snp_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtang_snp_rate_max.setter
+    def jtang_snp_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def j_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @j_max.setter
+    def j_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
 
 
 # ============================================================================
@@ -29650,4 +29802,140 @@ class SensorSpringBendingSnapRate:
         self.jbnd_snp_max = val
         self.jbend_snp_max = val
         self.jbending_snp_max = val
+
+
+# ============================================================================
+# M435 Suite: FailLadCoupledCoreDelaminationCrackingRate, EngElectrothermoflexomagnetoplasmonicexcitonicphononicmagnonicpolaritonicResonanceEnergy, LagmulCohomologicalSpatialLinkageJoint
+# ============================================================================
+
+@dataclass
+class FailLadCoupledCoreDelaminationCrackingRate:
+    """``/FAIL/LAD_COUPLED_CORE_DELAMINATION_CRACKING_RATE`` or ``/FAIL/LADEVEZE_COUPLED_CORE_DELAMINATION_CRACKING_RATE`` (M435): Ladevèze rate-dependent coupled sandwich core delamination cracking, cell-wall tearing and multi-axial core failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_ccdlcr0: float = 0.0     # initial coupled core delamination cracking threshold stress sigma_ccdlcr,0
+    sigma_ccdlcrc: float = 1.0     # critical coupled core delamination cracking saturation stress sigma_ccdlcr,c
+    gamma_ccdlcr: float = 0.0      # coupled core delamination cracking rate sensitivity factor gamma_ccdlcr
+    p_ccdlcr: float = 1.0          # coupled core delamination cracking rate exponent p_ccdlcr
+    d_ccdlcr_max: float = 0.999    # maximum allowable coupled core delamination cracking damage index
+    ifail_sh: int = 1              # shell element deletion flag
+    ifail_so: int = 1              # solid element deletion flag
+    fail_id: int = 0               # failure model ID reference
+
+    @property
+    def sigma_cctr0(self) -> float:
+        return self.sigma_ccdlcr0
+
+    @sigma_cctr0.setter
+    def sigma_cctr0(self, val: float) -> None:
+        self.sigma_ccdlcr0 = val
+
+    @property
+    def sigma_cctrc(self) -> float:
+        return self.sigma_ccdlcrc
+
+    @sigma_cctrc.setter
+    def sigma_cctrc(self, val: float) -> None:
+        self.sigma_ccdlcrc = val
+
+    @property
+    def gamma_cctr(self) -> float:
+        return self.gamma_ccdlcr
+
+    @gamma_cctr.setter
+    def gamma_cctr(self, val: float) -> None:
+        self.gamma_ccdlcr = val
+
+    @property
+    def p_cctr(self) -> float:
+        return self.p_ccdlcr
+
+    @p_cctr.setter
+    def p_cctr(self, val: float) -> None:
+        self.p_ccdlcr = val
+
+    @property
+    def d_cctr_max(self) -> float:
+        return self.d_ccdlcr_max
+
+    @d_cctr_max.setter
+    def d_cctr_max(self, val: float) -> None:
+        self.d_ccdlcr_max = val
+
+
+FailLadCoupleCoreDelaminationCrackingRate = FailLadCoupledCoreDelaminationCrackingRate
+
+
+@dataclass
+class EngElectrothermoflexomagnetoplasmonicexcitonicphononicmagnonicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICEXCITONICPHONONICMAGNONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_PLASMON_EXCITON_PHONON_MAGNON_POLARITON_RES_WORK`` (M435): Engine coupled electrothermal-flexomagnetic-flexoplasmonic-flexoexcitonic-flexophononic-flexomagnonic-flexopolaritonic nanoscale multi-mode hybrid resonance energy and opto-spintronic-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfplexphmnp: float = 0.0   # time frequency for electrothermoflexomagnetoplasmonicexcitonicphononicmagnonicpolaritonic resonance energy output
+    sens_id: int = 0               # sensor activation ID
+    dt_etfpepmp: float = 0.0       # alias field for compatibility
+
+    def __post_init__(self):
+        if self.dt_etfpepmp != 0.0 and self.dt_etfplexphmnp == 0.0:
+            self.dt_etfplexphmnp = self.dt_etfpepmp
+        elif self.dt_etfplexphmnp != 0.0 and self.dt_etfpepmp == 0.0:
+            self.dt_etfpepmp = self.dt_etfplexphmnp
+
+
+@dataclass
+class LagmulCohomologicalSpatialLinkageJoint:
+    """``/COHOMOLOGICAL_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/COHOMOLOGICAL_SPATIAL_LINKAGE_JOINT/id`` (M435): Cohomological spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0                 # base pivot node 1
+    node2: int = 0                 # intermediate spatial link node 2
+    node3: int = 0                 # driven spatial link node 3
+    stiff: float = 1e6             # kinematic constraint cohomological stiffness
+    skew_id: int = 0               # reference coordinate frame ID
+    tol: float = 1e-6              # constraint numerical tolerance
+    link_len_a: float = 0.0        # length of primary spatial link a
+    link_len_b: float = 0.0        # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
 

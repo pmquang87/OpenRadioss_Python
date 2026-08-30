@@ -2791,6 +2791,17 @@ class Model:
         self.lagmul_manifold_spatial_linkage_joints: Dict[int, Any] = self.lagmul_homological_spatial_linkage_joints # /MANIFOLD_SPATIAL_LINKAGE_JOINT, /LAGMUL/MANIFOLD_SPATIAL_LINKAGE_JOINT (M434)
         self.sensor_spring_bending_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_SNAP_RATE (M434)
 
+        # M435 Entities
+        self.fail_ladcoupledcoredelaminationcrackingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLED_CORE_DELAMINATION_CRACKING_RATE (M435)
+        self.fail_ladcouplecoredelaminationcrackingrates: Dict[int, Any] = self.fail_ladcoupledcoredelaminationcrackingrates # /FAIL/LAD_COUPLE_CORE_DELAMINATION_CRACKING_RATE (M435)
+        self.fail_ladcoupledcoretearingrates: Dict[int, Any] = self.fail_ladcoupledcoredelaminationcrackingrates # /FAIL/LAD_COUPLED_CORE_TEARING_RATE (M435)
+        self.fail_ladcouplecoretearingrates: Dict[int, Any] = self.fail_ladcoupledcoredelaminationcrackingrates # /FAIL/LAD_COUPLE_CORE_TEARING_RATE (M435)
+        self.eng_electrothermoflexomagnetoplasmonicexcitonicphononicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICEXCITONICPHONONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M435)
+        self.lagmul_cohomological_spatial_linkage_joints: Dict[int, Any] = {} # /COHOMOLOGICAL_SPATIAL_LINKAGE_JOINT, /LAGMUL/COHOMOLOGICAL_SPATIAL_LINKAGE_JOINT (M435)
+        self.lagmul_sheaf_spatial_linkage_joints: Dict[int, Any] = self.lagmul_cohomological_spatial_linkage_joints # /SHEAF_SPATIAL_LINKAGE_JOINT, /LAGMUL/SHEAF_SPATIAL_LINKAGE_JOINT (M435)
+        self.lagmul_fiber_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_cohomological_spatial_linkage_joints # /FIBER_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/FIBER_BUNDLE_SPATIAL_LINKAGE_JOINT (M435)
+
+
 
 
 
