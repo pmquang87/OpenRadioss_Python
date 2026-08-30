@@ -28565,3 +28565,210 @@ class SensorSpringTorsionalSnapRate:
     def jtors_drop_max(self, val: float) -> None:
         self.jtors_snp_max = val
         self.jtorsional_snp_max = val
+
+
+# ============================================================================
+# M433 Suite: FailLadDynamicCoreDelaminationCrackingRate, EngElectrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy, LagmulTopologicalSpatialLinkageJoint, SensorSpringTorsionalSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicCoreDelaminationCrackingRate:
+    """``/FAIL/LAD_DYNAMIC_CORE_DELAMINATION_CRACKING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_CORE_DELAMINATION_CRACKING_RATE`` (M433): Ladevèze rate-dependent dynamic sandwich core delamination cracking, dynamic cell-wall fracture, and progressive core delamination-cracking damage model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dcdlcr0: float = 0.0     # initial dynamic core delamination cracking threshold stress sigma_dcdlcr,0
+    sigma_dcdlcrc: float = 1.0     # critical dynamic core delamination cracking saturation stress sigma_dcdlcr,c
+    gamma_dcdlcr: float = 0.0      # dynamic core delamination cracking rate sensitivity factor gamma_dcdlcr
+    p_dcdlcr: float = 1.0          # dynamic core delamination cracking rate exponent p_dcdlcr
+    d_dcdlcr_max: float = 0.999    # maximum allowable dynamic core delamination cracking damage index
+    ifail_sh: int = 1              # shell element deletion flag
+    ifail_so: int = 1              # solid element deletion flag
+    fail_id: int = 0               # failure model ID reference
+
+
+@dataclass
+class EngElectrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICEXCITONICMAGNONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_PLASMON_EXCITON_MAGNON_POLARITON_RES_WORK`` (M433): Engine coupled electrothermal-flexomagnetic-flexoplasmonic-flexoexcitonic-flexomagnonic-flexopolaritonic nanoscale plasmon-exciton-magnon-polariton hybrid resonance energy and multi-field opto-spintronic-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfplexmmnp: float = 0.0    # time frequency for electrothermoflexomagnetoplasmonicexcitonicmagnonicpolaritonic resonance energy output
+    sens_id: int = 0               # sensor activation ID
+
+
+@dataclass
+class LagmulTopologicalSpatialLinkageJoint:
+    """``/TOPOLOGICAL_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/TOPOLOGICAL_SPATIAL_LINKAGE_JOINT/id`` (M433): Topological spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0                 # base pivot node 1
+    node2: int = 0                 # intermediate spatial link node 2
+    node3: int = 0                 # driven spatial link node 3
+    stiff: float = 1e6             # kinematic constraint topological stiffness
+    skew_id: int = 0               # reference coordinate frame ID
+    tol: float = 1e-6              # constraint numerical tolerance
+    link_len_a: float = 0.0        # length of primary spatial link a
+    link_len_b: float = 0.0        # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringTorsionalSnapRate:
+    """``/SENSOR/SPRING_TORSIONAL_SNAP_RATE`` or ``/SENSOR/SPRING_TORS_SNAP_RATE`` (M433): Spring element relative torsional angular acceleration 20th rate-of-change (torsional angular snap rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0             # spring element ID to monitor
+    jtor_snp_max: float = 1e30     # maximum torsional snap rate threshold
+    t_delay: float = 0.0           # activation delay time
+    jtors_snp_max: float = 1e30    # alias field for compatibility
+    jtorsional_snp_max: float = 1e30 # alias field for compatibility
+
+    def __post_init__(self):
+        if self.jtors_snp_max != 1e30 and self.jtor_snp_max == 1e30:
+            self.jtor_snp_max = self.jtors_snp_max
+        elif self.jtor_snp_max != 1e30 and self.jtors_snp_max == 1e30:
+            self.jtors_snp_max = self.jtor_snp_max
+        if self.jtorsional_snp_max != 1e30 and self.jtor_snp_max == 1e30:
+            self.jtor_snp_max = self.jtorsional_snp_max
+        elif self.jtor_snp_max != 1e30 and self.jtorsional_snp_max == 1e30:
+            self.jtorsional_snp_max = self.jtor_snp_max
+
+    @property
+    def jtor_lock_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtor_lock_max.setter
+    def jtor_lock_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtor_crackle_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtor_crackle_max.setter
+    def jtor_crackle_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtor_shot_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtor_shot_max.setter
+    def jtor_shot_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtor_pop_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtor_pop_max.setter
+    def jtor_pop_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtor_crk_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtor_crk_max.setter
+    def jtor_crk_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtor_drop_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtor_drop_rate_max.setter
+    def jtor_drop_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtor_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtor_rate_max.setter
+    def jtor_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtor_roc_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtor_roc_rate_max.setter
+    def jtor_roc_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def jtor_snap_rate_max(self) -> float:
+        return self.jtor_snp_max
+
+    @jtor_snap_rate_max.setter
+    def jtor_snap_rate_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
+
+    @property
+    def j_max(self) -> float:
+        return self.jtor_snp_max
+
+    @j_max.setter
+    def j_max(self, val: float) -> None:
+        self.jtor_snp_max = val
+        self.jtors_snp_max = val
+        self.jtorsional_snp_max = val
