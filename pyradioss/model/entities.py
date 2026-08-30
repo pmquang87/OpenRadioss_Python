@@ -27502,6 +27502,174 @@ class SensorSpringTotalAngularRateOfChange:
         self.jtot_ang_roc_max = val
 
 
+# ============================================================================
+# M430 Suite: FailLadDynamicCoreDelaminationRate, EngElectrothermoflexomagnetoexcitonicmagnonicpolaritonicResonanceEnergy, LagmulSymplecticSpatialLinkageJoint, SensorSpringAxialSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadDynamicCoreDelaminationRate:
+    """``/FAIL/LAD_DYNAMIC_CORE_DELAMINATION_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_CORE_DELAMINATION_RATE`` (M430): Ladevèze rate-dependent dynamic sandwich core delamination, dynamic peel/shear adhesive fracture, and progressive core delamination damage model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dcdl0: float = 0.0     # initial dynamic core delamination threshold stress sigma_dcdl,0
+    sigma_dcdlc: float = 1.0     # critical dynamic core delamination saturation stress sigma_dcdl,c
+    gamma_dcdl: float = 0.0      # dynamic core delamination rate sensitivity factor gamma_dcdl
+    p_dcdl: float = 1.0          # dynamic core delamination rate exponent p_dcdl
+    d_dcdl_max: float = 0.999    # maximum allowable dynamic core delamination damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+
+@dataclass
+class EngElectrothermoflexomagnetoexcitonicmagnonicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOEXCITONICMAGNONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_EXCITON_MAGNON_POLARITON_RES_WORK`` (M430): Engine coupled electrothermal-flexomagnetic-flexoexcitonic-flexomagnonic-flexopolaritonic nanoscale exciton-magnon-polariton hybrid resonance energy and multi-field opto-spintronic-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfmexmnp: float = 0.0    # time frequency for electrothermoflexomagnetoexcitonicmagnonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+
+
+@dataclass
+class LagmulSymplecticSpatialLinkageJoint:
+    """``/SYMPLECTIC_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/SYMPLECTIC_SPATIAL_LINKAGE_JOINT/id`` (M430): Symplectic spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0               # base pivot node 1
+    node2: int = 0               # intermediate spatial link node 2
+    node3: int = 0               # driven spatial link node 3
+    stiff: float = 1e6           # kinematic constraint contact stiffness
+    skew_id: int = 0             # reference coordinate frame ID
+    tol: float = 1e-6            # constraint numerical tolerance
+    link_len_a: float = 0.0      # length of primary spatial link a
+    link_len_b: float = 0.0      # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringAxialSnapRate:
+    """``/SENSOR/SPRING_AXIAL_SNAP_RATE`` or ``/SENSOR/SPRING_AXIAL_SNAP`` (M430): Spring element relative axial linear acceleration 20th rate-of-change (axial snap rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0           # spring element ID to monitor
+    jax_snp_max: float = 1e30    # maximum axial snap rate threshold
+    t_delay: float = 0.0         # activation delay time
+
+    @property
+    def jax_lock_max(self) -> float:
+        return self.jax_snp_max
+
+    @jax_lock_max.setter
+    def jax_lock_max(self, val: float) -> None:
+        self.jax_snp_max = val
+
+    @property
+    def jax_crackle_max(self) -> float:
+        return self.jax_snp_max
+
+    @jax_crackle_max.setter
+    def jax_crackle_max(self, val: float) -> None:
+        self.jax_snp_max = val
+
+    @property
+    def jax_shot_max(self) -> float:
+        return self.jax_snp_max
+
+    @jax_shot_max.setter
+    def jax_shot_max(self, val: float) -> None:
+        self.jax_snp_max = val
+
+    @property
+    def jax_pop_max(self) -> float:
+        return self.jax_snp_max
+
+    @jax_pop_max.setter
+    def jax_pop_max(self, val: float) -> None:
+        self.jax_snp_max = val
+
+    @property
+    def jax_crk_max(self) -> float:
+        return self.jax_snp_max
+
+    @jax_crk_max.setter
+    def jax_crk_max(self, val: float) -> None:
+        self.jax_snp_max = val
+
+    @property
+    def jax_drop_rate_max(self) -> float:
+        return self.jax_snp_max
+
+    @jax_drop_rate_max.setter
+    def jax_drop_rate_max(self, val: float) -> None:
+        self.jax_snp_max = val
+
+    @property
+    def jax_rate_max(self) -> float:
+        return self.jax_snp_max
+
+    @jax_rate_max.setter
+    def jax_rate_max(self, val: float) -> None:
+        self.jax_snp_max = val
+
+    @property
+    def jax_roc_rate_max(self) -> float:
+        return self.jax_snp_max
+
+    @jax_roc_rate_max.setter
+    def jax_roc_rate_max(self, val: float) -> None:
+        self.jax_snp_max = val
+
+    @property
+    def jax_snap_rate_max(self) -> float:
+        return self.jax_snp_max
+
+    @jax_snap_rate_max.setter
+    def jax_snap_rate_max(self, val: float) -> None:
+        self.jax_snp_max = val
+
+
+
 
 
 

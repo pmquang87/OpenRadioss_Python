@@ -2757,6 +2757,12 @@ class Model:
         self.lagmul_projective_spatial_linkage_joints: Dict[int, Any] = {} # /PROJECTIVE_SPATIAL_LINKAGE_JOINT, /LAGMUL/PROJECTIVE_SPATIAL_LINKAGE_JOINT (M429)
         self.sensor_spring_total_angular_rate_of_changes: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_RATE_OF_CHANGE (M429)
 
+        # M430 Entities
+        self.fail_laddynamiccoredelaminationrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_CORE_DELAMINATION_RATE (M430)
+        self.eng_electrothermoflexomagnetoexcitonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOEXCITONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M430)
+        self.lagmul_symplectic_spatial_linkage_joints: Dict[int, Any] = {} # /SYMPLECTIC_SPATIAL_LINKAGE_JOINT, /LAGMUL/SYMPLECTIC_SPATIAL_LINKAGE_JOINT (M430)
+        self.sensor_spring_axial_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_AXIAL_SNAP_RATE (M430)
+
 
 
 
