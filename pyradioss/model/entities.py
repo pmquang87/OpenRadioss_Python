@@ -28772,3 +28772,217 @@ class SensorSpringTorsionalSnapRate:
         self.jtor_snp_max = val
         self.jtors_snp_max = val
         self.jtorsional_snp_max = val
+
+
+# ============================================================================
+# M434 Suite: FailLadTransverseCoreDelaminationCrackingRate, EngElectrothermoflexomagnetoplasmonicphononicpolaritonicResonanceEnergy, LagmulHomologicalSpatialLinkageJoint, SensorSpringBendingSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseCoreDelaminationCrackingRate:
+    """``/FAIL/LAD_TRANSVERSE_CORE_DELAMINATION_CRACKING_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_CORE_DELAMINATION_CRACKING_RATE`` (M434): Ladevèze rate-dependent transverse sandwich core delamination cracking, transverse cell-wall fracture/tearing, and progressive core delamination-cracking damage model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tcdlcr0: float = 0.0     # initial transverse core delamination cracking threshold stress sigma_tcdlcr,0
+    sigma_tcdlcrc: float = 1.0     # critical transverse core delamination cracking saturation stress sigma_tcdlcr,c
+    gamma_tcdlcr: float = 0.0      # transverse core delamination cracking rate sensitivity factor gamma_tcdlcr
+    p_tcdlcr: float = 1.0          # transverse core delamination cracking rate exponent p_tcdlcr
+    d_tcdlcr_max: float = 0.999    # maximum allowable transverse core delamination cracking damage index
+    ifail_sh: int = 1              # shell element deletion flag
+    ifail_so: int = 1              # solid element deletion flag
+    fail_id: int = 0               # failure model ID reference
+
+
+@dataclass
+class EngElectrothermoflexomagnetoplasmonicphononicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICPHONONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_PLASMON_PHONON_POLARITON_RES_WORK`` (M434): Engine coupled electrothermal-flexomagnetic-flexoplasmonic-flexophononic-flexopolaritonic nanoscale plasmon-phonon-polariton hybrid resonance energy and multi-field opto-spintronic-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfplphnp: float = 0.0      # time frequency for electrothermoflexomagnetoplasmonicphononicpolaritonic resonance energy output
+    sens_id: int = 0               # sensor activation ID
+    dt_etfmppp: float = 0.0        # alias field for compatibility
+
+    def __post_init__(self):
+        if self.dt_etfmppp != 0.0 and self.dt_etfplphnp == 0.0:
+            self.dt_etfplphnp = self.dt_etfmppp
+        elif self.dt_etfplphnp != 0.0 and self.dt_etfmppp == 0.0:
+            self.dt_etfmppp = self.dt_etfplphnp
+
+
+@dataclass
+class LagmulHomologicalSpatialLinkageJoint:
+    """``/HOMOLOGICAL_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/HOMOLOGICAL_SPATIAL_LINKAGE_JOINT/id`` (M434): Homological spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0                 # base pivot node 1
+    node2: int = 0                 # intermediate spatial link node 2
+    node3: int = 0                 # driven spatial link node 3
+    stiff: float = 1e6             # kinematic constraint homological stiffness
+    skew_id: int = 0               # reference coordinate frame ID
+    tol: float = 1e-6              # constraint numerical tolerance
+    link_len_a: float = 0.0        # length of primary spatial link a
+    link_len_b: float = 0.0        # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+@dataclass
+class SensorSpringBendingSnapRate:
+    """``/SENSOR/SPRING_BENDING_SNAP_RATE`` or ``/SENSOR/SPRING_BEND_SNAP_RATE`` (M434): Spring element relative transverse bending angular acceleration 20th rate-of-change (bending angular snap rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0             # spring element ID to monitor
+    jbnd_snp_max: float = 1e30     # maximum bending snap rate threshold
+    t_delay: float = 0.0           # activation delay time
+    jbend_snp_max: float = 1e30    # alias field for compatibility
+    jbending_snp_max: float = 1e30 # alias field for compatibility
+
+    def __post_init__(self):
+        if self.jbend_snp_max != 1e30 and self.jbnd_snp_max == 1e30:
+            self.jbnd_snp_max = self.jbend_snp_max
+        elif self.jbnd_snp_max != 1e30 and self.jbend_snp_max == 1e30:
+            self.jbend_snp_max = self.jbnd_snp_max
+        if self.jbending_snp_max != 1e30 and self.jbnd_snp_max == 1e30:
+            self.jbnd_snp_max = self.jbending_snp_max
+        elif self.jbnd_snp_max != 1e30 and self.jbending_snp_max == 1e30:
+            self.jbending_snp_max = self.jbnd_snp_max
+
+    @property
+    def jbnd_lock_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbnd_lock_max.setter
+    def jbnd_lock_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbnd_crackle_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbnd_crackle_max.setter
+    def jbnd_crackle_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbnd_shot_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbnd_shot_max.setter
+    def jbnd_shot_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbnd_pop_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbnd_pop_max.setter
+    def jbnd_pop_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbnd_crk_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbnd_crk_max.setter
+    def jbnd_crk_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbnd_drop_rate_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbnd_drop_rate_max.setter
+    def jbnd_drop_rate_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbnd_rate_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbnd_rate_max.setter
+    def jbnd_rate_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbnd_roc_rate_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbnd_roc_rate_max.setter
+    def jbnd_roc_rate_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def jbnd_snap_rate_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @jbnd_snap_rate_max.setter
+    def jbnd_snap_rate_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val
+
+    @property
+    def j_max(self) -> float:
+        return self.jbnd_snp_max
+
+    @j_max.setter
+    def j_max(self, val: float) -> None:
+        self.jbnd_snp_max = val
+        self.jbend_snp_max = val
+        self.jbending_snp_max = val

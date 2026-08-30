@@ -2783,6 +2783,14 @@ class Model:
         self.lagmul_differential_spatial_linkage_joints: Dict[int, Any] = self.lagmul_topological_spatial_linkage_joints # /DIFFERENTIAL_SPATIAL_LINKAGE_JOINT, /LAGMUL/DIFFERENTIAL_SPATIAL_LINKAGE_JOINT (M433)
         self.sensor_spring_torsional_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_SNAP_RATE (M433)
 
+        # M434 Entities
+        self.fail_ladtransversecoredelaminationcrackingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_CORE_DELAMINATION_CRACKING_RATE (M434)
+        self.fail_ladtransversecoretearingrates: Dict[int, Any] = self.fail_ladtransversecoredelaminationcrackingrates # /FAIL/LAD_TRANSVERSE_CORE_TEARING_RATE (M434)
+        self.eng_electrothermoflexomagnetoplasmonicphononicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M434)
+        self.lagmul_homological_spatial_linkage_joints: Dict[int, Any] = {} # /HOMOLOGICAL_SPATIAL_LINKAGE_JOINT, /LAGMUL/HOMOLOGICAL_SPATIAL_LINKAGE_JOINT (M434)
+        self.lagmul_manifold_spatial_linkage_joints: Dict[int, Any] = self.lagmul_homological_spatial_linkage_joints # /MANIFOLD_SPATIAL_LINKAGE_JOINT, /LAGMUL/MANIFOLD_SPATIAL_LINKAGE_JOINT (M434)
+        self.sensor_spring_bending_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_BENDING_SNAP_RATE (M434)
+
 
 
 
