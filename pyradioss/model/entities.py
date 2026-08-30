@@ -30414,4 +30414,140 @@ class LagmulSpinorialSpatialLinkageJoint:
         self.offset_distance_s = val
 
 
+# ============================================================================
+# M438 Suite: FailLadTransverseCoreMicrocrackingRate, EngElectrothermoflexomagnetoexcitonicpolaritonicResonanceEnergy, LagmulSymplecticSpinorSpatialLinkageJoint
+# ============================================================================
+
+@dataclass
+class FailLadTransverseCoreMicrocrackingRate:
+    """``/FAIL/LAD_TRANSVERSE_CORE_MICROCRACKING_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_CORE_MICROCRACKING_RATE`` (M438): Ladevèze rate-dependent transverse sandwich core microcracking, transverse microdamage kinetics and multi-axial core failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tcmcr0: float = 0.0      # initial transverse core microcracking threshold stress sigma_tcmcr,0
+    sigma_tcmcrc: float = 1.0      # critical transverse core microcracking saturation stress sigma_tcmcr,c
+    gamma_tcmcr: float = 0.0       # transverse core microcracking rate sensitivity factor gamma_tcmcr
+    p_tcmcr: float = 1.0           # transverse core microcracking rate exponent p_tcmcr
+    d_tcmcr_max: float = 0.999     # maximum allowable transverse core microcracking damage index
+    ifail_sh: int = 1              # shell element deletion flag
+    ifail_so: int = 1              # solid element deletion flag
+    fail_id: int = 0               # failure model ID reference
+
+    @property
+    def sigma_tcmd0(self) -> float:
+        return self.sigma_tcmcr0
+
+    @sigma_tcmd0.setter
+    def sigma_tcmd0(self, val: float) -> None:
+        self.sigma_tcmcr0 = val
+
+    @property
+    def sigma_tcmdc(self) -> float:
+        return self.sigma_tcmcrc
+
+    @sigma_tcmdc.setter
+    def sigma_tcmdc(self, val: float) -> None:
+        self.sigma_tcmcrc = val
+
+    @property
+    def gamma_tcmd(self) -> float:
+        return self.gamma_tcmcr
+
+    @gamma_tcmd.setter
+    def gamma_tcmd(self, val: float) -> None:
+        self.gamma_tcmcr = val
+
+    @property
+    def p_tcmd(self) -> float:
+        return self.p_tcmcr
+
+    @p_tcmd.setter
+    def p_tcmd(self, val: float) -> None:
+        self.p_tcmcr = val
+
+    @property
+    def d_tcmd_max(self) -> float:
+        return self.d_tcmcr_max
+
+    @d_tcmd_max.setter
+    def d_tcmd_max(self, val: float) -> None:
+        self.d_tcmcr_max = val
+
+
+FailLadTransverseCoreMicrocrackRate = FailLadTransverseCoreMicrocrackingRate
+
+
+@dataclass
+class EngElectrothermoflexomagnetoexcitonicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOEXCITONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_EXCITON_POLARITON_RES_WORK`` (M438): Engine coupled electrothermal-flexomagnetic-flexoexcitonic-flexopolaritonic nanoscale exciton-polariton hybrid resonance energy and opto-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfexmnp: float = 0.0       # time frequency for electrothermoflexomagnetoexcitonicpolaritonic resonance energy output
+    sens_id: int = 0               # sensor activation ID
+    dt_etfexp: float = 0.0         # alias field for compatibility
+
+    def __post_init__(self):
+        if self.dt_etfexp != 0.0 and self.dt_etfexmnp == 0.0:
+            self.dt_etfexmnp = self.dt_etfexp
+        elif self.dt_etfexmnp != 0.0 and self.dt_etfexp == 0.0:
+            self.dt_etfexp = self.dt_etfexmnp
+
+
+@dataclass
+class LagmulSymplecticSpinorSpatialLinkageJoint:
+    """``/SYMPLECTIC_SPINOR_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/SYMPLECTIC_SPINOR_SPATIAL_LINKAGE_JOINT/id`` (M438): Symplectic spinor spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0                 # base pivot node 1
+    node2: int = 0                 # intermediate spatial link node 2
+    node3: int = 0                 # driven spatial link node 3
+    stiff: float = 1e6             # kinematic constraint symplectic spinor stiffness
+    skew_id: int = 0               # reference coordinate frame ID
+    tol: float = 1e-6              # constraint numerical tolerance
+    link_len_a: float = 0.0        # length of primary spatial link a
+    link_len_b: float = 0.0        # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+
 

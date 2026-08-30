@@ -2667,6 +2667,16 @@ class Model:
         self.lagmul_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_spinorial_spatial_linkage_joints # /SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M436)
         self.sensor_spring_axial_crackle_rates: Dict[int, Any] = self.sensor_spring_normal_crackle_rates # /SENSOR/SPRING_AXIAL_CRACKLE_RATE (M436)
 
+        # M438 Entities
+        self.fail_ladtransversecoremicrocrackingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_CORE_MICROCRACKING_RATE (M438)
+        self.fail_ladtransversecoremicrocrackrates: Dict[int, Any] = self.fail_ladtransversecoremicrocrackingrates # /FAIL/LAD_TRANSVERSE_CORE_MICROCRACK_RATE (M438)
+        self.fail_ladtransversecoremicrodamagerates: Dict[int, Any] = self.fail_ladtransversecoremicrocrackingrates # /FAIL/LAD_TRANSVERSE_CORE_MICRODAMAGE_RATE (M438)
+        self.eng_electrothermoflexomagnetoexcitonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOEXCITONICPOLARITONIC_RESONANCE_ENERGY (M438)
+        self.lagmul_symplectic_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /SYMPLECTIC_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/SYMPLECTIC_SPINOR_SPATIAL_LINKAGE_JOINT (M438)
+        self.lagmul_symplectic_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_symplectic_spinor_spatial_linkage_joints # /SYMPLECTIC_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/SYMPLECTIC_TWISTOR_SPATIAL_LINKAGE_JOINT (M438)
+        self.lagmul_symplectic_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_symplectic_spinor_spatial_linkage_joints # /SYMPLECTIC_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/SYMPLECTIC_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M438)
+
+
 
 
 
