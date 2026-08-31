@@ -30549,5 +30549,153 @@ class LagmulSymplecticSpinorSpatialLinkageJoint:
         self.offset_distance_s = val
 
 
+# ============================================================================
+# M439 Suite: FailLadCoupledCoreMicrocrackingRate, EngElectrothermoflexomagnetomagnonicpolaritonicResonanceEnergy, LagmulContactSpinorSpatialLinkageJoint
+# ============================================================================
+
+@dataclass
+class FailLadCoupledCoreMicrocrackingRate:
+    """``/FAIL/LAD_COUPLED_CORE_MICROCRACKING_RATE`` or ``/FAIL/LADEVEZE_COUPLED_CORE_MICROCRACKING_RATE`` (M439): Ladevèze rate-dependent coupled sandwich core microcracking, cell-wall fracture and multi-axial core failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_ccmcr0: float = 0.0      # initial coupled core microcracking threshold stress sigma_ccmcr,0
+    sigma_ccmcrc: float = 1.0      # critical coupled core microcracking saturation stress sigma_ccmcr,c
+    gamma_ccmcr: float = 0.0       # coupled core microcracking rate sensitivity factor gamma_ccmcr
+    p_ccmcr: float = 1.0           # coupled core microcracking rate exponent p_ccmcr
+    d_ccmcr_max: float = 0.999     # maximum allowable coupled core microcracking damage index
+    ifail_sh: int = 1              # shell element deletion flag
+    ifail_so: int = 1              # solid element deletion flag
+    fail_id: int = 0               # failure model ID reference
+
+    @property
+    def sigma_ccmd0(self) -> float:
+        return self.sigma_ccmcr0
+
+    @sigma_ccmd0.setter
+    def sigma_ccmd0(self, val: float) -> None:
+        self.sigma_ccmcr0 = val
+
+    @property
+    def sigma_ccmdc(self) -> float:
+        return self.sigma_ccmcrc
+
+    @sigma_ccmdc.setter
+    def sigma_ccmdc(self, val: float) -> None:
+        self.sigma_ccmcrc = val
+
+    @property
+    def gamma_ccmd(self) -> float:
+        return self.gamma_ccmcr
+
+    @gamma_ccmd.setter
+    def gamma_ccmd(self, val: float) -> None:
+        self.gamma_ccmcr = val
+
+    @property
+    def p_ccmd(self) -> float:
+        return self.p_ccmcr
+
+    @p_ccmd.setter
+    def p_ccmd(self, val: float) -> None:
+        self.p_ccmcr = val
+
+    @property
+    def d_ccmd_max(self) -> float:
+        return self.d_ccmcr_max
+
+    @d_ccmd_max.setter
+    def d_ccmd_max(self, val: float) -> None:
+        self.d_ccmcr_max = val
+
+
+FailLadCoupleCoreMicrocrackingRate = FailLadCoupledCoreMicrocrackingRate
+FailLadCoupledCoreMicrocrackRate = FailLadCoupledCoreMicrocrackingRate
+FailLadCoupleCoreMicrocrackRate = FailLadCoupledCoreMicrocrackingRate
+FailLadCoupledCoreMicrodamageRate = FailLadCoupledCoreMicrocrackingRate
+FailLadCoupleCoreMicrodamageRate = FailLadCoupledCoreMicrocrackingRate
+
+
+@dataclass
+class EngElectrothermoflexomagnetomagnonicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOMAGNONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_MAGNON_POLARITON_RES_WORK`` (M439): Engine coupled electrothermal-flexomagnetic-flexomagnonic-flexopolaritonic nanoscale magnon-polariton hybrid resonance energy and opto-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfmgmnp: float = 0.0       # time frequency for electrothermoflexomagnetomagnonicpolaritonic resonance energy output
+    sens_id: int = 0               # sensor activation ID
+    dt_etfplp: float = 0.0         # alias field for plasmonic polaritonic compatibility
+
+    def __post_init__(self):
+        if self.dt_etfplp != 0.0 and self.dt_etfmgmnp == 0.0:
+            self.dt_etfmgmnp = self.dt_etfplp
+        elif self.dt_etfmgmnp != 0.0 and self.dt_etfplp == 0.0:
+            self.dt_etfplp = self.dt_etfmgmnp
+
+
+EngElectrothermoflexomagnetoplasmonicpolaritonicResonanceEnergy = EngElectrothermoflexomagnetomagnonicpolaritonicResonanceEnergy
+
+
+@dataclass
+class LagmulContactSpinorSpatialLinkageJoint:
+    """``/CONTACT_SPINOR_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/CONTACT_SPINOR_SPATIAL_LINKAGE_JOINT/id`` (M439): Contact spinor spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0                 # base pivot node 1
+    node2: int = 0                 # intermediate spatial link node 2
+    node3: int = 0                 # driven spatial link node 3
+    stiff: float = 1e6             # kinematic constraint contact spinor stiffness
+    skew_id: int = 0               # reference coordinate frame ID
+    tol: float = 1e-6              # constraint numerical tolerance
+    link_len_a: float = 0.0        # length of primary spatial link a
+    link_len_b: float = 0.0        # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+LagmulContactTwistorSpatialLinkageJoint = LagmulContactSpinorSpatialLinkageJoint
+LagmulContactSpinorBundleSpatialLinkageJoint = LagmulContactSpinorSpatialLinkageJoint
+LagmulCliffordSpinorSpatialLinkageJoint = LagmulContactSpinorSpatialLinkageJoint
+
+
+
 
 
