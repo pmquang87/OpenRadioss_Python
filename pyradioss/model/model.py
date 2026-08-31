@@ -2684,11 +2684,22 @@ class Model:
         self.fail_ladcoupledcoremicrodamagerates: Dict[int, Any] = self.fail_ladcoupledcoremicrocrackingrates # /FAIL/LAD_COUPLED_CORE_MICRODAMAGE_RATE (M439)
         self.fail_ladcouplecoremicrodamagerates: Dict[int, Any] = self.fail_ladcoupledcoremicrocrackingrates # /FAIL/LAD_COUPLE_CORE_MICRODAMAGE_RATE (M439)
         self.eng_electrothermoflexomagnetomagnonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOMAGNONICPOLARITONIC_RESONANCE_ENERGY (M439)
-        self.eng_electrothermoflexomagnetoplasmonicpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetomagnonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICPOLARITONIC_RESONANCE_ENERGY (M439)
+        self.eng_electrothermoflexomagnetomagnonicpolariton_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetomagnonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOMAGNONICPOLARITON_RESONANCE_ENERGY (M439)
         self.lagmul_contact_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /CONTACT_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/CONTACT_SPINOR_SPATIAL_LINKAGE_JOINT (M439)
         self.lagmul_contact_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_contact_spinor_spatial_linkage_joints # /CONTACT_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/CONTACT_TWISTOR_SPATIAL_LINKAGE_JOINT (M439)
         self.lagmul_contact_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_contact_spinor_spatial_linkage_joints # /CONTACT_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/CONTACT_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M439)
         self.lagmul_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_contact_spinor_spatial_linkage_joints # /CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M439)
+
+        # M440 Entities
+        self.fail_laddynamiccoremicrobucklingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_CORE_MICROBUCKLING_RATE (M440)
+        self.fail_laddynamiccoremicrobucklerates: Dict[int, Any] = self.fail_laddynamiccoremicrobucklingrates # /FAIL/LAD_DYNAMIC_CORE_MICROBUCKLE_RATE (M440)
+        self.fail_laddynamiccoremicrokinkingrates: Dict[int, Any] = self.fail_laddynamiccoremicrobucklingrates # /FAIL/LAD_DYNAMIC_CORE_MICROKINKING_RATE (M440)
+        self.eng_electrothermoflexomagnetoplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICPOLARITONIC_RESONANCE_ENERGY (M440)
+        self.eng_electrothermoflexomagnetoplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetoplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONPOLARITONIC_RESONANCE_ENERGY (M440)
+        self.lagmul_conformal_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /CONFORMAL_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/CONFORMAL_SPINOR_SPATIAL_LINKAGE_JOINT (M440)
+        self.lagmul_conformal_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_conformal_spinor_spatial_linkage_joints # /CONFORMAL_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/CONFORMAL_TWISTOR_SPATIAL_LINKAGE_JOINT (M440)
+        self.lagmul_conformal_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_conformal_spinor_spatial_linkage_joints # /CONFORMAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/CONFORMAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M440)
+        self.lagmul_conformal_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_conformal_spinor_spatial_linkage_joints # /CONFORMAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/CONFORMAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M440)
 
 
 

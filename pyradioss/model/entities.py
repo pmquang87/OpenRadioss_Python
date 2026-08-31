@@ -30630,8 +30630,7 @@ class EngElectrothermoflexomagnetomagnonicpolaritonicResonanceEnergy:
         elif self.dt_etfmgmnp != 0.0 and self.dt_etfplp == 0.0:
             self.dt_etfplp = self.dt_etfmgmnp
 
-
-EngElectrothermoflexomagnetoplasmonicpolaritonicResonanceEnergy = EngElectrothermoflexomagnetomagnonicpolaritonicResonanceEnergy
+EngElectrothermoflexomagnetomagnonicpolaritonResonanceEnergy = EngElectrothermoflexomagnetomagnonicpolaritonicResonanceEnergy
 
 
 @dataclass
@@ -30694,6 +30693,190 @@ class LagmulContactSpinorSpatialLinkageJoint:
 LagmulContactTwistorSpatialLinkageJoint = LagmulContactSpinorSpatialLinkageJoint
 LagmulContactSpinorBundleSpatialLinkageJoint = LagmulContactSpinorSpatialLinkageJoint
 LagmulCliffordSpinorSpatialLinkageJoint = LagmulContactSpinorSpatialLinkageJoint
+
+
+# ============================================================================
+# M440 Suite: FailLadDynamicCoreMicrobucklingRate, EngElectrothermoflexomagnetoplasmonicpolaritonicResonanceEnergy, LagmulConformalSpinorSpatialLinkageJoint
+# ============================================================================
+
+@dataclass
+class FailLadDynamicCoreMicrobucklingRate:
+    """``/FAIL/LAD_DYNAMIC_CORE_MICROBUCKLING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_CORE_MICROBUCKLING_RATE`` (M440): Ladevèze rate-dependent dynamic sandwich core microbuckling, cell-wall kinking and multi-axial compressive failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_dcmbr0: float = 0.0      # initial dynamic core microbuckling threshold stress sigma_dcmbr,0
+    sigma_dcmbrc: float = 1.0      # critical dynamic core microbuckling saturation stress sigma_dcmbr,c
+    gamma_dcmbr: float = 0.0       # dynamic core microbuckling rate sensitivity factor gamma_dcmbr
+    p_dcmbr: float = 1.0           # dynamic core microbuckling rate exponent p_dcmbr
+    d_dcmbr_max: float = 0.999     # maximum allowable dynamic core microbuckling damage index
+    ifail_sh: int = 1              # shell element deletion flag
+    ifail_so: int = 1              # solid element deletion flag
+    fail_id: int = 0               # failure model ID reference
+
+    @property
+    def sigma_dcmbk0(self) -> float:
+        return self.sigma_dcmbr0
+
+    @sigma_dcmbk0.setter
+    def sigma_dcmbk0(self, val: float) -> None:
+        self.sigma_dcmbr0 = val
+
+    @property
+    def sigma_dcmbkc(self) -> float:
+        return self.sigma_dcmbrc
+
+    @sigma_dcmbkc.setter
+    def sigma_dcmbkc(self, val: float) -> None:
+        self.sigma_dcmbrc = val
+
+    @property
+    def gamma_dcmbk(self) -> float:
+        return self.gamma_dcmbr
+
+    @gamma_dcmbk.setter
+    def gamma_dcmbk(self, val: float) -> None:
+        self.gamma_dcmbr = val
+
+    @property
+    def p_dcmbk(self) -> float:
+        return self.p_dcmbr
+
+    @p_dcmbk.setter
+    def p_dcmbk(self, val: float) -> None:
+        self.p_dcmbr = val
+
+    @property
+    def d_dcmbk_max(self) -> float:
+        return self.d_dcmbr_max
+
+    @d_dcmbk_max.setter
+    def d_dcmbk_max(self, val: float) -> None:
+        self.d_dcmbr_max = val
+
+    @property
+    def sigma_dcmk0(self) -> float:
+        return self.sigma_dcmbr0
+
+    @sigma_dcmk0.setter
+    def sigma_dcmk0(self, val: float) -> None:
+        self.sigma_dcmbr0 = val
+
+    @property
+    def sigma_dcmkc(self) -> float:
+        return self.sigma_dcmbrc
+
+    @sigma_dcmkc.setter
+    def sigma_dcmkc(self, val: float) -> None:
+        self.sigma_dcmbrc = val
+
+    @property
+    def gamma_dcmk(self) -> float:
+        return self.gamma_dcmbr
+
+    @gamma_dcmk.setter
+    def gamma_dcmk(self, val: float) -> None:
+        self.gamma_dcmbr = val
+
+    @property
+    def p_dcmk(self) -> float:
+        return self.p_dcmbr
+
+    @p_dcmk.setter
+    def p_dcmk(self, val: float) -> None:
+        self.p_dcmbr = val
+
+    @property
+    def d_dcmk_max(self) -> float:
+        return self.d_dcmbr_max
+
+    @d_dcmk_max.setter
+    def d_dcmk_max(self, val: float) -> None:
+        self.d_dcmbr_max = val
+
+
+FailLadDynamicCoreMicrobuckleRate = FailLadDynamicCoreMicrobucklingRate
+FailLadDynamicCoreMicrokinkingRate = FailLadDynamicCoreMicrobucklingRate
+
+
+@dataclass
+class EngElectrothermoflexomagnetoplasmonicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_PLASMON_POLARITON_RES_WORK`` (M440): Engine coupled electrothermal-flexomagnetic-flexoplasmonic-flexopolaritonic nanoscale plasmon-polariton hybrid resonance energy and opto-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfplp: float = 0.0         # time frequency for electrothermoflexomagnetoplasmonicpolaritonic resonance energy output
+    sens_id: int = 0               # sensor activation ID
+    dt_etfmgmnp: float = 0.0       # alias field for compatibility
+
+    def __post_init__(self):
+        if self.dt_etfmgmnp != 0.0 and self.dt_etfplp == 0.0:
+            self.dt_etfplp = self.dt_etfmgmnp
+        elif self.dt_etfplp != 0.0 and self.dt_etfmgmnp == 0.0:
+            self.dt_etfmgmnp = self.dt_etfplp
+
+
+EngElectrothermoflexomagnetoplasmonpolaritonicResonanceEnergy = EngElectrothermoflexomagnetoplasmonicpolaritonicResonanceEnergy
+
+
+@dataclass
+class LagmulConformalSpinorSpatialLinkageJoint:
+    """``/CONFORMAL_SPINOR_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/CONFORMAL_SPINOR_SPATIAL_LINKAGE_JOINT/id`` (M440): Conformal spinor spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0                 # base pivot node 1
+    node2: int = 0                 # intermediate spatial link node 2
+    node3: int = 0                 # driven spatial link node 3
+    stiff: float = 1e6             # kinematic constraint conformal spinor stiffness
+    skew_id: int = 0               # reference coordinate frame ID
+    tol: float = 1e-6              # constraint numerical tolerance
+    link_len_a: float = 0.0        # length of primary spatial link a
+    link_len_b: float = 0.0        # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+LagmulConformalTwistorSpatialLinkageJoint = LagmulConformalSpinorSpatialLinkageJoint
+LagmulConformalSpinorBundleSpatialLinkageJoint = LagmulConformalSpinorSpatialLinkageJoint
+LagmulConformalCliffordSpinorSpatialLinkageJoint = LagmulConformalSpinorSpatialLinkageJoint
 
 
 
