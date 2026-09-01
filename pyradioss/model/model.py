@@ -2713,6 +2713,22 @@ class Model:
         self.lagmul_projective_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_projective_spinor_spatial_linkage_joints # /PROJECTIVE_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/PROJECTIVE_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M441)
         self.lagmul_projective_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_projective_spinor_spatial_linkage_joints # /PROJECTIVE_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/PROJECTIVE_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M441)
 
+        # M442 Entities
+        self.fail_ladcoupledcoremicrobucklingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLED_CORE_MICROBUCKLING_RATE (M442)
+        self.fail_ladcouplecoremicrobucklingrates: Dict[int, Any] = self.fail_ladcoupledcoremicrobucklingrates # /FAIL/LAD_COUPLE_CORE_MICROBUCKLING_RATE (M442)
+        self.fail_ladcoupledcoremicrobucklerates: Dict[int, Any] = self.fail_ladcoupledcoremicrobucklingrates # /FAIL/LAD_COUPLED_CORE_MICROBUCKLE_RATE (M442)
+        self.fail_ladcouplecoremicrobucklerates: Dict[int, Any] = self.fail_ladcoupledcoremicrobucklingrates # /FAIL/LAD_COUPLE_CORE_MICROBUCKLE_RATE (M442)
+        self.fail_ladcoupledcoremicrokinkingrates: Dict[int, Any] = self.fail_ladcoupledcoremicrobucklingrates # /FAIL/LAD_COUPLED_CORE_MICROKINKING_RATE (M442)
+        self.fail_ladcouplecoremicrokinkingrates: Dict[int, Any] = self.fail_ladcoupledcoremicrobucklingrates # /FAIL/LAD_COUPLE_CORE_MICROKINKING_RATE (M442)
+        self.eng_electrothermoflexomagnetoexcitonicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOEXCITONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M442)
+        self.eng_electrothermoflexomagnetoplasmonicexcitonicpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetoexcitonicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICEXCITONICPOLARITONIC_RESONANCE_ENERGY (M442)
+        self.eng_electrothermoflexomagnetoexcitonplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetoexcitonicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOEXCITONPLASMONPOLARITONIC_RESONANCE_ENERGY (M442)
+        self.lagmul_algebraic_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /ALGEBRAIC_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALGEBRAIC_SPINOR_SPATIAL_LINKAGE_JOINT (M442)
+        self.lagmul_algebraic_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_algebraic_spinor_spatial_linkage_joints # /ALGEBRAIC_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALGEBRAIC_TWISTOR_SPATIAL_LINKAGE_JOINT (M442)
+        self.lagmul_algebraic_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_algebraic_spinor_spatial_linkage_joints # /ALGEBRAIC_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALGEBRAIC_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M442)
+        self.lagmul_algebraic_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_algebraic_spinor_spatial_linkage_joints # /ALGEBRAIC_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALGEBRAIC_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M442)
+
+
 
 
 
