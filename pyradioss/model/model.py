@@ -2701,6 +2701,19 @@ class Model:
         self.lagmul_conformal_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_conformal_spinor_spatial_linkage_joints # /CONFORMAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/CONFORMAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M440)
         self.lagmul_conformal_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_conformal_spinor_spatial_linkage_joints # /CONFORMAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/CONFORMAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M440)
 
+        # M441 Entities
+        self.fail_ladtransversecoremicrobucklingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_CORE_MICROBUCKLING_RATE (M441)
+        self.fail_ladtransversecoremicrobucklerates: Dict[int, Any] = self.fail_ladtransversecoremicrobucklingrates # /FAIL/LAD_TRANSVERSE_CORE_MICROBUCKLE_RATE (M441)
+        self.fail_ladtransversecoremicrokinkingrates: Dict[int, Any] = self.fail_ladtransversecoremicrobucklingrates # /FAIL/LAD_TRANSVERSE_CORE_MICROKINKING_RATE (M441)
+        self.eng_electrothermoflexomagnetophononicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPHONONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M441)
+        self.eng_electrothermoflexomagnetoplasmonicphononicpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetophononicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICPHONONICPOLARITONIC_RESONANCE_ENERGY (M441)
+        self.eng_electrothermoflexomagnetophononplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetophononicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOPHONONPLASMONPOLARITONIC_RESONANCE_ENERGY (M441)
+        self.lagmul_projective_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /PROJECTIVE_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/PROJECTIVE_SPINOR_SPATIAL_LINKAGE_JOINT (M441)
+        self.lagmul_projective_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_projective_spinor_spatial_linkage_joints # /PROJECTIVE_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/PROJECTIVE_TWISTOR_SPATIAL_LINKAGE_JOINT (M441)
+        self.lagmul_projective_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_projective_spinor_spatial_linkage_joints # /PROJECTIVE_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/PROJECTIVE_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M441)
+        self.lagmul_projective_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_projective_spinor_spatial_linkage_joints # /PROJECTIVE_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/PROJECTIVE_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M441)
+
+
 
 
 
