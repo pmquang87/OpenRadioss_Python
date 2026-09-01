@@ -2728,6 +2728,21 @@ class Model:
         self.lagmul_algebraic_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_algebraic_spinor_spatial_linkage_joints # /ALGEBRAIC_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALGEBRAIC_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M442)
         self.lagmul_algebraic_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_algebraic_spinor_spatial_linkage_joints # /ALGEBRAIC_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/ALGEBRAIC_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M442)
 
+        # M443 Entities
+        self.fail_laddynamiccoremicroyieldingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_CORE_MICROYIELDING_RATE (M443)
+        self.fail_laddynamiccoremicroyieldrates: Dict[int, Any] = self.fail_laddynamiccoremicroyieldingrates # /FAIL/LAD_DYNAMIC_CORE_MICROYIELD_RATE (M443)
+        self.fail_laddynamiccoremicroplasticityrates: Dict[int, Any] = self.fail_laddynamiccoremicroyieldingrates # /FAIL/LAD_DYNAMIC_CORE_MICROPLASTICITY_RATE (M443)
+        self.fail_laddynamiccoremicroplasticrates: Dict[int, Any] = self.fail_laddynamiccoremicroyieldingrates # /FAIL/LAD_DYNAMIC_CORE_MICROPLASTIC_RATE (M443)
+        self.fail_laddynamiccoremicroflowrates: Dict[int, Any] = self.fail_laddynamiccoremicroyieldingrates # /FAIL/LAD_DYNAMIC_CORE_MICROFLOW_RATE (M443)
+        self.eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOMAGNONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M443)
+        self.eng_electrothermoflexomagnetoplasmonicmagnonicpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY (M443)
+        self.eng_electrothermoflexomagnetomagnonplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOMAGNONPLASMONPOLARITONIC_RESONANCE_ENERGY (M443)
+        self.lagmul_topological_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /TOPOLOGICAL_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/TOPOLOGICAL_SPINOR_SPATIAL_LINKAGE_JOINT (M443)
+        self.lagmul_topological_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_topological_spinor_spatial_linkage_joints # /TOPOLOGICAL_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/TOPOLOGICAL_TWISTOR_SPATIAL_LINKAGE_JOINT (M443)
+        self.lagmul_topological_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_topological_spinor_spatial_linkage_joints # /TOPOLOGICAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/TOPOLOGICAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M443)
+        self.lagmul_topological_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_topological_spinor_spatial_linkage_joints # /TOPOLOGICAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/TOPOLOGICAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M443)
+
+
 
 
 

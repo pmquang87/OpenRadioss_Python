@@ -57549,6 +57549,135 @@ def read_lagmul_algebraic_spinor_spatial_linkage_joint(block: KeywordBlock, mode
         offset_distance_s=offset_distance_s
     )
 
+
+def read_fail_lad_dynamic_core_microyielding_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_DYNAMIC_CORE_MICROYIELDING_RATE/mat_ID`` or ``/FAIL/LADEVEZE_DYNAMIC_CORE_MICROYIELDING_RATE`` (M443): Ladevèze rate-dependent dynamic sandwich core microyielding, cell-wall microplasticity and multi-axial plastic flow model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_DYNAMIC_CORE_MICROYIELDING_RATE/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_DYNAMIC_CORE_MICROYIELDING_RATE_1")
+        sigma_dcmyr0 = _fval(c1[0], 0.0) if len(c1) > 0 and c1[0].strip() else 0.0
+        sigma_dcmyrc = _fval(c1[1], 1.0) if len(c1) > 1 and c1[1].strip() else 1.0
+        gamma_dcmyr = _fval(c1[2], 0.0) if len(c1) > 2 and c1[2].strip() else 0.0
+        p_dcmyr = _fval(c1[3], 1.0) if len(c1) > 3 and c1[3].strip() else 1.0
+        d_dcmyr_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        c2 = cards[1].cut("FAIL_LAD_DYNAMIC_CORE_MICROYIELDING_RATE_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        sigma_dcmyr0 = float(t1[0].rstrip(',')) if len(t1) > 0 and t1[0].rstrip(',') else 0.0
+        sigma_dcmyrc = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 1.0
+        gamma_dcmyr = float(t1[2].rstrip(',')) if len(t1) > 2 and t1[2].rstrip(',') else 0.0
+        p_dcmyr = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 1.0
+        d_dcmyr_max = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.999
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "sigma_dcmyr0": sigma_dcmyr0, "sigma_dcmyrc": sigma_dcmyrc, "gamma_dcmyr": gamma_dcmyr,
+        "p_dcmyr": p_dcmyr, "d_dcmyr_max": d_dcmyr_max,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadDynamicCoreMicroyieldingRate, FailureModel
+    model.fail_laddynamiccoremicroyieldingrates[mat_id] = FailLadDynamicCoreMicroyieldingRate(
+        mat_id=mat_id, title=title, sigma_dcmyr0=sigma_dcmyr0, sigma_dcmyrc=sigma_dcmyrc,
+        gamma_dcmyr=gamma_dcmyr, p_dcmyr=p_dcmyr, d_dcmyr_max=d_dcmyr_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm_type = "LAD_DYNAMIC_CORE_MICROPLASTICITY_RATE" if "PLAST" in block.keyword.upper() else ("LAD_DYNAMIC_CORE_MICROFLOW_RATE" if "FLOW" in block.keyword.upper() else "LAD_DYNAMIC_CORE_MICROYIELDING_RATE")
+    fm = FailureModel(type=fm_type, ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOMAGNONICPLASMONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_MAGNON_PLASMON_POLARITON_RES_WORK`` (M443): Engine coupled electrothermal-flexomagnetic-flexomagnonic-flexoplasmonic-flexopolaritonic nanoscale magnon-plasmon-polariton hybrid resonance energy and opto-thermo-acoustic dissipation tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/ELECTROTHERMOFLEXOMAGNETOMAGNONICPLASMONICPOLARITONIC_RESONANCE_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_etfmagplp, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_ELECTROTHERMOFLEXOMAGNETOMAGNONICPLASMONICPOLARITONIC_RESONANCE_ENERGY_1")
+        dt_etfmagplp = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_etfmagplp = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngElectrothermoflexomagnetomagnonicplasmonicpolaritonicResonanceEnergy
+    r_id = block.user_id or (len(model.eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energies) + 1)
+    model.eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energies[r_id] = EngElectrothermoflexomagnetomagnonicplasmonicpolaritonicResonanceEnergy(
+        id=r_id, title=title, dt_etfmagplp=dt_etfmagplp, sens_id=sens_id
+    )
+
+
+def read_lagmul_topological_spinor_spatial_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/TOPOLOGICAL_SPINOR_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/TOPOLOGICAL_SPINOR_SPATIAL_LINKAGE_JOINT/id`` (M443): Topological spinor spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/TOPOLOGICAL_SPINOR_SPATIAL_LINKAGE_JOINT/{block.user_id}: missing data card 1", block.source)
+        return
+
+    node1, node2, node3 = 0, 0, 0
+    stiff, skew_id, tol = 1e6, 0, 1e-6
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("TOPOLOGICAL_SPINOR_SPATIAL_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0], 0) if len(f1) > 0 else 0
+        node2 = _ival(f1[1], 0) if len(f1) > 1 else 0
+        node3 = _ival(f1[2], 0) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        node2 = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+        node3 = int(float(toks[2].rstrip(','))) if len(toks) > 2 else 0
+        stiff = float(toks[3].rstrip(',')) if len(toks) > 3 else 1e6
+        skew_id = int(float(toks[4].rstrip(','))) if len(toks) > 4 else 0
+        tol = float(toks[5].rstrip(',')) if len(toks) > 5 else 1e-6
+
+    link_len_a, link_len_b, twist_angle_alpha, offset_distance_s = 0.0, 0.0, 0.0, 0.0
+    if len(cards) > 1 and not cards[1].is_blank:
+        if block.fixed and "," not in cards[1].raw:
+            f2 = cards[1].cut("TOPOLOGICAL_SPINOR_SPATIAL_LINKAGE_JOINT_2")
+            link_len_a = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            link_len_b = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            twist_angle_alpha = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            offset_distance_s = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+        else:
+            toks2 = cards[1].tokens()
+            link_len_a = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            link_len_b = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            twist_angle_alpha = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            offset_distance_s = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+
+    from ..model.entities import LagmulTopologicalSpinorSpatialLinkageJoint
+    j_id = block.user_id or (len(model.lagmul_topological_spinor_spatial_linkage_joints) + 1)
+    model.lagmul_topological_spinor_spatial_linkage_joints[j_id] = LagmulTopologicalSpinorSpatialLinkageJoint(
+        id=j_id,
+        title=title,
+        node1=node1,
+        node2=node2,
+        node3=node3,
+        stiff=stiff,
+        skew_id=skew_id,
+        tol=tol,
+        link_len_a=link_len_a,
+        link_len_b=link_len_b,
+        twist_angle_alpha=twist_angle_alpha,
+        offset_distance_s=offset_distance_s
+    )
+
 def read_fail_lad_transverse_core_microbuckling_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/LAD_TRANSVERSE_CORE_MICROBUCKLING_RATE/mat_ID`` or ``/FAIL/LADEVEZE_TRANSVERSE_CORE_MICROBUCKLING_RATE`` (M441): Ladevèze rate-dependent transverse sandwich core microbuckling, cell-wall kinking and multi-axial compressive failure model."""
     title, cards = _title_and_data(block)
@@ -81790,6 +81919,50 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ALGEBRAIC_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT": read_lagmul_algebraic_spinor_spatial_linkage_joint,
     "LAGMUL_ALGEBRAIC_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_algebraic_spinor_spatial_linkage_joint,
     "ALGEBRAIC_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_algebraic_spinor_spatial_linkage_joint,
+    # M443: FAIL_LAD_DYNAMIC_CORE_MICROYIELDING_RATE
+    "FAIL_LAD_DYNAMIC_CORE_MICROYIELDING_RATE": read_fail_lad_dynamic_core_microyielding_rate,
+    "FAIL_LADEVEZE_DYNAMIC_CORE_MICROYIELDING_RATE": read_fail_lad_dynamic_core_microyielding_rate,
+    "FAIL_LAD_DYNAMIC_CORE_MICROYIELD_RATE": read_fail_lad_dynamic_core_microyielding_rate,
+    "FAIL_LADEVEZE_DYNAMIC_CORE_MICROYIELD_RATE": read_fail_lad_dynamic_core_microyielding_rate,
+    "FAIL_LAD_DCMYR": read_fail_lad_dynamic_core_microyielding_rate,
+    "FAIL_LAD_DCMYR_MODEL": read_fail_lad_dynamic_core_microyielding_rate,
+    "FAIL_LAD_DCMYR_LAW": read_fail_lad_dynamic_core_microyielding_rate,
+    "FAIL_LADEVEZE_RATE_DEPENDENT_DYNAMIC_CORE_MICROYIELDING": read_fail_lad_dynamic_core_microyielding_rate,
+    "FAIL_LAD_DYNAMIC_CORE_MICROPLASTICITY_RATE": read_fail_lad_dynamic_core_microyielding_rate,
+    "FAIL_LADEVEZE_DYNAMIC_CORE_MICROPLASTICITY_RATE": read_fail_lad_dynamic_core_microyielding_rate,
+    "FAIL_LAD_DYNAMIC_CORE_MICROPLASTIC_RATE": read_fail_lad_dynamic_core_microyielding_rate,
+    "FAIL_LADEVEZE_DYNAMIC_CORE_MICROPLASTIC_RATE": read_fail_lad_dynamic_core_microyielding_rate,
+    "FAIL_LAD_DYNAMIC_CORE_MICROFLOW_RATE": read_fail_lad_dynamic_core_microyielding_rate,
+    "FAIL_LADEVEZE_DYNAMIC_CORE_MICROFLOW_RATE": read_fail_lad_dynamic_core_microyielding_rate,
+
+    # M443: ENG_ELECTROTHERMOFLEXOMAGNETOMAGNONICPLASMONICPOLARITONIC_RESONANCE_ENERGY
+    "ENG_ELECTROTHERMOFLEXOMAGNETOMAGNONICPLASMONICPOLARITONIC_RESONANCE_ENERGY": read_eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTRO_THERM_FLEXO_MAG_MAGNON_PLASMON_POLARITON_RES_WORK": read_eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energy,
+    "ENG_EELECTROTHERMOFLEXOMAGNETOMAGNONICPLASMONICPOLARITONICRESONANCE": read_eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOMAGNONICPLASMONICPOLARITONIC_RESONANCE_DISSIPATION": read_eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energy,
+    "ENG_ET_ELECTROTHERMOFLEXOMAGNETOMAGNONICPLASMONICPOLARITONIC_RESONANCE": read_eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOPLASMONICMAGNONICPOLARITONIC_RESONANCE_ENERGY": read_eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTRO_THERM_FLEXO_MAG_PLASMON_MAGNON_POLARITON_RES_WORK": read_eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energy,
+    "ENG_EELECTROTHERMOFLEXOMAGNETOPLASMONICMAGNONICPOLARITONICRESONANCE": read_eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOPLASMONICMAGNONICPOLARITONIC_RESONANCE_DISSIPATION": read_eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energy,
+    "ENG_ET_ELECTROTHERMOFLEXOMAGNETOPLASMONICMAGNONICPOLARITONIC_RESONANCE": read_eng_electrothermoflexomagnetomagnonicplasmonicpolaritonic_resonance_energy,
+
+    # M443: TOPOLOGICAL_SPINOR_SPATIAL_LINKAGE_JOINT
+    "TOPOLOGICAL_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_topological_spinor_spatial_linkage_joint,
+    "LAGMUL_TOPOLOGICAL_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_topological_spinor_spatial_linkage_joint,
+    "TOPOLOGICAL_SPINOR_SPATIAL_LINKAGE": read_lagmul_topological_spinor_spatial_linkage_joint,
+    "LAGMUL_TOPOLOGICAL_SPINOR_SPATIAL_LINKAGE": read_lagmul_topological_spinor_spatial_linkage_joint,
+    "TOPOLOGICAL_SPINOR_SPATIAL_MULTI_LOOP_MECHANISM": read_lagmul_topological_spinor_spatial_linkage_joint,
+    "TOPOLOGICAL_SPINOR_SPATIAL_SYMMETRIC_MECHANISM": read_lagmul_topological_spinor_spatial_linkage_joint,
+    "TOPOLOGICAL_SPINOR_SPATIAL_6R_MECHANISM": read_lagmul_topological_spinor_spatial_linkage_joint,
+    "TOPOLOGICAL_SPINOR_SPATIAL_OVERCONSTRAINED_MECHANISM": read_lagmul_topological_spinor_spatial_linkage_joint,
+    "LAGMUL_TOPOLOGICAL_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_topological_spinor_spatial_linkage_joint,
+    "TOPOLOGICAL_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_topological_spinor_spatial_linkage_joint,
+    "LAGMUL_TOPOLOGICAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT": read_lagmul_topological_spinor_spatial_linkage_joint,
+    "TOPOLOGICAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT": read_lagmul_topological_spinor_spatial_linkage_joint,
+    "LAGMUL_TOPOLOGICAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_topological_spinor_spatial_linkage_joint,
+    "TOPOLOGICAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_topological_spinor_spatial_linkage_joint,
+
 
     "SENSOR_SPRING_BENDING_CRACKLE_RATE": read_sensor_spring_bending_crackle_rate,
     "SENSOR_SPRING_BEND_CRACKLE_RATE": read_sensor_spring_bending_crackle_rate,
@@ -82624,6 +82797,18 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "LAGRANGE_SPATIAL_6R_MECHANISM": read_lagmul_lagrange_spatial_linkage_joint,
     "LAGRANGE_SPATIAL_OVERCONSTRAINED_MECHANISM": read_lagmul_lagrange_spatial_linkage_joint,
     "SENSOR_SPRING_NORMAL_POP_RATE": read_sensor_spring_normal_pop_rate,
+    "SENSOR_SPRING_NORMAL_POP": read_sensor_spring_normal_pop_rate,
+    "SENSOR_SPRING_NORM_POP": read_sensor_spring_normal_pop_rate,
+    "SENSOR_SPRING_AXIAL_POP_RATE": read_sensor_spring_normal_pop_rate,
+    "SENSOR_SPRING_AXIAL_POP": read_sensor_spring_normal_pop_rate,
+    "SENSOR_SPRING_POP_RATE_NORMAL": read_sensor_spring_normal_pop_rate,
+    "SENSOR_SPRING_POP_RATE_NORM": read_sensor_spring_normal_pop_rate,
+    "SENSOR_SPRING_POP_RATE_AXIAL": read_sensor_spring_normal_pop_rate,
+    "SENSOR_SPRING_POP_NORMAL": read_sensor_spring_normal_pop_rate,
+    "SENSOR_SPRING_POP_AXIAL": read_sensor_spring_normal_pop_rate,
+    "SENSOR_SPRING_POP_RATE_AX": read_sensor_spring_normal_pop_rate,
+    "SENSOR_SPRING_AX_POP_RATE": read_sensor_spring_normal_pop_rate,
+
     "SENSOR_SPRING_NORM_POP_RATE": read_sensor_spring_normal_pop_rate,
     "SENSOR_SPRING_RATE_POP_NORM": read_sensor_spring_normal_pop_rate,
     "SENSOR_NORMAL_POP_RATE_SPRING": read_sensor_spring_normal_pop_rate,
