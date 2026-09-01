@@ -2742,6 +2742,21 @@ class Model:
         self.lagmul_topological_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_topological_spinor_spatial_linkage_joints # /TOPOLOGICAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/TOPOLOGICAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M443)
         self.lagmul_topological_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_topological_spinor_spatial_linkage_joints # /TOPOLOGICAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/TOPOLOGICAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M443)
 
+        # M444 Entities
+        self.fail_ladtransversecoremicroyieldingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_CORE_MICROYIELDING_RATE (M444)
+        self.fail_ladtransversecoremicroyieldrates: Dict[int, Any] = self.fail_ladtransversecoremicroyieldingrates # /FAIL/LAD_TRANSVERSE_CORE_MICROYIELD_RATE (M444)
+        self.fail_ladtransversecoremicroplasticityrates: Dict[int, Any] = self.fail_ladtransversecoremicroyieldingrates # /FAIL/LAD_TRANSVERSE_CORE_MICROPLASTICITY_RATE (M444)
+        self.fail_ladtransversecoremicroplasticrates: Dict[int, Any] = self.fail_ladtransversecoremicroyieldingrates # /FAIL/LAD_TRANSVERSE_CORE_MICROPLASTIC_RATE (M444)
+        self.fail_ladtransversecoremicroflowrates: Dict[int, Any] = self.fail_ladtransversecoremicroyieldingrates # /FAIL/LAD_TRANSVERSE_CORE_MICROFLOW_RATE (M444)
+        self.eng_electrothermoflexomagnetophononicexcitonicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPHONONICEXCITONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M444)
+        self.eng_electrothermoflexomagnetoexcitonicphononicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetophononicexcitonicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOEXCITONICPHONONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M444)
+        self.eng_electrothermoflexomagnetophononexcitonplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetophononicexcitonicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOPHONONEXCITONPLASMONPOLARITONIC_RESONANCE_ENERGY (M444)
+        self.lagmul_homological_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /HOMOLOGICAL_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/HOMOLOGICAL_SPINOR_SPATIAL_LINKAGE_JOINT (M444)
+        self.lagmul_homological_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_homological_spinor_spatial_linkage_joints # /HOMOLOGICAL_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/HOMOLOGICAL_TWISTOR_SPATIAL_LINKAGE_JOINT (M444)
+        self.lagmul_homological_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_homological_spinor_spatial_linkage_joints # /HOMOLOGICAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/HOMOLOGICAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M444)
+        self.lagmul_homological_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_homological_spinor_spatial_linkage_joints # /HOMOLOGICAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/HOMOLOGICAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M444)
+
+
 
 
 
