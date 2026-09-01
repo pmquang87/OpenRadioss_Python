@@ -2756,6 +2756,26 @@ class Model:
         self.lagmul_homological_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_homological_spinor_spatial_linkage_joints # /HOMOLOGICAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/HOMOLOGICAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M444)
         self.lagmul_homological_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_homological_spinor_spatial_linkage_joints # /HOMOLOGICAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/HOMOLOGICAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M444)
 
+        # M445 Entities
+        self.fail_ladcoupledcoremicroyieldingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLED_CORE_MICROYIELDING_RATE (M445)
+        self.fail_ladcouplecoremicroyieldingrates: Dict[int, Any] = self.fail_ladcoupledcoremicroyieldingrates # /FAIL/LAD_COUPLE_CORE_MICROYIELDING_RATE (M445)
+        self.fail_ladcoupledcoremicroyieldrates: Dict[int, Any] = self.fail_ladcoupledcoremicroyieldingrates # /FAIL/LAD_COUPLED_CORE_MICROYIELD_RATE (M445)
+        self.fail_ladcouplecoremicroyieldrates: Dict[int, Any] = self.fail_ladcoupledcoremicroyieldingrates # /FAIL/LAD_COUPLE_CORE_MICROYIELD_RATE (M445)
+        self.fail_ladcoupledcoremicroplasticityrates: Dict[int, Any] = self.fail_ladcoupledcoremicroyieldingrates # /FAIL/LAD_COUPLED_CORE_MICROPLASTICITY_RATE (M445)
+        self.fail_ladcouplecoremicroplasticityrates: Dict[int, Any] = self.fail_ladcoupledcoremicroyieldingrates # /FAIL/LAD_COUPLE_CORE_MICROPLASTICITY_RATE (M445)
+        self.fail_ladcoupledcoremicroplasticrates: Dict[int, Any] = self.fail_ladcoupledcoremicroyieldingrates # /FAIL/LAD_COUPLED_CORE_MICROPLASTIC_RATE (M445)
+        self.fail_ladcouplecoremicroplasticrates: Dict[int, Any] = self.fail_ladcoupledcoremicroyieldingrates # /FAIL/LAD_COUPLE_CORE_MICROPLASTIC_RATE (M445)
+        self.fail_ladcoupledcoremicroflowrates: Dict[int, Any] = self.fail_ladcoupledcoremicroyieldingrates # /FAIL/LAD_COUPLED_CORE_MICROFLOW_RATE (M445)
+        self.fail_ladcouplecoremicroflowrates: Dict[int, Any] = self.fail_ladcoupledcoremicroyieldingrates # /FAIL/LAD_COUPLE_CORE_MICROFLOW_RATE (M445)
+        self.eng_electrothermoflexomagnetophononicmagnonicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPHONONICMAGNONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M445)
+        self.eng_electrothermoflexomagnetomagnonicphononicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetophononicmagnonicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOMAGNONICPHONONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M445)
+        self.eng_electrothermoflexomagnetophononmagnonplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetophononicmagnonicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOPHONONMAGNONPLASMONPOLARITONIC_RESONANCE_ENERGY (M445)
+        self.lagmul_cohomological_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /COHOMOLOGICAL_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/COHOMOLOGICAL_SPINOR_SPATIAL_LINKAGE_JOINT (M445)
+        self.lagmul_cohomological_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_cohomological_spinor_spatial_linkage_joints # /COHOMOLOGICAL_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/COHOMOLOGICAL_TWISTOR_SPATIAL_LINKAGE_JOINT (M445)
+        self.lagmul_cohomological_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_cohomological_spinor_spatial_linkage_joints # /COHOMOLOGICAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/COHOMOLOGICAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M445)
+        self.lagmul_cohomological_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_cohomological_spinor_spatial_linkage_joints # /COHOMOLOGICAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/COHOMOLOGICAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M445)
+
+
 
 
 
