@@ -2805,6 +2805,28 @@ class Model:
         self.lagmul_stack_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_stack_spinor_spatial_linkage_joints # /STACK_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/STACK_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M447)
         self.lagmul_stack_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_stack_spinor_spatial_linkage_joints # /STACK_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/STACK_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M447)
 
+        # M448 Entities
+        self.fail_ladcoupleddelaminationmicrocrackingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLED_DELAMINATION_MICROCRACKING_RATE (M448)
+        self.fail_ladcoupleddelaminationmicrocrackrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrocrackingrates # /FAIL/LAD_COUPLED_DELAMINATION_MICROCRACK_RATE (M448)
+        self.fail_ladcoupleddelammicrocrackingrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrocrackingrates # /FAIL/LAD_COUPLED_DELAM_MICROCRACKING_RATE (M448)
+        self.fail_ladcoupleddelammicrocrackrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrocrackingrates # /FAIL/LAD_COUPLED_DELAM_MICROCRACK_RATE (M448)
+        self.fail_ladcoupledinterlaminarmicrocrackingrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrocrackingrates # /FAIL/LAD_COUPLED_INTERLAMINAR_MICROCRACKING_RATE (M448)
+        self.fail_ladcoupledinterlaminarmicrocrackrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrocrackingrates # /FAIL/LAD_COUPLED_INTERLAMINAR_MICROCRACK_RATE (M448)
+        self.fail_ladcoupledelaminationmicrocrackingrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrocrackingrates # /FAIL/LAD_COUPLE_DELAMINATION_MICROCRACKING_RATE (M448)
+        self.fail_ladcoupledelaminationmicrocrackrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrocrackingrates # /FAIL/LAD_COUPLE_DELAMINATION_MICROCRACK_RATE (M448)
+        self.fail_ladcoupledelammicrocrackingrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrocrackingrates # /FAIL/LAD_COUPLE_DELAM_MICROCRACKING_RATE (M448)
+        self.fail_ladcoupledelammicrocrackrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrocrackingrates # /FAIL/LAD_COUPLE_DELAM_MICROCRACK_RATE (M448)
+        self.fail_ladcoupleinterlaminarmicrocrackingrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrocrackingrates # /FAIL/LAD_COUPLE_INTERLAMINAR_MICROCRACKING_RATE (M448)
+        self.fail_ladcoupleinterlaminarmicrocrackrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrocrackingrates # /FAIL/LAD_COUPLE_INTERLAMINAR_MICROCRACK_RATE (M448)
+        self.eng_electrothermoflexomagnetochiralphononicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALPHONONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M448)
+        self.eng_electrothermoflexomagnetochiralphononplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralphononicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALPHONONPLASMONPOLARITONIC_RESONANCE_ENERGY (M448)
+        self.eng_electrothermoflexomagnetophononicchiralplasmonicpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralphononicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOPHONONICCHIRALPLASMONICPOLARITONIC_RESONANCE_ENERGY (M448)
+        self.lagmul_topos_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /TOPOS_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/TOPOS_SPINOR_SPATIAL_LINKAGE_JOINT (M448)
+        self.lagmul_topos_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_topos_spinor_spatial_linkage_joints # /TOPOS_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/TOPOS_TWISTOR_SPATIAL_LINKAGE_JOINT (M448)
+        self.lagmul_topos_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_topos_spinor_spatial_linkage_joints # /TOPOS_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/TOPOS_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M448)
+        self.lagmul_topos_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_topos_spinor_spatial_linkage_joints # /TOPOS_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/TOPOS_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M448)
+
+
 
 
 

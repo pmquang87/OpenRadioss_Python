@@ -32495,6 +32495,256 @@ LagmulStackSpinorBundleSpatialLinkageJoint = LagmulStackSpinorSpatialLinkageJoin
 LagmulStackCliffordSpinorSpatialLinkageJoint = LagmulStackSpinorSpatialLinkageJoint
 
 
+# ============================================================================
+# M448 Suite: FailLadCoupledDelaminationMicrocrackingRate, EngElectrothermoflexomagnetochiralphononicplasmonicpolaritonicResonanceEnergy, LagmulToposSpinorSpatialLinkageJoint
+# ============================================================================
+
+@dataclass
+class FailLadCoupledDelaminationMicrocrackingRate:
+    """``/FAIL/LAD_COUPLED_DELAMINATION_MICROCRACKING_RATE`` or ``/FAIL/LADEVEZE_COUPLED_DELAMINATION_MICROCRACKING_RATE`` (M448): Ladevèze rate-dependent coupled interlaminar delamination microcracking and matrix ply separation model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cdmcr0: float = 0.0     # initial coupled delamination microcracking threshold stress sigma_cdmcr,0
+    sigma_cdmcrc: float = 1.0     # critical coupled delamination microcracking saturation stress sigma_cdmcr,c
+    gamma_cdmcr: float = 0.0      # coupled delamination microcracking rate sensitivity factor gamma_cdmcr
+    p_cdmcr: float = 1.0          # coupled delamination microcracking rate exponent p_cdmcr
+    d_cdmcr_max: float = 0.999    # maximum allowable coupled delamination microcracking damage index
+    ifail_sh: int = 1             # shell element deletion flag
+    ifail_so: int = 1             # solid element deletion flag
+    fail_id: int = 0              # failure model ID reference
+
+    @property
+    def sigma_cdmc0(self) -> float:
+        return self.sigma_cdmcr0
+
+    @sigma_cdmc0.setter
+    def sigma_cdmc0(self, val: float) -> None:
+        self.sigma_cdmcr0 = val
+
+    @property
+    def sigma_cdmcc(self) -> float:
+        return self.sigma_cdmcrc
+
+    @sigma_cdmcc.setter
+    def sigma_cdmcc(self, val: float) -> None:
+        self.sigma_cdmcrc = val
+
+    @property
+    def gamma_cdmc(self) -> float:
+        return self.gamma_cdmcr
+
+    @gamma_cdmc.setter
+    def gamma_cdmc(self, val: float) -> None:
+        self.gamma_cdmcr = val
+
+    @property
+    def p_cdmc(self) -> float:
+        return self.p_cdmcr
+
+    @p_cdmc.setter
+    def p_cdmc(self, val: float) -> None:
+        self.p_cdmcr = val
+
+    @property
+    def d_cdmc_max(self) -> float:
+        return self.d_cdmcr_max
+
+    @d_cdmc_max.setter
+    def d_cdmc_max(self, val: float) -> None:
+        self.d_cdmcr_max = val
+
+    @property
+    def sigma_cdm0(self) -> float:
+        return self.sigma_cdmcr0
+
+    @sigma_cdm0.setter
+    def sigma_cdm0(self, val: float) -> None:
+        self.sigma_cdmcr0 = val
+
+    @property
+    def sigma_cdmc(self) -> float:
+        return self.sigma_cdmcrc
+
+    @sigma_cdmc.setter
+    def sigma_cdmc(self, val: float) -> None:
+        self.sigma_cdmcrc = val
+
+    @property
+    def gamma_cdm(self) -> float:
+        return self.gamma_cdmcr
+
+    @gamma_cdm.setter
+    def gamma_cdm(self, val: float) -> None:
+        self.gamma_cdmcr = val
+
+    @property
+    def p_cdm(self) -> float:
+        return self.p_cdmcr
+
+    @p_cdm.setter
+    def p_cdm(self, val: float) -> None:
+        self.p_cdmcr = val
+
+    @property
+    def d_cdm_max(self) -> float:
+        return self.d_cdmcr_max
+
+    @d_cdm_max.setter
+    def d_cdm_max(self, val: float) -> None:
+        self.d_cdmcr_max = val
+
+    @property
+    def sigma_cimcr0(self) -> float:
+        return self.sigma_cdmcr0
+
+    @sigma_cimcr0.setter
+    def sigma_cimcr0(self, val: float) -> None:
+        self.sigma_cdmcr0 = val
+
+    @property
+    def sigma_cimcrc(self) -> float:
+        return self.sigma_cdmcrc
+
+    @sigma_cimcrc.setter
+    def sigma_cimcrc(self, val: float) -> None:
+        self.sigma_cdmcrc = val
+
+    @property
+    def gamma_cimcr(self) -> float:
+        return self.gamma_cdmcr
+
+    @gamma_cimcr.setter
+    def gamma_cimcr(self, val: float) -> None:
+        self.gamma_cdmcr = val
+
+    @property
+    def p_cimcr(self) -> float:
+        return self.p_cdmcr
+
+    @p_cimcr.setter
+    def p_cimcr(self, val: float) -> None:
+        self.p_cdmcr = val
+
+    @property
+    def d_cimcr_max(self) -> float:
+        return self.d_cdmcr_max
+
+    @d_cimcr_max.setter
+    def d_cimcr_max(self, val: float) -> None:
+        self.d_cdmcr_max = val
+
+
+FailLadCoupledDelaminationMicrocrackRate = FailLadCoupledDelaminationMicrocrackingRate
+FailLadCoupledDelamMicrocrackingRate = FailLadCoupledDelaminationMicrocrackingRate
+FailLadCoupledDelamMicrocrackRate = FailLadCoupledDelaminationMicrocrackingRate
+FailLadCoupledInterlaminarMicrocrackingRate = FailLadCoupledDelaminationMicrocrackingRate
+FailLadCoupledInterlaminarMicrocrackRate = FailLadCoupledDelaminationMicrocrackingRate
+
+
+@dataclass
+class EngElectrothermoflexomagnetochiralphononicplasmonicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALPHONONICPLASMONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_CHIRAL_PHONON_PLASMON_POLARITON_RES_WORK`` (M448): Engine coupled electrothermal-flexomagnetic-flexochiral-flexophononic-flexoplasmonic-flexopolaritonic nanoscale chiral-phonon-plasmon-polariton hybrid resonance energy and opto-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfcphplp: float = 0.0    # time frequency for electrothermoflexomagnetochiralphononicplasmonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+    dt_etfplp: float = 0.0       # alias field for compatibility
+    dt_etfexplp: float = 0.0     # alias field for compatibility
+    dt_etfphplp: float = 0.0     # alias field for compatibility
+    dt_etfmagplp: float = 0.0    # alias field for compatibility
+    dt_etfcplp: float = 0.0      # alias field for compatibility
+
+    def __post_init__(self):
+        if self.dt_etfplp != 0.0 and self.dt_etfcphplp == 0.0:
+            self.dt_etfcphplp = self.dt_etfplp
+        elif self.dt_etfexplp != 0.0 and self.dt_etfcphplp == 0.0:
+            self.dt_etfcphplp = self.dt_etfexplp
+        elif self.dt_etfphplp != 0.0 and self.dt_etfcphplp == 0.0:
+            self.dt_etfcphplp = self.dt_etfphplp
+        elif self.dt_etfmagplp != 0.0 and self.dt_etfcphplp == 0.0:
+            self.dt_etfcphplp = self.dt_etfmagplp
+        elif self.dt_etfcplp != 0.0 and self.dt_etfcphplp == 0.0:
+            self.dt_etfcphplp = self.dt_etfcplp
+        elif self.dt_etfcphplp != 0.0:
+            if self.dt_etfplp == 0.0:
+                self.dt_etfplp = self.dt_etfcphplp
+            if self.dt_etfexplp == 0.0:
+                self.dt_etfexplp = self.dt_etfcphplp
+            if self.dt_etfphplp == 0.0:
+                self.dt_etfphplp = self.dt_etfcphplp
+            if self.dt_etfmagplp == 0.0:
+                self.dt_etfmagplp = self.dt_etfcphplp
+            if self.dt_etfcplp == 0.0:
+                self.dt_etfcplp = self.dt_etfcphplp
+
+
+EngElectrothermoflexomagnetochiralphononplasmonpolaritonicResonanceEnergy = EngElectrothermoflexomagnetochiralphononicplasmonicpolaritonicResonanceEnergy
+EngElectrothermoflexomagnetophononicchiralplasmonicpolaritonicResonanceEnergy = EngElectrothermoflexomagnetochiralphononicplasmonicpolaritonicResonanceEnergy
+
+
+@dataclass
+class LagmulToposSpinorSpatialLinkageJoint:
+    """``/TOPOS_SPINOR_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/TOPOS_SPINOR_SPATIAL_LINKAGE_JOINT/id`` (M448): Topos spinor spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0                 # base pivot node 1
+    node2: int = 0                 # intermediate spatial link node 2
+    node3: int = 0                 # driven spatial link node 3
+    stiff: float = 1e6             # kinematic constraint topos spinor stiffness
+    skew_id: int = 0               # reference coordinate frame ID
+    tol: float = 1e-6              # constraint numerical tolerance
+    link_len_a: float = 0.0        # length of primary spatial link a
+    link_len_b: float = 0.0        # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+LagmulToposTwistorSpatialLinkageJoint = LagmulToposSpinorSpatialLinkageJoint
+LagmulToposSpinorBundleSpatialLinkageJoint = LagmulToposSpinorSpatialLinkageJoint
+LagmulToposCliffordSpinorSpatialLinkageJoint = LagmulToposSpinorSpatialLinkageJoint
+
+
+
 
 
 
