@@ -2880,6 +2880,26 @@ class Model:
         self.sensor_spring_coupled_crk_rates: Dict[int, Any] = self.sensor_spring_coupled_crackle_rates # /SENSOR/SPRING_COUPLED_CRK_RATE (M451)
         self.sensor_spring_couple_crk_rates: Dict[int, Any] = self.sensor_spring_coupled_crackle_rates # /SENSOR/SPRING_COUPLE_CRK_RATE (M451)
 
+        # M452 Entities
+        self.fail_laddynamicmatrixsheardegradationrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_MATRIX_SHEAR_DEGRADATION_RATE (M452)
+        self.fail_laddynamicmatrixsheardegraderates: Dict[int, Any] = self.fail_laddynamicmatrixsheardegradationrates # /FAIL/LAD_DYNAMIC_MATRIX_SHEAR_DEGRADE_RATE (M452)
+        self.fail_laddynamicmatrixshearrates: Dict[int, Any] = self.fail_laddynamicmatrixsheardegradationrates # /FAIL/LAD_DYNAMIC_MATRIX_SHEAR_RATE (M452)
+        self.fail_laddynamicsheardegradationrates: Dict[int, Any] = self.fail_laddynamicmatrixsheardegradationrates # /FAIL/LAD_DYNAMIC_SHEAR_DEGRADATION_RATE (M452)
+        self.fail_laddynamicsheardegraderates: Dict[int, Any] = self.fail_laddynamicmatrixsheardegradationrates # /FAIL/LAD_DYNAMIC_SHEAR_DEGRADE_RATE (M452)
+        self.fail_laddynamicmatrixsheardamagerates: Dict[int, Any] = self.fail_laddynamicmatrixsheardegradationrates # /FAIL/LAD_DYNAMIC_MATRIX_SHEAR_DAMAGE_RATE (M452)
+        self.eng_electrothermoflexomagnetochiralspinonplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALSPINONPLASMONICPOLARITONIC_RESONANCE_ENERGY (M452)
+        self.eng_electrothermoflexomagnetochiralspinonplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralspinonplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALSPINONPLASMONPOLARITONIC_RESONANCE_ENERGY (M452)
+        self.eng_electrothermoflexomagnetospinonchiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralspinonplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOSPINONCHIRALPLASMONPOLARITONIC_RESONANCE_ENERGY (M452)
+        self.lagmul_stratification_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /STRATIFICATION_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/STRATIFICATION_SPINOR_SPATIAL_LINKAGE_JOINT (M452)
+        self.lagmul_stratification_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_stratification_spinor_spatial_linkage_joints # /STRATIFICATION_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/STRATIFICATION_TWISTOR_SPATIAL_LINKAGE_JOINT (M452)
+        self.lagmul_stratification_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_stratification_spinor_spatial_linkage_joints # /STRATIFICATION_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/STRATIFICATION_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M452)
+        self.lagmul_stratification_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_stratification_spinor_spatial_linkage_joints # /STRATIFICATION_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/STRATIFICATION_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M452)
+        self.sensor_spring_torsional_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_CRACKLE_RATE (M452)
+        self.sensor_spring_torsion_crackle_rates: Dict[int, Any] = self.sensor_spring_torsional_crackle_rates # /SENSOR/SPRING_TORSION_CRACKLE_RATE (M452)
+        self.sensor_spring_torsional_crk_rates: Dict[int, Any] = self.sensor_spring_torsional_crackle_rates # /SENSOR/SPRING_TORSIONAL_CRK_RATE (M452)
+        self.sensor_spring_twist_crackle_rates: Dict[int, Any] = self.sensor_spring_torsional_crackle_rates # /SENSOR/SPRING_TWIST_CRACKLE_RATE (M452)
+
+
 
 
 
