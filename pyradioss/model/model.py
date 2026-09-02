@@ -2991,6 +2991,34 @@ class Model:
         self.sensor_spring_biaxial_pop_rates: Dict[int, Any] = self.sensor_spring_coupled_pop_rates # /SENSOR/SPRING_BIAXIAL_POP_RATE (M456)
         self.sensor_spring_biaxial_pops: Dict[int, Any] = self.sensor_spring_coupled_pop_rates # /SENSOR/SPRING_BIAXIAL_POP (M456)
 
+        # M457 Entities
+        self.fail_ladcoupledfibertensionrupturerates: Dict[int, Any] = {} # /FAIL/LAD_COUPLED_FIBER_TENSION_RUPTURE_RATE (M457)
+        self.fail_ladcoupledfibertensionruptures: Dict[int, Any] = self.fail_ladcoupledfibertensionrupturerates # /FAIL/LAD_COUPLED_FIBER_TENSION_RUPTURE (M457)
+        self.fail_ladcoupledfibertensionrates: Dict[int, Any] = self.fail_ladcoupledfibertensionrupturerates # /FAIL/LAD_COUPLED_FIBER_TENSION_RATE (M457)
+        self.fail_ladcoupledfiberrupturerates: Dict[int, Any] = self.fail_ladcoupledfibertensionrupturerates # /FAIL/LAD_COUPLED_FIBER_RUPTURE_RATE (M457)
+        self.fail_ladcoupledfibertensilerupturerates: Dict[int, Any] = self.fail_ladcoupledfibertensionrupturerates # /FAIL/LAD_COUPLED_FIBER_TENSILE_RUPTURE_RATE (M457)
+        self.fail_ladcoupledfibertensiondamagerates: Dict[int, Any] = self.fail_ladcoupledfibertensionrupturerates # /FAIL/LAD_COUPLED_FIBER_TENSION_DAMAGE_RATE (M457)
+        self.fail_ladcouplefibertensionrupturerates: Dict[int, Any] = self.fail_ladcoupledfibertensionrupturerates # /FAIL/LAD_COUPLE_FIBER_TENSION_RUPTURE_RATE (M457)
+        self.fail_ladcouplefibertensionruptures: Dict[int, Any] = self.fail_ladcoupledfibertensionrupturerates # /FAIL/LAD_COUPLE_FIBER_TENSION_RUPTURE (M457)
+        self.fail_ladcouplefibertensionrates: Dict[int, Any] = self.fail_ladcoupledfibertensionrupturerates # /FAIL/LAD_COUPLE_FIBER_TENSION_RATE (M457)
+        self.fail_ladcouplefiberrupturerates: Dict[int, Any] = self.fail_ladcoupledfibertensionrupturerates # /FAIL/LAD_COUPLE_FIBER_RUPTURE_RATE (M457)
+        self.fail_ladcouplefibertensilerupturerates: Dict[int, Any] = self.fail_ladcoupledfibertensionrupturerates # /FAIL/LAD_COUPLE_FIBER_TENSILE_RUPTURE_RATE (M457)
+        self.fail_ladcouplefibertensiondamagerates: Dict[int, Any] = self.fail_ladcoupledfibertensionrupturerates # /FAIL/LAD_COUPLE_FIBER_TENSION_DAMAGE_RATE (M457)
+        self.eng_electrothermoflexomagnetochiraldyonicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALDYONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M457)
+        self.eng_electrothermoflexomagnetochiraldyonicplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiraldyonicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALDYONICPLASMONPOLARITONIC_RESONANCE_ENERGY (M457)
+        self.eng_electrothermoflexomagnetodyonicchiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiraldyonicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETODYONICCHIRALPLASMONPOLARITONIC_RESONANCE_ENERGY (M457)
+        self.lagmul_torsion_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /TORSION_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/TORSION_SPINOR_SPATIAL_LINKAGE_JOINT (M457)
+        self.lagmul_torsion_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_torsion_spinor_spatial_linkage_joints # /TORSION_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/TORSION_TWISTOR_SPATIAL_LINKAGE_JOINT (M457)
+        self.lagmul_torsion_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_torsion_spinor_spatial_linkage_joints # /TORSION_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/TORSION_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M457)
+        self.lagmul_torsion_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_torsion_spinor_spatial_linkage_joints # /TORSION_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/TORSION_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M457)
+        self.sensor_spring_torsional_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TORSIONAL_POP_RATE (M457)
+        self.sensor_spring_torsion_pop_rates: Dict[int, Any] = self.sensor_spring_torsional_pop_rates # /SENSOR/SPRING_TORSION_POP_RATE (M457)
+        self.sensor_spring_torsional_pops: Dict[int, Any] = self.sensor_spring_torsional_pop_rates # /SENSOR/SPRING_TORSIONAL_POP (M457)
+        self.sensor_spring_torsion_pops: Dict[int, Any] = self.sensor_spring_torsional_pop_rates # /SENSOR/SPRING_TORSION_POP (M457)
+        self.sensor_spring_twist_pop_rates: Dict[int, Any] = self.sensor_spring_torsional_pop_rates # /SENSOR/SPRING_TWIST_POP_RATE (M457)
+        self.sensor_spring_twist_pops: Dict[int, Any] = self.sensor_spring_torsional_pop_rates # /SENSOR/SPRING_TWIST_POP (M457)
+
+
 
 
 
