@@ -2970,6 +2970,28 @@ class Model:
         self.sensor_spring_shear_pop_rates: Dict[int, Any] = self.sensor_spring_transverse_pop_rates # /SENSOR/SPRING_SHEAR_POP_RATE (M455)
         self.sensor_spring_shear_pops: Dict[int, Any] = self.sensor_spring_transverse_pop_rates # /SENSOR/SPRING_SHEAR_POP (M455)
 
+        # M456 Entities
+        self.fail_ladtransversefibertensionrupturerates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_TENSION_RUPTURE_RATE (M456)
+        self.fail_ladtransversefibertensionruptures: Dict[int, Any] = self.fail_ladtransversefibertensionrupturerates # /FAIL/LAD_TRANSVERSE_FIBER_TENSION_RUPTURE (M456)
+        self.fail_ladtransversefibertensionrates: Dict[int, Any] = self.fail_ladtransversefibertensionrupturerates # /FAIL/LAD_TRANSVERSE_FIBER_TENSION_RATE (M456)
+        self.fail_ladtransversefiberrupturerates: Dict[int, Any] = self.fail_ladtransversefibertensionrupturerates # /FAIL/LAD_TRANSVERSE_FIBER_RUPTURE_RATE (M456)
+        self.fail_ladtransversefibertensilerupturerates: Dict[int, Any] = self.fail_ladtransversefibertensionrupturerates # /FAIL/LAD_TRANSVERSE_FIBER_TENSILE_RUPTURE_RATE (M456)
+        self.fail_ladtransversefibertensiondamagerates: Dict[int, Any] = self.fail_ladtransversefibertensionrupturerates # /FAIL/LAD_TRANSVERSE_FIBER_TENSION_DAMAGE_RATE (M456)
+        self.eng_electrothermoflexomagnetochiralparamagnonplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALPARAMAGNONPLASMONICPOLARITONIC_RESONANCE_ENERGY (M456)
+        self.eng_electrothermoflexomagnetochiralparamagnonplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralparamagnonplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALPARAMAGNONPLASMONPOLARITONIC_RESONANCE_ENERGY (M456)
+        self.eng_electrothermoflexomagnetoparamagnonchiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralparamagnonplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOPARAMAGNONCHIRALPLASMONPOLARITONIC_RESONANCE_ENERGY (M456)
+        self.lagmul_curvature_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /CURVATURE_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/CURVATURE_SPINOR_SPATIAL_LINKAGE_JOINT (M456)
+        self.lagmul_curvature_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_curvature_spinor_spatial_linkage_joints # /CURVATURE_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/CURVATURE_TWISTOR_SPATIAL_LINKAGE_JOINT (M456)
+        self.lagmul_curvature_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_curvature_spinor_spatial_linkage_joints # /CURVATURE_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/CURVATURE_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M456)
+        self.lagmul_curvature_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_curvature_spinor_spatial_linkage_joints # /CURVATURE_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/CURVATURE_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M456)
+        self.sensor_spring_coupled_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_COUPLED_POP_RATE (M456)
+        self.sensor_spring_couple_pop_rates: Dict[int, Any] = self.sensor_spring_coupled_pop_rates # /SENSOR/SPRING_COUPLE_POP_RATE (M456)
+        self.sensor_spring_coupled_pops: Dict[int, Any] = self.sensor_spring_coupled_pop_rates # /SENSOR/SPRING_COUPLED_POP (M456)
+        self.sensor_spring_couple_pops: Dict[int, Any] = self.sensor_spring_coupled_pop_rates # /SENSOR/SPRING_COUPLE_POP (M456)
+        self.sensor_spring_biaxial_pop_rates: Dict[int, Any] = self.sensor_spring_coupled_pop_rates # /SENSOR/SPRING_BIAXIAL_POP_RATE (M456)
+        self.sensor_spring_biaxial_pops: Dict[int, Any] = self.sensor_spring_coupled_pop_rates # /SENSOR/SPRING_BIAXIAL_POP (M456)
+
+
 
 
 
