@@ -2841,6 +2841,22 @@ class Model:
         self.lagmul_scheme_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_scheme_spinor_spatial_linkage_joints # /SCHEME_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/SCHEME_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M449)
         self.lagmul_scheme_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_scheme_spinor_spatial_linkage_joints # /SCHEME_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/SCHEME_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M449)
 
+        # M450 Entities
+        self.fail_ladtransversedelaminationmicrodebondingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_DELAMINATION_MICRODEBONDING_RATE (M450)
+        self.fail_ladtransversedelaminationmicrodebondrates: Dict[int, Any] = self.fail_ladtransversedelaminationmicrodebondingrates # /FAIL/LAD_TRANSVERSE_DELAMINATION_MICRODEBOND_RATE (M450)
+        self.fail_ladtransversedelammicrodebondingrates: Dict[int, Any] = self.fail_ladtransversedelaminationmicrodebondingrates # /FAIL/LAD_TRANSVERSE_DELAM_MICRODEBONDING_RATE (M450)
+        self.fail_ladtransversedelammicrodebondrates: Dict[int, Any] = self.fail_ladtransversedelaminationmicrodebondingrates # /FAIL/LAD_TRANSVERSE_DELAM_MICRODEBOND_RATE (M450)
+        self.fail_ladtransverseinterlaminarmicrodebondingrates: Dict[int, Any] = self.fail_ladtransversedelaminationmicrodebondingrates # /FAIL/LAD_TRANSVERSE_INTERLAMINAR_MICRODEBONDING_RATE (M450)
+        self.fail_ladtransverseinterlaminarmicrodebondrates: Dict[int, Any] = self.fail_ladtransversedelaminationmicrodebondingrates # /FAIL/LAD_TRANSVERSE_INTERLAMINAR_MICRODEBOND_RATE (M450)
+        self.eng_electrothermoflexomagnetochiralmagnonicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALMAGNONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M450)
+        self.eng_electrothermoflexomagnetochiralmagnonplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralmagnonicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALMAGNONPLASMONPOLARITONIC_RESONANCE_ENERGY (M450)
+        self.eng_electrothermoflexomagnetomagnonicchiralplasmonicpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralmagnonicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOMAGNONICCHIRALPLASMONICPOLARITONIC_RESONANCE_ENERGY (M450)
+        self.lagmul_orbifold_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /ORBIFOLD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/ORBIFOLD_SPINOR_SPATIAL_LINKAGE_JOINT (M450)
+        self.lagmul_orbifold_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_orbifold_spinor_spatial_linkage_joints # /ORBIFOLD_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/ORBIFOLD_TWISTOR_SPATIAL_LINKAGE_JOINT (M450)
+        self.lagmul_orbifold_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_orbifold_spinor_spatial_linkage_joints # /ORBIFOLD_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/ORBIFOLD_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M450)
+        self.lagmul_orbifold_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_orbifold_spinor_spatial_linkage_joints # /ORBIFOLD_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/ORBIFOLD_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M450)
+
+
 
 
 
