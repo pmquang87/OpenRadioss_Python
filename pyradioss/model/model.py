@@ -2899,6 +2899,30 @@ class Model:
         self.sensor_spring_torsional_crk_rates: Dict[int, Any] = self.sensor_spring_torsional_crackle_rates # /SENSOR/SPRING_TORSIONAL_CRK_RATE (M452)
         self.sensor_spring_twist_crackle_rates: Dict[int, Any] = self.sensor_spring_torsional_crackle_rates # /SENSOR/SPRING_TWIST_CRACKLE_RATE (M452)
 
+        # M453 Entities
+        self.fail_ladtransversematrixsheardegradationrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_MATRIX_SHEAR_DEGRADATION_RATE (M453)
+        self.fail_ladtransversematrixsheardegraderates: Dict[int, Any] = self.fail_ladtransversematrixsheardegradationrates # /FAIL/LAD_TRANSVERSE_MATRIX_SHEAR_DEGRADE_RATE (M453)
+        self.fail_ladtransversematrixshearrates: Dict[int, Any] = self.fail_ladtransversematrixsheardegradationrates # /FAIL/LAD_TRANSVERSE_MATRIX_SHEAR_RATE (M453)
+        self.fail_ladtransversesheardegradationrates: Dict[int, Any] = self.fail_ladtransversematrixsheardegradationrates # /FAIL/LAD_TRANSVERSE_SHEAR_DEGRADATION_RATE (M453)
+        self.fail_ladtransversesheardegraderates: Dict[int, Any] = self.fail_ladtransversematrixsheardegradationrates # /FAIL/LAD_TRANSVERSE_SHEAR_DEGRADE_RATE (M453)
+        self.fail_ladtransversematrixsheardamagerates: Dict[int, Any] = self.fail_ladtransversematrixsheardegradationrates # /FAIL/LAD_TRANSVERSE_MATRIX_SHEAR_DAMAGE_RATE (M453)
+        self.eng_electrothermoflexomagnetochiralholonplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALHOLONPLASMONICPOLARITONIC_RESONANCE_ENERGY (M453)
+        self.eng_electrothermoflexomagnetochiralholonplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralholonplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALHOLONPLASMONPOLARITONIC_RESONANCE_ENERGY (M453)
+        self.eng_electrothermoflexomagnetoholonchiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralholonplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOHOLONCHIRALPLASMONPOLARITONIC_RESONANCE_ENERGY (M453)
+        self.lagmul_fibration_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /FIBRATION_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/FIBRATION_SPINOR_SPATIAL_LINKAGE_JOINT (M453)
+        self.lagmul_fibration_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_fibration_spinor_spatial_linkage_joints # /FIBRATION_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/FIBRATION_TWISTOR_SPATIAL_LINKAGE_JOINT (M453)
+        self.lagmul_fibration_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_fibration_spinor_spatial_linkage_joints # /FIBRATION_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/FIBRATION_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M453)
+        self.lagmul_fibration_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_fibration_spinor_spatial_linkage_joints # /FIBRATION_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/FIBRATION_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M453)
+        self.sensor_spring_total_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_CRACKLE_RATE (M453)
+        self.sensor_spring_tot_crackle_rates: Dict[int, Any] = self.sensor_spring_total_crackle_rates # /SENSOR/SPRING_TOT_CRACKLE_RATE (M453)
+        self.sensor_spring_total_crk_rates: Dict[int, Any] = self.sensor_spring_total_crackle_rates # /SENSOR/SPRING_TOTAL_CRK_RATE (M453)
+        self.sensor_spring_tot_crk_rates: Dict[int, Any] = self.sensor_spring_total_crackle_rates # /SENSOR/SPRING_TOT_CRK_RATE (M453)
+        self.sensor_spring_resultant_crackle_rates: Dict[int, Any] = self.sensor_spring_total_crackle_rates # /SENSOR/SPRING_RESULTANT_CRACKLE_RATE (M453)
+        self.sensor_spring_resultant_crk_rates: Dict[int, Any] = self.sensor_spring_total_crackle_rates # /SENSOR/SPRING_RESULTANT_CRK_RATE (M453)
+        self.sensor_spring_res_crackle_rates: Dict[int, Any] = self.sensor_spring_total_crackle_rates # /SENSOR/SPRING_RES_CRACKLE_RATE (M453)
+        self.sensor_spring_res_crk_rates: Dict[int, Any] = self.sensor_spring_total_crackle_rates # /SENSOR/SPRING_RES_CRK_RATE (M453)
+
+
 
 
 
