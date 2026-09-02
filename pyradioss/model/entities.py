@@ -34656,6 +34656,446 @@ SensorSpringResCrackleRate = SensorSpringTotalCrackleRate
 SensorSpringResCrkRate = SensorSpringTotalCrackleRate
 
 
+# ============================================================================
+# M454 Suite: FailLadCoupledMatrixShearDegradationRate, EngElectrothermoflexomagnetochiralorbitonplasmonicpolaritonicResonanceEnergy, LagmulBundleSpinorSpatialLinkageJoint, SensorSpringNormalPopRate
+# ============================================================================
+
+@dataclass
+class FailLadCoupledMatrixShearDegradationRate:
+    """``/FAIL/LAD_COUPLED_MATRIX_SHEAR_DEGRADATION_RATE`` or ``/FAIL/LADEVEZE_COUPLED_MATRIX_SHEAR_DEGRADATION_RATE`` (M454): Ladevèze rate-dependent coupled multi-axial matrix shear degradation, coupled in-plane/transverse shear damage accumulation, and progressive shear failure model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_cmsdr0: float = 0.0    # initial coupled shear degradation threshold stress sigma_cmsdr,0
+    sigma_cmsdrc: float = 1.0    # critical coupled shear degradation stress sigma_cmsdr,c
+    gamma_cmsdr: float = 0.0     # coupled matrix shear degradation rate sensitivity factor gamma_cmsdr
+    p_cmsdr: float = 1.0         # coupled matrix shear degradation rate exponent p_cmsdr
+    d_cmsdr_max: float = 0.999   # maximum allowable coupled shear damage index
+    ifail_sh: int = 1            # shell element deletion flag
+    ifail_so: int = 1            # solid element deletion flag
+    fail_id: int = 0             # failure model ID reference
+
+    @property
+    def sigma_cmsd0(self) -> float:
+        return self.sigma_cmsdr0
+
+    @sigma_cmsd0.setter
+    def sigma_cmsd0(self, val: float) -> None:
+        self.sigma_cmsdr0 = val
+
+    @property
+    def sigma_cmsdc(self) -> float:
+        return self.sigma_cmsdrc
+
+    @sigma_cmsdc.setter
+    def sigma_cmsdc(self, val: float) -> None:
+        self.sigma_cmsdrc = val
+
+    @property
+    def gamma_cmsd(self) -> float:
+        return self.gamma_cmsdr
+
+    @gamma_cmsd.setter
+    def gamma_cmsd(self, val: float) -> None:
+        self.gamma_cmsdr = val
+
+    @property
+    def p_cmsd(self) -> float:
+        return self.p_cmsdr
+
+    @p_cmsd.setter
+    def p_cmsd(self, val: float) -> None:
+        self.p_cmsdr = val
+
+    @property
+    def d_cmsd_max(self) -> float:
+        return self.d_cmsdr_max
+
+    @d_cmsd_max.setter
+    def d_cmsd_max(self, val: float) -> None:
+        self.d_cmsdr_max = val
+
+    @property
+    def sigma_cms0(self) -> float:
+        return self.sigma_cmsdr0
+
+    @sigma_cms0.setter
+    def sigma_cms0(self, val: float) -> None:
+        self.sigma_cmsdr0 = val
+
+    @property
+    def sigma_cmsc(self) -> float:
+        return self.sigma_cmsdrc
+
+    @sigma_cmsc.setter
+    def sigma_cmsc(self, val: float) -> None:
+        self.sigma_cmsdrc = val
+
+    @property
+    def gamma_cms(self) -> float:
+        return self.gamma_cmsdr
+
+    @gamma_cms.setter
+    def gamma_cms(self, val: float) -> None:
+        self.gamma_cmsdr = val
+
+    @property
+    def p_cms(self) -> float:
+        return self.p_cmsdr
+
+    @p_cms.setter
+    def p_cms(self, val: float) -> None:
+        self.p_cmsdr = val
+
+    @property
+    def d_cms_max(self) -> float:
+        return self.d_cmsdr_max
+
+    @d_cms_max.setter
+    def d_cms_max(self, val: float) -> None:
+        self.d_cmsdr_max = val
+
+    @property
+    def sigma_csdr0(self) -> float:
+        return self.sigma_cmsdr0
+
+    @sigma_csdr0.setter
+    def sigma_csdr0(self, val: float) -> None:
+        self.sigma_cmsdr0 = val
+
+    @property
+    def sigma_csdrc(self) -> float:
+        return self.sigma_cmsdrc
+
+    @sigma_csdrc.setter
+    def sigma_csdrc(self, val: float) -> None:
+        self.sigma_cmsdrc = val
+
+    @property
+    def gamma_csdr(self) -> float:
+        return self.gamma_cmsdr
+
+    @gamma_csdr.setter
+    def gamma_csdr(self, val: float) -> None:
+        self.gamma_cmsdr = val
+
+    @property
+    def p_csdr(self) -> float:
+        return self.p_cmsdr
+
+    @p_csdr.setter
+    def p_csdr(self, val: float) -> None:
+        self.p_cmsdr = val
+
+    @property
+    def d_csdr_max(self) -> float:
+        return self.d_cmsdr_max
+
+    @d_csdr_max.setter
+    def d_csdr_max(self, val: float) -> None:
+        self.d_cmsdr_max = val
+
+
+FailLadCoupledMatrixShearDegradeRate = FailLadCoupledMatrixShearDegradationRate
+FailLadCoupleMatrixShearDegradationRate = FailLadCoupledMatrixShearDegradationRate
+FailLadCoupleMatrixShearDegradeRate = FailLadCoupledMatrixShearDegradationRate
+FailLadCoupledMatrixShearRate = FailLadCoupledMatrixShearDegradationRate
+FailLadCoupleMatrixShearRate = FailLadCoupledMatrixShearDegradationRate
+FailLadCoupledShearDegradationRate = FailLadCoupledMatrixShearDegradationRate
+FailLadCoupleShearDegradationRate = FailLadCoupledMatrixShearDegradationRate
+FailLadCoupledShearDegradeRate = FailLadCoupledMatrixShearDegradationRate
+FailLadCoupleShearDegradeRate = FailLadCoupledMatrixShearDegradationRate
+FailLadCoupledMatrixShearDamageRate = FailLadCoupledMatrixShearDegradationRate
+FailLadCoupleMatrixShearDamageRate = FailLadCoupledMatrixShearDegradationRate
+
+
+@dataclass
+class EngElectrothermoflexomagnetochiralorbitonplasmonicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALORBITONPLASMONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_CHIRAL_ORBITON_PLASMON_POLARITON_RES_WORK`` (M454): Engine coupled electrothermal-flexomagnetic-flexochiral-flexoorbiton-flexoplasmonic-flexopolaritonic nanoscale chiral-orbiton-plasmon-polariton hybrid resonance energy and opto-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfcorbitonplp: float = 0.0 # time frequency for electrothermoflexomagnetochiralorbitonplasmonicpolaritonic resonance energy output
+    sens_id: int = 0              # sensor activation ID
+    dt_etfplp: float = 0.0        # alias field for compatibility
+    dt_etfexplp: float = 0.0      # alias field for compatibility
+    dt_etfphplp: float = 0.0      # alias field for compatibility
+    dt_etfmagplp: float = 0.0     # alias field for compatibility
+    dt_etfcplp: float = 0.0       # alias field for compatibility
+    dt_etfcphplp: float = 0.0     # alias field for compatibility
+    dt_etfcexplp: float = 0.0     # alias field for compatibility
+    dt_etfcmagplp: float = 0.0    # alias field for compatibility
+    dt_etfcspinplp: float = 0.0   # alias field for compatibility
+    dt_etfcspinonplp: float = 0.0 # alias field for compatibility
+    dt_etfcholonplp: float = 0.0  # alias field for compatibility
+
+    def __post_init__(self):
+        if self.dt_etfplp != 0.0 and self.dt_etfcorbitonplp == 0.0:
+            self.dt_etfcorbitonplp = self.dt_etfplp
+        elif self.dt_etfexplp != 0.0 and self.dt_etfcorbitonplp == 0.0:
+            self.dt_etfcorbitonplp = self.dt_etfexplp
+        elif self.dt_etfphplp != 0.0 and self.dt_etfcorbitonplp == 0.0:
+            self.dt_etfcorbitonplp = self.dt_etfphplp
+        elif self.dt_etfmagplp != 0.0 and self.dt_etfcorbitonplp == 0.0:
+            self.dt_etfcorbitonplp = self.dt_etfmagplp
+        elif self.dt_etfcplp != 0.0 and self.dt_etfcorbitonplp == 0.0:
+            self.dt_etfcorbitonplp = self.dt_etfcplp
+        elif self.dt_etfcphplp != 0.0 and self.dt_etfcorbitonplp == 0.0:
+            self.dt_etfcorbitonplp = self.dt_etfcphplp
+        elif self.dt_etfcexplp != 0.0 and self.dt_etfcorbitonplp == 0.0:
+            self.dt_etfcorbitonplp = self.dt_etfcexplp
+        elif self.dt_etfcmagplp != 0.0 and self.dt_etfcorbitonplp == 0.0:
+            self.dt_etfcorbitonplp = self.dt_etfcmagplp
+        elif self.dt_etfcspinplp != 0.0 and self.dt_etfcorbitonplp == 0.0:
+            self.dt_etfcorbitonplp = self.dt_etfcspinplp
+        elif self.dt_etfcspinonplp != 0.0 and self.dt_etfcorbitonplp == 0.0:
+            self.dt_etfcorbitonplp = self.dt_etfcspinonplp
+        elif self.dt_etfcholonplp != 0.0 and self.dt_etfcorbitonplp == 0.0:
+            self.dt_etfcorbitonplp = self.dt_etfcholonplp
+        elif self.dt_etfcorbitonplp != 0.0:
+            if self.dt_etfplp == 0.0:
+                self.dt_etfplp = self.dt_etfcorbitonplp
+            if self.dt_etfexplp == 0.0:
+                self.dt_etfexplp = self.dt_etfcorbitonplp
+            if self.dt_etfphplp == 0.0:
+                self.dt_etfphplp = self.dt_etfcorbitonplp
+            if self.dt_etfmagplp == 0.0:
+                self.dt_etfmagplp = self.dt_etfcorbitonplp
+            if self.dt_etfcplp == 0.0:
+                self.dt_etfcplp = self.dt_etfcorbitonplp
+            if self.dt_etfcphplp == 0.0:
+                self.dt_etfcphplp = self.dt_etfcorbitonplp
+            if self.dt_etfcexplp == 0.0:
+                self.dt_etfcexplp = self.dt_etfcorbitonplp
+            if self.dt_etfcmagplp == 0.0:
+                self.dt_etfcmagplp = self.dt_etfcorbitonplp
+            if self.dt_etfcspinplp == 0.0:
+                self.dt_etfcspinplp = self.dt_etfcorbitonplp
+            if self.dt_etfcspinonplp == 0.0:
+                self.dt_etfcspinonplp = self.dt_etfcorbitonplp
+            if self.dt_etfcholonplp == 0.0:
+                self.dt_etfcholonplp = self.dt_etfcorbitonplp
+
+
+EngElectrothermoflexomagnetochiralorbitonplasmonpolaritonicResonanceEnergy = EngElectrothermoflexomagnetochiralorbitonplasmonicpolaritonicResonanceEnergy
+EngElectrothermoflexomagnetoorbitonchiralplasmonpolaritonicResonanceEnergy = EngElectrothermoflexomagnetochiralorbitonplasmonicpolaritonicResonanceEnergy
+
+
+@dataclass
+class LagmulBundleSpinorSpatialLinkageJoint:
+    """``/BUNDLE_SPINOR_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/BUNDLE_SPINOR_SPATIAL_LINKAGE_JOINT/id`` (M454): Bundle spinor spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0                 # base pivot node 1
+    node2: int = 0                 # intermediate spatial link node 2
+    node3: int = 0                 # driven spatial link node 3
+    stiff: float = 1e6             # kinematic constraint bundle spinor stiffness
+    skew_id: int = 0               # reference coordinate frame ID
+    tol: float = 1e-6              # constraint numerical tolerance
+    link_len_a: float = 0.0        # length of primary spatial link a
+    link_len_b: float = 0.0        # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+LagmulBundleTwistorSpatialLinkageJoint = LagmulBundleSpinorSpatialLinkageJoint
+LagmulBundleSpinorBundleSpatialLinkageJoint = LagmulBundleSpinorSpatialLinkageJoint
+LagmulBundleCliffordSpinorSpatialLinkageJoint = LagmulBundleSpinorSpatialLinkageJoint
+
+
+@dataclass
+class SensorSpringNormalPopRate:
+    """``/SENSOR/SPRING_NORMAL_POP_RATE`` or ``/SENSOR/SPRING_NORM_POP_RATE`` (M454): Spring element relative normal / axial acceleration 22nd rate-of-change (axial pop rate) magnitude threshold sensor."""
+    id: int = 1
+    title: str = ""
+    spring_id: int = 0
+    jnorm_pop_max: float = 1e30
+    t_delay: float = 0.0
+    kind: str = "SPRING_NORMAL_POP_RATE"
+
+    @property
+    def j_pop_norm_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @j_pop_norm_max.setter
+    def j_pop_norm_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def j_pop_normal_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @j_pop_normal_max.setter
+    def j_pop_normal_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def j_norm_pop_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @j_norm_pop_max.setter
+    def j_norm_pop_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def j_pop_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @j_pop_max.setter
+    def j_pop_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def j_pop_axial_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @j_pop_axial_max.setter
+    def j_pop_axial_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def jnorm_shot_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @jnorm_shot_max.setter
+    def jnorm_shot_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def jnorm_drop_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @jnorm_drop_max.setter
+    def jnorm_drop_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def jnorm_lock_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @jnorm_lock_max.setter
+    def jnorm_lock_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def jnorm_snp_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @jnorm_snp_max.setter
+    def jnorm_snp_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def jnorm_snap_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @jnorm_snap_max.setter
+    def jnorm_snap_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def jnorm_rate_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @jnorm_rate_max.setter
+    def jnorm_rate_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def jnorm_roc_rate_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @jnorm_roc_rate_max.setter
+    def jnorm_roc_rate_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def jnorm_drop_rate_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @jnorm_drop_rate_max.setter
+    def jnorm_drop_rate_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def jnorm_crk_rate_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @jnorm_crk_rate_max.setter
+    def jnorm_crk_rate_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def jnorm_crackle_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @jnorm_crackle_max.setter
+    def jnorm_crackle_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def jnorm_crk_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @jnorm_crk_max.setter
+    def jnorm_crk_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+    @property
+    def jnorm_pop_rate_max(self) -> float:
+        return self.jnorm_pop_max
+
+    @jnorm_pop_rate_max.setter
+    def jnorm_pop_rate_max(self, val: float) -> None:
+        self.jnorm_pop_max = val
+
+
+SensorSpringNormPopRate = SensorSpringNormalPopRate
+SensorSpringNormalPop = SensorSpringNormalPopRate
+SensorSpringNormPop = SensorSpringNormalPopRate
+SensorSpringAxialPopRate = SensorSpringNormalPopRate
+SensorSpringAxialPop = SensorSpringNormalPopRate
+
+
+
 
 
 

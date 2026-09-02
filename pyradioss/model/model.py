@@ -2922,6 +2922,34 @@ class Model:
         self.sensor_spring_res_crackle_rates: Dict[int, Any] = self.sensor_spring_total_crackle_rates # /SENSOR/SPRING_RES_CRACKLE_RATE (M453)
         self.sensor_spring_res_crk_rates: Dict[int, Any] = self.sensor_spring_total_crackle_rates # /SENSOR/SPRING_RES_CRK_RATE (M453)
 
+        # M454 Entities
+        self.fail_ladcoupledmatrixsheardegradationrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLED_MATRIX_SHEAR_DEGRADATION_RATE (M454)
+        self.fail_ladcoupledmatrixsheardegraderates: Dict[int, Any] = self.fail_ladcoupledmatrixsheardegradationrates # /FAIL/LAD_COUPLED_MATRIX_SHEAR_DEGRADE_RATE (M454)
+        self.fail_ladcouplematrixsheardegradationrates: Dict[int, Any] = self.fail_ladcoupledmatrixsheardegradationrates # /FAIL/LAD_COUPLE_MATRIX_SHEAR_DEGRADATION_RATE (M454)
+        self.fail_ladcouplematrixsheardegraderates: Dict[int, Any] = self.fail_ladcoupledmatrixsheardegradationrates # /FAIL/LAD_COUPLE_MATRIX_SHEAR_DEGRADE_RATE (M454)
+        self.fail_ladcoupledmatrixshearrates: Dict[int, Any] = self.fail_ladcoupledmatrixsheardegradationrates # /FAIL/LAD_COUPLED_MATRIX_SHEAR_RATE (M454)
+        self.fail_ladcouplematrixshearrates: Dict[int, Any] = self.fail_ladcoupledmatrixsheardegradationrates # /FAIL/LAD_COUPLE_MATRIX_SHEAR_RATE (M454)
+        self.fail_ladcoupledsheardegradationrates: Dict[int, Any] = self.fail_ladcoupledmatrixsheardegradationrates # /FAIL/LAD_COUPLED_SHEAR_DEGRADATION_RATE (M454)
+        self.fail_ladcouplesheardegradationrates: Dict[int, Any] = self.fail_ladcoupledmatrixsheardegradationrates # /FAIL/LAD_COUPLE_SHEAR_DEGRADATION_RATE (M454)
+        self.fail_ladcoupledsheardegraderates: Dict[int, Any] = self.fail_ladcoupledmatrixsheardegradationrates # /FAIL/LAD_COUPLED_SHEAR_DEGRADE_RATE (M454)
+        self.fail_ladcouplesheardegraderates: Dict[int, Any] = self.fail_ladcoupledmatrixsheardegradationrates # /FAIL/LAD_COUPLE_SHEAR_DEGRADE_RATE (M454)
+        self.fail_ladcoupledmatrixsheardamagerates: Dict[int, Any] = self.fail_ladcoupledmatrixsheardegradationrates # /FAIL/LAD_COUPLED_MATRIX_SHEAR_DAMAGE_RATE (M454)
+        self.fail_ladcouplematrixsheardamagerates: Dict[int, Any] = self.fail_ladcoupledmatrixsheardegradationrates # /FAIL/LAD_COUPLE_MATRIX_SHEAR_DAMAGE_RATE (M454)
+        self.eng_electrothermoflexomagnetochiralorbitonplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALORBITONPLASMONICPOLARITONIC_RESONANCE_ENERGY (M454)
+        self.eng_electrothermoflexomagnetochiralorbitonplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralorbitonplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALORBITONPLASMONPOLARITONIC_RESONANCE_ENERGY (M454)
+        self.eng_electrothermoflexomagnetoorbitonchiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralorbitonplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOORBITONCHIRALPLASMONPOLARITONIC_RESONANCE_ENERGY (M454)
+        self.lagmul_bundle_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /BUNDLE_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/BUNDLE_SPINOR_SPATIAL_LINKAGE_JOINT (M454)
+        self.lagmul_bundle_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_bundle_spinor_spatial_linkage_joints # /BUNDLE_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/BUNDLE_TWISTOR_SPATIAL_LINKAGE_JOINT (M454)
+        self.lagmul_bundle_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_bundle_spinor_spatial_linkage_joints # /BUNDLE_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/BUNDLE_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M454)
+        self.lagmul_bundle_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_bundle_spinor_spatial_linkage_joints # /BUNDLE_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/BUNDLE_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M454)
+        self.sensor_spring_normal_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_NORMAL_POP_RATE (M454)
+        self.sensor_spring_norm_pop_rates: Dict[int, Any] = self.sensor_spring_normal_pop_rates # /SENSOR/SPRING_NORM_POP_RATE (M454)
+        self.sensor_spring_normal_pops: Dict[int, Any] = self.sensor_spring_normal_pop_rates # /SENSOR/SPRING_NORMAL_POP (M454)
+        self.sensor_spring_norm_pops: Dict[int, Any] = self.sensor_spring_normal_pop_rates # /SENSOR/SPRING_NORM_POP (M454)
+        self.sensor_spring_axial_pop_rates: Dict[int, Any] = self.sensor_spring_normal_pop_rates # /SENSOR/SPRING_AXIAL_POP_RATE (M454)
+        self.sensor_spring_axial_pops: Dict[int, Any] = self.sensor_spring_normal_pop_rates # /SENSOR/SPRING_AXIAL_POP (M454)
+
+
 
 
 
