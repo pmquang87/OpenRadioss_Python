@@ -2790,6 +2790,22 @@ class Model:
         self.lagmul_sheaf_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_sheaf_spinor_spatial_linkage_joints # /SHEAF_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/SHEAF_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M446)
         self.lagmul_sheaf_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_sheaf_spinor_spatial_linkage_joints # /SHEAF_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/SHEAF_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M446)
 
+        # M447 Entities
+        self.fail_ladtransversedelaminationmicrocrackingrates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_DELAMINATION_MICROCRACKING_RATE (M447)
+        self.fail_ladtransversedelaminationmicrocrackrates: Dict[int, Any] = self.fail_ladtransversedelaminationmicrocrackingrates # /FAIL/LAD_TRANSVERSE_DELAMINATION_MICROCRACK_RATE (M447)
+        self.fail_ladtransversedelammicrocrackingrates: Dict[int, Any] = self.fail_ladtransversedelaminationmicrocrackingrates # /FAIL/LAD_TRANSVERSE_DELAM_MICROCRACKING_RATE (M447)
+        self.fail_ladtransversedelammicrocrackrates: Dict[int, Any] = self.fail_ladtransversedelaminationmicrocrackingrates # /FAIL/LAD_TRANSVERSE_DELAM_MICROCRACK_RATE (M447)
+        self.fail_ladtransverseinterlaminarmicrocrackingrates: Dict[int, Any] = self.fail_ladtransversedelaminationmicrocrackingrates # /FAIL/LAD_TRANSVERSE_INTERLAMINAR_MICROCRACKING_RATE (M447)
+        self.fail_ladtransverseinterlaminarmicrocrackrates: Dict[int, Any] = self.fail_ladtransversedelaminationmicrocrackingrates # /FAIL/LAD_TRANSVERSE_INTERLAMINAR_MICROCRACK_RATE (M447)
+        self.eng_electrothermoflexomagnetochiralplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALPLASMONICPOLARITONIC_RESONANCE_ENERGY (M447)
+        self.eng_electrothermoflexomagnetochiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALPLASMONPOLARITONIC_RESONANCE_ENERGY (M447)
+        self.eng_electrothermoflexomagnetoplasmonicchiralpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOPLASMONICCHIRALPOLARITONIC_RESONANCE_ENERGY (M447)
+        self.lagmul_stack_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /STACK_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/STACK_SPINOR_SPATIAL_LINKAGE_JOINT (M447)
+        self.lagmul_stack_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_stack_spinor_spatial_linkage_joints # /STACK_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/STACK_TWISTOR_SPATIAL_LINKAGE_JOINT (M447)
+        self.lagmul_stack_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_stack_spinor_spatial_linkage_joints # /STACK_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/STACK_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M447)
+        self.lagmul_stack_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_stack_spinor_spatial_linkage_joints # /STACK_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/STACK_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M447)
+
+
 
 
 
