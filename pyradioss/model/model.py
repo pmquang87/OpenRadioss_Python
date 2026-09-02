@@ -2856,6 +2856,31 @@ class Model:
         self.lagmul_orbifold_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_orbifold_spinor_spatial_linkage_joints # /ORBIFOLD_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/ORBIFOLD_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M450)
         self.lagmul_orbifold_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_orbifold_spinor_spatial_linkage_joints # /ORBIFOLD_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/ORBIFOLD_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M450)
 
+        # M451 Entities
+        self.fail_ladcoupleddelaminationmicrodebondingrates: Dict[int, Any] = {} # /FAIL/LAD_COUPLED_DELAMINATION_MICRODEBONDING_RATE (M451)
+        self.fail_ladcoupleddelaminationmicrodebondrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrodebondingrates # /FAIL/LAD_COUPLED_DELAMINATION_MICRODEBOND_RATE (M451)
+        self.fail_ladcoupledelaminationmicrodebondingrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrodebondingrates # /FAIL/LAD_COUPLE_DELAMINATION_MICRODEBONDING_RATE (M451)
+        self.fail_ladcoupleddelammicrodebondingrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrodebondingrates # /FAIL/LAD_COUPLED_DELAM_MICRODEBONDING_RATE (M451)
+        self.fail_ladcoupleddelammicrodebondrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrodebondingrates # /FAIL/LAD_COUPLED_DELAM_MICRODEBOND_RATE (M451)
+        self.fail_ladcoupledelammicrodebondingrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrodebondingrates # /FAIL/LAD_COUPLE_DELAM_MICRODEBONDING_RATE (M451)
+        self.fail_ladcoupledelammicrodebondrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrodebondingrates # /FAIL/LAD_COUPLE_DELAM_MICRODEBOND_RATE (M451)
+        self.fail_ladcoupledinterlaminarmicrodebondingrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrodebondingrates # /FAIL/LAD_COUPLED_INTERLAMINAR_MICRODEBONDING_RATE (M451)
+        self.fail_ladcoupledinterlaminarmicrodebondrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrodebondingrates # /FAIL/LAD_COUPLED_INTERLAMINAR_MICRODEBOND_RATE (M451)
+        self.fail_ladcoupleinterlaminarmicrodebondingrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrodebondingrates # /FAIL/LAD_COUPLE_INTERLAMINAR_MICRODEBONDING_RATE (M451)
+        self.fail_ladcoupleinterlaminarmicrodebondrates: Dict[int, Any] = self.fail_ladcoupleddelaminationmicrodebondingrates # /FAIL/LAD_COUPLE_INTERLAMINAR_MICRODEBOND_RATE (M451)
+        self.eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALSPINPLASMONICPOLARITONIC_RESONANCE_ENERGY (M451)
+        self.eng_electrothermoflexomagnetochiralspinplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALSPINPLASMONPOLARITONIC_RESONANCE_ENERGY (M451)
+        self.eng_electrothermoflexomagnetospinonchiralplasmonicpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOSPINONCHIRALPLASMONICPOLARITONIC_RESONANCE_ENERGY (M451)
+        self.lagmul_foliation_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /FOLIATION_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/FOLIATION_SPINOR_SPATIAL_LINKAGE_JOINT (M451)
+        self.lagmul_foliation_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_foliation_spinor_spatial_linkage_joints # /FOLIATION_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/FOLIATION_TWISTOR_SPATIAL_LINKAGE_JOINT (M451)
+        self.lagmul_foliation_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_foliation_spinor_spatial_linkage_joints # /FOLIATION_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/FOLIATION_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M451)
+        self.lagmul_foliation_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_foliation_spinor_spatial_linkage_joints # /FOLIATION_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/FOLIATION_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M451)
+        self.sensor_spring_coupled_crackle_rates: Dict[int, Any] = {} # /SENSOR/SPRING_COUPLED_CRACKLE_RATE (M451)
+        self.sensor_spring_couple_crackle_rates: Dict[int, Any] = self.sensor_spring_coupled_crackle_rates # /SENSOR/SPRING_COUPLE_CRACKLE_RATE (M451)
+        self.sensor_spring_coupled_crk_rates: Dict[int, Any] = self.sensor_spring_coupled_crackle_rates # /SENSOR/SPRING_COUPLED_CRK_RATE (M451)
+        self.sensor_spring_couple_crk_rates: Dict[int, Any] = self.sensor_spring_coupled_crackle_rates # /SENSOR/SPRING_COUPLE_CRK_RATE (M451)
+
+
 
 
 

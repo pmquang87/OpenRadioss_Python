@@ -58581,6 +58581,166 @@ def read_lagmul_orbifold_spinor_spatial_linkage_joint(block: KeywordBlock, model
         offset_distance_s=offset_distance_s
     )
 
+
+def read_fail_lad_coupled_delamination_microdebonding_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_COUPLED_DELAMINATION_MICRODEBONDING_RATE/mat_ID`` or ``/FAIL/LADEVEZE_COUPLED_DELAMINATION_MICRODEBONDING_RATE`` (M451): Ladevèze rate-dependent coupled interlaminar delamination microdebonding and matrix ply separation model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_COUPLED_DELAMINATION_MICRODEBONDING_RATE/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_COUPLED_DELAMINATION_MICRODEBONDING_RATE_1")
+        sigma_cdmdbr0 = _fval(c1[0], 0.0) if len(c1) > 0 and c1[0].strip() else 0.0
+        sigma_cdmdbrc = _fval(c1[1], 1.0) if len(c1) > 1 and c1[1].strip() else 1.0
+        gamma_cdmdbr = _fval(c1[2], 0.0) if len(c1) > 2 and c1[2].strip() else 0.0
+        p_cdmdbr = _fval(c1[3], 1.0) if len(c1) > 3 and c1[3].strip() else 1.0
+        d_cdmdbr_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        c2 = cards[1].cut("FAIL_LAD_COUPLED_DELAMINATION_MICRODEBONDING_RATE_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        sigma_cdmdbr0 = float(t1[0].rstrip(',')) if len(t1) > 0 and t1[0].rstrip(',') else 0.0
+        sigma_cdmdbrc = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 1.0
+        gamma_cdmdbr = float(t1[2].rstrip(',')) if len(t1) > 2 and t1[2].rstrip(',') else 0.0
+        p_cdmdbr = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 1.0
+        d_cdmdbr_max = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.999
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "sigma_cdmdbr0": sigma_cdmdbr0, "sigma_cdmdbrc": sigma_cdmdbrc, "gamma_cdmdbr": gamma_cdmdbr,
+        "p_cdmdbr": p_cdmdbr, "d_cdmdbr_max": d_cdmdbr_max,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadCoupledDelaminationMicrodebondingRate, FailureModel
+    model.fail_ladcoupleddelaminationmicrodebondingrates[mat_id] = FailLadCoupledDelaminationMicrodebondingRate(
+        mat_id=mat_id, title=title, sigma_cdmdbr0=sigma_cdmdbr0, sigma_cdmdbrc=sigma_cdmdbrc,
+        gamma_cdmdbr=gamma_cdmdbr, p_cdmdbr=p_cdmdbr, d_cdmdbr_max=d_cdmdbr_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm_type = "LAD_COUPLE_DELAMINATION_MICRODEBONDING_RATE" if "COUPLE_" in block.keyword else "LAD_COUPLED_DELAMINATION_MICRODEBONDING_RATE"
+    fm = FailureModel(type=fm_type, ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALSPINPLASMONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_CHIRAL_SPIN_PLASMON_POLARITON_RES_WORK`` (M451): Engine coupled electrothermal-flexomagnetic-flexochiral-flexospin-flexoplasmonic-flexopolaritonic nanoscale chiral-spin-plasmon-polariton hybrid resonance energy and opto-thermo-acoustic dissipation tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALSPINPLASMONICPOLARITONIC_RESONANCE_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_etfcspinplp, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALSPINPLASMONICPOLARITONIC_RESONANCE_ENERGY_1")
+        dt_etfcspinplp = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_etfcspinplp = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngElectrothermoflexomagnetochiralspinplasmonicpolaritonicResonanceEnergy
+    r_id = block.user_id or (len(model.eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energies) + 1)
+    model.eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energies[r_id] = EngElectrothermoflexomagnetochiralspinplasmonicpolaritonicResonanceEnergy(
+        id=r_id, title=title, dt_etfcspinplp=dt_etfcspinplp, sens_id=sens_id
+    )
+
+
+def read_lagmul_foliation_spinor_spatial_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FOLIATION_SPINOR_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/FOLIATION_SPINOR_SPATIAL_LINKAGE_JOINT/id`` (M451): Foliation spinor spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FOLIATION_SPINOR_SPATIAL_LINKAGE_JOINT/{block.user_id}: missing data card 1", block.source)
+        return
+
+    node1, node2, node3 = 0, 0, 0
+    stiff, skew_id, tol = 1e6, 0, 1e-6
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("FOLIATION_SPINOR_SPATIAL_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0], 0) if len(f1) > 0 else 0
+        node2 = _ival(f1[1], 0) if len(f1) > 1 else 0
+        node3 = _ival(f1[2], 0) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        node2 = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+        node3 = int(float(toks[2].rstrip(','))) if len(toks) > 2 else 0
+        stiff = float(toks[3].rstrip(',')) if len(toks) > 3 else 1e6
+        skew_id = int(float(toks[4].rstrip(','))) if len(toks) > 4 else 0
+        tol = float(toks[5].rstrip(',')) if len(toks) > 5 else 1e-6
+
+    link_len_a, link_len_b, twist_angle_alpha, offset_distance_s = 0.0, 0.0, 0.0, 0.0
+    if len(cards) > 1 and not cards[1].is_blank:
+        if block.fixed and "," not in cards[1].raw:
+            f2 = cards[1].cut("FOLIATION_SPINOR_SPATIAL_LINKAGE_JOINT_2")
+            link_len_a = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            link_len_b = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            twist_angle_alpha = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            offset_distance_s = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+        else:
+            toks2 = cards[1].tokens()
+            link_len_a = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            link_len_b = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            twist_angle_alpha = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            offset_distance_s = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+
+    from ..model.entities import LagmulFoliationSpinorSpatialLinkageJoint
+    j_id = block.user_id or (len(model.lagmul_foliation_spinor_spatial_linkage_joints) + 1)
+    model.lagmul_foliation_spinor_spatial_linkage_joints[j_id] = LagmulFoliationSpinorSpatialLinkageJoint(
+        id=j_id,
+        title=title,
+        node1=node1,
+        node2=node2,
+        node3=node3,
+        stiff=stiff,
+        skew_id=skew_id,
+        tol=tol,
+        link_len_a=link_len_a,
+        link_len_b=link_len_b,
+        twist_angle_alpha=twist_angle_alpha,
+        offset_distance_s=offset_distance_s
+    )
+
+
+def read_sensor_spring_coupled_crackle_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_COUPLED_CRACKLE_RATE`` or ``/SENSOR/SPRING_COUPLE_CRACKLE_RATE`` (M451): Spring element relative coupled / mixed-mode acceleration 21st rate-of-change (coupled crackle rate) magnitude threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_COUPLED_CRACKLE_RATE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, jcoup_crk_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_COUPLED_CRACKLE_RATE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        jcoup_crk_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        jcoup_crk_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringCoupledCrackleRate, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_coupled_crackle_rates) + 1)
+    ssccr = SensorSpringCoupledCrackleRate(
+        id=s_id, title=title, spring_id=spring_id,
+        jcoup_crk_max=jcoup_crk_max, t_delay=t_delay
+    )
+    model.sensor_spring_coupled_crackle_rates[s_id] = ssccr
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_COUPLED_CRACKLE_RATE", tdelay=t_delay
+    ))
+
 def read_fail_lad_transverse_core_microbuckling_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/LAD_TRANSVERSE_CORE_MICROBUCKLING_RATE/mat_ID`` or ``/FAIL/LADEVEZE_TRANSVERSE_CORE_MICROBUCKLING_RATE`` (M441): Ladevèze rate-dependent transverse sandwich core microbuckling, cell-wall kinking and multi-axial compressive failure model."""
     title, cards = _title_and_data(block)
@@ -83213,6 +83373,86 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "ORBIFOLD_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT": read_lagmul_orbifold_spinor_spatial_linkage_joint,
     "LAGMUL_ORBIFOLD_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_orbifold_spinor_spatial_linkage_joint,
     "ORBIFOLD_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_orbifold_spinor_spatial_linkage_joint,
+    # M451: FAIL_LAD_COUPLED_DELAMINATION_MICRODEBONDING_RATE
+    "FAIL_LAD_COUPLED_DELAMINATION_MICRODEBONDING_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LADEVEZE_COUPLED_DELAMINATION_MICRODEBONDING_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LAD_COUPLE_DELAMINATION_MICRODEBONDING_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LADEVEZE_COUPLE_DELAMINATION_MICRODEBONDING_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LAD_COUPLED_DELAMINATION_MICRODEBOND_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LADEVEZE_COUPLED_DELAMINATION_MICRODEBOND_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LAD_COUPLE_DELAMINATION_MICRODEBOND_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LADEVEZE_COUPLE_DELAMINATION_MICRODEBOND_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LAD_COUPLED_DELAM_MICRODEBONDING_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LADEVEZE_COUPLED_DELAM_MICRODEBONDING_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LAD_COUPLE_DELAM_MICRODEBONDING_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LADEVEZE_COUPLE_DELAM_MICRODEBONDING_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LAD_COUPLED_DELAM_MICRODEBOND_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LADEVEZE_COUPLED_DELAM_MICRODEBOND_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LAD_COUPLE_DELAM_MICRODEBOND_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LADEVEZE_COUPLE_DELAM_MICRODEBOND_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LAD_CDDMDBR": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LAD_CDDMDBR_MODEL": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LAD_CDDMDBR_LAW": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LADEVEZE_RATE_DEPENDENT_COUPLED_DELAMINATION_MICRODEBONDING": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LAD_COUPLED_INTERLAMINAR_MICRODEBONDING_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LADEVEZE_COUPLED_INTERLAMINAR_MICRODEBONDING_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LAD_COUPLE_INTERLAMINAR_MICRODEBONDING_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LADEVEZE_COUPLE_INTERLAMINAR_MICRODEBONDING_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LAD_COUPLED_INTERLAMINAR_MICRODEBOND_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LADEVEZE_COUPLED_INTERLAMINAR_MICRODEBOND_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LAD_COUPLE_INTERLAMINAR_MICRODEBOND_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+    "FAIL_LADEVEZE_COUPLE_INTERLAMINAR_MICRODEBOND_RATE": read_fail_lad_coupled_delamination_microdebonding_rate,
+
+    # M451: ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALSPINPLASMONICPOLARITONIC_RESONANCE_ENERGY
+    "ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALSPINPLASMONICPOLARITONIC_RESONANCE_ENERGY": read_eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTRO_THERM_FLEXO_MAG_CHIRAL_SPIN_PLASMON_POLARITON_RES_WORK": read_eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energy,
+    "ENG_EELECTROTHERMOFLEXOMAGNETOCHIRALSPINPLASMONICPOLARITONICRESONANCE": read_eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALSPINPLASMONICPOLARITONIC_RESONANCE_DISSIPATION": read_eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energy,
+    "ENG_ET_ELECTROTHERMOFLEXOMAGNETOCHIRALSPINPLASMONICPOLARITONIC_RESONANCE": read_eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOSPINONCHIRALPLASMONICPOLARITONIC_RESONANCE_ENERGY": read_eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTRO_THERM_FLEXO_MAG_SPINON_CHIRAL_PLASMON_POLARITON_RES_WORK": read_eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energy,
+    "ENG_EELECTROTHERMOFLEXOMAGNETOSPINONCHIRALPLASMONICPOLARITONICRESONANCE": read_eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOSPINONCHIRALPLASMONICPOLARITONIC_RESONANCE_DISSIPATION": read_eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energy,
+    "ENG_ET_ELECTROTHERMOFLEXOMAGNETOSPINONCHIRALPLASMONICPOLARITONIC_RESONANCE": read_eng_electrothermoflexomagnetochiralspinplasmonicpolaritonic_resonance_energy,
+
+    # M451: FOLIATION_SPINOR_SPATIAL_LINKAGE_JOINT
+    "FOLIATION_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_foliation_spinor_spatial_linkage_joint,
+    "LAGMUL_FOLIATION_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_foliation_spinor_spatial_linkage_joint,
+    "FOLIATION_SPINOR_SPATIAL_LINKAGE": read_lagmul_foliation_spinor_spatial_linkage_joint,
+    "LAGMUL_FOLIATION_SPINOR_SPATIAL_LINKAGE": read_lagmul_foliation_spinor_spatial_linkage_joint,
+    "FOLIATION_SPINOR_SPATIAL_MULTI_LOOP_MECHANISM": read_lagmul_foliation_spinor_spatial_linkage_joint,
+    "FOLIATION_SPINOR_SPATIAL_SYMMETRIC_MECHANISM": read_lagmul_foliation_spinor_spatial_linkage_joint,
+    "FOLIATION_SPINOR_SPATIAL_6R_MECHANISM": read_lagmul_foliation_spinor_spatial_linkage_joint,
+    "FOLIATION_SPINOR_SPATIAL_OVERCONSTRAINED_MECHANISM": read_lagmul_foliation_spinor_spatial_linkage_joint,
+    "LAGMUL_FOLIATION_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_foliation_spinor_spatial_linkage_joint,
+    "FOLIATION_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_foliation_spinor_spatial_linkage_joint,
+    "LAGMUL_FOLIATION_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT": read_lagmul_foliation_spinor_spatial_linkage_joint,
+    "FOLIATION_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT": read_lagmul_foliation_spinor_spatial_linkage_joint,
+    "LAGMUL_FOLIATION_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_foliation_spinor_spatial_linkage_joint,
+    "FOLIATION_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_foliation_spinor_spatial_linkage_joint,
+
+    # M451: SENSOR_SPRING_COUPLED_CRACKLE_RATE
+    "SENSOR_SPRING_COUPLED_CRACKLE_RATE": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_COUPLE_CRACKLE_RATE": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_COUPLED_CRK_RATE": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_COUPLE_CRK_RATE": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_COUPLED_CRACKLE": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_COUPLE_CRACKLE": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_COUPLED_CRK": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_COUPLE_CRK": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_POP_RATE_COUPLED_CRACKLE": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_POP_RATE_COUPLE_CRACKLE": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_COUPLED_CRACKLE_RATE_SPRING": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_COUPLE_CRACKLE_RATE_SPRING": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_CRACKLE_RATE_COUPLED": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_CRACKLE_RATE_COUPLE": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_CRK_RATE_COUPLED": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_CRK_RATE_COUPLE": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_RATE_CRACKLE_COUPLED": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_RATE_CRACKLE_COUPLE": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_CRACKLE_COUPLED": read_sensor_spring_coupled_crackle_rate,
+    "SENSOR_SPRING_CRACKLE_COUPLE": read_sensor_spring_coupled_crackle_rate,
+
 
 
 
