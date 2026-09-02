@@ -2775,6 +2775,22 @@ class Model:
         self.lagmul_cohomological_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_cohomological_spinor_spatial_linkage_joints # /COHOMOLOGICAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/COHOMOLOGICAL_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M445)
         self.lagmul_cohomological_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_cohomological_spinor_spatial_linkage_joints # /COHOMOLOGICAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/COHOMOLOGICAL_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M445)
 
+        # M446 Entities
+        self.fail_laddynamicdelaminationmicrocrackingrates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_DELAMINATION_MICROCRACKING_RATE (M446)
+        self.fail_laddynamicdelaminationmicrocrackrates: Dict[int, Any] = self.fail_laddynamicdelaminationmicrocrackingrates # /FAIL/LAD_DYNAMIC_DELAMINATION_MICROCRACK_RATE (M446)
+        self.fail_laddynamicdelammicrocrackingrates: Dict[int, Any] = self.fail_laddynamicdelaminationmicrocrackingrates # /FAIL/LAD_DYNAMIC_DELAM_MICROCRACKING_RATE (M446)
+        self.fail_laddynamicdelammicrocrackrates: Dict[int, Any] = self.fail_laddynamicdelaminationmicrocrackingrates # /FAIL/LAD_DYNAMIC_DELAM_MICROCRACK_RATE (M446)
+        self.fail_laddynamicinterlaminarmicrocrackingrates: Dict[int, Any] = self.fail_laddynamicdelaminationmicrocrackingrates # /FAIL/LAD_DYNAMIC_INTERLAMINAR_MICROCRACKING_RATE (M446)
+        self.fail_laddynamicinterlaminarmicrocrackrates: Dict[int, Any] = self.fail_laddynamicdelaminationmicrocrackingrates # /FAIL/LAD_DYNAMIC_INTERLAMINAR_MICROCRACK_RATE (M446)
+        self.eng_electrothermoflexomagnetophononicexcitonicmagnonicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOPHONONICEXCITONICMAGNONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M446)
+        self.eng_electrothermoflexomagnetomagnonicexcitonicphononicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetophononicexcitonicmagnonicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOMAGNONICEXCITONICPHONONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M446)
+        self.eng_electrothermoflexomagnetophononexcitonmagnonplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetophononicexcitonicmagnonicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOPHONONEXCITONMAGNONPLASMONPOLARITONIC_RESONANCE_ENERGY (M446)
+        self.lagmul_sheaf_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /SHEAF_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/SHEAF_SPINOR_SPATIAL_LINKAGE_JOINT (M446)
+        self.lagmul_sheaf_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_sheaf_spinor_spatial_linkage_joints # /SHEAF_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/SHEAF_TWISTOR_SPATIAL_LINKAGE_JOINT (M446)
+        self.lagmul_sheaf_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_sheaf_spinor_spatial_linkage_joints # /SHEAF_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/SHEAF_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M446)
+        self.lagmul_sheaf_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_sheaf_spinor_spatial_linkage_joints # /SHEAF_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/SHEAF_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M446)
+
+
 
 
 

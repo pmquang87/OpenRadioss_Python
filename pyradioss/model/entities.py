@@ -31992,6 +31992,261 @@ LagmulCohomologicalSpinorBundleSpatialLinkageJoint = LagmulCohomologicalSpinorSp
 LagmulCohomologicalCliffordSpinorSpatialLinkageJoint = LagmulCohomologicalSpinorSpatialLinkageJoint
 
 
+# ============================================================================
+# M446 Suite: FailLadDynamicDelaminationMicrocrackingRate, EngElectrothermoflexomagnetophononicexcitonicmagnonicplasmonicpolaritonicResonanceEnergy, LagmulSheafSpinorSpatialLinkageJoint
+# ============================================================================
+
+@dataclass
+class FailLadDynamicDelaminationMicrocrackingRate:
+    """``/FAIL/LAD_DYNAMIC_DELAMINATION_MICROCRACKING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_DELAMINATION_MICROCRACKING_RATE`` (M446): Ladevèze rate-dependent dynamic interlaminar delamination microcracking and matrix ply separation model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_ddmcr0: float = 0.0     # initial dynamic delamination microcracking threshold stress sigma_ddmcr,0
+    sigma_ddmcrc: float = 1.0     # critical dynamic delamination microcracking saturation stress sigma_ddmcr,c
+    gamma_ddmcr: float = 0.0      # dynamic delamination microcracking rate sensitivity factor gamma_ddmcr
+    p_ddmcr: float = 1.0          # dynamic delamination microcracking rate exponent p_ddmcr
+    d_ddmcr_max: float = 0.999    # maximum allowable dynamic delamination microcracking damage index
+    ifail_sh: int = 1             # shell element deletion flag
+    ifail_so: int = 1             # solid element deletion flag
+    fail_id: int = 0              # failure model ID reference
+
+    @property
+    def sigma_ddmc0(self) -> float:
+        return self.sigma_ddmcr0
+
+    @sigma_ddmc0.setter
+    def sigma_ddmc0(self, val: float) -> None:
+        self.sigma_ddmcr0 = val
+
+    @property
+    def sigma_ddmcc(self) -> float:
+        return self.sigma_ddmcrc
+
+    @sigma_ddmcc.setter
+    def sigma_ddmcc(self, val: float) -> None:
+        self.sigma_ddmcrc = val
+
+    @property
+    def gamma_ddmc(self) -> float:
+        return self.gamma_ddmcr
+
+    @gamma_ddmc.setter
+    def gamma_ddmc(self, val: float) -> None:
+        self.gamma_ddmcr = val
+
+    @property
+    def p_ddmc(self) -> float:
+        return self.p_ddmcr
+
+    @p_ddmc.setter
+    def p_ddmc(self, val: float) -> None:
+        self.p_ddmcr = val
+
+    @property
+    def d_ddmc_max(self) -> float:
+        return self.d_ddmcr_max
+
+    @d_ddmc_max.setter
+    def d_ddmc_max(self, val: float) -> None:
+        self.d_ddmcr_max = val
+
+    @property
+    def sigma_ddm0(self) -> float:
+        return self.sigma_ddmcr0
+
+    @sigma_ddm0.setter
+    def sigma_ddm0(self, val: float) -> None:
+        self.sigma_ddmcr0 = val
+
+    @property
+    def sigma_ddmc(self) -> float:
+        return self.sigma_ddmcrc
+
+    @sigma_ddmc.setter
+    def sigma_ddmc(self, val: float) -> None:
+        self.sigma_ddmcrc = val
+
+    @property
+    def gamma_ddm(self) -> float:
+        return self.gamma_ddmcr
+
+    @gamma_ddm.setter
+    def gamma_ddm(self, val: float) -> None:
+        self.gamma_ddmcr = val
+
+    @property
+    def p_ddm(self) -> float:
+        return self.p_ddmcr
+
+    @p_ddm.setter
+    def p_ddm(self, val: float) -> None:
+        self.p_ddmcr = val
+
+    @property
+    def d_ddm_max(self) -> float:
+        return self.d_ddmcr_max
+
+    @d_ddm_max.setter
+    def d_ddm_max(self, val: float) -> None:
+        self.d_ddmcr_max = val
+
+    @property
+    def sigma_dimcr0(self) -> float:
+        return self.sigma_ddmcr0
+
+    @sigma_dimcr0.setter
+    def sigma_dimcr0(self, val: float) -> None:
+        self.sigma_ddmcr0 = val
+
+    @property
+    def sigma_dimcrc(self) -> float:
+        return self.sigma_ddmcrc
+
+    @sigma_dimcrc.setter
+    def sigma_dimcrc(self, val: float) -> None:
+        self.sigma_ddmcrc = val
+
+    @property
+    def gamma_dimcr(self) -> float:
+        return self.gamma_ddmcr
+
+    @gamma_dimcr.setter
+    def gamma_dimcr(self, val: float) -> None:
+        self.gamma_ddmcr = val
+
+    @property
+    def p_dimcr(self) -> float:
+        return self.p_ddmcr
+
+    @p_dimcr.setter
+    def p_dimcr(self, val: float) -> None:
+        self.p_ddmcr = val
+
+    @property
+    def d_dimcr_max(self) -> float:
+        return self.d_ddmcr_max
+
+    @d_dimcr_max.setter
+    def d_dimcr_max(self, val: float) -> None:
+        self.d_ddmcr_max = val
+
+
+FailLadDynamicDelaminationMicrocrackRate = FailLadDynamicDelaminationMicrocrackingRate
+FailLadDynamicDelamMicrocrackingRate = FailLadDynamicDelaminationMicrocrackingRate
+FailLadDynamicDelamMicrocrackRate = FailLadDynamicDelaminationMicrocrackingRate
+FailLadDynamicInterlaminarMicrocrackingRate = FailLadDynamicDelaminationMicrocrackingRate
+FailLadDynamicInterlaminarMicrocrackRate = FailLadDynamicDelaminationMicrocrackingRate
+
+
+@dataclass
+class EngElectrothermoflexomagnetophononicexcitonicmagnonicplasmonicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOPHONONICEXCITONICMAGNONICPLASMONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_PHONON_EXCITON_MAGNON_PLASMON_POLARITON_RES_WORK`` (M446): Engine coupled electrothermal-flexomagnetic-flexophononic-flexoexcitonic-flexomagnonic-flexoplasmonic-flexopolaritonic nanoscale phonon-exciton-magnon-plasmon-polariton hybrid resonance energy and opto-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfpexmplp: float = 0.0    # time frequency for electrothermoflexomagnetophononicexcitonicmagnonicplasmonicpolaritonic resonance energy output
+    sens_id: int = 0              # sensor activation ID
+    dt_etfplp: float = 0.0        # alias field for compatibility
+    dt_etfexplp: float = 0.0      # alias field for compatibility
+    dt_etfphplp: float = 0.0      # alias field for compatibility
+    dt_etfmagplp: float = 0.0     # alias field for compatibility
+    dt_etfpexplp: float = 0.0     # alias field for compatibility
+    dt_etfpmplp: float = 0.0      # alias field for compatibility
+
+    def __post_init__(self):
+        if self.dt_etfplp != 0.0 and self.dt_etfpexmplp == 0.0:
+            self.dt_etfpexmplp = self.dt_etfplp
+        elif self.dt_etfexplp != 0.0 and self.dt_etfpexmplp == 0.0:
+            self.dt_etfpexmplp = self.dt_etfexplp
+        elif self.dt_etfphplp != 0.0 and self.dt_etfpexmplp == 0.0:
+            self.dt_etfpexmplp = self.dt_etfphplp
+        elif self.dt_etfmagplp != 0.0 and self.dt_etfpexmplp == 0.0:
+            self.dt_etfpexmplp = self.dt_etfmagplp
+        elif self.dt_etfpexplp != 0.0 and self.dt_etfpexmplp == 0.0:
+            self.dt_etfpexmplp = self.dt_etfpexplp
+        elif self.dt_etfpmplp != 0.0 and self.dt_etfpexmplp == 0.0:
+            self.dt_etfpexmplp = self.dt_etfpmplp
+        elif self.dt_etfpexmplp != 0.0:
+            if self.dt_etfplp == 0.0:
+                self.dt_etfplp = self.dt_etfpexmplp
+            if self.dt_etfexplp == 0.0:
+                self.dt_etfexplp = self.dt_etfpexmplp
+            if self.dt_etfphplp == 0.0:
+                self.dt_etfphplp = self.dt_etfpexmplp
+            if self.dt_etfmagplp == 0.0:
+                self.dt_etfmagplp = self.dt_etfpexmplp
+            if self.dt_etfpexplp == 0.0:
+                self.dt_etfpexplp = self.dt_etfpexmplp
+            if self.dt_etfpmplp == 0.0:
+                self.dt_etfpmplp = self.dt_etfpexmplp
+
+
+EngElectrothermoflexomagnetophononexcitonmagnonplasmonpolaritonicResonanceEnergy = EngElectrothermoflexomagnetophononicexcitonicmagnonicplasmonicpolaritonicResonanceEnergy
+EngElectrothermoflexomagnetomagnonicexcitonicphononicplasmonicpolaritonicResonanceEnergy = EngElectrothermoflexomagnetophononicexcitonicmagnonicplasmonicpolaritonicResonanceEnergy
+
+
+@dataclass
+class LagmulSheafSpinorSpatialLinkageJoint:
+    """``/SHEAF_SPINOR_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/SHEAF_SPINOR_SPATIAL_LINKAGE_JOINT/id`` (M446): Sheaf spinor spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0                 # base pivot node 1
+    node2: int = 0                 # intermediate spatial link node 2
+    node3: int = 0                 # driven spatial link node 3
+    stiff: float = 1e6             # kinematic constraint sheaf spinor stiffness
+    skew_id: int = 0               # reference coordinate frame ID
+    tol: float = 1e-6              # constraint numerical tolerance
+    link_len_a: float = 0.0        # length of primary spatial link a
+    link_len_b: float = 0.0        # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+LagmulSheafTwistorSpatialLinkageJoint = LagmulSheafSpinorSpatialLinkageJoint
+LagmulSheafSpinorBundleSpatialLinkageJoint = LagmulSheafSpinorSpatialLinkageJoint
+LagmulSheafCliffordSpinorSpatialLinkageJoint = LagmulSheafSpinorSpatialLinkageJoint
+
+
+
 
 
 
