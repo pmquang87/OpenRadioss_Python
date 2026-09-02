@@ -602,6 +602,7 @@ Smaller known items:
 
 ## Handover notes (2026-08-02)
 
+- Reference corpus for benchmarking and validation: `C:\Users\pmqua\PycharmProjects\rad_examples_db` (harvested Radioss/OpenRadioss input-deck corpus with manifest.csv/manifest.jsonl, benchmarks, and validation tools).
 - The corpus tests' decks were re-homed from a dead session scratchpad to
   `tests/data/rd_decks/` (env `PYRADIOSS_RD_DECKS` for a fuller extract).
 - `.venv` + `requirements-lock.txt` are new at handover; numba 0.66.0 is now
