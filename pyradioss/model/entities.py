@@ -32744,6 +32744,303 @@ LagmulToposSpinorBundleSpatialLinkageJoint = LagmulToposSpinorSpatialLinkageJoin
 LagmulToposCliffordSpinorSpatialLinkageJoint = LagmulToposSpinorSpatialLinkageJoint
 
 
+# ============================================================================
+# M449 Suite: FailLadDynamicDelaminationMicrodebondingRate, EngElectrothermoflexomagnetochiralexcitonicplasmonicpolaritonicResonanceEnergy, LagmulSchemeSpinorSpatialLinkageJoint
+# ============================================================================
+
+@dataclass
+class FailLadDynamicDelaminationMicrodebondingRate:
+    """``/FAIL/LAD_DYNAMIC_DELAMINATION_MICRODEBONDING_RATE`` or ``/FAIL/LADEVEZE_DYNAMIC_DELAMINATION_MICRODEBONDING_RATE`` (M449): Ladevèze rate-dependent dynamic interlaminar delamination microdebonding and matrix ply separation model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_ddmdbr0: float = 0.0     # initial dynamic delamination microdebonding threshold stress sigma_ddmdbr,0
+    sigma_ddmdbrc: float = 1.0     # critical dynamic delamination microdebonding saturation stress sigma_ddmdbr,c
+    gamma_ddmdbr: float = 0.0      # dynamic delamination microdebonding rate sensitivity factor gamma_ddmdbr
+    p_ddmdbr: float = 1.0          # dynamic delamination microdebonding rate exponent p_ddmdbr
+    d_ddmdbr_max: float = 0.999    # maximum allowable dynamic delamination microdebonding damage index
+    ifail_sh: int = 1              # shell element deletion flag
+    ifail_so: int = 1              # solid element deletion flag
+    fail_id: int = 0               # failure model ID reference
+    sigma_ddmr0: float = 0.0       # compatibility alias field
+    sigma_ddmrc: float = 1.0       # compatibility alias field
+    gamma_ddmr: float = 0.0        # compatibility alias field
+    p_ddmr: float = 1.0            # compatibility alias field
+    d_ddmr_max: float = 0.999      # compatibility alias field
+
+    def __post_init__(self):
+        if self.sigma_ddmr0 != 0.0 and self.sigma_ddmdbr0 == 0.0:
+            self.sigma_ddmdbr0 = self.sigma_ddmr0
+        elif self.sigma_ddmdbr0 != 0.0 and self.sigma_ddmr0 == 0.0:
+            self.sigma_ddmr0 = self.sigma_ddmdbr0
+        if self.sigma_ddmrc != 1.0 and self.sigma_ddmdbrc == 1.0:
+            self.sigma_ddmdbrc = self.sigma_ddmrc
+        elif self.sigma_ddmdbrc != 1.0 and self.sigma_ddmrc == 1.0:
+            self.sigma_ddmrc = self.sigma_ddmdbrc
+        if self.gamma_ddmr != 0.0 and self.gamma_ddmdbr == 0.0:
+            self.gamma_ddmdbr = self.gamma_ddmr
+        elif self.gamma_ddmdbr != 0.0 and self.gamma_ddmr == 0.0:
+            self.gamma_ddmr = self.gamma_ddmdbr
+        if self.p_ddmr != 1.0 and self.p_ddmdbr == 1.0:
+            self.p_ddmdbr = self.p_ddmr
+        elif self.p_ddmdbr != 1.0 and self.p_ddmr == 1.0:
+            self.p_ddmr = self.p_ddmdbr
+        if self.d_ddmr_max != 0.999 and self.d_ddmdbr_max == 0.999:
+            self.d_ddmdbr_max = self.d_ddmr_max
+        elif self.d_ddmdbr_max != 0.999 and self.d_ddmr_max == 0.999:
+            self.d_ddmr_max = self.d_ddmdbr_max
+
+    @property
+    def sigma_ddmdb0(self) -> float:
+        return self.sigma_ddmdbr0
+
+    @sigma_ddmdb0.setter
+    def sigma_ddmdb0(self, val: float) -> None:
+        self.sigma_ddmdbr0 = val
+        self.sigma_ddmr0 = val
+
+    @property
+    def sigma_ddmdbc(self) -> float:
+        return self.sigma_ddmdbrc
+
+    @sigma_ddmdbc.setter
+    def sigma_ddmdbc(self, val: float) -> None:
+        self.sigma_ddmdbrc = val
+        self.sigma_ddmrc = val
+
+    @property
+    def gamma_ddmdb(self) -> float:
+        return self.gamma_ddmdbr
+
+    @gamma_ddmdb.setter
+    def gamma_ddmdb(self, val: float) -> None:
+        self.gamma_ddmdbr = val
+        self.gamma_ddmr = val
+
+    @property
+    def p_ddmdb(self) -> float:
+        return self.p_ddmdbr
+
+    @p_ddmdb.setter
+    def p_ddmdb(self, val: float) -> None:
+        self.p_ddmdbr = val
+        self.p_ddmr = val
+
+    @property
+    def d_ddmdb_max(self) -> float:
+        return self.d_ddmdbr_max
+
+    @d_ddmdb_max.setter
+    def d_ddmdb_max(self, val: float) -> None:
+        self.d_ddmdbr_max = val
+        self.d_ddmr_max = val
+
+    @property
+    def sigma_ddm0(self) -> float:
+        return self.sigma_ddmdbr0
+
+    @sigma_ddm0.setter
+    def sigma_ddm0(self, val: float) -> None:
+        self.sigma_ddmdbr0 = val
+        self.sigma_ddmr0 = val
+
+    @property
+    def sigma_ddmc(self) -> float:
+        return self.sigma_ddmdbrc
+
+    @sigma_ddmc.setter
+    def sigma_ddmc(self, val: float) -> None:
+        self.sigma_ddmdbrc = val
+        self.sigma_ddmrc = val
+
+    @property
+    def gamma_ddm(self) -> float:
+        return self.gamma_ddmdbr
+
+    @gamma_ddm.setter
+    def gamma_ddm(self, val: float) -> None:
+        self.gamma_ddmdbr = val
+        self.gamma_ddmr = val
+
+    @property
+    def p_ddm(self) -> float:
+        return self.p_ddmdbr
+
+    @p_ddm.setter
+    def p_ddm(self, val: float) -> None:
+        self.p_ddmdbr = val
+        self.p_ddmr = val
+
+    @property
+    def d_ddm_max(self) -> float:
+        return self.d_ddmdbr_max
+
+    @d_ddm_max.setter
+    def d_ddm_max(self, val: float) -> None:
+        self.d_ddmdbr_max = val
+        self.d_ddmr_max = val
+
+    @property
+    def sigma_dimdbr0(self) -> float:
+        return self.sigma_ddmdbr0
+
+    @sigma_dimdbr0.setter
+    def sigma_dimdbr0(self, val: float) -> None:
+        self.sigma_ddmdbr0 = val
+        self.sigma_ddmr0 = val
+
+    @property
+    def sigma_dimdbrc(self) -> float:
+        return self.sigma_ddmdbrc
+
+    @sigma_dimdbrc.setter
+    def sigma_dimdbrc(self, val: float) -> None:
+        self.sigma_ddmdbrc = val
+        self.sigma_ddmrc = val
+
+    @property
+    def gamma_dimdbr(self) -> float:
+        return self.gamma_ddmdbr
+
+    @gamma_dimdbr.setter
+    def gamma_dimdbr(self, val: float) -> None:
+        self.gamma_ddmdbr = val
+        self.gamma_ddmr = val
+
+    @property
+    def p_dimdbr(self) -> float:
+        return self.p_ddmdbr
+
+    @p_dimdbr.setter
+    def p_dimdbr(self, val: float) -> None:
+        self.p_ddmdbr = val
+        self.p_ddmr = val
+
+    @property
+    def d_dimdbr_max(self) -> float:
+        return self.d_ddmdbr_max
+
+    @d_dimdbr_max.setter
+    def d_dimdbr_max(self, val: float) -> None:
+        self.d_ddmdbr_max = val
+        self.d_ddmr_max = val
+
+
+FailLadDynamicDelaminationMicrodebondRate = FailLadDynamicDelaminationMicrodebondingRate
+FailLadDynamicDelamMicrodebondingRate = FailLadDynamicDelaminationMicrodebondingRate
+FailLadDynamicDelamMicrodebondRate = FailLadDynamicDelaminationMicrodebondingRate
+FailLadDynamicInterlaminarMicrodebondingRate = FailLadDynamicDelaminationMicrodebondingRate
+FailLadDynamicInterlaminarMicrodebondRate = FailLadDynamicDelaminationMicrodebondingRate
+
+
+@dataclass
+class EngElectrothermoflexomagnetochiralexcitonicplasmonicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALEXCITONICPLASMONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_CHIRAL_EXCITON_PLASMON_POLARITON_RES_WORK`` (M449): Engine coupled electrothermal-flexomagnetic-flexochiral-flexoexcitonic-flexoplasmonic-flexopolaritonic nanoscale chiral-exciton-plasmon-polariton hybrid resonance energy and opto-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfcexplp: float = 0.0    # time frequency for electrothermoflexomagnetochiralexcitonicplasmonicpolaritonic resonance energy output
+    sens_id: int = 0             # sensor activation ID
+    dt_etfplp: float = 0.0       # alias field for compatibility
+    dt_etfexplp: float = 0.0     # alias field for compatibility
+    dt_etfphplp: float = 0.0     # alias field for compatibility
+    dt_etfmagplp: float = 0.0    # alias field for compatibility
+    dt_etfcplp: float = 0.0      # alias field for compatibility
+    dt_etfcphplp: float = 0.0    # alias field for compatibility
+
+    def __post_init__(self):
+        if self.dt_etfplp != 0.0 and self.dt_etfcexplp == 0.0:
+            self.dt_etfcexplp = self.dt_etfplp
+        elif self.dt_etfexplp != 0.0 and self.dt_etfcexplp == 0.0:
+            self.dt_etfcexplp = self.dt_etfexplp
+        elif self.dt_etfphplp != 0.0 and self.dt_etfcexplp == 0.0:
+            self.dt_etfcexplp = self.dt_etfphplp
+        elif self.dt_etfmagplp != 0.0 and self.dt_etfcexplp == 0.0:
+            self.dt_etfcexplp = self.dt_etfmagplp
+        elif self.dt_etfcplp != 0.0 and self.dt_etfcexplp == 0.0:
+            self.dt_etfcexplp = self.dt_etfcplp
+        elif self.dt_etfcphplp != 0.0 and self.dt_etfcexplp == 0.0:
+            self.dt_etfcexplp = self.dt_etfcphplp
+        elif self.dt_etfcexplp != 0.0:
+            if self.dt_etfplp == 0.0:
+                self.dt_etfplp = self.dt_etfcexplp
+            if self.dt_etfexplp == 0.0:
+                self.dt_etfexplp = self.dt_etfcexplp
+            if self.dt_etfphplp == 0.0:
+                self.dt_etfphplp = self.dt_etfcexplp
+            if self.dt_etfmagplp == 0.0:
+                self.dt_etfmagplp = self.dt_etfcexplp
+            if self.dt_etfcplp == 0.0:
+                self.dt_etfcplp = self.dt_etfcexplp
+            if self.dt_etfcphplp == 0.0:
+                self.dt_etfcphplp = self.dt_etfcexplp
+
+
+EngElectrothermoflexomagnetochiralexcitonplasmonpolaritonicResonanceEnergy = EngElectrothermoflexomagnetochiralexcitonicplasmonicpolaritonicResonanceEnergy
+EngElectrothermoflexomagnetoexcitonicchiralplasmonicpolaritonicResonanceEnergy = EngElectrothermoflexomagnetochiralexcitonicplasmonicpolaritonicResonanceEnergy
+
+
+@dataclass
+class LagmulSchemeSpinorSpatialLinkageJoint:
+    """``/SCHEME_SPINOR_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/SCHEME_SPINOR_SPATIAL_LINKAGE_JOINT/id`` (M449): Scheme spinor spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0                 # base pivot node 1
+    node2: int = 0                 # intermediate spatial link node 2
+    node3: int = 0                 # driven spatial link node 3
+    stiff: float = 1e6             # kinematic constraint scheme spinor stiffness
+    skew_id: int = 0               # reference coordinate frame ID
+    tol: float = 1e-6              # constraint numerical tolerance
+    link_len_a: float = 0.0        # length of primary spatial link a
+    link_len_b: float = 0.0        # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+LagmulSchemeTwistorSpatialLinkageJoint = LagmulSchemeSpinorSpatialLinkageJoint
+LagmulSchemeSpinorBundleSpatialLinkageJoint = LagmulSchemeSpinorSpatialLinkageJoint
+LagmulSchemeCliffordSpinorSpatialLinkageJoint = LagmulSchemeSpinorSpatialLinkageJoint
+
+
+
 
 
 
