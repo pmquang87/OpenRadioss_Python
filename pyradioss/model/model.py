@@ -3244,6 +3244,29 @@ class Model:
         self.lagmul_berezin_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_berezin_spinor_spatial_linkage_joints
         self.lagmul_frobenius_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_berezin_spinor_spatial_linkage_joints
         self.lagmul_frobenius_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_berezin_spinor_spatial_linkage_joints
+        # M470 Suite
+        self.fail_laddynamicmatrixcrushingfailurerates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_MATRIX_CRUSHING_FAILURE_RATE (M470)
+        self.fail_laddynamicmatrixcrushingfailures: Dict[int, Any] = self.fail_laddynamicmatrixcrushingfailurerates
+        self.fail_laddynamicmatrixcrushfailurerates: Dict[int, Any] = self.fail_laddynamicmatrixcrushingfailurerates
+        self.fail_laddynamicmatrixcrushfailures: Dict[int, Any] = self.fail_laddynamicmatrixcrushingfailurerates
+        self.fail_laddynamictransversematrixcrushingfailurerates: Dict[int, Any] = self.fail_laddynamicmatrixcrushingfailurerates
+        self.fail_laddynamictransversematrixcrushingfailures: Dict[int, Any] = self.fail_laddynamicmatrixcrushingfailurerates
+        self.fail_laddynamictransversematrixcrushfailurerates: Dict[int, Any] = self.fail_laddynamicmatrixcrushingfailurerates
+        self.fail_laddynamicmatrixmicrocrushingfailurerates: Dict[int, Any] = self.fail_laddynamicmatrixcrushingfailurerates
+        self.fail_laddynamicmatrixmicrocrushingfailures: Dict[int, Any] = self.fail_laddynamicmatrixcrushingfailurerates
+        self.fail_laddmcrfrs: Dict[int, Any] = self.fail_laddynamicmatrixcrushingfailurerates
+        self.fail_laddynamicmatrixcrushingdamagerates: Dict[int, Any] = self.fail_laddynamicmatrixcrushingfailurerates
+        self.fail_laddynamicmatrixcrushdamagerates: Dict[int, Any] = self.fail_laddynamicmatrixcrushingfailurerates
+        self.fail_laddynamicmatrixmicrocrushingdamagerates: Dict[int, Any] = self.fail_laddynamicmatrixcrushingfailurerates
+        self.eng_electrothermoflexomagnetochiraltoronplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALTORONPLASMONICPOLARITONIC_RESONANCE_ENERGY (M470)
+        self.eng_electrothermoflexomagnetochiraltoronplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiraltoronplasmonicpolaritonic_resonance_energies
+        self.eng_electrothermoflexomagnetotoronchiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiraltoronplasmonicpolaritonic_resonance_energies
+        self.lagmul_borel_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /BOREL_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/BOREL_SPINOR_SPATIAL_LINKAGE_JOINT (M470)
+        self.lagmul_borel_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_borel_spinor_spatial_linkage_joints
+        self.lagmul_borel_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_borel_spinor_spatial_linkage_joints
+        self.lagmul_borel_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_borel_spinor_spatial_linkage_joints
+        self.lagmul_weil_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_borel_spinor_spatial_linkage_joints
+        self.lagmul_weil_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_borel_spinor_spatial_linkage_joints
 
 
 
