@@ -3038,6 +3038,19 @@ class Model:
         self.sensor_spring_tot_ang_pops: Dict[int, Any] = self.sensor_spring_total_angular_pop_rates # /SENSOR/SPRING_TOT_ANG_POP (M458)
         self.sensor_spring_resultant_angular_pop_rates: Dict[int, Any] = self.sensor_spring_total_angular_pop_rates # /SENSOR/SPRING_RESULTANT_ANGULAR_POP_RATE (M458)
         self.sensor_spring_resultant_angular_pops: Dict[int, Any] = self.sensor_spring_total_angular_pop_rates # /SENSOR/SPRING_RESULTANT_ANGULAR_POP (M458)
+        self.fail_ladtransversefibercompressionfailurerates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_FIBER_COMPRESSION_FAILURE_RATE (M459)
+        self.fail_ladtransversefibercompressionfailures: Dict[int, Any] = self.fail_ladtransversefibercompressionfailurerates
+        self.fail_ladtransversefibercompressionrates: Dict[int, Any] = self.fail_ladtransversefibercompressionfailurerates
+        self.fail_ladtransversefibercompressivefailurerates: Dict[int, Any] = self.fail_ladtransversefibercompressionfailurerates
+        self.fail_ladtransversefibercompressivefailures: Dict[int, Any] = self.fail_ladtransversefibercompressionfailurerates
+        self.fail_ladtransversefibercompressiondamagerates: Dict[int, Any] = self.fail_ladtransversefibercompressionfailurerates
+        self.eng_electrothermoflexomagnetochiralmajoranaplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALMAJORANAPLASMONICPOLARITONIC_RESONANCE_ENERGY (M459)
+        self.eng_electrothermoflexomagnetochiralmajoranaplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralmajoranaplasmonicpolaritonic_resonance_energies
+        self.eng_electrothermoflexomagnetomajoranachiralplasmonicpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralmajoranaplasmonicpolaritonic_resonance_energies
+        self.lagmul_monodromy_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /MONODROMY_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/MONODROMY_SPINOR_SPATIAL_LINKAGE_JOINT (M459)
+        self.lagmul_monodromy_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_monodromy_spinor_spatial_linkage_joints
+        self.lagmul_monodromy_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_monodromy_spinor_spatial_linkage_joints
+        self.lagmul_monodromy_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_monodromy_spinor_spatial_linkage_joints
 
 
 
