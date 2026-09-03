@@ -3072,7 +3072,6 @@ class Model:
         self.lagmul_symplectic_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_symplectic_spinor_spatial_linkage_joints
         self.fail_laddynamicinterlaminarshearfailurerates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_INTERLAMINAR_SHEAR_FAILURE_RATE (M461)
         self.fail_laddynamicinterlaminarshearfailures: Dict[int, Any] = self.fail_laddynamicinterlaminarshearfailurerates
-        self.fail_laddynamicinterlaminarshearrates: Dict[int, Any] = self.fail_laddynamicinterlaminarshearfailurerates
         self.fail_laddynamicinterlaminarfailurerates: Dict[int, Any] = self.fail_laddynamicinterlaminarshearfailurerates
         self.fail_laddynamicinterlaminardelaminationfailurerates: Dict[int, Any] = self.fail_laddynamicinterlaminarshearfailurerates
         self.fail_laddynamicinterlaminarsheardelaminationfailurerates: Dict[int, Any] = self.fail_laddynamicinterlaminarshearfailurerates
