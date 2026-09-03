@@ -23981,6 +23981,151 @@ class SensorSpringTotalAngularSnapRate:
     def j_max(self, val: float) -> None:
         self.jtot_ang_snp_max = val
 
+    # M471 snap properties
+    @property
+    def jtot_ang_snap_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_snap_max.setter
+    def jtot_ang_snap_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtang_snap_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtang_snap_max.setter
+    def jtang_snap_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def j_tot_ang_snp_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @j_tot_ang_snp_max.setter
+    def j_tot_ang_snp_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def j_tot_ang_snap_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @j_tot_ang_snap_max.setter
+    def j_tot_ang_snap_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def j_total_angular_snp_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @j_total_angular_snp_max.setter
+    def j_total_angular_snp_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def j_total_angular_snap_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @j_total_angular_snap_max.setter
+    def j_total_angular_snap_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def j_tang_snp_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @j_tang_snp_max.setter
+    def j_tang_snp_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def j_tang_snap_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @j_tang_snap_max.setter
+    def j_tang_snap_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def j_snap_tot_ang_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @j_snap_tot_ang_max.setter
+    def j_snap_tot_ang_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def j_snap_total_angular_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @j_snap_total_angular_max.setter
+    def j_snap_total_angular_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def j_snap_tang_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @j_snap_tang_max.setter
+    def j_snap_tang_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtot_ang_crk_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_crk_rate_max.setter
+    def jtot_ang_crk_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtot_ang_pop_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_pop_rate_max.setter
+    def jtot_ang_pop_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtot_ang_lock_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_lock_rate_max.setter
+    def jtot_ang_lock_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtot_ang_snap_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtot_ang_snap_rate_max.setter
+    def jtot_ang_snap_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtotal_angular_snap_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtotal_angular_snap_max.setter
+    def jtotal_angular_snap_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+    @property
+    def jtotal_angular_snap_rate_max(self) -> float:
+        return self.jtot_ang_snp_max
+
+    @jtotal_angular_snap_rate_max.setter
+    def jtotal_angular_snap_rate_max(self, val: float) -> None:
+        self.jtot_ang_snp_max = val
+
+
+SensorSpringTotAngSnapRate = SensorSpringTotalAngularSnapRate
+SensorSpringTotalAngularSnap = SensorSpringTotalAngularSnapRate
+SensorSpringTotAngSnap = SensorSpringTotalAngularSnapRate
+SensorSpringResultantAngularSnapRate = SensorSpringTotalAngularSnapRate
+SensorSpringResultantAngularSnap = SensorSpringTotalAngularSnapRate
+SensorSpringTotalAngularSnapRateSensor = SensorSpringTotalAngularSnapRate
+
 
 
 # ============================================================================
@@ -42640,6 +42785,382 @@ LagmulBorelSpinorBundleSpatialLinkageJoint = LagmulBorelSpinorSpatialLinkageJoin
 LagmulBorelCliffordSpinorSpatialLinkageJoint = LagmulBorelSpinorSpatialLinkageJoint
 LagmulWeilSpinorSpatialLinkageJoint = LagmulBorelSpinorSpatialLinkageJoint
 LagmulWeilTwistorSpatialLinkageJoint = LagmulBorelSpinorSpatialLinkageJoint
+
+
+# ============================================================================
+# M471 Suite: FailLadTransverseMatrixCrushingFailureRate, EngElectrothermoflexomagnetochiralbobberplasmonicpolaritonicResonanceEnergy, LagmulBottSpinorSpatialLinkageJoint, SensorSpringTotalAngularSnapRate
+# ============================================================================
+
+@dataclass
+class FailLadTransverseMatrixCrushingFailureRate:
+    """``/FAIL/LAD_TRANSVERSE_MATRIX_CRUSHING_FAILURE_RATE`` or ``/FAIL/LADEVEZE_TRANSVERSE_MATRIX_CRUSHING_FAILURE_RATE`` (M471): Ladevèze rate-dependent transverse matrix crushing failure rate, transverse matrix micro-crushing failure, and transverse compressive damage evolution model."""
+    mat_id: int = 0
+    title: str = ""
+    sigma_tmcrfr0: float = 0.0     # initial transverse matrix crushing failure rate threshold stress sigma_tmcrfr,0
+    sigma_tmcrfrc: float = 1.0     # characteristic critical transverse matrix crushing failure rate stress sigma_tmcrfr,c
+    gamma_tmcrfr: float = 0.0      # transverse matrix crushing damage rate coefficient gamma_tmcrfr
+    p_tmcrfr: float = 1.0          # transverse matrix crushing damage rate exponent p_tmcrfr
+    d_tmcrfr_max: float = 0.999    # maximum transverse matrix crushing failure rate damage limit d_tmcrfr,max
+    ifail_sh: int = 1              # shell post-failure treatment flag
+    ifail_so: int = 1              # solid post-failure treatment flag
+    fail_id: int = 0               # failure model ID
+
+    @property
+    def sigma_tmcrf0(self) -> float:
+        return self.sigma_tmcrfr0
+
+    @sigma_tmcrf0.setter
+    def sigma_tmcrf0(self, val: float) -> None:
+        self.sigma_tmcrfr0 = val
+
+    @property
+    def sigma_tmcrfc(self) -> float:
+        return self.sigma_tmcrfrc
+
+    @sigma_tmcrfc.setter
+    def sigma_tmcrfc(self, val: float) -> None:
+        self.sigma_tmcrfrc = val
+
+    @property
+    def gamma_tmcrf(self) -> float:
+        return self.gamma_tmcrfr
+
+    @gamma_tmcrf.setter
+    def gamma_tmcrf(self, val: float) -> None:
+        self.gamma_tmcrfr = val
+
+    @property
+    def p_tmcrf(self) -> float:
+        return self.p_tmcrfr
+
+    @p_tmcrf.setter
+    def p_tmcrf(self, val: float) -> None:
+        self.p_tmcrfr = val
+
+    @property
+    def d_tmcrf_max(self) -> float:
+        return self.d_tmcrfr_max
+
+    @d_tmcrf_max.setter
+    def d_tmcrf_max(self, val: float) -> None:
+        self.d_tmcrfr_max = val
+
+    @property
+    def sigma_tmcr0(self) -> float:
+        return self.sigma_tmcrfr0
+
+    @sigma_tmcr0.setter
+    def sigma_tmcr0(self, val: float) -> None:
+        self.sigma_tmcrfr0 = val
+
+    @property
+    def sigma_tmcrc(self) -> float:
+        return self.sigma_tmcrfrc
+
+    @sigma_tmcrc.setter
+    def sigma_tmcrc(self, val: float) -> None:
+        self.sigma_tmcrfrc = val
+
+    @property
+    def gamma_tmcr(self) -> float:
+        return self.gamma_tmcrfr
+
+    @gamma_tmcr.setter
+    def gamma_tmcr(self, val: float) -> None:
+        self.gamma_tmcrfr = val
+
+    @property
+    def p_tmcr(self) -> float:
+        return self.p_tmcrfr
+
+    @p_tmcr.setter
+    def p_tmcr(self, val: float) -> None:
+        self.p_tmcrfr = val
+
+    @property
+    def d_tmcr_max(self) -> float:
+        return self.d_tmcrfr_max
+
+    @d_tmcr_max.setter
+    def d_tmcr_max(self, val: float) -> None:
+        self.d_tmcrfr_max = val
+
+    @property
+    def sigma_tmc0(self) -> float:
+        return self.sigma_tmcrfr0
+
+    @sigma_tmc0.setter
+    def sigma_tmc0(self, val: float) -> None:
+        self.sigma_tmcrfr0 = val
+
+    @property
+    def sigma_tmcc(self) -> float:
+        return self.sigma_tmcrfrc
+
+    @sigma_tmcc.setter
+    def sigma_tmcc(self, val: float) -> None:
+        self.sigma_tmcrfrc = val
+
+    @property
+    def gamma_tmc(self) -> float:
+        return self.gamma_tmcrfr
+
+    @gamma_tmc.setter
+    def gamma_tmc(self, val: float) -> None:
+        self.gamma_tmcrfr = val
+
+    @property
+    def p_tmc(self) -> float:
+        return self.p_tmcrfr
+
+    @p_tmc.setter
+    def p_tmc(self, val: float) -> None:
+        self.p_tmcrfr = val
+
+    @property
+    def d_tmc_max(self) -> float:
+        return self.d_tmcrfr_max
+
+    @d_tmc_max.setter
+    def d_tmc_max(self, val: float) -> None:
+        self.d_tmcrfr_max = val
+
+
+FailLadTransverseMatrixCrushingFailure = FailLadTransverseMatrixCrushingFailureRate
+FailLadTransverseMatrixCrushFailureRate = FailLadTransverseMatrixCrushingFailureRate
+FailLadTransverseMatrixCrushFailure = FailLadTransverseMatrixCrushingFailureRate
+FailLadTransverseMatrixMicroCrushingFailureRate = FailLadTransverseMatrixCrushingFailureRate
+FailLadTransverseMatrixMicroCrushingFailure = FailLadTransverseMatrixCrushingFailureRate
+FailLadTransverseMatrixMicrocrushingFailureRate = FailLadTransverseMatrixCrushingFailureRate
+FailLadTransverseMatrixMicrocrushingFailure = FailLadTransverseMatrixCrushingFailureRate
+FailLadTmcrfr = FailLadTransverseMatrixCrushingFailureRate
+FailLadTmcrfrModel = FailLadTransverseMatrixCrushingFailureRate
+FailLadTmcrfrLaw = FailLadTransverseMatrixCrushingFailureRate
+FailLadevezeRateDependentTransverseMatrixCrushingFailure = FailLadTransverseMatrixCrushingFailureRate
+FailLadTransverseMatrixCrushingDamageRate = FailLadTransverseMatrixCrushingFailureRate
+FailLadTransverseMatrixCrushDamageRate = FailLadTransverseMatrixCrushingFailureRate
+FailLadTransverseMatrixMicroCrushingDamageRate = FailLadTransverseMatrixCrushingFailureRate
+FailLadTransverseMatrixMicrocrushingDamageRate = FailLadTransverseMatrixCrushingFailureRate
+
+
+@dataclass
+class EngElectrothermoflexomagnetochiralbobberplasmonicpolaritonicResonanceEnergy:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALBOBBERPLASMONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_CHIRAL_BOBBER_PLASMON_POLARITON_RES_WORK`` (M471): Engine coupled electrothermal-flexomagnetic-flexochiral-flexobobber-flexoplasmonic-flexopolaritonic nanoscale chiral-bobber-plasmon-polariton hybrid resonance energy and opto-thermo-acoustic dissipation tracking output directive."""
+    id: int = 1
+    title: str = ""
+    dt_etfcbobberplp: float = 0.0    # time frequency for electrothermoflexomagnetochiralbobberplasmonicpolaritonic resonance energy output
+    sens_id: int = 0                 # sensor activation ID
+    dt_etfplp: float = 0.0           # alias field for compatibility
+    dt_etfexplp: float = 0.0         # alias field for compatibility
+    dt_etfphplp: float = 0.0         # alias field for compatibility
+    dt_etfmagplp: float = 0.0        # alias field for compatibility
+    dt_etfcplp: float = 0.0          # alias field for compatibility
+    dt_etfcphplp: float = 0.0        # alias field for compatibility
+    dt_etfcexplp: float = 0.0        # alias field for compatibility
+    dt_etfcmagplp: float = 0.0       # alias field for compatibility
+    dt_etfcspinplp: float = 0.0      # alias field for compatibility
+    dt_etfcspinonplp: float = 0.0    # alias field for compatibility
+    dt_etfcholonplp: float = 0.0     # alias field for compatibility
+    dt_etfcorbitonplp: float = 0.0   # alias field for compatibility
+    dt_etfcplasmononplp: float = 0.0 # alias field for compatibility
+    dt_etfcparamagnonplp: float = 0.0# alias field for compatibility
+    dt_etfcdyonicplp: float = 0.0    # alias field for compatibility
+    dt_etfcaxionicplp: float = 0.0   # alias field for compatibility
+    dt_etfcmajoranaplp: float = 0.0  # alias field for compatibility
+    dt_etfcanyonplp: float = 0.0     # alias field for compatibility
+    dt_etfcskyrmionplp: float = 0.0  # alias field for compatibility
+    dt_etfcmeronplp: float = 0.0     # alias field for compatibility
+    dt_etfcbimeronplp: float = 0.0   # alias field for compatibility
+    dt_etfcinstantonplp: float = 0.0 # alias field for compatibility
+    dt_etfcsolitonplp: float = 0.0   # alias field for compatibility
+    dt_etfcvortexplp: float = 0.0    # alias field for compatibility
+    dt_etfchopfionplp: float = 0.0   # alias field for compatibility
+    dt_etfcmonopoleplp: float = 0.0  # alias field for compatibility
+    dt_etfcsphaleronplp: float = 0.0 # alias field for compatibility
+    dt_etfctoronplp: float = 0.0     # alias field for compatibility
+
+    def __post_init__(self):
+        if self.dt_etfplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfplp
+        elif self.dt_etfexplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfexplp
+        elif self.dt_etfphplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfphplp
+        elif self.dt_etfmagplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfmagplp
+        elif self.dt_etfcplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfcplp
+        elif self.dt_etfcphplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfcphplp
+        elif self.dt_etfcexplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfcexplp
+        elif self.dt_etfcmagplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfcmagplp
+        elif self.dt_etfcspinplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfcspinplp
+        elif self.dt_etfcspinonplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfcspinonplp
+        elif self.dt_etfcholonplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfcholonplp
+        elif self.dt_etfcorbitonplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfcorbitonplp
+        elif self.dt_etfcplasmononplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfcplasmononplp
+        elif self.dt_etfcparamagnonplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfcparamagnonplp
+        elif self.dt_etfcdyonicplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcdyonicplp = self.dt_etfcdyonicplp
+        elif self.dt_etfcaxionicplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfcaxionicplp
+        elif self.dt_etfcmajoranaplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcmajoranaplp = self.dt_etfcbobberplp
+        elif self.dt_etfcanyonplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfcanyonplp
+        elif self.dt_etfcskyrmionplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcskyrmionplp = self.dt_etfcbobberplp
+        elif self.dt_etfcmeronplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcmeronplp = self.dt_etfcbobberplp
+        elif self.dt_etfcbimeronplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbimeronplp = self.dt_etfcbobberplp
+        elif self.dt_etfcinstantonplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcinstantonplp = self.dt_etfcbobberplp
+        elif self.dt_etfcsolitonplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcsolitonplp = self.dt_etfcbobberplp
+        elif self.dt_etfcvortexplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcvortexplp = self.dt_etfcbobberplp
+        elif self.dt_etfchopfionplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfchopfionplp = self.dt_etfcbobberplp
+        elif self.dt_etfcmonopoleplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcmonopoleplp = self.dt_etfcbobberplp
+        elif self.dt_etfcsphaleronplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcsphaleronplp = self.dt_etfcbobberplp
+        elif self.dt_etfctoronplp != 0.0 and self.dt_etfcbobberplp == 0.0:
+            self.dt_etfcbobberplp = self.dt_etfctoronplp
+        elif self.dt_etfcbobberplp != 0.0:
+            if self.dt_etfplp == 0.0:
+                self.dt_etfplp = self.dt_etfcbobberplp
+            if self.dt_etfexplp == 0.0:
+                self.dt_etfexplp = self.dt_etfcbobberplp
+            if self.dt_etfphplp == 0.0:
+                self.dt_etfphplp = self.dt_etfcbobberplp
+            if self.dt_etfmagplp == 0.0:
+                self.dt_etfmagplp = self.dt_etfcbobberplp
+            if self.dt_etfcplp == 0.0:
+                self.dt_etfcplp = self.dt_etfcbobberplp
+            if self.dt_etfcphplp == 0.0:
+                self.dt_etfcphplp = self.dt_etfcbobberplp
+            if self.dt_etfcexplp == 0.0:
+                self.dt_etfcexplp = self.dt_etfcbobberplp
+            if self.dt_etfcmagplp == 0.0:
+                self.dt_etfcmagplp = self.dt_etfcbobberplp
+            if self.dt_etfcspinplp == 0.0:
+                self.dt_etfcspinplp = self.dt_etfcbobberplp
+            if self.dt_etfcspinonplp == 0.0:
+                self.dt_etfcspinonplp = self.dt_etfcbobberplp
+            if self.dt_etfcholonplp == 0.0:
+                self.dt_etfcholonplp = self.dt_etfcbobberplp
+            if self.dt_etfcorbitonplp == 0.0:
+                self.dt_etfcorbitonplp = self.dt_etfcbobberplp
+            if self.dt_etfcplasmononplp == 0.0:
+                self.dt_etfcplasmononplp = self.dt_etfcbobberplp
+            if self.dt_etfcparamagnonplp == 0.0:
+                self.dt_etfcparamagnonplp = self.dt_etfcbobberplp
+            if self.dt_etfcdyonicplp == 0.0:
+                self.dt_etfcdyonicplp = self.dt_etfcbobberplp
+            if self.dt_etfcaxionicplp == 0.0:
+                self.dt_etfcaxionicplp = self.dt_etfcbobberplp
+            if self.dt_etfcmajoranaplp == 0.0:
+                self.dt_etfcmajoranaplp = self.dt_etfcbobberplp
+            if self.dt_etfcanyonplp == 0.0:
+                self.dt_etfcanyonplp = self.dt_etfcbobberplp
+            if self.dt_etfcskyrmionplp == 0.0:
+                self.dt_etfcskyrmionplp = self.dt_etfcbobberplp
+            if self.dt_etfcmeronplp == 0.0:
+                self.dt_etfcmeronplp = self.dt_etfcbobberplp
+            if self.dt_etfcbimeronplp == 0.0:
+                self.dt_etfcbimeronplp = self.dt_etfcbobberplp
+            if self.dt_etfcinstantonplp == 0.0:
+                self.dt_etfcinstantonplp = self.dt_etfcbobberplp
+            if self.dt_etfcsolitonplp == 0.0:
+                self.dt_etfcsolitonplp = self.dt_etfcbobberplp
+            if self.dt_etfcvortexplp == 0.0:
+                self.dt_etfcvortexplp = self.dt_etfcbobberplp
+            if self.dt_etfchopfionplp == 0.0:
+                self.dt_etfchopfionplp = self.dt_etfcbobberplp
+            if self.dt_etfcmonopoleplp == 0.0:
+                self.dt_etfcmonopoleplp = self.dt_etfcbobberplp
+            if self.dt_etfcsphaleronplp == 0.0:
+                self.dt_etfcsphaleronplp = self.dt_etfcbobberplp
+            if self.dt_etfctoronplp == 0.0:
+                self.dt_etfctoronplp = self.dt_etfcbobberplp
+
+
+EngElectrothermoflexomagnetochiralbobberplasmonpolaritonicResonanceEnergy = EngElectrothermoflexomagnetochiralbobberplasmonicpolaritonicResonanceEnergy
+EngElectrothermoflexomagnetobobberchiralplasmonpolaritonicResonanceEnergy = EngElectrothermoflexomagnetochiralbobberplasmonicpolaritonicResonanceEnergy
+
+
+@dataclass
+class LagmulBottSpinorSpatialLinkageJoint:
+    """``/BOTT_SPINOR_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/BOTT_SPINOR_SPATIAL_LINKAGE_JOINT/id`` (M471): Bott spinor spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    id: int = 1
+    title: str = ""
+    node1: int = 0                 # base pivot node 1
+    node2: int = 0                 # intermediate spatial link node 2
+    node3: int = 0                 # driven spatial link node 3
+    stiff: float = 1e6             # kinematic constraint Bott spinor stiffness
+    skew_id: int = 0               # reference coordinate frame ID
+    tol: float = 1e-6              # constraint numerical tolerance
+    link_len_a: float = 0.0        # length of primary spatial link a
+    link_len_b: float = 0.0        # length of secondary spatial link b
+    twist_angle_alpha: float = 0.0 # spatial link twist angle alpha (deg)
+    offset_distance_s: float = 0.0 # axial joint offset distance s
+
+    @property
+    def offset_distance_r(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_r.setter
+    def offset_distance_r(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_v(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_v.setter
+    def offset_distance_v(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_h(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_h.setter
+    def offset_distance_h(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_u(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_u.setter
+    def offset_distance_u(self, val: float) -> None:
+        self.offset_distance_s = val
+
+    @property
+    def offset_distance_f(self) -> float:
+        return self.offset_distance_s
+
+    @offset_distance_f.setter
+    def offset_distance_f(self, val: float) -> None:
+        self.offset_distance_s = val
+
+
+LagmulBottTwistorSpatialLinkageJoint = LagmulBottSpinorSpatialLinkageJoint
+LagmulBottSpinorBundleSpatialLinkageJoint = LagmulBottSpinorSpatialLinkageJoint
+LagmulBottCliffordSpinorSpatialLinkageJoint = LagmulBottSpinorSpatialLinkageJoint
+LagmulBottPeriodicitySpinorSpatialLinkageJoint = LagmulBottSpinorSpatialLinkageJoint
+LagmulBottPeriodicityTwistorSpatialLinkageJoint = LagmulBottSpinorSpatialLinkageJoint
 
 
 

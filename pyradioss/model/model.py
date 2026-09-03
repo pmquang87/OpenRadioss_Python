@@ -3267,6 +3267,31 @@ class Model:
         self.lagmul_borel_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_borel_spinor_spatial_linkage_joints
         self.lagmul_weil_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_borel_spinor_spatial_linkage_joints
         self.lagmul_weil_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_borel_spinor_spatial_linkage_joints
+        # M471 Suite
+        self.fail_ladtransversematrixcrushingfailurerates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_MATRIX_CRUSHING_FAILURE_RATE (M471)
+        self.fail_ladtransversematrixcrushingfailures: Dict[int, Any] = self.fail_ladtransversematrixcrushingfailurerates
+        self.fail_ladtransversematrixcrushfailurerates: Dict[int, Any] = self.fail_ladtransversematrixcrushingfailurerates
+        self.fail_ladtransversematrixcrushfailures: Dict[int, Any] = self.fail_ladtransversematrixcrushingfailurerates
+        self.fail_ladtransversematrixmicrocrushingfailurerates: Dict[int, Any] = self.fail_ladtransversematrixcrushingfailurerates
+        self.fail_ladtransversematrixmicrocrushingfailures: Dict[int, Any] = self.fail_ladtransversematrixcrushingfailurerates
+        self.fail_ladtmcrfrs: Dict[int, Any] = self.fail_ladtransversematrixcrushingfailurerates
+        self.fail_ladtransversematrixcrushingdamagerates: Dict[int, Any] = self.fail_ladtransversematrixcrushingfailurerates
+        self.fail_ladtransversematrixcrushdamagerates: Dict[int, Any] = self.fail_ladtransversematrixcrushingfailurerates
+        self.fail_ladtransversematrixmicrocrushingdamagerates: Dict[int, Any] = self.fail_ladtransversematrixcrushingfailurerates
+        self.eng_electrothermoflexomagnetochiralbobberplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALBOBBERPLASMONICPOLARITONIC_RESONANCE_ENERGY (M471)
+        self.eng_electrothermoflexomagnetochiralbobberplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralbobberplasmonicpolaritonic_resonance_energies
+        self.eng_electrothermoflexomagnetobobberchiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralbobberplasmonicpolaritonic_resonance_energies
+        self.lagmul_bott_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /BOTT_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/BOTT_SPINOR_SPATIAL_LINKAGE_JOINT (M471)
+        self.lagmul_bott_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_bott_spinor_spatial_linkage_joints
+        self.lagmul_bott_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_bott_spinor_spatial_linkage_joints
+        self.lagmul_bott_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_bott_spinor_spatial_linkage_joints
+        self.lagmul_bott_periodicity_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_bott_spinor_spatial_linkage_joints
+        self.lagmul_bott_periodicity_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_bott_spinor_spatial_linkage_joints
+        self.sensor_spring_total_angular_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_SNAP_RATE (M471 / M402)
+        self.sensor_spring_tot_ang_snap_rates: Dict[int, Any] = self.sensor_spring_total_angular_snap_rates
+        self.sensor_spring_total_angular_snaps: Dict[int, Any] = self.sensor_spring_total_angular_snap_rates
+        self.sensor_spring_tot_ang_snaps: Dict[int, Any] = self.sensor_spring_total_angular_snap_rates
+        self.sensor_spring_resultant_angular_snap_rates: Dict[int, Any] = self.sensor_spring_total_angular_snap_rates
 
 
 
