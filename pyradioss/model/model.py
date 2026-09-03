@@ -3086,6 +3086,22 @@ class Model:
         self.lagmul_poisson_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_poisson_spinor_spatial_linkage_joints
         self.lagmul_metaplectic_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_poisson_spinor_spatial_linkage_joints
         self.lagmul_metaplectic_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_poisson_spinor_spatial_linkage_joints
+        self.fail_ladtransverseinterlaminarshearfailurerates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_INTERLAMINAR_SHEAR_FAILURE_RATE (M462)
+        self.fail_ladtransverseinterlaminarshearfailures: Dict[int, Any] = self.fail_ladtransverseinterlaminarshearfailurerates
+        self.fail_ladtransverseinterlaminarfailurerates: Dict[int, Any] = self.fail_ladtransverseinterlaminarshearfailurerates
+        self.fail_ladtransverseinterlaminardelaminationfailurerates: Dict[int, Any] = self.fail_ladtransverseinterlaminarshearfailurerates
+        self.fail_ladtransverseinterlaminarsheardelaminationfailurerates: Dict[int, Any] = self.fail_ladtransverseinterlaminarshearfailurerates
+        self.fail_ladtransverseinterlaminarsheardamagerates: Dict[int, Any] = self.fail_ladtransverseinterlaminarshearfailurerates
+        self.fail_ladtransverseinterlaminardamagerates: Dict[int, Any] = self.fail_ladtransverseinterlaminarshearfailurerates
+        self.eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALMERONPLASMONICPOLARITONIC_RESONANCE_ENERGY (M462)
+        self.eng_electrothermoflexomagnetochiralmeronplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energies
+        self.eng_electrothermoflexomagnetomeronchiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energies
+        self.lagmul_dirac_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /DIRAC_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/DIRAC_SPINOR_SPATIAL_LINKAGE_JOINT (M462)
+        self.lagmul_dirac_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_dirac_spinor_spatial_linkage_joints
+        self.lagmul_dirac_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_dirac_spinor_spatial_linkage_joints
+        self.lagmul_dirac_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_dirac_spinor_spatial_linkage_joints
+        self.lagmul_courant_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_dirac_spinor_spatial_linkage_joints
+        self.lagmul_courant_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_dirac_spinor_spatial_linkage_joints
 
 
 

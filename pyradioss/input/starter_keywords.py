@@ -59498,6 +59498,136 @@ def read_lagmul_torsion_spinor_spatial_linkage_joint(block: KeywordBlock, model:
 
 
 
+
+
+def read_fail_lad_transverse_interlaminar_shear_failure_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_TRANSVERSE_INTERLAMINAR_SHEAR_FAILURE_RATE/mat_ID`` or ``/FAIL/LADEVEZE_TRANSVERSE_INTERLAMINAR_SHEAR_FAILURE_RATE`` (M462): Ladevèze rate-dependent transverse interlaminar shear debonding, mode-II crack propagation, and interlaminar shear failure model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_TRANSVERSE_INTERLAMINAR_SHEAR_FAILURE_RATE/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_TRANSVERSE_INTERLAMINAR_SHEAR_FAILURE_RATE_1")
+        sigma_tisfr0 = _fval(c1[0], 0.0) if len(c1) > 0 and c1[0].strip() else 0.0
+        sigma_tisfrc = _fval(c1[1], 1.0) if len(c1) > 1 and c1[1].strip() else 1.0
+        gamma_tisfr = _fval(c1[2], 0.0) if len(c1) > 2 and c1[2].strip() else 0.0
+        p_tisfr = _fval(c1[3], 1.0) if len(c1) > 3 and c1[3].strip() else 1.0
+        d_tisfr_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        ifail_sh, ifail_so = 1, 1
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_LAD_TRANSVERSE_INTERLAMINAR_SHEAR_FAILURE_RATE_2")
+            ifail_sh = _ival(c2[0], 1) if len(c2) > 0 and c2[0].strip() else 1
+            ifail_so = _ival(c2[1], 1) if len(c2) > 1 and c2[1].strip() else 1
+    else:
+        toks = cards[0].tokens()
+        sigma_tisfr0 = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sigma_tisfrc = float(toks[1].rstrip(',')) if len(toks) > 1 else 1.0
+        gamma_tisfr = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+        p_tisfr = float(toks[3].rstrip(',')) if len(toks) > 3 else 1.0
+        d_tisfr_max = float(toks[4].rstrip(',')) if len(toks) > 4 else 0.999
+        ifail_sh, ifail_so = 1, 1
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            ifail_sh = int(float(toks2[0].rstrip(','))) if len(toks2) > 0 else 1
+            ifail_so = int(float(toks2[1].rstrip(','))) if len(toks2) > 1 else 1
+
+    from ..model.entities import FailLadTransverseInterlaminarShearFailureRate
+    f_id = len(model.fail_ladtransverseinterlaminarshearfailurerates) + 1
+    fm = FailLadTransverseInterlaminarShearFailureRate(
+        mat_id=mat_id,
+        title=title,
+        sigma_tisfr0=sigma_tisfr0,
+        sigma_tisfrc=sigma_tisfrc,
+        gamma_tisfr=gamma_tisfr,
+        p_tisfr=p_tisfr,
+        d_tisfr_max=d_tisfr_max,
+        ifail_sh=ifail_sh,
+        ifail_so=ifail_so,
+        fail_id=f_id,
+    )
+    model.fail_ladtransverseinterlaminarshearfailurerates[mat_id] = fm
+    mat = model.materials.get(mat_id)
+    if mat is not None:
+        mat.fail_models.append(fm)
+        if hasattr(mat, "fm_type"):
+            mat.fm_type = "LAD_TISFR"
+
+
+def read_eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALMERONPLASMONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_CHIRAL_MERON_PLASMON_POLARITON_RES_WORK`` (M462): Engine coupled electrothermal-flexomagnetic-flexochiral-flexomeron-flexoplasmonic-flexopolaritonic nanoscale chiral-meron-plasmon-polariton hybrid resonance energy and opto-thermo-acoustic dissipation tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALMERONPLASMONICPOLARITONIC_RESONANCE_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_etfcmeronplp, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALMERONPLASMONICPOLARITONIC_RESONANCE_ENERGY_1")
+        dt_etfcmeronplp = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_etfcmeronplp = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngElectrothermoflexomagnetochiralmeronplasmonicpolaritonicResonanceEnergy
+    r_id = block.user_id or (len(model.eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energies) + 1)
+    model.eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energies[r_id] = EngElectrothermoflexomagnetochiralmeronplasmonicpolaritonicResonanceEnergy(
+        id=r_id, title=title, dt_etfcmeronplp=dt_etfcmeronplp, sens_id=sens_id
+    )
+
+
+def read_lagmul_dirac_spinor_spatial_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/DIRAC_SPINOR_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/DIRAC_SPINOR_SPATIAL_LINKAGE_JOINT/id`` (M462): Dirac spinor spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/DIRAC_SPINOR_SPATIAL_LINKAGE_JOINT/{block.user_id}: missing data card 1", block.source)
+        return
+
+    node1, node2, node3 = 0, 0, 0
+    stiff, skew_id, tol = 1e6, 0, 1e-6
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("DIRAC_SPINOR_SPATIAL_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0], 0) if len(f1) > 0 else 0
+        node2 = _ival(f1[1], 0) if len(f1) > 1 else 0
+        node3 = _ival(f1[2], 0) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        node2 = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+        node3 = int(float(toks[2].rstrip(','))) if len(toks) > 2 else 0
+        stiff = float(toks[3].rstrip(',')) if len(toks) > 3 else 1e6
+        skew_id = int(float(toks[4].rstrip(','))) if len(toks) > 4 else 0
+        tol = float(toks[5].rstrip(',')) if len(toks) > 5 else 1e-6
+
+    link_len_a, link_len_b, twist_angle_alpha, offset_distance_s = 0.0, 0.0, 0.0, 0.0
+    if len(cards) > 1 and not cards[1].is_blank:
+        if block.fixed and "," not in cards[1].raw:
+            f2 = cards[1].cut("DIRAC_SPINOR_SPATIAL_LINKAGE_JOINT_2")
+            link_len_a = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            link_len_b = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            twist_angle_alpha = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            offset_distance_s = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+        else:
+            toks2 = cards[1].tokens()
+            link_len_a = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            link_len_b = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            twist_angle_alpha = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            offset_distance_s = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+
+    from ..model.entities import LagmulDiracSpinorSpatialLinkageJoint
+    j_id = block.user_id or (len(model.lagmul_dirac_spinor_spatial_linkage_joints) + 1)
+    model.lagmul_dirac_spinor_spatial_linkage_joints[j_id] = LagmulDiracSpinorSpatialLinkageJoint(
+        id=j_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        link_len_a=link_len_a, link_len_b=link_len_b,
+        twist_angle_alpha=twist_angle_alpha, offset_distance_s=offset_distance_s
+    )
+
 def read_fail_lad_dynamic_interlaminar_shear_failure_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/LAD_DYNAMIC_INTERLAMINAR_SHEAR_FAILURE_RATE/mat_ID`` or ``/FAIL/LADEVEZE_DYNAMIC_INTERLAMINAR_SHEAR_FAILURE_RATE`` (M461): Ladevèze rate-dependent dynamic interlaminar shear debonding, mode-II crack acceleration, and interlaminar shear failure model."""
     title, cards = _title_and_data(block)
@@ -85252,6 +85382,72 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "FAIL_LADEVEZE_RATE_DEPENDENT_DYNAMIC_FIBER_COMPRESSION_FAILURE": read_fail_lad_dynamic_fiber_compression_failure_rate,
     "FAIL_LAD_DYNAMIC_FIBER_COMPRESSION_DAMAGE_RATE": read_fail_lad_dynamic_fiber_compression_failure_rate,
     "FAIL_LADEVEZE_DYNAMIC_FIBER_COMPRESSION_DAMAGE_RATE": read_fail_lad_dynamic_fiber_compression_failure_rate,
+
+    # M462: FAIL_LAD_TRANSVERSE_INTERLAMINAR_SHEAR_FAILURE_RATE
+    "FAIL_LAD_TRANSVERSE_INTERLAMINAR_SHEAR_FAILURE_RATE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_INTERLAMINAR_SHEAR_FAILURE_RATE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LAD_TRANSVERSE_INTERLAMINAR_SHEAR_FAILURE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_INTERLAMINAR_SHEAR_FAILURE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LAD_TRANSVERSE_INTERLAMINAR_FAILURE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_INTERLAMINAR_FAILURE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LAD_TRANSVERSE_INTERLAMINAR_FAILURE_RATE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_INTERLAMINAR_FAILURE_RATE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LAD_TRANSVERSE_INTERLAMINAR_DELAMINATION_FAILURE_RATE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_INTERLAMINAR_DELAMINATION_FAILURE_RATE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LAD_TRANSVERSE_INTERLAMINAR_SHEAR_DELAMINATION_FAILURE_RATE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_INTERLAMINAR_SHEAR_DELAMINATION_FAILURE_RATE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LAD_TISFR": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LAD_TISFR_MODEL": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LAD_TISFR_LAW": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LADEVEZE_RATE_DEPENDENT_TRANSVERSE_INTERLAMINAR_SHEAR_FAILURE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LAD_TRANSVERSE_INTERLAMINAR_SHEAR_DAMAGE_RATE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_INTERLAMINAR_SHEAR_DAMAGE_RATE": read_fail_lad_transverse_interlaminar_shear_failure_rate,
+
+    # M462: ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALMERONPLASMONICPOLARITONIC_RESONANCE_ENERGY
+    "ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALMERONPLASMONICPOLARITONIC_RESONANCE_ENERGY": read_eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTRO_THERM_FLEXO_MAG_CHIRAL_MERON_PLASMON_POLARITON_RES_WORK": read_eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energy,
+    "ENG_EELECTROTHERMOFLEXOMAGNETOCHIRALMERONPLASMONICPOLARITONICRESONANCE": read_eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALMERONPLASMONICPOLARITONIC_RESONANCE_DISSIPATION": read_eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energy,
+    "ENG_ET_ELECTROTHERMOFLEXOMAGNETOCHIRALMERONPLASMONICPOLARITONIC_RESONANCE": read_eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOMERONCHIRALPLASMONICPOLARITONIC_RESONANCE_ENERGY": read_eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTRO_THERM_FLEXO_MAG_MERON_CHIRAL_PLASMON_POLARITON_RES_WORK": read_eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energy,
+    "ENG_EELECTROTHERMOFLEXOMAGNETOMERONCHIRALPLASMONICPOLARITONICRESONANCE": read_eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOMERONCHIRALPLASMONICPOLARITONIC_RESONANCE_DISSIPATION": read_eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energy,
+    "ENG_ET_ELECTROTHERMOFLEXOMAGNETOMERONCHIRALPLASMONICPOLARITONIC_RESONANCE": read_eng_electrothermoflexomagnetochiralmeronplasmonicpolaritonic_resonance_energy,
+
+    # M462: DIRAC_SPINOR_SPATIAL_LINKAGE_JOINT
+    "DIRAC_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "LAGMUL_DIRAC_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "DIRAC_SPINOR_SPATIAL_LINKAGE": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "LAGMUL_DIRAC_SPINOR_SPATIAL_LINKAGE": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "DIRAC_SPINOR_SPATIAL_MULTI_LOOP_MECHANISM": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "DIRAC_SPINOR_SPATIAL_SYMMETRIC_MECHANISM": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "DIRAC_SPINOR_SPATIAL_6R_MECHANISM": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "DIRAC_SPINOR_SPATIAL_OVERCONSTRAINED_MECHANISM": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "LAGMUL_DIRAC_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "DIRAC_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "LAGMUL_DIRAC_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "DIRAC_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "LAGMUL_DIRAC_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "DIRAC_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "LAGMUL_COURANT_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "COURANT_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "LAGMUL_COURANT_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_dirac_spinor_spatial_linkage_joint,
+    "COURANT_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_dirac_spinor_spatial_linkage_joint,
+
+    # SENSOR_SPRING_TRANSVERSE_LOCK_RATE aliases
+    "SENSOR_SPRING_TRANSVERSE_LOCK": read_sensor_spring_transverse_lock_rate,
+    "SENSOR_SPRING_TRANS_LOCK": read_sensor_spring_transverse_lock_rate,
+    "SENSOR_SPRING_SHEAR_LOCK_RATE": read_sensor_spring_transverse_lock_rate,
+    "SENSOR_SPRING_SHEAR_LOCK": read_sensor_spring_transverse_lock_rate,
+    "SENSOR_SPRING_POP_RATE_TRANSVERSE_LOCK": read_sensor_spring_transverse_lock_rate,
+    "SENSOR_SPRING_LOCK_RATE_TRANSVERSE": read_sensor_spring_transverse_lock_rate,
+    "SENSOR_SPRING_LOCK_RATE_TRANS": read_sensor_spring_transverse_lock_rate,
+    "SENSOR_SPRING_LOCK_RATE_SHEAR": read_sensor_spring_transverse_lock_rate,
+    "SENSOR_TRANS_LOCK_RATE_SPRING": read_sensor_spring_transverse_lock_rate,
+    "SENSOR_SHEAR_LOCK_RATE_SPRING": read_sensor_spring_transverse_lock_rate,
+    "SENSOR_SPRING_LOCK_TRANSVERSE": read_sensor_spring_transverse_lock_rate,
+    "SENSOR_SPRING_LOCK_SHEAR": read_sensor_spring_transverse_lock_rate,
 
     # M461: FAIL_LAD_DYNAMIC_INTERLAMINAR_SHEAR_FAILURE_RATE
     "FAIL_LAD_DYNAMIC_INTERLAMINAR_SHEAR_FAILURE_RATE": read_fail_lad_dynamic_interlaminar_shear_failure_rate,
