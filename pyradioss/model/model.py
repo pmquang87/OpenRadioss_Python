@@ -3208,6 +3208,24 @@ class Model:
         self.lagmul_kostant_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_kostant_spinor_spatial_linkage_joints
         self.lagmul_segal_shale_weil_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_kostant_spinor_spatial_linkage_joints
         self.lagmul_segal_shale_weil_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_kostant_spinor_spatial_linkage_joints
+        self.fail_ladtransversematrixmicrocrackingfailurerates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_MATRIX_MICROCRACKING_FAILURE_RATE (M468)
+        self.fail_ladtransversematrixmicrocrackingfailures: Dict[int, Any] = self.fail_ladtransversematrixmicrocrackingfailurerates
+        self.fail_ladtransversematrixcrackingfailurerates: Dict[int, Any] = self.fail_ladtransversematrixmicrocrackingfailurerates
+        self.fail_ladtransversematrixcrackingfailures: Dict[int, Any] = self.fail_ladtransversematrixmicrocrackingfailurerates
+        self.fail_ladtransversematrixmicro_crackingfailurerates: Dict[int, Any] = self.fail_ladtransversematrixmicrocrackingfailurerates
+        self.fail_ladtransversematrixmicro_crackingfailures: Dict[int, Any] = self.fail_ladtransversematrixmicrocrackingfailurerates
+        self.fail_ladtransversematrixmicrocrackingdamagerates: Dict[int, Any] = self.fail_ladtransversematrixmicrocrackingfailurerates
+        self.fail_ladtransversematrixcrackingdamagerates: Dict[int, Any] = self.fail_ladtransversematrixmicrocrackingfailurerates
+        self.fail_lad_tmmcfrs: Dict[int, Any] = self.fail_ladtransversematrixmicrocrackingfailurerates
+        self.eng_electrothermoflexomagnetochiralmonopoleplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALMONOPOLEPLASMONICPOLARITONIC_RESONANCE_ENERGY (M468)
+        self.eng_electrothermoflexomagnetochiralmonopoleplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralmonopoleplasmonicpolaritonic_resonance_energies
+        self.eng_electrothermoflexomagnetomonopolechiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralmonopoleplasmonicpolaritonic_resonance_energies
+        self.lagmul_souriau_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /SOURIAU_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/SOURIAU_SPINOR_SPATIAL_LINKAGE_JOINT (M468)
+        self.lagmul_souriau_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_souriau_spinor_spatial_linkage_joints
+        self.lagmul_souriau_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_souriau_spinor_spatial_linkage_joints
+        self.lagmul_souriau_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_souriau_spinor_spatial_linkage_joints
+        self.lagmul_kirillov_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_souriau_spinor_spatial_linkage_joints
+        self.lagmul_kirillov_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_souriau_spinor_spatial_linkage_joints
 
 
 
