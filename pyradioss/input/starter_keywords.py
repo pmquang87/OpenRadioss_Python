@@ -59491,6 +59491,166 @@ def read_lagmul_torsion_spinor_spatial_linkage_joint(block: KeywordBlock, model:
     )
 
 
+
+def read_fail_lad_dynamic_fiber_compression_failure_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_DYNAMIC_FIBER_COMPRESSION_FAILURE_RATE/mat_ID`` or ``/FAIL/LADEVEZE_DYNAMIC_FIBER_COMPRESSION_FAILURE_RATE`` (M458): Ladevèze rate-dependent dynamic longitudinal fiber compressive damage accumulation, high-rate microbuckling band propagation, and fiber crushing failure model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_DYNAMIC_FIBER_COMPRESSION_FAILURE_RATE/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_DYNAMIC_FIBER_COMPRESSION_FAILURE_RATE_1")
+        sigma_dfcfr0 = _fval(c1[0], 0.0) if len(c1) > 0 and c1[0].strip() else 0.0
+        sigma_dfcfrc = _fval(c1[1], 1.0) if len(c1) > 1 and c1[1].strip() else 1.0
+        gamma_dfcfr = _fval(c1[2], 0.0) if len(c1) > 2 and c1[2].strip() else 0.0
+        p_dfcfr = _fval(c1[3], 1.0) if len(c1) > 3 and c1[3].strip() else 1.0
+        d_dfcfr_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        c2 = cards[1].cut("FAIL_LAD_DYNAMIC_FIBER_COMPRESSION_FAILURE_RATE_2") if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = _ival(c2[0], 1) if len(c2) > 0 else 1
+        ifail_so = _ival(c2[1], 1) if len(c2) > 1 else 1
+    else:
+        t1 = cards[0].tokens()
+        sigma_dfcfr0 = float(t1[0].rstrip(',')) if len(t1) > 0 and t1[0].rstrip(',') else 0.0
+        sigma_dfcfrc = float(t1[1].rstrip(',')) if len(t1) > 1 and t1[1].rstrip(',') else 1.0
+        gamma_dfcfr = float(t1[2].rstrip(',')) if len(t1) > 2 and t1[2].rstrip(',') else 0.0
+        p_dfcfr = float(t1[3].rstrip(',')) if len(t1) > 3 and t1[3].rstrip(',') else 1.0
+        d_dfcfr_max = float(t1[4].rstrip(',')) if len(t1) > 4 and t1[4].rstrip(',') else 0.999
+        t2 = cards[1].tokens() if len(cards) > 1 and not cards[1].is_blank else []
+        ifail_sh = int(float(t2[0].rstrip(','))) if len(t2) > 0 else 1
+        ifail_so = int(float(t2[1].rstrip(','))) if len(t2) > 1 else 1
+    fail_id = 0
+    if len(cards) > 2 and not cards[2].is_blank:
+        fail_id = _ival(cards[2].cut("FAIL_RTCL_2")[0]) if block.fixed else int(float(cards[2].tokens()[0].rstrip(',')))
+    params = {
+        "sigma_dfcfr0": sigma_dfcfr0, "sigma_dfcfrc": sigma_dfcfrc, "gamma_dfcfr": gamma_dfcfr,
+        "p_dfcfr": p_dfcfr, "d_dfcfr_max": d_dfcfr_max,
+        "ifail_sh": ifail_sh, "ifail_so": ifail_so, "fail_id": fail_id,
+    }
+    from ..model.entities import FailLadDynamicFiberCompressionFailureRate, FailureModel
+    model.fail_laddynamicfibercompressionfailurerates[mat_id] = FailLadDynamicFiberCompressionFailureRate(
+        mat_id=mat_id, title=title, sigma_dfcfr0=sigma_dfcfr0, sigma_dfcfrc=sigma_dfcfrc,
+        gamma_dfcfr=gamma_dfcfr, p_dfcfr=p_dfcfr, d_dfcfr_max=d_dfcfr_max,
+        ifail_sh=ifail_sh, ifail_so=ifail_so, fail_id=fail_id,
+    )
+    fm_type = "LAD_DYNAMIC_FIBER_COMPRESSION_CRUSHING_RATE" if "CRUSH" in block.keyword else "LAD_DYNAMIC_FIBER_COMPRESSION_FAILURE_RATE"
+    fm = FailureModel(type=fm_type, ifail_sh=ifail_sh, params=params)
+    model.raw_fails.append((mat_id, fm, block.source))
+
+
+def read_eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALAXIONICPLASMONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_CHIRAL_AXIONIC_PLASMON_POLARITON_RES_WORK`` (M458): Engine coupled electrothermal-flexomagnetic-flexochiral-flexoaxionic-flexoplasmonic-flexopolaritonic nanoscale chiral-axionic-plasmon-polariton hybrid resonance energy and opto-thermo-acoustic dissipation tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALAXIONICPLASMONICPOLARITONIC_RESONANCE_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_etfcaxionicplp, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALAXIONICPLASMONICPOLARITONIC_RESONANCE_ENERGY_1")
+        dt_etfcaxionicplp = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_etfcaxionicplp = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngElectrothermoflexomagnetochiralaxionicplasmonicpolaritonicResonanceEnergy
+    r_id = block.user_id or (len(model.eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energies) + 1)
+    model.eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energies[r_id] = EngElectrothermoflexomagnetochiralaxionicplasmonicpolaritonicResonanceEnergy(
+        id=r_id, title=title, dt_etfcaxionicplp=dt_etfcaxionicplp, sens_id=sens_id
+    )
+
+
+def read_lagmul_holonomy_spinor_spatial_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/HOLONOMY_SPINOR_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/HOLONOMY_SPINOR_SPATIAL_LINKAGE_JOINT/id`` (M458): Holonomy spinor spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/HOLONOMY_SPINOR_SPATIAL_LINKAGE_JOINT/{block.user_id}: missing data card 1", block.source)
+        return
+
+    node1, node2, node3 = 0, 0, 0
+    stiff, skew_id, tol = 1e6, 0, 1e-6
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("HOLONOMY_SPINOR_SPATIAL_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0], 0) if len(f1) > 0 else 0
+        node2 = _ival(f1[1], 0) if len(f1) > 1 else 0
+        node3 = _ival(f1[2], 0) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        node2 = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+        node3 = int(float(toks[2].rstrip(','))) if len(toks) > 2 else 0
+        stiff = float(toks[3].rstrip(',')) if len(toks) > 3 else 1e6
+        skew_id = int(float(toks[4].rstrip(','))) if len(toks) > 4 else 0
+        tol = float(toks[5].rstrip(',')) if len(toks) > 5 else 1e-6
+
+    link_len_a, link_len_b, twist_angle_alpha, offset_distance_s = 0.0, 0.0, 0.0, 0.0
+    if len(cards) > 1 and not cards[1].is_blank:
+        if block.fixed and "," not in cards[1].raw:
+            f2 = cards[1].cut("HOLONOMY_SPINOR_SPATIAL_LINKAGE_JOINT_2")
+            link_len_a = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            link_len_b = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            twist_angle_alpha = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            offset_distance_s = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+        else:
+            toks2 = cards[1].tokens()
+            link_len_a = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            link_len_b = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            twist_angle_alpha = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            offset_distance_s = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+
+    from ..model.entities import LagmulHolonomySpinorSpatialLinkageJoint
+    j_id = block.user_id or (len(model.lagmul_holonomy_spinor_spatial_linkage_joints) + 1)
+    model.lagmul_holonomy_spinor_spatial_linkage_joints[j_id] = LagmulHolonomySpinorSpatialLinkageJoint(
+        id=j_id,
+        title=title,
+        node1=node1,
+        node2=node2,
+        node3=node3,
+        stiff=stiff,
+        skew_id=skew_id,
+        tol=tol,
+        link_len_a=link_len_a,
+        link_len_b=link_len_b,
+        twist_angle_alpha=twist_angle_alpha,
+        offset_distance_s=offset_distance_s
+    )
+
+
+def read_sensor_spring_total_angular_pop_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE`` or ``/SENSOR/SPRING_TOT_ANG_POP_RATE`` (M458): Spring element relative resultant total angular acceleration 22nd rate-of-change (resultant total angular pop rate) magnitude threshold sensor."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE/{block.user_id}: missing data card", block.source)
+        return
+
+    spring_id, jtot_ang_pop_max, t_delay = 0, 1e30, 0.0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("SENSOR_SPRING_TOTAL_ANGULAR_POP_RATE_1")
+        spring_id = _ival(f[0], 0) if len(f) > 0 else 0
+        jtot_ang_pop_max = _fval(f[1], 1e30) if len(f) > 1 else 1e30
+        t_delay = _fval(f[2], 0.0) if len(f) > 2 else 0.0
+    else:
+        toks = cards[0].tokens()
+        spring_id = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        jtot_ang_pop_max = float(toks[1].rstrip(',')) if len(toks) > 1 else 1e30
+        t_delay = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+
+    from ..model.entities import SensorSpringTotalAngularPopRate, Sensor
+    s_id = block.user_id or (len(model.sensor_spring_total_angular_pop_rates) + 1)
+    sstapr = SensorSpringTotalAngularPopRate(
+        id=s_id, title=title, spring_id=spring_id,
+        jtot_ang_pop_max=jtot_ang_pop_max, t_delay=t_delay
+    )
+    model.sensor_spring_total_angular_pop_rates[s_id] = sstapr
+    model.sensors.append(Sensor(
+        id=s_id, kind="SPRING_TOTAL_ANGULAR_POP_RATE", tdelay=t_delay
+    ))
+
 def read_sensor_spring_torsional_pop_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/SENSOR/SPRING_TORSIONAL_POP_RATE`` or ``/SENSOR/SPRING_TORSION_POP_RATE`` (M457): Spring element relative torsional acceleration 22nd rate-of-change (torsional pop rate) magnitude threshold sensor."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -84685,6 +84845,69 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "TORSION_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT": read_lagmul_torsion_spinor_spatial_linkage_joint,
     "LAGMUL_TORSION_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_torsion_spinor_spatial_linkage_joint,
     "TORSION_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_torsion_spinor_spatial_linkage_joint,
+    # M458: FAIL_LAD_DYNAMIC_FIBER_COMPRESSION_FAILURE_RATE
+    "FAIL_LAD_DYNAMIC_FIBER_COMPRESSION_FAILURE_RATE": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LADEVEZE_DYNAMIC_FIBER_COMPRESSION_FAILURE_RATE": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LAD_DYNAMIC_FIBER_COMPRESSION_FAILURE": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LADEVEZE_DYNAMIC_FIBER_COMPRESSION_FAILURE": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LAD_DYNAMIC_FIBER_COMPRESSION_RATE": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LADEVEZE_DYNAMIC_FIBER_COMPRESSION_RATE": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LAD_DYNAMIC_FIBER_COMPRESSIVE_FAILURE_RATE": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LADEVEZE_DYNAMIC_FIBER_COMPRESSIVE_FAILURE_RATE": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LAD_DYNAMIC_FIBER_COMPRESSIVE_FAILURE": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LADEVEZE_DYNAMIC_FIBER_COMPRESSIVE_FAILURE": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LAD_DFCFR": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LAD_DFCFR_MODEL": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LAD_DFCFR_LAW": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LADEVEZE_RATE_DEPENDENT_DYNAMIC_FIBER_COMPRESSION_FAILURE": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LAD_DYNAMIC_FIBER_COMPRESSION_DAMAGE_RATE": read_fail_lad_dynamic_fiber_compression_failure_rate,
+    "FAIL_LADEVEZE_DYNAMIC_FIBER_COMPRESSION_DAMAGE_RATE": read_fail_lad_dynamic_fiber_compression_failure_rate,
+
+    # M458: ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALAXIONICPLASMONICPOLARITONIC_RESONANCE_ENERGY
+    "ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALAXIONICPLASMONICPOLARITONIC_RESONANCE_ENERGY": read_eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTRO_THERM_FLEXO_MAG_CHIRAL_AXIONIC_PLASMON_POLARITON_RES_WORK": read_eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energy,
+    "ENG_EELECTROTHERMOFLEXOMAGNETOCHIRALAXIONICPLASMONICPOLARITONICRESONANCE": read_eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALAXIONICPLASMONICPOLARITONIC_RESONANCE_DISSIPATION": read_eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energy,
+    "ENG_ET_ELECTROTHERMOFLEXOMAGNETOCHIRALAXIONICPLASMONICPOLARITONIC_RESONANCE": read_eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOAXIONICCHIRALPLASMONICPOLARITONIC_RESONANCE_ENERGY": read_eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTRO_THERM_FLEXO_MAG_AXIONIC_CHIRAL_PLASMON_POLARITON_RES_WORK": read_eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energy,
+    "ENG_EELECTROTHERMOFLEXOMAGNETOAXIONICCHIRALPLASMONICPOLARITONICRESONANCE": read_eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOAXIONICCHIRALPLASMONICPOLARITONIC_RESONANCE_DISSIPATION": read_eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energy,
+    "ENG_ET_ELECTROTHERMOFLEXOMAGNETOAXIONICCHIRALPLASMONICPOLARITONIC_RESONANCE": read_eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energy,
+
+    # M458: HOLONOMY_SPINOR_SPATIAL_LINKAGE_JOINT
+    "HOLONOMY_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_holonomy_spinor_spatial_linkage_joint,
+    "LAGMUL_HOLONOMY_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_holonomy_spinor_spatial_linkage_joint,
+    "HOLONOMY_SPINOR_SPATIAL_LINKAGE": read_lagmul_holonomy_spinor_spatial_linkage_joint,
+    "LAGMUL_HOLONOMY_SPINOR_SPATIAL_LINKAGE": read_lagmul_holonomy_spinor_spatial_linkage_joint,
+    "HOLONOMY_SPINOR_SPATIAL_MULTI_LOOP_MECHANISM": read_lagmul_holonomy_spinor_spatial_linkage_joint,
+    "HOLONOMY_SPINOR_SPATIAL_SYMMETRIC_MECHANISM": read_lagmul_holonomy_spinor_spatial_linkage_joint,
+    "HOLONOMY_SPINOR_SPATIAL_6R_MECHANISM": read_lagmul_holonomy_spinor_spatial_linkage_joint,
+    "HOLONOMY_SPINOR_SPATIAL_OVERCONSTRAINED_MECHANISM": read_lagmul_holonomy_spinor_spatial_linkage_joint,
+    "LAGMUL_HOLONOMY_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_holonomy_spinor_spatial_linkage_joint,
+    "HOLONOMY_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_holonomy_spinor_spatial_linkage_joint,
+    "LAGMUL_HOLONOMY_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT": read_lagmul_holonomy_spinor_spatial_linkage_joint,
+    "HOLONOMY_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT": read_lagmul_holonomy_spinor_spatial_linkage_joint,
+    "LAGMUL_HOLONOMY_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_holonomy_spinor_spatial_linkage_joint,
+    "HOLONOMY_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_holonomy_spinor_spatial_linkage_joint,
+
+    # M458: SENSOR_SPRING_TOTAL_ANGULAR_POP_RATE
+    "SENSOR_SPRING_TOTAL_ANGULAR_POP_RATE": read_sensor_spring_total_angular_pop_rate,
+    "SENSOR_SPRING_TOT_ANG_POP_RATE": read_sensor_spring_total_angular_pop_rate,
+    "SENSOR_SPRING_TOTAL_ANGULAR_POP": read_sensor_spring_total_angular_pop_rate,
+    "SENSOR_SPRING_TOT_ANG_POP": read_sensor_spring_total_angular_pop_rate,
+    "SENSOR_SPRING_RESULTANT_ANGULAR_POP_RATE": read_sensor_spring_total_angular_pop_rate,
+    "SENSOR_SPRING_RESULTANT_ANGULAR_POP": read_sensor_spring_total_angular_pop_rate,
+    "SENSOR_SPRING_POP_RATE_TOTAL_ANGULAR": read_sensor_spring_total_angular_pop_rate,
+    "SENSOR_SPRING_POP_RATE_TOT_ANG": read_sensor_spring_total_angular_pop_rate,
+    "SENSOR_SPRING_POP_RATE_RESULTANT_ANGULAR": read_sensor_spring_total_angular_pop_rate,
+    "SENSOR_TOTAL_ANGULAR_POP_RATE_SPRING": read_sensor_spring_total_angular_pop_rate,
+    "SENSOR_TOT_ANG_POP_RATE_SPRING": read_sensor_spring_total_angular_pop_rate,
+    "SENSOR_RESULTANT_ANGULAR_POP_RATE_SPRING": read_sensor_spring_total_angular_pop_rate,
+    "SENSOR_SPRING_POP_TOTAL_ANGULAR": read_sensor_spring_total_angular_pop_rate,
+    "SENSOR_SPRING_POP_TOT_ANG": read_sensor_spring_total_angular_pop_rate,
+    "SENSOR_SPRING_POP_RESULTANT_ANGULAR": read_sensor_spring_total_angular_pop_rate,
+
 
     # M457: SENSOR_SPRING_TORSIONAL_POP_RATE
     "SENSOR_SPRING_TORSIONAL_POP_RATE": read_sensor_spring_torsional_pop_rate,

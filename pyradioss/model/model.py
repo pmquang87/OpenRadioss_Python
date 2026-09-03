@@ -3018,6 +3018,28 @@ class Model:
         self.sensor_spring_twist_pop_rates: Dict[int, Any] = self.sensor_spring_torsional_pop_rates # /SENSOR/SPRING_TWIST_POP_RATE (M457)
         self.sensor_spring_twist_pops: Dict[int, Any] = self.sensor_spring_torsional_pop_rates # /SENSOR/SPRING_TWIST_POP (M457)
 
+        # M458 Entities
+        self.fail_laddynamicfibercompressionfailurerates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_FIBER_COMPRESSION_FAILURE_RATE (M458)
+        self.fail_laddynamicfibercompressionfailures: Dict[int, Any] = self.fail_laddynamicfibercompressionfailurerates # /FAIL/LAD_DYNAMIC_FIBER_COMPRESSION_FAILURE (M458)
+        self.fail_laddynamicfibercompressionrates: Dict[int, Any] = self.fail_laddynamicfibercompressionfailurerates # /FAIL/LAD_DYNAMIC_FIBER_COMPRESSION_RATE (M458)
+        self.fail_laddynamicfibercompressivefailurerates: Dict[int, Any] = self.fail_laddynamicfibercompressionfailurerates # /FAIL/LAD_DYNAMIC_FIBER_COMPRESSIVE_FAILURE_RATE (M458)
+        self.fail_laddynamicfibercompressivefailures: Dict[int, Any] = self.fail_laddynamicfibercompressionfailurerates # /FAIL/LAD_DYNAMIC_FIBER_COMPRESSIVE_FAILURE (M458)
+        self.fail_laddynamicfibercompressiondamagerates: Dict[int, Any] = self.fail_laddynamicfibercompressionfailurerates # /FAIL/LAD_DYNAMIC_FIBER_COMPRESSION_DAMAGE_RATE (M458)
+        self.eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALAXIONICPLASMONICPOLARITONIC_RESONANCE_ENERGY (M458)
+        self.eng_electrothermoflexomagnetochiralaxionicplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALAXIONICPLASMONPOLARITONIC_RESONANCE_ENERGY (M458)
+        self.eng_electrothermoflexomagnetoaxionicchiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralaxionicplasmonicpolaritonic_resonance_energies # /ENG/ELECTROTHERMOFLEXOMAGNETOAXIONICCHIRALPLASMONPOLARITONIC_RESONANCE_ENERGY (M458)
+        self.lagmul_holonomy_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /HOLONOMY_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/HOLONOMY_SPINOR_SPATIAL_LINKAGE_JOINT (M458)
+        self.lagmul_holonomy_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_holonomy_spinor_spatial_linkage_joints # /HOLONOMY_TWISTOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/HOLONOMY_TWISTOR_SPATIAL_LINKAGE_JOINT (M458)
+        self.lagmul_holonomy_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_holonomy_spinor_spatial_linkage_joints # /HOLONOMY_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT, /LAGMUL/HOLONOMY_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT (M458)
+        self.lagmul_holonomy_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_holonomy_spinor_spatial_linkage_joints # /HOLONOMY_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/HOLONOMY_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT (M458)
+        self.sensor_spring_total_angular_pop_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_ANGULAR_POP_RATE (M458)
+        self.sensor_spring_tot_ang_pop_rates: Dict[int, Any] = self.sensor_spring_total_angular_pop_rates # /SENSOR/SPRING_TOT_ANG_POP_RATE (M458)
+        self.sensor_spring_total_angular_pops: Dict[int, Any] = self.sensor_spring_total_angular_pop_rates # /SENSOR/SPRING_TOTAL_ANGULAR_POP (M458)
+        self.sensor_spring_tot_ang_pops: Dict[int, Any] = self.sensor_spring_total_angular_pop_rates # /SENSOR/SPRING_TOT_ANG_POP (M458)
+        self.sensor_spring_resultant_angular_pop_rates: Dict[int, Any] = self.sensor_spring_total_angular_pop_rates # /SENSOR/SPRING_RESULTANT_ANGULAR_POP_RATE (M458)
+        self.sensor_spring_resultant_angular_pops: Dict[int, Any] = self.sensor_spring_total_angular_pop_rates # /SENSOR/SPRING_RESULTANT_ANGULAR_POP (M458)
+
+
 
 
 
