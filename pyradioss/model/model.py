@@ -3144,6 +3144,27 @@ class Model:
         self.lagmul_cartan_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_cartan_spinor_spatial_linkage_joints
         self.lagmul_weyl_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_cartan_spinor_spatial_linkage_joints
         self.lagmul_weyl_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_cartan_spinor_spatial_linkage_joints
+        self.fail_ladtransverseinterlaminartensionfailurerates: Dict[int, Any] = {} # /FAIL/LAD_TRANSVERSE_INTERLAMINAR_TENSION_FAILURE_RATE (M465)
+        self.fail_ladtransverseinterlaminartensionfailures: Dict[int, Any] = self.fail_ladtransverseinterlaminartensionfailurerates
+        self.fail_ladtransverseinterlaminartensionalfailurerates: Dict[int, Any] = self.fail_ladtransverseinterlaminartensionfailurerates
+        self.fail_ladtransverseinterlaminartensionalfailures: Dict[int, Any] = self.fail_ladtransverseinterlaminartensionfailurerates
+        self.fail_ladtransverseinterlaminarnormalfailurerates: Dict[int, Any] = self.fail_ladtransverseinterlaminartensionfailurerates
+        self.fail_ladtransverseinterlaminarnormalfailures: Dict[int, Any] = self.fail_ladtransverseinterlaminartensionfailurerates
+        self.fail_ladtransverseinterlaminarnormalpeelingfailurerates: Dict[int, Any] = self.fail_ladtransverseinterlaminartensionfailurerates
+        self.fail_ladtransverseinterlaminarpeelingfailurerates: Dict[int, Any] = self.fail_ladtransverseinterlaminartensionfailurerates
+        self.fail_ladtransverseinterlaminarpeelingfailures: Dict[int, Any] = self.fail_ladtransverseinterlaminartensionfailurerates
+        self.fail_ladtransverseinterlaminartensiondamagerates: Dict[int, Any] = self.fail_ladtransverseinterlaminartensionfailurerates
+        self.fail_ladtransverseinterlaminarnormaldamagerates: Dict[int, Any] = self.fail_ladtransverseinterlaminartensionfailurerates
+        self.fail_ladtransverseinterlaminarpeelingdamagerates: Dict[int, Any] = self.fail_ladtransverseinterlaminartensionfailurerates
+        self.eng_electrothermoflexomagnetochiralsolitonplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALSOLITONPLASMONICPOLARITONIC_RESONANCE_ENERGY (M465)
+        self.eng_electrothermoflexomagnetochiralsolitonplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralsolitonplasmonicpolaritonic_resonance_energies
+        self.eng_electrothermoflexomagnetosolitonchiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralsolitonplasmonicpolaritonic_resonance_energies
+        self.lagmul_majorana_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /MAJORANA_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/MAJORANA_SPINOR_SPATIAL_LINKAGE_JOINT (M465)
+        self.lagmul_majorana_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_majorana_spinor_spatial_linkage_joints
+        self.lagmul_majorana_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_majorana_spinor_spatial_linkage_joints
+        self.lagmul_majorana_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_majorana_spinor_spatial_linkage_joints
+        self.lagmul_pin_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_majorana_spinor_spatial_linkage_joints
+        self.lagmul_pin_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_majorana_spinor_spatial_linkage_joints
 
 
 
