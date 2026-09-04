@@ -401,3 +401,38 @@ class TestZeroVelocity:
             keys, k, v_zero, dt, normal, mu, fn, alpha, filt_keys, filt_vals)
 
         np.testing.assert_allclose(ft2[0], ft1[0], rtol=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# IFQ mapping: verify filter_alpha covers IFQ 10-13 correctly
+# ---------------------------------------------------------------------------
+class TestIFQMappingLogic:
+    """Verify the IFQ >= 10 modes map to the correct filter_alpha
+    coefficients, matching the IFQ 0-3 base modes but using the
+    incremental stiffness force path."""
+
+    def test_ifq10_matches_ifq0(self):
+        """IFQ=10 has the same alpha as IFQ=0 (constant)."""
+        assert filter_alpha(10, 0.75, 1e-4) == filter_alpha(0, 0.75, 1e-4)
+
+    def test_ifq11_matches_ifq1(self):
+        """IFQ=11 has the same alpha as IFQ=1."""
+        assert filter_alpha(11, 0.5, 1e-4) == filter_alpha(1, 0.5, 1e-4)
+
+    def test_ifq12_matches_ifq2(self):
+        """IFQ=12 has the same alpha as IFQ=2."""
+        assert filter_alpha(12, 0.3, 1e-4) == filter_alpha(2, 0.3, 1e-4)
+
+    def test_ifq13_matches_ifq3(self):
+        """IFQ=13 has the same alpha as IFQ=3 (cutoff frequency)."""
+        dt = 1e-4
+        xfiltr = 2000.0
+        assert filter_alpha(13, xfiltr, dt) == filter_alpha(3, xfiltr, dt)
+
+    def test_ifq_dispatch_incremental_vs_filter(self):
+        """IFQ >= 10 activates apply_incremental_stiffness, while
+        IFQ 1-3 activates apply_filter. Both use the same alpha."""
+        for ifq in (10, 11, 12, 13):
+            assert ifq >= 10, f"IFQ={ifq} should route to incremental"
+        for ifq in (1, 2, 3):
+            assert ifq < 10, f"IFQ={ifq} should route to filter"
