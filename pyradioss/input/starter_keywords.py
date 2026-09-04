@@ -60413,6 +60413,135 @@ def read_lagmul_atiyah_spinor_spatial_linkage_joint(block: KeywordBlock, model: 
     )
 
 
+def read_fail_lad_transverse_fiber_kinking_failure_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/FAIL/LAD_TRANSVERSE_FIBER_KINKING_FAILURE_RATE/mat_ID`` or ``/FAIL/LADEVEZE_TRANSVERSE_FIBER_KINKING_FAILURE_RATE`` (M474): Ladevèze rate-dependent transverse fiber micro-buckling and kinking failure rate, out-of-plane compressive kink-band formation, and fiber compressive damage evolution model."""
+    title, cards = _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/FAIL/LAD_TRANSVERSE_FIBER_KINKING_FAILURE_RATE/{block.user_id}: missing data card", block.source)
+        return
+    mat_id = block.user_id
+    if block.fixed:
+        c1 = cards[0].cut("FAIL_LAD_TRANSVERSE_FIBER_KINKING_FAILURE_RATE_1")
+        sigma_tfkfr0 = _fval(c1[0], 0.0) if len(c1) > 0 and c1[0].strip() else 0.0
+        sigma_tfkfrc = _fval(c1[1], 1.0) if len(c1) > 1 and c1[1].strip() else 1.0
+        gamma_tfkfr = _fval(c1[2], 0.0) if len(c1) > 2 and c1[2].strip() else 0.0
+        p_tfkfr = _fval(c1[3], 1.0) if len(c1) > 3 and c1[3].strip() else 1.0
+        d_tfkfr_max = _fval(c1[4], 0.999) if len(c1) > 4 and c1[4].strip() else 0.999
+        ifail_sh, ifail_so = 1, 1
+        if len(cards) > 1 and not cards[1].is_blank:
+            c2 = cards[1].cut("FAIL_LAD_TRANSVERSE_FIBER_KINKING_FAILURE_RATE_2")
+            ifail_sh = _ival(c2[0], 1) if len(c2) > 0 and c2[0].strip() else 1
+            ifail_so = _ival(c2[1], 1) if len(c2) > 1 and c2[1].strip() else 1
+    else:
+        toks = cards[0].tokens()
+        sigma_tfkfr0 = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sigma_tfkfrc = float(toks[1].rstrip(',')) if len(toks) > 1 else 1.0
+        gamma_tfkfr = float(toks[2].rstrip(',')) if len(toks) > 2 else 0.0
+        p_tfkfr = float(toks[3].rstrip(',')) if len(toks) > 3 else 1.0
+        d_tfkfr_max = float(toks[4].rstrip(',')) if len(toks) > 4 else 0.999
+        ifail_sh, ifail_so = 1, 1
+        if len(cards) > 1 and not cards[1].is_blank:
+            toks2 = cards[1].tokens()
+            ifail_sh = int(float(toks2[0].rstrip(','))) if len(toks2) > 0 else 1
+            ifail_so = int(float(toks2[1].rstrip(','))) if len(toks2) > 1 else 1
+
+    from ..model.entities import FailLadTransverseFiberKinkingFailureRate
+    f_id = len(model.fail_ladtransversefiberkinkingfailurerates) + 1
+    fm = FailLadTransverseFiberKinkingFailureRate(
+        mat_id=mat_id,
+        title=title,
+        sigma_tfkfr0=sigma_tfkfr0,
+        sigma_tfkfrc=sigma_tfkfrc,
+        gamma_tfkfr=gamma_tfkfr,
+        p_tfkfr=p_tfkfr,
+        d_tfkfr_max=d_tfkfr_max,
+        ifail_sh=ifail_sh,
+        ifail_so=ifail_so,
+        fail_id=f_id,
+    )
+    model.fail_ladtransversefiberkinkingfailurerates[mat_id] = fm
+    mat = model.materials.get(mat_id)
+    if mat is not None:
+        mat.fail_models.append(fm)
+        if hasattr(mat, "fm_type"):
+            mat.fm_type = "LAD_TFKFR"
+
+
+def read_eng_electrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonic_resonance_energy(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALSKYRMIONIUMPLASMONICPOLARITONIC_RESONANCE_ENERGY`` or ``/ENG/ELECTRO_THERM_FLEXO_MAG_CHIRAL_SKYRMIONIUM_PLASMON_POLARITON_RES_WORK`` (M474): Engine coupled electrothermal-flexomagnetic-flexochiral-flexoskyrmionium-flexoplasmonic-flexopolaritonic nanoscale chiral-skyrmionium-plasmon-polariton hybrid resonance energy and opto-thermo-acoustic dissipation tracking output directive."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALSKYRMIONIUMPLASMONICPOLARITONIC_RESONANCE_ENERGY/{block.user_id}: missing data card", block.source)
+        return
+
+    dt_etfcskyrmioniumplp, sens_id = 0.0, 0
+    if block.fixed and "," not in cards[0].raw:
+        f = cards[0].cut("ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALSKYRMIONIUMPLASMONICPOLARITONIC_RESONANCE_ENERGY_1")
+        dt_etfcskyrmioniumplp = _fval(f[0], 0.0) if len(f) > 0 else 0.0
+        sens_id = _ival(f[1], 0) if len(f) > 1 else 0
+    else:
+        toks = cards[0].tokens()
+        dt_etfcskyrmioniumplp = float(toks[0].rstrip(',')) if len(toks) > 0 else 0.0
+        sens_id = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+
+    from ..model.entities import EngElectrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonicResonanceEnergy
+    r_id = block.user_id or (len(model.eng_electrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonic_resonance_energies) + 1)
+    model.eng_electrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonic_resonance_energies[r_id] = EngElectrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonicResonanceEnergy(
+        id=r_id, title=title, dt_etfcskyrmioniumplp=dt_etfcskyrmioniumplp, sens_id=sens_id
+    )
+
+
+def read_lagmul_hirzebruch_spinor_spatial_linkage_joint(block: KeywordBlock, model: Model, log: MessageLog) -> None:
+    """``/HIRZEBRUCH_SPINOR_SPATIAL_LINKAGE_JOINT/id`` or ``/LAGMUL/HIRZEBRUCH_SPINOR_SPATIAL_LINKAGE_JOINT/id`` (M474): Hirzebruch spinor spatial 6R multivector multi-loop overconstrained kinematic mechanism joint constraint."""
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
+    if not cards or cards[0].is_blank:
+        log.error(f"/HIRZEBRUCH_SPINOR_SPATIAL_LINKAGE_JOINT/{block.user_id}: missing data card 1", block.source)
+        return
+
+    node1, node2, node3 = 0, 0, 0
+    stiff, skew_id, tol = 1e6, 0, 1e-6
+    if block.fixed and "," not in cards[0].raw:
+        f1 = cards[0].cut("HIRZEBRUCH_SPINOR_SPATIAL_LINKAGE_JOINT_1")
+        node1 = _ival(f1[0], 0) if len(f1) > 0 else 0
+        node2 = _ival(f1[1], 0) if len(f1) > 1 else 0
+        node3 = _ival(f1[2], 0) if len(f1) > 2 else 0
+        stiff = _fval(f1[3], 1e6) if len(f1) > 3 else 1e6
+        skew_id = _ival(f1[4], 0) if len(f1) > 4 else 0
+        tol = _fval(f1[5], 1e-6) if len(f1) > 5 else 1e-6
+    else:
+        toks = cards[0].tokens()
+        node1 = int(float(toks[0].rstrip(','))) if len(toks) > 0 else 0
+        node2 = int(float(toks[1].rstrip(','))) if len(toks) > 1 else 0
+        node3 = int(float(toks[2].rstrip(','))) if len(toks) > 2 else 0
+        stiff = float(toks[3].rstrip(',')) if len(toks) > 3 else 1e6
+        skew_id = int(float(toks[4].rstrip(','))) if len(toks) > 4 else 0
+        tol = float(toks[5].rstrip(',')) if len(toks) > 5 else 1e-6
+
+    link_len_a, link_len_b, twist_angle_alpha, offset_distance_s = 0.0, 0.0, 0.0, 0.0
+    if len(cards) > 1 and not cards[1].is_blank:
+        if block.fixed and "," not in cards[1].raw:
+            f2 = cards[1].cut("HIRZEBRUCH_SPINOR_SPATIAL_LINKAGE_JOINT_2")
+            link_len_a = _fval(f2[0], 0.0) if len(f2) > 0 else 0.0
+            link_len_b = _fval(f2[1], 0.0) if len(f2) > 1 else 0.0
+            twist_angle_alpha = _fval(f2[2], 0.0) if len(f2) > 2 else 0.0
+            offset_distance_s = _fval(f2[3], 0.0) if len(f2) > 3 else 0.0
+        else:
+            toks2 = cards[1].tokens()
+            link_len_a = float(toks2[0].rstrip(',')) if len(toks2) > 0 else 0.0
+            link_len_b = float(toks2[1].rstrip(',')) if len(toks2) > 1 else 0.0
+            twist_angle_alpha = float(toks2[2].rstrip(',')) if len(toks2) > 2 else 0.0
+            offset_distance_s = float(toks2[3].rstrip(',')) if len(toks2) > 3 else 0.0
+
+    from ..model.entities import LagmulHirzebruchSpinorSpatialLinkageJoint
+    j_id = block.user_id or (len(model.lagmul_hirzebruch_spinor_spatial_linkage_joints) + 1)
+    model.lagmul_hirzebruch_spinor_spatial_linkage_joints[j_id] = LagmulHirzebruchSpinorSpatialLinkageJoint(
+        id=j_id, title=title, node1=node1, node2=node2, node3=node3,
+        stiff=stiff, skew_id=skew_id, tol=tol,
+        link_len_a=link_len_a, link_len_b=link_len_b,
+        twist_angle_alpha=twist_angle_alpha, offset_distance_s=offset_distance_s
+    )
+
+
 def read_fail_lad_coupled_interlaminar_tension_failure_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/LAD_COUPLED_INTERLAMINAR_TENSION_FAILURE_RATE/mat_ID`` or ``/FAIL/LADEVEZE_COUPLED_INTERLAMINAR_TENSION_FAILURE_RATE`` (M466): Ladevèze rate-dependent coupled multi-axial interlaminar normal tension debonding, mode-I/opening crack acceleration, and interlaminar tension failure model."""
     title, cards = _title_and_data(block)
@@ -86880,6 +87009,109 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SENSOR_SPRING_SNAP_SHEAR": read_sensor_spring_transverse_snap_rate,
     "SENSOR_SPRING_RATE_TRANSVERSE_SNAP": read_sensor_spring_transverse_snap_rate,
     "SENSOR_SPRING_RATE_TRANS_SNAP": read_sensor_spring_transverse_snap_rate,
+
+    # M474: FAIL_LAD_TRANSVERSE_FIBER_KINKING_FAILURE_RATE
+    "FAIL_LAD_TRANSVERSE_FIBER_KINKING_FAILURE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_FIBER_KINKING_FAILURE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TRANSVERSE_FIBER_KINKING_FAILURE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_FIBER_KINKING_FAILURE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TRANSVERSE_FIBER_KINK_FAILURE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_FIBER_KINK_FAILURE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TRANSVERSE_FIBER_KINK_FAILURE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_FIBER_KINK_FAILURE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TRANSVERSE_FIBER_COMPRESSIVE_KINKING_FAILURE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_FIBER_COMPRESSIVE_KINKING_FAILURE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TRANSVERSE_FIBER_COMPRESSIVE_KINKING_FAILURE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_FIBER_COMPRESSIVE_KINKING_FAILURE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TRANSVERSE_FIBER_MICROBUCKLING_FAILURE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_FIBER_MICROBUCKLING_FAILURE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TRANSVERSE_FIBER_MICROBUCKLING_FAILURE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_FIBER_MICROBUCKLING_FAILURE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TRANSVERSE_FIBER_MICRO_BUCKLING_FAILURE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_FIBER_MICRO_BUCKLING_FAILURE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TFDFKFR": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TFDFKFR_MODEL": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TFDFKFR_LAW": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TFKFR": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TFKFR_MODEL": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TFKFR_LAW": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LADEVEZE_RATE_DEPENDENT_TRANSVERSE_FIBER_KINKING_FAILURE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TRANSVERSE_FIBER_KINKING_DAMAGE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_FIBER_KINKING_DAMAGE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TRANSVERSE_FIBER_KINK_DAMAGE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_FIBER_KINK_DAMAGE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LAD_TRANSVERSE_FIBER_MICROBUCKLING_DAMAGE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+    "FAIL_LADEVEZE_TRANSVERSE_FIBER_MICROBUCKLING_DAMAGE_RATE": read_fail_lad_transverse_fiber_kinking_failure_rate,
+
+    # M474: ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALSKYRMIONIUMPLASMONICPOLARITONIC_RESONANCE_ENERGY
+    "ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALSKYRMIONIUMPLASMONICPOLARITONIC_RESONANCE_ENERGY": read_eng_electrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTRO_THERM_FLEXO_MAG_CHIRAL_SKYRMIONIUM_PLASMON_POLARITON_RES_WORK": read_eng_electrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonic_resonance_energy,
+    "ENG_EELECTROTHERMOFLEXOMAGNETOCHIRALSKYRMIONIUMPLASMONICPOLARITONICRESONANCE": read_eng_electrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOCHIRALSKYRMIONIUMPLASMONICPOLARITONIC_RESONANCE_DISSIPATION": read_eng_electrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonic_resonance_energy,
+    "ENG_ET_ELECTROTHERMOFLEXOMAGNETOCHIRALSKYRMIONIUMPLASMONICPOLARITONIC_RESONANCE": read_eng_electrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOSKYRMIONIUMCHIRALPLASMONICPOLARITONIC_RESONANCE_ENERGY": read_eng_electrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTRO_THERM_FLEXO_MAG_SKYRMIONIUM_CHIRAL_PLASMON_POLARITON_RES_WORK": read_eng_electrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonic_resonance_energy,
+    "ENG_EELECTROTHERMOFLEXOMAGNETOSKYRMIONIUMCHIRALPLASMONICPOLARITONICRESONANCE": read_eng_electrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonic_resonance_energy,
+    "ENG_ELECTROTHERMOFLEXOMAGNETOSKYRMIONIUMCHIRALPLASMONICPOLARITONIC_RESONANCE_DISSIPATION": read_eng_electrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonic_resonance_energy,
+    "ENG_ET_ELECTROTHERMOFLEXOMAGNETOSKYRMIONIUMCHIRALPLASMONICPOLARITONIC_RESONANCE": read_eng_electrothermoflexomagnetochiralskyrmioniumplasmonicpolaritonic_resonance_energy,
+
+    # M474: HIRZEBRUCH_SPINOR_SPATIAL_LINKAGE_JOINT
+    "HIRZEBRUCH_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "LAGMUL_HIRZEBRUCH_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "HIRZEBRUCH_SPINOR_SPATIAL_LINKAGE": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "LAGMUL_HIRZEBRUCH_SPINOR_SPATIAL_LINKAGE": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "HIRZEBRUCH_SPINOR_SPATIAL_MULTI_LOOP_MECHANISM": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "HIRZEBRUCH_SPINOR_SPATIAL_SYMMETRIC_MECHANISM": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "HIRZEBRUCH_SPINOR_SPATIAL_6R_MECHANISM": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "HIRZEBRUCH_SPINOR_SPATIAL_OVERCONSTRAINED_MECHANISM": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "LAGMUL_HIRZEBRUCH_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "HIRZEBRUCH_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "LAGMUL_HIRZEBRUCH_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "HIRZEBRUCH_SPINOR_BUNDLE_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "LAGMUL_HIRZEBRUCH_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "HIRZEBRUCH_CLIFFORD_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "LAGMUL_HIRZEBRUCH_RIEMANN_ROCH_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "HIRZEBRUCH_RIEMANN_ROCH_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "LAGMUL_HIRZEBRUCH_RIEMANN_ROCH_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "HIRZEBRUCH_RIEMANN_ROCH_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "LAGMUL_HIRZEBRUCH_SIGNATURE_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "HIRZEBRUCH_SIGNATURE_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "LAGMUL_HIRZEBRUCH_SIGNATURE_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "HIRZEBRUCH_SIGNATURE_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "LAGMUL_HIRZEBRUCH_SURFACE_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "HIRZEBRUCH_SURFACE_SPINOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "LAGMUL_HIRZEBRUCH_SURFACE_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+    "HIRZEBRUCH_SURFACE_TWISTOR_SPATIAL_LINKAGE_JOINT": read_lagmul_hirzebruch_spinor_spatial_linkage_joint,
+
+    # M474 / M404: SENSOR_SPRING_TRANSVERSE_CRACKLE_RATE aliases
+    "SENSOR_SPRING_RATE_TRANSVERSE_CRACKLE": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_RATE_TRANS_CRACKLE": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_TRANSVERSE_CRACKLE_RATE_SENSOR": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_TRANS_CRACKLE_RATE_SENSOR": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_TRANSVERSE_CRACKLE_RATE_SPRING_SENSOR": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_TRANS_CRACKLE_RATE_SPRING_SENSOR": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_CRACKLE_RATE_TRANSVERSE_SENSOR": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_CRACKLE_RATE_TRANS_SENSOR": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_RATE_CRACKLE_TRANSVERSE": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_RATE_CRACKLE_TRANS": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_RATE_TRANSVERSE_CRK": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_RATE_TRANS_CRK": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_CRACKLE_TRANSVERSE": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_CRACKLE_TRANS": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_SNAP_RATE_TRANSVERSE_CRACKLE": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_SNAP_RATE_TRANS_CRACKLE": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_LOCK_RATE_TRANSVERSE_CRACKLE": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_LOCK_RATE_TRANS_CRACKLE": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_SHEAR_CRACKLE_RATE": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_RATE_SHEAR_CRACKLE": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_SHEAR_CRACKLE_RATE_SENSOR": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SHEAR_CRACKLE_RATE_SPRING_SENSOR": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_CRACKLE_RATE_SHEAR_SENSOR": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_RATE_CRACKLE_SHEAR": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_RATE_SHEAR_CRK": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_CRACKLE_SHEAR": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_SNAP_RATE_SHEAR_CRACKLE": read_sensor_spring_transverse_crackle_rate,
+    "SENSOR_SPRING_LOCK_RATE_SHEAR_CRACKLE": read_sensor_spring_transverse_crackle_rate,
 
     # M473: FAIL_LAD_DYNAMIC_FIBER_KINKING_FAILURE_RATE
     "FAIL_LAD_DYNAMIC_FIBER_KINKING_FAILURE_RATE": read_fail_lad_dynamic_fiber_kinking_failure_rate,
