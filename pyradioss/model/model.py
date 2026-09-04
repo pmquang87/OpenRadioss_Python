@@ -3433,6 +3433,46 @@ class Model:
         self.sensor_spring_rot_crackles: Dict[int, Any] = self.sensor_spring_bending_crackle_rates
         self.sensor_spring_rotational_crackles: Dict[int, Any] = self.sensor_spring_bending_crackle_rates
 
+        # M476 Suite
+        self.fail_laddynamiccorecrushingfailurerates: Dict[int, Any] = {} # /FAIL/LAD_DYNAMIC_CORE_CRUSHING_FAILURE_RATE (M476)
+        self.fail_laddynamiccorecrushingfailures: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.fail_laddynamiccorecrushfailurerates: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.fail_laddynamiccorecrushfailures: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.fail_laddynamicfiberdirectioncorecrushingfailurerates: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.fail_laddynamicfiberdirectioncorecrushingfailures: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.fail_ladfiberdirectiondynamiccorecrushingfailurerates: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.fail_laddfdccfrs: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.fail_laddccfrs: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.fail_laddynamiccorecrushingdamagerates: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.fail_laddynamiccorecrushdamagerates: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.fail_laddynamichoneycombcorecrushingfailurerates: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.fail_laddynamicfoamcorecrushingfailurerates: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.fail_laddynamicsandwichcorecrushingfailurerates: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.fail_laddynamiccellularcorecrushingfailurerates: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.fail_ladevezedynamiccorecrushingfailurerates: Dict[int, Any] = self.fail_laddynamiccorecrushingfailurerates
+        self.eng_electrothermoflexomagnetochiralantimeronplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALANTIMERONPLASMONICPOLARITONIC_RESONANCE_ENERGY (M476)
+        self.eng_electrothermoflexomagnetochiralantimeronplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralantimeronplasmonicpolaritonic_resonance_energies
+        self.eng_electrothermoflexomagnetoantimeronchiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralantimeronplasmonicpolaritonic_resonance_energies
+        self.eng_electrothermoflexomagnetochiralbiskyrmionplasmonicpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralantimeronplasmonicpolaritonic_resonance_energies
+        self.eng_electrothermoflexomagnetochiralbiskyrmionplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralantimeronplasmonicpolaritonic_resonance_energies
+        self.lagmul_serre_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /SERRE_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/SERRE_SPINOR_SPATIAL_LINKAGE_JOINT (M476)
+        self.lagmul_serre_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_serre_spinor_spatial_linkage_joints
+        self.lagmul_serre_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_serre_spinor_spatial_linkage_joints
+        self.lagmul_serre_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_serre_spinor_spatial_linkage_joints
+        self.lagmul_serre_duality_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_serre_spinor_spatial_linkage_joints
+        self.lagmul_serre_duality_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_serre_spinor_spatial_linkage_joints
+        self.lagmul_serre_fibration_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_serre_spinor_spatial_linkage_joints
+        self.lagmul_serre_fibration_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_serre_spinor_spatial_linkage_joints
+        self.lagmul_serre_spectral_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_serre_spinor_spatial_linkage_joints
+        self.lagmul_serre_spectral_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_serre_spinor_spatial_linkage_joints
+        self.sensor_spring_tors_crackle_rates: Dict[int, Any] = self.sensor_spring_torsional_crackle_rates
+        self.sensor_spring_torsional_crackles: Dict[int, Any] = self.sensor_spring_torsional_crackle_rates
+        self.sensor_spring_tors_crackles: Dict[int, Any] = self.sensor_spring_torsional_crackle_rates
+        self.sensor_spring_twist_crackle_rates: Dict[int, Any] = self.sensor_spring_torsional_crackle_rates
+        self.sensor_spring_twist_crackles: Dict[int, Any] = self.sensor_spring_torsional_crackle_rates
+        self.sensor_spring_twisting_crackle_rates: Dict[int, Any] = self.sensor_spring_torsional_crackle_rates
+        self.sensor_spring_twisting_crackles: Dict[int, Any] = self.sensor_spring_torsional_crackle_rates
+
 
 
 
