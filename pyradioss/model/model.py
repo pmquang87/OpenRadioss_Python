@@ -3293,6 +3293,44 @@ class Model:
         self.sensor_spring_tot_ang_snaps: Dict[int, Any] = self.sensor_spring_total_angular_snap_rates
         self.sensor_spring_resultant_angular_snap_rates: Dict[int, Any] = self.sensor_spring_total_angular_snap_rates
 
+        # M472 Suite
+        self.fail_ladcoupledmatrixcrushingfailurerates: Dict[int, Any] = {} # /FAIL/LAD_COUPLED_MATRIX_CRUSHING_FAILURE_RATE (M472)
+        self.fail_ladcoupledmatrixcrushingfailures: Dict[int, Any] = self.fail_ladcoupledmatrixcrushingfailurerates
+        self.fail_ladcoupledmatrixcrushfailurerates: Dict[int, Any] = self.fail_ladcoupledmatrixcrushingfailurerates
+        self.fail_ladcoupledmatrixcrushfailures: Dict[int, Any] = self.fail_ladcoupledmatrixcrushingfailurerates
+        self.fail_ladcouplematrixcrushingfailurerates: Dict[int, Any] = self.fail_ladcoupledmatrixcrushingfailurerates
+        self.fail_ladcouplematrixcrushingfailures: Dict[int, Any] = self.fail_ladcoupledmatrixcrushingfailurerates
+        self.fail_ladcouplematrixcrushfailurerates: Dict[int, Any] = self.fail_ladcoupledmatrixcrushingfailurerates
+        self.fail_ladcouplematrixcrushfailures: Dict[int, Any] = self.fail_ladcoupledmatrixcrushingfailurerates
+        self.fail_ladcoupledmatrixmicrocrushingfailurerates: Dict[int, Any] = self.fail_ladcoupledmatrixcrushingfailurerates
+        self.fail_ladcoupledmatrixmicrocrushingfailures: Dict[int, Any] = self.fail_ladcoupledmatrixcrushingfailurerates
+        self.fail_ladcmcrfrs: Dict[int, Any] = self.fail_ladcoupledmatrixcrushingfailurerates
+        self.fail_ladcoupledmatrixcrushingdamagerates: Dict[int, Any] = self.fail_ladcoupledmatrixcrushingfailurerates
+        self.fail_ladcoupledmatrixcrushdamagerates: Dict[int, Any] = self.fail_ladcoupledmatrixcrushingfailurerates
+        self.fail_ladcoupledmatrixmicrocrushingdamagerates: Dict[int, Any] = self.fail_ladcoupledmatrixcrushingfailurerates
+        self.eng_electrothermoflexomagnetochiralblochpointplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALBLOCHPOINTPLASMONICPOLARITONIC_RESONANCE_ENERGY (M472)
+        self.eng_electrothermoflexomagnetochiralblochpointplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralblochpointplasmonicpolaritonic_resonance_energies
+        self.eng_electrothermoflexomagnetoblochpointchiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralblochpointplasmonicpolaritonic_resonance_energies
+        self.lagmul_chern_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /CHERN_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/CHERN_SPINOR_SPATIAL_LINKAGE_JOINT (M472)
+        self.lagmul_chern_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_chern_spinor_spatial_linkage_joints
+        self.lagmul_chern_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_chern_spinor_spatial_linkage_joints
+        self.lagmul_chern_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_chern_spinor_spatial_linkage_joints
+        self.lagmul_singer_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_chern_spinor_spatial_linkage_joints
+        self.lagmul_singer_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_chern_spinor_spatial_linkage_joints
+        self.lagmul_chern_simons_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_chern_spinor_spatial_linkage_joints
+        self.lagmul_chern_simons_spatial_linkage_joints: Dict[int, Any] = self.lagmul_chern_spinor_spatial_linkage_joints
+        self.lagmul_chern_simons_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_chern_spinor_spatial_linkage_joints
+        if not hasattr(self, "sensor_spring_total_snap_rates"):
+            self.sensor_spring_total_snap_rates: Dict[int, Any] = {} # /SENSOR/SPRING_TOTAL_SNAP_RATE (M472 / M399)
+        self.sensor_spring_tot_snap_rates: Dict[int, Any] = self.sensor_spring_total_snap_rates
+        self.sensor_spring_total_snaps: Dict[int, Any] = self.sensor_spring_total_snap_rates
+        self.sensor_spring_tot_snaps: Dict[int, Any] = self.sensor_spring_total_snap_rates
+        self.sensor_spring_resultant_snap_rates: Dict[int, Any] = self.sensor_spring_total_snap_rates
+        self.sensor_spring_linear_total_snap_rates: Dict[int, Any] = self.sensor_spring_total_snap_rates
+        self.sensor_spring_snap_totals: Dict[int, Any] = self.sensor_spring_total_snap_rates
+        self.sensor_spring_snap_tots: Dict[int, Any] = self.sensor_spring_total_snap_rates
+        self.sensor_spring_snap_rate_totals: Dict[int, Any] = self.sensor_spring_total_snap_rates
+        self.sensor_spring_snap_rate_tots: Dict[int, Any] = self.sensor_spring_total_snap_rates
 
 
 
