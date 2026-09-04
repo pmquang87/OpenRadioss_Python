@@ -3397,6 +3397,42 @@ class Model:
         self.sensor_spring_shear_crackle_rates: Dict[int, Any] = self.sensor_spring_transverse_crackle_rates
         self.sensor_spring_shear_crackles: Dict[int, Any] = self.sensor_spring_transverse_crackle_rates
 
+        # M475 Suite
+        self.fail_ladcoupledfiberkinkingfailurerates: Dict[int, Any] = {} # /FAIL/LAD_COUPLED_FIBER_KINKING_FAILURE_RATE (M475)
+        self.fail_ladcoupledfiberkinkingfailures: Dict[int, Any] = self.fail_ladcoupledfiberkinkingfailurerates
+        self.fail_ladcoupledfiberkinkfailurerates: Dict[int, Any] = self.fail_ladcoupledfiberkinkingfailurerates
+        self.fail_ladcoupledfiberkinkfailures: Dict[int, Any] = self.fail_ladcoupledfiberkinkingfailurerates
+        self.fail_ladcoupledfibercompressivekinkingfailurerates: Dict[int, Any] = self.fail_ladcoupledfiberkinkingfailurerates
+        self.fail_ladcoupledfibercompressivekinkingfailures: Dict[int, Any] = self.fail_ladcoupledfiberkinkingfailurerates
+        self.fail_ladcoupledfibermicrobucklingfailurerates: Dict[int, Any] = self.fail_ladcoupledfiberkinkingfailurerates
+        self.fail_ladcoupledfibermicrobucklingfailures: Dict[int, Any] = self.fail_ladcoupledfiberkinkingfailurerates
+        self.fail_ladcfdfkfrs: Dict[int, Any] = self.fail_ladcoupledfiberkinkingfailurerates
+        self.fail_ladcfkfrs: Dict[int, Any] = self.fail_ladcoupledfiberkinkingfailurerates
+        self.fail_ladcoupledfiberkinkingdamagerates: Dict[int, Any] = self.fail_ladcoupledfiberkinkingfailurerates
+        self.fail_ladcoupledfiberkinkdamagerates: Dict[int, Any] = self.fail_ladcoupledfiberkinkingfailurerates
+        self.fail_ladcoupledfibermicrobucklingdamagerates: Dict[int, Any] = self.fail_ladcoupledfiberkinkingfailurerates
+        self.fail_ladevezecoupledfiberkinkingfailurerates: Dict[int, Any] = self.fail_ladcoupledfiberkinkingfailurerates
+        self.eng_electrothermoflexomagnetochiralantiskyrmionplasmonicpolaritonic_resonance_energies: Dict[int, Any] = {} # /ENG/ELECTROTHERMOFLEXOMAGNETOCHIRALANTISKYRMIONPLASMONICPOLARITONIC_RESONANCE_ENERGY (M475)
+        self.eng_electrothermoflexomagnetochiralantiskyrmionplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralantiskyrmionplasmonicpolaritonic_resonance_energies
+        self.eng_electrothermoflexomagnetoantiskyrmionchiralplasmonpolaritonic_resonance_energies: Dict[int, Any] = self.eng_electrothermoflexomagnetochiralantiskyrmionplasmonicpolaritonic_resonance_energies
+        self.lagmul_grothendieck_spinor_spatial_linkage_joints: Dict[int, Any] = {} # /GROTHENDIECK_SPINOR_SPATIAL_LINKAGE_JOINT, /LAGMUL/GROTHENDIECK_SPINOR_SPATIAL_LINKAGE_JOINT (M475)
+        self.lagmul_grothendieck_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_grothendieck_spinor_spatial_linkage_joints
+        self.lagmul_grothendieck_spinor_bundle_spatial_linkage_joints: Dict[int, Any] = self.lagmul_grothendieck_spinor_spatial_linkage_joints
+        self.lagmul_grothendieck_clifford_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_grothendieck_spinor_spatial_linkage_joints
+        self.lagmul_grothendieck_riemann_roch_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_grothendieck_spinor_spatial_linkage_joints
+        self.lagmul_grothendieck_riemann_roch_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_grothendieck_spinor_spatial_linkage_joints
+        self.lagmul_grothendieck_motivic_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_grothendieck_spinor_spatial_linkage_joints
+        self.lagmul_grothendieck_motivic_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_grothendieck_spinor_spatial_linkage_joints
+        self.lagmul_grothendieck_topos_spinor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_grothendieck_spinor_spatial_linkage_joints
+        self.lagmul_grothendieck_topos_twistor_spatial_linkage_joints: Dict[int, Any] = self.lagmul_grothendieck_spinor_spatial_linkage_joints
+        self.sensor_spring_bend_crackle_rates: Dict[int, Any] = self.sensor_spring_bending_crackle_rates
+        self.sensor_spring_bending_crackles: Dict[int, Any] = self.sensor_spring_bending_crackle_rates
+        self.sensor_spring_bend_crackles: Dict[int, Any] = self.sensor_spring_bending_crackle_rates
+        self.sensor_spring_rot_crackle_rates: Dict[int, Any] = self.sensor_spring_bending_crackle_rates
+        self.sensor_spring_rotational_crackle_rates: Dict[int, Any] = self.sensor_spring_bending_crackle_rates
+        self.sensor_spring_rot_crackles: Dict[int, Any] = self.sensor_spring_bending_crackle_rates
+        self.sensor_spring_rotational_crackles: Dict[int, Any] = self.sensor_spring_bending_crackle_rates
+
 
 
 
