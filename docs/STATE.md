@@ -487,6 +487,8 @@ real history is 41 milestones. One line each:
 
 | M478 | /DAMP Rayleigh Mass Damping Unit Tests & Validation: First direct test coverage for `Dampers.apply()` in `engine/damping.py` — the exact integrating factor mass-proportional damping (Fortran origin: damping.F, damping51, lines 100-228). Tests cover the exact factor formula (v *= exp(-α·dt) for 1D, 3D, multi-node), KE identity energy booking (translation-only, rotation-only, combined), time windowing (Tstart/Tstop gates), rotational DOF damping (inertia > 0 guard), multiple overlapping dampers (sequential composition), unconditional stability at α·dt = 100, edge cases (dt=0, α=0, empty items), and multi-cycle accumulation. Updated damping.py docstrings with exact Fortran line citations (damping.F lines 129-228) and documented the port's integrating factor vs Fortran's implicit-trapezoidal approach. 17 new tests. |
 
+| M479 | Contact/Tracking Element-Deletion Bookkeeping Unit Tests: First direct test coverage for `contact/tracking.py` (85 lines, 4 functions, zero prior tests) — the element-deletion/contact interaction bookkeeping that maintains segment and node masks when /FAIL criteria delete elements. Tests cover `alive_segment_mask` (all-alive, some-dead, no-off, empty-provenance, mixed-groups shells+bricks, empty-input), `any_deletable` (no-off, off-no-chk_fail, off-and-chk_fail, empty-provenance, only-empty), `node_reference_counts` (single-triangle, shared-edge, alive-only filter, multi-group accumulation, empty-model), and `tracked_node_mask` (all-alive, orphaned-node, extra-mass-node, partial-deletion). Updated tracking.py module docstring with exact Fortran file citations (intfop2.F, i7for3.F, int_checksum.F). 20 new tests. |
+
 
 
 

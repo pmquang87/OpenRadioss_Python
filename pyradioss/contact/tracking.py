@@ -1,11 +1,12 @@
 """
 Contact bookkeeping against element deletion (/FAIL, M3).
 
-Fortran origin: the ``IDEL`` option of the interfaces — ``resol.F`` and
-the interface force routines consult the element ``GBUF%OFF`` flags and
-remove the segments of deleted elements from the candidate lists
-(``engine/source/interfaces/interf/int_checksum / intfop2`` bookkeeping,
-and ``i7for3``'s dead-segment skip).
+Fortran origin: the ``IDEL`` option of the interfaces —
+``engine/source/interfaces/interf/intfop2.F`` (segment bookkeeping after
+element deletion), ``engine/source/interfaces/int07/i7for3.F`` (dead-segment
+skip: segments with parent ``GBUF%OFF <= 0`` are skipped in the force loop),
+and ``engine/source/interfaces/interf/int_checksum.F`` (contact-surface
+integrity checks).
 
 Why this matters physically: when a /FAIL criterion deletes an element,
 its former faces become *free surface* — crack faces. If the contact kept
