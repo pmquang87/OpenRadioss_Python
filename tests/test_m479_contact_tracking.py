@@ -204,6 +204,32 @@ class TestAnyDeletable:
 
         assert any_deletable(model, seg_gtype) is False
 
+    def test_secondary_failure_enables_deletable(self):
+        """BUG-06: Secondary nodes belonging to failure-capable element enable deletion tracking."""
+        model = _Model(10, {
+            "shells": _Group(
+                conn=np.array([[0, 1, 2, 3]]),
+                state={"off": np.array([1.0]), "chk_fail": True}
+            )
+        })
+        seg_gtype = np.array([""])  # Main surface has empty provenance
+        sec_nodes = np.array([2, 5])
+
+        assert any_deletable(model, seg_gtype, sec_nodes=sec_nodes) is True
+
+    def test_secondary_without_failure_remains_false(self):
+        """Secondary nodes in non-failing elements keep any_deletable False."""
+        model = _Model(10, {
+            "shells": _Group(
+                conn=np.array([[0, 1, 2, 3]]),
+                state={"off": np.array([1.0])}  # no chk_fail
+            )
+        })
+        seg_gtype = np.array([""])
+        sec_nodes = np.array([2, 5])
+
+        assert any_deletable(model, seg_gtype, sec_nodes=sec_nodes) is False
+
 
 # ======================================================================
 # node_reference_counts
@@ -273,6 +299,15 @@ class TestNodeReferenceCounts:
         cnt = node_reference_counts(model, alive_only=False)
 
         np.testing.assert_array_equal(cnt, [0, 0, 0, 0, 0])
+
+    def test_placeholder_connectivity_ignored(self):
+        """BUG-07: -1 placeholders (e.g. slaved TETRA10) must not increment the last node."""
+        model = _Model(5, {"tetra10s": _Group(
+            conn=np.array([[0, 1, 2, 3, -1, -1, -1, -1, -1, -1]]),
+            state={}
+        )})
+        cnt = node_reference_counts(model, alive_only=False)
+        np.testing.assert_array_equal(cnt, [1, 1, 1, 1, 0])
 
 
 # ======================================================================

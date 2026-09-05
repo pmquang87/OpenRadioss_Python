@@ -50,9 +50,16 @@ def alive_segment_mask(model: Model, seg_gtype: np.ndarray,
     return mask
 
 
-def any_deletable(model: Model, seg_gtype: np.ndarray) -> bool:
+def any_deletable(model: Model, seg_gtype: np.ndarray,
+                   sec_nodes: np.ndarray | None = None) -> bool:
     """False when no referenced group can ever delete an element — lets
-    the per-cycle mask refresh be skipped entirely for plain models."""
+    the per-cycle mask refresh be skipped entirely for plain models.
+
+    When *sec_nodes* is given, also check all element groups that contain
+    any of those nodes (the secondary side).  This catches the case where
+    only secondary-side elements carry a /FAIL criterion.
+    """
+    # Main-surface check (original logic)
     for gname in np.unique(seg_gtype):
         if gname == "":
             continue
@@ -60,6 +67,15 @@ def any_deletable(model: Model, seg_gtype: np.ndarray) -> bool:
         if group.state.get("off") is not None and group.state.get(
                 "chk_fail", False):
             return True
+    # Secondary-node check: scan all element groups for any that contain
+    # a secondary node AND have failure capability.
+    if sec_nodes is not None and len(sec_nodes) > 0 and hasattr(model, "element_groups"):
+        for gname, group in model.element_groups():
+            if group.state.get("off") is None or not group.state.get(
+                    "chk_fail", False):
+                continue
+            if np.isin(group.conn, sec_nodes).any():
+                return True
     return False
 
 

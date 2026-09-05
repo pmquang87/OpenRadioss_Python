@@ -309,7 +309,8 @@ class ContactType7:
         # means no deletion processing even if the material can fail.
         self.idel = int(getattr(itf, 'idel', 0))
         self.deletable = (self.idel >= 1 and
-                          tracking.any_deletable(model, self.seg_gtype))
+                          tracking.any_deletable(model, self.seg_gtype,
+                                                 sec_nodes=self.nodes))
         if self.deletable:
             self.ref_total = tracking.node_reference_counts(
                 model, alive_only=False)
