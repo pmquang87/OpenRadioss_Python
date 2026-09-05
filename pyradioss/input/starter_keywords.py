@@ -14846,13 +14846,15 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         pass   # compact path — variable not defined
     xfiltr = 0.0
     if ifq > 0:
-        if ifq == 1:
+        if ifq == 10:
+            xfiltr = 1.0                     # IFQ=10: constant alpha=1 (hm_read_inter_type07.F:623)
+        elif ifq % 10 == 1:
             xfiltr = xfreq
-        elif ifq == 2:
+        elif ifq % 10 == 2:
             xfiltr = (2.0 * np.pi / xfreq) if xfreq > 0.0 else -1.0
-        elif ifq == 3:
+        elif ifq % 10 == 3:
             xfiltr = 2.0 * np.pi * xfreq
-        if xfiltr < 0.0 or (xfiltr > 1.0 and ifq <= 2):
+        if xfiltr < 0.0 or (xfiltr > 1.0 and ifq % 10 <= 2):
             log.error(f"/INTER/{kind}/{block.user_id}: friction filtering "
                       f"factor out of range (Xfreq={xfreq:g} -> "
                       f"XFILTR={xfiltr:g}, must be in [0,1] for "

@@ -555,6 +555,7 @@ class ContactType7:
                     apply_incremental_stiffness(keys, K, vrel, dt, nvec, mu, Fn,
                                                 alpha, self._filt_keys,
                                                 self._filt_vals)
+                ftvec = -ftvec  # oppose sliding (i7for3.F:1511: FNCONT(JG) -= FXI)
             else:
                 Ft = mu * Fn * vt_mag / (
                     vt_mag + 1e-3 * gap_ref / max(dt, EM20))
