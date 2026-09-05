@@ -91,3 +91,74 @@ def test_read_inter_lagmul_type7(tmp_path):
     assert i7.surf_id == 7
     assert i7.gap == 0.02
     assert i7.lagmul is True
+
+
+def test_bug03_lagmul_solver_enters_solve():
+    """BUG-03: Lagrange-multiplier constraints must have nonzero len and generate rows on first force transfer."""
+    import numpy as np
+    from pyradioss.engine.lagmul import LagmulSolver
+    from pyradioss.model.entities import Interface, NodeGroup
+    from types import SimpleNamespace
+
+    model = Model()
+    model.node_ids = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9])
+    model.x = np.array([
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+        [1.0, 0.0, 1.0],
+        [1.0, 1.0, 1.0],
+        [0.0, 1.0, 1.0],
+        [0.5, 0.5, 0.5],  # node 9 inside brick
+    ], dtype=float)
+    model.x0 = model.x.copy()
+    model.v = np.zeros_like(model.x)
+    model.vr = np.zeros_like(model.x)
+    model.mass = np.ones(9, dtype=float)
+
+    # Brick group
+    model.bricks = SimpleNamespace(
+        ixs=np.array([[0, 1, 2, 3, 4, 5, 6, 7]], dtype=np.int64)
+    )
+    egrp = SimpleNamespace(elem_idx=np.array([0], dtype=np.int64))
+    model.egroups = {"BRIC": {1: egrp}}
+
+    # Node group for secondary node (node index 8)
+    ngrp = NodeGroup(id=1, node_ids=[9])
+    ngrp.node_idx = np.array([8], dtype=np.int64)
+    model.node_groups[1] = ngrp
+
+    itf = Interface(
+        id=1, type=16, grnod_id=1, grbric_id1=1, itied=1, lagmul=True
+    )
+    model.interfaces.append(itf)
+
+    log = MessageLog()
+    solver = LagmulSolver(model, loads=None, log=log)
+
+    # Acceptance check 1: len(solver) > 0 on initialization without manually seeding nc
+    assert len(solver) == 1
+    assert solver.nc == 0  # nc starts at 0 before first force transfer
+
+    # Acceptance check 2: transfer_forces executes, generates rows, updates nc, and injects forces
+    fint = np.zeros_like(model.x)
+    fcont = np.zeros_like(model.x)
+    fext = np.zeros_like(model.x)
+    fext[8] = [10.0, 0.0, 0.0]  # external load on secondary node
+    mint = np.zeros_like(model.x)
+    inv_mass = np.ones(9, dtype=float)
+    inv_inertia = np.zeros(9, dtype=float)
+
+    solver.transfer_forces(fint, fcont, fext, mint, inv_mass, inv_inertia, dt=1e-4)
+
+    # Row generation succeeded and updated nc
+    assert solver.nc == 3  # 3 translational DOFs tied
+    # Constraint force applied to balance external load
+    assert np.linalg.norm(fint[8]) > 0.0
+
+    # Acceptance check 3: enforce executes without error and enforces velocity projection
+    model.v[8] = [1.0, 0.0, 0.0]
+    solver.enforce(model.v, model.vr, inv_mass, inv_inertia)
+    assert solver.nc == 3

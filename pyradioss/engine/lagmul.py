@@ -99,8 +99,8 @@ class LagmulSolver:
         M_inv = sp.diags(M_inv_diag, format="csr")
         H = L @ M_inv @ L.T
         
-        # 6. lambda_vec, info = spla.cg(H, rhs, tol=1e-5)
-        lambda_vec, info = spla.cg(H, rhs, tol=1e-5)
+        # 6. lambda_vec, info = spla.cg(H, rhs, rtol=1e-5)
+        lambda_vec, info = spla.cg(H, rhs, rtol=1e-5)
         if info != 0:
             self.log.warning(f"LAGMUL PCG solve failed with info={info}", "LAGMUL")
             
@@ -150,7 +150,7 @@ class LagmulSolver:
         M_inv = sp.diags(M_inv_diag, format="csr")
         H = L @ M_inv @ L.T
         
-        lambda_vec, info = spla.cg(H, rhs, tol=1e-5)
+        lambda_vec, info = spla.cg(H, rhs, rtol=1e-5)
         
         dv = M_inv @ (L.T @ lambda_vec)
         v += dv.reshape(-1, 3)
