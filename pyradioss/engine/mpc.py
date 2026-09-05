@@ -1,9 +1,12 @@
 """
 /MPC — general linear multi-point constraints, engine side (M6).
 
-Fortran origin: ``starter/source/constraints/general/mpc/hm_read_mpc.F``
-(input) and ``engine/source/constraints/general/mpc/`` (the engine
-treatment). Deferred from M5 because a general MPC row couples arbitrary
+Fortran origin:
+  - ``starter/source/constraints/general/mpc/hm_read_mpc.F`` (input card reading, coefficient default)
+  - ``engine/source/tools/lagmul/lag_mpc.F`` (engine Lagrange multiplier system assembly)
+  - ``starter/source/tools/lagmul/lgmini_mpc.F`` (Lagrange multiplier initialization & sizing)
+  - ``hm_cfg_files/config/CFG/radioss110/RBODY/mpc.cfg`` (format specification: %10d%10d%10d%20lg)
+Deferred from M5 because a general MPC row couples arbitrary
 DOFs and needs a small COUPLED solve per cycle — it fits neither the
 lumped one-way transfer of /INTER/TYPE2 nor the closed-form fit of
 /RBE3.
@@ -124,10 +127,11 @@ class MpcConstraints:
         tra = self.col_dof < 3
         self.tra = tra
         self.fixed = np.zeros(len(ukey), dtype=bool)
-        self.fixed[tra] = loads.fix_tra[self.col_node[tra],
-                                        self.col_dof[tra]]
-        self.fixed[~tra] = loads.fix_rot[self.col_node[~tra],
-                                         self.col_dof[~tra] - 3]
+        if loads is not None:
+            self.fixed[tra] = loads.fix_tra[self.col_node[tra],
+                                            self.col_dof[tra]]
+            self.fixed[~tra] = loads.fix_rot[self.col_node[~tra],
+                                             self.col_dof[~tra] - 3]
 
         # kinematic clashes: prescribed nodes (the other condition wins)
         presc = np.zeros(model.numnod, dtype=bool)

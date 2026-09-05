@@ -12730,30 +12730,79 @@ def read_mpc(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/MPC/mpc_ID`` (M6) -- one linear multi-point constraint row::
 
         card 1:  title
-        card 2+: node_ID   dof   coef        (one term per card)
+        card 2+: node_ID   Idof   [skew_ID]   [alpha]   (one term per card)
 
-      imposing  sum_k coef_k * u(node_k, dof_k) = 0  with dof 1/2/3 the
+      imposing  sum_k alpha_k * u(node_k, dof_k) = 0  with dof 1/2/3 the
       X/Y/Z translations and 4/5/6 the rotations (rotational terms need
       the node to carry rotational inertia — shell/beam nodes). At least
-      two terms are required. See engine/mpc.py for the Lagrange
-      treatment and its zero-work property.
+      two terms are required.
+
+      Fortran origin:
+        - starter/source/constraints/general/mpc/hm_read_mpc.F
+        - engine/source/tools/lagmul/lag_mpc.F
+        - config/CFG/radioss110/RBODY/mpc.cfg (radioss51/radioss90 layouts: %10d%10d%10d%20lg)
+      If alpha (coef) is zero or omitted, it defaults to 1.0 (hm_read_mpc.F line 124).
+      See engine/mpc.py for the Lagrange treatment and its zero-work property.
     """
     title, cards = _title_and_data(block)
     nodes, dofs, coefs = [], [], []
+    warned_skew = False
     for c in cards:
-        t = c.tokens()
-        if len(t) < 3:
-            log.error(f"/MPC/{block.user_id}: term card needs "
-                      f"'node_ID dof coef'", c.source)
-            continue
-        dof = int(t[1])
+        if block.fixed:
+            vals = _fixed_vals(c, [10, 10, 10, 20])
+            if not vals or not vals[0]:
+                continue
+            try:
+                nid = _ival(vals[0])
+                dof = _ival(vals[1])
+                skew_id = _ival(vals[2]) if len(vals) > 2 else 0
+                coef = _fval(vals[3]) if len(vals) > 3 else 0.0
+            except ValueError as exc:
+                log.error(f"/MPC/{block.user_id}: invalid fixed card format: {exc}", c.source)
+                continue
+        else:
+            t = c.tokens()
+            if len(t) < 2:
+                log.error(f"/MPC/{block.user_id}: term card needs "
+                          f"at least 'node_ID dof'", c.source)
+                continue
+            try:
+                nid = int(t[0])
+                dof = int(t[1])
+                if len(t) >= 4:
+                    # Standard Radioss 4-token card: node_ID, Idof, skew_ID, alpha
+                    skew_id = int(t[2])
+                    coef = float(t[3])
+                elif len(t) == 3:
+                    # 3-token shorthand: node_ID, dof, coef
+                    skew_id = 0
+                    coef = float(t[2])
+                else:
+                    # 2-token card: node_ID, dof -> default alpha=1.0
+                    skew_id = 0
+                    coef = 1.0
+            except ValueError as exc:
+                log.error(f"/MPC/{block.user_id}: invalid term card numbers: {exc}", c.source)
+                continue
+
         if dof not in (1, 2, 3, 4, 5, 6):
             log.error(f"/MPC/{block.user_id}: dof must be 1..6, got {dof}",
                       c.source)
             continue
-        nodes.append(int(t[0]))
+
+        if skew_id != 0 and not warned_skew:
+            log.warning(f"/MPC/{block.user_id}: local skew_ID={skew_id} not ported — "
+                        f"using global reference frame", c.source)
+            warned_skew = True
+
+        # Upstream hm_read_mpc.F line 124: IF (COEF==ZERO) COEF = ONE
+        if coef == 0.0:
+            coef = 1.0
+
+        nodes.append(nid)
         dofs.append(dof)
-        coefs.append(float(t[2]))
+        coefs.append(coef)
+
     if len(nodes) < 2:
         log.error(f"/MPC/{block.user_id}: a constraint needs at least two "
                   f"terms", block.source)
