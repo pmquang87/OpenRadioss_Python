@@ -14682,6 +14682,8 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         sens = t[4] if len(t) > 4 else 0
         mfrot = t[5] if len(t) > 5 else 0        # Ifric (M15)
         ifq = t[6] if len(t) > 6 else 0          # Ifiltr (M15)
+        iform = t[7] if len(t) > 7 else 0
+        idel = t[8] if len(t) > 8 else 0
         stfac, fric, gap, gap_max, xfreq = (1.0, 0.0, 0.0, 0.0, 0.0)
         gap_max_m = 0.0
         fscale_gap, percent_mesh_size = 1.0, 0.4
@@ -14711,7 +14713,8 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         f0 = _fixed_vals(cards[0], [10] * 10)
         id1, id2 = _ival(f0[0]), _ival(f0[1])
         istf, igap = _ival(f0[2]), _ival(f0[4])
-        for name, s in (("Ithe", f0[3]), ("Ibag", f0[6]), ("Idel", f0[7]),
+        idel = _ival(f0[7])
+        for name, s in (("Ithe", f0[3]), ("Ibag", f0[6]),
                         ("Iadm", f0[9])):
             if _ival(s) != 0:
                 ign.append(f"{name}={s}")
@@ -14866,7 +14869,9 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap,
             gap_max=gap_max, fscale_gap=fscale_gap, percent_mesh_size=percent_mesh_size,
             sens_id=sens, mfrot=mfrot, ifq=ifq,
-            xfiltr=xfiltr, fric_c=fric_c, title=title))
+            xfiltr=xfiltr, fric_c=fric_c, title=title,
+            iform=iform if 'iform' in locals() else 0,
+            idel=idel if 'idel' in locals() else 0))
     elif kind == "TYPE24":
         # For TYPE24, we pass gap so compact mode can explicitly set it for tests.
         model.interfaces.append(Interface(

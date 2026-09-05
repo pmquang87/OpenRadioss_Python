@@ -1130,6 +1130,7 @@ class Interface:
     # card carries none — see contact/friction.py).
     mfrot: int = 0
     ifq: int = 0
+    iform: int = 0
     xfiltr: float = 0.0
     fric_c: tuple = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
     title: str = ""
