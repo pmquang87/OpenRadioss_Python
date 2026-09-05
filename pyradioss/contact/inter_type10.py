@@ -58,8 +58,10 @@ class ContactType10:
         self.Ks = Ks_all[self.nodes] if len(self.nodes) else np.zeros(0)
         self.gap_bound = itf.gap if itf.gap > 0 else 0.0
 
-        # tracking
-        self.deletable = tracking.any_deletable(model, self.seg_gtype)
+        # tracking — Fortran chkstfn3.F:1352 gates on IDEL >= 1
+        self.idel = int(getattr(itf, 'idel10', 0))
+        self.deletable = (self.idel >= 1 and
+                          tracking.any_deletable(model, self.seg_gtype))
         if self.deletable:
             self.ref_total = tracking.node_reference_counts(model, alive_only=False)
         self.seg_alive = np.ones(len(self.segs), dtype=bool)

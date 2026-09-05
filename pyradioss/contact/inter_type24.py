@@ -297,7 +297,10 @@ class ContactType24:
             getattr(model, "mass0", model.mass))
 
         # --- deletion bookkeeping (M3<->M4) --------------------------------
-        self.deletable = tracking.any_deletable(model, self.seg_gtype)
+        # Fortran chkstfn3.F:1352 gates deletion on IDEL >= 1
+        self.idel = int(getattr(itf, 'idel', 0))
+        self.deletable = (self.idel >= 1 and
+                          tracking.any_deletable(model, self.seg_gtype))
         if self.deletable:
             self.ref_total = tracking.node_reference_counts(
                 model, alive_only=False)
