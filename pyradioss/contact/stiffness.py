@@ -74,6 +74,10 @@ def _segment_areas(x0: np.ndarray, segments: np.ndarray) -> np.ndarray:
     return 0.5 * np.linalg.norm(np.cross(d1, d2), axis=1)
 
 
+_SHELL_GROUPS = ("shells", "shells_qbat", "shells_qeph", "sh3n", "sh3n_dkt18")
+_SOLID_GROUPS = ("bricks", "bricks_heph", "tetras", "tetra10s", "bric20s", "quads")
+
+
 # ----------------------------------------------------------------------------
 # Main-segment stiffness + gap  (i7sti3 main side)
 # ----------------------------------------------------------------------------
@@ -99,16 +103,16 @@ def segment_stiffness_gap(model: Model, segments: np.ndarray,
             continue
         group = getattr(model, gname)
         erow = seg_elem[sel]
-        if gname in ("shells", "shells_qbat", "shells_qeph", "sh3n"):
+        if gname in _SHELL_GROUPS:
             # K = 0.5 * Stfac * E * t ;  gap contribution = t / 2
             E = _per_element(group, lambda m, p: m.E)[erow]
             t = group.state["thick"][erow]
             K[sel] = 0.5 * stfac * E * t
             gap[sel] = 0.5 * t * fscale_gap
-        else:                       # 'bricks' / 'tetras'
+        else:                       # 'bricks' / 'tetras' / 'quads' / etc.
             # K = Stfac * B * A^2 / V ;  solids contact on their real face
             B = _per_element(group, lambda m, p: m.K)[erow]
-            V = group.state["vol0"][erow]
+            V = np.maximum(group.state["vol0"][erow], 1e-30)
             K[sel] = stfac * B * area[sel] ** 2 / V
     return K, gap
 
@@ -129,13 +133,13 @@ def node_stiffness_gap(model: Model, stfac: float, fscale_gap: float = 1.0):
     K = np.zeros(model.numnod)
     gap = np.zeros(model.numnod)
     for gname, group in model.element_groups():
-        if gname in ("shells", "shells_qbat", "shells_qeph", "sh3n"):
+        if gname in _SHELL_GROUPS:
             E = _per_element(group, lambda m, p: m.E)
             k_e = 0.5 * stfac * E * group.state["thick"]
             g_e = 0.5 * group.state["thick"] * fscale_gap
-        elif gname in ("bricks", "tetras"):
+        elif gname in _SOLID_GROUPS:
             B = _per_element(group, lambda m, p: m.K)
-            k_e = stfac * B * group.state["vol0"] ** (1.0 / 3.0)
+            k_e = stfac * B * np.maximum(group.state["vol0"], 0.0) ** (1.0 / 3.0)
             g_e = np.zeros(group.n)
         else:
             # trusses/springs/beams: no face to contact through — their
@@ -200,7 +204,7 @@ def edge_stiffness_gap(model: Model, edges: np.ndarray,
             continue
         group = getattr(model, gname)
         erow = seg_elem[sel]
-        if gname in ("shells", "shells_qbat", "shells_qeph", "sh3n"):
+        if gname in _SHELL_GROUPS:
             E = _per_element(group, lambda m, p: m.E)[erow]
             t = group.state["thick"][erow]
             K[sel] = 0.5 * stfac * E * t
@@ -208,7 +212,7 @@ def edge_stiffness_gap(model: Model, edges: np.ndarray,
         else:
             B = _per_element(group, lambda m, p: m.K)[erow]
             V = group.state["vol0"][erow]
-            K[sel] = stfac * B * V ** (1.0 / 3.0)
+            K[sel] = stfac * B * np.maximum(V, 0.0) ** (1.0 / 3.0)
     return K, gap
 
 
