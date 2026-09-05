@@ -61,6 +61,33 @@ Dynamic Core Crushing Failure Rate Card Title
     assert fm.ifail_so == 1
 
 
+def test_m476_fail_lad_numeric_title_matches_alpha_title(tmp_path: Path):
+    """BUG-08: A numeric title like '123' in fixed-format must not shift fields into data cards."""
+    c1 = f"{145.0:>20.4f}{455.0:>20.4f}{0.42:>20.4f}{1.65:>20.4f}{0.992:>20.4f}"
+    c2 = f"{2:>10d}{1:>10d}"
+    deck = f"""# RADIOSS STARTER DECK
+/BEGIN
+Test M476 Fail Lad Dynamic Core Crushing Failure Rate Numeric Title
+2022 0
+/FAIL/LAD_DYNAMIC_CORE_CRUSHING_FAILURE_RATE/1
+123
+{c1}
+{c2}
+/END
+"""
+    model, log = _parse_starter(tmp_path, deck)
+    assert len(log.errors) == 0
+    assert 1 in model.fail_laddynamiccorecrushingfailurerates
+    fm = model.fail_laddynamiccorecrushingfailurerates[1]
+    assert pytest.approx(fm.sigma_dccfr0) == 145.0
+    assert pytest.approx(fm.sigma_dccfrc) == 455.0
+    assert pytest.approx(fm.gamma_dccfr) == 0.42
+    assert pytest.approx(fm.p_dccfr) == 1.65
+    assert pytest.approx(fm.d_dccfr_max) == 0.992
+    assert fm.ifail_sh == 2
+    assert fm.ifail_so == 1
+
+
 def test_m476_fail_lad_dynamic_core_crushing_failure_rate_free(tmp_path: Path):
     deck = """# RADIOSS FREE DECK
 /BEGIN
