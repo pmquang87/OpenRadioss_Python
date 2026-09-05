@@ -2568,7 +2568,7 @@ def read_fail(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         fail_biquad.fit(params)   # pre-compute the two parabolas
         model.fails_biquad[mat_id] = FailBiquad(
             id=mat_id, mat_id=mat_id,
-            c1=c1, c2=c2, c3=c3, c4=c4, c5=c5,
+            c1=params["c1"], c2=params["c2"], c3=c3, c4=params["c4"], c5=params["c5"],
             p_thickfail=p_thickfail, m_flag=m_flag, s_flag=s_flag,
             inst_start=inst_start, title=title,
         )

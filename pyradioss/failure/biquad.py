@@ -28,9 +28,22 @@ The two meet at the uniaxial point c3, so eps_f is continuous. Outside
 positive floor guards against a parabola dipping through zero far outside
 its fitted range.
 
-Port simplifications: the built-in material presets (M-flag = 1..99,
-which derive c1..c5 from c3 alone) and the S-flag / Inst_start necking
-options are not ported — give the five coefficients explicitly.
+Presets and Options
+-------------------
+- M_flag (biquad_coefficients.F lines 70–122): Built-in material presets
+  deriving c1, c2, c4, c5 from c3:
+    1: Mild Steel (default if M_flag > 0 or c1=c2=c4=c5=0)
+    2: DP600
+    3: Boron
+    4: Aluminium AA5182
+    5: Aluminium AA6082-T6
+    6: Plastic PA6GF30
+    7: Plastic PP T40
+    99: User scaling factors e1..e4
+- S_flag (fail_biquad_s.F lines 176–205):
+    1: Raw parabola through (1/3, c3), (2/3, c4), (1, c5)
+    2: Split high parabolas meeting at plane strain triaxiality
+       sigma* = 1/sqrt(3) with zero slope (default in Radioss)
 """
 
 from __future__ import annotations
