@@ -485,6 +485,8 @@ real history is 41 milestones. One line each:
 
 | M477 | TYPE7 Iform=2 Incremental Tangential Friction Tests & Validation: First test coverage for `apply_incremental_stiffness()` in `contact/friction.py` — the MODFR=2 / IFQ>=10 incremental stiffness tangential force path (Fortran i7for3.F lines 2310-2356). Tests cover stick regime (elastic accumulation below Coulomb limit), slip regime (force saturation at μFn), separation/reset (IFPEN anchor zeroing), tangential plane projection (oblique surfaces), multiple independent pairs, IFQ 10-13 filter alpha mapping, stored values (CAND_F stores return-mapped force), zero-velocity preservation, and IFQ dispatch logic. Validated the existing Python implementation against the Fortran reference — found it correct (DT12 vs dt difference is second-order for constant dt). Updated friction.py docstrings with exact Fortran line citations. 22 new tests. |
 
+| M478 | /DAMP Rayleigh Mass Damping Unit Tests & Validation: First direct test coverage for `Dampers.apply()` in `engine/damping.py` — the exact integrating factor mass-proportional damping (Fortran origin: damping.F, damping51, lines 100-228). Tests cover the exact factor formula (v *= exp(-α·dt) for 1D, 3D, multi-node), KE identity energy booking (translation-only, rotation-only, combined), time windowing (Tstart/Tstop gates), rotational DOF damping (inertia > 0 guard), multiple overlapping dampers (sequential composition), unconditional stability at α·dt = 100, edge cases (dt=0, α=0, empty items), and multi-cycle accumulation. Updated damping.py docstrings with exact Fortran line citations (damping.F lines 129-228) and documented the port's integrating factor vs Fortran's implicit-trapezoidal approach. 17 new tests. |
+
 
 
 

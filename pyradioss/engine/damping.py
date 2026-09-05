@@ -1,8 +1,21 @@
 """
 /DAMP — Rayleigh mass damping (M6).
 
-Fortran origin: ``engine/source/assembly/damping*.F`` (the /DAMP engine
-option): a mass-proportional damping force  f_i = -alpha * m_i * v_i  on
+Fortran origin: ``engine/source/assembly/damping.F``, subroutine
+``damping51`` (lines 100–170 for the mass-proportional branch in global
+coordinates, lines 175–228 for the rotational-DOF branch).  The Fortran
+uses an implicit-trapezoidal acceleration correction::
+
+    OMEGA = 1/(1 + 0.5*DAMP_A*DT1)
+    DA = (A - DAMP_A*V - BETASDT*(A - A_old)) * OMEGA - A
+    A = A + DA
+
+with energy booked as  DW += m * DA * (V + 0.5*A*DT1) * DT12.  The port
+replaces this with the exact integrating factor (see below), which gives
+identical physics (both are first-order-accurate mass damping) but is
+unconditionally stable and books energy exactly from the KE identity.
+
+A mass-proportional damping force  f_i = -alpha * m_i * v_i  acts on
 the nodes of a group, optionally windowed in time (Tstart/Tstop). The
 stiffness-proportional (beta) branch of full Rayleigh damping needs K*v
 products the explicit port does not assemble — not ported (documented).
@@ -80,7 +93,17 @@ class Dampers:
     def apply(self, t: float, dt: float, v: np.ndarray, vr: np.ndarray,
               mass: np.ndarray, inertia: np.ndarray) -> float:
         """Damp the group velocities (exact integrating factor) and
-        return the kinetic energy removed this cycle."""
+        return the kinetic energy removed this cycle.
+
+        Fortran: ``damping.F`` lines 129–171 (translational, ISK<=1, global
+        coords) and lines 175–228 (rotational DOFs, IRODDL branch).
+
+        The Fortran applies  DA = (A - alpha*V) * omega - A  per axis and
+        books  DW += m * DA * (V + 0.5*A*DT1) * DT12.  The port replaces
+        this with the exact ODE solution  v *= exp(-alpha*dt)  and books
+        the KE drop  de += 0.5 * m * (|v_old|^2 - |v_new|^2)  — identical
+        to roundoff for the damping ODE and unconditionally stable.
+        """
         de = 0.0
         for idx, alpha, tstart, tstop in self.items:
             if dt <= 0.0 or t < tstart or t > tstop:
