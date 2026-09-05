@@ -1,10 +1,10 @@
 """
 /SECT — section-force output (M5).
 
-Fortran origin: ``engine/source/tools/sect/`` (``section.F``,
-``section_io.F``, ``forint.F``): the original tags the elements of one
-side of the cut and accumulates their internal-force contributions at the
-section nodes into the FSAV time-history blocks.
+Fortran origin: ``engine/source/tools/sect/section.F`` (side-sum
+accumulation), ``engine/source/tools/sect/section_io.F`` (output to the
+FSAV time-history blocks), and ``engine/source/tools/sect/forint.F``
+(internal-force tagging at cut nodes).
 
 The port uses the equivalent (and fully vectorized) *side-sum* identity.
 For any element, the assembled internal nodal forces are self-equilibrated

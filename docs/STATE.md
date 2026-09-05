@@ -489,6 +489,8 @@ real history is 41 milestones. One line each:
 
 | M479 | Contact/Tracking Element-Deletion Bookkeeping Unit Tests: First direct test coverage for `contact/tracking.py` (85 lines, 4 functions, zero prior tests) — the element-deletion/contact interaction bookkeeping that maintains segment and node masks when /FAIL criteria delete elements. Tests cover `alive_segment_mask` (all-alive, some-dead, no-off, empty-provenance, mixed-groups shells+bricks, empty-input), `any_deletable` (no-off, off-no-chk_fail, off-and-chk_fail, empty-provenance, only-empty), `node_reference_counts` (single-triangle, shared-edge, alive-only filter, multi-group accumulation, empty-model), and `tracked_node_mask` (all-alive, orphaned-node, extra-mass-node, partial-deletion). Updated tracking.py module docstring with exact Fortran file citations (intfop2.F, i7for3.F, int_checksum.F). 20 new tests. |
 
+| M480 | /SECT Section-Force Output Unit Tests: First direct test coverage for `SectionForces.compute()` in `engine/sections.py` (86 lines, zero prior tests) — the side-sum identity for section resultants (F_sect = Σ fint, M_sect = Σ r×fint + mint). Tests cover force summation (single-node, multi-node, equilibrated-element), moment computation (r×F, mint-only, combined, multi-node couple cancellation), reference point (fixed x_ref0 vs moving ref node), multiple independent sections, properties (__len__, ids, empty), and a physics validation on a tension bar section cut. Updated sections.py module docstring with exact Fortran file citations (section.F, section_io.F, forint.F). 14 new tests. |
+
 
 
 
