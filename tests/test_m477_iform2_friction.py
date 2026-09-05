@@ -436,3 +436,125 @@ class TestIFQMappingLogic:
             assert ifq >= 10, f"IFQ={ifq} should route to incremental"
         for ifq in (1, 2, 3):
             assert ifq < 10, f"IFQ={ifq} should route to filter"
+
+
+# ---------------------------------------------------------------------------
+# BUG-01 and BUG-02 regression tests
+# ---------------------------------------------------------------------------
+class TestBug01Bug02Regression:
+    """Acceptance tests for BUG-01 (Iform=2 XFILTR mapping) and BUG-02 (force sign)."""
+
+    @pytest.mark.parametrize("ifiltr,xfreq,expected_ifq,expected_xfiltr", [
+        (0, 0.0, 10, 1.0),
+        (1, 0.25, 11, 0.25),
+        (2, 100.0, 12, 2.0 * np.pi / 100.0),
+        (3, 20.0, 13, 2.0 * np.pi * 20.0),
+    ])
+    def test_bug01_iform2_xfiltr_mapping_fixed_format(self, tmp_path, ifiltr, xfreq, expected_ifq, expected_xfiltr):
+        """BUG-01: Iform=2 must map Ifiltr 0..3 to IFQ 10..13 with nonzero XFILTR."""
+        from pyradioss.input.deck_reader import read_deck
+        from pyradioss.input.starter_keywords import parse_starter_deck
+        from pyradioss.model.model import Model
+        from pyradioss.common.messages import MessageLog
+
+        c0 = f"{1:>10d}{1:>10d}{1:>10d}{0:>10d}{0:>10d}{0:>10d}{0:>10d}{0:>10d}{0:>10d}{0:>10d}"
+        c1 = f"{1.0:>20.4f}{0.0:>20.4f}{0.0:>20.4f}{0.0:>20.4f}{0:>10d}"
+        c2 = f"{0.0:>20.4f}{0.0:>20.4f}{0.4:>20.4f}{0.0:>20.4f}{0:>10d}{0:>10d}"
+        c3 = f"{1000.0:>20.4f}{0.5:>20.4f}{0.1:>20.4f}{0.0:>20.4f}{0.0:>20.4f}"
+        c4 = f"{'':7s}{0:>1d}{0:>1d}{0:>1d}{0.0:>20.4f}{0:>10d}{0.0:>20.4f}{0.0:>20.4f}{0.0:>20.4f}"
+        c5 = f"{0:>10d}{ifiltr:>10d}{xfreq:>20.4f}{2:>10d}{0:>10d}{0:>10d}{1.0:>20.4f}{0:>10d}"
+        deck = f"""# RADIOSS STARTER DECK
+/BEGIN
+Test Iform 2 fixed format
+/NODE
+1 0 0 0
+2 1 0 0
+3 1 1 0
+4 0 1 0
+5 0.5 0.5 0.05
+/GRNOD/NODE/1
+sec
+5
+/SURF/SEG/1
+main
+1 2 3 4
+/INTER/TYPE7/1
+fixed iform2
+{c0}
+{c1}
+{c2}
+{c3}
+{c4}
+{c5}
+/END
+"""
+        p = tmp_path / "TEST_0000.rad"
+        p.write_text(deck, encoding="utf-8")
+        model = Model()
+        log = MessageLog()
+        blocks = read_deck(str(p))
+        parse_starter_deck(blocks, model, log)
+
+        assert len(log.errors) == 0
+        assert len(model.interfaces) == 1
+        itf = model.interfaces[0]
+        assert itf.ifq == expected_ifq
+        assert itf.xfiltr == pytest.approx(expected_xfiltr)
+
+    def test_bug02_incremental_friction_opposes_velocity(self):
+        """BUG-02: Incremental friction must resist sliding (negative tangential power)."""
+        from pyradioss.contact.inter_type7 import ContactType7
+        from pyradioss.model.model import Model
+        from pyradioss.common.messages import MessageLog
+        from pyradioss.model.entities import Interface, Surface, NodeGroup
+
+        model = Model()
+        model.node_ids = np.array([1, 2, 3, 4, 5])
+        model.x = np.array([
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.5, 0.5, 0.05],  # 0.05 penetration into gap=0.1
+        ], dtype=float)
+        model.x0 = model.x.copy()
+        model.v = np.array([
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],  # secondary slides along +x
+        ], dtype=float)
+        model.mass = np.ones(5, dtype=float)
+        model.mass0 = model.mass.copy()
+
+        surf = Surface(id=1, segments=np.array([[0, 1, 2, 3]], dtype=np.int64))
+        surf.seg_gtype = np.array([""], dtype=object)
+        surf.seg_elem = np.array([0], dtype=np.int64)
+        model.surfaces[1] = surf
+
+        grp = NodeGroup(id=1, node_ids=[5])
+        grp.node_idx = np.array([4], dtype=np.int64)
+        model.node_groups[1] = grp
+
+        itf = Interface(
+            id=1, type=7, grnod_id=1, surf_id=1,
+            stfac=1000.0, fric=0.5, gap=0.1,
+            iform=2, ifq=10, xfiltr=1.0,
+        )
+        model.interfaces.append(itf)
+
+        ct = ContactType7(itf, model, MessageLog())
+        fcont = np.zeros_like(model.x)
+        ct.forces(model.x, model.v, model.mass, 1e-4, fcont, 0)
+
+        # Secondary node (index 4) must experience RESISTING tangential force in x (Fx < 0)
+        assert fcont[4, 0] < 0.0
+        # Normal force on secondary node is in +z direction (Fn > 0)
+        assert fcont[4, 2] > 0.0
+        # Main segment nodes (indices 0..3) must receive equal and opposite force
+        assert fcont[:4, 0].sum() == pytest.approx(-fcont[4, 0])
+        assert fcont[:4, 2].sum() == pytest.approx(-fcont[4, 2])
+        # Tangential work / power on sliding secondary node must be dissipative (resisting)
+        p_tan = (fcont[4] * model.v[4]).sum()
+        assert p_tan < 0.0
