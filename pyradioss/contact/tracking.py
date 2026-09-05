@@ -73,7 +73,9 @@ def node_reference_counts(model: Model, alive_only: bool) -> np.ndarray:
             off = group.state.get("off")
             if off is not None:
                 conn = conn[off > 0.0]
-        np.add.at(cnt, conn.reshape(-1), 1)
+        flat = conn.reshape(-1)
+        valid = flat >= 0
+        np.add.at(cnt, flat[valid], 1)
     return cnt
 
 
