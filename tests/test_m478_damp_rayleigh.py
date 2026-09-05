@@ -391,3 +391,44 @@ class TestEdgeCases:
         ke_init = 0.5 * 1.0 * 10.0 ** 2
         ke_final = 0.5 * 1.0 * v[0, 0] ** 2
         np.testing.assert_allclose(total_de, ke_init - ke_final, rtol=1e-12)
+
+
+# ======================================================================
+# Dampers.__init__ and rigid-body slave exclusion (BUG-04)
+# ======================================================================
+class TestDampersInitRigidBodyExclusion:
+    """Verify that rigid-body slave nodes are excluded from damping groups."""
+
+    def test_rigid_body_slaves_excluded(self):
+        """BUG-04: Rigid-body slave nodes must be filtered out of damper groups
+        to prevent phantom dissipation (damping.F:150)."""
+        from pyradioss.model.model import Model
+        from pyradioss.model.entities import NodeGroup, Damping
+        from pyradioss.common.messages import MessageLog
+        from types import SimpleNamespace
+
+        model = Model()
+        model.node_ids = np.array([1, 2, 3, 4])
+        model.mass = np.array([1.0, 1.0, 1.0, 1.0])
+
+        # Node group containing nodes 1, 2, 3 (indices 0, 1, 2)
+        grp = NodeGroup(id=1, node_ids=[1, 2, 3])
+        grp.node_idx = np.array([0, 1, 2], dtype=np.int64)
+        model.node_groups[1] = grp
+
+        # Rigid body with slave node 2 (index 1)
+        rb = SimpleNamespace(slaves=[1])
+        model.rbodies = [rb]
+
+        # Damp definition referencing node group 1
+        dp = Damping(id=1, grnod_id=1, alpha=50.0, tstart=0.0, tstop=1e30)
+        model.damps = [dp]
+
+        log = MessageLog()
+        dampers = Dampers(model, log)
+
+        assert len(dampers) == 1
+        damp_idx, alpha, _, _ = dampers.items[0]
+        # Only nodes 0 and 2 should be in the damper, node 1 (slave) must be excluded!
+        np.testing.assert_array_equal(damp_idx, [0, 2])
+        np.testing.assert_array_equal(dampers.all_idx, [0, 2])
