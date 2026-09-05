@@ -72,6 +72,18 @@ class Dampers:
         self.items = []          # (idx, alpha, tstart, tstop)
         self.all_idx = np.zeros(0, dtype=np.int64)   # union, for the
         # attribution correction the Engine books (see engine step 4b)
+        # Build rigid-body slave set once — Fortran damping.F:150 excludes
+        # nodes with TAGSLV_RBY != 0 because rigid_body.advance() will
+        # overwrite their velocities, making any damping booking phantom.
+        rb_slaves = set()
+        for rb in getattr(model, 'rbodies', []):
+            slaves = getattr(rb, 'slaves', None)
+            if slaves is not None:
+                rb_slaves.update(int(s) for s in slaves)
+        if rb_slaves:
+            rb_arr = np.array(sorted(rb_slaves), dtype=np.int64)
+        else:
+            rb_arr = np.zeros(0, dtype=np.int64)
         for dp in model.damps:
             g = model.node_groups.get(dp.grnod_id)
             if g is None or g.node_idx is None or g.node_idx.size == 0:
@@ -79,6 +91,11 @@ class Dampers:
                           f"missing or empty", "DAMP CHECK")
                 continue
             idx = g.node_idx[model.mass[g.node_idx] < 1e29]
+            # Exclude rigid-body slave nodes (damping.F:150 TAGSLV_RBY check)
+            if len(rb_arr):
+                idx = idx[~np.isin(idx, rb_arr)]
+            if len(idx) == 0:
+                continue
             self.items.append((idx, dp.alpha, dp.tstart, dp.tstop))
             self.all_idx = np.unique(np.concatenate([self.all_idx, idx]))
             log.info(f"     /DAMP/{dp.id}: ALPHA = {dp.alpha:12.5E} ON "
