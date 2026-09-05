@@ -4,9 +4,12 @@ cylinder geometries, and MOVING walls (imposed motion or free with a
 mass).
 
 Fortran origin: ``engine/source/constraints/general/rwall/`` —
-``rgwal0.F`` (fixed plane), ``rgwals.F`` (sphere), ``rgwalc.F``
-(cylinder), and the moving-wall treatment of ``rgwalt.F`` (wall tied to a
-node, impulses reacting on it).
+``rgwal0.F`` (driver & ITYP dispatch), ``rgwall.F`` (fixed/moving plane),
+``rgwals.F`` (sphere), ``rgwalc.F`` (cylinder), ``rgwalp.F`` (parallelogram),
+and the moving-wall treatment of ``rgwalt.F`` (wall tied to a node, impulses
+reacting on it). Starter counterpart: ``starter/source/constraints/general/rwall/``
+(``hm_read_rwall_plane.F``, ``hm_read_rwall_cyl.F``, ``hm_read_rwall_spher.F``,
+``hm_read_rwall_paral.F``, ``read_rwall.F``).
 
 Kinematic wall mechanics
 ------------------------
@@ -109,7 +112,8 @@ class RigidWalls:
             if rw.grnod_id in (None, 0):
                 idx = np.arange(model.numnod)
             else:
-                idx = model.node_groups[rw.grnod_id].node_idx
+                grp = model.node_groups.get(rw.grnod_id)
+                idx = grp.node_idx.copy() if grp is not None and grp.node_idx is not None else np.array([], dtype=int)
             if getattr(rw, "grnod_id2", None):
                 g2 = model.node_groups.get(rw.grnod_id2)
                 if g2 is not None and g2.node_idx is not None:
@@ -117,7 +121,9 @@ class RigidWalls:
             # frozen (massless) nodes and the wall's own carrier node are
             # never wall candidates (a 1e30 mass would wreck the ledger)
             idx = idx[model.mass[idx] < 1e29]
-            wnode = model.node_index(rw.node_id) if rw.node_id else -1
+            wnode = model._id2idx.get(rw.node_id, -1) if rw.node_id else -1
+            if rw.node_id and wnode < 0:
+                log.error(f"/RWALL/{rw.id}: moving wall carrier node {rw.node_id} not found in model", "RWALL INIT")
             if wnode >= 0:
                 idx = idx[idx != wnode]
             # an /IMPVEL anywhere on the carrier node = driven wall: the
@@ -140,7 +146,7 @@ class RigidWalls:
                 if np.isnan(rw.point).any():
                     rw.point = model.x0[wnode].copy()
                     if rw.geom in ("PLANE", "CYL", "PARAL"):
-                        # For PLANE/CYL, normal holds M1. For PARAL, normal holds M1 and axis2 holds M2 (we will fix parser to store M1 in normal and M2 in axis2).
+                        # For PLANE/CYL, normal holds M1. For PARAL, normal holds M1 and axis2 holds M2.
                         if rw.geom == "PARAL":
                             m1 = rw.normal
                             m2 = rw.axis2
@@ -151,9 +157,9 @@ class RigidWalls:
                             if nn1 < 1e-20 or nn2 < 1e-20:
                                 log.error(f"/RWALL/{rw.id}: moving wall node coincides with M1 or M2", "RWALL INIT")
                             else:
-                                rw.axis1 = a1 / nn1
-                                rw.axis2 = a2 / nn2
-                                n = np.cross(rw.axis1, rw.axis2)
+                                rw.axis1 = a1
+                                rw.axis2 = a2
+                                n = np.cross(a1, a2)
                                 nn = np.linalg.norm(n)
                                 if nn < 1e-20:
                                     log.error(f"/RWALL/{rw.id}: M, M1 and M2 are collinear", "RWALL INIT")

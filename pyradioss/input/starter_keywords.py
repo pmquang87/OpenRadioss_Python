@@ -13274,19 +13274,17 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             axis2 = m2
         else:
             axis1 = m1 - m
-            nn = np.linalg.norm(axis1)
-            if nn < 1e-20:
+            nn1 = np.linalg.norm(axis1)
+            if nn1 < 1e-20:
                 log.error(f"/RWALL/{block.user_id}: M and M1 coincide "
                           f"(zero normal/axis)", block.source)
                 return
-            axis1 = axis1 / nn
             axis2 = m2 - m
-            nn = np.linalg.norm(axis2)
-            if nn < 1e-20:
+            nn2 = np.linalg.norm(axis2)
+            if nn2 < 1e-20:
                 log.error(f"/RWALL/{block.user_id}: M and M2 coincide "
                           f"(zero normal/axis)", block.source)
                 return
-            axis2 = axis2 / nn
             n = np.cross(axis1, axis2)
             nn = np.linalg.norm(n)
             if nn < 1e-20:
