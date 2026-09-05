@@ -51,13 +51,13 @@ class LagmulSolver:
                         "implementation.", "LAGMUL INIT")
 
     def __len__(self):
-        return self.nc
+        return len(self.interfaces)
 
     def transfer_forces(self, fint, fcont, fext, mint,
                         inv_mass, inv_inertia, dt) -> None:
         """Per-cycle force stage: solve the global sparse system and inject
         Lagrange constraint forces."""
-        if self.nc == 0:
+        if not self.interfaces:
             return
             
         all_data = []
@@ -113,7 +113,7 @@ class LagmulSolver:
     def enforce(self, v, vr, inv_mass, inv_inertia) -> None:
         """Velocity cleanup stage: project post-kinematic velocities back
         onto L v = 0 using mass-weighted minimum-norm correction."""
-        if self.nc == 0:
+        if not self.interfaces:
             return
             
         # Velocity projection: L v = 0
