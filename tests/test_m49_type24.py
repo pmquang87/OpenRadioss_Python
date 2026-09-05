@@ -430,8 +430,10 @@ def test_deletion_drops_segments_and_nodes(make_deck):
 def test_type24_forces_vanish_on_deleted_segments(make_deck):
     """End-to-end mask usage: a contact pair pushing at cycle 0 must stop
     pushing the moment its segment's parent element is deleted, even
-    between broad-phase refreshes."""
+    between broad-phase refreshes.  Idel must be >= 1 for deletion
+    processing to activate (Fortran chkstfn3.F:1352)."""
     model = _starter_only(make_deck, "DELF", DELETABLE_BAR)
+    model.interfaces[0].idel = 1   # enable deletion (BUG-05: default 0 = no deletion)
     ct = ContactType24(model.interfaces[0], model, MessageLog())
     # move the tip nodes close over the top face: contact active
     tip = model.node_indices([9, 10, 11, 12])

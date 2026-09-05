@@ -14712,7 +14712,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id1, id2 = _ival(f0[0]), _ival(f0[1])
         istf, igap = _ival(f0[2]), _ival(f0[4])
         idel = _ival(f0[7])
-        for name, s in (("Ithe", f0[3]), ("Ibag", f0[6]),
+        for name, s in (("Ithe", f0[3]), ("Ibag", f0[6]), ("Idel", f0[7]),
                         ("Iadm", f0[9])):
             if _ival(s) != 0:
                 ign.append(f"{name}={s}")
