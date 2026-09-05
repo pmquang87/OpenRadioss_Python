@@ -491,6 +491,8 @@ real history is 41 milestones. One line each:
 
 | M480 | /SECT Section-Force Output Unit Tests: First direct test coverage for `SectionForces.compute()` in `engine/sections.py` (86 lines, zero prior tests) — the side-sum identity for section resultants (F_sect = Σ fint, M_sect = Σ r×fint + mint). Tests cover force summation (single-node, multi-node, equilibrated-element), moment computation (r×F, mint-only, combined, multi-node couple cancellation), reference point (fixed x_ref0 vs moving ref node), multiple independent sections, properties (__len__, ids, empty), and a physics validation on a tension bar section cut. Updated sections.py module docstring with exact Fortran file citations (section.F, section_io.F, forint.F). 14 new tests. |
 
+| M481 | Fastmath Numeric Primitives Unit Tests: First direct test coverage for `common/fastmath.py` (143 lines, 4 functions, zero prior tests) — the core vectorized linear algebra primitives used by every element kernel. Tests cover `cross3` (unit vectors, anti-commutativity, parallel=0, bitwise-identical to np.cross, broadcasting, single pair), `norm3` (unit vectors, 3-4-5 triangle, zero vector, batch vs np.linalg.norm, single vector), `det_inv33` (identity, diagonal, J@inv=I random, det vs np.linalg.det, batch-of-one, negative determinant), and `scatter_add3` (distinct indices, duplicate accumulation, additive to existing, matches np.add.at, empty scatter). 22 new tests. |
+
 
 
 
