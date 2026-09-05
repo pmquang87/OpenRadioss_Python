@@ -56654,7 +56654,7 @@ def read_lagmul_cohomological_spatial_linkage_joint(block: KeywordBlock, model: 
 
 def read_fail_lad_dynamic_core_crushing_failure_rate(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/FAIL/LAD_DYNAMIC_CORE_CRUSHING_FAILURE_RATE/mat_ID`` or ``/FAIL/LADEVEZE_DYNAMIC_CORE_CRUSHING_FAILURE_RATE`` (M476): Ladevèze rate-dependent dynamic core crushing failure rate, core micro-crushing failure, and compressive core damage evolution model."""
-    title, cards = _title_and_data(block)
+    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     if not cards or cards[0].is_blank:
         log.error(f"/FAIL/LAD_DYNAMIC_CORE_CRUSHING_FAILURE_RATE/{block.user_id}: missing data card", block.source)
         return
