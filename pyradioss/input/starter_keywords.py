@@ -14618,13 +14618,15 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             surf_id=int(toks[1]), dsearch=float(toks[2]) if len(toks) > 2 else 0.0, spotflag=spotflag, title=title))
         return
 
+    tstart, tstop, viss = 0.0, 1e30, 0.05
     if kind == "TYPE24" and len(cards) >= 6:
         ign: List[str] = []
         gap = 0.0
         f0 = _fixed_vals(cards[0], [10] * 9)
         id1, id2 = _ival(f0[0]), _ival(f0[1])
         istf = _ival(f0[2])
-        for name, s in (("Irem_i2", f0[4]), ("Idel", f0[6]), ("IPSTIF", f0[8])):
+        idel = _ival(f0[6])
+        for name, s in (("Irem_i2", f0[4]), ("IPSTIF", f0[8])):
             if _ival(s) != 0:
                 ign.append(f"{name}={s}")
                 
@@ -14643,14 +14645,14 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 
         f3 = _fixed_vals(cards[3], [20, 20, 20, 20, 20])
         stfac, fric = _fval(f3[0]), _fval(f3[1])
-        for name, s in (("Tstart", f3[3]), ("Tstop", f3[4])):
-            if s and s.strip() and any(_to_float(tok) != 0.0 for tok in s.split()):
-                ign.append(f"{name}={s.strip()}")
+        tstart = _fval(f3[3])
+        tstop = _fval(f3[4]) if _fval(f3[4]) > 0.0 else 1e30
                 
         f4 = _fixed_vals(cards[4], [7, 1, 1, 1, 20, 10, 20, 20, 20])
         if _ival(f4[1]) or _ival(f4[2]) or _ival(f4[3]):
             ign.append(f"IBC={f4[1] or '0'}{f4[2] or '0'}{f4[3] or '0'}")
-        for name, s in (("VISs", f4[6]), ("Tpressfit", f4[8])):
+        viss = _fval(f4[6]) if _fval(f4[6]) > 0.0 else 0.05
+        for name, s in (("Tpressfit", f4[8]),):
             if s and s.strip() and any(_to_float(tok) != 0.0 for tok in s.split()):
                 ign.append(f"{name}={s.strip()}")
                 
@@ -14928,7 +14930,11 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             id=block.user_id, type=24, grnod_id=grnod_id, surf_id1=id1, surf_id=id2,
             istf=istf, igap=igap, stfac=stfac, fric=fric, gap=gap,
             gap_max=gap_max, gap_max_m=gap_max_m, sens_id=sens, mfrot=mfrot, ifq=ifq,
-            xfiltr=xfiltr, fric_c=fric_c, title=title))
+            xfiltr=xfiltr, fric_c=fric_c, title=title,
+            idel=idel if 'idel' in locals() else 0,
+            tstart=tstart if 'tstart' in locals() else 0.0,
+            tstop=tstop if 'tstop' in locals() else 1e30,
+            stiff_dc=viss if ('viss' in locals() and viss > 0.0) else 0.05))
     else:                          # TYPE11
         if mfrot > 0 or ifq > 0:
             # the original TYPE11 has no friction models at all (checked:

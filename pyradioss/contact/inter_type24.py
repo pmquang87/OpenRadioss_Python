@@ -207,33 +207,98 @@ def _expand_matches(keys_a: np.ndarray, keys_b: np.ndarray):
 class ContactType24:
     """One /INTER/TYPE24 interface, engine-side."""
 
+    def _init_empty(self):
+        """Initialize safe empty / inactive interface state."""
+        self.segs = np.zeros((0, 4), dtype=np.int64)
+        self.seg_gtype = np.zeros(0, dtype="<U8")
+        self.seg_elem = np.zeros(0, dtype=np.int64)
+        self.nodes = np.zeros(0, dtype=np.int64)
+        self.Km = np.zeros(0, dtype=float)
+        self.Ks = np.zeros(0, dtype=float)
+        self.gap_m = np.zeros(0, dtype=float)
+        self.gap_s = np.zeros(0, dtype=float)
+        self.gap_const = 0.0
+        self.gap_bound = 0.0
+        self.fric = float(getattr(self.itf, "fric", 0.0))
+        self.mfrot = int(getattr(self.itf, "mfrot", 0))
+        self.ifq = int(getattr(self.itf, "ifq", 0))
+        self.xfiltr = float(getattr(self.itf, "xfiltr", 0.0))
+        self.fric_c = np.asarray(getattr(self.itf, "fric_c", (0.0,) * 6), dtype=float)
+        self._filt_keys = np.zeros(0, dtype=np.int64)
+        self._filt_vals = np.zeros((0, 3))
+        self.dt_bound = np.inf
+        self.idel = int(getattr(self.itf, "idel", 0))
+        self.deletable = False
+        self.seg_alive = np.zeros(0, dtype=bool)
+        self.nodes_tracked = self.nodes
+        self.pairs_node = np.zeros(0, dtype=np.int64)
+        self.pairs_seg = np.zeros(0, dtype=np.int64)
+        self._last_refresh = -10**9
+        self.refresh = 20
+        self.tstart = float(getattr(self.itf, "tstart", 0.0))
+        self.tstop = float(getattr(self.itf, "tstop", 1e30))
+        self.visc = float(getattr(self.itf, "viss", 0.0) or getattr(self.itf, "stiff_dc", _VISC))
+
     def __init__(self, itf, model: Model, log):
         self.itf = itf
         self.model = model
+        self.tstart = float(getattr(itf, "tstart", 0.0))
+        self.tstop = float(getattr(itf, "tstop", 1e30))
+        self.visc = float(getattr(itf, "viss", 0.0) or getattr(itf, "stiff_dc", _VISC))
 
-        surf = model.surfaces[itf.surf_id]
-        self.segs = surf.segments
-        if self.segs is None or len(self.segs) == 0:
-            log.warning(f"/INTER/TYPE24/{itf.id}: main surface is empty — "
+        surfaces = getattr(model, "surfaces", {})
+        surf = surfaces.get(itf.surf_id) if hasattr(surfaces, "get") else None
+        if surf is None or getattr(surf, "segments", None) is None or len(surf.segments) == 0:
+            log.warning(f"/INTER/TYPE24/{itf.id}: main surface {itf.surf_id} is empty or missing — "
                         f"interface inactive", "CONTACT INIT")
-            self.segs = np.zeros((0, 4), dtype=np.int64)
-            self.seg_gtype = np.zeros(0, dtype="<U8")
-            self.seg_elem = np.zeros(0, dtype=np.int64)
-        else:
-            self.seg_gtype = surf.seg_gtype
-            self.seg_elem = surf.seg_elem
+            self._init_empty()
+            return
 
-        # --- secondary nodes: group, or the surface's own nodes ----------
-        # (grnod_ID = 0 -> self-impact, the Radioss single-surface input)
+        self.segs = np.asarray(surf.segments, dtype=np.int64)
+        # Normalize triangle segments: 3 columns -> pad corner 2 as corner 3
+        if self.segs.ndim == 2:
+            if self.segs.shape[1] == 3:
+                self.segs = np.column_stack([self.segs, self.segs[:, 2]])
+            elif self.segs.shape[1] == 4:
+                tri_mask = self.segs[:, 3] < 0
+                if np.any(tri_mask):
+                    self.segs = self.segs.copy()
+                    self.segs[tri_mask, 3] = self.segs[tri_mask, 2]
+
+        self.seg_gtype = getattr(surf, "seg_gtype", np.zeros(len(self.segs), dtype="<U8"))
+        self.seg_elem = getattr(surf, "seg_elem", np.zeros(len(self.segs), dtype=np.int64))
+
+        # --- secondary nodes: group, secondary surface, or the main surface's own nodes ---
+        # (grnod_ID = 0 -> self-impact or surface-to-surface via surf_id1)
         if itf.grnod_id == 0:
-            self.nodes = np.unique(self.segs)
-            log.info(f"     /INTER/TYPE24/{itf.id}: SELF-IMPACT — "
-                     f"{len(self.nodes)} SECONDARY NODES FROM THE MAIN "
-                     f"SURFACE")
+            surf1_id = getattr(itf, "surf_id1", 0)
+            surf1 = surfaces.get(surf1_id) if (surf1_id > 0 and hasattr(surfaces, "get")) else None
+            if surf1 is not None and getattr(surf1, "segments", None) is not None and len(surf1.segments) > 0:
+                s1_segs = np.asarray(surf1.segments, dtype=np.int64)
+                s1_valid = s1_segs[s1_segs >= 0]
+                self.nodes = np.sort(np.unique(s1_valid))
+                log.info(f"     /INTER/TYPE24/{itf.id}: SURFACE-TO-SURFACE — "
+                         f"{len(self.nodes)} SECONDARY NODES FROM SURFACE {surf1_id}")
+            else:
+                s_valid = self.segs[self.segs >= 0]
+                self.nodes = np.sort(np.unique(s_valid))
+                log.info(f"     /INTER/TYPE24/{itf.id}: SELF-IMPACT — "
+                         f"{len(self.nodes)} SECONDARY NODES FROM THE MAIN "
+                         f"SURFACE")
         else:
-            # kept SORTED: the cycle maps global node index -> position in
-            # this array with searchsorted (np.unique output is sorted)
-            self.nodes = np.sort(model.node_groups[itf.grnod_id].node_idx)
+            node_groups = getattr(model, "node_groups", {})
+            grp = node_groups.get(itf.grnod_id) if hasattr(node_groups, "get") else None
+            if grp is None or getattr(grp, "node_idx", None) is None or len(grp.node_idx) == 0:
+                log.warning(f"/INTER/TYPE24/{itf.id}: node group {itf.grnod_id} is empty or missing — "
+                            f"interface inactive", "CONTACT INIT")
+                self._init_empty()
+                return
+            self.nodes = np.sort(np.unique(np.asarray(grp.node_idx, dtype=np.int64)))
+
+        if len(self.nodes) == 0:
+            log.warning(f"/INTER/TYPE24/{itf.id}: zero secondary nodes — interface inactive", "CONTACT INIT")
+            self._init_empty()
+            return
 
         # --- penalty stiffness (i24sti3) -----------------------------------
         # Element-based stiffness on both sides; Istf picks the combination
@@ -244,7 +309,10 @@ class ContactType24:
                                        self.seg_elem, scale)
         Ks_all, gs_all = node_stiffness_gap(model, scale)
         self.Km = Km
-        self.Ks = Ks_all[self.nodes] if len(self.nodes) else np.zeros(0)
+        self.Ks = np.zeros(len(self.nodes), dtype=float)
+        valid_ks = (self.nodes >= 0) & (self.nodes < len(Ks_all))
+        if np.any(valid_ks):
+            self.Ks[valid_ks] = Ks_all[self.nodes[valid_ks]]
 
         # --- contact gap ---------------------------------------------------
         # lc = mean segment size, the reference length for the defaults
@@ -258,8 +326,10 @@ class ContactType24:
         if itf.igap == 1:
             # variable gap: g = g_s(node) + g_m(segment), clipped
             self.gap_m = gm
-            self.gap_s = gs_all[self.nodes] if len(self.nodes) else \
-                np.zeros(0)
+            self.gap_s = np.zeros(len(self.nodes), dtype=float)
+            valid_gs = (self.nodes >= 0) & (self.nodes < len(gs_all))
+            if np.any(valid_gs):
+                self.gap_s[valid_gs] = gs_all[self.nodes[valid_gs]]
             self.gap_min = gap_floor
             self.gap_max = itf.gap_max if itf.gap_max > 0 else np.inf
             gap_hi = (self.gap_s.max() if len(self.gap_s) else 0.0) + \
@@ -269,7 +339,7 @@ class ContactType24:
         else:
             self.gap_const = gap_floor
             self.gap_bound = gap_floor
-        self.fric = itf.fric
+        self.fric = float(itf.fric)
 
         # --- friction MODELS + IFQ filter state (M15) -----------------------
         # mfrot/ifq = 0 leaves every M4 path untouched (bit-identical).
@@ -323,15 +393,23 @@ class ContactType24:
         if len(self.segs) == 0 or len(self.nodes) == 0:
             return np.inf
         itf = self.itf
-        Km_max = np.full(len(self.nodes), self.Km.max())
+        valid_nodes = self.nodes[(self.nodes >= 0) & (self.nodes < len(mass))]
+        if len(valid_nodes) == 0:
+            return np.inf
+        Km_max = np.full(len(self.nodes), self.Km.max() if len(self.Km) else 0.0)
         K_sec = combine_stiffness(itf.istf, itf.stfac, Km_max, self.Ks)
-        dt_sec = np.sqrt(2.0 * mass[self.nodes]
-                         / np.maximum(K_sec, EM20)).min()
+        sec_sub = (self.nodes >= 0) & (self.nodes < len(mass))
+        dt_sec = np.sqrt(2.0 * np.maximum(mass[valid_nodes], 0.0)
+                         / np.maximum(K_sec[sec_sub], EM20)).min()
         Ks_max = np.full(len(self.segs),
                          self.Ks.max() if len(self.Ks) else 0.0)
         K_main = combine_stiffness(itf.istf, itf.stfac, self.Km, Ks_max)
-        m_corner = mass[self.segs].min(axis=1)
-        dt_main = np.sqrt(2.0 * m_corner / np.maximum(K_main, EM20)).min()
+        valid_segs = np.all((self.segs >= 0) & (self.segs < len(mass)), axis=1)
+        if not np.any(valid_segs):
+            return float(dt_sec)
+        m_corner = mass[self.segs[valid_segs]].min(axis=1)
+        dt_main = np.sqrt(2.0 * np.maximum(m_corner, 0.0)
+                          / np.maximum(K_main[valid_segs], EM20)).min()
         return float(min(dt_sec, dt_main))
 
     # ------------------------------------------------------------------
@@ -384,20 +462,20 @@ class ContactType24:
         sj = seg_rows[seg_ids[jj]]
         if len(ni):
             # deduplicate (a box can meet a node in several cells)
-            pair_key = ni * len(self.segs) + sj
+            pair_key = ni.astype(np.int64) * len(self.segs) + sj
             _, first = np.unique(pair_key, return_index=True)
             ni, sj = ni[first], sj[first]
             # a secondary node that is a corner of the segment is never a
             # candidate against it (self-exclusion; enables self-impact)
             keep = np.ones(len(ni), dtype=bool)
             for k in range(4):
-                keep &= self.segs[sj, k] != ni
+                keep &= (self.segs[sj, k] != ni)
             ni, sj = ni[keep], sj[keep]
         self.pairs_node = ni
         self.pairs_seg = sj
 
     # ------------------------------------------------------------------
-    def forces(self, x, v, mass, dt, fcont, cycle, stifn=None):
+    def forces(self, x, v, mass, dt, fcont, cycle=0, stifn=None, t: float | None = None, **kwargs):
         """Penalty forces for one cycle, scattered into ``fcont``.
 
         Returns (contact_work_increment, dt_interface). The work increment
@@ -414,6 +492,10 @@ class ContactType24:
         """
         if len(self.segs) == 0 or len(self.nodes) == 0:
             return 0.0, np.inf
+        if dt <= 0.0:
+            return 0.0, self.dt_bound
+        if t is not None and (t < self.tstart or t > self.tstop):
+            return 0.0, self.dt_bound
 
         # ---- deletion bookkeeping (cheap gathers; see tracking.py) -------
         if self.deletable:
@@ -423,7 +505,8 @@ class ContactType24:
         if cycle - self._last_refresh >= self.refresh:
             if self.deletable:
                 mask = tracking.tracked_node_mask(self.model, self.ref_total)
-                self.nodes_tracked = self.nodes[mask[self.nodes]]
+                valid_m = (self.nodes >= 0) & (self.nodes < len(mask))
+                self.nodes_tracked = self.nodes[valid_m][mask[self.nodes[valid_m]]]
             self._broad_phase(x, v, dt)
             self._last_refresh = cycle
         if len(self.pairs_node) == 0:
@@ -447,6 +530,7 @@ class ContactType24:
 
         # ---- per-pair gap (Igap) ------------------------------------------
         loc = np.searchsorted(self.nodes, ni)    # nodes is sorted (init)
+        loc = np.clip(loc, 0, max(len(self.nodes) - 1, 0))
         if self.itf.igap == 1:
             gap = self.gap_s[loc] + self.gap_m[srow]
             if self.gap_min > 0.0:
@@ -475,12 +559,20 @@ class ContactType24:
         # per-node spring-stiffness sums:
         # full K on the secondary node, full K on each corner (weight <= 1)
         n_nod = len(fcont)
-        Knode = np.bincount(ni, weights=K, minlength=n_nod)
-        Knode += np.bincount(seg.reshape(-1), weights=np.repeat(K, 4),
+        v_ni = (ni >= 0) & (ni < n_nod)
+        Knode = np.bincount(ni[v_ni], weights=K[v_ni], minlength=n_nod)
+        seg_flat = seg.reshape(-1)
+        w_flat = np.repeat(K, 4)
+        v_seg = (seg_flat >= 0) & (seg_flat < n_nod)
+        Knode += np.bincount(seg_flat[v_seg], weights=w_flat[v_seg],
                              minlength=n_nod)
         loaded = Knode > 0.0
-        dt_int = min(self.dt_bound, float(
-            np.sqrt(2.0 * mass[loaded] / Knode[loaded]).min())) if np.any(loaded) else self.dt_bound
+        if np.any(loaded):
+            m_loaded = np.maximum(mass[loaded], EM20)
+            dt_int = min(self.dt_bound, float(
+                np.sqrt(2.0 * m_loaded / Knode[loaded]).min()))
+        else:
+            dt_int = self.dt_bound
         if stifn is not None:                    # /DT/NODA accumulation
             stifn[loaded] += Knode[loaded]
         
@@ -504,7 +596,8 @@ class ContactType24:
         vn = np.einsum("nb,nb->n", vrel, nvec)
 
         # normal force: spring + damper (only damp approaching motion)
-        C = 2.0 * _VISC * np.sqrt(K * mass[ni])
+        m_ni = np.maximum(mass[ni], 0.0) if len(ni) else np.zeros(0)
+        C = 2.0 * self.visc * np.sqrt(K * m_ni)
         Fn = K * pen - C * np.minimum(vn, 0.0)
         Fvec = Fn[:, None] * nvec
 
@@ -543,9 +636,14 @@ class ContactType24:
 
         # scatter: action on the node, exact opposite reaction on the
         # segment corners (momentum conservation)
-        scatter_add3(fcont, ni, Fvec)
-        scatter_add3(fcont, seg.reshape(-1),
-                     (-wseg[:, :, None] * Fvec[:, None, :]).reshape(-1, 3))
+        v_act_ni = (ni >= 0) & (ni < n_nod)
+        if np.any(v_act_ni):
+            scatter_add3(fcont, ni[v_act_ni], Fvec[v_act_ni])
+        for c in range(4):
+            sc = seg[:, c]
+            v_sc = (sc >= 0) & (sc < n_nod) & (wseg[:, c] > 0.0)
+            if np.any(v_sc):
+                scatter_add3(fcont, sc[v_sc], -wseg[v_sc, c, None] * Fvec[v_sc])
 
         wrk = float(np.einsum("nb,nb->", Fvec, vrel)) * dt
         return -wrk, dt_int
