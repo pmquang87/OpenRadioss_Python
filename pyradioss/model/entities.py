@@ -1121,6 +1121,7 @@ class Interface:
     tstop: float = 1e30   # type 10: deactivation stop time
     inactiv: int = 0      # type 10: initial penetration deactivation flag
     stiff_dc: float = 0.05 # type 10: critical damping coefficient on interface stiffness (VISC)
+    viss: float = 0.05     # types 7/24: viscous damping ratio (default 0.05 / 5%)
     sort_fact: float = 0.20 # type 10: bucket sorting search factor
     # ---- friction MODELS (M15, Ifric > 0 — contact/friction.py) ----------
     # mfrot = Ifric (the MFROT law), fric_c = C1..C6, ifq = Ifiltr and

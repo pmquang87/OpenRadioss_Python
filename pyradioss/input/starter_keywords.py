@@ -14739,13 +14739,24 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         stfac, fric, gap, gap_max, xfreq = (1.0, 0.0, 0.0, 0.0, 0.0)
         gap_max_m = 0.0
         fscale_gap, percent_mesh_size = 1.0, 0.4
+        tstart, tstop, viss = 0.0, 1.0e30, 0.05
         grnod_id = id1
         if kind == "TYPE24":
             id1 = 0 # surf_id1 is 0 when using node-to-surface
         
         if len(cards) > 1:
-            stfac, fric, gap, gap_max, xfreq = _floats(
-                cards[1], 5, defaults=[1.0, 0.0, 0.0, 0.0, 0.0])
+            c1_toks = cards[1].tokens()
+            if len(c1_toks) > 5:
+                vals = _floats(cards[1], 8, defaults=[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0e30, 0.05])
+                stfac, fric, gap, gap_max, xfreq = vals[:5]
+                tstart = vals[5]
+                if len(c1_toks) > 6:
+                    tstop = vals[6]
+                if len(c1_toks) > 7:
+                    viss = vals[7]
+            else:
+                stfac, fric, gap, gap_max, xfreq = _floats(
+                    cards[1], 5, defaults=[1.0, 0.0, 0.0, 0.0, 0.0])
         # ---- optional C1..C6 card (the original's card 8, Ifric > 0) ------
         fric_c = (0.0,) * 6
         if mfrot in (1, 2, 3, 4):
@@ -14804,14 +14815,17 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             return
         f3 = _fixed_vals(cards[icard], [20] * 5)
         stfac, fric, gap = _fval(f3[0]), _fval(f3[1]), _fval(f3[2])
-        for name, s in (("Tstart", f3[3]), ("Tstop", f3[4])):
-            if s and _to_float(s) != 0.0:
-                ign.append(f"{name}={s}")
+        tstart = _fval(f3[3], 0.0)
+        tstop = _fval(f3[4], 1.0e30)
+        if tstop == 0.0:
+            tstop = 1.0e30
         f4 = _fixed_vals(cards[icard + 1], [7, 1, 1, 1, 20, 10, 20, 20, 20])
         if _ival(f4[1]) or _ival(f4[2]) or _ival(f4[3]):
             ign.append(f"IBC={f4[1] or '0'}{f4[2] or '0'}{f4[3] or '0'}")
-        for name, s in (("VisS", f4[6]),
-                        ("VisF", f4[7]), ("Bumult", f4[8])):
+        viss = _fval(f4[6], 0.05)
+        if viss == 0.0:
+            viss = 0.05
+        for name, s in (("VisF", f4[7]), ("Bumult", f4[8])):
             if s and _to_float(s) != 0.0:
                 ign.append(f"{name}={s}")
         f5 = _fixed_vals(cards[icard + 2],
@@ -14923,7 +14937,11 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             sens_id=sens, mfrot=mfrot, ifq=ifq,
             xfiltr=xfiltr, fric_c=fric_c, title=title,
             iform=iform if 'iform' in locals() else 0,
-            idel=idel if 'idel' in locals() else 0))
+            idel=idel if 'idel' in locals() else 0,
+            tstart=tstart if 'tstart' in locals() else 0.0,
+            tstop=tstop if 'tstop' in locals() else 1.0e30,
+            viss=viss if 'viss' in locals() else 0.05,
+            stiff_dc=viss if 'viss' in locals() else 0.05))
     elif kind == "TYPE24":
         # For TYPE24, we pass gap so compact mode can explicitly set it for tests.
         model.interfaces.append(Interface(
