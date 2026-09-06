@@ -10,7 +10,17 @@ Fortran origin: ``engine/source/elements/thickshell/solide16/``
 """
 
 import numpy as np
-from numba import njit, prange
+
+try:
+    from numba import njit, prange
+except ImportError:
+    def njit(*args, **kwargs):
+        if len(args) == 1 and callable(args[0]):
+            return args[0]
+        def dec(fn):
+            return fn
+        return dec
+    prange = range
 
 from .. import failure, materials
 from ..common.constants import EM20, EP30

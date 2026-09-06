@@ -1,10 +1,24 @@
 from __future__ import annotations
 from typing import Tuple, List, Optional
 import numpy as np
-from numba import njit
+try:
+    from numba import njit
+except ImportError:
+    def njit(*args, **kwargs):
+        if len(args) == 1 and callable(args[0]):
+            return args[0]
+        def dec(fn):
+            return fn
+        return dec
+
 from ..common.constants import EM20
 from ..model.model import Model
-import scipy.sparse as sp
+
+try:
+    import scipy.sparse as sp
+except ImportError:
+    sp = None
+
 
 class AMSManager:
     """Advanced Mass Scaling logic and state."""
@@ -21,7 +35,10 @@ class AMSManager:
             self.active_parts[:] = False
             grpart = model.egroups.get("PART", {}).get(self.dt_ams_igrp)
             if grpart is not None:
-                for pid in grpart.members:
+                pids = getattr(grpart, "part_ids_resolved", None)
+                if pids is None:
+                    pids = getattr(grpart, "members", [])
+                for pid in pids:
                     p = model.parts.get(pid)
                     if p is not None:
                         try:
@@ -34,6 +51,23 @@ class AMSManager:
         if controls.dt_scale > 0.0:
             self.dt_target /= controls.dt_scale
 
+    def tag_nodes(self, dt_claims: List[np.ndarray]) -> np.ndarray:
+        """Tag nodes that belong to active AMS elements requiring mass scaling."""
+        n = self.model.numnod
+        tagged = np.zeros(n, dtype=bool)
+        for (name, group), dt_e in zip(self.model.element_groups(), dt_claims):
+            if hasattr(group, "part") and len(self.active_parts) > 0:
+                elem_active = self.active_parts[group.part]
+            else:
+                elem_active = True
+            needs_ams = elem_active & (dt_e < self.dt_target)
+            if not np.any(needs_ams):
+                continue
+            conn = group.state.get("mass_conn", group.conn)[needs_ams]
+            valid = conn[conn >= 0]
+            tagged[valid] = True
+        return tagged
+
     def build_ams_matrix(self, dt_claims: List[np.ndarray]) -> Tuple[np.ndarray, Optional[sp.csr_matrix], float]:
         """
         Build the AMS added mass arrays.
@@ -42,12 +76,14 @@ class AMSManager:
             M_offdiag: CSR matrix containing the off-diagonal added mass.
             max_dmels: The maximum element added mass (for logging/debug).
         """
+        if sp is None:
+            raise ImportError("AMS (/DT/AMS) requires scipy. Please install scipy.")
+
         n = self.model.numnod
         rows = []
         cols = []
         vals = []
         
-        # Accumulate the diagonal added mass using np.add.at
         diag_added = np.zeros(n, dtype=np.float64)
         max_dmels = 0.0
         
@@ -68,12 +104,12 @@ class AMSManager:
             xnod = conn.shape[1]
             
             # Delegate to numba kernel to extract the unique node pairs and values
-            r, c, v, d_add = _build_group_ams(conn, dmels, xnod)
+            r, c, v, d_add = _build_group_ams(conn, dmels, xnod, n)
             
             rows.append(r)
             cols.append(c)
             vals.append(v)
-            np.add.at(diag_added, np.arange(n), d_add) # d_add is shape (n,)
+            diag_added += d_add
             
         if len(rows) > 0:
             rows = np.concatenate(rows)
@@ -107,12 +143,12 @@ class AMSManager:
         return iters, rel_res
 
 @njit(cache=True)
-def _build_group_ams(conn: np.ndarray, dmels: np.ndarray, xnod: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def _build_group_ams(conn: np.ndarray, dmels: np.ndarray, xnod: int, n_nodes: int = 0) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
     Extract off-diagonal entries and diagonal accumulations for a group of elements.
     Returns:
         rows, cols, vals: 1D arrays for the COO matrix.
-        diag_add: Array of shape (max_node_id + 1,) to be added to the diagonal.
+        diag_add: Array of shape (n_nodes,) to be added to the diagonal.
     """
     n_elems = conn.shape[0]
     
@@ -125,8 +161,8 @@ def _build_group_ams(conn: np.ndarray, dmels: np.ndarray, xnod: int) -> Tuple[np
     cols = np.empty(max_entries, dtype=np.int32)
     vals = np.empty(max_entries, dtype=np.float64)
     
-    max_node = np.max(conn)
-    diag_add = np.zeros(max_node + 1, dtype=np.float64)
+    size_diag = n_nodes if n_nodes > 0 else (np.max(conn) + 1 if n_elems > 0 else 0)
+    diag_add = np.zeros(size_diag, dtype=np.float64)
     
     idx = 0
     for e in range(n_elems):

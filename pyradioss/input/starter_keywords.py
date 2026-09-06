@@ -64,6 +64,7 @@ from ..model.entities import (
 from ..model.model import Model
 from ..model.skew import SkewFrame
 from . import mat_reader
+from .card_layouts import LAYOUTS
 from .card_layouts import CARD_LAYOUTS
 from .deck_reader import Card, KeywordBlock, _to_float
 
@@ -9556,7 +9557,7 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             sens_id = int(float(t[1])) if len(t) > 1 else 0
             funct_id = int(float(t[2])) if len(t) > 2 else 0
             scale = float(t[3]) if len(t) > 3 else 0.0
-        model.thermal_bcs[block.user_id] = ThermalBcs(
+        model.heat_bcs[block.user_id] = HeatBcs(
             id=block.user_id,
             kind=sub,
             title=title,
@@ -10153,9 +10154,6 @@ def read_inivel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         else _title_and_data(block)
     if not cards:
         log.error(f"/INIVEL/{block.user_id}: missing data card", block.source)
-    if kind in ("ROTVEL", "ROT_VEL"):
-        read_inirotvel(block, model, log)
-        return
     if kind == "TRA":
         if block.fixed:
             f = cards[0].cut("INIVEL_TRA")
@@ -10170,7 +10168,7 @@ def read_inivel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             grnod = int(float(toks[3])) if len(toks) > 3 else 0
         model.inivel.append(InitialVelocity(
             id=block.user_id, grnod_id=grnod, v=np.array(v), title=title))
-    elif kind in ("AXIS", "ROT"):
+    elif kind in ("AXIS", "ROT", "ROTVEL", "ROT_VEL"):
         from ..model.entities import InivelAxis
         t = cards[0].tokens()
         real_layout = False

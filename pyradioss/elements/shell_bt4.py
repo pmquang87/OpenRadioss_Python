@@ -768,6 +768,10 @@ def forces(group, x, v, vr, dt, fint, mint):
     # to the hourglass loop (chvis3.F), unlike the type-1 branch which only
     # touches the membrane rates.
     mask23 = ((ihbe_mask == 2) | (ihbe_mask == 3)) * alive
+    mask4 = (ihbe_mask == 4) * alive
+    if (mask23.any() or mask4.any()) and not st.get("_impl_static_hg"):
+        _, xl, _, _, _ = _local_geometry(xe)
+
     if mask23.any() and not st.get("_impl_static_hg"):
         idx = mask23
         z2 = xl[idx, 1, 2] - xl[idx, 0, 2]

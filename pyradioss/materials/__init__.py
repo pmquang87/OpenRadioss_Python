@@ -223,7 +223,7 @@ def shell_update(mat, sig, deps, epsp, dt, extra=None):
         return law02_johnson_cook.shell_update(mat, sig, deps, epsp, dt,
                                                extra)
     if mat.law == 36:
-        return law36_tabulated.shell_update(mat, sig, deps, epsp, dt)
+        return law36_tabulated.shell_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 27:
         return law27_brittle.shell_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 19:

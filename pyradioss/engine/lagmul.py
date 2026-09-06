@@ -15,8 +15,14 @@ to the nodal accelerations.
 from __future__ import annotations
 
 import numpy as np
-import scipy.sparse as sp
-import scipy.sparse.linalg as spla
+try:
+    import scipy.sparse as sp
+    import scipy.sparse.linalg as spla
+    HAS_SCIPY = True
+except ImportError:
+    sp = None
+    spla = None
+    HAS_SCIPY = False
 
 from ..model.model import Model
 
@@ -36,6 +42,8 @@ class LagmulSolver:
         for itf in model.interfaces:
             if not getattr(itf, "lagmul", False):
                 continue
+            if not HAS_SCIPY:
+                raise ImportError("LagmulSolver requires scipy to be installed.")
             if itf.type == 16:
                 self.interfaces.append(LagmulType16(itf, model, log))
             elif itf.type == 7:

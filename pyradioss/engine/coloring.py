@@ -1,5 +1,14 @@
 import numpy as np
-from numba import njit
+try:
+    from numba import njit
+except ImportError:
+    def njit(*args, **kwargs):
+        def dec(fn):
+            return fn
+        if len(args) == 1 and callable(args[0]) and not kwargs:
+            return args[0]
+        return dec
+
 from typing import Tuple
 
 @njit(cache=True)

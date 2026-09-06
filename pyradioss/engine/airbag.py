@@ -2,31 +2,38 @@ import numpy as np
 from pyradioss.model.model import Model
 
 def update_airbag_thermodynamics(mv, model: Model, dt: float, current_time: float) -> None:
-    if mv.iequil == 0:
-        pass
-
     mat = model.materials[mv.matid]
     r_spec = mat.r_spec
     cpa, cpb, cpc = mat.params.get('CPA', 0.0), mat.params.get('CPB', 0.0), mat.params.get('CPC', 0.0)
 
-    if mv.iequil == 1:
-        v_eps = 0.0 
-        gmi = mv.pext * (mv.volume + v_eps) / (r_spec * mv.t_initial)
+    if mv.iequil in (0, 1) or getattr(mv, 'mass', None) is None:
+        vol0 = max(getattr(mv, 'volume', 0.0), 1e-30)
+        t_init = max(getattr(mv, 't_initial', 293.15), 1e-30)
+        pext = getattr(mv, 'pext', 0.0)
+        if pext > 0.0 and r_spec > 0.0:
+            gmi = pext * vol0 / (r_spec * t_init)
+        else:
+            rho = getattr(mat, 'rho0', 1.0)
+            gmi = rho * vol0
         mv.mass = gmi
-        mv.iequil = -1 
-        mv.temperature = mv.t_initial
-        mv.pressure = mv.pext
+        mv.temperature = t_init
+        mv.pressure = pext
         mv.volume_old = mv.volume
+        mv.iequil = -1 
         
     t_bag_old = getattr(mv, 'temperature', mv.t_initial)
     vol_old = getattr(mv, 'volume_old', mv.volume)
+    if vol_old <= 0.0:
+        vol_old = max(mv.volume, 1e-30)
     
-    vol = mv.volume
+    vol = max(mv.volume, 1e-30)
     dv = vol - vol_old
     
     gmi = getattr(mv, 'mass', 0.0)
     
     cvi = cpa + cpb * t_bag_old + cpc * t_bag_old**2 - r_spec
+    if cvi <= 0.0:
+        cvi = max(r_spec, 1.0)
     
     left = gmi * cvi
     right = gmi * cvi * t_bag_old
@@ -37,10 +44,13 @@ def update_airbag_thermodynamics(mv, model: Model, dt: float, current_time: floa
     left += 0.5 * rnm * dv / vol
     right -= 0.5 * rnm_old * t_bag_old * dv / vol_old
     
-    t_bag = right / left
+    if abs(left) > 1e-30:
+        t_bag = right / left
+    else:
+        t_bag = t_bag_old
     t_bag = max(t_bag, 0.0)
     
-    p = rnm * t_bag / vol
+    p = rnm * t_bag / vol if vol > 0.0 else mv.pext
     
     mv.temperature = t_bag
     mv.pressure = p

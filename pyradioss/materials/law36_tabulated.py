@@ -269,29 +269,36 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
         rate = extra["epsd36"].copy()
 
     c_hard = mat.params.get("c_hard", 0.0)
-    if c_hard > 0.0 and extra is not None and "sigb36" in extra:
+    has_sigb = c_hard > 0.0 and extra is not None and "sigb36" in extra
+    if has_sigb:
         s_trial = s.copy()
-        s -= extra["sigb36"]
+        s_eff = s - extra["sigb36"]
+    else:
+        s_eff = s
 
-    j2 = 0.5 * (s[:, 0] ** 2 + s[:, 1] ** 2 + s[:, 2] ** 2) \
-        + s[:, 3] ** 2 + s[:, 4] ** 2 + s[:, 5] ** 2
+    j2 = 0.5 * (s_eff[:, 0] ** 2 + s_eff[:, 1] ** 2 + s_eff[:, 2] ** 2) \
+        + s_eff[:, 3] ** 2 + s_eff[:, 4] ** 2 + s_eff[:, 5] ** 2
     sig_eq = np.sqrt(3.0 * j2) + 1e-30
 
     # 3./4. yield check + radial return to the tabulated curve
     idx, scale, dl = _radial_return(mat, sig_eq, epsp, rate, 3.0 * G, dt)
     if idx is not None:
         for k in range(6):
-            s[idx, k] *= scale
+            s_eff[idx, k] *= scale
         epsp[idx] += dl
         
-        if c_hard > 0.0 and extra is not None and "sigb36" in extra:
-            s_new_tot = s[idx] + extra["sigb36"][idx]
+        if has_sigb:
+            s_new_tot = s_eff[idx] + extra["sigb36"][idx]
             _, H_i = _yield_stress(mat, epsp[idx], rate[idx])
             H_kin = (2.0/3.0) * c_hard * H_i
             alpha_pz = H_kin / (2.0 * G + H_kin)
             for k in range(6):
                 extra["sigb36"][idx, k] += alpha_pz * (s_trial[idx, k] - s_new_tot[:, k])
-                s[idx, k] += extra["sigb36"][idx, k]
+
+    if has_sigb:
+        s = s_eff + extra["sigb36"]
+    else:
+        s = s_eff
 
     sig[:, :] = s
     sig[:, 0] += p_new
@@ -305,17 +312,13 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
 # ----------------------------------------------------------------------------
 
 def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
-                 epsp: np.ndarray, dt: float):
+                 epsp: np.ndarray, dt: float, extra: Optional[dict] = None):
     """Plane-stress radial projection with the tabulated yield stress.
     sig, deps: (n, 3) = [xx, yy, xy]; epsp: (n,). In-place updates."""
     G = mat.G
 
     # elastic trial
     law01_elastic.shell_update(mat, sig, deps)
-
-    # plane-stress von Mises
-    sxx, syy, sxy = sig[:, 0], sig[:, 1], sig[:, 2]
-    sig_eq = np.sqrt(sxx ** 2 - sxx * syy + syy ** 2 + 3.0 * sxy ** 2) + 1e-30
 
     # in-plane equivalent strain rate (incompressible thickness estimate,
     # same as the LAW2 shell port)
@@ -334,32 +337,36 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
         rate = extra["epsd36"].copy()
 
     c_hard = mat.params.get("c_hard", 0.0)
-    if c_hard > 0.0 and extra is not None and "sigb36" in extra:
+    has_sigb = c_hard > 0.0 and extra is not None and "sigb36" in extra
+    if has_sigb:
         s_trial = sig.copy()
-        sig -= extra["sigb36"]
+        s_eff = sig - extra["sigb36"]
+    else:
+        s_eff = sig
 
     # plane-stress von Mises
-    sxx, syy, sxy = sig[:, 0], sig[:, 1], sig[:, 2]
+    sxx, syy, sxy = s_eff[:, 0], s_eff[:, 1], s_eff[:, 2]
     sig_eq = np.sqrt(sxx ** 2 - sxx * syy + syy ** 2 + 3.0 * sxy ** 2) + 1e-30
 
     idx, scale, dl = _radial_return(mat, sig_eq, epsp, rate, 3.0 * G, dt)
-    if idx is None:
-        if c_hard > 0.0 and extra is not None and "sigb36" in extra:
-            sig[:, :] = s_trial
-        return sig, epsp
-    sig[idx, 0] *= scale
-    sig[idx, 1] *= scale
-    sig[idx, 2] *= scale
-    epsp[idx] += dl
+    if idx is not None:
+        s_eff[idx, 0] *= scale
+        s_eff[idx, 1] *= scale
+        s_eff[idx, 2] *= scale
+        epsp[idx] += dl
 
-    if c_hard > 0.0 and extra is not None and "sigb36" in extra:
-        sig_new_tot = sig[idx] + extra["sigb36"][idx]
-        _, H_i = _yield_stress(mat, epsp[idx], rate[idx])
-        H_kin = (2.0/3.0) * c_hard * H_i
-        alpha_pz = H_kin / (2.0 * G + H_kin)
-        for k in range(3):
-            extra["sigb36"][idx, k] += alpha_pz * (s_trial[idx, k] - sig_new_tot[:, k])
-            sig[idx, k] += extra["sigb36"][idx, k]
+        if has_sigb:
+            s_new_tot = s_eff[idx] + extra["sigb36"][idx]
+            _, H_i = _yield_stress(mat, epsp[idx], rate[idx])
+            H_kin = (2.0/3.0) * c_hard * H_i
+            alpha_pz = H_kin / (2.0 * G + H_kin)
+            for k in range(3):
+                extra["sigb36"][idx, k] += alpha_pz * (s_trial[idx, k] - s_new_tot[:, k])
+
+    if has_sigb:
+        sig[:, :] = s_eff + extra["sigb36"]
+    else:
+        sig[:, :] = s_eff
 
     return sig, epsp
 

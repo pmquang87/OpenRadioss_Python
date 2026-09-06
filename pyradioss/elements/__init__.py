@@ -28,12 +28,13 @@ where internal forces enter negated).
 """
 
 from . import (beam_type3, shell_bt4, shell_dkt18, shell_qbat, shell_qeph,  # noqa: F401
-               shell_thick16, shell_tri3, solid_heph, solid_hexa8, solid_quad,
+               shell_thick16, shell_tri3, solid_bric20, solid_heph, solid_hexa8, solid_quad,
                solid_tetra10, solid_tetra4, spring, truss)
 
 KERNELS = {
     "bricks": solid_hexa8,
     "bricks_heph": solid_heph,
+    "bric20s": solid_bric20,
     "quads": solid_quad,
     "tetra10s": solid_tetra10,
     "tetras": solid_tetra4,
