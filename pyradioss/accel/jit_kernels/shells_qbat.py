@@ -1,5 +1,18 @@
-﻿import numpy as np
-from numba import njit, objmode
+import numpy as np
+try:
+    from numba import njit, objmode
+except ImportError:
+    def njit(*args, **kwargs):
+        if len(args) == 1 and callable(args[0]) and not kwargs:
+            return args[0]
+        def dec(fn):
+            return fn
+        return dec
+    class _ObjModeContext:
+        def __enter__(self): pass
+        def __exit__(self, exc_type, exc_val, exc_tb): pass
+    def objmode(*args, **kwargs):
+        return _ObjModeContext()
 from pyradioss.common.constants import EM20, EP30
 
 

@@ -217,3 +217,14 @@ def test_spinning_strip_hourglass_bounded(tmp_path):
     early = np.abs(he[: ncyc // 4]).max()
     late = np.abs(he[-ncyc // 4:]).max()
     assert late < 100.0 * max(early, 1e-12), (early, late)
+
+
+def test_bt_ishell_3_and_4_forces(tmp_path):
+    """Ensure ishell=3 and ishell=4 (IHBE 2 and 4) execute forces without NameError (AUD-006)."""
+    for ishell in (3, 4):
+        m = _one_element(tmp_path, ishell=ishell)
+        fint = np.zeros_like(m.x0)
+        mint = np.zeros_like(m.x0)
+        dt = shell_bt4.forces(m.shells, m.x0, np.zeros_like(m.x0), np.zeros_like(m.x0), 1e-6, fint, mint)
+        assert np.all(dt > 0.0)
+

@@ -9559,10 +9559,10 @@ def read_bcs(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             scale = float(t[3]) if len(t) > 3 else 0.0
         model.heat_bcs[block.user_id] = HeatBcs(
             id=block.user_id,
-            kind=sub,
             title=title,
-            grnod_id=grnod_id,
-            sensor_id=sens_id,
+            group_id=grnod_id,
+            bcs_type=sub,
+            sens_id=sens_id,
             funct_id=funct_id,
             scale=scale,
         )
@@ -10178,19 +10178,24 @@ def read_inivel(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             except ValueError:
                 real_layout = True         # first field is the DIR letter
         if real_layout:
-            f = cards[0].cut("INIVEL_AXIS_1")
+            if block.fixed:
+                f = cards[0].cut("INIVEL_AXIS_1")
+                g = cards[1].cut("INIVEL_AXIS_2") if len(cards) > 1 else [""] * 4
+                h = cards[2].cut("INIVEL_AXIS_3") if len(cards) > 2 and not cards[2].is_blank else []
+            else:
+                toks0 = cards[0].tokens()
+                f = [toks0[0], toks0[1] if len(toks0) > 1 else "0", toks0[2] if len(toks0) > 2 else "0"]
+                toks1 = cards[1].tokens() if len(cards) > 1 else []
+                g = [toks1[i] if i < len(toks1) else "0.0" for i in range(4)]
+                toks2 = cards[2].tokens() if len(cards) > 2 else []
+                h = [toks2[i] if i < len(toks2) else "0.0" for i in range(2)]
+
             axis = _direction(f[0])
             frame, grnod = _ival(f[1]), _ival(f[2])
-            g = cards[1].cut("INIVEL_AXIS_2") if len(cards) > 1 \
-                else [""] * 4
             vt = np.array([_fval(s) for s in g[:3]])
             omega = _fval(g[3])
-            tstart = 0.0
-            sens_id = 0
-            if len(cards) > 2 and not cards[2].is_blank:
-                h = cards[2].cut("INIVEL_AXIS_3")
-                tstart = _fval(h[0], 0.0) if len(h) > 0 else 0.0
-                sens_id = _ival(h[1]) if len(h) > 1 else 0
+            tstart = _fval(h[0], 0.0) if len(h) > 0 else 0.0
+            sens_id = _ival(h[1]) if len(h) > 1 else 0
 
             model.inivel.append(InitialVelocity(
                 id=block.user_id, grnod_id=grnod, v=vt, title=title,

@@ -1,5 +1,13 @@
 import numpy as np
-from numba import njit
+try:
+    from numba import njit
+except ImportError:
+    def njit(*args, **kwargs):
+        if len(args) == 1 and callable(args[0]) and not kwargs:
+            return args[0]
+        def dec(fn):
+            return fn
+        return dec
 
 @njit(cache=True)
 def qeph_pre(xe, ve, vre, dt, npt1, alive):
