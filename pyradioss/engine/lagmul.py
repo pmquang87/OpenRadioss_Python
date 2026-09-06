@@ -35,6 +35,7 @@ class LagmulSolver:
         self.log = log
         self._warned = False
         from ..contact.inter_type16 import LagmulType16
+        from ..contact.inter_type17 import LagmulType17
         from ..contact.inter_type7 import LagmulType7
         
         # Instantiate the specific handlers which generate the L rows.
@@ -46,6 +47,8 @@ class LagmulSolver:
                 raise ImportError("LagmulSolver requires scipy to be installed.")
             if itf.type == 16:
                 self.interfaces.append(LagmulType16(itf, model, log))
+            elif itf.type == 17:
+                self.interfaces.append(LagmulType17(itf, model, log))
             elif itf.type == 7:
                 self.interfaces.append(LagmulType7(itf, model, log))
             else:
