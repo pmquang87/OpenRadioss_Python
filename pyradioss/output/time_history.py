@@ -108,7 +108,8 @@ class TimeHistory:
         comp = {"X": 0, "Y": 1, "Z": 2}.get(var_upper[-1], 0)
 
         if kind == "RBODY":
-            rb = model.rigid_bodies.get(oid)
+            rbs = getattr(model, "rigid_bodies", None)
+            rb = rbs.get(oid) if rbs is not None else None
             if rb is not None:
                 if var_upper.startswith("D"):
                     return float(rb.x_cg[comp] - rb.x_cg0[comp]) if hasattr(rb, "x_cg0") else 0.0

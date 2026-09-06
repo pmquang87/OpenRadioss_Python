@@ -323,6 +323,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         saved_map=saved.get("rbodies") if resumed else None)
     if controls.rbody_active:
         rbodies = [rb for rb in rbodies if controls.rbody_active.get(rb.rb.id, True)]
+    model.rigid_bodies = {rb.rb.id: rb for rb in rbodies}
     rbe3s = build_rbe3(model, log)
     mpc = build_mpc(model, loads, log)     # /MPC (M6)
     lagmul = LagmulSolver(model, loads, log)

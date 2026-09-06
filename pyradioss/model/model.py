@@ -778,6 +778,7 @@ class Model:
         self.admas: List[AddedMass] = []               # /ADMAS   (M5)
         self.rwalls: List[RigidWall] = []
         self.rbodies: List[RigidBody] = []             # /RBODY + /RBE2 (M5)
+        self.rigid_bodies: Dict[int, Any] = {}         # engine-side {id: RigidBodyEngine}
         self.rbe3: List[Rbe3] = []                     # /RBE3    (M5)
         self.sections: List[Section] = []              # /SECT    (M5)
         self.damps: List[Damping] = []                 # /DAMP    (M6)

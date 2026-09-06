@@ -80,8 +80,12 @@ _VISC = 0.05  # normal damping ratio, as TYPE7
 
 def _closest_points_on_segments(p1, q1, p2, q2):
     """Vectorized exact closest points between segments [p1,q1] and
-    [p2,q2] (Ericson §5.1.9). All args (n,3). Returns (s, t, cA, cB):
-    parameters in [0,1] and the closest points on each segment."""
+    [p2,q2] (Ericson §5.1.9, Fortran origin: i11dst3.F). All args (n,3).
+    Returns (s, t, cA, cB): parameters in [0,1] and the closest points
+    on each segment."""
+    if len(p1) == 0:
+        return (np.zeros(0, dtype=float), np.zeros(0, dtype=float),
+                np.zeros((0, 3), dtype=float), np.zeros((0, 3), dtype=float))
     d1 = q1 - p1
     d2 = q2 - p2
     r = p1 - p2
@@ -112,24 +116,66 @@ def _closest_points_on_segments(p1, q1, p2, q2):
 
 
 class ContactType11:
-    """One /INTER/TYPE11 interface, engine-side."""
+    """One /INTER/TYPE11 interface, engine-side.
+
+    Fortran origin: engine/source/interfaces/int11/ (i11main_tri.F, i11buce.F,
+    i11dst3.F, i11for3.F) and starter/source/interfaces/inter3d1/i11sti3.F.
+    """
+
+    def _init_empty(self):
+        """Initialize empty state for inactive or missing interfaces."""
+        self.Ks = np.zeros(0, dtype=float)
+        self.Km = np.zeros(0, dtype=float)
+        self.gap_s = np.zeros(0, dtype=float)
+        self.gap_m = np.zeros(0, dtype=float)
+        self.gap_const = 0.0
+        self.gap_min = 0.0
+        self.gap_max = np.inf
+        self.gap_bound = 0.0
+        self.fric = float(getattr(self.itf, "fric", 0.0))
+        self.mfrot = int(getattr(self.itf, "mfrot", 0))
+        self.ifq = int(getattr(self.itf, "ifq", 0))
+        self.xfiltr = float(getattr(self.itf, "xfiltr", 0.0))
+        self.fric_c = np.asarray(getattr(self.itf, "fric_c", (0.0,) * 6), dtype=float)
+        self._filt_keys = np.zeros(0, dtype=np.int64)
+        self._filt_vals = np.zeros((0, 3))
+        self.dt_bound = np.inf
+        self.deletable = False
+        self.es_alive = np.zeros(0, dtype=bool)
+        self.em_alive = np.zeros(0, dtype=bool)
+        self.pairs_s = np.zeros(0, dtype=np.int64)
+        self.pairs_m = np.zeros(0, dtype=np.int64)
+        self._last_refresh = -10**9
+        self.refresh = 20
 
     def __init__(self, itf, model: Model, log):
         self.itf = itf
         self.model = model
 
         def _line(lid, side):
-            ln = model.lines[lid]
+            ln = model.lines.get(lid)
+            if ln is None:
+                log.error(f"/INTER/TYPE11/{itf.id}: {side} line {lid} not found in model", "CONTACT INIT")
+                return (np.zeros((0, 2), dtype=np.int64),
+                        np.zeros(0, dtype="<U8"), np.zeros(0, dtype=np.int64))
             if ln.segments is None or len(ln.segments) == 0:
                 log.warning(f"/INTER/TYPE11/{itf.id}: {side} line {lid} is "
                             f"empty — interface inactive", "CONTACT INIT")
                 return (np.zeros((0, 2), dtype=np.int64),
                         np.zeros(0, dtype="<U8"), np.zeros(0, dtype=np.int64))
-            return ln.segments, ln.seg_gtype, ln.seg_elem
+            seg_gtype = (ln.seg_gtype if ln.seg_gtype is not None
+                         else np.zeros(len(ln.segments), dtype="<U8"))
+            seg_elem = (ln.seg_elem if ln.seg_elem is not None
+                        else np.full(len(ln.segments), -1, dtype=np.int64))
+            return ln.segments, seg_gtype, seg_elem
 
         self.es, self.es_gtype, self.es_elem = _line(itf.line_id1,
                                                      "secondary")
         self.em, self.em_gtype, self.em_elem = _line(itf.line_id2, "main")
+
+        if len(self.es) == 0 or len(self.em) == 0:
+            self._init_empty()
+            return
 
         # ---- per-edge stiffness and gap (i11sti3) --------------------------
         scale = itf.stfac if itf.istf != 1 else 1.0
@@ -179,8 +225,10 @@ class ContactType11:
         # ---- interface time step bound -------------------------------------
         # physical pre-mass-scaling masses: conservative and
         # restart-invariant (M6), like inter_type7
-        self.dt_bound = self._compute_dt_bound(
-            getattr(model, "mass0", model.mass))
+        m_phys = getattr(model, "mass0", None)
+        if m_phys is None or len(m_phys) != len(model.mass):
+            m_phys = model.mass
+        self.dt_bound = self._compute_dt_bound(m_phys)
 
         # ---- deletion bookkeeping ------------------------------------------
         self.deletable = (tracking.any_deletable(model, self.es_gtype)
@@ -355,9 +403,22 @@ class ContactType11:
         K = K[active]                          # per-pair stiffness (Istf)
         s, t = s[active], t[active]
         gap = gap[active]
-        pen = pen[active]
-        d = np.maximum(d[active], EM20)
-        nvec = dvec[active] / d[:, None]      # pushes the secondary edge out
+        norm_d = norm3(dvec[active])
+        deg = norm_d <= EM20
+        if np.any(deg):
+            e1 = x[ea[:, 1]] - x[ea[:, 0]]
+            e2 = x[eb[:, 1]] - x[eb[:, 0]]
+            n_cross = np.cross(e1, e2)
+            n_cross_norm = norm3(n_cross)
+            valid_cross = n_cross_norm > EM20
+            fallback = np.where(valid_cross[:, None],
+                                n_cross / np.maximum(n_cross_norm, EM20)[:, None],
+                                np.array([0.0, 0.0, 1.0]))
+            d_safe = np.maximum(norm_d, EM20)
+            nvec = np.where(deg[:, None], fallback, dvec[active] / d_safe[:, None])
+        else:
+            d_safe = np.maximum(d[active], EM20)
+            nvec = dvec[active] / d_safe[:, None]
 
         # relative velocity of the two closest points
         vA = (1 - s)[:, None] * v[ea[:, 0]] + s[:, None] * v[ea[:, 1]]

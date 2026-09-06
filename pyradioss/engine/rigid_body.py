@@ -155,6 +155,9 @@ class RigidBodyEngine:
         self.M = float(rb.mass_total)
         self.J0 = rb.J.copy()          # about the COG, global axes at t=0
         self.xg = rb.xg.copy()         # current COG position
+        self.x_cg0 = self.xg.copy()    # initial COG position
+        self.f_res = np.zeros(3)       # resultant force
+        self.m_res = np.zeros(3)       # resultant moment
         self.R = np.eye(3)
 
         # ---- body-level boundary conditions from the MASTER's /BCS ------
@@ -446,6 +449,8 @@ class RigidBodyEngine:
         F = f.sum(axis=0)
         r = x[nodes] - self.x_ref
         T = cross3(r, f).sum(axis=0) + mint[nodes].sum(axis=0)
+        self.f_res = F.copy()
+        self.m_res = T.copy()
 
         wext = 0.0
         if not self.pivot:
@@ -557,6 +562,14 @@ class RigidBodyEngine:
             self.xg = self.x_ref
         x[self.nodes] = self.x_ref + self.r0 @ self.R.T
         v[self.nodes] = self._rigid_field(x[self.nodes])
+
+    @property
+    def x_cg(self) -> np.ndarray:
+        return self.xg
+
+    @property
+    def v_cg(self) -> np.ndarray:
+        return self.v_ref
 
 
 def build_rigid_bodies(model: Model, loads, log,
