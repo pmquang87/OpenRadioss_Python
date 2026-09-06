@@ -568,19 +568,21 @@ def _nodes_of_parts(model: Model, part_ids: List[int]) -> np.ndarray:
     for _, group in model.element_groups():
         mask = np.isin(group.state["part_ids"], part_ids)
         if np.any(mask):
-            out.append(np.unique(group.conn[mask]))
+            u = np.unique(group.conn[mask])
+            out.append(u[u >= 0])
     if not out:
         return np.zeros(0, dtype=np.int64)
-    return np.unique(np.concatenate(out))
+    res = np.unique(np.concatenate(out))
+    return res[res >= 0]
 
 
 # element-group family key -> model attributes it spans (GRBRIC = ALL
 # solids, like the Fortran IGRBRIC over the whole IXS; BEAM edges use
 # the two END nodes only — the orientation node N3 is no geometry)
 _EGROUP_FAMILIES = {
-    "SHEL": ("shells", "shells_qbat", "shells_qeph"),
+    "SHEL": ("shells", "shells_qbat", "shells_qeph", "shel16s"),
     "SH3N": ("sh3n", "sh3n_dkt18"),
-    "BRIC": ("bricks", "bricks_heph", "tetras", "tetra10s"),
+    "BRIC": ("bricks", "bricks_heph", "tetras", "tetra10s", "bric20s"),
     "QUAD": ("quads",),
     "TRUS": ("trusses",),
     "BEAM": ("beams",),
@@ -814,15 +816,20 @@ def resolve_node_group_base(model: Model, g, log: MessageLog) -> np.ndarray:
             log.error(f"/GRNOD/{g.id}: surface {sid} missing or unresolved", "GROUP CHECK")
             continue
         if surf.segments.size:
-            idx.append(np.unique(surf.segments))
+            u = np.unique(surf.segments)
+            idx.append(u[u >= 0])
     for family, gid in g.egroup_refs:
         eg = model.egroups.get(family, {}).get(gid)
         if eg is None:
             log.error(f"/GRNOD/{g.id}: unknown /GR{family} group {gid}", "GROUP CHECK")
             continue
         for attr, rows in (eg.members or []):
-            idx.append(np.unique(getattr(model, attr).conn[rows]))
-    return np.unique(np.concatenate(idx)) if idx else np.zeros(0, dtype=np.int64)
+            u = np.unique(getattr(model, attr).conn[rows])
+            idx.append(u[u >= 0])
+    if not idx:
+        return np.zeros(0, dtype=np.int64)
+    res = np.unique(np.concatenate(idx))
+    return res[res >= 0]
 
 
 def resolve_single_node_group(model: Model, g, log: MessageLog, visited: set = None) -> np.ndarray:
@@ -896,62 +903,86 @@ def resolve_node_groups(model: Model, log: MessageLog) -> None:
             log.warning(f"/GRNOD/{g.id} '{g.title}' is empty", "GROUP CHECK")
 
 
-def _free_faces_of_bricks(model: Model, part_ids: List[int]):
-    """Outer (free) faces of the given solid parts: faces used by exactly
-    one element. Fortran: the surface-from-part extraction of
-    starter/source/model/sets/. Returns (faces (n,4), parent element rows
-    in model.bricks (n,)) — the provenance is what lets contact drop the
-    faces of /FAIL-deleted elements (M3<->M4 interaction)."""
+def _free_faces_of_bricks(model: Model, part_ids: List[int], modifier: str = "EXT"):
+    """Outer (free) faces of the given solid parts (or all faces if modifier='ALL').
+    Supports bricks, bricks_heph, bric20s, and shel16s.
+    Returns (faces (n,4), parent element rows (n,), element group names (n,))."""
     from ..elements.solid_hexa8 import _FACES
-    g = model.bricks
-    if g is None:
+    all_faces: List[np.ndarray] = []
+    all_owners: List[np.ndarray] = []
+    all_attrs: List[np.ndarray] = []
+
+    for attr in ("bricks", "bricks_heph", "bric20s", "shel16s"):
+        g = getattr(model, attr, None)
+        if g is None:
+            continue
+        mask = np.isin(g.state["part_ids"], part_ids)
+        if not np.any(mask):
+            continue
+        erow = np.where(mask)[0]
+        # First 8 nodes define corner vertices
+        conn = g.conn[mask, :8]
+        faces = conn[:, _FACES.reshape(-1)].reshape(-1, 4)
+        owner = np.repeat(erow, 6)
+        key = np.sort(faces, axis=1)
+        _, inverse, counts = np.unique(key, axis=0, return_inverse=True, return_counts=True)
+        free = (counts[inverse] == 1) if modifier != "ALL" else np.ones(len(faces), dtype=bool)
+        if np.any(free):
+            all_faces.append(faces[free])
+            all_owners.append(owner[free])
+            all_attrs.append(np.full(int(np.sum(free)), attr, dtype="<U16"))
+
+    if not all_faces:
         return (np.zeros((0, 4), dtype=np.int64),
-                np.zeros(0, dtype=np.int64))
-    mask = np.isin(g.state["part_ids"], part_ids)
-    erow = np.where(mask)[0]                                # rows in group
-    conn = g.conn[mask]
-    faces = conn[:, _FACES.reshape(-1)].reshape(-1, 4)      # (nelem*6, 4)
-    owner = np.repeat(erow, 6)                              # face -> element
-    key = np.sort(faces, axis=1)
-    _, inverse, counts = np.unique(key, axis=0, return_inverse=True,
-                                   return_counts=True)
-    free = counts[inverse] == 1
-    return faces[free], owner[free]
+                np.zeros(0, dtype=np.int64),
+                np.zeros(0, dtype="<U16"))
+    return np.vstack(all_faces), np.concatenate(all_owners), np.concatenate(all_attrs)
 
 
-def _free_faces_of_tetras(model: Model, part_ids: List[int]):
-    """Free triangular faces of /TETRA4 parts, as degenerate 4-node
-    segments (3rd node repeated — Radioss triangle-segment convention).
-    Returns (faces (n,4), parent element rows in model.tetras (n,))."""
+def _free_faces_of_tetras(model: Model, part_ids: List[int], modifier: str = "EXT"):
+    """Free triangular faces of /TETRA4 and /TETRA10 parts (or all faces if modifier='ALL'),
+    as degenerate 4-node segments (3rd node repeated — Radioss triangle-segment convention).
+    Returns (faces (n,4), parent element rows (n,), element group names (n,))."""
     from ..elements.solid_tetra4 import _FACES
-    g = model.tetras
-    if g is None:
+    all_faces: List[np.ndarray] = []
+    all_owners: List[np.ndarray] = []
+    all_attrs: List[np.ndarray] = []
+
+    for attr in ("tetras", "tetra10s"):
+        g = getattr(model, attr, None)
+        if g is None:
+            continue
+        mask = np.isin(g.state["part_ids"], part_ids)
+        if not np.any(mask):
+            continue
+        erow = np.where(mask)[0]
+        # First 4 nodes define corner vertices
+        conn = g.conn[mask, :4]
+        faces = conn[:, _FACES.reshape(-1)].reshape(-1, 3)
+        owner = np.repeat(erow, 4)
+        key = np.sort(faces, axis=1)
+        _, inverse, counts = np.unique(key, axis=0, return_inverse=True, return_counts=True)
+        free = (counts[inverse] == 1) if modifier != "ALL" else np.ones(len(faces), dtype=bool)
+        if np.any(free):
+            ff = faces[free]
+            all_faces.append(np.column_stack([ff, ff[:, 2]]))  # n4 = n3
+            all_owners.append(owner[free])
+            all_attrs.append(np.full(int(np.sum(free)), attr, dtype="<U16"))
+
+    if not all_faces:
         return (np.zeros((0, 4), dtype=np.int64),
-                np.zeros(0, dtype=np.int64))
-    mask = np.isin(g.state["part_ids"], part_ids)
-    erow = np.where(mask)[0]
-    conn = g.conn[mask]
-    faces = conn[:, _FACES.reshape(-1)].reshape(-1, 3)      # (nelem*4, 3)
-    owner = np.repeat(erow, 4)
-    key = np.sort(faces, axis=1)
-    _, inverse, counts = np.unique(key, axis=0, return_inverse=True,
-                                   return_counts=True)
-    free = counts[inverse] == 1
-    faces = faces[free]
-    return np.column_stack([faces, faces[:, 2]]), owner[free]  # n4 = n3
+                np.zeros(0, dtype=np.int64),
+                np.zeros(0, dtype="<U16"))
+    return np.vstack(all_faces), np.concatenate(all_owners), np.concatenate(all_attrs)
 
 
 def resolve_surfaces(model: Model, log: MessageLog) -> None:
     """/SURF content -> (nseg, 4) node-index arrays + per-segment
     provenance (parent element group/row, see Surface docstring).
 
-    M37 additions: /SURF/GRSHEL and /SURF/GRSH3N (segments from element
-    groups — runs AFTER resolve_entity_groups) and /SURF/SURF
-    (surface-of-surfaces, hm_read_surfsurf.F): the referenced surfaces'
-    segments are concatenated by iterative fixpoint with cycle
-    detection; a NEGATIVE reference includes the surface with its
-    segment node order REVERSED (n4 n3 n2 n1 — the normal flips),
-    provenance carried along either way."""
+    Supports shells, quads, triangles, solids (bricks, tetras, high-order),
+    element groups (/SURF/GR*), selectors (/SURF/MAT, /PROP, /BOX, ALL),
+    and surface-of-surfaces (/SURF/SURF)."""
     def _base(s):
         segs: List[np.ndarray] = []
         gtypes: List[np.ndarray] = []   # parallel provenance pieces
@@ -970,49 +1001,56 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
             except KeyError as exc:
                 log.error(f"/SURF/{s.id}: unknown node id {exc}",
                           "SURFACE CHECK")
-        if s.part_ids:
-            # shell parts: every shell element is a segment
-            if model.shells is not None:
-                mask = np.isin(model.shells.state["part_ids"], s.part_ids)
+
+        # Resolve part selectors: s.part_ids, s.mat_ids, s.prop_ids, modifier == ALL
+        parts_to_include = set(s.part_ids)
+        if getattr(s, "mat_ids", None):
+            for pid, part in model.parts.items():
+                if part.mat_id in s.mat_ids:
+                    parts_to_include.add(pid)
+        if getattr(s, "prop_ids", None):
+            for pid, part in model.parts.items():
+                if part.prop_id in s.prop_ids:
+                    parts_to_include.add(pid)
+        if getattr(s, "modifier", "") == "ALL" and not parts_to_include and not s.seg_nodes and not s.egroup_refs and not s.surf_ids:
+            parts_to_include = set(model.parts.keys())
+
+        if parts_to_include:
+            pids = list(parts_to_include)
+            # shell parts
+            for attr in ("shells", "shells_qbat", "shells_qeph"):
+                g = getattr(model, attr, None)
+                if g is not None:
+                    mask = np.isin(g.state["part_ids"], pids)
+                    if np.any(mask):
+                        _add(g.conn[mask, :4], attr, np.where(mask)[0])
+            # quads
+            if getattr(model, "quads", None) is not None:
+                mask = np.isin(model.quads.state["part_ids"], pids)
                 if np.any(mask):
-                    _add(model.shells.conn[mask], "shells", np.where(mask)[0])
-            # QBAT shell parts (Ishell=12 split group, M41): same segments
-            if model.shells_qbat is not None:
-                mask = np.isin(model.shells_qbat.state["part_ids"],
-                               s.part_ids)
-                if np.any(mask):
-                    _add(model.shells_qbat.conn[mask], "shells_qbat",
-                         np.where(mask)[0])
-            # QEPH shell parts (Ishell=24 split group, M41): same segments
-            if model.shells_qeph is not None:
-                mask = np.isin(model.shells_qeph.state["part_ids"],
-                               s.part_ids)
-                if np.any(mask):
-                    _add(model.shells_qeph.conn[mask], "shells_qeph",
-                         np.where(mask)[0])
-            # DKT18 shell parts (Ish3n=2 split group)
-            if model.sh3n_dkt18 is not None:
-                mask = np.isin(model.sh3n_dkt18.state["part_ids"],
-                               s.part_ids)
-                if np.any(mask):
-                    c3 = model.sh3n_dkt18.conn[mask]
-                    _add(np.column_stack([c3, c3[:, 2]]), "sh3n_dkt18",
-                         np.where(mask)[0])
-            # 3-node shell parts: triangle segments (3rd node repeated)
-            if model.sh3n is not None:
-                mask = np.isin(model.sh3n.state["part_ids"], s.part_ids)
-                if np.any(mask):
-                    c3 = model.sh3n.conn[mask]
-                    _add(np.column_stack([c3, c3[:, 2]]), "sh3n",
-                         np.where(mask)[0])
-            # solid parts: free outer faces (with their parent element)
-            ff, fo = _free_faces_of_bricks(model, s.part_ids)
+                    _add(model.quads.conn[mask, :4], "quads", np.where(mask)[0])
+            # triangles
+            for attr in ("sh3n", "sh3n_dkt18"):
+                g = getattr(model, attr, None)
+                if g is not None:
+                    mask = np.isin(g.state["part_ids"], pids)
+                    if np.any(mask):
+                        c3 = g.conn[mask]
+                        _add(np.column_stack([c3[:, :3], c3[:, 2]]), attr, np.where(mask)[0])
+            # solid parts: bricks, tetras, bric20, shel16, tetra10
+            mod = getattr(s, "modifier", "EXT") or "EXT"
+            ff, fo, fa = _free_faces_of_bricks(model, pids, mod)
             if len(ff):
-                _add(ff, "bricks", fo)
-            ft, to = _free_faces_of_tetras(model, s.part_ids)
+                for attr in np.unique(fa):
+                    sel = (fa == attr)
+                    _add(ff[sel], attr, fo[sel])
+            ft, to, ta = _free_faces_of_tetras(model, pids, mod)
             if len(ft):
-                _add(ft, "tetras", to)
-        # /SURF/GRSHEL | /SURF/GRSH3N: every element of the group (M37)
+                for attr in np.unique(ta):
+                    sel = (ta == attr)
+                    _add(ft[sel], attr, to[sel])
+
+        # /SURF/GRSHEL | /SURF/GRSH3N | /SURF/GRBRIC
         for family, gid in s.egroup_refs:
             eg = model.egroups.get(family, {}).get(gid)
             if eg is None:
@@ -1020,10 +1058,51 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
                           "SURFACE CHECK")
                 continue
             for attr, rows in (eg.members or []):
-                conn = getattr(model, attr).conn[rows]
-                if conn.shape[1] == 3:              # triangles: n4 = n3
-                    conn = np.column_stack([conn, conn[:, 2]])
-                _add(conn, attr, rows)
+                g = getattr(model, attr, None)
+                if g is None:
+                    continue
+                conn = g.conn[rows]
+                mod = getattr(s, "modifier", "EXT") or "EXT"
+                if attr in ("tetras", "tetra10s"):
+                    from ..elements.solid_tetra4 import _FACES
+                    faces = conn[:, :4][:, _FACES.reshape(-1)].reshape(-1, 3)
+                    owner = np.repeat(rows, 4)
+                    key = np.sort(faces, axis=1)
+                    _, inv, cnt = np.unique(key, axis=0, return_inverse=True, return_counts=True)
+                    free = (cnt[inv] == 1) if mod != "ALL" else np.ones(len(faces), dtype=bool)
+                    if np.any(free):
+                        ff = faces[free]
+                        _add(np.column_stack([ff, ff[:, 2]]), attr, owner[free])
+                elif attr in ("bricks", "bricks_heph", "bric20s", "shel16s"):
+                    from ..elements.solid_hexa8 import _FACES
+                    faces = conn[:, :8][:, _FACES.reshape(-1)].reshape(-1, 4)
+                    owner = np.repeat(rows, 6)
+                    key = np.sort(faces, axis=1)
+                    _, inv, cnt = np.unique(key, axis=0, return_inverse=True, return_counts=True)
+                    free = (cnt[inv] == 1) if mod != "ALL" else np.ones(len(faces), dtype=bool)
+                    if np.any(free):
+                        _add(faces[free], attr, owner[free])
+                else:
+                    if conn.shape[1] == 3:              # triangles: n4 = n3
+                        c = np.column_stack([conn, conn[:, 2]])
+                    else:
+                        c = conn[:, :4]
+                    _add(c, attr, rows)
+
+        if getattr(s, "box_ids", None) and segs:
+            box_nodes = set()
+            for bid in s.box_ids:
+                box = model.boxes.get(bid)
+                if box:
+                    bn = _nodes_in_box(model, box, log, f"/SURF/{s.id}")
+                    box_nodes.update(bn)
+            if box_nodes:
+                all_s = np.vstack(segs)
+                all_gt = np.concatenate(gtypes)
+                all_el = np.concatenate(elems)
+                in_box = np.isin(all_s, list(box_nodes)).all(axis=1)
+                return (all_s[in_box], all_gt[in_box], all_el[in_box])
+
         if segs:
             return (np.vstack(segs), np.concatenate(gtypes),
                     np.concatenate(elems))
@@ -1067,6 +1146,16 @@ def resolve_surfaces(model: Model, log: MessageLog) -> None:
 
     _fixpoint(dict(model.surfaces), _try, log, "SURF", _on_cycle)
     for s in model.surfaces.values():
+        is_analytical = (
+            getattr(s, "plane_p1", None) is not None or
+            getattr(s, "ellipse_center", None) is not None or
+            getattr(s, "cyl_center", None) is not None or
+            getattr(s, "spher_center", None) is not None or
+            getattr(s, "cyl_radius", 0.0) > 0.0 or
+            getattr(s, "spher_radius", 0.0) > 0.0
+        )
+        if is_analytical:
+            continue
         if s.segments.shape[0] == 0:
             log.warning(f"/SURF/{s.id} '{s.title}' has no segments",
                         "SURFACE CHECK")

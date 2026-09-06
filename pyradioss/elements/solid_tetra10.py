@@ -99,21 +99,38 @@ def _exact_dt_factor(dndx: np.ndarray, vol: np.ndarray, lc: np.ndarray,
     n = len(vol)
     return 0.25 * np.ones(n)
 
+_TETRA10_EDGES = [(0, 1), (1, 2), (2, 0), (0, 3), (1, 3), (2, 3)]
+
+
 def init_group(group, model, log):
-    xe = model.x0[group.conn]
+    n = group.n
+    conn = group.conn
+    
+    # Reconstruct coordinates for virtual midside nodes (-1)
+    xe = np.zeros((n, 10, 3), dtype=np.float64)
+    xe[:, :4] = model.x0[conn[:, :4]]
+    for m, (n1, n2) in enumerate(_TETRA10_EDGES):
+        c_m = conn[:, 4 + m]
+        real = c_m >= 0
+        if real.any():
+            xe[real, 4 + m] = model.x0[c_m[real]]
+        virt = ~real
+        if virt.any():
+            xe[virt, 4 + m] = 0.5 * (xe[virt, n1] + xe[virt, n2])
+            
     dndx0, vol, vol_tot = _geometry(xe)
     
     flip = vol_tot < 0.0
     if np.any(flip):
         log.warning(f"{flip.sum()} TETRA10 elements have negative volume.", "TETRA10 INIT")
         
-    n = group.n
     rho0 = np.zeros(n)
     for sl, mat, prop in group.state["slices"]:
         rho0[sl] = mat.rho0
     mass = rho0 * vol_tot
     lc0 = _char_length(xe, vol_tot)
     
+    chk_fail = any(mat.fail is not None or mat.params.get("eps_p_max", EP30) < 1e30 for _, mat, _ in group.state["slices"])
     group.state.update(
         sig=np.zeros((n, 4, 6)),
         epsp=np.zeros((n, 4)),
@@ -124,15 +141,24 @@ def init_group(group, model, log):
         off=np.ones(n),
         qvw_pend=np.zeros(n),
         dtfac=_exact_dt_factor(dndx0, vol, lc0, group.state["slices"]),
+        chk_fail=chk_fail,
+        dama=np.zeros(n),
     )
-    mass_c = np.repeat(mass / 10.0, 10)
-    node_idx = group.conn.reshape(-1)
+    
+    elem_mass = np.zeros((n, 10), dtype=np.float64)
+    is_slaved = conn[:, 4] < 0
+    elem_mass[~is_slaved, :] = mass[~is_slaved, None] / 10.0
+    elem_mass[is_slaved, :4] = mass[is_slaved, None] / 4.0
+    elem_mass[is_slaved, 4:] = 0.0
+    
+    node_idx = conn.reshape(-1)
+    mass_c = elem_mass.reshape(-1)
+    valid = node_idx >= 0
     
     from .solid_hexa8 import _init_material_state
     _init_material_state(group, dndx0[:, 0]) 
-    group.state["chk_fail"] = False
     
-    return node_idx, mass_c, None
+    return node_idx[valid], mass_c[valid], None
 
 
 # Engine-side force computation (one cycle)
@@ -247,17 +273,23 @@ def forces(group, x, v, vr, dt, fint, mint):
     (_pre + _post above)."""
     st = group.state
     conn = group.conn
-    xe = x[conn]
-    ve = v[conn]
-
-    is_slaved = len(conn) > 0 and conn[0, 4] == -1
-    if is_slaved:
-        # Virtual slaved mid-side nodes for TETRA4 Itetra=1/2 Nodal-Pressure variants.
-        # Nodes 4,5,6 are mid-edges of the base (01, 12, 20).
-        # Nodes 7,8,9 are mid-edges to the apex (03, 13, 23).
-        for m, (n1, n2) in enumerate([(0, 1), (1, 2), (2, 0), (0, 3), (1, 3), (2, 3)]):
-            xe[:, 4 + m] = 0.5 * (xe[:, n1] + xe[:, n2])
-            ve[:, 4 + m] = 0.5 * (ve[:, n1] + ve[:, n2])
+    n = group.n
+    
+    # Reconstruct positions and velocities for virtual midside nodes (-1)
+    xe = np.zeros((n, 10, 3), dtype=np.float64)
+    ve = np.zeros((n, 10, 3), dtype=np.float64)
+    xe[:, :4] = x[conn[:, :4]]
+    ve[:, :4] = v[conn[:, :4]]
+    for m, (n1, n2) in enumerate(_TETRA10_EDGES):
+        c_m = conn[:, 4 + m]
+        real = c_m >= 0
+        if real.any():
+            xe[real, 4 + m] = x[c_m[real]]
+            ve[real, 4 + m] = v[c_m[real]]
+        virt = ~real
+        if virt.any():
+            xe[virt, 4 + m] = 0.5 * (xe[virt, n1] + xe[virt, n2])
+            ve[virt, 4 + m] = 0.5 * (ve[virt, n1] + ve[virt, n2])
 
     sig = st["sig"]
     sig_old = sig.copy()
@@ -277,6 +309,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     sig_flat = sig.reshape(-1, 6)
     deps_flat = deps.reshape(-1, 6)
     epsp_flat = st["epsp"].reshape(-1)
+    epsp_old = epsp_flat.copy() if st["chk_fail"] else None
 
     for sl, mat, prop in st["slices"]:
         sl_flat = slice(sl.start * 4, sl.stop * 4)
@@ -287,6 +320,27 @@ def forces(group, x, v, vr, dt, fint, mint):
             c[sl] = c_new
         else:
             c[sl] = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
+
+    # ---- failure evaluation -------------------------------------------
+    if st["chk_fail"]:
+        off = st["off"]
+        from pyradioss import failure
+        for sl, mat, prop in st["slices"]:
+            eps_max = mat.params.get("eps_p_max", EP30)
+            if mat.fail is None and eps_max >= 1e30:
+                continue
+            broken = np.zeros(sl.stop - sl.start, dtype=bool)
+            if mat.fail is not None:
+                sig_avg = sig[sl].mean(axis=1)
+                deps_avg = deps[sl].mean(axis=1)
+                depsp_avg = (st["epsp"][sl] - epsp_old.reshape(-1, 4)[sl]).mean(axis=1)
+                broken |= failure.solid_step(
+                    mat.fail, sig_avg, depsp_avg, deps_avg, dt, st["dama"][sl])
+            if eps_max < 1e30:
+                broken |= st["epsp"][sl].max(axis=1) > eps_max
+            off[sl][broken] = 0.0
+        alive = off > 0.0
+        sig[~alive] = 0.0
 
     # ---- bulk-viscosity coefficients per slice -------------------------
     qa = np.zeros(group.n)
@@ -306,23 +360,25 @@ def forces(group, x, v, vr, dt, fint, mint):
             xe, dndx, vol, vol_tot, lc, rho, trD, deps, sig, sig_old,
             qa, qb, c, alive, st["qvw_pend"], dt, st["dtfac"])
 
+    alive = st["off"] > 0.0
+    fe[~alive] = 0.0
     st["eint"] += deint0
     st["qvw_pend"] = qvw_new
 
-    if is_slaved:
-        # 100% of the element mass is on the 4 corners. The internal forces computed
-        # at the virtual mid-side nodes must be redistributed 50/50 back to the corner
-        # pairs to balance the equations of motion and prevent adding to node 0 (idx -1).
-        for m, (n1, n2) in enumerate([(0, 1), (1, 2), (2, 0), (0, 3), (1, 3), (2, 3)]):
-            fe[:, n1] += 0.5 * fe[:, 4 + m]
-            fe[:, n2] += 0.5 * fe[:, 4 + m]
-            fe[:, 4 + m] = 0.0
+    # For any virtual midside node (conn < 0), redistribute 50/50 back to corner pairs
+    for m, (n1, n2) in enumerate(_TETRA10_EDGES):
+        virt = conn[:, 4 + m] < 0
+        if virt.any():
+            f_mid = fe[virt, 4 + m]
+            fe[virt, n1] += 0.5 * f_mid
+            fe[virt, n2] += 0.5 * f_mid
+            fe[virt, 4 + m] = 0.0
 
-    # ---- scatter to global arrays --------------------------------------
-    if is_slaved:
-        scatter_add3(fint, conn[:, :4].reshape(-1), fe[:, :4].reshape(-1, 3), st.get("color_indices"), st.get("color_offsets"))
-    else:
-        scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get("color_indices"), st.get("color_offsets"))
+    # ---- scatter to global arrays (only non-negative node indices) ----
+    conn_flat = conn.reshape(-1)
+    fe_flat = fe.reshape(-1, 3)
+    valid = conn_flat >= 0
+    scatter_add3(fint, conn_flat[valid], fe_flat[valid], st.get("color_indices"), st.get("color_offsets"))
 
     return dt_crit
 

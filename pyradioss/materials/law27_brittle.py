@@ -129,7 +129,6 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
         # layer rupture at the failure strain (either direction)
         broken = (en1 > eps_f1) | (en2 > eps_f2)
         if np.any(broken):
-            print(f"BROKEN! en1={en1[broken]}, eps_f1={eps_f1}, en2={en2[broken]}, eps_f2={eps_f2}")
             bidx = np.where(cracked)[0][broken]
             layfail[bidx] = 0.0
 

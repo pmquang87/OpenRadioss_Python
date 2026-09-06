@@ -69,7 +69,8 @@ def init_group(group, model, log):
         qvw_pend=np.zeros(n),
         # dt_exact factor could be added here, setting 1.0 for now
         dtfac=np.ones(n),
-        chk_fail=False,
+        chk_fail=any(mat.fail is not None or mat.params.get("eps_p_max", EP30) < 1e30 for _, mat, _ in group.state["slices"]),
+        dama=np.zeros(n),
     )
     
     node_idx = conn.reshape(-1)
@@ -131,6 +132,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     
     sig = st["sig"]
     sig_old = sig.copy()
+    epsp_old = st["epsp"].copy() if st["chk_fail"] else None
     
     # No Jaumann rate for 1-point quad formulation unless requested (standard radioss drops it for purely 2D).
     # Material law evaluation
@@ -141,6 +143,24 @@ def forces(group, x, v, vr, dt, fint, mint):
             c[sl] = c_new
         else:
             c[sl] = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
+
+    if st["chk_fail"]:
+        off = st["off"]
+        from pyradioss import failure
+        for sl, mat, prop in st["slices"]:
+            eps_max = mat.params.get("eps_p_max", EP30)
+            if mat.fail is None and eps_max >= 1e30:
+                continue
+            broken = np.zeros(sl.stop - sl.start, dtype=bool)
+            if mat.fail is not None:
+                broken |= failure.solid_step(
+                    mat.fail, sig[sl], st["epsp"][sl] - epsp_old[sl],
+                    deps[sl], dt, st["dama"][sl])
+            if eps_max < 1e30:
+                broken |= st["epsp"][sl] > eps_max
+            off[sl][broken] = 0.0
+        alive = off > 0.0
+        sig[~alive] = 0.0
 
     # Bulk Viscosity
     compressing = (trD < 0.0)
@@ -197,6 +217,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     # Scatter to global array (negated because fint is defined as internal force resisting)
     # Radioss accumulates with MINUS sign into fint
     fe = -fe
+    alive = st["off"] > 0.0
+    fe[~alive] = 0.0
     scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
     
     # Energy bookkeeping

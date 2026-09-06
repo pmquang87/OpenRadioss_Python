@@ -593,12 +593,28 @@ def _init_mass(n, fill, rho, vol, dtx, dtelem, mass, mss, mssx, nc, stifn, delta
             stifn[nc[i, 4]] += HALF * sti
 
 
+_IPERM1_16 = np.array([0, 1, 2, 3, 4, 5, 6, 7], dtype=int)
+_IPERM2_16 = np.array([1, 2, 3, 0, 5, 6, 7, 4], dtype=int)
+
+
 def init_group(group, model, log):
     """Element buffer + lumped mass."""
     conn = group.conn
     n = group.n
     
-    xe = model.x0[conn] # (n, 16, 3) 
+    # Reconstruct coordinates for absent midside nodes (-1)
+    xe = np.zeros((n, 16, 3), dtype=np.float64)
+    xe[:, 0:8] = model.x0[conn[:, 0:8]]
+    for idx_16 in range(8):
+        n1 = _IPERM1_16[idx_16]
+        n2 = _IPERM2_16[idx_16]
+        c_n = conn[:, 8 + idx_16]
+        real = c_n >= 0
+        if real.any():
+            xe[real, 8 + idx_16] = model.x0[c_n[real]]
+        virt = ~real
+        if virt.any():
+            xe[virt, 8 + idx_16] = 0.5 * (xe[virt, n1] + xe[virt, n2])
     
     mass = np.zeros(n)
     mss = np.zeros((n, 8))
@@ -607,7 +623,7 @@ def init_group(group, model, log):
     
     fill = np.ones(n)
     rho = np.zeros(n)
-    vol = np.ones(n) # placeholder for actual volume calculation via Gauss loop
+    vol = np.zeros(n)
     dtx = np.full(n, EP30)
     dtelem = np.full(n, EP30)
     deltax2 = np.ones(n)
@@ -615,7 +631,6 @@ def init_group(group, model, log):
     nip_max = 1
     zw = []
     
-    # We need leggauss from numpy
     from numpy.polynomial.legendre import leggauss
     
     for sl, mat, prop in group.state["slices"]:
@@ -641,9 +656,32 @@ def init_group(group, model, log):
                     pts.append((xr[r_idx], xs[s_idx], xt[t_idx]))
                     wts.append(wr[r_idx] * ws[s_idx] * wt[t_idx])
         zw.append((pts, wts))
+
+    # Compute actual element volume via Gauss integration
+    for isl, (sl, mat, prop) in enumerate(group.state["slices"]):
+        pts, wts = zw[isl]
+        xe_sl = xe[sl]
+        n_sl = len(xe_sl)
+        for (r, s, t), w in zip(pts, wts):
+            ni, dnidr, dnids, dnidt = s16rst(r, s, t)
+            for i in range(n_sl):
+                xx = np.zeros((3, 16), dtype=np.float64)
+                for node_i in range(16):
+                    xx[0, node_i] = xe_sl[i, node_i, 0]
+                    xx[1, node_i] = xe_sl[i, node_i, 1]
+                    xx[2, node_i] = xe_sl[i, node_i, 2]
+                _, _, _, det = s16deri3(xx, dnidr, dnids, dnidt)
+                vol[sl.start + i] += det * w
+
+    vol = np.maximum(vol, 1e-20)
+    lc = vol ** (1.0 / 3.0)
+    for sl, mat, prop in group.state["slices"]:
+        c_snd = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / max(mat.rho0, 1e-20))
+        dtx[sl] = lc[sl] / max(c_snd, 1e-20)
         
     _init_mass(n, fill, rho, vol, dtx, dtelem, mass, mss, mssx, conn, stifn, deltax2)
     
+    chk_fail = any(mat.fail is not None or mat.params.get("eps_p_max", EP30) < 1e30 for _, mat, _ in group.state["slices"])
     group.state.update(
         sig=np.zeros((n, nip_max, 6)),
         epsp=np.zeros((n, nip_max)),
@@ -653,6 +691,10 @@ def init_group(group, model, log):
         rho=rho,
         vol=vol,
         mass=mass,
+        lc=lc,
+        chk_fail=chk_fail,
+        off=np.ones(n),
+        dama=np.zeros((n, nip_max)),
     )
     from pyradioss.elements.shell_bt4 import _init_material_state
     _init_material_state(group, nip_max)
@@ -752,20 +794,40 @@ def forces(group, x, v, vr, dt, fint, mint):
     """SHEL16 main integration loop."""
     st = group.state
     conn = group.conn
+    n = group.n
     
-    xe = x[conn]
-    ve = v[conn]
+    # Reconstruct positions and velocities for absent midside nodes (-1)
+    xe = np.zeros((n, 16, 3), dtype=np.float64)
+    ve = np.zeros((n, 16, 3), dtype=np.float64)
+    xe[:, 0:8] = x[conn[:, 0:8]]
+    ve[:, 0:8] = v[conn[:, 0:8]]
+    for idx_16 in range(8):
+        n1 = _IPERM1_16[idx_16]
+        n2 = _IPERM2_16[idx_16]
+        c_n = conn[:, 8 + idx_16]
+        real = c_n >= 0
+        if real.any():
+            xe[real, 8 + idx_16] = x[c_n[real]]
+            ve[real, 8 + idx_16] = v[c_n[real]]
+        virt = ~real
+        if virt.any():
+            xe[virt, 8 + idx_16] = 0.5 * (xe[virt, n1] + xe[virt, n2])
+            ve[virt, 8 + idx_16] = 0.5 * (ve[virt, n1] + ve[virt, n2])
     
     fint_e = np.zeros_like(xe)
     
-    from pyradioss.elements import solid_hexa8
+    from pyradioss import materials, failure
+    
+    c_spd = np.zeros(n)
     
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         pts, wts = st["zw"][isl]
         xe_sl = xe[sl]
         ve_sl = ve[sl]
-        
         n_sl = sl.stop - sl.start
+        
+        c_sound_default = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / max(mat.rho0, 1e-20))
+        c_spd[sl] = c_sound_default
         
         for k, ((r, s, t), w) in enumerate(zip(pts, wts)):
             px_all, py_all, pz_all, volnp_all, deps = _s16_pre(xe_sl, ve_sl, r, s, t, w)
@@ -774,15 +836,25 @@ def forces(group, x, v, vr, dt, fint, mint):
             
             sig_k = st["sig"][sl, k]
             sig_old = sig_k.copy()
+            epsp_k = st["epsp"][sl, k]
+            epsp_old = epsp_k.copy() if st["chk_fail"] else None
             
-            if mat.law == 1:
-                from pyradioss.materials.law01_elastic import solid_update
-                solid_update(mat, sig_k, deps)
-            elif mat.law == 2:
-                from pyradioss.materials.law02_johnson_cook import solid_update
-                epsp_k = st["epsp"][sl, k]
-                extra = st.get("mat_extra", {})
-                solid_update(mat, sig_k, deps, epsp_k, np.ones(n_sl), extra)
+            extra = st.get("mat_extra", {})
+            _, _, c_new = materials.solid_update(mat, sig_k, deps, epsp_k, dt, extra or None)
+            if c_new is not None:
+                c_spd[sl] = np.maximum(c_spd[sl], c_new)
+            
+            # Failure evaluation
+            if st["chk_fail"]:
+                eps_max = mat.params.get("eps_p_max", EP30)
+                broken = np.zeros(n_sl, dtype=bool)
+                if mat.fail is not None:
+                    broken |= failure.solid_step(
+                        mat.fail, sig_k, epsp_k - epsp_old, deps, dt, st["dama"][sl, k])
+                if eps_max < 1e30:
+                    broken |= epsp_k > eps_max
+                st["off"][sl][broken] = 0.0
+                sig_k[broken] = 0.0
             
             # energy
             avg_sig = 0.5 * (sig_k + sig_old)
@@ -791,6 +863,21 @@ def forces(group, x, v, vr, dt, fint, mint):
             
             fint_k = _s16_post(px_all, py_all, pz_all, sig_k, volnp_all)
             fint_e[sl] += fint_k
+
+    # Zero internal forces for dead elements
+    alive = st["off"] > 0.0
+    fint_e[~alive] = 0.0
+    
+    # Force redistribution from virtual midside nodes to corner nodes
+    for idx_16 in range(8):
+        n1 = _IPERM1_16[idx_16]
+        n2 = _IPERM2_16[idx_16]
+        virt = conn[:, 8 + idx_16] < 0
+        if virt.any():
+            f_mid = fint_e[virt, 8 + idx_16]
+            fint_e[virt, n1] += 0.5 * f_mid
+            fint_e[virt, n2] += 0.5 * f_mid
+            fint_e[virt, 8 + idx_16] = 0.0
             
     # Scatter to global fint
     from pyradioss.common.fastmath import scatter_add3
@@ -798,4 +885,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     fint_e_flat = fint_e.reshape(-1, 3)
     valid = conn_flat >= 0
     scatter_add3(fint, conn_flat[valid], fint_e_flat[valid], st.get('color_indices'), st.get('color_offsets'))
-    return np.full(group.n, EP30)  # dt_crit placeholder
+    
+    # Calculate stable time step
+    dt_crit = st["lc"] / np.maximum(c_spd, 1e-20)
+    return np.where(alive, dt_crit, EP30)

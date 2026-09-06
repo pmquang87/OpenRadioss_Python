@@ -80,7 +80,6 @@ def forces(group, x, v, vr, dt, fint, mint):
     n = group.n
     xe = x[conn]
     ve = v[conn]
-    print(f"DEBUG: Inside forces, x.max()={x.max()}, xe.max()={xe.max()}")
     re = vr[conn]
     nip_max = st.get("nip_max", 3)
     
@@ -99,10 +98,6 @@ def forces(group, x, v, vr, dt, fint, mint):
     area = 0.5 * area2
     vol0 = area * thick
     vol00 = vol0.copy()
-    if np.any(area2 <= 0.0):
-        print(f"DEBUG: Degenerate elements detected. area2={area2[area2 <= 0.0]}")
-        print(f"DEBUG: xe={xe[area2 <= 0.0]}")
-        print(f"DEBUG: conn={conn[area2 <= 0.0]}")
     alpe, aldt, px2, py2, px3, py3, px, py, pxy, pyy, vol00 = cdkderic3(xl2, yl2, xl3, yl3, area2, vol00, nu, thick**2)
     
     # 3. Membrane rates
@@ -161,12 +156,15 @@ def forces(group, x, v, vr, dt, fint, mint):
         force_pg = np.zeros((n, 3))
         mom_pg = np.zeros((n, 3))
         
+        nip_of = []
         for isl, (sl, mat, prop) in enumerate(st["slices"]):
             mask = sl
             if not np.any(mask): continue
             
             zrel, wrel = st["zw"][isl]
             nip = len(zrel)
+            if NG == 0:
+                nip_of.append(nip)
             
             for il in range(nip):
                 k = NG * nip_max + il
@@ -182,9 +180,13 @@ def forces(group, x, v, vr, dt, fint, mint):
                 
                 st_sig_k = st["sig"][mask, k, :].copy()
                 st_epsp_k = st["epsp"][mask, k].copy()
+                epsp_old = st_epsp_k.copy() if st["chk_fail"] else None
                 
                 sig_new, epsp_new = materials.shell_update(
                     mat, st_sig_k, deps, st_epsp_k, dt, _layer_extra(st, mask, k))
+                
+                if st["chk_fail"]:
+                    _layer_failure(st, mask, mat, k, sig_new, epsp_old, deps, dt)
                         
                 st["sig"][mask, k, :] = sig_new
                 st["epsp"][mask, k] = epsp_new
@@ -201,6 +203,30 @@ def forces(group, x, v, vr, dt, fint, mint):
                  f11, f12, f13, f21, f22, f23, f32, f33,
                  m11, m12, m13, m21, m22, m23)
                  
+    if st["chk_fail"]:
+        from .shell_bt4 import _element_deletion
+        alive = _element_deletion(st, nip_of)
+        if not alive.all():
+            dead = ~alive
+            f11[dead] = 0.0
+            f12[dead] = 0.0
+            f13[dead] = 0.0
+            f21[dead] = 0.0
+            f22[dead] = 0.0
+            f23[dead] = 0.0
+            f31[dead] = 0.0
+            f32[dead] = 0.0
+            f33[dead] = 0.0
+            m11[dead] = 0.0
+            m12[dead] = 0.0
+            m13[dead] = 0.0
+            m21[dead] = 0.0
+            m22[dead] = 0.0
+            m23[dead] = 0.0
+            m31[dead] = 0.0
+            m32[dead] = 0.0
+            m33[dead] = 0.0
+
     cdkfcum3(px2, py2, px3, py3, e1x, e2x, e3x, e1y, e2y, e3y, e1z, e2z, e3z,
              f11, f12, f13, f21, f22, f23, f31, f32, f33,
              m11, m12, m13, m21, m22, m23, m31, m32, m33)

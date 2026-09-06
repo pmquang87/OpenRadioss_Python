@@ -96,7 +96,10 @@ def _resolve_transform_nodes(model: Model, tr_id: int, tr_type: str,
         return idx
     elif grnod > 0 and grnod in model.node_groups:
         g = model.node_groups[grnod]
-        idx = resolve_single_node_group(model, g, log)
+        if getattr(g, "node_idx", None) is not None and len(g.node_idx) > 0:
+            idx = g.node_idx
+        else:
+            idx = resolve_single_node_group(model, g, log)
         if len(idx) == 0:
             log.warning(f"/TRANSFORM/{tr_type}/{tr_id}: node group "
                         f"{grnod} evaluated to empty — skipped")
@@ -107,6 +110,169 @@ def _resolve_transform_nodes(model: Model, tr_id: int, tr_type: str,
                     f"{grnod} not found — skipped")
         return None
     return None
+
+
+def apply_transforms(model: Model, log: MessageLog) -> None:
+    """Apply /TRANSFORM transformations (TRA, ROT, SYM, SCA, POS - M63, M85) to node coordinates."""
+    for tr in getattr(model, "transforms", []):
+        tr_id = tr[0]
+        if isinstance(tr[1], str):
+            tr_type = tr[1]
+            args = tr[2:]
+        else:
+            tr_type = "TRA"
+            args = tr[1:]
+
+        if tr_type == "TRA":
+            grnod, tx, ty, tz, n1, n2, sub_id, skew_id = args
+            idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
+            if idx is None or len(idx) == 0:
+                continue
+            if n1 > 0 and n2 > 0:
+                try:
+                    idx1 = model.node_index(n1)
+                    idx2 = model.node_index(n2)
+                    v = model.x0[idx2] - model.x0[idx1]
+                    tx += v[0]
+                    ty += v[1]
+                    tz += v[2]
+                except KeyError as exc:
+                    log.warning(f"/TRANSFORM/TRA/{tr_id}: node {exc} for "
+                                f"node-pair vector not found")
+                    continue
+            model.x0[idx, 0] += tx
+            model.x0[idx, 1] += ty
+            model.x0[idx, 2] += tz
+
+        elif tr_type == "ROT":
+            grnod, p1, p2, angle_deg, n1, n2, sub_id = args
+            idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
+            if idx is None or len(idx) == 0:
+                continue
+            p1 = np.array(p1, dtype=float)
+            p2 = np.array(p2, dtype=float)
+            if n1 > 0 or n2 > 0:
+                try:
+                    if n1 > 0:
+                        p1 = model.x0[model.node_index(n1)].copy()
+                    if n2 > 0:
+                        p2 = model.x0[model.node_index(n2)].copy()
+                except KeyError as exc:
+                    log.warning(f"/TRANSFORM/ROT/{tr_id}: node {exc} not found")
+                    continue
+            axis = p2 - p1
+            norm_axis = np.linalg.norm(axis)
+            if norm_axis > 1e-20 and abs(angle_deg) > 1e-12:
+                u = axis / norm_axis
+                theta = np.radians(angle_deg)
+                v = model.x0[idx] - p1
+                cos_t = np.cos(theta)
+                sin_t = np.sin(theta)
+                dot = np.sum(v * u, axis=1, keepdims=True)
+                cross = np.cross(u, v)
+                v_rot = v * cos_t + cross * sin_t + u * dot * (1.0 - cos_t)
+                model.x0[idx] = p1 + v_rot
+
+        elif tr_type == "SYM":
+            grnod, p1, p2, n1, n2, sub_id = args
+            idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
+            if idx is None or len(idx) == 0:
+                continue
+            p1 = np.array(p1, dtype=float)
+            p2 = np.array(p2, dtype=float)
+            if n1 > 0 or n2 > 0:
+                try:
+                    if n1 > 0:
+                        p1 = model.x0[model.node_index(n1)].copy()
+                    if n2 > 0:
+                        p2 = model.x0[model.node_index(n2)].copy()
+                except KeyError as exc:
+                    log.warning(f"/TRANSFORM/SYM/{tr_id}: node {exc} not found")
+                    continue
+            normal = p2 - p1
+            norm_n = np.linalg.norm(normal)
+            if norm_n > 1e-20:
+                n_unit = normal / norm_n
+                v = model.x0[idx] - p1
+                d = np.sum(v * n_unit, axis=1, keepdims=True)
+                model.x0[idx] -= 2.0 * d * n_unit
+
+        elif tr_type == "SCA":
+            grnod, (sx, sy, sz), n1, sub_id = args
+            idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
+            if idx is None or len(idx) == 0:
+                continue
+            center = np.zeros(3, dtype=float)
+            if n1 > 0:
+                try:
+                    center = model.x0[model.node_index(n1)].copy()
+                except KeyError as exc:
+                    log.warning(f"/TRANSFORM/SCA/{tr_id}: center node {exc} not found")
+                    continue
+            scale = np.array([sx if sx != 0.0 else 1.0,
+                              sy if sy != 0.0 else 1.0,
+                              sz if sz != 0.0 else 1.0], dtype=float)
+            model.x0[idx] = center + (model.x0[idx] - center) * scale
+
+        elif tr_type == "POS":
+            grnod, nodes, pts, sub_id = args
+            idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
+            if idx is None or len(idx) == 0:
+                continue
+            p = np.array(pts, dtype=float)
+            n1, n2, n3, n4, n5, n6 = nodes
+            node_list = [n1, n2, n3, n4, n5, n6]
+            skip = False
+            for i, nid in enumerate(node_list):
+                if nid > 0:
+                    try:
+                        p[i] = model.x0[model.node_index(nid)].copy()
+                    except KeyError as exc:
+                        log.warning(f"/TRANSFORM/POS/{tr_id}: node {exc} not found")
+                        skip = True
+                        break
+            if skip:
+                continue
+
+            # Build orthonormal frame 1 (P1, P2, P3)
+            v12 = p[1] - p[0]
+            norm12 = np.linalg.norm(v12)
+            if norm12 < 1e-20:
+                log.warning(f"/TRANSFORM/POS/{tr_id}: source frame X-axis has zero length")
+                continue
+            ex1 = v12 / norm12
+            v13 = p[2] - p[0]
+            ez1_raw = np.cross(ex1, v13)
+            normz1 = np.linalg.norm(ez1_raw)
+            if normz1 < 1e-20:
+                log.warning(f"/TRANSFORM/POS/{tr_id}: source frame points 1, 2, 3 are collinear")
+                continue
+            ez1 = ez1_raw / normz1
+            ey1 = np.cross(ez1, ex1)
+            R1 = np.column_stack([ex1, ey1, ez1])
+
+            # Build orthonormal frame 2 (P4, P5, P6)
+            v45 = p[4] - p[3]
+            norm45 = np.linalg.norm(v45)
+            if norm45 < 1e-20:
+                log.warning(f"/TRANSFORM/POS/{tr_id}: target frame X-axis has zero length")
+                continue
+            ex2 = v45 / norm45
+            v46 = p[5] - p[3]
+            ez2_raw = np.cross(ex2, v46)
+            normz2 = np.linalg.norm(ez2_raw)
+            if normz2 < 1e-20:
+                log.warning(f"/TRANSFORM/POS/{tr_id}: target frame points 4, 5, 6 are collinear")
+                continue
+            ez2 = ez2_raw / normz2
+            ey2 = np.cross(ez2, ex2)
+            R2 = np.column_stack([ex2, ey2, ez2])
+
+            # Total rotation: R = R2 @ R1.T
+            R = R2 @ R1.T
+            O1 = p[0]
+            O2 = p[3]
+            model.x0[idx] = O2 + (model.x0[idx] - O1) @ R.T
 
 
 def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
@@ -129,7 +295,7 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
             blocks = read_deck(input_file)
         except FileNotFoundError as e:
             log.error(f"LEXER CRASH: {e}", "LEXER")
-            return 1
+            raise StarterError(f"Starter input file not found: {input_file}")
         model = Model()
         parse_starter_deck(blocks, model, log)
 
@@ -139,170 +305,6 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
                 model.functions[funct_id].transform(scx, scy, shx, shy)
             else:
                 log.warning(f"/MOVE_FUNCT targets unknown function {funct_id}")
-
-        # Apply /TRANSFORM transformations (TRA, ROT, SYM, SCA - M63, M85) to node coordinates
-        for tr in getattr(model, "transforms", []):
-            tr_id = tr[0]
-            if isinstance(tr[1], str):
-                tr_type = tr[1]
-                args = tr[2:]
-            else:
-                tr_type = "TRA"
-                args = tr[1:]
-
-            if tr_type == "TRA":
-                grnod, tx, ty, tz, n1, n2, sub_id, skew_id = args
-                idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
-                if idx is None or len(idx) == 0:
-                    continue
-                if n1 > 0 and n2 > 0:
-                    try:
-                        idx1 = model.node_index(n1)
-                        idx2 = model.node_index(n2)
-                        v = model.x0[idx2] - model.x0[idx1]
-                        tx += v[0]
-                        ty += v[1]
-                        tz += v[2]
-                    except KeyError as exc:
-                        log.warning(f"/TRANSFORM/TRA/{tr_id}: node {exc} for "
-                                    f"node-pair vector not found")
-                        continue
-                model.x0[idx, 0] += tx
-                model.x0[idx, 1] += ty
-                model.x0[idx, 2] += tz
-
-            elif tr_type == "ROT":
-                grnod, p1, p2, angle_deg, n1, n2, sub_id = args
-                idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
-                if idx is None or len(idx) == 0:
-                    continue
-                p1 = np.array(p1, dtype=float)
-                p2 = np.array(p2, dtype=float)
-                if n1 > 0 or n2 > 0:
-                    try:
-                        if n1 > 0:
-                            p1 = model.x0[model.node_index(n1)].copy()
-                        if n2 > 0:
-                            p2 = model.x0[model.node_index(n2)].copy()
-                    except KeyError as exc:
-                        log.warning(f"/TRANSFORM/ROT/{tr_id}: node {exc} not found")
-                        continue
-                axis = p2 - p1
-                norm_axis = np.linalg.norm(axis)
-                if norm_axis > 1e-20 and abs(angle_deg) > 1e-12:
-                    u = axis / norm_axis
-                    theta = np.radians(angle_deg)
-                    v = model.x0[idx] - p1
-                    cos_t = np.cos(theta)
-                    sin_t = np.sin(theta)
-                    dot = np.sum(v * u, axis=1, keepdims=True)
-                    cross = np.cross(u, v)
-                    v_rot = v * cos_t + cross * sin_t + u * dot * (1.0 - cos_t)
-                    model.x0[idx] = p1 + v_rot
-
-            elif tr_type == "SYM":
-                grnod, p1, p2, n1, n2, sub_id = args
-                idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
-                if idx is None or len(idx) == 0:
-                    continue
-                p1 = np.array(p1, dtype=float)
-                p2 = np.array(p2, dtype=float)
-                if n1 > 0 or n2 > 0:
-                    try:
-                        if n1 > 0:
-                            p1 = model.x0[model.node_index(n1)].copy()
-                        if n2 > 0:
-                            p2 = model.x0[model.node_index(n2)].copy()
-                    except KeyError as exc:
-                        log.warning(f"/TRANSFORM/SYM/{tr_id}: node {exc} not found")
-                        continue
-                normal = p2 - p1
-                norm_n = np.linalg.norm(normal)
-                if norm_n > 1e-20:
-                    n_unit = normal / norm_n
-                    v = model.x0[idx] - p1
-                    d = np.sum(v * n_unit, axis=1, keepdims=True)
-                    model.x0[idx] -= 2.0 * d * n_unit
-
-            elif tr_type == "SCA":
-                grnod, (sx, sy, sz), n1, sub_id = args
-                idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
-                if idx is None or len(idx) == 0:
-                    continue
-                center = np.zeros(3, dtype=float)
-                if n1 > 0:
-                    try:
-                        center = model.x0[model.node_index(n1)].copy()
-                    except KeyError as exc:
-                        log.warning(f"/TRANSFORM/SCA/{tr_id}: center node {exc} not found")
-                        continue
-                scale = np.array([sx if sx != 0.0 else 1.0,
-                                  sy if sy != 0.0 else 1.0,
-                                  sz if sz != 0.0 else 1.0], dtype=float)
-                model.x0[idx] = center + (model.x0[idx] - center) * scale
-
-            elif tr_type == "POS":
-                grnod, nodes, pts, sub_id = args
-                idx = _resolve_transform_nodes(model, tr_id, tr_type, grnod, sub_id, log)
-                if idx is None or len(idx) == 0:
-                    continue
-                p = np.array(pts, dtype=float)
-                n1, n2, n3, n4, n5, n6 = nodes
-                node_list = [n1, n2, n3, n4, n5, n6]
-                skip = False
-                for i, nid in enumerate(node_list):
-                    if nid > 0:
-                        try:
-                            p[i] = model.x0[model.node_index(nid)].copy()
-                        except KeyError as exc:
-                            log.warning(f"/TRANSFORM/POS/{tr_id}: node {exc} not found")
-                            skip = True
-                            break
-                if skip:
-                    continue
-
-                # Build orthonormal frame 1 (P1, P2, P3)
-                v12 = p[1] - p[0]
-                norm12 = np.linalg.norm(v12)
-                if norm12 < 1e-20:
-                    log.warning(f"/TRANSFORM/POS/{tr_id}: source frame X-axis has zero length")
-                    continue
-                ex1 = v12 / norm12
-                v13 = p[2] - p[0]
-                ez1_raw = np.cross(ex1, v13)
-                normz1 = np.linalg.norm(ez1_raw)
-                if normz1 < 1e-20:
-                    log.warning(f"/TRANSFORM/POS/{tr_id}: source frame points 1, 2, 3 are collinear")
-                    continue
-                ez1 = ez1_raw / normz1
-                ey1 = np.cross(ez1, ex1)
-                R1 = np.column_stack([ex1, ey1, ez1])
-
-                # Build orthonormal frame 2 (P4, P5, P6)
-                v45 = p[4] - p[3]
-                norm45 = np.linalg.norm(v45)
-                if norm45 < 1e-20:
-                    log.warning(f"/TRANSFORM/POS/{tr_id}: target frame X-axis has zero length")
-                    continue
-                ex2 = v45 / norm45
-                v46 = p[5] - p[3]
-                ez2_raw = np.cross(ex2, v46)
-                normz2 = np.linalg.norm(ez2_raw)
-                if normz2 < 1e-20:
-                    log.warning(f"/TRANSFORM/POS/{tr_id}: target frame points 4, 5, 6 are collinear")
-                    continue
-                ez2 = ez2_raw / normz2
-                ey2 = np.cross(ez2, ex2)
-                R2 = np.column_stack([ex2, ey2, ez2])
-
-                # Total rotation: R = R2 @ R1.T
-                R = R2 @ R1.T
-                O1 = p[0]
-                O2 = p[3]
-                model.x0[idx] = O2 + (model.x0[idx] - O1) @ R.T
-
-
-
         # 2. finalize: ids->indices, element groups, node groups, surfaces,
         #    material curve/failure references.  Order matters (M37, the
         #    upstream two-pass resolve): local /UNIT conversion first
@@ -323,6 +325,11 @@ def run_starter(input_file: str, log: MessageLog | None = None) -> Model:
         resolve_skews(model, log)
         # node groups evaluate /BOX which may need resolved skews
         resolve_node_groups(model, log)
+
+        # Apply /TRANSFORM after node groups (including /GRNOD/PART, /GRNOD/SURF) are resolved (AUD-014)
+        apply_transforms(model, log)
+        if getattr(model, "transforms", None):
+            resolve_skews(model, log)
 
         # 3. checks before any heavy work (fail early with ALL messages)
         check_model(model, log)
