@@ -137,7 +137,7 @@ def forces(group, x, v, vr, dt, fint, mint):
                 (0.666666666666667, 0.166666666666667),
                 (0.166666666666667, 0.166666666666667)]
     
-    epsp_old = st["epsp"].copy() if st["chk_fail"] else None
+    epsp_old = st["epsp"].copy() if st.get("chk_fail", False) else None
     nip_of = []
 
     for NG in range(3):
@@ -187,7 +187,7 @@ def forces(group, x, v, vr, dt, fint, mint):
                     mat, st_sig_k, deps, st_epsp_k, dt, _layer_extra(st, mask, k))
                 
                 st["epsp"][mask, k] = epsp_new
-                if st["chk_fail"]:
+                if st.get("chk_fail", False):
                     _layer_failure(st, mask, mat, k, sig_new, epsp_old, deps, dt)
                         
                 st["sig"][mask, k, :] = sig_new
@@ -204,7 +204,7 @@ def forces(group, x, v, vr, dt, fint, mint):
                  f11, f12, f13, f21, f22, f23, f32, f33,
                  m11, m12, m13, m21, m22, m23)
                  
-    if st["chk_fail"]:
+    if st.get("chk_fail", False):
         from .shell_bt4 import _element_deletion
         alive = _element_deletion(st, nip_of)
         if not alive.all():

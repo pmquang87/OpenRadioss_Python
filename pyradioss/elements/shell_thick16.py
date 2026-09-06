@@ -837,7 +837,7 @@ def forces(group, x, v, vr, dt, fint, mint):
             sig_k = st["sig"][sl, k]
             sig_old = sig_k.copy()
             epsp_k = st["epsp"][sl, k]
-            epsp_old = epsp_k.copy() if st["chk_fail"] else None
+            epsp_old = epsp_k.copy() if st.get("chk_fail", False) else None
             
             extra = st.get("mat_extra", {})
             _, _, c_new = materials.solid_update(mat, sig_k, deps, epsp_k, dt, extra or None)
@@ -845,7 +845,7 @@ def forces(group, x, v, vr, dt, fint, mint):
                 c_spd[sl] = np.maximum(c_spd[sl], c_new)
             
             # Failure evaluation
-            if st["chk_fail"]:
+            if st.get("chk_fail", False):
                 eps_max = mat.params.get("eps_p_max", EP30)
                 broken = np.zeros(n_sl, dtype=bool)
                 if mat.fail is not None:

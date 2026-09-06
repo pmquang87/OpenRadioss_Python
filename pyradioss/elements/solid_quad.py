@@ -132,7 +132,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     
     sig = st["sig"]
     sig_old = sig.copy()
-    epsp_old = st["epsp"].copy() if st["chk_fail"] else None
+    epsp_old = st["epsp"].copy() if st.get("chk_fail", False) else None
     
     # No Jaumann rate for 1-point quad formulation unless requested (standard radioss drops it for purely 2D).
     # Material law evaluation
@@ -144,7 +144,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         else:
             c[sl] = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
 
-    if st["chk_fail"]:
+    if st.get("chk_fail", False):
         off = st["off"]
         from pyradioss import failure
         for sl, mat, prop in st["slices"]:

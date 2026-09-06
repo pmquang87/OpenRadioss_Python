@@ -309,7 +309,7 @@ def forces(group, x, v, vr, dt, fint, mint):
     sig_flat = sig.reshape(-1, 6)
     deps_flat = deps.reshape(-1, 6)
     epsp_flat = st["epsp"].reshape(-1)
-    epsp_old = epsp_flat.copy() if st["chk_fail"] else None
+    epsp_old = epsp_flat.copy() if st.get("chk_fail", False) else None
 
     for sl, mat, prop in st["slices"]:
         sl_flat = slice(sl.start * 4, sl.stop * 4)
@@ -322,7 +322,7 @@ def forces(group, x, v, vr, dt, fint, mint):
             c[sl] = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
 
     # ---- failure evaluation -------------------------------------------
-    if st["chk_fail"]:
+    if st.get("chk_fail", False):
         off = st["off"]
         from pyradioss import failure
         for sl, mat, prop in st["slices"]:

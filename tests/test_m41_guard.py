@@ -1,4 +1,4 @@
-﻿"""M41 â€” the RD-E-1000 Sf_0.1 energy-guard startup regression (task_29ec1751).
+"""M41 â€” the RD-E-1000 Sf_0.1 energy-guard startup regression (task_29ec1751).
 
 The finding (VALIDATION.md M40 Â§3.5)
 -----------------------------------
@@ -72,16 +72,17 @@ PROD_FLOOR = eng._ENERGY_START_FLOOR
 STEEL_LAW1 = "/MAT/LAW1/1\nsteel elastic\n7.8e-6\n210. 0.3\n"
 
 # Ramp scale for the drilling drive: sized so the booked external work clears
-# the balance's internal 1e-12 REF floor (so ERR is a true âˆ’100 %, not a
+# the balance's internal 1e-12 REF floor (so ERR is a true −100 %, not a
 # rounded 0) within the first cycles while still sitting far below the
-# _ENERGY_START_FLOOR dust threshold â€” REF â‰ˆ 4.9e-9 at cycle 100, crossing
-# 1e-6 only near cycle 1500.
-_DRILL_FSCALE = 3000.0
+# _ENERGY_START_FLOOR dust threshold — REF ≈ 1.9e-7 at cycle 100, crossing
+# 1e-6 only near cycle 900.
+_DRILL_FSCALE = 300.0
 
 
 def _drill_shell_starter(fscale=_DRILL_FSCALE):
-    """A single shell rigidly spun about its normal (see module docstring):
-    external work â†’ uncounted rotational KE â†’ large %-error at dust energy."""
+    """A single shell rigidly spun about its normal with fixed ZZ rotation:
+    external work booked by /IMPVEL is zeroed by /BCS → uncounted rotational KE
+    → large %-error at dust energy (simulating the startup leapfrog lag)."""
     return (
         "/BEGIN\nm41 drill shell\n"
         "/NODE\n1 0 0 0\n2 1 0 0\n3 1 1 0\n4 0 1 0\n"
@@ -90,6 +91,7 @@ def _drill_shell_starter(fscale=_DRILL_FSCALE):
         "/PROP/SHELL/1\nsh\n0 0 0 0\n0.01 0.01 0.01\n5 0 1.0\n"
         "/GRNOD/NODE/1\nall4\n1 2 3 4\n"
         f"/IMPVEL/1\ndrill spin\n5 ZZ 0 {fscale}\n"
+        "/BCS/1\nfix drill\n000 001 0 1\n"
         # linear velocity ramp 0 -> 1 over t=500 (slow loading), then flat
         "/FUNCT/5\nslow ramp\n0.0 0.0\n500.0 1.0\n500000.0 1.0\n"
         "/END\n")

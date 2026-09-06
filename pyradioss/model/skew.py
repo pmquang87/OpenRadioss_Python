@@ -256,6 +256,7 @@ class SkewSet:
         Duplicate ids inside one kind are rejected (the reference's
         ``UDOUBLE`` check on ``ISKN(4,*)``).
         """
+        self._by_key = {}
         n = 1 + len(self.entries)
         axes = np.zeros((n, 3, 3))
         origins = np.zeros((n, 3))
