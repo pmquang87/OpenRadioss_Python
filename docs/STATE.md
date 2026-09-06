@@ -29,13 +29,7 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   (`requirements-lock.txt`).
 - Suite: 5652 collected = 5633 fast + 19 `slow`-marked.
 - Fast tier (2026-09-06, this venv): **5629 passed / 4 skipped / 0 failed**, 19 slow deselected.
-- Pre-handover full-suite reference (same machine, Python 3.14.2, no numba):
-  1095 passed / 2 failed / 24 skipped in 25 min 18 s. The 2 failures were the
-  corpus tests whose decks lived in a deleted scratchpad — fixed at handover
-  by vendoring the decks into `tests/data/rd_decks/` (see its README).
-  Skips that remain are environmental (optional backends like CHOLMOD/MUMPS,
-  LS-PrePost/Vortex extras, one 15 MB corpus deck not vendored) and each
-  carries a reason string.
+- Full suite (2026-09-06, this venv, Python 3.14.2): **5647 passed / 5 skipped / 0 failed** in 49 min 48 s. Skips that remain are environmental (optional backends like CHOLMOD/MUMPS, LS-PrePost/Vortex extras, one 15 MB corpus deck not vendored) and each carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
 ## What is implemented (M1 → M493)
