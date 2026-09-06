@@ -14603,7 +14603,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             f = cards[0].cut("INTER2")
             _warn_ignored(log, f"/INTER/TYPE2/{block.user_id}",
                           block.source,
-                          [("Ignore", f[2]), ("Spotflag", f[3]),
+                          [("Ignore", f[2]),
                            ("Level", f[4]), ("Isearch", f[5]),
                            ("Idel2", f[6])])
             model.interfaces.append(Interface(

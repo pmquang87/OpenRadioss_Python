@@ -63,8 +63,8 @@ def any_deletable(model: Model, seg_gtype: np.ndarray,
     for gname in np.unique(seg_gtype):
         if gname == "":
             continue
-        group = getattr(model, gname)
-        if group.state.get("off") is not None and group.state.get(
+        group = getattr(model, gname, None)
+        if group is not None and group.state.get("off") is not None and group.state.get(
                 "chk_fail", False):
             return True
     # Secondary-node check: scan all element groups for any that contain

@@ -1,12 +1,12 @@
 """
 /INTER/TYPE2 — tied contact (kinematic secondary-to-main gluing).
 
-Fortran origin: ``engine/source/interfaces/int02/`` —
+Fortran origin: ``engine/source/interfaces/int02/`` and ``engine/source/interfaces/interf/`` —
 
-    i2for3.F   transfer of the secondary nodal forces to the main segment
-    i2vit3.F   kinematic update of the secondary velocities from the mains
-    i2curv.F   segment local frame (for offset secondary nodes)
-    starter/source/interfaces/inter3d1/i2buc1.F, i2dst3.F
+    i2for3.F   transfer of secondary nodal forces to the main segment (I2FOR3, I2FOMO3)
+    i2vit3.F   kinematic update of secondary velocities from mains (I2VIT3, I2VIROT3, I2ROT3_27)
+    i2curv.F   segment local co-rotating frame (t1, t2, n) for offset secondary nodes
+    starter/source/interfaces/inter3d1/i2buc1.F, i2dst3.F, i2tid3.F
                (Starter) projection search: each secondary node onto its
                closest main segment, isoparametric weights + offset
 
@@ -24,38 +24,44 @@ co-rotating local frame (so a spot-weld between two shell mid-surfaces,
 which are half a thickness apart, rotates rigidly with the segment).
 
 The explicit implementation is the classic lumped constraint method (the
-same one the original and LS-DYNA's constrained tied contacts use):
+same one the original OpenRadioss and LS-DYNA constrained tied contacts use):
 
-1. **Force transfer** (i2for3): the secondary node's assembled force is
+1. **Force transfer** (i2for3.F): the secondary node's assembled force is
    distributed to the segment corners with the weights,
    f_k += w_k f_s, and removed from the secondary node.
-2. **Mass transfer** (Starter i2 initialization): likewise, once, for the
-   lumped masses: M_k += w_k m_s. Steps 1+2 make the main nodes carry the
-   secondary's inertia and loading; total force and total mass are
-   conserved by construction (sum w_k = 1).
-3. **Kinematic update** (i2vit3): after the main nodes moved, the
+   - Spotflag=0 (Standard translation): translational forces transferred
+     according to projection weights w_k;
+   - Spotflag=1 (Solid main - I2FOMO3): offset moment (dvec x F_s) plus
+     secondary node moment (mint) transferred as an equilibrating force couple
+     F_couple = A x r, where A = I^-1 M_tot and I is the segment pseudo-inertia;
+   - Spotflag=2 (Shell main - I2MOM3): offset moment (dvec x F_s) plus
+     secondary moment transferred directly into the rotational DOFs (mint)
+     of the main shell nodes.
+2. **Mass transfer** (Starter i2tid3.F): likewise, once, for the lumped masses:
+   M_k += w_k m_s. Steps 1+2 make the main nodes carry the secondary's inertia
+   and loading; total force and total mass are conserved by construction (sum w_k = 1).
+3. **Kinematic update** (i2vit3.F): after the main nodes moved, the
    secondary node is *placed* — not integrated:
    x_s = sum w_k x_k + offset, and its velocity is set to the consistent
    v_s = (x_s^{n+1} - x_s^n) / dt.
+   - Spotflag=1 (Solid main - I2VIROT3): angular velocity omega derived from
+     main segment angular momentum L = sum r x v and assigned to vr_s, with
+     rotational offset velocity omega x (x_new - x0) added to v_s;
+   - Spotflag=2 (Shell main - I2ROT3_27): rotational DOFs vr_s interpolated
+     from main shell nodes with weights w_k, with offset velocity
+     omega x (x_new - x_interp) added to v_s.
 
 Momentum is conserved *exactly*: d/dt(m_s v_s + sum M_k v_k) =
 sum_k (M_k + w_k m_s) a_k = sum_k (f_k + w_k f_s) = total applied force.
 And the tie does **no work by construction** — it books nothing into the
-contact energy, and the global balance must close without a CE term
-(asserted by the M4 tests).
+contact energy, and the global balance closes without a CE term
+(asserted by the M4 and M489 tests).
 
 Element deletion (M3<->M4): a tie whose main segment's parent element is
 deleted is *released* (the crack must not keep carrying load through the
 glue); its transferred mass is handed back so the released node resumes
 free flight with its own inertia. A secondary node whose own elements all
 died is released the same way.
-
-Port simplifications (documented): rotational DOFs of shell secondary
-nodes are left free (Radioss Spotflag=1-style rotation tying not ported);
-the moment of the transferred force about an OFFSET projection point is
-not redistributed (exact for zero offset; for the usual spot-weld offsets
-— a fraction of the element size — the angular-momentum error is second
-order and the validation tests confirm the balance stays tight).
 """
 
 from __future__ import annotations
@@ -71,18 +77,28 @@ from .stiffness import _segment_areas
 
 def _segment_frames(xs: np.ndarray):
     """Co-rotating orthonormal frame (t1, t2, n) of 3/4-node segments
-    (i2curv flavour). ``xs`` is (n, 4, 3); triangles repeat node 3.
+    (i2curv.F lines 20-65). ``xs`` is (n, 4, 3); triangles repeat node 3.
 
     Built from the covariant mid-edge vectors r = (x2+x3)-(x1+x4) and
     s = (x3+x4)-(x1+x2): n = r x s (the average normal), t1 = r direction.
     This frame rotates rigidly with the segment, which is exactly what an
     offset tied node must follow.
     """
+    if len(xs) == 0:
+        return (np.zeros((0, 3), dtype=float),
+                np.zeros((0, 3), dtype=float),
+                np.zeros((0, 3), dtype=float))
     r = xs[:, 1] + xs[:, 2] - xs[:, 0] - xs[:, 3]
     s = xs[:, 2] + xs[:, 3] - xs[:, 0] - xs[:, 1]
     n = np.cross(r, s)
-    n /= np.maximum(np.linalg.norm(n, axis=1), EM20)[:, None]
-    t1 = r / np.maximum(np.linalg.norm(r, axis=1), EM20)[:, None]
+    norm_n = np.linalg.norm(n, axis=1)
+    norm_n_clamped = np.where(norm_n > EM20, norm_n, 1.0)
+    n = np.where((norm_n > EM20)[:, None], n / norm_n_clamped[:, None], np.array([0.0, 0.0, 1.0]))
+
+    norm_r = np.linalg.norm(r, axis=1)
+    norm_r_clamped = np.where(norm_r > EM20, norm_r, 1.0)
+    t1 = np.where((norm_r > EM20)[:, None], r / norm_r_clamped[:, None], np.array([1.0, 0.0, 0.0]))
+
     t2 = np.cross(n, t1)
     return t1, t2, n
 
@@ -93,10 +109,25 @@ class ContactType2:
     def __init__(self, itf, model: Model, log):
         self.itf = itf
         self.model = model
-        surf = model.surfaces[itf.surf_id]
-        segs = surf.segments if surf.segments is not None else \
-            np.zeros((0, 4), dtype=np.int64)
-        cand = np.asarray(model.node_groups[itf.grnod_id].node_idx)
+
+        surf = model.surfaces.get(itf.surf_id)
+        if surf is None:
+            log.error(f"/INTER/TYPE2/{itf.id}: main surface {itf.surf_id} not found in model", "TIED INIT")
+            self._init_empty()
+            return
+
+        segs = surf.segments if surf.segments is not None else np.zeros((0, 4), dtype=np.int64)
+
+        grp = model.node_groups.get(itf.grnod_id)
+        if grp is None or grp.node_idx is None:
+            log.error(f"/INTER/TYPE2/{itf.id}: secondary node group {itf.grnod_id} not found in model", "TIED INIT")
+            self._init_empty()
+            return
+
+        cand = np.asarray(grp.node_idx, dtype=np.int64)
+        if len(cand) == 0 or len(segs) == 0:
+            self._init_empty()
+            return
 
         # a node that is itself a corner of the main surface cannot be
         # tied to it (it would be glued to itself); frozen (massless,
@@ -108,6 +139,9 @@ class ContactType2:
                         f"node(s) excluded (main-surface corners or "
                         f"massless)", "TIED INIT")
         cand = cand[~bad]
+        if len(cand) == 0:
+            self._init_empty()
+            return
 
         # ---- projection search (Starter i2buc1/i2dst3) --------------------
         # closest point of every candidate on every segment, chunked to
@@ -219,14 +253,28 @@ class ContactType2:
                 model, self.ref_total)[self.snode]
             self.active &= ~(seg_dead | node_dead)
 
+    def _init_empty(self) -> None:
+        """Initialize empty tied interface."""
+        self.snode = np.zeros(0, dtype=np.int64)
+        self.seg = np.zeros((0, 4), dtype=np.int64)
+        self.w = np.zeros((0, 4), dtype=float)
+        self.seg_gtype = np.zeros(0, dtype="<U8")
+        self.seg_elem = np.zeros(0, dtype=np.int64)
+        self.off_loc = np.zeros((0, 3), dtype=float)
+        self.x_prev = np.zeros((0, 3), dtype=float)
+        self.active = np.zeros(0, dtype=bool)
+        self.deletable = False
+
     # ------------------------------------------------------------------
     def augment_mass(self, mass_eff: np.ndarray) -> None:
-        """Mass transfer M_k += w_k m_s (once, engine init). ``mass_eff``
-        is the Engine's EFFECTIVE mass used for accelerations only — the
-        physical ``model.mass`` (energies, momentum) is untouched.
+        """Mass transfer M_k += w_k m_s (once, engine init per i2tid3.F).
+        ``mass_eff`` is the Engine's EFFECTIVE mass used for accelerations only
+        — the physical ``model.mass`` (energies, momentum) is untouched.
         Released ties (reconstructed at init after a chained restart)
         transfer nothing — their nodes fly with their own inertia."""
         act = self.active
+        if not np.any(act):
+            return
         m_s = self.model.mass[self.snode[act]]
         for k in range(4):
             np.add.at(mass_eff, self.seg[act, k], self.w[act, k] * m_s)
@@ -249,7 +297,7 @@ class ContactType2:
     def transfer_forces(self, fint: np.ndarray, fext: np.ndarray,
                         fcont: np.ndarray, mint: np.ndarray, x: np.ndarray,
                         mass_eff: np.ndarray, inv_mass_eff: np.ndarray, cycle: int) -> None:
-        """Per-cycle step 1 (i2for3): move the tied nodes' assembled
+        """Per-cycle step 1 (i2for3.F / I2FOMO3): move the tied nodes' assembled
         forces (internal, external AND contact — a tied node can also be
         a penalty secondary) to their main segments. Also polls the
         deletion release (cheap, only for models that can actually delete
@@ -269,13 +317,13 @@ class ContactType2:
         sn = self.snode[act]
         seg = self.seg[act]
         w = self.w[act]
-        
-        sf = self.itf.spotflag
+
+        sf = getattr(self.itf, "spotflag", 0)
         if sf in (1, 2):
             # M_offset = dvec x F_slave
             xc = np.einsum("nk,nkb->nb", w, x[seg])
             dvec = x[sn] - xc
-        
+
         for arr in (fint, fext, fcont):
             F = arr[sn]
             if sf in (1, 2):
@@ -284,13 +332,13 @@ class ContactType2:
                 if arr is fint:
                     M_tot += mint[sn]
                     mint[sn] = 0.0
-                
+
                 if sf == 1:
                     # Spotflag 1 (Solid main): moment to force couple (I2FOMO3)
                     xs = x[seg]
                     x0 = np.mean(xs, axis=1)
                     r = xs - x0[:, None, :]
-                    
+
                     # Pseudo-inertia tensor I (unit mass at each node)
                     I_tensor = np.zeros((len(sn), 3, 3))
                     I_tensor[:, 0, 0] = np.sum(r[:, :, 1]**2 + r[:, :, 2]**2, axis=1)
@@ -299,33 +347,32 @@ class ContactType2:
                     I_tensor[:, 0, 1] = I_tensor[:, 1, 0] = -np.sum(r[:, :, 0] * r[:, :, 1], axis=1)
                     I_tensor[:, 0, 2] = I_tensor[:, 2, 0] = -np.sum(r[:, :, 0] * r[:, :, 2], axis=1)
                     I_tensor[:, 1, 2] = I_tensor[:, 2, 1] = -np.sum(r[:, :, 1] * r[:, :, 2], axis=1)
-                    
+
                     try:
-                        I_inv = np.linalg.inv(I_tensor)
+                        I_inv = np.linalg.pinv(I_tensor, rcond=1e-8)
                         A = np.einsum("nij,nj->ni", I_inv, M_tot)
                         F_couple = np.cross(A[:, None, :], r)
-                    except np.linalg.LinAlgError:
+                    except Exception:
                         F_couple = np.zeros_like(r)
-                    
+
                     for k in range(4):
                         np.add.at(arr, seg[:, k], w[:, k, None] * F + F_couple[:, k, :])
                 else:
                     # Spotflag 2 (Shell main): moment directly to rotational DOFs (I2MOM3)
                     for k in range(4):
                         np.add.at(arr, seg[:, k], w[:, k, None] * F)
-                        if arr is fint:
-                            np.add.at(mint, seg[:, k], w[:, k, None] * M_tot)
+                        np.add.at(mint, seg[:, k], w[:, k, None] * M_tot)
             else:
                 for k in range(4):
                     np.add.at(arr, seg[:, k], w[:, k, None] * F)
-            
+
             arr[sn] = 0.0
 
     # ------------------------------------------------------------------
     def enforce(self, x: np.ndarray, v: np.ndarray, vr: np.ndarray, dt: float) -> None:
-        """Per-cycle step 3 (i2vit3): place the tied nodes on their
-        segments (weights + co-rotated offset) and set the consistent
-        velocity. Called after the main nodes' position update."""
+        """Per-cycle step 3 (i2vit3.F / I2VIROT3 / I2ROT3_27): place the tied
+        nodes on their segments (weights + co-rotated offset) and set the
+        consistent velocity. Called after the main nodes' position update."""
         act = self.active
         if not np.any(act):
             return
@@ -335,18 +382,18 @@ class ContactType2:
         loc = self.off_loc[act]
         x_new = (np.einsum("nk,nkb->nb", self.w[act], xs)
                  + loc[:, 0:1] * t1 + loc[:, 1:2] * t2 + loc[:, 2:3] * n)
-        
-        sf = self.itf.spotflag
+
+        sf = getattr(self.itf, "spotflag", 0)
         if dt > EM20:
             v[sn] = (x_new - self.x_prev[act]) / dt
-            
+
             if sf == 1:
                 # Spotflag 1 (Solid main): derive rotational velocity (I2VIROT3)
                 x0 = np.mean(xs, axis=1)
                 r = xs - x0[:, None, :]
                 vs = v[self.seg[act]]
                 L = np.sum(np.cross(r, vs), axis=1)
-                
+
                 I_tensor = np.zeros((len(sn), 3, 3))
                 I_tensor[:, 0, 0] = np.sum(r[:, :, 1]**2 + r[:, :, 2]**2, axis=1)
                 I_tensor[:, 1, 1] = np.sum(r[:, :, 0]**2 + r[:, :, 2]**2, axis=1)
@@ -354,24 +401,23 @@ class ContactType2:
                 I_tensor[:, 0, 1] = I_tensor[:, 1, 0] = -np.sum(r[:, :, 0] * r[:, :, 1], axis=1)
                 I_tensor[:, 0, 2] = I_tensor[:, 2, 0] = -np.sum(r[:, :, 0] * r[:, :, 2], axis=1)
                 I_tensor[:, 1, 2] = I_tensor[:, 2, 1] = -np.sum(r[:, :, 1] * r[:, :, 2], axis=1)
-                
+
                 try:
-                    I_inv = np.linalg.inv(I_tensor)
+                    I_inv = np.linalg.pinv(I_tensor, rcond=1e-8)
                     omega_main = np.einsum("nij,nj->ni", I_inv, L)
                     vr[sn] = omega_main
-                    
+
                     # Add offset rotation to translational velocity
-                    # d_center = x[sn] - x0
                     d_center = x_new - x0
                     v[sn] += np.cross(omega_main, d_center)
-                except np.linalg.LinAlgError:
+                except Exception:
                     pass
             elif sf == 2:
-                # Spotflag 2 (Shell main): interpolate rotational DOFs (I2ROT3)
+                # Spotflag 2 (Shell main): interpolate rotational DOFs (I2ROT3_27)
                 vrs = vr[self.seg[act]]
                 omega_main = np.einsum("nk,nkb->nb", self.w[act], vrs)
                 vr[sn] = omega_main
-                
+
                 # Add offset rotation to translational velocity
                 d_interp = x_new - np.einsum("nk,nkb->nb", self.w[act], xs)
                 v[sn] += np.cross(omega_main, d_interp)
