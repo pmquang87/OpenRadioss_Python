@@ -56,7 +56,7 @@ class TimeHistory:
                     elif th.kind == "PART":
                         self._part_req.append((f"P{oid}_{var}", oid, var))
                     else:
-                        self._other_req.append((f"{th.kind[:2]}{oid}_{var}", oid, var))
+                        self._other_req.append((f"{th.kind[:2]}{oid}_{var}", th.kind, oid, var))
         self._cols += [r[0] for r in self._node_req]
         self._cols += [r[0] for r in self._part_req]
         self._cols += [r[0] for r in self._sect_req]
@@ -86,10 +86,71 @@ class TimeHistory:
                 # (beams store a reduced 'mass_conn' — their 3rd node is
                 # orientation only and carries no mass)
                 conn = group.state.get("mass_conn", group.conn)
-                ve = model.v[conn[mask]]
+                safe_conn = np.maximum(conn[mask], 0)
+                ve = model.v[safe_conn]
                 v2 = np.einsum("nib,nib->n", ve, ve) / conn.shape[1]
-                val += float(0.5 * (group.state["mass"][mask] * v2).sum())
+                ke_trans = 0.5 * (group.state["mass"][mask] * v2).sum()
+                ke_rot = 0.0
+                if getattr(model, "inertia", None) is not None and getattr(model, "vr", None) is not None:
+                    vre = model.vr[safe_conn]
+                    vr2 = np.einsum("nib,nib->n", vre, vre) / conn.shape[1]
+                    if "inertia" in group.state:
+                        ke_rot = 0.5 * (group.state["inertia"][mask] * vr2).sum()
+                    else:
+                        ine = model.inertia[safe_conn].mean(axis=1)
+                        ke_rot = 0.5 * (ine * vr2).sum()
+                val += float(ke_trans + ke_rot)
         return val
+
+    def _other_value(self, kind: str, oid: int, var: str) -> float:
+        model = self.model
+        var_upper = var.upper()
+        comp = {"X": 0, "Y": 1, "Z": 2}.get(var_upper[-1], 0)
+
+        if kind == "RBODY":
+            rb = model.rigid_bodies.get(oid)
+            if rb is not None:
+                if var_upper.startswith("D"):
+                    return float(rb.x_cg[comp] - rb.x_cg0[comp]) if hasattr(rb, "x_cg0") else 0.0
+                elif var_upper.startswith("V"):
+                    return float(rb.v_cg[comp]) if hasattr(rb, "v_cg") else 0.0
+                elif var_upper.startswith("F"):
+                    return float(rb.f_res[comp]) if hasattr(rb, "f_res") else 0.0
+                elif var_upper.startswith("M"):
+                    return float(rb.m_res[comp]) if hasattr(rb, "m_res") else 0.0
+
+        elif kind in ("SPRING", "SPRI"):
+            g = getattr(model, "springs", None)
+            if g is not None and oid in g.ids:
+                row = np.where(g.ids == oid)[0]
+                if len(row):
+                    r = row[0]
+                    st = g.state
+                    if var_upper in ("F", "FORCE"):
+                        return float(st["fres"][r, 0]) if "fres" in st else 0.0
+                    elif var_upper in ("D", "DISP"):
+                        return float(st["disp"][r]) if "disp" in st else 0.0
+                    elif var_upper in ("E", "IE", "ENERGY"):
+                        return float(st["eint"][r]) if "eint" in st else 0.0
+
+        elif kind in ("SHEL", "SHELL", "BRIC", "BRICK", "SH3N", "TETR"):
+            for attr in ("shells", "shells_qbat", "shells_qeph", "bricks", "bricks_heph", "tetras", "sh3n", "sh3n_dkt18", "bric20s", "shel16s", "tetra10s", "quads"):
+                g = getattr(model, attr, None)
+                if g is not None and oid in g.ids:
+                    row = np.where(g.ids == oid)[0]
+                    if len(row):
+                        r = row[0]
+                        st = g.state
+                        if var_upper in ("IE", "EINT", "ENERGY"):
+                            return float(st["eint"][r]) if "eint" in st else 0.0
+                        elif var_upper in ("EPSP", "PLASTIC_STRAIN"):
+                            ep = st.get("epsp")
+                            if ep is not None:
+                                return float(ep[r].max() if ep[r].ndim > 0 else ep[r])
+                        elif var_upper in ("VM", "VONM", "VON_MISES"):
+                            from .anim_vtk import _von_mises
+                            return float(_von_mises(attr, g)[r])
+        return 0.0
 
     def write(self, t, energies, mass, momentum, sect_values=None) -> None:
         """``sect_values``: {sect_id: (F (3,), M (3,))} from
@@ -106,6 +167,16 @@ class TimeHistory:
                 row.append(disp[idx, comp])
             elif var[0] == "V":
                 row.append(model.v[idx, comp])
+            elif var[0] == "A":
+                if hasattr(model, "a") and model.a is not None:
+                    row.append(model.a[idx, comp])
+                else:
+                    m = model.mass[idx]
+                    fext_val = model.fext[idx, comp] if hasattr(model, "fext") and model.fext is not None else 0.0
+                    fint_val = model.fint[idx, comp] if hasattr(model, "fint") and model.fint is not None else 0.0
+                    row.append((fext_val - fint_val) / m if m > 0 else 0.0)
+            elif var[0] == "F":
+                row.append(model.fint[idx, comp] if hasattr(model, "fint") and model.fint is not None else 0.0)
             else:
                 row.append(0.0)
         for _, pid, var in self._part_req:
@@ -117,8 +188,8 @@ class TimeHistory:
             else:
                 F, M = sect_values[sid]
                 row.append(F[comp] if var[0] == "F" else M[comp])
-        for _ in self._other_req:
-            row.append(0.0)
+        for _, kind, oid, var in self._other_req:
+            row.append(self._other_value(kind, oid, var))
         self._fh.write(",".join(f"{x:.9E}" for x in row) + "\n")
         self._fh.flush()
 

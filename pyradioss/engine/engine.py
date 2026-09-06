@@ -166,6 +166,9 @@ def _energies(model: Model, state: EngineState) -> dict:
         he += float(group.state["ehour"].sum())
     real = model.mass < 1e29
     ke = float(0.5 * (model.mass[real, None] * model.v[real] ** 2).sum())
+    if getattr(model, "inertia", None) is not None and getattr(model, "vr", None) is not None:
+        real_rot = model.inertia < 1e29
+        ke += float(0.5 * (model.inertia[real_rot, None] * model.vr[real_rot] ** 2).sum())
     total = ie + ke + he + state.econt + state.e_num + state.e_damp
     # the error reference is the ENERGY SCALE OF THE RUN: the largest of
     # the initial energy, external work, current energies and the running
@@ -383,9 +386,11 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     else:
         # initial energy = reference E0 of the balance: kinetic + any
         # initial internal energy (an /EOS with E0/P0 starts charged, M6)
-        _energies.e0 = float(0.5 * (model.mass[real, None]
-                                    * model.v[real] ** 2).sum()) \
-            + _element_energy_sum(model)
+        ke0 = float(0.5 * (model.mass[real, None] * model.v[real] ** 2).sum())
+        if getattr(model, "inertia", None) is not None and getattr(model, "vr", None) is not None:
+            real_rot = model.inertia < 1e29
+            ke0 += float(0.5 * (model.inertia[real_rot, None] * model.vr[real_rot] ** 2).sum())
+        _energies.e0 = ke0 + _element_energy_sum(model)
 
         # ---- priming pass: dt=0 'cycle' just to collect the initial
         # critical time step from every kernel (no state advances at 0).
@@ -598,6 +603,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             state.ams_iters = getattr(state, "ams_iters", 0) + iters
         else:
             acc = f_total * inv_mass[:, None]
+        model.a = acc
         model.v += acc * dt
         model.vr += mint * inv_inertia[:, None] * dt
 

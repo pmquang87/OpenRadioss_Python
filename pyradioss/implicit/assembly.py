@@ -162,6 +162,33 @@ def assemble_mass(model, dof: DofMap, x_geom, log=None):
         rows.append(row_eq[keep].ravel())
         cols.append(col_eq[keep].ravel())
         vals.append(me[keep].ravel())
+
+    # Point masses from /ADMAS (M5) and /ADMAS/NON_UNIFORM (M114) (AUD-026)
+    for am in getattr(model, "admas", []):
+        g = model.node_groups.get(am.grnod_id)
+        if g is None or g.node_idx is None:
+            continue
+        for n_idx in g.node_idx:
+            for d in range(3):
+                eq_num = dof.eq[n_idx, d]
+                if eq_num >= 0:
+                    rows.append(np.array([eq_num], dtype=np.int64))
+                    cols.append(np.array([eq_num], dtype=np.int64))
+                    vals.append(np.array([am.mass], dtype=np.float64))
+
+    for an in getattr(model, "admas_non_uniforms", {}).values():
+        for nid, mass_val in getattr(an, "items", []):
+            try:
+                n_idx = model.node_index(nid)
+            except KeyError:
+                continue
+            for d in range(3):
+                eq_num = dof.eq[n_idx, d]
+                if eq_num >= 0:
+                    rows.append(np.array([eq_num], dtype=np.int64))
+                    cols.append(np.array([eq_num], dtype=np.int64))
+                    vals.append(np.array([mass_val], dtype=np.float64))
+
     rows = np.concatenate(rows) if rows else np.zeros(0, dtype=np.int64)
     cols = np.concatenate(cols) if cols else np.zeros(0, dtype=np.int64)
     vals = np.concatenate(vals) if vals else np.zeros(0)

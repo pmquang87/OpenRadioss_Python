@@ -531,7 +531,10 @@ def _stress_state_field(group):
     ``(field_name, array)`` or ``(None, None)`` for a group with neither."""
     st = group.state
     if "sig" in st:
-        return "sig", np.asarray(st["sig"])
+        arr = np.asarray(st["sig"])
+        if arr.ndim == 3:
+            arr = arr.mean(axis=1)
+        return "sig", arr
     if "force" in st:
         return "force", np.asarray(st["force"])
     return None, None
@@ -600,8 +603,9 @@ def stress_channels(model):
                 channels.append((name, e, 0, f"{name}#{eid}:{tag}"))
             else:
                 for c in range(ncomp):
+                    lbl = _VOIGT_LABELS[c] if c < len(_VOIGT_LABELS) else str(c)
                     channels.append(
-                        (name, e, c, f"{name}#{eid}:s{_VOIGT_LABELS[c]}"))
+                        (name, e, c, f"{name}#{eid}:s{lbl}"))
     return channels
 
 
@@ -620,6 +624,8 @@ def stress_modes(model, basis, channels=None):
         rec = recover_element_stresses(model, du, dur)
         for j, (name, e, c, _lab) in enumerate(channels):
             arr = rec[name]
+            if arr.ndim == 3:
+                arr = arr.mean(axis=1)
             Sigma[i, j] = arr[e, c] if arr.ndim == 2 else arr[e]
     return Sigma, channels
 

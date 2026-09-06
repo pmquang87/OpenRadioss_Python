@@ -622,9 +622,17 @@ def run_implicit_dynamic(model, controls, log, out_dir=None, run_name="RUN",
             # supply beyond the loads, r = M a - (f_ext + f_int)
             g_new_r = model.mass[:, None] * a_new - (fext_new + fint)
             g_old_r = model.mass[:, None] * a - g_prev_f
+            iner = getattr(model, "inertia", None)
+            iner_val = iner[:, None] if iner is not None else np.zeros_like(ar_new)
+            g_new_rot = iner_val * ar_new - mint
+            g_old_rot = iner_val * ar - (g_prev_m if g_prev_m is not None else np.zeros_like(mint))
             for idx, d, fct, scale in imposed:
-                wext += 0.5 * float(((g_new_r + g_old_r)[idx, d]
-                                     * u[idx, d]).sum())
+                if d < 3:
+                    wext += 0.5 * float(((g_new_r + g_old_r)[idx, d]
+                                         * u[idx, d]).sum())
+                else:
+                    wext += 0.5 * float(((g_new_rot + g_old_rot)[idx, d - 3]
+                                         * ur_s[idx, d - 3]).sum())
 
         # ---- Rayleigh dissipation booking (DYNA_WEX's DY_EDAMP): the
         # trapezoid of the damping force over the step displacement
@@ -820,7 +828,11 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
     # ...and the /IMPDISP-driven DOFs (part of that mask) are then seeded
     # EXACTLY: the drive steps from d(t_n) to d(t_{n+1})
     for idx, d, fct, scale in imposed:
-        u[idx, d] = scale * (fct.eval(t_new) - fct.eval(t_old))
+        val = scale * (fct.eval(t_new) - fct.eval(t_old))
+        if d < 3:
+            u[idx, d] = val
+        else:
+            ur_s[idx, d - 3] = val
 
     inc = IncrementResult(load_factor=t_new, converged=False, iterations=0)
     fint = mint = None
