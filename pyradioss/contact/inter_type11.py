@@ -403,6 +403,7 @@ class ContactType11:
         K = K[active]                          # per-pair stiffness (Istf)
         s, t = s[active], t[active]
         gap = gap[active]
+        pen = pen[active]
         norm_d = norm3(dvec[active])
         deg = norm_d <= EM20
         if np.any(deg):
