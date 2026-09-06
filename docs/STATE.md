@@ -27,10 +27,8 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
 
 - Venv: Python 3.14.2, numpy 2.4.6, scipy 1.18.0, numba 0.66.0, pytest 9.1.1
   (`requirements-lock.txt`).
-- Suite: 1121 collected = 1105 fast + 16 `slow`-marked.
-- Fast tier at handover (2026-08-02, this venv): **1101 passed / 4 skipped /
-  0 failed**, 16 slow deselected, 30 min 09 s wall (desktop load-dependent;
-  expect ~12–50 min).
+- Suite: 5518 collected = 5499 fast + 19 `slow`-marked.
+- Fast tier (2026-09-06, this venv): **5495 passed / 4 skipped / 0 failed**, 19 slow deselected.
 - Pre-handover full-suite reference (same machine, Python 3.14.2, no numba):
   1095 passed / 2 failed / 24 skipped in 25 min 18 s. The 2 failures were the
   corpus tests whose decks lived in a deleted scratchpad — fixed at handover
@@ -40,10 +38,10 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
   carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
-## What is implemented (M1 → M251)
+## What is implemented (M1 → M488)
 
 README's "Milestones 1–11" section is the *narrative* for the foundation; the
-real history is 41 milestones. One line each:
+real history is 488 milestones. One line each:
 
 | # | Theme (headline) |
 |---|---|

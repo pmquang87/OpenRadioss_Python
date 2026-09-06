@@ -39,7 +39,7 @@ from ..model.model import Model
 class LoadsAndConstraints:
     """Pre-resolved (index-based) loads + constraints for the Engine."""
 
-    def __init__(self, model: Model, log):
+    def __init__(self, model: Model, log, controls=None):
         self.model = model
         # BCS -> per-dof boolean masks (the GLOBAL-system conditions)
         self.fix_tra = np.zeros((model.numnod, 3), dtype=bool)
@@ -51,6 +51,8 @@ class LoadsAndConstraints:
         # pays nothing.
         self.skew_bcs = []
         for bc in model.bcs:
+            if controls is not None and not controls.bcs_active.get(bc.id, True):
+                continue
             idx = model.node_groups[bc.grnod_id].node_idx
             row = getattr(bc, "skew_row", 0)
             if row:

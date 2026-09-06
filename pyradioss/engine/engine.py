@@ -281,12 +281,39 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     if len(getattr(model, "mass0", ())) != n:
         model.mass0 = model.mass.copy()
 
+    # ---- handle /DEL element deletion (M146) -----------------------------
+    if controls.del_elements:
+        for kind, eids in controls.del_elements.items():
+            if not eids:
+                continue
+            eid_set = set(eids)
+            k_upper = kind.upper()
+            for gname, group in model.element_groups():
+                match = (k_upper in ("ELEM", "ALL") or
+                         (k_upper in ("BRICK", "BRIC") and "bric" in gname) or
+                         (k_upper in ("SHELL", "SHEL") and ("shel" in gname or "sh3n" in gname)) or
+                         (k_upper in ("SH3N", "TRI", "TRIA") and "sh3n" in gname) or
+                         (k_upper in ("TETRA", "TETRA10") and "tetra" in gname) or
+                         (k_upper in ("QUAD",) and "quad" in gname) or
+                         (k_upper in ("SPRING",) and "spring" in gname) or
+                         (k_upper in ("TRUSS",) and "truss" in gname) or
+                         (k_upper in ("BEAM",) and "beam" in gname))
+                if match and hasattr(group, "ids") and "off" in group.state:
+                    mask = np.isin(group.ids, list(eid_set))
+                    if mask.any():
+                        group.state["off"][mask] = 0.0
+                        log.info(f" -- /DEL/{kind}: DELETED {int(mask.sum())} ELEMENT(S) IN {gname}")
+        state.ndel = _deleted_count(model)
+
     # ---- engine-side setup (resol_init) ----------------------------------
-    loads = LoadsAndConstraints(model, log)
+    loads = LoadsAndConstraints(model, log, controls=controls)
     walls = RigidWalls(model, log)
     # contact: penalty interfaces (TYPE7/TYPE11, force-based) and tied
     # interfaces (TYPE2, kinematic) hook into the cycle differently
     contacts, tied = build_contacts(model, log)
+    if controls.inter_active:
+        contacts = [ct for ct in contacts if controls.inter_active.get(ct.itf.id, True)]
+        tied = [t for t in tied if controls.inter_active.get(t.itf.id, True)]
     # rigid bodies (/RBODY + /RBE2) and interpolation constraints (/RBE3):
     # both kinematic — see engine/rigid_body.py and engine/rbe3.py. The
     # rigid bodies also project the initial nodal velocities onto rigid
@@ -294,6 +321,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     rbodies = build_rigid_bodies(
         model, loads, log,
         saved_map=saved.get("rbodies") if resumed else None)
+    if controls.rbody_active:
+        rbodies = [rb for rb in rbodies if controls.rbody_active.get(rb.rb.id, True)]
     rbe3s = build_rbe3(model, log)
     mpc = build_mpc(model, loads, log)     # /MPC (M6)
     lagmul = LagmulSolver(model, loads, log)
@@ -308,6 +337,9 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
         mat.sensors = sensors
     if resumed:                            # latched sensors stay latched
         sensors.fire_time.update(saved.get("sensors", {}))
+        sensors.status.update(saved.get("sensors_status", {}))
+        for sid in sensors.fire_time:
+            sensors.status[sid] = True
     ams = AMSManager(model, controls) if getattr(controls, "dt_ams", False) else None
     noda = NodalTimeStep(model, controls, log) if controls.dt_noda else None
     if noda is not None:
@@ -460,6 +492,7 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
             "e_damp": state.e_damp, "e0": _energies.e0, "dt": dt,
             "next_th": next_th, "next_anim": next_anim, "anim_no": anim_no,
             "sensors": dict(sensors.fire_time),
+            "sensors_status": dict(sensors.status),
             "rbodies": {rb.rb.id: {
                 "R": rb.R.copy(), "L": rb.L.copy(),
                 "v_ref": rb.v_ref.copy(), "w": rb.w.copy(),
@@ -487,7 +520,20 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     # one ulp of T_stop — which is exactly what happens at the junction
     # of a restart chain, M6)
     while state.t < controls.t_end * (1.0 - 1e-14):
+        # Planned stops (/STOP/NSTEP, /STOP/TSTOP, /STOP/TIMET)
+        if controls.stop_nstep > 0 and state.cycle >= controls.stop_nstep:
+            state.stop_reason = f"/STOP/NSTEP REACHED (CYCLE {state.cycle})"
+            break
+        if controls.stop_tstop > 0 and state.t >= controls.stop_tstop * (1.0 - 1e-14):
+            state.stop_reason = f"/STOP/TSTOP REACHED (TIME {state.t:.5E})"
+            break
+        if controls.stop_timet > 0 and (time.time() - t_wall0) >= controls.stop_timet:
+            state.stop_reason = f"/STOP/TIMET REACHED (ELAPSED {time.time() - t_wall0:.1f}s)"
+            break
+
         dt = min(dt, controls.t_end - state.t)  # land exactly on t_end
+        if controls.stop_tstop > 0 and state.t + dt > controls.stop_tstop:
+            dt = max(controls.stop_tstop - state.t, 0.0)
         model.t = state.t
 
         # ---- 0. sensors (M6): poll and latch before anything acts --------
@@ -847,7 +893,10 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
     e = _energies(model, state)
     log.info("\n     ------------------------------------------------")
     if state.stop_reason:
-        log.info(f"     ENGINE TERMINATION : ERROR — {state.stop_reason}")
+        if state.stop_reason.startswith("/STOP/"):
+            log.info(f"     ENGINE TERMINATION : NORMAL — {state.stop_reason}")
+        else:
+            log.info(f"     ENGINE TERMINATION : ERROR — {state.stop_reason}")
     else:
         log.info("     ENGINE TERMINATION : NORMAL")
     log.info(f"     FINAL TIME    . . . . . . : {state.t:14.7E}")

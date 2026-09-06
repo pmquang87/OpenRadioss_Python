@@ -1,324 +1,266 @@
-"""M39 — shell fidelity: the Belytschko-Tsay hourglass against upstream.
+"""M47 — DKT18 Discrete Kirchhoff Triangle shell element tests.
 
-Fortran reference: ``engine/source/elements/shell/coque/chvis3.F``, reached
-from ``cforc3.F`` (lines 593-638) for every Ishell except 2 — i.e. the
-/PROP/SHELL default — with the engine constants pinned in
-``engine/source/engine/radioss2.F`` lines 638-640::
-
-    HELAS = HALF      HVISC = HALF      HVLIN = ZERO
-
-HVLIN = 0 kills chvis3's LINEAR (sound-speed) viscous branch identically,
-leaving each mode with an ELASTIC stiffness plus a QUADRATIC viscous
-damper::
-
-    SHFPR3 = SHF / (3 (1 + nu))                            (chvis3 l.143)
-    (B1+B2) = PX1^2+PY1^2+PX2^2+PY2^2                      (chvis3 l.174)
-
-    elastic   HH1 = hm E t / 8                       modes 0,1 (membrane)
-              HH2 = hf E SHFPR3 t^3 / (8 (B1+B2))    mode 2    (bending)
-    viscous   H1Q = (25/2) rho hm t sqrt(A)          modes 0,1
-              H2Q = (25/2) rho hf sqrt(SHFPR3) t^2   mode 2
-              H3Q = (25/2) 0.072169 rho hr t^2 A     modes 3,4
-
-Upstream keeps its gradient operators AREA-scaled (``cderi3.F`` l.172:
-``PX1 = HALF*(Y2-Y4)``, so PX = A * B with B the operator this port
-builds), hence ``(B1+B2)_upstream = A^2 * bb / 2`` and the elastic
-coefficients carry NO area factor.
-
-Before M39 ``shell_bt4`` ran the LS-DYNA **BLT84** hourglass instead
-(``k_m = hm E t A bb / 8``, ``k_w = hf kappa G t A bb / 8``,
-``k_r = hr E t^3 A bb / 192``, no viscous branch at all). Measured on
-examples/box_beam_impact against the Fortran engine:
-
-    HE (hourglass energy) rel-RMS   0.584  ->  0.094
-    HE as % of peak(IE+KE)          0.069  ->  5.32   (Fortran 4.46)
-
-The old form was not "2 orders low in stiffness" as M36 read it — it was
-too STIFF (membrane by A*bb ~ 2, transverse by ~3 (B1+B2)^2/(A t^2), about
-300x at box_beam's L/t = 10) but purely ELASTIC, so it STORED the
-hourglass energy and dissipated none. The quadratic dampers are where the
-Fortran's 4.4 % lives.
+Tests the Ish3n=2 dispatch from /PROP/SH3N or /PROP/SHELL into model.sh3n_dkt18,
+DKT18 initialization (mass, inertia, local frame, char length), forces under
+membrane and bending deformation, layer failure and deletion, and an end-to-end
+Starter-to-Engine explicit dynamic simulation.
 """
 
+import os
 import numpy as np
 import pytest
 
+from pyradioss.common.constants import EP30
 from pyradioss.common.messages import MessageLog
-from pyradioss.elements import shell_bt4
+from pyradioss.elements import shell_dkt18
+from pyradioss.engine.engine import run_engine
 from pyradioss.input.deck_reader import read_deck
 from pyradioss.input.starter_keywords import parse_starter_deck
 from pyradioss.model.model import Model
-from pyradioss.starter.initialization import (build_element_groups,
-                                              initialize_elements_and_mass,
-                                              resolve_node_groups,
-                                              resolve_surfaces)
+from pyradioss.starter.initialization import (
+    build_element_groups,
+    initialize_elements_and_mass,
+    resolve_materials,
+    resolve_node_groups,
+    resolve_surfaces,
+)
+from pyradioss.starter.starter import run_starter
 
-STEEL = """\
+STEEL_LAW1 = """\
 /MAT/LAW1/1
 steel elastic
 7.8e-6
 210. 0.3
 """
 
-T_PLATE = 0.1                       # plate thickness of the unit-square deck
+STEEL_LAW2 = """\
+/MAT/LAW2/1
+steel plastic
+7.8e-6
+210. 0.3
+0.4 0.0 0.0
+"""
 
 
-def _plate(tmp_path, hm=0.01, hf=0.01, hr=0.01, t=T_PLATE, ishell=1):
-    """One unit-square BT4 shell (node 1 at the origin, area 1, bb = 2)."""
-    deck = (
-        "/BEGIN\nm39 unit shell\n"
-        "/NODE\n1 0 0 0\n2 1 0 0\n3 1 1 0\n4 0 1 0\n"
-        "/SHELL/1\n1 1 2 3 4\n"
-        "/PART/1\nplate\n1 1\n" + STEEL +
-        f"/PROP/SHELL/1\nplate prop\n{ishell} 0 0 0\n{hm} {hf} {hr} 0 0\n"
-        f"3 0 {t}\n/END\n"
-    )
-    f = tmp_path / "K_0000.rad"
+def _make_dkt18_deck(ish3n=2, fail_card="", mat_card=None):
+    mat = mat_card or STEEL_LAW1
+    return f"""\
+/BEGIN
+dkt18 test deck
+/NODE
+1 0.0 0.0 0.0
+2 10.0 0.0 0.0
+3 0.0 10.0 0.0
+4 10.0 10.0 0.0
+/SH3N/1
+1 1 2 3
+2 2 4 3
+/PART/1
+triangles
+1 1
+{mat}
+/PROP/SHELL/1
+dkt18 shell prop
+1 0 {ish3n} 0
+0.01 0.01 0.01
+3 0 1.0
+{fail_card}
+/END
+"""
+
+
+def _build_model(tmp_path, ish3n=2, fail_card="", mat_card=None, init_mass=False):
+    deck = _make_dkt18_deck(ish3n=ish3n, fail_card=fail_card, mat_card=mat_card)
+    f = tmp_path / f"deck_{ish3n}.rad"
     f.write_text(deck)
-    model = Model()
     log = MessageLog()
+    model = Model()
     parse_starter_deck(read_deck(str(f)), model, log)
-    build_element_groups(model, log)
+    resolve_materials(model, log)
     resolve_node_groups(model, log)
-    resolve_surfaces(model, log)
-    initialize_elements_and_mass(model, log)
-    assert not log.errors, log.errors
-    g = model.shells
-    return g, model, g.state["slices"][0][1]
+    build_element_groups(model, log)
+    if init_mass:
+        initialize_elements_and_mass(model, log)
+    return model, log
 
 
-@pytest.fixture
-def shell_plate(tmp_path):
-    """The default unit plate: hm = hf = hr = 0.01, t = 0.1."""
-    return _plate(tmp_path)
+def test_dkt18_starter_dispatch(tmp_path):
+    """Verify /SH3N with Ish3n=2 is routed to sh3n_dkt18 group."""
+    model, _ = _build_model(tmp_path, ish3n=2)
+
+    assert model.sh3n is None
+    assert model.sh3n_dkt18 is not None
+    assert model.sh3n_dkt18.n == 2
+    assert model.sh3n_dkt18.conn.shape == (2, 3)
+
+    # Ish3n=1 or default should stay in standard sh3n
+    model_std, _ = _build_model(tmp_path, ish3n=1)
+
+    assert model_std.sh3n is not None
+    assert model_std.sh3n_dkt18 is None
 
 
-@pytest.fixture
-def make_shell_plate(tmp_path):
-    """Factory for a unit plate with chosen hourglass coefficients."""
-    def _make(**kw):
-        return _plate(tmp_path, **kw)
-    return _make
+def test_dkt18_init_group(tmp_path):
+    """Verify DKT18 initialization calculates mass, inertia, and state buffers."""
+    model, _ = _build_model(tmp_path, ish3n=2, init_mass=True)
 
-
-# ---------------------------------------------------------------------------
-# coefficient-level parity with chvis3.F
-# ---------------------------------------------------------------------------
-
-def _expect(mat, hm, hf, hr, t, A, bb):
-    """The chvis3.F coefficients, written out independently of the port."""
-    b12 = A ** 2 * bb / 2.0                    # (B1+B2) upstream PX scaling
-    shf = 5.0 / 6.0                            # ccoef3.F: Ashear=0 -> SHF=FSH
-    shfpr3 = shf / (3.0 * (1.0 + mat.nu))
-    return dict(
-        hh1=hm * mat.E * t / 8.0,
-        hh2=hf * mat.E * shfpr3 * t ** 3 / (8.0 * b12),
-        h1q=12.5 * mat.rho0 * hm * t * np.sqrt(A),
-        h2q=12.5 * mat.rho0 * hf * np.sqrt(shfpr3) * t ** 2,
-        h3q=12.5 * 0.072169 * mat.rho0 * hr * t ** 2 * A,
-    )
-
-
-def test_membrane_hourglass_matches_chvis3(shell_plate):
-    """Membrane mode: elastic HH1 = hm E t / 8 (NO area/bb factor — the
-    A*bb the port carried before M39 came from LS-DYNA's BLT84 form) plus
-    the quadratic damper H1Q."""
-    g, model, mat = shell_plate
-    t, A, hm = 0.1, 1.0, 0.01
-    e = _expect(mat, hm, 0.01, 0.01, t, A, bb=2.0)
-
-    v0, dt = 1e-3, 1e-3
-    v = np.zeros_like(model.x)
-    v[:4, 0] = np.array([1.0, -1.0, 1.0, -1.0]) * v0     # x-hourglass
-    f = np.zeros_like(model.x)
-    m = np.zeros_like(model.x)
-    shell_bt4.forces(g, model.x, v, model.vr, dt, f, m)
-
-    qd = 4.0 * v0                              # gamma = h on the square
-    want = e["hh1"] * qd * dt + qd * e["h1q"] * abs(qd)
-    assert f[0, 0] == pytest.approx(-want, rel=1e-10)
-    # the hourglass pattern makes no real membrane stress
+    g = model.sh3n_dkt18
+    st = g.state
+    # Area of right triangle (0,0)-(10,0)-(0,10) = 0.5 * 10 * 10 = 50
+    assert np.allclose(st["area0"], 50.0)
+    # Mass = rho * thick * area = 7.8e-6 * 1.0 * 50 = 3.9e-4
+    expected_mass = 7.8e-6 * 1.0 * 50.0
+    assert np.allclose(st["mass"], expected_mass)
+    # Nodal mass scattered: 4 nodes total
+    assert np.all(model.mass[:4] > 0.0)
+    assert np.isclose(model.mass[:4].sum(), expected_mass * 2.0)
+    # Rotational inertia initialized
+    assert np.all(model.inertia[:4] > 0.0)
+    # State buffers initialized
+    assert "sig" in st
+    assert "epsp" in st
+    assert "off" in st
+    assert np.all(st["off"] == 1.0)
     assert np.abs(g.state["sig"]).max() < 1e-15
 
+def test_dkt18_forces_membrane(tmp_path):
+    """Verify DKT18 forces under in-plane tensile velocity."""
+    model, _ = _build_model(tmp_path, ish3n=2, init_mass=True)
 
-def test_bending_hourglass_matches_chvis3(shell_plate):
-    """Transverse 'w' mode: HH2 = hf E SHFPR3 t^3 / (8 (B1+B2)) — note the
-    DIVISION by (B1+B2), where BLT84 multiplied by A*bb."""
-    g, model, mat = shell_plate
-    t, A, hf = 0.1, 1.0, 0.01
-    e = _expect(mat, 0.01, hf, 0.01, t, A, bb=2.0)
+    g = model.sh3n_dkt18
+    n = model.numnod
+    fint = np.zeros((n, 3))
+    mint = np.zeros((n, 3))
 
-    w0, dt = 1e-3, 1e-3
-    v = np.zeros_like(model.x)
-    v[:4, 2] = np.array([1.0, -1.0, 1.0, -1.0]) * w0
-    f = np.zeros_like(model.x)
-    m = np.zeros_like(model.x)
-    shell_bt4.forces(g, model.x, v, model.vr, dt, f, m)
+    # Pull node 2 in +X direction
+    v = np.zeros((n, 3))
+    vr = np.zeros((n, 3))
+    v[1, 0] = 10.0  # 10 mm/s or unit/s
+    dt = 1e-4
 
-    qd = 4.0 * w0
-    want = e["hh2"] * qd * dt + qd * e["h2q"] * abs(qd)
-    assert f[0, 2] == pytest.approx(-want, rel=1e-10)
+    dt_e = shell_dkt18.forces(g, model.x0, v, vr, dt, fint, mint)
 
-
-def test_rotation_hourglass_is_purely_viscous(shell_plate):
-    """chvis3 lines 332-334 ASSIGN HOUR(4..5) = HG*(H3L+H3Q|HG|) rather
-    than accumulating them: the rotation modes have NO elastic branch, and
-    with HVLIN = 0 only the quadratic damper survives. Their modal rate
-    also rides the RAW h = (1,-1,1,-1), not gamma (lines 327-330)."""
-    g, model, mat = shell_plate
-    t, A, hr = 0.1, 1.0, 0.01
-    e = _expect(mat, 0.01, 0.01, hr, t, A, bb=2.0)
-
-    r0, dt = 1e-3, 1e-3
-    vr = np.zeros_like(model.vr)
-    vr[:4, 0] = np.array([1.0, -1.0, 1.0, -1.0]) * r0     # thx-hourglass
-    f = np.zeros_like(model.x)
-    m = np.zeros_like(model.x)
-    shell_bt4.forces(g, model.x, np.zeros_like(model.x), vr, dt, f, m)
-
-    qd = 4.0 * r0
-    want = qd * e["h3q"] * abs(qd)             # damper alone, no HH term
-    assert m[0, 0] == pytest.approx(-want, rel=1e-10)
-    # purely viscous -> no persistent elastic state is stored for 3,4
-    assert np.abs(g.state["hgq"][:, 3:]).max() == 0.0
-
-    # ... and because it is a damper, a CONSTANT rate gives a CONSTANT
-    # force (an elastic branch would keep accumulating)
-    f2 = np.zeros_like(model.x)
-    m2 = np.zeros_like(model.x)
-    shell_bt4.forces(g, model.x, np.zeros_like(model.x), vr, dt, f2, m2)
-    assert m2[0, 0] == pytest.approx(-want, rel=1e-10)
+    assert len(dt_e) == 2
+    assert np.all(dt_e > 0.0)
+    assert np.all(dt_e < EP30)
+    # Internal forces should resist tension: fint is -f_int, so fint has non-zero values
+    assert not np.allclose(fint, 0.0)
+    assert g.state["eint"].sum() > 0.0
 
 
-def test_viscous_hourglass_dissipates_and_never_returns(shell_plate):
-    """The M36 box_beam finding in miniature, on the rotation modes — the
-    ones chvis3 makes PURELY viscous, so they isolate dissipation from
-    storage exactly.
+def test_dkt18_forces_bending(tmp_path):
+    """Verify DKT18 forces and moments under out-of-plane bending velocity."""
+    model, _ = _build_model(tmp_path, ish3n=2, init_mass=True)
 
-    A damper cannot give energy back: driving the mode out and then back
-    at the mirrored rate books dt*H3Q*|qd|^3 EVERY cycle, both legs, and
-    HE rises monotonically to 2N dt H3Q |qd|^3. The pre-M39 BLT84 control
-    made these modes elastic, so the same round trip returned everything
-    and HE ended at ~0 — which is why box_beam_impact booked 0.069 % of
-    its energy in hourglass control against the Fortran's 4.46 %.
-    """
-    g, model, mat = shell_plate
-    r0, dt, N = 1e-2, 1e-3, 20
-    e = _expect(mat, 0.01, 0.01, 0.01, T_PLATE, 1.0, bb=2.0)
-    f = np.zeros_like(model.x)
-    m = np.zeros_like(model.x)
-    h = np.array([1.0, -1.0, 1.0, -1.0])
-    zero_v = np.zeros_like(model.x)
-    qd = 4.0 * r0
-    per_cycle = dt * e["h3q"] * abs(qd) ** 3      # dt * F * qd, F = qd H3Q|qd|
+    g = model.sh3n_dkt18
+    n = model.numnod
+    fint = np.zeros((n, 3))
+    mint = np.zeros((n, 3))
 
-    seen = []
-    for leg in (+1.0, -1.0):
-        for _ in range(N):
-            vr = np.zeros_like(model.vr)
-            vr[:4, 0] = h * r0 * leg
-            shell_bt4.forces(g, model.x, zero_v, vr, dt, f, m)
-            seen.append(g.state["ehour"][0])
+    # Apply out-of-plane velocity on node 4 (Z direction)
+    v = np.zeros((n, 3))
+    vr = np.zeros((n, 3))
+    v[3, 2] = 5.0
+    dt = 1e-4
 
-    # monotone: every cycle adds energy, the mirrored leg included
-    assert all(b > a for a, b in zip(seen, seen[1:]))
-    # and it adds exactly the analytic damper work each cycle
-    assert seen[-1] == pytest.approx(2 * N * per_cycle, rel=1e-9)
-    # nothing was stored: the rotation modes hold no elastic state
-    assert np.abs(g.state["hgq"][:, 3:]).max() == 0.0
+    dt_e = shell_dkt18.forces(g, model.x0, v, vr, dt, fint, mint)
+
+    assert len(dt_e) == 2
+    assert np.all(dt_e > 0.0)
+    # Moments and Z forces should be generated
+    assert not np.allclose(mint, 0.0)
+    assert not np.allclose(fint[:, 2], 0.0)
+    assert g.state["eint"].sum() > 0.0
 
 
-def test_elastic_hourglass_energy_follows_chvis3_integration(shell_plate):
-    """The membrane/bending modes DO store: their Q returns to zero over a
-    mirrored round trip. chvis3 books EHOU with the ALREADY-UPDATED HOUR
-    (lines 286/298: HOUR += HG*HH1 then EHOU = HOUR1A*HG1), a backward
-    -Euler quadrature whose O(dt) residual over the trip is exactly
-    2N k qd^2 dt^2 / 2 -> this pins the port to upstream's quadrature
-    rather than to the (more accurate, but wrong-reference) midpoint rule
-    the port used before M39."""
-    g, model, mat = shell_plate
-    w0, dt, N = 1e-2, 1e-3, 20
-    e = _expect(mat, 0.01, 0.01, 0.01, T_PLATE, 1.0, bb=2.0)
-    f = np.zeros_like(model.x)
-    m = np.zeros_like(model.x)
-    h = np.array([1.0, -1.0, 1.0, -1.0])
-    qd = 4.0 * w0
+def test_dkt18_failure_and_deletion(tmp_path):
+    """Verify /FAIL/JOHNSON deletes DKT18 element when plastic strain threshold is reached."""
+    fail_card = """\
+/FAIL/JOHNSON/1
+0.001 0.0 0.0 0.0 0.0
+"""
+    model, _ = _build_model(tmp_path, ish3n=2, fail_card=fail_card, mat_card=STEEL_LAW2, init_mass=True)
 
-    for leg in (+1.0, -1.0):
-        for _ in range(N):
-            v = np.zeros_like(model.x)
-            v[:4, 2] = h * w0 * leg
-            shell_bt4.forces(g, model.x, v, model.vr, dt, f, m)
+    g = model.sh3n_dkt18
+    assert g.state["chk_fail"]
 
-    # the elastic amplitude is fully recovered
-    assert np.abs(g.state["hgq"][0, 2]) < 1e-18
-    # residual = backward-Euler bias (N k qd^2 dt^2) + the damper's 2N legs
-    bias = N * e["hh2"] * qd ** 2 * dt ** 2
-    visc = 2 * N * dt * e["h2q"] * abs(qd) ** 3
-    assert g.state["ehour"][0] == pytest.approx(bias + visc, rel=1e-9)
+    n = model.numnod
+    fint = np.zeros((n, 3))
+    mint = np.zeros((n, 3))
 
-
-def test_linear_velocity_field_makes_no_hourglass(shell_plate):
-    """Flanagan-Belytschko orthogonality (chvis3 GAMA1..4, lines 122-140):
-    gamma is orthogonal to rigid motion AND to any linear field, so neither
-    the elastic state nor the viscous force may respond to one."""
-    g, model, _ = shell_plate
+    # Large strain to exceed 0.001 failure strain
+    v = np.zeros((n, 3))
+    vr = np.zeros((n, 3))
+    v[1, 0] = 1000.0
+    v[3, 0] = 1000.0
     dt = 1e-3
-    v = np.zeros_like(model.x)
-    v[:, 0] = 0.4 + 0.9 * model.x[:, 0] - 0.3 * model.x[:, 1]
-    v[:, 1] = -0.2 + 0.1 * model.x[:, 0] + 0.5 * model.x[:, 1]
-    v[:, 2] = 0.3 + 0.7 * model.x[:, 0] - 0.2 * model.x[:, 1]
-    f = np.zeros_like(model.x)
-    m = np.zeros_like(model.x)
-    shell_bt4.forces(g, model.x, v, model.vr, dt, f, m)
-    assert np.abs(g.state["hgq"]).max() < 1e-15
-    assert g.state["ehour"][0] == pytest.approx(0.0, abs=1e-18)
+
+    # Force evaluation should cause layer failure and element deletion
+    dt_e = shell_dkt18.forces(g, model.x0, v, vr, dt, fint, mint)
+
+    # At least element 0 or 1 should be deleted
+    assert (g.state["off"] == 0.0).any()
+    dead_idx = np.where(g.state["off"] == 0.0)[0]
+    assert np.all(dt_e[dead_idx] == EP30)
 
 
-def test_hourglass_forces_are_self_equilibrated(shell_plate):
-    """Whatever the coefficients, the hourglass must inject no net force or
-    torque: sum_i gamma_i = 0 and sum_i h_i = 0 on any quad."""
-    g, model, _ = shell_plate
-    dt = 1e-3
-    rng = np.random.default_rng(39)
-    v = rng.normal(scale=1e-3, size=model.x.shape)
-    vr = rng.normal(scale=1e-3, size=model.vr.shape)
-    f = np.zeros_like(model.x)
-    m = np.zeros_like(model.x)
-    shell_bt4.forces(g, model.x, v, vr, dt, f, m)
-    assert np.abs(f.sum(axis=0)).max() < 1e-12
-    total = m.sum(axis=0) + np.cross(model.x, f).sum(axis=0)
-    assert np.abs(total).max() < 1e-12
+def test_dkt18_end_to_end_engine(tmp_path):
+    """Run Starter and Engine end-to-end on a deck with DKT18 shells."""
+    deck_path = tmp_path / "DKT18_0000.rad"
+    deck_content = """\
+/BEGIN
+DKT18 run test
+/NODE
+1 0.0 0.0 0.0
+2 10.0 0.0 0.0
+3 0.0 10.0 0.0
+4 10.0 10.0 0.0
+/SH3N/1
+1 1 2 3
+2 2 4 3
+/PART/1
+plate
+1 1
+/MAT/LAW1/1
+steel elastic
+7.8e-6
+210. 0.3
+/PROP/SHELL/1
+dkt18 shell prop
+1 0 2 0
+0.01 0.01 0.01
+3 0 1.0
+/BCS/1
+fixed_edge
+111 111 0 1
+/GRNOD/NODE/1
+fixed_nodes
+1 3
+/END
+"""
+    deck_path.write_text(deck_content)
 
+    engine_deck_path = tmp_path / "DKT18_0001.rad"
+    engine_deck_content = """\
+/RUN/DKT18/1
+0.001
+/TFILE
+1e-4
+/PRINT
+-10
+/STOP
+99.0
+/END
+"""
+    engine_deck_path.write_text(engine_deck_content)
 
-# ---------------------------------------------------------------------------
-# /PROP/SHELL hourglass defaults (hm_read_prop01.F lines 204-212)
-# ---------------------------------------------------------------------------
+    # Run Starter
+    model = run_starter(str(deck_path))
+    assert model.sh3n_dkt18 is not None
+    assert model.sh3n_dkt18.n == 2
 
-def test_zero_hourglass_coefficients_take_the_upstream_default(
-        make_shell_plate):
-    """A blank/zero Hm Hf Hr does NOT mean "no hourglass": hm_read_prop01.F
-    lines 208-212 substitute EM02 = 0.01 for each zero (for any Ishell but
-    3). The deck cannot switch the control off this way — a 1-point element
-    with no hourglass control is rank deficient — so the port's 0 -> 0.01
-    fallback is upstream behaviour, not a shortcut."""
-    g0, model, _ = make_shell_plate(hm=0.0, hf=0.0, hr=0.0)
-    p0 = g0.state["slices"][0][2].params
-    assert (p0["hm"], p0["hf"], p0["hr"]) == (0.01, 0.01, 0.01)
-
-
-def test_ishell3_hourglass_defaults_are_ten_times_higher(make_shell_plate):
-    """hm_read_prop01.F lines 204-207: Ishell = 3 (the BT type-3 / Hallquist
-    -Liu member of the family) defaults Hm and Hf to **EM01 = 0.1**, ten
-    times the EM02 every other Ishell gets — Hr stays EM02. The port read
-    every Ishell the same before M39, running type-3 decks (official cases
-    c42/c43, E1000_Bending_BT_BT_type3) at a tenth of their membrane and
-    flexural hourglass."""
-    g3, _, _ = make_shell_plate(hm=0.0, hf=0.0, hr=0.0, ishell=3)
-    p3 = g3.state["slices"][0][2].params
-    assert (p3["hm"], p3["hf"], p3["hr"]) == (0.1, 0.1, 0.01)
-
-    # an EXPLICIT value is always kept — the default only fills a zero
-    g3e, _, _ = make_shell_plate(hm=0.02, hf=0.03, hr=0.04, ishell=3)
-    p3e = g3e.state["slices"][0][2].params
-    assert (p3e["hm"], p3e["hf"], p3e["hr"]) == (0.02, 0.03, 0.04)
+    # Run Engine
+    model = run_engine(str(engine_deck_path))
+    assert not model.engine_state.stop_reason, model.engine_state.stop_reason
+    assert model.engine_state.cycle > 0
+    assert model.engine_state.t >= 0.001 * (1.0 - 1e-12)

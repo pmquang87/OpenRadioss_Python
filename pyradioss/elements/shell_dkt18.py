@@ -137,6 +137,9 @@ def forces(group, x, v, vr, dt, fint, mint):
                 (0.666666666666667, 0.166666666666667),
                 (0.166666666666667, 0.166666666666667)]
     
+    epsp_old = st["epsp"].copy() if st["chk_fail"] else None
+    nip_of = []
+
     for NG in range(3):
         eta, ksi = A_HAMMER[NG]
         
@@ -156,7 +159,6 @@ def forces(group, x, v, vr, dt, fint, mint):
         force_pg = np.zeros((n, 3))
         mom_pg = np.zeros((n, 3))
         
-        nip_of = []
         for isl, (sl, mat, prop) in enumerate(st["slices"]):
             mask = sl
             if not np.any(mask): continue
@@ -180,16 +182,15 @@ def forces(group, x, v, vr, dt, fint, mint):
                 
                 st_sig_k = st["sig"][mask, k, :].copy()
                 st_epsp_k = st["epsp"][mask, k].copy()
-                epsp_old = st_epsp_k.copy() if st["chk_fail"] else None
                 
                 sig_new, epsp_new = materials.shell_update(
                     mat, st_sig_k, deps, st_epsp_k, dt, _layer_extra(st, mask, k))
                 
+                st["epsp"][mask, k] = epsp_new
                 if st["chk_fail"]:
                     _layer_failure(st, mask, mat, k, sig_new, epsp_old, deps, dt)
                         
                 st["sig"][mask, k, :] = sig_new
-                st["epsp"][mask, k] = epsp_new
                 
                 force_pg[mask] += sig_new * gw
                 mom_pg[mask] += sig_new * zrel[il] * gw

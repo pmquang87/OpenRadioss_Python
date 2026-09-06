@@ -59,10 +59,12 @@ from __future__ import annotations
 import glob
 import importlib.util
 import os
+import queue
 import re
 import subprocess
 import sys
 import threading
+import time
 from typing import Callable, Dict, List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
@@ -500,22 +502,70 @@ def _stream_subprocess(cmd: List[str], cwd: str, emit: EmitFn,
     except OSError as exc:
         _line(emit, f"   ** failed to launch: {exc}")
         return -1
-    try:
-        assert proc.stdout is not None
-        for raw in proc.stdout:
-            line = raw.rstrip("\n")
-            if line.strip():
-                _line(emit, "   " + line)
-    finally:
+
+    q: queue.Queue[Optional[str]] = queue.Queue()
+
+    def _reader():
         try:
             if proc.stdout is not None:
-                proc.stdout.close()
-        except OSError:
-            pass
+                for raw in proc.stdout:
+                    q.put(raw)
+        finally:
+            q.put(None)
+
+    t = threading.Thread(target=_reader, daemon=True)
+    t.start()
+
+    deadline = time.time() + timeout
+    timed_out = False
+
+    while True:
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            timed_out = True
+            break
         try:
-            rc = proc.wait(timeout=timeout)
+            item = q.get(timeout=min(remaining, 0.1))
+            if item is None:
+                break
+            line = item.rstrip("\n")
+            if line.strip():
+                _line(emit, "   " + line)
+        except queue.Empty:
+            if proc.poll() is not None:
+                # Process terminated, drain queue
+                while True:
+                    try:
+                        item = q.get_nowait()
+                        if item is None:
+                            break
+                        line = item.rstrip("\n")
+                        if line.strip():
+                            _line(emit, "   " + line)
+                    except queue.Empty:
+                        break
+                break
+
+    if timed_out:
+        proc.kill()
+        _line(emit, "   ** timed out")
+        try:
+            proc.wait(timeout=2.0)
+        except Exception:
+            pass
+        rc = -9
+    else:
+        try:
+            rc = proc.wait(timeout=max(0.1, deadline - time.time()))
         except subprocess.TimeoutExpired:
             proc.kill()
             _line(emit, "   ** timed out")
             rc = -9
+
+    try:
+        if proc.stdout is not None:
+            proc.stdout.close()
+    except OSError:
+        pass
+
     return rc
