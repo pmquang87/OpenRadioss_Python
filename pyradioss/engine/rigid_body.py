@@ -147,14 +147,24 @@ class RigidBodyEngine:
     def __init__(self, rb, model: Model, loads, log, saved=None):
         self.rb = rb
         self.model = model
-        who = f"/{rb.kind}/{rb.id}"
-        self.master = rb.master
-        self.slaves = rb.slaves
+        who = f"/{getattr(rb, 'kind', 'RBODY')}/{getattr(rb, 'id', 1)}"
+        self.master = int(getattr(rb, "master", 0))
+        slaves = getattr(rb, "slaves", None)
+        if slaves is None:
+            self.slaves = np.zeros(0, dtype=np.int64)
+        else:
+            self.slaves = np.asarray(slaves, dtype=np.int64)
+            self.slaves = self.slaves[self.slaves != self.master]
         self.nodes = np.concatenate([[self.master], self.slaves])
 
-        self.M = float(rb.mass_total)
-        self.J0 = rb.J.copy()          # about the COG, global axes at t=0
-        self.xg = rb.xg.copy()         # current COG position
+        mass_tot = float(getattr(rb, "mass_total", 0.0))
+        self.M = max(mass_tot, 1e-20)
+        j_val = getattr(rb, "J", None)
+        self.J0 = j_val.copy() if j_val is not None else np.eye(3) * 1e-20
+        xg_val = getattr(rb, "xg", None)
+        self.xg = xg_val.copy() if xg_val is not None else (
+            model.x0[self.master].copy() if len(model.x0) > self.master else np.zeros(3)
+        )
         self.x_cg0 = self.xg.copy()    # initial COG position
         self.f_res = np.zeros(3)       # resultant force
         self.m_res = np.zeros(3)       # resultant moment
@@ -176,35 +186,41 @@ class RigidBodyEngine:
         # /BCS/1+/BCS/2 name /SKEW/MOV/1 and sit on the two /RBODY masters.
         self.bc_skew = []
         self.skews = getattr(model, "skews", None)
-        for bc in model.bcs:
-            grp = model.node_groups.get(bc.grnod_id)
-            if grp is None or grp.node_idx is None:
+        bcs = getattr(model, "bcs", [])
+        node_groups = getattr(model, "node_groups", {})
+        for bc in bcs:
+            grp = node_groups.get(bc.grnod_id)
+            if grp is None or getattr(grp, "node_idx", None) is None:
                 continue
             if self.master in grp.node_idx:
                 row = int(getattr(bc, "skew_row", 0) or 0)
-                if row and not (bc.fix_tra.all() and bc.fix_rot.all()):
+                ftra = np.asarray(bc.fix_tra, dtype=bool)
+                frot = np.asarray(bc.fix_rot, dtype=bool)
+                if row and not (ftra.all() and frot.all()):
                     # a FULL clamp is skew-invariant (zeroing the vector is
                     # the same in any orthonormal basis) — keep it on the
                     # cheap global mask; anything partial must project.
-                    self.bc_skew.append((row, bc.fix_tra.astype(bool),
-                                         bc.fix_rot.astype(bool)))
+                    self.bc_skew.append((row, ftra, frot))
                     continue
-                self.fix_tra |= bc.fix_tra.astype(bool)
-                self.fix_rot |= bc.fix_rot.astype(bool)
-            if np.isin(self.slaves, grp.node_idx).any():
-                log.warning(f"{who}: /BCS/{bc.id} touches slave node(s) — "
-                            f"the rigid body wins (kinematic clash); put "
-                            f"the BCS on the master node instead",
-                            "RBODY INIT")
-        loads.fix_tra[self.nodes] = False
-        loads.fix_rot[self.nodes] = False
+                self.fix_tra |= ftra
+                self.fix_rot |= frot
+            if len(self.slaves) > 0 and np.isin(self.slaves, grp.node_idx).any():
+                if log is not None:
+                    log.warning(f"{who}: /BCS/{bc.id} touches slave node(s) — "
+                                f"the rigid body wins (kinematic clash); put "
+                                f"the BCS on the master node instead",
+                                "RBODY INIT")
+        if hasattr(loads, "fix_tra") and loads.fix_tra is not None and len(loads.fix_tra) > 0:
+            loads.fix_tra[self.nodes] = False
+        if hasattr(loads, "fix_rot") and loads.fix_rot is not None and len(loads.fix_rot) > 0:
+            loads.fix_rot[self.nodes] = False
 
         # ---- pivot mode: master translations fully fixed -----------------
         # The body then rotates about the (fixed) master point; transport
         # the inertia tensor there (parallel-axis / Huygens-Steiner).
         self.pivot = bool(self.fix_tra.all())
         if self.pivot:
-            self.x_ref = model.x0[self.master].copy()
+            self.x_ref = model.x0[self.master].copy() if len(model.x0) > self.master else np.zeros(3)
             c = self.xg - self.x_ref
             self.J0 = self.J0 + self.M * (np.eye(3) * float(c @ c)
                                           - np.outer(c, c))
@@ -213,7 +229,7 @@ class RigidBodyEngine:
             self.x_ref = self.xg.copy()
 
         # initial node offsets from the reference point (body frame = t0)
-        self.r0 = model.x0[self.nodes] - self.x_ref
+        self.r0 = (model.x0[self.nodes] - self.x_ref) if len(model.x0) > 0 else np.zeros((len(self.nodes), 3))
 
         # ---- /IMPVEL driving the master: body-velocity drive --------------
         # (removed from the nodal treatment so its huge-frozen-mass work
@@ -229,7 +245,8 @@ class RigidBodyEngine:
         self.drives = []               # translational: (dof, funct, scale)
         self.rot_drives = []           # rotational: (rdof, fct, scale,
         #                                             facx, tstart, tstop)
-        for k, entry in enumerate(loads.impvel):
+        impvel_list = getattr(loads, "impvel", [])
+        for k, entry in enumerate(impvel_list):
             idx, dof, fct, scale = entry[0], entry[1], entry[2], entry[3]
             if self.master in idx:
                 if dof < 3:
@@ -238,11 +255,11 @@ class RigidBodyEngine:
                     self.rot_drives.append((dof - 3, fct, scale) + entry[4:7])
             hit = np.isin(idx, self.nodes)
             if np.any(hit):
-                if np.isin(self.slaves, idx).any():
+                if len(self.slaves) > 0 and np.isin(self.slaves, idx).any() and log is not None:
                     log.warning(f"{who}: /IMPVEL drives slave node(s) — "
                                 f"the rigid body wins (kinematic clash)",
                                 "RBODY INIT")
-                loads.impvel[k] = (idx[~hit],) + entry[1:]
+                impvel_list[k] = (idx[~hit],) + entry[1:]
         # ---- /IMPDISP driving the master: body-displacement drive ---------
         # (M37: the standard way the official decks move a rigid platen —
         # RD-V-0220 drives the /RBODY master with a /FUNCT_SMOOTH ramp.
@@ -256,7 +273,8 @@ class RigidBodyEngine:
         # spin (no base angle to correct against, like the nodal branch in
         # kinematics.apply_kinematic).
         self.rot_disp_drives = []
-        for k, entry in enumerate(loads.impdisp):
+        impdisp_list = getattr(loads, "impdisp", [])
+        for k, entry in enumerate(impdisp_list):
             idx, dof, x0d = entry[0], entry[1], entry[-1]
             if self.master in idx:
                 if dof < 3:
@@ -266,19 +284,19 @@ class RigidBodyEngine:
                     self.rot_disp_drives.append((dof - 3,) + entry[2:-1])
             hit = np.isin(idx, self.nodes)
             if np.any(hit):
-                if np.isin(self.slaves, idx).any():
+                if len(self.slaves) > 0 and np.isin(self.slaves, idx).any() and log is not None:
                     log.warning(f"{who}: /IMPDISP drives slave node(s) — "
                                 f"the rigid body wins (kinematic clash)",
                                 "RBODY INIT")
-                loads.impdisp[k] = (idx[~hit],) + entry[1:-1] + (
+                impdisp_list[k] = (idx[~hit],) + entry[1:-1] + (
                     x0d[~hit] if x0d is not None else None,)
         # a pivoted (fully translation-clamped) master cannot TRANSLATE, so
         # translational drives are moot; a ROTATIONAL drive about the pivot
         # is perfectly valid, so it is NOT warned away.
-        if self.pivot and self.disp_drives:
+        if self.pivot and self.disp_drives and log is not None:
             log.warning(f"{who}: /IMPDISP on a pivoted (fully clamped) "
                         f"master is ignored", "RBODY INIT")
-        if self.pivot and self.drives:
+        if self.pivot and self.drives and log is not None:
             log.warning(f"{who}: /IMPVEL on a pivoted (fully clamped) "
                         f"master is ignored", "RBODY INIT")
 
@@ -304,13 +322,13 @@ class RigidBodyEngine:
                         + (x0[pos].copy() if x0 is not None else None,))
                 hit = np.isin(idx, self.nodes)
                 if np.any(hit):
-                    if np.isin(self.slaves, idx).any():
+                    if len(self.slaves) > 0 and np.isin(self.slaves, idx).any() and log is not None:
                         log.warning(f"{who}: a skewed /IMP* drives slave "
                                     f"node(s) — the rigid body wins "
                                     f"(kinematic clash)", "RBODY INIT")
                     lst[k] = (entry[0], idx[~hit]) + entry[2:-1] + (
                         x0[~hit] if x0 is not None else None,)
-        if self.pivot and self.skew_drives:
+        if self.pivot and self.skew_drives and log is not None:
             log.warning(f"{who}: a skewed /IMP* on a pivoted (fully "
                         f"clamped) master is ignored", "RBODY INIT")
 
@@ -322,7 +340,8 @@ class RigidBodyEngine:
             self.w = saved["w"].copy()
             self.x_ref = saved["x_ref"].copy()
             self.xg = saved["xg"].copy()
-            log.info(f"     {who}: RESUMED (RESTART)")
+            if log is not None:
+                log.info(f"     {who}: RESUMED (RESTART)")
             return
 
         # ---- initial state: project the nodal velocities ------------------
@@ -330,30 +349,39 @@ class RigidBodyEngine:
         # body can only carry its rigid part: v_g and L are the momenta of
         # the initial field, and the scatter below makes the nodal
         # velocities consistent with them)
-        m = model.mass[self.nodes].copy()
+        m = model.mass[self.nodes].copy() if len(model.mass) > 0 else np.zeros(len(self.nodes))
         m[m >= 1e29] = 0.0             # frozen = massless placeholder
-        v0 = model.v[self.nodes]
+        v0 = model.v[self.nodes] if len(model.v) > 0 else np.zeros((len(self.nodes), 3))
         msum = float(m.sum())
         self.v_ref = ((m[:, None] * v0).sum(axis=0) / msum if msum > 0
                       else np.zeros(3))
-        r = model.x0[self.nodes] - self.x_ref
+        r = (model.x0[self.nodes] - self.x_ref) if len(model.x0) > 0 else np.zeros((len(self.nodes), 3))
         self.L = np.cross(r, m[:, None] * v0).sum(axis=0)
-        self.L += (model.inertia[self.nodes, None]
-                   * model.vr[self.nodes]).sum(axis=0)
+        inertia = getattr(model, "inertia", None)
+        if inertia is not None and len(inertia) == len(model.mass):
+            vr = getattr(model, "vr", None)
+            if vr is not None and len(vr) == len(model.mass):
+                self.L += (inertia[self.nodes, None] * vr[self.nodes]).sum(axis=0)
         if self.pivot:
             self.v_ref = np.zeros(3)
         self.v_ref[self.fix_tra] = 0.0
-        w = np.linalg.solve(self.J0, self.L)
+        try:
+            w = np.linalg.solve(self.J0, self.L)
+        except np.linalg.LinAlgError:
+            w = np.linalg.pinv(self.J0) @ self.L
         w[self.fix_rot] = 0.0
         self._apply_skew_bcs(self.v_ref, w)
         self.L = self.J0 @ w
         self.w = w
-        model.v[self.nodes] = self._rigid_field(model.x[self.nodes])
-        model.vr[self.nodes] = w
+        if len(model.v) > 0 and len(model.x) > 0:
+            model.v[self.nodes] = self._rigid_field(model.x[self.nodes])
+        if len(getattr(model, "vr", [])) > 0:
+            model.vr[self.nodes] = w
 
-        log.info(f"     {who}: {len(self.slaves)} SLAVE NODE(S), MASS = "
-                 f"{self.M:12.5E}" + ("  [PIVOTED AT MASTER]"
-                                      if self.pivot else ""))
+        if log is not None:
+            log.info(f"     {who}: {len(self.slaves)} SLAVE NODE(S), MASS = "
+                     f"{self.M:12.5E}" + ("  [PIVOTED AT MASTER]"
+                                          if self.pivot else ""))
 
     # ------------------------------------------------------------------
     def _apply_skew_bcs(self, v_ref: np.ndarray, w: np.ndarray) -> None:
@@ -484,7 +512,10 @@ class RigidBodyEngine:
         # angular momentum update + spin from the co-rotated inertia
         self.L = self.L + T * dt
         Jsp = self.R @ self.J0 @ self.R.T
-        w = np.linalg.solve(Jsp, self.L)
+        try:
+            w = np.linalg.solve(Jsp, self.L)
+        except np.linalg.LinAlgError:
+            w = np.linalg.pinv(Jsp) @ self.L
         if np.any(self.fix_rot):
             w[self.fix_rot] = 0.0
             self.L = Jsp @ w
@@ -586,12 +617,17 @@ def build_rigid_bodies(model: Model, loads, log,
     resolves chains in the Starter — rbody_part_modif.F90 — so its engine
     never sees one.)"""
     saved_map = saved_map or {}
-    bodies = [rb for rb in model.rbodies if rb.slaves is not None]
-    is_master = np.zeros(model.numnod, dtype=bool)
+    bodies = [rb for rb in getattr(model, "rbodies", []) if getattr(rb, "slaves", None) is not None]
+    if not bodies:
+        return []
+    numnod = getattr(model, "numnod", len(getattr(model, "node_ids", [])))
+    is_master = np.zeros(numnod, dtype=bool)
     for rb in bodies:
-        is_master[rb.master] = True
+        if 0 <= rb.master < numnod:
+            is_master[rb.master] = True
     for rb in bodies:
-        if is_master[rb.slaves].any():
+        valid_slaves = rb.slaves[(rb.slaves >= 0) & (rb.slaves < numnod)]
+        if is_master[valid_slaves].any():
             raise NotImplementedError(
                 f"/{rb.kind}/{rb.id}: rigid-body CHAIN (a slave of this "
                 f"body is the master of another) — supported by the "
