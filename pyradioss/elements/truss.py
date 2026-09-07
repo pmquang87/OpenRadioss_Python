@@ -29,6 +29,14 @@ from ..common.fastmath import norm3
 
 
 def init_group(group, model, log):
+    if group is None or group.n == 0 or len(group.conn) == 0:
+        if group is not None:
+            group.state.update(
+                sig=np.zeros(0), epsp=np.zeros(0), area=np.zeros(0), L0=np.zeros(0),
+                mass=np.zeros(0), eint=np.zeros(0), ehour=np.zeros(0),
+            )
+        return np.zeros(0, dtype=np.int64), np.zeros(0, dtype=float), None
+
     xe = model.x0[group.conn]                     # (n, 2, 3)
     dx = xe[:, 1] - xe[:, 0]
     L0 = norm3(dx)
@@ -38,9 +46,15 @@ def init_group(group, model, log):
     n = group.n
     area = np.zeros(n)
     rho0 = np.zeros(n)
-    for sl, mat, prop in group.state["slices"]:
-        area[sl] = prop.params["area"]
-        rho0[sl] = mat.rho0
+    slices = group.state.get("slices", [])
+    for sl, mat, prop in slices:
+        area_val = 0.0
+        if hasattr(prop, "params") and isinstance(prop.params, dict) and "area" in prop.params:
+            area_val = prop.params["area"]
+        elif hasattr(prop, "area"):
+            area_val = prop.area
+        area[sl] = area_val
+        rho0[sl] = getattr(mat, "rho0", 0.0)
     mass = rho0 * area * L0
     group.state.update(
         sig=np.zeros(n), epsp=np.zeros(n), area=area, L0=L0,
@@ -51,20 +65,30 @@ def init_group(group, model, log):
 
 
 def forces(group, x, v, vr, dt, fint, mint):
+    if group is None or group.n == 0 or len(group.conn) == 0:
+        return np.zeros(0, dtype=float)
+
     st = group.state
     conn = group.conn
     dx = x[conn[:, 1]] - x[conn[:, 0]]
     L = np.maximum(norm3(dx), EM20)
     a = dx / L[:, None]
-    dv = v[conn[:, 1]] - v[conn[:, 0]]
-    eps_dot = np.einsum("nb,nb->n", dv, a) / L
-    deps = eps_dot * dt
+
+    if v is None:
+        eps_dot = np.zeros(len(conn))
+    else:
+        dv = v[conn[:, 1]] - v[conn[:, 0]]
+        eps_dot = np.einsum("nb,nb->n", dv, a) / L
+
+    deps = eps_dot * dt if (dt is not None and dt > 0.0) else np.zeros(len(conn))
 
     sig = st["sig"]
     sig_old = sig.copy()
     c = np.zeros(group.n)
-    for sl, mat, prop in st["slices"]:
-        E = mat.E
+    slices = st.get("slices", [])
+    for sl, mat, prop in slices:
+        E = getattr(mat, "E", 0.0)
+        rho0 = getattr(mat, "rho0", 0.0)
         # sound speed sqrt(E/rho) with the density guarded exactly as the
         # reference guards its own: hm_read_mat00.F computes
         # SDSP = SQRT(YOUNG/MAX(RHOR,EM20)).  A /MAT/VOID truss (LAW0) is
@@ -72,21 +96,28 @@ def forces(group, x, v, vr, dt, fint, mint):
         # and would otherwise turn the 0/0 into a NaN time step; with E = 0
         # the guarded form gives c = 0, i.e. the element claims no time-step
         # limit of its own, which is the void semantics (M39 / M38-NEW-2).
-        c[sl] = np.sqrt(E / max(mat.rho0, EM20))
+        if E > 0.0 and rho0 > 0.0:
+            c[sl] = np.sqrt(E / max(rho0, EM20))
+        else:
+            c[sl] = 0.0
+
         sig[sl] += E * deps[sl]                     # elastic trial (E = 0
         #                                             for VOID: no stress)
-        if mat.law == 2:
+        if getattr(mat, "law", 1) == 2:
             # 1-D radial return on the Johnson-Cook curve
-            p = mat.params
+            p = getattr(mat, "params", {})
             epsp = st["epsp"][sl]
             e = np.maximum(epsp, 1e-20)
             rate_fac = 1.0
-            if p.get("c", 0.0) > 0.0:
+            if p.get("c", 0.0) > 0.0 and p.get("eps_dot_0", 0.0) > 0.0:
                 r = np.maximum(np.abs(eps_dot[sl]) / p["eps_dot_0"], 1.0)
                 rate_fac = 1.0 + p["c"] * np.log(r)
-            sy = np.minimum((p["A"] + p["B"] * e ** p["n"]) * rate_fac,
-                            p["sig_max"])
-            H = p["B"] * p["n"] * e ** (p["n"] - 1.0) * rate_fac
+            A = p.get("A", 0.0)
+            B = p.get("B", 0.0)
+            n_exp = p.get("n", 0.0)
+            sig_max = p.get("sig_max", 1e30)
+            sy = np.minimum((A + B * e ** n_exp) * rate_fac, sig_max)
+            H = B * n_exp * e ** (n_exp - 1.0) * rate_fac
             over = np.abs(sig[sl]) - sy
             plastic = over > 0.0
             dl = np.where(plastic, over / (E + np.maximum(H, 0.0)), 0.0)
@@ -98,8 +129,9 @@ def forces(group, x, v, vr, dt, fint, mint):
     # tension (sig>0) pulls node 1 toward node 2: this force is already
     # the "-internal" contribution (see elements package docstring).
     fvec = F[:, None] * a
-    np.add.at(fint, conn[:, 0], fvec)
-    np.add.at(fint, conn[:, 1], -fvec)
+    if fint is not None:
+        np.add.at(fint, conn[:, 0], fvec)
+        np.add.at(fint, conn[:, 1], -fvec)
 
     st["eint"] += st["area"] * L * 0.5 * (sig_old + sig) * deps
     # dt = L/c.  A stiffness-free material (a /MAT/VOID truss, E = 0) has
@@ -167,6 +199,8 @@ def forces(group, x, v, vr, dt, fint, mint):
 
 def _axis(group, x):
     conn = group.conn
+    if len(conn) == 0:
+        return conn, np.zeros(0, dtype=float), np.zeros((0, 3), dtype=float)
     dx = x[conn[:, 1]] - x[conn[:, 0]]
     L = np.maximum(norm3(dx), EM20)
     return conn, L, dx / L[:, None]
@@ -199,29 +233,41 @@ def tangent(group, x, epsp_incr=None):
     ``epsp_incr`` (n,) is the increment's plastic-strain step (None / zeros
     = all elastic). Returns (ke (n,6,6), edofs (n,6)) in the implicit
     assembler's convention."""
+    if group is None or group.n == 0 or len(group.conn) == 0:
+        return np.zeros((0, 6, 6)), np.zeros((0, 6), dtype=np.int64)
     st = group.state
     conn, L, a = _axis(group, x)
     n = group.n
     k_ax = np.zeros(n)
-    for sl, mat, prop in st["slices"]:
-        if mat.law not in (1, 2):
+    slices = st.get("slices", [])
+    for sl, mat, prop in slices:
+        law = getattr(mat, "law", 1)
+        if law not in (0, 1, 2):
             raise NotImplementedError(
-                f"the implicit truss tangent supports LAW1 and LAW2; got "
-                f"LAW{mat.law} (see PORTING_GUIDE)")
-        Emod = np.full(sl.stop - sl.start, mat.E)
-        if mat.law == 2 and epsp_incr is not None:
+                f"the implicit truss tangent supports LAW0, LAW1 and LAW2; got "
+                f"LAW{law} (see PORTING_GUIDE)")
+        if law == 0:
+            Emod = np.zeros(sl.stop - sl.start)
+        else:
+            Emod = np.full(sl.stop - sl.start, getattr(mat, "E", 0.0))
+        if law == 2 and epsp_incr is not None:
             dl = epsp_incr[sl]
             plastic = dl > 0.0
             if np.any(plastic):
                 # hardening slope at the END of the converged consistency
                 # solve (see the note above); H = 0 where the sig_max cap
                 # rules — matching the iterated implicit return exactly
-                p = mat.params
+                p = getattr(mat, "params", {})
                 e = np.maximum(st["epsp"][sl], 1e-20)
-                sy = p["A"] + p["B"] * e ** p["n"]
-                H = np.maximum(p["B"] * p["n"] * e ** (p["n"] - 1.0), 0.0)
-                H = np.where(sy > p["sig_max"], 0.0, H)
-                Emod = np.where(plastic, mat.E * H / (mat.E + H), Emod)
+                A = p.get("A", 0.0)
+                B = p.get("B", 0.0)
+                n_exp = p.get("n", 0.0)
+                sig_max = p.get("sig_max", 1e30)
+                sy = A + B * e ** n_exp
+                H = np.maximum(B * n_exp * e ** (n_exp - 1.0), 0.0)
+                H = np.where(sy > sig_max, 0.0, H)
+                E = getattr(mat, "E", 0.0)
+                Emod = np.where(plastic, E * H / (E + H), Emod)
         k_ax[sl] = Emod * st["area"][sl] / L[sl]
     kb = k_ax[:, None, None] * np.einsum("ni,nj->nij", a, a)
     return _blocks_to_element(kb), _edofs(conn)
@@ -231,6 +277,8 @@ def kgeo(group, x):
     """Geometric (initial-stress) element stiffness (F/L)(I - a a^T) from
     the current axial stress state at geometry ``x`` (see the note above).
     Same shapes as ``tangent()``; identically zero at zero stress."""
+    if group is None or group.n == 0 or len(group.conn) == 0:
+        return np.zeros((0, 6, 6)), np.zeros((0, 6), dtype=np.int64)
     st = group.state
     conn, L, a = _axis(group, x)
     F_over_L = st["area"] * st["sig"] / L
@@ -279,6 +327,8 @@ def consistent_mass(group, x=None):
     ``x`` is accepted for a uniform kernel signature but unused: the mass is
     built on the reference length (mass conservation) and is frame-invariant
     (isotropic per nodal block)."""
+    if group is None or group.n == 0 or len(group.conn) == 0:
+        return np.zeros((0, 6, 6)), np.zeros((0, 6), dtype=np.int64)
     st = group.state
     conn = group.conn
     n = group.n
@@ -300,11 +350,14 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     (Kept for callers like the buckling prestress path; the implicit
     drivers reach the truss through ``implicit_internal_forces`` below
     since M11.)"""
+    if group is None or group.n == 0 or len(group.conn) == 0:
+        return
     st = group.state
     conn, L, a = _axis(group, x)
     fvec = (st["area"] * st["sig"])[:, None] * a
-    np.add.at(fint, conn[:, 0], fvec)
-    np.add.at(fint, conn[:, 1], -fvec)
+    if fint is not None:
+        np.add.at(fint, conn[:, 0], fvec)
+        np.add.at(fint, conn[:, 1], -fvec)
 
 
 _IMPL_NEWTON_ITERS = 12   # the iterated 1-D consistency solve (see note)
@@ -325,6 +378,10 @@ def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom):
     rate term off. State (sig, epsp, eint) updates to the trial values in
     place — the drivers' snapshot/commit machinery rolls back exactly as
     for the rate-form kernels."""
+    if group is None or group.n == 0 or len(group.conn) == 0:
+        return
+    if u is None:
+        u = np.zeros_like(x_ref)
     st = group.state
     conn = group.conn
     x_eval = (x_ref + 0.5 * u) if nlgeom else x_ref
@@ -336,33 +393,36 @@ def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom):
 
     sig = st["sig"]
     sig_old = sig.copy()
-    for sl, mat, prop in st["slices"]:
-        E = mat.E
+    slices = st.get("slices", [])
+    for sl, mat, prop in slices:
+        E = getattr(mat, "E", 0.0)
         sig[sl] += E * deps[sl]                      # elastic trial
-        if mat.law == 2:
+        if getattr(mat, "law", 1) == 2:
             # iterated 1-D consistency solve on the JC static curve
             # (rate term OFF under implicit — the M10 convention)
-            p = mat.params
+            p = getattr(mat, "params", {})
             ep0 = st["epsp"][sl]
             over = np.abs(sig[sl])
-            sy0 = np.minimum(p["A"] + p["B"] *
-                             np.maximum(ep0, 1e-20) ** p["n"], p["sig_max"])
+            A = p.get("A", 0.0)
+            B = p.get("B", 0.0)
+            n_exp = p.get("n", 0.0)
+            sig_max = p.get("sig_max", 1e30)
+            sy0 = np.minimum(A + B * np.maximum(ep0, 1e-20) ** n_exp, sig_max)
             plastic = over > sy0
             if np.any(plastic):
                 dl = np.zeros(sl.stop - sl.start)
                 for _ in range(_IMPL_NEWTON_ITERS):
                     e = np.maximum(ep0 + dl, 1e-20)
-                    sy = p["A"] + p["B"] * e ** p["n"]
-                    H = p["B"] * p["n"] * e ** (p["n"] - 1.0)
-                    capped = sy > p["sig_max"]
-                    sy = np.where(capped, p["sig_max"], sy)
+                    sy = A + B * e ** n_exp
+                    H = B * n_exp * e ** (n_exp - 1.0)
+                    capped = sy > sig_max
+                    sy = np.where(capped, sig_max, sy)
                     H = np.where(capped, 0.0, np.maximum(H, 0.0))
                     res = over - E * dl - sy
                     dl += np.where(plastic, res / (E + H), 0.0)
                     dl = np.maximum(dl, 0.0)
                 e = np.maximum(ep0 + dl, 1e-20)
-                sy_new = np.minimum(p["A"] + p["B"] * e ** p["n"],
-                                    p["sig_max"])
+                sy_new = np.minimum(A + B * e ** n_exp, sig_max)
                 sig[sl] = np.where(plastic, np.sign(sig[sl]) * sy_new,
                                    sig[sl])
                 st["epsp"][sl] = ep0 + dl
@@ -374,7 +434,8 @@ def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom):
     else:
         af = am
     fvec = (st["area"] * sig)[:, None] * af
-    np.add.at(fint, conn[:, 0], fvec)
-    np.add.at(fint, conn[:, 1], -fvec)
+    if fint is not None:
+        np.add.at(fint, conn[:, 0], fvec)
+        np.add.at(fint, conn[:, 1], -fvec)
     # trapezoidal internal-energy booking, the forces() formula
     st["eint"] += st["area"] * Lm * 0.5 * (sig_old + sig) * deps

@@ -5294,7 +5294,14 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             log.error(f"/PROP/TRUSS/{block.user_id}: area card missing",
                       block.source)
             return
-        params = {"area": cards[0].floats()[0]}
+        fl = cards[0].floats()
+        if not fl and block.fixed:
+            fl = [f for f in _cut_floats(cards[0], "F20X2") if f is not None]
+        if not fl:
+            log.error(f"/PROP/TRUSS/{block.user_id}: area card missing",
+                      block.source)
+            return
+        params = {"area": fl[0]}
     elif ptype == 3:  # BEAM
         if block.fixed:
             # REAL layout (cfg prop_p3_beam.cfg): title / Ismstr /
