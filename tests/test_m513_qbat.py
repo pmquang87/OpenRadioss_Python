@@ -22,6 +22,16 @@ from pyradioss.elements.shell_qbat import (
     implicit_internal_forces,
     _edofs,
 )
+from pyradioss.accel import _state, select_backend
+
+
+@pytest.fixture(autouse=True)
+def pin_numpy_backend(monkeypatch):
+    monkeypatch.setenv("PYRADIOSS_BACKEND", "numpy")
+    orig = dict(_state)
+    select_backend("numpy")
+    yield
+    _state.update(orig)
 
 
 class SimpleMat:

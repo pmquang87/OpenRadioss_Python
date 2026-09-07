@@ -328,9 +328,13 @@ def qbat_post_flat(n, E, off, thick, volg, forpg, mompg, for_mean, cdet, bm, bc,
             
         thoff = volg[e] * for_mean[e, 2] * off[e]
         vf_00 += -thoff * x24n[e]
-        vf_10 += thoff * y24n[e]
-        vf_20 += thoff * x13n[e]
-        vf_30 += -thoff * y13n[e]
+        vf_20 += thoff * x24n[e]
+        vf_10 += thoff * x13n[e]
+        vf_30 += -thoff * x13n[e]
+        vf_01 += thoff * y24n[e]
+        vf_21 += -thoff * y24n[e]
+        vf_11 += -thoff * y13n[e]
+        vf_31 += thoff * y13n[e]
         
         # cbaproj
         e1x = E[e, 0, 0]; e1y = E[e, 1, 0]; e1z = E[e, 2, 0]

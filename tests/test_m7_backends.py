@@ -493,8 +493,11 @@ def test_restart_chain_bitmatch_under_numba(make_deck):
         run_engine(ec1)
         mc = run_engine(ec2)
 
-    assert mc.engine_state.cycle == mu.engine_state.cycle == 700
-    assert np.allclose(mc.x, mu.x, rtol=0, atol=1e-10)
-    assert np.allclose(mc.v, mu.v, rtol=0, atol=1e-10)
-    # interior of the body must still be at exactly zero strain
-    assert np.abs(mc.bricks.state["sig"]).max() < 1e-12
+    try:
+        assert mc.engine_state.cycle == mu.engine_state.cycle == 700
+        assert np.allclose(mc.x, mu.x, rtol=0, atol=1e-10)
+        assert np.allclose(mc.v, mu.v, rtol=0, atol=1e-10)
+        # interior of the body must still be at exactly zero strain
+        assert np.abs(mc.bricks.state["sig"]).max() < 1e-12
+    finally:
+        accel.select_backend("numpy")
