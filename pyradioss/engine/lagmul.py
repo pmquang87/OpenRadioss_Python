@@ -56,7 +56,15 @@ class LagmulSolver:
                 self.interfaces.append(LagmulType2(itf, model, log))
             else:
                 log.warning(f"/INTER/LAGMUL/TYPE{itf.type} Engine constraint builder not implemented.", "LAGMUL")
-        
+
+        from .rigid_wall import LagmulRWall
+        for rw in getattr(model, "rwalls", []):
+            if not getattr(rw, "lagmul", False):
+                continue
+            if not HAS_SCIPY:
+                raise ImportError("LagmulSolver requires scipy to be installed.")
+            self.interfaces.append(LagmulRWall(rw, model, log))
+
         self.nc = 0  # Total number of constraint rows
 
     def __len__(self):

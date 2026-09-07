@@ -1000,6 +1000,14 @@ class RigidWall:
     node_id: int = 0     # > 0: wall tied to this (user id) node — moving
     axis1: Optional[np.ndarray] = None  # (3,) PARAL first edge vector
     axis2: Optional[np.ndarray] = None  # (3,) PARAL second edge vector
+    lagmul: bool = False                # True: global sparse Lagrange multiplier solver
+    ifq: int = 0                        # filtering flag
+    freq: float = 0.0                   # filtering factor / frequency
+    alpha: float = 0.0                  # filtering factor
+    mass: float = 0.0                   # wall carrier mass
+    vx: float = 0.0                     # wall carrier initial x-velocity
+    vy: float = 0.0                     # wall carrier initial y-velocity
+    vz: float = 0.0                     # wall carrier initial z-velocity
 
 
 @dataclass

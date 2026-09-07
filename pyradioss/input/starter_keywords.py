@@ -13150,13 +13150,31 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
       port's search distance Dist; grnd_ID2 (excluded nodes) and the
       friction-filter ffac/ifq are warned when set.
     """
-    kind = block.parts[1].upper() if len(block.parts) > 1 else "PLANE"
-    if kind in ("SPHERE", "SPHER"):
+    parts_upper = [p.upper() for p in block.parts]
+    lagmul = "LAGMUL" in parts_upper
+    geom_candidates = [p for p in parts_upper if p not in ("RWALL", "LAGMUL") and not p.isdigit()]
+    if any(p in ("SPHERE", "SPHER") for p in geom_candidates):
         kind = "SPHER"
-    elif kind in ("PARALLELEPIPED", "CUBOID"):
+    elif any(p in ("CYL", "CYLINDER") for p in geom_candidates):
+        kind = "CYL"
+    elif any(p in ("PARAL", "PARALLELEPIPED", "CUBOID") for p in geom_candidates):
+        kind = "PARAL"
+    elif any(p in ("BOX",) for p in geom_candidates):
         kind = "BOX"
-    elif kind in ("TRUNC_CONE", "TRUNCATED_CONE", "TCONE"):
+    elif any(p in ("CONE", "TRUNC_CONE", "TRUNCATED_CONE", "TCONE") for p in geom_candidates):
         kind = "CONE"
+    elif any(p in ("THERM",) for p in geom_candidates):
+        kind = "THERM"
+    else:
+        kind = block.parts[1].upper() if len(block.parts) > 1 else "PLANE"
+        if kind == "LAGMUL":
+            kind = "PLANE"
+        elif kind in ("SPHERE", "SPHER"):
+            kind = "SPHER"
+        elif kind in ("PARALLELEPIPED", "CUBOID"):
+            kind = "BOX"
+        elif kind in ("TRUNC_CONE", "TRUNCATED_CONE", "TCONE"):
+            kind = "CONE"
     if kind == "THERM":
         read_rwall_therm(block, model, log)
         return
@@ -13246,6 +13264,14 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         else _title_and_data(block)
     radius = 0.0
     grnod2 = 0
+    freq = 0.0
+    ifq = 0
+    alpha = 0.0
+    mass = 0.0
+    vx0 = 0.0
+    vy0 = 0.0
+    vz0 = 0.0
+
     if block.fixed:
         # real layout: ids card + d/fric/Diameter card, then geometry —
         # realign onto the legacy card indexing (geometry from index 1)
@@ -13261,21 +13287,43 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         g = cards[1].cut("RWALL_D")
         dist, fric = _fval(g[0]), _fval(g[1])
         radius = _fval(g[2]) / 2.0                 # Diameter -> radius
+        freq = _fval(g[3]) if len(g) > 3 else 0.0
+        ifq = _ival(g[4]) if len(g) > 4 else 0
+        if freq == 0.0 and ifq != 0:
+            ifq = 0
+        if ifq == 0:
+            freq = 1.0
+        if ifq >= 0:
+            if ifq <= 1:
+                alpha = freq
+            elif ifq == 2:
+                alpha = 4.0 * np.arctan2(1.0, 0.0) / freq
+            elif ifq == 3:
+                alpha = 4.0 * np.arctan2(1.0, 0.0) * freq
         ignored = []
-        if _fval(g[3]) != 0.0:
-            ignored.append(("ffac", g[3]))
-        if _ival(g[4]) != 0:
-            ignored.append(("ifq", g[4]))
+        if not lagmul:
+            if _fval(g[3]) != 0.0:
+                ignored.append(("ffac", g[3]))
+            if _ival(g[4]) != 0:
+                ignored.append(("ifq", g[4]))
         if node_id > 0:
             m_floats = _cut_floats(cards[2], "XYZM20") if len(cards) > 2 else []
-            if len(m_floats) > 0 and m_floats[0] != 0.0:
-                ignored.append(("Mass", m_floats[0]))
-            if len(m_floats) > 1 and m_floats[1] != 0.0:
-                ignored.append(("VX_0", m_floats[1]))
-            if len(m_floats) > 2 and m_floats[2] != 0.0:
-                ignored.append(("VY_0", m_floats[2]))
-            if len(m_floats) > 3 and m_floats[3] != 0.0:
-                ignored.append(("VZ_0", m_floats[3]))
+            if len(m_floats) > 0:
+                mass = m_floats[0]
+                if not lagmul and mass != 0.0:
+                    ignored.append(("Mass", m_floats[0]))
+            if len(m_floats) > 1:
+                vx0 = m_floats[1]
+                if not lagmul and vx0 != 0.0:
+                    ignored.append(("VX_0", m_floats[1]))
+            if len(m_floats) > 2:
+                vy0 = m_floats[2]
+                if not lagmul and vy0 != 0.0:
+                    ignored.append(("VY_0", m_floats[2]))
+            if len(m_floats) > 3:
+                vz0 = m_floats[3]
+                if not lagmul and vz0 != 0.0:
+                    ignored.append(("VZ_0", m_floats[3]))
         
         if ignored:
             # We use "not mapped" instead of "not ported" here so the automated coverage
@@ -13287,29 +13335,65 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         cards = cards[1:]                # geometry starts at legacy index 1
     else:
         ncards = {"PLANE": 3, "SPHER": 3, "CYL": 4, "PARAL": 4}[kind]
-        if len(cards) < ncards:
-            log.error(f"/RWALL/{kind}/{block.user_id}: needs {ncards} data "
-                      f"cards", block.source)
-            return
-        t = cards[0].tokens()
-        grnod = int(t[0]) if t else 0
-        slide = int(t[1]) if len(t) > 1 else 0
-        fric = float(t[2]) if len(t) > 2 else 0.0
-        dist = float(t[3]) if len(t) > 3 else 0.0
-        node_id = int(float(t[4])) if len(t) > 4 else 0
+        t = cards[0].tokens() if cards else []
+        if len(t) <= 4 and len(cards) > 1 and len(cards[1].tokens()) >= 2 and (
+            lagmul or len(cards) >= ncards + 1
+        ):
+            node_id = int(float(t[0])) if len(t) > 0 else 0
+            slide = int(float(t[1])) if len(t) > 1 else 0
+            grnod = int(float(t[2])) if len(t) > 2 else 0
+            grnod2 = int(float(t[3])) if len(t) > 3 else 0
+            t_d = cards[1].tokens()
+            dist = float(t_d[0]) if len(t_d) > 0 else 0.0
+            fric = float(t_d[1]) if len(t_d) > 1 else 0.0
+            if len(t_d) > 2:
+                radius = float(t_d[2]) / 2.0
+            if len(t_d) > 3:
+                freq = float(t_d[3])
+            if len(t_d) > 4:
+                ifq = int(float(t_d[4]))
+            if node_id > 0 and len(cards) > 2:
+                t_m = cards[2].tokens()
+                if len(t_m) > 0: mass = float(t_m[0])
+                if len(t_m) > 1: vx0 = float(t_m[1])
+                if len(t_m) > 2: vy0 = float(t_m[2])
+                if len(t_m) > 3: vz0 = float(t_m[3])
+            cards = cards[1:]
+        else:
+            if len(cards) < ncards:
+                log.error(f"/RWALL/{kind}/{block.user_id}: needs {ncards} data "
+                          f"cards", block.source)
+                return
+            grnod = int(t[0]) if t else 0
+            slide = int(t[1]) if len(t) > 1 else 0
+            fric = float(t[2]) if len(t) > 2 else 0.0
+            dist = float(t[3]) if len(t) > 3 else 0.0
+            node_id = int(float(t[4])) if len(t) > 4 else 0
+
+    if freq == 0.0 and ifq != 0:
+        ifq = 0
+    if ifq == 0 and freq == 0.0:
+        freq = 1.0
+    if ifq >= 0:
+        if ifq <= 1:
+            alpha = freq
+        elif ifq == 2 and freq != 0.0:
+            alpha = 4.0 * np.arctan2(1.0, 0.0) / freq
+        elif ifq == 3:
+            alpha = 4.0 * np.arctan2(1.0, 0.0) * freq
 
     def _xyz(card):
         return np.array(_cut_floats(card, "XYZ20")[:3]) if block.fixed \
             else np.array(_floats(card, 3))
 
-    m = np.array([np.nan, np.nan, np.nan]) if block.fixed and node_id > 0 \
+    m = np.array([np.nan, np.nan, np.nan]) if ((block.fixed or lagmul) and node_id > 0) \
         else _xyz(cards[1])
     normal = np.array([0.0, 0.0, 1.0])
     axis1 = None
     axis2 = None
     if kind in ("PLANE", "CYL", "PARAL"):
         m1 = _xyz(cards[2])
-        if block.fixed and node_id > 0:
+        if (block.fixed or lagmul) and node_id > 0:
             normal = m1 # pass absolute point M1 to engine to compute M1 - point
         else:
             n = m1 - m
@@ -13346,7 +13430,7 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             normal = n / nn
 
     if kind in ("SPHER", "CYL"):
-        if not block.fixed:
+        if not block.fixed and radius == 0.0:
             # port compact dialect: the radius rides on its own card
             rcard = cards[2] if kind == "SPHER" else cards[3]
             radius = rcard.floats()[0]
@@ -13354,10 +13438,21 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             log.error(f"/RWALL/{kind}/{block.user_id}: radius cannot be 0 (use negative for containment)",
                       block.source)
             return
+
+    if node_id > 0 and hasattr(model, "_id2idx"):
+        wnode = model._id2idx.get(node_id, -1)
+        if wnode >= 0:
+            if mass > 0.0 and hasattr(model, "mass") and model.mass is not None and len(model.mass) > wnode:
+                model.mass[wnode] += mass
+            if hasattr(model, "v") and model.v is not None and len(model.v) > wnode:
+                if vx0 != 0.0 or vy0 != 0.0 or vz0 != 0.0:
+                    model.v[wnode] = np.array([vx0, vy0, vz0], dtype=np.float64)
+
     model.rwalls.append(RigidWall(
         id=block.user_id, point=m, normal=normal, slide=slide, fric=fric,
         grnod_id=grnod or None, grnod_id2=grnod2 or None, dist=dist, title=title, geom=kind,
-        radius=radius, node_id=node_id, axis1=axis1, axis2=axis2))
+        radius=radius, node_id=node_id, axis1=axis1, axis2=axis2,
+        lagmul=lagmul, ifq=ifq, freq=freq, alpha=alpha, mass=mass, vx=vx0, vy=vy0, vz=vz0))
 
 
 def read_rwall_therm(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -83295,6 +83390,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "RWALL_PARAL": read_rwall,
     "RWALL_TRUNC_CONE": read_rwall,
     "RWALL_TCONE": read_rwall,
+    "RWALL_LAGMUL": read_rwall,
     "DT_INTER_DEL": read_dt_inter_del,
     "DT_NODA_CFL": read_dt_noda_cfl,
     # --- M208: Ball/Pin Kinematic Joints, Type 54 Layered Thick Shell Properties, and Engine Rayleigh Damping Directives Suite ---
