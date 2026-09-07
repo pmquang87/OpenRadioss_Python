@@ -6,7 +6,9 @@ Fortran origin: ``engine/source/elements/thickshell/solide16/``
     s16forc3.F  driver: gather coords/velocities, call the chain below
     s16coor3.F  geometry
     s16deri3.F  derivatives
-    s16mass3.F  mass initialization
+    s16rst.F    shape functions & natural derivatives
+    s16bilan.F  energy balance
+    s16mass3.F  mass initialization (starter/source/elements/thickshell/solide16/)
 """
 
 import numpy as np
@@ -29,6 +31,34 @@ from ..common.fastmath import scatter_add3
 # IPERM arrays from Fortran for node 9-16 connectivity
 _IPERM1 = [0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8]
 _IPERM2 = [0, 0, 0, 0, 0, 0, 0, 0, 2, 3, 4, 1, 6, 7, 8, 5]
+
+_IPERM1_16 = np.array([0, 1, 2, 3, 4, 5, 6, 7], dtype=int)
+_IPERM2_16 = np.array([1, 2, 3, 0, 5, 6, 7, 4], dtype=int)
+
+# Exact integer moment matrix for reference element [-1, 1]^3 with volume 8.
+# Denominator is 1080.
+# np.sum(_M_INT_SHEL16) / 1080.0 == 1.0.
+_M_INT_SHEL16 = np.array([
+    [ 12,   4,   6,   4,   6,   2,   3,   2, -12, -16, -16, -12,  -6,  -8,  -8,  -6],
+    [  4,  12,   4,   6,   2,   6,   2,   3, -12, -12, -16, -16,  -6,  -6,  -8,  -8],
+    [  6,   4,  12,   4,   3,   2,   6,   2, -16, -12, -12, -16,  -8,  -6,  -6,  -8],
+    [  4,   6,   4,  12,   2,   3,   2,   6, -16, -16, -12, -12,  -8,  -8,  -6,  -6],
+    [  6,   2,   3,   2,  12,   4,   6,   4,  -6,  -8,  -8,  -6, -12, -16, -16, -12],
+    [  2,   6,   2,   3,   4,  12,   4,   6,  -6,  -6,  -8,  -8, -12, -12, -16, -16],
+    [  3,   2,   6,   2,   6,   4,  12,   4,  -8,  -6,  -6,  -8, -16, -12, -12, -16],
+    [  2,   3,   2,   6,   4,   6,   4,  12,  -8,  -8,  -6,  -6, -16, -16, -12, -12],
+    [-12, -12, -16, -16,  -6,  -6,  -8,  -8,  64,  40,  32,  40,  32,  20,  16,  20],
+    [-16, -12, -12, -16,  -8,  -6,  -6,  -8,  40,  64,  40,  32,  20,  32,  20,  16],
+    [-16, -16, -12, -12,  -8,  -8,  -6,  -6,  32,  40,  64,  40,  16,  20,  32,  20],
+    [-12, -16, -16, -12,  -6,  -8,  -8,  -6,  40,  32,  40,  64,  20,  16,  20,  32],
+    [ -6,  -6,  -8,  -8, -12, -12, -16, -16,  32,  20,  16,  20,  64,  40,  32,  40],
+    [ -8,  -6,  -6,  -8, -16, -12, -12, -16,  20,  32,  20,  16,  40,  64,  40,  32],
+    [ -8,  -8,  -6,  -6, -16, -16, -12, -12,  16,  20,  32,  20,  32,  40,  64,  40],
+    [ -6,  -8,  -8,  -6, -12, -16, -16, -12,  20,  16,  20,  32,  40,  32,  40,  64]
+], dtype=float)
+
+_M_SHEL16 = _M_INT_SHEL16 / 1080.0
+
 
 @njit(cache=True)
 def s16rst(r, s, t):
@@ -256,11 +286,6 @@ def s16deri3(xx, dnidr, dnids, dnidt):
     )
     
     if det <= 0.0:
-        # Fortran s16deri3.F calls ARRET(2) — fatal error for non-positive
-        # Jacobian determinant.  Inside @njit we cannot raise a Python
-        # exception, so clamp to EM20 to prevent inf/nan propagation.
-        # The element will still produce garbage forces, but those are
-        # masked by the alive/off flag downstream.
         det = 1.0e-20
         
     d = 1.0 / det
@@ -364,9 +389,6 @@ def s16deri3(xx, dnidr, dnids, dnidt):
     return px, py, pz, det
 
 
-
-
-
 @njit(cache=True)
 def s20defo3(px, py, pz, vx, vy, vz, rho, voln, dt1=0.0):
     nel = px.shape[0]
@@ -440,14 +462,11 @@ def s20defo3(px, py, pz, vx, vy, vz, rho, voln, dt1=0.0):
             d4, d5, d6, wxx, wyy, wzz, rhoo, voln_out)
 
 
-
-
 @njit(cache=True)
 def s20fint3(px, py, pz, sig, voln):
     """
     Computes internal forces for the 16-node thick shell (solide16) element.
     Uses 0-based indexing.
-    
     px, py, pz : arrays of shape (16,) containing Cartesian derivatives
     sig        : array of shape (6,) containing stress components (xx, yy, zz, xy, yz, zx)
     voln       : volume integration weight for this integration point
@@ -593,8 +612,87 @@ def _init_mass(n, fill, rho, vol, dtx, dtelem, mass, mss, mssx, nc, stifn, delta
             stifn[nc[i, 4]] += HALF * sti
 
 
-_IPERM1_16 = np.array([0, 1, 2, 3, 4, 5, 6, 7], dtype=int)
-_IPERM2_16 = np.array([1, 2, 3, 0, 5, 6, 7, 4], dtype=int)
+def _reconstruct_xe(conn, x):
+    """Reconstruct 16-node coordinates, interpolating virtual midside nodes at edge midpoints."""
+    n = len(conn)
+    xe = np.zeros((n, 16, 3), dtype=np.float64)
+    if n == 0 or x is None:
+        return xe
+    xe[:, 0:8] = x[conn[:, 0:8]]
+    for idx_16 in range(8):
+        n1 = _IPERM1_16[idx_16]
+        n2 = _IPERM2_16[idx_16]
+        c_n = conn[:, 8 + idx_16]
+        real = c_n >= 0
+        if real.any():
+            xe[real, 8 + idx_16] = x[c_n[real]]
+        virt = ~real
+        if virt.any():
+            xe[virt, 8 + idx_16] = 0.5 * (xe[virt, n1] + xe[virt, n2])
+    return xe
+
+
+def _reconstruct_ve(conn, v):
+    """Reconstruct 16-node velocities, interpolating virtual midside nodes at edge midpoints."""
+    n = len(conn)
+    ve = np.zeros((n, 16, 3), dtype=np.float64)
+    if n == 0 or v is None:
+        return ve
+    ve[:, 0:8] = v[conn[:, 0:8]]
+    for idx_16 in range(8):
+        n1 = _IPERM1_16[idx_16]
+        n2 = _IPERM2_16[idx_16]
+        c_n = conn[:, 8 + idx_16]
+        real = c_n >= 0
+        if real.any():
+            ve[real, 8 + idx_16] = v[c_n[real]]
+        virt = ~real
+        if virt.any():
+            ve[virt, 8 + idx_16] = 0.5 * (ve[virt, n1] + ve[virt, n2])
+    return ve
+
+
+def _geometry(xe, pts=None, wts=None):
+    """Computes Cartesian derivatives dndx, Gauss point volumes vol_gp, and total volume.
+    xe: (nel, 16, 3)
+    pts: list of (r, s, t)
+    wts: list of w
+    Returns:
+    dndx: (nel, nip, 16, 3)
+    vol_gp: (nel, nip)
+    vol_tot: (nel,)
+    """
+    nel = xe.shape[0]
+    if pts is None or wts is None:
+        g = 1.0 / np.sqrt(3.0)
+        _pts_1d = [-g, g]
+        pts = []
+        wts = []
+        for r in _pts_1d:
+            for s in _pts_1d:
+                for t in _pts_1d:
+                    pts.append((r, s, t))
+                    wts.append(1.0)
+    nip = len(pts)
+    dndx = np.zeros((nel, nip, 16, 3), dtype=np.float64)
+    vol_gp = np.zeros((nel, nip), dtype=np.float64)
+    
+    for k, ((r, s, t), w) in enumerate(zip(pts, wts)):
+        ni, dnidr, dnids, dnidt = s16rst(r, s, t)
+        for i in range(nel):
+            xx = np.zeros((3, 16), dtype=np.float64)
+            for n in range(16):
+                xx[0, n] = xe[i, n, 0]
+                xx[1, n] = xe[i, n, 1]
+                xx[2, n] = xe[i, n, 2]
+            px, py, pz, det = s16deri3(xx, dnidr, dnids, dnidt)
+            dndx[i, k, :, 0] = px
+            dndx[i, k, :, 1] = py
+            dndx[i, k, :, 2] = pz
+            vol_gp[i, k] = det * w
+            
+    vol_tot = np.sum(vol_gp, axis=1)
+    return dndx, vol_gp, vol_tot
 
 
 def init_group(group, model, log):
@@ -602,19 +700,25 @@ def init_group(group, model, log):
     conn = group.conn
     n = group.n
     
+    if n == 0 or len(conn) == 0:
+        group.state.update(
+            sig=np.zeros((0, 1, 6)),
+            epsp=np.zeros((0, 1)),
+            eint=np.zeros(0),
+            ehour=np.zeros(0),
+            zw=[],
+            rho=np.zeros(0),
+            vol=np.zeros(0),
+            mass=np.zeros(0),
+            lc=np.zeros(0),
+            chk_fail=False,
+            off=np.ones(0),
+            dama=np.zeros((0, 1)),
+        )
+        return np.zeros(0, dtype=int), np.zeros(0, dtype=float), np.zeros(0, dtype=float)
+
     # Reconstruct coordinates for absent midside nodes (-1)
-    xe = np.zeros((n, 16, 3), dtype=np.float64)
-    xe[:, 0:8] = model.x0[conn[:, 0:8]]
-    for idx_16 in range(8):
-        n1 = _IPERM1_16[idx_16]
-        n2 = _IPERM2_16[idx_16]
-        c_n = conn[:, 8 + idx_16]
-        real = c_n >= 0
-        if real.any():
-            xe[real, 8 + idx_16] = model.x0[c_n[real]]
-        virt = ~real
-        if virt.any():
-            xe[virt, 8 + idx_16] = 0.5 * (xe[virt, n1] + xe[virt, n2])
+    xe = _reconstruct_xe(conn, model.x0)
     
     mass = np.zeros(n)
     mss = np.zeros((n, 8))
@@ -728,7 +832,6 @@ def _s16_pre(xe, ve, r, s, t, w):
     ni, dnidr, dnids, dnidt = s16rst(r, s, t)
     
     for i in range(nel):
-        # Extract components of xe[i] properly for s16deri3
         xx = np.zeros((3, 16), dtype=np.float64)
         for n in range(16):
             xx[0, n] = xe[i, n, 0]
@@ -795,24 +898,24 @@ def forces(group, x, v, vr, dt, fint, mint):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros(0)
     
+    # Cycle 0 Courant step calculation / velocity-free evaluation
+    if dt <= 0.0 or v is None:
+        c_spd = np.zeros(n)
+        for sl, mat, prop in st.get("slices", []):
+            if getattr(mat, "law", 1) == 0:
+                c_spd[sl] = 1e-20
+            else:
+                c_spd[sl] = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / max(mat.rho0, 1e-20))
+        dt_crit = st.get("lc", np.ones(n)) / np.maximum(c_spd, 1e-20)
+        alive = st.get("off", np.ones(n)) > 0.0
+        return np.where(alive, dt_crit, EP30)
+
     # Reconstruct positions and velocities for absent midside nodes (-1)
-    xe = np.zeros((n, 16, 3), dtype=np.float64)
-    ve = np.zeros((n, 16, 3), dtype=np.float64)
-    xe[:, 0:8] = x[conn[:, 0:8]]
-    ve[:, 0:8] = v[conn[:, 0:8]]
-    for idx_16 in range(8):
-        n1 = _IPERM1_16[idx_16]
-        n2 = _IPERM2_16[idx_16]
-        c_n = conn[:, 8 + idx_16]
-        real = c_n >= 0
-        if real.any():
-            xe[real, 8 + idx_16] = x[c_n[real]]
-            ve[real, 8 + idx_16] = v[c_n[real]]
-        virt = ~real
-        if virt.any():
-            xe[virt, 8 + idx_16] = 0.5 * (xe[virt, n1] + xe[virt, n2])
-            ve[virt, 8 + idx_16] = 0.5 * (ve[virt, n1] + ve[virt, n2])
+    xe = _reconstruct_xe(conn, x)
+    ve = _reconstruct_ve(conn, v)
     
     fint_e = np.zeros_like(xe)
     
@@ -821,6 +924,10 @@ def forces(group, x, v, vr, dt, fint, mint):
     c_spd = np.zeros(n)
     
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        if getattr(mat, "law", 1) == 0:
+            c_spd[sl] = 1e-20
+            continue
+
         pts, wts = st["zw"][isl]
         xe_sl = xe[sl]
         ve_sl = ve[sl]
@@ -844,7 +951,7 @@ def forces(group, x, v, vr, dt, fint, mint):
             if c_new is not None:
                 c_spd[sl] = np.maximum(c_spd[sl], c_new)
             
-            # Failure evaluation
+            # Failure evaluation (AUD-010)
             if st.get("chk_fail", False):
                 eps_max = mat.params.get("eps_p_max", EP30)
                 broken = np.zeros(n_sl, dtype=bool)
@@ -880,12 +987,235 @@ def forces(group, x, v, vr, dt, fint, mint):
             fint_e[virt, 8 + idx_16] = 0.0
             
     # Scatter to global fint
-    from pyradioss.common.fastmath import scatter_add3
-    conn_flat = conn.reshape(-1)
-    fint_e_flat = fint_e.reshape(-1, 3)
-    valid = conn_flat >= 0
-    scatter_add3(fint, conn_flat[valid], fint_e_flat[valid], st.get('color_indices'), st.get('color_offsets'))
+    if fint is not None:
+        conn_flat = conn.reshape(-1)
+        fint_e_flat = fint_e.reshape(-1, 3)
+        valid = conn_flat >= 0
+        scatter_add3(fint, conn_flat[valid], fint_e_flat[valid], st.get('color_indices'), st.get('color_offsets'))
     
     # Calculate stable time step
     dt_crit = st["lc"] / np.maximum(c_spd, 1e-20)
     return np.where(alive, dt_crit, EP30)
+
+
+def _edofs(conn):
+    """(n, 48) global scalar DOF slot ids, node-major [ux, uy, uz] * 16."""
+    n = len(conn)
+    if n == 0:
+        return np.zeros((0, 48), dtype=np.int64)
+    ix = np.arange(16)
+    edofs = np.empty((n, 48), dtype=np.int64)
+    safe_conn = np.maximum(conn, 0)
+    for c in range(3):
+        edofs[:, 3 * ix + c] = safe_conn * 6 + c
+    return edofs
+
+
+def tangent(group, x, epsp_incr=None):
+    """Element tangent stiffness for the whole shel16 group.
+    Returns (ke, edofs): ke (n, 48, 48), edofs (n, 48)."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 48, 48), dtype=float), np.zeros((0, 48), dtype=np.int64)
+
+    xe = _reconstruct_xe(conn, x)
+    ke = np.zeros((n, 48, 48), dtype=float)
+
+    from .. import materials as _materials
+
+    slices = st.get("slices", [])
+    zw_list = st.get("zw", [])
+
+    for isl, (sl, mat, prop) in enumerate(slices):
+        if getattr(mat, "law", 1) == 0:
+            continue
+        pts, wts = zw_list[isl] if isl < len(zw_list) else (None, None)
+        dndx_sl, vol_gp_sl, _ = _geometry(xe[sl], pts, wts)
+        n_sl = len(xe[sl])
+        nip = dndx_sl.shape[1]
+
+        # B matrix: shape (n_sl, nip, 6, 48)
+        B = np.zeros((n_sl, nip, 6, 48), dtype=float)
+        for ix in range(16):
+            gx = dndx_sl[:, :, ix, 0]
+            gy = dndx_sl[:, :, ix, 1]
+            gz = dndx_sl[:, :, ix, 2]
+            B[:, :, 0, 3 * ix + 0] = gx
+            B[:, :, 1, 3 * ix + 1] = gy
+            B[:, :, 2, 3 * ix + 2] = gz
+            B[:, :, 3, 3 * ix + 0] = gy
+            B[:, :, 3, 3 * ix + 1] = gx
+            B[:, :, 4, 3 * ix + 1] = gz
+            B[:, :, 4, 3 * ix + 2] = gy
+            B[:, :, 5, 3 * ix + 0] = gz
+            B[:, :, 5, 3 * ix + 2] = gx
+
+        sig_sl = st["sig"][sl] if "sig" in st else np.zeros((n_sl, nip, 6))
+        epsp_sl = st["epsp"][sl] if "epsp" in st else np.zeros((n_sl, nip))
+        epi = np.zeros((n, nip)) if epsp_incr is None else epsp_incr
+        if epi.ndim == 1:
+            epi = np.tile(epi[:, None], (1, nip))
+        epi_sl = epi[sl]
+
+        for k in range(nip):
+            D = _materials.solid_tangent(
+                mat, sig_sl[:, k], epsp_sl[:, k], epi_sl[:, k], None)  # (n_sl, 6, 6)
+            Bk = B[:, k]  # (n_sl, 6, 48)
+            DB = np.einsum("mij,mjk->mik", D, Bk)
+            ke[sl] += vol_gp_sl[:, k, None, None] * np.einsum("mji,mjk->mik", Bk, DB)
+
+    off = st.get("off")
+    if off is not None:
+        ke *= off[:, None, None]
+
+    return ke, _edofs(conn)
+
+
+def kgeo(group, x):
+    """Geometric (initial-stress) element stiffness for the shel16 group at geometry x.
+    Returns (kgeo, edofs): kgeo (n, 48, 48), edofs (n, 48)."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 48, 48), dtype=float), np.zeros((0, 48), dtype=np.int64)
+
+    xe = _reconstruct_xe(conn, x)
+    ke = np.zeros((n, 48, 48), dtype=float)
+    slices = st.get("slices", [])
+    zw_list = st.get("zw", [])
+    ix = np.arange(16)
+
+    for isl, (sl, mat, prop) in enumerate(slices):
+        pts, wts = zw_list[isl] if isl < len(zw_list) else (None, None)
+        dndx_sl, vol_gp_sl, _ = _geometry(xe[sl], pts, wts)
+        n_sl = len(xe[sl])
+        nip = dndx_sl.shape[1]
+
+        sig_sl = st["sig"][sl] if "sig" in st else np.zeros((n_sl, nip, 6))
+        S = np.empty((n_sl, nip, 3, 3))
+        S[:, :, 0, 0], S[:, :, 1, 1], S[:, :, 2, 2] = sig_sl[:, :, 0], sig_sl[:, :, 1], sig_sl[:, :, 2]
+        S[:, :, 0, 1] = S[:, :, 1, 0] = sig_sl[:, :, 3]
+        S[:, :, 1, 2] = S[:, :, 2, 1] = sig_sl[:, :, 4]
+        S[:, :, 0, 2] = S[:, :, 2, 0] = sig_sl[:, :, 5]
+
+        for k in range(nip):
+            gk = vol_gp_sl[:, k, None, None] * np.einsum(
+                "nac,ncd,nbd->nab", dndx_sl[:, k], S[:, k], dndx_sl[:, k])  # (n_sl, 16, 16)
+            for b in range(3):
+                rows = (3 * ix + b)[:, None]
+                cols = (3 * ix + b)[None, :]
+                ke[sl, rows, cols] += gk
+
+    off = st.get("off")
+    if off is not None:
+        ke *= off[:, None, None]
+
+    return ke, _edofs(conn)
+
+
+def consistent_mass(group, x=None):
+    """Consistent element mass integral rho N^T N dV of the 16-node serendipity thick shell:
+    exact analytical reference moment matrix _M_SHEL16 ⊗ I3, built on stored
+    element mass."""
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 48, 48), dtype=float), np.zeros((0, 48), dtype=np.int64)
+    m = st.get("mass", np.zeros(n))
+    me = np.zeros((n, 48, 48), dtype=float)
+    for a in range(16):
+        for b in range(16):
+            coeff = _M_SHEL16[a, b]
+            if coeff != 0.0:
+                f = m * coeff
+                for c in range(3):
+                    me[:, a * 3 + c, b * 3 + c] = f
+    return me, _edofs(conn)
+
+
+def static_internal_forces(group, x, u, ur, fint, mint):
+    """Internal nodal force at configuration x from CURRENT stress state:
+    fe = -sum_k vol_k S_k gradN_k."""
+    if group.n == 0 or len(group.conn) == 0 or fint is None:
+        return
+    st = group.state
+    conn = group.conn
+    n = group.n
+    xe = _reconstruct_xe(conn, x)
+    fe = np.zeros((n, 16, 3), dtype=np.float64)
+
+    slices = st.get("slices", [])
+    zw_list = st.get("zw", [])
+
+    for isl, (sl, mat, prop) in enumerate(slices):
+        pts, wts = zw_list[isl] if isl < len(zw_list) else (None, None)
+        dndx_sl, vol_gp_sl, _ = _geometry(xe[sl], pts, wts)
+        n_sl = len(xe[sl])
+        nip = dndx_sl.shape[1]
+
+        sig_sl = st["sig"][sl] if "sig" in st else np.zeros((n_sl, nip, 6))
+        S = np.empty((n_sl, nip, 3, 3))
+        S[:, :, 0, 0], S[:, :, 1, 1], S[:, :, 2, 2] = sig_sl[:, :, 0], sig_sl[:, :, 1], sig_sl[:, :, 2]
+        S[:, :, 0, 1] = S[:, :, 1, 0] = sig_sl[:, :, 3]
+        S[:, :, 1, 2] = S[:, :, 2, 1] = sig_sl[:, :, 4]
+        S[:, :, 0, 2] = S[:, :, 2, 0] = sig_sl[:, :, 5]
+
+        fe[sl] = -np.einsum("nk,nkbc,nkic->nib", vol_gp_sl, S, dndx_sl)
+
+    off = st.get("off")
+    if off is not None:
+        fe *= off[:, None, None]
+
+    # Virtual midside node force redistribution
+    for idx_16 in range(8):
+        n1 = _IPERM1_16[idx_16]
+        n2 = _IPERM2_16[idx_16]
+        virt = conn[:, 8 + idx_16] < 0
+        if virt.any():
+            f_mid = fe[virt, 8 + idx_16]
+            fe[virt, n1] += 0.5 * f_mid
+            fe[virt, n2] += 0.5 * f_mid
+            fe[virt, 8 + idx_16] = 0.0
+
+    conn_flat = conn.reshape(-1)
+    fe_flat = fe.reshape(-1, 3)
+    valid = conn_flat >= 0
+    scatter_add3(fint, conn_flat[valid], fe_flat[valid], st.get("color_indices"), st.get("color_offsets"))
+
+
+def implicit_internal_forces(group, x, u, ur, fint, mint, nlgeom=False):
+    """Implicit solver internal force vector dispatcher.
+    nlgeom=False: linear Ku from initial configuration.
+    nlgeom=True: nonlinear updated Lagrangian static assembly."""
+    if group.n == 0 or len(group.conn) == 0 or fint is None:
+        return
+    if not nlgeom:
+        ke, edofs = tangent(group, x)
+        ue = np.zeros((group.n, 48))
+        for ix in range(16):
+            nid = group.conn[:, ix]
+            valid = nid >= 0
+            for c in range(3):
+                ue[valid, 3 * ix + c] = u[nid[valid], c]
+        fe = -np.einsum("nij,nj->ni", ke, ue)
+        fe = fe.reshape(-1, 16, 3)
+        for idx_16 in range(8):
+            n1 = _IPERM1_16[idx_16]
+            n2 = _IPERM2_16[idx_16]
+            virt = group.conn[:, 8 + idx_16] < 0
+            if virt.any():
+                f_mid = fe[virt, 8 + idx_16]
+                fe[virt, n1] += 0.5 * f_mid
+                fe[virt, n2] += 0.5 * f_mid
+                fe[virt, 8 + idx_16] = 0.0
+        conn_flat = group.conn.reshape(-1)
+        fe_flat = fe.reshape(-1, 3)
+        valid = conn_flat >= 0
+        scatter_add3(fint, conn_flat[valid], fe_flat[valid],
+                     group.state.get("color_indices"), group.state.get("color_offsets"))
+    else:
+        static_internal_forces(group, x, u, ur, fint, mint)
