@@ -86,6 +86,10 @@ def _local_geometry(xe: np.ndarray):
 
     xe: (n, 3, 3). Returns (E (n,3,3) columns e1|e2|e3, xl (n,3,2),
     area (n,), B1 (n,3), B2 (n,3))."""
+    n = len(xe)
+    if n == 0:
+        return (np.zeros((0, 3, 3)), np.zeros((0, 3, 2)),
+                np.zeros(0), np.zeros((0, 3)), np.zeros((0, 3)))
     s12 = xe[:, 1] - xe[:, 0]
     s13 = xe[:, 2] - xe[:, 0]
     e3 = cross3(s12, s13)
@@ -93,6 +97,27 @@ def _local_geometry(xe: np.ndarray):
     e3 = e3 / np.maximum(a2, EM20)[:, None]
     e1 = s12 / np.maximum(norm3(s12), EM20)[:, None]
     e2 = cross3(e3, e1)
+
+    bad_norm = a2 < 1e-12
+    if np.any(bad_norm):
+        for idx in np.where(bad_norm)[0]:
+            e1_i = s12[idx]
+            n1 = np.linalg.norm(e1_i)
+            if n1 < 1e-12:
+                e1_i = np.array([1.0, 0.0, 0.0])
+            else:
+                e1_i = e1_i / n1
+            cand = np.array([0.0, 0.0, 1.0])
+            if abs(np.dot(e1_i, cand)) > 0.9:
+                cand = np.array([0.0, 1.0, 0.0])
+            e2_i = np.cross(cand, e1_i)
+            e2_i = e2_i / np.maximum(np.linalg.norm(e2_i), EM20)
+            e3_i = np.cross(e1_i, e2_i)
+            e3_i = e3_i / np.maximum(np.linalg.norm(e3_i), EM20)
+            e1[idx] = e1_i
+            e2[idx] = e2_i
+            e3[idx] = e3_i
+
     E = np.stack([e1, e2, e3], axis=2)
     center = xe.mean(axis=1)
     # local in-plane coords: xl[n,i,a] = (x_i - c) . e_a, a = 1,2
@@ -132,6 +157,8 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
       the node count differs), which governs thick or large elements."""
     from .shell_bt4 import _bend_shear_omega2
     n = len(area)
+    if n == 0:
+        return np.ones(0)
     Sxx = np.einsum("ni,ni->n", B1, B1)
     Syy = np.einsum("ni,ni->n", B2, B2)
     Sxy = np.einsum("ni,ni->n", B1, B2)
@@ -142,23 +169,27 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
     BBt[:, 1, 2] = BBt[:, 2, 1] = Sxy
     fac = np.ones(n)
     for sl, mat, prop in slices:
-        if not (mat.rho0 > 0.0 and mat.E > 0.0):
+        rho0_val = getattr(mat, "rho0", 0.0)
+        E_val = getattr(mat, "E", 0.0)
+        if not (rho0_val > 0.0 and E_val > 0.0) or np.any(area[sl] <= 1e-12):
             # stiffness-free / massless material (a /MAT/VOID skin sh3n —
             # legally RHO0 = 0 and E = 0, see starter/checks.
-            # _NULL_RHO0_OK_LAWS): the element claims no time step at all
-            # (upstream lc/SSP with SSP = 0) — the same guard the solid
-            # and BT4 kernels apply for the same material
-            # (M39 / M38-NEW-2).
+            # _NULL_RHO0_OK_LAWS) or degenerate/zero area: the element claims
+            # no time step at all.
             fac[sl] = 1.0
             continue
-        Ep = mat.E / (1.0 - mat.nu ** 2)
-        C = np.array([[Ep, mat.nu * Ep, 0.0],
-                      [mat.nu * Ep, Ep, 0.0],
-                      [0.0, 0.0, mat.G]])
+        nu_val = getattr(mat, "nu", 0.0)
+        t_val = prop.params.get("thick", getattr(prop, "thick", 1.0)) if hasattr(prop, "params") else getattr(prop, "thick", 1.0)
+        denom = 1.0 - nu_val ** 2
+        Ep = E_val / denom if abs(denom) > 1e-12 else E_val
+        G_val = getattr(mat, "G", E_val / 2.6)
+        C = np.array([[Ep, nu_val * Ep, 0.0],
+                      [nu_val * Ep, Ep, 0.0],
+                      [0.0, 0.0, G_val]])
         eig = np.linalg.eigvals(C[None, :, :] @ BBt[sl])
-        w2max = (3.0 / mat.rho0) * eig.real.max(axis=1)
+        w2max = (3.0 / rho0_val) * eig.real.max(axis=1)
         w2bend = _bend_shear_omega2(B1, B2, area, sl, mat,
-                                    prop.params["thick"], 3, mat.rho0)
+                                    t_val, 3, rho0_val)
         w2max = np.maximum(w2max, w2bend)
         c = mat.sound_speed_shell()
         dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
@@ -168,6 +199,24 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
 
 def init_group(group, model, log):
     """Element buffer + lumped mass/inertia (starter c3init3/c3mass3)."""
+    n = group.n
+    if n == 0 or len(group.conn) == 0:
+        group.state.update(
+            sig=np.zeros((0, 1, 3)),
+            qshear=np.zeros((0, 2)),
+            epsp=np.zeros((0, 1)),
+            thick=np.zeros(0),
+            area0=np.zeros(0),
+            mass=np.zeros(0),
+            eint=np.zeros(0),
+            ehour=np.zeros(0),
+            zw=[],
+            dtfac=np.ones(0),
+            off=np.ones(0),
+            chk_fail=False,
+        )
+        return np.empty(0, dtype=np.int64), np.empty(0, dtype=float), np.empty(0, dtype=float)
+
     xe = model.x0[group.conn]
     E, xl, area, B1, B2 = _local_geometry(xe)
     bad = area <= 0.0
@@ -176,21 +225,23 @@ def init_group(group, model, log):
             log.error(f"/SH3N {eid}: zero area (coincident nodes?)",
                       "SH3N INIT")
 
-    n = group.n
     thick = np.zeros(n)
     rho0 = np.zeros(n)
     nip_max = 1
-    for sl, mat, prop in group.state["slices"]:
-        thick[sl] = prop.params["thick"]
-        rho0[sl] = mat.rho0
-        nip_max = max(nip_max, int(prop.params["nip"]))
+    slices = group.state.get("slices", [])
+    for sl, mat, prop in slices:
+        t_val = prop.params.get("thick", getattr(prop, "thick", 1.0)) if hasattr(prop, "params") else getattr(prop, "thick", 1.0)
+        nip_val = int(prop.params.get("nip", getattr(prop, "nip", 1))) if hasattr(prop, "params") else int(getattr(prop, "nip", 1))
+        thick[sl] = t_val
+        rho0[sl] = getattr(mat, "rho0", 0.0)
+        nip_max = max(nip_max, nip_val)
     mass = rho0 * thick * area
 
     # Through-thickness Gauss stations per part slice (same as shell_bt4)
     zw = []
-    for sl, mat, prop in group.state["slices"]:
-        nip = int(prop.params["nip"])
-        gp, gw = np.polynomial.legendre.leggauss(nip)
+    for sl, mat, prop in slices:
+        nip_val = int(prop.params.get("nip", getattr(prop, "nip", 1))) if hasattr(prop, "params") else int(getattr(prop, "nip", 1))
+        gp, gw = np.polynomial.legendre.leggauss(nip_val)
         zw.append((gp * 0.5, gw * 0.5))  # relative to thickness
     group.state.update(
         sig=np.zeros((n, nip_max, 3)),   # in-plane stress per layer
@@ -203,13 +254,13 @@ def init_group(group, model, log):
         ehour=np.zeros(n),               # always zero: CST has no hg modes
         zw=zw,
         dtfac=_exact_dt_factor(B1, B2, area, _char_length(xl, area),
-                               thick, group.state["slices"]),
+                               thick, slices),
     )
     _init_material_state(group, nip_max)
     # orthotropy fiber frame (/PROP/TYPE9 SH_ORTH, TYPE16) — see shell_bt4
     from . import shell_ortho
     group.state["ortho"] = shell_ortho.build_group_ortho(
-        group.state["slices"], E, n, log, group.ids)
+        slices, E, n, log, group.ids)
     node_idx = group.conn.reshape(-1)
     mass_c = np.repeat(mass / 3.0, 3)
     # generous lumped rotational inertia (Key's trick, see module docstring)
@@ -230,6 +281,10 @@ def forces(group, x, v, vr, dt, fint, mint):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty(0, dtype=float)
+    if dt <= 0.0:
+        return np.full(n, EP30)
     xe = x[conn]
     E, xl, area, B1, B2 = _local_geometry(xe)
     area = np.maximum(area, EM20)
@@ -237,8 +292,10 @@ def forces(group, x, v, vr, dt, fint, mint):
     thick = st["thick"]
 
     # velocities in the corotational frame
-    vl = np.einsum("nib,nba->nia", v[conn], E)
-    wl = np.einsum("nib,nba->nia", vr[conn], E)
+    v_conn = np.zeros((n, 3, 3)) if v is None else v[conn]
+    vr_conn = np.zeros((n, 3, 3)) if vr is None else vr[conn]
+    vl = np.einsum("nib,nba->nia", v_conn, E)
+    wl = np.einsum("nib,nba->nia", vr_conn, E)
 
     # ---- rate of deformation (c3defo3 kinematics) --------------------------
     vx, vy, vz = vl[:, :, 0], vl[:, :, 1], vl[:, :, 2]
@@ -302,7 +359,10 @@ def forces(group, x, v, vr, dt, fint, mint):
                 if cs is not None else s_new        # fiber -> elem
             Nres[sl] += wk[:, None] * s_res
             Mres[sl] += (wk * zk)[:, None] * s_res
-        c[sl] = mat.sound_speed_shell()
+        if getattr(mat, "law", 1) == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or getattr(mat, "E", 0.0) <= 0.0:
+            c[sl] = 0.0
+        else:
+            c[sl] = mat.sound_speed_shell()
         # elastic transverse shear resultant stress (with 5/6 factor)
         qold = st["qshear"][sl].copy()
         st["qshear"][sl] += SHEAR_FACTOR * mat.G * gs[sl] * dt
@@ -340,12 +400,14 @@ def forces(group, x, v, vr, dt, fint, mint):
     ml = -m
     fg = np.einsum("nia,nba->nib", fl, E)
     mg = np.einsum("nia,nba->nib", ml, E)
-    scatter_add3(fint, conn.reshape(-1), fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
-    scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    if fint is not None:
+        scatter_add3(fint, conn.reshape(-1), fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    if mint is not None:
+        scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
     # ---- critical time step --------------------------------------------------
     # deleted elements no longer constrain the global step
-    return np.where(alive, st["dtfac"] * lc / c, EP30)
+    return np.where(alive & (c > 0.0), st["dtfac"] * lc / np.maximum(c, EM20), EP30)
 
 
 # ----------------------------------------------------------------------------
@@ -407,6 +469,8 @@ def tangent(group, x, epsp_incr=None):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=float), np.zeros((0, 18), dtype=np.int64)
     E, xl, area, B1, B2 = _local_geometry(x[conn])
     area = np.maximum(area, EM20)
     thick = st["thick"]
@@ -434,6 +498,9 @@ def tangent(group, x, epsp_incr=None):
     Kl = np.zeros((n, 15, 15))
     kdrill = np.zeros(n)
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        if getattr(mat, "law", 1) == 0:
+            kdrill[sl] = 0.0
+            continue
         t_sl = thick[sl]
         A_sl = area[sl]
         kGt = SHEAR_FACTOR * mat.G * t_sl
@@ -572,6 +639,8 @@ def consistent_mass(group, x=None):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=float), np.zeros((0, 18), dtype=np.int64)
     mass = st["mass"]                                  # ρ t A, per element
     thick = st["thick"]
     m_trans = mass
@@ -596,6 +665,8 @@ def kgeo(group, x):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.zeros((0, 18, 18), dtype=float), np.zeros((0, 18), dtype=np.int64)
     E, xl, area, B1, B2 = _local_geometry(x[conn])
     area = np.maximum(area, EM20)
     thick = st["thick"]
@@ -635,6 +706,10 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return
+    if fint is None and mint is None:
+        return
     thick = st["thick"]
     E, xl, area, B1, B2 = _local_geometry(x[conn])
     area = np.maximum(area, EM20)
@@ -665,5 +740,26 @@ def static_internal_forces(group, x, u, ur, fint, mint):
                        + qres[:, 0:1] / 3.0)
     fg = np.einsum("nia,nba->nib", -f, E)
     mg = np.einsum("nia,nba->nib", -m, E)
-    scatter_add3(fint, conn.reshape(-1), fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
-    scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    if fint is not None:
+        scatter_add3(fint, conn.reshape(-1), fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    if mint is not None:
+        scatter_add3(mint, conn.reshape(-1), mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+
+
+def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom):
+    """Implicit residual internal forces and moments dispatch for sh3n.
+
+    Linear geometry (nlgeom=False): evaluates forces at x_ref with displacement u.
+    Nonlinear geometry (nlgeom=True): advances state at midpoint configuration
+    x_ref + 0.5*u, then assembles internal forces on end configuration x_ref + u."""
+    if group.n == 0 or len(group.conn) == 0:
+        return
+    if not nlgeom:
+        forces(group, x_ref, u, ur, 1.0, fint, mint)
+    else:
+        x_mid = x_ref + 0.5 * u
+        x_end = x_ref + u
+        junk_f = np.zeros_like(fint) if fint is not None else None
+        junk_m = np.zeros_like(mint) if mint is not None else None
+        forces(group, x_mid, u, ur, 1.0, junk_f, junk_m)
+        static_internal_forces(group, x_end, u, ur, fint, mint)

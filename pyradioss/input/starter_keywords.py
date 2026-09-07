@@ -5248,9 +5248,9 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             model.properties[block.user_id] = Property(
                 id=block.user_id, type=ptype, title=title, params=params)
             return
-        # Detect short form: first card contains a non-integer float.
-        if cards and any("." in tok or "e" in tok.lower()
-                         for tok in cards[0].tokens()):
+        # Detect short form: single data card or first card contains a float.
+        if cards and (len(cards) == 1 or any("." in tok or "e" in tok.lower()
+                                             for tok in cards[0].tokens())):
             vals = _floats(cards[0], 3, defaults=[1.0, 3, 0.01])
             params["thick"], params["nip"], params["hm"] = \
                 vals[0], int(vals[1]) if vals[1] else 3, vals[2] or 0.01
