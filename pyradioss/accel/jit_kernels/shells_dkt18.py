@@ -325,7 +325,7 @@ def cdkderic3(x2, y2, x3, y3, area2, volg, nu, thk2):
     em20 = 1e-20
     
     for i in range(n):
-        areai = one / area2[i]
+        areai = one / max(area2[i], em20)
         px2[i] = y3[i] * areai
         py2[i] = -x3[i] * areai
         px3[i] = -y2[i] * areai
@@ -341,10 +341,10 @@ def cdkderic3(x2, y2, x3, y3, area2, volg, nu, thk2):
         almax = max(al1, al2, al3)
         almin = min(al1, al2, al3)
         
-        fac = 1.0 + 0.6 * (1.0 + nu[i]) * thk2[i] / almin
+        fac = 1.0 + 0.6 * (1.0 + nu[i]) * thk2[i] / max(almin, em20)
         almax = almax * fac
         
-        aldt[i] = area2[i] / np.sqrt(almax)
+        aldt[i] = area2[i] / np.sqrt(max(almax, em20))
         alpe[i] = one
         
         al4 = three / max(al1, em20)
