@@ -50,8 +50,12 @@ class LoadsAndConstraints:
         # apart from the mask so the (overwhelmingly common) unskewed model
         # pays nothing.
         self.skew_bcs = []
-        for bc in model.bcs:
+        for bc in getattr(model, "bcs", []):
             if controls is not None and not controls.bcs_active.get(bc.id, True):
+                continue
+            if bc.grnod_id not in getattr(model, "node_groups", {}):
+                if log is not None:
+                    log.warning(f"/BCS/{bc.id}: node group {bc.grnod_id} not found in model", "BCS INIT")
                 continue
             idx = model.node_groups[bc.grnod_id].node_idx
             row = getattr(bc, "skew_row", 0)
@@ -76,20 +80,43 @@ class LoadsAndConstraints:
         # its force rows). The PHYSICAL (pre-mass-scaling) mass is used:
         # /DT/NODA/CST additions are numerical and must not weigh (which
         # also keeps a chained restart identical to the unchained run).
-        m_phys = getattr(model, "mass0", model.mass)
+        m_phys = getattr(model, "mass0", None)
+        if m_phys is None or len(m_phys) != len(model.mass):
+            m_phys = model.mass
         self._m_grav = np.where(frozen, 0.0, m_phys)
 
+        class _ConstantFunc:
+            def __init__(self, val: float = 1.0):
+                self.val = float(val)
+            def eval(self, t: float) -> float:
+                return self.val
+
+        def _get_func(fid: int | None):
+            if fid in (None, 0):
+                return _ConstantFunc(1.0)
+            funcs = getattr(model, "functions", {})
+            if fid in funcs:
+                return funcs[fid]
+            if log is not None:
+                log.warning(f"Function {fid} not found in model — defaulting to constant 1.0", "LOADS INIT")
+            return _ConstantFunc(1.0)
+
         # resolved loads: (node_idx, direction, funct, scale)
-        def _grp(gid):
+        def _grp(gid: int | None) -> np.ndarray:
             if gid in (None, 0):
                 return np.arange(model.numnod)
-            return model.node_groups[gid].node_idx
+            ngroups = getattr(model, "node_groups", {})
+            if gid in ngroups:
+                return ngroups[gid].node_idx
+            if log is not None:
+                log.warning(f"Node group {gid} not found in model", "LOADS INIT")
+            return np.zeros(0, dtype=np.int64)
 
-        self.gravity = [(_grp(g.grnod_id), g.direction, model.functions[g.funct_id],
-                         g.scale) for g in model.gravity]
+        self.gravity = [(_grp(g.grnod_id), g.direction, _get_func(g.funct_id),
+                         g.scale) for g in getattr(model, "gravity", [])]
         # /CLOAD entries carry their /SENSOR id (M6): 0 = always active
-        self.cloads = [(_grp(c.grnod_id), c.direction, model.functions[c.funct_id],
-                        c.scale, c.sens_id, c.time_scale) for c in model.cloads]
+        self.cloads = [(_grp(c.grnod_id), c.direction, _get_func(c.funct_id),
+                        c.scale, c.sens_id, c.time_scale) for c in getattr(model, "cloads", [])]
         # /IMPVEL entries: (node_idx, dof, funct, Fscale_Y, 1/Ascale_x,
         # Tstart, Tstop) — the curve is evaluated at t/Ascale_x and the
         # condition only holds inside [Tstart, Tstop] (fixvel.F: FACX,
@@ -103,15 +130,16 @@ class LoadsAndConstraints:
         def _skewed(i):
             return bool(getattr(i, "skew_row", 0))
 
-        self.impvel = [(_grp(i.grnod_id), i.dof, model.functions[i.funct_id],
-                        i.scale, 1.0 / i.xscale, i.tstart, i.tstop)
-                       for i in model.impvel if not _skewed(i)]
+        self.impvel = [(_grp(i.grnod_id), i.dof, _get_func(i.funct_id),
+                        i.scale, 1.0 / i.xscale if getattr(i, "xscale", 1.0) not in (0.0, None) else 1.0,
+                        i.tstart, i.tstop)
+                       for i in getattr(model, "impvel", []) if not _skewed(i)]
         # /IMPDISP: like /IMPVEL, plus the base coordinate of each node so
         # the target position x0 + d(t) is exact (no velocity-integration
         # drift). Entries: (node_idx, dof, funct, scale, facx, tstart,
         # tstop, x0_dof).
         self.impdisp = []
-        for i in model.impdisp:
+        for i in getattr(model, "impdisp", []):
             if _skewed(i):
                 continue
             idx = _grp(i.grnod_id)
@@ -119,10 +147,12 @@ class LoadsAndConstraints:
             # correct against — x0d is left zero and the imposed ANGLE is
             # enforced as the finite-difference angular velocity in
             # apply_kinematic (exact for a DOF driven from d(tstart)=0).
-            x0d = (model.x0[idx, i.dof].copy() if i.dof < 3
+            x0d = (model.x0[idx, i.dof].copy() if i.dof < 3 and len(idx) > 0
                    else np.zeros(len(idx)))
-            self.impdisp.append((idx, i.dof, model.functions[i.funct_id],
-                                 i.scale, 1.0 / i.xscale, i.tstart, i.tstop,
+            xscale = getattr(i, "xscale", 1.0)
+            facx = 1.0 / xscale if xscale not in (0.0, None) else 1.0
+            self.impdisp.append((idx, i.dof, _get_func(i.funct_id),
+                                 i.scale, facx, i.tstart, i.tstop,
                                  x0d))
         # /IMPVEL + /IMPDISP in a /SKEW (M39): the imposed component is the
         # one along the skew's Dir axis (fixvel.F 390-418), so the base
@@ -131,25 +161,26 @@ class LoadsAndConstraints:
         # the unskewed fast path is untouched; each entry carries the skew
         # row (the axes are re-read every cycle — a /SKEW/MOV turns).
         self.skew_impvel, self.skew_impdisp = [], []
-        for i in model.impvel:
+        for i in getattr(model, "impvel", []):
             row = getattr(i, "skew_row", 0)
             if row:
+                xscale = getattr(i, "xscale", 1.0)
+                facx = 1.0 / xscale if xscale not in (0.0, None) else 1.0
                 self.skew_impvel.append(
                     (int(row), _grp(i.grnod_id), i.dof,
-                     model.functions[i.funct_id], i.scale, 1.0 / i.xscale,
+                     _get_func(i.funct_id), i.scale, facx,
                      i.tstart, i.tstop, None))
-        for i in model.impdisp:
+        for i in getattr(model, "impdisp", []):
             row = getattr(i, "skew_row", 0)
             if row:
                 idx = _grp(i.grnod_id)
-                # d0 = x0 . e_dir at t=0: the reference measures the
-                # imposed displacement from the ORIGINAL position along
-                # the CURRENT axis (fixvel.F's DD = SKEW . D, with D the
-                # displacement since t=0)
+                xscale = getattr(i, "xscale", 1.0)
+                facx = 1.0 / xscale if xscale not in (0.0, None) else 1.0
+                x0_sub = model.x0[idx].copy() if len(idx) > 0 else np.zeros((0, 3))
                 self.skew_impdisp.append(
-                    (int(row), idx, i.dof, model.functions[i.funct_id],
-                     i.scale, 1.0 / i.xscale, i.tstart, i.tstop,
-                     model.x0[idx].copy()))
+                    (int(row), idx, i.dof, _get_func(i.funct_id),
+                     i.scale, facx, i.tstart, i.tstop,
+                     x0_sub))
         # a FROZEN node under an imposed velocity/displacement is a
         # legitimate massless kinematic carrier (the standard way to drive
         # a moving /RWALL): release its auto-fix on the driven DOF, and
@@ -160,6 +191,8 @@ class LoadsAndConstraints:
         self._frozen = frozen
         for entry in self.impvel + self.impdisp:
             idx, dof = entry[0], entry[1]
+            if len(idx) == 0:
+                continue
             fzn = idx[frozen[idx]]
             if dof < 3:
                 self.fix_tra[fzn, dof] = False
@@ -173,14 +206,16 @@ class LoadsAndConstraints:
             # the translational auto-fix), dof 3..5 drive rotation about the
             # skew axis (release the rotational auto-fix instead) — M40.
             idx, dof = entry[1], entry[2]
+            if len(idx) == 0:
+                continue
             fzn = idx[frozen[idx]]
             if dof >= 3:
                 self.fix_rot[fzn, :] = False
             else:
                 self.fix_tra[fzn, :] = False
-        for i in model.impdisp:
-            f0 = model.functions[i.funct_id].eval(0.0) * i.scale
-            if abs(f0) > 0.0:
+        for i in getattr(model, "impdisp", []):
+            f0 = _get_func(i.funct_id).eval(0.0) * i.scale
+            if abs(f0) > 0.0 and log is not None:
                 log.warning(f"/IMPDISP/{i.id}: curve starts at "
                             f"d(0) = {f0:.4g} != 0 — the nodes will JUMP "
                             f"there in the first cycle", "IMPDISP INIT")
@@ -188,14 +223,19 @@ class LoadsAndConstraints:
         # /PLOAD: resolved segments + triangle lumping weights + deletion
         # provenance (a torn face stops carrying pressure)
         self.ploads = []
-        for pl in model.ploads:
-            surf = model.surfaces[pl.surf_id]
+        for pl in getattr(model, "ploads", []):
+            surfs = getattr(model, "surfaces", {})
+            if pl.surf_id not in surfs:
+                if log is not None:
+                    log.warning(f"/PLOAD/{pl.id}: surface {pl.surf_id} not found in model — load inactive", "PLOAD INIT")
+                continue
+            surf = surfs[pl.surf_id]
             segs = surf.segments if surf.segments is not None else \
                 np.zeros((0, 4), dtype=np.int64)
-            if len(segs) == 0:
+            if len(segs) == 0 and log is not None:
                 log.warning(f"/PLOAD/{pl.id}: surface {pl.surf_id} has no "
                             f"segments — load inactive", "PLOAD INIT")
-            tri = segs[:, 3] == segs[:, 2] if len(segs) else \
+            tri = ((segs[:, 3] == segs[:, 2]) | (segs[:, 3] <= 0)) if len(segs) else \
                 np.zeros(0, dtype=bool)
             # corner lumping weights: 1/4 per quad corner; triangles put
             # 1/3 on each distinct corner and 0 on the repeated slot
@@ -206,7 +246,7 @@ class LoadsAndConstraints:
             elem = (surf.seg_elem if surf.seg_elem is not None
                     else np.full(len(segs), -1, dtype=np.int64))
             deletable = tracking.any_deletable(model, gtype)
-            self.ploads.append((segs, wgt, model.functions[pl.funct_id],
+            self.ploads.append((segs, wgt, _get_func(pl.funct_id),
                                 pl.scale, gtype, elem, deletable,
                                 pl.sens_id))
 
@@ -243,7 +283,10 @@ class LoadsAndConstraints:
             p = scale * fct.eval(te)
             if p == 0.0:
                 continue
-            xs = x[segs]                                  # (nseg, 4, 3)
+            xs = x[segs].copy()                                  # (nseg, 4, 3)
+            degen = (segs[:, 3] == segs[:, 2]) | (segs[:, 3] <= 0)
+            if np.any(degen):
+                xs[degen, 3] = xs[degen, 2]
             # area vector = 1/2 (d13 x d24): exact for the bilinear quad
             # AND for the degenerate (n4 = n3) triangle segment
             av = 0.5 * np.cross(xs[:, 2] - xs[:, 0], xs[:, 3] - xs[:, 1])
@@ -252,7 +295,12 @@ class LoadsAndConstraints:
                 av[~alive] = 0.0
             fseg = p * av                                 # (nseg, 3)
             for k in range(4):
-                np.add.at(fext, segs[:, k], wgt[:, k, None] * fseg)
+                valid_k = wgt[:, k] > 0.0
+                if np.any(valid_k):
+                    nodes_k = segs[valid_k, k]
+                    valid_nodes = (nodes_k >= 0) & (nodes_k < len(fext))
+                    if np.any(valid_nodes):
+                        np.add.at(fext, nodes_k[valid_nodes], (wgt[valid_k, k, None] * fseg[valid_k])[valid_nodes])
 
     # ------------------------------------------------------------------
     def apply_kinematic(self, t: float, v: np.ndarray, vr: np.ndarray,
