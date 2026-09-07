@@ -132,11 +132,31 @@ def _frame(x1: np.ndarray, x2: np.ndarray, x3: np.ndarray):
 
     Returns (E (n,3,3) with columns e1|e2|e3, L (n,))."""
     d = x2 - x1
+    n = len(d)
+    if n == 0:
+        return np.zeros((0, 3, 3)), np.zeros(0)
     L = np.maximum(norm3(d), EM20)
     e1 = d / L[:, None]
     yref = x3 - x1                                # local y lies in (e1, yref)
-    e2 = yref - np.einsum("nb,nb->n", yref, e1)[:, None] * e1
-    e2 /= np.maximum(norm3(e2), EM20)[:, None]
+    dot = np.einsum("nb,nb->n", yref, e1)
+    e2 = yref - dot[:, None] * e1
+    ne2 = norm3(e2)
+    deg = ne2 <= 1e-12
+    if np.any(deg):
+        # Fallback reference vector for collinear/degenerate orientation nodes:
+        # choose global X if e1 is not aligned with X, else global Y
+        for i in np.where(deg)[0]:
+            e1_i = e1[i]
+            ref = np.array([1.0, 0.0, 0.0]) if abs(e1_i[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+            e2_cand = ref - np.dot(ref, e1_i) * e1_i
+            ne2_cand = np.linalg.norm(e2_cand)
+            if ne2_cand > 1e-12:
+                e2[i] = e2_cand / ne2_cand
+                ne2[i] = 1.0
+            else:
+                e2[i] = np.array([0.0, 0.0, 1.0])
+                ne2[i] = 1.0
+    e2 /= np.maximum(ne2, EM20)[:, None]
     e3 = cross3(e1, e2)
     return np.stack([e1, e2, e3], axis=2), L
 
@@ -165,25 +185,26 @@ def _exact_dt(L0, mass, inertia_c, slices) -> np.ndarray:
     12x12 eigenproblem (see module docstring). Vectorized per part slice."""
     n = len(L0)
     dt0 = np.zeros(n)
+    if n == 0 or not slices:
+        return dt0
     for sl, mat, prop in slices:
-        p = prop.params
-        C = np.diag([mat.E * p["area"], mat.G * p["area"],
-                     mat.G * p["area"], mat.G * p["ixx"],
-                     mat.E * p["iyy"], mat.E * p["izz"]])
+        p = getattr(prop, "params", {})
+        area = p.get("area", getattr(prop, "area", 0.0))
+        iyy = p.get("iyy", getattr(prop, "iyy", 0.0))
+        izz = p.get("izz", getattr(prop, "izz", 0.0))
+        ixx = p.get("ixx", getattr(prop, "ixx", iyy + izz))
+        E = getattr(mat, "E", 0.0)
+        G = getattr(mat, "G", 0.0)
+        C = np.diag([E * area, G * area, G * area, G * ixx, E * iyy, E * izz])
         Ls = L0[sl]
+        if len(Ls) == 0:
+            continue
         ms = mass[sl] / 2.0                       # nodal mass
         Is = inertia_c[sl]                        # nodal inertia
         K = np.empty((len(Ls), 12, 12))
         for k, L in enumerate(Ls):                # small setup loop: init only
             B = _b_operator(L)
             K[k] = L * B.T @ C @ B
-        # symmetric similarity: eig(M^-1 K) = eig(M^-1/2 K M^-1/2).
-        # ms/Is are floored at EM20: a legally massless beam (a /MAT/VOID
-        # part with RHO0 = 0) would otherwise divide by zero here and turn
-        # the whole eigenproblem into NaN.  Its K is identically zero
-        # anyway (E = G = 0), so the floor leaves w2 = 0 and the element
-        # claims no time-step limit — the same guard idiom hm_read_mat00.F
-        # uses for the void sound speed, MAX(RHOR,EM20) (M39 / M38-NEW-2).
         minv_sqrt = np.zeros((len(Ls), 12))
         for d in range(3):
             minv_sqrt[:, d] = minv_sqrt[:, 6 + d] = \
@@ -199,6 +220,8 @@ def _exact_dt(L0, mass, inertia_c, slices) -> np.ndarray:
 def init_group(group, model, log):
     """Element buffer + lumped mass/inertia (starter pinit3/pmass3).
     Only nodes N1, N2 receive mass — N3 is orientation only."""
+    if group is None or getattr(group, "n", 0) == 0 or len(getattr(group, "conn", [])) == 0:
+        return np.zeros(0, dtype=np.int64), np.zeros(0), np.zeros(0)
     conn = group.conn
     x1, x2, x3 = model.x0[conn[:, 0]], model.x0[conn[:, 1]], model.x0[conn[:, 2]]
     E, L0 = _frame(x1, x2, x3)
@@ -222,30 +245,30 @@ def init_group(group, model, log):
     wz = np.zeros(n)                              # (rectangle-exact map
     wx = np.zeros(n)                              #  W = sqrt(I*A/3), doc)
     plastic = False
-    for sl, mat, prop in group.state["slices"]:
-        if mat.law not in (0, 1, 2):
-            log.error(f"/BEAM: material LAW{mat.law} not ported for beams "
+    slices = group.state.get("slices", [])
+    for sl, mat, prop in slices:
+        law = getattr(mat, "law", 1)
+        if law not in (0, 1, 2):
+            log.error(f"/BEAM: material LAW{law} not ported for beams "
                       f"(LAW0 void, LAW1 elastic, LAW2 global plasticity)",
                       "BEAM INIT")
-        # LAW0 (/MAT/VOID) needs no branch of its own: the void card's
-        # E = G = 0 zeroes the whole elasticity matrix C of the rate-form
-        # resultant update, so a void beam carries mass and geometry but
-        # never any force — exactly the void semantics of
-        # hm_read_mat00.F, which declares LAW0 BEAM_ALL-compatible
-        # (M39 / M38-NEW-2; see starter/checks._ALLOWED_LAWS).
-        if mat.law == 2:
+        if law == 2:
             plastic = True
-            if mat.params.get("c", 0.0) > 0.0:
+            if getattr(mat, "params", {}).get("c", 0.0) > 0.0:
                 log.warning("/BEAM: the Johnson-Cook strain-rate term is "
                             "ignored by the global beam plasticity model",
                             "BEAM INIT")
-        p = prop.params
-        area[sl] = p["area"]
-        rho0[sl] = mat.rho0
-        igyr[sl] = (p["iyy"] + p["izz"]) / max(p["area"], EM20)
-        wy[sl] = np.sqrt(p["iyy"] * p["area"] / 3.0)
-        wz[sl] = np.sqrt(p["izz"] * p["area"] / 3.0)
-        wx[sl] = np.sqrt(p["ixx"] * p["area"] / 3.0)
+        p = getattr(prop, "params", {})
+        a_val = p.get("area", getattr(prop, "area", 0.0))
+        iyy_val = p.get("iyy", getattr(prop, "iyy", 0.0))
+        izz_val = p.get("izz", getattr(prop, "izz", 0.0))
+        ixx_val = p.get("ixx", getattr(prop, "ixx", iyy_val + izz_val))
+        area[sl] = a_val
+        rho0[sl] = getattr(mat, "rho0", 0.0)
+        igyr[sl] = (iyy_val + izz_val) / max(a_val, EM20)
+        wy[sl] = np.sqrt(iyy_val * a_val / 3.0)
+        wz[sl] = np.sqrt(izz_val * a_val / 3.0)
+        wx[sl] = np.sqrt(ixx_val * a_val / 3.0)
     mass = rho0 * area * L0
     # nodal inertia: Key's boosted lumping (module docstring)
     inertia_c = mass / 2.0 * (L0 ** 2 / 12.0 + igyr)
@@ -258,7 +281,7 @@ def init_group(group, model, log):
         mass=mass,
         eint=np.zeros(n),
         ehour=np.zeros(n),            # always zero: no hourglass modes
-        dt0=_exact_dt(L0, mass, inertia_c, group.state["slices"]),
+        dt0=_exact_dt(L0, mass, inertia_c, slices),
         # mass-carrying connectivity (N1, N2 only) for output/energy code
         mass_conn=conn[:, :2].copy(),
         # dt_iner: per-NODE inertia share for the ROTATIONAL /DT/NODA
@@ -356,6 +379,14 @@ def forces(group, x, v, vr, dt, fint, mint):
     since M15: the body moved to ``_forces_core`` so the implicit
     residual can thread a converged plastic-return budget through the
     SAME kinematics; the explicit call is bit-identical)."""
+    if group is None or getattr(group, "n", 0) == 0 or len(getattr(group, "conn", [])) == 0:
+        return np.zeros(0)
+    if dt <= 0.0:
+        return group.state.get("dt0", np.zeros(group.n))
+    if v is None:
+        v = np.zeros_like(x)
+    if vr is None:
+        vr = np.zeros_like(x)
     return _forces_core(group, x, v, vr, dt, fint, mint, _NEWTON_ITERS)
 
 
@@ -382,20 +413,28 @@ def _forces_core(group, x, v, vr, dt, fint, mint, plast_iters):
     # ---- resultant update (pmat3): elastic prediction ... ------------------
     fres, mres = st["fres"], st["mres"]
     f_old, m_old = fres.copy(), mres.copy()
-    for sl, mat, prop in st["slices"]:
-        p = prop.params
-        fres[sl, 0] += mat.E * p["area"] * eps_dot[sl] * dt
-        fres[sl, 1] += mat.G * p["area"] * gy_dot[sl] * dt
-        fres[sl, 2] += mat.G * p["area"] * gz_dot[sl] * dt
-        mres[sl, 0] += mat.G * p["ixx"] * kx_dot[sl] * dt
-        mres[sl, 1] += mat.E * p["iyy"] * ky_dot[sl] * dt
-        mres[sl, 2] += mat.E * p["izz"] * kz_dot[sl] * dt
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            continue
+        p = getattr(prop, "params", {})
+        area = p.get("area", getattr(prop, "area", 0.0))
+        iyy = p.get("iyy", getattr(prop, "iyy", 0.0))
+        izz = p.get("izz", getattr(prop, "izz", 0.0))
+        ixx = p.get("ixx", getattr(prop, "ixx", iyy + izz))
+        E_mod = getattr(mat, "E", 0.0)
+        G_mod = getattr(mat, "G", 0.0)
+        fres[sl, 0] += E_mod * area * eps_dot[sl] * dt
+        fres[sl, 1] += G_mod * area * gy_dot[sl] * dt
+        fres[sl, 2] += G_mod * area * gz_dot[sl] * dt
+        mres[sl, 0] += G_mod * ixx * kx_dot[sl] * dt
+        mres[sl, 1] += E_mod * iyy * ky_dot[sl] * dt
+        mres[sl, 2] += E_mod * izz * kz_dot[sl] * dt
 
         # ... then the LAW2 global-plasticity return (module docstring):
         # equivalent extreme-fiber stress from the resultants, 1-D
         # consistency solve on the Johnson-Cook curve, radial scaling of
         # all six resultants back to the yield surface.
-        if mat.law == 2:
+        if getattr(mat, "law", 1) == 2:
             _global_plastic_return(st, sl, mat, p, plast_iters)
 
     # ---- internal nodal forces & moments (pfint3, see docstring) -----------
@@ -415,11 +454,13 @@ def _forces_core(group, x, v, vr, dt, fint, mint, plast_iters):
 
     # back to global; fint/mint accumulate MINUS the internal terms
     # (elements package sign convention): -f1 = +f2 on node 1.
-    fg = np.einsum("na,nba->nb", f2, E)
-    np.add.at(fint, n1, fg)
-    np.add.at(fint, n2, -fg)
-    np.add.at(mint, n1, -np.einsum("na,nba->nb", m1, E))
-    np.add.at(mint, n2, -np.einsum("na,nba->nb", m2, E))
+    if fint is not None:
+        fg = np.einsum("na,nba->nb", f2, E)
+        np.add.at(fint, n1, fg)
+        np.add.at(fint, n2, -fg)
+    if mint is not None:
+        np.add.at(mint, n1, -np.einsum("na,nba->nb", m1, E))
+        np.add.at(mint, n2, -np.einsum("na,nba->nb", m2, E))
 
     # ---- critical time step (exact init value, length-rescaled) ------------
     ratio = L / st["L0"]
@@ -542,6 +583,8 @@ def tangent(group, x, epsp_incr=None):
     nodes x 6 global dofs, ``edofs`` (n, 12). ``epsp_incr`` (n,) is the
     increment's global plastic-strain step (None / zeros = all elastic —
     that path is the M11 code verbatim)."""
+    if group is None or getattr(group, "n", 0) == 0 or len(getattr(group, "conn", [])) == 0:
+        return np.zeros((0, 12, 12)), np.zeros((0, 12), dtype=np.int64)
     st = group.state
     conn = group.conn
     n = group.n
@@ -561,18 +604,28 @@ def tangent(group, x, epsp_incr=None):
     B[:, 5, 5], B[:, 5, 11] = -invL, invL                  # kz
 
     Cd = np.zeros((n, 6))                                  # diag of C
-    for sl, mat, prop in st["slices"]:
-        if mat.law not in (1, 2):
+    for sl, mat, prop in st.get("slices", []):
+        law = getattr(mat, "law", 1)
+        if law not in (0, 1, 2):
             raise NotImplementedError(
-                f"the implicit beam tangent supports LAW1 and LAW2 (the "
+                f"the implicit beam tangent supports LAW0, LAW1 and LAW2 (the "
                 f"global resultant-plasticity model, M15); got "
-                f"LAW{mat.law} — see PORTING_GUIDE")
-        p = prop.params
-        Cd[sl, 0] = mat.E * p["area"]
-        Cd[sl, 1] = Cd[sl, 2] = mat.G * p["area"]
-        Cd[sl, 3] = mat.G * p["ixx"]
-        Cd[sl, 4] = mat.E * p["iyy"]
-        Cd[sl, 5] = mat.E * p["izz"]
+                f"LAW{law} — see PORTING_GUIDE")
+        if law == 0:
+            Cd[sl] = 0.0
+            continue
+        p = getattr(prop, "params", {})
+        area = p.get("area", getattr(prop, "area", 0.0))
+        iyy = p.get("iyy", getattr(prop, "iyy", 0.0))
+        izz = p.get("izz", getattr(prop, "izz", 0.0))
+        ixx = p.get("ixx", getattr(prop, "ixx", iyy + izz))
+        E_mod = getattr(mat, "E", 0.0)
+        G_mod = getattr(mat, "G", 0.0)
+        Cd[sl, 0] = E_mod * area
+        Cd[sl, 1] = Cd[sl, 2] = G_mod * area
+        Cd[sl, 3] = G_mod * ixx
+        Cd[sl, 4] = E_mod * iyy
+        Cd[sl, 5] = E_mod * izz
     # K_l = L * B^T diag(C) B  (stacked)
     CB = Cd[:, :, None] * B                                # (n, 6, 12)
     Kl = L[:, None, None] * np.einsum("nai,naj->nij", B, CB)
@@ -582,28 +635,28 @@ def tangent(group, x, epsp_incr=None):
     # RECOMPUTED with the algorithmic C_alg (the derivation note above);
     # elastic elements keep the diag(C) block bit-for-bit.
     if epsp_incr is not None:
-        for sl, mat, prop in st["slices"]:
-            if mat.law != 2:
+        for sl, mat, prop in st.get("slices", []):
+            if getattr(mat, "law", 1) != 2:
                 continue
             dl_sl = epsp_incr[sl]
             plas = np.where(dl_sl > 0.0)[0]
             if len(plas) == 0:
                 continue
             gidx = np.arange(sl.start, sl.stop)[plas]
-            mp = mat.params
-            p = prop.params
-            A = p["area"]
+            mp = getattr(mat, "params", {})
+            p = getattr(prop, "params", {})
+            A = p.get("area", getattr(prop, "area", 0.0))
             # POST-return state (the driver's trial buffers) + increment
             R = np.concatenate([st["fres"][gidx], st["mres"][gidx]],
                                axis=1)                     # (m, 6)
             ep = np.maximum(st["epsp"][gidx], 1e-20)
             sy = mp["A"] + mp["B"] * ep ** mp["n"]
             H = mp["B"] * mp["n"] * ep ** (mp["n"] - 1.0)
-            capped = sy > mp["sig_max"]
-            sy = np.where(capped, mp["sig_max"], sy)
+            capped = sy > mp.get("sig_max", 1e30)
+            sy = np.where(capped, mp.get("sig_max", 1e30), sy)
             H = np.where(capped, 0.0, np.maximum(H, 0.0))
             dl = dl_sl[plas]
-            seq_tr = sy + mat.E * dl        # the consistency identity
+            seq_tr = sy + getattr(mat, "E", 0.0) * dl        # the consistency identity
             scale = sy / seq_tr             # s = sy_new / seq_tr
             R_tr = R / scale[:, None]       # radial: homogeneity deg 1
             # q = grad seq at the post state (degree-0 homogeneous —
@@ -624,7 +677,7 @@ def tangent(group, x, epsp_incr=None):
             q[:, 5] = (sn / seq) * np.sign(Mz) / wz
             # C_alg = s C + [(H/(E+H) - s)/seq_tr] R_tr (q^T C)
             Csub = Cd[gidx]                              # (m, 6) diag
-            coef = (H / (mat.E + H) - scale) / seq_tr
+            coef = (H / (getattr(mat, "E", 0.0) + H) - scale) / seq_tr
             Calg = scale[:, None, None] * \
                 np.einsum("ma,ab->mab", Csub, np.eye(6))
             Calg += coef[:, None, None] * np.einsum(
@@ -721,21 +774,29 @@ def consistent_mass(group, x):
     Returns ``(me (n,12,12), edofs (n,12))`` over the two force-carrying nodes
     × 6 global DOFs — the same addressing and frame transform as
     ``tangent()``."""
+    if group is None or getattr(group, "n", 0) == 0 or len(getattr(group, "conn", [])) == 0:
+        return np.zeros((0, 12, 12)), np.zeros((0, 12), dtype=np.int64)
     st = group.state
     conn = group.conn
     n = group.n
-    L0 = st["L0"]
+    L0 = st.get("L0")
+    if L0 is None:
+        _, L0 = _frame(x[conn[:, 0]], x[conn[:, 1]], x[conn[:, 2]])
     # per-element ρA, ρ Iyy, ρ Izz, ρ Ip from the part slices
     rhoA = np.zeros(n)
     rhoIyy = np.zeros(n)
     rhoIzz = np.zeros(n)
     rhoIp = np.zeros(n)
-    for sl, mat, prop in st["slices"]:
-        p = prop.params
-        rhoA[sl] = mat.rho0 * p["area"]
-        rhoIyy[sl] = mat.rho0 * p["iyy"]
-        rhoIzz[sl] = mat.rho0 * p["izz"]
-        rhoIp[sl] = mat.rho0 * (p["iyy"] + p["izz"])   # mass polar moment
+    for sl, mat, prop in st.get("slices", []):
+        p = getattr(prop, "params", {})
+        area = p.get("area", getattr(prop, "area", 0.0))
+        iyy = p.get("iyy", getattr(prop, "iyy", 0.0))
+        izz = p.get("izz", getattr(prop, "izz", 0.0))
+        rho0 = getattr(mat, "rho0", 0.0)
+        rhoA[sl] = rho0 * area
+        rhoIyy[sl] = rho0 * iyy
+        rhoIzz[sl] = rho0 * izz
+        rhoIp[sl] = rho0 * (iyy + izz)   # mass polar moment
 
     Ml = np.zeros((n, 12, 12))
     # axial (v1x=0, v2x=6): ρA L/6 [[2,1],[1,2]]
@@ -775,13 +836,18 @@ def kgeo(group, x):
     (N/L)(I - a a^T) on the two nodes' translations (see the note above for
     why this is the consistent operator of the linear element, and which
     coupling terms are deferred). Identically zero at zero axial force."""
+    if group is None or getattr(group, "n", 0) == 0 or len(getattr(group, "conn", [])) == 0:
+        return np.zeros((0, 12, 12)), np.zeros((0, 12), dtype=np.int64)
     st = group.state
     conn = group.conn
     n = group.n
+    fres = st.get("fres")
+    if fres is None or np.all(fres[:, 0] == 0.0):
+        return np.zeros((n, 12, 12)), _beam_edofs(conn)
     d = x[conn[:, 1]] - x[conn[:, 0]]
     L = np.maximum(norm3(d), EM20)
     a = d / L[:, None]
-    N_over_L = st["fres"][:, 0] / L
+    N_over_L = fres[:, 0] / L
     eye = np.eye(3)
     kb = N_over_L[:, None, None] * (eye[None, :, :]
                                     - np.einsum("ni,nj->nij", a, a))
@@ -800,12 +866,18 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     midpoint-geometry ``forces()`` call; this re-states the pfint3
     expressions with the frame and length OF THIS geometry).
     ``u``/``ur`` unused."""
+    if group is None or getattr(group, "n", 0) == 0 or len(getattr(group, "conn", [])) == 0:
+        return
     st = group.state
     conn = group.conn
     n1, n2, n3 = conn[:, 0], conn[:, 1], conn[:, 2]
     E, L = _frame(x[n1], x[n2], x[n3])
 
-    fres, mres = st["fres"], st["mres"]
+    fres, mres = st.get("fres"), st.get("mres")
+    if fres is None:
+        fres = np.zeros((group.n, 3))
+    if mres is None:
+        mres = np.zeros((group.n, 3))
     N, Qy, Qz = fres[:, 0], fres[:, 1], fres[:, 2]
     Mx, My, Mz = mres[:, 0], mres[:, 1], mres[:, 2]
     f2 = np.stack([N, Qy, Qz], axis=1)
@@ -813,11 +885,13 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     m1 = np.stack([-Mx, -My + Qz * hL, -Mz - Qy * hL], axis=1)
     m2 = np.stack([Mx, My + Qz * hL, Mz - Qy * hL], axis=1)
 
-    fg = np.einsum("na,nba->nb", f2, E)
-    np.add.at(fint, n1, fg)
-    np.add.at(fint, n2, -fg)
-    np.add.at(mint, n1, -np.einsum("na,nba->nb", m1, E))
-    np.add.at(mint, n2, -np.einsum("na,nba->nb", m2, E))
+    if fint is not None:
+        fg = np.einsum("na,nba->nb", f2, E)
+        np.add.at(fint, n1, fg)
+        np.add.at(fint, n2, -fg)
+    if mint is not None:
+        np.add.at(mint, n1, -np.einsum("na,nba->nb", m1, E))
+        np.add.at(mint, n2, -np.einsum("na,nba->nb", m2, E))
 
 
 #: Newton budget of the IMPLICIT 1-D consistency solve — sized so a
@@ -846,6 +920,12 @@ def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom):
     re-statement. The ONLY difference is the plastic-return budget:
     ``_IMPL_NEWTON_ITERS`` instead of 5, i.e. a CONVERGED resultant
     return (the M11 truss iterated-return lesson in resultant space)."""
+    if group is None or getattr(group, "n", 0) == 0 or len(getattr(group, "conn", [])) == 0:
+        return
+    if u is None:
+        u = np.zeros_like(x_ref)
+    if ur is None:
+        ur = np.zeros_like(x_ref)
     if not nlgeom:
         _forces_core(group, x_ref, u, ur, 1.0, fint, mint,
                      _IMPL_NEWTON_ITERS)

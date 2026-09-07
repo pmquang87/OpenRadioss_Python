@@ -5306,26 +5306,46 @@ def read_prop(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         if block.fixed:
             # REAL layout (cfg prop_p3_beam.cfg): title / Ismstr /
             # Dm Df / Area Iyy Izz Ixx / OmegaDof Ishear — the section
-            # card is data card index 2.  (E0500 fix: Area/Iyy/Izz/Ixx
-            # are commonly whole numbers, e.g. 36/108/108/216, so the
-            # free-format 'skip pure-integer cards' heuristic below wrongly
-            # skipped the section card too and reported it missing.)
-            sec = cards[2] if len(cards) >= 3 and not cards[2].is_blank \
-                else None
+            # card is data card index 2.
+            # If short form (1 data card), read card 0.
+            sec = None
+            if len(cards) == 1 and not cards[0].is_blank:
+                sec = cards[0]
+            elif len(cards) >= 3 and not cards[2].is_blank:
+                sec = cards[2]
+            elif len(cards) >= 2 and not cards[1].is_blank and (any("." in tok for tok in cards[1].tokens()) or len(cards[1].tokens()) >= 3):
+                sec = cards[1]
+            elif cards and not cards[0].is_blank:
+                sec = cards[0]
             if sec is None:
                 log.error(f"/PROP/BEAM/{block.user_id}: section card "
                           f"'Area Iyy Izz Ixx' missing", block.source)
                 return
             a, iyy, izz, ixx = _cut_floats(sec, "F20X4")
         else:
-            # skip pure-integer flag cards (Ishear...), read the section
-            data = [c for c in cards if not all(tok.lstrip("+-").isdigit()
-                                                for tok in c.tokens())]
-            if not data:
+            # Free format: support both short form (1 card: Area Iyy Izz Ixx)
+            # and multi-card standard form (card with 3-4 section floats).
+            sec_card = None
+            if len(cards) == 1:
+                sec_card = cards[0]
+            else:
+                candidates = [c for c in cards if len(c.tokens()) >= 3]
+                if candidates:
+                    sec_card = candidates[-1]
+                else:
+                    data = [c for c in cards if not all(tok.lstrip("+-").isdigit()
+                                                        for tok in c.tokens())]
+                    if data:
+                        sec_card = data[0]
+            if sec_card is None:
                 log.error(f"/PROP/BEAM/{block.user_id}: section card "
                           f"'Area Iyy Izz Ixx' missing", block.source)
                 return
-            a, iyy, izz, ixx = _floats(data[0], 4)
+            vals = _floats(sec_card, 4)
+            a = vals[0] if len(vals) > 0 and vals[0] is not None else 0.0
+            iyy = vals[1] if len(vals) > 1 and vals[1] is not None else 0.0
+            izz = vals[2] if len(vals) > 2 and vals[2] is not None else 0.0
+            ixx = vals[3] if len(vals) > 3 and vals[3] is not None else 0.0
         if a <= 0 or iyy <= 0 or izz <= 0:
             log.error(f"/PROP/BEAM/{block.user_id}: Area, Iyy and Izz "
                       f"must be > 0", block.source)
