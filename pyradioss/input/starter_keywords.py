@@ -13157,10 +13157,10 @@ def read_rwall(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         kind = "SPHER"
     elif any(p in ("CYL", "CYLINDER") for p in geom_candidates):
         kind = "CYL"
-    elif any(p in ("PARAL", "PARALLELEPIPED", "CUBOID") for p in geom_candidates):
-        kind = "PARAL"
-    elif any(p in ("BOX",) for p in geom_candidates):
+    elif any(p in ("BOX", "PARALLELEPIPED", "CUBOID") for p in geom_candidates):
         kind = "BOX"
+    elif any(p in ("PARAL",) for p in geom_candidates):
+        kind = "PARAL"
     elif any(p in ("CONE", "TRUNC_CONE", "TRUNCATED_CONE", "TCONE") for p in geom_candidates):
         kind = "CONE"
     elif any(p in ("THERM",) for p in geom_candidates):
