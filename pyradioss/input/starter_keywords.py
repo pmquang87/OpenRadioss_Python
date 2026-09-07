@@ -13600,7 +13600,7 @@ def read_inter(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 toks = cards[0].tokens()
                 grnod_id = int(toks[0]) if len(toks) > 0 else 0
                 surf_id = int(toks[1]) if len(toks) > 1 else 0
-                dsearch = float(toks[3]) if len(toks) > 3 else 0.0
+                dsearch = float(toks[3]) if len(toks) > 3 else (float(toks[2]) if len(toks) == 3 else 0.0)
             model.interfaces.append(Interface(
                 id=block.user_id, type=2, grnod_id=grnod_id, surf_id=surf_id,
                 dsearch=dsearch, lagmul=True, title=title))

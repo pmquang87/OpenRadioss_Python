@@ -37,6 +37,7 @@ class LagmulSolver:
         from ..contact.inter_type16 import LagmulType16
         from ..contact.inter_type17 import LagmulType17
         from ..contact.inter_type7 import LagmulType7
+        from ..contact.inter_type2 import LagmulType2
         
         # Instantiate the specific handlers which generate the L rows.
         self.interfaces = []
@@ -51,15 +52,12 @@ class LagmulSolver:
                 self.interfaces.append(LagmulType17(itf, model, log))
             elif itf.type == 7:
                 self.interfaces.append(LagmulType7(itf, model, log))
+            elif itf.type == 2:
+                self.interfaces.append(LagmulType2(itf, model, log))
             else:
                 log.warning(f"/INTER/LAGMUL/TYPE{itf.type} Engine constraint builder not implemented.", "LAGMUL")
         
         self.nc = 0  # Total number of constraint rows
-        
-        if self.interfaces:
-            log.warning("/INTER/LAGMUL: Sparse PCG solver initialized, but "
-                        "interface formulations (TYPE16/17/7) are pending "
-                        "implementation.", "LAGMUL INIT")
 
     def __len__(self):
         return len(self.interfaces)
