@@ -27,9 +27,9 @@ Interpreter/terminal discipline, READ-ONLY paths, domain rules: **AGENTS.md**.
 
 - Venv: Python 3.14.2, numpy 2.4.6, scipy 1.18.0, numba 0.66.0, pytest 9.1.1
   (`requirements-lock.txt`).
-- Suite: 5967 collected = 5948 fast + 19 `slow`-marked.
-- Fast tier (2026-09-07, this venv): **5943 passed / 5 skipped / 0 failed**, 19 slow deselected.
-- Full suite (2026-09-07, this venv, Python 3.14.2): **5962 passed / 5 skipped / 0 failed** in 32 min 19 s. Skips that remain are environmental (optional backends like CHOLMOD/MUMPS, LS-PrePost/Vortex extras, meshio, numpy.trapz in NumPy 2.0+, one 15 MB corpus deck not vendored) and each carries a reason string.
+- Suite: 5987 collected = 5968 fast + 19 `slow`-marked.
+- Fast tier (2026-09-07, this venv): **5963 passed / 5 skipped / 0 failed**, 19 slow deselected.
+- Full suite (2026-09-07, this venv, Python 3.14.2): **5982 passed / 5 skipped / 0 failed** in 32 min 04 s. Skips that remain are environmental (optional backends like CHOLMOD/MUMPS, LS-PrePost/Vortex extras, meshio, numpy.trapz in NumPy 2.0+, one 15 MB corpus deck not vendored) and each carries a reason string.
 - Any red on the fast tier is a regression you introduced, not baseline noise.
 
 ## What is implemented (M1 → M511)
