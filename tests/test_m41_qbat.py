@@ -539,20 +539,18 @@ def test_mixed_nip_all_layer_deletion(tmp_path):
 # F2. implicit: the documented refusal + the mass side of the contract
 # ============================================================================
 
-def test_implicit_refusal_and_consistent_mass(tmp_path):
-    """QBAT deliberately ships NO tangent()/kgeo() (module docstring): an
-    /IMPL deck with a shells_qbat group must be refused LOUDLY by the
-    implicit assembly's supported-kernel gate, never silently skipped.
-    consistent_mass() IS provided for kernel-contract completeness:
-    symmetric, translation entries totalling the element mass, rotary
-    entries totalling m t^2/12."""
-    from pyradioss.implicit import assembly
-    assert "shells_qbat" not in assembly._TANGENT_KERNELS
-    assert not hasattr(shell_qbat, "tangent")
-    assert not hasattr(shell_qbat, "kgeo")
+def test_implicit_tangent_and_consistent_mass(tmp_path):
+    """QBAT ships 24-DOF tangent()/kgeo() (M513): an /IMPL deck with a
+    shells_qbat group exposes tangent and kgeo, and consistent_mass()
+    provides symmetric, translation entries totalling the element mass,
+    rotary entries totalling m t^2/12."""
+    assert hasattr(shell_qbat, "tangent")
+    assert hasattr(shell_qbat, "kgeo")
     g, model = _qbat_plate(tmp_path)
-    with pytest.raises(NotImplementedError, match="shells_qbat"):
-        assembly.element_triplets("shells_qbat", g, model.x, None)
+    ke, edofs = shell_qbat.tangent(g, model.x)
+    assert ke.shape == (1, 24, 24) and edofs.shape == (1, 24)
+    kg, edofs_g = shell_qbat.kgeo(g, model.x)
+    assert kg.shape == (1, 24, 24)
     me, edofs = shell_qbat.consistent_mass(g)
     assert me.shape == (1, 24, 24) and edofs.shape == (1, 24)
     np.testing.assert_allclose(me[0], me[0].T, rtol=0, atol=0)

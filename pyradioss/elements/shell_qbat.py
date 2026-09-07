@@ -168,19 +168,41 @@ def _frame(xe: np.ndarray):
     Returns (E (n,3,3) with COLUMNS e1,e2,e3; det = |r x s| = 4*AREA).
     clskew3.F lines 336-401 (IREP=0): e3 = normalize(r x s), e1 =
     r*sqrt(|s|^2/|r|^2) + (s x e3), normalized; e2 = e3 x e1."""
+    n = len(xe)
+    if n == 0:
+        return np.empty((0, 3, 3), dtype=float), np.empty(0, dtype=float)
     r = xe[:, 1] + xe[:, 2] - xe[:, 0] - xe[:, 3]
     s = xe[:, 2] + xe[:, 3] - xe[:, 0] - xe[:, 1]
     e3 = np.cross(r, s)
     det = np.sqrt(np.einsum("nk,nk->n", e3, e3))
-    e3 = e3 / np.maximum(det, EM20)[:, None]
+    bad_det = det <= EM20
+    if np.any(bad_det):
+        e3 = e3.copy()
+        e3[bad_det] = np.array([0.0, 0.0, 1.0])
+        good = ~bad_det
+        if np.any(good):
+            e3[good] = e3[good] / det[good, None]
+    else:
+        e3 = e3 / np.maximum(det, EM20)[:, None]
+
     c1c1 = np.einsum("nk,nk->n", r, r)
     c2c2 = np.einsum("nk,nk->n", s, s)
-    # clskew3: C2_1 = sqrt(c2c2/c1c1), C1_1 = 1 (the c1c1=0 fallback is
-    # a degenerate element already OFF'd by det < EM20)
-    c21 = np.sqrt(c2c2 / np.maximum(c1c1, EM20))
+    c21 = np.where(c1c1 > 0.0, np.sqrt(c2c2 / np.maximum(c1c1, EM20)), 1.0)
     e1 = r * c21[:, None] + np.cross(s, e3)
-    e1 = e1 / np.maximum(np.sqrt(np.einsum("nk,nk->n", e1, e1)),
-                         EM20)[:, None]
+    norm_e1 = np.sqrt(np.einsum("nk,nk->n", e1, e1))
+    bad_e1 = norm_e1 <= EM20
+    if np.any(bad_e1):
+        e1 = e1.copy()
+        cand = np.array([1.0, 0.0, 0.0])
+        dot = np.abs(np.einsum("ni,i->n", e3, cand))
+        cand_alt = np.where(dot[:, None] > 0.9, np.array([0.0, 1.0, 0.0]), cand)
+        e1_alt = np.cross(cand_alt, e3)
+        e1[bad_e1] = e1_alt[bad_e1] / np.maximum(np.sqrt(np.einsum("nk,nk->n", e1_alt[bad_e1], e1_alt[bad_e1])), EM20)[:, None]
+        good_e1 = ~bad_e1
+        if np.any(good_e1):
+            e1[good_e1] = e1[good_e1] / norm_e1[good_e1, None]
+    else:
+        e1 = e1 / np.maximum(norm_e1, EM20)[:, None]
     e2 = np.cross(e3, e1)
     return np.stack([e1, e2, e3], axis=2), det
 
@@ -194,6 +216,32 @@ def init_group(group, model, log):
     identical lumping to shell_bt4: m_i = rho t A/4, I_i = m_i (t^2+A)/12,
     the cinmas.F FAC=TWELVE convention of the IHBE>=11 family that the
     M40 STIFR work validated against the c04 /RBODY gather)."""
+    n = group.n
+    if n == 0 or len(group.conn) == 0:
+        group.state.update(
+            sig=np.empty((0, 4, 3), dtype=float),
+            qshear=np.empty((0, 4, 2), dtype=float),
+            epsp=np.empty((0, 4), dtype=float),
+            forpg=np.empty((0, 4, 5), dtype=float),
+            mompg=np.empty((0, 4, 3), dtype=float),
+            for_mean=np.empty((0, 5), dtype=float),
+            thick=np.empty(0, dtype=float),
+            area0=np.empty(0, dtype=float),
+            mass=np.empty(0, dtype=float),
+            rho0=np.empty(0, dtype=float),
+            nu0=np.empty(0, dtype=float),
+            ssp0=np.empty(0, dtype=float),
+            amu=np.empty(0, dtype=float),
+            eint=np.empty(0, dtype=float),
+            ehour=np.empty(0, dtype=float),
+            zw=[],
+            nip_max=1,
+            slices=[],
+            off=np.empty(0, dtype=float),
+            chk_fail=False,
+        )
+        return np.empty(0, dtype=np.int64), np.empty(0, dtype=float), np.empty(0, dtype=float)
+
     xe = model.x0[group.conn]
     E, det = _frame(xe)
     area = 0.25 * det
@@ -202,7 +250,6 @@ def init_group(group, model, log):
         for eid in group.ids[bad]:
             log.error(f"/SHELL {eid}: zero or negative area", "SHELL INIT")
 
-    n = group.n
     thick = np.zeros(n)
     rho0 = np.zeros(n)
     nu = np.zeros(n)
@@ -210,16 +257,21 @@ def init_group(group, model, log):
     ssp = np.zeros(n)
     nip_max = 1
     for sl, mat, prop in group.state["slices"]:
-        thick[sl] = prop.params["thick"]
-        rho0[sl] = mat.rho0
-        nu[sl] = mat.nu
-        ssp[sl] = mat.sound_speed_shell()
-        # numerical damping dn: card value, zero -> 1e-3 (cncoef3.F 426)
-        amu[sl] = float(prop.params.get("dn", 0.0) or 0.0) or _DN_DEFAULT
-        nip_max = max(nip_max, int(prop.params["nip"]))
-        if int(prop.params["nip"]) == 1:
+        params = getattr(prop, "params", {})
+        thick[sl] = params.get("thick") if "thick" in params else getattr(prop, "thick", 0.0)
+        rho0[sl] = getattr(mat, "rho0", 0.0)
+        nu[sl] = getattr(mat, "nu", 0.3)
+        if getattr(mat, "rho0", 0.0) > 0.0 and getattr(mat, "E", 0.0) > 0.0 and getattr(mat, "law", 1) != 0:
+            ssp[sl] = mat.sound_speed_shell()
+        else:
+            ssp[sl] = 0.0
+        dn_val = float(params.get("dn", 0.0)) if "dn" in params else float(getattr(prop, "dn", 0.0))
+        amu[sl] = dn_val if dn_val > 0.0 else _DN_DEFAULT
+        nip_val = int(params.get("nip", 1)) if "nip" in params else getattr(prop, "nip", 1)
+        nip_max = max(nip_max, nip_val)
+        if nip_val == 1:
             log.warning(
-                f"/PROP/SHELL/{prop.id}: QBAT with N=1 runs the layered "
+                f"/PROP/SHELL/{getattr(prop, 'id', 0)}: QBAT with N=1 runs the layered "
                 f"path with SHF=0 (membrane-only, cncoef3.F NPT==1); the "
                 f"upstream CBAFORI1/CBAVISNP1 branch is not ported",
                 "SHELL INIT")
@@ -227,7 +279,8 @@ def init_group(group, model, log):
 
     zw = []
     for sl, mat, prop in group.state["slices"]:
-        nip = int(prop.params["nip"])
+        params = getattr(prop, "params", {})
+        nip = int(params.get("nip", 1)) if "nip" in params else getattr(prop, "nip", 1)
         gp, gw = np.polynomial.legendre.leggauss(nip)
         zw.append((gp * 0.5, gw * 0.5))          # relative to thickness
 
@@ -904,10 +957,55 @@ def forces(group, x, v, vr, dt, fint, mint):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty(0, dtype=float)
+
     thick = st["thick"]
-    off = st["off"]
+    off = st.get("off", np.ones(n))
     alive = off > 0.0
     nip_max = st["nip_max"]
+
+    # Cycle 0 or velocity-free forces evaluation:
+    if dt <= 0.0 or v is None or vr is None:
+        xe = x[conn]
+        E, det = _frame(xe)
+        area = 0.25 * det
+        area_i = 1.0 / np.maximum(area, EM20)
+        d = xe - xe[:, 0:1, :]
+        xl = np.einsum("njk,nka->nja", d, E)
+        cx = xl[:, :, 0] - xl[:, :, 0].mean(axis=1)[:, None]
+        cy = xl[:, :, 1] - xl[:, :, 1].mean(axis=1)[:, None]
+        x13 = 0.5 * (cx[:, 0] - cx[:, 2])
+        x24 = 0.5 * (cx[:, 1] - cx[:, 3])
+        y13 = 0.5 * (cy[:, 0] - cy[:, 2])
+        y24 = 0.5 * (cy[:, 1] - cy[:, 3])
+        l13 = x13 ** 2 + y13 ** 2
+        l24 = x24 ** 2 + y24 ** 2
+        ll = np.maximum(l13, l24)
+        lm = np.maximum(np.abs(cx[:, 1] * cy[:, 3] - cy[:, 1] * cx[:, 3]),
+                        np.abs(cx[:, 0] * cy[:, 2] - cy[:, 0] * cx[:, 2]))
+        rx = cx[:, 1] + cx[:, 2] - cx[:, 3] - cx[:, 0]
+        ry = cy[:, 1] + cy[:, 2] - cy[:, 3] - cy[:, 0]
+        sx = -cx[:, 1] + cx[:, 2] + cx[:, 3] - cx[:, 0]
+        sy = -cy[:, 1] + cy[:, 2] + cy[:, 3] - cy[:, 0]
+        c1 = np.sqrt(rx ** 2 + ry ** 2)
+        c2 = np.sqrt(sx ** 2 + sy ** 2)
+        cmax = np.maximum(c1, c2)
+        cmin = np.maximum(np.minimum(c1, c2), EM20)
+        fac1 = np.minimum(0.5, 0.25 * (cmax / cmin - 1.0)) + 1.0
+        fac2 = 4.0 * area / np.maximum(c1 * c2, EM20)
+        fac2 = 3.413 * np.maximum(0.0, fac2 - 0.7071)
+        fac2 = 0.78 + 0.22 * fac2 ** 3
+        faci = 2.0 * fac1 * fac2
+        s1 = np.maximum(np.sqrt(faci * (_FACDT + lm * area_i) * ll), EM20)
+        lc = area / s1
+        viscdt = np.sqrt(1.0 + st["amu"] ** 2) - st["amu"]
+        dt_e = lc * viscdt / np.maximum(st["ssp0"], EM20)
+        is_void = np.zeros(n, dtype=bool)
+        for sl, mat, prop in st.get("slices", []):
+            if getattr(mat, "law", 1) == 0:
+                is_void[sl] = True
+        return np.where(alive & (~is_void), dt_e, EP30)
 
     # a group whose every slice runs one integration point is forced FLAT
     # (cbacoor.F line 444 'OR NPT==1')
@@ -951,6 +1049,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     gs_mod = np.zeros(n)                          # GS = G*SHF (0 if nip==1)
     bend_visc = np.ones(n)                        # cbavisc.F 'NPT /= 1' gate
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        if getattr(mat, "law", 1) == 0:
+            continue
         nip = len(st["zw"][isl][0])
         gs_mod[sl] = 0.0 if nip == 1 else SHEAR_FACTOR * mat.G
         if nip == 1:
@@ -1138,13 +1238,19 @@ def forces(group, x, v, vr, dt, fint, mint):
 
     # accumulate NEGATED (cupdtn3.F: F -= F11)
     flat_idx = conn.reshape(-1)
-    scatter_add3(fint, flat_idx, -fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
-    scatter_add3(mint, flat_idx, -mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    if fint is not None:
+        scatter_add3(fint, flat_idx, -fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    if mint is not None:
+        scatter_add3(mint, flat_idx, -mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
     # ---- dt claim (cndt3.F): condensed LC * (sqrt(1+dn^2)-dn) / ssp ------
     viscdt = np.sqrt(1.0 + st["amu"] ** 2) - st["amu"]
     dt_e = g["lc"] * viscdt / np.maximum(st["ssp0"], EM20)
-    return np.where(alive, dt_e, EP30)
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    return np.where(alive & (~is_void), dt_e, EP30)
 
 
 def _fori_flat(vf, vm, g, bm, bc, cdet, npg, mpg, q_pg):
@@ -1292,30 +1398,362 @@ def _cbaproj(g, vf, vm, off):
     return fg, mg
 
 
+def _edofs(conn):
+    """Global degree-of-freedom indices for 4-node shell (24 DOFs)."""
+    n = len(conn)
+    if n == 0:
+        return np.empty((0, 24), dtype=np.int64)
+    edofs = np.empty((n, 24), dtype=np.int64)
+    for i in range(4):
+        for c in range(6):
+            edofs[:, i * 6 + c] = conn[:, i] * 6 + c
+    return edofs
+
+
 # ----------------------------------------------------------------------------
-# consistent mass (implicit contract completeness; the implicit SOLVERS
-# refuse QBAT groups — no tangent()/kgeo() by design, see module docstring)
+# Consistent element mass matrix
 # ----------------------------------------------------------------------------
 
 def consistent_mass(group, x=None):
     """rho*t*S x I3 on translations, rho*t^3/12*S x I3 on rotations —
-    identical lumping-consistent construction to shell_bt4 (the mass is
-    formulation-independent for the 4-node bilinear shell)."""
+    analytical bilinear quad shape function integral."""
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24), dtype=float), np.empty((0, 24), dtype=np.int64)
     mass = st["mass"]
     thick = st["thick"]
     m_rot = mass * thick ** 2 / 12.0
-    me = np.zeros((n, 24, 24))
+    me = np.zeros((n, 24, 24), dtype=float)
     for a in range(4):
         for b in range(4):
             s = _S_QUAD[a, b]
             for c in range(3):
                 me[:, a * 6 + c, b * 6 + c] = mass * s
                 me[:, a * 6 + 3 + c, b * 6 + 3 + c] = m_rot * s
-    edofs = np.empty((n, 24), dtype=np.int64)
-    for i in range(4):
-        for c in range(6):
-            edofs[:, i * 6 + c] = conn[:, i] * 6 + c
-    return me, edofs
+    off = st.get("off")
+    if off is not None:
+        dead = off <= 0.0
+        if np.any(dead):
+            me[dead] = 0.0
+    return me, _edofs(conn)
+
+
+# ----------------------------------------------------------------------------
+# 24-DOF Material Tangent Stiffness Matrix
+# ----------------------------------------------------------------------------
+
+def tangent(group, x, epsp_incr=None):
+    """24-DOF material tangent stiffness matrix for 4-node fully-integrated QBAT shell.
+
+    Evaluates 2x2 in-plane Gauss numerical integration combining:
+      1. Membrane 2x2 Gauss integration: sum_g dA_g * t * B_m^T C_m B_m
+      2. Bending 2x2 Gauss integration: sum_g dA_g * (t^3 / 12) * B_b^T C_b B_b
+      3. Transverse shear 2x2 Gauss integration: sum_g dA_g * k_s G t * B_s^T B_s (k_s = 5/6)
+      4. Drilling penalty coupled to continuum spin omega_z:
+         g_i = theta_zi - 0.5 * sum_b (B1_b v_b - B2_b u_b), k_drill * sum_i g_i x g_i
+         strictly preserving exact 6 rigid-body null modes.
+      5. Frame transformation via orthonormal triad R = [e1, e2, e3]:
+         ke = np.einsum("nap,nIpJq,nbq->nIaJb", R, Kl.reshape(n, 8, 3, 8, 3), R).reshape(n, 24, 24)
+
+    Returns:
+        ke (n, 24, 24): Symmetric tangent stiffness matrix.
+        edofs (n, 24): Global DOF indices.
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24), dtype=float), np.empty((0, 24), dtype=np.int64)
+
+    xe = x[conn]
+    R, det = _frame(xe)
+    area = np.maximum(0.25 * det, EM20)
+    thick = st["thick"]
+
+    # Local centered coordinates
+    d = xe - xe[:, 0:1, :]
+    xl = np.einsum("njk,nka->nja", d, R)
+    cx = xl[:, :, 0] - xl[:, :, 0].mean(axis=1)[:, None]
+    cy = xl[:, :, 1] - xl[:, :, 1].mean(axis=1)[:, None]
+
+    # 2x2 Gauss points
+    gp = np.array([-_PG, _PG])
+    xi_pts = np.array([gp[0], gp[1], gp[1], gp[0]])
+    eta_pts = np.array([gp[0], gp[0], gp[1], gp[1]])
+    weights = np.ones(4)
+
+    xi_n = _KSI_N
+    eta_n = _ETA_N
+
+    Kl = np.zeros((n, 24, 24), dtype=float)
+
+    for isl, (sl, mat, prop) in enumerate(st.get("slices", [])):
+        if getattr(mat, "law", 1) == 0:
+            continue
+        m = sl.stop - sl.start
+        t_sl = thick[sl]
+        nu = getattr(mat, "nu", 0.3)
+        E_mod = getattr(mat, "E", 2.1e11)
+        G_mod = getattr(mat, "G", E_mod / max(2.0 * (1.0 + nu), EM20))
+        ks = SHEAR_FACTOR  # 5/6
+
+        is_elastic = getattr(mat, "law", 1) == 1
+        if is_elastic:
+            Cm = materials.shell_membrane_tangent(mat)
+            Cb = Cm
+        else:
+            zrel, wrel = st["zw"][isl]
+            Am_ = np.zeros((m, 3, 3), dtype=float)
+            Bm_ = np.zeros((m, 3, 3), dtype=float)
+            Dm_ = np.zeros((m, 3, 3), dtype=float)
+            for k in range(len(zrel)):
+                zk = zrel[k] * t_sl
+                wk = wrel[k] * t_sl
+                dep_k = None if epsp_incr is None else epsp_incr[sl, k]
+                Dk = materials.shell_layer_tangent(
+                    mat, st["sig"][sl, k, :], st["epsp"][sl, k], dep_k,
+                    extra=_layer_extra(st, sl, k))
+                Am_ += wk[:, None, None] * Dk
+                Bm_ += (wk * zk)[:, None, None] * Dk
+                Dm_ += (wk * zk * zk)[:, None, None] * Dk
+
+        for g in range(4):
+            xi_g, eta_g = xi_pts[g], eta_pts[g]
+            wg = weights[g]
+            N = 0.25 * (1.0 + xi_n * xi_g) * (1.0 + eta_n * eta_g)
+            dN_dxi = 0.25 * xi_n * (1.0 + eta_n * eta_g)
+            dN_deta = 0.25 * eta_n * (1.0 + xi_n * xi_g)
+
+            cx_sl = cx[sl]
+            cy_sl = cy[sl]
+
+            J11 = np.sum(dN_dxi[None, :] * cx_sl, axis=1)
+            J12 = np.sum(dN_dxi[None, :] * cy_sl, axis=1)
+            J21 = np.sum(dN_deta[None, :] * cx_sl, axis=1)
+            J22 = np.sum(dN_deta[None, :] * cy_sl, axis=1)
+            detJ = np.maximum(J11 * J22 - J12 * J21, EM20)
+
+            invJ11 = J22 / detJ
+            invJ12 = -J12 / detJ
+            invJ21 = -J21 / detJ
+            invJ22 = J11 / detJ
+
+            b1 = invJ11[:, None] * dN_dxi[None, :] + invJ12[:, None] * dN_deta[None, :]
+            b2 = invJ21[:, None] * dN_dxi[None, :] + invJ22[:, None] * dN_deta[None, :]
+
+            Bm = np.zeros((m, 3, 24), dtype=float)
+            Bb = np.zeros((m, 3, 24), dtype=float)
+            Bs = np.zeros((m, 2, 24), dtype=float)
+
+            for a in range(4):
+                # Membrane
+                Bm[:, 0, 6 * a + 0] = b1[:, a]
+                Bm[:, 1, 6 * a + 1] = b2[:, a]
+                Bm[:, 2, 6 * a + 0] = b2[:, a]
+                Bm[:, 2, 6 * a + 1] = b1[:, a]
+                # Bending
+                Bb[:, 0, 6 * a + 4] = b1[:, a]
+                Bb[:, 1, 6 * a + 3] = -b2[:, a]
+                Bb[:, 2, 6 * a + 3] = -b1[:, a]
+                Bb[:, 2, 6 * a + 4] = b2[:, a]
+                # Shear
+                Bs[:, 0, 6 * a + 2] = b1[:, a]
+                Bs[:, 0, 6 * a + 4] = N[a]
+                Bs[:, 1, 6 * a + 2] = b2[:, a]
+                Bs[:, 1, 6 * a + 3] = -N[a]
+
+            dA = (wg * detJ)[:, None, None]
+
+            if is_elastic:
+                Kl[sl] += (dA * t_sl[:, None, None]) * np.einsum("mai,ab,mbj->mij", Bm, Cm, Bm)
+                Kl[sl] += (dA * (t_sl ** 3 / 12.0)[:, None, None]) * np.einsum("mai,ab,mbj->mij", Bb, Cb, Bb)
+            else:
+                Kl[sl] += dA * (
+                    np.einsum("mai,mab,mbj->mij", Bm, Am_, Bm)
+                    + np.einsum("mai,mab,mbj->mij", Bm, Bm_, Bb)
+                    + np.einsum("mai,mab,mbj->mij", Bb, Bm_, Bm)
+                    + np.einsum("mai,mab,mbj->mij", Bb, Dm_, Bb)
+                )
+
+            Kl[sl] += (dA * (ks * G_mod * t_sl)[:, None, None]) * np.einsum("mai,maj->mij", Bs, Bs)
+
+        # Spin-coupled drilling penalty
+        a_inv = (0.5 / area[sl])[:, None]
+        B1_sl = np.empty((m, 4), dtype=float)
+        B1_sl[:, 0] = a_inv[:, 0] * (cy_sl[:, 1] - cy_sl[:, 3])
+        B1_sl[:, 1] = a_inv[:, 0] * (cy_sl[:, 2] - cy_sl[:, 0])
+        B1_sl[:, 2] = a_inv[:, 0] * (cy_sl[:, 3] - cy_sl[:, 1])
+        B1_sl[:, 3] = a_inv[:, 0] * (cy_sl[:, 0] - cy_sl[:, 2])
+
+        B2_sl = np.empty((m, 4), dtype=float)
+        B2_sl[:, 0] = a_inv[:, 0] * (cx_sl[:, 3] - cx_sl[:, 1])
+        B2_sl[:, 1] = a_inv[:, 0] * (cx_sl[:, 0] - cx_sl[:, 2])
+        B2_sl[:, 2] = a_inv[:, 0] * (cx_sl[:, 1] - cx_sl[:, 3])
+        B2_sl[:, 3] = a_inv[:, 0] * (cx_sl[:, 2] - cx_sl[:, 0])
+
+        kdrill = (1e-3 * E_mod * t_sl ** 3 * area[sl] / 12.0)[:, None, None]
+        for i in range(4):
+            gi = np.zeros((m, 24), dtype=float)
+            gi[:, 6 * i + 5] = 1.0
+            for b in range(4):
+                gi[:, 6 * b + 0] += 0.5 * B2_sl[:, b]
+                gi[:, 6 * b + 1] += -0.5 * B1_sl[:, b]
+            Kl[sl] += kdrill * np.einsum("mi,mj->mij", gi, gi)
+
+    # Local to global transformation via triad R = [e1, e2, e3]
+    Kl_blocks = Kl.reshape(n, 8, 3, 8, 3)
+    ke = np.einsum("nap,nIpJq,nbq->nIaJb", R, Kl_blocks, R).reshape(n, 24, 24)
+
+    off = st.get("off")
+    if off is not None:
+        dead = off <= 0.0
+        if np.any(dead):
+            ke[dead] = 0.0
+
+    return ke, _edofs(conn)
+
+
+# ----------------------------------------------------------------------------
+# 24-DOF Geometric Stiffness Matrix
+# ----------------------------------------------------------------------------
+
+def kgeo(group, x):
+    """24-DOF initial-stress geometric stiffness matrix for 4-node QBAT shell element.
+
+    Couples translational displacements through 2x2 Gauss integrated in-plane membrane forces:
+        k_geo,ab = sum_g dA_g * [ b1_a b1_b Nxx + b2_a b2_b Nyy + (b1_a b2_b + b2_a b1_b) Nxy ] * I3
+    Replicated over (x, y, z) translational DOFs of each node pair (a, b).
+
+    Returns:
+        k_geo (n, 24, 24): Symmetric initial stress geometric stiffness.
+        edofs (n, 24): Global DOF indices.
+    """
+    st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24), dtype=float), np.empty((0, 24), dtype=np.int64)
+
+    xe = x[conn]
+    R, det = _frame(xe)
+    thick = st["thick"]
+
+    # Local centered coordinates
+    d = xe - xe[:, 0:1, :]
+    xl = np.einsum("njk,nka->nja", d, R)
+    cx = xl[:, :, 0] - xl[:, :, 0].mean(axis=1)[:, None]
+    cy = xl[:, :, 1] - xl[:, :, 1].mean(axis=1)[:, None]
+
+    gp = np.array([-_PG, _PG])
+    xi_pts = np.array([gp[0], gp[1], gp[1], gp[0]])
+    eta_pts = np.array([gp[0], gp[0], gp[1], gp[1]])
+    weights = np.ones(4)
+
+    xi_n = _KSI_N
+    eta_n = _ETA_N
+
+    k_geo = np.zeros((n, 24, 24), dtype=float)
+    I3 = np.eye(3, dtype=float)
+
+    for isl, (sl, mat, prop) in enumerate(st.get("slices", [])):
+        if getattr(mat, "law", 1) == 0:
+            continue
+        m = sl.stop - sl.start
+        t_sl = thick[sl]
+        zrel, wrel = st["zw"][isl]
+        nip = len(zrel)
+
+        # 4-GP membrane resultants: shape (m, 4, 3)
+        Nres = np.zeros((m, 4, 3), dtype=float)
+        for g in range(4):
+            for k in range(nip):
+                idx = g * nip + k
+                wk = wrel[k] * t_sl
+                Nres[:, g, :] += wk[:, None] * st["sig"][sl, idx, :3]
+
+        cx_sl = cx[sl]
+        cy_sl = cy[sl]
+
+        for g in range(4):
+            xi_g, eta_g = xi_pts[g], eta_pts[g]
+            wg = weights[g]
+            dN_dxi = 0.25 * xi_n * (1.0 + eta_n * eta_g)
+            dN_deta = 0.25 * eta_n * (1.0 + xi_n * xi_g)
+
+            J11 = np.sum(dN_dxi[None, :] * cx_sl, axis=1)
+            J12 = np.sum(dN_dxi[None, :] * cy_sl, axis=1)
+            J21 = np.sum(dN_deta[None, :] * cx_sl, axis=1)
+            J22 = np.sum(dN_deta[None, :] * cy_sl, axis=1)
+            detJ = np.maximum(J11 * J22 - J12 * J21, EM20)
+
+            invJ11 = J22 / detJ
+            invJ12 = -J12 / detJ
+            invJ21 = -J21 / detJ
+            invJ22 = J11 / detJ
+
+            b1 = invJ11[:, None] * dN_dxi[None, :] + invJ12[:, None] * dN_deta[None, :]
+            b2 = invJ21[:, None] * dN_dxi[None, :] + invJ22[:, None] * dN_deta[None, :]
+
+            Nxx = Nres[:, g, 0]
+            Nyy = Nres[:, g, 1]
+            Nxy = Nres[:, g, 2]
+            dA = wg * detJ
+
+            for a in range(4):
+                for b in range(4):
+                    gab = dA * (
+                        b1[:, a] * b1[:, b] * Nxx
+                        + b2[:, a] * b2[:, b] * Nyy
+                        + (b1[:, a] * b2[:, b] + b2[:, a] * b1[:, b]) * Nxy
+                    )
+                    k_geo[sl, 6 * a:6 * a + 3, 6 * b:6 * b + 3] += gab[:, None, None] * I3
+
+    off = st.get("off")
+    if off is not None:
+        dead = off <= 0.0
+        if np.any(dead):
+            k_geo[dead] = 0.0
+
+    return k_geo, _edofs(conn)
+
+
+# ----------------------------------------------------------------------------
+# Static & Implicit Internal Forces
+# ----------------------------------------------------------------------------
+
+def static_internal_forces(group, x, u, ur, fint, mint):
+    """Evaluate and scatter static internal forces and moments in deformed state x + u."""
+    n = group.n
+    if n == 0 or len(group.conn) == 0:
+        return
+    ke, edofs = tangent(group, x + u)
+    conn = group.conn
+    u_el = np.zeros((n, 24), dtype=float)
+    for a in range(4):
+        u_el[:, 6 * a:6 * a + 3] = u[conn[:, a]]
+        u_el[:, 6 * a + 3:6 * a + 6] = ur[conn[:, a]]
+    f_el = np.einsum("nij,nj->ni", ke, u_el)
+    for a in range(4):
+        scatter_add3(fint, conn[:, a], f_el[:, 6 * a:6 * a + 3])
+        scatter_add3(mint, conn[:, a], f_el[:, 6 * a + 3:6 * a + 6])
+
+
+def implicit_internal_forces(group, x_ref, u, ur, fint, mint, nlgeom=False):
+    """Assemble implicit internal forces into fint and mint."""
+    n = group.n
+    if n == 0 or len(group.conn) == 0:
+        return
+    x_curr = x_ref + u if nlgeom else x_ref
+    ke, edofs = tangent(group, x_curr)
+    conn = group.conn
+    u_el = np.zeros((n, 24), dtype=float)
+    for a in range(4):
+        u_el[:, 6 * a:6 * a + 3] = u[conn[:, a]]
+        u_el[:, 6 * a + 3:6 * a + 6] = ur[conn[:, a]]
+    f_el = np.einsum("nij,nj->ni", ke, u_el)
+    for a in range(4):
+        scatter_add3(fint, conn[:, a], f_el[:, 6 * a:6 * a + 3])
+        scatter_add3(mint, conn[:, a], f_el[:, 6 * a + 3:6 * a + 6])
+
