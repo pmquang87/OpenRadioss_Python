@@ -172,24 +172,62 @@ _HG_ROT_REG = 1.0
 # geometry: corotational frame and local coordinates (ccoor3.F)
 # ----------------------------------------------------------------------------
 
+def _edofs(conn: np.ndarray) -> np.ndarray:
+    """Return (n, 24) array of global scalar DOF slot ids."""
+    n = len(conn)
+    if n == 0:
+        return np.empty((0, 24), dtype=np.int64)
+    edofs = np.empty((n, 24), dtype=np.int64)
+    for i in range(4):
+        for c in range(6):
+            edofs[:, i * 6 + c] = conn[:, i] * 6 + c
+    return edofs
+
+
 def _frame(xe: np.ndarray):
     """Build the corotational triad E = [e1|e2|e3] per element.
 
     xe: (n, 4, 3). Returns E (n, 3, 3) with COLUMNS e1, e2, e3.
     """
+    n = len(xe)
+    if n == 0:
+        return np.empty((0, 3, 3))
     r31 = xe[:, 2] - xe[:, 0]
     r42 = xe[:, 3] - xe[:, 1]
     e3 = cross3(r31, r42)
-    e3 /= np.maximum(norm3(e3), EM20)[:, None]
+    n3 = norm3(e3)
+    degen3 = n3 <= EM20
+    e3 = np.where(degen3[:, None], np.array([0.0, 0.0, 1.0]), e3 / np.maximum(n3, EM20)[:, None])
+
     s1 = xe[:, 1] - xe[:, 0]
-    e1 = s1 - (np.einsum("nb,nb->n", s1, e3))[:, None] * e3
-    e1 /= np.maximum(norm3(e1), EM20)[:, None]
+    proj = np.einsum("nb,nb->n", s1, e3)
+    e1 = s1 - proj[:, None] * e3
+    n1 = norm3(e1)
+    degen1 = n1 <= EM20
+    if np.any(degen1):
+        cand_x = np.array([1.0, 0.0, 0.0])
+        cand1 = cand_x - np.einsum("nb,b->n", e3, cand_x)[:, None] * e3
+        nc1 = norm3(cand1)
+        use_x = nc1 > 0.1
+        cand_y = np.array([0.0, 1.0, 0.0])
+        cand2 = cand_y - np.einsum("nb,b->n", e3, cand_y)[:, None] * e3
+        nc2 = norm3(cand2)
+        cand1_norm = cand1 / np.maximum(nc1, EM20)[:, None]
+        cand2_norm = cand2 / np.maximum(nc2, EM20)[:, None]
+        fallback_e1 = np.where(use_x[:, None], cand1_norm, cand2_norm)
+        e1 = np.where(degen1[:, None], fallback_e1, e1 / np.maximum(n1, EM20)[:, None])
+    else:
+        e1 /= np.maximum(n1, EM20)[:, None]
+
     e2 = cross3(e3, e1)
     return np.stack([e1, e2, e3], axis=2)
 
 
 def _local_geometry(xe: np.ndarray):
     """Frame, local corner coordinates, area and gradient operators."""
+    n = len(xe)
+    if n == 0:
+        return np.empty((0, 3, 3)), np.empty((0, 4, 3)), np.empty(0), np.empty((0, 4)), np.empty((0, 4))
     E = _frame(xe)
     center = xe.mean(axis=1)
     # local coords: xl[n,i,a] = (x_i - c) . e_a  — one stacked matmul
@@ -303,7 +341,7 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
     BBt[:, 1, 2] = BBt[:, 2, 1] = Sxy
     fac = np.ones(n)
     for sl, mat, prop in slices:
-        if not (mat.rho0 > 0.0 and mat.E > 0.0):
+        if getattr(mat, "law", 1) == 0 or not (getattr(mat, "rho0", 0.0) > 0.0 and getattr(mat, "E", 0.0) > 0.0):
             # stiffness-free / massless material (a /MAT/VOID skin shell —
             # legally RHO0 = 0 and E = 0, see starter/checks.
             # _NULL_RHO0_OK_LAWS): the element claims no time step at all
@@ -311,6 +349,10 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
             # moot — keep 1 instead of dividing by the null density.  The
             # exact twin of the guard solid_hexa8._exact_dt_factor already
             # applies for the same material (M39 / M38-NEW-2).
+            fac[sl] = 1.0
+            continue
+        c = mat.sound_speed_shell()
+        if c <= EM20:
             fac[sl] = 1.0
             continue
         Ep = mat.E / (1.0 - mat.nu ** 2)
@@ -322,7 +364,6 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
         w2bend = _bend_shear_omega2(B1, B2, area, sl, mat,
                                     prop.params["thick"], 4, mat.rho0)
         w2max = np.maximum(w2max, w2bend)
-        c = mat.sound_speed_shell()
         dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
         fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
     return fac
@@ -330,6 +371,27 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
 
 def init_group(group, model, log):
     """Element buffer + lumped mass/inertia (starter cinit3/cmass3)."""
+    n = group.n
+    if n == 0 or len(group.conn) == 0:
+        group.state.update(
+            sig=np.zeros((0, 1, 3)),
+            qshear=np.zeros((0, 2)),
+            epsp=np.zeros((0, 1)),
+            thick=np.zeros(0),
+            area0=np.zeros(0),
+            mass=np.zeros(0),
+            eint=np.zeros(0),
+            ehour=np.zeros(0),
+            hgq=np.zeros((0, 5)),
+            hgq_rot=np.zeros((0, 2)),
+            zw=[],
+            dtfac=np.zeros(0),
+            off=np.zeros(0),
+            dt_iner=np.zeros(0),
+            ihbe_mask=np.zeros(0, dtype=int),
+        )
+        return np.empty(0, dtype=np.int64), np.empty(0), np.empty(0)
+
     xe = model.x0[group.conn]
     E, xl, area, B1, B2 = _local_geometry(xe)
     bad = area <= 0.0
@@ -342,16 +404,20 @@ def init_group(group, model, log):
     rho0 = np.zeros(n)
     nip_max = 1
     for sl, mat, prop in group.state["slices"]:
-        thick[sl] = prop.params["thick"]
+        p = getattr(prop, "params", {})
+        t_val = p.get("thick", getattr(prop, "thick", 0.001))
+        thick[sl] = t_val
         rho0[sl] = mat.rho0
-        nip_max = max(nip_max, int(prop.params["nip"]))
+        nip_val = int(p.get("nip", getattr(prop, "nip", 3)))
+        nip_max = max(nip_max, nip_val)
     mass = rho0 * thick * area
 
     # Through-thickness Gauss stations per part slice: z_k in [-t/2, t/2],
     # weights scaled so sum(w_k) = t. Stored per slice (nip may differ).
     zw = []
     for sl, mat, prop in group.state["slices"]:
-        nip = int(prop.params["nip"])
+        p = getattr(prop, "params", {})
+        nip = int(p.get("nip", getattr(prop, "nip", 3)))
         gp, gw = np.polynomial.legendre.leggauss(nip)
         zw.append((gp * 0.5, gw * 0.5))  # relative to thickness
     # dt-claim correction factor on lc/c (static, from initial geometry —
@@ -684,8 +750,26 @@ def forces(group, x, v, vr, dt, fint, mint):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty(0)
+
     xe = x[conn]
     thick = st["thick"]
+
+    # Cycle 0 Courant step probe or evaluation without velocity
+    if dt <= 0.0 or v is None:
+        E, xl, area, B1, B2 = _local_geometry(xe)
+        lc = _char_length(xl, area)
+        c = np.zeros(n)
+        is_void = np.zeros(n, dtype=bool)
+        for sl, mat, prop in st.get("slices", []):
+            if getattr(mat, "law", 1) == 0:
+                is_void[sl] = True
+            else:
+                c[sl] = mat.sound_speed_shell()
+        alive = st["off"] > 0.0
+        dt_e = np.where(alive, st["dtfac"] * lc / np.maximum(c, EM20), EP30)
+        return np.where(is_void, EP30, dt_e)
 
     # ---- pre block: frame, geometry, rates (numba mirror when active) -----
     jit = accel_get("shell_pre")
@@ -857,6 +941,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     nip_of = []
     ortho_all = st.get("ortho")                     # (n, 2) fiber cos/sin
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        if getattr(mat, "law", 1) == 0:
+            continue
         zrel, wrel = st["zw"][isl]
         nip_of.append(len(zrel))
         t_sl = thick[sl]
@@ -921,12 +1007,16 @@ def forces(group, x, v, vr, dt, fint, mint):
     hqr = np.zeros(n)      # H3Q quadratic viscous, rotation (modes 3,4)
     b12 = np.maximum(area ** 2 * bb * 0.5, EM20)       # (B1+B2) upstream
     for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            continue
         p = prop.params
         t_sl = thick[sl]
-        rho = mat.rho0
-        shfpr3 = SHEAR_FACTOR / (3.0 * (1.0 + mat.nu))
-        k_m[sl] = p["hm"] * mat.E * t_sl / 8.0
-        k_w[sl] = p["hf"] * mat.E * shfpr3 * t_sl ** 3 / (8.0 * b12[sl])
+        rho = getattr(mat, "rho0", 0.0)
+        E_mat = getattr(mat, "E", 0.0)
+        nu = getattr(mat, "nu", 0.0)
+        shfpr3 = SHEAR_FACTOR / (3.0 * (1.0 + nu))
+        k_m[sl] = p["hm"] * E_mat * t_sl / 8.0
+        k_w[sl] = p["hf"] * E_mat * shfpr3 * t_sl ** 3 / (8.0 * b12[sl])
         hqm[sl] = _HQ * rho * p["hm"] * t_sl * np.sqrt(area[sl])
         hqb[sl] = _HQ * rho * p["hf"] * np.sqrt(shfpr3) * t_sl ** 2
         hqr[sl] = _HQ * _ZEP072169 * rho * p["hr"] * t_sl ** 2 * area[sl]
@@ -962,12 +1052,18 @@ def forces(group, x, v, vr, dt, fint, mint):
 
     # ---- scatter to global arrays (asspar) ---------------------------------
     flat = conn.reshape(-1)
-    scatter_add3(fint, flat, fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
-    scatter_add3(mint, flat, mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    if fint is not None:
+        scatter_add3(fint, flat, fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    if mint is not None:
+        scatter_add3(mint, flat, mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
     # ---- critical time step ------------------------------------------------
-    # deleted elements no longer constrain the global step
-    return np.where(alive, st["dtfac"] * lc / c, EP30)
+    # deleted and void elements no longer constrain the global step
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    return np.where(alive & (~is_void), st["dtfac"] * lc / np.maximum(c, EM20), EP30)
 
 
 # ----------------------------------------------------------------------------
@@ -1039,6 +1135,9 @@ def tangent(group, x, epsp_incr=None):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24)), np.empty((0, 24), dtype=np.int64)
+
     xe = x[conn]
 
     E, xl, area, B1, B2 = _local_geometry(xe)
@@ -1070,6 +1169,8 @@ def tangent(group, x, epsp_incr=None):
     Kl = np.zeros((n, 20, 20))
     kdrill = np.zeros(n)
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        if getattr(mat, "law", 1) == 0:
+            continue
         t_sl = thick[sl]
         A_sl = area[sl]
         kGt = SHEAR_FACTOR * mat.G * t_sl                # transverse shear
@@ -1134,18 +1235,22 @@ def tangent(group, x, epsp_incr=None):
     kfield = np.zeros((n, 5))
     b12 = np.maximum(area ** 2 * bb * 0.5, EM20)       # (B1+B2) upstream
     for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            continue
         p = prop.params
         t_sl = thick[sl]
         A_sl = area[sl]
-        shfpr3 = SHEAR_FACTOR / (3.0 * (1.0 + mat.nu))
+        E_val = getattr(mat, "E", 0.0)
+        nu_val = getattr(mat, "nu", 0.0)
+        shfpr3 = SHEAR_FACTOR / (3.0 * (1.0 + nu_val))
         # membrane/bending: the ELASTIC chvis3 branch (HH1/HH2), the exact
         # linearization of the ELASTIC hourglass forces() integrates. The
         # quadratic viscous damper forces() also emits is a RATE device
         # (qd*HQ*|qd|, O(v^2)) that the implicit residual disables — so the
         # tangent carries the elastic stiffness alone (see the module note
         # on the implicit static hourglass, and forces()' _impl_static gate).
-        k_m = p["hm"] * mat.E * t_sl / 8.0
-        k_w = p["hf"] * mat.E * shfpr3 * t_sl ** 3 / (8.0 * b12[sl])
+        k_m = p["hm"] * E_val * t_sl / 8.0
+        k_w = p["hf"] * E_val * shfpr3 * t_sl ** 3 / (8.0 * b12[sl])
         # rotation: chvis3's rotational hourglass is PURELY VISCOUS, so it
         # contributes no stiffness and cannot appear in a tangent. Left
         # unconstrained the (1,-1,1,-1) thx/thy pattern is a zero-energy
@@ -1154,7 +1259,7 @@ def tangent(group, x, epsp_incr=None):
         # REGULARIZATION here of bending-stiffness order — the same role
         # _DRILL_COEF plays for the drilling DOF, and implicit-only (the
         # explicit path never sees it).
-        k_r = _HG_ROT_REG * p["hr"] * mat.E * t_sl ** 3 * A_sl * bb[sl] / 192.0
+        k_r = _HG_ROT_REG * p["hr"] * E_val * t_sl ** 3 * A_sl * bb[sl] / 192.0
         kfield[sl, 0] = k_m
         kfield[sl, 1] = k_m
         kfield[sl, 2] = k_w
@@ -1174,12 +1279,12 @@ def tangent(group, x, epsp_incr=None):
     e1, e2, e3 = E[:, :, 0], E[:, :, 1], E[:, :, 2]      # (n, 3) each
     Tg = np.zeros((n, 20, 24))
     for i in range(4):
-        for c in range(3):
-            Tg[:, 0 * 4 + i, i * 6 + c] = e1[:, c]       # vx = e1.trans
-            Tg[:, 1 * 4 + i, i * 6 + c] = e2[:, c]       # vy = e2.trans
-            Tg[:, 2 * 4 + i, i * 6 + c] = e3[:, c]       # vz = e3.trans
-            Tg[:, 3 * 4 + i, i * 6 + 3 + c] = e1[:, c]   # thx = e1.rot
-            Tg[:, 4 * 4 + i, i * 6 + 3 + c] = e2[:, c]   # thy = e2.rot
+        c = np.arange(3)
+        Tg[:, 0 * 4 + i, i * 6 + c] = e1[:, c]       # vx = e1.trans
+        Tg[:, 1 * 4 + i, i * 6 + c] = e2[:, c]       # vy = e2.trans
+        Tg[:, 2 * 4 + i, i * 6 + c] = e3[:, c]       # vz = e3.trans
+        Tg[:, 3 * 4 + i, i * 6 + 3 + c] = e1[:, c]   # thx = e1.rot
+        Tg[:, 4 * 4 + i, i * 6 + 3 + c] = e2[:, c]   # thy = e2.rot
     ke = np.einsum("nki,nkl,nlj->nij", Tg, Kl, Tg)       # (n, 24, 24)
 
     # ---- drilling penalty about the local normal e3 (global rot block) -----
@@ -1191,12 +1296,16 @@ def tangent(group, x, epsp_incr=None):
         r = i * 6 + 3
         ke[:, r:r + 3, r:r + 3] += kdrill[:, None, None] * e3e3
 
-    # ---- global DOF addressing --------------------------------------------
-    edofs = np.empty((n, 24), dtype=np.int64)
-    for i in range(4):
-        for c in range(6):
-            edofs[:, i * 6 + c] = conn[:, i] * 6 + c
-    return ke, edofs
+    # ---- zero dead elements -----------------------------------------------
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
 
 
 # ----------------------------------------------------------------------------
@@ -1236,6 +1345,8 @@ def _static_rot_hourglass(group, x, ur, mint):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return
     E, xl, area, B1, B2 = _local_geometry(x[conn])
     area = np.maximum(area, EM20)
     thick = st["thick"]
@@ -1255,9 +1366,11 @@ def _static_rot_hourglass(group, x, ur, mint):
     alive = st["off"] > 0.0
     k_r = np.zeros(n)
     for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            continue
         p = prop.params
         t_sl = thick[sl]
-        k_r[sl] = (_HG_ROT_REG * p["hr"] * mat.E * t_sl ** 3
+        k_r[sl] = (_HG_ROT_REG * p["hr"] * getattr(mat, "E", 0.0) * t_sl ** 3
                    * area[sl] * bb[sl] / 192.0)
     k_r *= alive
 
@@ -1345,6 +1458,8 @@ def consistent_mass(group, x=None):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24)), np.empty((0, 24), dtype=np.int64)
     mass = st["mass"]                                  # ρ t A, per element
     thick = st["thick"]
     m_trans = mass                                     # ρtA scalar
@@ -1358,11 +1473,14 @@ def consistent_mass(group, x=None):
             for c in range(3):
                 me[:, a * 6 + c, b * 6 + c] = ft        # translations
                 me[:, a * 6 + 3 + c, b * 6 + 3 + c] = fr  # rotations
-    edofs = np.empty((n, 24), dtype=np.int64)
-    for i in range(4):
-        for c in range(6):
-            edofs[:, i * 6 + c] = conn[:, i] * 6 + c
-    return me, edofs
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        me[dead] = 0.0
+    return me, _edofs(conn)
 
 
 # ----------------------------------------------------------------------------
@@ -1399,6 +1517,8 @@ def _membrane_resultants(st, thick):
     sig = st["sig"]
     Nres = np.zeros((len(thick), 3))
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        if getattr(mat, "law", 1) == 0:
+            continue
         zrel, wrel = st["zw"][isl]
         t_sl = thick[sl]
         for k in range(len(zrel)):
@@ -1414,6 +1534,8 @@ def kgeo(group, x):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24)), np.empty((0, 24), dtype=np.int64)
     E, xl, area, B1, B2 = _local_geometry(x[conn])
     area = np.maximum(area, EM20)
     Nres = _membrane_resultants(st, st["thick"])
@@ -1431,11 +1553,14 @@ def kgeo(group, x):
         cols = (ni + c)[None, :]
         ke[:, rows, cols] += g
 
-    edofs = np.empty((n, 24), dtype=np.int64)
-    for i in range(4):
-        for c in range(6):
-            edofs[:, i * 6 + c] = conn[:, i] * 6 + c
-    return ke, edofs
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st.get("slices", []):
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        ke[dead] = 0.0
+    return ke, _edofs(conn)
 
 
 def static_internal_forces(group, x, u, ur, fint, mint):
@@ -1454,6 +1579,8 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return
     thick = st["thick"]
     E, xl, area, B1, B2 = _local_geometry(x[conn])
     area = np.maximum(area, EM20)
@@ -1462,6 +1589,8 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     Nres = np.zeros((n, 3))
     Mres = np.zeros((n, 3))
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
+        if getattr(mat, "law", 1) == 0:
+            continue
         zrel, wrel = st["zw"][isl]
         t_sl = thick[sl]
         for k in range(len(zrel)):
@@ -1489,11 +1618,13 @@ def static_internal_forces(group, x, u, ur, fint, mint):
                       Nres, Mres, qres, st["hgq"],
                       zeros_n, zeros_n, zeros_n, zeros_n, zeros_n, 0.0)
     flat = conn.reshape(-1)
-    scatter_add3(fint, flat, fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
-    scatter_add3(mint, flat, mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
-    # the elastic ROTATION-hourglass moment — the residual counterpart of
-    # tangent()'s k_r regularization, on the END geometry (the M8 path adds
-    # it via static_stabilization; NLGEOM folds it in here). Without it the
-    # tangent's k_r has no residual match and the nonlinear-geometry Newton
-    # stalls on the rotation DOFs exactly as the small-strain path did.
-    _static_rot_hourglass(group, x, ur, mint)
+    if fint is not None:
+        scatter_add3(fint, flat, fg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    if mint is not None:
+        scatter_add3(mint, flat, mg.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+        # the elastic ROTATION-hourglass moment — the residual counterpart of
+        # tangent()'s k_r regularization, on the END geometry (the M8 path adds
+        # it via static_stabilization; NLGEOM folds it in here). Without it the
+        # tangent's k_r has no residual match and the nonlinear-geometry Newton
+        # stalls on the rotation DOFs exactly as the small-strain path did.
+        _static_rot_hourglass(group, x, ur, mint)
