@@ -72,20 +72,28 @@ def _slice_frame(prop, xe, log, skews=None):
     the relative motion on them, i.e. e1/e2/e3 ARE the skew's X'/Y'/Z'.
     """
     m = len(xe)
+    if m == 0:
+        return (np.zeros((0, 3)), np.zeros((0, 3)), np.zeros((0, 3)))
     ptype = getattr(prop, "type", 8)
     skew_id = int(prop.params.get("skew_id", 0) or 0)
     skew_row = int(prop.params.get("skew_row", 0) or 0)
     if ptype == 8 and skew_row and skews is not None:
-        a = skews.axes[skew_row]                 # rows = X', Y', Z'
-        return (np.tile(a[0], (m, 1)), np.tile(a[1], (m, 1)),
-                np.tile(a[2], (m, 1)))
+        if hasattr(skews, "axes") and 0 <= skew_row < len(skews.axes):
+            a = skews.axes[skew_row]                 # rows = X', Y', Z'
+            return (np.tile(a[0], (m, 1)), np.tile(a[1], (m, 1)),
+                    np.tile(a[2], (m, 1)))
+        elif log is not None:
+            log.warning(f"/PROP/TYPE8/{getattr(prop, 'id', '?')}: "
+                        f"skew_row={skew_row} out of bounds for skews ({getattr(skews, 'axes', len)})",
+                        "SPRING INIT")
     if ptype == 13 and skew_id == 0:
         # element frame: e1 along the element, default perpendicular e2/e3
         d = xe[:, 1] - xe[:, 0]
         L = norm3(d)
         e1 = np.tile(np.array([1.0, 0.0, 0.0]), (m, 1))
         good = L > EM20
-        e1[good] = d[good] / L[good, None]
+        if np.any(good):
+            e1[good] = d[good] / L[good, None]
         # e2 = e1 x (least-aligned global axis), e3 = e1 x e2
         ax = np.tile(np.array([0.0, 0.0, 1.0]), (m, 1))
         near_z = np.abs(e1[:, 2]) > 0.9
@@ -93,6 +101,7 @@ def _slice_frame(prop, xe, log, skews=None):
         e2 = np.cross(ax, e1)
         e2 /= np.maximum(norm3(e2), EM20)[:, None]
         e3 = np.cross(e1, e2)
+        e3 /= np.maximum(norm3(e3), EM20)[:, None]
         return e1, e2, e3
     if skew_id != 0 and ptype == 13 and log is not None:
         # TYPE13's skew is the INITIAL frame of a co-rotational beam, not a
@@ -114,6 +123,8 @@ def init6(group, model, log, idx6, massn, inertn):
     group and add their half/half nodal mass + rotational inertia into the
     caller's ``massn`` / ``inertn`` arrays (laid out like
     ``group.conn.reshape(-1)``)."""
+    if idx6 is None or len(idx6) == 0:
+        return
     st = group.state
     m6 = len(idx6)
     conn6 = group.conn[idx6]
@@ -125,6 +136,7 @@ def init6(group, model, log, idx6, massn, inertn):
     c6 = np.zeros((m6, 6))
     mass = np.zeros(m6)
     inertia = np.zeros(m6)
+    iequil = np.zeros(m6, dtype=np.int64)
 
     # position of each idx6 element within group order -> its slice params
     pos = {int(e): j for j, e in enumerate(idx6)}
@@ -148,6 +160,7 @@ def init6(group, model, log, idx6, massn, inertn):
             c6[local, i] = float(p.get(f"c{i + 1}", 0.0))
         mass[local] = float(p.get("mass", 0.0))
         inertia[local] = float(p.get("inertia", 0.0))
+        iequil[local] = int(p.get("iequil", 0) or 0)
 
     L0 = np.stack([
         np.einsum("mb,mb->m", xe[:, 1] - xe[:, 0], e1),
@@ -162,12 +175,13 @@ def init6(group, model, log, idx6, massn, inertn):
     mov = np.zeros(m6, dtype=bool)
     if skews is not None:
         for r in np.unique(skew_row[skew_row > 0]):
-            if skews.is_moving_row(int(r)):
+            if hasattr(skews, "is_moving_row") and skews.is_moving_row(int(r)):
                 mov |= skew_row == r
 
     st["gen6"] = dict(
         idx=np.asarray(idx6, dtype=np.int64), conn=conn6,
         e1=e1, e2=e2, e3=e3, k6=k6, c6=c6, mass=mass, inertia=inertia,
+        iequil=iequil,
         L0=L0, theta=np.zeros((m6, 3)),
         force=np.zeros((m6, 3)), moment=np.zeros((m6, 3)),
         eint=np.zeros(m6),
@@ -175,18 +189,26 @@ def init6(group, model, log, idx6, massn, inertn):
     )
     # half/half lumped mass + inertia into the caller's per-(elem,node)
     # arrays: node_idx = conn.reshape(-1) => slot 2*e (node0), 2*e+1 (node1)
-    for j, e in enumerate(idx6):
-        massn[2 * e] += mass[j] / 2.0
-        massn[2 * e + 1] += mass[j] / 2.0
-        inertn[2 * e] += inertia[j] / 2.0
-        inertn[2 * e + 1] += inertia[j] / 2.0
+    if massn is not None and inertn is not None:
+        for j, e in enumerate(idx6):
+            if 2 * e + 1 < len(massn):
+                massn[2 * e] += mass[j] / 2.0
+                massn[2 * e + 1] += mass[j] / 2.0
+            if 2 * e + 1 < len(inertn):
+                inertn[2 * e] += inertia[j] / 2.0
+                inertn[2 * e + 1] += inertia[j] / 2.0
 
 
 def forces6(group, x, v, vr, dt, fint, mint, idx6):
     """6-DOF spring forces for the ``idx6`` elements; scatters translation
     forces into ``fint`` and moments into ``mint`` and returns their
     per-element critical time step (aligned to ``idx6``)."""
-    g = group.state["gen6"]
+    if idx6 is None or len(idx6) == 0:
+        return np.zeros(0)
+    g = group.state.get("gen6")
+    if g is None:
+        return np.zeros(len(idx6))
+
     conn = g["conn"]
     n1, n2 = conn[:, 0], conn[:, 1]
     # a TYPE8 on a /SKEW/MOV reloads its axes from the (already updated,
@@ -195,10 +217,23 @@ def forces6(group, x, v, vr, dt, fint, mint, idx6):
     # delta below then measures d(t).e(t) - d(0).e(0), which is exactly
     # r2def3's total branch (lines 305-307: X21DP*EXX - X0DP).
     mov = g["skew_mov"]
-    if mov.any():
-        a = g["skews"].axes[g["skew_row"][mov]]        # (k, 3, 3)
-        g["e1"][mov], g["e2"][mov], g["e3"][mov] = a[:, 0], a[:, 1], a[:, 2]
+    if mov.any() and g.get("skews") is not None:
+        skews = g["skews"]
+        rows = g["skew_row"][mov]
+        valid = (rows >= 0) & (rows < len(skews.axes))
+        if valid.any():
+            a = skews.axes[rows[valid]]        # (k, 3, 3)
+            mov_indices = np.where(mov)[0][valid]
+            g["e1"][mov_indices] = a[:, 0]
+            g["e2"][mov_indices] = a[:, 1]
+            g["e3"][mov_indices] = a[:, 2]
     e1, e2, e3 = g["e1"], g["e2"], g["e3"]
+
+    if v is None:
+        v = np.zeros_like(x)
+    if vr is None:
+        vr = np.zeros_like(x)
+    dt_val = max(float(dt), 0.0)
 
     # relative translation (total form) and its rate, per local axis
     d = (x[n2] - x[n1])
@@ -217,33 +252,69 @@ def forces6(group, x, v, vr, dt, fint, mint, idx6):
     dwl = np.stack([np.einsum("mb,mb->m", dw, e1),
                     np.einsum("mb,mb->m", dw, e2),
                     np.einsum("mb,mb->m", dw, e3)], axis=1)
-    g["theta"] += dwl * dt
+    g["theta"] += dwl * dt_val
     M = g["k6"][:, 3:] * g["theta"] + g["c6"][:, 3:] * dwl
     g["moment"] = M
 
-    # assemble to the nodes (no moment arm): global force / moment vectors
+    # assemble to the nodes: global force / moment vectors
     fvec = F[:, 0:1] * e1 + F[:, 1:2] * e2 + F[:, 2:3] * e3
     mvec = M[:, 0:1] * e1 + M[:, 1:2] * e2 + M[:, 2:3] * e3
-    np.add.at(fint, n1, fvec)
-    np.add.at(fint, n2, -fvec)
-    np.add.at(mint, n1, mvec)
-    np.add.at(mint, n2, -mvec)
+
+    if fint is not None:
+        np.add.at(fint, n1, fvec)
+        np.add.at(fint, n2, -fvec)
+
+    # Rotational equilibrium (Fortran r2cum3.F:125-140):
+    # When iequil == 1, a moment arm correction MM = 0.5 * (d x fvec) is added
+    # to both nodes, ensuring exact angular momentum conservation:
+    # sum(M) + sum(r x F) = 0.
+    ieq = g.get("iequil")
+    if ieq is not None and np.any(ieq == 1):
+        has_eq = (ieq == 1)
+        arm = 0.5 * np.cross(d, fvec)
+        mvec1 = mvec.copy()
+        mvec2 = -mvec.copy()
+        mvec1[has_eq] += arm[has_eq]
+        mvec2[has_eq] += arm[has_eq]
+        if mint is not None:
+            np.add.at(mint, n1, mvec1)
+            np.add.at(mint, n2, mvec2)
+    else:
+        if mint is not None:
+            np.add.at(mint, n1, mvec)
+            np.add.at(mint, n2, -mvec)
 
     # internal energy (elastic + damping work, like the axial spring)
-    g["eint"] += np.einsum("mi,mi->m", F, dvl) * dt \
-        + np.einsum("mi,mi->m", M, dwl) * dt
+    g["eint"] += (np.einsum("mi,mi->m", F, dvl) + np.einsum("mi,mi->m", M, dwl)) * dt_val
 
-    # critical time step: min over the active DOF of the two-mass
-    # oscillator, the same omega = 2 sqrt(k/m) => dt = 2/omega bound the
-    # axial TYPE4 spring uses (masses m/2 on each node).  A DOF with no
-    # stiffness (or a rotation with no inertia) imposes no limit.
-    mass = np.maximum(g["mass"], EM20)
-    inertia = np.maximum(g["inertia"], EM20)
-    kt = g["k6"][:, :3]
-    kr = g["k6"][:, 3:]
-    dt_tr = np.where(kt > 0.0,
-                     1.0 / np.sqrt(kt / mass[:, None] + EM20), EP30)
-    has_I = g["inertia"] > 0.0
-    dt_rot = np.where((kr > 0.0) & has_I[:, None],
-                      1.0 / np.sqrt(kr / inertia[:, None] + EM20), EP30)
+    # critical time step with exact Fortran r2len3.F:182-185 damping reduction:
+    # dt_tr  = mass / (sqrt(C^2 + mass * K) + C)
+    # dt_rot = inertia / (sqrt(C^2 + inertia * K) + C)
+    mass = np.maximum(g["mass"], 0.0)
+    inertia = np.maximum(g["inertia"], 0.0)
+    kt = np.maximum(g["k6"][:, :3], 0.0)
+    ct = np.maximum(g["c6"][:, :3], 0.0)
+    kr = np.maximum(g["k6"][:, 3:], 0.0)
+    cr = np.maximum(g["c6"][:, 3:], 0.0)
+
+    dt_tr = np.full((len(idx6), 3), EP30)
+    for i in range(3):
+        active = (mass > 0.0) & ((kt[:, i] > 0.0) | (ct[:, i] > 0.0))
+        if np.any(active):
+            m_a = mass[active]
+            k_a = kt[active, i]
+            c_a = ct[active, i]
+            denom = np.sqrt(c_a * c_a + m_a * k_a) + c_a
+            dt_tr[active, i] = m_a / np.maximum(denom, EM20)
+
+    dt_rot = np.full((len(idx6), 3), EP30)
+    for i in range(3):
+        active = (inertia > 0.0) & ((kr[:, i] > 0.0) | (cr[:, i] > 0.0))
+        if np.any(active):
+            in_a = inertia[active]
+            k_a = kr[active, i]
+            c_a = cr[active, i]
+            denom = np.sqrt(c_a * c_a + in_a * k_a) + c_a
+            dt_rot[active, i] = in_a / np.maximum(denom, EM20)
+
     return np.minimum(dt_tr.min(axis=1), dt_rot.min(axis=1))

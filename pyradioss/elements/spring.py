@@ -167,16 +167,20 @@ def _forces_axial(group, x, v, dt, fint, idx):
     dx = x[conn[:, 1]] - x[conn[:, 0]]
     L = np.maximum(norm3(dx), EM20)
     a = dx / L[:, None]
-    Ldot = np.einsum("nb,nb->n",
-                     v[conn[:, 1]] - v[conn[:, 0]], a)
+    if v is None:
+        Ldot = np.zeros(len(conn))
+    else:
+        Ldot = np.einsum("nb,nb->n",
+                         v[conn[:, 1]] - v[conn[:, 0]], a)
 
     F_old = st["force"][idx].copy()
     F = st["k"][idx] * (L - st["L0"][idx]) + st["cdamp"][idx] * Ldot
     st["force"][idx] = F
 
     fvec = F[:, None] * a          # tension pulls the nodes together
-    np.add.at(fint, conn[:, 0], fvec)
-    np.add.at(fint, conn[:, 1], -fvec)
+    if fint is not None:
+        np.add.at(fint, conn[:, 0], fvec)
+        np.add.at(fint, conn[:, 1], -fvec)
 
     # elastic part of the work goes to internal energy; damping work too
     # (the original books spring damping into internal energy as well).
