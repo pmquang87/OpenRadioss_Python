@@ -267,6 +267,9 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
                 "supported for the solid kernels (hexa8/tetra4) under "
                 "/IMPL/NONLIN only (PORTING_GUIDE M14)")
         return law42_ogden.consistent_solid_tangent(mat, extra["F"])
+    if mat.law == 24:
+        return law24_concrete.consistent_solid_tangent(
+            mat, sig, epsp, epsp_incr, extra)
     if mat.law == 44:
         return law44_cowper.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr, extra)
@@ -275,7 +278,7 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
             mat, sig, epsp, epsp_incr, extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
-        f"elastic, LAW2, LAW36, LAW44 and LAW81 elastoplastic, LAW42 hyperelastic "
+        f"elastic, LAW2, LAW24, LAW36, LAW44 and LAW81 elastoplastic, LAW42 hyperelastic "
         f"are ported; LAW27 is deferred — see PORTING_GUIDE M14)")
 
 
