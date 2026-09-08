@@ -170,6 +170,26 @@ def build_law33(rec) -> Material:
     return mat
 
 
+def resolve(mat: Material, model, log) -> None:
+    """Pull optional /FUNCT yield curve (IFN1) into plain arrays.
+
+    Called from ``starter/initialization.py:resolve_materials()`` after
+    all /FUNCT cards have been parsed — deck order between /MAT and
+    /FUNCT is free (hm_read_mat33 stores IFN1, the starter resolves the
+    actual function data later).
+    """
+    p = mat.params
+    ifn1 = p.get("IFN1", 0)
+    if ifn1 and ifn1 != 0:
+        fct = model.functions.get(ifn1)
+        if fct is None:
+            if hasattr(log, "error"):
+                log.error(f"/MAT/LAW33/{mat.id}: function {ifn1} "
+                          f"(FUN_A1) not defined", "MAT CHECK")
+            return
+        p["yield_curve"] = (fct.x.copy(), fct.y.copy())
+
+
 # ------------------------------------------------------------------ #
 # Helpers
 # ------------------------------------------------------------------ #
