@@ -281,6 +281,8 @@ def shell_membrane_tangent(mat):
     ``shell_layer_tangent`` instead (M11)."""
     if mat.law == 1:
         return law01_elastic.shell_membrane_tangent(mat)
+    if mat.law == 19:
+        return law19_fabric.shell_membrane_tangent(mat)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic "
         f"and LAW2 elastoplastic are ported; see PORTING_GUIDE)")
@@ -297,7 +299,8 @@ def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
     layer's trial crack state passed in ``extra`` (the eps27/crk27/ang27/
     dmg27/layfail views — law27.consistent_shell_tangent for the
     per-branch derivation: uncracked / open-frozen / open-growing /
-    closed / broken)."""
+    closed / broken); LAW19 (M524) the orthotropic fabric tangent with
+    RCOMP and beta compression scaling."""
     n = sig.shape[0]
     if mat.law == 1:
         import numpy as np
@@ -315,7 +318,9 @@ def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
                 "LAW27 implicit tangent needs the layer crack state "
                 "(the shell kernels pass it since M15)")
         return law27_brittle.consistent_shell_tangent(mat, extra)
+    if mat.law == 19:
+        return law19_fabric.consistent_shell_tangent(mat, extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 "
-        f"elastic, LAW2 and LAW36 elastoplastic, LAW27 brittle cracking "
-        f"are ported — see PORTING_GUIDE M15)")
+        f"elastic, LAW2 and LAW36 elastoplastic, LAW27 brittle cracking, "
+        f"LAW19 fabric are ported — see PORTING_GUIDE M15)")
