@@ -161,7 +161,7 @@ def needs_env(mat) -> bool:
     ``rho``; LAW62's CIMAX sound-speed bound divides by the current
     density; LAW40's sound speed too; M40: LAW36 solids use the same
     total pressure as LAW44 — sigeps36.F P = BULK*AMU)."""
-    return mat.law in (2, 24, 35, 36, 40, 44, 62, 70, 81)
+    return mat.law in (2, 6, 24, 35, 36, 40, 44, 62, 70, 81)
 
 
 def solid_update(mat, sig, deps, epsp, dt, extra=None):
@@ -240,6 +240,8 @@ def shell_update(mat, sig, deps, epsp, dt, extra=None):
         return law62_hypervisco.shell_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 83:
         return law83_spotweld.shell_update(mat, sig, deps, epsp, dt, extra)
+    if mat.law == 6:
+        return law06_hyd_visc.shell_update(mat, sig, deps, epsp, dt, extra)
     raise NotImplementedError(f"material LAW{mat.law} not ported for shells")
 
 
@@ -296,9 +298,12 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
     if mat.law == 83:
         return law83_spotweld.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr, extra)
+    if mat.law == 6:
+        return law06_hyd_visc.consistent_solid_tangent(
+            mat, sig, epsp, epsp_incr, extra=extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
-        f"elastic, LAW2, LAW24, LAW35, LAW36, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
+        f"elastic, LAW2, LAW6, LAW24, LAW35, LAW36, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
         f"are ported; LAW27 is deferred — see PORTING_GUIDE M14)")
 
 
