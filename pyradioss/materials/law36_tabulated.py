@@ -142,9 +142,11 @@ def _yield_stress(mat, epsp: np.ndarray, rate: np.ndarray):
         r_clamp = np.maximum(r, 1e-10)
         r0 = np.maximum(rates[j], 1e-10)
         r1 = np.maximum(rates[j + 1], 1e-10)
-        w = np.log(r_clamp / r0) / np.log(r1 / r0)
+        denom = np.maximum(np.log(r1 / r0), 1e-20)
+        w = np.log(r_clamp / r0) / denom
     else:
-        w = (r - rates[j]) / (rates[j + 1] - rates[j])
+        denom = np.maximum(rates[j + 1] - rates[j], 1e-20)
+        w = (r - rates[j]) / denom
     cols = np.arange(len(epsp))
     sy = (1.0 - w) * vals[j, cols] + w * vals[j + 1, cols]
     H = (1.0 - w) * slps[j, cols] + w * slps[j + 1, cols]
@@ -174,7 +176,7 @@ def _radial_return(mat, sig_eq, epsp, rate, G3, dt):
         sy0_idx = sy0[idx]
     for _ in range(_NEWTON_ITERS):
         if vp > 0.0:
-            rt = dl / max(dt, 1e-30)
+            rt = dl / dt if dt > 0.0 else np.zeros_like(dl)
         sy_i, H_i = _yield_stress(mat, ep0 + dl, rt)
         if c_hard > 0.0:
             if vp > 0.0:
@@ -235,6 +237,9 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
     (matching the reference's 'material law calculates only deviatoric
     stress tensor' IEOS branch), so the fallback is also harmless there.
     """
+    if sig.shape[0] == 0:
+        return sig, epsp
+
     G = mat.G
 
     # 1. deviatoric elastic trial (strip the old pressure, sigeps36.F
@@ -259,7 +264,10 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
     exx, eyy, ezz = deps[:, 0] - tr3, deps[:, 1] - tr3, deps[:, 2] - tr3
     ee = exx ** 2 + eyy ** 2 + ezz ** 2 \
         + 0.5 * (deps[:, 3] ** 2 + deps[:, 4] ** 2 + deps[:, 5] ** 2)
-    rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, 1e-30)
+    if dt > 0.0:
+        rate = np.sqrt((2.0 / 3.0) * ee) / dt
+    else:
+        rate = np.zeros(len(deps))
 
     f_cut = mat.params.get("f_cut", 0.0)
     if f_cut > 0.0 and extra is not None and "epsd36" in extra:
@@ -291,7 +299,7 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
             s_new_tot = s_eff[idx] + extra["sigb36"][idx]
             _, H_i = _yield_stress(mat, epsp[idx], rate[idx])
             H_kin = (2.0/3.0) * c_hard * H_i
-            alpha_pz = H_kin / (2.0 * G + H_kin)
+            alpha_pz = H_kin / np.maximum(2.0 * G + H_kin, 0.02 * G)
             for k in range(6):
                 extra["sigb36"][idx, k] += alpha_pz * (s_trial[idx, k] - s_new_tot[:, k])
 
@@ -315,6 +323,9 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
                  epsp: np.ndarray, dt: float, extra: Optional[dict] = None):
     """Plane-stress radial projection with the tabulated yield stress.
     sig, deps: (n, 3) = [xx, yy, xy]; epsp: (n,). In-place updates."""
+    if sig.shape[0] == 0:
+        return sig, epsp
+
     G = mat.G
 
     # elastic trial
@@ -327,7 +338,10 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
     tr3 = (dxx + dyy + dzz) / 3.0
     ee = (dxx - tr3) ** 2 + (dyy - tr3) ** 2 + (dzz - tr3) ** 2 \
         + 0.5 * dxy ** 2
-    rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, 1e-30)
+    if dt > 0.0:
+        rate = np.sqrt((2.0 / 3.0) * ee) / dt
+    else:
+        rate = np.zeros(len(deps))
 
     f_cut = mat.params.get("f_cut", 0.0)
     if f_cut > 0.0 and extra is not None and "epsd36" in extra:
@@ -359,7 +373,7 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
             s_new_tot = s_eff[idx] + extra["sigb36"][idx]
             _, H_i = _yield_stress(mat, epsp[idx], rate[idx])
             H_kin = (2.0/3.0) * c_hard * H_i
-            alpha_pz = H_kin / (2.0 * G + H_kin)
+            alpha_pz = H_kin / np.maximum(2.0 * G + H_kin, 0.02 * G)
             for k in range(3):
                 extra["sigb36"][idx, k] += alpha_pz * (s_trial[idx, k] - s_new_tot[:, k])
 
@@ -379,7 +393,7 @@ def _static_sy_H(mat, epsp):
     """Yield stress and hardening slope on the STATIC (first) curve at
     plastic strain ``epsp`` — the implicit path's curve (module
     docstring)."""
-    rates = mat.params["rates"]
+    rates = mat.params.get("rates", [])
     r0 = np.full_like(epsp, rates[0]) if len(rates) > 0 else np.zeros_like(epsp)
     return _yield_stress(mat, epsp, r0)
 
@@ -401,6 +415,8 @@ def consistent_solid_tangent(mat, sig, epsp, epsp_incr):
     the module docstring's softening note)."""
     from . import law01_elastic
     n = sig.shape[0]
+    if n == 0:
+        return np.empty((0, 6, 6))
     G = mat.G
     Kb = mat.K
     C = law01_elastic.solid_tangent(mat)             # (6, 6) elastic
@@ -457,6 +473,8 @@ def consistent_shell_tangent(mat, sig, epsp, epsp_incr):
     from . import law01_elastic
     from .law02_johnson_cook import _P_PLANE
     n = sig.shape[0]
+    if n == 0:
+        return np.empty((0, 3, 3))
     G = mat.G
     C = law01_elastic.shell_membrane_tangent(mat)    # (3, 3) plane stress
     D = np.broadcast_to(C, (n, 3, 3)).copy()
