@@ -8,38 +8,48 @@ import numpy as np
 
 _TINY = 1e-20
 
-# Global caches to hold persistent state across cycles, keyed by the base array ID of dama.
-# This allows us to map the slice view `dama` back to its persistent global array.
-_epsp_cache = {}
-_pla1_cache = {}
-_pla2_cache = {}
+# State cache on fail instance to hold persistent state across cycles.
+_fallback_cache = {}
 
-def _get_state(dama):
-    """Retrieve or allocate persistent state arrays matching the base of `dama`."""
+def _get_state(fail, dama):
+    """Retrieve or allocate persistent state arrays matching the base of `dama`.
+    Bound to `fail._snconnect_state` so multiple instances/restarts don't conflict."""
     base = dama.base if dama.base is not None else dama
     base_id = id(base)
-    
-    if base_id not in _epsp_cache:
+
+    if fail is not None:
+        if not hasattr(fail, "_snconnect_state"):
+            fail._snconnect_state = {}
+        cache = fail._snconnect_state
+    else:
+        cache = _fallback_cache
+
+    if base_id not in cache or cache[base_id][0].shape != base.shape:
         n = len(base)
-        _epsp_cache[base_id] = np.zeros(n, dtype=np.float64)
-        _pla1_cache[base_id] = np.zeros(n, dtype=np.float64)
-        _pla2_cache[base_id] = np.zeros(n, dtype=np.float64)
-        
+        cache[base_id] = (
+            np.zeros(n, dtype=np.float64),
+            np.zeros(n, dtype=np.float64),
+            np.zeros(n, dtype=np.float64),
+            base,
+        )
+
+    epsp_all, pla1_all, pla2_all, _ = cache[base_id]
+
     if dama.base is not None:
         offset = (dama.__array_interface__['data'][0] - base.__array_interface__['data'][0]) // dama.itemsize
         sl = slice(offset, offset + len(dama))
     else:
         sl = slice(None)
-        
-    return _epsp_cache[base_id][sl], _pla1_cache[base_id][sl], _pla2_cache[base_id][sl]
+
+    return epsp_all[sl], pla1_all[sl], pla2_all[sl]
 
 def solid_step(fail, sig, d_epsp, deps, dt, dama, tstar=None):
     """3-D damage step for SNCONNECT."""
     p = fail.params
     a2, b2, a3, b3 = p.get("a2", 0.0), p.get("b2", 1.0), p.get("a3", 0.0), p.get("b3", 1.0)
     isym = p.get("isym", 0)
-    
-    epsp, pla1, pla2 = _get_state(dama)
+
+    epsp, pla1, pla2 = _get_state(fail, dama)
     
     # accumulate local epsp
     epsp += np.maximum(d_epsp, 0.0)

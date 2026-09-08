@@ -195,11 +195,24 @@ def init_group(group, model, log):
         dama=np.zeros(n),
     )
 
+    # Lumped mass according to OpenRadioss s10mass3.F:
+    # Corner nodes receive AM = mass / 32.0
+    # Midside nodes receive BM = 7.0 * mass / 48.0
+    # For any virtual midside node (conn < 0), 0.5 * BM is added to each of its two corner nodes
     elem_mass = np.zeros((n, 10), dtype=np.float64)
-    is_slaved = conn[:, 4] < 0
-    elem_mass[~is_slaved, :] = mass[~is_slaved, None] / 10.0
-    elem_mass[is_slaved, :4] = mass[is_slaved, None] / 4.0
-    elem_mass[is_slaved, 4:] = 0.0
+    am = mass / 32.0
+    bm = (7.0 / 48.0) * mass
+    for c in range(4):
+        elem_mass[:, c] = am
+    for m, (n1, n2) in enumerate(_TETRA10_EDGES):
+        c_m = conn[:, 4 + m]
+        real = c_m >= 0
+        virt = ~real
+        if real.any():
+            elem_mass[real, 4 + m] = bm[real]
+        if virt.any():
+            elem_mass[virt, n1] += 0.5 * bm[virt]
+            elem_mass[virt, n2] += 0.5 * bm[virt]
 
     node_idx = conn.reshape(-1)
     mass_c = elem_mass.reshape(-1)
@@ -464,11 +477,33 @@ def _edofs(conn):
     if n == 0:
         return np.zeros((0, 30), dtype=np.int64)
     ix = np.arange(10)
-    edofs = np.empty((n, 30), dtype=np.int64)
-    safe_conn = np.maximum(conn, 0)
+    edofs = np.full((n, 30), -1, dtype=np.int64)
+    valid = conn >= 0
     for c in range(3):
-        edofs[:, 3 * ix + c] = safe_conn * 6 + c
+        edofs[:, 3 * ix + c] = np.where(valid, conn * 6 + c, -1)
     return edofs
+
+
+def _condense_virtual_midsides(K, conn):
+    """Condense out virtual midside nodes from element matrix K (n, 30, 30).
+    For each virtual midside node 4 + m on edge (n1, n2), displacement is
+    u_mid = 0.5*(u_n1 + u_n2). Transform K = T^T K T so virtual DOFs are zeroed
+    and their stiffness/mass is distributed to corner endpoints."""
+    for m, (n1, n2) in enumerate(_TETRA10_EDGES):
+        virt = conn[:, 4 + m] < 0
+        if not virt.any():
+            continue
+        mid_idx = 4 + m
+        for c in range(3):
+            d_mid = 3 * mid_idx + c
+            d_n1 = 3 * n1 + c
+            d_n2 = 3 * n2 + c
+            K[virt, :, d_n1] += 0.5 * K[virt, :, d_mid]
+            K[virt, :, d_n2] += 0.5 * K[virt, :, d_mid]
+            K[virt, :, d_mid] = 0.0
+            K[virt, d_n1, :] += 0.5 * K[virt, d_mid, :]
+            K[virt, d_n2, :] += 0.5 * K[virt, d_mid, :]
+            K[virt, d_mid, :] = 0.0
 
 
 def tangent(group, x, epsp_incr=None):
@@ -532,6 +567,7 @@ def tangent(group, x, epsp_incr=None):
             DB = np.einsum("mij,mjk->mik", D, Bk)
             ke[sl] += _WIP[k] * vol[sl, k, None, None] * np.einsum("mji,mjk->mik", Bk, DB)
 
+    _condense_virtual_midsides(ke, conn)
     return ke, _edofs(conn)
 
 
@@ -575,6 +611,7 @@ def kgeo(group, x):
             cols = (3 * ix + b)[None, :]
             ke[:, rows, cols] += gk
 
+    _condense_virtual_midsides(ke, conn)
     return ke, _edofs(conn)
 
 
@@ -612,6 +649,7 @@ def consistent_mass(group, x=None):
             f = m * _M_TET10[a, b]
             for c in range(3):
                 me[:, a * 3 + c, b * 3 + c] = f
+    _condense_virtual_midsides(me, conn)
     return me, _edofs(conn)
 
 

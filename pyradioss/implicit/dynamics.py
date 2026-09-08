@@ -880,6 +880,8 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
         rnorm = float(np.linalg.norm(R))
         inc.residuals.append(rnorm)
         inc.iterations = it + 1
+        if not np.isfinite(rnorm):
+            break
         if it == 0:
             # reference: the largest of the applied load, the inertial
             # force of the predicted motion (THE force scale of a free
@@ -887,7 +889,10 @@ def _solve_step(model, ip, dof, loads, solver, committed, x_ref, imposed,
             ma = _reduce(dof.gather_residual(massz[:, None] * a_new,
                                              model.inertia[:, None]
                                              * ar_new))
-            ref = max(ref, float(np.linalg.norm(ma)), rnorm)
+            ma_norm = float(np.linalg.norm(ma))
+            if np.isfinite(ma_norm):
+                ref = max(ref, ma_norm)
+            ref = max(ref, rnorm)
 
         if rnorm <= ip.impl_tol * ref:
             inc.converged = True

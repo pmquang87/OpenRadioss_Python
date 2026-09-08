@@ -253,10 +253,12 @@ def init_group(group, model, log):
         off=np.ones(n),
         qvw_pend=np.zeros(n),
         dtfac=0.5 * np.ones(n),
+        dama=np.zeros((n, 8)),
     )
 
     from .solid_hexa8 import _init_material_state
     _init_material_state(group, dndx[:, 0])
+    group.state["dama"] = np.zeros((n, 8))
 
     chk_fail = any(
         getattr(mat, "fail", None) is not None
@@ -411,10 +413,23 @@ def forces(group, x, v, vr, dt, fint, mint):
 
     if st.get("chk_fail"):
         for sl, mat, prop in st.get("slices", []):
+            eps_max = mat.params.get("eps_p_max", EP30) if hasattr(mat, "params") else EP30
+            if getattr(mat, "fail", None) is None and eps_max >= 1e30:
+                continue
+            n_sl = sl.stop - sl.start if isinstance(sl, slice) else len(sl)
+            broken = np.zeros(n_sl, dtype=bool)
+            tstar = None
             if getattr(mat, "fail", None) is not None:
-                fail_res = failure.evaluate_solid(mat.fail, sig[sl], epsp[sl], epsp_old[sl], dt)
-                if fail_res is not None:
-                    st["off"][sl] *= fail_res
+                from .. import failure
+                for k in range(8):
+                    broken |= failure.solid_step(
+                        mat.fail, sig[sl, k], epsp[sl, k] - epsp_old[sl, k],
+                        deps[sl, k], dt, st["dama"][sl, k], tstar)
+            if eps_max < 1e30:
+                broken |= epsp[sl].max(axis=1) > eps_max
+            st["off"][sl] = np.where(broken, 0.0, st["off"][sl])
+        alive = st["off"] > 0.0
+        sig[~alive] = 0.0
 
     lc = _char_length(vol_tot)
     compressing = (trD < 0.0) & alive[:, None]
@@ -476,11 +491,33 @@ def _edofs(conn):
     if n == 0:
         return np.zeros((0, 60), dtype=np.int64)
     ix = np.arange(20)
-    edofs = np.empty((n, 60), dtype=np.int64)
-    safe_conn = np.maximum(conn, 0)
+    edofs = np.full((n, 60), -1, dtype=np.int64)
+    valid = conn >= 0
     for c in range(3):
-        edofs[:, 3 * ix + c] = safe_conn * 6 + c
+        edofs[:, 3 * ix + c] = np.where(valid, conn * 6 + c, -1)
     return edofs
+
+
+def _condense_virtual_midsides(K, conn):
+    """Condense out virtual midside nodes from element matrix K (n, 60, 60).
+    For each virtual midside node 8 + m on edge (n1, n2), displacement is
+    u_mid = 0.5*(u_n1 + u_n2). Transform K = T^T K T so virtual DOFs are zeroed
+    and their stiffness/mass is distributed to corner endpoints."""
+    for m, (n1, n2) in enumerate(_BRIC20_EDGES):
+        virt = conn[:, 8 + m] < 0
+        if not virt.any():
+            continue
+        mid_idx = 8 + m
+        for c in range(3):
+            d_mid = 3 * mid_idx + c
+            d_n1 = 3 * n1 + c
+            d_n2 = 3 * n2 + c
+            K[virt, :, d_n1] += 0.5 * K[virt, :, d_mid]
+            K[virt, :, d_n2] += 0.5 * K[virt, :, d_mid]
+            K[virt, :, d_mid] = 0.0
+            K[virt, d_n1, :] += 0.5 * K[virt, d_mid, :]
+            K[virt, d_n2, :] += 0.5 * K[virt, d_mid, :]
+            K[virt, d_mid, :] = 0.0
 
 
 def tangent(group, x, epsp_incr=None):
@@ -540,6 +577,7 @@ def tangent(group, x, epsp_incr=None):
             DB = np.einsum("mij,mjk->mik", D, Bk)
             ke[sl] += vol_gp[sl, k, None, None] * np.einsum("mji,mjk->mik", Bk, DB)
 
+    _condense_virtual_midsides(ke, conn)
     return ke, _edofs(conn)
 
 
@@ -582,6 +620,7 @@ def kgeo(group, x):
             cols = (3 * ix + b)[None, :]
             ke[:, rows, cols] += gk
 
+    _condense_virtual_midsides(ke, conn)
     return ke, _edofs(conn)
 
 
@@ -601,6 +640,7 @@ def consistent_mass(group, x=None):
             f = m * _M_BRIC20[a, b]
             for c in range(3):
                 me[:, a * 3 + c, b * 3 + c] = f
+    _condense_virtual_midsides(me, conn)
     return me, _edofs(conn)
 
 
@@ -665,6 +705,13 @@ def implicit_internal_forces(group, x, u, ur, fint, mint, nlgeom=False):
             valid = nid >= 0
             for c in range(3):
                 ue[valid, 3 * ix + c] = u[nid[valid], c]
+        # Interpolate virtual midside displacement from corner endpoints (s20coor3.F:240)
+        for m, (n1, n2) in enumerate(_BRIC20_EDGES):
+            c_m = group.conn[:, 8 + m]
+            virt = c_m < 0
+            if virt.any():
+                for c in range(3):
+                    ue[virt, 3 * (8 + m) + c] = 0.5 * (ue[virt, 3 * n1 + c] + ue[virt, 3 * n2 + c])
         fe = -np.einsum("nij,nj->ni", ke, ue)
         fe = fe.reshape(-1, 20, 3)
         for m, (n1, n2) in enumerate(_BRIC20_EDGES):

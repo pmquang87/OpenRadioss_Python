@@ -45,8 +45,7 @@ from .dofmap import DofMap
 #: beam and the TYPE4 spring: every element family of the port. The gate
 #: stays (a future un-ported family must still fail loudly here, never be
 #: silently ignored).
-_TANGENT_KERNELS = ("bricks", "tetras", "shells", "sh3n", "trusses",
-                    "springs", "beams")
+_TANGENT_KERNELS = tuple(KERNELS.keys())
 
 
 def element_triplets(name, group, x_geom, dof: DofMap, epsp_incr=None,
@@ -76,8 +75,10 @@ def element_triplets(name, group, x_geom, dof: DofMap, epsp_incr=None,
         ke = ke + kg
     # ke: (n, d, d)   edofs: (n, d) global scalar slot ids
     n, d, _ = ke.shape
-    # map each local DOF to its equation index (-1 = condensed/fixed)
-    eq = dof.eq[edofs]                        # (n, d)
+    # map each local DOF to its equation index (-1 = condensed/fixed/virtual)
+    valid_dof = edofs >= 0
+    eq = np.full_like(edofs, -1)
+    eq[valid_dof] = dof.eq[edofs[valid_dof]]           # (n, d)
     # broadcast to all (i, j) local pairs
     row_eq = np.repeat(eq[:, :, None], d, axis=2)     # (n, d, d) row eqns
     col_eq = np.repeat(eq[:, None, :], d, axis=1)     # (n, d, d) col eqns
@@ -155,7 +156,9 @@ def assemble_mass(model, dof: DofMap, x_geom, log=None):
         kernel = KERNELS[name]
         me, edofs = kernel.consistent_mass(group, x_geom)
         n, d, _ = me.shape
-        eq = dof.eq[edofs]
+        valid_dof = edofs >= 0
+        eq = np.full_like(edofs, -1)
+        eq[valid_dof] = dof.eq[edofs[valid_dof]]
         row_eq = np.repeat(eq[:, :, None], d, axis=2)
         col_eq = np.repeat(eq[:, None, :], d, axis=1)
         keep = (row_eq >= 0) & (col_eq >= 0)          # drop condensed DOFs
@@ -168,26 +171,48 @@ def assemble_mass(model, dof: DofMap, x_geom, log=None):
         g = model.node_groups.get(am.grnod_id)
         if g is None or g.node_idx is None:
             continue
+        m_per_node = am.mass if am.mass_type == 0 else (am.mass / max(1, len(g.node_idx)))
         for n_idx in g.node_idx:
             for d in range(3):
-                eq_num = dof.eq[n_idx, d]
+                eq_num = dof.eq[n_idx * 6 + d]
                 if eq_num >= 0:
                     rows.append(np.array([eq_num], dtype=np.int64))
                     cols.append(np.array([eq_num], dtype=np.int64))
-                    vals.append(np.array([am.mass], dtype=np.float64))
+                    vals.append(np.array([m_per_node], dtype=np.float64))
 
     for an in getattr(model, "admas_non_uniforms", {}).values():
-        for nid, mass_val in getattr(an, "items", []):
-            try:
-                n_idx = model.node_index(nid)
-            except KeyError:
-                continue
-            for d in range(3):
-                eq_num = dof.eq[n_idx, d]
-                if eq_num >= 0:
-                    rows.append(np.array([eq_num], dtype=np.int64))
-                    cols.append(np.array([eq_num], dtype=np.int64))
-                    vals.append(np.array([mass_val], dtype=np.float64))
+        if an.kind == "NODE":
+            for item in getattr(an, "items", []):
+                try:
+                    n_idx = model.node_index(item.entity_id)
+                except (KeyError, ValueError):
+                    continue
+                for d in range(3):
+                    eq_num = dof.eq[n_idx * 6 + d]
+                    if eq_num >= 0:
+                        rows.append(np.array([eq_num], dtype=np.int64))
+                        cols.append(np.array([eq_num], dtype=np.int64))
+                        vals.append(np.array([item.mass], dtype=np.float64))
+        elif an.kind == "PART":
+            for item in getattr(an, "items", []):
+                part_id = item.entity_id
+                part_nodes = set()
+                for _, grp in model.element_groups():
+                    mask = grp.state.get("part_ids") == part_id
+                    if np.any(mask):
+                        conn = grp.state.get("mass_conn", grp.conn)[mask]
+                        valid = conn[conn >= 0]
+                        part_nodes.update(valid.tolist())
+                if not part_nodes:
+                    continue
+                m_per_node = item.mass / len(part_nodes)
+                for n_idx in part_nodes:
+                    for d in range(3):
+                        eq_num = dof.eq[n_idx * 6 + d]
+                        if eq_num >= 0:
+                            rows.append(np.array([eq_num], dtype=np.int64))
+                            cols.append(np.array([eq_num], dtype=np.int64))
+                            vals.append(np.array([m_per_node], dtype=np.float64))
 
     rows = np.concatenate(rows) if rows else np.zeros(0, dtype=np.int64)
     cols = np.concatenate(cols) if cols else np.zeros(0, dtype=np.int64)

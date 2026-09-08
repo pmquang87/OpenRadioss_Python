@@ -102,8 +102,8 @@ class DofMap:
         # zero rows in K. Beam connectivity is (N1, N2, N3) with N3 the
         # force-free ORIENTATION node — only N1/N2 carry stiffness.
         has_rot = np.zeros(n, dtype=bool)
-        for name in ("shells", "sh3n"):
-            g = getattr(model, name)
+        for name in ("shells", "sh3n", "shells_qbat", "shells_qeph", "sh3n_dkt18"):
+            g = getattr(model, name, None)
             if g is not None and g.n:
                 has_rot[g.conn.reshape(-1)] = True
         g = getattr(model, "beams", None)

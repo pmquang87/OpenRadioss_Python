@@ -551,7 +551,8 @@ def _post(xe, ve, dndx, vol, lc, rho, trD, deps, sig, sig_old,
     # Courant limit — but only where it acts, i.e. in compression:
     Q = np.where(compressing, qb * c + qa * lc * np.abs(trD), 0.0)
     denom = Q + np.sqrt(Q * Q + c * c)
-    dt_crit = np.where(denom > 0.0, dtfac * lc / denom, EP30)
+    safe_denom = np.where(denom > 0.0, denom, 1.0)
+    dt_crit = np.where(denom > 0.0, dtfac * lc / safe_denom, EP30)
     # deleted elements no longer constrain the global step
     dt_crit = np.where(alive, dt_crit, EP30)
     return fe, dt_crit, w_visc, qvw_new, deint0, dehour

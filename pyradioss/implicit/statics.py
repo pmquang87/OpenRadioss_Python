@@ -1404,6 +1404,8 @@ def _solve_increment_arc(model, ip, dof, solver, committed, x_ref, lam, dl,
         inc.residuals.append(rnorm)
         inc.iterations = it + 1
         inc.load_factor = lam_t
+        if not np.isfinite(rnorm):
+            break
         # reference: the load level actually applied (never below the
         # predictor's own step, so a near-zero crossing of lambda cannot
         # make the tolerance impossible)

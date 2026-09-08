@@ -583,7 +583,8 @@ def _integrate(model: Model, controls: EngineControls, log: MessageLog,
                 continue                    # /SENSOR-gated, not fired yet
             _, dt_i = ct.forces(model.x, model.v, model.mass, dt,
                                 fcont, state.cycle,
-                                stifn=None if noda is None else noda.stifn)
+                                stifn=None if noda is None else noda.stifn,
+                                t=state.t)
             if noda is None:
                 dt_next = min(dt_next, dt_i)
 

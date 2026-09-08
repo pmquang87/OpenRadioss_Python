@@ -147,6 +147,10 @@ class ContactType11:
         self.pairs_m = np.zeros(0, dtype=np.int64)
         self._last_refresh = -10**9
         self.refresh = 20
+        self.tstart = float(getattr(self.itf, "tstart", 0.0) or 0.0)
+        self.tstop = float(getattr(self.itf, "tstop", np.inf) or np.inf)
+        if self.tstop <= 0.0:
+            self.tstop = np.inf
 
     def __init__(self, itf, model: Model, log):
         self.itf = itf
@@ -240,6 +244,10 @@ class ContactType11:
         self.pairs_m = np.zeros(0, dtype=np.int64)   # main edge rows
         self._last_refresh = -10**9
         self.refresh = 20
+        self.tstart = float(getattr(itf, "tstart", 0.0) or 0.0)
+        self.tstop = float(getattr(itf, "tstop", np.inf) or np.inf)
+        if self.tstop <= 0.0:
+            self.tstop = np.inf
 
     # ------------------------------------------------------------------
     def _compute_dt_bound(self, mass) -> float:
@@ -326,14 +334,18 @@ class ContactType11:
         self.pairs_m = pm
 
     # ------------------------------------------------------------------
-    def forces(self, x, v, mass, dt, fcont, cycle, stifn=None):
+    def forces(self, x, v, mass, dt, fcont, cycle=0, stifn=None, t=None, **kwargs):
         """Penalty forces for one cycle, scattered into ``fcont``.
         Returns (contact_work_increment, dt_interface) — the same
         contract as ContactType7.forces (the Engine books the exact
         midstep contact energy from ``fcont``, see engine.py; ``stifn``
         is the /DT/NODA nodal-stiffness accumulation, M6)."""
-        if len(self.es) == 0 or len(self.em) == 0:
+        if len(self.es) == 0 or len(self.em) == 0 or dt <= 0.0:
             return 0.0, np.inf
+
+        if t is not None:
+            if t < self.tstart or t > self.tstop:
+                return 0.0, self.dt_bound if hasattr(self, "dt_bound") else np.inf
 
         if self.deletable:
             self.es_alive = tracking.alive_segment_mask(

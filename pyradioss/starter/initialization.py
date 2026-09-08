@@ -138,8 +138,9 @@ def _convert_tetras(model: Model, log: MessageLog) -> None:
     kept, moved = [], 0
     for (eid, pid, nodes) in model.raw_elems["TETRA4"]:
         # part -> property -> itetra4 flag
-        prop_id = model.parts[pid].prop_id
-        prop = model.properties.get(prop_id)
+        part = model.parts.get(pid)
+        prop_id = part.prop_id if part is not None else None
+        prop = model.properties.get(prop_id) if prop_id is not None else None
         if prop and prop.params.get("itetra4", 0) in (1, 2):
             # Pad with 6 zeros for the mid-side nodes
             nodes10 = list(nodes) + [0] * 6
@@ -178,7 +179,25 @@ def build_element_groups(model: Model, log: MessageLog) -> None:
         ok = True
         for k, (eid, pid, nodes) in enumerate(raw):
             try:
-                conn[k] = [model._id2idx[int(n)] if n != 0 else -1 for n in nodes]
+                c_nodes = []
+                for j, n in enumerate(nodes):
+                    n_int = int(n)
+                    if n_int == 0:
+                        is_optional = (
+                            (etype == "TETRA10" and j >= 4) or
+                            (etype == "BRIC20" and j >= 8) or
+                            (etype == "SHEL16" and j >= 8) or
+                            (etype == "BEAM" and j >= 2)
+                        )
+                        if is_optional:
+                            c_nodes.append(-1)
+                        elif 0 in model._id2idx:
+                            c_nodes.append(model._id2idx[0])
+                        else:
+                            raise KeyError(0)
+                    else:
+                        c_nodes.append(model._id2idx[n_int])
+                conn[k] = c_nodes
             except KeyError as exc:
                 log.error(f"/{etype} {eid}: unknown node id {exc}",
                           "ELEMENT CHECK")
@@ -1427,15 +1446,106 @@ def initialize_elements_and_mass(model: Model, log: MessageLog) -> None:
             group.state["color_indices"] = c_idx
             group.state["color_offsets"] = c_off
 
-    # /ADMAS (M5): non-structural mass, added BEFORE the massless-node
+    # /ADMAS (M5, M139): non-structural mass, added BEFORE the massless-node
     # check so a standalone node + /ADMAS is a legitimate free point mass
     for am in model.admas:
+        if am.mass_type == 2:
+            # Surface area distributed
+            surf = model.surfaces.get(am.grnod_id) if hasattr(model, "surfaces") else None
+            if surf is not None and surf.segments is not None and len(surf.segments) > 0:
+                segs = np.asarray(surf.segments, dtype=np.int64)
+                areas = np.zeros(len(segs), dtype=float)
+                for si, seg in enumerate(segs):
+                    n1, n2, n3 = seg[0], seg[1], seg[2]
+                    n4 = seg[3] if len(seg) > 3 else seg[2]
+                    if n4 == n3 or n4 < 0:
+                        v1 = model.x0[n2] - model.x0[n1]
+                        v2 = model.x0[n3] - model.x0[n1]
+                        areas[si] = 0.5 * np.linalg.norm(np.cross(v1, v2))
+                    else:
+                        d1 = model.x0[n3] - model.x0[n1]
+                        d2 = model.x0[n4] - model.x0[n2]
+                        areas[si] = 0.5 * np.linalg.norm(np.cross(d1, d2))
+                tot_area = np.sum(areas)
+                if tot_area > 0.0:
+                    for si, seg in enumerate(segs):
+                        n1, n2, n3 = seg[0], seg[1], seg[2]
+                        n4 = seg[3] if len(seg) > 3 else seg[2]
+                        seg_m = am.mass * (areas[si] / tot_area)
+                        if n4 == n3 or n4 < 0:
+                            m_nod = seg_m / 3.0
+                            for nid in (n1, n2, n3):
+                                if 0 <= nid < model.numnod:
+                                    model.mass[nid] += m_nod
+                        else:
+                            m_nod = seg_m / 4.0
+                            for nid in (n1, n2, n3, n4):
+                                if 0 <= nid < model.numnod:
+                                    model.mass[nid] += m_nod
+                    continue
+        elif am.mass_type == 3:
+            # Part group distributed
+            grpart = model.egroups.get("PART", {}).get(am.grnod_id) if hasattr(model, "egroups") else None
+            pids = getattr(grpart, "part_ids_resolved", None) if grpart else None
+            if pids is None and grpart:
+                pids = getattr(grpart, "members", [])
+            if not pids and hasattr(model, "parts") and am.grnod_id in model.parts:
+                pids = [am.grnod_id]
+            if pids:
+                part_nodes = set()
+                for _, grp in model.element_groups():
+                    p_ids = grp.state.get("part_ids")
+                    if p_ids is not None:
+                        mask = np.isin(p_ids, pids)
+                        if np.any(mask):
+                            conn = grp.state.get("mass_conn", grp.conn)[mask]
+                            valid = conn[conn >= 0]
+                            part_nodes.update(valid.tolist())
+                if part_nodes:
+                    m_per_node = am.mass / len(part_nodes)
+                    for n_idx in part_nodes:
+                        if 0 <= n_idx < model.numnod:
+                            model.mass[n_idx] += m_per_node
+                    continue
+
         g = model.node_groups.get(am.grnod_id)
         if g is None or g.node_idx is None:
             log.error(f"/ADMAS/{am.id}: unknown node group {am.grnod_id}",
                       "ADMAS CHECK")
             continue
-        model.mass[g.node_idx] += am.mass
+        if am.mass_type == 1:
+            m_per_node = am.mass / max(1, len(g.node_idx))
+            model.mass[g.node_idx] += m_per_node
+        else:
+            model.mass[g.node_idx] += am.mass
+
+    # /ADMAS/NON_UNIFORM (M114)
+    for an in getattr(model, "admas_non_uniforms", {}).values():
+        if an.kind == "NODE":
+            for item in getattr(an, "items", []):
+                try:
+                    n_idx = model.node_index(item.entity_id)
+                except (KeyError, ValueError):
+                    continue
+                if 0 <= n_idx < model.numnod:
+                    model.mass[n_idx] += item.mass
+        elif an.kind == "PART":
+            for item in getattr(an, "items", []):
+                part_id = item.entity_id
+                part_nodes = set()
+                for _, grp in model.element_groups():
+                    p_ids = grp.state.get("part_ids")
+                    if p_ids is not None:
+                        mask = (p_ids == part_id)
+                        if np.any(mask):
+                            conn = grp.state.get("mass_conn", grp.conn)[mask]
+                            valid = conn[conn >= 0]
+                            part_nodes.update(valid.tolist())
+                if part_nodes:
+                    m_per_node = item.mass / len(part_nodes)
+                    for n_idx in part_nodes:
+                        if 0 <= n_idx < model.numnod:
+                            model.mass[n_idx] += m_per_node
 
     # /INIVEL
     for iv in model.inivel:

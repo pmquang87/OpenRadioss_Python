@@ -106,9 +106,13 @@ def test_tetra10_mass_lumping_and_volume():
     total_mass = mat.rho0 * expected_vol
     assert group.state["mass"][0] == pytest.approx(total_mass, rel=1e-6)
     assert len(mass_c) == 10
-    # Fully real 10-node element distributes mass equally to all 10 nodes (m/10)
-    for m in mass_c:
-        assert m == pytest.approx(total_mass / 10.0, rel=1e-6)
+    # Real 10-node element distributes mass per s10mass3.F:
+    # m/32 to 4 corners, 7m/48 to 6 midsides (sum: 4*m/32 + 6*7m/48 = m)
+    for i, m in enumerate(mass_c):
+        if i < 4:
+            assert m == pytest.approx(total_mass / 32.0, rel=1e-6)
+        else:
+            assert m == pytest.approx(7.0 * total_mass / 48.0, rel=1e-6)
     assert np.array_equal(node_idx, np.arange(10))
 
 

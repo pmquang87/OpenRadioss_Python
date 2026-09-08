@@ -274,6 +274,10 @@ class ContactType18:
         self.stiff_dc = float(getattr(itf, "stiff_dc", 0.0) or 0.0)
         self.sort_fact = float(getattr(itf, "sort_fact", 0.2) or 0.2)
         self.dt_bound = np.inf
+        self.tstart = float(getattr(itf, "tstart", 0.0) or 0.0)
+        self.tstop = float(getattr(itf, "tstop", np.inf) or np.inf)
+        if self.tstop <= 0.0:
+            self.tstop = np.inf
 
         # Secondary nodes (fluid)
         g = model.node_groups.get(self.grnod)
@@ -308,9 +312,14 @@ class ContactType18:
         self.main_faces = np.zeros((0, 4), dtype=np.int64)
         self.cand_p = np.zeros(0, dtype=float)
         self.dt_bound = np.inf
+        self.tstart = float(getattr(self.itf, "tstart", 0.0) or 0.0)
+        self.tstop = float(getattr(self.itf, "tstop", np.inf) or np.inf)
+        if self.tstop <= 0.0:
+            self.tstop = np.inf
 
     def forces(self, x: np.ndarray, v: np.ndarray, mass: np.ndarray, dt: float,
-               fcont: np.ndarray, cycle: int, stifn: np.ndarray | None = None) -> tuple[float, float]:
+               fcont: np.ndarray, cycle: int = 0, stifn: np.ndarray | None = None,
+               t: float | None = None, **kwargs) -> tuple[float, float]:
         """Penalty forces for one cycle, scattered into ``fcont``.
 
         Parameters
@@ -329,6 +338,8 @@ class ContactType18:
             Current cycle counter.
         stifn : np.ndarray (N,) | None
             Nodal stiffness accumulator for /DT/NODA.
+        t : float | None
+            Current simulation time.
 
         Returns
         -------
@@ -341,6 +352,10 @@ class ContactType18:
         n_main = len(self.main_faces)
         if n_sec == 0 or n_main == 0 or dt <= 0.0:
             return 0.0, self.dt_bound
+
+        if t is not None:
+            if t < self.tstart or t > self.tstop:
+                return 0.0, self.dt_bound
 
         xs = x[self.sec_nodes]
 

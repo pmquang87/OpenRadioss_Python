@@ -95,6 +95,20 @@ class AMSManager:
         if dt_scale > 0.0:
             self.dt_target /= dt_scale
 
+    def _get_elem_active(self, group, n_elem: int) -> np.ndarray:
+        if hasattr(group, "part") and group.part is not None:
+            p_arr = np.asarray(group.part)
+            if p_arr.ndim == 0:
+                val = int(p_arr)
+                active = bool(self.active_parts[val]) if 0 <= val < len(self.active_parts) else True
+                return np.full(n_elem, active, dtype=bool)
+            else:
+                valid_idx = (p_arr >= 0) & (p_arr < len(self.active_parts))
+                active = np.ones(len(p_arr), dtype=bool)
+                active[valid_idx] = self.active_parts[p_arr[valid_idx]]
+                return active
+        return np.ones(n_elem, dtype=bool)
+
     def tag_nodes(self, dt_claims: List[np.ndarray]) -> np.ndarray:
         """Tag nodes that belong to active AMS elements requiring mass scaling."""
         n = self.model.numnod
@@ -102,11 +116,8 @@ class AMSManager:
         if not hasattr(self.model, "element_groups"):
             return tagged
         for (name, group), dt_e in zip(self.model.element_groups(), dt_claims):
-            if hasattr(group, "part") and group.part is not None and 0 <= group.part < len(self.active_parts):
-                elem_active = self.active_parts[group.part]
-            else:
-                elem_active = True
             dt_arr = np.asarray(dt_e, dtype=np.float64)
+            elem_active = self._get_elem_active(group, len(dt_arr))
             needs_ams = elem_active & (dt_arr < self.dt_target)
             if not np.any(needs_ams):
                 continue
@@ -141,11 +152,8 @@ class AMSManager:
             return diag_added, None, max_dmels
 
         for (name, group), dt_e in zip(self.model.element_groups(), dt_claims):
-            if hasattr(group, "part") and group.part is not None and 0 <= group.part < len(self.active_parts):
-                elem_active = self.active_parts[group.part]
-            else:
-                elem_active = True
             dt_arr = np.asarray(dt_e, dtype=np.float64)
+            elem_active = self._get_elem_active(group, len(dt_arr))
             needs_ams = elem_active & (dt_arr < self.dt_target)
             if not np.any(needs_ams):
                 continue

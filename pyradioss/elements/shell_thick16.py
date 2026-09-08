@@ -1004,11 +1004,35 @@ def _edofs(conn):
     if n == 0:
         return np.zeros((0, 48), dtype=np.int64)
     ix = np.arange(16)
-    edofs = np.empty((n, 48), dtype=np.int64)
-    safe_conn = np.maximum(conn, 0)
+    edofs = np.full((n, 48), -1, dtype=np.int64)
+    valid = conn >= 0
     for c in range(3):
-        edofs[:, 3 * ix + c] = safe_conn * 6 + c
+        edofs[:, 3 * ix + c] = np.where(valid, conn * 6 + c, -1)
     return edofs
+
+
+def _condense_virtual_midsides(K, conn):
+    """Condense out virtual midside nodes from element matrix K (n, 48, 48).
+    For each virtual midside node 8 + idx on edge (n1, n2), displacement is
+    u_mid = 0.5*(u_n1 + u_n2). Transform K = T^T K T so virtual DOFs are zeroed
+    and their stiffness/mass is distributed to corner endpoints."""
+    for idx_16 in range(8):
+        virt = conn[:, 8 + idx_16] < 0
+        if not virt.any():
+            continue
+        n1 = _IPERM1_16[idx_16]
+        n2 = _IPERM2_16[idx_16]
+        mid_idx = 8 + idx_16
+        for c in range(3):
+            d_mid = 3 * mid_idx + c
+            d_n1 = 3 * n1 + c
+            d_n2 = 3 * n2 + c
+            K[virt, :, d_n1] += 0.5 * K[virt, :, d_mid]
+            K[virt, :, d_n2] += 0.5 * K[virt, :, d_mid]
+            K[virt, :, d_mid] = 0.0
+            K[virt, d_n1, :] += 0.5 * K[virt, d_mid, :]
+            K[virt, d_n2, :] += 0.5 * K[virt, d_mid, :]
+            K[virt, d_mid, :] = 0.0
 
 
 def tangent(group, x, epsp_incr=None):
@@ -1070,6 +1094,7 @@ def tangent(group, x, epsp_incr=None):
     if off is not None:
         ke *= off[:, None, None]
 
+    _condense_virtual_midsides(ke, conn)
     return ke, _edofs(conn)
 
 
@@ -1113,6 +1138,7 @@ def kgeo(group, x):
     if off is not None:
         ke *= off[:, None, None]
 
+    _condense_virtual_midsides(ke, conn)
     return ke, _edofs(conn)
 
 
@@ -1134,6 +1160,7 @@ def consistent_mass(group, x=None):
                 f = m * coeff
                 for c in range(3):
                     me[:, a * 3 + c, b * 3 + c] = f
+    _condense_virtual_midsides(me, conn)
     return me, _edofs(conn)
 
 
@@ -1196,11 +1223,24 @@ def implicit_internal_forces(group, x, u, ur, fint, mint, nlgeom=False):
     if not nlgeom:
         ke, edofs = tangent(group, x)
         ue = np.zeros((group.n, 48))
-        for ix in range(16):
+        for ix in range(8):
             nid = group.conn[:, ix]
             valid = nid >= 0
             for c in range(3):
                 ue[valid, 3 * ix + c] = u[nid[valid], c]
+        for idx_16 in range(8):
+            mid_idx = 8 + idx_16
+            nid = group.conn[:, mid_idx]
+            real = nid >= 0
+            if real.any():
+                for c in range(3):
+                    ue[real, 3 * mid_idx + c] = u[nid[real], c]
+            virt = ~real
+            if virt.any():
+                n1 = _IPERM1_16[idx_16]
+                n2 = _IPERM2_16[idx_16]
+                for c in range(3):
+                    ue[virt, 3 * mid_idx + c] = 0.5 * (ue[virt, 3 * n1 + c] + ue[virt, 3 * n2 + c])
         fe = -np.einsum("nij,nj->ni", ke, ue)
         fe = fe.reshape(-1, 16, 3)
         for idx_16 in range(8):

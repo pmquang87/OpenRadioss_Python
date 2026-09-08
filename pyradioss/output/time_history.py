@@ -93,12 +93,15 @@ class TimeHistory:
                 ke_rot = 0.0
                 if getattr(model, "inertia", None) is not None and getattr(model, "vr", None) is not None:
                     vre = model.vr[safe_conn]
-                    vr2 = np.einsum("nib,nib->n", vre, vre) / conn.shape[1]
+                    vr2_nodes = np.einsum("nib,nib->ni", vre, vre)
                     if "inertia" in group.state:
-                        ke_rot = 0.5 * (group.state["inertia"][mask] * vr2).sum()
+                        vr2_avg = vr2_nodes.mean(axis=1)
+                        ke_rot = 0.5 * (group.state["inertia"][mask] * vr2_avg).sum()
                     else:
-                        ine = model.inertia[safe_conn].mean(axis=1)
-                        ke_rot = 0.5 * (ine * vr2).sum()
+                        ine_nodes = model.inertia[safe_conn]
+                        if ine_nodes.ndim == 1:
+                            ine_nodes = ine_nodes[:, None]
+                        ke_rot = 0.5 * (ine_nodes * vr2_nodes).sum()
                 val += float(ke_trans + ke_rot)
         return val
 
@@ -128,9 +131,35 @@ class TimeHistory:
                     r = row[0]
                     st = g.state
                     if var_upper in ("F", "FORCE"):
-                        return float(st["fres"][r, 0]) if "fres" in st else 0.0
+                        if "fres" in st:
+                            f = st["fres"][r]
+                            return float(np.linalg.norm(f) if hasattr(f, "__len__") else f)
+                        return float(st.get("force", np.zeros(len(g.ids)))[r])
+                    elif var_upper in ("FX", "FY", "FZ"):
+                        c = {"FX": 0, "FY": 1, "FZ": 2}[var_upper]
+                        if "fres" in st and st["fres"].ndim > 1 and st["fres"].shape[1] > c:
+                            return float(st["fres"][r, c])
+                        if "force" in st:
+                            n1, n2 = g.conn[r, 0], g.conn[r, 1]
+                            dx = model.x[n2] - model.x[n1]
+                            L = np.linalg.norm(dx)
+                            if L > 1e-20:
+                                return float(st["force"][r] * (dx[c] / L))
+                        return 0.0
                     elif var_upper in ("D", "DISP"):
-                        return float(st["disp"][r]) if "disp" in st else 0.0
+                        if "disp" in st:
+                            return float(st["disp"][r])
+                        if "L" in st and "L0" in st:
+                            return float(st["L"][r] - st["L0"][r])
+                        n1, n2 = g.conn[r, 0], g.conn[r, 1]
+                        L = np.linalg.norm(model.x[n2] - model.x[n1])
+                        L0 = np.linalg.norm(model.x0[n2] - model.x0[n1])
+                        return float(L - L0)
+                    elif var_upper in ("DX", "DY", "DZ"):
+                        c = {"DX": 0, "DY": 1, "DZ": 2}[var_upper]
+                        n1, n2 = g.conn[r, 0], g.conn[r, 1]
+                        dx = (model.x[n2, c] - model.x0[n2, c]) - (model.x[n1, c] - model.x0[n1, c])
+                        return float(dx)
                     elif var_upper in ("E", "IE", "ENERGY"):
                         return float(st["eint"][r]) if "eint" in st else 0.0
 
@@ -151,6 +180,21 @@ class TimeHistory:
                         elif var_upper in ("VM", "VONM", "VON_MISES"):
                             from .anim_vtk import _von_mises
                             return float(_von_mises(attr, g)[r])
+                        elif var_upper in ("SIGXX", "SIGYY", "SIGZZ", "SIGXY", "SIGYZ", "SIGZX"):
+                            idx_map = {"SIGXX": 0, "SIGYY": 1, "SIGZZ": 2, "SIGXY": 3, "SIGYZ": 4, "SIGZX": 5}
+                            sig = st.get("sig")
+                            if sig is not None:
+                                s_elem = sig[r]
+                                if s_elem.ndim > 1:
+                                    s_elem = s_elem.mean(axis=0)
+                                return float(s_elem[idx_map[var_upper]])
+                        elif var_upper in ("P", "PRESSURE"):
+                            sig = st.get("sig")
+                            if sig is not None:
+                                s_elem = sig[r]
+                                if s_elem.ndim > 1:
+                                    s_elem = s_elem.mean(axis=0)
+                                return float(-np.mean(s_elem[:3]))
         return 0.0
 
     def write(self, t, energies, mass, momentum, sect_values=None) -> None:

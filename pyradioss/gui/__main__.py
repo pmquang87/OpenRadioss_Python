@@ -24,7 +24,7 @@ def main(argv: Optional[list] = None) -> int:
     ap.add_argument("deck", nargs="?", default=None,
                     help="optional starter deck to pre-select "
                          "(RunName_0000.rad)")
-    ap.add_argument("--web", action="store_true", default=True,
+    ap.add_argument("--web", action="store_true", default=False,
                     help="launch the modern web UI instead of Tkinter")
     args = ap.parse_args(argv)
 

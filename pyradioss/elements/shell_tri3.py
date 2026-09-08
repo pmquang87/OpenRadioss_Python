@@ -192,8 +192,11 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
                                     t_val, 3, rho0_val)
         w2max = np.maximum(w2max, w2bend)
         c = mat.sound_speed_shell()
-        dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
-        fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
+        if c > 0.0:
+            dt_exact = 2.0 / np.sqrt(np.maximum(w2max, EM20))
+            fac[sl] = np.minimum(dt_exact / (lc[sl] / c), 1.0)
+        else:
+            fac[sl] = 1.0
     return fac
 
 
