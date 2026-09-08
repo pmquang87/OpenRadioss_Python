@@ -44,11 +44,12 @@ drops to zero and the element is deleted through the kernels'
 
 Shells (sigeps44c.F): plane-stress radial projection (Iplas=2) exactly
 like the LAW2 port, with the LAW44 yield above; the in-plane principal
-total strain drives FAIL.  Kinematic hardening (C_hard/FISOKIN) is NOT
-ported — the constructor warns and runs isotropic.
+total strain drives FAIL.  Transverse shears (sig[:, 3:5]) are updated
+elastically using shear modulus G (sigeps44c.F:188-189).  Kinematic hardening
+(C_hard/FISOKIN) is NOT ported — the constructor warns and runs isotropic.
 
 Sound speed: ``c = sqrt((K + 4G/3)/rho0)`` for solids (the Fortran
-SOUNDSP), the plane-stress estimate for shells.
+SOUNDSP), and ``c = sqrt(A11/rho0)`` with ``A11 = E/(1 - nu^2)`` for shells.
 """
 
 from __future__ import annotations
@@ -67,47 +68,72 @@ def build_law44(rec) -> Material:
     """Physics constructor for the cfg-parsed /MAT/LAW44 record (cfg
     ``matl44_cowper.cfg`` radioss2020 format / hm_read_mat44.F)."""
     p = rec.params
-    e = float(p.get("MAT_E") or 0.0)
-    nu = float(p.get("MAT_NU") or 0.0)
+    e = float(p.get("MAT_E") if p.get("MAT_E") is not None else (p.get("E") or 0.0))
+    nu = float(p.get("MAT_NU") if p.get("MAT_NU") is not None else (p.get("nu") or 0.0))
     if e <= 0.0:
         raise ValueError(f"/MAT/LAW44/{rec.id}: Young modulus E must "
                          f"be > 0")
     if not (0.0 <= nu < 0.5):
         raise ValueError(f"/MAT/LAW44/{rec.id}: Poisson ratio nu={nu:g} "
                          f"outside [0, 0.5) (upstream error 49)")
-    ca = float(p.get("MAT_SIGY") or 0.0)
-    cb = float(p.get("MAT_B") or 0.0)
-    cn = float(p.get("MAT_N") or 0.0)
-    if cn > 1.0:
-        cb = 0.0                        # upstream warning 3121: n > 1
-    src = float(p.get("MAT_SRC") or 0.0)      # C of the CS factor
-    sre = float(p.get("MAT_SRE") or 0.0)      # p of the CS factor
+
+    iflag = int(p.get("MAT_Iflag") if p.get("MAT_Iflag") is not None else (p.get("iflag") or 0))
+    if iflag == 1 or ("MAT_UTS" in p or "uts" in p):
+        ca = float(p.get("MAT_SIG2_yc") or p.get("MAT_SIGY") or p.get("sig_y") or 0.0)
+        cb = float(p.get("MAT_UTS") or p.get("uts") or 0.0)
+        cn = float(p.get("MAT_EUTS") or p.get("euts") or 0.0)
+        if cb > 0.0 and cn > 0.0:
+            cb0 = cb
+            cn0 = cn
+            rm = cb * (1.0 + cn)
+            ag = math.log(1.0 + cn)
+            if rm > ca:
+                cn = rm * ag / (rm - ca)
+                cb = rm / max(cn * (ag ** (cn - 1.0)), _EM20)
+                if cn > 1.0:
+                    cn = 1.0
+                    denom = math.log(1.0 + cn0) - cb0 * (1.0 + cn0) / e - ca / e
+                    cb = (cb0 * (1.0 + cn0) - ca) / denom if abs(denom) > _EM20 else 0.0
+                elif cn < 0.0 and cb < 0.0:
+                    cn = 0.0
+                    cb = 0.0
+            else:
+                cn = 0.0
+                cb = 0.0
+    else:
+        ca = float(p.get("MAT_SIGY") if p.get("MAT_SIGY") is not None else (p.get("sig_y") or 0.0))
+        cb = float(p.get("MAT_B") if p.get("MAT_B") is not None else (p.get("B") or 0.0))
+        cn = float(p.get("MAT_N") if p.get("MAT_N") is not None else (p.get("n") or 0.0))
+        if cn > 1.0:
+            cb = 0.0                        # upstream warning 3121: n > 1
+
+    src = float(p.get("MAT_SRC") if p.get("MAT_SRC") is not None else (p.get("C") or 0.0))      # C of the CS factor
+    sre = float(p.get("MAT_SRE") if p.get("MAT_SRE") is not None else (p.get("p") or 0.0))      # p of the CS factor
     cc = 1.0 / src if src != 0.0 else 0.0
     cp = 1.0 / (sre if sre != 0.0 else 1.0)
-    icc = int(p.get("STRFLAG") or 0) or 1
-    vflag = int(p.get("Vflag") or 0) or 2
-    epsm = float(p.get("MAT_EPS") or 0.0) or _INF
-    epsr1 = float(p.get("MAT_ETA1") or 0.0) or _INF
-    epsr2 = float(p.get("MAT_ETA2") or 0.0) or 2.0 * _INF
-    sigm = float(p.get("MAT_SIG") or 0.0) or _INF
-    fisokin = float(p.get("MAT_HARD") or 0.0)
-    fct = int(p.get("YLD_FUNC") or 0)
-    yscale = float(p.get("YLD_SCALE") or 0.0) or 1.0
+    icc = int(p.get("STRFLAG") if p.get("STRFLAG") is not None else (p.get("icc") or 0)) or 1
+    vflag = int(p.get("Vflag") if p.get("Vflag") is not None else (p.get("vflag") or 0)) or 2
+    epsm = float(p.get("MAT_EPS") if p.get("MAT_EPS") is not None else (p.get("eps_p_max") or 0.0)) or _INF
+    epsr1 = float(p.get("MAT_ETA1") if p.get("MAT_ETA1") is not None else (p.get("eta1") or 0.0)) or _INF
+    epsr2 = float(p.get("MAT_ETA2") if p.get("MAT_ETA2") is not None else (p.get("eta2") or 0.0)) or 2.0 * _INF
+    sigm = float(p.get("MAT_SIG") if p.get("MAT_SIG") is not None else (p.get("sig_max") or 0.0)) or _INF
+    fisokin = float(p.get("MAT_HARD") if p.get("MAT_HARD") is not None else (p.get("hard") or 0.0))
+    fct = int(p.get("YLD_FUNC") if p.get("YLD_FUNC") is not None else (p.get("yld_fct") or 0))
+    yscale = float(p.get("YLD_SCALE") if p.get("YLD_SCALE") is not None else (p.get("yscale") or 0.0)) or 1.0
     if fct == 0:
         yscale = 0.0
     if fct > 0 and ca != 0.0 and vflag != 1:
         ca = 0.0                        # upstream warning 1880
     # filtering (hm_read_mat44): VP=1 forces it on at 10 kHz
-    fcut = float(p.get("Fcut") or 0.0)
-    ismooth = int(p.get("Fsmooth") or 0)
+    fcut = float(p.get("Fcut") if p.get("Fcut") is not None else (p.get("fcut") or 0.0))
+    ismooth = int(p.get("Fsmooth") if p.get("Fsmooth") is not None else (p.get("ismooth") or 0))
     if vflag == 1:
         ismooth, fcut = 1, fcut or 10000.0
     elif fcut != 0.0:
         ismooth = 1
     elif ismooth != 0:
         fcut = 10000.0
-    epsgm = ((sigm - ca) / cb) ** (1.0 / cn) \
-        if (cn != 0.0 and cb != 0.0 and sigm < _INF) else _INF
+    epsgm = ((sigm - ca) / cb) ** (1.0 / cn)         if (cn != 0.0 and cb != 0.0 and sigm < _INF) else _INF
     params = {
         "E": e, "nu": nu, "A": ca, "B": cb, "n": cn,
         "cc": cc, "cp": cp, "icc": icc, "vflag": vflag,
@@ -195,9 +221,13 @@ def _rate_factor(p, epsd):
 
 
 def _filtered_rate(p, raw, extra, key, dt):
-    if p["ismooth"] == 0:
+    if p["ismooth"] == 0 or dt <= 0.0:
         return raw
     alpha = min(1.0, 2.0 * math.pi * p["fcut"] * dt)
+    if extra is None:
+        return raw
+    if key not in extra:
+        extra[key] = np.zeros_like(raw)
     st = extra[key]
     st[:] = alpha * raw + (1.0 - alpha) * st
     return st.copy()
@@ -218,8 +248,7 @@ def _principal_strain(eps):
     e5 = 0.5 * eps[:, 4]
     e6 = 0.5 * eps[:, 5]
     c = -(e1 ** 2 + e2 ** 2 + e3 ** 2 + e4 ** 2 + e5 ** 2 + e6 ** 2)
-    d = -(e1 * e2 * e3) + e1 * e5 ** 2 + e2 * e6 ** 2 + e3 * e4 ** 2 \
-        - 2.0 * e4 * e5 * e6
+    d = -(e1 * e2 * e3) + e1 * e5 ** 2 + e2 * e6 ** 2 + e3 * e4 ** 2         - 2.0 * e4 * e5 * e6
     epst = np.sqrt(np.maximum(-c / 3.0, 0.0))
     y = (epst ** 2 + c) * epst + d
     active = np.abs(y) > 1e-8
@@ -236,17 +265,22 @@ def _principal_strain(eps):
 # Solids (sigeps44.F, IPLA=0 path)
 # ----------------------------------------------------------------------------
 
-def solid_update(mat, sig, deps, epsp, dt, extra):
+def solid_update(mat, sig, deps, epsp, dt, extra=None):
     """One SIGEPS44 cycle for solids. ``epsp`` is the equivalent plastic
     strain (updated in place); ``extra`` carries the kernel density
     ``rho`` plus the optional eps44/epsd44 state. Returns (sig, epsp, c).
     """
     p = mat.params
     n = sig.shape[0]
+    if n == 0:
+        return sig, epsp, np.empty(0, dtype=sig.dtype)
+    if extra is None:
+        extra = {}
+
     E, nu = p["E"], p["nu"]
-    G = E / (2.0 * (1.0 + nu))
+    G = mat.G if hasattr(mat, "G") else E / (2.0 * (1.0 + nu))
     G2, G3 = 2.0 * G, 3.0 * G
-    bulk = E / (3.0 * (1.0 - 2.0 * nu))
+    bulk = mat.K if hasattr(mat, "K") else E / (3.0 * (1.0 - 2.0 * nu))
 
     # deviatoric trial (pressure handled separately, TOTAL form)
     pm = (sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0
@@ -260,35 +294,52 @@ def solid_update(mat, sig, deps, epsp, dt, extra):
     s[:, 5] = sig[:, 5] + G * deps[:, 5]
 
     # tension-softening factor from the max principal total strain
-    if "eps44" in extra:
+    if p.get("epsr1", _INF) < _INF:
+        if "eps44" not in extra:
+            extra["eps44"] = np.zeros((n, 6), dtype=sig.dtype)
         eps = extra["eps44"]
         eps += deps
         epst = _principal_strain(eps)
-        fail = np.clip((p["epsr2"] - epst) / (p["epsr2"] - p["epsr1"]),
-                       0.0, 1.0)
+        denom = p["epsr2"] - p["epsr1"]
+        if abs(denom) > _EM20:
+            fail = np.clip((p["epsr2"] - epst) / denom, 0.0, 1.0)
+        else:
+            fail = np.ones(n)
+    elif "eps44" in extra:
+        eps = extra["eps44"]
+        eps += deps
+        epst = _principal_strain(eps)
+        denom = p["epsr2"] - p["epsr1"]
+        if abs(denom) > _EM20:
+            fail = np.clip((p["epsr2"] - epst) / denom, 0.0, 1.0)
+        else:
+            fail = np.ones(n)
     else:
         fail = np.ones(n)
 
     # strain-rate measure (VP flag) and the frozen CS factor
-    rate = deps / max(dt, 1e-30)
+    if dt > 0.0:
+        rate = deps / dt
+    else:
+        rate = np.zeros_like(deps)
+
     if p["vflag"] == 1:
+        if "epsd44" not in extra:
+            extra["epsd44"] = np.zeros(n, dtype=sig.dtype)
         epsd = extra["epsd44"].copy()
     elif p["vflag"] == 3:
         tr3 = (rate[:, 0] + rate[:, 1] + rate[:, 2]) / 3.0
         ee = 0.5 * ((rate[:, 0] - tr3) ** 2 + (rate[:, 1] - tr3) ** 2
-                    + (rate[:, 2] - tr3) ** 2) \
-            + 0.25 * (rate[:, 3] ** 2 + rate[:, 4] ** 2
+                    + (rate[:, 2] - tr3) ** 2)             + 0.25 * (rate[:, 3] ** 2 + rate[:, 4] ** 2
                       + rate[:, 5] ** 2)
         raw = np.sqrt(3.0 * ee) / 1.5
-        epsd = _filtered_rate(p, raw, extra, "epsd44", dt) \
-            if p["ismooth"] else raw
+        epsd = _filtered_rate(p, raw, extra, "epsd44", dt)             if p["ismooth"] else raw
     else:                                          # VP = 2 (default)
         raw = np.sqrt(rate[:, 0] ** 2 + rate[:, 1] ** 2
                       + rate[:, 2] ** 2
                       + 0.5 * (rate[:, 3] ** 2 + rate[:, 4] ** 2
                                + rate[:, 5] ** 2))
-        epsd = _filtered_rate(p, raw, extra, "epsd44", dt) \
-            if p["ismooth"] else raw
+        epsd = _filtered_rate(p, raw, extra, "epsd44", dt)             if p["ismooth"] else raw
     rq = _rate_factor(p, epsd)
 
     yld, hard = _yield44(p, epsp, rq, fail)
@@ -303,7 +354,14 @@ def solid_update(mat, sig, deps, epsp, dt, extra):
     epsp += dpla
 
     # total stress: deviator + EOS-style pressure P = K * mu
-    amu = extra["rho"] / mat.rho0 - 1.0
+    if "rho" in extra:
+        rho = extra["rho"]
+        if isinstance(rho, np.ndarray):
+            amu = rho / mat.rho0 - 1.0
+        else:
+            amu = np.full(n, rho / mat.rho0 - 1.0)
+    else:
+        amu = np.zeros(n)
     pr = bulk * amu
     sig[:] = s
     sig[:, 0] -= pr
@@ -312,9 +370,11 @@ def solid_update(mat, sig, deps, epsp, dt, extra):
 
     # VP = 1: filter the plastic strain rate for the next cycle
     if p["vflag"] == 1:
-        alpha = min(1.0, 2.0 * math.pi * p["fcut"] * dt)
-        st = extra["epsd44"]
-        st[:] = alpha * (dpla / max(dt, 1e-30)) + (1.0 - alpha) * st
+        if dt > 0.0:
+            alpha = min(1.0, 2.0 * math.pi * p["fcut"] * dt)
+            dpdt = dpla / dt
+            st = extra["epsd44"]
+            st[:] = alpha * dpdt + (1.0 - alpha) * st
 
     c = np.full(n, math.sqrt((bulk + 4.0 * G / 3.0) / mat.rho0))
     return sig, epsp, c
@@ -330,35 +390,71 @@ _NEWTON_ITERS = 5
 def shell_update(mat, sig, deps, epsp, dt, extra=None):
     """Plane-stress update, [xx, yy, xy] Voigt with engineering shear —
     the LAW2-port radial projection driven by the Cowper-Symonds yield
-    (sigeps44c's NICE return is mapped onto the same Iplas=2 machinery
+    (sigeps44c's return is mapped onto the same Iplas=2 machinery
     the LAW2/36 shell ports use)."""
-    from . import law01_elastic
     p = mat.params
     n = sig.shape[0]
-    G = mat.G
+    if n == 0:
+        return sig, epsp
+    if extra is None:
+        extra = {}
 
-    law01_elastic.shell_update(mat, sig, deps)     # elastic trial
+    E, nu = p["E"], p["nu"]
+    G = mat.G if hasattr(mat, "G") else E / (2.0 * (1.0 + nu))
+    fac = E / (1.0 - nu * nu)
+
+    # Elastic trial for in-plane components
+    sig[:, 0] += fac * (deps[:, 0] + nu * deps[:, 1])
+    sig[:, 1] += fac * (deps[:, 1] + nu * deps[:, 0])
+    sig[:, 2] += G * deps[:, 2]
+
+    # 5-component stress support: transverse shears updated elastically (sigeps44c.F:188-189)
+    if sig.shape[1] >= 5 and deps.shape[1] >= 5:
+        sig[:, 3] += G * deps[:, 3]
+        sig[:, 4] += G * deps[:, 4]
 
     sxx, syy, sxy = sig[:, 0], sig[:, 1], sig[:, 2]
     sig_eq = np.sqrt(sxx ** 2 - sxx * syy + syy ** 2
                      + 3.0 * sxy ** 2) + 1e-30
 
     # tension softening from the max in-plane principal total strain
-    if extra is not None and "eps44" in extra:
+    if p.get("epsr1", _INF) < _INF:
+        if "eps44" not in extra:
+            extra["eps44"] = np.zeros((n, 3), dtype=sig.dtype)
         eps = extra["eps44"]
-        eps += deps
+        eps += deps[:, :3]
         epst = 0.5 * (eps[:, 0] + eps[:, 1]
                       + np.sqrt((eps[:, 0] - eps[:, 1]) ** 2
                                 + eps[:, 2] ** 2))
-        fail = np.clip((p["epsr2"] - epst) / (p["epsr2"] - p["epsr1"]),
-                       0.0, 1.0)
+        denom = p["epsr2"] - p["epsr1"]
+        if abs(denom) > _EM20:
+            fail = np.clip((p["epsr2"] - epst) / denom, 0.0, 1.0)
+        else:
+            fail = np.ones(n)
+    elif "eps44" in extra:
+        eps = extra["eps44"]
+        eps += deps[:, :3]
+        epst = 0.5 * (eps[:, 0] + eps[:, 1]
+                      + np.sqrt((eps[:, 0] - eps[:, 1]) ** 2
+                                + eps[:, 2] ** 2))
+        denom = p["epsr2"] - p["epsr1"]
+        if abs(denom) > _EM20:
+            fail = np.clip((p["epsr2"] - epst) / denom, 0.0, 1.0)
+        else:
+            fail = np.ones(n)
     else:
         fail = np.ones(n)
 
     # strain-rate measure (VP): in-plane deviatoric rate, zz from the
     # in-plane trace (sigeps44c VFLAG=2), or the filtered plastic rate
-    rate = deps / max(dt, 1e-30)
-    if p["vflag"] == 1 and extra is not None and "epsd44" in extra:
+    if dt > 0.0:
+        rate = deps / dt
+    else:
+        rate = np.zeros_like(deps)
+
+    if p["vflag"] == 1:
+        if "epsd44" not in extra:
+            extra["epsd44"] = np.zeros(n, dtype=sig.dtype)
         epsd = extra["epsd44"].copy()
     else:
         dav = (rate[:, 0] + rate[:, 1]) / 3.0
@@ -368,16 +464,14 @@ def shell_update(mat, sig, deps, epsp, dt, extra=None):
         d4 = 0.5 * rate[:, 2]
         raw = np.sqrt(3.0 * (0.5 * (d1 ** 2 + d2 ** 2 + d3 ** 2)
                              + d4 ** 2)) / 1.5
-        epsd = _filtered_rate(p, raw, extra, "epsd44", dt) \
-            if (p["ismooth"] and extra is not None
-                and "epsd44" in extra) else raw
+        epsd = _filtered_rate(p, raw, extra, "epsd44", dt)             if p["ismooth"] else raw
     rq = _rate_factor(p, epsd)
 
     yld, _ = _yield44(p, epsp, rq, fail)
     yld = np.where(epsp >= p["eps_p_max"], 0.0, yld)
     plastic = sig_eq > yld
     if not np.any(plastic):
-        if p["vflag"] == 1 and extra is not None and "epsd44" in extra:
+        if p["vflag"] == 1 and "epsd44" in extra and dt > 0.0:
             alpha = min(1.0, 2.0 * math.pi * p["fcut"] * dt)
             extra["epsd44"][:] *= (1.0 - alpha)
         return sig, epsp
@@ -401,13 +495,159 @@ def shell_update(mat, sig, deps, epsp, dt, extra=None):
     sig[idx, 2] *= scale
     epsp[idx] = ep0 + dl
 
-    if p["vflag"] == 1 and extra is not None and "epsd44" in extra:
+    if p["vflag"] == 1 and "epsd44" in extra and dt > 0.0:
         alpha = min(1.0, 2.0 * math.pi * p["fcut"] * dt)
         dpdt = np.zeros(n)
-        dpdt[idx] = dl / max(dt, 1e-30)
+        dpdt[idx] = dl / dt
         st = extra["epsd44"]
         st[:] = alpha * dpdt + (1.0 - alpha) * st
     return sig, epsp
+
+
+def shell_sound_speed(mat) -> float:
+    """Plane-stress sound speed: c = sqrt(A11 / rho0) with A11 = E / (1 - nu^2)."""
+    p = mat.params
+    e, nu = p["E"], p["nu"]
+    a11 = e / (1.0 - nu * nu)
+    return math.sqrt(a11 / mat.rho0)
+
+
+# ----------------------------------------------------------------------------
+# Consistent tangents for implicit analysis
+# ----------------------------------------------------------------------------
+
+def shell_membrane_tangent(mat) -> np.ndarray:
+    """(3, 3) plane-stress elastic membrane tangent for LAW44."""
+    from . import law01_elastic
+    return law01_elastic.shell_membrane_tangent(mat)
+
+
+def consistent_solid_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
+                             epsp_incr: np.ndarray,
+                             extra=None) -> np.ndarray:
+    """The CONSISTENT (algorithmic) elastoplastic tangent of the radial
+    return for solids, (n, 6, 6), Voigt / engineering shear.
+
+    Derivation (Simo & Hughes 1998 / de Souza Neto, Perić & Owen 2008,
+    Box 7.3 — the von Mises consistent tangent for isotropic hardening):
+        D = C - a (C - K 1(x)1) + b (N (x) N)
+        a = 3G Δεp / q_tr,   b = 6G^2 (Δεp/q_tr - 1/(3G+H))
+    """
+    from . import law01_elastic
+    n = sig.shape[0]
+    if n == 0:
+        return np.empty((0, 6, 6))
+    p = mat.params
+    E, nu = p["E"], p["nu"]
+    G = mat.G if hasattr(mat, "G") else E / (2.0 * (1.0 + nu))
+    Kb = mat.K if hasattr(mat, "K") else E / (3.0 * (1.0 - 2.0 * nu))
+    C = law01_elastic.solid_tangent(mat)
+    D = np.broadcast_to(C, (n, 6, 6)).copy()
+    if epsp_incr is None:
+        return D
+    plastic = epsp_incr > 0.0
+    if not np.any(plastic):
+        return D
+
+    idx = np.where(plastic)[0]
+    s = sig[idx].copy()
+    pm = (s[:, 0] + s[:, 1] + s[:, 2]) / 3.0
+    s[:, 0] -= pm
+    s[:, 1] -= pm
+    s[:, 2] -= pm
+    snorm = np.sqrt(s[:, 0] ** 2 + s[:, 1] ** 2 + s[:, 2] ** 2
+                    + 2.0 * (s[:, 3] ** 2 + s[:, 4] ** 2 + s[:, 5] ** 2))
+    snorm = np.maximum(snorm, 1e-30)
+    Nv = s / snorm[:, None]
+    q = np.sqrt(1.5) * snorm
+    dep = epsp_incr[idx]
+    q_tr = q + 3.0 * G * dep
+
+    # Evaluate hardening slope H
+    rq = np.ones(len(idx))
+    fail = np.ones(len(idx))
+    if extra is not None and "eps44" in extra and p.get("epsr1", _INF) < _INF:
+        epst = _principal_strain(extra["eps44"][idx])
+        denom = p["epsr2"] - p["epsr1"]
+        if abs(denom) > _EM20:
+            fail = np.clip((p["epsr2"] - epst) / denom, 0.0, 1.0)
+
+    _, H = _yield44(p, epsp[idx], rq, fail)
+    Hbar = np.maximum(H, 0.0)
+
+    a = 3.0 * G * dep / q_tr
+    b = 6.0 * G * G * (dep / q_tr - 1.0 / (3.0 * G + Hbar))
+
+    ee = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+    KeeT = Kb * np.outer(ee, ee)
+    C_minus_vol = C - KeeT
+    NN = np.einsum("mi,mj->mij", Nv, Nv)
+    D[idx] = (C[None, :, :]
+              - a[:, None, None] * C_minus_vol[None, :, :]
+              + b[:, None, None] * NN)
+    return D
+
+
+#: Plane-stress von Mises metric P (Voigt [xx, yy, xy], engineering shear):
+#: q^2 = sig^T P sig = sxx^2 - sxx*syy + syy^2 + 3*sxy^2.
+_P_PLANE = np.array([[1.0, -0.5, 0.0],
+                     [-0.5, 1.0, 0.0],
+                     [0.0, 0.0, 3.0]])
+
+
+def consistent_shell_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
+                             epsp_incr: np.ndarray,
+                             extra=None) -> np.ndarray:
+    """The CONSISTENT (algorithmic) elastoplastic plane-stress tangent
+    for shells, (n, 3, 3), Voigt [xx, yy, xy] with engineering shear.
+
+    Derivation:
+        D = s C + [H/(3G+H) - s] / q_tr^2 * sig_tr (x) (C P sig_tr)
+    """
+    from . import law01_elastic
+    n = sig.shape[0]
+    if n == 0:
+        return np.empty((0, 3, 3))
+    p = mat.params
+    E, nu = p["E"], p["nu"]
+    G = mat.G if hasattr(mat, "G") else E / (2.0 * (1.0 + nu))
+    C = law01_elastic.shell_membrane_tangent(mat)
+    D = np.broadcast_to(C, (n, 3, 3)).copy()
+    if epsp_incr is None:
+        return D
+    plastic = epsp_incr > 0.0
+    if not np.any(plastic):
+        return D
+
+    idx = np.where(plastic)[0]
+    dl = epsp_incr[idx]
+    s_c = sig[idx, :3]
+    sy = np.sqrt(np.maximum(
+        np.einsum("mi,ij,mj->m", s_c, _P_PLANE, s_c), 0.0))
+    sy = np.maximum(sy, 1e-30)
+    q_tr = sy + 3.0 * G * dl
+    s = sy / q_tr
+    sig_tr = s_c / s[:, None]
+
+    rq = np.ones(len(idx))
+    fail = np.ones(len(idx))
+    if extra is not None and "eps44" in extra and p.get("epsr1", _INF) < _INF:
+        eps = extra["eps44"][idx]
+        epst = 0.5 * (eps[:, 0] + eps[:, 1]
+                      + np.sqrt((eps[:, 0] - eps[:, 1]) ** 2 + eps[:, 2] ** 2))
+        denom = p["epsr2"] - p["epsr1"]
+        if abs(denom) > _EM20:
+            fail = np.clip((p["epsr2"] - epst) / denom, 0.0, 1.0)
+
+    _, H = _yield44(p, epsp[idx], rq, fail)
+    Hbar = np.maximum(H, 0.0)
+
+    gamma = (Hbar / (3.0 * G + Hbar) - s) / (q_tr ** 2)
+    CP = C @ _P_PLANE
+    v = np.einsum("ij,mj->mi", CP, sig_tr)
+    rank1 = np.einsum("mi,mj->mij", sig_tr, v)
+    D[idx] = s[:, None, None] * C[None, :, :] + gamma[:, None, None] * rank1
+    return D
 
 
 def _register():

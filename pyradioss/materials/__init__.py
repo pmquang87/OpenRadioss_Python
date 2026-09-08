@@ -267,10 +267,13 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
                 "supported for the solid kernels (hexa8/tetra4) under "
                 "/IMPL/NONLIN only (PORTING_GUIDE M14)")
         return law42_ogden.consistent_solid_tangent(mat, extra["F"])
+    if mat.law == 44:
+        return law44_cowper.consistent_solid_tangent(
+            mat, sig, epsp, epsp_incr, extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
-        f"elastic, LAW2 and LAW36 elastoplastic, LAW42 hyperelastic are "
-        f"ported; LAW27 is deferred — see PORTING_GUIDE M14)")
+        f"elastic, LAW2, LAW36 and LAW44 elastoplastic, LAW42 hyperelastic "
+        f"are ported; LAW27 is deferred — see PORTING_GUIDE M14)")
 
 
 def shell_membrane_tangent(mat):
@@ -283,9 +286,11 @@ def shell_membrane_tangent(mat):
         return law01_elastic.shell_membrane_tangent(mat)
     if mat.law == 19:
         return law19_fabric.shell_membrane_tangent(mat)
+    if mat.law == 44:
+        return law44_cowper.shell_membrane_tangent(mat)
     raise NotImplementedError(
-        f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic "
-        f"and LAW2 elastoplastic are ported; see PORTING_GUIDE)")
+        f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic, "
+        f"LAW19 fabric and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")
 
 
 def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
@@ -320,7 +325,10 @@ def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
         return law27_brittle.consistent_shell_tangent(mat, extra)
     if mat.law == 19:
         return law19_fabric.consistent_shell_tangent(mat, extra)
+    if mat.law == 44:
+        return law44_cowper.consistent_shell_tangent(
+            mat, sig, epsp, epsp_incr, extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 "
-        f"elastic, LAW2 and LAW36 elastoplastic, LAW27 brittle cracking, "
+        f"elastic, LAW2, LAW36 and LAW44 elastoplastic, LAW27 brittle cracking, "
         f"LAW19 fabric are ported — see PORTING_GUIDE M15)")
