@@ -99,10 +99,10 @@ def _yield_stress(mat, epsp: np.ndarray, rate_fac):
     thermal-softening factors — both are evaluated once per increment
     and held constant through the Newton return (see _combined_factor).
     """
-    A = mat.params["A"]
-    B = mat.params["B"]
-    n = mat.params["n"]
-    sig_max = mat.params["sig_max"]
+    A = mat.params.get("A", 0.0)
+    B = mat.params.get("B", 0.0)
+    n = mat.params.get("n", 1.0)
+    sig_max = mat.params.get("sig_max", 1e30)
     # eps^n with eps=0 guarded (n<1 would give infinite slope at 0 — the
     # Fortran guards the same way with EM20).
     e = np.maximum(epsp, 1e-20)
@@ -122,15 +122,20 @@ def _thermal_factor(mat, extra):
     if extra is None or "temp" not in extra or "mT" not in mat.params:
         return 1.0, None
     temp = extra["temp"]                 # rise above T_i, in place
-    tstar = np.clip(temp / (mat.params["T_melt"] - mat.params["T_i"]),
-                    0.0, 1.0)
-    return 1.0 - tstar ** mat.params["mT"], temp
+    T_melt = mat.params.get("T_melt", 1.0)
+    T_i = mat.params.get("T_i", 0.0)
+    denom = max(T_melt - T_i, 1e-20)
+    tstar = np.clip(temp / denom, 0.0, 1.0)
+    mT = mat.params.get("mT", 1.0)
+    return 1.0 - tstar ** mT, temp
 
 
 def _adiabatic_heating(mat, temp, sy_new, dl, idx):
     """T += sigma_y * d(eps_p) / rho_Cp on the plastic subset (M6)."""
     if temp is not None:
-        temp[idx] += sy_new * dl / mat.params["rho_cp"]
+        rho_cp = mat.params.get("rho_cp", 1.0)
+        if rho_cp > 0.0:
+            temp[idx] += sy_new * dl / rho_cp
 
 
 def _rate_factor(mat, deps_eq_dot: np.ndarray) -> np.ndarray:
@@ -161,6 +166,9 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
     extra: law state views (M6: extra['temp'] = adiabatic temperature
            rise, present when the thermal card is given)
     """
+    if sig.shape[0] == 0:
+        return sig, epsp
+
     G = mat.G
 
     # 1. deviatoric elastic trial (strip the old pressure, sigeps02.F
@@ -187,10 +195,13 @@ def solid_update(mat, sig: np.ndarray, deps: np.ndarray,
 
     # equivalent (deviatoric) strain rate of the increment, for the JC
     # rate term: eps_eq_dot = sqrt(2/3 e:e) / dt
-    exx, eyy, ezz = deps[:, 0] - tr3, deps[:, 1] - tr3, deps[:, 2] - tr3
-    ee = exx ** 2 + eyy ** 2 + ezz ** 2 \
-        + 0.5 * (deps[:, 3] ** 2 + deps[:, 4] ** 2 + deps[:, 5] ** 2)
-    rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, 1e-30)
+    if dt > 0.0:
+        exx, eyy, ezz = deps[:, 0] - tr3, deps[:, 1] - tr3, deps[:, 2] - tr3
+        ee = exx ** 2 + eyy ** 2 + ezz ** 2 \
+            + 0.5 * (deps[:, 3] ** 2 + deps[:, 4] ** 2 + deps[:, 5] ** 2)
+        rate = np.sqrt((2.0 / 3.0) * ee) / dt
+    else:
+        rate = np.zeros(len(deps))
     rate_fac = _rate_factor(mat, rate)
     # thermal softening (M6): evaluated at the START-of-increment
     # temperature and frozen through the return (see module docstring)
@@ -242,6 +253,9 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
     sig, deps: (n, 3) = [xx, yy, xy];  epsp: (n,). In-place updates.
     extra['temp'] (M6): per-layer adiabatic temperature rise.
     """
+    if sig.shape[0] == 0:
+        return sig, epsp
+
     G = mat.G
 
     # elastic trial
@@ -258,7 +272,10 @@ def shell_update(mat, sig: np.ndarray, deps: np.ndarray,
     tr3 = (dxx + dyy + dzz) / 3.0
     ee = (dxx - tr3) ** 2 + (dyy - tr3) ** 2 + (dzz - tr3) ** 2 \
         + 0.5 * dxy ** 2
-    rate = np.sqrt((2.0 / 3.0) * ee) / max(dt, 1e-30)
+    if dt > 0.0:
+        rate = np.sqrt((2.0 / 3.0) * ee) / dt
+    else:
+        rate = np.zeros(len(deps))
     rate_fac = _rate_factor(mat, rate)
     tfac, temp = _thermal_factor(mat, extra)     # M6 thermal softening
     rate_fac = rate_fac * tfac
@@ -336,6 +353,8 @@ def consistent_solid_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
     """
     from . import law01_elastic
     n = sig.shape[0]
+    if n == 0:
+        return np.empty((0, 6, 6))
     G = mat.G
     Kb = mat.K
     C = law01_elastic.solid_tangent(mat)             # (6, 6) elastic
@@ -430,6 +449,8 @@ def consistent_shell_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
     """
     from . import law01_elastic
     n = sig.shape[0]
+    if n == 0:
+        return np.empty((0, 3, 3))
     G = mat.G
     C = law01_elastic.shell_membrane_tangent(mat)     # (3, 3) plane stress
     D = np.broadcast_to(C, (n, 3, 3)).copy()
