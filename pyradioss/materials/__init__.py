@@ -270,9 +270,12 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
     if mat.law == 44:
         return law44_cowper.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr, extra)
+    if mat.law == 81:
+        return law81_druckerprager.consistent_solid_tangent(
+            mat, sig, epsp, epsp_incr, extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
-        f"elastic, LAW2, LAW36 and LAW44 elastoplastic, LAW42 hyperelastic "
+        f"elastic, LAW2, LAW36, LAW44 and LAW81 elastoplastic, LAW42 hyperelastic "
         f"are ported; LAW27 is deferred — see PORTING_GUIDE M14)")
 
 

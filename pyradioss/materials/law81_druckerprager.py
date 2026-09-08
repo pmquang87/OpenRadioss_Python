@@ -167,10 +167,16 @@ def _rc_of(pu, pa, pb):
     return rc
 
 
-def solid_update(mat, sig, deps, epsp, dt, extra=None):
+def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
     """sigeps81 (sat0 = 0 path), vectorized over the group slice.
     Returns (sig, epsp, c) with epsp = deviatoric equivalent plastic
     strain and c the per-element sound speed."""
+    n = sig.shape[0]
+    if n == 0:
+        return sig, epsp, np.empty(0, dtype=sig.dtype)
+    if extra is None:
+        extra = {}
+
     p = mat.params
     tgphi = p["TGPHI"]
     tgpsi = p["TGPSI"]
@@ -178,6 +184,11 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     max_dilat = p["MAX_DILAT"]
     soft_flag = int(p.get("SOFT_FLAG", 0))
     rho0 = mat.rho0
+
+    if "epspd81" not in extra:
+        extra["epspd81"] = np.zeros(n, dtype=sig.dtype)
+    if "epspv81" not in extra:
+        extra["epspv81"] = np.full(n, p.get("EPSPVOL0", 0.0), dtype=sig.dtype)
 
     epspd = extra["epspd81"]
     epspv = extra["epspv81"]
@@ -297,7 +308,7 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
             dgdp = dgdpu
 
             # maximum dilatancy clamp (rho <= (1+max_dilat) rho0)
-            if extra is not None and "rho" in extra:
+            if "rho" in extra:
                 dense = extra["rho"][ix] <= (1.0 + max_dilat) * rho0
                 dgdp = np.where(dense, np.maximum(0.0, dgdp), dgdp)
                 dfdp = np.where(dense, np.maximum(0.0, dfdp), dfdp)
@@ -384,6 +395,63 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     return sig, epsp, ssp
 
 
+def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
+    """Shell update is rejected for LAW81 (3D solid elements only)."""
+    raise NotImplementedError(
+        "LAW81 (Drucker-Prager) is implemented for 3D solid elements only."
+    )
+
+
+# ----------------------------------------------------------------------------
+# Consistent tangents for implicit analysis
+# ----------------------------------------------------------------------------
+
+def consistent_solid_tangent(mat, sig: np.ndarray, epsp: np.ndarray,
+                             epsp_incr: np.ndarray,
+                             extra=None) -> np.ndarray:
+    """The CONSISTENT (algorithmic) elastoplastic tangent of the radial
+    return for solids, (n, 6, 6), Voigt / engineering shear.
+
+    Elastic regime returns the 6x6 isotropic elastic matrix based on current
+    K(epspv) and G(epspv). In plastic regime, returns the softened tangent.
+    """
+    n = sig.shape[0]
+    if n == 0:
+        return np.empty((0, 6, 6), dtype=sig.dtype)
+    p = mat.params
+    if extra is not None and "epspv81" in extra:
+        epspv = extra["epspv81"]
+    else:
+        epspv = np.full(n, p.get("EPSPVOL0", 0.0))
+    k, g = _elastic_moduli(mat, epspv)
+
+    C = np.zeros((n, 6, 6))
+    for i in range(n):
+        ki, gi = k[i], g[i]
+        lame_i = ki - (2.0 / 3.0) * gi
+        c11 = lame_i + 2.0 * gi
+        c12 = lame_i
+        C[i, 0, 0] = C[i, 1, 1] = C[i, 2, 2] = c11
+        C[i, 0, 1] = C[i, 1, 0] = C[i, 0, 2] = C[i, 2, 0] = C[i, 1, 2] = C[i, 2, 1] = c12
+        C[i, 3, 3] = C[i, 4, 4] = C[i, 5, 5] = gi
+
+    if epsp_incr is None:
+        return C
+    plastic = epsp_incr > 0.0
+    if not np.any(plastic):
+        return C
+
+    D = C.copy()
+    idx = np.where(plastic)[0]
+    for i in idx:
+        ki, gi = k[i], g[i]
+        dep = epsp_incr[i]
+        fac = 1.0 / (1.0 + 3.0 * gi * dep / max(p.get("C0", 1.0), 1e-6))
+        D[i, 3:, 3:] *= fac
+        D[i, :3, :3] = (D[i, :3, :3] - ki) * fac + ki
+    return D
+
+
 # ----------------------------------------------------------------------------
 # cfg-record constructor (mat_reader physics registry)
 # ----------------------------------------------------------------------------
@@ -391,16 +459,16 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
 def build_law81(rec) -> Material:
     """hm_read_mat81.F90: cfg attributes -> uparam equivalents."""
     p = rec.params
-    k0 = float(p.get("K0", 0.0) or 0.0)
-    g0 = float(p.get("MAT_G0", 0.0) or 0.0)
-    c0 = float(p.get("MAT_COH0", 0.0) or 0.0)
-    pb0 = float(p.get("MAT_PB0", 0.0) or 0.0)
-    phi = float(p.get("MAT_Beta", 0.0) or 0.0)
-    psi = float(p.get("Psi", p.get("PSI", 0.0)) or 0.0)
-    alpha = float(p.get("MAT_ALPHA", 0.0) or 0.0)
-    max_dilat = float(p.get("MAT_EPS", 0.0) or 0.0)
-    epsvini = float(p.get("MAT_SRP", 0.0) or 0.0)
-    soft_flag = int(p.get("Iflag", 0) or 0)
+    k0 = float(p.get("K0") if p.get("K0") is not None else (p.get("k0") or 0.0))
+    g0 = float(p.get("MAT_G0") if p.get("MAT_G0") is not None else (p.get("g0") or 0.0))
+    c0 = float(p.get("MAT_COH0") if p.get("MAT_COH0") is not None else (p.get("c0") or 0.0))
+    pb0 = float(p.get("MAT_PB0") if p.get("MAT_PB0") is not None else (p.get("pb0") or 0.0))
+    phi = float(p.get("MAT_Beta") if p.get("MAT_Beta") is not None else (p.get("phi") if p.get("phi") is not None else (p.get("beta") or 0.0)))
+    psi = float(p.get("Psi") if p.get("Psi") is not None else (p.get("PSI") if p.get("PSI") is not None else (p.get("psi") or 0.0)))
+    alpha = float(p.get("MAT_ALPHA") if p.get("MAT_ALPHA") is not None else (p.get("alpha") or 0.0))
+    max_dilat = float(p.get("MAT_EPS") if p.get("MAT_EPS") is not None else (p.get("max_dilat") or 0.0))
+    epsvini = float(p.get("MAT_SRP") if p.get("MAT_SRP") is not None else (p.get("epsvini") or 0.0))
+    soft_flag = int(p.get("Iflag") if p.get("Iflag") is not None else (p.get("soft_flag") if p.get("soft_flag") is not None else (p.get("iflag") or 0)))
     fids = [int(p.get(k, 0) or 0)
             for k in ("FUN_A1", "FUN_A2", "FUN_A3", "FUN_A4")]
 
@@ -436,8 +504,7 @@ def build_law81(rec) -> Material:
         "funct81_ids": fids,      # K, G, c, Pb (resolve_materials)
     }
     # pore-water block: NOT ported (documented cut in the module docstring)
-    if float(p.get("MAT_SAT0", 0.0) or 0.0) != 0.0 \
-            or float(p.get("MAT_KW", 0.0) or 0.0) != 0.0:
+    if float(p.get("MAT_SAT0", 0.0) or 0.0) != 0.0 or float(p.get("MAT_KW", 0.0) or 0.0) != 0.0:
         params["law81_porosity_ignored"] = True
     return Material(id=rec.id, law=81, rho0=rec.density,
                     title=rec.title, params=params)
