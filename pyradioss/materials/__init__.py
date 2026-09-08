@@ -234,6 +234,8 @@ def shell_update(mat, sig, deps, epsp, dt, extra=None):
         return law44_cowper.shell_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 35:
         return law35_kelvinmax.shell_update(mat, sig, deps, epsp, dt, extra)
+    if mat.law == 40:
+        return law40_kelvinmax.shell_update(mat, sig, deps, epsp, dt, extra)
     raise NotImplementedError(f"material LAW{mat.law} not ported for shells")
 
 
@@ -275,6 +277,9 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
     if mat.law == 35:
         return law35_kelvinmax.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr, extra)
+    if mat.law == 40:
+        return law40_kelvinmax.consistent_solid_tangent(
+            mat, sig, epsp, epsp_incr, extra)
     if mat.law == 44:
         return law44_cowper.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr, extra)
@@ -283,7 +288,7 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
             mat, sig, epsp, epsp_incr, extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
-        f"elastic, LAW2, LAW24, LAW35, LAW36, LAW44 and LAW81, LAW42 hyperelastic "
+        f"elastic, LAW2, LAW24, LAW35, LAW36, LAW40, LAW44 and LAW81, LAW42 hyperelastic "
         f"are ported; LAW27 is deferred — see PORTING_GUIDE M14)")
 
 

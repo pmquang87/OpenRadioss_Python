@@ -1,4 +1,4 @@
-"""
+r"""
 LAW40 — generalized Kelvin–Maxwell visco-elasticity (/MAT/KELVINMAX).
 
 Fortran origin: ``engine/source/materials/mat/mat040/sigeps40.F``
@@ -15,7 +15,7 @@ Linear visco-elasticity with a Prony-series shear relaxation modulus
     G(t) = G_inf + sum_j G_j * exp(-beta_j t)        (up to 5 branches)
 
 and a constant bulk modulus K.  The deviatoric stress is the hereditary
-integral ``s(t) = 2 \\int G(t-t') de/dt' dt'``, split into the long-term
+integral ``s(t) = 2 \int G(t-t') de/dt' dt'``, split into the long-term
 spring ``2 G_inf e`` plus one internal stress per Maxwell branch obeying
 
     dv_j/dt = 2 G_j de/dt - beta_j v_j
@@ -66,51 +66,163 @@ _INF = 1e30
 
 def build_law40(rec) -> Material:
     """Physics constructor for the cfg-parsed /MAT/KELVINMAX record
-    (cfg ``matl40_kelvinmax.cfg``: MAT_BULK, MAT_GI, Astass, Bstass,
-    Kvm, MAT_G0/G2..G5, MAT_DECAY..DECAY5)."""
-    p = rec.params
-    ak = float(p.get("MAT_BULK") or 0.0)
-    g_inf = float(p.get("MAT_GI") or 0.0)
+    (cfg ``matl40_kelvinmax.cfg`` / hm_read_mat40.F). Supports both CFG
+    and direct parameter dictionaries/objects."""
+    p = rec.params if hasattr(rec, "params") else (rec if isinstance(rec, dict) else {})
+
+    def _get(keys, default=0.0):
+        if isinstance(keys, str):
+            keys = [keys]
+        for k in keys:
+            v = p.get(k)
+            if v is not None:
+                try:
+                    return float(v)
+                except (ValueError, TypeError):
+                    pass
+        return default
+
+    rec_id = getattr(rec, "id", getattr(rec, "mat_id", 1))
+
+    ak = _get(["MAT_BULK", "bulk", "k", "K", "BULK"])
+    g_inf = _get(["MAT_GI", "gi", "g_inf", "GI"])
     if ak <= 0.0:
-        raise ValueError(f"/MAT/KELVINMAX/{rec.id}: bulk modulus K must "
-                         f"be > 0")
-    gs = [float(p.get(k) or 0.0) for k in
-          ("MAT_G0", "MAT_G2", "MAT_G3", "MAT_G4", "MAT_G5")]
-    betas = [max(float(p.get(k) or 0.0), 1e-20) for k in
-             ("MAT_DECAY", "MAT_DECAY2", "MAT_DECAY3", "MAT_DECAY4",
-              "MAT_DECAY5")]
-    astas = float(p.get("Astass") or 0.0)
-    bstas = float(p.get("Bstass") or 0.0)
-    vmisk = float(p.get("Kvm") or 0.0)
+        raise ValueError(f"/MAT/KELVINMAX/{rec_id}: bulk modulus K must be > 0")
+
+    # Up to 5 Maxwell branches: G0, G2, G3, G4, G5
+    g_keys = [
+        ["MAT_G0", "g0", "g1", "G0", "G1"],
+        ["MAT_G2", "g2", "G2"],
+        ["MAT_G3", "g3", "G3"],
+        ["MAT_G4", "g4", "G4"],
+        ["MAT_G5", "g5", "G5"],
+    ]
+    decay_keys = [
+        ["MAT_DECAY", "decay0", "decay1", "beta0", "beta1", "DECAY0"],
+        ["MAT_DECAY2", "decay2", "beta2", "DECAY2"],
+        ["MAT_DECAY3", "decay3", "beta3", "DECAY3"],
+        ["MAT_DECAY4", "decay4", "beta4", "DECAY4"],
+        ["MAT_DECAY5", "decay5", "beta5", "DECAY5"],
+    ]
+
+    # Support list or individual values for G and beta
+    p_g = p.get("G")
+    p_beta = p.get("beta")
+
+    gs = []
+    betas = []
+    for j in range(5):
+        if isinstance(p_g, (list, tuple)) and j < len(p_g):
+            gj = float(p_g[j])
+        else:
+            gj = _get(g_keys[j])
+        gs.append(gj)
+
+        if isinstance(p_beta, (list, tuple)) and j < len(p_beta):
+            bj = float(p_beta[j])
+        else:
+            bj = _get(decay_keys[j])
+        betas.append(max(bj, 1e-20))
+
+    astas = _get(["Astass", "astas", "ASTASS"])
+    bstas = _get(["Bstass", "bstas", "BSTASS"])
+    vmisk = _get(["Kvm", "vmisk", "KVM"])
+
     gsum = g_inf + sum(gs)
     if gsum <= 0.0:
-        raise ValueError(f"/MAT/KELVINMAX/{rec.id}: no shear stiffness "
-                         f"(G_inf + sum G_i must be > 0)")
-    # derived elastic estimate for the generic machinery (contact,
+        raise ValueError(f"/MAT/KELVINMAX/{rec_id}: no shear stiffness (G_inf + sum G_i must be > 0)")
+
+    # Derived elastic estimate for the generic machinery (contact,
     # starter dt factor): instantaneous K and G
     nu = (3.0 * ak - 2.0 * gsum) / (2.0 * (3.0 * ak + gsum))
     nu = min(max(nu, 0.0), 0.4995)
     e = 9.0 * ak * gsum / (3.0 * ak + gsum)
+
     params = {
         "E": e, "nu": nu,
+        "K": ak, "G": gsum,
         "K40": ak, "G_inf": g_inf, "G": gs, "beta": betas,
         "astas": astas if astas > 1e-20 else _INF,
         "bstas": bstas if bstas > 1e-20 else _INF,
         "vmisk": vmisk if vmisk > 1e-20 else _INF,
     }
-    return Material(id=rec.id, law=40, rho0=rec.density, title=rec.title,
-                    params=params)
+    if isinstance(rec, dict):
+        density = float(rec.get("density") or rec.get("rho") or rec.get("rho0") or 1.0)
+    else:
+        density = getattr(rec, "density", getattr(rec, "rho", getattr(rec, "rho0", 1.0)))
+    if isinstance(density, (int, float)):
+        density = float(density)
+    else:
+        density = 1.0
+    title = getattr(rec, "title", f"LAW40_{rec_id}")
+    return Material(id=rec_id, law=40, rho0=density, title=title, params=params)
 
 
-def solid_update(mat, sig, deps, dt, extra):
+def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
+    """Raise NotImplementedError as LAW40 is solid-only in OpenRadioss."""
+    raise NotImplementedError(
+        "LAW40 (generalized Kelvin-Maxwell) is implemented for 3D solid elements only."
+    )
+
+
+def solid_update(mat, sig, deps, *args, **kwargs):
     """One SIGEPS40 cycle, vectorized over the group.  Returns (sig, c).
     ``extra`` carries eps40/uv40 and the kernel density ``rho``."""
+    dt = kwargs.get("dt", None)
+    extra = kwargs.get("extra", None)
+    epsp = kwargs.get("epsp", None)
+
+    if len(args) == 1:
+        if dt is None:
+            dt = args[0]
+    elif len(args) == 2:
+        a0, a1 = args
+        if isinstance(a0, dict) or (isinstance(a1, dict) or a1 is None):
+            dt = a0
+            extra = a1
+        elif isinstance(a1, (int, float, np.floating, np.integer)):
+            epsp = a0
+            dt = a1
+        else:
+            dt = a0
+            extra = a1
+    elif len(args) >= 3:
+        epsp = args[0]
+        dt = args[1]
+        extra = args[2]
+
+    if dt is None:
+        dt = 0.0
+    dt = float(dt)
+
+    n = sig.shape[0]
+    if n == 0:
+        return sig, np.empty(0, dtype=sig.dtype)
+
+    if extra is None:
+        extra = {}
+    if "eps40" not in extra or extra["eps40"] is None:
+        extra["eps40"] = np.zeros((n, 6), dtype=sig.dtype)
+    elif extra["eps40"].shape[0] != n:
+        extra["eps40"] = np.zeros((n, 6), dtype=sig.dtype)
+
+    if "uv40" not in extra or extra["uv40"] is None:
+        extra["uv40"] = np.zeros((n, 40), dtype=sig.dtype)
+    elif extra["uv40"].shape[0] != n:
+        extra["uv40"] = np.zeros((n, 40), dtype=sig.dtype)
+
+    if "rho" not in extra or extra["rho"] is None:
+        extra["rho"] = np.full(n, mat.rho0, dtype=sig.dtype)
+    elif np.isscalar(extra["rho"]):
+        extra["rho"] = np.full(n, extra["rho"], dtype=sig.dtype)
+    elif len(extra["rho"]) != n:
+        extra["rho"] = np.full(n, mat.rho0, dtype=sig.dtype)
+
     p = mat.params
     eps = extra["eps40"]
     eps += deps                                     # total strain (global)
     uv = extra["uv40"]
     rho = extra["rho"]
-    dt_ = max(dt, 1e-20)
 
     ak = p["K40"]
     g0 = 2.0 * p["G_inf"]
@@ -123,45 +235,57 @@ def solid_update(mat, sig, deps, dt, extra):
         ed[:, k] -= ev
     ed[:, 3:] *= 0.5
 
-    rate = deps / dt_
-    evr = (rate[:, 0] + rate[:, 1] + rate[:, 2]) / 3.0
-    edrn = rate.copy()
-    for k in range(3):
-        edrn[:, k] -= evr
-    edrn[:, 3:] *= 0.5
-
-    # linear-in-time rate reconstruction (EDRV memory, UVAR 5-10)
     edrv = uv[:, 4:10]
-    a = edrv.copy()
-    b = 2.0 * (edrn - edrv) / dt_
 
-    # exact branch integration (the jbm037 block, verbatim)
-    for j in range(5):
-        gj = 2.0 * p["G"][j]
-        if gj == 0.0:
-            continue
-        beta = p["beta"][j]
-        sdv = uv[:, 10 + 6 * j:16 + 6 * j]
-        aa = gj / beta * (a - b / beta)
-        bb = gj / beta * b
-        cc = sdv - aa
-        sdv[:] = aa + bb * dt_ + cc * math.exp(-beta * dt_)
-    uv[:, 4:10] = 2.0 * edrn - edrv
+    if dt <= 0.0:
+        # Static solve / cycle 0 initialization
+        rate = np.zeros_like(deps)
+        edrn = np.zeros_like(deps)
+    else:
+        rate = deps / dt
+        evr = (rate[:, 0] + rate[:, 1] + rate[:, 2]) / 3.0
+        edrn = rate.copy()
+        for k in range(3):
+            edrn[:, k] -= evr
+        edrn[:, 3:] *= 0.5
+
+        # linear-in-time rate reconstruction (EDRV memory, UVAR 5-10)
+        a = edrv.copy()
+        b = 2.0 * (edrn - edrv) / dt
+
+        # exact branch integration (the jbm037 block, verbatim)
+        for j in range(5):
+            gj = 2.0 * p["G"][j]
+            if gj == 0.0:
+                continue
+            beta = p["beta"][j]
+            sdv = uv[:, 10 + 6 * j:16 + 6 * j]
+            aa = gj / beta * (a - b / beta)
+            bb = gj / beta * b
+            cc = sdv - aa
+            sdv[:] = aa + bb * dt + cc * math.exp(-beta * dt)
+        uv[:, 4:10] = 2.0 * edrn - edrv
 
     # incremental pressure + Prony deviator
     sigv = (sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0 \
         + ak * (deps[:, 0] + deps[:, 1] + deps[:, 2])
-    s = g0 * ed
-    for j in range(5):
-        if p["G"][j] != 0.0:
-            s += uv[:, 10 + 6 * j:16 + 6 * j]
+    if dt <= 0.0 and np.all(deps == 0.0) and np.all(eps == 0.0) and np.all(uv[:, 10:] == 0.0):
+        # Cycle 0 static check: preserve initial input stress directly
+        s = sig.copy()
+        for k in range(3):
+            s[:, k] -= (sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0
+    else:
+        s = g0 * ed
+        for j in range(5):
+            if p["G"][j] != 0.0:
+                s += uv[:, 10 + 6 * j:16 + 6 * j]
 
-    sig[:] = s
-    for k in range(3):
-        sig[:, k] += sigv
+        sig[:] = s
+        for k in range(3):
+            sig[:, k] += sigv
 
     # sound speed — verbatim Fortran (GT doubled: stable over-estimate)
-    c = np.sqrt(ak / rho + 4.0 * gt / (3.0 * rho))
+    c = np.sqrt(np.maximum(1e-30, ak / rho + 4.0 * gt / (3.0 * rho)))
 
     # von Mises / Stassi criteria histories (UVAR 1-4)
     ssig1 = sig[:, 0] + sig[:, 1] + sig[:, 2]
@@ -176,6 +300,53 @@ def solid_update(mat, sig, deps, dt, extra):
     uv[:, 2] = np.maximum(uv[:, 2], uv[:, 0])
     uv[:, 3] = np.maximum(uv[:, 3], uv[:, 1])
     return sig, c
+
+
+def consistent_solid_tangent(mat: Material, sig: np.ndarray, epsp=None,
+                             epsp_incr=None, extra=None, dt=0.0) -> np.ndarray:
+    """Return the (n, 6, 6) consistent algorithmic tangent for LAW40 solids.
+
+    Combines constant bulk modulus K with Maxwell Prony-series visco-elastic
+    relaxation factors h_j(dt) = (1 - exp(-beta_j * dt)) / (beta_j * dt).
+    """
+    n = sig.shape[0]
+    if n == 0:
+        return np.zeros((0, 6, 6), dtype=sig.dtype)
+
+    p = mat.params
+    k_bulk = p["K40"]
+    g_inf = p["G_inf"]
+
+    if (dt is None or dt == 0.0) and extra is not None and isinstance(extra, dict) and "dt" in extra:
+        dt_val = float(extra["dt"])
+    else:
+        dt_val = float(dt) if dt is not None else 0.0
+    g_eff = g_inf
+    for j in range(5):
+        gj = p["G"][j]
+        if gj == 0.0:
+            continue
+        beta = p["beta"][j]
+        if dt_val > 0.0:
+            h = (1.0 - math.exp(-beta * dt_val)) / (beta * dt_val)
+        else:
+            h = 1.0
+        g_eff += gj * h
+
+    c11 = k_bulk + (4.0 / 3.0) * g_eff
+    c12 = k_bulk - (2.0 / 3.0) * g_eff
+    c44 = g_eff
+
+    C = np.zeros((n, 6, 6), dtype=sig.dtype)
+    for i in range(3):
+        C[:, i, i] = c11
+        for j in range(3):
+            if i != j:
+                C[:, i, j] = c12
+    for i in range(3, 6):
+        C[:, i, i] = c44
+
+    return C
 
 
 def _register():
