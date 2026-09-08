@@ -91,17 +91,18 @@ class TimeHistory:
                 v2 = np.einsum("nib,nib->n", ve, ve) / conn.shape[1]
                 ke_trans = 0.5 * (group.state["mass"][mask] * v2).sum()
                 ke_rot = 0.0
-                if getattr(model, "inertia", None) is not None and getattr(model, "vr", None) is not None:
+                if getattr(model, "vr", None) is not None:
                     vre = model.vr[safe_conn]
-                    vr2_nodes = np.einsum("nib,nib->ni", vre, vre)
-                    if "inertia" in group.state:
-                        vr2_avg = vr2_nodes.mean(axis=1)
+                    if "dt_iner" in group.state:
+                        # Shells / beams: dt_iner is the per-node rotational
+                        # inertia share (cbilan.F: IN25 * VA2 * HALF).
+                        # Sum |omega_i|^2 over nodes, multiply by dt_iner.
+                        vr2_sum = np.einsum("nib,nib->n", vre, vre)
+                        ke_rot = 0.5 * (group.state["dt_iner"][mask] * vr2_sum).sum()
+                    elif "inertia" in group.state:
+                        # Springs / mock groups: element-total inertia.
+                        vr2_avg = np.einsum("nib,nib->n", vre, vre) / conn.shape[1]
                         ke_rot = 0.5 * (group.state["inertia"][mask] * vr2_avg).sum()
-                    else:
-                        ine_nodes = model.inertia[safe_conn]
-                        if ine_nodes.ndim == 1:
-                            ine_nodes = ine_nodes[:, None]
-                        ke_rot = 0.5 * (ine_nodes * vr2_nodes).sum()
                 val += float(ke_trans + ke_rot)
         return val
 

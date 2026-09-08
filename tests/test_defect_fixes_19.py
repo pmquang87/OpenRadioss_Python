@@ -259,22 +259,26 @@ def test_defect_9_contact_activation_time():
 
 
 # ----------------------------------------------------------------------------
-# Defect 10: SNCONNECT state attached to fail instance
+# Defect 10: SNCONNECT state survives state copy / restart
 # ----------------------------------------------------------------------------
-def test_defect_10_snconnect_instance_state():
-    fail1 = FailureModel(type="SNCONNECT", params={"a2": 0.0, "b2": 1.0, "a3": 0.0, "b3": 1.0})
-    fail2 = FailureModel(type="SNCONNECT", params={"a2": 0.0, "b2": 1.0, "a3": 0.0, "b3": 1.0})
+def test_defect_10_snconnect_state_survives_copy():
+    fail = FailureModel(type="SNCONNECT", params={"a2": 0.0, "b2": 1.0, "a3": 0.0, "b3": 1.0})
 
-    dama1 = np.zeros(2)
-    dama2 = np.zeros(2)
-    sig = np.zeros((2, 6))
-    sig[:, 2] = 100.0
+    dama = np.zeros(4)
+    sig = np.zeros((4, 6))
+    sig[:, 2] = 100.0  # normal stress
 
-    # Step fail1
-    snconnect.solid_step(fail1, sig, np.array([0.5, 0.5]), None, 1e-4, dama1)
-    assert hasattr(fail1, "_snconnect_state")
-    # fail2 state is independent
-    assert not hasattr(fail2, "_snconnect_state")
+    # Step once — accumulates epsp on the fail object
+    snconnect.solid_step(fail, sig, np.array([0.5, 0.5, 0.5, 0.5]), None, 1e-4, dama)
+    assert hasattr(fail, "_snc")
+    epsp_before = fail._snc["epsp"].copy()
+    assert epsp_before[0] == pytest.approx(0.5)
+
+    # Simulate restart: replace dama with a fresh array of the same shape
+    dama_new = dama.copy()
+    snconnect.solid_step(fail, sig, np.array([0.3, 0.3, 0.3, 0.3]), None, 1e-4, dama_new)
+    # History must accumulate (0.5 + 0.3 = 0.8), not reset to 0.3
+    assert fail._snc["epsp"][0] == pytest.approx(0.8)
 
 
 # ----------------------------------------------------------------------------
@@ -337,16 +341,15 @@ def test_defect_13_node_0_validation():
 
 
 # ----------------------------------------------------------------------------
-# Defect 14: GUI default --web flag is False
+# Defect 14: GUI entry point does not crash (dead --web removed)
 # ----------------------------------------------------------------------------
-def test_defect_14_gui_web_default():
-    import argparse
-    from pyradioss.gui.__main__ import main
-    # Argument parser without --web should have args.web == False
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--web", action="store_true", default=False)
-    args = ap.parse_args([])
-    assert args.web is False
+def test_defect_14_gui_no_dead_web_flag():
+    import inspect
+    from pyradioss.gui import __main__ as gui_main
+    src = inspect.getsource(gui_main)
+    # The nonexistent .server import must be gone
+    assert "from .server" not in src
+    assert "run_server" not in src
 
 
 # ----------------------------------------------------------------------------
@@ -399,27 +402,40 @@ def test_defect_16_th_channels(tmp_path):
 
 
 # ----------------------------------------------------------------------------
-# Defect 17: Rotational KE in /TH/PART/KE
+# Defect 17: Rotational KE via dt_iner (cbilan.F formula)
 # ----------------------------------------------------------------------------
-def test_defect_17_rotational_ke_sum(tmp_path):
+def test_defect_17_rotational_ke_dt_iner(tmp_path):
     model = Model()
     model.x = np.zeros((4, 3))
     model.x0 = np.zeros((4, 3))
     model.v = np.zeros((4, 3))
-    model.vr = np.ones((4, 3)) # omega = [1, 1, 1], omega^2 = 3
+    model.vr = np.ones((4, 3))  # omega = [1, 1, 1] at all nodes
     model.inertia = np.full(4, 2.0)
 
     grp = ElementGroup(ids=np.array([1]), conn=np.array([[0, 1, 2, 3]]), part=np.array([0]))
     grp.state["part_ids"] = np.array([1])
     grp.state["mass"] = np.array([0.0])
-    grp.state["inertia"] = np.array([8.0]) # Element inertia = 8.0
+    # Per-node rotational inertia share, like cbilan.F IN25
+    grp.state["dt_iner"] = np.array([2.0])
     model.shells = grp
 
     th = TimeHistory(str(tmp_path / "th2.csv"), model, MagicMock())
-    # Rot KE = 0.5 * I_e * omega^2 = 0.5 * 8.0 * 3.0 = 12.0
+    # vr2_sum = sum_i |omega_i|^2 = 4 nodes * 3 = 12
+    # KE_rot = 0.5 * dt_iner * vr2_sum = 0.5 * 2.0 * 12 = 12.0
     ke = th._part_value(1, "KE")
     assert ke == pytest.approx(12.0)
-    assert ke == pytest.approx(12.0)
+
+    # Also test the spring/mock path with group.state["inertia"]
+    grp2 = ElementGroup(ids=np.array([2]), conn=np.array([[0, 1, 2, 3]]), part=np.array([0]))
+    grp2.state["part_ids"] = np.array([2])
+    grp2.state["mass"] = np.array([0.0])
+    grp2.state["inertia"] = np.array([8.0])  # element-total inertia
+    model.springs = grp2
+
+    ke2 = th._part_value(2, "KE")
+    # vr2_avg = (4 nodes * 3) / 4 nodes = 3
+    # KE_rot = 0.5 * 8.0 * 3.0 = 12.0
+    assert ke2 == pytest.approx(12.0)
 
 
 # ----------------------------------------------------------------------------
