@@ -317,7 +317,7 @@ def _principal_return_tension_cutoff(sig_trial, syield, gamma, sigt_cutoff):
             for k in range(3):
                 clamped[i, k] = min(clamped[i, k], sc)
         else:
-            # Expansion (gamma > 0): clamp to ±SIGT_CUTOFF, then zero positive
+            # Expansion (gamma > 0): clamp to ±SIGT_CUTOFF, then zero negative
             for k in range(3):
                 clamped[i, k] = math.copysign(min(abs(clamped[i, k]), sc), clamped[i, k])
             for k in range(3):
@@ -410,12 +410,13 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
         sig_s[:, 2] += sig_air
 
         # Trial stress (sigeps33 lines 185-192)
-        sig_s[:, 0] += e * deps_rate[:, 0] * dt
-        sig_s[:, 1] += e * deps_rate[:, 1] * dt
-        sig_s[:, 2] += e * deps_rate[:, 2] * dt
-        sig_s[:, 3] += e * deps_rate[:, 3] * dt * _HALF
-        sig_s[:, 4] += e * deps_rate[:, 4] * dt * _HALF
-        sig_s[:, 5] += e * deps_rate[:, 5] * dt * _HALF
+        # Fortran: EY * EPSPXX * TIMESTEP = E * deps (rate × dt = increment)
+        sig_s[:, 0] += e * deps[:, 0]
+        sig_s[:, 1] += e * deps[:, 1]
+        sig_s[:, 2] += e * deps[:, 2]
+        sig_s[:, 3] += e * deps[:, 3] * _HALF
+        sig_s[:, 4] += e * deps[:, 4] * _HALF
+        sig_s[:, 5] += e * deps[:, 5] * _HALF
 
         # Principal stress return
         sig_s = _principal_return_clamp(sig_s, syield)
@@ -458,11 +459,16 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
         sig_s[:, 1] += sig_air
         sig_s[:, 2] += sig_air
 
-        # Get total strain from extra or initialize
+        # Get total strain from extra and update in-place FIRST
+        # (Fortran mulaw.F90 lines 881-895: strain = strain + de BEFORE
+        # calling sigeps33, so EPSXX inside sigeps33 is eps^{n+1}).
+        # The extra["eps33"] is a view into persistent st["mat_extra"],
+        # so in-place += modifies the backing array directly.
         if extra is not None and "eps33" in extra:
-            eps_total = extra["eps33"].copy()
+            extra["eps33"][:] += deps      # in-place update on the view
+            eps_total = extra["eps33"]     # reference, NOT copy
         else:
-            eps_total = np.zeros_like(sig)
+            eps_total = deps.copy()
 
         # Stress rates (sigeps33 lines 350-357)
         # Normal components: dsig = E*deps_rate - EPET*sig + EMET*eps
@@ -479,11 +485,6 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
 
         # Trial stress
         sig_s += dsig * dt
-
-        # Update total strain
-        eps_total += deps
-        if extra is not None:
-            extra["eps33"] = eps_total
 
         # Principal stress return (skip if KEN < 0)
         if ken >= 0:
@@ -508,12 +509,12 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
         sig_s[:, 2] += sig_air
 
         # Trial stress (same as ICASE 1)
-        sig_s[:, 0] += e * deps_rate[:, 0] * dt
-        sig_s[:, 1] += e * deps_rate[:, 1] * dt
-        sig_s[:, 2] += e * deps_rate[:, 2] * dt
-        sig_s[:, 3] += e * deps_rate[:, 3] * dt * _HALF
-        sig_s[:, 4] += e * deps_rate[:, 4] * dt * _HALF
-        sig_s[:, 5] += e * deps_rate[:, 5] * dt * _HALF
+        sig_s[:, 0] += e * deps[:, 0]
+        sig_s[:, 1] += e * deps[:, 1]
+        sig_s[:, 2] += e * deps[:, 2]
+        sig_s[:, 3] += e * deps[:, 3] * _HALF
+        sig_s[:, 4] += e * deps[:, 4] * _HALF
+        sig_s[:, 5] += e * deps[:, 5] * _HALF
 
         # Tension cutoff principal return
         sig_s = _principal_return_tension_cutoff(sig_s, syield, gamma, sigt_cutoff)
