@@ -238,6 +238,8 @@ def shell_update(mat, sig, deps, epsp, dt, extra=None):
         return law40_kelvinmax.shell_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 62:
         return law62_hypervisco.shell_update(mat, sig, deps, epsp, dt, extra)
+    if mat.law == 83:
+        return law83_spotweld.shell_update(mat, sig, deps, epsp, dt, extra)
     raise NotImplementedError(f"material LAW{mat.law} not ported for shells")
 
 
@@ -291,9 +293,12 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
     if mat.law == 62:
         return law62_hypervisco.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr, extra)
+    if mat.law == 83:
+        return law83_spotweld.consistent_solid_tangent(
+            mat, sig, epsp, epsp_incr, extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
-        f"elastic, LAW2, LAW24, LAW35, LAW36, LAW40, LAW44, LAW62 and LAW81, LAW42 hyperelastic "
+        f"elastic, LAW2, LAW24, LAW35, LAW36, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
         f"are ported; LAW27 is deferred — see PORTING_GUIDE M14)")
 
 
