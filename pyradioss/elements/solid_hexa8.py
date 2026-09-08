@@ -112,17 +112,48 @@ _FACES = np.array([
 # Geometry helpers
 # ----------------------------------------------------------------------------
 
+def _edofs(conn: np.ndarray) -> np.ndarray:
+    """Global translation DOF indices for 8-node hexas: 3 per node in node-major order."""
+    n = len(conn)
+    if n == 0:
+        return np.empty((0, 24), dtype=np.int64)
+    ix = np.arange(8)
+    edofs = np.empty((n, 24), dtype=np.int64)
+    edofs[:, 3 * ix + 0] = conn * 6 + 0
+    edofs[:, 3 * ix + 1] = conn * 6 + 1
+    edofs[:, 3 * ix + 2] = conn * 6 + 2
+    return edofs
+
+
 def _geometry(xe: np.ndarray):
     """Centroid Jacobian, volume and cartesian shape gradients.
 
     xe : (n, 8, 3) nodal coordinates.
     Returns (dndx (n,8,3), vol (n,)). Fortran: srcoor3.F + sderi3.F.
     """
+    n = len(xe)
+    if n == 0:
+        return np.empty((0, 8, 3)), np.empty(0)
     # J[a,b] = d x_b / d xi_a  summed over nodes: (3,8) @ (n,8,3) matmul
     J = _DN_DXI_T @ xe
-    # explicit 3x3 cofactor det/inverse (fastmath — LAPACK is ~5x slower
-    # at group sizes and not reproducible by the numba mirror)
-    detJ, Jinv = det_inv33(J)
+    a, b, c = J[:, 0, 0], J[:, 0, 1], J[:, 0, 2]
+    d, e, f = J[:, 1, 0], J[:, 1, 1], J[:, 1, 2]
+    g, h, i = J[:, 2, 0], J[:, 2, 1], J[:, 2, 2]
+    A = e * i - f * h
+    B = f * g - d * i
+    C = d * h - e * g
+    detJ = a * A + b * B + c * C
+    bad = np.abs(detJ) <= EM20
+    if np.any(bad):
+        # Safe fallback for degenerate / zero-volume / collapsed elements
+        J_safe = np.where(bad[:, None, None], np.eye(3)[None, :, :], J)
+        _, Jinv = det_inv33(J_safe)
+        Jinv[bad] = 0.0
+        vol = 8.0 * np.where(bad, EM20, detJ)
+        dndx = _DN_DXI @ Jinv.transpose(0, 2, 1)
+        dndx[bad] = 0.0
+        return dndx, vol
+    _, Jinv = det_inv33(J)
     vol = 8.0 * detJ
     # dN_i/dx_b = dN_i/dxi_a * dxi_a/dx_b ; dxi_a/dx_b = inv(J)[b,a]
     dndx = _DN_DXI @ Jinv.transpose(0, 2, 1)
@@ -186,8 +217,12 @@ def _exact_dt_factor(dndx: np.ndarray, vol: np.ndarray, lc: np.ndarray,
             [0, 0, 0, 0, G, 0],
             [0, 0, 0, 0, 0, G],
         ])
-        c = mat.sound_speed_solid() \
-            if (mat.rho0 > 0.0 and mat.E > 0.0) else 0.0
+        if hasattr(mat, "sound_speed_solid"):
+            c = mat.sound_speed_solid() if (getattr(mat, "rho0", 0.0) > 0.0 and getattr(mat, "E", 0.0) > 0.0) else 0.0
+        else:
+            rho0 = getattr(mat, "rho0", 0.0)
+            E = getattr(mat, "E", 0.0)
+            c = np.sqrt(max(mat.K + 4.0 * mat.G / 3.0, 0.0) / max(rho0, EM20)) if (rho0 > 0.0 and E > 0.0) else 0.0
         if c <= 0.0:
             # stiffness-free material (a /MAT/VOID with E = 0, a bare
             # /MAT/GAS): the element claims no time step at all
@@ -215,6 +250,28 @@ def init_group(group, model, log):
     element volume from the initial geometry, element mass = rho0 * V,
     spread equally to the 8 nodes (consistent with the original's lumping).
     """
+    n = group.n
+    if n == 0 or len(group.conn) == 0:
+        group.state.update(
+            sig=np.empty((0, 6)),
+            epsp=np.empty(0),
+            vol0=np.empty(0),
+            mass=np.empty(0),
+            eint=np.empty(0),
+            ehour=np.empty(0),
+            off=np.empty(0),
+            qvw_pend=np.empty(0),
+            hgq=np.empty((0, 4, 3)),
+            hgqex=np.empty((0, 4, 3)),
+            dtfac=np.empty(0),
+            lc_scale=np.empty(0),
+            law70_mask=np.empty(0, dtype=bool),
+            has_law70=False,
+            chk_fail=False,
+            mat_extra={},
+        )
+        return np.empty(0, dtype=np.int64), np.empty(0), None
+
     xe = model.x0[group.conn]                      # (n, 8, 3)
     dndx0, vol = _geometry(xe)
     bad = vol <= 0.0
@@ -222,10 +279,9 @@ def init_group(group, model, log):
         for eid in group.ids[bad]:
             log.error(f"/BRICK {eid}: zero or negative volume "
                       f"(check node ordering)", "SOLID INIT")
-    n = group.n
     rho0 = np.zeros(n)
     for sl, mat, prop in group.state["slices"]:
-        rho0[sl] = mat.rho0
+        rho0[sl] = getattr(mat, "rho0", 0.0)
     mass = rho0 * vol
 
     # Degenerate element (wedge/pyramid/tetra) length scale
@@ -586,7 +642,30 @@ def forces(group, x, v, vr, dt, fint, mint):
     time step."""
     st = group.state
     conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty(0)
+
     xe = x[conn]                                   # (n, 8, 3) gather
+
+    # Cycle 0 Courant step probe or evaluation without velocity
+    if dt <= 0.0 or v is None:
+        dndx, vol = _geometry(xe)
+        lc = _char_length(xe, vol) * st.get("lc_scale", np.ones(n))
+        rho = st["mass"] / np.maximum(vol, EM20)
+        c = np.zeros(n)
+        is_void = np.zeros(n, dtype=bool)
+        for sl, mat, prop in st.get("slices", []):
+            if getattr(mat, "law", 1) == 0:
+                is_void[sl] = True
+            else:
+                K = getattr(mat, "K", 0.0)
+                G = getattr(mat, "G", 0.0)
+                c[sl] = np.sqrt(np.maximum(K + 4.0 * G / 3.0, 0.0) / np.maximum(rho[sl], EM20))
+        alive = st["off"] > 0.0
+        dt_e = np.where(alive, st.get("dtfac", np.ones(n)) * lc / np.maximum(c, EM20), EP30)
+        return np.where(is_void, EP30, dt_e)
+
     ve = v[conn]
 
     sig = st["sig"]
@@ -614,6 +693,8 @@ def forces(group, x, v, vr, dt, fint, mint):
         # exact deformation gradient at the point: F = sum_i x_i (x) gradN0_i
         F = np.einsum("nia,nib->nab", xe, st["dndx0"])
     for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            continue
         extra = {}
         if F is not None:
             extra["F"] = F[sl]
@@ -684,6 +765,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     if st["chk_fail"]:
         off = st["off"]
         for sl, mat, prop in st["slices"]:
+            if getattr(mat, "law", 1) == 0:
+                continue
             eps_max = mat.params.get("eps_p_max", EP30)
             if mat.fail is None and eps_max >= 1e30:
                 continue
@@ -710,13 +793,15 @@ def forces(group, x, v, vr, dt, fint, mint):
     qb = np.zeros(group.n)
     hcoef = np.zeros(group.n)
     for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            continue
         # current sound speed uses current density (stiffness constant);
         # laws that returned their own (nonlinear) c keep it
         if not c_from_law[sl.start]:
-            c[sl] = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
-        qa[sl] = prop.params["qa"]
-        qb[sl] = prop.params["qb"]
-        hcoef[sl] = prop.params["h"]
+            c[sl] = np.sqrt((getattr(mat, "K", 0.0) + 4.0 * getattr(mat, "G", 0.0) / 3.0) / rho[sl])
+        qa[sl] = getattr(prop, "params", {}).get("qa", 1.1)
+        qb[sl] = getattr(prop, "params", {}).get("qb", 0.05)
+        hcoef[sl] = getattr(prop, "params", {}).get("h", 0.1)
 
     # ---- post block: viscosity, forces, hourglass, energies, dt -----------
     # (dispatched to the numba mirror when that backend is active)
@@ -766,8 +851,17 @@ def forces(group, x, v, vr, dt, fint, mint):
         st["ehour"] += dehour_hg
         dt_crit = np.minimum(dt_crit, dt_hg)
 
+    is_void = np.zeros(group.n, dtype=bool)
+    for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    if np.any(is_void):
+        fe[is_void] = 0.0
+        dt_crit[is_void] = EP30
+
     # ---- scatter to global arrays (asspar) ---------------------------------
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    if fint is not None:
+        scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
     return dt_crit
 
@@ -836,6 +930,9 @@ def _hg_operators(group, x):
     above)."""
     st = group.state
     conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return conn, np.empty((0, 4, 8)), np.empty((0, 8, 8)), np.empty(0), np.empty(0)
     xe = x[conn]
     dndx, vol = _geometry(xe)
     vol = np.maximum(vol, EM20)
@@ -848,9 +945,11 @@ def _hg_operators(group, x):
     k_hg = np.zeros(n)
     k_stiff = np.zeros(n)
     for sl, mat, prop in st["slices"]:
-        c = np.sqrt((mat.K + 4.0 * mat.G / 3.0) / rho[sl])
-        ah = prop.params["h"] * rho[sl] * c * vol[sl] ** (2.0 / 3.0) / 4.0
-        ks = HG_STIFF * mat.G * vol[sl] * traceS[sl]
+        if getattr(mat, "law", 1) == 0:
+            continue
+        c = np.sqrt((getattr(mat, "K", 0.0) + 4.0 * getattr(mat, "G", 0.0) / 3.0) / rho[sl])
+        ah = getattr(prop, "params", {}).get("h", 0.1) * rho[sl] * c * vol[sl] ** (2.0 / 3.0) / 4.0
+        ks = HG_STIFF * getattr(mat, "G", 0.0) * vol[sl] * traceS[sl]
         k_stiff[sl] = ks
         k_hg[sl] = ah + ks
     return conn, gamma, GG, k_hg, k_stiff
@@ -887,6 +986,10 @@ def static_stabilization(group, x, u, ur, fint, mint):
     ``ehour`` (a statics device; documented, like the incremental form
     before it)."""
     st = group.state
+    conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return
     conn, gamma, GG, k_hg, k_stiff = _hg_operators(group, x)
     ue = u[conn]                                               # (n, 8, 3)
     modal = np.einsum("nai,nid->nad", gamma, ue)              # (n, 4, 3)
@@ -898,7 +1001,16 @@ def static_stabilization(group, x, u, ur, fint, mint):
     #                                       identity kept — the snapshot/
     #                                       restore contract); committed
     #                                       on convergence
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        fe[dead] = 0.0
+
+    if fint is not None:
+        scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
 
 
 def tangent(group, x, epsp_incr=None):
@@ -916,6 +1028,8 @@ def tangent(group, x, epsp_incr=None):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24)), np.empty((0, 24), dtype=np.int64)
     xe = x[conn]                                   # (n, 8, 3)
 
     # geometry: uniform-gradient shape derivatives + volume (srcoor3/sderi3)
@@ -947,6 +1061,8 @@ def tangent(group, x, epsp_incr=None):
     F = (np.einsum("nia,nib->nab", xe, st["dndx0"])
          if "dndx0" in st else None)
     for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            continue
         extra = ({"F": F[sl]} if F is not None
                  and materials.needs_defgrad(mat) else None)
         D = materials.solid_tangent(mat, st["sig"][sl], st["epsp"][sl],
@@ -967,12 +1083,15 @@ def tangent(group, x, epsp_incr=None):
         cols = (3 * ix + b)[None, :]
         ke[:, rows, cols] += kh
 
-    # ---- global DOF addressing (node*6 + component) -----------------------
-    edofs = np.empty((n, 24), dtype=np.int64)
-    edofs[:, 3 * ix + 0] = conn * 6 + 0
-    edofs[:, 3 * ix + 1] = conn * 6 + 1
-    edofs[:, 3 * ix + 2] = conn * 6 + 2
-    return ke, edofs
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
 
 
 # ----------------------------------------------------------------------------
@@ -1026,6 +1145,8 @@ def consistent_mass(group, x=None):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24)), np.empty((0, 24), dtype=np.int64)
     # density ρ = m / V0 from the stored element mass and reference volume:
     # the mass is conserved, so it is integrated on the UNDEFORMED element.
     rho = st["mass"] / np.maximum(st["vol0"], EM20)     # (n,)
@@ -1058,11 +1179,15 @@ def consistent_mass(group, x=None):
         rows = (3 * ix + c)[:, None]
         cols = (3 * ix + c)[None, :]
         me[:, rows, cols] = MS
-    edofs = np.empty((n, 24), dtype=np.int64)
-    edofs[:, 3 * ix + 0] = conn * 6 + 0
-    edofs[:, 3 * ix + 1] = conn * 6 + 1
-    edofs[:, 3 * ix + 2] = conn * 6 + 2
-    return me, edofs
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        me[dead] = 0.0
+
+    return me, _edofs(conn)
 
 
 # ----------------------------------------------------------------------------
@@ -1101,6 +1226,8 @@ def kgeo(group, x):
     st = group.state
     conn = group.conn
     n = group.n
+    if n == 0 or len(conn) == 0:
+        return np.empty((0, 24, 24)), np.empty((0, 24), dtype=np.int64)
     dndx, vol = _geometry(x[conn])
     vol = np.maximum(vol, EM20)
 
@@ -1122,11 +1249,15 @@ def kgeo(group, x):
         cols = (3 * ix + b)[None, :]
         ke[:, rows, cols] += g
 
-    edofs = np.empty((n, 24), dtype=np.int64)
-    edofs[:, 3 * ix + 0] = conn * 6 + 0
-    edofs[:, 3 * ix + 1] = conn * 6 + 1
-    edofs[:, 3 * ix + 2] = conn * 6 + 2
-    return ke, edofs
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        ke[dead] = 0.0
+
+    return ke, _edofs(conn)
 
 
 def static_internal_forces(group, x, u, ur, fint, mint):
@@ -1148,6 +1279,9 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     ``mint`` are unused (solids carry no rotational DOFs)."""
     st = group.state
     conn = group.conn
+    n = group.n
+    if n == 0 or len(conn) == 0:
+        return
     dndx, vol = _geometry(x[conn])
     vol = np.maximum(vol, EM20)
     s = st["sig"]
@@ -1162,6 +1296,8 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     if "dndx0" in st:
         F = np.einsum("nia,nib->nab", x[conn], st["dndx0"])
         for sl, mat, prop in st["slices"]:
+            if getattr(mat, "law", 1) == 0:
+                continue
             if materials.needs_defgrad(mat):
                 materials.solid_update(mat, s[sl], np.zeros((sl.stop - sl.start, 6)),
                                        st["epsp"][sl], 1.0, {"F": F[sl]})
@@ -1176,4 +1312,14 @@ def static_internal_forces(group, x, u, ur, fint, mint):
     _, gamma, _, k_hg, _ = _hg_operators(group, x)
     modal = np.einsum("nai,nid->nad", gamma, u[conn])          # (n, 4, 3)
     fe -= k_hg[:, None, None] * np.einsum("nad,nai->nid", modal, gamma)
-    scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
+
+    is_void = np.zeros(n, dtype=bool)
+    for sl, mat, prop in st["slices"]:
+        if getattr(mat, "law", 1) == 0:
+            is_void[sl] = True
+    dead = (st["off"] <= 0.0) | is_void
+    if np.any(dead):
+        fe[dead] = 0.0
+
+    if fint is not None:
+        scatter_add3(fint, conn.reshape(-1), fe.reshape(-1, 3), st.get('color_indices'), st.get('color_offsets'))
