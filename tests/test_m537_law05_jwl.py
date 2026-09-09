@@ -26,7 +26,10 @@ Covers all milestone requirements:
 
 from __future__ import annotations
 
+import contextlib
+import io
 import math
+import os
 import numpy as np
 import pytest
 
@@ -41,6 +44,8 @@ from pyradioss.model.model import Model
 from pyradioss.common.messages import MessageLog
 from pyradioss.starter import checks
 from pyradioss.starter.checks import check_model, _ALLOWED_LAWS
+from pyradioss.starter.starter import run_starter, StarterError
+from pyradioss.engine.engine import run_engine, _energies
 
 
 # =============================================================================
@@ -863,3 +868,220 @@ class TestMaterialsPackageIntegration:
         assert "aburn" in shapes
         assert "eint" in shapes
         assert "tb" in shapes
+
+
+# =============================================================================
+# 15. Engine Multi-Cycle Integration & Starter Topology Auditing
+# =============================================================================
+
+class TestEngineMultiCycleIntegration:
+    """Multi-cycle explicit engine simulation and Starter topology check audit."""
+
+    def test_starter_topology_checks_allow_solids_reject_shells(self, tmp_path):
+        """Verify Starter topology checks:
+        - Solids (bricks and tetras) with LAW5 are allowed in _ALLOWED_LAWS.
+        - Shell elements with LAW5 are rejected by Starter check or raise NotImplementedError.
+        """
+        assert 5 in _ALLOWED_LAWS["bricks"]
+        assert "5" in _ALLOWED_LAWS["bricks"] or "LAW5" in _ALLOWED_LAWS["bricks"]
+        assert 5 in _ALLOWED_LAWS["tetras"]
+        assert 5 not in _ALLOWED_LAWS["shells"]
+
+        # 1. Verify shell_update directly raises NotImplementedError
+        with pytest.raises(NotImplementedError, match="solid/SPH elements only"):
+            law05_jwl.shell_update()
+
+        # 2. Verify Starter check rejects shell element with LAW5
+        s_path = os.path.join(tmp_path, "SHELL_LAW5_0000.rad")
+        deck = StarterDeck("SHELL_LAW5")
+        deck.node([(1, 0, 0, 0), (2, 1, 0, 0), (3, 1, 1, 0), (4, 0, 1, 0)])
+        deck.shell(1, [(1, 1, 2, 3, 4)])
+        deck.part(1, "SHELL_PART", 1, 1)
+        deck.mat_law5(
+            1,
+            rho=1.63e-6,
+            a=3.712e5,
+            b=3.231e3,
+            r1=4.15,
+            r2=0.95,
+            omega=0.30,
+            d=6930.0,
+            pcj=2.1e4,
+            e0=7.0e3,
+            title="TNT",
+        )
+        deck.prop_shell(1, "SHELL_PROP", 1.0)
+        deck.write(s_path)
+
+        log = MessageLog()
+        with contextlib.redirect_stdout(io.StringIO()):
+            with pytest.raises(StarterError):
+                run_starter(s_path, log=log)
+
+        err_text = " ".join(str(e) for e in log.errors)
+        assert "not ported for shells elements" in err_text
+
+    def test_engine_multi_cycle_simulation_hexa8(self, tmp_path):
+        """Run 10+ explicit cycles of high explosive expansion on solid hexa8.
+        Verify:
+        - Model initializes cleanly without errors or warnings.
+        - Initial time step reflects LAW5 sound speed and Courant stability.
+        - Multi-cycle explicit integration completes normally.
+        - Hydrodynamic fluid deviatoric stresses remain identically zero across all cycles.
+        - Stress and internal energy evolve without NaN or Inf.
+        - Energy balance is tracked properly in engine ledgers.
+        """
+        run_name = "HEXA_JWL"
+        s_path = os.path.join(tmp_path, f"{run_name}_0000.rad")
+        e_path = os.path.join(tmp_path, f"{run_name}_0001.rad")
+
+        deck = StarterDeck(run_name)
+        deck.node([
+            (1, 0.0, 0.0, 0.0),
+            (2, 10.0, 0.0, 0.0),
+            (3, 10.0, 10.0, 0.0),
+            (4, 0.0, 10.0, 0.0),
+            (5, 0.0, 0.0, 10.0),
+            (6, 10.0, 0.0, 10.0),
+            (7, 10.0, 10.0, 10.0),
+            (8, 0.0, 10.0, 10.0),
+        ])
+        deck.brick(1, [(1, 1, 2, 3, 4, 5, 6, 7, 8)])
+        deck.part(1, "TNT_BLOCK", 1, 1)
+        deck.mat_law5(
+            1,
+            rho=1.63e-6,
+            a=3.712e5,
+            b=3.231e3,
+            r1=4.15,
+            r2=0.95,
+            omega=0.30,
+            d=6930.0,
+            pcj=2.1e4,
+            e0=7.0e3,
+            title="TNT_EXPLOSIVE",
+        )
+        deck.prop_solid(1, "SOLID_PROP")
+        deck.write(s_path)
+
+        engine_deck = f"""/RUN/{run_name}/1
+2.0e-2
+/DT
+0.9 0
+/PRINT/-1
+/STOP
+100
+/END
+"""
+        with open(e_path, "w") as f:
+            f.write(engine_deck)
+
+        log = MessageLog()
+        with contextlib.redirect_stdout(io.StringIO()):
+            st_model = run_starter(s_path, log=log)
+            eng_model = run_engine(e_path)
+
+        # 1. Starter sanity
+        assert len(log.errors) == 0
+        mat = st_model.materials[1]
+        assert mat.law == 5
+        c_sound = mat.sound_speed_solid()
+        assert c_sound > 0.0
+
+        # 2. Cycle count & Time step from listing file
+        state = eng_model.engine_state
+        assert state.cycle >= 10, f"Expected >= 10 cycles, got {state.cycle}"
+
+        out_path = os.path.join(tmp_path, f"{run_name}_0001.out")
+        with open(out_path) as f:
+            out_text = f.read()
+        assert "INITIAL TIME STEP" in out_text
+        dt_line = [ln for ln in out_text.splitlines() if "INITIAL TIME STEP" in ln][0]
+        dt_val = float(dt_line.split(":")[-1])
+        # dt0 should match Courant condition dt0 = 0.9 * lc / c
+        assert 5.0e-5 < dt_val < 1.0e-4
+
+        # 3. Normal engine termination
+        assert not state.stop_reason or "/STOP" in str(state.stop_reason)
+
+        # 4. Stress and deviatoric nullity
+        brick_g = dict(eng_model.element_groups())["bricks"]
+        sig = brick_g.state["sig"]
+        assert np.isfinite(sig).all()
+        # Hydrodynamic fluid: shear stresses are identically 0
+        np.testing.assert_allclose(sig[:, 3:], 0.0, atol=1e-12)
+        # Normal stresses are pure hydrostatic pressure: sig_11 = sig_22 = sig_33 = -P
+        dev_normal = sig[:, :3] - np.mean(sig[:, :3], axis=-1, keepdims=True)
+        np.testing.assert_allclose(dev_normal, 0.0, atol=1e-10)
+
+        # 5. Energy ledgers
+        eint = brick_g.state["eint"]
+        assert np.isfinite(eint).all()
+        energies = _energies(eng_model, state)
+        assert np.isfinite(energies["IE"])
+        assert np.isfinite(energies["KE"])
+        assert abs(energies["ERR"]) < 5.0
+
+    def test_engine_multi_cycle_simulation_tetra4(self, tmp_path):
+        """Run 10+ explicit cycles on solid tetra4 with LAW5.
+        Verify tetra4 kernel initializes material state, passes extra views,
+        and maintains zero shear stress.
+        """
+        run_name = "TETRA_JWL"
+        s_path = os.path.join(tmp_path, f"{run_name}_0000.rad")
+        e_path = os.path.join(tmp_path, f"{run_name}_0001.rad")
+
+        deck = StarterDeck(run_name)
+        deck.node([
+            (1, 0.0, 0.0, 0.0),
+            (2, 10.0, 0.0, 0.0),
+            (3, 5.0, 10.0, 0.0),
+            (4, 5.0, 5.0, 10.0),
+        ])
+        deck.tetra4(1, [(1, 1, 2, 3, 4)])
+        deck.part(1, "TNT_TETRA", 1, 1)
+        deck.mat_law5(
+            1,
+            rho=1.63e-6,
+            a=3.712e5,
+            b=3.231e3,
+            r1=4.15,
+            r2=0.95,
+            omega=0.30,
+            d=6930.0,
+            pcj=2.1e4,
+            e0=7.0e3,
+            title="TNT_EXPLOSIVE",
+        )
+        deck.prop_solid(1, "SOLID_PROP")
+        deck.write(s_path)
+
+        engine_deck = f"""/RUN/{run_name}/1
+2.0e-2
+/DT
+0.9 0
+/PRINT/-1
+/STOP
+100
+/END
+"""
+        with open(e_path, "w") as f:
+            f.write(engine_deck)
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            st_model = run_starter(s_path)
+            eng_model = run_engine(e_path)
+
+        state = eng_model.engine_state
+        assert state.cycle >= 10
+        assert not state.stop_reason or "/STOP" in str(state.stop_reason)
+
+        tetra_g = dict(eng_model.element_groups())["tetras"]
+        sig = tetra_g.state["sig"]
+        assert np.isfinite(sig).all()
+        np.testing.assert_allclose(sig[:, 3:], 0.0, atol=1e-12)
+        dev_normal = sig[:, :3] - np.mean(sig[:, :3], axis=-1, keepdims=True)
+        np.testing.assert_allclose(dev_normal, 0.0, atol=1e-10)
+
+        eint = tetra_g.state["eint"]
+        assert np.isfinite(eint).all()
