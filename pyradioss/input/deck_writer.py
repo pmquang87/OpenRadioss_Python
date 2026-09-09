@@ -403,6 +403,82 @@ class StarterDeck:
         else:
             self.lines.append(fmt_float(rhocp))
 
+    def mat_law5(
+        self,
+        mat_id: int,
+        rho: float = 0.0,
+        a: float = 0.0,
+        b: float = 0.0,
+        r1: float = 0.0,
+        r2: float = 0.0,
+        omega: float = 0.0,
+        d: float = 0.0,
+        pcj: float = 0.0,
+        e0: float = 0.0,
+        eadd: float = 0.0,
+        ibfrac: int = 0,
+        qopt: int = 0,
+        p0: float = 0.0,
+        psh: float = 0.0,
+        bunreacted: float = 0.0,
+        tstart: float = 0.0,
+        tstop: float = 0.0,
+        a_mil: float = 0.0,
+        m_mil: float = 0.0,
+        n_mil: float = 0.0,
+        rho_ref: float | None = None,
+        title: str = "",
+        unit_id: int | None = None,
+        law_name: str = "LAW5",
+        **kwargs,
+    ) -> None:
+        """``/MAT/LAW5`` (/MAT/JWL) — cfg MAT/matl5_jwl.cfg
+        (FORMAT radioss2019):
+        Card 1: MAT_RHO, [Refer_Rho] (%20lg[%20lg]) — MAT_LAW5_CFG_1: (20, 20)
+        Card 2: MAT_A, MAT_B, MAT_PDIR1, MAT_PDIR2, Omega (%20lg*5) — MAT_LAW5_CFG_2: (20, 20, 20, 20, 20)
+        Card 3: MAT_D, MAT_PC, MAT_E0, MAT_E, MAT_IBFRAC, QOPT (%20lg*4%10d%10d) — MAT_LAW5_CFG_3: (20, 20, 20, 20, 10, 10)
+        Card 4: LAW5_P0, LAW5_PSH, BUNREACTED (%20lg*3) — MAT_LAW5_CFG_4: (20, 20, 20)
+        Card 5 (optional afterburning):
+          - If QOPT in (0, 1, 2) and Eadd > 0: TSTART, TSTOP (%20lg*2) — MAT_LAW5_CFG_5_OPT1: (20, 20)
+          - If QOPT == 3 and Eadd > 0: LAW5_A, LAW5_M, LAW5_N (%20lg*3) — MAT_LAW5_CFG_5_OPT2: (20, 20, 20)
+
+        Jones-Wilkins-Lee (JWL) equation of state material for high explosives.
+        """
+        if "mid" in kwargs and mat_id == 0:
+            mat_id = kwargs["mid"]
+        if "rho0" in kwargs and rho == 0.0:
+            rho = kwargs["rho0"]
+        if rho_ref is None and "rhor" in kwargs:
+            rho_ref = kwargs["rhor"]
+        if rho_ref is None and "refer_rho" in kwargs:
+            rho_ref = kwargs["refer_rho"]
+        if "law" in kwargs:
+            law_name = kwargs["law"]
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mat_id, unit_id)
+        else:
+            self._header("MAT", law_name, mat_id)
+        self._title(title)
+        if rho_ref is not None:
+            self.lines.append(fmt_float(rho) + fmt_float(rho_ref))
+        else:
+            self.lines.append(fmt_float(rho))
+        self.lines.append(fmt_float(a) + fmt_float(b) + fmt_float(r1) + fmt_float(r2) + fmt_float(omega))
+        self.lines.append(
+            fmt_float(d) + fmt_float(pcj) + fmt_float(e0) + fmt_float(eadd)
+            + fmt_int(ibfrac) + fmt_int(qopt)
+        )
+        self.lines.append(fmt_float(p0) + fmt_float(psh) + fmt_float(bunreacted))
+        has_afterburn = (eadd > 0.0) or (tstart != 0.0 or tstop != 0.0) or (a_mil != 0.0 or m_mil != 0.0 or n_mil != 0.0)
+        if has_afterburn:
+            if qopt == 3:
+                self.lines.append(fmt_float(a_mil) + fmt_float(m_mil) + fmt_float(n_mil))
+            else:
+                self.lines.append(fmt_float(tstart) + fmt_float(tstop))
+
+    mat_jwl = mat_law5
+
     def mat_law10(
         self,
         mat_id: int,
@@ -668,12 +744,6 @@ class StarterDeck:
         self._header("MAT", "HYD_JCOOK", mid)
         self._title(title)
         self.lines.extend((c.raw if hasattr(c, "raw") else str(c)).rstrip("\r\n") for c in data_cards)
-
-    def mat_jwl(self, mid: int, title: str, data_cards) -> None:
-        """``/MAT/JWL``."""
-        self._header("MAT", "JWL", mid)
-        self._title(title)
-        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
     def mat_plas_predef(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/PLAS_PREDEF``."""
@@ -2097,7 +2167,7 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_hyd_visc(mid, title, cards)
     elif law in ("LAW58", "FABRI"):
         d.mat_fabri(mid, title, cards)
-    elif law in ("LAW5", "GAS"):
+    elif law in ("GAS",):
         d.mat_gas(mid, title, cards)
     elif law in ("LAW0", "VOID"):
         d.mat_void(mid, title, cards)
@@ -2146,8 +2216,6 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
             d.mat_law4(mid, title, rho, e, nu, **kw)
         else:
             d.mat_hyd_jcook(mid, title, [c.raw if hasattr(c, "raw") else c for c in cards])
-    elif law == "JWL":
-        d.mat_jwl(mid, title, cards)
     elif law == "PLAS_PREDEF":
         d.mat_plas_predef(mid, title, cards)
     elif law == "LAW69":
@@ -2205,6 +2273,50 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
             if len(t) >= 1: kw["b"] = t[0]
             if len(t) >= 2: kw["mue_max"] = t[1]
         d.mat_law10(mid, title, unit_id=b.unit_id, **kw)
+    elif law in ("LAW5", "JWL"):
+        kw: Dict = {}
+        if len(cards) >= 1:
+            tokens = cards[0].tokens()
+            if len(tokens) >= 1:
+                kw["rho"] = float(tokens[0])
+            if len(tokens) >= 2:
+                kw["rho_ref"] = float(tokens[1])
+        if len(cards) >= 2:
+            t = cards[1].floats()
+            if len(t) >= 1: kw["a"] = t[0]
+            if len(t) >= 2: kw["b"] = t[1]
+            if len(t) >= 3: kw["r1"] = t[2]
+            if len(t) >= 4: kw["r2"] = t[3]
+            if len(t) >= 5: kw["omega"] = t[4]
+        if len(cards) >= 3:
+            toks = cards[2].tokens()
+            if getattr(b, "fixed", False) and hasattr(cards[2], "cut"):
+                c_toks = cards[2].cut("MAT_LAW5_3")
+                if len([x for x in c_toks if x]) >= 4:
+                    toks = [x for x in c_toks]
+            if len(toks) >= 1 and toks[0]: kw["d"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["pcj"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["e0"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["eadd"] = float(toks[3])
+            if len(toks) >= 5 and toks[4]: kw["ibfrac"] = int(float(toks[4]))
+            if len(toks) >= 6 and toks[5]: kw["qopt"] = int(float(toks[5]))
+        if len(cards) >= 4:
+            t = cards[3].floats()
+            if len(t) >= 1: kw["p0"] = t[0]
+            if len(t) >= 2: kw["psh"] = t[1]
+            if len(t) >= 3: kw["bunreacted"] = t[2]
+        if len(cards) >= 5:
+            qopt = kw.get("qopt", 0)
+            if qopt == 3:
+                t = cards[4].floats()
+                if len(t) >= 1: kw["a_mil"] = t[0]
+                if len(t) >= 2: kw["m_mil"] = t[1]
+                if len(t) >= 3: kw["n_mil"] = t[2]
+            else:
+                t = cards[4].floats()
+                if len(t) >= 1: kw["tstart"] = t[0]
+                if len(t) >= 2: kw["tstop"] = t[1]
+        d.mat_law5(mid, title=title, unit_id=b.unit_id, law_name=law, **kw)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")

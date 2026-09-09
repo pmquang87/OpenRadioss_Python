@@ -37144,25 +37144,30 @@ def read_mat_law5(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/MAT/LAW5/{mat_id}: missing data card", block.source)
         return
 
+    if len(valid_cards) >= 4:
+        from .mat_reader import read_generic_mat
+        read_generic_mat(block, model, log)
+        return
+
     rho0, e, nu = 0.0, 0.0, 0.0
     a, b, n, c, sig_max = 0.0, 0.0, 0.0, 0.0, 0.0
     fct_id1, fct_id2, fct_id3, fct_id4, fct_id5 = 0, 0, 0, 0, 0
 
     if block.fixed:
         if len(valid_cards) > 0:
-            f0 = valid_cards[0].cut("MAT_LAW5_1")
+            f0 = valid_cards[0].cut("MAT_JCOOK_TAB_1")
             rho0 = _safe_float(f0[0]) if len(f0) > 0 else 0.0
             e = _safe_float(f0[1]) if len(f0) > 1 else 0.0
             nu = _safe_float(f0[2]) if len(f0) > 2 else 0.0
         if len(valid_cards) > 1:
-            f1 = valid_cards[1].cut("MAT_LAW5_2")
+            f1 = valid_cards[1].cut("MAT_JCOOK_TAB_2")
             a = _safe_float(f1[0]) if len(f1) > 0 else 0.0
             b = _safe_float(f1[1]) if len(f1) > 1 else 0.0
             n = _safe_float(f1[2]) if len(f1) > 2 else 0.0
             c = _safe_float(f1[3]) if len(f1) > 3 else 0.0
             sig_max = _safe_float(f1[4]) if len(f1) > 4 else 0.0
         if len(valid_cards) > 2:
-            f2 = valid_cards[2].cut("MAT_LAW5_3")
+            f2 = valid_cards[2].cut("MAT_JCOOK_TAB_3")
             fct_id1 = _safe_int(f2[0]) if len(f2) > 0 else 0
             fct_id2 = _safe_int(f2[1]) if len(f2) > 1 else 0
             fct_id3 = _safe_int(f2[2]) if len(f2) > 2 else 0

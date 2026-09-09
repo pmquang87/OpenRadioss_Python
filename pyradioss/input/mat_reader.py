@@ -619,6 +619,7 @@ class CfgCatalogue:
     _SYNONYMS: Dict[str, str] = {
         "SOIL": "LAW10",
         "SOIL_CONC": "LAW10",
+        "JWL": "LAW5",
     }
 
     def schema(self, law_name: str) -> Optional[CfgLawSchema]:

@@ -121,6 +121,36 @@ MAT_LAW10_CFG_6 = MAT_LAW10_6
 MAT_LAW10_CFG_7 = MAT_LAW10_7
 
 
+# M537: /MAT/LAW5 (/MAT/JWL) card layout constants citing radioss2019/MAT/matl5_jwl.cfg
+MAT_LAW5_1 = (20, 20)
+MAT_LAW5_2 = (20, 20, 20, 20, 20)
+MAT_LAW5_3 = (20, 20, 20, 20, 10, 10)
+MAT_LAW5_4 = (20, 20, 20)
+MAT_LAW5_5_OPT1 = (20, 20)
+MAT_LAW5_5_OPT2 = (20, 20, 20)
+
+MAT_LAW5_CFG_1 = MAT_LAW5_1
+MAT_LAW5_CFG_2 = MAT_LAW5_2
+MAT_LAW5_CFG_3 = MAT_LAW5_3
+MAT_LAW5_CFG_4 = MAT_LAW5_4
+MAT_LAW5_CFG_5_OPT1 = MAT_LAW5_5_OPT1
+MAT_LAW5_CFG_5_OPT2 = MAT_LAW5_5_OPT2
+
+MAT_JWL_1 = MAT_LAW5_1
+MAT_JWL_2 = MAT_LAW5_2
+MAT_JWL_3 = MAT_LAW5_3
+MAT_JWL_4 = MAT_LAW5_4
+MAT_JWL_5_OPT1 = MAT_LAW5_5_OPT1
+MAT_JWL_5_OPT2 = MAT_LAW5_5_OPT2
+
+MAT_JWL_CFG_1 = MAT_LAW5_1
+MAT_JWL_CFG_2 = MAT_LAW5_2
+MAT_JWL_CFG_3 = MAT_LAW5_3
+MAT_JWL_CFG_4 = MAT_LAW5_4
+MAT_JWL_CFG_5_OPT1 = MAT_LAW5_5_OPT1
+MAT_JWL_CFG_5_OPT2 = MAT_LAW5_5_OPT2
+
+
 # ============================================================================
 # The per-card column-layout table (reader side of the shared knowledge)
 # ============================================================================
@@ -2343,9 +2373,42 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_LAW4_EOS_1": [20, 20, 20, 20],
     "MAT_LAW4_EOS_2": [20, 20],
     "MAT_LAW4_EOS_3": [20, 20, 20],
-    "MAT_LAW5_1": [20, 20, 20],
-    "MAT_LAW5_2": [20, 20, 20, 20, 20],
-    "MAT_LAW5_3": [10, 10, 10, 10, 10],
+    # M537: matl5_jwl.cfg (radioss2019) — /MAT/LAW5 (/MAT/JWL)
+    # Card 1: CARD("%20lg%20lg", MAT_RHO, Refer_Rho) or CARD("%20lg", MAT_RHO)
+    "MAT_LAW5_1": _LayoutList([20, 20]),
+    # Card 2: CARD("%20lg%20lg%20lg%20lg%20lg", MAT_A, MAT_B, MAT_PDIR1, MAT_PDIR2, Omega)
+    "MAT_LAW5_2": _LayoutList([20, 20, 20, 20, 20]),
+    # Card 3: CARD("%20lg%20lg%20lg%20lg%10d%10d", MAT_D, MAT_PC, MAT_E0, MAT_E, MAT_IBFRAC, QOPT)
+    "MAT_LAW5_3": _LayoutList([20, 20, 20, 20, 10, 10]),
+    # Card 4: CARD("%20lg%20lg%20lg", LAW5_P0, LAW5_PSH, BUNREACTED)
+    "MAT_LAW5_4": _LayoutList([20, 20, 20]),
+    # Card 5 (OPT1, QOPT in 0, 1, 2): CARD("%20lg%20lg", TSTART, TSTOP)
+    "MAT_LAW5_5_OPT1": _LayoutList([20, 20]),
+    # Card 5 (OPT2, QOPT == 3): CARD("%20lg%20lg%20lg", LAW5_A, LAW5_M, LAW5_N)
+    "MAT_LAW5_5_OPT2": _LayoutList([20, 20, 20]),
+
+    "MAT_LAW5_CFG_1": _LayoutList([20, 20]),
+    "MAT_LAW5_CFG_2": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_LAW5_CFG_3": _LayoutList([20, 20, 20, 20, 10, 10]),
+    "MAT_LAW5_CFG_4": _LayoutList([20, 20, 20]),
+    "MAT_LAW5_CFG_5_OPT1": _LayoutList([20, 20]),
+    "MAT_LAW5_CFG_5_OPT2": _LayoutList([20, 20, 20]),
+
+    "MAT_JWL_1": _LayoutList([20, 20]),
+    "MAT_JWL_2": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_JWL_3": _LayoutList([20, 20, 20, 20, 10, 10]),
+    "MAT_JWL_4": _LayoutList([20, 20, 20]),
+    "MAT_JWL_5_OPT1": _LayoutList([20, 20]),
+    "MAT_JWL_5_OPT2": _LayoutList([20, 20, 20]),
+
+    "MAT_JWL_CFG_1": _LayoutList([20, 20]),
+    "MAT_JWL_CFG_2": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_JWL_CFG_3": _LayoutList([20, 20, 20, 20, 10, 10]),
+    "MAT_JWL_CFG_4": _LayoutList([20, 20, 20]),
+    "MAT_JWL_CFG_5_OPT1": _LayoutList([20, 20]),
+    "MAT_JWL_CFG_5_OPT2": _LayoutList([20, 20, 20]),
+
+    # Legacy / M187 aliases for Tabulated Johnson-Cook
     "MAT_JCOOK_TAB_1": [20, 20, 20],
     "MAT_JCOOK_TAB_2": [20, 20, 20, 20, 20],
     "MAT_JCOOK_TAB_3": [10, 10, 10, 10, 10],
