@@ -51,7 +51,8 @@ exceed the ground-state one (LAW42 at large stretch!) MUST return the
 true current sound speed or the Courant time step is not a bound.
 """
 
-from . import (eos, law01_elastic, law02_johnson_cook, law06_hyd_visc,  # noqa: F401
+from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa: F401
+               law06_hyd_visc,
                law19_fabric, law24_concrete, law27_brittle,
                law33_foamplas, law35_kelvinmax, law36_tabulated,
                law40_kelvinmax, law42_ogden, law44_cowper,
@@ -64,6 +65,7 @@ def register_materials():
     eos._register()
     law01_elastic._register()
     law02_johnson_cook._register()
+    law03_plas_bost._register()
     law06_hyd_visc._register()
     law19_fabric._register()
     law24_concrete._register()
@@ -180,6 +182,10 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
         sig, epsp = law02_johnson_cook.solid_update(mat, sig, deps, epsp,
                                                     dt, extra)
         return sig, epsp, None
+    if mat.law == 3:
+        sig, epsp = law03_plas_bost.solid_update(mat, sig, deps, epsp,
+                                                  dt, extra)
+        return sig, epsp, None
     if mat.law == 36:
         sig, epsp = law36_tabulated.solid_update(mat, sig, deps, epsp, dt,
                                                  extra)
@@ -228,6 +234,9 @@ def shell_update(mat, sig, deps, epsp, dt, extra=None):
     if mat.law == 2:
         return law02_johnson_cook.shell_update(mat, sig, deps, epsp, dt,
                                                extra)
+    if mat.law == 3:
+        return law03_plas_bost.shell_update(mat, sig, deps, epsp, dt,
+                                             extra)
     if mat.law == 36:
         return law36_tabulated.shell_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 27:
@@ -272,6 +281,9 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
                                (n, 6, 6)).copy()
     if mat.law == 2:
         return law02_johnson_cook.consistent_solid_tangent(
+            mat, sig, epsp, epsp_incr)
+    if mat.law == 3:
+        return law03_plas_bost.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr)
     if mat.law == 36:
         return law36_tabulated.consistent_solid_tangent(
@@ -328,9 +340,11 @@ def shell_membrane_tangent(mat):
         return law19_fabric.shell_membrane_tangent(mat)
     if mat.law == 44:
         return law44_cowper.shell_membrane_tangent(mat)
+    if mat.law == 3:
+        return law03_plas_bost.shell_membrane_tangent(mat)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic, "
-        f"LAW19 fabric and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")
+        f"LAW3 plas_bost, LAW19 fabric and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")
 
 
 def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
@@ -354,6 +368,9 @@ def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
     if mat.law == 2:
         return law02_johnson_cook.consistent_shell_tangent(
             mat, sig, epsp, epsp_incr)
+    if mat.law == 3:
+        return law03_plas_bost.consistent_shell_tangent(
+            mat, sig, epsp, epsp_incr)
     if mat.law == 36:
         return law36_tabulated.consistent_shell_tangent(
             mat, sig, epsp, epsp_incr)
@@ -370,5 +387,5 @@ def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
             mat, sig, epsp, epsp_incr, extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 "
-        f"elastic, LAW2, LAW36 and LAW44 elastoplastic, LAW27 brittle cracking, "
+        f"elastic, LAW2, LAW3, LAW36 and LAW44 elastoplastic, LAW27 brittle cracking, "
         f"LAW19 fabric are ported — see PORTING_GUIDE M15)")
