@@ -649,3 +649,255 @@ class TestStarterChecksAllowedLaws:
         log = MessageLog()
         check_model(model, log)
         assert len(log.errors) == 0, f"Unexpected errors: {log.errors}"
+
+
+class TestLaw28EdgeCasesAndRobustness:
+    """Comprehensive edge cases: missing cards, blank defaults, dual density, arbitrary titles/IDs."""
+
+    def test_missing_optional_cards_fixed_format(self, tmp_path: Path):
+        # Case A: 3 data cards only (Cards 1..3; 4..7 omitted)
+        deck_3cards = """\
+# RADIOSS STARTER
+/BEGIN
+TEST_3CARDS
+                2022
+/MAT/LAW28/301
+3 Cards Only
+            3.500E-4
+            100.0000            120.0000            500.0000
+             40.0000             60.0000             50.0000
+/END
+"""
+        f3 = tmp_path / "law28_3cards.rad"
+        f3.write_text(deck_3cards, encoding="utf-8")
+        blocks = read_deck(str(f3))
+        model = Model()
+        log = MessageLog()
+        parse_starter_deck(blocks, model, log)
+        assert len(log.errors) == 0
+        assert 301 in model.mat_law28s
+        m = model.mat_law28s[301]
+        assert m.rho0 == pytest.approx(3.5e-4)
+        assert m.e11 == pytest.approx(100.0)
+        assert m.fun_a1 == 0
+        assert m.fscale11 == pytest.approx(1.0)
+        assert m.fscale12 == pytest.approx(1.0)
+        # Material params resolved via build_law28
+        mat = model.materials[301]
+        assert mat.law == 28
+        assert mat.params["rho_ref"] == pytest.approx(3.5e-4)
+        assert mat.params["fun_id11"] == 0
+        assert mat.params["fun_id12"] == 0
+        assert mat.params["fscale11"] == pytest.approx(1.0)
+        assert mat.params["fscale12"] == pytest.approx(1.0)
+        assert mat.params["eps_max11"] == pytest.approx(1.0e30)
+        assert mat.params["eps_max12"] == pytest.approx(1.0e30)
+
+        # Case B: 4 data cards only (Cards 1..4; 5..7 omitted)
+        deck_4cards = """\
+# RADIOSS STARTER
+/BEGIN
+TEST_4CARDS
+                2022
+/MAT/LAW28/302
+4 Cards Only
+            3.500E-4
+            100.0000            120.0000            500.0000
+             40.0000             60.0000             50.0000
+        11        22        33         1              1.5000              1.6000              1.7000
+/END
+"""
+        f4 = tmp_path / "law28_4cards.rad"
+        f4.write_text(deck_4cards, encoding="utf-8")
+        blocks4 = read_deck(str(f4))
+        model4 = Model()
+        log4 = MessageLog()
+        parse_starter_deck(blocks4, model4, log4)
+        assert len(log4.errors) == 0
+        assert 302 in model4.mat_law28s
+        mat4 = model4.materials[302]
+        assert mat4.params["fun_id11"] == 11
+        assert mat4.params["fun_id22"] == 22
+        assert mat4.params["fun_id33"] == 33
+        assert mat4.params["gflag"] == 1
+        assert mat4.params["fscale11"] == pytest.approx(1.5)
+        assert mat4.params["fscale22"] == pytest.approx(1.6)
+        assert mat4.params["fscale33"] == pytest.approx(1.7)
+        assert mat4.params["eps_max11"] == pytest.approx(1.0e30)
+        assert mat4.params["fun_id12"] == 0
+        assert mat4.params["fscale12"] == pytest.approx(1.0)
+        assert mat4.params["eps_max12"] == pytest.approx(1.0e30)
+
+        # Case C: 6 data cards (Cards 1..6; Card 7 omitted)
+        deck_6cards = """\
+# RADIOSS STARTER
+/BEGIN
+TEST_6CARDS
+                2022
+/MAT/LAW28/303
+6 Cards Only
+            3.500E-4
+            100.0000            120.0000            500.0000
+             40.0000             60.0000             50.0000
+        11        22        33         1              1.0000              1.1000              1.2000
+              0.5000              0.4000              0.8000
+        12        23        31         0              0.9000              1.0000              1.0500
+/END
+"""
+        f6 = tmp_path / "law28_6cards.rad"
+        f6.write_text(deck_6cards, encoding="utf-8")
+        blocks6 = read_deck(str(f6))
+        model6 = Model()
+        log6 = MessageLog()
+        parse_starter_deck(blocks6, model6, log6)
+        assert len(log6.errors) == 0
+        assert 303 in model6.mat_law28s
+        mat6 = model6.materials[303]
+        assert mat6.params["eps_max11"] == pytest.approx(0.5)
+        assert mat6.params["fun_id12"] == 12
+        assert mat6.params["eps_max12"] == pytest.approx(1.0e30)
+
+    def test_missing_optional_cards_free_format(self, tmp_path: Path):
+        deck_free = """\
+# RADIOSS STARTER
+/MAT/HONEYCOMB/310
+Free 3 Cards
+3.2e-4
+80.0 90.0 400.0
+30.0 50.0 45.0
+/MAT/HONEYCOMB/311
+Free 4 Cards
+3.2e-4
+80.0 90.0 400.0
+30.0 50.0 45.0
+11 22 33 0 1.2 1.3 1.4
+/END
+"""
+        f_free = tmp_path / "law28_free_truncated.rad"
+        f_free.write_text(deck_free, encoding="utf-8")
+        blocks = read_deck(str(f_free))
+        model = Model()
+        log = MessageLog()
+        parse_starter_deck(blocks, model, log)
+        assert len(log.errors) == 0
+        assert 310 in model.materials
+        assert 311 in model.materials
+        m310 = model.materials[310]
+        assert m310.params["fun_id11"] == 0
+        assert m310.params["eps_max11"] == pytest.approx(1.0e30)
+        m311 = model.materials[311]
+        assert m311.params["fun_id11"] == 11
+        assert m311.params["fscale11"] == pytest.approx(1.2)
+        assert m311.params["eps_max11"] == pytest.approx(1.0e30)
+
+    def test_blank_and_default_fields(self, tmp_path: Path):
+        """When fields on Card 4 or Card 6 are blank/omitted, fscale defaults to 1.0."""
+        deck_blank_fields = """\
+# RADIOSS STARTER
+/BEGIN
+TEST_BLANKS
+                2022
+/MAT/LAW28/320
+Blank Fields Test
+            3.500E-4
+            100.0000            120.0000            500.0000
+             40.0000             60.0000             50.0000
+        11        22        33         1
+                                
+        12        23        31         0
+                                
+/END
+"""
+        fb = tmp_path / "law28_blank_fields.rad"
+        fb.write_text(deck_blank_fields, encoding="utf-8")
+        blocks = read_deck(str(fb))
+        model = Model()
+        log = MessageLog()
+        parse_starter_deck(blocks, model, log)
+        assert len(log.errors) == 0
+        assert 320 in model.mat_law28s
+        mat = model.materials[320]
+        assert mat.params["fscale11"] == pytest.approx(1.0)
+        assert mat.params["fscale22"] == pytest.approx(1.0)
+        assert mat.params["fscale33"] == pytest.approx(1.0)
+        assert mat.params["fscale12"] == pytest.approx(1.0)
+        assert mat.params["fscale23"] == pytest.approx(1.0)
+        assert mat.params["fscale31"] == pytest.approx(1.0)
+        assert mat.params["eps_max11"] == pytest.approx(1.0e30)
+        assert mat.params["eps_max12"] == pytest.approx(1.0e30)
+
+    def test_dual_density_variations(self, tmp_path: Path):
+        deck = """\
+# RADIOSS STARTER
+/BEGIN
+TEST_RHO
+                2022
+/MAT/LAW28/330
+Single Density
+            3.500E-4
+            100.0000            120.0000            500.0000
+             40.0000             60.0000             50.0000
+/MAT/LAW28/331
+Dual Density
+            3.500E-4            2.900E-4
+            100.0000            120.0000            500.0000
+             40.0000             60.0000             50.0000
+/END
+"""
+        frho = tmp_path / "law28_rho.rad"
+        frho.write_text(deck, encoding="utf-8")
+        blocks = read_deck(str(frho))
+        model = Model()
+        log = MessageLog()
+        parse_starter_deck(blocks, model, log)
+        assert len(log.errors) == 0
+
+        # Single density: rho_ref defaults to rho0
+        mat330 = model.materials[330]
+        assert mat330.rho0 == pytest.approx(3.5e-4)
+        assert mat330.params["rho0"] == pytest.approx(3.5e-4)
+        assert mat330.params["rho_ref"] == pytest.approx(3.5e-4)
+
+        # Dual density: rho_ref takes specified value
+        mat331 = model.materials[331]
+        assert mat331.rho0 == pytest.approx(3.5e-4)
+        assert mat331.params["rho0"] == pytest.approx(3.5e-4)
+        assert mat331.params["rho_ref"] == pytest.approx(2.9e-4)
+
+    def test_arbitrary_ids_and_titles_roundtrip(self, tmp_path: Path):
+        d = dw.StarterDeck("ARBITRARY_TEST")
+        # 1. Very large integer ID
+        d.mat_law28(mat_id=987654321, title="Large_ID_Mat", rho=1.0e-3, e11=100.0)
+        # 2. Title with special characters
+        d.mat_law28(mat_id=10, title="Honeycomb [Nomex] Type-42 (t=0.5mm) #1", rho=2.0e-3, e11=200.0)
+        # 3. Numeric title in fixed format
+        d.mat_law28(mat_id=20, title="999888", rho=3.0e-3, e11=300.0)
+        # 4. Empty title
+        d.mat_law28(mat_id=30, title="", rho=4.0e-3, e11=400.0)
+
+        rendered = d.render()
+        f_arb = tmp_path / "arbitrary.rad"
+        f_arb.write_text(rendered, encoding="utf-8")
+
+        blocks = read_deck(str(f_arb))
+        model = Model()
+        log = MessageLog()
+        parse_starter_deck(blocks, model, log)
+        assert len(log.errors) == 0
+
+        assert 987654321 in model.mat_law28s
+        assert model.mat_law28s[987654321].title == "Large_ID_Mat"
+        assert 10 in model.mat_law28s
+        assert model.mat_law28s[10].title == "Honeycomb [Nomex] Type-42 (t=0.5mm) #1"
+        assert 20 in model.mat_law28s
+        assert model.mat_law28s[20].title == "999888"
+        assert 30 in model.mat_law28s
+        assert model.mat_law28s[30].title == ""
+
+        # Normalize roundtrip
+        d_norm = dw.starter_deck_from_lines(rendered.splitlines(), "ARBITRARY_NORM")
+        norm_rendered = d_norm.render()
+        assert "/MAT/LAW28/987654321" in norm_rendered
+        assert "/MAT/LAW28/10" in norm_rendered
+        assert "/MAT/LAW28/20" in norm_rendered
+        assert "/MAT/LAW28/30" in norm_rendered

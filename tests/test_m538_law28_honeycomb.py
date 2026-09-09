@@ -548,6 +548,251 @@ class TestLaw28ConsistentSolidTangent:
         assert pytest.approx(D[0, 1, 1]) == 250.0
         assert pytest.approx(D[0, 2, 2]) == 350.0
 
+    def test_tangent_elastic_regime_central_differences(self):
+        """Elastic regime: D is diagonal [E11, E22, E33, G12, G23, G31] with zero off-diagonals.
+        Matches central difference perturbation exactly.
+        """
+        mat = _make_honeycomb(e11=100.0, e22=200.0, e33=300.0, g12=40.0, g23=50.0, g31=60.0)
+        sig_0 = np.zeros((1, 6))
+        deps = np.array([[0.01, 0.02, 0.015, 0.03, 0.025, 0.02]])
+        extra = {"eps28": np.zeros((1, 6))}
+        sig_base, _, _ = law28_honeycomb.solid_update(mat, sig_0, deps, extra=extra)
+
+        D_alg = law28_honeycomb.consistent_solid_tangent(mat, sig_base, extra=extra)
+        assert D_alg.shape == (1, 6, 6)
+        expected_diag = [100.0, 200.0, 300.0, 40.0, 50.0, 60.0]
+        assert np.allclose(np.diag(D_alg[0]), expected_diag)
+        assert np.allclose(D_alg[0] - np.diag(expected_diag), 0.0)
+
+        h = 1e-6
+        D_num = np.zeros((6, 6))
+        for j in range(6):
+            dp = deps.copy(); dp[0, j] += h
+            dm = deps.copy(); dm[0, j] -= h
+            sp, _, _ = law28_honeycomb.solid_update(mat, sig_0, dp, extra={"eps28": np.zeros((1, 6))})
+            sm, _, _ = law28_honeycomb.solid_update(mat, sig_0, dm, extra={"eps28": np.zeros((1, 6))})
+            D_num[:, j] = (sp[0] - sm[0]) / (2.0 * h)
+
+        assert np.allclose(D_alg[0], D_num, atol=1e-5, rtol=1e-5)
+
+    def test_tangent_component_yielded_regime_iflag1_one(self):
+        """Iflag1 = 1: d(sigma_ii)/d(eps_ii) = sign(sigma_ii) * f'_{ii}(eps_ii) * F_scale,ii.
+        Off-diagonals are zero. Matches central difference perturbation.
+        """
+        fc = FunctTable(1, [0.0, 0.1, 0.5, 1.0], [10.0, 20.0, 32.0, 50.0])  # slope in [0.1, 0.5] is 30.0
+        mat = _make_honeycomb(
+            e11=1000.0, e22=200.0, e33=300.0, g12=40.0, g23=50.0, g31=60.0,
+            fun_a1=1, gflag=1, fscale11=1.5,
+            curve28_x=[fc.x, None, None, None, None, None],
+            curve28_y=[fc.y, None, None, None, None, None],
+            curve28_s=[fc.slope, None, None, None, None, None],
+            curve28_fct=[fc, None, None, None, None, None],
+        )
+        sig_0 = np.zeros((1, 6))
+        deps = np.array([[0.3, 0.01, 0.01, 0.01, 0.01, 0.01]])
+        extra = {"eps28": np.zeros((1, 6))}
+        sig_base, _, _ = law28_honeycomb.solid_update(mat, sig_0, deps, extra=extra)
+
+        D_alg = law28_honeycomb.consistent_solid_tangent(mat, sig_base, extra=extra)
+        assert pytest.approx(D_alg[0, 0, 0]) == 45.0
+        assert np.allclose(D_alg[0, 0, 1:], 0.0)
+
+        h = 1e-6
+        D_num = np.zeros((6, 6))
+        for j in range(6):
+            dp = deps.copy(); dp[0, j] += h
+            dm = deps.copy(); dm[0, j] -= h
+            sp, _, _ = law28_honeycomb.solid_update(mat, sig_0, dp, extra={"eps28": np.zeros((1, 6))})
+            sm, _, _ = law28_honeycomb.solid_update(mat, sig_0, dm, extra={"eps28": np.zeros((1, 6))})
+            D_num[:, j] = (sp[0] - sm[0]) / (2.0 * h)
+
+        assert np.allclose(D_alg[0], D_num, atol=1e-5, rtol=1e-5)
+
+    def test_tangent_volumetric_yielded_hydrostatic_coupling_iflag1_zero(self):
+        """Iflag1 = 0: d(sigma_ii)/d(eps_jj) = -sign(sigma_ii) * f'_{ii}(mu) * F_scale,ii for j in {0, 1, 2}.
+        Hydrostatic coupling terms in all 3 normal directions; shear off-diagonals are zero.
+        """
+        fc = FunctTable(1, [0.0, 0.1, 0.5, 1.0], [10.0, 20.0, 60.0, 110.0])  # slope in [0.1, 0.5] is 100.0
+        mat = _make_honeycomb(
+            e11=1000.0, e22=200.0, e33=300.0, g12=40.0, g23=50.0, g31=60.0,
+            fun_a1=1, gflag=0, fscale11=1.5,
+            curve28_x=[fc.x, None, None, None, None, None],
+            curve28_y=[fc.y, None, None, None, None, None],
+            curve28_s=[fc.slope, None, None, None, None, None],
+            curve28_fct=[fc, None, None, None, None, None],
+        )
+        sig_0 = np.zeros((1, 6))
+        deps = np.array([[-0.25, 0.0, 0.0, 0.0, 0.0, 0.0]])
+        extra = {"eps28": np.zeros((1, 6))}
+        sig_base, _, _ = law28_honeycomb.solid_update(mat, sig_0, deps, extra=extra)
+
+        D_alg = law28_honeycomb.consistent_solid_tangent(mat, sig_base, extra=extra)
+        assert pytest.approx(D_alg[0, 0, 0]) == 150.0
+        assert pytest.approx(D_alg[0, 0, 1]) == 150.0
+        assert pytest.approx(D_alg[0, 0, 2]) == 150.0
+        assert np.allclose(D_alg[0, 0, 3:], 0.0)
+
+        h = 1e-6
+        D_num = np.zeros((6, 6))
+        for j in range(6):
+            dp = deps.copy(); dp[0, j] += h
+            dm = deps.copy(); dm[0, j] -= h
+            sp, _, _ = law28_honeycomb.solid_update(mat, sig_0, dp, extra={"eps28": np.zeros((1, 6))})
+            sm, _, _ = law28_honeycomb.solid_update(mat, sig_0, dm, extra={"eps28": np.zeros((1, 6))})
+            D_num[:, j] = (sp[0] - sm[0]) / (2.0 * h)
+
+        assert np.allclose(D_alg[0], D_num, atol=1e-5, rtol=1e-5)
+
+    def test_tangent_negative_component_yielded_iflag1_minus_one(self):
+        """Iflag1 = -1: d(sigma_ii)/d(eps_ii) = -sign(sigma_ii) * f'_{ii}(-eps_ii) * F_scale,ii."""
+        fc = FunctTable(1, [0.0, 0.1, 0.5, 1.0], [10.0, 20.0, 60.0, 110.0])  # slope = 100.0
+        mat = _make_honeycomb(
+            e11=1000.0, e22=200.0, e33=300.0, g12=40.0, g23=50.0, g31=60.0,
+            fun_a1=1, gflag=-1, fscale11=1.0,
+            curve28_x=[fc.x, None, None, None, None, None],
+            curve28_y=[fc.y, None, None, None, None, None],
+            curve28_s=[fc.slope, None, None, None, None, None],
+            curve28_fct=[fc, None, None, None, None, None],
+        )
+        sig_0 = np.zeros((1, 6))
+        deps = np.array([[-0.3, 0.0, 0.0, 0.0, 0.0, 0.0]])
+        extra = {"eps28": np.zeros((1, 6))}
+        sig_base, _, _ = law28_honeycomb.solid_update(mat, sig_0, deps, extra=extra)
+
+        D_alg = law28_honeycomb.consistent_solid_tangent(mat, sig_base, extra=extra)
+        assert pytest.approx(D_alg[0, 0, 0]) == 100.0
+        assert np.allclose(D_alg[0, 0, 1:], 0.0)
+
+        h = 1e-6
+        D_num = np.zeros((6, 6))
+        for j in range(6):
+            dp = deps.copy(); dp[0, j] += h
+            dm = deps.copy(); dm[0, j] -= h
+            sp, _, _ = law28_honeycomb.solid_update(mat, sig_0, dp, extra={"eps28": np.zeros((1, 6))})
+            sm, _, _ = law28_honeycomb.solid_update(mat, sig_0, dm, extra={"eps28": np.zeros((1, 6))})
+            D_num[:, j] = (sp[0] - sm[0]) / (2.0 * h)
+
+        assert np.allclose(D_alg[0], D_num, atol=1e-5, rtol=1e-5)
+
+    def test_tangent_shear_yielded_regime_iflag2_one(self):
+        """Iflag2 = 1: d(sigma_12)/d(gamma_12) = sign(sigma_12) * f'_{12}(eps_12) * F_scale,12."""
+        fc = FunctTable(2, [0.0, 0.2, 0.6], [5.0, 15.0, 35.0])  # slope = 50.0
+        mat = _make_honeycomb(
+            e11=100.0, e22=200.0, e33=300.0, g12=500.0, g23=50.0, g31=60.0,
+            fun_a3=2, vflag=1, fscale12=1.2,
+            curve28_x=[None, None, None, fc.x, None, None],
+            curve28_y=[None, None, None, fc.y, None, None],
+            curve28_s=[None, None, None, fc.slope, None, None],
+            curve28_fct=[None, None, None, fc, None, None],
+        )
+        sig_0 = np.zeros((1, 6))
+        deps = np.array([[0.0, 0.0, 0.0, 0.35, 0.0, 0.0]])
+        extra = {"eps28": np.zeros((1, 6))}
+        sig_base, _, _ = law28_honeycomb.solid_update(mat, sig_0, deps, extra=extra)
+
+        D_alg = law28_honeycomb.consistent_solid_tangent(mat, sig_base, extra=extra)
+        assert pytest.approx(D_alg[0, 3, 3]) == 60.0
+
+        h = 1e-6
+        D_num = np.zeros((6, 6))
+        for j in range(6):
+            dp = deps.copy(); dp[0, j] += h
+            dm = deps.copy(); dm[0, j] -= h
+            sp, _, _ = law28_honeycomb.solid_update(mat, sig_0, dp, extra={"eps28": np.zeros((1, 6))})
+            sm, _, _ = law28_honeycomb.solid_update(mat, sig_0, dm, extra={"eps28": np.zeros((1, 6))})
+            D_num[:, j] = (sp[0] - sm[0]) / (2.0 * h)
+
+        assert np.allclose(D_alg[0], D_num, atol=1e-5, rtol=1e-5)
+
+    def test_tangent_shear_volumetric_yielded_iflag2_zero(self):
+        """Iflag2 = 0: shear yield evaluated vs volumetric strain mu = -tr(eps)."""
+        fc = FunctTable(2, [0.0, 0.2, 0.6], [5.0, 15.0, 35.0])  # slope = 50.0
+        mat = _make_honeycomb(
+            e11=100.0, e22=200.0, e33=300.0, g12=500.0, g23=50.0, g31=60.0,
+            fun_a3=2, vflag=0, fscale12=1.0,
+            curve28_x=[None, None, None, fc.x, None, None],
+            curve28_y=[None, None, None, fc.y, None, None],
+            curve28_s=[None, None, None, fc.slope, None, None],
+            curve28_fct=[None, None, None, fc, None, None],
+        )
+        sig_0 = np.zeros((1, 6))
+        deps = np.array([[-0.3, 0.0, 0.0, 0.1, 0.0, 0.0]])
+        extra = {"eps28": np.zeros((1, 6))}
+        sig_base, _, _ = law28_honeycomb.solid_update(mat, sig_0, deps, extra=extra)
+
+        D_alg = law28_honeycomb.consistent_solid_tangent(mat, sig_base, extra=extra)
+        assert pytest.approx(D_alg[0, 3, 0]) == -50.0
+        assert pytest.approx(D_alg[0, 3, 1]) == -50.0
+        assert pytest.approx(D_alg[0, 3, 2]) == -50.0
+        assert pytest.approx(D_alg[0, 3, 3]) == 0.0
+
+        h = 1e-6
+        D_num = np.zeros((6, 6))
+        for j in range(6):
+            dp = deps.copy(); dp[0, j] += h
+            dm = deps.copy(); dm[0, j] -= h
+            sp, _, _ = law28_honeycomb.solid_update(mat, sig_0, dp, extra={"eps28": np.zeros((1, 6))})
+            sm, _, _ = law28_honeycomb.solid_update(mat, sig_0, dm, extra={"eps28": np.zeros((1, 6))})
+            D_num[:, j] = (sp[0] - sm[0]) / (2.0 * h)
+
+        assert np.allclose(D_alg[0], D_num, atol=1e-5, rtol=1e-5)
+
+    def test_tangent_ruptured_and_deleted_zeroes_slice(self):
+        """Ruptured or deleted elements have their entire (6, 6) tangent matrix zeroed."""
+        mat = _make_honeycomb(e11=100.0, e22=200.0, e33=300.0, eps_max11=0.10)
+        sig_0 = np.zeros((3, 6))
+        deps = np.array([
+            [0.15, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.02, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.02, 0.0, 0.0, 0.0, 0.0, 0.0],
+        ])
+        off = np.array([1.0, 0.0, 1.0])
+        extra = {"eps28": np.zeros((3, 6)), "off28": off}
+        sig_base, _, _ = law28_honeycomb.solid_update(mat, sig_0, deps, extra=extra)
+
+        assert off[0] == 0.0  # element 0 ruptured
+        assert off[1] == 0.0  # element 1 pre-deleted
+        assert off[2] == 1.0  # element 2 active
+
+        D_alg = law28_honeycomb.consistent_solid_tangent(mat, sig_base, extra=extra)
+        assert np.allclose(D_alg[0], 0.0)
+        assert np.allclose(D_alg[1], 0.0)
+        assert not np.allclose(D_alg[2], 0.0)
+        assert pytest.approx(D_alg[2, 0, 0]) == 100.0
+
+    def test_tangent_multi_axial_simultaneous_yielding(self):
+        """Simultaneous yielding across multiple normal and shear directions."""
+        fc1 = FunctTable(1, [0.0, 0.1, 0.5, 1.0], [10.0, 20.0, 32.0, 50.0])  # slope = 30.0
+        fc2 = FunctTable(2, [0.0, 0.1, 0.5, 1.0], [5.0, 15.0, 25.0, 40.0])   # slope = 25.0
+        fc3 = FunctTable(3, [0.0, 0.2, 0.6], [4.0, 12.0, 28.0])              # slope = 40.0
+
+        mat = _make_honeycomb(
+            e11=1000.0, e22=2000.0, e33=3000.0, g12=500.0, g23=600.0, g31=700.0,
+            fun_a1=1, fun_b1=2, fun_a3=3,
+            gflag=0, vflag=1,
+            fscale11=1.0, fscale22=1.2, fscale12=1.5,
+            curve28_x=[fc1.x, fc2.x, None, fc3.x, None, None],
+            curve28_y=[fc1.y, fc2.y, None, fc3.y, None, None],
+            curve28_s=[fc1.slope, fc2.slope, None, fc3.slope, None, None],
+            curve28_fct=[fc1, fc2, None, fc3, None, None],
+        )
+        sig_0 = np.zeros((1, 6))
+        deps = np.array([[-0.25, -0.05, 0.005, 0.35, 0.01, 0.01]])
+        extra = {"eps28": np.zeros((1, 6))}
+        sig_base, _, _ = law28_honeycomb.solid_update(mat, sig_0, deps, extra=extra)
+        D_alg = law28_honeycomb.consistent_solid_tangent(mat, sig_base, extra=extra)
+
+        h = 1e-6
+        D_num = np.zeros((6, 6))
+        for j in range(6):
+            dp = deps.copy(); dp[0, j] += h
+            dm = deps.copy(); dm[0, j] -= h
+            sp, _, _ = law28_honeycomb.solid_update(mat, sig_0, dp, extra={"eps28": np.zeros((1, 6))})
+            sm, _, _ = law28_honeycomb.solid_update(mat, sig_0, dm, extra={"eps28": np.zeros((1, 6))})
+            D_num[:, j] = (sp[0] - sm[0]) / (2.0 * h)
+
+        assert np.allclose(D_alg[0], D_num, atol=1e-5, rtol=1e-5)
+
 
 # =============================================================================
 # 9. Shell Update Rejection Guard

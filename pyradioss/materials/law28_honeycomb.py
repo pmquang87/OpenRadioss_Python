@@ -54,6 +54,7 @@ from typing import Any
 import numpy as np
 
 from pyradioss.model.entities import Material
+from pyradioss.common.tables import SmoothFunctTable
 
 _DEFAULT_EPS_MAX = 1.0e30
 
@@ -325,6 +326,64 @@ def _eval_curve_k(mat: Material, k: int, x: np.ndarray) -> np.ndarray | None:
     return None
 
 
+def _eval_curve_slope_k(mat: Material, k: int, x: np.ndarray) -> np.ndarray | None:
+    """Evaluate curve k (0..5) derivative dy/dx at abscissae x."""
+    p = mat.params
+    fcts = p.get("curve28_fct")
+    fct = fcts[k] if fcts is not None and k < len(fcts) else None
+    if fct is None:
+        curves = p.get("curves")
+        if isinstance(curves, (list, tuple)) and k < len(curves):
+            fct = curves[k]
+
+    if fct is not None and isinstance(fct, SmoothFunctTable):
+        t = np.asarray(x, dtype=float)
+        i = np.clip(np.searchsorted(fct.x, t, side="right") - 1, 0, fct.x.size - 2)
+        x1, x2 = fct.x[i], fct.x[i + 1]
+        y1, y2 = fct.y[i], fct.y[i + 1]
+        dx = x2 - x1
+        dx = np.where(dx == 0.0, 1.0, dx)
+        s = np.clip((t - x1) / dx, 0.0, 1.0)
+        ds = 30.0 * (y2 - y1) * (s ** 2) * ((1.0 - s) ** 2) / dx
+        ds = np.where((t < fct.x[0]) | (t > fct.x[-1]), 0.0, ds)
+        return ds
+
+    if fct is not None and hasattr(fct, "x"):
+        xs = np.asarray(fct.x, dtype=float)
+        if hasattr(fct, "slope") and fct.slope is not None:
+            ss = np.asarray(fct.slope, dtype=float)
+        elif hasattr(fct, "y") and len(fct.y) > 1:
+            ss = np.diff(np.asarray(fct.y, dtype=float)) / np.diff(xs)
+        else:
+            return np.zeros_like(x, dtype=float)
+        t = np.asarray(x, dtype=float)
+        idx = np.searchsorted(xs, t, side="right") - 1
+        idx = np.clip(idx, 0, len(ss) - 1)
+        return ss[idx]
+
+    cxs = p.get("curve28_x")
+    cys = p.get("curve28_y")
+    css = p.get("curve28_s")
+    if cxs is not None and k < len(cxs) and cxs[k] is not None:
+        xs = np.asarray(cxs[k], dtype=float)
+        if css is not None and k < len(css) and css[k] is not None:
+            ss = np.asarray(css[k], dtype=float)
+        elif cys is not None and k < len(cys) and cys[k] is not None:
+            ys = np.asarray(cys[k], dtype=float)
+            if len(xs) > 1:
+                ss = np.diff(ys) / np.diff(xs)
+            else:
+                return np.zeros_like(x, dtype=float)
+        else:
+            return np.zeros_like(x, dtype=float)
+        t = np.asarray(x, dtype=float)
+        idx = np.searchsorted(xs, t, side="right") - 1
+        idx = np.clip(idx, 0, len(ss) - 1)
+        return ss[idx]
+
+    return None
+
+
 # ------------------------------------------------------------------ #
 # Constitutive kernel: solid_update (sigeps28.F)
 # ------------------------------------------------------------------ #
@@ -556,35 +615,222 @@ def consistent_solid_tangent(
     epsp_incr: np.ndarray | None = None,
     extra: dict | None = None,
 ) -> np.ndarray:
-    """Return the (n, 6, 6) algorithmic tangent matrix for LAW28 solids.
+    """Return the (n, 6, 6) algorithmic consistent tangent stiffness tensor.
 
-    Uncoupled orthotropic elastic tangent with zeroed rows/cols for deleted elements.
+    Fortran origin: ``engine/source/materials/mat/mat028/sigeps28.F``.
+
+    Theory and Consistent Tangent Derivation:
+    -----------------------------------------
+    C^alg = d(sigma_{n+1}) / d(deps)
+
+    1. Elastic regime:
+       Uncoupled orthotropic diagonal stiffness:
+       D = diag([E11, E22, E33, G12, G23, G31]), off-diagonals = 0.
+
+    2. Yielded regime (component k in {0..5} clamped by Y_k = F_scale,k * f_k(x_k)):
+       - When Iflag1 = 1 (normal component k in {0, 1, 2}):
+         x_k = eps_k  =>  d(sigma_k)/d(eps_k) = sign(sigma_k) * f'_k(eps_k) * F_scale,k.
+       - When Iflag1 = -1 (normal component k in {0, 1, 2}):
+         x_k = -eps_k =>  d(sigma_k)/d(eps_k) = -sign(sigma_k) * f'_k(-eps_k) * F_scale,k.
+       - When Iflag1 = 0 (volumetric strain mu = rho/rho0 - 1 ≈ -tr(eps)):
+         x_k = mu     =>  d(sigma_k)/d(eps_j) = -sign(sigma_k) * f'_k(mu) * F_scale,k
+                          for normal strains j in {0, 1, 2} (hydrostatic coupling),
+                          and 0 for shear strains j in {3, 4, 5}.
+       - When Iflag2 = 1 (shear component k in {3, 4, 5}):
+         x_k = eps_k  =>  d(sigma_k)/d(eps_k) = sign(sigma_k) * f'_k(eps_k) * F_scale,k.
+       - When Iflag2 = -1 (shear component k in {3, 4, 5}):
+         x_k = -eps_k =>  d(sigma_k)/d(eps_k) = -sign(sigma_k) * f'_k(-eps_k) * F_scale,k.
+       - When Iflag2 = 0 (shear component k in {3, 4, 5} vs volumetric strain):
+         x_k = mu     =>  d(sigma_k)/d(eps_j) = -sign(sigma_k) * f'_k(mu) * F_scale,k
+                          for j in {0, 1, 2}, and 0 for j in {3, 4, 5}.
+
+    3. Ruptured or deleted elements (off28 == 0 or failure strain exceeded):
+       The entire (6, 6) tangent slice is zeroed out: D[dead] = 0.
     """
     n = sig.shape[0] if sig is not None and hasattr(sig, "shape") else 0
     if n == 0:
         return np.empty((0, 6, 6), dtype=float if sig is None else sig.dtype)
 
+    is_1d = (sig.ndim == 1)
+    if is_1d:
+        sig = sig.reshape(1, -1)
+        n = 1
+
     p = mat.params
+    rho0 = float(mat.rho0 if mat.rho0 > 0 else p.get("rho0", 1.0))
     e11 = float(p.get("E11", 0.0))
     e22 = float(p.get("E22", 0.0))
     e33 = float(p.get("E33", 0.0))
     g12 = float(p.get("G12", 0.0))
     g23 = float(p.get("G23", 0.0))
     g31 = float(p.get("G31", 0.0))
+    moduli = [e11, e22, e33, g12, g23, g31]
 
+    # Initialize uncoupled orthotropic elastic tangent
     D = np.zeros((n, 6, 6), dtype=sig.dtype)
-    D[:, 0, 0] = e11
-    D[:, 1, 1] = e22
-    D[:, 2, 2] = e33
-    D[:, 3, 3] = g12
-    D[:, 4, 4] = g23
-    D[:, 5, 5] = g31
+    for k in range(6):
+        D[:, k, k] = moduli[k]
 
+    # Check for element deletion / rupture
+    off = None
     if extra is not None:
         off = extra.get("off28", extra.get("off", None))
-        if off is not None:
-            off_arr = np.asarray(off)
-            D[off_arr == 0.0] = 0.0
+
+    eps = None
+    if extra is not None:
+        if "eps28" in extra:
+            eps = np.asarray(extra["eps28"], dtype=sig.dtype)
+        elif "eps" in extra:
+            eps = np.asarray(extra["eps"], dtype=sig.dtype)
+
+    if eps is not None and eps.ndim == 1:
+        eps = eps.reshape(1, -1)
+
+    eps_max11 = float(p.get("eps_max11", _DEFAULT_EPS_MAX))
+    eps_max22 = float(p.get("eps_max22", _DEFAULT_EPS_MAX))
+    eps_max33 = float(p.get("eps_max33", _DEFAULT_EPS_MAX))
+    eps_max12 = float(p.get("eps_max12", _DEFAULT_EPS_MAX))
+    eps_max23 = float(p.get("eps_max23", _DEFAULT_EPS_MAX))
+    eps_max31 = float(p.get("eps_max31", _DEFAULT_EPS_MAX))
+
+    dead = np.zeros(n, dtype=bool)
+    if off is not None:
+        dead |= (np.asarray(off).reshape(-1) == 0.0)
+
+    if eps is not None and eps.shape[0] == n:
+        rupture = (
+            (eps[:, 0] > eps_max11)
+            | (eps[:, 1] > eps_max22)
+            | (eps[:, 2] > eps_max33)
+            | (np.abs(eps[:, 3] / 2.0) > eps_max12)
+            | (np.abs(eps[:, 4] / 2.0) > eps_max23)
+            | (np.abs(eps[:, 5] / 2.0) > eps_max31)
+        )
+        dead |= rupture
+
+    # Yield regime adjustments
+    fids = [
+        p.get("fun_id11", 0),
+        p.get("fun_id22", 0),
+        p.get("fun_id33", 0),
+        p.get("fun_id12", 0),
+        p.get("fun_id23", 0),
+        p.get("fun_id31", 0),
+    ]
+    fscales = [
+        float(p.get("fscale11", 1.0)),
+        float(p.get("fscale22", 1.0)),
+        float(p.get("fscale33", 1.0)),
+        float(p.get("fscale12", 1.0)),
+        float(p.get("fscale23", 1.0)),
+        float(p.get("fscale31", 1.0)),
+    ]
+    gflag = int(p.get("gflag", 0))
+    vflag = int(p.get("vflag", 0))
+
+    if extra is not None and "amu" in extra:
+        mu = np.atleast_1d(np.asarray(extra["amu"], dtype=sig.dtype))
+    elif extra is not None and "AMU" in extra:
+        mu = np.atleast_1d(np.asarray(extra["AMU"], dtype=sig.dtype))
+    elif extra is not None and "rho" in extra:
+        rho_curr = np.atleast_1d(np.asarray(extra["rho"], dtype=sig.dtype))
+        mu = rho_curr / rho0 - 1.0
+    elif eps is not None and eps.shape[0] == n:
+        mu = -(eps[:, 0] + eps[:, 1] + eps[:, 2])
+    else:
+        mu = np.zeros(n, dtype=sig.dtype)
+
+    if mu.ndim == 0:
+        mu = np.full(n, float(mu), dtype=sig.dtype)
+    elif mu.shape[0] != n:
+        mu = np.broadcast_to(mu, (n,)).astype(sig.dtype)
+
+    for k in range(6):
+        if fids[k] == 0 and p.get("curve28_x") is None and p.get("curve28_fct") is None and p.get("curves") is None:
+            continue
+
+        flag = gflag if k < 3 else vflag
+
+        if flag == 1:
+            xk = eps[:, k] if (eps is not None and eps.shape[0] == n) else np.zeros(n, dtype=sig.dtype)
+        elif flag == -1:
+            xk = -eps[:, k] if (eps is not None and eps.shape[0] == n) else np.zeros(n, dtype=sig.dtype)
+        else:
+            xk = mu
+
+        yk = _eval_curve_k(mat, k, xk)
+        if yk is None:
+            continue
+        yk_arr = np.atleast_1d(np.asarray(yk, dtype=sig.dtype))
+        if yk_arr.ndim == 0:
+            yk_arr = np.full(n, float(yk_arr), dtype=sig.dtype)
+        elif yk_arr.shape[0] != n:
+            yk_arr = np.broadcast_to(yk_arr, (n,)).astype(sig.dtype)
+
+        y_limit = np.maximum(0.0, yk_arr * fscales[k])
+
+        slope = _eval_curve_slope_k(mat, k, xk)
+        if slope is None:
+            slope_arr = np.zeros(n, dtype=sig.dtype)
+        else:
+            slope_arr = np.atleast_1d(np.asarray(slope, dtype=sig.dtype))
+            if slope_arr.ndim == 0:
+                slope_arr = np.full(n, float(slope_arr), dtype=sig.dtype)
+            elif slope_arr.shape[0] != n:
+                slope_arr = np.broadcast_to(slope_arr, (n,)).astype(sig.dtype)
+
+        slope_eff = np.where(yk_arr * fscales[k] <= 0.0, 0.0, slope_arr)
+
+        if extra is not None and "yielded" in extra:
+            y_mask = np.asarray(extra["yielded"])
+            if y_mask.ndim == 2:
+                yielded = y_mask[:, k]
+            else:
+                yielded = y_mask
+        elif extra is not None and "sig_trial" in extra:
+            sig_tr = np.asarray(extra["sig_trial"], dtype=sig.dtype).reshape(n, -1)
+            yielded = np.abs(sig_tr[:, k]) >= y_limit - 1e-9 * np.maximum(y_limit, 1.0)
+        elif extra is not None and "deps" in extra and "sig_old" in extra:
+            deps_arr = np.asarray(extra["deps"], dtype=sig.dtype).reshape(n, -1)
+            sig_o = np.asarray(extra["sig_old"], dtype=sig.dtype).reshape(n, -1)
+            sig_tr_k = sig_o[:, k] + moduli[k] * deps_arr[:, k]
+            yielded = np.abs(sig_tr_k) >= y_limit - 1e-9 * np.maximum(y_limit, 1.0)
+        else:
+            # Under yielding, |sigma| is clamped to y_limit
+            yielded = (np.abs(sig[:, k]) >= y_limit * (1.0 - 1e-5)) & (np.abs(sig[:, k]) > 1e-12)
+            if np.any(y_limit == 0.0):
+                if eps is not None and eps.shape[0] == n:
+                    yielded |= (y_limit == 0.0) & (np.abs(eps[:, k]) > 1e-12)
+
+        active_yield = yielded & (~dead)
+        if not np.any(active_yield):
+            continue
+
+        sgn = np.sign(sig[:, k])
+        if extra is not None and "sig_trial" in extra:
+            sig_tr = np.asarray(extra["sig_trial"], dtype=sig.dtype).reshape(n, -1)
+            sgn = np.where(sgn == 0, np.sign(sig_tr[:, k]), sgn)
+        if extra is not None and "deps" in extra:
+            deps_arr = np.asarray(extra["deps"], dtype=sig.dtype).reshape(n, -1)
+            sgn = np.where(sgn == 0, np.sign(deps_arr[:, k]), sgn)
+        if eps is not None and eps.shape[0] == n:
+            sgn = np.where(sgn == 0, np.sign(eps[:, k]), sgn)
+        sgn = np.where(sgn == 0, 1.0, sgn)
+
+        D[active_yield, k, :] = 0.0
+
+        if flag == 1:
+            D[active_yield, k, k] = sgn[active_yield] * slope_eff[active_yield] * fscales[k]
+        elif flag == -1:
+            D[active_yield, k, k] = -sgn[active_yield] * slope_eff[active_yield] * fscales[k]
+        else:  # flag == 0 (volumetric strain hydrostatic coupling)
+            d_val = -sgn[active_yield] * slope_eff[active_yield] * fscales[k]
+            D[active_yield, k, 0] = d_val
+            D[active_yield, k, 1] = d_val
+            D[active_yield, k, 2] = d_val
+
+    if np.any(dead):
+        D[dead] = 0.0
 
     return D
 
