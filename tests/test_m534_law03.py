@@ -79,6 +79,24 @@ def test_build_invalid_e():
         _make_law03(e=-1.0)
 
 
+def test_build_invalid_nu():
+    with pytest.raises(ValueError, match="Poisson ratio"):
+        _make_law03(nu=0.5)
+    with pytest.raises(ValueError, match="Poisson ratio"):
+        _make_law03(nu=-0.1)
+
+
+def test_register_in_physics_registry():
+    """_register() puts LAW3/PLAS_BOST/BOSTEELS in MAT_PHYSICS_REGISTRY."""
+    from pyradioss.input.mat_reader import MAT_PHYSICS_REGISTRY
+    assert "LAW3" in MAT_PHYSICS_REGISTRY
+    assert "PLAS_BOST" in MAT_PHYSICS_REGISTRY
+    assert "BOSTEELS" in MAT_PHYSICS_REGISTRY
+    assert MAT_PHYSICS_REGISTRY["LAW3"] is law03.build_law03
+    assert MAT_PHYSICS_REGISTRY["PLAS_BOST"] is law03.build_law03
+    assert MAT_PHYSICS_REGISTRY["BOSTEELS"] is law03.build_law03
+
+
 # ===================================================================
 # Elastic response tests
 # ===================================================================
