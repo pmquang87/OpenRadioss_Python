@@ -192,6 +192,18 @@ def build_law28(rec: Any) -> Material:
     if eps_max31 == 0.0:
         eps_max31 = _DEFAULT_EPS_MAX
 
+    # Time step & characteristic formulation (hm_read_mat28.F lines 185, 196-200)
+    # PARMAT(1) = MAX(E11,E22,E33,G12,G23,G31)
+    # DMIN = MIN(E11*E22, E22*E33, E11*E33)
+    # DMAX = MAX(E11,E22,E33)
+    # PARMAT(16) = 1 (iformdt = 1)
+    # PARMAT(17) = DMIN / DMAX**2 (gfac)
+    dmin = min(e11 * e22, e22 * e33, e11 * e33) if (e11 > 0.0 and e22 > 0.0 and e33 > 0.0) else 0.0
+    dmax = max(e11, e22, e33)
+    parmat_16 = 1
+    parmat_17 = (dmin / (dmax * dmax)) if dmax > 0.0 else 0.0
+    c_max = max(e11, e22, e33, g12, g23, g31)
+
     e_max = max(e11, e22, e33)
     params = {
         "E": e_max if e_max > 0.0 else 1.0,
@@ -224,6 +236,13 @@ def build_law28(rec: Any) -> Material:
         "eps_max12": eps_max12,
         "eps_max23": eps_max23,
         "eps_max31": eps_max31,
+        "dmin": dmin,
+        "dmax": dmax,
+        "iformdt": parmat_16,
+        "parmat_1": c_max,
+        "parmat_16": parmat_16,
+        "parmat_17": parmat_17,
+        "gfac": parmat_17,
     }
 
     # Preserve any pre-resolved curves if present
@@ -475,10 +494,10 @@ def solid_update(
 
     off = None
     if extra is not None:
-        if "off28" in extra:
-            off = extra["off28"]
-        elif "off" in extra:
+        if "off" in extra:
             off = extra["off"]
+        elif "off28" in extra:
+            off = extra["off28"]
 
     if off is not None:
         active = (off != 0.0)
@@ -491,6 +510,8 @@ def solid_update(
             | (np.abs(eps[:, 5] / 2.0) > eps_max31)
         )
         off[active & rupture] = 0.0
+        if extra is not None and "off28" in extra and extra["off28"] is not off:
+            extra["off28"][:] = off
 
     # 3. Uncoupled elastic trial stress (sigeps28.F lines 175-195)
     sign = np.empty_like(sig)
@@ -512,6 +533,10 @@ def solid_update(
     elif extra is not None and "rho" in extra:
         rho_curr = np.atleast_1d(np.asarray(extra["rho"], dtype=sig.dtype))
         mu = rho_curr / rho0 - 1.0
+    elif extra is not None and "vol" in extra and "vol0" in extra:
+        vol_curr = np.atleast_1d(np.asarray(extra["vol"], dtype=sig.dtype))
+        vol0_val = np.atleast_1d(np.asarray(extra["vol0"], dtype=sig.dtype))
+        mu = np.where(vol_curr > 0.0, vol0_val / vol_curr - 1.0, 0.0)
     else:
         # Small-strain volumetric compression mu = rho/rho0 - 1 ≈ -tr(eps)
         mu = -(eps[:, 0] + eps[:, 1] + eps[:, 2])
@@ -541,8 +566,15 @@ def solid_update(
 
     for k in range(6):
         # In sigeps28.F: if AUX == 0 (no function defined for this component), skip clamping
-        if fids[k] == 0 and p.get("curve28_x") is None and p.get("curve28_fct") is None and p.get("curves") is None:
-            continue
+        if fids[k] == 0:
+            has_curve = False
+            for key in ("curve28_fct", "curve28_x", "curves"):
+                clist = p.get(key)
+                if clist is not None and k < len(clist) and clist[k] is not None:
+                    has_curve = True
+                    break
+            if not has_curve:
+                continue
 
         if k < 3:
             if gflag == 1:
@@ -735,6 +767,10 @@ def consistent_solid_tangent(
     elif extra is not None and "rho" in extra:
         rho_curr = np.atleast_1d(np.asarray(extra["rho"], dtype=sig.dtype))
         mu = rho_curr / rho0 - 1.0
+    elif extra is not None and "vol" in extra and "vol0" in extra:
+        vol_curr = np.atleast_1d(np.asarray(extra["vol"], dtype=sig.dtype))
+        vol0_val = np.atleast_1d(np.asarray(extra["vol0"], dtype=sig.dtype))
+        mu = np.where(vol_curr > 0.0, vol0_val / vol_curr - 1.0, 0.0)
     elif eps is not None and eps.shape[0] == n:
         mu = -(eps[:, 0] + eps[:, 1] + eps[:, 2])
     else:
@@ -746,8 +782,15 @@ def consistent_solid_tangent(
         mu = np.broadcast_to(mu, (n,)).astype(sig.dtype)
 
     for k in range(6):
-        if fids[k] == 0 and p.get("curve28_x") is None and p.get("curve28_fct") is None and p.get("curves") is None:
-            continue
+        if fids[k] == 0:
+            has_curve = False
+            for key in ("curve28_fct", "curve28_x", "curves"):
+                clist = p.get(key)
+                if clist is not None and k < len(clist) and clist[k] is not None:
+                    has_curve = True
+                    break
+            if not has_curve:
+                continue
 
         flag = gflag if k < 3 else vflag
 

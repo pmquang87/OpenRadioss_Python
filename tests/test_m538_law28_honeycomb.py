@@ -940,3 +940,131 @@ class TestLaw28EngineSimulation:
 
         state = eng_model.engine_state
         assert state.cycle >= 10, f"Expected >= 10 cycles, got {state.cycle}"
+
+
+# =============================================================================
+# 13. Upstream Fortran Parity Audit Checks (Auditor 1, Milestone M538)
+# =============================================================================
+
+class TestLaw28FortranParityAudit:
+    """Rigorous audit tests verifying law28_honeycomb against sigeps28.F & hm_read_mat28.F."""
+
+    def test_audit_check1_engineering_shear_stress_update(self):
+        """Check 1: SIGNXY = SIGOXY + G12 * DEPSXY with engineering shear strain increment."""
+        g12, g23, g31 = 40.0, 50.0, 60.0
+        mat = _make_honeycomb(e11=100.0, e22=200.0, e33=300.0, g12=g12, g23=g23, g31=g31)
+        sig = np.zeros((1, 6))
+        # Pass engineering shear strain increment gamma_xy = 0.05
+        deps = np.array([[0.0, 0.0, 0.0, 0.05, 0.02, 0.01]])
+        sign, _, _ = law28_honeycomb.solid_update(mat, sig, deps)
+
+        assert pytest.approx(sign[0, 3]) == g12 * 0.05  # 2.0
+        assert pytest.approx(sign[0, 4]) == g23 * 0.02  # 1.0
+        assert pytest.approx(sign[0, 5]) == g31 * 0.01  # 0.6
+
+    def test_audit_check2_tensorial_shear_failure_criterion(self):
+        """Check 2: ABS(EPSXY/TWO) > EMX12 converts engineering shear to tensorial shear.
+        Also verifies normal strain rupture is tensile only (EPSXX > EMX11, not ABS).
+        """
+        emx12 = 0.04
+        mat = _make_honeycomb(eps_max11=0.10, eps_max12=emx12)
+
+        # Case A: gamma_xy = 0.06 -> tensorial eps_xy = 0.03 <= 0.04 (no failure!)
+        off_a = np.array([1.0])
+        extra_a = {"eps28": np.zeros((1, 6)), "off28": off_a}
+        deps_a = np.array([[0.0, 0.0, 0.0, 0.06, 0.0, 0.0]])
+        sign_a, _, _ = law28_honeycomb.solid_update(mat, np.zeros((1, 6)), deps_a, extra=extra_a)
+        assert off_a[0] == 1.0, "Should not fail when tensorial shear eps_xy <= emx12"
+        assert sign_a[0, 3] != 0.0
+
+        # Case B: gamma_xy = 0.10 -> tensorial eps_xy = 0.05 > 0.04 (failure!)
+        off_b = np.array([1.0])
+        extra_b = {"eps28": np.zeros((1, 6)), "off28": off_b}
+        deps_b = np.array([[0.0, 0.0, 0.0, 0.10, 0.0, 0.0]])
+        sign_b, _, _ = law28_honeycomb.solid_update(mat, np.zeros((1, 6)), deps_b, extra=extra_b)
+        assert off_b[0] == 0.0, "Must fail when tensorial shear eps_xy > emx12"
+        assert np.allclose(sign_b[0], 0.0)
+
+        # Case C: Large compressive normal strain (eps_11 = -0.50) with eps_max11 = 0.10
+        # In sigeps28.F: EPSXX(I) > EMX11. -0.50 is NOT > 0.10, so no tensile rupture!
+        off_c = np.array([1.0])
+        extra_c = {"eps28": np.zeros((1, 6)), "off28": off_c}
+        deps_c = np.array([[-0.50, 0.0, 0.0, 0.0, 0.0, 0.0]])
+        sign_c, _, _ = law28_honeycomb.solid_update(mat, np.zeros((1, 6)), deps_c, extra=extra_c)
+        assert off_c[0] == 1.0, "Large compressive strain must not trigger tensile rupture"
+
+    def test_audit_check3_volumetric_strain_mu_from_vol(self):
+        """Check 3: mu = rho/rho0 - 1 = vol0/vol - 1 = AMU."""
+        fc = FunctTable(1, [0.0, 0.1, 0.5], [10.0, 25.0, 75.0])
+        mat = _make_honeycomb(
+            rho0=1.0e-3,
+            e11=1000.0,
+            fun_a1=1,
+            gflag=0,
+            fscale11=1.0,
+            curve28_x=[fc.x, None, None, None, None, None],
+            curve28_y=[fc.y, None, None, None, None, None],
+            curve28_fct=[fc, None, None, None, None, None],
+        )
+        sig = np.zeros((1, 6))
+        deps = np.array([[0.1, 0.0, 0.0, 0.0, 0.0, 0.0]])
+        # Provide vol and vol0: vol0 = 1.0, vol = 0.9090909 -> vol0/vol - 1 = 0.10
+        extra = {
+            "eps28": np.zeros((1, 6)),
+            "vol0": np.array([1.0]),
+            "vol": np.array([1.0 / 1.1]),  # mu = 1.1 - 1 = 0.10
+        }
+        sign, _, _ = law28_honeycomb.solid_update(mat, sig, deps, extra=extra)
+        # Yield stress at mu = 0.10 is 25.0
+        assert pytest.approx(sign[0, 0]) == 25.0
+
+    def test_audit_check4_fscale13_attribute_corresponds_to_dir31(self):
+        """Check 4: CFG attribute FScale13 corresponds to direction 31."""
+        mat = _make_honeycomb(
+            g31=1000.0,
+            fun_a4=4,
+            vflag=1,
+            FScale13=2.5,  # CFG attribute name
+            curve28_x=[None, None, None, None, None, np.array([0.0, 1.0])],
+            curve28_y=[None, None, None, None, None, np.array([10.0, 10.0])],
+        )
+        assert pytest.approx(mat.params["fscale31"]) == 2.5
+        sig = np.zeros((1, 6))
+        deps = np.array([[0.0, 0.0, 0.0, 0.0, 0.0, 0.5]])
+        sign, _, _ = law28_honeycomb.solid_update(mat, sig, deps)
+        # Clamped to Y * FScale13 = 10.0 * 2.5 = 25.0
+        assert pytest.approx(sign[0, 5]) == 25.0
+
+    def test_audit_check5_sound_speed_shear_dominance(self):
+        """Check 5: c = sqrt(max(E11..33, G12..31) / rho0) in sigeps28.F line 192."""
+        mat = _make_honeycomb(
+            rho0=2.0e-3,
+            e11=100.0, e22=120.0, e33=110.0,
+            g12=150.0, g23=200.0, g31=800.0,  # g31 is dominant
+        )
+        expected_c = math.sqrt(800.0 / 2.0e-3)
+        assert pytest.approx(law28_honeycomb.sound_speed(mat)) == expected_c
+        assert pytest.approx(mat.sound_speed_solid()) == expected_c
+        assert pytest.approx(pm.sound_speed(mat)) == expected_c
+
+    def test_audit_check6_timestep_parmat_formulation(self):
+        """Check 6: DMIN = MIN(E11*E22, E22*E33, E11*E33), DMAX = MAX(E11,E22,E33),
+        PARMAT(16) = 1 (iformdt=1), PARMAT(17) = DMIN / DMAX**2 (gfac).
+        """
+        e11, e22, e33 = 100.0, 200.0, 400.0
+        mat = _make_honeycomb(e11=e11, e22=e22, e33=e33, g12=50.0, g23=60.0, g31=70.0)
+        p = mat.params
+
+        expected_dmin = min(e11 * e22, e22 * e33, e11 * e33)  # min(20000, 80000, 40000) = 20000
+        expected_dmax = max(e11, e22, e33)                    # 400.0
+        expected_parmat17 = expected_dmin / (expected_dmax ** 2)  # 20000 / 160000 = 0.125
+        expected_parmat1 = max(e11, e22, e33, 50.0, 60.0, 70.0)  # 400.0
+
+        assert pytest.approx(p["dmin"]) == expected_dmin
+        assert pytest.approx(p["dmax"]) == expected_dmax
+        assert p["iformdt"] == 1
+        assert p["parmat_16"] == 1
+        assert pytest.approx(p["parmat_17"]) == expected_parmat17
+        assert pytest.approx(p["gfac"]) == expected_parmat17
+        assert pytest.approx(p["parmat_1"]) == expected_parmat1
+

@@ -360,7 +360,9 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     if mat.law == 33:
         return law33_foamplas.solid_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 28 or getattr(mat, "law_name", None) in ("LAW28", "HONEYCOMB", "HONEYCOMB_SOL"):
-        return law28_honeycomb.solid_update(mat, sig, deps, epsp, dt, extra)
+        sign, epsp_out, c = law28_honeycomb.solid_update(mat, sig, deps, epsp, dt, extra)
+        sig[:] = sign
+        return sig, epsp_out, c
     if getattr(mat, "law", None) in (5, "5", "LAW5", "JWL") or getattr(mat, "law_name", None) in ("LAW5", "JWL"):
         _get_law05()
         if law05_solid_update is not None:

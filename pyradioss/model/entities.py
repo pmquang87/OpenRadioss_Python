@@ -175,6 +175,12 @@ class Material:
                 return float(law05_jwl.sound_speed(self, rho=self.rho0))
             except Exception:
                 return float(self.params.get("d", self.params.get("vdet", 0.0)))
+        if self.law in (28, "28", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL"):
+            try:
+                from ..materials import law28_honeycomb
+                return float(law28_honeycomb.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
         return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
 
     def sound_speed_shell(self) -> float:

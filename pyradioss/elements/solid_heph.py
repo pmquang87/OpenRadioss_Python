@@ -360,7 +360,10 @@ def _init_material_state(group, dndx0):
     for sl, mat, prop in st["slices"]:
         for name, shape in materials.extra_shapes(mat).items():
             if name not in st["mat_extra"]:
-                st["mat_extra"][name] = np.zeros((n,) + shape)
+                if name.startswith("off"):
+                    st["mat_extra"][name] = np.ones((n,) + shape)
+                else:
+                    st["mat_extra"][name] = np.zeros((n,) + shape)
     if any(mat.eos is not None for _, mat, _ in st["slices"]):
         from ..materials import eos as eos_mod
         st["eos_mask"] = np.zeros(n, dtype=bool)
@@ -572,6 +575,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         extra = {}
         if F is not None:
             extra["F"] = F[sl]
+        extra["off"] = st["off"][sl]
         for name, arr in st["mat_extra"].items():
             extra[name] = arr[sl]
         if materials.needs_env(mat) and not st.get("_impl_static_hg"):
@@ -582,6 +586,13 @@ def forces(group, x, v, vr, dt, fint, mint):
         if c_new is not None:
             c[sl] = c_new
             c_from_law[sl] = True
+        for name in st["mat_extra"]:
+            if name in extra and name != "eint":
+                st["mat_extra"][name][sl] = extra[name]
+        if "off28" in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra["off28"])
+        elif "off" in extra:
+            st["off"][sl] = extra["off"]
 
         if mat.eos is not None:
             from ..materials import eos as eos_mod
@@ -638,8 +649,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             if eps_max < 1e30:
                 broken |= st["epsp"][sl] > eps_max
             off[sl][broken] = 0.0
-        alive = off > 0.0
-        sig[~alive] = 0.0
+    alive = st["off"] > 0.0
+    sig[~alive] = 0.0
 
     qa = np.zeros(group.n)
     qb = np.zeros(group.n)

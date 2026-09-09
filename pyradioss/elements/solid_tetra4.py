@@ -446,6 +446,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         extra = {}
         if F is not None:
             extra["F"] = F[sl]
+        extra["off"] = st["off"][sl]
         for name, arr in st.get("mat_extra", {}).items():
             extra[name] = arr[sl]
         if materials.needs_env(mat) and not st.get("_impl_static_hg"):
@@ -470,6 +471,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         for name in st.get("mat_extra", {}):
             if name in extra and name != "eint":
                 st["mat_extra"][name][sl] = extra[name]
+        if "off28" in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra["off28"])
+        elif "off" in extra:
+            st["off"][sl] = extra["off"]
 
         # ---- /EOS pressure (M6, eosmain) — see solid_hexa8 -----------------
         if mat.eos is not None:
@@ -526,8 +531,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             if eps_max < 1e30:
                 broken |= st["epsp"][sl] > eps_max
             off[sl][broken] = 0.0
-        alive = off > 0.0
-        sig[~alive] = 0.0            # a deleted element carries no stress
+    alive = st["off"] > 0.0
+    sig[~alive] = 0.0            # a deleted element carries no stress
 
     # ---- sound speed & bulk viscosity (sbulk3) ------------------------------
     qa = np.zeros(group.n)

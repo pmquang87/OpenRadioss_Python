@@ -383,7 +383,10 @@ def _init_material_state(group, dndx0):
     for sl, mat, prop in st["slices"]:
         for name, shape in materials.extra_shapes(mat).items():
             if name not in st["mat_extra"]:
-                st["mat_extra"][name] = np.zeros((n,) + shape)
+                if name.startswith("off"):
+                    st["mat_extra"][name] = np.ones((n,) + shape)
+                else:
+                    st["mat_extra"][name] = np.zeros((n,) + shape)
         if getattr(mat, "law", 1) in (5, "5", "LAW5", "JWL"):
             e0 = float(mat.params.get("e0", mat.params.get("MAT_E0", 0.0)))
             st["eint"][sl] = e0 * st["vol0"][sl]
@@ -709,6 +712,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         extra = {}
         if F is not None:
             extra["F"] = F[sl]
+        extra["off"] = st["off"][sl]
         for name, arr in st["mat_extra"].items():
             extra[name] = arr[sl]
         if materials.needs_env(mat) and not st.get("_impl_static_hg"):
@@ -739,6 +743,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         for name in st["mat_extra"]:
             if name in extra and name != "eint":
                 st["mat_extra"][name][sl] = extra[name]
+        if "off28" in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra["off28"])
+        elif "off" in extra:
+            st["off"][sl] = extra["off"]
 
         # ---- /EOS pressure (M6, eosmain): replace the law's pressure by
         # the implicit E-p update — deviator from the law, pressure from
@@ -804,8 +812,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             if eps_max < 1e30:
                 broken |= st["epsp"][sl] > eps_max
             off[sl][broken] = 0.0
-        alive = off > 0.0
-        sig[~alive] = 0.0            # a deleted element carries no stress
+    alive = st["off"] > 0.0
+    sig[~alive] = 0.0            # a deleted element carries no stress
 
     # ---- sound speed & bulk-viscosity coefficients per slice --------------
     qa = np.zeros(group.n)
