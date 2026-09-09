@@ -66,7 +66,8 @@ def test_ale_keywords(tmp_path):
     assert mat3.params["MAT_BETA"] == 20e6
     
     mat4 = model.materials[2]
-    assert getattr(mat4, "inactive", False) is True
+    # M535: LAW4 physics is ported, so mat4 is active (inactive is False)
+    assert getattr(mat4, "inactive", False) is False
     assert mat4.law == 4
     assert mat4.params["MAT_E"] == 200e9
     assert mat4.params["MAT_SIGY"] == 200e6
