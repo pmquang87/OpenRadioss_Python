@@ -616,12 +616,20 @@ class CfgCatalogue:
 
     # -- public API -----------------------------------------------------------
 
+    _SYNONYMS: Dict[str, str] = {
+        "SOIL": "LAW10",
+        "SOIL_CONC": "LAW10",
+    }
+
     def schema(self, law_name: str) -> Optional[CfgLawSchema]:
         """The parsed schema for a law spelling ('FABRI', 'LAW19',
         'ALE/MAT' ...), or None when the catalogue has no cfg for it."""
         self._scan()
         key = law_name.upper()
         path = self._files.get(key)
+        if path is None and key in self._SYNONYMS:
+            key = self._SYNONYMS[key]
+            path = self._files.get(key)
         if path is None:
             return None
         if path not in self._schemas:

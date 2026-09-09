@@ -951,8 +951,39 @@ def test_registry_pending_laws_have_schemas():
     cat = mat_reader.catalogue()
     for key in ("LAW19", "FABRI", "LAW24", "CONC", "LAW35", "FOAM_VISC",
                 "LAW44", "COWPER", "LAW70", "FOAM_TAB", "LAW81",
-                "VOID", "LAW0", "GAS"):
+                "VOID", "LAW0", "GAS", "LAW10", "SOIL", "DPRAG1"):
         assert cat.schema(key) is not None, f"no cfg schema for {key}"
+
+
+@needs_cfg
+def test_law10_soil_cfg_parse(tmp_path):
+    """M536: Verify /MAT/SOIL, /MAT/DPRAG1, /MAT/LAW10 parse through CFG into active Material."""
+    deck_text = """\
+# RAD
+/BEGIN
+TEST
+                2019                   0
+/MAT/SOIL/1
+Soil Layer
+                1800                1800
+               2.5e7                 0.3
+               1.0e6                 0.5                0.01               1.0e7
+                50.0               2.0e7               100.0                25.0
+             -1.0e5              101325
+               2.2e7                 0.2
+/END
+"""
+    model, log = _parse_deck(deck_text, tmp_path, "SOIL_TEST")
+    assert len(log.errors) == 0, log.errors
+    assert 1 in model.materials
+    mat = model.materials[1]
+    assert mat.law == 10
+    assert mat.rho0 == 1800.0
+    assert mat.params["E"] == 2.5e7
+    assert mat.params["nu"] == 0.3
+    assert mat.params["A0"] == 1.0e6
+    assert mat.params["c1"] == 2.0e7
+    assert mat.params["bunl"] == 2.2e7
 
 
 @needs_cfg
