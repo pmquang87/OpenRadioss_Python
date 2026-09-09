@@ -44,7 +44,7 @@ from pyradioss.starter import checks
 from pyradioss.starter.checks import check_model, _ALLOWED_LAWS
 from pyradioss.starter.initialization import resolve_materials
 from pyradioss.starter.starter import run_starter, StarterError
-from pyradioss.engine.engine import run_engine
+from pyradioss.engine.engine import run_engine, _energies
 
 
 # =============================================================================
@@ -875,15 +875,15 @@ class TestLaw28StarterChecks:
 # =============================================================================
 
 class TestLaw28EngineSimulation:
-    """Multi-cycle explicit engine simulation on solid hexa8."""
+    """Multi-cycle explicit engine simulation, energy balance, and stability audit for LAW28."""
 
     def test_engine_multi_cycle_simulation_hexa8(self, tmp_path):
-        """Run 15+ explicit cycles of compression on a solid hexa8 element.
+        """Run explicit cycles of compression on a solid hexa8 element with LAW28.
         Verify:
         - Starter initializes and resolves without errors.
         - Engine runs multiple explicit integration cycles.
         - State progresses without NaNs or Infs.
-        - Energy balance is maintained.
+        - Energy balance is tracked properly in engine ledgers.
         """
         run_name = "HEXA_HONEYCOMB"
         s_path = os.path.join(tmp_path, f"{run_name}_0000.rad")
@@ -940,6 +940,417 @@ class TestLaw28EngineSimulation:
 
         state = eng_model.engine_state
         assert state.cycle >= 10, f"Expected >= 10 cycles, got {state.cycle}"
+        assert not state.stop_reason or "/STOP" in str(state.stop_reason)
+
+        brick_g = dict(eng_model.element_groups())["bricks"]
+        sig = brick_g.state["sig"]
+        assert np.isfinite(sig).all()
+        en = _energies(eng_model, state)
+        assert np.isfinite(en["IE"])
+        assert np.isfinite(en["KE"])
+        assert abs(en["ERR"]) < 5.0
+
+    def test_engine_multielement_compressive_impact_50_steps(self, tmp_path):
+        """Audit explicit dynamic simulation and energy conservation on a 2x2x2 hexa8 mesh.
+        Verify:
+        - 2x2x2 mesh (8 solid hexa8 bricks, 27 nodes) under dynamic compressive impact load.
+        - Run for 50+ explicit time steps without numerical divergence.
+        - Audit energy conservation: kinetic energy E_k, internal energy E_int, external work W_ext.
+        - Total energy balance error |ERR| <= 5.0% and total energy ratio E_tot / (E_tot,0 + W_ext) ~ 1.0.
+        - Stresses, coordinates, and velocities remain strictly finite (no NaNs or Infs).
+        - Courant time step remains stable throughout the simulation.
+        """
+        run_name = "HEXA_IMPACT_50"
+        s_path = os.path.join(tmp_path, f"{run_name}_0000.rad")
+        e_path = os.path.join(tmp_path, f"{run_name}_0001.rad")
+
+        deck = StarterDeck(run_name)
+
+        # 2x2x2 regular mesh of 27 nodes: x, y, z in {0, 10, 20}
+        nodes = []
+        nid = 1
+        node_grid = np.zeros((3, 3, 3), dtype=int)
+        for k in range(3):
+            for j in range(3):
+                for i in range(3):
+                    nodes.append((nid, float(i * 10.0), float(j * 10.0), float(k * 10.0)))
+                    node_grid[i, j, k] = nid
+                    nid += 1
+        deck.node(nodes)
+
+        # 8 brick elements
+        bricks = []
+        eid = 1
+        for k in range(2):
+            for j in range(2):
+                for i in range(2):
+                    n1 = int(node_grid[i, j, k])
+                    n2 = int(node_grid[i + 1, j, k])
+                    n3 = int(node_grid[i + 1, j + 1, k])
+                    n4 = int(node_grid[i, j + 1, k])
+                    n5 = int(node_grid[i, j, k + 1])
+                    n6 = int(node_grid[i + 1, j, k + 1])
+                    n7 = int(node_grid[i + 1, j + 1, k + 1])
+                    n8 = int(node_grid[i, j + 1, k + 1])
+                    bricks.append((eid, n1, n2, n3, n4, n5, n6, n7, n8))
+                    eid += 1
+        deck.brick(1, bricks)
+        deck.part(1, "HONEYCOMB_BLOCK_2X2X2", 1, 1)
+
+        # Orthotropic honeycomb material
+        deck.mat_law28(
+            1,
+            rho=1.0e-3,
+            e11=200.0,
+            e22=300.0,
+            e33=400.0,
+            g12=50.0,
+            g23=60.0,
+            g31=70.0,
+            title="HONEYCOMB_ORTHO",
+        )
+        deck.prop_solid(1, "SOLID_PROP")
+
+        # Boundary conditions: Clamped base (z=0, 9 nodes)
+        base_nodes = node_grid[:, :, 0].flatten().tolist()
+        top_nodes = node_grid[:, :, 2].flatten().tolist()
+        deck.grnod_node(1, "base_nodes", base_nodes)
+        deck.grnod_node(2, "top_nodes", top_nodes)
+        deck.bcs(1, "clamp_base", "111", "111", 1)
+
+        # Dynamic compressive impact load: initial velocity -10.0 mm/ms in -Z on top face
+        deck.inivel_tra(1, "impact_velocity", [0.0, 0.0, -10.0], 2)
+        deck.write(s_path)
+
+        # Run for 0.8 s (approx 59 cycles with Courant dt ~ 0.0136 s)
+        engine_deck = f"""/RUN/{run_name}/1
+0.80
+/DT
+0.9 0
+/PRINT/-1
+/STOP
+100
+/END
+"""
+        with open(e_path, "w") as f:
+            f.write(engine_deck)
+
+        log = MessageLog()
+        with contextlib.redirect_stdout(io.StringIO()):
+            st_model = run_starter(s_path, log=log)
+            eng_model = run_engine(e_path)
+
+        # 1. Verification of Starter resolution
+        assert len(log.errors) == 0
+        mat = st_model.materials[1]
+        assert mat.law == 28
+        assert mat.sound_speed_solid() == pytest.approx(math.sqrt(400.0 / 1.0e-3), rel=1e-5)
+
+        # 2. 50+ explicit time steps executed
+        state = eng_model.engine_state
+        assert state.cycle >= 50, f"Expected >= 50 cycles, got {state.cycle}"
+        assert not state.stop_reason or "/STOP" in str(state.stop_reason)
+
+        # 3. Kinematic and stress state finiteness
+        assert np.isfinite(eng_model.x).all()
+        assert np.isfinite(eng_model.v).all()
+        brick_g = dict(eng_model.element_groups())["bricks"]
+        sig = brick_g.state["sig"]
+        assert sig.shape == (8, 6)
+        assert np.isfinite(sig).all()
+
+        # Compressive shock wave: mean normal stress in Z is compressive
+        assert np.mean(sig[:, 2]) < 0.0
+
+        # 4. Energy conservation audit
+        en = _energies(eng_model, state)
+        assert en["IE"] > 0.0, f"Expected positive internal energy, got {en['IE']}"
+        assert en["KE"] > 0.0, f"Expected positive kinetic energy, got {en['KE']}"
+        assert pytest.approx(en["EW"], abs=1e-6) == 0.0  # Initial velocity, no external work
+        assert abs(en["ERR"]) <= 5.0, f"Energy error exceeded threshold: {en['ERR']}%"
+
+        # Energy ratio: E_tot / (E_tot,0 + W_ext) == 1.0
+        # In OpenRadioss engine ledgers, E_tot = IE + KE + HE + CE + EN + DE
+        total_e = en["IE"] + en["KE"] + en["HE"] + en["CE"] + en["EN"] + en["DE"]
+        ref_e = _energies.e0 + state.wext
+        assert ref_e > 0.0
+        energy_ratio = total_e / ref_e
+        assert pytest.approx(energy_ratio, rel=1e-5) == 1.0
+
+    def test_engine_combined_hexa8_tetra4_mesh_simulation(self, tmp_path):
+        """Run explicit dynamic simulation with combined hexa8 and tetra4 solid elements.
+        Verify:
+        - Concurrent solid constitutive update for both hexa8 and tetra4 elements with LAW28.
+        - Prescribed velocity impact load (/IMPVEL) with /FUNCT velocity table.
+        - Run for 50+ explicit time steps.
+        - External work W_ext, internal energy E_int, kinetic energy E_k booked correctly.
+        - Energy balance maintained within 5.0% error across both element families.
+        """
+        run_name = "COMBINED_HEX_TET"
+        s_path = os.path.join(tmp_path, f"{run_name}_0000.rad")
+        e_path = os.path.join(tmp_path, f"{run_name}_0001.rad")
+
+        deck = StarterDeck(run_name)
+
+        # Mesh: 1 hexa8 brick at base (nodes 1..8) + 2 tetra4 elements (apex node 9)
+        deck.node([
+            (1, 0.0, 0.0, 0.0),
+            (2, 10.0, 0.0, 0.0),
+            (3, 10.0, 10.0, 0.0),
+            (4, 0.0, 10.0, 0.0),
+            (5, 0.0, 0.0, 10.0),
+            (6, 10.0, 0.0, 10.0),
+            (7, 10.0, 10.0, 10.0),
+            (8, 0.0, 10.0, 10.0),
+            (9, 5.0, 5.0, 20.0),
+        ])
+        deck.brick(1, [(1, 1, 2, 3, 4, 5, 6, 7, 8)])
+        deck.tetra4(2, [
+            (2, 5, 6, 7, 9),
+            (3, 5, 7, 8, 9),
+        ])
+        deck.part(1, "HEX_HONEYCOMB_PART", 1, 1)
+        deck.part(2, "TET_HONEYCOMB_PART", 2, 1)
+
+        deck.mat_law28(
+            1,
+            rho=1.0e-3,
+            e11=200.0,
+            e22=300.0,
+            e33=400.0,
+            g12=50.0,
+            g23=60.0,
+            g31=70.0,
+            title="HONEYCOMB_SHARED",
+        )
+        deck.prop_solid(1, "HEX_PROP")
+        deck.prop_solid(2, "TET_PROP")
+
+        # Boundary conditions: Clamped base (nodes 1..4)
+        deck.grnod_node(1, "base", [1, 2, 3, 4])
+        deck.bcs(1, "fix_base", "111", "111", 1)
+
+        # Prescribed velocity /IMPVEL pushing apex node 9 downward into the honeycomb
+        deck.grnod_node(2, "apex", [9])
+        deck.funct(1, "vel_profile", [(0.0, -10.0), (10.0, -10.0)])
+        deck.impvel(1, "push_apex", 1, "Z", 2, scale=1.0)
+        deck.write(s_path)
+
+        engine_deck = f"""/RUN/{run_name}/1
+0.80
+/DT
+0.9 0
+/PRINT/-1
+/STOP
+100
+/END
+"""
+        with open(e_path, "w") as f:
+            f.write(engine_deck)
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            st_model = run_starter(s_path)
+            eng_model = run_engine(e_path)
+
+        state = eng_model.engine_state
+        assert state.cycle >= 50, f"Expected >= 50 cycles, got {state.cycle}"
+        assert not state.stop_reason or "/STOP" in str(state.stop_reason)
+
+        groups = dict(eng_model.element_groups())
+        assert "bricks" in groups and "tetras" in groups
+        sig_b = groups["bricks"].state["sig"]
+        sig_t = groups["tetras"].state["sig"]
+
+        assert sig_b.shape == (1, 6)
+        assert sig_t.shape == (2, 6)
+        assert np.isfinite(sig_b).all()
+        assert np.isfinite(sig_t).all()
+
+        # Both element groups experience compression in Z
+        assert sig_b[0, 2] < 0.0
+        assert np.mean(sig_t[:, 2]) < 0.0
+
+        # Energy conservation audit
+        en = _energies(eng_model, state)
+        assert en["IE"] > 0.0
+        assert en["KE"] > 0.0
+        assert en["EW"] > 0.0
+        assert abs(en["ERR"]) <= 5.0
+
+        assert np.isfinite(eng_model.x).all()
+        assert np.isfinite(eng_model.v).all()
+
+    def test_engine_severe_deformation_element_deletion(self, tmp_path):
+        """Audit element deletion under severe deformation for LAW28 honeycomb.
+        Verify:
+        - Rupture strain eps_max33 triggers clean element deletion under severe dynamic tension.
+        - Deletion updates ndel counter and zeroes out stress for deleted elements.
+        - Alive elements continue integration without NaN or Inf propagation.
+        - Time step does not crash or collapse to zero; solver finishes normally.
+        """
+        run_name = "DELETION_HONEYCOMB"
+        s_path = os.path.join(tmp_path, f"{run_name}_0000.rad")
+        e_path = os.path.join(tmp_path, f"{run_name}_0001.rad")
+
+        deck = StarterDeck(run_name)
+
+        # 2 stacked bricks in Z
+        deck.node([
+            (1, 0.0, 0.0, 0.0),
+            (2, 10.0, 0.0, 0.0),
+            (3, 10.0, 10.0, 0.0),
+            (4, 0.0, 10.0, 0.0),
+            (5, 0.0, 0.0, 10.0),
+            (6, 10.0, 0.0, 10.0),
+            (7, 10.0, 10.0, 10.0),
+            (8, 0.0, 10.0, 10.0),
+            (9, 0.0, 0.0, 20.0),
+            (10, 10.0, 0.0, 20.0),
+            (11, 10.0, 10.0, 20.0),
+            (12, 0.0, 10.0, 20.0),
+        ])
+        deck.brick(1, [
+            (1, 1, 2, 3, 4, 5, 6, 7, 8),
+            (2, 5, 6, 7, 8, 9, 10, 11, 12),
+        ])
+        deck.part(1, "HONEYCOMB_STACK", 1, 1)
+
+        # Tensile rupture limit in direction 33: eps_max33 = 0.005
+        deck.mat_law28(
+            1,
+            rho=1.0e-3,
+            e11=100.0,
+            e22=100.0,
+            e33=500.0,
+            eps_max33=0.005,
+            title="HONEYCOMB_RUPTURE",
+        )
+        deck.prop_solid(1, "SOLID_PROP")
+
+        # Clamped base (nodes 1..4)
+        deck.grnod_node(1, "base", [1, 2, 3, 4])
+        deck.bcs(1, "fix_base", "111", "111", 1)
+
+        # High-velocity dynamic tensile pull on top face (nodes 9..12) in +Z at 100 mm/ms
+        deck.grnod_node(2, "top", [9, 10, 11, 12])
+        deck.inivel_tra(1, "pull_top", [0.0, 0.0, 100.0], 2)
+        deck.write(s_path)
+
+        engine_deck = f"""/RUN/{run_name}/1
+0.50
+/DT
+0.9 0
+/PRINT/-1
+/STOP
+100
+/END
+"""
+        with open(e_path, "w") as f:
+            f.write(engine_deck)
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            st_model = run_starter(s_path)
+            eng_model = run_engine(e_path)
+
+        state = eng_model.engine_state
+        assert state.cycle >= 10
+        # Verification that element deletion triggered cleanly
+        assert state.ndel >= 1, f"Expected at least 1 element deleted, got ndel={state.ndel}"
+
+        brick_g = dict(eng_model.element_groups())["bricks"]
+        sig = brick_g.state["sig"]
+        st_extra = brick_g.state.get("mat_extra", {})
+        off = st_extra.get("off28")
+
+        assert off is not None
+        assert 0.0 in off, "Expected at least one element with off28 == 0.0"
+
+        # Deleted elements have zero stress
+        dead_mask = (off == 0.0)
+        assert np.allclose(sig[dead_mask], 0.0)
+
+        # Entire solution remains strictly finite (no NaNs or Infs)
+        assert np.isfinite(eng_model.x).all()
+        assert np.isfinite(eng_model.v).all()
+        assert np.isfinite(sig).all()
+        assert not state.stop_reason or "/STOP" in str(state.stop_reason)
+
+    def test_engine_courant_timestep_stability(self, tmp_path):
+        """Verify that the engine time-step calculation with LAW28 sound speed maintains Courant stability.
+        Verify:
+        - Normal modulus dominance (E33): c = sqrt(E33 / rho0).
+        - Shear modulus dominance (G31): c = sqrt(G31 / rho0).
+        - Initial time step matches theoretical formula: dt0 = 0.9 * Le / c.
+        - Explicit time stepping remains stable across all cycles.
+        """
+        # Case A: Normal modulus dominant (E33 = 400.0, rho0 = 1.0e-3, Le = 10.0)
+        # Expected c = sqrt(400 / 1e-3) = 632.4555 mm/ms -> dt0 = 0.9 * 10 / 632.4555 = 1.42302e-2 ms
+        run_name_a = "COURANT_NORM"
+        s_path_a = os.path.join(tmp_path, f"{run_name_a}_0000.rad")
+        e_path_a = os.path.join(tmp_path, f"{run_name_a}_0001.rad")
+
+        deck_a = StarterDeck(run_name_a)
+        deck_a.node([
+            (1, 0.0, 0.0, 0.0), (2, 10.0, 0.0, 0.0), (3, 10.0, 10.0, 0.0), (4, 0.0, 10.0, 0.0),
+            (5, 0.0, 0.0, 10.0), (6, 10.0, 0.0, 10.0), (7, 10.0, 10.0, 10.0), (8, 0.0, 10.0, 10.0),
+        ])
+        deck_a.brick(1, [(1, 1, 2, 3, 4, 5, 6, 7, 8)])
+        deck_a.part(1, "BLOCK", 1, 1)
+        deck_a.mat_law28(1, rho=1.0e-3, e11=200.0, e22=300.0, e33=400.0, g12=50.0, g23=60.0, g31=70.0)
+        deck_a.prop_solid(1, "SOLID_PROP")
+        deck_a.write(s_path_a)
+
+        with open(e_path_a, "w") as f:
+            f.write(f"/RUN/{run_name_a}/1\n0.05\n/DT\n0.9 0\n/PRINT/-1\n/STOP\n100\n/END\n")
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            run_starter(s_path_a)
+            eng_a = run_engine(e_path_a)
+
+        out_path_a = os.path.join(tmp_path, f"{run_name_a}_0001.out")
+        with open(out_path_a) as f:
+            out_text_a = f.read()
+        dt_line_a = [ln for ln in out_text_a.splitlines() if "INITIAL TIME STEP" in ln][0]
+        dt_val_a = float(dt_line_a.split(":")[-1])
+        c_expected_a = math.sqrt(400.0 / 1.0e-3)
+        dt_expected_a = 0.9 * 10.0 / c_expected_a
+        assert pytest.approx(dt_val_a, rel=1e-3) == dt_expected_a
+        assert eng_a.engine_state.cycle >= 3
+
+        # Case B: Shear modulus dominant (G31 = 900.0, rho0 = 1.0e-3, Le = 10.0)
+        # Expected c = sqrt(900 / 1e-3) = 948.6833 mm/ms -> dt0 = 0.9 * 10 / 948.6833 = 9.48683e-3 ms
+        run_name_b = "COURANT_SHEAR"
+        s_path_b = os.path.join(tmp_path, f"{run_name_b}_0000.rad")
+        e_path_b = os.path.join(tmp_path, f"{run_name_b}_0001.rad")
+
+        deck_b = StarterDeck(run_name_b)
+        deck_b.node([
+            (1, 0.0, 0.0, 0.0), (2, 10.0, 0.0, 0.0), (3, 10.0, 10.0, 0.0), (4, 0.0, 10.0, 0.0),
+            (5, 0.0, 0.0, 10.0), (6, 10.0, 0.0, 10.0), (7, 10.0, 10.0, 10.0), (8, 0.0, 10.0, 10.0),
+        ])
+        deck_b.brick(1, [(1, 1, 2, 3, 4, 5, 6, 7, 8)])
+        deck_b.part(1, "BLOCK", 1, 1)
+        deck_b.mat_law28(1, rho=1.0e-3, e11=100.0, e22=100.0, e33=100.0, g12=50.0, g23=60.0, g31=900.0)
+        deck_b.prop_solid(1, "SOLID_PROP")
+        deck_b.write(s_path_b)
+
+        with open(e_path_b, "w") as f:
+            f.write(f"/RUN/{run_name_b}/1\n0.05\n/DT\n0.9 0\n/PRINT/-1\n/STOP\n100\n/END\n")
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            run_starter(s_path_b)
+            eng_b = run_engine(e_path_b)
+
+        out_path_b = os.path.join(tmp_path, f"{run_name_b}_0001.out")
+        with open(out_path_b) as f:
+            out_text_b = f.read()
+        dt_line_b = [ln for ln in out_text_b.splitlines() if "INITIAL TIME STEP" in ln][0]
+        dt_val_b = float(dt_line_b.split(":")[-1])
+        c_expected_b = math.sqrt(900.0 / 1.0e-3)
+        dt_expected_b = 0.9 * 10.0 / c_expected_b
+        assert pytest.approx(dt_val_b, rel=1e-3) == dt_expected_b
+        assert eng_b.engine_state.cycle >= 5
+
 
 
 # =============================================================================

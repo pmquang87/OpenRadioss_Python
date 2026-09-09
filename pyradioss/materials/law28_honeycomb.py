@@ -455,12 +455,12 @@ def solid_update(
     rho0 = float(mat.rho0 if mat.rho0 > 0 else p.get("rho0", 1.0))
 
     # Sound speed calculation: c = sqrt(max(E11, E22, E33, G12, G23, G31) / rho0)
-    e11 = float(p.get("E11", 0.0))
-    e22 = float(p.get("E22", 0.0))
-    e33 = float(p.get("E33", 0.0))
-    g12 = float(p.get("G12", 0.0))
-    g23 = float(p.get("G23", 0.0))
-    g31 = float(p.get("G31", 0.0))
+    e11 = float(p.get("E11", p.get("e11", 0.0)))
+    e22 = float(p.get("E22", p.get("e22", 0.0)))
+    e33 = float(p.get("E33", p.get("e33", 0.0)))
+    g12 = float(p.get("G12", p.get("g12", 0.0)))
+    g23 = float(p.get("G23", p.get("g23", 0.0)))
+    g31 = float(p.get("G31", p.get("g31", 0.0)))
     c_scalar = math.sqrt(max(max(e11, e22, e33, g12, g23, g31), 0.0) / rho0)
 
     if n == 0:
@@ -627,12 +627,12 @@ def sound_speed(mat: Material, rho: float | None = None, extra: dict | None = No
         SOUNDSP(I) = SQRT(MAX(E11,E22,E33,G12,G23,G31)/RHO0(I))
     """
     p = mat.params
-    e11 = float(p.get("E11", 0.0))
-    e22 = float(p.get("E22", 0.0))
-    e33 = float(p.get("E33", 0.0))
-    g12 = float(p.get("G12", 0.0))
-    g23 = float(p.get("G23", 0.0))
-    g31 = float(p.get("G31", 0.0))
+    e11 = float(p.get("E11", p.get("e11", 0.0)))
+    e22 = float(p.get("E22", p.get("e22", 0.0)))
+    e33 = float(p.get("E33", p.get("e33", 0.0)))
+    g12 = float(p.get("G12", p.get("g12", 0.0)))
+    g23 = float(p.get("G23", p.get("g23", 0.0)))
+    g31 = float(p.get("G31", p.get("g31", 0.0)))
     r = rho if rho is not None and rho > 0.0 else mat.rho0
     if r <= 0.0:
         r = float(p.get("rho0", 1.0))
@@ -690,12 +690,12 @@ def consistent_solid_tangent(
 
     p = mat.params
     rho0 = float(mat.rho0 if mat.rho0 > 0 else p.get("rho0", 1.0))
-    e11 = float(p.get("E11", 0.0))
-    e22 = float(p.get("E22", 0.0))
-    e33 = float(p.get("E33", 0.0))
-    g12 = float(p.get("G12", 0.0))
-    g23 = float(p.get("G23", 0.0))
-    g31 = float(p.get("G31", 0.0))
+    e11 = float(p.get("E11", p.get("e11", 0.0)))
+    e22 = float(p.get("E22", p.get("e22", 0.0)))
+    e33 = float(p.get("E33", p.get("e33", 0.0)))
+    g12 = float(p.get("G12", p.get("g12", 0.0)))
+    g23 = float(p.get("G23", p.get("g23", 0.0)))
+    g31 = float(p.get("G31", p.get("g31", 0.0)))
     moduli = [e11, e22, e33, g12, g23, g31]
 
     # Initialize uncoupled orthotropic elastic tangent
