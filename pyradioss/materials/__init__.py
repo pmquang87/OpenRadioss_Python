@@ -61,6 +61,57 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                mat_gas, mat_void)
 
 try:
+    from . import law05_jwl
+    from .law05_jwl import (solid_update as law05_solid_update,
+                             sound_speed as law05_sound_speed,
+                             consistent_solid_tangent as law05_solid_tangent)
+except ImportError:
+    law05_jwl = None
+    law05_solid_update = None
+    law05_sound_speed = None
+    law05_solid_tangent = None
+
+
+def _get_law05():
+    global law05_jwl, law05_solid_update, law05_sound_speed, law05_solid_tangent
+    if law05_jwl is None:
+        try:
+            from . import law05_jwl as _m
+            law05_jwl = _m
+            law05_solid_update = getattr(_m, "solid_update", None)
+            law05_sound_speed = getattr(_m, "sound_speed", None)
+            law05_solid_tangent = getattr(_m, "consistent_solid_tangent", None)
+        except ImportError:
+            pass
+    return law05_jwl
+
+
+def _register_law05():
+    _get_law05()
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = None
+        if law05_jwl is not None:
+            builder = getattr(law05_jwl, "build_law05", getattr(law05_jwl, "build_jwl", getattr(law05_jwl, "_builder", None)))
+        if builder is None:
+            def _dynamic_law05_builder(rec):
+                mod = _get_law05()
+                if mod is not None:
+                    fn = getattr(mod, "build_law05", getattr(mod, "build_jwl", None))
+                    if fn is not None:
+                        return fn(rec)
+                raise NotImplementedError("LAW5 builder not available in law05_jwl")
+            builder = _dynamic_law05_builder
+        for k in (5, "5", "LAW5", "JWL"):
+            MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law05()
+
+
+try:
     from . import law10_soil
     from .law10_soil import (solid_update as law10_solid_update,
                              sound_speed as law10_sound_speed,
@@ -112,6 +163,7 @@ _register_law10()
 
 
 def register_materials():
+    _get_law05()
     _get_law10()
     for mod in (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,
                 law04_hyd_jcook, law06_hyd_visc, law10_soil, law19_fabric, law24_concrete,
@@ -123,6 +175,11 @@ def register_materials():
         fn = getattr(mod, "_register", None)
         if callable(fn):
             fn()
+    if law05_jwl is not None:
+        fn = getattr(law05_jwl, "_register", None)
+        if callable(fn):
+            fn()
+    _register_law05()
     if law10_soil is not None:
         fn = getattr(law10_soil, "_register", None)
         if callable(fn):
@@ -195,6 +252,8 @@ def extra_shapes(mat, nip=None):
         shapes.update(eps33=(6,))
     if mat.law == 4:
         shapes["temp"] = ()
+    if getattr(mat, "law", None) in (5, "5", "LAW5", "JWL") or getattr(mat, "law_name", None) in ("LAW5", "JWL"):
+        shapes.update(bfrac=(), aburn=(), eint=(), tb=())
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         shapes.update(mu_bak=(), epxe=(), p_old=())
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
@@ -218,8 +277,8 @@ def needs_env(mat) -> bool:
     ``rho``; LAW62's CIMAX sound-speed bound divides by the current
     density; LAW40's sound speed too; M40: LAW36 solids use the same
     total pressure as LAW44 — sigeps36.F P = BULK*AMU)."""
-    return (getattr(mat, "law", None) in (2, 4, 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 33, 35, 36, 40, 44, 62, 70, 81)
-            or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"))
+    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 33, 35, 36, 40, 44, 62, 70, 81)
+            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1"))
 
 
 def solid_update(mat, sig, deps, epsp, dt, extra=None):
@@ -278,6 +337,17 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
         return law44_cowper.solid_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 33:
         return law33_foamplas.solid_update(mat, sig, deps, epsp, dt, extra)
+    if getattr(mat, "law", None) in (5, "5", "LAW5", "JWL") or getattr(mat, "law_name", None) in ("LAW5", "JWL"):
+        _get_law05()
+        if law05_solid_update is not None:
+            try:
+                return law05_solid_update(mat, sig, deps=deps, epsp=epsp, dt=dt, extra=extra, return_tuple=True)
+            except TypeError:
+                try:
+                    return law05_solid_update(mat, sig, deps, epsp, dt, extra=extra)
+                except TypeError:
+                    return law05_solid_update(sig, epsp, deps, mat, dt, extra=extra)
+        raise NotImplementedError("LAW5 solid_update not available")
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         _get_law10()
         if law10_solid_update is not None:
@@ -290,6 +360,11 @@ def sound_speed(mat, rho=None, extra=None):
     """Dispatch sound speed calculation to material law."""
     law = getattr(mat, "law", None)
     law_name = getattr(mat, "law_name", None)
+    if law in (5, "5", "LAW5", "JWL") or law_name in ("LAW5", "JWL"):
+        _get_law05()
+        if law05_sound_speed is not None:
+            return law05_sound_speed(mat, rho=rho, extra=extra)
+        raise NotImplementedError("LAW5 sound_speed not available")
     if law in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or law_name in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         _get_law10()
         if law10_sound_speed is not None:
@@ -302,6 +377,8 @@ def sound_speed(mat, rho=None, extra=None):
 
 def shell_update(mat, sig, deps, epsp, dt, extra=None):
     """Dispatch a plane-stress (shell) update to the material's law."""
+    if getattr(mat, "law", None) in (5, "5", "LAW5", "JWL") or getattr(mat, "law_name", None) in ("LAW5", "JWL"):
+        raise NotImplementedError("LAW5 (JWL explosive) is implemented for 3D solid and SPH elements only.")
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         raise NotImplementedError("LAW10 (soil/Drucker-Prager) is implemented for 3D solid elements only.")
     if mat.law == 1:
@@ -402,6 +479,14 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
     if mat.law == 4:
         return law04_hyd_jcook.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr, extra)
+    if getattr(mat, "law", None) in (5, "5", "LAW5", "JWL") or getattr(mat, "law_name", None) in ("LAW5", "JWL"):
+        _get_law05()
+        if law05_solid_tangent is not None:
+            try:
+                return law05_solid_tangent(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
+            except TypeError:
+                return law05_solid_tangent(sig, epsp, mat, extra=extra)
+        raise NotImplementedError("LAW5 solid_tangent not available")
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         _get_law10()
         if law10_solid_tangent is not None:
@@ -409,7 +494,7 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
         raise NotImplementedError("LAW10 solid_tangent not available")
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
-        f"elastic, LAW2, LAW4, LAW6, LAW10, LAW24, LAW33, LAW35, LAW36, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
+        f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW33, LAW35, LAW36, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
         f"are ported; LAW27 is deferred — see PORTING_GUIDE M14)")
 
 
