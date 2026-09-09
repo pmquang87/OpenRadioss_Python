@@ -95,6 +95,32 @@ def split_fixed(raw: str, widths: List[int]) -> List[str]:
     return out
 
 
+class _LayoutList(list):
+    """List that compares equal to both list and tuple forms."""
+    def __eq__(self, other):
+        if isinstance(other, (list, tuple)):
+            return list(self) == list(other)
+        return super().__eq__(other)
+
+
+# M536: /MAT/LAW10 (/MAT/SOIL, /MAT/DPRAG) card layout constants citing radioss2020/MAT/matl10_law10.cfg
+MAT_LAW10_1 = (100,)
+MAT_LAW10_2 = (20, 20)
+MAT_LAW10_3 = (20, 20)
+MAT_LAW10_4 = (20, 20, 20, 20)
+MAT_LAW10_5 = (20, 20, 20, 20)
+MAT_LAW10_6 = (20, 20)
+MAT_LAW10_7 = (20, 20)
+
+MAT_LAW10_CFG_1 = MAT_LAW10_1
+MAT_LAW10_CFG_2 = MAT_LAW10_2
+MAT_LAW10_CFG_3 = MAT_LAW10_3
+MAT_LAW10_CFG_4 = MAT_LAW10_4
+MAT_LAW10_CFG_5 = MAT_LAW10_5
+MAT_LAW10_CFG_6 = MAT_LAW10_6
+MAT_LAW10_CFG_7 = MAT_LAW10_7
+
+
 # ============================================================================
 # The per-card column-layout table (reader side of the shared knowledge)
 # ============================================================================
@@ -2323,8 +2349,63 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_JCOOK_TAB_1": [20, 20, 20],
     "MAT_JCOOK_TAB_2": [20, 20, 20, 20, 20],
     "MAT_JCOOK_TAB_3": [10, 10, 10, 10, 10],
-    "MAT_LAW10_1": [20, 20, 20, 20, 20, 20],
-    "MAT_LAW10_2": [20, 20, 10],
+    # M536: matl10_law10.cfg (radioss2020) — /MAT/LAW10 (/MAT/SOIL, /MAT/DPRAG)
+    # Card 1: CARD("%-100s", TITLE)
+    "MAT_LAW10_1": _LayoutList([100]),
+    # Card 2: CARD("%20lg%20lg", MAT_RHO, Refer_Rho)
+    "MAT_LAW10_2": _LayoutList([20, 20]),
+    # Card 3: CARD("%20lg%20lg", MAT_E, MAT_NU)
+    "MAT_LAW10_3": _LayoutList([20, 20]),
+    # Card 4: CARD("%20lg%20lg%20lg%20lg", MAT_A0, MAT_A1, MAT_A2, MAT_AMAX)
+    "MAT_LAW10_4": _LayoutList([20, 20, 20, 20]),
+    # Card 5: CARD("%20lg%20lg%20lg%20lg", EOS_COM_C0, EOS_COM_C1, EOS_COM_C2, EOS_COM_C3)
+    "MAT_LAW10_5": _LayoutList([20, 20, 20, 20]),
+    # Card 6: CARD("%20lg%20lg", MAT_PC, PEXT)
+    "MAT_LAW10_6": _LayoutList([20, 20]),
+    # Card 7: CARD("%20lg%20lg", EOS_COM_B, EOS_COM_Mue_max)
+    "MAT_LAW10_7": _LayoutList([20, 20]),
+
+    "MAT_LAW10_CFG_1": _LayoutList([100]),
+    "MAT_LAW10_CFG_2": _LayoutList([20, 20]),
+    "MAT_LAW10_CFG_3": _LayoutList([20, 20]),
+    "MAT_LAW10_CFG_4": _LayoutList([20, 20, 20, 20]),
+    "MAT_LAW10_CFG_5": _LayoutList([20, 20, 20, 20]),
+    "MAT_LAW10_CFG_6": _LayoutList([20, 20]),
+    "MAT_LAW10_CFG_7": _LayoutList([20, 20]),
+
+    "MAT_SOIL_CFG_1": _LayoutList([100]),
+    "MAT_SOIL_CFG_2": _LayoutList([20, 20]),
+    "MAT_SOIL_CFG_3": _LayoutList([20, 20]),
+    "MAT_SOIL_CFG_4": _LayoutList([20, 20, 20, 20]),
+    "MAT_SOIL_CFG_5": _LayoutList([20, 20, 20, 20]),
+    "MAT_SOIL_CFG_6": _LayoutList([20, 20]),
+    "MAT_SOIL_CFG_7": _LayoutList([20, 20]),
+
+    "MAT_DPRAG_1": _LayoutList([100]),
+    "MAT_DPRAG_2": _LayoutList([20, 20]),
+    "MAT_DPRAG_3": _LayoutList([20, 20]),
+    "MAT_DPRAG_4": _LayoutList([20, 20, 20, 20]),
+    "MAT_DPRAG_5": _LayoutList([20, 20, 20, 20]),
+    "MAT_DPRAG_6": _LayoutList([20, 20]),
+    "MAT_DPRAG_7": _LayoutList([20, 20]),
+
+    "MAT_DPRAG_CFG_1": _LayoutList([100]),
+    "MAT_DPRAG_CFG_2": _LayoutList([20, 20]),
+    "MAT_DPRAG_CFG_3": _LayoutList([20, 20]),
+    "MAT_DPRAG_CFG_4": _LayoutList([20, 20, 20, 20]),
+    "MAT_DPRAG_CFG_5": _LayoutList([20, 20, 20, 20]),
+    "MAT_DPRAG_CFG_6": _LayoutList([20, 20]),
+    "MAT_DPRAG_CFG_7": _LayoutList([20, 20]),
+
+    "MAT_DPRAG1_1": _LayoutList([100]),
+    "MAT_DPRAG1_2": _LayoutList([20, 20]),
+    "MAT_DPRAG1_3": _LayoutList([20, 20]),
+    "MAT_DPRAG1_4": _LayoutList([20, 20, 20, 20]),
+    "MAT_DPRAG1_5": _LayoutList([20, 20, 20, 20]),
+    "MAT_DPRAG1_6": _LayoutList([20, 20]),
+    "MAT_DPRAG1_7": _LayoutList([20, 20]),
+
+    # Legacy / M187 aliases kept for backwards compatibility
     "MAT_SOIL_1": [20, 20, 20, 20, 20, 20],
     "MAT_SOIL_2": [20, 20, 10],
     "MAT_SOIL_CONC_1": [20, 20, 20, 20, 20, 20],

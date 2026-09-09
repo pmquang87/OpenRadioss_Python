@@ -155,6 +155,8 @@ from .starter_keywords import split_imposed_card
 
 from .card_layouts import (                                     # noqa: F401
     BLANK_CARD, blank, fmt_float, fmt_int, fmt_str,
+    MAT_LAW10_CFG_1, MAT_LAW10_CFG_2, MAT_LAW10_CFG_3, MAT_LAW10_CFG_4,
+    MAT_LAW10_CFG_5, MAT_LAW10_CFG_6, MAT_LAW10_CFG_7,
 )
 
 
@@ -400,6 +402,73 @@ class StarterDeck:
             self.lines.append(fmt_float(rhocp) + blank(40) + fmt_float(t0))
         else:
             self.lines.append(fmt_float(rhocp))
+
+    def mat_law10(
+        self,
+        mat_id: int,
+        title: str = "",
+        rho0: float = 0.0,
+        rhor: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        a0: float = 0.0,
+        a1: float = 0.0,
+        a2: float = 0.0,
+        amax: float = 0.0,
+        c0: float = 0.0,
+        c1: float = 0.0,
+        c2: float = 0.0,
+        c3: float = 0.0,
+        pmin: float = -1e30,
+        pext: float = 0.0,
+        b: float = 0.0,
+        mue_max: float = 0.0,
+        unit_id: int | None = None,
+        **kwargs,
+    ) -> None:
+        """``/MAT/LAW10`` (/MAT/SOIL, /MAT/DPRAG) — cfg MAT/matl10_law10.cfg
+        (FORMAT radioss2019/radioss2020):
+        Card 1: TITLE (%-100s) — MAT_LAW10_CFG_1: (100,)
+        Card 2: MAT_RHO, Refer_Rho (%20lg%20lg) — MAT_LAW10_CFG_2: (20, 20)
+        Card 3: MAT_E, MAT_NU (%20lg%20lg) — MAT_LAW10_CFG_3: (20, 20)
+        Card 4: MAT_A0, MAT_A1, MAT_A2, MAT_AMAX (%20lg%20lg%20lg%20lg) — MAT_LAW10_CFG_4: (20, 20, 20, 20)
+        Card 5: EOS_COM_C0, EOS_COM_C1, EOS_COM_C2, EOS_COM_C3 (%20lg%20lg%20lg%20lg) — MAT_LAW10_CFG_5: (20, 20, 20, 20)
+        Card 6: MAT_PC, PEXT (%20lg%20lg) — MAT_LAW10_CFG_6: (20, 20)
+        Card 7: EOS_COM_B, EOS_COM_Mue_max (%20lg%20lg) — MAT_LAW10_CFG_7: (20, 20)
+
+        Drucker-Prager plastic material with compaction EOS for soil and rock.
+        """
+        if "mid" in kwargs and mat_id == 0:
+            mat_id = kwargs["mid"]
+        if "rho" in kwargs and rho0 == 0.0:
+            rho0 = kwargs["rho"]
+        if "refer_rho" in kwargs and rhor == 0.0:
+            rhor = kwargs["refer_rho"]
+        if "pc" in kwargs and pmin == -1e30:
+            pmin = kwargs["pc"]
+        if "p_min" in kwargs and pmin == -1e30:
+            pmin = kwargs["p_min"]
+        if "p_ext" in kwargs and pext == 0.0:
+            pext = kwargs["p_ext"]
+        if "mu_max" in kwargs and mue_max == 0.0:
+            mue_max = kwargs["mu_max"]
+        if "bulk" in kwargs and b == 0.0:
+            b = kwargs["bulk"]
+
+        if unit_id is not None:
+            self._header("MAT", "LAW10", mat_id, unit_id)
+        else:
+            self._header("MAT", "LAW10", mat_id)
+        self._title(title)
+        self.lines.append(fmt_float(rho0) + fmt_float(rhor))
+        self.lines.append(fmt_float(e) + fmt_float(nu))
+        self.lines.append(fmt_float(a0) + fmt_float(a1) + fmt_float(a2) + fmt_float(amax))
+        self.lines.append(fmt_float(c0) + fmt_float(c1) + fmt_float(c2) + fmt_float(c3))
+        self.lines.append(fmt_float(pmin) + fmt_float(pext))
+        self.lines.append(fmt_float(b) + fmt_float(mue_max))
+
+    mat_soil = mat_law10
+    mat_dprag = mat_law10
 
     def mat_law27(self, mid: int, title: str, rho, e, nu,
                   card1: Sequence, card2: Optional[Sequence] = None) -> None:
@@ -2101,6 +2170,41 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law88(mid, title, cards)
     elif law in ("CONNECT",):
         d.mat_connect(mid, title, cards)
+    elif law in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
+        kw: Dict = {}
+        if len(cards) >= 1:
+            tokens = cards[0].tokens()
+            if len(tokens) >= 1:
+                kw["rho0"] = float(tokens[0])
+            if len(tokens) >= 2:
+                kw["rhor"] = float(tokens[1])
+        if len(cards) >= 2:
+            tokens = cards[1].tokens()
+            if len(tokens) >= 1:
+                kw["e"] = float(tokens[0])
+            if len(tokens) >= 2:
+                kw["nu"] = float(tokens[1])
+        if len(cards) >= 3:
+            t = cards[2].floats()
+            if len(t) >= 1: kw["a0"] = t[0]
+            if len(t) >= 2: kw["a1"] = t[1]
+            if len(t) >= 3: kw["a2"] = t[2]
+            if len(t) >= 4: kw["amax"] = t[3]
+        if len(cards) >= 4:
+            t = cards[3].floats()
+            if len(t) >= 1: kw["c0"] = t[0]
+            if len(t) >= 2: kw["c1"] = t[1]
+            if len(t) >= 3: kw["c2"] = t[2]
+            if len(t) >= 4: kw["c3"] = t[3]
+        if len(cards) >= 5:
+            t = cards[4].floats()
+            if len(t) >= 1: kw["pmin"] = t[0]
+            if len(t) >= 2: kw["pext"] = t[1]
+        if len(cards) >= 6:
+            t = cards[5].floats()
+            if len(t) >= 1: kw["b"] = t[0]
+            if len(t) >= 2: kw["mue_max"] = t[1]
+        d.mat_law10(mid, title, unit_id=b.unit_id, **kw)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")
