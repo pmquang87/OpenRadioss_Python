@@ -131,6 +131,11 @@ class GenericMaterialRecord:
     cfg_file: str = ""                  # provenance (schema used)
     raw_cards: List[str] = field(default_factory=list)
 
+    @property
+    def rho0(self) -> float:
+        """Initial density alias for Material compatibility."""
+        return self.density
+
 
 #: law name -> constructor(record) -> material-kernel-compatible object.
 #: The physics builders (LAW19/24/35/44/70/81, VOID, GAS ...) register
@@ -1339,3 +1344,7 @@ def read_mat_note(kind: str, block: KeywordBlock, model,
     notes.append((kind, mat_id, params, block.source))
     log.info(f"     /{kind}/{mat_id}: parsed as a note — "
              f"formulation not implemented (M37)")
+
+
+# Alias for callers importing read_mat from mat_reader
+read_mat = read_generic_mat

@@ -898,3 +898,242 @@ def test_vectorized_mixed_elastic_plastic():
     assert epsp_out[1] > 0.0
     assert epsp_out[2] == 0.0
     assert epsp_out[3] > 0.0
+
+
+# ============================================================================
+# 6. Input Deck Writing, Reading & Model Integration (Builder 4)
+# ============================================================================
+
+def test_card_layouts_law4_definitions():
+    """Verify MAT_LAW4 and MAT_HYD_JCOOK layouts exist in CARD_LAYOUTS with correct widths."""
+    from pyradioss.input.card_layouts import CARD_LAYOUTS
+
+    # Check fixed CFG layouts
+    assert "MAT_LAW4_CFG_1" in CARD_LAYOUTS
+    assert CARD_LAYOUTS["MAT_LAW4_CFG_1"] == [20, 20]
+    assert CARD_LAYOUTS["MAT_LAW4_CFG_2"] == [20, 20]
+    assert CARD_LAYOUTS["MAT_LAW4_CFG_3"] == [20, 20, 20, 20, 20]
+    assert CARD_LAYOUTS["MAT_LAW4_CFG_4"] == [20]
+    assert CARD_LAYOUTS["MAT_LAW4_CFG_5"] == [20, 20, 20, 20, 20]
+    assert CARD_LAYOUTS["MAT_LAW4_CFG_6"] == [20, 40, 20]
+
+    # Check HYD_JCOOK aliases
+    assert "MAT_HYD_JCOOK_CFG_1" in CARD_LAYOUTS
+    assert CARD_LAYOUTS["MAT_HYD_JCOOK_CFG_1"] == [20, 20]
+    assert CARD_LAYOUTS["MAT_HYD_JCOOK_CFG_6"] == [20, 40, 20]
+
+
+def test_deck_writer_mat_law4():
+    """StarterDeck.mat_law4 outputs exact fixed-format cards according to matl4_hyd_jcook.cfg."""
+    from pyradioss.input.deck_writer import StarterDeck
+
+    d = StarterDeck("LAW4_TEST")
+    d.mat_law4(
+        1, "STEEL_JCOOK",
+        rho=7.85e-3, e=210000.0, nu=0.3,
+        a=250.0, b=400.0, n=0.4, eps_max=0.5, sig_max=800.0,
+        p_min=-500.0, c=0.05, eps_dot_0=1.0, m=1.0,
+        tmelt=1800.0, tmax=2000.0, rhocp=3.5e6, t0=300.0,
+    )
+    text = d.render()
+    lines = text.splitlines()
+
+    # Find MAT block
+    mat_idx = [i for i, ln in enumerate(lines) if ln.startswith("/MAT/LAW4/1")]
+    assert len(mat_idx) == 1
+    idx = mat_idx[0]
+    cards = lines[idx + 1: idx + 8]
+    assert len(cards) == 7
+    assert cards[0] == "STEEL_JCOOK"
+    # Card 1: RHO
+    assert float(cards[1][0:20]) == 7.85e-3
+    # Card 2: E, nu
+    assert float(cards[2][0:20]) == 210000.0
+    assert float(cards[2][20:40]) == 0.3
+    # Card 3: A, B, n, eps_max, sig_max
+    assert float(cards[3][0:20]) == 250.0
+    assert float(cards[3][20:40]) == 400.0
+    assert float(cards[3][40:60]) == 0.4
+    assert float(cards[3][60:80]) == 0.5
+    assert float(cards[3][80:100]) == 800.0
+    # Card 4: Pmin
+    assert float(cards[4][0:20]) == -500.0
+    # Card 5: C, eps_dot_0, M, Tmelt, Tmax
+    assert float(cards[5][0:20]) == 0.05
+    assert float(cards[5][20:40]) == 1.0
+    assert float(cards[5][40:60]) == 1.0
+    assert float(cards[5][60:80]) == 1800.0
+    assert float(cards[5][80:100]) == 2000.0
+    # Card 6: RHOCP, blank(40), T0
+    assert float(cards[6][0:20]) == 3.5e6
+    assert cards[6][20:60] == " " * 40
+    assert float(cards[6][60:80]) == 300.0
+
+
+def test_deck_writer_mat_law4_refer_rho():
+    """StarterDeck.mat_law4 with refer_rho writes both densities on card 1."""
+    from pyradioss.input.deck_writer import StarterDeck
+
+    d = StarterDeck("LAW4_TEST")
+    d.mat_law4(
+        2, "COPPER",
+        rho=8.96e-3, refer_rho=8.90e-3, e=115000.0, nu=0.34,
+        a=90.0, b=292.0, n=0.31,
+    )
+    text = d.render()
+    lines = text.splitlines()
+    mat_idx = [i for i, ln in enumerate(lines) if ln.startswith("/MAT/LAW4/2")]
+    idx = mat_idx[0]
+    card1 = lines[idx + 2]
+    assert float(card1[0:20]) == 8.96e-3
+    assert float(card1[20:40]) == 8.90e-3
+
+
+def test_starter_deck_roundtrip_law4(tmp_path):
+    """Writing a deck with mat_law4 and parsing it produces a live Material with law == 4."""
+    from pyradioss.input.deck_writer import StarterDeck
+    from pyradioss.input.deck_reader import read_deck
+    from pyradioss.input.starter_keywords import parse_starter_deck
+    from pyradioss.model.model import Model
+    from pyradioss.common.messages import MessageLog
+
+    d = StarterDeck("ROUNDTRIP_LAW4")
+    d.mat_law4(
+        1, "STEEL_JCOOK",
+        rho=7.85e-3, e=210000.0, nu=0.3,
+        a=250.0, b=400.0, n=0.4, eps_max=0.5, sig_max=800.0,
+        p_min=-500.0, c=0.05, eps_dot_0=1.0, m=1.0,
+        tmelt=1800.0, rhocp=3.5e6, t0=300.0,
+    )
+    p = tmp_path / "deck_0000.rad"
+    p.write_text(d.render(), encoding="utf-8")
+
+    deck = read_deck(str(p))
+    model = Model()
+    log = MessageLog()
+    parse_starter_deck(deck, model, log)
+
+    assert 1 in model.materials
+    mat = model.materials[1]
+    assert mat.law == 4
+    assert abs(mat.rho0 - 7.85e-3) < 1e-9
+    assert mat.title == "STEEL_JCOOK"
+    assert mat.params["E"] == 210000.0
+    assert mat.params["nu"] == 0.3
+    assert mat.params["A"] == 250.0
+    assert mat.params["B"] == 400.0
+    assert mat.params["n"] == 0.4
+    assert mat.params["pmin"] == -500.0
+    assert mat.params["C"] == 0.05
+    assert mat.params["eps0"] == 1.0
+    assert mat.params["Tmelt"] == 1800.0
+    assert mat.params["rho_cp"] == 3.5e6
+    assert mat.params["T0"] == 300.0
+
+
+def test_starter_deck_roundtrip_hyd_jcook(tmp_path):
+    """Writing a deck with /MAT/HYD_JCOOK parses into a live Material with law == 4."""
+    from pyradioss.input.deck_writer import StarterDeck
+    from pyradioss.input.deck_reader import read_deck
+    from pyradioss.input.starter_keywords import parse_starter_deck
+    from pyradioss.model.model import Model
+    from pyradioss.common.messages import MessageLog
+
+    d = StarterDeck("ROUNDTRIP_HYD")
+    d.raw_block("MAT/HYD_JCOOK/5", [
+        "COPPER",
+        " 8.96e-3",
+        " 115000.0 0.34",
+        " 90.0 292.0 0.31 0.0 0.0",
+        " -100.0",
+        " 0.025 1.0 1.09 1356.0 1e30",
+        " 3.4e6 300.0",
+    ])
+    p = tmp_path / "hyd_0000.rad"
+    p.write_text(d.render(), encoding="utf-8")
+
+    deck = read_deck(str(p))
+    model = Model()
+    log = MessageLog()
+    parse_starter_deck(deck, model, log)
+
+    assert 5 in model.materials
+    mat = model.materials[5]
+    assert mat.law == 4
+    assert abs(mat.rho0 - 8.96e-3) < 1e-9
+    assert mat.params["E"] == 115000.0
+    assert mat.params["nu"] == 0.34
+    assert mat.params["A"] == 90.0
+    assert mat.params["B"] == 292.0
+    assert mat.params["n"] == 0.31
+
+
+def test_direct_read_generic_mat_law4():
+    """read_generic_mat on a KeywordBlock for /MAT/LAW4 builds a live Material with law == 4."""
+    from pyradioss.input.deck_reader import KeywordBlock, Card
+    from pyradioss.input.mat_reader import read_generic_mat
+    from pyradioss.model.model import Model
+    from pyradioss.common.messages import MessageLog
+
+    kb = KeywordBlock(
+        keyword="MAT/LAW4",
+        parts=["MAT", "LAW4", "42"],
+        user_id=42,
+        source="test:1",
+        cards=[
+            Card("STEEL_42", "test:2"),
+            Card("0.00785", "test:3"),
+            Card("210000.0 0.3", "test:4"),
+            Card("250.0 400.0 0.4 0.0 0.0", "test:5"),
+            Card("-500.0", "test:6"),
+            Card("0.05 1.0 1.0 1800.0 2000.0", "test:7"),
+            Card("3.5e6 300.0", "test:8"),
+        ],
+    )
+    model = Model()
+    log = MessageLog()
+    read_generic_mat(kb, model, log)
+
+    assert 42 in model.materials
+    mat = model.materials[42]
+    assert mat.law == 4
+    assert abs(mat.rho0 - 0.00785) < 1e-9
+    assert mat.params["E"] == 210000.0
+    assert mat.params["nu"] == 0.3
+    assert mat.params["A"] == 250.0
+    assert mat.params["B"] == 400.0
+
+
+def test_direct_read_generic_mat_hyd_jcook():
+    """read_generic_mat on a KeywordBlock for /MAT/HYD_JCOOK builds a live Material with law == 4."""
+    from pyradioss.input.deck_reader import KeywordBlock, Card
+    from pyradioss.input.mat_reader import read_generic_mat
+    from pyradioss.model.model import Model
+    from pyradioss.common.messages import MessageLog
+
+    kb = KeywordBlock(
+        keyword="MAT/HYD_JCOOK",
+        parts=["MAT", "HYD_JCOOK", "77"],
+        user_id=77,
+        source="test:1",
+        cards=[
+            Card("COPPER_77", "test:2"),
+            Card("0.00896", "test:3"),
+            Card("115000.0 0.34", "test:4"),
+            Card("90.0 292.0 0.31 0.0 0.0", "test:5"),
+            Card("-100.0", "test:6"),
+            Card("0.025 1.0 1.09 1356.0 1e30", "test:7"),
+            Card("3.4e6 300.0", "test:8"),
+        ],
+    )
+    model = Model()
+    log = MessageLog()
+    read_generic_mat(kb, model, log)
+
+    assert 77 in model.materials
+    mat = model.materials[77]
+    assert mat.law == 4
+    assert abs(mat.rho0 - 0.00896) < 1e-9
+    assert mat.params["E"] == 115000.0
+    assert mat.params["A"] == 90.0
+

@@ -165,6 +165,35 @@ class TestFieldLayouts:
         assert float(cards[5][0:20]) == 2.0          # alpha_1
         assert cards[6].strip() == ""                # alpha_6..10 blank
 
+    def test_law4_card_layout(self):
+        """MAT/matl4_hyd_jcook.cfg: RHO / E nu / A B n eps_max sig_max /
+        Pmin / C eps_dot_0 M Tmelt Tmax / RHOCP blank(40) T0."""
+        d = dw.StarterDeck("T")
+        d.mat_law4(1, "jcook", rho=7.85e-3, e=210000.0, nu=0.3,
+                   a=250.0, b=400.0, n=0.4, eps_max=0.5, sig_max=800.0,
+                   p_min=-500.0, c=0.05, eps_dot_0=1.0, m=1.0,
+                   tmelt=1800.0, tmax=2000.0, rhocp=3.5e6, t0=300.0)
+        cards = data_cards(block_lines(d.render(), "/MAT/LAW4/1"))
+        assert len(cards) == 7
+        assert cards[0] == "jcook"
+        assert float(cards[1][0:20]) == 7.85e-3
+        assert float(cards[2][0:20]) == 210000.0
+        assert float(cards[2][20:40]) == 0.3
+        assert float(cards[3][0:20]) == 250.0
+        assert float(cards[3][20:40]) == 400.0
+        assert float(cards[3][40:60]) == 0.4
+        assert float(cards[3][60:80]) == 0.5
+        assert float(cards[3][80:100]) == 800.0
+        assert float(cards[4][0:20]) == -500.0
+        assert float(cards[5][0:20]) == 0.05
+        assert float(cards[5][20:40]) == 1.0
+        assert float(cards[5][40:60]) == 1.0
+        assert float(cards[5][60:80]) == 1800.0
+        assert float(cards[5][80:100]) == 2000.0
+        assert float(cards[6][0:20]) == 3.5e6
+        assert cards[6][20:60] == " " * 40
+        assert float(cards[6][60:80]) == 300.0
+
     def test_fmt_float_roundtrip(self):
         for v in (0.3, 7.8e-6, -9.81e-3, 1e30, 12345.6789012345,
                   5000000000000.0):

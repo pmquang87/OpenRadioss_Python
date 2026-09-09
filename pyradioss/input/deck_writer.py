@@ -347,6 +347,60 @@ class StarterDeck:
         else:
             self.lines.append(BLANK_CARD)
 
+    def mat_law4(self, mid: int, title: str, rho, e, nu,
+                 a=None, b=0.0, n=1.0, eps_max=0.0, sig_max=0.0,
+                 p_min=-1.0e30,
+                 c=0.0, eps_dot_0=1.0e-5, m=0.0, tmelt=1.0e30, tmax=1.0e30,
+                 rhocp=0.0, t0=0.0,
+                 refer_rho: Optional[float] = None,
+                 **kwargs) -> None:
+        """``/MAT/LAW4`` (HYD_JCOOK) — cfg MAT/matl4_hyd_jcook.cfg
+        (FORMAT radioss2018):
+        Card 1: RHO_I [Refer_Rho]
+        Card 2: E nu
+        Card 3: A B n epsmax sigmax
+        Card 4: Pmin
+        Card 5: C EPS_DOT_0 M Tmelt Tmax
+        Card 6: RHOCP [blank(40)] T0
+
+        Hydrodynamic Johnson-Cook elastoplastic material with optional
+        polynomial/linear EOS and adiabatic thermal softening.
+        """
+        if "epsmax" in kwargs and eps_max == 0.0:
+            eps_max = kwargs["epsmax"]
+        if "sigmax" in kwargs and sig_max == 0.0:
+            sig_max = kwargs["sigmax"]
+        if "pmin" in kwargs and p_min == -1.0e30:
+            p_min = kwargs["pmin"]
+        if "eps0" in kwargs and eps_dot_0 == 1.0e-5:
+            eps_dot_0 = kwargs["eps0"]
+        if "t_melt" in kwargs and tmelt == 1.0e30:
+            tmelt = kwargs["t_melt"]
+        if "t_max" in kwargs and tmax == 1.0e30:
+            tmax = kwargs["t_max"]
+        if "rho_cp" in kwargs and rhocp == 0.0:
+            rhocp = kwargs["rho_cp"]
+
+        self._header("MAT", "LAW4", mid)
+        self._title(title)
+        if refer_rho is not None:
+            self.lines.append(fmt_float(rho) + fmt_float(refer_rho))
+        else:
+            self.lines.append(fmt_float(rho))
+        self.lines.append(fmt_float(e) + fmt_float(nu))
+        if a is None:
+            raise DeckWriterError(f"/MAT/LAW4/{mid}: the A/B/n yield card "
+                                  f"is required")
+        self.lines.append(fmt_float(a) + fmt_float(b) + fmt_float(n)
+                          + fmt_float(eps_max) + fmt_float(sig_max))
+        self.lines.append(fmt_float(p_min))
+        self.lines.append(fmt_float(c) + fmt_float(eps_dot_0) + fmt_float(m)
+                          + fmt_float(tmelt) + fmt_float(tmax))
+        if rhocp != 0.0 or t0 != 0.0:
+            self.lines.append(fmt_float(rhocp) + blank(40) + fmt_float(t0))
+        else:
+            self.lines.append(fmt_float(rhocp))
+
     def mat_law27(self, mid: int, title: str, rho, e, nu,
                   card1: Sequence, card2: Optional[Sequence] = None) -> None:
         """``/MAT/LAW27`` (PLAS_BRIT) — cfg MAT/matl27_plas_brit.cfg
@@ -2000,7 +2054,7 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_law37(mid, title, cards)
     elif law == "LAW66":
         d.mat_law66(mid, title, cards)
-    elif law == "HYD_JCOOK":
+    elif law in ("LAW4", "HYD_JCOOK"):
         d.mat_hyd_jcook(mid, title, cards)
     elif law == "JWL":
         d.mat_jwl(mid, title, cards)

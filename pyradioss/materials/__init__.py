@@ -52,7 +52,7 @@ true current sound speed or the Courant time step is not a bound.
 """
 
 from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa: F401
-               law06_hyd_visc,
+               law04_hyd_jcook, law06_hyd_visc,
                law19_fabric, law24_concrete, law27_brittle,
                law33_foamplas, law35_kelvinmax, law36_tabulated,
                law40_kelvinmax, law42_ogden, law44_cowper,
@@ -66,6 +66,7 @@ def register_materials():
     law01_elastic._register()
     law02_johnson_cook._register()
     law03_plas_bost._register()
+    law04_hyd_jcook._register()
     law06_hyd_visc._register()
     law19_fabric._register()
     law24_concrete._register()

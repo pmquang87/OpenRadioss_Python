@@ -2289,6 +2289,34 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_HYD_JCOOK_2": [20, 20, 20, 20, 20, 20],
     "MAT_HYD_JCOOK_3": [20, 20, 20, 20, 20],
     "MAT_HYD_JCOOK_4": [20, 20, 20, 20, 20, 20],
+    # matl4_hyd_jcook.cfg (radioss2018 / radioss2020) — M535
+    # Card 1: CARD("%20lg%20lg", MAT_RHO, Refer_Rho)
+    "MAT_LAW4_CFG_1": [20, 20],
+    # Card 2: CARD("%20lg%20lg", MAT_E, MAT_NU)
+    "MAT_LAW4_CFG_2": [20, 20],
+    # Card 3: CARD("%20lg%20lg%20lg%20lg%20lg", MAT_SIGY, MAT_BETA, MAT_HARD, MAT_EPS, MAT_SIG)
+    "MAT_LAW4_CFG_3": [20, 20, 20, 20, 20],
+    # Card 4: CARD("%20lg", MAT_PC)
+    "MAT_LAW4_CFG_4": [20],
+    # Card 5: CARD("%20lg%20lg%20lg%20lg%20lg", MAT_SRC, MAT_SRP, MAT_M, MAT_TMELT, MAT_TMAX)
+    "MAT_LAW4_CFG_5": [20, 20, 20, 20, 20],
+    # Card 6: CARD("%20lg                                        %20lg", MAT_SPHEAT, MAT_T0)
+    "MAT_LAW4_CFG_6": [20, 40, 20],
+    "MAT_HYD_JCOOK_CFG_1": [20, 20],
+    "MAT_HYD_JCOOK_CFG_2": [20, 20],
+    "MAT_HYD_JCOOK_CFG_3": [20, 20, 20, 20, 20],
+    "MAT_HYD_JCOOK_CFG_4": [20],
+    "MAT_HYD_JCOOK_CFG_5": [20, 20, 20, 20, 20],
+    "MAT_HYD_JCOOK_CFG_6": [20, 40, 20],
+    "MAT_LAW4_RHO": [20, 20],
+    "MAT_LAW4_E_NU": [20, 20],
+    "MAT_LAW4_PLAS": [20, 20, 20, 20, 20],
+    "MAT_LAW4_PMIN": [20],
+    "MAT_LAW4_RATE": [20, 20, 20, 20, 20],
+    "MAT_LAW4_THERM": [20, 40, 20],
+    "MAT_LAW4_EOS_1": [20, 20, 20, 20],
+    "MAT_LAW4_EOS_2": [20, 20],
+    "MAT_LAW4_EOS_3": [20, 20, 20],
     "MAT_LAW5_1": [20, 20, 20],
     "MAT_LAW5_2": [20, 20, 20, 20, 20],
     "MAT_LAW5_3": [10, 10, 10, 10, 10],

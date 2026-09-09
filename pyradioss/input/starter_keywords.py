@@ -36994,14 +36994,36 @@ def read_mat_law4(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         model.mat_law4s[mat_id] = mat
         e_val = e if e > 0 else 200e9
         nu_val = nu if 0.0 <= nu < 0.5 else 0.3
+        params = {
+            "E": e_val, "MAT_E": e_val, "nu": nu_val, "MAT_NU": nu_val,
+            "A": a, "MAT_SIGY": a, "B": b, "MAT_BETA": b, "n": n, "N": n, "MAT_HARD": n,
+            "c": c, "C": c, "MAT_SRC": c, "eps0": eps_dot_0, "MAT_SRP": eps_dot_0,
+            "Pmin": pmin, "pmin": pmin, "MAT_PC": pmin,
+            "epsmax": eps_max, "eps_max": eps_max, "MAT_EPS": eps_max,
+            "sigmax": sig_max, "sig_max": sig_max, "MAT_SIG": sig_max,
+            "M": m, "m": m, "MAT_M": m,
+            "Tmelt": tmelt, "MAT_TMELT": tmelt, "Tmax": tmax, "MAT_TMAX": tmax,
+            "RHOCP": rhocp, "rho_cp": rhocp, "MAT_SPHEAT": rhocp,
+            "Tr": tr, "T0": tr, "MAT_T0": tr, "rho": rho_i, "MAT_RHO": rho_i
+        }
+        from .. import materials  # noqa: F401 (ensure registry loaded)
+        from .mat_reader import MAT_PHYSICS_REGISTRY, GenericMaterialRecord
+        builder = MAT_PHYSICS_REGISTRY.get("LAW4") or MAT_PHYSICS_REGISTRY.get("HYD_JCOOK")
+        if builder is not None:
+            try:
+                rec = GenericMaterialRecord(
+                    law_name="LAW4", law_number=4, id=mat_id, title=title,
+                    params=params, density=rho_i,
+                )
+                live_mat = builder(rec)
+                if live_mat is not None:
+                    model.materials[mat_id] = live_mat
+                    return
+            except Exception:
+                pass
         model.materials[mat_id] = InactiveMaterial(
             id=mat_id, law=4, rho0=rho_i, title=title, law_name="LAW4",
-            params={
-                "E": e_val, "MAT_E": e_val, "nu": nu_val, "MAT_NU": nu_val,
-                "A": a, "MAT_SIGY": a, "B": b, "n": n, "c": c, "C": c, "Pmin": pmin,
-                "epsmax": eps_max, "sigmax": sig_max, "M": m, "Tmelt": tmelt, "Tmax": tmax,
-                "RHOCP": rhocp, "Tr": tr, "rho": rho_i, "MAT_RHO": rho_i
-            }
+            params=params
         )
         return
 
@@ -37082,16 +37104,32 @@ def read_mat_law4(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     )
     model.mat_law4s[mat_id] = mat
     e_val = (c0_eos * c0_eos * rho_i) if (c0_eos * c0_eos * rho_i > 0) else 200e9
+    params = {
+        "rho": rho_i, "c0_eos": c0_eos, "s_eos": s_eos, "gamma0": gamma0, "a_eos": a_eos,
+        "a": a, "b": b, "n": n, "c": c, "eps_max": eps_max, "sig_max": sig_max,
+        "t0": t0, "tm": tm, "m": m, "cp": cp, "pmin": pmin,
+        "c0": c0, "c1": c1, "c2": c2, "c3": c3, "c4": c4, "c5": c5,
+        "E": e_val, "MAT_E": e_val, "nu": 0.3, "MAT_NU": 0.3,
+        "MAT_SIGY": a if a > 0 else (c0 if c0 > 0 else 200e6), "SIG_Y": a,
+    }
+    from .. import materials  # noqa: F401 (ensure registry loaded)
+    from .mat_reader import MAT_PHYSICS_REGISTRY, GenericMaterialRecord
+    builder = MAT_PHYSICS_REGISTRY.get("LAW4") or MAT_PHYSICS_REGISTRY.get("HYD_JCOOK")
+    if builder is not None:
+        try:
+            rec = GenericMaterialRecord(
+                law_name="LAW4", law_number=4, id=mat_id, title=title,
+                params=params, density=rho_i,
+            )
+            live_mat = builder(rec)
+            if live_mat is not None:
+                model.materials[mat_id] = live_mat
+                return
+        except Exception:
+            pass
     model.materials[mat_id] = InactiveMaterial(
         id=mat_id, law=4, rho0=rho_i, title=title, law_name="LAW4",
-        params={
-            "rho": rho_i, "c0_eos": c0_eos, "s_eos": s_eos, "gamma0": gamma0, "a_eos": a_eos,
-            "a": a, "b": b, "n": n, "c": c, "eps_max": eps_max, "sig_max": sig_max,
-            "t0": t0, "tm": tm, "m": m, "cp": cp, "pmin": pmin,
-            "c0": c0, "c1": c1, "c2": c2, "c3": c3, "c4": c4, "c5": c5,
-            "E": e_val, "MAT_E": e_val, "nu": 0.3, "MAT_NU": 0.3,
-            "MAT_SIGY": a if a > 0 else (c0 if c0 > 0 else 200e6), "SIG_Y": a,
-        }
+        params=params
     )
 
 
