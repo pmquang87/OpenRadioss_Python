@@ -776,8 +776,10 @@ class _CfgInterpreter:
         py = re.sub(r"!(?!=)", " not ", py)
         py = re.sub(r"\bFALSE\b", "0", py)
         py = re.sub(r"\bTRUE\b", "1", py)
+        env = _Env(self.v)
+        env["_GET_NB_FREE_CARDS"] = lambda: max(0, len(self.cards) - self.i)
         try:
-            return eval(py, {"__builtins__": {}}, _Env(self.v))
+            return eval(py, {"__builtins__": {}}, env)
         except Exception:
             return 0
 

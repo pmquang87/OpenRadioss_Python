@@ -37216,6 +37216,11 @@ def read_mat_law10(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         log.error(f"/MAT/LAW10/{mat_id}: missing data card", block.source)
         return
 
+    if len(valid_cards) >= 5:
+        from .mat_reader import read_generic_mat
+        read_generic_mat(block, model, log)
+        return
+
     rho0, g, k, a0, a1, a2 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
     p_cut, p_min, fct_id_p = 0.0, 0.0, 0
 
