@@ -454,7 +454,7 @@ def parse_cfg_file(path: str,
         text = _strip_comments(fh.read())
 
     attributes: Dict[str, _Attr] = {}
-    for body in _region(text, re.compile(r"ATTRIBUTES\s*\(\s*COMMON\s*\)")):
+    for body in _region(text, re.compile(r"ATTRIBUTES(?:\s*\(\s*COMMON\s*\))?")):
         for m in _ATTR_RE.finditer(body):
             name, kind, size_var, typ = m.groups()
             if kind == "SIZE":
@@ -467,7 +467,7 @@ def parse_cfg_file(path: str,
                 attributes[name] = _Attr(name, typ or "FLOAT")
 
     defaults: Dict[str, object] = {}
-    for body in _region(text, re.compile(r"DEFAULTS\s*\(\s*COMMON\s*\)")):
+    for body in _region(text, re.compile(r"DEFAULTS(?:\s*\(\s*COMMON\s*\))?")):
         for m in _DEFAULT_RE.finditer(body):
             defaults[m.group(1)] = _parse_default_value(m.group(2))
 
@@ -620,7 +620,13 @@ class CfgCatalogue:
         "SOIL": "LAW10",
         "SOIL_CONC": "LAW10",
         "JWL": "LAW5",
+        "HONEYCOMB": "LAW28",
     }
+
+    def canonical_law_name(self, law_name: str) -> str:
+        """Map a law spelling to its canonical name if known in synonyms."""
+        key = law_name.upper()
+        return self._SYNONYMS.get(key, key)
 
     def schema(self, law_name: str) -> Optional[CfgLawSchema]:
         """The parsed schema for a law spelling ('FABRI', 'LAW19',

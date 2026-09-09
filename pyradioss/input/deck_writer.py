@@ -546,6 +546,105 @@ class StarterDeck:
     mat_soil = mat_law10
     mat_dprag = mat_law10
 
+    def mat_law28(
+        self,
+        mat_id: int,
+        rho: float = 0.0,
+        e11: float = 0.0,
+        e22: float = 0.0,
+        e33: float = 0.0,
+        g12: float = 0.0,
+        g23: float = 0.0,
+        g31: float = 0.0,
+        fun_a1: int = 0,
+        fun_b1: int = 0,
+        fun_a2: int = 0,
+        gflag: int = 0,
+        fscale11: float = 1.0,
+        fscale22: float = 1.0,
+        fscale33: float = 1.0,
+        eps_max11: float = 0.0,
+        eps_max22: float = 0.0,
+        eps_max33: float = 0.0,
+        fun_a3: int = 0,
+        fun_b3: int = 0,
+        fun_a4: int = 0,
+        vflag: int = 0,
+        fscale12: float = 1.0,
+        fscale23: float = 1.0,
+        fscale31: float = 1.0,
+        eps_max12: float = 0.0,
+        eps_max23: float = 0.0,
+        eps_max31: float = 0.0,
+        rho_ref: float | None = None,
+        title: str = "",
+        unit_id: int | None = None,
+        law_name: str = "LAW28",
+        **kwargs,
+    ) -> None:
+        """``/MAT/LAW28`` (/MAT/HONEYCOMB) — cfg MAT/matl28_honeycomb.cfg
+        (FORMAT radioss90/radioss110):
+        Card 1: MAT_RHO, [Refer_Rho] (%20lg[%20lg]) — MAT_LAW28_CFG_1: (20, 20)
+        Card 2: MAT_EA, MAT_EB, MAT_EC (%20lg*3) — MAT_LAW28_CFG_2: (20, 20, 20)
+        Card 3: MAT_GAB, MAT_GBC, MAT_GCA (%20lg*3) — MAT_LAW28_CFG_3: (20, 20, 20)
+        Card 4: FUN_A1, FUN_B1, FUN_A2, Gflag, FScale11, FScale22, FScale33
+                (%10d%10d%10d%10d%20lg%20lg%20lg) — MAT_LAW28_CFG_4: (10, 10, 10, 10, 20, 20, 20)
+        Card 5: MAT_EPSR1, MAT_EPSR2, MAT_EPSR3 (%20lg*3) — MAT_LAW28_CFG_5: (20, 20, 20)
+        Card 6: FUN_A3, FUN_B3, FUN_A4, Vflag, FScale12, FScale23, FScale13
+                (%10d%10d%10d%10d%20lg%20lg%20lg) — MAT_LAW28_CFG_6: (10, 10, 10, 10, 20, 20, 20)
+        Card 7: MAT_EPSR4, MAT_EPSR5, MAT_EPSR6 (%20lg*3) — MAT_LAW28_CFG_7: (20, 20, 20)
+
+        Orthotropic honeycomb crushable material model.
+        """
+        if "mid" in kwargs and mat_id == 0:
+            mat_id = kwargs["mid"]
+        if "rho0" in kwargs and rho == 0.0:
+            rho = kwargs["rho0"]
+        if rho_ref is None and "rhor" in kwargs:
+            rho_ref = kwargs["rhor"]
+        if rho_ref is None and "refer_rho" in kwargs:
+            rho_ref = kwargs["refer_rho"]
+        if "law" in kwargs:
+            law_name = kwargs["law"]
+        if "ea" in kwargs and e11 == 0.0: e11 = kwargs["ea"]
+        if "eb" in kwargs and e22 == 0.0: e22 = kwargs["eb"]
+        if "ec" in kwargs and e33 == 0.0: e33 = kwargs["ec"]
+        if "gab" in kwargs and g12 == 0.0: g12 = kwargs["gab"]
+        if "gbc" in kwargs and g23 == 0.0: g23 = kwargs["gbc"]
+        if "gca" in kwargs and g31 == 0.0: g31 = kwargs["gca"]
+        if "epsr1" in kwargs and eps_max11 == 0.0: eps_max11 = kwargs["epsr1"]
+        if "epsr2" in kwargs and eps_max22 == 0.0: eps_max22 = kwargs["epsr2"]
+        if "epsr3" in kwargs and eps_max33 == 0.0: eps_max33 = kwargs["epsr3"]
+        if "epsr4" in kwargs and eps_max12 == 0.0: eps_max12 = kwargs["epsr4"]
+        if "epsr5" in kwargs and eps_max23 == 0.0: eps_max23 = kwargs["epsr5"]
+        if "epsr6" in kwargs and eps_max31 == 0.0: eps_max31 = kwargs["epsr6"]
+        if "fscale13" in kwargs and fscale31 == 1.0: fscale31 = kwargs["fscale13"]
+        if "eps_max13" in kwargs and eps_max31 == 0.0: eps_max31 = kwargs["eps_max13"]
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mat_id, unit_id)
+        else:
+            self._header("MAT", law_name, mat_id)
+        self._title(title)
+        if rho_ref is not None:
+            self.lines.append(fmt_float(rho) + fmt_float(rho_ref))
+        else:
+            self.lines.append(fmt_float(rho))
+        self.lines.append(fmt_float(e11) + fmt_float(e22) + fmt_float(e33))
+        self.lines.append(fmt_float(g12) + fmt_float(g23) + fmt_float(g31))
+        self.lines.append(
+            fmt_int(fun_a1) + fmt_int(fun_b1) + fmt_int(fun_a2) + fmt_int(gflag)
+            + fmt_float(fscale11) + fmt_float(fscale22) + fmt_float(fscale33)
+        )
+        self.lines.append(fmt_float(eps_max11) + fmt_float(eps_max22) + fmt_float(eps_max33))
+        self.lines.append(
+            fmt_int(fun_a3) + fmt_int(fun_b3) + fmt_int(fun_a4) + fmt_int(vflag)
+            + fmt_float(fscale12) + fmt_float(fscale23) + fmt_float(fscale31)
+        )
+        self.lines.append(fmt_float(eps_max12) + fmt_float(eps_max23) + fmt_float(eps_max31))
+
+    mat_honeycomb = mat_law28
+
     def mat_law27(self, mid: int, title: str, rho, e, nu,
                   card1: Sequence, card2: Optional[Sequence] = None) -> None:
         """``/MAT/LAW27`` (PLAS_BRIT) — cfg MAT/matl27_plas_brit.cfg
@@ -2317,6 +2416,55 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
                 if len(t) >= 1: kw["tstart"] = t[0]
                 if len(t) >= 2: kw["tstop"] = t[1]
         d.mat_law5(mid, title=title, unit_id=b.unit_id, law_name=law, **kw)
+    elif law in ("LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "HONEY_SOL", "LAW28_HONEYCOMB", "LAW28_HONEYCOMB_SOL"):
+        kw: Dict = {}
+        rho_ref = None
+        is_fixed = getattr(b, "fixed", False)
+        if len(cards) >= 1:
+            toks = cards[0].cut("MAT_LAW28_1") if is_fixed and hasattr(cards[0], "cut") else cards[0].tokens()
+            if len(toks) >= 1 and toks[0]:
+                kw["rho"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]:
+                rho_ref = float(toks[1])
+        if len(cards) >= 2:
+            toks = cards[1].cut("MAT_LAW28_2") if is_fixed and hasattr(cards[1], "cut") else cards[1].tokens()
+            if len(toks) >= 1 and toks[0]: kw["e11"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["e22"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["e33"] = float(toks[2])
+        if len(cards) >= 3:
+            toks = cards[2].cut("MAT_LAW28_3") if is_fixed and hasattr(cards[2], "cut") else cards[2].tokens()
+            if len(toks) >= 1 and toks[0]: kw["g12"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["g23"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["g31"] = float(toks[2])
+        if len(cards) >= 4:
+            toks = cards[3].cut("MAT_LAW28_4") if is_fixed and hasattr(cards[3], "cut") else cards[3].tokens()
+            if len(toks) >= 1 and toks[0]: kw["fun_a1"] = int(float(toks[0]))
+            if len(toks) >= 2 and toks[1]: kw["fun_b1"] = int(float(toks[1]))
+            if len(toks) >= 3 and toks[2]: kw["fun_a2"] = int(float(toks[2]))
+            if len(toks) >= 4 and toks[3]: kw["gflag"] = int(float(toks[3]))
+            if len(toks) >= 5 and toks[4]: kw["fscale11"] = float(toks[4])
+            if len(toks) >= 6 and toks[5]: kw["fscale22"] = float(toks[5])
+            if len(toks) >= 7 and toks[6]: kw["fscale33"] = float(toks[6])
+        if len(cards) >= 5:
+            toks = cards[4].cut("MAT_LAW28_5") if is_fixed and hasattr(cards[4], "cut") else cards[4].tokens()
+            if len(toks) >= 1 and toks[0]: kw["eps_max11"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["eps_max22"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["eps_max33"] = float(toks[2])
+        if len(cards) >= 6:
+            toks = cards[5].cut("MAT_LAW28_6") if is_fixed and hasattr(cards[5], "cut") else cards[5].tokens()
+            if len(toks) >= 1 and toks[0]: kw["fun_a3"] = int(float(toks[0]))
+            if len(toks) >= 2 and toks[1]: kw["fun_b3"] = int(float(toks[1]))
+            if len(toks) >= 3 and toks[2]: kw["fun_a4"] = int(float(toks[2]))
+            if len(toks) >= 4 and toks[3]: kw["vflag"] = int(float(toks[3]))
+            if len(toks) >= 5 and toks[4]: kw["fscale12"] = float(toks[4])
+            if len(toks) >= 6 and toks[5]: kw["fscale23"] = float(toks[5])
+            if len(toks) >= 7 and toks[6]: kw["fscale31"] = float(toks[6])
+        if len(cards) >= 7:
+            toks = cards[6].cut("MAT_LAW28_7") if is_fixed and hasattr(cards[6], "cut") else cards[6].tokens()
+            if len(toks) >= 1 and toks[0]: kw["eps_max12"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["eps_max23"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["eps_max31"] = float(toks[2])
+        d.mat_law28(mid, rho_ref=rho_ref, title=title, unit_id=b.unit_id, law_name=law, **kw)
     else:
         d.raw_block("/".join(b.parts), [c.raw for c in b.cards],
                     note=f"unknown material {law}")

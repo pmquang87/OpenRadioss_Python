@@ -151,6 +151,40 @@ MAT_JWL_CFG_5_OPT1 = MAT_LAW5_5_OPT1
 MAT_JWL_CFG_5_OPT2 = MAT_LAW5_5_OPT2
 
 
+# M538: /MAT/LAW28 (/MAT/HONEYCOMB) card layout constants citing radioss110/MAT/matl28_honeycomb.cfg
+MAT_LAW28_1 = (20, 20)
+MAT_LAW28_2 = (20, 20, 20)
+MAT_LAW28_3 = (20, 20, 20)
+MAT_LAW28_4 = (10, 10, 10, 10, 20, 20, 20)
+MAT_LAW28_5 = (20, 20, 20)
+MAT_LAW28_6 = (10, 10, 10, 10, 20, 20, 20)
+MAT_LAW28_7 = (20, 20, 20)
+
+MAT_LAW28_CFG_1 = MAT_LAW28_1
+MAT_LAW28_CFG_2 = MAT_LAW28_2
+MAT_LAW28_CFG_3 = MAT_LAW28_3
+MAT_LAW28_CFG_4 = MAT_LAW28_4
+MAT_LAW28_CFG_5 = MAT_LAW28_5
+MAT_LAW28_CFG_6 = MAT_LAW28_6
+MAT_LAW28_CFG_7 = MAT_LAW28_7
+
+MAT_HONEYCOMB_1 = MAT_LAW28_1
+MAT_HONEYCOMB_2 = MAT_LAW28_2
+MAT_HONEYCOMB_3 = MAT_LAW28_3
+MAT_HONEYCOMB_4 = MAT_LAW28_4
+MAT_HONEYCOMB_5 = MAT_LAW28_5
+MAT_HONEYCOMB_6 = MAT_LAW28_6
+MAT_HONEYCOMB_7 = MAT_LAW28_7
+
+MAT_HONEYCOMB_CFG_1 = MAT_LAW28_1
+MAT_HONEYCOMB_CFG_2 = MAT_LAW28_2
+MAT_HONEYCOMB_CFG_3 = MAT_LAW28_3
+MAT_HONEYCOMB_CFG_4 = MAT_LAW28_4
+MAT_HONEYCOMB_CFG_5 = MAT_LAW28_5
+MAT_HONEYCOMB_CFG_6 = MAT_LAW28_6
+MAT_HONEYCOMB_CFG_7 = MAT_LAW28_7
+
+
 # ============================================================================
 # The per-card column-layout table (reader side of the shared knowledge)
 # ============================================================================
@@ -1630,13 +1664,38 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_LAW35_6": [20, 20, 20],
     "MAT_LAW62_1": [20, 20],
     "MAT_LAW62_2": [20, 10, 10, 20],
-    "MAT_LAW28_1": [20, 20],
-    "MAT_LAW28_2": [20, 20, 20],
-    "MAT_LAW28_3": [20, 20, 20],
-    "MAT_LAW28_4": [10, 10, 10, 10, 20, 20, 20],
-    "MAT_LAW28_5": [20, 20, 20],
-    "MAT_LAW28_6": [10, 10, 10, 10, 20, 20, 20],
-    "MAT_LAW28_7": [20, 20, 20],
+    # M538: matl28_honeycomb.cfg (radioss110) — /MAT/LAW28 (/MAT/HONEYCOMB)
+    "MAT_LAW28_1": _LayoutList([20, 20]),
+    "MAT_LAW28_2": _LayoutList([20, 20, 20]),
+    "MAT_LAW28_3": _LayoutList([20, 20, 20]),
+    "MAT_LAW28_4": _LayoutList([10, 10, 10, 10, 20, 20, 20]),
+    "MAT_LAW28_5": _LayoutList([20, 20, 20]),
+    "MAT_LAW28_6": _LayoutList([10, 10, 10, 10, 20, 20, 20]),
+    "MAT_LAW28_7": _LayoutList([20, 20, 20]),
+
+    "MAT_LAW28_CFG_1": _LayoutList([20, 20]),
+    "MAT_LAW28_CFG_2": _LayoutList([20, 20, 20]),
+    "MAT_LAW28_CFG_3": _LayoutList([20, 20, 20]),
+    "MAT_LAW28_CFG_4": _LayoutList([10, 10, 10, 10, 20, 20, 20]),
+    "MAT_LAW28_CFG_5": _LayoutList([20, 20, 20]),
+    "MAT_LAW28_CFG_6": _LayoutList([10, 10, 10, 10, 20, 20, 20]),
+    "MAT_LAW28_CFG_7": _LayoutList([20, 20, 20]),
+
+    "MAT_HONEYCOMB_1": _LayoutList([20, 20]),
+    "MAT_HONEYCOMB_2": _LayoutList([20, 20, 20]),
+    "MAT_HONEYCOMB_3": _LayoutList([20, 20, 20]),
+    "MAT_HONEYCOMB_4": _LayoutList([10, 10, 10, 10, 20, 20, 20]),
+    "MAT_HONEYCOMB_5": _LayoutList([20, 20, 20]),
+    "MAT_HONEYCOMB_6": _LayoutList([10, 10, 10, 10, 20, 20, 20]),
+    "MAT_HONEYCOMB_7": _LayoutList([20, 20, 20]),
+
+    "MAT_HONEYCOMB_CFG_1": _LayoutList([20, 20]),
+    "MAT_HONEYCOMB_CFG_2": _LayoutList([20, 20, 20]),
+    "MAT_HONEYCOMB_CFG_3": _LayoutList([20, 20, 20]),
+    "MAT_HONEYCOMB_CFG_4": _LayoutList([10, 10, 10, 10, 20, 20, 20]),
+    "MAT_HONEYCOMB_CFG_5": _LayoutList([20, 20, 20]),
+    "MAT_HONEYCOMB_CFG_6": _LayoutList([10, 10, 10, 10, 20, 20, 20]),
+    "MAT_HONEYCOMB_CFG_7": _LayoutList([20, 20, 20]),
     "MAT_LAW44_1": [20, 20],
     "MAT_LAW44_2": [20, 20, 10],
     "MAT_LAW44_3": [20, 20, 20, 20, 20],
@@ -2532,8 +2591,6 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_3D_COMP_10": [20, 20, 20, 20, 10],
     "MAT_LAW13_1": [20, 20],
     "MAT_LAW13_2": [20, 20],
-    "MAT_HONEYCOMB_1": [20, 20],
-    "MAT_HONEYCOMB_2": [20, 20],
     "MAT_LAW15_1": [20, 20],
     "MAT_LAW15_2": [20, 20, 20],
     "MAT_LAW15_3": [20, 20, 20],

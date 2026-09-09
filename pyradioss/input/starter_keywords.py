@@ -28,6 +28,7 @@ listing.
 from __future__ import annotations
 
 from typing import Callable, Dict, List, Optional, Tuple, Union
+import os
 
 import numpy as np
 
@@ -870,7 +871,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW62", "VISC_HYP", "LAW62_VISC_HYP"):
         read_mat_law62(block, model, log)
         return
-    if lawname in ("LAW28", "HONEYCOMB_SOL", "HONEY_SOL", "LAW28_HONEYCOMB_SOL"):
+    if lawname in ("LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "HONEY_SOL", "LAW28_HONEYCOMB", "LAW28_HONEYCOMB_SOL"):
         read_mat_law28(block, model, log)
         return
     if lawname in ("LAW44", "COWPER_SYMONDS", "PLAS_COWPER", "LAW44_COWPER_SYMONDS"):
@@ -27073,19 +27074,8 @@ def read_mat_law28(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         epsr4=epsr4, epsr5=epsr5, epsr6=epsr6,
     )
     model.mat_law28s[mat_id] = m28
-    model.materials[mat_id] = Material(
-        id=mat_id, law=28, rho0=rho0, title=title,
-        params={
-            "E11": e11, "E22": e22, "E33": e33,
-            "G12": g12, "G23": g23, "G31": g31,
-            "FUN_A1": fun_a1, "FUN_B1": fun_b1, "FUN_A2": fun_a2, "Gflag": gflag,
-            "FScale11": fscale11, "FScale22": fscale22, "FScale33": fscale33,
-            "EPSR1": epsr1, "EPSR2": epsr2, "EPSR3": epsr3,
-            "FUN_A3": fun_a3, "FUN_B3": fun_b3, "FUN_A4": fun_a4, "Vflag": vflag,
-            "FScale12": fscale12, "FScale23": fscale23, "FScale13": fscale13,
-            "EPSR4": epsr4, "EPSR5": epsr5, "EPSR6": epsr6,
-        }
-    )
+    from ..materials.law28_honeycomb import build_law28
+    model.materials[mat_id] = build_law28(m28)
 
 
 def read_mat_law44(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -38634,16 +38624,8 @@ def read_mat_law28_m188(block: KeywordBlock, model: Model, log: MessageLog) -> N
         eps_max31=eps_max31, title=title
     )
     model.mat_law28s[mat_id] = mat
-    e_val = max(e11, e22, e33, 200e9) if max(e11, e22, e33) > 0 else 200e9
-    model.materials[mat_id] = InactiveMaterial(
-        id=mat_id, law=28, rho0=rho0, title=title, law_name="LAW28",
-        params={
-            "E": e_val, "MAT_E": e_val, "nu": 0.3, "MAT_NU": 0.3, "rho": rho0, "MAT_RHO": rho0,
-            "E11": e11, "E22": e22, "E33": e33, "G12": g12, "G23": g23, "G31": g31,
-            "fun_id11": fun_id11, "fun_id22": fun_id22, "fun_id33": fun_id33,
-            "fun_id12": fun_id12, "fun_id23": fun_id23, "fun_id31": fun_id31,
-        }
-    )
+    from ..materials.law28_honeycomb import build_law28
+    model.materials[mat_id] = build_law28(mat)
 
 
 def read_prop_type9(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -90686,8 +90668,9 @@ ENGINE_KEYWORDS_IGNORE = {
     "ANIM", "DEBUG", "DT", "DTIX", "MON",
 }
 
-def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
-                       log: MessageLog) -> None:
+def parse_starter_deck(blocks: Union[List[KeywordBlock], str, Any],
+                       model: Optional[Model] = None,
+                       log: Optional[MessageLog] = None) -> Model:
     """Dispatch every block to its parser (unknown → warning + skip).
 
     M37: blocks whose header carries a LOCAL unit id
@@ -90696,6 +90679,13 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
     system happens in the Starter resolve phase (input/units.py), after
     all /UNIT blocks are read (deck order between a block and the /UNIT
     it references is free, like every other cross-reference)."""
+    if isinstance(blocks, str) or hasattr(blocks, "__fspath__"):
+        from .deck_reader import read_deck
+        blocks = read_deck(str(blocks))
+    if model is None:
+        model = Model()
+    if log is None:
+        log = MessageLog()
     for block in blocks:
         # M258: handle missing #include files (FileNotFoundError → error, not crash)
         if block.keyword == "__INCLUDE_ERROR__":
@@ -90741,3 +90731,4 @@ def parse_starter_deck(blocks: List[KeywordBlock], model: Model,
             # convention (except /TABLE where it's dimension/table_id)
             model.raw_unit_refs.append(
                 (block.key0, block.user_id, block.unit_id, block.source))
+    return model

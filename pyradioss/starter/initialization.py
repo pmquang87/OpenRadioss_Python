@@ -452,6 +452,9 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
         elif mat.law == 33:
             from ..materials import law33_foamplas
             law33_foamplas.resolve(mat, model, log)
+        elif mat.law == 28:
+            from ..materials import law28_honeycomb
+            law28_honeycomb.resolve(mat, model, log)
 
     for mat_id, fm, source in model.raw_fails:
         mat = model.materials.get(mat_id)
