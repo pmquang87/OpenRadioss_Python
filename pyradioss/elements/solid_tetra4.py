@@ -284,6 +284,7 @@ def init_group(group, model, log):
     # dndx0 / damage / failure-flag plumbing shared with the brick kernel
     from .solid_hexa8 import _init_material_state
     _init_material_state(group, dndx0)
+    group._model = model
     
     # ---- M36: Smoothing FEM (Itetra4 = 3) initialization -------------------
     # Determine which slices have itetra4 == 3
@@ -437,7 +438,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         F = np.einsum("nia,nib->nab", xe, st["dndx0"])
     for sl, mat, prop in st.get("slices", []):
         law = getattr(mat, "law", 1)
-        if law == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or getattr(mat, "E", 0.0) <= 0.0:
+        if law == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or (getattr(mat, "E", 0.0) <= 0.0 and law not in (5, "5", "LAW5", "JWL")):
             sig[sl] = 0.0
             c[sl] = 0.0
             c_from_law[sl] = True
@@ -456,11 +457,19 @@ def forces(group, x, v, vr, dt, fint, mint):
             # tangent carries K — see solid_hexa8.forces for the full note.
             extra["rho"] = rho[sl]
             extra["eint"] = st["eint"][sl]
+            extra["vol"] = vol[sl]
+            extra["vol0"] = st["vol0"][sl]
+            extra["deltax"] = lc[sl]
+            if hasattr(group, "_model") and hasattr(group._model, "t"):
+                extra["time"] = group._model.t
         _, _, c_new = materials.solid_update(
             mat, sig[sl], deps[sl], st["epsp"][sl], dt, extra or None)
         if c_new is not None:
             c[sl] = c_new
             c_from_law[sl] = True
+        for name in st.get("mat_extra", {}):
+            if name in extra and name != "eint":
+                st["mat_extra"][name][sl] = extra[name]
 
         # ---- /EOS pressure (M6, eosmain) — see solid_hexa8 -----------------
         if mat.eos is not None:

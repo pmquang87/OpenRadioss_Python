@@ -572,52 +572,157 @@ class TestHydrodynamicStressState:
 # =============================================================================
 
 class TestConsistentSolidTangent:
-    """Test consistent algorithmic tangent matrix and numerical directional derivative."""
+    """Rigorous audit of consistent algorithmic tangent for LAW5/JWL hydrodynamic fluid.
 
-    def test_tangent_structure(self):
-        """Verify upper-left 3x3 block is all K_eff = rho0 * c^2, all others zero."""
+    Audits:
+    1. Volumetric bulk modulus definition: K_eff = rho0 * c^2.
+    2. Tangent tensor structure: D_ijkl = K_eff * delta_ij * delta_kl (upper-left 3x3 is K_eff, shear is 0).
+    3. Spectral eigenvalue analysis: 1 positive eigenvalue equal to 3 * K_eff, 5 zero eigenvalues.
+    4. Directional derivative consistency: [sig(eps + h*d) - sig(eps)] / h vs D : d across
+       compression, expansion, pure shear, and mixed multiaxial modes for BFRAC in {0.0, 0.5, 1.0}.
+    5. Signature dispatch, 1D/2D shape broadcasting, and empty batch handling.
+    """
+
+    def test_volumetric_bulk_modulus_definition(self):
+        """Check 1: K_eff = rho0 * c^2 for unreacted, partially reacted, and CJ detonated states."""
+        mat = _make_tnt(bulk=6.0e4, rho0=1.63e-6, ibfrac=1)
+        for bfrac in (0.0, 0.5, 1.0):
+            extra = {"bfrac": np.array([bfrac]), "v": np.array([1.0]), "vol0": np.array([1.0]), "eint": np.array([7000.0])}
+            c = law05_jwl.sound_speed(mat, extra=extra)
+            assert c > 0.0
+            expected_k_eff = mat.rho0 * (c ** 2)
+
+            D = law05_jwl.consistent_solid_tangent(mat, np.zeros((1, 6)), extra=extra)
+            assert D.shape == (1, 6, 6)
+            # Volumetric block entries must match rho0 * c^2 exactly
+            for i in range(3):
+                for j in range(3):
+                    assert D[0, i, j] == pytest.approx(expected_k_eff, rel=1e-12)
+
+    def test_tangent_structure_and_symmetry(self):
+        """Check 2: Tangent symmetry D = D^T, upper-left 3x3 is K_eff, all deviatoric/shear entries zero."""
         mat = _make_tnt(bulk=5.0e4, rho0=1.63e-6)
-        extra = {"bfrac": np.array([0.0]), "v": np.array([1.0])}
-        D = law05_jwl.consistent_solid_tangent(mat, np.zeros((1, 6)), extra=extra)
+        extra = {"bfrac": np.array([0.5]), "v": np.array([1.0]), "vol0": np.array([1.0]), "eint": np.array([7000.0])}
+        D = law05_jwl.consistent_solid_tangent(mat, np.zeros((1, 6)), extra=extra)[0]
 
-        assert D.shape == (1, 6, 6)
+        # Symmetry: D_ijkl = D_klij
+        np.testing.assert_allclose(D, D.T, atol=1e-14, err_msg="Tangent D is not symmetric")
+
         c = law05_jwl.sound_speed(mat, extra=extra)
         k_eff = mat.rho0 * (c ** 2)
 
-        # Check 3x3 block
+        # Hydrodynamic fluid: D_ijkl = K_eff * delta_ij * delta_kl
         for i in range(3):
             for j in range(3):
-                assert D[0, i, j] == pytest.approx(k_eff, rel=1e-6)
+                assert D[i, j] == pytest.approx(k_eff, rel=1e-12)
 
-        # Check shear rows and columns are zero
-        for i in range(3, 6):
-            for j in range(6):
-                assert D[0, i, j] == 0.0
-                assert D[0, j, i] == 0.0
+        # Shear rows and columns (Voigt indices 3, 4, 5) must be strictly 0.0 (G = 0)
+        for s in (3, 4, 5):
+            for k in range(6):
+                assert D[s, k] == 0.0, f"Shear row D[{s}, {k}] is not 0"
+                assert D[k, s] == 0.0, f"Shear col D[{k}, {s}] is not 0"
 
-    def test_numerical_directional_derivative(self):
-        """Verify finite difference directional derivative:
-        Delta_sigma = D : delta_eps
-        for a purely volumetric perturbation.
+    def test_eigenvalue_analysis_and_spectral_decomposition(self):
+        """Check 3: D has exactly 1 positive eigenvalue = 3 * K_eff, and 5 zero eigenvalues."""
+        mat = _make_tnt(bulk=6.0e4, rho0=1.63e-6, ibfrac=1)
+        v_hydro = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0], dtype=float) / np.sqrt(3.0)
+
+        for bfrac in (0.0, 0.5, 1.0):
+            extra = {"bfrac": np.array([bfrac]), "v": np.array([1.0]), "vol0": np.array([1.0]), "eint": np.array([7000.0])}
+            c = law05_jwl.sound_speed(mat, extra=extra)
+            k_eff = mat.rho0 * (c ** 2)
+
+            D = law05_jwl.consistent_solid_tangent(mat, np.zeros((1, 6)), extra=extra)[0]
+
+            # Compute all 6 eigenvalues of symmetric D
+            eigvals = np.linalg.eigvalsh(D)
+
+            # Exactly 5 eigenvalues must be 0 within machine precision
+            np.testing.assert_allclose(eigvals[:5], 0.0, atol=1e-10,
+                                       err_msg=f"Non-zero shear eigenvalues found at bfrac={bfrac}")
+
+            # Exactly 1 positive eigenvalue equal to 3 * K_eff
+            assert eigvals[5] == pytest.approx(3.0 * k_eff, rel=1e-12)
+
+            # Hydrostatic strain vector is the exact eigenvector: D @ v_hydro == 3 * K_eff * v_hydro
+            res = D @ v_hydro
+            expected = 3.0 * k_eff * v_hydro
+            np.testing.assert_allclose(res, expected, atol=1e-10)
+
+    def test_directional_derivative_consistency_multi_state(self):
+        """Check 4: Compare D : d against finite-difference stress increment:
+        [sig(eps + h * d) - sig(eps)] / h
+        across compression, expansion, pure shear (3 modes), and mixed multiaxial strain
+        for unreacted (BFRAC=0), partially reacted (BFRAC=0.5), and fully reacted (BFRAC=1.0).
         """
-        mat = _make_tnt(bulk=6.0e4, ibfrac=1)
-        deps_base = np.zeros((1, 6))
-        delta = 1.0e-6
-        deps_pert = np.array([[-delta, -delta, -delta, 0.0, 0.0, 0.0]])
+        mat = _make_tnt(bulk=6.0e4, ibfrac=1, p0=1000.0)
 
-        extra1 = {"bfrac": np.array([0.0]), "vol": np.array([1.0]), "vol0": np.array([1.0])}
-        extra2 = {"bfrac": np.array([0.0]), "vol": np.array([1.0]), "vol0": np.array([1.0])}
+        directions = {
+            "volumetric_compression": np.array([-1.0, -1.0, -1.0, 0.0, 0.0, 0.0]) / np.sqrt(3.0),
+            "volumetric_expansion": np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0]) / np.sqrt(3.0),
+            "pure_shear_xy": np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0]),
+            "pure_shear_yz": np.array([0.0, 0.0, 0.0, 0.0, 1.0, 0.0]),
+            "pure_shear_zx": np.array([0.0, 0.0, 0.0, 0.0, 0.0, 1.0]),
+            "mixed_multiaxial": np.array([-0.5, 0.2, -0.3, 0.4, -0.1, 0.6]) / np.linalg.norm([-0.5, 0.2, -0.3, 0.4, -0.1, 0.6]),
+        }
 
-        sig0, _, _ = law05_jwl.solid_update(mat, np.zeros((1, 6)), deps_base, dt=1e-6, extra=extra1)
-        sig1, _, _ = law05_jwl.solid_update(mat, np.zeros((1, 6)), deps_pert, dt=1e-6, extra=extra2)
+        h = 1.0e-6
 
-        d_sig_num = sig1[0, 0] - sig0[0, 0]
+        for bfrac in (0.0, 0.5, 1.0):
+            extra_base = {
+                "bfrac": np.array([bfrac]),
+                "vol0": np.array([1.0]),
+                "v": np.array([1.0]),
+                "eint": np.array([7000.0]),
+            }
 
-        D = law05_jwl.consistent_solid_tangent(mat, sig0, extra=extra1)
-        # deps_vol = -3 * delta -> D : deps = K_eff * (-3 * delta)
-        # Note: in engineering convention, sig = -P -> d_sig = -d_P
-        d_sig_tan = D[0, 0, 0] * (-delta) + D[0, 0, 1] * (-delta) + D[0, 0, 2] * (-delta)
-        assert d_sig_num == pytest.approx(d_sig_tan, rel=1e-4)
+            # Algorithmic tangent D at base state
+            D = law05_jwl.consistent_solid_tangent(mat, np.zeros((1, 6)), extra=extra_base)[0]
+
+            # Base stress state
+            sig0, _, _ = law05_jwl.solid_update(mat, np.zeros((1, 6)), np.zeros((1, 6)), dt=1e-6, extra=dict(extra_base))
+
+            for name, d_vec in directions.items():
+                deps_pert = (h * d_vec).reshape(1, 6)
+                sig1, _, _ = law05_jwl.solid_update(mat, np.zeros((1, 6)), deps_pert, dt=1e-6, extra=dict(extra_base))
+
+                fd_increment = (sig1[0] - sig0[0]) / h
+                tan_increment = D @ d_vec
+
+                if "pure_shear" in name:
+                    # Fluid has zero shear stiffness: stress increment must be strictly 0.0
+                    np.testing.assert_allclose(fd_increment, 0.0, atol=1e-12,
+                                               err_msg=f"Shear produced non-zero stress increment for {name} at bfrac={bfrac}")
+                    np.testing.assert_allclose(tan_increment, 0.0, atol=1e-12)
+                else:
+                    diff = np.max(np.abs(fd_increment - tan_increment))
+                    rel_err = diff / np.max(np.abs(tan_increment))
+                    assert rel_err < 0.10, (
+                        f"Directional derivative mismatch for {name} at bfrac={bfrac}: "
+                        f"max diff = {diff}, rel_err = {rel_err}"
+                    )
+
+    def test_tangent_call_signatures_and_shapes(self):
+        """Check 5: Verify signature flexibility and shape broadcasting (1D, 2D, empty)."""
+        mat = _make_tnt(bulk=5.0e4)
+        extra = {"bfrac": np.array([0.0]), "v": np.array([1.0])}
+
+        # 1. Signature (mat, sig, ...)
+        D1 = law05_jwl.consistent_solid_tangent(mat, np.zeros((2, 6)), extra=extra)
+        assert D1.shape == (2, 6, 6)
+
+        # 2. Signature (sig, epsp, mat, ...)
+        D2 = law05_jwl.consistent_solid_tangent(np.zeros((2, 6)), None, mat, extra=extra)
+        assert D2.shape == (2, 6, 6)
+        np.testing.assert_allclose(D1, D2, atol=1e-14)
+
+        # 3. 1D input shape (6,) -> returns (6, 6)
+        D_1d = law05_jwl.consistent_solid_tangent(mat, np.zeros(6), extra=extra)
+        assert D_1d.shape == (6, 6)
+
+        # 4. Empty batch (0, 6) -> returns (0, 6, 6)
+        D_empty = law05_jwl.consistent_solid_tangent(mat, np.zeros((0, 6)), extra=extra)
+        assert D_empty.shape == (0, 6, 6)
 
 
 # =============================================================================

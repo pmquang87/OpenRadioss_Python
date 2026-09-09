@@ -83,12 +83,17 @@ def _get_val(d: dict, *keys, default=None):
         return default
     if len(present) == 1:
         return present[0]
-    if all(v == present[0] for v in present):
-        return present[0]
-    # If aliases differ, prefer the non-zero one if one is 0 (e.g. overridden default)
-    non_zeros = [v for v in present if v != 0 and v != 0.0 and v != ""]
-    if len(non_zeros) == 1:
-        return non_zeros[0]
+    try:
+        if all(np.array_equal(v, present[0]) for v in present):
+            return present[0]
+    except Exception:
+        pass
+    try:
+        non_zeros = [v for v in present if np.any(np.asarray(v) != 0)]
+        if len(non_zeros) == 1:
+            return non_zeros[0]
+    except Exception:
+        pass
     return present[0]
 
 
@@ -314,15 +319,32 @@ def sound_speed(
         env = {}
 
     # Density and relative volume v
-    if rho is None:
-        rho = extra.get("rho", env.get("rho", rho0))
+    if rho is not None:
+        is_scalar = np.isscalar(rho)
+        rho_arr = np.atleast_1d(np.asarray(rho, dtype=float))
+        v = rho0 / np.maximum(_EM20, rho_arr)
+    else:
+        v_val = _get_val(extra, "v", "df", default=_get_val(env, "v", "df", default=None))
+        if v_val is not None:
+            is_scalar = np.isscalar(v_val)
+            v = np.atleast_1d(np.asarray(v_val, dtype=float)).copy()
+            rho_arr = rho0 / np.maximum(_EM20, v)
+        else:
+            vol_given = extra.get("vol", extra.get("voln", env.get("vol", env.get("voln", None))))
+            vol0_given = extra.get("vol0", env.get("vol0", None))
+            if vol_given is not None and vol0_given is not None:
+                is_scalar = np.isscalar(vol_given)
+                vol_arr_tmp = np.atleast_1d(np.asarray(vol_given, dtype=float))
+                vol0_arr_tmp = np.atleast_1d(np.asarray(vol0_given, dtype=float))
+                v = vol_arr_tmp / np.maximum(_EM20, vol0_arr_tmp)
+                rho_arr = rho0 / np.maximum(_EM20, v)
+            else:
+                rho_val = _get_val(extra, "rho", default=_get_val(env, "rho", default=rho0))
+                is_scalar = np.isscalar(rho_val)
+                rho_arr = np.atleast_1d(np.asarray(rho_val, dtype=float))
+                v = rho0 / np.maximum(_EM20, rho_arr)
 
-    is_scalar = np.isscalar(rho)
-    rho_arr = np.atleast_1d(np.asarray(rho, dtype=float))
-    nel = len(rho_arr)
-
-    # v = rho0 / rho
-    v = rho0 / np.maximum(_EM20, rho_arr)
+    nel = len(v)
     v = np.maximum(v, _EM20)
     mu = 1.0 / v - 1.0
 
@@ -536,22 +558,23 @@ def solid_update(
             df_prev_arr = np.broadcast_to(np.atleast_1d(np.asarray(df_prev, dtype=float)), (nel,))
             v = df_prev_arr * (1.0 + deps_vol)
         else:
-            mu_val = _get_val(extra, "mu", default=_get_val(env, "mu", default=None))
-            if mu_val is not None:
-                mu_arr = np.broadcast_to(np.atleast_1d(np.asarray(mu_val, dtype=float)), (nel,))
-                v = 1.0 / np.maximum(_EM20, 1.0 + mu_arr)
+            vol_given = _get_val(extra, "vol", "voln", default=_get_val(env, "vol", "voln", default=None))
+            if vol_given is not None:
+                vol_arr_tmp = np.broadcast_to(np.atleast_1d(np.asarray(vol_given, dtype=float)), (nel,))
+                v = (vol_arr_tmp / np.maximum(_EM20, vol0)) * (1.0 + deps_vol)
             else:
-                v = 1.0 + deps_vol
+                mu_val = _get_val(extra, "mu", default=_get_val(env, "mu", default=None))
+                if mu_val is not None:
+                    mu_arr = np.broadcast_to(np.atleast_1d(np.asarray(mu_val, dtype=float)), (nel,))
+                    v = 1.0 / np.maximum(_EM20, 1.0 + mu_arr)
+                else:
+                    v = 1.0 + deps_vol
 
     v = np.maximum(v, _EM20)
     mu = 1.0 / v - 1.0
 
     # Current element volume V = v * V0
-    vol_val = _get_val(extra, "vol", "voln", default=_get_val(env, "vol", "voln", default=None))
-    if vol_val is not None:
-        vol = np.broadcast_to(np.atleast_1d(np.asarray(vol_val, dtype=float)), (nel,)).copy()
-    else:
-        vol = v * vol0
+    vol = v * vol0
     vol = np.maximum(vol, _EM20)
 
     # 1. Burn Fraction kinetics (m5law.F lines 105-121)
@@ -577,18 +600,33 @@ def solid_update(
     if ibfrac != 2 and b_he > 0.0:
         b2 = b_he * (1.0 - v)
 
-    b_cand = np.maximum(b1, b2)
-    bfrac = np.maximum(bfrac, b_cand)
-    bfrac = np.where(bfrac < _EM04, 0.0, bfrac)
-    bfrac = np.clip(bfrac, 0.0, 1.0)
+    # m5law.F lines 109-121:
+    # If BFRAC < 1.0, BFRAC = max(bfrac, bfrac1, bfrac2), threshold EM04 (1e-4), clamped to [0, 1].
+    # If BFRAC >= 1.0, update is skipped (irreversible complete detonation).
+    mask_active = (bfrac < 1.0)
+    b_cand = np.maximum(bfrac, np.maximum(b1, b2))
+    b_cand = np.where(b_cand < _EM04, 0.0, b_cand)
+    b_cand = np.clip(b_cand, 0.0, 1.0)
+    bfrac = np.where(mask_active, b_cand, 1.0)
     extra["bfrac"] = bfrac.copy()
 
-    # 2. Internal energy & Afterburning (mjwl.F lines 78-156)
+    # 2. Internal energy & Afterburning (mjwl.F lines 69-156)
     eint_val = _get_val(extra, "eint", default=_get_val(env, "eint", default=None))
     if eint_val is None:
         eint = e0 * vol0.copy()
     else:
         eint = np.broadcast_to(np.atleast_1d(np.asarray(eint_val, dtype=float)), (nel,)).copy()
+
+    # Old pressure from previous stress state: p_old = -tr(sig_old) / 3
+    p_old = -(sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0
+    p_eff_old = p_old - psh
+
+    # Delta_V = vol * tr(deps)
+    dvol = vol * deps_vol
+
+    # First half-step PdV work on Eint (mjwl.F lines 70-73):
+    # EINC = 0.5 * DVOL * (POLD - PSH)
+    eint += -0.5 * (p_old + psh) * dvol
 
     aburn_val = _get_val(extra, "aburn", default=_get_val(env, "aburn", default=None))
     if aburn_val is None:
@@ -598,13 +636,13 @@ def solid_update(
 
     if eadd > 0.0:
         if qopt == 0:
-            # Instantaneous release
+            # Instantaneous release (mjwl.F lines 94-109)
             lam = np.where(current_time > tbegin, 1.0, 0.0)
             de_ab = np.maximum(0.0, lam - aburn) * eadd * np.maximum(_EM20, vol0)
             eint += de_ab
             aburn = np.where(current_time > tbegin, 1.0, aburn)
         elif qopt == 1:
-            # Constant afterburning rate
+            # Constant afterburning rate (mjwl.F lines 110-126)
             if current_time <= tbegin:
                 lam = np.zeros(nel, dtype=float)
             elif current_time > tend:
@@ -615,7 +653,7 @@ def solid_update(
             eint += de_ab
             aburn = np.maximum(aburn, lam)
         elif qopt == 2:
-            # Linear afterburning rate
+            # Linear afterburning rate (mjwl.F lines 127-143)
             if current_time <= tbegin:
                 lam = np.zeros(nel, dtype=float)
             elif current_time > tend:
@@ -627,13 +665,10 @@ def solid_update(
             eint += de_ab
             aburn = np.maximum(aburn, lam)
         elif qopt == 3:
-            # Miller's extension: pressure dependent rate
-            # -p_old - psh > 0 where p_old = -tr(sig_old)/3
-            p_old = -(sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0
-            p_eff = p_old - psh
-            mask_mil = (p_eff > 0.0) & (dt > 1e-20)
+            # Miller's extension: pressure dependent rate (mjwl.F lines 144-156)
+            mask_mil = (p_eff_old > 0.0) & (dt > 1e-20)
             term_m = (1.0 + aburn) ** m_mil
-            term_n = (alpha_unit * np.maximum(_EM20, p_eff)) ** n_mil
+            term_n = (alpha_unit * np.maximum(_EM20, p_eff_old)) ** n_mil
             dlam = np.where(mask_mil, dt * a_mil * term_m * term_n, 0.0)
             lam = np.clip(aburn + dlam, 0.0, 1.0)
             de_ab = np.maximum(0.0, lam - aburn) * eadd * np.maximum(_EM20, vol0)
@@ -656,18 +691,18 @@ def solid_update(
     dr1v = omega * eint / vol
 
     p_jwl = wdr1v * er1v + wdr2v * er2v + dr1v
+
     if bulk == 0.0:
         p_tot = p0 + p_jwl
     else:
         p_tot = (1.0 - bfrac) * (p0 + bulk * mu) + bfrac * p_jwl
 
-    # Cavitation cutoff: m5law.F line 147
+    # Cavitation cutoff: m5law.F line 147, mjwl.F line 172
     p_tot = np.maximum(0.0, p_tot) - psh
 
-    # Work done update on E_int: mjwl.F lines 176-177
-    # Delta_V = vol * tr(deps)
-    dvol = vol * deps_vol
-    eint = eint - (p_tot + psh) * dvol
+    # Second half-step PdV work on Eint (mjwl.F lines 176-177):
+    # Total PdV work over time step is -0.5 * (p_old + p_tot + 2*psh) * dvol
+    eint += -0.5 * (p_tot + psh) * dvol
     extra["eint"] = eint.copy()
 
     # 4. Stress update: fluid has no deviatoric shear stress (m5law.F lines 176-182)
@@ -678,6 +713,10 @@ def solid_update(
     sig[:, 3] = 0.0
     sig[:, 4] = 0.0
     sig[:, 5] = 0.0
+
+    # partial derivative at constant volume (m5law.F line 152)
+    dpde = omega / v
+    extra["dpde"] = dpde.copy()
 
     # 5. Sound speed calculation (m5law.F lines 156-172)
     term1 = a * er1v * (-w_r1_v + r1 * v - omega)
@@ -695,6 +734,7 @@ def solid_update(
     extra["df"] = v.copy()
     extra["v"] = v.copy()
     extra["rho"] = (rho0 / v).copy()
+    extra["vol"] = vol.copy()
 
     if is_1d:
         return sig.reshape(6,), epsp, float(c[0])
@@ -724,18 +764,33 @@ def consistent_solid_tangent(
     if isinstance(first, (Material, dict)):
         mat = first
         sig = second
-        extra = args[3] if len(args) > 3 else kwargs.get("extra", None)
-        env = args[4] if len(args) > 4 else kwargs.get("env", None)
+        extra = kwargs.get("extra", None)
+        env = kwargs.get("env", None)
+        dict_args = [a for a in args if isinstance(a, dict)]
+        if extra is None and len(dict_args) >= 1:
+            extra = dict_args[0]
+        if env is None and len(dict_args) >= 2:
+            env = dict_args[1]
     elif isinstance(second, (Material, dict)):
         sig = first
         mat = second
-        extra = args[0] if len(args) > 0 and isinstance(args[0], dict) else kwargs.get("extra", None)
-        env = args[1] if len(args) > 1 and isinstance(args[1], dict) else kwargs.get("env", None)
+        extra = kwargs.get("extra", None)
+        env = kwargs.get("env", None)
+        dict_args = [a for a in args if isinstance(a, dict)]
+        if extra is None and len(dict_args) >= 1:
+            extra = dict_args[0]
+        if env is None and len(dict_args) >= 2:
+            env = dict_args[1]
     else:
         sig = first
         mat = args[0] if len(args) > 0 else kwargs.get("mat")
-        extra = args[1] if len(args) > 1 else kwargs.get("extra", None)
-        env = args[2] if len(args) > 2 else kwargs.get("env", None)
+        extra = kwargs.get("extra", None)
+        env = kwargs.get("env", None)
+        dict_args = [a for a in args[1:] if isinstance(a, dict)]
+        if extra is None and len(dict_args) >= 1:
+            extra = dict_args[0]
+        if env is None and len(dict_args) >= 2:
+            env = dict_args[1]
 
     if extra is None:
         extra = {}

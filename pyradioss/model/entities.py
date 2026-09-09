@@ -146,13 +146,15 @@ class Material:
     @property
     def K(self) -> float:
         """Bulk modulus K = E / 3(1-2nu)."""
+        if self.law in (5, "5", "LAW5", "JWL"):
+            return float(self.params.get("c1", self.params.get("bulk", 0.0)))
         if "K" in self.params:
             return self.params["K"]
         if "bulk" in self.params:
             return self.params["bulk"]
         if "Bulk" in self.params:
             return self.params["Bulk"]
-        if "d" in self.params and self.params["d"] > 0:
+        if "d" in self.params and self.params["d"] > 0 and self.law not in (5, "5", "LAW5", "JWL"):
             return 2.0 / self.params["d"]
         denom = 3.0 * (1.0 - 2.0 * self.nu)
         if abs(denom) < 1e-12:
@@ -167,6 +169,12 @@ class Material:
         must resolve (Fortran: computed in each material's ini routine,
         e.g. starter/source/materials/mat/mat001/ini... -> PM(27) 'SSP').
         """
+        if self.law in (5, "5", "LAW5", "JWL"):
+            try:
+                from ..materials import law05_jwl
+                return float(law05_jwl.sound_speed(self, rho=self.rho0))
+            except Exception:
+                return float(self.params.get("d", self.params.get("vdet", 0.0)))
         return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
 
     def sound_speed_shell(self) -> float:

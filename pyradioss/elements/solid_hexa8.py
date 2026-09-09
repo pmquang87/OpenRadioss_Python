@@ -342,6 +342,7 @@ def init_group(group, model, log):
     group.state["law70_mask"] = law70_mask
     group.state["has_law70"] = bool(law70_mask.any())
     _init_material_state(group, dndx0)
+    group._model = model
     # nodal mass: 1/8 of the element mass to each node
     node_idx = group.conn.reshape(-1)
     mass_c = np.repeat(mass / 8.0, 8)
@@ -383,6 +384,11 @@ def _init_material_state(group, dndx0):
         for name, shape in materials.extra_shapes(mat).items():
             if name not in st["mat_extra"]:
                 st["mat_extra"][name] = np.zeros((n,) + shape)
+        if getattr(mat, "law", 1) in (5, "5", "LAW5", "JWL"):
+            e0 = float(mat.params.get("e0", mat.params.get("MAT_E0", 0.0)))
+            st["eint"][sl] = e0 * st["vol0"][sl]
+            if "eint" in st["mat_extra"]:
+                st["mat_extra"]["eint"][sl] = st["eint"][sl]
     if any(mat.eos is not None for _, mat, _ in st["slices"]):
         from ..materials import eos as eos_mod
         st["eos_mask"] = np.zeros(n, dtype=bool)
@@ -659,6 +665,10 @@ def forces(group, x, v, vr, dt, fint, mint):
         for sl, mat, prop in st.get("slices", []):
             if getattr(mat, "law", 1) == 0:
                 is_void[sl] = True
+            elif getattr(mat, "law", 1) in (5, "5", "LAW5", "JWL"):
+                c[sl] = materials.sound_speed(mat, rho[sl])
+            elif hasattr(mat, "sound_speed_solid"):
+                c[sl] = mat.sound_speed_solid()
             else:
                 K = getattr(mat, "K", 0.0)
                 G = getattr(mat, "G", 0.0)
@@ -716,11 +726,19 @@ def forces(group, x, v, vr, dt, fint, mint):
             # refused by materials.solid_tangent at assembly time.)
             extra["rho"] = rho[sl]
             extra["eint"] = st["eint"][sl]
+            extra["vol"] = vol[sl]
+            extra["vol0"] = st["vol0"][sl]
+            extra["deltax"] = lc[sl]
+            if hasattr(group, "_model") and hasattr(group._model, "t"):
+                extra["time"] = group._model.t
         _, _, c_new = materials.solid_update(
             mat, sig[sl], deps[sl], st["epsp"][sl], dt, extra or None)
         if c_new is not None:
             c[sl] = c_new
             c_from_law[sl] = True
+        for name in st["mat_extra"]:
+            if name in extra and name != "eint":
+                st["mat_extra"][name][sl] = extra[name]
 
         # ---- /EOS pressure (M6, eosmain): replace the law's pressure by
         # the implicit E-p update — deviator from the law, pressure from
