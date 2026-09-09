@@ -555,6 +555,8 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
         pos = epsp > 0.0
         qh[pos] = (B * N / np.maximum(epsp[pos], _EM15) ** (1.0 - N)) * ce[pos] * ct[pos]
     qh[melted] = 0.0
+    qh[ch >= sig_max] = 0.0
+    qh[gt_max] = 0.0
 
     # 9. von Mises equivalent sigma_vm = sqrt(3 J2)
     j2 = (0.5 * (s[:, 0] ** 2 + s[:, 1] ** 2 + s[:, 2] ** 2)
@@ -589,8 +591,9 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
         if ipla == 1:
             ak = sig_y[yielding] + dpla[yielding] * qh[yielding]
             sc2 = np.minimum(1.0, ak / np.maximum(sig_vm[yielding], _EM15))
+            ratio = np.where(sc > 0.0, sc2 / np.maximum(sc, _EM15), 0.0)
             for c_idx in range(6):
-                s[yielding, c_idx] = np.where(sc > 0.0, (s[yielding, c_idx] / sc) * sc2, 0.0)
+                s[yielding, c_idx] *= ratio
 
         epsp[yielding] += dpla[yielding]
 
@@ -671,10 +674,39 @@ def consistent_solid_tangent(mat: Material, sig: np.ndarray, epsp: np.ndarray,
         [0.0, 0.0, 0.0, 0.0, 0.0, G],
     ], dtype=float)
 
+    ee = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+    KeeT = Kb * np.outer(ee, ee)
+
     D = np.broadcast_to(C, (n, 6, 6)).copy()
+
+    # 1. Melted state: when T >= Tmelt, shear strength is 0, leaving only bulk volumetric modulus K 1 (x) 1
+    melted = np.zeros(n, dtype=bool)
+    if extra is not None and "temp" in extra and extra["temp"] is not None:
+        raw_t = extra["temp"]
+        if np.isscalar(raw_t):
+            T_arr = np.full(n, float(raw_t), dtype=float)
+        else:
+            T_arr = np.array(raw_t, dtype=float, copy=True)
+            if T_arr.shape != (n,):
+                T_arr = np.full(n, float(T_arr.flat[0]) if T_arr.size > 0 else T0, dtype=float)
+        melted = T_arr >= Tmelt
+
+    if np.any(melted):
+        D[melted] = KeeT
+
+    # 2. Broken state: when epsp > eps_max, shear strength is 0, leaving only bulk volumetric modulus K 1 (x) 1
+    eps_max = float(p.get("eps_max", _INF))
+    broken = np.zeros(n, dtype=bool)
+    if epsp is not None and eps_max < _INF:
+        broken = epsp > eps_max
+        if np.any(broken):
+            D[broken] = KeeT
+
+    active_mask = (~melted) & (~broken)
+
     if epsp_incr is None:
         return D
-    plastic = epsp_incr > 0.0
+    plastic = (epsp_incr > 0.0) & active_mask
     if not np.any(plastic):
         return D
 
@@ -702,35 +734,50 @@ def consistent_solid_tangent(mat: Material, sig: np.ndarray, epsp: np.ndarray,
         H[pos] = B * N / np.maximum(epsp_cur[pos], 1e-20) ** (1.0 - N)
 
     # Thermal and strain rate scaling of hardening modulus (m4law.F line 160)
-    ct = 1.0
+    ct = np.ones(len(idx), dtype=float)
     if extra is not None and "temp" in extra and extra["temp"] is not None:
         raw_t = extra["temp"]
-        t_val = float(raw_t.flat[0]) if isinstance(raw_t, np.ndarray) and raw_t.size > 0 else float(raw_t)
-        if t_val >= Tmelt:
-            ct = 0.0
-        elif t_val > T0:
-            m_eff = 1.0 if t_val > Tmax else m
+        if np.isscalar(raw_t):
+            T_idx = np.full(len(idx), float(raw_t), dtype=float)
+        else:
+            t_arr = np.array(raw_t, dtype=float, copy=True)
+            T_idx = t_arr[idx] if t_arr.shape == (n,) else np.full(len(idx), float(t_arr.flat[0]), dtype=float)
+        above_t0 = (T_idx > T0) & (T_idx < Tmelt)
+        if np.any(above_t0):
+            T_sub = T_idx[above_t0]
+            m_eff = np.where(T_sub > Tmax, 1.0, m)
             denom = max(Tmelt - T0, 1e-20)
-            tstar = np.clip((t_val - T0) / denom, 0.0, 1.0)
-            ct = max(1.0 - (tstar ** m_eff), 0.0)
+            tstar = np.clip((T_sub - T0) / denom, 0.0, 1.0)
+            ct[above_t0] = np.maximum(1.0 - (tstar ** m_eff), 0.0)
 
-    ce = 1.0
-    if extra is not None and "epd" in extra and extra["epd"] is not None:
-        epd_val = float(np.max(extra["epd"]))
-        if c_rate > 0.0 and eps0 > 0.0 and epd_val > eps0:
-            ce = 1.0 + c_rate * np.log(epd_val / eps0)
+    ce = np.ones(len(idx), dtype=float)
+    if extra is not None and "ce" in extra and extra["ce"] is not None:
+        raw_ce = extra["ce"]
+        if np.isscalar(raw_ce):
+            ce = np.full(len(idx), float(raw_ce), dtype=float)
+        else:
+            ce_arr = np.array(raw_ce, dtype=float, copy=True)
+            ce = ce_arr[idx] if ce_arr.shape == (n,) else np.full(len(idx), float(ce_arr.flat[0]), dtype=float)
+    elif extra is not None and "epd" in extra and extra["epd"] is not None:
+        raw_epd = extra["epd"]
+        if np.isscalar(raw_epd):
+            epd_idx = np.full(len(idx), float(raw_epd), dtype=float)
+        else:
+            epd_arr = np.array(raw_epd, dtype=float, copy=True)
+            epd_idx = epd_arr[idx] if epd_arr.shape == (n,) else np.full(len(idx), float(epd_arr.flat[0]), dtype=float)
+        if c_rate > 0.0 and eps0 > 0.0:
+            ratio = np.maximum(epd_idx / eps0, 1.0)
+            ce = 1.0 + c_rate * np.log(ratio)
 
     H = H * ce * ct
 
     ch = (p.get("A", 0.0) + B * np.maximum(epsp_cur, 0.0) ** N) * ce * ct
-    capped = ch >= sig_max
+    capped = (ch >= sig_max) | (epsp_cur > eps_max)
     H[capped] = 0.0
 
     a = 3.0 * G * dep / q_tr
     b = 6.0 * G * G * (dep / q_tr - 1.0 / (3.0 * G + np.maximum(H, 0.0)))
 
-    ee = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
-    KeeT = Kb * np.outer(ee, ee)
     C_minus_vol = C - KeeT
     NN = np.einsum("mi,mj->mij", Nv, Nv)
     D[idx] = (C[None, :, :]

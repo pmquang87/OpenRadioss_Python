@@ -1608,3 +1608,441 @@ def test_materials_dispatcher_integration():
         materials.shell_update(mat, np.zeros((1, 3)), np.zeros((1, 3)), np.zeros(1), dt=1e-5)
 
 
+# ============================================================================
+# 7. Wave 2 Verifier 1 Audit Checks (m4law.F / hm_read_mat04.F Fidelity)
+# ============================================================================
+
+def test_audit_check1_hydrostatic_deviatoric_split():
+    """Audit check 1:
+    In m4law.F: P = -THIRD*(SIG1+SIG2+SIG3), DAV = -THIRD*(D1+D2+D3).
+    Check how pressure and deviatoric stresses are calculated and recombined in solid_update.
+    """
+    mat = _make_law04(e=210000.0, nu=0.3, a=500.0, pmin=-1e30)
+    G = mat.params["G"]
+    K = mat.params["K"]
+
+    sig_old = np.array([[100.0, 50.0, -30.0, 20.0, -10.0, 15.0]])
+    deps = np.array([[0.001, -0.0005, 0.0002, 0.0004, -0.0002, 0.0006]])
+
+    # Fortran reference calculations
+    sig1, sig2, sig3, sig4, sig5, sig6 = sig_old[0]
+    d1, d2, d3, d4, d5, d6 = deps[0]
+
+    p_old_expected = -(sig1 + sig2 + sig3) / 3.0
+    dav_expected = -(d1 + d2 + d3) / 3.0
+
+    s_trial_xx = sig1 + p_old_expected + 2.0 * G * (d1 + dav_expected)
+    s_trial_yy = sig2 + p_old_expected + 2.0 * G * (d2 + dav_expected)
+    s_trial_zz = sig3 + p_old_expected + 2.0 * G * (d3 + dav_expected)
+    s_trial_xy = sig4 + G * d4
+    s_trial_yz = sig5 + G * d5
+    s_trial_zx = sig6 + G * d6
+
+    p_new_expected = p_old_expected + 3.0 * K * dav_expected
+    sig_new_expected = np.array([
+        s_trial_xx - p_new_expected,
+        s_trial_yy - p_new_expected,
+        s_trial_zz - p_new_expected,
+        s_trial_xy,
+        s_trial_yz,
+        s_trial_zx,
+    ])
+
+    sig_new, epsp_new, _ = law04_hyd_jcook.solid_update(mat, sig_old.copy(), deps.copy())
+
+    np.testing.assert_allclose(sig_new[0], sig_new_expected, rtol=1e-12)
+
+    # Verify that deviator trace is identically zero
+    p_result = -(sig_new[0, 0] + sig_new[0, 1] + sig_new[0, 2]) / 3.0
+    s_result = sig_new[0, :3] + p_result
+    np.testing.assert_allclose(np.sum(s_result), 0.0, atol=1e-12)
+    np.testing.assert_allclose(p_result, p_new_expected, rtol=1e-12)
+
+
+def test_audit_check2_strain_rate_epd_formula():
+    """Audit check 2:
+    EPD = MAX(ABS(D1), ABS(D2), ABS(D3), HALF*ABS(D4), HALF*ABS(D5), HALF*ABS(D6)).
+    Verify law04_hyd_jcook.py reproduces this exact formula for all 6 components.
+    """
+    dt = 1e-4
+    c_rate = 0.1
+    eps0 = 1.0
+    A = 200.0
+    mat = _make_law04(a=A, b=0.0, c=c_rate, eps0=eps0)
+
+    # Test 6 cases where each component in turn dominates the strain rate
+    components = [
+        [0.005, 0.0, 0.0, 0.0, 0.0, 0.0],          # D1 dominates: EPD = 0.005 / dt = 50
+        [0.0, -0.006, 0.0, 0.0, 0.0, 0.0],         # D2 dominates: EPD = 0.006 / dt = 60
+        [0.0, 0.0, 0.007, 0.0, 0.0, 0.0],          # D3 dominates: EPD = 0.007 / dt = 70
+        [0.0, 0.0, 0.0, 0.016, 0.0, 0.0],          # D4 dominates: EPD = 0.5 * 0.016 / dt = 80
+        [0.0, 0.0, 0.0, 0.0, -0.018, 0.0],         # D5 dominates: EPD = 0.5 * 0.018 / dt = 90
+        [0.0, 0.0, 0.0, 0.0, 0.0, 0.020],          # D6 dominates: EPD = 0.5 * 0.020 / dt = 100
+    ]
+    expected_epds = [50.0, 60.0, 70.0, 80.0, 90.0, 100.0]
+
+    for comp, exp_epd in zip(components, expected_epds):
+        deps = np.array([comp])
+        sig = np.zeros((1, 6))
+        expected_ce = 1.0 + c_rate * math.log(exp_epd / eps0)
+        expected_sigy = A * expected_ce
+
+        # Under plastic loading, von Mises equals yield stress:
+        sig_out, _, _ = law04_hyd_jcook.solid_update(mat, sig, deps, np.zeros(1), dt=dt)
+        p = -(sig_out[0, 0] + sig_out[0, 1] + sig_out[0, 2]) / 3.0
+        s = sig_out[0].copy()
+        s[:3] += p
+        svm = math.sqrt(3.0 * (0.5 * (s[0]**2 + s[1]**2 + s[2]**2) + s[3]**2 + s[4]**2 + s[5]**2))
+        np.testing.assert_allclose(svm, expected_sigy, rtol=1e-4)
+
+
+def test_audit_check3_rate_enhancement_ce_branches():
+    """Audit check 3:
+    Rate enhancement factor C_E:
+    When EPD <= EPDR, C_E = 1.0.
+    When EPD > EPDR, C_E = 1.0 + C * ln(EPD / EPDR).
+    Verify handling of C = 0, EPD <= EPDR, and EPD > EPDR.
+    """
+    A = 300.0
+
+    # 1. C = 0 -> C_E is strictly 1.0 regardless of extreme strain rates
+    mat_c0 = _make_law04(a=A, b=0.0, c=0.0, eps0=1.0)
+    deps = np.array([[0.01, 0.0, 0.0, 0.0, 0.0, 0.0]])
+    sig_c0, _, _ = law04_hyd_jcook.solid_update(mat_c0, np.zeros((1, 6)), deps, np.zeros(1), dt=1e-8)  # 1e6 s^-1
+    p_c0 = -(sig_c0[0, 0] + sig_c0[0, 1] + sig_c0[0, 2]) / 3.0
+    s_c0 = sig_c0[0].copy()
+    s_c0[:3] += p_c0
+    svm_c0 = math.sqrt(3.0 * (0.5 * np.sum(s_c0[:3]**2) + np.sum(s_c0[3:]**2)))
+    np.testing.assert_allclose(svm_c0, A, rtol=1e-4)
+
+    # 2. EPD <= EPDR -> C_E = 1.0
+    C = 0.05
+    EPDR = 100.0
+    mat_rate = _make_law04(a=A, b=0.0, c=C, eps0=EPDR)
+    dt_slow = 1e-3  # EPD = 0.01 / 1e-3 = 10.0 <= 100.0
+    sig_slow, _, _ = law04_hyd_jcook.solid_update(mat_rate, np.zeros((1, 6)), deps, np.zeros(1), dt=dt_slow)
+    p_slow = -(sig_slow[0, 0] + sig_slow[0, 1] + sig_slow[0, 2]) / 3.0
+    s_slow = sig_slow[0].copy()
+    s_slow[:3] += p_slow
+    svm_slow = math.sqrt(3.0 * (0.5 * np.sum(s_slow[:3]**2) + np.sum(s_slow[3:]**2)))
+    np.testing.assert_allclose(svm_slow, A, rtol=1e-4)
+
+    # 3. EPD > EPDR -> C_E = 1.0 + C * ln(EPD / EPDR)
+    dt_fast = 1e-5  # EPD = 0.01 / 1e-5 = 1000.0 > 100.0
+    ce_expected = 1.0 + C * math.log(1000.0 / EPDR)
+    sig_fast, _, _ = law04_hyd_jcook.solid_update(mat_rate, np.zeros((1, 6)), deps, np.zeros(1), dt=dt_fast)
+    p_fast = -(sig_fast[0, 0] + sig_fast[0, 1] + sig_fast[0, 2]) / 3.0
+    s_fast = sig_fast[0].copy()
+    s_fast[:3] += p_fast
+    svm_fast = math.sqrt(3.0 * (0.5 * np.sum(s_fast[:3]**2) + np.sum(s_fast[3:]**2)))
+    np.testing.assert_allclose(svm_fast, A * ce_expected, rtol=1e-4)
+
+
+def test_audit_check4_thermal_softening_melting_tmax():
+    """Audit check 4:
+    TSTAR = (T - T0) / (TMELT - T0).
+    If T >= TMELT, does deviatoric stress completely vanish (sigma_dev = 0, QH = 0)?
+    If T > TMAX, is CMX = 1 used?
+    """
+    A = 400.0
+    T0 = 300.0
+    Tmelt = 1500.0
+    Tmax = 900.0
+    m = 1.8
+    mat = _make_law04(a=A, b=0.0, c=0.0, t0=T0, tmelt=Tmelt, tmax=Tmax, m=m)
+    deps = np.array([[0.01, -0.005, -0.005, 0.005, 0.0, 0.0]])
+
+    # Case A: T < T0 -> C_T = 1.0
+    extra_cold = {"temp": np.array([250.0])}
+    sig_cold, _, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps, np.zeros(1), dt=1e-5, extra=extra_cold)
+    p_cold = -(sig_cold[0, 0] + sig_cold[0, 1] + sig_cold[0, 2]) / 3.0
+    s_cold = sig_cold[0].copy()
+    s_cold[:3] += p_cold
+    svm_cold = math.sqrt(3.0 * (0.5 * np.sum(s_cold[:3]**2) + np.sum(s_cold[3:]**2)))
+    np.testing.assert_allclose(svm_cold, A, rtol=1e-4)
+
+    # Case B: T0 < T <= Tmax -> C_T = 1.0 - Tstar^m
+    T_mid = 600.0
+    tstar_mid = (T_mid - T0) / (Tmelt - T0)
+    ct_mid = 1.0 - (tstar_mid ** m)
+    extra_mid = {"temp": np.array([T_mid])}
+    sig_mid, _, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps, np.zeros(1), dt=1e-5, extra=extra_mid)
+    p_mid = -(sig_mid[0, 0] + sig_mid[0, 1] + sig_mid[0, 2]) / 3.0
+    s_mid = sig_mid[0].copy()
+    s_mid[:3] += p_mid
+    svm_mid = math.sqrt(3.0 * (0.5 * np.sum(s_mid[:3]**2) + np.sum(s_mid[3:]**2)))
+    np.testing.assert_allclose(svm_mid, A * ct_mid, rtol=1e-4)
+
+    # Case C: T > Tmax -> CMX = 1.0 used (m4law.F line 136)
+    T_high = 1200.0
+    tstar_high = (T_high - T0) / (Tmelt - T0)
+    ct_high = 1.0 - (tstar_high ** 1.0)  # CMX forced to 1.0
+    extra_high = {"temp": np.array([T_high])}
+    sig_high, _, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps, np.zeros(1), dt=1e-5, extra=extra_high)
+    p_high = -(sig_high[0, 0] + sig_high[0, 1] + sig_high[0, 2]) / 3.0
+    s_high = sig_high[0].copy()
+    s_high[:3] += p_high
+    svm_high = math.sqrt(3.0 * (0.5 * np.sum(s_high[:3]**2) + np.sum(s_high[3:]**2)))
+    np.testing.assert_allclose(svm_high, A * ct_high, rtol=1e-4)
+
+    # Case D: T >= Tmelt -> Deviatoric stresses completely vanish (sigma_dev = 0, QH = 0)
+    extra_melt = {"temp": np.array([1600.0])}
+    sig_melt, epsp_melt, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps, np.zeros(1), dt=1e-5, extra=extra_melt)
+    p_melt = -(sig_melt[0, 0] + sig_melt[0, 1] + sig_melt[0, 2]) / 3.0
+    s_melt_dev = sig_melt[0, :3] + p_melt
+    np.testing.assert_allclose(s_melt_dev, 0.0, atol=1e-12)
+    np.testing.assert_allclose(sig_melt[0, 3:], 0.0, atol=1e-12)
+    assert epsp_melt[0] == 0.0  # DPLA = 0 when melted
+
+
+def test_audit_check5_taylor_quinney_heating():
+    """Audit check 5:
+    Plastic work heating (Taylor-Quinney):
+    If rho * C_p > 0, is Delta T = sigma_y * Delta eps_p / (rho * C_p) added and tracked in extra["temp"]?
+    """
+    A = 250.0
+    rho_cp = 4.0e6
+    T0 = 295.0
+    mat = _make_law04(a=A, b=0.0, c=0.0, rho_cp=rho_cp, t0=T0)
+
+    deps = np.array([[0.008, 0.0, 0.0, 0.0, 0.0, 0.0]])
+    extra = {"temp": np.array([T0])}
+
+    _, epsp_new, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps, np.zeros(1), dt=1e-5, extra=extra)
+
+    dpla = epsp_new[0]
+    assert dpla > 0.0
+    expected_delta_T = A * dpla / rho_cp
+    expected_T = T0 + expected_delta_T
+
+    np.testing.assert_allclose(extra["temp"][0], expected_T, rtol=1e-8)
+
+
+def test_audit_check6_pressure_cutoff():
+    """Audit check 6:
+    Pressure cutoff: Is P >= Pmin enforced?
+    Verify tensile pressure is clamped at Pmin (a negative cutoff), while compressive pressure is unclamped.
+    """
+    pmin = -200.0
+    mat = _make_law04(e=210000.0, nu=0.3, a=500.0, pmin=pmin)
+    K = mat.params["K"]
+
+    # 1. Large tensile volumetric strain: P = -K * tr(deps) << pmin -> clamped to pmin
+    deps_tensile = np.array([[0.01, 0.01, 0.01, 0.0, 0.0, 0.0]])
+    sig_tensile, _, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps_tensile, np.zeros(1))
+    p_tensile = -(sig_tensile[0, 0] + sig_tensile[0, 1] + sig_tensile[0, 2]) / 3.0
+    np.testing.assert_allclose(p_tensile, pmin, rtol=1e-8)
+    np.testing.assert_allclose(sig_tensile[0, :3], -pmin, rtol=1e-8)  # sigma = -P = +200
+
+    # 2. Large compressive volumetric strain: P = -K * tr(deps) >> 0 -> UNCLAMPED
+    deps_compressive = np.array([[-0.01, -0.01, -0.01, 0.0, 0.0, 0.0]])
+    sig_compressive, _, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps_compressive, np.zeros(1))
+    p_compressive = -(sig_compressive[0, 0] + sig_compressive[0, 1] + sig_compressive[0, 2]) / 3.0
+    expected_p_comp = 3.0 * K * 0.01
+    np.testing.assert_allclose(p_compressive, expected_p_comp, rtol=1e-8)
+    np.testing.assert_allclose(sig_compressive[0, :3], -expected_p_comp, rtol=1e-8)
+
+
+def test_audit_check7_sound_speed():
+    """Audit check 7:
+    Sound speed: Is c = sqrt((K + 4/3*G)/rho0) correct?
+    """
+    mat = _make_law04(e=205000.0, nu=0.28, rho0=7.8e-3)
+    G = mat.params["G"]
+    K = mat.params["K"]
+    expected_c = math.sqrt((K + (4.0 / 3.0) * G) / 7.8e-3)
+
+    _, _, c = law04_hyd_jcook.solid_update(mat, np.zeros((3, 6)), np.zeros((3, 6)), np.zeros(3))
+    assert c.shape == (3,)
+    np.testing.assert_allclose(c, expected_c, rtol=1e-12)
+
+
+def test_audit_check8_ipla_radial_return_branches():
+    """Audit check 8:
+    Verify IPLA=0, 1, 2 radial return formulations from m4law.F lines 177-219.
+    """
+    mat0 = _make_law04(a=200.0, b=400.0, n=0.5, ipla=0)
+    mat1 = _make_law04(a=200.0, b=400.0, n=0.5, ipla=1)
+    mat2 = _make_law04(a=200.0, b=400.0, n=0.5, ipla=2)
+
+    deps = np.array([[0.005, 0.0, 0.0, 0.0, 0.0, 0.0]])
+    epsp_init = np.array([0.01])
+
+    sig0, ep0, _ = law04_hyd_jcook.solid_update(mat0, np.zeros((1, 6)), deps, epsp_init.copy(), dt=1e-5)
+    sig1, ep1, _ = law04_hyd_jcook.solid_update(mat1, np.zeros((1, 6)), deps, epsp_init.copy(), dt=1e-5)
+    sig2, ep2, _ = law04_hyd_jcook.solid_update(mat2, np.zeros((1, 6)), deps, epsp_init.copy(), dt=1e-5)
+
+    # In IPLA=2, denominator is 3G instead of 3G + QH, so plastic increment is slightly larger
+    assert ep2[0] > ep0[0]
+    # In IPLA=1, actual yield stress updates by DPLA*QH and rescales
+    assert ep1[0] > 0.0
+
+
+# ============================================================================
+# Wave 2 Verifier 2: Mathematical Audit of Algorithmic Consistent Tangent
+# ============================================================================
+
+def test_audit_wave2_verifier2_tangent_box73_exact_algebra():
+    """Audit check 1:
+    Verify tangent matches Simo & Hughes Box 7.3 J2 radial return:
+    D_alg = C_el - a * (C_el - K 1 (x) 1) + b * (N (x) N)
+    with a = 3G * dep / q_tr, b = 6G^2 * (dep / q_tr - 1 / (3G + H)).
+    """
+    mat = _make_law04(a=200.0, b=400.0, n=0.5, sig_max=500.0, eps_max=0.5, c=0.0, pmin=-1e20)
+    G = mat.params["G"]
+    K = mat.params["K"]
+    deps = np.array([[0.005, -0.001, -0.001, 0.001, 0.0, 0.0]])
+    epsp_init = np.array([0.01])
+    s0, ep0, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps, epsp_init.copy(), dt=1e-5, extra={"ipla": 1})
+    dep = ep0[0] - epsp_init[0]
+
+    D_calc = law04_hyd_jcook.consistent_solid_tangent(mat, s0, epsp_init, np.array([dep]), extra={"ipla": 1})[0]
+
+    # Manual Box 7.3 derivation
+    lam = K - 2.0 * G / 3.0
+    Cel = np.zeros((6, 6))
+    Cel[:3, :3] = lam
+    np.fill_diagonal(Cel[:3, :3], lam + 2.0 * G)
+    np.fill_diagonal(Cel[3:, 3:], G)
+
+    ee = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+    KeeT = K * np.outer(ee, ee)
+    C_minus_vol = Cel - KeeT
+
+    p = (s0[0, 0] + s0[0, 1] + s0[0, 2]) / 3.0
+    s_dev = s0[0].copy()
+    s_dev[:3] -= p
+    snorm = math.sqrt(s_dev[0]**2 + s_dev[1]**2 + s_dev[2]**2 + 2.0 * (s_dev[3]**2 + s_dev[4]**2 + s_dev[5]**2))
+    Nv = s_dev / snorm
+    q = math.sqrt(1.5) * snorm
+    q_tr = q + 3.0 * G * dep
+    H = 400.0 * 0.5 * (0.01 ** (0.5 - 1.0))
+    a = 3.0 * G * dep / q_tr
+    b = 6.0 * G * G * (dep / q_tr - 1.0 / (3.0 * G + H))
+
+    D_box73 = Cel - a * C_minus_vol + b * np.outer(Nv, Nv)
+
+    np.testing.assert_allclose(D_calc, D_box73, rtol=1e-12)
+
+
+def test_audit_wave2_verifier2_melted_state():
+    """Audit check 2:
+    In melted state (T >= Tmelt), shear strength is 0, so deviatoric tangent vanishes,
+    leaving only the bulk volumetric modulus K 1 (x) 1.
+    """
+    mat = _make_law04(a=200.0, b=400.0, tmelt=1500.0)
+    K = mat.params["K"]
+    deps = np.array([[0.005, -0.001, -0.001, 0.001, 0.0, 0.0]])
+    extra_melt = {"temp": np.array([1600.0])}
+
+    s_melt, ep_melt, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps, np.zeros(1), dt=1e-5, extra=extra_melt)
+    # Check deviator is 0
+    p = np.mean(s_melt[0, :3])
+    np.testing.assert_allclose(s_melt[0, :3] - p, 0.0, atol=1e-12)
+    np.testing.assert_allclose(s_melt[0, 3:], 0.0, atol=1e-12)
+
+    D_melt = law04_hyd_jcook.consistent_solid_tangent(mat, s_melt, ep_melt, ep_melt, extra=extra_melt)[0]
+    ee = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+    KeeT = K * np.outer(ee, ee)
+
+    np.testing.assert_allclose(D_melt, KeeT, atol=1e-10)
+
+
+def test_audit_wave2_verifier2_symmetry_and_positive_semidefinite():
+    """Audit check 3:
+    Check symmetry and positive-semidefiniteness / positive eigenvalues across states.
+    Eigenvalues are:
+    lambda_1 = 3K (volumetric)
+    lambda_2 = 2G * H / (3G + H) >= 0 (flow direction N)
+    lambda_{3..6} = 2G * sigma_y / q_tr > 0 (deviatoric orthogonal to N)
+    """
+    mat = _make_law04(a=200.0, b=400.0, n=0.5, tmelt=1800.0)
+    K = mat.params["K"]
+    deps = np.array([[0.005, -0.001, -0.001, 0.001, 0.0, 0.0]])
+
+    # 1. Plastic state
+    s0, ep0, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps, np.array([0.01]), dt=1e-5, extra={"ipla": 1})
+    D_pl = law04_hyd_jcook.consistent_solid_tangent(mat, s0, np.array([0.01]), ep0 - 0.01, extra={"ipla": 1})[0]
+
+    # Symmetry
+    np.testing.assert_allclose(D_pl, D_pl.T, atol=1e-12)
+    # Positive eigenvalues
+    eigs_pl = np.linalg.eigvalsh(D_pl)
+    assert np.all(eigs_pl >= -1e-8)
+    # Analytical eigenvalue check
+    assert np.isclose(eigs_pl[-1], 3.0 * K, rtol=1e-6)
+
+    # 2. Melted state
+    extra_melt = {"temp": np.array([1900.0])}
+    D_melt = law04_hyd_jcook.consistent_solid_tangent(mat, s0, ep0, ep0, extra=extra_melt)[0]
+    np.testing.assert_allclose(D_melt, D_melt.T, atol=1e-12)
+    eigs_melt = np.linalg.eigvalsh(D_melt)
+    assert np.all(eigs_melt >= -1e-8)
+    assert np.isclose(eigs_melt[-1], 3.0 * K, rtol=1e-6)
+    assert np.allclose(eigs_melt[:5], 0.0, atol=1e-8)
+
+
+def test_audit_wave2_verifier2_directional_derivative_consistency_all_states():
+    """Audit check 4:
+    Verify finite-difference directional derivative consistency across multiple states:
+    - Elastic state
+    - Yielding with power-law hardening (IPLA=1)
+    - Rate sensitivity active (frozen CE)
+    - Thermal softening active (frozen CT)
+    - Saturated hardening (sig >= sig_max -> H = 0)
+    - Broken state (epsp > eps_max -> H = 0)
+    - Melted state (T >= Tmelt)
+    - Unhardened return (IPLA=0, b=0)
+    """
+    delta = np.array([1.0, -0.3, -0.3, 0.5, 0.0, 0.0])
+    eps = 1e-7
+
+    def _verify_state(mat, deps0, epsp0, extra=None):
+        s0, ep0, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps0.copy(), epsp0.copy(), dt=1e-5, extra=extra)
+        dep_incr = ep0 - epsp0
+        D = law04_hyd_jcook.consistent_solid_tangent(mat, s0, epsp0, dep_incr, extra=extra)[0]
+
+        sp, _, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps0 + eps * delta, epsp0.copy(), dt=1e-5, extra=extra)
+        sm, _, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps0 - eps * delta, epsp0.copy(), dt=1e-5, extra=extra)
+        num_diff = (sp[0] - sm[0]) / (2.0 * eps)
+        tan_diff = D @ delta
+        rel_err = np.linalg.norm(num_diff - tan_diff) / np.linalg.norm(tan_diff)
+        assert rel_err < 1e-5, f"rel_err={rel_err:.4e} exceeds 1e-5"
+
+    deps_plas = np.array([[0.005, -0.001, -0.001, 0.001, 0.0, 0.0]])
+    deps_elas = np.array([[1e-5, 0.0, 0.0, 0.0, 0.0, 0.0]])
+
+    # 1. Elastic state
+    mat_el = _make_law04(a=500.0, b=0.0, pmin=-1e20)
+    _verify_state(mat_el, deps_elas, np.zeros(1))
+
+    # 2. Yielding with power-law hardening (IPLA=1)
+    mat_pl = _make_law04(a=200.0, b=400.0, n=0.5, c=0.0, pmin=-1e20)
+    _verify_state(mat_pl, deps_plas, np.array([0.01]), extra={"ipla": 1})
+
+    # 3. Rate sensitivity active (frozen CE)
+    mat_rate = _make_law04(a=200.0, b=400.0, n=0.5, c=0.05, eps0=1.0, pmin=-1e20)
+    _verify_state(mat_rate, deps_plas, np.array([0.01]), extra={"ipla": 1, "ce": 1.25})
+
+    # 4. Thermal softening active (T = 1000K, T0=300, Tmelt=1800)
+    mat_therm = _make_law04(a=200.0, b=400.0, n=0.5, c=0.0, t0=300.0, tmelt=1800.0, pmin=-1e20)
+    _verify_state(mat_therm, deps_plas, np.array([0.01]), extra={"ipla": 1, "temp": np.array([1000.0])})
+
+    # 5. Saturated hardening (sig >= sig_max -> H = 0)
+    mat_sat = _make_law04(a=200.0, b=400.0, n=0.5, sig_max=200.0, c=0.0, pmin=-1e20)
+    _verify_state(mat_sat, deps_plas, np.array([0.01]), extra={"ipla": 1})
+
+    # 6. Broken state (epsp > eps_max -> H = 0)
+    mat_brk = _make_law04(a=200.0, b=400.0, n=0.5, eps_max=0.01, c=0.0, pmin=-1e20)
+    _verify_state(mat_brk, deps_plas, np.array([0.02]), extra={"ipla": 1})
+
+    # 7. Melted state (T >= Tmelt)
+    mat_melt = _make_law04(a=200.0, b=400.0, n=0.5, tmelt=1800.0, pmin=-1e20)
+    _verify_state(mat_melt, deps_plas, np.zeros(1), extra={"temp": np.array([1900.0])})
+
+    # 8. Unhardened return (IPLA=0, b=0)
+    mat_b0 = _make_law04(a=200.0, b=0.0, c=0.0, pmin=-1e20)
+    _verify_state(mat_b0, deps_plas, np.zeros(1), extra={"ipla": 0})
+
+
+
