@@ -598,7 +598,7 @@ class StarterDeck:
         """``/MAT/HYD_JCOOK``."""
         self._header("MAT", "HYD_JCOOK", mid)
         self._title(title)
-        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+        self.lines.extend((c.raw if hasattr(c, "raw") else str(c)).rstrip("\r\n") for c in data_cards)
 
     def mat_jwl(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/JWL``."""
@@ -2055,7 +2055,28 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
     elif law == "LAW66":
         d.mat_law66(mid, title, cards)
     elif law in ("LAW4", "HYD_JCOOK"):
-        d.mat_hyd_jcook(mid, title, cards)
+        if len(cards) >= 2 and len(cards[1].tokens()) >= 2:
+            e, nu = cards[1].tokens()[:2]
+            kw: Dict = {}
+            if len(cards[0].tokens()) > 1:
+                kw["refer_rho"] = float(cards[0].tokens()[1])
+            if len(cards) >= 3:
+                t = cards[2].floats() + [0.0] * 5
+                kw.update(a=t[0], b=t[1], n=t[2] if t[2] else 1.0,
+                          eps_max=t[3], sig_max=t[4])
+            if len(cards) >= 4:
+                t = cards[3].floats()
+                if t:
+                    kw["p_min"] = t[0]
+            if len(cards) >= 5:
+                t = cards[4].floats() + [0.0, 1e-5, 0.0, 1e30, 1e30]
+                kw.update(c=t[0], eps_dot_0=t[1], m=t[2], tmelt=t[3], tmax=t[4])
+            if len(cards) >= 6:
+                t = cards[5].floats() + [0.0, 0.0]
+                kw.update(rhocp=t[0], t0=t[1])
+            d.mat_law4(mid, title, rho, e, nu, **kw)
+        else:
+            d.mat_hyd_jcook(mid, title, [c.raw if hasattr(c, "raw") else c for c in cards])
     elif law == "JWL":
         d.mat_jwl(mid, title, cards)
     elif law == "PLAS_PREDEF":

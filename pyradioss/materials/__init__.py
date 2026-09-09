@@ -62,26 +62,16 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
 
 
 def register_materials():
-    eos._register()
-    law01_elastic._register()
-    law02_johnson_cook._register()
-    law03_plas_bost._register()
-    law04_hyd_jcook._register()
-    law06_hyd_visc._register()
-    law19_fabric._register()
-    law24_concrete._register()
-    law33_foamplas._register()
-    law35_kelvinmax._register()
-    law40_kelvinmax._register()
-    law44_cowper._register()
-    law62_hypervisco._register()
-    law70_tabfoam._register()
-    law81_druckerprager._register()
-    law83_spotweld._register()
-    law114_seatbelt._register()
-    law120_advanced._register()
-    mat_gas._register()
-    mat_void._register()
+    for mod in (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,
+                law04_hyd_jcook, law06_hyd_visc, law19_fabric, law24_concrete,
+                law27_brittle, law33_foamplas, law35_kelvinmax,
+                law36_tabulated, law40_kelvinmax, law42_ogden, law44_cowper,
+                law62_hypervisco, law70_tabfoam, law81_druckerprager,
+                law83_spotweld, law114_seatbelt, law120_advanced,
+                mat_gas, mat_void):
+        fn = getattr(mod, "_register", None)
+        if callable(fn):
+            fn()
 
 
 def extra_shapes(mat, nip=None):
@@ -147,6 +137,8 @@ def extra_shapes(mat, nip=None):
     if mat.law == 33 and abs(mat.params.get("KEN", 0)) == 1:
         # M533: ICASE=2 Kelvin model needs total strain (solids only)
         shapes.update(eps33=(6,))
+    if mat.law == 4:
+        shapes["temp"] = ()
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
         shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
     return shapes
@@ -168,7 +160,7 @@ def needs_env(mat) -> bool:
     ``rho``; LAW62's CIMAX sound-speed bound divides by the current
     density; LAW40's sound speed too; M40: LAW36 solids use the same
     total pressure as LAW44 — sigeps36.F P = BULK*AMU)."""
-    return mat.law in (2, 6, 24, 33, 35, 36, 40, 44, 62, 70, 81)
+    return mat.law in (2, 4, 6, 24, 33, 35, 36, 40, 44, 62, 70, 81)
 
 
 def solid_update(mat, sig, deps, epsp, dt, extra=None):
@@ -205,6 +197,8 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
                                              extra)
     if mat.law == 0:
         return mat_void.solid_update(mat, sig, deps), epsp, None
+    if mat.law == 4:
+        return law04_hyd_jcook.solid_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 6:
         sig, epsp, c = law06_hyd_visc.solid_update(mat, sig, deps, epsp, dt, extra)
         return sig, epsp, c
@@ -258,6 +252,8 @@ def shell_update(mat, sig, deps, epsp, dt, extra=None):
         return law83_spotweld.shell_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 6:
         return law06_hyd_visc.shell_update(mat, sig, deps, epsp, dt, extra)
+    if mat.law == 4:
+        return law04_hyd_jcook.shell_update(mat, sig, deps, epsp, dt, extra)
     raise NotImplementedError(f"material LAW{mat.law} not ported for shells")
 
 
@@ -323,9 +319,12 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
     if mat.law == 33:
         return law33_foamplas.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr, extra)
+    if mat.law == 4:
+        return law04_hyd_jcook.consistent_solid_tangent(
+            mat, sig, epsp, epsp_incr, extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
-        f"elastic, LAW2, LAW6, LAW24, LAW33, LAW35, LAW36, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
+        f"elastic, LAW2, LAW4, LAW6, LAW24, LAW33, LAW35, LAW36, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
         f"are ported; LAW27 is deferred — see PORTING_GUIDE M14)")
 
 

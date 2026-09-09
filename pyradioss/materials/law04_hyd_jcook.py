@@ -11,10 +11,10 @@ LAW4 models elastic-plastic hydrodynamic behavior using a Johnson-Cook yield sur
 with isotropic power-law hardening, strain rate sensitivity, and thermal softening,
 coupled with a hydrodynamic equation of state (linear bulk modulus or embedded polynomial EOS).
 
-1. Deviatoric elastic trial:
-   p_old = tr(sigma_old) / 3
-   Delta eps_dev = Delta eps - (1/3) tr(Delta eps) I
-   s_trial = sigma_old - p_old * I + 2G * Delta eps_dev
+1. Deviatoric elastic trial (m4law.F lines 90-95, 106-113):
+   P_old = -tr(sigma_old) / 3
+   DAV = -tr(Delta eps) / 3
+   s_trial = sigma_old + P_old * I + 2G * (Delta eps + DAV * I)
 
 2. Strain rate measure EPD (m4law.F lines 116-117):
    For D = Delta eps / dt:
@@ -47,12 +47,12 @@ coupled with a hydrodynamic equation of state (linear bulk modulus or embedded p
    Else if eps_p > 0: QH = (B * N / eps_p^(1 - N)) * C_E * C_T
    Else: QH = 0.0
 
-8. Radial return (IPLA=0, m4law.F lines 168-188):
+8. Radial return (IPLA=0, 1, 2, m4law.F lines 168-219):
    sigma_vm = sqrt(3 J_2)
    If sigma_vm > sigma_y:
        scale = sigma_y / sigma_vm
        s = scale * s
-       Delta eps_p = (1.0 - scale) * sigma_vm / (3G + QH)
+       Delta eps_p = (1.0 - scale) * sigma_vm / (3G + QH)  (IPLA=0)
        eps_p += Delta eps_p
 
 9. Adiabatic temperature rise (m4law.F lines 232-235):
@@ -60,12 +60,12 @@ coupled with a hydrodynamic equation of state (linear bulk modulus or embedded p
        Delta T = sigma_y * Delta eps_p / (rho * C_p)
        T += Delta T
 
-10. Hydrodynamic pressure:
-    p_new = p_old + K * tr(Delta eps)  (or -K * (rho / rho0 - 1.0) if rho provided)
-    p_new = max(p_new, P_min)
-    sigma = s + p_new * I
+10. Hydrodynamic pressure & pressure cutoff (m4law.F line 91, eosmain.F line 229, eospolyno.F line 104):
+    P_new = K * (rho / rho0 - 1.0) if rho provided else P_old + 3K * DAV
+    P_new = max(P_new, P_min)  (P_min is negative tension cutoff, e.g. -1e30)
+    sigma = s - P_new * I
 
-11. Sound speed:
+11. Sound speed (m4law.F lines 99-102):
     c = sqrt((K + 4/3 * G) / rho0)
 """
 
@@ -469,14 +469,16 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
     else:
         epsp = np.array(epsp, dtype=float, copy=True)
 
-    # 1. Strip old pressure and compute deviatoric trial stress
-    p_old = (sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0
-    tr3 = (deps[:, 0] + deps[:, 1] + deps[:, 2]) / 3.0
+    # 1. Hydrostatic vs deviatoric split (m4law.F lines 90-95, 106-113)
+    # Fortran: P = -THIRD*(SIG1+SIG2+SIG3), DAV = -THIRD*(D1+D2+D3)
+    # SIG1_dev = SIG1 + P + 2G*(D1 + DAV)
+    P_old = -(sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0
+    dav = -(deps[:, 0] + deps[:, 1] + deps[:, 2]) / 3.0
 
     s = np.empty_like(sig)
-    s[:, 0] = sig[:, 0] - p_old + 2.0 * G * (deps[:, 0] - tr3)
-    s[:, 1] = sig[:, 1] - p_old + 2.0 * G * (deps[:, 1] - tr3)
-    s[:, 2] = sig[:, 2] - p_old + 2.0 * G * (deps[:, 2] - tr3)
+    s[:, 0] = sig[:, 0] + P_old + 2.0 * G * (deps[:, 0] + dav)
+    s[:, 1] = sig[:, 1] + P_old + 2.0 * G * (deps[:, 1] + dav)
+    s[:, 2] = sig[:, 2] + P_old + 2.0 * G * (deps[:, 2] + dav)
     s[:, 3] = sig[:, 3] + G * deps[:, 3]
     s[:, 4] = sig[:, 4] + G * deps[:, 4]
     s[:, 5] = sig[:, 5] + G * deps[:, 5]
@@ -496,7 +498,13 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
         epd = np.zeros(nel, dtype=float)
 
     # 3. Strain rate factor C_E (m4law.F lines 140-144)
-    if c_rate > 0.0 and eps0 > 0.0:
+    if extra is not None and "ce" in extra and extra["ce"] is not None:
+        raw_ce = extra["ce"]
+        if np.isscalar(raw_ce):
+            ce = np.full(nel, float(raw_ce), dtype=float)
+        else:
+            ce = np.array(raw_ce, dtype=float, copy=True)
+    elif c_rate > 0.0 and eps0 > 0.0:
         ratio = np.maximum(epd / eps0, 1.0)
         ce = 1.0 + c_rate * np.log(ratio)
     else:
@@ -553,7 +561,8 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
           + s[:, 3] ** 2 + s[:, 4] ** 2 + s[:, 5] ** 2)
     sig_vm = np.sqrt(3.0 * np.maximum(j2, 0.0))
 
-    # 10. Radial return (IPLA=0, m4law.F lines 168-188)
+    # 10. Radial return (IPLA=0, 1, 2, m4law.F lines 168-219)
+    ipla = int(extra.get("ipla", p.get("ipla", p.get("IPLA", 0)))) if extra is not None else int(p.get("ipla", p.get("IPLA", 0)))
     scale = np.ones(nel, dtype=float)
     dpla = np.zeros(nel, dtype=float)
 
@@ -568,9 +577,21 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
         scale[yielding] = sc
         for c_idx in range(6):
             s[yielding, c_idx] *= sc
-        denom = 3.0 * G + qh[yielding]
-        denom = np.where(denom > _EM15, denom, _EM15)
+
+        if ipla == 2:
+            denom = 3.0 * G
+        else:
+            denom = 3.0 * G + qh[yielding]
+            denom = np.where(denom > _EM15, denom, _EM15)
+
         dpla[yielding] = (1.0 - sc) * sig_vm[yielding] / denom
+
+        if ipla == 1:
+            ak = sig_y[yielding] + dpla[yielding] * qh[yielding]
+            sc2 = np.minimum(1.0, ak / np.maximum(sig_vm[yielding], _EM15))
+            for c_idx in range(6):
+                s[yielding, c_idx] = np.where(sc > 0.0, (s[yielding, c_idx] / sc) * sc2, 0.0)
+
         epsp[yielding] += dpla[yielding]
 
     # 11. Temperature rise (m4law.F lines 232-235)
@@ -583,17 +604,21 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
             else:
                 extra["temp"] = T.copy()
 
-    # 12. Pressure update
+    # 12. Hydrodynamic pressure update & cutoff (m4law.F / eosmain.F)
+    # Pressure P is positive in compression, negative in tension.
     if extra is not None and "rho" in extra and extra["rho"] is not None:
-        p_new = -K * (extra["rho"] / rho0 - 1.0)
+        P_new = K * (extra["rho"] / rho0 - 1.0)
     else:
-        p_new = p_old + K * (deps[:, 0] + deps[:, 1] + deps[:, 2])
+        # Incremental hypoelastic bulk update: dP = -K * tr(deps) = 3 * K * dav
+        P_new = P_old + 3.0 * K * dav
 
-    p_new = np.maximum(p_new, pmin)
+    # Pressure cutoff: P >= Pmin (Pmin is negative tension cutoff, e.g. -1e30)
+    P_new = np.maximum(P_new, pmin)
 
-    sig[:, 0] = s[:, 0] + p_new
-    sig[:, 1] = s[:, 1] + p_new
-    sig[:, 2] = s[:, 2] + p_new
+    # Recombine deviatoric stress and pressure into Cauchy stress: sigma = s - P * I
+    sig[:, 0] = s[:, 0] - P_new
+    sig[:, 1] = s[:, 1] - P_new
+    sig[:, 2] = s[:, 2] - P_new
     sig[:, 3] = s[:, 3]
     sig[:, 4] = s[:, 4]
     sig[:, 5] = s[:, 5]
@@ -611,7 +636,8 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
 
 
 def consistent_solid_tangent(mat: Material, sig: np.ndarray, epsp: np.ndarray,
-                            epsp_incr: np.ndarray, extra: dict = None) -> np.ndarray:
+                            epsp_incr: np.ndarray, extra: dict = None,
+                            dt: float = 0.0) -> np.ndarray:
     """Algorithmic consistent elastoplastic tangent matrix for solids (Simo & Hughes).
 
     Matches the J2 radial-return tangent formulation in ``law02_johnson_cook.py``:
@@ -628,6 +654,12 @@ def consistent_solid_tangent(mat: Material, sig: np.ndarray, epsp: np.ndarray,
     B = float(p["B"])
     N = float(p["N"])
     sig_max = float(p["sig_max"])
+    c_rate = float(p.get("C", 0.0))
+    eps0 = float(p.get("eps0", 1.0))
+    T0 = float(p.get("T0", 300.0))
+    Tmelt = float(p.get("Tmelt", _INF))
+    Tmax = float(p.get("Tmax", _INF))
+    m = float(p.get("m", 1.0))
 
     lam = Kb - 2.0 * G / 3.0
     C = np.array([
@@ -669,7 +701,28 @@ def consistent_solid_tangent(mat: Material, sig: np.ndarray, epsp: np.ndarray,
         pos = epsp_cur > 0.0
         H[pos] = B * N / np.maximum(epsp_cur[pos], 1e-20) ** (1.0 - N)
 
-    ch = p.get("A", 0.0) + B * np.maximum(epsp_cur, 0.0) ** N
+    # Thermal and strain rate scaling of hardening modulus (m4law.F line 160)
+    ct = 1.0
+    if extra is not None and "temp" in extra and extra["temp"] is not None:
+        raw_t = extra["temp"]
+        t_val = float(raw_t.flat[0]) if isinstance(raw_t, np.ndarray) and raw_t.size > 0 else float(raw_t)
+        if t_val >= Tmelt:
+            ct = 0.0
+        elif t_val > T0:
+            m_eff = 1.0 if t_val > Tmax else m
+            denom = max(Tmelt - T0, 1e-20)
+            tstar = np.clip((t_val - T0) / denom, 0.0, 1.0)
+            ct = max(1.0 - (tstar ** m_eff), 0.0)
+
+    ce = 1.0
+    if extra is not None and "epd" in extra and extra["epd"] is not None:
+        epd_val = float(np.max(extra["epd"]))
+        if c_rate > 0.0 and eps0 > 0.0 and epd_val > eps0:
+            ce = 1.0 + c_rate * np.log(epd_val / eps0)
+
+    H = H * ce * ct
+
+    ch = (p.get("A", 0.0) + B * np.maximum(epsp_cur, 0.0) ** N) * ce * ct
     capped = ch >= sig_max
     H[capped] = 0.0
 
@@ -684,6 +737,9 @@ def consistent_solid_tangent(mat: Material, sig: np.ndarray, epsp: np.ndarray,
               - a[:, None, None] * C_minus_vol[None, :, :]
               + b[:, None, None] * NN)
     return D
+
+
+solid_tangent = consistent_solid_tangent
 
 
 def _register():

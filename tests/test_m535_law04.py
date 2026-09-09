@@ -582,18 +582,18 @@ def test_pressure_cutoff():
     pmin = -150.0
     mat = _make_law04(e=210000.0, nu=0.3, a=500.0, pmin=pmin)
 
-    # Large compressive volumetric strain to trigger cutoff
-    deps = np.array([[-0.01, -0.01, -0.01, 0.0, 0.0, 0.0]])
+    # Large tensile volumetric strain to trigger negative pressure cutoff
+    deps = np.array([[0.01, 0.01, 0.01, 0.0, 0.0, 0.0]])
     sig = np.zeros((1, 6))
 
     sig_new, _, _ = law04_hyd_jcook.solid_update(mat, sig, deps, np.zeros(1))
-    p_mean = (sig_new[0, 0] + sig_new[0, 1] + sig_new[0, 2]) / 3.0
+    p_hydro = -(sig_new[0, 0] + sig_new[0, 1] + sig_new[0, 2]) / 3.0
 
-    # Under pure volumetric strain, deviator is zero, mean normal stress is clamped at pmin
-    np.testing.assert_allclose(p_mean, pmin, rtol=1e-8)
-    np.testing.assert_allclose(sig_new[0, 0], pmin, rtol=1e-8)
-    np.testing.assert_allclose(sig_new[0, 1], pmin, rtol=1e-8)
-    np.testing.assert_allclose(sig_new[0, 2], pmin, rtol=1e-8)
+    # Under pure volumetric strain, deviator is zero, pressure is clamped at pmin
+    np.testing.assert_allclose(p_hydro, pmin, rtol=1e-8)
+    np.testing.assert_allclose(sig_new[0, 0], -pmin, rtol=1e-8)
+    np.testing.assert_allclose(sig_new[0, 1], -pmin, rtol=1e-8)
+    np.testing.assert_allclose(sig_new[0, 2], -pmin, rtol=1e-8)
 
 
 def test_pressure_from_rho_in_extra():
@@ -840,13 +840,9 @@ def test_starter_checks_allowed_laws():
         assert 4 not in checks._ALLOWED_LAWS["sh3n"]
 
     # Solid elements (bricks and tetras)
-    if 4 in checks._ALLOWED_LAWS["bricks"]:
-        assert 4 in checks._ALLOWED_LAWS["tetras"]
-    else:
-        allowed_bricks = checks._ALLOWED_LAWS["bricks"] | {4}
-        allowed_tetras = checks._ALLOWED_LAWS["tetras"] | {4}
-        assert 4 in allowed_bricks
-        assert 4 in allowed_tetras
+    assert 4 in checks._ALLOWED_LAWS["bricks"]
+    assert 4 in checks._ALLOWED_LAWS["tetras"]
+
 
 
 def test_vectorized_batch_equivalence():
@@ -1136,4 +1132,479 @@ def test_direct_read_generic_mat_hyd_jcook():
     assert abs(mat.rho0 - 0.00896) < 1e-9
     assert mat.params["E"] == 115000.0
     assert mat.params["A"] == 90.0
+
+
+# ============================================================================
+# 7. Wave 2 Comprehensive Edge Cases & Verification
+# ============================================================================
+
+def test_build_validation_missing_keys_and_valid_nu_boundaries():
+    """Verify ValueError on missing required parameters and valid nu boundaries."""
+    # Missing E
+    with pytest.raises(ValueError, match="Young's modulus E must be > 0"):
+        law04_hyd_jcook.build_law04({"id": 1, "density": 7.8e-3, "params": {"MAT_NU": 0.3}})
+
+    # Missing nu
+    with pytest.raises(ValueError, match=r"Poisson's ratio nu must be in \[0, 0\.5\)"):
+        law04_hyd_jcook.build_law04({"id": 1, "density": 7.8e-3, "params": {"MAT_E": 210000.0}})
+
+    # Missing density (rho0)
+    with pytest.raises(ValueError, match="Initial density rho0 must be > 0"):
+        law04_hyd_jcook.build_law04({"id": 1, "params": {"MAT_E": 210000.0, "MAT_NU": 0.3}})
+
+    # Valid boundary nu = 0.0
+    mat_nu0 = _make_law04(nu=0.0)
+    assert mat_nu0.params["nu"] == 0.0
+    assert mat_nu0.params["G"] == pytest.approx(mat_nu0.params["E"] / 2.0)
+    assert mat_nu0.params["K"] == pytest.approx(mat_nu0.params["E"] / 3.0)
+
+    # Valid boundary nu = 0.49999
+    mat_nu_high = _make_law04(nu=0.49999)
+    assert mat_nu_high.params["nu"] == pytest.approx(0.49999)
+
+
+def test_hardening_clamping_n_variations():
+    """Verify n=0 or n=1 via various keys ('N', 'n', 'MAT_HARD') clamps to 1.0001 and steps cleanly."""
+    for key in ("N", "n", "MAT_HARD"):
+        for val in (0, 1, 0.0, 1.0):
+            rec = {
+                "id": 1,
+                "density": 7.85e-3,
+                "params": {"MAT_E": 210000.0, "MAT_NU": 0.3, "MAT_SIGY": 250.0, "MAT_BETA": 400.0, key: val},
+            }
+            mat = law04_hyd_jcook.build_law04(rec)
+            assert mat.params["N"] == pytest.approx(1.0001)
+            assert mat.params["n"] == pytest.approx(1.0001)
+
+            # Check plastic step execution with clamped n=1.0001
+            sig, epsp, _ = law04_hyd_jcook.solid_update(
+                mat, np.zeros((1, 6)), np.array([[0.005, 0.0, 0.0, 0.0, 0.0, 0.0]]), np.zeros(1), dt=1e-5
+            )
+            assert epsp[0] > 0.0
+            assert np.all(np.isfinite(sig))
+
+
+def test_zero_strain_increment_with_active_plasticity():
+    """Zero strain increment on rate-independent plastic element preserves stress and plastic strain."""
+    # 1. Rate-independent: stress and plastic strain remain exactly constant
+    mat = _make_law04(a=250.0, b=400.0, n=0.5, c=0.0, rho_cp=0.0, t0=300.0)
+    deps_init = np.array([[0.005, -0.001, -0.001, 0.001, 0.0, 0.0]])
+    s0, ep0, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps_init, np.zeros(1), dt=1e-5)
+
+    deps_zero = np.zeros((1, 6))
+    s1, ep1, _ = law04_hyd_jcook.solid_update(mat, s0.copy(), deps_zero, ep0.copy(), dt=1e-5)
+
+    np.testing.assert_allclose(s1, s0, rtol=1e-12)
+    np.testing.assert_allclose(ep1, ep0, atol=1e-15)
+
+    # 2. Rate-dependent: dropping strain rate to 0 relaxes dynamic overstress to static yield surface
+    mat_rate = _make_law04(a=250.0, b=0.0, c=0.1, eps0=1.0)
+    s_dyn, ep_dyn, _ = law04_hyd_jcook.solid_update(mat_rate, np.zeros((1, 6)), deps_init, np.zeros(1), dt=1e-5)
+    s_stat, ep_stat, _ = law04_hyd_jcook.solid_update(mat_rate, s_dyn.copy(), deps_zero, ep_dyn.copy(), dt=1e-5)
+    p_stat = np.mean(s_stat[0, :3])
+    dev_stat = s_stat[0].copy()
+    dev_stat[:3] -= p_stat
+    svm_stat = np.sqrt(3.0 * (0.5 * np.sum(dev_stat[:3] ** 2) + np.sum(dev_stat[3:] ** 2)))
+    np.testing.assert_allclose(svm_stat, 250.0, rtol=1e-4)
+
+
+def test_zero_and_negative_dt_unenhanced_rate():
+    """dt <= 0 forces eps_dot = 0, C_E = 1.0, and unenhanced yield stress."""
+    A = 300.0
+    C = 0.1
+    eps0 = 1.0
+    mat = _make_law04(a=A, b=0.0, c=C, eps0=eps0)
+
+    deps = np.array([[0.05, 0.0, 0.0, 0.0, 0.0, 0.0]])  # large increment
+
+    # With dt = 0.0
+    s_dt0, ep_dt0, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps, np.zeros(1), dt=0.0)
+    p_dt0 = (s_dt0[0, 0] + s_dt0[0, 1] + s_dt0[0, 2]) / 3.0
+    dev0 = s_dt0[0].copy()
+    dev0[:3] -= p_dt0
+    svm_dt0 = np.sqrt(3.0 * (0.5 * np.sum(dev0[:3] ** 2) + np.sum(dev0[3:] ** 2)))
+    np.testing.assert_allclose(svm_dt0, A, rtol=1e-4)
+
+    # With dt < 0.0
+    s_dtneg, _, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps, np.zeros(1), dt=-1e-3)
+    p_dtneg = (s_dtneg[0, 0] + s_dtneg[0, 1] + s_dtneg[0, 2]) / 3.0
+    devneg = s_dtneg[0].copy()
+    devneg[:3] -= p_dtneg
+    svm_dtneg = np.sqrt(3.0 * (0.5 * np.sum(devneg[:3] ** 2) + np.sum(devneg[3:] ** 2)))
+    np.testing.assert_allclose(svm_dtneg, A, rtol=1e-4)
+
+    # In contrast, with dt > 0, rate enhancement occurs
+    s_dtpos, _, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps, np.zeros(1), dt=1e-5)
+    p_dtpos = (s_dtpos[0, 0] + s_dtpos[0, 1] + s_dtpos[0, 2]) / 3.0
+    devpos = s_dtpos[0].copy()
+    devpos[:3] -= p_dtpos
+    svm_dtpos = np.sqrt(3.0 * (0.5 * np.sum(devpos[:3] ** 2) + np.sum(devpos[3:] ** 2)))
+    assert svm_dtpos > A * 1.5
+
+
+def test_strain_rate_threshold_exact_and_shear_components():
+    """Exact rate threshold eps_dot == eps0 gives CE=1.0; shear tensor rate is 0.5 * gamma_dot."""
+    A = 200.0
+    C = 0.05
+    eps0 = 10.0
+    mat = _make_law04(a=A, b=0.0, c=C, eps0=eps0)
+
+    # 1. Exact threshold: eps_dot = 10.0 == eps0 -> CE = 1.0
+    dt = 1e-3
+    deps_thresh = np.array([[10.0 * dt, 0.0, 0.0, 0.0, 0.0, 0.0]])
+    s_thresh, _, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps_thresh, np.zeros(1), dt=dt)
+    p_th = np.mean(s_thresh[0, :3])
+    dev_th = s_thresh[0].copy()
+    dev_th[:3] -= p_th
+    svm_th = np.sqrt(3.0 * (0.5 * np.sum(dev_th[:3] ** 2) + np.sum(dev_th[3:] ** 2)))
+    np.testing.assert_allclose(svm_th, A, rtol=1e-4)
+
+    # 2. Shear strain rate: engineering shear increment gamma_12 = 40.0 * dt -> rate measure = 0.5 * 40 = 20 > 10
+    deps_shear = np.array([[0.0, 0.0, 0.0, 40.0 * dt, 0.0, 0.0]])
+    expected_ce = 1.0 + C * np.log(20.0 / eps0)
+    expected_yield = A * expected_ce
+
+    s_sh, _, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps_shear, np.zeros(1), dt=dt)
+    p_sh = np.mean(s_sh[0, :3])
+    dev_sh = s_sh[0].copy()
+    dev_sh[:3] -= p_sh
+    svm_sh = np.sqrt(3.0 * (0.5 * np.sum(dev_sh[:3] ** 2) + np.sum(dev_sh[3:] ** 2)))
+    np.testing.assert_allclose(svm_sh, expected_yield, rtol=1e-4)
+
+
+def test_temperature_sub_t0_and_clamping():
+    """Verify sub-T0 temperatures yield CT = 1.0 and T >= Tmelt relaxes all deviatoric stresses."""
+    A = 350.0
+    T0 = 300.0
+    Tmelt = 1500.0
+    mat = _make_law04(a=A, b=0.0, c=0.0, t0=T0, tmelt=Tmelt)
+    deps = np.array([[0.005, 0.0, 0.0, 0.0, 0.0, 0.0]])
+
+    # Sub-T0 temperature (e.g. 150 K)
+    extra_sub = {"temp": np.array([150.0])}
+    s_sub, _, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps, np.zeros(1), dt=1e-5, extra=extra_sub)
+    p_sub = np.mean(s_sub[0, :3])
+    dev_sub = s_sub[0].copy()
+    dev_sub[:3] -= p_sub
+    svm_sub = np.sqrt(3.0 * (0.5 * np.sum(dev_sub[:3] ** 2) + np.sum(dev_sub[3:] ** 2)))
+    np.testing.assert_allclose(svm_sub, A, rtol=1e-4)
+
+    # Melted temperature (T >= Tmelt) retains pressure while deviator is zero
+    extra_melt = {"temp": np.array([Tmelt + 100.0])}
+    s_melt, _, _ = law04_hyd_jcook.solid_update(mat, np.zeros((1, 6)), deps, np.zeros(1), dt=1e-5, extra=extra_melt)
+    p_melt = np.mean(s_melt[0, :3])
+    assert p_melt > 0.0
+    np.testing.assert_allclose(s_melt[0, :3], p_melt, rtol=1e-8)
+    np.testing.assert_allclose(s_melt[0, 3:], 0.0, atol=1e-12)
+
+
+def test_taylor_quinney_zero_specific_heat_and_multi_increment():
+    """rho_cp == 0 prevents heating; rho_cp > 0 accumulates temperature and induces progressive softening."""
+    # 1. rho_cp == 0
+    mat_no_heat = _make_law04(a=300.0, b=0.0, rho_cp=0.0, t0=300.0)
+    extra_no = {"temp": np.array([300.0])}
+    deps = np.array([[0.005, 0.0, 0.0, 0.0, 0.0, 0.0]])
+    law04_hyd_jcook.solid_update(mat_no_heat, np.zeros((1, 6)), deps, np.zeros(1), dt=1e-5, extra=extra_no)
+    assert extra_no["temp"][0] == 300.0
+
+    # 2. Multi-increment progressive heating and softening
+    mat_heat = _make_law04(a=400.0, b=0.0, rho_cp=1.0e6, t0=300.0, tmelt=1000.0, m=1.0)
+    extra_h = {"temp": np.array([300.0])}
+    sig = np.zeros((1, 6))
+    epsp = np.zeros(1)
+
+    flow_stresses = []
+    for _ in range(4):
+        sig, epsp, _ = law04_hyd_jcook.solid_update(mat_heat, sig, deps, epsp, dt=1e-5, extra=extra_h)
+        p = np.mean(sig[0, :3])
+        dev = sig[0].copy()
+        dev[:3] -= p
+        svm = np.sqrt(3.0 * (0.5 * np.sum(dev[:3] ** 2) + np.sum(dev[3:] ** 2)))
+        flow_stresses.append(svm)
+
+    # Temperature increases monotonically
+    assert extra_h["temp"][0] > 300.0
+    # Flow stress progressively softens due to heating
+    for i in range(len(flow_stresses) - 1):
+        assert flow_stresses[i + 1] < flow_stresses[i]
+
+
+def test_pressure_cutoff_tensile_vs_compressive_and_mixed_batch():
+    """Compressive pressure is unclamped, severe tensile pressure is clamped to pmin, deviator untouched."""
+    pmin = -100.0
+    mat = _make_law04(e=210000.0, nu=0.3, a=500.0, pmin=pmin)
+    K = mat.params["K"]
+
+    # Batch of 3 elements:
+    # 0: Compressive volumetric strain (e_vol = -0.003 < 0 -> P = +K * 0.003)
+    # 1: Moderate tensile volumetric strain (e_vol = +1e-4 -> P = -K * 1e-4 > pmin)
+    # 2: Severe tensile volumetric strain (e_vol = +0.015 -> P = -K * 0.015 << pmin)
+    deps = np.array([
+        [-0.001, -0.001, -0.001, 1e-5, 0.0, 0.0],
+        [3.33333333e-5, 3.33333333e-5, 3.33333333e-5, 1e-5, 0.0, 0.0],
+        [0.005, 0.005, 0.005, 1e-5, 0.0, 0.0],
+    ])
+    sig = np.zeros((3, 6))
+    epsp = np.zeros(3)
+
+    sig_new, _, _ = law04_hyd_jcook.solid_update(mat, sig, deps, epsp)
+
+    # Element 0: compressive pressure P = -mean(sig[:3]) = +K * 0.003
+    p0 = -np.mean(sig_new[0, :3])
+    expected_p0 = K * 0.003
+    np.testing.assert_allclose(p0, expected_p0, rtol=1e-6)
+
+    # Element 1: moderate tension, not clamped: P = -K * 1e-4 > pmin
+    p1 = -np.mean(sig_new[1, :3])
+    expected_p1 = -K * 1e-4
+    assert expected_p1 > pmin
+    np.testing.assert_allclose(p1, expected_p1, rtol=1e-6)
+
+    # Element 2: severe tension, clamped to pmin: P = pmin
+    p2 = -np.mean(sig_new[2, :3])
+    np.testing.assert_allclose(p2, pmin, rtol=1e-8)
+
+    # Deviatoric shear stress xy = G * deps_xy is identical across all three
+    G = mat.params["G"]
+    for i in range(3):
+        np.testing.assert_allclose(sig_new[i, 3], G * 1e-5, rtol=1e-8)
+
+
+def test_embedded_polynomial_eos_integration():
+    """Embedded polynomial EOS builds EquationOfState and integrates via eos module."""
+    from pyradioss.materials import eos
+
+    mat = _make_law04(
+        c0=1.5,
+        c1=160000.0,
+        c2=4000.0,
+        c3=200.0,
+        c4=0.4,
+        c5=0.1,
+        e0=12.0,
+        psh=3.0,
+        pmin=-200.0,
+    )
+    assert mat.eos is not None
+    assert mat.eos.kind == "POLYNOMIAL"
+    assert mat.eos.params["c0"] == 1.5
+    assert mat.eos.params["c1"] == 160000.0
+    assert mat.eos.params["c2"] == 4000.0
+    assert mat.eos.params["c3"] == 200.0
+    assert mat.eos.params["c4"] == 0.4
+    assert mat.eos.params["c5"] == 0.1
+    assert mat.eos.params["e0"] == 12.0
+    assert mat.eos.params["psh"] == 3.0
+    assert mat.eos.params["pmin"] == -200.0
+
+    # Test eos.initial_state
+    e0_init, p0_init = eos.initial_state(mat.eos)
+    assert e0_init == 12.0
+    assert p0_init == pytest.approx(1.5 + 0.4 * 12.0)
+
+    # Test eos.update
+    mu = np.array([0.02])
+    dv = np.array([-0.01])
+    e_old = np.array([12.0])
+    p_old = np.array([p0_init])
+    de_other = np.array([0.5])
+    p_new, e_new, c2 = eos.update(mat.eos, mu, dv, e_old, p_old, de_other)
+    assert p_new[0] > p_old[0]
+    assert e_new[0] > 0.0
+    assert c2[0] > 0.0
+
+    # Material without EOS parameters has mat.eos is None
+    mat_plain = _make_law04()
+    assert mat_plain.eos is None
+
+
+def test_tangent_directional_derivative_shear_and_multiaxial():
+    """Consistent solid tangent matches directional derivative of solid_update for shear and multiaxial loading."""
+    from pyradioss import materials
+
+    # 1. Verification of exact directional derivative with consistent tangent (b=0)
+    mat = _make_law04(a=250.0, b=0.0, c=0.0, pmin=-1e20)
+    sig0 = np.zeros((1, 6))
+    deps0 = np.array([[0.006, -0.002, -0.002, 0.003, 0.001, -0.001]])
+    s0, ep0, _ = law04_hyd_jcook.solid_update(mat, sig0.copy(), deps0.copy(), np.zeros(1), dt=1e-5)
+    dep_incr = ep0.copy()
+
+    D = materials.solid_tangent(mat, s0, ep0, dep_incr)[0]
+    D_direct = law04_hyd_jcook.consistent_solid_tangent(mat, s0, ep0, dep_incr)[0]
+    np.testing.assert_allclose(D, D_direct, rtol=1e-12)
+
+    # Direction 1: Pure shear perturbation
+    delta_shear = np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0])
+    eps = 1e-7
+    sp, _, _ = law04_hyd_jcook.solid_update(mat, sig0.copy(), deps0 + eps * delta_shear, np.zeros(1), dt=1e-5)
+    sm, _, _ = law04_hyd_jcook.solid_update(mat, sig0.copy(), deps0 - eps * delta_shear, np.zeros(1), dt=1e-5)
+    num_diff_sh = (sp[0] - sm[0]) / (2.0 * eps)
+    tan_diff_sh = D @ delta_shear
+    rel_err_sh = np.linalg.norm(num_diff_sh - tan_diff_sh) / np.linalg.norm(tan_diff_sh)
+    assert rel_err_sh < 1e-5
+
+    # Direction 2: General multiaxial perturbation
+    delta_multi = np.array([1.0, -0.5, -0.2, 0.4, -0.3, 0.2])
+    sp_m, _, _ = law04_hyd_jcook.solid_update(mat, sig0.copy(), deps0 + eps * delta_multi, np.zeros(1), dt=1e-5)
+    sm_m, _, _ = law04_hyd_jcook.solid_update(mat, sig0.copy(), deps0 - eps * delta_multi, np.zeros(1), dt=1e-5)
+    num_diff_m = (sp_m[0] - sm_m[0]) / (2.0 * eps)
+    tan_diff_m = D @ delta_multi
+    rel_err_m = np.linalg.norm(num_diff_m - tan_diff_m) / np.linalg.norm(tan_diff_m)
+    assert rel_err_m < 1e-5
+
+    # 2. Hardening material (b > 0): tangent is symmetric, positive semi-definite, and softer than elastic
+    mat_hard = _make_law04(a=250.0, b=500.0, n=0.4, c=0.0)
+    s_h, ep_h, _ = law04_hyd_jcook.solid_update(mat_hard, sig0.copy(), deps0.copy(), np.zeros(1), dt=1e-5)
+    D_hard = materials.solid_tangent(mat_hard, s_h, ep_h, ep_h)[0]
+    D_el = materials.solid_tangent(mat_hard, s_h, ep_h, np.zeros(1))[0]
+    np.testing.assert_allclose(D_hard, D_hard.T, atol=1e-10)
+    assert np.all(np.linalg.eigvalsh(D_hard) > -1e-8)
+    assert D_hard[0, 0] < D_el[0, 0]
+
+
+def test_vectorized_batch_eight_diverse_states():
+    """Vectorized solid_update on 8 heterogeneous states exactly matches individual element updates."""
+    mat = _make_law04(a=220.0, b=450.0, n=0.45, c=0.04, eps0=2.0, t0=300.0, tmelt=1600.0, tmax=1800.0, pmin=-120.0)
+    nel = 8
+
+    sig_batch = np.zeros((nel, 6))
+    deps_batch = np.array([
+        [1e-5, 0.0, 0.0, 0.0, 0.0, 0.0],  # 0: elastic tension
+        [0.0, 0.0, 0.0, 2e-5, 0.0, 0.0],  # 1: elastic shear
+        [0.005, 0.0, 0.0, 0.0, 0.0, 0.0],  # 2: virgin plastic
+        [0.008, -0.002, -0.002, 0.001, 0.0, 0.0],  # 3: hardened plastic
+        [0.015, -0.005, -0.005, 0.002, 0.0, 0.0],  # 4: high strain rate
+        [0.006, -0.002, -0.002, 0.0, 0.0, 0.0],  # 5: thermally softened
+        [0.004, -0.001, -0.001, 0.001, 0.0, 0.0],  # 6: melted (T >= Tmelt)
+        [-0.01, -0.01, -0.01, 0.0, 0.0, 0.0],  # 7: tensile pressure cutoff
+    ])
+    epsp_batch = np.array([0.0, 0.0, 0.0, 0.03, 0.01, 0.005, 0.02, 0.0])
+    temp_batch = np.array([300.0, 300.0, 300.0, 300.0, 300.0, 800.0, 1700.0, 300.0])
+    extra_batch = {"temp": temp_batch.copy()}
+    dt = 1e-4
+
+    s_batched, ep_batched, c_batched = law04_hyd_jcook.solid_update(
+        mat, sig_batch.copy(), deps_batch, epsp_batch.copy(), dt=dt, extra=extra_batch
+    )
+
+    for i in range(nel):
+        extra_single = {"temp": np.array([temp_batch[i]])}
+        s_single, ep_single, c_single = law04_hyd_jcook.solid_update(
+            mat, sig_batch[i:i+1].copy(), deps_batch[i:i+1], epsp_batch[i:i+1].copy(), dt=dt, extra=extra_single
+        )
+        np.testing.assert_allclose(s_batched[i], s_single[0], rtol=1e-12)
+        np.testing.assert_allclose(ep_batched[i], ep_single[0], rtol=1e-12)
+        np.testing.assert_allclose(c_batched[i], c_single[0], rtol=1e-12)
+        np.testing.assert_allclose(extra_batch["temp"][i], extra_single["temp"][0], rtol=1e-12)
+
+
+def test_starter_check_model_solids_accepted_shells_rejected(tmp_path):
+    """check_model accepts LAW4 for solid elements and logs error for shell elements."""
+    from pyradioss.starter.checks import check_model
+    from pyradioss.input.deck_reader import read_deck
+    from pyradioss.input.starter_keywords import parse_starter_deck
+    from pyradioss.starter.initialization import (
+        resolve_materials, build_element_groups, initialize_elements_and_mass,
+    )
+    from pyradioss.model.model import Model
+    from pyradioss.common.messages import MessageLog
+
+    # 1. Solid deck with LAW4 (Hexa8)
+    deck_solid = (
+        "/NODE\n"
+        "1 0.0 0.0 0.0\n"
+        "2 1.0 0.0 0.0\n"
+        "3 1.0 1.0 0.0\n"
+        "4 0.0 1.0 0.0\n"
+        "5 0.0 0.0 1.0\n"
+        "6 1.0 0.0 1.0\n"
+        "7 1.0 1.0 1.0\n"
+        "8 0.0 1.0 1.0\n"
+        "/BRICK/1/1\n"
+        "1 1 2 3 4 5 6 7 8\n"
+        "/PART/1\n"
+        "Part_Solid\n"
+        "1 1 1\n"
+        "/PROP/SOLID/1\n"
+        "Solid_Prop\n"
+        "/MAT/LAW4/1\n"
+        "LAW4_MAT\n"
+        " 0.00785\n"
+        " 210000.0 0.3\n"
+        " 250.0 400.0 0.4 0.0 0.0\n"
+        " -500.0\n"
+        " 0.05 1.0 1.0 1800.0 2000.0\n"
+        " 3.5e6 300.0\n"
+        "/END\n"
+    )
+    p_solid = tmp_path / "solid_0000.rad"
+    p_solid.write_text(deck_solid, encoding="utf-8")
+    model_s = Model()
+    log_s = MessageLog()
+    parse_starter_deck(read_deck(str(p_solid)), model_s, log_s)
+    resolve_materials(model_s, log_s)
+    build_element_groups(model_s, log_s)
+    initialize_elements_and_mass(model_s, log_s)
+    check_model(model_s, log_s)
+    assert not log_s.errors, log_s.errors
+
+    # 2. Shell deck with LAW4
+    deck_shell = (
+        "/NODE\n"
+        "1 0.0 0.0 0.0\n"
+        "2 1.0 0.0 0.0\n"
+        "3 1.0 1.0 0.0\n"
+        "4 0.0 1.0 0.0\n"
+        "/SHELL/1\n"
+        "1 1 2 3 4\n"
+        "/PART/1\n"
+        "Part_Shell\n"
+        "1 1 1\n"
+        "/PROP/SHELL/1\n"
+        "Shell_Prop\n"
+        " 1.0 5\n"
+        "/MAT/LAW4/1\n"
+        "LAW4_MAT\n"
+        " 0.00785\n"
+        " 210000.0 0.3\n"
+        " 250.0 400.0 0.4 0.0 0.0\n"
+        " -500.0\n"
+        " 0.05 1.0 1.0 1800.0 2000.0\n"
+        " 3.5e6 300.0\n"
+        "/END\n"
+    )
+    p_shell = tmp_path / "shell_0000.rad"
+    p_shell.write_text(deck_shell, encoding="utf-8")
+    model_sh = Model()
+    log_sh = MessageLog()
+    parse_starter_deck(read_deck(str(p_shell)), model_sh, log_sh)
+    resolve_materials(model_sh, log_sh)
+    build_element_groups(model_sh, log_sh)
+    initialize_elements_and_mass(model_sh, log_sh)
+    check_model(model_sh, log_sh)
+    assert log_sh.errors
+    assert any("not ported for shells elements" in err for err in log_sh.errors)
+
+
+def test_materials_dispatcher_integration():
+    """Verify materials module dispatches solid_update, solid_tangent, shell_update, needs_env, extra_shapes."""
+    from pyradioss import materials
+
+    mat = _make_law04(a=200.0)
+    sig = np.zeros((1, 6))
+    deps = np.array([[1e-5, 0.0, 0.0, 0.0, 0.0, 0.0]])
+    sig_out, epsp_out, c_out = materials.solid_update(mat, sig, deps, np.zeros(1), dt=1e-5)
+    assert sig_out.shape == (1, 6)
+    assert epsp_out.shape == (1,)
+    assert c_out.shape == (1,)
+
+    Ct = materials.solid_tangent(mat, sig_out, epsp_out, np.zeros(1))
+    assert Ct.shape == (1, 6, 6)
+
+    assert materials.needs_env(mat) is True
+    assert "temp" in materials.extra_shapes(mat)
+
+    with pytest.raises(NotImplementedError, match="solid/SPH elements only"):
+        materials.shell_update(mat, np.zeros((1, 3)), np.zeros((1, 3)), np.zeros(1), dt=1e-5)
+
 

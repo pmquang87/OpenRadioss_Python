@@ -59,8 +59,8 @@ _NULL_RHO0_OK_LAWS = frozenset({0} | _MULTIMAT_ALE_LAWS)
 # and their density divisions are guarded exactly as hm_read_mat00.F
 # guards its own — see elements/truss.py and elements/beam_type3.py.
 _ALLOWED_LAWS = {
-    "bricks": {0, 1, 2, 3, 24, 33, 35, 36, 40, 42, 44, 62, 70, 81, 83, 999},
-    "tetras": {0, 1, 2, 3, 24, 33, 35, 36, 40, 42, 44, 62, 70, 81, 999},
+    "bricks": {0, 1, 2, 3, 4, 24, 33, 35, 36, 40, 42, 44, 62, 70, 81, 83, 999},
+    "tetras": {0, 1, 2, 3, 4, 24, 33, 35, 36, 40, 42, 44, 62, 70, 81, 999},
     "shells": {0, 1, 2, 3, 19, 27, 36, 44},
     # QBAT (Ishell=12, M41): the laws the layered kernel reuses from the
     # BT plumbing; no orthotropic (LAW19) shell_ortho wiring yet
