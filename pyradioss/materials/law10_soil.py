@@ -333,10 +333,28 @@ def sound_speed(
     p = _ensure_params(mat)
     g = float(p["G"])
     c1 = float(p["c1"])
+    c2 = float(p["c2"])
+    c3 = float(p["c3"])
     bunl = float(p["bunl"])
+    iform = int(p["iform"])
+    mue_max = float(p["mue_max"])
     rho0 = float(p["rho0"])
 
-    k_eff = max(c1, bunl)
+    # Dynamic DPDM per compaction.F90 lines 152-156 & m10law.F lines 152-155
+    if extra is not None and "mu" in extra and extra["mu"] is not None:
+        mu_val = np.asarray(extra["mu"], dtype=float)
+        mu_pos = np.maximum(0.0, mu_val)
+        dpdm = c1 + mu_pos * (2.0 * c2 + 3.0 * c3 * mu_val)
+        if iform == 1:
+            b_eff = bunl
+        else:
+            mu_bak = np.asarray(extra.get("mu_bak", mu_val), dtype=float)
+            alpha = np.where(mue_max > 0.0, mu_bak / mue_max, 1.0)
+            b_eff = alpha * bunl + (1.0 - alpha) * c1
+        k_eff = np.maximum(b_eff, dpdm)
+    else:
+        k_eff = max(c1, bunl)
+
     g43 = (4.0 / 3.0) * g
 
     if rho is None and extra is not None and "rho" in extra and extra["rho"] is not None:
@@ -521,8 +539,9 @@ def solid_update(
         b_eff = alpha * bunl + (1.0 - alpha) * c1
 
     p_unl = p_bak - (mu_bak - mu) * b_eff
-    p_new = np.where(mu_bak > 0.0, np.minimum(p_loading, p_unl), p_loading)
-    p_new = np.maximum(p_new, pmin)
+    p_eos = np.where(mu_bak > 0.0, np.minimum(p_loading, p_unl), p_loading)
+    p_eos = np.maximum(p_eos, pmin) * off
+    p_new = p_eos - psh
     p_tot = p_new + psh
 
     # Historic compaction update (compaction.F90 line 177)
@@ -565,6 +584,7 @@ def solid_update(
     if epxe_cur.shape != (n,):
         epxe_cur = np.full(n, float(epxe_cur.flat[0]) if epxe_cur.size > 0 else 0.0, dtype=float)
     extra["epxe"] = epxe_cur + dpla
+    extra["epsq"] = mu_bak  # m10law.F line 215: EPSQ(I) = MU_BAK(I)
     extra["mu_bak"] = mu_bak
     extra["p_old"] = p_new
     extra["sigy"] = np.sqrt(3.0 * g0)
@@ -620,7 +640,10 @@ def consistent_solid_tangent(
     epsp, epsp_incr :
         Optional plastic strain history / increments.
     extra : dict, optional
-        Extra state views (e.g. 'ratio', 'j2', 'p_new', 'p_old').
+        Extra state views (e.g. 'ratio', 'j2', 'p_new', 'p_old', 'mu', 'mu_bak').
+    symmetric : bool, optional (via kwargs)
+        If True, returns symmetrized tangent matrix 0.5 * (D + D^T).
+        Default is False (exact algorithmic consistent tangent).
 
     Returns
     -------
@@ -639,7 +662,10 @@ def consistent_solid_tangent(
 
     p = _ensure_params(mat)
     g = float(p["G"])
+    c0 = float(p["c0"])
     c1 = float(p["c1"])
+    c2 = float(p["c2"])
+    c3 = float(p["c3"])
     bunl = float(p["bunl"])
     k_eff = max(c1, bunl)
     a0 = float(p["A0"])
@@ -649,21 +675,19 @@ def consistent_solid_tangent(
     pmin = float(p["pmin"])
     psh = float(p["psh"])
     pstar = float(p["pstar"])
+    iform = int(p["iform"])
+    mue_max = float(p["mue_max"])
 
-    # Volumetric bulk stiffness tensor KeeT = K_eff * (1 x 1)
+    # Base Voigt projector tensors
     ee = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0], dtype=float)
-    keet = k_eff * np.outer(ee, ee)
-
-    # Elastic deviatoric projection stiffness tensor C_dev = 2G * I_dev
     c_dev = np.zeros((6, 6), dtype=float)
     c_dev[0, 0] = c_dev[1, 1] = c_dev[2, 2] = (4.0 / 3.0) * g
     c_dev[0, 1] = c_dev[0, 2] = c_dev[1, 0] = c_dev[1, 2] = c_dev[2, 0] = c_dev[2, 1] = -(2.0 / 3.0) * g
     c_dev[3, 3] = c_dev[4, 4] = c_dev[5, 5] = g
 
-    c_elastic = keet + c_dev
-    d_tangent = np.broadcast_to(c_elastic, (n, 6, 6)).copy()
+    d_tangent = np.zeros((n, 6, 6), dtype=float)
 
-    # Determine ratio and current deviatoric state
+    # Current stress state decomposition
     p_cur = -(sig[:, 0] + sig[:, 1] + sig[:, 2]) / 3.0
     p_tot = p_cur + psh
     s_cur = sig.copy()
@@ -671,49 +695,100 @@ def consistent_solid_tangent(
     s_cur[:, 1] += p_cur
     s_cur[:, 2] += p_cur
 
-    if extra is not None and "ratio" in extra:
-        ratio = np.asarray(extra["ratio"], dtype=float)
-    else:
-        j2 = (
-            0.5 * (s_cur[:, 0] ** 2 + s_cur[:, 1] ** 2 + s_cur[:, 2] ** 2)
-            + s_cur[:, 3] ** 2
-            + s_cur[:, 4] ** 2
-            + s_cur[:, 5] ** 2
-        )
-        g0 = a0 + a1 * p_tot + a2 * (p_tot**2)
-        g0 = np.clip(g0, 0.0, amax)
-        g0 = np.where(p_cur <= pmin, 0.0, g0)
-        g0 = np.where(p_tot <= pstar, 0.0, g0)
-        ratio = np.where((j2 <= g0) & (g0 > 0.0), 1.0, np.sqrt(g0 / (j2 + _EM14)))
-        ratio = np.where(g0 <= 0.0, 0.0, ratio)
+    mu = extra.get("mu") if extra is not None else None
+    mu_bak = extra.get("mu_bak") if extra is not None else None
 
-    if ratio.shape != (n,):
-        ratio = np.full(n, float(ratio.flat[0]) if ratio.size > 0 else 1.0, dtype=float)
-
-    # Elastic / yielding / failed partition
+    # Element loop
     for i in range(n):
-        r_i = float(ratio[i])
+        # 1. Tangent bulk modulus K_t = dP/dmu from Compaction EOS
+        if mu is not None:
+            mu_arr = np.asarray(mu, dtype=float)
+            mu_i = float(mu_arr.flat[i if i < mu_arr.size else 0])
+            if mu_bak is not None:
+                mu_bak_arr = np.asarray(mu_bak, dtype=float)
+                mu_bak_i = float(mu_bak_arr.flat[i if i < mu_bak_arr.size else 0])
+            else:
+                mu_bak_i = 0.0
+
+            if iform == 1:
+                b_eff = bunl
+            else:
+                alpha = (mu_bak_i / mue_max) if mue_max > 0.0 else 1.0
+                b_eff = alpha * bunl + (1.0 - alpha) * c1
+
+            mu2 = mu_i * max(0.0, mu_i)
+            p_loading = c0 + c1 * mu_i + (c2 + c3 * mu_i) * mu2
+            p_bak = c0 + c1 * mu_bak_i + (c2 + c3 * mu_bak_i) * (mu_bak_i**2)
+            p_unl = p_bak - (mu_bak_i - mu_i) * b_eff
+
+            if mu_bak_i > 0.0 and p_unl < p_loading:
+                k_t = b_eff
+            elif mu_i > 0.0:
+                k_t = c1 + 2.0 * c2 * mu_i + 3.0 * c3 * (mu_i**2)
+            else:
+                k_t = c1
+        else:
+            k_t = k_eff
+
+        keet = k_t * np.outer(ee, ee)
+        c_elastic = keet + c_dev
+
+        # 2. Yield surface & ratio evaluation
+        s_i = s_cur[i]
+        j2_i = (
+            0.5 * (s_i[0] ** 2 + s_i[1] ** 2 + s_i[2] ** 2)
+            + s_i[3] ** 2
+            + s_i[4] ** 2
+            + s_i[5] ** 2
+        )
+        p_i = p_cur[i]
+        ptot_i = p_tot[i]
+
+        g0_uncapped = a0 + a1 * ptot_i + a2 * (ptot_i**2)
+        g0_val = min(max(0.0, g0_uncapped), amax)
+        if p_i <= pmin or ptot_i <= pstar:
+            g0_val = 0.0
+
+        if extra is not None and "ratio" in extra:
+            ratio_arr = np.asarray(extra["ratio"], dtype=float)
+            r_i = float(ratio_arr.flat[i if i < ratio_arr.size else 0])
+        else:
+            if j2_i <= g0_val and g0_val > 0.0:
+                r_i = 1.0
+            elif g0_val <= 0.0:
+                r_i = 0.0
+            else:
+                r_i = math.sqrt(g0_val / (j2_i + _EM14))
+
+        # 3. Tangent stiffness matrix partition
         if r_i >= 1.0:
-            # Fully elastic
+            # Fully elastic regime: isotropic Hookean tensor KeeT + C_dev
             d_tangent[i] = c_elastic
         elif r_i <= 0.0:
-            # Completely failed shear envelope (tension fracture or apex closure):
-            # Only bulk modulus remains
+            # Collapsed yield envelope (G0=0 or P <= pmin or P_tot <= pstar):
+            # Deviatoric tangent drops to zero, only KeeT remains
             d_tangent[i] = keet
         else:
             # Elastoplastic radial return tangent:
-            # d_sigma = keet + r * C_dev - r * G * (s_hat (x) s_hat)
-            s_i = s_cur[i]
-            j2_i = (
-                0.5 * (s_i[0] ** 2 + s_i[1] ** 2 + s_i[2] ** 2)
-                + s_i[3] ** 2
-                + s_i[4] ** 2
-                + s_i[5] ** 2
-            )
+            # d_sigma = keet + r * C_dev - r * G * (s_hat (x) s_hat) + D_coupling
             norm_s = math.sqrt(max(j2_i, _EM20))
             s_hat = s_i / norm_s
             nn = np.outer(s_hat, s_hat)
-            d_tangent[i] = keet + r_i * c_dev - g * r_i * nn
+
+            # Non-associated Drucker-Prager pressure-coupling term:
+            # Yield function F = J2 - G0(P_tot) = 0 depends on pressure P_tot,
+            # while plastic flow is purely deviatoric (radial return in deviatoric plane).
+            # dG0/dP_tot = A1 + 2*A2*P_tot when 0 < G0 < Amax (0 at von Mises cap cutoff).
+            if g0_uncapped >= amax or g0_uncapped <= 0.0:
+                dg0_dptot = 0.0
+            else:
+                dg0_dptot = a1 + 2.0 * a2 * ptot_i
+
+            d_coupling = - (k_t * dg0_dptot / (2.0 * max(g0_val, _EM14))) * np.outer(s_i, ee)
+            d_tangent[i] = keet + r_i * c_dev - g * r_i * nn + d_coupling
+
+        if kwargs.get("symmetric", False):
+            d_tangent[i] = 0.5 * (d_tangent[i] + d_tangent[i].T)
 
     return d_tangent
 

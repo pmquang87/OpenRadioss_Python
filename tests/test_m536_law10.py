@@ -908,3 +908,269 @@ def test_law10_calling_conventions():
     sig_k, epsp_k, c_k = solid_update(mat, sig, deps, epsp, dt, extra, return_tuple=True)
     np.testing.assert_allclose(sig_k, res1)
     assert c_k is not None
+
+
+# =============================================================================
+# 8. Consistent Tangent Rigorous Mathematical & Numerical Audit
+# =============================================================================
+
+def test_law10_tangent_elastic_isotropic_hookean():
+    """Audit 1: In elastic regime, consistent tangent equals KeeT + C_dev with major/minor symmetry."""
+    mat = build_law10({
+        "MAT_RHO": 2000.0,
+        "MAT_E": 1.5e7,
+        "MAT_NU": 0.2,
+        "A0": 1.0e12,  # Elastic envelope
+    })
+    p = mat.params
+    g = p["G"]
+    k = p["K"]
+    ee = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+    keet = k * np.outer(ee, ee)
+    c_dev = np.zeros((6, 6))
+    c_dev[0, 0] = c_dev[1, 1] = c_dev[2, 2] = (4.0 / 3.0) * g
+    c_dev[0, 1] = c_dev[0, 2] = c_dev[1, 0] = c_dev[1, 2] = c_dev[2, 0] = c_dev[2, 1] = -(2.0 / 3.0) * g
+    c_dev[3, 3] = c_dev[4, 4] = c_dev[5, 5] = g
+    c_expected = keet + c_dev
+
+    D = consistent_solid_tangent(mat, np.zeros((1, 6)))[0]
+
+    # Exact equality to isotropic Hookean tensor
+    np.testing.assert_allclose(D, c_expected, rtol=1e-12, atol=1e-12)
+    # Major symmetry D == D^T
+    np.testing.assert_allclose(D, D.T, rtol=1e-12, atol=1e-12)
+
+
+def test_law10_tangent_collapsed_envelope_regimes():
+    """Audit 2: When yield envelope collapses (G0=0, P <= pmin, P_tot <= pstar), deviatoric tangent drops to zero and only KeeT remains."""
+    ee = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+
+    # Case A: G0 = 0 (A0=0, A1=0, A2=0)
+    mat_g0 = build_law10({"MAT_RHO": 2000.0, "MAT_E": 1.0e7, "MAT_NU": 0.25, "A0": 0.0, "A1": 0.0, "c1": 1.0e7})
+    sig_g0 = np.array([[100.0, -100.0, 50.0, 20.0, 10.0, -5.0]])
+    D_g0 = consistent_solid_tangent(mat_g0, sig_g0)[0]
+    expected_keet_g0 = 1.0e7 * np.outer(ee, ee)
+    np.testing.assert_allclose(D_g0, expected_keet_g0, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(D_g0, D_g0.T, rtol=1e-12, atol=1e-12)
+
+    # Case B: P <= pmin (tensile fracture pressure cutoff)
+    mat_pmin = build_law10({"MAT_RHO": 2000.0, "MAT_E": 1.0e7, "MAT_NU": 0.25, "A0": 1.0e6, "pmin": -1.0e4, "c1": 1.0e7})
+    # Mean normal stress sigma_ii = 3e4 -> P = -3e4 <= pmin (-1e4)
+    sig_pmin = np.array([[3.0e4, 3.0e4, 3.0e4, 100.0, 0.0, 0.0]])
+    D_pmin = consistent_solid_tangent(mat_pmin, sig_pmin)[0]
+    np.testing.assert_allclose(D_pmin, expected_keet_g0, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(D_pmin, D_pmin.T, rtol=1e-12, atol=1e-12)
+
+    # Case C: P_tot <= pstar (apex root closure)
+    # A0=1e6, A1=2.0 -> pstar = -5e5. Let P = -6e5 < pstar
+    mat_pstar = build_law10({"MAT_RHO": 2000.0, "MAT_E": 1.0e7, "MAT_NU": 0.25, "A0": 1.0e6, "A1": 2.0, "pstar": -5.0e5, "c1": 1.0e7})
+    sig_pstar = np.array([[6.0e5, 6.0e5, 6.0e5, 100.0, 0.0, 0.0]])
+    D_pstar = consistent_solid_tangent(mat_pstar, sig_pstar)[0]
+    np.testing.assert_allclose(D_pstar, expected_keet_g0, rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(D_pstar, D_pstar.T, rtol=1e-12, atol=1e-12)
+
+
+def test_law10_tangent_pure_hydrostatic_loading():
+    """Audit 3: Pure hydrostatic loading matches numerical finite difference to high precision (< 1e-3)."""
+    mat = build_law10({
+        "MAT_RHO": 2000.0,
+        "MAT_E": 1.0e7,
+        "MAT_NU": 0.25,
+        "A0": 1.0e6,
+        "A1": 2.0,
+        "c0": 0.0,
+        "c1": 1.0e7,
+    })
+    sig_base = np.zeros((1, 6))
+    deps_base = np.array([[-1.0e-3, -1.0e-3, -1.0e-3, 0.0, 0.0, 0.0]])
+    extra = {}
+    sig_cur = solid_update(mat, sig_base, d_eps=deps_base, dt=1e-4, extra=extra)
+    D = consistent_solid_tangent(mat, sig_cur, extra=extra)[0]
+
+    # Hydrostatic compression perturbation
+    delta_eps = np.array([-2.0e-6, -2.0e-6, -2.0e-6, 0.0, 0.0, 0.0])
+    sig_p = solid_update(mat, sig_base, d_eps=deps_base + delta_eps[None, :], dt=1e-4)
+
+    d_sig_fd = sig_p[0] - sig_cur[0]
+    d_sig_tang = D @ delta_eps
+
+    rel_err = np.linalg.norm(d_sig_tang - d_sig_fd) / np.linalg.norm(d_sig_fd)
+    assert rel_err < 1.0e-3
+    np.testing.assert_allclose(D, D.T, rtol=1e-10, atol=1e-10)
+
+
+def test_law10_tangent_pure_shear_loading():
+    """Audit 4: Pure shear loading matches numerical finite difference across multiaxial perturbations (< 1e-3)."""
+    mat = build_law10({
+        "MAT_RHO": 2000.0,
+        "MAT_E": 1.0e7,
+        "MAT_NU": 0.25,
+        "A0": 1.0e6,
+        "A1": 0.0,  # von Mises yield cylinder
+        "c0": 0.0,
+        "c1": 1.0e7,
+    })
+    sig_base = np.zeros((1, 6))
+    deps_base = np.array([[0.0, 0.0, 0.0, 2.0e-3, 0.0, 0.0]])
+    extra = {}
+    sig_cur = solid_update(mat, sig_base, d_eps=deps_base, dt=1e-4, extra=extra)
+    D = consistent_solid_tangent(mat, sig_cur, extra=extra)[0]
+
+    # Multiaxial perturbation with shear and normal components
+    delta_eps = np.array([5.0e-7, -2.5e-7, -2.5e-7, 1.0e-6, -5.0e-7, 3.0e-7])
+    sig_p = solid_update(mat, sig_base, d_eps=deps_base + delta_eps[None, :], dt=1e-4)
+
+    d_sig_fd = sig_p[0] - sig_cur[0]
+    d_sig_tang = D @ delta_eps
+
+    rel_err = np.linalg.norm(d_sig_tang - d_sig_fd) / np.linalg.norm(d_sig_fd)
+    assert rel_err < 1.0e-3
+    # von Mises yield surface has no pressure coupling -> major symmetric
+    np.testing.assert_allclose(D, D.T, rtol=1e-10, atol=1e-10)
+
+
+def test_law10_tangent_combined_axial_shear_loading():
+    """Audit 5: Combined axial tension/compression with multiaxial shear matches finite differences across 5 directions (< 1e-3)."""
+    mat = build_law10({
+        "MAT_RHO": 2000.0,
+        "MAT_E": 1.0e7,
+        "MAT_NU": 0.25,
+        "A0": 1.0e6,
+        "A1": 1.5,
+        "c0": 0.0,
+        "c1": 1.0e7,
+    })
+    sig_base = np.zeros((1, 6))
+    deps_base = np.array([[-1.0e-3, 5.0e-4, -5.0e-4, 1.5e-3, 8.0e-4, -6.0e-4]])
+    extra = {}
+    sig_cur = solid_update(mat, sig_base, d_eps=deps_base, dt=1e-4, extra=extra)
+    D = consistent_solid_tangent(mat, sig_cur, extra=extra)[0]
+
+    np.random.seed(101)
+    for trial in range(5):
+        delta_eps = np.random.randn(6) * 1.0e-6
+        sig_p = solid_update(mat, sig_base, d_eps=deps_base + delta_eps[None, :], dt=1e-4)
+        d_sig_fd = sig_p[0] - sig_cur[0]
+        d_sig_tang = D @ delta_eps
+        rel_err = np.linalg.norm(d_sig_tang - d_sig_fd) / np.linalg.norm(d_sig_fd)
+        assert rel_err < 1.0e-3, f"Trial {trial} failed with rel_err={rel_err}"
+
+
+def test_law10_tangent_drucker_prager_cone_high_pressure():
+    """Audit 6: High pressure yielding on Drucker-Prager cone exhibits exact non-associated coupling and matches FD (< 1e-3)."""
+    mat = build_law10({
+        "MAT_RHO": 2000.0,
+        "MAT_E": 1.0e7,
+        "MAT_NU": 0.25,
+        "A0": 5.0e5,
+        "A1": 3.0,
+        "A2": 0.01,
+        "c0": 0.0,
+        "c1": 1.0e7,
+    })
+    sig_base = np.zeros((1, 6))
+    deps_base = np.array([[-3.0e-3, -1.5e-3, -2.0e-3, 2.0e-3, 1.0e-3, -1.5e-3]])
+    extra = {}
+    sig_cur = solid_update(mat, sig_base, d_eps=deps_base, dt=1e-4, extra=extra)
+    D = consistent_solid_tangent(mat, sig_cur, extra=extra)[0]
+
+    # Major asymmetry due to non-associated pressure coupling
+    assert not np.allclose(D, D.T)
+
+    np.random.seed(202)
+    for trial in range(5):
+        delta_eps = np.random.randn(6) * 1.0e-6
+        sig_p = solid_update(mat, sig_base, d_eps=deps_base + delta_eps[None, :], dt=1e-4)
+        d_sig_fd = sig_p[0] - sig_cur[0]
+        d_sig_tang = D @ delta_eps
+        rel_err = np.linalg.norm(d_sig_tang - d_sig_fd) / np.linalg.norm(d_sig_fd)
+        assert rel_err < 1.0e-3, f"DP cone trial {trial} failed with rel_err={rel_err}"
+
+
+def test_law10_tangent_von_mises_cap_cutoff_regime():
+    """Audit 7: In von Mises cap cutoff regime (G0=Amax), dG0/dP=0 restores major symmetry and matches FD (< 1e-3)."""
+    mat = build_law10({
+        "MAT_RHO": 2000.0,
+        "MAT_E": 1.0e7,
+        "MAT_NU": 0.25,
+        "A0": 1.0e5,
+        "A1": 5.0,
+        "Amax": 1.5e6,  # Cap at 1.5e6
+        "c0": 0.0,
+        "c1": 1.0e7,
+    })
+    sig_base = np.zeros((1, 6))
+    # Large volumetric compression driving P_tot well past cap threshold
+    deps_base = np.array([[-0.015, -0.015, -0.015, 2.0e-3, 1.0e-3, -1.0e-3]])
+    extra = {}
+    sig_cur = solid_update(mat, sig_base, d_eps=deps_base, dt=1e-4, extra=extra)
+    assert math.isclose(extra["g0"][0], 1.5e6)
+
+    D = consistent_solid_tangent(mat, sig_cur, extra=extra)[0]
+
+    # At the cap, dG0/dP=0 so major symmetry is restored!
+    np.testing.assert_allclose(D, D.T, rtol=1e-7, atol=1e-7)
+
+    np.random.seed(303)
+    for trial in range(5):
+        delta_eps = np.random.randn(6) * 1.0e-6
+        sig_p = solid_update(mat, sig_base, d_eps=deps_base + delta_eps[None, :], dt=1e-4)
+        d_sig_fd = sig_p[0] - sig_cur[0]
+        d_sig_tang = D @ delta_eps
+        rel_err = np.linalg.norm(d_sig_tang - d_sig_fd) / np.linalg.norm(d_sig_fd)
+        assert rel_err < 1.0e-3, f"Cap trial {trial} failed with rel_err={rel_err}"
+
+
+def test_law10_tangent_compaction_eos_nonlinear_and_unloading():
+    """Audit 8: Consistent tangent accounts for nonlinear compaction EOS slope Kt = dP/dmu and unloading."""
+    mat = build_law10({
+        "MAT_RHO": 2000.0,
+        "MAT_E": 1.0e7,
+        "MAT_NU": 0.25,
+        "A0": 1.0e6,
+        "A1": 2.0,
+        "A2": 0.01,
+        "c0": 1000.0,
+        "c1": 5.0e6,
+        "c2": 2.0e7,
+        "c3": 1.0e7,
+        "bunl": 3.0e7,
+    })
+    sig_base = np.zeros((1, 6))
+    deps_load = np.array([[-0.001, -0.001, -0.001, 0.001, 0.0, 0.0]])
+    extra = {}
+    sig_load = solid_update(mat, sig_base, d_eps=deps_load, dt=1e-4, extra=extra)
+
+    D_load = consistent_solid_tangent(mat, sig_load, extra=extra)[0]
+
+    delta_eps = np.array([-1.0e-6, -5.0e-7, -5.0e-7, 1.0e-6, 0.0, 0.0])
+    sig_p = solid_update(mat, sig_base, d_eps=deps_load + delta_eps[None, :], dt=1e-4)
+    d_sig_fd = sig_p[0] - sig_load[0]
+    d_sig_tang = D_load @ delta_eps
+    rel_err = np.linalg.norm(d_sig_tang - d_sig_fd) / np.linalg.norm(d_sig_fd)
+    assert rel_err < 1.0e-3
+
+
+def test_law10_tangent_symmetry_option():
+    """Audit 9: symmetric=True returns symmetrized tangent matrix 0.5 * (D + D^T)."""
+    mat = build_law10({
+        "MAT_RHO": 2000.0,
+        "MAT_E": 1.0e7,
+        "MAT_NU": 0.25,
+        "A0": 5.0e5,
+        "A1": 3.0,
+        "A2": 0.01,
+        "c0": 0.0,
+        "c1": 1.0e7,
+    })
+    deps_base = np.array([[-3.0e-3, -1.5e-3, -2.0e-3, 2.0e-3, 1.0e-3, -1.5e-3]])
+    extra = {}
+    sig_cur = solid_update(mat, np.zeros((1, 6)), d_eps=deps_base, dt=1e-4, extra=extra)
+
+    D_exact = consistent_solid_tangent(mat, sig_cur, extra=extra)[0]
+    D_sym = consistent_solid_tangent(mat, sig_cur, extra=extra, symmetric=True)[0]
+
+    assert not np.allclose(D_exact, D_exact.T)
+    np.testing.assert_allclose(D_sym, D_sym.T)
+    np.testing.assert_allclose(D_sym, 0.5 * (D_exact + D_exact.T))
+
