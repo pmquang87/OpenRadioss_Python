@@ -1174,3 +1174,35 @@ def test_law10_tangent_symmetry_option():
     np.testing.assert_allclose(D_sym, D_sym.T)
     np.testing.assert_allclose(D_sym, 0.5 * (D_exact + D_exact.T))
 
+
+def test_law10_hydrostatic_prestress_shift_psh():
+    """Audit 10: Prestress shift psh reduces pnew (pnew = P - psh) and maintains ptot = P per compaction.F90 & m10law.F."""
+    mat = build_law10({
+        "MAT_RHO": 2000.0,
+        "MAT_E": 1.0e7,
+        "MAT_NU": 0.25,
+        "A0": 1.0e6,
+        "A1": 2.0,
+        "c0": 0.0,
+        "c1": 1.0e7,
+        "psh": 5.0e4,
+    })
+    # Compression: mu = 0.01 -> P_eos = 1e5
+    deps = np.array([[-0.01/3.0, -0.01/3.0, -0.01/3.0, 0.0, 0.0, 0.0]])
+    extra = {}
+    sig_out = solid_update(mat, np.zeros((1, 6)), d_eps=deps, dt=1e-4, extra=extra)
+
+    # In Fortran compaction.F90 line 162: pnew = P_eos - psh = 1e5 - 5e4 = 5e4
+    # m10law.F line 174: ptot = pnew + psh = 1e5
+    # G0 is evaluated at ptot: G0 = A0 + A1*ptot = 1e6 + 2.0*1e5 = 1.2e6
+    expected_pnew = 5.0e4
+    expected_ptot = 1.0e5
+    expected_g0 = 1.2e6
+
+    np.testing.assert_allclose(extra["p_new"][0], expected_pnew, rtol=1e-5)
+    np.testing.assert_allclose(extra["ptot"][0], expected_ptot, rtol=1e-5)
+    np.testing.assert_allclose(extra["g0"][0], expected_g0, rtol=1e-5)
+    np.testing.assert_allclose(sig_out[0, :3], -expected_pnew, rtol=1e-5)
+    np.testing.assert_allclose(extra["epsq"][0], 0.01)
+
+
