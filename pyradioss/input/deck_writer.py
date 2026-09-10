@@ -971,282 +971,6 @@ class StarterDeck:
         kwargs.setdefault("law_name", "HILL")
         return self.mat_law32(*args, **kwargs)
 
-    def mat_law25(
-        self,
-        mat_id: int = 0,
-        rho: float = 0.0,
-        e11: float = 0.0,
-        e22: float = 0.0,
-        nu12: float = 0.0,
-        iform: int = 0,
-        e33: float = 0.0,
-        g12: float = 0.0,
-        g23: float = 0.0,
-        g31: float = 0.0,
-        eps_f1: float = 0.0,
-        eps_f2: float = 0.0,
-        eps_t1: float = 0.0,
-        eps_m1: float = 0.0,
-        eps_t2: float = 0.0,
-        eps_m2: float = 0.0,
-        dmax: float = 0.0,
-        wpmax: float = 0.0,
-        wpref: float = 0.0,
-        ioff: int = 0,
-        b: float = 0.0,
-        n: float = 0.0,
-        fmax: float = 0.0,
-        sig_1yt: float = 0.0,
-        sig_2yt: float = 0.0,
-        sig_1yc: float = 0.0,
-        sig_2yc: float = 0.0,
-        alpha: float = 0.0,
-        sig_12yc: float = 0.0,
-        sig_12yt: float = 0.0,
-        c: float = 0.0,
-        eps_rate_0: float = 0.0,
-        icc: int = 0,
-        rhor: float | None = None,
-        title: str = "",
-        unit_id: int | None = None,
-        law_name: str = "LAW25",
-        **kwargs,
-    ) -> StarterDeck:
-        """``/MAT/LAW25`` (/MAT/COMP_PLAS, /MAT/COMPSH, /MAT/TSAI_WU, /MAT/CRASURV) — cfg MAT/matl25_compsh.cfg.
-
-        Composite anisotropic plasticity material model (Tsai-Wu or CRASURV formulation).
-        """
-        if isinstance(rho, str):
-            actual_title = rho
-            title = actual_title
-            rho = float(e11) if isinstance(e11, (int, float, str)) and str(e11).strip() else 0.0
-            e11 = float(e22) if isinstance(e22, (int, float, str)) and str(e22).strip() else 0.0
-            e22 = float(nu12) if isinstance(nu12, (int, float, str)) and str(nu12).strip() else 0.0
-            nu12 = float(iform) if isinstance(iform, (int, float, str)) and str(iform).strip() else 0.0
-            iform = int(e33) if isinstance(e33, (int, float, str)) and str(e33).strip() else 0
-            e33 = float(g12) if isinstance(g12, (int, float, str)) and str(g12).strip() else 0.0
-
-        if "id" in kwargs and mat_id == 0:
-            mat_id = kwargs["id"]
-        elif "mid" in kwargs and mat_id == 0:
-            mat_id = kwargs["mid"]
-        if "rho0" in kwargs and rho == 0.0:
-            rho = kwargs["rho0"]
-        if rhor is None and "refer_rho" in kwargs:
-            rhor = kwargs["refer_rho"]
-        if rhor is None and "rhor" in kwargs:
-            rhor = kwargs["rhor"]
-        if "MAT_EA" in kwargs and e11 == 0.0:
-            e11 = kwargs["MAT_EA"]
-        if "MAT_EB" in kwargs and e22 == 0.0:
-            e22 = kwargs["MAT_EB"]
-        if "MAT_EC" in kwargs and e33 == 0.0:
-            e33 = kwargs["MAT_EC"]
-        if "MAT_PRAB" in kwargs and nu12 == 0.0:
-            nu12 = kwargs["MAT_PRAB"]
-        if "MAT_GAB" in kwargs and g12 == 0.0:
-            g12 = kwargs["MAT_GAB"]
-        if "MAT_GBC" in kwargs and g23 == 0.0:
-            g23 = kwargs["MAT_GBC"]
-        if "MAT_GCA" in kwargs and g31 == 0.0:
-            g31 = kwargs["MAT_GCA"]
-        if "MAT_Iflag" in kwargs and iform == 0:
-            iform = kwargs["MAT_Iflag"]
-        if "iflag" in kwargs and iform == 0:
-            iform = kwargs["iflag"]
-        if "MAT_EPSF1" in kwargs and eps_f1 == 0.0:
-            eps_f1 = kwargs["MAT_EPSF1"]
-        if "MAT_EPSF2" in kwargs and eps_f2 == 0.0:
-            eps_f2 = kwargs["MAT_EPSF2"]
-        if "MAT_EPST1" in kwargs and eps_t1 == 0.0:
-            eps_t1 = kwargs["MAT_EPST1"]
-        if "MAT_EPSM1" in kwargs and eps_m1 == 0.0:
-            eps_m1 = kwargs["MAT_EPSM1"]
-        if "MAT_EPST2" in kwargs and eps_t2 == 0.0:
-            eps_t2 = kwargs["MAT_EPST2"]
-        if "MAT_EPSM2" in kwargs and eps_m2 == 0.0:
-            eps_m2 = kwargs["MAT_EPSM2"]
-        if "MAT_DAMAGE" in kwargs and dmax == 0.0:
-            dmax = kwargs["MAT_DAMAGE"]
-        if "WPMAX" in kwargs and wpmax == 0.0:
-            wpmax = kwargs["WPMAX"]
-        if "WPREF" in kwargs and wpref == 0.0:
-            wpref = kwargs["WPREF"]
-        if "Itype" in kwargs and ioff == 0:
-            ioff = kwargs["Itype"]
-        if "MAT_BETA" in kwargs and b == 0.0:
-            b = kwargs["MAT_BETA"]
-        if "MAT_HARD" in kwargs and n == 0.0:
-            n = kwargs["MAT_HARD"]
-        if "MAT_SIG" in kwargs and fmax == 0.0:
-            fmax = kwargs["MAT_SIG"]
-        if "MAT_SIGYT1" in kwargs and sig_1yt == 0.0:
-            sig_1yt = kwargs["MAT_SIGYT1"]
-        if "MAT_SIGYT2" in kwargs and sig_2yt == 0.0:
-            sig_2yt = kwargs["MAT_SIGYT2"]
-        if "MAT_SIGYC1" in kwargs and sig_1yc == 0.0:
-            sig_1yc = kwargs["MAT_SIGYC1"]
-        if "MAT_SIGYC2" in kwargs and sig_2yc == 0.0:
-            sig_2yc = kwargs["MAT_SIGYC2"]
-        if "MAT_ALPHA" in kwargs and alpha == 0.0:
-            alpha = kwargs["MAT_ALPHA"]
-        if "MAT_SIGC12" in kwargs and sig_12yc == 0.0:
-            sig_12yc = kwargs["MAT_SIGC12"]
-        if "MAT_SIGT12" in kwargs and sig_12yt == 0.0:
-            sig_12yt = kwargs["MAT_SIGT12"]
-        if "MAT_SRC" in kwargs and c == 0.0:
-            c = kwargs["MAT_SRC"]
-        if "MAT_SRP" in kwargs and eps_rate_0 == 0.0:
-            eps_rate_0 = kwargs["MAT_SRP"]
-        if "STRFLAG" in kwargs and icc == 0:
-            icc = kwargs["STRFLAG"]
-        if "title" in kwargs and not title:
-            title = kwargs["title"]
-        if "law" in kwargs:
-            law_name = kwargs["law"]
-
-        if unit_id is not None:
-            self._header("MAT", law_name, mat_id, unit_id)
-        else:
-            self._header("MAT", law_name, mat_id)
-
-        self._title(title)
-
-        # Card 1: RHO_I [RHO_O]
-        if rhor is not None and rhor != 0.0 and rhor != rho:
-            self.lines.append("#              RHO_I               RHO_O")
-            self.lines.append(fmt_float(rho) + fmt_float(rhor))
-        else:
-            self.lines.append("#              RHO_I")
-            self.lines.append(fmt_float(rho))
-
-        # Card 2: E11 E22 NU12 Iform [blank 10] E33
-        self.lines.append("#                E11                 E22                NU12     Iform                           E33")
-        self.lines.append(fmt_float(e11) + fmt_float(e22) + fmt_float(nu12) + fmt_int(iform) + " " * 10 + fmt_float(e33))
-
-        # Card 3: G12 G23 G31 EPS_f1 EPS_f2
-        self.lines.append("#                G12                 G23                 G31              EPS_f1              EPS_f2")
-        self.lines.append(fmt_float(g12) + fmt_float(g23) + fmt_float(g31) + fmt_float(eps_f1) + fmt_float(eps_f2))
-
-        # Card 4: EPS_t1 EPS_m1 EPS_t2 EPS_m2 dmax
-        self.lines.append("#             EPS_t1              EPS_m1              EPS_t2              EPS_m2                dmax")
-        self.lines.append(fmt_float(eps_t1) + fmt_float(eps_m1) + fmt_float(eps_t2) + fmt_float(eps_m2) + fmt_float(dmax))
-
-        if iform == 0:
-            # Card 5: Wpmax Wpref Ioff
-            self.lines.append("#              Wpmax               Wpref      Ioff")
-            self.lines.append(fmt_float(wpmax) + fmt_float(wpref) + fmt_int(ioff))
-
-            # Card 6: b n fmax
-            self.lines.append("#                  b                   n                fmax")
-            self.lines.append(fmt_float(b) + fmt_float(n) + fmt_float(fmax))
-
-            # Card 7: sig_1yt sig_2yt sig_1yc sig_2yc alpha
-            self.lines.append("#            sig_1yt             sig_2yt             sig_1yc             sig_2yc               alpha")
-            self.lines.append(fmt_float(sig_1yt) + fmt_float(sig_2yt) + fmt_float(sig_1yc) + fmt_float(sig_2yc) + fmt_float(alpha))
-
-            # Card 8: sig_12yc sig_12yt c_12 Eps_rate_0 ICC
-            self.lines.append("#           sig_12yc            sig_12yt                c_12          Eps_rate_0       ICC")
-            self.lines.append(fmt_float(sig_12yc) + fmt_float(sig_12yt) + fmt_float(c) + fmt_float(eps_rate_0) + fmt_int(icc))
-        else:
-            # CRASURV formulation cards
-            wp_fail = int(kwargs.get("wp_fail", kwargs.get("WP_FAIL", 0)))
-            ratio = float(kwargs.get("ratio", kwargs.get("MAT_R00", 0.0)))
-            self.lines.append("#              Wpmax               Wpref      Ioff   WP_fail               ratio")
-            self.lines.append(fmt_float(wpmax) + fmt_float(wpref) + fmt_int(ioff) + fmt_int(wp_fail) + fmt_float(ratio))
-
-            self.lines.append("#                  c          EPS_rate_0               alpha                              ICC_global")
-            self.lines.append(fmt_float(c) + fmt_float(eps_rate_0) + fmt_float(alpha) + " " * 30 + fmt_int(icc))
-
-            b_1t = float(kwargs.get("b_1t", kwargs.get("MAT_b1_t", 0.0)))
-            n_1t = float(kwargs.get("n_1t", kwargs.get("MAT_n1_t", 1.0)))
-            sig_1maxt = float(kwargs.get("sig_1maxt", kwargs.get("MAT_SIG1max_t", 0.0)))
-            c_1t = float(kwargs.get("c_1t", kwargs.get("MAT_c1_t", 0.0)))
-            self.lines.append("#            sig_1yt                b_1t                n_1t           sig_1maxt                c_1t")
-            self.lines.append(fmt_float(sig_1yt) + fmt_float(b_1t) + fmt_float(n_1t) + fmt_float(sig_1maxt) + fmt_float(c_1t))
-
-            eps_1t1 = float(kwargs.get("eps_1t1", kwargs.get("MAT_EPS1_t1", 0.0)))
-            eps_2t1 = float(kwargs.get("eps_2t1", kwargs.get("MAT_EPS2_t1", 0.0)))
-            sig_rst1 = float(kwargs.get("sig_rst1", kwargs.get("MAT_SIGres_t1", 0.0)))
-            wpmax_t1 = float(kwargs.get("wpmax_t1", kwargs.get("MAT_Wmax_pt1", 0.0)))
-            self.lines.append("#            EPS_1t1             EPS_2t1          SIGMA_rst1            Wpmax_t1")
-            self.lines.append(fmt_float(eps_1t1) + fmt_float(eps_2t1) + fmt_float(sig_rst1) + fmt_float(wpmax_t1))
-
-            b_2t = float(kwargs.get("b_2t", kwargs.get("MAT_b2_t", 0.0)))
-            n_2t = float(kwargs.get("n_2t", kwargs.get("MAT_n2_t", 1.0)))
-            sig_2maxt = float(kwargs.get("sig_2maxt", kwargs.get("MAT_SIG2max_t", 0.0)))
-            c_2t = float(kwargs.get("c_2t", kwargs.get("MAT_c2_t", 0.0)))
-            self.lines.append("#            sig_2yt                b_2t                n_2t           sig_2maxt                c_2t")
-            self.lines.append(fmt_float(sig_2yt) + fmt_float(b_2t) + fmt_float(n_2t) + fmt_float(sig_2maxt) + fmt_float(c_2t))
-
-            eps_1t2 = float(kwargs.get("eps_1t2", kwargs.get("MAT_EPS1_t2", 0.0)))
-            eps_2t2 = float(kwargs.get("eps_2t2", kwargs.get("MAT_EPS2_t2", 0.0)))
-            sig_rst2 = float(kwargs.get("sig_rst2", kwargs.get("MAT_SIGres_t2", 0.0)))
-            wpmax_t2 = float(kwargs.get("wpmax_t2", kwargs.get("MAT_Wmax_pt2", 0.0)))
-            self.lines.append("#            EPS_1t2             EPS_2t2            sig_rst2            Wpmax_t2")
-            self.lines.append(fmt_float(eps_1t2) + fmt_float(eps_2t2) + fmt_float(sig_rst2) + fmt_float(wpmax_t2))
-
-            b_1c = float(kwargs.get("b_1c", kwargs.get("MAT_b1_c", 0.0)))
-            n_1c = float(kwargs.get("n_1c", kwargs.get("MAT_n1_c", 1.0)))
-            sig_1maxc = float(kwargs.get("sig_1maxc", kwargs.get("MAT_SIG1max_c", 0.0)))
-            c_1c = float(kwargs.get("c_1c", kwargs.get("MAT_c1_c", 0.0)))
-            self.lines.append("#            sig_1yc                b_1c                n_1c           sig_1maxc                c_1c")
-            self.lines.append(fmt_float(sig_1yc) + fmt_float(b_1c) + fmt_float(n_1c) + fmt_float(sig_1maxc) + fmt_float(c_1c))
-
-            eps_1c1 = float(kwargs.get("eps_1c1", kwargs.get("MAT_EPS1_c1", 0.0)))
-            eps_2c1 = float(kwargs.get("eps_2c1", kwargs.get("MAT_EPS2_c1", 0.0)))
-            sig_rsc1 = float(kwargs.get("sig_rsc1", kwargs.get("MAT_SIGres_c1", 0.0)))
-            wpmax_c1 = float(kwargs.get("wpmax_c1", kwargs.get("MAT_Wmax_pc1", 0.0)))
-            self.lines.append("#            EPS_1c1             EPS_2c1            sig_rsc1            Wpmax_c1")
-            self.lines.append(fmt_float(eps_1c1) + fmt_float(eps_2c1) + fmt_float(sig_rsc1) + fmt_float(wpmax_c1))
-
-            b_2c = float(kwargs.get("b_2c", kwargs.get("MAT_b2_c", 0.0)))
-            n_2c = float(kwargs.get("n_2c", kwargs.get("MAT_n2_c", 1.0)))
-            sig_2maxc = float(kwargs.get("sig_2maxc", kwargs.get("MAT_SIG2max_c", 0.0)))
-            c_2c = float(kwargs.get("c_2c", kwargs.get("MAT_c2_c", 0.0)))
-            self.lines.append("#            sig_2yc                b_2c                n_2c           sig_2maxc                c_2c")
-            self.lines.append(fmt_float(sig_2yc) + fmt_float(b_2c) + fmt_float(n_2c) + fmt_float(sig_2maxc) + fmt_float(c_2c))
-
-            eps_1c2 = float(kwargs.get("eps_1c2", kwargs.get("MAT_EPS1_c2", 0.0)))
-            eps_2c2 = float(kwargs.get("eps_2c2", kwargs.get("MAT_EPS2_c2", 0.0)))
-            sig_rsc2 = float(kwargs.get("sig_rsc2", kwargs.get("MAT_SIGres_c2", 0.0)))
-            wpmax_c2 = float(kwargs.get("wpmax_c2", kwargs.get("MAT_Wmax_pc2", 0.0)))
-            self.lines.append("#            EPS_1c2             EPS_2c2            sig_rsc2            Wpmax_c2")
-            self.lines.append(fmt_float(eps_1c2) + fmt_float(eps_2c2) + fmt_float(sig_rsc2) + fmt_float(wpmax_c2))
-
-            b_12t = float(kwargs.get("b_12t", kwargs.get("MAT_b12_t", 0.0)))
-            n_12t = float(kwargs.get("n_12t", kwargs.get("MAT_n12_t", 1.0)))
-            sig_12maxt = float(kwargs.get("sig_12maxt", kwargs.get("MAT_SIG12max_t", 0.0)))
-            c_12t = float(kwargs.get("c_12t", kwargs.get("MAT_c12_t", 0.0)))
-            self.lines.append("#           sig_12yt               b_12t               n_12t          sig_12maxt               c_12t")
-            self.lines.append(fmt_float(sig_12yt) + fmt_float(b_12t) + fmt_float(n_12t) + fmt_float(sig_12maxt) + fmt_float(c_12t))
-
-            eps_1t12 = float(kwargs.get("eps_1t12", kwargs.get("MAT_EPS1_t12", 0.0)))
-            eps_2t12 = float(kwargs.get("eps_2t12", kwargs.get("MAT_EPS2_t12", 0.0)))
-            sig_rst12 = float(kwargs.get("sig_rst12", kwargs.get("MAT_SIGres_t12", 0.0)))
-            wpmax_t12 = float(kwargs.get("wpmax_t12", kwargs.get("MAT_Wmax_pt12", 0.0)))
-            self.lines.append("#           EPS_1t12            EPS_2t12           sig_rst12           Wpmax_t12")
-            self.lines.append(fmt_float(eps_1t12) + fmt_float(eps_2t12) + fmt_float(sig_rst12) + fmt_float(wpmax_t12))
-
-        return self
-
-    def mat_comp_plas(self, *args, **kwargs) -> StarterDeck:
-        kwargs.setdefault("law_name", "COMP_PLAS")
-        return self.mat_law25(*args, **kwargs)
-
-    def mat_compsh(self, *args, **kwargs) -> StarterDeck:
-        kwargs.setdefault("law_name", "COMPSH")
-        return self.mat_law25(*args, **kwargs)
-
-    def mat_tsai_wu(self, *args, **kwargs) -> StarterDeck:
-        kwargs.setdefault("law_name", "TSAI_WU")
-        return self.mat_law25(*args, **kwargs)
-
-    def mat_crasurv(self, *args, **kwargs) -> StarterDeck:
-        kwargs.setdefault("law_name", "CRASURV")
-        kwargs.setdefault("iform", 1)
-        return self.mat_law25(*args, **kwargs)
-
     def mat_law38(
         self,
         id: int,
@@ -1862,12 +1586,17 @@ class StarterDeck:
         law_name: str = "LAW25",
         unit_id: Optional[int] = None,
         **kwargs,
-    ) -> None:
+    ) -> StarterDeck:
         """``/MAT/LAW25`` (/MAT/COMP_PLAS, /MAT/COMPSH, /MAT/TSAI_WU, /MAT/CRASURV) — cfg MAT/matl25_compsh.cfg
         (FORMAT radioss110): Composite anisotropic plasticity model (Tsai-Wu or CRASURV formulation).
         """
         if "mat_id" in kwargs and mid == 0:
             mid = kwargs["mat_id"]
+        if "mid" in kwargs and mid == 0:
+            mid = kwargs["mid"]
+        if isinstance(title, (int, float)) and rho == 0.0:
+            rho = float(title)
+            title = ""
         if "rho0" in kwargs and rho == 0.0:
             rho = kwargs["rho0"]
         if "rhor" in kwargs and refer_rho is None:
@@ -1875,7 +1604,10 @@ class StarterDeck:
         if "rho_ref" in kwargs and refer_rho is None:
             refer_rho = kwargs["rho_ref"]
 
-        self._header("MAT", law_name, mid)
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
         self._title(title)
 
         # Card 1: RHO_I [RHO_O]
@@ -1986,23 +1718,28 @@ class StarterDeck:
                 fmt_float(gamma_ini) + fmt_float(gamma_max) + fmt_float(d3max)
             )
             self.lines.append(fmt_int(fsmooth) + fmt_float(fcut))
+        return self
 
-    def mat_comp_plas(self, *args, **kwargs) -> None:
+    def mat_comp_plas(self, *args, **kwargs) -> StarterDeck:
         kwargs.setdefault("law_name", "COMP_PLAS")
         return self.mat_law25(*args, **kwargs)
 
-    def mat_compsh(self, *args, **kwargs) -> None:
+    def mat_compsh(self, *args, **kwargs) -> StarterDeck:
         kwargs.setdefault("law_name", "COMPSH")
         return self.mat_law25(*args, **kwargs)
 
-    def mat_tsai_wu(self, *args, **kwargs) -> None:
+    def mat_tsai_wu(self, *args, **kwargs) -> StarterDeck:
         kwargs.setdefault("law_name", "TSAI_WU")
         kwargs.setdefault("iform", 0)
         return self.mat_law25(*args, **kwargs)
 
-    def mat_crasurv(self, *args, **kwargs) -> None:
+    def mat_crasurv(self, *args, **kwargs) -> StarterDeck:
         kwargs.setdefault("law_name", "CRASURV")
         kwargs.setdefault("iform", 1)
+        return self.mat_law25(*args, **kwargs)
+
+    def mat_composite_plas(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "COMPOSITE_PLAS")
         return self.mat_law25(*args, **kwargs)
 
     # ---- failure / EOS -----------------------------------------------------------

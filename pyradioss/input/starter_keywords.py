@@ -83653,6 +83653,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "TSAIWU": read_mat,
     "DAMA": read_mat,
     "MAT_LAW25": read_mat,
+    "LAW25": read_mat,
     "MAT_COMP_PLAS": read_mat,
     "MAT_COMPOSITE_PLAS": read_mat,
     "MAT_COMPSH": read_mat,

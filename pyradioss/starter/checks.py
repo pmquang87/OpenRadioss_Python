@@ -533,6 +533,40 @@ def check_mat_law25(mat: Any, log: MessageLog) -> None:
     if dmax < 0.0 or dmax > 1.0:
         log.error(f"/MAT/LAW25/{mid}: maximum damage dmax must be in [0, 1] (got {dmax:g})", "MAT CHECK")
 
+    # 8. Damage strains: epsm >= epst
+    epst1 = _extract(["eps_t1", "epst1", "MAT_EPST1", "EPST1", "eps_t", "epst"], default=0.0)
+    epsm1 = _extract(["eps_m1", "epsm1", "MAT_EPSM1", "EPSM1", "eps_m", "epsm"], default=0.0)
+    epst2 = _extract(["eps_t2", "epst2", "MAT_EPST2", "EPST2"], default=0.0)
+    epsm2 = _extract(["eps_m2", "epsm2", "MAT_EPSM2", "EPSM2"], default=0.0)
+
+    if (epst1 > 0.0 or epsm1 > 0.0) and epsm1 < epst1:
+        log.error(f"/MAT/LAW25/{mid}: maximum damage strain eps_m1 must be >= damage initiation strain eps_t1 (got eps_m1={epsm1:g}, eps_t1={epst1:g})", "MAT CHECK")
+    if (epst2 > 0.0 or epsm2 > 0.0) and epsm2 < epst2:
+        log.error(f"/MAT/LAW25/{mid}: maximum damage strain eps_m2 must be >= damage initiation strain eps_t2 (got eps_m2={epsm2:g}, eps_t2={epst2:g})", "MAT CHECK")
+
+    if iform != 0:
+        eps_1t1 = _extract(["eps_1t1", "MAT_EPS1_t1"], default=0.0)
+        eps_2t1 = _extract(["eps_2t1", "MAT_EPS2_t1"], default=0.0)
+        if (eps_1t1 > 0.0 or eps_2t1 > 0.0) and eps_2t1 < eps_1t1:
+            log.error(f"/MAT/LAW25/{mid}: CRASURV maximum damage strain eps_2t1 must be >= eps_1t1 (got eps_2t1={eps_2t1:g}, eps_1t1={eps_1t1:g})", "MAT CHECK")
+        eps_1t2 = _extract(["eps_1t2", "MAT_EPS1_t2"], default=0.0)
+        eps_2t2 = _extract(["eps_2t2", "MAT_EPS2_t2"], default=0.0)
+        if (eps_1t2 > 0.0 or eps_2t2 > 0.0) and eps_2t2 < eps_1t2:
+            log.error(f"/MAT/LAW25/{mid}: CRASURV maximum damage strain eps_2t2 must be >= eps_1t2 (got eps_2t2={eps_2t2:g}, eps_1t2={eps_1t2:g})", "MAT CHECK")
+        eps_1c1 = _extract(["eps_1c1", "MAT_EPS1_c1"], default=0.0)
+        eps_2c1 = _extract(["eps_2c1", "MAT_EPS2_c1"], default=0.0)
+        if (eps_1c1 > 0.0 or eps_2c1 > 0.0) and eps_2c1 < eps_1c1:
+            log.error(f"/MAT/LAW25/{mid}: CRASURV maximum damage strain eps_2c1 must be >= eps_1c1 (got eps_2c1={eps_2c1:g}, eps_1c1={eps_1c1:g})", "MAT CHECK")
+        eps_1c2 = _extract(["eps_1c2", "MAT_EPS1_c2"], default=0.0)
+        eps_2c2 = _extract(["eps_2c2", "MAT_EPS2_c2"], default=0.0)
+        if (eps_1c2 > 0.0 or eps_2c2 > 0.0) and eps_2c2 < eps_1c2:
+            log.error(f"/MAT/LAW25/{mid}: CRASURV maximum damage strain eps_2c2 must be >= eps_1c2 (got eps_2c2={eps_2c2:g}, eps_1c2={eps_1c2:g})", "MAT CHECK")
+        eps_1t12 = _extract(["eps_1t12", "MAT_EPS1_t12"], default=0.0)
+        eps_2t12 = _extract(["eps_2t12", "MAT_EPS2_t12"], default=0.0)
+        if (eps_1t12 > 0.0 or eps_2t12 > 0.0) and eps_2t12 < eps_1t12:
+            log.error(f"/MAT/LAW25/{mid}: CRASURV maximum damage strain eps_2t12 must be >= eps_1t12 (got eps_2t12={eps_2t12:g}, eps_1t12={eps_1t12:g})", "MAT CHECK")
+
+
 
 def check_materials(model: Model, log: MessageLog) -> None:
     """Validate all material parameters across model."""
@@ -646,8 +680,8 @@ def check_model(model: Model, log: MessageLog) -> None:
                         "MAT CHECK",
                     )
                     continue
-            if (mat.law in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV")
-                    or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV")):
+            if (mat.law in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS")
+                    or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "MAT_LAW25", "MAT_COMP_PLAS", "MAT_COMPSH", "MAT_TSAI_WU", "MAT_CRASURV", "MAT_COMPOSITE_PLAS")):
                 if name in ("trusses", "beams", "springs"):
                     log.error(
                         f"/MAT/LAW25/{mat.id} (/MAT/COMP_PLAS) is not supported for {name} elements "

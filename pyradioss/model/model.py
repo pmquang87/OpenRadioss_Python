@@ -1091,6 +1091,8 @@ class Model:
         self.mat_compshs = self.mat_law25s
         self.mat_tsai_wus = self.mat_law25s
         self.mat_crasurvs = self.mat_law25s
+        self.mat_composite_plas = self.mat_law25s
+        self.mat_composite_plass = self.mat_law25s
         self.mat_law28s: Dict[int, MatLaw28] = {}                   # /MAT/LAW28, /MAT/HONEYCOMB_SOL (M188)
         self.prop_type9s: Dict[int, PropType9] = {}                 # /PROP/TYPE9, /PROP/SH_ORTH (M188)
         self.prop_sh_orths = self.prop_type9s
