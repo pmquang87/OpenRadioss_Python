@@ -59,23 +59,25 @@ _NULL_RHO0_OK_LAWS = frozenset({0} | _MULTIMAT_ALE_LAWS)
 # and their density divisions are guarded exactly as hm_read_mat00.F
 # guards its own — see elements/truss.py and elements/beam_type3.py.
 _ALLOWED_LAWS = {
-    "bricks": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 44, 62, 70, 81, 83, 999},
-    "tetras": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 44, 62, 70, 81, 999},
-    "penta6": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 44, 62, 70, 81, 83, 999},
-    "pyra5": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 44, 62, 70, 81, 83, 999},
-    "shells": {0, 1, 2, 3, 19, 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 44},
+    "bricks": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 44, 62, 70, 81, 83, 999},
+    "tetras": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 44, 62, 70, 81, 999},
+    "penta6": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 44, 62, 70, 81, 83, 999},
+    "pyra5": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 44, 62, 70, 81, 83, 999},
+    "shells": {0, 1, 2, 3, 19, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 44},
     # QBAT (Ishell=12, M41): the laws the layered kernel reuses from the
     # BT plumbing; no orthotropic (LAW19) shell_ortho wiring yet
-    "shells_qbat": {0, 1, 2, 3, 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 44},
+    "shells_qbat": {0, 1, 2, 3, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 44},
     # QEPH (Ishell=24, M41): shares the BT layer plumbing INCLUDING the
     # shell_ortho fiber rotation (LAW19); the czfintn.F stabilization
     # runs isotropic moduli (czfintn_or orthotropic HM/HF deferred)
-    "shells_qeph": {0, 1, 2, 3, 19, 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 44},
-    "sh3n": {0, 1, 2, 3, 19, 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 44},
+    "shells_qeph": {0, 1, 2, 3, 19, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 44},
+    "sh3n": {0, 1, 2, 3, 19, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 27, 32, "32", "LAW32", "HILL", 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 44},
     "trusses": {0, 1, 2, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW"},
     "springs": None,          # springs ignore their material entirely
     "beams": {0, 1, 2, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW"},
 }
+_ALLOWED_LAWS["quads"] = _ALLOWED_LAWS["shells"]
+
 
 
 def check_mat_law34(mat: Any, log: MessageLog) -> None:
@@ -401,91 +403,139 @@ def check_mat_law32(mat: Any, log: MessageLog) -> None:
         log.error(f"/MAT/LAW32/{mid}: Lankford parameter r90 must be > 0 (got {r90:g})", "MAT CHECK")
 
 
-def check_model(model: Model, log: MessageLog) -> None:
-    if model.numnod == 0:
-        log.error("model has no nodes", "MODEL CHECK")
-    if not any(True for _ in model.element_groups()):
-        log.warning("model has no elements (deck may use only unported "
-                    "element types)", "MODEL CHECK")
+def check_mat_law25(mat: Any, log: MessageLog) -> None:
+    """Validate /MAT/LAW25 (/MAT/COMP_PLAS, /MAT/COMPSH, /MAT/TSAI_WU, /MAT/CRASURV) parameter bounds (M543).
 
-    # material law vs element family compatibility (fail in the Starter
-    # with a clear message instead of a NotImplementedError mid-run)
-    for name, group in model.element_groups():
-        allowed = _ALLOWED_LAWS.get(name)
-        if allowed is None:
-            continue
-        for sl, mat, prop in group.state["slices"]:
-            if mat.law == 999 and mat.eos is None:
-                # M37 pack 1: a /MAT/GAS on elements has no pressure or
-                # stiffness of its own — the initial state must come
-                # from an /EOS/IDEAL-GAS card (or the programmatic
-                # P0/T0/RHO0 params); see materials/mat_gas.py.  Checked
-                # before the density (a bare gas card has neither).
-                log.error(f"/MAT/GAS/{mat.id} on {name} elements needs "
-                          f"an /EOS/IDEAL-GAS card for its initial "
-                          f"state (P0, gamma) — a bare gas card has no "
-                          f"element pressure", "MAT CHECK")
-            rho0 = getattr(mat, "rho0", 0.0) or 0.0
-            if rho0 <= 0.0 and mat.law not in _NULL_RHO0_OK_LAWS:
-                # M37: a used material MUST carry a positive initial
-                # density — element masses cannot be initialized without
-                # it (the reference Starter raises the same fatal check).
-                # EXEMPT (see _NULL_RHO0_OK_LAWS): the multimaterial ALE
-                # family (LAW51, LAW151/MULTIFLUID — M38 / M37-BUG-2),
-                # whose density lives on the submaterial references +
-                # volume fractions rather than the top-level RHO0; and
-                # LAW0 / /MAT/VOID (M39 / M38-NEW-2), which is massless by
-                # design — upstream applies no RHO0 check to it at all and
-                # its cfg demands only MAT_RHO >= 0.  The ALE laws are
-                # also 'inactive' in the port, so they fall through to the
-                # physics-not-implemented warning below; VOID is active
-                # and falls through to the family check.
-                law_name = getattr(mat, "law_name", None) \
-                    or f"LAW{mat.law}"
-                log.error(f"/MAT/{law_name}/{mat.id} on {name} elements: "
-                          f"zero or missing initial density "
-                          f"(RHO0={rho0:g}) — element masses cannot be "
-                          f"initialized", "MAT CHECK")
-                continue
-            if getattr(mat, "inactive", False):
-                # M37: cfg-parsed law without ported physics — the
-                # STARTER accepts it (params + density read, mass init
-                # works); the ENGINE refuses to run the model (see
-                # mat_reader.refuse_inactive_materials)
-                law_name = getattr(mat, "law_name", f"LAW{mat.law}")
-                log.warning(f"/MAT/{law_name}/{mat.id} on {name} "
-                            f"elements: parsed, physics not implemented "
-                            f"(M37) — the Engine will refuse to run "
-                            f"this model", "MAT CHECK")
-                continue
-            if (mat.law in (38, "38", "LAW38", "VISC_TAB")
-                    or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB")):
-                if name in ("shells", "shells_qbat", "shells_qeph", "sh3n", "trusses", "beams"):
-                    log.error(
-                        f"/MAT/LAW38/{mat.id} (/MAT/VISC_TAB) is not supported for {name} elements "
-                        f"(solids only: bricks, tetras, penta6, pyra5)",
-                        "MAT CHECK",
-                    )
-                    continue
-            if (mat.law in (32, "32", "LAW32", "HILL")
-                    or getattr(mat, "law_name", None) in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL")):
-                if name in ("bricks", "tetras", "penta6", "pyra5", "trusses", "beams"):
-                    log.error(
-                        f"/MAT/LAW32/{mat.id} (/MAT/HILL) is not supported for {name} elements "
-                        f"(shells only: shells, shells_qbat, shells_qeph, sh3n)",
-                        "MAT CHECK",
-                    )
-                    continue
-            if mat.law not in allowed:
-                log.error(f"material LAW{mat.law} (/MAT {mat.id}) is not "
-                          f"ported for {name} elements (supported: "
-                          f"{sorted(allowed, key=str)})", "MAT CHECK")
-            if mat.fail is not None and name in ("trusses", "springs",
-                                                 "beams"):
-                log.warning(f"/FAIL on /MAT {mat.id} is ignored for {name} "
-                            f"(failure is ported for solids and shells)",
-                            "MAT CHECK")
+    Required checks:
+      - rho0 > 0
+      - E1 > 0, E2 > 0
+      - detc = 1 - nu12*nu21 > 0
+      - G12, G23, G31 > 0
+      - sigyt1, sigyc1, sigyt2, sigyc2, sigt12, sigc12 > 0
+      - n <= 1.0
+      - 0 <= dmax <= 1.0
+    """
+    mid = getattr(mat, "id", 0)
+    params = getattr(mat, "params", {}) or {}
 
+    def _extract(keys: list[str], default: float = 0.0) -> float:
+        for k in keys:
+            if hasattr(mat, k):
+                val = getattr(mat, k)
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (TypeError, ValueError):
+                        pass
+            if isinstance(params, dict) and k in params:
+                val = params[k]
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (TypeError, ValueError):
+                        pass
+        return default
+
+    # 1. Density rho0 > 0
+    rho0 = getattr(mat, "rho0", None)
+    if rho0 is None:
+        rho0 = _extract(["rho0", "rho", "MAT_RHO", "RHO", "RHO0", "Refer_Rho", "rhor"], default=0.0)
+    else:
+        try:
+            rho0 = float(rho0)
+        except (TypeError, ValueError):
+            rho0 = 0.0
+
+    if rho0 <= 0.0:
+        log.error(f"/MAT/LAW25/{mid}: initial density RHO must be > 0 (got {rho0:g})", "MAT CHECK")
+
+    # 2. Young's moduli: E1 > 0, E2 > 0
+    e11 = _extract(["e11", "E11", "e1", "E1", "MAT_EA", "EA", "MAT_E1"], default=0.0)
+    if e11 <= 0.0:
+        log.error(f"/MAT/LAW25/{mid}: Young's modulus E1 must be > 0 (got {e11:g})", "MAT CHECK")
+
+    e22 = _extract(["e22", "E22", "e2", "E2", "MAT_EB", "EB", "MAT_E2"], default=0.0)
+    if e22 <= 0.0:
+        log.error(f"/MAT/LAW25/{mid}: Young's modulus E2 must be > 0 (got {e22:g})", "MAT CHECK")
+
+    # 3. Poisson's ratio determinant: detc = 1 - nu12*nu21 > 0
+    nu12 = _extract(["nu12", "NU12", "MAT_PRAB", "nu", "NU"], default=0.0)
+    nu21 = nu12 * e22 / e11 if e11 > 0.0 else 0.0
+    detc = 1.0 - nu12 * nu21
+    if detc <= 0.0:
+        log.error(f"/MAT/LAW25/{mid}: invalid Poisson ratio, detc = 1 - nu12*nu21 must be > 0 (got {detc:g})", "MAT CHECK")
+
+    # 4. Shear moduli: G12, G23, G31 > 0
+    g12 = _extract(["g12", "G12", "MAT_GAB", "GAB"], default=0.0)
+    if g12 <= 0.0:
+        log.error(f"/MAT/LAW25/{mid}: shear modulus G12 must be > 0 (got {g12:g})", "MAT CHECK")
+
+    g23 = _extract(["g23", "G23", "MAT_GBC", "GBC"], default=0.0)
+    if g23 <= 0.0:
+        log.error(f"/MAT/LAW25/{mid}: shear modulus G23 must be > 0 (got {g23:g})", "MAT CHECK")
+
+    g31 = _extract(["g31", "G31", "MAT_GCA", "GCA"], default=0.0)
+    if g31 <= 0.0:
+        log.error(f"/MAT/LAW25/{mid}: shear modulus G31 must be > 0 (got {g31:g})", "MAT CHECK")
+
+    # 5. Yield stresses: sigyt1, sigyc1, sigyt2, sigyc2, sigt12, sigc12 > 0
+    sigyt1 = _extract(["sigyt1", "sig_1yt", "MAT_SIGYT1", "SIGYT1", "sigyt_1"], default=0.0)
+    sigyc1 = _extract(["sigyc1", "sig_1yc", "MAT_SIGYC1", "SIGYC1", "MAT_SIG1_yc", "sigyc_1"], default=0.0)
+    sigyt2 = _extract(["sigyt2", "sig_2yt", "MAT_SIGYT2", "SIGYT2", "sigyt_2"], default=0.0)
+    sigyc2 = _extract(["sigyc2", "sig_2yc", "MAT_SIGYC2", "SIGYC2", "MAT_SIG2_yc", "sigyc_2"], default=0.0)
+    sigt12 = _extract(["sigt12", "sigyt12", "sig_12yt", "MAT_SIGT12", "SIGT12", "MAT_SIG12_yt"], default=0.0)
+    sigc12 = _extract(["sigc12", "sigyc12", "sig_12yc", "MAT_SIGC12", "SIGC12"], default=sigt12)
+
+    if sigyt1 <= 0.0:
+        log.error(f"/MAT/LAW25/{mid}: tensile yield stress in dir 1 (sigyt1) must be > 0 (got {sigyt1:g})", "MAT CHECK")
+    if sigyc1 <= 0.0:
+        log.error(f"/MAT/LAW25/{mid}: compressive yield stress in dir 1 (sigyc1) must be > 0 (got {sigyc1:g})", "MAT CHECK")
+    if sigyt2 <= 0.0:
+        log.error(f"/MAT/LAW25/{mid}: tensile yield stress in dir 2 (sigyt2) must be > 0 (got {sigyt2:g})", "MAT CHECK")
+    if sigyc2 <= 0.0:
+        log.error(f"/MAT/LAW25/{mid}: compressive yield stress in dir 2 (sigyc2) must be > 0 (got {sigyc2:g})", "MAT CHECK")
+    if sigt12 <= 0.0:
+        log.error(f"/MAT/LAW25/{mid}: tensile shear yield stress in dir 12 (sigt12) must be > 0 (got {sigt12:g})", "MAT CHECK")
+    if sigc12 <= 0.0:
+        log.error(f"/MAT/LAW25/{mid}: compressive shear yield stress in dir 12 (sigc12) must be > 0 (got {sigc12:g})", "MAT CHECK")
+
+    # 6. Hardening exponent: n <= 1.0
+    iform = 0
+    for k in ["iform", "MAT_Iflag", "iflag", "IFORM", "IFLAG"]:
+        if hasattr(mat, k) and getattr(mat, k) is not None:
+            try:
+                iform = int(getattr(mat, k))
+                break
+            except (TypeError, ValueError):
+                pass
+        if isinstance(params, dict) and k in params and params[k] is not None:
+            try:
+                iform = int(params[k])
+                break
+            except (TypeError, ValueError):
+                pass
+
+    if iform == 0:
+        n = _extract(["n", "N", "MAT_HARD", "hard", "cn"], default=1.0)
+        if n > 1.0:
+            log.error(f"/MAT/LAW25/{mid}: hardening exponent n must be <= 1.0 (got {n:g})", "MAT CHECK")
+    else:
+        n1_t = _extract(["n1_t", "n_1t", "MAT_n1_t", "cnt1"], default=1.0)
+        n1_c = _extract(["n1_c", "n_1c", "MAT_n1_c", "cnc1"], default=1.0)
+        n2_t = _extract(["n2_t", "n_2t", "MAT_n2_t", "cnt2"], default=1.0)
+        n2_c = _extract(["n2_c", "n_2c", "MAT_n2_c", "cnc2"], default=1.0)
+        n12_t = _extract(["n12_t", "n_12t", "MAT_n12_t", "cnt12"], default=1.0)
+        if n1_t > 1.0 or n1_c > 1.0 or n2_t > 1.0 or n2_c > 1.0 or n12_t > 1.0:
+            log.error(f"/MAT/LAW25/{mid}: hardening exponent n must be <= 1.0", "MAT CHECK")
+
+    # 7. Maximum damage: 0 <= dmax <= 1.0
+    dmax = _extract(["dmax", "MAT_DAMAGE", "d_max", "damage"], default=0.0)
+    if dmax < 0.0 or dmax > 1.0:
+        log.error(f"/MAT/LAW25/{mid}: maximum damage dmax must be in [0, 1] (got {dmax:g})", "MAT CHECK")
+
+
+def check_materials(model: Model, log: MessageLog) -> None:
+    """Validate all material parameters across model."""
     # M539: Material LAW34 parameter validation
     for mid, mat in getattr(model, "materials", {}).items():
         if getattr(mat, "law", None) in (34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW"):
@@ -528,6 +578,97 @@ def check_model(model: Model, log: MessageLog) -> None:
         if mid not in getattr(model, "materials", {}):
             if not hasattr(mat32, "fct_id11"):
                 check_mat_law32(mat32, log)
+
+    # M543: Material LAW25 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "MAT_LAW25", "MAT_COMP_PLAS", "MAT_COMPSH", "MAT_TSAI_WU", "MAT_CRASURV", "MAT_COMPOSITE_PLAS"):
+            check_mat_law25(mat, log)
+    for mid, mat25 in getattr(model, "mat_law25s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law25(mat25, log)
+
+
+def check_model(model: Model, log: MessageLog) -> None:
+    if model.numnod == 0:
+        log.error("model has no nodes", "MODEL CHECK")
+    if not any(True for _ in model.element_groups()):
+        log.warning("model has no elements (deck may use only unported "
+                    "element types)", "MODEL CHECK")
+
+    # material law vs element family compatibility (fail in the Starter
+    # with a clear message instead of a NotImplementedError mid-run)
+    for name, group in model.element_groups():
+        allowed = _ALLOWED_LAWS.get(name)
+        if allowed is None and name != "springs":
+            continue
+        for sl, mat, prop in group.state["slices"]:
+            if mat.law == 999 and mat.eos is None:
+                # M37 pack 1: a /MAT/GAS on elements has no pressure or
+                # stiffness of its own — the initial state must come
+                # from an /EOS/IDEAL-GAS card (or the programmatic
+                # P0/T0/RHO0 params); see materials/mat_gas.py.  Checked
+                # before the density (a bare gas card has neither).
+                log.error(f"/MAT/GAS/{mat.id} on {name} elements needs "
+                          f"an /EOS/IDEAL-GAS card for its initial "
+                          f"state (P0, gamma) — a bare gas card has no "
+                          f"element pressure", "MAT CHECK")
+            rho0 = getattr(mat, "rho0", 0.0) or 0.0
+            if rho0 <= 0.0 and mat.law not in _NULL_RHO0_OK_LAWS:
+                law_name = getattr(mat, "law_name", None) \
+                    or f"LAW{mat.law}"
+                log.error(f"/MAT/{law_name}/{mat.id} on {name} elements: "
+                          f"zero or missing initial density "
+                          f"(RHO0={rho0:g}) — element masses cannot be "
+                          f"initialized", "MAT CHECK")
+                continue
+            if getattr(mat, "inactive", False):
+                law_name = getattr(mat, "law_name", f"LAW{mat.law}")
+                log.warning(f"/MAT/{law_name}/{mat.id} on {name} "
+                            f"elements: parsed, physics not implemented "
+                            f"(M37) — the Engine will refuse to run "
+                            f"this model", "MAT CHECK")
+                continue
+            if (mat.law in (38, "38", "LAW38", "VISC_TAB")
+                    or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB")):
+                if name in ("shells", "shells_qbat", "shells_qeph", "sh3n", "trusses", "beams"):
+                    log.error(
+                        f"/MAT/LAW38/{mat.id} (/MAT/VISC_TAB) is not supported for {name} elements "
+                        f"(solids only: bricks, tetras, penta6, pyra5)",
+                        "MAT CHECK",
+                    )
+                    continue
+            if (mat.law in (32, "32", "LAW32", "HILL")
+                    or getattr(mat, "law_name", None) in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL")):
+                if name in ("bricks", "tetras", "penta6", "pyra5", "trusses", "beams"):
+                    log.error(
+                        f"/MAT/LAW32/{mat.id} (/MAT/HILL) is not supported for {name} elements "
+                        f"(shells only: shells, shells_qbat, shells_qeph, sh3n)",
+                        "MAT CHECK",
+                    )
+                    continue
+            if (mat.law in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV")
+                    or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV")):
+                if name in ("trusses", "beams", "springs"):
+                    log.error(
+                        f"/MAT/LAW25/{mat.id} (/MAT/COMP_PLAS) is not supported for {name} elements "
+                        f"(solids and shells only: bricks, tetras, penta6, pyra5, shells, shells_qbat, shells_qeph, sh3n)",
+                        "MAT CHECK",
+                    )
+                    continue
+            if allowed is None:
+                continue
+            if mat.law not in allowed:
+                log.error(f"material LAW{mat.law} (/MAT {mat.id}) is not "
+                          f"ported for {name} elements (supported: "
+                          f"{sorted(allowed, key=str)})", "MAT CHECK")
+            if mat.fail is not None and name in ("trusses", "springs",
+                                                 "beams"):
+                log.warning(f"/FAIL on /MAT {mat.id} is ignored for {name} "
+                            f"(failure is ported for solids and shells)",
+                            "MAT CHECK")
+
+    check_materials(model, log)
+
 
 
     # M38: element groups that reference a parsed-but-not-implemented

@@ -23,4 +23,5 @@ from .entities import (  # noqa: F401
     Material, Property, Part, NodeGroup, Surface, BoundaryCondition,
     InitialVelocity, Gravity, ConcentratedLoad, ImposedVelocity,
     RigidWall, Interface, Line, THRequest, Box,
+    MatLaw25, MatCompPlas, MatCompsh, MatTsaiWu, MatCrasurv, MatCompositePlas,
 )

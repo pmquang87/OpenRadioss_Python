@@ -963,9 +963,11 @@ def forces(group, x, v, vr, dt, fint, mint):
             if cs is not None:
                 deps = shell_ortho.rot_strain_e2m(deps, cs)   # elem -> fiber
             s_old = sig[sl, k, :].copy()
-            s_new, _ = materials.shell_update(
+            s_new, ep_new = materials.shell_update(
                 mat, sig[sl, k, :], deps, st["epsp"][sl, k], dt,
                 _layer_extra(st, sl, k))
+            if ep_new is not None:
+                st["epsp"][sl, k] = ep_new
             if st["chk_fail"]:
                 # /FAIL damage + eps_p_max: break layers, zero their stress
                 # BEFORE they enter the resultants

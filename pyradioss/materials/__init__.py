@@ -115,7 +115,13 @@ try:
                                  shell_update as law25_shell_update,
                                  sound_speed as law25_sound_speed,
                                  consistent_solid_tangent as law25_solid_tangent,
-                                 shell_membrane_tangent as law25_shell_tangent)
+                                 shell_membrane_tangent as law25_shell_tangent,
+                                 build_law25,
+                                 build_comp_plas,
+                                 build_compsh,
+                                 build_tsai_wu,
+                                 build_crasurv,
+                                 build_composite_plas)
 except ImportError:
     law25_composite = None
     law25_solid_update = None
@@ -123,10 +129,17 @@ except ImportError:
     law25_sound_speed = None
     law25_solid_tangent = None
     law25_shell_tangent = None
+    build_law25 = None
+    build_comp_plas = None
+    build_compsh = None
+    build_tsai_wu = None
+    build_crasurv = None
+    build_composite_plas = None
 
 
 def _get_law25():
     global law25_composite, law25_solid_update, law25_shell_update, law25_sound_speed, law25_solid_tangent, law25_shell_tangent
+    global build_law25, build_comp_plas, build_compsh, build_tsai_wu, build_crasurv, build_composite_plas
     if law25_composite is None:
         try:
             from . import law25_composite as _m
@@ -136,6 +149,12 @@ def _get_law25():
             law25_sound_speed = getattr(_m, "sound_speed", None)
             law25_solid_tangent = getattr(_m, "consistent_solid_tangent", None)
             law25_shell_tangent = getattr(_m, "shell_membrane_tangent", None)
+            build_law25 = getattr(_m, "build_law25", None)
+            build_comp_plas = getattr(_m, "build_comp_plas", None)
+            build_compsh = getattr(_m, "build_compsh", None)
+            build_tsai_wu = getattr(_m, "build_tsai_wu", None)
+            build_crasurv = getattr(_m, "build_crasurv", None)
+            build_composite_plas = getattr(_m, "build_composite_plas", None)
         except ImportError:
             pass
     return law25_composite
@@ -375,8 +394,8 @@ def _register_law25():
                 title = getattr(rec, "title", "")
                 return Material(id=mid, law=25, rho0=density, title=title, law_name="LAW25", params=params)
             builder = _dynamic_law25_builder
-        for k in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV",
-                  "MAT_LAW25", "MAT_COMP_PLAS", "MAT_COMPSH", "MAT_TSAI_WU", "MAT_CRASURV"):
+        for k in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS",
+                  "MAT_LAW25", "MAT_COMP_PLAS", "MAT_COMPSH", "MAT_TSAI_WU", "MAT_CRASURV", "MAT_COMPOSITE_PLAS"):
             MAT_PHYSICS_REGISTRY[k] = builder
     except Exception:
         pass
@@ -386,7 +405,7 @@ _register_law25()
 
 
 _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
-    "uv25": (10,),
+    "uv25": (12,),
     "uv32": (2,),
     "uv38": (33,),
 }
@@ -443,6 +462,11 @@ def register_materials():
         if callable(fn):
             fn()
     _register_law32()
+    if law25_composite is not None:
+        fn = getattr(law25_composite, "_register", None)
+        if callable(fn):
+            fn()
+    _register_law25()
 
 
 def extra_shapes(mat, nip=None):
@@ -533,7 +557,7 @@ def extra_shapes(mat, nip=None):
         shapes.update(bfrac=(), aburn=(), eint=(), tb=())
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         shapes.update(mu_bak=(), epxe=(), p_old=())
-    if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV"):
+    if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
         shapes.update(law25_composite.extra_shapes(mat, nip))
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
         shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
@@ -558,8 +582,8 @@ def needs_env(mat) -> bool:
     total pressure as LAW44 — sigeps36.F P = BULK*AMU; M539: LAW34 air pressure;
     M540: LAW37 biphasic liquid-gas density; M541: LAW38 density and time;
     LAW25: composite density)."""
-    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 44, 62, 70, 81)
-            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB"))
+    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 44, 62, 70, 81)
+            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB"))
 
 
 def solid_update(mat, sig, deps, epsp, dt, extra=None):
@@ -644,8 +668,15 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
         if law10_solid_update is not None:
             return law10_solid_update(mat, sig, deps=deps, epsp=epsp, dt=dt, extra=extra, return_tuple=True)
         raise NotImplementedError("LAW10 solid_update not available")
-    if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV"):
-        return law25_composite.solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+    if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
+        sign, epsp_out, c = law25_composite.solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        sig[:] = sign
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
     if getattr(mat, "law", None) in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or getattr(mat, "law_name", None) in ("LAW37", "BIPHAS", "BIPHASIC"):
         return law37_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
     if getattr(mat, "law", None) in (38, "38", "LAW38", "VISC_TAB") or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB"):
@@ -678,7 +709,7 @@ def sound_speed(mat, rho=None, extra=None):
         return law34_boltzmann.sound_speed(mat, rho=rho, extra=extra)
     if law in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or law_name in ("LAW37", "BIPHAS", "BIPHASIC"):
         return law37_sound_speed(mat, rho=rho, extra=extra)
-    if law in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV") or law_name in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV"):
+    if law in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or law_name in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
         return law25_composite.sound_speed(mat, rho=rho, extra=extra)
     if law in (38, "38", "LAW38", "VISC_TAB") or law_name in ("LAW38", "VISC_TAB"):
         _get_law38()
@@ -718,7 +749,7 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         raise NotImplementedError("LAW5 (JWL explosive) is implemented for 3D solid and SPH elements only.")
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         raise NotImplementedError("LAW10 (soil/Drucker-Prager) is implemented for 3D solid elements only.")
-    if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV"):
+    if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
         res = law25_composite.shell_update(mat, sig, deps, epsp, dt, extra)
         return res[0], res[1]
     if mat.law == 34 or getattr(mat, "law_name", None) in ("LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
@@ -842,7 +873,7 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
         raise NotImplementedError("LAW10 solid_tangent not available")
     if getattr(mat, "law", None) in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or getattr(mat, "law_name", None) in ("LAW37", "BIPHAS", "BIPHASIC"):
         return law37_solid_tangent(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
-    if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV"):
+    if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
         return law25_composite.consistent_solid_tangent(mat, sig, epsp=epsp, dt=epsp_incr, extra=extra)
     if getattr(mat, "law", None) in (38, "38", "LAW38", "VISC_TAB") or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB"):
         _get_law38()
@@ -882,7 +913,7 @@ def shell_membrane_tangent(mat):
         return law03_plas_bost.shell_membrane_tangent(mat)
     if mat.law == 34 or getattr(mat, "law_name", None) in ("LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
         return law34_boltzmann.shell_membrane_tangent(mat)
-    if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV"):
+    if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
         return law25_composite.shell_membrane_tangent(mat)
     if getattr(mat, "law", None) in (32, "32", "LAW32", "HILL") or getattr(mat, "law_name", None) in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL"):
         _get_law32()
@@ -949,7 +980,7 @@ def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
     if mat.law == 34 or getattr(mat, "law_name", None) in ("LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
         return law34_boltzmann.consistent_shell_tangent(
             mat, sig, epsp, epsp_incr, extra)
-    if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV"):
+    if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
         return law25_composite.consistent_shell_tangent(
             mat, sig, epsp, epsp_incr, extra)
     raise NotImplementedError(

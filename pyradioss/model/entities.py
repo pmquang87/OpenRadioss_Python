@@ -9410,7 +9410,8 @@ MatDama = MatLaw22
 
 @dataclass
 class MatLaw25:
-    """``/MAT/LAW25`` or ``/MAT/COMP_PLAS`` / ``/MAT/COMPSH``: Composite anisotropic plasticity model."""
+    """``/MAT/LAW25`` or ``/MAT/COMP_PLAS`` / ``/MAT/COMPSH`` / ``/MAT/TSAI_WU`` / ``/MAT/CRASURV``:
+    Composite anisotropic plasticity model (Tsai-Wu or CRASURV formulation)."""
     id: int = 0
     rho0: float = 0.0
     rhor: float = 0.0
@@ -9446,10 +9447,72 @@ class MatLaw25:
     eps_rate_0: float = 0.0
     icc: int = 0
     title: str = ""
+    law: int = 25
+    law_name: str = "LAW25"
+    fail: Optional[Any] = None
+    eos: Optional[Any] = None
+
+    # CRASURV formulation fields (iform=1)
+    iflawp: int = 0
+    # Dir 1 tension
+    b_1t: float = 0.0
+    n_1t: float = 1.0
+    sig_1maxt: float = 0.0
+    c_1t: float = 0.0
+    eps_1t1: float = 0.0
+    eps_2t1: float = 0.0
+    sig_rst1: float = 0.0
+    wpmax_t1: float = 0.0
+    # Dir 2 tension
+    b_2t: float = 0.0
+    n_2t: float = 1.0
+    sig_2maxt: float = 0.0
+    c_2t: float = 0.0
+    eps_1t2: float = 0.0
+    eps_2t2: float = 0.0
+    sig_rst2: float = 0.0
+    wpmax_t2: float = 0.0
+    # Dir 1 compression
+    b_1c: float = 0.0
+    n_1c: float = 1.0
+    sig_1maxc: float = 0.0
+    c_1c: float = 0.0
+    eps_1c1: float = 0.0
+    eps_2c1: float = 0.0
+    sig_rsc1: float = 0.0
+    wpmax_c1: float = 0.0
+    # Dir 2 compression
+    b_2c: float = 0.0
+    n_2c: float = 1.0
+    sig_2maxc: float = 0.0
+    c_2c: float = 0.0
+    eps_1c2: float = 0.0
+    eps_2c2: float = 0.0
+    sig_rsc2: float = 0.0
+    wpmax_c2: float = 0.0
+    # Dir 12 shear
+    b_12t: float = 0.0
+    n_12t: float = 1.0
+    sig_12maxt: float = 0.0
+    c_12t: float = 0.0
+    eps_1t12: float = 0.0
+    eps_2t12: float = 0.0
+    sig_rst12: float = 0.0
+    wpmax_t12: float = 0.0
+
+    # Delamination and rate filtering
+    gamma_ini: float = 0.0
+    gamma_max: float = 0.0
+    d3max: float = 0.0
+    fsmooth: int = 0
+    fcut: float = 0.0
 
 
 MatCompPlas = MatLaw25
 MatCompsh = MatLaw25
+MatTsaiWu = MatLaw25
+MatCrasurv = MatLaw25
+MatCompositePlas = MatLaw25
 
 
 @dataclass

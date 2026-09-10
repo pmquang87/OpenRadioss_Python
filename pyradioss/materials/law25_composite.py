@@ -389,6 +389,7 @@ build_comp_plas = build_law25
 build_compsh = build_law25
 build_tsai_wu = build_law25
 build_crasurv = build_law25
+build_composite_plas = build_law25
 
 
 # ============================================================================
@@ -654,7 +655,9 @@ def _update_point_law25(
     alpha = float(p.get("alpha", p.get("MAT_ALPHA", 1.0)))
 
     # Total strain tracking (m25law.F line 243)
-    epst = epst_val + deps
+    epst = np.copy(epst_val)
+    n_d = min(len(epst), len(deps))
+    epst[:n_d] += deps[:n_d]
 
     # Tensile damage accumulation (mat25_tsaiwu_c.F90 lines 384-402, m25law.F lines 263-293)
     dmg = np.copy(dmg_val)
@@ -1029,6 +1032,9 @@ def shell_update(
     c_val = sound_speed(mat)
     c_arr = np.full(n, float(c_val), dtype=float)
 
+    if epsp is not None and isinstance(epsp, np.ndarray):
+        epsp[:] = ep_out.reshape(epsp.shape)
+
     if is_1d:
         return s_out[0], ep_out[0], float(c_arr[0])
     return s_out, ep_out, c_arr
@@ -1088,6 +1094,9 @@ def solid_update(
     c_val = sound_speed(mat)
     c_arr = np.full(n, float(c_val), dtype=float)
 
+    if epsp is not None and isinstance(epsp, np.ndarray):
+        epsp[:] = ep_out.reshape(epsp.shape)
+
     if is_1d:
         return s_out[0], ep_out[0], float(c_arr[0])
     return s_out, ep_out, c_arr
@@ -1102,7 +1111,8 @@ def _register() -> None:
     try:
         from ..input.mat_reader import MAT_PHYSICS_REGISTRY
         for key in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV",
-                    "COMPOSITE_PLAS", "MAT_LAW25", "MAT_COMP_PLAS", "MAT_COMPSH"):
+                    "COMPOSITE_PLAS", "MAT_LAW25", "MAT_COMP_PLAS", "MAT_COMPSH",
+                    "MAT_TSAI_WU", "MAT_CRASURV", "MAT_COMPOSITE_PLAS"):
             MAT_PHYSICS_REGISTRY[key] = build_law25
     except Exception:
         pass

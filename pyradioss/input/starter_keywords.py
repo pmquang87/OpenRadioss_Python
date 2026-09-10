@@ -1094,10 +1094,17 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW18", "CONCR_DRA", "DRAGON", "THERM", "MAT_CONCR_DRA", "MAT_DRAGON", "MAT_THERM", "LAW18_CONCR_DRA", "LAW18_THERM"):
         read_mat_law18(block, model, log)
         return
-    if lawname in ("LAW22", "TSAI_WU", "TSAIWU", "DAMA", "MAT_TSAI_WU", "MAT_TSAIWU", "MAT_DAMA", "LAW22_TSAI_WU", "LAW22_DAMA"):
+    if lawname in ("LAW22", "TSAIWU", "DAMA", "MAT_TSAIWU", "MAT_DAMA", "LAW22_TSAI_WU", "LAW22_DAMA"):
         read_mat_law22(block, model, log)
         return
-    if lawname in ("LAW25", "COMP_PLAS", "COMPOSITE_PLAS", "COMPSH", "MAT_COMP_PLAS", "MAT_COMPOSITE_PLAS", "MAT_COMPSH", "LAW25_COMP_PLAS", "LAW25_COMPSH"):
+    if lawname in ("TSAI_WU", "MAT_TSAI_WU"):
+        _vc = [c for c in block.cards if not c.is_blank and not c.raw.strip().startswith("#")]
+        if len(_vc) >= 7:
+            read_mat_law25(block, model, log)
+        else:
+            read_mat_law22(block, model, log)
+        return
+    if lawname in ("LAW25", "COMP_PLAS", "COMPOSITE_PLAS", "COMPSH", "MAT_COMP_PLAS", "MAT_COMPOSITE_PLAS", "MAT_COMPSH", "LAW25_COMP_PLAS", "LAW25_COMPSH", "CRASURV", "MAT_CRASURV", "LAW25_CRASURV", "LAW25_TSAI_WU"):
         read_mat_law25(block, model, log)
         return
     if lawname in ("LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "HONEY_SOL", "MAT_HONEYCOMB", "MAT_HONEYCOMB_SOL", "MAT_HONEY_SOL", "LAW28_HONEYCOMB", "LAW28_HONEYCOMB_SOL"):
@@ -38620,7 +38627,7 @@ def read_mat_law22(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law25(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW25`` or ``/MAT/COMP_PLAS`` / ``/MAT/COMPSH`` (M188): Composite plasticity model."""
+    """``/MAT/LAW25`` or ``/MAT/COMP_PLAS`` / ``/MAT/COMPSH`` / ``/MAT/CRASURV``: Composite plasticity model."""
     from ..model.entities import MatLaw25
     from .mat_reader import InactiveMaterial
     mat_id = block.user_id or 0
@@ -38640,6 +38647,21 @@ def read_mat_law25(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     sig_1yt, sig_2yt, sig_1yc, sig_2yc, alpha = 0.0, 0.0, 0.0, 0.0, 0.0
     sig_12yc, sig_12yt, c, eps_rate_0 = 0.0, 0.0, 0.0, 0.0
     icc = 0
+
+    iflawp = 0
+    b_1t, n_1t, sig_1maxt, c_1t = 0.0, 1.0, 0.0, 0.0
+    eps_1t1, eps_2t1, sig_rst1, wpmax_t1 = 0.0, 0.0, 0.0, 0.0
+    b_2t, n_2t, sig_2maxt, c_2t = 0.0, 1.0, 0.0, 0.0
+    eps_1t2, eps_2t2, sig_rst2, wpmax_t2 = 0.0, 0.0, 0.0, 0.0
+    b_1c, n_1c, sig_1maxc, c_1c = 0.0, 1.0, 0.0, 0.0
+    eps_1c1, eps_2c1, sig_rsc1, wpmax_c1 = 0.0, 0.0, 0.0, 0.0
+    b_2c, n_2c, sig_2maxc, c_2c = 0.0, 1.0, 0.0, 0.0
+    eps_1c2, eps_2c2, sig_rsc2, wpmax_c2 = 0.0, 0.0, 0.0, 0.0
+    b_12t, n_12t, sig_12maxt, c_12t = 0.0, 1.0, 0.0, 0.0
+    eps_1t12, eps_2t12, sig_rst12, wpmax_t12 = 0.0, 0.0, 0.0, 0.0
+
+    gamma_ini, gamma_max, d3max = 0.0, 0.0, 0.0
+    fsmooth, fcut = 0, 0.0
 
     if block.fixed:
         if len(valid_cards) > 0:
@@ -38667,30 +38689,6 @@ def read_mat_law25(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             eps_t2 = _safe_float(c3[2]) if len(c3) > 2 else 0.0
             eps_m2 = _safe_float(c3[3]) if len(c3) > 3 else 0.0
             dmax = _safe_float(c3[4]) if len(c3) > 4 else 0.0
-        if len(valid_cards) > 4:
-            c4 = valid_cards[4].cut("MAT_LAW25_5")
-            wpmax = _safe_float(c4[0]) if len(c4) > 0 else 0.0
-            wpref = _safe_float(c4[1]) if len(c4) > 1 else 0.0
-            ioff = _safe_int(c4[2]) if len(c4) > 2 else 0
-        if len(valid_cards) > 5:
-            c5 = valid_cards[5].cut("MAT_LAW25_6")
-            b = _safe_float(c5[0]) if len(c5) > 0 else 0.0
-            n = _safe_float(c5[1]) if len(c5) > 1 else 0.0
-            fmax = _safe_float(c5[2]) if len(c5) > 2 else 0.0
-        if len(valid_cards) > 6:
-            c6 = valid_cards[6].cut("MAT_LAW25_7")
-            sig_1yt = _safe_float(c6[0]) if len(c6) > 0 else 0.0
-            sig_2yt = _safe_float(c6[1]) if len(c6) > 1 else 0.0
-            sig_1yc = _safe_float(c6[2]) if len(c6) > 2 else 0.0
-            sig_2yc = _safe_float(c6[3]) if len(c6) > 3 else 0.0
-            alpha = _safe_float(c6[4]) if len(c6) > 4 else 0.0
-        if len(valid_cards) > 7:
-            c7 = valid_cards[7].cut("MAT_LAW25_8")
-            sig_12yc = _safe_float(c7[0]) if len(c7) > 0 else 0.0
-            sig_12yt = _safe_float(c7[1]) if len(c7) > 1 else 0.0
-            c = _safe_float(c7[2]) if len(c7) > 2 else 0.0
-            eps_rate_0 = _safe_float(c7[3]) if len(c7) > 3 else 0.0
-            icc = _safe_int(c7[4]) if len(c7) > 4 else 0
     else:
         if len(valid_cards) > 0:
             t0 = valid_cards[0].tokens()
@@ -38717,30 +38715,263 @@ def read_mat_law25(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             eps_t2 = _safe_float(t3[2]) if len(t3) > 2 else 0.0
             eps_m2 = _safe_float(t3[3]) if len(t3) > 3 else 0.0
             dmax = _safe_float(t3[4]) if len(t3) > 4 else 0.0
-        if len(valid_cards) > 4:
-            t4 = valid_cards[4].tokens()
-            wpmax = _safe_float(t4[0]) if len(t4) > 0 else 0.0
-            wpref = _safe_float(t4[1]) if len(t4) > 1 else 0.0
-            ioff = _safe_int(t4[2]) if len(t4) > 2 else 0
-        if len(valid_cards) > 5:
-            t5 = valid_cards[5].tokens()
-            b = _safe_float(t5[0]) if len(t5) > 0 else 0.0
-            n = _safe_float(t5[1]) if len(t5) > 1 else 0.0
-            fmax = _safe_float(t5[2]) if len(t5) > 2 else 0.0
-        if len(valid_cards) > 6:
-            t6 = valid_cards[6].tokens()
-            sig_1yt = _safe_float(t6[0]) if len(t6) > 0 else 0.0
-            sig_2yt = _safe_float(t6[1]) if len(t6) > 1 else 0.0
-            sig_1yc = _safe_float(t6[2]) if len(t6) > 2 else 0.0
-            sig_2yc = _safe_float(t6[3]) if len(t6) > 3 else 0.0
-            alpha = _safe_float(t6[4]) if len(t6) > 4 else 0.0
-        if len(valid_cards) > 7:
-            t7 = valid_cards[7].tokens()
-            sig_12yc = _safe_float(t7[0]) if len(t7) > 0 else 0.0
-            sig_12yt = _safe_float(t7[1]) if len(t7) > 1 else 0.0
-            c = _safe_float(t7[2]) if len(t7) > 2 else 0.0
-            eps_rate_0 = _safe_float(t7[3]) if len(t7) > 3 else 0.0
-            icc = _safe_int(t7[4]) if len(t7) > 4 else 0
+
+    parts_upper = [p.upper() for p in getattr(block, "parts", [])]
+    kw_upper = (getattr(block, "keyword", "") or "").upper()
+    is_crasurv = (
+        any(p in ("CRASURV", "MAT_CRASURV", "LAW25_CRASURV") for p in parts_upper)
+        or ("CRASURV" in kw_upper)
+        or (iform == 1 and len(valid_cards) >= 12)
+    )
+
+    if not is_crasurv:
+        # Tsai-Wu formulation (cards 4..9)
+        if block.fixed:
+            if len(valid_cards) > 4:
+                c4 = valid_cards[4].cut("MAT_LAW25_5")
+                wpmax = _safe_float(c4[0]) if len(c4) > 0 else 0.0
+                wpref = _safe_float(c4[1]) if len(c4) > 1 else 0.0
+                ioff = _safe_int(c4[2]) if len(c4) > 2 else 0
+            if len(valid_cards) > 5:
+                c5 = valid_cards[5].cut("MAT_LAW25_6")
+                b = _safe_float(c5[0]) if len(c5) > 0 else 0.0
+                n = _safe_float(c5[1]) if len(c5) > 1 else 0.0
+                fmax = _safe_float(c5[2]) if len(c5) > 2 else 0.0
+            if len(valid_cards) > 6:
+                c6 = valid_cards[6].cut("MAT_LAW25_7")
+                sig_1yt = _safe_float(c6[0]) if len(c6) > 0 else 0.0
+                sig_2yt = _safe_float(c6[1]) if len(c6) > 1 else 0.0
+                sig_1yc = _safe_float(c6[2]) if len(c6) > 2 else 0.0
+                sig_2yc = _safe_float(c6[3]) if len(c6) > 3 else 0.0
+                alpha = _safe_float(c6[4]) if len(c6) > 4 else 0.0
+            if len(valid_cards) > 7:
+                c7 = valid_cards[7].cut("MAT_LAW25_8")
+                sig_12yc = _safe_float(c7[0]) if len(c7) > 0 else 0.0
+                sig_12yt = _safe_float(c7[1]) if len(c7) > 1 else 0.0
+                c = _safe_float(c7[2]) if len(c7) > 2 else 0.0
+                eps_rate_0 = _safe_float(c7[3]) if len(c7) > 3 else 0.0
+                icc = _safe_int(c7[4]) if len(c7) > 4 else 0
+            if len(valid_cards) > 8:
+                c8 = valid_cards[8].cut("MAT_LAW25_9")
+                gamma_ini = _safe_float(c8[0]) if len(c8) > 0 else 0.0
+                gamma_max = _safe_float(c8[1]) if len(c8) > 1 else 0.0
+                d3max = _safe_float(c8[2]) if len(c8) > 2 else 0.0
+            if len(valid_cards) > 9:
+                c9 = valid_cards[9].cut("MAT_LAW25_10")
+                fsmooth = _safe_int(c9[0]) if len(c9) > 0 else 0
+                fcut = _safe_float(c9[1]) if len(c9) > 1 else 0.0
+        else:
+            if len(valid_cards) > 4:
+                t4 = valid_cards[4].tokens()
+                wpmax = _safe_float(t4[0]) if len(t4) > 0 else 0.0
+                wpref = _safe_float(t4[1]) if len(t4) > 1 else 0.0
+                ioff = _safe_int(t4[2]) if len(t4) > 2 else 0
+            if len(valid_cards) > 5:
+                t5 = valid_cards[5].tokens()
+                b = _safe_float(t5[0]) if len(t5) > 0 else 0.0
+                n = _safe_float(t5[1]) if len(t5) > 1 else 0.0
+                fmax = _safe_float(t5[2]) if len(t5) > 2 else 0.0
+            if len(valid_cards) > 6:
+                t6 = valid_cards[6].tokens()
+                sig_1yt = _safe_float(t6[0]) if len(t6) > 0 else 0.0
+                sig_2yt = _safe_float(t6[1]) if len(t6) > 1 else 0.0
+                sig_1yc = _safe_float(t6[2]) if len(t6) > 2 else 0.0
+                sig_2yc = _safe_float(t6[3]) if len(t6) > 3 else 0.0
+                alpha = _safe_float(t6[4]) if len(t6) > 4 else 0.0
+            if len(valid_cards) > 7:
+                t7 = valid_cards[7].tokens()
+                sig_12yc = _safe_float(t7[0]) if len(t7) > 0 else 0.0
+                sig_12yt = _safe_float(t7[1]) if len(t7) > 1 else 0.0
+                c = _safe_float(t7[2]) if len(t7) > 2 else 0.0
+                eps_rate_0 = _safe_float(t7[3]) if len(t7) > 3 else 0.0
+                icc = _safe_int(t7[4]) if len(t7) > 4 else 0
+            if len(valid_cards) > 8:
+                t8 = valid_cards[8].tokens()
+                gamma_ini = _safe_float(t8[0]) if len(t8) > 0 else 0.0
+                gamma_max = _safe_float(t8[1]) if len(t8) > 1 else 0.0
+                d3max = _safe_float(t8[2]) if len(t8) > 2 else 0.0
+            if len(valid_cards) > 9:
+                t9 = valid_cards[9].tokens()
+                fsmooth = _safe_int(t9[0]) if len(t9) > 0 else 0
+                fcut = _safe_float(t9[1]) if len(t9) > 1 else 0.0
+    else:
+        # CRASURV formulation (iform=1, cards 4..17)
+        iform = 1
+        if block.fixed:
+            if len(valid_cards) > 4:
+                c4 = valid_cards[4].cut("MAT_CRASURV_5")
+                wpmax = _safe_float(c4[0]) if len(c4) > 0 else 0.0
+                wpref = _safe_float(c4[1]) if len(c4) > 1 else 0.0
+                ioff = _safe_int(c4[2]) if len(c4) > 2 else 0
+                iflawp = _safe_int(c4[3]) if len(c4) > 3 else 0
+            if len(valid_cards) > 5:
+                c5 = valid_cards[5].cut("MAT_CRASURV_6")
+                c = _safe_float(c5[0]) if len(c5) > 0 else 0.0
+                eps_rate_0 = _safe_float(c5[1]) if len(c5) > 1 else 0.0
+                alpha = _safe_float(c5[2]) if len(c5) > 2 else 0.0
+                icc = _safe_int(c5[4]) if len(c5) > 4 else 0
+            if len(valid_cards) > 6:
+                c6 = valid_cards[6].cut("MAT_CRASURV_7")
+                sig_1yt = _safe_float(c6[0]) if len(c6) > 0 else 0.0
+                b_1t = _safe_float(c6[1]) if len(c6) > 1 else 0.0
+                n_1t = _safe_float(c6[2]) if len(c6) > 2 else 1.0
+                sig_1maxt = _safe_float(c6[3]) if len(c6) > 3 else 0.0
+                c_1t = _safe_float(c6[4]) if len(c6) > 4 else 0.0
+            if len(valid_cards) > 7:
+                c7 = valid_cards[7].cut("MAT_CRASURV_8")
+                eps_1t1 = _safe_float(c7[0]) if len(c7) > 0 else 0.0
+                eps_2t1 = _safe_float(c7[1]) if len(c7) > 1 else 0.0
+                sig_rst1 = _safe_float(c7[2]) if len(c7) > 2 else 0.0
+                wpmax_t1 = _safe_float(c7[3]) if len(c7) > 3 else 0.0
+            if len(valid_cards) > 8:
+                c8 = valid_cards[8].cut("MAT_CRASURV_9")
+                sig_2yt = _safe_float(c8[0]) if len(c8) > 0 else 0.0
+                b_2t = _safe_float(c8[1]) if len(c8) > 1 else 0.0
+                n_2t = _safe_float(c8[2]) if len(c8) > 2 else 1.0
+                sig_2maxt = _safe_float(c8[3]) if len(c8) > 3 else 0.0
+                c_2t = _safe_float(c8[4]) if len(c8) > 4 else 0.0
+            if len(valid_cards) > 9:
+                c9 = valid_cards[9].cut("MAT_CRASURV_10")
+                eps_1t2 = _safe_float(c9[0]) if len(c9) > 0 else 0.0
+                eps_2t2 = _safe_float(c9[1]) if len(c9) > 1 else 0.0
+                sig_rst2 = _safe_float(c9[2]) if len(c9) > 2 else 0.0
+                wpmax_t2 = _safe_float(c9[3]) if len(c9) > 3 else 0.0
+            if len(valid_cards) > 10:
+                c10 = valid_cards[10].cut("MAT_CRASURV_11")
+                sig_1yc = _safe_float(c10[0]) if len(c10) > 0 else 0.0
+                b_1c = _safe_float(c10[1]) if len(c10) > 1 else 0.0
+                n_1c = _safe_float(c10[2]) if len(c10) > 2 else 1.0
+                sig_1maxc = _safe_float(c10[3]) if len(c10) > 3 else 0.0
+                c_1c = _safe_float(c10[4]) if len(c10) > 4 else 0.0
+            if len(valid_cards) > 11:
+                c11 = valid_cards[11].cut("MAT_CRASURV_12")
+                eps_1c1 = _safe_float(c11[0]) if len(c11) > 0 else 0.0
+                eps_2c1 = _safe_float(c11[1]) if len(c11) > 1 else 0.0
+                sig_rsc1 = _safe_float(c11[2]) if len(c11) > 2 else 0.0
+                wpmax_c1 = _safe_float(c11[3]) if len(c11) > 3 else 0.0
+            if len(valid_cards) > 12:
+                c12 = valid_cards[12].cut("MAT_CRASURV_13")
+                sig_2yc = _safe_float(c12[0]) if len(c12) > 0 else 0.0
+                b_2c = _safe_float(c12[1]) if len(c12) > 1 else 0.0
+                n_2c = _safe_float(c12[2]) if len(c12) > 2 else 1.0
+                sig_2maxc = _safe_float(c12[3]) if len(c12) > 3 else 0.0
+                c_2c = _safe_float(c12[4]) if len(c12) > 4 else 0.0
+            if len(valid_cards) > 13:
+                c13 = valid_cards[13].cut("MAT_CRASURV_14")
+                eps_1c2 = _safe_float(c13[0]) if len(c13) > 0 else 0.0
+                eps_2c2 = _safe_float(c13[1]) if len(c13) > 1 else 0.0
+                sig_rsc2 = _safe_float(c13[2]) if len(c13) > 2 else 0.0
+                wpmax_c2 = _safe_float(c13[3]) if len(c13) > 3 else 0.0
+            if len(valid_cards) > 14:
+                c14 = valid_cards[14].cut("MAT_CRASURV_15")
+                sig_12yt = _safe_float(c14[0]) if len(c14) > 0 else 0.0
+                b_12t = _safe_float(c14[1]) if len(c14) > 1 else 0.0
+                n_12t = _safe_float(c14[2]) if len(c14) > 2 else 1.0
+                sig_12maxt = _safe_float(c14[3]) if len(c14) > 3 else 0.0
+                c_12t = _safe_float(c14[4]) if len(c14) > 4 else 0.0
+            if len(valid_cards) > 15:
+                c15 = valid_cards[15].cut("MAT_CRASURV_16")
+                eps_1t12 = _safe_float(c15[0]) if len(c15) > 0 else 0.0
+                eps_2t12 = _safe_float(c15[1]) if len(c15) > 1 else 0.0
+                sig_rst12 = _safe_float(c15[2]) if len(c15) > 2 else 0.0
+                wpmax_t12 = _safe_float(c15[3]) if len(c15) > 3 else 0.0
+            if len(valid_cards) > 16:
+                c16 = valid_cards[16].cut("MAT_CRASURV_17")
+                gamma_ini = _safe_float(c16[0]) if len(c16) > 0 else 0.0
+                gamma_max = _safe_float(c16[1]) if len(c16) > 1 else 0.0
+                d3max = _safe_float(c16[2]) if len(c16) > 2 else 0.0
+            if len(valid_cards) > 17:
+                c17 = valid_cards[17].cut("MAT_CRASURV_18")
+                fsmooth = _safe_int(c17[0]) if len(c17) > 0 else 0
+                fcut = _safe_float(c17[1]) if len(c17) > 1 else 0.0
+        else:
+            if len(valid_cards) > 4:
+                t4 = valid_cards[4].tokens()
+                wpmax = _safe_float(t4[0]) if len(t4) > 0 else 0.0
+                wpref = _safe_float(t4[1]) if len(t4) > 1 else 0.0
+                ioff = _safe_int(t4[2]) if len(t4) > 2 else 0
+                iflawp = _safe_int(t4[3]) if len(t4) > 3 else 0
+            if len(valid_cards) > 5:
+                t5 = valid_cards[5].tokens()
+                c = _safe_float(t5[0]) if len(t5) > 0 else 0.0
+                eps_rate_0 = _safe_float(t5[1]) if len(t5) > 1 else 0.0
+                alpha = _safe_float(t5[2]) if len(t5) > 2 else 0.0
+                if len(t5) > 3:
+                    icc = _safe_int(t5[3])
+            if len(valid_cards) > 6:
+                t6 = valid_cards[6].tokens()
+                sig_1yt = _safe_float(t6[0]) if len(t6) > 0 else 0.0
+                b_1t = _safe_float(t6[1]) if len(t6) > 1 else 0.0
+                n_1t = _safe_float(t6[2]) if len(t6) > 2 else 1.0
+                sig_1maxt = _safe_float(t6[3]) if len(t6) > 3 else 0.0
+                c_1t = _safe_float(t6[4]) if len(t6) > 4 else 0.0
+            if len(valid_cards) > 7:
+                t7 = valid_cards[7].tokens()
+                eps_1t1 = _safe_float(t7[0]) if len(t7) > 0 else 0.0
+                eps_2t1 = _safe_float(t7[1]) if len(t7) > 1 else 0.0
+                sig_rst1 = _safe_float(t7[2]) if len(t7) > 2 else 0.0
+                wpmax_t1 = _safe_float(t7[3]) if len(t7) > 3 else 0.0
+            if len(valid_cards) > 8:
+                t8 = valid_cards[8].tokens()
+                sig_2yt = _safe_float(t8[0]) if len(t8) > 0 else 0.0
+                b_2t = _safe_float(t8[1]) if len(t8) > 1 else 0.0
+                n_2t = _safe_float(t8[2]) if len(t8) > 2 else 1.0
+                sig_2maxt = _safe_float(t8[3]) if len(t8) > 3 else 0.0
+                c_2t = _safe_float(t8[4]) if len(t8) > 4 else 0.0
+            if len(valid_cards) > 9:
+                t9 = valid_cards[9].tokens()
+                eps_1t2 = _safe_float(t9[0]) if len(t9) > 0 else 0.0
+                eps_2t2 = _safe_float(t9[1]) if len(t9) > 1 else 0.0
+                sig_rst2 = _safe_float(t9[2]) if len(t9) > 2 else 0.0
+                wpmax_t2 = _safe_float(t9[3]) if len(t9) > 3 else 0.0
+            if len(valid_cards) > 10:
+                t10 = valid_cards[10].tokens()
+                sig_1yc = _safe_float(t10[0]) if len(t10) > 0 else 0.0
+                b_1c = _safe_float(t10[1]) if len(t10) > 1 else 0.0
+                n_1c = _safe_float(t10[2]) if len(t10) > 2 else 1.0
+                sig_1maxc = _safe_float(t10[3]) if len(t10) > 3 else 0.0
+                c_1c = _safe_float(t10[4]) if len(t10) > 4 else 0.0
+            if len(valid_cards) > 11:
+                t11 = valid_cards[11].tokens()
+                eps_1c1 = _safe_float(t11[0]) if len(t11) > 0 else 0.0
+                eps_2c1 = _safe_float(t11[1]) if len(t11) > 1 else 0.0
+                sig_rsc1 = _safe_float(t11[2]) if len(t11) > 2 else 0.0
+                wpmax_c1 = _safe_float(t11[3]) if len(t11) > 3 else 0.0
+            if len(valid_cards) > 12:
+                t12 = valid_cards[12].tokens()
+                sig_2yc = _safe_float(t12[0]) if len(t12) > 0 else 0.0
+                b_2c = _safe_float(t12[1]) if len(t12) > 1 else 0.0
+                n_2c = _safe_float(t12[2]) if len(t12) > 2 else 1.0
+                sig_2maxc = _safe_float(t12[3]) if len(t12) > 3 else 0.0
+                c_2c = _safe_float(t12[4]) if len(t12) > 4 else 0.0
+            if len(valid_cards) > 13:
+                t13 = valid_cards[13].tokens()
+                eps_1c2 = _safe_float(t13[0]) if len(t13) > 0 else 0.0
+                eps_2c2 = _safe_float(t13[1]) if len(t13) > 1 else 0.0
+                sig_rsc2 = _safe_float(t13[2]) if len(t13) > 2 else 0.0
+                wpmax_c2 = _safe_float(t13[3]) if len(t13) > 3 else 0.0
+            if len(valid_cards) > 14:
+                t14 = valid_cards[14].tokens()
+                sig_12yt = _safe_float(t14[0]) if len(t14) > 0 else 0.0
+                b_12t = _safe_float(t14[1]) if len(t14) > 1 else 0.0
+                n_12t = _safe_float(t14[2]) if len(t14) > 2 else 1.0
+                sig_12maxt = _safe_float(t14[3]) if len(t14) > 3 else 0.0
+                c_12t = _safe_float(t14[4]) if len(t14) > 4 else 0.0
+            if len(valid_cards) > 15:
+                t15 = valid_cards[15].tokens()
+                eps_1t12 = _safe_float(t15[0]) if len(t15) > 0 else 0.0
+                eps_2t12 = _safe_float(t15[1]) if len(t15) > 1 else 0.0
+                sig_rst12 = _safe_float(t15[2]) if len(t15) > 2 else 0.0
+                wpmax_t12 = _safe_float(t15[3]) if len(t15) > 3 else 0.0
+            if len(valid_cards) > 16:
+                t16 = valid_cards[16].tokens()
+                gamma_ini = _safe_float(t16[0]) if len(t16) > 0 else 0.0
+                gamma_max = _safe_float(t16[1]) if len(t16) > 1 else 0.0
+                d3max = _safe_float(t16[2]) if len(t16) > 2 else 0.0
+            if len(valid_cards) > 17:
+                t17 = valid_cards[17].tokens()
+                fsmooth = _safe_int(t17[0]) if len(t17) > 0 else 0
+                fcut = _safe_float(t17[1]) if len(t17) > 1 else 0.0
 
     mat = MatLaw25(
         id=mat_id, rho0=rho0, rhor=rhor, e11=e11, e22=e22, nu12=nu12,
@@ -38749,18 +38980,43 @@ def read_mat_law25(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         eps_t2=eps_t2, eps_m2=eps_m2, dmax=dmax, wpmax=wpmax, wpref=wpref,
         ioff=ioff, b=b, n=n, fmax=fmax, sig_1yt=sig_1yt, sig_2yt=sig_2yt,
         sig_1yc=sig_1yc, sig_2yc=sig_2yc, alpha=alpha, sig_12yc=sig_12yc,
-        sig_12yt=sig_12yt, c=c, eps_rate_0=eps_rate_0, icc=icc, title=title
+        sig_12yt=sig_12yt, c=c, eps_rate_0=eps_rate_0, icc=icc, title=title,
+        iflawp=iflawp,
+        b_1t=b_1t, n_1t=n_1t, sig_1maxt=sig_1maxt, c_1t=c_1t,
+        eps_1t1=eps_1t1, eps_2t1=eps_2t1, sig_rst1=sig_rst1, wpmax_t1=wpmax_t1,
+        b_2t=b_2t, n_2t=n_2t, sig_2maxt=sig_2maxt, c_2t=c_2t,
+        eps_1t2=eps_1t2, eps_2t2=eps_2t2, sig_rst2=sig_rst2, wpmax_t2=wpmax_t2,
+        b_1c=b_1c, n_1c=n_1c, sig_1maxc=sig_1maxc, c_1c=c_1c,
+        eps_1c1=eps_1c1, eps_2c1=eps_2c1, sig_rsc1=sig_rsc1, wpmax_c1=wpmax_c1,
+        b_2c=b_2c, n_2c=n_2c, sig_2maxc=sig_2maxc, c_2c=c_2c,
+        eps_1c2=eps_1c2, eps_2c2=eps_2c2, sig_rsc2=sig_rsc2, wpmax_c2=wpmax_c2,
+        b_12t=b_12t, n_12t=n_12t, sig_12maxt=sig_12maxt, c_12t=c_12t,
+        eps_1t12=eps_1t12, eps_2t12=eps_2t12, sig_rst12=sig_rst12, wpmax_t12=wpmax_t12,
+        gamma_ini=gamma_ini, gamma_max=gamma_max, d3max=d3max,
+        fsmooth=fsmooth, fcut=fcut,
     )
     model.mat_law25s[mat_id] = mat
-    e_val = max(e11, e22, e33, 200e9) if max(e11, e22, e33) > 0 else 200e9
-    model.materials[mat_id] = InactiveMaterial(
-        id=mat_id, law=25, rho0=rho0, title=title, law_name="LAW25",
-        params={
-            "E": e_val, "MAT_E": e_val, "nu": nu12 if 0.0 <= nu12 < 0.5 else 0.3, "MAT_NU": nu12 if 0.0 <= nu12 < 0.5 else 0.3,
-            "MAT_SIGY": sig_1yt if sig_1yt > 0 else 200e6, "rho": rho0, "MAT_RHO": rho0,
-            "E11": e11, "E22": e22, "E33": e33, "NU12": nu12, "G12": g12, "G23": g23, "G31": g31,
-        }
-    )
+    try:
+        from ..materials.law25_composite import build_law25
+        model.materials[mat_id] = build_law25(mat)
+    except Exception:
+        e_val = max(e11, e22, e33, 200e9) if max(e11, e22, e33) > 0 else 200e9
+        model.materials[mat_id] = InactiveMaterial(
+            id=mat_id, law=25, rho0=rho0, title=title, law_name="LAW25",
+            params={
+                "E": e_val, "MAT_E": e_val, "nu": nu12 if 0.0 <= nu12 < 0.5 else 0.3, "MAT_NU": nu12 if 0.0 <= nu12 < 0.5 else 0.3,
+                "MAT_SIGY": sig_1yt if sig_1yt > 0 else 200e6, "rho": rho0, "MAT_RHO": rho0,
+                "E11": e11, "E22": e22, "E33": e33, "NU12": nu12, "G12": g12, "G23": g23, "G31": g31,
+                "IFORM": iform, "MAT_IFLAG": iform,
+            }
+        )
+
+
+read_mat_comp_plas = read_mat_law25
+read_mat_compsh = read_mat_law25
+read_mat_tsai_wu = read_mat_law25
+read_mat_crasurv = read_mat_law25
+read_mat_composite_plas = read_mat_law25
 
 
 def read_mat_law28_m188(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -83403,6 +83659,8 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "COMP_PLAS": read_mat,
     "COMPOSITE_PLAS": read_mat,
     "COMPSH": read_mat,
+    "MAT_CRASURV": read_mat,
+    "CRASURV": read_mat,
     "MAT_HONEYCOMB_SOL": read_mat,
     "MAT_HONEY_SOL": read_mat,
     "HONEYCOMB_SOL": read_mat,

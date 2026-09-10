@@ -33,6 +33,12 @@ LAW_MAP: Dict[str, int] = {
     "LAW19": 19,
     "CONC": 24,
     "LAW24": 24,
+    "COMP_PLAS": 25,
+    "COMPSH": 25,
+    "TSAI_WU": 25,
+    "CRASURV": 25,
+    "COMPOSITE_PLAS": 25,
+    "LAW25": 25,
     "HONEYCOMB": 28,
     "HONEYCOMB_SOL": 28,
     "LAW28": 28,
@@ -72,6 +78,12 @@ LAW_MAP: Dict[str, int] = {
 }
 
 LAW_SYNONYMS: Dict[str, str] = {
+    "COMP_PLAS": "LAW25",
+    "COMPSH": "LAW25",
+    "TSAI_WU": "LAW25",
+    "CRASURV": "LAW25",
+    "COMPOSITE_PLAS": "LAW25",
+    "LAW25": "LAW25",
     "HILL": "LAW32",
     "LAW32": "LAW32",
     "VISC_TAB": "LAW38",

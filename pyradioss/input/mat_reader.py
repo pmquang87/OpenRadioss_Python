@@ -629,6 +629,12 @@ class CfgCatalogue:
         "LAW34": "LAW34",
         "VISC_TAB": "LAW38",
         "LAW38": "LAW38",
+        "COMP_PLAS": "LAW25",
+        "COMPSH": "LAW25",
+        "TSAI_WU": "LAW25",
+        "CRASURV": "LAW25",
+        "COMPOSITE_PLAS": "LAW25",
+        "LAW25": "LAW25",
     }
 
 
