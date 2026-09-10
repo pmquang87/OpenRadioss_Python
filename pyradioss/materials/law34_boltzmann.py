@@ -502,7 +502,10 @@ def shell_update(
     cc2 = gv2 * (c1 + c2_over_dt)
 
     q = extra["uv34"]
-    dezz_old = q[:, 6].copy()
+    if "ezz34" in extra and extra["ezz34"] is not None:
+        dezz_old = np.asarray(extra["ezz34"]).reshape(-1).copy()
+    else:
+        dezz_old = q[:, 6].copy()
     h3 = q[:, 2].copy()  # z-component of deviatoric strain history
 
     # Analytical solution for deps_zz assuming sign_zz = 0 (sigeps34c.F lines 107-111)
@@ -517,6 +520,8 @@ def shell_update(
     ddezz = (2.0 / 3.0) * deps_zz - (1.0 / 3.0) * (deps[:, 0] + deps[:, 1])
     dezz_new = dezz_old + ddezz
     q[:, 6] = dezz_new
+    if "ezz34" in extra and extra["ezz34"] is not None:
+        extra["ezz34"][:] = dezz_new.reshape(extra["ezz34"].shape)
 
     # Accumulate total strains
     eps = extra["eps34"]

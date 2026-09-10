@@ -6,6 +6,9 @@ Upstream Fortran origins:
 - Starter Reader: starter/source/materials/mat/mat034/hm_read_mat34.F
 """
 
+import os
+import io
+import contextlib
 import math
 import numpy as np
 import pytest
@@ -14,6 +17,10 @@ from pyradioss.model.entities import Material
 import pyradioss.materials as pm
 from pyradioss.materials import law34_boltzmann as l34
 from pyradioss.input.mat_reader import MAT_PHYSICS_REGISTRY
+from pyradioss.starter.starter import run_starter
+from pyradioss.engine.engine import run_engine, _energies
+from pyradioss.input.deck_writer import StarterDeck
+from pyradioss.common.messages import MessageLog
 
 
 # =============================================================================
@@ -490,4 +497,252 @@ def test_starter_deck_roundtrip(tmp_path):
     assert mat.params["p0"] == 1.2e5
     assert mat.params["phi"] == 0.15
     assert mat.params.get("gama0", mat.params.get("gamma0")) == 0.01
+
+
+# =============================================================================
+# 8. Explicit Engine Simulation (Multi-Cycle Solid & Shell)
+# =============================================================================
+
+class TestLaw34EngineSimulation:
+    """Multi-cycle explicit engine simulation, stability, and energy balance for LAW34."""
+
+    def test_engine_multi_cycle_simulation_hexa8(self, tmp_path):
+        """Run 25+ explicit cycles of compressive deformation on a solid Hexa8 element."""
+        run_name = "HEXA_BOLTZ"
+        s_path = os.path.join(tmp_path, f"{run_name}_0000.rad")
+        e_path = os.path.join(tmp_path, f"{run_name}_0001.rad")
+
+        deck = StarterDeck(run_name)
+        deck.node([
+            (1, 0.0, 0.0, 0.0),
+            (2, 10.0, 0.0, 0.0),
+            (3, 10.0, 10.0, 0.0),
+            (4, 0.0, 10.0, 0.0),
+            (5, 0.0, 0.0, 10.0),
+            (6, 10.0, 0.0, 10.0),
+            (7, 10.0, 10.0, 10.0),
+            (8, 0.0, 10.0, 10.0),
+        ])
+        deck.brick(1, [(1, 1, 2, 3, 4, 5, 6, 7, 8)])
+        deck.part(1, "BOLTZ_BLOCK", 1, 1)
+        deck.mat_law34(
+            1,
+            rho=1.0e-3,
+            bulk=100.0,
+            g0=30.0,
+            gi=10.0,
+            beta=15.0,
+            p0=1.0,
+            phi=0.1,
+            gamma0=0.01,
+            title="BOLTZMANN_SOLID",
+        )
+        deck.prop_solid(1, "SOLID_PROP")
+
+        deck.grnod_node(1, "base_nodes", [1, 2, 3, 4])
+        deck.grnod_node(2, "top_nodes", [5, 6, 7, 8])
+        deck.bcs(1, "clamp_base", "111", "111", 1)
+        deck.inivel_tra(1, "top_vel", [0.0, 0.0, -1.0], 2)
+        deck.write(s_path)
+
+        engine_deck = f"""/RUN/{run_name}/1
+0.5
+/DT
+0.9 0
+/PRINT/-1
+/STOP
+30
+/END
+"""
+        with open(e_path, "w") as f:
+            f.write(engine_deck)
+
+        log = MessageLog()
+        with contextlib.redirect_stdout(io.StringIO()):
+            st_model = run_starter(s_path, log=log)
+            eng_model = run_engine(e_path)
+
+        assert len(log.errors) == 0
+        mat = st_model.materials[1]
+        assert mat.law == 34
+        assert mat.sound_speed_solid() > 0.0
+
+        state = eng_model.engine_state
+        assert state.cycle >= 20, f"Expected >= 20 cycles, got {state.cycle}"
+        assert not state.stop_reason or "/STOP" in str(state.stop_reason)
+
+        brick_g = dict(eng_model.element_groups())["bricks"]
+        sig = brick_g.state["sig"]
+        assert np.isfinite(sig).all()
+        assert "eps34" in brick_g.state["mat_extra"]
+        assert "uv34" in brick_g.state["mat_extra"]
+        assert np.isfinite(brick_g.state["mat_extra"]["eps34"]).all()
+        assert np.isfinite(brick_g.state["mat_extra"]["uv34"]).all()
+
+        en = _energies(eng_model, state)
+        assert np.isfinite(en["IE"])
+        assert np.isfinite(en["KE"])
+        assert en["IE"] > 0.0
+        assert abs(en["ERR"]) < 5.0
+
+    def test_engine_multi_cycle_simulation_shell4(self, tmp_path):
+        """Run 25+ explicit cycles of in-plane stretch on a BT4 shell element with LAW34."""
+        run_name = "SHELL_BOLTZ"
+        s_path = os.path.join(tmp_path, f"{run_name}_0000.rad")
+        e_path = os.path.join(tmp_path, f"{run_name}_0001.rad")
+
+        deck = StarterDeck(run_name)
+        deck.node([
+            (1, 0.0, 0.0, 0.0),
+            (2, 10.0, 0.0, 0.0),
+            (3, 10.0, 10.0, 0.0),
+            (4, 0.0, 10.0, 0.0),
+        ])
+        deck.shell(1, [(1, 1, 2, 3, 4)])
+        deck.part(1, "SHELL_PART", 1, 1)
+        deck.mat_law34(
+            1,
+            rho=1.0e-3,
+            bulk=100.0,
+            g0=30.0,
+            gi=10.0,
+            beta=15.0,
+            p0=0.0,
+            phi=0.0,
+            gamma0=0.0,
+            title="BOLTZMANN_SHELL",
+        )
+        deck.prop_shell(1, "SHELL_PROP", thick=1.0, nip=3)
+
+        deck.grnod_node(1, "left_nodes", [1, 4])
+        deck.grnod_node(2, "right_nodes", [2, 3])
+        deck.bcs(1, "clamp_left", "111", "111", 1)
+        deck.inivel_tra(1, "stretch_vel", [2.0, 0.0, 0.0], 2)
+        deck.write(s_path)
+
+        engine_deck = f"""/RUN/{run_name}/1
+0.5
+/DT
+0.9 0
+/PRINT/-1
+/STOP
+30
+/END
+"""
+        with open(e_path, "w") as f:
+            f.write(engine_deck)
+
+        log = MessageLog()
+        with contextlib.redirect_stdout(io.StringIO()):
+            st_model = run_starter(s_path, log=log)
+            eng_model = run_engine(e_path)
+
+        assert len(log.errors) == 0
+        mat = st_model.materials[1]
+        assert mat.law == 34
+
+        state = eng_model.engine_state
+        assert state.cycle >= 20, f"Expected >= 20 cycles, got {state.cycle}"
+
+        sh_g = dict(eng_model.element_groups())["shells"]
+        sig = sh_g.state["sig"]
+        assert np.isfinite(sig).all()
+        assert "eps34" in sh_g.state["mat_extra"]
+        assert "uv34" in sh_g.state["mat_extra"]
+        assert np.isfinite(sh_g.state["mat_extra"]["eps34"]).all()
+        assert np.isfinite(sh_g.state["mat_extra"]["uv34"]).all()
+
+        en = _energies(eng_model, state)
+        assert np.isfinite(en["IE"])
+        assert np.isfinite(en["KE"])
+        assert en["IE"] > 0.0
+
+    def test_engine_multielement_compressive_impact_50_steps(self, tmp_path):
+        """Run 50+ explicit integration cycles on a 2x2x2 Hexa8 mesh with air pressure."""
+        run_name = "HEXA_AIR_50"
+        s_path = os.path.join(tmp_path, f"{run_name}_0000.rad")
+        e_path = os.path.join(tmp_path, f"{run_name}_0001.rad")
+
+        deck = StarterDeck(run_name)
+        nodes = []
+        nid = 1
+        node_grid = np.zeros((3, 3, 3), dtype=int)
+        for k in range(3):
+            for j in range(3):
+                for i in range(3):
+                    nodes.append((nid, float(i * 10.0), float(j * 10.0), float(k * 10.0)))
+                    node_grid[i, j, k] = nid
+                    nid += 1
+        deck.node(nodes)
+
+        bricks = []
+        eid = 1
+        for k in range(2):
+            for j in range(2):
+                for i in range(2):
+                    n1 = int(node_grid[i, j, k])
+                    n2 = int(node_grid[i + 1, j, k])
+                    n3 = int(node_grid[i + 1, j + 1, k])
+                    n4 = int(node_grid[i, j + 1, k])
+                    n5 = int(node_grid[i, j, k + 1])
+                    n6 = int(node_grid[i + 1, j, k + 1])
+                    n7 = int(node_grid[i + 1, j + 1, k + 1])
+                    n8 = int(node_grid[i, j + 1, k + 1])
+                    bricks.append((eid, n1, n2, n3, n4, n5, n6, n7, n8))
+                    eid += 1
+        deck.brick(1, bricks)
+        deck.part(1, "FOAM_2X2X2", 1, 1)
+
+        deck.mat_law34(
+            1,
+            rho=1.0e-3,
+            bulk=200.0,
+            g0=50.0,
+            gi=20.0,
+            beta=25.0,
+            p0=5.0,
+            phi=0.15,
+            gamma0=0.01,
+            title="FOAM_AIR_P0",
+        )
+        deck.prop_solid(1, "SOLID_PROP")
+
+        base_nodes = node_grid[:, :, 0].flatten().tolist()
+        top_nodes = node_grid[:, :, 2].flatten().tolist()
+        deck.grnod_node(1, "base_nodes", base_nodes)
+        deck.grnod_node(2, "top_nodes", top_nodes)
+        deck.bcs(1, "clamp_base", "111", "111", 1)
+        deck.inivel_tra(1, "top_impact", [0.0, 0.0, -5.0], 2)
+        deck.write(s_path)
+
+        engine_deck = f"""/RUN/{run_name}/1
+0.8
+/DT
+0.9 0
+/PRINT/-1
+/STOP
+50
+/END
+"""
+        with open(e_path, "w") as f:
+            f.write(engine_deck)
+
+        log = MessageLog()
+        with contextlib.redirect_stdout(io.StringIO()):
+            st_model = run_starter(s_path, log=log)
+            eng_model = run_engine(e_path)
+
+        assert len(log.errors) == 0
+        state = eng_model.engine_state
+        assert state.cycle >= 50, f"Expected >= 50 cycles, got {state.cycle}"
+
+        brick_g = dict(eng_model.element_groups())["bricks"]
+        sig = brick_g.state["sig"]
+        assert np.isfinite(sig).all()
+
+        en = _energies(eng_model, state)
+        assert np.isfinite(en["IE"])
+        assert np.isfinite(en["KE"])
+        assert abs(en["ERR"]) < 5.0
+
 

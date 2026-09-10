@@ -297,8 +297,8 @@ def extra_shapes(mat, nip=None):
         # M538: LAW28 (honeycomb) needs total strain and element deletion flag (solids only)
         shapes.update(eps28=(6,), off28=())
     if mat.law == 34 or getattr(mat, "law_name", None) in ("LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
-        # M539: LAW34 (Boltzmann viscoelastic) needs total strain and history variables
-        shapes.update(eps34=(nip, 3) if nip else (6,), uv34=(nip, 6) if nip else (6,))
+        # M539: LAW34 (Boltzmann viscoelastic) needs total strain and history variables (7 for shells, sigeps34c.F)
+        shapes.update(eps34=(nip, 3) if nip else (6,), uv34=(nip, 7) if nip else (6,))
         if nip:
             shapes.update(ezz34=(nip,))
     if mat.law == 4:
