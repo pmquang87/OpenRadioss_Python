@@ -1262,7 +1262,6 @@ def _octahedral_update(
         sign[:, 5] = sig[:, 5] + d44 * deps[:, 5]
 
     soundsp = np.sqrt(d11 / rho0)
-    sig[:] = sign
     epsp_out = epsp if epsp is not None else np.zeros(n, dtype=sig.dtype)
     return sign, epsp_out, soundsp
 
