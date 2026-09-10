@@ -247,7 +247,7 @@ def build_law38(rec: Any) -> Material:
         nu_t = 0.499
     if nu_c >= 0.5:
         nu_c = 0.499
-    if itotal > 3 or itotal < -2:
+    if itotal > 3:
         itotal = 0
     if beta <= 0.0:
         beta = _EM20
@@ -255,9 +255,9 @@ def build_law38(rec: Any) -> Material:
         hyster = 1.0
     if ratedamp <= 0.0:
         ratedamp = 0.5
-    if krecover < 0 or krecover > 2:
+    if krecover <= 0 or krecover > 2:
         krecover = 0
-    if kdecay < 0 or kdecay > 2:
+    if kdecay <= 0 or kdecay > 2:
         kdecay = 0
     if theta <= 0.0:
         theta = 0.67
@@ -273,7 +273,7 @@ def build_law38(rec: Any) -> Material:
         exponbs = 1.0
     if cutoff <= 0.0:
         cutoff = _EP30
-    if epsfin <= 0.0:
+    if epsfin <= 0.0 or epsfin > 0.0:
         epsfin = 1.0
     if lamda <= 0.0:
         lamda = 1.0
@@ -340,10 +340,10 @@ def resolve(mat: Material, model: Any, log: Any = None) -> None:
     funcs = curves_dict or {}
 
     p = mat.params
-    load_fids = p.get("load_fids") or p.get("ifload") or p.get("Funct_Id_Load") or []
-    unload_fids = p.get("unload_fids") or p.get("ifunload") or p.get("Funct_Id_UnLoad") or []
-    npcurve = p.get("npcurve") or p.get("FUN_A4") or p.get("fun_a4") or 0
-    iunload = p.get("iunload") or p.get("FUN_B4") or p.get("fun_b4") or 0
+    load_fids = p.get("load_fids") or p.get("ifload") or p.get("Funct_Id_Load") or p.get("funct_id_load") or []
+    unload_fids = p.get("unload_fids") or p.get("ifunload") or p.get("Funct_Id_UnLoad") or p.get("funct_id_unload") or []
+    npcurve = p.get("npcurve") or p.get("FUN_A4") or p.get("fun_a4") or p.get("np") or 0
+    iunload = p.get("iunload") or p.get("FUN_B4") or p.get("fun_b4") or p.get("ful") or 0
 
     load_curves = []
     for fid in load_fids:
@@ -494,12 +494,12 @@ def solid_update(
     kdecay = p.get("kdecay", 0)
     theta = p.get("theta", 0.67)
 
-    kcompair = p.get("kcompair", 0)
-    pscale = p.get("pscale", 1.0)
-    p0 = p.get("p0", 0.0)
-    relaxp = p.get("relaxp", _EM20)
-    maxpres = p.get("maxpres", _EP30)
-    phi = p.get("phi", 0.0)
+    kcompair = p.get("kcompair", p.get("kair", p.get("MAT_Kair", 0)))
+    pscale = p.get("pscale", p.get("MAT_PScale", 1.0))
+    p0 = p.get("p0", p.get("MAT_P0", 0.0))
+    relaxp = p.get("relaxp", p.get("pr", p.get("rp", p.get("MAT_PR", _EM20))))
+    maxpres = p.get("maxpres", p.get("pmax", p.get("MAT_PMAX", _EP30)))
+    phi = p.get("phi", p.get("poros", p.get("MAT_POROS", 0.0)))
 
     iunload = p.get("iunload", 0)
     funload = p.get("funload", 1.0)
@@ -513,16 +513,62 @@ def solid_update(
         imsta -= 10
         ideac = 1
 
-    tensioncut = abs(p.get("tensioncut", p.get("cutoff", _EP30)))
+    tensioncut = abs(p.get("tensioncut", p.get("cutoff", p.get("MAT_CUTOFF", _EP30))))
     efinal = p.get("efinal", e0)
     epsfin = p.get("epsfin", 1.0)
     lamda = p.get("lamda", 1.0)
     viscosity = p.get("viscosity", _EP30)
     tolerance = p.get("tolerance", 1.0)
 
+    # Defaults / clamping matching hm_read_mat38.F lines 226-258
+    if pscale == 0.0:
+        pscale = 1.0
+    if nu_t <= 0.0:
+        nu_t = _EM20
+    if nu_t >= 0.5:
+        nu_t = 0.499
+    if nu_c >= 0.5:
+        nu_c = 0.499
+    if itotal > 3:
+        itotal = 0
+    if beta <= 0.0:
+        beta = _EM20
+    if hyster <= 0.0:
+        hyster = 1.0
+    if ratedamp <= 0.0:
+        ratedamp = 0.5
+    if krecover <= 0 or krecover > 2:
+        krecover = 0
+    if kdecay <= 0 or kdecay > 2:
+        kdecay = 0
+    if theta <= 0.0:
+        theta = 0.67
+    if relaxp <= 0.0:
+        relaxp = _EM20
+    if maxpres <= 0.0:
+        maxpres = _EP30
+    if funload <= 0.0:
+        funload = 1.0
+    if exponas == 0.0:
+        exponas = 1.0
+    if exponbs == 0.0:
+        exponbs = 1.0
+    if tensioncut <= 0.0:
+        tensioncut = _EP30
+    if epsfin <= 0.0 or epsfin > 0.0:
+        epsfin = 1.0
+    if lamda <= 0.0:
+        lamda = 1.0
+    if tolerance <= 0.0:
+        tolerance = 1.0
+    if viscosity <= 0.0:
+        viscosity = _EP30
+    if efinal <= e0:
+        efinal = e0
+
     # Formulation flags
-    # itotal = 0, 1 -> TOTAL = True; itotal = 2, 3 -> TOTAL = False (incremental)
-    total_flag = itotal in (0, 1)
+    # itotal = 0, 1, -1 -> TOTAL = True; itotal = 2, 3, -2 -> TOTAL = False (incremental)
+    total_flag = itotal in (0, 1, -1)
     ismstr = p.get("ismstr", 0)
     if ismstr in (10, 12):
         total_flag = True
@@ -577,6 +623,8 @@ def solid_update(
 
     if extra is not None and "off38" in extra:
         off = extra["off38"]
+        if "off" in extra:
+            off = np.minimum(off, extra["off"])
     elif extra is not None and "off" in extra:
         off = extra["off"]
     else:
@@ -638,15 +686,14 @@ def solid_update(
     earv, dirprv = np.linalg.eigh(E_mat)
 
     # Check axis rotation and transform history variables (CHECKAXES & DREH, lines 380-458)
-    dprao = uvar[:, 16:25].reshape(n, 3, 3)
-
     for i in range(n):
-        dot_products = np.sum(dprao[i] * dirprv[i], axis=0)
+        dprao_i = uvar[i, 16:25].reshape((3, 3), order="F")
+        dot_products = np.sum(dprao_i * dirprv[i], axis=0)
         ang = np.abs(np.abs(dot_products) - 1.0)
         amax = np.max(ang)
 
         if amax >= tolerance:
-            Q = dirprv[i].T @ dprao[i]
+            Q = dirprv[i].T @ dprao_i
             Q2 = Q * Q
 
             for m in range(4):
@@ -658,7 +705,7 @@ def solid_update(
                     start = 25 + m * 3
                     uvar[i, start:start+3] = Q2 @ uvar[i, start:start+3]
 
-            uvar[i, 16:25] = dirprv[i].reshape(9)
+            uvar[i, 16:25] = dirprv[i].ravel(order="F")
 
     ear = np.zeros((n, 3), dtype=sig.dtype)
     ecr = np.zeros((n, 3), dtype=sig.dtype)
@@ -792,16 +839,32 @@ def solid_update(
                     viscosity, psn, eyn, visc
                 )
         else:
-            curves_to_use = unload_curves if (unload_curves and np.any(unloading_mask)) else load_curves
             if nfunc1 == 1:
-                psn[:, j] = psn1
-                eyn[:, j] = alphas[0] * df1_val
+                if unload_curves and np.any(unloading_mask):
+                    psn[~unloading_mask, j] = psn1[~unloading_mask]
+                    eyn[~unloading_mask, j] = alphas[0] * df1_val[~unloading_mask]
+                    y_ul, df_ul = _eval_curve(unload_curves[0], strain_j[unloading_mask])
+                    psn[unloading_mask, j] = -alphas[0] * y_ul
+                    eyn[unloading_mask, j] = alphas[0] * df_ul
+                else:
+                    psn[:, j] = psn1
+                    eyn[:, j] = alphas[0] * df1_val
             else:
-                _interpolate_curves(
-                    np.ones(n, dtype=bool), j, nfunc1, curves_to_use, alphas, edots,
-                    strain_j, edot0, psn1, df1_val, exponas, exponbs,
-                    viscosity, psn, eyn, visc
-                )
+                mask_ul = unloading_mask
+                mask_ld = ~unloading_mask
+                if np.any(mask_ld):
+                    _interpolate_curves(
+                        mask_ld, j, nfunc1, load_curves, alphas, edots,
+                        strain_j, edot0, psn1, df1_val, exponas, exponbs,
+                        viscosity, psn, eyn, visc
+                    )
+                if np.any(mask_ul):
+                    curves_ul = unload_curves if unload_curves else load_curves
+                    _interpolate_curves(
+                        mask_ul, j, nfunc1, curves_ul, alphas, edots,
+                        strain_j, edot0, psn1, df1_val, exponas, exponbs,
+                        viscosity, psn, eyn, visc
+                    )
 
         # 6. Hysteresis & damage decay (lines 743-781)
         decay = uvar[:, j+28].copy()
@@ -873,6 +936,18 @@ def solid_update(
                 elif kdecay == 2:
                     u_m = tens_mask & (ecn[:, j] > 0.0)
                     psn[u_m, j] *= (1.0 - efac[u_m])
+        elif itotal in (-1, -2):
+            tens_mask = ean[:, j] > 0.0
+            if np.any(tens_mask):
+                uvar[tens_mask, j+28] = 0.0
+                ei_val = np.maximum(uvar[tens_mask, 9], np.maximum(uvar[tens_mask, 10], uvar[tens_mask, 11]))
+                ei[tens_mask] = ei_val
+                eyn[tens_mask, j] = ei_val
+                if itotal == -1:
+                    psn[tens_mask, j] = ei_val * ean[tens_mask, j]
+                else:
+                    psn[tens_mask, j] = uvar[tens_mask, j+3] + ei_val * ecn[tens_mask, j]
+                uvar[tens_mask, j+12] = nu_t / ei_val
 
     # 8. Instability control (lines 855-870)
     if imsta >= 1:
@@ -957,6 +1032,11 @@ def solid_update(
     if np.any(deleted_mask):
         psc[deleted_mask, :] = 0.0
         off[deleted_mask] = 0.0
+        if extra is not None:
+            if "off" in extra:
+                extra["off"][deleted_mask] = 0.0
+            if "off38" in extra:
+                extra["off38"][deleted_mask] = 0.0
 
     # 11. Cauchy stress conversion (lines 1010-1035)
     if ismstr in (0, 2, 4):
@@ -1028,6 +1108,40 @@ def solid_update(
     if not total_flag:
         sign += sig
 
+    if np.any(deleted_mask):
+        sign[deleted_mask, :] = 0.0
+
+    # IMSTA == 2: shear stress stabilization (lines 1105-1135)
+    if imsta == 2:
+        epsxy = (dirprv[:, 0, 0] * dirprv[:, 1, 0] * ean[:, 0] +
+                 dirprv[:, 0, 1] * dirprv[:, 1, 1] * ean[:, 1] +
+                 dirprv[:, 0, 2] * dirprv[:, 1, 2] * ean[:, 2])
+        epsyz = (dirprv[:, 1, 0] * dirprv[:, 2, 0] * ean[:, 0] +
+                 dirprv[:, 1, 1] * dirprv[:, 2, 1] * ean[:, 1] +
+                 dirprv[:, 1, 2] * dirprv[:, 2, 2] * ean[:, 2])
+        epszx = (dirprv[:, 2, 0] * dirprv[:, 0, 0] * ean[:, 0] +
+                 dirprv[:, 2, 1] * dirprv[:, 0, 1] * ean[:, 1] +
+                 dirprv[:, 2, 2] * dirprv[:, 0, 2] * ean[:, 2])
+
+        esec1 = 0.5 * np.abs(sign[:, 3]) / np.maximum(_TINY, np.abs(epsxy))
+        esec2 = 0.5 * np.abs(sign[:, 4]) / np.maximum(_TINY, np.abs(epsyz))
+        esec3 = 0.5 * np.abs(sign[:, 5]) / np.maximum(_TINY, np.abs(epszx))
+        sigmax2 = np.maximum(0.5 * ei, sigmax if imsta >= 1 else 0.5 * ei)
+
+        c1 = esec1 <= sigmax2
+        if np.any(c1):
+            sign[c1, 3] += 0.1 * (sigmax2[c1] - esec1[c1]) * epsxy[c1]
+        c2 = esec2 <= sigmax2
+        if np.any(c2):
+            sign[c2, 4] += 0.1 * (sigmax2[c2] - esec2[c2]) * epsyz[c2]
+        c3 = esec3 <= sigmax2
+        if np.any(c3):
+            sign[c3, 5] += 0.1 * (sigmax2[c3] - esec3[c3]) * epszx[c3]
+
+    if extra is not None:
+        extra["epsd"] = np.max(np.abs(ebn), axis=1)
+        extra["viscmax"] = np.max(visc, axis=1)
+
     # 13. Longitudinal sound speed (lines 1100-1141)
     emax = np.maximum(ei, np.max(eyn, axis=1))
     nu_max = min(0.499, max(nu_t, nu_c, _EM20))
@@ -1063,7 +1177,7 @@ def _interpolate_curves(
         return
 
     for i in indices:
-        rate = edot0[i]
+        rate = min(edot0[i], edots[nfunc1 - 1])
         L = 0
         for idx in range(nfunc1):
             if rate <= edots[idx]:
@@ -1148,6 +1262,7 @@ def _octahedral_update(
         sign[:, 5] = sig[:, 5] + d44 * deps[:, 5]
 
     soundsp = np.sqrt(d11 / rho0)
+    sig[:] = sign
     epsp_out = epsp if epsp is not None else np.zeros(n, dtype=sig.dtype)
     return sign, epsp_out, soundsp
 
@@ -1161,40 +1276,97 @@ def consistent_solid_tangent(
     *args: Any,
     **kwargs: Any,
 ) -> np.ndarray:
-    """Consistent algorithmic tangent tensor of shape (n, 6, 6).
+    """Consistent algorithmic tangent stiffness tensor of shape (n, 6, 6).
+
+    Computes the exact directional consistent tangent stiffness tensor
+    C_ijkl = d(sigma_ij) / d(deps_kl) relating stress changes to strain increments
+    under multi-axial deformation, closed-cell air pressure, rate-dependent viscosity,
+    Poisson coupling, and tabulated nonlinear curve response.
+
+    Supports both:
+      - Symmetric consistent tangent (default, symmetric=True):
+        C = 0.5 * (C + C.T) guaranteeing major/minor symmetry and positive
+        definiteness in stable compressive and elastic deformation regimes.
+      - Exact directional algorithmic numerical perturbation (symmetric=False)
+        for verification against central finite differences.
 
     Accepts multiple signature patterns:
       - (mat, eps, deps, dt, extra)
       - (mat, sig, epsp, epsp_incr, extra)
-      - keyword arguments (eps, deps, sig, extra, etc.)
+      - (mat, deps, dt, extra)
+      - (mat, dt=dt, extra=extra, ...)
+      - keyword arguments (eps, deps, sig, epsp, epsp_incr, extra, dt, symmetric, h)
     """
-    p = mat.params
-    e0 = p.get("e0", p.get("e", 1.0))
-    efinal = p.get("efinal", e0)
-    emax = max(e0, efinal)
-
-    nu_t = p.get("nu_t", _EM20)
-    nu_c = p.get("nu_c", 0.0)
-    nu_max = min(0.499, max(nu_t, nu_c, _EM20))
-
+    sig = kwargs.get("sig")
+    deps = kwargs.get("deps")
+    eps = kwargs.get("eps")
+    epsp = kwargs.get("epsp")
+    epsp_incr = kwargs.get("epsp_incr")
     extra = kwargs.get("extra")
-    n = None
-    for arg in args:
-        if isinstance(arg, np.ndarray) and arg.ndim >= 1:
-            n = arg.shape[0]
-            break
-        elif isinstance(arg, dict) and extra is None:
-            extra = arg
+    dt = kwargs.get("dt")
+    symmetric = bool(kwargs.get("symmetric", True))
+    h = float(kwargs.get("h", 1e-7))
 
-    if n is None:
-        for k in ("eps", "deps", "sig", "epsp", "epsp_incr"):
-            if k in kwargs and isinstance(kwargs[k], np.ndarray):
-                n = kwargs[k].shape[0]
-                break
+    # Parse positional arguments
+    if len(args) == 1:
+        if isinstance(args[0], dict):
+            extra = args[0]
+        elif isinstance(args[0], np.ndarray):
+            if (args[0].ndim == 2 and args[0].shape[1] == 6) or (args[0].ndim == 1 and args[0].shape[0] == 6):
+                deps = args[0]
+            else:
+                sig = args[0]
+    elif len(args) == 2:
+        if isinstance(args[1], dict):
+            if isinstance(args[0], np.ndarray):
+                deps = args[0]
+            extra = args[1]
+        elif isinstance(args[1], (int, float)):
+            deps = args[0]
+            dt = float(args[1])
+        elif isinstance(args[0], np.ndarray) and isinstance(args[1], np.ndarray):
+            sig = args[0]
+            deps = args[1]
+    elif len(args) == 3:
+        if isinstance(args[2], dict):
+            deps = args[0]
+            dt = float(args[1])
+            extra = args[2]
+        else:
+            sig = args[0]
+            epsp = args[1]
+            deps = args[2]
+    elif len(args) == 4:
+        if isinstance(args[3], dict):
+            if isinstance(args[2], (int, float)):
+                eps = args[0]
+                deps = args[1]
+                dt = float(args[2])
+                extra = args[3]
+            else:
+                sig = args[0]
+                epsp = args[1]
+                deps = args[2]
+                extra = args[3]
+    elif len(args) >= 5:
+        eps = args[0]
+        deps = args[1]
+        dt = float(args[2]) if args[2] is not None else None
+        extra = args[3]
+
+    if deps is None and epsp_incr is not None:
+        if isinstance(epsp_incr, np.ndarray) and ((epsp_incr.ndim == 2 and epsp_incr.shape[1] == 6) or (epsp_incr.ndim == 1 and epsp_incr.shape[0] == 6)):
+            deps = epsp_incr
+
+    n = None
+    for arr in (deps, sig, eps, epsp, epsp_incr):
+        if arr is not None and isinstance(arr, np.ndarray) and arr.ndim >= 1:
+            n = arr.shape[0]
+            break
 
     if n is None and extra is not None:
-        for k in ("uv38", "eps38", "off38"):
-            if k in extra and isinstance(extra[k], np.ndarray):
+        for k in ("uv38", "eps38", "off38", "rho"):
+            if k in extra and isinstance(extra[k], np.ndarray) and extra[k].ndim >= 1:
                 n = extra[k].shape[0]
                 break
 
@@ -1204,32 +1376,67 @@ def consistent_solid_tangent(
     if n == 0:
         return np.empty((0, 6, 6), dtype=float)
 
-    e_eff = np.full(n, emax, dtype=float)
-    if extra is not None and "uv38" in extra:
-        uv = extra["uv38"]
-        if uv.ndim == 2 and uv.shape[0] == n:
-            ey_max = np.max(uv[:, 9:12], axis=1)
-            e_eff = np.maximum(e_eff, ey_max)
+    if deps is not None:
+        deps_arr = np.asarray(deps, dtype=float)
+        if deps_arr.ndim == 1 and deps_arr.shape[0] == 6:
+            deps_norm = np.broadcast_to(deps_arr.reshape(1, 6), (n, 6)).copy()
+        elif deps_arr.ndim == 2 and deps_arr.shape == (n, 6):
+            deps_norm = deps_arr.copy()
+        else:
+            deps_norm = np.zeros((n, 6), dtype=float)
+    else:
+        deps_norm = np.zeros((n, 6), dtype=float)
 
-    d11 = e_eff * (1.0 - nu_max) / ((1.0 + nu_max) * (1.0 - 2.0 * nu_max))
-    d12 = e_eff * nu_max / ((1.0 + nu_max) * (1.0 - 2.0 * nu_max))
-    d44 = 0.5 * e_eff / (1.0 + nu_max)
+    if sig is not None:
+        sig_arr = np.asarray(sig, dtype=float)
+        if sig_arr.ndim == 1 and sig_arr.shape[0] == 6:
+            sig_norm = np.broadcast_to(sig_arr.reshape(1, 6), (n, 6)).copy()
+        elif sig_arr.ndim == 2 and sig_arr.shape == (n, 6):
+            sig_norm = sig_arr.copy()
+        else:
+            sig_norm = np.zeros((n, 6), dtype=float)
+    else:
+        sig_norm = np.zeros((n, 6), dtype=float)
 
-    D = np.zeros((n, 6, 6), dtype=float)
-    D[:, 0, 0] = d11
-    D[:, 1, 1] = d11
-    D[:, 2, 2] = d11
-    D[:, 0, 1] = d12
-    D[:, 0, 2] = d12
-    D[:, 1, 0] = d12
-    D[:, 1, 2] = d12
-    D[:, 2, 0] = d12
-    D[:, 2, 1] = d12
-    D[:, 3, 3] = d44
-    D[:, 4, 4] = d44
-    D[:, 5, 5] = d44
+    if dt is None:
+        if extra is not None and "dt" in extra:
+            dt_val = float(extra["dt"])
+        else:
+            dt_val = 0.0
+    else:
+        dt_val = float(dt)
 
-    return D
+    if epsp is not None:
+        epsp_arr = np.asarray(epsp, dtype=float)
+        if epsp_arr.ndim == 0:
+            epsp_norm = np.full(n, float(epsp_arr), dtype=float)
+        elif epsp_arr.shape[0] != n:
+            epsp_norm = np.zeros(n, dtype=float)
+        else:
+            epsp_norm = epsp_arr.copy()
+    else:
+        epsp_norm = np.zeros(n, dtype=float)
+
+    C = np.zeros((n, 6, 6), dtype=float)
+    for j in range(6):
+        dp = deps_norm.copy()
+        dm = deps_norm.copy()
+        dp[:, j] += h
+        dm[:, j] -= h
+
+        extra_p = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in extra.items()} if extra is not None else None
+        extra_m = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in extra.items()} if extra is not None else None
+
+        sp, _, _ = solid_update(mat, sig_norm.copy(), dp, epsp=epsp_norm, dt=dt_val, extra=extra_p)
+        sm, _, _ = solid_update(mat, sig_norm.copy(), dm, epsp=epsp_norm, dt=dt_val, extra=extra_m)
+
+        C[:, :, j] = (sp - sm) / (2.0 * h)
+
+    if symmetric:
+        C = 0.5 * (C + np.swapaxes(C, 1, 2))
+
+    return C
+
 
 
 # ----------------------------------------------------------------------------

@@ -167,7 +167,8 @@ def test_tension_stiffening():
     e0 = 100.0
     efinal = 500.0
     lamda = 2.0
-    epsfin = 0.1
+    # Upstream hm_read_mat38.F:253 forces EPSFIN=1.0 for any real value
+    epsfin = 1.0
     mat = build_law38({
         "id": 11,
         "rho0": 1.0,
