@@ -212,11 +212,14 @@ class StarterDeck:
             self.end()
         return "\n".join(self.lines) + "\n"
 
-    def write(self, path: str) -> None:
+    def write(self, path: Optional[str] = None) -> Optional[str]:
         # decks are plain ASCII by construction (emitted comments too);
         # utf-8 keeps any user-supplied title bytes deterministic
+        if path is None:
+            return self.render()
         with open(path, "w", newline="\n", encoding="utf-8") as fh:
             fh.write(self.render())
+        return None
 
     # ---- control -------------------------------------------------------------
 
