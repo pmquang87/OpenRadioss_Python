@@ -819,6 +819,158 @@ class StarterDeck:
     mat_biphas = mat_law37
     mat_biphasic = mat_law37
 
+    def mat_law32(
+        self,
+        mat_id: int = 0,
+        rho: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        sigy: float = 1.0e30,
+        beta: float = 0.0,
+        hard: float = 1.0,
+        eps: float = 1.0e30,
+        sig: float = 1.0e30,
+        srp: float = 1.0,
+        src: float = 0.0,
+        r00: float = 1.0,
+        r45: float = 1.0,
+        r90: float = 1.0,
+        rhor: float | None = None,
+        title: str = "",
+        unit_id: int | None = None,
+        law_name: str = "LAW32",
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW32`` (/MAT/HILL) — cfg MAT/matl32_hill.cfg
+        (FORMAT radioss90/radioss110):
+        Card 1: MAT_RHO, [Refer_Rho] (%20lg[%20lg]) — MAT_LAW32_1: (20, 20)
+        Card 2: MAT_E, MAT_NU (%20lg%20lg) — MAT_LAW32_2: (20, 20)
+        Card 3: MAT_SIGY, MAT_BETA, MAT_HARD, MAT_EPS, MAT_SIG (%20lg*5) — MAT_LAW32_3: (20, 20, 20, 20, 20)
+        Card 4: MAT_SRP, MAT_SRC (%20lg%20lg) — MAT_LAW32_4: (20, 20)
+        Card 5: MAT_R00, MAT_R45, MAT_R90 (%20lg*3) — MAT_LAW32_5: (20, 20, 20)
+
+        Hill (1948) anisotropic plasticity material model for shells.
+        """
+        # Allow title as 2nd positional argument if passed as string: mat_law32(1, "title", rho, e, nu...)
+        if isinstance(rho, str):
+            actual_title = rho
+            actual_rho = float(e) if isinstance(e, (int, float, str)) and str(e).strip() else 0.0
+            actual_e = float(nu) if isinstance(nu, (int, float, str)) and str(nu).strip() else 0.0
+            actual_nu = float(sigy) if isinstance(sigy, (int, float, str)) and str(sigy).strip() else 0.0
+            actual_sigy = float(beta) if isinstance(beta, (int, float, str)) and str(beta).strip() else 1.0e30
+            actual_beta = float(hard) if isinstance(hard, (int, float, str)) and str(hard).strip() else 0.0
+            actual_hard = float(eps) if isinstance(eps, (int, float, str)) and str(eps).strip() else 1.0
+            actual_eps = float(sig) if isinstance(sig, (int, float, str)) and str(sig).strip() else 1.0e30
+            actual_sig = float(srp) if isinstance(srp, (int, float, str)) and str(srp).strip() else 1.0e30
+            actual_srp = float(src) if isinstance(src, (int, float, str)) and str(src).strip() else 1.0
+            actual_src = float(r00) if isinstance(r00, (int, float, str)) and str(r00).strip() else 0.0
+            actual_r00 = float(r45) if isinstance(r45, (int, float, str)) and str(r45).strip() else 1.0
+            actual_r45 = float(r90) if isinstance(r90, (int, float, str)) and str(r90).strip() else 1.0
+            actual_r90 = float(rhor) if isinstance(rhor, (int, float, str)) and str(rhor).strip() else 1.0
+            title = actual_title
+            rho = actual_rho
+            e = actual_e
+            nu = actual_nu
+            sigy = actual_sigy
+            beta = actual_beta
+            hard = actual_hard
+            eps = actual_eps
+            sig = actual_sig
+            srp = actual_srp
+            src = actual_src
+            r00 = actual_r00
+            r45 = actual_r45
+            r90 = actual_r90
+            rhor = None
+
+        if "id" in kwargs and mat_id == 0:
+            mat_id = kwargs["id"]
+        elif "mid" in kwargs and mat_id == 0:
+            mat_id = kwargs["mid"]
+        if "rho0" in kwargs and rho == 0.0:
+            rho = kwargs["rho0"]
+        if rhor is None and "refer_rho" in kwargs:
+            rhor = kwargs["refer_rho"]
+        if rhor is None and "rho_ref" in kwargs:
+            rhor = kwargs["rho_ref"]
+        if "a" in kwargs and sigy == 1.0e30:
+            sigy = kwargs["a"]
+        if "ca" in kwargs and sigy == 1.0e30:
+            sigy = kwargs["ca"]
+        if "yield_param" in kwargs and sigy == 1.0e30:
+            sigy = kwargs["yield_param"]
+        if "b" in kwargs and beta == 0.0:
+            beta = kwargs["b"]
+        if "ce" in kwargs and beta == 0.0:
+            beta = kwargs["ce"]
+        if "epsilon_0" in kwargs and beta == 0.0:
+            beta = kwargs["epsilon_0"]
+        if "hardening_param" in kwargs and beta == 0.0:
+            beta = kwargs["hardening_param"]
+        if "n" in kwargs and hard == 1.0:
+            hard = kwargs["n"]
+        if "cn" in kwargs and hard == 1.0:
+            hard = kwargs["cn"]
+        if "hardening_exp" in kwargs and hard == 1.0:
+            hard = kwargs["hardening_exp"]
+        if "eps_max" in kwargs and eps == 1.0e30:
+            eps = kwargs["eps_max"]
+        if "epsm" in kwargs and eps == 1.0e30:
+            eps = kwargs["epsm"]
+        if "sig_max" in kwargs and sig == 1.0e30:
+            sig = kwargs["sig_max"]
+        if "sigm" in kwargs and sig == 1.0e30:
+            sig = kwargs["sigm"]
+        if "eps_dot_0" in kwargs and srp == 1.0:
+            srp = kwargs["eps_dot_0"]
+        if "eps0" in kwargs and srp == 1.0:
+            srp = kwargs["eps0"]
+        if "m" in kwargs and src == 0.0:
+            src = kwargs["m"]
+        if "cm" in kwargs and src == 0.0:
+            src = kwargs["cm"]
+        if "title" in kwargs and not title:
+            title = kwargs["title"]
+        if "law" in kwargs:
+            law_name = kwargs["law"]
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mat_id, unit_id)
+        else:
+            self._header("MAT", law_name, mat_id)
+
+        self._title(title)
+
+        # Card 1: RHO_I [RHO_O]
+        if rhor is not None and rhor != 0.0 and rhor != rho:
+            self.lines.append("#              RHO_I               RHO_O")
+            self.lines.append(fmt_float(rho) + fmt_float(rhor))
+        else:
+            self.lines.append("#              RHO_I")
+            self.lines.append(fmt_float(rho))
+
+        # Card 2: E NU
+        self.lines.append("#                  E                  NU")
+        self.lines.append(fmt_float(e) + fmt_float(nu))
+
+        # Card 3: A EPSILON_0 n EPS_max SIGMA_max
+        self.lines.append("#                  A           EPSILON_0                   n             EPS_max           SIGMA_max")
+        self.lines.append(fmt_float(sigy) + fmt_float(beta) + fmt_float(hard) + fmt_float(eps) + fmt_float(sig))
+
+        # Card 4: EPS_DOT_0 m
+        self.lines.append("#          EPS_DOT_0                   m")
+        self.lines.append(fmt_float(srp) + fmt_float(src))
+
+        # Card 5: r00 r45 r90
+        self.lines.append("#                r00                 r45                 r90")
+        self.lines.append(fmt_float(r00) + fmt_float(r45) + fmt_float(r90))
+
+        return self
+
+    def mat_hill(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "HILL")
+        return self.mat_law32(*args, **kwargs)
+
     def mat_law38(
         self,
         id: int,

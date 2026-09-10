@@ -1074,7 +1074,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW21", "DUCKHUB", "MAT_DUCKHUB", "LAW21_DUCKHUB"):
         read_mat_law21(block, model, log)
         return
-    if lawname in ("LAW32", "HILL_TAB", "HILL_PLAS_TAB", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "LAW32_HILL_TAB"):
+    if lawname in ("LAW32", "HILL", "MAT_HILL", "LAW32_HILL", "32", "HILL_TAB", "HILL_PLAS_TAB", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "LAW32_HILL_TAB"):
         read_mat_law32(block, model, log)
         return
     if lawname in ("LAW37", "BIQUAD", "BANABIC", "MAT_BIQUAD", "MAT_BANABIC", "LAW37_BIQUAD",
@@ -37387,18 +37387,69 @@ def read_mat_law21(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law32(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW32`` or ``/MAT/HILL_TAB`` (M187): Tabulated Hill orthotropic plasticity model."""
-    from ..model.entities import MatLaw32
+    """``/MAT/LAW32`` or ``/MAT/HILL``: Hill (1948) anisotropic plasticity model for shells (M542)."""
+    from ..model.entities import MatLaw32, Material
     from .mat_reader import InactiveMaterial
     mat_id = block.user_id or 0
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    has_comma = any("," in c.raw for c in block.cards)
+    is_fixed = block.fixed and not has_comma
+    title, cards = _fixed_data(block) if is_fixed else _title_and_data(block)
+    if is_fixed:
+        valid_cards = [c for c in cards if not c.raw.strip().startswith("#")]
+    else:
+        valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
     if not valid_cards:
         log.error(f"/MAT/LAW32/{mat_id}: missing data card", block.source)
         return
 
-    # Check if this is the RD-E-2500 style (Card 0: RHO_I, Card 1: E NU, Card 2: FUNCT_IDE EINF CE, Card 3: r00 r45 r90 C_hard, Card 4: EPSP_max..., Card 5: func_IDi...)
-    if len(valid_cards) >= 4 and len(valid_cards[0].tokens()) <= 2:
+    # Check for legacy M187 3-card tabulated format (Card 0 has >= 6 tokens)
+    t0_peek = valid_cards[0].tokens()
+    if len(t0_peek) >= 6:
+        rho0 = _safe_float(t0_peek[0]) if len(t0_peek) > 0 else 0.0
+        e1 = _safe_float(t0_peek[1]) if len(t0_peek) > 1 else 0.0
+        e2 = _safe_float(t0_peek[2]) if len(t0_peek) > 2 else 0.0
+        e3 = _safe_float(t0_peek[3]) if len(t0_peek) > 3 else 0.0
+        nu12 = _safe_float(t0_peek[4]) if len(t0_peek) > 4 else 0.0
+        nu23 = _safe_float(t0_peek[5]) if len(t0_peek) > 5 else 0.0
+        nu31 = _safe_float(t0_peek[6]) if len(t0_peek) > 6 else 0.0
+        g12, g23, g31 = 0.0, 0.0, 0.0
+        if len(valid_cards) > 1:
+            t1 = valid_cards[1].tokens()
+            g12 = _safe_float(t1[0]) if len(t1) > 0 else 0.0
+            g23 = _safe_float(t1[1]) if len(t1) > 1 else 0.0
+            g31 = _safe_float(t1[2]) if len(t1) > 2 else 0.0
+        fct_id11, fct_id22, fct_id33, fct_id12, fct_id23, fct_id31 = 0, 0, 0, 0, 0, 0
+        if len(valid_cards) > 2:
+            t2 = valid_cards[2].tokens()
+            fct_id11 = _safe_int(t2[0]) if len(t2) > 0 else 0
+            fct_id22 = _safe_int(t2[1]) if len(t2) > 1 else 0
+            fct_id33 = _safe_int(t2[2]) if len(t2) > 2 else 0
+            fct_id12 = _safe_int(t2[3]) if len(t2) > 3 else 0
+            fct_id23 = _safe_int(t2[4]) if len(t2) > 4 else 0
+            fct_id31 = _safe_int(t2[5]) if len(t2) > 5 else 0
+
+        mat = MatLaw32(id=mat_id, rho0=rho0, title=title)
+        mat.e1, mat.e2, mat.e3 = e1, e2, e3
+        mat.nu12, mat.nu23, mat.nu31 = nu12, nu23, nu31
+        mat.g12, mat.g23, mat.g31 = g12, g23, g31
+        mat.fct_id11, mat.fct_id22, mat.fct_id33 = fct_id11, fct_id22, fct_id33
+        mat.fct_id12, mat.fct_id23, mat.fct_id31 = fct_id12, fct_id23, fct_id31
+        model.mat_law32s[mat_id] = mat
+        e_val = e1 if e1 > 0 else 200e9
+        nu_val = nu12 if 0.0 <= nu12 < 0.5 else 0.3
+        model.materials[mat_id] = InactiveMaterial(
+            id=mat_id, law=32, rho0=rho0, title=title, law_name="LAW32",
+            params={
+                "E1": e1, "E2": e2, "E3": e3, "nu12": nu12, "nu23": nu23, "nu31": nu31,
+                "G12": g12, "G23": g23, "G31": g31, "E": e_val, "nu": nu_val,
+                "fct_id11": fct_id11, "fct_id22": fct_id22, "fct_id33": fct_id33,
+                "fct_id12": fct_id12, "fct_id23": fct_id23, "fct_id31": fct_id31, "rho": rho0
+            }
+        )
+        return
+
+    # Check for legacy RD-E-2500 tabulated format
+    if len(valid_cards) >= 4 and len(valid_cards[2].tokens()) == 3 and len(valid_cards[3].tokens()) == 4:
         t0 = valid_cards[0].tokens()
         rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
         t1 = valid_cards[1].tokens()
@@ -37414,12 +37465,10 @@ def read_mat_law32(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         r90 = _safe_float(t3[2]) if len(t3) > 2 else 0.0
         c_hard = _safe_float(t3[3]) if len(t3) > 3 else 0.0
 
-        mat = MatLaw32(
-            id=mat_id, rho0=rho0, e1=e, e2=e, e3=e, nu12=nu, nu23=nu, nu31=nu,
-            g12=0.0, g23=0.0, g31=0.0,
-            fct_id11=funct_ide, fct_id22=0, fct_id33=0, fct_id12=0, fct_id23=0, fct_id31=0,
-            title=title
-        )
+        mat = MatLaw32(id=mat_id, rho0=rho0, title=title)
+        mat.e1, mat.e2, mat.e3 = e, e, e
+        mat.nu12, mat.nu23, mat.nu31 = nu, nu, nu
+        mat.fct_id11 = funct_ide
         model.mat_law32s[mat_id] = mat
         model.materials[mat_id] = InactiveMaterial(
             id=mat_id, law=32, rho0=rho0, title=title, law_name="LAW32",
@@ -37431,77 +37480,166 @@ def read_mat_law32(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         )
         return
 
-    # Standard 3-card format
-    rho0, e1, e2, e3, nu12, nu23, nu31 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
-    g12, g23, g31 = 0.0, 0.0, 0.0
-    fct_id11, fct_id22, fct_id33, fct_id12, fct_id23, fct_id31 = 0, 0, 0, 0, 0, 0
+    # Standard OpenRadioss /MAT/LAW32 (/MAT/HILL) 5-card format per matl32_hill.cfg & hm_read_mat32.F
+    rho0 = 0.0
+    rhor = 0.0
+    e = 0.0
+    nu = 0.0
+    sigy = 1.0e30
+    beta = 0.0
+    hard = 1.0
+    eps = 1.0e30
+    sig = 1.0e30
+    srp = 1.0
+    src = 0.0
+    r00 = 1.0
+    r45 = 1.0
+    r90 = 1.0
 
-    if block.fixed:
+    if is_fixed:
+        # Card 1: MAT_RHO, [Refer_Rho]
         if len(valid_cards) > 0:
-            f0 = valid_cards[0].cut("MAT_LAW32_1")
-            rho0 = _safe_float(f0[0]) if len(f0) > 0 else 0.0
-            e1 = _safe_float(f0[1]) if len(f0) > 1 else 0.0
-            e2 = _safe_float(f0[2]) if len(f0) > 2 else 0.0
-            e3 = _safe_float(f0[3]) if len(f0) > 3 else 0.0
-            nu12 = _safe_float(f0[4]) if len(f0) > 4 else 0.0
-            nu23 = _safe_float(f0[5]) if len(f0) > 5 else 0.0
-            nu31 = _safe_float(f0[6]) if len(f0) > 6 else 0.0
+            c0 = valid_cards[0].cut("MAT_LAW32_1")
+            rho0 = _safe_float(c0[0]) if len(c0) > 0 and c0[0] else 0.0
+            rhor = _safe_float(c0[1]) if len(c0) > 1 and c0[1] else rho0
+        # Card 2: MAT_E, MAT_NU
         if len(valid_cards) > 1:
-            f1 = valid_cards[1].cut("MAT_LAW32_2")
-            g12 = _safe_float(f1[0]) if len(f1) > 0 else 0.0
-            g23 = _safe_float(f1[1]) if len(f1) > 1 else 0.0
-            g31 = _safe_float(f1[2]) if len(f1) > 2 else 0.0
+            c1 = valid_cards[1].cut("MAT_LAW32_2")
+            e = _safe_float(c1[0]) if len(c1) > 0 and c1[0] else 0.0
+            nu = _safe_float(c1[1]) if len(c1) > 1 and c1[1] else 0.0
+        # Card 3: MAT_SIGY, MAT_BETA, MAT_HARD, MAT_EPS, MAT_SIG
         if len(valid_cards) > 2:
-            f2 = valid_cards[2].cut("MAT_LAW32_3")
-            fct_id11 = _safe_int(f2[0]) if len(f2) > 0 else 0
-            fct_id22 = _safe_int(f2[1]) if len(f2) > 1 else 0
-            fct_id33 = _safe_int(f2[2]) if len(f2) > 2 else 0
-            fct_id12 = _safe_int(f2[3]) if len(f2) > 3 else 0
-            fct_id23 = _safe_int(f2[4]) if len(f2) > 4 else 0
-            fct_id31 = _safe_int(f2[5]) if len(f2) > 5 else 0
+            c2 = valid_cards[2].cut("MAT_LAW32_3")
+            sigy = _safe_float(c2[0]) if len(c2) > 0 and c2[0] else 1.0e30
+            beta = _safe_float(c2[1]) if len(c2) > 1 and c2[1] else 0.0
+            hard = _safe_float(c2[2]) if len(c2) > 2 and c2[2] else 1.0
+            eps = _safe_float(c2[3]) if len(c2) > 3 and c2[3] else 1.0e30
+            sig = _safe_float(c2[4]) if len(c2) > 4 and c2[4] else 1.0e30
+        # Card 4: MAT_SRP, MAT_SRC
+        if len(valid_cards) > 3:
+            c3 = valid_cards[3].cut("MAT_LAW32_4")
+            srp = _safe_float(c3[0]) if len(c3) > 0 and c3[0] else 1.0
+            src = _safe_float(c3[1]) if len(c3) > 1 and c3[1] else 0.0
+        # Card 5: MAT_R00, MAT_R45, MAT_R90
+        if len(valid_cards) > 4:
+            c4 = valid_cards[4].cut("MAT_LAW32_5")
+            r00 = _safe_float(c4[0]) if len(c4) > 0 and c4[0] else 1.0
+            r45 = _safe_float(c4[1]) if len(c4) > 1 and c4[1] else 1.0
+            r90 = _safe_float(c4[2]) if len(c4) > 2 and c4[2] else 1.0
     else:
+        # Free-format
         if len(valid_cards) > 0:
             t0 = valid_cards[0].tokens()
-            rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
-            e1 = _safe_float(t0[1]) if len(t0) > 1 else 0.0
-            e2 = _safe_float(t0[2]) if len(t0) > 2 else 0.0
-            e3 = _safe_float(t0[3]) if len(t0) > 3 else 0.0
-            nu12 = _safe_float(t0[4]) if len(t0) > 4 else 0.0
-            nu23 = _safe_float(t0[5]) if len(t0) > 5 else 0.0
-            nu31 = _safe_float(t0[6]) if len(t0) > 6 else 0.0
+            rho0 = _safe_float(t0[0]) if len(t0) > 0 and t0[0] else 0.0
+            rhor = _safe_float(t0[1]) if len(t0) > 1 and t0[1] else rho0
         if len(valid_cards) > 1:
             t1 = valid_cards[1].tokens()
-            g12 = _safe_float(t1[0]) if len(t1) > 0 else 0.0
-            g23 = _safe_float(t1[1]) if len(t1) > 1 else 0.0
-            g31 = _safe_float(t1[2]) if len(t1) > 2 else 0.0
+            e = _safe_float(t1[0]) if len(t1) > 0 and t1[0] else 0.0
+            nu = _safe_float(t1[1]) if len(t1) > 1 and t1[1] else 0.0
         if len(valid_cards) > 2:
             t2 = valid_cards[2].tokens()
-            fct_id11 = _safe_int(t2[0]) if len(t2) > 0 else 0
-            fct_id22 = _safe_int(t2[1]) if len(t2) > 1 else 0
-            fct_id33 = _safe_int(t2[2]) if len(t2) > 2 else 0
-            fct_id12 = _safe_int(t2[3]) if len(t2) > 3 else 0
-            fct_id23 = _safe_int(t2[4]) if len(t2) > 4 else 0
-            fct_id31 = _safe_int(t2[5]) if len(t2) > 5 else 0
+            sigy = _safe_float(t2[0]) if len(t2) > 0 and t2[0] else 1.0e30
+            beta = _safe_float(t2[1]) if len(t2) > 1 and t2[1] else 0.0
+            hard = _safe_float(t2[2]) if len(t2) > 2 and t2[2] else 1.0
+            eps = _safe_float(t2[3]) if len(t2) > 3 and t2[3] else 1.0e30
+            sig = _safe_float(t2[4]) if len(t2) > 4 and t2[4] else 1.0e30
+        if len(valid_cards) > 3:
+            t3 = valid_cards[3].tokens()
+            srp = _safe_float(t3[0]) if len(t3) > 0 and t3[0] else 1.0
+            src = _safe_float(t3[1]) if len(t3) > 1 and t3[1] else 0.0
+        if len(valid_cards) > 4:
+            t4 = valid_cards[4].tokens()
+            r00 = _safe_float(t4[0]) if len(t4) > 0 and t4[0] else 1.0
+            r45 = _safe_float(t4[1]) if len(t4) > 1 and t4[1] else 1.0
+            r90 = _safe_float(t4[2]) if len(t4) > 2 and t4[2] else 1.0
+
+    # Default injections per hm_read_mat32.F lines 135-147:
+    if rhor == 0.0:
+        rhor = rho0
+    if nu == 0.5:
+        nu = 0.499999
+    if r00 == 0.0:
+        r00 = 1.0
+    if r45 == 0.0:
+        r45 = 1.0
+    if r90 == 0.0:
+        r90 = 1.0
+    if sigy == 0.0:
+        sigy = 1.0e30
+    if hard == 0.0:
+        hard = 1.0
+    if eps == 0.0:
+        eps = 1.0e30
+    if sig == 0.0:
+        sig = 1.0e30
+    if src == 0.0 and srp == 0.0:
+        srp = 1.0
+
+    # Anisotropic Hill coefficients (hm_read_mat32.F lines 157-168)
+    r = 0.25 * (r00 + 2.0 * r45 + r90)
+    h = r / (1.0 + r) if (1.0 + r) != 0.0 else 0.5
+    a11 = h * (1.0 + 1.0 / r00) if r00 != 0.0 else 1.0
+    a22 = h * (1.0 + 1.0 / r90) if r90 != 0.0 else 1.0
+    a1122 = 2.0 * h
+    a12 = 2.0 * h * (r45 + 0.5) * (1.0 / r00 + 1.0 / r90) if (r00 != 0.0 and r90 != 0.0) else 1.0
+
+    # Elastic plane stress moduli
+    a1_mod = e / (1.0 - nu ** 2) if (1.0 - nu ** 2) != 0.0 else e
+    a2_mod = nu * a1_mod
+    g_mod = e / (2.0 * (1.0 + nu)) if (1.0 + nu) != 0.0 else e / 2.0
+    k_mod = e / (3.0 * (1.0 - 2.0 * nu)) if (1.0 - 2.0 * nu) != 0.0 else e / 3.0
+    c_sound = (a1_mod / max(rho0, 1.0e-20)) ** 0.5 if rho0 > 0.0 else max(a1_mod, 0.0) ** 0.5
 
     mat = MatLaw32(
-        id=mat_id, rho0=rho0, e1=e1, e2=e2, e3=e3, nu12=nu12, nu23=nu23, nu31=nu31,
-        g12=g12, g23=g23, g31=g31,
-        fct_id11=fct_id11, fct_id22=fct_id22, fct_id33=fct_id33,
-        fct_id12=fct_id12, fct_id23=fct_id23, fct_id31=fct_id31,
-        title=title
+        id=mat_id,
+        rho0=rho0,
+        rhor=rhor,
+        e=e,
+        nu=nu,
+        sigy=sigy,
+        beta=beta,
+        hard=hard,
+        eps=eps,
+        sig=sig,
+        srp=srp,
+        src=src,
+        r00=r00,
+        r45=r45,
+        r90=r90,
+        title=title,
     )
     model.mat_law32s[mat_id] = mat
-    e_val = e1 if e1 > 0 else 200e9
-    nu_val = nu12 if 0.0 <= nu12 < 0.5 else 0.3
-    model.materials[mat_id] = InactiveMaterial(
-        id=mat_id, law=32, rho0=rho0, title=title, law_name="LAW32",
-        params={
-            "E1": e1, "E2": e2, "E3": e3, "nu12": nu12, "nu23": nu23, "nu31": nu31,
-            "G12": g12, "G23": g23, "G31": g31, "E": e_val, "nu": nu_val,
-            "fct_id11": fct_id11, "fct_id22": fct_id22, "fct_id33": fct_id33,
-            "fct_id12": fct_id12, "fct_id23": fct_id23, "fct_id31": fct_id31, "rho": rho0
-        }
+
+    params: Dict[str, Any] = {
+        "rho": rho0, "rho0": rho0, "rhor": rhor, "Refer_Rho": rhor,
+        "E": e, "MAT_E": e, "young": e,
+        "nu": nu, "NU": nu, "MAT_NU": nu,
+        "G": g_mod, "K": k_mod, "A1": a1_mod, "A2": a2_mod,
+        "A": sigy, "a": sigy, "sigy": sigy, "SIGY": sigy, "MAT_SIGY": sigy,
+        "B": beta, "b": beta, "beta": beta, "BETA": beta, "epsilon_0": beta, "EPSILON_0": beta, "MAT_BETA": beta,
+        "n": hard, "N": hard, "hard": hard, "HARD": hard, "MAT_HARD": hard,
+        "eps": eps, "EPS": eps, "eps_max": eps, "EPS_max": eps, "eps_p_max": eps, "MAT_EPS": eps,
+        "sig": sig, "SIG": sig, "sig_max": sig, "SIGMA_max": sig, "MAT_SIG": sig,
+        "srp": srp, "SRP": srp, "eps0": srp, "eps_dot_0": srp, "EPS_DOT_0": srp, "MAT_SRP": srp,
+        "src": src, "SRC": src, "m": src, "M": src, "MAT_SRC": src,
+        "r00": r00, "R00": r00, "r_00": r00, "MAT_R00": r00,
+        "r45": r45, "R45": r45, "r_45": r45, "MAT_R45": r45,
+        "r90": r90, "R90": r90, "r_90": r90, "MAT_R90": r90,
+        "A11": a11, "A22": a22, "A1122": a1122, "A12": a12,
+        "c": c_sound,
+    }
+
+    model.materials[mat_id] = Material(
+        id=mat_id,
+        law=32,
+        rho0=rho0,
+        title=title,
+        law_name="LAW32",
+        params=params,
     )
+
+
+read_mat_hill = read_mat_law32
 
 
 def read_mat_law37(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -83161,6 +83299,9 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_DUCKHUB": read_mat,
     "DUCKHUB": read_mat,
     "MAT_LAW32": read_mat,
+    "LAW32": read_mat,
+    "MAT_HILL": read_mat,
+    "HILL": read_mat,
     "MAT_HILL_TAB": read_mat,
     "MAT_HILL_PLAS_TAB": read_mat,
     "HILL_TAB": read_mat,

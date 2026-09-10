@@ -617,6 +617,8 @@ class CfgCatalogue:
     # -- public API -----------------------------------------------------------
 
     _SYNONYMS: Dict[str, str] = {
+        "HILL": "LAW32",
+        "LAW32": "LAW32",
         "SOIL": "LAW10",
         "SOIL_CONC": "LAW10",
         "JWL": "LAW5",

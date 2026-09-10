@@ -1076,7 +1076,8 @@ class Model:
         self.mat_law10s: Dict[int, MatLaw10] = {}                   # /MAT/LAW10, /MAT/SOIL (M187)
         self.mat_law14s: Dict[int, MatLaw14] = {}                   # /MAT/LAW14, /MAT/CAM_CLAY (M187)
         self.mat_law21s: Dict[int, MatLaw21] = {}                   # /MAT/LAW21, /MAT/DUCKHUB (M187)
-        self.mat_law32s: Dict[int, MatLaw32] = {}                   # /MAT/LAW32, /MAT/HILL_TAB (M187)
+        self.mat_law32s: Dict[int, MatLaw32] = {}                   # /MAT/LAW32, /MAT/HILL (M187/M542)
+        self.mat_hills = self.mat_law32s
         self.mat_law37s: Dict[int, MatLaw37] = {}                   # /MAT/LAW37, /MAT/BIQUAD (M187)
         self.prop_type45s: Dict[int, PropType45] = {}               # /PROP/TYPE45, /PROP/KJOINT2 (M187)
         self.prop_type36s: Dict[int, PropType36] = {}               # /PROP/TYPE36, /PROP/PREDIT (M187)

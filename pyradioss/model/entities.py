@@ -9100,27 +9100,63 @@ MatDuckhub = MatLaw21
 
 @dataclass
 class MatLaw32:
-    """``/MAT/LAW32`` or ``/MAT/HILL_TAB``: Tabulated Hill orthotropic plasticity model."""
+    """``/MAT/LAW32`` or ``/MAT/HILL``: Hill (1948) anisotropic plasticity model (M542)."""
     id: int = 0
     rho0: float = 0.0
-    e1: float = 0.0
-    e2: float = 0.0
-    e3: float = 0.0
-    nu12: float = 0.0
-    nu23: float = 0.0
-    nu31: float = 0.0
-    g12: float = 0.0
-    g23: float = 0.0
-    g31: float = 0.0
-    fct_id11: int = 0
-    fct_id22: int = 0
-    fct_id33: int = 0
-    fct_id12: int = 0
-    fct_id23: int = 0
-    fct_id31: int = 0
+    rhor: float = 0.0
+    e: float = 0.0
+    nu: float = 0.0
+    sigy: float = 1.0e30
+    beta: float = 0.0
+    hard: float = 1.0
+    eps: float = 1.0e30
+    sig: float = 1.0e30
+    srp: float = 1.0
+    src: float = 0.0
+    r00: float = 1.0
+    r45: float = 1.0
+    r90: float = 1.0
     title: str = ""
+    law: int = 32
+    law_name: str = "LAW32"
+    fail: Optional[Any] = None
+    eos: Optional[Any] = None
+
+    # Mathematical aliases matching upstream hm_read_mat32.F
+    @property
+    def a(self) -> float:
+        return self.sigy
+
+    @property
+    def b(self) -> float:
+        return self.beta
+
+    @property
+    def n(self) -> float:
+        return self.hard
+
+    @property
+    def eps_max(self) -> float:
+        return self.eps
+
+    @property
+    def sig_max(self) -> float:
+        return self.sig
+
+    @property
+    def eps0(self) -> float:
+        return self.srp
+
+    @property
+    def eps_dot_0(self) -> float:
+        return self.srp
+
+    @property
+    def m(self) -> float:
+        return self.src
 
 
+MatHill = MatLaw32
 MatHillTab = MatLaw32
 
 

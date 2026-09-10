@@ -84,6 +84,31 @@ except ImportError:
     law38_solid_tangent = None
 
 try:
+    from . import law32_hill
+    from .law32_hill import (shell_update as law32_shell_update,
+                             consistent_shell_tangent as law32_shell_tangent,
+                             sound_speed as law32_sound_speed)
+except ImportError:
+    law32_hill = None
+    law32_shell_update = None
+    law32_shell_tangent = None
+    law32_sound_speed = None
+
+
+def _get_law32():
+    global law32_hill, law32_shell_update, law32_shell_tangent, law32_sound_speed
+    if law32_hill is None:
+        try:
+            from . import law32_hill as _m
+            law32_hill = _m
+            law32_shell_update = getattr(_m, "shell_update", None)
+            law32_shell_tangent = getattr(_m, "consistent_shell_tangent", None)
+            law32_sound_speed = getattr(_m, "sound_speed", None)
+        except ImportError:
+            pass
+    return law32_hill
+
+try:
     from . import law05_jwl
     from .law05_jwl import (solid_update as law05_solid_update,
                              sound_speed as law05_sound_speed,
@@ -266,7 +291,38 @@ def _register_law38():
 _register_law38()
 
 
+def _register_law32():
+    _get_law32()
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = None
+        if law32_hill is not None:
+            builder = getattr(law32_hill, "build_law32", getattr(law32_hill, "build_hill", None))
+        if builder is None:
+            def _dynamic_law32_builder(rec):
+                mod = _get_law32()
+                if mod is not None:
+                    fn = getattr(mod, "build_law32", getattr(mod, "build_hill", None))
+                    if fn is not None:
+                        return fn(rec)
+                from ..model.entities import Material
+                params = dict(rec.params) if hasattr(rec, "params") else {}
+                density = getattr(rec, "density", 0.0)
+                mid = getattr(rec, "id", 0)
+                title = getattr(rec, "title", "")
+                return Material(id=mid, law=32, rho0=density, title=title, law_name="LAW32", params=params)
+            builder = _dynamic_law32_builder
+        for k in (32, "32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL"):
+            MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law32()
+
+
 _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
+    "uv32": (2,),
     "uv38": (33,),
 }
 
@@ -274,6 +330,7 @@ _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
 def register_materials():
     _get_law05()
     _get_law10()
+    _get_law32()
     _get_law38()
     for mod in (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,
                 law04_hyd_jcook, law06_hyd_visc, law10_soil, law19_fabric, law24_concrete,
@@ -315,6 +372,11 @@ def register_materials():
         if callable(fn):
             fn()
     _register_law38()
+    if law32_hill is not None:
+        fn = getattr(law32_hill, "_register", None)
+        if callable(fn):
+            fn()
+    _register_law32()
 
 
 def extra_shapes(mat, nip=None):
@@ -394,6 +456,10 @@ def extra_shapes(mat, nip=None):
     if mat.law in (38, "38", "LAW38", "VISC_TAB") or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB"):
         # M541: LAW38 (VISC_TAB tabulated viscoelastic foam) needs 33 state variables (uv38)
         shapes.update(eps38=(6,), uv38=_STATE_VAR_COUNT.get("uv38", (33,)), off38=())
+    if getattr(mat, "law", None) in (32, "32", "LAW32", "HILL") or getattr(mat, "law_name", None) in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL"):
+        # M542: LAW32 (Hill orthotropic plasticity) needs 2 state variables per point (uv32)
+        uv_shape = _STATE_VAR_COUNT.get("uv32", (2,))
+        shapes.update(uv32=(nip, *uv_shape) if nip else uv_shape)
     if mat.law == 4:
         shapes["temp"] = ()
     if getattr(mat, "law", None) in (5, "5", "LAW5", "JWL") or getattr(mat, "law_name", None) in ("LAW5", "JWL"):
@@ -432,6 +498,8 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     Returns (sig, epsp, c): c is the law's current sound speed array or
     None (constant elastic estimate is a bound). ``epsp`` may be None for
     laws without plasticity."""
+    if getattr(mat, "law", None) in (32, "32", "LAW32", "HILL") or getattr(mat, "law_name", None) in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL"):
+        raise NotImplementedError("LAW32 (HILL anisotropic plasticity) is implemented for shell elements only.")
     if mat.law == 1:
         return law01_elastic.solid_update(mat, sig, deps), epsp, None
     if mat.law == 2:
@@ -543,6 +611,17 @@ def sound_speed(mat, rho=None, extra=None):
         if law38_sound_speed is not None:
             return law38_sound_speed(mat, rho=rho, extra=extra)
         raise NotImplementedError("LAW38 sound_speed not available")
+    if law in (32, "32", "LAW32", "HILL") or law_name in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL"):
+        _get_law32()
+        if law32_sound_speed is not None:
+            return law32_sound_speed(mat, rho=rho, extra=extra)
+        if hasattr(mat, "sound_speed_solid"):
+            return mat.sound_speed_solid()
+        import numpy as np
+        rho0 = float(getattr(mat, "rho0", 0.0) or (mat.params.get("rho", 0.0) if hasattr(mat, "params") else 0.0) or (mat.params.get("MAT_RHO", 0.0) if hasattr(mat, "params") else 0.0) or 1.0)
+        e = float(getattr(mat, "E", 0.0) or getattr(mat, "e", 0.0) or (mat.params.get("e", 0.0) if hasattr(mat, "params") else 0.0) or (mat.params.get("MAT_E", 0.0) if hasattr(mat, "params") else 0.0) or 1.0)
+        r = rho if rho is not None else rho0
+        return np.sqrt(e / np.maximum(r, 1e-20))
     if hasattr(mat, "sound_speed_solid"):
         return mat.sound_speed_solid()
     raise NotImplementedError(f"material LAW{law} does not implement sound_speed")
@@ -550,6 +629,11 @@ def sound_speed(mat, rho=None, extra=None):
 
 def shell_update(mat, sig, deps, epsp, dt, extra=None):
     """Dispatch a plane-stress (shell) update to the material's law."""
+    if getattr(mat, "law", None) in (32, "32", "LAW32", "HILL") or getattr(mat, "law_name", None) in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL"):
+        _get_law32()
+        if law32_shell_update is not None:
+            return law32_shell_update(mat, sig, deps, epsp, dt, extra)
+        raise NotImplementedError("LAW32 shell_update not available in law32_hill")
     if getattr(mat, "law", None) in (38, "38", "LAW38", "VISC_TAB") or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB"):
         raise NotImplementedError("LAW38 (VISC_TAB tabulated viscoelastic) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or getattr(mat, "law_name", None) in ("LAW37", "BIPHAS", "BIPHASIC"):
@@ -719,9 +803,23 @@ def shell_membrane_tangent(mat):
         return law03_plas_bost.shell_membrane_tangent(mat)
     if mat.law == 34 or getattr(mat, "law_name", None) in ("LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
         return law34_boltzmann.shell_membrane_tangent(mat)
+    if getattr(mat, "law", None) in (32, "32", "LAW32", "HILL") or getattr(mat, "law_name", None) in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL"):
+        _get_law32()
+        if law32_hill is not None and hasattr(law32_hill, "shell_membrane_tangent"):
+            return law32_hill.shell_membrane_tangent(mat)
+        import numpy as np
+        e = float(getattr(mat, "E", 0.0) or getattr(mat, "e", 0.0) or (mat.params.get("e", 0.0) if hasattr(mat, "params") else 0.0) or (mat.params.get("MAT_E", 0.0) if hasattr(mat, "params") else 0.0))
+        nu = float(getattr(mat, "nu", 0.0) or (mat.params.get("nu", 0.0) if hasattr(mat, "params") else 0.0) or (mat.params.get("MAT_NU", 0.0) if hasattr(mat, "params") else 0.0))
+        c = e / max(1.0 - nu * nu, 1e-15)
+        g = e / max(2.0 * (1.0 + nu), 1e-15)
+        return np.array([
+            [c, nu * c, 0.0],
+            [nu * c, c, 0.0],
+            [0.0, 0.0, g],
+        ])
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic, "
-        f"LAW3 plas_bost, LAW19 fabric, LAW34 Boltzmann and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")
+        f"LAW3 plas_bost, LAW19 fabric, LAW34 Boltzmann, LAW32 Hill and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")
 
 
 def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
@@ -736,8 +834,13 @@ def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
     dmg27/layfail views — law27.consistent_shell_tangent for the
     per-branch derivation: uncracked / open-frozen / open-growing /
     closed / broken); LAW19 (M524) the orthotropic fabric tangent with
-    RCOMP and beta compression scaling."""
+    RCOMP and beta compression scaling; LAW32 (M542) consistent Hill tangent."""
     n = sig.shape[0]
+    if getattr(mat, "law", None) in (32, "32", "LAW32", "HILL") or getattr(mat, "law_name", None) in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL"):
+        _get_law32()
+        if law32_shell_tangent is not None:
+            return law32_shell_tangent(mat, sig, epsp, epsp_incr, extra)
+        raise NotImplementedError("LAW32 consistent_shell_tangent not available in law32_hill")
     if mat.law == 1:
         import numpy as np
         return np.broadcast_to(law01_elastic.shell_membrane_tangent(mat),
@@ -769,3 +872,6 @@ def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 "
         f"elastic, LAW2, LAW3, LAW36 and LAW44 elastoplastic, LAW27 brittle cracking, "
         f"LAW19 fabric are ported — see PORTING_GUIDE M15)")
+
+
+consistent_shell_tangent = shell_layer_tangent

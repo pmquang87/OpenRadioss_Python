@@ -36,6 +36,8 @@ LAW_MAP: Dict[str, int] = {
     "HONEYCOMB": 28,
     "HONEYCOMB_SOL": 28,
     "LAW28": 28,
+    "HILL": 32,
+    "LAW32": 32,
     "FOAM_PLAS": 33,
     "LAW33": 33,
     "BOLTZMAN": 34,
@@ -70,6 +72,8 @@ LAW_MAP: Dict[str, int] = {
 }
 
 LAW_SYNONYMS: Dict[str, str] = {
+    "HILL": "LAW32",
+    "LAW32": "LAW32",
     "VISC_TAB": "LAW38",
     "LAW38": "LAW38",
     "BIPHAS": "LAW37",
@@ -92,18 +96,17 @@ SYNONYMS = LAW_SYNONYMS
 def law_number(name: str) -> Optional[int]:
     """Map a law name, alias, or keyword spelling to its integer law number."""
     uname = str(name).strip().upper()
+    if uname.startswith("/"):
+        uname = uname.lstrip("/")
+    if uname.startswith("MAT/"):
+        uname = uname[4:]
+    elif uname.startswith("MAT_"):
+        uname = uname[4:]
     if uname in LAW_MAP:
         return LAW_MAP[uname]
     m = re.fullmatch(r"LAW(\d+)", uname)
     if m:
         return int(m.group(1))
-    if uname.startswith("MAT_"):
-        sub = uname[4:]
-        if sub in LAW_MAP:
-            return LAW_MAP[sub]
-        m = re.fullmatch(r"LAW(\d+)", sub)
-        if m:
-            return int(m.group(1))
     try:
         return int(uname)
     except ValueError:
@@ -116,6 +119,12 @@ get_law_number = law_number
 def canonical_law_name(name: str) -> str:
     """Map a law spelling to canonical 'LAW<n>' or registered synonym."""
     uname = str(name).strip().upper()
+    if uname.startswith("/"):
+        uname = uname.lstrip("/")
+    if uname.startswith("MAT/"):
+        uname = uname[4:]
+    elif uname.startswith("MAT_"):
+        uname = uname[4:]
     if uname in LAW_SYNONYMS:
         return LAW_SYNONYMS[uname]
     num = law_number(uname)

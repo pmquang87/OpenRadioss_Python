@@ -304,6 +304,31 @@ MAT_VISC_TAB_CFG_10 = MAT_LAW38_10
 MAT_VISC_TAB_CFG_11 = MAT_LAW38_11
 MAT_VISC_TAB_CFG_12 = MAT_LAW38_12
 
+# M542: /MAT/LAW32 (/MAT/HILL) card layout constants citing radioss110/MAT/matl32_hill.cfg
+MAT_LAW32_1 = (20, 20)  # MAT_RHO, Refer_Rho
+MAT_LAW32_2 = (20, 20)  # MAT_E, MAT_NU
+MAT_LAW32_3 = (20, 20, 20, 20, 20)  # MAT_SIGY, MAT_BETA, MAT_HARD, MAT_EPS, MAT_SIG
+MAT_LAW32_4 = (20, 20)  # MAT_SRP, MAT_SRC
+MAT_LAW32_5 = (20, 20, 20)  # MAT_R00, MAT_R45, MAT_R90
+
+MAT_LAW32_CFG_1 = MAT_LAW32_1
+MAT_LAW32_CFG_2 = MAT_LAW32_2
+MAT_LAW32_CFG_3 = MAT_LAW32_3
+MAT_LAW32_CFG_4 = MAT_LAW32_4
+MAT_LAW32_CFG_5 = MAT_LAW32_5
+
+MAT_HILL_1 = MAT_LAW32_1
+MAT_HILL_2 = MAT_LAW32_2
+MAT_HILL_3 = MAT_LAW32_3
+MAT_HILL_4 = MAT_LAW32_4
+MAT_HILL_5 = MAT_LAW32_5
+
+MAT_HILL_CFG_1 = MAT_LAW32_1
+MAT_HILL_CFG_2 = MAT_LAW32_2
+MAT_HILL_CFG_3 = MAT_LAW32_3
+MAT_HILL_CFG_4 = MAT_LAW32_4
+MAT_HILL_CFG_5 = MAT_LAW32_5
+
 
 
 # ============================================================================
@@ -2984,6 +3009,31 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_VISC_TAB_CFG_10": _LayoutList([20, 20, 20, 20, 20]),
     "MAT_VISC_TAB_CFG_11": _LayoutList([10, 10, 10, 10, 10]),
     "MAT_VISC_TAB_CFG_12": _LayoutList([10, 10, 10, 10, 10]),
+
+    # M542: matl32_hill.cfg (radioss110) — /MAT/LAW32 (/MAT/HILL)
+    "MAT_LAW32_1": _LayoutList([20, 20]),
+    "MAT_LAW32_2": _LayoutList([20, 20]),
+    "MAT_LAW32_3": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_LAW32_4": _LayoutList([20, 20]),
+    "MAT_LAW32_5": _LayoutList([20, 20, 20]),
+
+    "MAT_LAW32_CFG_1": _LayoutList([20, 20]),
+    "MAT_LAW32_CFG_2": _LayoutList([20, 20]),
+    "MAT_LAW32_CFG_3": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_LAW32_CFG_4": _LayoutList([20, 20]),
+    "MAT_LAW32_CFG_5": _LayoutList([20, 20, 20]),
+
+    "MAT_HILL_1": _LayoutList([20, 20]),
+    "MAT_HILL_2": _LayoutList([20, 20]),
+    "MAT_HILL_3": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_HILL_4": _LayoutList([20, 20]),
+    "MAT_HILL_5": _LayoutList([20, 20, 20]),
+
+    "MAT_HILL_CFG_1": _LayoutList([20, 20]),
+    "MAT_HILL_CFG_2": _LayoutList([20, 20]),
+    "MAT_HILL_CFG_3": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_HILL_CFG_4": _LayoutList([20, 20]),
+    "MAT_HILL_CFG_5": _LayoutList([20, 20, 20]),
     "MAT_LAW29_1": [20, 20],
     "MAT_LAW29_2": [100],
     "MAT_LAW29_3": [10, 10, 10, 10, 10, 10, 10, 10],
