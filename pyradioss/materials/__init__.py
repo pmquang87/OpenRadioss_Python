@@ -63,7 +63,9 @@ from .law34_boltzmann import (solid_update as law34_solid_update,
                              shell_update as law34_shell_update,
                              sound_speed as law34_sound_speed,
                              consistent_solid_tangent as law34_solid_tangent,
-                             shell_membrane_tangent as law34_shell_tangent)
+                             shell_membrane_tangent as law34_shell_tangent,
+                             truss_update as law34_truss_update,
+                             beam_update as law34_beam_update)
 
 try:
     from . import law05_jwl

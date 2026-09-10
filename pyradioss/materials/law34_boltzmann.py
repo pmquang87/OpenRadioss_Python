@@ -125,6 +125,11 @@ def build_law34(rec: Any) -> Material:
         young = 0.0
         nu = 0.3
 
+    dp_drho0 = bulk + (4.0 / 3.0) * g0
+    parmat17 = (2.0 * g0) / dp_drho0 if dp_drho0 > 0.0 else 0.0
+    c_solid = math.sqrt(max(0.0, dp_drho0 / rho0))
+    c_bar = math.sqrt(max(0.0, young / rho0))
+
     params: Dict[str, Any] = {
         "rho0": rho0,
         "rhor": rhor,
@@ -147,11 +152,44 @@ def build_law34(rec: Any) -> Material:
         "nu": nu,
         "G": g0,
         "young": young,
+        "nuparam": 7,
+        "nuvar": 8,
+        "parmat1": bulk,
+        "parmat2": young,
+        "parmat16": 2,
+        "parmat17": parmat17,
+        "pm1": rhor,
+        "pm12": math.sqrt(max(0.0, g0)),
+        "pm22": g0,
+        "pm27": c_bar,
+        "sound_speed": c_solid,
     }
 
     mat = Material(id=rec_id, law=34, rho0=rho0, title=title, params=params)
     mat.law_name = "LAW34"
     return mat
+
+
+def _compute_relaxation_coeffs(beta: float, dt: float) -> Tuple[float, float, float]:
+    """Compute Maxwell relaxation coefficients C1, C2, and C2/dt (sigeps34.F lines 100-101).
+
+    C1 = 1 - exp(-beta * dt)
+    C2 = -C1 / beta  (with analytical limit -dt as beta -> 0)
+    """
+    if dt > 1e-20:
+        if beta > 0.0:
+            b_dt = beta * dt
+            c1 = -math.expm1(-b_dt)
+            c2 = -c1 / beta
+        else:
+            c1 = 0.0
+            c2 = -dt
+        c2_over_dt = c2 / dt
+    else:
+        c1 = 0.0
+        c2 = 0.0
+        c2_over_dt = -1.0
+    return c1, c2, c2_over_dt
 
 
 # =============================================================================
@@ -264,23 +302,40 @@ def solid_update(
         extra = {}
 
     # State arrays: history q (deviatoric strain history) and total strain eps34
+    # Fortran NUVAR=8 (hm_read_mat34.F line 129; sigeps34.F uses UVAR 1..6)
     if "uv34" not in extra or extra["uv34"] is None:
-        extra["uv34"] = np.zeros((n, 6), dtype=sig.dtype)
-    elif extra["uv34"].shape[0] != n or extra["uv34"].shape[1] < 6:
-        padded = np.zeros((n, 6), dtype=sig.dtype)
-        if extra["uv34"].ndim == 2:
-            m_cols = min(6, extra["uv34"].shape[1])
-            padded[:min(n, extra["uv34"].shape[0]), :m_cols] = extra["uv34"][:min(n, extra["uv34"].shape[0]), :m_cols]
-        extra["uv34"] = padded
+        extra["uv34"] = np.zeros((n, 8), dtype=sig.dtype)
+    else:
+        u = np.asarray(extra["uv34"], dtype=sig.dtype)
+        if u.ndim == 1:
+            u = u.reshape(n, -1) if u.size >= n * 6 else np.broadcast_to(u, (n, u.size)).copy()
+        if u.ndim != 2 or u.shape[0] != n or u.shape[1] < 6:
+            cols = max(8, u.shape[1] if u.ndim == 2 else 8)
+            padded = np.zeros((n, cols), dtype=sig.dtype)
+            if u.ndim == 2:
+                r = min(n, u.shape[0])
+                c_idx = min(cols, u.shape[1])
+                padded[:r, :c_idx] = u[:r, :c_idx]
+            extra["uv34"] = padded
+        else:
+            extra["uv34"] = u
 
     if "eps34" not in extra or extra["eps34"] is None:
         extra["eps34"] = np.zeros((n, 6), dtype=sig.dtype)
-    elif extra["eps34"].shape[0] != n or extra["eps34"].shape[1] < 6:
-        padded = np.zeros((n, 6), dtype=sig.dtype)
-        if extra["eps34"].ndim == 2:
-            m_cols = min(6, extra["eps34"].shape[1])
-            padded[:min(n, extra["eps34"].shape[0]), :m_cols] = extra["eps34"][:min(n, extra["eps34"].shape[0]), :m_cols]
-        extra["eps34"] = padded
+    else:
+        e_arr = np.asarray(extra["eps34"], dtype=sig.dtype)
+        if e_arr.ndim == 1:
+            e_arr = e_arr.reshape(n, -1) if e_arr.size >= n * 6 else np.broadcast_to(e_arr, (n, e_arr.size)).copy()
+        if e_arr.ndim != 2 or e_arr.shape[0] != n or e_arr.shape[1] < 6:
+            cols = max(6, e_arr.shape[1] if e_arr.ndim == 2 else 6)
+            padded = np.zeros((n, cols), dtype=sig.dtype)
+            if e_arr.ndim == 2:
+                r = min(n, e_arr.shape[0])
+                c_idx = min(cols, e_arr.shape[1])
+                padded[:r, :c_idx] = e_arr[:r, :c_idx]
+            extra["eps34"] = padded
+        else:
+            extra["eps34"] = e_arr
 
     if "rho" not in extra or extra["rho"] is None:
         rho = np.full(n, mat.rho0, dtype=sig.dtype)
@@ -306,18 +361,7 @@ def solid_update(
     gv2 = 2.0 * gv
     bulk3 = 3.0 * bulk
 
-    if dt > 1e-20:
-        if beta * dt > 1e-12:
-            c1 = 1.0 - math.exp(-beta * dt)
-            c2 = -c1 / beta
-        else:
-            c1 = 0.0
-            c2 = -dt
-        c2_over_dt = c2 / dt
-    else:
-        c1 = 0.0
-        c2 = 0.0
-        c2_over_dt = -1.0
+    c1, c2, c2_over_dt = _compute_relaxation_coeffs(beta, dt)
 
     # Volumetric strain & air pressure (sigeps34.F lines 105-106, 146)
     rho0 = mat.rho0 if mat.rho0 > 0.0 else 1.0
@@ -457,23 +501,40 @@ def shell_update(
 
     # Shell history requires at least 7 variables:
     # 0..5 = deviatoric strain history q, 6 = dezz (thickness deviatoric strain)
+    # Fortran NUVAR=8 (hm_read_mat34.F line 129; sigeps34c.F uses UVAR 1..7)
     if "uv34" not in extra or extra["uv34"] is None:
-        extra["uv34"] = np.zeros((n, 7), dtype=sig.dtype)
-    elif extra["uv34"].shape[0] != n or extra["uv34"].shape[1] < 7:
-        padded = np.zeros((n, 7), dtype=sig.dtype)
-        if extra["uv34"].ndim == 2:
-            m_cols = min(7, extra["uv34"].shape[1])
-            padded[:min(n, extra["uv34"].shape[0]), :m_cols] = extra["uv34"][:min(n, extra["uv34"].shape[0]), :m_cols]
-        extra["uv34"] = padded
+        extra["uv34"] = np.zeros((n, 8), dtype=sig.dtype)
+    else:
+        u = np.asarray(extra["uv34"], dtype=sig.dtype)
+        if u.ndim == 1:
+            u = u.reshape(n, -1) if u.size >= n * 7 else np.broadcast_to(u, (n, u.size)).copy()
+        if u.ndim != 2 or u.shape[0] != n or u.shape[1] < 7:
+            cols = max(8, u.shape[1] if u.ndim == 2 else 8)
+            padded = np.zeros((n, cols), dtype=sig.dtype)
+            if u.ndim == 2:
+                r = min(n, u.shape[0])
+                c_idx = min(cols, u.shape[1])
+                padded[:r, :c_idx] = u[:r, :c_idx]
+            extra["uv34"] = padded
+        else:
+            extra["uv34"] = u
 
     if "eps34" not in extra or extra["eps34"] is None:
         extra["eps34"] = np.zeros((n, max(6, deps.shape[1])), dtype=sig.dtype)
-    elif extra["eps34"].shape[0] != n or extra["eps34"].shape[1] < 3:
-        padded = np.zeros((n, max(6, deps.shape[1])), dtype=sig.dtype)
-        if extra["eps34"].ndim == 2:
-            m_cols = min(padded.shape[1], extra["eps34"].shape[1])
-            padded[:min(n, extra["eps34"].shape[0]), :m_cols] = extra["eps34"][:min(n, extra["eps34"].shape[0]), :m_cols]
-        extra["eps34"] = padded
+    else:
+        e_arr = np.asarray(extra["eps34"], dtype=sig.dtype)
+        if e_arr.ndim == 1:
+            e_arr = e_arr.reshape(n, -1) if e_arr.size >= n * 3 else np.broadcast_to(e_arr, (n, e_arr.size)).copy()
+        if e_arr.ndim != 2 or e_arr.shape[0] != n or e_arr.shape[1] < 3:
+            cols = max(6, deps.shape[1], e_arr.shape[1] if e_arr.ndim == 2 else 6)
+            padded = np.zeros((n, cols), dtype=sig.dtype)
+            if e_arr.ndim == 2:
+                r = min(n, e_arr.shape[0])
+                c_idx = min(cols, e_arr.shape[1])
+                padded[:r, :c_idx] = e_arr[:r, :c_idx]
+            extra["eps34"] = padded
+        else:
+            extra["eps34"] = e_arr
 
     p = mat.params
     bulk = p.get("bulk", p.get("K", mat.K))
@@ -487,18 +548,7 @@ def shell_update(
     gv2 = 2.0 * gv
     bulk3 = 3.0 * bulk
 
-    if dt > 1e-20:
-        if beta * dt > 1e-12:
-            c1 = 1.0 - math.exp(-beta * dt)
-            c2 = -c1 / beta
-        else:
-            c1 = 0.0
-            c2 = -dt
-        c2_over_dt = c2 / dt
-    else:
-        c1 = 0.0
-        c2 = 0.0
-        c2_over_dt = -1.0
+    c1, c2, c2_over_dt = _compute_relaxation_coeffs(beta, dt)
 
     cc2 = gv2 * (c1 + c2_over_dt)
 
@@ -657,18 +707,8 @@ def consistent_solid_tangent(
     ge = gi
     gv = g0 - gi
 
-    if dt > 0.0:
-        if beta * dt > 1e-12:
-            c1 = 1.0 - math.exp(-beta * dt)
-            c2 = -c1 / beta
-        else:
-            c1 = 0.0
-            c2 = -dt
-        cc = c1 + c2 / dt
-    else:
-        # dt -> 0 limit: cc -> -1, g_alg -> ge + gv = g0
-        cc = -1.0
-
+    c1, c2, c2_over_dt = _compute_relaxation_coeffs(beta, dt)
+    cc = c1 + c2_over_dt
     g_alg = ge - gv * cc
 
     is_1d = (sig is not None and isinstance(sig, np.ndarray) and sig.ndim == 1)
@@ -743,18 +783,8 @@ def shell_membrane_tangent(
     ge = gi
     gv = g0 - gi
 
-    if dt > 0.0:
-        if beta * dt > 1e-12:
-            c1 = 1.0 - math.exp(-beta * dt)
-            c2 = -c1 / beta
-        else:
-            c1 = 0.0
-            c2 = -dt
-        cc = c1 + c2 / dt
-    else:
-        # dt -> 0 limit: cc -> -1, g_alg -> g0
-        cc = -1.0
-
+    c1, c2, c2_over_dt = _compute_relaxation_coeffs(beta, dt)
+    cc = c1 + c2_over_dt
     g_alg = ge - gv * cc
 
     denom = bulk + (4.0 / 3.0) * g_alg
@@ -794,6 +824,250 @@ def consistent_shell_tangent(
         return C_mat
     n = sig.shape[0]
     return np.broadcast_to(C_mat, (n, 3, 3)).copy()
+
+
+# =============================================================================
+# 1D Truss: truss_update (sigeps34t.F)
+# =============================================================================
+
+def truss_update(
+    mat: Material,
+    force: np.ndarray,
+    deps: np.ndarray,
+    area: np.ndarray,
+    al0: np.ndarray,
+    al: np.ndarray,
+    dt: float,
+    extra: Optional[Dict[str, Any]] = None,
+    off: Optional[np.ndarray] = None,
+    gap: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """1D truss element stress and force update for LAW34 (sigeps34t.F).
+
+    Parameters
+    ----------
+    mat : Material
+        LAW34 material instance.
+    force : ndarray
+        Current axial force (n,).
+    deps : ndarray
+        Axial strain increment (n,).
+    area : ndarray
+        Current cross-sectional area (n,).
+    al0 : ndarray
+        Initial element length (n,).
+    al : ndarray
+        Current element length (n,).
+    dt : float
+        Current time step.
+    extra : dict or None
+        Extra dictionary containing state 'uv34_t' (n, 2) where:
+        uvar[:, 0] = deviatoric strain history q_1
+        uvar[:, 1] = total axial strain eps
+    off : ndarray or None
+        Active element flag (1=active, 0=inactive).
+    gap : ndarray or None
+        Initial slack/gap distance.
+
+    Returns
+    -------
+    (force_new, area_new, dsig, sti) : tuple of ndarrays
+        force_new : updated axial force (n,)
+        area_new : updated cross-sectional area (n,)
+        dsig : axial stress increment (n,)
+        sti : axial stiffness (n,)
+    """
+    dt = float(dt) if dt is not None else 0.0
+    is_1d = (np.ndim(force) == 0)
+    force = np.atleast_1d(np.asarray(force, dtype=float)).copy()
+    deps = np.atleast_1d(np.asarray(deps, dtype=float))
+    area = np.atleast_1d(np.asarray(area, dtype=float)).copy()
+    al0 = np.atleast_1d(np.asarray(al0, dtype=float))
+    al = np.atleast_1d(np.asarray(al, dtype=float))
+    n = len(force)
+
+    if off is None:
+        off = np.ones(n, dtype=float)
+    else:
+        off = np.atleast_1d(np.asarray(off, dtype=float)).copy()
+
+    if gap is None:
+        gap = np.zeros(n, dtype=float)
+    else:
+        gap = np.atleast_1d(np.asarray(gap, dtype=float))
+
+    if extra is None:
+        extra = {}
+
+    if "uv34_t" not in extra or extra["uv34_t"] is None:
+        extra["uv34_t"] = np.zeros((n, 2), dtype=float)
+    elif extra["uv34_t"].shape[0] != n or extra["uv34_t"].shape[1] < 2:
+        padded = np.zeros((n, 2), dtype=float)
+        if extra["uv34_t"].ndim == 2:
+            r = min(n, extra["uv34_t"].shape[0])
+            c_idx = min(2, extra["uv34_t"].shape[1])
+            padded[:r, :c_idx] = extra["uv34_t"][:r, :c_idx]
+        extra["uv34_t"] = padded
+
+    p = mat.params
+    bulk = p.get("bulk", p.get("K", mat.K))
+    g0 = p.get("g0", p.get("G0", mat.G))
+    gi = p.get("gi", p.get("GI", g0))
+    beta = p.get("beta", p.get("BETA", 0.0))
+
+    ge = gi
+    gv = g0 - gi
+    ge2 = 2.0 * ge
+    gv2 = 2.0 * gv
+
+    c1, c2, c2_over_dt = _compute_relaxation_coeffs(beta, dt)
+
+    uvar = extra["uv34_t"]
+    # Total normal strain (sigeps34t.F lines 80-81)
+    eps = uvar[:, 1] + deps
+    uvar[:, 1] = eps
+
+    # Gap activation (sigeps34t.F lines 83-85)
+    gap_mask = (gap > 0.0) & (al <= (al0 - gap))
+    off = np.where(gap_mask, 1.0, off)
+
+    # Poisson contraction and stiffness (sigeps34t.F lines 87-94)
+    k3 = 3.0 * bulk
+    nu2_denom = k3 + ge
+    nu2 = (k3 - ge2) / nu2_denom if abs(nu2_denom) > 1e-30 else 1.0
+    nu2 = max(float(nu2), 1.0)
+
+    area_new = area * (1.0 - nu2 * deps * off)
+    sti = np.full(n, k3, dtype=float)
+
+    # Strain deviators (sigeps34t.F lines 97-99)
+    ddexx = deps * (2.0 / 3.0)
+    depsdxx = ddexx * (1.0 / dt) if dt > 1e-20 else np.zeros(n, dtype=float)
+    dexx = eps * (2.0 / 3.0)
+
+    # Viscous strain & mean pressure (sigeps34t.F lines 101-102)
+    depsvxx = c1 * (dexx - uvar[:, 0]) + c2 * depsdxx
+    dp = bulk * deps
+
+    # Stress increment & force update (sigeps34t.F lines 104-109)
+    dsig = ge2 * ddexx - gv2 * depsvxx + dp
+    force_new = (force + dsig * area_new) * off
+
+    ddexx_safe = np.where(np.abs(ddexx) < 1e-20, 1e-20, np.abs(ddexx))
+    sti = np.maximum(sti, np.abs(dsig / ddexx_safe)) * off
+    uvar[:, 0] += depsvxx + ddexx
+
+    if is_1d:
+        return force_new[0], area_new[0], dsig[0], sti[0]
+    return force_new, area_new, dsig, sti
+
+
+# =============================================================================
+# Integrated Beam: beam_update (sigeps34pi.F)
+# =============================================================================
+
+def beam_update(
+    mat: Material,
+    sig: np.ndarray,
+    deps: np.ndarray,
+    dt: float,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Integrated beam element stress update for LAW34 (sigeps34pi.F).
+
+    Components: [xx (axial), xy (shear y), xz (shear z)].
+
+    Parameters
+    ----------
+    mat : Material
+        LAW34 material instance.
+    sig : ndarray, shape (n, 3) or (3,)
+        Current beam stresses [xx, xy, xz].
+    deps : ndarray, shape (n, 3) or (3,)
+        Strain increments [xx, xy, xz].
+    dt : float
+        Time step.
+    extra : dict or None
+        Extra dictionary containing state 'uv34_b' (n, 3) for history q.
+
+    Returns
+    -------
+    (sign, eps_tot) : tuple of ndarrays
+        sign : updated stress [xx, xy, xz]
+        eps_tot : accumulated total strain [xx, xy, xz]
+    """
+    dt = float(dt) if dt is not None else 0.0
+    is_1d = (np.ndim(sig) == 1)
+    sig = np.atleast_2d(np.asarray(sig, dtype=float)).copy()
+    deps = np.atleast_2d(np.asarray(deps, dtype=float))
+    n = sig.shape[0]
+
+    if extra is None:
+        extra = {}
+
+    if "uv34_b" not in extra or extra["uv34_b"] is None:
+        extra["uv34_b"] = np.zeros((n, 3), dtype=float)
+    elif extra["uv34_b"].shape[0] != n or extra["uv34_b"].shape[1] < 3:
+        padded = np.zeros((n, 3), dtype=float)
+        if extra["uv34_b"].ndim == 2:
+            r = min(n, extra["uv34_b"].shape[0])
+            c_idx = min(3, extra["uv34_b"].shape[1])
+            padded[:r, :c_idx] = extra["uv34_b"][:r, :c_idx]
+        extra["uv34_b"] = padded
+
+    if "eps34_b" not in extra or extra["eps34_b"] is None:
+        extra["eps34_b"] = np.zeros((n, 3), dtype=float)
+    elif extra["eps34_b"].shape[0] != n or extra["eps34_b"].shape[1] < 3:
+        padded = np.zeros((n, 3), dtype=float)
+        if extra["eps34_b"].ndim == 2:
+            r = min(n, extra["eps34_b"].shape[0])
+            c_idx = min(3, extra["eps34_b"].shape[1])
+            padded[:r, :c_idx] = extra["eps34_b"][:r, :c_idx]
+        extra["eps34_b"] = padded
+
+    eps = extra["eps34_b"]
+    eps += deps
+
+    p = mat.params
+    bulk = p.get("bulk", p.get("K", mat.K))
+    g0 = p.get("g0", p.get("G0", mat.G))
+    gi = p.get("gi", p.get("GI", g0))
+    beta = p.get("beta", p.get("BETA", 0.0))
+
+    ge = gi
+    gv = g0 - gi
+    ge2 = 2.0 * ge
+    gv2 = 2.0 * gv
+
+    c1, c2, c2_over_dt = _compute_relaxation_coeffs(beta, dt)
+
+    uvar = extra["uv34_b"]
+    ddexx = (2.0 / 3.0) * deps[:, 0]
+    ddexy = deps[:, 1]
+    ddexz = deps[:, 2]
+
+    dexx = (2.0 / 3.0) * eps[:, 0]
+    dexy = eps[:, 1]
+    dexz = eps[:, 2]
+
+    depsvxx = c1 * (dexx - uvar[:, 0]) + c2_over_dt * ddexx
+    depsvxy = c1 * (dexy - uvar[:, 1]) + c2_over_dt * ddexy
+    depsvxz = c1 * (dexz - uvar[:, 2]) + c2_over_dt * ddexz
+
+    dp = bulk * deps[:, 0]
+
+    sign = np.empty_like(sig)
+    sign[:, 0] = sig[:, 0] + ge2 * ddexx - gv2 * depsvxx + dp
+    sign[:, 1] = sig[:, 1] + ge * ddexy - gv * depsvxy
+    sign[:, 2] = sig[:, 2] + ge * ddexz - gv * depsvxz
+
+    uvar[:, 0] += depsvxx + ddexx
+    uvar[:, 1] += depsvxy + ddexy
+    uvar[:, 2] += depsvxz + ddexz
+
+    if is_1d:
+        return sign[0], eps[0]
+    return sign, eps
 
 
 # =============================================================================
