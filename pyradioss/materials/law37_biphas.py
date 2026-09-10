@@ -294,12 +294,12 @@ def init_uv37(
             a_init = np.zeros(nel, dtype=float)
             b1 = np.zeros(nel, dtype=float)
         else:
-            rho0_ref = rho_l0 * alpha1 + (1.0 - alpha1) * rho_g0
-            y1 = (alpha1 * rho_l0) / rho0_ref if rho0_ref > _EM30 else alpha1
-            b1 = np.clip(y1 * rho_arr, 0.0, rho_arr)
-            a_init = np.where(rho1_init > _EM30, b1 / rho1_init, 0.0)
+            denom = rho1_init - rho2_init
+            denom = np.where(np.abs(denom) < _EM30, _EM30, denom)
+            a_init = (rho_arr - rho2_init) / denom
             a_init = np.clip(a_init, 0.0, 1.0)
             a_init = np.where(a_init < _EM20, 0.0, a_init)
+            b1 = a_init * rho1_init
 
         uv37[:, 0] = b1
         uv37[:, 1] = rho2_init
@@ -406,13 +406,27 @@ def solid_update(
     uninit = (uv37[:, 1] <= 0.0) & (uv37[:, 2] <= 0.0)
     to_init = np.ones(nel, dtype=bool) if is_time_zero else uninit
     if np.any(to_init):
+        # If uninitialized and density differs from rho0_ref, scale B1 by rho/rho0_ref for mass conservation
+        rho_init = rho[to_init]
         uv37_init = init_uv37(
             mat=mat,
             nel=int(np.count_nonzero(to_init)),
-            rho=rho[to_init],
+            rho=rho_init,
             sig=sig[to_init],
             pshift=pshift,
         )
+        if not is_time_zero and np.any(np.abs(rho_init - rho0_ref) > 1e-6) and 1e-10 < alpha1 < 1.0 - 1e-10:
+            uv37_ref = init_uv37(
+                mat=mat,
+                nel=int(np.count_nonzero(to_init)),
+                rho=np.full(int(np.count_nonzero(to_init)), rho0_ref),
+                sig=sig[to_init],
+                pshift=pshift,
+            )
+            b1_0 = uv37_ref[:, 0]
+            uv37_init[:, 0] = np.clip(b1_0 * (rho_init / rho0_ref), 0.0, rho_init)
+            uv37_init[:, 3] = np.clip(uv37_init[:, 0] / np.maximum(_EM30, uv37_init[:, 2]), 0.0, 1.0)
+            uv37_init[:, 4] = 1.0 - uv37_init[:, 3]
         uv37[to_init] = uv37_init
 
     # Boundary element input check (sigeps37.F lines 208-232)
