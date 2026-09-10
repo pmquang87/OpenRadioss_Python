@@ -128,7 +128,13 @@ def _hourglass_defaults(ishell: int) -> Tuple[float, float, float]:
 def _is_numeric_card(card: Card) -> bool:
     """True if every token of the card parses as a number — used to decide
     whether the first card of a block is a title or already data."""
-    toks = card.tokens()
+    raw = card.raw.strip()
+    if not raw:
+        return False
+    if "," in raw:
+        toks = [p.strip() for p in raw.replace(",", " ").split()]
+    else:
+        toks = card.tokens()
     if not toks:
         return False
     for t in toks:
@@ -41285,8 +41291,10 @@ def read_mat_law38(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     """``/MAT/LAW38`` or ``/MAT/VISC_TAB``: Tabulated viscoelastic polymer/foam model (M190/M541)."""
     from ..model.entities import MatLaw38, Material
     mat_id = block.user_id or 0
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    if block.fixed:
+    has_comma = any("," in c.raw for c in block.cards)
+    is_fixed = block.fixed and not has_comma
+    title, cards = _fixed_data(block) if is_fixed else _title_and_data(block)
+    if is_fixed:
         valid_cards = [c for c in cards if not c.raw.strip().startswith("#")]
     else:
         valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
@@ -41314,7 +41322,7 @@ def read_mat_law38(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     funct_id_load: list[int] = []
     funct_id_unload: list[int] = []
 
-    if block.fixed:
+    if is_fixed:
         # Card 1: MAT_RHO, [Refer_Rho]
         if len(valid_cards) > 0:
             c0 = valid_cards[0].cut("MAT_LAW38_1")
@@ -41393,13 +41401,30 @@ def read_mat_law38(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 c11 = valid_cards[11].cut("MAT_LAW38_12")
                 funct_id_unload = [_safe_int(c11[i]) if i < len(c11) and c11[i] else 0 for i in range(n)]
     else:
-        # Free-format
+        # Free-format (supports comma-separated, whitespace-separated, and empty fields)
+        def _card_tokens(c: Card) -> list[str]:
+            raw = c.raw.strip()
+            if not raw:
+                return []
+            if "," in raw:
+                parts = [p.strip() for p in raw.split(",")]
+                while parts and parts[-1] == "":
+                    parts.pop()
+                toks = []
+                for p in parts:
+                    if not p:
+                        toks.append("")
+                    else:
+                        toks.extend(p.split())
+                return toks
+            return c.tokens()
+
         if len(valid_cards) > 0:
-            t0 = valid_cards[0].tokens()
+            t0 = _card_tokens(valid_cards[0])
             rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
             rhor = _safe_float(t0[1]) if len(t0) > 1 else rho0
         if len(valid_cards) > 1:
-            t1 = valid_cards[1].tokens()
+            t1 = _card_tokens(valid_cards[1])
             e = _safe_float(t1[0]) if len(t1) > 0 else 0.0
             nu_t = _safe_float(t1[1]) if len(t1) > 1 else 0.0
             nu_c = _safe_float(t1[2]) if len(t1) > 2 else 0.0
@@ -41407,7 +41432,7 @@ def read_mat_law38(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             iflag = _safe_int(t1[4]) if len(t1) > 4 else 0
             itotal = _safe_int(t1[5]) if len(t1) > 5 else 0
         if len(valid_cards) > 2:
-            t2 = valid_cards[2].tokens()
+            t2 = _card_tokens(valid_cards[2])
             beta = _safe_float(t2[0]) if len(t2) > 0 else 0.0
             h = _safe_float(t2[1]) if len(t2) > 1 else 0.0
             r_d = _safe_float(t2[2]) if len(t2) > 2 else 0.0
@@ -41415,18 +41440,18 @@ def read_mat_law38(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             k_d = _safe_int(t2[4]) if len(t2) > 4 else 0
             instant_mod_upd = _safe_float(t2[5]) if len(t2) > 5 else 0.0
         if len(valid_cards) > 3:
-            t3 = valid_cards[3].tokens()
+            t3 = _card_tokens(valid_cards[3])
             kair = _safe_int(t3[0]) if len(t3) > 0 else 0
             np_val = _safe_int(t3[1]) if len(t3) > 1 else 0
             pscale = _safe_float(t3[2]) if len(t3) > 2 else 0.0
         if len(valid_cards) > 4:
-            t4 = valid_cards[4].tokens()
+            t4 = _card_tokens(valid_cards[4])
             p0 = _safe_float(t4[0]) if len(t4) > 0 else 0.0
             rp = _safe_float(t4[1]) if len(t4) > 1 else 0.0
             pmax = _safe_float(t4[2]) if len(t4) > 2 else 0.0
             phi = _safe_float(t4[3]) if len(t4) > 3 else 0.0
         if len(valid_cards) > 5:
-            t5 = valid_cards[5].tokens()
+            t5 = _card_tokens(valid_cards[5])
             if len(t5) >= 6:
                 ful = _safe_int(t5[0])
                 alpha_unload = _safe_float(t5[2])
@@ -41440,7 +41465,7 @@ def read_mat_law38(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 a = _safe_float(t5[3]) if len(t5) > 3 else 0.0
                 b = _safe_float(t5[4]) if len(t5) > 4 else 0.0
         if len(valid_cards) > 6:
-            t6 = valid_cards[6].tokens()
+            t6 = _card_tokens(valid_cards[6])
             if len(t6) >= 4:
                 m_func = _safe_int(t6[0])
                 cutoff = _safe_float(t6[2])
@@ -41450,7 +41475,7 @@ def read_mat_law38(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 cutoff = _safe_float(t6[1]) if len(t6) > 1 else 0.0
                 iinsta = _safe_int(t6[2]) if len(t6) > 2 else 0
         if len(valid_cards) > 7:
-            t7 = valid_cards[7].tokens()
+            t7 = _card_tokens(valid_cards[7])
             e_final = _safe_float(t7[0]) if len(t7) > 0 else 0.0
             epsi_final = _safe_float(t7[1]) if len(t7) > 1 else 0.0
             lamb = _safe_float(t7[2]) if len(t7) > 2 else 0.0
@@ -41458,22 +41483,22 @@ def read_mat_law38(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             tol = _safe_float(t7[4]) if len(t7) > 4 else 0.0
 
         if m_func == 0 and len(valid_cards) > 8:
-            t8 = valid_cards[8].tokens()
+            t8 = _card_tokens(valid_cards[8])
             if t8:
                 m_func = min(len(t8), 5)
         n = min(m_func, 5)
         if n > 0:
             if len(valid_cards) > 8:
-                t8 = valid_cards[8].tokens()
+                t8 = _card_tokens(valid_cards[8])
                 fscale_i = [_safe_float(t8[i]) if i < len(t8) else 1.0 for i in range(n)]
             if len(valid_cards) > 9:
-                t9 = valid_cards[9].tokens()
+                t9 = _card_tokens(valid_cards[9])
                 epsilon_i = [_safe_float(t9[i]) if i < len(t9) else 0.0 for i in range(n)]
             if len(valid_cards) > 10:
-                t10 = valid_cards[10].tokens()
+                t10 = _card_tokens(valid_cards[10])
                 funct_id_load = [_safe_int(t10[i]) if i < len(t10) else 0 for i in range(n)]
             if len(valid_cards) > 11:
-                t11 = valid_cards[11].tokens()
+                t11 = _card_tokens(valid_cards[11])
                 funct_id_unload = [_safe_int(t11[i]) if i < len(t11) else 0 for i in range(n)]
 
     # Defaults and post-processing (citing hm_read_mat38.F lines 221-258)

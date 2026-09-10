@@ -268,7 +268,7 @@ def check_mat_law38(mat: Any, log: MessageLog) -> None:
 
     # 4. Number of functions: 1 <= nfunc <= 5
     nfunc = None
-    for k in ["nfunc", "NFUNC", "mfunc", "MFUNC", "n_func", "num_curves"]:
+    for k in ["nfunc", "NFUNC", "mfunc", "MFUNC", "m_func", "n_func", "num_curves"]:
         if hasattr(mat, k) and getattr(mat, k) is not None:
             try:
                 nfunc = int(getattr(mat, k))

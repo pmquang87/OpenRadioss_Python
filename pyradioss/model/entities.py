@@ -106,6 +106,12 @@ class Material:
             return self.params["Young"]
         if "E0" in self.params:
             return self.params["E0"]
+        if "e" in self.params:
+            return float(self.params["e"])
+        if "e0" in self.params:
+            return float(self.params["e0"])
+        if "MAT_E" in self.params:
+            return float(self.params["MAT_E"])
         g = self.G
         if g > 0.0:
             return 2.0 * g * (1.0 + self.nu)
@@ -119,6 +125,10 @@ class Material:
             return self.params["Nu"]
         if "MAT_NU" in self.params:
             return self.params["MAT_NU"]
+        if "nu_t" in self.params:
+            return float(self.params["nu_t"])
+        if "nu_c" in self.params:
+            return float(self.params["nu_c"])
         return 0.3
 
     @property
@@ -142,6 +152,12 @@ class Material:
             return 2.0 * float(self.params["c10"])
         if "E" in self.params:
             return float(self.params["E"]) / (2.0 * (1.0 + self.nu))
+        if "e" in self.params:
+            return float(self.params["e"]) / (2.0 * (1.0 + self.nu))
+        if "e0" in self.params:
+            return float(self.params["e0"]) / (2.0 * (1.0 + self.nu))
+        if "MAT_E" in self.params:
+            return float(self.params["MAT_E"]) / (2.0 * (1.0 + self.nu))
         return 0.0
 
     @property
@@ -149,6 +165,9 @@ class Material:
         """Bulk modulus K = E / 3(1-2nu)."""
         if self.law in (5, "5", "LAW5", "JWL"):
             return float(self.params.get("c1", self.params.get("bulk", 0.0)))
+        if self.law in (38, "38", "LAW38", "VISC_TAB"):
+            nu_max = min(0.499, max(self.params.get("nu_t", 0.0), self.params.get("nu_c", 0.0), 0.0))
+            return self.E / (3.0 * (1.0 - 2.0 * nu_max))
         if "K" in self.params:
             return self.params["K"]
         if "bulk" in self.params:
@@ -180,6 +199,12 @@ class Material:
             try:
                 from ..materials import law28_honeycomb
                 return float(law28_honeycomb.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (38, "38", "LAW38", "VISC_TAB"):
+            try:
+                from ..materials import law38_visc_tab
+                return float(law38_visc_tab.sound_speed(self, rho=self.rho0))
             except Exception:
                 pass
         return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
@@ -10079,6 +10104,14 @@ class MatLaw38:
     @property
     def epsilon(self) -> List[float]:
         return self.epsilon_i
+
+    @property
+    def nfunc(self) -> int:
+        return self.m_func
+
+    @property
+    def nu(self) -> float:
+        return max(self.nu_c, self.nu_t)
 
 
 MatViscTab = MatLaw38
