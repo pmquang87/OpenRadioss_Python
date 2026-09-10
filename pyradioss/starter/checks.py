@@ -673,7 +673,7 @@ def check_mat_law12(mat: Any, log: MessageLog) -> None:
 
     if e11 <= 0.0 or e22 <= 0.0 or e33 <= 0.0:
         log.error(
-            f"/MAT/LAW12/{mid}: Young's moduli E11, E22, E33 must be > 0 (got E11={e11:g}, E22={e22:g}, E33={e33:g})",
+            f"/MAT/LAW12/{mid}: Young's moduli E11, E22, E33 must be > 0 (got E11={e11:g}, E22={e22:g}, E33={e33:g}) (ANCMSG 306)",
             "MAT CHECK",
         )
     else:
@@ -697,7 +697,7 @@ def check_mat_law12(mat: Any, log: MessageLog) -> None:
             - (c13**2) * c22
         )
         if detc <= 0.0:
-            log.error(f"/MAT/LAW12/{mid}: compliance matrix determinant DETC must be > 0 (got {detc:g})", "MAT CHECK")
+            log.error(f"/MAT/LAW12/{mid}: compliance matrix determinant DETC must be > 0 (got {detc:g}) (ANCMSG 307)", "MAT CHECK")
 
     # 4. Shear moduli
     g12 = _extract(["g12", "G12", "MAT_GAB", "gab", "GAB"], default=0.0)
@@ -961,10 +961,10 @@ def check_model(model: Model, log: MessageLog) -> None:
     if getattr(model, "n2d", 0) > 0:
         for mid, mat in getattr(model, "materials", {}).items():
             if getattr(mat, "law", None) in (12, "12", "LAW12", "3PARBI", "3D_COMP", "COMP_3D", "RAGAB") or getattr(mat, "law_name", None) in ("12", "LAW12", "3PARBI", "3D_COMP", "COMP_3D", "RAGAB", "MAT_LAW12", "MAT_3D_COMP", "MAT_COMP_3D"):
-                log.error(f"/MAT/LAW12/{mid}: LAW12 is not supported for 2D analysis (N2D > 0)", "MAT CHECK")
+                log.error(f"/MAT/LAW12/{mid}: LAW12 is not supported for 2D analysis (N2D > 0) (ANCMSG 305)", "MAT CHECK")
         for mid, mat12 in getattr(model, "mat_law12s", {}).items():
             if mid not in getattr(model, "materials", {}):
-                log.error(f"/MAT/LAW12/{mid}: LAW12 is not supported for 2D analysis (N2D > 0)", "MAT CHECK")
+                log.error(f"/MAT/LAW12/{mid}: LAW12 is not supported for 2D analysis (N2D > 0) (ANCMSG 305)", "MAT CHECK")
 
     # material law vs element family compatibility (fail in the Starter
     # with a clear message instead of a NotImplementedError mid-run)

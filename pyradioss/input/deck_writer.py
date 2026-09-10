@@ -1786,6 +1786,58 @@ class StarterDeck:
         Card 10: ALPHA, EFIB, CC, EPS0, STRFLAG (%20lg%20lg%20lg%20lg%10d)
         """
         kw_low = {k.lower(): v for k, v in kwargs.items()}
+        mat_obj = None
+        if hasattr(mid, "e11") and hasattr(mid, "rho0"):
+            mat_obj = mid
+        elif "mat" in kw_low and hasattr(kw_low["mat"], "e11"):
+            mat_obj = kw_low["mat"]
+        elif "mat12" in kw_low and hasattr(kw_low["mat12"], "e11"):
+            mat_obj = kw_low["mat12"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", 0)
+            if not title:
+                title = getattr(mat_obj, "title", "")
+            if rho == 0.0:
+                rho = getattr(mat_obj, "rho0", 0.0)
+            if refer_rho is None and getattr(mat_obj, "rhor", 0.0) > 0.0:
+                refer_rho = getattr(mat_obj, "rhor", None)
+            if e11 == 0.0: e11 = getattr(mat_obj, "e11", 0.0)
+            if e22 == 0.0: e22 = getattr(mat_obj, "e22", 0.0)
+            if e33 == 0.0: e33 = getattr(mat_obj, "e33", 0.0)
+            if nu12 == 0.0: nu12 = getattr(mat_obj, "nu12", 0.0)
+            if nu23 == 0.0: nu23 = getattr(mat_obj, "nu23", 0.0)
+            if nu31 == 0.0: nu31 = getattr(mat_obj, "nu31", 0.0)
+            if g12 == 0.0: g12 = getattr(mat_obj, "g12", 0.0)
+            if g23 == 0.0: g23 = getattr(mat_obj, "g23", 0.0)
+            if g31 == 0.0: g31 = getattr(mat_obj, "g31", 0.0)
+            if sigt1 == 0.0: sigt1 = getattr(mat_obj, "sig_t1", 0.0)
+            if sigt2 == 0.0: sigt2 = getattr(mat_obj, "sig_t2", 0.0)
+            if sigt3 == 0.0: sigt3 = getattr(mat_obj, "sig_t3", 0.0)
+            if delta == 0.05: delta = getattr(mat_obj, "delta", 0.05)
+            if cb == 0.0: cb = getattr(mat_obj, "b", 0.0)
+            if cn == 1.0: cn = getattr(mat_obj, "n", 1.0)
+            if fmax == 1.0e10: fmax = getattr(mat_obj, "fmax", 1.0e10)
+            if wplaref == 1.0: wplaref = getattr(mat_obj, "wplaref", 1.0)
+            if sigyt1 == 0.0: sigyt1 = getattr(mat_obj, "sig_1yt", 0.0)
+            if sigyt2 == 0.0: sigyt2 = getattr(mat_obj, "sig_2yt", 0.0)
+            if sigyc1 == 0.0: sigyc1 = getattr(mat_obj, "sig_1yc", 0.0)
+            if sigyc2 == 0.0: sigyc2 = getattr(mat_obj, "sig_2yc", 0.0)
+            if sigyt12 == 0.0: sigyt12 = getattr(mat_obj, "sig_12yt", 0.0)
+            if sigyc12 == 0.0: sigyc12 = getattr(mat_obj, "sig_12yc", 0.0)
+            if sigyt23 == 0.0: sigyt23 = getattr(mat_obj, "sig_23yt", 0.0)
+            if sigyc23 == 0.0: sigyc23 = getattr(mat_obj, "sig_23yc", 0.0)
+            if sigyt3 == 0.0: sigyt3 = getattr(mat_obj, "sig_3yt", 0.0)
+            if sigyc3 == 0.0: sigyc3 = getattr(mat_obj, "sig_3yc", 0.0)
+            if sigyt13 == 0.0: sigyt13 = getattr(mat_obj, "sig_13yt", 0.0)
+            if sigyc13 == 0.0: sigyc13 = getattr(mat_obj, "sig_13yc", 0.0)
+            if alpha == 0.0: alpha = getattr(mat_obj, "alpha", 0.0)
+            if efib == 0.0: efib = getattr(mat_obj, "efib", 0.0)
+            if cc == 0.0: cc = getattr(mat_obj, "c", 0.0)
+            if eps0 == 0.0: eps0 = getattr(mat_obj, "eps0", 0.0)
+            if strflag == 1: strflag = getattr(mat_obj, "icc", 1)
+            if law_name == "LAW12": law_name = getattr(mat_obj, "law_name", "LAW12")
+
         if "mat_id" in kw_low and mid == 0:
             mid = kw_low["mat_id"]
         if "mid" in kw_low and mid == 0:

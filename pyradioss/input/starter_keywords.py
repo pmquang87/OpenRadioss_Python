@@ -1082,7 +1082,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_mat_law37(block, model, log)
         return
     # M188: LAW12 (3PARBI), LAW13 (HONEYCOMB), LAW15 (CHANG), LAW18 (CONCR_DRA), LAW22 (TSAI_WU), LAW25 (COMP_PLAS), LAW28 (HONEYCOMB_SOL)
-    if lawname in ("LAW12", "3PARBI", "3D_COMP", "COMP_3D", "RAGAB", "MAT_3PARBI", "MAT_3D_COMP", "MAT_COMP_3D", "MAT_RAGAB", "LAW12_3PARBI", "LAW12_3D_COMP", "LAW12_COMP_3D"):
+    if lawname in ("12", "LAW12", "3PARBI", "3D_COMP", "COMP_3D", "RAGAB", "MAT_3PARBI", "MAT_3D_COMP", "MAT_COMP_3D", "MAT_RAGAB", "LAW12_3PARBI", "LAW12_3D_COMP", "LAW12_COMP_3D"):
         read_mat_law12(block, model, log)
         return
     if lawname in ("LAW13", "RIGID", "MAT_RIGID", "LAW13_RIGID"):
@@ -38248,6 +38248,28 @@ def read_mat_law12(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             eps0 = _safe_float(t9[3]) if len(t9) > 3 else 0.0
             icc = _safe_int(t9[4]) if len(t9) > 4 else 0
 
+    # Fortran defaults (hm_read_mat12.F:154, 178-200)
+    if rhor == 0.0:
+        rhor = rho0
+    if delta == 0.0:
+        delta = 0.05
+    if n == 0.0:
+        n = 1.0
+    if fmax == 0.0:
+        fmax = 1.0e10
+    if wplaref == 0.0:
+        wplaref = 1.0
+    if c == 0.0 and eps0 == 0.0:
+        eps0 = 1.0
+    if icc == 0:
+        icc = 1
+
+    law_name = "LAW12"
+    if block.keyword:
+        parts = block.keyword.split("/")
+        if len(parts) > 2 and parts[2].strip():
+            law_name = parts[2].strip()
+
     mat = MatLaw12(
         id=mat_id, rho0=rho0, rhor=rhor, e11=e11, e22=e22, e33=e33,
         nu12=nu12, nu23=nu23, nu31=nu31, g12=g12, g23=g23, g31=g31,
@@ -38256,7 +38278,7 @@ def read_mat_law12(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         sig_1yc=sig_1yc, sig_2yc=sig_2yc, sig_12yt=sig_12yt, sig_12yc=sig_12yc,
         sig_23yt=sig_23yt, sig_23yc=sig_23yc, sig_3yt=sig_3yt, sig_3yc=sig_3yc,
         sig_13yt=sig_13yt, sig_13yc=sig_13yc, alpha=alpha, efib=efib, c=c, eps0=eps0,
-        icc=icc, title=title
+        icc=icc, title=title, law_name=law_name
     )
     model.mat_law12s[mat_id] = mat
     try:
@@ -38265,7 +38287,7 @@ def read_mat_law12(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     except Exception:
         e_val = max(e11, e22, e33, 200e9) if max(e11, e22, e33) > 0 else 200e9
         model.materials[mat_id] = InactiveMaterial(
-            id=mat_id, law=12, rho0=rho0, title=title, law_name="LAW12",
+            id=mat_id, law=12, rho0=rho0, title=title, law_name=law_name,
             params={
                 "E": e_val, "MAT_E": e_val, "nu": nu12 if 0.0 <= nu12 < 0.5 else 0.3, "MAT_NU": nu12 if 0.0 <= nu12 < 0.5 else 0.3,
                 "MAT_SIGY": sig_1yt if sig_1yt > 0 else 200e6, "rho": rho0, "MAT_RHO": rho0,

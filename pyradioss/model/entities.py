@@ -9346,6 +9346,222 @@ class MatLaw12:
     def strflag(self, val: int) -> None:
         self.icc = val
 
+    @property
+    def rho(self) -> float:
+        return self.rho0
+
+    @rho.setter
+    def rho(self, val: float) -> None:
+        self.rho0 = val
+
+    @property
+    def refer_rho(self) -> float:
+        return self.rhor
+
+    @refer_rho.setter
+    def refer_rho(self, val: float) -> None:
+        self.rhor = val
+
+    @property
+    def ea(self) -> float:
+        return self.e11
+
+    @ea.setter
+    def ea(self, val: float) -> None:
+        self.e11 = val
+
+    @property
+    def eb(self) -> float:
+        return self.e22
+
+    @eb.setter
+    def eb(self, val: float) -> None:
+        self.e22 = val
+
+    @property
+    def ec(self) -> float:
+        return self.e33
+
+    @ec.setter
+    def ec(self, val: float) -> None:
+        self.e33 = val
+
+    @property
+    def prab(self) -> float:
+        return self.nu12
+
+    @prab.setter
+    def prab(self, val: float) -> None:
+        self.nu12 = val
+
+    @property
+    def prbc(self) -> float:
+        return self.nu23
+
+    @prbc.setter
+    def prbc(self, val: float) -> None:
+        self.nu23 = val
+
+    @property
+    def prca(self) -> float:
+        return self.nu31
+
+    @prca.setter
+    def prca(self, val: float) -> None:
+        self.nu31 = val
+
+    @property
+    def gab(self) -> float:
+        return self.g12
+
+    @gab.setter
+    def gab(self, val: float) -> None:
+        self.g12 = val
+
+    @property
+    def gbc(self) -> float:
+        return self.g23
+
+    @gbc.setter
+    def gbc(self, val: float) -> None:
+        self.g23 = val
+
+    @property
+    def gca(self) -> float:
+        return self.g31
+
+    @gca.setter
+    def gca(self, val: float) -> None:
+        self.g31 = val
+
+    @property
+    def sigt1(self) -> float:
+        return self.sig_t1
+
+    @sigt1.setter
+    def sigt1(self, val: float) -> None:
+        self.sig_t1 = val
+
+    @property
+    def sigt2(self) -> float:
+        return self.sig_t2
+
+    @sigt2.setter
+    def sigt2(self, val: float) -> None:
+        self.sig_t2 = val
+
+    @property
+    def sigt3(self) -> float:
+        return self.sig_t3
+
+    @sigt3.setter
+    def sigt3(self, val: float) -> None:
+        self.sig_t3 = val
+
+    @property
+    def sigyt1(self) -> float:
+        return self.sig_1yt
+
+    @sigyt1.setter
+    def sigyt1(self, val: float) -> None:
+        self.sig_1yt = val
+
+    @property
+    def sigyt2(self) -> float:
+        return self.sig_2yt
+
+    @sigyt2.setter
+    def sigyt2(self, val: float) -> None:
+        self.sig_2yt = val
+
+    @property
+    def sigyc1(self) -> float:
+        return self.sig_1yc
+
+    @sigyc1.setter
+    def sigyc1(self, val: float) -> None:
+        self.sig_1yc = val
+
+    @property
+    def sigyc2(self) -> float:
+        return self.sig_2yc
+
+    @sigyc2.setter
+    def sigyc2(self, val: float) -> None:
+        self.sig_2yc = val
+
+    @property
+    def sigyt12(self) -> float:
+        return self.sig_12yt
+
+    @sigyt12.setter
+    def sigyt12(self, val: float) -> None:
+        self.sig_12yt = val
+
+    @property
+    def sigyc12(self) -> float:
+        return self.sig_12yc
+
+    @sigyc12.setter
+    def sigyc12(self, val: float) -> None:
+        self.sig_12yc = val
+
+    @property
+    def sigyt23(self) -> float:
+        return self.sig_23yt
+
+    @sigyt23.setter
+    def sigyt23(self, val: float) -> None:
+        self.sig_23yt = val
+
+    @property
+    def sigyc23(self) -> float:
+        return self.sig_23yc
+
+    @sigyc23.setter
+    def sigyc23(self, val: float) -> None:
+        self.sig_23yc = val
+
+    @property
+    def sigyt3(self) -> float:
+        return self.sig_3yt
+
+    @sigyt3.setter
+    def sigyt3(self, val: float) -> None:
+        self.sig_3yt = val
+
+    @property
+    def sigyc3(self) -> float:
+        return self.sig_3yc
+
+    @sigyc3.setter
+    def sigyc3(self, val: float) -> None:
+        self.sig_3yc = val
+
+    @property
+    def sigyt13(self) -> float:
+        return self.sig_13yt
+
+    @sigyt13.setter
+    def sigyt13(self, val: float) -> None:
+        self.sig_13yt = val
+
+    @property
+    def sigyc13(self) -> float:
+        return self.sig_13yc
+
+    @sigyc13.setter
+    def sigyc13(self, val: float) -> None:
+        self.sig_13yc = val
+
+    @property
+    def cc(self) -> float:
+        return self.c
+
+    @cc.setter
+    def cc(self, val: float) -> None:
+        self.c = val
+
 
 Mat3parbi = MatLaw12
 Mat3dComp = MatLaw12

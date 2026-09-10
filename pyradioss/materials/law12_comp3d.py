@@ -353,6 +353,7 @@ def build_law12(rec: Any = None, **kwargs: Any) -> Material:
     fmax = _get(["MAT_SIG", "fmax", "FMAX", "sig"], 1.0e10)
     if fmax <= 0.0:
         fmax = 1.0e10
+    fmax = max(1.0001, fmax)
     wplaref = _get(["WPREF", "wplaref", "wpref", "WPLAREF"], 1.0)
     if wplaref <= 0.0:
         wplaref = 1.0
@@ -441,6 +442,14 @@ def build_law12(rec: Any = None, **kwargs: Any) -> Material:
     d33 = (c11 * c22 - c12**2) / detc
     d21, d31, d32 = d12, d13, d23
 
+    # Verification: A = C @ D = I (hm_read_mat12.F:250-255)
+    a11 = c11 * d11 + c12 * d21 + c13 * d31
+    a12 = c11 * d12 + c12 * d22 + c13 * d32
+    a13 = c11 * d13 + c12 * d23 + c13 * d33
+    a22 = c12 * d12 + c22 * d22 + c23 * d23
+    a23 = c12 * d13 + c22 * d23 + c23 * d33
+    a33 = c13 * d13 + c23 * d23 + c33 * d33
+
     # Tsai-Wu yield constants (hm_read_mat12.F:291-306)
     f1 = _inv(sigyt1) - _inv(sigyc1)
     f2 = _inv(sigyt2) - _inv(sigyc2)
@@ -460,9 +469,18 @@ def build_law12(rec: Any = None, **kwargs: Any) -> Material:
     f23 = _tw_cross(sigyt2, sigyc2, sigyt3, sigyc3)
     f13 = _tw_cross(sigyt1, sigyc1, sigyt3, sigyc3)
 
+    # Verification constants for yield surface (hm_read_mat12.F:306-307)
+    ft1 = f11 * f22 - 4.0 * (f12**2)
+    ft2 = (f22**2) - 4.0 * (f23**2)
+
     # Sound speed (hm_read_mat12.F:265-266)
     c1_stiff = max(d11, d22, d33)
-    ssp = math.sqrt(c1_stiff / max(rho0, 1.0e-20))
+    r_ref = refer_rho if refer_rho > 0.0 else rho0
+    ssp = math.sqrt(c1_stiff / max(r_ref, 1.0e-20))
+
+    # Time step parameter for solid elements (hm_read_mat12.F:351-352)
+    dmin = min(d11 * d22 - d12**2, d22 * d33 - d23**2, d11 * d33 - d13**2)
+    pm105 = dmin / (c1_stiff**2) if c1_stiff > 0.0 else 0.0
 
     params: Dict[str, Any] = {
         "rho0": rho0,
@@ -560,6 +578,13 @@ def build_law12(rec: Any = None, **kwargs: Any) -> Material:
         "D21": d21,
         "D31": d31,
         "D32": d32,
+        # Verification of C @ D = I (hm_read_mat12.F:250-255)
+        "A11": a11,
+        "A12": a12,
+        "A13": a13,
+        "A22": a22,
+        "A23": a23,
+        "A33": a33,
         # Tsai-Wu coefficients
         "F1": f1,
         "F2": f2,
@@ -576,11 +601,15 @@ def build_law12(rec: Any = None, **kwargs: Any) -> Material:
         "F12": f12,
         "F23": f23,
         "F13": f13,
+        "FT1": ft1,
+        "FT2": ft2,
         # Sound speed & equivalents
         "C1": c1_stiff,
         "SSP": ssp,
         "ssp": ssp,
         "c_sound": ssp,
+        "DMIN": dmin,
+        "PM105": pm105,
         "E": max(e11, e22, e33),
         "MAT_E": max(e11, e22, e33),
         "nu": (nu12 + nu23 + nu31) / 3.0,
@@ -625,6 +654,7 @@ def extra_shapes(mat: Any = None, nip: int = 1) -> Dict[str, Tuple[int, ...]]:
             "off12": (nip,),
             "epsf12": (nip,),
             "sigf12": (nip,),
+            "tsaiwu12": (nip,),
         }
     return {
         "dam12": (5,),
@@ -634,6 +664,7 @@ def extra_shapes(mat: Any = None, nip: int = 1) -> Dict[str, Tuple[int, ...]]:
         "off12": (),
         "epsf12": (),
         "sigf12": (),
+        "tsaiwu12": (),
     }
 
 
@@ -1118,6 +1149,14 @@ def solid_update(
         if len(sigf) == 1 and n > 1:
             sigf = np.full(n, sigf[0], dtype=float)
 
+    tsaiwu = extra.get("tsaiwu12", extra.get("tsaiwu"))
+    if tsaiwu is None:
+        tsaiwu = np.zeros(n, dtype=float)
+    else:
+        tsaiwu = np.atleast_1d(tsaiwu).astype(float).copy()
+        if len(tsaiwu) == 1 and n > 1:
+            tsaiwu = np.full(n, tsaiwu[0], dtype=float)
+
     # Optional local orthotropic coordinate system transformation
     axes = extra.get("axes", extra.get("frame", extra.get("A")))
     has_rot = False
@@ -1187,6 +1226,13 @@ def solid_update(
         off[i] = off_i
         epsf[i] = epsf_i
         sigf[i] = sigf_i
+        # Historical Tsai-Wu utilization factor (m12law.F:533)
+        wvec_i = dam_i[3]
+        sigmx_i = float(p.get("fmax", 1.0e10))
+        cb_i = float(p.get("cb", 0.0))
+        cn_i = float(p.get("cn", 1.0))
+        sigmy_i = min(sigmx_i, 1.0 + cb_i * (wpla_i**cn_i if wpla_i > 0 else 0.0))
+        tsaiwu[i] = max(min(wvec_i / max(sigmy_i, 1.0e-20), 1.0), float(tsaiwu[i]))
 
     if has_rot:
         s_out = m14ftg(s_out, ax, ay, az, bx, by, bz, cx, cy, cz)
@@ -1201,6 +1247,8 @@ def solid_update(
             ("off12", off),
             ("epsf12", epsf),
             ("sigf12", sigf),
+            ("tsaiwu12", tsaiwu),
+            ("tsaiwu", tsaiwu),
             ("dam", dam),
             ("off", off),
             ("wpla", wpla),
@@ -1239,6 +1287,9 @@ def consistent_solid_tangent(
     dt: float = 0.0,
     extra: Optional[Dict[str, Any]] = None,
     epsp_incr: Any = None,
+    deps: Optional[np.ndarray] = None,
+    symmetric: bool = False,
+    h: float = 1.0e-7,
     **kwargs: Any,
 ) -> np.ndarray:
     """Exact (n, 6, 6) algorithmic 3D solid tangent tensor.
@@ -1252,6 +1303,13 @@ def consistent_solid_tangent(
        [0,   0,   0,   0,   0,   G31]]
     Under damage / plasticity, computes the consistent algorithmic tangent.
     """
+    if deps is None and "deps" in kwargs:
+        deps = kwargs["deps"]
+    if "symmetric" in kwargs and kwargs["symmetric"] is not None:
+        symmetric = bool(kwargs["symmetric"])
+    if "h" in kwargs and kwargs["h"] is not None:
+        h = float(kwargs["h"])
+
     p = getattr(mat, "params", {}) or {}
     sig_arr = np.asarray(sig, dtype=float)
     is_1d = (sig_arr.ndim == 1)
@@ -1348,20 +1406,85 @@ def consistent_solid_tangent(
         if len(ep) == 1 and n > 1:
             ep = np.full(n, ep[0], dtype=float)
 
+    deps_2d = None
+    if deps is not None:
+        deps_arr = np.asarray(deps, dtype=float)
+        deps_2d = deps_arr[None, :] if deps_arr.ndim == 1 else deps_arr
+
+    # Coordinate transformation if axes provided in extra
+    axes = extra.get("axes", extra.get("frame", extra.get("A")))
+    has_rot = False
+    if axes is not None:
+        axes_arr = np.asarray(axes, dtype=float)
+        if axes_arr.ndim == 2 and axes_arr.shape == (n, 9):
+            has_rot = True
+            ax, ay, az = axes_arr[:, 0], axes_arr[:, 1], axes_arr[:, 2]
+            bx, by, bz = axes_arr[:, 3], axes_arr[:, 4], axes_arr[:, 5]
+            cx, cy, cz = axes_arr[:, 6], axes_arr[:, 7], axes_arr[:, 8]
+        elif axes_arr.ndim == 3 and axes_arr.shape == (n, 3, 3):
+            has_rot = True
+            ax, ay, az = axes_arr[:, 0, 0], axes_arr[:, 0, 1], axes_arr[:, 0, 2]
+            bx, by, bz = axes_arr[:, 1, 0], axes_arr[:, 1, 1], axes_arr[:, 1, 2]
+            cx, cy, cz = axes_arr[:, 2, 0], axes_arr[:, 2, 1], axes_arr[:, 2, 2]
+        elif axes_arr.ndim == 2 and axes_arr.shape == (3, 3):
+            has_rot = True
+            ax = np.full(n, axes_arr[0, 0])
+            ay = np.full(n, axes_arr[0, 1])
+            az = np.full(n, axes_arr[0, 2])
+            bx = np.full(n, axes_arr[1, 0])
+            by = np.full(n, axes_arr[1, 1])
+            bz = np.full(n, axes_arr[1, 2])
+            cx = np.full(n, axes_arr[2, 0])
+            cy = np.full(n, axes_arr[2, 1])
+            cz = np.full(n, axes_arr[2, 2])
+
+    if has_rot:
+        s_mat, d_mat = m14gtf(
+            sig_2d,
+            deps_2d if deps_2d is not None else np.zeros((n, 6), dtype=float),
+            ax, ay, az, bx, by, bz, cx, cy, cz,
+        )
+    else:
+        s_mat = sig_2d
+        d_mat = deps_2d if deps_2d is not None else np.zeros((n, 6), dtype=float)
+
     tangents = np.zeros((n, 6, 6), dtype=float)
-    h = 1.0e-7
 
     for i in range(n):
         off_i = off[i]
-        if off_i <= 0.0:
+        if off_i <= 0.0 or off_i < 0.1:
             continue
 
-        # Check if strictly elastic (no damage, no plastic yielding)
+        base_d = d_mat[i]
+        s_i = s_mat[i]
         dam_i = dam[i].copy()
-        s_i = sig_2d[i]
-        is_damaged = (dam_i[0] > 0.0 or dam_i[1] > 0.0 or dam_i[2] > 0.0)
+        is_damaged = (
+            dam_i[0] > 0.0
+            or dam_i[1] > 0.0
+            or dam_i[2] > 0.0
+            or epc[i, 0] > 0.0
+            or epc[i, 1] > 0.0
+            or epc[i, 2] > 0.0
+        )
 
-        # Tsai-Wu yield evaluation at current stress
+        # Trial stresses under base_d
+        t1 = s_i[0] + d11 * base_d[0] + d12 * base_d[1] + d13 * base_d[2]
+        t2 = s_i[1] + d12 * base_d[0] + d22 * base_d[1] + d23 * base_d[2]
+        t3 = s_i[2] + d13 * base_d[0] + d23 * base_d[1] + d33 * base_d[2]
+        t4 = s_i[3] + g12 * base_d[3]
+        t5 = s_i[4] + g23 * base_d[4]
+        t6 = s_i[5] + g31 * base_d[5]
+
+        sigt1 = float(p.get("sigt1", 0.0))
+        sigt2 = float(p.get("sigt2", 0.0))
+        sigt3 = float(p.get("sigt3", 0.0))
+        will_crack = (
+            (sigt1 > 0.0 and t1 > sigt1)
+            or (sigt2 > 0.0 and t2 > sigt2)
+            or (sigt3 > 0.0 and t3 > sigt3)
+        )
+
+        # Tsai-Wu yield evaluation at trial stress
         f1 = float(p.get("F1", 0.0))
         f2 = float(p.get("F2", 0.0))
         f3 = float(p.get("F3", 0.0))
@@ -1375,7 +1498,6 @@ def consistent_solid_tangent(
         f23 = float(p.get("F23", 0.0))
         f13 = float(p.get("F13", 0.0))
 
-        t1, t2, t3, t4, t5, t6 = s_i[0], s_i[1], s_i[2], s_i[3], s_i[4], s_i[5]
         wvec_tw = (
             f1 * t1
             + f2 * t2
@@ -1396,46 +1518,115 @@ def consistent_solid_tangent(
         fmax_val = float(p.get("fmax", 1.0e10))
         sigmy = min(fmax_val, 1.0 + cb_val * (wpla[i] ** cn_val if wpla[i] > 0.0 else 0.0))
 
-        if not is_damaged and wvec_tw < sigmy and off_i == 1.0:
-            tangents[i] = D_mat
+        if not has_rot and not is_damaged and not will_crack and wvec_tw < sigmy and off_i == 1.0:
+            tangents[i] = D_mat.copy()
+            if symmetric:
+                tangents[i] = 0.5 * (tangents[i] + tangents[i].T)
             continue
 
         # Algorithmic tangent via consistent numerical perturbation
         for j in range(6):
-            d_p = np.zeros(6, dtype=float)
-            d_m = np.zeros(6, dtype=float)
-            d_p[j] = h
-            d_m[j] = -h
+            if has_rot:
+                d_p_g = (deps_2d[i] if deps_2d is not None else np.zeros(6, dtype=float)).copy()
+                d_m_g = d_p_g.copy()
+                d_p_g[j] += h
+                d_m_g[j] -= h
 
-            s_p, _, _, _, _, _, _, _, _ = _update_one_element(
-                p,
-                s_i.copy(),
-                d_p,
-                ep[i],
-                dt,
-                dam_i.copy(),
-                epe[i].copy(),
-                epc[i].copy(),
-                wpla[i],
-                off_i,
-                epsf[i],
-                sigf[i],
-            )
-            s_m, _, _, _, _, _, _, _, _ = _update_one_element(
-                p,
-                s_i.copy(),
-                d_m,
-                ep[i],
-                dt,
-                dam_i.copy(),
-                epe[i].copy(),
-                epc[i].copy(),
-                wpla[i],
-                off_i,
-                epsf[i],
-                sigf[i],
-            )
+                _, d_p_m = m14gtf(
+                    sig_2d[i : i + 1],
+                    d_p_g[None, :],
+                    ax[i : i + 1], ay[i : i + 1], az[i : i + 1],
+                    bx[i : i + 1], by[i : i + 1], bz[i : i + 1],
+                    cx[i : i + 1], cy[i : i + 1], cz[i : i + 1],
+                )
+                _, d_m_m = m14gtf(
+                    sig_2d[i : i + 1],
+                    d_m_g[None, :],
+                    ax[i : i + 1], ay[i : i + 1], az[i : i + 1],
+                    bx[i : i + 1], by[i : i + 1], bz[i : i + 1],
+                    cx[i : i + 1], cy[i : i + 1], cz[i : i + 1],
+                )
+
+                s_p_m, _, _, _, _, _, _, _, _ = _update_one_element(
+                    p,
+                    s_i.copy(),
+                    d_p_m[0],
+                    ep[i],
+                    dt,
+                    dam_i.copy(),
+                    epe[i].copy(),
+                    epc[i].copy(),
+                    wpla[i],
+                    off_i,
+                    epsf[i],
+                    sigf[i],
+                )
+                s_m_m, _, _, _, _, _, _, _, _ = _update_one_element(
+                    p,
+                    s_i.copy(),
+                    d_m_m[0],
+                    ep[i],
+                    dt,
+                    dam_i.copy(),
+                    epe[i].copy(),
+                    epc[i].copy(),
+                    wpla[i],
+                    off_i,
+                    epsf[i],
+                    sigf[i],
+                )
+
+                s_p = m14ftg(
+                    s_p_m[None, :],
+                    ax[i : i + 1], ay[i : i + 1], az[i : i + 1],
+                    bx[i : i + 1], by[i : i + 1], bz[i : i + 1],
+                    cx[i : i + 1], cy[i : i + 1], cz[i : i + 1],
+                )[0]
+                s_m = m14ftg(
+                    s_m_m[None, :],
+                    ax[i : i + 1], ay[i : i + 1], az[i : i + 1],
+                    bx[i : i + 1], by[i : i + 1], bz[i : i + 1],
+                    cx[i : i + 1], cy[i : i + 1], cz[i : i + 1],
+                )[0]
+            else:
+                d_p = base_d.copy()
+                d_m = base_d.copy()
+                d_p[j] += h
+                d_m[j] -= h
+
+                s_p, _, _, _, _, _, _, _, _ = _update_one_element(
+                    p,
+                    s_i.copy(),
+                    d_p,
+                    ep[i],
+                    dt,
+                    dam_i.copy(),
+                    epe[i].copy(),
+                    epc[i].copy(),
+                    wpla[i],
+                    off_i,
+                    epsf[i],
+                    sigf[i],
+                )
+                s_m, _, _, _, _, _, _, _, _ = _update_one_element(
+                    p,
+                    s_i.copy(),
+                    d_m,
+                    ep[i],
+                    dt,
+                    dam_i.copy(),
+                    epe[i].copy(),
+                    epc[i].copy(),
+                    wpla[i],
+                    off_i,
+                    epsf[i],
+                    sigf[i],
+                )
+
             tangents[i, :, j] = (s_p - s_m) / (2.0 * h)
+
+        if symmetric:
+            tangents[i] = 0.5 * (tangents[i] + tangents[i].T)
 
     if is_1d:
         return tangents[0]
