@@ -935,3 +935,175 @@ def test_crack_open_no_compression_detailed():
 
     assert extra["epc12"][0, 0] == 0.0
     assert sig3[0] < 0.0
+
+
+# ============================================================================
+# 18. Starter Keyword Aliases and Model Properties
+# ============================================================================
+
+def test_starter_keyword_aliases_and_model_properties(tmp_path):
+    """Verify parsing /MAT/3D_COMP and /MAT/COMP_3D and model property aliases."""
+    from pyradioss.common.messages import MessageLog
+    from pyradioss.input.deck_reader import read_deck
+    from pyradioss.input.starter_keywords import parse_starter_deck
+    from pyradioss.model.model import Model
+
+    deck_text = """# OpenRadioss Starter input deck
+/BEGIN
+ALIASES_TEST
+/MAT/3D_COMP/201
+Material 3D Comp
+#    RHO_I              RHO_O
+ 1.500E-09          1.500E-09
+#      E11                E22                E33
+ 1.000E+05          5.000E+04          2.000E+04
+#     NU12               NU23               NU31
+      0.25               0.20               0.15
+#      G12                G23                G31
+ 1.500E+04          1.000E+04          1.200E+04
+#    SIGT1              SIGT2              SIGT3              DELTA
+ 1.500E+02          1.500E+02          1.500E+02               0.05
+#        B                  N               FMAX            WPLAREF
+     500.0                0.5             1000.0                1.0
+#   SIGYT1             SIGYT2             SIGYC1             SIGYC2
+     250.0              250.0              250.0              250.0
+#  SIGYT12            SIGYC12            SIGYT23            SIGYC23
+     120.0              120.0              100.0              100.0
+#   SIGYT3             SIGYC3            SIGYT13            SIGYC13
+     200.0              200.0              110.0              110.0
+#    ALPHA               EFIB                  C               EPS0               ICC
+      0.30          2.000E+05               0.05                1.0                 1
+/MAT/COMP_3D/202
+Material Comp 3D
+#    RHO_I              RHO_O
+ 1.600E-09          1.600E-09
+#      E11                E22                E33
+ 1.200E+05          6.000E+04          2.500E+04
+#     NU12               NU23               NU31
+      0.28               0.22               0.18
+#      G12                G23                G31
+ 1.600E+04          1.100E+04          1.300E+04
+#    SIGT1              SIGT2              SIGT3              DELTA
+ 1.800E+02          1.800E+02          1.800E+02               0.06
+#        B                  N               FMAX            WPLAREF
+     600.0                0.6             1200.0                1.5
+#   SIGYT1             SIGYT2             SIGYC1             SIGYC2
+     280.0              280.0              280.0              280.0
+#  SIGYT12            SIGYC12            SIGYT23            SIGYC23
+     140.0              140.0              110.0              110.0
+#   SIGYT3             SIGYC3            SIGYT13            SIGYC13
+     220.0              220.0              120.0              120.0
+#    ALPHA               EFIB                  C               EPS0               ICC
+      0.35          2.200E+05               0.06                1.0                 1
+/END
+"""
+    deck_path = tmp_path / "ALIASES_0000.rad"
+    deck_path.write_text(deck_text, encoding="ascii")
+
+    blocks = read_deck(str(deck_path))
+    model = Model()
+    log = MessageLog()
+    parse_starter_deck(blocks, model, log)
+
+    assert 201 in model.mat_law12s
+    assert 201 in model.mat_3d_comps
+    assert 201 in model.mat_comp_3ds
+    assert 201 in model.mat_3parbis
+    assert 201 in model.mat_ragabs
+
+    assert 202 in model.mat_law12s
+    assert 202 in model.mat_3d_comps
+    assert 202 in model.mat_comp_3ds
+
+    mat201 = model.mat_3d_comps[201]
+    assert mat201.rho0 == pytest.approx(1.5e-9)
+    assert mat201.e11 == pytest.approx(1.0e5)
+    assert mat201.wplaref == pytest.approx(1.0)
+
+    mat202 = model.mat_comp_3ds[202]
+    assert mat202.rho0 == pytest.approx(1.6e-9)
+    assert mat202.e11 == pytest.approx(1.2e5)
+    assert mat202.wplaref == pytest.approx(1.5)
+
+
+# ============================================================================
+# 19. Deck Writer & Round-Trip Verification
+# ============================================================================
+
+def test_starter_deck_writer_roundtrip(tmp_path):
+    """Verify StarterDeck.mat_law12 and mat_3d_comp write valid cards and roundtrip parse."""
+    from pyradioss.common.messages import MessageLog
+    from pyradioss.input.deck_reader import read_deck
+    from pyradioss.input.deck_writer import StarterDeck
+    from pyradioss.input.starter_keywords import parse_starter_deck
+    from pyradioss.model.model import Model
+
+    writer = StarterDeck("LAW12_ROUNDTRIP")
+    writer.mat_law12(
+        mat_id=301,
+        rho=1.5e-9,
+        e11=110000.0,
+        e22=55000.0,
+        e33=22000.0,
+        nu12=0.26,
+        nu23=0.21,
+        nu31=0.16,
+        g12=14000.0,
+        g23=9500.0,
+        g31=11500.0,
+        sig_t1=160.0,
+        sig_t2=170.0,
+        sig_t3=180.0,
+        delta=0.07,
+        b=450.0,
+        n=0.55,
+        fmax=950.0,
+        wplaref=1.25,
+        sig_1yt=240.0,
+        sig_2yt=245.0,
+        sig_1yc=250.0,
+        sig_2yc=255.0,
+        sig_12yt=115.0,
+        sig_12yc=118.0,
+        sig_23yt=98.0,
+        sig_23yc=99.0,
+        sig_3yt=190.0,
+        sig_3yc=195.0,
+        sig_13yt=105.0,
+        sig_13yc=108.0,
+        alpha=0.28,
+        efib=190000.0,
+        c=0.04,
+        eps0=1.0,
+        icc=1,
+        title="Written Law12",
+    )
+
+    deck_path = tmp_path / "ROUNDTRIP_0000.rad"
+    writer.write(str(deck_path))
+
+    blocks = read_deck(str(deck_path))
+    model = Model()
+    log = MessageLog()
+    parse_starter_deck(blocks, model, log)
+
+    assert 301 in model.mat_law12s
+    mat = model.mat_law12s[301]
+    assert mat.rho0 == pytest.approx(1.5e-9)
+    assert mat.e11 == pytest.approx(110000.0)
+    assert mat.e22 == pytest.approx(55000.0)
+    assert mat.e33 == pytest.approx(22000.0)
+    assert mat.nu12 == pytest.approx(0.26)
+    assert mat.g12 == pytest.approx(14000.0)
+    assert mat.sig_t1 == pytest.approx(160.0)
+    assert mat.delta == pytest.approx(0.07)
+    assert mat.b == pytest.approx(450.0)
+    assert mat.n == pytest.approx(0.55)
+    assert mat.fmax == pytest.approx(950.0)
+    assert mat.wplaref == pytest.approx(1.25)
+    assert mat.sig_1yt == pytest.approx(240.0)
+    assert mat.sig_12yt == pytest.approx(115.0)
+    assert mat.alpha == pytest.approx(0.28)
+    assert mat.efib == pytest.approx(190000.0)
+    assert mat.c == pytest.approx(0.04)
+    assert mat.icc == 1
