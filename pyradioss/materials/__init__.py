@@ -511,7 +511,9 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     if getattr(mat, "law", None) in (38, "38", "LAW38", "VISC_TAB") or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB"):
         _get_law38()
         if law38_solid_update is not None:
-            return law38_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+            sign, epsp_out, c = law38_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+            sig[:] = sign
+            return sig, epsp_out, c
         raise NotImplementedError("LAW38 solid_update not available")
     raise NotImplementedError(f"material LAW{mat.law} not ported for solids")
 
