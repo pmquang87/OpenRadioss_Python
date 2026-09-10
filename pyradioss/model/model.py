@@ -620,37 +620,52 @@ class EngineControls:
 class _PlasDamasProxy(dict):
     """Proxy dictionary presenting a unified view of LAW22 and LAW23 materials."""
 
-    def __init__(self, d1: dict, d2: dict) -> None:
+    def __init__(self, d1: dict = None, d2: dict = None) -> None:
         super().__init__()
-        self._d1 = d1
-        self._d2 = d2
+        self._d1 = d1 if d1 is not None else {}
+        self._d2 = d2 if d2 is not None else {}
+
+    def __reduce__(self):
+        return (_PlasDamasProxy, (getattr(self, "_d1", {}), getattr(self, "_d2", {})))
 
     def __getitem__(self, key: Any) -> Any:
-        if key in self._d1:
-            return self._d1[key]
-        return self._d2[key]
+        d1 = getattr(self, "_d1", {})
+        d2 = getattr(self, "_d2", {})
+        if key in d1:
+            return d1[key]
+        return d2[key]
 
     def __contains__(self, key: Any) -> bool:
-        return key in self._d1 or key in self._d2
+        d1 = getattr(self, "_d1", {})
+        d2 = getattr(self, "_d2", {})
+        return key in d1 or key in d2
 
     def __setitem__(self, key: Any, value: Any) -> None:
+        if not hasattr(self, "_d1"):
+            self._d1 = {}
         self._d1[key] = value
 
     def __iter__(self):
-        seen = set(self._d1.keys())
-        for k in self._d1:
+        d1 = getattr(self, "_d1", {})
+        d2 = getattr(self, "_d2", {})
+        seen = set(d1.keys())
+        for k in d1:
             yield k
-        for k in self._d2:
+        for k in d2:
             if k not in seen:
                 yield k
 
     def __len__(self) -> int:
-        return len(set(self._d1.keys()) | set(self._d2.keys()))
+        d1 = getattr(self, "_d1", {})
+        d2 = getattr(self, "_d2", {})
+        return len(set(d1.keys()) | set(d2.keys()))
 
     def get(self, key: Any, default: Any = None) -> Any:
-        if key in self._d1:
-            return self._d1[key]
-        return self._d2.get(key, default)
+        d1 = getattr(self, "_d1", {})
+        d2 = getattr(self, "_d2", {})
+        if key in d1:
+            return d1[key]
+        return d2.get(key, default)
 
     def items(self):
         return [(k, self[k]) for k in self]
