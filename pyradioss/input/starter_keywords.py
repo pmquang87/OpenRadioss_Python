@@ -1096,7 +1096,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW18", "CONCR_DRA", "DRAGON", "THERM", "MAT_CONCR_DRA", "MAT_DRAGON", "MAT_THERM", "LAW18_CONCR_DRA", "LAW18_THERM"):
         read_mat_law18(block, model, log)
         return
-    if lawname in ("LAW22", "TSAIWU", "DAMA", "MAT_TSAIWU", "MAT_DAMA", "LAW22_TSAI_WU", "LAW22_DAMA"):
+    if lawname in ("LAW22", "TSAIWU", "DAMA", "MAT_TSAIWU", "MAT_DAMA", "LAW22_TSAI_WU", "LAW22_DAMA", "PLAS_DAMA", "MAT_PLAS_DAMA", "22"):
         read_mat_law22(block, model, log)
         return
     if lawname in ("TSAI_WU", "MAT_TSAI_WU"):
@@ -1157,7 +1157,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_mat_law34(block, model, log)
         return
 
-    if lawname in ("LAW23", "PLAS_DAMA", "MAT_PLAS_DAMA", "LAW23_PLAS_DAMA"):
+    if lawname in ("LAW23", "LAW23_PLAS_DAMA"):
         read_mat_law23(block, model, log)
         return
     if lawname in ("LAW78", "MAT_LAW78", "LAW78_78"):
@@ -38556,22 +38556,23 @@ def read_mat_law18(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law22(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW22`` or ``/MAT/TSAI_WU`` / ``/MAT/DAMA`` (M188): Tsai-Wu anisotropic composite damage model."""
+    """``/MAT/LAW22`` or ``/MAT/DAMA`` / ``/MAT/PLAS_DAMA`` (M545): Damaged elasto-plastic material model."""
     from ..model.entities import MatLaw22
     from .mat_reader import InactiveMaterial
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
     if not valid_cards:
         log.error(f"/MAT/LAW22/{mat_id}: missing data card", block.source)
         return
 
     rho0, rhor = 0.0, 0.0
     e, nu = 0.0, 0.0
-    sigy, beta, n, eps_max, sig_max = 0.0, 0.0, 0.0, 0.0, 0.0
+    a, b, n = 0.0, 0.0, 1.0
+    eps_max, sig_max = 1.0e30, 1.0e30
     c, eps_dot_0 = 0.0, 0.0
-    icc = 0
-    eps_dam, e_t = 0.0, 0.0
+    icc = 1
+    eps_dam, e_tan = 0.15, 0.0
 
     if block.fixed:
         if len(valid_cards) > 0:
@@ -38584,20 +38585,20 @@ def read_mat_law22(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             nu = _safe_float(c1[1]) if len(c1) > 1 else 0.0
         if len(valid_cards) > 2:
             c2 = valid_cards[2].cut("MAT_LAW22_3")
-            sigy = _safe_float(c2[0]) if len(c2) > 0 else 0.0
-            beta = _safe_float(c2[1]) if len(c2) > 1 else 0.0
-            n = _safe_float(c2[2]) if len(c2) > 2 else 0.0
-            eps_max = _safe_float(c2[3]) if len(c2) > 3 else 0.0
-            sig_max = _safe_float(c2[4]) if len(c2) > 4 else 0.0
+            a = _safe_float(c2[0]) if len(c2) > 0 else 0.0
+            b = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+            n = _safe_float(c2[2]) if len(c2) > 2 and c2[2] != "" else 1.0
+            eps_max = _safe_float(c2[3]) if len(c2) > 3 and c2[3] != "" else 1.0e30
+            sig_max = _safe_float(c2[4]) if len(c2) > 4 and c2[4] != "" else 1.0e30
         if len(valid_cards) > 3:
             c3 = valid_cards[3].cut("MAT_LAW22_4")
             c = _safe_float(c3[0]) if len(c3) > 0 else 0.0
             eps_dot_0 = _safe_float(c3[1]) if len(c3) > 1 else 0.0
-            icc = _safe_int(c3[2]) if len(c3) > 2 else 0
+            icc = _safe_int(c3[2]) if len(c3) > 2 and c3[2] != "" else 1
         if len(valid_cards) > 4:
             c4 = valid_cards[4].cut("MAT_LAW22_5")
-            eps_dam = _safe_float(c4[0]) if len(c4) > 0 else 0.0
-            e_t = _safe_float(c4[1]) if len(c4) > 1 else 0.0
+            eps_dam = _safe_float(c4[0]) if len(c4) > 0 and c4[0] != "" else 0.15
+            e_tan = _safe_float(c4[1]) if len(c4) > 1 and c4[1] != "" else 0.0
     else:
         if len(valid_cards) > 0:
             t0 = valid_cards[0].tokens()
@@ -38609,36 +38610,51 @@ def read_mat_law22(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             nu = _safe_float(t1[1]) if len(t1) > 1 else 0.0
         if len(valid_cards) > 2:
             t2 = valid_cards[2].tokens()
-            sigy = _safe_float(t2[0]) if len(t2) > 0 else 0.0
-            beta = _safe_float(t2[1]) if len(t2) > 1 else 0.0
-            n = _safe_float(t2[2]) if len(t2) > 2 else 0.0
-            eps_max = _safe_float(t2[3]) if len(t2) > 3 else 0.0
-            sig_max = _safe_float(t2[4]) if len(t2) > 4 else 0.0
+            a = _safe_float(t2[0]) if len(t2) > 0 else 0.0
+            b = _safe_float(t2[1]) if len(t2) > 1 else 0.0
+            n = _safe_float(t2[2]) if len(t2) > 2 else 1.0
+            eps_max = _safe_float(t2[3]) if len(t2) > 3 else 1.0e30
+            sig_max = _safe_float(t2[4]) if len(t2) > 4 else 1.0e30
         if len(valid_cards) > 3:
             t3 = valid_cards[3].tokens()
             c = _safe_float(t3[0]) if len(t3) > 0 else 0.0
             eps_dot_0 = _safe_float(t3[1]) if len(t3) > 1 else 0.0
-            icc = _safe_int(t3[2]) if len(t3) > 2 else 0
+            icc = _safe_int(t3[2]) if len(t3) > 2 else 1
         if len(valid_cards) > 4:
             t4 = valid_cards[4].tokens()
-            eps_dam = _safe_float(t4[0]) if len(t4) > 0 else 0.0
-            e_t = _safe_float(t4[1]) if len(t4) > 1 else 0.0
+            eps_dam = _safe_float(t4[0]) if len(t4) > 0 else 0.15
+            e_tan = _safe_float(t4[1]) if len(t4) > 1 else 0.0
+
+    law_name = "LAW22"
+    if len(block.parts) > 1 and block.parts[1].upper() in ("LAW22", "DAMA", "PLAS_DAMA", "MAT_LAW22", "MAT_DAMA", "MAT_PLAS_DAMA"):
+        law_name = block.parts[1].upper()
 
     mat = MatLaw22(
-        id=mat_id, rho0=rho0, rhor=rhor, e=e, nu=nu, sigy=sigy, beta=beta,
+        id=mat_id, rho0=rho0, rhor=rhor, e=e, nu=nu, a=a, b=b,
         n=n, eps_max=eps_max, sig_max=sig_max, c=c, eps_dot_0=eps_dot_0,
-        icc=icc, eps_dam=eps_dam, e_t=e_t, title=title
+        icc=icc, eps_dam=eps_dam, e_tan=e_tan, title=title, law_name=law_name
     )
     model.mat_law22s[mat_id] = mat
-    e_val = e if e > 0 else 200e9
-    model.materials[mat_id] = InactiveMaterial(
-        id=mat_id, law=22, rho0=rho0, title=title, law_name="LAW22",
-        params={
-            "E": e_val, "MAT_E": e_val, "nu": nu if 0.0 <= nu < 0.5 else 0.3, "MAT_NU": nu if 0.0 <= nu < 0.5 else 0.3,
-            "MAT_SIGY": sigy if sigy > 0 else 200e6, "SIG_Y": sigy, "rho": rho0, "MAT_RHO": rho0,
-            "A": sigy, "B": beta, "n": n, "EPS_MAX": eps_max, "SIG_MAX": sig_max,
-        }
-    )
+    if law_name in ("PLAS_DAMA", "MAT_PLAS_DAMA"):
+        model.mat_law23s[mat_id] = mat
+    from ..materials.law22_dama import build_law22
+    try:
+        model.materials[mat_id] = build_law22(mat)
+    except Exception as ex:
+        log.warning(f"/MAT/LAW22/{mat_id}: build_law22 fallback ({ex})", block.source)
+        e_val = e if e > 0 else 200e9
+        model.materials[mat_id] = InactiveMaterial(
+            id=mat_id, law=22, rho0=rho0, title=title, law_name=law_name,
+            params={
+                "E": e_val, "MAT_E": e_val, "nu": nu if 0.0 <= nu < 0.5 else 0.3, "MAT_NU": nu if 0.0 <= nu < 0.5 else 0.3,
+                "MAT_SIGY": a if a > 0 else 200e6, "SIG_Y": a, "rho": rho0, "MAT_RHO": rho0,
+                "A": a, "B": b, "n": n, "EPS_MAX": eps_max, "SIG_MAX": sig_max,
+                "C": c, "EPS_DOT_0": eps_dot_0, "ICC": icc, "EPS_DAM": eps_dam, "E_TAN": e_tan,
+            }
+        )
+
+read_mat_dama = read_mat_law22
+read_mat_plas_dama = read_mat_law22
 
 
 def read_mat_law25(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -83674,12 +83690,15 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "DRAGON": read_mat,
     "THERM": read_mat,
     "MAT_LAW22": read_mat,
+    "LAW22": read_mat,
     "MAT_TSAI_WU": read_mat,
     "MAT_TSAIWU": read_mat,
     "MAT_DAMA": read_mat,
     "TSAI_WU": read_mat,
     "TSAIWU": read_mat,
     "DAMA": read_mat,
+    "MAT_PLAS_DAMA": read_mat,
+    "PLAS_DAMA": read_mat,
     "MAT_LAW25": read_mat,
     "LAW25": read_mat,
     "MAT_COMP_PLAS": read_mat,

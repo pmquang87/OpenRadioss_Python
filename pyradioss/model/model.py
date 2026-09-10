@@ -617,6 +617,51 @@ class EngineControls:
     impl_fatig_wv_smooth: float = 0.0  # Cohen-class time-smoothing width (mission frac)
 
 
+class _PlasDamasProxy(dict):
+    """Proxy dictionary presenting a unified view of LAW22 and LAW23 materials."""
+
+    def __init__(self, d1: dict, d2: dict) -> None:
+        super().__init__()
+        self._d1 = d1
+        self._d2 = d2
+
+    def __getitem__(self, key: Any) -> Any:
+        if key in self._d1:
+            return self._d1[key]
+        return self._d2[key]
+
+    def __contains__(self, key: Any) -> bool:
+        return key in self._d1 or key in self._d2
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        self._d1[key] = value
+
+    def __iter__(self):
+        seen = set(self._d1.keys())
+        for k in self._d1:
+            yield k
+        for k in self._d2:
+            if k not in seen:
+                yield k
+
+    def __len__(self) -> int:
+        return len(set(self._d1.keys()) | set(self._d2.keys()))
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        if key in self._d1:
+            return self._d1[key]
+        return self._d2.get(key, default)
+
+    def items(self):
+        return [(k, self[k]) for k in self]
+
+    def values(self):
+        return [self[k] for k in self]
+
+    def keys(self):
+        return list(self)
+
+
 class Model:
     """The full model. Created empty, filled by the keyword parsers, then
     finalized (IDs → indices, mass init...) by the Starter."""
@@ -1085,7 +1130,9 @@ class Model:
         self.mat_law13s: Dict[int, MatLaw13] = {}                   # /MAT/LAW13, /MAT/HONEYCOMB (M188)
         self.mat_law15s: Dict[int, MatLaw15] = {}                   # /MAT/LAW15, /MAT/CHANG (M188)
         self.mat_law18s: Dict[int, MatLaw18] = {}                   # /MAT/LAW18, /MAT/CONCR_DRA (M188)
-        self.mat_law22s: Dict[int, MatLaw22] = {}                   # /MAT/LAW22, /MAT/TSAI_WU (M188)
+        self.mat_law22s: Dict[int, MatLaw22] = {}                   # /MAT/LAW22, /MAT/DAMA, /MAT/PLAS_DAMA
+        self.mat_damas = self.mat_law22s
+        self.mat_plas_damas = self.mat_law22s
         self.mat_law25s: Dict[int, MatLaw25] = {}                   # /MAT/LAW25, /MAT/COMP_PLAS (M188)
         self.mat_comp_plas = self.mat_law25s
         self.mat_compshs = self.mat_law25s
@@ -1158,7 +1205,7 @@ class Model:
         self.mat_visc_maxws = self.mat_law34s
 
         self.mat_law23s: Dict[int, MatLaw23] = {}                   # /MAT/LAW23, /MAT/PLAS_DAMA (M190)
-        self.mat_plas_damas = self.mat_law23s
+        self.mat_plas_damas = _PlasDamasProxy(self.mat_law22s, self.mat_law23s)
         self.mat_law78s: Dict[int, MatLaw78] = {}                   # /MAT/LAW78 (M190)
         self.fail_hashins: Dict[int, FailHashin] = {}               # /FAIL/HASHIN (M190)
         self.fail_tensstrains: Dict[int, FailTensstrain] = {}       # /FAIL/TENSSTRAIN (M190)

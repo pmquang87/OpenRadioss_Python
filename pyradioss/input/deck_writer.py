@@ -1729,6 +1729,132 @@ class StarterDeck:
         kwargs.setdefault("law_name", "COMP_CHANG")
         return self.mat_law15(*args, **kwargs)
 
+    def mat_law22(
+        self,
+        mid: int = 0,
+        title: str = "",
+        rho: float = 0.0,
+        refer_rho: Optional[float] = None,
+        e: float = 0.0,
+        nu: float = 0.0,
+        a: float = 0.0,
+        b: float = 0.0,
+        n: float = 1.0,
+        eps_max: float = 1.0e30,
+        sig_max: float = 1.0e30,
+        c: float = 0.0,
+        eps_dot_0: float = 0.0,
+        icc: int = 1,
+        eps_dam: float = 0.15,
+        e_tan: float = 0.0,
+        law_name: str = "LAW22",
+        unit_id: Optional[int] = None,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW22`` (/MAT/DAMA, /MAT/PLAS_DAMA) — cfg MAT/matl22_dama.cfg (radioss110):
+        Card 1: RHO_I, Refer_Rho (%20lg%20lg)
+        Card 2: E, nu (%20lg%20lg)
+        Card 3: a, b, n, eps_max, sig_max (%20lg%20lg%20lg%20lg%20lg)
+        Card 4: c, eps_dot_0, ICC (%20lg%20lg%10d)
+        Card 5: eps_dam, E_tan (%20lg%20lg)
+        """
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+        if "mat_id" in kw_low and mid == 0:
+            mid = kw_low["mat_id"]
+        if "mid" in kw_low and mid == 0:
+            mid = kw_low["mid"]
+        if isinstance(title, (int, float)) and rho == 0.0:
+            rho = float(title)
+            title = ""
+        if "rho0" in kw_low and rho == 0.0:
+            rho = kw_low["rho0"]
+        elif "rho" in kw_low and rho == 0.0:
+            rho = kw_low["rho"]
+        if "rhor" in kw_low and refer_rho is None:
+            refer_rho = kw_low["rhor"]
+        elif "rho_ref" in kw_low and refer_rho is None:
+            refer_rho = kw_low["rho_ref"]
+        elif "refer_rho" in kw_low and refer_rho is None:
+            refer_rho = kw_low["refer_rho"]
+
+        if e == 0.0:
+            for k in ("e", "mat_e", "young"):
+                if k in kw_low: e = kw_low[k]; break
+        if nu == 0.0:
+            for k in ("nu", "mat_nu", "poisson"):
+                if k in kw_low: nu = kw_low[k]; break
+        if a == 0.0:
+            for k in ("a", "sigy", "sig_y", "mat_sigy", "yield_stress"):
+                if k in kw_low: a = kw_low[k]; break
+        if b == 0.0:
+            for k in ("b", "beta", "mat_beta"):
+                if k in kw_low: b = kw_low[k]; break
+        if n == 1.0 or n == 0.0:
+            for k in ("n", "hard", "mat_hard"):
+                if k in kw_low: n = kw_low[k]; break
+        if eps_max == 1.0e30:
+            for k in ("eps_max", "epsmax", "mat_eps", "eps_p_max"):
+                if k in kw_low: eps_max = kw_low[k]; break
+        if sig_max == 1.0e30:
+            for k in ("sig_max", "sigmax", "mat_sig", "sigma_max"):
+                if k in kw_low: sig_max = kw_low[k]; break
+        if c == 0.0:
+            for k in ("c", "mat_src", "src"):
+                if k in kw_low: c = kw_low[k]; break
+        if eps_dot_0 == 0.0:
+            for k in ("eps_dot_0", "eps0", "eps_0", "mat_srp", "srp"):
+                if k in kw_low: eps_dot_0 = kw_low[k]; break
+        if icc == 1:
+            for k in ("icc", "strflag", "iflag"):
+                if k in kw_low: icc = int(kw_low[k]); break
+        if eps_dam == 0.15:
+            for k in ("eps_dam", "epsdam", "mat_damage", "damage"):
+                if k in kw_low: eps_dam = kw_low[k]; break
+        if e_tan == 0.0:
+            for k in ("e_tan", "etan", "e_t", "mat_etan"):
+                if k in kw_low: e_tan = kw_low[k]; break
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        # Card 1: RHO_I, Refer_Rho (%20lg%20lg)
+        if refer_rho is not None and refer_rho > 0.0:
+            self.lines.append(fmt_float(rho) + fmt_float(refer_rho))
+        else:
+            self.lines.append(fmt_float(rho))
+
+        # Card 2: E, nu (%20lg%20lg)
+        self.lines.append(fmt_float(e) + fmt_float(nu))
+
+        # Card 3: a, b, n, eps_max, sig_max (%20lg%20lg%20lg%20lg%20lg)
+        self.lines.append(
+            fmt_float(a) + fmt_float(b) + fmt_float(n)
+            + fmt_float(eps_max) + fmt_float(sig_max)
+        )
+
+        # Card 4: c, eps_dot_0, ICC (%20lg%20lg%10d)
+        self.lines.append(
+            fmt_float(c) + fmt_float(eps_dot_0) + fmt_int(icc)
+        )
+
+        # Card 5: eps_dam, E_tan (%20lg%20lg)
+        self.lines.append(
+            fmt_float(eps_dam) + fmt_float(e_tan)
+        )
+
+        return self
+
+    def mat_dama(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "DAMA")
+        return self.mat_law22(*args, **kwargs)
+
+    def mat_plas_dama(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "PLAS_DAMA")
+        return self.mat_law22(*args, **kwargs)
+
     def mat_law25(
         self,
         mid: int = 0,
@@ -3583,6 +3709,36 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
             if len(toks) >= 3 and toks[2]: kw["c1"] = float(toks[2])
             if len(toks) >= 4 and toks[3]: kw["c2"] = float(toks[3])
         d.mat_law15(mid, refer_rho=rho_ref, title=title, unit_id=b.unit_id, law_name=law, **kw)
+    elif law in ("LAW22", "DAMA", "PLAS_DAMA"):
+        kw: Dict = {}
+        rho_ref = None
+        is_fixed = getattr(b, "fixed", False)
+        vcards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
+        if len(vcards) >= 1:
+            toks = vcards[0].cut("MAT_LAW22_1") if is_fixed and hasattr(vcards[0], "cut") else vcards[0].tokens()
+            if len(toks) >= 1 and toks[0]: kw["rho"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: rho_ref = float(toks[1])
+        if len(vcards) >= 2:
+            toks = vcards[1].cut("MAT_LAW22_2") if is_fixed and hasattr(vcards[1], "cut") else vcards[1].tokens()
+            if len(toks) >= 1 and toks[0]: kw["e"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["nu"] = float(toks[1])
+        if len(vcards) >= 3:
+            toks = vcards[2].cut("MAT_LAW22_3") if is_fixed and hasattr(vcards[2], "cut") else vcards[2].tokens()
+            if len(toks) >= 1 and toks[0]: kw["a"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["b"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["n"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["eps_max"] = float(toks[3])
+            if len(toks) >= 5 and toks[4]: kw["sig_max"] = float(toks[4])
+        if len(vcards) >= 4:
+            toks = vcards[3].cut("MAT_LAW22_4") if is_fixed and hasattr(vcards[3], "cut") else vcards[3].tokens()
+            if len(toks) >= 1 and toks[0]: kw["c"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["eps_dot_0"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["icc"] = int(float(toks[2]))
+        if len(vcards) >= 5:
+            toks = vcards[4].cut("MAT_LAW22_5") if is_fixed and hasattr(vcards[4], "cut") else vcards[4].tokens()
+            if len(toks) >= 1 and toks[0]: kw["eps_dam"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["e_tan"] = float(toks[1])
+        d.mat_law22(mid, refer_rho=rho_ref, title=title, unit_id=b.unit_id, law_name=law, **kw)
     elif law in ("LAW25", "COMP_PLAS", "COMPOSITE_PLAS", "COMPSH", "TSAI_WU", "CRASURV"):
         kw: Dict = {}
         rho_ref = None

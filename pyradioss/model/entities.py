@@ -9407,14 +9407,14 @@ MatTherm = MatLaw18
 
 @dataclass
 class MatLaw22:
-    """``/MAT/LAW22`` or ``/MAT/TSAI_WU`` / ``/MAT/DAMA``: Tsai-Wu anisotropic composite damage model."""
+    """``/MAT/LAW22`` (/MAT/DAMA, /MAT/PLAS_DAMA): Elastoplastic material law with progressive damage & softening slope."""
     id: int = 0
     rho0: float = 0.0
     rhor: float = 0.0
     e: float = 0.0
     nu: float = 0.0
-    sigy: float = 0.0
-    beta: float = 0.0
+    a: float = 0.0
+    b: float = 0.0
     n: float = 0.0
     eps_max: float = 0.0
     sig_max: float = 0.0
@@ -9422,12 +9422,91 @@ class MatLaw22:
     eps_dot_0: float = 0.0
     icc: int = 0
     eps_dam: float = 0.0
-    e_t: float = 0.0
+    e_tan: float = 0.0
     title: str = ""
+    law: int = 22
+    law_name: str = "LAW22"
+
+    def __init__(
+        self,
+        id: int = 0,
+        rho0: float = 0.0,
+        rhor: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        a: float = 0.0,
+        b: float = 0.0,
+        n: float = 0.0,
+        eps_max: float = 0.0,
+        sig_max: float = 0.0,
+        c: float = 0.0,
+        eps_dot_0: float = 0.0,
+        icc: int = 0,
+        eps_dam: float = 0.0,
+        e_tan: float = 0.0,
+        title: str = "",
+        law: int = 22,
+        law_name: str = "LAW22",
+        sigy: Optional[float] = None,
+        beta: Optional[float] = None,
+        e_t: Optional[float] = None,
+        **kwargs,
+    ):
+        self.id = id
+        self.rho0 = rho0
+        self.rhor = rhor
+        self.e = e
+        self.nu = nu
+        self.a = sigy if sigy is not None else a
+        self.b = beta if beta is not None else b
+        self.n = n
+        self.eps_max = eps_max
+        self.sig_max = sig_max
+        self.c = c
+        self.eps_dot_0 = eps_dot_0
+        self.icc = icc
+        self.eps_dam = eps_dam
+        self.e_tan = e_t if e_t is not None else e_tan
+        self.title = title
+        self.law = law
+        self.law_name = law_name
+
+    @property
+    def sigy(self) -> float:
+        return self.a
+
+    @sigy.setter
+    def sigy(self, val: float) -> None:
+        self.a = val
+
+    @property
+    def beta(self) -> float:
+        return self.b
+
+    @beta.setter
+    def beta(self, val: float) -> None:
+        self.b = val
+
+    @property
+    def e_t(self) -> float:
+        return self.e_tan
+
+    @e_t.setter
+    def e_t(self, val: float) -> None:
+        self.e_tan = val
+
+    @property
+    def eps_0(self) -> float:
+        return self.eps_dot_0
+
+    @eps_0.setter
+    def eps_0(self, val: float) -> None:
+        self.eps_dot_0 = val
 
 
 MatTsaiWu = MatLaw22
 MatDama = MatLaw22
+MatPlasDama = MatLaw22
 
 
 @dataclass

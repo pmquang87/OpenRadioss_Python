@@ -531,7 +531,7 @@ def _init_material_state(group, nip_max):
     for sl, mat, prop in st["slices"]:
         for name, shape in materials.extra_shapes(mat, nip_max).items():
             if name not in st["mat_extra"]:
-                if name.startswith("off") or name.startswith("damt"):
+                if name.startswith("off") or name.startswith("damt") or name.startswith("alpe"):
                     st["mat_extra"][name] = np.ones((n,) + shape)
                 else:
                     st["mat_extra"][name] = np.zeros((n,) + shape)
