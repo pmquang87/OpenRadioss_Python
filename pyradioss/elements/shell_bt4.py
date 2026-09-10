@@ -530,7 +530,10 @@ def _init_material_state(group, nip_max):
     for sl, mat, prop in st["slices"]:
         for name, shape in materials.extra_shapes(mat, nip_max).items():
             if name not in st["mat_extra"]:
-                st["mat_extra"][name] = np.zeros((n,) + shape)
+                if name.startswith("off"):
+                    st["mat_extra"][name] = np.ones((n,) + shape)
+                else:
+                    st["mat_extra"][name] = np.zeros((n,) + shape)
     if any(mat.fail is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros((n, nip_max))
     st["chk_fail"] = any(
@@ -993,6 +996,10 @@ def forces(group, x, v, vr, dt, fint, mint):
             sig[dead] = 0.0
             st["qshear"][dead] = 0.0
             st["hgq"][dead] = 0.0
+            if "mat_extra" in st:
+                for name in st["mat_extra"]:
+                    if name.startswith("off"):
+                        st["mat_extra"][name][dead] = 0.0
     qres = st["qshear"] * thick[:, None]            # shear force / length
 
     # ---- hourglass coefficients (chvis3.F — see the module docstring) ------

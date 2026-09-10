@@ -1084,6 +1084,10 @@ def forces(group, x, v, vr, dt, fint, mint):
             sig[dead] = 0.0
             st["qshear"][dead] = 0.0
             st["hgstr"][dead] = 0.0
+            if "mat_extra" in st:
+                for name in st["mat_extra"]:
+                    if name.startswith("off"):
+                        st["mat_extra"][name][dead] = 0.0
     qres = st["qshear"] * thick[:, None]
     st["eint"] += area * de_layers
 
