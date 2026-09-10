@@ -805,6 +805,8 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         raise NotImplementedError("LAW37 (biphasic fluid/gas) is implemented for 3D solid and SPH elements only.")
     if getattr(mat, "law", None) == 28 or getattr(mat, "law_name", None) in ("LAW28", "HONEYCOMB", "HONEYCOMB_SOL"):
         raise NotImplementedError("LAW28 (HONEYCOMB crushable) is implemented for 3D solid and SPH elements only.")
+    if getattr(mat, "law", None) in (4, "4", "LAW4", "HYD_JCOOK") or getattr(mat, "law_name", None) in ("4", "LAW4", "HYD_JCOOK"):
+        return law04_hyd_jcook.shell_update(mat, sig, deps, epsp, dt, extra)
     if getattr(mat, "law", None) in (5, "5", "LAW5", "JWL") or getattr(mat, "law_name", None) in ("LAW5", "JWL"):
         raise NotImplementedError("LAW5 (JWL explosive) is implemented for 3D solid and SPH elements only.")
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
