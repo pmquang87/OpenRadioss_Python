@@ -49,6 +49,8 @@ LAW_MAP: Dict[str, int] = {
     "BIPHAS": 37,
     "BIPHASIC": 37,
     "LAW37": 37,
+    "VISC_TAB": 38,
+    "LAW38": 38,
     "COWPER_SYMONDS": 44,
     "LAW44": 44,
     "DONEA": 46,
@@ -68,6 +70,8 @@ LAW_MAP: Dict[str, int] = {
 }
 
 LAW_SYNONYMS: Dict[str, str] = {
+    "VISC_TAB": "LAW38",
+    "LAW38": "LAW38",
     "BIPHAS": "LAW37",
     "BIPHASIC": "LAW37",
     "LAW37": "LAW37",
@@ -80,6 +84,9 @@ LAW_SYNONYMS: Dict[str, str] = {
     "SOIL": "LAW10",
     "SOIL_CONC": "LAW10",
 }
+
+KEYWORD_NAME_MAP = LAW_MAP
+SYNONYMS = LAW_SYNONYMS
 
 
 def law_number(name: str) -> Optional[int]:
@@ -123,6 +130,8 @@ __all__ = [
     "CfgLawSchema",
     "LAW_MAP",
     "LAW_SYNONYMS",
+    "KEYWORD_NAME_MAP",
+    "SYNONYMS",
     "law_number",
     "get_law_number",
     "canonical_law_name",

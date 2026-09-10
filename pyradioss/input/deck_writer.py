@@ -819,6 +819,275 @@ class StarterDeck:
     mat_biphas = mat_law37
     mat_biphasic = mat_law37
 
+    def mat_law38(
+        self,
+        id: int,
+        rho: float,
+        e: float,
+        nu: float = 0.0,
+        nu_t: float | None = None,
+        nu_c: float | None = None,
+        rv: float = 0.0,
+        iflag: int = 0,
+        itotal: int = 0,
+        beta: float = 0.0,
+        h: float = 1.0,
+        damp1: float = 0.5,
+        gflag: int = 0,
+        vflag: int = 0,
+        theta: float = 0.67,
+        kair: int = 0,
+        np: int = 0,
+        pscale: float = 1.0,
+        p0: float = 0.0,
+        pr: float = 0.0,
+        pmax: float = 0.0,
+        poros: float = 0.0,
+        ful: int = 0,
+        alpha_unload: float = 1.0,
+        eps_unload: float = 0.0,
+        a: float = 1.0,
+        b: float = 1.0,
+        nfunc: int | None = None,
+        cutoff: float = 0.0,
+        iinsta: int = 0,
+        efinal: float = 0.0,
+        epsfinal: float = 1.0,
+        lamda: float = 1.0,
+        maxvisc: float = 0.0,
+        tol: float = 1.0,
+        fscale: Sequence[float] | None = None,
+        epsilon: Sequence[float] | None = None,
+        funct_id_load: Sequence[int] | None = None,
+        funct_id_unload: Sequence[int] | None = None,
+        title: str | None = None,
+        rhor: float | None = None,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW38`` (/MAT/VISC_TAB) — cfg MAT/matl38_visc_tab.cfg
+        (FORMAT radioss51 / radioss110):
+        Card 1: MAT_RHO, [Refer_Rho] (%20lg[%20lg])
+        Card 2: MAT_E, MAT_NU, MAT_NUt, MAT_RV, MAT_IFLAG, ITOTAL (%20lg*4%10d%10d)
+        Card 3: MAT_RELX, MAT_HYST, DAMP1, Gflag, Vflag, MAT_Theta (%20lg*3%10d%10d%20lg)
+        Card 4: MAT_Kair, FUN_A4, MAT_PScale (%10d%10d%20lg)
+        Card 5: MAT_P0, MAT_PR, MAT_PMAX, MAT_POROS (%20lg*4)
+        Card 6: FUN_B4, blank, MAT_ALPHA6, MAT_EPSF2, MAT_EXP1, MAT_EXP2 (%10d 10x %20lg*4)
+        Card 7: NFUNC, blank, MAT_CUTOFF, MAT_Iinsta (%10d 10x %20lg%10d)
+        Card 8: MAT_Efinal, MAT_Epsfinal, MAT_Lamda, MAT_MaxVisc, MAT_Tol (%20lg*5)
+        Card 9: Fscale_i (up to 5 x %20lg)
+        Card 10: Epsilon_i (up to 5 x %20lg)
+        Card 11: Funct_Id_Load (up to 5 x %10d)
+        Card 12: Funct_Id_UnLoad (up to 5 x %10d)
+        """
+        # Backward compatibility with stub mat_law38(mid, title, data_cards)
+        if isinstance(rho, str) and (isinstance(e, (list, tuple)) or hasattr(e, "__iter__")):
+            law_name = kwargs.get("law_name", "LAW38")
+            self._header("MAT", law_name, id)
+            self._title(rho)
+            self.lines.extend(str(c).rstrip("\r\n") for c in e)
+            return self
+
+        # Handle id / mid / mat_id
+        if "mat_id" in kwargs and id == 0:
+            id = kwargs["mat_id"]
+        elif "mid" in kwargs and id == 0:
+            id = kwargs["mid"]
+
+        # Keyword argument overrides
+        if "density" in kwargs and rho == 0.0:
+            rho = kwargs["density"]
+        if "refer_rho" in kwargs and rhor is None:
+            rhor = kwargs["refer_rho"]
+        if "r_d" in kwargs:
+            damp1 = kwargs["r_d"]
+        if "k_r" in kwargs:
+            gflag = kwargs["k_r"]
+        if "k_d" in kwargs:
+            vflag = kwargs["k_d"]
+        if "instant_mod_upd" in kwargs:
+            theta = kwargs["instant_mod_upd"]
+        if "fun_a4" in kwargs:
+            np = kwargs["fun_a4"]
+        if "rp" in kwargs:
+            pr = kwargs["rp"]
+        if "phi" in kwargs:
+            poros = kwargs["phi"]
+        if "fun_b4" in kwargs:
+            ful = kwargs["fun_b4"]
+        if "alpha6" in kwargs:
+            alpha_unload = kwargs["alpha6"]
+        if "epsf2" in kwargs:
+            eps_unload = kwargs["epsf2"]
+        if "exp1" in kwargs:
+            a = kwargs["exp1"]
+        if "exp2" in kwargs:
+            b = kwargs["exp2"]
+        if "m_func" in kwargs and nfunc is None:
+            nfunc = kwargs["m_func"]
+        if "e_final" in kwargs:
+            efinal = kwargs["e_final"]
+        if "epsi_final" in kwargs:
+            epsfinal = kwargs["epsi_final"]
+        if "lamb" in kwargs:
+            lamda = kwargs["lamb"]
+        if "visc" in kwargs:
+            maxvisc = kwargs["visc"]
+        if "fscale_i" in kwargs and fscale is None:
+            fscale = kwargs["fscale_i"]
+        if "epsilon_i" in kwargs and epsilon is None:
+            epsilon = kwargs["epsilon_i"]
+        if "fload" in kwargs and funct_id_load is None:
+            funct_id_load = kwargs["fload"]
+        if "funload" in kwargs and funct_id_unload is None:
+            funct_id_unload = kwargs["funload"]
+
+        # Poisson's ratio handling
+        if nu_t is None:
+            nu_t = nu
+        if nu_c is None:
+            nu_c = nu_t
+
+        law_name = kwargs.get("law_name", kwargs.get("law", "LAW38"))
+        unit_id = kwargs.get("unit_id")
+
+        if unit_id is not None:
+            self._header("MAT", law_name, id, unit_id)
+        else:
+            self._header("MAT", law_name, id)
+
+        if title is not None and title.strip():
+            self._title(title)
+        else:
+            self.lines.append(BLANK_CARD)
+
+        # Card 1: Init dens [Ref dens]
+        if rhor is not None and rhor != 0.0 and rhor != rho:
+            self.comment("       Init. dens.          Ref. dens.")
+            self.lines.append(fmt_float(rho) + fmt_float(rhor))
+        else:
+            self.comment("       Init. dens.")
+            self.lines.append(fmt_float(rho))
+
+        # Card 2: E nu_t nu_c Rv Iflag Itota
+        self.comment("                 E                nu_t                nu_c                  Rv     Iflag     Itota")
+        self.lines.append(
+            fmt_float(e)
+            + fmt_float(nu_t)
+            + fmt_float(nu_c)
+            + fmt_float(rv)
+            + fmt_int(iflag, 10)
+            + fmt_int(itotal, 10)
+        )
+
+        # Card 3: Beta H R_D K_R K_D Instant-mod-upd
+        self.comment("              Beta                   H                 R_D       K_R       K_D     Instant-mod-upd")
+        self.lines.append(
+            fmt_float(beta)
+            + fmt_float(h)
+            + fmt_float(damp1)
+            + fmt_int(gflag, 10)
+            + fmt_int(vflag, 10)
+            + fmt_float(theta)
+        )
+
+        # Card 4: Kair Np Pscale
+        self.comment("    Kair        Np              Pscale")
+        self.lines.append(
+            fmt_int(kair, 10)
+            + fmt_int(np, 10)
+            + fmt_float(pscale)
+        )
+
+        # Card 5: P0 Rp Pmax Phi
+        self.comment("                P0                  Rp                Pmax                 Phi")
+        self.lines.append(
+            fmt_float(p0)
+            + fmt_float(pr)
+            + fmt_float(pmax)
+            + fmt_float(poros)
+        )
+
+        # Card 6: ful blank alpha_unload Eps_._unload a b
+        self.comment("     ful                  alpha_unload        Eps_._unload                   a                   b")
+        self.lines.append(
+            fmt_int(ful, 10)
+            + blank(10)
+            + fmt_float(alpha_unload)
+            + fmt_float(eps_unload)
+            + fmt_float(a)
+            + fmt_float(b)
+        )
+
+        # Deduce nfunc if not given
+        if nfunc is None:
+            if funct_id_load:
+                nfunc = len(funct_id_load)
+            elif fscale:
+                nfunc = len(fscale)
+            elif epsilon:
+                nfunc = len(epsilon)
+            else:
+                nfunc = 0
+
+        # Card 7: m_func blank CUToff Iinsta
+        self.comment("  m_func                        CUToff    Iinsta")
+        self.lines.append(
+            fmt_int(nfunc, 10)
+            + blank(10)
+            + fmt_float(cutoff)
+            + fmt_int(iinsta, 10)
+        )
+
+        # Card 8: E-final Epsi-final Lambda VISC Tol
+        self.comment("           E-final          Epsi-final              Lambda                VISC                 Tol")
+        self.lines.append(
+            fmt_float(efinal)
+            + fmt_float(epsfinal)
+            + fmt_float(lamda)
+            + fmt_float(maxvisc)
+            + fmt_float(tol)
+        )
+
+        # Cards 9..12: Cell lists or blank cards
+        n = min(nfunc, 5)
+        if n > 0:
+            fscale_l = list(fscale)[:n] if fscale else [1.0] * n
+            while len(fscale_l) < n:
+                fscale_l.append(1.0)
+            eps_l = list(epsilon)[:n] if epsilon else [0.0] * n
+            while len(eps_l) < n:
+                eps_l.append(0.0)
+            fload_l = list(funct_id_load)[:n] if funct_id_load else [0] * n
+            while len(fload_l) < n:
+                fload_l.append(0)
+            funload_l = list(funct_id_unload)[:n] if funct_id_unload else list(fload_l)
+            while len(funload_l) < n:
+                funload_l.append(fload_l[0] if fload_l else 0)
+
+            self.comment("Scale factors")
+            self.lines.append("".join(fmt_float(x) for x in fscale_l))
+            self.comment("Strain rates")
+            self.lines.append("".join(fmt_float(x) for x in eps_l))
+            self.comment("Loading functions")
+            self.lines.append("".join(fmt_int(x, 10) for x in fload_l))
+            self.comment("Unloading functions")
+            self.lines.append("".join(fmt_int(x, 10) for x in funload_l))
+        else:
+            self.comment("Scale factors")
+            self.lines.append(BLANK_CARD)
+            self.comment("Strain rates")
+            self.lines.append(BLANK_CARD)
+            self.comment("Loading functions")
+            self.lines.append(BLANK_CARD)
+            self.comment("Unloading functions")
+            self.lines.append(BLANK_CARD)
+
+        return self
+
+    def mat_visc_tab(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "VISC_TAB")
+        return self.mat_law38(*args, **kwargs)
+
 
     def mat_law27(self, mid: int, title: str, rho, e, nu,
                   card1: Sequence, card2: Optional[Sequence] = None) -> None:

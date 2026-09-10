@@ -68,6 +68,16 @@ class MessageLog:
                 f"(see messages above); restart file not written."
             )
 
+    @property
+    def has_errors(self) -> bool:
+        """True if any error was logged."""
+        return bool(self.errors)
+
+    @property
+    def has_warnings(self) -> bool:
+        """True if any warning was logged."""
+        return bool(self.warnings)
+
     def summary(self) -> str:
         """The classic end-of-listing tally."""
         return (

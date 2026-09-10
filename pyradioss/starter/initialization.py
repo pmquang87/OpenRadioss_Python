@@ -455,6 +455,10 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
         elif mat.law == 28:
             from ..materials import law28_honeycomb
             law28_honeycomb.resolve(mat, model, log)
+        elif mat.law in (38, "38", "LAW38", "VISC_TAB") or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB"):
+            from ..materials import law38_visc_tab
+            if hasattr(law38_visc_tab, "resolve"):
+                law38_visc_tab.resolve(mat, model, log)
 
     for mat_id, fm, source in model.raw_fails:
         mat = model.materials.get(mat_id)

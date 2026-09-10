@@ -1132,7 +1132,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW20", "BIMAT", "MAT_BIMAT", "LAW20_BIMAT"):
         read_mat_law20(block, model, log)
         return
-    if lawname in ("LAW38", "VISC_TAB", "MAT_VISC_TAB", "LAW38_VISC_TAB"):
+    if lawname in ("LAW38", "VISC_TAB", "MAT_VISC_TAB", "LAW38_VISC_TAB", "38"):
         read_mat_law38(block, model, log)
         return
     if lawname in ("LAW29", "FEM", "MAT29_FEM", "MAT_FEM", "LAW29_FEM"):
@@ -41282,11 +41282,14 @@ def read_mat_law20(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law38(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW38`` or ``/MAT/VISC_TAB`` (M190): Tabulated viscoelastic polymer/foam model."""
+    """``/MAT/LAW38`` or ``/MAT/VISC_TAB``: Tabulated viscoelastic polymer/foam model (M190/M541)."""
     from ..model.entities import MatLaw38, Material
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    if block.fixed:
+        valid_cards = [c for c in cards if not c.raw.strip().startswith("#")]
+    else:
+        valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
     if not valid_cards:
         log.error(f"/MAT/LAW38/{mat_id}: missing data card", block.source)
         return
@@ -41306,63 +41309,95 @@ def read_mat_law38(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     cutoff = 0.0
     iinsta = 0
     e_final, epsi_final, lamb, visc, tol = 0.0, 0.0, 0.0, 0.0, 0.0
+    fscale_i: list[float] = []
+    epsilon_i: list[float] = []
+    funct_id_load: list[int] = []
+    funct_id_unload: list[int] = []
 
     if block.fixed:
+        # Card 1: MAT_RHO, [Refer_Rho]
         if len(valid_cards) > 0:
             c0 = valid_cards[0].cut("MAT_LAW38_1")
-            rho0 = _safe_float(c0[0]) if len(c0) > 0 else 0.0
-            rhor = _safe_float(c0[1]) if len(c0) > 1 else 0.0
+            rho0 = _safe_float(c0[0]) if len(c0) > 0 and c0[0] else 0.0
+            rhor = _safe_float(c0[1]) if len(c0) > 1 and c0[1] else rho0
+        # Card 2: MAT_E, MAT_NU, MAT_NUt, MAT_RV, MAT_IFLAG, ITOTAL
         if len(valid_cards) > 1:
             c1 = valid_cards[1].cut("MAT_LAW38_2")
-            e = _safe_float(c1[0]) if len(c1) > 0 else 0.0
-            nu_t = _safe_float(c1[1]) if len(c1) > 1 else 0.0
-            nu_c = _safe_float(c1[2]) if len(c1) > 2 else 0.0
-            rv = _safe_float(c1[3]) if len(c1) > 3 else 0.0
-            iflag = _safe_int(c1[4]) if len(c1) > 4 else 0
-            itotal = _safe_int(c1[5]) if len(c1) > 5 else 0
+            e = _safe_float(c1[0]) if len(c1) > 0 and c1[0] else 0.0
+            nu_t = _safe_float(c1[1]) if len(c1) > 1 and c1[1] else 0.0
+            nu_c = _safe_float(c1[2]) if len(c1) > 2 and c1[2] else 0.0
+            rv = _safe_float(c1[3]) if len(c1) > 3 and c1[3] else 0.0
+            iflag = _safe_int(c1[4]) if len(c1) > 4 and c1[4] else 0
+            itotal = _safe_int(c1[5]) if len(c1) > 5 and c1[5] else 0
+        # Card 3: MAT_RELX, MAT_HYST, DAMP1, Gflag, Vflag, MAT_Theta
         if len(valid_cards) > 2:
             c2 = valid_cards[2].cut("MAT_LAW38_3")
-            beta = _safe_float(c2[0]) if len(c2) > 0 else 0.0
-            h = _safe_float(c2[1]) if len(c2) > 1 else 0.0
-            r_d = _safe_float(c2[2]) if len(c2) > 2 else 0.0
-            k_r = _safe_int(c2[3]) if len(c2) > 3 else 0
-            k_d = _safe_int(c2[4]) if len(c2) > 4 else 0
-            instant_mod_upd = _safe_float(c2[5]) if len(c2) > 5 else 0.0
+            beta = _safe_float(c2[0]) if len(c2) > 0 and c2[0] else 0.0
+            h = _safe_float(c2[1]) if len(c2) > 1 and c2[1] else 0.0
+            r_d = _safe_float(c2[2]) if len(c2) > 2 and c2[2] else 0.0
+            k_r = _safe_int(c2[3]) if len(c2) > 3 and c2[3] else 0
+            k_d = _safe_int(c2[4]) if len(c2) > 4 and c2[4] else 0
+            instant_mod_upd = _safe_float(c2[5]) if len(c2) > 5 and c2[5] else 0.0
+        # Card 4: MAT_Kair, FUN_A4, MAT_PScale
         if len(valid_cards) > 3:
             c3 = valid_cards[3].cut("MAT_LAW38_4")
-            kair = _safe_int(c3[0]) if len(c3) > 0 else 0
-            np_val = _safe_int(c3[1]) if len(c3) > 1 else 0
-            pscale = _safe_float(c3[2]) if len(c3) > 2 else 0.0
+            kair = _safe_int(c3[0]) if len(c3) > 0 and c3[0] else 0
+            np_val = _safe_int(c3[1]) if len(c3) > 1 and c3[1] else 0
+            pscale = _safe_float(c3[2]) if len(c3) > 2 and c3[2] else 0.0
+        # Card 5: MAT_P0, MAT_PR, MAT_PMAX, MAT_POROS
         if len(valid_cards) > 4:
             c4 = valid_cards[4].cut("MAT_LAW38_5")
-            p0 = _safe_float(c4[0]) if len(c4) > 0 else 0.0
-            rp = _safe_float(c4[1]) if len(c4) > 1 else 0.0
-            pmax = _safe_float(c4[2]) if len(c4) > 2 else 0.0
-            phi = _safe_float(c4[3]) if len(c4) > 3 else 0.0
+            p0 = _safe_float(c4[0]) if len(c4) > 0 and c4[0] else 0.0
+            rp = _safe_float(c4[1]) if len(c4) > 1 and c4[1] else 0.0
+            pmax = _safe_float(c4[2]) if len(c4) > 2 and c4[2] else 0.0
+            phi = _safe_float(c4[3]) if len(c4) > 3 and c4[3] else 0.0
+        # Card 6: FUN_B4, blank, MAT_ALPHA6, MAT_EPSF2, MAT_EXP1, MAT_EXP2
         if len(valid_cards) > 5:
             c5 = valid_cards[5].cut("MAT_LAW38_6")
-            ful = _safe_int(c5[0]) if len(c5) > 0 else 0
-            alpha_unload = _safe_float(c5[1]) if len(c5) > 1 else 0.0
-            eps_unload = _safe_float(c5[2]) if len(c5) > 2 else 0.0
-            a = _safe_float(c5[3]) if len(c5) > 3 else 0.0
-            b = _safe_float(c5[4]) if len(c5) > 4 else 0.0
+            ful = _safe_int(c5[0]) if len(c5) > 0 and c5[0] else 0
+            alpha_unload = _safe_float(c5[2]) if len(c5) > 2 and c5[2] else 0.0
+            eps_unload = _safe_float(c5[3]) if len(c5) > 3 and c5[3] else 0.0
+            a = _safe_float(c5[4]) if len(c5) > 4 and c5[4] else 0.0
+            b = _safe_float(c5[5]) if len(c5) > 5 and c5[5] else 0.0
+        # Card 7: NFUNC, blank, MAT_CUTOFF, MAT_Iinsta
         if len(valid_cards) > 6:
             c6 = valid_cards[6].cut("MAT_LAW38_7")
-            m_func = _safe_int(c6[0]) if len(c6) > 0 else 0
-            cutoff = _safe_float(c6[1]) if len(c6) > 1 else 0.0
-            iinsta = _safe_int(c6[2]) if len(c6) > 2 else 0
+            m_func = _safe_int(c6[0]) if len(c6) > 0 and c6[0] else 0
+            cutoff = _safe_float(c6[2]) if len(c6) > 2 and c6[2] else 0.0
+            iinsta = _safe_int(c6[3]) if len(c6) > 3 and c6[3] else 0
+        # Card 8: MAT_Efinal, MAT_Epsfinal, MAT_Lamda, MAT_MaxVisc, MAT_Tol
         if len(valid_cards) > 7:
             c7 = valid_cards[7].cut("MAT_LAW38_8")
-            e_final = _safe_float(c7[0]) if len(c7) > 0 else 0.0
-            epsi_final = _safe_float(c7[1]) if len(c7) > 1 else 0.0
-            lamb = _safe_float(c7[2]) if len(c7) > 2 else 0.0
-            visc = _safe_float(c7[3]) if len(c7) > 3 else 0.0
-            tol = _safe_float(c7[4]) if len(c7) > 4 else 0.0
+            e_final = _safe_float(c7[0]) if len(c7) > 0 and c7[0] else 0.0
+            epsi_final = _safe_float(c7[1]) if len(c7) > 1 and c7[1] else 0.0
+            lamb = _safe_float(c7[2]) if len(c7) > 2 and c7[2] else 0.0
+            visc = _safe_float(c7[3]) if len(c7) > 3 and c7[3] else 0.0
+            tol = _safe_float(c7[4]) if len(c7) > 4 and c7[4] else 0.0
+
+        if m_func == 0 and len(valid_cards) > 8:
+            t8 = valid_cards[8].tokens()
+            if t8:
+                m_func = min(len(t8), 5)
+        n = min(m_func, 5)
+        if n > 0:
+            if len(valid_cards) > 8:
+                c8 = valid_cards[8].cut("MAT_LAW38_9")
+                fscale_i = [_safe_float(c8[i]) if i < len(c8) and c8[i] else 1.0 for i in range(n)]
+            if len(valid_cards) > 9:
+                c9 = valid_cards[9].cut("MAT_LAW38_10")
+                epsilon_i = [_safe_float(c9[i]) if i < len(c9) and c9[i] else 0.0 for i in range(n)]
+            if len(valid_cards) > 10:
+                c10 = valid_cards[10].cut("MAT_LAW38_11")
+                funct_id_load = [_safe_int(c10[i]) if i < len(c10) and c10[i] else 0 for i in range(n)]
+            if len(valid_cards) > 11:
+                c11 = valid_cards[11].cut("MAT_LAW38_12")
+                funct_id_unload = [_safe_int(c11[i]) if i < len(c11) and c11[i] else 0 for i in range(n)]
     else:
+        # Free-format
         if len(valid_cards) > 0:
             t0 = valid_cards[0].tokens()
             rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
-            rhor = _safe_float(t0[1]) if len(t0) > 1 else 0.0
+            rhor = _safe_float(t0[1]) if len(t0) > 1 else rho0
         if len(valid_cards) > 1:
             t1 = valid_cards[1].tokens()
             e = _safe_float(t1[0]) if len(t1) > 0 else 0.0
@@ -41392,16 +41427,28 @@ def read_mat_law38(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             phi = _safe_float(t4[3]) if len(t4) > 3 else 0.0
         if len(valid_cards) > 5:
             t5 = valid_cards[5].tokens()
-            ful = _safe_int(t5[0]) if len(t5) > 0 else 0
-            alpha_unload = _safe_float(t5[1]) if len(t5) > 1 else 0.0
-            eps_unload = _safe_float(t5[2]) if len(t5) > 2 else 0.0
-            a = _safe_float(t5[3]) if len(t5) > 3 else 0.0
-            b = _safe_float(t5[4]) if len(t5) > 4 else 0.0
+            if len(t5) >= 6:
+                ful = _safe_int(t5[0])
+                alpha_unload = _safe_float(t5[2])
+                eps_unload = _safe_float(t5[3])
+                a = _safe_float(t5[4])
+                b = _safe_float(t5[5])
+            else:
+                ful = _safe_int(t5[0]) if len(t5) > 0 else 0
+                alpha_unload = _safe_float(t5[1]) if len(t5) > 1 else 0.0
+                eps_unload = _safe_float(t5[2]) if len(t5) > 2 else 0.0
+                a = _safe_float(t5[3]) if len(t5) > 3 else 0.0
+                b = _safe_float(t5[4]) if len(t5) > 4 else 0.0
         if len(valid_cards) > 6:
             t6 = valid_cards[6].tokens()
-            m_func = _safe_int(t6[0]) if len(t6) > 0 else 0
-            cutoff = _safe_float(t6[1]) if len(t6) > 1 else 0.0
-            iinsta = _safe_int(t6[2]) if len(t6) > 2 else 0
+            if len(t6) >= 4:
+                m_func = _safe_int(t6[0])
+                cutoff = _safe_float(t6[2])
+                iinsta = _safe_int(t6[3])
+            else:
+                m_func = _safe_int(t6[0]) if len(t6) > 0 else 0
+                cutoff = _safe_float(t6[1]) if len(t6) > 1 else 0.0
+                iinsta = _safe_int(t6[2]) if len(t6) > 2 else 0
         if len(valid_cards) > 7:
             t7 = valid_cards[7].tokens()
             e_final = _safe_float(t7[0]) if len(t7) > 0 else 0.0
@@ -41409,6 +41456,58 @@ def read_mat_law38(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             lamb = _safe_float(t7[2]) if len(t7) > 2 else 0.0
             visc = _safe_float(t7[3]) if len(t7) > 3 else 0.0
             tol = _safe_float(t7[4]) if len(t7) > 4 else 0.0
+
+        if m_func == 0 and len(valid_cards) > 8:
+            t8 = valid_cards[8].tokens()
+            if t8:
+                m_func = min(len(t8), 5)
+        n = min(m_func, 5)
+        if n > 0:
+            if len(valid_cards) > 8:
+                t8 = valid_cards[8].tokens()
+                fscale_i = [_safe_float(t8[i]) if i < len(t8) else 1.0 for i in range(n)]
+            if len(valid_cards) > 9:
+                t9 = valid_cards[9].tokens()
+                epsilon_i = [_safe_float(t9[i]) if i < len(t9) else 0.0 for i in range(n)]
+            if len(valid_cards) > 10:
+                t10 = valid_cards[10].tokens()
+                funct_id_load = [_safe_int(t10[i]) if i < len(t10) else 0 for i in range(n)]
+            if len(valid_cards) > 11:
+                t11 = valid_cards[11].tokens()
+                funct_id_unload = [_safe_int(t11[i]) if i < len(t11) else 0 for i in range(n)]
+
+    # Defaults and post-processing (citing hm_read_mat38.F lines 221-258)
+    if rhor == 0.0:
+        rhor = rho0
+    if pscale == 0.0:
+        pscale = 1.0
+    if h == 0.0:
+        h = 1.0
+    if r_d == 0.0:
+        r_d = 0.5
+    if instant_mod_upd == 0.0:
+        instant_mod_upd = 0.67
+    if alpha_unload <= 0.0:
+        alpha_unload = 1.0
+    if a == 0.0:
+        a = 1.0
+    if b == 0.0:
+        b = 1.0
+    if epsi_final == 0.0:
+        epsi_final = 1.0
+    if lamb == 0.0:
+        lamb = 1.0
+    if tol == 0.0:
+        tol = 1.0
+    if e_final <= e and e_final == 0.0:
+        e_final = e
+
+    # Scale factors default <= 0 -> 1.0 (hm_read_mat38.F line 323)
+    fscale_i = [1.0 if x <= 0.0 else x for x in fscale_i]
+    # Unload functions default <= 0 -> funct_id_load[0] (hm_read_mat38.F line 343)
+    for j in range(len(funct_id_unload)):
+        if funct_id_unload[j] <= 0 and funct_id_load:
+            funct_id_unload[j] = funct_id_load[0]
 
     mat = MatLaw38(
         id=mat_id, rho0=rho0, rhor=rhor,
@@ -41419,18 +41518,46 @@ def read_mat_law38(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         ful=ful, alpha_unload=alpha_unload, eps_unload=eps_unload, a=a, b=b,
         m_func=m_func, cutoff=cutoff, iinsta=iinsta,
         e_final=e_final, epsi_final=epsi_final, lamb=lamb, visc=visc, tol=tol,
+        fscale_i=fscale_i, epsilon_i=epsilon_i,
+        funct_id_load=funct_id_load, funct_id_unload=funct_id_unload,
         title=title
     )
     model.mat_law38s[mat_id] = mat
+
+    nu_effective = max(nu_c, nu_t)
     model.materials[mat_id] = Material(
-        id=mat_id, law=38, rho0=rho0, title=title,
+        id=mat_id, law=38, rho0=rho0, title=title, law_name="LAW38",
         params={
-            "rho": rho0, "e": e, "nu_t": nu_t, "nu_c": nu_c, "rv": rv,
-            "iflag": iflag, "itotal": itotal, "beta": beta, "h": h,
-            "kair": kair, "np": np_val, "pscale": pscale,
-            "p0": p0, "rp": rp, "pmax": pmax, "phi": phi,
+            "rho": rho0, "rho0": rho0, "rhor": rhor, "MAT_RHO": rho0, "Refer_Rho": rhor,
+            "e": e, "MAT_E": e, "E": e,
+            "nu": nu_effective, "nu_t": nu_t, "nu_c": nu_c, "MAT_NU": nu_t, "MAT_NUt": nu_c, "rv": rv, "MAT_RV": rv,
+            "iflag": iflag, "MAT_IFLAG": iflag, "itotal": itotal, "ITOTAL": itotal,
+            "beta": beta, "MAT_RELX": beta, "h": h, "MAT_HYST": h, "r_d": r_d, "damp1": r_d, "DAMP1": r_d,
+            "k_r": k_r, "gflag": k_r, "Gflag": k_r, "k_d": k_d, "vflag": k_d, "Vflag": k_d,
+            "instant_mod_upd": instant_mod_upd, "theta": instant_mod_upd, "MAT_Theta": instant_mod_upd,
+            "kair": kair, "MAT_Kair": kair, "np": np_val, "fun_a4": np_val, "FUN_A4": np_val,
+            "pscale": pscale, "MAT_PScale": pscale,
+            "p0": p0, "MAT_P0": p0, "rp": rp, "pr": rp, "MAT_PR": rp,
+            "pmax": pmax, "MAT_PMAX": pmax, "phi": phi, "poros": phi, "MAT_POROS": phi,
+            "ful": ful, "fun_b4": ful, "FUN_B4": ful,
+            "alpha_unload": alpha_unload, "alpha6": alpha_unload, "MAT_ALPHA6": alpha_unload,
+            "eps_unload": eps_unload, "epsf2": eps_unload, "MAT_EPSF2": eps_unload,
+            "a": a, "exp1": a, "MAT_EXP1": a, "b": b, "exp2": b, "MAT_EXP2": b,
+            "m_func": m_func, "nfunc": m_func, "NFUNC": m_func,
+            "cutoff": cutoff, "MAT_CUTOFF": cutoff, "iinsta": iinsta, "MAT_Iinsta": iinsta,
+            "e_final": e_final, "efinal": e_final, "MAT_Efinal": e_final,
+            "epsi_final": epsi_final, "epsfinal": epsi_final, "MAT_Epsfinal": epsi_final,
+            "lamb": lamb, "lamda": lamb, "MAT_Lamda": lamb,
+            "visc": visc, "maxvisc": visc, "MAT_MaxVisc": visc,
+            "tol": tol, "MAT_Tol": tol,
+            "fscale_i": fscale_i, "epsilon_i": epsilon_i,
+            "funct_id_load": funct_id_load, "funct_id_unload": funct_id_unload,
+            "fscale": fscale_i, "epsilon": epsilon_i,
         }
     )
+
+
+read_mat_visc_tab = read_mat_law38
 
 
 def read_mat_law29(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -83178,6 +83305,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_BIMAT": read_mat,
     "BIMAT": read_mat,
     "MAT_LAW38": read_mat,
+    "LAW38": read_mat,
     "MAT_VISC_TAB": read_mat,
     "VISC_TAB": read_mat,
     "MAT_LAW29": read_mat,

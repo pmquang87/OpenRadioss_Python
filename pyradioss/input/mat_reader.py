@@ -625,6 +625,8 @@ class CfgCatalogue:
         "VISC_MAXW": "LAW34",
         "BOLTZMANN": "LAW34",
         "LAW34": "LAW34",
+        "VISC_TAB": "LAW38",
+        "LAW38": "LAW38",
     }
 
 

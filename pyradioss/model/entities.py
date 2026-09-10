@@ -10066,7 +10066,19 @@ class MatLaw38:
     lamb: float = 0.0
     visc: float = 0.0
     tol: float = 0.0
+    fscale_i: List[float] = field(default_factory=list)
+    epsilon_i: List[float] = field(default_factory=list)
+    funct_id_load: List[int] = field(default_factory=list)
+    funct_id_unload: List[int] = field(default_factory=list)
     title: str = ""
+
+    @property
+    def fscale(self) -> List[float]:
+        return self.fscale_i
+
+    @property
+    def epsilon(self) -> List[float]:
+        return self.epsilon_i
 
 
 MatViscTab = MatLaw38

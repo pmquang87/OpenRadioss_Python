@@ -73,6 +73,17 @@ from .law37_biphas import (solid_update as law37_solid_update,
                            consistent_solid_tangent as law37_solid_tangent)
 
 try:
+    from . import law38_visc_tab
+    from .law38_visc_tab import (solid_update as law38_solid_update,
+                                sound_speed as law38_sound_speed,
+                                consistent_solid_tangent as law38_solid_tangent)
+except ImportError:
+    law38_visc_tab = None
+    law38_solid_update = None
+    law38_sound_speed = None
+    law38_solid_tangent = None
+
+try:
     from . import law05_jwl
     from .law05_jwl import (solid_update as law05_solid_update,
                              sound_speed as law05_sound_speed,
@@ -216,9 +227,54 @@ def _register_law37():
 _register_law37()
 
 
+def _get_law38():
+    global law38_visc_tab, law38_solid_update, law38_sound_speed, law38_solid_tangent
+    if law38_visc_tab is None:
+        try:
+            from . import law38_visc_tab as _m
+            law38_visc_tab = _m
+            law38_solid_update = getattr(_m, "solid_update", None)
+            law38_sound_speed = getattr(_m, "sound_speed", None)
+            law38_solid_tangent = getattr(_m, "consistent_solid_tangent", None)
+        except ImportError:
+            pass
+    return law38_visc_tab
+
+
+def _register_law38():
+    _get_law38()
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = None
+        if law38_visc_tab is not None:
+            builder = getattr(law38_visc_tab, "build_law38", None)
+        if builder is None:
+            def _dynamic_law38_builder(rec):
+                mod = _get_law38()
+                if mod is not None:
+                    fn = getattr(mod, "build_law38", None)
+                    if fn is not None:
+                        return fn(rec)
+                raise NotImplementedError("LAW38 builder not available in law38_visc_tab")
+            builder = _dynamic_law38_builder
+        for k in (38, "38", "LAW38", "VISC_TAB", "MAT_LAW38", "MAT_VISC_TAB"):
+            MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law38()
+
+
+_STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
+    "uv38": (33,),
+}
+
+
 def register_materials():
     _get_law05()
     _get_law10()
+    _get_law38()
     for mod in (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,
                 law04_hyd_jcook, law06_hyd_visc, law10_soil, law19_fabric, law24_concrete,
                 law27_brittle, law28_honeycomb, law33_foamplas, law34_boltzmann, law35_kelvinmax,
@@ -254,6 +310,11 @@ def register_materials():
         if callable(fn):
             fn()
     _register_law37()
+    if law38_visc_tab is not None:
+        fn = getattr(law38_visc_tab, "_register", None)
+        if callable(fn):
+            fn()
+    _register_law38()
 
 
 def extra_shapes(mat, nip=None):
@@ -330,6 +391,9 @@ def extra_shapes(mat, nip=None):
     if mat.law in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or getattr(mat, "law_name", None) in ("LAW37", "BIPHAS", "BIPHASIC"):
         # M540: LAW37 (Biphasic fluid-gas) needs uv37 (5 variables per element: liquid mass density, rho2, rho1, alpha_v1, alpha_v2)
         shapes.update(uv37=(5,))
+    if mat.law in (38, "38", "LAW38", "VISC_TAB") or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB"):
+        # M541: LAW38 (VISC_TAB tabulated viscoelastic foam) needs 33 state variables (uv38)
+        shapes.update(eps38=(6,), uv38=_STATE_VAR_COUNT.get("uv38", (33,)), off38=())
     if mat.law == 4:
         shapes["temp"] = ()
     if getattr(mat, "law", None) in (5, "5", "LAW5", "JWL") or getattr(mat, "law_name", None) in ("LAW5", "JWL"):
@@ -357,9 +421,9 @@ def needs_env(mat) -> bool:
     ``rho``; LAW62's CIMAX sound-speed bound divides by the current
     density; LAW40's sound speed too; M40: LAW36 solids use the same
     total pressure as LAW44 — sigeps36.F P = BULK*AMU; M539: LAW34 air pressure;
-    M540: LAW37 biphasic liquid-gas density)."""
-    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 40, 44, 62, 70, 81)
-            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC"))
+    M540: LAW37 biphasic liquid-gas density; M541: LAW38 density and time)."""
+    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 44, 62, 70, 81)
+            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB"))
 
 
 def solid_update(mat, sig, deps, epsp, dt, extra=None):
@@ -444,6 +508,11 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
         raise NotImplementedError("LAW10 solid_update not available")
     if getattr(mat, "law", None) in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or getattr(mat, "law_name", None) in ("LAW37", "BIPHAS", "BIPHASIC"):
         return law37_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+    if getattr(mat, "law", None) in (38, "38", "LAW38", "VISC_TAB") or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB"):
+        _get_law38()
+        if law38_solid_update is not None:
+            return law38_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        raise NotImplementedError("LAW38 solid_update not available")
     raise NotImplementedError(f"material LAW{mat.law} not ported for solids")
 
 
@@ -467,6 +536,11 @@ def sound_speed(mat, rho=None, extra=None):
         return law34_boltzmann.sound_speed(mat, rho=rho, extra=extra)
     if law in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or law_name in ("LAW37", "BIPHAS", "BIPHASIC"):
         return law37_sound_speed(mat, rho=rho, extra=extra)
+    if law in (38, "38", "LAW38", "VISC_TAB") or law_name in ("LAW38", "VISC_TAB"):
+        _get_law38()
+        if law38_sound_speed is not None:
+            return law38_sound_speed(mat, rho=rho, extra=extra)
+        raise NotImplementedError("LAW38 sound_speed not available")
     if hasattr(mat, "sound_speed_solid"):
         return mat.sound_speed_solid()
     raise NotImplementedError(f"material LAW{law} does not implement sound_speed")
@@ -474,6 +548,8 @@ def sound_speed(mat, rho=None, extra=None):
 
 def shell_update(mat, sig, deps, epsp, dt, extra=None):
     """Dispatch a plane-stress (shell) update to the material's law."""
+    if getattr(mat, "law", None) in (38, "38", "LAW38", "VISC_TAB") or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB"):
+        raise NotImplementedError("LAW38 (VISC_TAB tabulated viscoelastic) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or getattr(mat, "law_name", None) in ("LAW37", "BIPHAS", "BIPHASIC"):
         raise NotImplementedError("LAW37 (biphasic fluid/gas) is implemented for 3D solid and SPH elements only.")
     if getattr(mat, "law", None) == 28 or getattr(mat, "law_name", None) in ("LAW28", "HONEYCOMB", "HONEYCOMB_SOL"):
@@ -603,10 +679,26 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
         raise NotImplementedError("LAW10 solid_tangent not available")
     if getattr(mat, "law", None) in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or getattr(mat, "law_name", None) in ("LAW37", "BIPHAS", "BIPHASIC"):
         return law37_solid_tangent(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
+    if getattr(mat, "law", None) in (38, "38", "LAW38", "VISC_TAB") or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB"):
+        _get_law38()
+        if law38_solid_tangent is not None:
+            return law38_solid_tangent(mat, sig=sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
+        raise NotImplementedError("LAW38 solid_tangent not available")
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
-        f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW34, LAW35, LAW36, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
+        f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW34, LAW35, LAW36, LAW38, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
         f"are ported; LAW27 is deferred — see PORTING_GUIDE M14)")
+
+
+consistent_solid_tangent = solid_tangent
+
+
+def resolve_curves(mat, model, log=None):
+    """Wire curve resolution hook for /FUNCT references so model.curves can be accessed by the kernel."""
+    if getattr(mat, "law", None) in (38, "38", "LAW38", "VISC_TAB") or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB"):
+        _get_law38()
+        if law38_visc_tab is not None and hasattr(law38_visc_tab, "resolve"):
+            return law38_visc_tab.resolve(mat, model, log)
 
 
 def shell_membrane_tangent(mat):

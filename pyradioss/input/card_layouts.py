@@ -251,6 +251,59 @@ MAT_BIPHASIC_CFG_1 = MAT_LAW37_1
 MAT_BIPHASIC_CFG_2 = MAT_LAW37_2
 MAT_BIPHASIC_CFG_3 = MAT_LAW37_3
 
+# M541: /MAT/LAW38 (/MAT/VISC_TAB) card layout constants citing radioss110/MAT/matl38_visc_tab.cfg
+MAT_LAW38_1 = (20, 20)  # MAT_RHO, Refer_Rho
+MAT_LAW38_2 = (20, 20, 20, 20, 10, 10)  # MAT_E, MAT_NU, MAT_NUt, MAT_RV, MAT_IFLAG, ITOTAL
+MAT_LAW38_3 = (20, 20, 20, 10, 10, 20)  # MAT_RELX, MAT_HYST, DAMP1, Gflag, Vflag, MAT_Theta
+MAT_LAW38_4 = (10, 10, 20)  # MAT_Kair, FUN_A4, MAT_PScale
+MAT_LAW38_5 = (20, 20, 20, 20)  # MAT_P0, MAT_PR, MAT_PMAX, MAT_POROS
+MAT_LAW38_6 = (10, 10, 20, 20, 20, 20)  # FUN_B4, blank, MAT_ALPHA6, MAT_EPSF2, MAT_EXP1, MAT_EXP2
+MAT_LAW38_7 = (10, 10, 20, 10)  # NFUNC, blank, MAT_CUTOFF, MAT_Iinsta
+MAT_LAW38_8 = (20, 20, 20, 20, 20)  # MAT_Efinal, MAT_Epsfinal, MAT_Lamda, MAT_MaxVisc, MAT_Tol
+MAT_LAW38_9 = (20, 20, 20, 20, 20)  # Fscale_i (up to 5 entries)
+MAT_LAW38_10 = (20, 20, 20, 20, 20)  # Epsilon_i (up to 5 entries)
+MAT_LAW38_11 = (10, 10, 10, 10, 10)  # Funct_Id_Load (up to 5 entries)
+MAT_LAW38_12 = (10, 10, 10, 10, 10)  # Funct_Id_UnLoad (up to 5 entries)
+
+MAT_LAW38_CFG_1 = MAT_LAW38_1
+MAT_LAW38_CFG_2 = MAT_LAW38_2
+MAT_LAW38_CFG_3 = MAT_LAW38_3
+MAT_LAW38_CFG_4 = MAT_LAW38_4
+MAT_LAW38_CFG_5 = MAT_LAW38_5
+MAT_LAW38_CFG_6 = MAT_LAW38_6
+MAT_LAW38_CFG_7 = MAT_LAW38_7
+MAT_LAW38_CFG_8 = MAT_LAW38_8
+MAT_LAW38_CFG_9 = MAT_LAW38_9
+MAT_LAW38_CFG_10 = MAT_LAW38_10
+MAT_LAW38_CFG_11 = MAT_LAW38_11
+MAT_LAW38_CFG_12 = MAT_LAW38_12
+
+MAT_VISC_TAB_1 = MAT_LAW38_1
+MAT_VISC_TAB_2 = MAT_LAW38_2
+MAT_VISC_TAB_3 = MAT_LAW38_3
+MAT_VISC_TAB_4 = MAT_LAW38_4
+MAT_VISC_TAB_5 = MAT_LAW38_5
+MAT_VISC_TAB_6 = MAT_LAW38_6
+MAT_VISC_TAB_7 = MAT_LAW38_7
+MAT_VISC_TAB_8 = MAT_LAW38_8
+MAT_VISC_TAB_9 = MAT_LAW38_9
+MAT_VISC_TAB_10 = MAT_LAW38_10
+MAT_VISC_TAB_11 = MAT_LAW38_11
+MAT_VISC_TAB_12 = MAT_LAW38_12
+
+MAT_VISC_TAB_CFG_1 = MAT_LAW38_1
+MAT_VISC_TAB_CFG_2 = MAT_LAW38_2
+MAT_VISC_TAB_CFG_3 = MAT_LAW38_3
+MAT_VISC_TAB_CFG_4 = MAT_LAW38_4
+MAT_VISC_TAB_CFG_5 = MAT_LAW38_5
+MAT_VISC_TAB_CFG_6 = MAT_LAW38_6
+MAT_VISC_TAB_CFG_7 = MAT_LAW38_7
+MAT_VISC_TAB_CFG_8 = MAT_LAW38_8
+MAT_VISC_TAB_CFG_9 = MAT_LAW38_9
+MAT_VISC_TAB_CFG_10 = MAT_LAW38_10
+MAT_VISC_TAB_CFG_11 = MAT_LAW38_11
+MAT_VISC_TAB_CFG_12 = MAT_LAW38_12
+
 
 
 # ============================================================================
@@ -2880,22 +2933,57 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_BIMAT_1": [20, 20],
     "MAT_BIMAT_2": [10, 10],
     "MAT_BIMAT_3": [20, 20],
-    "MAT_LAW38_1": [20, 20],
-    "MAT_LAW38_2": [20, 20, 20, 20, 10, 10],
-    "MAT_LAW38_3": [20, 20, 20, 10, 10, 20],
-    "MAT_LAW38_4": [10, 10, 20],
-    "MAT_LAW38_5": [20, 20, 20, 20],
-    "MAT_LAW38_6": [10, 10, 20, 20, 20, 20],
-    "MAT_LAW38_7": [10, 10, 20, 10],
-    "MAT_LAW38_8": [20, 20, 20, 20, 20],
-    "MAT_VISC_TAB_1": [20, 20],
-    "MAT_VISC_TAB_2": [20, 20, 20, 20, 10, 10],
-    "MAT_VISC_TAB_3": [20, 20, 20, 10, 10, 20],
-    "MAT_VISC_TAB_4": [10, 10, 20],
-    "MAT_VISC_TAB_5": [20, 20, 20, 20],
-    "MAT_VISC_TAB_6": [10, 10, 20, 20, 20, 20],
-    "MAT_VISC_TAB_7": [10, 10, 20, 10],
-    "MAT_VISC_TAB_8": [20, 20, 20, 20, 20],
+    "MAT_LAW38_1": _LayoutList([20, 20]),
+    "MAT_LAW38_2": _LayoutList([20, 20, 20, 20, 10, 10]),
+    "MAT_LAW38_3": _LayoutList([20, 20, 20, 10, 10, 20]),
+    "MAT_LAW38_4": _LayoutList([10, 10, 20]),
+    "MAT_LAW38_5": _LayoutList([20, 20, 20, 20]),
+    "MAT_LAW38_6": _LayoutList([10, 10, 20, 20, 20, 20]),
+    "MAT_LAW38_7": _LayoutList([10, 10, 20, 10]),
+    "MAT_LAW38_8": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_LAW38_9": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_LAW38_10": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_LAW38_11": _LayoutList([10, 10, 10, 10, 10]),
+    "MAT_LAW38_12": _LayoutList([10, 10, 10, 10, 10]),
+
+    "MAT_LAW38_CFG_1": _LayoutList([20, 20]),
+    "MAT_LAW38_CFG_2": _LayoutList([20, 20, 20, 20, 10, 10]),
+    "MAT_LAW38_CFG_3": _LayoutList([20, 20, 20, 10, 10, 20]),
+    "MAT_LAW38_CFG_4": _LayoutList([10, 10, 20]),
+    "MAT_LAW38_CFG_5": _LayoutList([20, 20, 20, 20]),
+    "MAT_LAW38_CFG_6": _LayoutList([10, 10, 20, 20, 20, 20]),
+    "MAT_LAW38_CFG_7": _LayoutList([10, 10, 20, 10]),
+    "MAT_LAW38_CFG_8": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_LAW38_CFG_9": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_LAW38_CFG_10": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_LAW38_CFG_11": _LayoutList([10, 10, 10, 10, 10]),
+    "MAT_LAW38_CFG_12": _LayoutList([10, 10, 10, 10, 10]),
+
+    "MAT_VISC_TAB_1": _LayoutList([20, 20]),
+    "MAT_VISC_TAB_2": _LayoutList([20, 20, 20, 20, 10, 10]),
+    "MAT_VISC_TAB_3": _LayoutList([20, 20, 20, 10, 10, 20]),
+    "MAT_VISC_TAB_4": _LayoutList([10, 10, 20]),
+    "MAT_VISC_TAB_5": _LayoutList([20, 20, 20, 20]),
+    "MAT_VISC_TAB_6": _LayoutList([10, 10, 20, 20, 20, 20]),
+    "MAT_VISC_TAB_7": _LayoutList([10, 10, 20, 10]),
+    "MAT_VISC_TAB_8": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_VISC_TAB_9": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_VISC_TAB_10": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_VISC_TAB_11": _LayoutList([10, 10, 10, 10, 10]),
+    "MAT_VISC_TAB_12": _LayoutList([10, 10, 10, 10, 10]),
+
+    "MAT_VISC_TAB_CFG_1": _LayoutList([20, 20]),
+    "MAT_VISC_TAB_CFG_2": _LayoutList([20, 20, 20, 20, 10, 10]),
+    "MAT_VISC_TAB_CFG_3": _LayoutList([20, 20, 20, 10, 10, 20]),
+    "MAT_VISC_TAB_CFG_4": _LayoutList([10, 10, 20]),
+    "MAT_VISC_TAB_CFG_5": _LayoutList([20, 20, 20, 20]),
+    "MAT_VISC_TAB_CFG_6": _LayoutList([10, 10, 20, 20, 20, 20]),
+    "MAT_VISC_TAB_CFG_7": _LayoutList([10, 10, 20, 10]),
+    "MAT_VISC_TAB_CFG_8": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_VISC_TAB_CFG_9": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_VISC_TAB_CFG_10": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_VISC_TAB_CFG_11": _LayoutList([10, 10, 10, 10, 10]),
+    "MAT_VISC_TAB_CFG_12": _LayoutList([10, 10, 10, 10, 10]),
     "MAT_LAW29_1": [20, 20],
     "MAT_LAW29_2": [100],
     "MAT_LAW29_3": [10, 10, 10, 10, 10, 10, 10, 10],

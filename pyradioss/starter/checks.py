@@ -59,10 +59,10 @@ _NULL_RHO0_OK_LAWS = frozenset({0} | _MULTIMAT_ALE_LAWS)
 # and their density divisions are guarded exactly as hm_read_mat00.F
 # guards its own — see elements/truss.py and elements/beam_type3.py.
 _ALLOWED_LAWS = {
-    "bricks": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 40, 42, 44, 62, 70, 81, 83, 999},
-    "tetras": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 40, 42, 44, 62, 70, 81, 999},
-    "penta6": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 40, 42, 44, 62, 70, 81, 83, 999},
-    "pyra5": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 40, 42, 44, 62, 70, 81, 83, 999},
+    "bricks": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 44, 62, 70, 81, 83, 999},
+    "tetras": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 44, 62, 70, 81, 999},
+    "penta6": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 44, 62, 70, 81, 83, 999},
+    "pyra5": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 42, 44, 62, 70, 81, 83, 999},
     "shells": {0, 1, 2, 3, 19, 27, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 44},
     # QBAT (Ishell=12, M41): the laws the layered kernel reuses from the
     # BT plumbing; no orthotropic (LAW19) shell_ortho wiring yet
@@ -195,6 +195,126 @@ def check_mat_law37(mat: Any, log: MessageLog) -> None:
         log.error(f"/MAT/LAW37/{mid}: gas shear viscosity nu_g must be >= 0 (got {nu_g:g})", "MAT CHECK")
 
 
+def check_mat_law38(mat: Any, log: MessageLog) -> None:
+    """Validate /MAT/LAW38 (/MAT/VISC_TAB) parameter bounds (M541).
+
+    Required checks:
+      - rho0 > 0
+      - e > 0
+      - 0 <= nu_t < 0.5 and 0 <= nu_c < 0.5
+      - 1 <= nfunc <= 5
+      - If air content active (kcompair == 1): 0 <= phi < 1 and P0 >= 0
+    """
+    mid = getattr(mat, "id", 0)
+    params = getattr(mat, "params", {}) or {}
+
+    def _extract(keys: list[str], default: float = 0.0) -> float:
+        for k in keys:
+            if hasattr(mat, k):
+                val = getattr(mat, k)
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (TypeError, ValueError):
+                        pass
+            if isinstance(params, dict) and k in params:
+                val = params[k]
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (TypeError, ValueError):
+                        pass
+        return default
+
+    # 1. Density rho0 > 0
+    rho0 = getattr(mat, "rho0", None)
+    if rho0 is None:
+        rho0 = _extract(["rho0", "rho", "MAT_RHO", "RHO", "RHO0", "Refer_Rho", "rhor"], default=0.0)
+    else:
+        try:
+            rho0 = float(rho0)
+        except (TypeError, ValueError):
+            rho0 = 0.0
+
+    if rho0 <= 0.0:
+        log.error(f"/MAT/LAW38/{mid}: initial density RHO must be > 0 (got {rho0:g})", "MAT CHECK")
+
+    # 2. Young's modulus e > 0
+    e = _extract(["e", "E", "MAT_E", "young"], default=0.0)
+    if e <= 0.0:
+        log.error(f"/MAT/LAW38/{mid}: Young's modulus E must be > 0 (got {e:g})", "MAT CHECK")
+
+    # 3. Poisson's ratios: 0 <= nu_t < 0.5 and 0 <= nu_c < 0.5
+    nu_t = _extract(["nu_t", "nu", "NU_t", "MAT_NU", "MAT_NUt", "vt", "VT"], default=0.0)
+    nu_c = _extract(["nu_c", "NU_c", "MAT_NUc", "vc", "VC"], default=nu_t)
+    for k in ["nu_c", "NU_c", "MAT_NUc", "vc", "VC"]:
+        if hasattr(mat, k) and getattr(mat, k) is not None:
+            try:
+                nu_c = float(getattr(mat, k))
+                break
+            except (TypeError, ValueError):
+                pass
+        if isinstance(params, dict) and k in params and params[k] is not None:
+            try:
+                nu_c = float(params[k])
+                break
+            except (TypeError, ValueError):
+                pass
+
+    if nu_t < 0.0 or nu_t >= 0.5:
+        log.error(f"/MAT/LAW38/{mid}: tensile Poisson's ratio nu_t must be in [0, 0.5) (got {nu_t:g})", "MAT CHECK")
+    if nu_c < 0.0 or nu_c >= 0.5:
+        log.error(f"/MAT/LAW38/{mid}: compressive Poisson's ratio nu_c must be in [0, 0.5) (got {nu_c:g})", "MAT CHECK")
+
+    # 4. Number of functions: 1 <= nfunc <= 5
+    nfunc = None
+    for k in ["nfunc", "NFUNC", "mfunc", "MFUNC", "n_func", "num_curves"]:
+        if hasattr(mat, k) and getattr(mat, k) is not None:
+            try:
+                nfunc = int(getattr(mat, k))
+                break
+            except (TypeError, ValueError):
+                pass
+        if isinstance(params, dict) and k in params and params[k] is not None:
+            try:
+                nfunc = int(params[k])
+                break
+            except (TypeError, ValueError):
+                pass
+    if nfunc is None:
+        curves = getattr(mat, "curves", None) or (params.get("curves", None) if isinstance(params, dict) else None) or (params.get("funct_ids", None) if isinstance(params, dict) else None)
+        if isinstance(curves, (list, tuple)):
+            nfunc = len(curves)
+        else:
+            nfunc = 1
+
+    if nfunc < 1 or nfunc > 5:
+        log.error(f"/MAT/LAW38/{mid}: number of functions nfunc must be between 1 and 5 (got {nfunc})", "MAT CHECK")
+
+    # 5. Air content active (kcompair == 1): 0 <= phi < 1 and P0 >= 0
+    kcompair = 0
+    for k in ["kcompair", "KCOMPAIR", "MAT_Kair", "kair", "KAIR"]:
+        if hasattr(mat, k) and getattr(mat, k) is not None:
+            try:
+                kcompair = int(getattr(mat, k))
+                break
+            except (TypeError, ValueError):
+                pass
+        if isinstance(params, dict) and k in params and params[k] is not None:
+            try:
+                kcompair = int(params[k])
+                break
+            except (TypeError, ValueError):
+                pass
+
+    if kcompair == 1:
+        phi = _extract(["phi", "PHI", "poros", "porosity", "MAT_POROS"], default=0.0)
+        p0 = _extract(["p0", "P0", "p_atm", "MAT_P0"], default=0.0)
+        if phi < 0.0 or phi >= 1.0:
+            log.error(f"/MAT/LAW38/{mid}: porosity phi must be in [0, 1) when air content is active (got {phi:g})", "MAT CHECK")
+        if p0 < 0.0:
+            log.error(f"/MAT/LAW38/{mid}: initial air pressure P0 must be >= 0 (got {p0:g})", "MAT CHECK")
+
 
 def check_model(model: Model, log: MessageLog) -> None:
     if model.numnod == 0:
@@ -253,6 +373,15 @@ def check_model(model: Model, log: MessageLog) -> None:
                             f"(M37) — the Engine will refuse to run "
                             f"this model", "MAT CHECK")
                 continue
+            if (mat.law in (38, "38", "LAW38", "VISC_TAB")
+                    or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB")):
+                if name in ("shells", "shells_qbat", "shells_qeph", "sh3n", "trusses", "beams"):
+                    log.error(
+                        f"/MAT/LAW38/{mat.id} (/MAT/VISC_TAB) is not supported for {name} elements "
+                        f"(solids only: bricks, tetras, penta6, pyra5)",
+                        "MAT CHECK",
+                    )
+                    continue
             if mat.law not in allowed:
                 log.error(f"material LAW{mat.law} (/MAT {mat.id}) is not "
                           f"ported for {name} elements (supported: "
@@ -288,6 +417,14 @@ def check_model(model: Model, log: MessageLog) -> None:
             )
             if not is_biquad:
                 check_mat_law37(mat37, log)
+
+    # M541: Material LAW38 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in (38, "38", "LAW38", "VISC_TAB") or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB"):
+            check_mat_law38(mat, log)
+    for mid, mat38 in getattr(model, "mat_law38s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law38(mat38, log)
 
 
     # M38: element groups that reference a parsed-but-not-implemented
