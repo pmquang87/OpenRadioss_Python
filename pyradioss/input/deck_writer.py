@@ -3370,6 +3370,7 @@ def read_lines_to_blocks(lines: Sequence[str]) -> List[KeywordBlock]:
                 blocks.append(current)
             parts = [p for p in stripped[1:].split("/") if p != ""]
             user_id: Optional[int] = None
+            unit_id: Optional[int] = None
             kw_parts = parts
             if len(parts) > 1:
                 try:
@@ -3377,9 +3378,17 @@ def read_lines_to_blocks(lines: Sequence[str]) -> List[KeywordBlock]:
                     kw_parts = parts[:-1]
                 except ValueError:
                     user_id = None
+            if user_id is not None and len(parts) > 2:
+                try:
+                    first = int(parts[-2])
+                except ValueError:
+                    first = None
+                if first is not None:
+                    user_id, unit_id = first, user_id
+                    kw_parts = parts[:-2]
             current = KeywordBlock(
                 keyword="/".join(p.upper() for p in kw_parts),
-                parts=parts, user_id=user_id, cards=[],
+                parts=parts, user_id=user_id, unit_id=unit_id, cards=[],
                 source=f"<memory>:{lineno}")
             continue
         if current is None:
