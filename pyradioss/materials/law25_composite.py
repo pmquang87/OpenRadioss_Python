@@ -313,18 +313,36 @@ def build_law25(rec: Any = None, **kwargs: Any) -> Material:
     g23 = _get(["MAT_GBC", "g23", "G23"], 0.0)
     g31 = _get(["MAT_GCA", "g31", "G31"], 0.0)
 
-    # Failure limits
+    # Failure limits (read_mat25_tsaiwu.F90 lines 253-277: 0.0 defaults to infinity)
     eps_f1 = _get(["MAT_EPSF1", "eps_f1", "EPS_F1", "epsf1"], _INF)
+    if eps_f1 <= 0.0:
+        eps_f1 = _INF
     eps_f2 = _get(["MAT_EPSF2", "eps_f2", "EPS_F2", "epsf2"], _INF)
+    if eps_f2 <= 0.0:
+        eps_f2 = _INF
     eps_t1 = _get(["MAT_EPST1", "eps_t1", "EPS_T1", "epst1"], _INF)
+    if eps_t1 <= 0.0:
+        eps_t1 = _INF
     eps_m1 = _get(["MAT_EPSM1", "eps_m1", "EPS_M1", "epsm1"], 1.1 * _INF)
+    if eps_m1 <= 0.0:
+        eps_m1 = 1.1 * _INF
     eps_t2 = _get(["MAT_EPST2", "eps_t2", "EPS_T2", "epst2"], _INF)
+    if eps_t2 <= 0.0:
+        eps_t2 = _INF
     eps_m2 = _get(["MAT_EPSM2", "eps_m2", "EPS_M2", "epsm2"], 1.1 * _INF)
+    if eps_m2 <= 0.0:
+        eps_m2 = 1.1 * _INF
     dmax = _get(["MAT_DAMAGE", "dmax", "DMAX"], 0.999)
+    if dmax <= 0.0:
+        dmax = 0.999
 
     # Hardening / plasticity
     wpmax = _get(["WPMAX", "wpmax", "wplamx"], _INF)
+    if wpmax <= 0.0:
+        wpmax = _INF
     wpref = _get(["WPREF", "wpref", "wplaref"], 1.0)
+    if wpref <= 0.0:
+        wpref = 1.0
     ioff = _geti(["Itype", "ioff", "IOFF"], 0)
     ratio = _get(["MAT_R00", "ratio"], 1.0)
 
@@ -332,11 +350,15 @@ def build_law25(rec: Any = None, **kwargs: Any) -> Material:
     b = _get(["MAT_BETA", "b", "B", "beta"], 0.0)
     n = _get(["MAT_HARD", "n", "N", "hard"], 1.0)
     fmax = _get(["MAT_SIG", "fmax", "FMAX"], _INF)
+    if fmax <= 0.0:
+        fmax = _INF
     sig_1yt = _get(["MAT_SIGYT1", "sig_1yt", "sigyt1"], _INF)
     sig_2yt = _get(["MAT_SIGYT2", "sig_2yt", "sigyt2"], _INF)
     sig_1yc = _get(["MAT_SIGYC1", "MAT_SIG1_yc", "sig_1yc", "sigyc1"], _INF)
     sig_2yc = _get(["MAT_SIGYC2", "MAT_SIG2_yc", "sig_2yc", "sigyc2"], _INF)
     alpha = _get(["MAT_ALPHA", "alpha", "ALPHA"], 1.0)
+    if alpha <= 0.0:
+        alpha = 1.0
     sig_12 = _get(["MAT_SIG12", "sig12", "SIG12", "sig_12"], _INF)
     sig_12yc = _get(["MAT_SIGC12", "sig_12yc", "sigc12", "sigyc12"], sig_12)
     sig_12yt = _get(["MAT_SIGT12", "MAT_SIG12_yt", "sig_12yt", "sigt12", "sigyt12"], sig_12)
@@ -595,8 +617,6 @@ def build_law25(rec: Any = None, **kwargs: Any) -> Material:
         law_name="LAW25",
         params=params,
     )
-    mat.sound_speed_solid = lambda: c_sound
-    mat.sound_speed_shell = lambda: c_sound
     return mat
 
 
@@ -818,6 +838,13 @@ def consistent_shell_tangent(
 
     d1, d2, off = _extract_extra_state(extra, n)
 
+    wpla_arr = None
+    if extra is not None and isinstance(extra, dict):
+        for wp_key in ("wpla25", "wpla"):
+            if wp_key in extra and extra[wp_key] is not None:
+                wpla_arr = np.asarray(extra[wp_key], dtype=np.float64).flatten()
+                break
+
     epsp_arr = None
     if epsp is not None:
         epsp_arr = np.asarray(epsp, dtype=np.float64).flatten()
@@ -859,7 +886,15 @@ def consistent_shell_tangent(
             [0.0, 0.0, g12_eff],
         ], dtype=np.float64)
 
-        wp = float(epsp_arr[i]) if (epsp_arr is not None and i < len(epsp_arr)) else 0.0
+        wp = 0.0
+        if epsp_arr is not None and i < len(epsp_arr) and epsp_arr[i] > 0.0:
+            wp = float(epsp_arr[i])
+        elif wpla_arr is not None:
+            if len(wpla_arr) == 1 and n > 1:
+                wp = float(wpla_arr[0])
+            elif i < len(wpla_arr):
+                wp = float(wpla_arr[i])
+
         fyld = (1.0 + b_val * (wp ** n_val)) if wp > 0.0 else 1.0
         fyld = min(fmax_val, fyld)
 
@@ -898,11 +933,14 @@ def consistent_shell_tangent(
             m_cel = m_grad @ c_el
             m_dot_t = float(m_grad @ t_tr)
 
-            h_hard = 0.0
-            if wp > 0.0 and b_val > 0.0:
-                h_hard = (s_ret[0] * m_grad[0] + s_ret[1] * m_grad[1] + 2.0 * s_ret[2] * m_grad[2]) * n_val * b_val * (wp ** (n_val - 1.0))
+            if deps_2d is not None and i < len(deps_2d):
+                denom = m_dot_t
+            else:
+                h_hard = 0.0
+                if wp > 0.0 and b_val > 0.0:
+                    h_hard = (s_ret[0] * m_grad[0] + s_ret[1] * m_grad[1] + 2.0 * s_ret[2] * m_grad[2]) * n_val * b_val * (wp ** (n_val - 1.0))
+                denom = m_dot_t + h_hard
 
-            denom = m_dot_t + h_hard
             if denom > _EM20:
                 c_ep = beta * (c_el - np.outer(t_tr, m_cel) / denom)
                 if symmetric:
@@ -1012,6 +1050,13 @@ def consistent_solid_tangent(
 
     d1, d2, off = _extract_extra_state(extra, n)
 
+    wpla_arr = None
+    if extra is not None and isinstance(extra, dict):
+        for wp_key in ("wpla25", "wpla"):
+            if wp_key in extra and extra[wp_key] is not None:
+                wpla_arr = np.asarray(extra[wp_key], dtype=np.float64).flatten()
+                break
+
     epsp_arr = None
     if epsp is not None:
         epsp_arr = np.asarray(epsp, dtype=np.float64).flatten()
@@ -1068,7 +1113,15 @@ def consistent_solid_tangent(
             [0.0, 0.0, g12_eff],
         ], dtype=np.float64)
 
-        wp = float(epsp_arr[i]) if (epsp_arr is not None and i < len(epsp_arr)) else 0.0
+        wp = 0.0
+        if epsp_arr is not None and i < len(epsp_arr) and epsp_arr[i] > 0.0:
+            wp = float(epsp_arr[i])
+        elif wpla_arr is not None:
+            if len(wpla_arr) == 1 and n > 1:
+                wp = float(wpla_arr[0])
+            elif i < len(wpla_arr):
+                wp = float(wpla_arr[i])
+
         fyld = (1.0 + b_val * (wp ** n_val)) if wp > 0.0 else 1.0
         fyld = min(fmax_val, fyld)
 
@@ -1108,11 +1161,14 @@ def consistent_solid_tangent(
             m_cel_in = m_in @ c_el_in
             m_dot_t = float(m_in @ t_in)
 
-            h_hard = 0.0
-            if wp > 0.0 and b_val > 0.0:
-                h_hard = (s_ret_in[0] * m_in[0] + s_ret_in[1] * m_in[1] + 2.0 * s_ret_in[2] * m_in[2]) * n_val * b_val * (wp ** (n_val - 1.0))
+            if deps_2d is not None and i < len(deps_2d):
+                denom = m_dot_t
+            else:
+                h_hard = 0.0
+                if wp > 0.0 and b_val > 0.0:
+                    h_hard = (s_ret_in[0] * m_in[0] + s_ret_in[1] * m_in[1] + 2.0 * s_ret_in[2] * m_in[2]) * n_val * b_val * (wp ** (n_val - 1.0))
+                denom = m_dot_t + h_hard
 
-            denom = m_dot_t + h_hard
             if denom > _EM20:
                 c_ep_in = beta * (c_el_in - np.outer(t_in, m_cel_in) / denom)
                 c_algo = c_el.copy()

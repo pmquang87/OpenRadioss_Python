@@ -791,7 +791,7 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
 # Consistent tangents for the implicit solver (M8)
 # ----------------------------------------------------------------------------
 
-def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
+def solid_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
     """Dispatch the (n, 6, 6) consistent solid tangent for the implicit
     solve. LAW1 returns the constant elastic C broadcast over the group;
     LAW2 returns the CONSISTENT (algorithmic) elastoplastic tangent of the
@@ -934,7 +934,7 @@ def shell_membrane_tangent(mat):
         f"LAW3 plas_bost, LAW19 fabric, LAW34 Boltzmann, LAW32 Hill and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")
 
 
-def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
+def shell_layer_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
     """Dispatch the (n, 3, 3) consistent PLANE-STRESS tangent of one
     through-thickness layer for the implicit shell tangents (M11). LAW1
     broadcasts the elastic matrix; LAW2 returns the CONSISTENT (algorithmic)
