@@ -477,6 +477,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             st["off"][sl] = np.minimum(st["off"][sl], extra["off38"])
         elif "off12" in extra:
             st["off"][sl] = np.minimum(st["off"][sl], extra["off12"])
+        elif "off14" in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra["off14"])
         elif "off" in extra:
             st["off"][sl] = extra["off"]
 

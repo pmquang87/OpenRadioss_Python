@@ -40648,6 +40648,7 @@ def read_mat_compso(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         hard=cn, cn=cn, sig_max=fmax, fmax=fmax, wpref=wplaref, wplaref=wplaref,
         sigyt1=sigyt1, sigyt2=sigyt2, sigyc1=sigyc1, sigyc2=sigyc2,
         sigt12=sigt12, sigc12=sigc12, sigt23=sigt23, sigc23=sigc23,
+        sigyt12=sigt12, sigyc12=sigc12, sigyt23=sigt23, sigyc23=sigc23,
         alpha_fib=alpha, alpha=alpha, e_fib=efib, efib=efib, src=cc, cc=cc,
         srp=eps0, eps0=eps0, strflag=strflag, icc=strflag,
         title=title, law_name=law_name, law=14

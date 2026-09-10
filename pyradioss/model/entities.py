@@ -9090,6 +9090,10 @@ class MatLaw14:
     sigc12: float = 0.0
     sigt23: float = 0.0
     sigc23: float = 0.0
+    sigyt12: float = 0.0
+    sigyc12: float = 0.0
+    sigyt23: float = 0.0
+    sigyc23: float = 0.0
     alpha_fib: float = 0.0
     alpha: float = 0.0
     e_fib: float = 0.0
