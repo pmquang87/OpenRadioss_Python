@@ -644,6 +644,9 @@ class CfgCatalogue:
         "COMP_3D": "LAW12",
         "3PARBI": "LAW12",
         "RAGAB": "LAW12",
+        "LAW14": "LAW14",
+        "COMPSO": "LAW14",
+        "COMP_SOL": "LAW14",
     }
 
 

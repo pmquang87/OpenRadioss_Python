@@ -496,7 +496,7 @@ def register_materials():
     _get_law32()
     _get_law38()
     for mod in (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,
-                law04_hyd_jcook, law06_hyd_visc, law10_soil, law12_comp3d, law15_chang, law19_fabric, law22_dama, law24_concrete,
+                law04_hyd_jcook, law06_hyd_visc, law10_soil, law12_comp3d, law14_compso, law15_chang, law19_fabric, law22_dama, law24_concrete,
                 law25_composite, law27_brittle, law28_honeycomb, law33_foamplas, law34_boltzmann, law35_kelvinmax,
                 law36_tabulated, law37_biphas, law40_kelvinmax, law42_ogden, law44_cowper,
                 law62_hypervisco, law70_tabfoam, law81_druckerprager,
@@ -506,6 +506,7 @@ def register_materials():
         if callable(fn):
             fn()
     _register_law12()
+    _register_law14()
     _register_law15()
     _register_law22()
     if law05_jwl is not None:
@@ -642,6 +643,8 @@ def extra_shapes(mat, nip=None):
         shapes.update(mu_bak=(), epxe=(), p_old=())
     if getattr(mat, "law", None) in (12, "12", "LAW12", "3D_COMP", "COMP_3D") or getattr(mat, "law_name", None) in ("12", "LAW12", "3D_COMP", "COMP_3D"):
         shapes.update(law12_comp3d.extra_shapes(mat, nip))
+    if getattr(mat, "law", None) in (14, "14", "LAW14", "COMPSO", "COMP_SOL") or getattr(mat, "law_name", None) in ("14", "LAW14", "COMPSO", "COMP_SOL"):
+        shapes.update(law14_compso.extra_shapes(mat, nip))
     if getattr(mat, "law", None) in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG") or getattr(mat, "law_name", None) in ("15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG"):
         shapes.update(law15_chang.extra_shapes(mat, nip))
     if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):

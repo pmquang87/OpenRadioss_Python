@@ -1179,6 +1179,7 @@ class Model:
         self.mat_grays = self.mat_law16s
         self.mat_camclays = self.mat_law14s
         self.mat_compsos = self.mat_law14s
+        self.mat_comp_sols = self.mat_law14s
         self.mat_law59s: Dict[int, MatLaw59] = {}                   # /MAT/LAW59, /MAT/CONNECT (M189)
         self.mat_connects = self.mat_law59s
         self.mat_law64s: Dict[int, MatLaw64] = {}                   # /MAT/LAW64, /MAT/TRANSFO_MART (M189)

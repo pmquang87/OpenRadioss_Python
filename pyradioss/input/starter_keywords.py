@@ -37300,12 +37300,12 @@ def read_mat_cam_clay(block: KeywordBlock, model: Model, log: MessageLog) -> Non
 
     if block.fixed:
         if len(valid_cards) > 0:
-            f0 = valid_cards[0].cut("MAT_LAW14_1")
+            f0 = valid_cards[0].cut("MAT_CAM_CLAY_1")
             rho0 = _safe_float(f0[0]) if len(f0) > 0 else 0.0
             g = _safe_float(f0[1]) if len(f0) > 1 else 0.0
             nu = _safe_float(f0[2]) if len(f0) > 2 else 0.0
         if len(valid_cards) > 1:
-            f1 = valid_cards[1].cut("MAT_LAW14_2")
+            f1 = valid_cards[1].cut("MAT_CAM_CLAY_2")
             m = _safe_float(f1[0]) if len(f1) > 0 else 0.0
             lamda = _safe_float(f1[1]) if len(f1) > 1 else 0.0
             kappa = _safe_float(f1[2]) if len(f1) > 2 else 0.0
@@ -37326,7 +37326,7 @@ def read_mat_cam_clay(block: KeywordBlock, model: Model, log: MessageLog) -> Non
             pc0 = _safe_float(t1[4]) if len(t1) > 4 else 0.0
 
     mat = MatLaw14(
-        id=mat_id, rho0=rho0, g=g, nu=nu, m=m, lamda=lamda, kappa=kappa, e0=e0, pc0=pc0, title=title
+        id=mat_id, rho0=rho0, g=g, nu=nu, m=m, lamda=lamda, lambda_=lamda, kappa=kappa, e0=e0, pc0=pc0, title=title
     )
     model.mat_law14s[mat_id] = mat
     nu_val = nu if 0.0 <= nu < 0.5 else 0.3
@@ -40490,8 +40490,8 @@ def read_mat_law16(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_compso(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/COMPSO`` or ``/MAT/COMP_SOL`` (M189): Composite solid orthotropic material model."""
-    from ..model.entities import MatLaw14, Material
+    """``/MAT/COMPSO`` or ``/MAT/COMP_SOL`` (M189/M547): Composite solid orthotropic material model."""
+    from ..model.entities import MatLaw14
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
@@ -40500,12 +40500,15 @@ def read_mat_compso(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
 
     rho0, rhor = 0.0, 0.0
-    ea, eb, ec, prab, prbc, prca, gab, gbc, gca = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
-    sigt1, sigt2, sigt3, damage, beta = 0.0, 0.0, 0.0, 0.0, 0.0
-    hard, sig_max, sigyt1, sigyt2, sigyc1 = 0.0, 0.0, 0.0, 0.0, 0.0
-    sigyc2, sigt12, sigt23, sigc12, sigc23 = 0.0, 0.0, 0.0, 0.0, 0.0
-    alpha_fib, e_fib, src, srp = 0.0, 0.0, 0.0, 0.0
-    strflag = 0
+    ea, eb, ec = 0.0, 0.0, 0.0
+    prab, prbc, prca = 0.0, 0.0, 0.0
+    gab, gbc, gca = 0.0, 0.0, 0.0
+    sigt1, sigt2, sigt3, delta = 0.0, 0.0, 0.0, 0.05
+    cb, cn, fmax, wplaref = 0.0, 1.0, 1.0e10, 1.0
+    sigyt1, sigyt2, sigyc1, sigyc2 = 0.0, 0.0, 0.0, 0.0
+    sigt12, sigc12, sigt23, sigc23 = 0.0, 0.0, 0.0, 0.0
+    alpha, efib, cc, eps0 = 0.0, 0.0, 0.0, 0.0
+    strflag = 1
 
     if block.fixed:
         if len(valid_cards) > 0:
@@ -40517,39 +40520,47 @@ def read_mat_compso(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             ea = _safe_float(c1[0]) if len(c1) > 0 else 0.0
             eb = _safe_float(c1[1]) if len(c1) > 1 else 0.0
             ec = _safe_float(c1[2]) if len(c1) > 2 else 0.0
-            prab = _safe_float(c1[3]) if len(c1) > 3 else 0.0
-            prbc = _safe_float(c1[4]) if len(c1) > 4 else 0.0
         if len(valid_cards) > 2:
             c2 = valid_cards[2].cut("MAT_COMPSO_3")
-            prca = _safe_float(c2[0]) if len(c2) > 0 else 0.0
-            gab = _safe_float(c2[1]) if len(c2) > 1 else 0.0
-            gbc = _safe_float(c2[2]) if len(c2) > 2 else 0.0
-            gca = _safe_float(c2[3]) if len(c2) > 3 else 0.0
+            prab = _safe_float(c2[0]) if len(c2) > 0 else 0.0
+            prbc = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+            prca = _safe_float(c2[2]) if len(c2) > 2 else 0.0
         if len(valid_cards) > 3:
             c3 = valid_cards[3].cut("MAT_COMPSO_4")
-            sigt1 = _safe_float(c3[0]) if len(c3) > 0 else 0.0
-            sigt2 = _safe_float(c3[1]) if len(c3) > 1 else 0.0
-            sigt3 = _safe_float(c3[2]) if len(c3) > 2 else 0.0
-            damage = _safe_float(c3[3]) if len(c3) > 3 else 0.0
-            beta = _safe_float(c3[4]) if len(c3) > 4 else 0.0
+            gab = _safe_float(c3[0]) if len(c3) > 0 else 0.0
+            gbc = _safe_float(c3[1]) if len(c3) > 1 else 0.0
+            gca = _safe_float(c3[2]) if len(c3) > 2 else 0.0
         if len(valid_cards) > 4:
             c4 = valid_cards[4].cut("MAT_COMPSO_5")
-            hard = _safe_float(c4[0]) if len(c4) > 0 else 0.0
-            sig_max = _safe_float(c4[1]) if len(c4) > 1 else 0.0
-            sigyt1 = _safe_float(c4[2]) if len(c4) > 2 else 0.0
-            sigyt2 = _safe_float(c4[3]) if len(c4) > 3 else 0.0
-            sigyc1 = _safe_float(c4[4]) if len(c4) > 4 else 0.0
+            sigt1 = _safe_float(c4[0]) if len(c4) > 0 else 0.0
+            sigt2 = _safe_float(c4[1]) if len(c4) > 1 else 0.0
+            sigt3 = _safe_float(c4[2]) if len(c4) > 2 else 0.0
+            delta = _safe_float(c4[3]) if len(c4) > 3 else 0.0
         if len(valid_cards) > 5:
             c5 = valid_cards[5].cut("MAT_COMPSO_6")
-            sigyc2 = _safe_float(c5[0]) if len(c5) > 0 else 0.0
-            sigt12 = _safe_float(c5[1]) if len(c5) > 1 else 0.0
-            sigt23 = _safe_float(c5[2]) if len(c5) > 2 else 0.0
-            sigc12 = _safe_float(c5[3]) if len(c5) > 3 else 0.0
-            sigc23 = _safe_float(c5[4]) if len(c5) > 4 else 0.0
-            alpha_fib = _safe_float(c5[5]) if len(c5) > 5 else 0.0
-            e_fib = _safe_float(c5[6]) if len(c5) > 6 else 0.0
-            src = _safe_float(c5[7]) if len(c5) > 7 else 0.0
-            strflag = _safe_int(c5[8]) if len(c5) > 8 else 0
+            cb = _safe_float(c5[0]) if len(c5) > 0 else 0.0
+            cn = _safe_float(c5[1]) if len(c5) > 1 else 0.0
+            fmax = _safe_float(c5[2]) if len(c5) > 2 else 0.0
+            wplaref = _safe_float(c5[3]) if len(c5) > 3 and c5[3].strip() else 1.0
+        if len(valid_cards) > 6:
+            c6 = valid_cards[6].cut("MAT_COMPSO_7")
+            sigyt1 = _safe_float(c6[0]) if len(c6) > 0 else 0.0
+            sigyt2 = _safe_float(c6[1]) if len(c6) > 1 else 0.0
+            sigyc1 = _safe_float(c6[2]) if len(c6) > 2 else 0.0
+            sigyc2 = _safe_float(c6[3]) if len(c6) > 3 else 0.0
+        if len(valid_cards) > 7:
+            c7 = valid_cards[7].cut("MAT_COMPSO_8")
+            sigt12 = _safe_float(c7[0]) if len(c7) > 0 else 0.0
+            sigc12 = _safe_float(c7[1]) if len(c7) > 1 else 0.0
+            sigt23 = _safe_float(c7[2]) if len(c7) > 2 else 0.0
+            sigc23 = _safe_float(c7[3]) if len(c7) > 3 else 0.0
+        if len(valid_cards) > 8:
+            c8 = valid_cards[8].cut("MAT_COMPSO_9")
+            alpha = _safe_float(c8[0]) if len(c8) > 0 else 0.0
+            efib = _safe_float(c8[1]) if len(c8) > 1 else 0.0
+            cc = _safe_float(c8[2]) if len(c8) > 2 else 0.0
+            eps0 = _safe_float(c8[3]) if len(c8) > 3 else 0.0
+            strflag = _safe_int(c8[4]) if len(c8) > 4 else 1
     else:
         if len(valid_cards) > 0:
             t0 = valid_cards[0].tokens()
@@ -40560,65 +40571,117 @@ def read_mat_compso(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             ea = _safe_float(t1[0]) if len(t1) > 0 else 0.0
             eb = _safe_float(t1[1]) if len(t1) > 1 else 0.0
             ec = _safe_float(t1[2]) if len(t1) > 2 else 0.0
-            prab = _safe_float(t1[3]) if len(t1) > 3 else 0.0
-            prbc = _safe_float(t1[4]) if len(t1) > 4 else 0.0
         if len(valid_cards) > 2:
             t2 = valid_cards[2].tokens()
-            prca = _safe_float(t2[0]) if len(t2) > 0 else 0.0
-            gab = _safe_float(t2[1]) if len(t2) > 1 else 0.0
-            gbc = _safe_float(t2[2]) if len(t2) > 2 else 0.0
-            gca = _safe_float(t2[3]) if len(t2) > 3 else 0.0
+            prab = _safe_float(t2[0]) if len(t2) > 0 else 0.0
+            prbc = _safe_float(t2[1]) if len(t2) > 1 else 0.0
+            prca = _safe_float(t2[2]) if len(t2) > 2 else 0.0
         if len(valid_cards) > 3:
             t3 = valid_cards[3].tokens()
-            sigt1 = _safe_float(t3[0]) if len(t3) > 0 else 0.0
-            sigt2 = _safe_float(t3[1]) if len(t3) > 1 else 0.0
-            sigt3 = _safe_float(t3[2]) if len(t3) > 2 else 0.0
-            damage = _safe_float(t3[3]) if len(t3) > 3 else 0.0
-            beta = _safe_float(t3[4]) if len(t3) > 4 else 0.0
+            gab = _safe_float(t3[0]) if len(t3) > 0 else 0.0
+            gbc = _safe_float(t3[1]) if len(t3) > 1 else 0.0
+            gca = _safe_float(t3[2]) if len(t3) > 2 else 0.0
         if len(valid_cards) > 4:
             t4 = valid_cards[4].tokens()
-            hard = _safe_float(t4[0]) if len(t4) > 0 else 0.0
-            sig_max = _safe_float(t4[1]) if len(t4) > 1 else 0.0
-            sigyt1 = _safe_float(t4[2]) if len(t4) > 2 else 0.0
-            sigyt2 = _safe_float(t4[3]) if len(t4) > 3 else 0.0
-            sigyc1 = _safe_float(t4[4]) if len(t4) > 4 else 0.0
+            sigt1 = _safe_float(t4[0]) if len(t4) > 0 else 0.0
+            sigt2 = _safe_float(t4[1]) if len(t4) > 1 else 0.0
+            sigt3 = _safe_float(t4[2]) if len(t4) > 2 else 0.0
+            delta = _safe_float(t4[3]) if len(t4) > 3 else 0.0
         if len(valid_cards) > 5:
             t5 = valid_cards[5].tokens()
-            sigyc2 = _safe_float(t5[0]) if len(t5) > 0 else 0.0
-            sigt12 = _safe_float(t5[1]) if len(t5) > 1 else 0.0
-            sigt23 = _safe_float(t5[2]) if len(t5) > 2 else 0.0
-            sigc12 = _safe_float(t5[3]) if len(t5) > 3 else 0.0
-            sigc23 = _safe_float(t5[4]) if len(t5) > 4 else 0.0
-            alpha_fib = _safe_float(t5[5]) if len(t5) > 5 else 0.0
-            e_fib = _safe_float(t5[6]) if len(t5) > 6 else 0.0
-            src = _safe_float(t5[7]) if len(t5) > 7 else 0.0
-            strflag = _safe_int(t5[8]) if len(t5) > 8 else 0
+            cb = _safe_float(t5[0]) if len(t5) > 0 else 0.0
+            cn = _safe_float(t5[1]) if len(t5) > 1 else 0.0
+            fmax = _safe_float(t5[2]) if len(t5) > 2 else 0.0
+            wplaref = _safe_float(t5[3]) if len(t5) > 3 and t5[3].strip() else 1.0
+        if len(valid_cards) > 6:
+            t6 = valid_cards[6].tokens()
+            sigyt1 = _safe_float(t6[0]) if len(t6) > 0 else 0.0
+            sigyt2 = _safe_float(t6[1]) if len(t6) > 1 else 0.0
+            sigyc1 = _safe_float(t6[2]) if len(t6) > 2 else 0.0
+            sigyc2 = _safe_float(t6[3]) if len(t6) > 3 else 0.0
+        if len(valid_cards) > 7:
+            t7 = valid_cards[7].tokens()
+            sigt12 = _safe_float(t7[0]) if len(t7) > 0 else 0.0
+            sigc12 = _safe_float(t7[1]) if len(t7) > 1 else 0.0
+            sigt23 = _safe_float(t7[2]) if len(t7) > 2 else 0.0
+            sigc23 = _safe_float(t7[3]) if len(t7) > 3 else 0.0
+        if len(valid_cards) > 8:
+            t8 = valid_cards[8].tokens()
+            alpha = _safe_float(t8[0]) if len(t8) > 0 else 0.0
+            efib = _safe_float(t8[1]) if len(t8) > 1 else 0.0
+            cc = _safe_float(t8[2]) if len(t8) > 2 else 0.0
+            eps0 = _safe_float(t8[3]) if len(t8) > 3 else 0.0
+            strflag = _safe_int(t8[4]) if len(t8) > 4 else 1
+
+    # Fortran defaults (hm_read_mat14.F:161-174)
+    if rhor == 0.0:
+        rhor = rho0
+    if delta == 0.0:
+        delta = 0.05
+    if sigt1 == 0.0:
+        sigt1 = 1.0e30
+    if sigt2 == 0.0:
+        sigt2 = sigt1
+    if sigt3 == 0.0:
+        sigt3 = sigt1
+    if cn == 0.0:
+        cn = 1.0
+    if fmax == 0.0:
+        fmax = 1.0e10
+    if wplaref == 0.0:
+        wplaref = 1.0
+    if cc == 0.0 and eps0 == 0.0:
+        eps0 = 1.0
+    if strflag == 0:
+        strflag = 1
+
+    law_name = "LAW14"
+    if block.keyword:
+        parts = block.keyword.split("/")
+        if len(parts) > 2 and parts[2].strip():
+            law_name = parts[2].strip()
 
     mat = MatLaw14(
         id=mat_id, rho0=rho0, rhor=rhor, ea=ea, eb=eb, ec=ec,
         prab=prab, prbc=prbc, prca=prca, gab=gab, gbc=gbc, gca=gca,
-        sigt1=sigt1, sigt2=sigt2, sigt3=sigt3, damage=damage, beta=beta,
-        hard=hard, sig_max=sig_max, sigyt1=sigyt1, sigyt2=sigyt2, sigyc1=sigyc1,
-        sigyc2=sigyc2, sigt12=sigt12, sigt23=sigt23, sigc12=sigc12, sigc23=sigc23,
-        alpha_fib=alpha_fib, e_fib=e_fib, src=src, srp=srp, strflag=strflag,
-        title=title
+        sigt1=sigt1, sigt2=sigt2, sigt3=sigt3, damage=delta, delta=delta, beta=cb, cb=cb,
+        hard=cn, cn=cn, sig_max=fmax, fmax=fmax, wpref=wplaref, wplaref=wplaref,
+        sigyt1=sigyt1, sigyt2=sigyt2, sigyc1=sigyc1, sigyc2=sigyc2,
+        sigt12=sigt12, sigc12=sigc12, sigt23=sigt23, sigc23=sigc23,
+        alpha_fib=alpha, alpha=alpha, e_fib=efib, efib=efib, src=cc, cc=cc,
+        srp=eps0, eps0=eps0, strflag=strflag, icc=strflag,
+        title=title, law_name=law_name, law=14
     )
     model.mat_law14s[mat_id] = mat
-    model.materials[mat_id] = Material(
-        id=mat_id, law=14, rho0=rho0, title=title,
-        params={
-            "rho_i": rho0, "rho_o": rhor, "ea": ea, "eb": eb, "ec": ec,
-            "prab": prab, "prbc": prbc, "prca": prca, "gab": gab, "gbc": gbc, "gca": gca,
-            "sigt1": sigt1, "sigt2": sigt2, "sigt3": sigt3, "damage": damage, "beta": beta,
-            "hard": hard, "sig_max": sig_max, "sigyt1": sigyt1, "sigyt2": sigyt2, "sigyc1": sigyc1,
-            "sigyc2": sigyc2, "sigt12": sigt12, "sigt23": sigt23, "sigc12": sigc12, "sigc23": sigc23,
-            "alpha_fib": alpha_fib, "e_fib": e_fib, "src": src, "srp": srp, "strflag": strflag
-        }
-    )
+    try:
+        from ..materials.law14_compso import build_law14
+        model.materials[mat_id] = build_law14(mat)
+    except Exception:
+        from .mat_reader import InactiveMaterial
+        e_val = max(ea, eb, ec, 200e9) if max(ea, eb, ec) > 0 else 200e9
+        model.materials[mat_id] = InactiveMaterial(
+            id=mat_id, law=14, rho0=rho0, title=title, law_name=law_name,
+            params={
+                "rho_i": rho0, "rho_o": rhor, "ea": ea, "eb": eb, "ec": ec,
+                "prab": prab, "prbc": prbc, "prca": prca, "gab": gab, "gbc": gbc, "gca": gca,
+                "sigt1": sigt1, "sigt2": sigt2, "sigt3": sigt3, "damage": delta, "delta": delta,
+                "beta": cb, "cb": cb, "hard": cn, "cn": cn, "sig_max": fmax, "fmax": fmax,
+                "wpref": wplaref, "wplaref": wplaref,
+                "sigyt1": sigyt1, "sigyt2": sigyt2, "sigyc1": sigyc1, "sigyc2": sigyc2,
+                "sigt12": sigt12, "sigc12": sigc12, "sigt23": sigt23, "sigc23": sigc23,
+                "alpha_fib": alpha, "alpha": alpha, "e_fib": efib, "efib": efib,
+                "src": cc, "cc": cc, "srp": eps0, "eps0": eps0, "strflag": strflag, "icc": strflag,
+                "E": e_val, "MAT_E": e_val, "nu": prab if 0.0 <= prab < 0.5 else 0.3,
+                "MAT_NU": prab if 0.0 <= prab < 0.5 else 0.3, "MAT_SIGY": sigyt1 if sigyt1 > 0 else 200e6,
+                "rho": rho0, "MAT_RHO": rho0
+            }
+        )
+
+read_mat_comp_sol = read_mat_compso
 
 
 def read_mat_law14(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW14``: dispatches to Cam-Clay (M187, <= 2 cards) or Composite Solid (M189, > 2 cards)."""
+    """``/MAT/LAW14``: dispatches to Cam-Clay (M187, <= 2 cards) or Composite Solid (M189/M547, > 2 cards)."""
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
     if len(valid_cards) <= 2:
@@ -83658,6 +83721,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_SOIL_CONC": read_mat,
     "SOIL": read_mat,
     "SOIL_CONC": read_mat,
+    "MAT/LAW14": read_mat_law14,
     "MAT_LAW14": read_mat,
     "MAT_CAM_CLAY": read_mat,
     "MAT_CAMCLAY": read_mat,
@@ -83784,10 +83848,12 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_CAST_IRON": read_mat,
     "GRAY": read_mat,
     "CAST_IRON": read_mat,
-    "MAT_COMPSO": read_mat,
-    "MAT_COMP_SOL": read_mat,
-    "COMPSO": read_mat,
-    "COMP_SOL": read_mat,
+    "MAT/COMPSO": read_mat_compso,
+    "MAT/COMP_SOL": read_mat_compso,
+    "MAT_COMPSO": read_mat_compso,
+    "MAT_COMP_SOL": read_mat_compso,
+    "COMPSO": read_mat_compso,
+    "COMP_SOL": read_mat_compso,
     "MAT_LAW59": read_mat,
     "MAT_CONNECT": read_mat,
     "MAT_CONNECTOR": read_mat,

@@ -2026,6 +2026,274 @@ class StarterDeck:
         kwargs.setdefault("law_name", "3PARBI")
         return self.mat_law12(*args, **kwargs)
 
+    def mat_law14(
+        self,
+        mid: int = 0,
+        title: str = "",
+        rho: float = 0.0,
+        refer_rho: Optional[float] = None,
+        ea: float = 0.0,
+        eb: float = 0.0,
+        ec: float = 0.0,
+        prab: float = 0.0,
+        prbc: float = 0.0,
+        prca: float = 0.0,
+        gab: float = 0.0,
+        gbc: float = 0.0,
+        gca: float = 0.0,
+        sigt1: float = 0.0,
+        sigt2: float = 0.0,
+        sigt3: float = 0.0,
+        delta: float = 0.05,
+        cb: float = 0.0,
+        cn: float = 1.0,
+        fmax: float = 1.0e10,
+        wplaref: float = 1.0,
+        sigyt1: float = 0.0,
+        sigyt2: float = 0.0,
+        sigyc1: float = 0.0,
+        sigyc2: float = 0.0,
+        sigyt12: float = 0.0,
+        sigyc12: float = 0.0,
+        sigyt23: float = 0.0,
+        sigyc23: float = 0.0,
+        alpha: float = 0.0,
+        efib: float = 0.0,
+        cc: float = 0.0,
+        eps0: float = 0.0,
+        strflag: int = 1,
+        law_name: str = "LAW14",
+        unit_id: Optional[int] = None,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW14`` (/MAT/COMPSO, /MAT/COMP_SOL) — cfg MAT/matl14_compso.cfg (radioss2020) & hm_read_mat14.F:
+        Card 1: RHO_I, Refer_Rho (%20lg%20lg)
+        Card 2: E11, E22, E33 (%20lg%20lg%20lg)
+        Card 3: NU12, NU23, NU31 (%20lg%20lg%20lg)
+        Card 4: G12, G23, G31 (%20lg%20lg%20lg)
+        Card 5: SIGT1, SIGT2, SIGT3, DELTA (%20lg%20lg%20lg%20lg)
+        Card 6: CB, CN, FMAX, WPLAREF (%20lg%20lg%20lg%20lg)
+        Card 7: SIGYT1, SIGYT2, SIGYC1, SIGYC2 (%20lg%20lg%20lg%20lg)
+        Card 8: SIGYT12, SIGYC12, SIGYT23, SIGYC23 (%20lg%20lg%20lg%20lg)
+        Card 9: ALPHA, EFIB, CC, EPS0, STRFLAG (%20lg%20lg%20lg%20lg%10d)
+        """
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+        mat_obj = None
+        if hasattr(mid, "ea") and hasattr(mid, "rho0"):
+            mat_obj = mid
+        elif hasattr(mid, "e11") and hasattr(mid, "rho0"):
+            mat_obj = mid
+        elif "mat" in kw_low and (hasattr(kw_low["mat"], "ea") or hasattr(kw_low["mat"], "e11")):
+            mat_obj = kw_low["mat"]
+        elif "mat14" in kw_low and (hasattr(kw_low["mat14"], "ea") or hasattr(kw_low["mat14"], "e11")):
+            mat_obj = kw_low["mat14"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", 0)
+            if not title:
+                title = getattr(mat_obj, "title", "")
+            if rho == 0.0:
+                rho = getattr(mat_obj, "rho0", 0.0)
+            if refer_rho is None and getattr(mat_obj, "rhor", 0.0) > 0.0:
+                refer_rho = getattr(mat_obj, "rhor", None)
+            if ea == 0.0: ea = getattr(mat_obj, "ea", getattr(mat_obj, "e11", 0.0))
+            if eb == 0.0: eb = getattr(mat_obj, "eb", getattr(mat_obj, "e22", 0.0))
+            if ec == 0.0: ec = getattr(mat_obj, "ec", getattr(mat_obj, "e33", 0.0))
+            if prab == 0.0: prab = getattr(mat_obj, "prab", getattr(mat_obj, "nu12", 0.0))
+            if prbc == 0.0: prbc = getattr(mat_obj, "prbc", getattr(mat_obj, "nu23", 0.0))
+            if prca == 0.0: prca = getattr(mat_obj, "prca", getattr(mat_obj, "nu31", 0.0))
+            if gab == 0.0: gab = getattr(mat_obj, "gab", getattr(mat_obj, "g12", 0.0))
+            if gbc == 0.0: gbc = getattr(mat_obj, "gbc", getattr(mat_obj, "g23", 0.0))
+            if gca == 0.0: gca = getattr(mat_obj, "gca", getattr(mat_obj, "g31", 0.0))
+            if sigt1 == 0.0: sigt1 = getattr(mat_obj, "sigt1", getattr(mat_obj, "sig_t1", 0.0))
+            if sigt2 == 0.0: sigt2 = getattr(mat_obj, "sigt2", getattr(mat_obj, "sig_t2", 0.0))
+            if sigt3 == 0.0: sigt3 = getattr(mat_obj, "sigt3", getattr(mat_obj, "sig_t3", 0.0))
+            if delta == 0.05: delta = getattr(mat_obj, "delta", getattr(mat_obj, "damage", 0.05))
+            if cb == 0.0: cb = getattr(mat_obj, "cb", getattr(mat_obj, "beta", 0.0))
+            if cn == 1.0: cn = getattr(mat_obj, "cn", getattr(mat_obj, "hard", 1.0))
+            if fmax == 1.0e10: fmax = getattr(mat_obj, "fmax", getattr(mat_obj, "sig_max", 1.0e10))
+            if wplaref == 1.0: wplaref = getattr(mat_obj, "wplaref", getattr(mat_obj, "wpref", 1.0))
+            if sigyt1 == 0.0: sigyt1 = getattr(mat_obj, "sigyt1", getattr(mat_obj, "sig_1yt", 0.0))
+            if sigyt2 == 0.0: sigyt2 = getattr(mat_obj, "sigyt2", getattr(mat_obj, "sig_2yt", 0.0))
+            if sigyc1 == 0.0: sigyc1 = getattr(mat_obj, "sigyc1", getattr(mat_obj, "sig_1yc", 0.0))
+            if sigyc2 == 0.0: sigyc2 = getattr(mat_obj, "sigyc2", getattr(mat_obj, "sig_2yc", 0.0))
+            if sigyt12 == 0.0: sigyt12 = getattr(mat_obj, "sigyt12", getattr(mat_obj, "sigt12", 0.0))
+            if sigyc12 == 0.0: sigyc12 = getattr(mat_obj, "sigyc12", getattr(mat_obj, "sigc12", 0.0))
+            if sigyt23 == 0.0: sigyt23 = getattr(mat_obj, "sigyt23", getattr(mat_obj, "sigt23", 0.0))
+            if sigyc23 == 0.0: sigyc23 = getattr(mat_obj, "sigyc23", getattr(mat_obj, "sigc23", 0.0))
+            if alpha == 0.0: alpha = getattr(mat_obj, "alpha", getattr(mat_obj, "alpha_fib", 0.0))
+            if efib == 0.0: efib = getattr(mat_obj, "efib", getattr(mat_obj, "e_fib", 0.0))
+            if cc == 0.0: cc = getattr(mat_obj, "cc", getattr(mat_obj, "src", 0.0))
+            if eps0 == 0.0: eps0 = getattr(mat_obj, "eps0", getattr(mat_obj, "srp", 0.0))
+            if strflag == 1: strflag = getattr(mat_obj, "strflag", getattr(mat_obj, "icc", 1))
+            if law_name == "LAW14": law_name = getattr(mat_obj, "law_name", "LAW14")
+
+        if "mat_id" in kw_low and mid == 0:
+            mid = kw_low["mat_id"]
+        if "mid" in kw_low and mid == 0:
+            mid = kw_low["mid"]
+        if isinstance(title, (int, float)) and rho == 0.0:
+            rho = float(title)
+            title = ""
+        if "rho0" in kw_low and rho == 0.0:
+            rho = kw_low["rho0"]
+        elif "rho" in kw_low and rho == 0.0:
+            rho = kw_low["rho"]
+        elif "mat_rho" in kw_low and rho == 0.0:
+            rho = kw_low["mat_rho"]
+
+        if "rhor" in kw_low and refer_rho is None:
+            refer_rho = kw_low["rhor"]
+        elif "rho_ref" in kw_low and refer_rho is None:
+            refer_rho = kw_low["rho_ref"]
+        elif "refer_rho" in kw_low and refer_rho is None:
+            refer_rho = kw_low["refer_rho"]
+
+        if ea == 0.0:
+            for k in ("ea", "e11", "mat_ea"):
+                if k in kw_low: ea = float(kw_low[k]); break
+        if eb == 0.0:
+            for k in ("eb", "e22", "mat_eb"):
+                if k in kw_low: eb = float(kw_low[k]); break
+        if ec == 0.0:
+            for k in ("ec", "e33", "mat_ec"):
+                if k in kw_low: ec = float(kw_low[k]); break
+
+        if prab == 0.0:
+            for k in ("prab", "nu12", "mat_prab"):
+                if k in kw_low: prab = float(kw_low[k]); break
+        if prbc == 0.0:
+            for k in ("prbc", "nu23", "mat_prbc"):
+                if k in kw_low: prbc = float(kw_low[k]); break
+        if prca == 0.0:
+            for k in ("prca", "nu31", "mat_prca"):
+                if k in kw_low: prca = float(kw_low[k]); break
+
+        if gab == 0.0:
+            for k in ("gab", "g12", "mat_gab"):
+                if k in kw_low: gab = float(kw_low[k]); break
+        if gbc == 0.0:
+            for k in ("gbc", "g23", "mat_gbc"):
+                if k in kw_low: gbc = float(kw_low[k]); break
+        if gca == 0.0:
+            for k in ("gca", "g31", "mat_gca"):
+                if k in kw_low: gca = float(kw_low[k]); break
+
+        if sigt1 == 0.0:
+            for k in ("sigt1", "sig_t1", "mat_sigt1"):
+                if k in kw_low: sigt1 = float(kw_low[k]); break
+        if sigt2 == 0.0:
+            for k in ("sigt2", "sig_t2", "mat_sigt2"):
+                if k in kw_low: sigt2 = float(kw_low[k]); break
+        if sigt3 == 0.0:
+            for k in ("sigt3", "sig_t3", "mat_sigt3"):
+                if k in kw_low: sigt3 = float(kw_low[k]); break
+        if delta == 0.05 or delta == 0.0:
+            for k in ("delta", "damage", "mat_damage"):
+                if k in kw_low: delta = float(kw_low[k]); break
+
+        if cb == 0.0:
+            for k in ("cb", "b", "beta", "mat_beta"):
+                if k in kw_low: cb = float(kw_low[k]); break
+        if cn == 1.0 or cn == 0.0:
+            for k in ("cn", "n", "hard", "mat_hard"):
+                if k in kw_low: cn = float(kw_low[k]); break
+        if fmax == 1.0e10:
+            for k in ("fmax", "sig", "sig_max", "mat_sig"):
+                if k in kw_low: fmax = float(kw_low[k]); break
+        if wplaref == 1.0 or wplaref == 0.0:
+            for k in ("wplaref", "wpref", "wp_ref"):
+                if k in kw_low: wplaref = float(kw_low[k]); break
+
+        if sigyt1 == 0.0:
+            for k in ("sigyt1", "sig_yt1", "sig_1yt", "mat_sigyt1"):
+                if k in kw_low: sigyt1 = float(kw_low[k]); break
+        if sigyt2 == 0.0:
+            for k in ("sigyt2", "sig_yt2", "sig_2yt", "mat_sigyt2"):
+                if k in kw_low: sigyt2 = float(kw_low[k]); break
+        if sigyc1 == 0.0:
+            for k in ("sigyc1", "sig_yc1", "sig_1yc", "mat_sigyc1"):
+                if k in kw_low: sigyc1 = float(kw_low[k]); break
+        if sigyc2 == 0.0:
+            for k in ("sigyc2", "sig_yc2", "sig_2yc", "mat_sigyc2"):
+                if k in kw_low: sigyc2 = float(kw_low[k]); break
+
+        if sigyt12 == 0.0:
+            for k in ("sigyt12", "sig_yt12", "sig_12yt", "mat_sigt12", "sigt12"):
+                if k in kw_low: sigyt12 = float(kw_low[k]); break
+        if sigyc12 == 0.0:
+            for k in ("sigyc12", "sig_yc12", "sig_12yc", "mat_sigc12", "sigc12"):
+                if k in kw_low: sigyc12 = float(kw_low[k]); break
+        if sigyt23 == 0.0:
+            for k in ("sigyt23", "sig_yt23", "sig_23yt", "mat_sigt23", "sigt23"):
+                if k in kw_low: sigyt23 = float(kw_low[k]); break
+        if sigyc23 == 0.0:
+            for k in ("sigyc23", "sig_yc23", "sig_23yc", "mat_sigc23", "sigc23"):
+                if k in kw_low: sigyc23 = float(kw_low[k]); break
+
+        if alpha == 0.0:
+            for k in ("alpha", "alpha_fib", "mat_alpha"):
+                if k in kw_low: alpha = float(kw_low[k]); break
+        if efib == 0.0:
+            for k in ("efib", "e_fib", "mat_efib", "ef"):
+                if k in kw_low: efib = float(kw_low[k]); break
+        if cc == 0.0:
+            for k in ("cc", "c", "mat_src", "src"):
+                if k in kw_low: cc = float(kw_low[k]); break
+        if eps0 == 0.0:
+            for k in ("eps0", "srp", "mat_srp", "eps_rate_0"):
+                if k in kw_low: eps0 = float(kw_low[k]); break
+        if strflag == 1 or strflag == 0:
+            for k in ("strflag", "icc", "iflag"):
+                if k in kw_low: strflag = int(kw_low[k]); break
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        # Card 1: RHO_I, Refer_Rho (%20lg%20lg)
+        if refer_rho is not None and refer_rho > 0.0:
+            self.lines.append(fmt_float(rho) + fmt_float(refer_rho))
+        else:
+            self.lines.append(fmt_float(rho))
+
+        # Card 2: E11, E22, E33 (%20lg%20lg%20lg)
+        self.lines.append(fmt_float(ea) + fmt_float(eb) + fmt_float(ec))
+
+        # Card 3: NU12, NU23, NU31 (%20lg%20lg%20lg)
+        self.lines.append(fmt_float(prab) + fmt_float(prbc) + fmt_float(prca))
+
+        # Card 4: G12, G23, G31 (%20lg%20lg%20lg)
+        self.lines.append(fmt_float(gab) + fmt_float(gbc) + fmt_float(gca))
+
+        # Card 5: SIGT1, SIGT2, SIGT3, DELTA (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(sigt1) + fmt_float(sigt2) + fmt_float(sigt3) + fmt_float(delta))
+
+        # Card 6: CB, CN, FMAX, WPLAREF (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(cb) + fmt_float(cn) + fmt_float(fmax) + fmt_float(wplaref))
+
+        # Card 7: SIGYT1, SIGYT2, SIGYC1, SIGYC2 (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(sigyt1) + fmt_float(sigyt2) + fmt_float(sigyc1) + fmt_float(sigyc2))
+
+        # Card 8: SIGYT12, SIGYC12, SIGYT23, SIGYC23 (%20lg%20lg%20lg%20lg)
+        self.lines.append(fmt_float(sigyt12) + fmt_float(sigyc12) + fmt_float(sigyt23) + fmt_float(sigyc23))
+
+        # Card 9: ALPHA, EFIB, CC, EPS0, STRFLAG (%20lg%20lg%20lg%20lg%10d)
+        self.lines.append(fmt_float(alpha) + fmt_float(efib) + fmt_float(cc) + fmt_float(eps0) + fmt_int(strflag))
+
+        return self
+
+    def mat_compso(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "COMPSO")
+        return self.mat_law14(*args, **kwargs)
+
+    def mat_comp_sol(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "COMP_SOL")
+        return self.mat_law14(*args, **kwargs)
+
+
     def mat_law22(
         self,
         mid: int = 0,
