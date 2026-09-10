@@ -10143,6 +10143,8 @@ class MatLaw34:
 
 MatBoltzman = MatLaw34
 MatBoltzmann = MatLaw34
+MatViscMaxw = MatLaw34
+
 
 
 @dataclass

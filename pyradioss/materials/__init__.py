@@ -54,11 +54,16 @@ true current sound speed or the Courant time step is not a bound.
 from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa: F401
                law04_hyd_jcook, law06_hyd_visc, law10_soil,
                law19_fabric, law24_concrete, law27_brittle,
-               law28_honeycomb, law33_foamplas, law35_kelvinmax, law36_tabulated,
+               law28_honeycomb, law33_foamplas, law34_boltzmann, law35_kelvinmax, law36_tabulated,
                law40_kelvinmax, law42_ogden, law44_cowper,
                law62_hypervisco, law70_tabfoam, law81_druckerprager,
                law83_spotweld, law114_seatbelt, law120_advanced,
                mat_gas, mat_void)
+from .law34_boltzmann import (solid_update as law34_solid_update,
+                             shell_update as law34_shell_update,
+                             sound_speed as law34_sound_speed,
+                             consistent_solid_tangent as law34_solid_tangent,
+                             shell_membrane_tangent as law34_shell_tangent)
 
 try:
     from . import law05_jwl
@@ -176,12 +181,26 @@ def _register_law28():
 _register_law28()
 
 
+def _register_law34():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law34_boltzmann, "build_law34", None)
+        if builder is not None:
+            for k in (34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law34()
+
+
 def register_materials():
     _get_law05()
     _get_law10()
     for mod in (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,
                 law04_hyd_jcook, law06_hyd_visc, law10_soil, law19_fabric, law24_concrete,
-                law27_brittle, law28_honeycomb, law33_foamplas, law35_kelvinmax,
+                law27_brittle, law28_honeycomb, law33_foamplas, law34_boltzmann, law35_kelvinmax,
                 law36_tabulated, law40_kelvinmax, law42_ogden, law44_cowper,
                 law62_hypervisco, law70_tabfoam, law81_druckerprager,
                 law83_spotweld, law114_seatbelt, law120_advanced,
@@ -204,6 +223,11 @@ def register_materials():
         if callable(fn):
             fn()
     _register_law28()
+    if law34_boltzmann is not None:
+        fn = getattr(law34_boltzmann, "_register", None)
+        if callable(fn):
+            fn()
+    _register_law34()
 
 
 def extra_shapes(mat, nip=None):
@@ -272,6 +296,11 @@ def extra_shapes(mat, nip=None):
     if mat.law == 28 or getattr(mat, "law_name", None) in ("LAW28", "HONEYCOMB", "HONEYCOMB_SOL"):
         # M538: LAW28 (honeycomb) needs total strain and element deletion flag (solids only)
         shapes.update(eps28=(6,), off28=())
+    if mat.law == 34 or getattr(mat, "law_name", None) in ("LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
+        # M539: LAW34 (Boltzmann viscoelastic) needs total strain and history variables
+        shapes.update(eps34=(nip, 3) if nip else (6,), uv34=(nip, 6) if nip else (6,))
+        if nip:
+            shapes.update(ezz34=(nip,))
     if mat.law == 4:
         shapes["temp"] = ()
     if getattr(mat, "law", None) in (5, "5", "LAW5", "JWL") or getattr(mat, "law_name", None) in ("LAW5", "JWL"):
@@ -298,9 +327,9 @@ def needs_env(mat) -> bool:
     P = K*(rho/rho0 - 1) and LAW70's Itens tension scale all need
     ``rho``; LAW62's CIMAX sound-speed bound divides by the current
     density; LAW40's sound speed too; M40: LAW36 solids use the same
-    total pressure as LAW44 — sigeps36.F P = BULK*AMU)."""
-    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, 33, 35, 36, 40, 44, 62, 70, 81)
-            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL"))
+    total pressure as LAW44 — sigeps36.F P = BULK*AMU; M539: LAW34 air pressure)."""
+    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 40, 44, 62, 70, 81)
+            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"))
 
 
 def solid_update(mat, sig, deps, epsp, dt, extra=None):
@@ -363,6 +392,10 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
         sign, epsp_out, c = law28_honeycomb.solid_update(mat, sig, deps, epsp, dt, extra)
         sig[:] = sign
         return sig, epsp_out, c
+    if mat.law == 34 or getattr(mat, "law_name", None) in ("LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
+        sign, epsp_out, c = law34_boltzmann.solid_update(mat, sig, deps, epsp, dt, extra)
+        sig[:] = sign
+        return sig, epsp_out, c
     if getattr(mat, "law", None) in (5, "5", "LAW5", "JWL") or getattr(mat, "law_name", None) in ("LAW5", "JWL"):
         _get_law05()
         if law05_solid_update is not None:
@@ -398,6 +431,8 @@ def sound_speed(mat, rho=None, extra=None):
         raise NotImplementedError("LAW10 sound_speed not available")
     if law == 28 or law_name in ("LAW28", "HONEYCOMB", "HONEYCOMB_SOL"):
         return law28_honeycomb.sound_speed(mat, rho=rho, extra=extra)
+    if law in (34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN") or law_name in ("LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
+        return law34_boltzmann.sound_speed(mat, rho=rho, extra=extra)
     if hasattr(mat, "sound_speed_solid"):
         return mat.sound_speed_solid()
     raise NotImplementedError(f"material LAW{law} does not implement sound_speed")
@@ -411,6 +446,8 @@ def shell_update(mat, sig, deps, epsp, dt, extra=None):
         raise NotImplementedError("LAW5 (JWL explosive) is implemented for 3D solid and SPH elements only.")
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         raise NotImplementedError("LAW10 (soil/Drucker-Prager) is implemented for 3D solid elements only.")
+    if mat.law == 34 or getattr(mat, "law_name", None) in ("LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
+        return law34_boltzmann.shell_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 1:
         return law01_elastic.shell_update(mat, sig, deps), epsp
     if mat.law == 2:
@@ -512,6 +549,9 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
     if mat.law == 4:
         return law04_hyd_jcook.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr, extra)
+    if mat.law == 34 or getattr(mat, "law_name", None) in ("LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
+        return law34_boltzmann.consistent_solid_tangent(
+            mat, sig, epsp, epsp_incr, extra)
     if getattr(mat, "law", None) in (5, "5", "LAW5", "JWL") or getattr(mat, "law_name", None) in ("LAW5", "JWL"):
         _get_law05()
         if law05_solid_tangent is not None:
@@ -527,7 +567,7 @@ def solid_tangent(mat, sig, epsp, epsp_incr, extra=None):
         raise NotImplementedError("LAW10 solid_tangent not available")
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
-        f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW35, LAW36, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
+        f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW34, LAW35, LAW36, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
         f"are ported; LAW27 is deferred — see PORTING_GUIDE M14)")
 
 
@@ -545,9 +585,11 @@ def shell_membrane_tangent(mat):
         return law44_cowper.shell_membrane_tangent(mat)
     if mat.law == 3:
         return law03_plas_bost.shell_membrane_tangent(mat)
+    if mat.law == 34 or getattr(mat, "law_name", None) in ("LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
+        return law34_boltzmann.shell_membrane_tangent(mat)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic, "
-        f"LAW3 plas_bost, LAW19 fabric and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")
+        f"LAW3 plas_bost, LAW19 fabric, LAW34 Boltzmann and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")
 
 
 def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
@@ -587,6 +629,9 @@ def shell_layer_tangent(mat, sig, epsp, epsp_incr, extra=None):
         return law19_fabric.consistent_shell_tangent(mat, extra)
     if mat.law == 44:
         return law44_cowper.consistent_shell_tangent(
+            mat, sig, epsp, epsp_incr, extra)
+    if mat.law == 34 or getattr(mat, "law_name", None) in ("LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
+        return law34_boltzmann.consistent_shell_tangent(
             mat, sig, epsp, epsp_incr, extra)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 "

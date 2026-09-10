@@ -621,7 +621,12 @@ class CfgCatalogue:
         "SOIL_CONC": "LAW10",
         "JWL": "LAW5",
         "HONEYCOMB": "LAW28",
+        "BOLTZMAN": "LAW34",
+        "VISC_MAXW": "LAW34",
+        "BOLTZMANN": "LAW34",
+        "LAW34": "LAW34",
     }
+
 
     def canonical_law_name(self, law_name: str) -> str:
         """Map a law spelling to its canonical name if known in synonyms."""

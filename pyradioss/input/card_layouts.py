@@ -185,6 +185,49 @@ MAT_HONEYCOMB_CFG_6 = MAT_LAW28_6
 MAT_HONEYCOMB_CFG_7 = MAT_LAW28_7
 
 
+# M539: /MAT/LAW34 (/MAT/BOLTZMAN, /MAT/VISC_MAXW) card layout constants citing radioss110/MAT/matl34_boltzman.cfg
+MAT_LAW34_1 = (20, 20)  # RHO_I, RHOR
+MAT_LAW34_2 = (20,)      # BULK
+MAT_LAW34_3 = (20, 20, 20)  # G0, GI, BETA
+MAT_LAW34_4 = (20, 20, 20)  # P0, PHI, GAMMA0
+
+MAT_LAW34_CFG_1 = MAT_LAW34_1
+MAT_LAW34_CFG_2 = MAT_LAW34_2
+MAT_LAW34_CFG_3 = MAT_LAW34_3
+MAT_LAW34_CFG_4 = MAT_LAW34_4
+
+MAT_BOLTZMAN_1 = MAT_LAW34_1
+MAT_BOLTZMAN_2 = MAT_LAW34_2
+MAT_BOLTZMAN_3 = MAT_LAW34_3
+MAT_BOLTZMAN_4 = MAT_LAW34_4
+
+MAT_BOLTZMAN_CFG_1 = MAT_LAW34_1
+MAT_BOLTZMAN_CFG_2 = MAT_LAW34_2
+MAT_BOLTZMAN_CFG_3 = MAT_LAW34_3
+MAT_BOLTZMAN_CFG_4 = MAT_LAW34_4
+
+MAT_VISC_MAXW_1 = MAT_LAW34_1
+MAT_VISC_MAXW_2 = MAT_LAW34_2
+MAT_VISC_MAXW_3 = MAT_LAW34_3
+MAT_VISC_MAXW_4 = MAT_LAW34_4
+
+MAT_VISC_MAXW_CFG_1 = MAT_LAW34_1
+MAT_VISC_MAXW_CFG_2 = MAT_LAW34_2
+MAT_VISC_MAXW_CFG_3 = MAT_LAW34_3
+MAT_VISC_MAXW_CFG_4 = MAT_LAW34_4
+
+MAT_BOLTZMANN_1 = MAT_LAW34_1
+MAT_BOLTZMANN_2 = MAT_LAW34_2
+MAT_BOLTZMANN_3 = MAT_LAW34_3
+MAT_BOLTZMANN_4 = MAT_LAW34_4
+
+MAT_BOLTZMANN_CFG_1 = MAT_LAW34_1
+MAT_BOLTZMANN_CFG_2 = MAT_LAW34_2
+MAT_BOLTZMANN_CFG_3 = MAT_LAW34_3
+MAT_BOLTZMANN_CFG_4 = MAT_LAW34_4
+
+
+
 # ============================================================================
 # The per-card column-layout table (reader side of the shared knowledge)
 # ============================================================================
@@ -2845,14 +2888,47 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_FEM_5": [10, 10, 10, 10, 10, 10, 10, 10],
     "MAT_FEM_6": [10, 10, 10, 10, 10, 10, 10, 10],
     "MAT_FEM_7": [10, 10, 10, 10, 10, 10, 10, 10],
-    "MAT_LAW34_1": [20, 20],
-    "MAT_LAW34_2": [20],
-    "MAT_LAW34_3": [20, 20, 20],
-    "MAT_LAW34_4": [20, 20, 20],
-    "MAT_BOLTZMAN_1": [20, 20],
-    "MAT_BOLTZMAN_2": [20],
-    "MAT_BOLTZMAN_3": [20, 20, 20],
-    "MAT_BOLTZMAN_4": [20, 20, 20],
+    # M539: matl34_boltzman.cfg (radioss110) — /MAT/LAW34 (/MAT/BOLTZMAN, /MAT/VISC_MAXW)
+    "MAT_LAW34_1": _LayoutList([20, 20]),
+    "MAT_LAW34_2": _LayoutList([20]),
+    "MAT_LAW34_3": _LayoutList([20, 20, 20]),
+    "MAT_LAW34_4": _LayoutList([20, 20, 20]),
+
+    "MAT_LAW34_CFG_1": _LayoutList([20, 20]),
+    "MAT_LAW34_CFG_2": _LayoutList([20]),
+    "MAT_LAW34_CFG_3": _LayoutList([20, 20, 20]),
+    "MAT_LAW34_CFG_4": _LayoutList([20, 20, 20]),
+
+    "MAT_BOLTZMAN_1": _LayoutList([20, 20]),
+    "MAT_BOLTZMAN_2": _LayoutList([20]),
+    "MAT_BOLTZMAN_3": _LayoutList([20, 20, 20]),
+    "MAT_BOLTZMAN_4": _LayoutList([20, 20, 20]),
+
+    "MAT_BOLTZMAN_CFG_1": _LayoutList([20, 20]),
+    "MAT_BOLTZMAN_CFG_2": _LayoutList([20]),
+    "MAT_BOLTZMAN_CFG_3": _LayoutList([20, 20, 20]),
+    "MAT_BOLTZMAN_CFG_4": _LayoutList([20, 20, 20]),
+
+    "MAT_VISC_MAXW_1": _LayoutList([20, 20]),
+    "MAT_VISC_MAXW_2": _LayoutList([20]),
+    "MAT_VISC_MAXW_3": _LayoutList([20, 20, 20]),
+    "MAT_VISC_MAXW_4": _LayoutList([20, 20, 20]),
+
+    "MAT_VISC_MAXW_CFG_1": _LayoutList([20, 20]),
+    "MAT_VISC_MAXW_CFG_2": _LayoutList([20]),
+    "MAT_VISC_MAXW_CFG_3": _LayoutList([20, 20, 20]),
+    "MAT_VISC_MAXW_CFG_4": _LayoutList([20, 20, 20]),
+
+    "MAT_BOLTZMANN_1": _LayoutList([20, 20]),
+    "MAT_BOLTZMANN_2": _LayoutList([20]),
+    "MAT_BOLTZMANN_3": _LayoutList([20, 20, 20]),
+    "MAT_BOLTZMANN_4": _LayoutList([20, 20, 20]),
+
+    "MAT_BOLTZMANN_CFG_1": _LayoutList([20, 20]),
+    "MAT_BOLTZMANN_CFG_2": _LayoutList([20]),
+    "MAT_BOLTZMANN_CFG_3": _LayoutList([20, 20, 20]),
+    "MAT_BOLTZMANN_CFG_4": _LayoutList([20, 20, 20]),
+
     "MAT_LAW23_1": [20, 20],
     "MAT_LAW23_2": [20, 20],
     "MAT_LAW23_3": [20, 20, 20, 20, 20],

@@ -1148,6 +1148,8 @@ class Model:
         self.mat_law34s: Dict[int, MatLaw34] = {}                   # /MAT/LAW34, /MAT/BOLTZMAN (M190)
         self.mat_boltzmans = self.mat_law34s
         self.mat_boltzmanns = self.mat_law34s
+        self.mat_visc_maxws = self.mat_law34s
+
         self.mat_law23s: Dict[int, MatLaw23] = {}                   # /MAT/LAW23, /MAT/PLAS_DAMA (M190)
         self.mat_plas_damas = self.mat_law23s
         self.mat_law78s: Dict[int, MatLaw78] = {}                   # /MAT/LAW78 (M190)

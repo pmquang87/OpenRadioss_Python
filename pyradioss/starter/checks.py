@@ -59,21 +59,82 @@ _NULL_RHO0_OK_LAWS = frozenset({0} | _MULTIMAT_ALE_LAWS)
 # and their density divisions are guarded exactly as hm_read_mat00.F
 # guards its own — see elements/truss.py and elements/beam_type3.py.
 _ALLOWED_LAWS = {
-    "bricks": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 35, 36, 40, 42, 44, 62, 70, 81, 83, 999},
-    "tetras": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 35, 36, 40, 42, 44, 62, 70, 81, 999},
-    "shells": {0, 1, 2, 3, 19, 27, 36, 44},
+    "bricks": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 40, 42, 44, 62, 70, 81, 83, 999},
+    "tetras": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 40, 42, 44, 62, 70, 81, 999},
+    "shells": {0, 1, 2, 3, 19, 27, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 44},
     # QBAT (Ishell=12, M41): the laws the layered kernel reuses from the
     # BT plumbing; no orthotropic (LAW19) shell_ortho wiring yet
-    "shells_qbat": {0, 1, 2, 3, 27, 36, 44},
+    "shells_qbat": {0, 1, 2, 3, 27, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 44},
     # QEPH (Ishell=24, M41): shares the BT layer plumbing INCLUDING the
     # shell_ortho fiber rotation (LAW19); the czfintn.F stabilization
     # runs isotropic moduli (czfintn_or orthotropic HM/HF deferred)
-    "shells_qeph": {0, 1, 2, 3, 19, 27, 36, 44},
-    "sh3n": {0, 1, 2, 3, 19, 27, 36, 44},
-    "trusses": {0, 1, 2},
+    "shells_qeph": {0, 1, 2, 3, 19, 27, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 44},
+    "sh3n": {0, 1, 2, 3, 19, 27, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 44},
+    "trusses": {0, 1, 2, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW"},
     "springs": None,          # springs ignore their material entirely
-    "beams": {0, 1, 2},
+    "beams": {0, 1, 2, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW"},
 }
+
+
+def check_mat_law34(mat: Any, log: MessageLog) -> None:
+    """Validate /MAT/LAW34 (/MAT/BOLTZMAN, /MAT/VISC_MAXW) parameter bounds (M539).
+
+    Required checks:
+      - rho > 0
+      - bulk > 0
+      - g0 >= 0
+      - gi >= 0
+      - beta >= 0
+    """
+    mid = getattr(mat, "id", 0)
+    if hasattr(mat, "k") and hasattr(mat, "rho0"):
+        rho = getattr(mat, "rho0", 0.0)
+        bulk = getattr(mat, "k", 0.0)
+        g0 = getattr(mat, "g0", 0.0)
+        gi = getattr(mat, "gl", 0.0)
+        beta = getattr(mat, "beta", 0.0)
+    else:
+        params = getattr(mat, "params", {}) or {}
+        rho = getattr(mat, "rho0", 0.0) or params.get("rho", 0.0) or params.get("MAT_RHO", 0.0)
+        bulk = params.get("bulk", params.get("k", params.get("MAT_BULK", 0.0)))
+        g0 = params.get("g0", params.get("MAT_G0", 0.0))
+        gi = params.get("gi", params.get("gl", params.get("MAT_GI", 0.0)))
+        beta = params.get("beta", params.get("decay", params.get("MAT_DECAY", 0.0)))
+
+    try:
+        rho = float(rho)
+    except (TypeError, ValueError):
+        rho = 0.0
+    try:
+        bulk = float(bulk)
+    except (TypeError, ValueError):
+        bulk = 0.0
+    try:
+        g0 = float(g0)
+    except (TypeError, ValueError):
+        g0 = 0.0
+    try:
+        gi = float(gi)
+    except (TypeError, ValueError):
+        gi = 0.0
+    try:
+        beta = float(beta)
+    except (TypeError, ValueError):
+        beta = 0.0
+
+    if rho <= 0.0:
+        log.error(f"/MAT/LAW34/{mid}: initial density RHO must be > 0 (got {rho:g})", "MAT CHECK")
+    if bulk <= 0.0:
+        log.error(f"/MAT/LAW34/{mid}: bulk modulus BULK must be > 0 (got {bulk:g})", "MAT CHECK")
+    if g0 < 0.0:
+        log.error(f"/MAT/LAW34/{mid}: short-term shear modulus G0 must be >= 0 (got {g0:g})", "MAT CHECK")
+    if gi < 0.0:
+        log.error(f"/MAT/LAW34/{mid}: long-term shear modulus GI must be >= 0 (got {gi:g})", "MAT CHECK")
+    if beta < 0.0:
+        log.error(f"/MAT/LAW34/{mid}: decay constant BETA must be >= 0 (got {beta:g})", "MAT CHECK")
+    if g0 > 0.0 and gi > g0:
+        log.warning(f"/MAT/LAW34/{mid}: long-term shear modulus GI ({gi:g}) exceeds short-term shear modulus G0 ({g0:g})", "MAT CHECK")
+
 
 
 def check_model(model: Model, log: MessageLog) -> None:
@@ -142,6 +203,15 @@ def check_model(model: Model, log: MessageLog) -> None:
                 log.warning(f"/FAIL on /MAT {mat.id} is ignored for {name} "
                             f"(failure is ported for solids and shells)",
                             "MAT CHECK")
+
+    # M539: Material LAW34 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in (34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW"):
+            check_mat_law34(mat, log)
+    for mid, mat34 in getattr(model, "mat_law34s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            check_mat_law34(mat34, log)
+
 
     # M38: element groups that reference a parsed-but-not-implemented
     # PROPERTY (InactiveProperty) — the Starter accepts them (params +

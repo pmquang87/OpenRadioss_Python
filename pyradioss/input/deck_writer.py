@@ -645,6 +645,74 @@ class StarterDeck:
 
     mat_honeycomb = mat_law28
 
+    def mat_law34(
+        self,
+        id: int,
+        rho: float,
+        bulk: float,
+        g0: float,
+        gi: float,
+        beta: float,
+        p0: float = 0.0,
+        phi: float = 0.0,
+        gamma0: float = 0.0,
+        title: str | None = None,
+        rhor: float | None = None,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW34`` (/MAT/BOLTZMAN, /MAT/VISC_MAXW) — cfg MAT/matl34_boltzman.cfg
+        (FORMAT radioss51/radioss110):
+        Card 1: Header /MAT/LAW34/{id} followed by TITLE line (or blank line if None)
+        Card 2: MAT_RHO, [Refer_Rho] (%20lg[%20lg]) — MAT_LAW34_1: (20, 20)
+        Card 3: MAT_BULK (%20lg) — MAT_LAW34_2: (20,)
+        Card 4: MAT_G0, MAT_GI, MAT_DECAY (%20lg%20lg%20lg) — MAT_LAW34_3: (20, 20, 20)
+        Card 5: MAT_P0, MAT_PHI, MAT_GAMA0 (%20lg%20lg%20lg) — MAT_LAW34_4: (20, 20, 20)
+
+        Boltzmann linear viscoelastic relaxation material model (Maxwell model).
+        """
+        if "mat_id" in kwargs and id == 0:
+            id = kwargs["mat_id"]
+        elif "mid" in kwargs and id == 0:
+            id = kwargs["mid"]
+        if "rho0" in kwargs and rho == 0.0:
+            rho = kwargs["rho0"]
+        if rhor is None and "refer_rho" in kwargs:
+            rhor = kwargs["refer_rho"]
+        if "k" in kwargs and bulk == 0.0:
+            bulk = kwargs["k"]
+        if "gl" in kwargs and gi == 0.0:
+            gi = kwargs["gl"]
+        if "decay" in kwargs and beta == 0.0:
+            beta = kwargs["decay"]
+        law_name = kwargs.get("law_name", kwargs.get("law", "LAW34"))
+        unit_id = kwargs.get("unit_id")
+
+        if unit_id is not None:
+            self._header("MAT", law_name, id, unit_id)
+        else:
+            self._header("MAT", law_name, id)
+
+        if title is not None and title.strip():
+            self._title(title)
+        else:
+            self.lines.append(BLANK_CARD)
+
+        if rhor is not None and rhor != 0.0:
+            self.lines.append(fmt_float(rho) + fmt_float(rhor))
+        else:
+            self.lines.append(fmt_float(rho))
+
+        self.lines.append(fmt_float(bulk))
+        self.lines.append(fmt_float(g0) + fmt_float(gi) + fmt_float(beta))
+        self.lines.append(fmt_float(p0) + fmt_float(phi) + fmt_float(gamma0))
+
+        return self
+
+    mat_boltzman = mat_law34
+    mat_visc_maxw = mat_law34
+    mat_boltzmann = mat_law34
+
+
     def mat_law27(self, mid: int, title: str, rho, e, nu,
                   card1: Sequence, card2: Optional[Sequence] = None) -> None:
         """``/MAT/LAW27`` (PLAS_BRIT) — cfg MAT/matl27_plas_brit.cfg

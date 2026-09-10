@@ -1137,9 +1137,10 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW29", "FEM", "MAT29_FEM", "MAT_FEM", "LAW29_FEM"):
         read_mat_law29(block, model, log)
         return
-    if lawname in ("LAW34", "BOLTZMAN", "BOLTZMANN", "MAT_BOLTZMAN", "MAT_BOLTZMANN", "LAW34_BOLTZMAN"):
+    if lawname in ("LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", "MAT_BOLTZMAN", "MAT_BOLTZMANN", "MAT_VISC_MAXW", "LAW34_BOLTZMAN", "LAW34_VISC_MAXW"):
         read_mat_law34(block, model, log)
         return
+
     if lawname in ("LAW23", "PLAS_DAMA", "MAT_PLAS_DAMA", "LAW23_PLAS_DAMA"):
         read_mat_law23(block, model, log)
         return
@@ -41570,13 +41571,24 @@ def read_mat_law34(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         title=title
     )
     model.mat_law34s[mat_id] = mat
+    if 3.0 * k + g0 > 0.0:
+        young = (9.0 * k * g0) / (3.0 * k + g0)
+        nu = (3.0 * k - 2.0 * g0) / (2.0 * (3.0 * k + g0))
+    else:
+        young = 0.0
+        nu = 0.0
+
     model.materials[mat_id] = Material(
         id=mat_id, law=34, rho0=rho0, title=title,
         params={
-            "rho": rho0, "k": k, "g0": g0, "gl": gl, "beta": beta,
-            "p0": p0, "phi": phi, "gamma0": gamma0,
+            "rho": rho0, "rhor": rhor, "k": k, "bulk": k,
+            "g0": g0, "gl": gl, "gi": gl, "beta": beta, "decay": beta,
+            "p0": p0, "phi": phi, "gamma0": gamma0, "gama0": gamma0,
+            "E": young, "nu": nu,
+
         }
     )
+
 
 
 def read_mat_law23(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -83098,8 +83110,11 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_LAW34": read_mat,
     "MAT_BOLTZMAN": read_mat,
     "MAT_BOLTZMANN": read_mat,
+    "MAT_VISC_MAXW": read_mat,
     "BOLTZMAN": read_mat,
     "BOLTZMANN": read_mat,
+    "VISC_MAXW": read_mat,
+
     "MAT_LAW23": read_mat,
     "MAT_PLAS_DAMA": read_mat,
     "PLAS_DAMA": read_mat,
