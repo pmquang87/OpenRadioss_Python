@@ -255,8 +255,12 @@ def init_uv37(
     p0 = float(p.get("p0", 1.01325e5))
 
     if pshift is None:
+        pshift_val = p.get("pshift")
         psh_raw = float(p.get("psh", 0.0))
-        pshift = float(p.get("pshift", -p0 if psh_raw == 0.0 else -psh_raw))
+        if pshift_val is not None and float(pshift_val) != 0.0:
+            pshift = float(pshift_val)
+        else:
+            pshift = -p0 if psh_raw == 0.0 else -psh_raw
 
     if rho is None:
         rho0_ref = float(getattr(mat, "rho0", None) or (rho_l0 * alpha1 + (1.0 - alpha1) * rho_g0))
@@ -367,8 +371,12 @@ def solid_update(
     p0 = float(p.get("p0", 1.01325e5))
     nu_g = float(p.get("nu_g", 0.0))
     nu_vol_g = float(p.get("nu_vol_g", 0.0))
-
-    pshift = float(p.get("pshift", -p0 if p.get("psh", 0.0) == 0.0 else -float(p.get("psh", 0.0))))
+    pshift_val = p.get("pshift")
+    psh_raw = float(p.get("psh", 0.0))
+    if pshift_val is not None and float(pshift_val) != 0.0:
+        pshift = float(pshift_val)
+    else:
+        pshift = -p0 if psh_raw == 0.0 else -psh_raw
     isolver = int(p.get("isolver", 1))
     pmin = float(p.get("pmin", -p0))
     r1 = c_l / rho_l0 if rho_l0 > 0.0 else 0.0
