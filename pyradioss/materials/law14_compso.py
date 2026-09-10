@@ -252,10 +252,13 @@ def build_law14(rec: Any = None, **kwargs: Any) -> Material:
 
     f12 = _tw_cross(sigyt1, sigyc1, sigyt2, sigyc2)
     f13 = f12
-    if sigyt2 > 0.0 and sigyc2 > 0.0 and not math.isinf(sigyt2) and not math.isinf(sigyc2):
+    if sigyt2 > 0.0 and sigyc2 > 0.0 and not math.isinf(sigyt2) and not math.isinf(sigyc2) and sigyt2 < 1.0e29 and sigyc2 < 1.0e29:
         f23 = -0.5 / (sigyt2 * sigyc2)
     else:
-        f23 = _tw_cross(sigyt2, sigyc2, sigyt2, sigyc2)
+        f23 = 0.0
+
+    ft1 = f11 * f22 - 4.0 * (f12**2)
+    ft2 = (f22**2) - 4.0 * (f23**2)
 
     d_mat = np.array(
         [
@@ -411,11 +414,17 @@ def build_law14(rec: Any = None, **kwargs: Any) -> Material:
         "icc": icc,
         "strflag": icc,
         # Compliance & Stiffness
+        "C11": c11,
         "c11": c11,
+        "C22": c22,
         "c22": c22,
+        "C33": c33,
         "c33": c33,
+        "C12": c12,
         "c12": c12,
+        "C13": c13,
         "c13": c13,
+        "C23": c23,
         "c23": c23,
         "DETC": detc,
         "detc": detc,
@@ -478,6 +487,10 @@ def build_law14(rec: Any = None, **kwargs: Any) -> Material:
         "f13": f13,
         "F23": f23,
         "f23": f23,
+        "FT1": ft1,
+        "ft1": ft1,
+        "FT2": ft2,
+        "ft2": ft2,
         "E": e11,
         "nu": nu12,
     }
@@ -492,7 +505,6 @@ def build_law14(rec: Any = None, **kwargs: Any) -> Material:
     )
     mat.d_mat = d_mat
     mat.ssp = ssp
-    mat.sound_speed_solid = lambda: ssp
     return mat
 
 
@@ -677,17 +689,45 @@ def solid_update(
         if len(tsaiwu) == 1 and n > 1:
             tsaiwu = np.full(n, tsaiwu[0], dtype=float)
 
-    # Coordinate triad vectors if supplied
+    # Coordinate rotation: support both axes rotation matrix and triad vectors
+    axes = extra.get("axes")
     rx = extra.get("rx")
     ry = extra.get("ry")
     rz = extra.get("rz")
     sx = extra.get("sx")
     sy = extra.get("sy")
     sz = extra.get("sz")
-    use_rot = rx is not None and ry is not None and rz is not None and sx is not None and sy is not None and sz is not None
+    use_triad = rx is not None and ry is not None and rz is not None and sx is not None and sy is not None and sz is not None
+
+    use_rot = False
+    if axes is not None:
+        axes_arr = np.asarray(axes, dtype=float)
+        if axes_arr.ndim == 2 and axes_arr.shape == (n, 9):
+            use_rot = True
+            ax, ay, az = axes_arr[:, 0], axes_arr[:, 1], axes_arr[:, 2]
+            bx, by, bz = axes_arr[:, 3], axes_arr[:, 4], axes_arr[:, 5]
+            cx, cy, cz = axes_arr[:, 6], axes_arr[:, 7], axes_arr[:, 8]
+        elif axes_arr.ndim == 3 and axes_arr.shape == (n, 3, 3):
+            use_rot = True
+            ax, ay, az = axes_arr[:, 0, 0], axes_arr[:, 0, 1], axes_arr[:, 0, 2]
+            bx, by, bz = axes_arr[:, 1, 0], axes_arr[:, 1, 1], axes_arr[:, 1, 2]
+            cx, cy, cz = axes_arr[:, 2, 0], axes_arr[:, 2, 1], axes_arr[:, 2, 2]
+        elif axes_arr.ndim == 2 and axes_arr.shape == (3, 3):
+            use_rot = True
+            ax = np.full(n, axes_arr[0, 0])
+            ay = np.full(n, axes_arr[0, 1])
+            az = np.full(n, axes_arr[0, 2])
+            bx = np.full(n, axes_arr[1, 0])
+            by = np.full(n, axes_arr[1, 1])
+            bz = np.full(n, axes_arr[1, 2])
+            cx = np.full(n, axes_arr[2, 0])
+            cy = np.full(n, axes_arr[2, 1])
+            cz = np.full(n, axes_arr[2, 2])
+    elif use_triad:
+        use_rot = True
+        ax, ay, az, bx, by, bz, cx, cy, cz = m14ama(rx, ry, rz, sx, sy, sz)
 
     if use_rot:
-        ax, ay, az, bx, by, bz, cx, cy, cz = m14ama(rx, ry, rz, sx, sy, sz)
         s_mat, d_mat = m14gtf(s_in, d_in, ax, ay, az, bx, by, bz, cx, cy, cz)
     else:
         s_mat = s_in
@@ -788,32 +828,53 @@ def consistent_solid_tangent(
     epsp: Optional[np.ndarray] = None,
     dt: float = 0.0,
     extra: Optional[Dict[str, Any]] = None,
+    epsp_incr: Any = None,
     deps: Optional[np.ndarray] = None,
-    symmetric: bool = True,
+    symmetric: bool = False,
     h: float = 1.0e-7,
-    epsp_incr: Optional[np.ndarray] = None,
+    **kwargs: Any,
 ) -> np.ndarray:
-    """Return 6x6 algorithmic consistent tangent stiffness tensor.
+    """Return (n, 6, 6) or (6, 6) algorithmic consistent tangent stiffness tensor for LAW14.
 
     In the elastic unyielding regime, returns the exact orthotropic D matrix.
     In the damaged or plastic regimes, computes the consistent tangent via
     central finite difference perturbation of _update_one_element.
     """
+    if deps is None and "deps" in kwargs:
+        deps = kwargs["deps"]
+    if "symmetric" in kwargs and kwargs["symmetric"] is not None:
+        symmetric = bool(kwargs["symmetric"])
+    if "h" in kwargs and kwargs["h"] is not None:
+        h = float(kwargs["h"])
+
+    # If deps not provided as keyword, check if epsp_incr was passed as strain increment
+    if deps is None and epsp_incr is not None:
+        incr_arr = np.asarray(epsp_incr, dtype=float)
+        if (incr_arr.ndim == 1 and incr_arr.shape[0] == 6) or (incr_arr.ndim == 2 and incr_arr.shape[1] == 6):
+            deps = incr_arr
+
     p = getattr(mat, "params", {}) or {}
     if "D11" not in p and "d_mat" not in p:
         mat_built = build_law14(mat)
         p = mat_built.params
 
-    is_1d = (sig.ndim == 1)
-    s_in = np.atleast_2d(sig).copy()
-    n = s_in.shape[0]
+    sig_arr = np.asarray(sig, dtype=float)
+    is_1d = (sig_arr.ndim == 1)
+    sig_2d = sig_arr[None, :].copy() if is_1d else sig_arr.copy()
+    n = sig_2d.shape[0]
+    if n == 0:
+        return np.empty((0, 6, 6), dtype=float)
 
     if deps is None:
-        deps_in = np.zeros((n, 6), dtype=float)
+        deps_2d = np.zeros((n, 6), dtype=float)
     else:
-        deps_in = np.atleast_2d(deps).astype(float).copy()
-        if deps_in.shape[0] != n:
-            deps_in = np.zeros((n, 6), dtype=float)
+        deps_arr = np.asarray(deps, dtype=float)
+        deps_2d = deps_arr[None, :].copy() if deps_arr.ndim == 1 else deps_arr.copy()
+        if deps_2d.shape[0] != n:
+            if deps_2d.shape[0] == 1 and n > 1:
+                deps_2d = np.repeat(deps_2d, n, axis=0)
+            else:
+                deps_2d = np.zeros((n, 6), dtype=float)
 
     if epsp is None:
         ep = np.zeros(n, dtype=float)
@@ -881,6 +942,57 @@ def consistent_solid_tangent(
         if len(sigf) == 1 and n > 1:
             sigf = np.full(n, sigf[0], dtype=float)
 
+    # Coordinate triad vectors if supplied
+    rx = extra.get("rx")
+    ry = extra.get("ry")
+    rz = extra.get("rz")
+    sx = extra.get("sx")
+    sy = extra.get("sy")
+    sz = extra.get("sz")
+    use_triad = (
+        rx is not None and ry is not None and rz is not None
+        and sx is not None and sy is not None and sz is not None
+    )
+
+    axes = extra.get("axes", extra.get("frame", extra.get("A")))
+    has_rot = False
+    if axes is not None:
+        axes_arr = np.asarray(axes, dtype=float)
+        if axes_arr.ndim == 2 and axes_arr.shape == (n, 9):
+            has_rot = True
+            ax, ay, az = axes_arr[:, 0], axes_arr[:, 1], axes_arr[:, 2]
+            bx, by, bz = axes_arr[:, 3], axes_arr[:, 4], axes_arr[:, 5]
+            cx, cy, cz = axes_arr[:, 6], axes_arr[:, 7], axes_arr[:, 8]
+        elif axes_arr.ndim == 3 and axes_arr.shape == (n, 3, 3):
+            has_rot = True
+            ax, ay, az = axes_arr[:, 0, 0], axes_arr[:, 0, 1], axes_arr[:, 0, 2]
+            bx, by, bz = axes_arr[:, 1, 0], axes_arr[:, 1, 1], axes_arr[:, 1, 2]
+            cx, cy, cz = axes_arr[:, 2, 0], axes_arr[:, 2, 1], axes_arr[:, 2, 2]
+        elif axes_arr.ndim == 2 and axes_arr.shape == (3, 3):
+            has_rot = True
+            ax = np.full(n, axes_arr[0, 0])
+            ay = np.full(n, axes_arr[0, 1])
+            az = np.full(n, axes_arr[0, 2])
+            bx = np.full(n, axes_arr[1, 0])
+            by = np.full(n, axes_arr[1, 1])
+            bz = np.full(n, axes_arr[1, 2])
+            cx = np.full(n, axes_arr[2, 0])
+            cy = np.full(n, axes_arr[2, 1])
+            cz = np.full(n, axes_arr[2, 2])
+    elif use_triad:
+        has_rot = True
+        ax, ay, az, bx, by, bz, cx, cy, cz = m14ama(rx, ry, rz, sx, sy, sz)
+
+    if has_rot:
+        s_mat, d_mat = m14gtf(
+            sig_2d,
+            deps_2d,
+            ax, ay, az, bx, by, bz, cx, cy, cz,
+        )
+    else:
+        s_mat = sig_2d
+        d_mat = deps_2d
+
     d11 = float(p["D11"])
     d12 = float(p["D12"])
     d13 = float(p["D13"])
@@ -906,76 +1018,229 @@ def consistent_solid_tangent(
     tangents = np.zeros((n, 6, 6), dtype=float)
 
     for i in range(n):
-        s_i = s_in[i].copy()
-        dam_i = dam[i].copy()
         off_i = off[i]
 
-        # Element completely degraded/deleted
-        if off_i == 0.0:
+        # Element completely degraded or below cutoff
+        if off_i <= 0.0 or off_i < 0.1:
             tangents[i] = 0.0
             continue
 
-        # Check if element is in pure elastic undamaged regime
-        is_elastic = (
-            dam_i[0] == 0.0
-            and dam_i[1] == 0.0
-            and dam_i[2] == 0.0
-            and dam_i[3] == 0.0
-            and wpla[i] == 0.0
-            and ep[i] == 0.0
-            and np.allclose(deps_in[i], 0.0)
-            and np.allclose(s_i, 0.0)
+        base_d = d_mat[i]
+        s_i = s_mat[i]
+        dam_i = dam[i].copy()
+
+        is_damaged = (
+            dam_i[0] > 0.0
+            or dam_i[1] > 0.0
+            or dam_i[2] > 0.0
+            or epc[i, 0] > 0.0
+            or epc[i, 1] > 0.0
+            or epc[i, 2] > 0.0
         )
 
-        if is_elastic:
+        # Trial stresses under base_d
+        t1 = s_i[0] + d11 * base_d[0] + d12 * base_d[1] + d13 * base_d[2]
+        t2 = s_i[1] + d12 * base_d[0] + d22 * base_d[1] + d23 * base_d[2]
+        t3 = s_i[2] + d13 * base_d[0] + d23 * base_d[1] + d33 * base_d[2]
+        t4 = s_i[3] + g12 * base_d[3]
+        t5 = s_i[4] + g23 * base_d[4]
+        t6 = s_i[5] + g31 * base_d[5]
+
+        sigt1 = float(p.get("sigt1", 0.0))
+        sigt2 = float(p.get("sigt2", 0.0))
+        sigt3 = float(p.get("sigt3", 0.0))
+        will_crack = (
+            (sigt1 > 0.0 and t1 > sigt1)
+            or (sigt2 > 0.0 and t2 > sigt2)
+            or (sigt3 > 0.0 and t3 > sigt3)
+        )
+
+        f1 = float(p.get("F1", 0.0))
+        f2 = float(p.get("F2", 0.0))
+        f3 = float(p.get("F3", 0.0))
+        f4 = float(p.get("F4", 0.0))
+        f5 = float(p.get("F5", 0.0))
+        f6 = float(p.get("F6", 0.0))
+        f11 = float(p.get("F11", 0.0))
+        f22 = float(p.get("F22", 0.0))
+        f33 = float(p.get("F33", 0.0))
+        f44 = float(p.get("F44", 0.0))
+        f55 = float(p.get("F55", 0.0))
+        f66 = float(p.get("F66", 0.0))
+        f12 = float(p.get("F12", 0.0))
+        f23 = float(p.get("F23", 0.0))
+        f13 = float(p.get("F13", 0.0))
+
+        wvec_tw = (
+            f1 * t1
+            + f2 * t2
+            + f3 * t3
+            + f4 * t4
+            + f5 * t5
+            + f6 * t6
+            + f11 * (t1**2)
+            + f22 * (t2**2)
+            + f33 * (t3**2)
+            + f44 * (t4**2)
+            + f55 * (t5**2)
+            + f66 * (t6**2)
+            + 2.0 * f12 * t1 * t2
+            + 2.0 * f13 * t1 * t3
+            + 2.0 * f23 * t2 * t3
+        )
+
+        cb_val = float(p.get("cb", 0.0))
+        cn_val = float(p.get("cn", 1.0))
+        fmax_val = float(p.get("fmax", 1.0e10))
+        c_rate = float(p.get("c", 0.0))
+        eps0 = float(p.get("eps0", 0.0))
+        icc = int(p.get("ICC", 0))
+
+        if dt > 0.0:
+            epsp_rate = max(
+                abs(base_d[0] / dt),
+                abs(base_d[1] / dt),
+                abs(base_d[2] / dt),
+                0.5 * abs(base_d[3] / dt),
+                0.5 * abs(base_d[4] / dt),
+                0.5 * abs(base_d[5] / dt),
+            )
+        else:
+            epsp_rate = 0.0
+
+        if epsp_rate > eps0 and c_rate > 0.0 and eps0 > 0.0:
+            rate_fac = 1.0 + c_rate * math.log(epsp_rate / eps0)
+        else:
+            rate_fac = 1.0
+
+        sigmx = (fmax_val * rate_fac) if icc in (1, 3) else fmax_val
+        cb_eff = cb_val * rate_fac
+        ca_eff = 1.0 * rate_fac
+        wpla_term = (wpla[i] ** cn_val) if wpla[i] > 0.0 else 0.0
+        sigmy = min(sigmx, ca_eff + cb_eff * wpla_term)
+
+        # Check if element is in pure elastic undamaged regime
+        if not has_rot and not is_damaged and not will_crack and wvec_tw < sigmy and off_i == 1.0:
             tangents[i] = D_mat.copy()
+            if symmetric:
+                tangents[i] = 0.5 * (tangents[i] + tangents[i].T)
             continue
 
         # Numerical perturbation: d(sigma) / d(deps)
-        base_d = deps_in[i].copy()
         for j in range(6):
-            d_p = base_d.copy()
-            d_m = base_d.copy()
-            d_p[j] += h
-            d_m[j] -= h
+            if has_rot:
+                d_p_g = deps_2d[i].copy()
+                d_m_g = deps_2d[i].copy()
+                d_p_g[j] += h
+                d_m_g[j] -= h
 
-            s_p, _, _, _, _, _, _, _, _ = _update_one_element(
-                p,
-                s_i.copy(),
-                d_p,
-                ep[i],
-                dt,
-                dam_i.copy(),
-                epe[i].copy(),
-                epc[i].copy(),
-                wpla[i],
-                off_i,
-                epsf[i],
-                sigf[i],
-            )
-            s_m, _, _, _, _, _, _, _, _ = _update_one_element(
-                p,
-                s_i.copy(),
-                d_m,
-                ep[i],
-                dt,
-                dam_i.copy(),
-                epe[i].copy(),
-                epc[i].copy(),
-                wpla[i],
-                off_i,
-                epsf[i],
-                sigf[i],
-            )
+                _, d_p_m = m14gtf(
+                    sig_2d[i : i + 1],
+                    d_p_g[None, :],
+                    ax[i : i + 1], ay[i : i + 1], az[i : i + 1],
+                    bx[i : i + 1], by[i : i + 1], bz[i : i + 1],
+                    cx[i : i + 1], cy[i : i + 1], cz[i : i + 1],
+                )
+                _, d_m_m = m14gtf(
+                    sig_2d[i : i + 1],
+                    d_m_g[None, :],
+                    ax[i : i + 1], ay[i : i + 1], az[i : i + 1],
+                    bx[i : i + 1], by[i : i + 1], bz[i : i + 1],
+                    cx[i : i + 1], cy[i : i + 1], cz[i : i + 1],
+                )
 
-            tangents[i, :, j] = (s_p - s_m) / (2.0 * h)
+                s_p_m, _, _, _, _, _, _, _, _ = _update_one_element(
+                    p,
+                    s_i.copy(),
+                    d_p_m[0],
+                    ep[i],
+                    dt,
+                    dam_i.copy(),
+                    epe[i].copy(),
+                    epc[i].copy(),
+                    wpla[i],
+                    off_i,
+                    epsf[i],
+                    sigf[i],
+                )
+                s_m_m, _, _, _, _, _, _, _, _ = _update_one_element(
+                    p,
+                    s_i.copy(),
+                    d_m_m[0],
+                    ep[i],
+                    dt,
+                    dam_i.copy(),
+                    epe[i].copy(),
+                    epc[i].copy(),
+                    wpla[i],
+                    off_i,
+                    epsf[i],
+                    sigf[i],
+                )
 
+                s_p = m14ftg(
+                    s_p_m[None, :],
+                    ax[i : i + 1], ay[i : i + 1], az[i : i + 1],
+                    bx[i : i + 1], by[i : i + 1], bz[i : i + 1],
+                    cx[i : i + 1], cy[i : i + 1], cz[i : i + 1],
+                )[0]
+                s_m = m14ftg(
+                    s_m_m[None, :],
+                    ax[i : i + 1], ay[i : i + 1], az[i : i + 1],
+                    bx[i : i + 1], by[i : i + 1], bz[i : i + 1],
+                    cx[i : i + 1], cy[i : i + 1], cz[i : i + 1],
+                )[0]
+            else:
+                d_p = base_d.copy()
+                d_m = base_d.copy()
+                d_p[j] += h
+                d_m[j] -= h
+
+                s_p, _, _, _, _, _, _, _, _ = _update_one_element(
+                    p,
+                    s_i.copy(),
+                    d_p,
+                    ep[i],
+                    dt,
+                    dam_i.copy(),
+                    epe[i].copy(),
+                    epc[i].copy(),
+                    wpla[i],
+                    off_i,
+                    epsf[i],
+                    sigf[i],
+                )
+                s_m, _, _, _, _, _, _, _, _ = _update_one_element(
+                    p,
+                    s_i.copy(),
+                    d_m,
+                    ep[i],
+                    dt,
+                    dam_i.copy(),
+                    epe[i].copy(),
+                    epc[i].copy(),
+                    wpla[i],
+                    off_i,
+                    epsf[i],
+                    sigf[i],
+                )
+
+            diff = s_p - s_m
+            if np.all(np.isfinite(diff)):
+                tangents[i, :, j] = diff / (2.0 * h)
+            else:
+                tangents[i, :, j] = 0.0
+
+        np.nan_to_num(tangents[i], copy=False)
         if symmetric:
             tangents[i] = 0.5 * (tangents[i] + tangents[i].T)
 
     if is_1d:
         return tangents[0]
     return tangents
+
+
+solid_tangent = consistent_solid_tangent
 
 
 # ============================================================================
