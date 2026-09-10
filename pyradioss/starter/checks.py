@@ -636,6 +636,8 @@ def check_model(model: Model, log: MessageLog) -> None:
         if allowed is None and name != "springs":
             continue
         for sl, mat, prop in group.state["slices"]:
+            if name == "springs" and (getattr(mat, "id", 0) == 0 or getattr(mat, "law", 0) in (0, -1)):
+                continue
             if mat.law == 999 and mat.eos is None:
                 # M37 pack 1: a /MAT/GAS on elements has no pressure or
                 # stiffness of its own — the initial state must come
