@@ -503,6 +503,7 @@ def init_group(group, model, log):
             fac[sl] = 12.0                   # QBAT/QEPH/DKT18 keep A/12
     group.state["dt_iner"] = mass / 4.0 * (area / fac + thick ** 2 / 12.0)
     inertia_c = np.repeat(group.state["dt_iner"], 4)
+    group._model = model
     return node_idx, mass_c, inertia_c
 
 
@@ -537,7 +538,7 @@ def _init_material_state(group, nip_max):
     if any(mat.fail is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros((n, nip_max))
     st["chk_fail"] = any(
-        mat.fail is not None or getattr(mat, "law", 1) in (25, 27)
+        mat.fail is not None or getattr(mat, "law", 1) in (15, 25, 27)
         or mat.params.get("eps_p_max", EP30) < 1e30
         for _, mat, _ in st["slices"])
 
@@ -547,6 +548,8 @@ def _layer_extra(st, sl, k):
     law-specific arrays plus the shared layer-failure flags."""
     extra = {name: arr[sl, k] for name, arr in st["mat_extra"].items()}
     extra["layfail"] = st["layfail"][sl, k]
+    if "time" in st:
+        extra["time"] = st["time"]
     return extra
 
 
@@ -587,7 +590,7 @@ def _element_deletion(st, nip_of):
     layfail = st["layfail"]
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
         law = getattr(mat, "law", 1)
-        if not (mat.fail is not None or law in (25, 27)
+        if not (mat.fail is not None or law in (15, 25, 27)
                 or mat.params.get("eps_p_max", EP30) < 1e30):
             continue
         nip = nip_of[isl]
@@ -603,6 +606,12 @@ def _element_deletion(st, nip_of):
                 dead = nbroken >= 1
             else:
                 dead = nbroken >= fail_npt
+        elif law == 15:
+            ioff = int(mat.params.get("ioff", mat.params.get("itype", 0)))
+            if ioff == 2 and nip > 1:
+                dead = nbroken == nip
+            else:
+                dead = nbroken >= 1
         elif mat.fail is not None and getattr(mat.fail, "ifail_sh", 1) == 4:
             dead = np.zeros(len(off[sl]), dtype=bool)
         elif mat.fail is not None and getattr(mat.fail, "ifail_sh", 1) == 3:
@@ -948,6 +957,8 @@ def forces(group, x, v, vr, dt, fint, mint):
         V[idx, :, 1] += corr_y
 
     # ---- layer stress updates + resultants ---------------------------------
+    if hasattr(group, "_model") and hasattr(group._model, "t"):
+        st["time"] = group._model.t
     sig = st["sig"]
     epsp_old = st["epsp"].copy() if st["chk_fail"] else None
     Nres = np.zeros((n, 3))     # membrane force / length

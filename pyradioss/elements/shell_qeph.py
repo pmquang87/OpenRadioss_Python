@@ -617,6 +617,7 @@ def init_group(group, model, log):
     mass_c = np.repeat(mass / 4.0, 4)
     group.state["dt_iner"] = mass / 4.0 * (thick ** 2 + area) / 12.0
     inertia_c = np.repeat(group.state["dt_iner"], 4)
+    group._model = model
     return node_idx, mass_c, inertia_c
 
 
@@ -1038,6 +1039,8 @@ def forces(group, x, v, vr, dt, fint, mint):
     kap = vdef[:, 5:8] * dt
 
     sig = st["sig"]
+    if hasattr(group, "_model") and hasattr(group._model, "t"):
+        st["time"] = group._model.t
     epsp_old = st["epsp"].copy() if st["chk_fail"] else None
     Nres = np.zeros((n, 3))
     Mres = np.zeros((n, 3))

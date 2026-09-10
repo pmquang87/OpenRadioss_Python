@@ -141,16 +141,23 @@ def strain_rate_factor(
     eps_dot: float,
     c: float = 0.0,
     epdr: float = 1.0,
+    strflag: int = 1,
+    formulation: str = "log",
 ) -> float:
     """Strain rate enhancement factor.
 
-    Fortran source: engine/source/materials/mat/mat015/m15cplrc.F:177-186
+    Fortran origin: engine/source/materials/mat/mat015/m15cplrc.F:177-186
+      If eps_dot > epdr:
+        epspfac = 1 + c * log(eps_dot / epdr)
+      Else:
+        epspfac = 1.0
 
-    If eps_dot > epdr:
-      epspfac = 1 + c * log(eps_dot / epdr)
-    Else:
-      epspfac = 1.0
+    Cowper-Symonds / power formulation:
+      epspfac = 1 + (eps_dot / c) ** (1 / epdr) if strflag != 0 else 1.0
     """
+    if strflag == 0:
+        return 1.0
+
     ed = float(eps_dot)
     c_val = float(c)
     epdr_val = float(epdr)
@@ -158,6 +165,12 @@ def strain_rate_factor(
     if ed <= 0.0 or c_val <= 0.0:
         return 1.0
 
+    if formulation.lower() in ("cowper_symonds", "power"):
+        if epdr_val > 0.0:
+            return 1.0 + (ed / c_val) ** (1.0 / epdr_val)
+        return 1.0
+
+    # Default Fortran log rate law (m15cplrc.F:177-186)
     if epdr_val > 0.0 and ed > epdr_val:
         return 1.0 + c_val * math.log(ed / epdr_val)
     return 1.0
@@ -349,7 +362,7 @@ def build_law15(rec: Any = None, **kwargs: Any) -> Material:
     if c1 <= 0.0:
         c1 = sigyc1
     if c2 <= 0.0:
-        c2 = sigyc2
+        c2 = s2 if (0.0 < s2 < _INF) else sigyc2
     if s12 <= 0.0:
         s12 = sigt12
 
@@ -400,6 +413,8 @@ def build_law15(rec: Any = None, **kwargs: Any) -> Material:
         "g12": g12,
         "g23": g23,
         "g31": g31,
+        "G": (g12 + g23 + g31) / 3.0 if (g12 + g23 + g31) > 0.0 else g12,
+        "MAT_G": (g12 + g23 + g31) / 3.0 if (g12 + g23 + g31) > 0.0 else g12,
         "MAT_GAB": g12,
         "MAT_GBC": g23,
         "MAT_GCA": g31,
@@ -733,7 +748,7 @@ def consistent_shell_tangent(
                 [c12, c22, 0.0],
                 [0.0, 0.0, g12_eff],
             ], dtype=np.float64)
-            tangents[i] = c_el
+            tangents[i] = c_el if not symmetric else 0.5 * (c_el + c_el.T)
             continue
 
         # Matrix failure
@@ -763,24 +778,54 @@ def consistent_shell_tangent(
 
         wvec = tsai_wu_yield_criterion(s1, s2, s12, f1, f2, f11, f22, f33, f12)
 
-        if wvec >= fyld - 1e-5:
-            # Consistent elastoplastic tangent
-            m_grad = np.array([
-                f1 + 2.0 * f11 * s1 + 2.0 * f12 * s2,
-                f2 + 2.0 * f22 * s2 + 2.0 * f12 * s1,
-                2.0 * f33 * s12,
-            ], dtype=np.float64)
+        # Determine whether yielding occurs and the stress point for normal flow
+        is_yielding = False
+        so1, so2, so3 = s1, s2, s12
+        if deps is not None:
+            d_arr = np.asarray(deps, dtype=np.float64)
+            if d_arr.ndim == 1:
+                deps_i = d_arr
+            elif d_arr.ndim == 2:
+                deps_i = d_arr[i] if i < d_arr.shape[0] else d_arr[0]
+            else:
+                deps_i = np.zeros(3, dtype=np.float64)
+            t_trial = sig_2d[i] + c_el @ deps_i
+            w_trial = tsai_wu_yield_criterion(t_trial[0], t_trial[1], t_trial[2], f1, f2, f11, f22, f33, f12)
+            if w_trial > fyld:
+                is_yielding = True
+                if wvec >= 0.9 * fyld:
+                    so1, so2, so3 = s1, s2, s12
+                else:
+                    coefa = f11 * (t_trial[0] ** 2) + f22 * (t_trial[1] ** 2) + f33 * (t_trial[2] ** 2) + 2.0 * f12 * t_trial[0] * t_trial[1]
+                    coefb = f1 * t_trial[0] + f2 * t_trial[1]
+                    delta = coefb ** 2 + 4.0 * coefa * fyld
+                    if delta >= 0.0 and coefa > _EM20:
+                        beta_yld = max(0.0, min(1.0, (-coefb + math.sqrt(delta)) / (2.0 * coefa)))
+                    else:
+                        beta_yld = 1.0 / math.sqrt(max(_EM20, w_trial / fyld))
+                    so1 = beta_yld * t_trial[0]
+                    so2 = beta_yld * t_trial[1]
+                    so3 = beta_yld * t_trial[2]
+        elif wvec >= fyld - 1e-5:
+            is_yielding = True
 
-            m_cel = m_grad @ c_el
-            denom_el = float(m_grad @ m_cel)
+        if is_yielding:
+            # Consistent elastoplastic tangent
+            dp1 = f1 + 2.0 * f11 * so1 + 2.0 * f12 * so2
+            dp2 = f2 + 2.0 * f22 * so2 + 2.0 * f12 * so1
+            dp3 = 2.0 * f33 * so3
+            m_grad = np.array([dp1, dp2, dp3], dtype=np.float64)
+
+            v = c_el @ m_grad
+            u = np.array([v[0], v[1], 2.0 * v[2]], dtype=np.float64)
 
             h_hard = 0.0
-            if wp > 0.0 and b_val > 0.0:
-                h_hard = (s1 * m_grad[0] + s2 * m_grad[1] + 2.0 * s12 * m_grad[2]) * n_val * b_val * (wp ** (n_val - 1.0))
+            if wp > 0.0 and b_val > 0.0 and fyld < fmax_val:
+                h_hard = (so1 * dp1 + so2 * dp2 + 2.0 * so3 * dp3) * n_val * b_val * (wp ** (n_val - 1.0))
 
-            denom = denom_el + h_hard
+            denom = float(dp1 * u[0] + dp2 * u[1] + dp3 * u[2]) + h_hard
             if denom > _EM20:
-                c_ep = c_el - np.outer(m_cel, m_cel) / denom
+                c_ep = c_el - np.outer(u, v) / denom
                 if symmetric:
                     c_ep = 0.5 * (c_ep + c_ep.T)
                 tangents[i] = c_ep
@@ -921,6 +966,10 @@ def shell_update(
 
     s_out = np.zeros_like(s)
     ep_out = np.zeros_like(ep)
+    n_cols = s.shape[1]
+
+    g23 = float(p.get("g23", p.get("G23", p.get("MAT_GBC", 0.0))))
+    g31 = float(p.get("g31", p.get("G31", p.get("MAT_GCA", 0.0))))
 
     for i in range(n):
         if off[i] <= 0.0:
@@ -929,10 +978,14 @@ def shell_update(
         sig_old_1 = s[i, 0]
         sig_old_2 = s[i, 1]
         sig_old_3 = s[i, 2]
+        sig_old_4 = s[i, 3] if n_cols > 3 else 0.0
+        sig_old_5 = s[i, 4] if n_cols > 4 else 0.0
 
         deps_1 = d[i, 0]
         deps_2 = d[i, 1]
         deps_3 = d[i, 2]
+        deps_4 = d[i, 3] if d.shape[1] > 3 else 0.0
+        deps_5 = d[i, 4] if d.shape[1] > 4 else 0.0
 
         dam_f = damt[i, 0]
         dam_m = damt[i, 1]
@@ -940,15 +993,26 @@ def shell_update(
         # --------------------------------------------------------------------
         # 1. Elastic Predictor (m15cplrc.F:118-166)
         # --------------------------------------------------------------------
-        if dam_m < 1.0:
-            # Matrix has cracked: transverse stiffness and Poisson effects zeroed
-            # Fortran lines 148-152: E22 = EM20, NU12 = EM20, NU21 = EM20
+        if dam_f < 1.0:
+            scale_f = max(0.0, dam_f)
+            nu21 = nu12 * e22 / max(e11, _EM20) if e11 > 0.0 else 0.0
+            scale2 = max(1.0e-15, 1.0 - nu12 * nu21)
+            a11 = (e11 / scale2) * scale_f
+            a22 = (e22 / scale2) * scale_f
+            a12 = nu21 * a11
+            g12_eff = g12 * scale_f
+            t1 = sig_old_1 + a11 * deps_1 + a12 * deps_2
+            t2 = sig_old_2 + a12 * deps_1 + a22 * deps_2
+            t3 = sig_old_3 + g12_eff * deps_3
+        elif dam_m < 1.0:
+            scale_m = max(0.0, dam_m)
             a11 = e11
-            a22 = _EM20
+            a22 = max(_EM20, e22 * scale_m)
             a12 = 0.0
+            g12_eff = g12 * scale_m
             t1 = sig_old_1 + a11 * deps_1
-            t2 = 0.0
-            t3 = sig_old_3 + g12 * deps_3
+            t2 = sig_old_2 + a22 * deps_2
+            t3 = sig_old_3 + g12_eff * deps_3
         else:
             nu21 = nu12 * e22 / max(e11, _EM20) if e11 > 0.0 else 0.0
             scale2 = max(1.0e-15, 1.0 - nu12 * nu21)
@@ -959,12 +1023,15 @@ def shell_update(
             t2 = sig_old_2 + a12 * deps_1 + a22 * deps_2
             t3 = sig_old_3 + g12 * deps_3
 
+        t4 = sig_old_4 + g23 * deps_4
+        t5 = sig_old_5 + g31 * deps_5
+
         # --------------------------------------------------------------------
         # 2. Strain Rate Effect (m15cplrc.F:170-195)
         # --------------------------------------------------------------------
         dt_eff = max(dt, _EM20)
-        eps_dot = max(abs(deps_1), abs(deps_2), abs(deps_3)) / dt_eff
-        epspfac = strain_rate_factor(eps_dot, src, srp)
+        eps_dot = max(abs(deps_1), abs(deps_2), abs(deps_3), abs(deps_4), abs(deps_5)) / dt_eff
+        epspfac = strain_rate_factor(eps_dot, src, srp, strflag=strflag)
 
         wp = float(wpla[i])
         fyld = (1.0 + b_val * (wp ** n_val)) * epspfac
@@ -977,7 +1044,7 @@ def shell_update(
         # --------------------------------------------------------------------
         wvec = tsai_wu_yield_criterion(t1, t2, t3, f1, f2, f11, f22, f33, f12)
 
-        if wvec > fyld and off[i] > 0.0:
+        if dam_f >= 1.0 and wvec > fyld and off[i] > 0.0:
             coefa = f11 * (t1 ** 2) + f22 * (t2 ** 2) + f33 * (t3 ** 2) + 2.0 * f12 * t1 * t2
             coefb = f1 * t1 + f2 * t2
             delta = coefb ** 2 + 4.0 * coefa * fyld
@@ -1056,7 +1123,17 @@ def shell_update(
         s11 = t1
         s22 = t2
         s12 = t3
+        s23 = t4
+        s31 = t5
         tfail = sigr[i, 5]
+
+        # Effective transverse tensile limit (prefers s2 if provided, else c2)
+        c2_tens = c2 if (0.0 < c2 < 1e29) else (s2 if (0.0 < s2 < 1e29) else c2)
+
+        ef2 = 0.0
+        efc2 = 0.0
+        em2 = 0.0
+        emc2 = 0.0
 
         # --------------------------------------------------------------------
         # 4. Chang-Chang Failure Checking (m15crak.F:102-188)
@@ -1064,30 +1141,47 @@ def shell_update(
         if dam_f < 1.0:
             # Mode A: Fiber already failed -> exponential relaxation of all stresses
             # Fortran line 104-105
-            if time > 0.0 and time >= tfail:
-                t_elapsed = time - tfail
+            if tmax < 1e20 and np.any(sigr[i, :3] != 0.0):
+                if time > 0.0 and time >= tfail:
+                    t_elapsed = time - tfail
+                else:
+                    sigr[i, 5] += dt
+                    t_elapsed = sigr[i, 5]
+                dam_f = min(0.999, math.exp(-t_elapsed / max(tmax, _EM20)))
+                if dam_f < 0.01:
+                    dam_f = 0.0
+                s11 = sigr[i, 0] * dam_f
+                s22 = sigr[i, 1] * dam_f
+                s12 = sigr[i, 2] * dam_f
+                s23 = sigr[i, 3] * dam_f
+                s31 = sigr[i, 4] * dam_f
             else:
-                sigr[i, 5] += dt
-                t_elapsed = sigr[i, 5]
-            dam_f = min(0.999, math.exp(-t_elapsed / max(tmax, _EM20)))
-            if dam_f < 0.01:
-                dam_f = 0.0
-            s11 = sigr[i, 0] * dam_f
-            s22 = sigr[i, 1] * dam_f
-            s12 = sigr[i, 2] * dam_f
+                s11 = t1
+                s22 = t2
+                s12 = t3
+                s23 = t4
+                s31 = t5
         elif dam_m < 1.0:
-            # Mode B: Matrix already failed -> exponential relaxation of s22, s12
+            # Mode B: Matrix already failed -> exponential relaxation of s22, s12, s23, s31
             # Fortran lines 109-130
-            if time > 0.0 and time >= tfail:
-                t_elapsed = time - tfail
+            if tmax < 1e20 and np.any(sigr[i, :3] != 0.0):
+                if time > 0.0 and time >= tfail:
+                    t_elapsed = time - tfail
+                else:
+                    sigr[i, 5] += dt
+                    t_elapsed = sigr[i, 5]
+                dam_m = min(0.999, math.exp(-t_elapsed / max(tmax, _EM20)))
+                if dam_m < 0.01:
+                    dam_m = 0.0
+                s22 = sigr[i, 1] * dam_m
+                s12 = sigr[i, 2] * dam_m
+                s23 = sigr[i, 3] * dam_m
+                s31 = sigr[i, 4] * dam_m
             else:
-                sigr[i, 5] += dt
-                t_elapsed = sigr[i, 5]
-            dam_m = min(0.999, math.exp(-t_elapsed / max(tmax, _EM20)))
-            if dam_m < 0.01:
-                dam_m = 0.0
-            s22 = sigr[i, 1] * dam_m
-            s12 = sigr[i, 2] * dam_m
+                s22 = t2
+                s12 = t3
+                s23 = t4
+                s31 = t5
 
             # Check fiber failure mode while matrix is cracked
             if s11 > 0.0:
@@ -1105,6 +1199,8 @@ def shell_update(
                 sigr[i, 0] = s11
                 sigr[i, 1] = s22
                 sigr[i, 2] = s12
+                sigr[i, 3] = s23
+                sigr[i, 4] = s31
         else:
             # Mode C: Intact -> check fiber and matrix failure criteria
             # Fortran lines 137-187
@@ -1123,10 +1219,12 @@ def shell_update(
                 sigr[i, 0] = s11
                 sigr[i, 1] = s22
                 sigr[i, 2] = s12
+                sigr[i, 3] = t4
+                sigr[i, 4] = t5
             else:
                 # Matrix cracking failure
                 if s22 >= 0.0:
-                    em2 = (s22 / max(c2, _EM20)) ** 2 + (s12 / max(s12_str, _EM20)) ** 2
+                    em2 = (s22 / max(c2_tens, _EM20)) ** 2 + (s12 / max(s12_str, _EM20)) ** 2
                     emc2 = 0.0
                 else:
                     em2 = 0.0
@@ -1144,6 +1242,8 @@ def shell_update(
                     sigr[i, 0] = s11
                     sigr[i, 1] = s22
                     sigr[i, 2] = s12
+                    sigr[i, 3] = t4
+                    sigr[i, 4] = t5
 
         damt[i, 0] = dam_f
         damt[i, 1] = dam_m
@@ -1151,22 +1251,39 @@ def shell_update(
         # --------------------------------------------------------------------
         # 5. Layer Failure & Element Deletion (IOFF / Itype)
         # --------------------------------------------------------------------
-        if itype != 0:
-            if dam_f < 1.0 or wp >= wpmax_eff:
-                off[i] = 0.0
-                s11 = 0.0
-                s22 = 0.0
-                s12 = 0.0
+        wp_failed = (wp >= wpmax_eff)
+        tens_1_failed = (s11 > 0.0 and ef2 >= 1.0) or (dam_f < 1.0 and sigr[i, 0] > 0.0)
+        tens_2_failed = (s22 >= 0.0 and em2 >= 1.0) or (dam_m < 1.0 and sigr[i, 1] >= 0.0)
+
+        layer_failed = False
+        if itype in (0, 1):
+            layer_failed = wp_failed
+        elif itype == 2:
+            layer_failed = wp_failed or tens_1_failed or (dam_f < 1.0)
+        elif itype == 3:
+            layer_failed = wp_failed or tens_2_failed or (dam_m < 1.0)
+        elif itype == 4:
+            layer_failed = wp_failed or (tens_1_failed and tens_2_failed)
+        elif itype in (5, 6):
+            layer_failed = wp_failed or tens_1_failed or tens_2_failed or (dam_f < 1.0) or (dam_m < 1.0)
         else:
-            if wp >= wpmax_eff:
-                off[i] = 0.0
-                s11 = 0.0
-                s22 = 0.0
-                s12 = 0.0
+            layer_failed = wp_failed or (dam_f < 1.0)
+
+        if layer_failed:
+            off[i] = 0.0
+            s11 = 0.0
+            s22 = 0.0
+            s12 = 0.0
+            s23 = 0.0
+            s31 = 0.0
 
         s_out[i, 0] = s11
         s_out[i, 1] = s22
         s_out[i, 2] = s12
+        if n_cols > 3:
+            s_out[i, 3] = s23
+        if n_cols > 4:
+            s_out[i, 4] = s31
         wpla[i] = wp
         ep_out[i] = wp
 

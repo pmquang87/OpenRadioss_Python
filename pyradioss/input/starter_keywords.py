@@ -38340,56 +38340,56 @@ def read_mat_law15(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     if block.fixed:
         if len(valid_cards) > 0:
-            c0 = valid_cards[0].cut("MAT_LAW15_1")
-            rho0 = _safe_float(c0[0]) if len(c0) > 0 else 0.0
-            rhor = _safe_float(c0[1]) if len(c0) > 1 else 0.0
+            cut0 = valid_cards[0].cut("MAT_LAW15_1")
+            rho0 = _safe_float(cut0[0]) if len(cut0) > 0 else 0.0
+            rhor = _safe_float(cut0[1]) if len(cut0) > 1 else 0.0
         if len(valid_cards) > 1:
-            c1 = valid_cards[1].cut("MAT_LAW15_2")
-            e11 = _safe_float(c1[0]) if len(c1) > 0 else 0.0
-            e22 = _safe_float(c1[1]) if len(c1) > 1 else 0.0
-            nu12 = _safe_float(c1[2]) if len(c1) > 2 else 0.0
+            cut1 = valid_cards[1].cut("MAT_LAW15_2")
+            e11 = _safe_float(cut1[0]) if len(cut1) > 0 else 0.0
+            e22 = _safe_float(cut1[1]) if len(cut1) > 1 else 0.0
+            nu12 = _safe_float(cut1[2]) if len(cut1) > 2 else 0.0
         if len(valid_cards) > 2:
-            c2 = valid_cards[2].cut("MAT_LAW15_3")
-            g12 = _safe_float(c2[0]) if len(c2) > 0 else 0.0
-            g23 = _safe_float(c2[1]) if len(c2) > 1 else 0.0
-            g31 = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+            cut2 = valid_cards[2].cut("MAT_LAW15_3")
+            g12 = _safe_float(cut2[0]) if len(cut2) > 0 else 0.0
+            g23 = _safe_float(cut2[1]) if len(cut2) > 1 else 0.0
+            g31 = _safe_float(cut2[2]) if len(cut2) > 2 else 0.0
         if len(valid_cards) > 3:
-            c3 = valid_cards[3].cut("MAT_LAW15_4")
-            b = _safe_float(c3[0]) if len(c3) > 0 else 0.0
-            n = _safe_float(c3[1]) if len(c3) > 1 else 0.0
-            fmax = _safe_float(c3[2]) if len(c3) > 2 else 0.0
+            cut3 = valid_cards[3].cut("MAT_LAW15_4")
+            b = _safe_float(cut3[0]) if len(cut3) > 0 else 0.0
+            n = _safe_float(cut3[1]) if len(cut3) > 1 else 0.0
+            fmax = _safe_float(cut3[2]) if len(cut3) > 2 else 0.0
         if len(valid_cards) > 4:
-            c4 = valid_cards[4].cut("MAT_LAW15_5")
-            wpmax = _safe_float(c4[0]) if len(c4) > 0 else 0.0
-            wpref = _safe_float(c4[1]) if len(c4) > 1 else 0.0
-            ioff = _safe_int(c4[2]) if len(c4) > 2 else 0
+            cut4 = valid_cards[4].cut("MAT_LAW15_5")
+            wpmax = _safe_float(cut4[0]) if len(cut4) > 0 else 0.0
+            wpref = _safe_float(cut4[1]) if len(cut4) > 1 else 0.0
+            ioff = _safe_int(cut4[2]) if len(cut4) > 2 else 0
         if len(valid_cards) > 5:
-            c5 = valid_cards[5].cut("MAT_LAW15_6")
-            sig_1yt = _safe_float(c5[0]) if len(c5) > 0 else 0.0
-            sig_2yt = _safe_float(c5[1]) if len(c5) > 1 else 0.0
-            sig_1yc = _safe_float(c5[2]) if len(c5) > 2 else 0.0
-            sig_2yc = _safe_float(c5[3]) if len(c5) > 3 else 0.0
-            alpha = _safe_float(c5[4]) if len(c5) > 4 else 0.0
+            cut5 = valid_cards[5].cut("MAT_LAW15_6")
+            sig_1yt = _safe_float(cut5[0]) if len(cut5) > 0 else 0.0
+            sig_2yt = _safe_float(cut5[1]) if len(cut5) > 1 else 0.0
+            sig_1yc = _safe_float(cut5[2]) if len(cut5) > 2 else 0.0
+            sig_2yc = _safe_float(cut5[3]) if len(cut5) > 3 else 0.0
+            alpha = _safe_float(cut5[4]) if len(cut5) > 4 else 0.0
         if len(valid_cards) > 6:
-            c6 = valid_cards[6].cut("MAT_LAW15_7")
-            sig_12yc = _safe_float(c6[0]) if len(c6) > 0 else 0.0
-            sig_12yt = _safe_float(c6[1]) if len(c6) > 1 else 0.0
-            c = _safe_float(c6[2]) if len(c6) > 2 else 0.0
-            eps_dot_0 = _safe_float(c6[3]) if len(c6) > 3 else 0.0
-            icc = _safe_int(c6[4]) if len(c6) > 4 else 0
+            cut6 = valid_cards[6].cut("MAT_LAW15_7")
+            sig_12yc = _safe_float(cut6[0]) if len(cut6) > 0 else 0.0
+            sig_12yt = _safe_float(cut6[1]) if len(cut6) > 1 else 0.0
+            c = _safe_float(cut6[2]) if len(cut6) > 2 else 0.0
+            eps_dot_0 = _safe_float(cut6[3]) if len(cut6) > 3 else 0.0
+            icc = _safe_int(cut6[4]) if len(cut6) > 4 else 0
         if len(valid_cards) > 7:
-            c7 = valid_cards[7].cut("MAT_LAW15_8")
-            beta = _safe_float(c7[0]) if len(c7) > 0 else 0.0
-            tmax = _safe_float(c7[1]) if len(c7) > 1 else 0.0
-            s1 = _safe_float(c7[2]) if len(c7) > 2 else 0.0
-            s2 = _safe_float(c7[3]) if len(c7) > 3 else 0.0
-            s12 = _safe_float(c7[4]) if len(c7) > 4 else 0.0
+            cut7 = valid_cards[7].cut("MAT_LAW15_8")
+            beta = _safe_float(cut7[0]) if len(cut7) > 0 else 0.0
+            tmax = _safe_float(cut7[1]) if len(cut7) > 1 else 0.0
+            s1 = _safe_float(cut7[2]) if len(cut7) > 2 else 0.0
+            s2 = _safe_float(cut7[3]) if len(cut7) > 3 else 0.0
+            s12 = _safe_float(cut7[4]) if len(cut7) > 4 else 0.0
         if len(valid_cards) > 8:
-            c8 = valid_cards[8].cut("MAT_LAW15_9")
-            fsmooth = _safe_int(c8[0]) if len(c8) > 0 else 0
-            fcut = _safe_float(c8[1]) if len(c8) > 1 else 0.0
-            c1 = _safe_float(c8[2]) if len(c8) > 2 else 0.0
-            c2 = _safe_float(c8[3]) if len(c8) > 3 else 0.0
+            cut8 = valid_cards[8].cut("MAT_LAW15_9")
+            fsmooth = _safe_int(cut8[0]) if len(cut8) > 0 else 0
+            fcut = _safe_float(cut8[1]) if len(cut8) > 1 else 0.0
+            c1 = _safe_float(cut8[2]) if len(cut8) > 2 else 0.0
+            c2 = _safe_float(cut8[3]) if len(cut8) > 3 else 0.0
     else:
         if len(valid_cards) > 0:
             t0 = valid_cards[0].tokens()
@@ -38443,6 +38443,10 @@ def read_mat_law15(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             c1 = _safe_float(t8[2]) if len(t8) > 2 else 0.0
             c2 = _safe_float(t8[3]) if len(t8) > 3 else 0.0
 
+    law_name = "LAW15"
+    if len(block.parts) > 1 and block.parts[1].upper() in ("LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "CHANG_CHANG"):
+        law_name = block.parts[1].upper()
+
     mat = MatLaw15(
         id=mat_id, rho0=rho0, rhor=rhor, e11=e11, e22=e22, nu12=nu12,
         g12=g12, g23=g23, g31=g31, b=b, n=n, fmax=fmax,
@@ -38450,7 +38454,7 @@ def read_mat_law15(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         sig_1yt=sig_1yt, sig_2yt=sig_2yt, sig_1yc=sig_1yc, sig_2yc=sig_2yc, alpha=alpha,
         sig_12yc=sig_12yc, sig_12yt=sig_12yt, c=c, eps_dot_0=eps_dot_0, icc=icc,
         beta=beta, tmax=tmax, s1=s1, s2=s2, s12=s12, fsmooth=fsmooth, fcut=fcut,
-        c1=c1, c2=c2, title=title
+        c1=c1, c2=c2, title=title, law_name=law_name
     )
     model.mat_law15s[mat_id] = mat
     try:
@@ -38459,7 +38463,7 @@ def read_mat_law15(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     except Exception:
         e_val = max(e11, e22, 200e9) if max(e11, e22) > 0 else 200e9
         model.materials[mat_id] = InactiveMaterial(
-            id=mat_id, law=15, rho0=rho0, title=title, law_name="LAW15",
+            id=mat_id, law=15, rho0=rho0, title=title, law_name=law_name,
             params={
                 "E": e_val, "MAT_E": e_val, "nu": nu12 if 0.0 <= nu12 < 0.5 else 0.3, "MAT_NU": nu12 if 0.0 <= nu12 < 0.5 else 0.3,
                 "MAT_SIGY": sig_1yt if sig_1yt > 0 else 200e6, "rho": rho0, "MAT_RHO": rho0,
@@ -82889,6 +82893,14 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "BEAM": read_beam,
     "PART": read_part,
     "MAT": read_mat,
+    "LAW15": read_mat_law15,
+    "CHANG": read_mat_law15,
+    "PLAS_ANISO": read_mat_law15,
+    "COMP_CHANG": read_mat_law15,
+    "MAT_LAW15": read_mat_law15,
+    "MAT_CHANG": read_mat_law15,
+    "MAT_PLAS_ANISO": read_mat_law15,
+    "MAT_COMP_CHANG": read_mat_law15,
     "ALE/BCS": read_ale_bcs,
     "ALE": read_ale,        # /ALE/MAT parse-only note (M37)
     "EULER": read_euler,    # /EULER/MAT parse-only note (M37)

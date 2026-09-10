@@ -1552,48 +1552,119 @@ class StarterDeck:
         [Card 8: beta Tmax S1 S2 S12 (%20lg%20lg%20lg%20lg%20lg)]
         [Card 9: Fsmooth Fcut C1 C2 (%10d%20lg%20lg%20lg)]
         """
-        if "mat_id" in kwargs and mid == 0:
-            mid = kwargs["mat_id"]
-        if "mid" in kwargs and mid == 0:
-            mid = kwargs["mid"]
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+        if "mat_id" in kw_low and mid == 0:
+            mid = kw_low["mat_id"]
+        if "mid" in kw_low and mid == 0:
+            mid = kw_low["mid"]
         if isinstance(title, (int, float)) and rho == 0.0:
             rho = float(title)
             title = ""
-        if "rho0" in kwargs and rho == 0.0:
-            rho = kwargs["rho0"]
-        if "rhor" in kwargs and refer_rho is None:
-            refer_rho = kwargs["rhor"]
-        if "rho_ref" in kwargs and refer_rho is None:
-            refer_rho = kwargs["rho_ref"]
+        if "rho0" in kw_low and rho == 0.0:
+            rho = kw_low["rho0"]
+        elif "rho" in kw_low and rho == 0.0:
+            rho = kw_low["rho"]
+        if "rhor" in kw_low and refer_rho is None:
+            refer_rho = kw_low["rhor"]
+        elif "rho_ref" in kw_low and refer_rho is None:
+            refer_rho = kw_low["rho_ref"]
+        elif "refer_rho" in kw_low and refer_rho is None:
+            refer_rho = kw_low["refer_rho"]
 
-        if "e1" in kwargs and e11 == 0.0: e11 = kwargs["e1"]
-        if "ea" in kwargs and e11 == 0.0: e11 = kwargs["ea"]
-        if "e2" in kwargs and e22 == 0.0: e22 = kwargs["e2"]
-        if "eb" in kwargs and e22 == 0.0: e22 = kwargs["eb"]
-        if "nu" in kwargs and nu12 == 0.0: nu12 = kwargs["nu"]
-        if "prab" in kwargs and nu12 == 0.0: nu12 = kwargs["prab"]
-        if "gab" in kwargs and g12 == 0.0: g12 = kwargs["gab"]
-        if "gbc" in kwargs and g23 == 0.0: g23 = kwargs["gbc"]
-        if "gca" in kwargs and g31 == 0.0: g31 = kwargs["gca"]
-        if "hard" in kwargs: n = kwargs["hard"]
-        if "sig" in kwargs and fmax == 0.0: fmax = kwargs["sig"]
-        if "itype" in kwargs: ioff = kwargs["itype"]
-        if "sigyt1" in kwargs and sig_1yt == 0.0: sig_1yt = kwargs["sigyt1"]
-        if "sigyt2" in kwargs and sig_2yt == 0.0: sig_2yt = kwargs["sigyt2"]
-        if "sigyc1" in kwargs and sig_1yc == 0.0: sig_1yc = kwargs["sigyc1"]
-        if "sigyc2" in kwargs and sig_2yc == 0.0: sig_2yc = kwargs["sigyc2"]
-        if "sigc12" in kwargs and sig_12yc == 0.0: sig_12yc = kwargs["sigc12"]
-        if "sigt12" in kwargs and sig_12yt == 0.0: sig_12yt = kwargs["sigt12"]
-        if "src" in kwargs and c == 0.0: c = kwargs["src"]
-        if "srp" in kwargs and eps_dot_0 == 0.0: eps_dot_0 = kwargs["srp"]
-        if "strflag" in kwargs: icc = kwargs["strflag"]
-        if "mchang_s1" in kwargs and s1 == 0.0: s1 = kwargs["mchang_s1"]
-        if "mchang_s2" in kwargs and s2 == 0.0: s2 = kwargs["mchang_s2"]
-        if "mchang_s12" in kwargs and s12 == 0.0: s12 = kwargs["mchang_s12"]
-        if "mchang_c1" in kwargs and c1 == 0.0: c1 = kwargs["mchang_c1"]
-        if "mchang_c2" in kwargs and c2 == 0.0: c2 = kwargs["mchang_c2"]
-        if "c11" in kwargs and c1 == 0.0: c1 = kwargs["c11"]
-        if "c22" in kwargs and c2 == 0.0: c2 = kwargs["c22"]
+        if e11 == 0.0:
+            for k in ("e1", "ea", "e11", "mat_ea"):
+                if k in kw_low: e11 = kw_low[k]; break
+        if e22 == 0.0:
+            for k in ("e2", "eb", "e22", "mat_eb"):
+                if k in kw_low: e22 = kw_low[k]; break
+        if nu12 == 0.0:
+            for k in ("nu", "prab", "nu12", "mat_prab"):
+                if k in kw_low: nu12 = kw_low[k]; break
+        if g12 == 0.0:
+            for k in ("g12", "gab", "mat_gab"):
+                if k in kw_low: g12 = kw_low[k]; break
+        if g23 == 0.0:
+            for k in ("g23", "gbc", "mat_gbc"):
+                if k in kw_low: g23 = kw_low[k]; break
+        if g31 == 0.0:
+            for k in ("g31", "gca", "mat_gca"):
+                if k in kw_low: g31 = kw_low[k]; break
+
+        # Card 8 beta (shear scaling factor) vs Card 4 b (hardening parameter)
+        if "beta_s" in kw_low:
+            beta = kw_low["beta_s"]
+        elif "mat_beta_s" in kw_low:
+            beta = kw_low["mat_beta_s"]
+        if b == 0.0:
+            for k in ("b", "cb", "mat_beta"):
+                if k in kw_low: b = kw_low[k]; break
+        if b == 0.0 and "beta" in kw_low and "beta_s" in kw_low:
+            b = kw_low["beta"]
+
+        for k in ("hard", "n", "cn", "mat_hard"):
+            if k in kw_low: n = kw_low[k]; break
+        if fmax == 0.0:
+            for k in ("sig", "fmax", "mat_sig"):
+                if k in kw_low: fmax = kw_low[k]; break
+        if wpmax == 0.0 and "wpmax" in kw_low:
+            wpmax = kw_low["wpmax"]
+        if "wpref" in kw_low:
+            wpref = kw_low["wpref"]
+        for k in ("itype", "ioff"):
+            if k in kw_low: ioff = int(kw_low[k]); break
+
+        if sig_1yt == 0.0:
+            for k in ("sigyt1", "sig_1yt", "mat_sigyt1"):
+                if k in kw_low: sig_1yt = kw_low[k]; break
+        if sig_2yt == 0.0:
+            for k in ("sigyt2", "sig_2yt", "mat_sigyt2"):
+                if k in kw_low: sig_2yt = kw_low[k]; break
+        if sig_1yc == 0.0:
+            for k in ("sigyc1", "sig_1yc", "mat_sigyc1"):
+                if k in kw_low: sig_1yc = kw_low[k]; break
+        if sig_2yc == 0.0:
+            for k in ("sigyc2", "sig_2yc", "mat_sigyc2"):
+                if k in kw_low: sig_2yc = kw_low[k]; break
+        for k in ("alpha", "mat_alpha"):
+            if k in kw_low: alpha = kw_low[k]; break
+
+        if sig_12yc == 0.0:
+            for k in ("sigc12", "sig_12yc", "mat_sigc12"):
+                if k in kw_low: sig_12yc = kw_low[k]; break
+        if sig_12yt == 0.0:
+            for k in ("sigt12", "sig_12yt", "mat_sigt12"):
+                if k in kw_low: sig_12yt = kw_low[k]; break
+        if c == 0.0:
+            for k in ("src", "c", "cc", "mat_src"):
+                if k in kw_low: c = kw_low[k]; break
+        if eps_dot_0 == 0.0:
+            for k in ("srp", "epdr", "eps0", "eps_dot_0", "mat_srp"):
+                if k in kw_low: eps_dot_0 = kw_low[k]; break
+        for k in ("strflag", "icc"):
+            if k in kw_low: icc = int(kw_low[k]); break
+
+        if tmax == 0.0:
+            for k in ("tmax", "mat_tmax"):
+                if k in kw_low: tmax = kw_low[k]; break
+        if s1 == 0.0:
+            for k in ("s1", "mchang_s1"):
+                if k in kw_low: s1 = kw_low[k]; break
+        if s2 == 0.0:
+            for k in ("s2", "mchang_s2"):
+                if k in kw_low: s2 = kw_low[k]; break
+        if s12 == 0.0:
+            for k in ("s12", "mchang_s12"):
+                if k in kw_low: s12 = kw_low[k]; break
+        if c1 == 0.0:
+            for k in ("c1", "mchang_c1", "c11"):
+                if k in kw_low: c1 = kw_low[k]; break
+        if c2 == 0.0:
+            for k in ("c2", "mchang_c2", "c22"):
+                if k in kw_low: c2 = kw_low[k]; break
+        if "fsmooth" in kw_low:
+            fsmooth = int(kw_low["fsmooth"])
+        if fcut == 0.0 and "fcut" in kw_low:
+            fcut = kw_low["fcut"]
 
         if unit_id is not None:
             self._header("MAT", law_name, mid, unit_id)
@@ -3459,53 +3530,54 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         kw: Dict = {}
         rho_ref = None
         is_fixed = getattr(b, "fixed", False)
-        if len(cards) >= 1:
-            toks = cards[0].cut("MAT_LAW15_1") if is_fixed and hasattr(cards[0], "cut") else cards[0].tokens()
+        vcards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
+        if len(vcards) >= 1:
+            toks = vcards[0].cut("MAT_LAW15_1") if is_fixed and hasattr(vcards[0], "cut") else vcards[0].tokens()
             if len(toks) >= 1 and toks[0]: kw["rho"] = float(toks[0])
             if len(toks) >= 2 and toks[1]: rho_ref = float(toks[1])
-        if len(cards) >= 2:
-            toks = cards[1].cut("MAT_LAW15_2") if is_fixed and hasattr(cards[1], "cut") else cards[1].tokens()
+        if len(vcards) >= 2:
+            toks = vcards[1].cut("MAT_LAW15_2") if is_fixed and hasattr(vcards[1], "cut") else vcards[1].tokens()
             if len(toks) >= 1 and toks[0]: kw["e11"] = float(toks[0])
             if len(toks) >= 2 and toks[1]: kw["e22"] = float(toks[1])
             if len(toks) >= 3 and toks[2]: kw["nu12"] = float(toks[2])
-        if len(cards) >= 3:
-            toks = cards[2].cut("MAT_LAW15_3") if is_fixed and hasattr(cards[2], "cut") else cards[2].tokens()
+        if len(vcards) >= 3:
+            toks = vcards[2].cut("MAT_LAW15_3") if is_fixed and hasattr(vcards[2], "cut") else vcards[2].tokens()
             if len(toks) >= 1 and toks[0]: kw["g12"] = float(toks[0])
             if len(toks) >= 2 and toks[1]: kw["g23"] = float(toks[1])
             if len(toks) >= 3 and toks[2]: kw["g31"] = float(toks[2])
-        if len(cards) >= 4:
-            toks = cards[3].cut("MAT_LAW15_4") if is_fixed and hasattr(cards[3], "cut") else cards[3].tokens()
+        if len(vcards) >= 4:
+            toks = vcards[3].cut("MAT_LAW15_4") if is_fixed and hasattr(vcards[3], "cut") else vcards[3].tokens()
             if len(toks) >= 1 and toks[0]: kw["b"] = float(toks[0])
             if len(toks) >= 2 and toks[1]: kw["n"] = float(toks[1])
             if len(toks) >= 3 and toks[2]: kw["fmax"] = float(toks[2])
-        if len(cards) >= 5:
-            toks = cards[4].cut("MAT_LAW15_5") if is_fixed and hasattr(cards[4], "cut") else cards[4].tokens()
+        if len(vcards) >= 5:
+            toks = vcards[4].cut("MAT_LAW15_5") if is_fixed and hasattr(vcards[4], "cut") else vcards[4].tokens()
             if len(toks) >= 1 and toks[0]: kw["wpmax"] = float(toks[0])
             if len(toks) >= 2 and toks[1]: kw["wpref"] = float(toks[1])
             if len(toks) >= 3 and toks[2]: kw["ioff"] = int(float(toks[2]))
-        if len(cards) >= 6:
-            toks = cards[5].cut("MAT_LAW15_6") if is_fixed and hasattr(cards[5], "cut") else cards[5].tokens()
+        if len(vcards) >= 6:
+            toks = vcards[5].cut("MAT_LAW15_6") if is_fixed and hasattr(vcards[5], "cut") else vcards[5].tokens()
             if len(toks) >= 1 and toks[0]: kw["sig_1yt"] = float(toks[0])
             if len(toks) >= 2 and toks[1]: kw["sig_2yt"] = float(toks[1])
             if len(toks) >= 3 and toks[2]: kw["sig_1yc"] = float(toks[2])
             if len(toks) >= 4 and toks[3]: kw["sig_2yc"] = float(toks[3])
             if len(toks) >= 5 and toks[4]: kw["alpha"] = float(toks[4])
-        if len(cards) >= 7:
-            toks = cards[6].cut("MAT_LAW15_7") if is_fixed and hasattr(cards[6], "cut") else cards[6].tokens()
+        if len(vcards) >= 7:
+            toks = vcards[6].cut("MAT_LAW15_7") if is_fixed and hasattr(vcards[6], "cut") else vcards[6].tokens()
             if len(toks) >= 1 and toks[0]: kw["sig_12yc"] = float(toks[0])
             if len(toks) >= 2 and toks[1]: kw["sig_12yt"] = float(toks[1])
             if len(toks) >= 3 and toks[2]: kw["c"] = float(toks[2])
             if len(toks) >= 4 and toks[3]: kw["eps_dot_0"] = float(toks[3])
             if len(toks) >= 5 and toks[4]: kw["icc"] = int(float(toks[4]))
-        if len(cards) >= 8:
-            toks = cards[7].cut("MAT_LAW15_8") if is_fixed and hasattr(cards[7], "cut") else cards[7].tokens()
+        if len(vcards) >= 8:
+            toks = vcards[7].cut("MAT_LAW15_8") if is_fixed and hasattr(vcards[7], "cut") else vcards[7].tokens()
             if len(toks) >= 1 and toks[0]: kw["beta"] = float(toks[0])
             if len(toks) >= 2 and toks[1]: kw["tmax"] = float(toks[1])
             if len(toks) >= 3 and toks[2]: kw["s1"] = float(toks[2])
             if len(toks) >= 4 and toks[3]: kw["s2"] = float(toks[3])
             if len(toks) >= 5 and toks[4]: kw["s12"] = float(toks[4])
-        if len(cards) >= 9:
-            toks = cards[8].cut("MAT_LAW15_9") if is_fixed and hasattr(cards[8], "cut") else cards[8].tokens()
+        if len(vcards) >= 9:
+            toks = vcards[8].cut("MAT_LAW15_9") if is_fixed and hasattr(vcards[8], "cut") else vcards[8].tokens()
             if len(toks) >= 1 and toks[0]: kw["fsmooth"] = int(float(toks[0]))
             if len(toks) >= 2 and toks[1]: kw["fcut"] = float(toks[1])
             if len(toks) >= 3 and toks[2]: kw["c1"] = float(toks[2])

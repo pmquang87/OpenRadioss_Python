@@ -221,6 +221,12 @@ class Material:
         Shells use the plane-stress modulus because the through-thickness
         stress is zero, which softens the response relative to 3-D.
         """
+        if self.law in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG"):
+            try:
+                from ..materials import law15_chang
+                return float(law15_chang.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
         if self.law in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
             try:
                 from ..materials import law25_composite
