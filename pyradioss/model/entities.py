@@ -213,6 +213,26 @@ class Material:
                 return float(law38_visc_tab.sound_speed(self, rho=self.rho0))
             except Exception:
                 pass
+        if self.law in (12, "12", "LAW12", "3D_COMP", "COMP_3D", "3PARBI", "RAGAB"):
+            if "ssp" in self.params:
+                return float(self.params["ssp"])
+            if "SSP" in self.params:
+                return float(self.params["SSP"])
+            try:
+                from ..materials import law12_comp3d
+                return float(law12_comp3d.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (14, "14", "LAW14", "COMPSO", "COMP_SOL"):
+            if "ssp" in self.params:
+                return float(self.params["ssp"])
+            if "SSP" in self.params:
+                return float(self.params["SSP"])
+            try:
+                from ..materials import law14_compso
+                return float(law14_compso.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
         return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
 
     def sound_speed_shell(self) -> float:
@@ -234,6 +254,18 @@ class Material:
             except Exception:
                 pass
         return float(np.sqrt(self.E / (self.rho0 * (1.0 - self.nu ** 2))))
+
+    def __getstate__(self) -> Dict[str, Any]:
+        state = self.__dict__.copy()
+        if "sound_speed_solid" in state and callable(state["sound_speed_solid"]):
+            del state["sound_speed_solid"]
+        if "sound_speed_shell" in state and callable(state["sound_speed_shell"]):
+            del state["sound_speed_shell"]
+        return state
+
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        self.__dict__.update(state)
+
 
 
 # ============================================================================
@@ -9153,78 +9185,239 @@ class MatLaw14:
             self.icc = self.strflag
         elif not self.strflag and self.icc:
             self.strflag = self.icc
+        if not self.sigyt12 and self.sigt12:
+            self.sigyt12 = self.sigt12
+        elif not self.sigt12 and self.sigyt12:
+            self.sigt12 = self.sigyt12
+        if not self.sigyc12 and self.sigc12:
+            self.sigyc12 = self.sigc12
+        elif not self.sigc12 and self.sigyc12:
+            self.sigc12 = self.sigyc12
+        if not self.sigyt23 and self.sigt23:
+            self.sigyt23 = self.sigt23
+        elif not self.sigt23 and self.sigyt23:
+            self.sigt23 = self.sigyt23
+        if not self.sigyc23 and self.sigc23:
+            self.sigyc23 = self.sigc23
+        elif not self.sigc23 and self.sigyc23:
+            self.sigc23 = self.sigyc23
 
     @property
     def lam(self) -> float:
         return self.lamda
 
+    @lam.setter
+    def lam(self, val: float) -> None:
+        self.lamda = val
+        self.lambda_ = val
+
+    @property
+    def rho(self) -> float:
+        return self.rho0
+
+    @rho.setter
+    def rho(self, val: float) -> None:
+        self.rho0 = val
+
+    @property
+    def refer_rho(self) -> float:
+        return self.rhor
+
+    @refer_rho.setter
+    def refer_rho(self, val: float) -> None:
+        self.rhor = val
+
+    @property
+    def b(self) -> float:
+        return self.cb
+
+    @b.setter
+    def b(self, val: float) -> None:
+        self.cb = val
+        self.beta = val
+
+    @property
+    def n(self) -> float:
+        return self.cn
+
+    @n.setter
+    def n(self, val: float) -> None:
+        self.cn = val
+        self.hard = val
+
+    @property
+    def c(self) -> float:
+        return self.cc
+
+    @c.setter
+    def c(self, val: float) -> None:
+        self.cc = val
+        self.src = val
+
+    @property
+    def sig_t1(self) -> float:
+        return self.sigt1
+
+    @sig_t1.setter
+    def sig_t1(self, val: float) -> None:
+        self.sigt1 = val
+
+    @property
+    def sig_t2(self) -> float:
+        return self.sigt2
+
+    @sig_t2.setter
+    def sig_t2(self, val: float) -> None:
+        self.sigt2 = val
+
+    @property
+    def sig_t3(self) -> float:
+        return self.sigt3
+
+    @sig_t3.setter
+    def sig_t3(self, val: float) -> None:
+        self.sigt3 = val
+
     @property
     def e11(self) -> float:
         return self.ea
+
+    @e11.setter
+    def e11(self, val: float) -> None:
+        self.ea = val
 
     @property
     def e22(self) -> float:
         return self.eb
 
+    @e22.setter
+    def e22(self, val: float) -> None:
+        self.eb = val
+
     @property
     def e33(self) -> float:
         return self.ec
+
+    @e33.setter
+    def e33(self, val: float) -> None:
+        self.ec = val
 
     @property
     def nu12(self) -> float:
         return self.prab
 
+    @nu12.setter
+    def nu12(self, val: float) -> None:
+        self.prab = val
+
     @property
     def nu23(self) -> float:
         return self.prbc
+
+    @nu23.setter
+    def nu23(self, val: float) -> None:
+        self.prbc = val
 
     @property
     def nu31(self) -> float:
         return self.prca
 
+    @nu31.setter
+    def nu31(self, val: float) -> None:
+        self.prca = val
+
     @property
     def g12(self) -> float:
         return self.gab
+
+    @g12.setter
+    def g12(self, val: float) -> None:
+        self.gab = val
 
     @property
     def g23(self) -> float:
         return self.gbc
 
+    @g23.setter
+    def g23(self, val: float) -> None:
+        self.gbc = val
+
     @property
     def g31(self) -> float:
         return self.gca
+
+    @g31.setter
+    def g31(self, val: float) -> None:
+        self.gca = val
 
     @property
     def sig_1yt(self) -> float:
         return self.sigyt1
 
+    @sig_1yt.setter
+    def sig_1yt(self, val: float) -> None:
+        self.sigyt1 = val
+
     @property
     def sig_2yt(self) -> float:
         return self.sigyt2
+
+    @sig_2yt.setter
+    def sig_2yt(self, val: float) -> None:
+        self.sigyt2 = val
 
     @property
     def sig_1yc(self) -> float:
         return self.sigyc1
 
+    @sig_1yc.setter
+    def sig_1yc(self, val: float) -> None:
+        self.sigyc1 = val
+
     @property
     def sig_2yc(self) -> float:
         return self.sigyc2
+
+    @sig_2yc.setter
+    def sig_2yc(self, val: float) -> None:
+        self.sigyc2 = val
 
     @property
     def sig_12yt(self) -> float:
         return self.sigt12
 
+    @sig_12yt.setter
+    def sig_12yt(self, val: float) -> None:
+        self.sigt12 = val
+        self.sigyt12 = val
+
     @property
     def sig_12yc(self) -> float:
         return self.sigc12
+
+    @sig_12yc.setter
+    def sig_12yc(self, val: float) -> None:
+        self.sigc12 = val
+        self.sigyc12 = val
 
     @property
     def sig_23yt(self) -> float:
         return self.sigt23
 
+    @sig_23yt.setter
+    def sig_23yt(self, val: float) -> None:
+        self.sigt23 = val
+        self.sigyt23 = val
+
     @property
     def sig_23yc(self) -> float:
         return self.sigc23
+
+    @sig_23yc.setter
+    def sig_23yc(self, val: float) -> None:
+        self.sigc23 = val
+        self.sigyc23 = val
+
 
 
 MatCamClay = MatLaw14
