@@ -1,22 +1,10 @@
 """Tests for Milestone M539 (Auditor 3): Explicit Engine Simulation & Energy Balance.
 
-Validates /MAT/LAW34 (Boltzmann linear viscoelastic relaxation model) across:
-1. Multi-cycle explicit engine simulation on solid Hexa8 elements:
-   - 50+ time steps with Courant time step control.
-   - Energy balance: W_ext, E_int, E_k, and |ERR| < 1.0%.
-   - Stress relaxation hold: displacement ramp, then held fixed;
-     exponential stress relaxation towards sigma_inf = 2 * G_inf * eps_0.
-2. Multi-cycle explicit engine simulation on shell elements (BT4 / QBAT):
-   - In-plane shear and biaxial tension.
-   - Conservation of out-of-plane stress sigma_zz = 0 throughout the dynamic run.
-   - Thickness change tracking (ezz34 / uv34).
-3. Multi-element impact mesh simulation:
-   - 2x2x2 mesh of 8 Hexa8 elements subjected to high-velocity impact.
-   - Foam air pressure enabled (P0 > 0, phi = 0.1, gamma0 = 0.0).
-   - Stability, no NaN/Inf, energy balance conservation (|ERR| < 1.0%).
-4. Combined solid (Hexa8 + Tetra4) simulation:
-   - Mixed mesh compatibility across element families.
-   - Simultaneous integration of Hexa8 and Tetra4 elements under dynamic loading.
+Audit 3 Verification Summary:
+- Solid Hexa8 Multi-Cycle Engine Simulation: Courant control, |ERR| < 1%, exponential stress relaxation towards sigma_inf = 2 * G_inf * eps_0.
+- Shell Multi-Cycle Engine Simulation (BT4 & QBAT): in-plane shear, biaxial tension, plane stress sigma_zz = 0 conservation, thickness change tracking.
+- Multi-Element Impact Mesh: 2x2x2 mesh of 8 Hexa8 elements, foam air pressure (P0 > 0), high-velocity impact, energy balance.
+- Combined Solid Simulation: mixed Hexa8 + Tetra4 mesh compatibility and simultaneous integration.
 """
 
 import os
