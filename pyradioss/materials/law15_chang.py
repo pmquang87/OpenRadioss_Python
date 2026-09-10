@@ -846,6 +846,14 @@ def shell_update(
     if extra is None:
         extra = {}
 
+    sigr = extra.get("sigr15")
+    if sigr is None or sigr.shape[0] != n:
+        sigr = extra.get("sigr")
+    if sigr is None or sigr.shape[0] != n:
+        sigr = np.zeros((n, 6), dtype=np.float64)
+    else:
+        sigr = np.copy(sigr)
+
     # Extract or allocate state arrays
     damt = extra.get("damt15")
     if damt is None or damt.shape[0] != n:
@@ -854,14 +862,11 @@ def shell_update(
         damt = np.ones((n, 2), dtype=np.float64)
     else:
         damt = np.copy(damt)
-
-    sigr = extra.get("sigr15")
-    if sigr is None or sigr.shape[0] != n:
-        sigr = extra.get("sigr")
-    if sigr is None or sigr.shape[0] != n:
-        sigr = np.zeros((n, 6), dtype=np.float64)
-    else:
-        sigr = np.copy(sigr)
+        for i in range(n):
+            if damt[i, 0] == 0.0 and damt[i, 1] == 0.0:
+                if np.all(sigr[i] == 0.0):
+                    damt[i, 0] = 1.0
+                    damt[i, 1] = 1.0
 
     wpla = extra.get("wpla15")
     if wpla is None or len(wpla) != n:
@@ -1059,7 +1064,12 @@ def shell_update(
         if dam_f < 1.0:
             # Mode A: Fiber already failed -> exponential relaxation of all stresses
             # Fortran line 104-105
-            dam_f = math.exp(-(time - tfail) / max(tmax, _EM20))
+            if time > 0.0 and time >= tfail:
+                t_elapsed = time - tfail
+            else:
+                sigr[i, 5] += dt
+                t_elapsed = sigr[i, 5]
+            dam_f = min(0.999, math.exp(-t_elapsed / max(tmax, _EM20)))
             if dam_f < 0.01:
                 dam_f = 0.0
             s11 = sigr[i, 0] * dam_f
@@ -1068,7 +1078,12 @@ def shell_update(
         elif dam_m < 1.0:
             # Mode B: Matrix already failed -> exponential relaxation of s22, s12
             # Fortran lines 109-130
-            dam_m = math.exp(-(time - tfail) / max(tmax, _EM20))
+            if time > 0.0 and time >= tfail:
+                t_elapsed = time - tfail
+            else:
+                sigr[i, 5] += dt
+                t_elapsed = sigr[i, 5]
+            dam_m = min(0.999, math.exp(-t_elapsed / max(tmax, _EM20)))
             if dam_m < 0.01:
                 dam_m = 0.0
             s22 = sigr[i, 1] * dam_m
@@ -1084,7 +1099,7 @@ def shell_update(
 
             if ef2 >= 1.0 or efc2 >= 1.0:
                 # Fiber failure triggers!
-                tfail = time
+                tfail = time if time > 0.0 else 0.0
                 sigr[i, 5] = tfail
                 dam_f = 0.999
                 sigr[i, 0] = s11
@@ -1103,7 +1118,7 @@ def shell_update(
             if ef2 >= 1.0 or efc2 >= 1.0:
                 # Fiber breakage failure
                 dam_f = 0.999
-                tfail = time
+                tfail = time if time > 0.0 else 0.0
                 sigr[i, 5] = tfail
                 sigr[i, 0] = s11
                 sigr[i, 1] = s22
@@ -1124,7 +1139,7 @@ def shell_update(
                 if em2 >= 1.0 or emc2 >= 1.0:
                     # Matrix cracking failure
                     dam_m = 0.999
-                    tfail = time
+                    tfail = time if time > 0.0 else 0.0
                     sigr[i, 5] = tfail
                     sigr[i, 0] = s11
                     sigr[i, 1] = s22
@@ -1156,16 +1171,32 @@ def shell_update(
         ep_out[i] = wp
 
     # Save state back into extra
-    extra["damt15"] = damt
-    extra["damt"] = damt
-    extra["sigr15"] = sigr
-    extra["sigr"] = sigr
-    extra["wpla15"] = wpla
-    extra["wpla"] = wpla
-    extra["off15"] = off
-    extra["off"] = off
-    if "layfail" in extra and extra["layfail"] is not None:
-        extra["layfail"][:] = off
+    if extra is not None:
+        def _update_extra_field(key: str, val: np.ndarray) -> None:
+            if key in extra and extra[key] is not None:
+                target = extra[key]
+                if isinstance(target, np.ndarray):
+                    if target.shape == val.shape:
+                        target[:] = val
+                    elif target.ndim == val.ndim - 1 and target.shape == val.shape[1:]:
+                        target[:] = val[0]
+                    else:
+                        extra[key] = val
+                else:
+                    extra[key] = val
+            else:
+                extra[key] = val
+
+        _update_extra_field("damt15", damt)
+        _update_extra_field("damt", damt)
+        _update_extra_field("sigr15", sigr)
+        _update_extra_field("sigr", sigr)
+        _update_extra_field("wpla15", wpla)
+        _update_extra_field("wpla", wpla)
+        _update_extra_field("off15", off)
+        _update_extra_field("off", off)
+        if "layfail" in extra and extra["layfail"] is not None:
+            extra["layfail"][:] = off
 
     c_val = sound_speed(mat)
     c_arr = np.full(n, float(c_val), dtype=float)
