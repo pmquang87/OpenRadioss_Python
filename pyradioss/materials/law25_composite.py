@@ -31,6 +31,216 @@ _INF = 1.0e30
 
 
 # ============================================================================
+# Core Mathematical Formulations (Fortran parity)
+# ============================================================================
+
+def tsai_wu_coefficients(
+    sigyt1: float,
+    sigyc1: float,
+    sigyt2: float,
+    sigyc2: float,
+    sig12: float | tuple[float, float] | list[float],
+    alpha: float = 1.0,
+) -> Dict[str, float]:
+    """Calculate Tsai-Wu failure/yield coefficients.
+
+    Fortran source: starter/source/materials/mat/mat025/read_mat25_tsaiwu.F90:310-316
+
+    Formulas:
+      F1  = 1/sigyt1 - 1/sigyc1
+      F2  = 1/sigyt2 - 1/sigyc2
+      F11 = 1 / (sigyt1 * sigyc1)
+      F22 = 1 / (sigyt2 * sigyc2)
+      F33 = 1 / (sig12^2)  [or 1 / (sigyt12 * sigyc12)]
+      F12 = -0.5 * alpha * sqrt(F11 * F22)
+          = -alpha / (2 * sqrt(sigyt1 * sigyc1 * sigyt2 * sigyc2))
+    """
+    if isinstance(sig12, (tuple, list)):
+        sigyt12, sigyc12 = float(sig12[0]), float(sig12[1])
+    else:
+        sigyt12 = float(sig12)
+        sigyc12 = float(sig12)
+
+    s_yt1 = max(float(sigyt1), _EM20)
+    s_yc1 = max(float(sigyc1), _EM20)
+    s_yt2 = max(float(sigyt2), _EM20)
+    s_yc2 = max(float(sigyc2), _EM20)
+    s_yt12 = max(float(sigyt12), _EM20)
+    s_yc12 = max(float(sigyc12), _EM20)
+
+    f1 = 1.0 / s_yt1 - 1.0 / s_yc1
+    f2 = 1.0 / s_yt2 - 1.0 / s_yc2
+    f11 = 1.0 / (s_yt1 * s_yc1)
+    f22 = 1.0 / (s_yt2 * s_yc2)
+    f33 = 1.0 / (s_yt12 * s_yc12)
+    denom = 2.0 * math.sqrt(s_yt1 * s_yc1 * s_yt2 * s_yc2)
+    f12 = -float(alpha) / denom if denom > 0.0 else 0.0
+
+    return {
+        "F1": f1,
+        "F2": f2,
+        "F11": f11,
+        "F22": f22,
+        "F33": f33,
+        "F12": f12,
+    }
+
+
+def tsai_wu_yield_criterion(
+    s1: float | np.ndarray,
+    s2: float | np.ndarray,
+    s12: float | np.ndarray,
+    F1: float,
+    F2: float,
+    F11: float,
+    F22: float,
+    F33: float,
+    F12: float,
+) -> float | np.ndarray:
+    """Evaluate Tsai-Wu yield/failure function W.
+
+    Fortran source: engine/source/materials/mat/mat025/mat25_tsaiwu_c.F90:480-484
+
+    W = F1*s1 + F2*s2 + F11*s1^2 + F22*s2^2 + 2*F12*s1*s2 + F33*s12^2
+    """
+    return (
+        F1 * s1
+        + F2 * s2
+        + F11 * (s1 ** 2)
+        + F22 * (s2 ** 2)
+        + 2.0 * F12 * s1 * s2
+        + F33 * (s12 ** 2)
+    )
+
+
+def tsai_wu_flow_normal(
+    s1: float | np.ndarray,
+    s2: float | np.ndarray,
+    s12: float | np.ndarray,
+    F1: float,
+    F2: float,
+    F11: float,
+    F22: float,
+    F33: float,
+    F12: float,
+) -> tuple[float | np.ndarray, float | np.ndarray, float | np.ndarray]:
+    """Compute gradient normal of Tsai-Wu yield function (flow vector).
+
+    Fortran source: engine/source/materials/mat/mat025/mat25_tsaiwu_c.F90:501-503
+
+    dF/ds1  = F1 + 2*F11*s1 + 2*F12*s2
+    dF/ds2  = F2 + 2*F22*s2 + 2*F12*s1
+    dF/ds12 = 2*F33*s12
+    """
+    df_ds1 = F1 + 2.0 * F11 * s1 + 2.0 * F12 * s2
+    df_ds2 = F2 + 2.0 * F22 * s2 + 2.0 * F12 * s1
+    df_ds12 = 2.0 * F33 * s12
+    return df_ds1, df_ds2, df_ds12
+
+
+def hardening_yield(
+    wpla: float,
+    b: float,
+    n: float,
+    epspfac: float = 1.0,
+    fmax: float = _INF,
+) -> float:
+    """Hardening yield limit f_yld.
+
+    Fortran source: engine/source/materials/mat/mat025/mat25_tsaiwu_c.F90:463-474
+
+    f_yld = min(fmax, (1 + b * wpla^n) * epspfac)
+    """
+    if wpla > 0.0 and b > 0.0:
+        base = 1.0 + b * (wpla ** n)
+    else:
+        base = 1.0
+    return min(float(fmax), base * float(epspfac))
+
+
+def strain_rate_factor(
+    eps_dot: float,
+    c: float = 0.0,
+    epdr: float = 1.0,
+    formulation: str = "log",
+) -> float:
+    """Strain rate factor epspfac.
+
+    Fortran logarithmic rate formulation:
+      mat25_tsaiwu_c.F90:453-462:
+      epspfac = 1 + c * log(eps_dot / epdr)  for eps_dot > epdr
+
+    Power-law (Cowper-Symonds) rate formulation:
+      epspfac = 1 + (eps_dot / c) ** (1 / epdr)
+    """
+    ed = float(eps_dot)
+    c_val = float(c)
+    epdr_val = float(epdr)
+
+    if ed <= 0.0 or c_val <= 0.0:
+        return 1.0
+
+    if formulation.lower() in ("cowper_symonds", "power"):
+        if epdr_val > 0.0:
+            return 1.0 + (ed / c_val) ** (1.0 / epdr_val)
+        return 1.0
+    else:
+        # Default: Fortran log law
+        if epdr_val > 0.0 and ed > epdr_val:
+            return 1.0 + c_val * math.log(ed / epdr_val)
+        return 1.0
+
+
+def tensile_damage(
+    epst: float,
+    epst_limit: float,
+    epsm_limit: float,
+    dmax: float = 0.999,
+    dmg_old: float = 0.0,
+) -> float:
+    """Damage evolution in tension.
+
+    Fortran source: engine/source/materials/mat/mat025/m25crak.F:74-76
+
+    dam1 = (epst - epst1) / (epsm1 - epst1)
+    dam2 = dam1 * epsm1 / epst
+    dmg  = min(max(dam2, dmg_old), dmax)
+    """
+    if epst > epst_limit and epsm_limit > epst_limit:
+        dam1 = (epst - epst_limit) / (epsm_limit - epst_limit)
+        dam2 = dam1 * epsm_limit / max(epst, _EM20)
+        return float(min(max(dam2, dmg_old), dmax))
+    return float(dmg_old)
+
+
+def sound_speed_law25(
+    e11: float,
+    e22: float,
+    nu12: float,
+    g12: float,
+    g23: float,
+    g31: float,
+    rho0: float,
+) -> float:
+    """Sound speed for LAW25 matching Fortran read_mat25_tsaiwu.F90:288.
+
+    c = sqrt(max(C1, G12, G23, G31) / rho0)
+    where C1 = max(E1, E2) / (1 - nu12 * nu21)
+          nu21 = nu12 * E2 / E1
+    """
+    e1 = float(e11)
+    e2 = float(e22)
+    nu = float(nu12)
+    nu21 = nu * e2 / max(e1, _EM20) if e1 > 0.0 else 0.0
+    detc = max(1.0e-15, 1.0 - nu * nu21)
+    c1 = max(e1, e2) / detc
+    gmax = max(float(g12), float(g23), float(g31))
+    mod_max = max(c1, gmax)
+    r = float(rho0)
+    return math.sqrt(mod_max / max(r, _EM20)) if r > 0.0 else math.sqrt(mod_max)
+
+
+# ============================================================================
 # Parameter Extraction & Constructor
 # ============================================================================
 
@@ -127,8 +337,14 @@ def build_law25(rec: Any = None, **kwargs: Any) -> Material:
     sig_1yc = _get(["MAT_SIGYC1", "MAT_SIG1_yc", "sig_1yc", "sigyc1"], _INF)
     sig_2yc = _get(["MAT_SIGYC2", "MAT_SIG2_yc", "sig_2yc", "sigyc2"], _INF)
     alpha = _get(["MAT_ALPHA", "alpha", "ALPHA"], 1.0)
-    sig_12yc = _get(["MAT_SIGC12", "sig_12yc", "sigc12", "sigyc12"], _INF)
-    sig_12yt = _get(["MAT_SIGT12", "MAT_SIG12_yt", "sig_12yt", "sigt12", "sigyt12"], _INF)
+    sig_12 = _get(["MAT_SIG12", "sig12", "SIG12", "sig_12"], _INF)
+    sig_12yc = _get(["MAT_SIGC12", "sig_12yc", "sigc12", "sigyc12"], sig_12)
+    sig_12yt = _get(["MAT_SIGT12", "MAT_SIG12_yt", "sig_12yt", "sigt12", "sigyt12"], sig_12)
+    if sig_12yc >= _INF and sig_12yt < _INF:
+        sig_12yc = sig_12yt
+    elif sig_12yt >= _INF and sig_12yc < _INF:
+        sig_12yt = sig_12yc
+
     c = _get(["MAT_SRC", "c", "C", "src"], 0.0)
     eps_rate_0 = _get(["MAT_SRP", "eps_rate_0", "srp", "epdr"], 1.0)
     icc = _geti(["STRFLAG", "icc", "ICC", "strflag"], 1)
@@ -195,17 +411,16 @@ def build_law25(rec: Any = None, **kwargs: Any) -> Material:
 
     c1 = max(e11, e22) / detc
     gmax = max(g12, g23, g31)
-    mod_max = max(c1, gmax, e33)
-    c_sound = math.sqrt(max(c1, gmax, e33) / max(rho0, _EM20)) if rho0 > 0.0 else math.sqrt(mod_max)
+    c_sound = sound_speed_law25(e11, e22, nu12, g12, g23, g31, rho0)
 
     # Tsai-Wu yield coefficients (read_mat25_tsaiwu.F90:310-316)
-    f1 = (1.0 / sig_1yt - 1.0 / sig_1yc) if sig_1yt > 0 and sig_1yc > 0 else 0.0
-    f2 = (1.0 / sig_2yt - 1.0 / sig_2yc) if sig_2yt > 0 and sig_2yc > 0 else 0.0
-    f11 = 1.0 / max(_EM20, min(1e20, sig_1yt * sig_1yc)) if sig_1yt > 0 and sig_1yc > 0 else 0.0
-    f22 = 1.0 / max(_EM20, min(1e20, sig_2yt * sig_2yc)) if sig_2yt > 0 and sig_2yc > 0 else 0.0
-    f33 = 1.0 / max(_EM20, min(1e20, sig_12yt * sig_12yc)) if sig_12yt > 0 and sig_12yc > 0 else 0.0
-    denom = 2.0 * math.sqrt(max(_EM20, min(1e20, sig_1yt * sig_1yc * sig_2yt * sig_2yc)))
-    f12 = -alpha / denom if denom > 0 else 0.0
+    tw_coeffs = tsai_wu_coefficients(sig_1yt, sig_1yc, sig_2yt, sig_2yc, (sig_12yt, sig_12yc), alpha)
+    f1 = tw_coeffs["F1"]
+    f2 = tw_coeffs["F2"]
+    f11 = tw_coeffs["F11"]
+    f22 = tw_coeffs["F22"]
+    f33 = tw_coeffs["F33"]
+    f12 = tw_coeffs["F12"]
 
     params: Dict[str, Any] = {
         "E": max(e11, e22),
@@ -407,7 +622,6 @@ def sound_speed(mat: Any, rho: float | np.ndarray | None = None, extra: Any = No
 
     e11 = float(params.get("e11", params.get("MAT_EA", 1.0)))
     e22 = float(params.get("e22", params.get("MAT_EB", 1.0)))
-    e33 = float(params.get("e33", params.get("MAT_EC", max(e11, e22))))
     nu12 = float(params.get("nu12", params.get("MAT_PRAB", 0.3)))
     g12 = float(params.get("g12", params.get("MAT_GAB", 0.0)))
     g23 = float(params.get("g23", params.get("MAT_GBC", 0.0)))
@@ -416,8 +630,10 @@ def sound_speed(mat: Any, rho: float | np.ndarray | None = None, extra: Any = No
     nu21 = nu12 * e22 / max(e11, _EM20) if e11 > 0.0 else 0.0
     detc = max(1.0e-15, 1.0 - nu12 * nu21)
     c1 = max(e11, e22) / detc
-    young_mod = max(c1, g12, g23, g31, e33)
-    return np.sqrt(young_mod / np.maximum(r, _EM20))
+    gmax = max(g12, g23, g31)
+    mod_max = max(c1, gmax)
+    return np.sqrt(mod_max / np.maximum(r, _EM20))
+
 
 
 def extra_shapes(mat: Any, nip: Optional[int] = None) -> Dict[str, Tuple[int, ...]]:
@@ -451,8 +667,76 @@ def extra_shapes(mat: Any, nip: Optional[int] = None) -> Dict[str, Tuple[int, ..
 # Tangent Stiffness Formulations
 # ============================================================================
 
-def shell_membrane_tangent(mat: Any) -> np.ndarray:
-    """(3, 3) orthotropic plane-stress elastic matrix for shells."""
+def _extract_extra_state(extra: Any, n: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Extract damage (d1, d2) and failure status (off) arrays of shape (n,) from extra dict."""
+    d1 = np.zeros(n, dtype=np.float64)
+    d2 = np.zeros(n, dtype=np.float64)
+    off = np.ones(n, dtype=np.float64)
+
+    if extra is None or not isinstance(extra, dict):
+        return d1, d2, off
+
+    # 1. Failure status flag
+    for off_key in ("off25", "off", "layfail"):
+        if off_key in extra and extra[off_key] is not None:
+            val = np.asarray(extra[off_key], dtype=np.float64).flatten()
+            if len(val) == 1 and n > 1:
+                off[:] = val[0]
+            elif len(val) >= n:
+                off[:] = val[:n]
+            elif len(val) > 0:
+                off[:len(val)] = val
+            break
+
+    # 2. Damage arrays
+    for dmg_key in ("dmg25", "dmg"):
+        if dmg_key in extra and extra[dmg_key] is not None:
+            val = np.asarray(extra[dmg_key], dtype=np.float64)
+            if val.ndim == 1:
+                if len(val) >= 3 and n == 1:
+                    d1[0] = val[1]
+                    d2[0] = val[2]
+                elif len(val) == 2 and n == 1:
+                    d1[0] = val[0]
+                    d2[0] = val[1]
+                elif len(val) >= n:
+                    d1[:] = val[:n]
+            elif val.ndim == 2:
+                m = min(n, val.shape[0])
+                if val.shape[1] >= 3:
+                    d1[:m] = val[:m, 1]
+                    d2[:m] = val[:m, 2]
+                elif val.shape[1] >= 2:
+                    d1[:m] = val[:m, 0]
+                    d2[:m] = val[:m, 1]
+            break
+
+    if "d1" in extra and extra["d1"] is not None:
+        v1 = np.asarray(extra["d1"], dtype=np.float64).flatten()
+        if len(v1) == 1 and n > 1:
+            d1[:] = v1[0]
+        elif len(v1) >= n:
+            d1[:] = v1[:n]
+        elif len(v1) > 0:
+            d1[:len(v1)] = v1
+
+    if "d2" in extra and extra["d2"] is not None:
+        v2 = np.asarray(extra["d2"], dtype=np.float64).flatten()
+        if len(v2) == 1 and n > 1:
+            d2[:] = v2[0]
+        elif len(v2) >= n:
+            d2[:] = v2[:n]
+        elif len(v2) > 0:
+            d2[:len(v2)] = v2
+
+    return d1, d2, off
+
+
+def shell_membrane_tangent(mat: Any, extra: Any = None) -> np.ndarray:
+    """(3, 3) orthotropic plane-stress elastic matrix for shells.
+
+    Accounts for damaged moduli (d1, d2) if provided in extra.
+    """
     params = getattr(mat, "params", {}) or {}
     e11 = float(params.get("e11", params.get("MAT_EA", 1.0)))
     e22 = float(params.get("e22", params.get("MAT_EB", 1.0)))
@@ -460,16 +744,25 @@ def shell_membrane_tangent(mat: Any) -> np.ndarray:
     g12 = float(params.get("g12", params.get("MAT_GAB", 0.5 * e11 / max(1.0 + nu12, 1e-15))))
 
     nu21 = nu12 * e22 / max(e11, _EM20) if e11 > 0.0 else 0.0
-    detc = max(1.0e-15, 1.0 - nu12 * nu21)
 
-    c11 = e11 / detc
-    c22 = e22 / detc
-    c12 = nu12 * e22 / detc
+    d1, d2, off = _extract_extra_state(extra, 1)
+    if off[0] <= 0.0:
+        return np.zeros((3, 3), dtype=np.float64)
+
+    de1 = max(_EM20, min(1.0, 1.0 - d1[0]))
+    de2 = max(_EM20, min(1.0, 1.0 - d2[0]))
+    scale1 = 1.0 if (de1 >= 1.0 - 1e-12 and de2 >= 1.0 - 1e-12) else 0.0
+    scale2 = max(_EM20, 1.0 - nu12 * nu21 * scale1)
+
+    c11 = e11 * de1 / scale2
+    c22 = e22 * de2 / scale2
+    c12 = nu21 * c11 * scale1
+    g12_eff = de1 * de2 * g12
 
     return np.array([
         [c11, c12, 0.0],
         [c12, c22, 0.0],
-        [0.0, 0.0, g12],
+        [0.0, 0.0, g12_eff],
     ], dtype=np.float64)
 
 
@@ -477,16 +770,42 @@ def consistent_shell_tangent(
     mat: Any,
     sig: np.ndarray,
     epsp: Optional[np.ndarray] = None,
-    dt: Any = None,
+    epsp_incr: Any = None,
     extra: Any = None,
+    dt: Any = None,
+    deps: Optional[np.ndarray] = None,
+    symmetric: bool = False,
     **kwargs: Any,
 ) -> np.ndarray:
-    """(n, 3, 3) consistent plane-stress tangent for shells."""
-    c_shell = shell_membrane_tangent(mat)
-    n = 1 if sig.ndim == 1 else sig.shape[0]
-    tangents = np.broadcast_to(c_shell, (n, 3, 3)).copy()
+    """(n, 3, 3) consistent plane-stress tangent for shells.
+
+    Differentiates the constitutive stress update d(sig) / d(deps).
+    Accounts for:
+      - Orthotropic elastic plane-stress matrix
+      - Degraded moduli under tensile damage (d1, d2) and unilateral recovery under compression
+      - Consistent algorithmic elastoplastic tangent under Tsai-Wu / CRASURV yielding
+      - Element deletion / failure off state (zero stiffness)
+      - Major symmetry enforcement if symmetric=True
+    """
+    if deps is None and "deps" in kwargs:
+        deps = kwargs["deps"]
+    if dt is not None and epsp_incr is None and not isinstance(dt, (float, int)):
+        epsp_incr = dt
+
+    sig_arr = np.asarray(sig, dtype=np.float64)
+    is_1d = (sig_arr.ndim == 1)
+    sig_2d = sig_arr[None, :] if is_1d else sig_arr
+    n = sig_2d.shape[0]
+    if n == 0:
+        return np.empty((0, 3, 3), dtype=np.float64)
 
     params = getattr(mat, "params", {}) or {}
+    e11 = float(params.get("e11", params.get("MAT_EA", 1.0)))
+    e22 = float(params.get("e22", params.get("MAT_EB", 1.0)))
+    nu12 = float(params.get("nu12", params.get("MAT_PRAB", 0.3)))
+    g12 = float(params.get("g12", params.get("MAT_GAB", 0.5 * e11 / max(1.0 + nu12, 1e-15))))
+    nu21 = nu12 * e22 / max(e11, _EM20) if e11 > 0.0 else 0.0
+
     f1 = float(params.get("F1", 0.0))
     f2 = float(params.get("F2", 0.0))
     f11 = float(params.get("F11", 0.0))
@@ -497,38 +816,111 @@ def consistent_shell_tangent(
     n_val = float(params.get("n", params.get("MAT_HARD", 1.0)))
     fmax_val = float(params.get("fmax", params.get("MAT_SIG", _INF)))
 
-    sig_2d = np.atleast_2d(sig)
+    d1, d2, off = _extract_extra_state(extra, n)
+
+    epsp_arr = None
+    if epsp is not None:
+        epsp_arr = np.asarray(epsp, dtype=np.float64).flatten()
+    epsp_incr_arr = None
+    if epsp_incr is not None:
+        epsp_incr_arr = np.asarray(epsp_incr, dtype=np.float64).flatten()
+
+    deps_2d = None
+    if deps is not None:
+        deps_arr = np.asarray(deps, dtype=np.float64)
+        deps_2d = deps_arr[None, :] if deps_arr.ndim == 1 else deps_arr
+
+    tangents = np.zeros((n, 3, 3), dtype=np.float64)
+
     for i in range(n):
+        if off[i] <= 0.0:
+            continue
+
         s1 = sig_2d[i, 0]
         s2 = sig_2d[i, 1]
         s12 = sig_2d[i, 2]
 
-        # Check Tsai-Wu yielding
-        wvec = f1 * s1 + f2 * s2 + f11 * (s1 ** 2) + f22 * (s2 ** 2) + f33 * (s12 ** 2) + 2.0 * f12 * s1 * s2
-        if wvec >= 1.0 - 1e-6:
-            # Flow gradient m = df/ds
+        de1 = 1.0 - d1[i] if s1 >= 0.0 else 1.0
+        de2 = 1.0 - d2[i] if s2 >= 0.0 else 1.0
+        de1 = max(_EM20, min(1.0, de1))
+        de2 = max(_EM20, min(1.0, de2))
+
+        scale1 = 1.0 if (de1 >= 1.0 - 1e-12 and de2 >= 1.0 - 1e-12) else 0.0
+        scale2 = max(_EM20, 1.0 - nu12 * nu21 * scale1)
+
+        a11 = e11 * de1 / scale2
+        a22 = e22 * de2 / scale2
+        a12 = nu21 * a11 * scale1
+        g12_eff = de1 * de2 * g12
+
+        c_el = np.array([
+            [a11, a12, 0.0],
+            [a12, a22, 0.0],
+            [0.0, 0.0, g12_eff],
+        ], dtype=np.float64)
+
+        wp = float(epsp_arr[i]) if (epsp_arr is not None and i < len(epsp_arr)) else 0.0
+        fyld = (1.0 + b_val * (wp ** n_val)) if wp > 0.0 else 1.0
+        fyld = min(fmax_val, fyld)
+
+        is_yielding = False
+        beta = 1.0
+        t_tr = np.array([s1, s2, s12], dtype=np.float64)
+
+        if deps_2d is not None and i < len(deps_2d):
+            t_tr = np.array([s1, s2, s12], dtype=np.float64) + c_el @ deps_2d[i]
+            wvec_tr = f1 * t_tr[0] + f2 * t_tr[1] + f11 * (t_tr[0]**2) + f22 * (t_tr[1]**2) + f33 * (t_tr[2]**2) + 2.0 * f12 * t_tr[0] * t_tr[1]
+            if wvec_tr > fyld:
+                is_yielding = True
+                coefa = f11 * (t_tr[0]**2) + f22 * (t_tr[1]**2) + f33 * (t_tr[2]**2) + 2.0 * f12 * t_tr[0] * t_tr[1]
+                coefb = f1 * t_tr[0] + f2 * t_tr[1]
+                delta = coefb**2 + 4.0 * coefa * fyld
+                if delta >= 0.0 and coefa > _EM20:
+                    beta = (-coefb + math.sqrt(delta)) / (2.0 * coefa)
+                    beta = max(0.0, min(1.0, beta))
+                else:
+                    beta = 1.0 / math.sqrt(max(_EM20, wvec_tr / fyld))
+        else:
+            wvec = f1 * s1 + f2 * s2 + f11 * (s1**2) + f22 * (s2**2) + f33 * (s12**2) + 2.0 * f12 * s1 * s2
+            if epsp_incr_arr is not None and i < len(epsp_incr_arr) and epsp_incr_arr[i] > 0.0:
+                is_yielding = True
+            elif wvec >= fyld - 1e-5:
+                is_yielding = True
+
+        if is_yielding:
+            s_ret = beta * t_tr
             m_grad = np.array([
-                f1 + 2.0 * f11 * s1 + 2.0 * f12 * s2,
-                f2 + 2.0 * f22 * s2 + 2.0 * f12 * s1,
-                2.0 * f33 * s12,
-            ], dtype=float)
+                f1 + 2.0 * f11 * s_ret[0] + 2.0 * f12 * s_ret[1],
+                f2 + 2.0 * f22 * s_ret[1] + 2.0 * f12 * s_ret[0],
+                2.0 * f33 * s_ret[2],
+            ], dtype=np.float64)
 
-            cm = c_shell @ m_grad
+            m_cel = m_grad @ c_el
+            m_dot_t = float(m_grad @ t_tr)
+
             h_hard = 0.0
-            wp = float(epsp[i]) if (epsp is not None and i < len(epsp)) else 0.0
             if wp > 0.0 and b_val > 0.0:
-                h_hard = (s1 * m_grad[0] + s2 * m_grad[1] + s12 * m_grad[2]) * n_val * b_val * (wp ** (n_val - 1.0))
+                h_hard = (s_ret[0] * m_grad[0] + s_ret[1] * m_grad[1] + 2.0 * s_ret[2] * m_grad[2]) * n_val * b_val * (wp ** (n_val - 1.0))
 
-            denom = float(m_grad @ cm + h_hard)
+            denom = m_dot_t + h_hard
             if denom > _EM20:
-                c_ep = c_shell - np.outer(cm, cm) / denom
+                c_ep = beta * (c_el - np.outer(t_tr, m_cel) / denom)
+                if symmetric:
+                    c_ep = 0.5 * (c_ep + c_ep.T)
                 tangents[i] = c_ep
+            else:
+                tangents[i] = c_el if not symmetric else 0.5 * (c_el + c_el.T)
+        else:
+            tangents[i] = c_el if not symmetric else 0.5 * (c_el + c_el.T)
 
-    return tangents
+    return tangents[0] if is_1d else tangents
 
 
-def solid_stiffness_matrix(mat: Any) -> np.ndarray:
-    """(6, 6) 3D orthotropic elastic stiffness matrix."""
+def solid_stiffness_matrix(mat: Any, extra: Any = None) -> np.ndarray:
+    """(6, 6) 3D orthotropic elastic stiffness matrix.
+
+    Accounts for damaged moduli (d1, d2) if provided in extra.
+    """
     params = getattr(mat, "params", {}) or {}
     e11 = float(params.get("e11", params.get("MAT_EA", 1.0)))
     e22 = float(params.get("e22", params.get("MAT_EB", 1.0)))
@@ -538,11 +930,23 @@ def solid_stiffness_matrix(mat: Any) -> np.ndarray:
     g23 = float(params.get("g23", params.get("MAT_GBC", g12)))
     g31 = float(params.get("g31", params.get("MAT_GCA", g12)))
 
-    nu21 = nu12 * e22 / max(e11, _EM20)
-    detc = max(1.0e-15, 1.0 - nu12 * nu21)
-    a11 = e11 / detc
-    a22 = e22 / detc
-    a12 = nu21 * a11
+    nu21 = nu12 * e22 / max(e11, _EM20) if e11 > 0.0 else 0.0
+
+    d1, d2, off = _extract_extra_state(extra, 1)
+    if off[0] <= 0.0:
+        return np.zeros((6, 6), dtype=np.float64)
+
+    de1 = max(_EM20, min(1.0, 1.0 - d1[0]))
+    de2 = max(_EM20, min(1.0, 1.0 - d2[0]))
+    scale1 = 1.0 if (de1 >= 1.0 - 1e-12 and de2 >= 1.0 - 1e-12) else 0.0
+    scale2 = max(_EM20, 1.0 - nu12 * nu21 * scale1)
+
+    a11 = e11 * de1 / scale2
+    a22 = e22 * de2 / scale2
+    a12 = nu21 * a11 * scale1
+    g12_eff = de1 * de2 * g12
+    g23_eff = de2 * g23
+    g31_eff = de1 * g31
 
     c = np.zeros((6, 6), dtype=np.float64)
     c[0, 0] = a11
@@ -550,9 +954,9 @@ def solid_stiffness_matrix(mat: Any) -> np.ndarray:
     c[1, 0] = a12
     c[1, 1] = a22
     c[2, 2] = e33
-    c[3, 3] = g12
-    c[4, 4] = g23
-    c[5, 5] = g31
+    c[3, 3] = g12_eff
+    c[4, 4] = g23_eff
+    c[5, 5] = g31_eff
     return c
 
 
@@ -560,16 +964,42 @@ def consistent_solid_tangent(
     mat: Any,
     sig: np.ndarray,
     epsp: Optional[np.ndarray] = None,
-    dt: Any = None,
+    epsp_incr: Any = None,
     extra: Any = None,
+    dt: Any = None,
+    deps: Optional[np.ndarray] = None,
+    symmetric: bool = False,
     **kwargs: Any,
 ) -> np.ndarray:
-    """(n, 6, 6) 3D solid consistent tangent."""
-    c_mat = solid_stiffness_matrix(mat)
-    n = 1 if sig.ndim == 1 else sig.shape[0]
-    tangents = np.broadcast_to(c_mat, (n, 6, 6)).copy()
+    """(n, 6, 6) 3D solid consistent tangent.
+
+    Differentiates the 3D solid constitutive update d(sig) / d(deps).
+    Components: [11, 22, 33, 12, 23, 31].
+    In-plane components [11, 22, 12] undergo Tsai-Wu yielding and damage;
+    out-of-plane components [33, 23, 31] remain elastic with degraded shear moduli.
+    """
+    if deps is None and "deps" in kwargs:
+        deps = kwargs["deps"]
+    if dt is not None and epsp_incr is None and not isinstance(dt, (float, int)):
+        epsp_incr = dt
+
+    sig_arr = np.asarray(sig, dtype=np.float64)
+    is_1d = (sig_arr.ndim == 1)
+    sig_2d = sig_arr[None, :] if is_1d else sig_arr
+    n = sig_2d.shape[0]
+    if n == 0:
+        return np.empty((0, 6, 6), dtype=np.float64)
 
     params = getattr(mat, "params", {}) or {}
+    e11 = float(params.get("e11", params.get("MAT_EA", 1.0)))
+    e22 = float(params.get("e22", params.get("MAT_EB", 1.0)))
+    e33 = float(params.get("e33", params.get("MAT_EC", max(e11, e22))))
+    nu12 = float(params.get("nu12", params.get("MAT_PRAB", 0.3)))
+    g12 = float(params.get("g12", params.get("MAT_GAB", 0.5 * e11 / max(1.0 + nu12, 1e-15))))
+    g23 = float(params.get("g23", params.get("MAT_GBC", g12)))
+    g31 = float(params.get("g31", params.get("MAT_GCA", g12)))
+    nu21 = nu12 * e22 / max(e11, _EM20) if e11 > 0.0 else 0.0
+
     f1 = float(params.get("F1", 0.0))
     f2 = float(params.get("F2", 0.0))
     f11 = float(params.get("F11", 0.0))
@@ -578,36 +1008,127 @@ def consistent_solid_tangent(
     f12 = float(params.get("F12", 0.0))
     b_val = float(params.get("b", params.get("MAT_BETA", 0.0)))
     n_val = float(params.get("n", params.get("MAT_HARD", 1.0)))
+    fmax_val = float(params.get("fmax", params.get("MAT_SIG", _INF)))
 
-    sig_2d = np.atleast_2d(sig)
+    d1, d2, off = _extract_extra_state(extra, n)
+
+    epsp_arr = None
+    if epsp is not None:
+        epsp_arr = np.asarray(epsp, dtype=np.float64).flatten()
+    epsp_incr_arr = None
+    if epsp_incr is not None:
+        epsp_incr_arr = np.asarray(epsp_incr, dtype=np.float64).flatten()
+
+    deps_2d = None
+    if deps is not None:
+        deps_arr = np.asarray(deps, dtype=np.float64)
+        deps_2d = deps_arr[None, :] if deps_arr.ndim == 1 else deps_arr
+
+    tangents = np.zeros((n, 6, 6), dtype=np.float64)
+
     for i in range(n):
+        if off[i] <= 0.0:
+            continue
+
         s1 = sig_2d[i, 0]
         s2 = sig_2d[i, 1]
+        s3 = sig_2d[i, 2]
         s12 = sig_2d[i, 3]
+        s23 = sig_2d[i, 4]
+        s31 = sig_2d[i, 5]
 
-        wvec = f1 * s1 + f2 * s2 + f11 * (s1 ** 2) + f22 * (s2 ** 2) + f33 * (s12 ** 2) + 2.0 * f12 * s1 * s2
-        if wvec >= 1.0 - 1e-6:
-            m_grad = np.array([
-                f1 + 2.0 * f11 * s1 + 2.0 * f12 * s2,
-                f2 + 2.0 * f22 * s2 + 2.0 * f12 * s1,
-                0.0,
-                2.0 * f33 * s12,
-                0.0,
-                0.0,
-            ], dtype=float)
+        de1 = 1.0 - d1[i] if s1 >= 0.0 else 1.0
+        de2 = 1.0 - d2[i] if s2 >= 0.0 else 1.0
+        de1 = max(_EM20, min(1.0, de1))
+        de2 = max(_EM20, min(1.0, de2))
 
-            cm = c_mat @ m_grad
+        scale1 = 1.0 if (de1 >= 1.0 - 1e-12 and de2 >= 1.0 - 1e-12) else 0.0
+        scale2 = max(_EM20, 1.0 - nu12 * nu21 * scale1)
+
+        a11 = e11 * de1 / scale2
+        a22 = e22 * de2 / scale2
+        a12 = nu21 * a11 * scale1
+        g12_eff = de1 * de2 * g12
+        g23_eff = de2 * g23
+        g31_eff = de1 * g31
+
+        c_el = np.zeros((6, 6), dtype=np.float64)
+        c_el[0, 0] = a11
+        c_el[0, 1] = a12
+        c_el[1, 0] = a12
+        c_el[1, 1] = a22
+        c_el[2, 2] = e33
+        c_el[3, 3] = g12_eff
+        c_el[4, 4] = g23_eff
+        c_el[5, 5] = g31_eff
+
+        c_el_in = np.array([
+            [a11, a12, 0.0],
+            [a12, a22, 0.0],
+            [0.0, 0.0, g12_eff],
+        ], dtype=np.float64)
+
+        wp = float(epsp_arr[i]) if (epsp_arr is not None and i < len(epsp_arr)) else 0.0
+        fyld = (1.0 + b_val * (wp ** n_val)) if wp > 0.0 else 1.0
+        fyld = min(fmax_val, fyld)
+
+        is_yielding = False
+        beta = 1.0
+        t_in = np.array([s1, s2, s12], dtype=np.float64)
+
+        if deps_2d is not None and i < len(deps_2d):
+            deps_in = np.array([deps_2d[i, 0], deps_2d[i, 1], deps_2d[i, 3]], dtype=np.float64)
+            t_in = np.array([s1, s2, s12], dtype=np.float64) + c_el_in @ deps_in
+            wvec_tr = f1 * t_in[0] + f2 * t_in[1] + f11 * (t_in[0]**2) + f22 * (t_in[1]**2) + f33 * (t_in[2]**2) + 2.0 * f12 * t_in[0] * t_in[1]
+            if wvec_tr > fyld:
+                is_yielding = True
+                coefa = f11 * (t_in[0]**2) + f22 * (t_in[1]**2) + f33 * (t_in[2]**2) + 2.0 * f12 * t_in[0] * t_in[1]
+                coefb = f1 * t_in[0] + f2 * t_in[1]
+                delta = coefb**2 + 4.0 * coefa * fyld
+                if delta >= 0.0 and coefa > _EM20:
+                    beta = (-coefb + math.sqrt(delta)) / (2.0 * coefa)
+                    beta = max(0.0, min(1.0, beta))
+                else:
+                    beta = 1.0 / math.sqrt(max(_EM20, wvec_tr / fyld))
+        else:
+            wvec = f1 * s1 + f2 * s2 + f11 * (s1**2) + f22 * (s2**2) + f33 * (s12**2) + 2.0 * f12 * s1 * s2
+            if epsp_incr_arr is not None and i < len(epsp_incr_arr) and epsp_incr_arr[i] > 0.0:
+                is_yielding = True
+            elif wvec >= fyld - 1e-5:
+                is_yielding = True
+
+        if is_yielding:
+            s_ret_in = beta * t_in
+            m_in = np.array([
+                f1 + 2.0 * f11 * s_ret_in[0] + 2.0 * f12 * s_ret_in[1],
+                f2 + 2.0 * f22 * s_ret_in[1] + 2.0 * f12 * s_ret_in[0],
+                2.0 * f33 * s_ret_in[2],
+            ], dtype=np.float64)
+
+            m_cel_in = m_in @ c_el_in
+            m_dot_t = float(m_in @ t_in)
+
             h_hard = 0.0
-            wp = float(epsp[i]) if (epsp is not None and i < len(epsp)) else 0.0
             if wp > 0.0 and b_val > 0.0:
-                h_hard = (s1 * m_grad[0] + s2 * m_grad[1] + s12 * m_grad[3]) * n_val * b_val * (wp ** (n_val - 1.0))
+                h_hard = (s_ret_in[0] * m_in[0] + s_ret_in[1] * m_in[1] + 2.0 * s_ret_in[2] * m_in[2]) * n_val * b_val * (wp ** (n_val - 1.0))
 
-            denom = float(m_grad @ cm + h_hard)
+            denom = m_dot_t + h_hard
             if denom > _EM20:
-                c_ep = c_mat - np.outer(cm, cm) / denom
-                tangents[i] = c_ep
+                c_ep_in = beta * (c_el_in - np.outer(t_in, m_cel_in) / denom)
+                c_algo = c_el.copy()
+                c_algo[0, [0, 1, 3]] = c_ep_in[0]
+                c_algo[1, [0, 1, 3]] = c_ep_in[1]
+                c_algo[3, [0, 1, 3]] = c_ep_in[2]
+                if symmetric:
+                    c_algo = 0.5 * (c_algo + c_algo.T)
+                tangents[i] = c_algo
+            else:
+                tangents[i] = c_el if not symmetric else 0.5 * (c_el + c_el.T)
+        else:
+            tangents[i] = c_el if not symmetric else 0.5 * (c_el + c_el.T)
 
-    return tangents
+    return tangents[0] if is_1d else tangents
+
 
 
 # ============================================================================
@@ -720,10 +1241,8 @@ def _update_point_law25(
         n_val = float(p.get("n", p.get("MAT_HARD", 1.0)))
         fmax_val = float(p.get("fmax", p.get("MAT_SIG", _INF)))
 
-        fyld = ((1.0 + b_val * (wpla ** n_val)) if wpla > 0.0 else 1.0) * epspfac
-        fyld = min(fmax_val, fyld)
-
-        wvec = f1 * t1 + f2 * t2 + f11 * (t1 ** 2) + f22 * (t2 ** 2) + f33 * (t3 ** 2) + 2.0 * f12 * t1 * t2
+        fyld = hardening_yield(wpla, b_val, n_val, epspfac, fmax_val)
+        wvec = tsai_wu_yield_criterion(t1, t2, t3, f1, f2, f11, f22, f33, f12)
 
         if wvec > fyld:
             coefa = f11 * (t1 ** 2) + f22 * (t2 ** 2) + f33 * (t3 ** 2) + 2.0 * f12 * t1 * t2
@@ -739,9 +1258,7 @@ def _update_point_law25(
             so2 = beta * t2
             so3 = beta * t3
 
-            dp1 = f1 + 2.0 * f11 * so1 + 2.0 * f12 * so2
-            dp2 = f2 + 2.0 * f22 * so2 + 2.0 * f12 * so1
-            dp3 = 2.0 * f33 * so3
+            dp1, dp2, dp3 = tsai_wu_flow_normal(so1, so2, so3, f1, f2, f11, f22, f33, f12)
 
             ds1 = t1 - so1
             ds2 = t2 - so2
@@ -756,6 +1273,7 @@ def _update_point_law25(
                 + 2.0 * dp3 * g12_eff * dp3
                 + h_term
             )
+
             t1_ret = so1
             t2_ret = so2
             t3_ret = so3
@@ -781,6 +1299,7 @@ def _update_point_law25(
             t1 = t1_ret
             t2 = t2_ret
             t3 = t3_ret
+
 
     else:
         # CRASURV formulation (mat25_crasurv_c.F90:538-755)
@@ -874,15 +1393,15 @@ def _update_point_law25(
             s_yt12 = min(s_yt12, (1.0 - soft12) * s_yt12 + soft12 * sig_rst12)
 
         # Dynamic Tsai-Wu coefficients
-        f1 = (1.0 / s_yt1 - 1.0 / s_yc1) if (s_yt1 > 0 and s_yc1 > 0) else 0.0
-        f2 = (1.0 / s_yt2 - 1.0 / s_yc2) if (s_yt2 > 0 and s_yc2 > 0) else 0.0
-        f11 = 1.0 / max(_EM20, s_yt1 * s_yc1)
-        f22 = 1.0 / max(_EM20, s_yt2 * s_yc2)
-        f33 = 1.0 / max(_EM20, s_yt12 * s_yt12)
-        denom_12 = 2.0 * math.sqrt(max(_EM20, s_yt1 * s_yc1 * s_yt2 * s_yc2))
-        f12 = -alpha / denom_12 if denom_12 > 0 else 0.0
+        tw_cras = tsai_wu_coefficients(s_yt1, s_yc1, s_yt2, s_yc2, s_yt12, alpha)
+        f1 = tw_cras["F1"]
+        f2 = tw_cras["F2"]
+        f11 = tw_cras["F11"]
+        f22 = tw_cras["F22"]
+        f33 = tw_cras["F33"]
+        f12 = tw_cras["F12"]
 
-        wvec = f1 * t1 + f2 * t2 + f11 * (t1 ** 2) + f22 * (t2 ** 2) + f33 * (t3 ** 2) + 2.0 * f12 * t1 * t2
+        wvec = tsai_wu_yield_criterion(t1, t2, t3, f1, f2, f11, f22, f33, f12)
 
         if wvec > 1.0:
             coefa = f11 * (t1 ** 2) + f22 * (t2 ** 2) + f33 * (t3 ** 2) + 2.0 * f12 * t1 * t2
@@ -898,9 +1417,7 @@ def _update_point_law25(
             so2 = beta * t2
             so3 = beta * t3
 
-            dp1 = f1 + 2.0 * f11 * so1 + 2.0 * f12 * so2
-            dp2 = f2 + 2.0 * f22 * so2 + 2.0 * f12 * so1
-            dp3 = 2.0 * f33 * so3
+            dp1, dp2, dp3 = tsai_wu_flow_normal(so1, so2, so3, f1, f2, f11, f22, f33, f12)
 
             ds1 = t1 - so1
             ds2 = t2 - so2
@@ -911,6 +1428,7 @@ def _update_point_law25(
                 + dp2 * (a12 * dp1 + a22 * dp2)
                 + 2.0 * dp3 * g12_eff * dp3
             )
+
             t1_ret = so1
             t2_ret = so2
             t3_ret = so3
@@ -936,6 +1454,18 @@ def _update_point_law25(
             t1 = t1_ret
             t2 = t2_ret
             t3 = t3_ret
+
+
+    # Plastic work damage and global failure index (sigeps25c.F:288-302, m25law.F:308-323)
+    if wpmax < 1e20 and wpmax > 0.0 and len(dmg) > 3:
+        dmg[3] = min(1.0, wpla / wpmax)
+    if len(dmg) > 0:
+        cands = [float(dmg[1]), float(dmg[2])]
+        if len(dmg) > 3:
+            cands.append(float(dmg[3]))
+        if len(dmg) > 6 and iform != 0:
+            cands.extend([max(0.0, abs(float(dmg[4])) - 1.0), max(0.0, abs(float(dmg[5])) - 1.0), max(0.0, float(dmg[6]) - 1.0)])
+        dmg[0] = max(cands)
 
     if is_solid:
         sig_new = np.array([t1, t2, s3, t3, s5, s6], dtype=float)
@@ -1026,6 +1556,7 @@ def shell_update(
     extra["stra25"] = epst
     extra["dmg25"] = dmg
     extra["off25"] = off
+    extra["off"] = off
     if "layfail" in extra and extra["layfail"] is not None:
         extra["layfail"][:] = off
 
@@ -1090,6 +1621,7 @@ def solid_update(
     extra["stra25"] = epst
     extra["dmg25"] = dmg
     extra["off25"] = off
+    extra["off"] = off
 
     c_val = sound_speed(mat)
     c_arr = np.full(n, float(c_val), dtype=float)
