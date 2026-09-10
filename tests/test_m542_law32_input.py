@@ -560,6 +560,15 @@ class TestLaw32StarterChecks:
         assert "Lankford parameter r45 must be > 0" in error_msgs
         assert "Lankford parameter r90 must be > 0" in error_msgs
 
+    def test_element_compatibility(self):
+        """Verify check_model logs an error when LAW32 is assigned to solid (brick) elements."""
+        model = Model()
+        model.add_nodes(np.array([1, 2, 3, 4]), np.zeros((4, 3)))
+        mat = MatLaw32(
+            id=1, rho0=7.85e-9, e=210000.0, nu=0.3,
+            sigy=350.0, beta=150.0, hard=0.5,
+            eps=0.25, sig=550.0, srp=1.0, src=0.0,
+            r00=1.0, r45=1.0, r90=1.0,
         )
         model.materials[1] = mat
 
@@ -574,6 +583,7 @@ class TestLaw32StarterChecks:
         assert log.errors
         error_msgs = " ".join(log.errors)
         assert "/MAT/LAW32/1 (/MAT/HILL) is not supported for bricks elements" in error_msgs
+
 
 
 # ============================================================================
