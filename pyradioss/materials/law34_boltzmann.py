@@ -92,6 +92,7 @@ def build_law34(rec: Any) -> Material:
                     return float(getattr(rec, k))
                 except (ValueError, TypeError):
                     pass
+        return default
     if isinstance(rec, dict):
         rec_id = rec.get("id", rec.get("mat_id", rec.get("user_id", 1)))
         title = rec.get("title", f"LAW34_{rec_id}")
@@ -616,7 +617,7 @@ def consistent_solid_tangent(
     ----------
     mat : Material
         LAW34 material instance.
-    sig : ndarray, shape (n, 6), or None
+    sig : ndarray, shape (n, 6), (6,), or None
         Stress tensor.
     epsp, epsp_incr : optional
         Plastic strain views (unused).
@@ -630,9 +631,16 @@ def consistent_solid_tangent(
     ndarray
         (n, 6, 6) or (6, 6) algorithmic tangent tensor.
     """
+    if isinstance(sig, (int, float, np.floating, np.integer)):
+        if dt is None:
+            dt = float(sig)
+        sig = None
     if dt is None:
         if extra is not None and isinstance(extra, dict):
             dt = extra.get("dt", 0.0)
+        elif extra is not None and isinstance(extra, (int, float, np.floating, np.integer)):
+            dt = float(extra)
+            extra = None
         else:
             dt = 0.0
     dt = float(dt) if dt is not None else 0.0
@@ -663,11 +671,15 @@ def consistent_solid_tangent(
 
     g_alg = ge - gv * cc
 
+    is_1d = (sig is not None and isinstance(sig, np.ndarray) and sig.ndim == 1)
+    if is_1d:
+        sig = sig.reshape(1, -1)
+
     n = sig.shape[0] if sig is not None else 1
     if sig is not None and n == 0:
         return np.zeros((0, 6, 6), dtype=sig.dtype)
 
-    if extra is not None and "rho" in extra and extra["rho"] is not None:
+    if extra is not None and isinstance(extra, dict) and "rho" in extra and extra["rho"] is not None:
         rho = np.asarray(extra["rho"], dtype=float)
         if rho.ndim == 0 or len(rho) != n:
             rho = np.full(n, rho.item() if rho.ndim == 0 else mat.rho0)
@@ -695,26 +707,33 @@ def consistent_solid_tangent(
     for i in range(3, 6):
         C[:, i, i] = c44
 
-    if sig is None:
+    if sig is None or is_1d:
         return C[0]
     return C
 
 
-def shell_membrane_tangent(mat: Material, dt: Optional[float] = None) -> np.ndarray:
+def shell_membrane_tangent(
+    mat: Material,
+    dt: Optional[Union[float, Dict[str, Any]]] = None,
+) -> np.ndarray:
     """(3, 3) plane-stress consistent tangent matrix for LAW34 shells.
 
     Parameters
     ----------
     mat : Material
         LAW34 material instance.
-    dt : float or None
-        Time step.
+    dt : float, dict, or None
+        Time step or extra state dict.
 
     Returns
     -------
     ndarray
         (3, 3) plane-stress tangent matrix [xx, yy, xy].
     """
+    if isinstance(dt, dict):
+        dt = dt.get("dt", 0.0)
+    dt = float(dt) if dt is not None else 0.0
+
     p = mat.params
     bulk = p.get("bulk", p.get("K", mat.K))
     g0 = p.get("g0", p.get("G0", mat.G))
@@ -724,7 +743,7 @@ def shell_membrane_tangent(mat: Material, dt: Optional[float] = None) -> np.ndar
     ge = gi
     gv = g0 - gi
 
-    if dt is not None and dt > 0.0:
+    if dt > 0.0:
         if beta * dt > 1e-12:
             c1 = 1.0 - math.exp(-beta * dt)
             c2 = -c1 / beta
@@ -761,10 +780,17 @@ def consistent_shell_tangent(
     dt: Optional[float] = None,
 ) -> np.ndarray:
     """(n, 3, 3) plane-stress consistent tangent for LAW34 shell layers."""
+    if isinstance(sig, (int, float, np.floating, np.integer)):
+        if dt is None:
+            dt = float(sig)
+        sig = None
     if dt is None and extra is not None and isinstance(extra, dict):
         dt = extra.get("dt", 0.0)
+    elif dt is None and isinstance(extra, (int, float, np.floating, np.integer)):
+        dt = float(extra)
+        extra = None
     C_mat = shell_membrane_tangent(mat, dt=dt)
-    if sig is None:
+    if sig is None or (isinstance(sig, np.ndarray) and sig.ndim == 1):
         return C_mat
     n = sig.shape[0]
     return np.broadcast_to(C_mat, (n, 3, 3)).copy()
