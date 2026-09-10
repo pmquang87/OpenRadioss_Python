@@ -589,7 +589,9 @@ def forces(group, x, v, vr, dt, fint, mint):
         for name in st["mat_extra"]:
             if name in extra and name != "eint":
                 st["mat_extra"][name][sl] = extra[name]
-        if "off28" in extra:
+        if "off25" in extra:
+            st["off"][sl] = np.minimum(st["off"][sl], extra["off25"])
+        elif "off28" in extra:
             st["off"][sl] = np.minimum(st["off"][sl], extra["off28"])
         elif "off38" in extra:
             st["off"][sl] = np.minimum(st["off"][sl], extra["off38"])

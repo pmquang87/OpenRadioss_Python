@@ -1236,6 +1236,22 @@ def _update_point_law25(
     n_d = min(len(epst), len(deps))
     epst[:n_d] += deps[:n_d]
 
+    # Recover elastic strain components (mat25_tsaiwu_c.F90 lines 331-342)
+    de1_old = 1.0 - dmg_val[1] if sig_old[0] >= 0.0 else 1.0
+    de2_old = 1.0 - dmg_val[2] if sig_old[1] >= 0.0 else 1.0
+    de1_old = max(_EM20, min(1.0, de1_old))
+    de2_old = max(_EM20, min(1.0, de2_old))
+    scale_old = 1.0 if (de1_old >= 1.0 - 1e-12 and de2_old >= 1.0 - 1e-12) else 0.0
+
+    sig1_eff = sig_old[0] / de1_old - nu12 * sig_old[1] * scale_old
+    sig2_eff = sig_old[1] / de2_old - nu21 * sig_old[0] * scale_old
+    s1_tot = sig1_eff / max(e11, _EM20) + deps[0]
+    s2_tot = sig2_eff / max(e22, _EM20) + deps[1]
+    g12_old = max(_EM20, de1_old * de2_old * g12)
+    s12_shear = deps[3] if is_solid else deps[2]
+    s12_sig = sig_old[3] if is_solid else sig_old[2]
+    s3_tot = s12_sig / g12_old + s12_shear
+
     # Tensile damage accumulation (mat25_tsaiwu_c.F90 lines 384-402, m25law.F lines 263-293)
     dmg = np.copy(dmg_val)
     if epst[0] > epst1 and epsm1 > epst1:
@@ -1263,18 +1279,18 @@ def _update_point_law25(
     g23_eff = de2 * g23
     g31_eff = de1 * g31
 
-    # Elastic trial increment
+    # Elastic trial increment (mat25_tsaiwu_c.F90 lines 417-421)
     if is_solid:
-        t1 = sig_old[0] + a11 * deps[0] + a12 * deps[1]
-        t2 = sig_old[1] + a12 * deps[0] + a22 * deps[1]
-        t3 = sig_old[3] + g12_eff * deps[3]
+        t1 = a11 * s1_tot + a12 * s2_tot
+        t2 = a12 * s1_tot + a22 * s2_tot
+        t3 = g12_eff * s3_tot
         s3 = sig_old[2] + e33 * deps[2]
         s5 = sig_old[4] + g23_eff * deps[4]
         s6 = sig_old[5] + g31_eff * deps[5]
     else:
-        t1 = sig_old[0] + a11 * deps[0] + a12 * deps[1]
-        t2 = sig_old[1] + a12 * deps[0] + a22 * deps[1]
-        t3 = sig_old[2] + g12_eff * deps[2]
+        t1 = a11 * s1_tot + a12 * s2_tot
+        t2 = a12 * s1_tot + a22 * s2_tot
+        t3 = g12_eff * s3_tot
 
     # Strain rate factor (mat25_tsaiwu_c.F90 lines 453-462)
     eps_dot = np.linalg.norm(deps) / max(dt, _EM20) if dt > 0.0 else 0.0

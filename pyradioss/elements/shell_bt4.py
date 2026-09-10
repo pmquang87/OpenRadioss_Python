@@ -537,7 +537,7 @@ def _init_material_state(group, nip_max):
     if any(mat.fail is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros((n, nip_max))
     st["chk_fail"] = any(
-        mat.fail is not None or mat.law == 27
+        mat.fail is not None or getattr(mat, "law", 1) in (25, 27)
         or mat.params.get("eps_p_max", EP30) < 1e30
         for _, mat, _ in st["slices"])
 
@@ -580,23 +580,36 @@ def _element_deletion(st, nip_of):
     Deletion rule: /FAIL's Ifail_sh (1 = one broken layer kills the
     element — the Radioss default, also used for the material eps_p_max
     thresholds; 2 = all layers; 3 = membrane criterion; 4 = no deletion),
-    while LAW27 uses the all-layers rule of the original brittle law.
+    while LAW27 uses the all-layers rule of the original brittle law,
+    and LAW25 uses the composite layer ratio/ioff criteria.
     Returns the updated alive mask."""
     off = st["off"]
     layfail = st["layfail"]
     for isl, (sl, mat, prop) in enumerate(st["slices"]):
-        if not (mat.fail is not None or mat.law == 27
+        law = getattr(mat, "law", 1)
+        if not (mat.fail is not None or law in (25, 27)
                 or mat.params.get("eps_p_max", EP30) < 1e30):
             continue
         nip = nip_of[isl]
         nbroken = (layfail[sl, :nip] == 0.0).sum(axis=1)
-        if mat.fail is not None and getattr(mat.fail, "ifail_sh", 1) == 4:
+        if law == 25:
+            ratio = float(mat.params.get("ratio", 1.0))
+            if ratio < 0:
+                fail_npt = max(1, nip - 1)
+            else:
+                fail_npt = max(1, nip - round(nip * (1.0 - ratio)))
+            ioff = int(mat.params.get("ioff", 0))
+            if ioff == 0:
+                dead = nbroken >= 1
+            else:
+                dead = nbroken >= fail_npt
+        elif mat.fail is not None and getattr(mat.fail, "ifail_sh", 1) == 4:
             dead = np.zeros(len(off[sl]), dtype=bool)
         elif mat.fail is not None and getattr(mat.fail, "ifail_sh", 1) == 3:
             # Membrane criterion: mid-surface layer (or all layers)
             mid = nip // 2
             dead = layfail[sl, mid] == 0.0
-        elif mat.law == 27 or (mat.fail is not None and getattr(mat.fail, "ifail_sh", 1) == 2):
+        elif law == 27 or (mat.fail is not None and getattr(mat.fail, "ifail_sh", 1) == 2):
             dead = nbroken == nip
         else:
             dead = nbroken >= 1

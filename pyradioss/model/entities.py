@@ -201,6 +201,12 @@ class Material:
                 return float(law28_honeycomb.sound_speed(self, rho=self.rho0))
             except Exception:
                 pass
+        if self.law in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
+            try:
+                from ..materials import law25_composite
+                return float(law25_composite.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
         if self.law in (38, "38", "LAW38", "VISC_TAB"):
             try:
                 from ..materials import law38_visc_tab
@@ -215,6 +221,12 @@ class Material:
         Shells use the plane-stress modulus because the through-thickness
         stress is zero, which softens the response relative to 3-D.
         """
+        if self.law in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
+            try:
+                from ..materials import law25_composite
+                return float(law25_composite.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
         return float(np.sqrt(self.E / (self.rho0 * (1.0 - self.nu ** 2))))
 
 

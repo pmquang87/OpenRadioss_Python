@@ -608,6 +608,7 @@ def init_group(group, model, log):
         a11=a11, a12=a12, gmod=gmod, gs=gs, shf=shf, shfsr=shfsr,
         gsr=gsr, a11sr=a11sr, a12sr=a12sr, amu=amu, cspd=cspd,
         npt1=npt1, rho0=rho0,
+        yld=np.zeros(n), fmat=np.zeros(n),
     )
     _init_material_state(group, nip_max)
     group.state["ortho"] = shell_ortho.build_group_ortho(
