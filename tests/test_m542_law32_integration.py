@@ -369,8 +369,8 @@ class TestLaw32MaterialDispatchAndInit:
             MAT_SIGY=200e6,
         )
         c = sound_speed(mat)
-        # For thin shells: c = sqrt(E / (rho0 * (1 - nu^2)))
-        expected_c = math.sqrt(2.1e11 / (7800.0 * (1.0 - 0.3 ** 2)))
+        # hm_read_mat32.F:155: SDSP = sqrt(YOUNG / RHO0)
+        expected_c = math.sqrt(2.1e11 / 7800.0)
         assert math.isclose(float(c), expected_c, rel_tol=1e-4)
 
     def test_shell_membrane_tangent(self):

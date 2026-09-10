@@ -457,9 +457,10 @@ def extra_shapes(mat, nip=None):
         # M541: LAW38 (VISC_TAB tabulated viscoelastic foam) needs 33 state variables (uv38)
         shapes.update(eps38=(6,), uv38=_STATE_VAR_COUNT.get("uv38", (33,)), off38=())
     if getattr(mat, "law", None) in (32, "32", "LAW32", "HILL") or getattr(mat, "law_name", None) in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL"):
-        # M542: LAW32 (Hill orthotropic plasticity) needs 2 state variables per point (uv32)
+        # M542: LAW32 (Hill orthotropic plasticity) needs 2 state variables per point (uv32) + off32 flag
         uv_shape = _STATE_VAR_COUNT.get("uv32", (2,))
-        shapes.update(uv32=(nip, *uv_shape) if nip else uv_shape)
+        shapes.update(uv32=(nip, *uv_shape) if nip else uv_shape,
+                      off32=(nip,) if nip else ())
     if mat.law == 4:
         shapes["temp"] = ()
     if getattr(mat, "law", None) in (5, "5", "LAW5", "JWL") or getattr(mat, "law_name", None) in ("LAW5", "JWL"):

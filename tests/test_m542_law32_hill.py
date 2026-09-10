@@ -91,12 +91,12 @@ def test_law32_solid_update_not_implemented():
 
 
 def test_law32_sound_speed():
-    """Longitudinal thin-shell sound speed c = sqrt(E / (rho0 * (1 - nu^2)))."""
+    """Sound speed SDSP = sqrt(YOUNG / RHO0) matching hm_read_mat32.F:155."""
     rho = 7.85e-9
     e = 210000.0
     nu = 0.3
     mat = law32_hill.build_law32(id=1, rho0=rho, E=e, nu=nu, A=300.0)
-    expected_c = math.sqrt(e / (rho * (1.0 - nu ** 2)))
+    expected_c = math.sqrt(e / rho)
     assert law32_hill.sound_speed(mat) == pytest.approx(expected_c)
     assert sound_speed(mat) == pytest.approx(expected_c)
 
@@ -279,7 +279,7 @@ def test_law32_strain_rate_scaling():
 
 
 def test_law32_strain_rate_clamped_below_eps0():
-    """Strain rate below eps0 is clamped to eps0 (no softening)."""
+    """Strain rate below eps0 is clamped to eps0 (m32plas.F:121, 128)."""
     mat = law32_hill.build_law32(
         id=1, E=210000.0, nu=0.3,
         A=300.0, B=1.0, n=0.0,
@@ -291,7 +291,9 @@ def test_law32_strain_rate_clamped_below_eps0():
     dt = 1.0  # rate = 0.005 << 10.0
     sig, _ = law32_hill.shell_update(mat, sig, deps, dt=dt)
     seq = math.sqrt(sig[0, 0]**2 + sig[0, 1]**2 - sig[0, 0]*sig[0, 1])
-    assert seq == pytest.approx(300.0, rel=1e-4)
+    # YLD = CA * (CE+EPSEQ)^CN * EPSP^CM = 300 * 1^0 * 10^0.1 per m32plas.F:128
+    expected_seq = 300.0 * (10.0 ** 0.1)
+    assert seq == pytest.approx(expected_seq, rel=1e-4)
 
 
 # ============================================================================
