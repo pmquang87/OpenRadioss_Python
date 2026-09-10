@@ -9046,7 +9046,7 @@ MatSoilConc = MatLaw10
 
 @dataclass
 class MatLaw14:
-    """``/MAT/LAW14``, ``/MAT/CAM_CLAY`` (M187), or ``/MAT/COMPSO`` (M189)."""
+    """``/MAT/LAW14``, ``/MAT/CAM_CLAY`` (M187), or ``/MAT/COMPSO`` (M189/M547)."""
     id: int = 0
     rho0: float = 0.0
     rhor: float = 0.0
@@ -9055,10 +9055,11 @@ class MatLaw14:
     nu: float = 0.0
     m: float = 0.0
     lamda: float = 0.0
+    lambda_: float = 0.0
     kappa: float = 0.0
     e0: float = 0.0
     pc0: float = 0.0
-    # Composite Solid fields (M189)
+    # Composite Solid fields (M189/M547)
     ea: float = 0.0
     eb: float = 0.0
     ec: float = 0.0
@@ -9072,23 +9073,154 @@ class MatLaw14:
     sigt2: float = 0.0
     sigt3: float = 0.0
     damage: float = 0.0
+    delta: float = 0.0
     beta: float = 0.0
+    cb: float = 0.0
     hard: float = 0.0
+    cn: float = 0.0
     sig_max: float = 0.0
+    fmax: float = 0.0
+    wpref: float = 0.0
+    wplaref: float = 0.0
     sigyt1: float = 0.0
     sigyt2: float = 0.0
     sigyc1: float = 0.0
     sigyc2: float = 0.0
     sigt12: float = 0.0
-    sigt23: float = 0.0
     sigc12: float = 0.0
+    sigt23: float = 0.0
     sigc23: float = 0.0
     alpha_fib: float = 0.0
+    alpha: float = 0.0
     e_fib: float = 0.0
+    efib: float = 0.0
     src: float = 0.0
+    cc: float = 0.0
     srp: float = 0.0
+    eps0: float = 0.0
     strflag: int = 0
+    icc: int = 0
     title: str = ""
+    law: int = 14
+    law_name: str = "LAW14"
+
+    def __post_init__(self):
+        if not self.lambda_ and self.lamda:
+            self.lambda_ = self.lamda
+        elif not self.lamda and self.lambda_:
+            self.lamda = self.lambda_
+        if not self.delta and self.damage:
+            self.delta = self.damage
+        elif not self.damage and self.delta:
+            self.damage = self.delta
+        if not self.cb and self.beta:
+            self.cb = self.beta
+        elif not self.beta and self.cb:
+            self.beta = self.cb
+        if not self.cn and self.hard:
+            self.cn = self.hard
+        elif not self.hard and self.cn:
+            self.hard = self.cn
+        if not self.fmax and self.sig_max:
+            self.fmax = self.sig_max
+        elif not self.sig_max and self.fmax:
+            self.sig_max = self.fmax
+        if not self.wplaref and self.wpref:
+            self.wplaref = self.wpref
+        elif not self.wpref and self.wplaref:
+            self.wpref = self.wplaref
+        if not self.alpha and self.alpha_fib:
+            self.alpha = self.alpha_fib
+        elif not self.alpha_fib and self.alpha:
+            self.alpha_fib = self.alpha
+        if not self.efib and self.e_fib:
+            self.efib = self.e_fib
+        elif not self.e_fib and self.efib:
+            self.e_fib = self.efib
+        if not self.cc and self.src:
+            self.cc = self.src
+        elif not self.src and self.cc:
+            self.src = self.cc
+        if not self.eps0 and self.srp:
+            self.eps0 = self.srp
+        elif not self.srp and self.eps0:
+            self.srp = self.eps0
+        if not self.icc and self.strflag:
+            self.icc = self.strflag
+        elif not self.strflag and self.icc:
+            self.strflag = self.icc
+
+    @property
+    def lam(self) -> float:
+        return self.lamda
+
+    @property
+    def e11(self) -> float:
+        return self.ea
+
+    @property
+    def e22(self) -> float:
+        return self.eb
+
+    @property
+    def e33(self) -> float:
+        return self.ec
+
+    @property
+    def nu12(self) -> float:
+        return self.prab
+
+    @property
+    def nu23(self) -> float:
+        return self.prbc
+
+    @property
+    def nu31(self) -> float:
+        return self.prca
+
+    @property
+    def g12(self) -> float:
+        return self.gab
+
+    @property
+    def g23(self) -> float:
+        return self.gbc
+
+    @property
+    def g31(self) -> float:
+        return self.gca
+
+    @property
+    def sig_1yt(self) -> float:
+        return self.sigyt1
+
+    @property
+    def sig_2yt(self) -> float:
+        return self.sigyt2
+
+    @property
+    def sig_1yc(self) -> float:
+        return self.sigyc1
+
+    @property
+    def sig_2yc(self) -> float:
+        return self.sigyc2
+
+    @property
+    def sig_12yt(self) -> float:
+        return self.sigt12
+
+    @property
+    def sig_12yc(self) -> float:
+        return self.sigc12
+
+    @property
+    def sig_23yt(self) -> float:
+        return self.sigt23
+
+    @property
+    def sig_23yc(self) -> float:
+        return self.sigc23
 
 
 MatCamClay = MatLaw14

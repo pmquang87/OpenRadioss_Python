@@ -53,7 +53,7 @@ true current sound speed or the Courant time step is not a bound.
 
 from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa: F401
                law04_hyd_jcook, law06_hyd_visc, law10_soil,
-               law12_comp3d, law15_chang,
+               law12_comp3d, law14_compso, law15_chang,
                law19_fabric, law22_dama, law24_concrete, law25_composite, law27_brittle,
                law28_honeycomb, law33_foamplas, law34_boltzmann, law35_kelvinmax, law36_tabulated,
                law37_biphas,
@@ -463,6 +463,23 @@ def _register_law12():
 _register_law12()
 
 
+def _register_law14():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = None
+        if law14_compso is not None:
+            builder = getattr(law14_compso, "build_law14", None)
+        if builder is not None:
+            for k in (14, "14", "LAW14", "COMPSO", "COMP_SOL",
+                      "MAT_LAW14", "MAT_COMPSO", "MAT_COMP_SOL"):
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law14()
+
+
 _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
     "uv15": (8,),
     "uv22": (4,),
@@ -769,6 +786,15 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
             except Exception:
                 pass
         return sig, epsp_out, c
+    if getattr(mat, "law", None) in (14, "14", "LAW14", "COMPSO", "COMP_SOL") or getattr(mat, "law_name", None) in ("14", "LAW14", "COMPSO", "COMP_SOL"):
+        sign, epsp_out, c = law14_compso.solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        sig[:] = sign
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
     raise NotImplementedError(f"material LAW{mat.law} not ported for solids")
 
 
@@ -780,6 +806,8 @@ def sound_speed(mat, rho=None, extra=None):
         return law22_dama.sound_speed(mat, rho=rho, extra=extra)
     if law in (12, "12", "LAW12", "3D_COMP", "COMP_3D") or law_name in ("12", "LAW12", "3D_COMP", "COMP_3D"):
         return law12_comp3d.sound_speed(mat, rho=rho, extra=extra)
+    if law in (14, "14", "LAW14", "COMPSO", "COMP_SOL") or law_name in ("14", "LAW14", "COMPSO", "COMP_SOL"):
+        return law14_compso.sound_speed(mat, rho=rho, extra=extra)
     if law in (5, "5", "LAW5", "JWL") or law_name in ("LAW5", "JWL"):
         _get_law05()
         if law05_sound_speed is not None:
@@ -835,6 +863,8 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         raise NotImplementedError("LAW38 (VISC_TAB tabulated viscoelastic) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in (12, "12", "LAW12", "3D_COMP", "COMP_3D") or getattr(mat, "law_name", None) in ("12", "LAW12", "3D_COMP", "COMP_3D"):
         return law12_comp3d.shell_update(mat, sig, deps, epsp, dt, extra)
+    if getattr(mat, "law", None) in (14, "14", "LAW14", "COMPSO", "COMP_SOL") or getattr(mat, "law_name", None) in ("14", "LAW14", "COMPSO", "COMP_SOL"):
+        return law14_compso.shell_update(mat, sig, deps, epsp, dt, extra)
     if getattr(mat, "law", None) in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or getattr(mat, "law_name", None) in ("LAW37", "BIPHAS", "BIPHASIC"):
         raise NotImplementedError("LAW37 (biphasic fluid/gas) is implemented for 3D solid and SPH elements only.")
     if getattr(mat, "law", None) == 28 or getattr(mat, "law_name", None) in ("LAW28", "HONEYCOMB", "HONEYCOMB_SOL"):
@@ -981,6 +1011,8 @@ def solid_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
         return law22_dama.consistent_solid_tangent(mat, sig, epsp=epsp, dt=0.0, extra=extra, epsp_incr=epsp_incr)
     if getattr(mat, "law", None) in (12, "12", "LAW12", "3D_COMP", "COMP_3D") or getattr(mat, "law_name", None) in ("12", "LAW12", "3D_COMP", "COMP_3D"):
         return law12_comp3d.consistent_solid_tangent(mat, sig, epsp=epsp, dt=0.0, extra=extra, epsp_incr=epsp_incr)
+    if getattr(mat, "law", None) in (14, "14", "LAW14", "COMPSO", "COMP_SOL") or getattr(mat, "law_name", None) in ("14", "LAW14", "COMPSO", "COMP_SOL"):
+        return law14_compso.consistent_solid_tangent(mat, sig, epsp=epsp, dt=0.0, extra=extra, epsp_incr=epsp_incr)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
         f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW34, LAW35, LAW36, LAW38, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
