@@ -226,6 +226,31 @@ MAT_BOLTZMANN_CFG_2 = MAT_LAW34_2
 MAT_BOLTZMANN_CFG_3 = MAT_LAW34_3
 MAT_BOLTZMANN_CFG_4 = MAT_LAW34_4
 
+# M540: /MAT/LAW37 (/MAT/BIPHAS, /MAT/BIPHASIC) card layout constants citing radioss110/MAT/matl37_biphas.cfg & radioss2018/MAT/matl37_biphas.cfg
+MAT_LAW37_1 = (20, 20)  # MAT_RHO, Refer_Rho (or PSHIFT if 1 field)
+MAT_LAW37_2 = (20, 20, 20, 20, 20)  # Lqud_Rho_l, C_l, ALPHA1, Nu_l, Bulk_Ratio_l
+MAT_LAW37_3 = (20, 20, 20, 20, 20)  # Lqud_Rho_g, Lqud_Gamma_bulk, Lqud_P0, Nu_g, Bulk_Ratio_g
+
+MAT_LAW37_CFG_1 = MAT_LAW37_1
+MAT_LAW37_CFG_2 = MAT_LAW37_2
+MAT_LAW37_CFG_3 = MAT_LAW37_3
+
+MAT_BIPHAS_1 = MAT_LAW37_1
+MAT_BIPHAS_2 = MAT_LAW37_2
+MAT_BIPHAS_3 = MAT_LAW37_3
+
+MAT_BIPHAS_CFG_1 = MAT_LAW37_1
+MAT_BIPHAS_CFG_2 = MAT_LAW37_2
+MAT_BIPHAS_CFG_3 = MAT_LAW37_3
+
+MAT_BIPHASIC_1 = MAT_LAW37_1
+MAT_BIPHASIC_2 = MAT_LAW37_2
+MAT_BIPHASIC_3 = MAT_LAW37_3
+
+MAT_BIPHASIC_CFG_1 = MAT_LAW37_1
+MAT_BIPHASIC_CFG_2 = MAT_LAW37_2
+MAT_BIPHASIC_CFG_3 = MAT_LAW37_3
+
 
 
 # ============================================================================
@@ -2589,9 +2614,6 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_HILL_TAB_1": [20, 20, 20, 20, 20, 20, 20],
     "MAT_HILL_TAB_2": [20, 20, 20],
     "MAT_HILL_TAB_3": [10, 10, 10, 10, 10, 10],
-    "MAT_LAW37_1": [20, 20, 20, 20, 20, 20],
-    "MAT_LAW37_2": [20, 20, 20, 20, 20, 20, 20, 20],
-    "MAT_LAW37_3": [20, 20],
     "MAT_BIQUAD_1": [20, 20, 20, 20, 20, 20],
     "MAT_BIQUAD_2": [20, 20, 20, 20, 20, 20, 20, 20],
     "MAT_BIQUAD_3": [20, 20],
@@ -2928,6 +2950,31 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_BOLTZMANN_CFG_2": _LayoutList([20]),
     "MAT_BOLTZMANN_CFG_3": _LayoutList([20, 20, 20]),
     "MAT_BOLTZMANN_CFG_4": _LayoutList([20, 20, 20]),
+
+    # M540: matl37_biphas.cfg (radioss110 / radioss2018) — /MAT/LAW37 (/MAT/BIPHAS, /MAT/BIPHASIC)
+    "MAT_LAW37_1": _LayoutList([20, 20]),
+    "MAT_LAW37_2": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_LAW37_3": _LayoutList([20, 20, 20, 20, 20]),
+
+    "MAT_LAW37_CFG_1": _LayoutList([20, 20]),
+    "MAT_LAW37_CFG_2": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_LAW37_CFG_3": _LayoutList([20, 20, 20, 20, 20]),
+
+    "MAT_BIPHAS_1": _LayoutList([20, 20]),
+    "MAT_BIPHAS_2": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_BIPHAS_3": _LayoutList([20, 20, 20, 20, 20]),
+
+    "MAT_BIPHAS_CFG_1": _LayoutList([20, 20]),
+    "MAT_BIPHAS_CFG_2": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_BIPHAS_CFG_3": _LayoutList([20, 20, 20, 20, 20]),
+
+    "MAT_BIPHASIC_1": _LayoutList([20, 20]),
+    "MAT_BIPHASIC_2": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_BIPHASIC_3": _LayoutList([20, 20, 20, 20, 20]),
+
+    "MAT_BIPHASIC_CFG_1": _LayoutList([20, 20]),
+    "MAT_BIPHASIC_CFG_2": _LayoutList([20, 20, 20, 20, 20]),
+    "MAT_BIPHASIC_CFG_3": _LayoutList([20, 20, 20, 20, 20]),
 
     "MAT_LAW23_1": [20, 20],
     "MAT_LAW23_2": [20, 20],

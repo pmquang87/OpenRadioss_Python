@@ -1071,7 +1071,8 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW32", "HILL_TAB", "HILL_PLAS_TAB", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "LAW32_HILL_TAB"):
         read_mat_law32(block, model, log)
         return
-    if lawname in ("LAW37", "BIQUAD", "BANABIC", "MAT_BIQUAD", "MAT_BANABIC", "LAW37_BIQUAD"):
+    if lawname in ("LAW37", "BIQUAD", "BANABIC", "MAT_BIQUAD", "MAT_BANABIC", "LAW37_BIQUAD",
+                   "BIPHAS", "BIPHASIC", "MAT_BIPHAS", "MAT_BIPHASIC", "LAW37_BIPHAS"):
         read_mat_law37(block, model, log)
         return
     # M188: LAW12 (3PARBI), LAW13 (HONEYCOMB), LAW15 (CHANG), LAW18 (CONCR_DRA), LAW22 (TSAI_WU), LAW25 (COMP_PLAS), LAW28 (HONEYCOMB_SOL)
@@ -37509,19 +37510,56 @@ def read_mat_law37(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
 
     first_raw = valid_cards[0].raw
-    is_biphas = False
-    if len(valid_cards) >= 2:
-        if len(first_raw) <= 105:
-            tokens0 = valid_cards[0].tokens()
-            if len(tokens0) == 5 or (len(first_raw) >= 40 and len(first_raw) <= 105 and len(valid_cards[1].raw) <= 105):
+    lawname = block.action.upper() if hasattr(block, "action") and block.action else ""
+    is_biphas = lawname in ("BIPHAS", "BIPHASIC", "MAT_BIPHAS", "MAT_BIPHASIC", "LAW37_BIPHAS")
+    is_biquad = lawname in ("BIQUAD", "BANABIC", "MAT_BIQUAD", "MAT_BANABIC", "LAW37_BIQUAD")
+
+    has_density_card = False
+    if not is_biquad and not is_biphas:
+        if len(valid_cards) >= 3:
+            t0 = valid_cards[0].tokens()
+            f1_test = [valid_cards[1].raw[i:i+20].strip() for i in range(0, min(len(valid_cards[1].raw), 100), 20)]
+            if len(t0) <= 2 and (len(valid_cards[1].tokens()) == 5 or len([x for x in f1_test if x]) == 5 or len(valid_cards[1].raw.strip()) >= 40):
                 is_biphas = True
+                has_density_card = True
+        elif len(valid_cards) >= 2:
+            f0_test = [valid_cards[0].raw[i:i+20].strip() for i in range(0, min(len(valid_cards[0].raw), 100), 20)]
+            if len(valid_cards[0].tokens()) == 5 or len([x for x in f0_test if x]) == 5 or (len(first_raw) >= 40 and len(first_raw) <= 105 and len(valid_cards[1].raw) <= 105):
+                is_biphas = True
+                has_density_card = False
+    elif is_biphas:
+        if len(valid_cards) >= 3 and len(valid_cards[0].tokens()) <= 2:
+            has_density_card = True
+        else:
+            has_density_card = False
 
     if is_biphas:
-        # Two-phase fluid format (BIPHAS / matl37_37.cfg)
-        if len(first_raw) >= 40:
-            f0 = [first_raw[i:i+20].strip() for i in range(0, min(len(first_raw), 100), 20)]
+        # Two-phase fluid format (BIPHAS / matl37_biphas.cfg)
+        if has_density_card:
+            if block.fixed:
+                f_rho = valid_cards[0].cut("MAT_LAW37_1")
+            else:
+                f_rho = valid_cards[0].tokens()
+            rho_init = _safe_float(f_rho[0]) if len(f_rho) > 0 else 0.0
+            rhor_psh = _safe_float(f_rho[1]) if len(f_rho) > 1 else 0.0
+
+            card_l = valid_cards[1]
+            card_g = valid_cards[2]
         else:
-            f0 = valid_cards[0].tokens()
+            rho_init = 0.0
+            rhor_psh = 0.0
+            card_l = valid_cards[0]
+            card_g = valid_cards[1]
+
+        if len(card_l.raw) >= 40:
+            f0 = [card_l.raw[i:i+20].strip() for i in range(0, min(len(card_l.raw), 100), 20)]
+        else:
+            f0 = card_l.tokens()
+
+        if len(card_g.raw) >= 40:
+            f1 = [card_g.raw[i:i+20].strip() for i in range(0, min(len(card_g.raw), 100), 20)]
+        else:
+            f1 = card_g.tokens()
 
         rho_l0 = _safe_float(f0[0]) if len(f0) > 0 else 0.0
         c_l = _safe_float(f0[1]) if len(f0) > 1 else 0.0
@@ -37529,33 +37567,38 @@ def read_mat_law37(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         nu_l = _safe_float(f0[3]) if len(f0) > 3 else 0.0
         nu_vol_l = _safe_float(f0[4]) if len(f0) > 4 else 0.0
 
-        second_raw = valid_cards[1].raw
-        if len(second_raw) >= 40:
-            f1 = [second_raw[i:i+20].strip() for i in range(0, min(len(second_raw), 100), 20)]
-        else:
-            f1 = valid_cards[1].tokens()
-
         rho_g0 = _safe_float(f1[0]) if len(f1) > 0 else 0.0
         gamma = _safe_float(f1[1]) if len(f1) > 1 else 0.0
         p0 = _safe_float(f1[2]) if len(f1) > 2 else 0.0
         nu_g = _safe_float(f1[3]) if len(f1) > 3 else 0.0
         nu_vol_g = _safe_float(f1[4]) if len(f1) > 4 else 0.0
 
-        rho0 = rho_l0 if rho_l0 > 0 else rho_g0
+        if rho_init > 0.0:
+            rho0 = rho_init
+        else:
+            rho0 = rho_l0 * alpha_l + (1.0 - alpha_l) * rho_g0 if (rho_l0 > 0 or rho_g0 > 0) else 0.0
+
         mat = MatLaw37(
             id=mat_id, rho0=rho0, e=c_l, nu=nu_l, a=0.0, b=0.0, n=0.0,
             c1=0.0, c2=0.0, c3=0.0, c4=0.0, c5=0.0, c6=0.0, c7=0.0, c8=0.0, p=0.0, q=0.0,
             title=title
         )
         model.mat_law37s[mat_id] = mat
-        model.materials[mat_id] = InactiveMaterial(
+        model.materials[mat_id] = Material(
             id=mat_id, law=37, rho0=rho0, title=title, law_name="LAW37",
             params={
-                "Lqud_Rho_l": rho_l0, "RHO_l0": rho_l0, "C_l": c_l, "Alpha_l": alpha_l, "ALPHA_l": alpha_l,
-                "Nu_l": nu_l, "NU_l": nu_l, "Nu_vol_l": nu_vol_l, "NU_VOL_l": nu_vol_l,
-                "Lqud_Rho_g": rho_g0, "RHO_G0": rho_g0, "Lqud_Gamma_bulk": gamma, "GAMMA": gamma,
-                "P0": p0, "Nu_g": nu_g, "NU_g": nu_g, "Nu_vol_g": nu_vol_g, "NU_VOL_g": nu_vol_g,
-                "rho": rho0, "E": c_l if c_l > 0 else 200e9, "nu": nu_l if 0.0 <= nu_l < 0.5 else 0.3,
+                "rho_l0": rho_l0, "Lqud_Rho_l": rho_l0, "RHO_l0": rho_l0,
+                "c_l": c_l, "C_l": c_l, "bulk_l": c_l,
+                "alpha1": alpha_l, "ALPHA1": alpha_l, "Alpha_l": alpha_l, "ALPHA_l": alpha_l,
+                "nu_l": nu_l, "Nu_l": nu_l, "NU_l": nu_l,
+                "nu_vol_l": nu_vol_l, "Bulk_Ratio_l": nu_vol_l, "Nu_vol_l": nu_vol_l, "NU_VOL_l": nu_vol_l,
+                "rho_g0": rho_g0, "Lqud_Rho_g": rho_g0, "RHO_G0": rho_g0,
+                "gamma_g": gamma, "gamma": gamma, "Lqud_Gamma_bulk": gamma, "GAMMA": gamma,
+                "p0_g": p0, "p0": p0, "Lqud_P0": p0, "P0": p0,
+                "nu_g": nu_g, "Nu_g": nu_g, "NU_g": nu_g,
+                "nu_vol_g": nu_vol_g, "Bulk_Ratio_g": nu_vol_g, "Nu_vol_g": nu_vol_g, "NU_VOL_g": nu_vol_g,
+                "rho": rho0, "rho0": rho0, "rhor": rhor_psh, "pshift": rhor_psh,
+                "E": c_l if c_l > 0 else 200e9, "nu": nu_l if 0.0 <= nu_l < 0.5 else 0.3,
             }
         )
         return
@@ -37567,7 +37610,7 @@ def read_mat_law37(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
     if block.fixed:
         if len(valid_cards) > 0:
-            f0 = valid_cards[0].cut("MAT_LAW37_1")
+            f0 = valid_cards[0].cut("MAT_BIQUAD_1")
             rho0 = _safe_float(f0[0]) if len(f0) > 0 else 0.0
             e = _safe_float(f0[1]) if len(f0) > 1 else 0.0
             nu = _safe_float(f0[2]) if len(f0) > 2 else 0.0
@@ -37575,7 +37618,7 @@ def read_mat_law37(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             b = _safe_float(f0[4]) if len(f0) > 4 else 0.0
             n = _safe_float(f0[5]) if len(f0) > 5 else 0.0
         if len(valid_cards) > 1:
-            f1 = valid_cards[1].cut("MAT_LAW37_2")
+            f1 = valid_cards[1].cut("MAT_BIQUAD_2")
             c1 = _safe_float(f1[0]) if len(f1) > 0 else 0.0
             c2 = _safe_float(f1[1]) if len(f1) > 1 else 0.0
             c3 = _safe_float(f1[2]) if len(f1) > 2 else 0.0
@@ -37585,7 +37628,7 @@ def read_mat_law37(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             c7 = _safe_float(f1[6]) if len(f1) > 6 else 0.0
             c8 = _safe_float(f1[7]) if len(f1) > 7 else 0.0
         if len(valid_cards) > 2:
-            f2 = valid_cards[2].cut("MAT_LAW37_3")
+            f2 = valid_cards[2].cut("MAT_BIQUAD_3")
             p = _safe_float(f2[0]) if len(f2) > 0 else 0.0
             q = _safe_float(f2[1]) if len(f2) > 1 else 0.0
     else:

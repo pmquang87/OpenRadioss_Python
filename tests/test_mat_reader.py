@@ -466,7 +466,7 @@ EXPECTED = {
     "JWL": (2, 1.63),            # /MAT/JWL/2/123: id 2, unit 123
     "KELVINMAX": (3, 2e-9),
     "LAW151": (2, 0.0),
-    "LAW37": (2, 1e-3),          # liquid-phase density estimate
+    "LAW37": (2, 1.22e-6),       # live biphasic mixture density (alpha1=0 -> pure gas rho_g0)
     "LAW46": (2, 960.0),
     "LAW51": (1, 0.0),           # non-reflecting boundary: all-zero phases
     "LAW59": (100026, 7.9e-9),
@@ -524,6 +524,7 @@ ACTIVE_FAMILIES = {"VOID", "GAS", "KELVINMAX", "LAW70",       # pack 1
                    "LAW68", "COSSER", "COSSERAT", "LAW72", "HILL_MMC",
                    "LAW65", "ELASTOMER", "LAW58", "FABR_A", "LAW20", "BIMAT",
                    "LAW38", "VISC_TAB", "LAW29", "FEM", "LAW34", "BOLTZMAN",
+                   "LAW37", "BIPHAS", "BIPHASIC",
                    "LAW23", "PLAS_DAMA", "LAW78",
                    "LAW100", "SPOTWELD", "LAW97", "EXPLOSIVE_JWLS", "JWLS",
                    "LAW71", "SUPER_ELAS", "NITINOL", "LAW73", "THERM_HILL", "HILL_THERM",

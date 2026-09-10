@@ -87,13 +87,14 @@ class Material:
 
     id: int
     law: int
-    rho0: float
+    rho0: float = 0.0
     title: str = ""
     params: Dict[str, float] = field(default_factory=dict)
     fail: Optional[FailureModel] = None
     eos: Optional["EquationOfState"] = None
     fail_models: List[Any] = field(default_factory=list)
     fm_type: Optional[str] = None
+    law_name: Optional[str] = None
 
     # Convenience elastic constants (every implemented law defines these;
     # they drive the sound speed / time step and contact stiffness).

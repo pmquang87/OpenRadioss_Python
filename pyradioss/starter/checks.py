@@ -59,8 +59,10 @@ _NULL_RHO0_OK_LAWS = frozenset({0} | _MULTIMAT_ALE_LAWS)
 # and their density divisions are guarded exactly as hm_read_mat00.F
 # guards its own — see elements/truss.py and elements/beam_type3.py.
 _ALLOWED_LAWS = {
-    "bricks": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 40, 42, 44, 62, 70, 81, 83, 999},
-    "tetras": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 40, 42, 44, 62, 70, 81, 999},
+    "bricks": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 40, 42, 44, 62, 70, 81, 83, 999},
+    "tetras": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 40, 42, 44, 62, 70, 81, 999},
+    "penta6": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 40, 42, 44, 62, 70, 81, 83, 999},
+    "pyra5": {0, 1, 2, 3, 4, 5, "5", "LAW5", "JWL", 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 28, "28", "LAW28", "HONEYCOMB", 33, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 40, 42, 44, 62, 70, 81, 83, 999},
     "shells": {0, 1, 2, 3, 19, 27, 34, "34", "LAW34", "BOLTZMAN", "BOLTZMANN", "VISC_MAXW", 36, 44},
     # QBAT (Ishell=12, M41): the laws the layered kernel reuses from the
     # BT plumbing; no orthotropic (LAW19) shell_ortho wiring yet
@@ -134,6 +136,63 @@ def check_mat_law34(mat: Any, log: MessageLog) -> None:
         log.error(f"/MAT/LAW34/{mid}: decay constant BETA must be >= 0 (got {beta:g})", "MAT CHECK")
     if g0 > 0.0 and gi > g0:
         log.warning(f"/MAT/LAW34/{mid}: long-term shear modulus GI ({gi:g}) exceeds short-term shear modulus G0 ({g0:g})", "MAT CHECK")
+
+
+def check_mat_law37(mat: Any, log: MessageLog) -> None:
+    """Validate /MAT/LAW37 (/MAT/BIPHAS, /MAT/BIPHASIC) parameter bounds (M540).
+
+    Required checks:
+      - rho_l0 > 0
+      - rho_g0 > 0
+      - c_l > 0
+      - gamma_g > 0
+      - 0 <= alpha1 <= 1
+      - nu_l >= 0
+      - nu_g >= 0
+    """
+    mid = getattr(mat, "id", 0)
+    params = getattr(mat, "params", {}) or {}
+
+    def _extract(keys: list[str], default: float = 0.0) -> float:
+        for k in keys:
+            if hasattr(mat, k):
+                val = getattr(mat, k)
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (TypeError, ValueError):
+                        pass
+            if k in params:
+                val = params[k]
+                if val is not None:
+                    try:
+                        return float(val)
+                    except (TypeError, ValueError):
+                        pass
+        return default
+
+    rho_l0 = _extract(["rho_l0", "RHO_l0", "Lqud_Rho_l", "rho_l", "RHO_L"])
+    rho_g0 = _extract(["rho_g0", "RHO_G0", "Lqud_Rho_g", "rho_g", "RHO_G"], default=1.0)
+    c_l = _extract(["c_l", "C_l", "bulk_l", "c1", "C1"])
+    gamma_g = _extract(["gamma_g", "gamma", "GAMMA", "Lqud_Gamma_bulk", "gam"], default=1.4)
+    alpha1 = _extract(["alpha1", "ALPHA1", "alpha_l", "Alpha_l", "a1", "A1"])
+    nu_l = _extract(["nu_l", "Nu_l", "NU_l", "vis_l"])
+    nu_g = _extract(["nu_g", "Nu_g", "NU_g", "vis_g"])
+
+    if rho_l0 <= 0.0:
+        log.error(f"/MAT/LAW37/{mid}: liquid reference density rho_l0 must be > 0 (got {rho_l0:g})", "MAT CHECK")
+    if rho_g0 <= 0.0:
+        log.error(f"/MAT/LAW37/{mid}: gas reference density rho_g0 must be > 0 (got {rho_g0:g})", "MAT CHECK")
+    if c_l <= 0.0:
+        log.error(f"/MAT/LAW37/{mid}: liquid bulk modulus c_l must be > 0 (got {c_l:g})", "MAT CHECK")
+    if gamma_g <= 0.0:
+        log.error(f"/MAT/LAW37/{mid}: gas constant gamma must be > 0 (got {gamma_g:g})", "MAT CHECK")
+    if alpha1 < 0.0 or alpha1 > 1.0:
+        log.error(f"/MAT/LAW37/{mid}: initial liquid massic fraction alpha1 must be between 0 and 1 (got {alpha1:g})", "MAT CHECK")
+    if nu_l < 0.0:
+        log.error(f"/MAT/LAW37/{mid}: liquid shear viscosity nu_l must be >= 0 (got {nu_l:g})", "MAT CHECK")
+    if nu_g < 0.0:
+        log.error(f"/MAT/LAW37/{mid}: gas shear viscosity nu_g must be >= 0 (got {nu_g:g})", "MAT CHECK")
 
 
 
@@ -211,6 +270,24 @@ def check_model(model: Model, log: MessageLog) -> None:
     for mid, mat34 in getattr(model, "mat_law34s", {}).items():
         if mid not in getattr(model, "materials", {}):
             check_mat_law34(mat34, log)
+
+    # M540: Material LAW37 parameter validation
+    for mid, mat in getattr(model, "materials", {}).items():
+        if getattr(mat, "law", None) in (37, "37", "LAW37", "BIPHAS", "BIPHASIC"):
+            params = getattr(mat, "params", {}) or {}
+            is_biquad = hasattr(mat, "a") and hasattr(mat, "c1") and not any(
+                k in params for k in ("Lqud_Rho_l", "RHO_l0", "rho_l0", "alpha1", "ALPHA1", "C_l", "c_l")
+            )
+            if not is_biquad:
+                check_mat_law37(mat, log)
+    for mid, mat37 in getattr(model, "mat_law37s", {}).items():
+        if mid not in getattr(model, "materials", {}):
+            params = getattr(mat37, "params", {}) or {}
+            is_biquad = hasattr(mat37, "a") and hasattr(mat37, "c1") and not any(
+                k in params for k in ("Lqud_Rho_l", "RHO_l0", "rho_l0", "alpha1", "ALPHA1", "C_l", "c_l")
+            )
+            if not is_biquad:
+                check_mat_law37(mat37, log)
 
 
     # M38: element groups that reference a parsed-but-not-implemented

@@ -712,6 +712,106 @@ class StarterDeck:
     mat_visc_maxw = mat_law34
     mat_boltzmann = mat_law34
 
+    def mat_law37(
+        self,
+        id: int,
+        rho_l0: float,
+        c_l: float,
+        alpha1: float,
+        nu_l: float = 0.0,
+        nu_vol_l: float = 0.0,
+        rho_g0: float = 1.0,
+        gamma_g: float = 1.4,
+        p0_g: float = 0.0,
+        nu_g: float = 0.0,
+        nu_vol_g: float = 0.0,
+        rho: float | None = None,
+        pshift: float = 0.0,
+        isolver: int = 1,
+        title: str | None = None,
+        rhor: float | None = None,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW37`` (/MAT/BIPHAS, /MAT/BIPHASIC) — cfg MAT/matl37_biphas.cfg
+        (FORMAT radioss110/radioss2018):
+        Card 1: Header /MAT/LAW37/{id} followed by TITLE line
+        Card 2: MAT_RHO, [Refer_Rho / Psh] (%20lg[%20lg]) — MAT_LAW37_1: (20, 20)
+        Card 3: Lqud_Rho_l, C_l, ALPHA1, Nu_l, Bulk_Ratio_l (%20lg*5) — MAT_LAW37_2: (20, 20, 20, 20, 20)
+        Card 4: Lqud_Rho_g, Lqud_Gamma_bulk, Lqud_P0, Nu_g, Bulk_Ratio_g (%20lg*5) — MAT_LAW37_3: (20, 20, 20, 20, 20)
+
+        Two-phase liquid-gas fluid material model (biphasic mixture).
+        """
+        # Backward compatibility with stub mat_law37(mid, title, data_cards)
+        if isinstance(rho_l0, str) and (isinstance(c_l, (list, tuple)) or hasattr(c_l, "__iter__")):
+            self._header("MAT", "LAW37", id)
+            self._title(rho_l0)
+            self.lines.extend(str(c).rstrip("\r\n") for c in c_l)
+            return self
+
+        if "mat_id" in kwargs and id == 0:
+            id = kwargs["mat_id"]
+        elif "mid" in kwargs and id == 0:
+            id = kwargs["mid"]
+        if "density" in kwargs and rho is None:
+            rho = kwargs["density"]
+        if "refer_rho" in kwargs and rhor is None:
+            rhor = kwargs["refer_rho"]
+        if "alpha_l" in kwargs and alpha1 == 0.0:
+            alpha1 = kwargs["alpha_l"]
+        if "gamma" in kwargs and gamma_g == 1.4:
+            gamma_g = kwargs["gamma"]
+        if "p0" in kwargs and p0_g == 0.0:
+            p0_g = kwargs["p0"]
+
+        law_name = kwargs.get("law_name", kwargs.get("law", "LAW37"))
+        unit_id = kwargs.get("unit_id")
+
+        if unit_id is not None:
+            self._header("MAT", law_name, id, unit_id)
+        else:
+            self._header("MAT", law_name, id)
+
+        if title is not None and title.strip():
+            self._title(title)
+        else:
+            self.lines.append(BLANK_CARD)
+
+        # Card 1: MAT_LAW37_1: rho and rhor (or pshift)
+        if rho is None:
+            rho = rho_l0 * alpha1 + (1.0 - alpha1) * rho_g0
+
+        if rhor is not None and rhor != 0.0:
+            self.lines.append(fmt_float(rho) + fmt_float(rhor))
+        elif pshift != 0.0:
+            self.lines.append(fmt_float(rho) + fmt_float(pshift))
+        elif rhor is not None:
+            self.lines.append(fmt_float(rho) + fmt_float(rhor))
+        else:
+            self.lines.append(fmt_float(rho))
+
+        # Card 2: MAT_LAW37_2: rho_l0, c_l, alpha1, nu_l, nu_vol_l
+        self.lines.append(
+            fmt_float(rho_l0)
+            + fmt_float(c_l)
+            + fmt_float(alpha1)
+            + fmt_float(nu_l)
+            + fmt_float(nu_vol_l)
+        )
+
+        # Card 3: MAT_LAW37_3: rho_g0, gamma_g, p0_g, nu_g, nu_vol_g
+        self.lines.append(
+            fmt_float(rho_g0)
+            + fmt_float(gamma_g)
+            + fmt_float(p0_g)
+            + fmt_float(nu_g)
+            + fmt_float(nu_vol_g)
+        )
+
+        return self
+
+    mat_biphas = mat_law37
+    mat_biphasic = mat_law37
+
 
     def mat_law27(self, mid: int, title: str, rho, e, nu,
                   card1: Sequence, card2: Optional[Sequence] = None) -> None:
@@ -891,12 +991,6 @@ class StarterDeck:
     def mat_bound(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/BOUND``."""
         self._header("MAT", "BOUND", mid)
-        self._title(title)
-        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
-
-    def mat_law37(self, mid: int, title: str, data_cards) -> None:
-        """``/MAT/LAW37``."""
-        self._header("MAT", "LAW37", mid)
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 

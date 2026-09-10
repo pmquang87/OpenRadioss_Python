@@ -46,6 +46,9 @@ LAW_MAP: Dict[str, int] = {
     "LAW35": 35,
     "PLAS_TAB": 36,
     "LAW36": 36,
+    "BIPHAS": 37,
+    "BIPHASIC": 37,
+    "LAW37": 37,
     "COWPER_SYMONDS": 44,
     "LAW44": 44,
     "DONEA": 46,
@@ -65,6 +68,9 @@ LAW_MAP: Dict[str, int] = {
 }
 
 LAW_SYNONYMS: Dict[str, str] = {
+    "BIPHAS": "LAW37",
+    "BIPHASIC": "LAW37",
+    "LAW37": "LAW37",
     "BOLTZMAN": "LAW34",
     "VISC_MAXW": "LAW34",
     "BOLTZMANN": "LAW34",
