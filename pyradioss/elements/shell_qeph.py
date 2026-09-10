@@ -678,6 +678,18 @@ def _current_yield(st, sl, mat):
         p = mat.params
         y = p["A"] + p["B"] * np.maximum(ep, 0.0) ** p["n"]
         return np.minimum(y, p.get("sig_max", EP30))
+    if mat.law == 22:
+        ep = st["epsp"][sl, :nip].mean(axis=1)
+        p = mat.params
+        a = p.get("A", p.get("a", 0.0))
+        b = p.get("B", p.get("b", 0.0))
+        n_exp = p.get("N", p.get("n", 1.0))
+        y = a + b * np.maximum(ep, 0.0) ** n_exp
+        y = np.minimum(y, p.get("sig_max", EP30))
+        eps_dam = p.get("eps_dam", EP30)
+        depsl = np.maximum(0.0, ep - eps_dam)
+        y = np.minimum(y, p.get("YLDL", y) + p.get("HL", 0.0) * depsl)
+        return np.maximum(y, 0.0)
     if mat.law == 36 and "curve_x" in mat.params:
         ep = st["epsp"][sl, :nip].mean(axis=1)
         return np.interp(ep, mat.params["curve_x"][0],

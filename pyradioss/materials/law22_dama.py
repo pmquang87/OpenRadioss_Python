@@ -174,10 +174,13 @@ def build_law22(rec=None, **kwargs) -> Material:
     EN1N2 = nu * E1MN2
     denom_hl = max(_EM20, E - E_tan)
     HL = E * E_tan / denom_hl
+    denom_hl_solid = max(_EM20, 3.0 * G + E_tan)
+    HL_solid = 3.0 * G * E_tan / denom_hl_solid
     YLDL = a + b * (eps_dam ** n)
     YLDL = min(YLDL, sig_max)
 
     # Sound speeds
+    c_sound = math.sqrt(E / max(rho0, _EM20))
     c_shell = math.sqrt(max(E1MN2, G) / max(rho0, _EM20))
     c_solid = math.sqrt((K + 4.0 / 3.0 * G) / max(rho0, _EM20))
 
@@ -192,6 +195,7 @@ def build_law22(rec=None, **kwargs) -> Material:
         "b": b,
         "n": n,
         "eps_max": eps_max,
+        "eps_p_max": eps_max,
         "sig_max": sig_max,
         "c": c,
         "eps_dot_0": eps_dot_0,
@@ -199,9 +203,13 @@ def build_law22(rec=None, **kwargs) -> Material:
         "eps_dam": eps_dam,
         "E_tan": E_tan,
         "HL": HL,
+        "HL_shell": HL,
+        "HL_solid": HL_solid,
         "YLDL": YLDL,
         "rho0": rho0,
         "refer_rho": refer_rho,
+        "c_sound": c_sound,
+        "SDSP": c_sound,
         "c_shell": c_shell,
         "c_solid": c_solid,
         # Standard CFG and legacy aliases
@@ -285,9 +293,24 @@ def sound_speed_solid(mat: Material, rho: Optional[Union[float, np.ndarray]] = N
 
 
 def sound_speed_shell(mat: Material, rho: Optional[Union[float, np.ndarray]] = None,
-                      extra: Any = None) -> Union[float, np.ndarray]:
-    """Exact 2D plane-stress shell sound speed: c_shell = sqrt(max(E1MN2, G) / rho)."""
+                      extra: Any = None, mode: str = "plane_stress") -> Union[float, np.ndarray]:
+    """Exact 2D plane-stress shell sound speed.
+
+    Parameters
+    ----------
+    mat : Material
+        LAW22 material definition.
+    rho : float or ndarray, optional
+        Density override.
+    extra : dict, optional
+    mode : {'plane_stress', 'young'}
+        'plane_stress' (default): c = sqrt(max(E1MN2, G) / rho).
+        'young': c = sqrt(E / rho) matching SDSP from hm_read_mat22.F line 154.
+    """
     rho0 = mat.rho0 if rho is None else rho
+    if mode == "young":
+        E = mat.params.get("E", 0.0)
+        return np.sqrt(E / np.maximum(rho0, _EM20))
     E1MN2 = mat.params.get("E1MN2", 0.0)
     G = mat.params.get("G", 0.0)
     return np.sqrt(np.maximum(E1MN2, G) / np.maximum(rho0, _EM20))
@@ -299,7 +322,8 @@ def sound_speed_shell(mat: Material, rho: Optional[Union[float, np.ndarray]] = N
 
 def shell_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
                  epsp: Optional[np.ndarray] = None, dt: float = 0.0,
-                 extra: Optional[dict] = None) -> Tuple[np.ndarray, np.ndarray, float]:
+                 extra: Optional[dict] = None,
+                 ipla: Optional[int] = None) -> Tuple[np.ndarray, np.ndarray, float]:
     """Vectorized plane-stress shell update for LAW22.
 
     Ports ``engine/source/materials/mat/mat022/m22cplr.F``.
@@ -321,6 +345,10 @@ def shell_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
         - 'epsp22': (n,) plastic strain
         - 'alpe22': (n,) modulus degradation factor alpha
         - 'off22': (n,) active status flag (1.0 active, 0.0 failed)
+        - 'ezz22': (n,) through-thickness plastic/elastic strain
+    ipla : int, optional
+        0: radial projection (m22cplr.F lines 129-142)
+        1: plane-stress iterative return mapping (m22cplr.F lines 144-223)
 
     Returns
     -------
@@ -343,11 +371,19 @@ def shell_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
     sig_max = float(p["sig_max"])
     eps_dam = float(p["eps_dam"])
     YLDL = float(p["YLDL"])
-    HL = float(p["HL"])
+    HL = float(p.get("HL_shell", p.get("HL", 0.0)))
     c_rate = float(p["c"])
     eps_dot_0 = float(p["eps_dot_0"])
     ICC = int(p["ICC"])
     eps_max = float(p["eps_max"])
+
+    if ipla is None:
+        if extra is not None and "ipla" in extra:
+            ipla = int(extra["ipla"])
+        elif "IPLA" in p:
+            ipla = int(p["IPLA"])
+        else:
+            ipla = 0
 
     # Retrieve or initialize state arrays
     if epsp is not None:
@@ -359,6 +395,8 @@ def shell_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
 
     if extra is not None and "off22" in extra:
         off = np.array(extra["off22"], dtype=float, copy=True)
+    elif extra is not None and "off" in extra:
+        off = np.array(extra["off"], dtype=float, copy=True)
     else:
         off = np.ones(n, dtype=float)
 
@@ -408,18 +446,75 @@ def shell_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
         if ICC == 2:
             yld = np.minimum(yld, sig_max)
 
-    # 5. Plastically admissible stresses (m22cplr.F lines 129-142, IPLA=0 radial projection)
-    plastic = (svm > yld) & active
-    dk = np.ones(n, dtype=float)
-    dk[plastic] = yld[plastic] / np.maximum(svm[plastic], _EM30)
+    # 5. Plastically admissible stresses
+    if ipla == 1:
+        # Plane-stress iterative return mapping (m22cplr.F lines 144-223)
+        s1 = s11_trial + s22_trial
+        s2 = s11_trial - s22_trial
+        s3 = s12_trial
+        a_vm = 0.25 * (s1 ** 2)
+        b_vm = 0.75 * (s2 ** 2) + 3.0 * (s3 ** 2)
+        svm_plane = np.sqrt(a_vm + b_vm)
 
-    s11_new = s11_trial * dk
-    s22_new = s22_trial * dk
-    s12_new = s12_trial * dk
+        s11_new = s11_trial.copy()
+        s22_new = s22_trial.copy()
+        s12_new = s12_trial.copy()
+        dpla = np.zeros(n, dtype=float)
 
-    dpla = np.zeros(n, dtype=float)
-    dpla[plastic] = (svm[plastic] - yld[plastic]) / np.maximum(E_curr[plastic], 1e-10)
-    epseq += dpla
+        plastic = (svm_plane > yld) & active
+        if np.any(plastic):
+            idx = np.where(plastic)[0]
+            nu1 = 1.0 / (1.0 - nu)
+            nu2 = 1.0 / (1.0 + nu)
+            ep_idx = epseq[idx]
+            small = 1e-7
+            if n_exp == 1.0:
+                h_term = np.full(len(idx), b, dtype=float)
+            else:
+                h_term = np.where(
+                    ep_idx + small > 0.0,
+                    b * n_exp * np.exp((n_exp - 1.0) * np.log(np.maximum(ep_idx + small, _EM20))),
+                    0.0
+                )
+            h_term[yld[idx] >= sig_max] = 0.0
+            dpla_j = (svm_plane[idx] - yld[idx]) / np.maximum(3.0 * G_curr[idx] + h_term, 1e-10)
+
+            for _ in range(3):
+                dpla_i = dpla_j.copy()
+                pla_i = ep_idx + dpla_i
+                yld_i = np.minimum(sig_max, a + b * (np.maximum(pla_i, 0.0) ** n_exp))
+                yld_i = np.maximum(yld_i, _EM30)
+                dr = 0.5 * E_curr[idx] * dpla_i / yld_i
+                p_fac = 1.0 / (1.0 + dr * nu1)
+                q_fac = 1.0 / (1.0 + 3.0 * dr * nu2)
+                p2 = p_fac * p_fac
+                q2 = q_fac * q_fac
+                f = a_vm[idx] * p2 + b_vm[idx] * q2 - yld_i * yld_i
+                df = -(a_vm[idx] * nu1 * p2 * p_fac + 3.0 * b_vm[idx] * nu2 * q2 * q_fac) * (E_curr[idx] - 2.0 * dr * h_term) / yld_i - 2.0 * h_term * yld_i
+                corr = np.where(np.abs(df) > _EM30, f / df, 0.0)
+                dpla_j = np.where(dpla_i > 0.0, np.maximum(0.0, dpla_i - corr), 0.0)
+
+            dpla[idx] = dpla_i
+            epseq[idx] += dpla_i
+
+            s1_new = (s11_trial[idx] + s22_trial[idx]) * p_fac
+            s2_new = (s11_trial[idx] - s22_trial[idx]) * q_fac
+            s11_new[idx] = 0.5 * (s1_new + s2_new)
+            s22_new[idx] = 0.5 * (s1_new - s2_new)
+            s12_new[idx] = s12_trial[idx] * q_fac
+    else:
+        # IPLA=0 radial projection (m22cplr.F lines 129-142)
+        plastic = (svm > yld) & active
+        dk = np.ones(n, dtype=float)
+        dk[plastic] = yld[plastic] / np.maximum(svm[plastic], _EM30)
+
+        s11_new = s11_trial * dk
+        s22_new = s22_trial * dk
+        s12_new = s12_trial * dk
+
+        dpla = np.zeros(n, dtype=float)
+        dpla[plastic] = (svm[plastic] - yld[plastic]) / np.maximum(E_curr[plastic], 1e-10)
+        epseq += dpla
 
     # 6. Element failure: epseq >= eps_max or already inactive (m22cplr.F / sigeps22c.F)
     failed = (epseq >= eps_max) | (~active)
@@ -470,6 +565,15 @@ def shell_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
         else:
             extra["off22"] = off
 
+        if "off" in extra and isinstance(extra["off"], np.ndarray):
+            try:
+                extra["off"][:] = off
+            except Exception:
+                extra["off"] = off
+
+        if "layfail" in extra and isinstance(extra["layfail"], np.ndarray):
+            extra["layfail"][failed] = 0.0
+
         if "dpla" in extra and isinstance(extra["dpla"], np.ndarray):
             try:
                 extra["dpla"][:] = dpla
@@ -477,6 +581,17 @@ def shell_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
                 extra["dpla"] = dpla
         else:
             extra["dpla"] = dpla
+
+        # Through-thickness plastic strain (m22cplr.F line 139 / line 222)
+        s1_mean = 0.5 * (s11_new + s22_new)
+        ezz = dpla * s1_mean / np.maximum(yld, _EM30)
+        if "ezz22" in extra and isinstance(extra["ezz22"], np.ndarray):
+            try:
+                extra["ezz22"][:] = ezz
+            except Exception:
+                extra["ezz22"] = ezz
+        else:
+            extra["ezz22"] = ezz
 
     if epsp is not None:
         epsp[:] = epseq
@@ -553,6 +668,8 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
 
     if extra is not None and "off22" in extra:
         off = np.array(extra["off22"], dtype=float, copy=True)
+    elif extra is not None and "off" in extra:
+        off = np.array(extra["off"], dtype=float, copy=True)
     else:
         off = np.ones(n, dtype=float)
 
@@ -574,8 +691,8 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
 
     # 2. Softening after eps_dam (m22law.F lines 240-247)
     depsl = np.maximum(0.0, epseq - eps_dam)
-    denom_hl = 3.0 * G + E_tan
-    HL = 3.0 * G * E_tan / denom_hl if abs(denom_hl) > _EM20 else 0.0
+    denom_hl = max(_EM20, 3.0 * G + E_tan)
+    HL = float(p.get("HL_solid", 3.0 * G * E_tan / denom_hl))
     ak = np.minimum(ak, YLDL + HL * depsl)
     ak = np.maximum(ak, 0.0)
     qh = np.where(epseq > eps_dam, HL, qh)
@@ -597,7 +714,8 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
         epsp_rate = np.maximum(epd, eps_dot_0)
         ce = 1.0 + c_rate * np.log(epsp_rate / eps_dot_0)
         ak = ak * ce
-        qh = qh * ce
+        # In Fortran m22law.F:220, IF(EPXE(I)>EPSL(I)) QH(I)=QL(I) occurs after CE scaling
+        qh = np.where(epseq > eps_dam, HL, qh * ce)
         if ICC == 2:
             ak = np.minimum(ak, sig_max)
 
@@ -673,6 +791,12 @@ def solid_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
         else:
             extra["off22"] = off
 
+        if "off" in extra and isinstance(extra["off"], np.ndarray):
+            try:
+                extra["off"][:] = off
+            except Exception:
+                extra["off"] = off
+
         if "dpla" in extra and isinstance(extra["dpla"], np.ndarray):
             try:
                 extra["dpla"][:] = dpla
@@ -715,10 +839,12 @@ def solid_tangent(mat: Material) -> np.ndarray:
 
 
 def consistent_shell_tangent(mat: Material, sig: np.ndarray,
-                             epsp: Optional[np.ndarray] = None,
+                             epsp: Optional[Union[float, np.ndarray]] = None,
                              dt: Any = 0.0,
                              extra: Optional[dict] = None,
-                             epsp_incr: Optional[np.ndarray] = None,
+                             epsp_incr: Optional[Union[float, np.ndarray]] = None,
+                             symmetric: bool = False,
+                             deps: Optional[np.ndarray] = None,
                              **kwargs) -> np.ndarray:
     """Consistent (n, 3, 3) algorithmic plane-stress tangent tensor.
 
@@ -729,6 +855,13 @@ def consistent_shell_tangent(mat: Material, sig: np.ndarray,
         epsp_incr = dt
         dt = 0.0
 
+    if not isinstance(sig, np.ndarray):
+        sig = np.asarray(sig, dtype=float)
+
+    is_1d = (sig.ndim == 1)
+    if is_1d:
+        sig = sig[None, :]
+
     n = sig.shape[0]
     if n == 0:
         return np.empty((0, 3, 3), dtype=float)
@@ -736,110 +869,180 @@ def consistent_shell_tangent(mat: Material, sig: np.ndarray,
     p = mat.params
     E, nu = float(p["E"]), float(p["nu"])
     G = float(p["G"])
-    a1 = float(p.get("E1MN2", E / (1.0 - nu * nu)))
-    a2 = float(p.get("EN1N2", nu * a1))
-    Ce = np.array([
-        [a1, a2, 0.0],
-        [a2, a1, 0.0],
-        [0.0, 0.0, G],
-    ], dtype=float)
-
-    D = np.broadcast_to(Ce, (n, 3, 3)).copy()
+    a1_base = float(p.get("E1MN2", E / (1.0 - nu * nu)))
+    a2_base = float(p.get("EN1N2", nu * a1_base))
 
     alpe = None
     off = None
     if extra is not None:
-        alpe = extra.get("alpe22")
-        off = extra.get("off22")
+        alpe = extra.get("alpe22", extra.get("alpe"))
+        off = extra.get("off22", extra.get("off"))
         if epsp is None:
             epsp = extra.get("epsp22")
 
-    if alpe is not None:
-        alpe_arr = np.asarray(alpe, dtype=float)
-        if alpe_arr.ndim > 0 and len(alpe_arr) == n:
-            D *= alpe_arr[:, None, None]
-
     if epsp is None:
-        epsp = np.zeros(n, dtype=float)
+        epsp_arr = np.zeros(n, dtype=float)
     else:
-        epsp = np.asarray(epsp, dtype=float)
+        epsp_arr = np.asarray(epsp, dtype=float).flatten()
+        if len(epsp_arr) == 1 and n > 1:
+            epsp_arr = np.full(n, epsp_arr[0], dtype=float)
 
     if off is not None:
-        off_arr = np.asarray(off, dtype=float)
-        if off_arr.ndim > 0 and len(off_arr) == n:
-            dead = off_arr <= 0.0
-            D[dead] = 0.0
+        off_arr = np.asarray(off, dtype=float).flatten()
+        if len(off_arr) == 1 and n > 1:
+            off_arr = np.full(n, off_arr[0], dtype=float)
+    else:
+        off_arr = np.ones(n, dtype=float)
+
+    # Resolve alpe (modulus degradation)
+    if alpe is not None:
+        alpe_arr = np.asarray(alpe, dtype=float).flatten()
+        if len(alpe_arr) == 1 and n > 1:
+            alpe_arr = np.full(n, alpe_arr[0], dtype=float)
+    else:
+        # Fallback: compute alpe from epsp if past damage threshold
+        eps_dam = float(p.get("eps_dam", _EM15))
+        epseq_pos = np.maximum(epsp_arr, 0.0)
+        depsl = np.maximum(0.0, epseq_pos - eps_dam)
+        if np.any(depsl > 0.0):
+            a = float(p["a"])
+            b = float(p["b"])
+            n_exp = float(p["n"])
+            sig_max = float(p["sig_max"])
+            YLDL = float(p["YLDL"])
+            HL = float(p["HL"])
+            yld = a + b * (epseq_pos ** n_exp)
+            yld = np.minimum(yld, sig_max)
+            yld = np.minimum(yld, YLDL + HL * depsl)
+            yld = np.maximum(yld, _EM30)
+            alpe_arr = np.minimum(1.0, yld / (yld + E * depsl))
+            alpe_arr = np.maximum(_EM30, alpe_arr)
+        else:
+            alpe_arr = np.ones(n, dtype=float)
+
+    D = np.zeros((n, 3, 3), dtype=float)
+    for i in range(n):
+        ai = alpe_arr[i]
+        D[i, 0, 0] = ai * a1_base
+        D[i, 1, 1] = ai * a1_base
+        D[i, 0, 1] = ai * a2_base
+        D[i, 1, 0] = ai * a2_base
+        D[i, 2, 2] = ai * G
+
+    eps_max = float(p.get("eps_max", _INF))
+    dead = (off_arr <= 0.0) | (epsp_arr >= eps_max)
+    D[dead] = 0.0
 
     if epsp_incr is None:
         if extra is not None and "dpla" in extra:
             epsp_incr = extra["dpla"]
-        else:
-            return D
 
-    epsp_incr = np.asarray(epsp_incr, dtype=float)
-    plastic = (epsp_incr > 0.0)
-    if off is not None:
-        plastic = plastic & (np.asarray(off) > 0.0)
+    if epsp_incr is None and deps is not None:
+        deps_arr = np.asarray(deps, dtype=float)
+        if deps_arr.ndim == 1:
+            deps_arr = deps_arr[None, :]
+        epsp_incr = np.zeros(n, dtype=float)
+        for i in range(n):
+            if not dead[i]:
+                Ce_i = D[i]
+                s_tr = sig[i, :3] + Ce_i @ deps_arr[i, :3]
+                svm_tr = math.sqrt(max(0.0, float(s_tr @ _P_PLANE @ s_tr)))
+                a = float(p["a"])
+                b = float(p["b"])
+                n_exp = float(p["n"])
+                sig_max = float(p["sig_max"])
+                YLDL = float(p["YLDL"])
+                HL = float(p["HL"])
+                eps_dam = float(p.get("eps_dam", _EM15))
+                ep0 = epsp_arr[i]
+                yld = min(sig_max, a + b * (ep0 ** n_exp))
+                depsl = max(0.0, ep0 - eps_dam)
+                yld = max(_EM30, min(yld, YLDL + HL * depsl))
+                if svm_tr > yld:
+                    E_curr = alpe_arr[i] * E
+                    epsp_incr[i] = (svm_tr - yld) / max(E_curr, 1e-10)
 
+    if epsp_incr is None:
+        if symmetric:
+            D = 0.5 * (D + np.swapaxes(D, -1, -2))
+        return D[0] if is_1d else D
+
+    epsp_incr = np.asarray(epsp_incr, dtype=float).flatten()
+    if len(epsp_incr) == 1 and n > 1:
+        epsp_incr = np.full(n, epsp_incr[0], dtype=float)
+
+    plastic = (epsp_incr > 0.0) & (~dead)
     if not np.any(plastic):
-        return D
+        if symmetric:
+            D = 0.5 * (D + np.swapaxes(D, -1, -2))
+        return D[0] if is_1d else D
 
     idx = np.where(plastic)[0]
-    dl = epsp_incr[idx]
-    s_c = sig[idx, :3]
-
-    sy = np.sqrt(np.maximum(
-        np.einsum("mi,ij,mj->m", s_c, _P_PLANE, s_c), 0.0))
-    sy = np.maximum(sy, _EM30)
-
-    alpe_idx = alpe[idx] if (alpe is not None and np.ndim(alpe) > 0) else 1.0
-    G_idx = G * alpe_idx
-
-    q_tr = sy + 3.0 * G_idx * dl
-    s_scale = sy / q_tr
-    sig_tr = s_c / s_scale[:, None]
-
-    ep_idx = epsp[idx]
-    eps_dam = float(p["eps_dam"])
+    hardening = kwargs.get("hardening", extra.get("hardening", None) if extra is not None else None)
     b = float(p["b"])
     n_exp = float(p["n"])
     sig_max = float(p["sig_max"])
+    eps_dam = float(p.get("eps_dam", _EM15))
     HL = float(p["HL"])
 
-    H = np.where(
-        ep_idx > eps_dam,
-        HL,
-        np.where(
-            ep_idx > 0.0,
-            b * n_exp * (np.maximum(ep_idx, _EM20) ** (n_exp - 1.0)),
-            b if n_exp == 1.0 else 0.0
-        )
-    )
-    H = np.where(sy >= sig_max, 0.0, H)
-    Hbar = np.maximum(H, 0.0)
+    for ii in idx:
+        dl = float(epsp_incr[ii])
+        s_c = sig[ii, :3]
+        sy = math.sqrt(max(0.0, float(s_c @ _P_PLANE @ s_c)))
+        sy = max(sy, _EM30)
 
-    gamma = (Hbar / (3.0 * G_idx + Hbar) - s_scale) / (q_tr ** 2)
+        E_curr = alpe_arr[ii] * E
+        q_tr = sy + E_curr * dl
+        s_scale = sy / max(q_tr, _EM30)
+        s_tr = s_c / max(s_scale, _EM30)
 
-    for k, ii in enumerate(idx):
-        Ce_i = D[ii]
-        CP = Ce_i @ _P_PLANE
-        v = CP @ sig_tr[k]
-        rank1 = np.outer(sig_tr[k], v)
-        D[ii] = s_scale[k] * Ce_i + gamma[k] * rank1
+        Ce_i = D[ii].copy()
+        v = Ce_i @ _P_PLANE @ s_tr
+        rank1 = np.outer(s_tr, v)
 
-    return D
+        if hardening is True:
+            ep_start = max(0.0, float(epsp_arr[ii]) - dl)
+            if ep_start > eps_dam:
+                h_slope = HL
+            elif ep_start > 0.0:
+                h_slope = b * n_exp * (max(ep_start, _EM20) ** (n_exp - 1.0))
+            else:
+                h_slope = b if n_exp == 1.0 else 0.0
+            if sy >= sig_max:
+                h_slope = 0.0
+            h_eff = max(h_slope, 0.0)
+            h_fac = h_eff / max(E_curr + h_eff, _EM30)
+        else:
+            h_fac = 0.0
+
+        gamma = (h_fac - s_scale) / max(q_tr * q_tr, _EM30)
+        D[ii] = s_scale * Ce_i + gamma * rank1
+
+    if symmetric:
+        D = 0.5 * (D + np.swapaxes(D, -1, -2))
+
+    return D[0] if is_1d else D
 
 
 def consistent_solid_tangent(mat: Material, sig: np.ndarray,
-                             epsp: Optional[np.ndarray] = None,
+                             epsp: Optional[Union[float, np.ndarray]] = None,
                              dt: Any = 0.0,
                              extra: Optional[dict] = None,
-                             epsp_incr: Optional[np.ndarray] = None,
+                             epsp_incr: Optional[Union[float, np.ndarray]] = None,
+                             symmetric: bool = False,
+                             deps: Optional[np.ndarray] = None,
                              **kwargs) -> np.ndarray:
     """Consistent (n, 6, 6) algorithmic 3D solid tangent tensor."""
     if isinstance(dt, np.ndarray):
         epsp_incr = dt
         dt = 0.0
+
+    if not isinstance(sig, np.ndarray):
+        sig = np.asarray(sig, dtype=float)
+
+    is_1d = (sig.ndim == 1)
+    if is_1d:
+        sig = sig[None, :]
 
     n = sig.shape[0]
     if n == 0:
@@ -852,15 +1055,52 @@ def consistent_solid_tangent(mat: Material, sig: np.ndarray,
     alpe = None
     off = None
     if extra is not None:
-        alpe = extra.get("alpe22")
-        off = extra.get("off22")
+        alpe = extra.get("alpe22", extra.get("alpe"))
+        off = extra.get("off22", extra.get("off"))
         if epsp is None:
             epsp = extra.get("epsp22")
 
     if epsp is None:
-        epsp = np.zeros(n, dtype=float)
+        epsp_arr = np.zeros(n, dtype=float)
     else:
-        epsp = np.asarray(epsp, dtype=float)
+        epsp_arr = np.asarray(epsp, dtype=float).flatten()
+        if len(epsp_arr) == 1 and n > 1:
+            epsp_arr = np.full(n, epsp_arr[0], dtype=float)
+
+    if off is not None:
+        off_arr = np.asarray(off, dtype=float).flatten()
+        if len(off_arr) == 1 and n > 1:
+            off_arr = np.full(n, off_arr[0], dtype=float)
+    else:
+        off_arr = np.ones(n, dtype=float)
+
+    # Resolve alpe (modulus degradation)
+    if alpe is not None:
+        alpe_arr = np.asarray(alpe, dtype=float).flatten()
+        if len(alpe_arr) == 1 and n > 1:
+            alpe_arr = np.full(n, alpe_arr[0], dtype=float)
+    else:
+        # Fallback: compute alpe from epsp if past damage threshold
+        eps_dam = float(p.get("eps_dam", _EM15))
+        epseq_pos = np.maximum(epsp_arr, 0.0)
+        depsl = np.maximum(0.0, epseq_pos - eps_dam)
+        if np.any(depsl > 0.0):
+            a = float(p["a"])
+            b = float(p["b"])
+            n_exp = float(p["n"])
+            sig_max = float(p["sig_max"])
+            E_tan = float(p["E_tan"])
+            YLDL = float(p["YLDL"])
+            denom_hl = 3.0 * G + E_tan
+            HL = 3.0 * G * E_tan / denom_hl if abs(denom_hl) > _EM20 else 0.0
+            ak = a + b * (epseq_pos ** n_exp)
+            ak = np.minimum(ak, sig_max)
+            ak = np.minimum(ak, YLDL + HL * depsl)
+            ak = np.maximum(ak, 0.0)
+            alpe_arr = np.minimum(1.0, ak / np.maximum(ak + 3.0 * G * depsl, _EM15))
+            alpe_arr = np.maximum(_EM30, alpe_arr)
+        else:
+            alpe_arr = np.ones(n, dtype=float)
 
     ee = np.array([1.0, 1.0, 1.0, 0.0, 0.0, 0.0], dtype=float)
     KeeT = K * np.outer(ee, ee)
@@ -869,77 +1109,133 @@ def consistent_solid_tangent(mat: Material, sig: np.ndarray,
     I_dev[0, 1] = I_dev[0, 2] = I_dev[1, 0] = I_dev[1, 2] = I_dev[2, 0] = I_dev[2, 1] = -1.0 / 3.0
 
     D = np.zeros((n, 6, 6), dtype=float)
-    alpe_arr = np.asarray(alpe, dtype=float) if alpe is not None else np.ones(n, dtype=float)
-    if alpe_arr.ndim == 0:
-        alpe_arr = np.full(n, float(alpe_arr), dtype=float)
-
     for i in range(n):
         Gi = G * alpe_arr[i]
         D[i] = KeeT + 2.0 * Gi * I_dev
 
-    if off is not None:
-        off_arr = np.asarray(off, dtype=float)
-        if off_arr.ndim > 0 and len(off_arr) == n:
-            dead = off_arr <= 0.0
-            D[dead] = 0.0
+    eps_max = float(p.get("eps_max", _INF))
+    dead = (off_arr <= 0.0) | (epsp_arr >= eps_max)
+    D[dead] = 0.0
 
     if epsp_incr is None:
         if extra is not None and "dpla" in extra:
             epsp_incr = extra["dpla"]
-        else:
-            return D
 
-    epsp_incr = np.asarray(epsp_incr, dtype=float)
-    plastic = (epsp_incr > 0.0)
-    if off is not None:
-        plastic = plastic & (np.asarray(off) > 0.0)
+    if epsp_incr is None and deps is not None:
+        deps_arr = np.asarray(deps, dtype=float)
+        if deps_arr.ndim == 1:
+            deps_arr = deps_arr[None, :]
+        epsp_incr = np.zeros(n, dtype=float)
+        for i in range(n):
+            if not dead[i]:
+                Gi = G * alpe_arr[i]
+                p_old = (sig[i, 0] + sig[i, 1] + sig[i, 2]) / 3.0
+                tr3 = (deps_arr[i, 0] + deps_arr[i, 1] + deps_arr[i, 2]) / 3.0
+                s_tr = np.zeros(6)
+                s_tr[0] = sig[i, 0] - p_old + 2.0 * Gi * (deps_arr[i, 0] - tr3)
+                s_tr[1] = sig[i, 1] - p_old + 2.0 * Gi * (deps_arr[i, 1] - tr3)
+                s_tr[2] = sig[i, 2] - p_old + 2.0 * Gi * (deps_arr[i, 2] - tr3)
+                s_tr[3] = sig[i, 3] + Gi * deps_arr[i, 3]
+                s_tr[4] = sig[i, 4] + Gi * deps_arr[i, 4]
+                s_tr[5] = sig[i, 5] + Gi * deps_arr[i, 5]
+                j2 = 0.5 * (s_tr[0]**2 + s_tr[1]**2 + s_tr[2]**2) + s_tr[3]**2 + s_tr[4]**2 + s_tr[5]**2
+                aj2 = math.sqrt(3.0 * j2)
 
+                a = float(p["a"])
+                b = float(p["b"])
+                n_exp = float(p["n"])
+                sig_max = float(p["sig_max"])
+                E_tan = float(p["E_tan"])
+                YLDL = float(p["YLDL"])
+                eps_dam = float(p.get("eps_dam", _EM15))
+                ep0 = epsp_arr[i]
+                if n_exp == 1.0:
+                    ak = a + b * ep0
+                    qh = b
+                else:
+                    ak = a + b * (ep0 ** n_exp)
+                    qh = b * n_exp * (max(ep0, _EM20) ** (n_exp - 1.0)) if ep0 > 0.0 else 0.0
+                ak = min(ak, sig_max)
+                depsl = max(0.0, ep0 - eps_dam)
+                denom_hl = 3.0 * G + E_tan
+                HL = 3.0 * G * E_tan / denom_hl if abs(denom_hl) > _EM20 else 0.0
+                ak = min(ak, YLDL + HL * depsl)
+                ak = max(ak, 0.0)
+                if ep0 > eps_dam:
+                    qh = HL
+                if aj2 > ak:
+                    epsp_incr[i] = (aj2 - ak) / max(3.0 * Gi + qh, 1e-10)
+
+    if epsp_incr is None:
+        if symmetric:
+            D = 0.5 * (D + np.swapaxes(D, -1, -2))
+        return D[0] if is_1d else D
+
+    epsp_incr = np.asarray(epsp_incr, dtype=float).flatten()
+    if len(epsp_incr) == 1 and n > 1:
+        epsp_incr = np.full(n, epsp_incr[0], dtype=float)
+
+    plastic = (epsp_incr > 0.0) & (~dead)
     if not np.any(plastic):
-        return D
+        if symmetric:
+            D = 0.5 * (D + np.swapaxes(D, -1, -2))
+        return D[0] if is_1d else D
 
     idx = np.where(plastic)[0]
-    s = sig[idx].copy()
-    pm = (s[:, 0] + s[:, 1] + s[:, 2]) / 3.0
-    s[:, 0] -= pm
-    s[:, 1] -= pm
-    s[:, 2] -= pm
-
-    snorm = np.sqrt(s[:, 0] ** 2 + s[:, 1] ** 2 + s[:, 2] ** 2
-                    + 2.0 * (s[:, 3] ** 2 + s[:, 4] ** 2 + s[:, 5] ** 2))
-    snorm = np.maximum(snorm, _EM30)
-    Nv = s / snorm[:, None]
-    q = np.sqrt(1.5) * snorm
-    dep = epsp_incr[idx]
-
-    eps_dam = float(p["eps_dam"])
+    hardening = kwargs.get("hardening", extra.get("hardening", None) if extra is not None else None)
+    eps_dam = float(p.get("eps_dam", _EM15))
     b = float(p["b"])
     n_exp = float(p["n"])
     sig_max = float(p["sig_max"])
-    HL = float(p["HL"])
-    ep_idx = epsp[idx]
+    E_tan = float(p["E_tan"])
 
-    H = np.where(
-        ep_idx > eps_dam,
-        HL,
-        np.where(
-            ep_idx > 0.0,
-            b * n_exp * (np.maximum(ep_idx, _EM20) ** (n_exp - 1.0)),
-            b if n_exp == 1.0 else 0.0
-        )
-    )
-    H = np.where(q >= sig_max, 0.0, H)
-    Hbar = np.maximum(H, 0.0)
-
-    for k, ii in enumerate(idx):
+    for ii in idx:
+        dep = float(epsp_incr[ii])
         Gi = G * alpe_arr[ii]
-        q_tr = q[k] + 3.0 * Gi * dep[k]
-        a_coef = 3.0 * Gi * dep[k] / q_tr
-        b_coef = 6.0 * Gi * Gi * (dep[k] / q_tr - 1.0 / (3.0 * Gi + Hbar[k]))
-        C_minus_vol = 2.0 * Gi * I_dev
-        NN = np.outer(Nv[k], Nv[k])
-        D[ii] = D[ii] - a_coef * C_minus_vol + b_coef * NN
 
-    return D
+        s_vec = sig[ii, :6].copy()
+        pm = (s_vec[0] + s_vec[1] + s_vec[2]) / 3.0
+        s_vec[0] -= pm
+        s_vec[1] -= pm
+        s_vec[2] -= pm
+
+        snorm = math.sqrt(s_vec[0] ** 2 + s_vec[1] ** 2 + s_vec[2] ** 2
+                          + 2.0 * (s_vec[3] ** 2 + s_vec[4] ** 2 + s_vec[5] ** 2))
+        snorm = max(snorm, _EM30)
+        Nv = s_vec / snorm
+        q = math.sqrt(1.5) * snorm
+
+        ep_start = max(0.0, float(epsp_arr[ii]) - dep)
+        if ep_start > eps_dam:
+            denom_hl = 3.0 * G + E_tan
+            qh = 3.0 * G * E_tan / denom_hl if abs(denom_hl) > _EM20 else 0.0
+        else:
+            if n_exp == 1.0:
+                qh = b
+            elif ep_start > 0.0:
+                qh = b * n_exp * (max(ep_start, _EM20) ** (n_exp - 1.0))
+            else:
+                qh = 0.0
+        if q >= sig_max:
+            qh = 0.0
+
+        q_tr = q + (3.0 * Gi + qh) * dep
+        scale = q / max(q_tr, _EM30)
+
+        if hardening is True:
+            h_eff = max(qh, 0.0)
+            h_fac = h_eff / max(3.0 * Gi + h_eff, _EM30)
+        else:
+            h_fac = 0.0
+
+        NN = np.outer(Nv, Nv)
+        C_dev = scale * 2.0 * Gi * I_dev + 2.0 * Gi * (h_fac - scale) * NN
+        D[ii] = KeeT + C_dev
+
+    if symmetric:
+        D = 0.5 * (D + np.swapaxes(D, -1, -2))
+
+    return D[0] if is_1d else D
 
 
 # ===================================================================
