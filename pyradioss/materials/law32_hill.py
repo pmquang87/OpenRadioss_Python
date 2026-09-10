@@ -151,13 +151,15 @@ def build_law32(rec: Any = None, **kwargs: Any) -> Material:
     if sig_max == 0.0:
         sig_max = _INF
 
-    # Reference strain rate (MAT_SRP, default 1.0 if 0)
-    eps0 = _get(["MAT_SRP", "SRP", "srp", "eps0", "eps_dot_0", "eps_min"], 1.0)
-    if eps0 <= 0.0:
-        eps0 = 1.0
-
     # Strain rate exponent (MAT_SRC, default 0.0)
     m = _get(["MAT_SRC", "SRC", "src", "m", "cm"], 0.0)
+
+    # Reference strain rate (MAT_SRP, hm_read_mat32.F: IF(CM==ZERO) EPS0=ONE)
+    eps0 = _get(["MAT_SRP", "SRP", "srp", "eps0", "eps_dot_0", "eps_min"], 1.0 if m == 0.0 else 0.0)
+    if m == 0.0:
+        eps0 = 1.0
+    if eps0 <= 0.0:
+        raise ValueError(f"/MAT/LAW32/{_id}: Reference strain rate EPS0={eps0:g} must be > 0 (upstream error 207).")
 
     # Lankford parameters R00, R45, R90 (default 1.0 if 0)
     r00 = _get(["MAT_R00", "R00", "r00", "r_00"], 1.0)
@@ -195,7 +197,7 @@ def build_law32(rec: Any = None, **kwargs: Any) -> Material:
     a2 = nu * a1
     g = e / (2.0 * (1.0 + nu))
     k = e / (3.0 * (1.0 - 2.0 * nu))
-    c_sound = math.sqrt(a1 / max(rho0, _EM20)) if rho0 > 0.0 else math.sqrt(a1)
+    c_sound = math.sqrt(e / max(rho0, _EM20)) if rho0 > 0.0 else math.sqrt(e)
 
     params: Dict[str, Any] = {
         "E": e,
@@ -239,12 +241,10 @@ def build_law32(rec: Any = None, **kwargs: Any) -> Material:
 # ============================================================================
 
 def sound_speed(mat: Material, rho: Optional[float] = None, extra: Any = None) -> float:
-    """Longitudinal sound speed for thin shells: c = sqrt(E / (rho0 * (1 - nu^2)))."""
+    """Sound speed SDSP = sqrt(YOUNG / RHO0) matching hm_read_mat32.F:155."""
     rho_val = float(rho) if rho is not None else float(mat.rho0)
     e = float(mat.params.get("E", mat.E))
-    nu = float(mat.params.get("nu", mat.nu))
-    denom = max(rho_val, _EM20) * (1.0 - nu ** 2)
-    return float(math.sqrt(e / max(denom, _EM20)))
+    return float(math.sqrt(e / max(rho_val, _EM20)))
 
 
 def extra_shapes(mat: Material, nip: int = 1) -> Dict[str, Tuple[int, ...]]:
@@ -447,8 +447,8 @@ def shell_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
         epsp_rate = np.zeros(n, dtype=float)
 
     epsp_clamped = np.maximum(epsp_rate, eps0)
-    if m_rate != 0.0 and eps0 > 0.0:
-        rate_fac = (epsp_clamped / eps0) ** m_rate
+    if m_rate != 0.0:
+        rate_fac = epsp_clamped ** m_rate
     else:
         rate_fac = np.ones(n, dtype=float)
 
@@ -596,9 +596,16 @@ def shell_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
     # 6. Update accumulated plastic strain
     epsp_new = epsp + dpla
 
-    # 7. Through-thickness strain increment (sigeps32c.F line 185-190)
+    # 7. Through-thickness strain increment (sigeps32c.F line 185-190, m32plas.F:140, 193, 344)
     ezz_el = -(deps[:, 0] + deps[:, 1]) * (nu / max(1.0 - nu, _EM20))
-    ezz_pl = -nu5 * dpla * 0.5 * (sxx_new + syy_new) / np.maximum(sigy, _EM20)
+    if ipla == 1:
+        # Material axes formulation (m32plas.F lines 342-344)
+        s11_m, s22_m, _ = _rot_elem_to_mat(sxx_new, syy_new, sxy_new, d11, d22, d12)
+        s1_ezz = a11 * s11_m + a22 * s22_m - 0.5 * a1122 * (s11_m + s22_m)
+        ezz_pl = -nu5 * dpla * s1_ezz / np.maximum(sigy, _EM20)
+    else:
+        # Radial projection & plane stress projection (m32plas.F lines 140, 193)
+        ezz_pl = -nu5 * dpla * 0.5 * (sxx_new + syy_new) / np.maximum(sigy, _EM20)
     ezz_tot = ezz_el + ezz_pl
 
     # 8. Plastic failure element deletion (m32plas.F lines 354-358)
@@ -621,12 +628,20 @@ def shell_update(mat: Material, sig: np.ndarray, deps: np.ndarray,
                 uv32[:] = epsp_new
             else:
                 uv32[:, 0] = epsp_new
+                if uv32.shape[-1] > 1:
+                    uv32[:, 1] += ezz_tot
         if "off32" in extra and extra["off32"] is not None:
             extra["off32"][:] = off
         if "off" in extra and extra["off"] is not None:
             extra["off"][:] = off
+        if "layfail" in extra and extra["layfail"] is not None:
+            extra["layfail"][:] = off
         if "ezz" in extra:
             extra["ezz"] = ezz_tot
+        if "thk" in extra and "thklyl" in extra:
+            thk = np.asarray(extra["thk"], dtype=float)
+            thklyl = np.asarray(extra["thklyl"], dtype=float)
+            extra["thk"] = thk + ezz_tot * thklyl * off
 
     if epsp_in is not None and isinstance(epsp_in, np.ndarray):
         epsp_in[:] = epsp_new
@@ -700,11 +715,33 @@ def consistent_shell_tangent(mat: Material, sig: np.ndarray,
     if epsp_incr is None:
         return d_tangent[0] if is_1d else d_tangent
 
-    epsp_incr_arr = np.asarray(epsp_incr, dtype=float)
-    if epsp_incr_arr.ndim == 0:
-        epsp_incr_arr = np.full(n, float(epsp_incr_arr), dtype=float)
+    epsp_incr_arr = np.asarray(epsp_incr, dtype=float).flatten()
+    if epsp_incr_arr.ndim == 0 or len(epsp_incr_arr) == 1:
+        epsp_incr_arr = np.full(n, float(epsp_incr_arr.item() if epsp_incr_arr.ndim == 0 else epsp_incr_arr[0]), dtype=float)
 
-    plastic = epsp_incr_arr > 0.0
+    if epsp is not None:
+        epsp_arr = np.asarray(epsp, dtype=float).flatten()
+        if epsp_arr.ndim == 0 or len(epsp_arr) == 1:
+            epsp_arr = np.full(n, float(epsp_arr.item() if epsp_arr.ndim == 0 else epsp_arr[0]), dtype=float)
+    else:
+        epsp_arr = None
+
+    if extra is not None and "off32" in extra and extra["off32"] is not None:
+        off = np.asarray(extra["off32"], dtype=float).flatten()
+    elif extra is not None and "off" in extra and extra["off"] is not None:
+        off = np.asarray(extra["off"], dtype=float).flatten()
+    elif extra is not None and "layfail" in extra and extra["layfail"] is not None:
+        off = np.asarray(extra["layfail"], dtype=float).flatten()
+    else:
+        off = np.ones(n, dtype=float)
+    if len(off) == 1 and n > 1:
+        off = np.full(n, float(off[0]), dtype=float)
+
+    plastic = (epsp_incr_arr > 0.0) & (off > 0.0)
+    for ii in range(n):
+        if off[ii] <= 0.0:
+            d_tangent[ii] = 0.0
+
     if not np.any(plastic):
         return d_tangent[0] if is_1d else d_tangent
 
@@ -713,6 +750,7 @@ def consistent_shell_tangent(mat: Material, sig: np.ndarray,
     a_yield = float(p.get("A", _INF))
     b_yield = float(p.get("B", 0.0))
     n_hard = float(p.get("n", 1.0))
+    eps_max = float(p.get("eps_max", _INF))
     sig_max = float(p.get("sig_max", _INF))
     a11 = float(p.get("A11", 1.0))
     a22 = float(p.get("A22", 1.0))
@@ -729,29 +767,36 @@ def consistent_shell_tangent(mat: Material, sig: np.ndarray,
     idx = np.where(plastic)[0]
     for ii in idx:
         dl = float(epsp_incr_arr[ii])
-        ep_ii = float(epsp[ii]) if epsp is not None else dl
+        ep_ii = float(epsp_arr[ii]) if epsp_arr is not None else dl
+
+        if ep_ii >= eps_max or off[ii] <= 0.0:
+            d_tangent[ii] = 0.0
+            continue
 
         # For IPLA=0 (explicit radial return), yield stress is frozen from start of step,
         # so d(sigy)/d(deps) = 0 (H_eff = 0), matching the discrete algorithm to machine precision.
-        # For IPLA=1 (implicit iterative return), H_eff is the hardening slope.
+        # For IPLA=1 (implicit iterative return) or when hardening is explicitly requested,
+        # H_eff is the hardening slope.
         ipla = int(extra.get("ipla", p.get("ipla", 0)) if extra is not None else p.get("ipla", 0))
-        if ipla == 0:
-            h_eff = 0.0
-        else:
+        hardening = extra.get("hardening", None) if extra is not None else None
+        if hardening is True or (ipla != 0 and hardening is not False):
             eff_ep = max(b_yield + ep_ii, _EM20)
             cur_sigy = a_yield * (eff_ep ** n_hard)
             if cur_sigy >= sig_max:
                 h_eff = 0.0
             else:
                 h_eff = a_yield * n_hard * (eff_ep ** (n_hard - 1.0))
+        else:
+            h_eff = 0.0
 
-        # Rotation matrix Q_sigma from element to material axes
-        c_i = math.sqrt(d11[ii])
-        s_i = math.copysign(math.sqrt(d22[ii]), d12[ii])
+        # Direct rotation matrix Q_sigma from element to material axes
+        d11_i = float(d11[ii])
+        d22_i = float(d22[ii])
+        d12_i = float(d12[ii])
         q_sigma = np.array([
-            [c_i * c_i, s_i * s_i, 2.0 * c_i * s_i],
-            [s_i * s_i, c_i * c_i, -2.0 * c_i * s_i],
-            [-c_i * s_i, c_i * s_i, c_i * c_i - s_i * s_i],
+            [d11_i, d22_i, 2.0 * d12_i],
+            [d22_i, d11_i, -2.0 * d12_i],
+            [-d12_i, d12_i, d11_i - d22_i],
         ], dtype=float)
 
         p_elem = q_sigma.T @ p_hill @ q_sigma
