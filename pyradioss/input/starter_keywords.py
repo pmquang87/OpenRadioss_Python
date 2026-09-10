@@ -37520,21 +37520,22 @@ def read_mat_law37(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         lawname = ""
     if lawname.startswith("MAT_"):
         lawname = lawname[4:]
-    is_biphas = lawname in ("BIPHAS", "BIPHASIC", "LAW37_BIPHAS", "LAW37")
+    is_biphas = lawname in ("BIPHAS", "BIPHASIC", "LAW37_BIPHAS")
     is_biquad = lawname in ("BIQUAD", "BANABIC", "LAW37_BIQUAD")
 
     has_density_card = False
     if not is_biquad and not is_biphas:
-        if len(valid_cards) >= 3:
-            t0 = valid_cards[0].tokens()
-            f1_test = [valid_cards[1].raw[i:i+20].strip() for i in range(0, min(len(valid_cards[1].raw), 100), 20)]
-            if len(t0) <= 3 and (len(valid_cards[1].tokens()) == 5 or len([x for x in f1_test if x]) == 5 or len(valid_cards[1].raw.strip()) >= 40):
-                is_biphas = True
+        # Generic /MAT/LAW37: disambiguate between BIQUAD (anisotropic metal, 6/8 tokens)
+        # and BIPHAS (two-phase fluid, 1-3 tokens card 0, 5 tokens card 1 & 2)
+        t0 = valid_cards[0].tokens()
+        t1 = valid_cards[1].tokens() if len(valid_cards) > 1 else []
+        if len(t1) >= 6 or (len(t0) >= 6 and len(t1) != 5):
+            is_biquad = True
+        else:
+            is_biphas = True
+            if len(valid_cards) >= 3 and len(t0) <= 3:
                 has_density_card = True
-        elif len(valid_cards) >= 2:
-            f0_test = [valid_cards[0].raw[i:i+20].strip() for i in range(0, min(len(valid_cards[0].raw), 100), 20)]
-            if len(valid_cards[0].tokens()) == 5 or len([x for x in f0_test if x]) == 5 or (len(first_raw) >= 40 and len(first_raw) <= 105 and len(valid_cards[1].raw) <= 105):
-                is_biphas = True
+            else:
                 has_density_card = False
     elif is_biphas:
         if len(valid_cards) >= 3 and len(valid_cards[0].tokens()) <= 3:
