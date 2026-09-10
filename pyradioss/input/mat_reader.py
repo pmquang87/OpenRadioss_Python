@@ -635,6 +635,10 @@ class CfgCatalogue:
         "CRASURV": "LAW25",
         "COMPOSITE_PLAS": "LAW25",
         "LAW25": "LAW25",
+        "CHANG": "LAW15",
+        "PLAS_ANISO": "LAW15",
+        "COMP_CHANG": "LAW15",
+        "LAW15": "LAW15",
     }
 
 

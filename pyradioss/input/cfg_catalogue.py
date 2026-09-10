@@ -29,6 +29,10 @@ LAW_MAP: Dict[str, int] = {
     "SOIL_CONC": 10,
     "DPRAG": 10,
     "LAW10": 10,
+    "LAW15": 15,
+    "CHANG": 15,
+    "PLAS_ANISO": 15,
+    "COMP_CHANG": 15,
     "FABRI": 19,
     "LAW19": 19,
     "CONC": 24,
@@ -99,6 +103,10 @@ LAW_SYNONYMS: Dict[str, str] = {
     "JWL": "LAW5",
     "SOIL": "LAW10",
     "SOIL_CONC": "LAW10",
+    "LAW15": "LAW15",
+    "CHANG": "LAW15",
+    "PLAS_ANISO": "LAW15",
+    "COMP_CHANG": "LAW15",
 }
 
 KEYWORD_NAME_MAP = LAW_MAP

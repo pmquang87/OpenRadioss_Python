@@ -1500,6 +1500,164 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
+    def mat_law15(
+        self,
+        mid: int = 0,
+        title: str = "",
+        rho: float = 0.0,
+        refer_rho: Optional[float] = None,
+        e11: float = 0.0,
+        e22: float = 0.0,
+        nu12: float = 0.0,
+        g12: float = 0.0,
+        g23: float = 0.0,
+        g31: float = 0.0,
+        b: float = 0.0,
+        n: float = 1.0,
+        fmax: float = 0.0,
+        wpmax: float = 0.0,
+        wpref: float = 1.0,
+        ioff: int = 0,
+        sig_1yt: float = 0.0,
+        sig_2yt: float = 0.0,
+        sig_1yc: float = 0.0,
+        sig_2yc: float = 0.0,
+        alpha: float = 1.0,
+        sig_12yc: float = 0.0,
+        sig_12yt: float = 0.0,
+        c: float = 0.0,
+        eps_dot_0: float = 0.0,
+        icc: int = 1,
+        beta: float = 0.0,
+        tmax: float = 0.0,
+        s1: float = 0.0,
+        s2: float = 0.0,
+        s12: float = 0.0,
+        fsmooth: int = 0,
+        fcut: float = 0.0,
+        c1: float = 0.0,
+        c2: float = 0.0,
+        law_name: str = "LAW15",
+        unit_id: Optional[int] = None,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW15`` (/MAT/CHANG, /MAT/PLAS_ANISO, /MAT/COMP_CHANG) — cfg MAT/matl15_chang.cfg:
+        Card 1: RHO_I [RHO_O] (%20lg%20lg)
+        Card 2: E11 E22 nu12 (%20lg%20lg%20lg)
+        Card 3: G12 G23 G31 (%20lg%20lg%20lg)
+        Card 4: b n fmax (%20lg%20lg%20lg)
+        Card 5: Wpmax Wpref Ioff (%20lg%20lg%10d)
+        Card 6: sigma_1yt sigma_2yt sigma_1yc sigma_2yc alpha (%20lg%20lg%20lg%20lg%20lg)
+        Card 7: sigma_12yc sigma_12yt c Eps_dot_0 ICC (%20lg%20lg%20lg%20lg%10d)
+        [Card 8: beta Tmax S1 S2 S12 (%20lg%20lg%20lg%20lg%20lg)]
+        [Card 9: Fsmooth Fcut C1 C2 (%10d%20lg%20lg%20lg)]
+        """
+        if "mat_id" in kwargs and mid == 0:
+            mid = kwargs["mat_id"]
+        if "mid" in kwargs and mid == 0:
+            mid = kwargs["mid"]
+        if isinstance(title, (int, float)) and rho == 0.0:
+            rho = float(title)
+            title = ""
+        if "rho0" in kwargs and rho == 0.0:
+            rho = kwargs["rho0"]
+        if "rhor" in kwargs and refer_rho is None:
+            refer_rho = kwargs["rhor"]
+        if "rho_ref" in kwargs and refer_rho is None:
+            refer_rho = kwargs["rho_ref"]
+
+        if "e1" in kwargs and e11 == 0.0: e11 = kwargs["e1"]
+        if "ea" in kwargs and e11 == 0.0: e11 = kwargs["ea"]
+        if "e2" in kwargs and e22 == 0.0: e22 = kwargs["e2"]
+        if "eb" in kwargs and e22 == 0.0: e22 = kwargs["eb"]
+        if "nu" in kwargs and nu12 == 0.0: nu12 = kwargs["nu"]
+        if "prab" in kwargs and nu12 == 0.0: nu12 = kwargs["prab"]
+        if "gab" in kwargs and g12 == 0.0: g12 = kwargs["gab"]
+        if "gbc" in kwargs and g23 == 0.0: g23 = kwargs["gbc"]
+        if "gca" in kwargs and g31 == 0.0: g31 = kwargs["gca"]
+        if "hard" in kwargs: n = kwargs["hard"]
+        if "sig" in kwargs and fmax == 0.0: fmax = kwargs["sig"]
+        if "itype" in kwargs: ioff = kwargs["itype"]
+        if "sigyt1" in kwargs and sig_1yt == 0.0: sig_1yt = kwargs["sigyt1"]
+        if "sigyt2" in kwargs and sig_2yt == 0.0: sig_2yt = kwargs["sigyt2"]
+        if "sigyc1" in kwargs and sig_1yc == 0.0: sig_1yc = kwargs["sigyc1"]
+        if "sigyc2" in kwargs and sig_2yc == 0.0: sig_2yc = kwargs["sigyc2"]
+        if "sigc12" in kwargs and sig_12yc == 0.0: sig_12yc = kwargs["sigc12"]
+        if "sigt12" in kwargs and sig_12yt == 0.0: sig_12yt = kwargs["sigt12"]
+        if "src" in kwargs and c == 0.0: c = kwargs["src"]
+        if "srp" in kwargs and eps_dot_0 == 0.0: eps_dot_0 = kwargs["srp"]
+        if "strflag" in kwargs: icc = kwargs["strflag"]
+        if "mchang_s1" in kwargs and s1 == 0.0: s1 = kwargs["mchang_s1"]
+        if "mchang_s2" in kwargs and s2 == 0.0: s2 = kwargs["mchang_s2"]
+        if "mchang_s12" in kwargs and s12 == 0.0: s12 = kwargs["mchang_s12"]
+        if "mchang_c1" in kwargs and c1 == 0.0: c1 = kwargs["mchang_c1"]
+        if "mchang_c2" in kwargs and c2 == 0.0: c2 = kwargs["mchang_c2"]
+        if "c11" in kwargs and c1 == 0.0: c1 = kwargs["c11"]
+        if "c22" in kwargs and c2 == 0.0: c2 = kwargs["c22"]
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        # Card 1: RHO_I [RHO_O]
+        if refer_rho is not None and refer_rho > 0.0:
+            self.lines.append(fmt_float(rho) + fmt_float(refer_rho))
+        else:
+            self.lines.append(fmt_float(rho))
+
+        # Card 2: E11 E22 nu12
+        self.lines.append(fmt_float(e11) + fmt_float(e22) + fmt_float(nu12))
+
+        # Card 3: G12 G23 G31
+        self.lines.append(fmt_float(g12) + fmt_float(g23) + fmt_float(g31))
+
+        # Card 4: b n fmax
+        self.lines.append(fmt_float(b) + fmt_float(n) + fmt_float(fmax))
+
+        # Card 5: Wpmax Wpref Ioff
+        self.lines.append(fmt_float(wpmax) + fmt_float(wpref) + fmt_int(ioff))
+
+        # Card 6: sigma_1yt sigma_2yt sigma_1yc sigma_2yc alpha
+        self.lines.append(
+            fmt_float(sig_1yt) + fmt_float(sig_2yt) + fmt_float(sig_1yc)
+            + fmt_float(sig_2yc) + fmt_float(alpha)
+        )
+
+        # Card 7: sigma_12yc sigma_12yt c Eps_dot_0 ICC
+        self.lines.append(
+            fmt_float(sig_12yc) + fmt_float(sig_12yt) + fmt_float(c)
+            + fmt_float(eps_dot_0) + fmt_int(icc)
+        )
+
+        # Optional Card 8 and Card 9
+        has_card8 = any(x != 0.0 for x in (beta, tmax, s1, s2, s12)) or any(x != 0.0 for x in (fcut, c1, c2)) or fsmooth != 0
+        has_card9 = any(x != 0.0 for x in (fcut, c1, c2)) or fsmooth != 0
+        if has_card8:
+            self.lines.append(
+                fmt_float(beta) + fmt_float(tmax) + fmt_float(s1)
+                + fmt_float(s2) + fmt_float(s12)
+            )
+        if has_card9:
+            self.lines.append(
+                fmt_int(fsmooth) + fmt_float(fcut) + fmt_float(c1) + fmt_float(c2)
+            )
+
+        return self
+
+    def mat_chang(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "CHANG")
+        return self.mat_law15(*args, **kwargs)
+
+    def mat_plas_aniso(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "PLAS_ANISO")
+        return self.mat_law15(*args, **kwargs)
+
+    def mat_comp_chang(self, *args, **kwargs) -> StarterDeck:
+        kwargs.setdefault("law_name", "COMP_CHANG")
+        return self.mat_law15(*args, **kwargs)
+
     def mat_law25(
         self,
         mid: int = 0,
@@ -3297,6 +3455,62 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
             if len(toks) >= 2 and toks[1]: kw["eps_max23"] = float(toks[1])
             if len(toks) >= 3 and toks[2]: kw["eps_max31"] = float(toks[2])
         d.mat_law28(mid, rho_ref=rho_ref, title=title, unit_id=b.unit_id, law_name=law, **kw)
+    elif law in ("LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "CHANG_CHANG"):
+        kw: Dict = {}
+        rho_ref = None
+        is_fixed = getattr(b, "fixed", False)
+        if len(cards) >= 1:
+            toks = cards[0].cut("MAT_LAW15_1") if is_fixed and hasattr(cards[0], "cut") else cards[0].tokens()
+            if len(toks) >= 1 and toks[0]: kw["rho"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: rho_ref = float(toks[1])
+        if len(cards) >= 2:
+            toks = cards[1].cut("MAT_LAW15_2") if is_fixed and hasattr(cards[1], "cut") else cards[1].tokens()
+            if len(toks) >= 1 and toks[0]: kw["e11"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["e22"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["nu12"] = float(toks[2])
+        if len(cards) >= 3:
+            toks = cards[2].cut("MAT_LAW15_3") if is_fixed and hasattr(cards[2], "cut") else cards[2].tokens()
+            if len(toks) >= 1 and toks[0]: kw["g12"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["g23"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["g31"] = float(toks[2])
+        if len(cards) >= 4:
+            toks = cards[3].cut("MAT_LAW15_4") if is_fixed and hasattr(cards[3], "cut") else cards[3].tokens()
+            if len(toks) >= 1 and toks[0]: kw["b"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["n"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["fmax"] = float(toks[2])
+        if len(cards) >= 5:
+            toks = cards[4].cut("MAT_LAW15_5") if is_fixed and hasattr(cards[4], "cut") else cards[4].tokens()
+            if len(toks) >= 1 and toks[0]: kw["wpmax"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["wpref"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["ioff"] = int(float(toks[2]))
+        if len(cards) >= 6:
+            toks = cards[5].cut("MAT_LAW15_6") if is_fixed and hasattr(cards[5], "cut") else cards[5].tokens()
+            if len(toks) >= 1 and toks[0]: kw["sig_1yt"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["sig_2yt"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["sig_1yc"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["sig_2yc"] = float(toks[3])
+            if len(toks) >= 5 and toks[4]: kw["alpha"] = float(toks[4])
+        if len(cards) >= 7:
+            toks = cards[6].cut("MAT_LAW15_7") if is_fixed and hasattr(cards[6], "cut") else cards[6].tokens()
+            if len(toks) >= 1 and toks[0]: kw["sig_12yc"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["sig_12yt"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["c"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["eps_dot_0"] = float(toks[3])
+            if len(toks) >= 5 and toks[4]: kw["icc"] = int(float(toks[4]))
+        if len(cards) >= 8:
+            toks = cards[7].cut("MAT_LAW15_8") if is_fixed and hasattr(cards[7], "cut") else cards[7].tokens()
+            if len(toks) >= 1 and toks[0]: kw["beta"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["tmax"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["s1"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["s2"] = float(toks[3])
+            if len(toks) >= 5 and toks[4]: kw["s12"] = float(toks[4])
+        if len(cards) >= 9:
+            toks = cards[8].cut("MAT_LAW15_9") if is_fixed and hasattr(cards[8], "cut") else cards[8].tokens()
+            if len(toks) >= 1 and toks[0]: kw["fsmooth"] = int(float(toks[0]))
+            if len(toks) >= 2 and toks[1]: kw["fcut"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["c1"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["c2"] = float(toks[3])
+        d.mat_law15(mid, refer_rho=rho_ref, title=title, unit_id=b.unit_id, law_name=law, **kw)
     elif law in ("LAW25", "COMP_PLAS", "COMPOSITE_PLAS", "COMPSH", "TSAI_WU", "CRASURV"):
         kw: Dict = {}
         rho_ref = None

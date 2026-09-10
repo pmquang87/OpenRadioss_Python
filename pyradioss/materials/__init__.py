@@ -53,6 +53,7 @@ true current sound speed or the Courant time step is not a bound.
 
 from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa: F401
                law04_hyd_jcook, law06_hyd_visc, law10_soil,
+               law15_chang,
                law19_fabric, law24_concrete, law25_composite, law27_brittle,
                law28_honeycomb, law33_foamplas, law34_boltzmann, law35_kelvinmax, law36_tabulated,
                law37_biphas,
@@ -404,6 +405,23 @@ def _register_law25():
 _register_law25()
 
 
+def _register_law15():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = None
+        if law15_chang is not None:
+            builder = getattr(law15_chang, "build_law15", None)
+        if builder is not None:
+            for k in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG",
+                      "MAT_LAW15", "MAT_CHANG", "MAT_PLAS_ANISO", "MAT_COMP_CHANG"):
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law15()
+
+
 _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
     "uv25": (12,),
     "uv32": (2,),
@@ -418,7 +436,7 @@ def register_materials():
     _get_law32()
     _get_law38()
     for mod in (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,
-                law04_hyd_jcook, law06_hyd_visc, law10_soil, law19_fabric, law24_concrete,
+                law04_hyd_jcook, law06_hyd_visc, law10_soil, law15_chang, law19_fabric, law24_concrete,
                 law25_composite, law27_brittle, law28_honeycomb, law33_foamplas, law34_boltzmann, law35_kelvinmax,
                 law36_tabulated, law37_biphas, law40_kelvinmax, law42_ogden, law44_cowper,
                 law62_hypervisco, law70_tabfoam, law81_druckerprager,
@@ -427,6 +445,7 @@ def register_materials():
         fn = getattr(mod, "_register", None)
         if callable(fn):
             fn()
+    _register_law15()
     if law05_jwl is not None:
         fn = getattr(law05_jwl, "_register", None)
         if callable(fn):
@@ -557,6 +576,8 @@ def extra_shapes(mat, nip=None):
         shapes.update(bfrac=(), aburn=(), eint=(), tb=())
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         shapes.update(mu_bak=(), epxe=(), p_old=())
+    if getattr(mat, "law", None) in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG") or getattr(mat, "law_name", None) in ("15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG"):
+        shapes.update(law15_chang.extra_shapes(mat, nip))
     if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
         shapes.update(law25_composite.extra_shapes(mat, nip))
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
@@ -581,9 +602,9 @@ def needs_env(mat) -> bool:
     density; LAW40's sound speed too; M40: LAW36 solids use the same
     total pressure as LAW44 — sigeps36.F P = BULK*AMU; M539: LAW34 air pressure;
     M540: LAW37 biphasic liquid-gas density; M541: LAW38 density and time;
-    LAW25: composite density)."""
-    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 44, 62, 70, 81)
-            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB"))
+    LAW25: composite density; LAW15: Chang-Chang composite density)."""
+    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 44, 62, 70, 81)
+            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB"))
 
 
 def solid_update(mat, sig, deps, epsp, dt, extra=None):
@@ -592,6 +613,8 @@ def solid_update(mat, sig, deps, epsp, dt, extra=None):
     Returns (sig, epsp, c): c is the law's current sound speed array or
     None (constant elastic estimate is a bound). ``epsp`` may be None for
     laws without plasticity."""
+    if getattr(mat, "law", None) in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG") or getattr(mat, "law_name", None) in ("15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG"):
+        raise NotImplementedError("LAW15 is for shell elements only")
     if getattr(mat, "law", None) in (32, "32", "LAW32", "HILL") or getattr(mat, "law_name", None) in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL"):
         raise NotImplementedError("LAW32 (HILL anisotropic plasticity) is implemented for shell elements only.")
     if mat.law == 1:
@@ -709,6 +732,8 @@ def sound_speed(mat, rho=None, extra=None):
         return law34_boltzmann.sound_speed(mat, rho=rho, extra=extra)
     if law in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or law_name in ("LAW37", "BIPHAS", "BIPHASIC"):
         return law37_sound_speed(mat, rho=rho, extra=extra)
+    if law in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG") or law_name in ("15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG"):
+        return law15_chang.sound_speed(mat, rho=rho, extra=extra)
     if law in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or law_name in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
         return law25_composite.sound_speed(mat, rho=rho, extra=extra)
     if law in (38, "38", "LAW38", "VISC_TAB") or law_name in ("LAW38", "VISC_TAB"):
@@ -734,6 +759,9 @@ def sound_speed(mat, rho=None, extra=None):
 
 def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
     """Dispatch a plane-stress (shell) update to the material's law."""
+    if getattr(mat, "law", None) in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG") or getattr(mat, "law_name", None) in ("15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG"):
+        res = law15_chang.shell_update(mat, sig, deps, epsp, dt, extra)
+        return res[0], res[1]
     if getattr(mat, "law", None) in (32, "32", "LAW32", "HILL") or getattr(mat, "law_name", None) in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL"):
         _get_law32()
         if law32_shell_update is not None:
@@ -913,6 +941,8 @@ def shell_membrane_tangent(mat):
         return law03_plas_bost.shell_membrane_tangent(mat)
     if mat.law == 34 or getattr(mat, "law_name", None) in ("LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
         return law34_boltzmann.shell_membrane_tangent(mat)
+    if getattr(mat, "law", None) in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG") or getattr(mat, "law_name", None) in ("15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG"):
+        return law15_chang.shell_membrane_tangent(mat)
     if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
         return law25_composite.shell_membrane_tangent(mat)
     if getattr(mat, "law", None) in (32, "32", "LAW32", "HILL") or getattr(mat, "law_name", None) in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL"):
@@ -948,6 +978,9 @@ def shell_layer_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
     closed / broken); LAW19 (M524) the orthotropic fabric tangent with
     RCOMP and beta compression scaling; LAW32 (M542) consistent Hill tangent."""
     n = sig.shape[0]
+    if getattr(mat, "law", None) in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG") or getattr(mat, "law_name", None) in ("15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG"):
+        return law15_chang.consistent_shell_tangent(
+            mat, sig, epsp, epsp_incr, extra)
     if getattr(mat, "law", None) in (32, "32", "LAW32", "HILL") or getattr(mat, "law_name", None) in ("32", "LAW32", "HILL", "MAT_LAW32", "MAT_HILL"):
         _get_law32()
         if law32_shell_tangent is not None:
