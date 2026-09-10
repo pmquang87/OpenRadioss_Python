@@ -138,6 +138,12 @@ except ImportError:
     build_composite_plas = None
 
 
+try:
+    from .law22_dama import build_law22
+except ImportError:
+    build_law22 = None
+
+
 def _get_law25():
     global law25_composite, law25_solid_update, law25_shell_update, law25_sound_speed, law25_solid_tangent, law25_shell_tangent
     global build_law25, build_comp_plas, build_compsh, build_tsai_wu, build_crasurv, build_composite_plas
