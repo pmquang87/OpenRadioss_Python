@@ -9364,10 +9364,14 @@ class MatLaw15:
     c1: float = 0.0
     c2: float = 0.0
     title: str = ""
+    law: int = 15
+    law_name: str = "LAW15"
 
 
 MatChang = MatLaw15
 MatChangChang = MatLaw15
+MatPlasAniso = MatLaw15
+MatCompChang = MatLaw15
 
 
 @dataclass

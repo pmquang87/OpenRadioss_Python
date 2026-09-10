@@ -1088,7 +1088,9 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW13", "RIGID", "MAT_RIGID", "LAW13_RIGID"):
         read_mat_law13(block, model, log)
         return
-    if lawname in ("LAW15", "CHANG", "CHANG_CHANG", "MAT_CHANG", "MAT_CHANG_CHANG", "LAW15_CHANG"):
+    if lawname in ("LAW15", "CHANG", "CHANG_CHANG", "MAT_CHANG", "MAT_CHANG_CHANG", "LAW15_CHANG",
+                   "PLAS_ANISO", "COMP_CHANG", "MAT_PLAS_ANISO", "MAT_COMP_CHANG",
+                   "LAW15_PLAS_ANISO", "LAW15_COMP_CHANG"):
         read_mat_law15(block, model, log)
         return
     if lawname in ("LAW18", "CONCR_DRA", "DRAGON", "THERM", "MAT_CONCR_DRA", "MAT_DRAGON", "MAT_THERM", "LAW18_CONCR_DRA", "LAW18_THERM"):
@@ -38451,15 +38453,24 @@ def read_mat_law15(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         c1=c1, c2=c2, title=title
     )
     model.mat_law15s[mat_id] = mat
-    e_val = max(e11, e22, 200e9) if max(e11, e22) > 0 else 200e9
-    model.materials[mat_id] = InactiveMaterial(
-        id=mat_id, law=15, rho0=rho0, title=title, law_name="LAW15",
-        params={
-            "E": e_val, "MAT_E": e_val, "nu": nu12 if 0.0 <= nu12 < 0.5 else 0.3, "MAT_NU": nu12 if 0.0 <= nu12 < 0.5 else 0.3,
-            "MAT_SIGY": sig_1yt if sig_1yt > 0 else 200e6, "rho": rho0, "MAT_RHO": rho0,
-            "E11": e11, "E22": e22, "NU12": nu12, "G12": g12, "G23": g23, "G31": g31,
-        }
-    )
+    try:
+        from ..materials.law15_chang import build_law15
+        model.materials[mat_id] = build_law15(mat)
+    except Exception:
+        e_val = max(e11, e22, 200e9) if max(e11, e22) > 0 else 200e9
+        model.materials[mat_id] = InactiveMaterial(
+            id=mat_id, law=15, rho0=rho0, title=title, law_name="LAW15",
+            params={
+                "E": e_val, "MAT_E": e_val, "nu": nu12 if 0.0 <= nu12 < 0.5 else 0.3, "MAT_NU": nu12 if 0.0 <= nu12 < 0.5 else 0.3,
+                "MAT_SIGY": sig_1yt if sig_1yt > 0 else 200e6, "rho": rho0, "MAT_RHO": rho0,
+                "E11": e11, "E22": e22, "NU12": nu12, "G12": g12, "G23": g23, "G31": g31,
+            }
+        )
+
+
+read_mat_chang = read_mat_law15
+read_mat_plas_aniso = read_mat_law15
+read_mat_comp_chang = read_mat_law15
 
 
 def read_mat_law18(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -83633,11 +83644,16 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_LAW13": read_mat,
     "MAT_RIGID": read_mat,
     "RIGID": read_mat,
+    "LAW15": read_mat,
     "MAT_LAW15": read_mat,
     "MAT_CHANG": read_mat,
     "MAT_CHANG_CHANG": read_mat,
     "CHANG": read_mat,
     "CHANG_CHANG": read_mat,
+    "PLAS_ANISO": read_mat,
+    "COMP_CHANG": read_mat,
+    "MAT_PLAS_ANISO": read_mat,
+    "MAT_COMP_CHANG": read_mat,
     "MAT_LAW18": read_mat,
     "MAT_CONCR_DRA": read_mat,
     "MAT_DRAGON": read_mat,

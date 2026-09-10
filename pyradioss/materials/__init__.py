@@ -423,6 +423,7 @@ _register_law15()
 
 
 _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
+    "uv15": (8,),
     "uv25": (12,),
     "uv32": (2,),
     "uv38": (33,),
