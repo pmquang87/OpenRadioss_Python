@@ -574,6 +574,51 @@ MAT_PLAS_DAMA_CFG_3 = MAT_LAW22_3
 MAT_PLAS_DAMA_CFG_4 = MAT_LAW22_4
 MAT_PLAS_DAMA_CFG_5 = MAT_LAW22_5
 
+# M546: /MAT/LAW12 (/MAT/3D_COMP, /MAT/COMP_3D) card layout constants citing radioss2020/MAT/3d_comp_12.cfg and hm_read_mat12.F
+MAT_LAW12_1 = (20, 20)
+MAT_LAW12_2 = (20, 20, 20)
+MAT_LAW12_3 = (20, 20, 20)
+MAT_LAW12_4 = (20, 20, 20)
+MAT_LAW12_5 = (20, 20, 20, 20)
+MAT_LAW12_6 = (20, 20, 20, 20)
+MAT_LAW12_7 = (20, 20, 20, 20)
+MAT_LAW12_8 = (20, 20, 20, 20)
+MAT_LAW12_9 = (20, 20, 20, 20)
+MAT_LAW12_10 = (20, 20, 20, 20, 10)
+
+MAT_LAW12_CFG_1 = MAT_LAW12_1
+MAT_LAW12_CFG_2 = MAT_LAW12_2
+MAT_LAW12_CFG_3 = MAT_LAW12_3
+MAT_LAW12_CFG_4 = MAT_LAW12_4
+MAT_LAW12_CFG_5 = MAT_LAW12_5
+MAT_LAW12_CFG_6 = MAT_LAW12_6
+MAT_LAW12_CFG_7 = MAT_LAW12_7
+MAT_LAW12_CFG_8 = MAT_LAW12_8
+MAT_LAW12_CFG_9 = MAT_LAW12_9
+MAT_LAW12_CFG_10 = MAT_LAW12_10
+
+MAT_3D_COMP_1 = MAT_LAW12_1
+MAT_3D_COMP_2 = MAT_LAW12_2
+MAT_3D_COMP_3 = MAT_LAW12_3
+MAT_3D_COMP_4 = MAT_LAW12_4
+MAT_3D_COMP_5 = MAT_LAW12_5
+MAT_3D_COMP_6 = MAT_LAW12_6
+MAT_3D_COMP_7 = MAT_LAW12_7
+MAT_3D_COMP_8 = MAT_LAW12_8
+MAT_3D_COMP_9 = MAT_LAW12_9
+MAT_3D_COMP_10 = MAT_LAW12_10
+
+MAT_COMP_3D_1 = MAT_LAW12_1
+MAT_COMP_3D_2 = MAT_LAW12_2
+MAT_COMP_3D_3 = MAT_LAW12_3
+MAT_COMP_3D_4 = MAT_LAW12_4
+MAT_COMP_3D_5 = MAT_LAW12_5
+MAT_COMP_3D_6 = MAT_LAW12_6
+MAT_COMP_3D_7 = MAT_LAW12_7
+MAT_COMP_3D_8 = MAT_LAW12_8
+MAT_COMP_3D_9 = MAT_LAW12_9
+MAT_COMP_3D_10 = MAT_LAW12_10
+
 
 # ============================================================================
 # The per-card column-layout table (reader side of the shared knowledge)
@@ -2951,7 +2996,7 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_LAW12_3": [20, 20, 20],
     "MAT_LAW12_4": [20, 20, 20],
     "MAT_LAW12_5": [20, 20, 20, 20],
-    "MAT_LAW12_6": [20, 20, 20],
+    "MAT_LAW12_6": [20, 20, 20, 20],
     "MAT_LAW12_7": [20, 20, 20, 20],
     "MAT_LAW12_8": [20, 20, 20, 20],
     "MAT_LAW12_9": [20, 20, 20, 20],
@@ -2961,7 +3006,7 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_3PARBI_3": [20, 20, 20],
     "MAT_3PARBI_4": [20, 20, 20],
     "MAT_3PARBI_5": [20, 20, 20, 20],
-    "MAT_3PARBI_6": [20, 20, 20],
+    "MAT_3PARBI_6": [20, 20, 20, 20],
     "MAT_3PARBI_7": [20, 20, 20, 20],
     "MAT_3PARBI_8": [20, 20, 20, 20],
     "MAT_3PARBI_9": [20, 20, 20, 20],
@@ -2971,11 +3016,21 @@ LAYOUTS: Dict[str, List[int]] = {
     "MAT_3D_COMP_3": [20, 20, 20],
     "MAT_3D_COMP_4": [20, 20, 20],
     "MAT_3D_COMP_5": [20, 20, 20, 20],
-    "MAT_3D_COMP_6": [20, 20, 20],
+    "MAT_3D_COMP_6": [20, 20, 20, 20],
     "MAT_3D_COMP_7": [20, 20, 20, 20],
     "MAT_3D_COMP_8": [20, 20, 20, 20],
     "MAT_3D_COMP_9": [20, 20, 20, 20],
     "MAT_3D_COMP_10": [20, 20, 20, 20, 10],
+    "MAT_COMP_3D_1": [20, 20],
+    "MAT_COMP_3D_2": [20, 20, 20],
+    "MAT_COMP_3D_3": [20, 20, 20],
+    "MAT_COMP_3D_4": [20, 20, 20],
+    "MAT_COMP_3D_5": [20, 20, 20, 20],
+    "MAT_COMP_3D_6": [20, 20, 20, 20],
+    "MAT_COMP_3D_7": [20, 20, 20, 20],
+    "MAT_COMP_3D_8": [20, 20, 20, 20],
+    "MAT_COMP_3D_9": [20, 20, 20, 20],
+    "MAT_COMP_3D_10": [20, 20, 20, 20, 10],
     "MAT_LAW13_1": [20, 20],
     "MAT_LAW13_2": [20, 20],
     "MAT_LAW15_1": [20, 20],

@@ -53,7 +53,7 @@ true current sound speed or the Courant time step is not a bound.
 
 from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa: F401
                law04_hyd_jcook, law06_hyd_visc, law10_soil,
-               law15_chang,
+               law12_comp3d, law15_chang,
                law19_fabric, law22_dama, law24_concrete, law25_composite, law27_brittle,
                law28_honeycomb, law33_foamplas, law34_boltzmann, law35_kelvinmax, law36_tabulated,
                law37_biphas,
@@ -445,6 +445,24 @@ def _register_law22():
 _register_law22()
 
 
+def _register_law12():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = None
+        if law12_comp3d is not None:
+            builder = getattr(law12_comp3d, "build_law12", None)
+        if builder is not None:
+            for k in (12, "12", "LAW12", "3D_COMP", "COMP_3D",
+                      "MAT_LAW12", "MAT_3D_COMP", "MAT_COMP_3D",
+                      "3PARBI", "MAT_3PARBI", "LAW12_3PARBI", "LAW12_3D_COMP"):
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law12()
+
+
 _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
     "uv15": (8,),
     "uv22": (4,),
@@ -461,7 +479,7 @@ def register_materials():
     _get_law32()
     _get_law38()
     for mod in (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,
-                law04_hyd_jcook, law06_hyd_visc, law10_soil, law15_chang, law19_fabric, law22_dama, law24_concrete,
+                law04_hyd_jcook, law06_hyd_visc, law10_soil, law12_comp3d, law15_chang, law19_fabric, law22_dama, law24_concrete,
                 law25_composite, law27_brittle, law28_honeycomb, law33_foamplas, law34_boltzmann, law35_kelvinmax,
                 law36_tabulated, law37_biphas, law40_kelvinmax, law42_ogden, law44_cowper,
                 law62_hypervisco, law70_tabfoam, law81_druckerprager,
@@ -470,6 +488,7 @@ def register_materials():
         fn = getattr(mod, "_register", None)
         if callable(fn):
             fn()
+    _register_law12()
     _register_law15()
     _register_law22()
     if law05_jwl is not None:
@@ -604,6 +623,8 @@ def extra_shapes(mat, nip=None):
         shapes.update(bfrac=(), aburn=(), eint=(), tb=())
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         shapes.update(mu_bak=(), epxe=(), p_old=())
+    if getattr(mat, "law", None) in (12, "12", "LAW12", "3D_COMP", "COMP_3D") or getattr(mat, "law_name", None) in ("12", "LAW12", "3D_COMP", "COMP_3D"):
+        shapes.update(law12_comp3d.extra_shapes(mat, nip))
     if getattr(mat, "law", None) in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG") or getattr(mat, "law_name", None) in ("15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG"):
         shapes.update(law15_chang.extra_shapes(mat, nip))
     if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
@@ -739,6 +760,15 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         raise NotImplementedError("LAW38 solid_update not available")
     if getattr(mat, "law", None) in (22, "22", "LAW22", "DAMA", "PLAS_DAMA") or getattr(mat, "law_name", None) in ("22", "LAW22", "DAMA", "PLAS_DAMA"):
         return law22_dama.solid_update(mat, sig, deps, epsp, dt, extra)
+    if getattr(mat, "law", None) in (12, "12", "LAW12", "3D_COMP", "COMP_3D") or getattr(mat, "law_name", None) in ("12", "LAW12", "3D_COMP", "COMP_3D"):
+        sign, epsp_out, c = law12_comp3d.solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        sig[:] = sign
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
     raise NotImplementedError(f"material LAW{mat.law} not ported for solids")
 
 
@@ -748,6 +778,8 @@ def sound_speed(mat, rho=None, extra=None):
     law_name = getattr(mat, "law_name", None)
     if law in (22, "22", "LAW22", "DAMA", "PLAS_DAMA") or law_name in ("22", "LAW22", "DAMA", "PLAS_DAMA"):
         return law22_dama.sound_speed(mat, rho=rho, extra=extra)
+    if law in (12, "12", "LAW12", "3D_COMP", "COMP_3D") or law_name in ("12", "LAW12", "3D_COMP", "COMP_3D"):
+        return law12_comp3d.sound_speed(mat, rho=rho, extra=extra)
     if law in (5, "5", "LAW5", "JWL") or law_name in ("LAW5", "JWL"):
         _get_law05()
         if law05_sound_speed is not None:
@@ -801,6 +833,8 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         raise NotImplementedError("LAW32 shell_update not available in law32_hill")
     if getattr(mat, "law", None) in (38, "38", "LAW38", "VISC_TAB") or getattr(mat, "law_name", None) in ("LAW38", "VISC_TAB"):
         raise NotImplementedError("LAW38 (VISC_TAB tabulated viscoelastic) is implemented for 3D solid elements only.")
+    if getattr(mat, "law", None) in (12, "12", "LAW12", "3D_COMP", "COMP_3D") or getattr(mat, "law_name", None) in ("12", "LAW12", "3D_COMP", "COMP_3D"):
+        return law12_comp3d.shell_update(mat, sig, deps, epsp, dt, extra)
     if getattr(mat, "law", None) in (37, "37", "LAW37", "BIPHAS", "BIPHASIC") or getattr(mat, "law_name", None) in ("LAW37", "BIPHAS", "BIPHASIC"):
         raise NotImplementedError("LAW37 (biphasic fluid/gas) is implemented for 3D solid and SPH elements only.")
     if getattr(mat, "law", None) == 28 or getattr(mat, "law_name", None) in ("LAW28", "HONEYCOMB", "HONEYCOMB_SOL"):
@@ -945,6 +979,8 @@ def solid_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
         raise NotImplementedError("LAW38 solid_tangent not available")
     if getattr(mat, "law", None) in (22, "22", "LAW22", "DAMA", "PLAS_DAMA") or getattr(mat, "law_name", None) in ("22", "LAW22", "DAMA", "PLAS_DAMA"):
         return law22_dama.consistent_solid_tangent(mat, sig, epsp=epsp, dt=0.0, extra=extra, epsp_incr=epsp_incr)
+    if getattr(mat, "law", None) in (12, "12", "LAW12", "3D_COMP", "COMP_3D") or getattr(mat, "law_name", None) in ("12", "LAW12", "3D_COMP", "COMP_3D"):
+        return law12_comp3d.consistent_solid_tangent(mat, sig, epsp=epsp, dt=0.0, extra=extra, epsp_incr=epsp_incr)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
         f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW34, LAW35, LAW36, LAW38, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "

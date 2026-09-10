@@ -9273,7 +9273,7 @@ PropPredit = PropType36
 
 @dataclass
 class MatLaw12:
-    """``/MAT/LAW12`` or ``/MAT/3PARBI`` / ``/MAT/3D_COMP`` / ``/MAT/RAGAB``: 3-parameter Drucker-Prager / 3D composite."""
+    """``/MAT/LAW12`` or ``/MAT/3PARBI`` / ``/MAT/3D_COMP`` / ``/MAT/COMP_3D`` / ``/MAT/RAGAB``: 3D composite elasto-plastic with cracking damage."""
     id: int = 0
     rho0: float = 0.0
     rhor: float = 0.0
@@ -9289,10 +9289,11 @@ class MatLaw12:
     sig_t1: float = 0.0
     sig_t2: float = 0.0
     sig_t3: float = 0.0
-    delta: float = 0.0
+    delta: float = 0.05
     b: float = 0.0
-    n: float = 0.0
-    fmax: float = 0.0
+    n: float = 1.0
+    fmax: float = 1.0e10
+    wplaref: float = 1.0
     sig_1yt: float = 0.0
     sig_2yt: float = 0.0
     sig_1yc: float = 0.0
@@ -9309,12 +9310,46 @@ class MatLaw12:
     efib: float = 0.0
     c: float = 0.0
     eps0: float = 0.0
-    icc: int = 0
+    icc: int = 1
     title: str = ""
+    law_name: str = "LAW12"
+
+    @property
+    def cb(self) -> float:
+        return self.b
+
+    @cb.setter
+    def cb(self, val: float) -> None:
+        self.b = val
+
+    @property
+    def cn(self) -> float:
+        return self.n
+
+    @cn.setter
+    def cn(self, val: float) -> None:
+        self.n = val
+
+    @property
+    def wpref(self) -> float:
+        return self.wplaref
+
+    @wpref.setter
+    def wpref(self, val: float) -> None:
+        self.wplaref = val
+
+    @property
+    def strflag(self) -> int:
+        return self.icc
+
+    @strflag.setter
+    def strflag(self, val: int) -> None:
+        self.icc = val
 
 
 Mat3parbi = MatLaw12
 Mat3dComp = MatLaw12
+MatComp3d = MatLaw12
 MatRagab = MatLaw12
 
 

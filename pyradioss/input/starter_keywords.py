@@ -1082,7 +1082,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         read_mat_law37(block, model, log)
         return
     # M188: LAW12 (3PARBI), LAW13 (HONEYCOMB), LAW15 (CHANG), LAW18 (CONCR_DRA), LAW22 (TSAI_WU), LAW25 (COMP_PLAS), LAW28 (HONEYCOMB_SOL)
-    if lawname in ("LAW12", "3PARBI", "3D_COMP", "RAGAB", "MAT_3PARBI", "MAT_3D_COMP", "MAT_RAGAB", "LAW12_3PARBI", "LAW12_3D_COMP"):
+    if lawname in ("LAW12", "3PARBI", "3D_COMP", "COMP_3D", "RAGAB", "MAT_3PARBI", "MAT_3D_COMP", "MAT_COMP_3D", "MAT_RAGAB", "LAW12_3PARBI", "LAW12_3D_COMP", "LAW12_COMP_3D"):
         read_mat_law12(block, model, log)
         return
     if lawname in ("LAW13", "RIGID", "MAT_RIGID", "LAW13_RIGID"):
@@ -38125,13 +38125,13 @@ def read_mat_law12(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     e11, e22, e33 = 0.0, 0.0, 0.0
     nu12, nu23, nu31 = 0.0, 0.0, 0.0
     g12, g23, g31 = 0.0, 0.0, 0.0
-    sig_t1, sig_t2, sig_t3, delta = 0.0, 0.0, 0.0, 0.0
-    b, n, fmax = 0.0, 0.0, 0.0
+    sig_t1, sig_t2, sig_t3, delta = 0.0, 0.0, 0.0, 0.05
+    b, n, fmax, wplaref = 0.0, 1.0, 1.0e10, 1.0
     sig_1yt, sig_2yt, sig_1yc, sig_2yc = 0.0, 0.0, 0.0, 0.0
     sig_12yt, sig_12yc, sig_23yt, sig_23yc = 0.0, 0.0, 0.0, 0.0
     sig_3yt, sig_3yc, sig_13yt, sig_13yc = 0.0, 0.0, 0.0, 0.0
     alpha, efib, c, eps0 = 0.0, 0.0, 0.0, 0.0
-    icc = 0
+    icc = 1
 
     if block.fixed:
         if len(valid_cards) > 0:
@@ -38164,6 +38164,7 @@ def read_mat_law12(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             b = _safe_float(c5[0]) if len(c5) > 0 else 0.0
             n = _safe_float(c5[1]) if len(c5) > 1 else 0.0
             fmax = _safe_float(c5[2]) if len(c5) > 2 else 0.0
+            wplaref = _safe_float(c5[3]) if len(c5) > 3 and c5[3].strip() else 1.0
         if len(valid_cards) > 6:
             c6 = valid_cards[6].cut("MAT_LAW12_7")
             sig_1yt = _safe_float(c6[0]) if len(c6) > 0 else 0.0
@@ -38220,6 +38221,7 @@ def read_mat_law12(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             b = _safe_float(t5[0]) if len(t5) > 0 else 0.0
             n = _safe_float(t5[1]) if len(t5) > 1 else 0.0
             fmax = _safe_float(t5[2]) if len(t5) > 2 else 0.0
+            wplaref = _safe_float(t5[3]) if len(t5) > 3 and t5[3].strip() else 1.0
         if len(valid_cards) > 6:
             t6 = valid_cards[6].tokens()
             sig_1yt = _safe_float(t6[0]) if len(t6) > 0 else 0.0
@@ -38250,23 +38252,32 @@ def read_mat_law12(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=mat_id, rho0=rho0, rhor=rhor, e11=e11, e22=e22, e33=e33,
         nu12=nu12, nu23=nu23, nu31=nu31, g12=g12, g23=g23, g31=g31,
         sig_t1=sig_t1, sig_t2=sig_t2, sig_t3=sig_t3, delta=delta,
-        b=b, n=n, fmax=fmax, sig_1yt=sig_1yt, sig_2yt=sig_2yt,
+        b=b, n=n, fmax=fmax, wplaref=wplaref, sig_1yt=sig_1yt, sig_2yt=sig_2yt,
         sig_1yc=sig_1yc, sig_2yc=sig_2yc, sig_12yt=sig_12yt, sig_12yc=sig_12yc,
         sig_23yt=sig_23yt, sig_23yc=sig_23yc, sig_3yt=sig_3yt, sig_3yc=sig_3yc,
         sig_13yt=sig_13yt, sig_13yc=sig_13yc, alpha=alpha, efib=efib, c=c, eps0=eps0,
         icc=icc, title=title
     )
     model.mat_law12s[mat_id] = mat
-    e_val = max(e11, e22, e33, 200e9) if max(e11, e22, e33) > 0 else 200e9
-    model.materials[mat_id] = InactiveMaterial(
-        id=mat_id, law=12, rho0=rho0, title=title, law_name="LAW12",
-        params={
-            "E": e_val, "MAT_E": e_val, "nu": nu12 if 0.0 <= nu12 < 0.5 else 0.3, "MAT_NU": nu12 if 0.0 <= nu12 < 0.5 else 0.3,
-            "MAT_SIGY": sig_1yt if sig_1yt > 0 else 200e6, "rho": rho0, "MAT_RHO": rho0,
-            "E11": e11, "E22": e22, "E33": e33, "NU12": nu12, "NU23": nu23, "NU31": nu31,
-            "G12": g12, "G23": g23, "G31": g31,
-        }
-    )
+    try:
+        from ..materials.law12_comp3d import build_law12
+        model.materials[mat_id] = build_law12(mat)
+    except Exception:
+        e_val = max(e11, e22, e33, 200e9) if max(e11, e22, e33) > 0 else 200e9
+        model.materials[mat_id] = InactiveMaterial(
+            id=mat_id, law=12, rho0=rho0, title=title, law_name="LAW12",
+            params={
+                "E": e_val, "MAT_E": e_val, "nu": nu12 if 0.0 <= nu12 < 0.5 else 0.3, "MAT_NU": nu12 if 0.0 <= nu12 < 0.5 else 0.3,
+                "MAT_SIGY": sig_1yt if sig_1yt > 0 else 200e6, "rho": rho0, "MAT_RHO": rho0,
+                "E11": e11, "E22": e22, "E33": e33, "NU12": nu12, "NU23": nu23, "NU31": nu31,
+                "G12": g12, "G23": g23, "G31": g31,
+            }
+        )
+
+read_mat_3d_comp = read_mat_law12
+read_mat_comp_3d = read_mat_law12
+read_mat_3parbi = read_mat_law12
+read_mat_ragab = read_mat_law12
 
 
 def read_mat_law13(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -83663,11 +83674,14 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "PROP_P36_PREDIT": read_prop,
     # --- M188: Composite, Honeycomb, Concrete Damage & Advanced Shell/Solid Props ---
     "MAT_LAW12": read_mat,
+    "LAW12": read_mat,
     "MAT_3PARBI": read_mat,
     "MAT_3D_COMP": read_mat,
+    "MAT_COMP_3D": read_mat,
     "MAT_RAGAB": read_mat,
     "3PARBI": read_mat,
     "3D_COMP": read_mat,
+    "COMP_3D": read_mat,
     "RAGAB": read_mat,
     "MAT_LAW13": read_mat,
     "MAT_RIGID": read_mat,

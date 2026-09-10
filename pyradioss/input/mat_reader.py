@@ -639,6 +639,11 @@ class CfgCatalogue:
         "PLAS_ANISO": "LAW15",
         "COMP_CHANG": "LAW15",
         "LAW15": "LAW15",
+        "LAW12": "LAW12",
+        "3D_COMP": "LAW12",
+        "COMP_3D": "LAW12",
+        "3PARBI": "LAW12",
+        "RAGAB": "LAW12",
     }
 
 

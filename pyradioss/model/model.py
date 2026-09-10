@@ -1141,7 +1141,11 @@ class Model:
         self.mat_law37s: Dict[int, MatLaw37] = {}                   # /MAT/LAW37, /MAT/BIQUAD (M187)
         self.prop_type45s: Dict[int, PropType45] = {}               # /PROP/TYPE45, /PROP/KJOINT2 (M187)
         self.prop_type36s: Dict[int, PropType36] = {}               # /PROP/TYPE36, /PROP/PREDIT (M187)
-        self.mat_law12s: Dict[int, MatLaw12] = {}                   # /MAT/LAW12, /MAT/3PARBI (M188)
+        self.mat_law12s: Dict[int, MatLaw12] = {}                   # /MAT/LAW12, /MAT/3PARBI, /MAT/3D_COMP, /MAT/COMP_3D (M188/M546)
+        self.mat_3d_comps = self.mat_law12s
+        self.mat_comp_3ds = self.mat_law12s
+        self.mat_3parbis = self.mat_law12s
+        self.mat_ragabs = self.mat_law12s
         self.mat_law13s: Dict[int, MatLaw13] = {}                   # /MAT/LAW13, /MAT/HONEYCOMB (M188)
         self.mat_law15s: Dict[int, MatLaw15] = {}                   # /MAT/LAW15, /MAT/CHANG (M188)
         self.mat_law18s: Dict[int, MatLaw18] = {}                   # /MAT/LAW18, /MAT/CONCR_DRA (M188)
