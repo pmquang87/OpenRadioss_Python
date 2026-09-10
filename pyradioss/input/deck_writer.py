@@ -776,18 +776,25 @@ class StarterDeck:
         else:
             self.lines.append(BLANK_CARD)
 
-        # Card 1: MAT_LAW37_1: rho and rhor (or pshift)
+        # Card 1: MAT_LAW37_1: rho and rhor (or pshift), with optional isolver
         if rho is None:
             rho = rho_l0 * alpha1 + (1.0 - alpha1) * rho_g0
 
         if rhor is not None and rhor != 0.0:
-            self.lines.append(fmt_float(rho) + fmt_float(rhor))
+            card1 = fmt_float(rho) + fmt_float(rhor)
         elif pshift != 0.0:
-            self.lines.append(fmt_float(rho) + fmt_float(pshift))
+            card1 = fmt_float(rho) + fmt_float(pshift)
         elif rhor is not None:
-            self.lines.append(fmt_float(rho) + fmt_float(rhor))
+            card1 = fmt_float(rho) + fmt_float(rhor)
         else:
-            self.lines.append(fmt_float(rho))
+            card1 = fmt_float(rho)
+
+        if isolver is not None and isolver != 1:
+            if len(card1) == 20:
+                card1 += fmt_float(0.0) + fmt_int(isolver, 20)
+            elif len(card1) == 40:
+                card1 += fmt_int(isolver, 20)
+        self.lines.append(card1)
 
         # Card 2: MAT_LAW37_2: rho_l0, c_l, alpha1, nu_l, nu_vol_l
         self.lines.append(

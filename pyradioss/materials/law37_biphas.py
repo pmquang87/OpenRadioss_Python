@@ -189,6 +189,14 @@ def build_law37(rec: Any) -> Material:
         "pmin": pmin,
         "r1": r1,
         "R1": r1,
+        "PMIN": pmin,
+        "PSH": psh_raw,
+        "PSHIFT": pshift,
+        "ISOLVER": isolver,
+        "visa1": nu_l,
+        "visb1": nu_vol_l,
+        "visa2": nu_g,
+        "visb2": nu_vol_g,
         # CFG aliases
         "Lqud_Rho_l": rho_l0,
         "C_l": c_l,
@@ -211,6 +219,98 @@ def build_law37(rec: Any) -> Material:
 
     mat = Material(id=rec_id, law=37, rho0=rho0, title=title, params=params, law_name="LAW37")
     return mat
+
+
+def init_uv37(
+    mat: Material,
+    nel: int = 1,
+    rho: Optional[Union[float, np.ndarray]] = None,
+    sig: Optional[np.ndarray] = None,
+    pshift: Optional[float] = None,
+) -> np.ndarray:
+    """Initialize history array uv37 for LAW37 elements.
+
+    Fortran origins:
+    - Starter: ``starter/source/materials/mat/mat037/m37init.F`` lines 83-105
+    - Engine cycle 0: ``engine/source/materials/mat/mat037/sigeps37.F`` lines 180-197
+
+    Variables in uv37:
+    - uv37[:, 0]: Liquid mass per unit volume B_1 = alpha_v * rho_1
+    - uv37[:, 1]: Gas density rho_2
+    - uv37[:, 2]: Liquid density rho_1
+    - uv37[:, 3]: Liquid volume fraction alpha_{v, 1}
+    - uv37[:, 4]: Gas volume fraction alpha_{v, 2} = 1 - alpha_{v, 1}
+
+    Returns
+    -------
+    uv37 : np.ndarray
+        Array of shape (nel, 5).
+    """
+    p = mat.params if mat.params is not None else {}
+    rho_l0 = float(p.get("rho_l0", 1000.0))
+    c_l = float(p.get("c_l", 2.2e9))
+    alpha1 = float(p.get("alpha1", 1.0))
+    rho_g0 = float(p.get("rho_g0", 1.2))
+    gamma = float(p.get("gamma", 1.4))
+    p0 = float(p.get("p0", 1.01325e5))
+
+    if pshift is None:
+        psh_raw = float(p.get("psh", 0.0))
+        pshift = float(p.get("pshift", -p0 if psh_raw == 0.0 else -psh_raw))
+
+    if rho is None:
+        rho0_ref = float(getattr(mat, "rho0", None) or (rho_l0 * alpha1 + (1.0 - alpha1) * rho_g0))
+        rho_arr = np.full(nel, rho0_ref, dtype=float)
+    elif np.isscalar(rho):
+        rho_arr = np.full(nel, float(rho), dtype=float)
+    else:
+        rho_arr = np.asarray(rho, dtype=float).copy()
+        if rho_arr.shape[0] != nel:
+            nel = rho_arr.shape[0]
+
+    if sig is None:
+        sig_arr = np.zeros((nel, 6), dtype=float)
+    else:
+        sig_arr = np.asarray(sig, dtype=float)
+
+    uv37 = np.zeros((nel, 5), dtype=float)
+
+    # sigeps37.F line 181: P = MAX(EM30, (-SIGOXX - SIGOYY - SIGOZZ)*THIRD) - PSH
+    sig_hydro = -(sig_arr[:, 0] + sig_arr[:, 1] + sig_arr[:, 2]) / 3.0
+    p_init = np.maximum(_EM30, sig_hydro) - pshift
+
+    if gamma * c_l >= _EM30:
+        # Liquid and gas correctly defined (sigeps37.F lines 183-193 / m37init.F lines 91-105)
+        mu1p1 = (p_init - p0) / c_l + 1.0
+        base_p = np.maximum(_EM30, p_init / p0)
+        mu2p1 = base_p ** (1.0 / gamma)
+        rho1_init = rho_l0 * mu1p1
+        rho2_init = rho_g0 * mu2p1
+
+        if alpha1 >= 1.0 - 1e-10:
+            a_init = np.ones(nel, dtype=float)
+            b1 = rho_arr.copy()
+        elif alpha1 <= 1e-10:
+            a_init = np.zeros(nel, dtype=float)
+            b1 = np.zeros(nel, dtype=float)
+        else:
+            rho0_ref = rho_l0 * alpha1 + (1.0 - alpha1) * rho_g0
+            y1 = (alpha1 * rho_l0) / rho0_ref if rho0_ref > _EM30 else alpha1
+            b1 = np.clip(y1 * rho_arr, 0.0, rho_arr)
+            a_init = np.where(rho1_init > _EM30, b1 / rho1_init, 0.0)
+            a_init = np.clip(a_init, 0.0, 1.0)
+            a_init = np.where(a_init < _EM20, 0.0, a_init)
+
+        uv37[:, 0] = b1
+        uv37[:, 1] = rho2_init
+        uv37[:, 2] = rho1_init
+        uv37[:, 3] = a_init
+        uv37[:, 4] = 1.0 - a_init
+    else:
+        # Boundary element (sigeps37.F line 195)
+        uv37[:, 2] = rho_arr
+
+    return uv37
 
 
 def solid_update(
@@ -290,7 +390,7 @@ def solid_update(
         rho = np.asarray(current_rho, dtype=float).copy()
 
     # History array uv37: shape (nel, 5)
-    # uv37[:, 0]: liquid mass per unit volume M_1 / V
+    # uv37[:, 0]: liquid mass per unit volume B_1 = alpha_{v, 1} * rho_1
     # uv37[:, 1]: gas density rho_2
     # uv37[:, 2]: liquid density rho_1
     # uv37[:, 3]: liquid volume fraction alpha_{v, 1}
@@ -300,30 +400,20 @@ def solid_update(
         uv37 = np.zeros((nel, 5), dtype=float)
         extra["uv37"] = uv37
 
-    # Initialization at first cycle (if uv37 is uninitialized)
-    # Follow sigeps37.F lines 180-197
+    # Initialization at cycle 0 (or uninitialized)
+    # Follow sigeps37.F lines 179-197 and m37init.F lines 83-105
+    is_time_zero = (extra.get("time", None) == 0.0) or (kwargs.get("time", None) == 0.0)
     uninit = (uv37[:, 1] <= 0.0) & (uv37[:, 2] <= 0.0)
-    if np.any(uninit):
-        sig_hydro = -(sig[uninit, 0] + sig[uninit, 1] + sig[uninit, 2]) / 3.0
-        p_init = np.maximum(_EM30, sig_hydro) - pshift
-        if gamma * c_l >= _EM30:
-            mu1p1 = (p_init - p0) / c_l + 1.0
-            base_p = np.maximum(_EM30, p_init / p0)
-            mu2p1 = base_p ** (1.0 / gamma)
-            rho1_init = rho_l0 * mu1p1
-            rho2_init = rho_g0 * mu2p1
-            denom = rho1_init - rho2_init
-            denom = np.where(np.abs(denom) < _EM30, _EM30, denom)
-            a_init = (rho[uninit] - rho2_init) / denom
-            a_init = np.clip(a_init, 0.0, 1.0)
-            a_init = np.where(a_init < _EM20, 0.0, a_init)
-            uv37[uninit, 0] = a_init * rho1_init
-            uv37[uninit, 1] = rho2_init
-            uv37[uninit, 2] = rho1_init
-            uv37[uninit, 3] = a_init
-            uv37[uninit, 4] = 1.0 - a_init
-        else:
-            uv37[uninit, 2] = rho[uninit]
+    to_init = np.ones(nel, dtype=bool) if is_time_zero else uninit
+    if np.any(to_init):
+        uv37_init = init_uv37(
+            mat=mat,
+            nel=int(np.count_nonzero(to_init)),
+            rho=rho[to_init],
+            sig=sig[to_init],
+            pshift=pshift,
+        )
+        uv37[to_init] = uv37_init
 
     # Boundary element input check (sigeps37.F lines 208-232)
     if gamma * c_l < _EM30:
@@ -358,40 +448,41 @@ def solid_update(
         tol = _EM10
         niter = 20
 
+        vol = extra.get("volume", extra.get("vol", None))
+        if vol is None:
+            vol_arr = np.ones(nel, dtype=float)
+        elif np.isscalar(vol):
+            vol_arr = np.full(nel, float(vol), dtype=float)
+        else:
+            vol_arr = np.asarray(vol, dtype=float)
+
         for i in range(nel):
             rho_i = rho[i]
-            if alpha1 >= 1.0 - 1e-10:
-                b1 = rho_i
-                b2 = 0.0
-            elif alpha1 <= 1e-10:
-                b1 = 0.0
-                b2 = rho_i
-            else:
-                b1 = min(rho_i, max(0.0, (alpha1 * rho_l0) * (rho_i / rho0_ref)))
-                b2 = rho_i - b1
-            uv37[i, 0] = b1
+            vol_i = vol_arr[i]
+            mas = rho_i * vol_i
+            mas1 = uv37[i, 0] * vol_i
+            mas2 = mas - mas1
             rho2 = uv37[i, 1]
             rho1 = uv37[i, 2]
 
-            if b1 / rho_i < _EM10:
-                # Phase 2 (pure gas)
+            if mas1 / mas < _EM10:
+                # Phase 2 (pure gas, sigeps37.F lines 250-257)
                 uv37[i, 0] = 0.0
                 uv37[i, 3] = 0.0
                 uv37[i, 4] = 1.0
-                rho2 = rho_i
+                rho2 = mas / vol_i
                 uv37[i, 1] = rho2
                 p_eq = p0 * (rho2 / rho_g0) ** gamma
-            elif b2 / rho_i < _EM10:
-                # Phase 1 (pure liquid)
-                rho1 = rho_i
+            elif mas2 / mas < _EM10:
+                # Phase 1 (pure liquid, sigeps37.F lines 258-265)
+                rho1 = mas / vol_i
                 uv37[i, 0] = rho1
                 uv37[i, 2] = rho1
                 uv37[i, 3] = 1.0
                 uv37[i, 4] = 0.0
                 p_eq = r1 * rho1 - c_l + p0
             else:
-                # 2D Newton iteration for (rho1, rho2)
-                # Initial guess
+                # 2D Newton iteration for (rho1, rho2, sigeps37.F lines 267-291)
                 if rho1 <= 0.0:
                     rho1 = rho_l0
                 if rho2 <= 0.0:
@@ -402,10 +493,10 @@ def solid_update(
                 while it < niter and err > tol:
                     p1 = r1 * rho1 - c_l + p0
                     p2 = p0 * (rho2 / rho_g0) ** gamma
-                    f1 = b1 / rho1 + b2 / rho2 - 1.0
+                    f1 = mas1 / rho1 + mas2 / rho2 - vol_i
                     f2 = p1 - p2
-                    df11 = -b1 / (rho1 * rho1)
-                    df12 = -b2 / (rho2 * rho2)
+                    df11 = -mas1 / (rho1 * rho1)
+                    df12 = -mas2 / (rho2 * rho2)
                     df21 = r1
                     df22 = -gamma * p0 / (rho_g0 ** gamma) * (rho2 ** (gamma - 1.0))
                     det = df11 * df22 - df12 * df21
@@ -452,21 +543,13 @@ def solid_update(
         rho2_arr = uv37[:, 1].copy()
         rho2_arr = np.where(rho2_arr <= 0.0, rho_g0, rho2_arr)
 
-        # Iteration 1
+        # Iteration 1 (sigeps37.F lines 345-356)
         pold = p0 * (rho2_arr / rho_g0) ** gamma
         r2 = gamma * pold / rho2_arr
         c2 = -(1.0 - gamma) * pold + p0
         c12 = c_l - c2
-        if alpha1 >= 1.0 - 1e-10:
-            b1 = rho.copy()
-            b2 = np.zeros_like(rho)
-        elif alpha1 <= 1e-10:
-            b1 = np.zeros_like(rho)
-            b2 = rho.copy()
-        else:
-            b1 = np.clip((alpha1 * rho_l0) * (rho / rho0_ref), 0.0, rho)
-            b2 = rho - b1
-        uv37[:, 0] = b1
+        b1 = uv37[:, 0].copy()
+        b2 = rho - b1
         a = r1
         b = 0.5 * (b1 * r1 + b2 * r2 + c12)
         c_quad = b1 * c12
@@ -475,7 +558,7 @@ def solid_update(
         p_iter1 = r1 * rho1_arr - c_l
         rhn2 = np.maximum(_EM30, (p_iter1 + c2) / r2)
 
-        # Iteration 2
+        # Iteration 2 (sigeps37.F lines 358-363)
         pn2 = pold + p0 * (rhn2 / rho_g0) ** gamma
         r2 = gamma * pn2 / (rho2_arr + rhn2)
         b = 0.5 * (b1 * r1 + b2 * r2 + c12)
@@ -493,7 +576,7 @@ def solid_update(
         pressure = np.maximum(pmin, p_iter2) + p0 + pshift
         soundsp = np.sqrt(np.maximum(0.0, c_l / np.maximum(_EM30, rho1_arr)))
 
-    # Ensure non-negative state variables
+    # Ensure non-negative state variables (sigeps37.F lines 331-335 / 386-390)
     np.maximum(0.0, uv37, out=uv37)
 
     # Viscous stresses (sigeps37.F lines 319-328 / 374-383)
@@ -512,13 +595,16 @@ def solid_update(
     sig_v_yz = mu * deps_rate[:, 4]
     sig_v_zx = mu * deps_rate[:, 5]
 
-    # Total stress
+    # Total stress (sigeps37.F lines 316-318, 371-373 and mulaw.F90 SIGN + SIGV)
     sig[:, 0] = -pressure + sig_v_xx
     sig[:, 1] = -pressure + sig_v_yy
     sig[:, 2] = -pressure + sig_v_zz
     sig[:, 3] = sig_v_xy
     sig[:, 4] = sig_v_yz
     sig[:, 5] = sig_v_zx
+
+    if extra is not None:
+        extra["viscmax"] = 2.0 * mu + mu_vol
 
     return sig, epsp, soundsp
 
@@ -649,6 +735,9 @@ def consistent_solid_tangent(
         Algorithmic tangent matrix of shape (n, 6, 6).
     """
     if sig is not None:
+        sig = np.asarray(sig, dtype=float)
+        if sig.ndim == 1:
+            sig = sig.reshape(1, -1)
         nel = sig.shape[0]
     elif extra is not None and "rho" in extra:
         rho_val = np.asarray(extra["rho"])
@@ -704,6 +793,19 @@ def consistent_solid_tangent(
     safe_rho = np.maximum(_EM30, rho)
     mu = (b1 * rho1 * nu_l + b2 * rho2 * nu_g) / safe_rho
     mu_vol = (b1 * rho1 * nu_vol_l + b2 * rho2 * nu_vol_g) / safe_rho
+
+    if extra is not None and extra.get("mixture_sound_speed", False):
+        r1 = float(p.get("r1", 0.0))
+        if r1 <= 0.0 and rho_l0 > 0.0:
+            r1 = float(p.get("c_l", 2.2e9)) / rho_l0
+        gamma = float(p.get("gamma", 1.4))
+        p0 = float(p.get("p0", 1.01325e5))
+        ssp1 = np.where(r1 * rho1 > 0.0, r1 * rho1, _EM30)
+        ssp2 = np.where(gamma * p0 * (rho2 / rho_g0) ** gamma > 0.0, gamma * p0 * (rho2 / rho_g0) ** gamma, _EM30)
+        alpha_v1 = np.clip(b1 / np.maximum(_EM30, rho1), 0.0, 1.0)
+        alpha_v2 = 1.0 - alpha_v1
+        ssp_tot = np.where(alpha_v1 / ssp1 + alpha_v2 / ssp2 > 0.0, alpha_v1 / ssp1 + alpha_v2 / ssp2, _EM30)
+        c = np.sqrt(1.0 / (ssp_tot * safe_rho))
 
     kt = rho * (c ** 2)
     if dt > _EM20:

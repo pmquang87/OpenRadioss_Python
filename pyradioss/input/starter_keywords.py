@@ -37510,16 +37510,25 @@ def read_mat_law37(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         return
 
     first_raw = valid_cards[0].raw
-    lawname = block.action.upper() if hasattr(block, "action") and block.action else ""
-    is_biphas = lawname in ("BIPHAS", "BIPHASIC", "MAT_BIPHAS", "MAT_BIPHASIC", "LAW37_BIPHAS")
-    is_biquad = lawname in ("BIQUAD", "BANABIC", "MAT_BIQUAD", "MAT_BANABIC", "LAW37_BIQUAD")
+    if hasattr(block, "action") and block.action:
+        lawname = block.action.upper()
+    elif len(block.parts) > 1 and block.parts[0].upper() == "MAT":
+        lawname = block.parts[1].upper()
+    elif block.parts:
+        lawname = block.parts[0].upper()
+    else:
+        lawname = ""
+    if lawname.startswith("MAT_"):
+        lawname = lawname[4:]
+    is_biphas = lawname in ("BIPHAS", "BIPHASIC", "LAW37_BIPHAS", "LAW37")
+    is_biquad = lawname in ("BIQUAD", "BANABIC", "LAW37_BIQUAD")
 
     has_density_card = False
     if not is_biquad and not is_biphas:
         if len(valid_cards) >= 3:
             t0 = valid_cards[0].tokens()
             f1_test = [valid_cards[1].raw[i:i+20].strip() for i in range(0, min(len(valid_cards[1].raw), 100), 20)]
-            if len(t0) <= 2 and (len(valid_cards[1].tokens()) == 5 or len([x for x in f1_test if x]) == 5 or len(valid_cards[1].raw.strip()) >= 40):
+            if len(t0) <= 3 and (len(valid_cards[1].tokens()) == 5 or len([x for x in f1_test if x]) == 5 or len(valid_cards[1].raw.strip()) >= 40):
                 is_biphas = True
                 has_density_card = True
         elif len(valid_cards) >= 2:
@@ -37528,26 +37537,45 @@ def read_mat_law37(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 is_biphas = True
                 has_density_card = False
     elif is_biphas:
-        if len(valid_cards) >= 3 and len(valid_cards[0].tokens()) <= 2:
+        if len(valid_cards) >= 3 and len(valid_cards[0].tokens()) <= 3:
             has_density_card = True
         else:
             has_density_card = False
 
     if is_biphas:
         # Two-phase fluid format (BIPHAS / matl37_biphas.cfg)
+        isolver_val = 1
         if has_density_card:
-            if block.fixed:
+            card0_raw = valid_cards[0].raw
+            tokens0 = valid_cards[0].tokens()
+            if len(card0_raw) >= 60:
+                f_rho = [card0_raw[:20].strip(), card0_raw[20:40].strip(), card0_raw[40:60].strip()]
+            elif len(card0_raw) >= 40:
+                f_rho = [card0_raw[:20].strip(), card0_raw[20:40].strip()]
+            elif block.fixed:
                 f_rho = valid_cards[0].cut("MAT_LAW37_1")
             else:
-                f_rho = valid_cards[0].tokens()
-            rho_init = _safe_float(f_rho[0]) if len(f_rho) > 0 else 0.0
-            rhor_psh = _safe_float(f_rho[1]) if len(f_rho) > 1 else 0.0
+                f_rho = tokens0
+
+            rho_init = _safe_float(f_rho[0]) if len(f_rho) > 0 and f_rho[0] else 0.0
+            rhor_psh = _safe_float(f_rho[1]) if len(f_rho) > 1 and f_rho[1] else 0.0
+            if len(f_rho) > 2 and f_rho[2]:
+                try:
+                    isolver_val = int(float(f_rho[2]))
+                except ValueError:
+                    isolver_val = 1
+            elif len(tokens0) > 2:
+                try:
+                    isolver_val = int(float(tokens0[2]))
+                except ValueError:
+                    isolver_val = 1
 
             card_l = valid_cards[1]
             card_g = valid_cards[2]
         else:
             rho_init = 0.0
             rhor_psh = 0.0
+            isolver_val = 1
             card_l = valid_cards[0]
             card_g = valid_cards[1]
 
@@ -37597,7 +37625,8 @@ def read_mat_law37(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 "p0_g": p0, "p0": p0, "Lqud_P0": p0, "P0": p0,
                 "nu_g": nu_g, "Nu_g": nu_g, "NU_g": nu_g,
                 "nu_vol_g": nu_vol_g, "Bulk_Ratio_g": nu_vol_g, "Nu_vol_g": nu_vol_g, "NU_VOL_g": nu_vol_g,
-                "rho": rho0, "rho0": rho0, "rhor": rhor_psh, "pshift": rhor_psh,
+                "rho": rho0, "rho0": rho0, "rhor": rhor_psh, "pshift": rhor_psh, "psh": rhor_psh,
+                "isolver": isolver_val,
                 "E": c_l if c_l > 0 else 200e9, "nu": nu_l if 0.0 <= nu_l < 0.5 else 0.3,
             }
         )
@@ -82987,6 +83016,10 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_BANABIC": read_mat,
     "BIQUAD": read_mat,
     "BANABIC": read_mat,
+    "MAT_BIPHAS": read_mat,
+    "MAT_BIPHASIC": read_mat,
+    "BIPHAS": read_mat,
+    "BIPHASIC": read_mat,
     "PROP_TYPE45": read_prop,
     "PROP_KJOINT2": read_prop,
     "PROP_KINEMATIC_JOINT2": read_prop,
