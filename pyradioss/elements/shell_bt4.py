@@ -543,11 +543,18 @@ def _init_material_state(group, nip_max):
                     st["mat_extra"][name] = arr
                 else:
                     st["mat_extra"][name] = np.zeros((n,) + shape)
+    for sl, mat, prop in st["slices"]:
+        if (getattr(mat, "law", 1) in (73, "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL")
+                or getattr(mat, "law_name", None) in ("73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL", "MAT_LAW73", "MAT_BARLAT2000", "MAT_HILL_THERM", "MAT_THERM_HILL")):
+            if "uvar73" not in st:
+                st["uvar73"] = np.zeros((n, 7))
+            if "uvar73" not in st["mat_extra"]:
+                st["mat_extra"]["uvar73"] = np.zeros((n, nip_max, 7))
     if any(mat.fail is not None for _, mat, _ in st["slices"]):
         st["dama"] = np.zeros((n, nip_max))
     st["chk_fail"] = any(
-        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43, 48, 52, 57, 60, 69)
-        or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3")
+        mat.fail is not None or getattr(mat, "law", 1) in (15, 22, 25, 27, 43, 48, 52, 57, 60, 69, 73)
+        or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "73", "LAW73", "BARLAT2000", "HILL_THERM", "THERM_HILL")
         or mat.params.get("eps_p_max", EP30) < 1e30
         or mat.params.get("eps_max", EP30) < 1e30
         or mat.params.get("EPSMAX", EP30) < 1e30
@@ -561,6 +568,10 @@ def _layer_extra(st, sl, k, area=None):
     law-specific arrays plus the shared layer-failure flags."""
     extra = {name: arr[sl, k] for name, arr in st["mat_extra"].items()}
     extra["layfail"] = st["layfail"][sl, k]
+    if "uvar73" in st and "uvar73" not in extra:
+        extra["uvar73"] = st["uvar73"][sl]
+    if "uvar73" in extra and "uvar" not in extra:
+        extra["uvar"] = extra["uvar73"]
     if "time" in st:
         extra["time"] = st["time"]
     if "thick" in st:

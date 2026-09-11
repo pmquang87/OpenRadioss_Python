@@ -13307,33 +13307,355 @@ MatNitinol = MatLaw71
 
 @dataclass
 class MatLaw73:
-    """``/MAT/LAW73`` or ``/MAT/THERM_HILL``: Thermal Hill orthotropic material model."""
-    id: int = 0
-    rho0: float = 0.0
-    rhor: float = 0.0
-    e: float = 0.0
-    nu: float = 0.0
+    """``/MAT/LAW73`` (/MAT/BARLAT2000, /MAT/HILL_THERM, /MAT/THERM_HILL):
+    Thermal Hill Orthotropic Material Model for Shells (M561).
+
+    Upstream reference:
+      - ``starter/source/materials/mat/mat073/hm_read_mat73.F``
+      - ``engine/source/materials/mat/mat073/sigeps73c.F``
+      - ``hm_cfg_files/config/CFG/radioss140/MAT/matl73_73.cfg``
+    """
+    id: int
+    rho: float
+    e: float
+    nu: float
+    ifunce: int = 0
+    einf: float = 0.0
+    ce: float = 0.0
     r00: float = 1.0
     r45: float = 1.0
     r90: float = 1.0
     chard: float = 0.0
-    eps_max: float = 0.0
-    epst1: float = 0.0
-    epst2: float = 0.0
-    fun_a1: int = 0
+    iyield: int = 0
+    eps_max: float = 1e30
+    epsr1: float = 1e30
+    epsr2: float = 2e30
+    table_id: int = 0
     fscale: float = 1.0
     pscale: float = 1.0
-    t_initial: float = 0.0
-    spheat: float = 0.0
-    iyield: int = 0
-    yr_fun: int = 0
-    efib: float = 0.0
-    c: float = 0.0
+    t0: float = 293.0
+    rhocp: float = 0.0
     title: str = ""
+    law: int = 73
+    law_name: str = "LAW73"
+    refer_rho: float = 0.0
+
+    def __init__(
+        self,
+        id: int = 0,
+        rho: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        ifunce: int = 0,
+        einf: float = 0.0,
+        ce: float = 0.0,
+        r00: float = 1.0,
+        r45: float = 1.0,
+        r90: float = 1.0,
+        chard: float = 0.0,
+        iyield: int = 0,
+        eps_max: float = 1e30,
+        epsr1: float = 1e30,
+        epsr2: float = 2e30,
+        table_id: int = 0,
+        fscale: float = 1.0,
+        pscale: float = 1.0,
+        t0: float = 293.0,
+        rhocp: float = 0.0,
+        title: str = "",
+        law: int = 73,
+        law_name: str = "LAW73",
+        refer_rho: float = 0.0,
+        **kwargs: Any,
+    ):
+        self.id = id
+        self.rho = kwargs.get("rho0", rho)
+        self.refer_rho = kwargs.get("rhor", refer_rho)
+        self.e = kwargs.get("E", e)
+        self.nu = kwargs.get("Nu", nu)
+        self.ifunce = kwargs.get("yr_fun", ifunce)
+        self.einf = kwargs.get("efib", einf)
+        self.ce = kwargs.get("c", ce)
+        self.r00 = r00
+        self.r45 = r45
+        self.r90 = r90
+        self.chard = chard
+        self.iyield = iyield
+        self.eps_max = kwargs.get("epsp_max", eps_max)
+        self.epsr1 = kwargs.get("epst1", epsr1)
+        self.epsr2 = kwargs.get("epst2", epsr2)
+        self.table_id = kwargs.get("fun_a1", table_id)
+        self.fscale = fscale
+        self.pscale = pscale
+        self.t0 = kwargs.get("t_initial", t0)
+        self.rhocp = kwargs.get("spheat", rhocp)
+        self.title = title
+        self.law = law
+        self.law_name = law_name
+
+    # --- Property helpers & aliases ---
+    @property
+    def rho0(self) -> float:
+        return self.rho
+
+    @rho0.setter
+    def rho0(self, val: float) -> None:
+        self.rho = val
+
+    @property
+    def rhor(self) -> float:
+        return self.refer_rho if self.refer_rho != 0.0 else self.rho
+
+    @rhor.setter
+    def rhor(self, val: float) -> None:
+        self.refer_rho = val
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @E.setter
+    def E(self, val: float) -> None:
+        self.e = val
+
+    @property
+    def Nu(self) -> float:
+        return self.nu
+
+    @Nu.setter
+    def Nu(self, val: float) -> None:
+        self.nu = val
+
+    @property
+    def G(self) -> float:
+        """Elastic shear modulus: G = 0.5 * E / (1 + nu)."""
+        denom = 2.0 * (1.0 + self.nu)
+        return self.e / denom if denom != 0.0 else 0.0
+
+    @property
+    def g(self) -> float:
+        return self.G
+
+    def _calc_hill_coefficients(self) -> tuple[float, float, float, float]:
+        """Compute Lankford Hill parameters A01, A02, A03, A12 per hm_read_mat73.F."""
+        r0 = self.r00 if self.r00 != 0.0 else 1.0
+        r45 = self.r45 if self.r45 != 0.0 else 1.0
+        r90 = self.r90 if self.r90 != 0.0 else 1.0
+        r = (r0 + 2.0 * r45 + r90) * 0.25
+        h = r / (1.0 + r) if (1.0 + r) != 0.0 else 0.0
+        a01 = h * (1.0 + 1.0 / r0)
+        a02 = h * (1.0 + 1.0 / r90)
+        a03 = 2.0 * h
+        a12 = (2.0 * r45 + 1.0) * (a01 + a02 - a03)
+        if self.iyield > 0 and a01 != 0.0:
+            a02 = a02 / a01
+            a03 = a03 / a01
+            a12 = a12 / a01
+            a01 = 1.0
+        return a01, a02, a03, a12
+
+    @property
+    def A01(self) -> float:
+        return self._calc_hill_coefficients()[0]
+
+    @property
+    def A02(self) -> float:
+        return self._calc_hill_coefficients()[1]
+
+    @property
+    def A03(self) -> float:
+        return self._calc_hill_coefficients()[2]
+
+    @property
+    def A12(self) -> float:
+        return self._calc_hill_coefficients()[3]
+
+    @property
+    def a01(self) -> float:
+        return self.A01
+
+    @property
+    def a02(self) -> float:
+        return self.A02
+
+    @property
+    def a03(self) -> float:
+        return self.A03
+
+    @property
+    def a12(self) -> float:
+        return self.A12
+
+    @property
+    def sound_speed(self) -> CallableFloat:
+        """Acoustic sound speed: c = sqrt(E / rho0)."""
+        import math
+        c = math.sqrt(self.e / self.rho) if self.rho > 0.0 and self.e > 0.0 else 0.0
+        return CallableFloat(c)
+
+    @property
+    def sound_speed_shell(self) -> CallableFloat:
+        """Shell plane-stress sound speed: c = sqrt(E / (rho0 * (1 - nu^2)))."""
+        import math
+        denom = self.rho * (1.0 - self.nu**2)
+        c = math.sqrt(self.e / denom) if denom > 0.0 and self.e > 0.0 else 0.0
+        return CallableFloat(c)
+
+    # Legacy/CFG field aliases
+    @property
+    def fun_a1(self) -> int:
+        return self.table_id
+
+    @fun_a1.setter
+    def fun_a1(self, val: int) -> None:
+        self.table_id = val
+
+    @property
+    def yr_fun(self) -> int:
+        return self.ifunce
+
+    @yr_fun.setter
+    def yr_fun(self, val: int) -> None:
+        self.ifunce = val
+
+    @property
+    def efib(self) -> float:
+        return self.einf
+
+    @efib.setter
+    def efib(self, val: float) -> None:
+        self.einf = val
+
+    @property
+    def c(self) -> float:
+        return self.ce
+
+    @c.setter
+    def c(self, val: float) -> None:
+        self.ce = val
+
+    @property
+    def t_initial(self) -> float:
+        return self.t0
+
+    @t_initial.setter
+    def t_initial(self, val: float) -> None:
+        self.t0 = val
+
+    @property
+    def spheat(self) -> float:
+        return self.rhocp
+
+    @spheat.setter
+    def spheat(self, val: float) -> None:
+        self.rhocp = val
+
+    @property
+    def epst1(self) -> float:
+        return self.epsr1
+
+    @epst1.setter
+    def epst1(self, val: float) -> None:
+        self.epsr1 = val
+
+    @property
+    def epst2(self) -> float:
+        return self.epsr2
+
+    @epst2.setter
+    def epst2(self, val: float) -> None:
+        self.epsr2 = val
+
+    @property
+    def epsp_max(self) -> float:
+        return self.eps_max
+
+    @epsp_max.setter
+    def epsp_max(self, val: float) -> None:
+        self.eps_max = val
+
+    @property
+    def params(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "rho": self.rho,
+            "rho0": self.rho,
+            "refer_rho": self.refer_rho,
+            "rhor": self.rhor,
+            "e": self.e,
+            "E": self.e,
+            "nu": self.nu,
+            "ifunce": self.ifunce,
+            "yr_fun": self.ifunce,
+            "einf": self.einf,
+            "efib": self.einf,
+            "ce": self.ce,
+            "c": self.ce,
+            "r00": self.r00,
+            "r45": self.r45,
+            "r90": self.r90,
+            "chard": self.chard,
+            "iyield": self.iyield,
+            "eps_max": self.eps_max,
+            "epsp_max": self.eps_max,
+            "epsr1": self.epsr1,
+            "epst1": self.epsr1,
+            "epsr2": self.epsr2,
+            "epst2": self.epsr2,
+            "table_id": self.table_id,
+            "fun_a1": self.table_id,
+            "fscale": self.fscale,
+            "pscale": self.pscale,
+            "t0": self.t0,
+            "t_initial": self.t0,
+            "rhocp": self.rhocp,
+            "spheat": self.rhocp,
+            "title": self.title,
+            "law": self.law,
+            "law_name": self.law_name,
+        }
+
+    # Mapping protocol
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        p = self.params
+        if key in p:
+            return p[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            raise KeyError(f"Cannot set unknown attribute {key!r} on MatLaw73")
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or key in self.params
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self) -> list[str]:
+        import dataclasses
+        k = [f.name for f in dataclasses.fields(self)]
+        k.extend(["rho0", "rhor", "E", "nu", "Nu", "G", "A01", "A02", "A03", "A12", "sound_speed", "sound_speed_shell", "fun_a1", "yr_fun", "efib", "c", "t_initial", "spheat", "epst1", "epst2", "epsp_max"])
+        return list(dict.fromkeys(k))
+
+    def values(self) -> list[Any]:
+        return [self[k] for k in self.keys()]
+
+    def items(self) -> list[tuple[str, Any]]:
+        return [(k, self[k]) for k in self.keys()]
 
 
-MatThermHill = MatLaw73
 MatHillTherm = MatLaw73
+MatBarlat2000 = MatLaw73
+MatThermalHill = MatLaw73
+MatThermHill = MatLaw73
 
 
 @dataclass

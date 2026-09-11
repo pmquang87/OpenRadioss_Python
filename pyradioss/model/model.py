@@ -1262,9 +1262,10 @@ class Model:
         self.mat_law71s: Dict[int, MatLaw71] = {}                   # /MAT/LAW71, /MAT/SUPER_ELAS (M191)
         self.mat_super_elass = self.mat_law71s
         self.mat_nitinols = self.mat_law71s
-        self.mat_law73s: Dict[int, MatLaw73] = {}                   # /MAT/LAW73, /MAT/THERM_HILL (M191)
+        self.mat_law73s: Dict[int, MatLaw73] = {}                   # /MAT/LAW73, /MAT/BARLAT2000, /MAT/HILL_THERM (M191, M561)
         self.mat_therm_hills = self.mat_law73s
         self.mat_hill_therms = self.mat_law73s
+        self.mat_barlat2000s = self.mat_law73s
         self.mat_law84s: Dict[int, MatLaw84] = {}                   # /MAT/LAW84, /MAT/SWIFT_VOCE (M191)
         self.mat_swift_voces = self.mat_law84s
         self.mat_plas_swift_voces = self.mat_law84s
