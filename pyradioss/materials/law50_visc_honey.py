@@ -984,46 +984,51 @@ def solid_update(
 
 
 def sound_speed_solid(
-    mat: Material,
+    mat: Any,
     rho: float | np.ndarray | None = None,
     extra: dict | None = None,
     compacted: bool = False,
+    **kwargs: Any,
 ) -> float | np.ndarray:
     """Acoustic longitudinal wave speed for LAW50.
 
     Fortran origin: ``engine/source/materials/mat/mat050/sigeps50s.F90``:
         SOUNDSP = SQRT(MAX(E11,E22,E33,G12,G23,G31)/RHO)
     """
-    p = mat.params
-    ea = float(p.get("ea", p.get("MAT_EA", p.get("E11", 0.0))))
-    eb = float(p.get("eb", p.get("MAT_EB", p.get("E22", 0.0))))
-    ec = float(p.get("ec", p.get("MAT_EC", p.get("E33", 0.0))))
-    gab = float(p.get("gab", p.get("MAT_GAB", p.get("G12", 0.0))))
-    gbc = float(p.get("gbc", p.get("MAT_GBC", p.get("G23", 0.0))))
-    gca = float(p.get("gca", p.get("MAT_GCA", p.get("G31", 0.0))))
-    ecomp = float(p.get("ecomp", p.get("MAT_ECOMP", 0.0)))
-    gcomp = float(p.get("gcomp", 0.0))
+    p = getattr(mat, "params", mat)
+    rho0 = getattr(mat, "rho0", None)
+    if rho0 is None:
+        rho0 = p.get("rho0", p.get("rho", p.get("MAT_RHO", 1.0))) if isinstance(p, dict) else getattr(p, "rho0", 1.0)
+    rho_val = rho if rho is not None else rho0
+
+    ea = float(p.get("ea", p.get("MAT_EA", p.get("E11", 0.0))) if isinstance(p, dict) else getattr(p, "ea", 0.0))
+    eb = float(p.get("eb", p.get("MAT_EB", p.get("E22", 0.0))) if isinstance(p, dict) else getattr(p, "eb", 0.0))
+    ec = float(p.get("ec", p.get("MAT_EC", p.get("E33", 0.0))) if isinstance(p, dict) else getattr(p, "ec", 0.0))
+    gab = float(p.get("gab", p.get("MAT_GAB", p.get("G12", 0.0))) if isinstance(p, dict) else getattr(p, "gab", 0.0))
+    gbc = float(p.get("gbc", p.get("MAT_GBC", p.get("G23", 0.0))) if isinstance(p, dict) else getattr(p, "gbc", 0.0))
+    gca = float(p.get("gca", p.get("MAT_GCA", p.get("G31", 0.0))) if isinstance(p, dict) else getattr(p, "gca", 0.0))
+    ecomp = float(p.get("ecomp", p.get("MAT_ECOMP", 0.0)) if isinstance(p, dict) else getattr(p, "ecomp", 0.0))
+    gcomp = float(p.get("gcomp", 0.0) if isinstance(p, dict) else getattr(p, "gcomp", 0.0))
     if gcomp == 0.0 and ecomp > 0.0:
-        pr = float(p.get("pr", p.get("MAT_PR", p.get("nu", 0.0))))
+        pr = float(p.get("pr", p.get("MAT_PR", p.get("nu", 0.0))) if isinstance(p, dict) else getattr(p, "pr", 0.0))
         gcomp = ecomp / (1.0 + min(pr, 0.495))
 
-    if not compacted and extra is not None:
+    is_compact = compacted or bool(kwargs.get("compacted", False))
+    if not is_compact and extra is not None:
         comp_val = extra.get("compacted", False)
         if isinstance(comp_val, np.ndarray):
-            compacted = bool(np.any(comp_val))
+            is_compact = bool(np.any(comp_val))
         else:
-            compacted = bool(comp_val)
+            is_compact = bool(comp_val)
 
-    if compacted and ecomp > 0.0:
+    if is_compact and ecomp > 0.0:
         mod_max = max(ecomp, gcomp)
     else:
         mod_max = max(ea, eb, ec, gab, gbc, gca)
         if mod_max <= 0.0 and ecomp > 0.0:
             mod_max = max(ecomp, gcomp)
 
-    r0 = float(mat.rho0 if mat.rho0 > 0 else p.get("rho0", 1.0))
-    r = rho if rho is not None else r0
-
+    r = rho_val
     if isinstance(r, np.ndarray):
         return np.sqrt(np.maximum(mod_max, 0.0) / np.maximum(r, 1.0e-20))
     return math.sqrt(max(mod_max, 0.0) / max(float(r), 1.0e-20))
@@ -1147,6 +1152,9 @@ def consistent_solid_tangent(
         D[dead] = 0.0
 
     return D
+
+
+sound_speed = sound_speed_solid
 
 
 def shell_update(

@@ -33730,94 +33730,108 @@ def read_mat_law50(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 et = _fval(f5_comp[3]) if len(f5_comp) > 3 else 0.0
                 vcomp = _fval(f5_comp[4]) if len(f5_comp) > 4 else 0.0
     else:
-        toks1 = valid_cards[0].tokens()
+        def _card_tokens(c: Card) -> list[str]:
+            raw = getattr(c, "raw", str(c)).strip()
+            for ch in ("#", "$"):
+                if ch in raw:
+                    raw = raw.split(ch)[0].strip()
+            if not raw:
+                return []
+            if "," in raw:
+                parts = [p.strip() for p in raw.split(",")]
+                while parts and parts[-1] == "":
+                    parts.pop()
+                return parts
+            return raw.split()
+
+        toks1 = _card_tokens(valid_cards[0])
         rho = float(toks1[0]) if len(toks1) > 0 else 0.0
         refer_rho = float(toks1[1]) if len(toks1) > 1 else 0.0
 
         if len(valid_cards) > 1:
-            toks2 = valid_cards[1].tokens()
+            toks2 = _card_tokens(valid_cards[1])
             ea = float(toks2[0]) if len(toks2) > 0 else 0.0
             eb = float(toks2[1]) if len(toks2) > 1 else 0.0
             ec = float(toks2[2]) if len(toks2) > 2 else 0.0
 
         if len(valid_cards) > 2:
-            toks3 = valid_cards[2].tokens()
+            toks3 = _card_tokens(valid_cards[2])
             gab = float(toks3[0]) if len(toks3) > 0 else 0.0
             gbc = float(toks3[1]) if len(toks3) > 1 else 0.0
             gca = float(toks3[2]) if len(toks3) > 2 else 0.0
 
         if len(valid_cards) > 3:
-            toks4 = valid_cards[3].tokens()
+            toks4 = _card_tokens(valid_cards[3])
             asrate = float(toks4[0]) if len(toks4) > 0 else 0.0
             irate = int(float(toks4[1])) if len(toks4) > 1 else 2
             if irate == 0:
                 irate = 2
 
         if len(valid_cards) > 4:
-            toks5 = valid_cards[4].tokens()
+            toks5 = _card_tokens(valid_cards[4])
             gflag = int(float(toks5[0])) if len(toks5) > 0 else 0
             eps_max11 = float(toks5[1]) if len(toks5) > 1 else 0.0
             eps_max22 = float(toks5[2]) if len(toks5) > 2 else 0.0
             eps_max33 = float(toks5[3]) if len(toks5) > 3 else 0.0
 
         if len(valid_cards) > 5:
-            yfun11 = [int(float(x)) for x in valid_cards[5].tokens()]
+            yfun11 = [int(float(x)) for x in _card_tokens(valid_cards[5])]
         if len(valid_cards) > 6:
-            sfac11 = [float(x) for x in valid_cards[6].tokens()]
+            sfac11 = [float(x) for x in _card_tokens(valid_cards[6])]
         if len(valid_cards) > 7:
-            eps11 = [float(x) for x in valid_cards[7].tokens()]
+            eps11 = [float(x) for x in _card_tokens(valid_cards[7])]
 
         if len(valid_cards) > 8:
-            yfun22 = [int(float(x)) for x in valid_cards[8].tokens()]
+            yfun22 = [int(float(x)) for x in _card_tokens(valid_cards[8])]
         if len(valid_cards) > 9:
-            sfac22 = [float(x) for x in valid_cards[9].tokens()]
+            sfac22 = [float(x) for x in _card_tokens(valid_cards[9])]
         if len(valid_cards) > 10:
-            eps22 = [float(x) for x in valid_cards[10].tokens()]
+            eps22 = [float(x) for x in _card_tokens(valid_cards[10])]
 
         if len(valid_cards) > 11:
-            yfun33 = [int(float(x)) for x in valid_cards[11].tokens()]
+            yfun33 = [int(float(x)) for x in _card_tokens(valid_cards[11])]
         if len(valid_cards) > 12:
-            sfac33 = [float(x) for x in valid_cards[12].tokens()]
+            sfac33 = [float(x) for x in _card_tokens(valid_cards[12])]
         if len(valid_cards) > 13:
-            eps33 = [float(x) for x in valid_cards[13].tokens()]
+            eps33 = [float(x) for x in _card_tokens(valid_cards[13])]
 
         if len(valid_cards) > 14:
-            toks15 = valid_cards[14].tokens()
+            toks15 = _card_tokens(valid_cards[14])
             vflag = int(float(toks15[0])) if len(toks15) > 0 else 0
             eps_max12 = float(toks15[1]) if len(toks15) > 1 else 0.0
             eps_max23 = float(toks15[2]) if len(toks15) > 2 else 0.0
             eps_max31 = float(toks15[3]) if len(toks15) > 3 else 0.0
 
         if len(valid_cards) > 15:
-            yfun12 = [int(float(x)) for x in valid_cards[15].tokens()]
+            yfun12 = [int(float(x)) for x in _card_tokens(valid_cards[15])]
         if len(valid_cards) > 16:
-            sfac12 = [float(x) for x in valid_cards[16].tokens()]
+            sfac12 = [float(x) for x in _card_tokens(valid_cards[16])]
         if len(valid_cards) > 17:
-            eps12 = [float(x) for x in valid_cards[17].tokens()]
+            eps12 = [float(x) for x in _card_tokens(valid_cards[17])]
 
         if len(valid_cards) > 18:
-            yfun23 = [int(float(x)) for x in valid_cards[18].tokens()]
+            yfun23 = [int(float(x)) for x in _card_tokens(valid_cards[18])]
         if len(valid_cards) > 19:
-            sfac23 = [float(x) for x in valid_cards[19].tokens()]
+            sfac23 = [float(x) for x in _card_tokens(valid_cards[19])]
         if len(valid_cards) > 20:
-            eps23 = [float(x) for x in valid_cards[20].tokens()]
+            eps23 = [float(x) for x in _card_tokens(valid_cards[20])]
 
         if len(valid_cards) > 21:
-            yfun31 = [int(float(x)) for x in valid_cards[21].tokens()]
+            yfun31 = [int(float(x)) for x in _card_tokens(valid_cards[21])]
         if len(valid_cards) > 22:
-            sfac31 = [float(x) for x in valid_cards[22].tokens()]
+            sfac31 = [float(x) for x in _card_tokens(valid_cards[22])]
         if len(valid_cards) > 23:
-            eps31 = [float(x) for x in valid_cards[23].tokens()]
+            eps31 = [float(x) for x in _card_tokens(valid_cards[23])]
 
         if len(valid_cards) > 24:
-            toks25 = valid_cards[24].tokens()
+            toks25 = _card_tokens(valid_cards[24])
             ecomp = float(toks25[0]) if len(toks25) > 0 else 0.0
             pr = float(toks25[1]) if len(toks25) > 1 else 0.0
             sigy = float(toks25[2]) if len(toks25) > 2 else 0.0
             et = float(toks25[3]) if len(toks25) > 3 else 0.0
             vcomp = float(toks25[4]) if len(toks25) > 4 else 0.0
         elif len(valid_cards) == 5:
-            toks5_comp = valid_cards[4].tokens()
+            toks5_comp = _card_tokens(valid_cards[4])
             if len(toks5_comp) >= 5:
                 ecomp = float(toks5_comp[0]) if len(toks5_comp) > 0 else 0.0
                 pr = float(toks5_comp[1]) if len(toks5_comp) > 1 else 0.0

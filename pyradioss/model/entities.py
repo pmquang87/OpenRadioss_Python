@@ -8384,6 +8384,10 @@ class MatLaw50:
         return self.rho
 
     @property
+    def rhor(self) -> float:
+        return self.refer_rho
+
+    @property
     def e11(self) -> float:
         return self.ea
 
@@ -8452,18 +8456,13 @@ class MatLaw50:
         import math
         rho_val = self.rho if self.rho > 0.0 else self.refer_rho
         if rho_val > 0.0:
-            c = math.sqrt(max(self.ea, self.eb, self.ec) / rho_val)
+            c = math.sqrt(max(self.ea, self.eb, self.ec, self.gab, self.gbc, self.gca) / rho_val)
             return CallableFloat(c)
         return CallableFloat(0.0)
 
     @property
     def sound_speed_solid(self) -> CallableFloat:
-        import math
-        rho_val = self.rho if self.rho > 0.0 else self.refer_rho
-        if rho_val > 0.0:
-            c = math.sqrt(max((4.0 * max(self.gab, self.gbc, self.gca) / 3.0 + max(self.ea, self.eb, self.ec) / 3.0) / rho_val, 0.0))
-            return CallableFloat(c)
-        return CallableFloat(0.0)
+        return self.sound_speed
 
     @property
     def law(self) -> int:
