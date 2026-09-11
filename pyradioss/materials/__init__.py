@@ -58,11 +58,27 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                law28_honeycomb, law33_foamplas, law34_boltzmann, law35_kelvinmax, law36_tabulated,
                law37_biphas,
                law40_kelvinmax, law42_ogden, law44_cowper,
+               law48_zhao,
                law60_plast3,
                law62_hypervisco, law69_hyperelastic, law70_tabfoam, law81_druckerprager,
                law82_ogden,
                law83_spotweld, law114_seatbelt, law120_advanced,
                mat_gas, mat_void)
+from .law48_zhao import (
+    Law48Params,
+    build_law48,
+    solid_update_law48,
+    shell_update_law48,
+    sound_speed_solid_law48,
+    sound_speed_shell_law48,
+    tangent_law48_solid,
+    tangent_law48_shell,
+    solid_update as law48_solid_update,
+    shell_update as law48_shell_update,
+    sound_speed as law48_sound_speed,
+    consistent_solid_tangent as law48_solid_tangent,
+    consistent_shell_tangent as law48_shell_tangent,
+)
 from .law60_plast3 import (
     Law60Params,
     build_law60,
@@ -569,6 +585,29 @@ def _register_law60():
 _register_law60()
 
 
+def _register_law48():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law48_zhao, "build_law48", None)
+        if builder is None:
+            def _dynamic_law48_builder(rec):
+                from ..model.entities import Material
+                params = dict(rec.params) if hasattr(rec, "params") else {}
+                density = getattr(rec, "density", 0.0)
+                mid = getattr(rec, "id", 0)
+                title = getattr(rec, "title", "")
+                return Material(id=mid, law=48, rho0=density, title=title, law_name="LAW48", params=params)
+            builder = _dynamic_law48_builder
+        for k in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO",
+                  "MAT_LAW48", "MAT_ZHAO", "PLAS_ZHAO", "LAW48_ZHAO"):
+            MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law48()
+
+
 def _register_law25():
     _get_law25()
     try:
@@ -679,6 +718,14 @@ _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
 }
 
 LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
+    48: {"plane_stress": True, "solid": True, "shell": True},
+    "48": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW48": {"plane_stress": True, "solid": True, "shell": True},
+    "ZHAO": {"plane_stress": True, "solid": True, "shell": True},
+    "PLAS_ZHAO": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_LAW48": {"plane_stress": True, "solid": True, "shell": True},
+    "MAT_ZHAO": {"plane_stress": True, "solid": True, "shell": True},
+    "LAW48_ZHAO": {"plane_stress": True, "solid": True, "shell": True},
     60: {"plane_stress": True, "solid": True, "shell": True},
     "60": {"plane_stress": True, "solid": True, "shell": True},
     "LAW60": {"plane_stress": True, "solid": True, "shell": True},
@@ -687,6 +734,18 @@ LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
     "MAT_PLAS_T3": {"plane_stress": True, "solid": True, "shell": True},
     "FABRIC": {"plane_stress": True, "solid": True, "shell": True},
     "MAT_FABRIC": {"plane_stress": True, "solid": True, "shell": True},
+}
+
+MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
+    48: solid_update_law48, "48": solid_update_law48, "LAW48": solid_update_law48,
+    "ZHAO": solid_update_law48, "MAT_LAW48": solid_update_law48, "MAT_ZHAO": solid_update_law48,
+    "PLAS_ZHAO": solid_update_law48, "LAW48_ZHAO": solid_update_law48,
+}
+
+MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
+    48: shell_update_law48, "48": shell_update_law48, "LAW48": shell_update_law48,
+    "ZHAO": shell_update_law48, "MAT_LAW48": shell_update_law48, "MAT_ZHAO": shell_update_law48,
+    "PLAS_ZHAO": shell_update_law48, "LAW48_ZHAO": shell_update_law48,
 }
 
 
@@ -772,6 +831,7 @@ def register_materials():
         if callable(fn):
             fn()
     _register_law60()
+    _register_law48()
 
 
 def extra_shapes(mat, nip=None):
@@ -898,6 +958,13 @@ def extra_shapes(mat, nip=None):
             uvar_dim = (5 + nfunc,)
             shapes.update(uvar=(nip, *uvar_dim) if nip else uvar_dim,
                           off60=(nip,) if nip else ())
+    if getattr(mat, "law", None) in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO") or getattr(mat, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO"):
+        shapes.update(
+            eps48=(nip, 3) if nip else (6,),
+            sigb48=(nip, 3) if nip else (6,),
+            epsd48=(nip,) if nip else (),
+            off48=(nip,) if nip else (),
+        )
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
         shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
     return shapes
@@ -923,9 +990,9 @@ def needs_env(mat) -> bool:
     M540: LAW37 biphasic liquid-gas density; M541: LAW38 density and time;
     LAW25: composite density; LAW15: Chang-Chang composite density;
     M548: LAW43 Hill tabulated density and sound speed; M549: LAW82 Ogden;
-    M550: LAW69 hyperelastic)."""
-    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB", 44, 60, "60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", 62, 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", 70, 81, 82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN")
-            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "LAW22", "DAMA", "PLAS_DAMA", "MAT_LAW22", "MAT_DAMA", "MAT_PLAS_DAMA", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB", "LAW60", "PLAS_T3", "FABRIC", "MAT_LAW60", "MAT_PLAS_T3", "MAT_FABRIC", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN"))
+    M550: LAW69 hyperelastic; M552: LAW48 Zhao dynamic plasticity)."""
+    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", 60, "60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", 62, 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", 70, 81, 82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN")
+            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "LAW22", "DAMA", "PLAS_DAMA", "MAT_LAW22", "MAT_DAMA", "MAT_PLAS_DAMA", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB", "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", "LAW60", "PLAS_T3", "FABRIC", "MAT_LAW60", "MAT_PLAS_T3", "MAT_FABRIC", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN"))
 
 
 def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
@@ -986,6 +1053,8 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         return sig, epsp, c
     if mat.law == 44:
         return law44_cowper.solid_update(mat, sig, deps, epsp, dt, extra)
+    if getattr(mat, "law", None) in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO") or getattr(mat, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO"):
+        return law48_zhao.solid_update_law48(mat, sig, deps, epsp, dt, extra)
     if mat.law == 33:
         return law33_foamplas.solid_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 28 or getattr(mat, "law_name", None) in ("LAW28", "HONEYCOMB", "HONEYCOMB_SOL"):
@@ -1200,6 +1269,8 @@ def sound_speed(mat, rho=None, extra=None):
         return law69_sound_speed(mat, rho=rho, extra=extra)
     if law in (82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN") or law_name in ("82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN"):
         return law82_sound_speed(mat, rho=rho, extra=extra)
+    if law in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO") or law_name in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO"):
+        return law48_zhao.sound_speed_solid_law48(mat, rho0=rho)
     if hasattr(mat, "sound_speed_solid"):
         return mat.sound_speed_solid()
     raise NotImplementedError(f"material LAW{law} does not implement sound_speed")
@@ -1288,6 +1359,8 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         return mat_void.shell_update(mat, sig, deps), epsp
     if mat.law == 44:
         return law44_cowper.shell_update(mat, sig, deps, epsp, dt, extra)
+    if getattr(mat, "law", None) in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO") or getattr(mat, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO"):
+        return law48_zhao.shell_update_law48(mat, sig, deps, epsp, dt, extra)
     if mat.law == 35:
         return law35_kelvinmax.shell_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 40:
@@ -1365,6 +1438,8 @@ def solid_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
     if mat.law == 44:
         return law44_cowper.consistent_solid_tangent(
             mat, sig, epsp, epsp_incr, extra)
+    if getattr(mat, "law", None) in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO") or getattr(mat, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO"):
+        return law48_zhao.tangent_law48_solid(mat, sig, epsp, epsp_incr, extra=extra)
     if getattr(mat, "law", None) in (60, "60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC") or getattr(mat, "law_name", None) in ("60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC"):
         _get_law60()
         return law60_solid_tangent(
@@ -1523,6 +1598,8 @@ def shell_membrane_tangent(mat):
             [nu * c, c, 0.0],
             [0.0, 0.0, g],
         ])
+    if getattr(mat, "law", None) in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO") or getattr(mat, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO"):
+        return law48_zhao.shell_membrane_tangent(mat)
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit shell tangent (LAW1 elastic, "
         f"LAW3 plas_bost, LAW19 fabric, LAW34 Boltzmann, LAW32 Hill and LAW2/44 elastoplastic are ported; see PORTING_GUIDE)")
@@ -1589,6 +1666,9 @@ def shell_layer_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
     if mat.law == 44:
         return law44_cowper.consistent_shell_tangent(
             mat, sig, epsp, epsp_incr, extra)
+    if getattr(mat, "law", None) in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO") or getattr(mat, "law_name", None) in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO"):
+        return law48_zhao.tangent_law48_shell(
+            mat, sig, epsp, epsp_incr, extra=extra)
     if mat.law == 34 or getattr(mat, "law_name", None) in ("LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN"):
         return law34_boltzmann.consistent_shell_tangent(
             mat, sig, epsp, epsp_incr, extra)
