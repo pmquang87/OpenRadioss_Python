@@ -86,7 +86,9 @@ LAW_MAP: Dict[str, int] = {
     "LAW62": 62,
     "FOAM_TAB": 66,
     "LAW66": 66,
-    "OGDEN": 88,
+    "LAW82": 82,
+    "OGDEN": 82,
+    "LAW82_OGDEN": 82,
     "HYPER_ELAS": 88,
     "LAW88": 88,
     "ARRUDA_BOYCE": 92,
@@ -135,6 +137,9 @@ LAW_SYNONYMS: Dict[str, str] = {
     "LAW43": "LAW43",
     "HILL_TAB": "LAW43",
     "LAW43_HILL_TAB": "LAW43",
+    "LAW82": "LAW82",
+    "OGDEN": "LAW82",
+    "LAW82_OGDEN": "LAW82",
 }
 
 KEYWORD_NAME_MAP = LAW_MAP

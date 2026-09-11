@@ -221,9 +221,9 @@ def build_law82(
 
 
 def solid_update(
-    mat: OgdenParams,
+    mat: Any,
     sig: np.ndarray,
-    deps: np.ndarray | None,
+    deps: np.ndarray | None = None,
     eps: np.ndarray | None = None,
     dt: float = 0.0,
     extra: dict | None = None,
@@ -231,11 +231,15 @@ def solid_update(
     *,
     epsp: np.ndarray | None = None,
     **kwargs: Any,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """3D solid continuum Ogden hyperelastic stress update.
 
+    Returns (sig, epsp, c).
     Fortran reference: engine/source/materials/mat/mat082/sigeps82.F
     """
+    if not isinstance(mat, OgdenParams):
+        mat = build_law82(mat)
+
     is_1d = (sig.ndim == 1)
     if is_1d:
         sig = sig.reshape(1, -1)
@@ -350,14 +354,24 @@ def solid_update(
         epsp_new = np.zeros(n, dtype=np.float64)
 
     if is_1d:
-        return sig_new[0], (epsp_new[0] if epsp_new.ndim > 0 else 0.0)
+        epsp_scalar = epsp_new.item(0) if hasattr(epsp_new, "item") else (epsp_new[0] if hasattr(epsp_new, "__len__") else float(epsp_new))
+
+    if kwargs.get("return_sound_speed", False):
+        rho_val = extra.get("rho", mat.rho0 / rv) if extra is not None else (mat.rho0 / rv)
+        c = solid_sound_speed(mat, rho=rho_val, eps=eps_arr, ismstr=ismstr)
+        if is_1d:
+            return sig_new[0], epsp_scalar, float(c if np.isscalar(c) else c[0])
+        return sig_new, epsp_new, c
+
+    if is_1d:
+        return sig_new[0], epsp_scalar
     return sig_new, epsp_new
 
 
 def shell_update(
-    mat: OgdenParams,
+    mat: Any,
     sig: np.ndarray,
-    deps: np.ndarray | None,
+    deps: np.ndarray | None = None,
     eps: np.ndarray | None = None,
     dt: float = 0.0,
     extra: dict | None = None,
@@ -368,8 +382,12 @@ def shell_update(
 ) -> tuple[np.ndarray, np.ndarray]:
     """2D shell / membrane plane-stress Ogden hyperelastic update.
 
+    Returns (sig_new, epsp_new).
     Fortran reference: engine/source/materials/mat/mat082/sigeps82c.F
     """
+    if not isinstance(mat, OgdenParams):
+        mat = build_law82(mat)
+
     is_1d = (sig.ndim == 1)
     if is_1d:
         sig = sig.reshape(1, -1)
@@ -417,9 +435,16 @@ def shell_update(
         lam1 = np.exp(evv1)
         lam2 = np.exp(evv2)
 
-    # Initial out-of-plane stretch lambda_3 from extra["uvar"][:, 0] or 1.0
-    if extra is not None and "uvar" in extra and extra["uvar"] is not None:
-        lam3 = np.asarray(extra["uvar"][:, 0], dtype=np.float64).copy()
+    # Initial out-of-plane stretch lambda_3 from extra["uvar82"] or extra["uvar"] or 1.0
+    uvar_key = "uvar82" if (extra and "uvar82" in extra) else "uvar"
+    if extra is not None and uvar_key in extra and extra[uvar_key] is not None:
+        uvar_arr = np.asarray(extra[uvar_key], dtype=np.float64)
+        if uvar_arr.ndim == 2:
+            lam3 = uvar_arr[:, 0].copy()
+        elif uvar_arr.ndim == 1:
+            lam3 = uvar_arr.copy()
+        else:
+            lam3 = np.ones(n, dtype=np.float64)
     else:
         lam3 = np.ones(n, dtype=np.float64)
 
@@ -466,11 +491,14 @@ def shell_update(
         denom = np.where(np.abs(dpartt) > _EM20, dpartt, 1.0)
         ev[:, 2] = np.maximum(ev[:, 2] * (1.0 - t3 / denom), 1e-12)
 
-    # Store lambda_3 in extra["uvar"][:, 0]: sigeps82c.F:285-287
+    # Store lambda_3 in extra[uvar_key]: sigeps82c.F:285-287
     if extra is not None:
-        if "uvar" not in extra or extra["uvar"] is None or extra["uvar"].shape[0] != n:
-            extra["uvar"] = np.ones((n, 1), dtype=np.float64)
-        extra["uvar"][:, 0] = ev[:, 2]
+        if uvar_key not in extra or extra[uvar_key] is None:
+            extra[uvar_key] = np.ones((n, 1), dtype=np.float64)
+        if extra[uvar_key].ndim == 2:
+            extra[uvar_key][:, 0] = ev[:, 2]
+        else:
+            extra[uvar_key][:] = ev[:, 2]
 
     # 4. Recalculate principal stresses T1, T2: sigeps82c.F:228-283
     rv = np.maximum(ev[:, 0] * ev[:, 1] * ev[:, 2], _EM20)
@@ -550,8 +578,8 @@ def shell_update(
 
 
 def solid_sound_speed(
-    mat: OgdenParams,
-    rho: np.ndarray | float,
+    mat: Any,
+    rho: np.ndarray | float | None = None,
     eps: np.ndarray | None = None,
     ismstr: int = 0,
     **kwargs: Any,
@@ -560,6 +588,9 @@ def solid_sound_speed(
 
     Fortran reference: engine/source/materials/mat/mat082/sigeps82.F:273-335
     """
+    if not isinstance(mat, OgdenParams):
+        mat = build_law82(mat)
+
     if rho is None:
         rho = getattr(mat, "rho0", 1.0)
 
@@ -571,7 +602,7 @@ def solid_sound_speed(
     rbulk = mat.rbulk
 
     if eps is None:
-        return np.sqrt(((4.0 / 3.0) * gmax + rbulk) / rho)
+        return float(np.sqrt(((4.0 / 3.0) * gmax + rbulk) / max(float(rho) if np.isscalar(rho) else 1.0, _EM20))) if np.isscalar(rho) else np.sqrt(((4.0 / 3.0) * gmax + rbulk) / np.maximum(rho, _EM20))
 
     is_scalar_rho = np.isscalar(rho)
     eps_arr = np.asarray(eps, dtype=np.float64)
@@ -628,14 +659,14 @@ def solid_sound_speed(
     rkmax = np.maximum(rbulk, rkmax)
 
     rho_arr = np.asarray(rho, dtype=np.float64)
-    c = np.sqrt(((4.0 / 3.0) * gtmax + rkmax) / rho_arr)
+    c = np.sqrt(((4.0 / 3.0) * gtmax + rkmax) / np.maximum(rho_arr, _EM20))
     if is_scalar_rho and is_1d:
         return float(c[0])
     return c
 
 
 def shell_sound_speed(
-    mat: OgdenParams,
+    mat: Any,
     rho: np.ndarray | float | None = None,
     **kwargs: Any,
 ) -> np.ndarray | float:
@@ -643,14 +674,18 @@ def shell_sound_speed(
 
     Fortran reference: engine/source/materials/mat/mat082/sigeps82c.F:303
     """
+    if not isinstance(mat, OgdenParams):
+        mat = build_law82(mat)
     if rho is None:
         rho = getattr(mat, "rho0", 1.0)
     modulus = (2.0 / 3.0) * mat.g0 + mat.rbulk
-    return np.sqrt(modulus / rho)
+    if np.isscalar(rho):
+        return float(np.sqrt(modulus / max(float(rho), _EM20)))
+    return np.sqrt(modulus / np.maximum(np.asarray(rho, dtype=np.float64), _EM20))
 
 
 def consistent_solid_tangent(
-    mat: OgdenParams,
+    mat: Any,
     eps: np.ndarray,
     deps: np.ndarray | None = None,
     dt: float = 1e-6,
@@ -661,6 +696,9 @@ def consistent_solid_tangent(
 
     Returns algorithmic tangent tensor with shape (n, 6, 6).
     """
+    if not isinstance(mat, OgdenParams):
+        mat = build_law82(mat)
+
     if eps.ndim == 3 and eps.shape[1:] == (3, 3):
         # Passed deformation gradient F (m, 3, 3)
         F = eps
@@ -692,8 +730,8 @@ def consistent_solid_tangent(
         eps_m = eps_arr.copy()
         eps_m[:, j] -= h
 
-        sp, _ = solid_update(mat, dummy_sig, dummy_deps, eps_p, dt)
-        sm, _ = solid_update(mat, dummy_sig, dummy_deps, eps_m, dt)
+        sp, *_ = solid_update(mat, dummy_sig, dummy_deps, eps_p, dt)
+        sm, *_ = solid_update(mat, dummy_sig, dummy_deps, eps_m, dt)
 
         C[:, :, j] = (sp - sm) / (2.0 * h)
 
@@ -701,7 +739,7 @@ def consistent_solid_tangent(
 
 
 def consistent_shell_tangent(
-    mat: OgdenParams,
+    mat: Any,
     eps: np.ndarray,
     deps: np.ndarray | None = None,
     dt: float = 1e-6,
@@ -712,6 +750,9 @@ def consistent_shell_tangent(
 
     Returns in-plane condensed tangent tensor with shape (n, 3, 3).
     """
+    if not isinstance(mat, OgdenParams):
+        mat = build_law82(mat)
+
     eps_arr = np.asarray(eps, dtype=np.float64)
     if eps_arr.ndim == 1:
         eps_arr = eps_arr.reshape(1, -1)
@@ -746,7 +787,13 @@ law82_solid_sound_speed = solid_sound_speed
 law82_shell_sound_speed = shell_sound_speed
 law82_consistent_solid_tangent = consistent_solid_tangent
 law82_consistent_shell_tangent = consistent_shell_tangent
-extra_shapes = lambda mat, nip=None: {"uvar": (1,)}
+
+
+def extra_shapes(mat: Any = None, nip: int | None = None) -> dict[str, tuple[int, ...]]:
+    """Extra state variable allocations for LAW82 elements."""
+    if nip is not None and nip > 0:
+        return {"uvar82": (nip, 1)}
+    return {"uvar82": (1,)}
 
 
 def _register() -> None:

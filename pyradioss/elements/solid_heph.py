@@ -360,7 +360,7 @@ def _init_material_state(group, dndx0):
     for sl, mat, prop in st["slices"]:
         for name, shape in materials.extra_shapes(mat).items():
             if name not in st["mat_extra"]:
-                if name.startswith("off"):
+                if name.startswith("off") or name.startswith("uvar82"):
                     st["mat_extra"][name] = np.ones((n,) + shape)
                 else:
                     st["mat_extra"][name] = np.zeros((n,) + shape)

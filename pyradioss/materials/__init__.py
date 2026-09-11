@@ -943,7 +943,27 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
             return sig, epsp_out, c
         raise NotImplementedError("LAW43 solid_update not available")
     if getattr(mat, "law", None) in (82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN") or getattr(mat, "law_name", None) in ("82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN"):
-        return law82_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        res = law82_solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
+        if isinstance(res, tuple):
+            if len(res) == 3:
+                sign, epsp_out, c = res
+            elif len(res) == 2:
+                sign, epsp_out = res
+                try:
+                    c = law82_sound_speed(mat, rho=extra.get("rho") if extra else None, extra=extra)
+                except Exception:
+                    c = None
+            else:
+                sign, epsp_out, c = res[0], epsp, None
+        else:
+            sign, epsp_out, c = res, epsp, None
+        sig[:] = sign
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
     raise NotImplementedError(f"material LAW{mat.law} not ported for solids")
 
 

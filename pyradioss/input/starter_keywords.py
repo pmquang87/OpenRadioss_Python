@@ -1204,6 +1204,18 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW82", "MAT_LAW82", "LAW82_OGDEN", "OGDEN_82", "MAT_OGDEN_82"):
         read_mat_law82(block, model, log)
         return
+    if lawname in ("OGDEN", "MAT_OGDEN"):
+        valid_c = [c for c in block.cards if not c.is_blank and not c.raw.strip().startswith("#")]
+        is_law82 = False
+        if len(valid_c) >= 5:
+            is_law82 = True
+        elif len(valid_c) >= 2:
+            first_tok = valid_c[1].tokens()[0] if not block.fixed else valid_c[1].raw[:10].strip()
+            if first_tok.isdigit() and 1 <= int(first_tok) <= 10:
+                is_law82 = True
+        if is_law82:
+            read_mat_law82(block, model, log)
+            return
     # M194: LAW40 (CONCR_SUB), LAW102 (HILL_48), NLOCAL
     if lawname in ("LAW40", "CONCR_SUB", "MAT_CONCR_SUB", "LAW40_CONCR_SUB"):
         read_mat_law40(block, model, log)
@@ -46649,7 +46661,7 @@ def read_mat_law74(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law82(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW82`` or ``/MAT/OGDEN`` (M193): Ogden hyperelastic material model."""
+    """``/MAT/LAW82`` or ``/MAT/OGDEN``: Ogden hyperelastic material model."""
     from ..model.entities import MatLaw82, Material
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
@@ -46657,7 +46669,9 @@ def read_mat_law82(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     rho, refer_rho = 0.0, 0.0
     order = 0
     nu = 0.475
-    mu_arr, alpha_arr, gamma_arr = [], [], []
+    mu_arr: list[float] = []
+    alpha_arr: list[float] = []
+    gamma_arr: list[float] = []
 
     if block.fixed:
         if len(valid_cards) > 0:
@@ -46668,40 +46682,62 @@ def read_mat_law82(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             c1 = valid_cards[1].cut("MAT_LAW82_2")
             order = _safe_int(c1[0]) if len(c1) > 0 else 0
             nu = _safe_float(c1[2], 0.475) if len(c1) > 2 and c1[2].strip() else 0.475
-        card_idx = 2
-        # Mu list
-        remaining = order
-        while remaining > 0 and card_idx < len(valid_cards):
-            c = valid_cards[card_idx]
-            n_in_card = min(5, remaining)
-            cuts = [c.raw[i*20:(i+1)*20].strip() for i in range(n_in_card)]
-            for val in cuts:
-                if val:
-                    mu_arr.append(_safe_float(val))
-            remaining -= n_in_card
-            card_idx += 1
-        # Alpha list
-        remaining = order
-        while remaining > 0 and card_idx < len(valid_cards):
-            c = valid_cards[card_idx]
-            n_in_card = min(5, remaining)
-            cuts = [c.raw[i*20:(i+1)*20].strip() for i in range(n_in_card)]
-            for val in cuts:
-                if val:
-                    alpha_arr.append(_safe_float(val))
-            remaining -= n_in_card
-            card_idx += 1
-        # Gamma (D_i) list
-        remaining = order
-        while remaining > 0 and card_idx < len(valid_cards):
-            c = valid_cards[card_idx]
-            n_in_card = min(5, remaining)
-            cuts = [c.raw[i*20:(i+1)*20].strip() for i in range(n_in_card)]
-            for val in cuts:
-                if val:
-                    gamma_arr.append(_safe_float(val))
-            remaining -= n_in_card
-            card_idx += 1
+
+        data_cards = valid_cards[2:]
+        is_per_term = False
+        raw_comments = [c.raw.upper() for c in block.cards if c.raw.strip().startswith("#")]
+        has_array_comments = any("ALPHA" in c or "MU" in c or "GAMMA" in c or "D_I" in c for c in raw_comments)
+        if not has_array_comments and order == 1 and len(data_cards) == 1:
+            first_cuts = [data_cards[0].raw[i*20:(i+1)*20].strip() for i in range(3)]
+            non_empty = [x for x in first_cuts if x]
+            if len(non_empty) >= 2:
+                is_per_term = True
+
+        if is_per_term:
+            for idx in range(min(order, len(data_cards))):
+                c = data_cards[idx]
+                cuts = [c.raw[i*20:(i+1)*20].strip() for i in range(3)]
+                mu_i = _safe_float(cuts[0]) if len(cuts) > 0 and cuts[0] else 0.0
+                al_i = _safe_float(cuts[1]) if len(cuts) > 1 and cuts[1] else 0.0
+                d_i = _safe_float(cuts[2]) if len(cuts) > 2 and cuts[2] else 0.0
+                mu_arr.append(mu_i)
+                alpha_arr.append(al_i)
+                gamma_arr.append(d_i)
+        else:
+            card_idx = 2
+            # Mu list
+            remaining = order
+            while remaining > 0 and card_idx < len(valid_cards):
+                c = valid_cards[card_idx]
+                n_in_card = min(5, remaining)
+                cuts = [c.raw[i*20:(i+1)*20].strip() for i in range(n_in_card)]
+                for val in cuts:
+                    if val:
+                        mu_arr.append(_safe_float(val))
+                remaining -= n_in_card
+                card_idx += 1
+            # Alpha list
+            remaining = order
+            while remaining > 0 and card_idx < len(valid_cards):
+                c = valid_cards[card_idx]
+                n_in_card = min(5, remaining)
+                cuts = [c.raw[i*20:(i+1)*20].strip() for i in range(n_in_card)]
+                for val in cuts:
+                    if val:
+                        alpha_arr.append(_safe_float(val))
+                remaining -= n_in_card
+                card_idx += 1
+            # Gamma (D_i) list
+            remaining = order
+            while remaining > 0 and card_idx < len(valid_cards):
+                c = valid_cards[card_idx]
+                n_in_card = min(5, remaining)
+                cuts = [c.raw[i*20:(i+1)*20].strip() for i in range(n_in_card)]
+                for val in cuts:
+                    if val:
+                        gamma_arr.append(_safe_float(val))
+                remaining -= n_in_card
+                card_idx += 1
     else:
         if len(valid_cards) > 0:
             t0 = valid_cards[0].tokens()
@@ -46711,42 +46747,89 @@ def read_mat_law82(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             t1 = valid_cards[1].tokens()
             order = _safe_int(t1[0]) if len(t1) > 0 else 0
             nu = _safe_float(t1[1], 0.475) if len(t1) > 1 else 0.475
-        card_idx = 2
-        # Mu list
-        while len(mu_arr) < order and card_idx < len(valid_cards):
-            toks = valid_cards[card_idx].tokens()
-            for t in toks:
-                if len(mu_arr) < order:
-                    mu_arr.append(_safe_float(t))
-            card_idx += 1
-        # Alpha list
-        while len(alpha_arr) < order and card_idx < len(valid_cards):
-            toks = valid_cards[card_idx].tokens()
-            for t in toks:
-                if len(alpha_arr) < order:
-                    alpha_arr.append(_safe_float(t))
-            card_idx += 1
-        # Gamma list
-        while len(gamma_arr) < order and card_idx < len(valid_cards):
-            toks = valid_cards[card_idx].tokens()
-            for t in toks:
-                if len(gamma_arr) < order:
-                    gamma_arr.append(_safe_float(t))
-            card_idx += 1
+
+        data_cards = valid_cards[2:]
+        is_per_term = False
+        raw_comments = [c.raw.upper() for c in block.cards if c.raw.strip().startswith("#")]
+        has_array_comments = any("ALPHA" in c or "MU" in c or "GAMMA" in c or "D_I" in c for c in raw_comments)
+        if not has_array_comments and order == 1 and len(data_cards) == 1:
+            toks0 = data_cards[0].tokens()
+            if len(toks0) >= 2:
+                is_per_term = True
+
+        if is_per_term:
+            for idx in range(min(order, len(data_cards))):
+                toks = data_cards[idx].tokens()
+                mu_i = _safe_float(toks[0]) if len(toks) > 0 else 0.0
+                al_i = _safe_float(toks[1]) if len(toks) > 1 else 0.0
+                d_i = _safe_float(toks[2]) if len(toks) > 2 else 0.0
+                mu_arr.append(mu_i)
+                alpha_arr.append(al_i)
+                gamma_arr.append(d_i)
+        else:
+            card_idx = 2
+            # Mu list
+            while len(mu_arr) < order and card_idx < len(valid_cards):
+                toks = valid_cards[card_idx].tokens()
+                for t in toks:
+                    if len(mu_arr) < order:
+                        mu_arr.append(_safe_float(t))
+                card_idx += 1
+            # Alpha list
+            while len(alpha_arr) < order and card_idx < len(valid_cards):
+                toks = valid_cards[card_idx].tokens()
+                for t in toks:
+                    if len(alpha_arr) < order:
+                        alpha_arr.append(_safe_float(t))
+                card_idx += 1
+            # Gamma list
+            while len(gamma_arr) < order and card_idx < len(valid_cards):
+                toks = valid_cards[card_idx].tokens()
+                for t in toks:
+                    if len(gamma_arr) < order:
+                        gamma_arr.append(_safe_float(t))
+                card_idx += 1
+
+    while len(alpha_arr) < len(mu_arr):
+        alpha_arr.append(0.0)
+    while len(gamma_arr) < len(mu_arr):
+        gamma_arr.append(0.0)
+
+    g0 = float(sum(mu_arr)) if mu_arr else 0.0
+    if len(gamma_arr) > 0 and float(gamma_arr[0]) > 0.0:
+        k0 = 2.0 / float(gamma_arr[0])
+    else:
+        denom = 3.0 * (1.0 - 2.0 * nu) if abs(1.0 - 2.0 * nu) > 1e-12 else 1e-6
+        k0 = 2.0 * g0 * (1.0 + nu) / denom
+    e0 = 2.0 * g0 * (1.0 + nu)
 
     mat = MatLaw82(
-        id=mat_id, rho=rho, ref_rho=refer_rho, order=order, nu=nu,
-        mu_arr=mu_arr, alpha_arr=alpha_arr, gamma_arr=gamma_arr,
+        id=mat_id,
+        rho0=rho,
+        rhor=refer_rho,
+        nu=nu,
+        nordre=order,
+        mu=mu_arr,
+        alpha=alpha_arr,
+        d=gamma_arr,
         title=title,
     )
     model.mat_law82s[mat_id] = mat
     model.materials[mat_id] = Material(
-        id=mat_id, law=82, rho0=rho, title=title,
+        id=mat_id,
+        law=82,
+        rho0=rho,
+        title=title,
+        law_name="LAW82",
         params={
-            "MAT_RHO": rho, "rho": rho, "rho0": rho, "refer_rho": refer_rho,
-            "ORDER": order, "MAT_NU": nu, "nu": nu,
-            "Mu_arr": mu_arr, "Alpha_arr": alpha_arr, "Gamma_arr": gamma_arr,
-        }
+            "MAT_RHO": rho, "rho": rho, "rho0": rho, "refer_rho": refer_rho, "rhor": refer_rho,
+            "ORDER": order, "nordre": order, "order": order,
+            "MAT_NU": nu, "nu": nu,
+            "Mu_arr": mu_arr, "mu": mu_arr,
+            "Alpha_arr": alpha_arr, "alpha": alpha_arr,
+            "Gamma_arr": gamma_arr, "d": gamma_arr,
+            "G": g0, "K": k0, "E": e0,
+        },
     )
 
 
@@ -84293,10 +84376,15 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "LAW54": read_mat,
     "MAT_LAW74": read_mat,
     "LAW74": read_mat,
-    "MAT_LAW82": read_mat,
-    "MAT_OGDEN": read_mat,
-    "OGDEN": read_mat,
-    "LAW82": read_mat,
+    "MAT_LAW82": read_mat_law82,
+    "MAT_OGDEN": read_mat_law82,
+    "OGDEN": read_mat_law82,
+    "LAW82": read_mat_law82,
+    "MAT_LAW82_OGDEN": read_mat_law82,
+    "LAW82_OGDEN": read_mat_law82,
+    "/MAT/LAW82": read_mat_law82,
+    "/MAT/OGDEN": read_mat_law82,
+    "/MAT/LAW82_OGDEN": read_mat_law82,
     "PROP_TYPE18": read_prop,
     "PROP_INT_BEAM": read_prop,
     "INT_BEAM": read_prop,

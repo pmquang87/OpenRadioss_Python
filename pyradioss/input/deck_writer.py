@@ -1670,11 +1670,93 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
-    def mat_law82(self, mid: int, title: str, data_cards) -> None:
-        """``/MAT/LAW82``."""
-        self._header("MAT", "LAW82", mid)
+    def mat_law82(
+        self,
+        mid: int = 0,
+        rho0: float | str = 0.0,
+        nu: float = 0.475,
+        nordre: int = 1,
+        mu: list[float] | None = None,
+        alpha: list[float] | None = None,
+        d: list[float] | None = None,
+        title: str = "",
+        rhor: float = 0.0,
+        unit_id: int | None = None,
+        law_name: str = "LAW82",
+        mat_id: int | None = None,
+        **kwargs,
+    ) -> StarterDeck:
+        if mat_id is not None:
+            mid = mat_id
+        """``/MAT/LAW82`` (/MAT/OGDEN, /MAT/LAW82_OGDEN) — cfg MAT/matl82_ogden.cfg (radioss110) & hm_read_mat82.F:
+        Card 1: RHO_I, Refer_Rho (%20lg%20lg)
+        Card 2: ORDER, Nu (%10d          %20lg)
+        Card 3: Mu_arr (CELL_LIST up to 5 per card, %20lg)
+        Card 4: Alpha_arr (CELL_LIST up to 5 per card, %20lg)
+        Card 5: Gamma_arr (D_i) (CELL_LIST up to 5 per card, %20lg)
+        """
+        if isinstance(rho0, str) and isinstance(nu, (list, tuple)):
+            # Legacy/raw card invocation: mat_law82(mid, title, data_cards)
+            t = rho0
+            data_cards = nu
+            if unit_id is not None:
+                self._header("MAT", law_name, mid, unit_id)
+            else:
+                self._header("MAT", law_name, mid)
+            self._title(t)
+            self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+            return self
+
+        rho_val = float(rho0) if not isinstance(rho0, str) else 0.0
+        rhor_val = float(rhor)
+        nu_val = float(nu)
+        n_val = int(nordre)
+
+        mu_list = [float(x) for x in mu] if mu is not None else []
+        alpha_list = [float(x) for x in alpha] if alpha is not None else []
+        d_list = [float(x) for x in d] if d is not None else []
+
+        if len(mu_list) < n_val:
+            mu_list.extend([0.0] * (n_val - len(mu_list)))
+        if len(alpha_list) < n_val:
+            alpha_list.extend([0.0] * (n_val - len(alpha_list)))
+        if len(d_list) < n_val:
+            d_list.extend([0.0] * (n_val - len(d_list)))
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
         self._title(title)
-        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+        # Card 1: RHO_I, Refer_Rho (%20lg%20lg)
+        self.lines.append(fmt_float(rho_val) + fmt_float(rhor_val))
+
+        # Card 2: N, Nu (%10d          %20lg)
+        self.lines.append(fmt_int(n_val, 10) + " " * 10 + fmt_float(nu_val, 20))
+
+        # Card 3: CELL_LIST Mu_arr
+        if n_val > 0:
+            for i in range(0, n_val, 5):
+                chunk = mu_list[i : i + 5]
+                self.lines.append("".join(fmt_float(x) for x in chunk))
+
+        # Card 4: CELL_LIST Alpha_arr
+        if n_val > 0:
+            for i in range(0, n_val, 5):
+                chunk = alpha_list[i : i + 5]
+                self.lines.append("".join(fmt_float(x) for x in chunk))
+
+        # Card 5: CELL_LIST Gamma_arr (D_i)
+        if n_val > 0:
+            for i in range(0, n_val, 5):
+                chunk = d_list[i : i + 5]
+                self.lines.append("".join(fmt_float(x) for x in chunk))
+
+        return self
+
+    mat_ogden = mat_law82
+    mat_law82_ogden = mat_law82
 
     def mat_multifluid(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/MULTIFLUID``."""
@@ -2966,16 +3048,16 @@ class StarterDeck:
         self.lines.append(fmt_int(nip) + fmt_int(0) + fmt_float(thick))
 
     def prop_solid(self, pid: int, title: str, qa=1.1, qb=0.05,
-                   h=0.1) -> None:
+                   h=0.1, isolid: int = 1) -> None:
         """``/PROP/SOLID`` (TYPE14) — cfg PROP/prop_p14_solid.cfg
         (radioss2022): title / Isolid Ismstr ... / qa qb h Lambda Mu /
-        dtmin...  Isolid=1 is emitted explicitly (8-node 1-point +
-        viscous hourglass — the only ported formulation); the trailing
+        dtmin...  Isolid is emitted on card 1 (default 1: 8-node 1-point +
+        viscous hourglass; 24: HEPH formulation); the trailing
         dtmin/Istrain/Ihkt card is emitted blank (real defaults, port
         skips it)."""
         self._header("PROP", "SOLID", pid)
         self._title(title)
-        self.lines.append(fmt_int(1))
+        self.lines.append(fmt_int(isolid))
         self.lines.append(fmt_float(qa) + fmt_float(qb) + fmt_float(h))
         self.lines.append(BLANK_CARD)          # deltaT_min Istrain Ihkt
 
@@ -4289,7 +4371,7 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_hill_tab(mid, title, cards)
     elif law == "LAW92":
         d.mat_law92(mid, title, cards)
-    elif law == "LAW82":
+    elif law in ("LAW82", "OGDEN", "LAW82_OGDEN"):
         d.mat_law82(mid, title, cards)
     elif law == "MULTIFLUID":
         d.mat_multifluid(mid, title, cards)

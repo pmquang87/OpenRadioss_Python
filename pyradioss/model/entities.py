@@ -146,6 +146,10 @@ class Material:
                 return float(sum(m * a for m, a in
                                  zip(mu, self.params["alpha"])) / 2.0)
             # fall through to E-based computation
+        if "Mu_arr" in self.params:
+            mu_arr = self.params["Mu_arr"]
+            if isinstance(mu_arr, (list, tuple)) and len(mu_arr) > 0:
+                return float(sum(mu_arr))
         if "Mu" in self.params:
             return float(self.params["Mu"])
         if "c10" in self.params:
@@ -163,6 +167,15 @@ class Material:
     @property
     def K(self) -> float:
         """Bulk modulus K = E / 3(1-2nu)."""
+        if self.law in (82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN"):
+            d_arr = self.params.get("Gamma_arr", self.params.get("D_arr", []))
+            if d_arr and len(d_arr) > 0 and float(d_arr[0]) > 0:
+                return 2.0 / float(d_arr[0])
+            gs = self.G
+            nu = self.nu
+            denom = 3.0 * (1.0 - 2.0 * nu)
+            if abs(denom) > 1e-12:
+                return 2.0 * gs * (1.0 + nu) / denom
         if self.law in (5, "5", "LAW5", "JWL"):
             return float(self.params.get("c1", self.params.get("bulk", 0.0)))
         if self.law in (38, "38", "LAW38", "VISC_TAB"):
@@ -233,6 +246,12 @@ class Material:
                 return float(law14_compso.sound_speed(self, rho=self.rho0))
             except Exception:
                 pass
+        if self.law in (82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN"):
+            try:
+                from ..materials import law82_ogden
+                return float(law82_ogden.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
         return float(np.sqrt((self.K + 4.0 * self.G / 3.0) / self.rho0))
 
     def sound_speed_shell(self) -> float:
@@ -251,6 +270,12 @@ class Material:
             try:
                 from ..materials import law25_composite
                 return float(law25_composite.sound_speed(self, rho=self.rho0))
+            except Exception:
+                pass
+        if self.law in (82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN"):
+            try:
+                from ..materials import law82_ogden
+                return float(law82_ogden.sound_speed_shell(self, rho=self.rho0))
             except Exception:
                 pass
         return float(np.sqrt(self.E / (self.rho0 * (1.0 - self.nu ** 2))))
@@ -11850,14 +11875,129 @@ class MatLaw74:
 class MatLaw82:
     """``/MAT/LAW82`` & ``/MAT/OGDEN``: Ogden hyperelastic material."""
     id: int = 0
-    rho: float = 0.0
-    ref_rho: float = 0.0
-    order: int = 0
+    rho0: float = 0.0
+    rhor: float = 0.0
     nu: float = 0.475
-    mu_arr: List[float] = field(default_factory=list)
-    alpha_arr: List[float] = field(default_factory=list)
-    gamma_arr: List[float] = field(default_factory=list)
+    nordre: int = 1
+    mu: List[float] = field(default_factory=list)
+    alpha: List[float] = field(default_factory=list)
+    d: List[float] = field(default_factory=list)
     title: str = ""
+
+    def __init__(
+        self,
+        id: int = 0,
+        rho0: float = 0.0,
+        rhor: float = 0.0,
+        nu: float = 0.475,
+        nordre: int = 1,
+        mu: Optional[List[float]] = None,
+        alpha: Optional[List[float]] = None,
+        d: Optional[List[float]] = None,
+        title: str = "",
+        **kwargs,
+    ):
+        self.id = id
+        self.rho0 = kwargs.get("rho", rho0)
+        self.rhor = kwargs.get("ref_rho", rhor)
+        self.nu = kwargs.get("nu", nu)
+        self.nordre = kwargs.get("order", nordre)
+        if mu is not None:
+            self.mu = list(mu)
+        elif "mu_arr" in kwargs:
+            self.mu = list(kwargs["mu_arr"])
+        else:
+            self.mu = []
+        if alpha is not None:
+            self.alpha = list(alpha)
+        elif "alpha_arr" in kwargs:
+            self.alpha = list(kwargs["alpha_arr"])
+        else:
+            self.alpha = []
+        if d is not None:
+            self.d = list(d)
+        elif "gamma_arr" in kwargs:
+            self.d = list(kwargs["gamma_arr"])
+        else:
+            self.d = []
+        self.title = kwargs.get("title", title)
+
+    @property
+    def rho(self) -> float:
+        return self.rho0
+
+    @rho.setter
+    def rho(self, val: float) -> None:
+        self.rho0 = val
+
+    @property
+    def ref_rho(self) -> float:
+        return self.rhor
+
+    @ref_rho.setter
+    def ref_rho(self, val: float) -> None:
+        self.rhor = val
+
+    @property
+    def order(self) -> int:
+        return self.nordre
+
+    @order.setter
+    def order(self, val: int) -> None:
+        self.nordre = val
+
+    @property
+    def mu_arr(self) -> List[float]:
+        return self.mu
+
+    @mu_arr.setter
+    def mu_arr(self, val: List[float]) -> None:
+        self.mu = val
+
+    @property
+    def alpha_arr(self) -> List[float]:
+        return self.alpha
+
+    @alpha_arr.setter
+    def alpha_arr(self, val: List[float]) -> None:
+        self.alpha = val
+
+    @property
+    def gamma_arr(self) -> List[float]:
+        return self.d
+
+    @gamma_arr.setter
+    def gamma_arr(self, val: List[float]) -> None:
+        self.d = val
+
+    @property
+    def G(self) -> float:
+        return float(sum(self.mu)) if self.mu else 0.0
+
+    @property
+    def K(self) -> float:
+        if self.d and len(self.d) > 0 and float(self.d[0]) > 0.0:
+            return 2.0 / float(self.d[0])
+        gs = self.G
+        nu = self.nu
+        denom = 3.0 * (1.0 - 2.0 * nu)
+        if abs(denom) > 1e-12:
+            return 2.0 * gs * (1.0 + nu) / denom
+        return 0.0
+
+    @property
+    def E(self) -> float:
+        return 2.0 * self.G * (1.0 + self.nu)
+
+    def sound_speed_solid(self) -> float:
+        import math
+        return float(math.sqrt(max((self.K + 4.0 * self.G / 3.0) / max(self.rho0, 1e-20), 1e-20)))
+
+    def sound_speed_shell(self) -> float:
+        import math
+        return float(math.sqrt(max(((2.0 / 3.0) * self.G + self.K) / max(self.rho0, 1e-20), 1e-20)))
+
+
 
 
 @dataclass
