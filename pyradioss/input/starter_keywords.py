@@ -1020,7 +1020,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW169", "ARUP_ADHESIVE", "COH_TAB_3D", "COH_3D", "MAT_ARUP_ADHESIVE", "MAT_COH_TAB_3D", "MAT_COH_3D", "LAW169_ARUP_ADHESIVE"):
         read_mat_law169(block, model, log)
         return
-    if lawname in ("LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+    if lawname in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_STEINB", "MAT_STEINBERG", "MAT_STEINBERG_GUINAN", "LAW49_STEINB"):
         read_mat_law49(block, model, log)
         return
     if lawname in ("LAW76", "SAMP", "PLAS_SAMP", "SAMP_PLAS", "MAT_SAMP", "MAT_PLAS_SAMP", "LAW76_SAMP"):
@@ -1249,7 +1249,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO"):
         read_mat_law48(block, model, log)
         return
-    if lawname in ("LAW49", "STEINB", "STEINBERG", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+    if lawname in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_STEINB", "MAT_STEINBERG", "MAT_STEINBERG_GUINAN", "LAW49_STEINB"):
         read_mat_law49(block, model, log)
         return
     if lawname in ("LAW106", "P_FOAM", "POLY_FOAM", "MAT_P_FOAM", "MAT_POLY_FOAM", "LAW106_P_FOAM"):
@@ -34466,11 +34466,60 @@ def read_mat_law169(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 # =========================================================================
 
 def read_mat_law49(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW49/id`` or ``/MAT/STEINB/id`` (M184): Steinberg-Guinan high-pressure plasticity model."""
-    from ..model.entities import MatLaw49
+    """``/MAT/LAW49/id`` or ``/MAT/STEINB/id`` (M184/M557): Steinberg-Guinan high-pressure plasticity model."""
+    from ..model.entities import MatLaw49, Material
     mat_id = block.user_id or 0
-    title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
-    valid_cards = [c for c in cards if not c.is_blank]
+
+    def _card_tokens(c: Card) -> list[str]:
+        raw = c.raw.strip()
+        for ch in ("#", "$"):
+            if ch in raw:
+                raw = raw.split(ch)[0].strip()
+        if not raw:
+            return []
+        if "," in raw:
+            parts = [p.strip() for p in raw.split(",")]
+            while parts and parts[-1] == "":
+                parts.pop()
+            return parts
+        return raw.split()
+
+    def _fval_safe(v: Any, default: float = 0.0) -> float:
+        if v is None:
+            return default
+        s = str(v).strip().replace("D", "E").replace("d", "e")
+        if not s:
+            return default
+        try:
+            return float(s)
+        except (ValueError, TypeError):
+            return default
+
+    has_comma = any("," in getattr(c, "raw", str(c)) for c in block.cards)
+    is_fixed = block.fixed and not has_comma
+    if is_fixed:
+        for c in block.cards:
+            c_raw = getattr(c, "raw", str(c))
+            raw_s = c_raw.strip()
+            if not raw_s or raw_s.startswith(("#", "$")):
+                continue
+            if "\t" in c_raw:
+                is_fixed = False
+                break
+            toks = raw_s.split()
+            if len(toks) > 1 and len(c_raw[:20].split()) > 1:
+                is_fixed = False
+                break
+            if len(toks) > 1 and len(c_raw.rstrip()) <= 20:
+                is_fixed = False
+                break
+
+    title, cards = _fixed_data(block) if is_fixed else _title_and_data(block)
+    if is_fixed:
+        valid_cards = [c for c in cards if not c.raw.strip().startswith(("#", "$"))]
+    else:
+        valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith(("#", "$"))]
+
     if not valid_cards:
         log.error(f"/MAT/LAW49/{mat_id}: missing data cards", block.source)
         return
@@ -34481,87 +34530,126 @@ def read_mat_law49(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     t0, tmelt, rhoc_p, pmin = 0.0, 0.0, 0.0, 0.0
     b1, b2, h, f = 0.0, 0.0, 0.0, 0.0
 
-    if block.fixed:
-        f1 = valid_cards[0].cut("MAT_LAW49_1")
-        rho = _fval(f1[0]) if len(f1) > 0 else 0.0
-        refer_rho = _fval(f1[1]) if len(f1) > 1 else 0.0
+    try:
+        if is_fixed:
+            # Card 1: RHO_I, [RHO_O] (MAT_LAW49_1: [20, 20])
+            if len(valid_cards) > 0:
+                f1 = valid_cards[0].cut("MAT_LAW49_1")
+                rho = _fval_safe(f1[0]) if len(f1) > 0 else 0.0
+                refer_rho = _fval_safe(f1[1]) if len(f1) > 1 else 0.0
 
-        if len(valid_cards) > 1:
-            f2 = valid_cards[1].cut("MAT_LAW49_2")
-            e0 = _fval(f2[0]) if len(f2) > 0 else 0.0
-            nu = _fval(f2[1]) if len(f2) > 1 else 0.0
+            # Card 2: E0, nu (MAT_LAW49_2: [20, 20])
+            if len(valid_cards) > 1:
+                f2 = valid_cards[1].cut("MAT_LAW49_2")
+                e0 = _fval_safe(f2[0]) if len(f2) > 0 else 0.0
+                nu = _fval_safe(f2[1]) if len(f2) > 1 else 0.0
 
-        if len(valid_cards) > 2:
-            f3 = valid_cards[2].cut("MAT_LAW49_3")
-            sigy = _fval(f3[0]) if len(f3) > 0 else 0.0
-            beta = _fval(f3[1]) if len(f3) > 1 else 0.0
-            n = _fval(f3[2]) if len(f3) > 2 else 0.0
-            eps_max = _fval(f3[3]) if len(f3) > 3 else 0.0
-            sigma_max = _fval(f3[4]) if len(f3) > 4 else 0.0
+            # Card 3: sigma_0, beta, n, EPS_max, SIGMA_max (MAT_LAW49_3: [20, 20, 20, 20, 20])
+            if len(valid_cards) > 2:
+                f3 = valid_cards[2].cut("MAT_LAW49_3")
+                sigy = _fval_safe(f3[0]) if len(f3) > 0 else 0.0
+                beta = _fval_safe(f3[1]) if len(f3) > 1 else 0.0
+                n = _fval_safe(f3[2]) if len(f3) > 2 else 0.0
+                eps_max = _fval_safe(f3[3]) if len(f3) > 3 else 0.0
+                sigma_max = _fval_safe(f3[4]) if len(f3) > 4 else 0.0
 
-        if len(valid_cards) > 3:
-            f4 = valid_cards[3].cut("MAT_LAW49_4")
-            t0 = _fval(f4[0]) if len(f4) > 0 else 0.0
-            tmelt = _fval(f4[1]) if len(f4) > 1 else 0.0
-            rhoc_p = _fval(f4[2]) if len(f4) > 2 else 0.0
-            pmin = _fval(f4[3]) if len(f4) > 3 else 0.0
+            # Card 4: T_0, Tmelt, rhoC_p, Pmin (MAT_LAW49_4: [20, 20, 20, 20])
+            if len(valid_cards) > 3:
+                f4 = valid_cards[3].cut("MAT_LAW49_4")
+                t0 = _fval_safe(f4[0]) if len(f4) > 0 else 0.0
+                tmelt = _fval_safe(f4[1]) if len(f4) > 1 else 0.0
+                rhoc_p = _fval_safe(f4[2]) if len(f4) > 2 else 0.0
+                pmin = _fval_safe(f4[3]) if len(f4) > 3 else 0.0
 
-        if len(valid_cards) > 4:
-            f5 = valid_cards[4].cut("MAT_LAW49_5")
-            b1 = _fval(f5[0]) if len(f5) > 0 else 0.0
-            b2 = _fval(f5[1]) if len(f5) > 1 else 0.0
-            h = _fval(f5[2]) if len(f5) > 2 else 0.0
-            f = _fval(f5[3]) if len(f5) > 3 else 0.0
-    else:
-        toks1 = valid_cards[0].tokens()
-        rho = float(toks1[0]) if len(toks1) > 0 else 0.0
-        refer_rho = float(toks1[1]) if len(toks1) > 1 else 0.0
+            # Card 5: b1, b2, h, f (MAT_LAW49_5: [20, 20, 20, 20])
+            if len(valid_cards) > 4:
+                f5 = valid_cards[4].cut("MAT_LAW49_5")
+                b1 = _fval_safe(f5[0]) if len(f5) > 0 else 0.0
+                b2 = _fval_safe(f5[1]) if len(f5) > 1 else 0.0
+                h = _fval_safe(f5[2]) if len(f5) > 2 else 0.0
+                f = _fval_safe(f5[3]) if len(f5) > 3 else 0.0
+        else:
+            # Free format (comma or space delimited)
+            # Card 1: rho, refer_rho
+            if len(valid_cards) > 0:
+                toks1 = _card_tokens(valid_cards[0])
+                rho = _fval_safe(toks1[0]) if len(toks1) > 0 else 0.0
+                refer_rho = _fval_safe(toks1[1]) if len(toks1) > 1 else 0.0
 
-        if len(valid_cards) > 1:
-            toks2 = valid_cards[1].tokens()
-            e0 = float(toks2[0]) if len(toks2) > 0 else 0.0
-            nu = float(toks2[1]) if len(toks2) > 1 else 0.0
+            # Card 2: e0, nu
+            if len(valid_cards) > 1:
+                toks2 = _card_tokens(valid_cards[1])
+                e0 = _fval_safe(toks2[0]) if len(toks2) > 0 else 0.0
+                nu = _fval_safe(toks2[1]) if len(toks2) > 1 else 0.0
 
-        if len(valid_cards) > 2:
-            toks3 = valid_cards[2].tokens()
-            sigy = float(toks3[0]) if len(toks3) > 0 else 0.0
-            beta = float(toks3[1]) if len(toks3) > 1 else 0.0
-            n = float(toks3[2]) if len(toks3) > 2 else 0.0
-            eps_max = float(toks3[3]) if len(toks3) > 3 else 0.0
-            sigma_max = float(toks3[4]) if len(toks3) > 4 else 0.0
+            # Card 3: sigy, beta, n, eps_max, sigma_max
+            if len(valid_cards) > 2:
+                toks3 = _card_tokens(valid_cards[2])
+                sigy = _fval_safe(toks3[0]) if len(toks3) > 0 else 0.0
+                beta = _fval_safe(toks3[1]) if len(toks3) > 1 else 0.0
+                n = _fval_safe(toks3[2]) if len(toks3) > 2 else 0.0
+                eps_max = _fval_safe(toks3[3]) if len(toks3) > 3 else 0.0
+                sigma_max = _fval_safe(toks3[4]) if len(toks3) > 4 else 0.0
 
-        if len(valid_cards) > 3:
-            toks4 = valid_cards[3].tokens()
-            t0 = float(toks4[0]) if len(toks4) > 0 else 0.0
-            tmelt = float(toks4[1]) if len(toks4) > 1 else 0.0
-            rhoc_p = float(toks4[2]) if len(toks4) > 2 else 0.0
-            pmin = float(toks4[3]) if len(toks4) > 3 else 0.0
+            # Card 4: t0, tmelt, rhoc_p, pmin
+            if len(valid_cards) > 3:
+                toks4 = _card_tokens(valid_cards[3])
+                t0 = _fval_safe(toks4[0]) if len(toks4) > 0 else 0.0
+                tmelt = _fval_safe(toks4[1]) if len(toks4) > 1 else 0.0
+                rhoc_p = _fval_safe(toks4[2]) if len(toks4) > 2 else 0.0
+                pmin = _fval_safe(toks4[3]) if len(toks4) > 3 else 0.0
 
-        if len(valid_cards) > 4:
-            toks5 = valid_cards[4].tokens()
-            b1 = float(toks5[0]) if len(toks5) > 0 else 0.0
-            b2 = float(toks5[1]) if len(toks5) > 1 else 0.0
-            h = float(toks5[2]) if len(toks5) > 2 else 0.0
-            f = float(toks5[3]) if len(toks5) > 3 else 0.0
+            # Card 5: b1, b2, h, f
+            if len(valid_cards) > 4:
+                toks5 = _card_tokens(valid_cards[4])
+                b1 = _fval_safe(toks5[0]) if len(toks5) > 0 else 0.0
+                b2 = _fval_safe(toks5[1]) if len(toks5) > 1 else 0.0
+                h = _fval_safe(toks5[2]) if len(toks5) > 2 else 0.0
+                f = _fval_safe(toks5[3]) if len(toks5) > 3 else 0.0
 
-    m49 = MatLaw49(
-        id=mat_id, rho=rho, refer_rho=refer_rho, e0=e0, nu=nu,
-        sigy=sigy, beta=beta, n=n, eps_max=eps_max, sigma_max=sigma_max,
-        t0=t0, tmelt=tmelt, rhoc_p=rhoc_p, pmin=pmin,
-        b1=b1, b2=b2, h=h, f=f, title=title,
-    )
-    model.mat_law49s[mat_id] = m49
-    model.materials[mat_id] = Material(
-        id=mat_id, law=49, rho0=rho, title=title,
-        params={
-            "rho": rho, "rho0": rho, "refer_rho": refer_rho,
-            "e0": e0, "e": e0, "nu": nu, "pr": nu,
-            "sigy": sigy, "sigma_0": sigy, "beta": beta, "n": n, "hard": n,
+        # Apply defaults per hm_read_mat49.F
+        if refer_rho == 0.0:
+            refer_rho = rho
+        if eps_max == 0.0:
+            eps_max = 1.0e20
+        if sigma_max == 0.0:
+            sigma_max = 1.0e20
+        if t0 == 0.0:
+            t0 = 300.0
+        if tmelt == 0.0:
+            tmelt = 1.0e20
+        if pmin == 0.0:
+            pmin = -1.0e20
+
+        unit_id = block.unit_id if hasattr(block, "unit_id") else None
+
+        m49 = MatLaw49(
+            id=mat_id, rho=rho, refer_rho=refer_rho, e0=e0, nu=nu,
+            sigy=sigy, beta=beta, n=n, eps_max=eps_max, sigma_max=sigma_max,
+            t0=t0, tmelt=tmelt, rhoc_p=rhoc_p, pmin=pmin,
+            b1=b1, b2=b2, h=h, f=f, title=title,
+            law=49, law_name="LAW49", unit_id=unit_id,
+        )
+        model.mat_law49s[mat_id] = m49
+
+        params: Dict[str, Any] = {
+            "rho": rho, "rho0": rho, "refer_rho": refer_rho, "rhor": refer_rho,
+            "e0": e0, "e": e0, "E": e0, "nu": nu, "Nu": nu, "pr": nu,
+            "sigy": sigy, "sigma_0": sigy, "sig0": sigy,
+            "beta": beta, "n": n, "hard": n,
             "eps_max": eps_max, "sigma_max": sigma_max,
             "t0": t0, "tmelt": tmelt, "rhoc_p": rhoc_p, "pmin": pmin,
             "b1": b1, "b2": b2, "h": h, "f": f,
+            "G": m49.G, "G0": m49.G0, "bulk": m49.bulk, "C1": m49.C1,
         }
-    )
+
+        model.materials[mat_id] = Material(
+            id=mat_id, law=49, rho0=rho, title=title,
+            law_name="LAW49",
+            params=params,
+        )
+    except ValueError as err:
+        log.error(f"/MAT/LAW49/{mat_id}: malformed numeric input ({err})", block.source)
 
 
 def read_mat_law76(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -84702,14 +84790,20 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "COH_TAB_3D": read_mat,
     "MAT_COH_3D": read_mat,
     "COH_3D": read_mat,
-    # M184: MAT_LAW49 (STEINB), MAT_LAW76 (SAMP), PROP_TYPE11 (SH_SANDW), PROP_TYPE16 (SH_FABR), PROP_TYPE17 (STACK), PROP_TYPE44 (SPR_CRUS)
-    "MAT_LAW49": read_mat,
-    "MAT_STEINB": read_mat,
-    "STEINB": read_mat,
-    "MAT_STEINBERG": read_mat,
-    "STEINBERG": read_mat,
-    "MAT_STEINBERG_GUINAN": read_mat,
-    "STEINBERG_GUINAN": read_mat,
+    # M184 / M557: MAT_LAW49 (STEINB), MAT_LAW76 (SAMP), PROP_TYPE11 (SH_SANDW), PROP_TYPE16 (SH_FABR), PROP_TYPE17 (STACK), PROP_TYPE44 (SPR_CRUS)
+    "MAT_LAW49": read_mat_law49,
+    "LAW49": read_mat_law49,
+    "MAT/LAW49": read_mat_law49,
+    "MAT_STEINB": read_mat_law49,
+    "STEINB": read_mat_law49,
+    "MAT/STEINB": read_mat_law49,
+    "MAT_STEINBERG": read_mat_law49,
+    "STEINBERG": read_mat_law49,
+    "MAT/STEINBERG": read_mat_law49,
+    "MAT_STEINBERG_GUINAN": read_mat_law49,
+    "STEINBERG_GUINAN": read_mat_law49,
+    "MAT/STEINBERG_GUINAN": read_mat_law49,
+    "LAW49_STEINB": read_mat_law49,
     "MAT_LAW76": read_mat,
     "MAT_SAMP": read_mat,
     "SAMP": read_mat,
@@ -85233,7 +85327,7 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "SEWING": read_mat,
     "LAW95": read_mat,
     "LAW48": read_mat_law48,
-    "LAW49": read_mat,
+    "LAW49": read_mat_law49,
     "MAT_P_FOAM": read_mat,
     "MAT_POLY_FOAM": read_mat,
     "P_FOAM": read_mat,

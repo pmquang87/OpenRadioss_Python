@@ -8489,8 +8489,8 @@ MatCoh3D = MatLaw169
 
 @dataclass
 class MatLaw49:
-    """/MAT/LAW49 or /MAT/STEINB (M184): Steinberg-Guinan high-pressure plasticity model."""
-    id: int
+    """/MAT/LAW49 or /MAT/STEINB (M184/M557): Steinberg-Guinan high-pressure plasticity model."""
+    id: int = 0
     rho: float = 0.0
     refer_rho: float = 0.0
     e0: float = 0.0
@@ -8509,22 +8509,181 @@ class MatLaw49:
     h: float = 0.0
     f: float = 0.0
     title: str = ""
+    law: int = 49
+    law_name: str = "LAW49"
+    unit_id: Optional[int] = None
+    params: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.refer_rho == 0.0:
+            self.refer_rho = self.rho
+        if self.eps_max == 0.0:
+            self.eps_max = 1.0e20
+        if self.sigma_max == 0.0:
+            self.sigma_max = 1.0e20
+        if self.t0 == 0.0:
+            self.t0 = 300.0
+        if self.tmelt == 0.0:
+            self.tmelt = 1.0e20
+        if self.pmin == 0.0:
+            self.pmin = -1.0e20
+
+        core: Dict[str, Any] = {
+            "rho": self.rho,
+            "rho0": self.rho0,
+            "refer_rho": self.refer_rho,
+            "rhor": self.rhor,
+            "e0": self.e0,
+            "e": self.e,
+            "E": self.E,
+            "nu": self.nu,
+            "Nu": self.Nu,
+            "sigy": self.sigy,
+            "sigma_0": self.sigma_0,
+            "beta": self.beta,
+            "n": self.n,
+            "hard": self.hard,
+            "eps_max": self.eps_max,
+            "sigma_max": self.sigma_max,
+            "t0": self.t0,
+            "tmelt": self.tmelt,
+            "rhoc_p": self.rhoc_p,
+            "pmin": self.pmin,
+            "b1": self.b1,
+            "b2": self.b2,
+            "h": self.h,
+            "f": self.f,
+            "G": self.G,
+            "G0": self.G0,
+            "bulk": self.bulk,
+            "C1": self.C1,
+        }
+        for k, v in core.items():
+            if k not in self.params:
+                self.params[k] = v
 
     @property
     def rho0(self) -> float:
         return self.rho
 
+    @rho0.setter
+    def rho0(self, val: float) -> None:
+        self.rho = float(val)
+
+    @property
+    def rhor(self) -> float:
+        return self.refer_rho if self.refer_rho != 0.0 else self.rho
+
+    @rhor.setter
+    def rhor(self, val: float) -> None:
+        self.refer_rho = float(val)
+
     @property
     def e(self) -> float:
         return self.e0
+
+    @e.setter
+    def e(self, val: float) -> None:
+        self.e0 = float(val)
+
+    @property
+    def E(self) -> float:
+        return self.e0
+
+    @E.setter
+    def E(self, val: float) -> None:
+        self.e0 = float(val)
+
+    @property
+    def Nu(self) -> float:
+        return self.nu
+
+    @Nu.setter
+    def Nu(self, val: float) -> None:
+        self.nu = float(val)
 
     @property
     def sigma_0(self) -> float:
         return self.sigy
 
+    @sigma_0.setter
+    def sigma_0(self, val: float) -> None:
+        self.sigy = float(val)
+
     @property
     def hard(self) -> float:
         return self.n
+
+    @hard.setter
+    def hard(self, val: float) -> None:
+        self.n = float(val)
+
+    @property
+    def G(self) -> float:
+        """Elastic shear modulus: G0 = E / (2 * (1 + nu))."""
+        return self.e0 / (2.0 * (1.0 + self.nu)) if (1.0 + self.nu) != 0.0 else 0.0
+
+    @property
+    def G0(self) -> float:
+        return self.G
+
+    @property
+    def bulk(self) -> float:
+        """Elastic bulk modulus: K = E / (3 * (1 - 2 * nu))."""
+        denom = 3.0 * (1.0 - 2.0 * self.nu)
+        return self.e0 / denom if denom != 0.0 else 0.0
+
+    @property
+    def C1(self) -> float:
+        return self.bulk
+
+    @property
+    def sound_speed(self) -> CallableFloat:
+        """1D acoustic sound speed: c = sqrt(E / rho0)."""
+        rho_val = self.rho0
+        c = (self.e0 / rho_val)**0.5 if rho_val > 0.0 and self.e0 > 0.0 else 0.0
+        return CallableFloat(c)
+
+    @property
+    def sound_speed_solid(self) -> CallableFloat:
+        """Solid sound speed: c = sqrt((C1 + 4/3 G) / rho0) per matl49_steinb.cfg DRAWABLES."""
+        rho_val = self.rho0
+        c = 0.0
+        if rho_val > 0.0:
+            c2 = (self.bulk + (4.0 / 3.0) * self.G) / rho_val
+            if c2 > 0.0:
+                c = c2**0.5
+        return CallableFloat(c)
+
+    # Mapping protocol
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        if key in self.params:
+            return self.params[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            self.params[key] = value
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or (key in self.params)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def keys(self) -> List[str]:
+        import dataclasses
+        k = [f.name for f in dataclasses.fields(self)]
+        k.extend(["rho0", "rhor", "e", "E", "Nu", "sigma_0", "hard", "G", "G0", "bulk", "C1", "sound_speed", "sound_speed_solid"])
+        k.extend(list(self.params.keys()))
+        return list(dict.fromkeys(k))
 
 
 MatSteinb = MatLaw49

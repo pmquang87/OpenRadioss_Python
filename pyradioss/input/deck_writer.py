@@ -823,6 +823,263 @@ class StarterDeck:
         kwargs.setdefault("law_name", "DPRAG")
         return self.mat_law21(*args, **kwargs)
 
+    def mat_law49(
+        self,
+        mat_id: int = 0,
+        rho: float = 0.0,
+        e0: float = 0.0,
+        nu: float = 0.0,
+        sig0: float = 0.0,
+        beta: float = 0.0,
+        n: float = 0.0,
+        eps_max: float = 1.0e20,
+        sigma_max: float = 1.0e20,
+        t0: float = 300.0,
+        tmelt: float = 1.0e20,
+        rhoc_p: float = 0.0,
+        pmin: float = -1.0e20,
+        b1: float = 0.0,
+        b2: float = 0.0,
+        h: float = 0.0,
+        f: float = 0.0,
+        refer_rho: float | None = None,
+        title: str = "",
+        unit_id: int | None = None,
+        law_name: str = "LAW49",
+        fixed_format: bool = True,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW49`` (/MAT/STEINB, /MAT/STEINBERG) — Steinberg-Guinan shock plasticity model.
+
+        Upstream reference: hm_read_mat49.F and matl49_steinb.cfg:
+          Card 1: MAT_RHO, [Refer_Rho] (%20lg[%20lg]) — MAT_LAW49_1: [20, 20]
+          Card 2: MAT_E0, MAT_NU (%20lg%20lg) — MAT_LAW49_2: [20, 20]
+          Card 3: MAT_SIGY, MAT_BETA, MAT_HARD, MAT_EPS, MAT_SIG (%20lg*5) — MAT_LAW49_3: [20, 20, 20, 20, 20]
+          Card 4: MAT_T0, MAT_TMELT, MAT_SPHEAT, MAT_PC (%20lg*4) — MAT_LAW49_4: [20, 20, 20, 20]
+          Card 5: MAT_B1, MAT_B2, h, MAT_F (%20lg*4) — MAT_LAW49_5: [20, 20, 20, 20]
+        """
+        # Allow title as 2nd positional argument if passed as string: mat_law49(1, "title", rho, e0, nu...)
+        if isinstance(rho, str):
+            actual_title = rho
+            actual_rho = float(e0) if isinstance(e0, (int, float, str)) and str(e0).strip() else 0.0
+            actual_e0 = float(nu) if isinstance(nu, (int, float, str)) and str(nu).strip() else 0.0
+            actual_nu = float(sig0) if isinstance(sig0, (int, float, str)) and str(sig0).strip() else 0.0
+            actual_sig0 = float(beta) if isinstance(beta, (int, float, str)) and str(beta).strip() else 0.0
+            actual_beta = float(n) if isinstance(n, (int, float, str)) and str(n).strip() else 0.0
+            actual_n = float(eps_max) if isinstance(eps_max, (int, float, str)) and str(eps_max).strip() else 0.0
+            actual_eps_max = float(sigma_max) if isinstance(sigma_max, (int, float, str)) and str(sigma_max).strip() else 1.0e20
+            actual_sigma_max = float(t0) if isinstance(t0, (int, float, str)) and str(t0).strip() else 1.0e20
+            actual_t0 = float(tmelt) if isinstance(tmelt, (int, float, str)) and str(tmelt).strip() else 300.0
+            actual_tmelt = float(rhoc_p) if isinstance(rhoc_p, (int, float, str)) and str(rhoc_p).strip() else 1.0e20
+            actual_rhoc_p = float(pmin) if isinstance(pmin, (int, float, str)) and str(pmin).strip() else 0.0
+            actual_pmin = float(b1) if isinstance(b1, (int, float, str)) and str(b1).strip() else -1.0e20
+            actual_b1 = float(b2) if isinstance(b2, (int, float, str)) and str(b2).strip() else 0.0
+            actual_b2 = float(h) if isinstance(h, (int, float, str)) and str(h).strip() else 0.0
+            actual_h = float(f) if isinstance(f, (int, float, str)) and str(f).strip() else 0.0
+            actual_f = float(refer_rho) if isinstance(refer_rho, (int, float, str)) and str(refer_rho).strip() else 0.0
+            actual_refer_rho = None
+            title = actual_title
+            rho = actual_rho
+            e0 = actual_e0
+            nu = actual_nu
+            sig0 = actual_sig0
+            beta = actual_beta
+            n = actual_n
+            eps_max = actual_eps_max
+            sigma_max = actual_sigma_max
+            t0 = actual_t0
+            tmelt = actual_tmelt
+            rhoc_p = actual_rhoc_p
+            pmin = actual_pmin
+            b1 = actual_b1
+            b2 = actual_b2
+            h = actual_h
+            f = actual_f
+            refer_rho = actual_refer_rho
+
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+
+        mat_obj = None
+        if hasattr(mat_id, "sig0") or hasattr(mat_id, "sigy"):
+            mat_obj = mat_id
+        elif hasattr(mat_id, "params") and ("sig0" in getattr(mat_id, "params", {}) or "sigy" in getattr(mat_id, "params", {})):
+            mat_obj = mat_id
+        elif "mat" in kw_low:
+            mat_obj = kw_low["mat"]
+        elif "mat49" in kw_low:
+            mat_obj = kw_low["mat49"]
+        elif "mat_law49" in kw_low:
+            mat_obj = kw_low["mat_law49"]
+        elif "mat_steinb" in kw_low:
+            mat_obj = kw_low["mat_steinb"]
+
+        if mat_obj is not None:
+            mat_id = getattr(mat_obj, "id", mat_id)
+            title = getattr(mat_obj, "title", title)
+            rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", rho))
+            refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", refer_rho))
+            e0 = getattr(mat_obj, "e0", getattr(mat_obj, "e", getattr(mat_obj, "E", e0)))
+            nu = getattr(mat_obj, "nu", getattr(mat_obj, "Nu", nu))
+            sig0 = getattr(mat_obj, "sig0", getattr(mat_obj, "sigy", getattr(mat_obj, "sigma_0", sig0)))
+            beta = getattr(mat_obj, "beta", beta)
+            n = getattr(mat_obj, "n", getattr(mat_obj, "hard", n))
+            eps_max = getattr(mat_obj, "eps_max", eps_max)
+            sigma_max = getattr(mat_obj, "sigma_max", sigma_max)
+            t0 = getattr(mat_obj, "t0", t0)
+            tmelt = getattr(mat_obj, "tmelt", tmelt)
+            rhoc_p = getattr(mat_obj, "rhoc_p", rhoc_p)
+            pmin = getattr(mat_obj, "pmin", pmin)
+            b1 = getattr(mat_obj, "b1", b1)
+            b2 = getattr(mat_obj, "b2", b2)
+            h = getattr(mat_obj, "h", h)
+            f = getattr(mat_obj, "f", f)
+            p_dict = getattr(mat_obj, "params", {}) or {}
+            if isinstance(p_dict, dict):
+                rho = p_dict.get("rho0", p_dict.get("rho", rho))
+                refer_rho = p_dict.get("refer_rho", p_dict.get("rhor", refer_rho))
+                e0 = p_dict.get("e0", p_dict.get("e", p_dict.get("E", e0)))
+                nu = p_dict.get("nu", p_dict.get("Nu", nu))
+                sig0 = p_dict.get("sig0", p_dict.get("sigy", p_dict.get("sigma_0", sig0)))
+                beta = p_dict.get("beta", beta)
+                n = p_dict.get("n", p_dict.get("hard", n))
+                eps_max = p_dict.get("eps_max", eps_max)
+                sigma_max = p_dict.get("sigma_max", sigma_max)
+                t0 = p_dict.get("t0", t0)
+                tmelt = p_dict.get("tmelt", tmelt)
+                rhoc_p = p_dict.get("rhoc_p", rhoc_p)
+                pmin = p_dict.get("pmin", pmin)
+                b1 = p_dict.get("b1", b1)
+                b2 = p_dict.get("b2", b2)
+                h = p_dict.get("h", h)
+                f = p_dict.get("f", f)
+
+        explicit_rhor = False
+        if "refer_rho" in kw_low and refer_rho is None:
+            refer_rho = float(kw_low["refer_rho"])
+            explicit_rhor = True
+        if "rhor" in kw_low and refer_rho is None:
+            refer_rho = float(kw_low["rhor"])
+            explicit_rhor = True
+        if "mat_rho" in kw_low and rho == 0.0:
+            rho = float(kw_low["mat_rho"])
+        if "mat_e0" in kw_low and e0 == 0.0:
+            e0 = float(kw_low["mat_e0"])
+        if "mat_e" in kw_low and e0 == 0.0:
+            e0 = float(kw_low["mat_e"])
+        if "mat_nu" in kw_low and nu == 0.0:
+            nu = float(kw_low["mat_nu"])
+        if "mat_sigy" in kw_low and sig0 == 0.0:
+            sig0 = float(kw_low["mat_sigy"])
+        if "mat_beta" in kw_low and beta == 0.0:
+            beta = float(kw_low["mat_beta"])
+        if "mat_hard" in kw_low and n == 0.0:
+            n = float(kw_low["mat_hard"])
+        if "mat_eps" in kw_low and eps_max == 1.0e20:
+            eps_max = float(kw_low["mat_eps"])
+        if "mat_sig" in kw_low and sigma_max == 1.0e20:
+            sigma_max = float(kw_low["mat_sig"])
+        if "mat_t0" in kw_low and t0 == 300.0:
+            t0 = float(kw_low["mat_t0"])
+        if "mat_tmelt" in kw_low and tmelt == 1.0e20:
+            tmelt = float(kw_low["mat_tmelt"])
+        if "mat_spheat" in kw_low and rhoc_p == 0.0:
+            rhoc_p = float(kw_low["mat_spheat"])
+        if "mat_pc" in kw_low and pmin == -1.0e20:
+            pmin = float(kw_low["mat_pc"])
+        if "mat_b1" in kw_low and b1 == 0.0:
+            b1 = float(kw_low["mat_b1"])
+        if "mat_b2" in kw_low and b2 == 0.0:
+            b2 = float(kw_low["mat_b2"])
+        if "mat_f" in kw_low and f == 0.0:
+            f = float(kw_low["mat_f"])
+        if "title" in kw_low and not title:
+            title = str(kw_low["title"])
+        if "fixed_format" in kw_low:
+            fixed_format = bool(kw_low["fixed_format"])
+        if "fixed" in kw_low:
+            fixed_format = bool(kw_low["fixed"])
+        if "free" in kw_low and bool(kw_low["free"]):
+            fixed_format = False
+        if "law" in kw_low:
+            law_name = str(kw_low["law"])
+
+        if refer_rho is None or refer_rho == 0.0:
+            refer_rho = rho
+        if eps_max == 0.0:
+            eps_max = 1.0e20
+        if sigma_max == 0.0:
+            sigma_max = 1.0e20
+        if t0 == 0.0:
+            t0 = 300.0
+        if tmelt == 0.0:
+            tmelt = 1.0e20
+        if pmin == 0.0:
+            pmin = -1.0e20
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mat_id, unit_id)
+        else:
+            self._header("MAT", law_name, mat_id)
+        self._title(title)
+
+        if fixed_format:
+            # Card 1: rho, refer_rho (MAT_LAW49_1: [20, 20])
+            if explicit_rhor and float(refer_rho) != 0.0:
+                self.lines.append("#        Init. dens.          Ref. dens.")
+                self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(refer_rho, 20)}")
+            elif refer_rho is not None and float(refer_rho) != 0.0 and float(refer_rho) != float(rho):
+                self.lines.append("#        Init. dens.          Ref. dens.")
+                self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(refer_rho, 20)}")
+            else:
+                self.lines.append("#        Init. dens.")
+                self.lines.append(fmt_float(rho, 20))
+
+            # Card 2: e0, nu (MAT_LAW49_2: [20, 20])
+            self.lines.append("#                 E0                  Nu")
+            self.lines.append(f"{fmt_float(e0, 20)}{fmt_float(nu, 20)}")
+
+            # Card 3: sig0, beta, n, eps_max, sigma_max (MAT_LAW49_3: [20, 20, 20, 20, 20])
+            self.lines.append("#             Sigma0                Beta                   N             EPS_max           SIGMA_max")
+            self.lines.append(f"{fmt_float(sig0, 20)}{fmt_float(beta, 20)}{fmt_float(n, 20)}{fmt_float(eps_max, 20)}{fmt_float(sigma_max, 20)}")
+
+            # Card 4: t0, tmelt, rhoc_p, pmin (MAT_LAW49_4: [20, 20, 20, 20])
+            self.lines.append("#                T_0               Tmelt              rhoC_p                Pmin")
+            self.lines.append(f"{fmt_float(t0, 20)}{fmt_float(tmelt, 20)}{fmt_float(rhoc_p, 20)}{fmt_float(pmin, 20)}")
+
+            # Card 5: b1, b2, h, f (MAT_LAW49_5: [20, 20, 20, 20])
+            self.lines.append("#                 b1                  b2                   h                   f")
+            self.lines.append(f"{fmt_float(b1, 20)}{fmt_float(b2, 20)}{fmt_float(h, 20)}{fmt_float(f, 20)}")
+        else:
+            delim = kw_low.get("delimiter", ", " if (kw_low.get("comma") or kw_low.get("comma_delimited")) else " ")
+            if explicit_rhor and float(refer_rho) != 0.0:
+                self.lines.append(f"{rho}{delim}{refer_rho}")
+            elif refer_rho is not None and float(refer_rho) != 0.0 and float(refer_rho) != float(rho):
+                self.lines.append(f"{rho}{delim}{refer_rho}")
+            else:
+                self.lines.append(f"{rho}")
+            self.lines.append(f"{e0}{delim}{nu}")
+            self.lines.append(f"{sig0}{delim}{beta}{delim}{n}{delim}{eps_max}{delim}{sigma_max}")
+            self.lines.append(f"{t0}{delim}{tmelt}{delim}{rhoc_p}{delim}{pmin}")
+            self.lines.append(f"{b1}{delim}{b2}{delim}{h}{delim}{f}")
+
+        return self
+
+    def mat_steinb(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/STEINB`` — synonym for ``/MAT/LAW49``."""
+        kwargs.setdefault("law_name", "STEINB")
+        return self.mat_law49(*args, **kwargs)
+
+    def mat_steinberg(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/STEINBERG`` — synonym for ``/MAT/LAW49``."""
+        kwargs.setdefault("law_name", "STEINBERG")
+        return self.mat_law49(*args, **kwargs)
+
+    def mat_steinberg_guinan(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/STEINBERG_GUINAN`` — synonym for ``/MAT/LAW49``."""
+        kwargs.setdefault("law_name", "STEINBERG_GUINAN")
+        return self.mat_law49(*args, **kwargs)
+
+
 
     def mat_law28(
         self,

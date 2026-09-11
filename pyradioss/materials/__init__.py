@@ -60,7 +60,7 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                law28_honeycomb, law33_foamplas, law34_boltzmann, law35_kelvinmax, law36_tabulated,
                law37_biphas,
                law40_kelvinmax, law42_ogden, law44_cowper,
-               law48_zhao,
+               law48_zhao, law49_steinb,
                law52_gurson,
                law60_plast3,
                law62_hypervisco, law69_hyperelastic, law70_tabfoam, law81_druckerprager,
@@ -69,6 +69,18 @@ from . import (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,  # noqa:
                law58_fabr_a,
                law57_barlat,
                mat_gas, mat_void)
+from .law49_steinb import (
+    Law49Params,
+    build_law49,
+    solid_update_law49,
+    shell_update_law49,
+    sound_speed_solid_law49,
+    tangent_law49_solid,
+    solid_update as law49_solid_update,
+    shell_update as law49_shell_update,
+    sound_speed_solid as law49_sound_speed,
+    consistent_solid_tangent as law49_solid_tangent,
+)
 from .law57_barlat import (
     Law57Params,
     build_law57,
@@ -836,6 +848,21 @@ def _register_law21():
 _register_law21()
 
 
+def _register_law49():
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = getattr(law49_steinb, "build_law49", None)
+        if builder is not None:
+            for k in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN",
+                      "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+                MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law49()
+
+
 def _register_law12():
     try:
         from ..input.mat_reader import MAT_PHYSICS_REGISTRY
@@ -931,6 +958,16 @@ LAW_DISPATCH_METADATA: dict[Any, dict[str, Any]] = {
     "MAT_LAW21": {"plane_stress": False, "solid": True, "shell": False},
     "MAT_DPRAG": {"plane_stress": False, "solid": True, "shell": False},
     "LAW21_DPRAG": {"plane_stress": False, "solid": True, "shell": False},
+    49: {"plane_stress": False, "solid": True, "shell": False},
+    "49": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW49": {"plane_stress": False, "solid": True, "shell": False},
+    "STEINB": {"plane_stress": False, "solid": True, "shell": False},
+    "STEINBERG": {"plane_stress": False, "solid": True, "shell": False},
+    "STEINBERG_GUINAN": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_LAW49": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_STEINB": {"plane_stress": False, "solid": True, "shell": False},
+    "MAT_STEINBERG": {"plane_stress": False, "solid": True, "shell": False},
+    "LAW49_STEINB": {"plane_stress": False, "solid": True, "shell": False},
 }
 
 MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
@@ -953,6 +990,11 @@ MATERIAL_SOLID_DISPATCH: dict[Any, Any] = {
     21: solid_update_law21, "21": solid_update_law21, "LAW21": solid_update_law21,
     "DPRAG": solid_update_law21, "MAT_LAW21": solid_update_law21, "MAT_DPRAG": solid_update_law21,
     "LAW21_DPRAG": solid_update_law21,
+    49: solid_update_law49, "49": solid_update_law49, "LAW49": solid_update_law49,
+    "STEINB": solid_update_law49, "STEINBERG": solid_update_law49,
+    "STEINBERG_GUINAN": solid_update_law49, "MAT_LAW49": solid_update_law49,
+    "MAT_STEINB": solid_update_law49, "MAT_STEINBERG": solid_update_law49,
+    "LAW49_STEINB": solid_update_law49,
 }
 
 MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
@@ -965,8 +1007,8 @@ MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
     "MAT_PLAS_GURS": shell_update_law52,
     58: shell_update_law58, "58": shell_update_law58, "LAW58": shell_update_law58,
     "FABR_A": shell_update_law58, "FABRIC_A": shell_update_law58,
-    "MAT_LAW58": shell_update_law58, "MAT_FABR_A": shell_update_law58,
-    "MAT_FABRIC_A": shell_update_law58, "LAW58_FABR_A": shell_update_law58,
+    "MAT_LAW58": solid_update_law58, "MAT_FABR_A": solid_update_law58,
+    "MAT_FABRIC_A": solid_update_law58, "LAW58_FABR_A": solid_update_law58,
     57: shell_update_law57, "57": shell_update_law57, "LAW57": shell_update_law57,
     "BARLAT": shell_update_law57, "BARLAT3": shell_update_law57,
     "MAT_LAW57": shell_update_law57, "MAT_BARLAT": shell_update_law57,
@@ -975,6 +1017,11 @@ MATERIAL_SHELL_DISPATCH: dict[Any, Any] = {
     21: shell_update_law21, "21": shell_update_law21, "LAW21": shell_update_law21,
     "DPRAG": shell_update_law21, "MAT_LAW21": shell_update_law21, "MAT_DPRAG": shell_update_law21,
     "LAW21_DPRAG": shell_update_law21,
+    49: shell_update_law49, "49": shell_update_law49, "LAW49": shell_update_law49,
+    "STEINB": shell_update_law49, "STEINBERG": shell_update_law49,
+    "STEINBERG_GUINAN": shell_update_law49, "MAT_LAW49": shell_update_law49,
+    "MAT_STEINB": shell_update_law49, "MAT_STEINBERG": shell_update_law49,
+    "LAW49_STEINB": shell_update_law49,
 }
 
 
@@ -1068,6 +1115,7 @@ def register_materials():
     _register_law52()
     _register_law57()
     _register_law21()
+    _register_law49()
 
 
 def extra_shapes(mat, nip=None):
@@ -1217,6 +1265,8 @@ def extra_shapes(mat, nip=None):
                 off57=(nip,) if nip else (),
                 pla57=(nip,) if nip else (),
             )
+    if getattr(mat, "law", None) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+        shapes.update(law49_steinb.extra_shapes(mat, nip=nip))
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
         shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
     return shapes
@@ -1243,12 +1293,12 @@ def needs_env(mat) -> bool:
     LAW25: composite density; LAW15: Chang-Chang composite density;
     M548: LAW43 Hill tabulated density and sound speed; M549: LAW82 Ogden;
     M550: LAW69 hyperelastic; M552: LAW48 Zhao dynamic plasticity;
-    M555: LAW57 Barlat anisotropic plasticity)."""
-    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 21, "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", 52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", 58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", 60, "60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", 62, 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", 70, 81, 82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN")
-            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", "LAW22", "DAMA", "PLAS_DAMA", "MAT_LAW22", "MAT_DAMA", "MAT_PLAS_DAMA", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB", "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", "LAW60", "PLAS_T3", "FABRIC", "MAT_LAW60", "MAT_PLAS_T3", "MAT_FABRIC", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN"))
+    M555: LAW57 Barlat anisotropic plasticity; M557: LAW49 Steinberg-Guinan)."""
+    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 21, "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB", 44, 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", 49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", 52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", 57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", 58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", 60, "60", "LAW60", "PLAS_T3", "MAT_LAW60", "MAT_PLAS_T3", "FABRIC", "MAT_FABRIC", 62, 69, "69", "LAW69", "HYP_ELAS", "HYPERELASTIC", 70, 81, 82, "82", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN")
+            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "21", "LAW21", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", "LAW22", "DAMA", "PLAS_DAMA", "MAT_LAW22", "MAT_DAMA", "MAT_PLAS_DAMA", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB", "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_LAW48", "MAT_ZHAO", "MAT_PLAS_ZHAO", "LAW48_ZHAO", "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB", "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS", "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3", "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A", "LAW60", "PLAS_T3", "FABRIC", "MAT_LAW60", "MAT_PLAS_T3", "MAT_FABRIC", "LAW69", "HYP_ELAS", "HYPERELASTIC", "MAT_LAW69", "MAT_HYP_ELAS", "MAT_HYPERELASTIC", "LAW69_HYPERELASTIC", "LAW82", "OGDEN", "MAT_LAW82", "MAT_OGDEN", "LAW82_OGDEN"))
 
 
-def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
+def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None, **kwargs):
     """Dispatch a solid stress update to the material's law.
 
     Returns (sig, epsp, c): c is the law's current sound speed array or
@@ -1359,6 +1409,19 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         raise NotImplementedError("LAW5 solid_update not available")
     if getattr(mat, "law", None) in (21, "21", "LAW21", "MAT_LAW21", "MAT_DPRAG") or (getattr(mat, "law_name", None) in ("21", "LAW21", "DPRAG", "MAT_DPRAG") and getattr(mat, "law", None) != 10):
         sign, epsp_out, c = law21_dprag.solid_update(mat, sig, deps=deps, epsp=epsp, dt=dt, extra=extra, return_tuple=True)
+        if hasattr(sig, "__setitem__"):
+            try:
+                sig[:] = sign
+            except Exception:
+                pass
+        if epsp is not None and hasattr(epsp, "__setitem__"):
+            try:
+                epsp[:] = epsp_out
+            except Exception:
+                pass
+        return sig, epsp_out, c
+    if getattr(mat, "law", None) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+        sign, epsp_out, c = law49_steinb.solid_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra, return_tuple=True)
         if hasattr(sig, "__setitem__"):
             try:
                 sig[:] = sign
@@ -1517,6 +1580,8 @@ def sound_speed(mat, rho=None, extra=None):
         raise NotImplementedError("LAW5 sound_speed not available")
     if law in (21, "21", "LAW21", "MAT_LAW21", "MAT_DPRAG") or (law_name in ("21", "LAW21", "DPRAG", "MAT_DPRAG") and law != 10):
         return law21_dprag.sound_speed(mat, rho=rho, extra=extra)
+    if law in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or law_name in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+        return law49_steinb.sound_speed_solid(mat, rho=rho, extra=extra)
     if law in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or law_name in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         _get_law10()
         if law10_sound_speed is not None:
@@ -1567,6 +1632,8 @@ def sound_speed(mat, rho=None, extra=None):
         return law82_sound_speed(mat, rho=rho, extra=extra)
     if law in (48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO") or law_name in ("48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "LAW48_ZHAO"):
         return law48_zhao.sound_speed_solid_law48(mat, rho0=rho)
+    if law in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or law_name in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+        return law49_steinb.sound_speed_solid(mat, rho=rho, extra=extra)
     if law in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON") or law_name in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON"):
         return law52_gurson.sound_speed_solid_law52(mat, rho=rho)
     if law in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A") or law_name in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "MAT_FABRIC_A", "LAW58_FABR_A"):
@@ -1638,6 +1705,8 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
         raise NotImplementedError("LAW5 (JWL explosive) is implemented for 3D solid and SPH elements only.")
     if getattr(mat, "law", None) in (21, "21", "LAW21", "MAT_LAW21", "MAT_DPRAG") or (getattr(mat, "law_name", None) in ("21", "LAW21", "DPRAG", "MAT_DPRAG") and getattr(mat, "law", None) != 10):
         return law21_dprag.shell_update(mat, sig, deps=deps, epsp=epsp, dt=dt, extra=extra)
+    if getattr(mat, "law", None) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+        return law49_steinb.shell_update(mat, sig, deps, epsp=epsp, dt=dt, extra=extra)
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         raise NotImplementedError("LAW10 (soil/Drucker-Prager) is implemented for 3D solid elements only.")
     if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
@@ -1797,6 +1866,8 @@ def solid_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
         raise NotImplementedError("LAW5 solid_tangent not available")
     if getattr(mat, "law", None) in (21, "21", "LAW21", "MAT_LAW21", "MAT_DPRAG") or (getattr(mat, "law_name", None) in ("21", "LAW21", "DPRAG", "MAT_DPRAG") and getattr(mat, "law", None) != 10):
         return law21_dprag.consistent_solid_tangent(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
+    if getattr(mat, "law", None) in (49, "49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB") or getattr(mat, "law_name", None) in ("49", "LAW49", "STEINB", "STEINBERG", "STEINBERG_GUINAN", "MAT_LAW49", "MAT_STEINB", "MAT_STEINBERG", "LAW49_STEINB"):
+        return law49_steinb.consistent_solid_tangent(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
     if getattr(mat, "law", None) in (10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1") or getattr(mat, "law_name", None) in ("LAW10", "SOIL", "DPRAG", "DPRAG1"):
         _get_law10()
         if law10_solid_tangent is not None:

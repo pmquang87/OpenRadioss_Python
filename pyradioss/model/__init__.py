@@ -27,5 +27,6 @@ from .entities import (  # noqa: F401
     MatLaw58, MatFabrA, MatFabricA,
     MatLaw52, MatGurson, MatPlasGurs,
     MatLaw21, MatDprag,
+    MatLaw49, MatSteinb, MatSteinberg, MatSteinbergGuinan,
 )
 

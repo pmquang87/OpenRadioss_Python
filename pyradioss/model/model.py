@@ -1115,6 +1115,10 @@ class Model:
         self.mat_law87s: Dict[int, MatLaw87] = {}                   # /MAT/LAW87, /MAT/BARLAT_YLD2000 (M183)
         self.mat_law163s: Dict[int, MatLaw163] = {}                 # /MAT/LAW163, /MAT/CRUSHABLE_FOAM (M183)
         self.mat_law169s: Dict[int, MatLaw169] = {}                 # /MAT/LAW169, /MAT/ARUP_ADHESIVE (M183)
+        self.mat_law49s: Dict[int, MatLaw49] = {}                   # /MAT/LAW49, /MAT/STEINB (M184/M557)
+        self.mat_steinbs = self.mat_law49s
+        self.mat_steinbergs = self.mat_law49s
+        self.mat_steinberg_guinans = self.mat_law49s
         self.mat_law76s: Dict[int, MatLaw76] = {}                   # /MAT/LAW76, /MAT/SAMP (M184)
         self.prop_type11s: Dict[int, PropType11] = {}               # /PROP/TYPE11, /PROP/SH_SANDW (M184)
         self.prop_type16s: Dict[int, PropType16] = {}               # /PROP/TYPE16, /PROP/SH_FABR (M184)
