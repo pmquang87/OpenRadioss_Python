@@ -438,7 +438,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         F = np.einsum("nia,nib->nab", xe, st["dndx0"])
     for sl, mat, prop in st.get("slices", []):
         law = getattr(mat, "law", 1)
-        if law == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or (getattr(mat, "E", 0.0) <= 0.0 and law not in (5, "5", "LAW5", "JWL")):
+        if law == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or (getattr(mat, "E", 0.0) <= 0.0 and law not in (5, "5", "LAW5", "JWL", 21, "21", "LAW21", "DPRAG", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG")):
             sig[sl] = 0.0
             c[sl] = 0.0
             c_from_law[sl] = True

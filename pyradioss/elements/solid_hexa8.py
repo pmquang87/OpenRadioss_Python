@@ -675,7 +675,7 @@ def forces(group, x, v, vr, dt, fint, mint):
         for sl, mat, prop in st.get("slices", []):
             if getattr(mat, "law", 1) == 0:
                 is_void[sl] = True
-            elif getattr(mat, "law", 1) in (5, "5", "LAW5", "JWL", 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_LAW48", "LAW48_ZHAO", 52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
+            elif getattr(mat, "law", 1) in (5, "5", "LAW5", "JWL", 21, "21", "LAW21", "DPRAG", "MAT_LAW21", "MAT_DPRAG", "LAW21_DPRAG", 48, "48", "LAW48", "ZHAO", "PLAS_ZHAO", "MAT_ZHAO", "MAT_LAW48", "LAW48_ZHAO", 52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS"):
                 c[sl] = materials.sound_speed(mat, rho[sl])
             elif hasattr(mat, "sound_speed_solid"):
                 c[sl] = mat.sound_speed_solid()
