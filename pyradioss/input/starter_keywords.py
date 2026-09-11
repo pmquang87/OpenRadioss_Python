@@ -33763,9 +33763,17 @@ def read_mat_law57(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         raw = c.raw if hasattr(c, "raw") else str(c)
         return [t.strip() for t in raw.replace(",", " ").split() if t.strip()]
 
+    is_fixed = getattr(block, "fixed", False)
+    if is_fixed and valid_cards:
+        for c in valid_cards[:5]:
+            c_raw = c.raw if hasattr(c, "raw") else str(c)
+            if "," in c_raw:
+                is_fixed = False
+                break
+
     # Detect 5-card vs 4-card format
     is_5_card = False
-    if block.fixed:
+    if is_fixed:
         if len(valid_cards) >= 3:
             c3_raw = valid_cards[2].raw if hasattr(valid_cards[2], "raw") else str(valid_cards[2])
             if len(c3_raw) > 60 and c3_raw[60:].strip():
@@ -33786,7 +33794,7 @@ def read_mat_law57(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 if len(toks4) >= 4 or len(valid_cards) >= 5:
                     is_5_card = True
 
-    if block.fixed:
+    if is_fixed:
         f1 = valid_cards[0].cut("MAT_LAW57_1")
         rho = _fval(f1[0]) if len(f1) > 0 and f1[0].strip() else 0.0
         refer_rho = _fval(f1[1]) if len(f1) > 1 and f1[1].strip() else 0.0

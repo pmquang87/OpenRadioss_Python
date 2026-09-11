@@ -2529,55 +2529,83 @@ class StarterDeck:
           Curves: funct_ID, Fscale_i, EPS_i (%10d          %20lg%20lg)
         """
         mat_obj = None
-        if hasattr(mid, "r00") or hasattr(mid, "r45") or hasattr(mid, "m") or hasattr(mid, "chard") or hasattr(mid, "curves"):
+        if (
+            hasattr(mid, "r00")
+            or hasattr(mid, "r45")
+            or hasattr(mid, "m")
+            or hasattr(mid, "chard")
+            or hasattr(mid, "curves")
+            or (
+                hasattr(mid, "params")
+                and isinstance(getattr(mid, "params", None), dict)
+                and (
+                    "r00" in mid.params
+                    or getattr(mid, "law", None) in (57, "57", "LAW57", "BARLAT3", "MAT_BARLAT3", "LAW57_BARLAT3")
+                    or getattr(mid, "law_name", None) in ("57", "LAW57", "BARLAT3", "MAT_BARLAT3", "LAW57_BARLAT3")
+                )
+            )
+        ):
             mat_obj = mid
-        elif "mat" in kwargs and (hasattr(kwargs["mat"], "r00") or hasattr(kwargs["mat"], "curves")):
+        elif "mat" in kwargs and (
+            hasattr(kwargs["mat"], "r00")
+            or hasattr(kwargs["mat"], "curves")
+            or (
+                hasattr(kwargs["mat"], "params")
+                and isinstance(getattr(kwargs["mat"], "params", None), dict)
+                and (
+                    "r00" in kwargs["mat"].params
+                    or getattr(kwargs["mat"], "law", None) in (57, "57", "LAW57", "BARLAT3", "MAT_BARLAT3", "LAW57_BARLAT3")
+                    or getattr(kwargs["mat"], "law_name", None) in ("57", "LAW57", "BARLAT3", "MAT_BARLAT3", "LAW57_BARLAT3")
+                )
+            )
+        ):
             mat_obj = kwargs["mat"]
         elif "mat_law57" in kwargs and (hasattr(kwargs["mat_law57"], "r00") or hasattr(kwargs["mat_law57"], "curves")):
             mat_obj = kwargs["mat_law57"]
 
         if mat_obj is not None:
             mid = getattr(mat_obj, "id", 0)
+            p = getattr(mat_obj, "params", {}) or {}
             if not title:
                 title = getattr(mat_obj, "title", "")
             if rho == 0.0:
-                rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", 0.0))
+                rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", p.get("rho", p.get("rho0", 0.0))))
             if refer_rho is None:
-                refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", getattr(mat_obj, "ref_rho", None)))
+                refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", getattr(mat_obj, "ref_rho", p.get("refer_rho", p.get("rhor", None)))))
             if e == 0.0:
-                e = getattr(mat_obj, "e", getattr(mat_obj, "E", 0.0))
+                e = getattr(mat_obj, "e", getattr(mat_obj, "E", p.get("e", p.get("E", 0.0))))
             if nu == 0.0:
-                nu = getattr(mat_obj, "nu", 0.0)
+                nu = getattr(mat_obj, "nu", getattr(mat_obj, "Nu", p.get("nu", p.get("Nu", 0.0))))
             if ifunce == 0:
-                ifunce = getattr(mat_obj, "ifunce", getattr(mat_obj, "mat_fct_ide", 0))
+                ifunce = getattr(mat_obj, "ifunce", getattr(mat_obj, "mat_fct_ide", p.get("ifunce", 0)))
             if einf == 0.0:
-                einf = getattr(mat_obj, "einf", getattr(mat_obj, "mat_ea", 0.0))
+                einf = getattr(mat_obj, "einf", getattr(mat_obj, "mat_ea", p.get("einf", 0.0)))
             if ce == 0.0:
-                ce = getattr(mat_obj, "ce", getattr(mat_obj, "mat_ce", 0.0))
+                ce = getattr(mat_obj, "ce", getattr(mat_obj, "mat_ce", p.get("ce", 0.0)))
             if r00 == 1.0:
-                r00 = getattr(mat_obj, "r00", getattr(mat_obj, "mat_r00", 1.0))
+                r00 = getattr(mat_obj, "r00", getattr(mat_obj, "mat_r00", p.get("r00", 1.0)))
             if r45 == 1.0:
-                r45 = getattr(mat_obj, "r45", getattr(mat_obj, "mat_r45", 1.0))
+                r45 = getattr(mat_obj, "r45", getattr(mat_obj, "mat_r45", p.get("r45", 1.0)))
             if r90 == 1.0:
-                r90 = getattr(mat_obj, "r90", getattr(mat_obj, "mat_r90", 1.0))
+                r90 = getattr(mat_obj, "r90", getattr(mat_obj, "mat_r90", p.get("r90", 1.0)))
             if chard == 0.0:
-                chard = getattr(mat_obj, "chard", getattr(mat_obj, "mat_chard", 0.0))
+                chard = getattr(mat_obj, "chard", getattr(mat_obj, "mat_chard", p.get("chard", 0.0)))
             if m == 6.0:
-                m = getattr(mat_obj, "m", getattr(mat_obj, "mat_m", 6.0))
+                m = getattr(mat_obj, "m", getattr(mat_obj, "mat_m", p.get("m", 6.0)))
             if eps_max == 1.0e30:
-                eps_max = getattr(mat_obj, "eps_max", getattr(mat_obj, "epsp_max", getattr(mat_obj, "mat_eps", 1.0e30)))
+                eps_max = getattr(mat_obj, "eps_max", getattr(mat_obj, "epsp_max", getattr(mat_obj, "mat_eps", p.get("eps_max", p.get("epsp_max", 1.0e30)))))
             if eps_t1 == 1.0e30:
-                eps_t1 = getattr(mat_obj, "eps_t1", getattr(mat_obj, "mat_epst1", 1.0e30))
+                eps_t1 = getattr(mat_obj, "eps_t1", getattr(mat_obj, "mat_epst1", p.get("eps_t1", 1.0e30)))
             if eps_t2 == 2.0e30:
-                eps_t2 = getattr(mat_obj, "eps_t2", getattr(mat_obj, "mat_epst2", 2.0e30))
+                eps_t2 = getattr(mat_obj, "eps_t2", getattr(mat_obj, "mat_epst2", p.get("eps_t2", 2.0e30)))
             if fcut == 1.0e30:
-                fcut = getattr(mat_obj, "fcut", 1.0e30)
+                fcut = getattr(mat_obj, "fcut", p.get("fcut", 1.0e30))
             if fsmooth == 0:
-                fsmooth = getattr(mat_obj, "fsmooth", 0)
+                fsmooth = getattr(mat_obj, "fsmooth", p.get("fsmooth", 0))
             if vp == 0:
-                vp = getattr(mat_obj, "vp", getattr(mat_obj, "mat_vp", 0))
+                vp = getattr(mat_obj, "vp", getattr(mat_obj, "mat_vp", p.get("vp", 0)))
             if curves is None:
-                curves = getattr(mat_obj, "curves", None)
+                curves = getattr(mat_obj, "curves", p.get("curves", None))
 
         kw_low = {k.lower(): v for k, v in kwargs.items()}
         if "mat_id" in kw_low and mid == 0:

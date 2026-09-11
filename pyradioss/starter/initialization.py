@@ -467,6 +467,10 @@ def resolve_materials(model: Model, log: MessageLog) -> None:
             from ..materials import law60_plast3
             if hasattr(law60_plast3, "resolve"):
                 law60_plast3.resolve(mat, model, log)
+        elif mat.law in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
+            from ..materials import law57_barlat
+            if hasattr(law57_barlat, "resolve"):
+                law57_barlat.resolve(mat, model, log)
 
     for mat_id, fm, source in model.raw_fails:
         mat = model.materials.get(mat_id)

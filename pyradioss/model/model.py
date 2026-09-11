@@ -1111,6 +1111,7 @@ class Model:
         self.prop_spr_bdamps: Dict[int, PropType27] = {}            # /PROP/TYPE27, /PROP/SPR_BDAMP (M182)
         self.mat_law50s: Dict[int, MatLaw50] = {}                   # /MAT/LAW50, /MAT/VISC_HONEY (M183)
         self.mat_law57s: Dict[int, MatLaw57] = {}                   # /MAT/LAW57, /MAT/BARLAT3 (M183)
+        self.mat_barlat3s = self.mat_law57s
         self.mat_law87s: Dict[int, MatLaw87] = {}                   # /MAT/LAW87, /MAT/BARLAT_YLD2000 (M183)
         self.mat_law163s: Dict[int, MatLaw163] = {}                 # /MAT/LAW163, /MAT/CRUSHABLE_FOAM (M183)
         self.mat_law169s: Dict[int, MatLaw169] = {}                 # /MAT/LAW169, /MAT/ARUP_ADHESIVE (M183)
