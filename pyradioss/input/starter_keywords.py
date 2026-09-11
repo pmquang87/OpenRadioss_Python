@@ -43538,6 +43538,11 @@ def read_mat_law43(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+    if valid_cards:
+        t0_tokens = valid_cards[0].raw.split()
+        if len(t0_tokens) >= 6 and len(valid_cards) <= 3:
+            read_mat_law32(block, model, log)
+            return
 
     rho0, rhor = 0.0, 0.0
     e, nu = 0.0, 0.0
