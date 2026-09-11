@@ -197,6 +197,25 @@ class Law57Params:
     def barlat(self) -> BarlatParams:
         return barlat_params(self.r00, self.r45, self.r90, self.m)
 
+    @property
+    def rho(self) -> float:
+        return self.rho0
+
+    @property
+    def nu0(self) -> float:
+        return self.nu
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key)
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return getattr(self, key, default)
+
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        raise KeyError(key)
+
 
 def _get_params(mat: Any) -> Law57Params:
     """Extract or adapt Law57Params from a Law57Params, Material, or dict."""
@@ -282,10 +301,8 @@ def _eval_young(p: Law57Params, pla: np.ndarray
     e = np.full_like(pla_arr, e0, dtype=float)
 
     if p.ifunce > 0 and p.E_curve_x is not None and len(p.E_curve_x) > 0:
-        pos = pla_arr > 0.0
-        if np.any(pos):
-            val, _ = _curve_eval(p.E_curve_x, p.E_curve_y, p.E_curve_s, pla_arr[pos])
-            e[pos] = val
+        val, _ = _curve_eval(p.E_curve_x, p.E_curve_y, p.E_curve_s, pla_arr)
+        e = val
     elif p.ce > 0.0 and p.einf > 0.0:
         pos = pla_arr > 0.0
         if np.any(pos):
@@ -586,6 +603,8 @@ def shell_update_law57(
 
     if eps_tot.ndim == 1:
         eps_tot = eps_tot[None, :3]
+    if eps_tot.shape[0] != n:
+        eps_tot = np.tile(eps_tot[0, :3], (n, 1))
     eps_tot[:, :3] += deps[:, :3]
 
     # Dynamic Young's modulus evaluation (sigeps57c.F90 lines 200-216)
@@ -635,13 +654,23 @@ def shell_update_law57(
     elif extra is not None and "epsd" in extra and extra["epsd"] is not None:
         epsd_prev = np.asarray(extra["epsd"], dtype=float).flatten()
 
-    if p.vp == 0:
-        if p.israte == 0:
+    israte_val = p.israte
+    if extra is not None and "israte" in extra and extra["israte"] is not None:
+        israte_val = int(extra["israte"])
+    vp_val = p.vp
+    if extra is not None and "vp" in extra and extra["vp"] is not None:
+        vp_val = int(extra["vp"])
+
+    if vp_val == 0:
+        if israte_val == 0:
             epsd = epsd_inst.copy()
         else:
-            alpha_rate = p.asrate
-            if dt > 0.0 and alpha_rate > 1.0:
-                alpha_rate = min(1.0, alpha_rate * dt)
+            if extra is not None and "asrate" in extra and extra["asrate"] is not None:
+                alpha_rate = float(extra["asrate"])
+            else:
+                alpha_rate = p.asrate
+                if dt > 0.0 and alpha_rate > 1.0:
+                    alpha_rate = min(1.0, alpha_rate * dt)
             epsd = alpha_rate * epsd_inst + (1.0 - alpha_rate) * epsd_prev
     else:
         epsd = epsd_prev.copy()
@@ -800,12 +829,14 @@ def shell_update_law57(
             if pla[i] > p.epsmax and off[i] == 1.0:
                 off[i] = 0.8
 
-    # Plastic strain rate if VP = 1 (sigeps57c.F90 lines 516-521)
-    if p.vp == 1:
+    if vp_val == 1:
         dpdt = dpla / max(dt, _EM20)
-        alpha_rate = p.asrate
-        if dt > 0.0 and alpha_rate > 1.0:
-            alpha_rate = min(1.0, alpha_rate * dt)
+        if extra is not None and "asrate" in extra and extra["asrate"] is not None:
+            alpha_rate = float(extra["asrate"])
+        else:
+            alpha_rate = p.asrate
+            if dt > 0.0 and alpha_rate > 1.0:
+                alpha_rate = min(1.0, alpha_rate * dt)
         epsd = alpha_rate * dpdt + (1.0 - alpha_rate) * epsd
 
     # Reconstitute total stresses with backstresses (sigeps57c.F90 lines 524-528)
@@ -890,18 +921,32 @@ def shell_update_law57(
                 extra[k] = pla[0] if is_1d else pla
         for k in ("sigb57", "sigb"):
             if k in extra and isinstance(extra[k], np.ndarray):
-                extra[k][:] = sigb
+                if extra[k].ndim == 1:
+                    extra[k][:3] = sigb[0, :3]
+                else:
+                    extra[k][:] = sigb
+        found_off = False
         for k in ("off57", "off", "layfail"):
             if k in extra and isinstance(extra[k], np.ndarray):
                 extra[k].flat = off
+                found_off = True
             elif k in extra:
                 extra[k] = off[0] if is_1d else off
+                found_off = True
+        if not found_off:
+            extra["off57"] = off[0] if is_1d else off
         for k in ("dmg57", "dmg"):
             if k in extra and isinstance(extra[k], np.ndarray):
-                extra[k][:] = dmg
+                if extra[k].ndim == 1:
+                    extra[k][:3] = dmg[0, :3]
+                else:
+                    extra[k][:] = dmg
         for k in ("eps57", "eps"):
             if k in extra and isinstance(extra[k], np.ndarray):
-                extra[k][:, :3] = eps_tot[:, :3]
+                if extra[k].ndim == 1:
+                    extra[k][:3] = eps_tot[0, :3]
+                else:
+                    extra[k][:, :3] = eps_tot[:, :3]
         for k in ("thk57", "thk"):
             if k in extra and isinstance(extra[k], np.ndarray):
                 extra[k].flat = thk_val
@@ -961,10 +1006,10 @@ def tangent_law57_shell(
     sig: Optional[np.ndarray] = None,
     deps: Optional[np.ndarray] = None,
     epsp: Optional[Union[float, np.ndarray]] = None,
+    epsp_incr: Optional[Union[float, np.ndarray]] = None,
     dt: float = 0.0,
     extra: Optional[Dict[str, Any]] = None,
     *args: Any,
-    epsp_incr: Optional[Union[float, np.ndarray]] = None,
     symmetric: bool = False,
     h: float = 1.0e-7,
     **kwargs: Any,
@@ -978,132 +1023,198 @@ def tangent_law57_shell(
     """
     p = _get_params(mat)
 
-    # Disambiguate arguments
+    # Disambiguate keyword arguments
     if "deps" in kwargs and deps is None:
-        deps = kwargs["deps"]
+        deps = kwargs.pop("deps")
     if "eps" in kwargs and deps is None:
-        deps = kwargs["eps"]
+        deps = kwargs.pop("eps")
     if "sig" in kwargs and sig is None:
-        sig = kwargs["sig"]
+        sig = kwargs.pop("sig")
     if "epsp" in kwargs and epsp is None:
-        epsp = kwargs["epsp"]
+        epsp = kwargs.pop("epsp")
     if "epsp_incr" in kwargs and epsp_incr is None:
-        epsp_incr = kwargs["epsp_incr"]
+        epsp_incr = kwargs.pop("epsp_incr")
     if "extra" in kwargs and extra is None:
-        extra = kwargs["extra"]
+        extra = kwargs.pop("extra")
     if "dt" in kwargs:
-        dt = float(kwargs["dt"])
+        dt = float(kwargs.pop("dt"))
     if "h" in kwargs:
-        h = float(kwargs["h"])
+        h = float(kwargs.pop("h"))
     if "symmetric" in kwargs:
-        symmetric = bool(kwargs["symmetric"])
+        symmetric = bool(kwargs.pop("symmetric"))
 
-    if len(args) >= 1 and epsp is None:
-        epsp = args[0]
-    if len(args) >= 2 and epsp_incr is None:
-        epsp_incr = args[1]
-    if len(args) >= 3 and extra is None and isinstance(args[2], dict):
+    # Disambiguate positional arguments
+    # If called as tangent(mat, sig, epsp, epsp_incr, extra):
+    # then deps is actually epsp!
+    if deps is not None and not isinstance(deps, dict):
+        deps_check = np.asarray(deps)
+        if deps_check.ndim == 0 or (deps_check.ndim == 1 and deps_check.shape[0] not in (3, 5)) or (deps_check.ndim == 2 and deps_check.shape[1] not in (3, 5)):
+            if epsp_incr is None and epsp is not None:
+                epsp_incr = epsp
+            epsp = deps
+            deps = None
+    if len(args) >= 1:
+        if isinstance(args[0], dict) and extra is None:
+            extra = args[0]
+        elif isinstance(args[0], (int, float)):
+            dt = float(args[0])
+        elif isinstance(args[0], np.ndarray):
+            arr = np.asarray(args[0])
+            if (arr.ndim == 1 and arr.shape[0] in (3, 5)) or (arr.ndim == 2 and arr.shape[1] in (3, 5)):
+                if deps is None:
+                    deps = arr
+            elif epsp_incr is None:
+                epsp_incr = args[0]
+    if len(args) >= 2:
+        if isinstance(args[1], dict) and extra is None:
+            extra = args[1]
+        elif epsp_incr is None:
+            epsp_incr = args[1]
+    if len(args) >= 3 and isinstance(args[2], dict) and extra is None:
         extra = args[2]
 
-    # Determine dimensions
-    is_1d = False
-    if deps is not None:
-        deps_arr = np.asarray(deps, dtype=float)
-        is_1d = (deps_arr.ndim == 1)
-        if is_1d:
-            deps_arr = deps_arr[None, :]
-        nel = deps_arr.shape[0]
-    elif sig is not None:
-        sig_arr = np.asarray(sig, dtype=float)
-        is_1d = (sig_arr.ndim == 1)
-        if is_1d:
-            sig_arr = sig_arr[None, :]
-        nel = sig_arr.shape[0]
-    else:
-        nel = 1
-        is_1d = True
+    # Sizing and dimensionality
+    n_sig = 1 if (sig is None or np.ndim(sig) <= 1) else np.asarray(sig).shape[0]
+    n_deps = 1 if (deps is None or np.ndim(deps) <= 1) else np.asarray(deps).shape[0]
+    nel = max(n_sig, n_deps)
+    single = (sig is None or np.ndim(sig) <= 1) and (deps is None or np.ndim(deps) <= 1)
 
-    # Plastic strain array
+    if extra is not None:
+        for k in ("pla57", "pla", "off57", "off", "layfail", "thk57", "thk"):
+            if k in extra and extra[k] is not None:
+                v = np.asarray(extra[k])
+                if v.ndim >= 1 and len(v) > nel:
+                    nel = len(v)
+                    single = False
+
+    if sig is not None:
+        sig_arr = np.asarray(sig, dtype=float).copy()
+        if sig_arr.ndim == 1:
+            sig_arr = sig_arr.reshape(1, -1)
+        if sig_arr.shape[0] == 1 and nel > 1:
+            sig_arr = np.repeat(sig_arr, nel, axis=0)
+    else:
+        sig_arr = np.zeros((nel, 3), dtype=float)
+
+    if deps is not None:
+        deps_arr = np.asarray(deps, dtype=float).copy()
+        if deps_arr.ndim == 1:
+            deps_arr = deps_arr.reshape(1, -1)
+        if deps_arr.shape[0] == 1 and nel > 1:
+            deps_arr = np.repeat(deps_arr, nel, axis=0)
+    else:
+        deps_arr = None
+
     if epsp is not None:
-        epsp_arr = np.asarray(epsp, dtype=float).flatten()
+        epsp_arr = np.asarray(epsp, dtype=float).copy().flatten()
         if len(epsp_arr) == 1 and nel > 1:
             epsp_arr = np.full(nel, epsp_arr[0], dtype=float)
     elif extra is not None and "pla57" in extra and extra["pla57"] is not None:
-        epsp_arr = np.asarray(extra["pla57"], dtype=float).flatten()
+        epsp_arr = np.asarray(extra["pla57"], dtype=float).copy().flatten()
+        if len(epsp_arr) == 1 and nel > 1:
+            epsp_arr = np.full(nel, epsp_arr[0], dtype=float)
     elif extra is not None and "pla" in extra and extra["pla"] is not None:
-        epsp_arr = np.asarray(extra["pla"], dtype=float).flatten()
+        epsp_arr = np.asarray(extra["pla"], dtype=float).copy().flatten()
+        if len(epsp_arr) == 1 and nel > 1:
+            epsp_arr = np.full(nel, epsp_arr[0], dtype=float)
+    elif extra is not None and "epsp" in extra and extra["epsp"] is not None:
+        epsp_arr = np.asarray(extra["epsp"], dtype=float).copy().flatten()
+        if len(epsp_arr) == 1 and nel > 1:
+            epsp_arr = np.full(nel, epsp_arr[0], dtype=float)
     else:
         epsp_arr = np.zeros(nel, dtype=float)
 
-    # Element deletion status
+    # Element deletion / erosion status
     off_arr = np.ones(nel, dtype=float)
     if extra is not None:
         for k in ("off57", "off", "layfail"):
             if k in extra and extra[k] is not None:
-                off_arr = np.asarray(extra[k], dtype=float).flatten()
+                val = np.asarray(extra[k], dtype=float).flatten()
+                if len(val) == 1 and nel > 1:
+                    off_arr = np.full(nel, val[0], dtype=float)
+                else:
+                    off_arr = val.copy()
                 break
 
-    # If deps is provided, compute numerical algorithmic perturbation
-    if deps is not None:
-        deps_arr = np.asarray(deps, dtype=float)
-        if deps_arr.ndim == 1:
-            deps_arr = deps_arr[None, :]
-        sig_in = np.asarray(sig, dtype=float) if sig is not None else np.zeros((nel, deps_arr.shape[1]), dtype=float)
-        if sig_in.ndim == 1:
-            sig_in = sig_in[None, :]
+    deleted_mask = (off_arr <= 0.0) | (epsp_arr >= p.epsmax)
 
+    if extra is not None:
+        for k in ("dmg57", "dmg"):
+            if k in extra and extra[k] is not None:
+                dmg_val = np.asarray(extra[k], dtype=float)
+                if dmg_val.ndim == 1 and len(dmg_val) == 3:
+                    dmg_val = dmg_val.reshape(1, 3)
+                if dmg_val.shape[0] == nel:
+                    deleted_mask = deleted_mask | (dmg_val[:, 2] >= 1.0 - 1e-12)
+                break
+        if p.epsr2 < _INF:
+            for k in ("eps57", "eps"):
+                if k in extra and extra[k] is not None:
+                    eps_tot_val = np.asarray(extra[k], dtype=float)
+                    if eps_tot_val.ndim == 1:
+                        eps_tot_val = eps_tot_val.reshape(1, -1)
+                    if eps_tot_val.shape[0] == 1 and nel > 1:
+                        eps_tot_val = np.repeat(eps_tot_val, nel, axis=0)
+                    if eps_tot_val.shape[0] == nel:
+                        epst = 0.5 * (eps_tot_val[:, 0] + eps_tot_val[:, 1]
+                                      + np.sqrt((eps_tot_val[:, 0] - eps_tot_val[:, 1]) ** 2 + eps_tot_val[:, 2] ** 2))
+                        deleted_mask = deleted_mask | (epst >= p.epsr2)
+                    break
+
+    # If deps is provided, compute numerical algorithmic perturbation
+    if deps_arr is not None:
         D = np.zeros((nel, 3, 3), dtype=float)
+        active = ~deleted_mask
         h_step = float(h)
 
-        for i in range(nel):
-            if off_arr[i] <= 0.0:
-                continue
-
-            sig_i = sig_in[i:i+1].copy()
-            deps_i = deps_arr[i:i+1].copy()
-            epsp_i = float(epsp_arr[i])
-
+        if np.any(active):
             for j in range(3):
-                deps_p = deps_i.copy()
-                deps_m = deps_i.copy()
-                deps_p[0, j] += h_step
-                deps_m[0, j] -= h_step
+                ej = np.zeros_like(deps_arr)
+                ej[:, j] = h_step
 
                 ext_p = _copy_extra(extra)
                 ext_m = _copy_extra(extra)
 
-                res_p = shell_update_law57(p, sig_i.copy(), deps_p, epsp=epsp_i, dt=dt, extra=ext_p, return_sound_speed=False)
-                res_m = shell_update_law57(p, sig_i.copy(), deps_m, epsp=epsp_i, dt=dt, extra=ext_m, return_sound_speed=False)
+                res_p = shell_update_law57(p, sig_arr.copy(), deps_arr + ej, epsp=epsp_arr.copy(), dt=dt, extra=ext_p, return_sound_speed=False)
+                res_m = shell_update_law57(p, sig_arr.copy(), deps_arr - ej, epsp=epsp_arr.copy(), dt=dt, extra=ext_m, return_sound_speed=False)
 
                 sp = res_p[0] if isinstance(res_p, tuple) else res_p
                 sm = res_m[0] if isinstance(res_m, tuple) else res_m
 
-                sp_3 = sp[0, :3] if sp.ndim == 2 else sp[:3]
-                sm_3 = sm[0, :3] if sm.ndim == 2 else sm[:3]
+                if sp.ndim == 1:
+                    sp = sp.reshape(1, -1)
+                    sm = sm.reshape(1, -1)
 
-                D[i, :, j] = (sp_3 - sm_3) / (2.0 * h_step)
+                D[:, :, j] = (sp[:, :3] - sm[:, :3]) / (2.0 * h_step)
+
+        if np.any(deleted_mask):
+            D[deleted_mask] = 0.0
 
         if symmetric:
             D = 0.5 * (D + np.swapaxes(D, -1, -2))
 
-        return D[0] if is_1d else D
+        return D[0] if single else D
 
-    # Pure elastic membrane tangent
+    # Pure elastic membrane tangent (with degraded modulus if active)
     _, a11_arr, a12_arr, shear_arr = _eval_young(p, epsp_arr)
     C_el = np.zeros((nel, 3, 3), dtype=float)
     for i in range(nel):
-        if off_arr[i] > 0.0:
+        if not deleted_mask[i]:
             C_el[i, 0, 0] = a11_arr[i]
             C_el[i, 0, 1] = a12_arr[i]
             C_el[i, 1, 0] = a12_arr[i]
             C_el[i, 1, 1] = a11_arr[i]
             C_el[i, 2, 2] = shear_arr[i]
 
-    return C_el[0] if is_1d else C_el
+    if symmetric:
+        C_el = 0.5 * (C_el + np.swapaxes(C_el, -1, -2))
+
+    return C_el[0] if single else C_el
 
 
 consistent_shell_tangent = tangent_law57_shell
 shell_tangent = tangent_law57_shell
+shell_membrane_tangent = tangent_law57_shell
 
 
 # ============================================================================
@@ -1245,21 +1356,36 @@ def build_law57(rec: Any = None, **kwargs: Any) -> Law57Params:
 
     if "curves" in p and isinstance(p["curves"], (list, tuple)):
         for item in p["curves"]:
-            if len(item) == 3:
-                x_c, y_c, r_c = item
-            elif len(item) == 2:
-                x_c, y_c = item
-                r_c = 0.0
-            else:
+            if hasattr(item, "fct_id"):
+                f_int = int(getattr(item, "fct_id", 0))
+                if f_int != 0:
+                    funct_ids.append(f_int)
+                    yfacs.append(float(getattr(item, "fscale", 1.0)) if float(getattr(item, "fscale", 1.0)) != 0.0 else 1.0)
+                    rates.append(float(getattr(item, "eps", 0.0)))
                 continue
-            x_arr = np.asarray(x_c, dtype=float)
-            y_arr = np.asarray(y_c, dtype=float)
-            s_arr = (np.diff(y_arr) / np.maximum(np.diff(x_arr), _EM20)
-                     if len(x_arr) > 1 else np.zeros(0, dtype=float))
-            cxs.append(x_arr)
-            cys.append(y_arr)
-            css.append(s_arr)
-            rates.append(float(r_c))
+            if isinstance(item, dict) and ("fct_id" in item or "funct_id" in item):
+                f_int = int(item.get("fct_id", item.get("funct_id", 0)))
+                if f_int != 0:
+                    funct_ids.append(f_int)
+                    yfacs.append(float(item.get("fscale", 1.0)) if float(item.get("fscale", 1.0)) != 0.0 else 1.0)
+                    rates.append(float(item.get("eps", 0.0)))
+                continue
+            if isinstance(item, (list, tuple, np.ndarray)):
+                if len(item) == 3:
+                    x_c, y_c, r_c = item
+                elif len(item) == 2:
+                    x_c, y_c = item
+                    r_c = 0.0
+                else:
+                    continue
+                x_arr = np.asarray(x_c, dtype=float)
+                y_arr = np.asarray(y_c, dtype=float)
+                s_arr = (np.diff(y_arr) / np.maximum(np.diff(x_arr), _EM20)
+                         if len(x_arr) > 1 else np.zeros(0, dtype=float))
+                cxs.append(x_arr)
+                cys.append(y_arr)
+                css.append(s_arr)
+                rates.append(float(r_c))
 
     if "FunctionIds" in p:
         fids = list(p["FunctionIds"]) if isinstance(p["FunctionIds"], (list, tuple, np.ndarray)) else [p["FunctionIds"]]
@@ -1275,6 +1401,11 @@ def build_law57(rec: Any = None, **kwargs: Any) -> Law57Params:
     e_cx = p.get("E_curve_x")
     e_cy = p.get("E_curve_y")
     e_cs = p.get("E_curve_s")
+    if "E_curve" in p and p["E_curve"] is not None:
+        ec = p["E_curve"]
+        if isinstance(ec, (list, tuple)) and len(ec) == 2:
+            e_cx = np.asarray(ec[0], dtype=float)
+            e_cy = np.asarray(ec[1], dtype=float)
     if e_cx is not None and e_cy is not None:
         e_cx = np.asarray(e_cx, dtype=float)
         e_cy = np.asarray(e_cy, dtype=float)
@@ -1372,6 +1503,12 @@ def resolve(mat: Any, model: Any, log: Any = None) -> None:
             p.E_curve_x = x_e
             p.E_curve_y = y_e
             p.E_curve_s = s_e
+
+    if p.sigy0 >= 1.0e29 and len(p.curve_y) > 0 and len(p.curve_y[0]) > 0:
+        p.sigy0 = float(p.curve_y[0][0])
+
+    if hasattr(mat, "params") and not isinstance(mat.params, Law57Params):
+        mat.params = p
 
 
 def _register() -> None:
