@@ -246,18 +246,29 @@ def _eval_curve_1d(curve: Any, x: Union[float, np.ndarray]) -> Tuple[np.ndarray,
             cx, cy = data[:, 0], data[:, 1]
         else:
             cx, cy = np.array([]), np.array([])
-    elif isinstance(curve, (list, tuple)) and len(curve) == 2 and isinstance(curve[0], (list, tuple, np.ndarray)) and isinstance(curve[1], (list, tuple, np.ndarray)):
-        cx = np.asarray(curve[0], dtype=float)
-        cy = np.asarray(curve[1], dtype=float)
-    elif isinstance(curve, (list, tuple, np.ndarray)):
-        try:
-            data = np.asarray(curve, dtype=float)
-            if data.ndim == 2 and data.shape[1] >= 2:
-                cx, cy = data[:, 0], data[:, 1]
+    elif isinstance(curve, (list, tuple)):
+        if len(curve) == 2 and isinstance(curve[0], (list, tuple, np.ndarray)) and isinstance(curve[1], (list, tuple, np.ndarray)):
+            arr0 = np.asarray(curve[0], dtype=float)
+            arr1 = np.asarray(curve[1], dtype=float)
+            if len(arr0) != 2 or len(arr1) != 2:
+                cx, cy = arr0, arr1
+            elif isinstance(curve[0], tuple) and isinstance(curve, list):
+                pts = np.asarray(curve, dtype=float)
+                cx, cy = pts[:, 0], pts[:, 1]
+            elif arr0[1] > arr0[0] and (arr1[0] > arr0[1] or arr1[1] > arr0[1]):
+                cx, cy = arr0, arr1
             else:
+                pts = np.asarray(curve, dtype=float)
+                cx, cy = pts[:, 0], pts[:, 1]
+        else:
+            try:
+                data = np.asarray(curve, dtype=float)
+                if data.ndim == 2 and data.shape[1] >= 2:
+                    cx, cy = data[:, 0], data[:, 1]
+                else:
+                    cx, cy = np.array([]), np.array([])
+            except Exception:
                 cx, cy = np.array([]), np.array([])
-        except Exception:
-            cx, cy = np.array([]), np.array([])
     elif isinstance(curve, dict) and "x" in curve and "y" in curve:
         cx = np.asarray(curve["x"], dtype=float)
         cy = np.asarray(curve["y"], dtype=float)
