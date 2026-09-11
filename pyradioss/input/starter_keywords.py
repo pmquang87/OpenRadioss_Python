@@ -40598,11 +40598,11 @@ def read_mat_law52(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         id=mat_id, law=52, rho0=rho, title=title,
         params={
             "rho": rho, "rho_i": rho, "refer_rho": refer_rho, "rho_o": refer_rho,
-            "e": e, "nu": nu, "iflag": iflag, "fsmooth": fsmooth, "fcut": fcut,
+            "e": e, "E": e, "nu": nu, "NU": nu, "iflag": iflag, "fsmooth": fsmooth, "fcut": fcut,
             "raw_fcut": raw_fcut, "raw_c": raw_c, "raw_pc": raw_pc,
-            "a": a, "yield": a, "b": b, "n": n, "c": c, "pc": pc,
-            "q1": q1, "q2": q2, "q3": q3, "s_n": s_n, "eps_n": eps_n,
-            "f_i": f_i, "f_n": f_n, "f_c": f_c, "f_f": f_f, "fu": fu,
+            "a": a, "A": a, "yield": a, "b": b, "B": b, "n": n, "N": n, "c": c, "C": c, "pc": pc, "P": pc,
+            "q1": q1, "q2": q2, "q3": q3, "s_n": s_n, "sn": s_n, "eps_n": eps_n, "epsn": eps_n,
+            "f_i": f_i, "f0": f_i, "f_0": f_i, "fi": f_i, "f_n": f_n, "fn": f_n, "f_c": f_c, "fc": f_c, "f_f": f_f, "ff": f_f, "fu": fu,
             "itable": itable, "xfac": xfac, "yfac": yfac,
         }
     )
