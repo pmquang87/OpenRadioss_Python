@@ -80,6 +80,8 @@ from .law57_barlat import (
     solid_update as law57_solid_update,
     sound_speed_shell as law57_sound_speed,
     consistent_shell_tangent as law57_shell_tangent,
+    shell_membrane_tangent as law57_shell_membrane_tangent,
+    shell_tangent as law57_tangent_shell,
 )
 from .law58_fabr_a import (
     Law58Params,
@@ -140,6 +142,8 @@ from .law57_barlat import (
     shell_update as law57_shell_update,
     sound_speed as law57_sound_speed,
     consistent_shell_tangent as law57_shell_tangent,
+    shell_membrane_tangent as law57_shell_membrane_tangent,
+    shell_tangent as law57_tangent_shell,
 )
 from .law60_plast3 import (
     Law60Params,
@@ -1788,9 +1792,9 @@ def shell_membrane_tangent(mat):
     layer; the shell kernels take this fast path so the M8 results stay
     byte-identical). Elastoplastic shells go through the per-layer
     ``shell_layer_tangent`` instead (M11)."""
-    if mat.law == 1:
+    if getattr(mat, "law", None) == 1:
         return law01_elastic.shell_membrane_tangent(mat)
-    if mat.law == 19:
+    if getattr(mat, "law", None) == 19:
         return law19_fabric.shell_membrane_tangent(mat)
     if getattr(mat, "law", None) in (58, "58", "LAW58", "FABR_A", "MAT_FABR_A", "FABRIC_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "MAT_FABR_A", "FABRIC_A", "LAW58_FABR_A"):
         return law58_fabr_a.shell_membrane_tangent(mat)

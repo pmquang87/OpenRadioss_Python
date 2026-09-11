@@ -149,6 +149,7 @@ def barlat_params(r0: float = 1.0, r45: float = 1.0, r90: float = 1.0,
 class Law57Params:
     """Strongly-typed parameters for /MAT/LAW57 (/MAT/BARLAT3)."""
     id: int = 1
+    law: int = 57
     title: str = "LAW57_BARLAT"
     rho0: float = 1.0
     rhor: float = 1.0
