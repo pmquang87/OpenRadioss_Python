@@ -1039,241 +1039,471 @@ def shell_update_law52(
 # Algorithmic Consistent Tangent Operators
 # ===================================================================
 
+def _copy_extra(extra: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Deep copy persistent state dictionary arrays and sub-dictionaries."""
+    if extra is None:
+        return None
+    res: Dict[str, Any] = {}
+    for k, v in extra.items():
+        if isinstance(v, np.ndarray):
+            res[k] = v.copy()
+        elif isinstance(v, dict):
+            res[k] = _copy_extra(v)
+        elif hasattr(v, "copy"):
+            try:
+                res[k] = v.copy()
+            except Exception:
+                res[k] = v
+        else:
+            res[k] = v
+    return res
+
+
 def tangent_law52_solid(
     mat: Any,
-    sig: np.ndarray,
-    epsp: Optional[np.ndarray] = None,
-    epsp_incr: Optional[np.ndarray] = None,
+    sig: Optional[np.ndarray] = None,
+    deps: Optional[np.ndarray] = None,
+    epsp: Optional[Union[float, np.ndarray]] = None,
+    epsp_incr: Optional[Union[float, np.ndarray]] = None,
+    dt: float = 0.0,
     extra: Optional[Dict[str, Any]] = None,
+    *args: Any,
+    symmetric: bool = False,
+    h: float = 1e-7,
+    **kwargs: Any,
 ) -> np.ndarray:
     """Algorithmic consistent elasto-plastic tangent for 3D solids, shape (n, 6, 6) or (6, 6).
 
     .. math::
-        \\mathbf{C}^{\\mathrm{ep}} = \\mathbf{C}^{\\mathrm{el}}
-        - \\frac{(\\mathbf{C}^{\\mathrm{el}} : \\mathbf{D}) \\otimes (\\mathbf{D} : \\mathbf{C}^{\\mathrm{el}})}
-          {LAM1}
+        \\mathbf{D}^{\\mathrm{alg}} = \\frac{\\partial\\boldsymbol{\\sigma}}{\\partial\\Delta\\boldsymbol{\\varepsilon}}
     """
     params = _extract_params(mat)
-    is_1d = sig.ndim == 1
-    if is_1d:
-        sig = sig.reshape(1, -1)
-        if epsp is not None and np.ndim(epsp) == 0:
-            epsp = np.array([epsp])
-        if epsp_incr is not None and np.ndim(epsp_incr) == 0:
-            epsp_incr = np.array([epsp_incr])
 
-    n = sig.shape[0]
+    # Disambiguate keyword arguments
+    if "deps" in kwargs and deps is None:
+        deps = kwargs["deps"]
+    if "eps" in kwargs and deps is None:
+        deps = kwargs["eps"]
+    if "sig" in kwargs and sig is None:
+        sig = kwargs["sig"]
+    if "epsp" in kwargs and epsp is None:
+        epsp = kwargs["epsp"]
+    if "epsp_incr" in kwargs and epsp_incr is None:
+        epsp_incr = kwargs["epsp_incr"]
+    if "extra" in kwargs and extra is None:
+        extra = kwargs["extra"]
+    if "dt" in kwargs:
+        dt = float(kwargs["dt"])
+    if "h" in kwargs:
+        h = float(kwargs["h"])
+    if "symmetric" in kwargs:
+        symmetric = bool(kwargs["symmetric"])
+
+    # Disambiguate positional arguments
+    # If called as (mat, sig, epsp, epsp_incr, extra):
+    # Then deps was actually epsp, and epsp was actually epsp_incr!
+    if deps is not None and not isinstance(deps, dict):
+        deps_check = np.asarray(deps)
+        if deps_check.ndim == 0 or (deps_check.ndim == 1 and deps_check.shape[0] != 6) or (deps_check.ndim == 2 and deps_check.shape[1] != 6):
+            if epsp_incr is None and epsp is not None:
+                epsp_incr = epsp
+            epsp = deps
+            deps = None
+    if len(args) >= 1:
+        if isinstance(args[0], dict) and extra is None:
+            extra = args[0]
+        elif isinstance(args[0], (int, float, np.ndarray)):
+            arr = np.asarray(args[0])
+            if (arr.ndim == 1 and arr.shape[0] == 6) or (arr.ndim == 2 and arr.shape[1] == 6):
+                if deps is None:
+                    deps = arr
+            elif epsp_incr is None:
+                epsp_incr = args[0]
+    if len(args) >= 2:
+        if isinstance(args[1], dict) and extra is None:
+            extra = args[1]
+        elif epsp_incr is None:
+            epsp_incr = args[1]
+    if len(args) >= 3 and isinstance(args[2], dict) and extra is None:
+        extra = args[2]
+
+    # Sizing and dimensionality
+    n_sig = 1 if (sig is None or np.ndim(sig) <= 1) else np.asarray(sig).shape[0]
+    n_deps = 1 if (deps is None or np.ndim(deps) <= 1) else np.asarray(deps).shape[0]
+    nel = max(n_sig, n_deps)
+    single = (sig is None or np.ndim(sig) <= 1) and (deps is None or np.ndim(deps) <= 1)
+
+    if sig is not None:
+        sig_arr = np.asarray(sig, dtype=float).copy()
+        if sig_arr.ndim == 1:
+            sig_arr = sig_arr.reshape(1, -1)
+        if sig_arr.shape[0] == 1 and nel > 1:
+            sig_arr = np.repeat(sig_arr, nel, axis=0)
+    else:
+        sig_arr = np.zeros((nel, 6), dtype=float)
+
+    if deps is not None:
+        deps_arr = np.asarray(deps, dtype=float).copy()
+        if deps_arr.ndim == 1:
+            deps_arr = deps_arr.reshape(1, -1)
+        if deps_arr.shape[0] == 1 and nel > 1:
+            deps_arr = np.repeat(deps_arr, nel, axis=0)
+    else:
+        deps_arr = None
+
+    if epsp is not None:
+        epsp_arr = np.asarray(epsp, dtype=float).copy().flatten()
+        if len(epsp_arr) == 1 and nel > 1:
+            epsp_arr = np.full(nel, epsp_arr[0])
+    else:
+        epsp_arr = np.zeros(nel, dtype=float)
+
     E = params.E
     nu = params.nu
     G = 0.5 * E / (1.0 + nu)
     c1 = E * (1.0 - nu) / ((1.0 + nu) * (1.0 - 2.0 * nu))
     c2 = c1 * nu / (1.0 - nu)
 
-    # Base elastic stiffness matrix (6x6 Voigt)
+    # Element deletion / rupture status
+    off_val = extra.get("off", extra.get("off52", np.ones(nel))) if extra else np.ones(nel)
+    off_arr = np.asarray(off_val, dtype=float).flatten()
+    if len(off_arr) == 1 and nel > 1:
+        off_arr = np.full(nel, off_arr[0])
+    deleted_mask = (off_arr <= 0.0)
+    if extra and "dmg" in extra:
+        dmg = np.asarray(extra["dmg"], dtype=float)
+        if dmg.ndim == 1 and dmg.shape[0] == 5:
+            dmg = dmg.reshape(1, 5)
+        if dmg.shape[0] == nel:
+            deleted_mask = deleted_mask | (dmg[:, 3] >= params.ff) | (dmg[:, 4] >= params.fu) | (dmg[:, 0] >= params.fu)
+
+    # 1. Consistent algorithmic perturbation tangent when deps is provided
+    if deps_arr is not None:
+        D = np.zeros((nel, 6, 6), dtype=float)
+        active = ~deleted_mask
+        if np.any(active):
+            for j in range(6):
+                ej = np.zeros_like(deps_arr)
+                ej[:, j] = h
+                ex_p = _copy_extra(extra)
+                ex_m = _copy_extra(extra)
+                sp, _ = solid_update_law52(params, sig_arr.copy(), deps_arr + ej, epsp=epsp_arr.copy(), dt=dt, extra=ex_p)
+                sm, _ = solid_update_law52(params, sig_arr.copy(), deps_arr - ej, epsp=epsp_arr.copy(), dt=dt, extra=ex_m)
+                if sp.ndim == 1:
+                    sp = sp.reshape(1, 6)
+                    sm = sm.reshape(1, 6)
+                D[:, :, j] = (sp - sm) / (2.0 * h)
+        if np.any(deleted_mask):
+            D[deleted_mask] = 0.0
+        if symmetric:
+            D = 0.5 * (D + np.swapaxes(D, -1, -2))
+        return D[0] if single else D
+
+    # 2. Analytical / ground state tangent fallback when deps is None
     Cel = np.zeros((6, 6), dtype=float)
     Cel[0, 0] = Cel[1, 1] = Cel[2, 2] = c1
     Cel[0, 1] = Cel[1, 0] = Cel[0, 2] = Cel[2, 0] = Cel[1, 2] = Cel[2, 1] = c2
     Cel[3, 3] = Cel[4, 4] = Cel[5, 5] = G
 
-    D_tangent = np.broadcast_to(Cel, (n, 6, 6)).copy()
+    D_tangent = np.broadcast_to(Cel, (nel, 6, 6)).copy()
+    if np.any(deleted_mask):
+        D_tangent[deleted_mask] = 0.0
 
-    off = extra.get("off", np.ones(n)) if extra else np.ones(n)
-    sigm = extra.get("sigm", np.full(n, params.yield_a)) if extra else np.full(n, params.yield_a)
-    epsm = extra.get("epsm", np.zeros(n)) if extra else np.zeros(n)
-    dmg = extra.get("dmg", None) if extra else None
-
-    # Identify plastic elements
     if epsp_incr is not None:
-        plastic = (epsp_incr > 1e-12) & (off > 0.0)
-    else:
-        plastic = np.zeros(n, dtype=bool)
+        ep_inc = np.asarray(epsp_incr, dtype=float).flatten()
+        if len(ep_inc) == 1 and nel > 1:
+            ep_inc = np.full(nel, ep_inc[0])
+        plastic = (ep_inc > 1e-12) & (~deleted_mask)
+        if np.any(plastic):
+            idx = np.where(plastic)[0]
+            sigm = extra.get("sigm", np.full(nel, params.yield_a)) if extra else np.full(nel, params.yield_a)
+            epsm = extra.get("epsm", np.zeros(nel)) if extra else np.zeros(nel)
+            dmg = extra.get("dmg", None) if extra else None
+            for i in idx:
+                f_curr = dmg[i, 3] if dmg is not None else params.fi
+                f_star_curr, df_curr = compute_f_star(f_curr, params.fc, params.ff, params.fu)
 
-    dead = off <= 0.0
-    D_tangent[dead] = 0.0
+                pn = (sig_arr[i, 0] + sig_arr[i, 1] + sig_arr[i, 2]) / 3.0
+                sxx = sig_arr[i, 0] - pn
+                syy = sig_arr[i, 1] - pn
+                szz = sig_arr[i, 2] - pn
+                j2 = 0.5 * (sxx ** 2 + syy ** 2 + szz ** 2) + sig_arr[i, 3] ** 2 + sig_arr[i, 4] ** 2 + sig_arr[i, 5] ** 2
+                vm = math.sqrt(max(3.0 * j2, _EM20))
 
-    if not np.any(plastic):
-        if is_1d:
-            return D_tangent[0]
-        return D_tangent
+                sigm_i = max(sigm[i], _EM20)
+                sigm1 = 1.0 / sigm_i
+                var = 1.5 * params.q2 * pn * sigm1
+                var_clipped = max(min(var, 80.0), -80.0)
+                coh = math.cosh(var_clipped)
+                sih = math.sinh(var_clipped)
 
-    idx = np.where(plastic)[0]
-    for i in idx:
-        f_curr = dmg[i, 3] if dmg is not None else params.fi
-        f_star_curr, df_curr = compute_f_star(f_curr, params.fc, params.ff, params.fu)
+                va = 1.0 + params.q3 * (f_star_curr ** 2) - 2.0 * params.q1 * f_star_curr * coh
+                va_sqrt = math.sqrt(max(0.0, va))
+                va1 = 1.0 / max(va_sqrt, _EM20)
+                va11 = 0.5 * params.q1 * params.q2 * f_star_curr * sih * va1
 
-        pn = (sig[i, 0] + sig[i, 1] + sig[i, 2]) / 3.0
-        sxx = sig[i, 0] - pn
-        syy = sig[i, 1] - pn
-        szz = sig[i, 2] - pn
-        j2 = 0.5 * (sxx ** 2 + syy ** 2 + szz ** 2) + sig[i, 3] ** 2 + sig[i, 4] ** 2 + sig[i, 5] ** 2
-        vm = math.sqrt(max(3.0 * j2, _EM20))
+                vm1 = 1.0 / vm
+                D_flow = np.zeros(6, dtype=float)
+                D_flow[0] = 0.5 * (2.0 * sig_arr[i, 0] - sig_arr[i, 1] - sig_arr[i, 2]) * vm1 + va11
+                D_flow[1] = 0.5 * (2.0 * sig_arr[i, 1] - sig_arr[i, 0] - sig_arr[i, 2]) * vm1 + va11
+                D_flow[2] = 0.5 * (2.0 * sig_arr[i, 2] - sig_arr[i, 0] - sig_arr[i, 1]) * vm1 + va11
+                D_flow[3] = 3.0 * sig_arr[i, 3] * vm1
+                D_flow[4] = 3.0 * sig_arr[i, 4] * vm1
+                D_flow[5] = 3.0 * sig_arr[i, 5] * vm1
 
-        sigm_i = max(sigm[i], _EM20)
-        sigm1 = 1.0 / sigm_i
-        var = 1.5 * params.q2 * pn * sigm1
-        var_clipped = max(min(var, 80.0), -80.0)
-        coh = math.cosh(var_clipped)
-        sih = math.sinh(var_clipped)
+                a21 = _EP20 if f_curr >= 1.0 else (sigm1 / (1.0 - f_curr))
+                a1_i = (params.fn / (max(params.sn, _EM20) * _SQRT2PI)) * math.exp(
+                    -0.5 * (((epsm[i] - params.epsn) / max(params.sn, _EM20)) ** 2)
+                )
+                a2 = (D_flow[0] * sig_arr[i, 0] + D_flow[1] * sig_arr[i, 1] + D_flow[2] * sig_arr[i, 2] +
+                      2.0 * (D_flow[3] * sig_arr[i, 3] + D_flow[4] * sig_arr[i, 4] + D_flow[5] * sig_arr[i, 5])) * a21
 
-        va = 1.0 + params.q3 * (f_star_curr ** 2) - 2.0 * params.q1 * f_star_curr * coh
-        va_sqrt = math.sqrt(max(0.0, va))
-        va1 = 1.0 / max(va_sqrt, _EM20)
-        va11 = 0.5 * params.q1 * params.q2 * f_star_curr * sih * va1
+                dcrf = -sigm_i * (params.q3 * f_star_curr * df_curr - params.q1 * coh * df_curr) * va1
+                dcrm = -va_sqrt - 3.0 * va11 * pn * sigm1
 
-        vm1 = 1.0 / vm
-        D_flow = np.zeros(6, dtype=float)
-        D_flow[0] = 0.5 * (2.0 * sig[i, 0] - sig[i, 1] - sig[i, 2]) * vm1 + va11
-        D_flow[1] = 0.5 * (2.0 * sig[i, 1] - sig[i, 0] - sig[i, 2]) * vm1 + va11
-        D_flow[2] = 0.5 * (2.0 * sig[i, 2] - sig[i, 0] - sig[i, 1]) * vm1 + va11
-        D_flow[3] = 3.0 * sig[i, 3] * vm1
-        D_flow[4] = 3.0 * sig[i, 4] * vm1
-        D_flow[5] = 3.0 * sig[i, 5] * vm1
+                if params.hard_n == 1.0:
+                    dsepp = params.hard_b
+                else:
+                    dsepp = params.hard_b * params.hard_n * (max(epsm[i], _EM20) ** (params.hard_n - 1.0))
 
-        a21 = _EP20 if f_curr >= 1.0 else (sigm1 / (1.0 - f_curr))
-        a1_i = (params.fn / (max(params.sn, _EM20) * _SQRT2PI)) * math.exp(
-            -0.5 * (((epsm[i] - params.epsn) / max(params.sn, _EM20)) ** 2)
-        )
-        a2 = (D_flow[0] * sig[i, 0] + D_flow[1] * sig[i, 1] + D_flow[2] * sig[i, 2] +
-              2.0 * (D_flow[3] * sig[i, 3] + D_flow[4] * sig[i, 4] + D_flow[5] * sig[i, 5])) * a21
+                CD = Cel @ D_flow
+                DCD = float(D_flow @ CD)
 
-        dcrf = -sigm_i * (params.q3 * f_star_curr * df_curr - params.q1 * coh * df_curr) * va1
-        dcrm = -va_sqrt - 3.0 * va11 * pn * sigm1
+                tr_d = D_flow[0] + D_flow[1] + D_flow[2]
+                lam1 = DCD - dcrm * dsepp * a2 - dcrf * ((1.0 - f_curr) * tr_d + a1_i * a2)
+                lam1 = max(lam1, 1e-12)
 
-        if params.hard_n == 1.0:
-            dsepp = params.hard_b
-        else:
-            dsepp = params.hard_b * params.hard_n * (max(epsm[i], _EM20) ** (params.hard_n - 1.0))
+                D_tangent[i] = Cel - np.outer(CD, CD) / lam1
 
-        CD = Cel @ D_flow
-        DCD = float(D_flow @ CD)
-
-        tr_d = D_flow[0] + D_flow[1] + D_flow[2]
-        lam1 = DCD - dcrm * dsepp * a2 - dcrf * ((1.0 - f_curr) * tr_d + a1_i * a2)
-        lam1 = max(lam1, 1e-12)
-
-        D_tangent[i] = Cel - np.outer(CD, CD) / lam1
-
-    if is_1d:
+    if symmetric:
+        D_tangent = 0.5 * (D_tangent + np.swapaxes(D_tangent, -1, -2))
+    if single:
         return D_tangent[0]
     return D_tangent
 
 
 def tangent_law52_shell(
     mat: Any,
-    sig: np.ndarray,
-    epsp: Optional[np.ndarray] = None,
-    epsp_incr: Optional[np.ndarray] = None,
+    sig: Optional[np.ndarray] = None,
+    deps: Optional[np.ndarray] = None,
+    epsp: Optional[Union[float, np.ndarray]] = None,
+    epsp_incr: Optional[Union[float, np.ndarray]] = None,
+    dt: float = 0.0,
     extra: Optional[Dict[str, Any]] = None,
+    *args: Any,
+    symmetric: bool = False,
+    h: float = 1e-7,
+    **kwargs: Any,
 ) -> np.ndarray:
     """Algorithmic consistent elasto-plastic tangent for plane-stress shells, shape (n, 3, 3) or (3, 3).
 
     .. math::
-        \\mathbf{C}^{\\mathrm{ep}} = \\mathbf{C}^{\\mathrm{el}}
-        - \\frac{(\\mathbf{C}^{\\mathrm{el}} : \\mathbf{D}) \\otimes (\\mathbf{D} : \\mathbf{C}^{\\mathrm{el}})}
-          {LAM1}
+        \\mathbf{C}^{\\mathrm{ep}} = \\frac{\\partial\\boldsymbol{\\sigma}}{\\partial\\Delta\\boldsymbol{\\varepsilon}}
     """
     params = _extract_params(mat)
-    is_1d = sig.ndim == 1
-    if is_1d:
-        sig = sig.reshape(1, -1)
-        if epsp is not None and np.ndim(epsp) == 0:
-            epsp = np.array([epsp])
-        if epsp_incr is not None and np.ndim(epsp_incr) == 0:
-            epsp_incr = np.array([epsp_incr])
 
-    n = sig.shape[0]
+    # Disambiguate keyword arguments
+    if "deps" in kwargs and deps is None:
+        deps = kwargs["deps"]
+    if "eps" in kwargs and deps is None:
+        deps = kwargs["eps"]
+    if "sig" in kwargs and sig is None:
+        sig = kwargs["sig"]
+    if "epsp" in kwargs and epsp is None:
+        epsp = kwargs["epsp"]
+    if "epsp_incr" in kwargs and epsp_incr is None:
+        epsp_incr = kwargs["epsp_incr"]
+    if "extra" in kwargs and extra is None:
+        extra = kwargs["extra"]
+    if "dt" in kwargs:
+        dt = float(kwargs["dt"])
+    if "h" in kwargs:
+        h = float(kwargs["h"])
+    if "symmetric" in kwargs:
+        symmetric = bool(kwargs["symmetric"])
+
+    # Disambiguate positional arguments
+    # If called as (mat, sig, epsp, epsp_incr, extra):
+    # Then deps was actually epsp, and epsp was actually epsp_incr!
+    if deps is not None and not isinstance(deps, dict):
+        deps_check = np.asarray(deps)
+        if deps_check.ndim == 0 or (deps_check.ndim == 1 and deps_check.shape[0] not in (3, 5)) or (deps_check.ndim == 2 and deps_check.shape[1] not in (3, 5)):
+            if epsp_incr is None and epsp is not None:
+                epsp_incr = epsp
+            epsp = deps
+            deps = None
+    if len(args) >= 1:
+        if isinstance(args[0], dict) and extra is None:
+            extra = args[0]
+        elif isinstance(args[0], (int, float, np.ndarray)):
+            arr = np.asarray(args[0])
+            if (arr.ndim == 1 and arr.shape[0] in (3, 5)) or (arr.ndim == 2 and arr.shape[1] in (3, 5)):
+                if deps is None:
+                    deps = arr
+            elif epsp_incr is None:
+                epsp_incr = args[0]
+    if len(args) >= 2:
+        if isinstance(args[1], dict) and extra is None:
+            extra = args[1]
+        elif epsp_incr is None:
+            epsp_incr = args[1]
+    if len(args) >= 3 and isinstance(args[2], dict) and extra is None:
+        extra = args[2]
+
+    # Sizing and dimensionality
+    n_sig = 1 if (sig is None or np.ndim(sig) <= 1) else np.asarray(sig).shape[0]
+    n_deps = 1 if (deps is None or np.ndim(deps) <= 1) else np.asarray(deps).shape[0]
+    nel = max(n_sig, n_deps)
+    single = (sig is None or np.ndim(sig) <= 1) and (deps is None or np.ndim(deps) <= 1)
+
+    if sig is not None:
+        sig_arr = np.asarray(sig, dtype=float).copy()
+        if sig_arr.ndim == 1:
+            sig_arr = sig_arr.reshape(1, -1)
+        if sig_arr.shape[0] == 1 and nel > 1:
+            sig_arr = np.repeat(sig_arr, nel, axis=0)
+    else:
+        sig_arr = np.zeros((nel, 3), dtype=float)
+
+    if deps is not None:
+        deps_arr = np.asarray(deps, dtype=float).copy()
+        if deps_arr.ndim == 1:
+            deps_arr = deps_arr.reshape(1, -1)
+        if deps_arr.shape[0] == 1 and nel > 1:
+            deps_arr = np.repeat(deps_arr, nel, axis=0)
+    else:
+        deps_arr = None
+
+    if epsp is not None:
+        epsp_arr = np.asarray(epsp, dtype=float).copy().flatten()
+        if len(epsp_arr) == 1 and nel > 1:
+            epsp_arr = np.full(nel, epsp_arr[0])
+    else:
+        epsp_arr = np.zeros(nel, dtype=float)
+
     E = params.E
     nu = params.nu
     a1 = E / (1.0 - nu * nu)
     a2 = nu * a1
     G = 0.5 * E / (1.0 + nu)
-    c1 = E * (1.0 - nu) / ((1.0 + nu) * (1.0 - 2.0 * nu))
-    c2 = c1 * nu / (1.0 - nu)
 
+    # Element deletion / rupture status
+    off_val = extra.get("off", extra.get("off52", np.ones(nel))) if extra else np.ones(nel)
+    off_arr = np.asarray(off_val, dtype=float).flatten()
+    if len(off_arr) == 1 and nel > 1:
+        off_arr = np.full(nel, off_arr[0])
+    deleted_mask = (off_arr <= 0.0)
+    if extra and "dmg" in extra:
+        dmg = np.asarray(extra["dmg"], dtype=float)
+        if dmg.ndim == 1 and dmg.shape[0] == 5:
+            dmg = dmg.reshape(1, 5)
+        if dmg.shape[0] == nel:
+            deleted_mask = deleted_mask | (dmg[:, 3] >= params.ff) | (dmg[:, 4] >= params.fu) | (dmg[:, 0] >= params.fu)
+
+    # 1. Consistent algorithmic perturbation tangent when deps is provided
+    if deps_arr is not None:
+        D = np.zeros((nel, 3, 3), dtype=float)
+        active = ~deleted_mask
+        if np.any(active):
+            for j in range(3):
+                ej = np.zeros_like(deps_arr)
+                ej[:, j] = h
+                ex_p = _copy_extra(extra)
+                ex_m = _copy_extra(extra)
+                sp, _ = shell_update_law52(params, sig_arr.copy(), deps_arr + ej, epsp=epsp_arr.copy(), dt=dt, extra=ex_p)
+                sm, _ = shell_update_law52(params, sig_arr.copy(), deps_arr - ej, epsp=epsp_arr.copy(), dt=dt, extra=ex_m)
+                if sp.ndim == 1:
+                    sp = sp.reshape(1, -1)
+                    sm = sm.reshape(1, -1)
+                D[:, :, j] = (sp[:, :3] - sm[:, :3]) / (2.0 * h)
+        if np.any(deleted_mask):
+            D[deleted_mask] = 0.0
+        if symmetric:
+            D = 0.5 * (D + np.swapaxes(D, -1, -2))
+        return D[0] if single else D
+
+    # 2. Analytical / ground state tangent fallback when deps is None
     Cel = np.zeros((3, 3), dtype=float)
     Cel[0, 0] = a1
     Cel[1, 1] = a1
     Cel[0, 1] = Cel[1, 0] = a2
     Cel[2, 2] = G
 
-    D_tangent = np.broadcast_to(Cel, (n, 3, 3)).copy()
-
-    off = extra.get("off", np.ones(n)) if extra else np.ones(n)
-    sigm = extra.get("sigm", np.full(n, params.yield_a)) if extra else np.full(n, params.yield_a)
-    epsm = extra.get("epsm", np.zeros(n)) if extra else np.zeros(n)
-    dmg = extra.get("dmg", None) if extra else None
+    D_tangent = np.broadcast_to(Cel, (nel, 3, 3)).copy()
+    if np.any(deleted_mask):
+        D_tangent[deleted_mask] = 0.0
 
     if epsp_incr is not None:
-        plastic = (epsp_incr > 1e-12) & (off > 0.0)
-    else:
-        plastic = np.zeros(n, dtype=bool)
+        ep_inc = np.asarray(epsp_incr, dtype=float).flatten()
+        if len(ep_inc) == 1 and nel > 1:
+            ep_inc = np.full(nel, ep_inc[0])
+        plastic = (ep_inc > 1e-12) & (~deleted_mask)
+        if np.any(plastic):
+            idx = np.where(plastic)[0]
+            c1 = E * (1.0 - nu) / ((1.0 + nu) * (1.0 - 2.0 * nu))
+            c2 = c1 * nu / (1.0 - nu)
+            sigm = extra.get("sigm", np.full(nel, params.yield_a)) if extra else np.full(nel, params.yield_a)
+            epsm = extra.get("epsm", np.zeros(nel)) if extra else np.zeros(nel)
+            dmg = extra.get("dmg", None) if extra else None
+            for i in idx:
+                f_curr = dmg[i, 3] if dmg is not None else params.fi
+                f_star_curr, df_curr = compute_f_star(f_curr, params.fc, params.ff, params.fu)
 
-    dead = off <= 0.0
-    D_tangent[dead] = 0.0
+                s11 = sig_arr[i, 0]
+                s22 = sig_arr[i, 1]
+                s12 = sig_arr[i, 2]
+                vm2 = s11 ** 2 + s22 ** 2 - s11 * s22 + 3.0 * (s12 ** 2)
+                vm = math.sqrt(max(vm2, _EM20))
+                pn = (s11 + s22) / 3.0
 
-    if not np.any(plastic):
-        if is_1d:
-            return D_tangent[0]
-        return D_tangent
+                sigm_i = max(sigm[i], _EM20)
+                sigm1 = 1.0 / sigm_i
+                var = 1.5 * params.q2 * pn * sigm1
+                var_clipped = max(min(var, 80.0), -80.0)
+                coh = math.cosh(var_clipped)
+                sih = math.sinh(var_clipped)
 
-    idx = np.where(plastic)[0]
-    for i in idx:
-        f_curr = dmg[i, 3] if dmg is not None else params.fi
-        f_star_curr, df_curr = compute_f_star(f_curr, params.fc, params.ff, params.fu)
+                va = 1.0 + params.q3 * (f_star_curr ** 2) - 2.0 * params.q1 * f_star_curr * coh
+                va_sqrt = math.sqrt(max(0.0, va))
+                va1 = 1.0 / max(va_sqrt, _EM20)
+                va2 = 0.5 * params.q1 * params.q2 * f_star_curr * sih * va1
 
-        s11 = sig[i, 0]
-        s22 = sig[i, 1]
-        s12 = sig[i, 2]
-        vm2 = s11 ** 2 + s22 ** 2 - s11 * s22 + 3.0 * (s12 ** 2)
-        vm = math.sqrt(max(vm2, _EM20))
-        pn = (s11 + s22) / 3.0
+                vm1 = 1.0 / vm
+                d11 = 0.5 * (2.0 * sig_arr[i, 0] - sig_arr[i, 1]) * vm1 + va2
+                d22 = 0.5 * (2.0 * sig_arr[i, 1] - sig_arr[i, 0]) * vm1 + va2
+                d33 = 0.5 * (-sig_arr[i, 0] - sig_arr[i, 1]) * vm1 + va2
+                d12 = 3.0 * sig_arr[i, 2] * vm1
 
-        sigm_i = max(sigm[i], _EM20)
-        sigm1 = 1.0 / sigm_i
-        var = 1.5 * params.q2 * pn * sigm1
-        var_clipped = max(min(var, 80.0), -80.0)
-        coh = math.cosh(var_clipped)
-        sih = math.sinh(var_clipped)
+                D_shell = np.array([d11, d22, d12], dtype=float)
 
-        va = 1.0 + params.q3 * (f_star_curr ** 2) - 2.0 * params.q1 * f_star_curr * coh
-        va_sqrt = math.sqrt(max(0.0, va))
-        va1 = 1.0 / max(va_sqrt, _EM20)
-        va2 = 0.5 * params.q1 * params.q2 * f_star_curr * sih * va1
+                a21 = _EP20 if f_curr >= 1.0 else (sigm1 / (1.0 - f_curr))
+                a1_i = (params.fn / (max(params.sn, _EM20) * _SQRT2PI)) * math.exp(
+                    -0.5 * (((epsm[i] - params.epsn) / max(params.sn, _EM20)) ** 2)
+                )
+                a22 = (d11 * sig_arr[i, 0] + d22 * sig_arr[i, 1] + 2.0 * d12 * sig_arr[i, 2]) * a21
 
-        vm1 = 1.0 / vm
-        d11 = 0.5 * (2.0 * sig[i, 0] - sig[i, 1]) * vm1 + va2
-        d22 = 0.5 * (2.0 * sig[i, 1] - sig[i, 0]) * vm1 + va2
-        d33 = 0.5 * (-sig[i, 0] - sig[i, 1]) * vm1 + va2
-        d12 = 3.0 * sig[i, 2] * vm1
+                dcrf = -sigm_i * (params.q3 * f_star_curr * df_curr - params.q1 * coh * df_curr) * va1
+                dcrm = -va_sqrt - 3.0 * va2 * pn * sigm1
 
-        D_shell = np.array([d11, d22, d12], dtype=float)
+                if params.hard_n == 1.0:
+                    dsepp = params.hard_b
+                else:
+                    dsepp = params.hard_b * params.hard_n * (max(epsm[i], _EM20) ** (params.hard_n - 1.0))
 
-        a21 = _EP20 if f_curr >= 1.0 else (sigm1 / (1.0 - f_curr))
-        a1_i = (params.fn / (max(params.sn, _EM20) * _SQRT2PI)) * math.exp(
-            -0.5 * (((epsm[i] - params.epsn) / max(params.sn, _EM20)) ** 2)
-        )
-        a22 = (d11 * sig[i, 0] + d22 * sig[i, 1] + 2.0 * d12 * sig[i, 2]) * a21
+                dcd = (c1 * (d11 ** 2 + d22 ** 2 + d33 ** 2) +
+                       2.0 * c2 * (d11 * d22 + d11 * d33 + d22 * d33) +
+                       2.0 * G * (d12 ** 2))
 
-        dcrf = -sigm_i * (params.q3 * f_star_curr * df_curr - params.q1 * coh * df_curr) * va1
-        dcrm = -va_sqrt - 3.0 * va2 * pn * sigm1
+                tr_d = d11 + d22 + d33
+                lam1 = dcd - dcrm * dsepp * a22 - dcrf * ((1.0 - f_curr) * tr_d + a1_i * a22)
+                lam1 = max(lam1, 1e-12)
 
-        if params.hard_n == 1.0:
-            dsepp = params.hard_b
-        else:
-            dsepp = params.hard_b * params.hard_n * (max(epsm[i], _EM20) ** (params.hard_n - 1.0))
+                CD = Cel @ D_shell
+                D_tangent[i] = Cel - np.outer(CD, CD) / lam1
 
-        dcd = (c1 * (d11 ** 2 + d22 ** 2 + d33 ** 2) +
-               2.0 * c2 * (d11 * d22 + d11 * d33 + d22 * d33) +
-               2.0 * G * (d12 ** 2))
-
-        tr_d = d11 + d22 + d33
-        lam1 = dcd - dcrm * dsepp * a22 - dcrf * ((1.0 - f_curr) * tr_d + a1_i * a22)
-        lam1 = max(lam1, 1e-12)
-
-        CD = Cel @ D_shell
-        D_tangent[i] = Cel - np.outer(CD, CD) / lam1
-
-    if is_1d:
+    if symmetric:
+        D_tangent = 0.5 * (D_tangent + np.swapaxes(D_tangent, -1, -2))
+    if single:
         return D_tangent[0]
     return D_tangent
 
