@@ -191,7 +191,14 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
         w2bend = _bend_shear_omega2(B1, B2, area, sl, mat,
                                     t_val, 3, rho0_val)
         w2max = np.maximum(w2max, w2bend)
-        if hasattr(mat, "sound_speed_shell"):
+        is_law57 = getattr(mat, "law", None) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3")
+        if is_law57:
+            try:
+                from ..materials import law57_barlat
+                c = law57_barlat.sound_speed_shell_law57(mat, rho0_val)
+            except Exception:
+                c = 0.0
+        elif hasattr(mat, "sound_speed_shell"):
             c = mat.sound_speed_shell()
         else:
             try:
@@ -373,7 +380,8 @@ def forces(group, x, v, vr, dt, fint, mint):
             Mres[sl] += (wk * zk)[:, None] * s_res
         is_law52 = getattr(mat, "law", None) in (52, "52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS") or getattr(mat, "law_name", None) in ("52", "LAW52", "GURSON", "PLAS_GURS", "MAT_LAW52", "MAT_GURSON", "MAT_PLAS_GURS")
         is_law58 = getattr(mat, "law", None) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A")
-        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58 or is_law52
+        is_law57 = getattr(mat, "law", None) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3")
+        has_stiff = getattr(mat, "E", 0.0) > 0.0 or getattr(mat, "e1", 0.0) > 0.0 or is_law58 or is_law52 or is_law57
         if getattr(mat, "law", 1) == 0 or getattr(mat, "rho0", 0.0) <= 0.0 or not has_stiff:
             c[sl] = 0.0
         else:
@@ -387,6 +395,12 @@ def forces(group, x, v, vr, dt, fint, mint):
                 try:
                     from ..materials import law58_fabr_a
                     c[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))
+                except Exception:
+                    c[sl] = mat.sound_speed_shell()
+            elif is_law57:
+                try:
+                    from ..materials import law57_barlat
+                    c[sl] = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
                 except Exception:
                     c[sl] = mat.sound_speed_shell()
             else:

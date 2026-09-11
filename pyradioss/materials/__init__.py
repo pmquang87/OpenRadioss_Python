@@ -1602,7 +1602,10 @@ def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
     if getattr(mat, "law", None) in (58, "58", "LAW58", "FABR_A", "MAT_FABR_A", "FABRIC_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "MAT_FABR_A", "FABRIC_A", "LAW58_FABR_A"):
         return law58_fabr_a.shell_update_law58(mat, sig, deps, epsp, dt, extra)
     if getattr(mat, "law", None) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
-        return shell_update_law57(mat, sig, deps, epsp, dt, extra)
+        res = shell_update_law57(mat, sig, deps, epsp, dt, extra, return_sound_speed=False)
+        if isinstance(res, tuple):
+            return res[0], res[1]
+        return res, epsp
     if mat.law == 35:
         return law35_kelvinmax.shell_update(mat, sig, deps, epsp, dt, extra)
     if mat.law == 40:

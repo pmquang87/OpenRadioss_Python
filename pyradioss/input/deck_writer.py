@@ -2490,6 +2490,220 @@ class StarterDeck:
         kwargs.setdefault("law_name", "FABRIC_A")
         return self.mat_law58(*args, **kwargs)
 
+    def mat_law57(
+        self,
+        mid: int = 0,
+        title: str = "",
+        rho: float = 0.0,
+        refer_rho: Optional[float] = None,
+        e: float = 0.0,
+        nu: float = 0.0,
+        ifunce: int = 0,
+        einf: float = 0.0,
+        ce: float = 0.0,
+        r00: float = 1.0,
+        r45: float = 1.0,
+        r90: float = 1.0,
+        chard: float = 0.0,
+        m: float = 6.0,
+        eps_max: float = 1.0e30,
+        eps_t1: float = 1.0e30,
+        eps_t2: float = 2.0e30,
+        fcut: float = 1.0e30,
+        fsmooth: int = 0,
+        vp: int = 0,
+        curves: Optional[List[Any]] = None,
+        fixed_format: bool = True,
+        law_name: str = "LAW57",
+        unit_id: Optional[int] = None,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW57`` (/MAT/BARLAT3) — Barlat 3-parameter anisotropic plasticity.
+
+        Cites ``radioss2025/MAT/matl57_BARLAT3.cfg`` and ``hm_read_mat57.F90``:
+          Card 1: RHO, Refer_Rho (%20lg%20lg)
+          Card 2: E, NU (%20lg%20lg)
+          Card 3: FUNCT_IDE, EINF, CE (%10d          %20lg%20lg)
+          Card 4: r00, r45, r90, C_hard, m (%20lg%20lg%20lg%20lg%20lg)
+          Card 5: EPSP_max, EPS_t1, EPS_t2, Fcut, Fsmooth, VP (%20lg%20lg%20lg%20lg%10d%10d)
+          Curves: funct_ID, Fscale_i, EPS_i (%10d          %20lg%20lg)
+        """
+        mat_obj = None
+        if hasattr(mid, "r00") or hasattr(mid, "r45") or hasattr(mid, "m") or hasattr(mid, "chard") or hasattr(mid, "curves"):
+            mat_obj = mid
+        elif "mat" in kwargs and (hasattr(kwargs["mat"], "r00") or hasattr(kwargs["mat"], "curves")):
+            mat_obj = kwargs["mat"]
+        elif "mat_law57" in kwargs and (hasattr(kwargs["mat_law57"], "r00") or hasattr(kwargs["mat_law57"], "curves")):
+            mat_obj = kwargs["mat_law57"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", 0)
+            if not title:
+                title = getattr(mat_obj, "title", "")
+            if rho == 0.0:
+                rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", 0.0))
+            if refer_rho is None:
+                refer_rho = getattr(mat_obj, "refer_rho", getattr(mat_obj, "rhor", getattr(mat_obj, "ref_rho", None)))
+            if e == 0.0:
+                e = getattr(mat_obj, "e", getattr(mat_obj, "E", 0.0))
+            if nu == 0.0:
+                nu = getattr(mat_obj, "nu", 0.0)
+            if ifunce == 0:
+                ifunce = getattr(mat_obj, "ifunce", getattr(mat_obj, "mat_fct_ide", 0))
+            if einf == 0.0:
+                einf = getattr(mat_obj, "einf", getattr(mat_obj, "mat_ea", 0.0))
+            if ce == 0.0:
+                ce = getattr(mat_obj, "ce", getattr(mat_obj, "mat_ce", 0.0))
+            if r00 == 1.0:
+                r00 = getattr(mat_obj, "r00", getattr(mat_obj, "mat_r00", 1.0))
+            if r45 == 1.0:
+                r45 = getattr(mat_obj, "r45", getattr(mat_obj, "mat_r45", 1.0))
+            if r90 == 1.0:
+                r90 = getattr(mat_obj, "r90", getattr(mat_obj, "mat_r90", 1.0))
+            if chard == 0.0:
+                chard = getattr(mat_obj, "chard", getattr(mat_obj, "mat_chard", 0.0))
+            if m == 6.0:
+                m = getattr(mat_obj, "m", getattr(mat_obj, "mat_m", 6.0))
+            if eps_max == 1.0e30:
+                eps_max = getattr(mat_obj, "eps_max", getattr(mat_obj, "epsp_max", getattr(mat_obj, "mat_eps", 1.0e30)))
+            if eps_t1 == 1.0e30:
+                eps_t1 = getattr(mat_obj, "eps_t1", getattr(mat_obj, "mat_epst1", 1.0e30))
+            if eps_t2 == 2.0e30:
+                eps_t2 = getattr(mat_obj, "eps_t2", getattr(mat_obj, "mat_epst2", 2.0e30))
+            if fcut == 1.0e30:
+                fcut = getattr(mat_obj, "fcut", 1.0e30)
+            if fsmooth == 0:
+                fsmooth = getattr(mat_obj, "fsmooth", 0)
+            if vp == 0:
+                vp = getattr(mat_obj, "vp", getattr(mat_obj, "mat_vp", 0))
+            if curves is None:
+                curves = getattr(mat_obj, "curves", None)
+
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+        if "mat_id" in kw_low and mid == 0:
+            mid = kw_low["mat_id"]
+        if "id" in kw_low and mid == 0:
+            mid = kw_low["id"]
+        if "rho0" in kw_low and rho == 0.0:
+            rho = kw_low["rho0"]
+        if "refer_rho" in kw_low and refer_rho is None:
+            refer_rho = kw_low["refer_rho"]
+        if "rho_ref" in kw_low and refer_rho is None:
+            refer_rho = kw_low["rho_ref"]
+        if "rhor" in kw_low and refer_rho is None:
+            refer_rho = kw_low["rhor"]
+        if "e" in kw_low and e == 0.0:
+            e = kw_low["e"]
+        if "nu" in kw_low and nu == 0.0:
+            nu = kw_low["nu"]
+        if "ifunce" in kw_low and ifunce == 0:
+            ifunce = kw_low["ifunce"]
+        if "einf" in kw_low and einf == 0.0:
+            einf = kw_low["einf"]
+        if "ce" in kw_low and ce == 0.0:
+            ce = kw_low["ce"]
+        if "r00" in kw_low:
+            r00 = kw_low["r00"]
+        if "r45" in kw_low:
+            r45 = kw_low["r45"]
+        if "r90" in kw_low:
+            r90 = kw_low["r90"]
+        if "chard" in kw_low:
+            chard = kw_low["chard"]
+        if "m" in kw_low:
+            m = kw_low["m"]
+        if "eps_max" in kw_low:
+            eps_max = kw_low["eps_max"]
+        elif "epsp_max" in kw_low:
+            eps_max = kw_low["epsp_max"]
+        if "eps_t1" in kw_low:
+            eps_t1 = kw_low["eps_t1"]
+        if "eps_t2" in kw_low:
+            eps_t2 = kw_low["eps_t2"]
+        if "fcut" in kw_low:
+            fcut = kw_low["fcut"]
+        if "fsmooth" in kw_low:
+            fsmooth = kw_low["fsmooth"]
+        if "vp" in kw_low:
+            vp = kw_low["vp"]
+        if "curves" in kw_low and curves is None:
+            curves = kw_low["curves"]
+        if "fixed_format" in kw_low:
+            fixed_format = bool(kw_low["fixed_format"])
+
+        parsed_curves = []
+        if curves:
+            for c in curves:
+                if hasattr(c, "fct_id"):
+                    fid = getattr(c, "fct_id", 0)
+                    fsc = getattr(c, "fscale", 1.0)
+                    eps_val = getattr(c, "eps", 0.0)
+                elif isinstance(c, dict):
+                    fid = c.get("fct_id", c.get("func_id", c.get("fid", 0)))
+                    fsc = c.get("fscale", c.get("scale", 1.0))
+                    eps_val = c.get("eps", c.get("rate", 0.0))
+                elif isinstance(c, (list, tuple)):
+                    fid = c[0] if len(c) > 0 else 0
+                    fsc = c[1] if len(c) > 1 else 1.0
+                    eps_val = c[2] if len(c) > 2 else 0.0
+                else:
+                    continue
+                parsed_curves.append((int(fid), float(fsc), float(eps_val)))
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        if fixed_format:
+            # Card 1: RHO, Refer_Rho (MAT_LAW57_1: [20, 20])
+            if refer_rho is not None and float(refer_rho) != 0.0:
+                self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(refer_rho, 20)}")
+            else:
+                self.lines.append(fmt_float(rho, 20))
+
+            # Card 2: E, NU (MAT_LAW57_2: [20, 20])
+            self.lines.append(f"{fmt_float(e, 20)}{fmt_float(nu, 20)}")
+
+            # Card 3: FUNCT_IDE, EINF, CE (MAT_LAW57_3: [10, 10, 20, 20])
+            self.lines.append(f"{fmt_int(ifunce, 10)}{' ' * 10}{fmt_float(einf, 20)}{fmt_float(ce, 20)}")
+
+            # Card 4: r00, r45, r90, C_hard, m (MAT_LAW57_4: [20, 20, 20, 20, 20])
+            self.lines.append(
+                f"{fmt_float(r00, 20)}{fmt_float(r45, 20)}{fmt_float(r90, 20)}{fmt_float(chard, 20)}{fmt_float(m, 20)}"
+            )
+
+            # Card 5: EPSP_max, EPS_t1, EPS_t2, Fcut, Fsmooth, VP (MAT_LAW57_5: [20, 20, 20, 20, 10, 10])
+            self.lines.append(
+                f"{fmt_float(eps_max, 20)}{fmt_float(eps_t1, 20)}{fmt_float(eps_t2, 20)}{fmt_float(fcut, 20)}{fmt_int(fsmooth, 10)}{fmt_int(vp, 10)}"
+            )
+
+            # Curves: funct_ID, Fscale_i, EPS_i (MAT_LAW57_CURVE: [10, 10, 20, 20])
+            for fid, fsc, eps_val in parsed_curves:
+                self.lines.append(f"{fmt_int(fid, 10)}{' ' * 10}{fmt_float(fsc, 20)}{fmt_float(eps_val, 20)}")
+        else:
+            delim = ", "
+            if refer_rho is not None and float(refer_rho) != 0.0:
+                self.lines.append(f"{rho}{delim}{refer_rho}")
+            else:
+                self.lines.append(f"{rho}")
+
+            self.lines.append(f"{e}{delim}{nu}")
+            self.lines.append(f"{ifunce}{delim}{einf}{delim}{ce}")
+            self.lines.append(f"{r00}{delim}{r45}{delim}{r90}{delim}{chard}{delim}{m}")
+            self.lines.append(f"{eps_max}{delim}{eps_t1}{delim}{eps_t2}{delim}{fcut}{delim}{fsmooth}{delim}{vp}")
+
+            for fid, fsc, eps_val in parsed_curves:
+                self.lines.append(f"{fid}{delim}{fsc}{delim}{eps_val}")
+
+        return self
+
+    def mat_barlat3(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/BARLAT3`` — synonym for ``/MAT/LAW57``."""
+        kwargs.setdefault("law_name", "BARLAT3")
+        return self.mat_law57(*args, **kwargs)
+
 
     def mat_law94(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/LAW94``."""

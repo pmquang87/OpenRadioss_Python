@@ -351,7 +351,11 @@ def _exact_dt_factor(B1, B2, area, lc, thick, slices) -> np.ndarray:
             # applies for the same material (M39 / M38-NEW-2).
             fac[sl] = 1.0
             continue
-        c = mat.sound_speed_shell()
+        if getattr(mat, "law", 1) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
+            from ..materials import law57_barlat
+            c = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
+        else:
+            c = mat.sound_speed_shell()
         if c <= EM20:
             fac[sl] = 1.0
             continue
@@ -832,6 +836,9 @@ def forces(group, x, v, vr, dt, fint, mint):
             elif getattr(mat, "law", 1) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A"):
                 from ..materials import law58_fabr_a
                 c[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))
+            elif getattr(mat, "law", 1) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
+                from ..materials import law57_barlat
+                c[sl] = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
             else:
                 c[sl] = mat.sound_speed_shell()
         alive = st["off"] > 0.0
@@ -1051,6 +1058,9 @@ def forces(group, x, v, vr, dt, fint, mint):
         elif getattr(mat, "law", 1) in (58, "58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A") or getattr(mat, "law_name", None) in ("58", "LAW58", "FABR_A", "FABRIC_A", "MAT_LAW58", "MAT_FABR_A", "LAW58_FABR_A"):
             from ..materials import law58_fabr_a
             c[sl] = law58_fabr_a.sound_speed_shell_law58(mat, getattr(mat, "rho0", None))
+        elif getattr(mat, "law", 1) in (57, "57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3") or getattr(mat, "law_name", None) in ("57", "LAW57", "BARLAT", "BARLAT3", "MAT_LAW57", "MAT_BARLAT", "MAT_BARLAT3", "LAW57_BARLAT", "LAW57_BARLAT3"):
+            from ..materials import law57_barlat
+            c[sl] = law57_barlat.sound_speed_shell_law57(mat, getattr(mat, "rho0", None))
         else:
             c[sl] = mat.sound_speed_shell()
         # elastic transverse shear resultant stress (with 5/6 factor)

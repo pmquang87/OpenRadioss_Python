@@ -127,6 +127,10 @@ LAW_MAP: Dict[str, int] = {
     "MAT_PLAS_GURS": 52,
     "MAT_LAW52": 52,
     "LAW52_GURSON": 52,
+    "LAW57": 57,
+    "BARLAT3": 57,
+    "MAT_BARLAT3": 57,
+    "LAW57_BARLAT3": 57,
 }
 
 LAW_SYNONYMS: Dict[str, str] = {
@@ -204,6 +208,10 @@ LAW_SYNONYMS: Dict[str, str] = {
     "MAT_PLAS_GURS": "LAW52",
     "MAT_LAW52": "LAW52",
     "LAW52_GURSON": "LAW52",
+    "LAW57": "LAW57",
+    "BARLAT3": "LAW57",
+    "MAT_BARLAT3": "LAW57",
+    "LAW57_BARLAT3": "LAW57",
 }
 
 KEYWORD_NAME_MAP = LAW_MAP

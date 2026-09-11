@@ -8115,35 +8115,177 @@ MatViscHoney = MatLaw50
 MatHypFoam = MatLaw50
 
 
+try:
+    CallableFloat  # type: ignore[name-defined]
+except NameError:
+    class CallableFloat(float):
+        """Float that is also callable returning itself (compatible with both property and method access)."""
+        def __call__(self) -> float:
+            return float(self)
+
+
 @dataclass
 class MatLaw57Curve:
+    """A single strain-rate plasticity curve for /MAT/LAW57 (/MAT/BARLAT3)."""
     fct_id: int = 0
     fscale: float = 1.0
     eps: float = 0.0
 
+    @property
+    def func_id(self) -> int:
+        return self.fct_id
+
+    @property
+    def scale(self) -> float:
+        return self.fscale
+
+    @property
+    def rate(self) -> float:
+        return self.eps
+
+    def __getitem__(self, item: str) -> Any:
+        if item in ("fct_id", "func_id", "fid"):
+            return self.fct_id
+        if item in ("fscale", "scale"):
+            return self.fscale
+        if item in ("eps", "rate"):
+            return self.eps
+        raise KeyError(item)
+
+    def get(self, item: str, default: Any = None) -> Any:
+        try:
+            return self[item]
+        except KeyError:
+            return default
+
 
 @dataclass
 class MatLaw57:
-    """/MAT/LAW57 or /MAT/BARLAT3 (M183): Barlat 3-parameter anisotropic plasticity."""
-    id: int
+    """/MAT/LAW57 or /MAT/BARLAT3 (M183, M555): Barlat 3-parameter anisotropic plasticity."""
+    id: int = 0
     rho: float = 0.0
     refer_rho: float = 0.0
     e: float = 0.0
     nu: float = 0.0
-    r00: float = 0.0
-    r45: float = 0.0
-    r90: float = 0.0
+    ifunce: int = 0
+    einf: float = 0.0
+    ce: float = 0.0
+    r00: float = 1.0
+    r45: float = 1.0
+    r90: float = 1.0
     chard: float = 0.0
-    m: float = 2.0
-    epsp_max: float = 0.0
-    eps_t1: float = 0.0
-    eps_t2: float = 0.0
+    m: float = 6.0
+    eps_max: float = 1.0e30
+    eps_t1: float = 1.0e30
+    eps_t2: float = 2.0e30
+    fcut: float = 1.0e30
+    fsmooth: int = 0
+    vp: int = 0
     curves: list[MatLaw57Curve] = field(default_factory=list)
     title: str = ""
 
     @property
     def rho0(self) -> float:
         return self.rho
+
+    @property
+    def rhor(self) -> float:
+        return self.refer_rho if self.refer_rho > 0.0 else self.rho
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @E.setter
+    def E(self, value: float) -> None:
+        self.e = value
+
+    @property
+    def G(self) -> float:
+        return 0.5 * self.e / (1.0 + self.nu) if (1.0 + self.nu) > 0.0 else 0.0
+
+    @property
+    def Nu(self) -> float:
+        return self.nu
+
+    @Nu.setter
+    def Nu(self, value: float) -> None:
+        self.nu = value
+
+    @property
+    def epsp_max(self) -> float:
+        return self.eps_max
+
+    @epsp_max.setter
+    def epsp_max(self, value: float) -> None:
+        self.eps_max = value
+
+    @property
+    def sound_speed_shell(self) -> CallableFloat:
+        """Shell plane-stress sound speed: c = sqrt(E / (rho0 * (1 - nu^2)))."""
+        rho_val = self.rho if self.rho > 0.0 else self.refer_rho
+        if rho_val > 0.0 and self.e > 0.0 and (1.0 - self.nu**2) > 0.0:
+            import math
+            c = math.sqrt(self.e / (rho_val * (1.0 - self.nu**2)))
+            return CallableFloat(c)
+        return CallableFloat(0.0)
+
+    @property
+    def sound_speed(self) -> CallableFloat:
+        return self.sound_speed_shell
+
+    @property
+    def params(self) -> Dict[str, Any]:
+        return {
+            "rho": self.rho,
+            "rho0": self.rho0,
+            "refer_rho": self.refer_rho,
+            "rhor": self.rhor,
+            "e": self.e,
+            "E": self.e,
+            "nu": self.nu,
+            "Nu": self.nu,
+            "nu0": self.nu,
+            "ifunce": self.ifunce,
+            "einf": self.einf,
+            "ce": self.ce,
+            "r00": self.r00,
+            "r45": self.r45,
+            "r90": self.r90,
+            "chard": self.chard,
+            "m": self.m,
+            "eps_max": self.eps_max,
+            "epsp_max": self.eps_max,
+            "eps_t1": self.eps_t1,
+            "eps_t2": self.eps_t2,
+            "fcut": self.fcut,
+            "fsmooth": self.fsmooth,
+            "vp": self.vp,
+            "curves": self.curves,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        if hasattr(self, key):
+            return getattr(self, key)
+        p = self.params
+        if key in p:
+            return p[key]
+        raise KeyError(key)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if hasattr(self, key):
+            setattr(self, key, value)
+        else:
+            raise KeyError(f"Cannot set unknown attribute {key!r} on MatLaw57")
+
+    def __contains__(self, key: str) -> bool:
+        return hasattr(self, key) or key in self.params
+
+    def get(self, key: str, default: Any = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
 
 MatBarlat3 = MatLaw57
