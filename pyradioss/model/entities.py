@@ -9504,7 +9504,6 @@ class MatLaw32:
 
 
 MatHill = MatLaw32
-MatHillTab = MatLaw32
 
 
 @dataclass
@@ -11387,28 +11386,235 @@ MatPlasPoly = MatLaw101
 
 @dataclass
 class MatLaw43:
-    """``/MAT/LAW43`` or ``/MAT/HILL_TAB``: Tabulated Hill orthotropic material model."""
+    """``/MAT/LAW43`` or ``/MAT/HILL_TAB``: Tabulated Hill orthotropic material model (M548).
+
+    Reference:
+      - starter/source/materials/mat/mat043/hm_read_mat43.F
+      - radioss140/MAT/matl43_HILL_TAB.cfg
+    """
     id: int = 0
     rho0: float = 0.0
     rhor: float = 0.0
     e: float = 0.0
     nu: float = 0.0
-    yr_fun: int = 0
-    efib: float = 0.0
-    c: float = 0.0
+    ifunce: int = 0
+    einf: float = 0.0
+    ce: float = 0.0
     r00: float = 1.0
     r45: float = 1.0
     r90: float = 1.0
     chard: float = 0.0
+    fisokin: float = 0.0
     iyield: int = 0
-    eps: float = 0.0
+    eps_max: float = 0.0
+    epsr1: float = 0.0
     epst1: float = 0.0
+    epsr2: float = 0.0
     epst2: float = 0.0
-    num_curves: int = 0
-    fsmooth: int = 0
     fcut: float = 0.0
+    asrate: float = 0.0
+    fsmooth: int = 0
+    israte: int = 0
     curves: List[Dict[str, Any]] = field(default_factory=list)
     title: str = ""
+    law: int = 43
+    law_name: str = "LAW43"
+    fail: Optional[Any] = None
+    eos: Optional[Any] = None
+
+    def __post_init__(self):
+        if self.rhor == 0.0 and self.rho0 != 0.0:
+            self.rhor = self.rho0
+        if self.fisokin == 0.0 and self.chard != 0.0:
+            self.fisokin = self.chard
+        elif self.chard == 0.0 and self.fisokin != 0.0:
+            self.chard = self.fisokin
+        if self.epst1 == 0.0 and self.epsr1 != 0.0:
+            self.epst1 = self.epsr1
+        elif self.epsr1 == 0.0 and self.epst1 != 0.0:
+            self.epsr1 = self.epst1
+        if self.epst2 == 0.0 and self.epsr2 != 0.0:
+            self.epst2 = self.epsr2
+        elif self.epsr2 == 0.0 and self.epst2 != 0.0:
+            self.epsr2 = self.epst2
+        if self.asrate == 0.0 and self.fcut != 0.0:
+            self.asrate = self.fcut
+        elif self.fcut == 0.0 and self.asrate != 0.0:
+            self.fcut = self.asrate
+        if self.israte == 0 and self.fsmooth != 0:
+            self.israte = self.fsmooth
+        elif self.fsmooth == 0 and self.israte != 0:
+            self.fsmooth = self.israte
+
+    # Lowercase aliases & Radioss naming
+    @property
+    def rho(self) -> float:
+        return self.rho0
+
+    @property
+    def rho_i(self) -> float:
+        return self.rho0
+
+    @property
+    def refer_rho(self) -> float:
+        return self.rhor
+
+    @property
+    def yr_fun(self) -> int:
+        return self.ifunce
+
+    @property
+    def efib(self) -> float:
+        return self.einf
+
+    @property
+    def c(self) -> float:
+        return self.ce
+
+    @property
+    def r0(self) -> float:
+        return self.r00
+
+    @property
+    def c_hard(self) -> float:
+        return self.chard
+
+    @property
+    def eps(self) -> float:
+        return self.eps_max
+
+    @property
+    def epsp_max(self) -> float:
+        return self.eps_max
+
+    @property
+    def eps_t(self) -> float:
+        return self.epst1
+
+    @property
+    def eps_m(self) -> float:
+        return self.epst2
+
+    @property
+    def num_curves(self) -> int:
+        return len(self.curves)
+
+    # Uppercase aliases
+    @property
+    def RHO(self) -> float:
+        return self.rho0
+
+    @property
+    def RHO0(self) -> float:
+        return self.rho0
+
+    @property
+    def RHOR(self) -> float:
+        return self.rhor
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @property
+    def NU(self) -> float:
+        return self.nu
+
+    @property
+    def IFUNCE(self) -> int:
+        return self.ifunce
+
+    @property
+    def YR_FUN(self) -> int:
+        return self.ifunce
+
+    @property
+    def EINF(self) -> float:
+        return self.einf
+
+    @property
+    def EFIB(self) -> float:
+        return self.einf
+
+    @property
+    def CE(self) -> float:
+        return self.ce
+
+    @property
+    def C(self) -> float:
+        return self.ce
+
+    @property
+    def R00(self) -> float:
+        return self.r00
+
+    @property
+    def R45(self) -> float:
+        return self.r45
+
+    @property
+    def R90(self) -> float:
+        return self.r90
+
+    @property
+    def CHARD(self) -> float:
+        return self.chard
+
+    @property
+    def FISOKIN(self) -> float:
+        return self.fisokin
+
+    @property
+    def IYIELD(self) -> int:
+        return self.iyield
+
+    @property
+    def EPS_MAX(self) -> float:
+        return self.eps_max
+
+    @property
+    def EPS(self) -> float:
+        return self.eps_max
+
+    @property
+    def EPSR1(self) -> float:
+        return self.epsr1
+
+    @property
+    def EPST1(self) -> float:
+        return self.epst1
+
+    @property
+    def EPSR2(self) -> float:
+        return self.epsr2
+
+    @property
+    def EPST2(self) -> float:
+        return self.epst2
+
+    @property
+    def FCUT(self) -> float:
+        return self.fcut
+
+    @property
+    def ASRATE(self) -> float:
+        return self.asrate
+
+    @property
+    def FSMOOTH(self) -> int:
+        return self.fsmooth
+
+    @property
+    def ISRATE(self) -> int:
+        return self.israte
+
+    @property
+    def CURVES(self) -> List[Dict[str, Any]]:
+        return self.curves
+
+    @property
+    def NUM_CURVES(self) -> int:
+        return len(self.curves)
 
 
 MatHillTab = MatLaw43

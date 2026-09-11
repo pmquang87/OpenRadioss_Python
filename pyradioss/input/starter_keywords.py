@@ -1074,7 +1074,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW21", "DUCKHUB", "MAT_DUCKHUB", "LAW21_DUCKHUB"):
         read_mat_law21(block, model, log)
         return
-    if lawname in ("LAW32", "HILL", "MAT_HILL", "LAW32_HILL", "32", "HILL_TAB", "HILL_PLAS_TAB", "MAT_HILL_TAB", "MAT_HILL_PLAS_TAB", "LAW32_HILL_TAB"):
+    if lawname in ("LAW32", "HILL", "MAT_HILL", "LAW32_HILL", "32"):
         read_mat_law32(block, model, log)
         return
     if lawname in ("LAW37", "BIQUAD", "BANABIC", "MAT_BIQUAD", "MAT_BANABIC", "LAW37_BIQUAD",
@@ -1188,7 +1188,7 @@ def read_mat(block: KeywordBlock, model: Model, log: MessageLog) -> None:
     if lawname in ("LAW101", "PLAS_POLY", "MAT_PLAS_POLY", "LAW101_PLAS_POLY"):
         read_mat_law101(block, model, log)
         return
-    if lawname in ("LAW43", "HILL_TAB", "MAT_HILL_TAB", "LAW43_HILL_TAB"):
+    if lawname in ("LAW43", "HILL_TAB", "MAT_HILL_TAB", "LAW43_HILL_TAB", "HILL_PLAS_TAB", "MAT_HILL_PLAS_TAB"):
         read_mat_law43(block, model, log)
         return
     # M193: LAW53 (TSAI_TAB), LAW54 (PREDIT), LAW74 (HILL_THERM), LAW82 (OGDEN)
@@ -43523,104 +43523,208 @@ def read_mat_law101(block: KeywordBlock, model: Model, log: MessageLog) -> None:
 
 
 def read_mat_law43(block: KeywordBlock, model: Model, log: MessageLog) -> None:
-    """``/MAT/LAW43`` or ``/MAT/HILL_TAB`` (M191): Tabulated Hill orthotropic material model."""
+    """``/MAT/LAW43`` or ``/MAT/HILL_TAB`` (M548): Tabulated Hill orthotropic material model.
+
+    Citing starter/source/materials/mat/mat043/hm_read_mat43.F and radioss140/MAT/matl43_HILL_TAB.cfg:
+      Card 1: RHO, Refer_Rho (%20lg%20lg)
+      Card 2: E, nu (%20lg%20lg)
+      Card 3: Yr_fun, MAT_EFIB, MAT_C (%10d[10s]%20lg%20lg)
+      Card 4: MAT_R00, MAT_R45, MAT_R90, MAT_CHARD, MAT_Iyield (%20lg%20lg%20lg%20lg%10d)
+      Card 5: MAT_EPS, MAT_EPST1, MAT_EPST2, Fcut, Fsmooth (%20lg%20lg%20lg%20lg%10d)
+      Curve cards (repeated): FunctionIds, [10s], ABG_cpa, ABG_cpb (%10d[10s]%20lg%20lg)
+    """
     from ..model.entities import MatLaw43, Material
+    from .card_layouts import split_fixed
     mat_id = block.user_id or 0
     title, cards = _fixed_data(block) if block.fixed else _title_and_data(block)
     valid_cards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#")]
+
     rho0, rhor = 0.0, 0.0
-    e, nu, yr_fun, efib, c = 0.0, 0.0, 0, 0.0, 0.0
+    e, nu = 0.0, 0.0
+    ifunce, einf, ce = 0, 0.0, 0.0
     r00, r45, r90, chard, iyield = 1.0, 1.0, 1.0, 0.0, 0
-    eps, epst1, epst2, num_curves, fsmooth, fcut = 0.0, 0.0, 0.0, 0, 0, 0.0
+    eps_max, epst1, epst2, fcut, fsmooth = 0.0, 0.0, 0.0, 0.0, 0
     curves = []
 
+    law_name = "LAW43"
+    if block.keyword:
+        parts = block.keyword.split("/")
+        if len(parts) > 2 and parts[2].strip():
+            law_name = parts[2].strip()
+
     if block.fixed:
+        # Card 1: RHO, Refer_Rho (MAT_LAW43_1: [20, 20])
         if len(valid_cards) > 0:
             c0 = valid_cards[0].cut("MAT_LAW43_1")
             rho0 = _safe_float(c0[0]) if len(c0) > 0 else 0.0
-            rhor = _safe_float(c0[1]) if len(c0) > 1 else 0.0
+            rhor = _safe_float(c0[1]) if len(c0) > 1 and c0[1].strip() else rho0
+
+        # Card 2: E, nu (MAT_LAW43_2: [20, 20])
         if len(valid_cards) > 1:
             c1 = valid_cards[1].cut("MAT_LAW43_2")
             e = _safe_float(c1[0]) if len(c1) > 0 else 0.0
             nu = _safe_float(c1[1]) if len(c1) > 1 else 0.0
-            yr_fun = _safe_int(c1[2]) if len(c1) > 2 else 0
-            efib = _safe_float(c1[3]) if len(c1) > 3 else 0.0
-            c = _safe_float(c1[4]) if len(c1) > 4 else 0.0
+
+        # Card 3: Yr_fun, Einf, C (MAT_LAW43_3: [10, 20, 20] or CFG format with 10 blank spaces [10, 10, 20, 20])
         if len(valid_cards) > 2:
-            c2 = valid_cards[2].cut("MAT_LAW43_3")
-            r00 = _safe_float(c2[0], 1.0) if len(c2) > 0 else 1.0
-            r45 = _safe_float(c2[1], 1.0) if len(c2) > 1 else 1.0
-            r90 = _safe_float(c2[2], 1.0) if len(c2) > 2 else 1.0
-            chard = _safe_float(c2[3]) if len(c2) > 3 else 0.0
-            iyield = _safe_int(c2[4]) if len(c2) > 4 else 0
+            raw3 = valid_cards[2].raw
+            if len(raw3) >= 40 and raw3[10:20].strip() == "" and len(raw3[:40].strip()) > 10:
+                c2 = split_fixed(raw3, [10, 10, 20, 20])
+                ifunce = _safe_int(c2[0]) if len(c2) > 0 else 0
+                einf = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+                ce = _safe_float(c2[3]) if len(c2) > 3 else 0.0
+            else:
+                c2 = valid_cards[2].cut("MAT_LAW43_3")
+                ifunce = _safe_int(c2[0]) if len(c2) > 0 else 0
+                einf = _safe_float(c2[1]) if len(c2) > 1 else 0.0
+                ce = _safe_float(c2[2]) if len(c2) > 2 else 0.0
+
+        # Card 4: R00, R45, R90, CHard, Iyield (MAT_LAW43_4: [20, 20, 20, 20, 10])
         if len(valid_cards) > 3:
             c3 = valid_cards[3].cut("MAT_LAW43_4")
-            eps = _safe_float(c3[0]) if len(c3) > 0 else 0.0
-            epst1 = _safe_float(c3[1]) if len(c3) > 1 else 0.0
-            epst2 = _safe_float(c3[2]) if len(c3) > 2 else 0.0
-            num_curves = _safe_int(c3[3]) if len(c3) > 3 else 0
-            fsmooth = _safe_int(c3[4]) if len(c3) > 4 else 0
-            fcut = _safe_float(c3[5]) if len(c3) > 5 else 0.0
-        for i in range(num_curves):
-            c_idx = 4 + i
-            if c_idx < len(valid_cards):
+            r00 = _safe_float(c3[0], 1.0) if len(c3) > 0 and c3[0].strip() else 1.0
+            r45 = _safe_float(c3[1], 1.0) if len(c3) > 1 and c3[1].strip() else 1.0
+            r90 = _safe_float(c3[2], 1.0) if len(c3) > 2 and c3[2].strip() else 1.0
+            chard = _safe_float(c3[3]) if len(c3) > 3 else 0.0
+            iyield = _safe_int(c3[4]) if len(c3) > 4 else 0
+
+        # Card 5: EPS_max, EPST1, EPST2, Fcut, Fsmooth (MAT_LAW43_5: [20, 20, 20, 20, 10])
+        if len(valid_cards) > 4:
+            c4 = valid_cards[4].cut("MAT_LAW43_5")
+            eps_max = _safe_float(c4[0]) if len(c4) > 0 else 0.0
+            epst1 = _safe_float(c4[1]) if len(c4) > 1 else 0.0
+            epst2 = _safe_float(c4[2]) if len(c4) > 2 else 0.0
+            fcut = _safe_float(c4[3]) if len(c4) > 3 else 0.0
+            fsmooth = _safe_int(c4[4]) if len(c4) > 4 else 0
+
+        # Curve cards: cards 5 onwards (MAT_LAW43_CURVE: [10, 20, 20])
+        for c_idx in range(5, len(valid_cards)):
+            raw_c = valid_cards[c_idx].raw
+            if len(raw_c) >= 40 and raw_c[10:20].strip() == "" and len(raw_c[:40].strip()) > 10:
+                cc = split_fixed(raw_c, [10, 10, 20, 20])
+                fct_id = _safe_int(cc[0]) if len(cc) > 0 else 0
+                fscale = _safe_float(cc[2], 1.0) if len(cc) > 2 and cc[2].strip() else 1.0
+                eps_dot = _safe_float(cc[3]) if len(cc) > 3 else 0.0
+            else:
                 cc = valid_cards[c_idx].cut("MAT_LAW43_CURVE")
-                funct_id = _safe_int(cc[0]) if len(cc) > 0 else 0
-                fscale = _safe_float(cc[1], 1.0) if len(cc) > 1 else 1.0
+                fct_id = _safe_int(cc[0]) if len(cc) > 0 else 0
+                fscale = _safe_float(cc[1], 1.0) if len(cc) > 1 and cc[1].strip() else 1.0
                 eps_dot = _safe_float(cc[2]) if len(cc) > 2 else 0.0
-                curves.append({"funct_id": funct_id, "fscale": fscale, "eps_dot": eps_dot})
+            if fscale == 0.0:
+                fscale = 1.0
+            curves.append({"fct_id": fct_id, "funct_id": fct_id, "fscale": fscale, "eps_dot": eps_dot})
     else:
+        # Free format
+        # Card 1: RHO, Refer_Rho
         if len(valid_cards) > 0:
             t0 = valid_cards[0].tokens()
             rho0 = _safe_float(t0[0]) if len(t0) > 0 else 0.0
-            rhor = _safe_float(t0[1]) if len(t0) > 1 else 0.0
+            rhor = _safe_float(t0[1]) if len(t0) > 1 else rho0
+
+        # Card 2: E, nu
         if len(valid_cards) > 1:
             t1 = valid_cards[1].tokens()
             e = _safe_float(t1[0]) if len(t1) > 0 else 0.0
             nu = _safe_float(t1[1]) if len(t1) > 1 else 0.0
-            yr_fun = _safe_int(t1[2]) if len(t1) > 2 else 0
-            efib = _safe_float(t1[3]) if len(t1) > 3 else 0.0
-            c = _safe_float(t1[4]) if len(t1) > 4 else 0.0
+
+        # Card 3: Yr_fun, Einf, C
         if len(valid_cards) > 2:
             t2 = valid_cards[2].tokens()
-            r00 = _safe_float(t2[0], 1.0) if len(t2) > 0 else 1.0
-            r45 = _safe_float(t2[1], 1.0) if len(t2) > 1 else 1.0
-            r90 = _safe_float(t2[2], 1.0) if len(t2) > 2 else 1.0
-            chard = _safe_float(t2[3]) if len(t2) > 3 else 0.0
-            iyield = _safe_int(t2[4]) if len(t2) > 4 else 0
+            if len(t2) == 4 and t2[1] == "":
+                ifunce = _safe_int(t2[0])
+                einf = _safe_float(t2[2])
+                ce = _safe_float(t2[3])
+            else:
+                ifunce = _safe_int(t2[0]) if len(t2) > 0 else 0
+                einf = _safe_float(t2[1]) if len(t2) > 1 else 0.0
+                ce = _safe_float(t2[2]) if len(t2) > 2 else 0.0
+
+        # Card 4: R00, R45, R90, CHard, Iyield
         if len(valid_cards) > 3:
             t3 = valid_cards[3].tokens()
-            eps = _safe_float(t3[0]) if len(t3) > 0 else 0.0
-            epst1 = _safe_float(t3[1]) if len(t3) > 1 else 0.0
-            epst2 = _safe_float(t3[2]) if len(t3) > 2 else 0.0
-            num_curves = _safe_int(t3[3]) if len(t3) > 3 else 0
-            fsmooth = _safe_int(t3[4]) if len(t3) > 4 else 0
-            fcut = _safe_float(t3[5]) if len(t3) > 5 else 0.0
-        for i in range(num_curves):
-            c_idx = 4 + i
-            if c_idx < len(valid_cards):
-                tt = valid_cards[c_idx].tokens()
-                funct_id = _safe_int(tt[0]) if len(tt) > 0 else 0
+            r00 = _safe_float(t3[0], 1.0) if len(t3) > 0 else 1.0
+            r45 = _safe_float(t3[1], 1.0) if len(t3) > 1 else 1.0
+            r90 = _safe_float(t3[2], 1.0) if len(t3) > 2 else 1.0
+            chard = _safe_float(t3[3]) if len(t3) > 3 else 0.0
+            iyield = _safe_int(t3[4]) if len(t3) > 4 else 0
+
+        # Card 5: EPS_max, EPST1, EPST2, Fcut, Fsmooth
+        if len(valid_cards) > 4:
+            t4 = valid_cards[4].tokens()
+            eps_max = _safe_float(t4[0]) if len(t4) > 0 else 0.0
+            epst1 = _safe_float(t4[1]) if len(t4) > 1 else 0.0
+            epst2 = _safe_float(t4[2]) if len(t4) > 2 else 0.0
+            fcut = _safe_float(t4[3]) if len(t4) > 3 else 0.0
+            fsmooth = _safe_int(t4[4]) if len(t4) > 4 else 0
+
+        # Curve cards: cards 5 onwards
+        for c_idx in range(5, len(valid_cards)):
+            tt = valid_cards[c_idx].tokens()
+            if len(tt) == 4 and tt[1] == "":
+                fct_id = _safe_int(tt[0])
+                fscale = _safe_float(tt[2], 1.0)
+                eps_dot = _safe_float(tt[3])
+            else:
+                fct_id = _safe_int(tt[0]) if len(tt) > 0 else 0
                 fscale = _safe_float(tt[1], 1.0) if len(tt) > 1 else 1.0
                 eps_dot = _safe_float(tt[2]) if len(tt) > 2 else 0.0
-                curves.append({"funct_id": funct_id, "fscale": fscale, "eps_dot": eps_dot})
+            if fscale == 0.0:
+                fscale = 1.0
+            curves.append({"fct_id": fct_id, "funct_id": fct_id, "fscale": fscale, "eps_dot": eps_dot})
+
+    # Upstream defaults from hm_read_mat43.F:
+    if rhor == 0.0:
+        rhor = rho0
+    if r00 == 0.0:
+        r00 = 1.0
+    if r45 == 0.0:
+        r45 = 1.0
+    if r90 == 0.0:
+        r90 = 1.0
+    epsr1 = epst1 if epst1 != 0.0 else 1.0e30
+    epsr2 = epst2 if epst2 != 0.0 else 2.0e30
+    fisokin = chard
+
+    asrate = fcut
+    israte = fsmooth
+    if asrate != 0.0:
+        israte = 1
+    elif israte != 0:
+        asrate = 10000.0
+    else:
+        asrate = 0.0
 
     mat = MatLaw43(
-        id=mat_id, rho0=rho0, rhor=rhor, e=e, nu=nu, yr_fun=yr_fun, efib=efib, c=c,
-        r00=r00, r45=r45, r90=r90, chard=chard, iyield=iyield,
-        eps=eps, epst1=epst1, epst2=epst2, num_curves=num_curves, fsmooth=fsmooth, fcut=fcut,
-        curves=curves, title=title
+        id=mat_id, rho0=rho0, rhor=rhor, e=e, nu=nu, ifunce=ifunce, einf=einf, ce=ce,
+        r00=r00, r45=r45, r90=r90, chard=chard, fisokin=fisokin, iyield=iyield,
+        eps_max=eps_max, epsr1=epsr1, epst1=epst1, epsr2=epsr2, epst2=epst2,
+        fcut=fcut, asrate=asrate, fsmooth=fsmooth, israte=israte,
+        curves=curves, title=title, law=43, law_name=law_name
     )
     model.mat_law43s[mat_id] = mat
-    model.materials[mat_id] = Material(
-        id=mat_id, law=43, rho0=rho0, title=title,
-        params={
-            "rho": rho0, "rhor": rhor, "e": e, "nu": nu, "yr_fun": yr_fun, "efib": efib, "c": c,
-            "r00": r00, "r45": r45, "r90": r90, "chard": chard, "iyield": iyield,
-            "eps": eps, "epst1": epst1, "epst2": epst2, "num_curves": num_curves, "fsmooth": fsmooth, "fcut": fcut,
-            "curves": curves,
-        }
-    )
+
+    try:
+        from ..materials.law43_hill_tab import build_law43
+        model.materials[mat_id] = build_law43(mat)
+    except Exception:
+        try:
+            from ..materials import build_law43
+            model.materials[mat_id] = build_law43(mat)
+        except Exception:
+            from .mat_reader import InactiveMaterial
+            model.materials[mat_id] = InactiveMaterial(
+                id=mat_id, law=43, rho0=rho0, title=title, law_name=law_name,
+                params={
+                    "rho": rho0, "rho0": rho0, "rhor": rhor, "e": e, "nu": nu,
+                    "ifunce": ifunce, "yr_fun": ifunce, "einf": einf, "efib": einf, "ce": ce, "c": ce,
+                    "r00": r00, "r45": r45, "r90": r90, "chard": chard, "fisokin": fisokin, "iyield": iyield,
+                    "eps_max": eps_max, "eps": eps_max, "epst1": epst1, "epsr1": epsr1,
+                    "epst2": epst2, "epsr2": epsr2, "fcut": fcut, "asrate": asrate,
+                    "fsmooth": fsmooth, "israte": israte, "curves": curves,
+                    "MAT_RHO": rho0, "MAT_E": e, "MAT_NU": nu,
+                }
+            )
+
 
 
 def read_fail_lemaitre(block: KeywordBlock, model: Model, log: MessageLog) -> None:
@@ -83781,9 +83885,9 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "LAW32": read_mat,
     "MAT_HILL": read_mat,
     "HILL": read_mat,
-    "MAT_HILL_TAB": read_mat,
-    "MAT_HILL_PLAS_TAB": read_mat,
-    "HILL_TAB": read_mat,
+    "MAT_HILL_TAB": read_mat_law43,
+    "MAT_HILL_PLAS_TAB": read_mat_law43,
+    "HILL_TAB": read_mat_law43,
     "MAT_LAW37": read_mat,
     "MAT_BIQUAD": read_mat,
     "MAT_BANABIC": read_mat,
@@ -84049,8 +84153,14 @@ KEYWORD_PARSERS: Dict[str, Callable[[KeywordBlock, Model, MessageLog], None]] = 
     "MAT_PLAS_POLY": read_mat,
     "PLAS_POLY": read_mat,
     "LAW101": read_mat,
-    "MAT_LAW43": read_mat,
-    "LAW43": read_mat,
+    "MAT_LAW43": read_mat_law43,
+    "LAW43": read_mat_law43,
+    "MAT_HILL_TAB": read_mat_law43,
+    "HILL_TAB": read_mat_law43,
+    "MAT_HILL_PLAS_TAB": read_mat_law43,
+    "HILL_PLAS_TAB": read_mat_law43,
+    "MAT_LAW43_HILL_TAB": read_mat_law43,
+    "LAW43_HILL_TAB": read_mat_law43,
     "FAIL_LEMAITRE": read_fail,
     "LEMAITRE": read_fail,
     "FAIL_COMPOSITE": read_fail,

@@ -111,6 +111,45 @@ def _get_law32():
 
 
 try:
+    from . import law43_hill_tab
+    from .law43_hill_tab import (solid_update as law43_solid_update,
+                                 shell_update as law43_shell_update,
+                                 sound_speed as law43_sound_speed,
+                                 consistent_solid_tangent as law43_solid_tangent,
+                                 consistent_shell_tangent as law43_shell_tangent,
+                                 shell_membrane_tangent as law43_membrane_tangent,
+                                 build_law43)
+except ImportError:
+    law43_hill_tab = None
+    law43_solid_update = None
+    law43_shell_update = None
+    law43_sound_speed = None
+    law43_solid_tangent = None
+    law43_shell_tangent = None
+    law43_membrane_tangent = None
+    build_law43 = None
+
+
+def _get_law43():
+    global law43_hill_tab, law43_solid_update, law43_shell_update, law43_sound_speed
+    global law43_solid_tangent, law43_shell_tangent, law43_membrane_tangent, build_law43
+    if law43_hill_tab is None:
+        try:
+            from . import law43_hill_tab as _m
+            law43_hill_tab = _m
+            law43_solid_update = getattr(_m, "solid_update", None)
+            law43_shell_update = getattr(_m, "shell_update", None)
+            law43_sound_speed = getattr(_m, "sound_speed", None)
+            law43_solid_tangent = getattr(_m, "consistent_solid_tangent", None)
+            law43_shell_tangent = getattr(_m, "consistent_shell_tangent", None)
+            law43_membrane_tangent = getattr(_m, "shell_membrane_tangent", None)
+            build_law43 = getattr(_m, "build_law43", None)
+        except ImportError:
+            pass
+    return law43_hill_tab
+
+
+try:
     from . import law25_composite
     from .law25_composite import (solid_update as law25_solid_update,
                                  shell_update as law25_shell_update,
@@ -380,6 +419,36 @@ def _register_law32():
 _register_law32()
 
 
+def _register_law43():
+    _get_law43()
+    try:
+        from ..input.mat_reader import MAT_PHYSICS_REGISTRY
+        builder = None
+        if law43_hill_tab is not None:
+            builder = getattr(law43_hill_tab, "build_law43", None)
+        if builder is None:
+            def _dynamic_law43_builder(rec):
+                mod = _get_law43()
+                if mod is not None:
+                    fn = getattr(mod, "build_law43", None)
+                    if fn is not None:
+                        return fn(rec)
+                from ..model.entities import Material
+                params = dict(rec.params) if hasattr(rec, "params") else {}
+                density = getattr(rec, "density", 0.0)
+                mid = getattr(rec, "id", 0)
+                title = getattr(rec, "title", "")
+                return Material(id=mid, law=43, rho0=density, title=title, law_name="LAW43", params=params)
+            builder = _dynamic_law43_builder
+        for k in (43, "43", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB"):
+            MAT_PHYSICS_REGISTRY[k] = builder
+    except Exception:
+        pass
+
+
+_register_law43()
+
+
 def _register_law25():
     _get_law25()
     try:
@@ -486,6 +555,7 @@ _STATE_VAR_COUNT: dict[str, tuple[int, ...]] = {
     "uv25": (12,),
     "uv32": (2,),
     "uv38": (33,),
+    "uv43": (4,),
 }
 
 
@@ -495,6 +565,7 @@ def register_materials():
     _get_law25()
     _get_law32()
     _get_law38()
+    _get_law43()
     for mod in (eos, law01_elastic, law02_johnson_cook, law03_plas_bost,
                 law04_hyd_jcook, law06_hyd_visc, law10_soil, law12_comp3d, law14_compso, law15_chang, law19_fabric, law22_dama, law24_concrete,
                 law25_composite, law27_brittle, law28_honeycomb, law33_foamplas, law34_boltzmann, law35_kelvinmax,
@@ -549,6 +620,11 @@ def register_materials():
         if callable(fn):
             fn()
     _register_law25()
+    if law43_hill_tab is not None:
+        fn = getattr(law43_hill_tab, "_register", None)
+        if callable(fn):
+            fn()
+    _register_law43()
 
 
 def extra_shapes(mat, nip=None):
@@ -649,6 +725,15 @@ def extra_shapes(mat, nip=None):
         shapes.update(law15_chang.extra_shapes(mat, nip))
     if getattr(mat, "law", None) in (25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS") or getattr(mat, "law_name", None) in ("25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS"):
         shapes.update(law25_composite.extra_shapes(mat, nip))
+    if getattr(mat, "law", None) in (43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB") or getattr(mat, "law_name", None) in ("43", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB"):
+        # M548: LAW43 (Hill tabulated orthotropic plasticity)
+        _get_law43()
+        if law43_hill_tab is not None and hasattr(law43_hill_tab, "extra_shapes"):
+            shapes.update(law43_hill_tab.extra_shapes(mat, nip))
+        else:
+            uv_shape = _STATE_VAR_COUNT.get("uv43", (4,))
+            shapes.update(uv43=(nip, *uv_shape) if nip else uv_shape,
+                          off43=(nip,) if nip else ())
     if getattr(mat, "fail", None) is not None and mat.fail.type == "FLD":
         shapes["eps_fld"] = (nip, 3) if nip is not None else (3,)
     return shapes
@@ -671,9 +756,10 @@ def needs_env(mat) -> bool:
     density; LAW40's sound speed too; M40: LAW36 solids use the same
     total pressure as LAW44 — sigeps36.F P = BULK*AMU; M539: LAW34 air pressure;
     M540: LAW37 biphasic liquid-gas density; M541: LAW38 density and time;
-    LAW25: composite density; LAW15: Chang-Chang composite density)."""
-    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 44, 62, 70, 81)
-            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "LAW22", "DAMA", "PLAS_DAMA", "MAT_LAW22", "MAT_DAMA", "MAT_PLAS_DAMA", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB"))
+    LAW25: composite density; LAW15: Chang-Chang composite density;
+    M548: LAW43 Hill tabulated density and sound speed)."""
+    return (getattr(mat, "law", None) in (2, 4, 5, "5", "LAW5", "JWL", 6, 10, "10", "LAW10", "SOIL", "DPRAG", "DPRAG1", 15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", 22, "22", "LAW22", "DAMA", "PLAS_DAMA", 24, 25, "25", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", 28, 33, 34, "34", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", 35, 36, 37, "37", "LAW37", "BIPHAS", "BIPHASIC", 38, "38", "LAW38", "VISC_TAB", 40, 43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB", 44, 62, 70, 81)
+            or getattr(mat, "law_name", None) in ("LAW5", "JWL", "LAW10", "SOIL", "DPRAG", "DPRAG1", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG", "LAW22", "DAMA", "PLAS_DAMA", "MAT_LAW22", "MAT_DAMA", "MAT_PLAS_DAMA", "LAW25", "COMP_PLAS", "COMPSH", "TSAI_WU", "CRASURV", "COMPOSITE_PLAS", "LAW28", "HONEYCOMB", "HONEYCOMB_SOL", "LAW34", "BOLTZMAN", "VISC_MAXW", "BOLTZMANN", "LAW37", "BIPHAS", "BIPHASIC", "LAW38", "VISC_TAB", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB"))
 
 
 def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
@@ -798,6 +884,28 @@ def solid_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
             except Exception:
                 pass
         return sig, epsp_out, c
+    if getattr(mat, "law", None) in (43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB") or getattr(mat, "law_name", None) in ("43", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB"):
+        _get_law43()
+        if law43_solid_update is not None:
+            res = law43_solid_update(mat, sig, deps=deps, epsp=epsp, dt=dt, extra=extra)
+            if isinstance(res, tuple):
+                if len(res) == 3:
+                    sign, epsp_out, c = res
+                elif len(res) == 2:
+                    sign, epsp_out = res
+                    c = None
+                else:
+                    sign, epsp_out, c = res[0], epsp, None
+            else:
+                sign, epsp_out, c = res, epsp, None
+            sig[:] = sign
+            if epsp is not None and hasattr(epsp, "__setitem__"):
+                try:
+                    epsp[:] = epsp_out
+                except Exception:
+                    pass
+            return sig, epsp_out, c
+        raise NotImplementedError("LAW43 solid_update not available")
     raise NotImplementedError(f"material LAW{mat.law} not ported for solids")
 
 
@@ -847,6 +955,17 @@ def sound_speed(mat, rho=None, extra=None):
         e = float(getattr(mat, "E", 0.0) or getattr(mat, "e", 0.0) or (mat.params.get("e", 0.0) if hasattr(mat, "params") else 0.0) or (mat.params.get("MAT_E", 0.0) if hasattr(mat, "params") else 0.0) or 1.0)
         r = rho if rho is not None else rho0
         return np.sqrt(e / np.maximum(r, 1e-20))
+    if law in (43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB") or law_name in ("43", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB"):
+        _get_law43()
+        if law43_sound_speed is not None:
+            return law43_sound_speed(mat, rho=rho, extra=extra)
+        if hasattr(mat, "sound_speed_solid"):
+            return mat.sound_speed_solid()
+        import numpy as np
+        rho0 = float(getattr(mat, "rho0", 0.0) or (mat.params.get("rho", 0.0) if hasattr(mat, "params") else 0.0) or (mat.params.get("MAT_RHO", 0.0) if hasattr(mat, "params") else 0.0) or 1.0)
+        e = float(getattr(mat, "E", 0.0) or getattr(mat, "e", 0.0) or (mat.params.get("e", 0.0) if hasattr(mat, "params") else 0.0) or (mat.params.get("MAT_E", 0.0) if hasattr(mat, "params") else 0.0) or 1.0)
+        r = rho if rho is not None else rho0
+        return np.sqrt(e / np.maximum(r, 1e-20))
     if hasattr(mat, "sound_speed_solid"):
         return mat.sound_speed_solid()
     raise NotImplementedError(f"material LAW{law} does not implement sound_speed")
@@ -854,6 +973,14 @@ def sound_speed(mat, rho=None, extra=None):
 
 def shell_update(mat, sig, deps, epsp=None, dt=0.0, extra=None):
     """Dispatch a plane-stress (shell) update to the material's law."""
+    if getattr(mat, "law", None) in (43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB") or getattr(mat, "law_name", None) in ("43", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB"):
+        _get_law43()
+        if law43_shell_update is not None:
+            res = law43_shell_update(mat, sig, deps, epsp, dt, extra)
+            if isinstance(res, tuple):
+                return res[0], res[1]
+            return res, epsp
+        raise NotImplementedError("LAW43 shell_update not available in law43_hill_tab")
     if getattr(mat, "law", None) in (15, "15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG") or getattr(mat, "law_name", None) in ("15", "LAW15", "CHANG", "PLAS_ANISO", "COMP_CHANG"):
         res = law15_chang.shell_update(mat, sig, deps, epsp, dt, extra)
         return res[0], res[1]
@@ -1016,6 +1143,11 @@ def solid_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
         return law12_comp3d.consistent_solid_tangent(mat, sig, epsp=epsp, dt=0.0, extra=extra, epsp_incr=epsp_incr)
     if getattr(mat, "law", None) in (14, "14", "LAW14", "COMPSO", "COMP_SOL") or getattr(mat, "law_name", None) in ("14", "LAW14", "COMPSO", "COMP_SOL"):
         return law14_compso.consistent_solid_tangent(mat, sig, epsp=epsp, dt=0.0, extra=extra, epsp_incr=epsp_incr)
+    if getattr(mat, "law", None) in (43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB") or getattr(mat, "law_name", None) in ("43", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB"):
+        _get_law43()
+        if law43_solid_tangent is not None:
+            return law43_solid_tangent(mat, sig, epsp=epsp, epsp_incr=epsp_incr, extra=extra)
+        raise NotImplementedError("LAW43 solid_tangent not available")
     raise NotImplementedError(
         f"material LAW{mat.law} has no implicit solid tangent (LAW1 "
         f"elastic, LAW2, LAW4, LAW5, LAW6, LAW10, LAW24, LAW28, LAW33, LAW34, LAW35, LAW36, LAW38, LAW40, LAW44, LAW62, LAW81 and LAW83, LAW42 hyperelastic "
@@ -1031,6 +1163,10 @@ def resolve_curves(mat, model, log=None):
         _get_law38()
         if law38_visc_tab is not None and hasattr(law38_visc_tab, "resolve"):
             return law38_visc_tab.resolve(mat, model, log)
+    if getattr(mat, "law", None) in (43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB") or getattr(mat, "law_name", None) in ("43", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB"):
+        _get_law43()
+        if law43_hill_tab is not None and hasattr(law43_hill_tab, "resolve"):
+            return law43_hill_tab.resolve(mat, model, log)
 
 
 def shell_membrane_tangent(mat):
@@ -1067,6 +1203,20 @@ def shell_membrane_tangent(mat):
             [nu * c, c, 0.0],
             [0.0, 0.0, g],
         ])
+    if getattr(mat, "law", None) in (43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB") or getattr(mat, "law_name", None) in ("43", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB"):
+        _get_law43()
+        if law43_hill_tab is not None and hasattr(law43_hill_tab, "shell_membrane_tangent"):
+            return law43_hill_tab.shell_membrane_tangent(mat)
+        import numpy as np
+        e = float(getattr(mat, "E", 0.0) or getattr(mat, "e", 0.0) or (mat.params.get("e", 0.0) if hasattr(mat, "params") else 0.0) or (mat.params.get("MAT_E", 0.0) if hasattr(mat, "params") else 0.0) or 1.0)
+        nu = float(getattr(mat, "nu", 0.0) or (mat.params.get("nu", 0.0) if hasattr(mat, "params") else 0.0) or (mat.params.get("MAT_NU", 0.0) if hasattr(mat, "params") else 0.0) or 0.3)
+        c = e / max(1.0 - nu * nu, 1e-15)
+        g = e / max(2.0 * (1.0 + nu), 1e-15)
+        return np.array([
+            [c, nu * c, 0.0],
+            [nu * c, c, 0.0],
+            [0.0, 0.0, g],
+        ])
     if getattr(mat, "law", None) in (22, "22", "LAW22", "DAMA", "PLAS_DAMA") or getattr(mat, "law_name", None) in ("22", "LAW22", "DAMA", "PLAS_DAMA"):
         return law22_dama.shell_membrane_tangent(mat)
     raise NotImplementedError(
@@ -1096,6 +1246,11 @@ def shell_layer_tangent(mat, sig, epsp=None, epsp_incr=None, extra=None):
         if law32_shell_tangent is not None:
             return law32_shell_tangent(mat, sig, epsp, epsp_incr, extra)
         raise NotImplementedError("LAW32 consistent_shell_tangent not available in law32_hill")
+    if getattr(mat, "law", None) in (43, "43", "LAW43", "HILL_TAB", "LAW43_HILL_TAB") or getattr(mat, "law_name", None) in ("43", "LAW43", "HILL_TAB", "MAT_LAW43", "MAT_HILL_TAB", "LAW43_HILL_TAB"):
+        _get_law43()
+        if law43_shell_tangent is not None:
+            return law43_shell_tangent(mat, sig, epsp, epsp_incr, extra)
+        raise NotImplementedError("LAW43 consistent_shell_tangent not available in law43_hill_tab")
     if mat.law == 1:
         import numpy as np
         return np.broadcast_to(law01_elastic.shell_membrane_tangent(mat),

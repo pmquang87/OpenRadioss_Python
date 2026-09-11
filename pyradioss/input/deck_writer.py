@@ -1455,11 +1455,138 @@ class StarterDeck:
         self._title(title)
         self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
 
-    def mat_hill_tab(self, mid: int, title: str, data_cards) -> None:
-        """``/MAT/HILL_TAB``."""
-        self._header("MAT", "HILL_TAB", mid)
+    def mat_law43(
+        self,
+        mid: int = 0,
+        title: str = "",
+        rho: float = 0.0,
+        rhor: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        ifunce: int = 0,
+        einf: float = 0.0,
+        ce: float = 0.0,
+        r00: float = 1.0,
+        r45: float = 1.0,
+        r90: float = 1.0,
+        chard: float = 0.0,
+        iyield: int = 0,
+        eps_max: float = 0.0,
+        epst1: float = 0.0,
+        epst2: float = 0.0,
+        fcut: float = 0.0,
+        fsmooth: int = 0,
+        curves=None,
+        law_name: str = "LAW43",
+        unit_id: Optional[int] = None,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW43`` (/MAT/HILL_TAB) — Tabulated Hill orthotropic plasticity model (M548).
+
+        Reference:
+          - radioss140/MAT/matl43_HILL_TAB.cfg
+          - starter/source/materials/mat/mat043/hm_read_mat43.F
+
+        Cards:
+          Card 1: RHO, Refer_Rho (MAT_LAW43_1: [20, 20])
+          Card 2: E, nu (MAT_LAW43_2: [20, 20])
+          Card 3: Yr_fun, Einf, C (MAT_LAW43_3: [10, 20, 20])
+          Card 4: R00, R45, R90, CHard, Iyield (MAT_LAW43_4: [20, 20, 20, 20, 10])
+          Card 5: EPS_max, EPST1, EPST2, Fcut, Fsmooth (MAT_LAW43_5: [20, 20, 20, 20, 10])
+          Curve cards: fct_ID, Fscale, EPS_DOT (MAT_LAW43_CURVE: [10, 20, 20])
+        """
+        if "id" in kwargs and mid == 0:
+            mid = kwargs["id"]
+        elif "mat_id" in kwargs and mid == 0:
+            mid = kwargs["mat_id"]
+        if "rho0" in kwargs and rho == 0.0:
+            rho = kwargs["rho0"]
+        if "refer_rho" in kwargs and rhor == 0.0:
+            rhor = kwargs["refer_rho"]
+        if "rho_ref" in kwargs and rhor == 0.0:
+            rhor = kwargs["rho_ref"]
+        if "yr_fun" in kwargs and ifunce == 0:
+            ifunce = kwargs["yr_fun"]
+        if "efib" in kwargs and einf == 0.0:
+            einf = kwargs["efib"]
+        if "c" in kwargs and ce == 0.0:
+            ce = kwargs["c"]
+        if "r0" in kwargs and r00 == 1.0:
+            r00 = kwargs["r0"]
+        if "c_hard" in kwargs and chard == 0.0:
+            chard = kwargs["c_hard"]
+        if "fisokin" in kwargs and chard == 0.0:
+            chard = kwargs["fisokin"]
+        if "eps" in kwargs and eps_max == 0.0:
+            eps_max = kwargs["eps"]
+        if "epsp_max" in kwargs and eps_max == 0.0:
+            eps_max = kwargs["epsp_max"]
+        if "epsr1" in kwargs and epst1 == 0.0:
+            epst1 = kwargs["epsr1"]
+        if "epsr2" in kwargs and epst2 == 0.0:
+            epst2 = kwargs["epsr2"]
+        if "asrate" in kwargs and fcut == 0.0:
+            fcut = kwargs["asrate"]
+        if "israte" in kwargs and fsmooth == 0:
+            fsmooth = kwargs["israte"]
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
         self._title(title)
-        self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+
+        # Card 1: RHO [Refer_Rho]
+        if rhor is not None and float(rhor) != 0.0 and float(rhor) != float(rho):
+            self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(rhor, 20)}")
+        else:
+            self.lines.append(fmt_float(rho, 20))
+
+        # Card 2: E, nu
+        self.lines.append(f"{fmt_float(e, 20)}{fmt_float(nu, 20)}")
+
+        # Card 3: Yr_fun, Einf, C
+        self.lines.append(f"{fmt_int(ifunce, 10)}{fmt_float(einf, 20)}{fmt_float(ce, 20)}")
+
+        # Card 4: R00, R45, R90, CHard, Iyield
+        self.lines.append(
+            f"{fmt_float(r00, 20)}{fmt_float(r45, 20)}{fmt_float(r90, 20)}{fmt_float(chard, 20)}{fmt_int(iyield, 10)}"
+        )
+
+        # Card 5: EPS_max, EPST1, EPST2, Fcut, Fsmooth
+        self.lines.append(
+            f"{fmt_float(eps_max, 20)}{fmt_float(epst1, 20)}{fmt_float(epst2, 20)}{fmt_float(fcut, 20)}{fmt_int(fsmooth, 10)}"
+        )
+
+        # Curve cards: fct_ID, Fscale, EPS_DOT
+        if curves:
+            for cv in curves:
+                if isinstance(cv, dict):
+                    fct_id = cv.get("fct_id", cv.get("funct_id", cv.get("id", 0)))
+                    fscale = cv.get("fscale", cv.get("scale", 1.0))
+                    eps_dot = cv.get("eps_dot", cv.get("rate", 0.0))
+                elif isinstance(cv, (list, tuple)):
+                    fct_id = cv[0] if len(cv) > 0 else 0
+                    fscale = cv[1] if len(cv) > 1 else 1.0
+                    eps_dot = cv[2] if len(cv) > 2 else 0.0
+                else:
+                    fct_id, fscale, eps_dot = int(cv), 1.0, 0.0
+                self.lines.append(f"{fmt_int(fct_id, 10)}{fmt_float(fscale, 20)}{fmt_float(eps_dot, 20)}")
+
+        return self
+
+    def mat_hill_tab(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/HILL_TAB`` — synonym for ``/MAT/LAW43``."""
+        # Backward compatibility for legacy test calls with raw data cards: mat_hill_tab(mid, title, data_cards)
+        if len(args) == 3 and isinstance(args[2], (list, tuple)) and not kwargs:
+            mid, title, data_cards = args
+            self._header("MAT", "HILL_TAB", mid)
+            self._title(title)
+            self.lines.extend(str(c).rstrip("\r\n") for c in data_cards)
+            return self
+        kwargs.setdefault("law_name", "HILL_TAB")
+        return self.mat_law43(*args, **kwargs)
+
 
     def mat_law92(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/LAW92``."""
