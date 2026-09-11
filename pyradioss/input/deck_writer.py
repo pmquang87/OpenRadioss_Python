@@ -1566,6 +1566,212 @@ class StarterDeck:
         kwargs.setdefault("law_name", "LAW69_HYP_ELAS")
         return self.mat_law69(*args, **kwargs)
 
+    def mat_law60(
+        self,
+        mid: int = 0,
+        title: str = "",
+        rho: float = 0.0,
+        ref_rho: Optional[float] = None,
+        e: float = 0.0,
+        nu: float = 0.0,
+        eps_p_max: float = 1.0e30,
+        eps_t1: float = 1.0e30,
+        eps_t2: float = 2.0e30,
+        nfunc: int = 5,
+        fsmooth: int = 0,
+        mat_hard: float = 0.0,
+        fcut: float = 1.0e30,
+        xr_fun: int = 0,
+        ifunce: int = 0,
+        mat_fscale: float = 1.0,
+        einf: float = 0.0,
+        ce: float = 0.0,
+        funcs: Optional[Sequence[int]] = None,
+        fscales: Optional[Sequence[float]] = None,
+        rates: Optional[Sequence[float]] = None,
+        fixed_format: bool = True,
+        law_name: str = "LAW60",
+        unit_id: Optional[int] = None,
+        **kwargs,
+    ) -> StarterDeck:
+        """``/MAT/LAW60`` (/MAT/PLAS_T3, /MAT/FABRIC) — cfg MAT/matl60_PLAS_T3.cfg & hm_read_mat60.F:
+        Card 1: RHO, Refer_Rho (%20lg%20lg)
+        Card 2: E, nu, eps_p_max, eps_t1, eps_t2 (%20lg%20lg%20lg%20lg%20lg)
+        Card 3: nfunc, fsmooth, mat_hard, fcut (%10d%10d%20lg%20lg)
+        Card 4: xr_fun, mat_fscale, ifunce, einf, ce (%10d%20lg%10d%20lg%20lg)
+        Cards 5, 6: fct_ID1..5, fct_ID6..10 (5*%10d)
+        Cards 7, 8: Fscale1..5, Fscale6..10 (5*%20lg)
+        Cards 9, 10: Rates1..5, Rates6..10 (5*%20lg)
+        """
+        mat_obj = None
+        if hasattr(mid, "eps_p_max") or hasattr(mid, "mat_hard") or hasattr(mid, "funcs") or hasattr(mid, "fun_ids"):
+            mat_obj = mid
+        elif "mat" in kwargs and (hasattr(kwargs["mat"], "eps_p_max") or hasattr(kwargs["mat"], "funcs")):
+            mat_obj = kwargs["mat"]
+        elif "mat_law60" in kwargs and (hasattr(kwargs["mat_law60"], "eps_p_max") or hasattr(kwargs["mat_law60"], "funcs")):
+            mat_obj = kwargs["mat_law60"]
+
+        if mat_obj is not None:
+            mid = getattr(mat_obj, "id", 0)
+            if not title:
+                title = getattr(mat_obj, "title", "")
+            if rho == 0.0:
+                rho = getattr(mat_obj, "rho", getattr(mat_obj, "rho0", 0.0))
+            if ref_rho is None:
+                ref_rho = getattr(mat_obj, "ref_rho", getattr(mat_obj, "refer_rho", None))
+            if e == 0.0:
+                e = getattr(mat_obj, "e", getattr(mat_obj, "E", 0.0))
+            if nu == 0.0:
+                nu = getattr(mat_obj, "nu", 0.0)
+            if eps_p_max == 1.0e30:
+                eps_p_max = getattr(mat_obj, "eps_p_max", 1.0e30)
+            if eps_t1 == 1.0e30:
+                eps_t1 = getattr(mat_obj, "eps_t1", 1.0e30)
+            if eps_t2 == 2.0e30:
+                eps_t2 = getattr(mat_obj, "eps_t2", 2.0e30)
+            if nfunc == 5:
+                nfunc = getattr(mat_obj, "nfunc", 5)
+            if fsmooth == 0:
+                fsmooth = getattr(mat_obj, "fsmooth", 0)
+            if mat_hard == 0.0:
+                mat_hard = getattr(mat_obj, "mat_hard", getattr(mat_obj, "chard", 0.0))
+            if fcut == 1.0e30:
+                fcut = getattr(mat_obj, "fcut", 1.0e30)
+            if xr_fun == 0:
+                xr_fun = getattr(mat_obj, "xr_fun", 0)
+            if ifunce == 0:
+                ifunce = getattr(mat_obj, "ifunce", 0)
+            if mat_fscale == 1.0:
+                mat_fscale = getattr(mat_obj, "mat_fscale", getattr(mat_obj, "fpscale", 1.0))
+            if einf == 0.0:
+                einf = getattr(mat_obj, "einf", 0.0)
+            if ce == 0.0:
+                ce = getattr(mat_obj, "ce", 0.0)
+            if funcs is None:
+                funcs = getattr(mat_obj, "funcs", getattr(mat_obj, "fun_ids", None))
+            if fscales is None:
+                fscales = getattr(mat_obj, "fscales", None)
+            if rates is None:
+                rates = getattr(mat_obj, "rates", getattr(mat_obj, "eps_rates", None))
+
+        kw_low = {k.lower(): v for k, v in kwargs.items()}
+        if "mat_id" in kw_low and mid == 0:
+            mid = kw_low["mat_id"]
+        if "id" in kw_low and mid == 0:
+            mid = kw_low["id"]
+        if "rho0" in kw_low and rho == 0.0:
+            rho = kw_low["rho0"]
+        if "refer_rho" in kw_low and ref_rho is None:
+            ref_rho = kw_low["refer_rho"]
+        if "rho_ref" in kw_low and ref_rho is None:
+            ref_rho = kw_low["rho_ref"]
+        if "rhor" in kw_low and ref_rho is None:
+            ref_rho = kw_low["rhor"]
+        if "chard" in kw_low and mat_hard == 0.0:
+            mat_hard = kw_low["chard"]
+        if "fpscale" in kw_low and mat_fscale == 1.0:
+            mat_fscale = kw_low["fpscale"]
+        if "fscale" in kw_low and mat_fscale == 1.0:
+            mat_fscale = kw_low["fscale"]
+        if "fun_ids" in kw_low and funcs is None:
+            funcs = kw_low["fun_ids"]
+        if "eps_rates" in kw_low and rates is None:
+            rates = kw_low["eps_rates"]
+        if "fixed_format" in kw_low:
+            fixed_format = bool(kw_low["fixed_format"])
+
+        if unit_id is not None:
+            self._header("MAT", law_name, mid, unit_id)
+        else:
+            self._header("MAT", law_name, mid)
+        self._title(title)
+
+        funcs_list = list(funcs) if funcs is not None else []
+        fscales_list = list(fscales) if fscales is not None else []
+        rates_list = list(rates) if rates is not None else []
+
+        if rates_list and not fscales_list:
+            fscales_list = [1.0] * max(len(rates_list), len(funcs_list))
+        if (fscales_list or rates_list) and not funcs_list:
+            funcs_list = [0] * max(len(fscales_list), len(rates_list))
+
+        if fixed_format:
+            # Card 1: RHO, Refer_Rho (MAT_LAW60_1: [20, 20])
+            if ref_rho is not None and float(ref_rho) != 0.0:
+                self.lines.append(f"{fmt_float(rho, 20)}{fmt_float(ref_rho, 20)}")
+            else:
+                self.lines.append(fmt_float(rho, 20))
+
+            # Card 2: E, nu, eps_p_max, eps_t1, eps_t2 (MAT_LAW60_2: [20, 20, 20, 20, 20])
+            self.lines.append(
+                f"{fmt_float(e, 20)}{fmt_float(nu, 20)}{fmt_float(eps_p_max, 20)}{fmt_float(eps_t1, 20)}{fmt_float(eps_t2, 20)}"
+            )
+
+            # Card 3: nfunc, fsmooth, mat_hard, fcut (MAT_LAW60_3: [10, 10, 20, 20])
+            self.lines.append(
+                f"{fmt_int(nfunc, 10)}{fmt_int(fsmooth, 10)}{fmt_float(mat_hard, 20)}{fmt_float(fcut, 20)}"
+            )
+
+            # Card 4: xr_fun, mat_fscale, ifunce, einf, ce (MAT_LAW60_4: [10, 20, 10, 20, 20])
+            self.lines.append(
+                f"{fmt_int(xr_fun, 10)}{fmt_float(mat_fscale, 20)}{fmt_int(ifunce, 10)}{fmt_float(einf, 20)}{fmt_float(ce, 20)}"
+            )
+
+            # Cards 5, 6: Functions
+            if funcs_list:
+                self.lines.append("".join(fmt_int(f, 10) for f in funcs_list[:5]))
+                if nfunc > 5 and len(funcs_list) > 5:
+                    self.lines.append("".join(fmt_int(f, 10) for f in funcs_list[5:10]))
+
+            # Cards 7, 8: Scale factors
+            if fscales_list:
+                self.lines.append("".join(fmt_float(s, 20) for s in fscales_list[:5]))
+                if nfunc > 5 and len(fscales_list) > 5:
+                    self.lines.append("".join(fmt_float(s, 20) for s in fscales_list[5:10]))
+
+            # Cards 9, 10: Strain rates
+            if rates_list:
+                self.lines.append("".join(fmt_float(r, 20) for r in rates_list[:5]))
+                if nfunc > 5 and len(rates_list) > 5:
+                    self.lines.append("".join(fmt_float(r, 20) for r in rates_list[5:10]))
+        else:
+            # Free format (space-separated)
+            if ref_rho is not None and float(ref_rho) != 0.0:
+                self.lines.append(f"{rho} {ref_rho}")
+            else:
+                self.lines.append(f"{rho}")
+
+            self.lines.append(f"{e} {nu} {eps_p_max} {eps_t1} {eps_t2}")
+            self.lines.append(f"{nfunc} {fsmooth} {mat_hard} {fcut}")
+            self.lines.append(f"{xr_fun} {mat_fscale} {ifunce} {einf} {ce}")
+
+            if funcs_list:
+                self.lines.append(" ".join(str(int(f)) for f in funcs_list[:5]))
+                if nfunc > 5 and len(funcs_list) > 5:
+                    self.lines.append(" ".join(str(int(f)) for f in funcs_list[5:10]))
+
+            if fscales_list:
+                self.lines.append(" ".join(str(s) for s in fscales_list[:5]))
+                if nfunc > 5 and len(fscales_list) > 5:
+                    self.lines.append(" ".join(str(s) for s in fscales_list[5:10]))
+
+            if rates_list:
+                self.lines.append(" ".join(str(r) for r in rates_list[:5]))
+                if nfunc > 5 and len(rates_list) > 5:
+                    self.lines.append(" ".join(str(r) for r in rates_list[5:10]))
+
+        return self
+
+    def mat_plas_t3(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/PLAS_T3`` — synonym for ``/MAT/LAW60``."""
+        kwargs.setdefault("law_name", "PLAS_T3")
+        return self.mat_law60(*args, **kwargs)
+
+    def mat_fabric(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/FABRIC`` — synonym for ``/MAT/LAW60``."""
+        kwargs.setdefault("law_name", "FABRIC")
+        return self.mat_law60(*args, **kwargs)
+
     def mat_law94(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/LAW94``."""
         self._header("MAT", "LAW94", mid)
@@ -4447,6 +4653,100 @@ def _conv_mat(d: StarterDeck, b: KeywordBlock) -> None:
         d.mat_hyd_visc(mid, title, cards)
     elif law in ("LAW58", "FABRI"):
         d.mat_fabri(mid, title, cards)
+    elif law in ("LAW60", "PLAS_T3", "FABRIC", "MAT_PLAS_T3", "MAT_FABRIC"):
+        kw: Dict = {}
+        rho_ref = None
+        is_fixed = getattr(b, "fixed", False)
+        vcards = [c for c in cards if not c.is_blank and not c.raw.strip().startswith("#") and not c.raw.strip().startswith("$")]
+
+        def _get_toks(c, layout_name):
+            if is_fixed and hasattr(c, "cut"):
+                return c.cut(layout_name)
+            raw = c.raw if hasattr(c, "raw") else str(c)
+            if "," in raw:
+                return [t.strip() for t in raw.split(",")]
+            return c.tokens()
+
+        if len(vcards) >= 1:
+            toks = _get_toks(vcards[0], "MAT_LAW60_1")
+            if len(toks) >= 1 and toks[0]: kw["rho"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: rho_ref = float(toks[1])
+        if len(vcards) >= 2:
+            toks = _get_toks(vcards[1], "MAT_LAW60_2")
+            if len(toks) >= 1 and toks[0]: kw["e"] = float(toks[0])
+            if len(toks) >= 2 and toks[1]: kw["nu"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["eps_p_max"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["eps_t1"] = float(toks[3])
+            if len(toks) >= 5 and toks[4]: kw["eps_t2"] = float(toks[4])
+        nfunc = 5
+        if len(vcards) >= 3:
+            toks = _get_toks(vcards[2], "MAT_LAW60_3")
+            if len(toks) >= 1 and toks[0]:
+                nfunc = int(float(toks[0]))
+                kw["nfunc"] = nfunc
+            if len(toks) >= 2 and toks[1]: kw["fsmooth"] = int(float(toks[1]))
+            if len(toks) >= 3 and toks[2]: kw["mat_hard"] = float(toks[2])
+            if len(toks) >= 4 and toks[3]: kw["fcut"] = float(toks[3])
+        if len(vcards) >= 4:
+            toks = _get_toks(vcards[3], "MAT_LAW60_4")
+            if len(toks) >= 1 and toks[0]: kw["xr_fun"] = int(float(toks[0]))
+            if len(toks) >= 2 and toks[1]: kw["mat_fscale"] = float(toks[1])
+            if len(toks) >= 3 and toks[2]: kw["ifunce"] = int(float(toks[2]))
+            if len(toks) >= 4 and toks[3]: kw["einf"] = float(toks[3])
+            if len(toks) >= 5 and toks[4]: kw["ce"] = float(toks[4])
+
+        card_idx = 4
+        funcs = []
+        if len(vcards) > card_idx:
+            toks = _get_toks(vcards[card_idx], "MAT_LAW60_5")
+            for t in toks:
+                if t and t.strip():
+                    fid = int(float(t))
+                    if fid != 0: funcs.append(fid)
+            card_idx += 1
+        if nfunc > 5 and len(vcards) > card_idx:
+            toks = _get_toks(vcards[card_idx], "MAT_LAW60_6")
+            for t in toks:
+                if t and t.strip():
+                    fid = int(float(t))
+                    if fid != 0: funcs.append(fid)
+            card_idx += 1
+        if funcs:
+            kw["funcs"] = funcs
+
+        fscales = []
+        if len(vcards) > card_idx:
+            toks = _get_toks(vcards[card_idx], "MAT_LAW60_7")
+            for t in toks:
+                if t and t.strip():
+                    fscales.append(float(t))
+            card_idx += 1
+        if nfunc > 5 and len(vcards) > card_idx:
+            toks = _get_toks(vcards[card_idx], "MAT_LAW60_8")
+            for t in toks:
+                if t and t.strip():
+                    fscales.append(float(t))
+            card_idx += 1
+        if fscales:
+            kw["fscales"] = fscales
+
+        rates = []
+        if len(vcards) > card_idx:
+            toks = _get_toks(vcards[card_idx], "MAT_LAW60_9")
+            for t in toks:
+                if t and t.strip():
+                    rates.append(float(t))
+            card_idx += 1
+        if nfunc > 5 and len(vcards) > card_idx:
+            toks = _get_toks(vcards[card_idx], "MAT_LAW60_10")
+            for t in toks:
+                if t and t.strip():
+                    rates.append(float(t))
+            card_idx += 1
+        if rates:
+            kw["rates"] = rates
+
+        d.mat_law60(mid, ref_rho=rho_ref, title=title, unit_id=b.unit_id, law_name=law, fixed_format=is_fixed, **kw)
     elif law in ("GAS",):
         d.mat_gas(mid, title, cards)
     elif law in ("LAW0", "VOID"):

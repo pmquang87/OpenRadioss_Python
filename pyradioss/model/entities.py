@@ -8575,40 +8575,149 @@ PropSpringCrush = PropType44
 #       PROP TYPE12 (SPR_PUL), PROP TYPE15 (POROUS), PROP TYPE28 (NSTRAND)
 # ============================================================================
 
-@dataclass
+@dataclass(init=False)
 class MatLaw60:
-    """``/MAT/LAW60`` or ``/MAT/PLAS_T3``: Tabulated temperature/rate plasticity."""
-    id: int = 0
-    rho: float = 0.0
-    refer_rho: float = 0.0
+    """``/MAT/LAW60``, ``/MAT/PLAS_T3``, or ``/MAT/FABRIC``: Tabulated temperature/rate plasticity."""
+    id: int
+    rho: float
+    ref_rho: float = 0.0
     e: float = 0.0
     nu: float = 0.0
-    eps_p_max: float = 0.0
-    eps_t1: float = 0.0
-    eps_t2: float = 0.0
+    eps_p_max: float = 1.0e30
+    eps_t1: float = 1.0e30
+    eps_t2: float = 2.0e30
     nfunc: int = 5
     fsmooth: int = 0
-    chard: float = 0.0
-    fcut: float = 0.0
+    mat_hard: float = 0.0
+    fcut: float = 1.0e30
     xr_fun: int = 0
-    fpscale: float = 1.0
-    fun_ids: list[int] = field(default_factory=list)
+    ifunce: int = 0
+    mat_fscale: float = 1.0
+    einf: float = 0.0
+    ce: float = 0.0
+    funcs: list[int] = field(default_factory=list)
     fscales: list[float] = field(default_factory=list)
-    eps_rates: list[float] = field(default_factory=list)
+    rates: list[float] = field(default_factory=list)
     title: str = ""
+
+    def __init__(
+        self,
+        id: int = 0,
+        rho: float = 0.0,
+        ref_rho: float = 0.0,
+        e: float = 0.0,
+        nu: float = 0.0,
+        eps_p_max: float = 1.0e30,
+        eps_t1: float = 1.0e30,
+        eps_t2: float = 2.0e30,
+        nfunc: int = 5,
+        fsmooth: int = 0,
+        mat_hard: float = 0.0,
+        fcut: float = 1.0e30,
+        xr_fun: int = 0,
+        ifunce: int = 0,
+        mat_fscale: float = 1.0,
+        einf: float = 0.0,
+        ce: float = 0.0,
+        funcs: Optional[list[int]] = None,
+        fscales: Optional[list[float]] = None,
+        rates: Optional[list[float]] = None,
+        title: str = "",
+        **kwargs,
+    ):
+        self.id = id
+        self.rho = rho
+        if "refer_rho" in kwargs and ref_rho == 0.0:
+            ref_rho = kwargs["refer_rho"]
+        self.ref_rho = ref_rho
+        self.e = e
+        self.nu = nu
+        self.eps_p_max = eps_p_max
+        self.eps_t1 = eps_t1
+        self.eps_t2 = eps_t2
+        self.nfunc = nfunc
+        self.fsmooth = fsmooth
+        if "chard" in kwargs and mat_hard == 0.0:
+            mat_hard = kwargs["chard"]
+        self.mat_hard = mat_hard
+        self.fcut = fcut
+        self.xr_fun = xr_fun
+        self.ifunce = ifunce
+        if "fpscale" in kwargs and mat_fscale == 1.0:
+            mat_fscale = kwargs["fpscale"]
+        self.mat_fscale = mat_fscale
+        self.einf = einf
+        self.ce = ce
+        if funcs is None:
+            funcs = kwargs.get("fun_ids", [])
+        self.funcs = list(funcs)
+        self.fscales = list(fscales) if fscales is not None else []
+        if rates is None:
+            rates = kwargs.get("eps_rates", [])
+        self.rates = list(rates)
+        self.title = title
+
+    @property
+    def refer_rho(self) -> float:
+        return self.ref_rho
+
+    @refer_rho.setter
+    def refer_rho(self, v: float) -> None:
+        self.ref_rho = v
 
     @property
     def rho0(self) -> float:
-        return self.refer_rho if self.refer_rho != 0.0 else self.rho
+        return self.ref_rho if self.ref_rho != 0.0 else self.rho
+
+    @property
+    def E(self) -> float:
+        return self.e
+
+    @E.setter
+    def E(self, v: float) -> None:
+        self.e = v
 
     @property
     def hard(self) -> float:
-        return self.chard
+        return self.mat_hard
+
+    @property
+    def chard(self) -> float:
+        return self.mat_hard
+
+    @chard.setter
+    def chard(self, v: float) -> None:
+        self.mat_hard = v
+
+    @property
+    def fpscale(self) -> float:
+        return self.mat_fscale
+
+    @fpscale.setter
+    def fpscale(self, v: float) -> None:
+        self.mat_fscale = v
+
+    @property
+    def fun_ids(self) -> list[int]:
+        return self.funcs
+
+    @fun_ids.setter
+    def fun_ids(self, v: list[int]) -> None:
+        self.funcs = v
+
+    @property
+    def eps_rates(self) -> list[float]:
+        return self.rates
+
+    @eps_rates.setter
+    def eps_rates(self, v: list[float]) -> None:
+        self.rates = v
 
 
 MatPlasT3 = MatLaw60
 MatPlastT3 = MatLaw60
 MatMaxwell = MatLaw60
+MatFabric = MatLaw60
 
 
 @dataclass
