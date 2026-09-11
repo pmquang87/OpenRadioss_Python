@@ -1410,6 +1410,15 @@ def check_model(model: Model, log: MessageLog) -> None:
                         "MAT CHECK",
                     )
                     continue
+            if (mat.law in (82, "82", "LAW82", "OGDEN", "LAW82_OGDEN")
+                    or getattr(mat, "law_name", None) in ("82", "LAW82", "OGDEN", "LAW82_OGDEN", "MAT_LAW82", "MAT_OGDEN", "MAT_LAW82_OGDEN")):
+                if name in ("trusses", "beams", "springs"):
+                    log.error(
+                        f"/MAT/LAW82/{mat.id} (/MAT/OGDEN) is not supported for {name} elements "
+                        f"(solids and shells only: bricks, tetras, penta6, pyra5, shells, shells_qbat, shells_qeph, sh3n, quads)",
+                        "MAT CHECK",
+                    )
+                    continue
             if allowed is None:
                 continue
             if mat.law not in allowed:

@@ -1686,6 +1686,17 @@ class StarterDeck:
         mat_id: int | None = None,
         **kwargs,
     ) -> StarterDeck:
+        if hasattr(mid, "nordre") or hasattr(mid, "mu"):
+            mat_obj = mid
+            mid = getattr(mat_obj, "id", 0)
+            rho0 = getattr(mat_obj, "rho0", 0.0)
+            rhor = getattr(mat_obj, "rhor", 0.0)
+            nu = getattr(mat_obj, "nu", 0.475)
+            nordre = getattr(mat_obj, "nordre", 1)
+            mu = getattr(mat_obj, "mu", None)
+            alpha = getattr(mat_obj, "alpha", None)
+            d = getattr(mat_obj, "d", None)
+            title = getattr(mat_obj, "title", title)
         if mat_id is not None:
             mid = mat_id
         """``/MAT/LAW82`` (/MAT/OGDEN, /MAT/LAW82_OGDEN) — cfg MAT/matl82_ogden.cfg (radioss110) & hm_read_mat82.F:
@@ -1755,8 +1766,15 @@ class StarterDeck:
 
         return self
 
-    mat_ogden = mat_law82
-    mat_law82_ogden = mat_law82
+    def mat_ogden(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/OGDEN`` — synonym for ``/MAT/LAW82``."""
+        kwargs.setdefault("law_name", "OGDEN")
+        return self.mat_law82(*args, **kwargs)
+
+    def mat_law82_ogden(self, *args, **kwargs) -> StarterDeck:
+        """``/MAT/LAW82_OGDEN`` — synonym for ``/MAT/LAW82``."""
+        kwargs.setdefault("law_name", "LAW82_OGDEN")
+        return self.mat_law82(*args, **kwargs)
 
     def mat_multifluid(self, mid: int, title: str, data_cards) -> None:
         """``/MAT/MULTIFLUID``."""

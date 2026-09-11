@@ -46739,12 +46739,18 @@ def read_mat_law82(block: KeywordBlock, model: Model, log: MessageLog) -> None:
                 remaining -= n_in_card
                 card_idx += 1
     else:
+        def _card_tokens(c: Card) -> list[str]:
+            raw = c.raw.strip()
+            if "," in raw:
+                return [p.strip() for p in raw.replace(",", " ").split() if p.strip()]
+            return c.tokens()
+
         if len(valid_cards) > 0:
-            t0 = valid_cards[0].tokens()
+            t0 = _card_tokens(valid_cards[0])
             rho = _safe_float(t0[0]) if len(t0) > 0 else 0.0
             refer_rho = _safe_float(t0[1]) if len(t0) > 1 else 0.0
         if len(valid_cards) > 1:
-            t1 = valid_cards[1].tokens()
+            t1 = _card_tokens(valid_cards[1])
             order = _safe_int(t1[0]) if len(t1) > 0 else 0
             nu = _safe_float(t1[1], 0.475) if len(t1) > 1 else 0.475
 
@@ -46753,13 +46759,13 @@ def read_mat_law82(block: KeywordBlock, model: Model, log: MessageLog) -> None:
         raw_comments = [c.raw.upper() for c in block.cards if c.raw.strip().startswith("#")]
         has_array_comments = any("ALPHA" in c or "MU" in c or "GAMMA" in c or "D_I" in c for c in raw_comments)
         if not has_array_comments and order == 1 and len(data_cards) == 1:
-            toks0 = data_cards[0].tokens()
+            toks0 = _card_tokens(data_cards[0])
             if len(toks0) >= 2:
                 is_per_term = True
 
         if is_per_term:
             for idx in range(min(order, len(data_cards))):
-                toks = data_cards[idx].tokens()
+                toks = _card_tokens(data_cards[idx])
                 mu_i = _safe_float(toks[0]) if len(toks) > 0 else 0.0
                 al_i = _safe_float(toks[1]) if len(toks) > 1 else 0.0
                 d_i = _safe_float(toks[2]) if len(toks) > 2 else 0.0
@@ -46770,21 +46776,21 @@ def read_mat_law82(block: KeywordBlock, model: Model, log: MessageLog) -> None:
             card_idx = 2
             # Mu list
             while len(mu_arr) < order and card_idx < len(valid_cards):
-                toks = valid_cards[card_idx].tokens()
+                toks = _card_tokens(valid_cards[card_idx])
                 for t in toks:
                     if len(mu_arr) < order:
                         mu_arr.append(_safe_float(t))
                 card_idx += 1
             # Alpha list
             while len(alpha_arr) < order and card_idx < len(valid_cards):
-                toks = valid_cards[card_idx].tokens()
+                toks = _card_tokens(valid_cards[card_idx])
                 for t in toks:
                     if len(alpha_arr) < order:
                         alpha_arr.append(_safe_float(t))
                 card_idx += 1
             # Gamma list
             while len(gamma_arr) < order and card_idx < len(valid_cards):
-                toks = valid_cards[card_idx].tokens()
+                toks = _card_tokens(valid_cards[card_idx])
                 for t in toks:
                     if len(gamma_arr) < order:
                         gamma_arr.append(_safe_float(t))

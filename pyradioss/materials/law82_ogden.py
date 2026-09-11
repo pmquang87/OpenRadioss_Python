@@ -127,17 +127,24 @@ def build_law82(
 
     Supports both keyword-argument construction and card/CFG record unpacking.
     """
-    if not isinstance(id, (int, np.integer, float)) and hasattr(id, "params"):
+    if not isinstance(id, (int, np.integer, float)):
         rec = id
         mid = int(getattr(rec, "id", 1))
         rho0 = float(getattr(rec, "density", getattr(rec, "rho0", 1.0)) or 1.0)
         title = str(getattr(rec, "title", ""))
         p = getattr(rec, "params", {})
-        nu = float(p.get("MAT_NU", p.get("nu", 0.475)))
-        nordre = int(p.get("ORDER", p.get("order", 1)))
-        mu = p.get("Mu_arr", p.get("mu", None))
-        alpha = p.get("Alpha_arr", p.get("alpha", None))
-        d = p.get("Gamma_arr", p.get("d", None))
+        if p and isinstance(p, dict):
+            nu = float(p.get("MAT_NU", p.get("nu", getattr(rec, "nu", 0.475))))
+            nordre = int(p.get("ORDER", p.get("order", getattr(rec, "nordre", 1))))
+            mu = p.get("Mu_arr", p.get("mu", getattr(rec, "mu", None)))
+            alpha = p.get("Alpha_arr", p.get("alpha", getattr(rec, "alpha", None)))
+            d = p.get("Gamma_arr", p.get("d", getattr(rec, "d", None)))
+        else:
+            nu = float(getattr(rec, "nu", 0.475))
+            nordre = int(getattr(rec, "nordre", 1))
+            mu = getattr(rec, "mu", None)
+            alpha = getattr(rec, "alpha", None)
+            d = getattr(rec, "d", None)
         id = mid
 
     if mu is None:
